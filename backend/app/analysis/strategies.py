@@ -63,6 +63,15 @@ EXHAUSTION_DEFAULT_PARAMS = {
     # quartile directly on an oversold reaction candle.
     "range_lookback": 40,
     "range_zone_pct": 0.25,
+    # These three entry conditions were added reactively in one sitting,
+    # each while looking at a chart where the previous ones didn't fire —
+    # a textbook overfitting pattern. Exposing them as independent on/off
+    # switches (rather than baking the OR together silently) lets a user
+    # who wants only the most conservative signal (divergence) turn the
+    # other two off instead of trusting all three blindly.
+    "enable_divergence": True,
+    "enable_contraction": True,
+    "enable_range_bounce": True,
 }
 
 _MAX_ALERTS_RETURNED = 30
@@ -178,88 +187,92 @@ def compute_exhaustion_signals(df: pd.DataFrame, params: dict | None = None) -> 
     entry_long = pd.Series(False, index=df.index)
     entry_short = pd.Series(False, index=df.index)
 
-    low_positions = swing_lows.index.to_list()
-    for i in range(1, len(low_positions)):
-        cur_pos = int(low_positions[i])
-        ref_pos = _reference_swing(low_positions, i, p["divergence_lookback"], df["low"], "low")
-        cur_rsi, ref_rsi = rsi.iloc[cur_pos], rsi.iloc[ref_pos]
-        cur_vol_ma = vol_ma.iloc[cur_pos]
-        if pd.isna(cur_rsi) or pd.isna(ref_rsi) or pd.isna(cur_vol_ma):
-            continue
-        not_a_higher_low = df["low"].iloc[cur_pos] <= df["low"].iloc[ref_pos] * (1 + tolerance)
-        bullish_divergence = not_a_higher_low and cur_rsi > ref_rsi + p["rsi_min_gap"]
-        oversold = cur_rsi < p["rsi_oversold"]
-        volume_climax = df["volume"].iloc[cur_pos] > cur_vol_ma * p["volume_multiplier"]
-        volume_quiet = df["volume"].iloc[cur_pos] < cur_vol_ma / p["volume_multiplier"]
-        trend_ok = (not p["trend_filter"]) or (close.iloc[cur_pos] < trend_ema.iloc[cur_pos])
-        if bullish_divergence and oversold and (volume_climax or volume_quiet) and trend_ok:
-            confirm_pos = _find_confirmation(df, cur_pos, "long", p["confirmation_lookahead"])
-            if confirm_pos is not None:
-                entry_long.iloc[confirm_pos] = True
-
-    high_positions = swing_highs.index.to_list()
-    for i in range(1, len(high_positions)):
-        cur_pos = int(high_positions[i])
-        ref_pos = _reference_swing(high_positions, i, p["divergence_lookback"], df["high"], "high")
-        cur_rsi, ref_rsi = rsi.iloc[cur_pos], rsi.iloc[ref_pos]
-        cur_vol_ma = vol_ma.iloc[cur_pos]
-        if pd.isna(cur_rsi) or pd.isna(ref_rsi) or pd.isna(cur_vol_ma):
-            continue
-        not_a_lower_high = df["high"].iloc[cur_pos] >= df["high"].iloc[ref_pos] * (1 - tolerance)
-        bearish_divergence = not_a_lower_high and cur_rsi < ref_rsi - p["rsi_min_gap"]
-        overbought = cur_rsi > p["rsi_overbought"]
-        volume_climax = df["volume"].iloc[cur_pos] > cur_vol_ma * p["volume_multiplier"]
-        volume_quiet = df["volume"].iloc[cur_pos] < cur_vol_ma / p["volume_multiplier"]
-        trend_ok = (not p["trend_filter"]) or (close.iloc[cur_pos] > trend_ema.iloc[cur_pos])
-        if bearish_divergence and overbought and (volume_climax or volume_quiet) and trend_ok:
-            confirm_pos = _find_confirmation(df, cur_pos, "short", p["confirmation_lookahead"])
-            if confirm_pos is not None:
-                entry_short.iloc[confirm_pos] = True
-
-    # Volatility-contraction breakout — independent of confirmed swings, so
-    # it can fire inside a range that only just formed.
-    recent_std = close.rolling(p["contraction_lookback"]).std()
-    prior_std = close.rolling(p["contraction_prior_lookback"]).std().shift(p["contraction_lookback"])
-    contracted = recent_std < prior_std * p["contraction_ratio"]
-    was_oversold_recently = rsi.rolling(p["contraction_lookback"]).min() < p["rsi_oversold"]
-    was_overbought_recently = rsi.rolling(p["contraction_lookback"]).max() > p["rsi_overbought"]
-    range_high = df["high"].rolling(p["contraction_lookback"]).max().shift(1)
-    range_low = df["low"].rolling(p["contraction_lookback"]).min().shift(1)
     trend_ok_long = (close < trend_ema) if p["trend_filter"] else pd.Series(True, index=df.index)
     trend_ok_short = (close > trend_ema) if p["trend_filter"] else pd.Series(True, index=df.index)
-    # A mere tick above the range is noise; require a real break plus renewed
-    # volume on the breakout bar itself — without it this fires on every
-    # minor chop and drags win rate down.
-    breakout_long = close > range_high * 1.003
-    breakout_short = close < range_low * 0.997
-    volume_confirms = df["volume"] > vol_ma
 
-    entry_long_contraction = (
-        contracted & was_oversold_recently & (rsi > p["rsi_oversold"]) & breakout_long & volume_confirms & trend_ok_long
-    )
-    entry_short_contraction = (
-        contracted & was_overbought_recently & (rsi < p["rsi_overbought"]) & breakout_short & volume_confirms & trend_ok_short
-    )
-    entry_long = entry_long | entry_long_contraction.fillna(False)
-    entry_short = entry_short | entry_short_contraction.fillna(False)
+    if p["enable_divergence"]:
+        low_positions = swing_lows.index.to_list()
+        for i in range(1, len(low_positions)):
+            cur_pos = int(low_positions[i])
+            ref_pos = _reference_swing(low_positions, i, p["divergence_lookback"], df["low"], "low")
+            cur_rsi, ref_rsi = rsi.iloc[cur_pos], rsi.iloc[ref_pos]
+            cur_vol_ma = vol_ma.iloc[cur_pos]
+            if pd.isna(cur_rsi) or pd.isna(ref_rsi) or pd.isna(cur_vol_ma):
+                continue
+            not_a_higher_low = df["low"].iloc[cur_pos] <= df["low"].iloc[ref_pos] * (1 + tolerance)
+            bullish_divergence = not_a_higher_low and cur_rsi > ref_rsi + p["rsi_min_gap"]
+            oversold = cur_rsi < p["rsi_oversold"]
+            volume_climax = df["volume"].iloc[cur_pos] > cur_vol_ma * p["volume_multiplier"]
+            volume_quiet = df["volume"].iloc[cur_pos] < cur_vol_ma / p["volume_multiplier"]
+            trend_ok = (not p["trend_filter"]) or (close.iloc[cur_pos] < trend_ema.iloc[cur_pos])
+            if bullish_divergence and oversold and (volume_climax or volume_quiet) and trend_ok:
+                confirm_pos = _find_confirmation(df, cur_pos, "long", p["confirmation_lookahead"])
+                if confirm_pos is not None:
+                    entry_long.iloc[confirm_pos] = True
 
-    # Range-support bounce — a long, grinding sideways range (many small
-    # touches, no volume climax and no real quiet-volume either, since it's
-    # just unremarkable chop) satisfies neither entry condition above. This
-    # buys the range's own lower quartile directly on an oversold reaction
-    # candle, which is what "buy the lows of this range" literally means.
-    range_est_high = df["high"].rolling(p["range_lookback"]).max()
-    range_est_low = df["low"].rolling(p["range_lookback"]).min()
-    range_width = range_est_high - range_est_low
-    in_lower_zone = close <= range_est_low + range_width * p["range_zone_pct"]
-    in_upper_zone = close >= range_est_high - range_width * p["range_zone_pct"]
-    bullish_reaction = close > df["open"]
-    bearish_reaction = close < df["open"]
+        high_positions = swing_highs.index.to_list()
+        for i in range(1, len(high_positions)):
+            cur_pos = int(high_positions[i])
+            ref_pos = _reference_swing(high_positions, i, p["divergence_lookback"], df["high"], "high")
+            cur_rsi, ref_rsi = rsi.iloc[cur_pos], rsi.iloc[ref_pos]
+            cur_vol_ma = vol_ma.iloc[cur_pos]
+            if pd.isna(cur_rsi) or pd.isna(ref_rsi) or pd.isna(cur_vol_ma):
+                continue
+            not_a_lower_high = df["high"].iloc[cur_pos] >= df["high"].iloc[ref_pos] * (1 - tolerance)
+            bearish_divergence = not_a_lower_high and cur_rsi < ref_rsi - p["rsi_min_gap"]
+            overbought = cur_rsi > p["rsi_overbought"]
+            volume_climax = df["volume"].iloc[cur_pos] > cur_vol_ma * p["volume_multiplier"]
+            volume_quiet = df["volume"].iloc[cur_pos] < cur_vol_ma / p["volume_multiplier"]
+            trend_ok = (not p["trend_filter"]) or (close.iloc[cur_pos] > trend_ema.iloc[cur_pos])
+            if bearish_divergence and overbought and (volume_climax or volume_quiet) and trend_ok:
+                confirm_pos = _find_confirmation(df, cur_pos, "short", p["confirmation_lookahead"])
+                if confirm_pos is not None:
+                    entry_short.iloc[confirm_pos] = True
 
-    entry_long_range = in_lower_zone & (rsi < p["rsi_oversold"]) & bullish_reaction & trend_ok_long
-    entry_short_range = in_upper_zone & (rsi > p["rsi_overbought"]) & bearish_reaction & trend_ok_short
-    entry_long = entry_long | entry_long_range.fillna(False)
-    entry_short = entry_short | entry_short_range.fillna(False)
+    if p["enable_contraction"]:
+        # Volatility-contraction breakout — independent of confirmed swings,
+        # so it can fire inside a range that only just formed.
+        recent_std = close.rolling(p["contraction_lookback"]).std()
+        prior_std = close.rolling(p["contraction_prior_lookback"]).std().shift(p["contraction_lookback"])
+        contracted = recent_std < prior_std * p["contraction_ratio"]
+        was_oversold_recently = rsi.rolling(p["contraction_lookback"]).min() < p["rsi_oversold"]
+        was_overbought_recently = rsi.rolling(p["contraction_lookback"]).max() > p["rsi_overbought"]
+        range_high = df["high"].rolling(p["contraction_lookback"]).max().shift(1)
+        range_low = df["low"].rolling(p["contraction_lookback"]).min().shift(1)
+        # A mere tick above the range is noise; require a real break plus
+        # renewed volume on the breakout bar itself — without it this fires
+        # on every minor chop and drags win rate down.
+        breakout_long = close > range_high * 1.003
+        breakout_short = close < range_low * 0.997
+        volume_confirms = df["volume"] > vol_ma
+
+        entry_long_contraction = (
+            contracted & was_oversold_recently & (rsi > p["rsi_oversold"]) & breakout_long & volume_confirms & trend_ok_long
+        )
+        entry_short_contraction = (
+            contracted & was_overbought_recently & (rsi < p["rsi_overbought"]) & breakout_short & volume_confirms & trend_ok_short
+        )
+        entry_long = entry_long | entry_long_contraction.fillna(False)
+        entry_short = entry_short | entry_short_contraction.fillna(False)
+
+    if p["enable_range_bounce"]:
+        # Range-support bounce — a long, grinding sideways range (many small
+        # touches, no volume climax and no real quiet-volume either, since
+        # it's just unremarkable chop) satisfies neither condition above.
+        # This buys the range's own lower quartile directly on an oversold
+        # reaction candle, which is what "buy the lows of this range" means.
+        range_est_high = df["high"].rolling(p["range_lookback"]).max()
+        range_est_low = df["low"].rolling(p["range_lookback"]).min()
+        range_width = range_est_high - range_est_low
+        in_lower_zone = close <= range_est_low + range_width * p["range_zone_pct"]
+        in_upper_zone = close >= range_est_high - range_width * p["range_zone_pct"]
+        bullish_reaction = close > df["open"]
+        bearish_reaction = close < df["open"]
+
+        entry_long_range = in_lower_zone & (rsi < p["rsi_oversold"]) & bullish_reaction & trend_ok_long
+        entry_short_range = in_upper_zone & (rsi > p["rsi_overbought"]) & bearish_reaction & trend_ok_short
+        entry_long = entry_long | entry_long_range.fillna(False)
+        entry_short = entry_short | entry_short_range.fillna(False)
 
     # This reads as an accumulation/distribution indicator for long-horizon
     # positions, not a scalp: an RSI-recovery exit would close the trade

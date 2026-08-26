@@ -714,11 +714,14 @@
     const params = new URLSearchParams();
     ["average", "len", "slopeFlen", "slopeSlen", "trendfilterperiod", "trendfiltertype",
       "volatilitystdevlength", "volatilitystdevmalength", "initial_capital", "qty_pct_of_equity",
-      "commission_pct", "slippage_pct"].forEach((name) => {
+      "commission_pct", "slippage_pct", "stop_loss_pct", "take_profit_pct"].forEach((name) => {
       params.set(name, data.get(name));
     });
     params.set("trendfilter", form.elements["trendfilter"].checked);
     params.set("volatilityfilter", form.elements["volatilityfilter"].checked);
+    params.set("enable_divergence", form.elements["enable_divergence"].checked);
+    params.set("enable_contraction", form.elements["enable_contraction"].checked);
+    params.set("enable_range_bounce", form.elements["enable_range_bounce"].checked);
     params.set("strategy_name", el("active-strategy-select").value);
     return params.toString();
   }
@@ -804,6 +807,7 @@
       state.liveRefreshTimer = null;
     }
     el("live-badge").classList.add("hidden");
+    el("polling-badge").classList.add("hidden");
   }
 
   function intervalQuery() {
@@ -880,6 +884,11 @@
       }
       if (state.assetType === "crypto") {
         state.liveRefreshTimer = setInterval(() => silentRefresh(body.symbol), 60000);
+        // No WebSocket wired up for Binance yet — say so plainly instead of
+        // leaving the user guessing whether the chart is updating at all.
+        if (state.cryptoExchange !== "mexc") {
+          el("polling-badge").classList.remove("hidden");
+        }
       }
     } catch (err) {
       showError(err.message || "Errore durante l'analisi del ticker.");
@@ -936,6 +945,9 @@
       const exchange = document.createElement("span");
       exchange.className = "sug-exchange sug-exchange-" + item.provider;
       exchange.textContent = item.exchange;
+      if (item.provider === "mexc" || item.provider === "binance") {
+        exchange.title = "Prezzi e livelli calcolati su questo exchange — possono differire leggermente da altri exchange per lo stesso simbolo.";
+      }
       li.appendChild(main);
       li.appendChild(exchange);
       // mousedown (not click) fires before the input's blur handler hides the list

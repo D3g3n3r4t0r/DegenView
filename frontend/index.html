@@ -72,6 +72,7 @@
 
     <section class="chart-area">
       <div id="live-badge" class="live-badge hidden"><span class="live-dot"></span>LIVE</div>
+      <div id="polling-badge" class="polling-badge hidden">Agg. ogni 60s</div>
       <div id="loading" class="loading hidden">Analisi in corso…</div>
       <div id="empty-state" class="empty-state">Cerca un ticker per iniziare l'analisi multi-timeframe.</div>
       <div id="chart-wrap" class="chart-wrap hidden">
@@ -139,11 +140,20 @@
                 <label>Stdev media lunghezza <input type="number" name="volatilitystdevmalength" value="44" min="1" /></label>
               </fieldset>
               <fieldset>
+                <legend>Accumulo / Distribuzione</legend>
+                <p class="panel-hint">Tre condizioni indipendenti (in OR) — disattivane qualcuna se vuoi restringere ai segnali di cui ti fidi di più.</p>
+                <label><input type="checkbox" name="enable_divergence" checked /> Divergenza RSI su swing</label>
+                <label><input type="checkbox" name="enable_contraction" checked /> Breakout da contrazione volatilità</label>
+                <label><input type="checkbox" name="enable_range_bounce" checked /> Rimbalzo sul supporto/resistenza del range</label>
+              </fieldset>
+              <fieldset>
                 <legend>Backtest</legend>
                 <label>Capitale iniziale <input type="number" name="initial_capital" value="10000" min="1" /></label>
                 <label>% equity per trade <input type="number" name="qty_pct_of_equity" value="30" min="1" max="100" step="1" /></label>
                 <label>Commissione % <input type="number" name="commission_pct" value="0.06" min="0" step="0.01" /></label>
                 <label>Slippage % <input type="number" name="slippage_pct" value="0.02" min="0" step="0.01" /></label>
+                <label>Stop-loss % <input type="number" name="stop_loss_pct" value="0" min="0" step="0.5" title="0 = disattivato" /></label>
+                <label>Take-profit % <input type="number" name="take_profit_pct" value="0" min="0" step="0.5" title="0 = disattivato" /></label>
               </fieldset>
               <button type="submit">Applica e ricalcola</button>
             </form>
@@ -225,6 +235,7 @@
         </div>
         <div class="panel">
           <h3>Zone di confluenza</h3>
+          <p class="panel-hint">Prezzi dove più livelli di struttura (order block, FVG, equal high/low) su timeframe diversi si sovrappongono entro lo 0.15% — più alto il punteggio, più timeframe/livelli coincidono nella stessa zona.</p>
           <ul id="confluence-list" class="confluence-list"></ul>
         </div>
       </div>

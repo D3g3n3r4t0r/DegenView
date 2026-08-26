@@ -8,11 +8,17 @@ from app.models import BacktestResult, BacktestTrade, StrategySignal
 #          commission_type=percent, commission_value=0.06, slippage=2, default_qty_value=30)
 # Pine's slippage is in ticks, which has no single meaning across stocks/crypto
 # of wildly different price scales — ported here as a percent-of-price instead.
+# stop_loss_pct/take_profit_pct default to 0 (disabled) — signal-only exits,
+# same behavior as before this was added. Set either > 0 to close a position
+# the moment a bar's intrabar high/low crosses that level, independent of
+# whatever the strategy's own exit signal says.
 DEFAULT_BACKTEST_PARAMS = {
     "initial_capital": 10000.0,
     "qty_pct_of_equity": 30.0,
     "commission_pct": 0.06,
     "slippage_pct": 0.02,
+    "stop_loss_pct": 0.0,
+    "take_profit_pct": 0.0,
 }
 
 _ENTRY_TYPES = {"entry_long", "entry_short"}
@@ -34,6 +40,7 @@ def run_backtest(
 ) -> BacktestResult:
     bp = {**DEFAULT_BACKTEST_PARAMS, **(backtest_params or {})}
     events, _final_position = confirmed_events(df, strategy_params, signals=signals, strategy_name=strategy_name)
+    event_by_ts: dict[int, StrategySignal] = {s.time: s for s in events}
 
     equity = bp["initial_capital"]
     peak_equity = equity
@@ -48,12 +55,12 @@ def run_backtest(
         fill = _fill_price(signal.price, bp["slippage_pct"], "buy" if direction == "long" else "sell")
         open_trade = {"direction": direction, "entry_time": signal.time, "entry_price": fill}
 
-    def _close(signal: StrategySignal) -> None:
+    def _close_at(raw_price: float, time: int) -> None:
         nonlocal equity, peak_equity, max_drawdown_pct, open_trade
         if open_trade is None:
             return
         direction = open_trade["direction"]
-        exit_fill = _fill_price(signal.price, bp["slippage_pct"], "sell" if direction == "long" else "buy")
+        exit_fill = _fill_price(raw_price, bp["slippage_pct"], "sell" if direction == "long" else "buy")
         entry_fill = open_trade["entry_price"]
 
         raw_return = (exit_fill - entry_fill) / entry_fill
@@ -72,7 +79,7 @@ def run_backtest(
             BacktestTrade(
                 direction=direction,
                 entry_time=open_trade["entry_time"],
-                exit_time=signal.time,
+                exit_time=time,
                 entry_price=entry_fill,
                 exit_price=exit_fill,
                 pnl_pct=raw_return * 100,
@@ -80,16 +87,48 @@ def run_backtest(
                 equity_after=equity,
             )
         )
-        equity_curve.append((signal.time, equity))
+        equity_curve.append((time, equity))
         open_trade = None
 
-    for signal in events:
+    stop_pct = bp["stop_loss_pct"]
+    target_pct = bp["take_profit_pct"]
+    stop_loss_enabled = stop_pct > 0 or target_pct > 0
+
+    for ts, row in df.iterrows():
+        t = int(ts.timestamp())
+
+        # Intrabar stop/target check happens before this bar's own signal —
+        # a position can be stopped out on a bar between two strategy
+        # signals, using the bar's actual high/low, not just its close.
+        if stop_loss_enabled and open_trade is not None:
+            direction = open_trade["direction"]
+            entry = open_trade["entry_price"]
+            if direction == "long":
+                stop_level = entry * (1 - stop_pct / 100) if stop_pct > 0 else None
+                target_level = entry * (1 + target_pct / 100) if target_pct > 0 else None
+                stop_hit = stop_level is not None and row["low"] <= stop_level
+                target_hit = target_level is not None and row["high"] >= target_level
+            else:
+                stop_level = entry * (1 + stop_pct / 100) if stop_pct > 0 else None
+                target_level = entry * (1 - target_pct / 100) if target_pct > 0 else None
+                stop_hit = stop_level is not None and row["high"] >= stop_level
+                target_hit = target_level is not None and row["low"] <= target_level
+            if stop_hit:
+                _close_at(stop_level, t)
+                continue
+            if target_hit:
+                _close_at(target_level, t)
+                continue
+
+        signal = event_by_ts.get(t)
+        if signal is None:
+            continue
         if signal.type in _ENTRY_TYPES:
             _open("long" if signal.type == "entry_long" else "short", signal)
         elif signal.type in _EXIT_TYPES:
-            _close(signal)
+            _close_at(signal.price, signal.time)
         elif signal.type in _FLIP_TYPES:
-            _close(signal)
+            _close_at(signal.price, signal.time)
             _open("long" if signal.type == "flip_to_long" else "short", signal)
 
     wins = [t for t in trades if t.pnl_abs > 0]

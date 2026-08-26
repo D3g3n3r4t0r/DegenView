@@ -105,6 +105,7 @@ app = FastAPI(title="Liquidity Analysis Engine", lifespan=lifespan)
 
 
 class StrategyParamsQuery(BaseModel):
+    # Lorenzo (trend-follower) params — ignored by other strategies.
     average: Literal["EMA", "SMA"] = "EMA"
     len: int = 130
     slopeFlen: int = 7
@@ -115,6 +116,14 @@ class StrategyParamsQuery(BaseModel):
     volatilityfilter: bool = True
     volatilitystdevlength: int = 16
     volatilitystdevmalength: int = 44
+    # Accumulo/Distribuzione (long-term) params — ignored by other strategies.
+    # Exposed as independent toggles rather than baked into a silent OR: each
+    # was added reactively against a single chart, so a user who trusts only
+    # the divergence condition can turn the other two off instead of having
+    # to trust all three blindly.
+    enable_divergence: bool = True
+    enable_contraction: bool = True
+    enable_range_bounce: bool = True
 
 
 class BacktestParamsQuery(BaseModel):
@@ -122,6 +131,8 @@ class BacktestParamsQuery(BaseModel):
     qty_pct_of_equity: float = 30.0
     commission_pct: float = 0.06
     slippage_pct: float = 0.02
+    stop_loss_pct: float = 0.0
+    take_profit_pct: float = 0.0
 
 
 async def _safe_search(
