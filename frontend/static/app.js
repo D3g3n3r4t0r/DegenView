@@ -209,11 +209,6 @@
     });
   }
 
-  function updateIntervalContext() {
-    const triad = PRIMARY_TO_TRIAD[el("interval-primary").value];
-    el("interval-context").textContent = `MTF ${triad.mtf} · HTF ${triad.htf}`;
-  }
-
   function populateIntervalSelects() {
     const select = el("interval-primary");
     CANONICAL_INTERVALS.forEach((iv) => {
@@ -223,7 +218,6 @@
       if (iv === DEFAULT_PRIMARY_INTERVAL) opt.selected = true;
       select.appendChild(opt);
     });
-    updateIntervalContext();
   }
 
   async function populateStrategySelects() {
@@ -929,14 +923,21 @@
     state.suggestions.forEach((item, i) => {
       const li = document.createElement("li");
       li.className = i === state.activeSuggestionIndex ? "active" : "";
+      const main = document.createElement("span");
+      main.className = "sug-main";
       const sym = document.createElement("span");
       sym.className = "sug-symbol";
       sym.textContent = item.symbol;
       const name = document.createElement("span");
       name.className = "sug-name";
-      name.textContent = [item.name, item.exchange].filter(Boolean).join(" · ");
-      li.appendChild(sym);
-      li.appendChild(name);
+      name.textContent = item.name || "";
+      main.appendChild(sym);
+      main.appendChild(name);
+      const exchange = document.createElement("span");
+      exchange.className = "sug-exchange sug-exchange-" + item.provider;
+      exchange.textContent = item.exchange;
+      li.appendChild(main);
+      li.appendChild(exchange);
       // mousedown (not click) fires before the input's blur handler hides the list
       li.addEventListener("mousedown", (e) => {
         e.preventDefault();
@@ -1389,7 +1390,6 @@
     bindTickerAutocomplete();
 
     el("interval-primary").addEventListener("change", () => {
-      updateIntervalContext();
       if (state.pineActive) clearPineOverride();
       if (state.data) runAnalysis(state.data.symbol);
     });

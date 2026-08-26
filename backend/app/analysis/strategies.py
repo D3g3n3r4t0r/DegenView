@@ -156,6 +156,12 @@ def compute_exhaustion_signals(df: pd.DataFrame, params: dict | None = None) -> 
     tolerance = p["low_tolerance_pct"] / 100
 
     rsi = df.ta.rsi(length=p["rsi_length"])
+    # pandas_ta silently returns the input DataFrame unchanged (not a
+    # NaN-filled Series) when there's too little history for the requested
+    # length — treat that as "no RSI available" rather than let it corrupt
+    # every downstream comparison.
+    if not isinstance(rsi, pd.Series) or len(rsi) != len(df):
+        rsi = pd.Series(float("nan"), index=df.index)
     vol_ma = df["volume"].rolling(p["volume_ma_length"]).mean()
     trend_ema = close.ewm(span=p["trend_ema_length"], adjust=False).mean()
 

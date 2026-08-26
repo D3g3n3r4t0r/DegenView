@@ -15,16 +15,32 @@ def _first_col(df: pd.DataFrame | None, prefix: str) -> pd.Series | None:
     return df[col] if col is not None else None
 
 
+def _as_series(x: object, n: int) -> pd.Series | None:
+    # When a requested indicator's length exceeds the available history (e.g.
+    # a 50-period EMA on a symbol with only 48 candles at this timeframe),
+    # pandas_ta silently returns the *input* DataFrame back unchanged instead
+    # of a NaN-filled Series. Iterating that as if it were a series of prices
+    # yields its column names ('open', 'high', ...) — not floats — and blows
+    # up downstream. Anything that isn't a proper same-length Series is
+    # simply "not enough data for this indicator" and gets dropped.
+    return x if isinstance(x, pd.Series) and len(x) == n else None
+
+
+def _as_dataframe(x: object, n: int) -> pd.DataFrame | None:
+    return x if isinstance(x, pd.DataFrame) and len(x) == n else None
+
+
 def compute_indicators(df: pd.DataFrame) -> list[IndicatorSeries]:
     out: list[IndicatorSeries] = []
+    n = len(df)
 
-    ema20 = df.ta.ema(length=20)
-    ema50 = df.ta.ema(length=50)
-    rsi14 = df.ta.rsi(length=14)
-    macd = df.ta.macd()
-    bbands = df.ta.bbands(length=20)
-    vwap = df.ta.vwap()
-    stoch = df.ta.stoch(k=14, d=3, smooth_k=3)
+    ema20 = _as_series(df.ta.ema(length=20), n)
+    ema50 = _as_series(df.ta.ema(length=50), n)
+    rsi14 = _as_series(df.ta.rsi(length=14), n)
+    macd = _as_dataframe(df.ta.macd(), n)
+    bbands = _as_dataframe(df.ta.bbands(length=20), n)
+    vwap = _as_series(df.ta.vwap(), n)
+    stoch = _as_dataframe(df.ta.stoch(k=14, d=3, smooth_k=3), n)
 
     if ema20 is not None:
         out.append(IndicatorSeries(name="EMA20", values=_series_to_values(ema20)))
