@@ -3,6 +3,7 @@ from typing import Literal
 from pydantic import BaseModel
 
 AssetType = Literal["stock", "crypto"]
+CryptoExchange = Literal["mexc", "binance"]
 TimeframeKey = Literal["htf", "mtf", "ltf"]
 LevelType = Literal["order_block", "fvg", "eqh", "eql", "bos", "choch"]
 
@@ -10,7 +11,9 @@ LevelType = Literal["order_block", "fvg", "eqh", "eql", "bos", "choch"]
 class SymbolSuggestion(BaseModel):
     symbol: str
     name: str
-    exchange: str
+    exchange: str  # human label, e.g. "NASDAQ", "MEXC (USDT)", "Binance (USDT)"
+    asset_type: AssetType
+    provider: Literal["stock", "mexc", "binance"]
 
 
 class Candle(BaseModel):
@@ -87,6 +90,7 @@ class WatchlistEntry(BaseModel):
     id: str
     symbol: str
     asset_type: AssetType
+    exchange: CryptoExchange = "mexc"
     strategy_name: str
     timeframes: list[TimeframeKey]
     enabled: bool = True

@@ -17,12 +17,8 @@
   <header class="topbar">
     <div class="brand">Liquidity Analysis Engine</div>
     <form id="search-form" class="search-form">
-      <div class="asset-toggle">
-        <button type="button" data-asset="stock" class="asset-btn active">Azioni</button>
-        <button type="button" data-asset="crypto" class="asset-btn">Crypto</button>
-      </div>
       <div class="ticker-field">
-        <input id="ticker-input" type="text" placeholder="Cerca ticker (es. AAPL, BTC)" autocomplete="off" />
+        <input id="ticker-input" type="text" placeholder="Cerca ticker — azioni o crypto (es. AAPL, BTC)" autocomplete="off" />
         <ul id="ticker-suggestions" class="suggestions hidden"></ul>
       </div>
       <button type="submit" id="search-btn">Analizza</button>
@@ -33,6 +29,10 @@
 
   <main class="layout">
     <aside class="sidebar">
+      <div class="drawer-header">
+        <span>Livelli &amp; Watchlist</span>
+        <button type="button" class="drawer-close-btn" data-close-drawer>✕ Chiudi</button>
+      </div>
       <div class="panel">
         <h3>Timeframe</h3>
         <div id="timeframe-tabs" class="timeframe-tabs">
@@ -113,6 +113,10 @@
             <button type="button" data-watchlist-asset="stock" class="wl-asset-btn active">Azioni</button>
             <button type="button" data-watchlist-asset="crypto" class="wl-asset-btn">Crypto</button>
           </div>
+          <select id="watchlist-exchange" class="hidden">
+            <option value="mexc">MEXC</option>
+            <option value="binance">Binance</option>
+          </select>
           <select id="watchlist-strategy"></select>
           <button type="submit">Aggiungi</button>
         </form>
@@ -134,6 +138,10 @@
     </section>
 
     <aside class="summary-panel">
+      <div class="drawer-header">
+        <span>Strategia &amp; Analisi</span>
+        <button type="button" class="drawer-close-btn" data-close-drawer>✕ Chiudi</button>
+      </div>
       <div class="panel">
         <div class="panel-title-row">
           <h3>Strategia</h3>

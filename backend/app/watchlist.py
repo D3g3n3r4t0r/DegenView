@@ -12,7 +12,7 @@ import json
 import uuid
 from pathlib import Path
 
-from app.models import AssetType, TimeframeKey, WatchlistEntry
+from app.models import AssetType, CryptoExchange, TimeframeKey, WatchlistEntry
 
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 _DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -53,11 +53,13 @@ def add_entry(
     asset_type: AssetType,
     strategy_name: str,
     timeframes: list[TimeframeKey],
+    exchange: CryptoExchange = "mexc",
 ) -> WatchlistEntry:
     entry = WatchlistEntry(
         id=uuid.uuid4().hex[:12],
         symbol=symbol.strip().upper(),
         asset_type=asset_type,
+        exchange=exchange,
         strategy_name=strategy_name,
         timeframes=timeframes,
         enabled=True,

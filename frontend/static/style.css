@@ -909,7 +909,7 @@ body {
    bottom-sheet drawers reached via a TradingView-style bottom tab bar, not a
    long stacked scroll. ---- */
 
-.mobile-nav, .mobile-drawer-backdrop { display: none; }
+.mobile-nav, .mobile-drawer-backdrop, .drawer-header { display: none; }
 
 @media (max-width: 760px) {
   html, body { height: 100%; overflow: hidden; }
@@ -972,6 +972,36 @@ body {
     z-index: 35;
   }
   .mobile-drawer-backdrop.hidden { display: none; }
+
+  .drawer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: -16px;
+    margin: -16px -14px 12px;
+    padding: 12px 14px;
+    background: var(--accent);
+    color: var(--bg);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-radius: 10px 10px 0 0;
+    z-index: 1;
+  }
+
+  .drawer-close-btn {
+    background: rgba(242, 237, 225, 0.16);
+    color: var(--bg);
+    border: 1.5px solid rgba(242, 237, 225, 0.5);
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
 
   .mobile-nav {
     display: flex;

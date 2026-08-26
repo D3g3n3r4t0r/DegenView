@@ -1,4 +1,5 @@
 import asyncio
+import itertools
 import logging
 import sys
 from contextlib import asynccontextmanager
@@ -35,6 +36,7 @@ from app.models import (
     AnalysisResponse,
     AssetType,
     Candle,
+    CryptoExchange,
     StrategyState,
     SymbolSuggestion,
     TimeframeAnalysis,
@@ -46,6 +48,7 @@ from app.notify.alerts import find_new_signals, format_signal_message
 from app.pine import PineError, PineInterpreter, is_strategy_style, parse_program, scan_inputs
 from app.pine import storage as pine_storage
 from app.providers.base import DataProvider, ProviderError
+from app.providers.binance import BinanceProvider
 from app.providers.mexc import MexcProvider
 from app.providers.twelvedata import TwelveDataProvider
 from app.timeframes import DEFAULT_INTERVALS, IntervalChoice
@@ -59,10 +62,13 @@ WATCHLIST_POLL_SECONDS = 60
 
 twelvedata_provider = TwelveDataProvider()
 mexc_provider = MexcProvider()
+binance_provider = BinanceProvider()
 
 
-def get_provider(asset_type: AssetType) -> DataProvider:
-    return mexc_provider if asset_type == "crypto" else twelvedata_provider
+def get_provider(asset_type: AssetType, exchange: CryptoExchange = "mexc") -> DataProvider:
+    if asset_type != "crypto":
+        return twelvedata_provider
+    return binance_provider if exchange == "binance" else mexc_provider
 
 
 async def _watchlist_alert_loop() -> None:
@@ -76,7 +82,7 @@ async def _watchlist_alert_loop() -> None:
         for entry in watchlist_store.list_entries():
             if not entry.enabled:
                 continue
-            provider = get_provider(entry.asset_type)
+            provider = get_provider(entry.asset_type, entry.exchange)
             for tf_key in entry.timeframes:
                 try:
                     df = await provider.fetch_ohlcv(
@@ -118,16 +124,36 @@ class BacktestParamsQuery(BaseModel):
     slippage_pct: float = 0.02
 
 
-@app.get("/api/symbols", response_model=list[SymbolSuggestion])
-async def search_symbols(
-    query: str = Query(..., min_length=1, max_length=20),
-    asset_type: AssetType = Query("stock"),
+async def _safe_search(
+    provider: DataProvider, query: str, asset_type: AssetType, provider_id: str
 ) -> list[SymbolSuggestion]:
     try:
-        results = await get_provider(asset_type).search_symbols(query)
-    except ProviderError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-    return [SymbolSuggestion(**r) for r in results]
+        results = await provider.search_symbols(query)
+    except ProviderError:
+        return []  # one source being down shouldn't sink the combined search
+    return [SymbolSuggestion(**r, asset_type=asset_type, provider=provider_id) for r in results]
+
+
+def _interleave(*lists: list) -> list:
+    """Round-robin merge so one source's larger result count (typically
+    stocks) doesn't crowd the others out of a capped combined list."""
+    out = []
+    for group in itertools.zip_longest(*lists):
+        out.extend(item for item in group if item is not None)
+    return out
+
+
+@app.get("/api/symbols", response_model=list[SymbolSuggestion])
+async def search_symbols(query: str = Query(..., min_length=1, max_length=20)) -> list[SymbolSuggestion]:
+    # Single unified search across stocks and both crypto exchanges — no
+    # upfront "stock vs crypto" toggle. The user picks the asset from results
+    # that already say which market/exchange it's on.
+    stock_res, binance_res, mexc_res = await asyncio.gather(
+        _safe_search(twelvedata_provider, query, "stock", "stock"),
+        _safe_search(binance_provider, query, "crypto", "binance"),
+        _safe_search(mexc_provider, query, "crypto", "mexc"),
+    )
+    return _interleave(stock_res, binance_res, mexc_res)[:12]
 
 
 def _dispatch_telegram_alerts(symbol: str, timeframe_key: TimeframeKey, strategy: StrategyState) -> None:
@@ -238,6 +264,7 @@ async def delete_pinescript(script_id: str) -> dict:
 class PineRunRequest(BaseModel):
     symbol: str
     asset_type: AssetType
+    exchange: CryptoExchange = "mexc"
     timeframe: TimeframeKey = "mtf"
     interval: IntervalChoice | None = None
     params: dict = {}
@@ -257,13 +284,13 @@ async def run_pinescript(script_id: str, req: PineRunRequest) -> dict:
     if not symbol:
         raise HTTPException(status_code=400, detail="Ticker mancante")
     interval = req.interval or DEFAULT_INTERVALS[req.timeframe]
-    provider = get_provider(req.asset_type)
+    provider = get_provider(req.asset_type, req.exchange)
 
     async def do_fetch():
         return await provider.fetch_ohlcv(symbol, interval, settings.candles_per_timeframe)
 
     try:
-        df = await get_or_fetch((f"pine:{req.asset_type}:{symbol.upper()}", interval), do_fetch)
+        df = await get_or_fetch((f"pine:{req.asset_type}:{req.exchange}:{symbol.upper()}", interval), do_fetch)
     except ProviderError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     if df.empty:
@@ -304,6 +331,7 @@ async def get_watchlist() -> list[WatchlistEntry]:
 class WatchlistAddRequest(BaseModel):
     symbol: str
     asset_type: AssetType
+    exchange: CryptoExchange = "mexc"
     strategy_name: str = DEFAULT_STRATEGY
     timeframes: list[TimeframeKey] = ["htf", "mtf", "ltf"]
 
@@ -315,7 +343,7 @@ async def add_watchlist_entry(req: WatchlistAddRequest) -> WatchlistEntry:
         raise HTTPException(status_code=400, detail="Ticker mancante")
     if req.strategy_name not in AVAILABLE_STRATEGIES:
         raise HTTPException(status_code=400, detail=f"Strategia sconosciuta: {req.strategy_name}")
-    return watchlist_store.add_entry(symbol, req.asset_type, req.strategy_name, req.timeframes)
+    return watchlist_store.add_entry(symbol, req.asset_type, req.strategy_name, req.timeframes, exchange=req.exchange)
 
 
 @app.delete("/api/watchlist/{entry_id}")
@@ -336,6 +364,7 @@ async def toggle_watchlist_entry(entry_id: str, enabled: bool = Query(...)) -> W
 async def analyze(
     symbol: str = Query(..., min_length=1, max_length=20),
     asset_type: AssetType = Query("stock"),
+    exchange: CryptoExchange = Query("mexc"),
     htf_interval: IntervalChoice = Query(DEFAULT_INTERVALS["htf"]),
     mtf_interval: IntervalChoice = Query(DEFAULT_INTERVALS["mtf"]),
     ltf_interval: IntervalChoice = Query(DEFAULT_INTERVALS["ltf"]),
@@ -352,12 +381,12 @@ async def analyze(
     strategy_params_dict = strategy_params.model_dump()
     backtest_params_dict = backtest_params.model_dump()
 
-    provider = get_provider(asset_type)
+    provider = get_provider(asset_type, exchange)
     intervals: dict[TimeframeKey, str] = {"htf": htf_interval, "mtf": mtf_interval, "ltf": ltf_interval}
 
     async def fetch_timeframe(tf_key: TimeframeKey):
         interval = intervals[tf_key]
-        cache_key = (f"{asset_type}:{symbol.upper()}", interval)
+        cache_key = (f"{asset_type}:{exchange}:{symbol.upper()}", interval)
 
         async def do_fetch():
             return await provider.fetch_ohlcv(symbol, interval, settings.candles_per_timeframe)

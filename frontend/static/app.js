@@ -115,6 +115,7 @@
   // ---- App state ----
   const state = {
     assetType: "stock",
+    cryptoExchange: "mexc", // set automatically from the picked search suggestion
     activeTimeframe: "htf",
     data: null,
     suggestions: [],
@@ -821,14 +822,12 @@
       }
     });
     ws.addEventListener("error", () => ws.close());
-
-    state.liveRefreshTimer = setInterval(() => silentRefresh(symbol), 60000);
   }
 
   async function silentRefresh(symbol) {
     if (!state.data || state.data.symbol !== symbol) return;
     try {
-      const url = `/api/analyze?symbol=${encodeURIComponent(symbol)}&asset_type=${state.assetType}&${intervalQuery()}&${getStrategyAndBacktestQuery()}`;
+      const url = `/api/analyze?symbol=${encodeURIComponent(symbol)}&asset_type=${state.assetType}&exchange=${state.cryptoExchange}&${intervalQuery()}&${getStrategyAndBacktestQuery()}`;
       const resp = await fetch(url);
       if (!resp.ok) return;
       state.data = await resp.json();
@@ -847,7 +846,7 @@
     disconnectLiveFeed();
 
     try {
-      const url = `/api/analyze?symbol=${encodeURIComponent(symbol)}&asset_type=${state.assetType}&${intervalQuery()}&${getStrategyAndBacktestQuery()}`;
+      const url = `/api/analyze?symbol=${encodeURIComponent(symbol)}&asset_type=${state.assetType}&exchange=${state.cryptoExchange}&${intervalQuery()}&${getStrategyAndBacktestQuery()}`;
       const resp = await fetch(url);
       const body = await resp.json();
       if (!resp.ok) {
@@ -861,8 +860,13 @@
       el("chart-wrap").classList.remove("hidden");
       resizeAllCharts();
       render();
-      if (state.assetType === "crypto") {
+      // Live WS streaming is only wired up for MEXC today; every crypto
+      // symbol still gets the periodic refresh below regardless of exchange.
+      if (state.assetType === "crypto" && state.cryptoExchange === "mexc") {
         connectLiveFeed(body.symbol);
+      }
+      if (state.assetType === "crypto") {
+        state.liveRefreshTimer = setInterval(() => silentRefresh(body.symbol), 60000);
       }
     } catch (err) {
       showError(err.message || "Errore durante l'analisi del ticker.");
@@ -877,7 +881,7 @@
 
   async function fetchSuggestions(query) {
     try {
-      const url = `/api/symbols?query=${encodeURIComponent(query)}&asset_type=${state.assetType}`;
+      const url = `/api/symbols?query=${encodeURIComponent(query)}`;
       const resp = await fetch(url);
       state.suggestions = resp.ok ? await resp.json() : [];
     } catch (err) {
@@ -925,6 +929,8 @@
 
   function selectSuggestion(item) {
     el("ticker-input").value = item.symbol;
+    state.assetType = item.asset_type;
+    state.cryptoExchange = item.provider === "binance" ? "binance" : "mexc";
     hideSuggestions();
     runAnalysis(item.symbol);
   }
@@ -1128,6 +1134,7 @@
         body: JSON.stringify({
           symbol: state.data.symbol,
           asset_type: state.assetType,
+          exchange: state.cryptoExchange,
           timeframe: state.activeTimeframe,
           params: collectPineParams(),
           signal_map: state.activePineIsStrategy ? null : collectSignalMap(),
@@ -1283,18 +1290,16 @@
       closeMobileDrawers();
       resizeAllCharts();
     });
+
+    document.querySelectorAll("[data-close-drawer]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        closeMobileDrawers();
+        resizeAllCharts();
+      });
+    });
   }
 
   function bindUI() {
-    document.querySelectorAll(".asset-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        document.querySelectorAll(".asset-btn").forEach((b) => b.classList.remove("active"));
-        btn.classList.add("active");
-        state.assetType = btn.dataset.asset;
-        hideSuggestions();
-      });
-    });
-
     document.querySelectorAll(".tf-tab").forEach((btn) => {
       btn.addEventListener("click", () => {
         document.querySelectorAll(".tf-tab").forEach((b) => b.classList.remove("active"));
@@ -1314,9 +1319,17 @@
 
     el("search-form").addEventListener("submit", (e) => {
       e.preventDefault();
-      hideSuggestions();
       const symbol = el("ticker-input").value.trim();
       if (!symbol) return;
+      // No suggestion explicitly picked (e.g. hit Enter right away) — if the
+      // typed text exactly matches a suggestion already fetched, use its
+      // asset type/exchange instead of falling back to whatever was set last.
+      const exact = state.suggestions.find((s) => s.symbol.toLowerCase() === symbol.toLowerCase());
+      if (exact) {
+        state.assetType = exact.asset_type;
+        state.cryptoExchange = exact.provider === "binance" ? "binance" : "mexc";
+      }
+      hideSuggestions();
       runAnalysis(symbol);
     });
 
@@ -1342,6 +1355,7 @@
         document.querySelectorAll(".wl-asset-btn").forEach((b) => b.classList.remove("active"));
         btn.classList.add("active");
         state.watchlistAssetType = btn.dataset.watchlistAsset;
+        el("watchlist-exchange").classList.toggle("hidden", state.watchlistAssetType !== "crypto");
       });
     });
 
@@ -1355,6 +1369,7 @@
         body: JSON.stringify({
           symbol,
           asset_type: state.watchlistAssetType,
+          exchange: el("watchlist-exchange").value,
           strategy_name: el("watchlist-strategy").value,
         }),
       });
