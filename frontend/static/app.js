@@ -9,12 +9,12 @@
     inkDim: "#5c675f",
     gridMinor: "rgba(168, 184, 174, 0.45)",
     gridMajor: "rgba(127, 148, 136, 0.55)",
-    bull: "#2e5c3e",
+    bull: "#1f7a44",
     bear: "#8c2f1f",
     accent: "#1f4e6b",
     stamp: "#8a6d3b",
-    bullFill: "rgba(46, 92, 62, 0.14)",
-    bullBorder: "rgba(46, 92, 62, 0.85)",
+    bullFill: "rgba(31, 122, 68, 0.16)",
+    bullBorder: "rgba(31, 122, 68, 0.9)",
     bearFill: "rgba(140, 47, 31, 0.14)",
     bearBorder: "rgba(140, 47, 31, 0.85)",
     confluenceFill: "rgba(138, 109, 59, 0.16)",
@@ -602,19 +602,50 @@
     });
 
     if (el("strategy-markers-toggle").checked && activeState) {
-      const markers = activeState.signals.map((sig) => ({
-        time: sig.time,
-        position: sig.type.includes("long") ? "belowBar" : "aboveBar",
-        color: sig.type.includes("long") ? COLORS.bullBorder : COLORS.bearBorder,
-        shape: sig.type.includes("long") ? "arrowUp" : "arrowDown",
-        text: sig.type.startsWith("entry") ? (sig.type.includes("long") ? "L" : "S") : "x",
-      }));
-      candleSeries.setMarkers(markers);
+      candleSeries.setMarkers(buildStrategyMarkers(activeState.signals));
     } else {
       candleSeries.setMarkers([]);
     }
 
     notifyNewAlerts(allSignals);
+  }
+
+  // Entry/exit/flip need to read unambiguously at a glance: shape says
+  // in-or-out (triangle vs. circle), color says which side (bull green vs.
+  // bear red — flips get the stamp accent since they're neither purely "in"
+  // nor "out"), and the label spells it out instead of a bare cryptic letter.
+  function buildStrategyMarkers(signals) {
+    return signals.map((sig) => {
+      const isLongSide = sig.type.includes("long");
+      if (sig.type.startsWith("entry")) {
+        return {
+          time: sig.time,
+          position: isLongSide ? "belowBar" : "aboveBar",
+          color: isLongSide ? COLORS.bullBorder : COLORS.bearBorder,
+          shape: isLongSide ? "arrowUp" : "arrowDown",
+          text: isLongSide ? "IN long" : "IN short",
+        };
+      }
+      if (sig.type.startsWith("exit")) {
+        return {
+          time: sig.time,
+          position: isLongSide ? "aboveBar" : "belowBar",
+          color: isLongSide ? COLORS.bullBorder : COLORS.bearBorder,
+          shape: "circle",
+          text: "OUT",
+        };
+      }
+      // flip_to_long / flip_to_short: closes one side and opens the other in
+      // the same bar — mark it distinctly rather than as a plain entry.
+      const flippingToLong = sig.type === "flip_to_long";
+      return {
+        time: sig.time,
+        position: flippingToLong ? "belowBar" : "aboveBar",
+        color: COLORS.stamp,
+        shape: flippingToLong ? "arrowUp" : "arrowDown",
+        text: flippingToLong ? "FLIP long" : "FLIP short",
+      };
+    });
   }
 
   function notifyNewAlerts(allSignals) {
@@ -1150,14 +1181,7 @@
     });
 
     if (el("strategy-markers-toggle").checked) {
-      const markers = strategyState.signals.map((sig) => ({
-        time: sig.time,
-        position: sig.type.includes("long") ? "belowBar" : "aboveBar",
-        color: sig.type.includes("long") ? COLORS.bullBorder : COLORS.bearBorder,
-        shape: sig.type.includes("long") ? "arrowUp" : "arrowDown",
-        text: sig.type.startsWith("entry") ? (sig.type.includes("long") ? "L" : "S") : "x",
-      }));
-      candleSeries.setMarkers(markers);
+      candleSeries.setMarkers(buildStrategyMarkers(strategyState.signals));
     } else {
       candleSeries.setMarkers([]);
     }

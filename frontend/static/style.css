@@ -8,7 +8,7 @@
   --ink: #26312e;
   --ink-dim: #5c675f;
   --accent: #1f4e6b;
-  --bull: #2e5c3e;
+  --bull: #1f7a44;
   --bear: #8c2f1f;
   --stamp: #8a6d3b;
 
@@ -476,6 +476,32 @@ body {
   line-height: 1.45;
   margin: 0 0 8px;
 }
+
+.marker-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 4px 0 8px;
+  padding: 0;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--ink-dim);
+}
+
+.legend-swatch {
+  font-size: 11px;
+  color: var(--ink-dim);
+}
+
+.legend-swatch.bull { color: var(--bull); }
+.legend-swatch.bear { color: var(--bear); }
+.legend-swatch.stamp { color: var(--stamp); }
 
 .watchlist-form {
   display: flex;

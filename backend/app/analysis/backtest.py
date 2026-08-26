@@ -1,6 +1,6 @@
 import pandas as pd
 
-from app.analysis.strategies import confirmed_events
+from app.analysis.strategies import DEFAULT_STRATEGY, confirmed_events
 from app.models import BacktestResult, BacktestTrade, StrategySignal
 
 # Same defaults as the user's Pine Script header:
@@ -30,9 +30,10 @@ def run_backtest(
     strategy_params: dict | None,
     backtest_params: dict | None,
     signals: pd.DataFrame | None = None,
+    strategy_name: str = DEFAULT_STRATEGY,
 ) -> BacktestResult:
     bp = {**DEFAULT_BACKTEST_PARAMS, **(backtest_params or {})}
-    events, _final_position = confirmed_events(df, strategy_params, signals=signals)
+    events, _final_position = confirmed_events(df, strategy_params, signals=signals, strategy_name=strategy_name)
 
     equity = bp["initial_capital"]
     peak_equity = equity

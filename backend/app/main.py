@@ -383,7 +383,7 @@ async def analyze(
         dealing_range = compute_dealing_range(df, tf_key)
         strategy = build_strategy_state(strategy_name, df, strategy_params_dict)
         strategies[tf_key] = [strategy]
-        backtests[tf_key] = run_backtest(df, strategy_params_dict, backtest_params_dict)
+        backtests[tf_key] = run_backtest(df, strategy_params_dict, backtest_params_dict, strategy_name=strategy_name)
         candles = [
             Candle(
                 time=int(ts.timestamp()),

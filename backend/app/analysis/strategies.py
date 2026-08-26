@@ -1,4 +1,6 @@
 import pandas as pd
+import pandas_ta  # noqa: F401  (registers the .ta accessor on DataFrame)
+from smartmoneyconcepts import smc
 
 from app.models import StrategySignal, StrategyState
 
@@ -18,12 +20,28 @@ DEFAULT_PARAMS = {
     "volatilitystdevmalength": 44,
 }
 
-_MAX_ALERTS_RETURNED = 30
+# Contrarian counterpart to Lorenzo: instead of riding a trend, it looks for
+# the point selling (or buying) pressure exhausts itself — RSI momentum
+# divergence at a swing extreme, confirmed by a volume climax and a real
+# close breaking back through the swing bar's level. Swing points reuse the
+# same smartmoneyconcepts detection already powering the SMC overlays, so the
+# "evident sign on the price chart" the reversal hangs on is the same swing
+# structure a trader would circle by hand.
+EXHAUSTION_DEFAULT_PARAMS = {
+    "swing_length": 8,
+    "rsi_length": 14,
+    "rsi_oversold": 35,
+    "rsi_overbought": 65,
+    "rsi_exit_long": 55,
+    "rsi_exit_short": 45,
+    "volume_ma_length": 20,
+    "volume_multiplier": 1.5,
+    "trend_filter": True,
+    "trend_ema_length": 50,
+    "confirmation_lookahead": 10,
+}
 
-# Registry of pluggable strategies — one entry today, built so a future
-# "exhaustion/reversal" strategy just adds a name here without UI changes.
-AVAILABLE_STRATEGIES = ["Lorenzo (trend-follower)"]
-DEFAULT_STRATEGY = AVAILABLE_STRATEGIES[0]
+_MAX_ALERTS_RETURNED = 30
 
 
 def _ma(series: pd.Series, length: int, kind: str) -> pd.Series:
@@ -76,18 +94,115 @@ def compute_signals(df: pd.DataFrame, params: dict | None = None) -> pd.DataFram
     )
 
 
+def _find_confirmation(df: pd.DataFrame, swing_pos: int, direction: str, max_lookahead: int) -> int | None:
+    """First bar after the swing point whose close actually breaks back
+    through the swing bar's high/low — the follow-through that turns a
+    divergence into a real signal instead of a mid-formation guess."""
+    n = len(df)
+    end = min(n, swing_pos + 1 + max_lookahead)
+    if direction == "long":
+        level = df["high"].iloc[swing_pos]
+        for pos in range(swing_pos + 1, end):
+            if df["close"].iloc[pos] > level:
+                return pos
+    else:
+        level = df["low"].iloc[swing_pos]
+        for pos in range(swing_pos + 1, end):
+            if df["close"].iloc[pos] < level:
+                return pos
+    return None
+
+
+def compute_exhaustion_signals(df: pd.DataFrame, params: dict | None = None) -> pd.DataFrame:
+    """Contrarian reversal strategy: fires when momentum (RSI) diverges from
+    price at a swing extreme — a higher RSI low on a lower price low (selling
+    exhaustion) or a lower RSI high on a higher price high (buying exhaustion)
+    — gated by a volume climax and an optional prior-trend filter, and only
+    confirmed once price actually closes back through the swing bar's level.
+    """
+    p = {**EXHAUSTION_DEFAULT_PARAMS, **(params or {})}
+    close = df["close"]
+
+    rsi = df.ta.rsi(length=p["rsi_length"])
+    vol_ma = df["volume"].rolling(p["volume_ma_length"]).mean()
+    trend_ema = close.ewm(span=p["trend_ema_length"], adjust=False).mean()
+
+    swings = smc.swing_highs_lows(df, swing_length=p["swing_length"])
+    swing_lows = swings[swings["HighLow"] == -1]
+    swing_highs = swings[swings["HighLow"] == 1]
+
+    entry_long = pd.Series(False, index=df.index)
+    entry_short = pd.Series(False, index=df.index)
+
+    low_positions = swing_lows.index.to_list()
+    for i in range(1, len(low_positions)):
+        cur_pos, prev_pos = int(low_positions[i]), int(low_positions[i - 1])
+        cur_rsi, prev_rsi = rsi.iloc[cur_pos], rsi.iloc[prev_pos]
+        if pd.isna(cur_rsi) or pd.isna(prev_rsi) or pd.isna(vol_ma.iloc[cur_pos]):
+            continue
+        bullish_divergence = df["low"].iloc[cur_pos] < df["low"].iloc[prev_pos] and cur_rsi > prev_rsi
+        oversold = cur_rsi < p["rsi_oversold"]
+        volume_climax = df["volume"].iloc[cur_pos] > vol_ma.iloc[cur_pos] * p["volume_multiplier"]
+        trend_ok = (not p["trend_filter"]) or (close.iloc[cur_pos] < trend_ema.iloc[cur_pos])
+        if bullish_divergence and oversold and volume_climax and trend_ok:
+            confirm_pos = _find_confirmation(df, cur_pos, "long", p["confirmation_lookahead"])
+            if confirm_pos is not None:
+                entry_long.iloc[confirm_pos] = True
+
+    high_positions = swing_highs.index.to_list()
+    for i in range(1, len(high_positions)):
+        cur_pos, prev_pos = int(high_positions[i]), int(high_positions[i - 1])
+        cur_rsi, prev_rsi = rsi.iloc[cur_pos], rsi.iloc[prev_pos]
+        if pd.isna(cur_rsi) or pd.isna(prev_rsi) or pd.isna(vol_ma.iloc[cur_pos]):
+            continue
+        bearish_divergence = df["high"].iloc[cur_pos] > df["high"].iloc[prev_pos] and cur_rsi < prev_rsi
+        overbought = cur_rsi > p["rsi_overbought"]
+        volume_climax = df["volume"].iloc[cur_pos] > vol_ma.iloc[cur_pos] * p["volume_multiplier"]
+        trend_ok = (not p["trend_filter"]) or (close.iloc[cur_pos] > trend_ema.iloc[cur_pos])
+        if bearish_divergence and overbought and volume_climax and trend_ok:
+            confirm_pos = _find_confirmation(df, cur_pos, "short", p["confirmation_lookahead"])
+            if confirm_pos is not None:
+                entry_short.iloc[confirm_pos] = True
+
+    exit_long = (rsi.shift(1) < p["rsi_exit_long"]) & (rsi >= p["rsi_exit_long"])
+    exit_short = (rsi.shift(1) > p["rsi_exit_short"]) & (rsi <= p["rsi_exit_short"])
+
+    return pd.DataFrame(
+        {
+            "entry_long": entry_long.fillna(False),
+            "entry_short": entry_short.fillna(False),
+            "exit_long": exit_long.fillna(False),
+            "exit_short": exit_short.fillna(False),
+        },
+        index=df.index,
+    )
+
+
+# Registry of pluggable strategies — dispatch used by confirmed_events()
+# whenever a caller passes a strategy name instead of pre-computed signals.
+STRATEGY_REGISTRY = {
+    "Lorenzo (trend-follower)": compute_signals,
+    "Esaurimento pressione (contrarian)": compute_exhaustion_signals,
+}
+AVAILABLE_STRATEGIES = list(STRATEGY_REGISTRY.keys())
+DEFAULT_STRATEGY = AVAILABLE_STRATEGIES[0]
+
+
 _LABELS = {
     "entry_long": "Ingresso long rilevato",
     "entry_short": "Ingresso short rilevato",
-    "exit_long": "Uscita long rilevata (inversione pendenza)",
-    "exit_short": "Uscita short rilevata (inversione pendenza)",
+    "exit_long": "Uscita long rilevata",
+    "exit_short": "Uscita short rilevata",
     "flip_to_long": "Inversione: chiusura short e apertura long",
     "flip_to_short": "Inversione: chiusura long e apertura short",
 }
 
 
 def confirmed_events(
-    df: pd.DataFrame, params: dict | None = None, signals: pd.DataFrame | None = None
+    df: pd.DataFrame,
+    params: dict | None = None,
+    signals: pd.DataFrame | None = None,
+    strategy_name: str = DEFAULT_STRATEGY,
 ) -> tuple[list[StrategySignal], int]:
     """All confirmed position-transition events for the full window (uncapped —
     used for backtesting), plus the resulting final position (1/0/-1).
@@ -100,9 +215,11 @@ def confirmed_events(
 
     `signals` lets callers (e.g. the Pine Script engine) inject an
     already-computed entry_long/entry_short/exit_long/exit_short frame
-    instead of the built-in Lorenzo formula.
+    instead of dispatching to a registered strategy by name.
     """
-    signals = signals if signals is not None else compute_signals(df, params)
+    if signals is None:
+        compute_fn = STRATEGY_REGISTRY.get(strategy_name, compute_signals)
+        signals = compute_fn(df, params)
     last_confirmed_ts = df.index[-2] if len(df) > 1 else None
 
     position = 0  # 0 flat, 1 long, -1 short
@@ -152,6 +269,6 @@ def confirmed_events(
 def build_strategy_state(
     name: str, df: pd.DataFrame, params: dict | None = None, signals: pd.DataFrame | None = None
 ) -> StrategyState:
-    events, position = confirmed_events(df, params, signals=signals)
+    events, position = confirmed_events(df, params, signals=signals, strategy_name=name)
     position_label = {1: "long", -1: "short", 0: "flat"}[position]
     return StrategyState(name=name, position=position_label, signals=events[-_MAX_ALERTS_RETURNED:])
