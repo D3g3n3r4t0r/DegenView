@@ -21,21 +21,32 @@ DEFAULT_PARAMS = {
 }
 
 # Contrarian counterpart to Lorenzo: instead of riding a trend, it looks for
-# the point selling (or buying) pressure exhausts itself — RSI momentum
-# divergence at a swing extreme, confirmed by a volume climax and a real
-# close breaking back through the swing bar's level. Swing points reuse the
-# same smartmoneyconcepts detection already powering the SMC overlays, so the
-# "evident sign on the price chart" the reversal hangs on is the same swing
-# structure a trader would circle by hand.
+# the point selling (or buying) pressure exhausts itself. Two distinct real
+# patterns both count as "exhaustion" and both get caught here:
+#   - Capitulation: a sharp new low on a volume climax, RSI still oversold —
+#     the classic panic V-bottom.
+#   - Accumulation/basing: price re-tests a prior swing low at roughly the
+#     SAME level (not a new low) on much *lower* volume while RSI is clearly
+#     higher than it was at that prior low — sellers have stopped pressing,
+#     a Wyckoff-style spring/re-test rather than a spike. Comparing against
+#     the lowest of the last few swings (not just the immediately preceding
+#     one) is what lets a multi-touch range register instead of only the
+#     single sharpest capitulation candle.
+# Swing points reuse the same smartmoneyconcepts detection already powering
+# the SMC overlays, so the "evident sign on the price chart" is the same
+# swing structure a trader would circle by hand.
 EXHAUSTION_DEFAULT_PARAMS = {
     "swing_length": 8,
     "rsi_length": 14,
-    "rsi_oversold": 35,
-    "rsi_overbought": 65,
+    "rsi_oversold": 40,
+    "rsi_overbought": 60,
     "rsi_exit_long": 55,
     "rsi_exit_short": 45,
+    "rsi_min_gap": 3.0,
+    "low_tolerance_pct": 1.0,
+    "divergence_lookback": 3,
     "volume_ma_length": 20,
-    "volume_multiplier": 1.5,
+    "volume_multiplier": 1.3,
     "trend_filter": True,
     "trend_ema_length": 50,
     "confirmation_lookahead": 10,
@@ -113,15 +124,29 @@ def _find_confirmation(df: pd.DataFrame, swing_pos: int, direction: str, max_loo
     return None
 
 
+def _reference_swing(positions: list[int], i: int, lookback: int, values, pick: str) -> int:
+    """Among the `lookback` swings before index i, return the position holding
+    the min (pick="low") or max (pick="high") value — the range's own
+    established extreme, not just whatever the immediately preceding swing
+    happened to be. That's what lets a multi-touch accumulation range register
+    instead of only a single sharp capitulation candle."""
+    window = positions[max(0, i - lookback) : i]
+    if pick == "low":
+        return min(window, key=lambda pos: values.iloc[pos])
+    return max(window, key=lambda pos: values.iloc[pos])
+
+
 def compute_exhaustion_signals(df: pd.DataFrame, params: dict | None = None) -> pd.DataFrame:
     """Contrarian reversal strategy: fires when momentum (RSI) diverges from
-    price at a swing extreme — a higher RSI low on a lower price low (selling
-    exhaustion) or a lower RSI high on a higher price high (buying exhaustion)
-    — gated by a volume climax and an optional prior-trend filter, and only
-    confirmed once price actually closes back through the swing bar's level.
+    price at a swing extreme relative to the range's established low/high —
+    either a sharp capitulation (new low, volume climax) or a quiet
+    accumulation re-test (roughly the same low, below-average volume, RSI
+    clearly firmer) — gated by an optional prior-trend filter and confirmed
+    only once price actually closes back through the swing bar's level.
     """
     p = {**EXHAUSTION_DEFAULT_PARAMS, **(params or {})}
     close = df["close"]
+    tolerance = p["low_tolerance_pct"] / 100
 
     rsi = df.ta.rsi(length=p["rsi_length"])
     vol_ma = df["volume"].rolling(p["volume_ma_length"]).mean()
@@ -136,30 +161,38 @@ def compute_exhaustion_signals(df: pd.DataFrame, params: dict | None = None) -> 
 
     low_positions = swing_lows.index.to_list()
     for i in range(1, len(low_positions)):
-        cur_pos, prev_pos = int(low_positions[i]), int(low_positions[i - 1])
-        cur_rsi, prev_rsi = rsi.iloc[cur_pos], rsi.iloc[prev_pos]
-        if pd.isna(cur_rsi) or pd.isna(prev_rsi) or pd.isna(vol_ma.iloc[cur_pos]):
+        cur_pos = int(low_positions[i])
+        ref_pos = _reference_swing(low_positions, i, p["divergence_lookback"], df["low"], "low")
+        cur_rsi, ref_rsi = rsi.iloc[cur_pos], rsi.iloc[ref_pos]
+        cur_vol_ma = vol_ma.iloc[cur_pos]
+        if pd.isna(cur_rsi) or pd.isna(ref_rsi) or pd.isna(cur_vol_ma):
             continue
-        bullish_divergence = df["low"].iloc[cur_pos] < df["low"].iloc[prev_pos] and cur_rsi > prev_rsi
+        not_a_higher_low = df["low"].iloc[cur_pos] <= df["low"].iloc[ref_pos] * (1 + tolerance)
+        bullish_divergence = not_a_higher_low and cur_rsi > ref_rsi + p["rsi_min_gap"]
         oversold = cur_rsi < p["rsi_oversold"]
-        volume_climax = df["volume"].iloc[cur_pos] > vol_ma.iloc[cur_pos] * p["volume_multiplier"]
+        volume_climax = df["volume"].iloc[cur_pos] > cur_vol_ma * p["volume_multiplier"]
+        volume_quiet = df["volume"].iloc[cur_pos] < cur_vol_ma / p["volume_multiplier"]
         trend_ok = (not p["trend_filter"]) or (close.iloc[cur_pos] < trend_ema.iloc[cur_pos])
-        if bullish_divergence and oversold and volume_climax and trend_ok:
+        if bullish_divergence and oversold and (volume_climax or volume_quiet) and trend_ok:
             confirm_pos = _find_confirmation(df, cur_pos, "long", p["confirmation_lookahead"])
             if confirm_pos is not None:
                 entry_long.iloc[confirm_pos] = True
 
     high_positions = swing_highs.index.to_list()
     for i in range(1, len(high_positions)):
-        cur_pos, prev_pos = int(high_positions[i]), int(high_positions[i - 1])
-        cur_rsi, prev_rsi = rsi.iloc[cur_pos], rsi.iloc[prev_pos]
-        if pd.isna(cur_rsi) or pd.isna(prev_rsi) or pd.isna(vol_ma.iloc[cur_pos]):
+        cur_pos = int(high_positions[i])
+        ref_pos = _reference_swing(high_positions, i, p["divergence_lookback"], df["high"], "high")
+        cur_rsi, ref_rsi = rsi.iloc[cur_pos], rsi.iloc[ref_pos]
+        cur_vol_ma = vol_ma.iloc[cur_pos]
+        if pd.isna(cur_rsi) or pd.isna(ref_rsi) or pd.isna(cur_vol_ma):
             continue
-        bearish_divergence = df["high"].iloc[cur_pos] > df["high"].iloc[prev_pos] and cur_rsi < prev_rsi
+        not_a_lower_high = df["high"].iloc[cur_pos] >= df["high"].iloc[ref_pos] * (1 - tolerance)
+        bearish_divergence = not_a_lower_high and cur_rsi < ref_rsi - p["rsi_min_gap"]
         overbought = cur_rsi > p["rsi_overbought"]
-        volume_climax = df["volume"].iloc[cur_pos] > vol_ma.iloc[cur_pos] * p["volume_multiplier"]
+        volume_climax = df["volume"].iloc[cur_pos] > cur_vol_ma * p["volume_multiplier"]
+        volume_quiet = df["volume"].iloc[cur_pos] < cur_vol_ma / p["volume_multiplier"]
         trend_ok = (not p["trend_filter"]) or (close.iloc[cur_pos] > trend_ema.iloc[cur_pos])
-        if bearish_divergence and overbought and volume_climax and trend_ok:
+        if bearish_divergence and overbought and (volume_climax or volume_quiet) and trend_ok:
             confirm_pos = _find_confirmation(df, cur_pos, "short", p["confirmation_lookahead"])
             if confirm_pos is not None:
                 entry_short.iloc[confirm_pos] = True
