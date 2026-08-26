@@ -25,9 +25,14 @@ def _fill_price(price: float, pct: float, side: str) -> float:
     return price * (1 + pct / 100) if side == "buy" else price * (1 - pct / 100)
 
 
-def run_backtest(df: pd.DataFrame, strategy_params: dict | None, backtest_params: dict | None) -> BacktestResult:
+def run_backtest(
+    df: pd.DataFrame,
+    strategy_params: dict | None,
+    backtest_params: dict | None,
+    signals: pd.DataFrame | None = None,
+) -> BacktestResult:
     bp = {**DEFAULT_BACKTEST_PARAMS, **(backtest_params or {})}
-    events, _final_position = confirmed_events(df, strategy_params)
+    events, _final_position = confirmed_events(df, strategy_params, signals=signals)
 
     equity = bp["initial_capital"]
     peak_equity = equity

@@ -11,3 +11,4 @@ backend/dist/
 desktop-app/src-tauri/target/
 desktop-app/src-tauri/binaries/
 backend/uvicorn.log
+backend/data/pine_scripts/

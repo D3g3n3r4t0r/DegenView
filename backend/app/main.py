@@ -43,6 +43,8 @@ from app.models import (
 )
 from app.notify import telegram
 from app.notify.alerts import find_new_signals, format_signal_message
+from app.pine import PineError, PineInterpreter, is_strategy_style, parse_program, scan_inputs
+from app.pine import storage as pine_storage
 from app.providers.base import DataProvider, ProviderError
 from app.providers.mexc import MexcProvider
 from app.providers.twelvedata import TwelveDataProvider
@@ -140,6 +142,158 @@ def _dispatch_telegram_alerts(symbol: str, timeframe_key: TimeframeKey, strategy
 @app.get("/api/strategies", response_model=list[str])
 async def list_strategies() -> list[str]:
     return AVAILABLE_STRATEGIES
+
+
+class PineParamOut(BaseModel):
+    var_name: str
+    kind: str
+    default: object
+    title: str
+    minval: float | None = None
+    maxval: float | None = None
+
+
+class PineUploadRequest(BaseModel):
+    name: str
+    source: str
+
+
+class PineScriptOut(BaseModel):
+    id: str
+    name: str
+    created_at: int
+    params: list[PineParamOut]
+    is_strategy_style: bool
+
+
+def _parse_pine_or_400(source: str) -> tuple[list, list[PineParamOut], bool]:
+    try:
+        stmts = parse_program(source)
+        params = scan_inputs(stmts)
+        strategy_style = is_strategy_style(stmts)
+    except PineError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    params_out = [
+        PineParamOut(var_name=p.var_name, kind=p.kind, default=p.default, title=p.title, minval=p.minval, maxval=p.maxval)
+        for p in params
+    ]
+    return stmts, params_out, strategy_style
+
+
+@app.post("/api/pinescript", response_model=PineScriptOut)
+async def upload_pinescript(req: PineUploadRequest) -> PineScriptOut:
+    name = req.name.strip() or "Script senza nome"
+    _stmts, params_out, strategy_style = _parse_pine_or_400(req.source)
+    default_params = {p.var_name: p.default for p in params_out}
+    meta = pine_storage.save_script(name, req.source, default_params)
+    return PineScriptOut(
+        id=meta["id"], name=meta["name"], created_at=meta["created_at"], params=params_out, is_strategy_style=strategy_style
+    )
+
+
+@app.get("/api/pinescript", response_model=list[PineScriptOut])
+async def list_pinescripts() -> list[PineScriptOut]:
+    out = []
+    for meta in pine_storage.list_scripts():
+        loaded = pine_storage.load_script(meta["id"])
+        if loaded is None:
+            continue
+        _, source = loaded
+        try:
+            _stmts, params_out, strategy_style = _parse_pine_or_400(source)
+        except HTTPException:
+            continue
+        out.append(
+            PineScriptOut(
+                id=meta["id"], name=meta["name"], created_at=meta["created_at"], params=params_out, is_strategy_style=strategy_style
+            )
+        )
+    return out
+
+
+@app.get("/api/pinescript/{script_id}")
+async def get_pinescript(script_id: str) -> dict:
+    loaded = pine_storage.load_script(script_id)
+    if loaded is None:
+        raise HTTPException(status_code=404, detail="Script non trovato")
+    meta, source = loaded
+    _stmts, params_out, strategy_style = _parse_pine_or_400(source)
+    return {
+        "id": meta["id"],
+        "name": meta["name"],
+        "created_at": meta["created_at"],
+        "source": source,
+        "params": [p.model_dump() for p in params_out],
+        "is_strategy_style": strategy_style,
+    }
+
+
+@app.delete("/api/pinescript/{script_id}")
+async def delete_pinescript(script_id: str) -> dict:
+    if not pine_storage.delete_script(script_id):
+        raise HTTPException(status_code=404, detail="Script non trovato")
+    return {"ok": True}
+
+
+class PineRunRequest(BaseModel):
+    symbol: str
+    asset_type: AssetType
+    timeframe: TimeframeKey = "mtf"
+    interval: IntervalChoice | None = None
+    params: dict = {}
+    signal_map: dict[str, str] | None = None
+    backtest_params: BacktestParamsQuery = BacktestParamsQuery()
+
+
+@app.post("/api/pinescript/{script_id}/run")
+async def run_pinescript(script_id: str, req: PineRunRequest) -> dict:
+    loaded = pine_storage.load_script(script_id)
+    if loaded is None:
+        raise HTTPException(status_code=404, detail="Script non trovato")
+    _meta, source = loaded
+    stmts, params_out, strategy_style = _parse_pine_or_400(source)
+
+    symbol = req.symbol.strip()
+    if not symbol:
+        raise HTTPException(status_code=400, detail="Ticker mancante")
+    interval = req.interval or DEFAULT_INTERVALS[req.timeframe]
+    provider = get_provider(req.asset_type)
+
+    async def do_fetch():
+        return await provider.fetch_ohlcv(symbol, interval, settings.candles_per_timeframe)
+
+    try:
+        df = await get_or_fetch((f"pine:{req.asset_type}:{symbol.upper()}", interval), do_fetch)
+    except ProviderError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if df.empty:
+        raise HTTPException(status_code=502, detail=f"Nessun dato per {symbol} su {interval}")
+
+    merged_params = {p.var_name: p.default for p in params_out}
+    merged_params.update(req.params or {})
+
+    try:
+        interp = PineInterpreter(df, params=merged_params, signal_map=req.signal_map)
+        signals = interp.run(stmts)
+    except PineError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if not strategy_style:
+        roles = {"entry_long", "entry_short", "exit_long", "exit_short"}
+        mapped = set((req.signal_map or {}).keys())
+        if not roles.issubset(mapped):
+            return {
+                "needs_mapping": True,
+                "candidates": interp.boolean_candidates(),
+                "warning": (
+                    "Questo script non usa strategy.entry/close: seleziona quali variabili booleane "
+                    "corrispondono a entry_long / entry_short / exit_long / exit_short."
+                ),
+            }
+
+    strategy = build_strategy_state(f"Script: {_meta['name']}", df, signals=signals)
+    backtest = run_backtest(df, None, req.backtest_params.model_dump(), signals=signals)
+    return {"needs_mapping": False, "strategy": strategy.model_dump(), "backtest": backtest.model_dump()}
 
 
 @app.get("/api/watchlist", response_model=list[WatchlistEntry])

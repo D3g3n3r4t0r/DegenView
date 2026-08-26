@@ -124,6 +124,12 @@
     seenAlertKeys: new Set(),
     alertsSeeded: false,
     watchlistAssetType: "stock",
+    pineScripts: [],
+    activePineScriptId: null,
+    activePineParams: [],
+    activePineIsStrategy: true,
+    pineActive: false,
+    pineLastResult: null,
     layers: {
       order_block: true,
       fvg: true,
@@ -786,6 +792,7 @@
       state.data = body;
       state.seenAlertKeys = new Set();
       state.alertsSeeded = false;
+      if (state.pineActive) clearPineOverride();
       el("chart-wrap").classList.remove("hidden");
       resizeAllCharts();
       render();
@@ -897,6 +904,291 @@
     });
   }
 
+  // ---- Script Pine: upload/parse/apply, editor via CodeMirror ----
+
+  let pineCM = null;
+
+  function initPineEditor() {
+    pineCM = CodeMirror.fromTextArea(el("pine-source"), {
+      lineNumbers: true,
+      lineWrapping: false,
+      styleActiveLine: true,
+      indentUnit: 4,
+      tabSize: 4,
+      viewportMargin: Infinity,
+    });
+  }
+
+  async function loadPineScripts() {
+    const resp = await fetch("/api/pinescript");
+    state.pineScripts = resp.ok ? await resp.json() : [];
+    const select = el("pine-script-select");
+    const current = select.value;
+    select.innerHTML = '<option value="">— Nuovo script —</option>';
+    state.pineScripts.forEach((s) => {
+      const opt = document.createElement("option");
+      opt.value = s.id;
+      opt.textContent = s.name;
+      select.appendChild(opt);
+    });
+    if (state.pineScripts.some((s) => s.id === current)) select.value = current;
+  }
+
+  function pineSetStatus(elId, text, cls) {
+    const node = el(elId);
+    node.textContent = text || "";
+    node.className = "pine-status" + (cls ? " " + cls : "");
+  }
+
+  function renderPineParamsForm(script) {
+    state.activePineParams = script.params;
+    state.activePineIsStrategy = script.is_strategy_style;
+    const container = el("pine-params-fields");
+    container.innerHTML = "";
+    script.params.forEach((p) => {
+      const row = document.createElement("div");
+      row.className = "pine-param-row";
+      let input;
+      if (p.kind === "bool") {
+        input = `<input type="checkbox" data-pine-param="${p.var_name}" ${p.default ? "checked" : ""} />`;
+      } else if (p.kind === "int" || p.kind === "float") {
+        const step = p.kind === "int" ? "1" : "any";
+        input = `<input type="number" step="${step}" data-pine-param="${p.var_name}" value="${p.default ?? ""}" />`;
+      } else {
+        input = `<input type="text" data-pine-param="${p.var_name}" value="${p.default ?? ""}" />`;
+      }
+      row.innerHTML = `<label>${p.title}</label>${input}`;
+      container.appendChild(row);
+    });
+    el("pine-params-form").classList.remove("hidden");
+    el("pine-delete-btn").classList.remove("hidden");
+    el("pine-signal-mapping").classList.toggle("hidden", script.is_strategy_style);
+  }
+
+  function collectPineParams() {
+    const params = {};
+    document.querySelectorAll("[data-pine-param]").forEach((input) => {
+      const name = input.dataset.pineParam;
+      if (input.type === "checkbox") params[name] = input.checked;
+      else if (input.type === "number") params[name] = input.value === "" ? null : parseFloat(input.value);
+      else params[name] = input.value;
+    });
+    return params;
+  }
+
+  function collectSignalMap() {
+    const map = {};
+    document.querySelectorAll("#pine-signal-mapping select[data-role]").forEach((select) => {
+      if (select.value) map[select.dataset.role] = select.value;
+    });
+    return map;
+  }
+
+  function populateSignalMappingCandidates(candidates) {
+    document.querySelectorAll("#pine-signal-mapping select[data-role]").forEach((select) => {
+      const current = select.value;
+      select.innerHTML = '<option value="">—</option>';
+      candidates.forEach((c) => {
+        const opt = document.createElement("option");
+        opt.value = c.name;
+        opt.textContent = `${c.name} (${c.true_count}x)`;
+        select.appendChild(opt);
+      });
+      if (candidates.some((c) => c.name === current)) select.value = current;
+    });
+    el("pine-signal-mapping").classList.remove("hidden");
+  }
+
+  async function analyzePineSource() {
+    const name = el("pine-script-name").value.trim() || "Script senza nome";
+    const source = pineCM.getValue();
+    if (!source.trim()) {
+      pineSetStatus("pine-parse-status", "Incolla o carica uno script prima di analizzare.", "error");
+      return;
+    }
+    pineSetStatus("pine-parse-status", "Analisi in corso…", "");
+    try {
+      const resp = await fetch("/api/pinescript", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, source }),
+      });
+      const body = await resp.json();
+      if (!resp.ok) {
+        pineSetStatus("pine-parse-status", typeof body.detail === "string" ? body.detail : "Errore di parsing.", "error");
+        return;
+      }
+      pineSetStatus("pine-parse-status", `Script valido — ${body.params.length} parametri rilevati.`, "ok");
+      await loadPineScripts();
+      el("pine-script-select").value = body.id;
+      renderPineParamsForm(body);
+    } catch (err) {
+      pineSetStatus("pine-parse-status", "Errore di rete durante l'analisi.", "error");
+    }
+  }
+
+  async function selectPineScript(id) {
+    if (!id) {
+      state.activePineScriptId = null;
+      el("pine-params-form").classList.add("hidden");
+      el("pine-delete-btn").classList.add("hidden");
+      el("pine-script-name").value = "";
+      pineCM.setValue("");
+      return;
+    }
+    const resp = await fetch(`/api/pinescript/${id}`);
+    if (!resp.ok) return;
+    const body = await resp.json();
+    state.activePineScriptId = id;
+    el("pine-script-name").value = body.name;
+    pineCM.setValue(body.source);
+    renderPineParamsForm(body);
+    pineSetStatus("pine-parse-status", `Script caricato — ${body.params.length} parametri.`, "ok");
+  }
+
+  async function applyPineScript() {
+    if (!state.activePineScriptId) {
+      pineSetStatus("pine-run-status", "Analizza e salva uno script prima di applicarlo.", "error");
+      return;
+    }
+    if (!state.data) {
+      pineSetStatus("pine-run-status", "Cerca prima un ticker.", "error");
+      return;
+    }
+    pineSetStatus("pine-run-status", "Esecuzione script…", "");
+    try {
+      const resp = await fetch(`/api/pinescript/${state.activePineScriptId}/run`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          symbol: state.data.symbol,
+          asset_type: state.assetType,
+          timeframe: state.activeTimeframe,
+          params: collectPineParams(),
+          signal_map: state.activePineIsStrategy ? null : collectSignalMap(),
+        }),
+      });
+      const body = await resp.json();
+      if (!resp.ok) {
+        pineSetStatus("pine-run-status", typeof body.detail === "string" ? body.detail : "Errore di esecuzione.", "error");
+        return;
+      }
+      if (body.needs_mapping) {
+        populateSignalMappingCandidates(body.candidates);
+        pineSetStatus("pine-run-status", body.warning || "Seleziona la mappatura dei segnali.", "error");
+        return;
+      }
+      state.pineActive = true;
+      state.pineLastResult = body;
+      el("pine-clear-btn").classList.remove("hidden");
+      renderPineStrategy(body.strategy);
+      renderPineBacktest(body.backtest);
+      pineSetStatus("pine-run-status", "Applicato al grafico.", "ok");
+    } catch (err) {
+      pineSetStatus("pine-run-status", "Errore di rete durante l'esecuzione.", "error");
+    }
+  }
+
+  function clearPineOverride() {
+    state.pineActive = false;
+    state.pineLastResult = null;
+    el("pine-clear-btn").classList.add("hidden");
+    pineSetStatus("pine-run-status", "", "");
+    if (state.data) {
+      renderStrategy();
+      renderBacktest();
+    }
+  }
+
+  function renderPineStrategy(strategyState) {
+    const badge = el("strategy-position-badge");
+    badge.textContent = strategyState.position.toUpperCase();
+    badge.className = "position-badge " + strategyState.position;
+
+    const log = el("strategy-alert-log");
+    log.innerHTML = "";
+    strategyState.signals.slice(-40).forEach((sig) => {
+      const li = document.createElement("li");
+      li.className = sig.type.includes("long") ? "long-signal" : "short-signal";
+      const time = new Date(sig.time * 1000).toLocaleString("it-IT");
+      li.innerHTML = `[${state.activeTimeframe.toUpperCase()}] ${sig.label} — ${sig.price.toPrecision(6)}<span class="alert-time">${time}</span>`;
+      log.appendChild(li);
+    });
+
+    if (el("strategy-markers-toggle").checked) {
+      const markers = strategyState.signals.map((sig) => ({
+        time: sig.time,
+        position: sig.type.includes("long") ? "belowBar" : "aboveBar",
+        color: sig.type.includes("long") ? COLORS.bullBorder : COLORS.bearBorder,
+        shape: sig.type.includes("long") ? "arrowUp" : "arrowDown",
+        text: sig.type.startsWith("entry") ? (sig.type.includes("long") ? "L" : "S") : "x",
+      }));
+      candleSeries.setMarkers(markers);
+    } else {
+      candleSeries.setMarkers([]);
+    }
+  }
+
+  function renderPineBacktest(bt) {
+    const statsEl = el("backtest-stats");
+    statsEl.innerHTML = "";
+    const returnClass = bt.total_return_pct >= 0 ? "positive" : "negative";
+    const stats = [
+      ["Rendimento", `${bt.total_return_pct >= 0 ? "+" : ""}${bt.total_return_pct.toFixed(1)}%`, returnClass],
+      ["Equity finale", bt.final_equity.toLocaleString("it-IT", { maximumFractionDigits: 0 }), ""],
+      ["Trade", bt.num_trades, ""],
+      ["Win rate", bt.win_rate_pct !== null ? `${bt.win_rate_pct.toFixed(0)}%` : "—", ""],
+      ["Max drawdown", `-${bt.max_drawdown_pct.toFixed(1)}%`, "negative"],
+      ["Profit factor", bt.profit_factor !== null ? bt.profit_factor.toFixed(2) : "—", ""],
+    ];
+    stats.forEach(([label, value, cls]) => {
+      const div = document.createElement("div");
+      div.className = "stat";
+      div.innerHTML = `<div class="stat-label">${label}</div><div class="stat-value ${cls}">${value}</div>`;
+      statsEl.appendChild(div);
+    });
+    equitySeries.setData(bt.equity_curve.map(([time, equity]) => ({ time, value: equity })));
+    equityChart.timeScale().fitContent();
+  }
+
+  function bindPineUI() {
+    el("pine-file-input").addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        pineCM.setValue(reader.result);
+        if (!el("pine-script-name").value.trim()) {
+          el("pine-script-name").value = file.name.replace(/\.(pine|txt)$/i, "");
+        }
+      };
+      reader.readAsText(file);
+    });
+
+    el("pine-analyze-btn").addEventListener("click", analyzePineSource);
+
+    el("pine-script-select").addEventListener("change", (e) => selectPineScript(e.target.value));
+
+    el("pine-delete-btn").addEventListener("click", async () => {
+      if (!state.activePineScriptId) return;
+      if (!confirm("Eliminare questo script?")) return;
+      await fetch(`/api/pinescript/${state.activePineScriptId}`, { method: "DELETE" });
+      state.activePineScriptId = null;
+      el("pine-params-form").classList.add("hidden");
+      el("pine-delete-btn").classList.add("hidden");
+      el("pine-script-name").value = "";
+      pineCM.setValue("");
+      loadPineScripts();
+    });
+
+    el("pine-params-form").addEventListener("submit", (e) => {
+      e.preventDefault();
+      applyPineScript();
+    });
+
+    el("pine-clear-btn").addEventListener("click", clearPineOverride);
+  }
+
   function bindUI() {
     document.querySelectorAll(".asset-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -912,6 +1204,7 @@
         document.querySelectorAll(".tf-tab").forEach((b) => b.classList.remove("active"));
         btn.classList.add("active");
         state.activeTimeframe = btn.dataset.tf;
+        if (state.pineActive) clearPineOverride();
         render();
       });
     });
@@ -998,6 +1291,9 @@
     loadWatchlist();
     initCharts();
     bindUI();
+    initPineEditor();
+    bindPineUI();
+    loadPineScripts();
     window.addEventListener("resize", resizeAllCharts);
   });
 })();

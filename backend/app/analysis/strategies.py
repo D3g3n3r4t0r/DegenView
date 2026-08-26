@@ -86,7 +86,9 @@ _LABELS = {
 }
 
 
-def confirmed_events(df: pd.DataFrame, params: dict | None = None) -> tuple[list[StrategySignal], int]:
+def confirmed_events(
+    df: pd.DataFrame, params: dict | None = None, signals: pd.DataFrame | None = None
+) -> tuple[list[StrategySignal], int]:
     """All confirmed position-transition events for the full window (uncapped —
     used for backtesting), plus the resulting final position (1/0/-1).
 
@@ -95,8 +97,12 @@ def confirmed_events(df: pd.DataFrame, params: dict | None = None) -> tuple[list
     would fire, vanish, and re-fire as the price moves, spamming the same
     timestamp. We still fold it into the returned position for a live-ish
     badge, but never emit it as a confirmed event.
+
+    `signals` lets callers (e.g. the Pine Script engine) inject an
+    already-computed entry_long/entry_short/exit_long/exit_short frame
+    instead of the built-in Lorenzo formula.
     """
-    signals = compute_signals(df, params)
+    signals = signals if signals is not None else compute_signals(df, params)
     last_confirmed_ts = df.index[-2] if len(df) > 1 else None
 
     position = 0  # 0 flat, 1 long, -1 short
@@ -143,7 +149,9 @@ def confirmed_events(df: pd.DataFrame, params: dict | None = None) -> tuple[list
     return events, position
 
 
-def build_strategy_state(name: str, df: pd.DataFrame, params: dict | None = None) -> StrategyState:
-    events, position = confirmed_events(df, params)
+def build_strategy_state(
+    name: str, df: pd.DataFrame, params: dict | None = None, signals: pd.DataFrame | None = None
+) -> StrategyState:
+    events, position = confirmed_events(df, params, signals=signals)
     position_label = {1: "long", -1: "short", 0: "flat"}[position]
     return StrategyState(name=name, position=position_label, signals=events[-_MAX_ALERTS_RETURNED:])
