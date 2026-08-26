@@ -8,6 +8,23 @@ from app.models import LiquidityLevel
 SWING_LENGTH_BY_TIMEFRAME = {"htf": 5, "mtf": 8, "ltf": 12}
 LIQUIDITY_RANGE_PERCENT = 0.01
 
+# Without a cap, every BOS/CHoCH/OB/FVG/EQH/EQL ever detected across the whole
+# fetched history (hundreds of candles) becomes a permanent chart label —
+# unreadable, especially on narrow mobile screens. Keep only the most recent
+# few per type; older structure is no longer actionable anyway.
+_LEVEL_LIMIT_PER_TYPE = {"bos": 6, "choch": 6, "order_block": 5, "fvg": 6, "eqh": 5, "eql": 5}
+
+
+def _cap_recent_per_type(levels: list[LiquidityLevel]) -> list[LiquidityLevel]:
+    grouped: dict[str, list[LiquidityLevel]] = {}
+    for lvl in levels:
+        grouped.setdefault(lvl.type, []).append(lvl)
+    out: list[LiquidityLevel] = []
+    for level_type, group in grouped.items():
+        group.sort(key=lambda l: l.start_time, reverse=True)
+        out.extend(group[: _LEVEL_LIMIT_PER_TYPE.get(level_type, 6)])
+    return out
+
 
 def _ts(df: pd.DataFrame, pos) -> int:
     return int(df.index[int(pos)].timestamp())
@@ -46,7 +63,7 @@ def compute_levels(df: pd.DataFrame, timeframe_key: str) -> list[LiquidityLevel]
     levels.extend(_order_block_levels(df, swings))
     levels.extend(_fvg_levels(df))
     levels.extend(_liquidity_levels(df, swings))
-    return levels
+    return _cap_recent_per_type(levels)
 
 
 def _bos_choch_levels(df: pd.DataFrame, swings: pd.DataFrame) -> list[LiquidityLevel]:

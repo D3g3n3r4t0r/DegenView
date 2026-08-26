@@ -24,6 +24,7 @@ def compute_indicators(df: pd.DataFrame) -> list[IndicatorSeries]:
     macd = df.ta.macd()
     bbands = df.ta.bbands(length=20)
     vwap = df.ta.vwap()
+    stoch = df.ta.stoch(k=14, d=3, smooth_k=3)
 
     if ema20 is not None:
         out.append(IndicatorSeries(name="EMA20", values=_series_to_values(ema20)))
@@ -54,5 +55,12 @@ def compute_indicators(df: pd.DataFrame) -> list[IndicatorSeries]:
 
     if vwap is not None:
         out.append(IndicatorSeries(name="VWAP", values=_series_to_values(vwap)))
+
+    stoch_k = _first_col(stoch, "STOCHk_")
+    stoch_d = _first_col(stoch, "STOCHd_")
+    if stoch_k is not None:
+        out.append(IndicatorSeries(name="STOCH_K", values=_series_to_values(stoch_k)))
+    if stoch_d is not None:
+        out.append(IndicatorSeries(name="STOCH_D", values=_series_to_values(stoch_d)))
 
     return out

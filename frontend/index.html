@@ -45,14 +45,16 @@
           <label>MTF <select id="interval-mtf" class="interval-select" data-tf="mtf"></select></label>
           <label>LTF <select id="interval-ltf" class="interval-select" data-tf="ltf"></select></label>
         </div>
+        <label class="layer-toggle log-scale-toggle"><input type="checkbox" id="log-scale-toggle" /> Scala logaritmica</label>
       </div>
 
       <div class="panel">
         <h3>Struttura &amp; Liquidità</h3>
-        <label class="layer-toggle"><input type="checkbox" data-layer="order_block" checked /> Order Blocks</label>
-        <label class="layer-toggle"><input type="checkbox" data-layer="fvg" checked /> Fair Value Gap</label>
-        <label class="layer-toggle"><input type="checkbox" data-layer="liquidity" checked /> Equal Highs/Lows</label>
-        <label class="layer-toggle"><input type="checkbox" data-layer="structure" checked /> BOS / CHoCH</label>
+        <p class="panel-hint">Disattivati di default — troppi livelli insieme affollano il grafico. Attiva solo quelli che ti servono.</p>
+        <label class="layer-toggle"><input type="checkbox" data-layer="order_block" /> Order Blocks</label>
+        <label class="layer-toggle"><input type="checkbox" data-layer="fvg" /> Fair Value Gap</label>
+        <label class="layer-toggle"><input type="checkbox" data-layer="liquidity" /> Equal Highs/Lows</label>
+        <label class="layer-toggle"><input type="checkbox" data-layer="structure" /> BOS / CHoCH</label>
         <label class="layer-toggle"><input type="checkbox" data-layer="confluence" checked /> Zone di confluenza</label>
       </div>
 
@@ -63,6 +65,7 @@
         <label class="layer-toggle"><input type="checkbox" data-layer="vwap" /> VWAP</label>
         <label class="layer-toggle"><input type="checkbox" data-layer="rsi" /> RSI (14)</label>
         <label class="layer-toggle"><input type="checkbox" data-layer="macd" /> MACD</label>
+        <label class="layer-toggle"><input type="checkbox" data-layer="stoch" /> Stocastico (14,3)</label>
       </div>
 
       <div class="panel pine-panel">
@@ -125,6 +128,7 @@
         <div id="main-chart" class="main-chart"></div>
         <div id="rsi-chart" class="sub-chart hidden"></div>
         <div id="macd-chart" class="sub-chart hidden"></div>
+        <div id="stoch-chart" class="sub-chart hidden"></div>
       </div>
       <div id="tooltip" class="chart-tooltip hidden"></div>
     </section>

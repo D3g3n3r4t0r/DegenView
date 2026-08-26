@@ -130,17 +130,23 @@
     activePineIsStrategy: true,
     pineActive: false,
     pineLastResult: null,
+    logScale: false,
+    // Kept minimal by default — every structure/liquidity level draws its own
+    // chart label, and turning them all on at once buries the price action
+    // (especially on narrow screens). Confluence zones stay on since they're
+    // already a synthesized, filtered view rather than raw noise.
     layers: {
-      order_block: true,
-      fvg: true,
-      liquidity: true,
-      structure: true,
+      order_block: false,
+      fvg: false,
+      liquidity: false,
+      structure: false,
       confluence: true,
       ema: true,
       bbands: false,
       vwap: false,
       rsi: false,
       macd: false,
+      stoch: false,
     },
   };
 
@@ -152,6 +158,7 @@
   };
 
   let mainChart, candleSeries, rsiChart, rsiSeries, macdChart, macdLineSeries, macdSignalSeries, macdHistSeries;
+  let stochChart, stochKSeries, stochDSeries;
   let equityChart, equitySeries;
 
   const el = (id) => document.getElementById(id);
@@ -173,6 +180,7 @@
       [el("main-chart"), mainChart],
       [el("rsi-chart"), rsiChart],
       [el("macd-chart"), macdChart],
+      [el("stoch-chart"), stochChart],
       [el("equity-chart"), equityChart],
     ].forEach(([container, chart]) => {
       if (container.clientWidth > 0 && container.clientHeight > 0) {
@@ -310,6 +318,12 @@
     macdHistSeries = macdChart.addHistogramSeries({ color: "rgba(38, 49, 46, 0.35)" });
     observeResize(macdContainer, macdChart);
 
+    const stochContainer = el("stoch-chart");
+    stochChart = LightweightCharts.createChart(stochContainer, baseOptions);
+    stochKSeries = stochChart.addLineSeries({ color: COLORS.rsi, lineWidth: 2 });
+    stochDSeries = stochChart.addLineSeries({ color: COLORS.stamp, lineWidth: 1 });
+    observeResize(stochContainer, stochChart);
+
     const equityContainer = el("equity-chart");
     equityChart = LightweightCharts.createChart(equityContainer, {
       ...baseOptions,
@@ -328,6 +342,7 @@
       if (!range) return;
       rsiChart.timeScale().setVisibleLogicalRange(range);
       macdChart.timeScale().setVisibleLogicalRange(range);
+      stochChart.timeScale().setVisibleLogicalRange(range);
     });
 
     mainChart.subscribeCrosshairMove(handleCrosshairMove);
@@ -419,6 +434,13 @@
     }
   }
 
+  function pricePrecisionFor(price) {
+    if (!price || price <= 0 || price >= 1) return { type: "price", precision: 2, minMove: 0.01 };
+    const magnitude = Math.floor(Math.log10(price));
+    const precision = Math.min(8, Math.max(2, -magnitude + 3));
+    return { type: "price", precision, minMove: 1 / 10 ** precision };
+  }
+
   function render() {
     if (!state.data) return;
     clearOverlays();
@@ -429,6 +451,10 @@
     const lastTime = candles[candles.length - 1].time;
     const firstTime = candles[0].time;
 
+    // Switching symbol/timeframe can jump price magnitude by orders of
+    // magnitude (a $90,000 BTC chart vs. a $0.00001 microcap) — the default
+    // fixed 2-decimal price format rounds small prices straight to 0.00.
+    candleSeries.applyOptions({ priceFormat: pricePrecisionFor(candles[candles.length - 1].close) });
     candleSeries.setData(candles.map((c) => ({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close })));
 
     // --- price-scale indicator overlays ---
@@ -488,6 +514,14 @@
       } else {
         macdHistSeries.setData([]);
       }
+    }
+
+    el("stoch-chart").classList.toggle("hidden", !state.layers.stoch);
+    if (state.layers.stoch) {
+      const kVals = findIndicator(analysis.indicators, "STOCH_K");
+      const dVals = findIndicator(analysis.indicators, "STOCH_D");
+      stochKSeries.setData(kVals ? seriesFromIndicatorValues(candles, kVals) : []);
+      stochDSeries.setData(dVals ? seriesFromIndicatorValues(candles, dVals) : []);
     }
 
     // --- structure / liquidity overlays ---
@@ -1282,6 +1316,13 @@
       } else if (Notification.permission === "denied") {
         e.target.checked = false;
       }
+    });
+
+    el("log-scale-toggle").addEventListener("change", (e) => {
+      state.logScale = e.target.checked;
+      mainChart.priceScale("right").applyOptions({
+        mode: state.logScale ? LightweightCharts.PriceScaleMode.Logarithmic : LightweightCharts.PriceScaleMode.Normal,
+      });
     });
   }
 
