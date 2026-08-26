@@ -1247,6 +1247,44 @@
     el("pine-clear-btn").addEventListener("click", clearPineOverride);
   }
 
+  // Mobile app-shell: the sidebar/summary-panel become bottom-sheet drawers
+  // opened via the bottom tab bar, closed by tapping "Grafico", the backdrop,
+  // or the same tab again — mirrors how TradingView's own mobile app keeps
+  // the chart full-screen with menus tucked away until asked for.
+  function closeMobileDrawers() {
+    document.querySelector(".sidebar").classList.remove("mobile-open");
+    document.querySelector(".summary-panel").classList.remove("mobile-open");
+    el("mobile-drawer-backdrop").classList.add("hidden");
+    document.querySelectorAll(".mobile-nav-btn").forEach((b) => b.classList.remove("active"));
+    document.querySelector('.mobile-nav-btn[data-mobile-target="chart"]').classList.add("active");
+  }
+
+  function bindMobileNav() {
+    const targets = { sidebar: document.querySelector(".sidebar"), summary: document.querySelector(".summary-panel") };
+    document.querySelectorAll(".mobile-nav-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const target = btn.dataset.mobileTarget;
+        if (target === "chart") {
+          closeMobileDrawers();
+          resizeAllCharts();
+          return;
+        }
+        const panel = targets[target];
+        const alreadyOpen = panel.classList.contains("mobile-open");
+        closeMobileDrawers();
+        if (!alreadyOpen) {
+          panel.classList.add("mobile-open");
+          el("mobile-drawer-backdrop").classList.remove("hidden");
+          btn.classList.add("active");
+        }
+      });
+    });
+    el("mobile-drawer-backdrop").addEventListener("click", () => {
+      closeMobileDrawers();
+      resizeAllCharts();
+    });
+  }
+
   function bindUI() {
     document.querySelectorAll(".asset-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -1356,6 +1394,7 @@
     loadWatchlist();
     initCharts();
     bindUI();
+    bindMobileNav();
     initPineEditor();
     bindPineUI();
     loadPineScripts();
