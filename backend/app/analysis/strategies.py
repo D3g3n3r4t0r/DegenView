@@ -57,6 +57,12 @@ EXHAUSTION_DEFAULT_PARAMS = {
     "contraction_lookback": 10,
     "contraction_prior_lookback": 30,
     "contraction_ratio": 0.55,
+    # A long grinding range has neither a volume climax nor unusually quiet
+    # volume at any single touch — it's just unremarkable chop — so it can
+    # satisfy neither condition above. This buys the range's own lower
+    # quartile directly on an oversold reaction candle.
+    "range_lookback": 40,
+    "range_zone_pct": 0.25,
 }
 
 _MAX_ALERTS_RETURNED = 30
@@ -236,6 +242,24 @@ def compute_exhaustion_signals(df: pd.DataFrame, params: dict | None = None) -> 
     )
     entry_long = entry_long | entry_long_contraction.fillna(False)
     entry_short = entry_short | entry_short_contraction.fillna(False)
+
+    # Range-support bounce — a long, grinding sideways range (many small
+    # touches, no volume climax and no real quiet-volume either, since it's
+    # just unremarkable chop) satisfies neither entry condition above. This
+    # buys the range's own lower quartile directly on an oversold reaction
+    # candle, which is what "buy the lows of this range" literally means.
+    range_est_high = df["high"].rolling(p["range_lookback"]).max()
+    range_est_low = df["low"].rolling(p["range_lookback"]).min()
+    range_width = range_est_high - range_est_low
+    in_lower_zone = close <= range_est_low + range_width * p["range_zone_pct"]
+    in_upper_zone = close >= range_est_high - range_width * p["range_zone_pct"]
+    bullish_reaction = close > df["open"]
+    bearish_reaction = close < df["open"]
+
+    entry_long_range = in_lower_zone & (rsi < p["rsi_oversold"]) & bullish_reaction & trend_ok_long
+    entry_short_range = in_upper_zone & (rsi > p["rsi_overbought"]) & bearish_reaction & trend_ok_short
+    entry_long = entry_long | entry_long_range.fillna(False)
+    entry_short = entry_short | entry_short_range.fillna(False)
 
     # This reads as an accumulation/distribution indicator for long-horizon
     # positions, not a scalp: an RSI-recovery exit would close the trade
