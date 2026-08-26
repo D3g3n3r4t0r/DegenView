@@ -148,11 +148,13 @@ body {
 }
 
 .suggestions {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  z-index: 30;
+  /* position:fixed with coordinates set from JS (not absolute) — the
+     toolbar needs its own horizontal scroll (overflow-x:auto) when its
+     items don't all fit, and that implicitly clips vertical overflow too
+     (an absolutely-positioned child included), which was hiding this list
+     entirely. Fixed positioning escapes that ancestor clipping. */
+  position: fixed;
+  z-index: 60;
   list-style: none;
   margin: 0;
   padding: 3px;
@@ -357,10 +359,12 @@ body {
   font-family: var(--font-mono);
 }
 
-.interval-select.active {
-  border-color: var(--accent);
-  color: var(--accent);
-  font-weight: 700;
+.interval-context {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink-dim);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .layer-toggle {

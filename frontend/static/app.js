@@ -31,6 +31,23 @@
   const TF_LABELS = { htf: "HTF", mtf: "MTF", ltf: "LTF" };
   const CANONICAL_INTERVALS = ["1m", "5m", "15m", "30m", "1h", "4h", "1d", "1w", "1M"];
   const DEFAULT_INTERVALS = { htf: "1d", mtf: "1h", ltf: "15m" };
+  const DEFAULT_PRIMARY_INTERVAL = "15m";
+
+  // One dropdown is all the user picks — HTF/MTF for the multi-timeframe SMC
+  // confluence engine are derived automatically from it (two and four steps
+  // up the canonical ladder), instead of three interval pickers that could
+  // drift out of sync with each other.
+  const PRIMARY_TO_TRIAD = {
+    "1m": { ltf: "1m", mtf: "15m", htf: "4h" },
+    "5m": { ltf: "5m", mtf: "1h", htf: "1d" },
+    "15m": { ltf: "15m", mtf: "1h", htf: "1d" },
+    "30m": { ltf: "30m", mtf: "4h", htf: "1d" },
+    "1h": { ltf: "1h", mtf: "4h", htf: "1w" },
+    "4h": { ltf: "4h", mtf: "1d", htf: "1w" },
+    "1d": { ltf: "1d", mtf: "1w", htf: "1M" },
+    "1w": { ltf: "1w", mtf: "1M", htf: "1M" },
+    "1M": { ltf: "1M", mtf: "1M", htf: "1M" },
+  };
 
   // ---- Series Primitive: filled rectangle between two (time, price) points ----
   function positionsBox(pos1, pos2, pixelRatio) {
@@ -116,7 +133,9 @@
   const state = {
     assetType: "stock",
     cryptoExchange: "mexc", // set automatically from the picked search suggestion
-    activeTimeframe: "htf",
+    // Always "ltf" now — the single timeframe dropdown *is* the chart's
+    // timeframe; MTF/HTF exist only for the derived confluence context.
+    activeTimeframe: "ltf",
     data: null,
     suggestions: [],
     activeSuggestionIndex: -1,
@@ -190,17 +209,21 @@
     });
   }
 
+  function updateIntervalContext() {
+    const triad = PRIMARY_TO_TRIAD[el("interval-primary").value];
+    el("interval-context").textContent = `MTF ${triad.mtf} · HTF ${triad.htf}`;
+  }
+
   function populateIntervalSelects() {
-    ["htf", "mtf", "ltf"].forEach((tf) => {
-      const select = el(`interval-${tf}`);
-      CANONICAL_INTERVALS.forEach((iv) => {
-        const opt = document.createElement("option");
-        opt.value = iv;
-        opt.textContent = iv;
-        if (iv === DEFAULT_INTERVALS[tf]) opt.selected = true;
-        select.appendChild(opt);
-      });
+    const select = el("interval-primary");
+    CANONICAL_INTERVALS.forEach((iv) => {
+      const opt = document.createElement("option");
+      opt.value = iv;
+      opt.textContent = iv;
+      if (iv === DEFAULT_PRIMARY_INTERVAL) opt.selected = true;
+      select.appendChild(opt);
     });
+    updateIntervalContext();
   }
 
   async function populateStrategySelects() {
@@ -274,11 +297,7 @@
   }
 
   function getSelectedIntervals() {
-    return {
-      htf: el("interval-htf").value,
-      mtf: el("interval-mtf").value,
-      ltf: el("interval-ltf").value,
-    };
+    return PRIMARY_TO_TRIAD[el("interval-primary").value];
   }
 
   function initCharts() {
@@ -891,6 +910,14 @@
     renderSuggestions();
   }
 
+  function positionSuggestions() {
+    const list = el("ticker-suggestions");
+    const rect = el("ticker-input").getBoundingClientRect();
+    list.style.left = `${rect.left}px`;
+    list.style.top = `${rect.bottom + 4}px`;
+    list.style.width = `${rect.width}px`;
+  }
+
   function renderSuggestions() {
     const list = el("ticker-suggestions");
     list.innerHTML = "";
@@ -898,6 +925,7 @@
       list.classList.add("hidden");
       return;
     }
+    positionSuggestions();
     state.suggestions.forEach((item, i) => {
       const li = document.createElement("li");
       li.className = i === state.activeSuggestionIndex ? "active" : "";
@@ -1334,19 +1362,6 @@
     });
   }
 
-  // Which of HTF/MTF/LTF is "active" (shown on the main chart) now follows
-  // directly from which interval dropdown the user touches — no separate
-  // tab row to fall out of sync with it. Focusing a dropdown switches the
-  // active view immediately (using data already fetched); picking a new
-  // value there additionally triggers a full re-fetch below.
-  function setActiveTimeframe(tf) {
-    if (state.activeTimeframe === tf) return;
-    state.activeTimeframe = tf;
-    document.querySelectorAll(".interval-select").forEach((s) => s.classList.toggle("active", s.dataset.tf === tf));
-    if (state.pineActive) clearPineOverride();
-    if (state.data) render();
-  }
-
   function bindUI() {
     document.querySelectorAll("[data-layer]").forEach((input) => {
       input.addEventListener("change", () => {
@@ -1373,13 +1388,10 @@
 
     bindTickerAutocomplete();
 
-    document.querySelectorAll(".interval-select").forEach((select) => {
-      select.addEventListener("mousedown", () => setActiveTimeframe(select.dataset.tf));
-      select.addEventListener("focus", () => setActiveTimeframe(select.dataset.tf));
-      select.addEventListener("change", () => {
-        setActiveTimeframe(select.dataset.tf);
-        if (state.data) runAnalysis(state.data.symbol);
-      });
+    el("interval-primary").addEventListener("change", () => {
+      updateIntervalContext();
+      if (state.pineActive) clearPineOverride();
+      if (state.data) runAnalysis(state.data.symbol);
     });
 
     el("params-form").addEventListener("submit", (e) => {

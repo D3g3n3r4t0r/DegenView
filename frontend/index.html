@@ -25,9 +25,8 @@
     </form>
 
     <div class="toolbar-intervals">
-      <label class="interval-label" data-tf-label="htf">HTF <select id="interval-htf" class="interval-select active" data-tf="htf" title="Intervallo HTF — attivo sul grafico"></select></label>
-      <label class="interval-label" data-tf-label="mtf">MTF <select id="interval-mtf" class="interval-select" data-tf="mtf" title="Intervallo MTF"></select></label>
-      <label class="interval-label" data-tf-label="ltf">LTF <select id="interval-ltf" class="interval-select" data-tf="ltf" title="Intervallo LTF"></select></label>
+      <select id="interval-primary" class="interval-select" title="Timeframe del grafico — i timeframe superiori per la confluenza vengono derivati automaticamente"></select>
+      <span id="interval-context" class="interval-context"></span>
     </div>
 
     <select id="active-strategy-select" class="active-strategy-select toolbar-strategy"></select>
