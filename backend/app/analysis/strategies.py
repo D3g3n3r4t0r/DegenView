@@ -40,8 +40,6 @@ EXHAUSTION_DEFAULT_PARAMS = {
     "rsi_length": 14,
     "rsi_oversold": 40,
     "rsi_overbought": 60,
-    "rsi_exit_long": 55,
-    "rsi_exit_short": 45,
     "rsi_min_gap": 3.0,
     "low_tolerance_pct": 1.0,
     "divergence_lookback": 3,
@@ -50,6 +48,15 @@ EXHAUSTION_DEFAULT_PARAMS = {
     "trend_filter": True,
     "trend_ema_length": 50,
     "confirmation_lookahead": 10,
+    # Swing-divergence needs two *confirmed* swings (swing_length bars settled
+    # on each side), so it structurally can't fire inside a range that formed
+    # only in the last handful of candles — exactly the freshest, tightest
+    # accumulation zones. This second, independent condition catches those:
+    # realized volatility collapsing after a decline (the sharp move has
+    # stopped, price is coiling) plus a breakout back through the range.
+    "contraction_lookback": 10,
+    "contraction_prior_lookback": 30,
+    "contraction_ratio": 0.55,
 }
 
 _MAX_ALERTS_RETURNED = 30
@@ -197,8 +204,40 @@ def compute_exhaustion_signals(df: pd.DataFrame, params: dict | None = None) -> 
             if confirm_pos is not None:
                 entry_short.iloc[confirm_pos] = True
 
-    exit_long = (rsi.shift(1) < p["rsi_exit_long"]) & (rsi >= p["rsi_exit_long"])
-    exit_short = (rsi.shift(1) > p["rsi_exit_short"]) & (rsi <= p["rsi_exit_short"])
+    # Volatility-contraction breakout — independent of confirmed swings, so
+    # it can fire inside a range that only just formed.
+    recent_std = close.rolling(p["contraction_lookback"]).std()
+    prior_std = close.rolling(p["contraction_prior_lookback"]).std().shift(p["contraction_lookback"])
+    contracted = recent_std < prior_std * p["contraction_ratio"]
+    was_oversold_recently = rsi.rolling(p["contraction_lookback"]).min() < p["rsi_oversold"]
+    was_overbought_recently = rsi.rolling(p["contraction_lookback"]).max() > p["rsi_overbought"]
+    range_high = df["high"].rolling(p["contraction_lookback"]).max().shift(1)
+    range_low = df["low"].rolling(p["contraction_lookback"]).min().shift(1)
+    trend_ok_long = (close < trend_ema) if p["trend_filter"] else pd.Series(True, index=df.index)
+    trend_ok_short = (close > trend_ema) if p["trend_filter"] else pd.Series(True, index=df.index)
+    # A mere tick above the range is noise; require a real break plus renewed
+    # volume on the breakout bar itself — without it this fires on every
+    # minor chop and drags win rate down.
+    breakout_long = close > range_high * 1.003
+    breakout_short = close < range_low * 0.997
+    volume_confirms = df["volume"] > vol_ma
+
+    entry_long_contraction = (
+        contracted & was_oversold_recently & (rsi > p["rsi_oversold"]) & breakout_long & volume_confirms & trend_ok_long
+    )
+    entry_short_contraction = (
+        contracted & was_overbought_recently & (rsi < p["rsi_overbought"]) & breakout_short & volume_confirms & trend_ok_short
+    )
+    entry_long = entry_long | entry_long_contraction.fillna(False)
+    entry_short = entry_short | entry_short_contraction.fillna(False)
+
+    # This reads as an accumulation/distribution indicator for long-horizon
+    # positions, not a scalp: an RSI-recovery exit would close the trade
+    # within days of an entry meant to be held through a slow re-accumulation
+    # base. Flip out only when the opposite exhaustion condition appears —
+    # i.e. hold the long until distribution (buying exhaustion) shows up.
+    exit_long = entry_short
+    exit_short = entry_long
 
     return pd.DataFrame(
         {
@@ -215,7 +254,7 @@ def compute_exhaustion_signals(df: pd.DataFrame, params: dict | None = None) -> 
 # whenever a caller passes a strategy name instead of pre-computed signals.
 STRATEGY_REGISTRY = {
     "Lorenzo (trend-follower)": compute_signals,
-    "Esaurimento pressione (contrarian)": compute_exhaustion_signals,
+    "Accumulo / Distribuzione (long-term)": compute_exhaustion_signals,
 }
 AVAILABLE_STRATEGIES = list(STRATEGY_REGISTRY.keys())
 DEFAULT_STRATEGY = AVAILABLE_STRATEGIES[0]

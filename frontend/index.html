@@ -14,40 +14,44 @@
   <link rel="stylesheet" href="https://unpkg.com/codemirror@5.65.16/lib/codemirror.css" />
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">Liquidity Analysis Engine</div>
+  <header class="toolbar">
+    <div class="brand">Liquidity Engine</div>
+
     <form id="search-form" class="search-form">
       <div class="ticker-field">
-        <input id="ticker-input" type="text" placeholder="Cerca ticker — azioni o crypto (es. AAPL, BTC)" autocomplete="off" />
+        <input id="ticker-input" type="text" placeholder="Cerca ticker — azioni o crypto" autocomplete="off" />
         <ul id="ticker-suggestions" class="suggestions hidden"></ul>
       </div>
-      <button type="submit" id="search-btn">Analizza</button>
     </form>
+
+    <div class="toolbar-intervals">
+      <label class="interval-label" data-tf-label="htf">HTF <select id="interval-htf" class="interval-select active" data-tf="htf" title="Intervallo HTF — attivo sul grafico"></select></label>
+      <label class="interval-label" data-tf-label="mtf">MTF <select id="interval-mtf" class="interval-select" data-tf="mtf" title="Intervallo MTF"></select></label>
+      <label class="interval-label" data-tf-label="ltf">LTF <select id="interval-ltf" class="interval-select" data-tf="ltf" title="Intervallo LTF"></select></label>
+    </div>
+
+    <select id="active-strategy-select" class="active-strategy-select toolbar-strategy"></select>
+
+    <label class="toolbar-check" title="Scala logaritmica">
+      <input type="checkbox" id="log-scale-toggle" /> Log
+    </label>
+
+    <div class="toolbar-spacer"></div>
+    <button type="submit" form="search-form" id="search-btn">Analizza</button>
   </header>
 
   <div id="error-banner" class="error-banner hidden"></div>
 
-  <main class="layout">
-    <aside class="sidebar">
+  <main class="cockpit">
+    <nav class="rail">
+      <button type="button" class="rail-btn" id="rail-levels-btn" title="Livelli, struttura e indicatori">▦</button>
+    </nav>
+
+    <div id="levels-panel" class="levels-panel">
       <div class="drawer-header">
-        <span>Livelli &amp; Watchlist</span>
+        <span>Livelli &amp; Indicatori</span>
         <button type="button" class="drawer-close-btn" data-close-drawer>✕ Chiudi</button>
       </div>
-      <div class="panel">
-        <h3>Timeframe</h3>
-        <div id="timeframe-tabs" class="timeframe-tabs">
-          <button data-tf="htf" class="tf-tab active">HTF</button>
-          <button data-tf="mtf" class="tf-tab">MTF</button>
-          <button data-tf="ltf" class="tf-tab">LTF</button>
-        </div>
-        <div class="interval-selects">
-          <label>HTF <select id="interval-htf" class="interval-select" data-tf="htf"></select></label>
-          <label>MTF <select id="interval-mtf" class="interval-select" data-tf="mtf"></select></label>
-          <label>LTF <select id="interval-ltf" class="interval-select" data-tf="ltf"></select></label>
-        </div>
-        <label class="layer-toggle log-scale-toggle"><input type="checkbox" id="log-scale-toggle" /> Scala logaritmica</label>
-      </div>
-
       <div class="panel">
         <h3>Struttura &amp; Liquidità</h3>
         <p class="panel-hint">Disattivati di default — troppi livelli insieme affollano il grafico. Attiva solo quelli che ti servono.</p>
@@ -57,7 +61,6 @@
         <label class="layer-toggle"><input type="checkbox" data-layer="structure" /> BOS / CHoCH</label>
         <label class="layer-toggle"><input type="checkbox" data-layer="confluence" checked /> Zone di confluenza</label>
       </div>
-
       <div class="panel">
         <h3>Indicatori</h3>
         <label class="layer-toggle"><input type="checkbox" data-layer="ema" checked /> EMA 20 / 50</label>
@@ -67,62 +70,7 @@
         <label class="layer-toggle"><input type="checkbox" data-layer="macd" /> MACD</label>
         <label class="layer-toggle"><input type="checkbox" data-layer="stoch" /> Stocastico (14,3)</label>
       </div>
-
-      <div class="panel pine-panel">
-        <h3>Script Pine</h3>
-        <p class="panel-hint">Carica o incolla uno script Pine (v4/v5). Supportato un sottoinsieme: variabili, ta.*, condizioni, strategy.entry/close, input.*. Non supportati: array, matrici, security(), librerie, oggetti grafici.</p>
-
-        <select id="pine-script-select" class="pine-script-select">
-          <option value="">— Nuovo script —</option>
-        </select>
-
-        <div id="pine-editor-wrap">
-          <input type="text" id="pine-script-name" placeholder="Nome script" autocomplete="off" />
-          <input type="file" id="pine-file-input" accept=".pine,.txt" />
-          <div id="pine-editor" class="pine-editor"><textarea id="pine-source"></textarea></div>
-          <div class="pine-actions">
-            <button type="button" id="pine-analyze-btn">Analizza e salva</button>
-            <button type="button" id="pine-delete-btn" class="pine-danger hidden">Elimina script</button>
-          </div>
-          <p id="pine-parse-status" class="pine-status"></p>
-        </div>
-
-        <form id="pine-params-form" class="pine-params-form hidden">
-          <div id="pine-params-fields"></div>
-          <div id="pine-signal-mapping" class="pine-signal-mapping hidden">
-            <p class="panel-hint">Questo script non usa strategy.entry/close — assegna le variabili booleane rilevate ai ruoli:</p>
-            <label>Ingresso long <select data-role="entry_long"></select></label>
-            <label>Ingresso short <select data-role="entry_short"></select></label>
-            <label>Uscita long <select data-role="exit_long"></select></label>
-            <label>Uscita short <select data-role="exit_short"></select></label>
-          </div>
-          <div class="pine-actions">
-            <button type="submit" id="pine-apply-btn">Applica al grafico</button>
-            <button type="button" id="pine-clear-btn" class="pine-secondary hidden">Torna alla strategia integrata</button>
-          </div>
-        </form>
-        <p id="pine-run-status" class="pine-status"></p>
-      </div>
-
-      <div class="panel">
-        <h3>Watchlist (alert Telegram)</h3>
-        <p class="panel-hint">Simboli qui dentro vengono controllati in background ogni minuto, indipendentemente da cosa stai guardando a schermo.</p>
-        <form id="watchlist-form" class="watchlist-form">
-          <input type="text" id="watchlist-symbol" placeholder="Ticker (es. BTC)" autocomplete="off" required />
-          <div class="asset-toggle small">
-            <button type="button" data-watchlist-asset="stock" class="wl-asset-btn active">Azioni</button>
-            <button type="button" data-watchlist-asset="crypto" class="wl-asset-btn">Crypto</button>
-          </div>
-          <select id="watchlist-exchange" class="hidden">
-            <option value="mexc">MEXC</option>
-            <option value="binance">Binance</option>
-          </select>
-          <select id="watchlist-strategy"></select>
-          <button type="submit">Aggiungi</button>
-        </form>
-        <ul id="watchlist-list" class="watchlist-list"></ul>
-      </div>
-    </aside>
+    </div>
 
     <section class="chart-area">
       <div id="live-badge" class="live-badge hidden"><span class="live-dot"></span>LIVE</div>
@@ -137,79 +85,150 @@
       <div id="tooltip" class="chart-tooltip hidden"></div>
     </section>
 
-    <aside class="summary-panel">
+    <aside class="right-panel">
       <div class="drawer-header">
-        <span>Strategia &amp; Analisi</span>
+        <span>Pannello</span>
         <button type="button" class="drawer-close-btn" data-close-drawer>✕ Chiudi</button>
       </div>
-      <div class="panel">
-        <div class="panel-title-row">
-          <h3>Strategia</h3>
-          <span id="strategy-position-badge" class="position-badge flat">FLAT</span>
+
+      <div class="tabs">
+        <button type="button" class="tab active" data-tab="strategia">Strategia</button>
+        <button type="button" class="tab" data-tab="watchlist">Watchlist</button>
+        <button type="button" class="tab" data-tab="script">Script</button>
+        <button type="button" class="tab" data-tab="analisi">Analisi</button>
+      </div>
+
+      <div class="tab-content active" data-tab-content="strategia">
+        <div class="panel">
+          <div class="panel-title-row">
+            <h3>Strategia</h3>
+            <span id="strategy-position-badge" class="position-badge flat">FLAT</span>
+          </div>
+          <label class="layer-toggle"><input type="checkbox" id="strategy-markers-toggle" checked /> Marker sul grafico</label>
+          <p class="marker-legend">
+            <span class="legend-item"><span class="legend-swatch bull">▲</span>Ingresso long</span>
+            <span class="legend-item"><span class="legend-swatch bear">▼</span>Ingresso short</span>
+            <span class="legend-item"><span class="legend-swatch">●</span>Uscita</span>
+            <span class="legend-item"><span class="legend-swatch stamp">◆</span>Inversione</span>
+          </p>
+          <label class="layer-toggle"><input type="checkbox" id="strategy-notify-toggle" /> Notifiche browser</label>
+          <ul id="strategy-alert-log" class="alert-log"></ul>
+          <p class="strategy-disclaimer">
+            Notifiche su una condizione tecnica definita dall'utente. Non sono raccomandazioni di investimento.
+          </p>
+
+          <h4 class="backtest-heading">Backtest (timeframe attivo)</h4>
+          <div id="backtest-stats" class="backtest-stats"></div>
+          <div id="equity-chart" class="equity-chart"></div>
+          <p class="strategy-disclaimer">
+            Simulazione storica su dati passati. Le performance passate non garantiscono risultati futuri.
+          </p>
+
+          <details class="params-details">
+            <summary>Parametri strategia &amp; backtest</summary>
+            <form id="params-form" class="params-form">
+              <fieldset>
+                <legend>Strategia</legend>
+                <label>Tipo media <select name="average"><option value="EMA">EMA</option><option value="SMA">SMA</option></select></label>
+                <label>Lunghezza media <input type="number" name="len" value="130" min="2" /></label>
+                <label>Slope veloce <input type="number" name="slopeFlen" value="7" min="1" /></label>
+                <label>Slope lenta <input type="number" name="slopeSlen" value="27" min="1" /></label>
+                <label><input type="checkbox" name="trendfilter" checked /> Filtro trend</label>
+                <label>Periodo trend <input type="number" name="trendfilterperiod" value="268" min="2" /></label>
+                <label>Tipo trend <select name="trendfiltertype"><option value="EMA">EMA</option><option value="SMA">SMA</option></select></label>
+                <label><input type="checkbox" name="volatilityfilter" checked /> Filtro volatilità</label>
+                <label>Stdev lunghezza <input type="number" name="volatilitystdevlength" value="16" min="1" /></label>
+                <label>Stdev media lunghezza <input type="number" name="volatilitystdevmalength" value="44" min="1" /></label>
+              </fieldset>
+              <fieldset>
+                <legend>Backtest</legend>
+                <label>Capitale iniziale <input type="number" name="initial_capital" value="10000" min="1" /></label>
+                <label>% equity per trade <input type="number" name="qty_pct_of_equity" value="30" min="1" max="100" step="1" /></label>
+                <label>Commissione % <input type="number" name="commission_pct" value="0.06" min="0" step="0.01" /></label>
+                <label>Slippage % <input type="number" name="slippage_pct" value="0.02" min="0" step="0.01" /></label>
+              </fieldset>
+              <button type="submit">Applica e ricalcola</button>
+            </form>
+          </details>
         </div>
-        <select id="active-strategy-select" class="active-strategy-select"></select>
-        <label class="layer-toggle"><input type="checkbox" id="strategy-markers-toggle" checked /> Marker sul grafico</label>
-        <p class="marker-legend">
-          <span class="legend-item"><span class="legend-swatch bull">▲</span>Ingresso long</span>
-          <span class="legend-item"><span class="legend-swatch bear">▼</span>Ingresso short</span>
-          <span class="legend-item"><span class="legend-swatch">●</span>Uscita</span>
-          <span class="legend-item"><span class="legend-swatch stamp">◆</span>Inversione</span>
-        </p>
-        <label class="layer-toggle"><input type="checkbox" id="strategy-notify-toggle" /> Notifiche browser</label>
-        <ul id="strategy-alert-log" class="alert-log"></ul>
-        <p class="strategy-disclaimer">
-          Notifiche su una condizione tecnica definita dall'utente. Non sono raccomandazioni di investimento.
-        </p>
+      </div>
 
-        <h4 class="backtest-heading">Backtest (timeframe attivo)</h4>
-        <div id="backtest-stats" class="backtest-stats"></div>
-        <div id="equity-chart" class="equity-chart"></div>
-        <p class="strategy-disclaimer">
-          Simulazione storica su dati passati. Le performance passate non garantiscono risultati futuri.
-        </p>
-
-        <details class="params-details">
-          <summary>Parametri strategia &amp; backtest</summary>
-          <form id="params-form" class="params-form">
-            <fieldset>
-              <legend>Strategia</legend>
-              <label>Tipo media <select name="average"><option value="EMA">EMA</option><option value="SMA">SMA</option></select></label>
-              <label>Lunghezza media <input type="number" name="len" value="130" min="2" /></label>
-              <label>Slope veloce <input type="number" name="slopeFlen" value="7" min="1" /></label>
-              <label>Slope lenta <input type="number" name="slopeSlen" value="27" min="1" /></label>
-              <label><input type="checkbox" name="trendfilter" checked /> Filtro trend</label>
-              <label>Periodo trend <input type="number" name="trendfilterperiod" value="268" min="2" /></label>
-              <label>Tipo trend <select name="trendfiltertype"><option value="EMA">EMA</option><option value="SMA">SMA</option></select></label>
-              <label><input type="checkbox" name="volatilityfilter" checked /> Filtro volatilità</label>
-              <label>Stdev lunghezza <input type="number" name="volatilitystdevlength" value="16" min="1" /></label>
-              <label>Stdev media lunghezza <input type="number" name="volatilitystdevmalength" value="44" min="1" /></label>
-            </fieldset>
-            <fieldset>
-              <legend>Backtest</legend>
-              <label>Capitale iniziale <input type="number" name="initial_capital" value="10000" min="1" /></label>
-              <label>% equity per trade <input type="number" name="qty_pct_of_equity" value="30" min="1" max="100" step="1" /></label>
-              <label>Commissione % <input type="number" name="commission_pct" value="0.06" min="0" step="0.01" /></label>
-              <label>Slippage % <input type="number" name="slippage_pct" value="0.02" min="0" step="0.01" /></label>
-            </fieldset>
-            <button type="submit">Applica e ricalcola</button>
+      <div class="tab-content" data-tab-content="watchlist">
+        <div class="panel">
+          <h3>Watchlist (alert Telegram)</h3>
+          <p class="panel-hint">Simboli qui dentro vengono controllati in background ogni minuto, indipendentemente da cosa stai guardando a schermo.</p>
+          <form id="watchlist-form" class="watchlist-form">
+            <input type="text" id="watchlist-symbol" placeholder="Ticker (es. BTC)" autocomplete="off" required />
+            <div class="asset-toggle small">
+              <button type="button" data-watchlist-asset="stock" class="wl-asset-btn active">Azioni</button>
+              <button type="button" data-watchlist-asset="crypto" class="wl-asset-btn">Crypto</button>
+            </div>
+            <select id="watchlist-exchange" class="hidden">
+              <option value="mexc">MEXC</option>
+              <option value="binance">Binance</option>
+            </select>
+            <select id="watchlist-strategy"></select>
+            <button type="submit">Aggiungi</button>
           </form>
-        </details>
+          <ul id="watchlist-list" class="watchlist-list"></ul>
+        </div>
       </div>
-      <div class="panel">
-        <h3>Riepilogo struttura</h3>
-        <div id="summary-text" class="summary-text">—</div>
+
+      <div class="tab-content" data-tab-content="script">
+        <div class="panel pine-panel">
+          <h3>Script Pine</h3>
+          <p class="panel-hint">Carica o incolla uno script Pine (v4/v5). Supportato un sottoinsieme: variabili, ta.*, condizioni, strategy.entry/close, input.*. Non supportati: array, matrici, security(), librerie, oggetti grafici.</p>
+
+          <select id="pine-script-select" class="pine-script-select">
+            <option value="">— Nuovo script —</option>
+          </select>
+
+          <div id="pine-editor-wrap">
+            <input type="text" id="pine-script-name" placeholder="Nome script" autocomplete="off" />
+            <input type="file" id="pine-file-input" accept=".pine,.txt" />
+            <div id="pine-editor" class="pine-editor"><textarea id="pine-source"></textarea></div>
+            <div class="pine-actions">
+              <button type="button" id="pine-analyze-btn">Analizza e salva</button>
+              <button type="button" id="pine-delete-btn" class="pine-danger hidden">Elimina script</button>
+            </div>
+            <p id="pine-parse-status" class="pine-status"></p>
+          </div>
+
+          <form id="pine-params-form" class="pine-params-form hidden">
+            <div id="pine-params-fields"></div>
+            <div id="pine-signal-mapping" class="pine-signal-mapping hidden">
+              <p class="panel-hint">Questo script non usa strategy.entry/close — assegna le variabili booleane rilevate ai ruoli:</p>
+              <label>Ingresso long <select data-role="entry_long"></select></label>
+              <label>Ingresso short <select data-role="entry_short"></select></label>
+              <label>Uscita long <select data-role="exit_long"></select></label>
+              <label>Uscita short <select data-role="exit_short"></select></label>
+            </div>
+            <div class="pine-actions">
+              <button type="submit" id="pine-apply-btn">Applica al grafico</button>
+              <button type="button" id="pine-clear-btn" class="pine-secondary hidden">Torna alla strategia integrata</button>
+            </div>
+          </form>
+          <p id="pine-run-status" class="pine-status"></p>
+        </div>
       </div>
-      <div class="panel">
-        <h3>Contesto di lungo periodo (HTF)</h3>
-        <ul id="long-term-context" class="indicator-readout"></ul>
-      </div>
-      <div class="panel">
-        <h3>Lettura indicatori (per timeframe)</h3>
-        <ul id="indicator-readout" class="indicator-readout"></ul>
-      </div>
-      <div class="panel">
-        <h3>Zone di confluenza</h3>
-        <ul id="confluence-list" class="confluence-list"></ul>
+
+      <div class="tab-content" data-tab-content="analisi">
+        <div class="panel">
+          <h3>Riepilogo struttura</h3>
+          <div id="summary-text" class="summary-text">—</div>
+        </div>
+        <div class="panel">
+          <h3>Contesto di lungo periodo (HTF)</h3>
+          <ul id="long-term-context" class="indicator-readout"></ul>
+        </div>
+        <div class="panel">
+          <h3>Lettura indicatori (per timeframe)</h3>
+          <ul id="indicator-readout" class="indicator-readout"></ul>
+        </div>
+        <div class="panel">
+          <h3>Zone di confluenza</h3>
+          <ul id="confluence-list" class="confluence-list"></ul>
+        </div>
       </div>
     </aside>
   </main>
@@ -218,11 +237,11 @@
     <button type="button" class="mobile-nav-btn active" data-mobile-target="chart">
       <span class="mobile-nav-icon">◱</span>Grafico
     </button>
-    <button type="button" class="mobile-nav-btn" data-mobile-target="sidebar">
+    <button type="button" class="mobile-nav-btn" data-mobile-target="levels">
       <span class="mobile-nav-icon">☰</span>Livelli
     </button>
-    <button type="button" class="mobile-nav-btn" data-mobile-target="summary">
-      <span class="mobile-nav-icon">◆</span>Strategia
+    <button type="button" class="mobile-nav-btn" data-mobile-target="panel">
+      <span class="mobile-nav-icon">◆</span>Pannello
     </button>
   </nav>
   <div id="mobile-drawer-backdrop" class="mobile-drawer-backdrop hidden"></div>

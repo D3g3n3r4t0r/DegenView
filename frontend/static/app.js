@@ -1259,15 +1259,50 @@
   // or the same tab again — mirrors how TradingView's own mobile app keeps
   // the chart full-screen with menus tucked away until asked for.
   function closeMobileDrawers() {
-    document.querySelector(".sidebar").classList.remove("mobile-open");
-    document.querySelector(".summary-panel").classList.remove("mobile-open");
+    el("levels-panel").classList.remove("mobile-open");
+    document.querySelector(".right-panel").classList.remove("mobile-open");
     el("mobile-drawer-backdrop").classList.add("hidden");
     document.querySelectorAll(".mobile-nav-btn").forEach((b) => b.classList.remove("active"));
     document.querySelector('.mobile-nav-btn[data-mobile-target="chart"]').classList.add("active");
   }
 
+  // Desktop-only: the rail icon opens/closes the levels-panel as a flyout
+  // that reflows the chart (not an overlay) — click the icon again, or click
+  // anywhere outside it, to close.
+  function bindRail() {
+    const btn = el("rail-levels-btn");
+    const panel = el("levels-panel");
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const opening = !panel.classList.contains("open");
+      panel.classList.toggle("open", opening);
+      btn.classList.toggle("active", opening);
+      resizeAllCharts();
+    });
+    document.addEventListener("click", (e) => {
+      if (!panel.classList.contains("open")) return;
+      if (panel.contains(e.target) || btn.contains(e.target)) return;
+      panel.classList.remove("open");
+      btn.classList.remove("active");
+      resizeAllCharts();
+    });
+  }
+
+  function bindTabs() {
+    document.querySelectorAll(".tab").forEach((tab) => {
+      tab.addEventListener("click", () => {
+        const name = tab.dataset.tab;
+        document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t === tab));
+        document.querySelectorAll(".tab-content").forEach((c) => {
+          c.classList.toggle("active", c.dataset.tabContent === name);
+        });
+        resizeAllCharts();
+      });
+    });
+  }
+
   function bindMobileNav() {
-    const targets = { sidebar: document.querySelector(".sidebar"), summary: document.querySelector(".summary-panel") };
+    const targets = { levels: el("levels-panel"), panel: document.querySelector(".right-panel") };
     document.querySelectorAll(".mobile-nav-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
         const target = btn.dataset.mobileTarget;
@@ -1299,17 +1334,20 @@
     });
   }
 
-  function bindUI() {
-    document.querySelectorAll(".tf-tab").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        document.querySelectorAll(".tf-tab").forEach((b) => b.classList.remove("active"));
-        btn.classList.add("active");
-        state.activeTimeframe = btn.dataset.tf;
-        if (state.pineActive) clearPineOverride();
-        render();
-      });
-    });
+  // Which of HTF/MTF/LTF is "active" (shown on the main chart) now follows
+  // directly from which interval dropdown the user touches — no separate
+  // tab row to fall out of sync with it. Focusing a dropdown switches the
+  // active view immediately (using data already fetched); picking a new
+  // value there additionally triggers a full re-fetch below.
+  function setActiveTimeframe(tf) {
+    if (state.activeTimeframe === tf) return;
+    state.activeTimeframe = tf;
+    document.querySelectorAll(".interval-select").forEach((s) => s.classList.toggle("active", s.dataset.tf === tf));
+    if (state.pineActive) clearPineOverride();
+    if (state.data) render();
+  }
 
+  function bindUI() {
     document.querySelectorAll("[data-layer]").forEach((input) => {
       input.addEventListener("change", () => {
         state.layers[input.dataset.layer] = input.checked;
@@ -1336,7 +1374,10 @@
     bindTickerAutocomplete();
 
     document.querySelectorAll(".interval-select").forEach((select) => {
+      select.addEventListener("mousedown", () => setActiveTimeframe(select.dataset.tf));
+      select.addEventListener("focus", () => setActiveTimeframe(select.dataset.tf));
       select.addEventListener("change", () => {
+        setActiveTimeframe(select.dataset.tf);
         if (state.data) runAnalysis(state.data.symbol);
       });
     });
@@ -1410,6 +1451,8 @@
     initCharts();
     bindUI();
     bindMobileNav();
+    bindRail();
+    bindTabs();
     initPineEditor();
     bindPineUI();
     loadPineScripts();
