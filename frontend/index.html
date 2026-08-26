@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Liquidity Analysis Engine</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Archivo+Narrow:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">Liquidity Analysis Engine</div>
+    <form id="search-form" class="search-form">
+      <div class="asset-toggle">
+        <button type="button" data-asset="stock" class="asset-btn active">Azioni</button>
+        <button type="button" data-asset="crypto" class="asset-btn">Crypto</button>
+      </div>
+      <div class="ticker-field">
+        <input id="ticker-input" type="text" placeholder="Cerca ticker (es. AAPL, BTC)" autocomplete="off" />
+        <ul id="ticker-suggestions" class="suggestions hidden"></ul>
+      </div>
+      <button type="submit" id="search-btn">Analizza</button>
+    </form>
+  </header>
+
+  <div id="error-banner" class="error-banner hidden"></div>
+
+  <main class="layout">
+    <aside class="sidebar">
+      <div class="panel">
+        <h3>Timeframe</h3>
+        <div id="timeframe-tabs" class="timeframe-tabs">
+          <button data-tf="htf" class="tf-tab active">HTF</button>
+          <button data-tf="mtf" class="tf-tab">MTF</button>
+          <button data-tf="ltf" class="tf-tab">LTF</button>
+        </div>
+        <div class="interval-selects">
+          <label>HTF <select id="interval-htf" class="interval-select" data-tf="htf"></select></label>
+          <label>MTF <select id="interval-mtf" class="interval-select" data-tf="mtf"></select></label>
+          <label>LTF <select id="interval-ltf" class="interval-select" data-tf="ltf"></select></label>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Struttura &amp; Liquidità</h3>
+        <label class="layer-toggle"><input type="checkbox" data-layer="order_block" checked /> Order Blocks</label>
+        <label class="layer-toggle"><input type="checkbox" data-layer="fvg" checked /> Fair Value Gap</label>
+        <label class="layer-toggle"><input type="checkbox" data-layer="liquidity" checked /> Equal Highs/Lows</label>
+        <label class="layer-toggle"><input type="checkbox" data-layer="structure" checked /> BOS / CHoCH</label>
+        <label class="layer-toggle"><input type="checkbox" data-layer="confluence" checked /> Zone di confluenza</label>
+      </div>
+
+      <div class="panel">
+        <h3>Indicatori</h3>
+        <label class="layer-toggle"><input type="checkbox" data-layer="ema" checked /> EMA 20 / 50</label>
+        <label class="layer-toggle"><input type="checkbox" data-layer="bbands" /> Bollinger Bands</label>
+        <label class="layer-toggle"><input type="checkbox" data-layer="vwap" /> VWAP</label>
+        <label class="layer-toggle"><input type="checkbox" data-layer="rsi" /> RSI (14)</label>
+        <label class="layer-toggle"><input type="checkbox" data-layer="macd" /> MACD</label>
+      </div>
+
+      <div class="panel">
+        <h3>Watchlist (alert Telegram)</h3>
+        <p class="panel-hint">Simboli qui dentro vengono controllati in background ogni minuto, indipendentemente da cosa stai guardando a schermo.</p>
+        <form id="watchlist-form" class="watchlist-form">
+          <input type="text" id="watchlist-symbol" placeholder="Ticker (es. BTC)" autocomplete="off" required />
+          <div class="asset-toggle small">
+            <button type="button" data-watchlist-asset="stock" class="wl-asset-btn active">Azioni</button>
+            <button type="button" data-watchlist-asset="crypto" class="wl-asset-btn">Crypto</button>
+          </div>
+          <select id="watchlist-strategy"></select>
+          <button type="submit">Aggiungi</button>
+        </form>
+        <ul id="watchlist-list" class="watchlist-list"></ul>
+      </div>
+    </aside>
+
+    <section class="chart-area">
+      <div id="live-badge" class="live-badge hidden"><span class="live-dot"></span>LIVE</div>
+      <div id="loading" class="loading hidden">Analisi in corso…</div>
+      <div id="empty-state" class="empty-state">Cerca un ticker per iniziare l'analisi multi-timeframe.</div>
+      <div id="chart-wrap" class="chart-wrap hidden">
+        <div id="main-chart" class="main-chart"></div>
+        <div id="rsi-chart" class="sub-chart hidden"></div>
+        <div id="macd-chart" class="sub-chart hidden"></div>
+      </div>
+      <div id="tooltip" class="chart-tooltip hidden"></div>
+    </section>
+
+    <aside class="summary-panel">
+      <div class="panel">
+        <div class="panel-title-row">
+          <h3>Strategia</h3>
+          <span id="strategy-position-badge" class="position-badge flat">FLAT</span>
+        </div>
+        <select id="active-strategy-select" class="active-strategy-select"></select>
+        <label class="layer-toggle"><input type="checkbox" id="strategy-markers-toggle" checked /> Marker sul grafico</label>
+        <label class="layer-toggle"><input type="checkbox" id="strategy-notify-toggle" /> Notifiche browser</label>
+        <ul id="strategy-alert-log" class="alert-log"></ul>
+        <p class="strategy-disclaimer">
+          Notifiche su una condizione tecnica definita dall'utente. Non sono raccomandazioni di investimento.
+        </p>
+
+        <h4 class="backtest-heading">Backtest (timeframe attivo)</h4>
+        <div id="backtest-stats" class="backtest-stats"></div>
+        <div id="equity-chart" class="equity-chart"></div>
+        <p class="strategy-disclaimer">
+          Simulazione storica su dati passati. Le performance passate non garantiscono risultati futuri.
+        </p>
+
+        <details class="params-details">
+          <summary>Parametri strategia &amp; backtest</summary>
+          <form id="params-form" class="params-form">
+            <fieldset>
+              <legend>Strategia</legend>
+              <label>Tipo media <select name="average"><option value="EMA">EMA</option><option value="SMA">SMA</option></select></label>
+              <label>Lunghezza media <input type="number" name="len" value="130" min="2" /></label>
+              <label>Slope veloce <input type="number" name="slopeFlen" value="7" min="1" /></label>
+              <label>Slope lenta <input type="number" name="slopeSlen" value="27" min="1" /></label>
+              <label><input type="checkbox" name="trendfilter" checked /> Filtro trend</label>
+              <label>Periodo trend <input type="number" name="trendfilterperiod" value="268" min="2" /></label>
+              <label>Tipo trend <select name="trendfiltertype"><option value="EMA">EMA</option><option value="SMA">SMA</option></select></label>
+              <label><input type="checkbox" name="volatilityfilter" checked /> Filtro volatilità</label>
+              <label>Stdev lunghezza <input type="number" name="volatilitystdevlength" value="16" min="1" /></label>
+              <label>Stdev media lunghezza <input type="number" name="volatilitystdevmalength" value="44" min="1" /></label>
+            </fieldset>
+            <fieldset>
+              <legend>Backtest</legend>
+              <label>Capitale iniziale <input type="number" name="initial_capital" value="10000" min="1" /></label>
+              <label>% equity per trade <input type="number" name="qty_pct_of_equity" value="30" min="1" max="100" step="1" /></label>
+              <label>Commissione % <input type="number" name="commission_pct" value="0.06" min="0" step="0.01" /></label>
+              <label>Slippage % <input type="number" name="slippage_pct" value="0.02" min="0" step="0.01" /></label>
+            </fieldset>
+            <button type="submit">Applica e ricalcola</button>
+          </form>
+        </details>
+      </div>
+      <div class="panel">
+        <h3>Riepilogo struttura</h3>
+        <div id="summary-text" class="summary-text">—</div>
+      </div>
+      <div class="panel">
+        <h3>Contesto di lungo periodo (HTF)</h3>
+        <ul id="long-term-context" class="indicator-readout"></ul>
+      </div>
+      <div class="panel">
+        <h3>Lettura indicatori (per timeframe)</h3>
+        <ul id="indicator-readout" class="indicator-readout"></ul>
+      </div>
+      <div class="panel">
+        <h3>Zone di confluenza</h3>
+        <ul id="confluence-list" class="confluence-list"></ul>
+      </div>
+    </aside>
+  </main>
+
+  <footer class="disclaimer">
+    Strumento di analisi tecnica automatica. Non costituisce consulenza finanziaria, raccomandazione di investimento
+    o segnale operativo. Le decisioni di trading restano sempre a discrezione dell'utente.
+  </footer>
+
+  <script src="https://unpkg.com/lightweight-charts@4/dist/lightweight-charts.standalone.production.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

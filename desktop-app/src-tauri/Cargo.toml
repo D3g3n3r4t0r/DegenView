@@ -1,0 +1,18 @@
+[package]
+name = "liquidity-analysis-engine"
+version = "1.0.0"
+description = "Liquidity Analysis Engine — analisi grafica azioni/crypto con livelli SMC"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

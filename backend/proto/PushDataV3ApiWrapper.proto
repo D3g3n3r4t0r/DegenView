@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+import "PublicSpotKlineV3Api.proto";
+
+message PushDataV3ApiWrapper {
+  string channel = 1;
+
+  oneof body {
+    PublicSpotKlineV3Api publicSpotKline = 308;
+  }
+
+  optional string symbol = 3;
+  optional string symbolId = 4;
+  optional int64 createTime = 5;
+  optional int64 sendTime = 6;
+}

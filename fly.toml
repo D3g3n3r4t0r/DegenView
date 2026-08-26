@@ -1,0 +1,25 @@
+# Fly.io — Liquidity Analysis Engine
+# Deploy: flyctl deploy  (o automatico via GitHub Actions)
+
+app = "liquidity-analysis-engine"
+primary_region = "ams"   # Amsterdam — più vicino all'Italia
+
+[build]
+  dockerfile = "Dockerfile"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0      # scala a zero di notte (free tier)
+
+  # WebSocket keepalive
+  [http_service.concurrency]
+    type = "connections"
+    hard_limit = 25
+    soft_limit = 20
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

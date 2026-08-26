@@ -1,0 +1,13 @@
+backend/.env
+.claude/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Build artifacts
+backend/build/
+backend/dist/
+desktop-app/src-tauri/target/
+desktop-app/src-tauri/binaries/
+backend/uvicorn.log

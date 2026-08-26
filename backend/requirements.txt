@@ -1,0 +1,12 @@
+fastapi>=0.115
+uvicorn[standard]>=0.34
+httpx>=0.28
+pandas>=2.2
+numpy>=2.0
+pandas-ta>=0.4.67b0
+smartmoneyconcepts>=0.0.26
+python-dotenv>=1.0
+pydantic-settings>=2.7
+cachetools>=5.5
+protobuf>=7.0
+websockets>=13
