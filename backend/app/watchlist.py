@@ -1,7 +1,9 @@
 """
-Watchlist: symbols the user explicitly wants background Telegram alerts for,
+Watchlist: tickers the user explicitly wants background Telegram alerts for,
 independent of whatever ticker happens to be open in the browser — the
 background loop in main.py checks these every 60s regardless of any open tab.
+Each ticker can have multiple strategies watched independently (a checkbox
+per strategy in the Alert tab), not just one.
 
 Persisted to disk (backend/data/watchlist.json) so it survives server
 restarts and redeploys — a Fly.io volume is mounted at that path in
@@ -12,7 +14,7 @@ import json
 import uuid
 from pathlib import Path
 
-from app.models import AssetType, CryptoExchange, TimeframeKey, WatchlistEntry
+from app.models import AssetType, CryptoExchange, WatchlistEntry
 
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 _DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -48,21 +50,22 @@ def list_entries() -> list[WatchlistEntry]:
     return list(_entries.values())
 
 
-def add_entry(
-    symbol: str,
-    asset_type: AssetType,
-    strategy_name: str,
-    timeframes: list[TimeframeKey],
-    exchange: CryptoExchange = "mexc",
-) -> WatchlistEntry:
+def add_entry(symbol: str, asset_type: AssetType, exchange: CryptoExchange = "mexc") -> WatchlistEntry:
+    """Upsert: adding a ticker that's already tracked just returns the
+    existing entry (with whatever strategies are already on it) instead of
+    creating a duplicate row."""
+    symbol = symbol.strip().upper()
+    for entry in _entries.values():
+        if entry.symbol == symbol and entry.asset_type == asset_type and entry.exchange == exchange:
+            return entry
+
     entry = WatchlistEntry(
         id=uuid.uuid4().hex[:12],
-        symbol=symbol.strip().upper(),
+        symbol=symbol,
         asset_type=asset_type,
         exchange=exchange,
-        strategy_name=strategy_name,
-        timeframes=timeframes,
-        enabled=True,
+        strategies=[],
+        timeframes=["htf", "mtf", "ltf"],
     )
     _entries[entry.id] = entry
     _save()
@@ -74,11 +77,18 @@ def remove_entry(entry_id: str) -> None:
         _save()
 
 
-def set_enabled(entry_id: str, enabled: bool) -> WatchlistEntry | None:
+def set_strategy_enabled(entry_id: str, strategy_name: str, enabled: bool) -> WatchlistEntry | None:
     entry = _entries.get(entry_id)
     if entry is None:
         return None
-    updated = entry.model_copy(update={"enabled": enabled})
+    strategies = list(entry.strategies)
+    if enabled and strategy_name not in strategies:
+        strategies.append(strategy_name)
+    elif not enabled and strategy_name in strategies:
+        strategies.remove(strategy_name)
+    else:
+        return entry  # no-op, already in the requested state
+    updated = entry.model_copy(update={"strategies": strategies})
     _entries[entry_id] = updated
     _save()
     return updated

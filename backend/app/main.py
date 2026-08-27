@@ -73,14 +73,16 @@ def get_provider(asset_type: AssetType, exchange: CryptoExchange = "mexc") -> Da
 
 async def _watchlist_alert_loop() -> None:
     """Background loop, independent of any browser tab: evaluates every
-    enabled watchlist entry on its own chosen strategy and fires Telegram
-    alerts for it — never for whatever symbol happens to be open on screen."""
+    watchlist ticker against each of its enabled strategies and fires
+    Telegram alerts — never for whatever symbol happens to be open on
+    screen. One fetch per (ticker, timeframe), reused across every strategy
+    enabled on that ticker rather than refetching per strategy."""
     while True:
         await asyncio.sleep(WATCHLIST_POLL_SECONDS)
         if not telegram.is_configured():
             continue
         for entry in watchlist_store.list_entries():
-            if not entry.enabled:
+            if not entry.strategies:
                 continue
             provider = get_provider(entry.asset_type, entry.exchange)
             for tf_key in entry.timeframes:
@@ -88,8 +90,9 @@ async def _watchlist_alert_loop() -> None:
                     df = await provider.fetch_ohlcv(
                         entry.symbol, DEFAULT_INTERVALS[tf_key], settings.candles_per_timeframe
                     )
-                    strategy = build_strategy_state(entry.strategy_name, df)
-                    _dispatch_telegram_alerts(entry.symbol, tf_key, strategy)
+                    for strategy_name in entry.strategies:
+                        strategy = build_strategy_state(strategy_name, df)
+                        _dispatch_telegram_alerts(entry.symbol, tf_key, strategy)
                 except Exception:
                     logger.exception("Watchlist check failed for %s [%s]", entry.symbol, tf_key)
 
@@ -350,8 +353,6 @@ class WatchlistAddRequest(BaseModel):
     symbol: str
     asset_type: AssetType
     exchange: CryptoExchange = "mexc"
-    strategy_name: str = DEFAULT_STRATEGY
-    timeframes: list[TimeframeKey] = ["htf", "mtf", "ltf"]
 
 
 @app.post("/api/watchlist", response_model=WatchlistEntry)
@@ -359,9 +360,7 @@ async def add_watchlist_entry(req: WatchlistAddRequest) -> WatchlistEntry:
     symbol = req.symbol.strip()
     if not symbol:
         raise HTTPException(status_code=400, detail="Ticker mancante")
-    if req.strategy_name not in AVAILABLE_STRATEGIES:
-        raise HTTPException(status_code=400, detail=f"Strategia sconosciuta: {req.strategy_name}")
-    return watchlist_store.add_entry(symbol, req.asset_type, req.strategy_name, req.timeframes, exchange=req.exchange)
+    return watchlist_store.add_entry(symbol, req.asset_type, exchange=req.exchange)
 
 
 @app.delete("/api/watchlist/{entry_id}")
@@ -370,9 +369,16 @@ async def delete_watchlist_entry(entry_id: str) -> dict:
     return {"ok": True}
 
 
-@app.patch("/api/watchlist/{entry_id}", response_model=WatchlistEntry)
-async def toggle_watchlist_entry(entry_id: str, enabled: bool = Query(...)) -> WatchlistEntry:
-    entry = watchlist_store.set_enabled(entry_id, enabled)
+class WatchlistStrategyToggleRequest(BaseModel):
+    strategy_name: str
+    enabled: bool
+
+
+@app.patch("/api/watchlist/{entry_id}/strategy", response_model=WatchlistEntry)
+async def toggle_watchlist_strategy(entry_id: str, req: WatchlistStrategyToggleRequest) -> WatchlistEntry:
+    if req.strategy_name not in AVAILABLE_STRATEGIES:
+        raise HTTPException(status_code=400, detail=f"Strategia sconosciuta: {req.strategy_name}")
+    entry = watchlist_store.set_strategy_enabled(entry_id, req.strategy_name, req.enabled)
     if entry is None:
         raise HTTPException(status_code=404, detail="Voce non trovata")
     return entry

@@ -150,6 +150,7 @@
     activePineIsStrategy: true,
     pineActive: false,
     pineLastResult: null,
+    availableStrategies: [],
     logScale: false,
     // Kept minimal by default — every structure/liquidity level draws its own
     // chart label, and turning them all on at once buries the price action
@@ -228,17 +229,20 @@
     } catch (err) {
       strategies = [];
     }
-    [el("active-strategy-select"), el("watchlist-strategy")].forEach((select) => {
-      select.innerHTML = "";
-      strategies.forEach((name) => {
-        const opt = document.createElement("option");
-        opt.value = name;
-        opt.textContent = name;
-        select.appendChild(opt);
-      });
+    state.availableStrategies = strategies;
+    const select = el("active-strategy-select");
+    select.innerHTML = "";
+    strategies.forEach((name) => {
+      const opt = document.createElement("option");
+      opt.value = name;
+      opt.textContent = name;
+      select.appendChild(opt);
     });
   }
 
+  // Each ticker is a card that expands to show one on/off toggle per
+  // available strategy — a ticker can have several strategies watched at
+  // once (previously one strategy meant one whole separate watchlist row).
   async function loadWatchlist() {
     let entries = [];
     try {
@@ -248,45 +252,80 @@
       entries = [];
     }
     const list = el("watchlist-list");
+    const openIds = new Set(
+      Array.from(list.querySelectorAll(".tick-card.open")).map((c) => c.dataset.entryId)
+    );
     list.innerHTML = "";
     if (!entries.length) {
       const li = document.createElement("li");
+      li.className = "panel-hint";
       li.textContent = "Nessun ticker in watchlist.";
       list.appendChild(li);
       return;
     }
     entries.forEach((entry) => {
-      const li = document.createElement("li");
-      const enabledBox = document.createElement("input");
-      enabledBox.type = "checkbox";
-      enabledBox.checked = entry.enabled;
-      enabledBox.title = "Attivo";
-      enabledBox.addEventListener("change", async () => {
-        await fetch(`/api/watchlist/${entry.id}?enabled=${enabledBox.checked}`, { method: "PATCH" });
+      const card = document.createElement("li");
+      card.className = "tick-card" + (openIds.has(entry.id) ? " open" : "");
+      card.dataset.entryId = entry.id;
+
+      const head = document.createElement("div");
+      head.className = "tick-card-head";
+      const activeCount = entry.strategies.length;
+      head.innerHTML = `
+        <span><span class="wl-symbol">${entry.symbol}</span><span class="wl-exch">${entry.asset_type === "crypto" ? entry.exchange.toUpperCase() : "Azioni"}</span></span>
+        <span class="wl-summary">${activeCount ? `${activeCount} attiv${activeCount === 1 ? "a" : "e"}` : "nessuna attiva"}</span>
+        <span class="wl-caret">▾</span>
+      `;
+      head.addEventListener("click", (e) => {
+        if (e.target.closest(".wl-remove")) return;
+        card.classList.toggle("open");
       });
 
-      const symbolSpan = document.createElement("span");
-      symbolSpan.className = "wl-symbol";
-      symbolSpan.textContent = entry.symbol;
-
-      const metaSpan = document.createElement("span");
-      metaSpan.className = "wl-meta";
-      metaSpan.textContent = `${entry.asset_type === "crypto" ? "Crypto" : "Azioni"} · ${entry.strategy_name}`;
+      const body = document.createElement("div");
+      body.className = "tick-card-body";
+      state.availableStrategies.forEach((name) => {
+        const isOn = entry.strategies.includes(name);
+        const row = document.createElement("div");
+        row.className = "strat-row";
+        const label = document.createElement("span");
+        label.textContent = name;
+        const toggle = document.createElement("button");
+        toggle.type = "button";
+        toggle.className = "wl-toggle" + (isOn ? " on" : "");
+        toggle.innerHTML = '<span class="knob"></span>';
+        toggle.addEventListener("click", async () => {
+          const nextOn = !toggle.classList.contains("on");
+          toggle.classList.toggle("on", nextOn);
+          try {
+            await fetch(`/api/watchlist/${entry.id}/strategy`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ strategy_name: name, enabled: nextOn }),
+            });
+          } finally {
+            loadWatchlist();
+          }
+        });
+        row.appendChild(label);
+        row.appendChild(toggle);
+        body.appendChild(row);
+      });
 
       const removeBtn = document.createElement("button");
-      removeBtn.className = "wl-remove";
       removeBtn.type = "button";
-      removeBtn.textContent = "✕";
-      removeBtn.addEventListener("click", async () => {
+      removeBtn.className = "wl-remove";
+      removeBtn.textContent = "✕ Rimuovi ticker";
+      removeBtn.style.marginTop = "4px";
+      removeBtn.addEventListener("click", async (e) => {
+        e.stopPropagation();
         await fetch(`/api/watchlist/${entry.id}`, { method: "DELETE" });
         loadWatchlist();
       });
+      body.appendChild(removeBtn);
 
-      li.appendChild(enabledBox);
-      li.appendChild(symbolSpan);
-      li.appendChild(metaSpan);
-      li.appendChild(removeBtn);
-      list.appendChild(li);
+      card.appendChild(head);
+      card.appendChild(body);
+      list.appendChild(card);
     });
   }
 
@@ -1306,32 +1345,67 @@
   // the chart full-screen with menus tucked away until asked for.
   function closeMobileDrawers() {
     el("levels-panel").classList.remove("mobile-open");
+    el("script-panel").classList.remove("mobile-open");
     document.querySelector(".right-panel").classList.remove("mobile-open");
     el("mobile-drawer-backdrop").classList.add("hidden");
     document.querySelectorAll(".mobile-nav-btn").forEach((b) => b.classList.remove("active"));
     document.querySelector('.mobile-nav-btn[data-mobile-target="chart"]').classList.add("active");
   }
 
-  // Desktop-only: the rail icon opens/closes the levels-panel as a flyout
-  // that reflows the chart (not an overlay) — click the icon again, or click
-  // anywhere outside it, to close.
+  // Desktop-only: a rail icon opens/closes its panel as a flyout that
+  // reflows the chart (not an overlay) — click the icon again, click
+  // anywhere outside it, or open the other rail panel, to close it.
+  const RAIL_PANELS = [
+    ["rail-levels-btn", "levels-panel"],
+    ["rail-script-btn", "script-panel"],
+  ];
+
   function bindRail() {
-    const btn = el("rail-levels-btn");
-    const panel = el("levels-panel");
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const opening = !panel.classList.contains("open");
-      panel.classList.toggle("open", opening);
-      btn.classList.toggle("active", opening);
-      resizeAllCharts();
+    RAIL_PANELS.forEach(([btnId, panelId]) => {
+      const btn = el(btnId);
+      const panel = el(panelId);
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const opening = !panel.classList.contains("open");
+        RAIL_PANELS.forEach(([otherBtnId, otherPanelId]) => {
+          el(otherPanelId).classList.remove("open");
+          el(otherBtnId).classList.remove("active");
+        });
+        panel.classList.toggle("open", opening);
+        btn.classList.toggle("active", opening);
+        resizeAllCharts();
+      });
     });
     document.addEventListener("click", (e) => {
-      if (!panel.classList.contains("open")) return;
-      if (panel.contains(e.target) || btn.contains(e.target)) return;
-      panel.classList.remove("open");
-      btn.classList.remove("active");
-      resizeAllCharts();
+      RAIL_PANELS.forEach(([btnId, panelId]) => {
+        const btn = el(btnId);
+        const panel = el(panelId);
+        if (!panel.classList.contains("open")) return;
+        if (panel.contains(e.target) || btn.contains(e.target)) return;
+        panel.classList.remove("open");
+        btn.classList.remove("active");
+        resizeAllCharts();
+      });
     });
+  }
+
+  // Used by links that need to open a specific panel outside the rail/bottom
+  // nav (e.g. the "Script Pine personalizzato" link inside the Alert tab) —
+  // works the same on desktop (flyout via the matching rail button) and
+  // mobile (bottom-sheet drawer), whichever this viewport is currently using.
+  function openPanel(panelId) {
+    const isMobile = window.matchMedia("(max-width: 760px)").matches;
+    if (isMobile) {
+      closeMobileDrawers();
+      el(panelId).classList.add("mobile-open");
+      el("mobile-drawer-backdrop").classList.remove("hidden");
+    } else {
+      RAIL_PANELS.forEach(([btnId, pid]) => {
+        el(pid).classList.toggle("open", pid === panelId);
+        el(btnId).classList.toggle("active", pid === panelId);
+      });
+      resizeAllCharts();
+    }
   }
 
   function bindTabs() {
@@ -1440,11 +1514,15 @@
           symbol,
           asset_type: state.watchlistAssetType,
           exchange: el("watchlist-exchange").value,
-          strategy_name: el("watchlist-strategy").value,
         }),
       });
       el("watchlist-symbol").value = "";
       loadWatchlist();
+    });
+
+    el("open-script-from-alert").addEventListener("click", (e) => {
+      e.stopPropagation();
+      openPanel("script-panel");
     });
 
     el("strategy-markers-toggle").addEventListener("change", () => {

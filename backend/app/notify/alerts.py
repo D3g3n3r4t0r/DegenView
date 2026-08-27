@@ -11,8 +11,12 @@ _seen_signal_keys: set[str] = set()
 _seeded_symbol_timeframes: set[str] = set()
 
 
-def _signal_key(symbol: str, timeframe_key: str, signal: StrategySignal) -> str:
-    return f"{symbol}|{timeframe_key}|{signal.time}|{signal.type}"
+def _signal_key(symbol: str, timeframe_key: str, strategy_name: str, signal: StrategySignal) -> str:
+    # strategy_name must be part of the key — with multiple strategies now
+    # watchable on the same ticker, two different strategies can produce a
+    # signal with the identical (time, type) by coincidence, and without this
+    # the second one would be silently deduped as if it were a repeat.
+    return f"{symbol}|{timeframe_key}|{strategy_name}|{signal.time}|{signal.type}"
 
 
 def find_new_signals(symbol: str, timeframe_key: str, strategy: StrategyState) -> list[StrategySignal]:
@@ -21,7 +25,7 @@ def find_new_signals(symbol: str, timeframe_key: str, strategy: StrategyState) -
 
     fresh: list[StrategySignal] = []
     for signal in strategy.signals:
-        key = _signal_key(symbol, timeframe_key, signal)
+        key = _signal_key(symbol, timeframe_key, strategy.name, signal)
         if key in _seen_signal_keys:
             continue
         _seen_signal_keys.add(key)

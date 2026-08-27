@@ -91,9 +91,8 @@ class WatchlistEntry(BaseModel):
     symbol: str
     asset_type: AssetType
     exchange: CryptoExchange = "mexc"
-    strategy_name: str
-    timeframes: list[TimeframeKey]
-    enabled: bool = True
+    strategies: list[str] = []  # which strategies fire Telegram alerts for this ticker
+    timeframes: list[TimeframeKey] = ["htf", "mtf", "ltf"]
 
 
 class ConfluenceZone(BaseModel):
