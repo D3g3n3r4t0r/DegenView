@@ -295,9 +295,14 @@
   }
 
   function initCharts() {
+    // TradingView's own mobile app keeps chart gridlines barely-there —
+    // dense gridlines that read as "considered" on a wide desktop screen
+    // just look busy/dated on a phone. Same hue, much lower opacity.
+    const isMobile = window.matchMedia("(max-width: 760px)").matches;
+    const chartGridColor = isMobile ? "rgba(168, 184, 174, 0.18)" : COLORS.gridMinor;
     const baseOptions = {
       layout: { background: { color: COLORS.paperBg }, textColor: COLORS.inkDim, fontFamily: "'Space Mono', monospace" },
-      grid: { vertLines: { color: COLORS.gridMinor }, horzLines: { color: COLORS.gridMinor } },
+      grid: { vertLines: { color: chartGridColor }, horzLines: { color: chartGridColor } },
       rightPriceScale: { borderColor: COLORS.gridMajor },
       timeScale: { borderColor: COLORS.gridMajor, timeVisible: true, secondsVisible: false },
       crosshair: {
@@ -1488,9 +1493,8 @@
     }
   }
 
-  document.addEventListener("DOMContentLoaded", () => {
+  document.addEventListener("DOMContentLoaded", async () => {
     populateIntervalSelects();
-    populateStrategySelects();
     loadWatchlist();
     initCharts();
     bindUI();
@@ -1501,6 +1505,16 @@
     bindPineUI();
     loadPineScripts();
     relocateChartSettings();
+    // active-strategy-select must be populated before the auto-load below
+    // reads its value, or the request goes out with an empty strategy_name.
+    await populateStrategySelects();
+    // A real trading app never opens on an empty grid — it shows whatever
+    // was last open, or a sensible default. We have no per-user persistence
+    // yet, so default to BTC on MEXC every time; better than a blank screen.
+    state.assetType = "crypto";
+    state.cryptoExchange = "mexc";
+    el("ticker-input").value = "BTC";
+    runAnalysis("BTC");
     let relocateTimer = null;
     window.addEventListener("resize", () => {
       resizeAllCharts();

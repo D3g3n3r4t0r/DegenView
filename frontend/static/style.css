@@ -1046,6 +1046,18 @@ body {
 @media (max-width: 760px) {
   html, body { height: 100%; overflow: hidden; }
 
+  /* The millimeter-paper background reads as a technical drawing, not a
+     modern trading app, when it's this visible on a small screen with
+     mostly-empty panels — TradingView's own mobile app uses a near-flat
+     background with barely-there gridlines. Mobile keeps the same paper
+     hue (still "our" palette) but drops the layered fine-grid pattern for
+     one faint line every 32px. */
+  body {
+    background-image:
+      repeating-linear-gradient(to right, rgba(127, 148, 136, 0.09) 0, rgba(127, 148, 136, 0.09) 0.6px, transparent 0.6px, transparent 32px),
+      repeating-linear-gradient(to bottom, rgba(127, 148, 136, 0.09) 0, rgba(127, 148, 136, 0.09) 0.6px, transparent 0.6px, transparent 32px);
+  }
+
   /* chart-settings-group (timeframe/strategy/log) is relocated into the
      Livelli drawer by JS on this breakpoint — the toolbar carries only the
      brand + search, so the chart starts almost immediately like a native
@@ -1167,9 +1179,18 @@ body {
     bottom: 0;
     height: 52px;
     background: var(--bg);
-    border-top: 1.5px solid var(--border-strong);
+    border-top: 1px solid var(--border);
     z-index: 50;
   }
+
+  /* Rounder, lighter controls read as an app, not a technical form —
+     Blueprint's sharp 2px corners work on a dense desktop panel, less so
+     stretched across a phone screen with lots of open space around them. */
+  #ticker-input, #search-btn, .interval-select, .toolbar-strategy {
+    border-radius: 9px;
+    border-width: 1px;
+  }
+  #search-btn { border: none; }
 
   .mobile-nav-btn {
     flex: 1;
@@ -1188,7 +1209,7 @@ body {
     cursor: pointer;
   }
 
-  .mobile-nav-icon { font-size: 16px; line-height: 1; }
+  .mobile-nav-icon { width: 20px; height: 20px; }
 
   .mobile-nav-btn.active { color: var(--accent); }
 
