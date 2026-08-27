@@ -679,10 +679,19 @@
     });
 
     mainChart.subscribeCrosshairMove(handleCrosshairMove);
-    mainChart.subscribeClick(handleChartDrawClick);
+    bindDrawClickCapture();
   }
 
+  // Chart-relative point + bar time as last reported by the library's own
+  // crosshair tracking — proven correct (it drives the working tooltip),
+  // unlike hand-computing offsets from a raw DOM pointer event's
+  // clientX/clientY, which don't line up with what coordinateToPrice/
+  // coordinateToTime expect. The drawing-tools click capture below reuses
+  // this instead of recomputing its own coordinates.
+  let lastCrosshairPoint = null;
+
   function handleCrosshairMove(param) {
+    lastCrosshairPoint = param.point && param.time !== undefined ? { y: param.point.y, time: param.time } : null;
     if (!param.point || param.time === undefined || !overlays.hitZones.length) {
       tooltipEl.classList.add("hidden");
       return;
@@ -814,6 +823,7 @@
     });
     const container = el("main-chart");
     if (container) container.style.cursor = tool === "cursor" ? "default" : "crosshair";
+    if (mainChart) mainChart.applyOptions({ handleScroll: tool === "cursor", handleScale: tool === "cursor" });
   }
 
   function formatRangeLabel(p1, p2) {
@@ -979,17 +989,59 @@
     setDrawTool("cursor"); // single-shot, like TradingView's default (unlocked) behavior
   }
 
-  function handleChartDrawClick(param) {
-    if (drawState.tool === "cursor" || !state.data) return;
-    if (!param.point || param.time === undefined) return;
-    const price = candleSeries.coordinateToPrice(param.point.y);
-    if (price === null) return;
-    drawState.pending.push({ time: param.time, price });
-    if (drawState.pending.length >= DRAW_TOOL_POINTS[drawState.tool]) finalizeDrawing();
+  // Lightweight Charts' own subscribeClick() disambiguates click-vs-drag
+  // internally, and with panning enabled on the chart, ordinary mouse
+  // jitter between press and release can get swallowed as a micro-pan
+  // instead of firing a click — the exact symptom reported ("clicco e non
+  // succede niente"). Capturing pointerdown/up directly, with our own
+  // small-movement tolerance, sidesteps that entirely — and pan/zoom are
+  // disabled for the duration so the chart doesn't drift under the cursor
+  // while placing a point (see setDrawTool).
+  const DRAW_CLICK_TOLERANCE_PX = 6;
+
+  function bindDrawClickCapture() {
+    const container = el("main-chart");
+    let downPos = null;
+    // Capture phase on document, not a bubble-phase listener on the
+    // container: the chart library attaches its own pointer handlers
+    // directly on its internal canvas for pan/zoom/crosshair, and those can
+    // stop the event from ever bubbling back up to a container-level
+    // listener. A capture-phase listener runs top-down before that,
+    // guaranteeing delivery regardless of what the library does with it.
+    document.addEventListener(
+      "pointerdown",
+      (e) => {
+        if (drawState.tool === "cursor" || !container.contains(e.target)) return;
+        downPos = { x: e.clientX, y: e.clientY };
+      },
+      true
+    );
+    document.addEventListener(
+      "pointerup",
+      (e) => {
+        if (drawState.tool === "cursor" || !downPos || !state.data) {
+          downPos = null;
+          return;
+        }
+        const dx = e.clientX - downPos.x;
+        const dy = e.clientY - downPos.y;
+        downPos = null;
+        if (Math.hypot(dx, dy) > DRAW_CLICK_TOLERANCE_PX) return; // was a drag, not a placement click
+        if (!lastCrosshairPoint) return; // pointer never registered a valid chart position
+
+        const price = candleSeries.coordinateToPrice(lastCrosshairPoint.y);
+        const time = lastCrosshairPoint.time;
+        if (price === null || time === undefined) return;
+
+        drawState.pending.push({ time, price });
+        if (drawState.pending.length >= DRAW_TOOL_POINTS[drawState.tool]) finalizeDrawing();
+      },
+      true
+    );
   }
 
   function bindDrawRail() {
-    document.querySelectorAll(".draw-tool-btn").forEach((btn) => {
+    document.querySelectorAll(".draw-tool-btn[data-draw-tool]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const tool = btn.dataset.drawTool;
         setDrawTool(drawState.tool === tool ? "cursor" : tool);
