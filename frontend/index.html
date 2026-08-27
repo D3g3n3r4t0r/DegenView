@@ -276,7 +276,11 @@
             </div>
             <p class="panel-hint">Ogni ticker qui dentro viene controllato in background ogni minuto, indipendentemente da cosa stai guardando a schermo. Attiva una o più strategie per ticker: arriva una notifica Telegram per ogni segnale confermato.</p>
             <form id="watchlist-form" class="watchlist-form">
-              <input type="text" id="watchlist-symbol" placeholder="Ticker (es. BTC)" autocomplete="off" required />
+              <div class="wl-ticker-field">
+                <input type="text" id="watchlist-symbol" placeholder="Ticker (es. BTC)" autocomplete="off" required />
+                <ul id="watchlist-suggestions" class="suggestions hidden"></ul>
+              </div>
+              <p id="watchlist-resolved-pair" class="wl-resolved-pair hidden"></p>
               <div class="asset-toggle small">
                 <button type="button" data-watchlist-asset="stock" class="wl-asset-btn active">Azioni</button>
                 <button type="button" data-watchlist-asset="crypto" class="wl-asset-btn">Crypto</button>

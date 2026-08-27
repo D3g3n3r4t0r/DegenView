@@ -724,6 +724,26 @@ body {
   margin-bottom: 10px;
 }
 
+.wl-ticker-field {
+  position: relative;
+  width: 100%;
+}
+
+.wl-ticker-field input {
+  width: 100%;
+}
+
+.wl-resolved-pair {
+  margin: -2px 0 0;
+  font-size: 10.5px;
+  font-family: var(--font-mono);
+  color: var(--bull);
+}
+
+.wl-resolved-pair.wl-resolved-pair-error {
+  color: var(--bear);
+}
+
 .watchlist-form input[type="text"],
 .watchlist-form select {
   background: var(--bg-panel);
