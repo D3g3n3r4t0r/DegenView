@@ -2,6 +2,8 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from app.timeframes import IntervalChoice
+
 AssetType = Literal["stock", "crypto"]
 CryptoExchange = Literal["mexc", "binance"]
 TimeframeKey = Literal["htf", "mtf", "ltf"]
@@ -92,7 +94,7 @@ class WatchlistEntry(BaseModel):
     asset_type: AssetType
     exchange: CryptoExchange = "mexc"
     strategies: list[str] = []  # which strategies fire Telegram alerts for this ticker
-    timeframes: list[TimeframeKey] = ["htf", "mtf", "ltf"]
+    interval: IntervalChoice = "1d"  # which timeframe those strategies are evaluated on
 
 
 class ConfluenceZone(BaseModel):

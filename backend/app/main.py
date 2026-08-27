@@ -51,7 +51,8 @@ from app.providers.base import DataProvider, ProviderError
 from app.providers.binance import BinanceProvider
 from app.providers.mexc import MexcProvider
 from app.providers.twelvedata import TwelveDataProvider
-from app.timeframes import DEFAULT_INTERVALS, IntervalChoice
+from app.resample import resample_by_count
+from app.timeframes import DEFAULT_INTERVALS, SYNTHETIC_DAY_INTERVALS, IntervalChoice
 
 logger = logging.getLogger("watchlist_alerts")
 if getattr(sys, "frozen", False):
@@ -71,6 +72,17 @@ def get_provider(asset_type: AssetType, exchange: CryptoExchange = "mexc") -> Da
     return binance_provider if exchange == "binance" else mexc_provider
 
 
+async def fetch_ohlcv_canonical(provider: DataProvider, symbol: str, interval: str, outputsize: int):
+    """Like provider.fetch_ohlcv, but transparently synthesizes intervals no
+    provider natively supports (2D/3D/5D) by fetching extra 1D candles and
+    folding them down — every call site gets these for free."""
+    multiple = SYNTHETIC_DAY_INTERVALS.get(interval)
+    if multiple is None:
+        return await provider.fetch_ohlcv(symbol, interval, outputsize)
+    raw = await provider.fetch_ohlcv(symbol, "1d", outputsize * multiple)
+    return resample_by_count(raw, multiple).tail(outputsize)
+
+
 async def _watchlist_alert_loop() -> None:
     """Background loop, independent of any browser tab: evaluates every
     watchlist ticker against each of its enabled strategies and fires
@@ -85,16 +97,15 @@ async def _watchlist_alert_loop() -> None:
             if not entry.strategies:
                 continue
             provider = get_provider(entry.asset_type, entry.exchange)
-            for tf_key in entry.timeframes:
-                try:
-                    df = await provider.fetch_ohlcv(
-                        entry.symbol, DEFAULT_INTERVALS[tf_key], settings.candles_per_timeframe
-                    )
-                    for strategy_name in entry.strategies:
-                        strategy = build_strategy_state(strategy_name, df)
-                        _dispatch_telegram_alerts(entry.symbol, tf_key, strategy)
-                except Exception:
-                    logger.exception("Watchlist check failed for %s [%s]", entry.symbol, tf_key)
+            try:
+                df = await fetch_ohlcv_canonical(
+                    provider, entry.symbol, entry.interval, settings.candles_per_timeframe
+                )
+                for strategy_name in entry.strategies:
+                    strategy = build_strategy_state(strategy_name, df)
+                    _dispatch_telegram_alerts(entry.symbol, entry.interval, strategy)
+            except Exception:
+                logger.exception("Watchlist check failed for %s [%s]", entry.symbol, entry.interval)
 
 
 @asynccontextmanager
@@ -170,7 +181,7 @@ async def search_symbols(query: str = Query(..., min_length=1, max_length=20)) -
     return _interleave(stock_res, binance_res, mexc_res)[:12]
 
 
-def _dispatch_telegram_alerts(symbol: str, timeframe_key: TimeframeKey, strategy: StrategyState) -> None:
+def _dispatch_telegram_alerts(symbol: str, timeframe_key: str, strategy: StrategyState) -> None:
     if not telegram.is_configured():
         return
     fresh = find_new_signals(symbol, timeframe_key, strategy)
@@ -301,7 +312,7 @@ async def run_pinescript(script_id: str, req: PineRunRequest) -> dict:
     provider = get_provider(req.asset_type, req.exchange)
 
     async def do_fetch():
-        return await provider.fetch_ohlcv(symbol, interval, settings.candles_per_timeframe)
+        return await fetch_ohlcv_canonical(provider, symbol, interval, settings.candles_per_timeframe)
 
     try:
         df = await get_or_fetch((f"pine:{req.asset_type}:{req.exchange}:{symbol.upper()}", interval), do_fetch)
@@ -353,6 +364,7 @@ class WatchlistAddRequest(BaseModel):
     symbol: str
     asset_type: AssetType
     exchange: CryptoExchange = "mexc"
+    interval: IntervalChoice = "1d"
 
 
 @app.post("/api/watchlist", response_model=WatchlistEntry)
@@ -360,7 +372,19 @@ async def add_watchlist_entry(req: WatchlistAddRequest) -> WatchlistEntry:
     symbol = req.symbol.strip()
     if not symbol:
         raise HTTPException(status_code=400, detail="Ticker mancante")
-    return watchlist_store.add_entry(symbol, req.asset_type, exchange=req.exchange)
+    return watchlist_store.add_entry(symbol, req.asset_type, exchange=req.exchange, interval=req.interval)
+
+
+class WatchlistIntervalRequest(BaseModel):
+    interval: IntervalChoice
+
+
+@app.patch("/api/watchlist/{entry_id}/interval", response_model=WatchlistEntry)
+async def set_watchlist_interval(entry_id: str, req: WatchlistIntervalRequest) -> WatchlistEntry:
+    entry = watchlist_store.set_interval(entry_id, req.interval)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Voce non trovata")
+    return entry
 
 
 @app.delete("/api/watchlist/{entry_id}")
@@ -392,6 +416,7 @@ async def toggle_watchlist_strategy(entry_id: str, req: WatchlistStrategyToggleR
         asyncio.create_task(
             telegram.send_message(
                 f"✅ <b>{entry.symbol}</b> — {req.strategy_name}\n"
+                f"Timeframe: {entry.interval}\n"
                 "Monitoraggio attivato. Riceverai un messaggio quando viene rilevata una condizione."
             )
         )
@@ -427,7 +452,7 @@ async def analyze(
         cache_key = (f"{asset_type}:{exchange}:{symbol.upper()}", interval)
 
         async def do_fetch():
-            return await provider.fetch_ohlcv(symbol, interval, settings.candles_per_timeframe)
+            return await fetch_ohlcv_canonical(provider, symbol, interval, settings.candles_per_timeframe)
 
         try:
             df = await get_or_fetch(cache_key, do_fetch)

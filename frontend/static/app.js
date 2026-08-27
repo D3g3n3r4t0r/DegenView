@@ -29,7 +29,7 @@
   };
 
   const TF_LABELS = { htf: "HTF", mtf: "MTF", ltf: "LTF" };
-  const CANONICAL_INTERVALS = ["1m", "5m", "15m", "30m", "1h", "4h", "1d", "1w", "1M"];
+  const CANONICAL_INTERVALS = ["1m", "5m", "15m", "30m", "1h", "4h", "1d", "2d", "3d", "5d", "1w", "1M"];
   const DEFAULT_INTERVALS = { htf: "1d", mtf: "1h", ltf: "15m" };
   const DEFAULT_PRIMARY_INTERVAL = "15m";
 
@@ -45,6 +45,9 @@
     "1h": { ltf: "1h", mtf: "4h", htf: "1w" },
     "4h": { ltf: "4h", mtf: "1d", htf: "1w" },
     "1d": { ltf: "1d", mtf: "1w", htf: "1M" },
+    "2d": { ltf: "2d", mtf: "1w", htf: "1M" },
+    "3d": { ltf: "3d", mtf: "1w", htf: "1M" },
+    "5d": { ltf: "5d", mtf: "1M", htf: "1M" },
     "1w": { ltf: "1w", mtf: "1M", htf: "1M" },
     "1M": { ltf: "1M", mtf: "1M", htf: "1M" },
   };
@@ -219,6 +222,15 @@
       if (iv === DEFAULT_PRIMARY_INTERVAL) opt.selected = true;
       select.appendChild(opt);
     });
+
+    const wlSelect = el("watchlist-interval");
+    CANONICAL_INTERVALS.forEach((iv) => {
+      const opt = document.createElement("option");
+      opt.value = iv;
+      opt.textContent = iv;
+      if (iv === "1d") opt.selected = true;
+      wlSelect.appendChild(opt);
+    });
   }
 
   async function populateStrategySelects() {
@@ -272,7 +284,7 @@
       head.className = "tick-card-head";
       const activeCount = entry.strategies.length;
       head.innerHTML = `
-        <span><span class="wl-symbol">${entry.symbol}</span><span class="wl-exch">${entry.asset_type === "crypto" ? entry.exchange.toUpperCase() : "Azioni"}</span></span>
+        <span><span class="wl-symbol">${entry.symbol}</span><span class="wl-exch">${entry.asset_type === "crypto" ? entry.exchange.toUpperCase() : "Azioni"} · ${entry.interval}</span></span>
         <span class="wl-summary">${activeCount ? `${activeCount} attiv${activeCount === 1 ? "a" : "e"}` : "nessuna attiva"}</span>
         <span class="wl-caret">▾</span>
       `;
@@ -283,6 +295,36 @@
 
       const body = document.createElement("div");
       body.className = "tick-card-body";
+
+      const intervalRow = document.createElement("div");
+      intervalRow.className = "strat-row wl-interval-row";
+      const intervalLabel = document.createElement("span");
+      intervalLabel.textContent = "Timeframe strategie";
+      const intervalSelect = document.createElement("select");
+      intervalSelect.className = "wl-interval-select";
+      CANONICAL_INTERVALS.forEach((iv) => {
+        const opt = document.createElement("option");
+        opt.value = iv;
+        opt.textContent = iv;
+        if (iv === entry.interval) opt.selected = true;
+        intervalSelect.appendChild(opt);
+      });
+      intervalSelect.addEventListener("click", (e) => e.stopPropagation());
+      intervalSelect.addEventListener("change", async () => {
+        try {
+          await fetch(`/api/watchlist/${entry.id}/interval`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ interval: intervalSelect.value }),
+          });
+        } finally {
+          loadWatchlist();
+        }
+      });
+      intervalRow.appendChild(intervalLabel);
+      intervalRow.appendChild(intervalSelect);
+      body.appendChild(intervalRow);
+
       state.availableStrategies.forEach((name) => {
         const isOn = entry.strategies.includes(name);
         const row = document.createElement("div");
@@ -1514,6 +1556,7 @@
           symbol,
           asset_type: state.watchlistAssetType,
           exchange: el("watchlist-exchange").value,
+          interval: el("watchlist-interval").value,
         }),
       });
       el("watchlist-symbol").value = "";

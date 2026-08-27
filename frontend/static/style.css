@@ -770,6 +770,22 @@ body {
   padding: 3px 0;
 }
 
+.wl-interval-row {
+  padding-bottom: 6px;
+  margin-bottom: 2px;
+  border-bottom: 1px dashed var(--border);
+}
+
+.wl-interval-select {
+  font-family: inherit;
+  font-size: 11px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-panel);
+  color: var(--ink);
+}
+
 .wl-toggle {
   position: relative;
   width: 32px;

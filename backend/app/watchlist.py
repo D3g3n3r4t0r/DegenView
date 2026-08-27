@@ -15,6 +15,7 @@ import uuid
 from pathlib import Path
 
 from app.models import AssetType, CryptoExchange, WatchlistEntry
+from app.timeframes import IntervalChoice
 
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 _DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -50,10 +51,15 @@ def list_entries() -> list[WatchlistEntry]:
     return list(_entries.values())
 
 
-def add_entry(symbol: str, asset_type: AssetType, exchange: CryptoExchange = "mexc") -> WatchlistEntry:
+def add_entry(
+    symbol: str,
+    asset_type: AssetType,
+    exchange: CryptoExchange = "mexc",
+    interval: IntervalChoice = "1d",
+) -> WatchlistEntry:
     """Upsert: adding a ticker that's already tracked just returns the
-    existing entry (with whatever strategies are already on it) instead of
-    creating a duplicate row."""
+    existing entry (with whatever strategies/interval are already on it)
+    instead of creating a duplicate row."""
     symbol = symbol.strip().upper()
     for entry in _entries.values():
         if entry.symbol == symbol and entry.asset_type == asset_type and entry.exchange == exchange:
@@ -65,11 +71,21 @@ def add_entry(symbol: str, asset_type: AssetType, exchange: CryptoExchange = "me
         asset_type=asset_type,
         exchange=exchange,
         strategies=[],
-        timeframes=["htf", "mtf", "ltf"],
+        interval=interval,
     )
     _entries[entry.id] = entry
     _save()
     return entry
+
+
+def set_interval(entry_id: str, interval: IntervalChoice) -> WatchlistEntry | None:
+    entry = _entries.get(entry_id)
+    if entry is None:
+        return None
+    updated = entry.model_copy(update={"interval": interval})
+    _entries[entry_id] = updated
+    _save()
+    return updated
 
 
 def remove_entry(entry_id: str) -> None:

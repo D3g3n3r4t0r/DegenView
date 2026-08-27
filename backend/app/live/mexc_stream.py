@@ -73,10 +73,15 @@ class MexcStreamManager:
         tf_by_channel = {}
         channels = []
         for tf_key, canonical_interval in interval_items:
-            ws_interval = _CANONICAL_TO_WS_INTERVAL[canonical_interval]
+            ws_interval = _CANONICAL_TO_WS_INTERVAL.get(canonical_interval)
+            if ws_interval is None:
+                continue  # synthetic interval (2D/3D/5D) has no native MEXC ws channel
             channel = f"spot@public.kline.v3.api.pb@{symbol}@{ws_interval}"
             channels.append(channel)
             tf_by_channel[channel] = tf_key
+
+        if not channels:
+            return  # nothing this leg can stream live; frontend falls back to polling
 
         while True:
             try:
