@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 import pandas_ta  # noqa: F401  (registers the .ta accessor on DataFrame)
 from smartmoneyconcepts import smc
@@ -293,11 +294,70 @@ def compute_exhaustion_signals(df: pd.DataFrame, params: dict | None = None) -> 
     )
 
 
+def _wilder_rma(series: pd.Series, length: int) -> pd.Series:
+    return series.ewm(alpha=1 / length, adjust=False).mean()
+
+
+# RSI + Bollinger Bands mean-reversion, ported from a Pine Script v4
+# indicator the user calls "LKI Trading" — supplied as two separate scripts
+# (one for the long alert, one for the short alert), combined here into one.
+# The source only ever defines entries (alertcondition, no strategy.close):
+# long when RSI is oversold *and* price is below the lower band, short when
+# RSI is overbought *and* price is above the upper band. No explicit exit in
+# the original either — a position holds until the opposite signal fires,
+# same convention as every other strategy in this registry.
+LKI_DEFAULT_PARAMS = {
+    "rsi_length": 14,
+    "bb_length": 20,
+    "bb_mult": 2.0,
+    "rsi_oversold": 28,
+    "rsi_overbought": 72,
+}
+
+
+def compute_lki_signals(df: pd.DataFrame, params: dict | None = None) -> pd.DataFrame:
+    p = {**LKI_DEFAULT_PARAMS, **(params or {})}
+    close = df["close"]
+
+    # Matches Pine's rsi() exactly, including its edge-case ternary:
+    # down==0 -> 100, up==0 (and down!=0) -> 0, else the usual formula.
+    delta = close.diff()
+    avg_gain = _wilder_rma(delta.clip(lower=0), p["rsi_length"])
+    avg_loss = _wilder_rma(-delta.clip(upper=0), p["rsi_length"])
+    avg_loss_safe = avg_loss.replace(0, np.nan)
+    raw_rsi = 100 - (100 / (1 + avg_gain / avg_loss_safe))
+    rsi = pd.Series(
+        np.where(avg_loss == 0, 100.0, np.where(avg_gain == 0, 0.0, raw_rsi)),
+        index=df.index,
+    )
+
+    # Pine's stdev() is a population (biased) standard deviation, ddof=0 —
+    # same convention already used by the Lorenzo strategy above.
+    basis = close.rolling(p["bb_length"]).mean()
+    dev = p["bb_mult"] * close.rolling(p["bb_length"]).std(ddof=0)
+    upper = basis + dev
+    lower = basis - dev
+
+    entry_long = (rsi < p["rsi_oversold"]) & (close < lower)
+    entry_short = (rsi > p["rsi_overbought"]) & (close > upper)
+
+    return pd.DataFrame(
+        {
+            "entry_long": entry_long.fillna(False),
+            "entry_short": entry_short.fillna(False),
+            "exit_long": pd.Series(False, index=df.index),
+            "exit_short": pd.Series(False, index=df.index),
+        },
+        index=df.index,
+    )
+
+
 # Registry of pluggable strategies — dispatch used by confirmed_events()
 # whenever a caller passes a strategy name instead of pre-computed signals.
 STRATEGY_REGISTRY = {
     "Lorenzo (trend-follower)": compute_signals,
     "Accumulo / Distribuzione (long-term)": compute_exhaustion_signals,
+    "LKI Trading (RSI+BB reversal)": compute_lki_signals,
 }
 AVAILABLE_STRATEGIES = list(STRATEGY_REGISTRY.keys())
 DEFAULT_STRATEGY = AVAILABLE_STRATEGIES[0]
