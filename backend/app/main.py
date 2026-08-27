@@ -53,8 +53,11 @@ from app.pine import PineError, PineInterpreter, is_strategy_style, parse_progra
 from app.pine import storage as pine_storage
 from app.providers.base import DataProvider, ProviderError
 from app.providers.binance import BinanceProvider
+from app.providers.binance import format_symbol as format_binance_symbol
 from app.providers.kucoin import KucoinProvider
+from app.providers.kucoin import format_symbol as format_kucoin_symbol
 from app.providers.mexc import MexcProvider
+from app.providers.mexc import format_symbol as format_mexc_symbol
 from app.providers.twelvedata import TwelveDataProvider
 from app.resample import resample_by_count
 from app.timeframes import DEFAULT_INTERVALS, INTERVAL_SECONDS, SYNTHETIC_DAY_INTERVALS, IntervalChoice
@@ -85,6 +88,24 @@ def get_provider(asset_type: AssetType, exchange: CryptoExchange = "mexc") -> Da
     if exchange == "kucoin":
         return kucoin_provider
     return mexc_provider
+
+
+def canonical_symbol(symbol: str, asset_type: AssetType, exchange: CryptoExchange = "mexc") -> str:
+    """The exact trading-pair string a provider actually resolves a query
+    to (e.g. "BTC" -> "BTCUSDT" on MEXC) — echoed back in API responses
+    instead of the raw query so the same instrument always identifies
+    itself the same way regardless of how it was searched for. The
+    frontend keys client-side drawing persistence off this value; without
+    it, typing "BTC" versus clicking the "BTCUSDT" suggestion produced two
+    different symbols for the same chart, and drawings saved under one
+    never showed up under the other."""
+    if asset_type != "crypto":
+        return symbol.strip().upper()
+    if exchange == "binance":
+        return format_binance_symbol(symbol)
+    if exchange == "kucoin":
+        return format_kucoin_symbol(symbol)
+    return format_mexc_symbol(symbol)
 
 
 async def fetch_ohlcv_canonical(provider: DataProvider, symbol: str, interval: str, outputsize: int):
@@ -684,7 +705,7 @@ async def analyze(
     summary = build_summary(current_price, timeframes, confluence_zones)
 
     return AnalysisResponse(
-        symbol=symbol.upper(),
+        symbol=canonical_symbol(symbol, asset_type, exchange),
         asset_type=asset_type,
         current_price=current_price,
         timeframes=timeframes,
