@@ -317,15 +317,22 @@ async def run_pinescript(script_id: str, req: PineRunRequest) -> dict:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     if not strategy_style:
-        roles = {"entry_long", "entry_short", "exit_long", "exit_short"}
+        # Only entry_long/entry_short are mandatory — plenty of indicator
+        # scripts (RSI/BB reversal setups included) only ever define entry
+        # conditions and rely on the opposite signal to flip the position,
+        # exactly like our own built-in strategies. Requiring an explicit
+        # exit mapping that doesn't exist in the script would leave a
+        # perfectly usable script stuck asking for mapping forever.
+        required_roles = {"entry_long", "entry_short"}
         mapped = set((req.signal_map or {}).keys())
-        if not roles.issubset(mapped):
+        if not required_roles.issubset(mapped):
             return {
                 "needs_mapping": True,
                 "candidates": interp.boolean_candidates(),
                 "warning": (
                     "Questo script non usa strategy.entry/close: seleziona quali variabili booleane "
-                    "corrispondono a entry_long / entry_short / exit_long / exit_short."
+                    "corrispondono a entry_long / entry_short (exit_long / exit_short sono opzionali — "
+                    "se non li mappi, la posizione resta aperta fino al segnale opposto)."
                 ),
             }
 
