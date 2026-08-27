@@ -378,9 +378,23 @@ class WatchlistStrategyToggleRequest(BaseModel):
 async def toggle_watchlist_strategy(entry_id: str, req: WatchlistStrategyToggleRequest) -> WatchlistEntry:
     if req.strategy_name not in AVAILABLE_STRATEGIES:
         raise HTTPException(status_code=400, detail=f"Strategia sconosciuta: {req.strategy_name}")
+    before = watchlist_store.list_entries()
+    was_enabled = any(
+        e.id == entry_id and req.strategy_name in e.strategies for e in before
+    )
     entry = watchlist_store.set_strategy_enabled(entry_id, req.strategy_name, req.enabled)
     if entry is None:
         raise HTTPException(status_code=404, detail="Voce non trovata")
+    if req.enabled and not was_enabled:
+        # Confirms the watch is actually active — sent immediately on
+        # activation, before any real signal, so silence afterward reads as
+        # "no condition yet" rather than "is this even running?".
+        asyncio.create_task(
+            telegram.send_message(
+                f"✅ <b>{entry.symbol}</b> — {req.strategy_name}\n"
+                "Monitoraggio attivato. Riceverai un messaggio quando viene rilevata una condizione."
+            )
+        )
     return entry
 
 
