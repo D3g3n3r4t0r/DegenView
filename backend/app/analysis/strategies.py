@@ -357,7 +357,7 @@ def compute_lki_signals(df: pd.DataFrame, params: dict | None = None) -> pd.Data
 STRATEGY_REGISTRY = {
     "Lorenzo (trend-follower)": compute_signals,
     "Accumulo / Distribuzione (long-term)": compute_exhaustion_signals,
-    "LKI Trading (RSI+BB reversal)": compute_lki_signals,
+    "Gabriele (RSI+BB reversal)": compute_lki_signals,
 }
 AVAILABLE_STRATEGIES = list(STRATEGY_REGISTRY.keys())
 DEFAULT_STRATEGY = AVAILABLE_STRATEGIES[0]

@@ -132,6 +132,239 @@
     }
   }
 
+  // ---- Series Primitive: freehand line between two (time, price) points,
+  // optionally with an arrowhead at the second point (reused for both the
+  // Trend Line and Arrow drawing tools) ----
+  class LineRenderer {
+    constructor(p1, p2, color, width, arrow) {
+      this._p1 = p1;
+      this._p2 = p2;
+      this._color = color;
+      this._width = width;
+      this._arrow = arrow;
+    }
+    draw(target) {
+      target.useBitmapCoordinateSpace((scope) => {
+        if (this._p1.x === null || this._p1.y === null || this._p2.x === null || this._p2.y === null) return;
+        const ctx = scope.context;
+        const x1 = this._p1.x * scope.horizontalPixelRatio;
+        const y1 = this._p1.y * scope.verticalPixelRatio;
+        const x2 = this._p2.x * scope.horizontalPixelRatio;
+        const y2 = this._p2.y * scope.verticalPixelRatio;
+        ctx.strokeStyle = this._color;
+        ctx.lineWidth = this._width * scope.horizontalPixelRatio;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+        if (this._arrow) {
+          const angle = Math.atan2(y2 - y1, x2 - x1);
+          const headLen = 9 * scope.horizontalPixelRatio;
+          ctx.beginPath();
+          ctx.moveTo(x2, y2);
+          ctx.lineTo(x2 - headLen * Math.cos(angle - Math.PI / 6), y2 - headLen * Math.sin(angle - Math.PI / 6));
+          ctx.lineTo(x2 - headLen * Math.cos(angle + Math.PI / 6), y2 - headLen * Math.sin(angle + Math.PI / 6));
+          ctx.closePath();
+          ctx.fillStyle = this._color;
+          ctx.fill();
+        }
+      });
+    }
+  }
+
+  class LinePaneView {
+    constructor(source) {
+      this._source = source;
+      this._p1 = { x: null, y: null };
+      this._p2 = { x: null, y: null };
+    }
+    update() {
+      const { chart, series, point1, point2 } = this._source;
+      if (!chart || !series) return;
+      this._p1 = { x: chart.timeScale().timeToCoordinate(point1.time), y: series.priceToCoordinate(point1.price) };
+      this._p2 = { x: chart.timeScale().timeToCoordinate(point2.time), y: series.priceToCoordinate(point2.price) };
+    }
+    renderer() {
+      return new LineRenderer(this._p1, this._p2, this._source.color, this._source.width, this._source.arrow);
+    }
+    zOrder() {
+      return "normal";
+    }
+  }
+
+  class LinePrimitive {
+    constructor(point1, point2, color, width, arrow) {
+      this.point1 = point1;
+      this.point2 = point2;
+      this.color = color;
+      this.width = width;
+      this.arrow = arrow;
+      this.chart = null;
+      this.series = null;
+      this._paneViews = [new LinePaneView(this)];
+    }
+    attached({ chart, series }) {
+      this.chart = chart;
+      this.series = series;
+    }
+    detached() {
+      this.chart = null;
+      this.series = null;
+    }
+    updateAllViews() {
+      this._paneViews.forEach((v) => v.update());
+    }
+    paneViews() {
+      return this._paneViews;
+    }
+  }
+
+  // ---- Series Primitive: a text label anchored to one (time, price) point ----
+  class TextRenderer {
+    constructor(p, text, color) {
+      this._p = p;
+      this._text = text;
+      this._color = color;
+    }
+    draw(target) {
+      target.useBitmapCoordinateSpace((scope) => {
+        if (this._p.x === null || this._p.y === null || !this._text) return;
+        const ctx = scope.context;
+        ctx.font = `${11 * scope.verticalPixelRatio}px "Space Mono", monospace`;
+        ctx.fillStyle = this._color;
+        ctx.textBaseline = "bottom";
+        ctx.fillText(this._text, this._p.x * scope.horizontalPixelRatio + 5, this._p.y * scope.verticalPixelRatio - 5);
+      });
+    }
+  }
+
+  class TextPaneView {
+    constructor(source) {
+      this._source = source;
+      this._p = { x: null, y: null };
+    }
+    update() {
+      const { chart, series, point } = this._source;
+      if (!chart || !series) return;
+      this._p = { x: chart.timeScale().timeToCoordinate(point.time), y: series.priceToCoordinate(point.price) };
+    }
+    renderer() {
+      return new TextRenderer(this._p, this._source.text, this._source.color);
+    }
+    zOrder() {
+      return "normal";
+    }
+  }
+
+  class TextPrimitive {
+    constructor(point, text, color) {
+      this.point = point;
+      this.text = text;
+      this.color = color;
+      this.chart = null;
+      this.series = null;
+      this._paneViews = [new TextPaneView(this)];
+    }
+    attached({ chart, series }) {
+      this.chart = chart;
+      this.series = series;
+    }
+    detached() {
+      this.chart = null;
+      this.series = null;
+    }
+    updateAllViews() {
+      this._paneViews.forEach((v) => v.update());
+    }
+    paneViews() {
+      return this._paneViews;
+    }
+  }
+
+  // ---- Series Primitive: Fibonacci retracement — horizontal levels spanning
+  // the two anchor points, each labeled with its ratio and price ----
+  const FIB_LEVELS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
+
+  class FibRenderer {
+    constructor(x1, x2, levels, color) {
+      this._x1 = x1;
+      this._x2 = x2;
+      this._levels = levels; // [{ y, label }]
+      this._color = color;
+    }
+    draw(target) {
+      target.useBitmapCoordinateSpace((scope) => {
+        if (this._x1 === null || this._x2 === null) return;
+        const ctx = scope.context;
+        const xa = Math.min(this._x1, this._x2) * scope.horizontalPixelRatio;
+        const xb = Math.max(this._x1, this._x2) * scope.horizontalPixelRatio;
+        ctx.lineWidth = Math.max(1, scope.verticalPixelRatio);
+        ctx.font = `${10 * scope.verticalPixelRatio}px "Space Mono", monospace`;
+        this._levels.forEach(({ y, label }) => {
+          if (y === null) return;
+          const yy = y * scope.verticalPixelRatio;
+          ctx.strokeStyle = this._color;
+          ctx.beginPath();
+          ctx.moveTo(xa, yy);
+          ctx.lineTo(xb, yy);
+          ctx.stroke();
+          ctx.fillStyle = this._color;
+          ctx.fillText(label, xb + 4, yy + 4);
+        });
+      });
+    }
+  }
+
+  class FibPaneView {
+    constructor(source) {
+      this._source = source;
+      this._x1 = null;
+      this._x2 = null;
+      this._levels = [];
+    }
+    update() {
+      const { chart, series, point1, point2 } = this._source;
+      if (!chart || !series) return;
+      this._x1 = chart.timeScale().timeToCoordinate(point1.time);
+      this._x2 = chart.timeScale().timeToCoordinate(point2.time);
+      this._levels = FIB_LEVELS.map((ratio) => {
+        const price = point1.price + ratio * (point2.price - point1.price);
+        return { y: series.priceToCoordinate(price), label: `${(ratio * 100).toFixed(1)}% (${price.toFixed(2)})` };
+      });
+    }
+    renderer() {
+      return new FibRenderer(this._x1, this._x2, this._levels, this._source.color);
+    }
+    zOrder() {
+      return "normal";
+    }
+  }
+
+  class FibPrimitive {
+    constructor(point1, point2, color) {
+      this.point1 = point1;
+      this.point2 = point2;
+      this.color = color;
+      this.chart = null;
+      this.series = null;
+      this._paneViews = [new FibPaneView(this)];
+    }
+    attached({ chart, series }) {
+      this.chart = chart;
+      this.series = series;
+    }
+    detached() {
+      this.chart = null;
+      this.series = null;
+    }
+    updateAllViews() {
+      this._paneViews.forEach((v) => v.update());
+    }
+    paneViews() {
+      return this._paneViews;
+    }
+  }
+
   // ---- App state ----
   const state = {
     assetType: "stock",
@@ -446,6 +679,7 @@
     });
 
     mainChart.subscribeCrosshairMove(handleCrosshairMove);
+    mainChart.subscribeClick(handleChartDrawClick);
   }
 
   function handleCrosshairMove(param) {
@@ -539,6 +773,233 @@
     const magnitude = Math.floor(Math.log10(price));
     const precision = Math.min(8, Math.max(2, -magnitude + 3));
     return { type: "price", precision, minMove: 1 / 10 ** precision };
+  }
+
+  // ---- Drawing tools (left rail next to the chart) ----
+  // Drawings are placed with a click-to-collect flow (1 or 2 points
+  // depending on the tool), rendered as chart primitives, and persisted in
+  // localStorage per (asset_type, symbol) — client-side only, same scope as
+  // TradingView's own free-tier drawings. No drag/resize of an already-placed
+  // drawing in this first pass; removal is via the object list below the
+  // rail, not by clicking the drawing itself (that needs canvas hit-testing,
+  // scoped as a later iteration).
+  const DRAW_TOOL_POINTS = { cursor: 0, trend_line: 2, hline: 1, rectangle: 2, range: 2, fib: 2, text: 1, arrow: 2 };
+  const DRAW_TOOL_LABELS = {
+    trend_line: "Linea di tendenza",
+    hline: "Linea orizzontale",
+    rectangle: "Rettangolo",
+    range: "Misura (prezzo + tempo)",
+    fib: "Ritracciamento Fibonacci",
+    text: "Testo",
+    arrow: "Freccia",
+  };
+
+  const drawState = {
+    tool: "cursor",
+    pending: [],
+    drawings: [],
+    attached: {}, // id -> { priceLine } | { primitives: [...] }
+  };
+
+  function drawStorageKey() {
+    if (!state.data) return null;
+    return `draw:${state.assetType}:${state.data.symbol}`;
+  }
+
+  function setDrawTool(tool) {
+    drawState.tool = tool;
+    drawState.pending = [];
+    document.querySelectorAll(".draw-tool-btn").forEach((btn) => {
+      btn.classList.toggle("selected", btn.dataset.drawTool === tool);
+    });
+    const container = el("main-chart");
+    if (container) container.style.cursor = tool === "cursor" ? "default" : "crosshair";
+  }
+
+  function formatRangeLabel(p1, p2) {
+    const dPrice = p2.price - p1.price;
+    const pct = p1.price !== 0 ? (dPrice / p1.price) * 100 : 0;
+    const dSeconds = Math.abs(p2.time - p1.time);
+    const dDays = dSeconds / 86400;
+    const timeLabel = dDays >= 1 ? `${dDays.toFixed(1)}g` : `${Math.round(dSeconds / 3600)}h`;
+    const sign = dPrice >= 0 ? "+" : "";
+    return `${sign}${dPrice.toFixed(2)} (${sign}${pct.toFixed(2)}%) · ${timeLabel}`;
+  }
+
+  function attachDrawing(d) {
+    if (!candleSeries) return;
+    const color = COLORS.accent;
+    if (d.type === "hline") {
+      const line = candleSeries.createPriceLine({
+        price: d.points[0].price,
+        color,
+        lineWidth: 1,
+        lineStyle: LightweightCharts.LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: d.text || "",
+      });
+      drawState.attached[d.id] = { priceLine: line };
+      return;
+    }
+    const [p1, p2] = d.points;
+    const primitives = [];
+    if (d.type === "trend_line") {
+      primitives.push(new LinePrimitive(p1, p2, color, 2, false));
+    } else if (d.type === "arrow") {
+      primitives.push(new LinePrimitive(p1, p2, color, 2, true));
+    } else if (d.type === "rectangle") {
+      primitives.push(new RectanglePrimitive(p1, p2, "rgba(31, 78, 107, 0.12)", color));
+    } else if (d.type === "range") {
+      primitives.push(new RectanglePrimitive(p1, p2, "rgba(138, 109, 59, 0.12)", COLORS.stamp));
+      const topPoint = p1.price >= p2.price ? p1 : p2;
+      primitives.push(new TextPrimitive(topPoint, d.text || "", COLORS.stamp));
+    } else if (d.type === "fib") {
+      primitives.push(new FibPrimitive(p1, p2, color));
+    } else if (d.type === "text") {
+      primitives.push(new TextPrimitive(p1, d.text || "", color));
+    }
+    primitives.forEach((prim) => candleSeries.attachPrimitive(prim));
+    drawState.attached[d.id] = { primitives };
+  }
+
+  function detachDrawing(id) {
+    const ref = drawState.attached[id];
+    if (!ref) return;
+    if (ref.priceLine) {
+      try {
+        candleSeries.removePriceLine(ref.priceLine);
+      } catch (e) {
+        /* already gone */
+      }
+    }
+    if (ref.primitives) {
+      ref.primitives.forEach((p) => {
+        try {
+          candleSeries.detachPrimitive(p);
+        } catch (e) {
+          /* already gone */
+        }
+      });
+    }
+    delete drawState.attached[id];
+  }
+
+  function clearAllDrawingPrimitives() {
+    Object.keys(drawState.attached).forEach(detachDrawing);
+  }
+
+  function saveDrawings() {
+    const key = drawStorageKey();
+    if (!key) return;
+    try {
+      localStorage.setItem(key, JSON.stringify(drawState.drawings));
+    } catch (e) {
+      /* storage unavailable/full — drawings just won't survive a reload */
+    }
+  }
+
+  function renderDrawingsList() {
+    const list = el("draw-list");
+    if (!list) return;
+    list.innerHTML = "";
+    if (!drawState.drawings.length) {
+      const li = document.createElement("li");
+      li.className = "panel-hint";
+      li.textContent = "Nessun disegno su questo grafico.";
+      list.appendChild(li);
+      return;
+    }
+    drawState.drawings.forEach((d) => {
+      const li = document.createElement("li");
+      li.className = "draw-list-item";
+      const label = document.createElement("span");
+      label.textContent = DRAW_TOOL_LABELS[d.type] || d.type;
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "draw-list-remove";
+      removeBtn.textContent = "✕";
+      removeBtn.addEventListener("click", () => removeDrawing(d.id));
+      li.appendChild(label);
+      li.appendChild(removeBtn);
+      list.appendChild(li);
+    });
+  }
+
+  function removeDrawing(id) {
+    detachDrawing(id);
+    drawState.drawings = drawState.drawings.filter((d) => d.id !== id);
+    saveDrawings();
+    renderDrawingsList();
+  }
+
+  function clearAllDrawings() {
+    clearAllDrawingPrimitives();
+    drawState.drawings = [];
+    saveDrawings();
+    renderDrawingsList();
+  }
+
+  function loadDrawingsForSymbol() {
+    clearAllDrawingPrimitives();
+    drawState.drawings = [];
+    const key = drawStorageKey();
+    if (key) {
+      try {
+        const raw = localStorage.getItem(key);
+        if (raw) drawState.drawings = JSON.parse(raw);
+      } catch (e) {
+        drawState.drawings = [];
+      }
+    }
+    drawState.drawings.forEach(attachDrawing);
+    renderDrawingsList();
+  }
+
+  function finalizeDrawing() {
+    const type = drawState.tool;
+    const points = drawState.pending;
+    drawState.pending = [];
+
+    let text;
+    if (type === "text") {
+      text = window.prompt("Testo dell'annotazione:");
+      if (!text) {
+        setDrawTool("cursor");
+        return;
+      }
+    } else if (type === "range") {
+      text = formatRangeLabel(points[0], points[1]);
+    }
+
+    const drawing = { id: `d${Date.now()}${Math.random().toString(36).slice(2, 7)}`, type, points, text };
+    drawState.drawings.push(drawing);
+    attachDrawing(drawing);
+    saveDrawings();
+    renderDrawingsList();
+    setDrawTool("cursor"); // single-shot, like TradingView's default (unlocked) behavior
+  }
+
+  function handleChartDrawClick(param) {
+    if (drawState.tool === "cursor" || !state.data) return;
+    if (!param.point || param.time === undefined) return;
+    const price = candleSeries.coordinateToPrice(param.point.y);
+    if (price === null) return;
+    drawState.pending.push({ time: param.time, price });
+    if (drawState.pending.length >= DRAW_TOOL_POINTS[drawState.tool]) finalizeDrawing();
+  }
+
+  function bindDrawRail() {
+    document.querySelectorAll(".draw-tool-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const tool = btn.dataset.drawTool;
+        setDrawTool(drawState.tool === tool ? "cursor" : tool);
+      });
+    });
+    el("draw-clear-btn").addEventListener("click", () => {
+      if (drawState.drawings.length && window.confirm("Cancellare tutti i disegni su questo grafico?")) {
+        clearAllDrawings();
+      }
+    });
   }
 
   function render() {
@@ -963,6 +1424,7 @@
       el("chart-wrap").classList.remove("hidden");
       resizeAllCharts();
       render();
+      loadDrawingsForSymbol();
       // Live WS streaming is only wired up for MEXC today; every crypto
       // symbol still gets the periodic refresh below regardless of exchange.
       if (state.assetType === "crypto" && state.cryptoExchange === "mexc") {
@@ -1622,6 +2084,7 @@
     bindMobileNav();
     bindRail();
     bindTabs();
+    bindDrawRail();
     initPineEditor();
     bindPineUI();
     loadPineScripts();

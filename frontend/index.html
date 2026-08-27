@@ -64,6 +64,11 @@
         <button type="button" class="drawer-close-btn" data-close-drawer>✕ Chiudi</button>
       </div>
       <div class="panel">
+        <h3>Disegni sul grafico</h3>
+        <p class="panel-hint">Usa gli strumenti nella colonna a sinistra del grafico. Persistono per questo ticker anche dopo un ricaricamento della pagina (salvati in questo browser).</p>
+        <ul id="draw-list" class="draw-list"></ul>
+      </div>
+      <div class="panel">
         <h3>Struttura &amp; Liquidità</h3>
         <p class="panel-hint">Disattivati di default — troppi livelli insieme affollano il grafico. Attiva solo quelli che ti servono.</p>
         <label class="layer-toggle"><input type="checkbox" data-layer="order_block" /> Order Blocks</label>
@@ -129,11 +134,40 @@
       <div id="polling-badge" class="polling-badge hidden">Agg. ogni 60s</div>
       <div id="loading" class="loading hidden">Analisi in corso…</div>
       <div id="empty-state" class="empty-state">Cerca un ticker per iniziare l'analisi multi-timeframe.</div>
-      <div id="chart-wrap" class="chart-wrap hidden">
-        <div id="main-chart" class="main-chart"></div>
-        <div id="rsi-chart" class="sub-chart hidden"></div>
-        <div id="macd-chart" class="sub-chart hidden"></div>
-        <div id="stoch-chart" class="sub-chart hidden"></div>
+      <div class="chart-row">
+        <nav class="draw-rail" id="draw-rail" title="Strumenti di disegno">
+          <button type="button" class="draw-tool-btn" data-draw-tool="trend_line" title="Linea di tendenza">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 20 L20 4"/></svg>
+          </button>
+          <button type="button" class="draw-tool-btn" data-draw-tool="hline" title="Linea orizzontale">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 12 H21"/></svg>
+          </button>
+          <button type="button" class="draw-tool-btn" data-draw-tool="rectangle" title="Rettangolo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="6" width="16" height="12" rx="1"/></svg>
+          </button>
+          <button type="button" class="draw-tool-btn" data-draw-tool="range" title="Misura (prezzo + tempo)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 19 L19 5 M5 19 H10 M5 19 V14 M19 5 H14 M19 5 V10"/></svg>
+          </button>
+          <button type="button" class="draw-tool-btn" data-draw-tool="fib" title="Ritracciamento Fibonacci">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 5 H21 M3 9.5 H21 M3 14.5 H21 M3 19 H21"/></svg>
+          </button>
+          <button type="button" class="draw-tool-btn" data-draw-tool="text" title="Testo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5 H19 M12 5 V19"/></svg>
+          </button>
+          <button type="button" class="draw-tool-btn" data-draw-tool="arrow" title="Freccia">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20 L20 4 M20 4 H12 M20 4 V12"/></svg>
+          </button>
+          <div class="draw-rail-divider"></div>
+          <button type="button" id="draw-clear-btn" class="draw-tool-btn" title="Cancella tutti i disegni">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7 H20 M9 7 V4 H15 V7 M6 7 L7 20 H17 L18 7"/></svg>
+          </button>
+        </nav>
+        <div id="chart-wrap" class="chart-wrap hidden">
+          <div id="main-chart" class="main-chart"></div>
+          <div id="rsi-chart" class="sub-chart hidden"></div>
+          <div id="macd-chart" class="sub-chart hidden"></div>
+          <div id="stoch-chart" class="sub-chart hidden"></div>
+        </div>
       </div>
       <div id="tooltip" class="chart-tooltip hidden"></div>
     </section>

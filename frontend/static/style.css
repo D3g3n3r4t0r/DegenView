@@ -422,7 +422,7 @@ body {
 .live-badge {
   position: absolute;
   top: 10px;
-  left: 10px;
+  left: 46px;
   z-index: 15;
   display: flex;
   align-items: center;
@@ -455,7 +455,7 @@ body {
 .polling-badge {
   position: absolute;
   top: 10px;
-  left: 10px;
+  left: 46px;
   z-index: 15;
   background: var(--bg);
   color: var(--ink-dim);
@@ -480,9 +480,88 @@ body {
 
 .hidden { display: none !important; }
 
+.chart-row {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.draw-rail {
+  flex: 0 0 36px;
+  border-right: 1.5px solid var(--border-strong);
+  background: rgba(236, 229, 211, 0.5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 0;
+  z-index: 5;
+}
+
+.draw-tool-btn {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  border-radius: 3px;
+  color: var(--ink-dim);
+  cursor: pointer;
+}
+
+.draw-tool-btn svg { width: 15px; height: 15px; }
+.draw-tool-btn:hover { background: rgba(38, 49, 46, 0.08); color: var(--ink); }
+.draw-tool-btn.selected { background: var(--accent); color: var(--bg); }
+
+.draw-rail-divider {
+  width: 20px;
+  height: 1px;
+  background: var(--border-strong);
+  margin: 4px 0;
+}
+
+.draw-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.draw-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-panel);
+}
+
+.draw-list-remove {
+  background: transparent;
+  border: none;
+  color: var(--bear);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0 2px;
+}
+
+@media (max-width: 760px) {
+  .draw-rail { display: none; }
+}
+
 .chart-wrap {
   display: flex;
   flex-direction: column;
+  flex: 1;
+  min-width: 0;
   height: 100%;
 }
 
@@ -1185,6 +1264,7 @@ body {
   #levels-panel .toolbar-check { font-size: 13px; }
 
   .rail { display: none; }
+  .live-badge, .polling-badge { left: 10px; }
 
   .cockpit {
     display: block;
