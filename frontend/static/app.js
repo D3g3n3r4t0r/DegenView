@@ -491,6 +491,8 @@
   // once (previously one strategy meant one whole separate watchlist row).
   // ---- Auth: cookie session, login/register modal, per-user Telegram chat id ----
   let authMode = "login";
+  let authGateActive = false; // true while the modal is blocking the whole app (not logged in yet)
+  let appStarted = false; // startApp() runs once, either immediately or right after the gate clears
 
   async function checkAuth() {
     try {
@@ -518,18 +520,22 @@
     }
   }
 
-  function openAuthModal(mode) {
+  function openAuthModal(mode, opts) {
     authMode = mode || "login";
+    authGateActive = !!(opts && opts.gate);
     el("auth-modal-title").textContent = authMode === "login" ? "Accedi" : "Registrati";
     el("auth-submit-btn").textContent = authMode === "login" ? "Accedi" : "Registrati";
     el("auth-switch-text").textContent = authMode === "login" ? "Non hai un account?" : "Hai già un account?";
     el("auth-switch-btn").textContent = authMode === "login" ? "Registrati" : "Accedi";
     el("auth-error").classList.add("hidden");
+    el("auth-gate-hint").classList.toggle("hidden", !authGateActive);
     el("auth-form").reset();
     el("auth-modal").classList.remove("hidden");
+    el("auth-modal").classList.toggle("gate", authGateActive);
   }
 
   function closeAuthModal() {
+    if (authGateActive) return; // login is mandatory before the page unlocks — can't be dismissed
     el("auth-modal").classList.add("hidden");
   }
 
@@ -537,12 +543,15 @@
     el("auth-toggle-btn").addEventListener("click", () => openAuthModal("login"));
     el("alert-login-btn").addEventListener("click", () => openAuthModal("login"));
     document.querySelectorAll("[data-close-auth]").forEach((node) => node.addEventListener("click", closeAuthModal));
-    el("auth-switch-btn").addEventListener("click", () => openAuthModal(authMode === "login" ? "register" : "login"));
+    el("auth-switch-btn").addEventListener("click", () =>
+      openAuthModal(authMode === "login" ? "register" : "login", { gate: authGateActive })
+    );
 
     el("auth-logout-btn").addEventListener("click", async () => {
       await fetch("/api/auth/logout", { method: "POST" });
       state.user = null;
       updateAuthUI();
+      openAuthModal("login", { gate: true }); // re-lock the page immediately, same as first load
     });
 
     el("telegram-chat-id-save").addEventListener("click", async () => {
@@ -576,7 +585,9 @@
         }
         state.user = body;
         updateAuthUI();
+        authGateActive = false;
         closeAuthModal();
+        if (!appStarted) startApp();
       } catch (err) {
         errorEl.textContent = "Errore di rete.";
         errorEl.classList.remove("hidden");
@@ -2338,16 +2349,11 @@
     }
   }
 
-  document.addEventListener("DOMContentLoaded", async () => {
-    populateIntervalSelects();
-    initCharts();
-    bindUI();
-    bindMobileNav();
-    bindRail();
-    bindTabs();
-    bindDrawRail();
-    bindAuth();
-    checkAuth();
+  // Runs once, either right away (already logged in) or right after the
+  // login gate clears — everything that fetches real data or auto-loads a
+  // chart waits behind auth so nothing renders before the page unlocks.
+  async function startApp() {
+    appStarted = true;
     initPineEditor();
     bindPineUI();
     loadPineScripts();
@@ -2362,6 +2368,23 @@
     state.cryptoExchange = "mexc";
     el("ticker-input").value = "BTC";
     runAnalysis("BTC");
+  }
+
+  document.addEventListener("DOMContentLoaded", async () => {
+    populateIntervalSelects();
+    initCharts();
+    bindUI();
+    bindMobileNav();
+    bindRail();
+    bindTabs();
+    bindDrawRail();
+    bindAuth();
+    await checkAuth();
+    if (state.user) {
+      await startApp();
+    } else {
+      openAuthModal("login", { gate: true });
+    }
     let relocateTimer = null;
     window.addEventListener("resize", () => {
       resizeAllCharts();

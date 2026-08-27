@@ -840,6 +840,9 @@ body {
   cursor: pointer;
 }
 
+.auth-modal.gate .auth-modal-close { display: none; }
+.auth-modal.gate .auth-modal-backdrop { cursor: default; }
+
 .auth-modal-box h3 {
   margin: 0 0 14px;
   font-family: var(--font-display);
