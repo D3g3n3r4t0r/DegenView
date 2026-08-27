@@ -1766,7 +1766,7 @@
       const exchange = document.createElement("span");
       exchange.className = "sug-exchange sug-exchange-" + item.provider;
       exchange.textContent = item.exchange;
-      if (item.provider === "mexc" || item.provider === "binance") {
+      if (item.asset_type === "crypto") {
         exchange.title = "Prezzi e livelli calcolati su questo exchange — possono differire leggermente da altri exchange per lo stesso simbolo.";
       }
       li.appendChild(main);
@@ -1792,7 +1792,7 @@
   function selectSuggestion(item) {
     el("ticker-input").value = item.symbol;
     state.assetType = item.asset_type;
-    state.cryptoExchange = item.provider === "binance" ? "binance" : "mexc";
+    if (item.asset_type === "crypto") state.cryptoExchange = item.provider;
     hideSuggestions();
     runAnalysis(item.symbol);
   }
@@ -2249,7 +2249,7 @@
       const exact = state.suggestions.find((s) => s.symbol.toLowerCase() === symbol.toLowerCase());
       if (exact) {
         state.assetType = exact.asset_type;
-        state.cryptoExchange = exact.provider === "binance" ? "binance" : "mexc";
+        if (exact.asset_type === "crypto") state.cryptoExchange = exact.provider;
       }
       hideSuggestions();
       runAnalysis(symbol);

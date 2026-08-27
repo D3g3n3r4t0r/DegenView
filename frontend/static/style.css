@@ -230,6 +230,7 @@ body {
 .sug-exchange-stock { color: var(--accent); }
 .sug-exchange-mexc { color: var(--stamp); }
 .sug-exchange-binance { color: var(--bull); }
+.sug-exchange-kucoin { color: var(--ink); }
 
 .suggestions li:hover .sug-exchange,
 .suggestions li.active .sug-exchange {

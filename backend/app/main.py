@@ -51,6 +51,7 @@ from app.pine import PineError, PineInterpreter, is_strategy_style, parse_progra
 from app.pine import storage as pine_storage
 from app.providers.base import DataProvider, ProviderError
 from app.providers.binance import BinanceProvider
+from app.providers.kucoin import KucoinProvider
 from app.providers.mexc import MexcProvider
 from app.providers.twelvedata import TwelveDataProvider
 from app.resample import resample_by_count
@@ -66,12 +67,22 @@ WATCHLIST_POLL_SECONDS = 60
 twelvedata_provider = TwelveDataProvider()
 mexc_provider = MexcProvider()
 binance_provider = BinanceProvider()
+kucoin_provider = KucoinProvider()
+
+
+def _telegram_allowed(user: User) -> bool:
+    allowed = {e.strip().lower() for e in settings.telegram_allowed_emails.split(",") if e.strip()}
+    return not allowed or user.email.lower() in allowed
 
 
 def get_provider(asset_type: AssetType, exchange: CryptoExchange = "mexc") -> DataProvider:
     if asset_type != "crypto":
         return twelvedata_provider
-    return binance_provider if exchange == "binance" else mexc_provider
+    if exchange == "binance":
+        return binance_provider
+    if exchange == "kucoin":
+        return kucoin_provider
+    return mexc_provider
 
 
 async def fetch_ohlcv_canonical(provider: DataProvider, symbol: str, interval: str, outputsize: int):
@@ -99,8 +110,8 @@ async def _watchlist_alert_loop() -> None:
             if not entry.strategies:
                 continue
             owner = auth.get_user(entry.owner_id)
-            if owner is None or not owner.telegram_chat_id:
-                continue  # nowhere to deliver an alert until the user pastes in their chat_id
+            if owner is None or not owner.telegram_chat_id or not _telegram_allowed(owner):
+                continue  # no chat_id yet, or this account isn't on the Telegram delivery allowlist
             provider = get_provider(entry.asset_type, entry.exchange)
             try:
                 df = await fetch_ohlcv_canonical(
@@ -178,12 +189,13 @@ async def search_symbols(query: str = Query(..., min_length=1, max_length=20)) -
     # Single unified search across stocks and both crypto exchanges — no
     # upfront "stock vs crypto" toggle. The user picks the asset from results
     # that already say which market/exchange it's on.
-    stock_res, binance_res, mexc_res = await asyncio.gather(
+    stock_res, binance_res, mexc_res, kucoin_res = await asyncio.gather(
         _safe_search(twelvedata_provider, query, "stock", "stock"),
         _safe_search(binance_provider, query, "crypto", "binance"),
         _safe_search(mexc_provider, query, "crypto", "mexc"),
+        _safe_search(kucoin_provider, query, "crypto", "kucoin"),
     )
-    return _interleave(stock_res, binance_res, mexc_res)[:12]
+    return _interleave(stock_res, binance_res, mexc_res, kucoin_res)[:12]
 
 
 def _dispatch_telegram_alerts(chat_id: str, symbol: str, timeframe_key: str, strategy: StrategyState) -> None:
@@ -490,7 +502,7 @@ async def toggle_watchlist_strategy(
     before = _owned_entry_or_404(entry_id, user)
     was_enabled = req.strategy_name in before.strategies
     entry = watchlist_store.set_strategy_enabled(entry_id, req.strategy_name, req.enabled)
-    if req.enabled and not was_enabled and user.telegram_chat_id:
+    if req.enabled and not was_enabled and user.telegram_chat_id and _telegram_allowed(user):
         # Confirms the watch is actually active — sent immediately on
         # activation, before any real signal, so silence afterward reads as
         # "no condition yet" rather than "is this even running?".
