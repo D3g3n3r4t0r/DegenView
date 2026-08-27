@@ -85,6 +85,27 @@ def _verify_password(password: str, stored: str) -> bool:
     return hmac.compare_digest(_hash_password(password, salt), stored)
 
 
+# A short blocklist of the passwords most likely to appear in a leaked
+# credential-stuffing list — not a substitute for a real breach-check API,
+# just cheap insurance against the most obvious choices.
+_COMMON_WEAK_PASSWORDS = {
+    "password", "password1", "password12", "password123",
+    "12345678", "123456789", "1234567890",
+    "qwerty123", "qwertyui", "qwertyuiop",
+    "letmein1", "letmein123", "admin1234", "iloveyou1", "welcome1",
+}
+
+
+def is_strong_password(password: str) -> bool:
+    if len(password) < 8:
+        return False
+    if password.lower() in _COMMON_WEAK_PASSWORDS:
+        return False
+    has_letter = any(c.isalpha() for c in password)
+    has_digit = any(c.isdigit() for c in password)
+    return has_letter and has_digit
+
+
 def get_user(user_id: str) -> User | None:
     return _users.get(user_id)
 

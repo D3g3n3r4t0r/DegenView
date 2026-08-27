@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Response, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -24,6 +24,7 @@ except (AttributeError, ValueError):
     pass
 
 from app import auth
+from app import rate_limit
 from app import watchlist as watchlist_store
 from app.analysis.backtest import run_backtest
 from app.analysis.confluence import compute_confluence
@@ -409,36 +410,77 @@ def _user_out(user: User) -> dict:
     return {"id": user.id, "email": user.email, "telegram_chat_id": user.telegram_chat_id}
 
 
-def _set_session_cookie(response: Response, user_id: str) -> None:
+def _client_ip(request: Request) -> str:
+    # Fly's edge proxy sets this; request.client.host would otherwise be
+    # the internal proxy address, not the real caller.
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _is_https(request: Request) -> bool:
+    # Read the header directly rather than trusting uvicorn's own
+    # proxy-header handling (which needs explicit --forwarded-allow-ips
+    # config to kick in) — Fly's proxy always sets this correctly.
+    forwarded_proto = request.headers.get("x-forwarded-proto", "").lower()
+    return forwarded_proto == "https" if forwarded_proto else request.url.scheme == "https"
+
+
+def _set_session_cookie(response: Response, user_id: str, request: Request) -> None:
     response.set_cookie(
         auth.SESSION_COOKIE,
         auth.make_session_cookie(user_id),
         max_age=auth.SESSION_MAX_AGE_SECONDS,
         httponly=True,
         samesite="lax",
+        secure=_is_https(request),
     )
 
 
 @app.post("/api/auth/register")
-async def register(req: RegisterRequest, response: Response) -> dict:
+async def register(req: RegisterRequest, request: Request, response: Response) -> dict:
+    ip_key = f"register:{_client_ip(request)}"
+    if rate_limit.is_locked(ip_key):
+        raise HTTPException(status_code=429, detail="Troppi tentativi. Riprova tra qualche minuto.")
+
     email = req.email.strip().lower()
     if "@" not in email or len(email) < 5:
+        rate_limit.register_failure(ip_key)
         raise HTTPException(status_code=400, detail="Email non valida")
-    if len(req.password) < 8:
-        raise HTTPException(status_code=400, detail="La password deve avere almeno 8 caratteri")
+    if not auth.is_strong_password(req.password):
+        rate_limit.register_failure(ip_key)
+        raise HTTPException(
+            status_code=400,
+            detail="La password deve avere almeno 8 caratteri, con lettere e numeri, e non essere troppo comune",
+        )
     if auth.find_by_email(email):
+        rate_limit.register_failure(ip_key)
         raise HTTPException(status_code=400, detail="Email già registrata")
+
     user = auth.create_user(email, req.password)
-    _set_session_cookie(response, user.id)
+    rate_limit.register_success(ip_key)
+    _set_session_cookie(response, user.id, request)
     return _user_out(user)
 
 
 @app.post("/api/auth/login")
-async def login(req: LoginRequest, response: Response) -> dict:
-    user = auth.verify_login(req.email, req.password)
+async def login(req: LoginRequest, request: Request, response: Response) -> dict:
+    email = req.email.strip().lower()
+    ip_key = f"ip:{_client_ip(request)}"
+    email_key = f"email:{email}"
+    if rate_limit.is_locked(ip_key) or rate_limit.is_locked(email_key):
+        raise HTTPException(status_code=429, detail="Troppi tentativi falliti. Riprova tra qualche minuto.")
+
+    user = auth.verify_login(email, req.password)
     if user is None:
+        rate_limit.register_failure(ip_key)
+        rate_limit.register_failure(email_key)
         raise HTTPException(status_code=401, detail="Email o password errati")
-    _set_session_cookie(response, user.id)
+
+    rate_limit.register_success(ip_key)
+    rate_limit.register_success(email_key)
+    _set_session_cookie(response, user.id, request)
     return _user_out(user)
 
 
