@@ -517,6 +517,46 @@
     if (loggedIn) {
       el("telegram-chat-id-input").value = state.user.telegram_chat_id || "";
       loadWatchlist();
+      loadBalances();
+    } else {
+      el("balances-tab-btn").classList.add("hidden");
+    }
+  }
+
+  // ---- Saldi tab: read-only exchange balances (MEXC/KuCoin) ----
+  function renderBalanceAccount(name, data) {
+    if (!data.configured) {
+      return `<div class="balance-acct"><div class="balance-acct-head">${name}</div><p class="balance-empty">Chiavi API non configurate.</p></div>`;
+    }
+    if (data.error) {
+      return `<div class="balance-acct"><div class="balance-acct-head">${name}</div><p class="balance-error">${data.error}</p></div>`;
+    }
+    if (!data.balances.length) {
+      return `<div class="balance-acct"><div class="balance-acct-head">${name}</div><p class="balance-empty">Nessun saldo disponibile.</p></div>`;
+    }
+    const rows = data.balances
+      .map(
+        (b) =>
+          `<div class="balance-row"><span class="b-asset">${b.asset}</span><span class="b-qty">${b.total.toLocaleString("it-IT", { maximumFractionDigits: 8 })}</span></div>`
+      )
+      .join("");
+    return `<div class="balance-acct"><div class="balance-acct-head">${name}</div>${rows}</div>`;
+  }
+
+  async function loadBalances() {
+    try {
+      const resp = await fetch("/api/balances");
+      if (resp.status === 403) {
+        el("balances-tab-btn").classList.add("hidden");
+        return;
+      }
+      if (!resp.ok) return;
+      const body = await resp.json();
+      el("balances-tab-btn").classList.remove("hidden");
+      el("balances-content").innerHTML = renderBalanceAccount("MEXC", body.mexc) + renderBalanceAccount("KuCoin", body.kucoin);
+      el("balances-updated").textContent = `Aggiornato alle ${new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}`;
+    } catch (err) {
+      el("balances-tab-btn").classList.add("hidden");
     }
   }
 

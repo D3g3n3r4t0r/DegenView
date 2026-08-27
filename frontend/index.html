@@ -191,6 +191,7 @@
         <button type="button" class="tab active" data-tab="strategia">Strategia</button>
         <button type="button" class="tab" data-tab="alert">Alert</button>
         <button type="button" class="tab" data-tab="analisi">Analisi</button>
+        <button type="button" class="tab hidden" id="balances-tab-btn" data-tab="saldi">Saldi</button>
       </div>
 
       <div class="tab-content active" data-tab-content="strategia">
@@ -316,6 +317,15 @@
           <h3>Zone di confluenza</h3>
           <p class="panel-hint">Prezzi dove più livelli di struttura (order block, FVG, equal high/low) su timeframe diversi si sovrappongono entro lo 0.15% — più alto il punteggio, più timeframe/livelli coincidono nella stessa zona.</p>
           <ul id="confluence-list" class="confluence-list"></ul>
+        </div>
+      </div>
+
+      <div class="tab-content" data-tab-content="saldi">
+        <div class="panel">
+          <h3>Saldi <span class="readonly-badge">sola lettura</span></h3>
+          <p class="panel-hint">Saldo reale letto direttamente dagli exchange — questa pagina non può in nessun caso inviare un ordine.</p>
+          <div id="balances-updated" class="panel-hint"></div>
+          <div id="balances-content"><p class="panel-hint">Caricamento…</p></div>
         </div>
       </div>
     </aside>
