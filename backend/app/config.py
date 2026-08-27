@@ -28,6 +28,21 @@ class Settings(BaseSettings):
     # alerts going out, until this is opened up more broadly.
     telegram_allowed_emails: str = "lorenzocorazzi@gmail.com,whitekobra@icloud.com"
 
+    # Read-only exchange account credentials, used ONLY for GET
+    # account/balance endpoints (app/exchange_balances.py) — never for any
+    # order/trade/withdrawal endpoint. Empty = that exchange's balance card
+    # just shows "not configured" instead of erroring.
+    mexc_api_key: str = ""
+    mexc_api_secret: str = ""
+    kucoin_api_key: str = ""
+    kucoin_api_secret: str = ""
+    kucoin_api_passphrase: str = ""
+
+    # Personal exchange balances are sensitive — visible only to these
+    # account emails (comma-separated), separate from the Telegram
+    # allowlist since this isn't necessarily the same audience.
+    balance_visible_emails: str = "lorenzocorazzi@gmail.com"
+
     # Timeframe set: HTF -> MTF -> LTF, matches PROMPT_SPEC.md section 5.
     # Each DataProvider maps these neutral keys to its own interval format.
     timeframe_keys: tuple[str, str, str] = ("htf", "mtf", "ltf")

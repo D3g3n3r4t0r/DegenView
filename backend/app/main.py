@@ -47,6 +47,7 @@ from app.models import (
     User,
     WatchlistEntry,
 )
+from app.exchange_balances import BalanceFetchError, fetch_kucoin_balances, fetch_mexc_balances
 from app.notify import telegram
 from app.notify.alerts import find_new_signals, format_signal_message
 from app.pine import PineError, PineInterpreter, is_strategy_style, parse_program, scan_inputs
@@ -77,6 +78,11 @@ kucoin_provider = KucoinProvider()
 
 def _telegram_allowed(user: User) -> bool:
     allowed = {e.strip().lower() for e in settings.telegram_allowed_emails.split(",") if e.strip()}
+    return not allowed or user.email.lower() in allowed
+
+
+def _balance_visible(user: User) -> bool:
+    allowed = {e.strip().lower() for e in settings.balance_visible_emails.split(",") if e.strip()}
     return not allowed or user.email.lower() in allowed
 
 
@@ -533,6 +539,30 @@ async def update_telegram_chat_id(
             )
         )
     return _user_out(updated)
+
+
+@app.get("/api/balances")
+async def get_balances(user: User = Depends(auth.get_current_user)) -> dict:
+    if not _balance_visible(user):
+        raise HTTPException(status_code=403, detail="Non disponibile per questo account")
+
+    async def _safe(fetch_fn, configured: bool):
+        if not configured:
+            return {"configured": False, "balances": [], "error": None}
+        try:
+            balances = await fetch_fn()
+            return {"configured": True, "balances": balances, "error": None}
+        except BalanceFetchError as exc:
+            return {"configured": True, "balances": [], "error": str(exc)}
+
+    mexc, kucoin = await asyncio.gather(
+        _safe(fetch_mexc_balances, bool(settings.mexc_api_key and settings.mexc_api_secret)),
+        _safe(
+            fetch_kucoin_balances,
+            bool(settings.kucoin_api_key and settings.kucoin_api_secret and settings.kucoin_api_passphrase),
+        ),
+    )
+    return {"mexc": mexc, "kucoin": kucoin}
 
 
 def _owned_entry_or_404(entry_id: str, user: User) -> WatchlistEntry:
