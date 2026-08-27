@@ -1785,8 +1785,15 @@
       if (state.pineActive) clearPineOverride();
       el("chart-wrap").classList.remove("hidden");
       resizeAllCharts();
-      render();
+      // Detach the previous symbol's drawings before the new candle data
+      // loads, not after — a leftover horizontal-line price line (or any
+      // primitive) from the old symbol staying attached while render()
+      // sets data at a wildly different price magnitude (e.g. BTC's
+      // ~90000 vs. a $1-2 altcoin) stretches the price scale's autoscale
+      // to cover both, squeezing the real candles down to an invisible
+      // sliver — and it doesn't shrink back down on its own afterward.
       loadDrawingsForSymbol();
+      render();
       // Live WS streaming is only wired up for MEXC today; every crypto
       // symbol still gets the periodic refresh below regardless of exchange.
       if (state.assetType === "crypto" && state.cryptoExchange === "mexc") {
