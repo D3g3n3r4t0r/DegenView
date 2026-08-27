@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from app.timeframes import IntervalChoice
 
 AssetType = Literal["stock", "crypto"]
-CryptoExchange = Literal["mexc", "binance"]
+CryptoExchange = Literal["mexc", "binance", "kucoin"]
 TimeframeKey = Literal["htf", "mtf", "ltf"]
 LevelType = Literal["order_block", "fvg", "eqh", "eql", "bos", "choch"]
 
@@ -15,7 +15,7 @@ class SymbolSuggestion(BaseModel):
     name: str
     exchange: str  # human label, e.g. "NASDAQ", "MEXC (USDT)", "Binance (USDT)"
     asset_type: AssetType
-    provider: Literal["stock", "mexc", "binance"]
+    provider: Literal["stock", "mexc", "binance", "kucoin"]
 
 
 class Candle(BaseModel):

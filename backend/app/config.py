@@ -22,6 +22,12 @@ class Settings(BaseSettings):
     telegram_bot_token: str = ""
     telegram_chat_ids: str = ""  # comma-separated
 
+    # Registration is open to anyone, but actual Telegram delivery is
+    # deliberately locked to specific account emails (comma-separated) —
+    # other registered users can still use the app/watchlist, just without
+    # alerts going out, until this is opened up more broadly.
+    telegram_allowed_emails: str = "lorenzocorazzi@gmail.com"
+
     # Timeframe set: HTF -> MTF -> LTF, matches PROMPT_SPEC.md section 5.
     # Each DataProvider maps these neutral keys to its own interval format.
     timeframe_keys: tuple[str, str, str] = ("htf", "mtf", "ltf")
