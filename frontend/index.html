@@ -38,6 +38,11 @@
 
     <div class="toolbar-spacer"></div>
     <button type="submit" form="search-form" id="search-btn">Analizza</button>
+    <div class="auth-widget">
+      <span id="auth-user-email" class="auth-user-email hidden"></span>
+      <button type="button" id="auth-toggle-btn">Accedi</button>
+      <button type="button" id="auth-logout-btn" class="hidden">Esci</button>
+    </div>
   </header>
 
   <div id="error-banner" class="error-banner hidden"></div>
@@ -255,22 +260,37 @@
       <div class="tab-content" data-tab-content="alert">
         <div class="panel">
           <h3>Alert (Telegram)</h3>
-          <p class="panel-hint">Ogni ticker qui dentro viene controllato in background ogni minuto, indipendentemente da cosa stai guardando a schermo. Attiva una o più strategie per ticker: arriva una notifica Telegram per ogni segnale confermato.</p>
-          <form id="watchlist-form" class="watchlist-form">
-            <input type="text" id="watchlist-symbol" placeholder="Ticker (es. BTC)" autocomplete="off" required />
-            <div class="asset-toggle small">
-              <button type="button" data-watchlist-asset="stock" class="wl-asset-btn active">Azioni</button>
-              <button type="button" data-watchlist-asset="crypto" class="wl-asset-btn">Crypto</button>
+
+          <div id="alert-login-prompt" class="alert-login-prompt hidden">
+            <p class="panel-hint">Accedi per creare e gestire i tuoi avvisi — ogni utente ha la propria lista e riceve le notifiche sul proprio Telegram.</p>
+            <button type="button" id="alert-login-btn">Accedi o registrati</button>
+          </div>
+
+          <div id="alert-authenticated" class="hidden">
+            <div class="telegram-setup">
+              <label>Il tuo Telegram chat ID
+                <input type="text" id="telegram-chat-id-input" placeholder="es. 123456789" autocomplete="off" />
+              </label>
+              <button type="button" id="telegram-chat-id-save">Salva</button>
+              <p class="panel-hint">Scrivi un messaggio qualsiasi al bot, poi apri <code>https://api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</code> per trovare il tuo chat ID — chiedi il link del bot se non lo hai.</p>
             </div>
-            <select id="watchlist-exchange" class="hidden">
-              <option value="mexc">MEXC</option>
-              <option value="binance">Binance</option>
-            </select>
-            <select id="watchlist-interval" title="Timeframe su cui valutare le strategie di questo ticker"></select>
-            <button type="submit">Aggiungi</button>
-          </form>
-          <ul id="watchlist-list" class="watchlist-cards"></ul>
-          <button type="button" id="open-script-from-alert" class="pine-secondary-link">Script Pine personalizzato →</button>
+            <p class="panel-hint">Ogni ticker qui dentro viene controllato in background ogni minuto, indipendentemente da cosa stai guardando a schermo. Attiva una o più strategie per ticker: arriva una notifica Telegram per ogni segnale confermato.</p>
+            <form id="watchlist-form" class="watchlist-form">
+              <input type="text" id="watchlist-symbol" placeholder="Ticker (es. BTC)" autocomplete="off" required />
+              <div class="asset-toggle small">
+                <button type="button" data-watchlist-asset="stock" class="wl-asset-btn active">Azioni</button>
+                <button type="button" data-watchlist-asset="crypto" class="wl-asset-btn">Crypto</button>
+              </div>
+              <select id="watchlist-exchange" class="hidden">
+                <option value="mexc">MEXC</option>
+                <option value="binance">Binance</option>
+              </select>
+              <select id="watchlist-interval" title="Timeframe su cui valutare le strategie di questo ticker"></select>
+              <button type="submit">Aggiungi</button>
+            </form>
+            <ul id="watchlist-list" class="watchlist-cards"></ul>
+            <button type="button" id="open-script-from-alert" class="pine-secondary-link">Script Pine personalizzato →</button>
+          </div>
         </div>
       </div>
 
@@ -319,6 +339,24 @@
     </button>
   </nav>
   <div id="mobile-drawer-backdrop" class="mobile-drawer-backdrop hidden"></div>
+
+  <div id="auth-modal" class="auth-modal hidden">
+    <div class="auth-modal-backdrop" data-close-auth></div>
+    <div class="auth-modal-box">
+      <button type="button" class="auth-modal-close" data-close-auth>✕</button>
+      <h3 id="auth-modal-title">Accedi</h3>
+      <form id="auth-form" class="auth-form">
+        <label>Email <input type="email" id="auth-email" required autocomplete="email" /></label>
+        <label>Password <input type="password" id="auth-password" required autocomplete="current-password" minlength="8" /></label>
+        <p id="auth-error" class="auth-error hidden"></p>
+        <button type="submit" id="auth-submit-btn">Accedi</button>
+      </form>
+      <p class="auth-switch">
+        <span id="auth-switch-text">Non hai un account?</span>
+        <button type="button" id="auth-switch-btn">Registrati</button>
+      </p>
+    </div>
+  </div>
 
   <footer class="disclaimer">
     Strumento di analisi tecnica automatica. Non costituisce consulenza finanziaria, raccomandazione di investimento

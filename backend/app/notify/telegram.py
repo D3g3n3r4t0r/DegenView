@@ -30,6 +30,30 @@ def is_configured() -> bool:
     return bool(settings.telegram_bot_token) and bool(_chat_ids())
 
 
+async def send_to(chat_id: str, text: str) -> bool:
+    """Send to one specific chat — used for per-user watchlist alerts now
+    that each user has their own chat_id, instead of broadcasting to every
+    configured recipient."""
+    if not settings.telegram_bot_token or not chat_id:
+        return False
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        try:
+            resp = await client.post(
+                f"{API_BASE}/bot{settings.telegram_bot_token}/sendMessage",
+                json={
+                    "chat_id": chat_id,
+                    "text": text,
+                    "parse_mode": "HTML",
+                    "disable_web_page_preview": True,
+                },
+            )
+            resp.raise_for_status()
+            return True
+        except httpx.HTTPError:
+            logger.warning("Invio Telegram fallito per chat_id=%s", chat_id, exc_info=True)
+            return False
+
+
 async def send_message(text: str) -> bool:
     """Manda a tutti i destinatari configurati. Non solleva mai — un errore qui non
     deve mai far fallire l'analisi in corso. Un destinatario che fallisce (es. ha

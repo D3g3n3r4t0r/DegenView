@@ -367,6 +367,7 @@
 
   // ---- App state ----
   const state = {
+    user: null, // { id, email, telegram_chat_id } | null — set by checkAuth()
     assetType: "stock",
     cryptoExchange: "mexc", // set automatically from the picked search suggestion
     // Always "ltf" now — the single timeframe dropdown *is* the chart's
@@ -488,6 +489,101 @@
   // Each ticker is a card that expands to show one on/off toggle per
   // available strategy — a ticker can have several strategies watched at
   // once (previously one strategy meant one whole separate watchlist row).
+  // ---- Auth: cookie session, login/register modal, per-user Telegram chat id ----
+  let authMode = "login";
+
+  async function checkAuth() {
+    try {
+      const resp = await fetch("/api/auth/me");
+      const body = await resp.json();
+      state.user = body.user;
+    } catch (err) {
+      state.user = null;
+    }
+    updateAuthUI();
+  }
+
+  function updateAuthUI() {
+    const loggedIn = !!state.user;
+    el("auth-toggle-btn").classList.toggle("hidden", loggedIn);
+    el("auth-logout-btn").classList.toggle("hidden", !loggedIn);
+    const emailEl = el("auth-user-email");
+    emailEl.classList.toggle("hidden", !loggedIn);
+    if (loggedIn) emailEl.textContent = state.user.email;
+    el("alert-login-prompt").classList.toggle("hidden", loggedIn);
+    el("alert-authenticated").classList.toggle("hidden", !loggedIn);
+    if (loggedIn) {
+      el("telegram-chat-id-input").value = state.user.telegram_chat_id || "";
+      loadWatchlist();
+    }
+  }
+
+  function openAuthModal(mode) {
+    authMode = mode || "login";
+    el("auth-modal-title").textContent = authMode === "login" ? "Accedi" : "Registrati";
+    el("auth-submit-btn").textContent = authMode === "login" ? "Accedi" : "Registrati";
+    el("auth-switch-text").textContent = authMode === "login" ? "Non hai un account?" : "Hai già un account?";
+    el("auth-switch-btn").textContent = authMode === "login" ? "Registrati" : "Accedi";
+    el("auth-error").classList.add("hidden");
+    el("auth-form").reset();
+    el("auth-modal").classList.remove("hidden");
+  }
+
+  function closeAuthModal() {
+    el("auth-modal").classList.add("hidden");
+  }
+
+  function bindAuth() {
+    el("auth-toggle-btn").addEventListener("click", () => openAuthModal("login"));
+    el("alert-login-btn").addEventListener("click", () => openAuthModal("login"));
+    document.querySelectorAll("[data-close-auth]").forEach((node) => node.addEventListener("click", closeAuthModal));
+    el("auth-switch-btn").addEventListener("click", () => openAuthModal(authMode === "login" ? "register" : "login"));
+
+    el("auth-logout-btn").addEventListener("click", async () => {
+      await fetch("/api/auth/logout", { method: "POST" });
+      state.user = null;
+      updateAuthUI();
+    });
+
+    el("telegram-chat-id-save").addEventListener("click", async () => {
+      const chatId = el("telegram-chat-id-input").value.trim();
+      const resp = await fetch("/api/auth/telegram", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ telegram_chat_id: chatId }),
+      });
+      if (resp.ok) state.user = await resp.json();
+    });
+
+    el("auth-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const email = el("auth-email").value.trim();
+      const password = el("auth-password").value;
+      const endpoint = authMode === "login" ? "/api/auth/login" : "/api/auth/register";
+      const errorEl = el("auth-error");
+      errorEl.classList.add("hidden");
+      try {
+        const resp = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        });
+        const body = await resp.json();
+        if (!resp.ok) {
+          errorEl.textContent = body.detail || "Errore, riprova.";
+          errorEl.classList.remove("hidden");
+          return;
+        }
+        state.user = body;
+        updateAuthUI();
+        closeAuthModal();
+      } catch (err) {
+        errorEl.textContent = "Errore di rete.";
+        errorEl.classList.remove("hidden");
+      }
+    });
+  }
+
   async function loadWatchlist() {
     let entries = [];
     try {
@@ -2244,13 +2340,14 @@
 
   document.addEventListener("DOMContentLoaded", async () => {
     populateIntervalSelects();
-    loadWatchlist();
     initCharts();
     bindUI();
     bindMobileNav();
     bindRail();
     bindTabs();
     bindDrawRail();
+    bindAuth();
+    checkAuth();
     initPineEditor();
     bindPineUI();
     loadPineScripts();

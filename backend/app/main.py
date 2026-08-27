@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal
 
-from fastapi import Depends, FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, HTTPException, Query, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -22,6 +22,7 @@ try:
 except (AttributeError, ValueError):
     pass
 
+from app import auth
 from app import watchlist as watchlist_store
 from app.analysis.backtest import run_backtest
 from app.analysis.confluence import compute_confluence
@@ -41,6 +42,7 @@ from app.models import (
     SymbolSuggestion,
     TimeframeAnalysis,
     TimeframeKey,
+    User,
     WatchlistEntry,
 )
 from app.notify import telegram
@@ -91,11 +93,14 @@ async def _watchlist_alert_loop() -> None:
     enabled on that ticker rather than refetching per strategy."""
     while True:
         await asyncio.sleep(WATCHLIST_POLL_SECONDS)
-        if not telegram.is_configured():
+        if not settings.telegram_bot_token:
             continue
         for entry in watchlist_store.list_entries():
             if not entry.strategies:
                 continue
+            owner = auth.get_user(entry.owner_id)
+            if owner is None or not owner.telegram_chat_id:
+                continue  # nowhere to deliver an alert until the user pastes in their chat_id
             provider = get_provider(entry.asset_type, entry.exchange)
             try:
                 df = await fetch_ohlcv_canonical(
@@ -103,7 +108,7 @@ async def _watchlist_alert_loop() -> None:
                 )
                 for strategy_name in entry.strategies:
                     strategy = build_strategy_state(strategy_name, df)
-                    _dispatch_telegram_alerts(entry.symbol, entry.interval, strategy)
+                    _dispatch_telegram_alerts(owner.telegram_chat_id, entry.symbol, entry.interval, strategy)
             except Exception:
                 logger.exception("Watchlist check failed for %s [%s]", entry.symbol, entry.interval)
 
@@ -181,13 +186,11 @@ async def search_symbols(query: str = Query(..., min_length=1, max_length=20)) -
     return _interleave(stock_res, binance_res, mexc_res)[:12]
 
 
-def _dispatch_telegram_alerts(symbol: str, timeframe_key: str, strategy: StrategyState) -> None:
-    if not telegram.is_configured():
-        return
+def _dispatch_telegram_alerts(chat_id: str, symbol: str, timeframe_key: str, strategy: StrategyState) -> None:
     fresh = find_new_signals(symbol, timeframe_key, strategy)
     for signal in fresh:
         message = format_signal_message(symbol, timeframe_key, strategy.name, signal)
-        asyncio.create_task(telegram.send_message(message))
+        asyncio.create_task(telegram.send_to(chat_id, message))
 
 
 @app.get("/api/strategies", response_model=list[str])
@@ -355,9 +358,86 @@ async def run_pinescript(script_id: str, req: PineRunRequest) -> dict:
     return {"needs_mapping": False, "strategy": strategy.model_dump(), "backtest": backtest.model_dump()}
 
 
+class RegisterRequest(BaseModel):
+    email: str
+    password: str
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class TelegramChatIdRequest(BaseModel):
+    telegram_chat_id: str
+
+
+def _user_out(user: User) -> dict:
+    return {"id": user.id, "email": user.email, "telegram_chat_id": user.telegram_chat_id}
+
+
+def _set_session_cookie(response: Response, user_id: str) -> None:
+    response.set_cookie(
+        auth.SESSION_COOKIE,
+        auth.make_session_cookie(user_id),
+        max_age=auth.SESSION_MAX_AGE_SECONDS,
+        httponly=True,
+        samesite="lax",
+    )
+
+
+@app.post("/api/auth/register")
+async def register(req: RegisterRequest, response: Response) -> dict:
+    email = req.email.strip().lower()
+    if "@" not in email or len(email) < 5:
+        raise HTTPException(status_code=400, detail="Email non valida")
+    if len(req.password) < 8:
+        raise HTTPException(status_code=400, detail="La password deve avere almeno 8 caratteri")
+    if auth.find_by_email(email):
+        raise HTTPException(status_code=400, detail="Email già registrata")
+    user = auth.create_user(email, req.password)
+    _set_session_cookie(response, user.id)
+    return _user_out(user)
+
+
+@app.post("/api/auth/login")
+async def login(req: LoginRequest, response: Response) -> dict:
+    user = auth.verify_login(req.email, req.password)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Email o password errati")
+    _set_session_cookie(response, user.id)
+    return _user_out(user)
+
+
+@app.post("/api/auth/logout")
+async def logout(response: Response) -> dict:
+    response.delete_cookie(auth.SESSION_COOKIE)
+    return {"ok": True}
+
+
+@app.get("/api/auth/me")
+async def me(user: User | None = Depends(auth.get_current_user_optional)) -> dict:
+    return {"user": _user_out(user) if user else None}
+
+
+@app.patch("/api/auth/telegram")
+async def update_telegram_chat_id(
+    req: TelegramChatIdRequest, user: User = Depends(auth.get_current_user)
+) -> dict:
+    updated = auth.set_telegram_chat_id(user.id, req.telegram_chat_id)
+    return _user_out(updated)
+
+
+def _owned_entry_or_404(entry_id: str, user: User) -> WatchlistEntry:
+    entry = watchlist_store.get_entry(entry_id)
+    if entry is None or entry.owner_id != user.id:
+        raise HTTPException(status_code=404, detail="Voce non trovata")
+    return entry
+
+
 @app.get("/api/watchlist", response_model=list[WatchlistEntry])
-async def get_watchlist() -> list[WatchlistEntry]:
-    return watchlist_store.list_entries()
+async def get_watchlist(user: User = Depends(auth.get_current_user)) -> list[WatchlistEntry]:
+    return watchlist_store.list_entries(owner_id=user.id)
 
 
 class WatchlistAddRequest(BaseModel):
@@ -368,11 +448,13 @@ class WatchlistAddRequest(BaseModel):
 
 
 @app.post("/api/watchlist", response_model=WatchlistEntry)
-async def add_watchlist_entry(req: WatchlistAddRequest) -> WatchlistEntry:
+async def add_watchlist_entry(
+    req: WatchlistAddRequest, user: User = Depends(auth.get_current_user)
+) -> WatchlistEntry:
     symbol = req.symbol.strip()
     if not symbol:
         raise HTTPException(status_code=400, detail="Ticker mancante")
-    return watchlist_store.add_entry(symbol, req.asset_type, exchange=req.exchange, interval=req.interval)
+    return watchlist_store.add_entry(user.id, symbol, req.asset_type, exchange=req.exchange, interval=req.interval)
 
 
 class WatchlistIntervalRequest(BaseModel):
@@ -380,15 +462,16 @@ class WatchlistIntervalRequest(BaseModel):
 
 
 @app.patch("/api/watchlist/{entry_id}/interval", response_model=WatchlistEntry)
-async def set_watchlist_interval(entry_id: str, req: WatchlistIntervalRequest) -> WatchlistEntry:
-    entry = watchlist_store.set_interval(entry_id, req.interval)
-    if entry is None:
-        raise HTTPException(status_code=404, detail="Voce non trovata")
-    return entry
+async def set_watchlist_interval(
+    entry_id: str, req: WatchlistIntervalRequest, user: User = Depends(auth.get_current_user)
+) -> WatchlistEntry:
+    _owned_entry_or_404(entry_id, user)
+    return watchlist_store.set_interval(entry_id, req.interval)
 
 
 @app.delete("/api/watchlist/{entry_id}")
-async def delete_watchlist_entry(entry_id: str) -> dict:
+async def delete_watchlist_entry(entry_id: str, user: User = Depends(auth.get_current_user)) -> dict:
+    _owned_entry_or_404(entry_id, user)
     watchlist_store.remove_entry(entry_id)
     return {"ok": True}
 
@@ -399,25 +482,24 @@ class WatchlistStrategyToggleRequest(BaseModel):
 
 
 @app.patch("/api/watchlist/{entry_id}/strategy", response_model=WatchlistEntry)
-async def toggle_watchlist_strategy(entry_id: str, req: WatchlistStrategyToggleRequest) -> WatchlistEntry:
+async def toggle_watchlist_strategy(
+    entry_id: str, req: WatchlistStrategyToggleRequest, user: User = Depends(auth.get_current_user)
+) -> WatchlistEntry:
     if req.strategy_name not in AVAILABLE_STRATEGIES:
         raise HTTPException(status_code=400, detail=f"Strategia sconosciuta: {req.strategy_name}")
-    before = watchlist_store.list_entries()
-    was_enabled = any(
-        e.id == entry_id and req.strategy_name in e.strategies for e in before
-    )
+    before = _owned_entry_or_404(entry_id, user)
+    was_enabled = req.strategy_name in before.strategies
     entry = watchlist_store.set_strategy_enabled(entry_id, req.strategy_name, req.enabled)
-    if entry is None:
-        raise HTTPException(status_code=404, detail="Voce non trovata")
-    if req.enabled and not was_enabled:
+    if req.enabled and not was_enabled and user.telegram_chat_id:
         # Confirms the watch is actually active — sent immediately on
         # activation, before any real signal, so silence afterward reads as
         # "no condition yet" rather than "is this even running?".
         asyncio.create_task(
-            telegram.send_message(
+            telegram.send_to(
+                user.telegram_chat_id,
                 f"✅ <b>{entry.symbol}</b> — {req.strategy_name}\n"
                 f"Timeframe: {entry.interval}\n"
-                "Monitoraggio attivato. Riceverai un messaggio quando viene rilevata una condizione."
+                "Monitoraggio attivato. Riceverai un messaggio quando viene rilevata una condizione.",
             )
         )
     return entry

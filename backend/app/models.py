@@ -88,8 +88,16 @@ class BacktestResult(BaseModel):
     trades: list[BacktestTrade]
 
 
+class User(BaseModel):
+    id: str
+    email: str
+    password_hash: str
+    telegram_chat_id: str = ""  # user pastes this in from their own DM with the shared bot
+
+
 class WatchlistEntry(BaseModel):
     id: str
+    owner_id: str
     symbol: str
     asset_type: AssetType
     exchange: CryptoExchange = "mexc"

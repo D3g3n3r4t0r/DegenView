@@ -1,9 +1,11 @@
 """
-Watchlist: tickers the user explicitly wants background Telegram alerts for,
+Watchlist: tickers a user explicitly wants background Telegram alerts for,
 independent of whatever ticker happens to be open in the browser — the
-background loop in main.py checks these every 60s regardless of any open tab.
-Each ticker can have multiple strategies watched independently (a checkbox
-per strategy in the Alert tab), not just one.
+background loop in main.py checks these every 60s regardless of any open
+tab. Each ticker can have multiple strategies watched independently (a
+checkbox per strategy in the Alert tab), not just one. Every entry belongs
+to one owner_id (a logged-in user) — alerts route to that user's own
+Telegram chat_id, not a single shared broadcast list.
 
 Persisted to disk (backend/data/watchlist.json) so it survives server
 restarts and redeploys — a Fly.io volume is mounted at that path in
@@ -47,26 +49,40 @@ def _save() -> None:
 _load()
 
 
-def list_entries() -> list[WatchlistEntry]:
-    return list(_entries.values())
+def list_entries(owner_id: str | None = None) -> list[WatchlistEntry]:
+    entries = list(_entries.values())
+    if owner_id is not None:
+        entries = [e for e in entries if e.owner_id == owner_id]
+    return entries
+
+
+def get_entry(entry_id: str) -> WatchlistEntry | None:
+    return _entries.get(entry_id)
 
 
 def add_entry(
+    owner_id: str,
     symbol: str,
     asset_type: AssetType,
     exchange: CryptoExchange = "mexc",
     interval: IntervalChoice = "1d",
 ) -> WatchlistEntry:
-    """Upsert: adding a ticker that's already tracked just returns the
-    existing entry (with whatever strategies/interval are already on it)
-    instead of creating a duplicate row."""
+    """Upsert: adding a ticker that's already tracked by this owner just
+    returns the existing entry (with whatever strategies/interval are
+    already on it) instead of creating a duplicate row."""
     symbol = symbol.strip().upper()
     for entry in _entries.values():
-        if entry.symbol == symbol and entry.asset_type == asset_type and entry.exchange == exchange:
+        if (
+            entry.owner_id == owner_id
+            and entry.symbol == symbol
+            and entry.asset_type == asset_type
+            and entry.exchange == exchange
+        ):
             return entry
 
     entry = WatchlistEntry(
         id=uuid.uuid4().hex[:12],
+        owner_id=owner_id,
         symbol=symbol,
         asset_type=asset_type,
         exchange=exchange,
