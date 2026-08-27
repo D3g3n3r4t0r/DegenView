@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     # deliberately locked to specific account emails (comma-separated) —
     # other registered users can still use the app/watchlist, just without
     # alerts going out, until this is opened up more broadly.
-    telegram_allowed_emails: str = "lorenzocorazzi@gmail.com"
+    telegram_allowed_emails: str = "lorenzocorazzi@gmail.com,whitekobra@icloud.com"
 
     # Timeframe set: HTF -> MTF -> LTF, matches PROMPT_SPEC.md section 5.
     # Each DataProvider maps these neutral keys to its own interval format.

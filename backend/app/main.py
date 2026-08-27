@@ -458,6 +458,17 @@ async def update_telegram_chat_id(
     req: TelegramChatIdRequest, user: User = Depends(auth.get_current_user)
 ) -> dict:
     updated = auth.set_telegram_chat_id(user.id, req.telegram_chat_id)
+    if updated.telegram_chat_id and _telegram_allowed(updated):
+        # Confirms the chat_id was actually saved and is reachable — sent
+        # immediately on save, not the first real alert, so a typo'd id
+        # shows up right away instead of silently going nowhere.
+        asyncio.create_task(
+            telegram.send_to(
+                updated.telegram_chat_id,
+                "✅ Chat ID collegato correttamente a Liquidity Analysis Engine.\n"
+                "Da qui in poi riceverai qui gli avvisi delle strategie che attivi.",
+            )
+        )
     return _user_out(updated)
 
 
