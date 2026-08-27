@@ -68,6 +68,13 @@ body {
   flex-shrink: 0;
 }
 
+.chart-settings-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
 .toolbar-intervals {
   display: flex;
   gap: 4px;
@@ -1039,14 +1046,30 @@ body {
 @media (max-width: 760px) {
   html, body { height: 100%; overflow: hidden; }
 
-  .toolbar { padding: 8px 10px; gap: 6px; flex-wrap: wrap; overflow-x: visible; }
-  .brand { font-size: 12px; width: 100%; order: 0; }
-  .search-form { width: 100%; order: 1; }
-  .ticker-field { flex: 1 1 100%; max-width: none; }
-  #ticker-input { width: 100%; padding: 10px; font-size: 15px; }
-  .toolbar-intervals, .toolbar-strategy, .toolbar-check { order: 2; }
+  /* chart-settings-group (timeframe/strategy/log) is relocated into the
+     Livelli drawer by JS on this breakpoint — the toolbar carries only the
+     brand + search, so the chart starts almost immediately like a native
+     mobile chart app instead of scrolling past a stack of controls first. */
+  .toolbar { padding: 6px 10px; gap: 6px; flex-wrap: nowrap; overflow-x: visible; align-items: center; }
+  .brand { font-size: 11px; flex: 0 0 auto; width: auto; white-space: nowrap; }
+  .search-form { flex: 1 1 auto; min-width: 0; }
+  .ticker-field { flex: 1 1 auto; max-width: none; min-width: 0; }
+  #ticker-input { width: 100%; padding: 9px 10px; font-size: 14px; }
   .toolbar-spacer { display: none; }
-  #search-btn { order: 3; padding: 10px 16px; font-size: 13px; width: 100%; }
+  #search-btn { flex: 0 0 auto; padding: 9px 12px; font-size: 11px; }
+
+  #levels-panel .chart-settings-group {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding-bottom: 14px;
+    margin-bottom: 14px;
+    border-bottom: 1px dashed var(--border);
+  }
+  #levels-panel .toolbar-intervals { width: 100%; }
+  #levels-panel .interval-select { width: 100%; padding: 10px; font-size: 14px; }
+  #levels-panel .toolbar-strategy { width: 100%; max-width: none; padding: 10px; font-size: 14px; }
+  #levels-panel .toolbar-check { font-size: 13px; }
 
   .rail { display: none; }
 

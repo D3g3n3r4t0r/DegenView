@@ -24,15 +24,17 @@
       </div>
     </form>
 
-    <div class="toolbar-intervals">
-      <select id="interval-primary" class="interval-select" title="Timeframe del grafico — i timeframe superiori per la confluenza vengono derivati automaticamente"></select>
+    <div id="chart-settings-group" class="chart-settings-group">
+      <div class="toolbar-intervals">
+        <select id="interval-primary" class="interval-select" title="Timeframe del grafico — i timeframe superiori per la confluenza vengono derivati automaticamente"></select>
+      </div>
+
+      <select id="active-strategy-select" class="active-strategy-select toolbar-strategy"></select>
+
+      <label class="toolbar-check" title="Scala logaritmica">
+        <input type="checkbox" id="log-scale-toggle" /> Log
+      </label>
     </div>
-
-    <select id="active-strategy-select" class="active-strategy-select toolbar-strategy"></select>
-
-    <label class="toolbar-check" title="Scala logaritmica">
-      <input type="checkbox" id="log-scale-toggle" /> Log
-    </label>
 
     <div class="toolbar-spacer"></div>
     <button type="submit" form="search-form" id="search-btn">Analizza</button>

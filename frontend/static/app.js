@@ -1468,6 +1468,26 @@
     });
   }
 
+  // On phones the toolbar has no room to also carry the timeframe/strategy/
+  // log-scale controls without burying the chart below the fold (a TradingView
+  // mobile screen shows almost nothing but the chart). Relocate that one group
+  // — moving the real nodes, not cloning them, so there's still exactly one
+  // #interval-primary etc. in the DOM — into the Livelli drawer on mobile, and
+  // back into the toolbar on desktop.
+  function relocateChartSettings() {
+    const group = el("chart-settings-group");
+    const isMobile = window.matchMedia("(max-width: 760px)").matches;
+    const targetParent = isMobile ? el("levels-panel") : document.querySelector(".toolbar");
+    if (group.parentElement === targetParent) return;
+    if (isMobile) {
+      const header = targetParent.querySelector(".drawer-header");
+      targetParent.insertBefore(group, header.nextSibling);
+    } else {
+      const spacer = targetParent.querySelector(".toolbar-spacer");
+      targetParent.insertBefore(group, spacer);
+    }
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
     populateIntervalSelects();
     populateStrategySelects();
@@ -1480,6 +1500,12 @@
     initPineEditor();
     bindPineUI();
     loadPineScripts();
-    window.addEventListener("resize", resizeAllCharts);
+    relocateChartSettings();
+    let relocateTimer = null;
+    window.addEventListener("resize", () => {
+      resizeAllCharts();
+      clearTimeout(relocateTimer);
+      relocateTimer = setTimeout(relocateChartSettings, 150);
+    });
   });
 })();
