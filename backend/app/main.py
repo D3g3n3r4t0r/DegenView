@@ -540,6 +540,21 @@ async def add_watchlist_entry(
     symbol = req.symbol.strip()
     if not symbol:
         raise HTTPException(status_code=400, detail="Ticker mancante")
+
+    # Re-verify the pair actually resolves on this exchange before storing
+    # it — the frontend already confirms this via the suggestions list, but
+    # a symbol could still be typed/submitted without going through it, or
+    # get delisted between being suggested and being added.
+    provider = get_provider(req.asset_type, req.exchange)
+    try:
+        probe = await provider.fetch_ohlcv(symbol, "1d", 2)
+    except ProviderError as exc:
+        raise HTTPException(
+            status_code=400, detail=f"Ticker non trovato su questo exchange: {exc}"
+        ) from exc
+    if probe.empty:
+        raise HTTPException(status_code=400, detail="Ticker non trovato su questo exchange.")
+
     return watchlist_store.add_entry(user.id, symbol, req.asset_type, exchange=req.exchange, interval=req.interval)
 
 

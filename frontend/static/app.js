@@ -1720,6 +1720,139 @@
     }
   }
 
+  // ---- Alert tab: ticker autocomplete that also confirms the exact pair
+  // + exchange before the ticker can be added, instead of trusting free
+  // text — the same source of truth as the main search (/api/symbols), just
+  // filtered to the asset type/exchange currently selected in the form. ----
+  const wlSuggest = { suggestions: [], activeIndex: -1, resolved: null };
+  let wlSuggestTimer = null;
+
+  async function fetchWatchlistSuggestions(query) {
+    try {
+      const resp = await fetch(`/api/symbols?query=${encodeURIComponent(query)}`);
+      const all = resp.ok ? await resp.json() : [];
+      wlSuggest.suggestions =
+        state.watchlistAssetType === "crypto"
+          ? all.filter((s) => s.asset_type === "crypto" && s.provider === el("watchlist-exchange").value)
+          : all.filter((s) => s.asset_type === "stock");
+    } catch (err) {
+      wlSuggest.suggestions = [];
+    }
+    wlSuggest.activeIndex = -1;
+    renderWatchlistSuggestions();
+  }
+
+  function positionWatchlistSuggestions() {
+    const list = el("watchlist-suggestions");
+    const rect = el("watchlist-symbol").getBoundingClientRect();
+    list.style.left = `${rect.left}px`;
+    list.style.top = `${rect.bottom + 4}px`;
+    list.style.width = `${rect.width}px`;
+  }
+
+  function showResolvedPair(item) {
+    const p = el("watchlist-resolved-pair");
+    if (!item) {
+      p.classList.add("hidden");
+      p.textContent = "";
+      return;
+    }
+    p.textContent = `✓ ${item.symbol} — ${item.exchange}`;
+    p.classList.remove("hidden");
+  }
+
+  function renderWatchlistSuggestions() {
+    const list = el("watchlist-suggestions");
+    list.innerHTML = "";
+    if (!wlSuggest.suggestions.length) {
+      list.classList.add("hidden");
+      return;
+    }
+    positionWatchlistSuggestions();
+    wlSuggest.suggestions.forEach((item, i) => {
+      const li = document.createElement("li");
+      li.className = i === wlSuggest.activeIndex ? "active" : "";
+      const main = document.createElement("span");
+      main.className = "sug-main";
+      const sym = document.createElement("span");
+      sym.className = "sug-symbol";
+      sym.textContent = item.symbol;
+      const name = document.createElement("span");
+      name.className = "sug-name";
+      name.textContent = item.name || "";
+      main.appendChild(sym);
+      main.appendChild(name);
+      const exchange = document.createElement("span");
+      exchange.className = "sug-exchange sug-exchange-" + item.provider;
+      exchange.textContent = item.exchange;
+      li.appendChild(main);
+      li.appendChild(exchange);
+      li.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        selectWatchlistSuggestion(item);
+      });
+      list.appendChild(li);
+    });
+    list.classList.remove("hidden");
+  }
+
+  function hideWatchlistSuggestions() {
+    wlSuggest.suggestions = [];
+    wlSuggest.activeIndex = -1;
+    const list = el("watchlist-suggestions");
+    list.classList.add("hidden");
+    list.innerHTML = "";
+  }
+
+  function selectWatchlistSuggestion(item) {
+    el("watchlist-symbol").value = item.symbol;
+    wlSuggest.resolved = item;
+    hideWatchlistSuggestions();
+    showResolvedPair(item);
+  }
+
+  function bindWatchlistAutocomplete() {
+    const input = el("watchlist-symbol");
+
+    input.addEventListener("input", () => {
+      wlSuggest.resolved = null; // typing invalidates whatever was confirmed before
+      showResolvedPair(null);
+      const value = input.value.trim();
+      clearTimeout(wlSuggestTimer);
+      if (!value) {
+        hideWatchlistSuggestions();
+        return;
+      }
+      wlSuggestTimer = setTimeout(() => fetchWatchlistSuggestions(value), 300);
+    });
+
+    input.addEventListener("keydown", (e) => {
+      if (el("watchlist-suggestions").classList.contains("hidden")) return;
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        wlSuggest.activeIndex = Math.min(wlSuggest.activeIndex + 1, wlSuggest.suggestions.length - 1);
+        renderWatchlistSuggestions();
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        wlSuggest.activeIndex = Math.max(wlSuggest.activeIndex - 1, 0);
+        renderWatchlistSuggestions();
+      } else if (e.key === "Enter") {
+        if (wlSuggest.activeIndex >= 0) {
+          e.preventDefault();
+          selectWatchlistSuggestion(wlSuggest.suggestions[wlSuggest.activeIndex]);
+        } else {
+          hideWatchlistSuggestions();
+        }
+      } else if (e.key === "Escape") {
+        hideWatchlistSuggestions();
+      }
+    });
+
+    input.addEventListener("blur", () => {
+      setTimeout(hideWatchlistSuggestions, 150);
+    });
+  }
+
   let suggestTimer = null;
 
   async function fetchSuggestions(query) {
@@ -2256,6 +2389,7 @@
     });
 
     bindTickerAutocomplete();
+    bindWatchlistAutocomplete();
 
     el("interval-primary").addEventListener("change", () => {
       if (state.pineActive) clearPineOverride();
@@ -2277,24 +2411,59 @@
         btn.classList.add("active");
         state.watchlistAssetType = btn.dataset.watchlistAsset;
         el("watchlist-exchange").classList.toggle("hidden", state.watchlistAssetType !== "crypto");
+        wlSuggest.resolved = null; // asset type changed — whatever pair was confirmed no longer applies
+        showResolvedPair(null);
       });
+    });
+
+    el("watchlist-exchange").addEventListener("change", () => {
+      wlSuggest.resolved = null; // exchange changed — re-verify against the new one
+      showResolvedPair(null);
     });
 
     el("watchlist-form").addEventListener("submit", async (e) => {
       e.preventDefault();
-      const symbol = el("watchlist-symbol").value.trim();
-      if (!symbol) return;
+      const symbolInput = el("watchlist-symbol");
+      const typed = symbolInput.value.trim();
+      if (!typed) return;
+
+      // The ticker must have been actively verified against this exact
+      // asset type/exchange (picked from the suggestions list) — a symbol
+      // typed and never confirmed could resolve to the wrong pair
+      // (or nothing at all) on the selected exchange.
+      let resolved = wlSuggest.resolved && wlSuggest.resolved.symbol === typed ? wlSuggest.resolved : null;
+      if (!resolved) {
+        await fetchWatchlistSuggestions(typed);
+        const exact = wlSuggest.suggestions.find((s) => s.symbol.toUpperCase() === typed.toUpperCase());
+        if (exact) {
+          resolved = exact;
+          selectWatchlistSuggestion(exact);
+        }
+      }
+      if (!resolved) {
+        showResolvedPair(null);
+        const hint = el("watchlist-resolved-pair");
+        hint.textContent =
+          "Ticker non trovato su questo exchange — seleziona una coppia dal menu che appare mentre scrivi.";
+        hint.classList.remove("hidden");
+        hint.classList.add("wl-resolved-pair-error");
+        return;
+      }
+
       await fetch("/api/watchlist", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          symbol,
+          symbol: resolved.symbol,
           asset_type: state.watchlistAssetType,
           exchange: el("watchlist-exchange").value,
           interval: el("watchlist-interval").value,
         }),
       });
-      el("watchlist-symbol").value = "";
+      symbolInput.value = "";
+      wlSuggest.resolved = null;
+      showResolvedPair(null);
+      el("watchlist-resolved-pair").classList.remove("wl-resolved-pair-error");
       loadWatchlist();
     });
 
