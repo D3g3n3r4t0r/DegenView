@@ -2,6 +2,7 @@ import asyncio
 import itertools
 import logging
 import sys
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal
@@ -55,7 +56,7 @@ from app.providers.kucoin import KucoinProvider
 from app.providers.mexc import MexcProvider
 from app.providers.twelvedata import TwelveDataProvider
 from app.resample import resample_by_count
-from app.timeframes import DEFAULT_INTERVALS, SYNTHETIC_DAY_INTERVALS, IntervalChoice
+from app.timeframes import DEFAULT_INTERVALS, INTERVAL_SECONDS, SYNTHETIC_DAY_INTERVALS, IntervalChoice
 
 logger = logging.getLogger("watchlist_alerts")
 if getattr(sys, "frozen", False):
@@ -96,6 +97,23 @@ async def fetch_ohlcv_canonical(provider: DataProvider, symbol: str, interval: s
     return resample_by_count(raw, multiple).tail(outputsize)
 
 
+def _drop_unclosed_candle(df, interval: str):
+    """Alerts must only fire on a confirmed (closed) candle — a signal that
+    only appears on the still-forming last bar can vanish again before that
+    bar actually closes, and firing on it anyway would be a false alert.
+    Drops the last row whenever its open time + the interval's duration is
+    still in the future."""
+    if df.empty:
+        return df
+    seconds = INTERVAL_SECONDS.get(interval)
+    if seconds is None:
+        return df
+    last_open = df.index[-1].timestamp()
+    if last_open + seconds > time.time():
+        return df.iloc[:-1]
+    return df
+
+
 async def _watchlist_alert_loop() -> None:
     """Background loop, independent of any browser tab: evaluates every
     watchlist ticker against each of its enabled strategies and fires
@@ -117,6 +135,9 @@ async def _watchlist_alert_loop() -> None:
                 df = await fetch_ohlcv_canonical(
                     provider, entry.symbol, entry.interval, settings.candles_per_timeframe
                 )
+                df = _drop_unclosed_candle(df, entry.interval)
+                if df.empty:
+                    continue
                 for strategy_name in entry.strategies:
                     strategy = build_strategy_state(strategy_name, df)
                     _dispatch_telegram_alerts(owner.telegram_chat_id, entry.symbol, entry.interval, strategy)
