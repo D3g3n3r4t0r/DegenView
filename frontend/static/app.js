@@ -1404,9 +1404,21 @@
     });
   }
 
+  function updateMobileChartStrip() {
+    const strip = el("mobile-chart-strip");
+    if (!state.data) {
+      strip.classList.add("hidden");
+      return;
+    }
+    el("mobile-chart-symbol").textContent = state.data.symbol;
+    el("mobile-chart-interval").textContent = el("interval-primary").value || "—";
+    strip.classList.remove("hidden");
+  }
+
   function render() {
     if (!state.data) return;
     clearOverlays();
+    updateMobileChartStrip();
 
     const tf = state.activeTimeframe;
     const analysis = state.data.timeframes[tf];

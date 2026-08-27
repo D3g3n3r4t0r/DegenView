@@ -1502,7 +1502,7 @@ body {
    bottom-sheet drawers reached via a TradingView-style bottom tab bar, not a
    long stacked scroll. ---- */
 
-.mobile-nav, .mobile-drawer-backdrop, .drawer-header { display: none; }
+.mobile-nav, .mobile-drawer-backdrop, .drawer-header, .mobile-chart-strip { display: none; }
 
 @media (max-width: 760px) {
   html, body { height: 100%; overflow: hidden; }
@@ -1645,6 +1645,42 @@ body {
     z-index: 50;
   }
 
+  /* Slim symbol/timeframe strip pinned above the bottom nav, matching
+     TradingView mobile's compact info bar that stays visible while
+     looking at the chart — not shown until a chart is actually loaded. */
+  .mobile-chart-strip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 52px;
+    height: 30px;
+    padding: 0 12px;
+    background: var(--bg);
+    border-top: 1px solid var(--border);
+    z-index: 49;
+  }
+  .mobile-chart-strip.hidden { display: none; }
+
+  .mobile-chart-symbol {
+    font-weight: 700;
+    font-size: 12.5px;
+    letter-spacing: 0.01em;
+  }
+
+  .mobile-chart-interval {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    background: var(--bg-panel);
+    border: 1px solid var(--border-strong);
+    border-radius: 100px;
+    padding: 2px 8px;
+  }
+
   /* Rounder, lighter controls read as an app, not a technical form —
      Blueprint's sharp 2px corners work on a dense desktop panel, less so
      stretched across a phone screen with lots of open space around them. */
@@ -1701,12 +1737,14 @@ body {
   .suggestions { font-size: 14px; }
 
   /* Compliance: the disclaimer must stay reachable even in the fixed
-     app-shell, not disappear because there's no room for a normal footer. */
+     app-shell, not disappear because there's no room for a normal footer.
+     Stacked above the chart-strip (which sits right above the bottom
+     nav) so the two never overlap. */
   .disclaimer {
     position: fixed;
     left: 0;
     right: 0;
-    bottom: 52px;
+    bottom: 82px;
     z-index: 45;
     font-size: 8px;
     line-height: 1.25;
