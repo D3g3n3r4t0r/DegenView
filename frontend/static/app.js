@@ -1058,6 +1058,44 @@
   // point by the same time/price delta — no per-endpoint resize yet) ----
   let dragState = null; // { drawing, startTime, startPrice, originalPoints }
 
+  // Mutates the already-attached primitives' own point1/point2 in place —
+  // no detach/reattach, no new objects — so a drag stays smooth even at
+  // mousemove frequency. Mirrors how the placement ghost preview already
+  // avoids that same churn.
+  function repositionDrawingPrimitives(d) {
+    const ref = drawState.attached[d.id];
+    if (!ref) return;
+    if (ref.priceLine) {
+      candleSeries.removePriceLine(ref.priceLine);
+      ref.priceLine = candleSeries.createPriceLine({
+        price: d.points[0].price,
+        color: COLORS.accent,
+        lineWidth: 1,
+        lineStyle: LightweightCharts.LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: d.text || "",
+      });
+      return;
+    }
+    if (!ref.primitives || !ref.primitives.length) return;
+    const [p1, p2] = d.points;
+    if (d.type === "text") {
+      ref.primitives[0].point = p1;
+      return;
+    }
+    if (d.type === "range") {
+      ref.primitives[0].point1 = p1;
+      ref.primitives[0].point2 = p2;
+      if (ref.primitives[1]) {
+        ref.primitives[1].point = p1.price >= p2.price ? p1 : p2;
+        ref.primitives[1].text = d.text || "";
+      }
+      return;
+    }
+    ref.primitives[0].point1 = p1;
+    ref.primitives[0].point2 = p2;
+  }
+
   function updateDragPreview() {
     if (!dragState || !lastCrosshairPoint) return;
     const price = candleSeries.coordinateToPrice(lastCrosshairPoint.y);
@@ -1067,8 +1105,7 @@
     const d = dragState.drawing;
     d.points = dragState.originalPoints.map((p) => ({ time: p.time + dTime, price: p.price + dPrice }));
     if (d.type === "range") d.text = formatRangeLabel(d.points[0], d.points[1]);
-    detachDrawing(d.id);
-    attachDrawing(d);
+    repositionDrawingPrimitives(d);
   }
 
   function attachDrawing(d) {
