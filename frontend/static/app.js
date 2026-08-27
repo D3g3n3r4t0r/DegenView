@@ -801,6 +801,7 @@
     lastCrosshairPoint =
       param.point && param.time !== undefined ? { x: param.point.x, y: param.point.y, time: param.time } : null;
     updateGhost();
+    updateDragPreview();
     updateCursorHover();
     if (!param.point || param.time === undefined || !overlays.hitZones.length) {
       tooltipEl.classList.add("hidden");
@@ -929,6 +930,7 @@
     drawState.tool = tool;
     drawState.pending = [];
     clearGhost();
+    dragState = null; // abandon any in-progress drag rather than leaving it half-applied
     document.querySelectorAll(".draw-tool-btn").forEach((btn) => {
       btn.classList.toggle("selected", btn.dataset.drawTool === tool);
     });
@@ -1006,12 +1008,16 @@
       return y !== null && Math.abs(py - y) <= HIT_TOLERANCE_PX;
     }
     const ts = mainChart.timeScale();
-    const [p1, p2] = d.points;
+    const [p1, p2] = d.points; // text has only p1 — handled below before p2 is ever touched
     const x1 = ts.timeToCoordinate(p1.time);
     const y1 = candleSeries.priceToCoordinate(p1.price);
+    if (x1 === null || y1 === null) return false;
+    if (d.type === "text") {
+      return Math.hypot(px - x1, py - y1) <= 14;
+    }
     const x2 = ts.timeToCoordinate(p2.time);
     const y2 = candleSeries.priceToCoordinate(p2.price);
-    if (x1 === null || y1 === null || x2 === null || y2 === null) return false;
+    if (x2 === null || y2 === null) return false;
     if (d.type === "trend_line" || d.type === "arrow") {
       return distanceToSegment(px, py, x1, y1, x2, y2) <= HIT_TOLERANCE_PX;
     }
@@ -1031,9 +1037,6 @@
         return y !== null && Math.abs(py - y) <= HIT_TOLERANCE_PX;
       });
     }
-    if (d.type === "text") {
-      return Math.hypot(px - x1, py - y1) <= 14;
-    }
     return false;
   }
 
@@ -1046,9 +1049,26 @@
 
   function updateCursorHover() {
     const container = el("main-chart");
-    if (!container || drawState.tool !== "cursor" || !lastCrosshairPoint) return;
+    if (!container || drawState.tool !== "cursor" || !lastCrosshairPoint || dragState) return;
     const hit = findHitDrawing(lastCrosshairPoint.x, lastCrosshairPoint.y);
     container.style.cursor = hit ? "pointer" : "default";
+  }
+
+  // ---- Cursor tool: drag an existing drawing to move it (translate every
+  // point by the same time/price delta — no per-endpoint resize yet) ----
+  let dragState = null; // { drawing, startTime, startPrice, originalPoints }
+
+  function updateDragPreview() {
+    if (!dragState || !lastCrosshairPoint) return;
+    const price = candleSeries.coordinateToPrice(lastCrosshairPoint.y);
+    if (price === null) return;
+    const dTime = lastCrosshairPoint.time - dragState.startTime;
+    const dPrice = price - dragState.startPrice;
+    const d = dragState.drawing;
+    d.points = dragState.originalPoints.map((p) => ({ time: p.time + dTime, price: p.price + dPrice }));
+    if (d.type === "range") d.text = formatRangeLabel(d.points[0], d.points[1]);
+    detachDrawing(d.id);
+    attachDrawing(d);
   }
 
   function attachDrawing(d) {
@@ -1220,20 +1240,52 @@
       (e) => {
         if (!container.contains(e.target)) return;
         downPos = { x: e.clientX, y: e.clientY };
+        if (drawState.tool === "cursor" && lastCrosshairPoint) {
+          const hit = findHitDrawing(lastCrosshairPoint.x, lastCrosshairPoint.y);
+          if (hit) {
+            const startPrice = candleSeries.coordinateToPrice(lastCrosshairPoint.y);
+            if (startPrice !== null) {
+              dragState = {
+                drawing: hit,
+                startTime: lastCrosshairPoint.time,
+                startPrice,
+                originalPoints: hit.points.map((p) => ({ ...p })),
+              };
+              // Suspend pan/zoom for the drag itself — cursor mode leaves
+              // them on by default (see setDrawTool) so empty-space drags
+              // still pan the chart normally.
+              mainChart.applyOptions({ handleScroll: false, handleScale: false });
+            }
+          }
+        }
       },
       true
     );
     document.addEventListener(
       "pointerup",
       (e) => {
-        if (!downPos || !state.data) {
-          downPos = null;
+        if (!downPos) {
+          dragState = null;
           return;
         }
         const dx = e.clientX - downPos.x;
         const dy = e.clientY - downPos.y;
+        const moved = Math.hypot(dx, dy) > DRAW_CLICK_TOLERANCE_PX;
         downPos = null;
-        if (Math.hypot(dx, dy) > DRAW_CLICK_TOLERANCE_PX) return; // was a drag, not a placement click
+
+        if (dragState) {
+          const dragged = dragState.drawing;
+          dragState = null;
+          mainChart.applyOptions({ handleScroll: true, handleScale: true }); // cursor tool always keeps these on
+          if (moved) {
+            saveDrawings(); // points were already updated live during the drag
+          } else {
+            removeDrawing(dragged.id); // pressed and released without moving — same as the old click-to-delete
+          }
+          return;
+        }
+
+        if (!state.data || moved) return; // empty-space drag → native chart panning already handled it
         if (!lastCrosshairPoint) return; // pointer never registered a valid chart position
 
         if (drawState.tool === "cursor") {
