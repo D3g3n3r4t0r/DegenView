@@ -691,7 +691,10 @@
   let lastCrosshairPoint = null;
 
   function handleCrosshairMove(param) {
-    lastCrosshairPoint = param.point && param.time !== undefined ? { y: param.point.y, time: param.time } : null;
+    lastCrosshairPoint =
+      param.point && param.time !== undefined ? { x: param.point.x, y: param.point.y, time: param.time } : null;
+    updateGhost();
+    updateCursorHover();
     if (!param.point || param.time === undefined || !overlays.hitZones.length) {
       tooltipEl.classList.add("hidden");
       return;
@@ -788,10 +791,10 @@
   // Drawings are placed with a click-to-collect flow (1 or 2 points
   // depending on the tool), rendered as chart primitives, and persisted in
   // localStorage per (asset_type, symbol) — client-side only, same scope as
-  // TradingView's own free-tier drawings. No drag/resize of an already-placed
-  // drawing in this first pass; removal is via the object list below the
-  // rail, not by clicking the drawing itself (that needs canvas hit-testing,
-  // scoped as a later iteration).
+  // TradingView's own free-tier drawings. A 2-point tool shows a live
+  // "ghost" preview between the first and second click; the Cursor tool
+  // hit-tests existing drawings and removes one on click. No drag-to-resize
+  // of an already-placed drawing yet — that's a later iteration.
   const DRAW_TOOL_POINTS = { cursor: 0, trend_line: 2, hline: 1, rectangle: 2, range: 2, fib: 2, text: 1, arrow: 2 };
   const DRAW_TOOL_LABELS = {
     trend_line: "Linea di tendenza",
@@ -818,6 +821,7 @@
   function setDrawTool(tool) {
     drawState.tool = tool;
     drawState.pending = [];
+    clearGhost();
     document.querySelectorAll(".draw-tool-btn").forEach((btn) => {
       btn.classList.toggle("selected", btn.dataset.drawTool === tool);
     });
@@ -836,6 +840,110 @@
     return `${sign}${dPrice.toFixed(2)} (${sign}${pct.toFixed(2)}%) · ${timeLabel}`;
   }
 
+  // ---- Live preview while placing a 2-point drawing ----
+  let drawGhost = null; // { primitives: [...] } — a real primitive instance whose point2 we mutate every mousemove
+
+  function makeDrawingPrimitives(type, p1, p2) {
+    const color = COLORS.accent;
+    if (type === "trend_line") return [new LinePrimitive(p1, p2, color, 2, false)];
+    if (type === "arrow") return [new LinePrimitive(p1, p2, color, 2, true)];
+    if (type === "rectangle") return [new RectanglePrimitive(p1, p2, "rgba(31, 78, 107, 0.12)", color)];
+    if (type === "range") return [new RectanglePrimitive(p1, p2, "rgba(138, 109, 59, 0.12)", COLORS.stamp)];
+    if (type === "fib") return [new FibPrimitive(p1, p2, color)];
+    return [];
+  }
+
+  function startGhost(type, point1) {
+    const primitives = makeDrawingPrimitives(type, point1, point1);
+    primitives.forEach((prim) => candleSeries.attachPrimitive(prim));
+    drawGhost = { primitives };
+  }
+
+  function updateGhost() {
+    if (!drawGhost || !lastCrosshairPoint) return;
+    const price = candleSeries.coordinateToPrice(lastCrosshairPoint.y);
+    if (price === null) return;
+    const point2 = { time: lastCrosshairPoint.time, price };
+    drawGhost.primitives.forEach((prim) => {
+      prim.point2 = point2;
+    });
+  }
+
+  function clearGhost() {
+    if (!drawGhost) return;
+    drawGhost.primitives.forEach((prim) => {
+      try {
+        candleSeries.detachPrimitive(prim);
+      } catch (e) {
+        /* already gone */
+      }
+    });
+    drawGhost = null;
+  }
+
+  // ---- Cursor tool: hit-test existing drawings, click to delete ----
+  const HIT_TOLERANCE_PX = 6;
+
+  function distanceToSegment(px, py, x1, y1, x2, y2) {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const lenSq = dx * dx + dy * dy;
+    let t = lenSq === 0 ? 0 : ((px - x1) * dx + (py - y1) * dy) / lenSq;
+    t = Math.max(0, Math.min(1, t));
+    return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+  }
+
+  function hitTestDrawing(d, px, py) {
+    if (d.type === "hline") {
+      const y = candleSeries.priceToCoordinate(d.points[0].price);
+      return y !== null && Math.abs(py - y) <= HIT_TOLERANCE_PX;
+    }
+    const ts = mainChart.timeScale();
+    const [p1, p2] = d.points;
+    const x1 = ts.timeToCoordinate(p1.time);
+    const y1 = candleSeries.priceToCoordinate(p1.price);
+    const x2 = ts.timeToCoordinate(p2.time);
+    const y2 = candleSeries.priceToCoordinate(p2.price);
+    if (x1 === null || y1 === null || x2 === null || y2 === null) return false;
+    if (d.type === "trend_line" || d.type === "arrow") {
+      return distanceToSegment(px, py, x1, y1, x2, y2) <= HIT_TOLERANCE_PX;
+    }
+    if (d.type === "rectangle" || d.type === "range") {
+      const xa = Math.min(x1, x2) - HIT_TOLERANCE_PX;
+      const xb = Math.max(x1, x2) + HIT_TOLERANCE_PX;
+      const ya = Math.min(y1, y2) - HIT_TOLERANCE_PX;
+      const yb = Math.max(y1, y2) + HIT_TOLERANCE_PX;
+      return px >= xa && px <= xb && py >= ya && py <= yb;
+    }
+    if (d.type === "fib") {
+      const xa = Math.min(x1, x2) - HIT_TOLERANCE_PX;
+      const xb = Math.max(x1, x2) + HIT_TOLERANCE_PX;
+      if (px < xa || px > xb) return false;
+      return FIB_LEVELS.some((ratio) => {
+        const y = candleSeries.priceToCoordinate(p1.price + ratio * (p2.price - p1.price));
+        return y !== null && Math.abs(py - y) <= HIT_TOLERANCE_PX;
+      });
+    }
+    if (d.type === "text") {
+      return Math.hypot(px - x1, py - y1) <= 14;
+    }
+    return false;
+  }
+
+  function findHitDrawing(px, py) {
+    for (let i = drawState.drawings.length - 1; i >= 0; i--) {
+      if (hitTestDrawing(drawState.drawings[i], px, py)) return drawState.drawings[i];
+    }
+    return null;
+  }
+
+  function updateCursorHover() {
+    const container = el("main-chart");
+    if (!container || drawState.tool !== "cursor" || !lastCrosshairPoint) return;
+    const hit = findHitDrawing(lastCrosshairPoint.x, lastCrosshairPoint.y);
+    container.style.cursor = hit ? "pointer" : "default";
+  }
+
   function attachDrawing(d) {
     if (!candleSeries) return;
     const color = COLORS.accent;
@@ -852,19 +960,10 @@
       return;
     }
     const [p1, p2] = d.points;
-    const primitives = [];
-    if (d.type === "trend_line") {
-      primitives.push(new LinePrimitive(p1, p2, color, 2, false));
-    } else if (d.type === "arrow") {
-      primitives.push(new LinePrimitive(p1, p2, color, 2, true));
-    } else if (d.type === "rectangle") {
-      primitives.push(new RectanglePrimitive(p1, p2, "rgba(31, 78, 107, 0.12)", color));
-    } else if (d.type === "range") {
-      primitives.push(new RectanglePrimitive(p1, p2, "rgba(138, 109, 59, 0.12)", COLORS.stamp));
+    const primitives = makeDrawingPrimitives(d.type, p1, p2);
+    if (d.type === "range") {
       const topPoint = p1.price >= p2.price ? p1 : p2;
       primitives.push(new TextPrimitive(topPoint, d.text || "", COLORS.stamp));
-    } else if (d.type === "fib") {
-      primitives.push(new FibPrimitive(p1, p2, color));
     } else if (d.type === "text") {
       primitives.push(new TextPrimitive(p1, d.text || "", color));
     }
@@ -966,6 +1065,7 @@
   }
 
   function finalizeDrawing() {
+    clearGhost();
     const type = drawState.tool;
     const points = drawState.pending;
     drawState.pending = [];
@@ -1011,7 +1111,7 @@
     document.addEventListener(
       "pointerdown",
       (e) => {
-        if (drawState.tool === "cursor" || !container.contains(e.target)) return;
+        if (!container.contains(e.target)) return;
         downPos = { x: e.clientX, y: e.clientY };
       },
       true
@@ -1019,7 +1119,7 @@
     document.addEventListener(
       "pointerup",
       (e) => {
-        if (drawState.tool === "cursor" || !downPos || !state.data) {
+        if (!downPos || !state.data) {
           downPos = null;
           return;
         }
@@ -1029,15 +1129,29 @@
         if (Math.hypot(dx, dy) > DRAW_CLICK_TOLERANCE_PX) return; // was a drag, not a placement click
         if (!lastCrosshairPoint) return; // pointer never registered a valid chart position
 
+        if (drawState.tool === "cursor") {
+          const hit = findHitDrawing(lastCrosshairPoint.x, lastCrosshairPoint.y);
+          if (hit) removeDrawing(hit.id);
+          return;
+        }
+
         const price = candleSeries.coordinateToPrice(lastCrosshairPoint.y);
         const time = lastCrosshairPoint.time;
         if (price === null || time === undefined) return;
 
         drawState.pending.push({ time, price });
-        if (drawState.pending.length >= DRAW_TOOL_POINTS[drawState.tool]) finalizeDrawing();
+        const needed = DRAW_TOOL_POINTS[drawState.tool];
+        if (drawState.pending.length === 1 && needed === 2) {
+          startGhost(drawState.tool, { time, price }); // live preview until the second click
+        } else if (drawState.pending.length >= needed) {
+          finalizeDrawing();
+        }
       },
       true
     );
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && drawState.tool !== "cursor") setDrawTool("cursor");
+    });
   }
 
   function bindDrawRail() {
