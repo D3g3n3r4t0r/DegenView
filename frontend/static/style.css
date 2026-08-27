@@ -1542,7 +1542,13 @@ body {
   #levels-panel .toolbar-intervals { width: 100%; }
   #levels-panel .interval-select { width: 100%; padding: 10px; font-size: 14px; }
   #levels-panel .toolbar-strategy { width: 100%; max-width: none; padding: 10px; font-size: 14px; }
-  #levels-panel .toolbar-check { font-size: 13px; }
+  #levels-panel .toolbar-check {
+    font-size: 13px;
+    border: 1px solid var(--border-strong);
+    border-radius: 100px;
+    padding: 7px 12px;
+    background: var(--bg-panel);
+  }
 
   .rail { display: none; }
   .live-badge, .polling-badge { left: 10px; }

@@ -132,6 +132,72 @@
     }
   }
 
+  // ---- Series Primitive: a full-height vertical band behind the candles,
+  // used to shade alternating calendar days on intraday timeframes
+  // (TradingView's faint day-separator stripes). zOrder "bottom" so it
+  // never covers the candles or any other overlay. ----
+  class SessionBandRenderer {
+    constructor(p1x, p2x, fillColor) {
+      this._p1x = p1x;
+      this._p2x = p2x;
+      this._fillColor = fillColor;
+    }
+    draw(target) {
+      target.useBitmapCoordinateSpace((scope) => {
+        if (this._p1x === null || this._p2x === null) return;
+        const ctx = scope.context;
+        const h = positionsBox(this._p1x, this._p2x, scope.horizontalPixelRatio);
+        ctx.fillStyle = this._fillColor;
+        ctx.fillRect(h.position, 0, h.length, scope.bitmapSize.height);
+      });
+    }
+  }
+
+  class SessionBandPaneView {
+    constructor(source) {
+      this._source = source;
+      this._p1x = null;
+      this._p2x = null;
+    }
+    update() {
+      const { chart, point1, point2 } = this._source;
+      if (!chart) return;
+      this._p1x = chart.timeScale().timeToCoordinate(point1.time);
+      this._p2x = chart.timeScale().timeToCoordinate(point2.time);
+    }
+    renderer() {
+      return new SessionBandRenderer(this._p1x, this._p2x, this._source.fillColor);
+    }
+    zOrder() {
+      return "bottom";
+    }
+  }
+
+  class SessionBandPrimitive {
+    constructor(point1, point2, fillColor) {
+      this.point1 = point1;
+      this.point2 = point2;
+      this.fillColor = fillColor;
+      this.chart = null;
+      this.series = null;
+      this._paneViews = [new SessionBandPaneView(this)];
+    }
+    attached({ chart, series }) {
+      this.chart = chart;
+      this.series = series;
+    }
+    detached() {
+      this.chart = null;
+      this.series = null;
+    }
+    updateAllViews() {
+      this._paneViews.forEach((v) => v.update());
+    }
+    paneViews() {
+      return this._paneViews;
+    }
+  }
+
   // ---- Series Primitive: freehand line between two (time, price) points,
   // optionally with an arrowhead at the second point (reused for both the
   // Trend Line and Arrow drawing tools) ----
@@ -913,10 +979,22 @@
     overlays.lineSeries.push({ chart: chartRef, series });
   }
 
-  function addRectangle(point1, point2, fillColor, borderColor, label) {
+  // TradingView shows a short code directly on each level's box (e.g.
+  // "FVG", "Top Liq") rather than only on hover — the full descriptive
+  // text stays in the hover tooltip (hitZones), this is just the
+  // always-visible short form drawn on the chart itself.
+  const LEVEL_SHORT_LABELS = { order_block: "OB", fvg: "FVG", eqh: "EQH", eql: "EQL", bos: "BOS", choch: "CHoCH" };
+
+  function addRectangle(point1, point2, fillColor, borderColor, label, shortLabel) {
     const rect = new RectanglePrimitive(point1, point2, fillColor, borderColor);
     candleSeries.attachPrimitive(rect);
     overlays.primitives.push({ series: candleSeries, primitive: rect });
+    if (shortLabel) {
+      const topPoint = point1.price >= point2.price ? point1 : point2;
+      const labelPrim = new TextPrimitive(topPoint, shortLabel, borderColor);
+      candleSeries.attachPrimitive(labelPrim);
+      overlays.primitives.push({ series: candleSeries, primitive: labelPrim });
+    }
     if (label) {
       overlays.hitZones.push({
         price_low: Math.min(point1.price, point2.price),
@@ -926,6 +1004,36 @@
         label,
       });
     }
+  }
+
+  // Only meaningful on intraday timeframes — on 1d+ each candle already
+  // spans a day or more, so day-shading would just paint every other bar.
+  const DAY_PLUS_INTERVALS = new Set(["1d", "2d", "3d", "5d", "1w", "1M"]);
+
+  function addSessionShading(candles, interval) {
+    if (DAY_PLUS_INTERVALS.has(interval) || candles.length < 2) return;
+    let dayKey = null;
+    let groupStart = null;
+    let dayIndex = -1;
+    const bands = [];
+    candles.forEach((c, i) => {
+      const d = new Date(c.time * 1000);
+      const key = `${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}`;
+      if (key !== dayKey) {
+        if (dayKey !== null) bands.push({ start: groupStart, end: candles[i - 1].time, index: dayIndex });
+        dayKey = key;
+        groupStart = c.time;
+        dayIndex++;
+      }
+    });
+    bands.push({ start: groupStart, end: candles[candles.length - 1].time, index: dayIndex });
+
+    bands.forEach((b) => {
+      if (b.index % 2 === 0) return; // shade every other day only
+      const prim = new SessionBandPrimitive({ time: b.start }, { time: b.end }, "rgba(38, 49, 46, 0.035)");
+      candleSeries.attachPrimitive(prim);
+      overlays.primitives.push({ series: candleSeries, primitive: prim });
+    });
   }
 
   function pricePrecisionFor(price) {
@@ -1431,6 +1539,7 @@
     // fixed 2-decimal price format rounds small prices straight to 0.00.
     candleSeries.applyOptions({ priceFormat: pricePrecisionFor(candles[candles.length - 1].close) });
     candleSeries.setData(candles.map((c) => ({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close })));
+    addSessionShading(candles, el("interval-primary").value);
 
     // --- price-scale indicator overlays ---
     if (state.layers.ema) {
@@ -1516,7 +1625,8 @@
           { time: endTime, price: lvl.price_low },
           fill,
           border,
-          lvl.label
+          lvl.label,
+          LEVEL_SHORT_LABELS[lvl.type]
         );
       } else {
         const line = candleSeries.createPriceLine({
@@ -1538,7 +1648,8 @@
           { time: lastTime, price: z.price_low },
           COLORS.confluenceFill,
           COLORS.confluenceBorder,
-          z.label
+          z.label,
+          "CONF"
         );
       });
     }
