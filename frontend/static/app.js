@@ -1853,6 +1853,44 @@
       });
     }
 
+    // --- automatic Fibonacci retracement / extension ---
+    // Only the single most recent leg (and, when a pullback has confirmed
+    // it, its extension) — same "most actionable, not full history"
+    // philosophy as the dealing range and confluence zones above.
+    if (state.layers.fibonacci && analysis.fib_zones) {
+      analysis.fib_zones.forEach((zone) => {
+        const isBull = zone.direction === "bullish";
+        const isExt = zone.kind === "extension";
+        const lineColor = isExt ? COLORS.accent : isBull ? COLORS.bull : COLORS.bear;
+        const ratioEntries = Object.entries(zone.levels);
+
+        ratioEntries.forEach(([ratio, price]) => {
+          const isKeyRatio = ["0", "1", "0.382", "0.618", "1.618"].includes(ratio);
+          const line = candleSeries.createPriceLine({
+            price,
+            color: lineColor,
+            lineWidth: isKeyRatio ? 2 : 1,
+            lineStyle: LightweightCharts.LineStyle.Dashed,
+            axisLabelVisible: true,
+            title: `Fib ${isExt ? "ext" : "ret"} ${(parseFloat(ratio) * 100).toFixed(1)}%`,
+          });
+          overlays.priceLines.push({ series: candleSeries, line });
+        });
+
+        if (!isExt && zone.levels["0.382"] !== undefined && zone.levels["0.618"] !== undefined) {
+          // Golden-pocket fill (38.2%-61.8%) — the zone traders actually watch.
+          addRectangle(
+            { time: zone.anchor_time, price: zone.levels["0.382"] },
+            { time: lastTime, price: zone.levels["0.618"] },
+            isBull ? COLORS.bullFill : COLORS.bearFill,
+            isBull ? COLORS.bullBorder : COLORS.bearBorder,
+            null,
+            null
+          );
+        }
+      });
+    }
+
     renderSummary();
     renderStrategy();
     renderBacktest();

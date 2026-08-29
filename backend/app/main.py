@@ -29,6 +29,7 @@ from app import watchlist as watchlist_store
 from app.analysis.backtest import run_backtest
 from app.analysis.confluence import compute_confluence
 from app.analysis.indicators import compute_indicators
+from app.analysis.fibonacci import compute_fib_zones
 from app.analysis.smc_engine import compute_dealing_range, compute_levels
 from app.analysis.strategies import AVAILABLE_STRATEGIES, DEFAULT_STRATEGY, build_strategy_state
 from app.analysis.summary import build_summary, determine_bias
@@ -739,6 +740,7 @@ async def analyze(
         indicators = compute_indicators(df)
         bias = determine_bias(levels)
         dealing_range = compute_dealing_range(df, tf_key)
+        fib_zones = compute_fib_zones(df, tf_key)
         strategy = build_strategy_state(strategy_name, df, strategy_params_dict)
         strategies[tf_key] = [strategy]
         backtests[tf_key] = run_backtest(df, strategy_params_dict, backtest_params_dict, strategy_name=strategy_name)
@@ -760,6 +762,7 @@ async def analyze(
             indicators=indicators,
             bias=bias,
             dealing_range=dealing_range,
+            fib_zones=fib_zones,
         )
 
     confluence_zones = compute_confluence(timeframes)
