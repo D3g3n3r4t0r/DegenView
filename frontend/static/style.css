@@ -1,20 +1,21 @@
 :root {
-  --bg: #f2ede1;
-  --bg-panel: #ece5d3;
-  --grid: #a8b8ae;
-  --grid-major: #7f9488;
-  --border: rgba(38, 49, 46, 0.28);
-  --border-strong: rgba(38, 49, 46, 0.55);
-  --ink: #26312e;
-  --ink-dim: #5c675f;
-  --accent: #1f4e6b;
-  --bull: #1f7a44;
-  --bear: #8c2f1f;
-  --stamp: #8a6d3b;
+  --bg: #0e1012;
+  --bg-panel: #191b20;
+  --bg-raised: #20232a;
+  --grid: rgba(255, 255, 255, 0.05);
+  --grid-major: rgba(255, 255, 255, 0.09);
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --ink: #e6e8ee;
+  --ink-dim: #82868f;
+  --accent: #e0c87a;
+  --bull: #22c55e;
+  --bear: #ef4444;
+  --stamp: #c9ad6a;
 
-  --font-display: "Special Elite", "Courier New", monospace;
-  --font-body: "Archivo Narrow", "Segoe UI", sans-serif;
-  --font-mono: "Space Mono", "Courier New", monospace;
+  --font-display: "Instrument Serif", Georgia, serif;
+  --font-body: "DM Sans", system-ui, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", "Courier New", monospace;
 }
 
 * { box-sizing: border-box; }
@@ -34,11 +35,6 @@ body {
   height: 100vh;
   overflow: hidden;
   background-color: var(--bg);
-  background-image:
-    repeating-linear-gradient(to right, rgba(127, 148, 136, 0.20) 0, rgba(127, 148, 136, 0.20) 0.6px, transparent 0.6px, transparent 25px),
-    repeating-linear-gradient(to bottom, rgba(127, 148, 136, 0.20) 0, rgba(127, 148, 136, 0.20) 0.6px, transparent 0.6px, transparent 25px),
-    repeating-linear-gradient(to right, rgba(168, 184, 174, 0.30) 0, rgba(168, 184, 174, 0.30) 0.4px, transparent 0.4px, transparent 5px),
-    repeating-linear-gradient(to bottom, rgba(168, 184, 174, 0.30) 0, rgba(168, 184, 174, 0.30) 0.4px, transparent 0.4px, transparent 5px);
 }
 
 .toolbar {
@@ -47,16 +43,17 @@ body {
   gap: 10px;
   padding: 8px 14px;
   border-bottom: 1.5px solid var(--border-strong);
-  background: rgba(242, 237, 225, 0.95);
+  background: rgba(14, 16, 18, 0.95);
   flex-wrap: nowrap;
   overflow-x: auto;
 }
 
 .brand {
   font-family: var(--font-display);
-  font-size: 14px;
+  font-size: 18px;
+  font-style: italic;
   letter-spacing: 0.01em;
-  color: var(--ink);
+  color: var(--accent);
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -109,7 +106,7 @@ body {
 .asset-toggle {
   display: flex;
   border: 1.5px solid var(--border-strong);
-  border-radius: 2px;
+  border-radius: 8px;
   overflow: hidden;
 }
 
@@ -142,7 +139,7 @@ body {
   border: 1.5px solid var(--border-strong);
   color: var(--ink);
   padding: 7px 10px;
-  border-radius: 2px;
+  border-radius: 8px;
   width: 100%;
   font-size: 13px;
   font-family: var(--font-mono);
@@ -167,10 +164,10 @@ body {
   padding: 3px;
   background: var(--bg-panel);
   border: 1.5px solid var(--border-strong);
-  border-radius: 2px;
+  border-radius: 8px;
   max-height: 280px;
   overflow-y: auto;
-  box-shadow: 2px 3px 0 rgba(38, 49, 46, 0.12);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
 }
 
 .suggestions li {
@@ -214,7 +211,7 @@ body {
 
 .suggestions li:hover .sug-name,
 .suggestions li.active .sug-name {
-  color: rgba(242, 237, 225, 0.85);
+  color: rgba(14, 16, 18, 0.75);
 }
 
 .sug-exchange {
@@ -223,7 +220,7 @@ body {
   font-weight: 700;
   letter-spacing: 0.02em;
   padding: 2px 6px;
-  border-radius: 2px;
+  border-radius: 8px;
   border: 1px solid currentColor;
 }
 
@@ -235,7 +232,7 @@ body {
 .suggestions li:hover .sug-exchange,
 .suggestions li.active .sug-exchange {
   color: var(--bg);
-  border-color: rgba(242, 237, 225, 0.7);
+  border-color: rgba(14, 16, 18, 0.6);
 }
 
 #search-btn {
@@ -243,7 +240,7 @@ body {
   color: var(--bg);
   border: 1.5px solid var(--ink);
   padding: 7px 16px;
-  border-radius: 2px;
+  border-radius: 8px;
   cursor: pointer;
   font-size: 12px;
   font-family: var(--font-mono);
@@ -254,7 +251,7 @@ body {
 #search-btn:disabled { opacity: 0.5; cursor: default; }
 
 .error-banner {
-  background: rgba(140, 47, 31, 0.10);
+  background: rgba(239, 68, 68, 0.10);
   color: var(--bear);
   padding: 8px 16px;
   font-size: 12.5px;
@@ -274,7 +271,7 @@ body {
 .rail {
   flex: 0 0 44px;
   border-right: 1.5px solid var(--border-strong);
-  background: rgba(236, 229, 211, 0.5);
+  background: rgba(255, 255, 255, 0.03);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -290,7 +287,7 @@ body {
   justify-content: center;
   border: none;
   background: transparent;
-  border-radius: 3px;
+  border-radius: 9px;
   font-size: 16px;
   color: var(--ink-dim);
   cursor: pointer;
@@ -316,7 +313,7 @@ body {
   flex-direction: column;
   min-height: 0;
   border-left: 1.5px solid var(--border-strong);
-  background: rgba(242, 237, 225, 0.4);
+  background: rgba(14, 16, 18, 0.4);
 }
 
 .tabs {
@@ -390,7 +387,7 @@ body {
   background: var(--bg-panel);
   border: 1.5px solid var(--border-strong);
   color: var(--ink);
-  border-radius: 2px;
+  border-radius: 8px;
   padding: 3px 6px;
   font-size: 11px;
   font-family: var(--font-mono);
@@ -432,7 +429,7 @@ body {
   color: var(--bull);
   border: 1.5px solid var(--bull);
   padding: 3px 10px;
-  border-radius: 2px;
+  border-radius: 8px;
   font-size: 10.5px;
   font-family: var(--font-mono);
   font-weight: 700;
@@ -462,7 +459,7 @@ body {
   color: var(--ink-dim);
   border: 1.5px solid var(--border-strong);
   padding: 3px 10px;
-  border-radius: 2px;
+  border-radius: 8px;
   font-size: 10px;
   font-family: var(--font-mono);
   letter-spacing: 0.02em;
@@ -491,7 +488,7 @@ body {
 .draw-rail {
   flex: 0 0 36px;
   border-right: 1.5px solid var(--border-strong);
-  background: rgba(236, 229, 211, 0.5);
+  background: rgba(255, 255, 255, 0.03);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -508,13 +505,13 @@ body {
   justify-content: center;
   border: none;
   background: transparent;
-  border-radius: 3px;
+  border-radius: 9px;
   color: var(--ink-dim);
   cursor: pointer;
 }
 
 .draw-tool-btn svg { width: 15px; height: 15px; }
-.draw-tool-btn:hover { background: rgba(38, 49, 46, 0.08); color: var(--ink); }
+.draw-tool-btn:hover { background: rgba(255, 255, 255, 0.08); color: var(--ink); }
 .draw-tool-btn.selected { background: var(--accent); color: var(--bg); }
 
 .draw-rail-divider {
@@ -541,7 +538,7 @@ body {
   font-size: 12px;
   padding: 5px 8px;
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: 8px;
   background: var(--bg-panel);
 }
 
@@ -581,14 +578,14 @@ body {
   z-index: 20;
   background: var(--bg-panel);
   border: 1.5px solid var(--border-strong);
-  border-radius: 2px;
+  border-radius: 8px;
   padding: 6px 10px;
   font-size: 11.5px;
   font-family: var(--font-mono);
   color: var(--ink);
   pointer-events: none;
   max-width: 260px;
-  box-shadow: 2px 3px 0 rgba(38, 49, 46, 0.15);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
 }
 
 .summary-text {
@@ -613,24 +610,24 @@ body {
   font-family: var(--font-mono);
   font-weight: 700;
   padding: 2px 8px;
-  border-radius: 2px;
+  border-radius: 8px;
   letter-spacing: 0.05em;
 }
 
 .position-badge.long {
-  background: rgba(46, 92, 62, 0.12);
+  background: rgba(34, 197, 94, 0.12);
   color: var(--bull);
   border: 1.5px solid var(--bull);
 }
 
 .position-badge.short {
-  background: rgba(140, 47, 31, 0.12);
+  background: rgba(239, 68, 68, 0.12);
   color: var(--bear);
   border: 1.5px solid var(--bear);
 }
 
 .position-badge.flat {
-  background: rgba(38, 49, 46, 0.06);
+  background: rgba(255, 255, 255, 0.05);
   color: var(--ink-dim);
   border: 1.5px solid var(--border-strong);
 }
@@ -677,7 +674,7 @@ body {
   background: var(--bg-panel);
   border: 1.5px solid var(--border-strong);
   color: var(--ink);
-  border-radius: 2px;
+  border-radius: 8px;
   padding: 5px 7px;
   font-size: 11.5px;
   font-family: var(--font-mono);
@@ -749,7 +746,7 @@ body {
   background: var(--bg-panel);
   border: 1.5px solid var(--border-strong);
   color: var(--ink);
-  border-radius: 2px;
+  border-radius: 8px;
   padding: 6px 8px;
   font-size: 11.5px;
   font-family: var(--font-mono);
@@ -758,7 +755,7 @@ body {
 .asset-toggle.small {
   display: flex;
   border: 1.5px solid var(--border-strong);
-  border-radius: 2px;
+  border-radius: 8px;
   overflow: hidden;
 }
 
@@ -784,7 +781,7 @@ body {
   background: var(--ink);
   color: var(--bg);
   border: 1.5px solid var(--ink);
-  border-radius: 2px;
+  border-radius: 8px;
   padding: 6px;
   font-size: 11px;
   font-family: var(--font-mono);
@@ -814,7 +811,7 @@ body {
   background: transparent;
   border: 1.5px solid var(--border-strong);
   color: var(--ink);
-  border-radius: 2px;
+  border-radius: 8px;
   padding: 5px 10px;
   font-size: 11px;
   font-family: var(--font-mono);
@@ -837,7 +834,7 @@ body {
 .auth-modal-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(38, 49, 46, 0.45);
+  background: rgba(0, 0, 0, 0.6);
 }
 
 .auth-modal-box {
@@ -846,7 +843,7 @@ body {
   width: min(340px, 90vw);
   background: var(--bg);
   border: 1.5px solid var(--border-strong);
-  border-radius: 6px;
+  border-radius: 10px;
   padding: 22px 20px;
 }
 
@@ -888,7 +885,7 @@ body {
   background: var(--bg-panel);
   border: 1.5px solid var(--border-strong);
   color: var(--ink);
-  border-radius: 2px;
+  border-radius: 8px;
   padding: 7px 8px;
   font-size: 12.5px;
 }
@@ -898,7 +895,7 @@ body {
   background: var(--accent);
   color: var(--bg);
   border: 1.5px solid var(--accent);
-  border-radius: 2px;
+  border-radius: 8px;
   padding: 8px;
   font-size: 11px;
   font-family: var(--font-mono);
@@ -941,7 +938,7 @@ body {
   background: var(--accent);
   color: var(--bg);
   border: 1.5px solid var(--accent);
-  border-radius: 2px;
+  border-radius: 8px;
   padding: 8px 14px;
   font-size: 11px;
   font-family: var(--font-mono);
@@ -953,7 +950,7 @@ body {
 .telegram-setup {
   background: var(--bg-panel);
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: 8px;
   padding: 10px;
   margin-bottom: 12px;
 }
@@ -971,7 +968,7 @@ body {
   background: var(--bg);
   border: 1.5px solid var(--border-strong);
   color: var(--ink);
-  border-radius: 2px;
+  border-radius: 8px;
   padding: 6px 8px;
   font-size: 11.5px;
 }
@@ -980,7 +977,7 @@ body {
   background: var(--ink);
   color: var(--bg);
   border: 1.5px solid var(--ink);
-  border-radius: 2px;
+  border-radius: 8px;
   padding: 5px 10px;
   font-size: 10.5px;
   font-family: var(--font-mono);
@@ -993,7 +990,7 @@ body {
   font-size: 10px;
   background: var(--bg);
   padding: 1px 4px;
-  border-radius: 2px;
+  border-radius: 8px;
 }
 
 .watchlist-cards {
@@ -1007,7 +1004,7 @@ body {
 
 .tick-card {
   border: 1.5px solid var(--border);
-  border-radius: 3px;
+  border-radius: 9px;
   background: var(--bg);
   overflow: hidden;
 }
@@ -1083,7 +1080,7 @@ body {
   font-family: inherit;
   font-size: 11px;
   padding: 2px 4px;
-  border-radius: 4px;
+  border-radius: 8px;
   border: 1px solid var(--border-strong);
   background: var(--bg-panel);
   color: var(--ink);
@@ -1115,6 +1112,156 @@ body {
 }
 
 .wl-toggle.on .knob { left: 16px; }
+
+.wl-onclose-check {
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 6px 9px;
+  background: var(--bg-panel);
+}
+
+.wl-close-badge {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  background: rgba(224, 200, 122, 0.1);
+  border-radius: 4px;
+  padding: 2px 5px;
+  flex-shrink: 0;
+}
+
+.wl-custom-badge {
+  color: var(--accent);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.wl-onclose-row {
+  padding-bottom: 6px;
+  margin-bottom: 2px;
+  border-bottom: 1px dashed var(--border);
+}
+
+.strat-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.strat-gear {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  color: var(--ink-dim);
+  cursor: pointer;
+  padding: 0;
+}
+
+.strat-gear svg { width: 12px; height: 12px; }
+
+.strat-gear:hover { background: rgba(255, 255, 255, 0.06); color: var(--ink); }
+
+.strat-gear.active {
+  background: rgba(224, 200, 122, 0.12);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.strat-params-inline {
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  margin: -2px 0 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.strat-params-inline.hidden { display: none; }
+
+.param-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.param-label {
+  font-size: 11px;
+  color: var(--ink-dim);
+  flex: 1;
+  min-width: 0;
+}
+
+.param-input,
+.param-select {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  padding: 3px 6px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--ink);
+  width: 70px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.param-select { width: auto; text-align: left; }
+
+.param-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--ink-dim);
+  cursor: pointer;
+}
+
+.param-check input { accent-color: var(--accent); }
+
+.param-actions {
+  display: flex;
+  gap: 6px;
+  padding-top: 4px;
+  border-top: 1px dashed var(--border);
+  margin-top: 2px;
+}
+
+.param-btn-reset {
+  font-size: 10px;
+  color: var(--ink-dim);
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 5px 10px;
+  cursor: pointer;
+  font-family: var(--font-body);
+}
+
+.param-btn-save {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--bg);
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 5px 10px;
+  cursor: pointer;
+  margin-left: auto;
+  font-family: var(--font-body);
+}
 
 .wl-remove {
   background: transparent;
@@ -1160,7 +1307,7 @@ body {
 .backtest-stats .stat {
   background: var(--bg-panel);
   border: 1.5px solid var(--border);
-  border-radius: 2px;
+  border-radius: 8px;
   padding: 5px 7px;
 }
 
@@ -1185,7 +1332,7 @@ body {
 .equity-chart {
   height: 90px;
   border: 1.5px solid var(--border-strong);
-  border-radius: 2px;
+  border-radius: 8px;
   overflow: hidden;
 }
 
@@ -1213,7 +1360,7 @@ body {
 
 .params-form fieldset {
   border: 1.5px solid var(--border-strong);
-  border-radius: 2px;
+  border-radius: 8px;
   padding: 8px;
   display: flex;
   flex-direction: column;
@@ -1243,7 +1390,7 @@ body {
   background: var(--bg-panel);
   border: 1.5px solid var(--border-strong);
   color: var(--ink);
-  border-radius: 2px;
+  border-radius: 8px;
   padding: 3px 5px;
   font-size: 11px;
   font-family: var(--font-mono);
@@ -1259,7 +1406,7 @@ body {
   background: var(--ink);
   color: var(--bg);
   border: 1.5px solid var(--ink);
-  border-radius: 2px;
+  border-radius: 8px;
   padding: 7px;
   font-size: 11px;
   font-family: var(--font-mono);
@@ -1298,7 +1445,7 @@ body {
   background: var(--bg-panel);
   border: 1.5px solid var(--border);
   border-left: 3px solid var(--stamp);
-  border-radius: 2px;
+  border-radius: 8px;
   padding: 6px 8px;
   font-size: 11.5px;
   font-family: var(--font-mono);
@@ -1318,7 +1465,7 @@ body {
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--bull);
-  background: rgba(31, 122, 68, 0.1);
+  background: rgba(34, 197, 94, 0.1);
   border: 1px solid var(--bull);
   border-radius: 100px;
   padding: 2px 8px;
@@ -1328,7 +1475,7 @@ body {
 
 .balance-acct {
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: 8px;
   margin-bottom: 12px;
   overflow: hidden;
 }
@@ -1374,7 +1521,7 @@ body {
   color: var(--ink-dim);
   padding: 8px 16px;
   border-top: 1.5px solid var(--border-strong);
-  background: rgba(242, 237, 225, 0.92);
+  background: rgba(14, 16, 18, 0.92);
 }
 
 /* ---- Script Pine panel ---- */
@@ -1386,7 +1533,7 @@ body {
   background: var(--bg-panel);
   border: 1.5px solid var(--border-strong);
   color: var(--ink);
-  border-radius: 2px;
+  border-radius: 8px;
   padding: 6px 8px;
   font-size: 11.5px;
   font-family: var(--font-mono);
@@ -1406,7 +1553,7 @@ body {
   background: var(--bg-panel);
   border: 1.5px solid var(--border-strong);
   color: var(--ink);
-  border-radius: 2px;
+  border-radius: 8px;
   padding: 6px 8px;
   font-size: 11.5px;
   font-family: var(--font-mono);
@@ -1421,7 +1568,7 @@ body {
 
 .pine-editor {
   border: 1.5px solid var(--border-strong);
-  border-radius: 2px;
+  border-radius: 8px;
   overflow: hidden;
 }
 
@@ -1435,14 +1582,14 @@ body {
 }
 
 .pine-editor .CodeMirror-gutters {
-  background: rgba(38, 49, 46, 0.06);
+  background: rgba(255, 255, 255, 0.04);
   border-right: 1px solid var(--border);
   color: var(--ink-dim);
 }
 
 .pine-editor .CodeMirror-cursor { border-left: 1.5px solid var(--accent); }
-.pine-editor .CodeMirror-selected { background: rgba(31, 78, 107, 0.18); }
-.pine-editor .CodeMirror-activeline-background { background: rgba(138, 109, 59, 0.08); }
+.pine-editor .CodeMirror-selected { background: rgba(224, 200, 122, 0.18); }
+.pine-editor .CodeMirror-activeline-background { background: rgba(224, 200, 122, 0.06); }
 
 .pine-actions {
   display: flex;
@@ -1456,7 +1603,7 @@ body {
   background: var(--ink);
   color: var(--bg);
   border: 1.5px solid var(--ink);
-  border-radius: 2px;
+  border-radius: 8px;
   padding: 7px 6px;
   font-size: 10.5px;
   font-family: var(--font-mono);
@@ -1506,18 +1653,6 @@ body {
 
 @media (max-width: 760px) {
   html, body { height: 100%; overflow: hidden; }
-
-  /* The millimeter-paper background reads as a technical drawing, not a
-     modern trading app, when it's this visible on a small screen with
-     mostly-empty panels — TradingView's own mobile app uses a near-flat
-     background with barely-there gridlines. Mobile keeps the same paper
-     hue (still "our" palette) but drops the layered fine-grid pattern for
-     one faint line every 32px. */
-  body {
-    background-image:
-      repeating-linear-gradient(to right, rgba(127, 148, 136, 0.09) 0, rgba(127, 148, 136, 0.09) 0.6px, transparent 0.6px, transparent 32px),
-      repeating-linear-gradient(to bottom, rgba(127, 148, 136, 0.09) 0, rgba(127, 148, 136, 0.09) 0.6px, transparent 0.6px, transparent 32px);
-  }
 
   /* chart-settings-group (timeframe/strategy/log) is relocated into the
      Livelli drawer by JS on this breakpoint — the toolbar carries only the
@@ -1582,7 +1717,7 @@ body {
     border: 1.5px solid var(--border-strong);
     border-bottom: none;
     border-radius: 10px 10px 0 0;
-    box-shadow: 0 -6px 18px rgba(38, 49, 46, 0.18);
+    box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.5);
     opacity: 0;
     visibility: hidden;
     transition: opacity 0.18s ease, visibility 0s linear 0.18s;
@@ -1604,7 +1739,7 @@ body {
     position: fixed;
     inset: 0;
     bottom: 52px;
-    background: rgba(38, 49, 46, 0.35);
+    background: rgba(0, 0, 0, 0.55);
     z-index: 35;
   }
   .mobile-drawer-backdrop.hidden { display: none; }
@@ -1628,10 +1763,10 @@ body {
   }
 
   .drawer-close-btn {
-    background: rgba(242, 237, 225, 0.16);
+    background: rgba(14, 16, 18, 0.12);
     color: var(--bg);
-    border: 1.5px solid rgba(242, 237, 225, 0.5);
-    border-radius: 4px;
+    border: 1.5px solid rgba(14, 16, 18, 0.4);
+    border-radius: 8px;
     padding: 6px 10px;
     font-family: var(--font-mono);
     font-size: 11px;

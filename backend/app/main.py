@@ -163,11 +163,13 @@ async def _watchlist_alert_loop() -> None:
                 df = await fetch_ohlcv_canonical(
                     provider, entry.symbol, entry.interval, settings.candles_per_timeframe
                 )
-                df = _drop_unclosed_candle(df, entry.interval)
+                if entry.on_close:
+                    df = _drop_unclosed_candle(df, entry.interval)
                 if df.empty:
                     continue
                 for strategy_name in entry.strategies:
-                    strategy = build_strategy_state(strategy_name, df)
+                    params = entry.strategy_params.get(strategy_name) or None
+                    strategy = build_strategy_state(strategy_name, df, params=params)
                     _dispatch_telegram_alerts(owner.telegram_chat_id, entry.symbol, entry.interval, strategy)
             except Exception:
                 logger.exception("Watchlist check failed for %s [%s]", entry.symbol, entry.interval)
@@ -582,6 +584,7 @@ class WatchlistAddRequest(BaseModel):
     asset_type: AssetType
     exchange: CryptoExchange = "mexc"
     interval: IntervalChoice = "1d"
+    on_close: bool = True
 
 
 @app.post("/api/watchlist", response_model=WatchlistEntry)
@@ -606,7 +609,9 @@ async def add_watchlist_entry(
     if probe.empty:
         raise HTTPException(status_code=400, detail="Ticker non trovato su questo exchange.")
 
-    return watchlist_store.add_entry(user.id, symbol, req.asset_type, exchange=req.exchange, interval=req.interval)
+    return watchlist_store.add_entry(
+        user.id, symbol, req.asset_type, exchange=req.exchange, interval=req.interval, on_close=req.on_close
+    )
 
 
 class WatchlistIntervalRequest(BaseModel):
@@ -655,6 +660,33 @@ async def toggle_watchlist_strategy(
             )
         )
     return entry
+
+
+class WatchlistOnCloseRequest(BaseModel):
+    on_close: bool
+
+
+@app.patch("/api/watchlist/{entry_id}/on_close", response_model=WatchlistEntry)
+async def set_watchlist_on_close(
+    entry_id: str, req: WatchlistOnCloseRequest, user: User = Depends(auth.get_current_user)
+) -> WatchlistEntry:
+    _owned_entry_or_404(entry_id, user)
+    return watchlist_store.set_on_close(entry_id, req.on_close)
+
+
+class WatchlistStrategyParamsRequest(BaseModel):
+    strategy_name: str
+    params: dict = {}  # {} resets this strategy back to its global defaults
+
+
+@app.patch("/api/watchlist/{entry_id}/strategy_params", response_model=WatchlistEntry)
+async def set_watchlist_strategy_params(
+    entry_id: str, req: WatchlistStrategyParamsRequest, user: User = Depends(auth.get_current_user)
+) -> WatchlistEntry:
+    if req.strategy_name not in AVAILABLE_STRATEGIES:
+        raise HTTPException(status_code=400, detail=f"Strategia sconosciuta: {req.strategy_name}")
+    _owned_entry_or_404(entry_id, user)
+    return watchlist_store.set_strategy_params(entry_id, req.strategy_name, req.params)
 
 
 @app.get("/api/analyze", response_model=AnalysisResponse)

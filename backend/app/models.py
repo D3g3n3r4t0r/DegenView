@@ -103,6 +103,8 @@ class WatchlistEntry(BaseModel):
     exchange: CryptoExchange = "mexc"
     strategies: list[str] = []  # which strategies fire Telegram alerts for this ticker
     interval: IntervalChoice = "1d"  # which timeframe those strategies are evaluated on
+    on_close: bool = True  # False = also evaluate the still-forming candle (faster, but a signal can vanish before the bar closes)
+    strategy_params: dict[str, dict] = {}  # per-strategy parameter overrides, keyed by strategy name; missing/empty = use that strategy's defaults
 
 
 class ConfluenceZone(BaseModel):

@@ -4,34 +4,72 @@
   // Millimetrata Blueprint palette — every mark on the chart stays a tonal
   // variation of ink/accent/stamp/bull/bear, no arbitrary bright hues.
   const COLORS = {
-    paperBg: "#f2ede1",
-    ink: "#26312e",
-    inkDim: "#5c675f",
-    gridMinor: "rgba(168, 184, 174, 0.45)",
-    gridMajor: "rgba(127, 148, 136, 0.55)",
-    bull: "#1f7a44",
-    bear: "#8c2f1f",
-    accent: "#1f4e6b",
-    stamp: "#8a6d3b",
-    bullFill: "rgba(31, 122, 68, 0.16)",
-    bullBorder: "rgba(31, 122, 68, 0.9)",
-    bearFill: "rgba(140, 47, 31, 0.14)",
-    bearBorder: "rgba(140, 47, 31, 0.85)",
-    confluenceFill: "rgba(138, 109, 59, 0.16)",
-    confluenceBorder: "rgba(138, 109, 59, 0.85)",
-    ema20: "#1f4e6b",
-    ema50: "#8a6d3b",
-    bb: "#7f9488",
-    vwap: "#5c675f",
-    rsi: "#1f4e6b",
-    macd: "#1f4e6b",
-    macdSignal: "#8a6d3b",
+    paperBg: "#0e1012",
+    ink: "#e6e8ee",
+    inkDim: "#82868f",
+    gridMinor: "rgba(255, 255, 255, 0.06)",
+    gridMajor: "rgba(255, 255, 255, 0.1)",
+    bull: "#22c55e",
+    bear: "#ef4444",
+    accent: "#e0c87a",
+    stamp: "#c9ad6a",
+    bullFill: "rgba(34, 197, 94, 0.16)",
+    bullBorder: "rgba(34, 197, 94, 0.9)",
+    bearFill: "rgba(239, 68, 68, 0.14)",
+    bearBorder: "rgba(239, 68, 68, 0.85)",
+    confluenceFill: "rgba(224, 200, 122, 0.16)",
+    confluenceBorder: "rgba(224, 200, 122, 0.85)",
+    ema20: "#6b8afd",
+    ema50: "#e0c87a",
+    bb: "#82868f",
+    vwap: "#82868f",
+    rsi: "#6b8afd",
+    macd: "#6b8afd",
+    macdSignal: "#e0c87a",
   };
 
   const TF_LABELS = { htf: "HTF", mtf: "MTF", ltf: "LTF" };
   const CANONICAL_INTERVALS = ["1m", "5m", "15m", "30m", "1h", "4h", "1d", "2d", "3d", "5d", "1w", "1M"];
   const DEFAULT_INTERVALS = { htf: "1d", mtf: "1h", ltf: "15m" };
   const DEFAULT_PRIMARY_INTERVAL = "15m";
+
+  // Per-strategy parameter fields for the watchlist's inline "personalizza"
+  // panel — mirrors each strategy's own default-params dict on the backend
+  // (app/analysis/strategies.py) so an alert can override just the params
+  // that strategy actually reads. Keyed by the exact strategy name returned
+  // from /api/strategies.
+  const STRATEGY_PARAM_FIELDS = {
+    "Lorenzo (trend-follower)": [
+      { key: "average", label: "Tipo media", type: "select", options: ["EMA", "SMA"], default: "EMA" },
+      { key: "len", label: "Lunghezza media", type: "number", min: 2, default: 130 },
+      { key: "slopeFlen", label: "Slope veloce", type: "number", min: 1, default: 7 },
+      { key: "slopeSlen", label: "Slope lenta", type: "number", min: 1, default: 27 },
+      { key: "trendfilter", label: "Filtro trend", type: "checkbox", default: true },
+      { key: "trendfilterperiod", label: "Periodo trend", type: "number", min: 2, default: 268 },
+      { key: "trendfiltertype", label: "Tipo trend", type: "select", options: ["EMA", "SMA"], default: "EMA" },
+      { key: "volatilityfilter", label: "Filtro volatilità", type: "checkbox", default: true },
+      { key: "volatilitystdevlength", label: "Stdev lunghezza", type: "number", min: 1, default: 16 },
+      { key: "volatilitystdevmalength", label: "Stdev media lunghezza", type: "number", min: 1, default: 44 },
+    ],
+    "Accumulo / Distribuzione (long-term)": [
+      { key: "enable_divergence", label: "Divergenza RSI su swing", type: "checkbox", default: true },
+      { key: "enable_contraction", label: "Breakout da contrazione volatilità", type: "checkbox", default: true },
+      { key: "enable_range_bounce", label: "Rimbalzo su supporto/resistenza range", type: "checkbox", default: true },
+      { key: "swing_length", label: "Lunghezza swing", type: "number", min: 1, default: 8 },
+      { key: "rsi_length", label: "Lunghezza RSI", type: "number", min: 1, default: 14 },
+      { key: "rsi_oversold", label: "RSI ipervenduto", type: "number", min: 0, max: 100, default: 40 },
+      { key: "rsi_overbought", label: "RSI ipercomprato", type: "number", min: 0, max: 100, default: 60 },
+      { key: "trend_filter", label: "Filtro trend", type: "checkbox", default: true },
+      { key: "trend_ema_length", label: "EMA trend", type: "number", min: 1, default: 50 },
+    ],
+    "Gabriele (RSI+BB reversal)": [
+      { key: "rsi_length", label: "Lunghezza RSI", type: "number", min: 1, default: 14 },
+      { key: "bb_length", label: "Lunghezza Bollinger", type: "number", min: 1, default: 20 },
+      { key: "bb_mult", label: "Moltiplicatore Bollinger", type: "number", min: 0, step: 0.1, default: 2.0 },
+      { key: "rsi_oversold", label: "RSI ipervenduto", type: "number", min: 0, max: 100, default: 28 },
+      { key: "rsi_overbought", label: "RSI ipercomprato", type: "number", min: 0, max: 100, default: 72 },
+    ],
+  };
 
   // One dropdown is all the user picks — HTF/MTF for the multi-timeframe SMC
   // confluence engine are derived automatically from it (two and four steps
@@ -296,7 +334,7 @@
       target.useBitmapCoordinateSpace((scope) => {
         if (this._p.x === null || this._p.y === null || !this._text) return;
         const ctx = scope.context;
-        ctx.font = `${11 * scope.verticalPixelRatio}px "Space Mono", monospace`;
+        ctx.font = `${11 * scope.verticalPixelRatio}px "JetBrains Mono", monospace`;
         ctx.fillStyle = this._color;
         ctx.textBaseline = "bottom";
         ctx.fillText(this._text, this._p.x * scope.horizontalPixelRatio + 5, this._p.y * scope.verticalPixelRatio - 5);
@@ -365,7 +403,7 @@
         const xa = Math.min(this._x1, this._x2) * scope.horizontalPixelRatio;
         const xb = Math.max(this._x1, this._x2) * scope.horizontalPixelRatio;
         ctx.lineWidth = Math.max(1, scope.verticalPixelRatio);
-        ctx.font = `${10 * scope.verticalPixelRatio}px "Space Mono", monospace`;
+        ctx.font = `${10 * scope.verticalPixelRatio}px "JetBrains Mono", monospace`;
         this._levels.forEach(({ y, label }) => {
           if (y === null) return;
           const yy = y * scope.verticalPixelRatio;
@@ -701,6 +739,110 @@
     });
   }
 
+  // Inline "personalizza parametri" panel shown under one strategy row in a
+  // watchlist card — pre-filled with this ticker's override (if any) or the
+  // strategy's own defaults, so the field always shows a concrete value.
+  // Hidden by default; the row's gear button toggles it open.
+  function buildStrategyParamsPanel(entry, strategyName, fields, customParams) {
+    const panel = document.createElement("div");
+    panel.className = "strat-params-inline hidden";
+    panel.addEventListener("click", (e) => e.stopPropagation());
+
+    const inputs = {};
+    fields.forEach((field) => {
+      const row = document.createElement("div");
+      row.className = "param-row";
+      const value = customParams && field.key in customParams ? customParams[field.key] : field.default;
+
+      if (field.type === "checkbox") {
+        const label = document.createElement("label");
+        label.className = "param-check";
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.checked = Boolean(value);
+        label.appendChild(input);
+        label.appendChild(document.createTextNode(field.label));
+        row.appendChild(label);
+        inputs[field.key] = input;
+      } else {
+        const label = document.createElement("span");
+        label.className = "param-label";
+        label.textContent = field.label;
+        row.appendChild(label);
+        let input;
+        if (field.type === "select") {
+          input = document.createElement("select");
+          input.className = "param-select";
+          field.options.forEach((opt) => {
+            const o = document.createElement("option");
+            o.value = opt;
+            o.textContent = opt;
+            if (opt === value) o.selected = true;
+            input.appendChild(o);
+          });
+        } else {
+          input = document.createElement("input");
+          input.type = "number";
+          input.className = "param-input";
+          if (field.min !== undefined) input.min = field.min;
+          if (field.max !== undefined) input.max = field.max;
+          input.step = field.step || 1;
+          input.value = value;
+        }
+        row.appendChild(input);
+        inputs[field.key] = input;
+      }
+      panel.appendChild(row);
+    });
+
+    const actions = document.createElement("div");
+    actions.className = "param-actions";
+
+    const resetBtn = document.createElement("button");
+    resetBtn.type = "button";
+    resetBtn.className = "param-btn-reset";
+    resetBtn.textContent = "Reset default";
+    resetBtn.addEventListener("click", async () => {
+      try {
+        await fetch(`/api/watchlist/${entry.id}/strategy_params`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ strategy_name: strategyName, params: {} }),
+        });
+      } finally {
+        loadWatchlist();
+      }
+    });
+
+    const saveBtn = document.createElement("button");
+    saveBtn.type = "button";
+    saveBtn.className = "param-btn-save";
+    saveBtn.textContent = "Salva";
+    saveBtn.addEventListener("click", async () => {
+      const params = {};
+      fields.forEach((field) => {
+        const input = inputs[field.key];
+        if (field.type === "checkbox") params[field.key] = input.checked;
+        else if (field.type === "select") params[field.key] = input.value;
+        else params[field.key] = parseFloat(input.value);
+      });
+      try {
+        await fetch(`/api/watchlist/${entry.id}/strategy_params`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ strategy_name: strategyName, params }),
+        });
+      } finally {
+        loadWatchlist();
+      }
+    });
+
+    actions.appendChild(resetBtn);
+    actions.appendChild(saveBtn);
+    panel.appendChild(actions);
+    return panel;
+  }
+
   async function loadWatchlist() {
     let entries = [];
     try {
@@ -729,8 +871,11 @@
       const head = document.createElement("div");
       head.className = "tick-card-head";
       const activeCount = entry.strategies.length;
+      const hasCustomParams = Object.keys(entry.strategy_params || {}).length > 0;
       head.innerHTML = `
         <span><span class="wl-symbol">${entry.symbol}</span><span class="wl-exch">${entry.asset_type === "crypto" ? entry.exchange.toUpperCase() : "Azioni"} · ${entry.interval}</span></span>
+        ${entry.on_close ? '<span class="wl-close-badge" title="Alert alla chiusura della candela">CLOSE</span>' : ""}
+        ${hasCustomParams ? '<span class="wl-custom-badge" title="Uno o più parametri personalizzati">★</span>' : ""}
         <span class="wl-summary">${activeCount ? `${activeCount} attiv${activeCount === 1 ? "a" : "e"}` : "nessuna attiva"}</span>
         <span class="wl-caret">▾</span>
       `;
@@ -771,12 +916,62 @@
       intervalRow.appendChild(intervalSelect);
       body.appendChild(intervalRow);
 
+      // Applies to the whole ticker (not per-strategy) — matches the
+      // background scanner in main.py, which drops the still-forming
+      // candle for this entry only when on_close is true.
+      const onCloseRow = document.createElement("div");
+      onCloseRow.className = "strat-row wl-onclose-row";
+      const onCloseLabel = document.createElement("span");
+      onCloseLabel.textContent = "Alla chiusura della candela";
+      const onCloseToggle = document.createElement("button");
+      onCloseToggle.type = "button";
+      onCloseToggle.className = "wl-toggle" + (entry.on_close ? " on" : "");
+      onCloseToggle.title = "Se attivo, l'alert scatta solo quando la candela chiude — niente falsi segnali intra-bar";
+      onCloseToggle.innerHTML = '<span class="knob"></span>';
+      onCloseToggle.addEventListener("click", async () => {
+        const nextOn = !onCloseToggle.classList.contains("on");
+        onCloseToggle.classList.toggle("on", nextOn);
+        try {
+          await fetch(`/api/watchlist/${entry.id}/on_close`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ on_close: nextOn }),
+          });
+        } finally {
+          loadWatchlist();
+        }
+      });
+      onCloseRow.appendChild(onCloseLabel);
+      onCloseRow.appendChild(onCloseToggle);
+      body.appendChild(onCloseRow);
+
       state.availableStrategies.forEach((name) => {
         const isOn = entry.strategies.includes(name);
+        const customParams = (entry.strategy_params || {})[name];
+        const fields = STRATEGY_PARAM_FIELDS[name] || [];
+
         const row = document.createElement("div");
         row.className = "strat-row";
         const label = document.createElement("span");
+        label.className = "strat-name";
         label.textContent = name;
+        row.appendChild(label);
+
+        let paramsPanel = null;
+        if (fields.length) {
+          const gearBtn = document.createElement("button");
+          gearBtn.type = "button";
+          gearBtn.className = "strat-gear" + (customParams ? " active" : "");
+          gearBtn.title = "Parametri di questa strategia per questo ticker";
+          gearBtn.innerHTML =
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
+          gearBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            if (paramsPanel) paramsPanel.classList.toggle("hidden");
+          });
+          row.appendChild(gearBtn);
+        }
+
         const toggle = document.createElement("button");
         toggle.type = "button";
         toggle.className = "wl-toggle" + (isOn ? " on" : "");
@@ -794,9 +989,13 @@
             loadWatchlist();
           }
         });
-        row.appendChild(label);
         row.appendChild(toggle);
         body.appendChild(row);
+
+        if (fields.length) {
+          paramsPanel = buildStrategyParamsPanel(entry, name, fields, customParams);
+          body.appendChild(paramsPanel);
+        }
       });
 
       const removeBtn = document.createElement("button");
@@ -826,9 +1025,9 @@
     // dense gridlines that read as "considered" on a wide desktop screen
     // just look busy/dated on a phone. Same hue, much lower opacity.
     const isMobile = window.matchMedia("(max-width: 760px)").matches;
-    const chartGridColor = isMobile ? "rgba(168, 184, 174, 0.18)" : COLORS.gridMinor;
+    const chartGridColor = isMobile ? "rgba(255, 255, 255, 0.035)" : COLORS.gridMinor;
     const baseOptions = {
-      layout: { background: { color: COLORS.paperBg }, textColor: COLORS.inkDim, fontFamily: "'Space Mono', monospace" },
+      layout: { background: { color: COLORS.paperBg }, textColor: COLORS.inkDim, fontFamily: "'JetBrains Mono', monospace" },
       grid: { vertLines: { color: chartGridColor }, horzLines: { color: chartGridColor } },
       rightPriceScale: { borderColor: COLORS.gridMajor },
       timeScale: { borderColor: COLORS.gridMajor, timeVisible: true, secondsVisible: false },
@@ -861,7 +1060,7 @@
     macdChart = LightweightCharts.createChart(macdContainer, baseOptions);
     macdLineSeries = macdChart.addLineSeries({ color: COLORS.macd, lineWidth: 2 });
     macdSignalSeries = macdChart.addLineSeries({ color: COLORS.macdSignal, lineWidth: 1 });
-    macdHistSeries = macdChart.addHistogramSeries({ color: "rgba(38, 49, 46, 0.35)" });
+    macdHistSeries = macdChart.addHistogramSeries({ color: "rgba(255, 255, 255, 0.28)" });
     observeResize(macdContainer, macdChart);
 
     const stochContainer = el("stoch-chart");
@@ -1030,7 +1229,7 @@
 
     bands.forEach((b) => {
       if (b.index % 2 === 0) return; // shade every other day only
-      const prim = new SessionBandPrimitive({ time: b.start }, { time: b.end }, "rgba(38, 49, 46, 0.035)");
+      const prim = new SessionBandPrimitive({ time: b.start }, { time: b.end }, "rgba(255, 255, 255, 0.025)");
       candleSeries.attachPrimitive(prim);
       overlays.primitives.push({ series: candleSeries, primitive: prim });
     });
@@ -2717,6 +2916,7 @@
           asset_type: state.watchlistAssetType,
           exchange: el("watchlist-exchange").value,
           interval: el("watchlist-interval").value,
+          on_close: el("watchlist-onclose").checked,
         }),
       });
       symbolInput.value = "";
