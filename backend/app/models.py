@@ -43,6 +43,14 @@ class IndicatorSeries(BaseModel):
     values: list[float | None]
 
 
+class FibZone(BaseModel):
+    kind: Literal["retracement", "extension"]
+    direction: Literal["bullish", "bearish"]
+    anchor_time: int  # where the level lines start being drawn from (leg start for a retracement, the C pivot for an extension)
+    levels: dict[str, float]  # ratio (as string, e.g. "0.618") -> price
+    label: str
+
+
 class TimeframeAnalysis(BaseModel):
     interval: str
     candles: list[Candle]
@@ -50,6 +58,7 @@ class TimeframeAnalysis(BaseModel):
     indicators: list[IndicatorSeries]
     bias: Literal["bullish", "bearish", "neutral"]
     dealing_range: tuple[float, float] | None = None
+    fib_zones: list[FibZone] = []
 
 
 class StrategySignal(BaseModel):
