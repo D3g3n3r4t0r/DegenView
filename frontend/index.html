@@ -65,13 +65,8 @@
 
     <div id="levels-panel" class="levels-panel">
       <div class="drawer-header">
-        <span>Livelli &amp; Indicatori</span>
+        <span>Livelli</span>
         <button type="button" class="drawer-close-btn" data-close-drawer>✕ Chiudi</button>
-      </div>
-      <div class="panel">
-        <h3>Disegni sul grafico</h3>
-        <p class="panel-hint">Usa gli strumenti nella colonna a sinistra del grafico. Persistono per questo ticker anche dopo un ricaricamento della pagina (salvati in questo browser).</p>
-        <ul id="draw-list" class="draw-list"></ul>
       </div>
       <div class="panel">
         <h3>Struttura &amp; Liquidità</h3>
@@ -85,12 +80,18 @@
       </div>
       <div class="panel">
         <h3>Indicatori</h3>
+        <label class="layer-toggle"><input type="checkbox" id="strategy-markers-toggle" checked /> Marker strategia sul grafico</label>
         <label class="layer-toggle"><input type="checkbox" data-layer="ema" checked /> EMA 20 / 50</label>
         <label class="layer-toggle"><input type="checkbox" data-layer="bbands" /> Bollinger Bands</label>
         <label class="layer-toggle"><input type="checkbox" data-layer="vwap" /> VWAP</label>
         <label class="layer-toggle"><input type="checkbox" data-layer="rsi" /> RSI (14)</label>
         <label class="layer-toggle"><input type="checkbox" data-layer="macd" /> MACD</label>
         <label class="layer-toggle"><input type="checkbox" data-layer="stoch" /> Stocastico (14,3)</label>
+      </div>
+      <div class="panel">
+        <h3>Disegni sul grafico</h3>
+        <p class="panel-hint">Usa gli strumenti nella colonna a sinistra del grafico (o il pulsante matita sul grafico, su mobile). Persistono per questo ticker anche dopo un ricaricamento della pagina (salvati in questo browser).</p>
+        <ul id="draw-list" class="draw-list"></ul>
       </div>
     </div>
 
@@ -201,17 +202,11 @@
             <h3>Strategia</h3>
             <span id="strategy-position-badge" class="position-badge flat">FLAT</span>
           </div>
-          <label class="layer-toggle"><input type="checkbox" id="strategy-markers-toggle" checked /> Marker sul grafico</label>
           <p class="marker-legend">
             <span class="legend-item"><span class="legend-swatch bull">▲</span>Ingresso long</span>
             <span class="legend-item"><span class="legend-swatch bear">▼</span>Ingresso short</span>
             <span class="legend-item"><span class="legend-swatch">●</span>Uscita</span>
             <span class="legend-item"><span class="legend-swatch stamp">◆</span>Inversione</span>
-          </p>
-          <label class="layer-toggle"><input type="checkbox" id="strategy-notify-toggle" /> Notifiche browser</label>
-          <ul id="strategy-alert-log" class="alert-log"></ul>
-          <p class="strategy-disclaimer">
-            Notifiche su una condizione tecnica definita dall'utente. Non sono raccomandazioni di investimento.
           </p>
 
           <h4 class="backtest-heading">Backtest (timeframe attivo)</h4>
@@ -262,6 +257,12 @@
       <div class="tab-content" data-tab-content="alert">
         <div class="panel">
           <h3>Alert (Telegram)</h3>
+
+          <label class="layer-toggle"><input type="checkbox" id="strategy-notify-toggle" /> Notifiche browser (strategia integrata)</label>
+          <ul id="strategy-alert-log" class="alert-log"></ul>
+          <p class="strategy-disclaimer">
+            Notifiche su una condizione tecnica definita dall'utente. Non sono raccomandazioni di investimento.
+          </p>
 
           <div id="alert-login-prompt" class="alert-login-prompt hidden">
             <p class="panel-hint">Accedi per creare e gestire i tuoi avvisi — ogni utente ha la propria lista e riceve le notifiche sul proprio Telegram.</p>
@@ -333,12 +334,49 @@
         </div>
       </div>
     </aside>
+
+    <div id="altro-panel" class="levels-panel altro-panel">
+      <div class="drawer-header">
+        <span>Altro</span>
+        <button type="button" class="drawer-close-btn" data-close-drawer>✕ Chiudi</button>
+      </div>
+      <div class="panel">
+        <div id="altro-account-slot" class="altro-account-slot"></div>
+      </div>
+      <div class="panel">
+        <h3>Strumenti</h3>
+        <button type="button" id="open-script-from-altro" class="altro-menu-item">
+          <span class="altro-menu-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 4 12 9 6"/><polyline points="15 6 20 12 15 18"/></svg>
+          </span>
+          <span class="altro-menu-text">
+            <span class="altro-menu-title">Script Pine personalizzato</span>
+            <span class="altro-menu-sub">Carica o scrivi la tua strategia</span>
+          </span>
+          <span class="altro-menu-chev">›</span>
+        </button>
+        <button type="button" id="altro-saldi-item" class="altro-menu-item hidden">
+          <span class="altro-menu-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>
+          </span>
+          <span class="altro-menu-text">
+            <span class="altro-menu-title">Saldi</span>
+            <span class="altro-menu-sub">Sola lettura — MEXC, KuCoin</span>
+          </span>
+          <span class="altro-menu-chev">›</span>
+        </button>
+      </div>
+    </div>
   </main>
 
   <div id="mobile-chart-strip" class="mobile-chart-strip hidden">
     <span id="mobile-chart-symbol" class="mobile-chart-symbol">—</span>
     <span id="mobile-chart-interval" class="mobile-chart-interval">—</span>
   </div>
+
+  <button type="button" id="mobile-draw-fab" class="mobile-draw-fab hidden" title="Strumenti di disegno">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
+  </button>
 
   <nav id="mobile-nav" class="mobile-nav">
     <button type="button" class="mobile-nav-btn active" data-mobile-target="chart">
@@ -354,12 +392,20 @@
         <path d="M3 14.5 L12 20 L21 14.5" stroke-linecap="round"/>
       </svg>Livelli
     </button>
-    <button type="button" class="mobile-nav-btn" data-mobile-target="panel">
-      <svg class="mobile-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
-        <line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2" fill="currentColor" stroke="none"/>
-        <line x1="4" y1="12" x2="20" y2="12"/><circle cx="16" cy="12" r="2" fill="currentColor" stroke="none"/>
-        <line x1="4" y1="18" x2="20" y2="18"/><circle cx="11" cy="18" r="2" fill="currentColor" stroke="none"/>
-      </svg>Pannello
+    <button type="button" class="mobile-nav-btn" data-mobile-target="strategia">
+      <svg class="mobile-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="3 17 8 11 13 14 21 6"/><polyline points="16 6 21 6 21 11"/>
+      </svg>Strategia
+    </button>
+    <button type="button" class="mobile-nav-btn" data-mobile-target="alert">
+      <svg class="mobile-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/>
+      </svg>Alert
+    </button>
+    <button type="button" class="mobile-nav-btn" data-mobile-target="altro">
+      <svg class="mobile-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+        <circle cx="5" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.6" fill="currentColor" stroke="none"/>
+      </svg>Altro
     </button>
   </nav>
   <div id="mobile-drawer-backdrop" class="mobile-drawer-backdrop hidden"></div>
