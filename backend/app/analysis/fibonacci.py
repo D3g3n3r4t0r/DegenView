@@ -6,8 +6,7 @@ levels (smc.swing_highs_lows / smc_engine.SWING_LENGTH_BY_TIMEFRAME) so a
 "swing" means the same thing here as it does for BOS/CHoCH/order blocks —
 prototyped and eyeballed against real BTC/ETH data before being wired in.
 
-Only the single most recent retracement and, when a confirmed pullback
-exists, the single most recent extension are returned — same philosophy as
+Only the single most recent leg is used — same philosophy as
 compute_dealing_range's "most recent swing low -> most recent swing high":
 older legs are no longer actionable and just clutter the chart.
 """
@@ -45,45 +44,39 @@ def compute_fib_zones(df: pd.DataFrame, timeframe_key: str) -> list[FibZone]:
     if len(pivots) < 2:
         return []
 
-    zones: list[FibZone] = []
-
     # Most recent completed leg: second-to-last pivot -> last pivot.
     a, b = pivots[-2], pivots[-1]
-    if _leg_pct(a["Level"], b["Level"]) >= MIN_LEG_PCT:
-        bullish = b["HighLow"] == 1  # ends on a high => leg went up
-        retracement_levels = {str(r): a["Level"] + (b["Level"] - a["Level"]) * r for r in RETRACEMENT_RATIOS}
-        zones.append(
-            FibZone(
-                kind="retracement",
-                direction="bullish" if bullish else "bearish",
-                anchor_time=a["ts"],
-                levels=retracement_levels,
-                label=f"Fib ritracciamento {'rialzista' if bullish else 'ribassista'}",
-            )
-        )
+    if _leg_pct(a["Level"], b["Level"]) < MIN_LEG_PCT:
+        return []
 
-        # A fib extension is the classic 3-point A-B-C projection: an impulse
-        # (A -> B) followed by a pullback that stops at C without breaking
-        # back past A, projecting where price might go if the original move
-        # resumes. B is already the latest pivot here, so there's no
-        # confirmed C after it yet — instead treat *this* leg (a -> b) as
-        # the pullback (C) off the *previous* impulse (further_a -> a),
-        # i.e. look one leg further back for A.
-        if len(pivots) >= 3:
-            further_a = pivots[-3]
-            impulse_bullish = a["HighLow"] == 1  # further_a (low) -> a (high)
-            pullback_holds = (b["Level"] > further_a["Level"]) if impulse_bullish else (b["Level"] < further_a["Level"])
-            if pullback_holds and _leg_pct(further_a["Level"], a["Level"]) >= MIN_LEG_PCT:
-                leg_size = a["Level"] - further_a["Level"]
-                ext_levels = {str(r): b["Level"] + leg_size * r for r in EXTENSION_RATIOS}
-                zones.append(
-                    FibZone(
-                        kind="extension",
-                        direction="bullish" if impulse_bullish else "bearish",
-                        anchor_time=b["ts"],
-                        levels=ext_levels,
-                        label=f"Fib estensione {'rialzista' if impulse_bullish else 'ribassista'}",
-                    )
-                )
+    bullish = b["HighLow"] == 1  # ends on a high => leg went up
+    leg_size = b["Level"] - a["Level"]
+    direction = "bullish" if bullish else "bearish"
 
-    return zones
+    retracement_levels = {str(r): a["Level"] + leg_size * r for r in RETRACEMENT_RATIOS}
+    # The extension continues *this same* leg past its 100% point (a
+    # standard 2-point "trend-based" projection) rather than anchoring on
+    # an earlier, opposite-direction leg — an earlier version of this did
+    # that (a proper 3-point A-B-C extension using the leg before this
+    # one), and it produced a downside projection sitting right next to an
+    # upside retracement, both anchored at the same swing point: two
+    # contradictory reads on the same turn, not a continuation of the move
+    # the retracement was already describing.
+    extension_levels = {str(r): a["Level"] + leg_size * r for r in EXTENSION_RATIOS}
+
+    return [
+        FibZone(
+            kind="retracement",
+            direction=direction,
+            anchor_time=a["ts"],
+            levels=retracement_levels,
+            label=f"Fib ritracciamento {'rialzista' if bullish else 'ribassista'}",
+        ),
+        FibZone(
+            kind="extension",
+            direction=direction,
+            anchor_time=b["ts"],
+            levels=extension_levels,
+            label=f"Fib estensione {'rialzista' if bullish else 'ribassista'}",
+        ),
+    ]
