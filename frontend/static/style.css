@@ -1797,15 +1797,27 @@ body {
     letter-spacing: 0.01em;
   }
 
-  .mobile-chart-interval {
+  /* Applied to the real #interval-primary <select> once relocated here —
+     a live control now, not a read-only label, so it needs its native
+     dropdown chrome stripped back down to the same pill it replaced. */
+  select.mobile-chart-interval {
+    appearance: none;
+    -webkit-appearance: none;
     font-family: var(--font-mono);
     font-size: 10px;
+    font-weight: 700;
     text-transform: uppercase;
-    color: var(--ink-dim);
+    text-align: center;
+    text-align-last: center;
+    color: var(--accent);
     background: var(--bg-panel);
     border: 1px solid var(--border-strong);
     border-radius: 100px;
-    padding: 2px 8px;
+    padding: 3px 20px 3px 10px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23e0c87a' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 5px center;
+    background-size: 11px;
   }
 
   /* Drawing tools have no home at all below 760px otherwise (.draw-rail is

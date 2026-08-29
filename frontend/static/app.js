@@ -1747,7 +1747,6 @@
       return;
     }
     el("mobile-chart-symbol").textContent = state.data.symbol;
-    el("mobile-chart-interval").textContent = el("interval-primary").value || "—";
     strip.classList.remove("hidden");
     fab.classList.toggle("hidden", !onChartScreen);
   }
@@ -3072,6 +3071,22 @@
     targetParent.appendChild(widget);
   }
 
+  // The timeframe select otherwise only lives inside the Livelli screen —
+  // reachable, but not from the chart itself, which is where "change the
+  // timeframe" actually happens. On mobile it moves into the persistent
+  // strip pinned above the bottom nav (replacing what used to be a
+  // read-only "15M" label that looked tappable but did nothing), so the one
+  // real control is visible and usable without leaving the chart. Desktop
+  // keeps it in the toolbar's chart-settings-group, same as always.
+  function relocateIntervalSelect() {
+    const select = el("interval-primary");
+    const isMobile = window.matchMedia("(max-width: 760px)").matches;
+    const targetParent = isMobile ? el("mobile-chart-interval-slot") : document.querySelector("#chart-settings-group .toolbar-intervals");
+    if (select.parentElement === targetParent) return;
+    select.classList.toggle("mobile-chart-interval", isMobile);
+    targetParent.appendChild(select);
+  }
+
   // Runs once, either right away (already logged in) or right after the
   // login gate clears — everything that fetches real data or auto-loads a
   // chart waits behind auth so nothing renders before the page unlocks.
@@ -3081,6 +3096,7 @@
     bindPineUI();
     loadPineScripts();
     relocateChartSettings();
+    relocateIntervalSelect();
     // active-strategy-select must be populated before the auto-load below
     // reads its value, or the request goes out with an empty strategy_name.
     await populateStrategySelects();
@@ -3117,6 +3133,7 @@
       relocateTimer = setTimeout(() => {
         relocateChartSettings();
         relocateAuthWidget();
+        relocateIntervalSelect();
       }, 150);
     });
   });
