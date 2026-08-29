@@ -66,6 +66,7 @@ def add_entry(
     asset_type: AssetType,
     exchange: CryptoExchange = "mexc",
     interval: IntervalChoice = "1d",
+    on_close: bool = True,
 ) -> WatchlistEntry:
     """Upsert: adding a ticker that's already tracked by this owner just
     returns the existing entry (with whatever strategies/interval are
@@ -88,6 +89,7 @@ def add_entry(
         exchange=exchange,
         strategies=[],
         interval=interval,
+        on_close=on_close,
     )
     _entries[entry.id] = entry
     _save()
@@ -121,6 +123,32 @@ def set_strategy_enabled(entry_id: str, strategy_name: str, enabled: bool) -> Wa
     else:
         return entry  # no-op, already in the requested state
     updated = entry.model_copy(update={"strategies": strategies})
+    _entries[entry_id] = updated
+    _save()
+    return updated
+
+
+def set_on_close(entry_id: str, on_close: bool) -> WatchlistEntry | None:
+    entry = _entries.get(entry_id)
+    if entry is None:
+        return None
+    updated = entry.model_copy(update={"on_close": on_close})
+    _entries[entry_id] = updated
+    _save()
+    return updated
+
+
+def set_strategy_params(entry_id: str, strategy_name: str, params: dict | None) -> WatchlistEntry | None:
+    """params=None (or {}) resets this strategy back to its global defaults."""
+    entry = _entries.get(entry_id)
+    if entry is None:
+        return None
+    strategy_params = dict(entry.strategy_params)
+    if params:
+        strategy_params[strategy_name] = params
+    else:
+        strategy_params.pop(strategy_name, None)
+    updated = entry.model_copy(update={"strategy_params": strategy_params})
     _entries[entry_id] = updated
     _save()
     return updated
