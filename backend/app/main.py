@@ -3,7 +3,6 @@ import hashlib
 import itertools
 import logging
 import sys
-import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal
@@ -63,7 +62,7 @@ from app.providers.mexc import MexcProvider
 from app.providers.mexc import format_symbol as format_mexc_symbol
 from app.providers.twelvedata import TwelveDataProvider
 from app.resample import resample_by_count
-from app.timeframes import DEFAULT_INTERVALS, INTERVAL_SECONDS, SYNTHETIC_DAY_INTERVALS, IntervalChoice
+from app.timeframes import DEFAULT_INTERVALS, SYNTHETIC_DAY_INTERVALS, IntervalChoice, drop_unclosed_candle
 
 logger = logging.getLogger("watchlist_alerts")
 if getattr(sys, "frozen", False):
@@ -127,21 +126,6 @@ async def fetch_ohlcv_canonical(provider: DataProvider, symbol: str, interval: s
     return resample_by_count(raw, multiple).tail(outputsize)
 
 
-def _drop_unclosed_candle(df, interval: str):
-    """Alerts must only fire on a confirmed (closed) candle — a signal that
-    only appears on the still-forming last bar can vanish again before that
-    bar actually closes, and firing on it anyway would be a false alert.
-    Drops the last row whenever its open time + the interval's duration is
-    still in the future."""
-    if df.empty:
-        return df
-    seconds = INTERVAL_SECONDS.get(interval)
-    if seconds is None:
-        return df
-    last_open = df.index[-1].timestamp()
-    if last_open + seconds > time.time():
-        return df.iloc[:-1]
-    return df
 
 
 async def _watchlist_alert_loop() -> None:
@@ -166,7 +150,7 @@ async def _watchlist_alert_loop() -> None:
                     provider, entry.symbol, entry.interval, settings.candles_per_timeframe
                 )
                 if entry.on_close:
-                    df = _drop_unclosed_candle(df, entry.interval)
+                    df = drop_unclosed_candle(df, entry.interval)
                 if df.empty:
                     continue
                 for strategy_name in entry.strategies:
@@ -741,7 +725,7 @@ async def analyze(
         indicators = compute_indicators(df)
         bias = determine_bias(levels)
         dealing_range = compute_dealing_range(df, tf_key)
-        fib_zones = compute_fib_zones(df, tf_key)
+        fib_zones = compute_fib_zones(df, tf_key, intervals[tf_key])
         strategy = build_strategy_state(strategy_name, df, strategy_params_dict)
         strategies[tf_key] = [strategy]
         backtests[tf_key] = run_backtest(df, strategy_params_dict, backtest_params_dict, strategy_name=strategy_name)

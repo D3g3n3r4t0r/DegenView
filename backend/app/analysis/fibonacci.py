@@ -8,7 +8,9 @@ prototyped and eyeballed against real BTC/ETH data before being wired in.
 
 Only the single most recent leg is used — same philosophy as
 compute_dealing_range's "most recent swing low -> most recent swing high":
-older legs are no longer actionable and just clutter the chart.
+older legs are no longer actionable and just clutter the chart. Swing
+detection runs on closed candles only (see drop_unclosed_candle) so a zone
+never anchors on the still-forming last bar.
 """
 
 import pandas as pd
@@ -16,6 +18,7 @@ from smartmoneyconcepts import smc
 
 from app.analysis.smc_engine import SWING_LENGTH_BY_TIMEFRAME
 from app.models import FibZone
+from app.timeframes import drop_unclosed_candle
 
 RETRACEMENT_RATIOS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1]
 EXTENSION_RATIOS = [1.272, 1.414, 1.618, 2.0, 2.618]
@@ -39,7 +42,12 @@ def _leg_pct(a: float, b: float) -> float:
     return abs(b - a) / min(a, b)
 
 
-def compute_fib_zones(df: pd.DataFrame, timeframe_key: str) -> list[FibZone]:
+def compute_fib_zones(df: pd.DataFrame, timeframe_key: str, interval: str) -> list[FibZone]:
+    # A swing pivot anchored on the still-forming last candle isn't really
+    # "structure" yet — on a weekly/monthly bar especially, that candle's
+    # high/low can keep moving for days, so the fib zone would shift under
+    # the user candle by candle instead of describing a confirmed turn.
+    df = drop_unclosed_candle(df, interval)
     pivots = _get_swing_pivots(df, timeframe_key)
     if len(pivots) < 2:
         return []
