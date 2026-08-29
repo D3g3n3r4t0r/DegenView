@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
-    href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Archivo+Narrow:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
     rel="stylesheet"
   />
   <link rel="stylesheet" href="/static/style.css" />
@@ -81,6 +81,7 @@
         <label class="layer-toggle"><input type="checkbox" data-layer="liquidity" /> Equal Highs/Lows</label>
         <label class="layer-toggle"><input type="checkbox" data-layer="structure" /> BOS / CHoCH</label>
         <label class="layer-toggle"><input type="checkbox" data-layer="confluence" checked /> Zone di confluenza</label>
+        <label class="layer-toggle"><input type="checkbox" data-layer="fibonacci" /> Fibonacci automatico</label>
       </div>
       <div class="panel">
         <h3>Indicatori</h3>
@@ -292,6 +293,9 @@
                 <option value="kucoin">KuCoin (solo /BTC)</option>
               </select>
               <select id="watchlist-interval" title="Timeframe su cui valutare le strategie di questo ticker"></select>
+              <label class="toolbar-check wl-onclose-check" title="Se attivo, l'alert scatta solo quando la candela chiude — niente falsi segnali intra-bar">
+                <input type="checkbox" id="watchlist-onclose" checked /> Alla chiusura della candela
+              </label>
               <button type="submit">Aggiungi</button>
             </form>
             <ul id="watchlist-list" class="watchlist-cards"></ul>
