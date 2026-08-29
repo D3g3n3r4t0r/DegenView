@@ -623,8 +623,16 @@
       loadWatchlist();
       loadBalances();
     } else {
-      el("balances-tab-btn").classList.add("hidden");
+      setBalancesVisible(false);
     }
+  }
+
+  // Saldi is reachable two ways — the desktop right-panel tab and the Altro
+  // menu item on mobile — both mirroring the same "visible only if the
+  // account actually has exchange balances to show" condition.
+  function setBalancesVisible(visible) {
+    el("balances-tab-btn").classList.toggle("hidden", !visible);
+    el("altro-saldi-item").classList.toggle("hidden", !visible);
   }
 
   // ---- Saldi tab: read-only exchange balances (MEXC/KuCoin) ----
@@ -651,16 +659,16 @@
     try {
       const resp = await fetch("/api/balances");
       if (resp.status === 403) {
-        el("balances-tab-btn").classList.add("hidden");
+        setBalancesVisible(false);
         return;
       }
       if (!resp.ok) return;
       const body = await resp.json();
-      el("balances-tab-btn").classList.remove("hidden");
+      setBalancesVisible(true);
       el("balances-content").innerHTML = renderBalanceAccount("MEXC", body.mexc) + renderBalanceAccount("KuCoin", body.kucoin);
       el("balances-updated").textContent = `Aggiornato alle ${new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}`;
     } catch (err) {
-      el("balances-tab-btn").classList.add("hidden");
+      setBalancesVisible(false);
     }
   }
 
@@ -1711,15 +1719,37 @@
     });
   }
 
+  // .draw-rail is hidden outright below 760px (there's no room for a fixed
+  // side column) — this FAB is the only way to reach drawing tools on
+  // mobile, opening the same rail repositioned as a floating horizontal
+  // dock over the chart instead. Picking a tool or tapping the FAB again
+  // closes it, same as the desktop rail's own click-away behavior.
+  function bindMobileDrawFab() {
+    const fab = el("mobile-draw-fab");
+    const rail = el("draw-rail");
+    fab.addEventListener("click", () => {
+      rail.classList.toggle("mobile-tools-open");
+    });
+    rail.querySelectorAll(".draw-tool-btn[data-draw-tool]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (window.matchMedia("(max-width: 760px)").matches) rail.classList.remove("mobile-tools-open");
+      });
+    });
+  }
+
   function updateMobileChartStrip() {
     const strip = el("mobile-chart-strip");
+    const fab = el("mobile-draw-fab");
+    const onChartScreen = document.querySelector('.mobile-nav-btn[data-mobile-target="chart"]').classList.contains("active");
     if (!state.data) {
       strip.classList.add("hidden");
+      fab.classList.add("hidden");
       return;
     }
     el("mobile-chart-symbol").textContent = state.data.symbol;
     el("mobile-chart-interval").textContent = el("interval-primary").value || "—";
     strip.classList.remove("hidden");
+    fab.classList.toggle("hidden", !onChartScreen);
   }
 
   function render() {
@@ -2745,19 +2775,6 @@
     el("pine-clear-btn").addEventListener("click", clearPineOverride);
   }
 
-  // Mobile app-shell: the sidebar/summary-panel become bottom-sheet drawers
-  // opened via the bottom tab bar, closed by tapping "Grafico", the backdrop,
-  // or the same tab again — mirrors how TradingView's own mobile app keeps
-  // the chart full-screen with menus tucked away until asked for.
-  function closeMobileDrawers() {
-    el("levels-panel").classList.remove("mobile-open");
-    el("script-panel").classList.remove("mobile-open");
-    document.querySelector(".right-panel").classList.remove("mobile-open");
-    el("mobile-drawer-backdrop").classList.add("hidden");
-    document.querySelectorAll(".mobile-nav-btn").forEach((b) => b.classList.remove("active"));
-    document.querySelector('.mobile-nav-btn[data-mobile-target="chart"]').classList.add("active");
-  }
-
   // Desktop-only: a rail icon opens/closes its panel as a flyout that
   // reflows the chart (not an overlay) — click the icon again, click
   // anywhere outside it, or open the other rail panel, to close it.
@@ -2795,25 +2812,6 @@
     });
   }
 
-  // Used by links that need to open a specific panel outside the rail/bottom
-  // nav (e.g. the "Script Pine personalizzato" link inside the Alert tab) —
-  // works the same on desktop (flyout via the matching rail button) and
-  // mobile (bottom-sheet drawer), whichever this viewport is currently using.
-  function openPanel(panelId) {
-    const isMobile = window.matchMedia("(max-width: 760px)").matches;
-    if (isMobile) {
-      closeMobileDrawers();
-      el(panelId).classList.add("mobile-open");
-      el("mobile-drawer-backdrop").classList.remove("hidden");
-    } else {
-      RAIL_PANELS.forEach(([btnId, pid]) => {
-        el(pid).classList.toggle("open", pid === panelId);
-        el(btnId).classList.toggle("active", pid === panelId);
-      });
-      resizeAllCharts();
-    }
-  }
-
   function bindTabs() {
     document.querySelectorAll(".tab").forEach((tab) => {
       tab.addEventListener("click", () => {
@@ -2827,37 +2825,84 @@
     });
   }
 
-  function bindMobileNav() {
-    const targets = { levels: el("levels-panel"), panel: document.querySelector(".right-panel") };
-    document.querySelectorAll(".mobile-nav-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const target = btn.dataset.mobileTarget;
-        if (target === "chart") {
-          closeMobileDrawers();
-          resizeAllCharts();
-          return;
-        }
-        const panel = targets[target];
-        const alreadyOpen = panel.classList.contains("mobile-open");
-        closeMobileDrawers();
-        if (!alreadyOpen) {
-          panel.classList.add("mobile-open");
-          el("mobile-drawer-backdrop").classList.remove("hidden");
-          btn.classList.add("active");
-        }
-      });
-    });
-    el("mobile-drawer-backdrop").addEventListener("click", () => {
-      closeMobileDrawers();
-      resizeAllCharts();
-    });
+  // Mobile app-shell: five real full-screen destinations reached from the
+  // bottom nav — Grafico, Livelli, Strategia, Alert, Altro — not overlay
+  // sheets with a backdrop. Each tap shows exactly one screen and hides the
+  // rest; there is no "tap again to close" ambiguity like the old drawer
+  // model had. Strategia and Alert reuse the same underlying .right-panel
+  // (and its internal .tabs) that desktop already has — Strategia activates
+  // both the "strategia" and "analisi" tab-contents together (merged into
+  // one scroll on mobile, since they're two views of the same reading), and
+  // Alert activates just "alert". Script Pine and Saldi are reached through
+  // the Altro menu, not the bottom nav itself, so they still map onto the
+  // same mechanism without a 6th/7th tab.
+  const RIGHT_PANEL_TITLES = { strategia: "Strategia", alert: "Alert", saldi: "Saldi" };
 
-    document.querySelectorAll("[data-close-drawer]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        closeMobileDrawers();
-        resizeAllCharts();
+  function showMobileScreen(target) {
+    if (!window.matchMedia("(max-width: 760px)").matches) return;
+
+    el("levels-panel").classList.remove("mobile-open");
+    el("script-panel").classList.remove("mobile-open");
+    el("altro-panel").classList.remove("mobile-open");
+    document.querySelector(".right-panel").classList.remove("mobile-open");
+    el("draw-rail").classList.remove("mobile-tools-open");
+
+    const NAV_TARGET_FOR = { script: "altro", saldi: "altro" };
+    const navTarget = NAV_TARGET_FOR[target] || target;
+    document.querySelectorAll(".mobile-nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.mobileTarget === navTarget));
+
+    // The draw FAB only makes sense over the chart itself — everywhere else
+    // it would just float uselessly on top of Livelli/Strategia/etc content.
+    el("mobile-draw-fab").classList.toggle("hidden", target !== "chart" || !state.data);
+
+    if (target === "chart") {
+      resizeAllCharts();
+      return;
+    }
+    if (target === "levels") {
+      el("levels-panel").classList.add("mobile-open");
+    } else if (target === "script") {
+      el("script-panel").classList.add("mobile-open");
+    } else if (target === "altro") {
+      el("altro-panel").classList.add("mobile-open");
+    } else {
+      // strategia | alert | saldi — shared right-panel, pick the internal tab(s)
+      const panel = document.querySelector(".right-panel");
+      panel.classList.add("mobile-open");
+      panel.querySelector(".drawer-header span").textContent = RIGHT_PANEL_TITLES[target] || "Pannello";
+      document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === target));
+      document.querySelectorAll(".tab-content").forEach((c) => {
+        const match = c.dataset.tabContent === target || (target === "strategia" && c.dataset.tabContent === "analisi");
+        c.classList.toggle("active", match);
       });
+    }
+    resizeAllCharts();
+  }
+
+  // Used by links that open a specific panel outside the bottom nav (e.g.
+  // "Script Pine personalizzato" inside Alert) — works the same on desktop
+  // (flyout via the matching rail button) and mobile (full-screen tab).
+  function openPanel(panelId) {
+    if (window.matchMedia("(max-width: 760px)").matches) {
+      showMobileScreen(panelId === "script-panel" ? "script" : "levels");
+      return;
+    }
+    RAIL_PANELS.forEach(([btnId, pid]) => {
+      el(pid).classList.toggle("open", pid === panelId);
+      el(btnId).classList.toggle("active", pid === panelId);
     });
+    resizeAllCharts();
+  }
+
+  function bindMobileNav() {
+    document.querySelectorAll(".mobile-nav-btn").forEach((btn) => {
+      btn.addEventListener("click", () => showMobileScreen(btn.dataset.mobileTarget));
+    });
+    document.querySelectorAll("[data-close-drawer]").forEach((btn) => {
+      btn.addEventListener("click", () => showMobileScreen("chart"));
+    });
+    el("open-script-from-altro").addEventListener("click", () => openPanel("script-panel"));
+    el("altro-saldi-item").addEventListener("click", () => showMobileScreen("saldi"));
   }
 
   function bindUI() {
@@ -3015,6 +3060,18 @@
     }
   }
 
+  // Same relocation trick as chart-settings-group above, for the account
+  // widget (email + Accedi/Esci) — it moves into the Altro screen's account
+  // row on mobile instead of staying in the toolbar, which is exactly what
+  // was squeezing the ticker search field down to an unreadable sliver.
+  function relocateAuthWidget() {
+    const widget = document.querySelector(".auth-widget");
+    const isMobile = window.matchMedia("(max-width: 760px)").matches;
+    const targetParent = isMobile ? el("altro-account-slot") : document.querySelector(".toolbar");
+    if (widget.parentElement === targetParent) return;
+    targetParent.appendChild(widget);
+  }
+
   // Runs once, either right away (already logged in) or right after the
   // login gate clears — everything that fetches real data or auto-loads a
   // chart waits behind auth so nothing renders before the page unlocks.
@@ -3044,7 +3101,9 @@
     bindRail();
     bindTabs();
     bindDrawRail();
+    bindMobileDrawFab();
     bindAuth();
+    relocateAuthWidget();
     await checkAuth();
     if (state.user) {
       await startApp();
@@ -3055,7 +3114,10 @@
     window.addEventListener("resize", () => {
       resizeAllCharts();
       clearTimeout(relocateTimer);
-      relocateTimer = setTimeout(relocateChartSettings, 150);
+      relocateTimer = setTimeout(() => {
+        relocateChartSettings();
+        relocateAuthWidget();
+      }, 150);
     });
   });
 })();

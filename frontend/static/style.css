@@ -33,6 +33,7 @@ body {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  height: 100dvh; /* iOS Safari's address bar changes 100vh mid-session; dvh tracks the actual visible height */
   overflow: hidden;
   background-color: var(--bg);
 }
@@ -1645,33 +1646,41 @@ body {
   .right-panel { flex-basis: 260px; }
 }
 
-/* ---- Mobile app-shell (≤760px): chart fills the screen, side panels become
-   bottom-sheet drawers reached via a TradingView-style bottom tab bar, not a
-   long stacked scroll. ---- */
+/* ---- Mobile app-shell (≤760px): five real full-screen destinations reached
+   from a bottom tab bar — Grafico, Livelli, Strategia, Alert, Altro. Each tap
+   shows exactly one screen and hides the rest; there is no sheet, no
+   backdrop, no "tap again to close". Header (brand + a persistent, always-
+   visible search bar) and bottom nav are the only fixed chrome; every screen
+   fills the space between them with its own single scroll container. ---- */
 
-.mobile-nav, .mobile-drawer-backdrop, .drawer-header, .mobile-chart-strip { display: none; }
+.mobile-nav, .drawer-header, .mobile-chart-strip, .mobile-draw-fab { display: none; }
 
 @media (max-width: 760px) {
   html, body { height: 100%; overflow: hidden; }
 
-  /* chart-settings-group (timeframe/strategy/log) is relocated into the
-     Livelli drawer by JS on this breakpoint — the toolbar carries only the
-     brand + search, so the chart starts almost immediately like a native
-     mobile chart app instead of scrolling past a stack of controls first. */
-  .toolbar { padding: 6px 10px; gap: 6px; flex-wrap: nowrap; overflow-x: visible; align-items: center; }
-  .brand { font-size: 11px; flex: 0 0 auto; width: auto; white-space: nowrap; }
-  .search-form { flex: 1 1 auto; min-width: 0; }
-  .ticker-field { flex: 1 1 auto; max-width: none; min-width: 0; }
-  #ticker-input { width: 100%; padding: 9px 10px; font-size: 14px; }
-  .toolbar-spacer { display: none; }
-  #search-btn { flex: 0 0 auto; padding: 9px 12px; font-size: 11px; }
+  /* Toolbar becomes two stacked rows with zero HTML changes: giving .brand
+     a 100% flex-basis forces it alone onto row 1, so search-form + the
+     Analizza button (next in flex order, no longer fitting beside it) wrap
+     onto row 2 together — full width, never squeezed by anything else.
+     chart-settings-group and .auth-widget are physically relocated out of
+     the toolbar by JS on this breakpoint (into Livelli and Altro
+     respectively), so they don't compete for this space at all — this is
+     the fix for the search field that used to collapse to a sliver next to
+     the account email. */
+  .toolbar { flex-wrap: wrap; padding: 8px 12px; gap: 8px; align-items: center; overflow: visible; }
+  .brand { flex: 1 1 100%; height: 26px; font-size: 15px; display: flex; align-items: center; }
+  .auth-widget, .toolbar-spacer { display: none; }
+  .search-form { flex: 1 1 auto; min-width: 0; height: 42px; }
+  .ticker-field { flex: 1 1 auto; max-width: none; min-width: 0; height: 100%; }
+  #ticker-input { width: 100%; height: 100%; padding: 0 12px; font-size: 15px; box-sizing: border-box; }
+  #search-btn { flex: 0 0 auto; height: 42px; padding: 0 14px; font-size: 11px; border: none; }
 
   #levels-panel .chart-settings-group {
     flex-direction: column;
     align-items: stretch;
     gap: 10px;
-    padding-bottom: 14px;
-    margin-bottom: 14px;
+    padding: 14px 14px 14px;
+    margin-bottom: 4px;
     border-bottom: 1px dashed var(--border);
   }
   #levels-panel .toolbar-intervals { width: 100%; }
@@ -1693,7 +1702,7 @@ body {
     position: relative;
     overflow: hidden;
     height: auto;
-    margin-bottom: 70px; /* clears the fixed bottom nav (52px) + disclaimer strip (18px) */
+    margin-bottom: 82px; /* clears the fixed bottom nav (52px) + chart-strip (30px) */
   }
 
   .chart-area {
@@ -1704,75 +1713,51 @@ body {
   #chart-wrap { height: 100%; }
   .main-chart { height: 100%; }
 
-  /* Side panels: fixed bottom-sheet drawers, closed by default */
-  #levels-panel, #script-panel, .right-panel {
+  /* One screen at a time, filling everything between the 92px header and
+     the bottom nav — not a partial sheet, not an overlay over the chart. */
+  #levels-panel, #script-panel, .right-panel, .altro-panel {
     position: fixed;
     left: 0;
     right: 0;
+    width: auto; /* #levels-panel/#script-panel/.altro-panel otherwise inherit the desktop flyout's fixed 260px width, which — combined with left+right both set on a fixed element — wins over "right:0" and leaves the chart showing through the remaining strip */
+    top: 92px;
     bottom: 52px;
-    top: 15%;
     max-height: none;
     overflow-y: auto;
     background: var(--bg);
-    border: 1.5px solid var(--border-strong);
-    border-bottom: none;
-    border-radius: 10px 10px 0 0;
-    box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.5);
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity 0.18s ease, visibility 0s linear 0.18s;
     z-index: 40;
     padding: 0;
+    display: none;
+  }
+
+  #levels-panel.mobile-open, #script-panel.mobile-open, .right-panel.mobile-open, .altro-panel.mobile-open {
     display: flex;
+    flex-direction: column;
   }
 
-  #levels-panel .panel, #script-panel .panel, .right-panel .tabs { padding-left: 14px; padding-right: 14px; }
-  #levels-panel .panel:first-of-type, #script-panel .panel:first-of-type { padding-top: 14px; }
+  #levels-panel .panel, #script-panel .panel, .right-panel .tabs, .altro-panel .panel { padding-left: 16px; padding-right: 16px; }
+  #levels-panel .panel:first-of-type, #script-panel .panel:first-of-type, .altro-panel .panel:first-of-type { padding-top: 14px; }
 
-  #levels-panel.mobile-open, #script-panel.mobile-open, .right-panel.mobile-open {
-    opacity: 1;
-    visibility: visible;
-    transition: opacity 0.18s ease;
-  }
+  /* The internal Strategia/Alert/Analisi/Saldi tab strip is superseded by
+     the bottom nav on mobile (Strategia merges the first two, Alert reaches
+     the third, Saldi is reached from Altro) — JS drives which tab-content
+     is active directly, this bar would just be a second, redundant level of
+     navigation sitting on top of it. */
+  .right-panel .tabs { display: none; }
 
-  .mobile-drawer-backdrop {
-    position: fixed;
-    inset: 0;
-    bottom: 52px;
-    background: rgba(0, 0, 0, 0.55);
-    z-index: 35;
-  }
-  .mobile-drawer-backdrop.hidden { display: none; }
-
+  /* Plain screen title, not a colored bar with a close affordance — there is
+     nothing to "close" now, only another tab to switch to. */
   .drawer-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    position: sticky;
-    top: -16px;
-    margin: -16px -14px 12px;
-    padding: 12px 14px;
-    background: var(--accent);
-    color: var(--bg);
-    font-family: var(--font-mono);
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    border-radius: 10px 10px 0 0;
-    z-index: 1;
-  }
-
-  .drawer-close-btn {
-    background: rgba(14, 16, 18, 0.12);
-    color: var(--bg);
-    border: 1.5px solid rgba(14, 16, 18, 0.4);
-    border-radius: 8px;
-    padding: 6px 10px;
+    display: block;
+    padding: 14px 16px 6px;
     font-family: var(--font-mono);
     font-size: 11px;
+    font-weight: 700;
     text-transform: uppercase;
-    cursor: pointer;
+    letter-spacing: 0.06em;
+    color: var(--stamp);
   }
+  .drawer-close-btn { display: none; }
 
   .mobile-nav {
     display: flex;
@@ -1780,7 +1765,8 @@ body {
     left: 0;
     right: 0;
     bottom: 0;
-    height: 52px;
+    height: calc(52px + env(safe-area-inset-bottom));
+    padding-bottom: env(safe-area-inset-bottom);
     background: var(--bg);
     border-top: 1px solid var(--border);
     z-index: 50;
@@ -1796,7 +1782,7 @@ body {
     position: fixed;
     left: 0;
     right: 0;
-    bottom: 52px;
+    bottom: calc(52px + env(safe-area-inset-bottom));
     height: 30px;
     padding: 0 12px;
     background: var(--bg);
@@ -1822,6 +1808,51 @@ body {
     padding: 2px 8px;
   }
 
+  /* Drawing tools have no home at all below 760px otherwise (.draw-rail is
+     hidden outright) — a floating button over the chart opens the same
+     tool strip used on desktop, repositioned as a horizontal dock. */
+  .mobile-draw-fab {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    left: 14px;
+    /* +44px clears the disclaimer strip's own band (chart-strip + up to
+       three wrapped lines of legal text) that sits just above the bottom
+       nav — a smaller offset here visually collided with that text. */
+    bottom: calc(52px + env(safe-area-inset-bottom) + 30px + 44px);
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--bg);
+    border: none;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+    z-index: 46;
+  }
+  .mobile-draw-fab svg { width: 19px; height: 19px; }
+  .mobile-draw-fab.hidden { display: none; }
+
+  .draw-rail.mobile-tools-open {
+    display: flex;
+    flex-direction: row;
+    position: fixed;
+    left: 14px;
+    bottom: calc(52px + env(safe-area-inset-bottom) + 30px + 96px);
+    width: auto;
+    height: 48px;
+    padding: 0 6px;
+    border-radius: 24px;
+    border: 1.5px solid var(--border-strong);
+    background: var(--bg-panel);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    z-index: 46;
+    gap: 2px;
+  }
+  .draw-rail.mobile-tools-open .draw-rail-divider { width: 1px; height: 22px; margin: 0 2px; }
+  .draw-rail.mobile-tools-open .draw-tool-btn { width: 36px; height: 36px; }
+  .draw-rail.mobile-tools-open .draw-tool-btn svg { width: 17px; height: 17px; }
+
   /* Rounder, lighter controls read as an app, not a technical form —
      Blueprint's sharp 2px corners work on a dense desktop panel, less so
      stretched across a phone screen with lots of open space around them. */
@@ -1829,7 +1860,6 @@ body {
     border-radius: 9px;
     border-width: 1px;
   }
-  #search-btn { border: none; }
 
   .mobile-nav-btn {
     flex: 1;
@@ -1842,15 +1872,66 @@ body {
     border: none;
     color: var(--ink-dim);
     font-family: var(--font-mono);
-    font-size: 9.5px;
+    font-size: 8.5px;
     text-transform: uppercase;
-    letter-spacing: 0.03em;
+    letter-spacing: 0.02em;
     cursor: pointer;
   }
 
-  .mobile-nav-icon { width: 20px; height: 20px; }
+  .mobile-nav-icon { width: 19px; height: 19px; }
 
   .mobile-nav-btn.active { color: var(--accent); }
+
+  /* ---- Altro: account row + menu items (Script Pine, Saldi) ---- */
+  .altro-account-slot .auth-widget {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+  }
+  .altro-account-slot .auth-user-email {
+    max-width: none;
+    flex: 1;
+    font-size: 13px;
+  }
+  .altro-account-slot #auth-toggle-btn,
+  .altro-account-slot #auth-logout-btn {
+    min-height: 36px;
+    padding: 6px 12px;
+  }
+
+  .altro-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 12px 4px;
+    background: none;
+    border: none;
+    border-top: 1px solid var(--border);
+    cursor: pointer;
+    text-align: left;
+  }
+  .altro-menu-item:first-of-type { border-top: none; }
+  .altro-menu-item.hidden { display: none; }
+
+  .altro-menu-icon {
+    width: 30px;
+    height: 30px;
+    flex-shrink: 0;
+    border-radius: 8px;
+    background: var(--bg-panel);
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .altro-menu-icon svg { width: 15px; height: 15px; }
+
+  .altro-menu-text { flex: 1; display: flex; flex-direction: column; gap: 1px; }
+  .altro-menu-title { font-size: 13.5px; color: var(--ink); }
+  .altro-menu-sub { font-size: 10.5px; color: var(--ink-dim); }
+  .altro-menu-chev { color: var(--ink-dim); font-size: 15px; }
 
   .wl-asset-btn {
     padding: 9px 0;
@@ -1861,8 +1942,7 @@ body {
 
   .watchlist-form button[type="submit"],
   .pine-actions button,
-  .pine-params-form button[type="submit"],
-  #search-btn {
+  .pine-params-form button[type="submit"] {
     min-height: 40px;
   }
 
@@ -1885,7 +1965,7 @@ body {
     position: fixed;
     left: 0;
     right: 0;
-    bottom: 82px;
+    bottom: calc(52px + env(safe-area-inset-bottom) + 30px);
     z-index: 45;
     font-size: 8px;
     line-height: 1.25;
