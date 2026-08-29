@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import itertools
 import logging
 import sys
@@ -8,7 +9,7 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -809,6 +810,31 @@ async def live_feed(websocket: WebSocket) -> None:
 app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR / "static")), name="static")
 
 
+def _compute_asset_version() -> str:
+    """Hash of the actual CSS/JS bytes being served, not the git commit —
+    correct even in the Docker image, which doesn't ship .git. Computed once
+    at process startup: every deploy restarts the process, so the version
+    (and therefore the /static/*.css?v=... URL) always changes exactly when
+    the files do. Without this, browsers — mobile Safari especially — keep
+    serving a stale cached style.css/app.js after a deploy since neither the
+    URL nor any cache-control header ever changed."""
+    try:
+        css = (FRONTEND_DIR / "static" / "style.css").read_bytes()
+        js = (FRONTEND_DIR / "static" / "app.js").read_bytes()
+        return hashlib.sha256(css + js).hexdigest()[:10]
+    except OSError:
+        return "0"
+
+
+_ASSET_VERSION = _compute_asset_version()
+_INDEX_HTML = (
+    (FRONTEND_DIR / "index.html")
+    .read_text(encoding="utf-8")
+    .replace('href="/static/style.css"', f'href="/static/style.css?v={_ASSET_VERSION}"')
+    .replace('src="/static/app.js"', f'src="/static/app.js?v={_ASSET_VERSION}"')
+)
+
+
 @app.get("/")
-async def index() -> FileResponse:
-    return FileResponse(str(FRONTEND_DIR / "index.html"))
+async def index() -> HTMLResponse:
+    return HTMLResponse(_INDEX_HTML)
