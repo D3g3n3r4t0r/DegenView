@@ -620,11 +620,22 @@
     el("alert-authenticated").classList.toggle("hidden", !loggedIn);
     if (loggedIn) {
       el("telegram-chat-id-input").value = state.user.telegram_chat_id || "";
+      updateTelegramSetupUI();
       loadWatchlist();
       loadBalances();
     } else {
       setBalancesVisible(false);
     }
+  }
+
+  // The chat-ID setup box (with its raw bot-API URL instructions) only needs
+  // to be seen once — after it's saved, collapse it to a one-line status chip
+  // so it doesn't compete with the watchlist every time Alert is opened.
+  // forceOpen re-expands it for editing, from the chip's "Modifica" link.
+  function updateTelegramSetupUI(forceOpen) {
+    const configured = !!(state.user && state.user.telegram_chat_id);
+    el("telegram-status-chip").classList.toggle("hidden", !configured || forceOpen);
+    el("telegram-setup").classList.toggle("hidden", configured && !forceOpen);
   }
 
   // Saldi is reachable two ways — the desktop right-panel tab and the Altro
@@ -714,7 +725,10 @@
         body: JSON.stringify({ telegram_chat_id: chatId }),
       });
       if (resp.ok) state.user = await resp.json();
+      updateTelegramSetupUI();
     });
+
+    el("telegram-edit-btn").addEventListener("click", () => updateTelegramSetupUI(true));
 
     el("auth-form").addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -864,6 +878,7 @@
       Array.from(list.querySelectorAll(".tick-card.open")).map((c) => c.dataset.entryId)
     );
     list.innerHTML = "";
+    el("watchlist-count").textContent = entries.length ? `${entries.length} attiv${entries.length === 1 ? "o" : "i"}` : "";
     if (!entries.length) {
       const li = document.createElement("li");
       li.className = "panel-hint";
@@ -1081,7 +1096,10 @@
     equityChart = LightweightCharts.createChart(equityContainer, {
       ...baseOptions,
       rightPriceScale: { borderColor: COLORS.gridMajor },
-      timeScale: { borderColor: COLORS.gridMajor, timeVisible: true, secondsVisible: false, visible: false },
+      // Visible now (was hidden) — the equity curve is only useful for
+      // spotting *when* a run of trades happened if the axis actually shows
+      // dates instead of leaving the curve floating with no time reference.
+      timeScale: { borderColor: COLORS.gridMajor, timeVisible: true, secondsVisible: false, visible: true },
     });
     equitySeries = equityChart.addAreaSeries({
       lineColor: COLORS.stamp,
@@ -2024,30 +2042,70 @@
     state.alertsSeeded = true;
   }
 
-  function renderBacktest() {
-    const bt = state.data.backtests[state.activeTimeframe];
-    const statsEl = el("backtest-stats");
-    statsEl.innerHTML = "";
+  // Shared by both the built-in strategy backtest (renderBacktest) and a
+  // Pine script override (renderPineBacktest) — same result shape, same UI.
+  // Equity chart is the hero: the % return + final equity are stamped on it
+  // directly instead of living in a KPI tile, and its time axis is left on
+  // (see initCharts) so the curve reads against real dates. Below it, only
+  // the 3 ratios a trader actually scans for stay always-visible as chips;
+  // trade count/final equity move into "Dettagli", and every individual
+  // trade — with its entry/exit date — gets its own row in Operazioni so
+  // "when did this happen" has an actual answer instead of just an aggregate.
+  function renderBacktestUI(bt) {
     if (!bt) return;
 
-    const returnClass = bt.total_return_pct >= 0 ? "positive" : "negative";
-    const stats = [
-      ["Rendimento", `${bt.total_return_pct >= 0 ? "+" : ""}${bt.total_return_pct.toFixed(1)}%`, returnClass],
-      ["Equity finale", bt.final_equity.toLocaleString("it-IT", { maximumFractionDigits: 0 }), ""],
-      ["Trade", bt.num_trades, ""],
+    const pctEl = el("equity-stamp-pct");
+    pctEl.textContent = `${bt.total_return_pct >= 0 ? "+" : ""}${bt.total_return_pct.toFixed(1)}%`;
+    pctEl.className = "equity-stamp-pct " + (bt.total_return_pct >= 0 ? "positive" : "negative");
+    el("equity-stamp-sub").textContent = `equity ${bt.final_equity.toLocaleString("it-IT", { maximumFractionDigits: 0 })}`;
+
+    const chipsEl = el("backtest-chips");
+    chipsEl.innerHTML = "";
+    [
       ["Win rate", bt.win_rate_pct !== null ? `${bt.win_rate_pct.toFixed(0)}%` : "—", ""],
       ["Max drawdown", `-${bt.max_drawdown_pct.toFixed(1)}%`, "negative"],
       ["Profit factor", bt.profit_factor !== null ? bt.profit_factor.toFixed(2) : "—", ""],
-    ];
-    stats.forEach(([label, value, cls]) => {
+    ].forEach(([label, value, cls]) => {
       const div = document.createElement("div");
-      div.className = "stat";
-      div.innerHTML = `<div class="stat-label">${label}</div><div class="stat-value ${cls}">${value}</div>`;
-      statsEl.appendChild(div);
+      div.className = "chip";
+      div.innerHTML = `<div class="chip-label">${label}</div><div class="chip-value ${cls}">${value}</div>`;
+      chipsEl.appendChild(div);
     });
+
+    el("backtest-details").innerHTML = `
+      <div class="stat"><div class="stat-label">Trade</div><div class="stat-value">${bt.num_trades}</div></div>
+      <div class="stat"><div class="stat-label">Equity finale</div><div class="stat-value">${bt.final_equity.toLocaleString("it-IT", { maximumFractionDigits: 0 })}</div></div>
+    `;
+
+    el("operations-count").textContent = bt.num_trades ? `${bt.num_trades}` : "";
+    const opsList = el("operations-list");
+    opsList.innerHTML = "";
+    if (!bt.trades.length) {
+      opsList.innerHTML = `<li class="operations-empty">Nessuna operazione nel periodo</li>`;
+    } else {
+      const dateFmt = { day: "2-digit", month: "short", year: "2-digit" };
+      [...bt.trades].reverse().forEach((t) => {
+        const li = document.createElement("li");
+        li.className = "operation-row";
+        const dirIcon = t.direction === "long" ? "▲" : "▼";
+        const entryDate = new Date(t.entry_time * 1000).toLocaleDateString("it-IT", dateFmt);
+        const exitDate = new Date(t.exit_time * 1000).toLocaleDateString("it-IT", dateFmt);
+        const pnlClass = t.pnl_pct >= 0 ? "positive" : "negative";
+        li.innerHTML = `
+          <span class="op-dir ${t.direction}">${dirIcon}</span>
+          <span class="op-dates">${entryDate} → ${exitDate}</span>
+          <span class="op-pnl ${pnlClass}">${t.pnl_pct >= 0 ? "+" : ""}${t.pnl_pct.toFixed(1)}%</span>
+        `;
+        opsList.appendChild(li);
+      });
+    }
 
     equitySeries.setData(bt.equity_curve.map(([time, equity]) => ({ time, value: equity })));
     equityChart.timeScale().fitContent();
+  }
+
+  function renderBacktest() {
+    renderBacktestUI(state.data.backtests[state.activeTimeframe]);
   }
 
   function getStrategyAndBacktestQuery() {
@@ -2719,25 +2777,7 @@
   }
 
   function renderPineBacktest(bt) {
-    const statsEl = el("backtest-stats");
-    statsEl.innerHTML = "";
-    const returnClass = bt.total_return_pct >= 0 ? "positive" : "negative";
-    const stats = [
-      ["Rendimento", `${bt.total_return_pct >= 0 ? "+" : ""}${bt.total_return_pct.toFixed(1)}%`, returnClass],
-      ["Equity finale", bt.final_equity.toLocaleString("it-IT", { maximumFractionDigits: 0 }), ""],
-      ["Trade", bt.num_trades, ""],
-      ["Win rate", bt.win_rate_pct !== null ? `${bt.win_rate_pct.toFixed(0)}%` : "—", ""],
-      ["Max drawdown", `-${bt.max_drawdown_pct.toFixed(1)}%`, "negative"],
-      ["Profit factor", bt.profit_factor !== null ? bt.profit_factor.toFixed(2) : "—", ""],
-    ];
-    stats.forEach(([label, value, cls]) => {
-      const div = document.createElement("div");
-      div.className = "stat";
-      div.innerHTML = `<div class="stat-label">${label}</div><div class="stat-value ${cls}">${value}</div>`;
-      statsEl.appendChild(div);
-    });
-    equitySeries.setData(bt.equity_curve.map(([time, equity]) => ({ time, value: equity })));
-    equityChart.timeScale().fitContent();
+    renderBacktestUI(bt);
   }
 
   function bindPineUI() {
@@ -2839,7 +2879,7 @@
   // Alert activates just "alert". Script Pine and Saldi are reached through
   // the Altro menu, not the bottom nav itself, so they still map onto the
   // same mechanism without a 6th/7th tab.
-  const RIGHT_PANEL_TITLES = { strategia: "Strategia", alert: "Alert", saldi: "Saldi" };
+  const RIGHT_PANEL_TITLES = { strategia: "Strategia", alert: "Alert", saldi: "Saldi", analisi: "Analisi" };
 
   function showMobileScreen(target) {
     if (!window.matchMedia("(max-width: 760px)").matches) return;
@@ -2850,7 +2890,7 @@
     document.querySelector(".right-panel").classList.remove("mobile-open");
     el("draw-rail").classList.remove("mobile-tools-open");
 
-    const NAV_TARGET_FOR = { script: "altro", saldi: "altro" };
+    const NAV_TARGET_FOR = { script: "altro", saldi: "altro", analisi: "altro" };
     const navTarget = NAV_TARGET_FOR[target] || target;
     document.querySelectorAll(".mobile-nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.mobileTarget === navTarget));
 
@@ -2869,14 +2909,13 @@
     } else if (target === "altro") {
       el("altro-panel").classList.add("mobile-open");
     } else {
-      // strategia | alert | saldi — shared right-panel, pick the internal tab(s)
+      // strategia | alert | saldi | analisi — shared right-panel, pick the internal tab
       const panel = document.querySelector(".right-panel");
       panel.classList.add("mobile-open");
       panel.querySelector(".drawer-header span").textContent = RIGHT_PANEL_TITLES[target] || "Pannello";
       document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === target));
       document.querySelectorAll(".tab-content").forEach((c) => {
-        const match = c.dataset.tabContent === target || (target === "strategia" && c.dataset.tabContent === "analisi");
-        c.classList.toggle("active", match);
+        c.classList.toggle("active", c.dataset.tabContent === target);
       });
     }
     resizeAllCharts();
@@ -2906,6 +2945,7 @@
     });
     el("open-script-from-altro").addEventListener("click", () => openPanel("script-panel"));
     el("altro-saldi-item").addEventListener("click", () => showMobileScreen("saldi"));
+    el("altro-analisi-item").addEventListener("click", () => showMobileScreen("analisi"));
   }
 
   function bindUI() {

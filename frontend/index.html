@@ -203,16 +203,34 @@
             <span id="strategy-position-badge" class="position-badge flat">FLAT</span>
           </div>
           <div id="strategy-select-slot" class="strategy-select-slot"></div>
-          <p class="marker-legend">
-            <span class="legend-item"><span class="legend-swatch bull">▲</span>Ingresso long</span>
-            <span class="legend-item"><span class="legend-swatch bear">▼</span>Ingresso short</span>
+
+          <h4 class="backtest-heading">Backtest (timeframe attivo)</h4>
+          <div class="eq-hero-wrap">
+            <div id="equity-chart" class="equity-chart"></div>
+            <div class="equity-hero-stamp">
+              <div id="equity-stamp-pct" class="equity-stamp-pct">—</div>
+              <div id="equity-stamp-sub" class="equity-stamp-sub">—</div>
+            </div>
+          </div>
+          <div id="backtest-chips" class="backtest-chips"></div>
+
+          <details class="params-details">
+            <summary>Dettagli backtest</summary>
+            <div id="backtest-details" class="backtest-details"></div>
+          </details>
+
+          <div class="operations-head">
+            <span>Operazioni</span>
+            <span id="operations-count" class="operations-count"></span>
+          </div>
+          <ul id="operations-list" class="operations-list"></ul>
+
+          <p class="marker-legend legend-thin">
+            <span class="legend-item"><span class="legend-swatch bull">▲</span>Long</span>
+            <span class="legend-item"><span class="legend-swatch bear">▼</span>Short</span>
             <span class="legend-item"><span class="legend-swatch">●</span>Uscita</span>
             <span class="legend-item"><span class="legend-swatch stamp">◆</span>Inversione</span>
           </p>
-
-          <h4 class="backtest-heading">Backtest (timeframe attivo)</h4>
-          <div id="backtest-stats" class="backtest-stats"></div>
-          <div id="equity-chart" class="equity-chart"></div>
           <p class="strategy-disclaimer">
             Simulazione storica su dati passati. Le performance passate non garantiscono risultati futuri.
           </p>
@@ -259,32 +277,40 @@
         <div class="panel">
           <h3>Alert (Telegram)</h3>
 
-          <label class="layer-toggle"><input type="checkbox" id="strategy-notify-toggle" /> Notifiche browser (strategia integrata)</label>
-          <ul id="strategy-alert-log" class="alert-log"></ul>
-          <p class="strategy-disclaimer">
-            Notifiche su una condizione tecnica definita dall'utente. Non sono raccomandazioni di investimento.
-          </p>
-
           <div id="alert-login-prompt" class="alert-login-prompt hidden">
             <p class="panel-hint">Accedi per creare e gestire i tuoi avvisi — ogni utente ha la propria lista e riceve le notifiche sul proprio Telegram.</p>
             <button type="button" id="alert-login-btn">Accedi o registrati</button>
           </div>
 
           <div id="alert-authenticated" class="hidden">
-            <div class="telegram-setup">
+            <div id="telegram-status-chip" class="telegram-status-chip hidden">
+              <span class="tg-status-label"><span class="tg-status-dot"></span>Telegram collegato</span>
+              <button type="button" id="telegram-edit-btn" class="tg-edit-link">Modifica</button>
+            </div>
+            <div id="telegram-setup" class="telegram-setup">
               <label>Il tuo Telegram chat ID
                 <input type="text" id="telegram-chat-id-input" placeholder="es. 123456789" autocomplete="off" />
               </label>
               <button type="button" id="telegram-chat-id-save">Salva</button>
               <p class="panel-hint">Scrivi un messaggio qualsiasi al bot, poi apri <code>https://api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</code> per trovare il tuo chat ID — chiedi il link del bot se non lo hai.</p>
             </div>
-            <p class="panel-hint">Ogni ticker qui dentro viene controllato in background ogni minuto, indipendentemente da cosa stai guardando a schermo. Attiva una o più strategie per ticker: arriva una notifica Telegram per ogni segnale confermato.</p>
-            <form id="watchlist-form" class="watchlist-form">
+
+            <div class="section-title-row">
+              <span class="section-eyebrow">I tuoi alert</span>
+              <span id="watchlist-count" class="section-count"></span>
+            </div>
+
+            <form id="watchlist-form" class="watchlist-quickbar">
               <div class="wl-ticker-field">
-                <input type="text" id="watchlist-symbol" placeholder="Ticker (es. BTC)" autocomplete="off" required />
+                <input type="text" id="watchlist-symbol" placeholder="Aggiungi ticker (es. BTC)" autocomplete="off" required />
                 <ul id="watchlist-suggestions" class="suggestions hidden"></ul>
               </div>
-              <p id="watchlist-resolved-pair" class="wl-resolved-pair hidden"></p>
+              <button type="submit" title="Aggiungi alla watchlist">+</button>
+            </form>
+            <p id="watchlist-resolved-pair" class="wl-resolved-pair hidden"></p>
+
+            <details class="wl-options-details">
+              <summary>Opzioni — asset, exchange, timeframe, chiusura candela</summary>
               <div class="asset-toggle small">
                 <button type="button" data-watchlist-asset="stock" class="wl-asset-btn active">Azioni</button>
                 <button type="button" data-watchlist-asset="crypto" class="wl-asset-btn">Crypto</button>
@@ -298,10 +324,20 @@
               <label class="toolbar-check wl-onclose-check" title="Se attivo, l'alert scatta solo quando la candela chiude — niente falsi segnali intra-bar">
                 <input type="checkbox" id="watchlist-onclose" checked /> Alla chiusura della candela
               </label>
-              <button type="submit">Aggiungi</button>
-            </form>
+            </details>
+
+            <p class="panel-hint">Ogni ticker qui dentro viene controllato in background ogni minuto, indipendentemente da cosa stai guardando a schermo. Attiva una o più strategie per ticker: arriva una notifica Telegram per ogni segnale confermato.</p>
+
             <ul id="watchlist-list" class="watchlist-cards"></ul>
-            <button type="button" id="open-script-from-alert" class="pine-secondary-link">Script Pine personalizzato →</button>
+
+            <div class="alert-footnote">
+              <label class="layer-toggle"><input type="checkbox" id="strategy-notify-toggle" /> Notifiche browser (strategia integrata)</label>
+              <ul id="strategy-alert-log" class="alert-log"></ul>
+              <p class="strategy-disclaimer">
+                Notifiche su una condizione tecnica definita dall'utente. Non sono raccomandazioni di investimento.
+              </p>
+              <button type="button" id="open-script-from-alert" class="pine-secondary-link">Script Pine personalizzato →</button>
+            </div>
           </div>
         </div>
       </div>
@@ -363,6 +399,16 @@
           <span class="altro-menu-text">
             <span class="altro-menu-title">Saldi</span>
             <span class="altro-menu-sub">Sola lettura — MEXC, KuCoin</span>
+          </span>
+          <span class="altro-menu-chev">›</span>
+        </button>
+        <button type="button" id="altro-analisi-item" class="altro-menu-item">
+          <span class="altro-menu-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>
+          </span>
+          <span class="altro-menu-text">
+            <span class="altro-menu-title">Analisi struttura</span>
+            <span class="altro-menu-sub">Riepilogo, contesto HTF, indicatori, confluenze</span>
           </span>
           <span class="altro-menu-chev">›</span>
         </button>
