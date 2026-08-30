@@ -2687,6 +2687,10 @@
 
   function bindMobileTickerSearch() {
     el("ticker-input").addEventListener("focus", openMobileTickerSearch);
+    // The chart-strip symbol sits right next to the timeframe wheel, where
+    // the thumb already is — tapping it opens the same search instead of
+    // making the user reach back up to the toolbar field.
+    el("mobile-chart-symbol").addEventListener("click", openMobileTickerSearch);
     el("mts-close-btn").addEventListener("click", closeMobileTickerSearch);
     document.querySelectorAll(".mts-tab").forEach((tab) => {
       tab.addEventListener("click", () => {
