@@ -495,14 +495,13 @@
     logScale: false,
     // Kept minimal by default — every structure/liquidity level draws its own
     // chart label, and turning them all on at once buries the price action
-    // (especially on narrow screens). Confluence zones stay on since they're
-    // already a synthesized, filtered view rather than raw noise.
+    // (especially on narrow screens).
     layers: {
       order_block: false,
       fvg: false,
       liquidity: false,
       structure: false,
-      confluence: true,
+      confluence: false,
       ema: true,
       bbands: false,
       vwap: false,
