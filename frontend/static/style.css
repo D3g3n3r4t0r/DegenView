@@ -1983,7 +1983,7 @@ body {
     position: relative;
     overflow: hidden;
     height: auto;
-    margin-bottom: 82px; /* clears the fixed bottom nav (52px) + chart-strip (30px) */
+    margin-bottom: 112px; /* clears the fixed bottom nav (52px) + chart-strip (60px) */
   }
 
   .chart-area {
@@ -2059,13 +2059,13 @@ body {
   .mobile-chart-strip {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     position: fixed;
     left: 0;
     right: 0;
     bottom: calc(52px + env(safe-area-inset-bottom));
-    height: 30px;
-    padding: 0 12px;
+    height: 60px;
+    padding: 0 14px;
     background: var(--bg);
     border-top: 1px solid var(--border);
     z-index: 49;
@@ -2073,33 +2073,78 @@ body {
   .mobile-chart-strip.hidden { display: none; }
 
   .mobile-chart-symbol {
-    font-weight: 700;
-    font-size: 12.5px;
-    letter-spacing: 0.01em;
+    font-weight: 800;
+    font-size: 19px;
+    letter-spacing: -0.01em;
   }
 
-  /* Applied to the real #interval-primary <select> once relocated here —
-     a live control now, not a read-only label, so it needs its native
-     dropdown chrome stripped back down to the same pill it replaced. */
-  select.mobile-chart-interval {
-    appearance: none;
-    -webkit-appearance: none;
-    font-family: var(--font-mono);
-    font-size: 10px;
-    font-weight: 700;
-    text-transform: uppercase;
-    text-align: center;
-    text-align-last: center;
-    color: var(--accent);
-    background: var(--bg-panel);
-    border: 1px solid var(--border-strong);
-    border-radius: 100px;
-    padding: 3px 20px 3px 10px;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232962ff' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 5px center;
-    background-size: 11px;
+  /* The real #interval-primary <select> stays relocated here (so its
+     value/change-event logic doesn't get duplicated) but is now driven by
+     the wheel below instead of being the visible control itself. */
+  #mobile-chart-interval-slot { display: none; }
+
+  /* A small self-contained rounded capsule sized to the text, not a rail
+     spanning the strip — scroll-snap wheel of interval values, the
+     selected one sitting in a solid dark pill at its center. */
+  .tf-wheel {
+    position: relative;
+    width: 46px;
+    height: 54px;
+    flex-shrink: 0;
+    border: 1.5px solid var(--ink);
+    border-radius: 16px;
+    background: var(--bg);
+    overflow: hidden;
   }
+  .tf-wheel::before, .tf-wheel::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 16px;
+    z-index: 2;
+    pointer-events: none;
+  }
+  .tf-wheel::before { top: 0; background: linear-gradient(var(--bg), rgba(255, 255, 255, 0)); }
+  .tf-wheel::after { bottom: 0; background: linear-gradient(rgba(255, 255, 255, 0), var(--bg)); }
+
+  .tf-wheel-band {
+    position: absolute;
+    left: 3px;
+    right: 3px;
+    top: 18px;
+    height: 18px;
+    background: var(--ink);
+    border-radius: 8px;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  .tf-wheel-track {
+    height: 100%;
+    overflow-y: scroll;
+    scroll-snap-type: y mandatory;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+    padding: 18px 0;
+  }
+  .tf-wheel-track::-webkit-scrollbar { display: none; }
+
+  .tf-wheel-item {
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    scroll-snap-align: center;
+    position: relative;
+    z-index: 2;
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 10.5px;
+    color: #9a9ea5;
+  }
+  .tf-wheel-item.near { color: var(--ink-dim); }
+  .tf-wheel-item.current { color: #fff; font-size: 12px; font-weight: 800; }
 
   /* Drawing tools have no home at all below 760px otherwise (.draw-rail is
      hidden outright) — a floating button over the chart opens the same
@@ -2113,7 +2158,7 @@ body {
     /* +44px clears the disclaimer strip's own band (chart-strip + up to
        three wrapped lines of legal text) that sits just above the bottom
        nav — a smaller offset here visually collided with that text. */
-    bottom: calc(52px + env(safe-area-inset-bottom) + 30px + 44px);
+    bottom: calc(52px + env(safe-area-inset-bottom) + 60px + 44px);
     width: 44px;
     height: 44px;
     border-radius: 50%;
@@ -2131,7 +2176,7 @@ body {
     flex-direction: row;
     position: fixed;
     left: 14px;
-    bottom: calc(52px + env(safe-area-inset-bottom) + 30px + 96px);
+    bottom: calc(52px + env(safe-area-inset-bottom) + 60px + 96px);
     width: auto;
     height: 48px;
     padding: 0 6px;
@@ -2258,7 +2303,7 @@ body {
     position: fixed;
     left: 0;
     right: 0;
-    bottom: calc(52px + env(safe-area-inset-bottom) + 30px);
+    bottom: calc(52px + env(safe-area-inset-bottom) + 60px);
     z-index: 45;
     font-size: 8px;
     line-height: 1.25;

@@ -418,7 +418,15 @@
 
   <div id="mobile-chart-strip" class="mobile-chart-strip hidden">
     <span id="mobile-chart-symbol" class="mobile-chart-symbol">—</span>
+    <!-- #interval-primary gets relocated here by relocateIntervalSelect()
+         (app.js) but stays visually hidden — the wheel below is the real
+         UI, driven off this select's options/value/change event so no
+         interval logic gets duplicated. -->
     <span id="mobile-chart-interval-slot"></span>
+    <div id="mobile-tf-wheel" class="tf-wheel" title="Scorri per cambiare timeframe">
+      <div class="tf-wheel-band"></div>
+      <div class="tf-wheel-track" id="tf-wheel-track"></div>
+    </div>
   </div>
 
   <button type="button" id="mobile-draw-fab" class="mobile-draw-fab hidden" title="Strumenti di disegno">
