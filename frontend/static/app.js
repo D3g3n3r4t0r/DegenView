@@ -3091,6 +3091,25 @@
     targetParent.appendChild(select);
   }
 
+  // Switching which strategy drives the backtest/markers is a Strategia
+  // concern, not a Livelli one — but on mobile it used to travel with the
+  // rest of chart-settings-group into the Livelli screen, so switching
+  // strategy meant leaving Strategia entirely. Pull just this one control
+  // out and drop it at the top of the Strategia screen instead; desktop is
+  // unaffected, it stays in the toolbar.
+  function relocateStrategySelect() {
+    const select = el("active-strategy-select");
+    const isMobile = window.matchMedia("(max-width: 760px)").matches;
+    const targetParent = isMobile ? el("strategy-select-slot") : el("chart-settings-group");
+    if (select.parentElement === targetParent) return;
+    select.classList.toggle("mobile-strategy-select", isMobile);
+    if (isMobile) {
+      targetParent.appendChild(select);
+    } else {
+      targetParent.insertBefore(select, targetParent.querySelector(".toolbar-check"));
+    }
+  }
+
   // Runs once, either right away (already logged in) or right after the
   // login gate clears — everything that fetches real data or auto-loads a
   // chart waits behind auth so nothing renders before the page unlocks.
@@ -3101,6 +3120,7 @@
     loadPineScripts();
     relocateChartSettings();
     relocateIntervalSelect();
+    relocateStrategySelect();
     // active-strategy-select must be populated before the auto-load below
     // reads its value, or the request goes out with an empty strategy_name.
     await populateStrategySelects();
@@ -3138,6 +3158,7 @@
         relocateChartSettings();
         relocateAuthWidget();
         relocateIntervalSelect();
+        relocateStrategySelect();
       }, 150);
     });
   });

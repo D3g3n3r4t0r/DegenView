@@ -1702,6 +1702,12 @@ body {
   #levels-panel .toolbar-intervals { width: 100%; }
   #levels-panel .interval-select { width: 100%; padding: 10px; font-size: 14px; }
   #levels-panel .toolbar-strategy { width: 100%; max-width: none; padding: 10px; font-size: 14px; }
+
+  /* Strategy select relocated to the top of the Strategia screen itself
+     (see relocateStrategySelect in app.js) — same full-width treatment as
+     its Livelli counterpart above. */
+  .strategy-select-slot { margin: 2px 0 12px; }
+  .strategy-select-slot .toolbar-strategy { width: 100%; max-width: none; padding: 10px; font-size: 14px; }
   #levels-panel .toolbar-check {
     font-size: 13px;
     border: 1px solid var(--border-strong);
