@@ -1658,6 +1658,22 @@ body {
 @media (max-width: 760px) {
   html, body { height: 100%; overflow: hidden; }
 
+  /* iOS Safari auto-zooms the whole page in on focus whenever a text
+     input's computed font-size is below 16px — every text-entry field
+     needs to clear that threshold here regardless of its desktop size
+     (select elements are exempt: iOS shows a picker wheel for those,
+     never a zoom). Without this every text field on mobile — ticker
+     search, auth forms, watchlist ticker, Pine params, Telegram token —
+     triggered the zoom, forcing the user to manually pinch back out. */
+  input[type="text"],
+  input[type="number"],
+  input[type="email"],
+  input[type="password"],
+  input[type="search"],
+  textarea {
+    font-size: 16px !important;
+  }
+
   /* Toolbar becomes two stacked rows with zero HTML changes: giving .brand
      a 100% flex-basis forces it alone onto row 1, so search-form + the
      Analizza button (next in flex order, no longer fitting beside it) wrap

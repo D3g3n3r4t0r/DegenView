@@ -30,7 +30,7 @@ from app.analysis.backtest import run_backtest
 from app.analysis.confluence import compute_confluence
 from app.analysis.indicators import compute_indicators
 from app.analysis.fibonacci import compute_fib_zones
-from app.analysis.smc_engine import compute_dealing_range, compute_levels
+from app.analysis.smc_engine import compute_dealing_range, compute_levels, compute_swings
 from app.analysis.strategies import AVAILABLE_STRATEGIES, DEFAULT_STRATEGY, build_strategy_state
 from app.analysis.summary import build_summary, determine_bias
 from app.cache import get_or_fetch
@@ -721,10 +721,11 @@ async def analyze(
         if df.empty:
             raise HTTPException(status_code=502, detail=f"Nessun dato per {symbol} su timeframe {tf_key}")
 
-        levels = compute_levels(df, tf_key)
+        swings = compute_swings(df, tf_key)
+        levels = compute_levels(df, swings)
         indicators = compute_indicators(df)
         bias = determine_bias(levels)
-        dealing_range = compute_dealing_range(df, tf_key)
+        dealing_range = compute_dealing_range(df, swings)
         fib_zones = compute_fib_zones(df, tf_key, intervals[tf_key])
         strategy = build_strategy_state(strategy_name, df, strategy_params_dict)
         strategies[tf_key] = [strategy]

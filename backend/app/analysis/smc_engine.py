@@ -37,11 +37,19 @@ def _ts_or_none(df: pd.DataFrame, pos) -> int | None:
     return _ts(df, pos)
 
 
-def compute_dealing_range(df: pd.DataFrame, timeframe_key: str) -> tuple[float, float] | None:
+def compute_swings(df: pd.DataFrame, timeframe_key: str) -> pd.DataFrame:
+    """The one swing-high/low pass every other function here (and the fib
+    engine) builds on. Called once per timeframe in main.py and threaded
+    through — swing_highs_lows is a non-trivial rolling-window pass over the
+    full candle history, and computing it separately per consumer (levels,
+    dealing range, fib zones) tripled the work for identical output."""
+    swing_length = SWING_LENGTH_BY_TIMEFRAME.get(timeframe_key, 8)
+    return smc.swing_highs_lows(df, swing_length=swing_length)
+
+
+def compute_dealing_range(df: pd.DataFrame, swings: pd.DataFrame) -> tuple[float, float] | None:
     """Current structural range (most recent swing low -> most recent swing high),
     used to place price in a premium/discount/equilibrium context."""
-    swing_length = SWING_LENGTH_BY_TIMEFRAME.get(timeframe_key, 8)
-    swings = smc.swing_highs_lows(df, swing_length=swing_length)
     valid = swings.dropna(subset=["HighLow"])
     highs = valid[valid["HighLow"] == 1]
     lows = valid[valid["HighLow"] == -1]
@@ -54,10 +62,7 @@ def compute_dealing_range(df: pd.DataFrame, timeframe_key: str) -> tuple[float, 
     return last_low, last_high
 
 
-def compute_levels(df: pd.DataFrame, timeframe_key: str) -> list[LiquidityLevel]:
-    swing_length = SWING_LENGTH_BY_TIMEFRAME.get(timeframe_key, 8)
-    swings = smc.swing_highs_lows(df, swing_length=swing_length)
-
+def compute_levels(df: pd.DataFrame, swings: pd.DataFrame) -> list[LiquidityLevel]:
     levels: list[LiquidityLevel] = []
     levels.extend(_bos_choch_levels(df, swings))
     levels.extend(_order_block_levels(df, swings))
