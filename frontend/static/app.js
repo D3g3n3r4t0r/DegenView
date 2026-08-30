@@ -1757,6 +1757,80 @@
     });
   }
 
+  // The wheel is a thin skin over the real #interval-primary select — it
+  // never duplicates the interval list or the "what happens on change"
+  // logic, it just reads the select's options once and, from then on,
+  // keeps select.value and this UI in sync in both directions.
+  const TF_WHEEL_ITEM_H = 18;
+
+  function buildMobileTfWheel() {
+    const track = el("tf-wheel-track");
+    if (track.dataset.built) return;
+    track.dataset.built = "1";
+    const select = el("interval-primary");
+    Array.from(select.options).forEach((opt) => {
+      const item = document.createElement("div");
+      item.className = "tf-wheel-item";
+      item.textContent = opt.value;
+      item.dataset.value = opt.value;
+      item.addEventListener("click", () => {
+        track.scrollTo({ top: item.offsetTop - (track.clientHeight - TF_WHEEL_ITEM_H) / 2, behavior: "smooth" });
+      });
+      track.appendChild(item);
+    });
+
+    let settleTimer = null;
+    track.addEventListener("scroll", () => {
+      markTfWheelClosest();
+      clearTimeout(settleTimer);
+      settleTimer = setTimeout(() => {
+        const closest = markTfWheelClosest();
+        if (closest && closest.dataset.value !== select.value) {
+          select.value = closest.dataset.value;
+          select.dispatchEvent(new Event("change"));
+        }
+      }, 130);
+    });
+  }
+
+  // Whichever item's center is nearest the track's own center becomes
+  // "current" (the one sitting inside the dark pill); its immediate
+  // neighbors get a lighter "near" tint so the fade toward the edges
+  // reads as a wheel, not a flat list.
+  function markTfWheelClosest() {
+    const track = el("tf-wheel-track");
+    const items = Array.from(track.children);
+    if (!items.length) return null;
+    const center = track.scrollTop + track.clientHeight / 2;
+    let closest = items[0];
+    let closestDist = Infinity;
+    items.forEach((it) => {
+      const dist = Math.abs(it.offsetTop + TF_WHEEL_ITEM_H / 2 - center);
+      if (dist < closestDist) { closestDist = dist; closest = it; }
+    });
+    const closestIdx = items.indexOf(closest);
+    items.forEach((it, idx) => {
+      it.classList.toggle("current", it === closest);
+      it.classList.toggle("near", Math.abs(idx - closestIdx) === 1);
+    });
+    return closest;
+  }
+
+  // Re-centers the wheel on the select's current value — needed whenever
+  // the value changes from outside the wheel (initial load, resize onto
+  // mobile) since scrollTop math needs real layout, which only exists once
+  // the strip is actually visible (display:none elsewhere gives 0 height).
+  function syncMobileTfWheel() {
+    if (!window.matchMedia("(max-width: 760px)").matches) return;
+    const track = el("tf-wheel-track");
+    if (!track.dataset.built) return;
+    const select = el("interval-primary");
+    const target = track.querySelector(`.tf-wheel-item[data-value="${select.value}"]`);
+    if (!target) return;
+    track.scrollTop = target.offsetTop - (track.clientHeight - TF_WHEEL_ITEM_H) / 2;
+    markTfWheelClosest();
+  }
+
   function updateMobileChartStrip() {
     const strip = el("mobile-chart-strip");
     const fab = el("mobile-draw-fab");
@@ -1769,6 +1843,7 @@
     el("mobile-chart-symbol").textContent = state.data.symbol;
     strip.classList.remove("hidden");
     fab.classList.toggle("hidden", !onChartScreen);
+    syncMobileTfWheel();
   }
 
   function render() {
@@ -3120,16 +3195,16 @@
   // The timeframe select otherwise only lives inside the Livelli screen —
   // reachable, but not from the chart itself, which is where "change the
   // timeframe" actually happens. On mobile it moves into the persistent
-  // strip pinned above the bottom nav (replacing what used to be a
-  // read-only "15M" label that looked tappable but did nothing), so the one
-  // real control is visible and usable without leaving the chart. Desktop
-  // keeps it in the toolbar's chart-settings-group, same as always.
+  // strip pinned above the bottom nav, kept visually hidden there (see
+  // #mobile-chart-interval-slot in style.css) — the wheel widget next to
+  // it is the real UI, driven off this select (buildMobileTfWheel/
+  // syncMobileTfWheel), so the one source of truth stays this element.
+  // Desktop keeps it visible in the toolbar's chart-settings-group.
   function relocateIntervalSelect() {
     const select = el("interval-primary");
     const isMobile = window.matchMedia("(max-width: 760px)").matches;
     const targetParent = isMobile ? el("mobile-chart-interval-slot") : document.querySelector("#chart-settings-group .toolbar-intervals");
     if (select.parentElement === targetParent) return;
-    select.classList.toggle("mobile-chart-interval", isMobile);
     targetParent.appendChild(select);
   }
 
@@ -3177,6 +3252,7 @@
 
   document.addEventListener("DOMContentLoaded", async () => {
     populateIntervalSelects();
+    buildMobileTfWheel();
     initCharts();
     bindUI();
     bindMobileNav();
@@ -3201,6 +3277,7 @@
         relocateAuthWidget();
         relocateIntervalSelect();
         relocateStrategySelect();
+        syncMobileTfWheel();
       }, 150);
     });
   });
