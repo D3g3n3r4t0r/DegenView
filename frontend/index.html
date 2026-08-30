@@ -141,6 +141,18 @@
       <div id="polling-badge" class="polling-badge hidden">Agg. ogni 60s</div>
       <div id="loading" class="loading hidden">Analisi in corso…</div>
       <div id="empty-state" class="empty-state">Cerca un ticker per iniziare l'analisi multi-timeframe.</div>
+      <!-- Shown only if the very first request (checkAuth, in app.js) is
+           still pending after ~1.2s — the free-tier server suspends when
+           idle, so the first visit after any quiet period pays a one-time
+           wake-up cost with no other feedback otherwise. Only fires once
+           per boot; every later request is already fast. -->
+      <div id="server-wake-hint" class="server-wake-hint hidden">
+        <span class="server-wake-dot"></span>
+        <div>
+          <div class="server-wake-title">Il server si sta avviando…</div>
+          <div class="server-wake-sub">Dopo un periodo di inattività la prima apertura richiede qualche secondo in più.</div>
+        </div>
+      </div>
       <div class="chart-row">
         <nav class="draw-rail" id="draw-rail" title="Strumenti di disegno">
           <button type="button" class="draw-tool-btn selected" data-draw-tool="cursor" title="Cursore — clicca un disegno per eliminarlo">

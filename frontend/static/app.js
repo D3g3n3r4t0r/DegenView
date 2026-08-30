@@ -600,13 +600,31 @@
   let authGateActive = false; // true while the modal is blocking the whole app (not logged in yet)
   let appStarted = false; // startApp() runs once, either immediately or right after the gate clears
 
+  // Fly.io scale-to-zero means the very first request of a cold session can
+  // take several seconds while the machine boots — checkAuth() is that first
+  // request, so a hint arms here and only surfaces if it actually runs long.
+  let slowServerTimer = null;
+  function armSlowServerHint() {
+    clearTimeout(slowServerTimer);
+    slowServerTimer = setTimeout(() => {
+      el("server-wake-hint").classList.remove("hidden");
+    }, 1200);
+  }
+  function disarmSlowServerHint() {
+    clearTimeout(slowServerTimer);
+    el("server-wake-hint").classList.add("hidden");
+  }
+
   async function checkAuth() {
+    armSlowServerHint();
     try {
       const resp = await fetch("/api/auth/me");
       const body = await resp.json();
       state.user = body.user;
     } catch (err) {
       state.user = null;
+    } finally {
+      disarmSlowServerHint();
     }
     updateAuthUI();
   }
