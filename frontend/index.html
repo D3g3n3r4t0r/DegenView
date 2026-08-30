@@ -214,28 +214,7 @@
           </div>
           <div id="backtest-chips" class="backtest-chips"></div>
 
-          <details class="params-details">
-            <summary>Dettagli backtest</summary>
-            <div id="backtest-details" class="backtest-details"></div>
-          </details>
-
-          <div class="operations-head">
-            <span>Operazioni</span>
-            <span id="operations-count" class="operations-count"></span>
-          </div>
-          <ul id="operations-list" class="operations-list"></ul>
-
-          <p class="marker-legend legend-thin">
-            <span class="legend-item"><span class="legend-swatch bull">▲</span>Long</span>
-            <span class="legend-item"><span class="legend-swatch bear">▼</span>Short</span>
-            <span class="legend-item"><span class="legend-swatch">●</span>Uscita</span>
-            <span class="legend-item"><span class="legend-swatch stamp">◆</span>Inversione</span>
-          </p>
-          <p class="strategy-disclaimer">
-            Simulazione storica su dati passati. Le performance passate non garantiscono risultati futuri.
-          </p>
-
-          <details class="params-details">
+          <details class="params-details" open>
             <summary>Parametri strategia &amp; backtest</summary>
             <form id="params-form" class="params-form">
               <fieldset>
@@ -270,6 +249,27 @@
               <button type="submit">Applica e ricalcola</button>
             </form>
           </details>
+
+          <details class="params-details">
+            <summary>Dettagli backtest</summary>
+            <div id="backtest-details" class="backtest-details"></div>
+          </details>
+
+          <div class="operations-head">
+            <span>Operazioni</span>
+            <span id="operations-count" class="operations-count"></span>
+          </div>
+          <ul id="operations-list" class="operations-list"></ul>
+
+          <p class="marker-legend legend-thin">
+            <span class="legend-item"><span class="legend-swatch bull">▲</span>Long</span>
+            <span class="legend-item"><span class="legend-swatch bear">▼</span>Short</span>
+            <span class="legend-item"><span class="legend-swatch">●</span>Uscita</span>
+            <span class="legend-item"><span class="legend-swatch stamp">◆</span>Inversione</span>
+          </p>
+          <p class="strategy-disclaimer">
+            Simulazione storica su dati passati. Le performance passate non garantiscono risultati futuri.
+          </p>
         </div>
       </div>
 
