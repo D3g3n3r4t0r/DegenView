@@ -1895,13 +1895,17 @@
 
         ratioEntries.forEach(([ratio, price]) => {
           const isKeyRatio = ["0", "1", "0.382", "0.618", "1.618"].includes(ratio);
+          // Only the key ratios get an axis label + title box — the rest
+          // (0.236/0.5/0.786 retracement, 1.414/2/2.618 extension) still
+          // mark the price but stay unlabeled and near-invisible, so the
+          // chart doesn't turn into a stack of a dozen labeled price lines.
           const line = candleSeries.createPriceLine({
             price,
             color: lineColor,
             lineWidth: isKeyRatio ? 2 : 1,
             lineStyle: LightweightCharts.LineStyle.Dashed,
-            axisLabelVisible: true,
-            title: `Fib ${isExt ? "ext" : "ret"} ${(parseFloat(ratio) * 100).toFixed(1)}%`,
+            axisLabelVisible: isKeyRatio,
+            title: isKeyRatio ? `Fib ${isExt ? "ext" : "ret"} ${(parseFloat(ratio) * 100).toFixed(1)}%` : "",
           });
           overlays.priceLines.push({ series: candleSeries, line });
         });
