@@ -147,7 +147,7 @@ body {
 }
 
 #ticker-input:focus, .interval-select:focus, .params-form input:focus, .params-form select:focus,
-.watchlist-form input:focus, .watchlist-form select:focus, .active-strategy-select:focus {
+.watchlist-quickbar input:focus, .wl-options-details select:focus, .active-strategy-select:focus {
   outline: 1.5px solid var(--accent);
   outline-offset: 1px;
 }
@@ -715,13 +715,6 @@ body {
 .legend-swatch.bear { color: var(--bear); }
 .legend-swatch.stamp { color: var(--stamp); }
 
-.watchlist-form {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: 10px;
-}
-
 .wl-ticker-field {
   position: relative;
   width: 100%;
@@ -742,8 +735,7 @@ body {
   color: var(--bear);
 }
 
-.watchlist-form input[type="text"],
-.watchlist-form select {
+.wl-options-details select {
   background: var(--bg-panel);
   border: 1.5px solid var(--border-strong);
   color: var(--ink);
@@ -776,19 +768,6 @@ body {
 .wl-asset-btn.active {
   background: var(--accent);
   color: var(--bg);
-}
-
-.watchlist-form button[type="submit"] {
-  background: var(--ink);
-  color: var(--bg);
-  border: 1.5px solid var(--ink);
-  border-radius: 8px;
-  padding: 6px;
-  font-size: 11px;
-  font-family: var(--font-mono);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  cursor: pointer;
 }
 
 /* ---- Auth: toolbar widget + login/register modal ---- */
@@ -992,6 +971,129 @@ body {
   background: var(--bg);
   padding: 1px 4px;
   border-radius: 8px;
+}
+
+/* Collapsed one-line replacement for .telegram-setup once a chat ID is
+   already saved — the full box with its raw bot-API URL only needs to be
+   seen once, not every time Alert is opened (see updateTelegramSetupUI). */
+.telegram-status-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 12px;
+}
+
+.tg-status-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--ink);
+}
+
+.tg-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--bull);
+  flex-shrink: 0;
+}
+
+.tg-edit-link {
+  background: none;
+  border: none;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--accent);
+  cursor: pointer;
+  padding: 0;
+}
+
+.section-title-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 4px 0 8px;
+}
+
+.section-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--stamp);
+}
+
+.section-count {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink-dim);
+}
+
+/* Ticker input + submit on one line, matching the header search bar's own
+   pattern — everything else (asset/exchange/timeframe/on-close) collapses
+   behind .wl-options-details so adding a ticker isn't a 6-field form. */
+.watchlist-quickbar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.watchlist-quickbar .wl-ticker-field { flex: 1; }
+
+.watchlist-quickbar input[type="text"] {
+  width: 100%;
+  background: var(--bg-panel);
+  border: 1.5px solid var(--border-strong);
+  color: var(--ink);
+  border-radius: 8px;
+  padding: 7px 9px;
+  font-size: 12px;
+}
+
+.watchlist-quickbar button[type="submit"] {
+  flex-shrink: 0;
+  width: 36px;
+  background: var(--accent);
+  color: var(--bg);
+  border: none;
+  border-radius: 8px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.wl-options-details {
+  margin-bottom: 10px;
+  font-size: 12px;
+}
+
+.wl-options-details summary {
+  cursor: pointer;
+  color: var(--ink-dim);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 4px 0;
+}
+
+.wl-options-details > *:not(summary) {
+  margin-top: 6px;
+}
+
+/* Browser notifications are the lesser-used of the two alert systems here
+   — pushed to the bottom, visually separated, so it stops competing with
+   the Telegram watchlist (the one people actually rely on) for attention. */
+.alert-footnote {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border);
 }
 
 .watchlist-cards {
@@ -1297,22 +1399,105 @@ body {
   margin: 14px 0 8px;
 }
 
-.backtest-stats {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-  font-size: 11.5px;
+/* Equity chart is the hero of the Strategia screen — the % return and
+   final equity are stamped directly on it (not a separate KPI tile) so the
+   number that matters is the first thing read, and the time axis stays on
+   (see initCharts) so the curve reads against real dates instead of
+   floating with no time reference. */
+.eq-hero-wrap {
+  position: relative;
   margin-bottom: 8px;
 }
 
-.backtest-stats .stat {
+.equity-chart {
+  height: 180px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.equity-hero-stamp {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  text-align: right;
+  pointer-events: none;
+}
+
+.equity-stamp-pct {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 21px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+}
+
+.equity-stamp-pct.positive { color: var(--bull); }
+.equity-stamp-pct.negative { color: var(--bear); }
+
+.equity-stamp-sub {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--ink-dim);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+  margin-top: 1px;
+}
+
+/* Only the 3 ratios worth scanning at a glance stay always-visible; trade
+   count / final equity move behind "Dettagli backtest" below. */
+.backtest-chips {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.chip {
+  flex: 1;
+  text-align: center;
+  background: var(--bg-panel);
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 4px;
+  min-width: 0;
+}
+
+.chip-label {
+  color: var(--ink-dim);
+  font-size: 8.5px;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.chip-value {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  margin-top: 1px;
+}
+
+.chip-value.positive { color: var(--bull); }
+.chip-value.negative { color: var(--bear); }
+
+.backtest-details {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 11.5px;
+}
+
+.backtest-details .stat {
+  flex: 1;
   background: var(--bg-panel);
   border: 1.5px solid var(--border);
   border-radius: 8px;
   padding: 5px 7px;
 }
 
-.backtest-stats .stat-label {
+.backtest-details .stat-label {
   color: var(--ink-dim);
   font-size: 9.5px;
   font-family: var(--font-mono);
@@ -1320,21 +1505,89 @@ body {
   letter-spacing: 0.03em;
 }
 
-.backtest-stats .stat-value {
+.backtest-details .stat-value {
   font-family: var(--font-mono);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--ink);
 }
 
-.backtest-stats .stat-value.positive { color: var(--bull); }
-.backtest-stats .stat-value.negative { color: var(--bear); }
+.operations-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 14px 0 6px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--stamp);
+}
 
-.equity-chart {
-  height: 90px;
-  border: 1.5px solid var(--border-strong);
+.operations-count {
+  color: var(--ink-dim);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.operations-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  overflow: hidden;
+}
+
+.operation-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 9px;
+  font-size: 11px;
+  border-bottom: 1px dashed var(--border);
+}
+
+.operation-row:last-child { border-bottom: none; }
+
+.op-dir {
+  font-size: 11px;
+  flex-shrink: 0;
+  width: 12px;
+}
+
+.op-dir.long { color: var(--bull); }
+.op-dir.short { color: var(--bear); }
+
+.op-dates {
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink-dim);
+}
+
+.op-pnl {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.op-pnl.positive { color: var(--bull); }
+.op-pnl.negative { color: var(--bear); }
+
+.operations-empty {
+  padding: 12px 9px;
+  text-align: center;
+  font-size: 10.5px;
+  color: var(--ink-dim);
+}
+
+.legend-thin {
+  font-size: 9px;
+  margin-top: 12px;
 }
 
 .params-details {
@@ -1974,7 +2227,7 @@ body {
 
   .layer-toggle { padding: 8px 0; font-size: 14px; }
 
-  .watchlist-form button[type="submit"],
+  .watchlist-quickbar button[type="submit"],
   .pine-actions button,
   .pine-params-form button[type="submit"] {
     min-height: 40px;
