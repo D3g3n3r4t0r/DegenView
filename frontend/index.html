@@ -450,11 +450,20 @@
       <div class="tf-wheel-band"></div>
       <div class="tf-wheel-track" id="tf-wheel-track"></div>
     </div>
+    <!-- Same drawing-tools dock the desktop rail opens, plus clear-all —
+         replaces the floating FAB that used to sit on top of the chart
+         itself, blocking candles. Hidden on every mobile screen but
+         Grafico (see showMobileScreen/updateMobileChartStrip in app.js). -->
+    <div id="mobile-strip-tools" class="strip-tools hidden">
+      <div class="strip-divider"></div>
+      <button type="button" id="mobile-strip-draw-btn" class="strip-tool-btn" title="Strumenti di disegno">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+      </button>
+      <button type="button" id="mobile-strip-clear-btn" class="strip-tool-btn" title="Cancella tutti i disegni">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7 H20 M9 7 V4 H15 V7 M6 7 L7 20 H17 L18 7"/></svg>
+      </button>
+    </div>
   </div>
-
-  <button type="button" id="mobile-draw-fab" class="mobile-draw-fab hidden" title="Strumenti di disegno">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
-  </button>
 
   <nav id="mobile-nav" class="mobile-nav">
     <button type="button" class="mobile-nav-btn active" data-mobile-target="chart">

@@ -1740,19 +1740,30 @@
   }
 
   // .draw-rail is hidden outright below 760px (there's no room for a fixed
-  // side column) — this FAB is the only way to reach drawing tools on
-  // mobile, opening the same rail repositioned as a floating horizontal
-  // dock over the chart instead. Picking a tool or tapping the FAB again
-  // closes it, same as the desktop rail's own click-away behavior.
-  function bindMobileDrawFab() {
-    const fab = el("mobile-draw-fab");
+  // side column) — these two chart-strip buttons are how mobile reaches
+  // drawing tools instead: the pencil opens the same rail repositioned as
+  // a horizontal dock right above this row, the trash mirrors
+  // #draw-clear-btn. Picking a tool or tapping the pencil again closes the
+  // dock, same as the desktop rail's own click-away behavior.
+  function bindMobileDrawTools() {
+    const drawBtn = el("mobile-strip-draw-btn");
+    const clearBtn = el("mobile-strip-clear-btn");
     const rail = el("draw-rail");
-    fab.addEventListener("click", () => {
+    drawBtn.addEventListener("click", () => {
       rail.classList.toggle("mobile-tools-open");
+      drawBtn.classList.toggle("active", rail.classList.contains("mobile-tools-open"));
+    });
+    clearBtn.addEventListener("click", () => {
+      if (drawState.drawings.length && window.confirm("Cancellare tutti i disegni su questo grafico?")) {
+        clearAllDrawings();
+      }
     });
     rail.querySelectorAll(".draw-tool-btn[data-draw-tool]").forEach((btn) => {
       btn.addEventListener("click", () => {
-        if (window.matchMedia("(max-width: 760px)").matches) rail.classList.remove("mobile-tools-open");
+        if (window.matchMedia("(max-width: 760px)").matches) {
+          rail.classList.remove("mobile-tools-open");
+          drawBtn.classList.remove("active");
+        }
       });
     });
   }
@@ -1833,16 +1844,16 @@
 
   function updateMobileChartStrip() {
     const strip = el("mobile-chart-strip");
-    const fab = el("mobile-draw-fab");
+    const tools = el("mobile-strip-tools");
     const onChartScreen = document.querySelector('.mobile-nav-btn[data-mobile-target="chart"]').classList.contains("active");
     if (!state.data) {
       strip.classList.add("hidden");
-      fab.classList.add("hidden");
+      tools.classList.add("hidden");
       return;
     }
     el("mobile-chart-symbol").textContent = state.data.symbol;
     strip.classList.remove("hidden");
-    fab.classList.toggle("hidden", !onChartScreen);
+    tools.classList.toggle("hidden", !onChartScreen);
     syncMobileTfWheel();
   }
 
@@ -3078,9 +3089,9 @@
     const navTarget = NAV_TARGET_FOR[target] || target;
     document.querySelectorAll(".mobile-nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.mobileTarget === navTarget));
 
-    // The draw FAB only makes sense over the chart itself — everywhere else
-    // it would just float uselessly on top of Livelli/Strategia/etc content.
-    el("mobile-draw-fab").classList.toggle("hidden", target !== "chart" || !state.data);
+    // Drawing tools only make sense over the chart itself — everywhere else
+    // there's nothing to draw on.
+    el("mobile-strip-tools").classList.toggle("hidden", target !== "chart" || !state.data);
 
     if (target === "chart") {
       resizeAllCharts();
@@ -3368,7 +3379,7 @@
     bindRail();
     bindTabs();
     bindDrawRail();
-    bindMobileDrawFab();
+    bindMobileDrawTools();
     bindAuth();
     relocateAuthWidget();
     await checkAuth();

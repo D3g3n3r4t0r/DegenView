@@ -1912,7 +1912,7 @@ body {
    visible search bar) and bottom nav are the only fixed chrome; every screen
    fills the space between them with its own single scroll container. ---- */
 
-.mobile-nav, .drawer-header, .mobile-chart-strip, .mobile-draw-fab, .mobile-ticker-search { display: none; }
+.mobile-nav, .drawer-header, .mobile-chart-strip, .mobile-ticker-search { display: none; }
 
 @media (max-width: 760px) {
   html, body { height: 100%; overflow: hidden; }
@@ -1933,16 +1933,16 @@ body {
     font-size: 16px !important;
   }
 
-  /* Ticker entry no longer happens in the toolbar at all on mobile — the
-     chart-strip symbol (next to the timeframe wheel, see
-     openMobileTickerSearch in app.js) is the only way in, so .search-form
-     and #search-btn are hidden here; the toolbar is just the brand row.
-     #ticker-input itself stays in the DOM (inside the hidden .search-form)
-     until it gets physically moved into the search overlay on open — see
-     .mts-field-slot below for how it's styled once there. */
-  .toolbar { padding: 8px 12px; gap: 8px; align-items: center; overflow: visible; }
-  .brand { font-size: 15px; display: flex; align-items: center; }
-  .auth-widget, .toolbar-spacer, .search-form, #search-btn { display: none; }
+  /* Nothing lives in the toolbar on mobile any more — ticker entry moved to
+     the chart-strip symbol (openMobileTickerSearch in app.js), "Analizza"
+     is pointless since selecting a result already runs the analysis, and
+     the brand wordmark just cost a whole row of vertical space for a label
+     the user only needs once. The whole bar collapses to 0 height, so the
+     chart starts right at the top of the screen. #ticker-input stays in
+     the DOM (inside the hidden .search-form) until it's physically moved
+     into the search overlay on open — see .mts-field-slot for its styling
+     once there. */
+  .toolbar { display: none; }
 
   /* The small dropdown never shows on mobile — full-screen search
      (.mobile-ticker-search) replaces it entirely once the field is
@@ -2038,14 +2038,15 @@ body {
   #chart-wrap { height: 100%; }
   .main-chart { height: 100%; }
 
-  /* One screen at a time, filling everything between the 92px header and
-     the bottom nav — not a partial sheet, not an overlay over the chart. */
+  /* One screen at a time, filling everything from the very top of the
+     screen (there's no toolbar left to clear) down to the bottom nav —
+     not a partial sheet, not an overlay over the chart. */
   #levels-panel, #script-panel, .right-panel, .altro-panel {
     position: fixed;
     left: 0;
     right: 0;
     width: auto; /* #levels-panel/#script-panel/.altro-panel otherwise inherit the desktop flyout's fixed 260px width, which — combined with left+right both set on a fixed element — wins over "right:0" and leaves the chart showing through the remaining strip */
-    top: 92px;
+    top: 0;
     bottom: 52px;
     max-height: none;
     overflow-y: auto;
@@ -2197,36 +2198,35 @@ body {
   .tf-wheel-item.current { color: #fff; font-size: 12px; font-weight: 800; }
 
   /* Drawing tools have no home at all below 760px otherwise (.draw-rail is
-     hidden outright) — a floating button over the chart opens the same
-     tool strip used on desktop, repositioned as a horizontal dock. */
-  .mobile-draw-fab {
+     hidden outright) — these two buttons, next to the timeframe wheel, open
+     the same tool strip used on desktop as a horizontal dock right above
+     this row, instead of a FAB floating on top of the candles. */
+  .strip-divider { width: 1px; height: 26px; background: var(--border); flex-shrink: 0; }
+
+  .strip-tool-btn {
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    position: fixed;
-    left: 14px;
-    /* +44px clears the disclaimer strip's own band (chart-strip + up to
-       three wrapped lines of legal text) that sits just above the bottom
-       nav — a smaller offset here visually collided with that text. */
-    bottom: calc(52px + env(safe-area-inset-bottom) + 60px + 44px);
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
-    background: var(--accent);
-    color: var(--bg);
-    border: none;
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
-    z-index: 46;
+    border-radius: 9px;
+    border: 1.5px solid var(--border-strong);
+    background: var(--bg);
+    color: var(--ink-dim);
   }
-  .mobile-draw-fab svg { width: 19px; height: 19px; }
-  .mobile-draw-fab.hidden { display: none; }
+  .strip-tool-btn svg { width: 16px; height: 16px; }
+  .strip-tool-btn.active { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+  .strip-tools { display: flex; align-items: center; gap: 8px; }
+  .strip-tools.hidden { display: none; }
 
   .draw-rail.mobile-tools-open {
     display: flex;
     flex-direction: row;
     position: fixed;
-    left: 14px;
-    bottom: calc(52px + env(safe-area-inset-bottom) + 60px + 96px);
+    right: 14px;
+    bottom: calc(52px + env(safe-area-inset-bottom) + 60px + 10px);
     width: auto;
     height: 48px;
     padding: 0 6px;
