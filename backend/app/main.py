@@ -25,6 +25,7 @@ except (AttributeError, ValueError):
 
 from app import auth
 from app import rate_limit
+from app import favorites as favorites_store
 from app import watchlist as watchlist_store
 from app.analysis.backtest import run_backtest
 from app.analysis.confluence import compute_confluence
@@ -42,6 +43,7 @@ from app.models import (
     BacktestResult,
     Candle,
     CryptoExchange,
+    FavoriteEntry,
     StrategyState,
     SymbolSuggestion,
     TimeframeAnalysis,
@@ -674,6 +676,86 @@ async def set_watchlist_strategy_params(
         raise HTTPException(status_code=400, detail=f"Strategia sconosciuta: {req.strategy_name}")
     _owned_entry_or_404(entry_id, user)
     return watchlist_store.set_strategy_params(entry_id, req.strategy_name, req.params)
+
+
+def _owned_favorite_or_404(entry_id: str, user: User) -> FavoriteEntry:
+    entry = favorites_store.get_entry(entry_id)
+    if entry is None or entry.owner_id != user.id:
+        raise HTTPException(status_code=404, detail="Voce non trovata")
+    return entry
+
+
+@app.get("/api/favorites", response_model=list[FavoriteEntry])
+async def get_favorites(user: User = Depends(auth.get_current_user)) -> list[FavoriteEntry]:
+    return favorites_store.list_entries(owner_id=user.id)
+
+
+class FavoriteAddRequest(BaseModel):
+    symbol: str
+    asset_type: AssetType
+    exchange: CryptoExchange = "mexc"
+
+
+@app.post("/api/favorites", response_model=FavoriteEntry)
+async def add_favorite_entry(
+    req: FavoriteAddRequest, user: User = Depends(auth.get_current_user)
+) -> FavoriteEntry:
+    symbol = req.symbol.strip()
+    if not symbol:
+        raise HTTPException(status_code=400, detail="Ticker mancante")
+
+    provider = get_provider(req.asset_type, req.exchange)
+    try:
+        probe = await provider.fetch_ohlcv(symbol, "1d", 2)
+    except ProviderError as exc:
+        raise HTTPException(
+            status_code=400, detail=f"Ticker non trovato su questo exchange: {exc}"
+        ) from exc
+    if probe.empty:
+        raise HTTPException(status_code=400, detail="Ticker non trovato su questo exchange.")
+
+    return favorites_store.add_entry(user.id, symbol, req.asset_type, exchange=req.exchange)
+
+
+@app.delete("/api/favorites/{entry_id}")
+async def delete_favorite_entry(entry_id: str, user: User = Depends(auth.get_current_user)) -> dict:
+    _owned_favorite_or_404(entry_id, user)
+    favorites_store.remove_entry(entry_id)
+    return {"ok": True}
+
+
+class FavoriteQuote(BaseModel):
+    id: str
+    price: float | None = None
+    change_pct: float | None = None
+
+
+@app.get("/api/favorites/quotes", response_model=list[FavoriteQuote])
+async def get_favorite_quotes(user: User = Depends(auth.get_current_user)) -> list[FavoriteQuote]:
+    """Last price + day-over-day change for every favorite, fetched
+    concurrently. A quote that fails to resolve (delisted ticker, provider
+    hiccup) comes back with null price/change rather than failing the
+    whole batch — the frontend just shows a dash for that row."""
+    entries = favorites_store.list_entries(owner_id=user.id)
+
+    async def quote_for(entry: FavoriteEntry) -> FavoriteQuote:
+        provider = get_provider(entry.asset_type, entry.exchange)
+
+        async def do_fetch():
+            return await provider.fetch_ohlcv(entry.symbol, "1d", 2)
+
+        try:
+            df = await get_or_fetch((f"favquote:{entry.asset_type}:{entry.exchange}:{entry.symbol}", "1d"), do_fetch)
+        except ProviderError:
+            return FavoriteQuote(id=entry.id)
+        if df.empty:
+            return FavoriteQuote(id=entry.id)
+        closes = df["close"].tolist()
+        price = closes[-1]
+        change_pct = ((closes[-1] - closes[-2]) / closes[-2] * 100) if len(closes) >= 2 and closes[-2] else None
+        return FavoriteQuote(id=entry.id, price=price, change_pct=change_pct)
+
+    return list(await asyncio.gather(*(quote_for(e) for e in entries)))
 
 
 @app.get("/api/analyze", response_model=AnalysisResponse)

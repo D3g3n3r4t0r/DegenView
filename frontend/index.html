@@ -203,6 +203,7 @@
 
       <div class="tabs">
         <button type="button" class="tab active" data-tab="strategia">Strategia</button>
+        <button type="button" class="tab" data-tab="watchlist">Watchlist</button>
         <button type="button" class="tab" data-tab="alert">Alert</button>
         <button type="button" class="tab" data-tab="analisi">Analisi</button>
         <button type="button" class="tab hidden" id="balances-tab-btn" data-tab="saldi">Saldi</button>
@@ -282,6 +283,37 @@
           <p class="strategy-disclaimer">
             Simulazione storica su dati passati. Le performance passate non garantiscono risultati futuri.
           </p>
+        </div>
+      </div>
+
+      <div class="tab-content" data-tab-content="watchlist">
+        <div class="panel">
+          <div class="section-title-row">
+            <span class="section-eyebrow">I tuoi ticker</span>
+            <span id="favorites-count" class="section-count"></span>
+          </div>
+
+          <form id="favorite-form" class="watchlist-quickbar">
+            <div class="wl-ticker-field">
+              <input type="text" id="favorite-symbol" placeholder="Aggiungi ticker (es. BTC)" autocomplete="off" />
+              <ul id="favorite-suggestions" class="suggestions hidden"></ul>
+            </div>
+            <button type="submit" title="Aggiungi alla watchlist">+</button>
+          </form>
+
+          <div class="asset-toggle small" id="favorite-filter">
+            <button type="button" data-favorite-filter="all" class="wl-asset-btn active">Tutti</button>
+            <button type="button" data-favorite-filter="stock" class="wl-asset-btn">Azioni</button>
+            <button type="button" data-favorite-filter="crypto" class="wl-asset-btn">Crypto</button>
+          </div>
+
+          <ul id="favorite-rows" class="wl-rows"></ul>
+          <p id="favorite-empty" class="wl-empty hidden">
+            <span class="wl-empty-icon">☆</span><br />
+            Nessun ticker salvato.<br />Aggiungine uno per passare da un grafico all'altro con un clic.
+          </p>
+
+          <p class="wl-hint">Clicca un ticker per caricarlo nel grafico. Il pallino <b>●</b> indica che hai un alert Telegram attivo su quel ticker — gestiscilo dalla tab <b>Alert</b>.</p>
         </div>
       </div>
 
@@ -411,6 +443,16 @@
           <span class="altro-menu-text">
             <span class="altro-menu-title">Saldi</span>
             <span class="altro-menu-sub">Sola lettura — MEXC, KuCoin</span>
+          </span>
+          <span class="altro-menu-chev">›</span>
+        </button>
+        <button type="button" id="altro-watchlist-item" class="altro-menu-item">
+          <span class="altro-menu-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17.3l-6.2 3.6 1.6-7-5.4-4.7 7.2-.6L12 2l2.8 6.6 7.2.6-5.4 4.7 1.6 7z"/></svg>
+          </span>
+          <span class="altro-menu-text">
+            <span class="altro-menu-title">Watchlist</span>
+            <span class="altro-menu-sub">I tuoi ticker salvati — un tap per caricarli</span>
           </span>
           <span class="altro-menu-chev">›</span>
         </button>
