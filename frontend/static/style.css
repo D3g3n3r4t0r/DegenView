@@ -1,21 +1,28 @@
 :root {
-  --bg: #0e1012;
-  --bg-panel: #191b20;
-  --bg-raised: #20232a;
-  --grid: rgba(255, 255, 255, 0.05);
-  --grid-major: rgba(255, 255, 255, 0.09);
-  --border: rgba(255, 255, 255, 0.08);
-  --border-strong: rgba(255, 255, 255, 0.16);
-  --ink: #e6e8ee;
-  --ink-dim: #82868f;
-  --accent: #e0c87a;
-  --bull: #22c55e;
-  --bear: #ef4444;
-  --stamp: #c9ad6a;
+  /* TradingView-inspired light system: UI chrome (buttons, tabs, nav) is
+     monochrome black/white/grey — solid dark fills reuse --ink/--bg (the
+     same pattern already used by #search-btn etc.), no separate "chrome"
+     token needed. --accent (blue) is the interactive/liquidity data hue;
+     --stamp (amber) is the secondary highlight (EMA50, kicker labels,
+     drawing tools) that used to be carried by gold everywhere. */
+  --bg: #ffffff;
+  --bg-panel: #f4f5f6;
+  --bg-raised: #eceef0;
+  --grid: rgba(15, 23, 42, 0.05);
+  --grid-major: rgba(15, 23, 42, 0.1);
+  --border: #e5e7ea;
+  --border-strong: #d3d6da;
+  --ink: #131722;
+  --ink-dim: #787b86;
+  --accent: #2962ff;
+  --bull: #089981;
+  --bear: #f23645;
+  --stamp: #c07a1e;
+  --level: #ff9800;
 
-  --font-display: "Instrument Serif", Georgia, serif;
-  --font-body: "DM Sans", system-ui, "Segoe UI", sans-serif;
-  --font-mono: "JetBrains Mono", "Courier New", monospace;
+  --font-display: "Inter", system-ui, "Segoe UI", sans-serif;
+  --font-body: "Inter", system-ui, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", "Courier New", monospace;
 }
 
 * { box-sizing: border-box; }
@@ -44,17 +51,17 @@ body {
   gap: 10px;
   padding: 8px 14px;
   border-bottom: 1.5px solid var(--border-strong);
-  background: rgba(14, 16, 18, 0.95);
+  background: rgba(255, 255, 255, 0.95);
   flex-wrap: nowrap;
   overflow-x: auto;
 }
 
 .brand {
   font-family: var(--font-display);
-  font-size: 18px;
-  font-style: italic;
-  letter-spacing: 0.01em;
-  color: var(--accent);
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -212,7 +219,7 @@ body {
 
 .suggestions li:hover .sug-name,
 .suggestions li.active .sug-name {
-  color: rgba(14, 16, 18, 0.75);
+  color: rgba(255, 255, 255, 0.85);
 }
 
 .sug-exchange {
@@ -233,7 +240,7 @@ body {
 .suggestions li:hover .sug-exchange,
 .suggestions li.active .sug-exchange {
   color: var(--bg);
-  border-color: rgba(14, 16, 18, 0.6);
+  border-color: rgba(255, 255, 255, 0.55);
 }
 
 #search-btn {
@@ -252,7 +259,7 @@ body {
 #search-btn:disabled { opacity: 0.5; cursor: default; }
 
 .error-banner {
-  background: rgba(239, 68, 68, 0.10);
+  background: rgba(242, 54, 69, 0.10);
   color: var(--bear);
   padding: 8px 16px;
   font-size: 12.5px;
@@ -272,7 +279,7 @@ body {
 .rail {
   flex: 0 0 44px;
   border-right: 1.5px solid var(--border-strong);
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(15, 23, 42, 0.02);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -314,7 +321,7 @@ body {
   flex-direction: column;
   min-height: 0;
   border-left: 1.5px solid var(--border-strong);
-  background: rgba(14, 16, 18, 0.4);
+  background: var(--bg-panel);
 }
 
 .tabs {
@@ -342,7 +349,8 @@ body {
 .tab.active {
   background: var(--bg-panel);
   color: var(--ink);
-  box-shadow: inset 0 -2px 0 var(--accent);
+  font-weight: 700;
+  box-shadow: inset 0 -2.5px 0 var(--ink);
 }
 
 .tab-content {
@@ -489,7 +497,7 @@ body {
 .draw-rail {
   flex: 0 0 36px;
   border-right: 1.5px solid var(--border-strong);
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(15, 23, 42, 0.02);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -512,7 +520,7 @@ body {
 }
 
 .draw-tool-btn svg { width: 15px; height: 15px; }
-.draw-tool-btn:hover { background: rgba(255, 255, 255, 0.08); color: var(--ink); }
+.draw-tool-btn:hover { background: rgba(15, 23, 42, 0.06); color: var(--ink); }
 .draw-tool-btn.selected { background: var(--accent); color: var(--bg); }
 
 .draw-rail-divider {
@@ -616,19 +624,19 @@ body {
 }
 
 .position-badge.long {
-  background: rgba(34, 197, 94, 0.12);
+  background: rgba(8, 153, 129, 0.12);
   color: var(--bull);
   border: 1.5px solid var(--bull);
 }
 
 .position-badge.short {
-  background: rgba(239, 68, 68, 0.12);
+  background: rgba(242, 54, 69, 0.12);
   color: var(--bear);
   border: 1.5px solid var(--bear);
 }
 
 .position-badge.flat {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--bg-raised);
   color: var(--ink-dim);
   border: 1.5px solid var(--border-strong);
 }
@@ -1229,7 +1237,7 @@ body {
   font-weight: 700;
   letter-spacing: 0.04em;
   color: var(--accent);
-  background: rgba(224, 200, 122, 0.1);
+  background: rgba(41, 98, 255, 0.1);
   border-radius: 4px;
   padding: 2px 5px;
   flex-shrink: 0;
@@ -1272,10 +1280,10 @@ body {
 
 .strat-gear svg { width: 12px; height: 12px; }
 
-.strat-gear:hover { background: rgba(255, 255, 255, 0.06); color: var(--ink); }
+.strat-gear:hover { background: rgba(15, 23, 42, 0.05); color: var(--ink); }
 
 .strat-gear.active {
-  background: rgba(224, 200, 122, 0.12);
+  background: rgba(41, 98, 255, 0.12);
   color: var(--accent);
   border-color: var(--accent);
 }
@@ -1430,7 +1438,6 @@ body {
   font-size: 21px;
   font-variant-numeric: tabular-nums;
   color: var(--ink);
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
 }
 
 .equity-stamp-pct.positive { color: var(--bull); }
@@ -1440,7 +1447,6 @@ body {
   font-family: var(--font-mono);
   font-size: 9.5px;
   color: var(--ink-dim);
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
   margin-top: 1px;
 }
 
@@ -1775,7 +1781,7 @@ body {
   color: var(--ink-dim);
   padding: 8px 16px;
   border-top: 1.5px solid var(--border-strong);
-  background: rgba(14, 16, 18, 0.92);
+  background: var(--bg-panel);
 }
 
 /* ---- Script Pine panel ---- */
@@ -1836,14 +1842,14 @@ body {
 }
 
 .pine-editor .CodeMirror-gutters {
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(15, 23, 42, 0.03);
   border-right: 1px solid var(--border);
   color: var(--ink-dim);
 }
 
 .pine-editor .CodeMirror-cursor { border-left: 1.5px solid var(--accent); }
-.pine-editor .CodeMirror-selected { background: rgba(224, 200, 122, 0.18); }
-.pine-editor .CodeMirror-activeline-background { background: rgba(224, 200, 122, 0.06); }
+.pine-editor .CodeMirror-selected { background: rgba(41, 98, 255, 0.14); }
+.pine-editor .CodeMirror-activeline-background { background: rgba(41, 98, 255, 0.05); }
 
 .pine-actions {
   display: flex;
@@ -2089,7 +2095,7 @@ body {
     border: 1px solid var(--border-strong);
     border-radius: 100px;
     padding: 3px 20px 3px 10px;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23e0c87a' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232962ff' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right 5px center;
     background-size: 11px;
@@ -2167,7 +2173,7 @@ body {
 
   .mobile-nav-icon { width: 19px; height: 19px; }
 
-  .mobile-nav-btn.active { color: var(--accent); }
+  .mobile-nav-btn.active { color: var(--ink); font-weight: 700; }
 
   /* ---- Altro: account row + menu items (Script Pine, Saldi) ---- */
   .altro-account-slot .auth-widget {
