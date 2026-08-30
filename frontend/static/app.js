@@ -488,6 +488,10 @@
     seenAlertKeys: new Set(),
     alertsSeeded: false,
     watchlistAssetType: "stock",
+    favorites: [], // [{ id, symbol, asset_type, exchange }] — Watchlist tab, quick chart navigation
+    favoriteQuotes: {}, // entry id -> { price, change_pct } from /api/favorites/quotes
+    favoriteFilter: "all", // "all" | "stock" | "crypto"
+    alertEntries: [], // last /api/watchlist load — cross-checked for the favorite row's alert-bell indicator
     pineScripts: [],
     activePineScriptId: null,
     activePineParams: [],
@@ -643,6 +647,7 @@
       updateTelegramSetupUI();
       loadWatchlist();
       loadBalances();
+      loadFavorites();
     } else {
       setBalancesVisible(false);
     }
@@ -893,6 +898,8 @@
     } catch (err) {
       entries = [];
     }
+    state.alertEntries = entries; // read by renderFavorites() for the alert-bell indicator
+    renderFavorites();
     const list = el("watchlist-list");
     const openIds = new Set(
       Array.from(list.querySelectorAll(".tick-card.open")).map((c) => c.dataset.entryId)
@@ -2546,6 +2553,7 @@
       // sliver — and it doesn't shrink back down on its own afterward.
       loadDrawingsForSymbol();
       render();
+      renderFavorites();
       // Live WS streaming is only wired up for MEXC today; every crypto
       // symbol still gets the periodic refresh below regardless of exchange.
       if (state.assetType === "crypto" && state.cryptoExchange === "mexc") {
@@ -2698,6 +2706,294 @@
 
     input.addEventListener("blur", () => {
       setTimeout(hideWatchlistSuggestions, 150);
+    });
+  }
+
+  // ---- Watchlist tab: a plain list of favorite tickers for one-click chart
+  // navigation. Separate from the Alert tab's watchlist (background Telegram
+  // monitoring) — a ticker can be pinned here, watched there, both, or
+  // neither. The add form searches the same /api/symbols source as the main
+  // header search (each result already carries its own asset_type/exchange,
+  // so there's no separate asset-type toggle to get right before adding). ----
+  const favSuggest = { suggestions: [], activeIndex: -1, resolved: null };
+  let favSuggestTimer = null;
+
+  async function fetchFavoriteSuggestions(query) {
+    try {
+      const resp = await fetch(`/api/symbols?query=${encodeURIComponent(query)}`);
+      favSuggest.suggestions = resp.ok ? await resp.json() : [];
+    } catch (err) {
+      favSuggest.suggestions = [];
+    }
+    favSuggest.activeIndex = -1;
+    renderFavoriteSuggestions();
+  }
+
+  function positionFavoriteSuggestions() {
+    const list = el("favorite-suggestions");
+    const rect = el("favorite-symbol").getBoundingClientRect();
+    list.style.left = `${rect.left}px`;
+    list.style.top = `${rect.bottom + 4}px`;
+    list.style.width = `${rect.width}px`;
+  }
+
+  function renderFavoriteSuggestions() {
+    const list = el("favorite-suggestions");
+    list.innerHTML = "";
+    if (!favSuggest.suggestions.length) {
+      list.classList.add("hidden");
+      return;
+    }
+    positionFavoriteSuggestions();
+    favSuggest.suggestions.forEach((item, i) => {
+      const li = document.createElement("li");
+      li.className = i === favSuggest.activeIndex ? "active" : "";
+      const main = document.createElement("span");
+      main.className = "sug-main";
+      const sym = document.createElement("span");
+      sym.className = "sug-symbol";
+      sym.textContent = item.symbol;
+      const name = document.createElement("span");
+      name.className = "sug-name";
+      name.textContent = item.name || "";
+      main.appendChild(sym);
+      main.appendChild(name);
+      const exchange = document.createElement("span");
+      exchange.className = "sug-exchange sug-exchange-" + item.provider;
+      exchange.textContent = item.exchange;
+      li.appendChild(main);
+      li.appendChild(exchange);
+      li.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        selectFavoriteSuggestion(item);
+      });
+      list.appendChild(li);
+    });
+    list.classList.remove("hidden");
+  }
+
+  function hideFavoriteSuggestions() {
+    favSuggest.suggestions = [];
+    favSuggest.activeIndex = -1;
+    const list = el("favorite-suggestions");
+    list.classList.add("hidden");
+    list.innerHTML = "";
+  }
+
+  function selectFavoriteSuggestion(item) {
+    el("favorite-symbol").value = item.symbol;
+    favSuggest.resolved = item;
+    hideFavoriteSuggestions();
+  }
+
+  function bindFavoriteAutocomplete() {
+    const input = el("favorite-symbol");
+
+    input.addEventListener("input", () => {
+      favSuggest.resolved = null;
+      const value = input.value.trim();
+      clearTimeout(favSuggestTimer);
+      if (!value) {
+        hideFavoriteSuggestions();
+        return;
+      }
+      favSuggestTimer = setTimeout(() => fetchFavoriteSuggestions(value), 300);
+    });
+
+    input.addEventListener("keydown", (e) => {
+      if (el("favorite-suggestions").classList.contains("hidden")) return;
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        favSuggest.activeIndex = Math.min(favSuggest.activeIndex + 1, favSuggest.suggestions.length - 1);
+        renderFavoriteSuggestions();
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        favSuggest.activeIndex = Math.max(favSuggest.activeIndex - 1, 0);
+        renderFavoriteSuggestions();
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        if (favSuggest.activeIndex >= 0) {
+          selectFavoriteSuggestion(favSuggest.suggestions[favSuggest.activeIndex]);
+        }
+      } else if (e.key === "Escape") {
+        hideFavoriteSuggestions();
+      }
+    });
+
+    input.addEventListener("blur", () => {
+      setTimeout(hideFavoriteSuggestions, 150);
+    });
+  }
+
+  const FAV_AVATAR_COLORS = ["#f0b90b", "#23af91", "#5850ec", "#94a3b8", "#2962ff", "#f23645", "#089981"];
+  function favAvatarColor(symbol) {
+    let hash = 0;
+    for (let i = 0; i < symbol.length; i++) hash = (hash * 31 + symbol.charCodeAt(i)) >>> 0;
+    return FAV_AVATAR_COLORS[hash % FAV_AVATAR_COLORS.length];
+  }
+
+  async function loadFavorites() {
+    try {
+      const resp = await fetch("/api/favorites");
+      state.favorites = resp.ok ? await resp.json() : [];
+    } catch (err) {
+      state.favorites = [];
+    }
+    renderFavorites();
+    loadFavoriteQuotes();
+  }
+
+  async function loadFavoriteQuotes() {
+    if (!state.favorites.length) return;
+    try {
+      const resp = await fetch("/api/favorites/quotes");
+      const quotes = resp.ok ? await resp.json() : [];
+      state.favoriteQuotes = {};
+      quotes.forEach((q) => { state.favoriteQuotes[q.id] = q; });
+    } catch (err) {
+      // Rows just keep showing "—" for price/change — not worth surfacing an error for.
+    }
+    renderFavorites();
+  }
+
+  function renderFavorites() {
+    const rows = el("favorite-rows");
+    const empty = el("favorite-empty");
+    rows.innerHTML = "";
+
+    const items = state.favorites.filter(
+      (f) => state.favoriteFilter === "all" || f.asset_type === state.favoriteFilter
+    );
+
+    el("favorites-count").textContent = state.favorites.length
+      ? `${state.favorites.length} salvat${state.favorites.length === 1 ? "o" : "i"}`
+      : "";
+    empty.classList.toggle("hidden", state.favorites.length > 0);
+    if (!items.length) return;
+
+    const activeSymbol = state.data && state.data.symbol;
+
+    items.forEach((entry) => {
+      const li = document.createElement("li");
+      const isActive =
+        !!activeSymbol &&
+        entry.symbol === activeSymbol &&
+        entry.asset_type === state.assetType &&
+        (entry.asset_type !== "crypto" || entry.exchange === state.cryptoExchange);
+      li.className = "wl-row" + (isActive ? " active" : "");
+
+      const avatar = document.createElement("div");
+      avatar.className = "wl-avatar";
+      avatar.style.background = favAvatarColor(entry.symbol);
+      avatar.textContent = entry.symbol.charAt(0);
+
+      const main = document.createElement("div");
+      main.className = "wl-main";
+      const symRow = document.createElement("div");
+      symRow.className = "wl-sym-row";
+      const sym = document.createElement("span");
+      sym.className = "wl-sym";
+      sym.textContent = entry.symbol;
+      symRow.appendChild(sym);
+      const badge = document.createElement("span");
+      badge.className = "wl-badge";
+      badge.textContent = entry.asset_type === "crypto" ? entry.exchange : "azioni";
+      symRow.appendChild(badge);
+      const hasAlert = (state.alertEntries || []).some(
+        (a) => a.symbol === entry.symbol && a.asset_type === entry.asset_type && a.exchange === entry.exchange
+      );
+      if (hasAlert) {
+        const bell = document.createElement("span");
+        bell.className = "wl-bell";
+        bell.title = "Alert Telegram attivo su questo ticker";
+        bell.textContent = "●";
+        symRow.appendChild(bell);
+      }
+      main.appendChild(symRow);
+      const exch = document.createElement("div");
+      exch.className = "wl-exch";
+      exch.textContent = isActive ? "In grafico ora" : entry.asset_type === "crypto" ? `${entry.exchange} · crypto` : "azioni";
+      main.appendChild(exch);
+
+      const right = document.createElement("div");
+      right.className = "wl-right";
+      const quote = state.favoriteQuotes[entry.id];
+      const price = document.createElement("div");
+      price.className = "wl-price";
+      price.textContent =
+        quote && quote.price != null
+          ? quote.price.toLocaleString("it-IT", { maximumFractionDigits: quote.price < 10 ? 4 : 2 })
+          : "—";
+      right.appendChild(price);
+      const change = document.createElement("div");
+      const pct = quote && quote.change_pct;
+      change.className = "wl-change " + (pct > 0 ? "up" : pct < 0 ? "down" : "flat");
+      change.textContent = pct != null ? `${pct > 0 ? "+" : ""}${pct.toFixed(2)}%` : "—";
+      right.appendChild(change);
+
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "wl-remove";
+      remove.textContent = "✕";
+      remove.title = "Rimuovi dalla watchlist";
+      remove.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        await fetch(`/api/favorites/${entry.id}`, { method: "DELETE" });
+        loadFavorites();
+      });
+
+      li.appendChild(avatar);
+      li.appendChild(main);
+      li.appendChild(right);
+      li.appendChild(remove);
+      li.addEventListener("click", () => {
+        state.assetType = entry.asset_type;
+        if (entry.asset_type === "crypto") state.cryptoExchange = entry.exchange;
+        runAnalysis(entry.symbol);
+      });
+      rows.appendChild(li);
+    });
+  }
+
+  function bindFavorites() {
+    bindFavoriteAutocomplete();
+
+    el("favorite-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const input = el("favorite-symbol");
+      const typed = input.value.trim();
+      if (!typed) return;
+
+      let resolved = favSuggest.resolved && favSuggest.resolved.symbol === typed ? favSuggest.resolved : null;
+      if (!resolved) {
+        await fetchFavoriteSuggestions(typed);
+        resolved = favSuggest.suggestions.find((s) => s.symbol.toUpperCase() === typed.toUpperCase()) || null;
+      }
+      if (!resolved) return; // no matching ticker — nothing to add
+
+      await fetch("/api/favorites", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          symbol: resolved.symbol,
+          asset_type: resolved.asset_type,
+          exchange: resolved.provider || "mexc",
+        }),
+      });
+      input.value = "";
+      favSuggest.resolved = null;
+      hideFavoriteSuggestions();
+      loadFavorites();
+    });
+
+    document.querySelectorAll("#favorite-filter [data-favorite-filter]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        state.favoriteFilter = btn.dataset.favoriteFilter;
+        document.querySelectorAll("#favorite-filter [data-favorite-filter]").forEach((b) => {
+          b.classList.toggle("active", b === btn);
+        });
+        renderFavorites();
+      });
     });
   }
 
@@ -3247,7 +3543,7 @@
   // Alert activates just "alert". Script Pine and Saldi are reached through
   // the Altro menu, not the bottom nav itself, so they still map onto the
   // same mechanism without a 6th/7th tab.
-  const RIGHT_PANEL_TITLES = { strategia: "Strategia", alert: "Alert", saldi: "Saldi", analisi: "Analisi" };
+  const RIGHT_PANEL_TITLES = { strategia: "Strategia", alert: "Alert", saldi: "Saldi", analisi: "Analisi", watchlist: "Watchlist" };
 
   function showMobileScreen(target) {
     if (!window.matchMedia("(max-width: 760px)").matches) return;
@@ -3258,7 +3554,7 @@
     document.querySelector(".right-panel").classList.remove("mobile-open");
     el("draw-rail").classList.remove("mobile-tools-open");
 
-    const NAV_TARGET_FOR = { script: "altro", saldi: "altro", analisi: "altro" };
+    const NAV_TARGET_FOR = { script: "altro", saldi: "altro", analisi: "altro", watchlist: "altro" };
     const navTarget = NAV_TARGET_FOR[target] || target;
     document.querySelectorAll(".mobile-nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.mobileTarget === navTarget));
 
@@ -3314,6 +3610,7 @@
     el("open-script-from-altro").addEventListener("click", () => openPanel("script-panel"));
     el("altro-saldi-item").addEventListener("click", () => showMobileScreen("saldi"));
     el("altro-analisi-item").addEventListener("click", () => showMobileScreen("analisi"));
+    el("altro-watchlist-item").addEventListener("click", () => showMobileScreen("watchlist"));
   }
 
   function bindUI() {
@@ -3344,6 +3641,7 @@
     bindTickerAutocomplete();
     bindMobileTickerSearch();
     bindWatchlistAutocomplete();
+    bindFavorites();
 
     el("interval-primary").addEventListener("change", () => {
       if (state.pineActive) clearPineOverride();

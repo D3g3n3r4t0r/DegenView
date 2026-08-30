@@ -104,6 +104,14 @@ class User(BaseModel):
     telegram_chat_id: str = ""  # user pastes this in from their own DM with the shared bot
 
 
+class FavoriteEntry(BaseModel):
+    id: str
+    owner_id: str
+    symbol: str
+    asset_type: AssetType
+    exchange: CryptoExchange = "mexc"
+
+
 class WatchlistEntry(BaseModel):
     id: str
     owner_id: str

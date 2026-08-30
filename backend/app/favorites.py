@@ -1,0 +1,90 @@
+"""
+Favorites: tickers a user pins to the Watchlist tab purely for quick chart
+navigation — clicking one loads it on the main chart. Distinct from
+watchlist.py's WatchlistEntry, which is about background Telegram alerts;
+a ticker can be a favorite, an alert entry, both, or neither.
+
+Persisted to disk (backend/data/favorites.json), same convention as
+watchlist.py.
+"""
+
+import json
+import uuid
+from pathlib import Path
+
+from app.models import AssetType, CryptoExchange, FavoriteEntry
+
+_DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+_DATA_DIR.mkdir(parents=True, exist_ok=True)
+_STORE_FILE = _DATA_DIR / "favorites.json"
+
+_entries: dict[str, FavoriteEntry] = {}
+
+
+def _load() -> None:
+    if not _STORE_FILE.exists():
+        return
+    try:
+        raw = json.loads(_STORE_FILE.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return
+    for item in raw:
+        try:
+            entry = FavoriteEntry(**item)
+            _entries[entry.id] = entry
+        except (TypeError, ValueError):
+            continue
+
+
+def _save() -> None:
+    payload = [e.model_dump() for e in _entries.values()]
+    _STORE_FILE.write_text(json.dumps(payload), encoding="utf-8")
+
+
+_load()
+
+
+def list_entries(owner_id: str | None = None) -> list[FavoriteEntry]:
+    entries = list(_entries.values())
+    if owner_id is not None:
+        entries = [e for e in entries if e.owner_id == owner_id]
+    return entries
+
+
+def get_entry(entry_id: str) -> FavoriteEntry | None:
+    return _entries.get(entry_id)
+
+
+def add_entry(
+    owner_id: str,
+    symbol: str,
+    asset_type: AssetType,
+    exchange: CryptoExchange = "mexc",
+) -> FavoriteEntry:
+    """Upsert: pinning a ticker that's already a favorite for this owner
+    just returns the existing entry instead of creating a duplicate row."""
+    symbol = symbol.strip().upper()
+    for entry in _entries.values():
+        if (
+            entry.owner_id == owner_id
+            and entry.symbol == symbol
+            and entry.asset_type == asset_type
+            and entry.exchange == exchange
+        ):
+            return entry
+
+    entry = FavoriteEntry(
+        id=uuid.uuid4().hex[:12],
+        owner_id=owner_id,
+        symbol=symbol,
+        asset_type=asset_type,
+        exchange=exchange,
+    )
+    _entries[entry.id] = entry
+    _save()
+    return entry
+
+
+def remove_entry(entry_id: str) -> None:
+    if _entries.pop(entry_id, None) is not None:
+        _save()
