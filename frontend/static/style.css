@@ -1933,22 +1933,16 @@ body {
     font-size: 16px !important;
   }
 
-  /* Toolbar becomes two stacked rows with zero HTML changes: giving .brand
-     a 100% flex-basis forces it alone onto row 1, so search-form + the
-     Analizza button (next in flex order, no longer fitting beside it) wrap
-     onto row 2 together — full width, never squeezed by anything else.
-     chart-settings-group and .auth-widget are physically relocated out of
-     the toolbar by JS on this breakpoint (into Livelli and Altro
-     respectively), so they don't compete for this space at all — this is
-     the fix for the search field that used to collapse to a sliver next to
-     the account email. */
-  .toolbar { flex-wrap: wrap; padding: 8px 12px; gap: 8px; align-items: center; overflow: visible; }
-  .brand { flex: 1 1 100%; height: 26px; font-size: 15px; display: flex; align-items: center; }
-  .auth-widget, .toolbar-spacer { display: none; }
-  .search-form { flex: 1 1 auto; min-width: 0; height: 42px; }
-  .ticker-field { flex: 1 1 auto; max-width: none; min-width: 0; height: 100%; }
-  #ticker-input { width: 100%; height: 100%; padding: 0 12px; font-size: 15px; box-sizing: border-box; }
-  #search-btn { flex: 0 0 auto; height: 42px; padding: 0 14px; font-size: 11px; border: none; }
+  /* Ticker entry no longer happens in the toolbar at all on mobile — the
+     chart-strip symbol (next to the timeframe wheel, see
+     openMobileTickerSearch in app.js) is the only way in, so .search-form
+     and #search-btn are hidden here; the toolbar is just the brand row.
+     #ticker-input itself stays in the DOM (inside the hidden .search-form)
+     until it gets physically moved into the search overlay on open — see
+     .mts-field-slot below for how it's styled once there. */
+  .toolbar { padding: 8px 12px; gap: 8px; align-items: center; overflow: visible; }
+  .brand { font-size: 15px; display: flex; align-items: center; }
+  .auth-widget, .toolbar-spacer, .search-form, #search-btn { display: none; }
 
   /* The small dropdown never shows on mobile — full-screen search
      (.mobile-ticker-search) replaces it entirely once the field is
