@@ -2540,6 +2540,7 @@
   }
 
   function renderSuggestions() {
+    renderMobileTickerResults();
     const list = el("ticker-suggestions");
     list.innerHTML = "";
     if (!state.suggestions.length) {
@@ -2591,7 +2592,109 @@
     state.assetType = item.asset_type;
     if (item.asset_type === "crypto") state.cryptoExchange = item.provider;
     hideSuggestions();
+    closeMobileTickerSearch();
     runAnalysis(item.symbol);
+  }
+
+  // Colors are picked deterministically from the symbol so the same ticker
+  // always gets the same avatar, without needing a real logo per symbol
+  // (which we don't have data for).
+  const MTS_AVATAR_COLORS = ["#f0b90b", "#23af91", "#5850ec", "#94a3b8", "#2962ff", "#f23645", "#089981"];
+  function mtsAvatarColor(symbol) {
+    let hash = 0;
+    for (let i = 0; i < symbol.length; i++) hash = (hash * 31 + symbol.charCodeAt(i)) >>> 0;
+    return MTS_AVATAR_COLORS[hash % MTS_AVATAR_COLORS.length];
+  }
+
+  // Same suggestions the small desktop dropdown uses (state.suggestions,
+  // populated by fetchSuggestions) — just a different, full-screen renderer
+  // for mobile, with a client-side Tutti/Azioni/Crypto filter on top since
+  // asset_type is already on every result.
+  function renderMobileTickerResults() {
+    const list = el("mts-list");
+    list.innerHTML = "";
+    const filter = document.querySelector(".mts-tab.active")?.dataset.filter || "all";
+    const items = state.suggestions.filter((s) => filter === "all" || s.asset_type === filter);
+    if (!items.length) {
+      const li = document.createElement("li");
+      li.className = "mts-empty";
+      li.textContent = state.suggestions.length ? "Nessun risultato per questo filtro" : "Digita per cercare un ticker";
+      list.appendChild(li);
+      return;
+    }
+    items.forEach((item) => {
+      const li = document.createElement("li");
+      li.className = "mts-row";
+
+      const avatar = document.createElement("span");
+      avatar.className = "mts-avatar";
+      avatar.style.background = mtsAvatarColor(item.symbol);
+      avatar.textContent = item.symbol.charAt(0);
+
+      const main = document.createElement("span");
+      main.className = "mts-main";
+      const symRow = document.createElement("span");
+      symRow.className = "mts-sym-row";
+      const sym = document.createElement("span");
+      sym.className = "mts-sym";
+      sym.textContent = item.symbol;
+      const badge = document.createElement("span");
+      badge.className = "mts-badge";
+      badge.textContent = item.asset_type === "crypto" ? "crypto" : "azioni";
+      symRow.appendChild(sym);
+      symRow.appendChild(badge);
+      const name = document.createElement("span");
+      name.className = "mts-name";
+      name.textContent = item.name || "";
+      main.appendChild(symRow);
+      main.appendChild(name);
+
+      const right = document.createElement("span");
+      right.className = "mts-right";
+      const exch = document.createElement("span");
+      exch.className = "mts-exch";
+      exch.textContent = item.exchange;
+      right.appendChild(exch);
+
+      li.appendChild(avatar);
+      li.appendChild(main);
+      li.appendChild(right);
+      li.addEventListener("click", () => selectSuggestion(item));
+      list.appendChild(li);
+    });
+  }
+
+  function openMobileTickerSearch() {
+    if (!window.matchMedia("(max-width: 760px)").matches) return;
+    const slot = el("mts-field-slot");
+    const field = document.querySelector(".ticker-field");
+    if (field.parentElement !== slot) slot.appendChild(field);
+    document.querySelectorAll(".mts-tab").forEach((t) => t.classList.toggle("active", t.dataset.filter === "all"));
+    renderMobileTickerResults();
+    el("mobile-ticker-search").classList.remove("hidden");
+    el("ticker-input").focus();
+  }
+
+  function closeMobileTickerSearch() {
+    const overlay = el("mobile-ticker-search");
+    if (overlay.classList.contains("hidden")) return;
+    const searchForm = el("search-form");
+    const field = document.querySelector(".ticker-field");
+    if (field.parentElement !== searchForm) searchForm.appendChild(field);
+    overlay.classList.add("hidden");
+    el("ticker-input").blur();
+  }
+
+  function bindMobileTickerSearch() {
+    el("ticker-input").addEventListener("focus", openMobileTickerSearch);
+    el("mts-close-btn").addEventListener("click", closeMobileTickerSearch);
+    document.querySelectorAll(".mts-tab").forEach((tab) => {
+      tab.addEventListener("click", () => {
+        document.querySelectorAll(".mts-tab").forEach((t) => t.classList.remove("active"));
+        tab.classList.add("active");
+        renderMobileTickerResults();
+      });
+    });
   }
 
   function bindTickerAutocomplete() {
@@ -3046,10 +3149,12 @@
         if (exact.asset_type === "crypto") state.cryptoExchange = exact.provider;
       }
       hideSuggestions();
+      closeMobileTickerSearch();
       runAnalysis(symbol);
     });
 
     bindTickerAutocomplete();
+    bindMobileTickerSearch();
     bindWatchlistAutocomplete();
 
     el("interval-primary").addEventListener("change", () => {

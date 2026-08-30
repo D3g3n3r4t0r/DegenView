@@ -19,7 +19,7 @@
 
     <form id="search-form" class="search-form">
       <div class="ticker-field">
-        <input id="ticker-input" type="text" placeholder="Cerca ticker — azioni o crypto" autocomplete="off" />
+        <input id="ticker-input" type="text" form="search-form" placeholder="Cerca ticker — azioni o crypto" autocomplete="off" />
         <ul id="ticker-suggestions" class="suggestions hidden"></ul>
       </div>
     </form>
@@ -415,6 +415,26 @@
       </div>
     </div>
   </main>
+
+  <!-- Full-screen ticker search on mobile — the toolbar's .ticker-field
+       (real #ticker-input, same autocomplete logic) gets physically moved
+       into #mts-field-slot on open (see openMobileTickerSearch in app.js)
+       and back to the toolbar on close, so there's no duplicate input or
+       duplicate suggestion-fetching to keep in sync. -->
+  <div id="mobile-ticker-search" class="mobile-ticker-search hidden">
+    <div class="mts-header">
+      <div class="mts-searchrow">
+        <div id="mts-field-slot" class="mts-field-slot"></div>
+        <button type="button" id="mts-close-btn" class="mts-close">Chiudi</button>
+      </div>
+      <div class="mts-tabs">
+        <button type="button" class="mts-tab active" data-filter="all">Tutti</button>
+        <button type="button" class="mts-tab" data-filter="stock">Azioni</button>
+        <button type="button" class="mts-tab" data-filter="crypto">Crypto</button>
+      </div>
+    </div>
+    <ul id="mts-list" class="mts-list"></ul>
+  </div>
 
   <div id="mobile-chart-strip" class="mobile-chart-strip hidden">
     <span id="mobile-chart-symbol" class="mobile-chart-symbol">—</span>

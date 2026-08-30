@@ -1912,7 +1912,7 @@ body {
    visible search bar) and bottom nav are the only fixed chrome; every screen
    fills the space between them with its own single scroll container. ---- */
 
-.mobile-nav, .drawer-header, .mobile-chart-strip, .mobile-draw-fab { display: none; }
+.mobile-nav, .drawer-header, .mobile-chart-strip, .mobile-draw-fab, .mobile-ticker-search { display: none; }
 
 @media (max-width: 760px) {
   html, body { height: 100%; overflow: hidden; }
@@ -1949,6 +1949,56 @@ body {
   .ticker-field { flex: 1 1 auto; max-width: none; min-width: 0; height: 100%; }
   #ticker-input { width: 100%; height: 100%; padding: 0 12px; font-size: 15px; box-sizing: border-box; }
   #search-btn { flex: 0 0 auto; height: 42px; padding: 0 14px; font-size: 11px; border: none; }
+
+  /* The small dropdown never shows on mobile — full-screen search
+     (.mobile-ticker-search) replaces it entirely once the field is
+     relocated there by openMobileTickerSearch(). */
+  #ticker-suggestions { display: none !important; }
+
+  .mobile-ticker-search {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+    background: var(--bg);
+    flex-direction: column;
+  }
+  .mobile-ticker-search:not(.hidden) { display: flex; }
+
+  .mts-header { flex-shrink: 0; padding: 10px 12px 0; border-bottom: 1px solid var(--border); }
+  .mts-searchrow { display: flex; align-items: center; gap: 10px; }
+  .mts-field-slot { flex: 1; min-width: 0; height: 42px; }
+  .mts-field-slot .ticker-field { height: 100%; max-width: none; }
+  .mts-field-slot #ticker-input {
+    width: 100%; height: 100%; padding: 0 12px; font-size: 15px; box-sizing: border-box;
+    background: var(--bg-panel); border: 1.5px solid var(--border-strong); border-radius: 9px; color: var(--ink);
+  }
+  .mts-close { flex-shrink: 0; background: none; border: none; font-family: var(--font-body); font-size: 13.5px; font-weight: 600; color: var(--ink); padding: 8px 2px; }
+
+  .mts-tabs { display: flex; gap: 20px; padding: 12px 4px 0; }
+  .mts-tab { background: none; border: none; font-family: var(--font-body); font-size: 13px; font-weight: 600; color: var(--ink-dim); padding: 0 0 10px; position: relative; cursor: pointer; }
+  .mts-tab.active { color: var(--ink); }
+  .mts-tab.active::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2.5px; background: var(--ink); border-radius: 2px 2px 0 0; }
+
+  .mts-list { flex: 1; overflow-y: auto; list-style: none; margin: 0; padding: 0; }
+  .mts-empty { padding: 24px 14px; text-align: center; font-size: 12.5px; color: var(--ink-dim); }
+
+  .mts-row { display: flex; align-items: center; gap: 11px; padding: 10px 14px; border-bottom: 1px solid var(--border); cursor: pointer; }
+  .mts-avatar {
+    width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-mono); font-weight: 700; font-size: 12px; color: #fff;
+  }
+  .mts-main { flex: 1; min-width: 0; }
+  .mts-sym-row { display: flex; align-items: baseline; gap: 7px; }
+  .mts-sym { font-weight: 700; font-size: 14px; color: var(--accent); }
+  .mts-badge {
+    font-family: var(--font-mono); font-size: 8.5px; font-weight: 700; text-transform: uppercase;
+    padding: 1.5px 6px; border-radius: 4px; background: var(--bg-panel); color: var(--ink-dim); border: 1px solid var(--border);
+  }
+  .mts-name { font-size: 11.5px; color: var(--ink-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 1px; }
+  .mts-right { text-align: right; flex-shrink: 0; }
+  .mts-exch { font-weight: 600; font-size: 12.5px; color: var(--ink); }
 
   #levels-panel .chart-settings-group {
     flex-direction: column;
