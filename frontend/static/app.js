@@ -1,31 +1,34 @@
 (() => {
   "use strict";
 
-  // Millimetrata Blueprint palette — every mark on the chart stays a tonal
-  // variation of ink/accent/stamp/bull/bear, no arbitrary bright hues.
+  // TradingView-inspired light palette — UI chrome (buttons, tabs, nav) is
+  // monochrome black/white/grey; color is reserved for what the data means:
+  // bull/bear for candles, accent blue for the one interactive/liquidity
+  // hue, a warm amber for the second highlight a chart needs (EMA50, MACD
+  // signal, drawing tools) so it doesn't collide with the blue accent.
   const COLORS = {
-    paperBg: "#0e1012",
-    ink: "#e6e8ee",
-    inkDim: "#82868f",
-    gridMinor: "rgba(255, 255, 255, 0.06)",
-    gridMajor: "rgba(255, 255, 255, 0.1)",
-    bull: "#22c55e",
-    bear: "#ef4444",
-    accent: "#e0c87a",
-    stamp: "#c9ad6a",
-    bullFill: "rgba(34, 197, 94, 0.16)",
-    bullBorder: "rgba(34, 197, 94, 0.9)",
-    bearFill: "rgba(239, 68, 68, 0.14)",
-    bearBorder: "rgba(239, 68, 68, 0.85)",
-    confluenceFill: "rgba(224, 200, 122, 0.16)",
-    confluenceBorder: "rgba(224, 200, 122, 0.85)",
+    paperBg: "#ffffff",
+    ink: "#131722",
+    inkDim: "#787b86",
+    gridMinor: "rgba(15, 23, 42, 0.05)",
+    gridMajor: "rgba(15, 23, 42, 0.1)",
+    bull: "#089981",
+    bear: "#f23645",
+    accent: "#2962ff",
+    stamp: "#c07a1e",
+    bullFill: "rgba(8, 153, 129, 0.14)",
+    bullBorder: "rgba(8, 153, 129, 0.85)",
+    bearFill: "rgba(242, 54, 69, 0.12)",
+    bearBorder: "rgba(242, 54, 69, 0.8)",
+    confluenceFill: "rgba(41, 98, 255, 0.12)",
+    confluenceBorder: "rgba(41, 98, 255, 0.75)",
     ema20: "#6b8afd",
-    ema50: "#e0c87a",
-    bb: "#82868f",
-    vwap: "#82868f",
+    ema50: "#c07a1e",
+    bb: "#787b86",
+    vwap: "#787b86",
     rsi: "#6b8afd",
     macd: "#6b8afd",
-    macdSignal: "#e0c87a",
+    macdSignal: "#c07a1e",
   };
 
   const TF_LABELS = { htf: "HTF", mtf: "MTF", ltf: "LTF" };
@@ -334,7 +337,7 @@
       target.useBitmapCoordinateSpace((scope) => {
         if (this._p.x === null || this._p.y === null || !this._text) return;
         const ctx = scope.context;
-        ctx.font = `${11 * scope.verticalPixelRatio}px "JetBrains Mono", monospace`;
+        ctx.font = `${11 * scope.verticalPixelRatio}px "IBM Plex Mono", monospace`;
         ctx.fillStyle = this._color;
         ctx.textBaseline = "bottom";
         ctx.fillText(this._text, this._p.x * scope.horizontalPixelRatio + 5, this._p.y * scope.verticalPixelRatio - 5);
@@ -403,7 +406,7 @@
         const xa = Math.min(this._x1, this._x2) * scope.horizontalPixelRatio;
         const xb = Math.max(this._x1, this._x2) * scope.horizontalPixelRatio;
         ctx.lineWidth = Math.max(1, scope.verticalPixelRatio);
-        ctx.font = `${10 * scope.verticalPixelRatio}px "JetBrains Mono", monospace`;
+        ctx.font = `${10 * scope.verticalPixelRatio}px "IBM Plex Mono", monospace`;
         this._levels.forEach(({ y, label }) => {
           if (y === null) return;
           const yy = y * scope.verticalPixelRatio;
@@ -1049,7 +1052,7 @@
     const isMobile = window.matchMedia("(max-width: 760px)").matches;
     const chartGridColor = isMobile ? "rgba(255, 255, 255, 0.035)" : COLORS.gridMinor;
     const baseOptions = {
-      layout: { background: { color: COLORS.paperBg }, textColor: COLORS.inkDim, fontFamily: "'JetBrains Mono', monospace" },
+      layout: { background: { color: COLORS.paperBg }, textColor: COLORS.inkDim, fontFamily: "'IBM Plex Mono', monospace" },
       grid: { vertLines: { color: chartGridColor }, horzLines: { color: chartGridColor } },
       rightPriceScale: { borderColor: COLORS.gridMajor },
       timeScale: { borderColor: COLORS.gridMajor, timeVisible: true, secondsVisible: false },
@@ -1102,8 +1105,8 @@
     });
     equitySeries = equityChart.addAreaSeries({
       lineColor: COLORS.stamp,
-      topColor: "rgba(138, 109, 59, 0.22)",
-      bottomColor: "rgba(138, 109, 59, 0.02)",
+      topColor: "rgba(192, 122, 30, 0.20)",
+      bottomColor: "rgba(192, 122, 30, 0.02)",
       lineWidth: 2,
     });
     observeResize(equityContainer, equityChart);
@@ -1329,7 +1332,7 @@
     if (type === "trend_line") return [new LinePrimitive(p1, p2, color, 2, false)];
     if (type === "arrow") return [new LinePrimitive(p1, p2, color, 2, true)];
     if (type === "rectangle") return [new RectanglePrimitive(p1, p2, "rgba(31, 78, 107, 0.12)", color)];
-    if (type === "range") return [new RectanglePrimitive(p1, p2, "rgba(138, 109, 59, 0.12)", COLORS.stamp)];
+    if (type === "range") return [new RectanglePrimitive(p1, p2, "rgba(192, 122, 30, 0.12)", COLORS.stamp)];
     if (type === "fib") return [new FibPrimitive(p1, p2, color)];
     return [];
   }
