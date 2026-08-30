@@ -1045,6 +1045,161 @@
     return PRIMARY_TO_TRIAD[el("interval-primary").value];
   }
 
+  // ---- Rounded candlestick series (custom series plugin) ----
+  // The built-in candlestick series draws plain rectangles on canvas — no
+  // border-radius exists for canvas shapes, so getting rounded corners
+  // means supplying our own renderer via lightweight-charts' custom-series
+  // API. Ported from TradingView's own official plugin example
+  // (plugin-examples/src/plugins/rounded-candles-series in their repo),
+  // extended to also draw a stroked border (borderUpColor/borderDownColor)
+  // when borderVisible is set — the upstream example only fills, but this
+  // app's candles are deliberately hollow on the up side (upColor is
+  // transparent, only the border shows), which the upstream version alone
+  // would render as invisible. Everything else — setData, markers, price
+  // lines, coordinateToPrice — still goes through the same generic
+  // ISeriesApi every built-in series type uses; only how the body pixels
+  // get painted changes.
+  function candlestickWidth(barSpacing, horizontalPixelRatio) {
+    const from = 2.5, to = 4, specialCoeff = 3;
+    let width;
+    if (barSpacing >= from && barSpacing <= to) {
+      width = Math.floor(specialCoeff * horizontalPixelRatio);
+    } else {
+      const reducingCoeff = 0.2;
+      const coeff = 1 - (reducingCoeff * Math.atan(Math.max(to, barSpacing) - to)) / (Math.PI * 0.5);
+      const res = Math.floor(barSpacing * coeff * horizontalPixelRatio);
+      const scaledBarSpacing = Math.floor(barSpacing * horizontalPixelRatio);
+      width = Math.max(Math.floor(horizontalPixelRatio), Math.min(res, scaledBarSpacing));
+    }
+    if (width >= 2) {
+      const wickWidth = Math.floor(horizontalPixelRatio);
+      if (wickWidth % 2 !== width % 2) width--;
+    }
+    return width;
+  }
+
+  function gridAndCrosshairMediaWidth(horizontalPixelRatio) {
+    return Math.max(1, Math.floor(horizontalPixelRatio)) / horizontalPixelRatio;
+  }
+
+  function positionsLine(positionMedia, pixelRatio, desiredWidthMedia) {
+    const scaledPosition = Math.round(pixelRatio * positionMedia);
+    const lineBitmapWidth = Math.round((desiredWidthMedia === undefined ? 1 : desiredWidthMedia) * pixelRatio);
+    const offset = Math.floor(lineBitmapWidth * 0.5);
+    return { position: scaledPosition - offset, length: lineBitmapWidth };
+  }
+
+  function positionsBox(position1Media, position2Media, pixelRatio) {
+    const p1 = Math.round(pixelRatio * position1Media);
+    const p2 = Math.round(pixelRatio * position2Media);
+    return { position: Math.min(p1, p2), length: Math.abs(p2 - p1) + 1 };
+  }
+
+  class RoundedCandleSeriesRenderer {
+    constructor() {
+      this._data = null;
+      this._options = null;
+    }
+    draw(target, priceConverter) {
+      target.useBitmapCoordinateSpace((scope) => this._drawImpl(scope, priceConverter));
+    }
+    update(data, options) {
+      this._data = data;
+      this._options = options;
+    }
+    _drawImpl(renderingScope, priceToCoordinate) {
+      if (!this._data || this._data.bars.length === 0 || !this._data.visibleRange || !this._options) return;
+      let lastClose = -Infinity;
+      const bars = this._data.bars.map((bar) => {
+        const isUp = bar.originalData.close >= lastClose;
+        lastClose = bar.originalData.close ?? lastClose;
+        return {
+          openY: priceToCoordinate(bar.originalData.open) ?? 0,
+          highY: priceToCoordinate(bar.originalData.high) ?? 0,
+          lowY: priceToCoordinate(bar.originalData.low) ?? 0,
+          closeY: priceToCoordinate(bar.originalData.close) ?? 0,
+          x: bar.x,
+          isUp,
+        };
+      });
+      const radius = this._options.radius(this._data.barSpacing);
+      this._drawWicks(renderingScope, bars, this._data.visibleRange);
+      this._drawCandles(renderingScope, bars, this._data.visibleRange, radius);
+    }
+    _drawWicks(renderingScope, bars, visibleRange) {
+      const { context: ctx, horizontalPixelRatio, verticalPixelRatio } = renderingScope;
+      const wickWidth = gridAndCrosshairMediaWidth(horizontalPixelRatio);
+      for (let i = visibleRange.from; i < visibleRange.to; i++) {
+        const bar = bars[i];
+        ctx.fillStyle = bar.isUp ? this._options.wickUpColor : this._options.wickDownColor;
+        const v = positionsBox(bar.lowY, bar.highY, verticalPixelRatio);
+        const h = positionsLine(bar.x, horizontalPixelRatio, wickWidth);
+        ctx.fillRect(h.position, v.position, h.length, v.length);
+      }
+    }
+    _drawCandles(renderingScope, bars, visibleRange, radius) {
+      const { context: ctx, horizontalPixelRatio, verticalPixelRatio } = renderingScope;
+      const bodyWidth = candlestickWidth(this._data.barSpacing, 1);
+      const borderWidth = Math.max(1, Math.floor(horizontalPixelRatio));
+      for (let i = visibleRange.from; i < visibleRange.to; i++) {
+        const bar = bars[i];
+        const v = positionsBox(Math.min(bar.openY, bar.closeY), Math.max(bar.openY, bar.closeY), verticalPixelRatio);
+        const h = positionsLine(bar.x, horizontalPixelRatio, bodyWidth);
+        const fillColor = bar.isUp ? this._options.upColor : this._options.downColor;
+        const borderColor = bar.isUp ? this._options.borderUpColor : this._options.borderDownColor;
+        if (ctx.roundRect) {
+          ctx.beginPath();
+          ctx.roundRect(h.position, v.position, h.length, Math.max(v.length, 1), radius);
+          ctx.fillStyle = fillColor;
+          ctx.fill();
+          if (this._options.borderVisible && borderColor) {
+            ctx.lineWidth = borderWidth;
+            ctx.strokeStyle = borderColor;
+            ctx.stroke();
+          }
+        } else {
+          ctx.fillStyle = fillColor;
+          ctx.fillRect(h.position, v.position, h.length, v.length);
+        }
+      }
+    }
+  }
+
+  class RoundedCandleSeries {
+    constructor() {
+      this._renderer = new RoundedCandleSeriesRenderer();
+    }
+    priceValueBuilder(plotRow) {
+      return [plotRow.high, plotRow.low, plotRow.close];
+    }
+    renderer() {
+      return this._renderer;
+    }
+    isWhitespace(data) {
+      return data.close === undefined;
+    }
+    update(data, options) {
+      this._renderer.update(data, options);
+    }
+    defaultOptions() {
+      return {
+        ...LightweightCharts.customSeriesDefaultOptions,
+        upColor: "#26a69a",
+        downColor: "#ef5350",
+        borderVisible: true,
+        borderUpColor: "#26a69a",
+        borderDownColor: "#ef5350",
+        wickVisible: true,
+        wickColor: "#737375",
+        wickUpColor: "#26a69a",
+        wickDownColor: "#ef5350",
+        // Below ~4px bar spacing there's no room for a visible curve —
+        // stays a plain rectangle until bars are wide enough to show it.
+        radius: (bs) => (bs < 4 ? 0 : bs / 3),
+      };
+    }
+  }
+
   function initCharts() {
     // TradingView's own mobile app keeps chart gridlines barely-there —
     // dense gridlines that read as "considered" on a wide desktop screen
@@ -1065,7 +1220,7 @@
 
     const mainContainer = el("main-chart");
     mainChart = LightweightCharts.createChart(mainContainer, baseOptions);
-    candleSeries = mainChart.addCandlestickSeries({
+    candleSeries = mainChart.addCustomSeries(new RoundedCandleSeries(), {
       upColor: "rgba(0, 0, 0, 0)",
       downColor: COLORS.bear,
       borderVisible: true,
