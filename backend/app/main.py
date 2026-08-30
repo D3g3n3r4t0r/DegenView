@@ -39,6 +39,7 @@ from app.live.mexc_stream import mexc_stream_manager
 from app.models import (
     AnalysisResponse,
     AssetType,
+    BacktestResult,
     Candle,
     CryptoExchange,
     StrategyState,
@@ -729,7 +730,25 @@ async def analyze(
         fib_zones = compute_fib_zones(df, tf_key, intervals[tf_key])
         strategy = build_strategy_state(strategy_name, df, strategy_params_dict)
         strategies[tf_key] = [strategy]
-        backtests[tf_key] = run_backtest(df, strategy_params_dict, backtest_params_dict, strategy_name=strategy_name)
+        # The frontend only ever charts the ltf timeframe (state.activeTimeframe
+        # is a hardcoded "ltf", never reassigned) — htf/mtf backtests are never
+        # read (only strategies[htf|mtf] is, for cross-timeframe signal markers).
+        # Running the bar-by-bar backtest simulation twice for data nothing
+        # displays was pure wasted latency on every single analyze call.
+        if tf_key == "ltf":
+            backtests[tf_key] = run_backtest(df, strategy_params_dict, backtest_params_dict, strategy_name=strategy_name)
+        else:
+            backtests[tf_key] = BacktestResult(
+                initial_capital=backtest_params_dict.get("initial_capital", 10000.0),
+                final_equity=backtest_params_dict.get("initial_capital", 10000.0),
+                total_return_pct=0.0,
+                num_trades=0,
+                win_rate_pct=None,
+                max_drawdown_pct=0.0,
+                profit_factor=None,
+                equity_curve=[],
+                trades=[],
+            )
         candles = [
             Candle(
                 time=int(ts.timestamp()),
@@ -741,6 +760,16 @@ async def analyze(
             )
             for ts, row in df.iterrows()
         ]
+        # Same story for the raw candle/indicator time series: the chart only
+        # ever plots ltf, and build_summary's per-timeframe indicator readout
+        # (below) only reads each series' *last* value. htf/mtf keep full
+        # levels/dealing_range/fib_zones (compute_confluence and the summary
+        # both need those) but only their tail candle/indicator points, not
+        # the full 500-bar history — that history was ~2/3 of this endpoint's
+        # response size for two timeframes nothing ever renders.
+        if tf_key != "ltf":
+            candles = candles[-2:]
+            indicators = [ind.model_copy(update={"values": ind.values[-2:]}) for ind in indicators]
         timeframes[tf_key] = TimeframeAnalysis(
             interval=intervals[tf_key],
             candles=candles,
