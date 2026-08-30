@@ -2123,9 +2123,15 @@ body {
   .mobile-chart-strip.hidden { display: none; }
 
   .mobile-chart-symbol {
+    font-family: var(--font-body);
     font-weight: 800;
     font-size: 19px;
     letter-spacing: -0.01em;
+    color: var(--ink);
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
   }
 
   /* The real #interval-primary <select> stays relocated here (so its

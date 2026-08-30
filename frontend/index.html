@@ -437,7 +437,10 @@
   </div>
 
   <div id="mobile-chart-strip" class="mobile-chart-strip hidden">
-    <span id="mobile-chart-symbol" class="mobile-chart-symbol">—</span>
+    <!-- Opens the same full-screen search as the toolbar field — cambiare
+         ticker right where the thumb already is (next to the timeframe
+         wheel) instead of reaching back up to the top toolbar. -->
+    <button type="button" id="mobile-chart-symbol" class="mobile-chart-symbol">—</button>
     <!-- #interval-primary gets relocated here by relocateIntervalSelect()
          (app.js) but stays visually hidden — the wheel below is the real
          UI, driven off this select's options/value/change event so no
