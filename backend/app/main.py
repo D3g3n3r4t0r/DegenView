@@ -74,7 +74,7 @@ from app.timeframes import (
     drop_unclosed_candle,
 )
 
-logger = logging.getLogger("watchlist_alerts")
+logger = logging.getLogger(__name__)
 if getattr(sys, "frozen", False):
     FRONTEND_DIR = Path(sys._MEIPASS) / "frontend"  # type: ignore[attr-defined]
 else:
@@ -151,6 +151,13 @@ async def fetch_ohlcv_canonical(provider: DataProvider, symbol: str, interval: s
     return resample_by_count(raw, multiple).tail(outputsize)
 
 
+async def _fetch_cached(key: tuple, provider: DataProvider, symbol: str, interval: str, outputsize: int):
+    """Shared helper: wraps fetch_ohlcv_canonical + get_or_fetch so each
+    route doesn't need to declare its own inner do_fetch closure."""
+    async def _do():
+        return await fetch_ohlcv_canonical(provider, symbol, interval, outputsize)
+    return await get_or_fetch(key, _do)
+
 
 
 async def _watchlist_alert_loop() -> None:
@@ -182,8 +189,15 @@ async def _watchlist_alert_loop() -> None:
                     params = entry.strategy_params.get(strategy_name) or None
                     strategy = build_strategy_state(strategy_name, df, params=params)
                     _dispatch_telegram_alerts(owner.telegram_chat_id, entry.symbol, entry.interval, strategy)
-            except Exception:
-                logger.exception("Watchlist check failed for %s [%s]", entry.symbol, entry.interval)
+            except Exception as exc:  # noqa: BLE001
+                logger.error("Alert loop error for %s: %s", entry.symbol, exc, exc_info=True)
+                if settings.telegram_bot_token and owner.telegram_chat_id and _telegram_allowed(owner):
+                    asyncio.create_task(
+                        telegram.send_to(
+                            owner.telegram_chat_id,
+                            f"⚠️ Errore monitoraggio <b>{entry.symbol}</b> [{entry.interval}]: {exc}",
+                        )
+                    )
 
 
 @asynccontextmanager
@@ -425,12 +439,10 @@ async def run_pinescript(script_id: str, req: PineRunRequest) -> dict:
     interval = req.interval or DEFAULT_INTERVALS[req.timeframe]
     provider = get_provider(req.asset_type, req.exchange)
 
-    async def do_fetch():
-        return await fetch_ohlcv_canonical(provider, symbol, interval, settings.ltf_candles)
-
     try:
-        df = await get_or_fetch(
-            (f"pine:{req.asset_type}:{req.exchange}:{symbol.upper()}", interval, settings.ltf_candles), do_fetch
+        df = await _fetch_cached(
+            (f"pine:{req.asset_type}:{req.exchange}:{symbol.upper()}", interval, settings.ltf_candles),
+            provider, symbol, interval, settings.ltf_candles,
         )
     except ProviderError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -802,11 +814,11 @@ async def get_favorite_quotes(user: User = Depends(auth.get_current_user)) -> li
     async def quote_for(entry: FavoriteEntry) -> FavoriteQuote:
         provider = get_provider(entry.asset_type, entry.exchange)
 
-        async def do_fetch():
-            return await provider.fetch_ohlcv(entry.symbol, "1d", 2)
-
         try:
-            df = await get_or_fetch((f"favquote:{entry.asset_type}:{entry.exchange}:{entry.symbol}", "1d"), do_fetch)
+            df = await _fetch_cached(
+                (f"favquote:{entry.asset_type}:{entry.exchange}:{entry.symbol}", "1d", 2),
+                provider, entry.symbol, "1d", 2,
+            )
         except ProviderError:
             return FavoriteQuote(id=entry.id)
         if df.empty:
@@ -848,11 +860,8 @@ async def analyze(
         outputsize = settings.ltf_candles if tf_key == "ltf" else settings.candles_per_timeframe
         cache_key = (f"{asset_type}:{exchange}:{symbol.upper()}", interval, outputsize)
 
-        async def do_fetch():
-            return await fetch_ohlcv_canonical(provider, symbol, interval, outputsize)
-
         try:
-            df = await get_or_fetch(cache_key, do_fetch)
+            df = await _fetch_cached(cache_key, provider, symbol, interval, outputsize)
         except ProviderError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
         return tf_key, df
@@ -977,11 +986,8 @@ async def deep_backtest(
     backtest_interval = backtest_interval_for(ltf_interval)
     cache_key = (f"{asset_type}:{exchange}:{symbol.upper()}:backtest", backtest_interval, settings.backtest_candles)
 
-    async def do_fetch():
-        return await fetch_ohlcv_canonical(provider, symbol, backtest_interval, settings.backtest_candles)
-
     try:
-        df = await get_or_fetch(cache_key, do_fetch)
+        df = await _fetch_cached(cache_key, provider, symbol, backtest_interval, settings.backtest_candles)
     except ProviderError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     if df.empty:
@@ -1023,11 +1029,8 @@ async def optimize_strategy_endpoint(
     backtest_interval = backtest_interval_for(ltf_interval)
     cache_key = (f"{asset_type}:{exchange}:{symbol.upper()}:backtest", backtest_interval, settings.backtest_candles)
 
-    async def do_fetch():
-        return await fetch_ohlcv_canonical(provider, symbol, backtest_interval, settings.backtest_candles)
-
     try:
-        df = await get_or_fetch(cache_key, do_fetch)
+        df = await _fetch_cached(cache_key, provider, symbol, backtest_interval, settings.backtest_candles)
     except ProviderError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     if df.empty:
