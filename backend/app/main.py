@@ -31,7 +31,7 @@ from app.analysis.backtest import run_backtest
 from app.analysis.confluence import compute_confluence
 from app.analysis.indicators import compute_indicators
 from app.analysis.fibonacci import compute_fib_zones
-from app.analysis.optimize import optimize_lorenzo
+from app.analysis.optimize import is_optimizable, optimize_strategy
 from app.analysis.smc_engine import compute_dealing_range, compute_levels, compute_swings
 from app.analysis.strategies import AVAILABLE_STRATEGIES, DEFAULT_STRATEGY, build_strategy_state
 from app.analysis.summary import build_summary, determine_bias
@@ -197,7 +197,20 @@ app = FastAPI(title="Liquidity Analysis Engine", lifespan=lifespan)
 
 
 class StrategyParamsQuery(BaseModel):
-    # Lorenzo (trend-follower) params — ignored by other strategies.
+    # Every strategy's own params live on this one shared query model — each
+    # compute_*_signals() only ever reads its own keys (merged over that
+    # strategy's DEFAULT_PARAMS) and ignores the rest, so there's no
+    # cross-strategy collision in practice: the frontend only ever renders
+    # (and sends) one strategy's field set at a time (see
+    # STRATEGY_PARAM_FIELDS in app.js), even though a couple of names below
+    # are shared between two strategies (rsi_length, rsi_oversold,
+    # rsi_overbought — both Gabriele's and Exhaustion's own versions of
+    # those, never sent together). A field missing here is a field silently
+    # dropped by FastAPI's query parsing regardless of what the frontend
+    # sends, so keep this in sync with STRATEGY_PARAM_FIELDS in app.js and
+    # each strategy's own *_DEFAULT_PARAMS in app.analysis.strategies.
+
+    # Lorenzo (trend-follower)
     average: Literal["EMA", "SMA"] = "EMA"
     len: int = 130
     slopeFlen: int = 7
@@ -208,14 +221,38 @@ class StrategyParamsQuery(BaseModel):
     volatilityfilter: bool = True
     volatilitystdevlength: int = 16
     volatilitystdevmalength: int = 44
-    # Accumulo/Distribuzione (long-term) params — ignored by other strategies.
-    # Exposed as independent toggles rather than baked into a silent OR: each
-    # was added reactively against a single chart, so a user who trusts only
-    # the divergence condition can turn the other two off instead of having
-    # to trust all three blindly.
+
+    # Accumulo/Distribuzione (long-term) — exposed as independent toggles
+    # rather than baked into a silent OR: each condition was added reactively
+    # against a single chart, so a user who trusts only the divergence
+    # condition can turn the other two off instead of trusting all three.
     enable_divergence: bool = True
     enable_contraction: bool = True
     enable_range_bounce: bool = True
+    swing_length: int = 8
+    rsi_min_gap: float = 3.0
+    low_tolerance_pct: float = 1.0
+    divergence_lookback: int = 3
+    volume_ma_length: int = 20
+    volume_multiplier: float = 1.3
+    trend_filter: bool = True
+    trend_ema_length: int = 50
+    confirmation_lookahead: int = 10
+    contraction_lookback: int = 10
+    contraction_prior_lookback: int = 30
+    contraction_ratio: float = 0.55
+    range_lookback: int = 40
+    range_zone_pct: float = 0.25
+
+    # Shared between Exhaustion and Gabriele (RSI+BB reversal) — never sent
+    # together, see the class docstring above.
+    rsi_length: int = 14
+    rsi_oversold: int = 28
+    rsi_overbought: int = 72
+
+    # Gabriele (RSI+BB reversal)
+    bb_length: int = 20
+    bb_mult: float = 2.0
 
 
 class BacktestParamsQuery(BaseModel):
@@ -960,23 +997,27 @@ class OptimizeResult(BaseModel):
     trials_evaluated: int
 
 
-@app.get("/api/optimize/lorenzo", response_model=OptimizeResult)
-async def optimize_lorenzo_endpoint(
+@app.get("/api/optimize", response_model=OptimizeResult)
+async def optimize_strategy_endpoint(
     symbol: str = Query(..., min_length=1, max_length=20),
     asset_type: AssetType = Query("stock"),
     exchange: CryptoExchange = Query("mexc"),
     ltf_interval: IntervalChoice = Query(DEFAULT_INTERVALS["ltf"]),
+    strategy_name: str = Query(DEFAULT_STRATEGY),
     backtest_params: BacktestParamsQuery = Depends(),
 ) -> OptimizeResult:
-    """Random-search parameter tuning for the Lorenzo strategy — same
-    deep-history df the backtest itself uses (see backtest_interval_for),
-    so results here match what re-running the backtest with the winning
-    params will show. CPU-bound (~120 backtest simulations, ~15-25s), so it
-    runs off the event loop via a thread — otherwise it would stall every
-    other request (including other users') for its whole duration."""
+    """Random-search parameter tuning for any strategy in the registry —
+    same deep-history df the backtest itself uses (see
+    backtest_interval_for), so results here match what re-running the
+    backtest with the winning params will show. CPU-bound (~120 backtest
+    simulations, ~15-25s), so it runs off the event loop via a thread —
+    otherwise it would stall every other request (including other users')
+    for its whole duration."""
     symbol = symbol.strip()
     if not symbol:
         raise HTTPException(status_code=400, detail="Ticker mancante")
+    if not is_optimizable(strategy_name):
+        raise HTTPException(status_code=400, detail=f"Ottimizzazione non disponibile per {strategy_name}")
 
     provider = get_provider(asset_type, exchange)
     backtest_interval = backtest_interval_for(ltf_interval)
@@ -993,7 +1034,7 @@ async def optimize_lorenzo_endpoint(
         raise HTTPException(status_code=502, detail=f"Nessun dato per {symbol}")
 
     best_params, best_bt, trials = await asyncio.to_thread(
-        optimize_lorenzo, df, backtest_params.model_dump()
+        optimize_strategy, strategy_name, df, backtest_params.model_dump()
     )
     best_bt = best_bt.model_copy(update={"interval": backtest_interval})
     return OptimizeResult(params=best_params, backtest=best_bt, trials_evaluated=trials)

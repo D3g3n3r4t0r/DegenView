@@ -232,25 +232,9 @@
             <form id="params-form" class="params-form">
               <fieldset>
                 <legend>Strategia</legend>
-                <button type="button" id="optimize-lorenzo-btn" class="optimize-btn hidden">🎯 Ottimizza parametri automaticamente</button>
-                <p id="optimize-lorenzo-result" class="optimize-result hidden"></p>
-                <label>Tipo media <select name="average"><option value="EMA">EMA</option><option value="SMA">SMA</option></select></label>
-                <label>Lunghezza media <input type="number" name="len" value="130" min="2" /></label>
-                <label>Slope veloce <input type="number" name="slopeFlen" value="7" min="1" /></label>
-                <label>Slope lenta <input type="number" name="slopeSlen" value="27" min="1" /></label>
-                <label><input type="checkbox" name="trendfilter" checked /> Filtro trend</label>
-                <label>Periodo trend <input type="number" name="trendfilterperiod" value="268" min="2" /></label>
-                <label>Tipo trend <select name="trendfiltertype"><option value="EMA">EMA</option><option value="SMA">SMA</option></select></label>
-                <label><input type="checkbox" name="volatilityfilter" checked /> Filtro volatilità</label>
-                <label>Stdev lunghezza <input type="number" name="volatilitystdevlength" value="16" min="1" /></label>
-                <label>Stdev media lunghezza <input type="number" name="volatilitystdevmalength" value="44" min="1" /></label>
-              </fieldset>
-              <fieldset>
-                <legend>Accumulo / Distribuzione</legend>
-                <p class="panel-hint">Tre condizioni indipendenti (in OR) — disattivane qualcuna se vuoi restringere ai segnali di cui ti fidi di più.</p>
-                <label><input type="checkbox" name="enable_divergence" checked /> Divergenza RSI su swing</label>
-                <label><input type="checkbox" name="enable_contraction" checked /> Breakout da contrazione volatilità</label>
-                <label><input type="checkbox" name="enable_range_bounce" checked /> Rimbalzo sul supporto/resistenza del range</label>
+                <button type="button" id="optimize-strategy-btn" class="optimize-btn hidden">🎯 Ottimizza parametri automaticamente</button>
+                <p id="optimize-strategy-result" class="optimize-result hidden"></p>
+                <div id="strategy-params-fields"></div>
               </fieldset>
               <fieldset>
                 <legend>Backtest</legend>

@@ -68,8 +68,19 @@
       { key: "rsi_length", label: "Lunghezza RSI", type: "number", min: 1, default: 14 },
       { key: "rsi_oversold", label: "RSI ipervenduto", type: "number", min: 0, max: 100, default: 40 },
       { key: "rsi_overbought", label: "RSI ipercomprato", type: "number", min: 0, max: 100, default: 60 },
+      { key: "rsi_min_gap", label: "RSI scarto minimo divergenza", type: "number", min: 0, step: 0.1, default: 3.0 },
+      { key: "low_tolerance_pct", label: "Tolleranza nuovo minimo %", type: "number", min: 0, step: 0.1, default: 1.0 },
+      { key: "divergence_lookback", label: "Lookback swing divergenza", type: "number", min: 1, default: 3 },
+      { key: "volume_ma_length", label: "Media volume", type: "number", min: 1, default: 20 },
+      { key: "volume_multiplier", label: "Moltiplicatore volume", type: "number", min: 0, step: 0.1, default: 1.3 },
       { key: "trend_filter", label: "Filtro trend", type: "checkbox", default: true },
       { key: "trend_ema_length", label: "EMA trend", type: "number", min: 1, default: 50 },
+      { key: "confirmation_lookahead", label: "Barre di conferma", type: "number", min: 1, default: 10 },
+      { key: "contraction_lookback", label: "Lookback contrazione", type: "number", min: 1, default: 10 },
+      { key: "contraction_prior_lookback", label: "Lookback pre-contrazione", type: "number", min: 1, default: 30 },
+      { key: "contraction_ratio", label: "Rapporto contrazione volatilità", type: "number", min: 0, step: 0.05, default: 0.55 },
+      { key: "range_lookback", label: "Lookback range", type: "number", min: 1, default: 40 },
+      { key: "range_zone_pct", label: "Zona range %", type: "number", min: 0, max: 1, step: 0.05, default: 0.25 },
     ],
     "Gabriele (RSI+BB reversal)": [
       { key: "rsi_length", label: "Lunghezza RSI", type: "number", min: 1, default: 14 },
@@ -600,26 +611,31 @@
       opt.textContent = name;
       select.appendChild(opt);
     });
+    renderStrategyParamsFields();
     updateOptimizeButtonVisibility();
   }
 
-  // ---- Lorenzo auto-optimize: random-search the strategy's own parameter
-  // space against the deep backtest history, scored by profit factor. Only
-  // meaningful for Lorenzo (the other strategies have differently-shaped
-  // parameter spaces this doesn't cover), so the button only shows up when
-  // that's the active strategy. ----
-  const LORENZO_STRATEGY_NAME = "Lorenzo (trend-follower)";
+  // ---- Auto-optimize: random-search the active strategy's own parameter
+  // space (STRATEGY_PARAM_FIELDS) against the deep backtest history, scored
+  // by profit factor. Every strategy in the registry has one — the backend
+  // rejects strategy names it has no search space for, so this list just
+  // has to stay a subset of that. ----
+  const OPTIMIZABLE_STRATEGIES = new Set([
+    "Lorenzo (trend-follower)",
+    "Accumulo / Distribuzione (long-term)",
+    "Gabriele (RSI+BB reversal)",
+  ]);
 
   function updateOptimizeButtonVisibility() {
-    const isLorenzo = el("active-strategy-select").value === LORENZO_STRATEGY_NAME;
-    el("optimize-lorenzo-btn").classList.toggle("hidden", !isLorenzo);
-    if (!isLorenzo) el("optimize-lorenzo-result").classList.add("hidden");
+    const optimizable = OPTIMIZABLE_STRATEGIES.has(el("active-strategy-select").value);
+    el("optimize-strategy-btn").classList.toggle("hidden", !optimizable);
+    if (!optimizable) el("optimize-strategy-result").classList.add("hidden");
   }
 
-  async function runLorenzoOptimize() {
+  async function runStrategyOptimize() {
     if (!state.data) return;
-    const btn = el("optimize-lorenzo-btn");
-    const resultEl = el("optimize-lorenzo-result");
+    const btn = el("optimize-strategy-btn");
+    const resultEl = el("optimize-strategy-result");
     btn.disabled = true;
     const originalLabel = btn.textContent;
     btn.textContent = "Ottimizzazione in corso… (10-25s)";
@@ -627,13 +643,15 @@
 
     try {
       const form = el("params-form");
+      const strategyName = el("active-strategy-select").value;
       const backtestParams = new URLSearchParams();
       ["initial_capital", "qty_pct_of_equity", "commission_pct", "slippage_pct", "stop_loss_pct", "take_profit_pct"].forEach(
         (name) => backtestParams.set(name, new FormData(form).get(name))
       );
       const url =
-        `/api/optimize/lorenzo?symbol=${encodeURIComponent(state.data.symbol)}&asset_type=${state.assetType}` +
-        `&exchange=${state.cryptoExchange}&ltf_interval=${getSelectedIntervals().ltf}&${backtestParams.toString()}`;
+        `/api/optimize?symbol=${encodeURIComponent(state.data.symbol)}&asset_type=${state.assetType}` +
+        `&exchange=${state.cryptoExchange}&ltf_interval=${getSelectedIntervals().ltf}` +
+        `&strategy_name=${encodeURIComponent(strategyName)}&${backtestParams.toString()}`;
       const resp = await fetch(url);
       const body = await resp.json();
       if (!resp.ok) {
@@ -2454,18 +2472,45 @@
     const form = el("params-form");
     const data = new FormData(form);
     const params = new URLSearchParams();
-    ["average", "len", "slopeFlen", "slopeSlen", "trendfilterperiod", "trendfiltertype",
-      "volatilitystdevlength", "volatilitystdevmalength", "initial_capital", "qty_pct_of_equity",
-      "commission_pct", "slippage_pct", "stop_loss_pct", "take_profit_pct"].forEach((name) => {
-      params.set(name, data.get(name));
+    const strategyName = el("active-strategy-select").value;
+    (STRATEGY_PARAM_FIELDS[strategyName] || []).forEach((field) => {
+      const input = form.elements[field.key];
+      if (!input) return;
+      params.set(field.key, field.type === "checkbox" ? input.checked : data.get(field.key));
     });
-    params.set("trendfilter", form.elements["trendfilter"].checked);
-    params.set("volatilityfilter", form.elements["volatilityfilter"].checked);
-    params.set("enable_divergence", form.elements["enable_divergence"].checked);
-    params.set("enable_contraction", form.elements["enable_contraction"].checked);
-    params.set("enable_range_bounce", form.elements["enable_range_bounce"].checked);
-    params.set("strategy_name", el("active-strategy-select").value);
+    ["initial_capital", "qty_pct_of_equity", "commission_pct", "slippage_pct", "stop_loss_pct", "take_profit_pct"].forEach(
+      (name) => params.set(name, data.get(name))
+    );
+    params.set("strategy_name", strategyName);
     return params.toString();
+  }
+
+  // Rebuilds the "Strategia" fieldset's fields for whichever strategy is
+  // currently active — each one has its own differently-shaped parameter
+  // set (STRATEGY_PARAM_FIELDS), so this is what actually makes them
+  // visible/editable instead of only ever showing Lorenzo's.
+  function renderStrategyParamsFields() {
+    const strategyName = el("active-strategy-select").value;
+    const fields = STRATEGY_PARAM_FIELDS[strategyName] || [];
+    const container = el("strategy-params-fields");
+    container.innerHTML = "";
+    fields.forEach((field) => {
+      const label = document.createElement("label");
+      if (field.type === "checkbox") {
+        label.innerHTML = `<input type="checkbox" name="${field.key}" ${field.default ? "checked" : ""} /> ${field.label}`;
+      } else if (field.type === "select") {
+        const options = field.options
+          .map((opt) => `<option value="${opt}"${opt === field.default ? " selected" : ""}>${opt}</option>`)
+          .join("");
+        label.innerHTML = `${field.label} <select name="${field.key}">${options}</select>`;
+      } else {
+        const min = field.min !== undefined ? ` min="${field.min}"` : "";
+        const max = field.max !== undefined ? ` max="${field.max}"` : "";
+        const step = field.step !== undefined ? ` step="${field.step}"` : "";
+        label.innerHTML = `${field.label} <input type="number" name="${field.key}" value="${field.default}"${min}${max}${step} />`;
+      }
+      container.appendChild(label);
+    });
   }
 
   function renderSummary() {
@@ -3753,11 +3798,12 @@
     });
 
     el("active-strategy-select").addEventListener("change", () => {
+      renderStrategyParamsFields();
       updateOptimizeButtonVisibility();
       if (state.data) runAnalysis(state.data.symbol);
     });
 
-    el("optimize-lorenzo-btn").addEventListener("click", runLorenzoOptimize);
+    el("optimize-strategy-btn").addEventListener("click", runStrategyOptimize);
 
     document.querySelectorAll(".wl-asset-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
