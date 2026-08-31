@@ -250,40 +250,7 @@
       </div>
 
       <div class="tab-content" data-tab-content="backtest">
-        <div class="panel">
-          <!-- Chart backtest result (same symbol/strategy as chart) -->
-          <h4 class="backtest-heading">Backtest <span id="backtest-interval-tag" class="backtest-interval-tag"></span></h4>
-          <div class="eq-hero-wrap">
-            <div id="equity-chart" class="equity-chart"></div>
-            <div class="equity-hero-stamp">
-              <div id="equity-stamp-pct" class="equity-stamp-pct">—</div>
-              <div id="equity-stamp-sub" class="equity-stamp-sub">—</div>
-            </div>
-          </div>
-          <div id="backtest-chips" class="backtest-chips"></div>
-
-          <details class="params-details">
-            <summary>Parametri backtest</summary>
-            <div class="params-form">
-              <fieldset>
-                <legend>Backtest</legend>
-                <label>Capitale iniziale <input type="number" name="initial_capital" form="params-form" value="10000" min="1" /></label>
-                <label>% equity per trade <input type="number" name="qty_pct_of_equity" form="params-form" value="100" min="1" max="100" step="1" /></label>
-                <label>Commissione % <input type="number" name="commission_pct" form="params-form" value="0" min="0" step="0.01" /></label>
-                <label>Slippage % <input type="number" name="slippage_pct" form="params-form" value="0" min="0" step="0.01" /></label>
-                <label>Stop-loss % <input type="number" name="stop_loss_pct" form="params-form" value="0" min="0" step="0.5" title="0 = disattivato" /></label>
-                <label>Take-profit % <input type="number" name="take_profit_pct" form="params-form" value="0" min="0" step="0.5" title="0 = disattivato" /></label>
-              </fieldset>
-            </div>
-          </details>
-
-          <details class="params-details">
-            <summary>Dettagli backtest</summary>
-            <div id="backtest-details" class="backtest-details"></div>
-          </details>
-        </div>
-
-        <div class="panel lab-panel" style="margin-top:8px">
+        <div class="panel lab-panel" id="lab-panel">
 
           <!-- Ticker hero -->
           <div class="lab-ticker-hero" id="lab-ticker-hero">
@@ -351,6 +318,15 @@
             <button type="button" id="lab-apply-btn" class="lab-apply-btn">Applica ↗</button>
           </div>
 
+        </div>
+
+        <!-- Trade detail drawer (shown when "N trade" is clicked) -->
+        <div id="lab-trades-drawer" class="lab-trades-drawer hidden">
+          <div class="lab-trades-header">
+            <span id="lab-trades-title">Trade</span>
+            <button type="button" id="lab-trades-close" class="lab-trades-close">✕</button>
+          </div>
+          <div id="lab-trades-body" class="lab-trades-body"></div>
         </div>
       </div>
 

@@ -692,7 +692,6 @@
       [el("rsi-chart"), rsiChart],
       [el("macd-chart"), macdChart],
       [el("stoch-chart"), stochChart],
-      [el("equity-chart"), equityChart],
     ].forEach(([container, chart]) => {
       if (container.clientWidth > 0 && container.clientHeight > 0) {
         chart.resize(container.clientWidth, container.clientHeight);
@@ -764,12 +763,12 @@
     const resultEl = el("optimize-strategy-result");
     resultEl.classList.add("hidden");
     await withAsyncButton(btn, async () => {
-      const form = el("params-form");
       const strategyName = el("active-strategy-select").value;
-      const backtestParams = new URLSearchParams();
-      ["initial_capital", "qty_pct_of_equity", "commission_pct", "slippage_pct", "stop_loss_pct", "take_profit_pct"].forEach(
-        (name) => backtestParams.set(name, new FormData(form).get(name))
-      );
+      const backtestParams = new URLSearchParams({
+        initial_capital: "10000", qty_pct_of_equity: "100",
+        commission_pct: "0", slippage_pct: "0",
+        stop_loss_pct: "0", take_profit_pct: "0",
+      });
       const url =
         `/api/optimize?symbol=${encodeURIComponent(state.data.symbol)}&asset_type=${state.assetType}` +
         `&exchange=${state.cryptoExchange}&ltf_interval=${getSelectedIntervals().ltf}` +
@@ -1485,22 +1484,9 @@
     stochDSeries = stochChart.addLineSeries({ color: COLORS.stamp, lineWidth: 1 });
     observeResize(stochContainer, stochChart);
 
-    const equityContainer = el("equity-chart");
-    equityChart = LightweightCharts.createChart(equityContainer, {
-      ...baseOptions,
-      rightPriceScale: { borderColor: COLORS.gridMajor },
-      // Visible now (was hidden) — the equity curve is only useful for
-      // spotting *when* a run of trades happened if the axis actually shows
-      // dates instead of leaving the curve floating with no time reference.
-      timeScale: { borderColor: COLORS.gridMajor, timeVisible: true, secondsVisible: false, visible: true },
-    });
-    equitySeries = equityChart.addAreaSeries({
-      lineColor: COLORS.stamp,
-      topColor: "rgba(192, 122, 30, 0.20)",
-      bottomColor: "rgba(192, 122, 30, 0.02)",
-      lineWidth: 2,
-    });
-    observeResize(equityContainer, equityChart);
+    // equity-chart panel removed — equityChart/equitySeries stay null
+    equityChart = null;
+    equitySeries = null;
 
     mainChart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
       if (!range) return;
@@ -2538,28 +2524,36 @@
     // ltf is finer than daily (see backtest_interval_for on the backend) —
     // surface which interval it actually used instead of implying it always
     // matches the chart's own timeframe.
+    // These elements were in the old Backtest panel — now removed. Guard
+    // against null so the function still works for operations/equity.
     const tagEl = el("backtest-interval-tag");
     if (tagEl) tagEl.textContent = bt.interval ? `(${bt.interval})` : "";
 
     const pctEl = el("equity-stamp-pct");
-    pctEl.textContent = `${bt.total_return_pct >= 0 ? "+" : ""}${bt.total_return_pct.toFixed(1)}%`;
-    pctEl.className = "equity-stamp-pct " + (bt.total_return_pct >= 0 ? "positive" : "negative");
-    el("equity-stamp-sub").textContent = `equity ${bt.final_equity.toLocaleString("it-IT", { maximumFractionDigits: 0 })}`;
+    if (pctEl) {
+      pctEl.textContent = `${bt.total_return_pct >= 0 ? "+" : ""}${bt.total_return_pct.toFixed(1)}%`;
+      pctEl.className = "equity-stamp-pct " + (bt.total_return_pct >= 0 ? "positive" : "negative");
+    }
+    const subEl = el("equity-stamp-sub");
+    if (subEl) subEl.textContent = `equity ${bt.final_equity.toLocaleString("it-IT", { maximumFractionDigits: 0 })}`;
 
     const chipsEl = el("backtest-chips");
-    chipsEl.innerHTML = "";
-    [
-      ["Win rate", bt.win_rate_pct !== null ? `${bt.win_rate_pct.toFixed(0)}%` : "—", ""],
-      ["Max drawdown", `-${bt.max_drawdown_pct.toFixed(1)}%`, "negative"],
-      ["Profit factor", bt.profit_factor !== null ? bt.profit_factor.toFixed(2) : "—", ""],
-    ].forEach(([label, value, cls]) => {
-      const div = document.createElement("div");
-      div.className = "chip";
-      div.innerHTML = `<div class="chip-label">${label}</div><div class="chip-value ${cls}">${value}</div>`;
-      chipsEl.appendChild(div);
-    });
+    if (chipsEl) {
+      chipsEl.innerHTML = "";
+      [
+        ["Win rate", bt.win_rate_pct !== null ? `${bt.win_rate_pct.toFixed(0)}%` : "—", ""],
+        ["Max drawdown", `-${bt.max_drawdown_pct.toFixed(1)}%`, "negative"],
+        ["Profit factor", bt.profit_factor !== null ? bt.profit_factor.toFixed(2) : "—", ""],
+      ].forEach(([label, value, cls]) => {
+        const div = document.createElement("div");
+        div.className = "chip";
+        div.innerHTML = `<div class="chip-label">${label}</div><div class="chip-value ${cls}">${value}</div>`;
+        chipsEl.appendChild(div);
+      });
+    }
 
-    el("backtest-details").innerHTML = `
+    const detailsEl = el("backtest-details");
+    if (detailsEl) detailsEl.innerHTML = `
       <div class="stat"><div class="stat-label">Trade</div><div class="stat-value">${bt.num_trades}</div></div>
       <div class="stat"><div class="stat-label">Equity finale</div><div class="stat-value">${bt.final_equity.toLocaleString("it-IT", { maximumFractionDigits: 0 })}</div></div>
     `;
@@ -2587,8 +2581,10 @@
       });
     }
 
-    equitySeries.setData(bt.equity_curve.map(([time, equity]) => ({ time, value: equity })));
-    equityChart.timeScale().fitContent();
+    if (equitySeries) {
+      equitySeries.setData(bt.equity_curve.map(([time, equity]) => ({ time, value: equity })));
+      equityChart.timeScale().fitContent();
+    }
   }
 
   function renderBacktest() {
@@ -2605,9 +2601,14 @@
       if (!input) return;
       params.set(field.key, field.type === "checkbox" ? input.checked : data.get(field.key));
     });
-    ["initial_capital", "qty_pct_of_equity", "commission_pct", "slippage_pct", "stop_loss_pct", "take_profit_pct"].forEach(
-      (name) => params.set(name, data.get(name))
-    );
+    // Backtest params: always 100% equity, no fees — the Lab is the place to
+    // experiment; the chart's own backtest always uses clean defaults.
+    params.set("initial_capital", "10000");
+    params.set("qty_pct_of_equity", "100");
+    params.set("commission_pct", "0");
+    params.set("slippage_pct", "0");
+    params.set("stop_loss_pct", "0");
+    params.set("take_profit_pct", "0");
     params.set("strategy_name", strategyName);
     return params.toString();
   }
@@ -4126,7 +4127,7 @@
     const de = fmtDate(bt.data_end);
     const dateRange = ds && de ? ` · <span class="meta-dates">${ds} → ${de}</span>` : "";
 
-    labEl("lab-result-meta").innerHTML = `<span>${bt.num_trades} trade</span> · ${bt.interval || labState.tf}${dateRange}`;
+    labEl("lab-result-meta").innerHTML = `<button type="button" class="lab-trades-link">${bt.num_trades} trade</button> · ${bt.interval || labState.tf}${dateRange}`;
 
     // 3-chip base row + optional Sharpe chip
     let chipsHtml = `
@@ -4148,7 +4149,60 @@
       applyText.innerHTML = `Applica i risultati di <b>${labState.symbol}</b> sul grafico (ingressi/uscite del test).`;
     }
     labEl("lab-apply-strip").classList.remove("hidden");
+
+    // Wire "N trade" button to open the trade detail drawer
+    const tradeLink = labEl("lab-result-meta").querySelector(".lab-trades-link");
+    if (tradeLink) {
+      tradeLink.addEventListener("click", () => openLabTradesDrawer(bt));
+    }
   }
+
+  function openLabTradesDrawer(bt) {
+    const drawer = el("lab-trades-drawer");
+    const body = el("lab-trades-body");
+    el("lab-trades-title").textContent = `${bt.num_trades} operazioni`;
+
+    const dateFmt = { day: "2-digit", month: "short", year: "2-digit" };
+    const fmtTs = (ms) => new Date(ms * 1000).toLocaleDateString("it-IT", dateFmt);
+    const fmtPrice = (p) => p.toLocaleString("it-IT", { maximumFractionDigits: 4 });
+    const fmtMoney = (v) => v.toLocaleString("it-IT", { maximumFractionDigits: 0 });
+
+    const initCap = parseFloat(labEl("lab-initial-capital").value) || 10000;
+
+    let html = `<table class="lab-trades-table">
+      <thead><tr>
+        <th>#</th><th>Dir</th><th>Entrata</th><th>Uscita</th>
+        <th>Entry</th><th>Exit</th><th>P&amp;L %</th><th>P&amp;L $</th><th>Equity</th>
+      </tr></thead><tbody>`;
+
+    const trades = bt.trades || [];
+    trades.forEach((t, i) => {
+      const isWin = t.pnl_abs > 0;
+      const dir = t.direction === "long" ? "▲ L" : "▼ S";
+      const dirClass = t.direction === "long" ? "bull" : "bear";
+      const pnlClass = isWin ? "pos" : "neg";
+      html += `<tr>
+        <td class="td-num">${i + 1}</td>
+        <td class="td-dir ${dirClass}">${dir}</td>
+        <td class="td-date">${fmtTs(t.entry_time)}</td>
+        <td class="td-date">${fmtTs(t.exit_time)}</td>
+        <td class="td-price">${fmtPrice(t.entry_price)}</td>
+        <td class="td-price">${fmtPrice(t.exit_price)}</td>
+        <td class="td-pnl ${pnlClass}">${t.pnl_pct >= 0 ? "+" : ""}${t.pnl_pct.toFixed(2)}%</td>
+        <td class="td-pnl ${pnlClass}">${t.pnl_abs >= 0 ? "+" : ""}${fmtMoney(t.pnl_abs)}</td>
+        <td class="td-equity">${fmtMoney(t.equity_after)}</td>
+      </tr>`;
+    });
+
+    if (!trades.length) html += `<tr><td colspan="9" style="text-align:center;padding:16px;color:var(--ink-dim)">Nessuna operazione</td></tr>`;
+    html += `</tbody></table>`;
+    body.innerHTML = html;
+    drawer.classList.remove("hidden");
+  }
+
+  el("lab-trades-close").addEventListener("click", () => {
+    el("lab-trades-drawer").classList.add("hidden");
+  });
 
   async function runLabBacktest() {
     if (!labState.symbol) {
