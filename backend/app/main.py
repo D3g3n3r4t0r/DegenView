@@ -65,7 +65,13 @@ from app.providers.mexc import MexcProvider
 from app.providers.mexc import format_symbol as format_mexc_symbol
 from app.providers.twelvedata import TwelveDataProvider
 from app.resample import resample_by_count
-from app.timeframes import DEFAULT_INTERVALS, SYNTHETIC_DAY_INTERVALS, IntervalChoice, drop_unclosed_candle
+from app.timeframes import (
+    CANONICAL_INTERVALS,
+    DEFAULT_INTERVALS,
+    SYNTHETIC_DAY_INTERVALS,
+    IntervalChoice,
+    drop_unclosed_candle,
+)
 
 logger = logging.getLogger("watchlist_alerts")
 if getattr(sys, "frozen", False):
@@ -88,6 +94,21 @@ def _telegram_allowed(user: User) -> bool:
 def _balance_visible(user: User) -> bool:
     allowed = {e.strip().lower() for e in settings.balance_visible_emails.split(",") if e.strip()}
     return not allowed or user.email.lower() in allowed
+
+
+_BACKTEST_MIN_INTERVAL = "1d"
+
+
+def backtest_interval_for(ltf_interval: str) -> str:
+    """The backtest deliberately runs on a coarser feed than whatever the
+    chart happens to be set to — a fixed candle budget covers years at "1d"
+    but only hours at "1m", and the user is after the deepest history the
+    exchange has, not a simulation tied to the chart's own granularity.
+    Never goes coarser than the chart itself, though: if ltf is already
+    "1w"/"1M" there's nothing to gain by stepping back down to daily."""
+    if CANONICAL_INTERVALS.index(ltf_interval) >= CANONICAL_INTERVALS.index(_BACKTEST_MIN_INTERVAL):
+        return ltf_interval
+    return _BACKTEST_MIN_INTERVAL
 
 
 def get_provider(asset_type: AssetType, exchange: CryptoExchange = "mexc") -> DataProvider:
@@ -798,7 +819,30 @@ async def analyze(
             raise HTTPException(status_code=502, detail=str(exc)) from exc
         return tf_key, df
 
-    fetched = await asyncio.gather(*(fetch_timeframe(tf_key) for tf_key in settings.timeframe_keys))
+    # The backtest runs on its own, deliberately coarser fetch (see
+    # backtest_interval_for) instead of the ltf df the chart uses — a
+    # dedicated fetch so a chart pinned to 1m/5m doesn't limit the backtest
+    # to a few hours of history. Non-fatal on failure: falls back to ltf's
+    # own df (the previous behavior) rather than failing the whole request
+    # over what's ultimately a supplementary, deeper lookback.
+    backtest_interval = backtest_interval_for(ltf_interval)
+
+    async def fetch_backtest_df():
+        cache_key = (f"{asset_type}:{exchange}:{symbol.upper()}:backtest", backtest_interval, settings.backtest_candles)
+
+        async def do_fetch():
+            return await fetch_ohlcv_canonical(provider, symbol, backtest_interval, settings.backtest_candles)
+
+        try:
+            return await get_or_fetch(cache_key, do_fetch)
+        except ProviderError as exc:
+            logger.warning("Backtest deep-history fetch failed for %s [%s]: %s", symbol, backtest_interval, exc)
+            return None
+
+    fetched, backtest_df = await asyncio.gather(
+        asyncio.gather(*(fetch_timeframe(tf_key) for tf_key in settings.timeframe_keys)),
+        fetch_backtest_df(),
+    )
 
     timeframes: dict[str, TimeframeAnalysis] = {}
     strategies: dict[str, list[StrategyState]] = {}
@@ -821,9 +865,13 @@ async def analyze(
         # Running the bar-by-bar backtest simulation twice for data nothing
         # displays was pure wasted latency on every single analyze call.
         if tf_key == "ltf":
-            backtests[tf_key] = run_backtest(df, strategy_params_dict, backtest_params_dict, strategy_name=strategy_name)
+            sim_df = backtest_df if backtest_df is not None and not backtest_df.empty else df
+            sim_interval = backtest_interval if sim_df is backtest_df else intervals[tf_key]
+            result = run_backtest(sim_df, strategy_params_dict, backtest_params_dict, strategy_name=strategy_name)
+            backtests[tf_key] = result.model_copy(update={"interval": sim_interval})
         else:
             backtests[tf_key] = BacktestResult(
+                interval=intervals[tf_key],
                 initial_capital=backtest_params_dict.get("initial_capital", 10000.0),
                 final_equity=backtest_params_dict.get("initial_capital", 10000.0),
                 total_return_pct=0.0,

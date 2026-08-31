@@ -65,7 +65,10 @@ class TwelveDataProvider(DataProvider):
         params = {
             "symbol": formatted_symbol,
             "interval": interval,
-            "outputsize": outputsize,
+            # 5000 = Twelve Data's own hard max for a single time_series
+            # request (every plan, including free) — no pagination needed
+            # below that ceiling, unlike the crypto exchanges.
+            "outputsize": min(outputsize, 5000),
             "apikey": self._api_key,
             "format": "JSON",
             "timezone": "UTC",

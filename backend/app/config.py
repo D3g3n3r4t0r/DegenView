@@ -50,12 +50,19 @@ class Settings(BaseSettings):
     # filter enough settled history instead of just ~30 usable candles. Only
     # used for htf/mtf, which need recent context, not deep history.
     candles_per_timeframe: int = 500
-    # LTF drives both the chart and the backtest, so it asks for as much
-    # history as each provider will actually hand back in one request —
-    # MEXC still clamps this down to its own 500 REST max internally, but
-    # Binance (1000) and KuCoin (1500) give noticeably longer backtests, and
-    # Twelve Data (stocks) isn't capped by us at all below its own limit.
-    ltf_candles: int = 1500
+    # LTF drives the chart — kept at MEXC's own single-page cap (the
+    # smallest of the three exchanges') so the chart's own fetch never
+    # triggers pagination and stays a single fast request regardless of
+    # exchange. Deeper history is what the dedicated backtest fetch below is
+    # for, not this one.
+    ltf_candles: int = 500
+    # The backtest is a separate, deliberately coarser fetch (see
+    # `_backtest_interval` in main.py) so a chart set to 1m/5m doesn't cap
+    # its own lookback to a few hours — 5000 daily candles is more than any
+    # symbol's real listing history, so providers that support pagination
+    # (the crypto exchanges) will walk pages back to the actual listing date
+    # and stop there; it's a ceiling, not a target.
+    backtest_candles: int = 5000
 
 
 settings = Settings()

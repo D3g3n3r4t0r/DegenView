@@ -137,6 +137,7 @@ def run_backtest(
     gross_loss = -sum(t.pnl_abs for t in losses)
 
     return BacktestResult(
+        interval="",  # caller (app.main) fills in the interval the df it passed actually was
         initial_capital=bp["initial_capital"],
         final_equity=equity,
         total_return_pct=(equity - bp["initial_capital"]) / bp["initial_capital"] * 100,

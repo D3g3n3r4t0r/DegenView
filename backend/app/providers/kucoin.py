@@ -48,6 +48,12 @@ class KucoinProvider(DataProvider):
     alongside MEXC/Binance specifically for coins traders track priced in
     BTC rather than USDT, which the other two default to."""
 
+    # KuCoin's candles endpoint caps a single request at 1500 rows regardless
+    # of how wide a startAt/endAt window is requested — paged the same way as
+    # MexcProvider (see its docstring) for anything deeper.
+    _PAGE_LIMIT = 1500
+    _MAX_PAGES = 20
+
     def __init__(self, base_url: str | None = None):
         self._base_url = base_url or BASE_URL
 
@@ -56,23 +62,42 @@ class KucoinProvider(DataProvider):
         candle_type = _CANONICAL_TO_TYPE.get(interval)
         if candle_type is None:
             raise ProviderError(f"Timeframe {interval} non supportato su KuCoin")
+        interval_seconds = _INTERVAL_SECONDS[interval]
 
+        rows: list[list] = []
         end_at = int(time.time())
-        start_at = end_at - _INTERVAL_SECONDS[interval] * min(outputsize, 1500)
-        params = {"type": candle_type, "symbol": formatted_symbol, "startAt": start_at, "endAt": end_at}
-
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.get(f"{self._base_url}/api/v1/market/candles", params=params)
-
+        remaining = outputsize
         try:
-            payload = resp.json()
-        except ValueError as exc:
-            raise ProviderError(f"Risposta non valida da KuCoin per {formatted_symbol}") from exc
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                for _ in range(self._MAX_PAGES):
+                    if remaining <= 0:
+                        break
+                    page_count = min(remaining, self._PAGE_LIMIT)
+                    start_at = end_at - interval_seconds * page_count
+                    params = {"type": candle_type, "symbol": formatted_symbol, "startAt": start_at, "endAt": end_at}
 
-        if payload.get("code") != "200000":
-            raise ProviderError(payload.get("msg") or f"Errore KuCoin per {formatted_symbol}")
+                    resp = await client.get(f"{self._base_url}/api/v1/market/candles", params=params)
+                    try:
+                        payload = resp.json()
+                    except ValueError as exc:
+                        raise ProviderError(f"Risposta non valida da KuCoin per {formatted_symbol}") from exc
 
-        rows = payload.get("data") or []
+                    if payload.get("code") != "200000":
+                        raise ProviderError(payload.get("msg") or f"Errore KuCoin per {formatted_symbol}")
+
+                    page_rows = payload.get("data") or []
+                    if not page_rows:
+                        break
+
+                    rows.extend(page_rows)
+                    remaining -= len(page_rows)
+                    if len(page_rows) < page_count:
+                        break  # short page — reached the symbol's listing date
+                    end_at = min(int(r[0]) for r in page_rows) - 1
+        except httpx.HTTPError as exc:
+            if not rows:
+                raise ProviderError(f"KuCoin non raggiungibile per {formatted_symbol}: {exc}") from exc
+
         if not rows:
             raise ProviderError(f"Nessun dato disponibile per {formatted_symbol} ({interval})")
 
@@ -83,7 +108,8 @@ class KucoinProvider(DataProvider):
             df[col] = df[col].astype(float)
 
         df = df.set_index("datetime").sort_index()
-        return df[["open", "high", "low", "close", "volume"]]
+        df = df[~df.index.duplicated(keep="first")]
+        return df[["open", "high", "low", "close", "volume"]].tail(outputsize)
 
     async def search_symbols(self, query: str) -> list[dict]:
         query = query.strip()

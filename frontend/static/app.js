@@ -2329,6 +2329,13 @@
   function renderBacktestUI(bt) {
     if (!bt) return;
 
+    // The backtest runs on a deliberately coarser feed than the chart when
+    // ltf is finer than daily (see backtest_interval_for on the backend) —
+    // surface which interval it actually used instead of implying it always
+    // matches the chart's own timeframe.
+    const tagEl = el("backtest-interval-tag");
+    if (tagEl) tagEl.textContent = bt.interval ? `(${bt.interval})` : "";
+
     const pctEl = el("equity-stamp-pct");
     pctEl.textContent = `${bt.total_return_pct >= 0 ? "+" : ""}${bt.total_return_pct.toFixed(1)}%`;
     pctEl.className = "equity-stamp-pct " + (bt.total_return_pct >= 0 ? "positive" : "negative");
