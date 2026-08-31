@@ -2767,6 +2767,11 @@ body {
 }
 .lab-result-meta span { color: var(--accent); }
 .lab-result-meta .meta-dates { color: var(--ink-dim); font-size: 9px; }
+.lab-trades-link {
+  background: none; border: none; padding: 0;
+  font: inherit; color: var(--accent); cursor: pointer;
+  text-decoration: underline dotted; text-underline-offset: 2px;
+}
 
 .lab-return-hero {
   display: flex; align-items: baseline;
@@ -2810,17 +2815,88 @@ body {
   border: 1.5px solid color-mix(in srgb, var(--bull) 25%, transparent);
   border-radius: 10px; padding: 10px 12px;
 }
+.lab-apply-actions {
+  display: flex; flex-direction: column; gap: 6px; flex-shrink: 0;
+}
 .lab-apply-text {
   flex: 1; font-size: 10.5px; color: var(--ink); line-height: 1.5;
 }
 .lab-apply-text b { color: var(--accent); }
 .lab-apply-btn {
-  flex-shrink: 0; background: var(--bull); color: #fff; border: none;
+  background: var(--bull); color: #fff; border: none;
   border-radius: 7px; padding: 7px 11px;
   font-family: var(--font-mono); font-size: 9.5px; font-weight: 700;
   text-transform: uppercase; letter-spacing: 0.03em; cursor: pointer;
   white-space: nowrap;
 }
+.lab-signal-btn {
+  background: var(--bg-panel); color: var(--ink); border: 1.5px solid var(--border);
+  border-radius: 7px; padding: 5px 10px;
+  font-family: var(--font-mono); font-size: 9px; font-weight: 600;
+  cursor: pointer; white-space: nowrap;
+}
+.lab-signal-btn:hover { border-color: var(--accent); color: var(--accent); }
+.lab-signal-btn:disabled { opacity: 0.6; cursor: default; }
+.lab-signal-status {
+  font-size: 10.5px; padding: 6px 10px;
+  border-radius: 7px; margin-top: 6px;
+}
+.lab-signal-status.ok {
+  background: color-mix(in srgb, var(--bull) 10%, transparent);
+  color: var(--bull); border: 1px solid color-mix(in srgb, var(--bull) 25%, transparent);
+}
+.lab-signal-status.error {
+  background: color-mix(in srgb, var(--bear) 10%, transparent);
+  color: var(--bear); border: 1px solid color-mix(in srgb, var(--bear) 25%, transparent);
+}
+
+/* Lab — trade detail drawer */
+.lab-trades-drawer {
+  background: var(--bg-panel);
+  border-top: 1px solid var(--border);
+  padding: 12px 12px 16px;
+}
+.lab-trades-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px;
+}
+.lab-trades-header span {
+  font-size: 11px; font-weight: 600; color: var(--ink);
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.lab-trades-close {
+  background: none; border: none; padding: 2px 6px;
+  font-size: 13px; color: var(--ink-dim); cursor: pointer;
+  border-radius: 4px;
+}
+.lab-trades-close:hover { background: var(--border); }
+.lab-trades-body { overflow-x: auto; }
+.lab-trades-table {
+  width: 100%; border-collapse: collapse;
+  font-family: var(--font-mono); font-size: 9.5px;
+  font-variant-numeric: tabular-nums;
+}
+.lab-trades-table th {
+  text-align: right; padding: 3px 6px;
+  color: var(--ink-dim); font-weight: 600;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.lab-trades-table th:first-child,
+.lab-trades-table th:nth-child(2) { text-align: left; }
+.lab-trades-table td {
+  padding: 4px 6px; text-align: right;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+  vertical-align: middle;
+}
+.lab-trades-table td.td-num,
+.lab-trades-table td.td-dir,
+.lab-trades-table td.td-date { text-align: left; }
+.lab-trades-table .bull { color: var(--bull); font-weight: 600; }
+.lab-trades-table .bear { color: var(--bear); font-weight: 600; }
+.lab-trades-table .pos { color: var(--bull); font-weight: 600; }
+.lab-trades-table .neg { color: var(--bear); font-weight: 600; }
+.lab-trades-table tr:last-child td { border-bottom: none; }
 
 @media (max-width: 480px) {
   .brand { font-size: 12px; }
