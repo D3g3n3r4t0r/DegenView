@@ -4364,6 +4364,85 @@
       document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === "backtest"));
       document.querySelectorAll(".tab-content").forEach((c) => c.classList.toggle("active", c.dataset.tabContent === "backtest"));
     });
+
+    labEl("lab-signal-btn").addEventListener("click", async () => {
+      const statusEl = el("lab-signal-status");
+      const btn = labEl("lab-signal-btn");
+      if (!labState.symbol || !labState.lastBt) return;
+
+      const show = (msg, isError) => {
+        statusEl.textContent = msg;
+        statusEl.className = "lab-signal-status" + (isError ? " error" : " ok");
+        statusEl.classList.remove("hidden");
+      };
+
+      btn.disabled = true;
+      const prevText = btn.textContent;
+      btn.textContent = "…";
+
+      try {
+        // 1. Add (or upsert) the ticker to watchlist
+        const addResp = await fetch("/api/watchlist", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            symbol: labState.symbol,
+            asset_type: labState.assetType,
+            exchange: labState.exchange,
+            interval: labState.tf,
+            on_close: true,
+          }),
+        });
+
+        if (addResp.status === 401) {
+          show("Devi accedere per attivare i segnali.", true);
+          btn.disabled = false; btn.textContent = prevText; return;
+        }
+        if (!addResp.ok) {
+          const err = await addResp.json().catch(() => ({}));
+          show("Errore: " + (err.detail || addResp.status), true);
+          btn.disabled = false; btn.textContent = prevText; return;
+        }
+        const entry = await addResp.json();
+
+        // 2. Enable the strategy on this watchlist entry
+        const stratResp = await fetch(`/api/watchlist/${entry.id}/strategy`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ strategy_name: labState.strategy, enabled: true }),
+        });
+        if (!stratResp.ok) {
+          const err = await stratResp.json().catch(() => ({}));
+          show("Strategia non attivata: " + (err.detail || stratResp.status), true);
+          btn.disabled = false; btn.textContent = prevText; return;
+        }
+
+        // 3. Save the Lab's optimized params so the alert uses the same settings
+        const labParams = {};
+        const fields = STRATEGY_PARAM_FIELDS[labState.strategy] || [];
+        const container = labEl("lab-params-fields");
+        fields.forEach((f) => {
+          const input = container.querySelector(`[name="${f.key}"]`);
+          if (!input) return;
+          labParams[f.key] = f.type === "checkbox" ? input.checked
+            : f.type === "number" ? parseFloat(input.value)
+            : input.value;
+        });
+        if (Object.keys(labParams).length > 0) {
+          await fetch(`/api/watchlist/${entry.id}/strategy_params`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ strategy_name: labState.strategy, params: labParams }),
+          });
+        }
+
+        show(`✅ Segnali attivi per ${labState.symbol} (${labState.tf}) — ${labState.strategy}`, false);
+        btn.textContent = "✅ Attivo";
+      } catch (err) {
+        show("Errore di rete: " + err.message, true);
+        btn.disabled = false; btn.textContent = prevText;
+      }
+    });
   }
 
   function initLabState(strategies) {
