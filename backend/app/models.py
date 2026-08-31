@@ -86,6 +86,10 @@ class BacktestTrade(BaseModel):
 
 
 class BacktestResult(BaseModel):
+    # The interval the simulation actually ran on — deliberately coarser
+    # than the chart's own timeframe when that's finer than daily, so this
+    # can differ from whatever TimeframeAnalysis.interval says for "ltf".
+    interval: str
     initial_capital: float
     final_equity: float
     total_return_pct: float

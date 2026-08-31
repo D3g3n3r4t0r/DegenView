@@ -1587,6 +1587,12 @@ body {
   margin: 14px 0 8px;
 }
 
+.backtest-interval-tag {
+  color: var(--ink-dim);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
 /* Equity chart is the hero of the Strategia screen — the % return and
    final equity are stamped directly on it (not a separate KPI tile) so the
    number that matters is the first thing read, and the time axis stays on
