@@ -1001,6 +1001,8 @@ class OptimizeResult(BaseModel):
     params: dict
     backtest: BacktestResult
     trials_evaluated: int
+    out_of_sample_return_pct: float | None = None
+    overfitted: bool = False
 
 
 @app.get("/api/optimize", response_model=OptimizeResult)
@@ -1036,11 +1038,17 @@ async def optimize_strategy_endpoint(
     if df.empty:
         raise HTTPException(status_code=502, detail=f"Nessun dato per {symbol}")
 
-    best_params, best_bt, trials = await asyncio.to_thread(
+    best_params, best_bt, trials, oos_return, overfitted = await asyncio.to_thread(
         optimize_strategy, strategy_name, df, backtest_params.model_dump()
     )
     best_bt = best_bt.model_copy(update={"interval": backtest_interval})
-    return OptimizeResult(params=best_params, backtest=best_bt, trials_evaluated=trials)
+    return OptimizeResult(
+        params=best_params,
+        backtest=best_bt,
+        trials_evaluated=trials,
+        out_of_sample_return_pct=oos_return,
+        overfitted=overfitted,
+    )
 
 
 @app.websocket("/ws/live")

@@ -132,9 +132,15 @@ def _score(bt: BacktestResult) -> float:
 
 def optimize_strategy(
     strategy_name: str, df, backtest_params: dict, trials: int = _TRIALS, seed: int | None = None
-) -> tuple[dict, BacktestResult, int]:
-    """Returns (best_params, best_backtest_result, trials_evaluated). Always
-    evaluated at least once against the strategy's own defaults, so the
+) -> tuple[dict, BacktestResult, int, float | None, bool]:
+    """Returns (best_params, best_backtest_result, trials_evaluated, out_of_sample_return_pct, overfitted).
+
+    Walk-forward validation: optimises on the first 70% of the df (in-sample),
+    then validates the best params on the remaining 30% (out-of-sample).
+    If out-of-sample return degrades by more than 50% relative to in-sample,
+    overfitted is set to True — but the best params are still returned.
+
+    Always evaluated at least once against the strategy's own defaults, so the
     result is never worse than what "no optimization" would have given."""
     if strategy_name not in _STRATEGY_SPACES:
         raise ValueError(f"Nessuno spazio di parametri definito per {strategy_name!r}")
@@ -142,14 +148,19 @@ def optimize_strategy(
 
     rng = random.Random(seed)
 
+    # Walk-forward split: 70% in-sample, 30% out-of-sample
+    split = int(len(df) * 0.70)
+    df_in = df.iloc[:split]
+    df_out = df.iloc[split:]
+
     best_params = dict(default_params)
-    best_bt = run_backtest(df, best_params, backtest_params, strategy_name=strategy_name)
+    best_bt = run_backtest(df_in, best_params, backtest_params, strategy_name=strategy_name)
     best_score = _score(best_bt)
     evaluated = 1
 
     for _ in range(trials):
         candidate = random_params_fn(rng)
-        bt = run_backtest(df, candidate, backtest_params, strategy_name=strategy_name)
+        bt = run_backtest(df_in, candidate, backtest_params, strategy_name=strategy_name)
         evaluated += 1
         score = _score(bt)
         if score > best_score:
@@ -157,4 +168,20 @@ def optimize_strategy(
             best_params = candidate
             best_bt = bt
 
-    return best_params, best_bt, evaluated
+    # Out-of-sample validation
+    out_of_sample_return_pct: float | None = None
+    overfitted = False
+    if len(df_out) > 0:
+        oos_bt = run_backtest(df_out, best_params, backtest_params, strategy_name=strategy_name)
+        out_of_sample_return_pct = oos_bt.total_return_pct
+        in_sample_return = best_bt.total_return_pct
+        # Degradation > 50% relative: e.g. in-sample +100% → oos < +50%
+        if in_sample_return > 0:
+            degradation = (in_sample_return - out_of_sample_return_pct) / abs(in_sample_return)
+            if degradation > 0.50:
+                overfitted = True
+        elif in_sample_return <= 0 and out_of_sample_return_pct < in_sample_return:
+            # Both negative but oos is worse — also flag as overfitted
+            overfitted = True
+
+    return best_params, best_bt, evaluated, out_of_sample_return_pct, overfitted
