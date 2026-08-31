@@ -2763,8 +2763,10 @@ body {
 .lab-result-meta {
   font-family: var(--font-mono); font-size: 9.5px;
   color: var(--ink-dim); margin-bottom: 10px;
+  line-height: 1.6;
 }
 .lab-result-meta span { color: var(--accent); }
+.lab-result-meta .meta-dates { color: var(--ink-dim); font-size: 9px; }
 
 .lab-return-hero {
   display: flex; align-items: baseline;
@@ -2786,6 +2788,10 @@ body {
 
 .lab-stat-chips {
   display: grid; grid-template-columns: repeat(3,1fr); gap: 6px;
+  margin-top: 2px;
+}
+.lab-stat-chips > div:nth-child(n+4) {
+  grid-column: auto;
 }
 .lab-stat-chips .chip-lbl {
   font-family: var(--font-mono); font-size: 8.5px; font-weight: 600;

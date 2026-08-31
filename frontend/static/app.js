@@ -4027,36 +4027,63 @@
     if (!canvas || !equityCurve || equityCurve.length < 2) return;
     const dpr = window.devicePixelRatio || 1;
     const w = canvas.offsetWidth || 270;
-    const h = 68;
+    const h = 90;
     canvas.width = w * dpr;
     canvas.height = h * dpr;
     canvas.style.height = h + "px";
     const ctx = canvas.getContext("2d");
     ctx.scale(dpr, dpr);
     const values = equityCurve.map((p) => p[1]);
+    const initial = values[0];
     const minV = Math.min(...values);
     const maxV = Math.max(...values);
     const range = maxV - minV || 1;
-    const pad = 4;
-    const toX = (i) => pad + (i / (values.length - 1)) * (w - 2 * pad);
-    const toY = (v) => h - pad - ((v - minV) / range) * (h - 2 * pad);
+    const pad = { t: 6, b: 6, l: 4, r: 4 };
+    const ew = w - pad.l - pad.r;
+    const eh = h - pad.t - pad.b;
+    const toX = (i) => pad.l + (i / (values.length - 1)) * ew;
+    const toY = (v) => pad.t + eh - ((v - minV) / range) * eh;
     const points = values.map((v, i) => [toX(i), toY(v)]);
-    const isPos = values[values.length - 1] >= values[0];
+    const isPos = values[values.length - 1] >= initial;
     const stroke = isPos ? COLORS.bull : COLORS.bear;
-    const fillTop = isPos ? "rgba(8,153,129,0.2)" : "rgba(242,54,69,0.15)";
-    // Fill
-    const grad = ctx.createLinearGradient(0, 0, 0, h);
-    grad.addColorStop(0, fillTop);
+
+    // Drawdown shading — area below the running peak
+    const peaks = [];
+    let peak = values[0];
+    values.forEach((v) => { if (v > peak) peak = v; peaks.push(peak); });
+    ctx.beginPath();
+    ctx.moveTo(points[0][0], toY(peaks[0]));
+    peaks.forEach((pk, i) => { ctx.lineTo(toX(i), toY(pk)); });
+    for (let i = values.length - 1; i >= 0; i--) ctx.lineTo(toX(i), toY(values[i]));
+    ctx.closePath();
+    ctx.fillStyle = "rgba(242,54,69,0.10)";
+    ctx.fill();
+
+    // Equity area fill
+    const grad = ctx.createLinearGradient(0, pad.t, 0, h - pad.b);
+    grad.addColorStop(0, isPos ? "rgba(8,153,129,0.22)" : "rgba(242,54,69,0.18)");
     grad.addColorStop(1, "rgba(0,0,0,0)");
     ctx.beginPath();
-    ctx.moveTo(points[0][0], h);
+    ctx.moveTo(points[0][0], h - pad.b);
     ctx.lineTo(points[0][0], points[0][1]);
     points.slice(1).forEach(([x, y]) => ctx.lineTo(x, y));
-    ctx.lineTo(points[points.length - 1][0], h);
+    ctx.lineTo(points[points.length - 1][0], h - pad.b);
     ctx.closePath();
     ctx.fillStyle = grad;
     ctx.fill();
-    // Line
+
+    // Baseline at initial capital
+    const baseY = toY(initial);
+    ctx.beginPath();
+    ctx.moveTo(pad.l, baseY);
+    ctx.lineTo(w - pad.r, baseY);
+    ctx.strokeStyle = "rgba(120,123,134,0.25)";
+    ctx.lineWidth = 0.8;
+    ctx.setLineDash([3, 3]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Equity line
     ctx.beginPath();
     ctx.moveTo(points[0][0], points[0][1]);
     points.slice(1).forEach(([x, y]) => ctx.lineTo(x, y));
@@ -4065,6 +4092,13 @@
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
     ctx.stroke();
+
+    // Endpoint dot
+    const last = points[points.length - 1];
+    ctx.beginPath();
+    ctx.arc(last[0], last[1], 3, 0, Math.PI * 2);
+    ctx.fillStyle = stroke;
+    ctx.fill();
   }
 
   function renderLabResults(bt) {
@@ -4083,11 +4117,25 @@
     const pf = bt.profit_factor !== null ? bt.profit_factor.toFixed(2) : "∞";
     const wr = bt.win_rate_pct !== null ? bt.win_rate_pct.toFixed(0) + "%" : "—";
     const dd = "-" + Math.abs(bt.max_drawdown_pct).toFixed(1) + "%";
-    labEl("lab-result-meta").innerHTML = `<span>${bt.num_trades} trade</span> · ${bt.interval || labState.tf} · profit factor ${pf}`;
-    labEl("lab-stat-chips").innerHTML = `
-      <div><div class="chip-lbl">Win rate</div><div class="chip-val pos">${wr}</div></div>
+    const sharpe = bt.sharpe_ratio != null ? bt.sharpe_ratio.toFixed(2) : null;
+    const consec = bt.max_consecutive_losses != null ? bt.max_consecutive_losses : null;
+
+    // Date range from backend
+    const fmtDate = (ms) => ms ? new Date(ms).toLocaleDateString("it-IT", { month: "short", year: "numeric" }) : null;
+    const ds = fmtDate(bt.data_start);
+    const de = fmtDate(bt.data_end);
+    const dateRange = ds && de ? ` · <span class="meta-dates">${ds} → ${de}</span>` : "";
+
+    labEl("lab-result-meta").innerHTML = `<span>${bt.num_trades} trade</span> · ${bt.interval || labState.tf}${dateRange}`;
+
+    // 3-chip base row + optional Sharpe chip
+    let chipsHtml = `
+      <div><div class="chip-lbl">Win rate</div><div class="chip-val ${bt.win_rate_pct >= 50 ? "pos" : "neg"}">${wr}</div></div>
       <div><div class="chip-lbl">Drawdown</div><div class="chip-val neg">${dd}</div></div>
       <div><div class="chip-lbl">Prof. factor</div><div class="chip-val">${pf}</div></div>`;
+    if (sharpe !== null) chipsHtml += `<div><div class="chip-lbl">Sharpe</div><div class="chip-val ${parseFloat(sharpe) >= 1 ? "pos" : ""}">${sharpe}</div></div>`;
+    if (consec !== null) chipsHtml += `<div><div class="chip-lbl">Max loss streak</div><div class="chip-val neg">${consec}</div></div>`;
+    labEl("lab-stat-chips").innerHTML = chipsHtml;
     labEl("lab-result-block").classList.remove("hidden");
     drawLabEquityCanvas(bt.equity_curve);
 
