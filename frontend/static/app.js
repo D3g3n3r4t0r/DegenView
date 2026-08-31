@@ -110,6 +110,132 @@
     "1M": { ltf: "1M", mtf: "1M", htf: "1M" },
   };
 
+  // ---- Shared helpers ----
+
+  // showTabError: inject a visible error paragraph inside a container element.
+  function showTabError(containerId, msg) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const existing = container.querySelector(".tab-error-msg");
+    if (existing) existing.remove();
+    const p = document.createElement("p");
+    p.className = "tab-error-msg";
+    p.textContent = msg;
+    container.prepend(p);
+  }
+
+  // withAsyncButton: disable a button while an async fn runs, then restore it.
+  async function withAsyncButton(btn, fn, loadingText) {
+    const original = btn.textContent;
+    btn.disabled = true;
+    if (loadingText !== undefined) btn.textContent = loadingText;
+    try {
+      await fn();
+    } finally {
+      btn.disabled = false;
+      btn.textContent = original;
+    }
+  }
+
+  // makeSuggestController: unified autocomplete factory for symbol search inputs.
+  // Each controller returned is a plain object with { suggestions, activeIndex, resolved }
+  // plus methods { fetch(query), render(anchorEl?), clear(), handleKey(e) }.
+  // - fetchItems: async (query) => Item[]  — custom fetch logic
+  // - listId:     id of the <ul> dropdown element
+  // - anchorId:   id of the element used to position the dropdown
+  // - onSelect:   called with the chosen Item
+  // - elFn:       element lookup function, defaults to the global el()
+  function makeSuggestController({ fetchItems, listId, anchorId, onSelect, elFn }) {
+    const _el = elFn || el;
+    let _anchorEl = null;
+
+    const ctrl = {
+      suggestions: [],
+      activeIndex: -1,
+      resolved: null,
+
+      async fetch(query) {
+        try {
+          ctrl.suggestions = await fetchItems(query);
+        } catch {
+          ctrl.suggestions = [];
+        }
+        ctrl.activeIndex = -1;
+        // Lazily resolve anchor element on first use.
+        if (!_anchorEl && anchorId) _anchorEl = _el(anchorId);
+        ctrl.render(_anchorEl);
+      },
+
+      render(anchorEl) {
+        if (anchorEl) _anchorEl = anchorEl;
+        const list = _el(listId);
+        list.innerHTML = "";
+        if (!ctrl.suggestions.length) { list.classList.add("hidden"); return; }
+        if (_anchorEl) {
+          const rect = _anchorEl.getBoundingClientRect();
+          list.style.left = `${rect.left}px`;
+          list.style.top = `${rect.bottom + 4}px`;
+          list.style.width = `${rect.width}px`;
+        }
+        ctrl.suggestions.forEach((item, i) => {
+          const li = document.createElement("li");
+          li.className = i === ctrl.activeIndex ? "active" : "";
+          const main = document.createElement("span");
+          main.className = "sug-main";
+          const sym = document.createElement("span");
+          sym.className = "sug-symbol";
+          sym.textContent = item.symbol;
+          const name = document.createElement("span");
+          name.className = "sug-name";
+          name.textContent = item.name || "";
+          main.appendChild(sym);
+          main.appendChild(name);
+          const exch = document.createElement("span");
+          exch.className = "sug-exchange sug-exchange-" + (item.provider || "");
+          exch.textContent = item.exchange || "";
+          li.appendChild(main);
+          li.appendChild(exch);
+          li.addEventListener("mousedown", (e) => { e.preventDefault(); onSelect(item); });
+          list.appendChild(li);
+        });
+        list.classList.remove("hidden");
+      },
+
+      clear() {
+        ctrl.suggestions = [];
+        ctrl.activeIndex = -1;
+        const list = _el(listId);
+        list.classList.add("hidden");
+        list.innerHTML = "";
+      },
+
+      handleKey(e) {
+        const list = _el(listId);
+        if (list.classList.contains("hidden")) return;
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          ctrl.activeIndex = Math.min(ctrl.activeIndex + 1, ctrl.suggestions.length - 1);
+          ctrl.render();
+        } else if (e.key === "ArrowUp") {
+          e.preventDefault();
+          ctrl.activeIndex = Math.max(ctrl.activeIndex - 1, 0);
+          ctrl.render();
+        } else if (e.key === "Enter") {
+          if (ctrl.activeIndex >= 0) {
+            e.preventDefault();
+            onSelect(ctrl.suggestions[ctrl.activeIndex]);
+          } else {
+            ctrl.clear();
+          }
+        } else if (e.key === "Escape") {
+          ctrl.clear();
+        }
+      },
+    };
+
+    return ctrl;
+  }
+
   // ---- Series Primitive: filled rectangle between two (time, price) points ----
   function positionsBox(pos1, pos2, pixelRatio) {
     const a = Math.round(pixelRatio * pos1);
@@ -636,12 +762,8 @@
     if (!state.data) return;
     const btn = el("optimize-strategy-btn");
     const resultEl = el("optimize-strategy-result");
-    btn.disabled = true;
-    const originalLabel = btn.textContent;
-    btn.textContent = "Ottimizzazione in corso… (10-25s)";
     resultEl.classList.add("hidden");
-
-    try {
+    await withAsyncButton(btn, async () => {
       const form = el("params-form");
       const strategyName = el("active-strategy-select").value;
       const backtestParams = new URLSearchParams();
@@ -673,12 +795,9 @@
       resultEl.classList.remove("hidden");
 
       await runAnalysis(state.data.symbol);
-    } catch (err) {
+    }, "Ottimizzazione in corso… (10-25s)").catch((err) => {
       showError(err.message || "Ottimizzazione fallita.");
-    } finally {
-      btn.disabled = false;
-      btn.textContent = originalLabel;
-    }
+    });
   }
 
   // Each ticker is a card that expands to show one on/off toggle per
@@ -783,13 +902,16 @@
         setBalancesVisible(false);
         return;
       }
-      if (!resp.ok) return;
+      if (!resp.ok) {
+        showTabError("balances-content", `Errore caricamento saldi (${resp.status}).`);
+        return;
+      }
       const body = await resp.json();
       setBalancesVisible(true);
       el("balances-content").innerHTML = renderBalanceAccount("MEXC", body.mexc) + renderBalanceAccount("KuCoin", body.kucoin);
       el("balances-updated").textContent = `Aggiornato alle ${new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}`;
     } catch (err) {
-      setBalancesVisible(false);
+      showTabError("balances-content", "Impossibile caricare i saldi: problema di rete.");
     }
   }
 
@@ -979,9 +1101,13 @@
     let entries = [];
     try {
       const resp = await fetch("/api/watchlist");
-      if (resp.ok) entries = await resp.json();
+      if (resp.ok) {
+        entries = await resp.json();
+      } else {
+        showTabError("watchlist-list", `Errore caricamento watchlist (${resp.status}).`);
+      }
     } catch (err) {
-      entries = [];
+      showTabError("watchlist-list", "Impossibile caricare la watchlist: problema di rete.");
     }
     state.alertEntries = entries; // read by renderFavorites() for the alert-bell indicator
     renderFavorites();
@@ -2634,7 +2760,10 @@
     try {
       const url = `/api/analyze?symbol=${encodeURIComponent(symbol)}&asset_type=${state.assetType}&exchange=${state.cryptoExchange}&${intervalQuery()}&${getStrategyAndBacktestQuery()}`;
       const resp = await fetch(url);
-      if (!resp.ok) return;
+      if (!resp.ok) {
+        showTabError("error-banner", `Aggiornamento automatico fallito (${resp.status}).`);
+        return;
+      }
       state.data = await resp.json();
       render();
     } catch (err) {
@@ -2647,10 +2776,9 @@
     el("loading").classList.remove("hidden");
     el("empty-state").classList.add("hidden");
     el("chart-wrap").classList.add("hidden");
-    el("search-btn").disabled = true;
     disconnectLiveFeed();
 
-    try {
+    await withAsyncButton(el("search-btn"), async () => {
       const url = `/api/analyze?symbol=${encodeURIComponent(symbol)}&asset_type=${state.assetType}&exchange=${state.cryptoExchange}&${intervalQuery()}&${getStrategyAndBacktestQuery()}`;
       const resp = await fetch(url);
       const body = await resp.json();
@@ -2688,13 +2816,12 @@
           el("polling-badge").classList.remove("hidden");
         }
       }
-    } catch (err) {
+    }).catch((err) => {
       showError(err.message || "Errore durante l'analisi del ticker.");
       el("empty-state").classList.remove("hidden");
-    } finally {
+    }).finally(() => {
       el("loading").classList.add("hidden");
-      el("search-btn").disabled = false;
-    }
+    });
   }
 
   // /api/analyze answers instantly using whatever ltf_candles fetched (a
@@ -2725,31 +2852,24 @@
   // + exchange before the ticker can be added, instead of trusting free
   // text — the same source of truth as the main search (/api/symbols), just
   // filtered to the asset type/exchange currently selected in the form. ----
-  const wlSuggest = { suggestions: [], activeIndex: -1, resolved: null };
-  let wlSuggestTimer = null;
-
-  async function fetchWatchlistSuggestions(query) {
-    try {
+  const wlSuggest = makeSuggestController({
+    listId: "watchlist-suggestions",
+    anchorId: "watchlist-symbol",
+    fetchItems: async (query) => {
       const resp = await fetch(`/api/symbols?query=${encodeURIComponent(query)}`);
       const all = resp.ok ? await resp.json() : [];
-      wlSuggest.suggestions =
-        state.watchlistAssetType === "crypto"
-          ? all.filter((s) => s.asset_type === "crypto" && s.provider === el("watchlist-exchange").value)
-          : all.filter((s) => s.asset_type === "stock");
-    } catch (err) {
-      wlSuggest.suggestions = [];
-    }
-    wlSuggest.activeIndex = -1;
-    renderWatchlistSuggestions();
-  }
-
-  function positionWatchlistSuggestions() {
-    const list = el("watchlist-suggestions");
-    const rect = el("watchlist-symbol").getBoundingClientRect();
-    list.style.left = `${rect.left}px`;
-    list.style.top = `${rect.bottom + 4}px`;
-    list.style.width = `${rect.width}px`;
-  }
+      return state.watchlistAssetType === "crypto"
+        ? all.filter((s) => s.asset_type === "crypto" && s.provider === el("watchlist-exchange").value)
+        : all.filter((s) => s.asset_type === "stock");
+    },
+    onSelect: (item) => {
+      el("watchlist-symbol").value = item.symbol;
+      wlSuggest.resolved = item;
+      wlSuggest.clear();
+      showResolvedPair(item);
+    },
+  });
+  let wlSuggestTimer = null;
 
   function showResolvedPair(item) {
     const p = el("watchlist-resolved-pair");
@@ -2762,96 +2882,18 @@
     p.classList.remove("hidden");
   }
 
-  function renderWatchlistSuggestions() {
-    const list = el("watchlist-suggestions");
-    list.innerHTML = "";
-    if (!wlSuggest.suggestions.length) {
-      list.classList.add("hidden");
-      return;
-    }
-    positionWatchlistSuggestions();
-    wlSuggest.suggestions.forEach((item, i) => {
-      const li = document.createElement("li");
-      li.className = i === wlSuggest.activeIndex ? "active" : "";
-      const main = document.createElement("span");
-      main.className = "sug-main";
-      const sym = document.createElement("span");
-      sym.className = "sug-symbol";
-      sym.textContent = item.symbol;
-      const name = document.createElement("span");
-      name.className = "sug-name";
-      name.textContent = item.name || "";
-      main.appendChild(sym);
-      main.appendChild(name);
-      const exchange = document.createElement("span");
-      exchange.className = "sug-exchange sug-exchange-" + item.provider;
-      exchange.textContent = item.exchange;
-      li.appendChild(main);
-      li.appendChild(exchange);
-      li.addEventListener("mousedown", (e) => {
-        e.preventDefault();
-        selectWatchlistSuggestion(item);
-      });
-      list.appendChild(li);
-    });
-    list.classList.remove("hidden");
-  }
-
-  function hideWatchlistSuggestions() {
-    wlSuggest.suggestions = [];
-    wlSuggest.activeIndex = -1;
-    const list = el("watchlist-suggestions");
-    list.classList.add("hidden");
-    list.innerHTML = "";
-  }
-
-  function selectWatchlistSuggestion(item) {
-    el("watchlist-symbol").value = item.symbol;
-    wlSuggest.resolved = item;
-    hideWatchlistSuggestions();
-    showResolvedPair(item);
-  }
-
   function bindWatchlistAutocomplete() {
     const input = el("watchlist-symbol");
-
     input.addEventListener("input", () => {
       wlSuggest.resolved = null; // typing invalidates whatever was confirmed before
       showResolvedPair(null);
       const value = input.value.trim();
       clearTimeout(wlSuggestTimer);
-      if (!value) {
-        hideWatchlistSuggestions();
-        return;
-      }
-      wlSuggestTimer = setTimeout(() => fetchWatchlistSuggestions(value), 300);
+      if (!value) { wlSuggest.clear(); return; }
+      wlSuggestTimer = setTimeout(() => wlSuggest.fetch(value), 300);
     });
-
-    input.addEventListener("keydown", (e) => {
-      if (el("watchlist-suggestions").classList.contains("hidden")) return;
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        wlSuggest.activeIndex = Math.min(wlSuggest.activeIndex + 1, wlSuggest.suggestions.length - 1);
-        renderWatchlistSuggestions();
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        wlSuggest.activeIndex = Math.max(wlSuggest.activeIndex - 1, 0);
-        renderWatchlistSuggestions();
-      } else if (e.key === "Enter") {
-        if (wlSuggest.activeIndex >= 0) {
-          e.preventDefault();
-          selectWatchlistSuggestion(wlSuggest.suggestions[wlSuggest.activeIndex]);
-        } else {
-          hideWatchlistSuggestions();
-        }
-      } else if (e.key === "Escape") {
-        hideWatchlistSuggestions();
-      }
-    });
-
-    input.addEventListener("blur", () => {
-      setTimeout(hideWatchlistSuggestions, 150);
-    });
+    input.addEventListener("keydown", (e) => wlSuggest.handleKey(e));
+    input.addEventListener("blur", () => setTimeout(() => wlSuggest.clear(), 150));
   }
 
   // ---- Watchlist tab: a plain list of favorite tickers for one-click chart
@@ -2860,114 +2902,32 @@
   // neither. The add form searches the same /api/symbols source as the main
   // header search (each result already carries its own asset_type/exchange,
   // so there's no separate asset-type toggle to get right before adding). ----
-  const favSuggest = { suggestions: [], activeIndex: -1, resolved: null };
-  let favSuggestTimer = null;
-
-  async function fetchFavoriteSuggestions(query) {
-    try {
+  const favSuggest = makeSuggestController({
+    listId: "favorite-suggestions",
+    anchorId: "favorite-symbol",
+    fetchItems: async (query) => {
       const resp = await fetch(`/api/symbols?query=${encodeURIComponent(query)}`);
-      favSuggest.suggestions = resp.ok ? await resp.json() : [];
-    } catch (err) {
-      favSuggest.suggestions = [];
-    }
-    favSuggest.activeIndex = -1;
-    renderFavoriteSuggestions();
-  }
-
-  function positionFavoriteSuggestions() {
-    const list = el("favorite-suggestions");
-    const rect = el("favorite-symbol").getBoundingClientRect();
-    list.style.left = `${rect.left}px`;
-    list.style.top = `${rect.bottom + 4}px`;
-    list.style.width = `${rect.width}px`;
-  }
-
-  function renderFavoriteSuggestions() {
-    const list = el("favorite-suggestions");
-    list.innerHTML = "";
-    if (!favSuggest.suggestions.length) {
-      list.classList.add("hidden");
-      return;
-    }
-    positionFavoriteSuggestions();
-    favSuggest.suggestions.forEach((item, i) => {
-      const li = document.createElement("li");
-      li.className = i === favSuggest.activeIndex ? "active" : "";
-      const main = document.createElement("span");
-      main.className = "sug-main";
-      const sym = document.createElement("span");
-      sym.className = "sug-symbol";
-      sym.textContent = item.symbol;
-      const name = document.createElement("span");
-      name.className = "sug-name";
-      name.textContent = item.name || "";
-      main.appendChild(sym);
-      main.appendChild(name);
-      const exchange = document.createElement("span");
-      exchange.className = "sug-exchange sug-exchange-" + item.provider;
-      exchange.textContent = item.exchange;
-      li.appendChild(main);
-      li.appendChild(exchange);
-      li.addEventListener("mousedown", (e) => {
-        e.preventDefault();
-        selectFavoriteSuggestion(item);
-      });
-      list.appendChild(li);
-    });
-    list.classList.remove("hidden");
-  }
-
-  function hideFavoriteSuggestions() {
-    favSuggest.suggestions = [];
-    favSuggest.activeIndex = -1;
-    const list = el("favorite-suggestions");
-    list.classList.add("hidden");
-    list.innerHTML = "";
-  }
-
-  function selectFavoriteSuggestion(item) {
-    el("favorite-symbol").value = item.symbol;
-    favSuggest.resolved = item;
-    hideFavoriteSuggestions();
-  }
+      return resp.ok ? await resp.json() : [];
+    },
+    onSelect: (item) => {
+      el("favorite-symbol").value = item.symbol;
+      favSuggest.resolved = item;
+      favSuggest.clear();
+    },
+  });
+  let favSuggestTimer = null;
 
   function bindFavoriteAutocomplete() {
     const input = el("favorite-symbol");
-
     input.addEventListener("input", () => {
       favSuggest.resolved = null;
       const value = input.value.trim();
       clearTimeout(favSuggestTimer);
-      if (!value) {
-        hideFavoriteSuggestions();
-        return;
-      }
-      favSuggestTimer = setTimeout(() => fetchFavoriteSuggestions(value), 300);
+      if (!value) { favSuggest.clear(); return; }
+      favSuggestTimer = setTimeout(() => favSuggest.fetch(value), 300);
     });
-
-    input.addEventListener("keydown", (e) => {
-      if (el("favorite-suggestions").classList.contains("hidden")) return;
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        favSuggest.activeIndex = Math.min(favSuggest.activeIndex + 1, favSuggest.suggestions.length - 1);
-        renderFavoriteSuggestions();
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        favSuggest.activeIndex = Math.max(favSuggest.activeIndex - 1, 0);
-        renderFavoriteSuggestions();
-      } else if (e.key === "Enter") {
-        e.preventDefault();
-        if (favSuggest.activeIndex >= 0) {
-          selectFavoriteSuggestion(favSuggest.suggestions[favSuggest.activeIndex]);
-        }
-      } else if (e.key === "Escape") {
-        hideFavoriteSuggestions();
-      }
-    });
-
-    input.addEventListener("blur", () => {
-      setTimeout(hideFavoriteSuggestions, 150);
-    });
+    input.addEventListener("keydown", (e) => favSuggest.handleKey(e));
+    input.addEventListener("blur", () => setTimeout(() => favSuggest.clear(), 150));
   }
 
   const FAV_AVATAR_COLORS = ["#f0b90b", "#23af91", "#5850ec", "#94a3b8", "#2962ff", "#f23645", "#089981"];
@@ -2992,11 +2952,15 @@
     if (!state.favorites.length) return;
     try {
       const resp = await fetch("/api/favorites/quotes");
-      const quotes = resp.ok ? await resp.json() : [];
-      state.favoriteQuotes = {};
-      quotes.forEach((q) => { state.favoriteQuotes[q.id] = q; });
+      if (resp.ok) {
+        const quotes = await resp.json();
+        state.favoriteQuotes = {};
+        quotes.forEach((q) => { state.favoriteQuotes[q.id] = q; });
+      } else {
+        showTabError("favorite-rows", `Errore aggiornamento quotazioni (${resp.status}).`);
+      }
     } catch (err) {
-      // Rows just keep showing "—" for price/change — not worth surfacing an error for.
+      showTabError("favorite-rows", "Impossibile aggiornare le quotazioni: problema di rete.");
     }
     renderFavorites();
   }
@@ -3111,7 +3075,7 @@
 
       let resolved = favSuggest.resolved && favSuggest.resolved.symbol === typed ? favSuggest.resolved : null;
       if (!resolved) {
-        await fetchFavoriteSuggestions(typed);
+        await favSuggest.fetch(typed);
         resolved = favSuggest.suggestions.find((s) => s.symbol.toUpperCase() === typed.toUpperCase()) || null;
       }
       if (!resolved) return; // no matching ticker — nothing to add
@@ -3127,7 +3091,7 @@
       });
       input.value = "";
       favSuggest.resolved = null;
-      hideFavoriteSuggestions();
+      favSuggest.clear();
       loadFavorites();
     });
 
@@ -3834,11 +3798,14 @@
       // (or nothing at all) on the selected exchange.
       let resolved = wlSuggest.resolved && wlSuggest.resolved.symbol === typed ? wlSuggest.resolved : null;
       if (!resolved) {
-        await fetchWatchlistSuggestions(typed);
+        await wlSuggest.fetch(typed);
         const exact = wlSuggest.suggestions.find((s) => s.symbol.toUpperCase() === typed.toUpperCase());
         if (exact) {
           resolved = exact;
-          selectWatchlistSuggestion(exact);
+          el("watchlist-symbol").value = exact.symbol;
+          wlSuggest.resolved = exact;
+          wlSuggest.clear();
+          showResolvedPair(exact);
         }
       }
       if (!resolved) {
@@ -4144,13 +4111,12 @@
     const seq = ++labState.seq;
     const runBtn = labEl("lab-run-btn");
     const optBtn = labEl("lab-optimize-btn");
-    runBtn.disabled = true;
     optBtn.disabled = true;
     labEl("lab-result-block").classList.add("hidden");
     labEl("lab-apply-strip").classList.add("hidden");
     labEl("lab-status").textContent = "Backtest in corso… (può richiedere qualche secondo)";
     labEl("lab-status").classList.remove("hidden");
-    try {
+    await withAsyncButton(runBtn, async () => {
       const params = buildLabQuery();
       const resp = await fetch(`/api/backtest/deep?${params.toString()}`);
       if (seq !== labState.seq) return;
@@ -4158,13 +4124,10 @@
       const bt = await resp.json();
       labEl("lab-status").classList.add("hidden");
       renderLabResults(bt);
-    } catch (err) {
+    }).catch((err) => {
       if (seq !== labState.seq) return;
       labEl("lab-status").textContent = "Errore: " + (err.message || "backtest fallito.");
-    } finally {
-      runBtn.disabled = false;
-      optBtn.disabled = false;
-    }
+    }).finally(() => { optBtn.disabled = false; });
   }
 
   async function runLabOptimize() {
@@ -4182,12 +4145,11 @@
     const runBtn = labEl("lab-run-btn");
     const optBtn = labEl("lab-optimize-btn");
     runBtn.disabled = true;
-    optBtn.disabled = true;
     labEl("lab-result-block").classList.add("hidden");
     labEl("lab-apply-strip").classList.add("hidden");
     labEl("lab-status").textContent = "Ottimizzazione in corso… (10–25s)";
     labEl("lab-status").classList.remove("hidden");
-    try {
+    await withAsyncButton(optBtn, async () => {
       const params = buildLabQuery();
       const url = `/api/optimize?${params.toString()}`;
       const resp = await fetch(url);
@@ -4195,7 +4157,6 @@
       const body = await resp.json();
       if (!resp.ok) throw new Error(typeof body.detail === "string" ? body.detail : `Errore ${resp.status}`);
       // Apply optimized params to the lab fields
-      const strategyName = labState.strategy || "";
       const container = labEl("lab-params-fields");
       Object.entries(body.params).forEach(([key, value]) => {
         const input = container.querySelector(`[name="${key}"]`);
@@ -4205,61 +4166,24 @@
       });
       labEl("lab-status").classList.add("hidden");
       renderLabResults(body.backtest);
-    } catch (err) {
+    }).catch((err) => {
       if (seq !== labState.seq) return;
       labEl("lab-status").textContent = "Errore ottimizzazione: " + (err.message || "");
-    } finally {
-      runBtn.disabled = false;
-      optBtn.disabled = false;
-    }
+    }).finally(() => { runBtn.disabled = false; });
   }
 
   // Lab ticker autocomplete
-  const labSuggest = { suggestions: [], activeIndex: -1 };
-  let labSuggestTimer = null;
-
-  async function fetchLabSuggestions(query) {
-    try {
+  const labSuggest = makeSuggestController({
+    listId: "lab-suggestions",
+    anchorId: "lab-ticker-hero",
+    elFn: labEl,
+    fetchItems: async (query) => {
       const resp = await fetch(`/api/symbols?query=${encodeURIComponent(query)}`);
-      labSuggest.suggestions = resp.ok ? await resp.json() : [];
-    } catch {
-      labSuggest.suggestions = [];
-    }
-    labSuggest.activeIndex = -1;
-    renderLabSuggestions();
-  }
-
-  function renderLabSuggestions() {
-    const list = labEl("lab-suggestions");
-    list.innerHTML = "";
-    if (!labSuggest.suggestions.length) { list.classList.add("hidden"); return; }
-    const rect = labEl("lab-ticker-hero").getBoundingClientRect();
-    list.style.left = rect.left + "px";
-    list.style.top = (rect.bottom + 4) + "px";
-    list.style.width = rect.width + "px";
-    labSuggest.suggestions.forEach((item, i) => {
-      const li = document.createElement("li");
-      li.className = i === labSuggest.activeIndex ? "active" : "";
-      const sym = document.createElement("span");
-      sym.className = "sug-symbol";
-      sym.textContent = item.symbol;
-      const name = document.createElement("span");
-      name.className = "sug-name";
-      name.textContent = item.name || "";
-      const main = document.createElement("span");
-      main.className = "sug-main";
-      main.appendChild(sym);
-      main.appendChild(name);
-      const exch = document.createElement("span");
-      exch.className = "sug-exchange sug-exchange-" + (item.provider || "");
-      exch.textContent = item.exchange || "";
-      li.appendChild(main);
-      li.appendChild(exch);
-      li.addEventListener("click", () => selectLabSuggestion(item));
-      list.appendChild(li);
-    });
-    list.classList.remove("hidden");
-  }
+      return resp.ok ? await resp.json() : [];
+    },
+    onSelect: selectLabSuggestion,
+  });
+  let labSuggestTimer = null;
 
   function selectLabSuggestion(item) {
     labState.symbol = item.symbol;
@@ -4293,17 +4217,10 @@
     input.addEventListener("input", () => {
       clearTimeout(labSuggestTimer);
       const q = input.value.trim();
-      if (q.length < 1) { labEl("lab-suggestions").classList.add("hidden"); return; }
-      labSuggestTimer = setTimeout(() => fetchLabSuggestions(q), 200);
+      if (q.length < 1) { labSuggest.clear(); return; }
+      labSuggestTimer = setTimeout(() => labSuggest.fetch(q), 200);
     });
-    input.addEventListener("keydown", (e) => {
-      const list = labEl("lab-suggestions");
-      if (list.classList.contains("hidden")) return;
-      if (e.key === "ArrowDown") { labSuggest.activeIndex = Math.min(labSuggest.activeIndex + 1, labSuggest.suggestions.length - 1); renderLabSuggestions(); e.preventDefault(); }
-      else if (e.key === "ArrowUp") { labSuggest.activeIndex = Math.max(labSuggest.activeIndex - 1, 0); renderLabSuggestions(); e.preventDefault(); }
-      else if (e.key === "Enter" && labSuggest.activeIndex >= 0) { selectLabSuggestion(labSuggest.suggestions[labSuggest.activeIndex]); e.preventDefault(); }
-      else if (e.key === "Escape") { list.classList.add("hidden"); }
-    });
+    input.addEventListener("keydown", (e) => labSuggest.handleKey(e));
 
     // Timeframe pills
     labEl("lab-tf-row").addEventListener("click", (e) => {
