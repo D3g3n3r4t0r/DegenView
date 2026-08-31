@@ -20,6 +20,12 @@
     bullBorder: "rgba(8, 153, 129, 0.85)",
     bearFill: "rgba(242, 54, 69, 0.12)",
     bearBorder: "rgba(242, 54, 69, 0.8)",
+    // FVGs ("imbalance") render neutral gray regardless of direction, not
+    // bull/bear-colored like order blocks — an inefficiency in price, not a
+    // directional bias. Overlapping unmitigated gaps stack visually darker
+    // since the fill is semi-transparent.
+    fvgFill: "rgba(120, 123, 134, 0.22)",
+    fvgBorder: "rgba(120, 123, 134, 0.65)",
     confluenceFill: "rgba(41, 98, 255, 0.12)",
     confluenceBorder: "rgba(41, 98, 255, 0.75)",
     ema20: "#6b8afd",
@@ -2129,8 +2135,9 @@
       if (!state.layers[layerKey]) return;
 
       const isBullish = lvl.direction === "bullish";
-      const fill = isBullish ? COLORS.bullFill : COLORS.bearFill;
-      const border = isBullish ? COLORS.bullBorder : COLORS.bearBorder;
+      const isFvg = lvl.type === "fvg";
+      const fill = isFvg ? COLORS.fvgFill : isBullish ? COLORS.bullFill : COLORS.bearFill;
+      const border = isFvg ? COLORS.fvgBorder : isBullish ? COLORS.bullBorder : COLORS.bearBorder;
       const endTime = lvl.end_time ?? lastTime;
 
       if (isZone) {
