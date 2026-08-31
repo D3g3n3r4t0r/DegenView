@@ -820,30 +820,7 @@ async def analyze(
             raise HTTPException(status_code=502, detail=str(exc)) from exc
         return tf_key, df
 
-    # The backtest runs on its own, deliberately coarser fetch (see
-    # backtest_interval_for) instead of the ltf df the chart uses — a
-    # dedicated fetch so a chart pinned to 1m/5m doesn't limit the backtest
-    # to a few hours of history. Non-fatal on failure: falls back to ltf's
-    # own df (the previous behavior) rather than failing the whole request
-    # over what's ultimately a supplementary, deeper lookback.
-    backtest_interval = backtest_interval_for(ltf_interval)
-
-    async def fetch_backtest_df():
-        cache_key = (f"{asset_type}:{exchange}:{symbol.upper()}:backtest", backtest_interval, settings.backtest_candles)
-
-        async def do_fetch():
-            return await fetch_ohlcv_canonical(provider, symbol, backtest_interval, settings.backtest_candles)
-
-        try:
-            return await get_or_fetch(cache_key, do_fetch)
-        except ProviderError as exc:
-            logger.warning("Backtest deep-history fetch failed for %s [%s]: %s", symbol, backtest_interval, exc)
-            return None
-
-    fetched, backtest_df = await asyncio.gather(
-        asyncio.gather(*(fetch_timeframe(tf_key) for tf_key in settings.timeframe_keys)),
-        fetch_backtest_df(),
-    )
+    fetched = await asyncio.gather(*(fetch_timeframe(tf_key) for tf_key in settings.timeframe_keys))
 
     timeframes: dict[str, TimeframeAnalysis] = {}
     strategies: dict[str, list[StrategyState]] = {}
@@ -866,10 +843,14 @@ async def analyze(
         # Running the bar-by-bar backtest simulation twice for data nothing
         # displays was pure wasted latency on every single analyze call.
         if tf_key == "ltf":
-            sim_df = backtest_df if backtest_df is not None and not backtest_df.empty else df
-            sim_interval = backtest_interval if sim_df is backtest_df else intervals[tf_key]
-            result = run_backtest(sim_df, strategy_params_dict, backtest_params_dict, strategy_name=strategy_name)
-            backtests[tf_key] = result.model_copy(update={"interval": sim_interval})
+            # This is the fast pass, on whatever the chart already fetched —
+            # instant, but only as deep as ltf_candles. The frontend follows
+            # up with a separate /api/backtest/deep call (see that endpoint)
+            # that swaps this out for a backtest over each exchange's full
+            # history once that slower, paginated fetch resolves — without
+            # that split, every timeframe change would block on it too.
+            result = run_backtest(df, strategy_params_dict, backtest_params_dict, strategy_name=strategy_name)
+            backtests[tf_key] = result.model_copy(update={"interval": intervals[tf_key]})
         else:
             backtests[tf_key] = BacktestResult(
                 interval=intervals[tf_key],
@@ -928,6 +909,49 @@ async def analyze(
         strategies=strategies,
         backtests=backtests,
     )
+
+
+@app.get("/api/backtest/deep", response_model=BacktestResult)
+async def deep_backtest(
+    symbol: str = Query(..., min_length=1, max_length=20),
+    asset_type: AssetType = Query("stock"),
+    exchange: CryptoExchange = Query("mexc"),
+    ltf_interval: IntervalChoice = Query(DEFAULT_INTERVALS["ltf"]),
+    strategy_name: str = Query(DEFAULT_STRATEGY),
+    strategy_params: StrategyParamsQuery = Depends(),
+    backtest_params: BacktestParamsQuery = Depends(),
+) -> BacktestResult:
+    """The backtest's own, deliberately coarser fetch (see
+    backtest_interval_for) instead of the ltf df the chart uses — reaches
+    each exchange's actual listing date instead of stopping wherever
+    ltf_candles does. Split out of /api/analyze on purpose: this can take
+    several seconds on a cold cache (a multi-page fetch), and gating the
+    whole chart response on it made every timeframe switch pay that cost
+    too. The frontend calls this right after /api/analyze already rendered
+    the chart with the fast pass, and swaps the backtest panel over once
+    this resolves."""
+    symbol = symbol.strip()
+    if not symbol:
+        raise HTTPException(status_code=400, detail="Ticker mancante")
+    if strategy_name not in AVAILABLE_STRATEGIES:
+        raise HTTPException(status_code=400, detail=f"Strategia sconosciuta: {strategy_name}")
+
+    provider = get_provider(asset_type, exchange)
+    backtest_interval = backtest_interval_for(ltf_interval)
+    cache_key = (f"{asset_type}:{exchange}:{symbol.upper()}:backtest", backtest_interval, settings.backtest_candles)
+
+    async def do_fetch():
+        return await fetch_ohlcv_canonical(provider, symbol, backtest_interval, settings.backtest_candles)
+
+    try:
+        df = await get_or_fetch(cache_key, do_fetch)
+    except ProviderError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if df.empty:
+        raise HTTPException(status_code=502, detail=f"Nessun dato per {symbol}")
+
+    result = run_backtest(df, strategy_params.model_dump(), backtest_params.model_dump(), strategy_name=strategy_name)
+    return result.model_copy(update={"interval": backtest_interval})
 
 
 class OptimizeResult(BaseModel):

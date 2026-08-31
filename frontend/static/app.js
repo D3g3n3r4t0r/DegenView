@@ -2628,6 +2628,7 @@
       loadDrawingsForSymbol();
       render();
       renderFavorites();
+      refreshDeepBacktest(symbol);
       // Live WS streaming is only wired up for MEXC today; every crypto
       // symbol still gets the periodic refresh below regardless of exchange.
       if (state.assetType === "crypto" && state.cryptoExchange === "mexc") {
@@ -2647,6 +2648,30 @@
     } finally {
       el("loading").classList.add("hidden");
       el("search-btn").disabled = false;
+    }
+  }
+
+  // /api/analyze answers instantly using whatever ltf_candles fetched (a
+  // single page per exchange), so the backtest shown at first is only as
+  // deep as that — good enough to not block the chart on. This follows up
+  // in the background with the real, paginated deep-history backtest and
+  // swaps the Strategia panel over once it resolves. A monotonically
+  // increasing token guards against a slow response from an earlier
+  // symbol/timeframe landing after a newer one already replaced it.
+  let deepBacktestSeq = 0;
+
+  async function refreshDeepBacktest(symbol) {
+    const seq = ++deepBacktestSeq;
+    try {
+      const url = `/api/backtest/deep?symbol=${encodeURIComponent(symbol)}&asset_type=${state.assetType}&exchange=${state.cryptoExchange}&ltf_interval=${getSelectedIntervals().ltf}&${getStrategyAndBacktestQuery()}`;
+      const resp = await fetch(url);
+      if (!resp.ok || seq !== deepBacktestSeq || !state.data) return;
+      const bt = await resp.json();
+      state.data.backtests[state.activeTimeframe] = bt;
+      renderBacktest();
+    } catch (err) {
+      // The fast-pass backtest already rendered — losing the deeper one
+      // silently is fine, nothing on screen depends on it.
     }
   }
 
