@@ -209,6 +209,21 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Liquidity Analysis Engine", lifespan=lifespan)
 
+from starlette.middleware.gzip import GZipMiddleware
+app.add_middleware(GZipMiddleware, minimum_size=500)
+
+import time as _time
+_app_start = _time.time()
+
+@app.get("/api/health")
+async def health():
+    from app.cache import _intraday_cache, _daily_cache
+    return {
+        "status": "ok",
+        "uptime_s": round(_time.time() - _app_start),
+        "cache_size": len(_intraday_cache) + len(_daily_cache),
+    }
+
 
 class StrategyParamsQuery(BaseModel):
     # Every strategy's own params live on this one shared query model — each
