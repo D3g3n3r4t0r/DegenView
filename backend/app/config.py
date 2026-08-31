@@ -47,8 +47,15 @@ class Settings(BaseSettings):
     # Each DataProvider maps these neutral keys to its own interval format.
     timeframe_keys: tuple[str, str, str] = ("htf", "mtf", "ltf")
     # 500 = MEXC's REST max; gives the "Lorenzo" strategy's 268-period trend
-    # filter enough settled history instead of just ~30 usable candles.
+    # filter enough settled history instead of just ~30 usable candles. Only
+    # used for htf/mtf, which need recent context, not deep history.
     candles_per_timeframe: int = 500
+    # LTF drives both the chart and the backtest, so it asks for as much
+    # history as each provider will actually hand back in one request —
+    # MEXC still clamps this down to its own 500 REST max internally, but
+    # Binance (1000) and KuCoin (1500) give noticeably longer backtests, and
+    # Twelve Data (stocks) isn't capped by us at all below its own limit.
+    ltf_candles: int = 1500
 
 
 settings = Settings()

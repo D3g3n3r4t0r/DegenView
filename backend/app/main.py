@@ -367,10 +367,12 @@ async def run_pinescript(script_id: str, req: PineRunRequest) -> dict:
     provider = get_provider(req.asset_type, req.exchange)
 
     async def do_fetch():
-        return await fetch_ohlcv_canonical(provider, symbol, interval, settings.candles_per_timeframe)
+        return await fetch_ohlcv_canonical(provider, symbol, interval, settings.ltf_candles)
 
     try:
-        df = await get_or_fetch((f"pine:{req.asset_type}:{req.exchange}:{symbol.upper()}", interval), do_fetch)
+        df = await get_or_fetch(
+            (f"pine:{req.asset_type}:{req.exchange}:{symbol.upper()}", interval, settings.ltf_candles), do_fetch
+        )
     except ProviderError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     if df.empty:
@@ -784,10 +786,11 @@ async def analyze(
 
     async def fetch_timeframe(tf_key: TimeframeKey):
         interval = intervals[tf_key]
-        cache_key = (f"{asset_type}:{exchange}:{symbol.upper()}", interval)
+        outputsize = settings.ltf_candles if tf_key == "ltf" else settings.candles_per_timeframe
+        cache_key = (f"{asset_type}:{exchange}:{symbol.upper()}", interval, outputsize)
 
         async def do_fetch():
-            return await fetch_ohlcv_canonical(provider, symbol, interval, settings.candles_per_timeframe)
+            return await fetch_ohlcv_canonical(provider, symbol, interval, outputsize)
 
         try:
             df = await get_or_fetch(cache_key, do_fetch)
