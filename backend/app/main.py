@@ -31,6 +31,7 @@ from app.analysis.backtest import run_backtest
 from app.analysis.confluence import compute_confluence
 from app.analysis.indicators import compute_indicators
 from app.analysis.fibonacci import compute_fib_zones
+from app.analysis.optimize import optimize_lorenzo
 from app.analysis.smc_engine import compute_dealing_range, compute_levels, compute_swings
 from app.analysis.strategies import AVAILABLE_STRATEGIES, DEFAULT_STRATEGY, build_strategy_state
 from app.analysis.summary import build_summary, determine_bias
@@ -927,6 +928,51 @@ async def analyze(
         strategies=strategies,
         backtests=backtests,
     )
+
+
+class OptimizeResult(BaseModel):
+    params: dict
+    backtest: BacktestResult
+    trials_evaluated: int
+
+
+@app.get("/api/optimize/lorenzo", response_model=OptimizeResult)
+async def optimize_lorenzo_endpoint(
+    symbol: str = Query(..., min_length=1, max_length=20),
+    asset_type: AssetType = Query("stock"),
+    exchange: CryptoExchange = Query("mexc"),
+    ltf_interval: IntervalChoice = Query(DEFAULT_INTERVALS["ltf"]),
+    backtest_params: BacktestParamsQuery = Depends(),
+) -> OptimizeResult:
+    """Random-search parameter tuning for the Lorenzo strategy — same
+    deep-history df the backtest itself uses (see backtest_interval_for),
+    so results here match what re-running the backtest with the winning
+    params will show. CPU-bound (~120 backtest simulations, ~15-25s), so it
+    runs off the event loop via a thread — otherwise it would stall every
+    other request (including other users') for its whole duration."""
+    symbol = symbol.strip()
+    if not symbol:
+        raise HTTPException(status_code=400, detail="Ticker mancante")
+
+    provider = get_provider(asset_type, exchange)
+    backtest_interval = backtest_interval_for(ltf_interval)
+    cache_key = (f"{asset_type}:{exchange}:{symbol.upper()}:backtest", backtest_interval, settings.backtest_candles)
+
+    async def do_fetch():
+        return await fetch_ohlcv_canonical(provider, symbol, backtest_interval, settings.backtest_candles)
+
+    try:
+        df = await get_or_fetch(cache_key, do_fetch)
+    except ProviderError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if df.empty:
+        raise HTTPException(status_code=502, detail=f"Nessun dato per {symbol}")
+
+    best_params, best_bt, trials = await asyncio.to_thread(
+        optimize_lorenzo, df, backtest_params.model_dump()
+    )
+    best_bt = best_bt.model_copy(update={"interval": backtest_interval})
+    return OptimizeResult(params=best_params, backtest=best_bt, trials_evaluated=trials)
 
 
 @app.websocket("/ws/live")

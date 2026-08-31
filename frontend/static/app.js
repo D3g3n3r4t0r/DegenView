@@ -600,6 +600,66 @@
       opt.textContent = name;
       select.appendChild(opt);
     });
+    updateOptimizeButtonVisibility();
+  }
+
+  // ---- Lorenzo auto-optimize: random-search the strategy's own parameter
+  // space against the deep backtest history, scored by profit factor. Only
+  // meaningful for Lorenzo (the other strategies have differently-shaped
+  // parameter spaces this doesn't cover), so the button only shows up when
+  // that's the active strategy. ----
+  const LORENZO_STRATEGY_NAME = "Lorenzo (trend-follower)";
+
+  function updateOptimizeButtonVisibility() {
+    const isLorenzo = el("active-strategy-select").value === LORENZO_STRATEGY_NAME;
+    el("optimize-lorenzo-btn").classList.toggle("hidden", !isLorenzo);
+    if (!isLorenzo) el("optimize-lorenzo-result").classList.add("hidden");
+  }
+
+  async function runLorenzoOptimize() {
+    if (!state.data) return;
+    const btn = el("optimize-lorenzo-btn");
+    const resultEl = el("optimize-lorenzo-result");
+    btn.disabled = true;
+    const originalLabel = btn.textContent;
+    btn.textContent = "Ottimizzazione in corso… (10-25s)";
+    resultEl.classList.add("hidden");
+
+    try {
+      const form = el("params-form");
+      const backtestParams = new URLSearchParams();
+      ["initial_capital", "qty_pct_of_equity", "commission_pct", "slippage_pct", "stop_loss_pct", "take_profit_pct"].forEach(
+        (name) => backtestParams.set(name, new FormData(form).get(name))
+      );
+      const url =
+        `/api/optimize/lorenzo?symbol=${encodeURIComponent(state.data.symbol)}&asset_type=${state.assetType}` +
+        `&exchange=${state.cryptoExchange}&ltf_interval=${getSelectedIntervals().ltf}&${backtestParams.toString()}`;
+      const resp = await fetch(url);
+      const body = await resp.json();
+      if (!resp.ok) {
+        const detail = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail);
+        throw new Error(detail || `Errore ${resp.status}`);
+      }
+
+      Object.entries(body.params).forEach(([key, value]) => {
+        const field = form.elements[key];
+        if (!field) return;
+        if (field.type === "checkbox") field.checked = !!value;
+        else field.value = value;
+      });
+
+      const bt = body.backtest;
+      const pf = bt.profit_factor !== null ? bt.profit_factor.toFixed(2) : "∞";
+      resultEl.innerHTML = `Migliore trovato su <b>${body.trials_evaluated}</b> combinazioni (${bt.interval}): profit factor <b>${pf}</b>, ${bt.num_trades} trade, win rate ${bt.win_rate_pct !== null ? bt.win_rate_pct.toFixed(0) : "—"}%.`;
+      resultEl.classList.remove("hidden");
+
+      await runAnalysis(state.data.symbol);
+    } catch (err) {
+      showError(err.message || "Ottimizzazione fallita.");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = originalLabel;
+    }
   }
 
   // Each ticker is a card that expands to show one on/off toggle per
@@ -3668,8 +3728,11 @@
     });
 
     el("active-strategy-select").addEventListener("change", () => {
+      updateOptimizeButtonVisibility();
       if (state.data) runAnalysis(state.data.symbol);
     });
+
+    el("optimize-lorenzo-btn").addEventListener("click", runLorenzoOptimize);
 
     document.querySelectorAll(".wl-asset-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
