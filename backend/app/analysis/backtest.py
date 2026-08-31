@@ -1,3 +1,5 @@
+import math
+
 import pandas as pd
 
 from app.analysis.strategies import DEFAULT_STRATEGY, confirmed_events
@@ -136,6 +138,33 @@ def run_backtest(
     gross_profit = sum(t.pnl_abs for t in wins)
     gross_loss = -sum(t.pnl_abs for t in losses)
 
+    # data_start / data_end: unix milliseconds of first and last candle
+    data_start = int(df.index[0].timestamp() * 1000)
+    data_end = int(df.index[-1].timestamp() * 1000)
+
+    # Sharpe ratio from daily equity-curve returns
+    sharpe_ratio: float | None = None
+    if len(equity_curve) >= 3:
+        eq_values = [v for _, v in equity_curve]
+        daily_returns = [(eq_values[i] - eq_values[i - 1]) / eq_values[i - 1] for i in range(1, len(eq_values))]
+        mean_r = sum(daily_returns) / len(daily_returns)
+        var_r = sum((r - mean_r) ** 2 for r in daily_returns) / len(daily_returns)
+        std_r = math.sqrt(var_r)
+        if std_r > 0:
+            sharpe_ratio = (mean_r / std_r) * math.sqrt(252)
+
+    # max_consecutive_losses
+    max_consec_losses: int | None = None
+    if trades:
+        max_consec_losses = 0
+        current = 0
+        for t in trades:
+            if t.pnl_pct < 0:
+                current += 1
+                max_consec_losses = max(max_consec_losses, current)
+            else:
+                current = 0
+
     return BacktestResult(
         interval="",  # caller (app.main) fills in the interval the df it passed actually was
         initial_capital=bp["initial_capital"],
@@ -147,4 +176,8 @@ def run_backtest(
         profit_factor=(gross_profit / gross_loss) if gross_loss > 0 else None,
         equity_curve=equity_curve,
         trades=trades,
+        data_start=data_start,
+        data_end=data_end,
+        sharpe_ratio=sharpe_ratio,
+        max_consecutive_losses=max_consec_losses,
     )

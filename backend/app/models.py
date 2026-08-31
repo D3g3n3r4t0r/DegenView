@@ -99,6 +99,10 @@ class BacktestResult(BaseModel):
     profit_factor: float | None
     equity_curve: list[tuple[int, float]]
     trades: list[BacktestTrade]
+    data_start: int | None = None   # unix ms del primo candle usato
+    data_end: int | None = None     # unix ms dell'ultimo candle usato
+    sharpe_ratio: float | None = None
+    max_consecutive_losses: int | None = None
 
 
 class User(BaseModel):
