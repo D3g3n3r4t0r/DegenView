@@ -86,9 +86,10 @@ def _load_candidates() -> None:
     for item in raw:
         try:
             c = Candidate(**item)
-            # v3→v4 migration: score_items without 'measured' field are stale.
-            # Reset so the next main scan re-scores with the measured denominator.
-            if c.score_items and not any("measured" in i for i in c.score_items):
+            # v3→v4: items without 'measured' field are stale.
+            # v4→v5: scorer max is now 10; anything with score_max > 10 is pre-v5.
+            # Reset both cases so the next scan re-scores with v5 logic.
+            if (c.score_items and not any("measured" in i for i in c.score_items)) or c.score_max > 10:
                 c.score_total = 0
                 c.score_max = 0
                 c.score_items = []
