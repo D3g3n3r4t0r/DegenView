@@ -1087,8 +1087,8 @@ async function loadXlsx(){
 
       // score badge coloring — score_max=0 means unscored (agent-added, not yet through run_scan)
       const pct = c.score_max > 0 ? c.score_total / c.score_max : null;
-      const badgeClass = pct === null ? 'low' : pct >= 0.6 ? '' : pct >= 0.35 ? 'mid' : 'low';
-      const barColor = pct === null ? 'var(--fg-dim)' : pct >= 0.6 ? 'var(--green)' : pct >= 0.35 ? 'var(--amber)' : 'var(--red)';
+      const badgeClass = pct === null ? 'low' : pct >= 0.70 ? '' : pct >= 0.40 ? 'mid' : 'low';
+      const barColor = pct === null ? 'var(--fg-dim)' : pct >= 0.70 ? 'var(--green)' : pct >= 0.40 ? 'var(--amber)' : 'var(--red)';
       const scoreLabel = c.score_max > 0 ? `${c.score_total}/${c.score_max}` : '—';
 
       // liq coloring
