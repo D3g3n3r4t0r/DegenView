@@ -91,7 +91,6 @@ async def score(token, client: httpx.AsyncClient) -> TokenScore:  # token: RawTo
 
     has_goplus = gp is not None
     has_honeypot_is = hi is not None and hi.simulation_success
-    has_security = has_goplus or rc is not None or has_honeypot_is
 
     # ── SICUREZZA ─────────────────────────────────────────────────────────────
 
