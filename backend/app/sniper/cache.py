@@ -163,24 +163,25 @@ def _broadcast(event: dict) -> None:
 
 
 def passes_threshold(s: TokenScore) -> bool:
-    # Auto-reject confirmed honeypots regardless of score
+    # Hard reject: confirmed honeypot by any source
     if s.is_honeypot is True:
         return False
-    tok = sum(i.earned for i in s.items if i.category == "Tokenomics")
-    uti = sum(i.earned for i in s.items if i.category == "Utilità")
-    return s.total >= SCORE_MIN and tok >= TOKENOMICS_MIN and uti >= UTILITY_MIN
+    # Hard reject: tax abuse (even if is_honeypot is None, very high tax = exit scam)
+    if s.buy_tax is not None and s.sell_tax is not None:
+        if (s.buy_tax + s.sell_tax) > 25.0:
+            return False
+    # Anything else passes — primary filter (MC/liq/age) already did the heavy cut
+    return True
 
 
 def fail_reason(s: TokenScore) -> str:
     if s.is_honeypot is True:
-        return "HONEYPOT rilevato da GoPlus"
-    tok = sum(i.earned for i in s.items if i.category == "Tokenomics")
-    uti = sum(i.earned for i in s.items if i.category == "Utilità")
-    if tok < TOKENOMICS_MIN:
-        return f"tokenomics {tok}/{TOKENOMICS_MIN} min"
-    if uti < UTILITY_MIN:
-        return f"utilità {uti}/{UTILITY_MIN} min"
-    return f"score {s.total}/{SCORE_MIN} min"
+        return "HONEYPOT confermato"
+    if s.buy_tax is not None and s.sell_tax is not None:
+        total_tax = s.buy_tax + s.sell_tax
+        if total_tax > 25.0:
+            return f"Tax abusiva: {total_tax:.0f}% totale"
+    return "Nessun motivo — token passato"
 
 
 # private aliases kept for backward compat inside this module
