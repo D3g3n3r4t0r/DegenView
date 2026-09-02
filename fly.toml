@@ -1,33 +1,30 @@
-# Fly.io — Liquidity Analysis Engine
-# Deploy: flyctl deploy  (o automatico via GitHub Actions)
+# fly.toml app configuration file generated for degen-hub on 2026-09-02T09:24:00Z
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
 
-app = "liquidity-analysis-engine"
-primary_region = "ams"   # Amsterdam — più vicino all'Italia
+app = 'degen-hub'
+primary_region = 'ams'
 
 [build]
-  dockerfile = "Dockerfile"
+  dockerfile = 'Dockerfile'
+
+[[mounts]]
+  source = 'data'
+  destination = '/srv/backend/data'
 
 [http_service]
-  internal_port = 8000
+  internal_port = 8080
   force_https = true
-  auto_stop_machines = "stop"
+  auto_stop_machines = 'stop'
   auto_start_machines = true
-  min_machines_running = 0      # scala a zero di notte (free tier)
+  min_machines_running = 0
 
-  # WebSocket keepalive
   [http_service.concurrency]
-    type = "connections"
+    type = 'connections'
     hard_limit = 25
     soft_limit = 20
 
 [[vm]]
-  size = "shared-cpu-1x"
-  memory = "512mb"
-
-# Persistent 1GB volume for watchlist + uploaded Pine scripts — without this,
-# that data lives only in the container's writable layer and is wiped on
-# every deploy. Volumes attach to a single machine, so this app intentionally
-# runs as one instance (see the machine-count note in README/deploy notes).
-[[mounts]]
-  source = "data"
-  destination = "/srv/backend/data"
+  size = 'shared-cpu-1x'
+  memory = '512mb'
