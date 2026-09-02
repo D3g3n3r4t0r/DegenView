@@ -1100,10 +1100,16 @@ async function loadXlsx(){
     }
     const isTop5 = activeSort === 'top5' || activeSort === 'top5fund';
     if(activeSort === 'top5'){
+      // Require security APIs responded — unverified tokens can't rank as top 5
+      filtered = filtered.filter(c => c.score_max > 4);
       filtered.sort((a, b) => compositeRank(b) - compositeRank(a));
       filtered = filtered.slice(0, 5);
     } else if(activeSort === 'top5fund'){
-      filtered = filtered.filter(c => c.market_cap === null || c.market_cap === undefined || c.market_cap < 2_000_000);
+      // Require security APIs responded (score_max > 4) — unverified tokens can't rank as top fundamentals
+      filtered = filtered.filter(c =>
+        (c.market_cap === null || c.market_cap === undefined || c.market_cap < 2_000_000) &&
+        c.score_max > 4
+      );
       filtered.sort((a, b) => fundamentalRank(b) - fundamentalRank(a));
       filtered = filtered.slice(0, 25);
     } else {
