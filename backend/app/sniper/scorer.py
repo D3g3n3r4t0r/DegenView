@@ -212,7 +212,7 @@ async def score(token, client: httpx.AsyncClient) -> TokenScore:  # token: RawTo
     wash_ratio = (token.volume_h24 / liq) if liq > 0 else 0
     vol_h1 = token.volume_h1
     vol_m5 = token.volume_m5
-    if wash_ratio > 8.0:
+    if wash_ratio > 5.0:
         vol_ok = False
         note_vol = f"Wash trading sospetto (vol/liq {wash_ratio:.0f}x)"
     elif vol_h1 > 0:
