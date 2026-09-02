@@ -497,6 +497,54 @@ button.import-btn:disabled{background:var(--panel-2); color:var(--fg-dim); curso
 }
 tbody tr.top5-row{ background: rgba(240,180,41,.06); }
 tbody tr.top5-row:hover{ background: rgba(240,180,41,.12); }
+
+/* ── no-security badge (score_max ≤ 4 = only market data, no API response) ── */
+.no-sec-badge{
+  display:inline-block; font-size:9px; font-weight:700; letter-spacing:.02em;
+  padding:1px 5px; border-radius:3px; margin-left:5px; vertical-align:middle;
+  background:rgba(240,180,41,.12); color:var(--amber); border:1px solid rgba(240,180,41,.25);
+  white-space:nowrap;
+}
+
+/* ── token sub-line: MC · Liq · Age ── hidden on desktop, shown on mobile ── */
+.tok-sub{
+  display:none; align-items:center; gap:4px; margin-top:3px;
+  font-size:10.5px; color:var(--fg-dim); font-family:'JetBrains Mono',monospace;
+  font-variant-numeric:tabular-nums; flex-wrap:nowrap;
+}
+.tok-sub-liq-high{ color:var(--green); }
+.tok-sub-liq-mid{ color:var(--amber); }
+.tok-sub-liq-low{ color:var(--red); }
+.tok-sub-sep{ color:var(--border); }
+
+/* ── agent pill class-names for mobile CSS targeting ── */
+.agent-pill{
+  display:flex; align-items:center; gap:5px; padding:3px 9px;
+  border-radius:99px; border:1px solid var(--border); font-size:11px;
+  white-space:nowrap; flex-shrink:0;
+}
+
+@media (max-width: 767px) {
+  /* Show sub-line with MC / Liq / Age inside token cell */
+  .tok-sub{ display:flex; }
+
+  /* Remove redundant symbol filter — token-search-bar already handles lookup */
+  .sym-filter-wrap{ display:none; }
+
+  /* Agent bar: compact single-row strip */
+  #agentBar{
+    flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch;
+    scrollbar-width:none; padding:4px 10px; gap:5px;
+  }
+  #agentBar::-webkit-scrollbar{ display:none; }
+  .agent-pill{ font-size:10px; padding:3px 8px; }
+  /* Hide verbose label on mobile — keep icon + time only */
+  .agent-pill .ap-label,
+  .agent-pill .ap-sep{ display:none; }
+
+  /* Tighter token rows on mobile (sym cell doesn't need extra padding with sub-line) */
+  tbody td.sym-cell{ padding-bottom:8px; }
+}
 </style>
 </head>
 <body>
@@ -1095,8 +1143,23 @@ async function loadXlsx(){
       const liq = c.liquidity_usd || 0;
       const liqClass = liq >= 50000 ? 'liq-high' : liq >= 10000 ? 'liq-mid' : 'liq-low';
 
+      // no-security badge: score_max ≤ 4 means only market data scored (no GoPlus/Rugcheck reply)
+      const noSecBadge = (c.score_max > 0 && c.score_max <= 4)
+        ? `<span class="no-sec-badge" title="Sicurezza non verificata — nessuna API ha risposto">⚠️ NO SEC</span>`
+        : '';
+
+      // tok-sub: compact MC · Liq · Age line shown on mobile inside sym-cell
+      const liqSubClass = liq >= 50000 ? 'tok-sub-liq-high' : liq >= 10000 ? 'tok-sub-liq-mid' : 'tok-sub-liq-low';
+      const tokSub = `<div class="tok-sub">
+        <span>${fmtUsd(c.market_cap)}</span>
+        <span class="tok-sub-sep">·</span>
+        <span class="${liqSubClass}">${fmtUsd(liq)}</span>
+        <span class="tok-sub-sep">·</span>
+        <span>${fmtAge(c.age_hours)}</span>
+      </div>`;
+
       tr.innerHTML = `
-        <td class="sym-cell">${rankBadge}${newDot}${esc(c.symbol)}${honeypotBadge}${cexBadge}<span class="chain">${esc(c.chain_id)}</span></td>
+        <td class="sym-cell">${rankBadge}${newDot}${esc(c.symbol)}${honeypotBadge}${noSecBadge}${cexBadge}<span class="chain">${esc(c.chain_id)}</span>${tokSub}</td>
         <td>
           <span class="score-badge ${badgeClass}">${scoreLabel}</span>
           <div class="score-bar"><div class="score-bar-fill" style="width:${pct !== null ? Math.round(pct*100) : 0}%;background:${barColor}"></div></div>
@@ -1611,11 +1674,11 @@ async function loadXlsx(){
         const state = a.running ? 'running' : a.error ? 'err' : 'idle';
         const stateColor = { running:'var(--green)', err:'var(--red)', idle:'var(--fg-dim)' }[state];
         const stateTxt = { running:'in corso…', err:'errore', idle:`prossimo ~${nextIn}m` }[state];
-        return `<span style="display:flex;align-items:center;gap:5px;padding:3px 9px;border-radius:99px;border:1px solid var(--border);font-size:11px;color:${stateColor}">
-          <span>${meta.icon}</span>
-          <span style="color:var(--fg)">${meta.label}</span>
-          <span style="color:var(--fg-dim)">·</span>
-          <span>${stateTxt}</span>
+        return `<span class="agent-pill" style="color:${stateColor}">
+          <span class="ap-icon">${meta.icon}</span>
+          <span class="ap-label" style="color:var(--fg)">${meta.label}</span>
+          <span class="ap-sep" style="color:var(--fg-dim)">·</span>
+          <span class="ap-state">${stateTxt}</span>
           ${a.last_count > 0 ? `<span style="color:var(--accent);font-weight:700">+${a.last_count}</span>` : ''}
         </span>`;
       }).join('');
