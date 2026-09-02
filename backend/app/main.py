@@ -1232,22 +1232,29 @@ async def sniper_trigger_scan() -> dict:
     return {"ok": True, "added": added, "total": len(sniper_cache.get_candidates())}
 
 
+@app.get("/api/sniper/log")
+async def sniper_log(limit: int = Query(500, ge=1, le=5000)) -> dict:
+    """Persisted scan-log history — survives a page reload / redeploy, so the
+    console can show what happened before this browser session connected."""
+    from app.sniper import cache as sniper_cache
+    return {"events": sniper_cache.get_log(limit)}
+
+
 @app.get("/api/sniper/scan-stream")
 async def sniper_scan_stream() -> StreamingResponse:
-    """SSE feed of live scan log events. Starts a scan if none is running,
-    otherwise attaches to the one already in progress."""
+    """SSE feed of scan log events. Scanning itself runs continuously in the
+    background (polling_loop, every 5 min) regardless of whether anyone is
+    watching — this just relays whatever scan is happening, automatic or
+    manually triggered, to any open browser tab for as long as it stays
+    connected."""
     from app.sniper import cache as sniper_cache
 
     async def event_gen():
         q = sniper_cache.subscribe()
         try:
-            if not sniper_cache.scan_in_progress():
-                asyncio.create_task(sniper_cache.run_scan())
             while True:
                 event = await q.get()
                 yield f"data: {json.dumps(event)}\n\n"
-                if event.get("type") == "scan_end":
-                    break
         finally:
             sniper_cache.unsubscribe(q)
 
