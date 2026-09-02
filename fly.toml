@@ -1,9 +1,9 @@
-# fly.toml app configuration file generated for degen-hub on 2026-09-02T09:24:00Z
+# fly.toml app configuration file
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'degen-hub'
+app = 'liquidity-analysis-engine'
 primary_region = 'ams'
 
 [build]
