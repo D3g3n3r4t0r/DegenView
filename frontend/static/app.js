@@ -2309,6 +2309,12 @@
       return;
     }
     el("mobile-chart-symbol").textContent = state.data.symbol;
+    // Keep the strategy pill updated with the currently-active strategy name.
+    // Abbreviate long names so the pill stays compact on small screens.
+    const pill = el("mobile-strategy-pill");
+    const stratName = el("active-strategy-select").value || "—";
+    const stratAbbr = stratName.replace("(trend-follower)", "").replace("(long-term)", "").replace("(RSI+BB reversal)", "").trim();
+    pill.textContent = stratAbbr;
     strip.classList.remove("hidden");
     tools.classList.toggle("hidden", !onChartScreen);
     syncMobileTfWheel();
@@ -3802,6 +3808,9 @@
     document.querySelectorAll(".mobile-nav-btn").forEach((btn) => {
       btn.addEventListener("click", () => showMobileScreen(btn.dataset.mobileTarget));
     });
+    // Strategy pill in the chart strip opens the Livelli panel (where the
+    // strategy selector lives) so the user can change it in one tap.
+    el("mobile-strategy-pill").addEventListener("click", () => showMobileScreen("levels"));
     document.querySelectorAll("[data-close-drawer]").forEach((btn) => {
       btn.addEventListener("click", () => showMobileScreen("chart"));
     });
@@ -4095,11 +4104,20 @@
     return params;
   }
 
+  // Strategies for which the backend has a full discrete grid (grid mode).
+  const GRID_STRATEGIES = new Set([
+    "Gabriele (RSI+BB reversal)",
+    "Accumulo / Distribuzione (long-term)",
+  ]);
+
   function renderLabParamFields() {
     const strategyName = labState.strategy || "";
     const fields = STRATEGY_PARAM_FIELDS[strategyName] || [];
     const container = labEl("lab-params-fields");
     container.innerHTML = "";
+    // Show grid-mode toggle only for strategies that support it.
+    const gridWrap = labEl("lab-grid-toggle-wrap");
+    if (gridWrap) gridWrap.classList.toggle("hidden", !GRID_STRATEGIES.has(strategyName));
     fields.forEach((field) => {
       const label = document.createElement("label");
       if (field.type === "checkbox") {
@@ -4346,10 +4364,15 @@
     runBtn.disabled = true;
     labEl("lab-result-block").classList.add("hidden");
     labEl("lab-apply-strip").classList.add("hidden");
-    labEl("lab-status").textContent = "Ottimizzazione in corso… (10–25s)";
+    const isGrid = labEl("lab-grid-mode")?.checked;
+    labEl("lab-status").textContent = isGrid
+      ? "Grid search in corso… ogni combinazione testata (~30–50s)"
+      : "Ottimizzazione in corso… (10–25s)";
     labEl("lab-status").classList.remove("hidden");
     await withAsyncButton(optBtn, async () => {
       const params = buildLabQuery();
+      const gridMode = labEl("lab-grid-mode")?.checked;
+      if (gridMode) params.set("mode", "grid");
       const url = `/api/optimize?${params.toString()}`;
       const resp = await fetch(url);
       if (seq !== labState.seq) return;
