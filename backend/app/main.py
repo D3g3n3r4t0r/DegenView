@@ -781,6 +781,24 @@ def _owned_entry_or_404(entry_id: str, user: User) -> WatchlistEntry:
     return entry
 
 
+@app.get("/api/preferences")
+async def get_preferences(user: User = Depends(auth.get_current_user)) -> dict:
+    return user.preferences or {}
+
+
+@app.put("/api/preferences")
+async def put_preferences(
+    body: dict,
+    user: User = Depends(auth.get_current_user),
+) -> dict:
+    # Allowlist the keys we actually care about — ignore anything unknown
+    allowed = {"ticker", "asset_type", "exchange", "interval", "strategy", "strategy_params",
+               "layers", "log_scale", "lab_ticker", "lab_asset_type", "lab_exchange", "lab_interval"}
+    filtered = {k: v for k, v in body.items() if k in allowed}
+    auth.set_preferences(user.id, filtered)
+    return filtered
+
+
 @app.get("/api/watchlist", response_model=list[WatchlistEntry])
 async def get_watchlist(user: User = Depends(auth.get_current_user)) -> list[WatchlistEntry]:
     return watchlist_store.list_entries(owner_id=user.id)
