@@ -38,8 +38,18 @@ _users: dict[str, User] = {}
 
 
 def _get_secret() -> bytes:
+    # Env-var wins: always available even before the volume mounts, so a
+    # rolling deploy never regenerates the secret and logs everyone out.
+    import os
+    env_secret = os.environ.get("SESSION_SECRET", "").strip()
+    if env_secret:
+        return env_secret.encode("utf-8")
+    # Fallback: persistent file on the Fly volume (works for local dev and
+    # as a one-time seed before the env-var is set).
     if _SECRET_FILE.exists():
-        return _SECRET_FILE.read_text(encoding="utf-8").strip().encode("utf-8")
+        secret = _SECRET_FILE.read_text(encoding="utf-8").strip()
+        if secret:
+            return secret.encode("utf-8")
     secret = secrets.token_hex(32)
     _SECRET_FILE.write_text(secret, encoding="utf-8")
     return secret.encode("utf-8")
