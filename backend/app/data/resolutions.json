@@ -57,5 +57,14 @@
       "frontend/static/app.js",
       "frontend/static/style.css"
     ]
+  },
+  "seed-0005": {
+    "status": "risolto",
+    "summary": "Il valore ora compare in un'etichetta ancorata al punto sulla curva, e non segue piu' la punta del cursore.",
+    "detail": "L'etichetta sulla scala dei prezzi segue la y del puntatore: muovendo il mouse in verticale sulla stessa barra il numero cambiava pur restando lo stesso RSI. Un valore che si legge cosi' non e' un valore. Ora un'etichetta segue la x del crosshair e la y del valore della serie, cioe' resta attaccata al punto sulla curva e sta ferma mentre il puntatore si muove in verticale. Stessa cosa sullo stocastico, che aveva lo stesso difetto. Se l'etichetta uscirebbe dal riquadro si sposta a sinistra del punto, perche' meta' etichetta e' peggio di nessuna.",
+    "files": [
+      "frontend/static/app.js",
+      "frontend/static/style.css"
+    ]
   }
 }
