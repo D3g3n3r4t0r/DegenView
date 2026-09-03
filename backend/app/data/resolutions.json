@@ -21,7 +21,7 @@
     "next": "Nessuno. 16 test.",
     "commit": "vedi git log su main"
   },
-  "auto-trading-morto": {
+  "seed-0011": {
     "status": "risolto",
     "summary": "Trovato lavorando sull'alert: il trading automatico non ha mai piazzato un ordine. In silenzio.",
     "detail": "Non era sulla lista perche' non c'era modo di accorgersene: nessun errore, nessun log, semplicemente nessun ordine.\n\nCAUSA: nel ciclo watchlist, _dispatch_telegram_alerts() chiama find_new_signals(), che marca tutti i segnali come visti. Subito dopo il blocco di esecuzione ordini richiamava find_new_signals() sugli stessi segnali — ormai tutti gia' visti — e riceveva sempre lista vuota. Il for che piazza gli ordini non entrava mai.\n\nFIX: _dispatch_telegram_alerts ora restituisce i segnali che ha trovato, e il blocco di trading usa quelli invece di richiederli. La deduplica e' uno stato che si consuma: chiamarla due volte sugli stessi dati non e' idempotente, ed e' esattamente il tipo di bug che non lascia tracce.",
