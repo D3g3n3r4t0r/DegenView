@@ -1488,10 +1488,28 @@ class DeflatedSharpe(BaseModel):
     acceptable: bool = False
 
 
+class DataUsed(BaseModel):
+    """Su quali dati e' realmente girata l'ottimizzazione.
+
+    Senza questi campi il risultato non e' riproducibile a mano nemmeno in
+    linea di principio: l'ottimizzazione non usa il timeframe del grafico ma
+    quello derivato da backtest_interval_for(), con un minimo di 1d, e un
+    numero di candele diverso. Stessi parametri su feed diversi danno lo stesso
+    ordine di rendimento e un numero di trade completamente diverso — misurato
+    su KASUSDT: 27 trade a 1d contro 186 a 4h."""
+
+    interval: str
+    candles: int
+    chart_interval: str
+    differs_from_chart: bool
+    note: str = ""
+
+
 class OptimizeResult(BaseModel):
     params: dict
     backtest: BacktestResult
     trials_evaluated: int
+    data_used: DataUsed | None = None
     out_of_sample_return_pct: float | None = None
     overfitted: bool = False
     mode: str = "random"
@@ -1539,6 +1557,21 @@ async def optimize_strategy_endpoint(
     if df.empty:
         raise HTTPException(status_code=502, detail=f"Nessun dato per {symbol}")
 
+    data_used = DataUsed(
+        interval=backtest_interval,
+        candles=len(df),
+        chart_interval=ltf_interval,
+        differs_from_chart=backtest_interval != ltf_interval,
+        note=(
+            f"Ottimizzato su {len(df)} candele a {backtest_interval}, non sul "
+            f"timeframe {ltf_interval} del grafico. Per riprodurre a mano questo "
+            f"risultato imposta il grafico su {backtest_interval}."
+            if backtest_interval != ltf_interval
+            else f"Ottimizzato su {len(df)} candele a {backtest_interval}, "
+                 f"lo stesso timeframe del grafico."
+        ),
+    )
+
     if mode == "plateau":
         # Deterministic path: same inputs give the same answer, because the
         # cell grid is enumerated rather than sampled wherever it fits the
@@ -1556,6 +1589,7 @@ async def optimize_strategy_endpoint(
             out_of_sample_return_pct=pr.out_of_sample_return_pct,
             overfitted=pr.overfitted,
             mode=mode,
+            data_used=data_used,
             deterministic=pr.deterministic,
             chosen_branch=pr.chosen_branch,
             pipeline_notes=pr.notes,
@@ -1598,6 +1632,7 @@ async def optimize_strategy_endpoint(
         out_of_sample_return_pct=oos_return,
         overfitted=overfitted,
         mode=mode,
+        data_used=data_used,
         top_candidates=[
             OptimizeCandidate(
                 rank=c["rank"],
