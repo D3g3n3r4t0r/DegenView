@@ -148,6 +148,7 @@ class ParamSpace:
 PARAM_SPACES: dict[str, ParamSpace] = {
     "Lorenzo (trend-follower)": ParamSpace(tuple(_LORENZO_DIMS), _lorenzo),
     "Gabriele (RSI+BB reversal)": ParamSpace(tuple(_GABRIELE_DIMS), _gabriele),
+    "Gabriele 2 (RSI+BB long/short)": ParamSpace(tuple(_GABRIELE_DIMS), _gabriele),
     "Accumulo / Distribuzione (long-term)": ParamSpace(tuple(_EXHAUSTION_DIMS), _exhaustion),
 }
 

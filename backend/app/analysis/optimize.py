@@ -28,7 +28,12 @@ from dataclasses import dataclass
 from typing import Iterator
 
 from app.analysis.backtest import run_backtest
-from app.analysis.strategies import DEFAULT_PARAMS, EXHAUSTION_DEFAULT_PARAMS, LKI_DEFAULT_PARAMS
+from app.analysis.strategies import (
+    DEFAULT_PARAMS,
+    EXHAUSTION_DEFAULT_PARAMS,
+    LKI2_DEFAULT_PARAMS,
+    LKI_DEFAULT_PARAMS,
+)
 from app.models import BacktestResult
 
 _TRIALS = 200
@@ -210,6 +215,7 @@ _STRATEGY_SPACES: dict[str, tuple[dict, callable]] = {
     "Lorenzo (trend-follower)": (DEFAULT_PARAMS, _random_lorenzo_params),
     "Accumulo / Distribuzione (long-term)": (EXHAUSTION_DEFAULT_PARAMS, _random_exhaustion_params),
     "Gabriele (RSI+BB reversal)": (LKI_DEFAULT_PARAMS, _random_gabriele_params),
+    "Gabriele 2 (RSI+BB long/short)": (LKI2_DEFAULT_PARAMS, _random_gabriele_params),
 }
 
 _GRID_GABRIELE = {
@@ -233,6 +239,7 @@ _GRID_EXHAUSTION = {
 
 _GRID_SPACES: dict[str, dict] = {
     "Gabriele (RSI+BB reversal)": _GRID_GABRIELE,
+    "Gabriele 2 (RSI+BB long/short)": _GRID_GABRIELE,
     "Accumulo / Distribuzione (long-term)": _GRID_EXHAUSTION,
 }
 

@@ -38,6 +38,7 @@ FAMILY_REVERSION = "reversion"
 STRATEGY_FAMILY: dict[str, str] = {
     "Lorenzo (trend-follower)": FAMILY_TREND,
     "Gabriele (RSI+BB reversal)": FAMILY_REVERSION,
+    "Gabriele 2 (RSI+BB long/short)": FAMILY_REVERSION,
     "Accumulo / Distribuzione (long-term)": FAMILY_REVERSION,
 }
 
