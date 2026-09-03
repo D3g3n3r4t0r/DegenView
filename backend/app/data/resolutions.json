@@ -1,0 +1,19 @@
+{
+  "_README": "Scritto da Claude, versionato in git, distribuito col deploy. Le chiavi sono gli id delle segnalazioni. Non modificare a mano dall'app: verrebbe sovrascritto al deploy successivo.",
+
+  "seed-0007": {
+    "status": "in corso",
+    "summary": "Causa trovata e misurata: ottimizzatore e grafico girano su dati diversi, e non lo dicono.",
+    "detail": "Il grafico (/api/analyze) usa il timeframe che scegli tu con 3000 candele. L'ottimizzatore (/api/optimize e /api/backtest/deep) chiama backtest_interval_for(), che forza il minimo a 1d con 5000 candele. È deliberato — cerca la storia più profonda possibile — ma non è visibile da nessuna parte.\n\nMisurato su KASUSDT con gli STESSI parametri di Lorenzo:\n  1d (ottimizzatore): 1438 candele → 27 trade, +120,0%\n  4h (grafico):       8623 candele → 186 trade, +66,4%\n\nRendimenti dello stesso ordine, trade 7 volte diversi: il sintomo descritto, riprodotto. Finché timeframe e numero di candele non tornano nella risposta dell'API, quel backtest non è riproducibile a mano nemmeno in teoria.",
+    "next": "Restituire interval e candle count usati, e mostrarli accanto al risultato dell'ottimizzazione.",
+    "commit": "in corso"
+  },
+
+  "seed-0010": {
+    "status": "in corso",
+    "summary": "Il dubbio era fondato: il 97% degli ingressi usa uno swing che in quel momento non esisteva ancora.",
+    "detail": "Confermato per Accumulo / Distribuzione, con due misure indipendenti.\n\nGli ingressi nascono da swing rilevati con smc.swing_highs_lows(swing_length=8), che usa una finestra centrata: uno swing in posizione P è riconoscibile solo quando esistono 8 barre successive. Misurato su 16 swing di KASUSDT cercando il primo istante in cui lo swing compare E non sparisce più: ritardo minimo 8, mediano 8, massimo 8 barre — esattamente swing_length.\n\nMa _find_confirmation() parte da swing_pos + 1. Su 87 segnali con conferma:\n  conferme prima di P+8:  84/87 = 97%\n  ritardo mediano:        2 barre (ne servirebbero 8)\n\nNel backtest il trade viene aperto; con il bot dal vivo quel segnale non sarebbe esistito. I risultati di questa strategia sono sistematicamente ottimisti e non riproducibili.",
+    "next": "Il fix è una riga (partire da swing_pos + swing_length), ma abbassa OGNI risultato storico già guardato. Non applicato di iniziativa: serve il tuo via libera.",
+    "commit": "in corso"
+  }
+}

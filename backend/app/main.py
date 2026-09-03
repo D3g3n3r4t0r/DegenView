@@ -27,6 +27,7 @@ except (AttributeError, ValueError):
     pass
 
 from app import auth
+from app import issues as issues_store
 from app import rate_limit
 from app.trading.executor import place_order_for_signal
 from app import favorites as favorites_store
@@ -1468,6 +1469,70 @@ async def optimize_strategy_endpoint(
         overfitted=overfitted,
         mode=mode,
     )
+
+
+# --- Segnalazioni ------------------------------------------------------------
+# Lettura pubblica di proposito: la bacheca serve anche a chi non ha ancora
+# fatto login, e non contiene nulla di sensibile. La scrittura resta dietro
+# autenticazione, cosi' le segnalazioni portano un autore e non chiunque passi
+# di qui puo' riempirle.
+
+
+class IssueIn(BaseModel):
+    title: str
+    detail: str = ""
+    priority: str = "media"
+
+
+class IssuePatch(BaseModel):
+    status: str | None = None
+    priority: str | None = None
+    detail: str | None = None
+
+
+@app.get("/api/issues")
+async def list_issues() -> dict:
+    items = issues_store.list_issues()
+    return {
+        "items": items,
+        "counts": {
+            "aperto": sum(1 for i in items if i.get("status") == "aperto"),
+            "in corso": sum(1 for i in items if i.get("status") == "in corso"),
+            "risolto": sum(1 for i in items if i.get("status") == "risolto"),
+        },
+    }
+
+
+@app.post("/api/issues")
+async def create_issue(body: IssueIn, user: User = Depends(auth.get_current_user)) -> dict:
+    try:
+        return issues_store.add_issue(
+            title=body.title, detail=body.detail,
+            priority=body.priority, author=user.email,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.patch("/api/issues/{issue_id}")
+async def patch_issue(issue_id: str, body: IssuePatch,
+                      user: User = Depends(auth.get_current_user)) -> dict:
+    try:
+        updated = issues_store.update_issue(
+            issue_id, status=body.status, priority=body.priority, detail=body.detail
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Segnalazione non trovata")
+    return updated
+
+
+@app.delete("/api/issues/{issue_id}")
+async def remove_issue(issue_id: str, user: User = Depends(auth.get_current_user)) -> dict:
+    if not issues_store.delete_issue(issue_id):
+        raise HTTPException(status_code=404, detail="Segnalazione non trovata")
+    return {"deleted": issue_id}
 
 
 @app.get("/api/sniper/candidates")
