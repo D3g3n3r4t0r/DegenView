@@ -21,6 +21,7 @@ class Settings(BaseSettings):
 
     telegram_bot_token: str = ""
     telegram_chat_ids: str = ""  # comma-separated
+    github_api_token: str = ""   # PAT for fetching commit history on deploy notify
 
     # Registration is open to anyone, but actual Telegram delivery is
     # deliberately locked to specific account emails (comma-separated) —
