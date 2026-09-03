@@ -2686,12 +2686,8 @@ body {
   background: var(--bg-panel);
   z-index: 2;
 }
-#lab-suggestions {
-  position: absolute;
-  top: calc(100% + 5px);
-  left: 0; right: 0;
-  z-index: 20;
-}
+/* #lab-suggestions inherits position:fixed + z-index:60 from .suggestions
+   (JS sets left/top via getBoundingClientRect). No override needed. */
 
 .lab-tf-row {
   display: flex; gap: 5px; margin-bottom: 12px;
