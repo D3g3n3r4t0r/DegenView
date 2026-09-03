@@ -79,5 +79,13 @@
       "frontend/static/app.js",
       "frontend/static/style.css"
     ]
+  },
+  "seed-0004": {
+    "status": "risolto",
+    "summary": "Le FVG ora sono fasce orizzontali con il livello mediano, non rettangoli con i bordi verticali.",
+    "detail": "Un'imbalance e' definita da due prezzi, non da un intervallo di tempo: i bordi verticali disegnavano un inizio e una fine che la zona non ha, ed erano la ragione per cui si leggeva come un rettangolo invece che come una fascia. Ora restano i due bordi di prezzo, esteso fino alla mitigazione (o fino all'ultima candela se non e' ancora avvenuta), piu' la mediana tratteggiata, che e' il livello su cui la zona viene di solito considerata consumata a meta'. Gli order block restano rettangoli: li' l'estensione temporale e' parte di cosa sono.",
+    "files": [
+      "frontend/static/app.js"
+    ]
   }
 }

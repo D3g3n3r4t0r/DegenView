@@ -308,11 +308,13 @@
   }
 
   class RectangleRenderer {
-    constructor(p1, p2, fillColor, borderColor) {
+    constructor(p1, p2, fillColor, borderColor, style) {
       this._p1 = p1;
       this._p2 = p2;
       this._fillColor = fillColor;
       this._borderColor = borderColor;
+      // { edges: "box" | "horizontal", midline: bool }
+      this._style = style || {};
     }
     draw(target) {
       target.useBitmapCoordinateSpace((scope) => {
@@ -324,7 +326,34 @@
         ctx.fillRect(h.position, v.position, h.length, v.length);
         ctx.strokeStyle = this._borderColor;
         ctx.lineWidth = 1;
-        ctx.strokeRect(h.position, v.position, h.length, v.length);
+        if (this._style.edges === "horizontal") {
+          // Solo i due bordi di prezzo. Un'imbalance è definita da due livelli,
+          // non da un intervallo di tempo: i bordi verticali disegnano un
+          // inizio e una fine che la zona non ha, e sono la ragione per cui
+          // queste zone si leggevano come rettangoli invece che come fasce.
+          ctx.beginPath();
+          ctx.moveTo(h.position, v.position + 0.5);
+          ctx.lineTo(h.position + h.length, v.position + 0.5);
+          ctx.moveTo(h.position, v.position + v.length - 0.5);
+          ctx.lineTo(h.position + h.length, v.position + v.length - 0.5);
+          ctx.stroke();
+          if (this._style.midline && v.length > 6) {
+            // Il punto medio del gap: è il livello su cui la zona viene di
+            // solito considerata "consumata a metà", e senza di esso la fascia
+            // non dice dove sta il suo centro.
+            const mid = v.position + v.length / 2;
+            ctx.save();
+            ctx.setLineDash([3 * scope.horizontalPixelRatio, 3 * scope.horizontalPixelRatio]);
+            ctx.globalAlpha = 0.6;
+            ctx.beginPath();
+            ctx.moveTo(h.position, mid);
+            ctx.lineTo(h.position + h.length, mid);
+            ctx.stroke();
+            ctx.restore();
+          }
+        } else {
+          ctx.strokeRect(h.position, v.position, h.length, v.length);
+        }
       });
     }
   }
@@ -347,7 +376,10 @@
       this._p2 = { x: x2, y: y2 };
     }
     renderer() {
-      return new RectangleRenderer(this._p1, this._p2, this._source.fillColor, this._source.borderColor);
+      return new RectangleRenderer(
+        this._p1, this._p2, this._source.fillColor, this._source.borderColor,
+        this._source.style,
+      );
     }
     zOrder() {
       return "normal";
@@ -355,11 +387,12 @@
   }
 
   class RectanglePrimitive {
-    constructor(point1, point2, fillColor, borderColor) {
+    constructor(point1, point2, fillColor, borderColor, style) {
       this.point1 = point1;
       this.point2 = point2;
       this.fillColor = fillColor;
       this.borderColor = borderColor;
+      this.style = style || {};
       this.chart = null;
       this.series = null;
       this._paneViews = [new RectanglePaneView(this)];
@@ -2179,8 +2212,8 @@
   // always-visible short form drawn on the chart itself.
   const LEVEL_SHORT_LABELS = { order_block: "OB", fvg: "FVG", eqh: "EQH", eql: "EQL", bos: "BOS", choch: "CHoCH" };
 
-  function addRectangle(point1, point2, fillColor, borderColor, label, shortLabel) {
-    const rect = new RectanglePrimitive(point1, point2, fillColor, borderColor);
+  function addRectangle(point1, point2, fillColor, borderColor, label, shortLabel, style) {
+    const rect = new RectanglePrimitive(point1, point2, fillColor, borderColor, style);
     candleSeries.attachPrimitive(rect);
     overlays.primitives.push({ series: candleSeries, primitive: rect });
     if (shortLabel) {
@@ -2951,7 +2984,12 @@
           fill,
           border,
           lvl.label,
-          LEVEL_SHORT_LABELS[lvl.type]
+          LEVEL_SHORT_LABELS[lvl.type],
+          // Le imbalance si disegnano come fasce orizzontali, con il livello
+          // mediano: sono definite da due prezzi, non da un intervallo di
+          // tempo. Gli order block restano rettangoli, perché lì l'estensione
+          // temporale è parte di cosa sono.
+          isFvg ? { edges: "horizontal", midline: true } : undefined
         );
       } else {
         const line = candleSeries.createPriceLine({
