@@ -1,0 +1,7 @@
+id,area,task,priorita,stato,soluzione,applicato_il,commit
+1,strategie,"Ridurre i parametri delle strategie: il ramo a 4 parametri batte quello a 8 su IS e OOS. Puntare a 3-4 parametri per strategia",alta,aperto,,,
+2,validazione,"Alzare la soglia min_trades da 8: Gabriele passa con 8 trade e DD 0.0% - troppo pochi per contenere una perdita",alta,aperto,,,
+3,ricerca,"Trovare dove il gate PASSA: provare KAS su 4H e 1W e altri ticker invece di insistere su daily",alta,aperto,,,
+4,ottimizzatore,"Rami 6 e 8 di Lorenzo restano campionati (non deterministici) - servono meno parametri o piu budget",media,aperto,,,
+5,ottimizzatore,"PBO implementato ma non collegato: serve matrice rendimenti per candidato allineata nel tempo",bassa,aperto,,,
+6,ui,"Valutare se rendere 'Stabile' la modalita predefinita al posto di 'Rapida'",bassa,aperto,,,
