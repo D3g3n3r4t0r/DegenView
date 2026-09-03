@@ -4598,6 +4598,26 @@
   // does this strategy have an edge to find on this series at all? A failed
   // gate means any configuration returned is fitted to noise, so it is shown
   // as a warning rather than folded into the numbers.
+
+  // Su quali dati e' realmente girata l'ottimizzazione. Va mostrato sempre,
+  // non solo quando differisce: sapere che i due coincidono e' informazione
+  // quanto sapere che divergono, e chi legge non deve indovinare quale dei due
+  // casi ha davanti.
+  function renderDataUsed(body) {
+    const box = labEl("lab-data-used");
+    if (!box) return;
+    const d = body.data_used;
+    if (!d) { box.classList.add("hidden"); return; }
+    box.classList.toggle("mismatch", !!d.differs_from_chart);
+    box.innerHTML =
+      `<div class="lab-du-head">${d.differs_from_chart ? "⚠ Dati diversi dal grafico" : "Dati usati"}</div>`
+      + `<div class="lab-du-row"><span>Timeframe ottimizzazione</span><b>${escapeHtml(d.interval)}</b></div>`
+      + `<div class="lab-du-row"><span>Timeframe grafico</span><b>${escapeHtml(d.chart_interval)}</b></div>`
+      + `<div class="lab-du-row"><span>Candele</span><b>${d.candles}</b></div>`
+      + `<p class="lab-du-note">${escapeHtml(d.note || "")}</p>`;
+    box.classList.remove("hidden");
+  }
+
   function renderRegimeBox(body) {
     const box = labEl("lab-regime-box");
     if (!box) return;
@@ -4943,6 +4963,7 @@
         : optMode === "grid"
         ? "Grid search in corso… ogni combinazione testata (~30–50s)"
         : "Ottimizzazione in corso… (10–25s)";
+    labEl("lab-data-used").classList.add("hidden");
     labEl("lab-regime-box").classList.add("hidden");
     labEl("lab-branch-box").classList.add("hidden");
     labEl("lab-status").classList.remove("hidden");
@@ -4964,6 +4985,7 @@
       });
       labEl("lab-status").classList.add("hidden");
       renderLabResults(body.backtest);
+      renderDataUsed(body);
       renderRegimeBox(body);
       renderBranchBox(body);
 

@@ -3285,3 +3285,28 @@ body {
   margin-left: auto; margin-right: 6px; flex-shrink: 0;
 }
 .altro-issues-badge.hidden { display: none; }
+
+/* ---- Lab: su quali dati e' girata l'ottimizzazione ---- */
+/* Mostrato sempre, non solo quando diverge: il risultato non e' riproducibile
+   a mano finche' non si sa su che feed e' stato prodotto. */
+.lab-data-used {
+  border: 1px solid var(--rule, #e0e0da); border-left-width: 3px;
+  padding: 9px 11px; margin: 10px 0; font-size: 11.5px;
+}
+.lab-data-used.mismatch { border-left-color: var(--warn, #96222e); }
+.lab-du-head {
+  font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--muted, #888); margin-bottom: 7px;
+}
+.lab-data-used.mismatch .lab-du-head { color: var(--warn, #96222e); }
+.lab-du-row {
+  display: flex; justify-content: space-between; gap: 12px;
+  padding: 2px 0; color: var(--muted, #777);
+}
+.lab-du-row b {
+  font-family: var(--font-mono, monospace); color: var(--ink, #111); font-weight: 600;
+}
+.lab-du-note {
+  margin: 7px 0 0; font-size: 11px; line-height: 1.5; color: var(--muted, #777);
+}
+.lab-data-used.mismatch .lab-du-note { color: var(--ink, #333); }

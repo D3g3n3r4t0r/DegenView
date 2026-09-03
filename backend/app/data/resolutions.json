@@ -1,11 +1,11 @@
 {
   "_README": "Scritto da Claude, versionato in git, distribuito col deploy. Le chiavi sono gli id delle segnalazioni. Non modificare a mano dall'app: verrebbe sovrascritto al deploy successivo.",
   "seed-0007": {
-    "status": "in corso",
-    "summary": "Causa trovata e misurata: ottimizzatore e grafico girano su dati diversi, e non lo dicono.",
-    "detail": "Il grafico (/api/analyze) usa il timeframe che scegli tu con 3000 candele. L'ottimizzatore (/api/optimize e /api/backtest/deep) chiama backtest_interval_for(), che forza il minimo a 1d con 5000 candele. È deliberato — cerca la storia più profonda possibile — ma non è visibile da nessuna parte.\n\nMisurato su KASUSDT con gli STESSI parametri di Lorenzo:\n  1d (ottimizzatore): 1438 candele → 27 trade, +120,0%\n  4h (grafico):       8623 candele → 186 trade, +66,4%\n\nRendimenti dello stesso ordine, trade 7 volte diversi: il sintomo descritto, riprodotto. Finché timeframe e numero di candele non tornano nella risposta dell'API, quel backtest non è riproducibile a mano nemmeno in teoria.",
-    "next": "Restituire interval e candle count usati, e mostrarli accanto al risultato dell'ottimizzazione.",
-    "commit": "in corso"
+    "status": "risolto",
+    "summary": "Il feed realmente usato ora e' dichiarato nella risposta e mostrato nel Lab, con l'avviso quando differisce dal grafico.",
+    "detail": "CAUSA: /api/analyze (il grafico) legge il timeframe che scegli tu con 3000 candele. /api/optimize chiama backtest_interval_for(), che forza il minimo a 1d, con 5000 candele. Deliberato — cerca piu' storia possibile — ma invisibile.\n\nMisurato su KASUSDT, stessi parametri di Lorenzo:\n  1d (ottimizzatore): 1438 candele -> 27 trade, +120,0%\n  4h (grafico):       8623 candele -> 186 trade, +66,4%\n\nRendimenti dello stesso ordine, trade 7 volte diversi. Nessun errore di calcolo: due feed diversi.\n\nFIX: la risposta ora porta data_used {interval, candles, chart_interval, differs_from_chart, note}, e il Lab lo mostra accanto al risultato. Quando differisce, il riquadro si evidenzia e dice testualmente su quale timeframe impostare il grafico per riprodurre quel risultato a mano.\n\nMostrato sempre, anche quando i due coincidono: sapere che combaciano e' informazione quanto sapere che divergono.",
+    "next": "Il comportamento non e' cambiato — l'ottimizzazione continua a cercare la storia piu' profonda, che e' la scelta giusta. Ora pero' e' dichiarata invece che nascosta, quindi il risultato e' riproducibile.",
+    "commit": "vedi git log su main"
   },
   "seed-0010": {
     "status": "in corso",
