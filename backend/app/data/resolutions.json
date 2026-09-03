@@ -27,5 +27,12 @@
     "detail": "Non era sulla lista perche' non c'era modo di accorgersene: nessun errore, nessun log, semplicemente nessun ordine.\n\nCAUSA: nel ciclo watchlist, _dispatch_telegram_alerts() chiama find_new_signals(), che marca tutti i segnali come visti. Subito dopo il blocco di esecuzione ordini richiamava find_new_signals() sugli stessi segnali — ormai tutti gia' visti — e riceveva sempre lista vuota. Il for che piazza gli ordini non entrava mai.\n\nFIX: _dispatch_telegram_alerts ora restituisce i segnali che ha trovato, e il blocco di trading usa quelli invece di richiederli. La deduplica e' uno stato che si consuma: chiamarla due volte sugli stessi dati non e' idempotente, ed e' esattamente il tipo di bug che non lascia tracce.",
     "next": "Da verificare dal vivo con credenziali attive prima di fidarsi: il fix e' corretto nella logica, ma un ordine reale non l'ho potuto provare da qui.",
     "commit": "vedi git log su main"
+  },
+  "seed-0006": {
+    "status": "risolto",
+    "summary": "Interruttore tema nella barra in alto, con i colori del grafico che seguono davvero.",
+    "detail": "Il CSS supportava gia' [data-theme], ma non bastava: i colori del grafico non stanno nel CSS, sono opzioni passate alla libreria alla creazione delle serie. Un interruttore che cambiava solo il CSS avrebbe lasciato candele chiare su sfondo nero.\n\nCOLORS era una const scelta una volta sola all'avvio da prefers-color-scheme, con 40 riferimenti sparsi nel file. Riassegnarla li avrebbe lasciati legati alla vecchia palette. Ora l'oggetto resta lo stesso e viene sostituito il contenuto: i riferimenti leggono al momento della chiamata, quindi continuano a funzionare senza toccarne nessuno. Verificato: identita' preservata, tutte e 28 le chiavi cambiano.\n\nLa scelta viene ricordata. Se non ne fai una, il tema continua a seguire il sistema — passando a scuro la sera te lo ritrovi.",
+    "next": "Nessuno.",
+    "commit": "vedi git log su main"
   }
 }

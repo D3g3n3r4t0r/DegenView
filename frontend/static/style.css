@@ -3316,3 +3316,12 @@ body {
   background: var(--ink, #111); color: var(--bg, #fff);
   border: none; border-radius: 2px; cursor: pointer;
 }
+
+/* ---- Interruttore tema ---- */
+.theme-toggle-btn {
+  background: none; border: 1px solid var(--border, #e0e0e0);
+  color: var(--ink-dim, #666); border-radius: 2px;
+  width: 28px; height: 28px; padding: 0; cursor: pointer;
+  font-size: 13px; line-height: 1; flex-shrink: 0;
+}
+.theme-toggle-btn:hover { color: var(--ink, #000); border-color: var(--border-strong, #000); }
