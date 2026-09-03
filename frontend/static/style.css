@@ -3104,3 +3104,103 @@ body {
 .alert-toast.bear { background: var(--bg-panel); border-color: var(--bear); color: var(--ink); }
 .alert-toast.fade-out { opacity: 0; }
 .toast-strat { display: block; font-size: .72rem; color: var(--ink-dim); margin-top: .1rem; }
+
+/* ---- Lab: optimisation mode picker ---- */
+/* The three modes differ in a way the user has to be able to weigh: speed
+   against whether the answer is reproducible. The copy says that outright
+   rather than naming the algorithms. */
+.lab-mode-picker {
+  display: flex; flex-direction: column; gap: 1px;
+  background: var(--rule, #e0e0da);
+  border: 1px solid var(--rule, #e0e0da);
+  margin: 10px 0;
+}
+.lab-mode-opt {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas: "radio name" "radio desc";
+  gap: 2px 10px;
+  align-items: start;
+  padding: 9px 12px;
+  background: var(--bg, #fff);
+  cursor: pointer;
+}
+.lab-mode-opt input { grid-area: radio; margin-top: 3px; }
+.lab-mode-name {
+  grid-area: name;
+  font-size: 12px; font-weight: 600; letter-spacing: .01em;
+  color: var(--ink, #111);
+}
+.lab-mode-name em {
+  font-style: normal; font-size: 9.5px; font-weight: 700;
+  letter-spacing: .08em; text-transform: uppercase;
+  padding: 1px 5px; margin-left: 6px;
+  background: var(--ink, #111); color: var(--bg, #fff);
+}
+.lab-mode-desc {
+  grid-area: desc;
+  font-size: 11px; line-height: 1.45; color: var(--muted, #888);
+}
+.lab-mode-desc strong { color: var(--ink, #111); font-weight: 600; }
+.lab-mode-opt:has(input:checked) { background: var(--surface-2, #f6f6f3); }
+.lab-mode-opt:has(input:checked) .lab-mode-desc { color: var(--ink, #444); }
+.lab-mode-opt.hidden { display: none; }
+
+/* ---- Lab: regime gate ---- */
+.lab-regime-box {
+  border: 1px solid var(--rule, #e0e0da);
+  border-left-width: 3px;
+  padding: 10px 12px; margin: 10px 0;
+  font-size: 11.5px; line-height: 1.5;
+}
+.lab-regime-head { font-weight: 700; font-size: 12px; margin-bottom: 4px; }
+.lab-regime-head.ok { color: var(--ok, #1f5f42); }
+.lab-regime-head.warn { color: var(--warn, #96222e); }
+.lab-regime-reason { color: var(--muted, #777); }
+.lab-regime-stats {
+  font-family: var(--font-mono, monospace);
+  font-size: 10.5px; color: var(--muted, #999);
+  margin-top: 6px; letter-spacing: .02em;
+}
+.lab-regime-det { margin-top: 7px; font-size: 11px; }
+.lab-regime-det.ok { color: var(--ok, #1f5f42); }
+.lab-regime-det.warn { color: var(--warn, #96222e); }
+.lab-regime-note {
+  margin-top: 5px; font-size: 10.5px; color: var(--muted, #999); font-style: italic;
+}
+
+/* ---- Lab: branch comparison ---- */
+.lab-branch-box { margin: 10px 0; }
+.lab-branch-title {
+  font-size: 10px; font-weight: 700; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--muted, #999); margin-bottom: 6px;
+}
+.lab-branch-tbl {
+  width: 100%; border-collapse: collapse; font-size: 11px;
+  border: 1px solid var(--rule, #e0e0da);
+}
+.lab-branch-tbl th {
+  text-align: left; font-size: 9.5px; letter-spacing: .08em;
+  text-transform: uppercase; font-weight: 600; color: var(--muted, #999);
+  padding: 6px 8px; border-bottom: 1px solid var(--rule, #e0e0da);
+  white-space: nowrap;
+}
+.lab-branch-tbl td {
+  padding: 6px 8px; border-bottom: 1px solid var(--rule-soft, #f0f0ed);
+  color: var(--muted, #777);
+}
+.lab-branch-tbl tr:last-child td { border-bottom: none; }
+.lab-branch-tbl td.n {
+  font-family: var(--font-mono, monospace);
+  font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap;
+}
+.lab-branch-tbl tr.chosen td { color: var(--ink, #111); font-weight: 600; }
+.lab-branch-pick {
+  font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  padding: 1px 5px; background: var(--ink, #111); color: var(--bg, #fff);
+}
+.lab-branch-samp {
+  font-size: 9px; font-weight: 600; letter-spacing: .06em;
+  color: var(--warn, #96222e); cursor: help;
+}
+.lab-branch-tr { color: var(--faint, #bbb); font-size: 10px; }

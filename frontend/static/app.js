@@ -4435,13 +4435,92 @@
     "Accumulo / Distribuzione (long-term)",
   ]);
 
+
+  // Reason strings and branch labels are built server-side and interpolated
+  // into innerHTML below; escape them rather than trusting their shape.
+  function escapeHtml(str) {
+    return String(str ?? "").replace(/[&<>"']/g, (c) => (
+      { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+    ));
+  }
+
+  // Which optimisation mode the user picked in the lab.
+  function labOptMode() {
+    const checked = document.querySelector('input[name="lab-opt-mode"]:checked');
+    return checked ? checked.value : "random";
+  }
+
+  // The regime gate answers a question that comes before "which parameters":
+  // does this strategy have an edge to find on this series at all? A failed
+  // gate means any configuration returned is fitted to noise, so it is shown
+  // as a warning rather than folded into the numbers.
+  function renderRegimeBox(body) {
+    const box = labEl("lab-regime-box");
+    if (!box) return;
+    if (!body.regime) { box.classList.add("hidden"); return; }
+    const r = body.regime;
+    const ok = r.passed;
+    const det = body.deterministic;
+    const bits = [];
+    bits.push(`<div class="lab-regime-head ${ok ? "ok" : "warn"}">`
+      + `${ok ? "✓ Regime compatibile" : "⚠ Regime non compatibile"}</div>`);
+    bits.push(`<div class="lab-regime-reason">${escapeHtml(r.reason || "")}</div>`);
+    const stats = [];
+    if (r.variance_ratio != null) stats.push(`VR ${r.variance_ratio.toFixed(3)}`);
+    if (r.vr_z != null) stats.push(`z ${r.vr_z >= 0 ? "+" : ""}${r.vr_z.toFixed(2)}`);
+    if (r.vr_p_one_sided != null) stats.push(`p ${r.vr_p_one_sided.toFixed(4)}`);
+    if (r.hurst != null) stats.push(`H ${r.hurst.toFixed(3)}`);
+    if (stats.length) bits.push(`<div class="lab-regime-stats">${stats.join(" · ")}</div>`);
+    if (det != null) {
+      bits.push(`<div class="lab-regime-det ${det ? "ok" : "warn"}">`
+        + (det
+          ? "Risultato riproducibile: rieseguendo con gli stessi dati otterrai gli stessi parametri."
+          : "Alcuni rami hanno superato il budget e sono stati campionati: quella parte del risultato non è riproducibile.")
+        + "</div>");
+    }
+    (body.pipeline_notes || []).forEach((n) => {
+      bits.push(`<div class="lab-regime-note">${escapeHtml(n)}</div>`);
+    });
+    box.innerHTML = bits.join("");
+    box.classList.remove("hidden");
+  }
+
+  // Branch comparison. Showing these side by side is the point: a branch with
+  // more free parameters can score higher in-sample and worse out-of-sample,
+  // and a single returned number hides exactly that.
+  function renderBranchBox(body) {
+    const box = labEl("lab-branch-box");
+    if (!box) return;
+    const rows = body.branches || [];
+    if (rows.length < 2) { box.classList.add("hidden"); return; }
+    const head = `<div class="lab-branch-title">Varianti confrontate</div>`
+      + `<table class="lab-branch-tbl"><thead><tr>`
+      + `<th>variante</th><th>par.</th><th>storico</th><th>verifica</th><th>trade</th>`
+      + `</tr></thead><tbody>`;
+    const trs = rows.map((b) => {
+      const val = b.validation_return_pct == null
+        ? "—"
+        : `${b.validation_return_pct >= 0 ? "+" : ""}${b.validation_return_pct.toFixed(1)}%`;
+      const vt = b.validation_trades == null ? "" : ` <span class="lab-branch-tr">(${b.validation_trades})</span>`;
+      return `<tr class="${b.chosen ? "chosen" : ""}">`
+        + `<td>${escapeHtml(b.label)}${b.chosen ? ' <span class="lab-branch-pick">scelta</span>' : ""}`
+        + `${b.enumerated ? "" : ' <span class="lab-branch-samp" title="Spazio troppo grande per essere esplorato interamente: questa riga non è riproducibile">campionata</span>'}</td>`
+        + `<td class="n">${b.dims}</td>`
+        + `<td class="n">${b.total_return_pct >= 0 ? "+" : ""}${b.total_return_pct.toFixed(1)}%</td>`
+        + `<td class="n">${val}${vt}</td>`
+        + `<td class="n">${b.num_trades}</td></tr>`;
+    }).join("");
+    box.innerHTML = head + trs + "</tbody></table>";
+    box.classList.remove("hidden");
+  }
+
   function renderLabParamFields() {
     const strategyName = labState.strategy || "";
     const fields = STRATEGY_PARAM_FIELDS[strategyName] || [];
     const container = labEl("lab-params-fields");
     container.innerHTML = "";
     // Show grid-mode toggle only for strategies that support it.
-    const gridWrap = labEl("lab-grid-toggle-wrap");
+    const gridWrap = labEl("lab-mode-grid-wrap");
     if (gridWrap) gridWrap.classList.toggle("hidden", !GRID_STRATEGIES.has(strategyName));
     fields.forEach((field) => {
       const label = document.createElement("label");
@@ -4702,15 +4781,19 @@
     runBtn.disabled = true;
     labEl("lab-result-block").classList.add("hidden");
     labEl("lab-apply-strip").classList.add("hidden");
-    const isGrid = labEl("lab-grid-mode")?.checked;
-    labEl("lab-status").textContent = isGrid
-      ? "Grid search in corso… ogni combinazione testata (~30–50s)"
-      : "Ottimizzazione in corso… (10–25s)";
+    const optMode = labOptMode();
+    labEl("lab-status").textContent =
+      optMode === "plateau"
+        ? "Ricerca stabile in corso… mappa i pianori invece del picco (1–5 min). Il risultato sarà riproducibile."
+        : optMode === "grid"
+        ? "Grid search in corso… ogni combinazione testata (~30–50s)"
+        : "Ottimizzazione in corso… (10–25s)";
+    labEl("lab-regime-box").classList.add("hidden");
+    labEl("lab-branch-box").classList.add("hidden");
     labEl("lab-status").classList.remove("hidden");
     await withAsyncButton(optBtn, async () => {
       const params = buildLabQuery();
-      const gridMode = labEl("lab-grid-mode")?.checked;
-      if (gridMode) params.set("mode", "grid");
+      if (optMode !== "random") params.set("mode", optMode);
       const url = `/api/optimize?${params.toString()}`;
       const resp = await fetch(url);
       if (seq !== labState.seq) return;
@@ -4726,6 +4809,8 @@
       });
       labEl("lab-status").classList.add("hidden");
       renderLabResults(body.backtest);
+      renderRegimeBox(body);
+      renderBranchBox(body);
 
       // Auto-apply to main chart: copy params to main form and refresh signals
       state.assetType = labState.assetType;

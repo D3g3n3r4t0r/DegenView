@@ -36,6 +36,7 @@ from app.analysis.confluence import compute_confluence
 from app.analysis.indicators import compute_indicators
 from app.analysis.fibonacci import compute_fib_zones
 from app.analysis.optimize import is_optimizable, optimize_strategy
+from app.analysis.pipeline import run_pipeline
 from app.analysis.smc_engine import compute_dealing_range, compute_levels, compute_swings
 from app.analysis.strategies import AVAILABLE_STRATEGIES, DEFAULT_STRATEGY, build_strategy_state
 from app.analysis.summary import build_summary, determine_bias
@@ -1433,6 +1434,43 @@ class OptimizeCandidate(BaseModel):
     overfitted: bool = False
 
 
+class RegimeInfo(BaseModel):
+    """Whether the strategy had an edge to find on this series at all.
+
+    Surfaced rather than enforced: a result produced under a failed gate is
+    fitted to a series where the strategy has no measurable edge, and the
+    caller needs to be able to see that instead of reading the return figure
+    as if it meant the same thing."""
+
+    passed: bool
+    family: str | None = None
+    reason: str = ""
+    variance_ratio: float | None = None
+    vr_z: float | None = None
+    vr_p_one_sided: float | None = None
+    hurst: float | None = None
+    verdict: str = ""
+
+
+class BranchInfo(BaseModel):
+    """One branch of the parameter space, with the result it reached.
+
+    Shown side by side because that comparison is the finding: on the series
+    measured, branches with more free parameters scored higher in-sample and
+    worse out-of-sample. A single returned number hides exactly that."""
+
+    label: str
+    dims: int
+    enumerated: bool
+    chosen: bool
+    total_return_pct: float
+    max_drawdown_pct: float
+    num_trades: int
+    validation_return_pct: float | None = None
+    validation_trades: int | None = None
+    params: dict = {}
+
+
 class OptimizeResult(BaseModel):
     params: dict
     backtest: BacktestResult
@@ -1441,6 +1479,12 @@ class OptimizeResult(BaseModel):
     overfitted: bool = False
     mode: str = "random"
     top_candidates: list[OptimizeCandidate] = []
+    # Populated by mode="plateau" only.
+    deterministic: bool | None = None
+    regime: RegimeInfo | None = None
+    branches: list[BranchInfo] = []
+    chosen_branch: str | None = None
+    pipeline_notes: list[str] = []
 
 
 @app.get("/api/optimize", response_model=OptimizeResult)
@@ -1451,7 +1495,7 @@ async def optimize_strategy_endpoint(
     ltf_interval: IntervalChoice = Query(DEFAULT_INTERVALS["ltf"]),
     strategy_name: str = Query(DEFAULT_STRATEGY),
     backtest_params: BacktestParamsQuery = Depends(),
-    mode: str = Query("random", pattern="^(random|grid)$"),
+    mode: str = Query("random", pattern="^(random|grid|plateau)$"),
 ) -> OptimizeResult:
     """Random-search parameter tuning for any strategy in the registry —
     same deep-history df the backtest itself uses (see
@@ -1476,6 +1520,47 @@ async def optimize_strategy_endpoint(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     if df.empty:
         raise HTTPException(status_code=502, detail=f"Nessun dato per {symbol}")
+
+    if mode == "plateau":
+        # Deterministic path: same inputs give the same answer, because the
+        # cell grid is enumerated rather than sampled wherever it fits the
+        # budget. Measured against random search on identical data with only
+        # the seed varying, cv of the out-of-sample return went from 66.5% to
+        # 0% (Gabriele) and from 225.1% to 0% (Lorenzo).
+        pr = await asyncio.to_thread(
+            run_pipeline, strategy_name, df, backtest_params.model_dump()
+        )
+        rep = pr.gate.report
+        return OptimizeResult(
+            params=pr.params,
+            backtest=pr.backtest.model_copy(update={"interval": backtest_interval}),
+            trials_evaluated=pr.evaluations,
+            out_of_sample_return_pct=pr.out_of_sample_return_pct,
+            overfitted=pr.overfitted,
+            mode=mode,
+            deterministic=pr.deterministic,
+            chosen_branch=pr.chosen_branch,
+            pipeline_notes=pr.notes,
+            regime=RegimeInfo(
+                passed=pr.gate.passed, family=pr.gate.family, reason=pr.gate.reason,
+                variance_ratio=rep.variance_ratio, vr_z=rep.vr_z,
+                vr_p_one_sided=rep.vr_p_one_sided, hurst=rep.hurst,
+                verdict=rep.verdict,
+            ),
+            branches=[
+                BranchInfo(
+                    label=b.label, dims=b.dims, enumerated=b.enumerated,
+                    chosen=b.label == pr.chosen_branch,
+                    total_return_pct=b.best.backtest.total_return_pct,
+                    max_drawdown_pct=b.best.backtest.max_drawdown_pct,
+                    num_trades=b.best.backtest.num_trades,
+                    validation_return_pct=b.validation_return_pct,
+                    validation_trades=b.validation_trades,
+                    params=b.best.params,
+                )
+                for b in pr.branches if b.best is not None
+            ],
+        )
 
     best_params, best_bt, trials, oos_return, overfitted, top_results = await asyncio.to_thread(
         optimize_strategy, strategy_name, df, backtest_params.model_dump(), mode=mode
