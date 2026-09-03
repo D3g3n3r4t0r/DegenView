@@ -101,5 +101,14 @@
       "backend/tests/test_gabriele2.py",
       "frontend/static/app.js"
     ]
+  },
+  "seed-0001": {
+    "status": "risolto",
+    "summary": "Le frecce sul grafico erano i segnali della strategia sul timeframe del grafico, non le operazioni del backtest. Ora c'e' una spunta 'Trade del backtest sul grafico' che disegna quelle vere.",
+    "detail": "Il backtest gira su un feed piu' grosso di quello del grafico (vedi backtest_interval_for lato server), quindi i due elenchi non potevano coincidere: le frecce erano segnali, la tabella era operazioni, e sembrava un errore di disegno. La nuova spunta, sotto 'Indicatori', aggiunge un marker d'ingresso e uno d'uscita per ogni operazione, numerati e con il risultato in percentuale, con l'uscita colorata secondo l'esito. Poiche' gli istanti del backtest non cadono sulle candele del grafico, ogni operazione viene agganciata alla candela aperta in quel momento invece di sparire in silenzio, e una riga sotto la spunta dice quante operazioni sono finite sul grafico, quante cadono fuori dall'intervallo mostrato e su quali due timeframe si sta guardando. I due elenchi di marker ora passano da un'unica chiamata: setMarkers sostituisce tutto l'elenco, quindi due scritture separate si sarebbero cancellate a vicenda, e l'unione viene riordinata per tempo perche' la libreria li pretende crescenti.",
+    "files": [
+      "frontend/static/app.js",
+      "frontend/index.html"
+    ]
   }
 }
