@@ -1413,6 +1413,26 @@ async def deep_backtest(
     return result.model_copy(update={"interval": backtest_interval})
 
 
+class OptimizeCandidate(BaseModel):
+    """One entry of the optimizer's ranked shortlist.
+
+    Exposing the whole shortlist — rather than only the winner — lets the UI
+    show the dispersion between the top candidates. A shortlist whose members
+    disagree wildly is itself the signal that the winner is a lucky draw
+    rather than a stable optimum."""
+
+    rank: int
+    params: dict
+    score: float
+    total_return_pct: float
+    max_drawdown_pct: float
+    num_trades: int
+    win_rate_pct: float | None = None
+    profit_factor: float | None = None
+    out_of_sample_return_pct: float | None = None
+    overfitted: bool = False
+
+
 class OptimizeResult(BaseModel):
     params: dict
     backtest: BacktestResult
@@ -1420,6 +1440,7 @@ class OptimizeResult(BaseModel):
     out_of_sample_return_pct: float | None = None
     overfitted: bool = False
     mode: str = "random"
+    top_candidates: list[OptimizeCandidate] = []
 
 
 @app.get("/api/optimize", response_model=OptimizeResult)
@@ -1456,7 +1477,7 @@ async def optimize_strategy_endpoint(
     if df.empty:
         raise HTTPException(status_code=502, detail=f"Nessun dato per {symbol}")
 
-    best_params, best_bt, trials, oos_return, overfitted = await asyncio.to_thread(
+    best_params, best_bt, trials, oos_return, overfitted, top_results = await asyncio.to_thread(
         optimize_strategy, strategy_name, df, backtest_params.model_dump(), mode=mode
     )
     best_bt = best_bt.model_copy(update={"interval": backtest_interval})
@@ -1467,6 +1488,21 @@ async def optimize_strategy_endpoint(
         out_of_sample_return_pct=oos_return,
         overfitted=overfitted,
         mode=mode,
+        top_candidates=[
+            OptimizeCandidate(
+                rank=c["rank"],
+                params=c["params"],
+                score=c["score"],
+                total_return_pct=c["backtest"].total_return_pct,
+                max_drawdown_pct=c["backtest"].max_drawdown_pct,
+                num_trades=c["backtest"].num_trades,
+                win_rate_pct=c["backtest"].win_rate_pct,
+                profit_factor=c["backtest"].profit_factor,
+                out_of_sample_return_pct=c["out_of_sample_return_pct"],
+                overfitted=c["overfitted"],
+            )
+            for c in top_results
+        ],
     )
 
 
