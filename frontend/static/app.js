@@ -4478,6 +4478,17 @@
           : "Alcuni rami hanno superato il budget e sono stati campionati: quella parte del risultato non è riproducibile.")
         + "</div>");
     }
+    const d = body.deflated_sharpe;
+    if (d && d.deflated != null) {
+      const ok = d.acceptable;
+      bits.push(
+        `<div class="lab-regime-det ${ok ? "ok" : "warn"}">`
+        + `Sharpe ${d.sharpe != null ? d.sharpe.toFixed(2) : "—"} · `
+        + `soglia per ${d.n_trials} tentativi ${d.sharpe_threshold != null ? d.sharpe_threshold.toFixed(2) : "—"} · `
+        + `affidabilità ${(d.deflated * 100).toFixed(1)}%`
+        + (ok ? "" : " — non distinguibile dal migliore di altrettanti tentativi sul rumore")
+        + "</div>");
+    }
     (body.pipeline_notes || []).forEach((n) => {
       bits.push(`<div class="lab-regime-note">${escapeHtml(n)}</div>`);
     });

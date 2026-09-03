@@ -36,6 +36,11 @@ from app.analysis.backtest import run_backtest
 from app.analysis.plateau import PlateauCandidate, plateau_search
 from app.analysis.priors import ConstrainedSpace, build_spaces, estimate_series_stats
 from app.analysis.regime import GateDecision, regime_gate
+from app.analysis.validation import (
+    DSRResult,
+    deflated_sharpe_ratio,
+    returns_from_equity_curve,
+)
 from app.models import BacktestResult
 
 _MIN_OOS_CANDLES = 60
@@ -75,6 +80,7 @@ class PipelineResult:
     branches: list[BranchOutcome]
     deterministic: bool
     series_stats: dict
+    dsr: DSRResult | None = None
     notes: list[str] = field(default_factory=list)
 
     def summary(self) -> str:
@@ -254,13 +260,32 @@ def run_pipeline(
     vol = stats.as_dict()
     best_bt = incumbent.backtest.model_copy(update={"oos_trades": oos_trades})
 
+    # Deflate the winner's Sharpe by how many configurations were actually
+    # tried. The expected maximum Sharpe under no skill grows with the number
+    # of attempts, so a figure produced by searching thousands of candidates is
+    # not comparable to one from a single hypothesis — and reporting it as if
+    # it were is the whole failure this work started from. total_evals is
+    # passed rather than the shortlist size: understating the trial count
+    # inflates the result, which is exactly the error the measure exists to
+    # catch.
+    dsr = deflated_sharpe_ratio(
+        returns_from_equity_curve(incumbent.backtest.equity_curve),
+        n_trials=max(total_evals, 2),
+    )
+    if dsr.deflated is not None and not dsr.acceptable:
+        notes.append(
+            f"deflated Sharpe {dsr.deflated:.3f} (below 0.95): after correcting "
+            f"for {total_evals} configurations tried, this result is not "
+            f"distinguishable from the best of that many attempts on noise"
+        )
+
     return PipelineResult(
         strategy=strategy_name, params=incumbent.params, backtest=best_bt,
         out_of_sample_return_pct=oos_return, overfitted=overfitted,
         evaluations=total_evals, gate=gate, chosen_branch=incumbent_label,
         branches=outcomes,
         deterministic=all_enumerated,
-        series_stats=vol, notes=notes,
+        series_stats=vol, dsr=dsr, notes=notes,
     )
 
 

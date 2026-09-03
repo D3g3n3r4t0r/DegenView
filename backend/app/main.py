@@ -1471,6 +1471,22 @@ class BranchInfo(BaseModel):
     params: dict = {}
 
 
+class DeflatedSharpe(BaseModel):
+    """The winner's Sharpe, corrected for how many configurations were tried.
+
+    The expected maximum Sharpe under no skill grows with the number of
+    attempts, so a figure produced by searching thousands of candidates is not
+    comparable to one from a single hypothesis. `deflated` is the probability
+    the result survives that correction; below 0.95 it is not distinguishable
+    from the best of that many attempts on noise."""
+
+    sharpe: float | None = None
+    deflated: float | None = None
+    sharpe_threshold: float | None = None
+    n_trials: int = 0
+    acceptable: bool = False
+
+
 class OptimizeResult(BaseModel):
     params: dict
     backtest: BacktestResult
@@ -1485,6 +1501,7 @@ class OptimizeResult(BaseModel):
     branches: list[BranchInfo] = []
     chosen_branch: str | None = None
     pipeline_notes: list[str] = []
+    deflated_sharpe: DeflatedSharpe | None = None
 
 
 @app.get("/api/optimize", response_model=OptimizeResult)
@@ -1541,6 +1558,13 @@ async def optimize_strategy_endpoint(
             deterministic=pr.deterministic,
             chosen_branch=pr.chosen_branch,
             pipeline_notes=pr.notes,
+            deflated_sharpe=(
+                None if pr.dsr is None else DeflatedSharpe(
+                    sharpe=pr.dsr.sharpe, deflated=pr.dsr.deflated,
+                    sharpe_threshold=pr.dsr.sharpe_threshold,
+                    n_trials=pr.dsr.n_trials, acceptable=pr.dsr.acceptable,
+                )
+            ),
             regime=RegimeInfo(
                 passed=pr.gate.passed, family=pr.gate.family, reason=pr.gate.reason,
                 variance_ratio=rep.variance_ratio, vr_z=rep.vr_z,
