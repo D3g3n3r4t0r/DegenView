@@ -3398,3 +3398,46 @@ body {
   border-left-width: 3px;
   white-space: nowrap;
 }
+
+/* --- Archivio strategie ---------------------------------------------------- */
+.archive-cards { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.arch-card {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  background: var(--bg-panel);
+  padding: 8px 10px;
+  font-size: 12px;
+}
+.arch-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+.arch-symbol { font-weight: 700; color: var(--ink); }
+.arch-strat { color: var(--ink-dim); }
+.arch-src {
+  font-size: 10px; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--ink-dim); border: 1px solid var(--border); padding: 0 5px;
+}
+.arch-date { margin-left: auto; color: var(--ink-dim); font-size: 11px; }
+.arch-metrics {
+  display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.arch-metrics .bull { color: var(--bull); font-weight: 600; }
+.arch-metrics .bear { color: var(--bear); font-weight: 600; }
+.arch-pending, .arch-failed { margin-top: 6px; color: var(--ink-dim); font-style: italic; }
+.arch-failed { color: var(--bear); font-style: normal; }
+.arch-params {
+  margin-top: 6px; color: var(--ink-dim); font-size: 11px;
+  word-break: break-word;
+}
+.arch-note { margin-top: 4px; color: var(--ink); }
+.arch-actions { display: flex; gap: 6px; margin-top: 8px; }
+.arch-actions button {
+  font: inherit; font-size: 11px; padding: 3px 8px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--bg-raised); color: var(--ink-dim);
+}
+.arch-actions button:hover { color: var(--ink); }
+.arch-del:hover { color: var(--bear); border-color: var(--bear); }
+.lab-archive-btn {
+  font: inherit; font-size: 12px; padding: 5px 10px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--bg-raised); color: var(--ink-dim);
+}
+.lab-archive-btn:hover { color: var(--ink); }

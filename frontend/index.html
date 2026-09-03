@@ -378,6 +378,7 @@
             <div class="lab-apply-actions">
               <button type="button" id="lab-apply-btn" class="lab-apply-btn">Applica ↗</button>
               <button type="button" id="lab-signal-btn" class="lab-signal-btn" title="Aggiungi alla watchlist alert con questa strategia e questi parametri">📬 Segnali</button>
+              <button type="button" id="lab-archive-btn" class="lab-archive-btn" title="Salva questa configurazione nell'archivio strategie">🗄 Archivia</button>
             </div>
           </div>
           <div id="lab-signal-status" class="lab-signal-status hidden"></div>
@@ -500,6 +501,15 @@
             <p class="panel-hint">Ogni ticker qui dentro viene controllato in background ogni minuto, indipendentemente da cosa stai guardando a schermo. Attiva una o più strategie per ticker: arriva una notifica Telegram per ogni segnale confermato.</p>
 
             <ul id="watchlist-list" class="watchlist-cards"></ul>
+
+            <!-- Archivio delle strategie attivate -->
+            <div class="section-title-row" style="margin-top:16px">
+              <span class="section-eyebrow">Archivio strategie</span>
+              <span id="archive-count" class="section-count"></span>
+              <button type="button" id="archive-refresh-btn" class="section-action-btn">Aggiorna</button>
+            </div>
+            <p class="panel-hint">Ogni volta che attivi una strategia su un ticker, la configurazione viene fotografata qui con il backtest del momento. Serve a ritrovare, mesi dopo, con che cosa era partita e che cosa prometteva.</p>
+            <ul id="archive-list" class="archive-cards"></ul>
 
             <!-- Alert log (storico) -->
             <div class="section-title-row" style="margin-top:16px">

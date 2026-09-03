@@ -7,6 +7,7 @@ import logging
 import sys
 import time as _time
 from contextlib import asynccontextmanager
+from functools import partial
 from pathlib import Path
 from typing import Literal
 
@@ -30,6 +31,7 @@ from app import auth
 from app import issues as issues_store
 from app import rate_limit
 from app.trading.executor import place_order_for_signal
+from app import archive as archive_store
 from app import favorites as favorites_store
 from app import watchlist as watchlist_store
 from app.analysis.backtest import run_backtest
@@ -1012,6 +1014,26 @@ async def toggle_watchlist_strategy(
         # deve ripartire da adesso, non dalla prima attivazione — altrimenti
         # tutto quello che e' successo nel frattempo arriverebbe in blocco.
         alerts.disarm(entry_id, req.strategy_name)
+    if req.enabled and not was_enabled:
+        # Fotografia della configurazione con cui l'alert parte. E' il momento
+        # in cui smette di essere un esperimento: da qui lavora per settimane,
+        # e il risultato dell'ottimizzazione che l'ha prodotta vive quanto la
+        # scheda del browser. Spegnere e riaccendere non duplica la voce; una
+        # riattivazione con parametri diversi si', perche' e' un'altra strategia.
+        params = entry.strategy_params.get(req.strategy_name, {}) or {}
+        if not archive_store.already_archived(user.id, entry_id, req.strategy_name, params):
+            snapshot = archive_store.create(
+                owner_id=user.id, symbol=entry.symbol, asset_type=entry.asset_type,
+                exchange=entry.exchange,
+                interval=entry.strategy_intervals.get(req.strategy_name, entry.interval),
+                strategy_name=req.strategy_name, params=params,
+                backtest_params={}, source="alert", watchlist_entry_id=entry_id,
+            )
+            asyncio.create_task(_run_archive_backtest(
+                snapshot["id"], entry.symbol, entry.asset_type, entry.exchange,
+                snapshot["interval"], req.strategy_name, params, {},
+            ))
+
     if req.enabled and not was_enabled and user.telegram_chat_id and _telegram_allowed(user):
         # Confirms the watch is actually active — sent immediately on
         # activation, before any real signal, so silence afterward reads as
@@ -1696,6 +1718,121 @@ async def optimize_strategy_endpoint(
             for c in top_results
         ],
     )
+
+
+# --- Archivio strategie ------------------------------------------------------
+# Attivare un alert e' il momento in cui una configurazione smette di essere un
+# esperimento e comincia a lavorare per settimane. Senza una fotografia presa
+# in quel momento non resta traccia ne' di com'era fatta ne' di cosa prometteva:
+# il risultato dell'ottimizzazione vive quanto la scheda del browser.
+
+
+class ArchiveIn(BaseModel):
+    symbol: str
+    asset_type: AssetType = "crypto"
+    exchange: CryptoExchange = "mexc"
+    ltf_interval: IntervalChoice = DEFAULT_INTERVALS["ltf"]
+    strategy_name: str
+    params: dict = {}
+    backtest_params: dict = {}
+    note: str = ""
+
+
+class ArchiveNoteIn(BaseModel):
+    note: str = ""
+
+
+async def _run_archive_backtest(entry_id: str, symbol: str, asset_type: str,
+                                exchange: str, ltf_interval: str,
+                                strategy_name: str, params: dict,
+                                backtest_params: dict) -> None:
+    """Riempie la voce d'archivio con le metriche misurate dal server.
+
+    I numeri non arrivano mai dal client: un archivio che accetta le metriche
+    che gli vengono passate archivia affermazioni, non misure. Gira in
+    background perche' l'attivazione di un alert non deve aspettare un
+    backtest, e un fallimento resta scritto sulla voce invece di cancellarla.
+    """
+    try:
+        provider = get_provider(asset_type, exchange)
+        backtest_interval = backtest_interval_for(ltf_interval)
+        cache_key = (f"{asset_type}:{exchange}:{symbol.upper()}:backtest",
+                     backtest_interval, settings.backtest_candles)
+        df = await _fetch_cached(cache_key, provider, symbol, backtest_interval,
+                                 settings.backtest_candles)
+        if df.empty:
+            archive_store.attach_error(entry_id, f"Nessun dato per {symbol}")
+            return
+        bt = await asyncio.to_thread(
+            partial(run_backtest, df, params, backtest_params, strategy_name=strategy_name)
+        )
+        archive_store.attach_result(entry_id, {
+            "interval": backtest_interval,
+            "candles": len(df),
+            "total_return_pct": bt.total_return_pct,
+            "num_trades": bt.num_trades,
+            "win_rate_pct": bt.win_rate_pct,
+            "max_drawdown_pct": bt.max_drawdown_pct,
+            "profit_factor": bt.profit_factor,
+            "sharpe_ratio": bt.sharpe_ratio,
+            "initial_capital": bt.initial_capital,
+            "final_equity": bt.final_equity,
+            "data_start": bt.data_start,
+            "data_end": bt.data_end,
+        })
+    except Exception as exc:  # noqa: BLE001
+        # Volutamente ampio: gira come task in background, quindi un'eccezione
+        # non intercettata qui non raggiunge nessuno e la voce resterebbe "in
+        # corso" per sempre — che e' il modo peggiore di fallire, perche' sembra
+        # ancora in lavorazione.
+        logger.warning("archivio: backtest fallito per %s (%s)", symbol, exc)
+        archive_store.attach_error(entry_id, str(exc))
+
+
+@app.get("/api/archive")
+async def list_archive(user: User = Depends(auth.get_current_user)) -> dict:
+    return {"items": archive_store.list_for(user.id)}
+
+
+@app.post("/api/archive")
+async def add_archive_entry(
+    req: ArchiveIn, user: User = Depends(auth.get_current_user)
+) -> dict:
+    if req.strategy_name not in AVAILABLE_STRATEGIES:
+        raise HTTPException(status_code=400, detail=f"Strategia sconosciuta: {req.strategy_name}")
+    symbol = req.symbol.strip()
+    if not symbol:
+        raise HTTPException(status_code=400, detail="Ticker mancante")
+    entry = archive_store.create(
+        owner_id=user.id, symbol=symbol, asset_type=req.asset_type,
+        exchange=req.exchange, interval=req.ltf_interval,
+        strategy_name=req.strategy_name, params=req.params,
+        backtest_params=req.backtest_params, source="manuale", note=req.note,
+    )
+    asyncio.create_task(_run_archive_backtest(
+        entry["id"], symbol, req.asset_type, req.exchange, req.ltf_interval,
+        req.strategy_name, req.params, req.backtest_params,
+    ))
+    return entry
+
+
+@app.patch("/api/archive/{entry_id}")
+async def update_archive_note(
+    entry_id: str, req: ArchiveNoteIn, user: User = Depends(auth.get_current_user)
+) -> dict:
+    entry = archive_store.set_note(entry_id, user.id, req.note)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Voce non trovata")
+    return entry
+
+
+@app.delete("/api/archive/{entry_id}")
+async def delete_archive_entry(
+    entry_id: str, user: User = Depends(auth.get_current_user)
+) -> dict:
+    if not archive_store.remove(entry_id, user.id):
+        raise HTTPException(status_code=404, detail="Voce non trovata")
+    return {"ok": True}
 
 
 # --- Segnalazioni ------------------------------------------------------------

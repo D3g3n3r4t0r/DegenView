@@ -945,6 +945,7 @@
       el("telegram-chat-id-input").value = state.user.telegram_chat_id || "";
       updateTelegramSetupUI();
       loadWatchlist();
+      loadArchive();
       loadAlertLog();
       loadPriceAlerts();
       startAlertLogPoll();
@@ -1544,6 +1545,9 @@
             });
           } finally {
             loadWatchlist();
+            // Accendere una strategia crea una voce d'archivio: mostrarla
+            // subito, altrimenti sembra che il salvataggio non sia avvenuto.
+            if (nextOn) loadArchive();
           }
         });
         row.appendChild(toggle);
@@ -1654,6 +1658,160 @@
       card.appendChild(body);
       list.appendChild(card);
     });
+  }
+
+  // ── Archivio strategie ─────────────────────────────────────────────────────
+  //
+  // Una voce nasce senza numeri: il backtest gira in background, perche'
+  // accendere un alert non deve aspettarlo. Per questo lo stato "in corso"
+  // esiste ed e' mostrato — e per questo la lista si ricarica da sola una volta
+  // sola dopo qualche secondo, invece di lasciare "in corso" a schermo finche'
+  // qualcuno non ricarica la pagina.
+
+  let _archiveRecheck = null;
+
+  async function loadArchive() {
+    if (!state.user) return;
+    const list = el("archive-list");
+    if (!list) return;
+    try {
+      const resp = await fetch("/api/archive");
+      if (!resp.ok) return;
+      const body = await resp.json();
+      renderArchive(body.items || []);
+    } catch {
+      list.innerHTML = '<li class="panel-hint">Archivio non raggiungibile.</li>';
+    }
+  }
+
+  function renderArchive(items) {
+    const list = el("archive-list");
+    const count = el("archive-count");
+    if (!list) return;
+    if (count) count.textContent = items.length ? String(items.length) : "";
+    if (!items.length) {
+      list.innerHTML = '<li class="panel-hint">Nessuna strategia archiviata. Attivane una dalla watchlist, oppure salvala dal Laboratorio.</li>';
+      return;
+    }
+
+    const pct = (v) => (v === null || v === undefined ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`);
+    const num = (v, d = 2) => (v === null || v === undefined ? "—" : v.toFixed(d));
+    const when = (ts) => new Date(ts * 1000).toLocaleDateString("it-IT",
+      { day: "2-digit", month: "short", year: "2-digit" });
+
+    list.innerHTML = items.map((e) => {
+      const m = e.metrics;
+      const body = e.state === "pronto" && m
+        ? `<div class="arch-metrics">
+             <span class="${m.total_return_pct >= 0 ? "bull" : "bear"}">${pct(m.total_return_pct)}</span>
+             <span>${m.num_trades} trade</span>
+             <span>DD ${pct(m.max_drawdown_pct)}</span>
+             <span>PF ${num(m.profit_factor)}</span>
+             <span>${m.candles} candele · ${m.interval}</span>
+           </div>`
+        : e.state === "fallito"
+        ? `<div class="arch-failed">Backtest non riuscito: ${escapeHtml(e.error || "motivo non registrato")}</div>`
+        : '<div class="arch-pending">Backtest in corso…</div>';
+      const params = Object.entries(e.params || {})
+        .map(([k, v]) => `${escapeHtml(k)}=${escapeHtml(String(v))}`).join(" · ");
+      return `
+        <li class="arch-card" data-id="${e.id}">
+          <div class="arch-head">
+            <span class="arch-symbol">${escapeHtml(e.symbol)}</span>
+            <span class="arch-strat">${escapeHtml(e.strategy_name)}</span>
+            <span class="arch-src">${e.source === "alert" ? "da alert" : "salvata a mano"}</span>
+            <span class="arch-date">${when(e.created_at)}</span>
+          </div>
+          ${body}
+          ${params ? `<div class="arch-params">${params}</div>` : '<div class="arch-params">parametri di default</div>'}
+          ${e.note ? `<div class="arch-note">${escapeHtml(e.note)}</div>` : ""}
+          <div class="arch-actions">
+            <button type="button" class="arch-apply" data-id="${e.id}">Applica al grafico</button>
+            <button type="button" class="arch-del" data-id="${e.id}">Elimina</button>
+          </div>
+        </li>`;
+    }).join("");
+
+    list.querySelectorAll(".arch-del").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        await fetch(`/api/archive/${btn.dataset.id}`, { method: "DELETE" });
+        loadArchive();
+      });
+    });
+    list.querySelectorAll(".arch-apply").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const entry = items.find((x) => x.id === btn.dataset.id);
+        if (entry) applyArchiveEntry(entry);
+      });
+    });
+
+    // Una sola ricontrollata, e solo se c'e' davvero qualcosa da aspettare:
+    // un polling perenne per una lista che cambia una volta al mese sarebbe
+    // traffico speso per nulla.
+    if (items.some((e) => e.state === "in corso") && !_archiveRecheck) {
+      _archiveRecheck = setTimeout(() => { _archiveRecheck = null; loadArchive(); }, 8000);
+    }
+  }
+
+  function applyArchiveEntry(entry) {
+    state.assetType = entry.asset_type;
+    state.cryptoExchange = entry.exchange;
+    el("ticker-input").value = entry.symbol;
+    const stratSel = el("active-strategy-select");
+    if (stratSel && stratSel.value !== entry.strategy_name) {
+      stratSel.value = entry.strategy_name;
+      renderStrategyParamsFields();
+    }
+    const container = el("strategy-params-fields");
+    if (container) {
+      Object.entries(entry.params || {}).forEach(([key, value]) => {
+        const input = container.querySelector(`[name="${key}"]`);
+        if (!input) return;
+        if (input.type === "checkbox") input.checked = !!value;
+        else input.value = value;
+      });
+    }
+    runAnalysis(entry.symbol);
+  }
+
+  async function saveLabToArchive() {
+    if (!state.user) {
+      labEl("lab-status").textContent = "Accedi per salvare nell'archivio.";
+      labEl("lab-status").classList.remove("hidden");
+      return;
+    }
+    if (!labState.symbol) return;
+    const params = {};
+    labEl("lab-params-fields").querySelectorAll("[name]").forEach((input) => {
+      params[input.name] = input.type === "checkbox" ? input.checked
+        : input.type === "number" ? Number(input.value) : input.value;
+    });
+    const resp = await fetch("/api/archive", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        symbol: labState.symbol,
+        asset_type: labState.assetType,
+        exchange: labState.exchange,
+        ltf_interval: labState.tf,
+        strategy_name: labState.strategy,
+        params,
+        backtest_params: {},
+      }),
+    });
+    const status = labEl("lab-status");
+    status.textContent = resp.ok
+      ? "Salvata nell'archivio (scheda Watchlist). Il backtest viene ricalcolato dal server."
+      : "Salvataggio non riuscito.";
+    status.classList.remove("hidden");
+    if (resp.ok) loadArchive();
+  }
+
+  function bindArchive() {
+    const refresh = el("archive-refresh-btn");
+    if (refresh) refresh.addEventListener("click", loadArchive);
+    const save = labEl("lab-archive-btn");
+    if (save) save.addEventListener("click", saveLabToArchive);
   }
 
   // ── Alert log ──────────────────────────────────────────────────────────────
@@ -5409,6 +5567,7 @@
     bindIssues();
     bindTheme();
     bindLabFilters();
+    bindArchive();
     bindTabs();
     bindDrawRail();
     bindMobileDrawTools();
