@@ -226,7 +226,6 @@ async def _watchlist_alert_loop() -> None:
                     )
 
 
-@asynccontextmanager
 _LAST_SHA_FILE = Path(__file__).resolve().parent.parent / "data" / "last_deploy_sha.txt"
 _GITHUB_REPO = "lorenzocorazzi-wq/liquidity-analysis-engine"
 
@@ -271,6 +270,7 @@ async def _notify_deploy() -> None:
     await telegram.send_message(text)
 
 
+@asynccontextmanager
 async def lifespan(app: FastAPI):
     from app.sniper import cache as sniper_cache
     from app.sniper import agents as sniper_agents
