@@ -1,0 +1,421 @@
+"""
+Structural priors and space reduction (pipeline stage S2).
+
+Phase E left one blocker: plateau search is deterministic only when the cell
+grid can be enumerated, and Lorenzo's ten free parameters put enumeration many
+orders of magnitude out of reach. Narrowing ranges does not fix that — it
+reduces cells per axis while the exponent stays at ten. What fixes it is
+removing axes, and there are two ways to do that honestly.
+
+  1. Derive a parameter instead of searching it. Gabriele's band width follows
+     from the entry frequency the user wants: under approximate normality the
+     fraction of bars beyond k sigma is 2(1 - Phi(k)), so fixing N entries over
+     T bars fixes k. That converts a searched dimension into a stated
+     preference, which is both smaller and more interpretable.
+
+  2. Exploit inert parameters. When Lorenzo's trendfilter is off, its period
+     and type do not enter the computation at all — the backtest is
+     byte-identical whatever they hold. These are not weak parameters to be
+     frozen at a default, they are absent, and the space genuinely decomposes
+     into branches of different dimension. Inertness is verified against the
+     backtest rather than assumed from reading the code, because a parameter
+     that is inert in principle but read somewhere in practice would silently
+     corrupt the decomposition.
+
+Data-dependent ranges (from the estimators below) sit on top of both: they
+narrow what remains, using scales measured from the series rather than the
+arbitrary bounds the random sampler happened to declare.
+"""
+
+from __future__ import annotations
+
+import math
+import statistics
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass, field
+
+import numpy as np
+import pandas as pd
+
+from app.analysis.backtest import run_backtest
+from app.analysis.sensitivity import PARAM_SPACES, ParamSpace, _b, _c, _f, _i
+
+_NORM = statistics.NormalDist()
+
+
+# --- series statistics -------------------------------------------------------
+
+
+@dataclass
+class SeriesStats:
+    """Scales measured from the series, used to place parameter ranges."""
+
+    n: int
+    rho1: float                  # lag-1 autocorrelation of log returns
+    tau_int: float               # integrated autocorrelation time (1+r)/(1-r)
+    ou_half_life: float | None   # mean-reversion half-life of detrended price
+    dominant_period: float | None
+
+    def as_dict(self) -> dict:
+        return {
+            "n": self.n,
+            "rho1": round(self.rho1, 4),
+            "tau_int": round(self.tau_int, 2),
+            "ou_half_life": None if self.ou_half_life is None else round(self.ou_half_life, 2),
+            "dominant_period": None if self.dominant_period is None else round(self.dominant_period, 2),
+        }
+
+
+def _detrended_log_price(close: np.ndarray) -> np.ndarray:
+    y = np.log(close)
+    t = np.arange(y.size, dtype=float)
+    slope, intercept = np.polyfit(t, y, 1)
+    return y - (slope * t + intercept)
+
+
+def estimate_series_stats(df: pd.DataFrame) -> SeriesStats:
+    close = pd.to_numeric(df["close"], errors="coerce").astype(float).to_numpy()
+    close = close[np.isfinite(close) & (close > 0)]
+    n = close.size
+    if n < 60:
+        return SeriesStats(n=n, rho1=0.0, tau_int=1.0, ou_half_life=None, dominant_period=None)
+
+    r = np.diff(np.log(close))
+    rho1 = float(np.corrcoef(r[:-1], r[1:])[0, 1]) if r.size > 2 else 0.0
+    if not math.isfinite(rho1):
+        rho1 = 0.0
+    # Keep tau_int finite: rho1 -> 1 is a random walk, where no lookback is
+    # implied by the autocorrelation and the caller must fall back to defaults.
+    rho_c = float(np.clip(rho1, -0.95, 0.95))
+    tau_int = (1.0 + rho_c) / (1.0 - rho_c)
+
+    # Mean-reversion half-life from an AR(1) fit on detrended log price.
+    dev = _detrended_log_price(close)
+    half_life: float | None = None
+    if dev.size > 10:
+        phi = float(np.corrcoef(dev[:-1], dev[1:])[0, 1])
+        if math.isfinite(phi) and 0.0 < phi < 1.0:
+            hl = -math.log(2.0) / math.log(phi)
+            if math.isfinite(hl) and hl > 0:
+                half_life = float(np.clip(hl, 2.0, 500.0))
+
+    # Dominant cycle from the periodogram peak of the detrended series.
+    dominant: float | None = None
+    if dev.size >= 64:
+        spec = np.abs(np.fft.rfft(dev - dev.mean())) ** 2
+        freqs = np.fft.rfftfreq(dev.size, d=1.0)
+        if spec.size > 3:
+            # Only accept a peak that is genuinely a cycle. The lowest
+            # frequencies carry whatever trend the linear detrend left behind
+            # and always dominate the periodogram; a "period" equal to half the
+            # sample is that artefact, not a cycle, and anchoring parameters to
+            # it would be worse than having no prior at all. Require the period
+            # to be at most a quarter of the sample, else report None and let
+            # the caller keep the unnarrowed range.
+            max_period = dev.size / 4.0
+            min_k = max(2, int(math.ceil(dev.size / max_period)))
+            if min_k < spec.size:
+                k = int(np.argmax(spec[min_k:])) + min_k
+                if freqs[k] > 0:
+                    cand = 1.0 / freqs[k]
+                    if math.isfinite(cand) and 4.0 <= cand <= max_period:
+                        dominant = float(cand)
+
+    return SeriesStats(n=n, rho1=rho1, tau_int=tau_int,
+                       ou_half_life=half_life, dominant_period=dominant)
+
+
+# --- derived parameters ------------------------------------------------------
+
+
+def band_multiplier_for_frequency(n_entries: int, n_bars: int) -> float:
+    """Bollinger k implied by wanting n_entries touches over n_bars.
+
+    Under approximate normality the fraction of bars beyond +/- k sigma is
+    2(1 - Phi(k)), so k = Phi^-1(1 - N / 2T). This replaces a searched
+    dimension with a stated preference: the user picks how often they want to
+    trade, which is a decision they can actually reason about, and the band
+    width follows. Clamped to the range the strategy's own inputs allow.
+    """
+    if n_bars <= 0 or n_entries <= 0:
+        return 2.0
+    p = 1.0 - n_entries / (2.0 * n_bars)
+    p = min(max(p, 0.5 + 1e-9), 1.0 - 1e-9)
+    return float(np.clip(_NORM.inv_cdf(p), 1.0, 3.5))
+
+
+# --- constrained spaces ------------------------------------------------------
+
+def _narrow(
+    declared: tuple[int, int],
+    measured: tuple[float, float],
+    label: str,
+) -> tuple[int, int, str]:
+    """Narrow a declared range using a measured scale, refusing to collapse it.
+
+    When the measured scale falls outside what the strategy's own inputs allow,
+    clipping both ends lands them on the same bound and silently pins the
+    parameter to a single value. That is not a narrowed search, it is a
+    different strategy — and it is a decision taken by an estimator that has
+    just demonstrated it does not apply here. In that case keep the declared
+    range and record why.
+    """
+    d_lo, d_hi = declared
+    lo = max(d_lo, int(measured[0]))
+    hi = min(d_hi, int(measured[1]))
+    if hi - lo < 3:
+        return d_lo, d_hi, (
+            f"{label} left unnarrowed: measured scale "
+            f"[{measured[0]:.0f}, {measured[1]:.0f}] does not usefully overlap "
+            f"the declared range [{d_lo}, {d_hi}]"
+        )
+    return lo, hi, f"{label} in [{lo}, {hi}] from measured scale"
+
+
+
+
+@dataclass
+class ConstrainedSpace:
+    """A ParamSpace restricted by structural priors, plus what it cost."""
+
+    label: str
+    dims: tuple[str, ...]
+    to_params: Callable[[np.ndarray], dict]
+    fixed: dict = field(default_factory=dict)
+    notes: list[str] = field(default_factory=list)
+
+    @property
+    def d(self) -> int:
+        return len(self.dims)
+
+    def as_param_space(self) -> ParamSpace:
+        return ParamSpace(self.dims, self.to_params)
+
+
+def _lorenzo_space(stats: SeriesStats, trendfilter: bool, volatilityfilter: bool) -> ConstrainedSpace:
+    """One branch of Lorenzo's space, with inert parameters removed.
+
+    The lookback is centred on the integrated autocorrelation time, which is
+    the scale on which the series actually carries trend structure; searching
+    far from it is searching where the signal is not. The slow slope is
+    expressed as a RATIO of the fast one rather than as a free length: below
+    about 2 the two lines are the same signal and their crossings are noise,
+    above about 5 the slow line never updates and the system stops exiting.
+    """
+    # tau_int anchors the lookback only when there is autocorrelation to
+    # anchor to. On most financial return series rho1 sits near zero, tau_int
+    # collapses towards 1, and any multiplier applied to it is a number the
+    # author chose rather than a scale the data implied. Rather than dress that
+    # up, the range is narrowed only when rho1 is large enough for tau_int to
+    # mean something, and left at the declared bounds otherwise.
+    if abs(stats.rho1) >= 0.10 and stats.tau_int >= 1.5:
+        center = float(np.clip(stats.tau_int * 20.0, 30.0, 240.0))
+        len_lo = max(20, int(center * 0.5))
+        len_hi = min(300, max(len_lo + 20, int(center * 1.5)))
+        len_note = f"len in [{len_lo}, {len_hi}] from tau_int={stats.tau_int:.2f}"
+    else:
+        len_lo, len_hi = 20, 300
+        len_note = (f"len left unnarrowed: rho1={stats.rho1:.3f} too small for "
+                    f"tau_int to imply a lookback scale")
+
+    dims: list[str] = ["average", "len", "slopeFlen", "slope_ratio"]
+    if trendfilter:
+        dims += ["trendfilter_mult", "trendfiltertype"]
+    if volatilityfilter:
+        dims += ["volatilitystdevlength", "volatilitystdevmalength"]
+
+    idx = {name: i for i, name in enumerate(dims)}
+
+    def to_params(u: np.ndarray) -> dict:
+        length = _i(u[idx["len"]], len_lo, len_hi)
+        slope_fast = _i(u[idx["slopeFlen"]], 2, 30)
+        ratio = _f(u[idx["slope_ratio"]], 2.0, 5.0)
+        slope_slow = int(np.clip(round(slope_fast * ratio), slope_fast + 3, 80))
+        p = {
+            "average": _c(u[idx["average"]], ["EMA", "SMA"]),
+            "len": length,
+            "slopeFlen": slope_fast,
+            "slopeSlen": slope_slow,
+            "trendfilter": trendfilter,
+            "volatilityfilter": volatilityfilter,
+        }
+        if trendfilter:
+            # A filter faster than the signal it filters is not a filter, it is
+            # a second and noisier signal wearing the word "confirmation".
+            mult = _f(u[idx["trendfilter_mult"]], 1.5, 4.0)
+            p["trendfilterperiod"] = int(np.clip(round(length * mult), 50, 400))
+            p["trendfiltertype"] = _c(u[idx["trendfiltertype"]], ["EMA", "SMA"])
+        else:
+            p["trendfilterperiod"] = 200
+            p["trendfiltertype"] = "EMA"
+        if volatilityfilter:
+            p["volatilitystdevlength"] = _i(u[idx["volatilitystdevlength"]], 5, 40)
+            p["volatilitystdevmalength"] = _i(u[idx["volatilitystdevmalength"]], 10, 80)
+        else:
+            p["volatilitystdevlength"] = 20
+            p["volatilitystdevmalength"] = 40
+        return p
+
+    return ConstrainedSpace(
+        label=f"trendfilter={trendfilter} volatilityfilter={volatilityfilter}",
+        dims=tuple(dims), to_params=to_params,
+        fixed={"trendfilter": trendfilter, "volatilityfilter": volatilityfilter},
+        notes=[len_note, "slopeSlen expressed as ratio in [2, 5] of slopeFlen"],
+    )
+
+
+def _gabriele_space(stats: SeriesStats, target_entries: int) -> ConstrainedSpace:
+    """Gabriele with the band width derived rather than searched."""
+    bb_mult = band_multiplier_for_frequency(target_entries, stats.n)
+
+    hl = stats.ou_half_life
+    if hl is None:
+        bb_lo, bb_hi, bb_note = 10, 40, "bb_length left unnarrowed: no half-life estimate"
+    else:
+        bb_lo, bb_hi, bb_note = _narrow((10, 40), (hl, hl * 3.0),
+                                        f"bb_length (half-life={hl:.1f})")
+
+    # If the band already selects a 2-sigma event, an RSI threshold of 45 is
+    # not a second filter: it fires on nearly everything the band caught.
+    rsi_os_hi = 30 if bb_mult >= 2.0 else 40
+
+    dims = ("rsi_length", "bb_length", "rsi_oversold", "rsi_overbought")
+
+    def to_params(u: np.ndarray) -> dict:
+        bb_length = _i(u[1], bb_lo, bb_hi)
+        # Two indicators on the same horizon are one signal counted twice.
+        rsi_hi = max(7, min(25, bb_length // 2))
+        return {
+            "rsi_length": _i(u[0], 7, max(8, rsi_hi)),
+            "bb_length": bb_length,
+            "bb_mult": bb_mult,
+            "rsi_oversold": _i(u[2], 15, rsi_os_hi),
+            "rsi_overbought": _i(u[3], 60, 85),
+        }
+
+    return ConstrainedSpace(
+        label="gabriele-constrained", dims=dims, to_params=to_params,
+        fixed={"bb_mult": bb_mult},
+        notes=[f"bb_mult={bb_mult:.2f} derived from {target_entries} entries over {stats.n} bars",
+               bb_note, f"rsi_oversold capped at {rsi_os_hi}", "rsi_length <= bb_length/2"],
+    )
+
+
+def _exhaustion_space(stats: SeriesStats) -> ConstrainedSpace:
+    """Accumulo/Distribuzione, anchored on the dominant cycle."""
+    if stats.dominant_period is not None:
+        period = stats.dominant_period
+        sw_lo, sw_hi, period_note = _narrow(
+            (3, 20), (period / 8.0, period / 2.0),
+            f"swing_length (cycle={period:.0f})")
+    else:
+        # No cycle survived the trend test. Keep the declared range and say so,
+        # rather than anchoring to a default period nothing measured.
+        period = 40.0
+        sw_lo, sw_hi = 3, 20
+        period_note = "swing_length left unnarrowed: no dominant cycle detected"
+
+    dims = ("swing_length", "rsi_length", "rsi_oversold", "rsi_overbought",
+            "rsi_min_gap", "enable_contraction", "enable_range_bounce")
+
+    def to_params(u: np.ndarray) -> dict:
+        swing = _i(u[0], sw_lo, sw_hi)
+        # A divergence compared inside one leg of a move is not a divergence.
+        div_lb = int(np.clip(math.ceil((period / 2.0) / max(swing, 1)), 2, 8))
+        return {
+            "swing_length": swing,
+            "rsi_length": _i(u[1], 7, 25),
+            "rsi_oversold": _i(u[2], 20, 45),
+            "rsi_overbought": _i(u[3], 55, 80),
+            "rsi_min_gap": _f(u[4], 1.0, 10.0),
+            "low_tolerance_pct": 1.0,
+            "divergence_lookback": div_lb,
+            "volume_ma_length": 20,
+            "volume_multiplier": 1.5,
+            "trend_filter": True,
+            # The filter has to be slower than the swings it filters.
+            "trend_ema_length": int(np.clip(swing * 6, 20, 100)),
+            "confirmation_lookahead": int(np.clip(swing, 3, 20)),
+            "contraction_lookback": 10,
+            "contraction_prior_lookback": 40,
+            "contraction_ratio": 0.55,
+            "range_lookback": 50,
+            "range_zone_pct": 0.25,
+            "enable_divergence": True,
+            "enable_contraction": _b(u[5]),
+            "enable_range_bounce": _b(u[6]),
+        }
+
+    return ConstrainedSpace(
+        label="exhaustion-constrained", dims=dims, to_params=to_params,
+        notes=[period_note,
+               "divergence_lookback derived to span half a cycle",
+               "trend_ema_length = 6x swing_length"],
+    )
+
+
+def build_spaces(
+    strategy_name: str,
+    stats: SeriesStats,
+    target_entries: int = 40,
+) -> list[ConstrainedSpace]:
+    """Constrained space(s) for a strategy.
+
+    Lorenzo returns one space per switch combination — the branches have
+    genuinely different dimension, so treating them as one 10-dimensional
+    space both overstates the problem and wastes the search.
+    """
+    if strategy_name == "Lorenzo (trend-follower)":
+        return [_lorenzo_space(stats, tf, vf)
+                for tf in (False, True) for vf in (False, True)]
+    if strategy_name == "Gabriele (RSI+BB reversal)":
+        return [_gabriele_space(stats, target_entries)]
+    if strategy_name == "Accumulo / Distribuzione (long-term)":
+        return [_exhaustion_space(stats)]
+    raise ValueError(f"Nessuno spazio vincolato per {strategy_name!r}")
+
+
+# --- inertness verification --------------------------------------------------
+
+
+def verify_inert(
+    df: pd.DataFrame,
+    strategy_name: str,
+    base_params: dict,
+    candidates: Sequence[str],
+    values: dict[str, Sequence],
+    backtest_params: dict | None = None,
+) -> dict[str, bool]:
+    """Check against the backtest which parameters are genuinely inert.
+
+    The branch decomposition is only sound if a parameter dropped from a branch
+    truly does not enter the computation. Reading the strategy source is not
+    enough: a value read on some path the reader did not follow would make the
+    decomposition silently wrong, and the failure would look like noise in the
+    results rather than like a bug. So it is measured — vary the parameter and
+    see whether the trade sequence moves at all.
+    """
+    bp = backtest_params or {}
+    base = run_backtest(df, base_params, bp, strategy_name=strategy_name)
+    base_fp = (round(base.total_return_pct, 6), base.num_trades)
+
+    out: dict[str, bool] = {}
+    for name in candidates:
+        inert = True
+        for v in values.get(name, ()):
+            trial = {**base_params, name: v}
+            bt = run_backtest(df, trial, bp, strategy_name=strategy_name)
+            if (round(bt.total_return_pct, 6), bt.num_trades) != base_fp:
+                inert = False
+                break
+        out[name] = inert
+    return out
+
+
+def branch_grid_estimate(spaces: Sequence[ConstrainedSpace], cells_per_dim: float) -> float:
+    """Total cells across branches, for deciding whether enumeration fits."""
+    return float(sum(cells_per_dim ** s.d for s in spaces))
+
+
+def unconstrained_dims(strategy_name: str) -> int:
+    return PARAM_SPACES[strategy_name].d

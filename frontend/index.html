@@ -55,6 +55,12 @@
           <path d="M3 14.5 L12 20 L21 14.5" stroke-linecap="round"/>
         </svg>
       </button>
+      <button type="button" class="rail-btn" id="rail-issues-btn" title="Segnalazioni e bug">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
+          <path d="M12 9v4"/><path d="M12 17h.01"/>
+          <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>
+        </svg>
+      </button>
       <button type="button" class="rail-btn hidden" id="rail-script-btn" title="Script Pine personalizzato">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
           <polyline points="9 18 4 12 9 6"/>
@@ -92,6 +98,32 @@
         <h3>Disegni sul grafico</h3>
         <p class="panel-hint">Usa gli strumenti nella colonna a sinistra del grafico (o il pulsante matita sul grafico, su mobile). Persistono per questo ticker anche dopo un ricaricamento della pagina (salvati in questo browser).</p>
         <ul id="draw-list" class="draw-list"></ul>
+      </div>
+    </div>
+
+
+    <div id="issues-panel" class="levels-panel">
+      <div class="drawer-header">
+        <span>Segnalazioni</span>
+        <button type="button" class="drawer-close-btn" data-close-drawer>✕ Chiudi</button>
+      </div>
+      <div class="panel">
+        <p class="panel-hint">Scrivi qui i problemi che trovi. Claude li legge e riporta sotto ciascuno la diagnosi e il fix, con il commit che lo contiene.</p>
+        <div id="issues-counts" class="issues-counts"></div>
+        <form id="issue-form" class="issue-form">
+          <input type="text" id="issue-title" placeholder="Cosa non va — in una riga" autocomplete="off" required />
+          <textarea id="issue-detail" rows="3" placeholder="Dettagli: cosa hai fatto, cosa ti aspettavi, cosa è successo (facoltativo)"></textarea>
+          <div class="issue-form-row">
+            <select id="issue-priority">
+              <option value="alta">Priorità alta</option>
+              <option value="media" selected>Priorità media</option>
+              <option value="bassa">Priorità bassa</option>
+            </select>
+            <button type="submit" id="issue-submit">Segnala</button>
+          </div>
+          <p id="issue-form-status" class="issue-form-status"></p>
+        </form>
+        <div id="issues-list" class="issues-list"></div>
       </div>
     </div>
 
@@ -277,10 +309,26 @@
             <button type="button" id="lab-optimize-btn" class="lab-btn-opt">⟳ Ottimizza</button>
             <button type="button" id="lab-run-btn" class="lab-btn-run">▶ Esegui</button>
           </div>
-          <label class="lab-grid-toggle" id="lab-grid-toggle-wrap" title="Prova ogni combinazione di parametri su una griglia discreta (~1000–3000 test). Più lento (~30–50s) ma sistematico.">
-            <input type="checkbox" id="lab-grid-mode" />
-            <span>Modalità Grid — ogni combinazione possibile</span>
-          </label>
+          <div class="lab-mode-picker">
+            <label class="lab-mode-opt">
+              <input type="radio" name="lab-opt-mode" value="random" checked />
+              <span class="lab-mode-name">Rapida</span>
+              <span class="lab-mode-desc">200 tentativi casuali · 10–25s. Il risultato cambia a ogni esecuzione.</span>
+            </label>
+            <label class="lab-mode-opt" id="lab-mode-grid-wrap">
+              <input type="radio" name="lab-opt-mode" value="grid" />
+              <span class="lab-mode-name">Grid</span>
+              <span class="lab-mode-desc">Ogni combinazione di una griglia fissa · 30–50s.</span>
+            </label>
+            <label class="lab-mode-opt lab-mode-recommended">
+              <input type="radio" name="lab-opt-mode" value="plateau" />
+              <span class="lab-mode-name">Stabile <em>consigliata</em></span>
+              <span class="lab-mode-desc">Cerca la configurazione che regge alle variazioni, non il picco fortunato. Più lenta (1–5 min) ma dà <strong>sempre lo stesso risultato</strong>.</span>
+            </label>
+          </div>
+
+          <div id="lab-regime-box" class="lab-regime-box hidden"></div>
+          <div id="lab-branch-box" class="lab-branch-box hidden"></div>
 
           <!-- Loading/status -->
           <div id="lab-status" class="lab-status hidden"></div>

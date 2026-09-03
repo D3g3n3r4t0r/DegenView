@@ -3974,8 +3974,125 @@
   // anywhere outside it, or open the other rail panel, to close it.
   const RAIL_PANELS = [
     ["rail-levels-btn", "levels-panel"],
+    ["rail-issues-btn", "issues-panel"],
     ["rail-script-btn", "script-panel"],
   ];
+
+
+  // ---- Segnalazioni -------------------------------------------------------
+  // Le segnalazioni vivono sul server e le scrivete voi; le risoluzioni
+  // arrivano dal repo col deploy e le scrive Claude. Il server le unisce per
+  // id, quindi qui basta renderizzare quello che arriva senza sapere da quale
+  // dei due lati viene ogni pezzo.
+
+  const ISSUE_STATUS_LABEL = {
+    "aperto": "Aperto",
+    "in corso": "In corso",
+    "risolto": "Risolto",
+    "scartato": "Scartato",
+  };
+
+  async function loadIssues() {
+    const list = el("issues-list");
+    if (!list) return;
+    try {
+      const resp = await fetch("/api/issues");
+      if (!resp.ok) throw new Error(`Errore ${resp.status}`);
+      const body = await resp.json();
+      renderIssues(body);
+    } catch (err) {
+      list.innerHTML = `<p class="issues-empty">Impossibile caricare le segnalazioni: ${escapeHtml(err.message)}</p>`;
+    }
+  }
+
+  function renderIssues(body) {
+    const items = body.items || [];
+    const counts = body.counts || {};
+    const cEl = el("issues-counts");
+    if (cEl) {
+      cEl.innerHTML = ["aperto", "in corso", "risolto"]
+        .map((k) => `<span class="issues-count is-${k.replace(" ", "-")}">`
+          + `<b>${counts[k] || 0}</b> ${ISSUE_STATUS_LABEL[k].toLowerCase()}</span>`)
+        .join("");
+    }
+
+    const list = el("issues-list");
+    if (!items.length) {
+      list.innerHTML = '<p class="issues-empty">Nessuna segnalazione. Scrivi la prima qui sopra.</p>';
+      return;
+    }
+    // Aperte per prime: una bacheca che apre sulle cose gia' chiuse nasconde
+    // proprio quelle su cui bisogna agire.
+    const order = { "aperto": 0, "in corso": 1, "risolto": 2, "scartato": 3 };
+    const prio = { alta: 0, media: 1, bassa: 2 };
+    const sorted = [...items].sort((a, b) =>
+      (order[a.status] ?? 9) - (order[b.status] ?? 9)
+      || (prio[a.priority] ?? 9) - (prio[b.priority] ?? 9));
+
+    list.innerHTML = sorted.map((it) => {
+      const r = it.resolution;
+      const when = it.created_at
+        ? new Date(it.created_at * 1000).toLocaleDateString("it-IT")
+        : "";
+      return `<article class="issue-card is-${(it.status || "aperto").replace(" ", "-")}">
+        <header class="issue-head">
+          <span class="issue-status">${ISSUE_STATUS_LABEL[it.status] || it.status}</span>
+          <span class="issue-prio p-${it.priority}">${it.priority}</span>
+          <span class="issue-title">${escapeHtml(it.title)}</span>
+        </header>
+        ${it.detail ? `<p class="issue-detail">${escapeHtml(it.detail)}</p>` : ""}
+        <p class="issue-meta">${escapeHtml(it.author || "")}${when ? " · " + when : ""} · <code>${escapeHtml(it.id)}</code></p>
+        ${r ? `<div class="issue-res">
+          <div class="issue-res-head">Claude</div>
+          <p class="issue-res-summary">${escapeHtml(r.summary || "")}</p>
+          ${r.detail ? `<pre class="issue-res-detail">${escapeHtml(r.detail)}</pre>` : ""}
+          ${r.next ? `<p class="issue-res-next"><b>Prossimo passo:</b> ${escapeHtml(r.next)}</p>` : ""}
+          ${r.commit ? `<p class="issue-res-commit">commit <code>${escapeHtml(r.commit)}</code></p>` : ""}
+        </div>` : ""}
+      </article>`;
+    }).join("");
+  }
+
+  function bindIssues() {
+    const form = el("issue-form");
+    if (!form) return;
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const status = el("issue-form-status");
+      const title = el("issue-title").value.trim();
+      if (!title) return;
+      status.textContent = "Invio…";
+      try {
+        const resp = await fetch("/api/issues", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title,
+            detail: el("issue-detail").value,
+            priority: el("issue-priority").value,
+          }),
+        });
+        if (resp.status === 401) {
+          status.textContent = "Devi accedere per segnalare (pulsante Accedi in alto).";
+          return;
+        }
+        if (!resp.ok) {
+          const b = await resp.json().catch(() => ({}));
+          throw new Error(typeof b.detail === "string" ? b.detail : `Errore ${resp.status}`);
+        }
+        el("issue-title").value = "";
+        el("issue-detail").value = "";
+        status.textContent = "Segnalazione registrata.";
+        setTimeout(() => { status.textContent = ""; }, 3000);
+        loadIssues();
+      } catch (err) {
+        status.textContent = err.message;
+      }
+    });
+
+    const btn = el("rail-issues-btn");
+    if (btn) btn.addEventListener("click", () => loadIssues());
+  }
 
   function bindRail() {
     RAIL_PANELS.forEach(([btnId, panelId]) => {
@@ -4435,13 +4552,103 @@
     "Accumulo / Distribuzione (long-term)",
   ]);
 
+
+  // Reason strings and branch labels are built server-side and interpolated
+  // into innerHTML below; escape them rather than trusting their shape.
+  function escapeHtml(str) {
+    return String(str ?? "").replace(/[&<>"']/g, (c) => (
+      { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+    ));
+  }
+
+  // Which optimisation mode the user picked in the lab.
+  function labOptMode() {
+    const checked = document.querySelector('input[name="lab-opt-mode"]:checked');
+    return checked ? checked.value : "random";
+  }
+
+  // The regime gate answers a question that comes before "which parameters":
+  // does this strategy have an edge to find on this series at all? A failed
+  // gate means any configuration returned is fitted to noise, so it is shown
+  // as a warning rather than folded into the numbers.
+  function renderRegimeBox(body) {
+    const box = labEl("lab-regime-box");
+    if (!box) return;
+    if (!body.regime) { box.classList.add("hidden"); return; }
+    const r = body.regime;
+    const ok = r.passed;
+    const det = body.deterministic;
+    const bits = [];
+    bits.push(`<div class="lab-regime-head ${ok ? "ok" : "warn"}">`
+      + `${ok ? "✓ Regime compatibile" : "⚠ Regime non compatibile"}</div>`);
+    bits.push(`<div class="lab-regime-reason">${escapeHtml(r.reason || "")}</div>`);
+    const stats = [];
+    if (r.variance_ratio != null) stats.push(`VR ${r.variance_ratio.toFixed(3)}`);
+    if (r.vr_z != null) stats.push(`z ${r.vr_z >= 0 ? "+" : ""}${r.vr_z.toFixed(2)}`);
+    if (r.vr_p_one_sided != null) stats.push(`p ${r.vr_p_one_sided.toFixed(4)}`);
+    if (r.hurst != null) stats.push(`H ${r.hurst.toFixed(3)}`);
+    if (stats.length) bits.push(`<div class="lab-regime-stats">${stats.join(" · ")}</div>`);
+    if (det != null) {
+      bits.push(`<div class="lab-regime-det ${det ? "ok" : "warn"}">`
+        + (det
+          ? "Risultato riproducibile: rieseguendo con gli stessi dati otterrai gli stessi parametri."
+          : "Alcuni rami hanno superato il budget e sono stati campionati: quella parte del risultato non è riproducibile.")
+        + "</div>");
+    }
+    const d = body.deflated_sharpe;
+    if (d && d.deflated != null) {
+      const ok = d.acceptable;
+      bits.push(
+        `<div class="lab-regime-det ${ok ? "ok" : "warn"}">`
+        + `Sharpe ${d.sharpe != null ? d.sharpe.toFixed(2) : "—"} · `
+        + `soglia per ${d.n_trials} tentativi ${d.sharpe_threshold != null ? d.sharpe_threshold.toFixed(2) : "—"} · `
+        + `affidabilità ${(d.deflated * 100).toFixed(1)}%`
+        + (ok ? "" : " — non distinguibile dal migliore di altrettanti tentativi sul rumore")
+        + "</div>");
+    }
+    (body.pipeline_notes || []).forEach((n) => {
+      bits.push(`<div class="lab-regime-note">${escapeHtml(n)}</div>`);
+    });
+    box.innerHTML = bits.join("");
+    box.classList.remove("hidden");
+  }
+
+  // Branch comparison. Showing these side by side is the point: a branch with
+  // more free parameters can score higher in-sample and worse out-of-sample,
+  // and a single returned number hides exactly that.
+  function renderBranchBox(body) {
+    const box = labEl("lab-branch-box");
+    if (!box) return;
+    const rows = body.branches || [];
+    if (rows.length < 2) { box.classList.add("hidden"); return; }
+    const head = `<div class="lab-branch-title">Varianti confrontate</div>`
+      + `<table class="lab-branch-tbl"><thead><tr>`
+      + `<th>variante</th><th>par.</th><th>storico</th><th>verifica</th><th>trade</th>`
+      + `</tr></thead><tbody>`;
+    const trs = rows.map((b) => {
+      const val = b.validation_return_pct == null
+        ? "—"
+        : `${b.validation_return_pct >= 0 ? "+" : ""}${b.validation_return_pct.toFixed(1)}%`;
+      const vt = b.validation_trades == null ? "" : ` <span class="lab-branch-tr">(${b.validation_trades})</span>`;
+      return `<tr class="${b.chosen ? "chosen" : ""}">`
+        + `<td>${escapeHtml(b.label)}${b.chosen ? ' <span class="lab-branch-pick">scelta</span>' : ""}`
+        + `${b.enumerated ? "" : ' <span class="lab-branch-samp" title="Spazio troppo grande per essere esplorato interamente: questa riga non è riproducibile">campionata</span>'}</td>`
+        + `<td class="n">${b.dims}</td>`
+        + `<td class="n">${b.total_return_pct >= 0 ? "+" : ""}${b.total_return_pct.toFixed(1)}%</td>`
+        + `<td class="n">${val}${vt}</td>`
+        + `<td class="n">${b.num_trades}</td></tr>`;
+    }).join("");
+    box.innerHTML = head + trs + "</tbody></table>";
+    box.classList.remove("hidden");
+  }
+
   function renderLabParamFields() {
     const strategyName = labState.strategy || "";
     const fields = STRATEGY_PARAM_FIELDS[strategyName] || [];
     const container = labEl("lab-params-fields");
     container.innerHTML = "";
     // Show grid-mode toggle only for strategies that support it.
-    const gridWrap = labEl("lab-grid-toggle-wrap");
+    const gridWrap = labEl("lab-mode-grid-wrap");
     if (gridWrap) gridWrap.classList.toggle("hidden", !GRID_STRATEGIES.has(strategyName));
     fields.forEach((field) => {
       const label = document.createElement("label");
@@ -4702,15 +4909,19 @@
     runBtn.disabled = true;
     labEl("lab-result-block").classList.add("hidden");
     labEl("lab-apply-strip").classList.add("hidden");
-    const isGrid = labEl("lab-grid-mode")?.checked;
-    labEl("lab-status").textContent = isGrid
-      ? "Grid search in corso… ogni combinazione testata (~30–50s)"
-      : "Ottimizzazione in corso… (10–25s)";
+    const optMode = labOptMode();
+    labEl("lab-status").textContent =
+      optMode === "plateau"
+        ? "Ricerca stabile in corso… mappa i pianori invece del picco (1–5 min). Il risultato sarà riproducibile."
+        : optMode === "grid"
+        ? "Grid search in corso… ogni combinazione testata (~30–50s)"
+        : "Ottimizzazione in corso… (10–25s)";
+    labEl("lab-regime-box").classList.add("hidden");
+    labEl("lab-branch-box").classList.add("hidden");
     labEl("lab-status").classList.remove("hidden");
     await withAsyncButton(optBtn, async () => {
       const params = buildLabQuery();
-      const gridMode = labEl("lab-grid-mode")?.checked;
-      if (gridMode) params.set("mode", "grid");
+      if (optMode !== "random") params.set("mode", optMode);
       const url = `/api/optimize?${params.toString()}`;
       const resp = await fetch(url);
       if (seq !== labState.seq) return;
@@ -4726,6 +4937,8 @@
       });
       labEl("lab-status").classList.add("hidden");
       renderLabResults(body.backtest);
+      renderRegimeBox(body);
+      renderBranchBox(body);
 
       // Auto-apply to main chart: copy params to main form and refresh signals
       state.assetType = labState.assetType;
@@ -4974,6 +5187,7 @@
     bindLabUI();
     bindMobileNav();
     bindRail();
+    bindIssues();
     bindTabs();
     bindDrawRail();
     bindMobileDrawTools();

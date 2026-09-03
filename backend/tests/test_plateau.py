@@ -1,0 +1,230 @@
+"""Tests for plateau search (stages S3-S4).
+
+Boundary location is tested against synthetic step functions rather than
+backtests: the estimator's correctness is a separate question from whether the
+objective it is pointed at behaves well, and mixing the two makes both harder
+to diagnose.
+"""
+
+from __future__ import annotations
+
+import numpy as np
+import pandas as pd
+import pytest
+
+from app.analysis import plateau as P
+from app.analysis.plateau import (
+    AxisPartition,
+    locate_boundaries,
+    plateau_search,
+)
+from app.models import BacktestResult
+
+GABRIELE = "Gabriele (RSI+BB reversal)"
+
+
+def _bt(total_return=100.0, dd=20.0, trades=20, pf=2.0) -> BacktestResult:
+    return BacktestResult(
+        interval="1d", initial_capital=10000.0,
+        final_equity=10000 * (1 + total_return / 100),
+        total_return_pct=total_return, num_trades=trades, win_rate_pct=55.0,
+        max_drawdown_pct=dd, profit_factor=pf, equity_curve=[], trades=[],
+        data_start=0, data_end=1, sharpe_ratio=1.0, max_consecutive_losses=2,
+    )
+
+
+def _df(n: int = 200) -> pd.DataFrame:
+    rng = np.random.default_rng(0)
+    close = 100 * np.exp(np.cumsum(rng.normal(0, 0.02, n)))
+    return pd.DataFrame(
+        {"open": close, "high": close * 1.01, "low": close * 0.99,
+         "close": close, "volume": np.full(n, 1e6)},
+        index=pd.date_range("2023-01-01", periods=n, freq="D"),
+    )
+
+
+# --- AxisPartition -----------------------------------------------------------
+
+
+def test_partition_without_boundaries_is_one_cell():
+    p = AxisPartition(0, "x", ())
+    assert p.n_cells == 1
+    assert p.cell_bounds(0) == (0.0, 1.0)
+    assert p.width_at(0.5) == 1.0
+    assert p.centers() == [0.5]
+
+
+def test_partition_cells_tile_the_axis_without_gaps():
+    p = AxisPartition(0, "x", (0.25, 0.6))
+    assert p.n_cells == 3
+    bounds = [p.cell_bounds(i) for i in range(p.n_cells)]
+    assert bounds == [(0.0, 0.25), (0.25, 0.6), (0.6, 1.0)]
+    assert sum(hi - lo for lo, hi in bounds) == pytest.approx(1.0)
+
+
+def test_width_at_reports_the_containing_cell():
+    p = AxisPartition(0, "x", (0.25, 0.6))
+    assert p.width_at(0.10) == pytest.approx(0.25)
+    assert p.width_at(0.40) == pytest.approx(0.35)
+    assert p.width_at(0.90) == pytest.approx(0.40)
+
+
+def test_centers_sit_inside_their_own_cell():
+    p = AxisPartition(0, "x", (0.25, 0.6))
+    for i, c in enumerate(p.centers()):
+        lo, hi = p.cell_bounds(i)
+        assert lo < c < hi
+        assert p.cell_index(c) == i
+
+
+# --- boundary location on known step functions -------------------------------
+
+
+def test_locates_a_single_boundary_to_tolerance():
+    tol = 0.002
+    found = locate_boundaries(lambda u: ("hi",) if u > 0.37 else ("lo",), coarse=10, tol=tol)
+    assert len(found) == 1
+    assert found[0] == pytest.approx(0.37, abs=tol)
+
+
+def test_locates_several_boundaries():
+    truth = [0.2, 0.5, 0.8]
+
+    def f(u):
+        return (int(np.searchsorted(truth, u)),)
+
+    found = locate_boundaries(f, coarse=20, tol=0.002)
+    assert len(found) == 3
+    for got, want in zip(found, truth):
+        assert got == pytest.approx(want, abs=0.004)
+
+
+def test_constant_function_yields_no_boundaries():
+    assert locate_boundaries(lambda u: ("same",), coarse=10, tol=0.004) == []
+
+
+def test_narrow_plateau_between_coarse_samples_can_be_missed():
+    """Documents a real limitation rather than asserting it away.
+
+    Bisection assumes one transition per bracket. A plateau narrower than the
+    coarse spacing that departs and returns to the same value is invisible —
+    which is exactly the shape of the knife-edge maximum this work is about.
+    The coarse scan bounds the risk; it cannot remove it, and callers are told
+    so through the resolution settings rather than being given false comfort.
+    """
+    def f(u):
+        return ("spike",) if 0.5000 < u < 0.5008 else ("base",)
+
+    assert locate_boundaries(f, coarse=6, tol=0.004) == []
+
+    dense = locate_boundaries(f, coarse=4000, tol=1e-5)
+    assert len(dense) == 2
+
+
+def test_boundary_count_is_cheaper_than_dense_scanning():
+    """The reason for bisecting at all: cost should scale with the number of
+    jumps, not with the resolution."""
+    calls = {"n": 0}
+    truth = [0.3, 0.7]
+
+    def f(u):
+        calls["n"] += 1
+        return (int(np.searchsorted(truth, u)),)
+
+    locate_boundaries(f, coarse=10, tol=0.001)
+    # A dense scan at the same resolution would need 1000 evaluations.
+    assert calls["n"] < 60
+
+
+# --- plateau_search ----------------------------------------------------------
+
+
+def test_rejects_unknown_strategy():
+    with pytest.raises(ValueError):
+        plateau_search("Nope", _df())
+
+
+def test_enumerated_search_is_seed_independent(monkeypatch):
+    """The property the whole exercise exists to obtain. Measured on real
+    backtests it holds exactly (cv_oos 0.00% across seeds) once the cell grid
+    is small enough to enumerate; here it is pinned cheaply with a stub.
+    """
+    def fake(df, params, bp, strategy_name=None, signals=None):
+        # deterministic, mildly structured, plenty of trades
+        v = (params["rsi_length"] % 5) * 10 + (params["bb_length"] % 3) * 4
+        return _bt(total_return=float(v), trades=20)
+
+    monkeypatch.setattr(P, "run_backtest", fake)
+    runs = [plateau_search(GABRIELE, _df(), max_grid_evals=100000, seed=s) for s in range(3)]
+    assert all(r.enumerated for r in runs)
+    first = runs[0].best.params
+    assert all(r.best.params == first for r in runs)
+
+
+def test_sampled_search_says_so_in_the_notes(monkeypatch):
+    """When the grid cannot be enumerated the result must admit it: that is
+    precisely the regime where the answer becomes seed dependent."""
+    def fake(df, params, bp, strategy_name=None, signals=None):
+        return _bt(total_return=float(params["rsi_length"] * params["bb_length"] % 97), trades=20)
+
+    monkeypatch.setattr(P, "run_backtest", fake)
+    r = plateau_search(GABRIELE, _df(), max_grid_evals=5, seed=0)
+    assert not r.enumerated
+    assert any("sampling" in n for n in r.notes)
+
+
+def test_thin_candidates_are_excluded_from_selection(monkeypatch):
+    """A 3-trade backtest showing a large return is one lucky sequence, not an
+    edge. The objective has to stay finite for boundary detection, so the
+    trade floor is enforced at selection instead."""
+    def fake(df, params, bp, strategy_name=None, signals=None):
+        if params["rsi_length"] % 2 == 0:
+            return _bt(total_return=900.0, dd=5.0, trades=3)      # spectacular, thin
+        return _bt(total_return=40.0, dd=10.0, trades=25)         # modest, evidenced
+
+    monkeypatch.setattr(P, "run_backtest", fake)
+    r = plateau_search(GABRIELE, _df(), max_grid_evals=100000, min_trades=8, seed=0)
+    assert r.best is not None
+    assert r.best.backtest.num_trades >= 8
+    assert r.best.backtest.total_return_pct == pytest.approx(40.0)
+
+
+def test_reports_when_nothing_clears_the_trade_floor(monkeypatch):
+    def fake(df, params, bp, strategy_name=None, signals=None):
+        return _bt(total_return=500.0, trades=2)
+
+    monkeypatch.setattr(P, "run_backtest", fake)
+    r = plateau_search(GABRIELE, _df(), max_grid_evals=100000, min_trades=8, seed=0)
+    assert any("trades" in n and "unusable" in n for n in r.notes)
+
+
+def test_axis_approximation_error_is_reported(monkeypatch):
+    """The partition is an approximation of an interacting surface. Its error
+    has to appear in the output as a number, not survive as an assumption —
+    measured on real data it runs above 50%."""
+    def fake(df, params, bp, strategy_name=None, signals=None):
+        return _bt(total_return=float(hash(tuple(sorted(params.items()))) % 200), trades=20)
+
+    monkeypatch.setattr(P, "run_backtest", fake)
+    r = plateau_search(GABRIELE, _df(), max_grid_evals=400, seed=0)
+    assert r.best is not None
+    assert r.best.axis_approximation_error is not None
+    assert 0.0 <= r.best.axis_approximation_error <= 1.0
+    assert any("axis approximation error" in n for n in r.notes)
+
+
+def test_prefers_a_wide_plateau_over_a_narrow_spike(monkeypatch):
+    """The core behaviour: a taller but knife-edge configuration must lose to a
+    slightly lower one that survives perturbation."""
+    def fake(df, params, bp, strategy_name=None, signals=None):
+        # A single spike at one exact bb_mult, a broad shelf everywhere below 2.0
+        if params["bb_mult"] == pytest.approx(2.05, abs=0.03):
+            return _bt(total_return=400.0, dd=20.0, trades=20)
+        if params["bb_mult"] < 2.0:
+            return _bt(total_return=150.0, dd=20.0, trades=20)
+        return _bt(total_return=1.0, dd=20.0, trades=20)
+
+    monkeypatch.setattr(P, "run_backtest", fake)
+    r = plateau_search(GABRIELE, _df(), max_grid_evals=100000, seed=0)
+    assert r.best is not None
+    assert r.best.backtest.total_return_pct < 400.0

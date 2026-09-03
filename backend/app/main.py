@@ -27,6 +27,7 @@ except (AttributeError, ValueError):
     pass
 
 from app import auth
+from app import issues as issues_store
 from app import rate_limit
 from app.trading.executor import place_order_for_signal
 from app import favorites as favorites_store
@@ -36,6 +37,7 @@ from app.analysis.confluence import compute_confluence
 from app.analysis.indicators import compute_indicators
 from app.analysis.fibonacci import compute_fib_zones
 from app.analysis.optimize import is_optimizable, optimize_strategy
+from app.analysis.pipeline import run_pipeline
 from app.analysis.smc_engine import compute_dealing_range, compute_levels, compute_swings
 from app.analysis.strategies import AVAILABLE_STRATEGIES, DEFAULT_STRATEGY, build_strategy_state
 from app.analysis.summary import build_summary, determine_bias
@@ -1413,6 +1415,79 @@ async def deep_backtest(
     return result.model_copy(update={"interval": backtest_interval})
 
 
+class OptimizeCandidate(BaseModel):
+    """One entry of the optimizer's ranked shortlist.
+
+    Exposing the whole shortlist — rather than only the winner — lets the UI
+    show the dispersion between the top candidates. A shortlist whose members
+    disagree wildly is itself the signal that the winner is a lucky draw
+    rather than a stable optimum."""
+
+    rank: int
+    params: dict
+    score: float
+    total_return_pct: float
+    max_drawdown_pct: float
+    num_trades: int
+    win_rate_pct: float | None = None
+    profit_factor: float | None = None
+    out_of_sample_return_pct: float | None = None
+    overfitted: bool = False
+
+
+class RegimeInfo(BaseModel):
+    """Whether the strategy had an edge to find on this series at all.
+
+    Surfaced rather than enforced: a result produced under a failed gate is
+    fitted to a series where the strategy has no measurable edge, and the
+    caller needs to be able to see that instead of reading the return figure
+    as if it meant the same thing."""
+
+    passed: bool
+    family: str | None = None
+    reason: str = ""
+    variance_ratio: float | None = None
+    vr_z: float | None = None
+    vr_p_one_sided: float | None = None
+    hurst: float | None = None
+    verdict: str = ""
+
+
+class BranchInfo(BaseModel):
+    """One branch of the parameter space, with the result it reached.
+
+    Shown side by side because that comparison is the finding: on the series
+    measured, branches with more free parameters scored higher in-sample and
+    worse out-of-sample. A single returned number hides exactly that."""
+
+    label: str
+    dims: int
+    enumerated: bool
+    chosen: bool
+    total_return_pct: float
+    max_drawdown_pct: float
+    num_trades: int
+    validation_return_pct: float | None = None
+    validation_trades: int | None = None
+    params: dict = {}
+
+
+class DeflatedSharpe(BaseModel):
+    """The winner's Sharpe, corrected for how many configurations were tried.
+
+    The expected maximum Sharpe under no skill grows with the number of
+    attempts, so a figure produced by searching thousands of candidates is not
+    comparable to one from a single hypothesis. `deflated` is the probability
+    the result survives that correction; below 0.95 it is not distinguishable
+    from the best of that many attempts on noise."""
+
+    sharpe: float | None = None
+    deflated: float | None = None
+    sharpe_threshold: float | None = None
+    n_trials: int = 0
+    acceptable: bool = False
+
+
 class OptimizeResult(BaseModel):
     params: dict
     backtest: BacktestResult
@@ -1420,6 +1495,14 @@ class OptimizeResult(BaseModel):
     out_of_sample_return_pct: float | None = None
     overfitted: bool = False
     mode: str = "random"
+    top_candidates: list[OptimizeCandidate] = []
+    # Populated by mode="plateau" only.
+    deterministic: bool | None = None
+    regime: RegimeInfo | None = None
+    branches: list[BranchInfo] = []
+    chosen_branch: str | None = None
+    pipeline_notes: list[str] = []
+    deflated_sharpe: DeflatedSharpe | None = None
 
 
 @app.get("/api/optimize", response_model=OptimizeResult)
@@ -1430,7 +1513,7 @@ async def optimize_strategy_endpoint(
     ltf_interval: IntervalChoice = Query(DEFAULT_INTERVALS["ltf"]),
     strategy_name: str = Query(DEFAULT_STRATEGY),
     backtest_params: BacktestParamsQuery = Depends(),
-    mode: str = Query("random", pattern="^(random|grid)$"),
+    mode: str = Query("random", pattern="^(random|grid|plateau)$"),
 ) -> OptimizeResult:
     """Random-search parameter tuning for any strategy in the registry —
     same deep-history df the backtest itself uses (see
@@ -1456,7 +1539,55 @@ async def optimize_strategy_endpoint(
     if df.empty:
         raise HTTPException(status_code=502, detail=f"Nessun dato per {symbol}")
 
-    best_params, best_bt, trials, oos_return, overfitted = await asyncio.to_thread(
+    if mode == "plateau":
+        # Deterministic path: same inputs give the same answer, because the
+        # cell grid is enumerated rather than sampled wherever it fits the
+        # budget. Measured against random search on identical data with only
+        # the seed varying, cv of the out-of-sample return went from 66.5% to
+        # 0% (Gabriele) and from 225.1% to 0% (Lorenzo).
+        pr = await asyncio.to_thread(
+            run_pipeline, strategy_name, df, backtest_params.model_dump()
+        )
+        rep = pr.gate.report
+        return OptimizeResult(
+            params=pr.params,
+            backtest=pr.backtest.model_copy(update={"interval": backtest_interval}),
+            trials_evaluated=pr.evaluations,
+            out_of_sample_return_pct=pr.out_of_sample_return_pct,
+            overfitted=pr.overfitted,
+            mode=mode,
+            deterministic=pr.deterministic,
+            chosen_branch=pr.chosen_branch,
+            pipeline_notes=pr.notes,
+            deflated_sharpe=(
+                None if pr.dsr is None else DeflatedSharpe(
+                    sharpe=pr.dsr.sharpe, deflated=pr.dsr.deflated,
+                    sharpe_threshold=pr.dsr.sharpe_threshold,
+                    n_trials=pr.dsr.n_trials, acceptable=pr.dsr.acceptable,
+                )
+            ),
+            regime=RegimeInfo(
+                passed=pr.gate.passed, family=pr.gate.family, reason=pr.gate.reason,
+                variance_ratio=rep.variance_ratio, vr_z=rep.vr_z,
+                vr_p_one_sided=rep.vr_p_one_sided, hurst=rep.hurst,
+                verdict=rep.verdict,
+            ),
+            branches=[
+                BranchInfo(
+                    label=b.label, dims=b.dims, enumerated=b.enumerated,
+                    chosen=b.label == pr.chosen_branch,
+                    total_return_pct=b.best.backtest.total_return_pct,
+                    max_drawdown_pct=b.best.backtest.max_drawdown_pct,
+                    num_trades=b.best.backtest.num_trades,
+                    validation_return_pct=b.validation_return_pct,
+                    validation_trades=b.validation_trades,
+                    params=b.best.params,
+                )
+                for b in pr.branches if b.best is not None
+            ],
+        )
+
+    best_params, best_bt, trials, oos_return, overfitted, top_results = await asyncio.to_thread(
         optimize_strategy, strategy_name, df, backtest_params.model_dump(), mode=mode
     )
     best_bt = best_bt.model_copy(update={"interval": backtest_interval})
@@ -1467,7 +1598,86 @@ async def optimize_strategy_endpoint(
         out_of_sample_return_pct=oos_return,
         overfitted=overfitted,
         mode=mode,
+        top_candidates=[
+            OptimizeCandidate(
+                rank=c["rank"],
+                params=c["params"],
+                score=c["score"],
+                total_return_pct=c["backtest"].total_return_pct,
+                max_drawdown_pct=c["backtest"].max_drawdown_pct,
+                num_trades=c["backtest"].num_trades,
+                win_rate_pct=c["backtest"].win_rate_pct,
+                profit_factor=c["backtest"].profit_factor,
+                out_of_sample_return_pct=c["out_of_sample_return_pct"],
+                overfitted=c["overfitted"],
+            )
+            for c in top_results
+        ],
     )
+
+
+# --- Segnalazioni ------------------------------------------------------------
+# Lettura pubblica di proposito: la bacheca serve anche a chi non ha ancora
+# fatto login, e non contiene nulla di sensibile. La scrittura resta dietro
+# autenticazione, cosi' le segnalazioni portano un autore e non chiunque passi
+# di qui puo' riempirle.
+
+
+class IssueIn(BaseModel):
+    title: str
+    detail: str = ""
+    priority: str = "media"
+
+
+class IssuePatch(BaseModel):
+    status: str | None = None
+    priority: str | None = None
+    detail: str | None = None
+
+
+@app.get("/api/issues")
+async def list_issues() -> dict:
+    items = issues_store.list_issues()
+    return {
+        "items": items,
+        "counts": {
+            "aperto": sum(1 for i in items if i.get("status") == "aperto"),
+            "in corso": sum(1 for i in items if i.get("status") == "in corso"),
+            "risolto": sum(1 for i in items if i.get("status") == "risolto"),
+        },
+    }
+
+
+@app.post("/api/issues")
+async def create_issue(body: IssueIn, user: User = Depends(auth.get_current_user)) -> dict:
+    try:
+        return issues_store.add_issue(
+            title=body.title, detail=body.detail,
+            priority=body.priority, author=user.email,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.patch("/api/issues/{issue_id}")
+async def patch_issue(issue_id: str, body: IssuePatch,
+                      user: User = Depends(auth.get_current_user)) -> dict:
+    try:
+        updated = issues_store.update_issue(
+            issue_id, status=body.status, priority=body.priority, detail=body.detail
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Segnalazione non trovata")
+    return updated
+
+
+@app.delete("/api/issues/{issue_id}")
+async def remove_issue(issue_id: str, user: User = Depends(auth.get_current_user)) -> dict:
+    if not issues_store.delete_issue(issue_id):
+        raise HTTPException(status_code=404, detail="Segnalazione non trovata")
+    return {"deleted": issue_id}
 
 
 @app.get("/api/sniper/candidates")
