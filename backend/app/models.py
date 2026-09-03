@@ -120,6 +120,7 @@ class User(BaseModel):
     password_hash: str
     telegram_chat_id: str = ""  # user pastes this in from their own DM with the shared bot
     trading_credentials: dict[str, ExchangeCredential] = {}  # key = exchange slug ("binance", "mexc", "kucoin")
+    preferences: dict = {}  # last session state: ticker, interval, strategy, layers, etc.
 
 
 class FavoriteEntry(BaseModel):
