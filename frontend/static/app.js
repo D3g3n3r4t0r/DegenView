@@ -1,19 +1,13 @@
 (() => {
   "use strict";
 
-  // TradingView-inspired light palette — UI chrome (buttons, tabs, nav) is
-  // monochrome black/white/grey; color is reserved for what the data means:
-  // bull/bear for candles, accent blue for the one interactive/liquidity
-  // hue, a warm amber for the second highlight a chart needs (EMA50, MACD
-  // signal, drawing tools) so it doesn't collide with the blue accent.
-  const COLORS = {
-    // Terminal noir dark palette — chart backgrounds and text
+  // Terminal noir — dark mode chart palette
+  const COLORS_DARK = {
     paperBg: "#080b0f",
     ink: "#c9d1d9",
     inkDim: "#6e7681",
     gridMinor: "rgba(26, 37, 53, 0.55)",
     gridMajor: "rgba(26, 37, 53, 0.85)",
-    // Neon bull/bear — high contrast on dark ground
     bull: "#00d68f",
     bear: "#ff4560",
     accent: "#00d68f",
@@ -22,8 +16,6 @@
     bullBorder: "rgba(0, 214, 143, 0.75)",
     bearFill: "rgba(255, 69, 96, 0.12)",
     bearBorder: "rgba(255, 69, 96, 0.75)",
-    // FVGs split by direction: bullish = green-tinted, bearish = red-tinted
-    // (lighter opacity than order blocks so they stay non-invasive)
     fvgBullFill: "rgba(0, 214, 143, 0.09)",
     fvgBullBorder: "rgba(0, 214, 143, 0.45)",
     fvgBearFill: "rgba(255, 69, 96, 0.09)",
@@ -32,7 +24,6 @@
     confluenceBorder: "rgba(0, 214, 143, 0.40)",
     ema20: "#5b9cf6",
     ema50: "#f0a500",
-    // Bollinger: upper/lower bands cornflower blue, mid slightly dimmer + dashed
     bbUpper: "rgba(91, 156, 246, 0.85)",
     bbMid: "rgba(91, 156, 246, 0.45)",
     bbLower: "rgba(91, 156, 246, 0.85)",
@@ -41,6 +32,40 @@
     macd: "#5b9cf6",
     macdSignal: "#f0a500",
   };
+
+  // Minimal Ink — light mode chart palette: monochrome candles, only P&L uses color
+  const COLORS_LIGHT = {
+    paperBg: "#ffffff",
+    ink: "#000000",
+    inkDim: "#666666",
+    gridMinor: "rgba(0, 0, 0, 0.05)",
+    gridMajor: "rgba(0, 0, 0, 0.10)",
+    bull: "#1a1a1a",
+    bear: "#1a1a1a",
+    accent: "#000000",
+    stamp: "#888888",
+    bullFill: "rgba(0, 0, 0, 0.04)",
+    bullBorder: "rgba(0, 0, 0, 0.55)",
+    bearFill: "rgba(0, 0, 0, 0.07)",
+    bearBorder: "rgba(0, 0, 0, 0.75)",
+    fvgBullFill: "rgba(0, 0, 0, 0.03)",
+    fvgBullBorder: "rgba(0, 0, 0, 0.25)",
+    fvgBearFill: "rgba(0, 0, 0, 0.03)",
+    fvgBearBorder: "rgba(0, 0, 0, 0.25)",
+    confluenceFill: "rgba(0, 0, 0, 0.03)",
+    confluenceBorder: "rgba(0, 0, 0, 0.22)",
+    ema20: "#888888",
+    ema50: "#444444",
+    bbUpper: "rgba(0, 0, 0, 0.50)",
+    bbMid: "rgba(0, 0, 0, 0.25)",
+    bbLower: "rgba(0, 0, 0, 0.50)",
+    vwap: "#555555",
+    rsi: "#666666",
+    macd: "#555555",
+    macdSignal: "#aaaaaa",
+  };
+
+  const COLORS = window.matchMedia("(prefers-color-scheme: dark)").matches ? COLORS_DARK : COLORS_LIGHT;
 
   const TF_LABELS = { htf: "HTF", mtf: "MTF", ltf: "LTF" };
   const CANONICAL_INTERVALS = ["1m", "5m", "15m", "30m", "1h", "4h", "1d", "2d", "3d", "5d", "1w", "1M"];
