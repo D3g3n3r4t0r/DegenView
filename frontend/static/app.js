@@ -7,34 +7,39 @@
   // hue, a warm amber for the second highlight a chart needs (EMA50, MACD
   // signal, drawing tools) so it doesn't collide with the blue accent.
   const COLORS = {
-    paperBg: "#ffffff",
-    ink: "#131722",
-    inkDim: "#787b86",
-    gridMinor: "rgba(15, 23, 42, 0.05)",
-    gridMajor: "rgba(15, 23, 42, 0.1)",
-    bull: "#089981",
-    bear: "#f23645",
-    accent: "#2962ff",
-    stamp: "#c07a1e",
-    bullFill: "rgba(8, 153, 129, 0.14)",
-    bullBorder: "rgba(8, 153, 129, 0.85)",
-    bearFill: "rgba(242, 54, 69, 0.12)",
-    bearBorder: "rgba(242, 54, 69, 0.8)",
-    // FVGs ("imbalance") render neutral gray regardless of direction, not
-    // bull/bear-colored like order blocks — an inefficiency in price, not a
-    // directional bias. Overlapping unmitigated gaps stack visually darker
-    // since the fill is semi-transparent.
-    fvgFill: "rgba(120, 123, 134, 0.22)",
-    fvgBorder: "rgba(120, 123, 134, 0.65)",
-    confluenceFill: "rgba(41, 98, 255, 0.12)",
-    confluenceBorder: "rgba(41, 98, 255, 0.75)",
-    ema20: "#6b8afd",
-    ema50: "#c07a1e",
-    bb: "#787b86",
-    vwap: "#787b86",
-    rsi: "#6b8afd",
-    macd: "#6b8afd",
-    macdSignal: "#c07a1e",
+    // Terminal noir dark palette — chart backgrounds and text
+    paperBg: "#080b0f",
+    ink: "#c9d1d9",
+    inkDim: "#6e7681",
+    gridMinor: "rgba(26, 37, 53, 0.55)",
+    gridMajor: "rgba(26, 37, 53, 0.85)",
+    // Neon bull/bear — high contrast on dark ground
+    bull: "#00d68f",
+    bear: "#ff4560",
+    accent: "#00d68f",
+    stamp: "#f0a500",
+    bullFill: "rgba(0, 214, 143, 0.12)",
+    bullBorder: "rgba(0, 214, 143, 0.75)",
+    bearFill: "rgba(255, 69, 96, 0.12)",
+    bearBorder: "rgba(255, 69, 96, 0.75)",
+    // FVGs split by direction: bullish = green-tinted, bearish = red-tinted
+    // (lighter opacity than order blocks so they stay non-invasive)
+    fvgBullFill: "rgba(0, 214, 143, 0.09)",
+    fvgBullBorder: "rgba(0, 214, 143, 0.45)",
+    fvgBearFill: "rgba(255, 69, 96, 0.09)",
+    fvgBearBorder: "rgba(255, 69, 96, 0.45)",
+    confluenceFill: "rgba(0, 214, 143, 0.07)",
+    confluenceBorder: "rgba(0, 214, 143, 0.40)",
+    ema20: "#5b9cf6",
+    ema50: "#f0a500",
+    // Bollinger: upper/lower bands cornflower blue, mid slightly dimmer + dashed
+    bbUpper: "rgba(91, 156, 246, 0.85)",
+    bbMid: "rgba(91, 156, 246, 0.45)",
+    bbLower: "rgba(91, 156, 246, 0.85)",
+    vwap: "#8b8bff",
+    rsi: "#5b9cf6",
+    macd: "#5b9cf6",
+    macdSignal: "#f0a500",
   };
 
   const TF_LABELS = { htf: "HTF", mtf: "MTF", ltf: "LTF" };
@@ -658,6 +663,7 @@
       rsi: false,
       macd: false,
       stoch: false,
+      fibonacci: false,
     },
   };
 
@@ -1639,7 +1645,7 @@
     const isMobile = window.matchMedia("(max-width: 760px)").matches;
     const chartGridColor = isMobile ? "rgba(255, 255, 255, 0.035)" : COLORS.gridMinor;
     const baseOptions = {
-      layout: { background: { color: COLORS.paperBg }, textColor: COLORS.inkDim, fontFamily: "'IBM Plex Mono', monospace" },
+      layout: { background: { color: COLORS.paperBg }, textColor: COLORS.inkDim, fontFamily: "'JetBrains Mono', 'IBM Plex Mono', monospace" },
       grid: { vertLines: { color: chartGridColor }, horzLines: { color: chartGridColor } },
       rightPriceScale: { borderColor: COLORS.gridMajor },
       timeScale: { borderColor: COLORS.gridMajor, timeVisible: true, secondsVisible: false },
@@ -1666,19 +1672,26 @@
     const rsiContainer = el("rsi-chart");
     rsiChart = LightweightCharts.createChart(rsiContainer, baseOptions);
     rsiSeries = rsiChart.addLineSeries({ color: COLORS.rsi, lineWidth: 2 });
+    rsiSeries.createPriceLine({ price: 70, color: "rgba(255,69,96,0.45)", lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: "OB" });
+    rsiSeries.createPriceLine({ price: 50, color: "rgba(110,120,134,0.35)", lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dotted, axisLabelVisible: false, title: "" });
+    rsiSeries.createPriceLine({ price: 30, color: "rgba(0,214,143,0.45)", lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: "OS" });
     observeResize(rsiContainer, rsiChart);
 
     const macdContainer = el("macd-chart");
     macdChart = LightweightCharts.createChart(macdContainer, baseOptions);
     macdLineSeries = macdChart.addLineSeries({ color: COLORS.macd, lineWidth: 2 });
     macdSignalSeries = macdChart.addLineSeries({ color: COLORS.macdSignal, lineWidth: 1 });
-    macdHistSeries = macdChart.addHistogramSeries({ color: "rgba(255, 255, 255, 0.28)" });
+    macdHistSeries = macdChart.addHistogramSeries({ color: "rgba(91,156,246,0.3)" });
+    macdLineSeries.createPriceLine({ price: 0, color: "rgba(110,120,134,0.5)", lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Solid, axisLabelVisible: false, title: "" });
     observeResize(macdContainer, macdChart);
 
     const stochContainer = el("stoch-chart");
     stochChart = LightweightCharts.createChart(stochContainer, baseOptions);
     stochKSeries = stochChart.addLineSeries({ color: COLORS.rsi, lineWidth: 2 });
     stochDSeries = stochChart.addLineSeries({ color: COLORS.stamp, lineWidth: 1 });
+    stochKSeries.createPriceLine({ price: 80, color: "rgba(255,69,96,0.45)", lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: "OB" });
+    stochKSeries.createPriceLine({ price: 50, color: "rgba(110,120,134,0.35)", lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dotted, axisLabelVisible: false, title: "" });
+    stochKSeries.createPriceLine({ price: 20, color: "rgba(0,214,143,0.45)", lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: "OS" });
     observeResize(stochContainer, stochChart);
 
     // equity-chart panel removed — equityChart/equitySeries stay null
@@ -2465,10 +2478,15 @@
       }
     }
     if (state.layers.bbands) {
-      ["BB_upper", "BB_mid", "BB_lower"].forEach((name) => {
+      const bbBands = [
+        { name: "BB_upper", color: COLORS.bbUpper, lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Solid },
+        { name: "BB_mid", color: COLORS.bbMid, lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed },
+        { name: "BB_lower", color: COLORS.bbLower, lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Solid },
+      ];
+      bbBands.forEach(({ name, color, lineWidth, lineStyle }) => {
         const vals = findIndicator(analysis.indicators, name);
         if (!vals) return;
-        const s = mainChart.addLineSeries({ color: COLORS.bb, lineWidth: 1, priceLineVisible: false });
+        const s = mainChart.addLineSeries({ color, lineWidth, lineStyle, priceLineVisible: false });
         s.setData(seriesFromIndicatorValues(candles, vals));
         addLineOverlay(mainChart, s, null, mainChart);
       });
@@ -2497,11 +2515,17 @@
       macdSignalSeries.setData(signalVals ? seriesFromIndicatorValues(candles, signalVals) : []);
       if (histVals) {
         macdHistSeries.setData(
-          seriesFromIndicatorValues(candles, histVals).map((d) => ({
-            time: d.time,
-            value: d.value,
-            color: d.value >= 0 ? "rgba(46, 92, 62, 0.55)" : "rgba(140, 47, 31, 0.55)",
-          }))
+          seriesFromIndicatorValues(candles, histVals).map((d, i, arr) => {
+            const prev = arr[i - 1]?.value ?? d.value;
+            const rising = d.value > prev;
+            let color;
+            if (d.value >= 0) {
+              color = rising ? "rgba(0,214,143,0.85)" : "rgba(0,214,143,0.38)";
+            } else {
+              color = !rising ? "rgba(255,69,96,0.85)" : "rgba(255,69,96,0.38)";
+            }
+            return { time: d.time, value: d.value, color };
+          })
         );
       } else {
         macdHistSeries.setData([]);
@@ -2524,8 +2548,8 @@
 
       const isBullish = lvl.direction === "bullish";
       const isFvg = lvl.type === "fvg";
-      const fill = isFvg ? COLORS.fvgFill : isBullish ? COLORS.bullFill : COLORS.bearFill;
-      const border = isFvg ? COLORS.fvgBorder : isBullish ? COLORS.bullBorder : COLORS.bearBorder;
+      const fill = isFvg ? (isBullish ? COLORS.fvgBullFill : COLORS.fvgBearFill) : isBullish ? COLORS.bullFill : COLORS.bearFill;
+      const border = isFvg ? (isBullish ? COLORS.fvgBullBorder : COLORS.fvgBearBorder) : isBullish ? COLORS.bullBorder : COLORS.bearBorder;
       const endTime = lvl.end_time ?? lastTime;
 
       if (isZone) {

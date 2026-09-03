@@ -55,7 +55,7 @@ class Settings(BaseSettings):
     # triggers pagination and stays a single fast request regardless of
     # exchange. Deeper history is what the dedicated backtest fetch below is
     # for, not this one.
-    ltf_candles: int = 500
+    ltf_candles: int = 3000
     # The backtest is a separate, deliberately coarser fetch (see
     # `_backtest_interval` in main.py) so a chart set to 1m/5m doesn't cap
     # its own lookback to a few hours — 5000 daily candles is more than any
