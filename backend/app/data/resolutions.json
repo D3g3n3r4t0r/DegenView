@@ -43,5 +43,19 @@
       "backend/app/issues.py",
       "backend/tests/test_issues.py"
     ]
+  },
+  "seed-0009": {
+    "status": "risolto",
+    "summary": "Nel Laboratorio, sotto i pulsanti di ottimizzazione, c'e' 'Filtri sul risultato': minimo e massimo di trade in perdita e drawdown massimo.",
+    "detail": "Sono un filtro, non un peso: una configurazione che li viola viene esclusa dalla classifica, non penalizzata. Una preferenza sarebbe stata inutile, perche' il punteggio e' dominato dal Calmar, che varia di ordini di grandezza mentre il conteggio delle perdite varia di poche unita'. Campo vuoto significa 'nessun vincolo' ed e' tenuto distinto da 0, che e' il vincolo piu' stringente e va potuto chiedere: nessun trade in perdita, drawdown nullo. I trade in perdita sono contati dai trade e non dedotti dal win rate, che e' arrotondato e con pochi trade non permette di risalire al conteggio esatto. Se nessuna configurazione rispetta i filtri la risposta e' un errore 422 con quante ne sono state escluse su quante provate, invece di ripiegare sui parametri di default: con un filtro attivo, restituire una configurazione che lo viola darebbe una risposta che sembra valida e non lo e'. In modalita' Stabile i filtri si applicano scegliendo, fra i finalisti che la ricerca ha gia' classificato, il primo che li rispetta: dentro la ricerca l'obiettivo deve restare finito ovunque perche' il rilevamento dei confini funzioni, quindi un filtro spinto la' dentro bucherebbe la superficie che si sta misurando.",
+    "files": [
+      "backend/app/analysis/optimize.py",
+      "backend/app/analysis/pipeline.py",
+      "backend/app/main.py",
+      "backend/tests/test_constraints.py",
+      "frontend/index.html",
+      "frontend/static/app.js",
+      "frontend/static/style.css"
+    ]
   }
 }

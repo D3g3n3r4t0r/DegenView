@@ -3325,3 +3325,60 @@ body {
   font-size: 13px; line-height: 1; flex-shrink: 0;
 }
 .theme-toggle-btn:hover { color: var(--ink, #000); border-color: var(--border-strong, #000); }
+
+/* --- Filtri sul risultato dell'ottimizzazione ------------------------------
+   Chiusi di default: sono un'eccezione, non il percorso normale. Il badge sul
+   summary esiste perche' un filtro attivo dentro un pannello chiuso spiega da
+   solo un risultato che altrimenti sembra sbagliato. */
+.lab-filters {
+  border: 1px solid var(--border, #e0e0e0);
+  background: var(--bg-panel, #fff);
+  margin: 10px 0;
+  font-size: 12px;
+}
+.lab-filters > summary {
+  padding: 9px 12px;
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--ink, #111);
+  display: flex; align-items: center; gap: 8px;
+}
+.lab-filters-badge {
+  font-weight: 500;
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--accent, #2962ff);
+  color: #fff;
+}
+.lab-filters-hint {
+  margin: 0 12px 10px;
+  color: var(--ink-dim, #666);
+  line-height: 1.45;
+}
+.lab-filters-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px 10px;
+  padding: 0 12px 10px;
+}
+.lab-filters-grid label { display: flex; flex-direction: column; gap: 4px; }
+.lab-filters-grid span { color: var(--ink-dim, #666); font-size: 11px; }
+.lab-filters-grid input {
+  padding: 6px 8px;
+  border: 1px solid var(--border, #e0e0e0);
+  background: var(--bg, #fff);
+  color: var(--ink, #111);
+  font: inherit;
+  min-width: 0;
+}
+.lab-filters-clear {
+  margin: 0 12px 12px;
+  padding: 5px 10px;
+  border: 1px solid var(--border, #e0e0e0);
+  background: var(--bg-raised, #f7f7f7);
+  color: var(--ink-dim, #666);
+  cursor: pointer;
+  font: inherit; font-size: 11px;
+}
+.lab-filters-clear:hover { color: var(--ink, #111); }

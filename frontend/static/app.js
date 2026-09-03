@@ -4666,6 +4666,58 @@
     return checked ? checked.value : "random";
   }
 
+  // Filtri sul risultato dell'ottimizzazione. Vuoto significa "nessun vincolo",
+  // e va tenuto distinto da 0, che e' il vincolo piu' stringente e legittimo:
+  // "nessun trade in perdita", "drawdown nullo". Per questo il valore si legge
+  // con un confronto esplicito sulla stringa vuota, non con un test di verita'
+  // — con quest'ultimo uno 0 scritto a mano sparirebbe in silenzio.
+  function labFilterValue(id) {
+    const input = labEl(id);
+    if (!input) return null;
+    const raw = (input.value || "").trim();
+    if (raw === "") return null;
+    const n = Number(raw);
+    return Number.isFinite(n) && n >= 0 ? n : null;
+  }
+
+  function labFilters() {
+    return {
+      min_losing_trades: labFilterValue("lab-min-losing"),
+      max_losing_trades: labFilterValue("lab-max-losing"),
+      max_drawdown_pct: labFilterValue("lab-max-dd"),
+    };
+  }
+
+  function applyLabFilters(params) {
+    const f = labFilters();
+    let active = 0;
+    Object.entries(f).forEach(([key, value]) => {
+      if (value === null) return;
+      params.set(key, String(value));
+      active += 1;
+    });
+    const badge = labEl("lab-filters-badge");
+    if (badge) {
+      badge.textContent = active ? `${active} attivo${active > 1 ? "i" : ""}` : "";
+      badge.classList.toggle("hidden", active === 0);
+    }
+    return active;
+  }
+
+  function bindLabFilters() {
+    const clear = labEl("lab-filters-clear");
+    if (clear) {
+      clear.addEventListener("click", () => {
+        ["lab-min-losing", "lab-max-losing", "lab-max-dd"].forEach((id) => {
+          const input = labEl(id);
+          if (input) input.value = "";
+        });
+        const badge = labEl("lab-filters-badge");
+        if (badge) { badge.textContent = ""; badge.classList.add("hidden"); }
+      });
+    }
+  }
+
   // The regime gate answers a question that comes before "which parameters":
   // does this strategy have an edge to find on this series at all? A failed
   // gate means any configuration returned is fitted to noise, so it is shown
@@ -5042,6 +5094,7 @@
     await withAsyncButton(optBtn, async () => {
       const params = buildLabQuery();
       if (optMode !== "random") params.set("mode", optMode);
+      applyLabFilters(params);
       const url = `/api/optimize?${params.toString()}`;
       const resp = await fetch(url);
       if (seq !== labState.seq) return;
@@ -5310,6 +5363,7 @@
     bindRail();
     bindIssues();
     bindTheme();
+    bindLabFilters();
     bindTabs();
     bindDrawRail();
     bindMobileDrawTools();
