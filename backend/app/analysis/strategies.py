@@ -128,20 +128,42 @@ def compute_signals(df: pd.DataFrame, params: dict | None = None) -> pd.DataFram
     )
 
 
-def _find_confirmation(df: pd.DataFrame, swing_pos: int, direction: str, max_lookahead: int) -> int | None:
+def _find_confirmation(
+    df: pd.DataFrame,
+    swing_pos: int,
+    direction: str,
+    max_lookahead: int,
+    swing_length: int = 0,
+) -> int | None:
     """First bar after the swing point whose close actually breaks back
     through the swing bar's high/low — the follow-through that turns a
-    divergence into a real signal instead of a mid-formation guess."""
+    divergence into a real signal instead of a mid-formation guess.
+
+    The scan starts `swing_length` bars after the swing, not one, and that
+    offset is the difference between a backtest and a fantasy. smc's swing
+    detection uses a centred window: a swing at P is only identifiable once
+    `swing_length` further bars exist — measured on KASUSDT across 16 swings by
+    finding the first moment the swing appears and never disappears again, the
+    delay was 8 every single time, exactly swing_length.
+
+    Starting at swing_pos + 1 therefore confirmed against a swing that, at that
+    moment, nobody could yet know was a swing. Of 87 confirmed signals, 84 (97%)
+    fired inside that blind window, at a median of 2 bars. The backtest opened
+    those trades; a live bot could not have, because the signal did not exist
+    yet. Waiting the detection delay costs entry price and removes signals — and
+    buys back the only property that makes a backtest worth reading.
+    """
     n = len(df)
-    end = min(n, swing_pos + 1 + max_lookahead)
+    start = swing_pos + max(1, swing_length)
+    end = min(n, start + max_lookahead)
     if direction == "long":
         level = df["high"].iloc[swing_pos]
-        for pos in range(swing_pos + 1, end):
+        for pos in range(start, end):
             if df["close"].iloc[pos] > level:
                 return pos
     else:
         level = df["low"].iloc[swing_pos]
-        for pos in range(swing_pos + 1, end):
+        for pos in range(start, end):
             if df["close"].iloc[pos] < level:
                 return pos
     return None
@@ -207,7 +229,7 @@ def compute_exhaustion_signals(df: pd.DataFrame, params: dict | None = None) -> 
             volume_quiet = df["volume"].iloc[cur_pos] < cur_vol_ma / p["volume_multiplier"]
             trend_ok = (not p["trend_filter"]) or (close.iloc[cur_pos] < trend_ema.iloc[cur_pos])
             if bullish_divergence and oversold and (volume_climax or volume_quiet) and trend_ok:
-                confirm_pos = _find_confirmation(df, cur_pos, "long", p["confirmation_lookahead"])
+                confirm_pos = _find_confirmation(df, cur_pos, "long", p["confirmation_lookahead"], p["swing_length"])
                 if confirm_pos is not None:
                     entry_long.iloc[confirm_pos] = True
 
@@ -226,7 +248,7 @@ def compute_exhaustion_signals(df: pd.DataFrame, params: dict | None = None) -> 
             volume_quiet = df["volume"].iloc[cur_pos] < cur_vol_ma / p["volume_multiplier"]
             trend_ok = (not p["trend_filter"]) or (close.iloc[cur_pos] > trend_ema.iloc[cur_pos])
             if bearish_divergence and overbought and (volume_climax or volume_quiet) and trend_ok:
-                confirm_pos = _find_confirmation(df, cur_pos, "short", p["confirmation_lookahead"])
+                confirm_pos = _find_confirmation(df, cur_pos, "short", p["confirmation_lookahead"], p["swing_length"])
                 if confirm_pos is not None:
                     entry_short.iloc[confirm_pos] = True
 
