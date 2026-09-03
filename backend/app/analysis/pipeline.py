@@ -39,6 +39,7 @@ from app.analysis.regime import GateDecision, regime_gate
 from app.analysis.validation import (
     DSRResult,
     deflated_sharpe_ratio,
+    periods_per_year_from_curve,
     returns_from_equity_curve,
 )
 from app.models import BacktestResult
@@ -268,9 +269,11 @@ def run_pipeline(
     # passed rather than the shortlist size: understating the trial count
     # inflates the result, which is exactly the error the measure exists to
     # catch.
+    curve = incumbent.backtest.equity_curve
     dsr = deflated_sharpe_ratio(
-        returns_from_equity_curve(incumbent.backtest.equity_curve),
+        returns_from_equity_curve(curve),
         n_trials=max(total_evals, 2),
+        periods_per_year=periods_per_year_from_curve(curve),
     )
     if dsr.deflated is not None and not dsr.acceptable:
         notes.append(
