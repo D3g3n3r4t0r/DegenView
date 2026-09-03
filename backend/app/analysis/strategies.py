@@ -75,7 +75,7 @@ EXHAUSTION_DEFAULT_PARAMS = {
     "enable_range_bounce": True,
 }
 
-_MAX_ALERTS_RETURNED = 500
+_MAX_ALERTS_RETURNED = 10_000  # effectively uncapped — ltf_candles is the real ceiling
 
 
 def _ma(series: pd.Series, length: int, kind: str) -> pd.Series:
