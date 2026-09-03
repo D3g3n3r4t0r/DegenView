@@ -176,10 +176,12 @@ def is_optimizable(strategy_name: str) -> bool:
 def _calc_volatility(df) -> float:
     """ATR(14) / avg_close × 100 as a percentage."""
     try:
-        atr = (df["high"] - df["low"]).rolling(14).mean().iloc[-1]
-        avg_close = df["close"].mean()
-        if avg_close > 0:
-            return float((atr / avg_close) * 100)
+        atr = float((df["high"] - df["low"]).rolling(14).mean().iloc[-1])
+        avg_close = float(df["close"].mean())
+        if math.isfinite(atr) and avg_close > 0:
+            result = (atr / avg_close) * 100
+            if math.isfinite(result):
+                return result
     except Exception:
         pass
     return 2.0  # fallback: assume medium-volatility asset
@@ -261,8 +263,9 @@ def optimize_strategy(
             overfitted = True
 
     # Attach metadata to the result
+    vol_pct = round(ticker_volatility, 2) if math.isfinite(ticker_volatility) else None
     best_bt = best_bt.model_copy(update={
-        "ticker_volatility_pct": round(ticker_volatility, 2),
+        "ticker_volatility_pct": vol_pct,
         "oos_trades": oos_trades,
     })
 
