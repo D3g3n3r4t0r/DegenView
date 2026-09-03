@@ -28,6 +28,10 @@ from typing import Literal
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 _DATA_DIR.mkdir(parents=True, exist_ok=True)
 _STORE_FILE = _DATA_DIR / "issues.json"
+# Quali voci della lista iniziale sono gia' state inserite. Serve a distinguere
+# "mai inserita" da "inserita e poi cancellata": senza questo file l'unico modo
+# per non resuscitare una voce cancellata era non inserirne mai di nuove.
+_SEEDED_FILE = _DATA_DIR / "seeded_ids.json"
 
 # Versionato in git e distribuito col deploy: è il lato di Claude.
 _RESOLUTIONS_FILE = Path(__file__).resolve().parent / "data" / "resolutions.json"
@@ -41,6 +45,7 @@ _VALID_STATUS = {"aperto", "in corso", "risolto", "scartato"}
 _VALID_PRIORITY = {"alta", "media", "bassa"}
 
 _issues: list[dict] = []
+_seeded_ids: set[str] = set()
 
 
 def _load() -> None:
@@ -58,6 +63,24 @@ def _load() -> None:
 def _save() -> None:
     try:
         _STORE_FILE.write_text(json.dumps(_issues, ensure_ascii=False), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _load_seeded() -> None:
+    if not _SEEDED_FILE.exists():
+        return
+    try:
+        raw = json.loads(_SEEDED_FILE.read_text(encoding="utf-8"))
+        if isinstance(raw, list):
+            _seeded_ids.update(str(x) for x in raw)
+    except (json.JSONDecodeError, OSError):
+        pass
+
+
+def _save_seeded() -> None:
+    try:
+        _SEEDED_FILE.write_text(json.dumps(sorted(_seeded_ids)), encoding="utf-8")
     except OSError:
         pass
 
@@ -102,29 +125,50 @@ _SEED = [
     ("seed-0011", "Il trading automatico non ha mai piazzato un ordine",
      "Trovato lavorando sugli alert, non segnalato: non c'era modo di accorgersene. "
      "Nessun errore, nessun log, semplicemente nessun ordine.", "alta"),
+    ("seed-0012", "Voci della lista iniziale che non comparivano piu' sulla bacheca",
+     "Trovato controllando la bacheca dal vivo: seed-0011 non c'era, e la sua risoluzione "
+     "restava senza voce a cui agganciarsi.", "media"),
 ]
 
 
 def _seed() -> None:
-    """Popola l'elenco al primo avvio, senza toccare quello che c'e' gia'.
+    """Aggiunge le voci della lista iniziale che mancano, una per una.
 
     Gli id sono fissi e non generati: le risoluzioni scritte da Claude si
     agganciano per id, e un id casuale al primo avvio scollegherebbe le
     diagnosi gia' scritte da queste voci.
+
+    Il controllo e' per id, non "l'elenco e' vuoto". Con quest'ultimo, una voce
+    aggiunta alla lista dopo il primo avvio non compariva mai piu': il file sul
+    volume esisteva gia', quindi il seeding usciva subito. E' successo con
+    seed-0011, che dal vivo non c'era mentre la sua risoluzione, scritta e
+    distribuita, restava senza voce a cui agganciarsi.
+
+    Una voce cancellata a mano resta cancellata: `seeded_ids.json` ricorda cosa
+    e' gia' stato inserito, cosi' "mai vista" e "vista e buttata" non si
+    confondono.
     """
-    if _issues:
-        return
     now = int(time.time())
+    have = {it.get("id") for it in _issues}
+    added = False
     for i, (iid, title, detail, prio) in enumerate(_SEED):
+        if iid in have or iid in _seeded_ids:
+            _seeded_ids.add(iid)
+            continue
         _issues.append({
             "id": iid, "title": title, "detail": detail, "priority": prio,
             "status": "aperto", "author": "lista iniziale",
             "created_at": now - (len(_SEED) - i),
         })
-    _save()
+        _seeded_ids.add(iid)
+        added = True
+    if added:
+        _save()
+    _save_seeded()
 
 
 _load()
+_load_seeded()
 _seed()
 
 

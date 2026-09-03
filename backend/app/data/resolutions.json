@@ -34,5 +34,14 @@
     "detail": "Il CSS supportava gia' [data-theme], ma non bastava: i colori del grafico non stanno nel CSS, sono opzioni passate alla libreria alla creazione delle serie. Un interruttore che cambiava solo il CSS avrebbe lasciato candele chiare su sfondo nero.\n\nCOLORS era una const scelta una volta sola all'avvio da prefers-color-scheme, con 40 riferimenti sparsi nel file. Riassegnarla li avrebbe lasciati legati alla vecchia palette. Ora l'oggetto resta lo stesso e viene sostituito il contenuto: i riferimenti leggono al momento della chiamata, quindi continuano a funzionare senza toccarne nessuno. Verificato: identita' preservata, tutte e 28 le chiavi cambiano.\n\nLa scelta viene ricordata. Se non ne fai una, il tema continua a seguire il sistema — passando a scuro la sera te lo ritrovi.",
     "next": "Nessuno.",
     "commit": "vedi git log su main"
+  },
+  "seed-0012": {
+    "status": "risolto",
+    "summary": "Il seeding usciva subito se l'elenco non era vuoto, quindi una voce aggiunta dopo il primo avvio non compariva mai.",
+    "detail": "_seed() cominciava con 'if _issues: return'. Il file sul volume esisteva gia' dal primo avvio, quindi ogni voce aggiunta in seguito alla lista iniziale veniva saltata per sempre: dal vivo la bacheca ne mostrava 11 invece di 12, senza seed-0011, e la risoluzione del trading automatico non aveva una voce a cui agganciarsi. Ora il controllo e' per id: vengono inserite solo le voci mancanti. Perche' questo non resusciti una voce cancellata a mano, data/seeded_ids.json sul volume ricorda cosa e' gia' stato inserito, cosi' 'mai vista' e 'vista e buttata' restano distinte.",
+    "files": [
+      "backend/app/issues.py",
+      "backend/tests/test_issues.py"
+    ]
   }
 }
