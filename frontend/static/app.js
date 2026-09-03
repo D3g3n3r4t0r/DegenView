@@ -3974,8 +3974,125 @@
   // anywhere outside it, or open the other rail panel, to close it.
   const RAIL_PANELS = [
     ["rail-levels-btn", "levels-panel"],
+    ["rail-issues-btn", "issues-panel"],
     ["rail-script-btn", "script-panel"],
   ];
+
+
+  // ---- Segnalazioni -------------------------------------------------------
+  // Le segnalazioni vivono sul server e le scrivete voi; le risoluzioni
+  // arrivano dal repo col deploy e le scrive Claude. Il server le unisce per
+  // id, quindi qui basta renderizzare quello che arriva senza sapere da quale
+  // dei due lati viene ogni pezzo.
+
+  const ISSUE_STATUS_LABEL = {
+    "aperto": "Aperto",
+    "in corso": "In corso",
+    "risolto": "Risolto",
+    "scartato": "Scartato",
+  };
+
+  async function loadIssues() {
+    const list = el("issues-list");
+    if (!list) return;
+    try {
+      const resp = await fetch("/api/issues");
+      if (!resp.ok) throw new Error(`Errore ${resp.status}`);
+      const body = await resp.json();
+      renderIssues(body);
+    } catch (err) {
+      list.innerHTML = `<p class="issues-empty">Impossibile caricare le segnalazioni: ${escapeHtml(err.message)}</p>`;
+    }
+  }
+
+  function renderIssues(body) {
+    const items = body.items || [];
+    const counts = body.counts || {};
+    const cEl = el("issues-counts");
+    if (cEl) {
+      cEl.innerHTML = ["aperto", "in corso", "risolto"]
+        .map((k) => `<span class="issues-count is-${k.replace(" ", "-")}">`
+          + `<b>${counts[k] || 0}</b> ${ISSUE_STATUS_LABEL[k].toLowerCase()}</span>`)
+        .join("");
+    }
+
+    const list = el("issues-list");
+    if (!items.length) {
+      list.innerHTML = '<p class="issues-empty">Nessuna segnalazione. Scrivi la prima qui sopra.</p>';
+      return;
+    }
+    // Aperte per prime: una bacheca che apre sulle cose gia' chiuse nasconde
+    // proprio quelle su cui bisogna agire.
+    const order = { "aperto": 0, "in corso": 1, "risolto": 2, "scartato": 3 };
+    const prio = { alta: 0, media: 1, bassa: 2 };
+    const sorted = [...items].sort((a, b) =>
+      (order[a.status] ?? 9) - (order[b.status] ?? 9)
+      || (prio[a.priority] ?? 9) - (prio[b.priority] ?? 9));
+
+    list.innerHTML = sorted.map((it) => {
+      const r = it.resolution;
+      const when = it.created_at
+        ? new Date(it.created_at * 1000).toLocaleDateString("it-IT")
+        : "";
+      return `<article class="issue-card is-${(it.status || "aperto").replace(" ", "-")}">
+        <header class="issue-head">
+          <span class="issue-status">${ISSUE_STATUS_LABEL[it.status] || it.status}</span>
+          <span class="issue-prio p-${it.priority}">${it.priority}</span>
+          <span class="issue-title">${escapeHtml(it.title)}</span>
+        </header>
+        ${it.detail ? `<p class="issue-detail">${escapeHtml(it.detail)}</p>` : ""}
+        <p class="issue-meta">${escapeHtml(it.author || "")}${when ? " · " + when : ""} · <code>${escapeHtml(it.id)}</code></p>
+        ${r ? `<div class="issue-res">
+          <div class="issue-res-head">Claude</div>
+          <p class="issue-res-summary">${escapeHtml(r.summary || "")}</p>
+          ${r.detail ? `<pre class="issue-res-detail">${escapeHtml(r.detail)}</pre>` : ""}
+          ${r.next ? `<p class="issue-res-next"><b>Prossimo passo:</b> ${escapeHtml(r.next)}</p>` : ""}
+          ${r.commit ? `<p class="issue-res-commit">commit <code>${escapeHtml(r.commit)}</code></p>` : ""}
+        </div>` : ""}
+      </article>`;
+    }).join("");
+  }
+
+  function bindIssues() {
+    const form = el("issue-form");
+    if (!form) return;
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const status = el("issue-form-status");
+      const title = el("issue-title").value.trim();
+      if (!title) return;
+      status.textContent = "Invio…";
+      try {
+        const resp = await fetch("/api/issues", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title,
+            detail: el("issue-detail").value,
+            priority: el("issue-priority").value,
+          }),
+        });
+        if (resp.status === 401) {
+          status.textContent = "Devi accedere per segnalare (pulsante Accedi in alto).";
+          return;
+        }
+        if (!resp.ok) {
+          const b = await resp.json().catch(() => ({}));
+          throw new Error(typeof b.detail === "string" ? b.detail : `Errore ${resp.status}`);
+        }
+        el("issue-title").value = "";
+        el("issue-detail").value = "";
+        status.textContent = "Segnalazione registrata.";
+        setTimeout(() => { status.textContent = ""; }, 3000);
+        loadIssues();
+      } catch (err) {
+        status.textContent = err.message;
+      }
+    });
+
+    const btn = el("rail-issues-btn");
+    if (btn) btn.addEventListener("click", () => loadIssues());
+  }
 
   function bindRail() {
     RAIL_PANELS.forEach(([btnId, panelId]) => {
@@ -4974,6 +5091,7 @@
     bindLabUI();
     bindMobileNav();
     bindRail();
+    bindIssues();
     bindTabs();
     bindDrawRail();
     bindMobileDrawTools();
