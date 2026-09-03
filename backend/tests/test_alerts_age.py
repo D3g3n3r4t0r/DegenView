@@ -21,8 +21,10 @@ from app.notify import alerts
 def _isolate(tmp_path, monkeypatch):
     monkeypatch.setattr(alerts, "_SEEN_FILE", tmp_path / "seen.json")
     monkeypatch.setattr(alerts, "_STATS_FILE", tmp_path / "stats.json")
+    monkeypatch.setattr(alerts, "_ARMED_FILE", tmp_path / "armed.json")
     alerts._seen.clear()
     alerts._stats.clear()
+    alerts._armed.clear()
     alerts._seeded_scopes.clear()
 
 
@@ -122,3 +124,52 @@ def test_a_signal_right_at_the_edge_still_alerts():
     alerts.find_new_signals("BTCUSDT", "1d", _state([]))
     edge = _sig(NOW() - alerts._max_signal_age_s("1d") + 120)
     assert len(alerts.find_new_signals("BTCUSDT", "1d", _state([edge]))) == 1
+
+
+# --- solo cio' che accade dopo l'attivazione -----------------------------
+
+
+def test_only_signals_after_arming_alert():
+    """La regola vera: un alert notifica quello che succede DOPO che l'hai
+    chiesto. Un segnale di ieri non diventa una notifica solo perche' oggi hai
+    attivato la strategia — anche se rientra nella finestra d'eta'."""
+    now = NOW()
+    st_seed = _state([])
+    alerts.find_new_signals("BTCUSDT", "1d", st_seed, entry_id="e1")   # arma qui
+
+    prima = _sig(now - 3600, price=1.0)      # un'ora fa: dentro la finestra, ma prima dell'armamento
+    dopo = _sig(now + 60, price=2.0)         # dopo l'armamento
+    fresh = alerts.find_new_signals("BTCUSDT", "1d", _state([prima, dopo]), entry_id="e1")
+
+    assert [s.price for s in fresh] == [2.0], "ha notificato un segnale precedente all'attivazione"
+
+
+def test_arming_is_recorded_once_and_persists():
+    a = alerts.armed_at("e2", "Lorenzo (trend-follower)")
+    b = alerts.armed_at("e2", "Lorenzo (trend-follower)")
+    assert a == b, "l'armamento non deve spostarsi a ogni giro"
+    assert alerts._ARMED_FILE.exists()
+
+
+def test_arming_is_per_entry_and_strategy():
+    alerts.armed_at("e3", "Lorenzo (trend-follower)")
+    assert "e3|Gabriele (RSI+BB reversal)" not in alerts._armed
+
+
+def test_disarm_makes_reactivation_start_from_now():
+    """Spegnendo e riaccendendo, quello che e' successo nel frattempo non deve
+    arrivare in blocco."""
+    first = alerts.armed_at("e4", "Lorenzo (trend-follower)")
+    alerts.disarm("e4", "Lorenzo (trend-follower)")
+    time.sleep(1.1)
+    second = alerts.armed_at("e4", "Lorenzo (trend-follower)")
+    assert second > first
+
+
+def test_no_entry_id_falls_back_to_the_age_window():
+    """Senza una coppia da identificare non c'e' nulla da armare: resta valida
+    la sola finestra d'eta', invece di lasciar passare tutto."""
+    assert alerts.armed_at("", "Lorenzo (trend-follower)") == 0
+    alerts.find_new_signals("BTCUSDT", "1d", _state([]))
+    old = _sig(NOW() - 400 * 86400)
+    assert alerts.find_new_signals("BTCUSDT", "1d", _state([old])) == []
