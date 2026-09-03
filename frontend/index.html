@@ -277,6 +277,10 @@
             <button type="button" id="lab-optimize-btn" class="lab-btn-opt">⟳ Ottimizza</button>
             <button type="button" id="lab-run-btn" class="lab-btn-run">▶ Esegui</button>
           </div>
+          <label class="lab-grid-toggle" id="lab-grid-toggle-wrap" title="Prova ogni combinazione di parametri su una griglia discreta (~1000–3000 test). Più lento (~30–50s) ma sistematico.">
+            <input type="checkbox" id="lab-grid-mode" />
+            <span>Modalità Grid — ogni combinazione possibile</span>
+          </label>
 
           <!-- Loading/status -->
           <div id="lab-status" class="lab-status hidden"></div>
@@ -597,6 +601,9 @@
          ticker right where the thumb already is (next to the timeframe
          wheel) instead of reaching back up to the top toolbar. -->
     <button type="button" id="mobile-chart-symbol" class="mobile-chart-symbol">—</button>
+    <!-- Active strategy pill — tapping opens the Livelli panel where the
+         strategy selector lives so the user can change it without hunting. -->
+    <button type="button" id="mobile-strategy-pill" class="mobile-strategy-pill" title="Strategia attiva — tocca per cambiare">—</button>
     <!-- #interval-primary gets relocated here by relocateIntervalSelect()
          (app.js) but stays visually hidden — the wheel below is the real
          UI, driven off this select's options/value/change event so no

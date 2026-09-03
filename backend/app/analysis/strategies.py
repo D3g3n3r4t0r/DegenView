@@ -75,7 +75,7 @@ EXHAUSTION_DEFAULT_PARAMS = {
     "enable_range_bounce": True,
 }
 
-_MAX_ALERTS_RETURNED = 30
+_MAX_ALERTS_RETURNED = 500
 
 
 def _ma(series: pd.Series, length: int, kind: str) -> pd.Series:

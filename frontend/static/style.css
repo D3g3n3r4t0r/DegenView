@@ -2364,6 +2364,25 @@ body {
     cursor: pointer;
   }
 
+  .mobile-strategy-pill {
+    font-family: var(--font-sans);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--bg);
+    background: var(--ink);
+    border: none;
+    border-radius: 20px;
+    padding: 3px 9px;
+    cursor: pointer;
+    white-space: nowrap;
+    max-width: 110px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-shrink: 0;
+  }
+
   /* The real #interval-primary <select> stays relocated here (so its
      value/change-event logic doesn't get duplicated) but is now driven by
      the wheel below instead of being the visible control itself. */
@@ -2772,6 +2791,12 @@ body {
 }
 .lab-btn-opt:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
 .lab-btn-opt:disabled, .lab-btn-run:disabled { opacity: 0.55; cursor: not-allowed; }
+.lab-grid-toggle {
+  display: flex; align-items: center; gap: 7px; cursor: pointer;
+  font-size: 10.5px; color: var(--ink-dim); margin-bottom: 4px;
+}
+.lab-grid-toggle input[type="checkbox"] { accent-color: var(--accent); cursor: pointer; }
+#lab-grid-toggle-wrap.hidden { display: none; }
 .lab-btn-run {
   flex: 1.4; background: var(--ink); border: 1.5px solid var(--ink);
   border-radius: 9px; padding: 9px 6px;

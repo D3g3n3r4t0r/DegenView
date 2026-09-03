@@ -34,7 +34,7 @@ from app.analysis.backtest import run_backtest
 from app.analysis.confluence import compute_confluence
 from app.analysis.indicators import compute_indicators
 from app.analysis.fibonacci import compute_fib_zones
-from app.analysis.optimize import is_optimizable, optimize_strategy
+from app.analysis.optimize import grid_size, is_optimizable, optimize_strategy
 from app.analysis.smc_engine import compute_dealing_range, compute_levels, compute_swings
 from app.analysis.strategies import AVAILABLE_STRATEGIES, DEFAULT_STRATEGY, build_strategy_state
 from app.analysis.summary import build_summary, determine_bias
@@ -1148,6 +1148,7 @@ class OptimizeResult(BaseModel):
     trials_evaluated: int
     out_of_sample_return_pct: float | None = None
     overfitted: bool = False
+    mode: str = "random"
 
 
 @app.get("/api/optimize", response_model=OptimizeResult)
@@ -1158,6 +1159,7 @@ async def optimize_strategy_endpoint(
     ltf_interval: IntervalChoice = Query(DEFAULT_INTERVALS["ltf"]),
     strategy_name: str = Query(DEFAULT_STRATEGY),
     backtest_params: BacktestParamsQuery = Depends(),
+    mode: str = Query("random", pattern="^(random|grid)$"),
 ) -> OptimizeResult:
     """Random-search parameter tuning for any strategy in the registry —
     same deep-history df the backtest itself uses (see
@@ -1184,7 +1186,7 @@ async def optimize_strategy_endpoint(
         raise HTTPException(status_code=502, detail=f"Nessun dato per {symbol}")
 
     best_params, best_bt, trials, oos_return, overfitted = await asyncio.to_thread(
-        optimize_strategy, strategy_name, df, backtest_params.model_dump()
+        optimize_strategy, strategy_name, df, backtest_params.model_dump(), mode=mode
     )
     best_bt = best_bt.model_copy(update={"interval": backtest_interval})
     return OptimizeResult(
@@ -1193,6 +1195,7 @@ async def optimize_strategy_endpoint(
         trials_evaluated=trials,
         out_of_sample_return_pct=oos_return,
         overfitted=overfitted,
+        mode=mode,
     )
 
 
