@@ -1,41 +1,125 @@
 (() => {
   "use strict";
 
-  // Millimetrata Blueprint palette — every mark on the chart stays a tonal
-  // variation of ink/accent/stamp/bull/bear, no arbitrary bright hues.
-  const COLORS = {
-    paperBg: "#f2ede1",
-    ink: "#26312e",
-    inkDim: "#5c675f",
-    gridMinor: "rgba(168, 184, 174, 0.45)",
-    gridMajor: "rgba(127, 148, 136, 0.55)",
-    bull: "#1f7a44",
-    bear: "#8c2f1f",
-    accent: "#1f4e6b",
-    stamp: "#8a6d3b",
-    bullFill: "rgba(31, 122, 68, 0.16)",
-    bullBorder: "rgba(31, 122, 68, 0.9)",
-    bearFill: "rgba(140, 47, 31, 0.14)",
-    bearBorder: "rgba(140, 47, 31, 0.85)",
-    // FVG/imbalance zones render as flat neutral grey, not bull/bear tinted
-    // — matches TradingView's own SMC-indicator styling for these zones.
-    imbalanceFill: "rgba(120, 128, 122, 0.28)",
-    imbalanceBorder: "rgba(120, 128, 122, 0.6)",
-    confluenceFill: "rgba(138, 109, 59, 0.16)",
-    confluenceBorder: "rgba(138, 109, 59, 0.85)",
-    ema20: "#1f4e6b",
-    ema50: "#8a6d3b",
-    bb: "#7f9488",
-    vwap: "#5c675f",
-    rsi: "#1f4e6b",
-    macd: "#1f4e6b",
-    macdSignal: "#8a6d3b",
+  // Terminal noir — dark mode chart palette
+  const COLORS_DARK = {
+    paperBg: "#080b0f",
+    ink: "#c9d1d9",
+    inkDim: "#6e7681",
+    gridMinor: "rgba(26, 37, 53, 0.55)",
+    gridMajor: "rgba(26, 37, 53, 0.85)",
+    bull: "#00d68f",
+    bear: "#ff4560",
+    accent: "#00d68f",
+    stamp: "#f0a500",
+    bullFill: "rgba(0, 214, 143, 0.12)",
+    bullBorder: "rgba(0, 214, 143, 0.75)",
+    bearFill: "rgba(255, 69, 96, 0.12)",
+    bearBorder: "rgba(255, 69, 96, 0.75)",
+    fvgBullFill: "rgba(0, 214, 143, 0.20)",
+    fvgBullBorder: "rgba(0, 214, 143, 0.70)",
+    fvgBearFill: "rgba(255, 69, 96, 0.20)",
+    fvgBearBorder: "rgba(255, 69, 96, 0.70)",
+    confluenceFill: "rgba(0, 214, 143, 0.07)",
+    confluenceBorder: "rgba(0, 214, 143, 0.40)",
+    ema20: "#5b9cf6",
+    ema50: "#f0a500",
+    bbUpper: "rgba(91, 156, 246, 0.85)",
+    bbMid: "rgba(91, 156, 246, 0.45)",
+    bbLower: "rgba(91, 156, 246, 0.85)",
+    vwap: "#8b8bff",
+    rsi: "#5b9cf6",
+    macd: "#5b9cf6",
+    macdSignal: "#f0a500",
   };
+
+  // Minimal Ink — light mode chart palette: monochrome candles, only P&L uses color
+  const COLORS_LIGHT = {
+    paperBg: "#ffffff",
+    ink: "#000000",
+    inkDim: "#666666",
+    gridMinor: "rgba(0, 0, 0, 0.05)",
+    gridMajor: "rgba(0, 0, 0, 0.10)",
+    bull: "#1a1a1a",
+    bear: "#1a1a1a",
+    accent: "#000000",
+    stamp: "#d97706",
+    bullFill: "rgba(0, 0, 0, 0.04)",
+    bullBorder: "#00a86b",
+    bearFill: "rgba(0, 0, 0, 0.06)",
+    bearBorder: "#e03040",
+    fvgBullFill: "rgba(0, 168, 107, 0.12)",
+    fvgBullBorder: "rgba(0, 168, 107, 0.60)",
+    fvgBearFill: "rgba(224, 48, 64, 0.10)",
+    fvgBearBorder: "rgba(224, 48, 64, 0.60)",
+    confluenceFill: "rgba(0, 0, 0, 0.03)",
+    confluenceBorder: "rgba(0, 0, 0, 0.22)",
+    ema20: "#888888",
+    ema50: "#444444",
+    bbUpper: "rgba(0, 0, 0, 0.50)",
+    bbMid: "rgba(0, 0, 0, 0.25)",
+    bbLower: "rgba(0, 0, 0, 0.50)",
+    vwap: "#555555",
+    rsi: "#666666",
+    macd: "#555555",
+    macdSignal: "#aaaaaa",
+  };
+
+  const COLORS = window.matchMedia("(prefers-color-scheme: dark)").matches ? COLORS_DARK : COLORS_LIGHT;
 
   const TF_LABELS = { htf: "HTF", mtf: "MTF", ltf: "LTF" };
   const CANONICAL_INTERVALS = ["1m", "5m", "15m", "30m", "1h", "4h", "1d", "2d", "3d", "5d", "1w", "1M"];
   const DEFAULT_INTERVALS = { htf: "1d", mtf: "1h", ltf: "15m" };
   const DEFAULT_PRIMARY_INTERVAL = "15m";
+
+  // Per-strategy parameter fields for the watchlist's inline "personalizza"
+  // panel — mirrors each strategy's own default-params dict on the backend
+  // (app/analysis/strategies.py) so an alert can override just the params
+  // that strategy actually reads. Keyed by the exact strategy name returned
+  // from /api/strategies.
+  const STRATEGY_PARAM_FIELDS = {
+    "Lorenzo (trend-follower)": [
+      { key: "average", label: "Tipo media", type: "select", options: ["EMA", "SMA"], default: "EMA" },
+      { key: "len", label: "Lunghezza media", type: "number", min: 2, default: 130 },
+      { key: "slopeFlen", label: "Slope veloce", type: "number", min: 1, default: 7 },
+      { key: "slopeSlen", label: "Slope lenta", type: "number", min: 1, default: 27 },
+      { key: "trendfilter", label: "Filtro trend", type: "checkbox", default: true },
+      { key: "trendfilterperiod", label: "Periodo trend", type: "number", min: 2, default: 268 },
+      { key: "trendfiltertype", label: "Tipo trend", type: "select", options: ["EMA", "SMA"], default: "EMA" },
+      { key: "volatilityfilter", label: "Filtro volatilità", type: "checkbox", default: true },
+      { key: "volatilitystdevlength", label: "Stdev lunghezza", type: "number", min: 1, default: 16 },
+      { key: "volatilitystdevmalength", label: "Stdev media lunghezza", type: "number", min: 1, default: 44 },
+    ],
+    "Accumulo / Distribuzione (long-term)": [
+      { key: "enable_divergence", label: "Divergenza RSI su swing", type: "checkbox", default: true },
+      { key: "enable_contraction", label: "Breakout da contrazione volatilità", type: "checkbox", default: true },
+      { key: "enable_range_bounce", label: "Rimbalzo su supporto/resistenza range", type: "checkbox", default: true },
+      { key: "swing_length", label: "Lunghezza swing", type: "number", min: 1, default: 8 },
+      { key: "rsi_length", label: "Lunghezza RSI", type: "number", min: 1, default: 14 },
+      { key: "rsi_oversold", label: "RSI ipervenduto", type: "number", min: 0, max: 100, default: 40 },
+      { key: "rsi_overbought", label: "RSI ipercomprato", type: "number", min: 0, max: 100, default: 60 },
+      { key: "rsi_min_gap", label: "RSI scarto minimo divergenza", type: "number", min: 0, step: 0.1, default: 3.0 },
+      { key: "low_tolerance_pct", label: "Tolleranza nuovo minimo %", type: "number", min: 0, step: 0.1, default: 1.0 },
+      { key: "divergence_lookback", label: "Lookback swing divergenza", type: "number", min: 1, default: 3 },
+      { key: "volume_ma_length", label: "Media volume", type: "number", min: 1, default: 20 },
+      { key: "volume_multiplier", label: "Moltiplicatore volume", type: "number", min: 0, step: 0.1, default: 1.3 },
+      { key: "trend_filter", label: "Filtro trend", type: "checkbox", default: true },
+      { key: "trend_ema_length", label: "EMA trend", type: "number", min: 1, default: 50 },
+      { key: "confirmation_lookahead", label: "Barre di conferma", type: "number", min: 1, default: 10 },
+      { key: "contraction_lookback", label: "Lookback contrazione", type: "number", min: 1, default: 10 },
+      { key: "contraction_prior_lookback", label: "Lookback pre-contrazione", type: "number", min: 1, default: 30 },
+      { key: "contraction_ratio", label: "Rapporto contrazione volatilità", type: "number", min: 0, step: 0.05, default: 0.55 },
+      { key: "range_lookback", label: "Lookback range", type: "number", min: 1, default: 40 },
+      { key: "range_zone_pct", label: "Zona range %", type: "number", min: 0, max: 1, step: 0.05, default: 0.25 },
+    ],
+    "Gabriele (RSI+BB reversal)": [
+      { key: "rsi_length", label: "Lunghezza RSI", type: "number", min: 1, default: 14 },
+      { key: "bb_length", label: "Lunghezza Bollinger", type: "number", min: 1, default: 20 },
+      { key: "bb_mult", label: "Moltiplicatore Bollinger", type: "number", min: 0, step: 0.1, default: 2.0 },
+      { key: "rsi_oversold", label: "RSI ipervenduto", type: "number", min: 0, max: 100, default: 28 },
+      { key: "rsi_overbought", label: "RSI ipercomprato", type: "number", min: 0, max: 100, default: 72 },
+    ],
+  };
 
   // One dropdown is all the user picks — HTF/MTF for the multi-timeframe SMC
   // confluence engine are derived automatically from it (two and four steps
@@ -55,6 +139,132 @@
     "1w": { ltf: "1w", mtf: "1M", htf: "1M" },
     "1M": { ltf: "1M", mtf: "1M", htf: "1M" },
   };
+
+  // ---- Shared helpers ----
+
+  // showTabError: inject a visible error paragraph inside a container element.
+  function showTabError(containerId, msg) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const existing = container.querySelector(".tab-error-msg");
+    if (existing) existing.remove();
+    const p = document.createElement("p");
+    p.className = "tab-error-msg";
+    p.textContent = msg;
+    container.prepend(p);
+  }
+
+  // withAsyncButton: disable a button while an async fn runs, then restore it.
+  async function withAsyncButton(btn, fn, loadingText) {
+    const original = btn.textContent;
+    btn.disabled = true;
+    if (loadingText !== undefined) btn.textContent = loadingText;
+    try {
+      await fn();
+    } finally {
+      btn.disabled = false;
+      btn.textContent = original;
+    }
+  }
+
+  // makeSuggestController: unified autocomplete factory for symbol search inputs.
+  // Each controller returned is a plain object with { suggestions, activeIndex, resolved }
+  // plus methods { fetch(query), render(anchorEl?), clear(), handleKey(e) }.
+  // - fetchItems: async (query) => Item[]  — custom fetch logic
+  // - listId:     id of the <ul> dropdown element
+  // - anchorId:   id of the element used to position the dropdown
+  // - onSelect:   called with the chosen Item
+  // - elFn:       element lookup function, defaults to the global el()
+  function makeSuggestController({ fetchItems, listId, anchorId, onSelect, elFn }) {
+    const _el = elFn || el;
+    let _anchorEl = null;
+
+    const ctrl = {
+      suggestions: [],
+      activeIndex: -1,
+      resolved: null,
+
+      async fetch(query) {
+        try {
+          ctrl.suggestions = await fetchItems(query);
+        } catch {
+          ctrl.suggestions = [];
+        }
+        ctrl.activeIndex = -1;
+        // Lazily resolve anchor element on first use.
+        if (!_anchorEl && anchorId) _anchorEl = _el(anchorId);
+        ctrl.render(_anchorEl);
+      },
+
+      render(anchorEl) {
+        if (anchorEl) _anchorEl = anchorEl;
+        const list = _el(listId);
+        list.innerHTML = "";
+        if (!ctrl.suggestions.length) { list.classList.add("hidden"); return; }
+        if (_anchorEl) {
+          const rect = _anchorEl.getBoundingClientRect();
+          list.style.left = `${rect.left}px`;
+          list.style.top = `${rect.bottom + 4}px`;
+          list.style.width = `${rect.width}px`;
+        }
+        ctrl.suggestions.forEach((item, i) => {
+          const li = document.createElement("li");
+          li.className = i === ctrl.activeIndex ? "active" : "";
+          const main = document.createElement("span");
+          main.className = "sug-main";
+          const sym = document.createElement("span");
+          sym.className = "sug-symbol";
+          sym.textContent = item.symbol;
+          const name = document.createElement("span");
+          name.className = "sug-name";
+          name.textContent = item.name || "";
+          main.appendChild(sym);
+          main.appendChild(name);
+          const exch = document.createElement("span");
+          exch.className = "sug-exchange sug-exchange-" + (item.provider || "");
+          exch.textContent = item.exchange || "";
+          li.appendChild(main);
+          li.appendChild(exch);
+          li.addEventListener("mousedown", (e) => { e.preventDefault(); onSelect(item); });
+          list.appendChild(li);
+        });
+        list.classList.remove("hidden");
+      },
+
+      clear() {
+        ctrl.suggestions = [];
+        ctrl.activeIndex = -1;
+        const list = _el(listId);
+        list.classList.add("hidden");
+        list.innerHTML = "";
+      },
+
+      handleKey(e) {
+        const list = _el(listId);
+        if (list.classList.contains("hidden")) return;
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          ctrl.activeIndex = Math.min(ctrl.activeIndex + 1, ctrl.suggestions.length - 1);
+          ctrl.render();
+        } else if (e.key === "ArrowUp") {
+          e.preventDefault();
+          ctrl.activeIndex = Math.max(ctrl.activeIndex - 1, 0);
+          ctrl.render();
+        } else if (e.key === "Enter") {
+          if (ctrl.activeIndex >= 0) {
+            e.preventDefault();
+            onSelect(ctrl.suggestions[ctrl.activeIndex]);
+          } else {
+            ctrl.clear();
+          }
+        } else if (e.key === "Escape") {
+          ctrl.clear();
+        }
+      },
+    };
+
+    return ctrl;
+  }
 
   // ---- Series Primitive: filled rectangle between two (time, price) points ----
   function positionsBox(pos1, pos2, pixelRatio) {
@@ -300,7 +510,7 @@
       target.useBitmapCoordinateSpace((scope) => {
         if (this._p.x === null || this._p.y === null || !this._text) return;
         const ctx = scope.context;
-        ctx.font = `${11 * scope.verticalPixelRatio}px "Space Mono", monospace`;
+        ctx.font = `${11 * scope.verticalPixelRatio}px "IBM Plex Mono", monospace`;
         ctx.fillStyle = this._color;
         ctx.textBaseline = "bottom";
         ctx.fillText(this._text, this._p.x * scope.horizontalPixelRatio + 5, this._p.y * scope.verticalPixelRatio - 5);
@@ -369,7 +579,7 @@
         const xa = Math.min(this._x1, this._x2) * scope.horizontalPixelRatio;
         const xb = Math.max(this._x1, this._x2) * scope.horizontalPixelRatio;
         ctx.lineWidth = Math.max(1, scope.verticalPixelRatio);
-        ctx.font = `${10 * scope.verticalPixelRatio}px "Space Mono", monospace`;
+        ctx.font = `${10 * scope.verticalPixelRatio}px "IBM Plex Mono", monospace`;
         this._levels.forEach(({ y, label }) => {
           if (y === null) return;
           const yy = y * scope.verticalPixelRatio;
@@ -451,6 +661,10 @@
     seenAlertKeys: new Set(),
     alertsSeeded: false,
     watchlistAssetType: "stock",
+    favorites: [], // [{ id, symbol, asset_type, exchange }] — Watchlist tab, quick chart navigation
+    favoriteQuotes: {}, // entry id -> { price, change_pct } from /api/favorites/quotes
+    favoriteFilter: "all", // "all" | "stock" | "crypto"
+    alertEntries: [], // last /api/watchlist load — cross-checked for the favorite row's alert-bell indicator
     pineScripts: [],
     activePineScriptId: null,
     activePineParams: [],
@@ -461,20 +675,20 @@
     logScale: false,
     // Kept minimal by default — every structure/liquidity level draws its own
     // chart label, and turning them all on at once buries the price action
-    // (especially on narrow screens). Confluence zones stay on since they're
-    // already a synthesized, filtered view rather than raw noise.
+    // (especially on narrow screens).
     layers: {
       order_block: false,
       fvg: false,
       liquidity: false,
       structure: false,
-      confluence: true,
+      confluence: false,
       ema: true,
       bbands: false,
       vwap: false,
       rsi: false,
       macd: false,
       stoch: false,
+      fibonacci: false,
     },
   };
 
@@ -509,7 +723,6 @@
       [el("rsi-chart"), rsiChart],
       [el("macd-chart"), macdChart],
       [el("stoch-chart"), stochChart],
-      [el("equity-chart"), equityChart],
     ].forEach(([container, chart]) => {
       if (container.clientWidth > 0 && container.clientHeight > 0) {
         chart.resize(container.clientWidth, container.clientHeight);
@@ -554,16 +767,73 @@
       opt.textContent = name;
       select.appendChild(opt);
     });
+    renderStrategyParamsFields();
+    updateOptimizeButtonVisibility();
+  }
+
+  // ---- Auto-optimize: random-search the active strategy's own parameter
+  // space (STRATEGY_PARAM_FIELDS) against the deep backtest history, scored
+  // by profit factor. Every strategy in the registry has one — the backend
+  // rejects strategy names it has no search space for, so this list just
+  // has to stay a subset of that. ----
+  const OPTIMIZABLE_STRATEGIES = new Set([
+    "Lorenzo (trend-follower)",
+    "Accumulo / Distribuzione (long-term)",
+    "Gabriele (RSI+BB reversal)",
+  ]);
+
+  function updateOptimizeButtonVisibility() {
+    const optimizable = OPTIMIZABLE_STRATEGIES.has(el("active-strategy-select").value);
+    el("optimize-strategy-btn").classList.toggle("hidden", !optimizable);
+    if (!optimizable) el("optimize-strategy-result").classList.add("hidden");
+  }
+
+  async function runStrategyOptimize() {
+    if (!state.data) return;
+    const btn = el("optimize-strategy-btn");
+    const resultEl = el("optimize-strategy-result");
+    resultEl.classList.add("hidden");
+    await withAsyncButton(btn, async () => {
+      const strategyName = el("active-strategy-select").value;
+      const backtestParams = new URLSearchParams({
+        initial_capital: "10000", qty_pct_of_equity: "100",
+        commission_pct: "0", slippage_pct: "0",
+        stop_loss_pct: "0", take_profit_pct: "0",
+      });
+      const url =
+        `/api/optimize?symbol=${encodeURIComponent(state.data.symbol)}&asset_type=${state.assetType}` +
+        `&exchange=${state.cryptoExchange}&ltf_interval=${getSelectedIntervals().ltf}` +
+        `&strategy_name=${encodeURIComponent(strategyName)}&${backtestParams.toString()}`;
+      const resp = await fetch(url);
+      const body = await resp.json();
+      if (!resp.ok) {
+        const detail = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail);
+        throw new Error(detail || `Errore ${resp.status}`);
+      }
+
+      Object.entries(body.params).forEach(([key, value]) => {
+        const field = form.elements[key];
+        if (!field) return;
+        if (field.type === "checkbox") field.checked = !!value;
+        else field.value = value;
+      });
+
+      const bt = body.backtest;
+      const pf = bt.profit_factor !== null ? bt.profit_factor.toFixed(2) : "∞";
+      const dd = Math.abs(bt.max_drawdown_pct).toFixed(1);
+      resultEl.innerHTML = `Migliore trovato su <b>${body.trials_evaluated}</b> combinazioni (${bt.interval}): profit factor <b>${pf}</b>, drawdown <b>-${dd}%</b>, ${bt.num_trades} trade, win rate ${bt.win_rate_pct !== null ? bt.win_rate_pct.toFixed(0) : "—"}%.`;
+      resultEl.classList.remove("hidden");
+
+      await runAnalysis(state.data.symbol);
+    }, "Ottimizzazione in corso… (10-25s)").catch((err) => {
+      showError(err.message || "Ottimizzazione fallita.");
+    });
   }
 
   // Each ticker is a card that expands to show one on/off toggle per
   // available strategy — a ticker can have several strategies watched at
   // once (previously one strategy meant one whole separate watchlist row).
   // ---- Auth: cookie session, login/register modal, per-user Telegram chat id ----
-  let authMode = "login";
-  let authGateActive = false; // true while the modal is blocking the whole app (not logged in yet)
-  let appStarted = false; // startApp() runs once, either immediately or right after the gate clears
-
   let _prefSaveTimer = null;
   async function loadPreferences() {
     if (!state.user) return null;
@@ -595,13 +865,35 @@
     }, 2000);
   }
 
+  let authMode = "login";
+  let authGateActive = false; // true while the modal is blocking the whole app (not logged in yet)
+  let appStarted = false; // startApp() runs once, either immediately or right after the gate clears
+
+  // Fly.io scale-to-zero means the very first request of a cold session can
+  // take several seconds while the machine boots — checkAuth() is that first
+  // request, so a hint arms here and only surfaces if it actually runs long.
+  let slowServerTimer = null;
+  function armSlowServerHint() {
+    clearTimeout(slowServerTimer);
+    slowServerTimer = setTimeout(() => {
+      el("server-wake-hint").classList.remove("hidden");
+    }, 1200);
+  }
+  function disarmSlowServerHint() {
+    clearTimeout(slowServerTimer);
+    el("server-wake-hint").classList.add("hidden");
+  }
+
   async function checkAuth() {
+    armSlowServerHint();
     try {
       const resp = await fetch("/api/auth/me");
       const body = await resp.json();
       state.user = body.user;
     } catch (err) {
       state.user = null;
+    } finally {
+      disarmSlowServerHint();
     }
     updateAuthUI();
   }
@@ -617,11 +909,32 @@
     el("alert-authenticated").classList.toggle("hidden", !loggedIn);
     if (loggedIn) {
       el("telegram-chat-id-input").value = state.user.telegram_chat_id || "";
+      updateTelegramSetupUI();
       loadWatchlist();
       loadBalances();
+      loadTradingCredentials();
+      loadFavorites();
     } else {
-      el("balances-tab-btn").classList.add("hidden");
+      setBalancesVisible(false);
     }
+  }
+
+  // The chat-ID setup box (with its raw bot-API URL instructions) only needs
+  // to be seen once — after it's saved, collapse it to a one-line status chip
+  // so it doesn't compete with the watchlist every time Alert is opened.
+  // forceOpen re-expands it for editing, from the chip's "Modifica" link.
+  function updateTelegramSetupUI(forceOpen) {
+    const configured = !!(state.user && state.user.telegram_chat_id);
+    el("telegram-status-chip").classList.toggle("hidden", !configured || forceOpen);
+    el("telegram-setup").classList.toggle("hidden", configured && !forceOpen);
+  }
+
+  // Saldi is reachable two ways — the desktop right-panel tab and the Altro
+  // menu item on mobile — both mirroring the same "visible only if the
+  // account actually has exchange balances to show" condition.
+  function setBalancesVisible(visible) {
+    el("balances-tab-btn").classList.toggle("hidden", !visible);
+    el("altro-saldi-item").classList.toggle("hidden", !visible);
   }
 
   // ---- Saldi tab: read-only exchange balances (MEXC/KuCoin) ----
@@ -648,18 +961,217 @@
     try {
       const resp = await fetch("/api/balances");
       if (resp.status === 403) {
-        el("balances-tab-btn").classList.add("hidden");
+        setBalancesVisible(false);
         return;
       }
-      if (!resp.ok) return;
+      if (!resp.ok) {
+        showTabError("balances-content", `Errore caricamento saldi (${resp.status}).`);
+        return;
+      }
       const body = await resp.json();
-      el("balances-tab-btn").classList.remove("hidden");
+      setBalancesVisible(true);
       el("balances-content").innerHTML = renderBalanceAccount("MEXC", body.mexc) + renderBalanceAccount("KuCoin", body.kucoin);
       el("balances-updated").textContent = `Aggiornato alle ${new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}`;
     } catch (err) {
-      el("balances-tab-btn").classList.add("hidden");
+      showTabError("balances-content", "Impossibile caricare i saldi: problema di rete.");
     }
   }
+
+  // ---- Trading Automatico: per-exchange API key config + enable toggle ----
+  const TRADING_EXCHANGE_NAMES = { mexc: "MEXC", kraken: "Kraken", coinbase: "Coinbase", bitstamp: "Bitstamp" };
+  const TRADING_EXCHANGES = Object.keys(TRADING_EXCHANGE_NAMES);
+
+  async function loadTradingCredentials() {
+    try {
+      const resp = await fetch("/api/auth/trading");
+      if (resp.status === 401) return; // not logged in — silently skip
+      if (!resp.ok) return;
+      const data = await resp.json();
+      renderTradingCredentials(data);
+    } catch (_) {
+      // network error — silently skip
+    }
+  }
+
+  function renderTradingCredentials(creds) {
+    const container = el("trading-credentials-list");
+    if (!container) return;
+
+    container.innerHTML = creds.filter(c => TRADING_EXCHANGES.includes(c.exchange)).map(c => {
+      const name = TRADING_EXCHANGE_NAMES[c.exchange] || c.exchange;
+      const summaryText = c.api_key_set ? "🔑 Chiave configurata — modifica" : "Configura chiave API";
+      const passphraseField = c.exchange === "kucoin"
+        ? `<label>Passphrase <input type="password" class="trading-passphrase" placeholder="lascia vuoto per non cambiare" /></label>`
+        : "";
+      return `<div class="trading-cred-card" data-exchange="${c.exchange}">
+        <div class="trading-cred-exchange-row">
+          <span class="trading-cred-name">${name}</span>
+          <label class="trading-enabled-toggle">
+            <input type="checkbox" class="trading-enabled-cb" ${c.enabled ? "checked" : ""}> Attivo
+          </label>
+        </div>
+        <details class="trading-cred-details">
+          <summary>${summaryText}</summary>
+          <div class="trading-cred-fields">
+            <label>API Key <input type="text" class="trading-api-key" placeholder="lascia vuoto per non cambiare" autocomplete="off" /></label>
+            <label>API Secret <input type="password" class="trading-api-secret" placeholder="lascia vuoto per non cambiare" autocomplete="off" /></label>
+            ${passphraseField}
+            <div class="trading-size-row">
+              <label>Tipo size
+                <select class="trading-size-mode">
+                  <option value="fixed_usdt" ${c.size_mode === "fixed_usdt" ? "selected" : ""}>USDT fisso</option>
+                  <option value="pct_balance" ${c.size_mode === "pct_balance" ? "selected" : ""}>% saldo</option>
+                </select>
+              </label>
+              <label>Valore <input type="number" class="trading-size-val" value="${c.size_value}" min="1" step="1" /></label>
+            </div>
+            <button type="button" class="trading-save-btn">Salva</button>
+            <span class="trading-save-status"></span>
+          </div>
+        </details>
+      </div>`;
+    }).join("");
+
+    // Save button handler (event delegation)
+    container.addEventListener("click", async function handleTradingSave(e) {
+      if (!e.target.classList.contains("trading-save-btn")) return;
+      const card = e.target.closest(".trading-cred-card");
+      if (!card) return;
+      const exchange = card.dataset.exchange;
+      const statusEl = card.querySelector(".trading-save-status");
+      const body = {
+        exchange,
+        api_key: card.querySelector(".trading-api-key")?.value || "",
+        api_secret: card.querySelector(".trading-api-secret")?.value || "",
+        passphrase: card.querySelector(".trading-passphrase")?.value || "",
+        enabled: card.querySelector(".trading-enabled-cb")?.checked || false,
+        size_mode: card.querySelector(".trading-size-mode")?.value || "fixed_usdt",
+        size_value: parseFloat(card.querySelector(".trading-size-val")?.value) || 10,
+      };
+      try {
+        const resp = await fetch("/api/auth/trading", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (resp.ok) {
+          statusEl.textContent = "Salvato ✓";
+          setTimeout(() => { statusEl.textContent = ""; }, 3000);
+        } else {
+          const err = await resp.json().catch(() => ({}));
+          statusEl.textContent = err.detail || `Errore (${resp.status})`;
+        }
+      } catch (_) {
+        statusEl.textContent = "Errore di rete";
+      }
+    });
+
+    // Enabled toggle handler (event delegation)
+    container.addEventListener("change", async function handleTradingToggle(e) {
+      if (!e.target.classList.contains("trading-enabled-cb")) return;
+      const card = e.target.closest(".trading-cred-card");
+      if (!card) return;
+      const exchange = card.dataset.exchange;
+      const body = {
+        exchange,
+        api_key: "",
+        api_secret: "",
+        passphrase: "",
+        enabled: e.target.checked,
+        size_mode: card.querySelector(".trading-size-mode")?.value || "fixed_usdt",
+        size_value: parseFloat(card.querySelector(".trading-size-val")?.value) || 10,
+      };
+      try {
+        await fetch("/api/auth/trading", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+      } catch (_) {
+        // silently ignore
+      }
+    });
+  }
+
+  function bindManualOrderUI() {
+    let activeSide = "BUY";
+
+    function syncSideUI() {
+      document.querySelectorAll(".mo-side-tab").forEach(btn => {
+        btn.classList.toggle("mo-tab-active", btn.dataset.side === activeSide);
+      });
+      const execBtn = el("manual-execute-btn");
+      if (!execBtn) return;
+      execBtn.textContent = activeSide;
+      execBtn.classList.toggle("mo-execute-buy", activeSide === "BUY");
+      execBtn.classList.toggle("mo-execute-sell", activeSide === "SELL");
+    }
+
+    function syncSliderUnit() {
+      const mode = document.querySelector('input[name="mo-size-mode"]:checked')?.value;
+      const unit = el("manual-size-unit");
+      const slider = el("manual-size-slider");
+      const valInput = el("manual-size-val");
+      if (!unit || !slider) return;
+      if (mode === "pct_balance") {
+        unit.textContent = "%";
+        slider.max = 100;
+        slider.min = 1;
+        valInput.max = 100;
+      } else {
+        unit.textContent = "USDT";
+        slider.max = 10000;
+        slider.min = 1;
+        valInput.max = 10000;
+      }
+    }
+
+    document.querySelectorAll(".mo-side-tab").forEach(btn => {
+      btn.addEventListener("click", () => { activeSide = btn.dataset.side; syncSideUI(); });
+    });
+
+    document.querySelectorAll('input[name="mo-size-mode"]').forEach(r => {
+      r.addEventListener("change", syncSliderUnit);
+    });
+
+    const slider = el("manual-size-slider");
+    const valInput = el("manual-size-val");
+    slider?.addEventListener("input", () => { if (valInput) valInput.value = slider.value; });
+    valInput?.addEventListener("input", () => { if (slider) slider.value = valInput.value; });
+
+    async function submitManualOrder() {
+      const exchange = el("manual-exchange")?.value;
+      const symbol = el("manual-symbol")?.value.trim().toUpperCase();
+      const sizeMode = document.querySelector('input[name="mo-size-mode"]:checked')?.value || "pct_balance";
+      const sizeValue = parseFloat(el("manual-size-val")?.value);
+      const statusEl = el("manual-order-status");
+      if (!symbol) { statusEl.textContent = "Inserisci il pair (es. BTCUSDT)"; statusEl.classList.remove("hidden"); return; }
+      statusEl.textContent = "Invio ordine…";
+      statusEl.classList.remove("hidden", "ok", "error");
+      try {
+        const resp = await fetch("/api/trading/order", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ exchange, symbol, side: activeSide, size_mode: sizeMode, size_value: sizeValue }),
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (resp.ok) {
+          statusEl.textContent = `✓ Ordine ${activeSide} inviato`;
+          statusEl.classList.add("ok");
+        } else {
+          statusEl.textContent = `✗ ${data.detail || "Errore " + resp.status}`;
+          statusEl.classList.add("error");
+        }
+      } catch (_) {
+        statusEl.textContent = "✗ Errore di rete";
+        statusEl.classList.add("error");
+      }
+    }
+
+    el("manual-execute-btn")?.addEventListener("click", submitManualOrder);
+    syncSliderUnit();
+  }
+  bindManualOrderUI();
 
   function openAuthModal(mode, opts) {
     authMode = mode || "login";
@@ -703,7 +1215,10 @@
         body: JSON.stringify({ telegram_chat_id: chatId }),
       });
       if (resp.ok) state.user = await resp.json();
+      updateTelegramSetupUI();
     });
+
+    el("telegram-edit-btn").addEventListener("click", () => updateTelegramSetupUI(true));
 
     el("auth-form").addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -736,19 +1251,130 @@
     });
   }
 
+  // Inline "personalizza parametri" panel shown under one strategy row in a
+  // watchlist card — pre-filled with this ticker's override (if any) or the
+  // strategy's own defaults, so the field always shows a concrete value.
+  // Hidden by default; the row's gear button toggles it open.
+  function buildStrategyParamsPanel(entry, strategyName, fields, customParams) {
+    const panel = document.createElement("div");
+    panel.className = "strat-params-inline hidden";
+    panel.addEventListener("click", (e) => e.stopPropagation());
+
+    const inputs = {};
+    fields.forEach((field) => {
+      const row = document.createElement("div");
+      row.className = "param-row";
+      const value = customParams && field.key in customParams ? customParams[field.key] : field.default;
+
+      if (field.type === "checkbox") {
+        const label = document.createElement("label");
+        label.className = "param-check";
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.checked = Boolean(value);
+        label.appendChild(input);
+        label.appendChild(document.createTextNode(field.label));
+        row.appendChild(label);
+        inputs[field.key] = input;
+      } else {
+        const label = document.createElement("span");
+        label.className = "param-label";
+        label.textContent = field.label;
+        row.appendChild(label);
+        let input;
+        if (field.type === "select") {
+          input = document.createElement("select");
+          input.className = "param-select";
+          field.options.forEach((opt) => {
+            const o = document.createElement("option");
+            o.value = opt;
+            o.textContent = opt;
+            if (opt === value) o.selected = true;
+            input.appendChild(o);
+          });
+        } else {
+          input = document.createElement("input");
+          input.type = "number";
+          input.className = "param-input";
+          if (field.min !== undefined) input.min = field.min;
+          if (field.max !== undefined) input.max = field.max;
+          input.step = field.step || 1;
+          input.value = value;
+        }
+        row.appendChild(input);
+        inputs[field.key] = input;
+      }
+      panel.appendChild(row);
+    });
+
+    const actions = document.createElement("div");
+    actions.className = "param-actions";
+
+    const resetBtn = document.createElement("button");
+    resetBtn.type = "button";
+    resetBtn.className = "param-btn-reset";
+    resetBtn.textContent = "Reset default";
+    resetBtn.addEventListener("click", async () => {
+      try {
+        await fetch(`/api/watchlist/${entry.id}/strategy_params`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ strategy_name: strategyName, params: {} }),
+        });
+      } finally {
+        loadWatchlist();
+      }
+    });
+
+    const saveBtn = document.createElement("button");
+    saveBtn.type = "button";
+    saveBtn.className = "param-btn-save";
+    saveBtn.textContent = "Salva";
+    saveBtn.addEventListener("click", async () => {
+      const params = {};
+      fields.forEach((field) => {
+        const input = inputs[field.key];
+        if (field.type === "checkbox") params[field.key] = input.checked;
+        else if (field.type === "select") params[field.key] = input.value;
+        else params[field.key] = parseFloat(input.value);
+      });
+      try {
+        await fetch(`/api/watchlist/${entry.id}/strategy_params`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ strategy_name: strategyName, params }),
+        });
+      } finally {
+        loadWatchlist();
+      }
+    });
+
+    actions.appendChild(resetBtn);
+    actions.appendChild(saveBtn);
+    panel.appendChild(actions);
+    return panel;
+  }
+
   async function loadWatchlist() {
     let entries = [];
     try {
       const resp = await fetch("/api/watchlist");
-      if (resp.ok) entries = await resp.json();
+      if (resp.ok) {
+        entries = await resp.json();
+      } else {
+        showTabError("watchlist-list", `Errore caricamento watchlist (${resp.status}).`);
+      }
     } catch (err) {
-      entries = [];
+      showTabError("watchlist-list", "Impossibile caricare la watchlist: problema di rete.");
     }
+    state.alertEntries = entries; // read by renderFavorites() for the alert-bell indicator
+    renderFavorites();
     const list = el("watchlist-list");
     const openIds = new Set(
       Array.from(list.querySelectorAll(".tick-card.open")).map((c) => c.dataset.entryId)
     );
     list.innerHTML = "";
+    el("watchlist-count").textContent = entries.length ? `${entries.length} attiv${entries.length === 1 ? "o" : "i"}` : "";
     if (!entries.length) {
       const li = document.createElement("li");
       li.className = "panel-hint";
@@ -764,8 +1390,11 @@
       const head = document.createElement("div");
       head.className = "tick-card-head";
       const activeCount = entry.strategies.length;
+      const hasCustomParams = Object.keys(entry.strategy_params || {}).length > 0;
       head.innerHTML = `
         <span><span class="wl-symbol">${entry.symbol}</span><span class="wl-exch">${entry.asset_type === "crypto" ? entry.exchange.toUpperCase() : "Azioni"} · ${entry.interval}</span></span>
+        ${entry.on_close ? '<span class="wl-close-badge" title="Alert alla chiusura della candela">CLOSE</span>' : ""}
+        ${hasCustomParams ? '<span class="wl-custom-badge" title="Uno o più parametri personalizzati">★</span>' : ""}
         <span class="wl-summary">${activeCount ? `${activeCount} attiv${activeCount === 1 ? "a" : "e"}` : "nessuna attiva"}</span>
         <span class="wl-caret">▾</span>
       `;
@@ -806,12 +1435,62 @@
       intervalRow.appendChild(intervalSelect);
       body.appendChild(intervalRow);
 
+      // Applies to the whole ticker (not per-strategy) — matches the
+      // background scanner in main.py, which drops the still-forming
+      // candle for this entry only when on_close is true.
+      const onCloseRow = document.createElement("div");
+      onCloseRow.className = "strat-row wl-onclose-row";
+      const onCloseLabel = document.createElement("span");
+      onCloseLabel.textContent = "Alla chiusura della candela";
+      const onCloseToggle = document.createElement("button");
+      onCloseToggle.type = "button";
+      onCloseToggle.className = "wl-toggle" + (entry.on_close ? " on" : "");
+      onCloseToggle.title = "Se attivo, l'alert scatta solo quando la candela chiude — niente falsi segnali intra-bar";
+      onCloseToggle.innerHTML = '<span class="knob"></span>';
+      onCloseToggle.addEventListener("click", async () => {
+        const nextOn = !onCloseToggle.classList.contains("on");
+        onCloseToggle.classList.toggle("on", nextOn);
+        try {
+          await fetch(`/api/watchlist/${entry.id}/on_close`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ on_close: nextOn }),
+          });
+        } finally {
+          loadWatchlist();
+        }
+      });
+      onCloseRow.appendChild(onCloseLabel);
+      onCloseRow.appendChild(onCloseToggle);
+      body.appendChild(onCloseRow);
+
       state.availableStrategies.forEach((name) => {
         const isOn = entry.strategies.includes(name);
+        const customParams = (entry.strategy_params || {})[name];
+        const fields = STRATEGY_PARAM_FIELDS[name] || [];
+
         const row = document.createElement("div");
         row.className = "strat-row";
         const label = document.createElement("span");
+        label.className = "strat-name";
         label.textContent = name;
+        row.appendChild(label);
+
+        let paramsPanel = null;
+        if (fields.length) {
+          const gearBtn = document.createElement("button");
+          gearBtn.type = "button";
+          gearBtn.className = "strat-gear" + (customParams ? " active" : "");
+          gearBtn.title = "Parametri di questa strategia per questo ticker";
+          gearBtn.innerHTML =
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
+          gearBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            if (paramsPanel) paramsPanel.classList.toggle("hidden");
+          });
+          row.appendChild(gearBtn);
+        }
+
         const toggle = document.createElement("button");
         toggle.type = "button";
         toggle.className = "wl-toggle" + (isOn ? " on" : "");
@@ -829,9 +1508,13 @@
             loadWatchlist();
           }
         });
-        row.appendChild(label);
         row.appendChild(toggle);
         body.appendChild(row);
+
+        if (fields.length) {
+          paramsPanel = buildStrategyParamsPanel(entry, name, fields, customParams);
+          body.appendChild(paramsPanel);
+        }
       });
 
       const removeBtn = document.createElement("button");
@@ -861,9 +1544,9 @@
     // dense gridlines that read as "considered" on a wide desktop screen
     // just look busy/dated on a phone. Same hue, much lower opacity.
     const isMobile = window.matchMedia("(max-width: 760px)").matches;
-    const chartGridColor = isMobile ? "rgba(168, 184, 174, 0.18)" : COLORS.gridMinor;
+    const chartGridColor = isMobile ? "rgba(255, 255, 255, 0.035)" : COLORS.gridMinor;
     const baseOptions = {
-      layout: { background: { color: COLORS.paperBg }, textColor: COLORS.inkDim, fontFamily: "'Space Mono', monospace" },
+      layout: { background: { color: COLORS.paperBg }, textColor: COLORS.inkDim, fontFamily: "'JetBrains Mono', 'IBM Plex Mono', monospace" },
       grid: { vertLines: { color: chartGridColor }, horzLines: { color: chartGridColor } },
       rightPriceScale: { borderColor: COLORS.gridMajor },
       timeScale: { borderColor: COLORS.gridMajor, timeVisible: true, secondsVisible: false },
@@ -890,34 +1573,31 @@
     const rsiContainer = el("rsi-chart");
     rsiChart = LightweightCharts.createChart(rsiContainer, baseOptions);
     rsiSeries = rsiChart.addLineSeries({ color: COLORS.rsi, lineWidth: 2 });
+    rsiSeries.createPriceLine({ price: 70, color: "rgba(255,69,96,0.45)", lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: "OB" });
+    rsiSeries.createPriceLine({ price: 50, color: "rgba(110,120,134,0.35)", lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dotted, axisLabelVisible: false, title: "" });
+    rsiSeries.createPriceLine({ price: 30, color: "rgba(0,214,143,0.45)", lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: "OS" });
     observeResize(rsiContainer, rsiChart);
 
     const macdContainer = el("macd-chart");
     macdChart = LightweightCharts.createChart(macdContainer, baseOptions);
     macdLineSeries = macdChart.addLineSeries({ color: COLORS.macd, lineWidth: 2 });
     macdSignalSeries = macdChart.addLineSeries({ color: COLORS.macdSignal, lineWidth: 1 });
-    macdHistSeries = macdChart.addHistogramSeries({ color: "rgba(38, 49, 46, 0.35)" });
+    macdHistSeries = macdChart.addHistogramSeries({ color: "rgba(91,156,246,0.3)" });
+    macdLineSeries.createPriceLine({ price: 0, color: "rgba(110,120,134,0.5)", lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Solid, axisLabelVisible: false, title: "" });
     observeResize(macdContainer, macdChart);
 
     const stochContainer = el("stoch-chart");
     stochChart = LightweightCharts.createChart(stochContainer, baseOptions);
     stochKSeries = stochChart.addLineSeries({ color: COLORS.rsi, lineWidth: 2 });
     stochDSeries = stochChart.addLineSeries({ color: COLORS.stamp, lineWidth: 1 });
+    stochKSeries.createPriceLine({ price: 80, color: "rgba(255,69,96,0.45)", lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: "OB" });
+    stochKSeries.createPriceLine({ price: 50, color: "rgba(110,120,134,0.35)", lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dotted, axisLabelVisible: false, title: "" });
+    stochKSeries.createPriceLine({ price: 20, color: "rgba(0,214,143,0.45)", lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: "OS" });
     observeResize(stochContainer, stochChart);
 
-    const equityContainer = el("equity-chart");
-    equityChart = LightweightCharts.createChart(equityContainer, {
-      ...baseOptions,
-      rightPriceScale: { borderColor: COLORS.gridMajor },
-      timeScale: { borderColor: COLORS.gridMajor, timeVisible: true, secondsVisible: false, visible: false },
-    });
-    equitySeries = equityChart.addAreaSeries({
-      lineColor: COLORS.stamp,
-      topColor: "rgba(138, 109, 59, 0.22)",
-      bottomColor: "rgba(138, 109, 59, 0.02)",
-      lineWidth: 2,
-    });
-    observeResize(equityContainer, equityChart);
+    // equity-chart panel removed — equityChart/equitySeries stay null
+    equityChart = null;
+    equitySeries = null;
 
     mainChart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
       if (!range) return;
@@ -1065,7 +1745,7 @@
 
     bands.forEach((b) => {
       if (b.index % 2 === 0) return; // shade every other day only
-      const prim = new SessionBandPrimitive({ time: b.start }, { time: b.end }, "rgba(38, 49, 46, 0.035)");
+      const prim = new SessionBandPrimitive({ time: b.start }, { time: b.end }, "rgba(255, 255, 255, 0.025)");
       candleSeries.attachPrimitive(prim);
       overlays.primitives.push({ series: candleSeries, primitive: prim });
     });
@@ -1140,7 +1820,7 @@
     if (type === "trend_line") return [new LinePrimitive(p1, p2, color, 2, false)];
     if (type === "arrow") return [new LinePrimitive(p1, p2, color, 2, true)];
     if (type === "rectangle") return [new RectanglePrimitive(p1, p2, "rgba(31, 78, 107, 0.12)", color)];
-    if (type === "range") return [new RectanglePrimitive(p1, p2, "rgba(138, 109, 59, 0.12)", COLORS.stamp)];
+    if (type === "range") return [new RectanglePrimitive(p1, p2, "rgba(192, 122, 30, 0.12)", COLORS.stamp)];
     if (type === "fib") return [new FibPrimitive(p1, p2, color)];
     return [];
   }
@@ -1547,15 +2227,128 @@
     });
   }
 
+  // .draw-rail is hidden outright below 760px (there's no room for a fixed
+  // side column) — these two chart-strip buttons are how mobile reaches
+  // drawing tools instead: the pencil opens the same rail repositioned as
+  // a horizontal dock right above this row, the trash mirrors
+  // #draw-clear-btn. Picking a tool or tapping the pencil again closes the
+  // dock, same as the desktop rail's own click-away behavior.
+  function bindMobileDrawTools() {
+    const drawBtn = el("mobile-strip-draw-btn");
+    const clearBtn = el("mobile-strip-clear-btn");
+    const rail = el("draw-rail");
+    drawBtn.addEventListener("click", () => {
+      rail.classList.toggle("mobile-tools-open");
+      drawBtn.classList.toggle("active", rail.classList.contains("mobile-tools-open"));
+    });
+    clearBtn.addEventListener("click", () => {
+      if (drawState.drawings.length && window.confirm("Cancellare tutti i disegni su questo grafico?")) {
+        clearAllDrawings();
+      }
+    });
+    rail.querySelectorAll(".draw-tool-btn[data-draw-tool]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (window.matchMedia("(max-width: 760px)").matches) {
+          rail.classList.remove("mobile-tools-open");
+          drawBtn.classList.remove("active");
+        }
+      });
+    });
+  }
+
+  // The wheel is a thin skin over the real #interval-primary select — it
+  // never duplicates the interval list or the "what happens on change"
+  // logic, it just reads the select's options once and, from then on,
+  // keeps select.value and this UI in sync in both directions.
+  const TF_WHEEL_ITEM_H = 18;
+
+  function buildMobileTfWheel() {
+    const track = el("tf-wheel-track");
+    if (track.dataset.built) return;
+    track.dataset.built = "1";
+    const select = el("interval-primary");
+    Array.from(select.options).forEach((opt) => {
+      const item = document.createElement("div");
+      item.className = "tf-wheel-item";
+      item.textContent = opt.value;
+      item.dataset.value = opt.value;
+      item.addEventListener("click", () => {
+        track.scrollTo({ top: item.offsetTop - (track.clientHeight - TF_WHEEL_ITEM_H) / 2, behavior: "smooth" });
+      });
+      track.appendChild(item);
+    });
+
+    let settleTimer = null;
+    track.addEventListener("scroll", () => {
+      markTfWheelClosest();
+      clearTimeout(settleTimer);
+      settleTimer = setTimeout(() => {
+        const closest = markTfWheelClosest();
+        if (closest && closest.dataset.value !== select.value) {
+          select.value = closest.dataset.value;
+          select.dispatchEvent(new Event("change"));
+        }
+      }, 130);
+    });
+  }
+
+  // Whichever item's center is nearest the track's own center becomes
+  // "current" (the one sitting inside the dark pill); its immediate
+  // neighbors get a lighter "near" tint so the fade toward the edges
+  // reads as a wheel, not a flat list.
+  function markTfWheelClosest() {
+    const track = el("tf-wheel-track");
+    const items = Array.from(track.children);
+    if (!items.length) return null;
+    const center = track.scrollTop + track.clientHeight / 2;
+    let closest = items[0];
+    let closestDist = Infinity;
+    items.forEach((it) => {
+      const dist = Math.abs(it.offsetTop + TF_WHEEL_ITEM_H / 2 - center);
+      if (dist < closestDist) { closestDist = dist; closest = it; }
+    });
+    const closestIdx = items.indexOf(closest);
+    items.forEach((it, idx) => {
+      it.classList.toggle("current", it === closest);
+      it.classList.toggle("near", Math.abs(idx - closestIdx) === 1);
+    });
+    return closest;
+  }
+
+  // Re-centers the wheel on the select's current value — needed whenever
+  // the value changes from outside the wheel (initial load, resize onto
+  // mobile) since scrollTop math needs real layout, which only exists once
+  // the strip is actually visible (display:none elsewhere gives 0 height).
+  function syncMobileTfWheel() {
+    if (!window.matchMedia("(max-width: 760px)").matches) return;
+    const track = el("tf-wheel-track");
+    if (!track.dataset.built) return;
+    const select = el("interval-primary");
+    const target = track.querySelector(`.tf-wheel-item[data-value="${select.value}"]`);
+    if (!target) return;
+    track.scrollTop = target.offsetTop - (track.clientHeight - TF_WHEEL_ITEM_H) / 2;
+    markTfWheelClosest();
+  }
+
   function updateMobileChartStrip() {
     const strip = el("mobile-chart-strip");
+    const tools = el("mobile-strip-tools");
+    const onChartScreen = document.querySelector('.mobile-nav-btn[data-mobile-target="chart"]').classList.contains("active");
     if (!state.data) {
       strip.classList.add("hidden");
+      tools.classList.add("hidden");
       return;
     }
     el("mobile-chart-symbol").textContent = state.data.symbol;
-    el("mobile-chart-interval").textContent = el("interval-primary").value || "—";
+    // Keep the strategy pill updated with the currently-active strategy name.
+    // Abbreviate long names so the pill stays compact on small screens.
+    const pill = el("mobile-strategy-pill");
+    const stratName = el("active-strategy-select").value || "—";
+    const stratAbbr = stratName.replace("(trend-follower)", "").replace("(long-term)", "").replace("(RSI+BB reversal)", "").trim();
+    pill.textContent = stratAbbr;
     strip.classList.remove("hidden");
+    tools.classList.toggle("hidden", !onChartScreen);
+    syncMobileTfWheel();
   }
 
   function render() {
@@ -1592,10 +2385,15 @@
       }
     }
     if (state.layers.bbands) {
-      ["BB_upper", "BB_mid", "BB_lower"].forEach((name) => {
+      const bbBands = [
+        { name: "BB_upper", color: COLORS.bbUpper, lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Solid },
+        { name: "BB_mid", color: COLORS.bbMid, lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed },
+        { name: "BB_lower", color: COLORS.bbLower, lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Solid },
+      ];
+      bbBands.forEach(({ name, color, lineWidth, lineStyle }) => {
         const vals = findIndicator(analysis.indicators, name);
         if (!vals) return;
-        const s = mainChart.addLineSeries({ color: COLORS.bb, lineWidth: 1, priceLineVisible: false });
+        const s = mainChart.addLineSeries({ color, lineWidth, lineStyle, priceLineVisible: false });
         s.setData(seriesFromIndicatorValues(candles, vals));
         addLineOverlay(mainChart, s, null, mainChart);
       });
@@ -1624,11 +2422,17 @@
       macdSignalSeries.setData(signalVals ? seriesFromIndicatorValues(candles, signalVals) : []);
       if (histVals) {
         macdHistSeries.setData(
-          seriesFromIndicatorValues(candles, histVals).map((d) => ({
-            time: d.time,
-            value: d.value,
-            color: d.value >= 0 ? "rgba(46, 92, 62, 0.55)" : "rgba(140, 47, 31, 0.55)",
-          }))
+          seriesFromIndicatorValues(candles, histVals).map((d, i, arr) => {
+            const prev = arr[i - 1]?.value ?? d.value;
+            const rising = d.value > prev;
+            let color;
+            if (d.value >= 0) {
+              color = rising ? "rgba(0,214,143,0.85)" : "rgba(0,214,143,0.38)";
+            } else {
+              color = !rising ? "rgba(255,69,96,0.85)" : "rgba(255,69,96,0.38)";
+            }
+            return { time: d.time, value: d.value, color };
+          })
         );
       } else {
         macdHistSeries.setData([]);
@@ -1650,9 +2454,15 @@
       if (!state.layers[layerKey]) return;
 
       const isBullish = lvl.direction === "bullish";
-      const isImbalance = lvl.type === "fvg";
-      const fill = isImbalance ? COLORS.imbalanceFill : isBullish ? COLORS.bullFill : COLORS.bearFill;
-      const border = isImbalance ? COLORS.imbalanceBorder : isBullish ? COLORS.bullBorder : COLORS.bearBorder;
+      const isFvg = lvl.type === "fvg";
+      const isMitigated = isFvg && lvl.mitigated;
+      let fill = isFvg ? (isBullish ? COLORS.fvgBullFill : COLORS.fvgBearFill) : isBullish ? COLORS.bullFill : COLORS.bearFill;
+      let border = isFvg ? (isBullish ? COLORS.fvgBullBorder : COLORS.fvgBearBorder) : isBullish ? COLORS.bullBorder : COLORS.bearBorder;
+      if (isMitigated) {
+        // Mitigated FVGs: still visible but clearly "used" — half opacity
+        fill = fill.replace(/[\d.]+\)$/, (m) => `${(parseFloat(m) * 0.5).toFixed(2)})`);
+        border = border.replace(/[\d.]+\)$/, (m) => `${(parseFloat(m) * 0.5).toFixed(2)})`);
+      }
       const endTime = lvl.end_time ?? lastTime;
 
       if (isZone) {
@@ -1687,6 +2497,48 @@
           z.label,
           "CONF"
         );
+      });
+    }
+
+    // --- automatic Fibonacci retracement / extension ---
+    // Only the single most recent leg (and, when a pullback has confirmed
+    // it, its extension) — same "most actionable, not full history"
+    // philosophy as the dealing range and confluence zones above.
+    if (state.layers.fibonacci && analysis.fib_zones) {
+      analysis.fib_zones.forEach((zone) => {
+        const isBull = zone.direction === "bullish";
+        const isExt = zone.kind === "extension";
+        const lineColor = isExt ? COLORS.accent : isBull ? COLORS.bull : COLORS.bear;
+        const ratioEntries = Object.entries(zone.levels);
+
+        ratioEntries.forEach(([ratio, price]) => {
+          const isKeyRatio = ["0", "1", "0.382", "0.618", "1.618"].includes(ratio);
+          // Only the key ratios get an axis label + title box — the rest
+          // (0.236/0.5/0.786 retracement, 1.414/2/2.618 extension) still
+          // mark the price but stay unlabeled and near-invisible, so the
+          // chart doesn't turn into a stack of a dozen labeled price lines.
+          const line = candleSeries.createPriceLine({
+            price,
+            color: lineColor,
+            lineWidth: isKeyRatio ? 2 : 1,
+            lineStyle: LightweightCharts.LineStyle.Dashed,
+            axisLabelVisible: isKeyRatio,
+            title: isKeyRatio ? `Fib ${isExt ? "ext" : "ret"} ${(parseFloat(ratio) * 100).toFixed(1)}%` : "",
+          });
+          overlays.priceLines.push({ series: candleSeries, line });
+        });
+
+        if (!isExt && zone.levels["0.382"] !== undefined && zone.levels["0.618"] !== undefined) {
+          // Golden-pocket fill (38.2%-61.8%) — the zone traders actually watch.
+          addRectangle(
+            { time: zone.anchor_time, price: zone.levels["0.382"] },
+            { time: lastTime, price: zone.levels["0.618"] },
+            isBull ? COLORS.bullFill : COLORS.bearFill,
+            isBull ? COLORS.bullBorder : COLORS.bearBorder,
+            null,
+            null
+          );
+        }
       });
     }
 
@@ -1790,48 +2642,137 @@
     state.alertsSeeded = true;
   }
 
-  function renderBacktest() {
-    const bt = state.data.backtests[state.activeTimeframe];
-    const statsEl = el("backtest-stats");
-    statsEl.innerHTML = "";
+  // Shared by both the built-in strategy backtest (renderBacktest) and a
+  // Pine script override (renderPineBacktest) — same result shape, same UI.
+  // Equity chart is the hero: the % return + final equity are stamped on it
+  // directly instead of living in a KPI tile, and its time axis is left on
+  // (see initCharts) so the curve reads against real dates. Below it, only
+  // the 3 ratios a trader actually scans for stay always-visible as chips;
+  // trade count/final equity move into "Dettagli", and every individual
+  // trade — with its entry/exit date — gets its own row in Operazioni so
+  // "when did this happen" has an actual answer instead of just an aggregate.
+  function renderBacktestUI(bt) {
     if (!bt) return;
 
-    const returnClass = bt.total_return_pct >= 0 ? "positive" : "negative";
-    const stats = [
-      ["Rendimento", `${bt.total_return_pct >= 0 ? "+" : ""}${bt.total_return_pct.toFixed(1)}%`, returnClass],
-      ["Equity finale", bt.final_equity.toLocaleString("it-IT", { maximumFractionDigits: 0 }), ""],
-      ["Trade", bt.num_trades, ""],
-      ["Win rate", bt.win_rate_pct !== null ? `${bt.win_rate_pct.toFixed(0)}%` : "—", ""],
-      ["Max drawdown", `-${bt.max_drawdown_pct.toFixed(1)}%`, "negative"],
-      ["Profit factor", bt.profit_factor !== null ? bt.profit_factor.toFixed(2) : "—", ""],
-    ];
-    stats.forEach(([label, value, cls]) => {
-      const div = document.createElement("div");
-      div.className = "stat";
-      div.innerHTML = `<div class="stat-label">${label}</div><div class="stat-value ${cls}">${value}</div>`;
-      statsEl.appendChild(div);
-    });
+    // The backtest runs on a deliberately coarser feed than the chart when
+    // ltf is finer than daily (see backtest_interval_for on the backend) —
+    // surface which interval it actually used instead of implying it always
+    // matches the chart's own timeframe.
+    // These elements were in the old Backtest panel — now removed. Guard
+    // against null so the function still works for operations/equity.
+    const tagEl = el("backtest-interval-tag");
+    if (tagEl) tagEl.textContent = bt.interval ? `(${bt.interval})` : "";
 
-    equitySeries.setData(bt.equity_curve.map(([time, equity]) => ({ time, value: equity })));
-    equityChart.timeScale().fitContent();
+    const pctEl = el("equity-stamp-pct");
+    if (pctEl) {
+      pctEl.textContent = `${bt.total_return_pct >= 0 ? "+" : ""}${bt.total_return_pct.toFixed(1)}%`;
+      pctEl.className = "equity-stamp-pct " + (bt.total_return_pct >= 0 ? "positive" : "negative");
+    }
+    const subEl = el("equity-stamp-sub");
+    if (subEl) subEl.textContent = `equity ${bt.final_equity.toLocaleString("it-IT", { maximumFractionDigits: 0 })}`;
+
+    const chipsEl = el("backtest-chips");
+    if (chipsEl) {
+      chipsEl.innerHTML = "";
+      [
+        ["Win rate", bt.win_rate_pct !== null ? `${bt.win_rate_pct.toFixed(0)}%` : "—", ""],
+        ["Max drawdown", `-${bt.max_drawdown_pct.toFixed(1)}%`, "negative"],
+        ["Profit factor", bt.profit_factor !== null ? bt.profit_factor.toFixed(2) : "—", ""],
+      ].forEach(([label, value, cls]) => {
+        const div = document.createElement("div");
+        div.className = "chip";
+        div.innerHTML = `<div class="chip-label">${label}</div><div class="chip-value ${cls}">${value}</div>`;
+        chipsEl.appendChild(div);
+      });
+    }
+
+    const detailsEl = el("backtest-details");
+    if (detailsEl) detailsEl.innerHTML = `
+      <div class="stat"><div class="stat-label">Trade</div><div class="stat-value">${bt.num_trades}</div></div>
+      <div class="stat"><div class="stat-label">Equity finale</div><div class="stat-value">${bt.final_equity.toLocaleString("it-IT", { maximumFractionDigits: 0 })}</div></div>
+    `;
+
+    el("operations-count").textContent = bt.num_trades ? `${bt.num_trades}` : "";
+    const opsList = el("operations-list");
+    opsList.innerHTML = "";
+    if (!bt.trades.length) {
+      opsList.innerHTML = `<li class="operations-empty">Nessuna operazione nel periodo</li>`;
+    } else {
+      const dateFmt = { day: "2-digit", month: "short", year: "2-digit" };
+      [...bt.trades].reverse().forEach((t) => {
+        const li = document.createElement("li");
+        li.className = "operation-row";
+        const dirIcon = t.direction === "long" ? "▲" : "▼";
+        const entryDate = new Date(t.entry_time * 1000).toLocaleDateString("it-IT", dateFmt);
+        const exitDate = new Date(t.exit_time * 1000).toLocaleDateString("it-IT", dateFmt);
+        const pnlClass = t.pnl_pct >= 0 ? "positive" : "negative";
+        li.innerHTML = `
+          <span class="op-dir ${t.direction}">${dirIcon}</span>
+          <span class="op-dates">${entryDate} → ${exitDate}</span>
+          <span class="op-pnl ${pnlClass}">${t.pnl_pct >= 0 ? "+" : ""}${t.pnl_pct.toFixed(1)}%</span>
+        `;
+        opsList.appendChild(li);
+      });
+    }
+
+    if (equitySeries) {
+      equitySeries.setData(bt.equity_curve.map(([time, equity]) => ({ time, value: equity })));
+      equityChart.timeScale().fitContent();
+    }
+  }
+
+  function renderBacktest() {
+    renderBacktestUI(state.data.backtests[state.activeTimeframe]);
   }
 
   function getStrategyAndBacktestQuery() {
     const form = el("params-form");
     const data = new FormData(form);
     const params = new URLSearchParams();
-    ["average", "len", "slopeFlen", "slopeSlen", "trendfilterperiod", "trendfiltertype",
-      "volatilitystdevlength", "volatilitystdevmalength", "initial_capital", "qty_pct_of_equity",
-      "commission_pct", "slippage_pct", "stop_loss_pct", "take_profit_pct"].forEach((name) => {
-      params.set(name, data.get(name));
+    const strategyName = el("active-strategy-select").value;
+    (STRATEGY_PARAM_FIELDS[strategyName] || []).forEach((field) => {
+      const input = form.elements[field.key];
+      if (!input) return;
+      params.set(field.key, field.type === "checkbox" ? input.checked : data.get(field.key));
     });
-    params.set("trendfilter", form.elements["trendfilter"].checked);
-    params.set("volatilityfilter", form.elements["volatilityfilter"].checked);
-    params.set("enable_divergence", form.elements["enable_divergence"].checked);
-    params.set("enable_contraction", form.elements["enable_contraction"].checked);
-    params.set("enable_range_bounce", form.elements["enable_range_bounce"].checked);
-    params.set("strategy_name", el("active-strategy-select").value);
+    // Backtest params: always 100% equity, no fees — the Lab is the place to
+    // experiment; the chart's own backtest always uses clean defaults.
+    params.set("initial_capital", "10000");
+    params.set("qty_pct_of_equity", "100");
+    params.set("commission_pct", "0");
+    params.set("slippage_pct", "0");
+    params.set("stop_loss_pct", "0");
+    params.set("take_profit_pct", "0");
+    params.set("strategy_name", strategyName);
     return params.toString();
+  }
+
+  // Rebuilds the "Strategia" fieldset's fields for whichever strategy is
+  // currently active — each one has its own differently-shaped parameter
+  // set (STRATEGY_PARAM_FIELDS), so this is what actually makes them
+  // visible/editable instead of only ever showing Lorenzo's.
+  function renderStrategyParamsFields() {
+    const strategyName = el("active-strategy-select").value;
+    const fields = STRATEGY_PARAM_FIELDS[strategyName] || [];
+    const container = el("strategy-params-fields");
+    container.innerHTML = "";
+    fields.forEach((field) => {
+      const label = document.createElement("label");
+      if (field.type === "checkbox") {
+        label.innerHTML = `<input type="checkbox" name="${field.key}" ${field.default ? "checked" : ""} /> ${field.label}`;
+      } else if (field.type === "select") {
+        const options = field.options
+          .map((opt) => `<option value="${opt}"${opt === field.default ? " selected" : ""}>${opt}</option>`)
+          .join("");
+        label.innerHTML = `${field.label} <select name="${field.key}">${options}</select>`;
+      } else {
+        const min = field.min !== undefined ? ` min="${field.min}"` : "";
+        const max = field.max !== undefined ? ` max="${field.max}"` : "";
+        const step = field.step !== undefined ? ` step="${field.step}"` : "";
+        label.innerHTML = `${field.label} <input type="number" name="${field.key}" value="${field.default}"${min}${max}${step} />`;
+      }
+      container.appendChild(label);
+    });
   }
 
   function renderSummary() {
@@ -1954,7 +2895,10 @@
     try {
       const url = `/api/analyze?symbol=${encodeURIComponent(symbol)}&asset_type=${state.assetType}&exchange=${state.cryptoExchange}&${intervalQuery()}&${getStrategyAndBacktestQuery()}`;
       const resp = await fetch(url);
-      if (!resp.ok) return;
+      if (!resp.ok) {
+        showTabError("error-banner", `Aggiornamento automatico fallito (${resp.status}).`);
+        return;
+      }
       state.data = await resp.json();
       render();
     } catch (err) {
@@ -1967,10 +2911,9 @@
     el("loading").classList.remove("hidden");
     el("empty-state").classList.add("hidden");
     el("chart-wrap").classList.add("hidden");
-    el("search-btn").disabled = true;
     disconnectLiveFeed();
 
-    try {
+    await withAsyncButton(el("search-btn"), async () => {
       const url = `/api/analyze?symbol=${encodeURIComponent(symbol)}&asset_type=${state.assetType}&exchange=${state.cryptoExchange}&${intervalQuery()}&${getStrategyAndBacktestQuery()}`;
       const resp = await fetch(url);
       const body = await resp.json();
@@ -1993,7 +2936,9 @@
       // sliver — and it doesn't shrink back down on its own afterward.
       loadDrawingsForSymbol();
       render();
+      renderFavorites();
       savePreferences();
+      refreshDeepBacktest(symbol);
       // Live WS streaming is only wired up for MEXC today; every crypto
       // symbol still gets the periodic refresh below regardless of exchange.
       if (state.assetType === "crypto" && state.cryptoExchange === "mexc") {
@@ -2007,12 +2952,35 @@
           el("polling-badge").classList.remove("hidden");
         }
       }
-    } catch (err) {
+    }).catch((err) => {
       showError(err.message || "Errore durante l'analisi del ticker.");
       el("empty-state").classList.remove("hidden");
-    } finally {
+    }).finally(() => {
       el("loading").classList.add("hidden");
-      el("search-btn").disabled = false;
+    });
+  }
+
+  // /api/analyze answers instantly using whatever ltf_candles fetched (a
+  // single page per exchange), so the backtest shown at first is only as
+  // deep as that — good enough to not block the chart on. This follows up
+  // in the background with the real, paginated deep-history backtest and
+  // swaps the Strategia panel over once it resolves. A monotonically
+  // increasing token guards against a slow response from an earlier
+  // symbol/timeframe landing after a newer one already replaced it.
+  let deepBacktestSeq = 0;
+
+  async function refreshDeepBacktest(symbol) {
+    const seq = ++deepBacktestSeq;
+    try {
+      const url = `/api/backtest/deep?symbol=${encodeURIComponent(symbol)}&asset_type=${state.assetType}&exchange=${state.cryptoExchange}&ltf_interval=${getSelectedIntervals().ltf}&${getStrategyAndBacktestQuery()}`;
+      const resp = await fetch(url);
+      if (!resp.ok || seq !== deepBacktestSeq || !state.data) return;
+      const bt = await resp.json();
+      state.data.backtests[state.activeTimeframe] = bt;
+      renderBacktest();
+    } catch (err) {
+      // The fast-pass backtest already rendered — losing the deeper one
+      // silently is fine, nothing on screen depends on it.
     }
   }
 
@@ -2020,31 +2988,24 @@
   // + exchange before the ticker can be added, instead of trusting free
   // text — the same source of truth as the main search (/api/symbols), just
   // filtered to the asset type/exchange currently selected in the form. ----
-  const wlSuggest = { suggestions: [], activeIndex: -1, resolved: null };
-  let wlSuggestTimer = null;
-
-  async function fetchWatchlistSuggestions(query) {
-    try {
+  const wlSuggest = makeSuggestController({
+    listId: "watchlist-suggestions",
+    anchorId: "watchlist-symbol",
+    fetchItems: async (query) => {
       const resp = await fetch(`/api/symbols?query=${encodeURIComponent(query)}`);
       const all = resp.ok ? await resp.json() : [];
-      wlSuggest.suggestions =
-        state.watchlistAssetType === "crypto"
-          ? all.filter((s) => s.asset_type === "crypto" && s.provider === el("watchlist-exchange").value)
-          : all.filter((s) => s.asset_type === "stock");
-    } catch (err) {
-      wlSuggest.suggestions = [];
-    }
-    wlSuggest.activeIndex = -1;
-    renderWatchlistSuggestions();
-  }
-
-  function positionWatchlistSuggestions() {
-    const list = el("watchlist-suggestions");
-    const rect = el("watchlist-symbol").getBoundingClientRect();
-    list.style.left = `${rect.left}px`;
-    list.style.top = `${rect.bottom + 4}px`;
-    list.style.width = `${rect.width}px`;
-  }
+      return state.watchlistAssetType === "crypto"
+        ? all.filter((s) => s.asset_type === "crypto" && s.provider === el("watchlist-exchange").value)
+        : all.filter((s) => s.asset_type === "stock");
+    },
+    onSelect: (item) => {
+      el("watchlist-symbol").value = item.symbol;
+      wlSuggest.resolved = item;
+      wlSuggest.clear();
+      showResolvedPair(item);
+    },
+  });
+  let wlSuggestTimer = null;
 
   function showResolvedPair(item) {
     const p = el("watchlist-resolved-pair");
@@ -2057,95 +3018,227 @@
     p.classList.remove("hidden");
   }
 
-  function renderWatchlistSuggestions() {
-    const list = el("watchlist-suggestions");
-    list.innerHTML = "";
-    if (!wlSuggest.suggestions.length) {
-      list.classList.add("hidden");
-      return;
-    }
-    positionWatchlistSuggestions();
-    wlSuggest.suggestions.forEach((item, i) => {
-      const li = document.createElement("li");
-      li.className = i === wlSuggest.activeIndex ? "active" : "";
-      const main = document.createElement("span");
-      main.className = "sug-main";
-      const sym = document.createElement("span");
-      sym.className = "sug-symbol";
-      sym.textContent = item.symbol;
-      const name = document.createElement("span");
-      name.className = "sug-name";
-      name.textContent = item.name || "";
-      main.appendChild(sym);
-      main.appendChild(name);
-      const exchange = document.createElement("span");
-      exchange.className = "sug-exchange sug-exchange-" + item.provider;
-      exchange.textContent = item.exchange;
-      li.appendChild(main);
-      li.appendChild(exchange);
-      li.addEventListener("mousedown", (e) => {
-        e.preventDefault();
-        selectWatchlistSuggestion(item);
-      });
-      list.appendChild(li);
-    });
-    list.classList.remove("hidden");
-  }
-
-  function hideWatchlistSuggestions() {
-    wlSuggest.suggestions = [];
-    wlSuggest.activeIndex = -1;
-    const list = el("watchlist-suggestions");
-    list.classList.add("hidden");
-    list.innerHTML = "";
-  }
-
-  function selectWatchlistSuggestion(item) {
-    el("watchlist-symbol").value = item.symbol;
-    wlSuggest.resolved = item;
-    hideWatchlistSuggestions();
-    showResolvedPair(item);
-  }
-
   function bindWatchlistAutocomplete() {
     const input = el("watchlist-symbol");
-
     input.addEventListener("input", () => {
       wlSuggest.resolved = null; // typing invalidates whatever was confirmed before
       showResolvedPair(null);
       const value = input.value.trim();
       clearTimeout(wlSuggestTimer);
-      if (!value) {
-        hideWatchlistSuggestions();
-        return;
+      if (!value) { wlSuggest.clear(); return; }
+      wlSuggestTimer = setTimeout(() => wlSuggest.fetch(value), 300);
+    });
+    input.addEventListener("keydown", (e) => wlSuggest.handleKey(e));
+    input.addEventListener("blur", () => setTimeout(() => wlSuggest.clear(), 150));
+  }
+
+  // ---- Watchlist tab: a plain list of favorite tickers for one-click chart
+  // navigation. Separate from the Alert tab's watchlist (background Telegram
+  // monitoring) — a ticker can be pinned here, watched there, both, or
+  // neither. The add form searches the same /api/symbols source as the main
+  // header search (each result already carries its own asset_type/exchange,
+  // so there's no separate asset-type toggle to get right before adding). ----
+  const favSuggest = makeSuggestController({
+    listId: "favorite-suggestions",
+    anchorId: "favorite-symbol",
+    fetchItems: async (query) => {
+      const resp = await fetch(`/api/symbols?query=${encodeURIComponent(query)}`);
+      return resp.ok ? await resp.json() : [];
+    },
+    onSelect: (item) => {
+      el("favorite-symbol").value = item.symbol;
+      favSuggest.resolved = item;
+      favSuggest.clear();
+    },
+  });
+  let favSuggestTimer = null;
+
+  function bindFavoriteAutocomplete() {
+    const input = el("favorite-symbol");
+    input.addEventListener("input", () => {
+      favSuggest.resolved = null;
+      const value = input.value.trim();
+      clearTimeout(favSuggestTimer);
+      if (!value) { favSuggest.clear(); return; }
+      favSuggestTimer = setTimeout(() => favSuggest.fetch(value), 300);
+    });
+    input.addEventListener("keydown", (e) => favSuggest.handleKey(e));
+    input.addEventListener("blur", () => setTimeout(() => favSuggest.clear(), 150));
+  }
+
+  const FAV_AVATAR_COLORS = ["#f0b90b", "#23af91", "#5850ec", "#94a3b8", "#2962ff", "#f23645", "#089981"];
+  function favAvatarColor(symbol) {
+    let hash = 0;
+    for (let i = 0; i < symbol.length; i++) hash = (hash * 31 + symbol.charCodeAt(i)) >>> 0;
+    return FAV_AVATAR_COLORS[hash % FAV_AVATAR_COLORS.length];
+  }
+
+  async function loadFavorites() {
+    try {
+      const resp = await fetch("/api/favorites");
+      state.favorites = resp.ok ? await resp.json() : [];
+    } catch (err) {
+      state.favorites = [];
+    }
+    renderFavorites();
+    loadFavoriteQuotes();
+  }
+
+  async function loadFavoriteQuotes() {
+    if (!state.favorites.length) return;
+    try {
+      const resp = await fetch("/api/favorites/quotes");
+      if (resp.ok) {
+        const quotes = await resp.json();
+        state.favoriteQuotes = {};
+        quotes.forEach((q) => { state.favoriteQuotes[q.id] = q; });
+      } else {
+        showTabError("favorite-rows", `Errore aggiornamento quotazioni (${resp.status}).`);
       }
-      wlSuggestTimer = setTimeout(() => fetchWatchlistSuggestions(value), 300);
+    } catch (err) {
+      showTabError("favorite-rows", "Impossibile aggiornare le quotazioni: problema di rete.");
+    }
+    renderFavorites();
+  }
+
+  function renderFavorites() {
+    const rows = el("favorite-rows");
+    const empty = el("favorite-empty");
+    rows.innerHTML = "";
+
+    const items = state.favorites.filter(
+      (f) => state.favoriteFilter === "all" || f.asset_type === state.favoriteFilter
+    );
+
+    el("favorites-count").textContent = state.favorites.length
+      ? `${state.favorites.length} salvat${state.favorites.length === 1 ? "o" : "i"}`
+      : "";
+    empty.classList.toggle("hidden", state.favorites.length > 0);
+    if (!items.length) return;
+
+    const activeSymbol = state.data && state.data.symbol;
+
+    items.forEach((entry) => {
+      const li = document.createElement("li");
+      const isActive =
+        !!activeSymbol &&
+        entry.symbol === activeSymbol &&
+        entry.asset_type === state.assetType &&
+        (entry.asset_type !== "crypto" || entry.exchange === state.cryptoExchange);
+      li.className = "wl-row" + (isActive ? " active" : "");
+
+      const avatar = document.createElement("div");
+      avatar.className = "wl-avatar";
+      avatar.style.background = favAvatarColor(entry.symbol);
+      avatar.textContent = entry.symbol.charAt(0);
+
+      const main = document.createElement("div");
+      main.className = "wl-main";
+      const symRow = document.createElement("div");
+      symRow.className = "wl-sym-row";
+      const sym = document.createElement("span");
+      sym.className = "wl-sym";
+      sym.textContent = entry.symbol;
+      symRow.appendChild(sym);
+      const badge = document.createElement("span");
+      badge.className = "wl-badge";
+      badge.textContent = entry.asset_type === "crypto" ? entry.exchange : "azioni";
+      symRow.appendChild(badge);
+      const hasAlert = (state.alertEntries || []).some(
+        (a) => a.symbol === entry.symbol && a.asset_type === entry.asset_type && a.exchange === entry.exchange
+      );
+      if (hasAlert) {
+        const bell = document.createElement("span");
+        bell.className = "wl-bell";
+        bell.title = "Alert Telegram attivo su questo ticker";
+        bell.textContent = "●";
+        symRow.appendChild(bell);
+      }
+      main.appendChild(symRow);
+      const exch = document.createElement("div");
+      exch.className = "wl-exch";
+      exch.textContent = isActive ? "In grafico ora" : entry.asset_type === "crypto" ? `${entry.exchange} · crypto` : "azioni";
+      main.appendChild(exch);
+
+      const right = document.createElement("div");
+      right.className = "wl-right";
+      const quote = state.favoriteQuotes[entry.id];
+      const price = document.createElement("div");
+      price.className = "wl-price";
+      price.textContent =
+        quote && quote.price != null
+          ? quote.price.toLocaleString("it-IT", { maximumFractionDigits: quote.price < 10 ? 4 : 2 })
+          : "—";
+      right.appendChild(price);
+      const change = document.createElement("div");
+      const pct = quote && quote.change_pct;
+      change.className = "wl-change " + (pct > 0 ? "up" : pct < 0 ? "down" : "flat");
+      change.textContent = pct != null ? `${pct > 0 ? "+" : ""}${pct.toFixed(2)}%` : "—";
+      right.appendChild(change);
+
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "wl-remove";
+      remove.textContent = "✕";
+      remove.title = "Rimuovi dalla watchlist";
+      remove.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        await fetch(`/api/favorites/${entry.id}`, { method: "DELETE" });
+        loadFavorites();
+      });
+
+      li.appendChild(avatar);
+      li.appendChild(main);
+      li.appendChild(right);
+      li.appendChild(remove);
+      li.addEventListener("click", () => {
+        state.assetType = entry.asset_type;
+        if (entry.asset_type === "crypto") state.cryptoExchange = entry.exchange;
+        runAnalysis(entry.symbol);
+      });
+      rows.appendChild(li);
+    });
+  }
+
+  function bindFavorites() {
+    bindFavoriteAutocomplete();
+
+    el("favorite-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const input = el("favorite-symbol");
+      const typed = input.value.trim();
+      if (!typed) return;
+
+      let resolved = favSuggest.resolved && favSuggest.resolved.symbol === typed ? favSuggest.resolved : null;
+      if (!resolved) {
+        await favSuggest.fetch(typed);
+        resolved = favSuggest.suggestions.find((s) => s.symbol.toUpperCase() === typed.toUpperCase()) || null;
+      }
+      if (!resolved) return; // no matching ticker — nothing to add
+
+      await fetch("/api/favorites", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          symbol: resolved.symbol,
+          asset_type: resolved.asset_type,
+          exchange: resolved.provider || "mexc",
+        }),
+      });
+      input.value = "";
+      favSuggest.resolved = null;
+      favSuggest.clear();
+      loadFavorites();
     });
 
-    input.addEventListener("keydown", (e) => {
-      if (el("watchlist-suggestions").classList.contains("hidden")) return;
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        wlSuggest.activeIndex = Math.min(wlSuggest.activeIndex + 1, wlSuggest.suggestions.length - 1);
-        renderWatchlistSuggestions();
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        wlSuggest.activeIndex = Math.max(wlSuggest.activeIndex - 1, 0);
-        renderWatchlistSuggestions();
-      } else if (e.key === "Enter") {
-        if (wlSuggest.activeIndex >= 0) {
-          e.preventDefault();
-          selectWatchlistSuggestion(wlSuggest.suggestions[wlSuggest.activeIndex]);
-        } else {
-          hideWatchlistSuggestions();
-        }
-      } else if (e.key === "Escape") {
-        hideWatchlistSuggestions();
-      }
-    });
-
-    input.addEventListener("blur", () => {
-      setTimeout(hideWatchlistSuggestions, 150);
+    document.querySelectorAll("#favorite-filter [data-favorite-filter]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        state.favoriteFilter = btn.dataset.favoriteFilter;
+        document.querySelectorAll("#favorite-filter [data-favorite-filter]").forEach((b) => {
+          b.classList.toggle("active", b === btn);
+        });
+        renderFavorites();
+      });
     });
   }
 
@@ -2172,6 +3265,7 @@
   }
 
   function renderSuggestions() {
+    renderMobileTickerResults();
     const list = el("ticker-suggestions");
     list.innerHTML = "";
     if (!state.suggestions.length) {
@@ -2223,7 +3317,113 @@
     state.assetType = item.asset_type;
     if (item.asset_type === "crypto") state.cryptoExchange = item.provider;
     hideSuggestions();
+    closeMobileTickerSearch();
     runAnalysis(item.symbol);
+  }
+
+  // Colors are picked deterministically from the symbol so the same ticker
+  // always gets the same avatar, without needing a real logo per symbol
+  // (which we don't have data for).
+  const MTS_AVATAR_COLORS = ["#f0b90b", "#23af91", "#5850ec", "#94a3b8", "#2962ff", "#f23645", "#089981"];
+  function mtsAvatarColor(symbol) {
+    let hash = 0;
+    for (let i = 0; i < symbol.length; i++) hash = (hash * 31 + symbol.charCodeAt(i)) >>> 0;
+    return MTS_AVATAR_COLORS[hash % MTS_AVATAR_COLORS.length];
+  }
+
+  // Same suggestions the small desktop dropdown uses (state.suggestions,
+  // populated by fetchSuggestions) — just a different, full-screen renderer
+  // for mobile, with a client-side Tutti/Azioni/Crypto filter on top since
+  // asset_type is already on every result.
+  function renderMobileTickerResults() {
+    const list = el("mts-list");
+    list.innerHTML = "";
+    const filter = document.querySelector(".mts-tab.active")?.dataset.filter || "all";
+    const items = state.suggestions.filter((s) => filter === "all" || s.asset_type === filter);
+    if (!items.length) {
+      const li = document.createElement("li");
+      li.className = "mts-empty";
+      li.textContent = state.suggestions.length ? "Nessun risultato per questo filtro" : "Digita per cercare un ticker";
+      list.appendChild(li);
+      return;
+    }
+    items.forEach((item) => {
+      const li = document.createElement("li");
+      li.className = "mts-row";
+
+      const avatar = document.createElement("span");
+      avatar.className = "mts-avatar";
+      avatar.style.background = mtsAvatarColor(item.symbol);
+      avatar.textContent = item.symbol.charAt(0);
+
+      const main = document.createElement("span");
+      main.className = "mts-main";
+      const symRow = document.createElement("span");
+      symRow.className = "mts-sym-row";
+      const sym = document.createElement("span");
+      sym.className = "mts-sym";
+      sym.textContent = item.symbol;
+      const badge = document.createElement("span");
+      badge.className = "mts-badge";
+      badge.textContent = item.asset_type === "crypto" ? "crypto" : "azioni";
+      symRow.appendChild(sym);
+      symRow.appendChild(badge);
+      const name = document.createElement("span");
+      name.className = "mts-name";
+      name.textContent = item.name || "";
+      main.appendChild(symRow);
+      main.appendChild(name);
+
+      const right = document.createElement("span");
+      right.className = "mts-right";
+      const exch = document.createElement("span");
+      exch.className = "mts-exch";
+      exch.textContent = item.exchange;
+      right.appendChild(exch);
+
+      li.appendChild(avatar);
+      li.appendChild(main);
+      li.appendChild(right);
+      li.addEventListener("click", () => selectSuggestion(item));
+      list.appendChild(li);
+    });
+  }
+
+  function openMobileTickerSearch() {
+    if (!window.matchMedia("(max-width: 760px)").matches) return;
+    const slot = el("mts-field-slot");
+    const field = document.querySelector(".ticker-field");
+    if (field.parentElement !== slot) slot.appendChild(field);
+    document.querySelectorAll(".mts-tab").forEach((t) => t.classList.toggle("active", t.dataset.filter === "all"));
+    renderMobileTickerResults();
+    el("mobile-ticker-search").classList.remove("hidden");
+    el("ticker-input").focus();
+  }
+
+  function closeMobileTickerSearch() {
+    const overlay = el("mobile-ticker-search");
+    if (overlay.classList.contains("hidden")) return;
+    const searchForm = el("search-form");
+    const field = document.querySelector(".ticker-field");
+    if (field.parentElement !== searchForm) searchForm.appendChild(field);
+    overlay.classList.add("hidden");
+    el("ticker-input").blur();
+  }
+
+  function bindMobileTickerSearch() {
+    el("ticker-input").addEventListener("focus", openMobileTickerSearch);
+    // The chart-strip symbol sits right next to the timeframe wheel, where
+    // the thumb already is — tapping it opens the same search instead of
+    // making the user reach back up to the toolbar field.
+    el("mobile-chart-symbol").addEventListener("click", openMobileTickerSearch);
+    el("mts-close-btn").addEventListener("click", closeMobileTickerSearch);
+    document.querySelectorAll(".mts-tab").forEach((tab) => {
+      tab.addEventListener("click", () => {
+        document.querySelectorAll(".mts-tab").forEach((t) => t.classList.remove("active"));
+        tab.classList.add("active");
+        renderMobileTickerResults();
+      });
+    });
   }
 
   function bindTickerAutocomplete() {
@@ -2486,25 +3686,7 @@
   }
 
   function renderPineBacktest(bt) {
-    const statsEl = el("backtest-stats");
-    statsEl.innerHTML = "";
-    const returnClass = bt.total_return_pct >= 0 ? "positive" : "negative";
-    const stats = [
-      ["Rendimento", `${bt.total_return_pct >= 0 ? "+" : ""}${bt.total_return_pct.toFixed(1)}%`, returnClass],
-      ["Equity finale", bt.final_equity.toLocaleString("it-IT", { maximumFractionDigits: 0 }), ""],
-      ["Trade", bt.num_trades, ""],
-      ["Win rate", bt.win_rate_pct !== null ? `${bt.win_rate_pct.toFixed(0)}%` : "—", ""],
-      ["Max drawdown", `-${bt.max_drawdown_pct.toFixed(1)}%`, "negative"],
-      ["Profit factor", bt.profit_factor !== null ? bt.profit_factor.toFixed(2) : "—", ""],
-    ];
-    stats.forEach(([label, value, cls]) => {
-      const div = document.createElement("div");
-      div.className = "stat";
-      div.innerHTML = `<div class="stat-label">${label}</div><div class="stat-value ${cls}">${value}</div>`;
-      statsEl.appendChild(div);
-    });
-    equitySeries.setData(bt.equity_curve.map(([time, equity]) => ({ time, value: equity })));
-    equityChart.timeScale().fitContent();
+    renderBacktestUI(bt);
   }
 
   function bindPineUI() {
@@ -2545,19 +3727,6 @@
     el("pine-clear-btn").addEventListener("click", clearPineOverride);
   }
 
-  // Mobile app-shell: the sidebar/summary-panel become bottom-sheet drawers
-  // opened via the bottom tab bar, closed by tapping "Grafico", the backdrop,
-  // or the same tab again — mirrors how TradingView's own mobile app keeps
-  // the chart full-screen with menus tucked away until asked for.
-  function closeMobileDrawers() {
-    el("levels-panel").classList.remove("mobile-open");
-    el("script-panel").classList.remove("mobile-open");
-    document.querySelector(".right-panel").classList.remove("mobile-open");
-    el("mobile-drawer-backdrop").classList.add("hidden");
-    document.querySelectorAll(".mobile-nav-btn").forEach((b) => b.classList.remove("active"));
-    document.querySelector('.mobile-nav-btn[data-mobile-target="chart"]').classList.add("active");
-  }
-
   // Desktop-only: a rail icon opens/closes its panel as a flyout that
   // reflows the chart (not an overlay) — click the icon again, click
   // anywhere outside it, or open the other rail panel, to close it.
@@ -2595,25 +3764,6 @@
     });
   }
 
-  // Used by links that need to open a specific panel outside the rail/bottom
-  // nav (e.g. the "Script Pine personalizzato" link inside the Alert tab) —
-  // works the same on desktop (flyout via the matching rail button) and
-  // mobile (bottom-sheet drawer), whichever this viewport is currently using.
-  function openPanel(panelId) {
-    const isMobile = window.matchMedia("(max-width: 760px)").matches;
-    if (isMobile) {
-      closeMobileDrawers();
-      el(panelId).classList.add("mobile-open");
-      el("mobile-drawer-backdrop").classList.remove("hidden");
-    } else {
-      RAIL_PANELS.forEach(([btnId, pid]) => {
-        el(pid).classList.toggle("open", pid === panelId);
-        el(btnId).classList.toggle("active", pid === panelId);
-      });
-      resizeAllCharts();
-    }
-  }
-
   function bindTabs() {
     document.querySelectorAll(".tab").forEach((tab) => {
       tab.addEventListener("click", () => {
@@ -2627,37 +3777,86 @@
     });
   }
 
-  function bindMobileNav() {
-    const targets = { levels: el("levels-panel"), panel: document.querySelector(".right-panel") };
-    document.querySelectorAll(".mobile-nav-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const target = btn.dataset.mobileTarget;
-        if (target === "chart") {
-          closeMobileDrawers();
-          resizeAllCharts();
-          return;
-        }
-        const panel = targets[target];
-        const alreadyOpen = panel.classList.contains("mobile-open");
-        closeMobileDrawers();
-        if (!alreadyOpen) {
-          panel.classList.add("mobile-open");
-          el("mobile-drawer-backdrop").classList.remove("hidden");
-          btn.classList.add("active");
-        }
-      });
-    });
-    el("mobile-drawer-backdrop").addEventListener("click", () => {
-      closeMobileDrawers();
-      resizeAllCharts();
-    });
+  // Mobile app-shell: five real full-screen destinations reached from the
+  // bottom nav — Grafico, Livelli, Backtest, Alert, Altro — not overlay
+  // sheets with a backdrop. Each tap shows exactly one screen and hides the
+  // rest; there is no "tap again to close" ambiguity like the old drawer
+  // model had. Backtest and Alert reuse the same underlying .right-panel
+  // (and its internal .tabs) that desktop already has. Script Pine and Saldi
+  // are reached through the Altro menu, not the bottom nav itself, so they
+  // still map onto the same mechanism without a 6th/7th tab.
+  const RIGHT_PANEL_TITLES = { backtest: "Backtest", alert: "Alert", saldi: "Saldi", analisi: "Analisi", watchlist: "Watchlist" };
 
-    document.querySelectorAll("[data-close-drawer]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        closeMobileDrawers();
-        resizeAllCharts();
+  function showMobileScreen(target) {
+    if (!window.matchMedia("(max-width: 760px)").matches) return;
+
+    el("levels-panel").classList.remove("mobile-open");
+    el("script-panel").classList.remove("mobile-open");
+    el("altro-panel").classList.remove("mobile-open");
+    document.querySelector(".right-panel").classList.remove("mobile-open");
+    el("draw-rail").classList.remove("mobile-tools-open");
+
+    const NAV_TARGET_FOR = { script: "altro", saldi: "altro", analisi: "altro", watchlist: "altro", backtest: "altro" };
+    const navTarget = NAV_TARGET_FOR[target] || target;
+    document.querySelectorAll(".mobile-nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.mobileTarget === navTarget));
+
+    // Drawing tools only make sense over the chart itself — everywhere else
+    // there's nothing to draw on.
+    el("mobile-strip-tools").classList.toggle("hidden", target !== "chart" || !state.data);
+
+    if (target === "chart") {
+      resizeAllCharts();
+      return;
+    }
+    if (target === "levels") {
+      el("levels-panel").classList.add("mobile-open");
+    } else if (target === "script") {
+      el("script-panel").classList.add("mobile-open");
+    } else if (target === "altro") {
+      el("altro-panel").classList.add("mobile-open");
+    } else {
+      // backtest | alert | saldi | analisi — shared right-panel, pick the internal tab
+      const panel = document.querySelector(".right-panel");
+      panel.classList.add("mobile-open");
+      panel.querySelector(".drawer-header span").textContent = RIGHT_PANEL_TITLES[target] || "Pannello";
+      document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === target));
+      document.querySelectorAll(".tab-content").forEach((c) => {
+        c.classList.toggle("active", c.dataset.tabContent === target);
       });
+    }
+    resizeAllCharts();
+  }
+
+  // Used by links that open a specific panel outside the bottom nav (e.g.
+  // "Script Pine personalizzato" inside Alert) — works the same on desktop
+  // (flyout via the matching rail button) and mobile (full-screen tab).
+  function openPanel(panelId) {
+    if (window.matchMedia("(max-width: 760px)").matches) {
+      showMobileScreen(panelId === "script-panel" ? "script" : "levels");
+      return;
+    }
+    RAIL_PANELS.forEach(([btnId, pid]) => {
+      el(pid).classList.toggle("open", pid === panelId);
+      el(btnId).classList.toggle("active", pid === panelId);
     });
+    resizeAllCharts();
+  }
+
+  function bindMobileNav() {
+    document.querySelectorAll(".mobile-nav-btn").forEach((btn) => {
+      btn.addEventListener("click", () => showMobileScreen(btn.dataset.mobileTarget));
+    });
+    // Strategy pill in the chart strip opens the Livelli panel (where the
+    // strategy selector lives) so the user can change it in one tap.
+    el("mobile-strategy-pill").addEventListener("click", () => showMobileScreen("levels"));
+    document.querySelectorAll("[data-close-drawer]").forEach((btn) => {
+      btn.addEventListener("click", () => showMobileScreen("chart"));
+    });
+    el("open-script-from-altro").addEventListener("click", () => openPanel("script-panel"));
+    el("altro-saldi-item").addEventListener("click", () => showMobileScreen("saldi"));
+    el("altro-analisi-item").addEventListener("click", () => showMobileScreen("analisi"));
+    el("altro-watchlist-item").addEventListener("click", () => showMobileScreen("watchlist"));
+    el("altro-backtest-item").addEventListener("click", () => showMobileScreen("backtest"));
   }
 
   function bindUI() {
@@ -2665,6 +3864,11 @@
       input.addEventListener("change", () => {
         state.layers[input.dataset.layer] = input.checked;
         render();
+        // Sub-charts (RSI, MACD, Stoch) go from display:none → visible inside render().
+        // The ResizeObserver fires asynchronously after the layout reflow, so the
+        // chart may still have zero dimensions at the time render() calls resize.
+        // A single rAF after the paint ensures the new dimensions are available.
+        requestAnimationFrame(() => resizeAllCharts());
         savePreferences();
       });
     });
@@ -2682,11 +3886,14 @@
         if (exact.asset_type === "crypto") state.cryptoExchange = exact.provider;
       }
       hideSuggestions();
+      closeMobileTickerSearch();
       runAnalysis(symbol);
     });
 
     bindTickerAutocomplete();
+    bindMobileTickerSearch();
     bindWatchlistAutocomplete();
+    bindFavorites();
 
     el("interval-primary").addEventListener("change", () => {
       if (state.pineActive) clearPineOverride();
@@ -2699,8 +3906,12 @@
     });
 
     el("active-strategy-select").addEventListener("change", () => {
+      renderStrategyParamsFields();
+      updateOptimizeButtonVisibility();
       if (state.data) runAnalysis(state.data.symbol);
     });
+
+    el("optimize-strategy-btn").addEventListener("click", runStrategyOptimize);
 
     document.querySelectorAll(".wl-asset-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -2730,11 +3941,14 @@
       // (or nothing at all) on the selected exchange.
       let resolved = wlSuggest.resolved && wlSuggest.resolved.symbol === typed ? wlSuggest.resolved : null;
       if (!resolved) {
-        await fetchWatchlistSuggestions(typed);
+        await wlSuggest.fetch(typed);
         const exact = wlSuggest.suggestions.find((s) => s.symbol.toUpperCase() === typed.toUpperCase());
         if (exact) {
           resolved = exact;
-          selectWatchlistSuggestion(exact);
+          el("watchlist-symbol").value = exact.symbol;
+          wlSuggest.resolved = exact;
+          wlSuggest.clear();
+          showResolvedPair(exact);
         }
       }
       if (!resolved) {
@@ -2755,6 +3969,7 @@
           asset_type: state.watchlistAssetType,
           exchange: el("watchlist-exchange").value,
           interval: el("watchlist-interval").value,
+          on_close: el("watchlist-onclose").checked,
         }),
       });
       symbolInput.value = "";
@@ -2816,6 +4031,53 @@
     }
   }
 
+  // Same relocation trick as chart-settings-group above, for the account
+  // widget (email + Accedi/Esci) — it moves into the Altro screen's account
+  // row on mobile instead of staying in the toolbar, which is exactly what
+  // was squeezing the ticker search field down to an unreadable sliver.
+  function relocateAuthWidget() {
+    const widget = document.querySelector(".auth-widget");
+    const isMobile = window.matchMedia("(max-width: 760px)").matches;
+    const targetParent = isMobile ? el("altro-account-slot") : document.querySelector(".toolbar");
+    if (widget.parentElement === targetParent) return;
+    targetParent.appendChild(widget);
+  }
+
+  // The timeframe select otherwise only lives inside the Livelli screen —
+  // reachable, but not from the chart itself, which is where "change the
+  // timeframe" actually happens. On mobile it moves into the persistent
+  // strip pinned above the bottom nav, kept visually hidden there (see
+  // #mobile-chart-interval-slot in style.css) — the wheel widget next to
+  // it is the real UI, driven off this select (buildMobileTfWheel/
+  // syncMobileTfWheel), so the one source of truth stays this element.
+  // Desktop keeps it visible in the toolbar's chart-settings-group.
+  function relocateIntervalSelect() {
+    const select = el("interval-primary");
+    const isMobile = window.matchMedia("(max-width: 760px)").matches;
+    const targetParent = isMobile ? el("mobile-chart-interval-slot") : document.querySelector("#chart-settings-group .toolbar-intervals");
+    if (select.parentElement === targetParent) return;
+    targetParent.appendChild(select);
+  }
+
+  // Switching which strategy drives the backtest/markers is a Strategia
+  // concern, not a Livelli one — but on mobile it used to travel with the
+  // rest of chart-settings-group into the Livelli screen, so switching
+  // strategy meant leaving Strategia entirely. Pull just this one control
+  // out and drop it at the top of the Strategia screen instead; desktop is
+  // unaffected, it stays in the toolbar.
+  function relocateStrategySelect() {
+    const select = el("active-strategy-select");
+    const isMobile = window.matchMedia("(max-width: 760px)").matches;
+    const targetParent = isMobile ? el("strategy-select-slot") : el("chart-settings-group");
+    if (select.parentElement === targetParent) return;
+    select.classList.toggle("mobile-strategy-select", isMobile);
+    if (isMobile) {
+      targetParent.appendChild(select);
+    } else {
+      targetParent.insertBefore(select, targetParent.querySelector(".toolbar-check"));
+    }
+  }
+
   // Runs once, either right away (already logged in) or right after the
   // login gate clears — everything that fetches real data or auto-loads a
   // chart waits behind auth so nothing renders before the page unlocks.
@@ -2825,10 +4087,13 @@
     bindPineUI();
     loadPineScripts();
     relocateChartSettings();
+    relocateIntervalSelect();
+    relocateStrategySelect();
     // active-strategy-select must be populated before the auto-load below
     // reads its value, or the request goes out with an empty strategy_name.
     await populateStrategySelects();
-    // Restore last session state from server; fall back to BTC/MEXC default.
+    initLabState(state.availableStrategies || []);
+    // Ripristina l'ultima sessione dal server; fallback a BTC/MEXC.
     const prefs = await loadPreferences();
     state.assetType = prefs?.asset_type || "crypto";
     state.cryptoExchange = prefs?.exchange || "mexc";
@@ -2857,15 +4122,565 @@
     runAnalysis(ticker);
   }
 
+  // ── Backtest Lab (independent from chart) ──────────────────────────────
+  const labState = {
+    symbol: null,       // resolved symbol string (e.g. "BTCUSDT")
+    displaySymbol: null,// short name for display (e.g. "BTC")
+    assetType: "crypto",
+    exchange: "mexc",
+    tf: "1d",
+    strategy: null,     // set after populateStrategySelects
+    resolved: null,     // full suggestion item
+    seq: 0,             // monotonic to discard stale responses
+    lastBt: null,       // last successful BacktestResult
+  };
+
+  function labEl(id) { return document.getElementById(id); }
+
+  function buildLabQuery() {
+    const strategyName = labState.strategy || "";
+    // Exchange selector overrides labState when explicitly changed by user
+    const exchangeSel = el("lab-exchange-select");
+    const exchange = exchangeSel ? exchangeSel.value : (labState.exchange || "mexc");
+    const params = new URLSearchParams();
+    params.set("symbol", labState.symbol || "BTCUSDT");
+    params.set("asset_type", labState.assetType);
+    params.set("exchange", exchange);
+    params.set("ltf_interval", labState.tf);
+    params.set("strategy_name", strategyName);
+    params.set("initial_capital", labEl("lab-initial-capital").value);
+    params.set("qty_pct_of_equity", labEl("lab-qty-pct").value);
+    params.set("commission_pct", labEl("lab-commission").value);
+    params.set("slippage_pct", labEl("lab-slippage").value);
+    params.set("stop_loss_pct", "0");
+    params.set("take_profit_pct", "0");
+    const container = labEl("lab-params-fields");
+    const fields = STRATEGY_PARAM_FIELDS[strategyName] || [];
+    fields.forEach((field) => {
+      const input = container.querySelector(`[name="${field.key}"]`);
+      if (!input) return;
+      params.set(field.key, field.type === "checkbox" ? input.checked : input.value);
+    });
+    return params;
+  }
+
+  // Strategies for which the backend has a full discrete grid (grid mode).
+  const GRID_STRATEGIES = new Set([
+    "Gabriele (RSI+BB reversal)",
+    "Accumulo / Distribuzione (long-term)",
+  ]);
+
+  function renderLabParamFields() {
+    const strategyName = labState.strategy || "";
+    const fields = STRATEGY_PARAM_FIELDS[strategyName] || [];
+    const container = labEl("lab-params-fields");
+    container.innerHTML = "";
+    // Show grid-mode toggle only for strategies that support it.
+    const gridWrap = labEl("lab-grid-toggle-wrap");
+    if (gridWrap) gridWrap.classList.toggle("hidden", !GRID_STRATEGIES.has(strategyName));
+    fields.forEach((field) => {
+      const label = document.createElement("label");
+      if (field.type === "checkbox") {
+        label.className = "full-width";
+        label.innerHTML = `<input type="checkbox" name="${field.key}" ${field.default ? "checked" : ""} /> ${field.label}`;
+      } else if (field.type === "select") {
+        const options = field.options
+          .map((opt) => `<option value="${opt}"${opt === field.default ? " selected" : ""}>${opt}</option>`)
+          .join("");
+        label.innerHTML = `<span>${field.label}</span><select name="${field.key}">${options}</select>`;
+      } else {
+        const min = field.min !== undefined ? ` min="${field.min}"` : "";
+        const max = field.max !== undefined ? ` max="${field.max}"` : "";
+        const step = field.step !== undefined ? ` step="${field.step}"` : "";
+        label.innerHTML = `<span>${field.label}</span><input type="number" name="${field.key}" value="${field.default}"${min}${max}${step} />`;
+      }
+      container.appendChild(label);
+    });
+  }
+
+  function drawLabEquityCanvas(equityCurve) {
+    const canvas = labEl("lab-equity-canvas");
+    if (!canvas || !equityCurve || equityCurve.length < 2) return;
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.offsetWidth || 270;
+    const h = 90;
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    canvas.style.height = h + "px";
+    const ctx = canvas.getContext("2d");
+    ctx.scale(dpr, dpr);
+    const values = equityCurve.map((p) => p[1]);
+    const initial = values[0];
+    const minV = Math.min(...values);
+    const maxV = Math.max(...values);
+    const range = maxV - minV || 1;
+    const pad = { t: 6, b: 6, l: 4, r: 4 };
+    const ew = w - pad.l - pad.r;
+    const eh = h - pad.t - pad.b;
+    const toX = (i) => pad.l + (i / (values.length - 1)) * ew;
+    const toY = (v) => pad.t + eh - ((v - minV) / range) * eh;
+    const points = values.map((v, i) => [toX(i), toY(v)]);
+    const isPos = values[values.length - 1] >= initial;
+    const stroke = isPos ? COLORS.bull : COLORS.bear;
+
+    // Drawdown shading — area below the running peak
+    const peaks = [];
+    let peak = values[0];
+    values.forEach((v) => { if (v > peak) peak = v; peaks.push(peak); });
+    ctx.beginPath();
+    ctx.moveTo(points[0][0], toY(peaks[0]));
+    peaks.forEach((pk, i) => { ctx.lineTo(toX(i), toY(pk)); });
+    for (let i = values.length - 1; i >= 0; i--) ctx.lineTo(toX(i), toY(values[i]));
+    ctx.closePath();
+    ctx.fillStyle = "rgba(242,54,69,0.10)";
+    ctx.fill();
+
+    // Equity area fill
+    const grad = ctx.createLinearGradient(0, pad.t, 0, h - pad.b);
+    grad.addColorStop(0, isPos ? "rgba(8,153,129,0.22)" : "rgba(242,54,69,0.18)");
+    grad.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.beginPath();
+    ctx.moveTo(points[0][0], h - pad.b);
+    ctx.lineTo(points[0][0], points[0][1]);
+    points.slice(1).forEach(([x, y]) => ctx.lineTo(x, y));
+    ctx.lineTo(points[points.length - 1][0], h - pad.b);
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // Baseline at initial capital
+    const baseY = toY(initial);
+    ctx.beginPath();
+    ctx.moveTo(pad.l, baseY);
+    ctx.lineTo(w - pad.r, baseY);
+    ctx.strokeStyle = "rgba(120,123,134,0.25)";
+    ctx.lineWidth = 0.8;
+    ctx.setLineDash([3, 3]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Equity line
+    ctx.beginPath();
+    ctx.moveTo(points[0][0], points[0][1]);
+    points.slice(1).forEach(([x, y]) => ctx.lineTo(x, y));
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = 1.8;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.stroke();
+
+    // Endpoint dot
+    const last = points[points.length - 1];
+    ctx.beginPath();
+    ctx.arc(last[0], last[1], 3, 0, Math.PI * 2);
+    ctx.fillStyle = stroke;
+    ctx.fill();
+  }
+
+  function renderLabResults(bt) {
+    labState.lastBt = bt;
+    const pct = bt.total_return_pct;
+    const isPos = pct >= 0;
+    const retEl = labEl("lab-return-val");
+    retEl.textContent = (isPos ? "+" : "") + pct.toFixed(1) + "%";
+    retEl.className = "lab-return-val" + (isPos ? "" : " neg");
+
+    const finalEquity = bt.equity_curve.length ? bt.equity_curve[bt.equity_curve.length - 1][1] : 0;
+    const initCap = parseFloat(labEl("lab-initial-capital").value) || 10000;
+    const sideEl = labEl("lab-return-side");
+    sideEl.innerHTML = `equity finale<br/><b class="${isPos ? "" : "neg"}">${Math.round(finalEquity).toLocaleString("it-IT")} $</b><br/>su ${initCap.toLocaleString("it-IT")} $`;
+
+    const pf = bt.profit_factor !== null ? bt.profit_factor.toFixed(2) : "∞";
+    const wr = bt.win_rate_pct !== null ? bt.win_rate_pct.toFixed(0) + "%" : "—";
+    const dd = "-" + Math.abs(bt.max_drawdown_pct).toFixed(1) + "%";
+    const sharpe = bt.sharpe_ratio != null ? bt.sharpe_ratio.toFixed(2) : null;
+    const consec = bt.max_consecutive_losses != null ? bt.max_consecutive_losses : null;
+
+    // Date range from backend
+    const fmtDate = (ms) => ms ? new Date(ms).toLocaleDateString("it-IT", { month: "short", year: "numeric" }) : null;
+    const ds = fmtDate(bt.data_start);
+    const de = fmtDate(bt.data_end);
+    const dateRange = ds && de ? ` · <span class="meta-dates">${ds} → ${de}</span>` : "";
+
+    labEl("lab-result-meta").innerHTML = `<button type="button" class="lab-trades-link">${bt.num_trades} trade</button> · ${bt.interval || labState.tf}${dateRange}`;
+
+    // 3-chip base row + optional Sharpe chip
+    let chipsHtml = `
+      <div><div class="chip-lbl">Win rate</div><div class="chip-val ${bt.win_rate_pct >= 50 ? "pos" : "neg"}">${wr}</div></div>
+      <div><div class="chip-lbl">Drawdown</div><div class="chip-val neg">${dd}</div></div>
+      <div><div class="chip-lbl">Prof. factor</div><div class="chip-val">${pf}</div></div>`;
+    if (sharpe !== null) chipsHtml += `<div><div class="chip-lbl">Sharpe</div><div class="chip-val ${parseFloat(sharpe) >= 1 ? "pos" : ""}">${sharpe}</div></div>`;
+    if (consec !== null) chipsHtml += `<div><div class="chip-lbl">Max loss streak</div><div class="chip-val neg">${consec}</div></div>`;
+    labEl("lab-stat-chips").innerHTML = chipsHtml;
+    labEl("lab-result-block").classList.remove("hidden");
+    drawLabEquityCanvas(bt.equity_curve);
+
+    // Apply strip
+    const chartSymbol = state.data ? state.data.symbol : null;
+    const applyText = labEl("lab-apply-text");
+    if (chartSymbol && chartSymbol !== labState.symbol) {
+      applyText.innerHTML = `Il grafico mostra <b>${chartSymbol}</b> — applicando passerà a <b>${labState.symbol}</b> con gli ingressi/uscite del test.`;
+    } else {
+      applyText.innerHTML = `Applica i risultati di <b>${labState.symbol}</b> sul grafico (ingressi/uscite del test).`;
+    }
+    labEl("lab-apply-strip").classList.remove("hidden");
+
+    // Wire "N trade" button to open the trade detail drawer
+    const tradeLink = labEl("lab-result-meta").querySelector(".lab-trades-link");
+    if (tradeLink) {
+      tradeLink.addEventListener("click", () => openLabTradesDrawer(bt));
+    }
+  }
+
+  function openLabTradesDrawer(bt) {
+    const drawer = el("lab-trades-drawer");
+    const body = el("lab-trades-body");
+    el("lab-trades-title").textContent = `${bt.num_trades} operazioni`;
+
+    const dateFmt = { day: "2-digit", month: "short", year: "2-digit" };
+    const fmtTs = (ms) => new Date(ms * 1000).toLocaleDateString("it-IT", dateFmt);
+    const fmtPrice = (p) => p.toLocaleString("it-IT", { maximumFractionDigits: 4 });
+    const fmtMoney = (v) => v.toLocaleString("it-IT", { maximumFractionDigits: 0 });
+
+    const initCap = parseFloat(labEl("lab-initial-capital").value) || 10000;
+
+    let html = `<table class="lab-trades-table">
+      <thead><tr>
+        <th>#</th><th>Dir</th><th>Entrata</th><th>Uscita</th>
+        <th>Entry</th><th>Exit</th><th>P&amp;L %</th><th>P&amp;L $</th><th>Equity</th>
+      </tr></thead><tbody>`;
+
+    const trades = bt.trades || [];
+    trades.forEach((t, i) => {
+      const isWin = t.pnl_abs > 0;
+      const dir = t.direction === "long" ? "▲ L" : "▼ S";
+      const dirClass = t.direction === "long" ? "bull" : "bear";
+      const pnlClass = isWin ? "pos" : "neg";
+      html += `<tr>
+        <td class="td-num">${i + 1}</td>
+        <td class="td-dir ${dirClass}">${dir}</td>
+        <td class="td-date">${fmtTs(t.entry_time)}</td>
+        <td class="td-date">${fmtTs(t.exit_time)}</td>
+        <td class="td-price">${fmtPrice(t.entry_price)}</td>
+        <td class="td-price">${fmtPrice(t.exit_price)}</td>
+        <td class="td-pnl ${pnlClass}">${t.pnl_pct >= 0 ? "+" : ""}${t.pnl_pct.toFixed(2)}%</td>
+        <td class="td-pnl ${pnlClass}">${t.pnl_abs >= 0 ? "+" : ""}${fmtMoney(t.pnl_abs)}</td>
+        <td class="td-equity">${fmtMoney(t.equity_after)}</td>
+      </tr>`;
+    });
+
+    if (!trades.length) html += `<tr><td colspan="9" style="text-align:center;padding:16px;color:var(--ink-dim)">Nessuna operazione</td></tr>`;
+    html += `</tbody></table>`;
+    body.innerHTML = html;
+    drawer.classList.remove("hidden");
+  }
+
+  el("lab-trades-close").addEventListener("click", () => {
+    el("lab-trades-drawer").classList.add("hidden");
+  });
+
+  async function runLabBacktest() {
+    if (!labState.symbol) {
+      labEl("lab-status").textContent = "Inserisci prima un ticker.";
+      labEl("lab-status").classList.remove("hidden");
+      return;
+    }
+    const seq = ++labState.seq;
+    const runBtn = labEl("lab-run-btn");
+    const optBtn = labEl("lab-optimize-btn");
+    optBtn.disabled = true;
+    labEl("lab-result-block").classList.add("hidden");
+    labEl("lab-apply-strip").classList.add("hidden");
+    labEl("lab-status").textContent = "Backtest in corso… (può richiedere qualche secondo)";
+    labEl("lab-status").classList.remove("hidden");
+    await withAsyncButton(runBtn, async () => {
+      const params = buildLabQuery();
+      const resp = await fetch(`/api/backtest/deep?${params.toString()}`);
+      if (seq !== labState.seq) return;
+      if (!resp.ok) throw new Error(`Errore ${resp.status}`);
+      const bt = await resp.json();
+      labEl("lab-status").classList.add("hidden");
+      renderLabResults(bt);
+    }).catch((err) => {
+      if (seq !== labState.seq) return;
+      labEl("lab-status").textContent = "Errore: " + (err.message || "backtest fallito.");
+    }).finally(() => { optBtn.disabled = false; });
+  }
+
+  async function runLabOptimize() {
+    if (!labState.symbol) {
+      labEl("lab-status").textContent = "Inserisci prima un ticker.";
+      labEl("lab-status").classList.remove("hidden");
+      return;
+    }
+    if (!OPTIMIZABLE_STRATEGIES.has(labState.strategy)) {
+      labEl("lab-status").textContent = "Questa strategia non supporta l'ottimizzazione automatica.";
+      labEl("lab-status").classList.remove("hidden");
+      return;
+    }
+    const seq = ++labState.seq;
+    const runBtn = labEl("lab-run-btn");
+    const optBtn = labEl("lab-optimize-btn");
+    runBtn.disabled = true;
+    labEl("lab-result-block").classList.add("hidden");
+    labEl("lab-apply-strip").classList.add("hidden");
+    const isGrid = labEl("lab-grid-mode")?.checked;
+    labEl("lab-status").textContent = isGrid
+      ? "Grid search in corso… ogni combinazione testata (~30–50s)"
+      : "Ottimizzazione in corso… (10–25s)";
+    labEl("lab-status").classList.remove("hidden");
+    await withAsyncButton(optBtn, async () => {
+      const params = buildLabQuery();
+      const gridMode = labEl("lab-grid-mode")?.checked;
+      if (gridMode) params.set("mode", "grid");
+      const url = `/api/optimize?${params.toString()}`;
+      const resp = await fetch(url);
+      if (seq !== labState.seq) return;
+      const body = await resp.json();
+      if (!resp.ok) throw new Error(typeof body.detail === "string" ? body.detail : `Errore ${resp.status}`);
+      // Apply optimized params to the lab fields
+      const container = labEl("lab-params-fields");
+      Object.entries(body.params).forEach(([key, value]) => {
+        const input = container.querySelector(`[name="${key}"]`);
+        if (!input) return;
+        if (input.type === "checkbox") input.checked = !!value;
+        else input.value = value;
+      });
+      labEl("lab-status").classList.add("hidden");
+      renderLabResults(body.backtest);
+    }).catch((err) => {
+      if (seq !== labState.seq) return;
+      labEl("lab-status").textContent = "Errore ottimizzazione: " + (err.message || "");
+    }).finally(() => { runBtn.disabled = false; });
+  }
+
+  // Lab ticker autocomplete
+  const labSuggest = makeSuggestController({
+    listId: "lab-suggestions",
+    anchorId: "lab-ticker-hero",
+    elFn: labEl,
+    fetchItems: async (query) => {
+      const resp = await fetch(`/api/symbols?query=${encodeURIComponent(query)}`);
+      return resp.ok ? await resp.json() : [];
+    },
+    onSelect: selectLabSuggestion,
+  });
+  let labSuggestTimer = null;
+
+  function selectLabSuggestion(item) {
+    labState.symbol = item.symbol;
+    labState.displaySymbol = item.symbol.replace(/USDT$|USD$|BTC$/, "") || item.symbol;
+    labState.assetType = item.asset_type || "crypto";
+    labState.exchange = item.provider || "mexc";
+    labSuggest.resolved = item;
+    labEl("lab-ticker-val").textContent = item.symbol;
+    labEl("lab-ticker-input").value = "";
+    labEl("lab-ticker-input").blur();
+    labEl("lab-suggestions").classList.add("hidden");
+    // Sync exchange selector to match the result's provider
+    const sel = el("lab-exchange-select");
+    if (sel && item.provider) sel.value = item.provider;
+  }
+
+  function bindLabUI() {
+    const input = labEl("lab-ticker-input");
+    const hero = labEl("lab-ticker-hero");
+
+    // Show input on hero click
+    hero.addEventListener("click", () => { input.focus(); });
+    input.addEventListener("focus", () => {
+      input.style.opacity = "1";
+      input.style.background = "var(--bg-panel)";
+      input.style.zIndex = "2";
+    });
+    input.addEventListener("blur", () => {
+      setTimeout(() => {
+        input.style.opacity = "0";
+        labEl("lab-suggestions").classList.add("hidden");
+      }, 150);
+    });
+    input.addEventListener("input", () => {
+      clearTimeout(labSuggestTimer);
+      const q = input.value.trim();
+      if (q.length < 1) { labSuggest.clear(); return; }
+      labSuggestTimer = setTimeout(() => labSuggest.fetch(q), 200);
+    });
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        const typed = input.value.trim().toUpperCase().replace(/\//g, "");
+        if (typed && !labSuggest.resolved) {
+          // Accept the typed symbol directly — normalise to XXXUSDT if no quote
+          const sym = /USDT$|USD$|BTC$|ETH$|USDC$/.test(typed) ? typed : typed + "USDT";
+          labState.symbol = sym;
+          labState.displaySymbol = sym.replace(/USDT$|USD$|BTC$/, "") || sym;
+          labState.assetType = "crypto";
+          labState.exchange = "mexc";
+          labEl("lab-ticker-val").textContent = sym;
+          input.value = "";
+          input.blur();
+          labEl("lab-suggestions").classList.add("hidden");
+        } else {
+          labSuggest.handleKey(e);
+        }
+        return;
+      }
+      labSuggest.resolved = null;
+      labSuggest.handleKey(e);
+    });
+
+    // Timeframe pills
+    labEl("lab-tf-row").addEventListener("click", (e) => {
+      const btn = e.target.closest(".lab-tf-btn");
+      if (!btn) return;
+      labEl("lab-tf-row").querySelectorAll(".lab-tf-btn").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      labState.tf = btn.dataset.labTf;
+    });
+
+    // Strategy select — keep toolbar in sync so chart markers match the lab
+    labEl("lab-strategy-select").addEventListener("change", () => {
+      labState.strategy = labEl("lab-strategy-select").value;
+      renderLabParamFields();
+      const toolbarSel = el("active-strategy-select");
+      if (toolbarSel && toolbarSel.value !== labState.strategy) {
+        toolbarSel.value = labState.strategy;
+        renderStrategyParamsFields();
+        if (state.data) runAnalysis(state.data.symbol);
+      }
+    });
+
+    labEl("lab-run-btn").addEventListener("click", runLabBacktest);
+    labEl("lab-optimize-btn").addEventListener("click", runLabOptimize);
+
+    labEl("lab-apply-btn").addEventListener("click", () => {
+      if (!labState.symbol || !labState.lastBt) return;
+      // Switch main chart to lab's ticker+params
+      state.assetType = labState.assetType;
+      state.cryptoExchange = labState.exchange;
+      el("ticker-input").value = labState.displaySymbol || labState.symbol;
+      // Sync lab backtest params into the main form so the chart backtest
+      // uses the same capital/equity/commission as the Lab result just shown.
+      const syncField = (name, labId) => {
+        const mainInput = document.querySelector(`[name="${name}"][form="params-form"], #params-form [name="${name}"]`);
+        const labInput = labEl(labId);
+        if (mainInput && labInput) mainInput.value = labInput.value;
+      };
+      syncField("initial_capital", "lab-initial-capital");
+      syncField("qty_pct_of_equity", "lab-qty-pct");
+      syncField("commission_pct", "lab-commission");
+      syncField("slippage_pct", "lab-slippage");
+      runAnalysis(labState.symbol);
+      // Switch to Backtest tab so user sees the matching result
+      document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === "backtest"));
+      document.querySelectorAll(".tab-content").forEach((c) => c.classList.toggle("active", c.dataset.tabContent === "backtest"));
+    });
+
+    labEl("lab-signal-btn").addEventListener("click", async () => {
+      const statusEl = el("lab-signal-status");
+      const btn = labEl("lab-signal-btn");
+      if (!labState.symbol || !labState.lastBt) return;
+
+      const show = (msg, isError) => {
+        statusEl.textContent = msg;
+        statusEl.className = "lab-signal-status" + (isError ? " error" : " ok");
+        statusEl.classList.remove("hidden");
+      };
+
+      btn.disabled = true;
+      const prevText = btn.textContent;
+      btn.textContent = "…";
+
+      try {
+        // 1. Add (or upsert) the ticker to watchlist
+        const addResp = await fetch("/api/watchlist", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            symbol: labState.symbol,
+            asset_type: labState.assetType,
+            exchange: labState.exchange,
+            interval: labState.tf,
+            on_close: true,
+          }),
+        });
+
+        if (addResp.status === 401) {
+          show("Devi accedere per attivare i segnali.", true);
+          btn.disabled = false; btn.textContent = prevText; return;
+        }
+        if (!addResp.ok) {
+          const err = await addResp.json().catch(() => ({}));
+          show("Errore: " + (err.detail || addResp.status), true);
+          btn.disabled = false; btn.textContent = prevText; return;
+        }
+        const entry = await addResp.json();
+
+        // 2. Enable the strategy on this watchlist entry
+        const stratResp = await fetch(`/api/watchlist/${entry.id}/strategy`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ strategy_name: labState.strategy, enabled: true }),
+        });
+        if (!stratResp.ok) {
+          const err = await stratResp.json().catch(() => ({}));
+          show("Strategia non attivata: " + (err.detail || stratResp.status), true);
+          btn.disabled = false; btn.textContent = prevText; return;
+        }
+
+        // 3. Save the Lab's optimized params so the alert uses the same settings
+        const labParams = {};
+        const fields = STRATEGY_PARAM_FIELDS[labState.strategy] || [];
+        const container = labEl("lab-params-fields");
+        fields.forEach((f) => {
+          const input = container.querySelector(`[name="${f.key}"]`);
+          if (!input) return;
+          labParams[f.key] = f.type === "checkbox" ? input.checked
+            : f.type === "number" ? parseFloat(input.value)
+            : input.value;
+        });
+        if (Object.keys(labParams).length > 0) {
+          await fetch(`/api/watchlist/${entry.id}/strategy_params`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ strategy_name: labState.strategy, params: labParams }),
+          });
+        }
+
+        show(`✅ Segnali attivi per ${labState.symbol} (${labState.tf}) — ${labState.strategy}`, false);
+        btn.textContent = "✅ Attivo";
+      } catch (err) {
+        show("Errore di rete: " + err.message, true);
+        btn.disabled = false; btn.textContent = prevText;
+      }
+    });
+  }
+
+  function initLabState(strategies) {
+    // Pick the first available strategy
+    labState.strategy = strategies[0] || "";
+    const sel = labEl("lab-strategy-select");
+    sel.innerHTML = strategies.map((s) => `<option value="${s}">${s}</option>`).join("");
+    labState.strategy = sel.value;
+    renderLabParamFields();
+    // Default ticker same as chart
+    labState.symbol = "BTCUSDT";
+    labState.displaySymbol = "BTC";
+    labEl("lab-ticker-val").textContent = "BTCUSDT";
+  }
+
   document.addEventListener("DOMContentLoaded", async () => {
     populateIntervalSelects();
+    buildMobileTfWheel();
     initCharts();
     bindUI();
+    bindLabUI();
     bindMobileNav();
     bindRail();
     bindTabs();
     bindDrawRail();
+    bindMobileDrawTools();
     bindAuth();
+    relocateAuthWidget();
     await checkAuth();
     if (state.user) {
       await startApp();
@@ -2876,7 +4691,14 @@
     window.addEventListener("resize", () => {
       resizeAllCharts();
       clearTimeout(relocateTimer);
-      relocateTimer = setTimeout(relocateChartSettings, 150);
+      relocateTimer = setTimeout(() => {
+        relocateChartSettings();
+        relocateAuthWidget();
+        relocateIntervalSelect();
+        relocateStrategySelect();
+        syncMobileTfWheel();
+      }, 150);
     });
   });
+
 })();
