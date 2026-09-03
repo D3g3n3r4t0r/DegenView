@@ -3,6 +3,7 @@ import pandas as pd
 from cachetools import TTLCache
 
 from app.providers.base import DataProvider, ProviderError
+from app.timeframes import INTERVAL_SECONDS
 
 BASE_URL = "https://api.binance.com"
 _CANONICAL_TO_INTERVAL = {
@@ -17,7 +18,7 @@ _CANONICAL_TO_INTERVAL = {
     "1M": "1M",
 }
 _QUOTE_ASSETS = ["USDT", "USDC", "FDUSD", "TUSD", "BUSD", "DAI", "BTC", "ETH"]
-_MAX_SUGGESTIONS = 8
+_MAX_SUGGESTIONS = 25
 
 _symbols_cache: TTLCache = TTLCache(maxsize=1, ttl=3600)
 
@@ -37,30 +38,61 @@ class BinanceProvider(DataProvider):
     reliable history than MEXC for majors; MEXC stays the pick for freshly
     listed memecoins Binance doesn't carry yet."""
 
+    # Binance's klines endpoint caps a single request at 1000 rows — paged
+    # the same way as MexcProvider (see its docstring) for anything deeper.
+    _PAGE_LIMIT = 1000
+    _MAX_PAGES = 20
+
     def __init__(self, base_url: str | None = None):
         self._base_url = base_url or BASE_URL
 
     async def fetch_ohlcv(self, symbol: str, interval: str, outputsize: int) -> pd.DataFrame:
         formatted_symbol = format_symbol(symbol)
-        interval = _CANONICAL_TO_INTERVAL[interval]
-        params = {"symbol": formatted_symbol, "interval": interval, "limit": min(outputsize, 1000)}
+        api_interval = _CANONICAL_TO_INTERVAL[interval]
+        # A lone endTime (no startTime) was unreliable on MEXC's identically
+        # shaped klines endpoint — always sending both here too rather than
+        # trusting endTime alone to window the page.
+        interval_ms = INTERVAL_SECONDS[interval] * 1000
 
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.get(f"{self._base_url}/api/v3/klines", params=params)
-
+        rows: list[list] = []
+        end_time: int | None = None
+        remaining = outputsize
         try:
-            payload = resp.json()
-        except ValueError as exc:
-            raise ProviderError(f"Risposta non valida da Binance per {formatted_symbol}") from exc
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                for _ in range(self._MAX_PAGES):
+                    if remaining <= 0:
+                        break
+                    limit = min(remaining, self._PAGE_LIMIT)
+                    params = {"symbol": formatted_symbol, "interval": api_interval, "limit": limit}
+                    if end_time is not None:
+                        params["endTime"] = end_time
+                        params["startTime"] = end_time - limit * interval_ms
 
-        if isinstance(payload, dict) and "code" in payload:
-            raise ProviderError(payload.get("msg", f"Errore Binance per {formatted_symbol}"))
+                    resp = await client.get(f"{self._base_url}/api/v3/klines", params=params)
+                    try:
+                        payload = resp.json()
+                    except ValueError as exc:
+                        raise ProviderError(f"Risposta non valida da Binance per {formatted_symbol}") from exc
 
-        if not payload:
-            raise ProviderError(f"Nessun dato disponibile per {formatted_symbol} ({interval})")
+                    if isinstance(payload, dict) and "code" in payload:
+                        raise ProviderError(payload.get("msg", f"Errore Binance per {formatted_symbol}"))
+                    if not payload:
+                        break
+
+                    rows.extend(payload)
+                    remaining -= len(payload)
+                    if len(payload) < limit:
+                        break  # short page — reached the symbol's listing date
+                    end_time = min(int(row[0]) for row in payload) - 1
+        except httpx.HTTPError as exc:
+            if not rows:
+                raise ProviderError(f"Binance non raggiungibile per {formatted_symbol}: {exc}") from exc
+
+        if not rows:
+            raise ProviderError(f"Nessun dato disponibile per {formatted_symbol} ({api_interval})")
 
         # [openTime_ms, open, high, low, close, volume, closeTime_ms, quoteVolume, ...]
-        df = pd.DataFrame(payload, columns=range(len(payload[0])))
+        df = pd.DataFrame(rows, columns=range(len(rows[0])))
         df = df.iloc[:, :6]
         df.columns = ["open_time", "open", "high", "low", "close", "volume"]
         df["datetime"] = pd.to_datetime(df["open_time"].astype("int64"), unit="ms", utc=True)
@@ -68,7 +100,8 @@ class BinanceProvider(DataProvider):
             df[col] = df[col].astype(float)
 
         df = df.set_index("datetime").sort_index()
-        return df[["open", "high", "low", "close", "volume"]]
+        df = df[~df.index.duplicated(keep="first")]
+        return df[["open", "high", "low", "close", "volume"]].tail(outputsize)
 
     async def search_symbols(self, query: str) -> list[dict]:
         query = query.strip()
@@ -84,12 +117,11 @@ class BinanceProvider(DataProvider):
             _symbols_cache["all"] = symbols
 
         q = query.upper().replace("/", "")
-        matches = [
-            s
-            for s in symbols
-            if s.get("symbol", "").startswith(q) and s.get("isSpotTradingAllowed") and s.get("status") == "TRADING"
-        ]
-        matches.sort(key=lambda s: (s.get("quoteAsset") != "USDT", len(s.get("symbol", ""))))
+        all_spot = [s for s in symbols if s.get("isSpotTradingAllowed") and s.get("status") == "TRADING"]
+        starts = [s for s in all_spot if s.get("symbol", "").startswith(q)]
+        contains = [s for s in all_spot if q in s.get("symbol", "") and not s.get("symbol", "").startswith(q)]
+        matches = starts + contains
+        matches.sort(key=lambda s: (not s.get("symbol", "").startswith(q), s.get("quoteAsset") != "USDT", len(s.get("symbol", ""))))
 
         out = []
         for s in matches[:_MAX_SUGGESTIONS]:

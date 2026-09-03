@@ -1,14 +1,17 @@
 import asyncio
+import hashlib
+import httpx
 import itertools
+import json
 import logging
 import sys
-import time
+import time as _time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -25,11 +28,15 @@ except (AttributeError, ValueError):
 
 from app import auth
 from app import rate_limit
+from app.trading.executor import place_order_for_signal
+from app import favorites as favorites_store
 from app import watchlist as watchlist_store
 from app.analysis.backtest import run_backtest
 from app.analysis.confluence import compute_confluence
 from app.analysis.indicators import compute_indicators
-from app.analysis.smc_engine import compute_dealing_range, compute_levels
+from app.analysis.fibonacci import compute_fib_zones
+from app.analysis.optimize import grid_size, is_optimizable, optimize_strategy
+from app.analysis.smc_engine import compute_dealing_range, compute_levels, compute_swings
 from app.analysis.strategies import AVAILABLE_STRATEGIES, DEFAULT_STRATEGY, build_strategy_state
 from app.analysis.summary import build_summary, determine_bias
 from app.cache import get_or_fetch
@@ -38,8 +45,10 @@ from app.live.mexc_stream import mexc_stream_manager
 from app.models import (
     AnalysisResponse,
     AssetType,
+    BacktestResult,
     Candle,
     CryptoExchange,
+    FavoriteEntry,
     StrategyState,
     SymbolSuggestion,
     TimeframeAnalysis,
@@ -61,9 +70,16 @@ from app.providers.mexc import MexcProvider
 from app.providers.mexc import format_symbol as format_mexc_symbol
 from app.providers.twelvedata import TwelveDataProvider
 from app.resample import resample_by_count
-from app.timeframes import DEFAULT_INTERVALS, INTERVAL_SECONDS, SYNTHETIC_DAY_INTERVALS, IntervalChoice
+from app.timeframes import (
+    CANONICAL_INTERVALS,
+    DEFAULT_INTERVALS,
+    SYNTHETIC_DAY_INTERVALS,
+    IntervalChoice,
+    drop_unclosed_candle,
+)
+from starlette.middleware.gzip import GZipMiddleware
 
-logger = logging.getLogger("watchlist_alerts")
+logger = logging.getLogger(__name__)
 if getattr(sys, "frozen", False):
     FRONTEND_DIR = Path(sys._MEIPASS) / "frontend"  # type: ignore[attr-defined]
 else:
@@ -84,6 +100,21 @@ def _telegram_allowed(user: User) -> bool:
 def _balance_visible(user: User) -> bool:
     allowed = {e.strip().lower() for e in settings.balance_visible_emails.split(",") if e.strip()}
     return not allowed or user.email.lower() in allowed
+
+
+_BACKTEST_MIN_INTERVAL = "1d"
+
+
+def backtest_interval_for(ltf_interval: str) -> str:
+    """The backtest deliberately runs on a coarser feed than whatever the
+    chart happens to be set to — a fixed candle budget covers years at "1d"
+    but only hours at "1m", and the user is after the deepest history the
+    exchange has, not a simulation tied to the chart's own granularity.
+    Never goes coarser than the chart itself, though: if ltf is already
+    "1w"/"1M" there's nothing to gain by stepping back down to daily."""
+    if CANONICAL_INTERVALS.index(ltf_interval) >= CANONICAL_INTERVALS.index(_BACKTEST_MIN_INTERVAL):
+        return ltf_interval
+    return _BACKTEST_MIN_INTERVAL
 
 
 def get_provider(asset_type: AssetType, exchange: CryptoExchange = "mexc") -> DataProvider:
@@ -125,21 +156,13 @@ async def fetch_ohlcv_canonical(provider: DataProvider, symbol: str, interval: s
     return resample_by_count(raw, multiple).tail(outputsize)
 
 
-def _drop_unclosed_candle(df, interval: str):
-    """Alerts must only fire on a confirmed (closed) candle — a signal that
-    only appears on the still-forming last bar can vanish again before that
-    bar actually closes, and firing on it anyway would be a false alert.
-    Drops the last row whenever its open time + the interval's duration is
-    still in the future."""
-    if df.empty:
-        return df
-    seconds = INTERVAL_SECONDS.get(interval)
-    if seconds is None:
-        return df
-    last_open = df.index[-1].timestamp()
-    if last_open + seconds > time.time():
-        return df.iloc[:-1]
-    return df
+async def _fetch_cached(key: tuple, provider: DataProvider, symbol: str, interval: str, outputsize: int):
+    """Shared helper: wraps fetch_ohlcv_canonical + get_or_fetch so each
+    route doesn't need to declare its own inner do_fetch closure."""
+    async def _do():
+        return await fetch_ohlcv_canonical(provider, symbol, interval, outputsize)
+    return await get_or_fetch(key, _do)
+
 
 
 async def _watchlist_alert_loop() -> None:
@@ -163,28 +186,138 @@ async def _watchlist_alert_loop() -> None:
                 df = await fetch_ohlcv_canonical(
                     provider, entry.symbol, entry.interval, settings.candles_per_timeframe
                 )
-                df = _drop_unclosed_candle(df, entry.interval)
+                if entry.on_close:
+                    df = drop_unclosed_candle(df, entry.interval)
                 if df.empty:
                     continue
                 for strategy_name in entry.strategies:
-                    strategy = build_strategy_state(strategy_name, df)
+                    params = entry.strategy_params.get(strategy_name) or None
+                    strategy = build_strategy_state(strategy_name, df, params=params)
                     _dispatch_telegram_alerts(owner.telegram_chat_id, entry.symbol, entry.interval, strategy)
-            except Exception:
-                logger.exception("Watchlist check failed for %s [%s]", entry.symbol, entry.interval)
+                    # Auto-execute orders if trading credentials are configured for this exchange
+                    cred = owner.trading_credentials.get(entry.exchange)
+                    if cred and cred.enabled:
+                        api_key, api_secret, passphrase = auth.get_decrypted_credential(owner, entry.exchange)
+                        if api_key and api_secret:
+                            fresh = find_new_signals(entry.symbol, entry.interval, strategy)
+                            for signal in fresh:
+                                try:
+                                    result = await place_order_for_signal(
+                                        entry.exchange, entry.symbol, signal,
+                                        cred.size_mode, cred.size_value,
+                                        api_key, api_secret, passphrase,
+                                    )
+                                    logger.info("Order placed for %s %s: %s", entry.symbol, signal.type, result)
+                                except Exception as exc:
+                                    logger.error("Order failed for %s %s: %s", entry.symbol, signal.type, exc)
+                                    if owner.telegram_chat_id and _telegram_allowed(owner):
+                                        asyncio.create_task(telegram.send_to(
+                                            owner.telegram_chat_id,
+                                            f"⚠️ Ordine FALLITO <b>{entry.symbol}</b> [{signal.type}]: {exc}",
+                                        ))
+            except Exception as exc:  # noqa: BLE001
+                logger.error("Alert loop error for %s: %s", entry.symbol, exc, exc_info=True)
+                if settings.telegram_bot_token and owner.telegram_chat_id and _telegram_allowed(owner):
+                    asyncio.create_task(
+                        telegram.send_to(
+                            owner.telegram_chat_id,
+                            f"⚠️ Errore monitoraggio <b>{entry.symbol}</b> [{entry.interval}]: {exc}",
+                        )
+                    )
 
 
 @asynccontextmanager
+_LAST_SHA_FILE = Path(__file__).resolve().parent.parent / "data" / "last_deploy_sha.txt"
+_GITHUB_REPO = "lorenzocorazzi-wq/liquidity-analysis-engine"
+
+
+async def _notify_deploy() -> None:
+    if not settings.telegram_bot_token or not settings.github_api_token:
+        return
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            r = await client.get(
+                f"https://api.github.com/repos/{_GITHUB_REPO}/commits",
+                headers={"Authorization": f"Bearer {settings.github_api_token}",
+                         "Accept": "application/vnd.github+json"},
+                params={"per_page": 10},
+            )
+            r.raise_for_status()
+            commits = r.json()
+    except Exception:
+        return
+    if not commits:
+        return
+    current_sha = commits[0]["sha"]
+    last_sha = _LAST_SHA_FILE.read_text(encoding="utf-8").strip() if _LAST_SHA_FILE.exists() else ""
+    _LAST_SHA_FILE.parent.mkdir(parents=True, exist_ok=True)
+    _LAST_SHA_FILE.write_text(current_sha, encoding="utf-8")
+    if last_sha == current_sha:
+        return  # restart, not a new deploy
+    new_commits = [c for c in commits if c["sha"] != last_sha]
+    if last_sha:
+        try:
+            idx = next(i for i, c in enumerate(commits) if c["sha"] == last_sha)
+            new_commits = commits[:idx]
+        except StopIteration:
+            new_commits = commits[:5]
+    lines = []
+    for c in new_commits:
+        msg = c["commit"]["message"].splitlines()[0][:80]
+        sha_short = c["sha"][:7]
+        lines.append(f"• <code>{sha_short}</code> {msg}")
+    changelog = "\n".join(lines) if lines else "• (nessun commit trovato)"
+    text = f"🚀 <b>Nuovo deploy</b>\n\n{changelog}"
+    await telegram.send_message(text)
+
+
 async def lifespan(app: FastAPI):
-    task = asyncio.create_task(_watchlist_alert_loop())
+    from app.sniper import cache as sniper_cache
+    from app.sniper import agents as sniper_agents
+    from app.sniper.cex_check import enrichment_loop
+    asyncio.create_task(_notify_deploy())
+    t1 = asyncio.create_task(_watchlist_alert_loop())
+    t2 = asyncio.create_task(sniper_cache.polling_loop())
+    t3 = asyncio.create_task(enrichment_loop())
+    agent_tasks = await sniper_agents.start_all()
     yield
-    task.cancel()
+    t1.cancel()
+    t2.cancel()
+    t3.cancel()
+    for t in agent_tasks:
+        t.cancel()
 
 
 app = FastAPI(title="Liquidity Analysis Engine", lifespan=lifespan)
+app.add_middleware(GZipMiddleware, minimum_size=500)
+
+_app_start = _time.time()
+
+@app.get("/api/health")
+async def health():
+    from app.cache import _intraday_cache, _daily_cache
+    return {
+        "status": "ok",
+        "uptime_s": round(_time.time() - _app_start),
+        "cache_size": len(_intraday_cache) + len(_daily_cache),
+    }
 
 
 class StrategyParamsQuery(BaseModel):
-    # Lorenzo (trend-follower) params — ignored by other strategies.
+    # Every strategy's own params live on this one shared query model — each
+    # compute_*_signals() only ever reads its own keys (merged over that
+    # strategy's DEFAULT_PARAMS) and ignores the rest, so there's no
+    # cross-strategy collision in practice: the frontend only ever renders
+    # (and sends) one strategy's field set at a time (see
+    # STRATEGY_PARAM_FIELDS in app.js), even though a couple of names below
+    # are shared between two strategies (rsi_length, rsi_oversold,
+    # rsi_overbought — both Gabriele's and Exhaustion's own versions of
+    # those, never sent together). A field missing here is a field silently
+    # dropped by FastAPI's query parsing regardless of what the frontend
+    # sends, so keep this in sync with STRATEGY_PARAM_FIELDS in app.js and
+    # each strategy's own *_DEFAULT_PARAMS in app.analysis.strategies.
+
+    # Lorenzo (trend-follower)
     average: Literal["EMA", "SMA"] = "EMA"
     len: int = 130
     slopeFlen: int = 7
@@ -195,14 +328,38 @@ class StrategyParamsQuery(BaseModel):
     volatilityfilter: bool = True
     volatilitystdevlength: int = 16
     volatilitystdevmalength: int = 44
-    # Accumulo/Distribuzione (long-term) params — ignored by other strategies.
-    # Exposed as independent toggles rather than baked into a silent OR: each
-    # was added reactively against a single chart, so a user who trusts only
-    # the divergence condition can turn the other two off instead of having
-    # to trust all three blindly.
+
+    # Accumulo/Distribuzione (long-term) — exposed as independent toggles
+    # rather than baked into a silent OR: each condition was added reactively
+    # against a single chart, so a user who trusts only the divergence
+    # condition can turn the other two off instead of trusting all three.
     enable_divergence: bool = True
     enable_contraction: bool = True
     enable_range_bounce: bool = True
+    swing_length: int = 8
+    rsi_min_gap: float = 3.0
+    low_tolerance_pct: float = 1.0
+    divergence_lookback: int = 3
+    volume_ma_length: int = 20
+    volume_multiplier: float = 1.3
+    trend_filter: bool = True
+    trend_ema_length: int = 50
+    confirmation_lookahead: int = 10
+    contraction_lookback: int = 10
+    contraction_prior_lookback: int = 30
+    contraction_ratio: float = 0.55
+    range_lookback: int = 40
+    range_zone_pct: float = 0.25
+
+    # Shared between Exhaustion and Gabriele (RSI+BB reversal) — never sent
+    # together, see the class docstring above.
+    rsi_length: int = 14
+    rsi_oversold: int = 28
+    rsi_overbought: int = 72
+
+    # Gabriele (RSI+BB reversal)
+    bb_length: int = 20
+    bb_mult: float = 2.0
 
 
 class BacktestParamsQuery(BaseModel):
@@ -214,13 +371,33 @@ class BacktestParamsQuery(BaseModel):
     take_profit_pct: float = 0.0
 
 
+class TradingCredentialRequest(BaseModel):
+    exchange: str
+    api_key: str = ""        # empty = keep existing
+    api_secret: str = ""     # empty = keep existing
+    passphrase: str = ""     # empty = keep existing
+    enabled: bool = False
+    size_mode: Literal["fixed_usdt", "pct_balance"] = "fixed_usdt"
+    size_value: float = 50.0
+
+
+class TradingCredentialOut(BaseModel):
+    exchange: str
+    api_key_set: bool        # True if an encrypted key exists
+    api_secret_set: bool
+    passphrase_set: bool
+    enabled: bool
+    size_mode: str
+    size_value: float
+
+
 async def _safe_search(
     provider: DataProvider, query: str, asset_type: AssetType, provider_id: str
 ) -> list[SymbolSuggestion]:
     try:
         results = await provider.search_symbols(query)
-    except ProviderError:
-        return []  # one source being down shouldn't sink the combined search
+    except Exception:  # noqa: BLE001 — any provider failure must not sink combined search
+        return []
     return [SymbolSuggestion(**r, asset_type=asset_type, provider=provider_id) for r in results]
 
 
@@ -233,18 +410,31 @@ def _interleave(*lists: list) -> list:
     return out
 
 
+def _rank_suggestions(items: list[SymbolSuggestion], query: str) -> list[SymbolSuggestion]:
+    """Sort by match quality: exact symbol first, then prefix, then rest."""
+    q = query.upper()
+    def _score(s: SymbolSuggestion) -> int:
+        sym = s.symbol.upper()
+        if sym == q:
+            return 0
+        if sym.startswith(q):
+            return 1
+        return 2
+    return sorted(items, key=_score)
+
+
 @app.get("/api/symbols", response_model=list[SymbolSuggestion])
 async def search_symbols(query: str = Query(..., min_length=1, max_length=20)) -> list[SymbolSuggestion]:
     # Single unified search across stocks and both crypto exchanges — no
     # upfront "stock vs crypto" toggle. The user picks the asset from results
     # that already say which market/exchange it's on.
-    stock_res, binance_res, mexc_res, kucoin_res = await asyncio.gather(
+    stock_res, mexc_res, kucoin_res = await asyncio.gather(
         _safe_search(twelvedata_provider, query, "stock", "stock"),
-        _safe_search(binance_provider, query, "crypto", "binance"),
         _safe_search(mexc_provider, query, "crypto", "mexc"),
         _safe_search(kucoin_provider, query, "crypto", "kucoin"),
     )
-    return _interleave(stock_res, binance_res, mexc_res, kucoin_res)[:12]
+    merged = _interleave(stock_res, mexc_res, kucoin_res)
+    return _rank_suggestions(merged, query)[:25]
 
 
 def _dispatch_telegram_alerts(chat_id: str, symbol: str, timeframe_key: str, strategy: StrategyState) -> None:
@@ -375,11 +565,11 @@ async def run_pinescript(script_id: str, req: PineRunRequest) -> dict:
     interval = req.interval or DEFAULT_INTERVALS[req.timeframe]
     provider = get_provider(req.asset_type, req.exchange)
 
-    async def do_fetch():
-        return await fetch_ohlcv_canonical(provider, symbol, interval, settings.candles_per_timeframe)
-
     try:
-        df = await get_or_fetch((f"pine:{req.asset_type}:{req.exchange}:{symbol.upper()}", interval), do_fetch)
+        df = await _fetch_cached(
+            (f"pine:{req.asset_type}:{req.exchange}:{symbol.upper()}", interval, settings.ltf_candles),
+            provider, symbol, interval, settings.ltf_candles,
+        )
     except ProviderError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     if df.empty:
@@ -541,6 +731,71 @@ async def update_telegram_chat_id(
     return _user_out(updated)
 
 
+@app.get("/api/auth/trading", response_model=list[TradingCredentialOut])
+async def get_trading_credentials(user: User = Depends(auth.get_current_user)) -> list[TradingCredentialOut]:
+    out = []
+    for exchange in ("binance", "mexc", "kucoin"):
+        cred = user.trading_credentials.get(exchange)
+        if cred is None:
+            out.append(TradingCredentialOut(exchange=exchange, api_key_set=False, api_secret_set=False, passphrase_set=False, enabled=False, size_mode="fixed_usdt", size_value=50.0))
+        else:
+            out.append(TradingCredentialOut(
+                exchange=exchange,
+                api_key_set=bool(cred.api_key_enc),
+                api_secret_set=bool(cred.api_secret_enc),
+                passphrase_set=bool(cred.passphrase_enc),
+                enabled=cred.enabled,
+                size_mode=cred.size_mode,
+                size_value=cred.size_value,
+            ))
+    return out
+
+
+@app.patch("/api/auth/trading")
+async def set_trading_credential(body: TradingCredentialRequest, user: User = Depends(auth.get_current_user)):
+    supported = {"binance", "mexc", "kucoin", "kraken", "coinbase", "bitstamp"}
+    if body.exchange not in supported:
+        raise HTTPException(status_code=400, detail=f"Exchange non supportato: {body.exchange}")
+    auth.set_trading_credential(
+        user.id, body.exchange, body.api_key, body.api_secret, body.passphrase,
+        body.enabled, body.size_mode, body.size_value,
+    )
+    return {"ok": True}
+
+
+class ManualOrderRequest(BaseModel):
+    exchange: str
+    symbol: str
+    side: Literal["BUY", "SELL"]
+    size_mode: Literal["fixed_usdt", "pct_balance"] = "fixed_usdt"
+    size_value: float
+
+
+@app.post("/api/trading/order")
+async def place_manual_order(body: ManualOrderRequest, user: User = Depends(auth.get_current_user)):
+    supported = {"binance", "mexc", "kucoin", "kraken", "coinbase", "bitstamp"}
+    if body.exchange not in supported:
+        raise HTTPException(status_code=400, detail=f"Exchange non supportato: {body.exchange}")
+    cred = user.trading_credentials.get(body.exchange)
+    if not cred:
+        raise HTTPException(status_code=400, detail="Credenziali non configurate per questo exchange")
+    api_key, api_secret, passphrase = auth.get_decrypted_credential(user, body.exchange)
+    if not api_key or not api_secret:
+        raise HTTPException(status_code=400, detail="API key o secret mancanti — configurali prima nella sezione Trading automatico")
+    from app.models import StrategySignal
+    signal_type = "entry_long" if body.side == "BUY" else "entry_short"
+    fake_signal = StrategySignal(time=int(_time.time()), type=signal_type, price=0.0, label="manual")
+    try:
+        result = await place_order_for_signal(
+            body.exchange, body.symbol, fake_signal,
+            body.size_mode, body.size_value,
+            api_key, api_secret, passphrase,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"ok": True, "result": result}
+
+
 @app.get("/api/balances")
 async def get_balances(user: User = Depends(auth.get_current_user)) -> dict:
     if not _balance_visible(user):
@@ -572,6 +827,24 @@ def _owned_entry_or_404(entry_id: str, user: User) -> WatchlistEntry:
     return entry
 
 
+@app.get("/api/preferences")
+async def get_preferences(user: User = Depends(auth.get_current_user)) -> dict:
+    return user.preferences or {}
+
+
+@app.put("/api/preferences")
+async def put_preferences(
+    body: dict,
+    user: User = Depends(auth.get_current_user),
+) -> dict:
+    # Allowlist the keys we actually care about — ignore anything unknown
+    allowed = {"ticker", "asset_type", "exchange", "interval", "strategy", "strategy_params",
+               "layers", "log_scale", "lab_ticker", "lab_asset_type", "lab_exchange", "lab_interval"}
+    filtered = {k: v for k, v in body.items() if k in allowed}
+    auth.set_preferences(user.id, filtered)
+    return filtered
+
+
 @app.get("/api/watchlist", response_model=list[WatchlistEntry])
 async def get_watchlist(user: User = Depends(auth.get_current_user)) -> list[WatchlistEntry]:
     return watchlist_store.list_entries(owner_id=user.id)
@@ -582,6 +855,7 @@ class WatchlistAddRequest(BaseModel):
     asset_type: AssetType
     exchange: CryptoExchange = "mexc"
     interval: IntervalChoice = "1d"
+    on_close: bool = True
 
 
 @app.post("/api/watchlist", response_model=WatchlistEntry)
@@ -606,7 +880,9 @@ async def add_watchlist_entry(
     if probe.empty:
         raise HTTPException(status_code=400, detail="Ticker non trovato su questo exchange.")
 
-    return watchlist_store.add_entry(user.id, symbol, req.asset_type, exchange=req.exchange, interval=req.interval)
+    return watchlist_store.add_entry(
+        user.id, symbol, req.asset_type, exchange=req.exchange, interval=req.interval, on_close=req.on_close
+    )
 
 
 class WatchlistIntervalRequest(BaseModel):
@@ -657,6 +933,113 @@ async def toggle_watchlist_strategy(
     return entry
 
 
+class WatchlistOnCloseRequest(BaseModel):
+    on_close: bool
+
+
+@app.patch("/api/watchlist/{entry_id}/on_close", response_model=WatchlistEntry)
+async def set_watchlist_on_close(
+    entry_id: str, req: WatchlistOnCloseRequest, user: User = Depends(auth.get_current_user)
+) -> WatchlistEntry:
+    _owned_entry_or_404(entry_id, user)
+    return watchlist_store.set_on_close(entry_id, req.on_close)
+
+
+class WatchlistStrategyParamsRequest(BaseModel):
+    strategy_name: str
+    params: dict = {}  # {} resets this strategy back to its global defaults
+
+
+@app.patch("/api/watchlist/{entry_id}/strategy_params", response_model=WatchlistEntry)
+async def set_watchlist_strategy_params(
+    entry_id: str, req: WatchlistStrategyParamsRequest, user: User = Depends(auth.get_current_user)
+) -> WatchlistEntry:
+    if req.strategy_name not in AVAILABLE_STRATEGIES:
+        raise HTTPException(status_code=400, detail=f"Strategia sconosciuta: {req.strategy_name}")
+    _owned_entry_or_404(entry_id, user)
+    return watchlist_store.set_strategy_params(entry_id, req.strategy_name, req.params)
+
+
+def _owned_favorite_or_404(entry_id: str, user: User) -> FavoriteEntry:
+    entry = favorites_store.get_entry(entry_id)
+    if entry is None or entry.owner_id != user.id:
+        raise HTTPException(status_code=404, detail="Voce non trovata")
+    return entry
+
+
+@app.get("/api/favorites", response_model=list[FavoriteEntry])
+async def get_favorites(user: User = Depends(auth.get_current_user)) -> list[FavoriteEntry]:
+    return favorites_store.list_entries(owner_id=user.id)
+
+
+class FavoriteAddRequest(BaseModel):
+    symbol: str
+    asset_type: AssetType
+    exchange: CryptoExchange = "mexc"
+
+
+@app.post("/api/favorites", response_model=FavoriteEntry)
+async def add_favorite_entry(
+    req: FavoriteAddRequest, user: User = Depends(auth.get_current_user)
+) -> FavoriteEntry:
+    symbol = req.symbol.strip()
+    if not symbol:
+        raise HTTPException(status_code=400, detail="Ticker mancante")
+
+    provider = get_provider(req.asset_type, req.exchange)
+    try:
+        probe = await provider.fetch_ohlcv(symbol, "1d", 2)
+    except ProviderError as exc:
+        raise HTTPException(
+            status_code=400, detail=f"Ticker non trovato su questo exchange: {exc}"
+        ) from exc
+    if probe.empty:
+        raise HTTPException(status_code=400, detail="Ticker non trovato su questo exchange.")
+
+    return favorites_store.add_entry(user.id, symbol, req.asset_type, exchange=req.exchange)
+
+
+@app.delete("/api/favorites/{entry_id}")
+async def delete_favorite_entry(entry_id: str, user: User = Depends(auth.get_current_user)) -> dict:
+    _owned_favorite_or_404(entry_id, user)
+    favorites_store.remove_entry(entry_id)
+    return {"ok": True}
+
+
+class FavoriteQuote(BaseModel):
+    id: str
+    price: float | None = None
+    change_pct: float | None = None
+
+
+@app.get("/api/favorites/quotes", response_model=list[FavoriteQuote])
+async def get_favorite_quotes(user: User = Depends(auth.get_current_user)) -> list[FavoriteQuote]:
+    """Last price + day-over-day change for every favorite, fetched
+    concurrently. A quote that fails to resolve (delisted ticker, provider
+    hiccup) comes back with null price/change rather than failing the
+    whole batch — the frontend just shows a dash for that row."""
+    entries = favorites_store.list_entries(owner_id=user.id)
+
+    async def quote_for(entry: FavoriteEntry) -> FavoriteQuote:
+        provider = get_provider(entry.asset_type, entry.exchange)
+
+        try:
+            df = await _fetch_cached(
+                (f"favquote:{entry.asset_type}:{entry.exchange}:{entry.symbol}", "1d", 2),
+                provider, entry.symbol, "1d", 2,
+            )
+        except ProviderError:
+            return FavoriteQuote(id=entry.id)
+        if df.empty:
+            return FavoriteQuote(id=entry.id)
+        closes = df["close"].tolist()
+        price = closes[-1]
+        change_pct = ((closes[-1] - closes[-2]) / closes[-2] * 100) if len(closes) >= 2 and closes[-2] else None
+        return FavoriteQuote(id=entry.id, price=price, change_pct=change_pct)
+
+    return list(await asyncio.gather(*(quote_for(e) for e in entries)))
+
+
 @app.get("/api/analyze", response_model=AnalysisResponse)
 async def analyze(
     symbol: str = Query(..., min_length=1, max_length=20),
@@ -683,13 +1066,11 @@ async def analyze(
 
     async def fetch_timeframe(tf_key: TimeframeKey):
         interval = intervals[tf_key]
-        cache_key = (f"{asset_type}:{exchange}:{symbol.upper()}", interval)
-
-        async def do_fetch():
-            return await fetch_ohlcv_canonical(provider, symbol, interval, settings.candles_per_timeframe)
+        outputsize = settings.ltf_candles if tf_key == "ltf" else settings.candles_per_timeframe
+        cache_key = (f"{asset_type}:{exchange}:{symbol.upper()}", interval, outputsize)
 
         try:
-            df = await get_or_fetch(cache_key, do_fetch)
+            df = await _fetch_cached(cache_key, provider, symbol, interval, outputsize)
         except ProviderError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
         return tf_key, df
@@ -703,13 +1084,41 @@ async def analyze(
         if df.empty:
             raise HTTPException(status_code=502, detail=f"Nessun dato per {symbol} su timeframe {tf_key}")
 
-        levels = compute_levels(df, tf_key)
+        swings = compute_swings(df, tf_key)
+        levels = compute_levels(df, swings)
         indicators = compute_indicators(df)
         bias = determine_bias(levels)
-        dealing_range = compute_dealing_range(df, tf_key)
+        dealing_range = compute_dealing_range(df, swings)
+        fib_zones = compute_fib_zones(df, tf_key, intervals[tf_key])
         strategy = build_strategy_state(strategy_name, df, strategy_params_dict)
         strategies[tf_key] = [strategy]
-        backtests[tf_key] = run_backtest(df, strategy_params_dict, backtest_params_dict, strategy_name=strategy_name)
+        # The frontend only ever charts the ltf timeframe (state.activeTimeframe
+        # is a hardcoded "ltf", never reassigned) — htf/mtf backtests are never
+        # read (only strategies[htf|mtf] is, for cross-timeframe signal markers).
+        # Running the bar-by-bar backtest simulation twice for data nothing
+        # displays was pure wasted latency on every single analyze call.
+        if tf_key == "ltf":
+            # This is the fast pass, on whatever the chart already fetched —
+            # instant, but only as deep as ltf_candles. The frontend follows
+            # up with a separate /api/backtest/deep call (see that endpoint)
+            # that swaps this out for a backtest over each exchange's full
+            # history once that slower, paginated fetch resolves — without
+            # that split, every timeframe change would block on it too.
+            result = run_backtest(df, strategy_params_dict, backtest_params_dict, strategy_name=strategy_name)
+            backtests[tf_key] = result.model_copy(update={"interval": intervals[tf_key]})
+        else:
+            backtests[tf_key] = BacktestResult(
+                interval=intervals[tf_key],
+                initial_capital=backtest_params_dict.get("initial_capital", 10000.0),
+                final_equity=backtest_params_dict.get("initial_capital", 10000.0),
+                total_return_pct=0.0,
+                num_trades=0,
+                win_rate_pct=None,
+                max_drawdown_pct=0.0,
+                profit_factor=None,
+                equity_curve=[],
+                trades=[],
+            )
         candles = [
             Candle(
                 time=int(ts.timestamp()),
@@ -721,6 +1130,16 @@ async def analyze(
             )
             for ts, row in df.iterrows()
         ]
+        # Same story for the raw candle/indicator time series: the chart only
+        # ever plots ltf, and build_summary's per-timeframe indicator readout
+        # (below) only reads each series' *last* value. htf/mtf keep full
+        # levels/dealing_range/fib_zones (compute_confluence and the summary
+        # both need those) but only their tail candle/indicator points, not
+        # the full 500-bar history — that history was ~2/3 of this endpoint's
+        # response size for two timeframes nothing ever renders.
+        if tf_key != "ltf":
+            candles = candles[-2:]
+            indicators = [ind.model_copy(update={"values": ind.values[-2:]}) for ind in indicators]
         timeframes[tf_key] = TimeframeAnalysis(
             interval=intervals[tf_key],
             candles=candles,
@@ -728,6 +1147,7 @@ async def analyze(
             indicators=indicators,
             bias=bias,
             dealing_range=dealing_range,
+            fib_zones=fib_zones,
         )
 
     confluence_zones = compute_confluence(timeframes)
@@ -743,6 +1163,469 @@ async def analyze(
         summary=summary,
         strategies=strategies,
         backtests=backtests,
+    )
+
+
+@app.get("/api/backtest/deep", response_model=BacktestResult)
+async def deep_backtest(
+    symbol: str = Query(..., min_length=1, max_length=20),
+    asset_type: AssetType = Query("stock"),
+    exchange: CryptoExchange = Query("mexc"),
+    ltf_interval: IntervalChoice = Query(DEFAULT_INTERVALS["ltf"]),
+    strategy_name: str = Query(DEFAULT_STRATEGY),
+    strategy_params: StrategyParamsQuery = Depends(),
+    backtest_params: BacktestParamsQuery = Depends(),
+) -> BacktestResult:
+    """The backtest's own, deliberately coarser fetch (see
+    backtest_interval_for) instead of the ltf df the chart uses — reaches
+    each exchange's actual listing date instead of stopping wherever
+    ltf_candles does. Split out of /api/analyze on purpose: this can take
+    several seconds on a cold cache (a multi-page fetch), and gating the
+    whole chart response on it made every timeframe switch pay that cost
+    too. The frontend calls this right after /api/analyze already rendered
+    the chart with the fast pass, and swaps the backtest panel over once
+    this resolves."""
+    symbol = symbol.strip()
+    if not symbol:
+        raise HTTPException(status_code=400, detail="Ticker mancante")
+    if strategy_name not in AVAILABLE_STRATEGIES:
+        raise HTTPException(status_code=400, detail=f"Strategia sconosciuta: {strategy_name}")
+
+    provider = get_provider(asset_type, exchange)
+    backtest_interval = backtest_interval_for(ltf_interval)
+    cache_key = (f"{asset_type}:{exchange}:{symbol.upper()}:backtest", backtest_interval, settings.backtest_candles)
+
+    try:
+        df = await _fetch_cached(cache_key, provider, symbol, backtest_interval, settings.backtest_candles)
+    except ProviderError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if df.empty:
+        raise HTTPException(status_code=502, detail=f"Nessun dato per {symbol}")
+
+    result = run_backtest(df, strategy_params.model_dump(), backtest_params.model_dump(), strategy_name=strategy_name)
+    return result.model_copy(update={"interval": backtest_interval})
+
+
+class OptimizeResult(BaseModel):
+    params: dict
+    backtest: BacktestResult
+    trials_evaluated: int
+    out_of_sample_return_pct: float | None = None
+    overfitted: bool = False
+    mode: str = "random"
+
+
+@app.get("/api/optimize", response_model=OptimizeResult)
+async def optimize_strategy_endpoint(
+    symbol: str = Query(..., min_length=1, max_length=20),
+    asset_type: AssetType = Query("stock"),
+    exchange: CryptoExchange = Query("mexc"),
+    ltf_interval: IntervalChoice = Query(DEFAULT_INTERVALS["ltf"]),
+    strategy_name: str = Query(DEFAULT_STRATEGY),
+    backtest_params: BacktestParamsQuery = Depends(),
+    mode: str = Query("random", pattern="^(random|grid)$"),
+) -> OptimizeResult:
+    """Random-search parameter tuning for any strategy in the registry —
+    same deep-history df the backtest itself uses (see
+    backtest_interval_for), so results here match what re-running the
+    backtest with the winning params will show. CPU-bound (~120 backtest
+    simulations, ~15-25s), so it runs off the event loop via a thread —
+    otherwise it would stall every other request (including other users')
+    for its whole duration."""
+    symbol = symbol.strip()
+    if not symbol:
+        raise HTTPException(status_code=400, detail="Ticker mancante")
+    if not is_optimizable(strategy_name):
+        raise HTTPException(status_code=400, detail=f"Ottimizzazione non disponibile per {strategy_name}")
+
+    provider = get_provider(asset_type, exchange)
+    backtest_interval = backtest_interval_for(ltf_interval)
+    cache_key = (f"{asset_type}:{exchange}:{symbol.upper()}:backtest", backtest_interval, settings.backtest_candles)
+
+    try:
+        df = await _fetch_cached(cache_key, provider, symbol, backtest_interval, settings.backtest_candles)
+    except ProviderError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if df.empty:
+        raise HTTPException(status_code=502, detail=f"Nessun dato per {symbol}")
+
+    best_params, best_bt, trials, oos_return, overfitted = await asyncio.to_thread(
+        optimize_strategy, strategy_name, df, backtest_params.model_dump(), mode=mode
+    )
+    best_bt = best_bt.model_copy(update={"interval": backtest_interval})
+    return OptimizeResult(
+        params=best_params,
+        backtest=best_bt,
+        trials_evaluated=trials,
+        out_of_sample_return_pct=oos_return,
+        overfitted=overfitted,
+        mode=mode,
+    )
+
+
+@app.get("/api/sniper/candidates")
+async def sniper_candidates(
+    chain: str = Query("", description="Filter by chain_id"),
+    min_score: int = Query(0, ge=0, description="Minimum score_total"),
+    min_liq: float = Query(0.0, ge=0, description="Minimum liquidity_usd"),
+    max_mc: float = Query(0.0, ge=0, description="Maximum market_cap (0 = no limit)"),
+    exclude_cex: bool = Query(False, description="Exclude CEX-listed tokens"),
+    limit: int = Query(0, ge=0, description="Max results (0 = all)"),
+) -> dict:
+    from app.sniper import cache as sniper_cache
+    candidates = sniper_cache.get_candidates()
+    if chain:
+        candidates = [c for c in candidates if c.chain_id == chain]
+    if min_score:
+        candidates = [c for c in candidates if c.score_total >= min_score]
+    if min_liq:
+        candidates = [c for c in candidates if c.liquidity_usd >= min_liq]
+    if max_mc:
+        candidates = [c for c in candidates if c.market_cap is None or c.market_cap <= max_mc]
+    if exclude_cex:
+        candidates = [c for c in candidates if c.cex_listed is not True]
+    if limit:
+        candidates = candidates[:limit]
+    return {
+        "candidates": [
+            {
+                "chain_id": c.chain_id,
+                "token_address": c.token_address,
+                "pair_address": c.pair_address,
+                "symbol": c.symbol,
+                "name": c.name,
+                "dex_id": c.dex_id,
+                "pair_url": c.pair_url,
+                "price_usd": c.price_usd,
+                "market_cap": c.market_cap,
+                "liquidity_usd": c.liquidity_usd,
+                "volume_h24": c.volume_h24,
+                "volume_h1": c.volume_h1,
+                "age_hours": round(c.age_hours, 1),
+                "buy_sell_ratio": round(c.buy_sell_ratio, 2),
+                "website": c.website,
+                "socials": c.socials,
+                "score_total": c.score_total,
+                "score_max": c.score_max,
+                "score_items": c.score_items,
+                "first_seen": c.first_seen,
+                "last_updated": c.last_updated,
+                "cex_listed": c.cex_listed,
+            }
+            for c in candidates
+        ],
+        "last_scan": sniper_cache.last_scan_ts(),
+        "count": len(candidates),
+    }
+
+
+@app.post("/api/sniper/scan")
+async def sniper_trigger_scan() -> dict:
+    from app.sniper import cache as sniper_cache
+    added = await sniper_cache.run_scan()
+    return {"ok": True, "added": added, "total": len(sniper_cache.get_candidates())}
+
+
+@app.get("/api/sniper/log")
+async def sniper_log(limit: int = Query(500, ge=1, le=5000)) -> dict:
+    """Persisted scan-log history — survives a page reload / redeploy, so the
+    console can show what happened before this browser session connected."""
+    from app.sniper import cache as sniper_cache
+    return {"events": sniper_cache.get_log(limit)}
+
+
+@app.get("/api/sniper/scan-stream")
+async def sniper_scan_stream() -> StreamingResponse:
+    """SSE feed of scan log events. Scanning itself runs continuously in the
+    background (polling_loop, every 5 min) regardless of whether anyone is
+    watching — this just relays whatever scan is happening, automatic or
+    manually triggered, to any open browser tab for as long as it stays
+    connected.
+
+    Since two scans can be up to 5 minutes apart, the connection can sit
+    with nothing to send for a while — long enough for an intermediate
+    proxy to decide it's dead and silently drop it, which left the page
+    stuck showing "Connessione…" and reconnecting in a loop. A periodic
+    SSE comment (ignored by EventSource, invisible to the console) keeps
+    bytes flowing so the connection — and the browser's "open" state —
+    survives the quiet stretches."""
+    from app.sniper import cache as sniper_cache
+
+    async def event_gen():
+        q = sniper_cache.subscribe()
+        try:
+            yield f"data: {json.dumps({'type': 'connected', 'ts': _time.time()})}\n\n"
+            while True:
+                try:
+                    event = await asyncio.wait_for(q.get(), timeout=15.0)
+                    yield f"data: {json.dumps(event)}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": heartbeat\n\n"
+        finally:
+            sniper_cache.unsubscribe(q)
+
+    return StreamingResponse(
+        event_gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.get("/api/sniper/market")
+async def sniper_market(
+    chain: str = Query("all"),
+    q: str = Query(""),
+    sort: str = Query("liquidity"),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+) -> dict:
+    """Browse the market screener's store — every pool GeckoTerminal handed
+    us on the last market scan, not just new ones. No score here (see
+    sniper/market.py docstring for why); this is filter/sort/browse only."""
+    from app.sniper import market as sniper_market_mod
+
+    items, total = sniper_market_mod.get_tokens(
+        chain=chain or None, query=q or None, sort=sort, limit=limit, offset=offset
+    )
+    return {
+        "tokens": [
+            {
+                "chain_id": t.chain_id,
+                "token_address": t.token_address,
+                "pair_address": t.pair_address,
+                "symbol": t.symbol,
+                "name": t.name,
+                "dex_id": t.dex_id,
+                "pair_url": t.pair_url,
+                "price_usd": t.price_usd,
+                "market_cap": t.market_cap,
+                "liquidity_usd": t.liquidity_usd,
+                "volume_h24": t.volume_h24,
+                "age_hours": round(t.age_hours, 1),
+                "buy_sell_ratio": round(t.buy_sell_ratio, 2),
+                "last_updated": t.last_updated,
+            }
+            for t in items
+        ],
+        "total": total,
+        "last_scan": sniper_market_mod.last_scan_ts(),
+    }
+
+
+@app.post("/api/sniper/market-scan")
+async def sniper_market_trigger_scan() -> dict:
+    from app.sniper import market as sniper_market_mod
+
+    added = await sniper_market_mod.run_market_scan()
+    return {"ok": True, "added": added}
+
+
+@app.post("/api/sniper/market-import")
+async def sniper_market_import() -> dict:
+    """Apply the sniper's primary filter + on-chain scoring to every token
+    currently in the market store and add qualifying ones to the sniper
+    candidate archive. Progress is streamed via /api/sniper/market-stream."""
+    from app.sniper import market as sniper_market_mod
+
+    if sniper_market_mod.import_in_progress():
+        return {"ok": False, "error": "Import already in progress"}
+    added = await sniper_market_mod.run_import()
+    return {"ok": True, "added": added}
+
+
+@app.get("/api/sniper/market-log")
+async def sniper_market_log(limit: int = 500) -> dict:
+    from app.sniper import market as sniper_market_mod
+    return {"events": sniper_market_mod.get_log(limit=limit)}
+
+
+@app.get("/api/sniper/agents")
+async def sniper_agents_status() -> dict:
+    from app.sniper import agents as sniper_agents
+    return {"agents": sniper_agents.get_status()}
+
+
+@app.get("/api/sniper/research/auto/{token_address}")
+async def sniper_research_auto(token_address: str) -> dict:
+    """Auto-detect chain via DexScreener, then run research."""
+    import httpx as _httpx
+
+    chain_id = None
+    async with _httpx.AsyncClient(timeout=12.0) as client:
+        try:
+            r = await client.get(
+                f"https://api.dexscreener.com/latest/dex/tokens/{token_address}"
+            )
+            if r.status_code == 200:
+                data = r.json()
+                pairs = data.get("pairs") or []
+                if pairs:
+                    chain_id = pairs[0].get("chainId")
+        except Exception:
+            pass
+
+    if not chain_id:
+        return {
+            "chain_id": None,
+            "token_address": token_address,
+            "research_score": 0,
+            "description": "Token non trovato su DexScreener — verifica l'indirizzo.",
+            "checks": [{"label": "Non trovato su DexScreener", "passed": False}],
+            "links": [],
+        }
+
+    return await sniper_research(chain_id, token_address)
+
+
+@app.get("/api/sniper/research/{chain_id}/{token_address}")
+async def sniper_research(chain_id: str, token_address: str) -> dict:
+    """Query CoinGecko + DexScreener for a token and return a research report."""
+    import httpx as _httpx
+    from app.sniper.cex_check import _CHAIN_TO_PLATFORM, _CEX_IDS
+
+    checks = []
+    links = []
+    description = None
+    research_score = 0
+
+    platform = _CHAIN_TO_PLATFORM.get(chain_id)
+
+    async with _httpx.AsyncClient(timeout=12.0) as client:
+        # ── CoinGecko contract lookup ──
+        cg_data = None
+        if platform:
+            try:
+                r = await client.get(
+                    f"https://api.coingecko.com/api/v3/coins/{platform}/contract/{token_address}"
+                )
+                if r.status_code == 200:
+                    cg_data = r.json()
+            except Exception:
+                pass
+
+        if cg_data:
+            research_score += 2
+            checks.append({"label": "Trovato su CoinGecko", "passed": True, "note": cg_data.get("name", "")})
+
+            description = (cg_data.get("description") or {}).get("en", "")
+            if description and len(description) > 400:
+                description = description[:400] + "…"
+
+            # market data quality
+            md = cg_data.get("market_data") or {}
+            mc = (md.get("market_cap") or {}).get("usd")
+            if mc and mc > 0:
+                research_score += 1
+                checks.append({"label": "Market cap on-chain verificato", "passed": True, "note": f"${mc:,.0f}"})
+
+            # community / social
+            comm = cg_data.get("community_data") or {}
+            tw = comm.get("twitter_followers", 0) or 0
+            tg = comm.get("telegram_channel_user_count", 0) or 0
+            if tw > 1000:
+                research_score += 1
+                checks.append({"label": "Twitter attivo", "passed": True, "note": f"{tw:,} follower"})
+            elif tw > 0:
+                checks.append({"label": "Twitter presente", "warning": True, "note": f"{tw:,} follower"})
+            if tg > 500:
+                research_score += 1
+                checks.append({"label": "Telegram attivo", "passed": True, "note": f"{tg:,} membri"})
+            elif tg > 0:
+                checks.append({"label": "Telegram presente", "warning": True, "note": f"{tg:,} membri"})
+
+            # dev activity
+            dev = cg_data.get("developer_data") or {}
+            commits = (dev.get("commit_count_4_weeks") or 0)
+            if commits > 5:
+                research_score += 1
+                checks.append({"label": "Attività GitHub recente", "passed": True, "note": f"{commits} commit/4wk"})
+            elif commits > 0:
+                checks.append({"label": "Repository GitHub", "warning": True, "note": f"{commits} commit/4wk"})
+
+            # links
+            lnks = cg_data.get("links") or {}
+            if lnks.get("homepage"):
+                for h in (lnks["homepage"] or []):
+                    if h:
+                        links.append({"label": "Sito ufficiale", "url": h})
+                        break
+            if lnks.get("twitter_screen_name"):
+                links.append({"label": "Twitter", "url": f"https://twitter.com/{lnks['twitter_screen_name']}"})
+            if lnks.get("telegram_channel_identifier"):
+                links.append({"label": "Telegram", "url": f"https://t.me/{lnks['telegram_channel_identifier']}"})
+
+            # CEX tickers check
+            tickers = cg_data.get("tickers") or []
+            cex_names = [t["market"]["name"] for t in tickers if t.get("market", {}).get("identifier", "") in _CEX_IDS]
+            if cex_names:
+                checks.append({"label": f"Listato su {cex_names[0]}", "warning": True, "note": "già su CEX"})
+            else:
+                research_score += 1
+                checks.append({"label": "Non ancora su CEX", "passed": True, "note": "opportunità early"})
+        else:
+            checks.append({"label": "Non trovato su CoinGecko", "passed": False, "note": "token non indicizzato"})
+
+        # ── DexScreener pair check ──
+        try:
+            r2 = await client.get(
+                f"https://api.dexscreener.com/latest/dex/tokens/{token_address}"
+            )
+            if r2.status_code == 200:
+                pairs = (r2.json().get("pairs") or [])
+                if pairs:
+                    best = max(pairs, key=lambda p: float(p.get("liquidity", {}).get("usd", 0) or 0))
+                    liq = float((best.get("liquidity") or {}).get("usd", 0) or 0)
+                    vol = float((best.get("volume") or {}).get("h24", 0) or 0)
+                    if liq >= 10_000:
+                        research_score += 1
+                        checks.append({"label": "Liquidità solida su DEX", "passed": True, "note": f"${liq:,.0f}"})
+                    elif liq >= 1_000:
+                        checks.append({"label": "Liquidità bassa su DEX", "warning": True, "note": f"${liq:,.0f}"})
+                    else:
+                        checks.append({"label": "Liquidità molto bassa", "passed": False, "note": f"${liq:,.0f}"})
+                    if liq > 0 and vol / liq > 0.05:
+                        research_score += 1
+                        checks.append({"label": "Volume reale (>5% liq)", "passed": True, "note": f"${vol:,.0f}/24h"})
+                    if best.get("pairUrl"):
+                        links.append({"label": "DexScreener", "url": best["pairUrl"]})
+        except Exception:
+            pass
+
+    research_score = min(research_score, 10)
+    return {
+        "chain_id": chain_id,
+        "token_address": token_address,
+        "research_score": research_score,
+        "description": description,
+        "checks": checks,
+        "links": links,
+    }
+
+
+@app.get("/api/sniper/market-stream")
+async def sniper_market_stream() -> StreamingResponse:
+    """SSE feed of market-scan progress (per-chain, since this is a heavier
+    on-demand pull — up to 10 pages per chain — not the every-5-minutes
+    sniper scan)."""
+    from app.sniper import market as sniper_market_mod
+
+    async def event_gen():
+        q = sniper_market_mod.subscribe()
+        try:
+            yield f"data: {json.dumps({'type': 'connected', 'ts': _time.time()})}\n\n"
+            while True:
+                try:
+                    event = await asyncio.wait_for(q.get(), timeout=15.0)
+                    yield f"data: {json.dumps(event)}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": heartbeat\n\n"
+        finally:
+            sniper_market_mod.unsubscribe(q)
+
+    return StreamingResponse(
+        event_gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
@@ -774,6 +1657,43 @@ async def live_feed(websocket: WebSocket) -> None:
 app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR / "static")), name="static")
 
 
+def _compute_asset_version() -> str:
+    """Hash of the actual CSS/JS bytes being served, not the git commit —
+    correct even in the Docker image, which doesn't ship .git. Computed once
+    at process startup: every deploy restarts the process, so the version
+    (and therefore the /static/*.css?v=... URL) always changes exactly when
+    the files do. Without this, browsers — mobile Safari especially — keep
+    serving a stale cached style.css/app.js after a deploy since neither the
+    URL nor any cache-control header ever changed."""
+    try:
+        css = (FRONTEND_DIR / "static" / "style.css").read_bytes()
+        js = (FRONTEND_DIR / "static" / "app.js").read_bytes()
+        return hashlib.sha256(css + js).hexdigest()[:10]
+    except OSError:
+        return "0"
+
+
+_ASSET_VERSION = _compute_asset_version()
+_INDEX_HTML = (
+    (FRONTEND_DIR / "index.html")
+    .read_text(encoding="utf-8")
+    .replace('href="/static/style.css"', f'href="/static/style.css?v={_ASSET_VERSION}"')
+    .replace('src="/static/app.js"', f'src="/static/app.js?v={_ASSET_VERSION}"')
+)
+
+
+_SNIPER_HTML = (
+    (FRONTEND_DIR / "sniper.html")
+    .read_text(encoding="utf-8")
+    .replace('href="/static/style.css"', f'href="/static/style.css?v={_ASSET_VERSION}"')
+)
+
+
 @app.get("/")
-async def index() -> FileResponse:
-    return FileResponse(str(FRONTEND_DIR / "index.html"))
+async def index() -> HTMLResponse:
+    return HTMLResponse(_INDEX_HTML)
+
+
+@app.get("/sniper")
+async def sniper_app() -> HTMLResponse:
+    return HTMLResponse(_SNIPER_HTML)

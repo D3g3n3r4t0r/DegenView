@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
-    href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Archivo+Narrow:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;600;700&display=swap"
     rel="stylesheet"
   />
   <link rel="stylesheet" href="/static/style.css" />
@@ -19,7 +19,7 @@
 
     <form id="search-form" class="search-form">
       <div class="ticker-field">
-        <input id="ticker-input" type="text" placeholder="Cerca ticker — azioni o crypto" autocomplete="off" />
+        <input id="ticker-input" type="text" form="search-form" placeholder="Cerca ticker — azioni o crypto" autocomplete="off" />
         <ul id="ticker-suggestions" class="suggestions hidden"></ul>
       </div>
     </form>
@@ -55,7 +55,7 @@
           <path d="M3 14.5 L12 20 L21 14.5" stroke-linecap="round"/>
         </svg>
       </button>
-      <button type="button" class="rail-btn" id="rail-script-btn" title="Script Pine personalizzato">
+      <button type="button" class="rail-btn hidden" id="rail-script-btn" title="Script Pine personalizzato">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
           <polyline points="9 18 4 12 9 6"/>
           <polyline points="15 6 20 12 15 18"/>
@@ -65,13 +65,8 @@
 
     <div id="levels-panel" class="levels-panel">
       <div class="drawer-header">
-        <span>Livelli &amp; Indicatori</span>
+        <span>Livelli</span>
         <button type="button" class="drawer-close-btn" data-close-drawer>✕ Chiudi</button>
-      </div>
-      <div class="panel">
-        <h3>Disegni sul grafico</h3>
-        <p class="panel-hint">Usa gli strumenti nella colonna a sinistra del grafico. Persistono per questo ticker anche dopo un ricaricamento della pagina (salvati in questo browser).</p>
-        <ul id="draw-list" class="draw-list"></ul>
       </div>
       <div class="panel">
         <h3>Struttura &amp; Liquidità</h3>
@@ -80,16 +75,23 @@
         <label class="layer-toggle"><input type="checkbox" data-layer="fvg" /> Fair Value Gap</label>
         <label class="layer-toggle"><input type="checkbox" data-layer="liquidity" /> Equal Highs/Lows</label>
         <label class="layer-toggle"><input type="checkbox" data-layer="structure" /> BOS / CHoCH</label>
-        <label class="layer-toggle"><input type="checkbox" data-layer="confluence" checked /> Zone di confluenza</label>
+        <label class="layer-toggle"><input type="checkbox" data-layer="confluence" /> Zone di confluenza</label>
+        <label class="layer-toggle"><input type="checkbox" data-layer="fibonacci" /> Fibonacci automatico</label>
       </div>
       <div class="panel">
         <h3>Indicatori</h3>
+        <label class="layer-toggle"><input type="checkbox" id="strategy-markers-toggle" checked /> Marker strategia sul grafico</label>
         <label class="layer-toggle"><input type="checkbox" data-layer="ema" checked /> EMA 20 / 50</label>
         <label class="layer-toggle"><input type="checkbox" data-layer="bbands" /> Bollinger Bands</label>
         <label class="layer-toggle"><input type="checkbox" data-layer="vwap" /> VWAP</label>
         <label class="layer-toggle"><input type="checkbox" data-layer="rsi" /> RSI (14)</label>
         <label class="layer-toggle"><input type="checkbox" data-layer="macd" /> MACD</label>
         <label class="layer-toggle"><input type="checkbox" data-layer="stoch" /> Stocastico (14,3)</label>
+      </div>
+      <div class="panel">
+        <h3>Disegni sul grafico</h3>
+        <p class="panel-hint">Usa gli strumenti nella colonna a sinistra del grafico (o il pulsante matita sul grafico, su mobile). Persistono per questo ticker anche dopo un ricaricamento della pagina (salvati in questo browser).</p>
+        <ul id="draw-list" class="draw-list"></ul>
       </div>
     </div>
 
@@ -139,6 +141,18 @@
       <div id="polling-badge" class="polling-badge hidden">Agg. ogni 60s</div>
       <div id="loading" class="loading hidden">Analisi in corso…</div>
       <div id="empty-state" class="empty-state">Cerca un ticker per iniziare l'analisi multi-timeframe.</div>
+      <!-- Shown only if the very first request (checkAuth, in app.js) is
+           still pending after ~1.2s — the free-tier server suspends when
+           idle, so the first visit after any quiet period pays a one-time
+           wake-up cost with no other feedback otherwise. Only fires once
+           per boot; every later request is already fast. -->
+      <div id="server-wake-hint" class="server-wake-hint hidden">
+        <span class="server-wake-dot"></span>
+        <div>
+          <div class="server-wake-title">Il server si sta avviando…</div>
+          <div class="server-wake-sub">Dopo un periodo di inattività la prima apertura richiede qualche secondo in più.</div>
+        </div>
+      </div>
       <div class="chart-row">
         <nav class="draw-rail" id="draw-rail" title="Strumenti di disegno">
           <button type="button" class="draw-tool-btn selected" data-draw-tool="cursor" title="Cursore — clicca un disegno per eliminarlo">
@@ -188,73 +202,150 @@
       </div>
 
       <div class="tabs">
-        <button type="button" class="tab active" data-tab="strategia">Strategia</button>
+        <button type="button" class="tab active" data-tab="backtest">Backtest</button>
+        <button type="button" class="tab" data-tab="watchlist">Watchlist</button>
         <button type="button" class="tab" data-tab="alert">Alert</button>
         <button type="button" class="tab" data-tab="analisi">Analisi</button>
         <button type="button" class="tab hidden" id="balances-tab-btn" data-tab="saldi">Saldi</button>
+        <a href="/sniper" class="tab tab-link" title="Apre il Token Sniper in una nuova app">Sniper ↗</a>
       </div>
 
-      <div class="tab-content active" data-tab-content="strategia">
-        <div class="panel">
-          <div class="panel-title-row">
-            <h3>Strategia</h3>
-            <span id="strategy-position-badge" class="position-badge flat">FLAT</span>
+      <!-- Strategia tab removed from UI but DOM elements kept for JS compatibility -->
+      <div hidden>
+        <span id="strategy-position-badge" class="position-badge flat">FLAT</span>
+        <div id="strategy-select-slot"></div>
+        <form id="params-form">
+          <div id="strategy-params-fields"></div>
+          <button type="button" id="optimize-strategy-btn" hidden></button>
+          <p id="optimize-strategy-result" hidden></p>
+        </form>
+        <span id="operations-count"></span>
+        <ul id="operations-list"></ul>
+      </div>
+
+      <div class="tab-content active" data-tab-content="backtest">
+        <div class="panel lab-panel" id="lab-panel">
+
+          <!-- Ticker hero -->
+          <div class="lab-ticker-row">
+            <div class="lab-ticker-hero" id="lab-ticker-hero">
+              <div class="lab-ticker-dot"></div>
+              <div class="lab-ticker-text">
+                <span id="lab-ticker-val" class="lab-ticker-val">—</span>
+                <span class="lab-ticker-sub">Digita per cercare</span>
+              </div>
+              <input id="lab-ticker-input" type="text" class="lab-ticker-input" placeholder="es. RPLUSDT" autocomplete="off" />
+              <ul id="lab-suggestions" class="suggestions hidden"></ul>
+            </div>
+            <select id="lab-exchange-select" class="lab-exchange-select">
+              <option value="mexc">MEXC</option>
+              <option value="kucoin">KuCoin</option>
+            </select>
           </div>
-          <label class="layer-toggle"><input type="checkbox" id="strategy-markers-toggle" checked /> Marker sul grafico</label>
-          <p class="marker-legend">
-            <span class="legend-item"><span class="legend-swatch bull">▲</span>Ingresso long</span>
-            <span class="legend-item"><span class="legend-swatch bear">▼</span>Ingresso short</span>
-            <span class="legend-item"><span class="legend-swatch">●</span>Uscita</span>
-            <span class="legend-item"><span class="legend-swatch stamp">◆</span>Inversione</span>
-          </p>
-          <label class="layer-toggle"><input type="checkbox" id="strategy-notify-toggle" /> Notifiche browser</label>
-          <ul id="strategy-alert-log" class="alert-log"></ul>
-          <p class="strategy-disclaimer">
-            Notifiche su una condizione tecnica definita dall'utente. Non sono raccomandazioni di investimento.
-          </p>
 
-          <h4 class="backtest-heading">Backtest (timeframe attivo)</h4>
-          <div id="backtest-stats" class="backtest-stats"></div>
-          <div id="equity-chart" class="equity-chart"></div>
-          <p class="strategy-disclaimer">
-            Simulazione storica su dati passati. Le performance passate non garantiscono risultati futuri.
-          </p>
+          <!-- Timeframe pills -->
+          <div class="lab-tf-row" id="lab-tf-row">
+            <button type="button" class="lab-tf-btn" data-lab-tf="4h">4h</button>
+            <button type="button" class="lab-tf-btn active" data-lab-tf="1d">1d</button>
+            <button type="button" class="lab-tf-btn" data-lab-tf="3d">3d</button>
+            <button type="button" class="lab-tf-btn" data-lab-tf="1w">1w</button>
+            <button type="button" class="lab-tf-btn" data-lab-tf="1M">1M</button>
+          </div>
 
-          <details class="params-details">
-            <summary>Parametri strategia &amp; backtest</summary>
-            <form id="params-form" class="params-form">
-              <fieldset>
-                <legend>Strategia</legend>
-                <label>Tipo media <select name="average"><option value="EMA">EMA</option><option value="SMA">SMA</option></select></label>
-                <label>Lunghezza media <input type="number" name="len" value="130" min="2" /></label>
-                <label>Slope veloce <input type="number" name="slopeFlen" value="7" min="1" /></label>
-                <label>Slope lenta <input type="number" name="slopeSlen" value="27" min="1" /></label>
-                <label><input type="checkbox" name="trendfilter" checked /> Filtro trend</label>
-                <label>Periodo trend <input type="number" name="trendfilterperiod" value="268" min="2" /></label>
-                <label>Tipo trend <select name="trendfiltertype"><option value="EMA">EMA</option><option value="SMA">SMA</option></select></label>
-                <label><input type="checkbox" name="volatilityfilter" checked /> Filtro volatilità</label>
-                <label>Stdev lunghezza <input type="number" name="volatilitystdevlength" value="16" min="1" /></label>
-                <label>Stdev media lunghezza <input type="number" name="volatilitystdevmalength" value="44" min="1" /></label>
-              </fieldset>
-              <fieldset>
-                <legend>Accumulo / Distribuzione</legend>
-                <p class="panel-hint">Tre condizioni indipendenti (in OR) — disattivane qualcuna se vuoi restringere ai segnali di cui ti fidi di più.</p>
-                <label><input type="checkbox" name="enable_divergence" checked /> Divergenza RSI su swing</label>
-                <label><input type="checkbox" name="enable_contraction" checked /> Breakout da contrazione volatilità</label>
-                <label><input type="checkbox" name="enable_range_bounce" checked /> Rimbalzo sul supporto/resistenza del range</label>
-              </fieldset>
-              <fieldset>
-                <legend>Backtest</legend>
-                <label>Capitale iniziale <input type="number" name="initial_capital" value="10000" min="1" /></label>
-                <label>% equity per trade <input type="number" name="qty_pct_of_equity" value="30" min="1" max="100" step="1" /></label>
-                <label>Commissione % <input type="number" name="commission_pct" value="0.06" min="0" step="0.01" /></label>
-                <label>Slippage % <input type="number" name="slippage_pct" value="0.02" min="0" step="0.01" /></label>
-                <label>Stop-loss % <input type="number" name="stop_loss_pct" value="0" min="0" step="0.5" title="0 = disattivato" /></label>
-                <label>Take-profit % <input type="number" name="take_profit_pct" value="0" min="0" step="0.5" title="0 = disattivato" /></label>
-              </fieldset>
-              <button type="submit">Applica e ricalcola</button>
-            </form>
+          <div class="lab-divider"></div>
+
+          <!-- Strategy selector -->
+          <div class="lab-strat-header">
+            <span class="lab-strat-label">Parametri strategia</span>
+            <select id="lab-strategy-select" class="lab-strategy-select"></select>
+          </div>
+          <div id="lab-params-fields" class="lab-params-grid"></div>
+
+          <!-- Backtest params (collapsed) -->
+          <details class="lab-bt-details">
+            <summary>Parametri backtest</summary>
+            <div class="lab-bt-params">
+              <label>Capitale iniziale <input type="number" id="lab-initial-capital" value="10000" min="1" /></label>
+              <label>% equity/trade <input type="number" id="lab-qty-pct" value="100" min="1" max="100" /></label>
+              <label>Commissione % <input type="number" id="lab-commission" value="0" min="0" step="0.01" /></label>
+              <label>Slippage % <input type="number" id="lab-slippage" value="0" min="0" step="0.01" /></label>
+            </div>
           </details>
+
+          <!-- Action buttons -->
+          <div class="lab-action-row">
+            <button type="button" id="lab-optimize-btn" class="lab-btn-opt">⟳ Ottimizza</button>
+            <button type="button" id="lab-run-btn" class="lab-btn-run">▶ Esegui</button>
+          </div>
+          <label class="lab-grid-toggle" id="lab-grid-toggle-wrap" title="Prova ogni combinazione di parametri su una griglia discreta (~1000–3000 test). Più lento (~30–50s) ma sistematico.">
+            <input type="checkbox" id="lab-grid-mode" />
+            <span>Modalità Grid — ogni combinazione possibile</span>
+          </label>
+
+          <!-- Loading/status -->
+          <div id="lab-status" class="lab-status hidden"></div>
+
+          <!-- Results -->
+          <div id="lab-result-block" class="lab-result-block hidden">
+            <div id="lab-result-meta" class="lab-result-meta"></div>
+            <div class="lab-return-hero">
+              <div id="lab-return-val" class="lab-return-val">—</div>
+              <div id="lab-return-side" class="lab-return-side"></div>
+            </div>
+            <canvas id="lab-equity-canvas" class="lab-equity-canvas" height="68"></canvas>
+            <div id="lab-stat-chips" class="lab-stat-chips"></div>
+          </div>
+
+          <!-- Apply to chart -->
+          <div id="lab-apply-strip" class="lab-apply-strip hidden">
+            <div id="lab-apply-text" class="lab-apply-text"></div>
+            <div class="lab-apply-actions">
+              <button type="button" id="lab-apply-btn" class="lab-apply-btn">Applica ↗</button>
+              <button type="button" id="lab-signal-btn" class="lab-signal-btn" title="Aggiungi alla watchlist alert con questa strategia e questi parametri">📬 Segnali</button>
+            </div>
+          </div>
+          <div id="lab-signal-status" class="lab-signal-status hidden"></div>
+
+        </div>
+
+        <!-- Trade detail drawer (shown when "N trade" is clicked) -->
+        <div id="lab-trades-drawer" class="lab-trades-drawer hidden">
+          <div class="lab-trades-header">
+            <span id="lab-trades-title">Trade</span>
+            <button type="button" id="lab-trades-close" class="lab-trades-close">✕</button>
+          </div>
+          <div id="lab-trades-body" class="lab-trades-body"></div>
+        </div>
+      </div>
+
+      <div class="tab-content" data-tab-content="watchlist">
+        <div class="panel">
+          <div class="section-title-row">
+            <span class="section-eyebrow">I tuoi ticker</span>
+            <span id="favorites-count" class="section-count"></span>
+          </div>
+
+          <form id="favorite-form" class="watchlist-quickbar">
+            <div class="wl-ticker-field">
+              <input type="text" id="favorite-symbol" placeholder="Aggiungi ticker (es. BTC)" autocomplete="off" />
+              <ul id="favorite-suggestions" class="suggestions hidden"></ul>
+            </div>
+            <button type="submit" title="Aggiungi alla watchlist">+</button>
+          </form>
+
+          <div class="asset-toggle small" id="favorite-filter">
+            <button type="button" data-favorite-filter="all" class="wl-asset-btn active">Tutti</button>
+            <button type="button" data-favorite-filter="stock" class="wl-asset-btn">Azioni</button>
+            <button type="button" data-favorite-filter="crypto" class="wl-asset-btn">Crypto</button>
+          </div>
+
+          <ul id="favorite-rows" class="wl-rows"></ul>
+          <p id="favorite-empty" class="wl-empty hidden">
+            <span class="wl-empty-icon">☆</span><br />
+            Nessun ticker salvato.<br />Aggiungine uno per passare da un grafico all'altro con un clic.
+          </p>
+
+          <p class="wl-hint">Clicca un ticker per caricarlo nel grafico. Il pallino <b>●</b> indica che hai un alert Telegram attivo su quel ticker — gestiscilo dalla tab <b>Alert</b>.</p>
         </div>
       </div>
 
@@ -268,20 +359,34 @@
           </div>
 
           <div id="alert-authenticated" class="hidden">
-            <div class="telegram-setup">
+            <div id="telegram-status-chip" class="telegram-status-chip hidden">
+              <span class="tg-status-label"><span class="tg-status-dot"></span>Telegram collegato</span>
+              <button type="button" id="telegram-edit-btn" class="tg-edit-link">Modifica</button>
+            </div>
+            <div id="telegram-setup" class="telegram-setup">
               <label>Il tuo Telegram chat ID
                 <input type="text" id="telegram-chat-id-input" placeholder="es. 123456789" autocomplete="off" />
               </label>
               <button type="button" id="telegram-chat-id-save">Salva</button>
               <p class="panel-hint">Scrivi un messaggio qualsiasi al bot, poi apri <code>https://api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</code> per trovare il tuo chat ID — chiedi il link del bot se non lo hai.</p>
             </div>
-            <p class="panel-hint">Ogni ticker qui dentro viene controllato in background ogni minuto, indipendentemente da cosa stai guardando a schermo. Attiva una o più strategie per ticker: arriva una notifica Telegram per ogni segnale confermato.</p>
-            <form id="watchlist-form" class="watchlist-form">
+
+            <div class="section-title-row">
+              <span class="section-eyebrow">I tuoi alert</span>
+              <span id="watchlist-count" class="section-count"></span>
+            </div>
+
+            <form id="watchlist-form" class="watchlist-quickbar">
               <div class="wl-ticker-field">
-                <input type="text" id="watchlist-symbol" placeholder="Ticker (es. BTC)" autocomplete="off" required />
+                <input type="text" id="watchlist-symbol" placeholder="Aggiungi ticker (es. BTC)" autocomplete="off" required />
                 <ul id="watchlist-suggestions" class="suggestions hidden"></ul>
               </div>
-              <p id="watchlist-resolved-pair" class="wl-resolved-pair hidden"></p>
+              <button type="submit" title="Aggiungi alla watchlist">+</button>
+            </form>
+            <p id="watchlist-resolved-pair" class="wl-resolved-pair hidden"></p>
+
+            <details class="wl-options-details">
+              <summary>Opzioni — asset, exchange, timeframe, chiusura candela</summary>
               <div class="asset-toggle small">
                 <button type="button" data-watchlist-asset="stock" class="wl-asset-btn active">Azioni</button>
                 <button type="button" data-watchlist-asset="crypto" class="wl-asset-btn">Crypto</button>
@@ -292,10 +397,85 @@
                 <option value="kucoin">KuCoin (solo /BTC)</option>
               </select>
               <select id="watchlist-interval" title="Timeframe su cui valutare le strategie di questo ticker"></select>
-              <button type="submit">Aggiungi</button>
-            </form>
+              <label class="toolbar-check wl-onclose-check" title="Se attivo, l'alert scatta solo quando la candela chiude — niente falsi segnali intra-bar">
+                <input type="checkbox" id="watchlist-onclose" checked /> Alla chiusura della candela
+              </label>
+            </details>
+
+            <p class="panel-hint">Ogni ticker qui dentro viene controllato in background ogni minuto, indipendentemente da cosa stai guardando a schermo. Attiva una o più strategie per ticker: arriva una notifica Telegram per ogni segnale confermato.</p>
+
             <ul id="watchlist-list" class="watchlist-cards"></ul>
-            <button type="button" id="open-script-from-alert" class="pine-secondary-link">Script Pine personalizzato →</button>
+
+            <!-- Trading Automatico -->
+            <div class="trading-auto-section">
+              <div class="section-title-row trading-auto-header">
+                <span class="section-eyebrow">Trading automatico</span>
+                <span class="trading-auto-badge">⚠️ Denaro reale</span>
+              </div>
+              <p class="panel-hint trading-auto-hint">Quando scatta un segnale dalla watchlist, viene piazzato un ordine reale sull'exchange. Inserisci le API key con permessi di trading (non di prelievo).</p>
+              <div id="trading-credentials-list" class="trading-cred-list"></div>
+            </div>
+
+            <!-- Ordine manuale -->
+            <div class="trading-auto-section">
+              <div class="section-title-row trading-auto-header">
+                <span class="section-eyebrow">Ordine manuale</span>
+                <span class="trading-auto-badge">⚠️ Denaro reale</span>
+              </div>
+              <div class="manual-order-form">
+                <!-- Exchange + Pair -->
+                <div class="mo-row">
+                  <div class="mo-field">
+                    <label class="mo-label">Exchange</label>
+                    <select id="manual-exchange" class="mo-select">
+                      <option value="mexc">MEXC</option>
+                      <option value="kraken">Kraken</option>
+                      <option value="coinbase">Coinbase</option>
+                      <option value="bitstamp">Bitstamp</option>
+                    </select>
+                  </div>
+                  <div class="mo-field mo-field-grow">
+                    <label class="mo-label">Pair</label>
+                    <input type="text" id="manual-symbol" class="mo-input" placeholder="es. BTCUSDT" autocomplete="off" />
+                  </div>
+                </div>
+
+                <!-- BUY / SELL tabs -->
+                <div class="mo-side-tabs">
+                  <button type="button" class="mo-side-tab mo-buy-tab mo-tab-active" data-side="BUY">BUY</button>
+                  <button type="button" class="mo-side-tab mo-sell-tab" data-side="SELL">SELL</button>
+                </div>
+
+                <!-- Size mode radio row -->
+                <div class="mo-size-mode-row">
+                  <label class="mo-radio-label"><input type="radio" name="mo-size-mode" value="fixed_usdt" checked /> USDT fisso</label>
+                  <label class="mo-radio-label"><input type="radio" name="mo-size-mode" value="pct_balance" /> % saldo</label>
+                </div>
+
+                <!-- Slider + value input -->
+                <div class="mo-slider-row">
+                  <input type="range" id="manual-size-slider" class="mo-slider" min="1" max="100" value="10" step="1" />
+                  <div class="mo-slider-val-wrap">
+                    <input type="number" id="manual-size-val" class="mo-slider-val-input" value="10" min="1" step="1" />
+                    <span class="mo-slider-unit" id="manual-size-unit">%</span>
+                  </div>
+                </div>
+
+                <!-- Execute button -->
+                <button type="button" id="manual-execute-btn" class="mo-execute-btn mo-execute-buy">BUY</button>
+
+                <div id="manual-order-status" class="manual-order-status hidden"></div>
+              </div>
+            </div>
+
+            <div class="alert-footnote">
+              <label class="layer-toggle"><input type="checkbox" id="strategy-notify-toggle" /> Notifiche browser (strategia integrata)</label>
+              <ul id="strategy-alert-log" class="alert-log"></ul>
+              <p class="strategy-disclaimer">
+                Notifiche su una condizione tecnica definita dall'utente. Non sono raccomandazioni di investimento.
+              </p>
+              <button type="button" id="open-script-from-alert" class="pine-secondary-link hidden">Script Pine personalizzato →</button>
+            </div>
           </div>
         </div>
       </div>
@@ -329,11 +509,123 @@
         </div>
       </div>
     </aside>
+
+    <div id="altro-panel" class="levels-panel altro-panel">
+      <div class="drawer-header">
+        <span>Altro</span>
+        <button type="button" class="drawer-close-btn" data-close-drawer>✕ Chiudi</button>
+      </div>
+      <div class="panel">
+        <div id="altro-account-slot" class="altro-account-slot"></div>
+      </div>
+      <div class="panel">
+        <h3>Strumenti</h3>
+        <button type="button" id="open-script-from-altro" class="altro-menu-item hidden">
+          <span class="altro-menu-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 4 12 9 6"/><polyline points="15 6 20 12 15 18"/></svg>
+          </span>
+          <span class="altro-menu-text">
+            <span class="altro-menu-title">Script Pine personalizzato</span>
+            <span class="altro-menu-sub">Carica o scrivi la tua strategia</span>
+          </span>
+          <span class="altro-menu-chev">›</span>
+        </button>
+        <button type="button" id="altro-saldi-item" class="altro-menu-item hidden">
+          <span class="altro-menu-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>
+          </span>
+          <span class="altro-menu-text">
+            <span class="altro-menu-title">Saldi</span>
+            <span class="altro-menu-sub">Sola lettura — MEXC, KuCoin</span>
+          </span>
+          <span class="altro-menu-chev">›</span>
+        </button>
+        <button type="button" id="altro-backtest-item" class="altro-menu-item">
+          <span class="altro-menu-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-5"/></svg>
+          </span>
+          <span class="altro-menu-text">
+            <span class="altro-menu-title">Backtest</span>
+            <span class="altro-menu-sub">Testa la strategia su dati storici</span>
+          </span>
+          <span class="altro-menu-chev">›</span>
+        </button>
+        <button type="button" id="altro-watchlist-item" class="altro-menu-item">
+          <span class="altro-menu-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17.3l-6.2 3.6 1.6-7-5.4-4.7 7.2-.6L12 2l2.8 6.6 7.2.6-5.4 4.7 1.6 7z"/></svg>
+          </span>
+          <span class="altro-menu-text">
+            <span class="altro-menu-title">Watchlist</span>
+            <span class="altro-menu-sub">I tuoi ticker salvati — un tap per caricarli</span>
+          </span>
+          <span class="altro-menu-chev">›</span>
+        </button>
+        <button type="button" id="altro-analisi-item" class="altro-menu-item">
+          <span class="altro-menu-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>
+          </span>
+          <span class="altro-menu-text">
+            <span class="altro-menu-title">Analisi struttura</span>
+            <span class="altro-menu-sub">Riepilogo, contesto HTF, indicatori, confluenze</span>
+          </span>
+          <span class="altro-menu-chev">›</span>
+        </button>
+      </div>
+    </div>
+
+    </div>
   </main>
 
+  <!-- Full-screen ticker search on mobile — the toolbar's .ticker-field
+       (real #ticker-input, same autocomplete logic) gets physically moved
+       into #mts-field-slot on open (see openMobileTickerSearch in app.js)
+       and back to the toolbar on close, so there's no duplicate input or
+       duplicate suggestion-fetching to keep in sync. -->
+  <div id="mobile-ticker-search" class="mobile-ticker-search hidden">
+    <div class="mts-header">
+      <div class="mts-searchrow">
+        <div id="mts-field-slot" class="mts-field-slot"></div>
+        <button type="button" id="mts-close-btn" class="mts-close">Chiudi</button>
+      </div>
+      <div class="mts-tabs">
+        <button type="button" class="mts-tab active" data-filter="all">Tutti</button>
+        <button type="button" class="mts-tab" data-filter="stock">Azioni</button>
+        <button type="button" class="mts-tab" data-filter="crypto">Crypto</button>
+      </div>
+    </div>
+    <ul id="mts-list" class="mts-list"></ul>
+  </div>
+
   <div id="mobile-chart-strip" class="mobile-chart-strip hidden">
-    <span id="mobile-chart-symbol" class="mobile-chart-symbol">—</span>
-    <span id="mobile-chart-interval" class="mobile-chart-interval">—</span>
+    <!-- Opens the same full-screen search as the toolbar field — cambiare
+         ticker right where the thumb already is (next to the timeframe
+         wheel) instead of reaching back up to the top toolbar. -->
+    <button type="button" id="mobile-chart-symbol" class="mobile-chart-symbol">—</button>
+    <!-- Active strategy pill — tapping opens the Livelli panel where the
+         strategy selector lives so the user can change it without hunting. -->
+    <button type="button" id="mobile-strategy-pill" class="mobile-strategy-pill" title="Strategia attiva — tocca per cambiare">—</button>
+    <!-- #interval-primary gets relocated here by relocateIntervalSelect()
+         (app.js) but stays visually hidden — the wheel below is the real
+         UI, driven off this select's options/value/change event so no
+         interval logic gets duplicated. -->
+    <span id="mobile-chart-interval-slot"></span>
+    <div id="mobile-tf-wheel" class="tf-wheel" title="Scorri per cambiare timeframe">
+      <div class="tf-wheel-band"></div>
+      <div class="tf-wheel-track" id="tf-wheel-track"></div>
+    </div>
+    <!-- Same drawing-tools dock the desktop rail opens, plus clear-all —
+         replaces the floating FAB that used to sit on top of the chart
+         itself, blocking candles. Hidden on every mobile screen but
+         Grafico (see showMobileScreen/updateMobileChartStrip in app.js). -->
+    <div id="mobile-strip-tools" class="strip-tools hidden">
+      <div class="strip-divider"></div>
+      <button type="button" id="mobile-strip-draw-btn" class="strip-tool-btn" title="Strumenti di disegno">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+      </button>
+      <button type="button" id="mobile-strip-clear-btn" class="strip-tool-btn" title="Cancella tutti i disegni">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7 H20 M9 7 V4 H15 V7 M6 7 L7 20 H17 L18 7"/></svg>
+      </button>
+    </div>
   </div>
 
   <nav id="mobile-nav" class="mobile-nav">
@@ -350,13 +642,21 @@
         <path d="M3 14.5 L12 20 L21 14.5" stroke-linecap="round"/>
       </svg>Livelli
     </button>
-    <button type="button" class="mobile-nav-btn" data-mobile-target="panel">
-      <svg class="mobile-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
-        <line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2" fill="currentColor" stroke="none"/>
-        <line x1="4" y1="12" x2="20" y2="12"/><circle cx="16" cy="12" r="2" fill="currentColor" stroke="none"/>
-        <line x1="4" y1="18" x2="20" y2="18"/><circle cx="11" cy="18" r="2" fill="currentColor" stroke="none"/>
-      </svg>Pannello
+    <button type="button" class="mobile-nav-btn" data-mobile-target="alert">
+      <svg class="mobile-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/>
+      </svg>Alert
     </button>
+    <button type="button" class="mobile-nav-btn" data-mobile-target="altro">
+      <svg class="mobile-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+        <circle cx="5" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.6" fill="currentColor" stroke="none"/>
+      </svg>Altro
+    </button>
+    <a href="/sniper" class="mobile-nav-btn mobile-nav-link">
+      <svg class="mobile-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="3" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="21"/><line x1="3" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="21" y2="12"/>
+      </svg>Sniper
+    </a>
   </nav>
   <div id="mobile-drawer-backdrop" class="mobile-drawer-backdrop hidden"></div>
 
