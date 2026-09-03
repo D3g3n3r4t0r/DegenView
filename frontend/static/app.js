@@ -16,10 +16,10 @@
     bullBorder: "rgba(0, 214, 143, 0.75)",
     bearFill: "rgba(255, 69, 96, 0.12)",
     bearBorder: "rgba(255, 69, 96, 0.75)",
-    fvgBullFill: "rgba(0, 214, 143, 0.09)",
-    fvgBullBorder: "rgba(0, 214, 143, 0.45)",
-    fvgBearFill: "rgba(255, 69, 96, 0.09)",
-    fvgBearBorder: "rgba(255, 69, 96, 0.45)",
+    fvgBullFill: "rgba(0, 214, 143, 0.20)",
+    fvgBullBorder: "rgba(0, 214, 143, 0.70)",
+    fvgBearFill: "rgba(255, 69, 96, 0.20)",
+    fvgBearBorder: "rgba(255, 69, 96, 0.70)",
     confluenceFill: "rgba(0, 214, 143, 0.07)",
     confluenceBorder: "rgba(0, 214, 143, 0.40)",
     ema20: "#5b9cf6",
@@ -48,10 +48,10 @@
     bullBorder: "#00a86b",
     bearFill: "rgba(0, 0, 0, 0.06)",
     bearBorder: "#e03040",
-    fvgBullFill: "rgba(0, 0, 0, 0.03)",
-    fvgBullBorder: "rgba(0, 0, 0, 0.25)",
-    fvgBearFill: "rgba(0, 0, 0, 0.03)",
-    fvgBearBorder: "rgba(0, 0, 0, 0.25)",
+    fvgBullFill: "rgba(0, 168, 107, 0.12)",
+    fvgBullBorder: "rgba(0, 168, 107, 0.60)",
+    fvgBearFill: "rgba(224, 48, 64, 0.10)",
+    fvgBearBorder: "rgba(224, 48, 64, 0.60)",
     confluenceFill: "rgba(0, 0, 0, 0.03)",
     confluenceBorder: "rgba(0, 0, 0, 0.22)",
     ema20: "#888888",
@@ -2424,8 +2424,14 @@
 
       const isBullish = lvl.direction === "bullish";
       const isFvg = lvl.type === "fvg";
-      const fill = isFvg ? (isBullish ? COLORS.fvgBullFill : COLORS.fvgBearFill) : isBullish ? COLORS.bullFill : COLORS.bearFill;
-      const border = isFvg ? (isBullish ? COLORS.fvgBullBorder : COLORS.fvgBearBorder) : isBullish ? COLORS.bullBorder : COLORS.bearBorder;
+      const isMitigated = isFvg && lvl.mitigated;
+      let fill = isFvg ? (isBullish ? COLORS.fvgBullFill : COLORS.fvgBearFill) : isBullish ? COLORS.bullFill : COLORS.bearFill;
+      let border = isFvg ? (isBullish ? COLORS.fvgBullBorder : COLORS.fvgBearBorder) : isBullish ? COLORS.bullBorder : COLORS.bearBorder;
+      if (isMitigated) {
+        // Mitigated FVGs: still visible but clearly "used" — half opacity
+        fill = fill.replace(/[\d.]+\)$/, (m) => `${(parseFloat(m) * 0.5).toFixed(2)})`);
+        border = border.replace(/[\d.]+\)$/, (m) => `${(parseFloat(m) * 0.5).toFixed(2)})`);
+      }
       const endTime = lvl.end_time ?? lastTime;
 
       if (isZone) {
