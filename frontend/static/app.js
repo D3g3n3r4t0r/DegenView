@@ -17,6 +17,10 @@
     bullBorder: "rgba(31, 122, 68, 0.9)",
     bearFill: "rgba(140, 47, 31, 0.14)",
     bearBorder: "rgba(140, 47, 31, 0.85)",
+    // FVG/imbalance zones render as flat neutral grey, not bull/bear tinted
+    // — matches TradingView's own SMC-indicator styling for these zones.
+    imbalanceFill: "rgba(120, 128, 122, 0.28)",
+    imbalanceBorder: "rgba(120, 128, 122, 0.6)",
     confluenceFill: "rgba(138, 109, 59, 0.16)",
     confluenceBorder: "rgba(138, 109, 59, 0.85)",
     ema20: "#1f4e6b",
@@ -559,6 +563,37 @@
   let authMode = "login";
   let authGateActive = false; // true while the modal is blocking the whole app (not logged in yet)
   let appStarted = false; // startApp() runs once, either immediately or right after the gate clears
+
+  let _prefSaveTimer = null;
+  async function loadPreferences() {
+    if (!state.user) return null;
+    try {
+      const resp = await fetch("/api/preferences");
+      return resp.ok ? await resp.json() : null;
+    } catch { return null; }
+  }
+  function savePreferences() {
+    if (!state.user) return;
+    clearTimeout(_prefSaveTimer);
+    _prefSaveTimer = setTimeout(async () => {
+      const prefs = {
+        ticker: el("ticker-input").value.trim() || "BTC",
+        asset_type: state.assetType || "crypto",
+        exchange: state.cryptoExchange || "mexc",
+        interval: el("interval-primary")?.value || "1d",
+        strategy: el("active-strategy-select")?.value || "",
+        layers: { ...state.layers },
+        log_scale: el("log-scale-toggle")?.checked || false,
+      };
+      try {
+        await fetch("/api/preferences", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(prefs),
+        });
+      } catch {}
+    }, 2000);
+  }
 
   async function checkAuth() {
     try {
@@ -1615,8 +1650,9 @@
       if (!state.layers[layerKey]) return;
 
       const isBullish = lvl.direction === "bullish";
-      const fill = isBullish ? COLORS.bullFill : COLORS.bearFill;
-      const border = isBullish ? COLORS.bullBorder : COLORS.bearBorder;
+      const isImbalance = lvl.type === "fvg";
+      const fill = isImbalance ? COLORS.imbalanceFill : isBullish ? COLORS.bullFill : COLORS.bearFill;
+      const border = isImbalance ? COLORS.imbalanceBorder : isBullish ? COLORS.bullBorder : COLORS.bearBorder;
       const endTime = lvl.end_time ?? lastTime;
 
       if (isZone) {
@@ -1957,6 +1993,7 @@
       // sliver — and it doesn't shrink back down on its own afterward.
       loadDrawingsForSymbol();
       render();
+      savePreferences();
       // Live WS streaming is only wired up for MEXC today; every crypto
       // symbol still gets the periodic refresh below regardless of exchange.
       if (state.assetType === "crypto" && state.cryptoExchange === "mexc") {
@@ -2628,6 +2665,7 @@
       input.addEventListener("change", () => {
         state.layers[input.dataset.layer] = input.checked;
         render();
+        savePreferences();
       });
     });
 
@@ -2754,6 +2792,7 @@
       mainChart.priceScale("right").applyOptions({
         mode: state.logScale ? LightweightCharts.PriceScaleMode.Logarithmic : LightweightCharts.PriceScaleMode.Normal,
       });
+      savePreferences();
     });
   }
 
@@ -2789,13 +2828,33 @@
     // active-strategy-select must be populated before the auto-load below
     // reads its value, or the request goes out with an empty strategy_name.
     await populateStrategySelects();
-    // A real trading app never opens on an empty grid — it shows whatever
-    // was last open, or a sensible default. We have no per-user persistence
-    // yet, so default to BTC on MEXC every time; better than a blank screen.
-    state.assetType = "crypto";
-    state.cryptoExchange = "mexc";
-    el("ticker-input").value = "BTC";
-    runAnalysis("BTC");
+    // Restore last session state from server; fall back to BTC/MEXC default.
+    const prefs = await loadPreferences();
+    state.assetType = prefs?.asset_type || "crypto";
+    state.cryptoExchange = prefs?.exchange || "mexc";
+    const ticker = prefs?.ticker || "BTC";
+    el("ticker-input").value = ticker;
+    if (prefs?.interval) {
+      const sel = el("interval-primary");
+      if (sel) sel.value = prefs.interval;
+    }
+    if (prefs?.strategy) {
+      const sel = el("active-strategy-select");
+      if (sel) sel.value = prefs.strategy;
+    }
+    if (prefs?.layers) {
+      Object.entries(prefs.layers).forEach(([k, v]) => {
+        state.layers[k] = v;
+        const inp = document.querySelector(`[data-layer="${k}"]`);
+        if (inp) inp.checked = v;
+      });
+    }
+    if (prefs?.log_scale) {
+      const tog = el("log-scale-toggle");
+      if (tog) tog.checked = true;
+      state.logScale = true;
+    }
+    runAnalysis(ticker);
   }
 
   document.addEventListener("DOMContentLoaded", async () => {
