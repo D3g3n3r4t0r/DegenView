@@ -75,6 +75,9 @@ async def place_order(
         else:
             funds_or_size = size_value
 
+        if funds_or_size <= 0:
+            raise RuntimeError("Quantità calcolata zero o negativa — saldo insufficiente")
+
         order_path = "/api/v1/orders"
         payload: dict = {
             "clientOid": str(uuid.uuid4()),

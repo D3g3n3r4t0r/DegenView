@@ -982,7 +982,7 @@
   }
 
   // ---- Trading Automatico: per-exchange API key config + enable toggle ----
-  const TRADING_EXCHANGE_NAMES = { mexc: "MEXC", kraken: "Kraken", coinbase: "Coinbase", bitstamp: "Bitstamp" };
+  const TRADING_EXCHANGE_NAMES = { mexc: "MEXC", binance: "Binance", kucoin: "KuCoin", kraken: "Kraken", coinbase: "Coinbase", bitstamp: "Bitstamp" };
   const TRADING_EXCHANGES = Object.keys(TRADING_EXCHANGE_NAMES);
 
   async function loadTradingCredentials() {
