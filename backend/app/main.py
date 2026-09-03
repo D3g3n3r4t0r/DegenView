@@ -1,5 +1,6 @@
 import asyncio
 import hashlib
+import httpx
 import itertools
 import json
 import logging
@@ -226,10 +227,55 @@ async def _watchlist_alert_loop() -> None:
 
 
 @asynccontextmanager
+_LAST_SHA_FILE = Path(__file__).resolve().parent.parent / "data" / "last_deploy_sha.txt"
+_GITHUB_REPO = "lorenzocorazzi-wq/liquidity-analysis-engine"
+
+
+async def _notify_deploy() -> None:
+    if not settings.telegram_bot_token or not settings.github_api_token:
+        return
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            r = await client.get(
+                f"https://api.github.com/repos/{_GITHUB_REPO}/commits",
+                headers={"Authorization": f"Bearer {settings.github_api_token}",
+                         "Accept": "application/vnd.github+json"},
+                params={"per_page": 10},
+            )
+            r.raise_for_status()
+            commits = r.json()
+    except Exception:
+        return
+    if not commits:
+        return
+    current_sha = commits[0]["sha"]
+    last_sha = _LAST_SHA_FILE.read_text(encoding="utf-8").strip() if _LAST_SHA_FILE.exists() else ""
+    _LAST_SHA_FILE.parent.mkdir(parents=True, exist_ok=True)
+    _LAST_SHA_FILE.write_text(current_sha, encoding="utf-8")
+    if last_sha == current_sha:
+        return  # restart, not a new deploy
+    new_commits = [c for c in commits if c["sha"] != last_sha]
+    if last_sha:
+        try:
+            idx = next(i for i, c in enumerate(commits) if c["sha"] == last_sha)
+            new_commits = commits[:idx]
+        except StopIteration:
+            new_commits = commits[:5]
+    lines = []
+    for c in new_commits:
+        msg = c["commit"]["message"].splitlines()[0][:80]
+        sha_short = c["sha"][:7]
+        lines.append(f"• <code>{sha_short}</code> {msg}")
+    changelog = "\n".join(lines) if lines else "• (nessun commit trovato)"
+    text = f"🚀 <b>Nuovo deploy</b>\n\n{changelog}"
+    await telegram.send_message(text)
+
+
 async def lifespan(app: FastAPI):
     from app.sniper import cache as sniper_cache
     from app.sniper import agents as sniper_agents
     from app.sniper.cex_check import enrichment_loop
+    asyncio.create_task(_notify_deploy())
     t1 = asyncio.create_task(_watchlist_alert_loop())
     t2 = asyncio.create_task(sniper_cache.polling_loop())
     t3 = asyncio.create_task(enrichment_loop())
