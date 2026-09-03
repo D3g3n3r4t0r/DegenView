@@ -291,6 +291,7 @@ def plateau_search(
     probe_samples: int = 14,
     lam: float = 0.75,
     seed: int = 0,
+    space: ParamSpace | None = None,
     objective: Callable[[BacktestResult], float] = _plateau_objective,
 ) -> PlateauResult:
     """Find the widest good plateau rather than the highest point.
@@ -300,9 +301,10 @@ def plateau_search(
     same inputs return the same answer — which is the property the whole
     exercise exists to obtain.
     """
-    if strategy_name not in PARAM_SPACES:
-        raise ValueError(f"Nessuno spazio parametri per {strategy_name!r}")
-    space = PARAM_SPACES[strategy_name]
+    if space is None:
+        if strategy_name not in PARAM_SPACES:
+            raise ValueError(f"Nessuno spazio parametri per {strategy_name!r}")
+        space = PARAM_SPACES[strategy_name]
     bp = backtest_params or {}
     rng = np.random.default_rng(seed)
     counter: dict = {"n": 0, "boundary": 0}
