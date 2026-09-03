@@ -15,12 +15,19 @@ _DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 _SEEN_FILE = _DATA_DIR / "seen_signals.json"
 _STATS_FILE = _DATA_DIR / "alert_stats.json"
+_ARMED_FILE = _DATA_DIR / "armed_alerts.json"
 
 # { "symbol|interval|strategy_name|signal_time|signal_type" -> unix_seconds_ts }
 _seen: dict[str, int] = {}
 
 # { "entry_id|strategy_name" -> {"last_ts": int, "count": int} }
 _stats: dict[str, dict] = {}
+
+# { "entry_id|strategy_name" -> unix_seconds } — quando quell'alert e' stato armato.
+# Un alert notifica solo cio' che accade DOPO che l'hai chiesto: un segnale di
+# ieri non diventa una notifica solo perche' oggi hai attivato la strategia.
+# Persistito, perche' un riavvio non deve riaprire il passato.
+_armed: dict[str, int] = {}
 
 _seeded_scopes: set[str] = set()
 
@@ -71,6 +78,13 @@ def _load() -> None:
                 _stats.update(raw)
         except (json.JSONDecodeError, OSError):
             pass
+    if _ARMED_FILE.exists():
+        try:
+            raw = json.loads(_ARMED_FILE.read_text(encoding="utf-8"))
+            if isinstance(raw, dict):
+                _armed.update({k: int(v) for k, v in raw.items()})
+        except (json.JSONDecodeError, OSError, ValueError):
+            pass
 
 
 def _prune() -> None:
@@ -85,6 +99,42 @@ def _save_seen() -> None:
         _SEEN_FILE.write_text(json.dumps(_seen), encoding="utf-8")
     except OSError:
         pass
+
+
+def _save_armed() -> None:
+    try:
+        _ARMED_FILE.write_text(json.dumps(_armed), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def armed_at(entry_id: str, strategy_name: str) -> int:
+    """Da quando quell'alert e' attivo, registrandolo alla prima chiamata.
+
+    Restituisce 0 senza entry_id: senza una coppia da identificare non c'e'
+    nulla da armare, e resta valida la sola finestra d'eta'.
+    """
+    if not entry_id:
+        return 0
+    key = f"{entry_id}|{strategy_name}"
+    ts = _armed.get(key)
+    if ts is None:
+        ts = int(time.time())
+        _armed[key] = ts
+        _save_armed()
+    return ts
+
+
+def disarm(entry_id: str, strategy_name: str = "") -> None:
+    """Dimentica l'armamento quando l'alert viene tolto, cosi' riattivarlo
+    riparte da adesso invece che dalla prima volta."""
+    prefix = f"{entry_id}|"
+    keys = [k for k in _armed
+            if k == f"{entry_id}|{strategy_name}" or (not strategy_name and k.startswith(prefix))]
+    for k in keys:
+        del _armed[k]
+    if keys:
+        _save_armed()
 
 
 def _save_stats() -> None:
@@ -119,15 +169,25 @@ def find_new_signals(
     scope_key = f"{symbol}|{interval}|{strategy.name}"
     is_first_pass = scope_key not in _seeded_scopes
 
-    # Guardia d'eta' PRIMA della deduplica, non dopo: i segnali vecchi vanno
-    # comunque registrati come visti (cosi' non diventano "nuovi" piu' avanti),
-    # ma non devono mai finire in `fresh`.
-    cutoff = int(time.time()) - _max_signal_age_s(interval)
+    # Due sbarramenti, contro due guasti diversi, entrambi prima della deduplica.
+    # I segnali esclusi vanno comunque registrati come visti, o tornerebbero a
+    # sembrare nuovi appena una delle due soglie si sposta.
+    #
+    #  - armed_at: un alert notifica solo cio' che accade DOPO che l'hai
+    #    chiesto. Un segnale di ieri non diventa una notifica perche' oggi hai
+    #    attivato la strategia.
+    #  - finestra d'eta': se il servizio e' stato fermo una settimana, alla
+    #    ripartenza non deve arrivare tutto l'arretrato in blocco, per quanto
+    #    successivo all'armamento.
+    now = int(time.time())
+    cutoff_age = now - _max_signal_age_s(interval)
+    cutoff_armed = armed_at(entry_id, strategy.name)
+    cutoff = max(cutoff_age, cutoff_armed)
 
     fresh: list[StrategySignal] = []
     for signal in strategy.signals:
         key = _signal_key(symbol, interval, strategy.name, signal)
-        too_old = signal.time < cutoff
+        too_old = signal.time <= cutoff
 
         if frequency == "once":
             # For "once", use a type-level key (ignore signal.time) so we

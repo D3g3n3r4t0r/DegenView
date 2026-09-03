@@ -61,9 +61,10 @@ from app.models import (
 from app.exchange_balances import BalanceFetchError, fetch_kucoin_balances, fetch_mexc_balances
 from app.notify import telegram
 from app.notify import alert_log
+from app.notify import alerts
 from app.notify.alerts import find_new_signals, format_signal_message, record_alert_sent, get_all_stats_for_entry
 import app.price_alerts as price_alerts_store
-from app.models import PriceAlert, PriceAlertCondition
+from app.models import PriceAlert, PriceAlertCondition, StrategySignal
 from app.pine import PineError, PineInterpreter, is_strategy_style, parse_program, scan_inputs
 from app.pine import storage as pine_storage
 from app.providers.base import DataProvider, ProviderError
@@ -236,7 +237,7 @@ async def _watchlist_alert_loop() -> None:
                     params = entry.strategy_params.get(strategy_name) or None
                     strategy = build_strategy_state(strategy_name, strat_df, params=params)
                     frequency = entry.alert_frequency.get(strategy_name, "every")
-                    _dispatch_telegram_alerts(
+                    fresh = _dispatch_telegram_alerts(
                         owner.telegram_chat_id,
                         entry.symbol,
                         strategy_interval,
@@ -250,7 +251,10 @@ async def _watchlist_alert_loop() -> None:
                     if cred and cred.enabled:
                         api_key, api_secret, passphrase = auth.get_decrypted_credential(owner, entry.exchange)
                         if api_key and api_secret:
-                            fresh = find_new_signals(entry.symbol, strategy_interval, strategy)
+                            # I segnali arrivano dalla chiamata sopra. Richiederli
+                            # qui tornava sempre vuoto — find_new_signals li aveva
+                            # gia' marcati come visti — quindi nessun ordine e'
+                            # mai partito, in silenzio.
                             for signal in fresh:
                                 try:
                                     result = await place_order_for_signal(
@@ -496,7 +500,14 @@ def _dispatch_telegram_alerts(
     frequency: str = "every",
     entry_id: str = "",
     owner_id: str = "",
-) -> None:
+) -> list[StrategySignal]:
+    """Manda le notifiche e RESTITUISCE i segnali che le hanno generate.
+
+    Restituirli non e' una comodita': find_new_signals consuma lo stato di
+    deduplica, quindi una seconda chiamata sugli stessi segnali torna vuota.
+    Chi deve agire su quei segnali — l'esecuzione automatica degli ordini —
+    deve ricevere questi, non richiederli.
+    """
     fresh = find_new_signals(symbol, interval, strategy, frequency=frequency, entry_id=entry_id)
     for signal in fresh:
         message = format_signal_message(symbol, interval, strategy.name, signal)
@@ -514,6 +525,7 @@ def _dispatch_telegram_alerts(
             )
         if entry_id:
             record_alert_sent(entry_id, strategy.name)
+    return fresh
 
 
 @app.get("/api/strategies", response_model=list[str])
@@ -990,6 +1002,11 @@ async def toggle_watchlist_strategy(
     before = _owned_entry_or_404(entry_id, user)
     was_enabled = req.strategy_name in before.strategies
     entry = watchlist_store.set_strategy_enabled(entry_id, req.strategy_name, req.enabled)
+    if was_enabled and not req.enabled:
+        # Spegnendo l'alert si dimentica da quando era armato: riaccendendolo
+        # deve ripartire da adesso, non dalla prima attivazione — altrimenti
+        # tutto quello che e' successo nel frattempo arriverebbe in blocco.
+        alerts.disarm(entry_id, req.strategy_name)
     if req.enabled and not was_enabled and user.telegram_chat_id and _telegram_allowed(user):
         # Confirms the watch is actually active — sent immediately on
         # activation, before any real signal, so silence afterward reads as
