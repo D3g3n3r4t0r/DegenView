@@ -853,6 +853,40 @@
     el("server-wake-hint").classList.add("hidden");
   }
 
+  // ---- Per-user preferences (server-side, cross-device) ----
+  let _prefSaveTimer = null;
+
+  async function loadPreferences() {
+    if (!state.user) return null;
+    try {
+      const resp = await fetch("/api/preferences");
+      return resp.ok ? await resp.json() : null;
+    } catch { return null; }
+  }
+
+  function savePreferences() {
+    if (!state.user) return;
+    clearTimeout(_prefSaveTimer);
+    _prefSaveTimer = setTimeout(async () => {
+      const prefs = {
+        ticker: el("ticker-input").value.trim() || "BTC",
+        asset_type: state.assetType || "crypto",
+        exchange: state.cryptoExchange || "mexc",
+        interval: el("interval-primary")?.value || "1d",
+        strategy: el("active-strategy-select")?.value || "",
+        layers: { ...state.layers },
+        log_scale: el("log-scale-toggle")?.checked || false,
+      };
+      try {
+        await fetch("/api/preferences", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(prefs),
+        });
+      } catch {}
+    }, 2000);
+  }
+
   async function checkAuth() {
     armSlowServerHint();
     try {
@@ -2906,6 +2940,7 @@
       loadDrawingsForSymbol();
       render();
       renderFavorites();
+      savePreferences();
       refreshDeepBacktest(symbol);
       // Live WS streaming is only wired up for MEXC today; every crypto
       // symbol still gets the periodic refresh below regardless of exchange.
@@ -3832,6 +3867,7 @@
       input.addEventListener("change", () => {
         state.layers[input.dataset.layer] = input.checked;
         render();
+        savePreferences();
         // Sub-charts (RSI, MACD, Stoch) go from display:none → visible inside render().
         // The ResizeObserver fires asynchronously after the layout reflow, so the
         // chart may still have zero dimensions at the time render() calls resize.
@@ -3974,6 +4010,7 @@
       mainChart.priceScale("right").applyOptions({
         mode: state.logScale ? LightweightCharts.PriceScaleMode.Logarithmic : LightweightCharts.PriceScaleMode.Normal,
       });
+      savePreferences();
     });
   }
 
@@ -4059,13 +4096,32 @@
     // reads its value, or the request goes out with an empty strategy_name.
     await populateStrategySelects();
     initLabState(state.availableStrategies || []);
-    // A real trading app never opens on an empty grid — it shows whatever
-    // was last open, or a sensible default. We have no per-user persistence
-    // yet, so default to BTC on MEXC every time; better than a blank screen.
-    state.assetType = "crypto";
-    state.cryptoExchange = "mexc";
-    el("ticker-input").value = "BTC";
-    runAnalysis("BTC");
+    // Restore last session state from server; fall back to BTC/MEXC default.
+    const prefs = await loadPreferences();
+    if (prefs && prefs.ticker) {
+      state.assetType = prefs.asset_type || "crypto";
+      state.cryptoExchange = prefs.exchange || "mexc";
+      if (prefs.interval && el("interval-primary")) el("interval-primary").value = prefs.interval;
+      if (prefs.strategy && el("active-strategy-select")) el("active-strategy-select").value = prefs.strategy;
+      if (prefs.layers) Object.assign(state.layers, prefs.layers);
+      if (prefs.log_scale !== undefined && el("log-scale-toggle")) {
+        el("log-scale-toggle").checked = prefs.log_scale;
+        if (candleSeries) candleSeries.applyOptions({ priceScale: { mode: prefs.log_scale ? 1 : 0 } });
+      }
+      // Restore layer checkbox visual state
+      document.querySelectorAll("[data-layer]").forEach((cb) => {
+        if (prefs.layers && prefs.layers[cb.dataset.layer] !== undefined) {
+          cb.checked = prefs.layers[cb.dataset.layer];
+        }
+      });
+      el("ticker-input").value = prefs.ticker;
+      runAnalysis(prefs.ticker);
+    } else {
+      state.assetType = "crypto";
+      state.cryptoExchange = "mexc";
+      el("ticker-input").value = "BTC";
+      runAnalysis("BTC");
+    }
   }
 
   // ── Backtest Lab (independent from chart) ──────────────────────────────
