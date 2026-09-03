@@ -3043,3 +3043,64 @@ body {
 
 /* Token Sniper now lives at /sniper as its own standalone app (frontend/sniper.html) */
 .tab-link { display: flex; align-items: center; text-decoration: none; }
+
+/* ── Alert log (storico) ── */
+.section-title-row { display: flex; align-items: center; justify-content: space-between; }
+.section-action-btn { padding: .2rem .6rem; font-size: .75rem; background: none; border: 1px solid var(--border); border-radius: 4px; color: var(--ink-dim); cursor: pointer; }
+.section-action-btn:hover { border-color: var(--ink-dim); color: var(--ink); }
+
+.alert-log-cards { list-style: none; padding: 0; margin: .4rem 0; display: flex; flex-direction: column; gap: .3rem; }
+.alert-log-row { display: flex; align-items: center; gap: .5rem; padding: .4rem .5rem; border-radius: 4px; background: var(--bg-raised); font-size: .8rem; }
+.al-icon { font-size: 1rem; width: 1.2rem; text-align: center; }
+.al-icon.bull { color: var(--bull); }
+.al-icon.bear { color: var(--bear); }
+.al-body { flex: 1; display: flex; flex-wrap: wrap; gap: .15rem .4rem; min-width: 0; }
+.al-symbol { font-weight: 700; font-size: .82rem; }
+.al-strat { color: var(--ink-dim); font-size: .74rem; }
+.al-label { font-size: .78rem; }
+.al-time { color: var(--ink-dim); font-size: .72rem; white-space: nowrap; }
+
+/* ── Price alerts form + list ── */
+.pa-form { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; margin: .5rem 0; }
+.pa-form input[type="text"],
+.pa-form input[type="number"],
+.pa-form select { padding: .3rem .45rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--ink); font-size: .82rem; }
+.pa-form input[type="text"] { width: 7rem; }
+.pa-form input[type="number"] { width: 8rem; }
+.pa-form label { display: flex; align-items: center; gap: .25rem; font-size: .78rem; cursor: pointer; }
+.pa-form button[type="submit"] { padding: .3rem .7rem; background: var(--accent); color: var(--bg); border: none; border-radius: 4px; font-size: .88rem; font-weight: 700; cursor: pointer; }
+.pa-form button[type="submit"]:hover { opacity: .85; }
+
+.pa-list { list-style: none; padding: 0; margin: .4rem 0; display: flex; flex-direction: column; gap: .4rem; }
+.pa-card { padding: .5rem .6rem; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-raised); font-size: .8rem; }
+.pa-card.pa-inactive { opacity: .55; }
+.pa-head { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; }
+.pa-symbol { font-weight: 700; font-size: .85rem; }
+.pa-dir { font-weight: 600; font-size: .8rem; }
+.pa-price { font-variant-numeric: tabular-nums; font-size: .82rem; }
+.pa-badge { padding: .1rem .35rem; border-radius: 3px; font-size: .7rem; font-weight: 600; letter-spacing: .03em; }
+.pa-badge.once { background: rgba(240,165,0,.18); color: #c87800; }
+.pa-badge.repeat { background: rgba(0,201,125,.18); color: #009860; }
+.pa-badge.inactive { background: var(--bg); color: var(--ink-dim); border: 1px solid var(--border); }
+.pa-note { font-size: .75rem; color: var(--ink-dim); margin: .2rem 0; }
+.pa-meta { font-size: .73rem; color: var(--ink-dim); margin: .15rem 0; }
+.pa-actions { display: flex; gap: .4rem; margin-top: .3rem; }
+.pa-toggle-btn, .pa-del-btn { padding: .2rem .5rem; border: 1px solid var(--border); border-radius: 4px; background: none; color: var(--ink); font-size: .75rem; cursor: pointer; }
+.pa-toggle-btn:hover { border-color: var(--ink-dim); }
+.pa-del-btn { color: var(--bear); border-color: transparent; }
+.pa-del-btn:hover { border-color: var(--bear); background: rgba(255,69,96,.08); }
+
+/* ── Watchlist per-strategy sub-rows ── */
+.strat-sub-row { display: flex; align-items: center; gap: .4rem; margin-top: .25rem; flex-wrap: wrap; }
+.wl-freq-select { padding: .2rem .35rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--ink); font-size: .75rem; cursor: pointer; }
+.wl-test-btn { padding: .2rem .45rem; border: 1px solid var(--border); border-radius: 4px; background: none; cursor: pointer; font-size: .8rem; }
+.wl-test-btn:hover { background: var(--bg-raised); }
+.strat-stats { color: var(--ink-dim); font-size: .73rem; }
+
+/* ── Alert toast notifications ── */
+.alert-toast-container { position: fixed; bottom: 1.2rem; right: 1rem; z-index: 9999; display: flex; flex-direction: column; gap: .4rem; pointer-events: none; }
+.alert-toast { padding: .55rem .8rem; border-radius: 6px; font-size: .8rem; font-family: var(--font-sans); box-shadow: 0 4px 16px rgba(0,0,0,.25); pointer-events: auto; max-width: 260px; border-left: 3px solid transparent; opacity: 1; transition: opacity .4s ease; }
+.alert-toast.bull { background: var(--bg-panel); border-color: var(--bull); color: var(--ink); }
+.alert-toast.bear { background: var(--bg-panel); border-color: var(--bear); color: var(--ink); }
+.alert-toast.fade-out { opacity: 0; }
+.toast-strat { display: block; font-size: .72rem; color: var(--ink-dim); margin-top: .1rem; }

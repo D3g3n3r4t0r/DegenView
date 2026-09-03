@@ -152,3 +152,35 @@ def set_strategy_params(entry_id: str, strategy_name: str, params: dict | None) 
     _entries[entry_id] = updated
     _save()
     return updated
+
+
+def set_alert_frequency(entry_id: str, strategy_name: str, frequency: str) -> WatchlistEntry | None:
+    """frequency: "once" | "every". None resets to default ("every")."""
+    entry = _entries.get(entry_id)
+    if entry is None:
+        return None
+    freq_map = dict(entry.alert_frequency)
+    if frequency in ("once", "every"):
+        freq_map[strategy_name] = frequency
+    else:
+        freq_map.pop(strategy_name, None)
+    updated = entry.model_copy(update={"alert_frequency": freq_map})
+    _entries[entry_id] = updated
+    _save()
+    return updated
+
+
+def set_strategy_interval(entry_id: str, strategy_name: str, interval: str | None) -> WatchlistEntry | None:
+    """interval=None resets this strategy to use the entry's default interval."""
+    entry = _entries.get(entry_id)
+    if entry is None:
+        return None
+    si = dict(entry.strategy_intervals)
+    if interval:
+        si[strategy_name] = interval
+    else:
+        si.pop(strategy_name, None)
+    updated = entry.model_copy(update={"strategy_intervals": si})
+    _entries[entry_id] = updated
+    _save()
+    return updated

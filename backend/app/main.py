@@ -58,7 +58,10 @@ from app.models import (
 )
 from app.exchange_balances import BalanceFetchError, fetch_kucoin_balances, fetch_mexc_balances
 from app.notify import telegram
-from app.notify.alerts import find_new_signals, format_signal_message
+from app.notify import alert_log
+from app.notify.alerts import find_new_signals, format_signal_message, record_alert_sent, get_all_stats_for_entry
+import app.price_alerts as price_alerts_store
+from app.models import PriceAlert, PriceAlertCondition
 from app.pine import PineError, PineInterpreter, is_strategy_style, parse_program, scan_inputs
 from app.pine import storage as pine_storage
 from app.providers.base import DataProvider, ProviderError
@@ -190,16 +193,62 @@ async def _watchlist_alert_loop() -> None:
                     df = drop_unclosed_candle(df, entry.interval)
                 if df.empty:
                     continue
+                # Price-level alerts (checked once per entry poll regardless of strategies)
+                if df is not None and not df.empty:
+                    current_price = float(df["close"].iloc[-1])
+                    triggered_pa = price_alerts_store.check_alerts(owner.id, entry.symbol, current_price)
+                    for pa in triggered_pa:
+                        direction = "sopra" if pa.condition == PriceAlertCondition.crosses_above else "sotto"
+                        msg = (
+                            f"🎯 <b>{pa.symbol}</b> [{entry.interval}] — Alert prezzo\n"
+                            f"Prezzo {direction} <b>{pa.price:g}</b>\n"
+                            f"Prezzo attuale: {current_price:g}"
+                            + (f"\n{pa.note}" if pa.note else "")
+                        )
+                        asyncio.create_task(telegram.send_to(owner.telegram_chat_id, msg))
+                        alert_log.append_entry(
+                            owner_id=owner.id,
+                            symbol=pa.symbol,
+                            interval=entry.interval,
+                            strategy_name="Alert prezzo",
+                            signal_type=pa.condition.value,
+                            price=current_price,
+                            label=f"Prezzo {direction} {pa.price:g}",
+                            chat_id=owner.telegram_chat_id,
+                        )
+
                 for strategy_name in entry.strategies:
+                    strategy_interval = entry.strategy_intervals.get(strategy_name, entry.interval)
+                    # Refetch if the strategy uses a different interval than the entry default
+                    if strategy_interval != entry.interval:
+                        try:
+                            strat_df = await fetch_ohlcv_canonical(
+                                provider, entry.symbol, strategy_interval, settings.candles_per_timeframe
+                            )
+                            if entry.on_close:
+                                strat_df = drop_unclosed_candle(strat_df, strategy_interval)
+                        except Exception:
+                            strat_df = df
+                    else:
+                        strat_df = df
                     params = entry.strategy_params.get(strategy_name) or None
-                    strategy = build_strategy_state(strategy_name, df, params=params)
-                    _dispatch_telegram_alerts(owner.telegram_chat_id, entry.symbol, entry.interval, strategy)
+                    strategy = build_strategy_state(strategy_name, strat_df, params=params)
+                    frequency = entry.alert_frequency.get(strategy_name, "every")
+                    _dispatch_telegram_alerts(
+                        owner.telegram_chat_id,
+                        entry.symbol,
+                        strategy_interval,
+                        strategy,
+                        frequency=frequency,
+                        entry_id=entry.id,
+                        owner_id=owner.id,
+                    )
                     # Auto-execute orders if trading credentials are configured for this exchange
                     cred = owner.trading_credentials.get(entry.exchange)
                     if cred and cred.enabled:
                         api_key, api_secret, passphrase = auth.get_decrypted_credential(owner, entry.exchange)
                         if api_key and api_secret:
-                            fresh = find_new_signals(entry.symbol, entry.interval, strategy)
+                            fresh = find_new_signals(entry.symbol, strategy_interval, strategy)
                             for signal in fresh:
                                 try:
                                     result = await place_order_for_signal(
@@ -437,11 +486,32 @@ async def search_symbols(query: str = Query(..., min_length=1, max_length=20)) -
     return _rank_suggestions(merged, query)[:25]
 
 
-def _dispatch_telegram_alerts(chat_id: str, symbol: str, timeframe_key: str, strategy: StrategyState) -> None:
-    fresh = find_new_signals(symbol, timeframe_key, strategy)
+def _dispatch_telegram_alerts(
+    chat_id: str,
+    symbol: str,
+    interval: str,
+    strategy: StrategyState,
+    frequency: str = "every",
+    entry_id: str = "",
+    owner_id: str = "",
+) -> None:
+    fresh = find_new_signals(symbol, interval, strategy, frequency=frequency, entry_id=entry_id)
     for signal in fresh:
-        message = format_signal_message(symbol, timeframe_key, strategy.name, signal)
+        message = format_signal_message(symbol, interval, strategy.name, signal)
         asyncio.create_task(telegram.send_to(chat_id, message))
+        if owner_id:
+            alert_log.append_entry(
+                owner_id=owner_id,
+                symbol=symbol,
+                interval=interval,
+                strategy_name=strategy.name,
+                signal_type=signal.type,
+                price=signal.price,
+                label=signal.label,
+                chat_id=chat_id,
+            )
+        if entry_id:
+            record_alert_sent(entry_id, strategy.name)
 
 
 @app.get("/api/strategies", response_model=list[str])
@@ -958,6 +1028,143 @@ async def set_watchlist_strategy_params(
         raise HTTPException(status_code=400, detail=f"Strategia sconosciuta: {req.strategy_name}")
     _owned_entry_or_404(entry_id, user)
     return watchlist_store.set_strategy_params(entry_id, req.strategy_name, req.params)
+
+
+class WatchlistFrequencyRequest(BaseModel):
+    strategy_name: str
+    frequency: Literal["once", "every"]
+
+
+@app.patch("/api/watchlist/{entry_id}/alert_frequency", response_model=WatchlistEntry)
+async def set_watchlist_alert_frequency(
+    entry_id: str, req: WatchlistFrequencyRequest, user: User = Depends(auth.get_current_user)
+) -> WatchlistEntry:
+    _owned_entry_or_404(entry_id, user)
+    return watchlist_store.set_alert_frequency(entry_id, req.strategy_name, req.frequency)
+
+
+class WatchlistStrategyIntervalRequest(BaseModel):
+    strategy_name: str
+    interval: str | None = None  # None resets to entry default
+
+
+@app.patch("/api/watchlist/{entry_id}/strategy_interval", response_model=WatchlistEntry)
+async def set_watchlist_strategy_interval(
+    entry_id: str, req: WatchlistStrategyIntervalRequest, user: User = Depends(auth.get_current_user)
+) -> WatchlistEntry:
+    _owned_entry_or_404(entry_id, user)
+    return watchlist_store.set_strategy_interval(entry_id, req.strategy_name, req.interval)
+
+
+@app.get("/api/watchlist/{entry_id}/stats")
+async def get_watchlist_entry_stats(
+    entry_id: str, user: User = Depends(auth.get_current_user)
+) -> dict:
+    _owned_entry_or_404(entry_id, user)
+    return get_all_stats_for_entry(entry_id)
+
+
+@app.post("/api/watchlist/{entry_id}/test-alert")
+async def test_watchlist_alert(
+    entry_id: str,
+    body: dict,
+    user: User = Depends(auth.get_current_user),
+) -> dict:
+    """Fetch current candles, run the strategy, send the most recent signal as a test."""
+    strategy_name = body.get("strategy_name", "")
+    if strategy_name not in AVAILABLE_STRATEGIES:
+        raise HTTPException(status_code=400, detail=f"Strategia sconosciuta: {strategy_name}")
+    entry = _owned_entry_or_404(entry_id, user)
+    if not user.telegram_chat_id:
+        raise HTTPException(status_code=400, detail="Nessun Telegram chat_id configurato")
+    provider = get_provider(entry.asset_type, entry.exchange)
+    interval = entry.strategy_intervals.get(strategy_name, entry.interval)
+    try:
+        df = await fetch_ohlcv_canonical(provider, entry.symbol, interval, settings.candles_per_timeframe)
+        if entry.on_close:
+            df = drop_unclosed_candle(df, interval)
+    except ProviderError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if df.empty:
+        raise HTTPException(status_code=502, detail="Nessun dato disponibile")
+    params = entry.strategy_params.get(strategy_name) or None
+    strategy = build_strategy_state(strategy_name, df, params=params)
+    if not strategy.signals:
+        return {"sent": False, "signal": None}
+    signal = strategy.signals[-1]
+    msg = f"🧪 TEST — {format_signal_message(entry.symbol, interval, strategy_name, signal)}"
+    asyncio.create_task(telegram.send_to(user.telegram_chat_id, msg))
+    return {"sent": True, "signal": signal.type}
+
+
+# ── Alert log ──────────────────────────────────────────────────────────────────
+
+@app.get("/api/alerts/log")
+async def get_alert_log(
+    limit: int = 100,
+    since: int = 0,
+    user: User = Depends(auth.get_current_user),
+) -> list:
+    return alert_log.list_entries(user.id, limit=limit, since=since)
+
+
+@app.delete("/api/alerts/log")
+async def clear_alert_log(user: User = Depends(auth.get_current_user)) -> dict:
+    alert_log.clear(user.id)
+    return {"ok": True}
+
+
+# ── Price alerts ───────────────────────────────────────────────────────────────
+
+class PriceAlertCreateRequest(BaseModel):
+    symbol: str
+    asset_type: AssetType
+    exchange: CryptoExchange = "mexc"
+    condition: PriceAlertCondition
+    price: float
+    note: str = ""
+    once_only: bool = True
+
+
+@app.get("/api/price-alerts", response_model=list[PriceAlert])
+async def list_price_alerts(user: User = Depends(auth.get_current_user)) -> list[PriceAlert]:
+    return price_alerts_store.list_alerts(user.id)
+
+
+@app.post("/api/price-alerts", response_model=PriceAlert)
+async def create_price_alert(
+    req: PriceAlertCreateRequest, user: User = Depends(auth.get_current_user)
+) -> PriceAlert:
+    symbol = req.symbol.strip().upper()
+    if not symbol:
+        raise HTTPException(status_code=400, detail="Ticker mancante")
+    return price_alerts_store.add_alert(
+        user.id, symbol, req.asset_type, req.exchange,
+        req.condition, req.price, req.note, req.once_only,
+    )
+
+
+@app.delete("/api/price-alerts/{alert_id}")
+async def delete_price_alert(alert_id: str, user: User = Depends(auth.get_current_user)) -> dict:
+    a = price_alerts_store.get_alert(alert_id)
+    if a is None or a.owner_id != user.id:
+        raise HTTPException(status_code=404, detail="Alert non trovato")
+    price_alerts_store.remove_alert(alert_id)
+    return {"ok": True}
+
+
+class PriceAlertActiveRequest(BaseModel):
+    active: bool
+
+
+@app.patch("/api/price-alerts/{alert_id}/active", response_model=PriceAlert)
+async def set_price_alert_active(
+    alert_id: str, req: PriceAlertActiveRequest, user: User = Depends(auth.get_current_user)
+) -> PriceAlert:
+    a = price_alerts_store.get_alert(alert_id)
+    if a is None or a.owner_id != user.id:
+        raise HTTPException(status_code=404, detail="Alert non trovato")
+    return price_alerts_store.set_active(alert_id, req.active)
 
 
 def _owned_favorite_or_404(entry_id: str, user: User) -> FavoriteEntry:

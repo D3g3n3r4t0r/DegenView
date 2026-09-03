@@ -911,11 +911,15 @@
       el("telegram-chat-id-input").value = state.user.telegram_chat_id || "";
       updateTelegramSetupUI();
       loadWatchlist();
+      loadAlertLog();
+      loadPriceAlerts();
+      startAlertLogPoll();
       loadBalances();
       loadTradingCredentials();
       loadFavorites();
     } else {
       setBalancesVisible(false);
+      if (_alertLogPollTimer) { clearInterval(_alertLogPollTimer); _alertLogPollTimer = null; }
     }
   }
 
@@ -1515,6 +1519,89 @@
           paramsPanel = buildStrategyParamsPanel(entry, name, fields, customParams);
           body.appendChild(paramsPanel);
         }
+
+        if (isOn) {
+          // Frequency selector
+          const freqRow = document.createElement("div");
+          freqRow.className = "strat-sub-row";
+          const freqSel = document.createElement("select");
+          freqSel.className = "wl-freq-select";
+          freqSel.title = "Frequenza degli alert per questa strategia";
+          [["every", "Ogni segnale"], ["once", "Solo la prima volta"]].forEach(([val, label]) => {
+            const opt = document.createElement("option");
+            opt.value = val;
+            opt.textContent = label;
+            if ((entry.alert_frequency?.[name] || "every") === val) opt.selected = true;
+            freqSel.appendChild(opt);
+          });
+          freqSel.addEventListener("change", async () => {
+            await fetch(`/api/watchlist/${entry.id}/alert_frequency`, {
+              method: "PATCH", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ strategy_name: name, frequency: freqSel.value }),
+            });
+          });
+
+          // Per-strategy interval selector
+          const stratIvSel = document.createElement("select");
+          stratIvSel.className = "wl-freq-select";
+          stratIvSel.title = "Timeframe specifico per questa strategia";
+          const defaultOpt = document.createElement("option");
+          defaultOpt.value = "";
+          defaultOpt.textContent = `Default (${entry.interval})`;
+          stratIvSel.appendChild(defaultOpt);
+          CANONICAL_INTERVALS.forEach(iv => {
+            const opt = document.createElement("option");
+            opt.value = iv;
+            opt.textContent = iv;
+            if ((entry.strategy_intervals?.[name] || "") === iv) opt.selected = true;
+            stratIvSel.appendChild(opt);
+          });
+          stratIvSel.addEventListener("change", async () => {
+            await fetch(`/api/watchlist/${entry.id}/strategy_interval`, {
+              method: "PATCH", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ strategy_name: name, interval: stratIvSel.value || null }),
+            });
+          });
+
+          // Test alert button
+          const testBtn = document.createElement("button");
+          testBtn.type = "button";
+          testBtn.className = "wl-test-btn";
+          testBtn.title = "Invia un test su Telegram con l'ultimo segnale rilevato";
+          testBtn.textContent = "🧪";
+          testBtn.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            testBtn.disabled = true;
+            testBtn.textContent = "…";
+            try {
+              const resp = await fetch(`/api/watchlist/${entry.id}/test-alert`, {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ strategy_name: name }),
+              });
+              const data = await resp.json();
+              testBtn.textContent = data.sent ? "✓" : "—";
+            } catch { testBtn.textContent = "✕"; }
+            setTimeout(() => { testBtn.disabled = false; testBtn.textContent = "🧪"; }, 2000);
+          });
+
+          freqRow.appendChild(freqSel);
+          freqRow.appendChild(stratIvSel);
+          freqRow.appendChild(testBtn);
+          body.appendChild(freqRow);
+
+          // Last trigger + count (async fetch stats)
+          const statsRow = document.createElement("div");
+          statsRow.className = "strat-sub-row strat-stats";
+          statsRow.textContent = "…";
+          body.appendChild(statsRow);
+          fetch(`/api/watchlist/${entry.id}/stats`).then(r => r.json()).then(stats => {
+            const s = stats[name];
+            if (!s || !s.last_ts) { statsRow.textContent = "Nessun alert inviato"; return; }
+            const diff = Math.floor(Date.now() / 1000) - s.last_ts;
+            const ago = diff < 3600 ? `${Math.floor(diff / 60)}m fa` : diff < 86400 ? `${Math.floor(diff / 3600)}h fa` : new Date(s.last_ts * 1000).toLocaleDateString("it-IT");
+            statsRow.textContent = `Ultimo: ${ago} · ${s.count} alert totali`;
+          }).catch(() => { statsRow.textContent = ""; });
+        }
       });
 
       const removeBtn = document.createElement("button");
@@ -1532,6 +1619,161 @@
       card.appendChild(head);
       card.appendChild(body);
       list.appendChild(card);
+    });
+  }
+
+  // ── Alert log ──────────────────────────────────────────────────────────────
+
+  let _alertLogLastTs = 0;
+  let _alertLogPollTimer = null;
+
+  async function loadAlertLog() {
+    if (!state.user) return;
+    try {
+      const resp = await fetch("/api/alerts/log?limit=100");
+      if (!resp.ok) return;
+      const entries = await resp.json();
+      renderAlertLog(entries);
+      if (entries.length) _alertLogLastTs = entries[0].ts; // newest first
+    } catch { /* ignore */ }
+  }
+
+  function renderAlertLog(entries) {
+    const container = el("alert-log-list");
+    if (!container) return;
+    if (!entries.length) {
+      container.innerHTML = '<li class="panel-hint">Nessun alert inviato ancora.</li>';
+      return;
+    }
+    const fmtTs = (ts) => {
+      const diff = Math.floor(Date.now() / 1000) - ts;
+      if (diff < 60) return "Ora";
+      if (diff < 3600) return `${Math.floor(diff / 60)}m fa`;
+      if (diff < 86400) return `${Math.floor(diff / 3600)}h fa`;
+      return new Date(ts * 1000).toLocaleDateString("it-IT", { day: "2-digit", month: "short" });
+    };
+    const icon = (type) => {
+      if (type.includes("long") || type.includes("above")) return "▲";
+      if (type.includes("short") || type.includes("below")) return "▼";
+      return "◆";
+    };
+    const cls = (type) => (type.includes("long") || type.includes("above")) ? "bull" : "bear";
+    container.innerHTML = entries.map(e => `
+      <li class="alert-log-row">
+        <span class="al-icon ${cls(e.signal_type)}">${icon(e.signal_type)}</span>
+        <span class="al-body">
+          <span class="al-symbol">${e.symbol}</span>
+          <span class="al-strat">${e.strategy_name} · ${e.interval}</span>
+          <span class="al-label">${e.label}</span>
+        </span>
+        <span class="al-time">${fmtTs(e.ts)}</span>
+      </li>`).join("");
+  }
+
+  async function clearAlertLog() {
+    await fetch("/api/alerts/log", { method: "DELETE" });
+    renderAlertLog([]);
+  }
+
+  function startAlertLogPoll() {
+    if (_alertLogPollTimer) return;
+    _alertLogPollTimer = setInterval(async () => {
+      if (!state.user) return;
+      try {
+        const resp = await fetch(`/api/alerts/log?limit=20&since=${_alertLogLastTs}`);
+        if (!resp.ok) return;
+        const fresh = await resp.json();
+        if (!fresh.length) return;
+        _alertLogLastTs = fresh[0].ts;
+        // Show in-app toast for each new alert
+        fresh.forEach(e => showAlertToast(e));
+        // Reload the full log if the tab is visible
+        const logEl = el("alert-log-list");
+        if (logEl && !logEl.closest(".hidden") && document.visibilityState !== "hidden") {
+          loadAlertLog();
+        }
+        // Browser push notification
+        if (Notification.permission === "granted" && el("strategy-notify-toggle")?.checked) {
+          fresh.forEach(e => {
+            try {
+              new Notification(`${e.symbol} — ${e.label}`, {
+                body: `${e.strategy_name} · ${e.interval}`,
+                icon: "/favicon.ico",
+              });
+            } catch { /* ignore */ }
+          });
+        }
+      } catch { /* ignore */ }
+    }, 30000);
+  }
+
+  function showAlertToast(e) {
+    const container = el("alert-toast-container");
+    if (!container) return;
+    const toast = document.createElement("div");
+    const isBull = e.signal_type.includes("long") || e.signal_type.includes("above");
+    toast.className = `alert-toast ${isBull ? "bull" : "bear"}`;
+    toast.innerHTML = `<b>${e.symbol}</b> ${e.label}<span class="toast-strat">${e.strategy_name}</span>`;
+    container.appendChild(toast);
+    setTimeout(() => toast.classList.add("fade-out"), 4500);
+    setTimeout(() => toast.remove(), 5000);
+  }
+
+  // ── Price alerts ────────────────────────────────────────────────────────────
+
+  async function loadPriceAlerts() {
+    if (!state.user) return;
+    try {
+      const resp = await fetch("/api/price-alerts");
+      if (!resp.ok) return;
+      renderPriceAlerts(await resp.json());
+    } catch { /* ignore */ }
+  }
+
+  function renderPriceAlerts(alerts) {
+    const container = el("price-alerts-list");
+    if (!container) return;
+    if (!alerts.length) {
+      container.innerHTML = '<li class="panel-hint">Nessun alert su prezzo configurato.</li>';
+      return;
+    }
+    const fmtTs = (ts) => ts ? new Date(ts * 1000).toLocaleString("it-IT", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "—";
+    container.innerHTML = alerts.map(a => {
+      const dirLabel = a.condition === "crosses_above" ? "▲ sopra" : "▼ sotto";
+      const dirCls = a.condition === "crosses_above" ? "bull" : "bear";
+      const statusBadge = !a.active ? '<span class="pa-badge inactive">inattivo</span>' : a.once_only ? '<span class="pa-badge once">una volta</span>' : '<span class="pa-badge repeat">ripetuto</span>';
+      const lastTrig = a.last_triggered ? `Scattato: ${fmtTs(a.last_triggered)}` : "Mai scattato";
+      return `<li class="pa-card ${a.active ? "" : "pa-inactive"}" data-id="${a.id}">
+        <div class="pa-head">
+          <span class="pa-symbol">${a.symbol}</span>
+          <span class="${dirCls} pa-dir">${dirLabel}</span>
+          <span class="pa-price">${a.price.toLocaleString("it-IT", { maximumFractionDigits: 6 })}</span>
+          ${statusBadge}
+        </div>
+        ${a.note ? `<div class="pa-note">${a.note}</div>` : ""}
+        <div class="pa-meta">${lastTrig}${a.trigger_count > 0 ? ` · ${a.trigger_count}× scattato` : ""}</div>
+        <div class="pa-actions">
+          <button class="pa-toggle-btn" data-id="${a.id}" data-active="${a.active}">${a.active ? "Disattiva" : "Riattiva"}</button>
+          <button class="pa-del-btn" data-id="${a.id}">✕</button>
+        </div>
+      </li>`;
+    }).join("");
+
+    container.querySelectorAll(".pa-del-btn").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        await fetch(`/api/price-alerts/${btn.dataset.id}`, { method: "DELETE" });
+        loadPriceAlerts();
+      });
+    });
+    container.querySelectorAll(".pa-toggle-btn").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const active = btn.dataset.active === "true";
+        await fetch(`/api/price-alerts/${btn.dataset.id}/active`, {
+          method: "PATCH", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ active: !active }),
+        });
+        loadPriceAlerts();
+      });
     });
   }
 
@@ -3983,6 +4225,29 @@
       e.stopPropagation();
       openPanel("script-panel");
     });
+
+    el("price-alert-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const symbol = el("pa-symbol").value.trim().toUpperCase();
+      const condition = el("pa-condition").value;
+      const price = parseFloat(el("pa-price").value);
+      const note = el("pa-note").value.trim();
+      const once_only = el("pa-once").checked;
+      if (!symbol || isNaN(price) || price <= 0) return;
+      try {
+        const resp = await fetch("/api/price-alerts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ symbol, condition, price, note, once_only, asset_type: "crypto", exchange: "mexc" }),
+        });
+        if (resp.ok) {
+          e.target.reset();
+          loadPriceAlerts();
+        }
+      } catch { /* ignore */ }
+    });
+
+    el("alert-log-clear-btn").addEventListener("click", () => clearAlertLog());
 
     el("strategy-markers-toggle").addEventListener("change", () => {
       if (state.data) renderStrategy();

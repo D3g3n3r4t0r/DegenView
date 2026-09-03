@@ -402,9 +402,35 @@
               </label>
             </details>
 
+            <!-- Price alerts -->
+            <div class="section-title-row" style="margin-top:16px">
+              <span class="section-eyebrow">Alert su prezzo</span>
+            </div>
+            <form id="price-alert-form" class="pa-form">
+              <input type="text" id="pa-symbol" placeholder="Ticker (es. BTC)" autocomplete="off" required />
+              <select id="pa-condition">
+                <option value="crosses_above">▲ Sopra</option>
+                <option value="crosses_below">▼ Sotto</option>
+              </select>
+              <input type="number" id="pa-price" placeholder="Prezzo" step="any" required />
+              <input type="text" id="pa-note" placeholder="Nota (opz.)" />
+              <label class="pa-once-label" title="Si disattiva dopo il primo trigger">
+                <input type="checkbox" id="pa-once" checked /> Una volta
+              </label>
+              <button type="submit">+</button>
+            </form>
+            <ul id="price-alerts-list" class="pa-list"></ul>
+
             <p class="panel-hint">Ogni ticker qui dentro viene controllato in background ogni minuto, indipendentemente da cosa stai guardando a schermo. Attiva una o più strategie per ticker: arriva una notifica Telegram per ogni segnale confermato.</p>
 
             <ul id="watchlist-list" class="watchlist-cards"></ul>
+
+            <!-- Alert log (storico) -->
+            <div class="section-title-row" style="margin-top:16px">
+              <span class="section-eyebrow">Storico alert</span>
+              <button type="button" id="alert-log-clear-btn" class="section-action-btn">Svuota</button>
+            </div>
+            <ul id="alert-log-list" class="alert-log-cards"></ul>
 
             <!-- Trading Automatico -->
             <div class="trading-auto-section">
@@ -683,6 +709,8 @@
     Strumento di analisi tecnica automatica. Non costituisce consulenza finanziaria, raccomandazione di investimento
     o segnale operativo. Le decisioni di trading restano sempre a discrezione dell'utente.
   </footer>
+
+  <div id="alert-toast-container" class="alert-toast-container"></div>
 
   <script src="https://unpkg.com/lightweight-charts@4/dist/lightweight-charts.standalone.production.js"></script>
   <script src="https://unpkg.com/codemirror@5.65.16/lib/codemirror.js"></script>

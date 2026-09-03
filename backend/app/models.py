@@ -1,3 +1,4 @@
+from enum import Enum
 from typing import Literal
 
 from pydantic import BaseModel
@@ -143,6 +144,29 @@ class WatchlistEntry(BaseModel):
     interval: IntervalChoice = "1d"  # which timeframe those strategies are evaluated on
     on_close: bool = True  # False = also evaluate the still-forming candle (faster, but a signal can vanish before the bar closes)
     strategy_params: dict[str, dict] = {}  # per-strategy parameter overrides, keyed by strategy name; missing/empty = use that strategy's defaults
+    alert_frequency: dict[str, Literal["once", "every"]] = {}  # "once" | "every" per strategy; default "every"
+    strategy_intervals: dict[str, str] = {}  # per-strategy timeframe override; missing = use entry.interval
+
+
+class PriceAlertCondition(str, Enum):
+    crosses_above = "crosses_above"
+    crosses_below = "crosses_below"
+
+
+class PriceAlert(BaseModel):
+    id: str
+    owner_id: str
+    symbol: str
+    asset_type: AssetType
+    exchange: CryptoExchange = "mexc"
+    condition: PriceAlertCondition
+    price: float
+    note: str = ""
+    active: bool = True
+    last_triggered: int | None = None  # unix seconds
+    trigger_count: int = 0
+    once_only: bool = True  # se True si disattiva dopo il primo trigger
+    created_at: int = 0
 
 
 class ConfluenceZone(BaseModel):
