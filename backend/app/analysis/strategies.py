@@ -75,7 +75,7 @@ EXHAUSTION_DEFAULT_PARAMS = {
     "enable_range_bounce": True,
 }
 
-_MAX_ALERTS_RETURNED = 30
+_MAX_ALERTS_RETURNED = 10_000  # effectively uncapped — ltf_candles is the real ceiling
 
 
 def _ma(series: pd.Series, length: int, kind: str) -> pd.Series:
@@ -301,11 +301,10 @@ def _wilder_rma(series: pd.Series, length: int) -> pd.Series:
 # RSI + Bollinger Bands mean-reversion, ported from a Pine Script v4
 # indicator the user calls "LKI Trading" — supplied as two separate scripts
 # (one for the long alert, one for the short alert), combined here into one.
-# The source only ever defines entries (alertcondition, no strategy.close):
-# long when RSI is oversold *and* price is below the lower band, short when
-# RSI is overbought *and* price is above the upper band. No explicit exit in
-# the original either — a position holds until the opposite signal fires,
-# same convention as every other strategy in this registry.
+# Despite the name, the "short" alert was never meant to open a short
+# position — Gabriele's own strategy is long-only (buy oversold, sell the
+# overbought reaction): the second alert just closes the long. So it maps to
+# exit_long here, not entry_short — there is no entry_short/exit_short at all.
 LKI_DEFAULT_PARAMS = {
     "rsi_length": 14,
     "bb_length": 20,
@@ -339,13 +338,13 @@ def compute_lki_signals(df: pd.DataFrame, params: dict | None = None) -> pd.Data
     lower = basis - dev
 
     entry_long = (rsi < p["rsi_oversold"]) & (close < lower)
-    entry_short = (rsi > p["rsi_overbought"]) & (close > upper)
+    exit_long = (rsi > p["rsi_overbought"]) & (close > upper)
 
     return pd.DataFrame(
         {
             "entry_long": entry_long.fillna(False),
-            "entry_short": entry_short.fillna(False),
-            "exit_long": pd.Series(False, index=df.index),
+            "entry_short": pd.Series(False, index=df.index),
+            "exit_long": exit_long.fillna(False),
             "exit_short": pd.Series(False, index=df.index),
         },
         index=df.index,

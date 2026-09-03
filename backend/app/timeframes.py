@@ -1,4 +1,7 @@
+import time
 from typing import Literal
+
+import pandas as pd
 
 # TradingView-style granularity choices. 2d/3d/5d have no native support from
 # either provider (Twelve Data or the crypto exchanges) — they're synthesized
@@ -31,3 +34,23 @@ INTERVAL_SECONDS: dict[str, int] = {
     "1w": 7 * 86400,
     "1M": 30 * 86400,
 }
+
+
+def drop_unclosed_candle(df: pd.DataFrame, interval: str) -> pd.DataFrame:
+    """Anything that treats a candle as a confirmed data point — an alert
+    condition, a swing pivot — must not anchor on the still-forming last
+    bar: on a weekly/monthly timeframe especially, that bar's high/low can
+    still be far from final days into the week, so a "swing" pinned to it
+    is really just today's intraweek wiggle, not confirmed structure, and
+    will keep sliding around until the bar actually closes. Drops the last
+    row whenever its open time + the interval's duration is still in the
+    future."""
+    if df.empty:
+        return df
+    seconds = INTERVAL_SECONDS.get(interval)
+    if seconds is None:
+        return df
+    last_open = df.index[-1].timestamp()
+    if last_open + seconds > time.time():
+        return df.iloc[:-1]
+    return df

@@ -1,20 +1,63 @@
 :root {
-  --bg: #f2ede1;
-  --bg-panel: #ece5d3;
-  --grid: #a8b8ae;
-  --grid-major: #7f9488;
-  --border: rgba(38, 49, 46, 0.28);
-  --border-strong: rgba(38, 49, 46, 0.55);
-  --ink: #26312e;
-  --ink-dim: #5c675f;
-  --accent: #1f4e6b;
-  --bull: #1f7a44;
-  --bear: #8c2f1f;
-  --stamp: #8a6d3b;
+  /* TradingView-inspired light system: UI chrome (buttons, tabs, nav) is
+     monochrome black/white/grey — solid dark fills reuse --ink/--bg (the
+     same pattern already used by #search-btn etc.), no separate "chrome"
+     token needed. --accent (blue) is the interactive/liquidity data hue;
+     --stamp (amber) is the secondary highlight (EMA50, kicker labels,
+     drawing tools) that used to be carried by gold everywhere. */
+  --bg: #ffffff;
+  --bg-panel: #fafafa;
+  --bg-raised: #f5f5f5;
+  --grid: rgba(0, 0, 0, 0.04);
+  --grid-major: rgba(0, 0, 0, 0.09);
+  --border: #e0e0e0;
+  --border-strong: #000000;
+  --ink: #000000;
+  --ink-dim: #666666;
+  --accent: #000000;
+  --bull: #00c97d;
+  --bear: #ff4560;
+  --stamp: #888888;
+  --font-sans: "Space Grotesk", "Inter", system-ui, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", "Courier New", monospace;
 
-  --font-display: "Special Elite", "Courier New", monospace;
-  --font-body: "Archivo Narrow", "Segoe UI", sans-serif;
-  --font-mono: "Space Mono", "Courier New", monospace;
+  --text-xs: 10px;
+  --text-sm: 12px;
+  --text-base: 14px;
+  --text-md: 16px;
+  --text-lg: 20px;
+  --text-xl: 26px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #080b0f;
+    --bg-panel: #0d1117;
+    --bg-raised: #111620;
+    --border: #1a2535;
+    --border-strong: #253347;
+    --ink: #c9d1d9;
+    --ink-dim: #6e7681;
+    --bull: #00d68f;
+    --bear: #ff4560;
+    --accent: #00d68f;
+    --stamp: #f0a500;
+    --font-mono: "JetBrains Mono", "IBM Plex Mono", monospace;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #080b0f;
+  --bg-panel: #0d1117;
+  --bg-raised: #111620;
+  --border: #1a2535;
+  --border-strong: #253347;
+  --ink: #c9d1d9;
+  --ink-dim: #6e7681;
+  --bull: #00d68f;
+  --bear: #ff4560;
+  --accent: #00d68f;
+  --stamp: #f0a500;
+  --font-mono: "JetBrains Mono", "IBM Plex Mono", monospace;
 }
 
 * { box-sizing: border-box; }
@@ -24,7 +67,7 @@ html, body {
   padding: 0;
   background: var(--bg);
   color: var(--ink);
-  font-family: var(--font-body);
+  font-family: var(--font-sans);
   height: 100%;
 }
 
@@ -32,13 +75,9 @@ body {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  height: 100dvh; /* iOS Safari's address bar changes 100vh mid-session; dvh tracks the actual visible height */
   overflow: hidden;
   background-color: var(--bg);
-  background-image:
-    repeating-linear-gradient(to right, rgba(127, 148, 136, 0.20) 0, rgba(127, 148, 136, 0.20) 0.6px, transparent 0.6px, transparent 25px),
-    repeating-linear-gradient(to bottom, rgba(127, 148, 136, 0.20) 0, rgba(127, 148, 136, 0.20) 0.6px, transparent 0.6px, transparent 25px),
-    repeating-linear-gradient(to right, rgba(168, 184, 174, 0.30) 0, rgba(168, 184, 174, 0.30) 0.4px, transparent 0.4px, transparent 5px),
-    repeating-linear-gradient(to bottom, rgba(168, 184, 174, 0.30) 0, rgba(168, 184, 174, 0.30) 0.4px, transparent 0.4px, transparent 5px);
 }
 
 .toolbar {
@@ -47,15 +86,16 @@ body {
   gap: 10px;
   padding: 8px 14px;
   border-bottom: 1.5px solid var(--border-strong);
-  background: rgba(242, 237, 225, 0.95);
+  background: var(--bg-panel);
   flex-wrap: nowrap;
   overflow-x: auto;
 }
 
 .brand {
-  font-family: var(--font-display);
-  font-size: 14px;
-  letter-spacing: 0.01em;
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: -0.01em;
   color: var(--ink);
   white-space: nowrap;
   flex-shrink: 0;
@@ -109,7 +149,7 @@ body {
 .asset-toggle {
   display: flex;
   border: 1.5px solid var(--border-strong);
-  border-radius: 2px;
+  border-radius: 8px;
   overflow: hidden;
 }
 
@@ -142,14 +182,14 @@ body {
   border: 1.5px solid var(--border-strong);
   color: var(--ink);
   padding: 7px 10px;
-  border-radius: 2px;
+  border-radius: 8px;
   width: 100%;
   font-size: 13px;
   font-family: var(--font-mono);
 }
 
 #ticker-input:focus, .interval-select:focus, .params-form input:focus, .params-form select:focus,
-.watchlist-form input:focus, .watchlist-form select:focus, .active-strategy-select:focus {
+.watchlist-quickbar input:focus, .wl-options-details select:focus, .active-strategy-select:focus {
   outline: 1.5px solid var(--accent);
   outline-offset: 1px;
 }
@@ -167,10 +207,10 @@ body {
   padding: 3px;
   background: var(--bg-panel);
   border: 1.5px solid var(--border-strong);
-  border-radius: 2px;
+  border-radius: 8px;
   max-height: 280px;
   overflow-y: auto;
-  box-shadow: 2px 3px 0 rgba(38, 49, 46, 0.12);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
 }
 
 .suggestions li {
@@ -214,7 +254,7 @@ body {
 
 .suggestions li:hover .sug-name,
 .suggestions li.active .sug-name {
-  color: rgba(242, 237, 225, 0.85);
+  color: rgba(255, 255, 255, 0.85);
 }
 
 .sug-exchange {
@@ -223,7 +263,7 @@ body {
   font-weight: 700;
   letter-spacing: 0.02em;
   padding: 2px 6px;
-  border-radius: 2px;
+  border-radius: 8px;
   border: 1px solid currentColor;
 }
 
@@ -235,7 +275,7 @@ body {
 .suggestions li:hover .sug-exchange,
 .suggestions li.active .sug-exchange {
   color: var(--bg);
-  border-color: rgba(242, 237, 225, 0.7);
+  border-color: rgba(255, 255, 255, 0.55);
 }
 
 #search-btn {
@@ -243,7 +283,7 @@ body {
   color: var(--bg);
   border: 1.5px solid var(--ink);
   padding: 7px 16px;
-  border-radius: 2px;
+  border-radius: 8px;
   cursor: pointer;
   font-size: 12px;
   font-family: var(--font-mono);
@@ -254,7 +294,7 @@ body {
 #search-btn:disabled { opacity: 0.5; cursor: default; }
 
 .error-banner {
-  background: rgba(140, 47, 31, 0.10);
+  background: rgba(242, 54, 69, 0.10);
   color: var(--bear);
   padding: 8px 16px;
   font-size: 12.5px;
@@ -274,7 +314,7 @@ body {
 .rail {
   flex: 0 0 44px;
   border-right: 1.5px solid var(--border-strong);
-  background: rgba(236, 229, 211, 0.5);
+  background: rgba(15, 23, 42, 0.02);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -290,7 +330,7 @@ body {
   justify-content: center;
   border: none;
   background: transparent;
-  border-radius: 3px;
+  border-radius: 9px;
   font-size: 16px;
   color: var(--ink-dim);
   cursor: pointer;
@@ -316,7 +356,7 @@ body {
   flex-direction: column;
   min-height: 0;
   border-left: 1.5px solid var(--border-strong);
-  background: rgba(242, 237, 225, 0.4);
+  background: var(--bg-panel);
 }
 
 .tabs {
@@ -344,7 +384,8 @@ body {
 .tab.active {
   background: var(--bg-panel);
   color: var(--ink);
-  box-shadow: inset 0 -2px 0 var(--accent);
+  font-weight: 700;
+  box-shadow: inset 0 -2.5px 0 var(--ink);
 }
 
 .tab-content {
@@ -390,7 +431,7 @@ body {
   background: var(--bg-panel);
   border: 1.5px solid var(--border-strong);
   color: var(--ink);
-  border-radius: 2px;
+  border-radius: 8px;
   padding: 3px 6px;
   font-size: 11px;
   font-family: var(--font-mono);
@@ -432,7 +473,7 @@ body {
   color: var(--bull);
   border: 1.5px solid var(--bull);
   padding: 3px 10px;
-  border-radius: 2px;
+  border-radius: 8px;
   font-size: 10.5px;
   font-family: var(--font-mono);
   font-weight: 700;
@@ -462,7 +503,7 @@ body {
   color: var(--ink-dim);
   border: 1.5px solid var(--border-strong);
   padding: 3px 10px;
-  border-radius: 2px;
+  border-radius: 8px;
   font-size: 10px;
   font-family: var(--font-mono);
   letter-spacing: 0.02em;
@@ -479,6 +520,48 @@ body {
   font-family: var(--font-mono);
 }
 
+.server-wake-hint {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: var(--bg);
+  padding: 0 24px;
+  text-align: left;
+}
+.server-wake-hint.hidden { display: none; }
+
+.server-wake-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+  animation: server-wake-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes server-wake-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.7); }
+}
+
+.server-wake-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.server-wake-sub {
+  font-size: 11.5px;
+  color: var(--ink-dim);
+  line-height: 1.4;
+  margin-top: 2px;
+  max-width: 320px;
+}
+
 .hidden { display: none !important; }
 
 .chart-row {
@@ -491,7 +574,7 @@ body {
 .draw-rail {
   flex: 0 0 36px;
   border-right: 1.5px solid var(--border-strong);
-  background: rgba(236, 229, 211, 0.5);
+  background: rgba(15, 23, 42, 0.02);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -508,13 +591,13 @@ body {
   justify-content: center;
   border: none;
   background: transparent;
-  border-radius: 3px;
+  border-radius: 9px;
   color: var(--ink-dim);
   cursor: pointer;
 }
 
 .draw-tool-btn svg { width: 15px; height: 15px; }
-.draw-tool-btn:hover { background: rgba(38, 49, 46, 0.08); color: var(--ink); }
+.draw-tool-btn:hover { background: rgba(15, 23, 42, 0.06); color: var(--ink); }
 .draw-tool-btn.selected { background: var(--accent); color: var(--bg); }
 
 .draw-rail-divider {
@@ -541,7 +624,7 @@ body {
   font-size: 12px;
   padding: 5px 8px;
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: 8px;
   background: var(--bg-panel);
 }
 
@@ -581,14 +664,14 @@ body {
   z-index: 20;
   background: var(--bg-panel);
   border: 1.5px solid var(--border-strong);
-  border-radius: 2px;
+  border-radius: 8px;
   padding: 6px 10px;
   font-size: 11.5px;
   font-family: var(--font-mono);
   color: var(--ink);
   pointer-events: none;
   max-width: 260px;
-  box-shadow: 2px 3px 0 rgba(38, 49, 46, 0.15);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
 }
 
 .summary-text {
@@ -613,24 +696,24 @@ body {
   font-family: var(--font-mono);
   font-weight: 700;
   padding: 2px 8px;
-  border-radius: 2px;
+  border-radius: 8px;
   letter-spacing: 0.05em;
 }
 
 .position-badge.long {
-  background: rgba(46, 92, 62, 0.12);
+  background: color-mix(in srgb, var(--bull) 12%, transparent);
   color: var(--bull);
   border: 1.5px solid var(--bull);
 }
 
 .position-badge.short {
-  background: rgba(140, 47, 31, 0.12);
+  background: rgba(242, 54, 69, 0.12);
   color: var(--bear);
   border: 1.5px solid var(--bear);
 }
 
 .position-badge.flat {
-  background: rgba(38, 49, 46, 0.06);
+  background: var(--bg-raised);
   color: var(--ink-dim);
   border: 1.5px solid var(--border-strong);
 }
@@ -677,7 +760,7 @@ body {
   background: var(--bg-panel);
   border: 1.5px solid var(--border-strong);
   color: var(--ink);
-  border-radius: 2px;
+  border-radius: 8px;
   padding: 5px 7px;
   font-size: 11.5px;
   font-family: var(--font-mono);
@@ -717,13 +800,6 @@ body {
 .legend-swatch.bear { color: var(--bear); }
 .legend-swatch.stamp { color: var(--stamp); }
 
-.watchlist-form {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: 10px;
-}
-
 .wl-ticker-field {
   position: relative;
   width: 100%;
@@ -744,23 +820,17 @@ body {
   color: var(--bear);
 }
 
-.watchlist-form input[type="text"],
-.watchlist-form select {
+.wl-options-details select {
   background: var(--bg-panel);
   border: 1.5px solid var(--border-strong);
   color: var(--ink);
-  border-radius: 2px;
+  border-radius: 8px;
   padding: 6px 8px;
   font-size: 11.5px;
   font-family: var(--font-mono);
 }
 
-.asset-toggle.small {
-  display: flex;
-  border: 1.5px solid var(--border-strong);
-  border-radius: 2px;
-  overflow: hidden;
-}
+/* .asset-toggle.small inherits layout from .asset-toggle; no additional overrides needed */
 
 .wl-asset-btn {
   flex: 1;
@@ -778,19 +848,6 @@ body {
 .wl-asset-btn.active {
   background: var(--accent);
   color: var(--bg);
-}
-
-.watchlist-form button[type="submit"] {
-  background: var(--ink);
-  color: var(--bg);
-  border: 1.5px solid var(--ink);
-  border-radius: 2px;
-  padding: 6px;
-  font-size: 11px;
-  font-family: var(--font-mono);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  cursor: pointer;
 }
 
 /* ---- Auth: toolbar widget + login/register modal ---- */
@@ -814,7 +871,7 @@ body {
   background: transparent;
   border: 1.5px solid var(--border-strong);
   color: var(--ink);
-  border-radius: 2px;
+  border-radius: 8px;
   padding: 5px 10px;
   font-size: 11px;
   font-family: var(--font-mono);
@@ -837,7 +894,7 @@ body {
 .auth-modal-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(38, 49, 46, 0.45);
+  background: rgba(0, 0, 0, 0.6);
 }
 
 .auth-modal-box {
@@ -846,7 +903,7 @@ body {
   width: min(340px, 90vw);
   background: var(--bg);
   border: 1.5px solid var(--border-strong);
-  border-radius: 6px;
+  border-radius: 10px;
   padding: 22px 20px;
 }
 
@@ -866,7 +923,7 @@ body {
 
 .auth-modal-box h3 {
   margin: 0 0 14px;
-  font-family: var(--font-display);
+  font-family: var(--font-sans);
   font-size: 16px;
 }
 
@@ -888,7 +945,7 @@ body {
   background: var(--bg-panel);
   border: 1.5px solid var(--border-strong);
   color: var(--ink);
-  border-radius: 2px;
+  border-radius: 8px;
   padding: 7px 8px;
   font-size: 12.5px;
 }
@@ -898,7 +955,7 @@ body {
   background: var(--accent);
   color: var(--bg);
   border: 1.5px solid var(--accent);
-  border-radius: 2px;
+  border-radius: 8px;
   padding: 8px;
   font-size: 11px;
   font-family: var(--font-mono);
@@ -941,7 +998,7 @@ body {
   background: var(--accent);
   color: var(--bg);
   border: 1.5px solid var(--accent);
-  border-radius: 2px;
+  border-radius: 8px;
   padding: 8px 14px;
   font-size: 11px;
   font-family: var(--font-mono);
@@ -953,7 +1010,7 @@ body {
 .telegram-setup {
   background: var(--bg-panel);
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: 8px;
   padding: 10px;
   margin-bottom: 12px;
 }
@@ -971,7 +1028,7 @@ body {
   background: var(--bg);
   border: 1.5px solid var(--border-strong);
   color: var(--ink);
-  border-radius: 2px;
+  border-radius: 8px;
   padding: 6px 8px;
   font-size: 11.5px;
 }
@@ -980,7 +1037,7 @@ body {
   background: var(--ink);
   color: var(--bg);
   border: 1.5px solid var(--ink);
-  border-radius: 2px;
+  border-radius: 8px;
   padding: 5px 10px;
   font-size: 10.5px;
   font-family: var(--font-mono);
@@ -993,7 +1050,130 @@ body {
   font-size: 10px;
   background: var(--bg);
   padding: 1px 4px;
-  border-radius: 2px;
+  border-radius: 8px;
+}
+
+/* Collapsed one-line replacement for .telegram-setup once a chat ID is
+   already saved — the full box with its raw bot-API URL only needs to be
+   seen once, not every time Alert is opened (see updateTelegramSetupUI). */
+.telegram-status-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 12px;
+}
+
+.tg-status-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--ink);
+}
+
+.tg-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--bull);
+  flex-shrink: 0;
+}
+
+.tg-edit-link {
+  background: none;
+  border: none;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--accent);
+  cursor: pointer;
+  padding: 0;
+}
+
+.section-title-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 4px 0 8px;
+}
+
+.section-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--stamp);
+}
+
+.section-count {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink-dim);
+}
+
+/* Ticker input + submit on one line, matching the header search bar's own
+   pattern — everything else (asset/exchange/timeframe/on-close) collapses
+   behind .wl-options-details so adding a ticker isn't a 6-field form. */
+.watchlist-quickbar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.watchlist-quickbar .wl-ticker-field { flex: 1; }
+
+.watchlist-quickbar input[type="text"] {
+  width: 100%;
+  background: var(--bg-panel);
+  border: 1.5px solid var(--border-strong);
+  color: var(--ink);
+  border-radius: 8px;
+  padding: 7px 9px;
+  font-size: 12px;
+}
+
+.watchlist-quickbar button[type="submit"] {
+  flex-shrink: 0;
+  width: 36px;
+  background: var(--accent);
+  color: var(--bg);
+  border: none;
+  border-radius: 8px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.wl-options-details {
+  margin-bottom: 10px;
+  font-size: 12px;
+}
+
+.wl-options-details summary {
+  cursor: pointer;
+  color: var(--ink-dim);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 4px 0;
+}
+
+.wl-options-details > *:not(summary) {
+  margin-top: 6px;
+}
+
+/* Browser notifications are the lesser-used of the two alert systems here
+   — pushed to the bottom, visually separated, so it stops competing with
+   the Telegram watchlist (the one people actually rely on) for attention. */
+.alert-footnote {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border);
 }
 
 .watchlist-cards {
@@ -1005,9 +1185,147 @@ body {
   gap: 8px;
 }
 
+/* Watchlist tab — a plain list of favorite tickers for one-click chart
+   navigation, visually distinct from the Alert tab's .tick-card entries
+   (those carry per-strategy toggles; these are just "load this ticker"). */
+.wl-rows {
+  list-style: none;
+  margin: 0 0 4px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.wl-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 9px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  position: relative;
+}
+
+.wl-row:hover { background: var(--bg-panel); }
+
+.wl-row.active {
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+.wl-row.active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--accent);
+}
+
+.wl-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.wl-main { flex: 1; min-width: 0; }
+
+.wl-sym-row { display: flex; align-items: center; gap: 6px; }
+
+.wl-sym { font-weight: 700; font-size: 13px; color: var(--ink); }
+
+.wl-badge {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--ink-dim);
+  background: var(--bg-raised);
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+
+.wl-bell { font-size: 10px; color: var(--stamp); flex-shrink: 0; }
+
+.wl-exch { font-family: var(--font-mono); font-size: 10px; color: var(--ink-dim); margin-top: 1px; }
+
+.wl-right { text-align: right; flex-shrink: 0; }
+
+.wl-price {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.wl-change {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  margin-top: 2px;
+}
+
+.wl-change.up { color: var(--bull); }
+.wl-change.down { color: var(--bear); }
+.wl-change.flat { color: var(--ink-dim); }
+
+.wl-remove {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  color: var(--ink-dim);
+  font-size: 10px;
+  line-height: 1;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.wl-row:hover .wl-remove { display: flex; }
+.wl-row:hover .wl-right { opacity: 0.15; }
+
+.wl-empty {
+  text-align: center;
+  padding: 30px 10px;
+  color: var(--ink-dim);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.wl-empty-icon { font-size: 22px; opacity: 0.4; }
+
+.wl-hint {
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+  font-size: 10.5px;
+  color: var(--ink-dim);
+  line-height: 1.5;
+}
+
+.wl-hint b { color: var(--stamp); font-weight: 600; }
+
 .tick-card {
   border: 1.5px solid var(--border);
-  border-radius: 3px;
+  border-radius: 9px;
   background: var(--bg);
   overflow: hidden;
 }
@@ -1083,7 +1401,7 @@ body {
   font-family: inherit;
   font-size: 11px;
   padding: 2px 4px;
-  border-radius: 4px;
+  border-radius: 8px;
   border: 1px solid var(--border-strong);
   background: var(--bg-panel);
   color: var(--ink);
@@ -1116,15 +1434,154 @@ body {
 
 .wl-toggle.on .knob { left: 16px; }
 
-.wl-remove {
-  background: transparent;
-  border: none;
-  color: var(--bear);
-  cursor: pointer;
-  font-size: 13px;
-  padding: 0 2px;
+.wl-onclose-check {
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 6px 9px;
+  background: var(--bg-panel);
+}
+
+.wl-close-badge {
   font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border-radius: 4px;
+  padding: 2px 5px;
   flex-shrink: 0;
+}
+
+.wl-custom-badge {
+  color: var(--accent);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.wl-onclose-row {
+  padding-bottom: 6px;
+  margin-bottom: 2px;
+  border-bottom: 1px dashed var(--border);
+}
+
+.strat-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.strat-gear {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  color: var(--ink-dim);
+  cursor: pointer;
+  padding: 0;
+}
+
+.strat-gear svg { width: 12px; height: 12px; }
+
+.strat-gear:hover { background: rgba(15, 23, 42, 0.05); color: var(--ink); }
+
+.strat-gear.active {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.strat-params-inline {
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  margin: -2px 0 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.strat-params-inline.hidden { display: none; }
+
+.param-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.param-label {
+  font-size: 11px;
+  color: var(--ink-dim);
+  flex: 1;
+  min-width: 0;
+}
+
+.param-input,
+.param-select {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  padding: 3px 6px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--ink);
+  width: 70px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.param-select { width: auto; text-align: left; }
+
+.param-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--ink-dim);
+  cursor: pointer;
+}
+
+.param-check input { accent-color: var(--accent); }
+
+.param-actions {
+  display: flex;
+  gap: 6px;
+  padding-top: 4px;
+  border-top: 1px dashed var(--border);
+  margin-top: 2px;
+}
+
+.param-btn-reset {
+  font-size: 10px;
+  color: var(--ink-dim);
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 5px 10px;
+  cursor: pointer;
+  font-family: var(--font-sans);
+}
+
+.param-btn-save {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--bg);
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 5px 10px;
+  cursor: pointer;
+  margin-left: auto;
+  font-family: var(--font-sans);
 }
 
 .pine-secondary-link {
@@ -1149,22 +1606,109 @@ body {
   margin: 14px 0 8px;
 }
 
-.backtest-stats {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-  font-size: 11.5px;
+.backtest-interval-tag {
+  color: var(--ink-dim);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+/* Equity chart is the hero of the Strategia screen — the % return and
+   final equity are stamped directly on it (not a separate KPI tile) so the
+   number that matters is the first thing read, and the time axis stays on
+   (see initCharts) so the curve reads against real dates instead of
+   floating with no time reference. */
+.eq-hero-wrap {
+  position: relative;
   margin-bottom: 8px;
 }
 
-.backtest-stats .stat {
+.equity-chart {
+  height: 180px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.equity-hero-stamp {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  text-align: right;
+  pointer-events: none;
+}
+
+.equity-stamp-pct {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 21px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.equity-stamp-pct.positive { color: var(--bull); }
+.equity-stamp-pct.negative { color: var(--bear); }
+
+.equity-stamp-sub {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--ink-dim);
+  margin-top: 1px;
+}
+
+/* Only the 3 ratios worth scanning at a glance stay always-visible; trade
+   count / final equity move behind "Dettagli backtest" below. */
+.backtest-chips {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.chip {
+  flex: 1;
+  text-align: center;
   background: var(--bg-panel);
   border: 1.5px solid var(--border);
-  border-radius: 2px;
+  border-radius: 8px;
+  padding: 6px 4px;
+  min-width: 0;
+}
+
+.chip-label {
+  color: var(--ink-dim);
+  font-size: 8.5px;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.chip-value {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  margin-top: 1px;
+}
+
+.chip-value.positive { color: var(--bull); }
+.chip-value.negative { color: var(--bear); }
+
+.backtest-details {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 11.5px;
+}
+
+.backtest-details .stat {
+  flex: 1;
+  background: var(--bg-panel);
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
   padding: 5px 7px;
 }
 
-.backtest-stats .stat-label {
+.backtest-details .stat-label {
   color: var(--ink-dim);
   font-size: 9.5px;
   font-family: var(--font-mono);
@@ -1172,21 +1716,89 @@ body {
   letter-spacing: 0.03em;
 }
 
-.backtest-stats .stat-value {
+.backtest-details .stat-value {
   font-family: var(--font-mono);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--ink);
 }
 
-.backtest-stats .stat-value.positive { color: var(--bull); }
-.backtest-stats .stat-value.negative { color: var(--bear); }
+.operations-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 14px 0 6px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--stamp);
+}
 
-.equity-chart {
-  height: 90px;
-  border: 1.5px solid var(--border-strong);
-  border-radius: 2px;
-  overflow: hidden;
+.operations-count {
+  color: var(--ink-dim);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.operations-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.operation-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 9px;
+  font-size: 11px;
+  border-bottom: 1px dashed var(--border);
+}
+
+.operation-row:last-child { border-bottom: none; }
+
+.op-dir {
+  font-size: 11px;
+  flex-shrink: 0;
+  width: 12px;
+}
+
+.op-dir.long { color: var(--bull); }
+.op-dir.short { color: var(--bear); }
+
+.op-dates {
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink-dim);
+}
+
+.op-pnl {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.op-pnl.positive { color: var(--bull); }
+.op-pnl.negative { color: var(--bear); }
+
+.operations-empty {
+  padding: 12px 9px;
+  text-align: center;
+  font-size: 10.5px;
+  color: var(--ink-dim);
+}
+
+.legend-thin {
+  font-size: 9px;
+  margin-top: 12px;
 }
 
 .params-details {
@@ -1213,7 +1825,7 @@ body {
 
 .params-form fieldset {
   border: 1.5px solid var(--border-strong);
-  border-radius: 2px;
+  border-radius: 8px;
   padding: 8px;
   display: flex;
   flex-direction: column;
@@ -1243,7 +1855,7 @@ body {
   background: var(--bg-panel);
   border: 1.5px solid var(--border-strong);
   color: var(--ink);
-  border-radius: 2px;
+  border-radius: 8px;
   padding: 3px 5px;
   font-size: 11px;
   font-family: var(--font-mono);
@@ -1259,7 +1871,7 @@ body {
   background: var(--ink);
   color: var(--bg);
   border: 1.5px solid var(--ink);
-  border-radius: 2px;
+  border-radius: 8px;
   padding: 7px;
   font-size: 11px;
   font-family: var(--font-mono);
@@ -1267,6 +1879,36 @@ body {
   letter-spacing: 0.04em;
   cursor: pointer;
 }
+
+/* Distinct from "Applica e ricalcola" (a plain re-run) — the accent color
+   marks this as the one button that actually rewrites the fields below it. */
+.optimize-btn {
+  background: var(--accent);
+  color: var(--bg);
+  border: 1.5px solid var(--accent);
+  border-radius: 8px;
+  padding: 7px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  margin-bottom: 4px;
+}
+
+.optimize-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.optimize-result {
+  font-size: 10.5px;
+  color: var(--ink-dim);
+  line-height: 1.5;
+  margin: -2px 0 4px;
+}
+
+.optimize-result b { color: var(--bull); font-weight: 700; }
 
 .indicator-readout {
   list-style: none;
@@ -1298,7 +1940,7 @@ body {
   background: var(--bg-panel);
   border: 1.5px solid var(--border);
   border-left: 3px solid var(--stamp);
-  border-radius: 2px;
+  border-radius: 8px;
   padding: 6px 8px;
   font-size: 11.5px;
   font-family: var(--font-mono);
@@ -1318,7 +1960,7 @@ body {
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--bull);
-  background: rgba(31, 122, 68, 0.1);
+  background: rgba(34, 197, 94, 0.1);
   border: 1px solid var(--bull);
   border-radius: 100px;
   padding: 2px 8px;
@@ -1328,7 +1970,7 @@ body {
 
 .balance-acct {
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: 8px;
   margin-bottom: 12px;
   overflow: hidden;
 }
@@ -1374,7 +2016,7 @@ body {
   color: var(--ink-dim);
   padding: 8px 16px;
   border-top: 1.5px solid var(--border-strong);
-  background: rgba(242, 237, 225, 0.92);
+  background: var(--bg-panel);
 }
 
 /* ---- Script Pine panel ---- */
@@ -1386,7 +2028,7 @@ body {
   background: var(--bg-panel);
   border: 1.5px solid var(--border-strong);
   color: var(--ink);
-  border-radius: 2px;
+  border-radius: 8px;
   padding: 6px 8px;
   font-size: 11.5px;
   font-family: var(--font-mono);
@@ -1406,7 +2048,7 @@ body {
   background: var(--bg-panel);
   border: 1.5px solid var(--border-strong);
   color: var(--ink);
-  border-radius: 2px;
+  border-radius: 8px;
   padding: 6px 8px;
   font-size: 11.5px;
   font-family: var(--font-mono);
@@ -1421,7 +2063,7 @@ body {
 
 .pine-editor {
   border: 1.5px solid var(--border-strong);
-  border-radius: 2px;
+  border-radius: 8px;
   overflow: hidden;
 }
 
@@ -1435,14 +2077,14 @@ body {
 }
 
 .pine-editor .CodeMirror-gutters {
-  background: rgba(38, 49, 46, 0.06);
+  background: rgba(15, 23, 42, 0.03);
   border-right: 1px solid var(--border);
   color: var(--ink-dim);
 }
 
 .pine-editor .CodeMirror-cursor { border-left: 1.5px solid var(--accent); }
-.pine-editor .CodeMirror-selected { background: rgba(31, 78, 107, 0.18); }
-.pine-editor .CodeMirror-activeline-background { background: rgba(138, 109, 59, 0.08); }
+.pine-editor .CodeMirror-selected { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.pine-editor .CodeMirror-activeline-background { background: color-mix(in srgb, var(--accent) 5%, transparent); }
 
 .pine-actions {
   display: flex;
@@ -1456,7 +2098,7 @@ body {
   background: var(--ink);
   color: var(--bg);
   border: 1.5px solid var(--ink);
-  border-radius: 2px;
+  border-radius: 8px;
   padding: 7px 6px;
   font-size: 10.5px;
   font-family: var(--font-mono);
@@ -1498,50 +2140,112 @@ body {
   .right-panel { flex-basis: 260px; }
 }
 
-/* ---- Mobile app-shell (≤760px): chart fills the screen, side panels become
-   bottom-sheet drawers reached via a TradingView-style bottom tab bar, not a
-   long stacked scroll. ---- */
+/* ---- Mobile app-shell (≤760px): five real full-screen destinations reached
+   from a bottom tab bar — Grafico, Livelli, Strategia, Alert, Altro. Each tap
+   shows exactly one screen and hides the rest; there is no sheet, no
+   backdrop, no "tap again to close". Header (brand + a persistent, always-
+   visible search bar) and bottom nav are the only fixed chrome; every screen
+   fills the space between them with its own single scroll container. ---- */
 
-.mobile-nav, .mobile-drawer-backdrop, .drawer-header, .mobile-chart-strip { display: none; }
+.mobile-nav, .drawer-header, .mobile-chart-strip, .mobile-ticker-search { display: none; }
 
 @media (max-width: 760px) {
   html, body { height: 100%; overflow: hidden; }
 
-  /* The millimeter-paper background reads as a technical drawing, not a
-     modern trading app, when it's this visible on a small screen with
-     mostly-empty panels — TradingView's own mobile app uses a near-flat
-     background with barely-there gridlines. Mobile keeps the same paper
-     hue (still "our" palette) but drops the layered fine-grid pattern for
-     one faint line every 32px. */
-  body {
-    background-image:
-      repeating-linear-gradient(to right, rgba(127, 148, 136, 0.09) 0, rgba(127, 148, 136, 0.09) 0.6px, transparent 0.6px, transparent 32px),
-      repeating-linear-gradient(to bottom, rgba(127, 148, 136, 0.09) 0, rgba(127, 148, 136, 0.09) 0.6px, transparent 0.6px, transparent 32px);
+  /* iOS Safari auto-zooms the whole page in on focus whenever a text
+     input's computed font-size is below 16px — every text-entry field
+     needs to clear that threshold here regardless of its desktop size
+     (select elements are exempt: iOS shows a picker wheel for those,
+     never a zoom). Without this every text field on mobile — ticker
+     search, auth forms, watchlist ticker, Pine params, Telegram token —
+     triggered the zoom, forcing the user to manually pinch back out. */
+  input[type="text"],
+  input[type="number"],
+  input[type="email"],
+  input[type="password"],
+  input[type="search"],
+  textarea {
+    font-size: 16px !important;
   }
 
-  /* chart-settings-group (timeframe/strategy/log) is relocated into the
-     Livelli drawer by JS on this breakpoint — the toolbar carries only the
-     brand + search, so the chart starts almost immediately like a native
-     mobile chart app instead of scrolling past a stack of controls first. */
-  .toolbar { padding: 6px 10px; gap: 6px; flex-wrap: nowrap; overflow-x: visible; align-items: center; }
-  .brand { font-size: 11px; flex: 0 0 auto; width: auto; white-space: nowrap; }
-  .search-form { flex: 1 1 auto; min-width: 0; }
-  .ticker-field { flex: 1 1 auto; max-width: none; min-width: 0; }
-  #ticker-input { width: 100%; padding: 9px 10px; font-size: 14px; }
-  .toolbar-spacer { display: none; }
-  #search-btn { flex: 0 0 auto; padding: 9px 12px; font-size: 11px; }
+  /* Nothing lives in the toolbar on mobile any more — ticker entry moved to
+     the chart-strip symbol (openMobileTickerSearch in app.js), "Analizza"
+     is pointless since selecting a result already runs the analysis, and
+     the brand wordmark just cost a whole row of vertical space for a label
+     the user only needs once. The whole bar collapses to 0 height, so the
+     chart starts right at the top of the screen. #ticker-input stays in
+     the DOM (inside the hidden .search-form) until it's physically moved
+     into the search overlay on open — see .mts-field-slot for its styling
+     once there. */
+  .toolbar { display: none; }
+
+  /* The small dropdown never shows on mobile — full-screen search
+     (.mobile-ticker-search) replaces it entirely once the field is
+     relocated there by openMobileTickerSearch(). */
+  #ticker-suggestions { display: none !important; }
+
+  .mobile-ticker-search {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+    background: var(--bg);
+    flex-direction: column;
+  }
+  .mobile-ticker-search:not(.hidden) { display: flex; }
+
+  .mts-header { flex-shrink: 0; padding: 10px 12px 0; border-bottom: 1px solid var(--border); }
+  .mts-searchrow { display: flex; align-items: center; gap: 10px; }
+  .mts-field-slot { flex: 1; min-width: 0; height: 42px; }
+  .mts-field-slot .ticker-field { height: 100%; max-width: none; }
+  .mts-field-slot #ticker-input {
+    width: 100%; height: 100%; padding: 0 12px; font-size: 15px; box-sizing: border-box;
+    background: var(--bg-panel); border: 1.5px solid var(--border-strong); border-radius: 9px; color: var(--ink);
+  }
+  .mts-close { flex-shrink: 0; background: none; border: none; font-family: var(--font-sans); font-size: 13.5px; font-weight: 600; color: var(--ink); padding: 8px 2px; }
+
+  .mts-tabs { display: flex; gap: 20px; padding: 12px 4px 0; }
+  .mts-tab { background: none; border: none; font-family: var(--font-sans); font-size: 13px; font-weight: 600; color: var(--ink-dim); padding: 0 0 10px; position: relative; cursor: pointer; }
+  .mts-tab.active { color: var(--ink); }
+  .mts-tab.active::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2.5px; background: var(--ink); border-radius: 2px 2px 0 0; }
+
+  .mts-list { flex: 1; overflow-y: auto; list-style: none; margin: 0; padding: 0; }
+  .mts-empty { padding: 24px 14px; text-align: center; font-size: 12.5px; color: var(--ink-dim); }
+
+  .mts-row { display: flex; align-items: center; gap: 11px; padding: 10px 14px; border-bottom: 1px solid var(--border); cursor: pointer; }
+  .mts-avatar {
+    width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-mono); font-weight: 700; font-size: 12px; color: #fff;
+  }
+  .mts-main { flex: 1; min-width: 0; }
+  .mts-sym-row { display: flex; align-items: baseline; gap: 7px; }
+  .mts-sym { font-weight: 700; font-size: 14px; color: var(--accent); }
+  .mts-badge {
+    font-family: var(--font-mono); font-size: 8.5px; font-weight: 700; text-transform: uppercase;
+    padding: 1.5px 6px; border-radius: 4px; background: var(--bg-panel); color: var(--ink-dim); border: 1px solid var(--border);
+  }
+  .mts-name { font-size: 11.5px; color: var(--ink-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 1px; }
+  .mts-right { text-align: right; flex-shrink: 0; }
+  .mts-exch { font-weight: 600; font-size: 12.5px; color: var(--ink); }
 
   #levels-panel .chart-settings-group {
     flex-direction: column;
     align-items: stretch;
     gap: 10px;
-    padding-bottom: 14px;
-    margin-bottom: 14px;
+    padding: 14px 14px 14px;
+    margin-bottom: 4px;
     border-bottom: 1px dashed var(--border);
   }
   #levels-panel .toolbar-intervals { width: 100%; }
   #levels-panel .interval-select { width: 100%; padding: 10px; font-size: 14px; }
   #levels-panel .toolbar-strategy { width: 100%; max-width: none; padding: 10px; font-size: 14px; }
+
+  /* Strategy select relocated to the top of the Strategia screen itself
+     (see relocateStrategySelect in app.js) — same full-width treatment as
+     its Livelli counterpart above. */
+  .strategy-select-slot { margin: 2px 0 12px; }
+  .strategy-select-slot .toolbar-strategy { width: 100%; max-width: none; padding: 10px; font-size: 14px; }
   #levels-panel .toolbar-check {
     font-size: 13px;
     border: 1px solid var(--border-strong);
@@ -1558,7 +2262,7 @@ body {
     position: relative;
     overflow: hidden;
     height: auto;
-    margin-bottom: 70px; /* clears the fixed bottom nav (52px) + disclaimer strip (18px) */
+    margin-bottom: 112px; /* clears the fixed bottom nav (52px) + chart-strip (60px) */
   }
 
   .chart-area {
@@ -1569,75 +2273,52 @@ body {
   #chart-wrap { height: 100%; }
   .main-chart { height: 100%; }
 
-  /* Side panels: fixed bottom-sheet drawers, closed by default */
-  #levels-panel, #script-panel, .right-panel {
+  /* One screen at a time, filling everything from the very top of the
+     screen (there's no toolbar left to clear) down to the bottom nav —
+     not a partial sheet, not an overlay over the chart. */
+  #levels-panel, #script-panel, .right-panel, .altro-panel {
     position: fixed;
     left: 0;
     right: 0;
+    width: auto; /* #levels-panel/#script-panel/.altro-panel otherwise inherit the desktop flyout's fixed 260px width, which — combined with left+right both set on a fixed element — wins over "right:0" and leaves the chart showing through the remaining strip */
+    top: 0;
     bottom: 52px;
-    top: 15%;
     max-height: none;
     overflow-y: auto;
     background: var(--bg);
-    border: 1.5px solid var(--border-strong);
-    border-bottom: none;
-    border-radius: 10px 10px 0 0;
-    box-shadow: 0 -6px 18px rgba(38, 49, 46, 0.18);
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity 0.18s ease, visibility 0s linear 0.18s;
     z-index: 40;
     padding: 0;
+    display: none;
+  }
+
+  #levels-panel.mobile-open, #script-panel.mobile-open, .right-panel.mobile-open, .altro-panel.mobile-open {
     display: flex;
+    flex-direction: column;
   }
 
-  #levels-panel .panel, #script-panel .panel, .right-panel .tabs { padding-left: 14px; padding-right: 14px; }
-  #levels-panel .panel:first-of-type, #script-panel .panel:first-of-type { padding-top: 14px; }
+  #levels-panel .panel, #script-panel .panel, .right-panel .tabs, .altro-panel .panel { padding-left: 16px; padding-right: 16px; }
+  #levels-panel .panel:first-of-type, #script-panel .panel:first-of-type, .altro-panel .panel:first-of-type { padding-top: 14px; }
 
-  #levels-panel.mobile-open, #script-panel.mobile-open, .right-panel.mobile-open {
-    opacity: 1;
-    visibility: visible;
-    transition: opacity 0.18s ease;
-  }
+  /* The internal Strategia/Alert/Analisi/Saldi tab strip is superseded by
+     the bottom nav on mobile (Strategia merges the first two, Alert reaches
+     the third, Saldi is reached from Altro) — JS drives which tab-content
+     is active directly, this bar would just be a second, redundant level of
+     navigation sitting on top of it. */
+  .right-panel .tabs { display: none; }
 
-  .mobile-drawer-backdrop {
-    position: fixed;
-    inset: 0;
-    bottom: 52px;
-    background: rgba(38, 49, 46, 0.35);
-    z-index: 35;
-  }
-  .mobile-drawer-backdrop.hidden { display: none; }
-
+  /* Plain screen title, not a colored bar with a close affordance — there is
+     nothing to "close" now, only another tab to switch to. */
   .drawer-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    position: sticky;
-    top: -16px;
-    margin: -16px -14px 12px;
-    padding: 12px 14px;
-    background: var(--accent);
-    color: var(--bg);
-    font-family: var(--font-mono);
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    border-radius: 10px 10px 0 0;
-    z-index: 1;
-  }
-
-  .drawer-close-btn {
-    background: rgba(242, 237, 225, 0.16);
-    color: var(--bg);
-    border: 1.5px solid rgba(242, 237, 225, 0.5);
-    border-radius: 4px;
-    padding: 6px 10px;
+    display: block;
+    padding: 14px 16px 6px;
     font-family: var(--font-mono);
     font-size: 11px;
+    font-weight: 700;
     text-transform: uppercase;
-    cursor: pointer;
+    letter-spacing: 0.06em;
+    color: var(--stamp);
   }
+  .drawer-close-btn { display: none; }
 
   .mobile-nav {
     display: flex;
@@ -1645,7 +2326,8 @@ body {
     left: 0;
     right: 0;
     bottom: 0;
-    height: 52px;
+    height: calc(52px + env(safe-area-inset-bottom));
+    padding-bottom: env(safe-area-inset-bottom);
     background: var(--bg);
     border-top: 1px solid var(--border);
     z-index: 50;
@@ -1657,13 +2339,13 @@ body {
   .mobile-chart-strip {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     position: fixed;
     left: 0;
     right: 0;
-    bottom: 52px;
-    height: 30px;
-    padding: 0 12px;
+    bottom: calc(52px + env(safe-area-inset-bottom));
+    height: 60px;
+    padding: 0 14px;
     background: var(--bg);
     border-top: 1px solid var(--border);
     z-index: 49;
@@ -1671,21 +2353,147 @@ body {
   .mobile-chart-strip.hidden { display: none; }
 
   .mobile-chart-symbol {
-    font-weight: 700;
-    font-size: 12.5px;
-    letter-spacing: 0.01em;
+    font-family: var(--font-sans);
+    font-weight: 800;
+    font-size: 19px;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
   }
 
-  .mobile-chart-interval {
-    font-family: var(--font-mono);
+  .mobile-strategy-pill {
+    font-family: var(--font-sans);
     font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
     text-transform: uppercase;
-    color: var(--ink-dim);
-    background: var(--bg-panel);
-    border: 1px solid var(--border-strong);
-    border-radius: 100px;
-    padding: 2px 8px;
+    color: var(--bg);
+    background: var(--ink);
+    border: none;
+    border-radius: 20px;
+    padding: 3px 9px;
+    cursor: pointer;
+    white-space: nowrap;
+    max-width: 110px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-shrink: 0;
   }
+
+  /* The real #interval-primary <select> stays relocated here (so its
+     value/change-event logic doesn't get duplicated) but is now driven by
+     the wheel below instead of being the visible control itself. */
+  #mobile-chart-interval-slot { display: none; }
+
+  /* A small self-contained rounded capsule sized to the text, not a rail
+     spanning the strip — scroll-snap wheel of interval values, the
+     selected one sitting in a solid dark pill at its center. */
+  .tf-wheel {
+    position: relative;
+    width: 46px;
+    height: 54px;
+    flex-shrink: 0;
+    border: 1.5px solid var(--ink);
+    border-radius: 16px;
+    background: var(--bg);
+    overflow: hidden;
+  }
+  .tf-wheel::before, .tf-wheel::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 16px;
+    z-index: 2;
+    pointer-events: none;
+  }
+  .tf-wheel::before { top: 0; background: linear-gradient(var(--bg), transparent); }
+  .tf-wheel::after { bottom: 0; background: linear-gradient(transparent, var(--bg)); }
+
+  .tf-wheel-band {
+    position: absolute;
+    left: 3px;
+    right: 3px;
+    top: 18px;
+    height: 18px;
+    background: var(--ink);
+    border-radius: 8px;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  .tf-wheel-track {
+    height: 100%;
+    overflow-y: scroll;
+    scroll-snap-type: y mandatory;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+    padding: 18px 0;
+  }
+  .tf-wheel-track::-webkit-scrollbar { display: none; }
+
+  .tf-wheel-item {
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    scroll-snap-align: center;
+    position: relative;
+    z-index: 2;
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 10.5px;
+    color: #9a9ea5;
+  }
+  .tf-wheel-item.near { color: var(--ink-dim); }
+  .tf-wheel-item.current { color: #fff; font-size: 12px; font-weight: 800; }
+
+  /* Drawing tools have no home at all below 760px otherwise (.draw-rail is
+     hidden outright) — these two buttons, next to the timeframe wheel, open
+     the same tool strip used on desktop as a horizontal dock right above
+     this row, instead of a FAB floating on top of the candles. */
+  .strip-divider { width: 1px; height: 26px; background: var(--border); flex-shrink: 0; }
+
+  .strip-tool-btn {
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9px;
+    border: 1.5px solid var(--border-strong);
+    background: var(--bg);
+    color: var(--ink-dim);
+  }
+  .strip-tool-btn svg { width: 16px; height: 16px; }
+  .strip-tool-btn.active { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+  .strip-tools { display: flex; align-items: center; gap: 8px; }
+  .strip-tools.hidden { display: none; }
+
+  .draw-rail.mobile-tools-open {
+    display: flex;
+    flex-direction: row;
+    position: fixed;
+    right: 14px;
+    bottom: calc(52px + env(safe-area-inset-bottom) + 60px + 10px);
+    width: auto;
+    height: 48px;
+    padding: 0 6px;
+    border-radius: 24px;
+    border: 1.5px solid var(--border-strong);
+    background: var(--bg-panel);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    z-index: 46;
+    gap: 2px;
+  }
+  .draw-rail.mobile-tools-open .draw-rail-divider { width: 1px; height: 22px; margin: 0 2px; }
+  .draw-rail.mobile-tools-open .draw-tool-btn { width: 36px; height: 36px; }
+  .draw-rail.mobile-tools-open .draw-tool-btn svg { width: 17px; height: 17px; }
 
   /* Rounder, lighter controls read as an app, not a technical form —
      Blueprint's sharp 2px corners work on a dense desktop panel, less so
@@ -1694,7 +2502,6 @@ body {
     border-radius: 9px;
     border-width: 1px;
   }
-  #search-btn { border: none; }
 
   .mobile-nav-btn {
     flex: 1;
@@ -1707,15 +2514,83 @@ body {
     border: none;
     color: var(--ink-dim);
     font-family: var(--font-mono);
-    font-size: 9.5px;
+    font-size: 8.5px;
     text-transform: uppercase;
-    letter-spacing: 0.03em;
+    letter-spacing: 0.02em;
     cursor: pointer;
   }
 
-  .mobile-nav-icon { width: 20px; height: 20px; }
+  .mobile-nav-icon { width: 19px; height: 19px; }
 
-  .mobile-nav-btn.active { color: var(--accent); }
+  .mobile-nav-btn.active { color: var(--ink); font-weight: 700; border-top: 2px solid var(--ink); }
+
+  /* Sniper link — same visual as a nav button but navigates to a new page */
+  .mobile-nav-link {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    color: var(--ink-dim);
+    font-family: var(--font-mono);
+    font-size: 8.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  /* ---- Altro: account row + menu items (Script Pine, Saldi) ---- */
+  .altro-account-slot .auth-widget {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+  }
+  .altro-account-slot .auth-user-email {
+    max-width: none;
+    flex: 1;
+    font-size: 13px;
+  }
+  .altro-account-slot #auth-toggle-btn,
+  .altro-account-slot #auth-logout-btn {
+    min-height: 36px;
+    padding: 6px 12px;
+  }
+
+  .altro-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 12px 4px;
+    background: none;
+    border: none;
+    border-top: 1px solid var(--border);
+    cursor: pointer;
+    text-align: left;
+  }
+  .altro-menu-item:first-of-type { border-top: none; }
+  .altro-menu-item.hidden { display: none; }
+
+  .altro-menu-icon {
+    width: 30px;
+    height: 30px;
+    flex-shrink: 0;
+    border-radius: 8px;
+    background: var(--bg-panel);
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .altro-menu-icon svg { width: 15px; height: 15px; }
+
+  .altro-menu-text { flex: 1; display: flex; flex-direction: column; gap: 1px; }
+  .altro-menu-title { font-size: 13.5px; color: var(--ink); }
+  .altro-menu-sub { font-size: 10.5px; color: var(--ink-dim); }
+  .altro-menu-chev { color: var(--ink-dim); font-size: 15px; }
 
   .wl-asset-btn {
     padding: 9px 0;
@@ -1724,10 +2599,9 @@ body {
 
   .layer-toggle { padding: 8px 0; font-size: 14px; }
 
-  .watchlist-form button[type="submit"],
+  .watchlist-quickbar button[type="submit"],
   .pine-actions button,
-  .pine-params-form button[type="submit"],
-  #search-btn {
+  .pine-params-form button[type="submit"] {
     min-height: 40px;
   }
 
@@ -1750,7 +2624,7 @@ body {
     position: fixed;
     left: 0;
     right: 0;
-    bottom: 82px;
+    bottom: calc(52px + env(safe-area-inset-bottom) + 60px);
     z-index: 45;
     font-size: 8px;
     line-height: 1.25;
@@ -1759,8 +2633,389 @@ body {
   }
 }
 
+/* ── Backtest Lab (independent panel) ─────────────────────────────── */
+.lab-panel { padding: 12px !important; }
+
+.lab-ticker-row { display: flex; align-items: center; gap: .5rem; }
+.lab-ticker-row .lab-ticker-hero { flex: 1; }
+.lab-exchange-select { padding: .35rem .4rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--fg); font-size: .78rem; cursor: pointer; white-space: nowrap; }
+
+.lab-ticker-hero {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  background: var(--bg-panel);
+  border: 1.5px solid var(--border-strong);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  position: relative;
+  cursor: text;
+}
+.lab-ticker-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+.lab-ticker-text { flex: 1; min-width: 0; }
+.lab-ticker-val {
+  font-family: var(--font-mono);
+  font-size: 16px; font-weight: 700;
+  color: var(--ink); display: block;
+  line-height: 1; margin-bottom: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.lab-ticker-sub { font-size: 9.5px; color: var(--ink-dim); }
+.lab-ticker-input {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  width: 100%; height: 100%;
+  border: none; outline: none;
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: 16px; font-weight: 700;
+  color: var(--ink);
+  padding: 10px 12px 10px 28px;
+  border-radius: 10px;
+  cursor: text;
+  opacity: 0;
+}
+.lab-ticker-input:focus {
+  opacity: 1;
+  background: var(--bg-panel);
+  z-index: 2;
+}
+/* #lab-suggestions inherits position:fixed + z-index:60 from .suggestions
+   (JS sets left/top via getBoundingClientRect). No override needed. */
+
+.lab-tf-row {
+  display: flex; gap: 5px; margin-bottom: 12px;
+}
+.lab-tf-btn {
+  flex: 1;
+  background: var(--bg-panel);
+  border: 1.5px solid var(--border-strong);
+  border-radius: 7px;
+  padding: 6px 2px;
+  font-family: var(--font-mono); font-size: 9.5px; font-weight: 700;
+  color: var(--ink-dim); cursor: pointer;
+  text-align: center; text-transform: uppercase;
+}
+.lab-tf-btn.active {
+  background: var(--accent); border-color: var(--accent); color: #fff;
+}
+
+.lab-divider {
+  height: 1px; background: var(--border);
+  margin: 0 -12px 12px;
+}
+
+.lab-strat-header {
+  display: flex; align-items: center;
+  justify-content: space-between; margin-bottom: 10px;
+}
+.lab-strat-label {
+  font-size: 11px; font-weight: 600; color: var(--ink-dim);
+}
+.lab-strategy-select {
+  background: var(--bg-panel);
+  border: 1.5px solid var(--border-strong);
+  border-radius: 7px;
+  padding: 4px 7px;
+  font-family: var(--font-mono); font-size: 10px;
+  color: var(--stamp); font-weight: 700;
+  max-width: 140px;
+}
+
+.lab-params-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px; margin-bottom: 12px;
+}
+.lab-params-grid label {
+  display: flex; flex-direction: column;
+  gap: 3px; font-size: 9px; font-weight: 500;
+  color: var(--ink-dim); text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.lab-params-grid label.full-width { grid-column: 1 / -1; flex-direction: row; align-items: center; gap: 8px; }
+.lab-params-grid input[type=number],
+.lab-params-grid select {
+  background: var(--bg-panel);
+  border: 1.5px solid var(--border-strong);
+  border-radius: 7px;
+  padding: 5px 7px;
+  font-family: var(--font-mono); font-size: 11.5px; color: var(--ink);
+  outline: none; width: 100%;
+}
+.lab-params-grid input[type=number]:focus,
+.lab-params-grid select:focus { border-color: var(--accent); }
+
+.lab-bt-details {
+  margin-bottom: 12px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px; padding: 8px 10px;
+  font-size: 11px; color: var(--ink-dim);
+}
+.lab-bt-details summary {
+  cursor: pointer; font-size: 10.5px; color: var(--ink-dim); user-select: none;
+}
+.lab-bt-params {
+  margin-top: 8px;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+}
+.lab-bt-params label {
+  display: flex; flex-direction: column;
+  gap: 3px; font-size: 9px; color: var(--ink-dim);
+  text-transform: uppercase; letter-spacing: 0.03em;
+}
+.lab-bt-params input {
+  background: var(--bg-panel); border: 1.5px solid var(--border-strong);
+  border-radius: 7px; padding: 5px 7px;
+  font-family: var(--font-mono); font-size: 11px; color: var(--ink);
+}
+
+.lab-action-row { display: flex; gap: 7px; margin-bottom: 12px; }
+.lab-btn-opt {
+  flex: 1; background: transparent;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 9px; padding: 9px 6px;
+  font-family: var(--font-mono); font-size: 9.5px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.03em;
+  color: var(--ink-dim); cursor: pointer;
+}
+.lab-btn-opt:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.lab-btn-opt:disabled, .lab-btn-run:disabled { opacity: 0.55; cursor: not-allowed; }
+.lab-grid-toggle {
+  display: flex; align-items: center; gap: 7px; cursor: pointer;
+  font-size: 10.5px; color: var(--ink-dim); margin-bottom: 4px;
+}
+.lab-grid-toggle input[type="checkbox"] { accent-color: var(--accent); cursor: pointer; }
+#lab-grid-toggle-wrap.hidden { display: none; }
+.lab-btn-run {
+  flex: 1.4; background: var(--ink); border: 1.5px solid var(--ink);
+  border-radius: 9px; padding: 9px 6px;
+  font-family: var(--font-mono); font-size: 9.5px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.03em;
+  color: var(--bg); cursor: pointer;
+}
+
+.lab-status {
+  font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-dim);
+  text-align: center; padding: 8px; margin-bottom: 8px;
+}
+
+.lab-result-block {
+  background: var(--bg-panel);
+  border: 1.5px solid var(--border-strong);
+  border-radius: 10px; padding: 12px; margin-bottom: 9px;
+}
+.lab-result-meta {
+  font-family: var(--font-mono); font-size: 9.5px;
+  color: var(--ink-dim); margin-bottom: 10px;
+  line-height: 1.6;
+}
+.lab-result-meta span { color: var(--accent); }
+.lab-result-meta .meta-dates { color: var(--ink-dim); font-size: 9px; }
+.lab-trades-link {
+  background: none; border: none; padding: 0;
+  font: inherit; color: var(--accent); cursor: pointer;
+  text-decoration: underline dotted; text-underline-offset: 2px;
+}
+
+.lab-return-hero {
+  display: flex; align-items: baseline;
+  gap: 10px; margin-bottom: 12px;
+}
+.lab-return-val {
+  font-family: var(--font-mono); font-size: 30px; font-weight: 700;
+  color: var(--bull); line-height: 1;
+}
+.lab-return-val.neg { color: var(--bear); }
+.lab-return-side { font-size: 10px; color: var(--ink-dim); line-height: 1.6; }
+.lab-return-side b { color: var(--bull); }
+.lab-return-side b.neg { color: var(--bear); }
+
+.lab-equity-canvas {
+  display: block; width: 100%; margin-bottom: 12px;
+  border-radius: 4px;
+}
+
+.lab-stat-chips {
+  display: grid; grid-template-columns: repeat(3,1fr); gap: 6px;
+  margin-top: 2px;
+}
+.lab-stat-chips > div:nth-child(n+4) {
+  grid-column: auto;
+}
+.lab-stat-chips .chip-lbl {
+  font-family: var(--font-mono); font-size: 8.5px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--ink-dim); margin-bottom: 3px;
+}
+.lab-stat-chips .chip-val {
+  font-family: var(--font-mono); font-size: 14px; font-weight: 700; color: var(--ink);
+}
+.lab-stat-chips .chip-val.pos { color: var(--bull); }
+.lab-stat-chips .chip-val.neg { color: var(--bear); }
+
+.lab-apply-strip {
+  display: flex; align-items: center; gap: 10px;
+  background: color-mix(in srgb, var(--bull) 6%, transparent);
+  border: 1.5px solid color-mix(in srgb, var(--bull) 25%, transparent);
+  border-radius: 10px; padding: 10px 12px;
+}
+.lab-apply-actions {
+  display: flex; flex-direction: column; gap: 6px; flex-shrink: 0;
+}
+.lab-apply-text {
+  flex: 1; font-size: 10.5px; color: var(--ink); line-height: 1.5;
+}
+.lab-apply-text b { color: var(--accent); }
+.lab-apply-btn {
+  background: var(--bull); color: #fff; border: none;
+  border-radius: 7px; padding: 7px 11px;
+  font-family: var(--font-mono); font-size: 9.5px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.03em; cursor: pointer;
+  white-space: nowrap;
+}
+.lab-signal-btn {
+  background: var(--bg-panel); color: var(--ink); border: 1.5px solid var(--border);
+  border-radius: 7px; padding: 5px 10px;
+  font-family: var(--font-mono); font-size: 9px; font-weight: 600;
+  cursor: pointer; white-space: nowrap;
+}
+.lab-signal-btn:hover { border-color: var(--accent); color: var(--accent); }
+.lab-signal-btn:disabled { opacity: 0.6; cursor: default; }
+.lab-signal-status {
+  font-size: 10.5px; padding: 6px 10px;
+  border-radius: 7px; margin-top: 6px;
+}
+.lab-signal-status.ok {
+  background: color-mix(in srgb, var(--bull) 10%, transparent);
+  color: var(--bull); border: 1px solid color-mix(in srgb, var(--bull) 25%, transparent);
+}
+.lab-signal-status.error {
+  background: color-mix(in srgb, var(--bear) 10%, transparent);
+  color: var(--bear); border: 1px solid color-mix(in srgb, var(--bear) 25%, transparent);
+}
+
+/* Lab — trade detail drawer */
+.lab-trades-drawer {
+  background: var(--bg-panel);
+  border-top: 1px solid var(--border);
+  padding: 12px 12px 16px;
+}
+.lab-trades-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px;
+}
+.lab-trades-header span {
+  font-size: 11px; font-weight: 600; color: var(--ink);
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.lab-trades-close {
+  background: none; border: none; padding: 2px 6px;
+  font-size: 13px; color: var(--ink-dim); cursor: pointer;
+  border-radius: 4px;
+}
+.lab-trades-close:hover { background: var(--border); }
+.lab-trades-body { overflow-x: auto; }
+.lab-trades-table {
+  width: 100%; border-collapse: collapse;
+  font-family: var(--font-mono); font-size: 9.5px;
+  font-variant-numeric: tabular-nums;
+}
+.lab-trades-table th {
+  text-align: right; padding: 3px 6px;
+  color: var(--ink-dim); font-weight: 600;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.lab-trades-table th:first-child,
+.lab-trades-table th:nth-child(2) { text-align: left; }
+.lab-trades-table td {
+  padding: 4px 6px; text-align: right;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+  vertical-align: middle;
+}
+.lab-trades-table td.td-num,
+.lab-trades-table td.td-dir,
+.lab-trades-table td.td-date { text-align: left; }
+.lab-trades-table .bull { color: var(--bull); font-weight: 600; }
+.lab-trades-table .bear { color: var(--bear); font-weight: 600; }
+.lab-trades-table .pos { color: var(--bull); font-weight: 600; }
+.lab-trades-table .neg { color: var(--bear); font-weight: 600; }
+.lab-trades-table tr:last-child td { border-bottom: none; }
+
 @media (max-width: 480px) {
   .brand { font-size: 12px; }
   .stat-value { font-size: 14px; }
   .pine-editor .CodeMirror { height: 180px; font-size: 12px; }
 }
+
+/* ── Trading automatico ── */
+.trading-auto-section { margin-top: 1.5rem; }
+.trading-auto-header { align-items: center; }
+.trading-auto-badge { font-size: .7rem; font-weight: 600; color: #e67e22; background: #fff3cd; border-radius: 4px; padding: 2px 6px; }
+.trading-auto-hint { margin-bottom: .75rem; }
+.trading-cred-list { display: flex; flex-direction: column; gap: .75rem; }
+.trading-cred-card { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.trading-cred-exchange-row { display: flex; align-items: center; justify-content: space-between; padding: .6rem .75rem; background: var(--bg-raised); }
+.trading-cred-name { font-weight: 600; font-size: .85rem; }
+.trading-enabled-toggle { display: flex; align-items: center; gap: .4rem; font-size: .8rem; cursor: pointer; }
+.trading-enabled-toggle input[type="checkbox"] { accent-color: var(--accent); }
+.trading-cred-details { border-top: 1px solid var(--border); }
+.trading-cred-details > summary { padding: .5rem .75rem; cursor: pointer; font-size: .8rem; color: var(--accent); }
+.trading-cred-fields { display: flex; flex-direction: column; gap: .6rem; padding: .75rem; background: var(--bg-panel); }
+.trading-cred-fields label { display: flex; flex-direction: column; gap: .25rem; font-size: .78rem; font-weight: 500; color: var(--ink); }
+.trading-cred-fields input, .trading-cred-fields select { width: 100%; padding: .35rem .5rem; border: 1px solid var(--border-strong); border-radius: 4px; background: var(--bg); color: var(--ink); font-size: .82rem; font-family: var(--font-sans); }
+.trading-size-row { display: flex; gap: .75rem; }
+.trading-size-row label { flex: 1; }
+.trading-save-btn { align-self: flex-start; padding: .35rem .9rem; background: var(--accent); color: #fff; border: none; border-radius: 4px; font-size: .82rem; cursor: pointer; }
+.trading-save-btn:hover { opacity: .88; }
+.trading-save-status { font-size: .75rem; color: var(--accent); }
+
+/* ── Ordine manuale ── */
+/* ── Manual order form (TV-Hub style) ── */
+.manual-order-form { display: flex; flex-direction: column; gap: .65rem; }
+
+/* Exchange + Pair row */
+.mo-row { display: flex; gap: .6rem; }
+.mo-field { display: flex; flex-direction: column; gap: .22rem; }
+.mo-field-grow { flex: 1; }
+.mo-label { font-size: .72rem; font-weight: 600; color: var(--fg-muted, #888); text-transform: uppercase; letter-spacing: .04em; }
+.mo-select, .mo-input { width: 100%; padding: .38rem .5rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--fg); font-size: .82rem; }
+
+/* BUY / SELL tabs */
+.mo-side-tabs { display: flex; border-radius: 4px; overflow: hidden; border: 1px solid var(--border); }
+.mo-side-tab { flex: 1; padding: .45rem; border: none; background: var(--bg); color: var(--fg-muted, #888); font-size: .85rem; font-weight: 700; cursor: pointer; letter-spacing: .05em; transition: background .15s, color .15s; }
+.mo-buy-tab.mo-tab-active { background: #27ae60; color: #fff; }
+.mo-sell-tab.mo-tab-active { background: #e74c3c; color: #fff; }
+.mo-side-tab:not(.mo-tab-active):hover { background: var(--bg-panel); }
+
+/* Size mode radios */
+.mo-size-mode-row { display: flex; gap: 1rem; }
+.mo-radio-label { display: flex; align-items: center; gap: .3rem; font-size: .78rem; cursor: pointer; }
+
+/* Slider row */
+.mo-slider-row { display: flex; align-items: center; gap: .5rem; }
+.mo-slider { flex: 1; height: 4px; accent-color: #3a7bd5; cursor: pointer; }
+.mo-slider-val-wrap { display: flex; align-items: center; gap: .2rem; }
+.mo-slider-val-input { width: 54px; padding: .3rem .35rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--fg); font-size: .82rem; font-variant-numeric: tabular-nums; text-align: right; }
+.mo-slider-unit { font-size: .78rem; color: var(--fg-muted, #888); min-width: 2rem; }
+
+/* Execute button */
+.mo-execute-btn { width: 100%; padding: .55rem; border: none; border-radius: 4px; font-size: .9rem; font-weight: 700; cursor: pointer; letter-spacing: .06em; transition: background .15s; }
+.mo-execute-buy { background: #27ae60; color: #fff; }
+.mo-execute-buy:hover { background: #219a52; }
+.mo-execute-sell { background: #e74c3c; color: #fff; }
+.mo-execute-sell:hover { background: #c0392b; }
+
+.manual-order-status { font-size: .8rem; padding: .35rem .5rem; border-radius: 4px; background: var(--bg-raised, var(--bg-panel)); }
+.manual-order-status.ok { color: #27ae60; }
+.manual-order-status.error { color: #e74c3c; }
+
+/* Token Sniper now lives at /sniper as its own standalone app (frontend/sniper.html) */
+.tab-link { display: flex; align-items: center; text-decoration: none; }

@@ -21,6 +21,7 @@ class Settings(BaseSettings):
 
     telegram_bot_token: str = ""
     telegram_chat_ids: str = ""  # comma-separated
+    github_api_token: str = ""   # PAT for fetching commit history on deploy notify
 
     # Registration is open to anyone, but actual Telegram delivery is
     # deliberately locked to specific account emails (comma-separated) —
@@ -47,8 +48,22 @@ class Settings(BaseSettings):
     # Each DataProvider maps these neutral keys to its own interval format.
     timeframe_keys: tuple[str, str, str] = ("htf", "mtf", "ltf")
     # 500 = MEXC's REST max; gives the "Lorenzo" strategy's 268-period trend
-    # filter enough settled history instead of just ~30 usable candles.
+    # filter enough settled history instead of just ~30 usable candles. Only
+    # used for htf/mtf, which need recent context, not deep history.
     candles_per_timeframe: int = 500
+    # LTF drives the chart — kept at MEXC's own single-page cap (the
+    # smallest of the three exchanges') so the chart's own fetch never
+    # triggers pagination and stays a single fast request regardless of
+    # exchange. Deeper history is what the dedicated backtest fetch below is
+    # for, not this one.
+    ltf_candles: int = 3000
+    # The backtest is a separate, deliberately coarser fetch (see
+    # `_backtest_interval` in main.py) so a chart set to 1m/5m doesn't cap
+    # its own lookback to a few hours — 5000 daily candles is more than any
+    # symbol's real listing history, so providers that support pagination
+    # (the crypto exchanges) will walk pages back to the actual listing date
+    # and stop there; it's a ceiling, not a target.
+    backtest_candles: int = 5000
 
 
 settings = Settings()
