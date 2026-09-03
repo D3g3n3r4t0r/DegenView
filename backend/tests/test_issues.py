@@ -167,3 +167,96 @@ def test_seed_ids_match_the_shipped_resolutions():
         mod._RESOLUTIONS_FILE.read_text(encoding="utf-8")) if not k.startswith("_")}
     orphans = res_ids - seed_ids
     assert not orphans, f"risoluzioni senza voce corrispondente: {orphans}"
+
+
+# --- la lista iniziale --------------------------------------------------------
+#
+# Il guasto che questi test bloccano è arrivato davvero: `_seed` usciva subito
+# se l'elenco non era vuoto, quindi seed-0011 — aggiunto alla lista dopo il
+# primo avvio — dal vivo non è mai comparso, e la sua risoluzione, scritta e
+# distribuita col deploy, restava senza voce a cui agganciarsi. Il test sopra
+# non poteva accorgersene: confronta le due liste nel sorgente, non ciò che
+# c'è sul volume.
+
+
+@pytest.fixture()
+def seeding(tmp_path, monkeypatch):
+    from app import issues as mod
+
+    monkeypatch.setattr(mod, "_STORE_FILE", tmp_path / "issues.json")
+    monkeypatch.setattr(mod, "_SEEDED_FILE", tmp_path / "seeded.json")
+    monkeypatch.setattr(mod, "_RESOLUTIONS_FILE", tmp_path / "resolutions.json")
+    mod._issues.clear()
+    mod._seeded_ids.clear()
+    return mod
+
+
+def _ids(mod) -> set[str]:
+    return {it["id"] for it in mod._issues}
+
+
+def test_seeding_from_scratch_inserts_everything(seeding):
+    seeding._seed()
+    assert _ids(seeding) == {s[0] for s in seeding._SEED}
+
+
+def test_a_new_seed_entry_appears_on_a_store_that_already_exists(seeding):
+    """Il caso reale: volume già popolato, e una voce nuova nel sorgente."""
+    mancante = seeding._SEED[-1][0]
+    seeding._issues.extend(
+        {"id": s[0], "title": s[1], "detail": s[2], "priority": s[3],
+         "status": "aperto", "author": "lista iniziale", "created_at": 1}
+        for s in seeding._SEED[:-1]
+    )
+    assert mancante not in _ids(seeding)
+
+    seeding._seed()
+    assert mancante in _ids(seeding), "una voce aggiunta dopo il primo avvio non compare mai"
+
+
+def test_seeding_twice_does_not_duplicate(seeding):
+    seeding._seed()
+    seeding._seed()
+    assert len(seeding._issues) == len(seeding._SEED)
+
+
+def test_a_deleted_seed_entry_stays_deleted(seeding):
+    """L'altra metà: inserire per id non deve resuscitare ciò che è stato
+    buttato via a mano. È la ragione per cui esiste `seeded_ids.json`."""
+    seeding._seed()
+    vittima = seeding._SEED[0][0]
+    assert seeding.delete_issue(vittima)
+
+    seeding._seed()
+    assert vittima not in _ids(seeding)
+
+
+def test_the_record_of_what_was_seeded_survives_a_restart(seeding):
+    seeding._seed()
+    seeding.delete_issue(seeding._SEED[0][0])
+
+    seeding._issues.clear()          # come un riavvio
+    seeding._seeded_ids.clear()
+    seeding._load()
+    seeding._load_seeded()
+    seeding._seed()
+
+    assert seeding._SEED[0][0] not in _ids(seeding)
+    assert len(seeding._issues) == len(seeding._SEED) - 1
+
+
+def test_seeding_does_not_touch_reports_written_from_the_app(seeding):
+    seeding._seed()
+    mia = seeding.add_issue("segnalazione mia", author="io@x.it")
+    seeding._seed()
+    assert mia["id"] in _ids(seeding)
+
+
+def test_edits_to_a_seed_entry_are_not_overwritten(seeding):
+    seeding._seed()
+    iid = seeding._SEED[0][0]
+    seeding.update_issue(iid, status="in corso", detail="con dettagli aggiunti")
+    seeding._seed()
+    voce = next(it for it in seeding._issues if it["id"] == iid)
+    assert voce["status"] == "in corso"
+    assert voce["detail"] == "con dettagli aggiunti"
