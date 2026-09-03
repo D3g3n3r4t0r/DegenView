@@ -4461,6 +4461,26 @@
       });
       labEl("lab-status").classList.add("hidden");
       renderLabResults(body.backtest);
+
+      // Auto-apply to main chart: copy params to main form and refresh signals
+      state.assetType = labState.assetType;
+      state.cryptoExchange = labState.exchange;
+      el("ticker-input").value = labState.displaySymbol || labState.symbol;
+      const mainStratSel = el("active-strategy-select");
+      if (mainStratSel && mainStratSel.value !== labState.strategy) {
+        mainStratSel.value = labState.strategy;
+        renderStrategyParamsFields();
+      }
+      const mainParamsContainer = el("strategy-params-fields");
+      if (mainParamsContainer) {
+        Object.entries(body.params).forEach(([key, value]) => {
+          const input = mainParamsContainer.querySelector(`[name="${key}"]`);
+          if (!input) return;
+          if (input.type === "checkbox") input.checked = !!value;
+          else input.value = value;
+        });
+      }
+      runAnalysis(labState.symbol);
     }).catch((err) => {
       if (seq !== labState.seq) return;
       labEl("lab-status").textContent = "Errore ottimizzazione: " + (err.message || "");
