@@ -27,6 +27,34 @@ _seeded_scopes: set[str] = set()
 _MAX_SEEN_AGE_DAYS = 45
 _PRUNE_EVERY = 200   # prune after this many additions
 
+# Quante barre indietro un segnale puo' essere e restare degno di una notifica.
+# La deduplica da sola non basta a garantirlo: dice se un segnale e' gia' stato
+# visto, non se vale ancora la pena mandarlo. Se il suo stato si perde — un
+# prune, un file cancellato, o semplicemente piu' segnali storici di prima nella
+# stessa risposta — ogni segnale mai notificato diventa "nuovo" e parte tutto
+# insieme. E' successo davvero: alzare il tetto dei segnali restituiti da 30 a
+# 10 000 (per mostrare i trade vecchi sul grafico, che leggono la stessa
+# funzione) ha fatto arrivare una ventina di notifiche con prezzi di anni
+# diversi. Un limite d'eta' rende quella classe di guasti impossibile invece che
+# improbabile: un segnale del 2022 non e' azionabile oggi, qualunque cosa dica
+# la deduplica.
+_MAX_SIGNAL_AGE_BARS = 3
+_MIN_SIGNAL_AGE_WINDOW_S = 3600          # almeno un'ora, sui timeframe stretti
+_MAX_SIGNAL_AGE_WINDOW_S = 7 * 86400     # mai piu' di una settimana
+
+_INTERVAL_SECONDS = {
+    "1m": 60, "3m": 180, "5m": 300, "15m": 900, "30m": 1800,
+    "1h": 3600, "2h": 7200, "4h": 14400, "6h": 21600, "8h": 28800,
+    "12h": 43200, "1d": 86400, "3d": 259200, "1w": 604800, "1M": 2592000,
+}
+
+
+def _max_signal_age_s(interval: str) -> int:
+    """Finestra entro cui un segnale e' ancora azionabile, per quel timeframe."""
+    bar = _INTERVAL_SECONDS.get(interval, 86400)
+    return int(min(max(bar * _MAX_SIGNAL_AGE_BARS, _MIN_SIGNAL_AGE_WINDOW_S),
+                   _MAX_SIGNAL_AGE_WINDOW_S))
+
 
 def _load() -> None:
     if _SEEN_FILE.exists():
@@ -91,9 +119,15 @@ def find_new_signals(
     scope_key = f"{symbol}|{interval}|{strategy.name}"
     is_first_pass = scope_key not in _seeded_scopes
 
+    # Guardia d'eta' PRIMA della deduplica, non dopo: i segnali vecchi vanno
+    # comunque registrati come visti (cosi' non diventano "nuovi" piu' avanti),
+    # ma non devono mai finire in `fresh`.
+    cutoff = int(time.time()) - _max_signal_age_s(interval)
+
     fresh: list[StrategySignal] = []
     for signal in strategy.signals:
         key = _signal_key(symbol, interval, strategy.name, signal)
+        too_old = signal.time < cutoff
 
         if frequency == "once":
             # For "once", use a type-level key (ignore signal.time) so we
@@ -105,14 +139,14 @@ def find_new_signals(
                 _seen[key] = int(time.time())
                 _seen[once_key] = int(time.time())
                 _additions_since_prune += 1
-                if not is_first_pass:
+                if not is_first_pass and not too_old:
                     fresh.append(signal)
         else:
             if key in _seen:
                 continue
             _seen[key] = int(time.time())
             _additions_since_prune += 1
-            if not is_first_pass:
+            if not is_first_pass and not too_old:
                 fresh.append(signal)
 
     _seeded_scopes.add(scope_key)

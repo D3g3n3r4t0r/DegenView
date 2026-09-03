@@ -1,6 +1,5 @@
 {
   "_README": "Scritto da Claude, versionato in git, distribuito col deploy. Le chiavi sono gli id delle segnalazioni. Non modificare a mano dall'app: verrebbe sovrascritto al deploy successivo.",
-
   "seed-0007": {
     "status": "in corso",
     "summary": "Causa trovata e misurata: ottimizzatore e grafico girano su dati diversi, e non lo dicono.",
@@ -8,12 +7,18 @@
     "next": "Restituire interval e candle count usati, e mostrarli accanto al risultato dell'ottimizzazione.",
     "commit": "in corso"
   },
-
   "seed-0010": {
     "status": "in corso",
     "summary": "Il dubbio era fondato: il 97% degli ingressi usa uno swing che in quel momento non esisteva ancora.",
     "detail": "Confermato per Accumulo / Distribuzione, con due misure indipendenti.\n\nGli ingressi nascono da swing rilevati con smc.swing_highs_lows(swing_length=8), che usa una finestra centrata: uno swing in posizione P è riconoscibile solo quando esistono 8 barre successive. Misurato su 16 swing di KASUSDT cercando il primo istante in cui lo swing compare E non sparisce più: ritardo minimo 8, mediano 8, massimo 8 barre — esattamente swing_length.\n\nMa _find_confirmation() parte da swing_pos + 1. Su 87 segnali con conferma:\n  conferme prima di P+8:  84/87 = 97%\n  ritardo mediano:        2 barre (ne servirebbero 8)\n\nNel backtest il trade viene aperto; con il bot dal vivo quel segnale non sarebbe esistito. I risultati di questa strategia sono sistematicamente ottimisti e non riproducibili.",
     "next": "Il fix è una riga (partire da swing_pos + swing_length), ma abbassa OGNI risultato storico già guardato. Non applicato di iniziativa: serve il tuo via libera.",
     "commit": "in corso"
+  },
+  "seed-0008": {
+    "status": "risolto",
+    "summary": "Causa trovata — ed era un effetto collaterale di un'altra correzione fatta da me.",
+    "detail": "build_strategy_state() alimenta SIA il grafico SIA la deduplica degli alert. Per far vedere i trade vecchi sul grafico il tetto dei segnali restituiti era stato alzato da 30 a 10.000: da quel momento l'alert ha cominciato a vedere anni di storia invece degli ultimi 30 segnali.\n\nPer uno scope gia' registrato is_first_pass e' False, quindi ogni segnale storico mai notificato prima risultava 'nuovo' e partiva. I prezzi disparati erano esattamente questo: prezzi di anni diversi.\n\nLa deduplica funzionava: diceva correttamente 'non li ho mai visti'. Non era la domanda giusta.\n\nFIX: guardia d'eta' prima della deduplica. Un segnale piu' vecchio di 3 barre del suo timeframe (minimo 1 ora, massimo 7 giorni) non genera notifica, qualunque cosa dica il dedup. I vecchi vengono comunque registrati come visti, cosi' non tornano a sembrare nuovi quando la finestra si sposta.\n\nOra anche azzerando completamente la deduplica la storia non riparte: e' una difesa strutturale, non un rattoppo.",
+    "next": "Nessuno. 11 test, incluso quello che riproduce il caso reale: 900 giorni di storia in ingresso, 1 sola notifica in uscita.",
+    "commit": "vedi git log su main"
   }
 }
