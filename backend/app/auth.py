@@ -145,6 +145,16 @@ def set_telegram_chat_id(user_id: str, chat_id: str) -> User | None:
     return updated
 
 
+def set_preferences(user_id: str, prefs: dict) -> User | None:
+    user = _users.get(user_id)
+    if user is None:
+        return None
+    updated = user.model_copy(update={"preferences": prefs})
+    _users[user_id] = updated
+    _save_users()
+    return updated
+
+
 def set_trading_credential(
     user_id: str,
     exchange: str,
