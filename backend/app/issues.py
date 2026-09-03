@@ -99,6 +99,9 @@ _SEED = [
     ("seed-0010", "Dubbi sui dati non usati in ottimizzazione nel backtest",
      "Verificare che non escluda trade 'a giochi fatti' per gonfiare la performance, e che quei trade "
      "sarebbero davvero stati aperti o chiusi dal bot in tempo reale.", "alta"),
+    ("seed-0011", "Il trading automatico non ha mai piazzato un ordine",
+     "Trovato lavorando sugli alert, non segnalato: non c'era modo di accorgersene. "
+     "Nessun errore, nessun log, semplicemente nessun ordine.", "alta"),
 ]
 
 

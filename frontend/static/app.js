@@ -3995,13 +3995,23 @@
   async function loadIssues() {
     const list = el("issues-list");
     if (!list) return;
+    // Uno stato esplicito prima della richiesta: un pannello vuoto altrimenti
+    // significa contemporaneamente "sto caricando", "non c'e' niente" e "e'
+    // fallito", e chi guarda non puo' distinguerli. E' successo davvero.
+    list.innerHTML = '<p class="issues-empty">Caricamento…</p>';
     try {
-      const resp = await fetch("/api/issues");
-      if (!resp.ok) throw new Error(`Errore ${resp.status}`);
+      const resp = await fetch("/api/issues", { cache: "no-store" });
+      if (!resp.ok) throw new Error(`il server ha risposto ${resp.status}`);
       const body = await resp.json();
+      if (!body || !Array.isArray(body.items)) throw new Error("risposta inattesa dal server");
       renderIssues(body);
     } catch (err) {
-      list.innerHTML = `<p class="issues-empty">Impossibile caricare le segnalazioni: ${escapeHtml(err.message)}</p>`;
+      list.innerHTML =
+        `<p class="issues-empty">Impossibile caricare le segnalazioni: `
+        + `${escapeHtml(err && err.message ? err.message : String(err))}`
+        + `<br><button type="button" id="issues-retry" class="issues-retry">Riprova</button></p>`;
+      const retry = el("issues-retry");
+      if (retry) retry.addEventListener("click", loadIssues);
     }
   }
 
@@ -4097,7 +4107,14 @@
     // from there: the bottom bar has five slots and they are all taken, which
     // is what "Altro" exists for.
     const altroItem = el("altro-issues-item");
-    if (altroItem) altroItem.addEventListener("click", () => showMobileScreen("issues"));
+    if (altroItem) altroItem.addEventListener("click", () => {
+      showMobileScreen("issues");
+      loadIssues();
+    });
+
+    // Anche all'avvio: se una via d'accesso non chiama loadIssues, il pannello
+    // e' comunque gia' popolato quando lo si apre, invece di restare vuoto.
+    loadIssues();
 
     // A count on the entry, so an open report is visible without opening it.
     fetch("/api/issues")
