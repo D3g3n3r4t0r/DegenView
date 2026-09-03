@@ -4092,6 +4092,26 @@
 
     const btn = el("rail-issues-btn");
     if (btn) btn.addEventListener("click", () => loadIssues());
+
+    // The rail is hidden below 760px, so on a phone the tab is unreachable
+    // from there: the bottom bar has five slots and they are all taken, which
+    // is what "Altro" exists for.
+    const altroItem = el("altro-issues-item");
+    if (altroItem) altroItem.addEventListener("click", () => showMobileScreen("issues"));
+
+    // A count on the entry, so an open report is visible without opening it.
+    fetch("/api/issues")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((b) => {
+        if (!b) return;
+        const n = (b.counts || {})["aperto"] || 0;
+        const badge = el("altro-issues-badge");
+        if (badge && n > 0) {
+          badge.textContent = n;
+          badge.classList.remove("hidden");
+        }
+      })
+      .catch(() => {});
   }
 
   function bindRail() {
@@ -4152,10 +4172,11 @@
     el("levels-panel").classList.remove("mobile-open");
     el("script-panel").classList.remove("mobile-open");
     el("altro-panel").classList.remove("mobile-open");
+    el("issues-panel").classList.remove("mobile-open");
     document.querySelector(".right-panel").classList.remove("mobile-open");
     el("draw-rail").classList.remove("mobile-tools-open");
 
-    const NAV_TARGET_FOR = { script: "altro", saldi: "altro", analisi: "altro", watchlist: "altro", backtest: "altro" };
+    const NAV_TARGET_FOR = { script: "altro", saldi: "altro", analisi: "altro", watchlist: "altro", backtest: "altro", issues: "altro" };
     const navTarget = NAV_TARGET_FOR[target] || target;
     document.querySelectorAll(".mobile-nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.mobileTarget === navTarget));
 
@@ -4173,6 +4194,9 @@
       el("script-panel").classList.add("mobile-open");
     } else if (target === "altro") {
       el("altro-panel").classList.add("mobile-open");
+    } else if (target === "issues") {
+      el("issues-panel").classList.add("mobile-open");
+      loadIssues();
     } else {
       // backtest | alert | saldi | analisi — shared right-panel, pick the internal tab
       const panel = document.querySelector(".right-panel");
@@ -4191,7 +4215,10 @@
   // (flyout via the matching rail button) and mobile (full-screen tab).
   function openPanel(panelId) {
     if (window.matchMedia("(max-width: 760px)").matches) {
-      showMobileScreen(panelId === "script-panel" ? "script" : "levels");
+      showMobileScreen(
+        panelId === "script-panel" ? "script"
+        : panelId === "issues-panel" ? "issues"
+        : "levels");
       return;
     }
     RAIL_PANELS.forEach(([btnId, pid]) => {

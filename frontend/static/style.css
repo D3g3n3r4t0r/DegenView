@@ -2276,7 +2276,7 @@ body {
   /* One screen at a time, filling everything from the very top of the
      screen (there's no toolbar left to clear) down to the bottom nav —
      not a partial sheet, not an overlay over the chart. */
-  #levels-panel, #script-panel, .right-panel, .altro-panel {
+  #levels-panel, #script-panel, #issues-panel, .right-panel, .altro-panel {
     position: fixed;
     left: 0;
     right: 0;
@@ -2291,7 +2291,7 @@ body {
     display: none;
   }
 
-  #levels-panel.mobile-open, #script-panel.mobile-open, .right-panel.mobile-open, .altro-panel.mobile-open {
+  #levels-panel.mobile-open, #script-panel.mobile-open, #issues-panel.mobile-open, .right-panel.mobile-open, .altro-panel.mobile-open {
     display: flex;
     flex-direction: column;
   }
@@ -3274,3 +3274,14 @@ body {
 }
 .issue-res-next { font-size: 11.5px; color: var(--ink, #333); margin: 7px 0 0; line-height: 1.5; }
 .issue-res-commit { font-size: 10px; color: var(--faint, #aaa); margin: 5px 0 0; }
+
+/* Conteggio delle segnalazioni aperte sulla voce in "Altro": serve a vedere
+   che c'e' qualcosa in sospeso senza dover aprire il pannello. */
+.altro-issues-badge {
+  font-family: var(--font-mono, monospace); font-size: 10px; font-weight: 700;
+  min-width: 17px; height: 17px; padding: 0 5px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--warn, #96222e); color: #fff; border-radius: 9px;
+  margin-left: auto; margin-right: 6px; flex-shrink: 0;
+}
+.altro-issues-badge.hidden { display: none; }
