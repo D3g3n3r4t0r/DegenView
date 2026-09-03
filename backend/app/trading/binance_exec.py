@@ -58,7 +58,6 @@ async def place_order(
                     raise RuntimeError(f"{exchange} price error: {price_resp.text}")
                 price = float(price_resp.json()["price"])
                 qty = size_value / price
-                order_params["quantity"] = f"{qty:.6f}".rstrip("0").rstrip(".")
             else:
                 base = _base_asset(symbol)
                 resp = await client.get(f"/api/v3/account?{_sign(api_secret, {})}")
@@ -67,7 +66,9 @@ async def place_order(
                 balances = {b["asset"]: float(b["free"]) for b in resp.json()["balances"]}
                 free = balances.get(base, 0.0)
                 qty = free * size_value / 100
-                order_params["quantity"] = f"{qty:.6f}".rstrip("0").rstrip(".")
+            if qty <= 0:
+                raise RuntimeError(f"Quantità calcolata zero o negativa — saldo insufficiente o prezzo non disponibile")
+            order_params["quantity"] = f"{qty:.6f}".rstrip("0").rstrip(".")
 
         signed_qs = _sign(api_secret, order_params)
         order_resp = await client.post(f"/api/v3/order?{signed_qs}")

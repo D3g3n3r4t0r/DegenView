@@ -804,7 +804,7 @@ async def update_telegram_chat_id(
 @app.get("/api/auth/trading", response_model=list[TradingCredentialOut])
 async def get_trading_credentials(user: User = Depends(auth.get_current_user)) -> list[TradingCredentialOut]:
     out = []
-    for exchange in ("binance", "mexc", "kucoin"):
+    for exchange in ("binance", "mexc", "kucoin", "kraken", "coinbase", "bitstamp"):
         cred = user.trading_credentials.get(exchange)
         if cred is None:
             out.append(TradingCredentialOut(exchange=exchange, api_key_set=False, api_secret_set=False, passphrase_set=False, enabled=False, size_mode="fixed_usdt", size_value=50.0))
