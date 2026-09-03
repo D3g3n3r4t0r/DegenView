@@ -67,7 +67,7 @@ async def place_order(
                 free = balances.get(base, 0.0)
                 qty = free * size_value / 100
             if qty <= 0:
-                raise RuntimeError(f"Quantità calcolata zero o negativa — saldo insufficiente o prezzo non disponibile")
+                raise RuntimeError("Quantità calcolata zero o negativa — saldo insufficiente o prezzo non disponibile")
             order_params["quantity"] = f"{qty:.6f}".rstrip("0").rstrip(".")
 
         signed_qs = _sign(api_secret, order_params)
