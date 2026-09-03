@@ -3817,6 +3817,11 @@
       input.addEventListener("change", () => {
         state.layers[input.dataset.layer] = input.checked;
         render();
+        // Sub-charts (RSI, MACD, Stoch) go from display:none → visible inside render().
+        // The ResizeObserver fires asynchronously after the layout reflow, so the
+        // chart may still have zero dimensions at the time render() calls resize.
+        // A single rAF after the paint ensures the new dimensions are available.
+        requestAnimationFrame(() => resizeAllCharts());
       });
     });
 
