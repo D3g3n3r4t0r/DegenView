@@ -24,6 +24,7 @@ import heapq
 import itertools
 import math
 import random
+from dataclasses import dataclass
 from typing import Iterator
 
 from app.analysis.backtest import run_backtest
@@ -33,6 +34,90 @@ from app.models import BacktestResult
 _TRIALS = 200
 _MIN_OOS_CANDLES = 60
 _TOP_N = 10
+
+
+@dataclass(frozen=True)
+class Constraints:
+    """Vincoli scelti da chi cerca, applicati prima del punteggio.
+
+    Sono un filtro, non un peso: chiedere "al massimo zero trade in perdita"
+    vuol dire escludere le configurazioni che ne hanno, non preferire quelle
+    che ne hanno pochi. Una preferenza qui verrebbe comunque sopraffatta dal
+    Calmar, che varia di ordini di grandezza mentre il conteggio delle perdite
+    varia di poche unita'.
+
+    `None` significa "nessun vincolo" e va tenuto distinto da 0, che e' un
+    vincolo legittimo e il piu' stringente: "nessun trade in perdita",
+    "drawdown nullo" sono esattamente cio' che e' stato chiesto di poter
+    selezionare.
+    """
+
+    min_losing_trades: int | None = None
+    max_losing_trades: int | None = None
+    max_drawdown_pct: float | None = None
+
+    @property
+    def active(self) -> bool:
+        return any(v is not None for v in
+                   (self.min_losing_trades, self.max_losing_trades, self.max_drawdown_pct))
+
+    def accepts(self, bt: BacktestResult) -> bool:
+        """Filtro riusabile: la stessa regola vale per ogni modalita' di ricerca."""
+        return _passes(bt, self)
+
+    def describe(self) -> str:
+        parts = []
+        if self.min_losing_trades is not None:
+            parts.append(f"almeno {self.min_losing_trades} trade in perdita")
+        if self.max_losing_trades is not None:
+            parts.append(f"al massimo {self.max_losing_trades} trade in perdita")
+        if self.max_drawdown_pct is not None:
+            parts.append(f"drawdown entro il {self.max_drawdown_pct:g}%")
+        return ", ".join(parts)
+
+
+_NO_CONSTRAINTS = Constraints()
+
+
+class NoCandidateMeetsConstraints(Exception):
+    """Nessuna configurazione rispetta i filtri richiesti.
+
+    Sollevata invece di ripiegare sui parametri di default: con un filtro
+    attivo, restituire una configurazione che lo viola darebbe una risposta
+    che sembra valida e non lo e'. Meglio dire che con quei vincoli, su questa
+    serie, non c'e' niente.
+    """
+
+    def __init__(self, constraints: "Constraints", evaluated: int, rejected: int):
+        self.constraints = constraints
+        self.evaluated = evaluated
+        self.rejected = rejected
+        super().__init__(
+            f"Nessuna configurazione rispetta i filtri ({constraints.describe()}): "
+            f"{rejected} configurazioni su {evaluated} escluse. "
+            f"Prova ad allentare i vincoli."
+        )
+
+
+def losing_trades(bt: BacktestResult) -> int:
+    """Quanti trade chiusi in perdita. Contati dai trade, non dal win rate:
+    il win rate e' arrotondato e con pochi trade non permette di risalire al
+    conteggio esatto, che qui invece serve esatto perche' il vincolo puo'
+    essere 0."""
+    return sum(1 for t in bt.trades if t.pnl_abs < 0)
+
+
+def _passes(bt: BacktestResult, c: Constraints) -> bool:
+    if c.max_drawdown_pct is not None and abs(bt.max_drawdown_pct) > c.max_drawdown_pct:
+        return False
+    if c.min_losing_trades is None and c.max_losing_trades is None:
+        return True
+    n = losing_trades(bt)
+    if c.min_losing_trades is not None and n < c.min_losing_trades:
+        return False
+    if c.max_losing_trades is not None and n > c.max_losing_trades:
+        return False
+    return True
 
 
 def _volatility_thresholds(volatility_pct: float) -> tuple[float, int]:
@@ -218,6 +303,7 @@ def optimize_strategy(
     seed: int | None = None,
     mode: str = "random",
     top_n: int = _TOP_N,
+    constraints: Constraints | None = None,
 ) -> tuple[dict, BacktestResult, int, float | None, bool, list[dict]]:
     """Search for the best parameters and return the top-N candidates.
 
@@ -235,6 +321,7 @@ def optimize_strategy(
     default_params, random_params_fn = _STRATEGY_SPACES[strategy_name]
 
     rng = random.Random(seed)
+    constraints = constraints or _NO_CONSTRAINTS
     ticker_volatility = _calc_volatility(df)
 
     oos_candles = max(int(len(df) * 0.30), _MIN_OOS_CANDLES)
@@ -253,6 +340,7 @@ def optimize_strategy(
     # this the shortlist fills with ten copies of one configuration, which is
     # exactly the information the shortlist exists to avoid hiding.
     seen_fingerprints: set[tuple] = set()
+    rejected_by_constraints = 0
 
     def _fingerprint(bt: BacktestResult) -> tuple:
         return (
@@ -262,7 +350,12 @@ def optimize_strategy(
         )
 
     def _consider(params: dict, bt: BacktestResult) -> None:
-        nonlocal counter
+        nonlocal counter, rejected_by_constraints
+        # Prima del punteggio: un candidato che viola i vincoli non deve poter
+        # entrare nella classifica per quanto alto sia il suo Calmar.
+        if not _passes(bt, constraints):
+            rejected_by_constraints += 1
+            return
         score = _score(bt, ticker_volatility)
         if score == float("-inf"):
             return
@@ -295,6 +388,9 @@ def optimize_strategy(
             bt = run_backtest(df_in, candidate, backtest_params, strategy_name=strategy_name)
             evaluated += 1
             _consider(candidate, bt)
+
+    if not heap and constraints.active and rejected_by_constraints:
+        raise NoCandidateMeetsConstraints(constraints, evaluated, rejected_by_constraints)
 
     if not heap:
         # No candidate passed the score filters — fall back to defaults with OOS

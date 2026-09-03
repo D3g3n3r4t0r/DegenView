@@ -36,7 +36,12 @@ from app.analysis.backtest import run_backtest
 from app.analysis.confluence import compute_confluence
 from app.analysis.indicators import compute_indicators
 from app.analysis.fibonacci import compute_fib_zones
-from app.analysis.optimize import is_optimizable, optimize_strategy
+from app.analysis.optimize import (
+    Constraints,
+    NoCandidateMeetsConstraints,
+    is_optimizable,
+    optimize_strategy,
+)
 from app.analysis.pipeline import run_pipeline
 from app.analysis.smc_engine import compute_dealing_range, compute_levels, compute_swings
 from app.analysis.strategies import AVAILABLE_STRATEGIES, DEFAULT_STRATEGY, build_strategy_state
@@ -1549,6 +1554,12 @@ async def optimize_strategy_endpoint(
     strategy_name: str = Query(DEFAULT_STRATEGY),
     backtest_params: BacktestParamsQuery = Depends(),
     mode: str = Query("random", pattern="^(random|grid|plateau)$"),
+    # Filtri opzionali sul risultato. `None` = nessun vincolo, ed e' distinto
+    # da 0, che e' il vincolo piu' stringente ("nessun trade in perdita",
+    # "drawdown nullo") e va potuto chiedere.
+    min_losing_trades: int | None = Query(None, ge=0, le=1000),
+    max_losing_trades: int | None = Query(None, ge=0, le=1000),
+    max_drawdown_pct: float | None = Query(None, ge=0.0, le=100.0),
 ) -> OptimizeResult:
     """Random-search parameter tuning for any strategy in the registry —
     same deep-history df the backtest itself uses (see
@@ -1589,15 +1600,27 @@ async def optimize_strategy_endpoint(
         ),
     )
 
+    constraints = Constraints(
+        min_losing_trades=min_losing_trades,
+        max_losing_trades=max_losing_trades,
+        max_drawdown_pct=max_drawdown_pct,
+    )
+
     if mode == "plateau":
         # Deterministic path: same inputs give the same answer, because the
         # cell grid is enumerated rather than sampled wherever it fits the
         # budget. Measured against random search on identical data with only
         # the seed varying, cv of the out-of-sample return went from 66.5% to
         # 0% (Gabriele) and from 225.1% to 0% (Lorenzo).
-        pr = await asyncio.to_thread(
-            run_pipeline, strategy_name, df, backtest_params.model_dump()
-        )
+        try:
+            pr = await asyncio.to_thread(
+                run_pipeline, strategy_name, df, backtest_params.model_dump(),
+                accept=(constraints.accepts if constraints.active else None),
+            )
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=422 if constraints.active else 400, detail=str(exc)
+            ) from exc
         rep = pr.gate.report
         return OptimizeResult(
             params=pr.params,
@@ -1638,9 +1661,16 @@ async def optimize_strategy_endpoint(
             ],
         )
 
-    best_params, best_bt, trials, oos_return, overfitted, top_results = await asyncio.to_thread(
-        optimize_strategy, strategy_name, df, backtest_params.model_dump(), mode=mode
-    )
+    try:
+        best_params, best_bt, trials, oos_return, overfitted, top_results = await asyncio.to_thread(
+            optimize_strategy, strategy_name, df, backtest_params.model_dump(),
+            mode=mode, constraints=constraints,
+        )
+    except NoCandidateMeetsConstraints as exc:
+        # 422 e non 500: la richiesta e' valida, e' il risultato a non esistere
+        # con quei vincoli. Il messaggio dice quante configurazioni sono state
+        # escluse, cosi' si capisce se allentare di poco o di molto.
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     best_bt = best_bt.model_copy(update={"interval": backtest_interval})
     return OptimizeResult(
         params=best_params,

@@ -28,6 +28,7 @@ protect.
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 import pandas as pd
@@ -143,8 +144,16 @@ def run_pipeline(
     tol: float = 0.01,
     min_trades: int = 8,
     seed: int = 0,
+    accept: Callable[[BacktestResult], bool] | None = None,
 ) -> PipelineResult:
-    """Deterministic parameter selection. Same inputs, same answer, always."""
+    """Deterministic parameter selection. Same inputs, same answer, always.
+
+    `accept` is an optional hard filter chosen by the caller (no losing trades,
+    a drawdown ceiling). It is applied when picking each branch's winner among
+    the finalists the plateau search already ranked, not inside the search: the
+    objective has to stay finite everywhere for boundary detection to work, so
+    a filter pushed down there would carve holes in the surface being measured.
+    A branch whose finalists all fail the filter contributes nothing."""
     bp = backtest_params or {}
     df_in, df_val, df_out = _three_way_split(df)
 
@@ -183,16 +192,27 @@ def run_pipeline(
         ))
         if not res.enumerated:
             all_enumerated = False
-        if res.best is None:
+        pick = res.best
+        if accept is not None:
+            pick = next((c for c in res.candidates if accept(c.backtest)), None)
+            if pick is not None and pick is not res.best:
+                outcomes[-1].notes.append(
+                    "il migliore per stabilita' non rispettava i filtri: scelto "
+                    "il primo finalista che li rispetta"
+                )
+            outcomes[-1].best = pick
+        if pick is None:
+            if accept is not None:
+                outcomes[-1].notes.append("nessun finalista rispetta i filtri")
             continue
 
         # Score this branch's winner on data it never saw.
-        val_bt = run_backtest(df_val, res.best.params, bp, strategy_name=strategy_name)
+        val_bt = run_backtest(df_val, pick.params, bp, strategy_name=strategy_name)
         total_evals += 1
         outcomes[-1].validation_return_pct = val_bt.total_return_pct
         outcomes[-1].validation_trades = val_bt.num_trades
         scored.append((val_bt.total_return_pct, res.enumerated, cs.d,
-                       cs.label, res.best, val_bt.num_trades))
+                       cs.label, pick, val_bt.num_trades))
 
     incumbent: PlateauCandidate | None = None
     incumbent_label = ""
@@ -236,6 +256,13 @@ def run_pipeline(
         _, _, _, incumbent_label, incumbent, _ = contenders[0]
 
     if incumbent is None:
+        if accept is not None:
+            raise ValueError(
+                f"Nessuna configurazione rispetta i filtri richiesti per {strategy_name!r}. "
+                f"Questa modalita' seleziona per stabilita': i finalisti sono pochi per "
+                f"costruzione, quindi un filtro stretto puo' escluderli tutti anche quando "
+                f"altrove esisterebbe una configurazione che lo rispetta."
+            )
         raise ValueError(
             f"Nessuna configurazione con almeno {min_trades} trade per {strategy_name!r}"
         )

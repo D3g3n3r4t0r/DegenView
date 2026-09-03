@@ -328,6 +328,32 @@
             </label>
           </div>
 
+          <!-- Filtri sul risultato: escludono le configurazioni che non li
+               rispettano, non le penalizzano. Vuoto = nessun vincolo, che e'
+               diverso da 0 (nessun trade in perdita, drawdown nullo). -->
+          <details class="lab-filters" id="lab-filters">
+            <summary>Filtri sul risultato <span class="lab-filters-badge hidden" id="lab-filters-badge"></span></summary>
+            <p class="lab-filters-hint">
+              Lascia vuoto per non porre vincoli. Scrivere <strong>0</strong> e' un vincolo
+              vero e proprio: nessun trade in perdita, oppure drawdown nullo.
+            </p>
+            <div class="lab-filters-grid">
+              <label>
+                <span>Trade in perdita: min</span>
+                <input type="number" id="lab-min-losing" min="0" step="1" placeholder="—" />
+              </label>
+              <label>
+                <span>Trade in perdita: max</span>
+                <input type="number" id="lab-max-losing" min="0" step="1" placeholder="—" />
+              </label>
+              <label>
+                <span>Drawdown massimo (%)</span>
+                <input type="number" id="lab-max-dd" min="0" max="100" step="0.5" placeholder="—" />
+              </label>
+            </div>
+            <button type="button" class="lab-filters-clear" id="lab-filters-clear">Azzera filtri</button>
+          </details>
+
           <div id="lab-data-used" class="lab-data-used hidden"></div>
           <div id="lab-regime-box" class="lab-regime-box hidden"></div>
           <div id="lab-branch-box" class="lab-branch-box hidden"></div>
