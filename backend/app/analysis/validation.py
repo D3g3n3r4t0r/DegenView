@@ -191,6 +191,26 @@ def deflated_sharpe_ratio(
     )
 
 
+def periods_per_year_from_curve(equity_curve: list[tuple[int, float]]) -> float:
+    """How many equity-curve steps a year actually contains.
+
+    The steps are TRADES, not calendar days, so annualising them with the 252
+    of daily returns silently assumes the strategy trades every session. On a
+    28-trade backtest spanning two and a half years that inflates the Sharpe by
+    roughly a factor of three, and the deflation threshold it is compared
+    against is computed on the same wrong scale — the verdict survives, the
+    number does not. Derive the factor from the curve's own timestamps instead.
+    """
+    if not equity_curve or len(equity_curve) < 3:
+        return 252.0
+    t0, t1 = equity_curve[0][0], equity_curve[-1][0]
+    span_days = (t1 - t0) / 86400.0
+    if span_days <= 1:
+        return 252.0
+    steps = len(equity_curve) - 1
+    return float(np.clip(steps / (span_days / 365.25), 1.0, 365.0))
+
+
 def returns_from_equity_curve(equity_curve: list[tuple[int, float]]) -> np.ndarray:
     """Per-trade returns from an equity curve, for the Sharpe input."""
     if not equity_curve or len(equity_curve) < 2:

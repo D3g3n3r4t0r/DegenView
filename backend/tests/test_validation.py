@@ -12,6 +12,7 @@ import pytest
 
 from app.analysis.validation import (
     deflated_sharpe_ratio,
+    periods_per_year_from_curve,
     probability_of_backtest_overfitting,
     returns_from_equity_curve,
 )
@@ -126,3 +127,40 @@ def test_returns_from_equity_curve_handles_degenerate_input():
     assert returns_from_equity_curve([]).size == 0
     assert returns_from_equity_curve([(0, 100.0)]).size == 0
     assert returns_from_equity_curve([(0, 0.0), (1, 50.0)]).size == 0
+
+
+# --- annualisation from the curve's own clock --------------------------------
+
+
+def test_periods_per_year_comes_from_the_curve_not_a_constant():
+    """Equity-curve steps are TRADES, not sessions. Annualising 28 trades over
+    two and a half years with the 252 of daily returns assumes the strategy
+    traded every session, inflating the Sharpe about fourfold — and the
+    deflation threshold is computed on the same wrong scale."""
+    day = 86400
+    curve = [(int(i * 860 / 28) * day, 10000.0 * (1.02 ** i)) for i in range(29)]
+    ppy = periods_per_year_from_curve(curve)
+    assert 8 < ppy < 20, f"28 trades over 860 days should be ~12/yr, got {ppy}"
+
+
+def test_annualisation_is_capped_for_degenerate_curves():
+    for curve in ([], [(0, 100.0)], [(0, 100.0), (1, 101.0)]):
+        assert periods_per_year_from_curve(curve) == 252.0
+    same_day = [(0, 100.0), (100, 101.0), (200, 102.0), (300, 103.0)]
+    assert periods_per_year_from_curve(same_day) == 252.0
+
+
+def test_correcting_the_scale_changes_the_number_not_the_verdict():
+    day = 86400
+    rng = np.random.default_rng(0)
+    eq = [10000.0]
+    for _ in range(28):
+        eq.append(eq[-1] * (1 + rng.normal(0.02, 0.06)))
+    curve = [(int(i * 860 / 28) * day, v) for i, v in enumerate(eq)]
+    r = returns_from_equity_curve(curve)
+    ppy = periods_per_year_from_curve(curve)
+
+    wrong = deflated_sharpe_ratio(r, n_trials=3802, periods_per_year=252)
+    right = deflated_sharpe_ratio(r, n_trials=3802, periods_per_year=ppy)
+    assert wrong.sharpe > right.sharpe * 3
+    assert wrong.acceptable == right.acceptable
