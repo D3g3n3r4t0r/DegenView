@@ -35,7 +35,7 @@ from app.analysis.backtest import run_backtest
 from app.analysis.confluence import compute_confluence
 from app.analysis.indicators import compute_indicators
 from app.analysis.fibonacci import compute_fib_zones
-from app.analysis.optimize import grid_size, is_optimizable, optimize_strategy
+from app.analysis.optimize import is_optimizable, optimize_strategy
 from app.analysis.smc_engine import compute_dealing_range, compute_levels, compute_swings
 from app.analysis.strategies import AVAILABLE_STRATEGIES, DEFAULT_STRATEGY, build_strategy_state
 from app.analysis.summary import build_summary, determine_bias
