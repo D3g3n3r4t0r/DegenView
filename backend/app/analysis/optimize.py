@@ -12,8 +12,15 @@ Search modes:
 
 Walk-forward: optimises on the first N-60 candles (guaranteeing at least 60
 out-of-sample candles regardless of dataset length), validates on the rest.
+
+Top-N: the search keeps the N highest-scoring in-sample candidates (min-heap),
+then runs each of them through the OOS period so the caller can show a ranked
+table. The seed is derived deterministically from (symbol, strategy, interval)
+so the same query always produces the same ranking — results no longer change
+between runs.
 """
 
+import heapq
 import itertools
 import math
 import random
@@ -25,23 +32,18 @@ from app.models import BacktestResult
 
 _TRIALS = 200
 _MIN_OOS_CANDLES = 60
+_TOP_N = 10
 
 
 def _volatility_thresholds(volatility_pct: float) -> tuple[float, int]:
     """Return (max_drawdown_cap, min_trades) scaled to ticker volatility."""
-    # Low-vol (BTC, large cap): tight DD cap, more trades needed for confidence.
-    # High-vol (altcoins, meme): wider DD cap acceptable, fewer trades suffice.
     max_dd = 25.0 + min(volatility_pct * 4.0, 20.0)   # [25, 45]
     min_trades = max(6, 12 - int(volatility_pct))       # [6, 12]
     return max_dd, min_trades
 
 
 def _score(bt: BacktestResult, volatility_pct: float = 2.0) -> float:
-    """Composite score: Calmar × PF bonus × Sharpe bonus × trade confidence.
-
-    All thresholds scale with ticker volatility so BTC and a micro-cap are
-    not judged by the same ruler.
-    """
+    """Composite score: Calmar × PF bonus × Sharpe bonus × trade confidence."""
     max_dd_cap, min_trades = _volatility_thresholds(volatility_pct)
 
     if bt.num_trades < min_trades:
@@ -184,7 +186,28 @@ def _calc_volatility(df) -> float:
                 return result
     except Exception:
         pass
-    return 2.0  # fallback: assume medium-volatility asset
+    return 2.0
+
+
+def _oos_validate(
+    params: dict,
+    df_out,
+    backtest_params: dict,
+    strategy_name: str,
+    in_sample_return: float,
+) -> tuple[float | None, bool, list]:
+    """Run OOS backtest for a candidate; return (oos_return, overfitted, oos_trades)."""
+    if len(df_out) == 0:
+        return None, False, []
+    oos_bt = run_backtest(df_out, params, backtest_params, strategy_name=strategy_name)
+    oos_return = oos_bt.total_return_pct
+    oos_trades = oos_bt.trades
+    if in_sample_return > 0:
+        degradation = (in_sample_return - oos_return) / abs(in_sample_return)
+        overfitted = degradation > 0.50
+    else:
+        overfitted = oos_return < in_sample_return
+    return oos_return, overfitted, oos_trades
 
 
 def optimize_strategy(
@@ -194,35 +217,70 @@ def optimize_strategy(
     trials: int = _TRIALS,
     seed: int | None = None,
     mode: str = "random",
-) -> tuple[dict, BacktestResult, int, float | None, bool]:
-    """Returns (best_params, best_backtest_result, trials_evaluated,
-    out_of_sample_return_pct, overfitted).
+    top_n: int = _TOP_N,
+) -> tuple[dict, BacktestResult, int, float | None, bool, list[dict]]:
+    """Search for the best parameters and return the top-N candidates.
 
-    best_backtest_result.oos_trades contains the out-of-sample trades so the
-    caller can display them separately in the UI.
+    Returns:
+        (best_params, best_bt, trials_evaluated, oos_return, overfitted, top_results)
 
-    Walk-forward: optimises on df[:-oos_candles] (in-sample), validates on
-    df[-oos_candles:]. oos_candles = max(30% of df, _MIN_OOS_CANDLES).
+    top_results is a list of dicts (length ≤ top_n), sorted by IS score descending:
+        {rank, params, backtest, score, out_of_sample_return_pct, overfitted}
+
+    The seed should be set deterministically by the caller (hash of symbol +
+    strategy + interval) so repeated queries return a consistent ranking.
     """
     if strategy_name not in _STRATEGY_SPACES:
         raise ValueError(f"Nessuno spazio di parametri definito per {strategy_name!r}")
     default_params, random_params_fn = _STRATEGY_SPACES[strategy_name]
 
     rng = random.Random(seed)
-
-    # Volatility-aware thresholds
     ticker_volatility = _calc_volatility(df)
 
-    # Adaptive walk-forward split: guarantee at least _MIN_OOS_CANDLES OOS
     oos_candles = max(int(len(df) * 0.30), _MIN_OOS_CANDLES)
     split = len(df) - oos_candles
     df_in = df.iloc[:split]
     df_out = df.iloc[split:]
 
-    best_params = dict(default_params)
-    best_bt = run_backtest(df_in, best_params, backtest_params, strategy_name=strategy_name)
-    best_score = _score(best_bt, ticker_volatility)
-    evaluated = 1
+    # Min-heap of (score, counter, params, bt) — keeps top_n best by score.
+    # counter breaks ties so BacktestResult objects are never compared.
+    heap: list[tuple[float, int, dict, BacktestResult]] = []
+    counter = 0
+    evaluated = 0
+
+    # Distinct-by-effect: parameters that do not bind (an rsi_overbought of 80
+    # vs 85 that never triggers) produce byte-identical trade sequences. Without
+    # this the shortlist fills with ten copies of one configuration, which is
+    # exactly the information the shortlist exists to avoid hiding.
+    seen_fingerprints: set[tuple] = set()
+
+    def _fingerprint(bt: BacktestResult) -> tuple:
+        return (
+            round(bt.total_return_pct, 4),
+            bt.num_trades,
+            round(bt.max_drawdown_pct, 4),
+        )
+
+    def _consider(params: dict, bt: BacktestResult) -> None:
+        nonlocal counter
+        score = _score(bt, ticker_volatility)
+        if score == float("-inf"):
+            return
+        fp = _fingerprint(bt)
+        if fp in seen_fingerprints:
+            return
+        seen_fingerprints.add(fp)
+        counter += 1
+        entry = (score, counter, params, bt)
+        if len(heap) < top_n:
+            heapq.heappush(heap, entry)
+        elif score > heap[0][0]:
+            heapq.heapreplace(heap, entry)
+
+    # Always evaluate defaults first
+    default_bt = run_backtest(df_in, default_params, backtest_params, strategy_name=strategy_name)
+    _consider(dict(default_params), default_bt)
+    evaluated += 1
 
     use_grid = mode == "grid" and strategy_name in _GRID_SPACES
     if use_grid:
@@ -230,43 +288,59 @@ def optimize_strategy(
             candidate = {**default_params, **candidate_delta}
             bt = run_backtest(df_in, candidate, backtest_params, strategy_name=strategy_name)
             evaluated += 1
-            score = _score(bt, ticker_volatility)
-            if score > best_score:
-                best_score = score
-                best_params = candidate
-                best_bt = bt
+            _consider(candidate, bt)
     else:
         for _ in range(trials):
             candidate = random_params_fn(rng)
             bt = run_backtest(df_in, candidate, backtest_params, strategy_name=strategy_name)
             evaluated += 1
-            score = _score(bt, ticker_volatility)
-            if score > best_score:
-                best_score = score
-                best_params = candidate
-                best_bt = bt
+            _consider(candidate, bt)
 
-    # Out-of-sample validation — run best params on held-out period
-    out_of_sample_return_pct: float | None = None
-    overfitted = False
-    oos_trades = []
+    if not heap:
+        # No candidate passed the score filters — fall back to defaults with OOS
+        best_bt = default_bt.model_copy(update={
+            "ticker_volatility_pct": round(ticker_volatility, 2) if math.isfinite(ticker_volatility) else None,
+            "oos_trades": [],
+        })
+        return dict(default_params), best_bt, evaluated, None, False, []
+
+    # Sort descending by score
+    top_candidates = sorted(heap, key=lambda x: x[0], reverse=True)
+
+    # Run OOS for every top candidate
+    top_results: list[dict] = []
+    for rank, (score, _, params, bt) in enumerate(top_candidates, start=1):
+        oos_return, overfitted, oos_trades = _oos_validate(
+            params, df_out, backtest_params, strategy_name, bt.total_return_pct
+        )
+        top_results.append({
+            "rank": rank,
+            "params": params,
+            "backtest": bt,
+            "score": round(score, 4),
+            "out_of_sample_return_pct": oos_return,
+            "overfitted": overfitted,
+        })
+
+    # Best = top_results[0]
+    best = top_results[0]
+    best_params = best["params"]
+    best_bt_raw = best["backtest"]
+    best_oos = best["out_of_sample_return_pct"]
+    best_overfitted = best["overfitted"]
+
+    # OOS trades for the winner, so the UI can show them in the trades drawer
     if len(df_out) > 0:
-        oos_bt = run_backtest(df_out, best_params, backtest_params, strategy_name=strategy_name)
-        out_of_sample_return_pct = oos_bt.total_return_pct
-        oos_trades = oos_bt.trades
-        in_sample_return = best_bt.total_return_pct
-        if in_sample_return > 0:
-            degradation = (in_sample_return - out_of_sample_return_pct) / abs(in_sample_return)
-            if degradation > 0.50:
-                overfitted = True
-        elif in_sample_return <= 0 and out_of_sample_return_pct < in_sample_return:
-            overfitted = True
+        best_oos_trades = run_backtest(
+            df_out, best_params, backtest_params, strategy_name=strategy_name
+        ).trades
+    else:
+        best_oos_trades = []
 
-    # Attach metadata to the result
     vol_pct = round(ticker_volatility, 2) if math.isfinite(ticker_volatility) else None
-    best_bt = best_bt.model_copy(update={
+    best_bt = best_bt_raw.model_copy(update={
         "ticker_volatility_pct": vol_pct,
-        "oos_trades": oos_trades,
+        "oos_trades": best_oos_trades,
     })
 
-    return best_params, best_bt, evaluated, out_of_sample_return_pct, overfitted
+    return best_params, best_bt, evaluated, best_oos, best_overfitted, top_results
