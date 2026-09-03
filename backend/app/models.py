@@ -103,6 +103,8 @@ class BacktestResult(BaseModel):
     data_end: int | None = None     # unix ms dell'ultimo candle usato
     sharpe_ratio: float | None = None
     max_consecutive_losses: int | None = None
+    ticker_volatility_pct: float | None = None   # ATR(14)/close medio × 100
+    oos_trades: list[BacktestTrade] = []          # trade out-of-sample (solo ottimizzazione)
 
 
 class ExchangeCredential(BaseModel):

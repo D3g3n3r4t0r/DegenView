@@ -4335,29 +4335,27 @@
   function openLabTradesDrawer(bt) {
     const drawer = el("lab-trades-drawer");
     const body = el("lab-trades-body");
-    el("lab-trades-title").textContent = `${bt.num_trades} operazioni`;
+    const oosTrades = bt.oos_trades || [];
+    const isTrades = bt.trades || [];
+    const totalCount = isTrades.length + oosTrades.length;
+    el("lab-trades-title").textContent = oosTrades.length
+      ? `${isTrades.length} operazioni IS + ${oosTrades.length} OOS`
+      : `${bt.num_trades} operazioni`;
 
     const dateFmt = { day: "2-digit", month: "short", year: "2-digit" };
     const fmtTs = (ms) => new Date(ms * 1000).toLocaleDateString("it-IT", dateFmt);
     const fmtPrice = (p) => p.toLocaleString("it-IT", { maximumFractionDigits: 4 });
     const fmtMoney = (v) => v.toLocaleString("it-IT", { maximumFractionDigits: 0 });
 
-    const initCap = parseFloat(labEl("lab-initial-capital").value) || 10000;
-
-    let html = `<table class="lab-trades-table">
-      <thead><tr>
-        <th>#</th><th>Dir</th><th>Entrata</th><th>Uscita</th>
-        <th>Entry</th><th>Exit</th><th>P&amp;L %</th><th>P&amp;L $</th><th>Equity</th>
-      </tr></thead><tbody>`;
-
-    const trades = bt.trades || [];
-    trades.forEach((t, i) => {
+    const renderRow = (t, i, isOos) => {
       const isWin = t.pnl_abs > 0;
       const dir = t.direction === "long" ? "▲ L" : "▼ S";
       const dirClass = t.direction === "long" ? "bull" : "bear";
       const pnlClass = isWin ? "pos" : "neg";
-      html += `<tr>
-        <td class="td-num">${i + 1}</td>
+      const rowClass = isOos ? ' class="oos-row"' : "";
+      const numLabel = isOos ? `<span class="oos-badge">OOS</span>${i + 1}` : i + 1;
+      return `<tr${rowClass}>
+        <td class="td-num">${numLabel}</td>
         <td class="td-dir ${dirClass}">${dir}</td>
         <td class="td-date">${fmtTs(t.entry_time)}</td>
         <td class="td-date">${fmtTs(t.exit_time)}</td>
@@ -4367,9 +4365,24 @@
         <td class="td-pnl ${pnlClass}">${t.pnl_abs >= 0 ? "+" : ""}${fmtMoney(t.pnl_abs)}</td>
         <td class="td-equity">${fmtMoney(t.equity_after)}</td>
       </tr>`;
-    });
+    };
 
-    if (!trades.length) html += `<tr><td colspan="9" style="text-align:center;padding:16px;color:var(--ink-dim)">Nessuna operazione</td></tr>`;
+    let html = `<table class="lab-trades-table">
+      <thead><tr>
+        <th>#</th><th>Dir</th><th>Entrata</th><th>Uscita</th>
+        <th>Entry</th><th>Exit</th><th>P&amp;L %</th><th>P&amp;L $</th><th>Equity</th>
+      </tr></thead><tbody>`;
+
+    if (!isTrades.length && !oosTrades.length) {
+      html += `<tr><td colspan="9" style="text-align:center;padding:16px;color:var(--ink-dim)">Nessuna operazione</td></tr>`;
+    } else {
+      isTrades.forEach((t, i) => { html += renderRow(t, i, false); });
+      if (oosTrades.length) {
+        html += `<tr class="oos-separator"><td colspan="9">— Out-of-sample (${oosTrades.length} trade) — dati non usati in ottimizzazione</td></tr>`;
+        oosTrades.forEach((t, i) => { html += renderRow(t, i, true); });
+      }
+    }
+
     html += `</tbody></table>`;
     body.innerHTML = html;
     drawer.classList.remove("hidden");
