@@ -7,7 +7,9 @@ intractable; random sampling with a generous trial budget finds a strong
 combination in a bounded, predictable amount of time instead.
 """
 
+import itertools
 import random
+from typing import Iterator
 
 from app.analysis.backtest import run_backtest
 from app.analysis.strategies import DEFAULT_PARAMS, EXHAUSTION_DEFAULT_PARAMS, LKI_DEFAULT_PARAMS
@@ -89,6 +91,56 @@ _STRATEGY_SPACES: dict[str, tuple[dict, "random.Random"]] = {
     "Gabriele (RSI+BB reversal)": (LKI_DEFAULT_PARAMS, _random_gabriele_params),
 }
 
+# ---- Grid search parameter spaces ----
+# Discrete grids for strategies where a full cross-product is tractable
+# (under ~3 000 combinations). Lorenzo has too many parameters for a full grid
+# and stays on random search even in grid mode.
+_GRID_GABRIELE = {
+    "rsi_length":   [7, 10, 14, 18, 21],
+    "bb_length":    [10, 15, 20, 25, 30],
+    "bb_mult":      [1.0, 1.5, 2.0, 2.5, 3.0],
+    "rsi_oversold": [18, 22, 26, 30, 35],
+    "rsi_overbought": [65, 70, 75, 80, 85],
+}  # 5^5 = 3 125 combinations — feasible in ~20–40 s
+
+_GRID_EXHAUSTION = {
+    "swing_length":           [4, 8, 12],
+    "rsi_length":             [10, 14, 20],
+    "rsi_oversold":           [25, 35, 45],
+    "rsi_overbought":         [55, 65, 75],
+    "rsi_min_gap":            [2.0, 5.0, 8.0],
+    "trend_filter":           [True, False],
+    "enable_contraction":     [True, False],
+    "enable_range_bounce":    [True, False],
+}  # 3^5 × 2^3 = 1 944 combinations — feasible
+
+# Strategies that have a defined grid (others fall back to random search).
+_GRID_SPACES: dict[str, dict] = {
+    "Gabriele (RSI+BB reversal)": _GRID_GABRIELE,
+    "Accumulo / Distribuzione (long-term)": _GRID_EXHAUSTION,
+}
+
+
+def _grid_candidates(strategy_name: str) -> Iterator[dict]:
+    """Yield every parameter combination in the grid for the given strategy."""
+    grid = _GRID_SPACES.get(strategy_name)
+    if grid is None:
+        return
+    keys = list(grid.keys())
+    for values in itertools.product(*[grid[k] for k in keys]):
+        yield dict(zip(keys, values))
+
+
+def grid_size(strategy_name: str) -> int:
+    """Return the number of grid combinations (0 if grid mode is unsupported)."""
+    grid = _GRID_SPACES.get(strategy_name)
+    if grid is None:
+        return 0
+    total = 1
+    for vals in grid.values():
+        total *= len(vals)
+    return total
+
 
 def is_optimizable(strategy_name: str) -> bool:
     return strategy_name in _STRATEGY_SPACES
@@ -131,9 +183,21 @@ def _score(bt: BacktestResult) -> float:
 
 
 def optimize_strategy(
-    strategy_name: str, df, backtest_params: dict, trials: int = _TRIALS, seed: int | None = None
+    strategy_name: str,
+    df,
+    backtest_params: dict,
+    trials: int = _TRIALS,
+    seed: int | None = None,
+    mode: str = "random",
 ) -> tuple[dict, BacktestResult, int, float | None, bool]:
     """Returns (best_params, best_backtest_result, trials_evaluated, out_of_sample_return_pct, overfitted).
+
+    mode="random"  — random search over the strategy's continuous parameter space
+                     (default, fast, works for all strategies).
+    mode="grid"    — exhaustive search over a discrete parameter grid.
+                     Only available for strategies in _GRID_SPACES; falls back to
+                     random for the others.  Tries every combination in the grid
+                     (~1 000–3 000 depending on the strategy, ~20–45 s).
 
     Walk-forward validation: optimises on the first 70% of the df (in-sample),
     then validates the best params on the remaining 30% (out-of-sample).
@@ -158,15 +222,29 @@ def optimize_strategy(
     best_score = _score(best_bt)
     evaluated = 1
 
-    for _ in range(trials):
-        candidate = random_params_fn(rng)
-        bt = run_backtest(df_in, candidate, backtest_params, strategy_name=strategy_name)
-        evaluated += 1
-        score = _score(bt)
-        if score > best_score:
-            best_score = score
-            best_params = candidate
-            best_bt = bt
+    use_grid = mode == "grid" and strategy_name in _GRID_SPACES
+    if use_grid:
+        # Build default param dict and overlay each grid combination on top so
+        # any param not in the grid keeps its default value.
+        for candidate_delta in _grid_candidates(strategy_name):
+            candidate = {**default_params, **candidate_delta}
+            bt = run_backtest(df_in, candidate, backtest_params, strategy_name=strategy_name)
+            evaluated += 1
+            score = _score(bt)
+            if score > best_score:
+                best_score = score
+                best_params = candidate
+                best_bt = bt
+    else:
+        for _ in range(trials):
+            candidate = random_params_fn(rng)
+            bt = run_backtest(df_in, candidate, backtest_params, strategy_name=strategy_name)
+            evaluated += 1
+            score = _score(bt)
+            if score > best_score:
+                best_score = score
+                best_params = candidate
+                best_bt = bt
 
     # Out-of-sample validation
     out_of_sample_return_pct: float | None = None
