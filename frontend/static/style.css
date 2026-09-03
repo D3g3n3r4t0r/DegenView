@@ -3382,3 +3382,19 @@ body {
   font: inherit; font-size: 11px;
 }
 .lab-filters-clear:hover { color: var(--ink, #111); }
+
+/* Valore della serie ancorato al punto sulla curva, non alla punta del
+   cursore. `pointer-events: none` perche' altrimenti l'etichetta si mette fra
+   il mouse e il grafico e il crosshair si blocca sotto di essa. */
+.series-value-badge {
+  position: absolute;
+  z-index: 6;
+  pointer-events: none;
+  padding: 1px 6px;
+  font: 500 11px/1.5 'JetBrains Mono', 'IBM Plex Mono', monospace;
+  color: var(--ink, #111);
+  background: var(--bg-panel, #fff);
+  border: 1px solid var(--border, #e0e0e0);
+  border-left-width: 3px;
+  white-space: nowrap;
+}

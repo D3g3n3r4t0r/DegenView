@@ -1882,6 +1882,13 @@
       stochChart.timeScale().setVisibleLogicalRange(range);
     });
 
+    // Il valore dell'RSI va letto sul punto della curva, non dove capita il
+    // cursore. L'etichetta della scala segue la y del puntatore, quindi
+    // muovendo il mouse in verticale sulla stessa barra cambia il numero pur
+    // restando lo stesso RSI: un valore che si legge cosi' non e' un valore.
+    attachValueBadge(rsiChart, rsiContainer, rsiSeries, "RSI", COLORS.rsi);
+    attachValueBadge(stochChart, stochContainer, stochKSeries, "%K", COLORS.rsi);
+
     mainChart.subscribeCrosshairMove(handleCrosshairMove);
     bindDrawClickCapture();
   }
@@ -1921,6 +1928,44 @@
     tooltipEl.style.left = `${rect.left + param.point.x + 14}px`;
     tooltipEl.style.top = `${rect.top + param.point.y + 14}px`;
     tooltipEl.classList.remove("hidden");
+  }
+
+  // Etichetta ancorata al punto della serie sotto il crosshair — il "pallino"
+  // che la libreria disegna sulla curva — invece che alla punta del cursore.
+  // Segue la x del crosshair e la y del valore: e' il numero che quella barra
+  // ha davvero, e resta fermo mentre il puntatore si muove in verticale.
+  function attachValueBadge(chart, container, series, label, color) {
+    if (!chart || !container || !series) return;
+    if (getComputedStyle(container).position === "static") {
+      container.style.position = "relative";
+    }
+    const badge = document.createElement("div");
+    badge.className = "series-value-badge hidden";
+    badge.style.borderColor = color;
+    container.appendChild(badge);
+
+    chart.subscribeCrosshairMove((param) => {
+      const point = param.point;
+      const data = param.seriesData ? param.seriesData.get(series) : null;
+      const value = data ? (data.value !== undefined ? data.value : data.close) : null;
+      if (!point || param.time === undefined || value === null || value === undefined) {
+        badge.classList.add("hidden");
+        return;
+      }
+      const y = series.priceToCoordinate(value);
+      if (y === null) {
+        badge.classList.add("hidden");
+        return;
+      }
+      badge.textContent = `${label} ${value.toFixed(2)}`;
+      badge.classList.remove("hidden");
+      // Si sposta a sinistra del punto quando altrimenti uscirebbe dal
+      // riquadro: un'etichetta tagliata a meta' e' peggio di nessuna.
+      const w = badge.offsetWidth || 60;
+      const left = point.x + 10 + w > container.clientWidth ? point.x - 10 - w : point.x + 10;
+      badge.style.left = `${Math.max(2, left)}px`;
+      badge.style.top = `${Math.max(2, Math.min(container.clientHeight - 20, y - 10))}px`;
+    });
   }
 
   function clearOverlays() {
