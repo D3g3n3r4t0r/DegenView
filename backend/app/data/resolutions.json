@@ -87,5 +87,19 @@
     "files": [
       "frontend/static/app.js"
     ]
+  },
+  "seed-0003": {
+    "status": "risolto",
+    "summary": "Aggiunta 'Gabriele 2 (RSI+BB long/short)': sull'ipercomprato apre uno short invece di limitarsi a chiudere il long.",
+    "detail": "E' una strategia a se', non un'opzione della precedente: quella gira sugli alert gia' attivi, e cambiarne il comportamento con un parametro avrebbe riscritto i risultati storici di chi la usa. I parametri sono gli stessi, quindi una configurazione trovata per l'una si porta sull'altra e le due si confrontano sugli stessi assi. La posizione si ribalta invece di restare piatta fra i due estremi: l'ingresso long chiude lo short e viceversa. Compare nel menu delle strategie, e' ottimizzabile in tutte e tre le modalita', e il gate di regime la classifica come mean-reversion, come l'originale. Da testare sui futures prima di metterla a lavorare.",
+    "files": [
+      "backend/app/analysis/strategies.py",
+      "backend/app/analysis/optimize.py",
+      "backend/app/analysis/regime.py",
+      "backend/app/analysis/priors.py",
+      "backend/app/analysis/sensitivity.py",
+      "backend/tests/test_gabriele2.py",
+      "frontend/static/app.js"
+    ]
   }
 }

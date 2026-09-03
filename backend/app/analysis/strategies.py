@@ -373,12 +373,43 @@ def compute_lki_signals(df: pd.DataFrame, params: dict | None = None) -> pd.Data
     )
 
 
+# Stessa logica, simmetrica: la reazione di ipercomprato sulla banda superiore
+# apre uno short invece di limitarsi a chiudere il long. E' la variante chiesta
+# per i futures, dove si puo' stare corti davvero.
+#
+# Tenuta separata dall'originale invece di aggiungerle un'opzione: la strategia
+# di sopra e' quella che gira sugli alert attivi, e cambiarne il comportamento
+# in base a un parametro avrebbe cambiato i risultati storici di chi la usa gia'.
+# Qui i parametri sono gli stessi, quindi una configurazione trovata per l'una
+# si porta sull'altra e le due si confrontano sugli stessi assi.
+LKI2_DEFAULT_PARAMS = dict(LKI_DEFAULT_PARAMS)
+
+
+def compute_lki2_signals(df: pd.DataFrame, params: dict | None = None) -> pd.DataFrame:
+    base = compute_lki_signals(df, params)
+    # L'uscita long dell'originale e' la condizione di ipercomprato: qui apre
+    # anche lo short. Simmetricamente l'ingresso long chiude lo short — cioe'
+    # la posizione si ribalta invece di restare piatta fra i due estremi.
+    entry_long = base["entry_long"]
+    entry_short = base["exit_long"]
+    return pd.DataFrame(
+        {
+            "entry_long": entry_long,
+            "entry_short": entry_short,
+            "exit_long": entry_short,
+            "exit_short": entry_long,
+        },
+        index=df.index,
+    )
+
+
 # Registry of pluggable strategies — dispatch used by confirmed_events()
 # whenever a caller passes a strategy name instead of pre-computed signals.
 STRATEGY_REGISTRY = {
     "Lorenzo (trend-follower)": compute_signals,
     "Accumulo / Distribuzione (long-term)": compute_exhaustion_signals,
     "Gabriele (RSI+BB reversal)": compute_lki_signals,
+    "Gabriele 2 (RSI+BB long/short)": compute_lki2_signals,
 }
 AVAILABLE_STRATEGIES = list(STRATEGY_REGISTRY.keys())
 DEFAULT_STRATEGY = AVAILABLE_STRATEGIES[0]

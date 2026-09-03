@@ -153,6 +153,17 @@
       { key: "rsi_oversold", label: "RSI ipervenduto", type: "number", min: 0, max: 100, default: 28 },
       { key: "rsi_overbought", label: "RSI ipercomprato", type: "number", min: 0, max: 100, default: 72 },
     ],
+    // Stessi parametri della precedente, di proposito: una configurazione
+    // trovata per l'una si porta sull'altra e le due si confrontano sugli
+    // stessi assi. Cambia cosa succede sull'ipercomprato — apre uno short
+    // invece di limitarsi a chiudere il long.
+    "Gabriele 2 (RSI+BB long/short)": [
+      { key: "rsi_length", label: "Lunghezza RSI", type: "number", min: 1, default: 14 },
+      { key: "bb_length", label: "Lunghezza Bollinger", type: "number", min: 1, default: 20 },
+      { key: "bb_mult", label: "Moltiplicatore Bollinger", type: "number", min: 0, step: 0.1, default: 2.0 },
+      { key: "rsi_oversold", label: "RSI ipervenduto", type: "number", min: 0, max: 100, default: 28 },
+      { key: "rsi_overbought", label: "RSI ipercomprato", type: "number", min: 0, max: 100, default: 72 },
+    ],
   };
 
   // One dropdown is all the user picks — HTF/MTF for the multi-timeframe SMC
@@ -847,6 +858,7 @@
     "Lorenzo (trend-follower)",
     "Accumulo / Distribuzione (long-term)",
     "Gabriele (RSI+BB reversal)",
+    "Gabriele 2 (RSI+BB long/short)",
   ]);
 
   function updateOptimizeButtonVisibility() {
@@ -4889,6 +4901,7 @@
   // Strategies for which the backend has a full discrete grid (grid mode).
   const GRID_STRATEGIES = new Set([
     "Gabriele (RSI+BB reversal)",
+    "Gabriele 2 (RSI+BB long/short)",
     "Accumulo / Distribuzione (long-term)",
   ]);
 
