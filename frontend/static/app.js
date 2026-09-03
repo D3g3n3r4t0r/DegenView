@@ -3104,11 +3104,8 @@
       log.appendChild(li);
     });
 
-    if (el("strategy-markers-toggle").checked && activeState) {
-      candleSeries.setMarkers(buildStrategyMarkers(activeState.signals));
-    } else {
-      candleSeries.setMarkers([]);
-    }
+    _lastStrategySignals = activeState ? activeState.signals : [];
+    applyChartMarkers();
 
     notifyNewAlerts(allSignals);
   }
@@ -3149,6 +3146,94 @@
         text: flippingToLong ? "FLIP long" : "FLIP short",
       };
     });
+  }
+
+  // I marker sulla strategia e quelli sui trade del backtest finiscono nella
+  // stessa chiamata: `setMarkers` sostituisce l'intero elenco, quindi due
+  // scritture separate si cancellerebbero a vicenda.
+  let _lastStrategySignals = [];
+
+  function applyChartMarkers() {
+    if (!candleSeries) return;
+    let markers = [];
+    if (el("strategy-markers-toggle").checked) {
+      markers = markers.concat(buildStrategyMarkers(_lastStrategySignals));
+    }
+    const tradesToggle = el("backtest-trades-toggle");
+    if (tradesToggle && tradesToggle.checked) {
+      markers = markers.concat(buildBacktestTradeMarkers());
+    }
+    // La libreria pretende marker in ordine di tempo crescente; unendo due
+    // elenchi l'ordine si perde.
+    markers.sort((a, b) => a.time - b.time);
+    candleSeries.setMarkers(markers);
+  }
+
+  // Le operazioni vere del backtest, non i segnali della strategia sul
+  // timeframe del grafico. Sono cose diverse: il backtest gira su un feed piu'
+  // grosso (vedi backtest_interval_for lato server), quindi le frecce dei
+  // segnali non sono le righe della tabella delle operazioni — ed e' il motivo
+  // per cui il grafico sembrava non tornare con il backtest.
+  function buildBacktestTradeMarkers() {
+    const note = el("backtest-trades-note");
+    const bt = state.data && state.data.backtests
+      ? state.data.backtests[state.activeTimeframe] : null;
+    const candles = state.data && state.data.timeframes[state.activeTimeframe]
+      ? state.data.timeframes[state.activeTimeframe].candles : null;
+    if (!bt || !bt.trades || !candles || !candles.length) {
+      if (note) note.classList.add("hidden");
+      return [];
+    }
+
+    // Un marker deve cadere su una candela che il grafico ha davvero: il
+    // backtest lavora su un timeframe piu' grosso, quindi i suoi istanti non
+    // coincidono con quelli del grafico. Si aggancia alla candela aperta in
+    // quel momento (l'ultima con tempo <= t) invece di sparire in silenzio.
+    const times = candles.map((c) => c.time);
+    const snap = (t) => {
+      if (t < times[0] || t > times[times.length - 1]) return null;
+      let lo = 0, hi = times.length - 1, best = null;
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        if (times[mid] <= t) { best = times[mid]; lo = mid + 1; } else { hi = mid - 1; }
+      }
+      return best;
+    };
+
+    const markers = [];
+    let outside = 0;
+    bt.trades.forEach((t, i) => {
+      const inT = snap(t.entry_time);
+      const outT = snap(t.exit_time);
+      if (inT === null || outT === null) { outside += 1; return; }
+      const isLong = t.direction === "long";
+      markers.push({
+        time: inT,
+        position: isLong ? "belowBar" : "aboveBar",
+        color: isLong ? COLORS.bull : COLORS.bear,
+        shape: isLong ? "arrowUp" : "arrowDown",
+        text: `#${i + 1} ${isLong ? "long" : "short"}`,
+      });
+      markers.push({
+        time: outT,
+        position: isLong ? "aboveBar" : "belowBar",
+        color: t.pnl_pct >= 0 ? COLORS.bull : COLORS.bear,
+        shape: "square",
+        text: `#${i + 1} ${t.pnl_pct >= 0 ? "+" : ""}${t.pnl_pct.toFixed(1)}%`,
+      });
+    });
+
+    if (note) {
+      const parts = [`${bt.trades.length - outside} operazioni su ${bt.trades.length} sul grafico`];
+      if (outside) parts.push(`${outside} fuori dall'intervallo mostrato`);
+      const shown = state.data.timeframes[state.activeTimeframe].interval;
+      if (bt.interval && shown && bt.interval !== shown) {
+        parts.push(`backtest su ${bt.interval}, grafico su ${shown}: ogni operazione è agganciata alla candela aperta in quel momento`);
+      }
+      note.textContent = parts.join(" · ") + ".";
+      note.classList.remove("hidden");
+    }
+    return markers;
   }
 
   function notifyNewAlerts(allSignals) {
@@ -3507,6 +3592,9 @@
       const bt = await resp.json();
       state.data.backtests[state.activeTimeframe] = bt;
       renderBacktest();
+      // Il backtest profondo arriva dopo il primo disegno: i marker delle
+      // operazioni vanno rifatti su questo, non su quello della passata rapida.
+      applyChartMarkers();
     } catch (err) {
       // The fast-pass backtest already rendered — losing the deeper one
       // silently is fine, nothing on screen depends on it.
@@ -4207,11 +4295,8 @@
       log.appendChild(li);
     });
 
-    if (el("strategy-markers-toggle").checked) {
-      candleSeries.setMarkers(buildStrategyMarkers(strategyState.signals));
-    } else {
-      candleSeries.setMarkers([]);
-    }
+    _lastStrategySignals = strategyState.signals;
+    applyChartMarkers();
   }
 
   function renderPineBacktest(bt) {
@@ -4718,9 +4803,15 @@
 
     el("alert-log-clear-btn").addEventListener("click", () => clearAlertLog());
 
-    el("strategy-markers-toggle").addEventListener("change", () => {
-      if (state.data) renderStrategy();
-    });
+    el("strategy-markers-toggle").addEventListener("change", applyChartMarkers);
+
+    const btTrades = el("backtest-trades-toggle");
+    if (btTrades) {
+      btTrades.addEventListener("change", () => {
+        if (!btTrades.checked) el("backtest-trades-note").classList.add("hidden");
+        applyChartMarkers();
+      });
+    }
 
     el("strategy-notify-toggle").addEventListener("change", async (e) => {
       if (!e.target.checked) return;
