@@ -66,5 +66,18 @@
       "frontend/static/app.js",
       "frontend/static/style.css"
     ]
+  },
+  "seed-0002": {
+    "status": "risolto",
+    "summary": "Attivando una strategia dalla watchlist la configurazione viene fotografata in 'Archivio strategie', con il backtest calcolato dal server.",
+    "detail": "L'archivio sta nella scheda Watchlist, sotto la lista dei ticker. Ogni voce porta ticker, strategia, parametri, data e le metriche del backtest di quel momento; 'Applica al grafico' la ricarica, e dal Laboratorio il pulsante 'Archivia' salva a mano una configurazione senza aspettare di attivarla. Due scelte che vale la pena dichiarare. I numeri li misura il server e non arrivano dal client: un archivio che accetta le metriche che gli vengono passate archivia affermazioni, non misure. E si conservano parametri e metriche, non l'elenco dei trade: i parametri permettono di rieseguire il backtest quando serve, mentre un elenco di trade invecchierebbe (i dati storici si allungano) dando l'illusione di un dettaglio non piu' verificato. Il backtest gira in background, perche' accendere un alert non deve aspettarlo: per questo una voce appena creata dice 'in corso'. Se fallisce resta scritto sulla voce invece di cancellarla, perche' una voce sparita non si distingue da una mai creata. Spegnere e riaccendere lo stesso alert non duplica la voce; riattivarlo con parametri diversi si', perche' e' un'altra strategia.",
+    "files": [
+      "backend/app/archive.py",
+      "backend/app/main.py",
+      "backend/tests/test_archive.py",
+      "frontend/index.html",
+      "frontend/static/app.js",
+      "frontend/static/style.css"
+    ]
   }
 }
