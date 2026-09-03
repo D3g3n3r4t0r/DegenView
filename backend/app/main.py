@@ -266,7 +266,7 @@ async def _notify_deploy() -> None:
         sha_short = c["sha"][:7]
         lines.append(f"• <code>{sha_short}</code> {msg}")
     changelog = "\n".join(lines) if lines else "• (nessun commit trovato)"
-    text = f"🚀 <b>Nuovo deploy</b>\n\n{changelog}"
+    text = f"🚀 <b>Nuovo deploy completato</b>\n\n<b>Modifiche:</b>\n{changelog}"
     await telegram.send_message(text)
 
 
