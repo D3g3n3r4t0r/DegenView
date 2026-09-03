@@ -65,7 +65,41 @@
     macdSignal: "#aaaaaa",
   };
 
-  const COLORS = window.matchMedia("(prefers-color-scheme: dark)").matches ? COLORS_DARK : COLORS_LIGHT;
+  // Il contenuto viene sostituito quando si cambia tema, ma l'oggetto resta lo
+  // stesso: le decine di riferimenti a COLORS.x sparsi nel file leggono al
+  // momento della chiamata, quindi continuano a funzionare senza toccarli.
+  // Riassegnare la variabile invece li lascerebbe legati alla vecchia palette.
+  const COLORS = {};
+
+  const THEME_KEY = "lae.theme";
+
+  function preferredTheme() {
+    try {
+      const saved = localStorage.getItem(THEME_KEY);
+      if (saved === "dark" || saved === "light") return saved;
+    } catch { /* localStorage non disponibile: si usa la preferenza di sistema */ }
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+
+  function applyTheme(mode, { persist = true, redraw = true } = {}) {
+    document.documentElement.setAttribute("data-theme", mode);
+    Object.keys(COLORS).forEach((k) => delete COLORS[k]);
+    Object.assign(COLORS, mode === "dark" ? COLORS_DARK : COLORS_LIGHT);
+    const btn = el("theme-toggle-btn");
+    if (btn) {
+      btn.textContent = mode === "dark" ? "☾" : "☀";
+      btn.title = mode === "dark" ? "Passa al tema chiaro" : "Passa al tema scuro";
+      btn.setAttribute("aria-label", btn.title);
+    }
+    if (persist) {
+      try { localStorage.setItem(THEME_KEY, mode); } catch { /* ignora */ }
+    }
+    // I colori del grafico non stanno nel CSS: sono opzioni passate alla
+    // libreria alla creazione delle serie, quindi vanno riapplicati ridisegnando.
+    if (redraw && state.data) render();
+  }
+
+  applyTheme(preferredTheme(), { persist: false, redraw: false });
 
   const TF_LABELS = { htf: "HTF", mtf: "MTF", ltf: "LTF" };
   const CANONICAL_INTERVALS = ["1m", "5m", "15m", "30m", "1h", "4h", "1d", "2d", "3d", "5d", "1w", "1M"];
@@ -4063,6 +4097,27 @@
     }).join("");
   }
 
+
+  function bindTheme() {
+    const btn = el("theme-toggle-btn");
+    if (btn) {
+      btn.addEventListener("click", () => {
+        const now = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+        applyTheme(now);
+      });
+    }
+    // Se non e' mai stata fatta una scelta esplicita, il tema continua a
+    // seguire il sistema: chi passa a scuro la sera se lo ritrova.
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const onSystemChange = (e) => {
+      let saved = null;
+      try { saved = localStorage.getItem(THEME_KEY); } catch { /* ignora */ }
+      if (!saved) applyTheme(e.matches ? "dark" : "light", { persist: false });
+    };
+    if (mq.addEventListener) mq.addEventListener("change", onSystemChange);
+    else if (mq.addListener) mq.addListener(onSystemChange);
+  }
+
   function bindIssues() {
     const form = el("issue-form");
     if (!form) return;
@@ -5254,6 +5309,7 @@
     bindMobileNav();
     bindRail();
     bindIssues();
+    bindTheme();
     bindTabs();
     bindDrawRail();
     bindMobileDrawTools();
