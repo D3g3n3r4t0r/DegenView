@@ -8,11 +8,11 @@
     "commit": "vedi git log su main"
   },
   "seed-0010": {
-    "status": "in corso",
-    "summary": "Il dubbio era fondato: il 97% degli ingressi usa uno swing che in quel momento non esisteva ancora.",
-    "detail": "Confermato per Accumulo / Distribuzione, con due misure indipendenti.\n\nGli ingressi nascono da swing rilevati con smc.swing_highs_lows(swing_length=8), che usa una finestra centrata: uno swing in posizione P è riconoscibile solo quando esistono 8 barre successive. Misurato su 16 swing di KASUSDT cercando il primo istante in cui lo swing compare E non sparisce più: ritardo minimo 8, mediano 8, massimo 8 barre — esattamente swing_length.\n\nMa _find_confirmation() parte da swing_pos + 1. Su 87 segnali con conferma:\n  conferme prima di P+8:  84/87 = 97%\n  ritardo mediano:        2 barre (ne servirebbero 8)\n\nNel backtest il trade viene aperto; con il bot dal vivo quel segnale non sarebbe esistito. I risultati di questa strategia sono sistematicamente ottimisti e non riproducibili.",
-    "next": "Il fix è una riga (partire da swing_pos + swing_length), ma abbassa OGNI risultato storico già guardato. Non applicato di iniziativa: serve il tuo via libera.",
-    "commit": "in corso"
+    "status": "risolto",
+    "summary": "Look-ahead confermato e rimosso. Ma la mia previsione sull'impatto era sbagliata: i numeri non crollano.",
+    "detail": "CAUSA: gli ingressi per divergenza nascono da swing rilevati con smc.swing_highs_lows, che usa una finestra centrata — uno swing in posizione P e' identificabile solo dopo swing_length barre. Misurato su 16 swing di KASUSDT cercando il primo istante in cui compare E non sparisce piu': minimo 8, mediano 8, massimo 8, esattamente swing_length.\n\nMa _find_confirmation partiva da swing_pos + 1. Su 87 segnali con conferma, 84 (97%) scattavano dentro quella finestra cieca, a 2 barre di mediana. Il backtest apriva quei trade; il bot dal vivo non avrebbe potuto, perche' il segnale non esisteva ancora.\n\nFIX: la scansione parte da swing_pos + swing_length. Conferme dentro la finestra cieca: da 84/87 a 0/87.\n\nCORREZIONE A QUANTO AVEVO DETTO: avevo annunciato che il fix avrebbe abbassato ogni risultato storico. Non e' cosi'. Con i parametri di default la divergenza produce 1 solo trade su KAS — i 15 trade vengono da contrazione e range bounce, che non usano gli swing. Misurato sulle configurazioni dove la divergenza e' l'unica via attiva, la differenza e' di circa 2 punti percentuali, in entrambe le direzioni. Il motivo e' che le condizioni sono congiuntive e strette (divergenza E ipervenduto E volume E trend), quindi scattano di rado.\n\nIl fix resta giusto: toglie una classe di irriproducibilita' anche dove il costo numerico e' piccolo. Ma il costo che avevo annunciato non c'era, e su questi dati vale la pena saperlo.",
+    "next": "Nessuno. 9 test di regressione, incluso uno che verifica il ritardo di rilevamento invece di assumerlo — se la libreria smc cambia comportamento, il test lo segnala.",
+    "commit": "vedi git log su main"
   },
   "seed-0008": {
     "status": "risolto",
