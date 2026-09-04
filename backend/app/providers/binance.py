@@ -2,7 +2,7 @@ import httpx
 import pandas as pd
 from cachetools import TTLCache
 
-from app.providers.base import DataProvider, ProviderError
+from app.providers.base import DataProvider, ProviderError, ProviderUnreachable
 from app.timeframes import INTERVAL_SECONDS
 
 BASE_URL = "https://api.binance.com"
@@ -86,7 +86,7 @@ class BinanceProvider(DataProvider):
                     end_time = min(int(row[0]) for row in payload) - 1
         except httpx.HTTPError as exc:
             if not rows:
-                raise ProviderError(f"Binance non raggiungibile per {formatted_symbol}: {exc}") from exc
+                raise ProviderUnreachable(f"Binance non raggiungibile per {formatted_symbol}: {exc}") from exc
 
         if not rows:
             raise ProviderError(f"Nessun dato disponibile per {formatted_symbol} ({api_interval})")

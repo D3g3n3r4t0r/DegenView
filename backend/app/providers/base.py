@@ -7,6 +7,16 @@ class ProviderError(Exception):
     """Raised when a data provider fails to return usable OHLCV data."""
 
 
+class ProviderUnreachable(ProviderError):
+    """L'exchange non ha risposto: rete, TLS, proxy.
+
+    Distinta perche' e' quasi sempre passeggera e si risolve da sola al giro
+    dopo. Trattata come un guasto qualunque produceva un messaggio allarmante
+    al minuto per ticker — e' arrivata sulla bacheca cosi', per un errore TLS
+    di MEXC che poi non si e' piu' ripresentato.
+    """
+
+
 class QuotaExceeded(ProviderError):
     """The provider refused because the plan's quota is spent, not because
     anything is wrong with the request.

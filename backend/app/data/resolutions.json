@@ -151,5 +151,19 @@
     "summary": "Voce di prova: la bacheca funziona, il messaggio e' arrivato.",
     "detail": "Nessuna azione. La chiudo per lasciare in elenco solo cose vere.",
     "files": []
+  },
+  "4f9dda27": {
+    "status": "risolto",
+    "summary": "Un inciampo di rete non e' un guasto: ora quel provider va in pausa e si parla solo se il buco dura piu' di un quarto d'ora.",
+    "detail": "L'errore TLS di MEXC veniva trattato come un guasto qualunque, quindi riprovato al giro dopo e annunciato ogni volta — mentre quasi sempre e' passeggero e al giro dopo non si ripresenta. Ora rete, TLS e proxy sono un caso a se': il provider va in pausa con attesa crescente (5, 10, 20, 60 minuti) e il conteggio si azzera alla prima lettura riuscita, altrimenti un guasto di ieri farebbe scattare l'allarme al primo inciampo di domani. Il messaggio parte solo dal terzo tentativo fallito di fila — circa un quarto d'ora di buco — e una volta sola finche' dura, e dice che riprende da solo invece di 'Errore monitoraggio'. Vale per tutti e quattro i provider, non solo MEXC.",
+    "files": [
+      "backend/app/providers/base.py",
+      "backend/app/providers/mexc.py",
+      "backend/app/providers/binance.py",
+      "backend/app/providers/kucoin.py",
+      "backend/app/providers/twelvedata.py",
+      "backend/app/main.py",
+      "backend/tests/test_quota.py"
+    ]
   }
 }

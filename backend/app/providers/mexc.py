@@ -2,7 +2,7 @@ import httpx
 import pandas as pd
 from cachetools import TTLCache
 
-from app.providers.base import DataProvider, ProviderError
+from app.providers.base import DataProvider, ProviderError, ProviderUnreachable
 from app.timeframes import INTERVAL_SECONDS
 
 BASE_URL = "https://api.mexc.com"
@@ -95,7 +95,7 @@ class MexcProvider(DataProvider):
             # doesn't have to sink the whole fetch — whatever was already
             # collected is still usable history, just less of it.
             if not rows:
-                raise ProviderError(f"MEXC non raggiungibile per {formatted_symbol}: {exc}") from exc
+                raise ProviderUnreachable(f"MEXC non raggiungibile per {formatted_symbol}: {exc}") from exc
 
         if not rows:
             raise ProviderError(f"Nessun dato disponibile per {formatted_symbol} ({api_interval})")

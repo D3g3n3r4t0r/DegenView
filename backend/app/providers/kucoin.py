@@ -4,7 +4,7 @@ import httpx
 import pandas as pd
 from cachetools import TTLCache
 
-from app.providers.base import DataProvider, ProviderError
+from app.providers.base import DataProvider, ProviderError, ProviderUnreachable
 
 BASE_URL = "https://api.kucoin.com"
 _CANONICAL_TO_TYPE = {
@@ -96,7 +96,7 @@ class KucoinProvider(DataProvider):
                     end_at = min(int(r[0]) for r in page_rows) - 1
         except httpx.HTTPError as exc:
             if not rows:
-                raise ProviderError(f"KuCoin non raggiungibile per {formatted_symbol}: {exc}") from exc
+                raise ProviderUnreachable(f"KuCoin non raggiungibile per {formatted_symbol}: {exc}") from exc
 
         if not rows:
             raise ProviderError(f"Nessun dato disponibile per {formatted_symbol} ({interval})")
