@@ -99,3 +99,61 @@ def test_the_parameters_are_the_same_as_the_original():
 
     assert LKI2_DEFAULT_PARAMS == LKI_DEFAULT_PARAMS
     assert LKI2_DEFAULT_PARAMS is not LKI_DEFAULT_PARAMS
+
+
+# ── Confronto con il Pine originale, riga per riga ─────────────────────────
+#
+# Richiesta eb43d341: "modifica Gabriele 2 usando questo Pine Script". La
+# strategia gia' e' quel Pine — ma "gia' lo fa" senza una verifica e' esatta
+# quanto "non lo fa". Qui il Pine e' trascritto alla lettera, con le sue
+# funzioni (rma di Wilder, stdev di popolazione, il ternario dell'rsi), e i
+# segnali devono coincidere barra per barra.
+
+
+def _pine_lki(df: pd.DataFrame, len_=14, length_bb=20, mult=2.0,
+              oversold=28, overbought=72):
+    src = df["close"]
+
+    # up = rma(max(change(src), 0), len) · down = rma(-min(change(src), 0), len)
+    change = src.diff()
+    up = change.clip(lower=0).ewm(alpha=1 / len_, adjust=False).mean()
+    down = (-change.clip(upper=0)).ewm(alpha=1 / len_, adjust=False).mean()
+
+    # rsi = down == 0 ? 100 : up == 0 ? 0 : 100 - (100 / (1 + up / down))
+    rsi = np.where(down == 0, 100.0,
+                   np.where(up == 0, 0.0, 100 - (100 / (1 + up / down.replace(0, np.nan)))))
+    rsi = pd.Series(rsi, index=df.index)
+
+    # basis = sma(src, length_bb) · dev = mult * stdev(src, length_bb)
+    basis = src.rolling(length_bb).mean()
+    dev = mult * src.rolling(length_bb).std(ddof=0)   # Pine: deviazione di popolazione
+
+    return (
+        ((rsi < oversold) & (src < basis - dev)).fillna(False),    # entry_long
+        ((rsi > overbought) & (src > basis + dev)).fillna(False),  # entry_short
+    )
+
+
+def test_gabriele2_is_bar_for_bar_the_pine_script(df):
+    pine_long, pine_short = _pine_lki(df)
+    ours = compute_lki2_signals(df)
+    assert ours["entry_long"].equals(pine_long)
+    assert ours["entry_short"].equals(pine_short)
+    assert pine_long.sum() > 0 and pine_short.sum() > 0, "serie senza segnali: il test non proverebbe niente"
+
+
+def test_the_pine_inputs_are_our_defaults():
+    """len=14, BB Length=20, BB StdDev=2.0, e le soglie 28/72 scritte nelle
+    condizioni del Pine."""
+    from app.analysis.strategies import LKI2_DEFAULT_PARAMS as d
+    assert (d["rsi_length"], d["bb_length"], d["bb_mult"]) == (14, 20, 2.0)
+    assert (d["rsi_oversold"], d["rsi_overbought"]) == (28, 72)
+
+
+def test_the_population_stdev_is_not_a_detail(df):
+    """Con ddof=1 (deviazione campionaria) le bande sono piu' larghe e i
+    segnali cambiano: e' il modo silenzioso di non essere piu' quel Pine."""
+    src = df["close"]
+    pop = src.rolling(20).std(ddof=0)
+    sample = src.rolling(20).std(ddof=1)
+    assert not np.allclose(pop.dropna(), sample.dropna())
