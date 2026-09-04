@@ -55,6 +55,15 @@ class SeriesStats:
     tau_int: float               # integrated autocorrelation time (1+r)/(1-r)
     ou_half_life: float | None   # mean-reversion half-life of detrended price
     dominant_period: float | None
+    # --- scale della coppia, non della sua struttura temporale ---------------
+    # Le tre sopra dicono su che orizzonte la serie ha memoria. Queste dicono
+    # quanto si muove e quanto di quel movimento e' direzione. Servono perche'
+    # la stessa finestra che su BTC copre un trend, su una coppia che fa il 15%
+    # al giorno copre rumore — ed e' il caso in cui il sistema entra e esce su
+    # oscillazioni che non sono direzione.
+    sigma_bar: float = 0.0           # deviazione standard dei rendimenti per barra
+    efficiency_ratio: float = 0.0    # |P_fine - P_inizio| / somma |dP| (Kaufman)
+    illiquidity: float | None = None  # Amihud: |r| medio per unita' di volume scambiato
 
     def as_dict(self) -> dict:
         return {
@@ -121,8 +130,58 @@ def estimate_series_stats(df: pd.DataFrame) -> SeriesStats:
                     if math.isfinite(cand) and 4.0 <= cand <= max_period:
                         dominant = float(cand)
 
+    sigma_bar, er, illiq = _pair_scales(df, close, r)
     return SeriesStats(n=n, rho1=rho1, tau_int=tau_int,
-                       ou_half_life=half_life, dominant_period=dominant)
+                       ou_half_life=half_life, dominant_period=dominant,
+                       sigma_bar=sigma_bar, efficiency_ratio=er, illiquidity=illiq)
+
+
+def _pair_scales(df: pd.DataFrame, close: np.ndarray,
+                 r: np.ndarray) -> tuple[float, float, float | None]:
+    """Quanto si muove la coppia, e quanto di quel movimento e' direzione.
+
+    * `sigma_bar` — deviazione standard dei rendimenti logaritmici per barra.
+      E' l'unita' di misura naturale della coppia: una pendenza di 0.002 e'
+      enorme su una coppia che fa lo 0.5% al giorno e invisibile su una che ne
+      fa il 15%. Esprimere le soglie in multipli di questa e' cio' che rende la
+      stessa configurazione trasportabile fra coppie diverse.
+
+    * `efficiency_ratio` — la distanza percorsa diviso la strada fatta
+      (Kaufman). Vale 1 su una salita monotona e tende a 0 su un movimento che
+      va avanti e indietro senza arrivare da nessuna parte. E' la misura
+      diretta di "questa coppia ha un trend vero oppure e' agitazione": e'
+      esattamente cio' che manca quando una altcoin poco liquida sembra viva ma
+      non va da nessuna parte.
+
+    * `illiquidity` — Amihud: quanto prezzo si muove per unita' di volume
+      scambiato. Alto significa che bastano pochi soldi per spostare il prezzo,
+      cioe' che i movimenti sono meno informativi. None quando il volume non
+      c'e' o e' inutilizzabile, invece di un numero inventato.
+    """
+    sigma = float(np.std(r, ddof=1)) if r.size > 2 else 0.0
+    if not math.isfinite(sigma):
+        sigma = 0.0
+
+    moved = float(abs(close[-1] - close[0]))
+    travelled = float(np.sum(np.abs(np.diff(close))))
+    er = moved / travelled if travelled > 0 else 0.0
+    if not math.isfinite(er):
+        er = 0.0
+
+    illiq: float | None = None
+    if "volume" in df.columns:
+        vol = pd.to_numeric(df["volume"], errors="coerce").astype(float).to_numpy()
+        # Volume in unita' della moneta, non in valuta: moltiplicato per il
+        # prezzo diventa confrontabile fra coppie con prezzi di ordini di
+        # grandezza diversi.
+        turnover = vol[1:] * close[1:] if vol.size == close.size else np.array([])
+        usable = turnover > 0
+        if usable.sum() >= 30:
+            ratio = np.abs(r[usable[: r.size]]) / turnover[usable][: r.size][: np.count_nonzero(usable[: r.size])]
+            ratio = ratio[np.isfinite(ratio)]
+            if ratio.size:
+                illiq = float(np.median(ratio))
+    return sigma, float(np.clip(er, 0.0, 1.0)), illiq
 
 
 # --- derived parameters ------------------------------------------------------
@@ -218,7 +277,25 @@ def _lorenzo_space(stats: SeriesStats, trendfilter: bool, volatilityfilter: bool
         len_note = (f"len left unnarrowed: rho1={stats.rho1:.3f} too small for "
                     f"tau_int to imply a lookback scale")
 
-    dims: list[str] = ["average", "len", "slopeFlen", "slope_ratio"]
+    # Quando la serie percorre poca strada rispetto a quanta ne fa — cioe' si
+    # muove molto senza andare da nessuna parte — una finestra corta misura
+    # oscillazioni, non direzione. Si sposta allora il fondo della ricerca
+    # verso l'alto invece di lasciare che l'ottimizzatore trovi il picco
+    # fortunato di una finestra da 20 barre su una altcoin agitata.
+    #
+    # Misurato su daily reali: BTCUSDT ER=0.037, KASUSDT 0.006, PEPEUSDT 0.008.
+    # Su queste serie l'efficienza e' bassa quasi ovunque, e la soglia sotto e'
+    # tarata di conseguenza: non serve a distinguere i casi comuni, serve a non
+    # cercare finestre corte proprio dove non possono funzionare.
+    if stats.efficiency_ratio < 0.02 and stats.n >= 200:
+        floor = max(len_lo, 60)
+        if floor < len_hi:
+            len_lo = floor
+            len_note += (f" · fondo alzato a {len_lo}: efficienza "
+                         f"{stats.efficiency_ratio:.3f}, la serie fa molta strada "
+                         f"senza percorrere distanza")
+
+    dims: list[str] = ["average", "len", "slopeFlen", "slope_ratio", "slope_threshold_sigma"]
     if trendfilter:
         dims += ["trendfilter_mult", "trendfiltertype"]
     if volatilityfilter:
@@ -232,6 +309,12 @@ def _lorenzo_space(stats: SeriesStats, trendfilter: bool, volatilityfilter: bool
         ratio = _f(u[idx["slope_ratio"]], 2.0, 5.0)
         slope_slow = int(np.clip(round(slope_fast * ratio), slope_fast + 3, 80))
         p = {
+            # Quanta pendenza serve perche' conti come direzione, in unita' di
+            # sigma della pendenza stessa. Cercata e non fissata: quanto rumore
+            # vada tolto dipende dalla coppia, ed e' la variabile che oggi
+            # mancava del tutto. Zero resta nell'intervallo, quindi il
+            # comportamento storico e' sempre raggiungibile.
+            "slope_threshold_sigma": round(_f(u[idx["slope_threshold_sigma"]], 0.0, 1.2), 2),
             "average": _c(u[idx["average"]], ["EMA", "SMA"]),
             "len": length,
             "slopeFlen": slope_fast,
@@ -260,7 +343,9 @@ def _lorenzo_space(stats: SeriesStats, trendfilter: bool, volatilityfilter: bool
         label=f"trendfilter={trendfilter} volatilityfilter={volatilityfilter}",
         dims=tuple(dims), to_params=to_params,
         fixed={"trendfilter": trendfilter, "volatilityfilter": volatilityfilter},
-        notes=[len_note, "slopeSlen expressed as ratio in [2, 5] of slopeFlen"],
+        notes=[len_note, "slopeSlen expressed as ratio in [2, 5] of slopeFlen",
+               f"slope_threshold_sigma searched in [0, 1.2] · sigma={stats.sigma_bar:.4f}, "
+               f"efficienza={stats.efficiency_ratio:.3f}"],
     )
 
 

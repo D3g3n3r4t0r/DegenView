@@ -147,26 +147,39 @@ def test_lorenzo_slope_constraint_survives_the_ratio_parameterisation():
 
 
 def test_lorenzo_branches_drop_the_parameters_that_are_switched_off():
-    """The branch decomposition is the whole reason Lorenzo becomes tractable:
-    with both filters off the space is 4-dimensional, not 10."""
+    """The branch decomposition is the whole reason Lorenzo becomes tractable.
+
+    The counts moved by one when `slope_threshold_sigma` was added — a searched
+    dimension, not a filter's — so what is pinned here is the property rather
+    than the arithmetic: a switched-off filter contributes no dimension, and
+    turning both on costs exactly four.
+    """
     st = estimate_series_stats(_series(_ar1(900, 0.2, 10)))
     spaces = {cs.label: cs for cs in build_spaces(LORENZO, st)}
     assert len(spaces) == 4
 
     plain = spaces["trendfilter=False volatilityfilter=False"]
-    assert plain.d == 4
-    assert not any("trendfilter" in d or "volatility" in d for d in plain.dims)
+    assert not any(d.startswith("trendfilter") or d.startswith("volatility") for d in plain.dims)
 
     full = spaces["trendfilter=True volatilityfilter=True"]
-    assert full.d == 8
+    assert full.d == plain.d + 4
+    assert set(plain.dims) < set(full.dims)
 
 
 def test_branch_decomposition_shrinks_the_grid_by_orders_of_magnitude():
+    """Il confronto è a parità di assi: la decomposizione va misurata su quello
+    che toglie, non sommata a una dimensione aggiunta dopo per un'altra ragione.
+
+    `slope_threshold_sigma` è cercata in più — costa un asse e se lo merita —
+    ma metterla nel conto qui trasformerebbe questo test in una misura di due
+    cose insieme, e nessuna delle due si leggerebbe più.
+    """
     st = estimate_series_stats(_series(_ar1(900, 0.2, 11)))
     for strategy in (LORENZO, EXHAUSTION):
         spaces = build_spaces(strategy, st)
+        added = {"slope_threshold_sigma"}
         before = 4.0 ** unconstrained_dims(strategy)
-        after = branch_grid_estimate(spaces, 4.0)
+        after = sum(4.0 ** len(set(cs.dims) - added) for cs in spaces)
         assert after < before / 10
 
 

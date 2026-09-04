@@ -130,6 +130,12 @@
       { key: "volatilityfilter", label: "Filtro volatilità", type: "checkbox", default: true },
       { key: "volatilitystdevlength", label: "Stdev lunghezza", type: "number", min: 1, default: 16 },
       { key: "volatilitystdevmalength", label: "Stdev media lunghezza", type: "number", min: 1, default: 44 },
+      // La variabile che mancava: quanta pendenza serve perché conti come
+      // direzione, in unità di deviazione standard della pendenza stessa —
+      // così la stessa soglia significa la stessa cosa su BTC e su una
+      // altcoin che fa il 15% al giorno. Zero = spenta, come è sempre stato.
+      { key: "slope_threshold_sigma", label: "Soglia pendenza (σ)", type: "number", min: 0, max: 3, step: 0.1, default: 0 },
+      { key: "slope_sigma_length", label: "Finestra σ pendenza", type: "number", min: 10, default: 100 },
     ],
     "Accumulo / Distribuzione (long-term)": [
       { key: "enable_divergence", label: "Divergenza RSI su swing", type: "checkbox", default: true },
