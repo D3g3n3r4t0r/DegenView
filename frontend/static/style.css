@@ -3597,3 +3597,9 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .op-spin { animation: none; border-top-color: var(--accent); }
 }
+.opt-progress-stop {
+  font: inherit; font-size: 11px; padding: 2px 9px; cursor: pointer;
+  border: 1px solid var(--bear); background: transparent; color: var(--bear);
+}
+.opt-progress-stop:hover { background: var(--bear); color: var(--bg-panel); }
+.opt-progress-stop:disabled { opacity: .5; cursor: default; }

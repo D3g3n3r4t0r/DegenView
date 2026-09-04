@@ -28,6 +28,7 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 
 from app.analysis.backtest import run_backtest
+from app.analysis.cancel import stop_if_asked
 from app.analysis.strategies import (
     DEFAULT_PARAMS,
     EXHAUSTION_DEFAULT_PARAMS,
@@ -312,6 +313,7 @@ def optimize_strategy(
     top_n: int = _TOP_N,
     constraints: Constraints | None = None,
     progress: Callable[[str], None] | None = None,
+    should_stop: Callable[[], bool] | None = None,
 ) -> tuple[dict, BacktestResult, int, float | None, bool, list[dict]]:
     """Search for the best parameters and return the top-N candidates.
 
@@ -397,6 +399,7 @@ def optimize_strategy(
         say(f"griglia completa: {total} combinazioni")
         step = max(1, total // 20)
         for candidate_delta in _grid_candidates(strategy_name):
+            stop_if_asked(should_stop)
             candidate = {**default_params, **candidate_delta}
             bt = run_backtest(df_in, candidate, backtest_params, strategy_name=strategy_name)
             evaluated += 1
@@ -407,6 +410,7 @@ def optimize_strategy(
         say(f"ricerca casuale: {trials} tentativi")
         step = max(1, trials // 20)
         for _ in range(trials):
+            stop_if_asked(should_stop)
             candidate = random_params_fn(rng)
             bt = run_backtest(df_in, candidate, backtest_params, strategy_name=strategy_name)
             evaluated += 1

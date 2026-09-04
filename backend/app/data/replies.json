@@ -4,6 +4,10 @@
     {
       "text": "Ho trovato un disallineamento reale e l'ho corretto: la fascia partiva dalla candela di mezzo, mentre il vuoto sta fra la prima e la terza — quindi cominciava una barra dopo rispetto a TradingView e copriva solo meta' del movimento che l'ha creata.\n\nMa non voglio indovinare il resto. Guardando lo screenshot di TradingView che mi hai mandato, le differenze possibili sono: (1) il colore — li' sono grigie neutre, da noi verdi/rosse per direzione; (2) l'estensione — devono arrivare fino al bordo destro finche' non sono riempite, o fermarsi dove sono state riempite come fanno ora; (3) l'etichetta 'FVG' scritta sopra, che li' non c'e'; (4) l'altezza — se ti sembrano troppo alte, il problema e' l'unione delle imbalance consecutive, che ora e' attiva e le fonde in una sola.\n\nDimmi quale delle quattro (o mandami un altro screenshot) e la sistemo. Lascio la voce riaperta finche' non me lo confermi tu.",
       "created_at": 1788522925
+    },
+    {
+      "text": "Ho riguardato il tuo screenshot di TradingView e ho capito l'errore: la fascia orizzontale con la mediana me l'ero inventata io. Li' le imbalance sono box grigi neutri, senza scritta sopra. Ora sono cosi': rettangolo pieno con bordo, grigio in entrambe le direzioni (una imbalance e' una zona di prezzo, non un segnale rialzista o ribassista — il verde e il rosso restano agli order block, che una direzione ce l'hanno), nessuna etichetta 'FVG' sul grafico, il nome resta nel tooltip. Piu' la correzione di prima sulla partenza dalla prima delle tre candele.\n\nLa lascio riaperta: guardala e dimmi se e' quello che intendevi.",
+      "created_at": 1788525469
     }
   ]
 }

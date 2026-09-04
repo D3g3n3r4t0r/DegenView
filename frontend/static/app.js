@@ -16,10 +16,14 @@
     bullBorder: "rgba(0, 214, 143, 0.75)",
     bearFill: "rgba(255, 69, 96, 0.12)",
     bearBorder: "rgba(255, 69, 96, 0.75)",
-    fvgBullFill: "rgba(0, 214, 143, 0.20)",
-    fvgBullBorder: "rgba(0, 214, 143, 0.70)",
-    fvgBearFill: "rgba(255, 69, 96, 0.20)",
-    fvgBearBorder: "rgba(255, 69, 96, 0.70)",
+    // Grigie e non colorate per direzione: su TradingView una imbalance e' una
+    // zona di prezzo, non un segnale rialzista o ribassista, e il colore lo
+    // suggeriva. Il verde/rosso resta agli order block, che una direzione ce
+    // l'hanno davvero.
+    fvgBullFill: "rgba(148, 158, 170, 0.16)",
+    fvgBullBorder: "rgba(148, 158, 170, 0.55)",
+    fvgBearFill: "rgba(148, 158, 170, 0.16)",
+    fvgBearBorder: "rgba(148, 158, 170, 0.55)",
     confluenceFill: "rgba(0, 214, 143, 0.07)",
     confluenceBorder: "rgba(0, 214, 143, 0.40)",
     ema20: "#5b9cf6",
@@ -48,10 +52,10 @@
     bullBorder: "#00a86b",
     bearFill: "rgba(0, 0, 0, 0.06)",
     bearBorder: "#e03040",
-    fvgBullFill: "rgba(0, 168, 107, 0.12)",
-    fvgBullBorder: "rgba(0, 168, 107, 0.60)",
-    fvgBearFill: "rgba(224, 48, 64, 0.10)",
-    fvgBearBorder: "rgba(224, 48, 64, 0.60)",
+    fvgBullFill: "rgba(120, 128, 138, 0.14)",
+    fvgBullBorder: "rgba(120, 128, 138, 0.50)",
+    fvgBearFill: "rgba(120, 128, 138, 0.14)",
+    fvgBearBorder: "rgba(120, 128, 138, 0.50)",
     confluenceFill: "rgba(0, 0, 0, 0.03)",
     confluenceBorder: "rgba(0, 0, 0, 0.22)",
     ema20: "#888888",
@@ -78,6 +82,12 @@
   // restava ferma sul suo stato vuoto senza che nulla si inizializzasse.
   const el = (id) => document.getElementById(id);
 
+  // `applyTheme` gira subito, prima che il resto del file sia valutato: senza
+  // questa bandiera `repaintCharts` toccherebbe `mainChart`, dichiarato con
+  // `let` settecento righe piu' sotto, e cadrebbe nella stessa temporal dead
+  // zone che ha gia' spento l'app una volta.
+  let chartsReady = false;
+
   const THEME_KEY = "lae.theme";
 
   function preferredTheme() {
@@ -102,8 +112,43 @@
       try { localStorage.setItem(THEME_KEY, mode); } catch { /* ignora */ }
     }
     // I colori del grafico non stanno nel CSS: sono opzioni passate alla
-    // libreria alla creazione delle serie, quindi vanno riapplicati ridisegnando.
+    // libreria alla creazione, quindi vanno riapplicati a mano.
+    //
+    // Ridisegnare non bastava: `render()` aggiorna i DATI delle serie, non le
+    // opzioni del grafico. Lo sfondo, la griglia e il crosshair restavano
+    // quelli con cui il grafico era nato — ed e' il motivo per cui passando al
+    // tema chiaro il riquadro restava nero.
+    repaintCharts();
     if (redraw && state.data) render();
+  }
+
+  function repaintCharts() {
+    if (!chartsReady) return;
+    const opts = {
+      layout: { background: { color: COLORS.paperBg }, textColor: COLORS.inkDim },
+      grid: { vertLines: { color: COLORS.gridMinor }, horzLines: { color: COLORS.gridMinor } },
+      rightPriceScale: { borderColor: COLORS.gridMajor },
+      timeScale: { borderColor: COLORS.gridMajor },
+      crosshair: {
+        vertLine: { color: COLORS.inkDim, labelBackgroundColor: COLORS.ink },
+        horzLine: { color: COLORS.inkDim, labelBackgroundColor: COLORS.ink },
+      },
+    };
+    [mainChart, rsiChart, macdChart, stochChart].forEach((c) => {
+      if (c) { try { c.applyOptions(opts); } catch { /* grafico non ancora creato */ } }
+    });
+    // Anche le serie portano colori propri, decisi alla creazione.
+    if (candleSeries) {
+      candleSeries.applyOptions({
+        downColor: COLORS.bear, borderUpColor: COLORS.bull, borderDownColor: COLORS.bear,
+        wickUpColor: COLORS.bull, wickDownColor: COLORS.bear,
+      });
+    }
+    if (rsiSeries) rsiSeries.applyOptions({ color: COLORS.rsi });
+    if (macdLineSeries) macdLineSeries.applyOptions({ color: COLORS.macd });
+    if (macdSignalSeries) macdSignalSeries.applyOptions({ color: COLORS.macdSignal });
+    if (stochKSeries) stochKSeries.applyOptions({ color: COLORS.rsi });
+    if (stochDSeries) stochDSeries.applyOptions({ color: COLORS.stamp });
   }
 
   applyTheme(preferredTheme(), { persist: false, redraw: false });
@@ -1940,9 +1985,12 @@
       pill.title = running.map((j) => j.sub).join(" · ");
     } else {
       const failed = done.filter((j) => j.state === "fallito").length;
-      pill.className = "opt-pill " + (failed ? "failed" : "done");
-      pill.innerHTML = `<span class="op-mark">${failed ? "✕" : "✓"}</span>`
-        + `<span class="op-text">${failed ? "ricerca fallita" : "salvata in archivio"}</span>`;
+      const stopped = done.filter((j) => j.state === "annullato").length;
+      const kind = failed ? "failed" : stopped ? "" : "done";
+      pill.className = "opt-pill " + kind;
+      pill.innerHTML = `<span class="op-mark">${failed ? "✕" : stopped ? "◼" : "✓"}</span>`
+        + `<span class="op-text">${failed ? "ricerca fallita"
+          : stopped ? "ricerca fermata" : "salvata in archivio"}</span>`;
     }
     pill.classList.remove("hidden");
   }
@@ -1963,6 +2011,7 @@
     appendOptLog(job.log);
     el("opt-progress-time").textContent = `${Math.round(job.elapsed || 0)}s`;
     el("opt-progress").classList.remove("hidden", "done", "failed");
+    el("opt-progress-stop").classList.toggle("hidden", job.state !== "in corso");
     if (job.state !== "in corso") optProgressFoot(job.footText, job.footKind);
     renderOptPill();
   }
@@ -2026,7 +2075,17 @@
         appendOptLog(data.log || []);
         el("opt-progress-time").textContent = `${Math.round(job.elapsed)}s`;
       }
-      if (data.state === "finito") {
+      if (data.state === "annullato") {
+        // Fermata apposta: non e' un fallimento e non va raccontata come tale.
+        job.state = "annullato";
+        job.footText = "Fermata.";
+        job.footKind = "";
+        job.seenDone = true;
+        if (optViewing === job.id) {
+          optProgressFoot(job.footText, job.footKind);
+          el("opt-progress-stop").classList.add("hidden");
+        }
+      } else if (data.state === "finito") {
         job.state = "finito";
         job.result = data.result;
         job.footText = "Fatto. Salvata in archivio.";
@@ -2371,6 +2430,7 @@
 
     mainChart.subscribeCrosshairMove(handleCrosshairMove);
     bindDrawClickCapture();
+    chartsReady = true;
   }
 
   // Chart-relative point + bar time as last reported by the library's own
@@ -3283,12 +3343,10 @@
           fill,
           border,
           lvl.label,
-          LEVEL_SHORT_LABELS[lvl.type],
-          // Le imbalance si disegnano come fasce orizzontali, con il livello
-          // mediano: sono definite da due prezzi, non da un intervallo di
-          // tempo. Gli order block restano rettangoli, perché lì l'estensione
-          // temporale è parte di cosa sono.
-          isFvg ? { edges: "horizontal", midline: true } : undefined
+          // Niente scritta sopra le imbalance: su TradingView il box e' muto e
+          // il nome sta nel tooltip. La fascia con la mediana che avevo messo
+          // prima era una mia invenzione, non lo stile di riferimento.
+          isFvg ? "" : LEVEL_SHORT_LABELS[lvl.type]
         );
       } else {
         const line = candleSeries.createPriceLine({
@@ -6039,6 +6097,17 @@
     bindArchive();
     bindTradingJournal();
     el("opt-progress-close").addEventListener("click", closeOptProgress);
+    el("opt-progress-stop").addEventListener("click", async () => {
+      if (!optViewing) return;
+      const btn = el("opt-progress-stop");
+      btn.disabled = true;
+      btn.textContent = "Fermo…";
+      try {
+        await fetch(`/api/jobs/${optViewing}/cancel`, { method: "POST" });
+      } catch { /* il prossimo giro di polling lo dira' comunque */ }
+      btn.disabled = false;
+      btn.textContent = "Ferma";
+    });
     // La pastiglia riapre il log del lavoro piu' recente: e' l'unico modo di
     // tornare a vedere una ricerca dopo aver chiuso la finestra.
     const pill = el("opt-pill");
