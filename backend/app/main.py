@@ -76,7 +76,12 @@ import app.price_alerts as price_alerts_store
 from app.models import PriceAlert, PriceAlertCondition, StrategySignal
 from app.pine import PineError, PineInterpreter, is_strategy_style, parse_program, scan_inputs
 from app.pine import storage as pine_storage
-from app.providers.base import DataProvider, ProviderError, QuotaExceeded
+from app.providers.base import (
+    DataProvider,
+    ProviderError,
+    ProviderUnreachable,
+    QuotaExceeded,
+)
 from app.providers.binance import BinanceProvider
 from app.providers.binance import format_symbol as format_binance_symbol
 from app.providers.kucoin import KucoinProvider
@@ -203,6 +208,7 @@ async def _watchlist_alert_loop() -> None:
                 df = await fetch_ohlcv_canonical(
                     provider, entry.symbol, entry.interval, settings.candles_per_timeframe
                 )
+                _provider_recovered(entry.asset_type, entry.exchange)
                 if entry.on_close:
                     df = drop_unclosed_candle(df, entry.interval)
                 if df.empty:
@@ -320,6 +326,20 @@ async def _watchlist_alert_loop() -> None:
                                             owner.telegram_chat_id,
                                             f"⚠️ Ordine FALLITO <b>{entry.symbol}</b> [{signal.type}]: {exc}",
                                         ))
+            except ProviderUnreachable as exc:
+                # Rete, TLS, proxy: quasi sempre passeggero. Si mette in pausa
+                # quel provider con attesa crescente e si parla solo se il buco
+                # dura — un errore che al giro dopo non si ripresenta non vale
+                # un messaggio d'allarme.
+                streak = _pause_for_unreachable(entry.asset_type, entry.exchange)
+                if _notify_unreachable_once(entry.asset_type, entry.exchange, streak):
+                    asyncio.create_task(telegram.send_to(
+                        owner.telegram_chat_id,
+                        f"📡 <b>{entry.exchange}</b> non risponde da qualche minuto.\n"
+                        f"Il monitoraggio riprende da solo appena torna raggiungibile.\n\n"
+                        f"<i>{exc}</i>",
+                    ))
+                continue
             except QuotaExceeded as exc:
                 # I crediti del piano sono finiti: non c'e' niente da riprovare
                 # fra un minuto. Senza questa pausa arrivava un messaggio di
@@ -365,6 +385,46 @@ def _pause_for_quota(asset_type: str, exchange: str, exc: QuotaExceeded) -> None
     wait = exc.retry_after_s or 3600
     _quota_pause_until[_quota_key(asset_type, exchange)] = _time.time() + wait
     logger.warning("quota esaurita su %s/%s: pausa di %ss", asset_type, exchange, wait)
+
+
+# Irraggiungibilita': quasi sempre passeggera. Si conta quante volte di fila
+# succede, invece di reagire alla prima — un errore TLS che al giro dopo non si
+# ripresenta non merita un messaggio, e mandarlo comunque e' come e' arrivata
+# la segnalazione su MEXC.
+_UNREACHABLE_BACKOFF_S = (300, 600, 1200, 3600)
+_UNREACHABLE_SPEAK_AFTER = 3        # ~15 minuti di buco prima di dire qualcosa
+_unreachable_streak: dict[tuple[str, str], int] = {}
+
+
+def _pause_for_unreachable(asset_type: str, exchange: str) -> int:
+    """Mette in pausa quel provider e restituisce da quante volte di fila fallisce."""
+    key = _quota_key(asset_type, exchange)
+    streak = _unreachable_streak.get(key, 0) + 1
+    _unreachable_streak[key] = streak
+    wait = _UNREACHABLE_BACKOFF_S[min(streak - 1, len(_UNREACHABLE_BACKOFF_S) - 1)]
+    _quota_pause_until[key] = _time.time() + wait
+    logger.warning("provider %s/%s non raggiungibile (%d di fila): pausa di %ss",
+                   asset_type, exchange, streak, wait)
+    return streak
+
+
+def _provider_recovered(asset_type: str, exchange: str) -> None:
+    """Una lettura riuscita azzera il conteggio: altrimenti un guasto di ieri
+    farebbe scattare l'allarme al primo inciampo di domani."""
+    key = _quota_key(asset_type, exchange)
+    if _unreachable_streak.pop(key, 0):
+        _quota_notified.pop((None,) + key, None)
+
+
+def _notify_unreachable_once(asset_type: str, exchange: str, streak: int) -> bool:
+    """Si parla solo se il buco dura, e una volta sola finche' dura."""
+    if streak < _UNREACHABLE_SPEAK_AFTER:
+        return False
+    key = (None,) + _quota_key(asset_type, exchange)
+    if _quota_notified.get(key):
+        return False
+    _quota_notified[key] = _time.time()
+    return True
 
 
 def _notify_quota_once(owner_id: str, asset_type: str, exchange: str) -> bool:

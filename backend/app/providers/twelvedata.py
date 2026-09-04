@@ -7,7 +7,12 @@ import pandas as pd
 from cachetools import TTLCache
 
 from app.config import settings
-from app.providers.base import DataProvider, ProviderError, QuotaExceeded
+from app.providers.base import (
+    DataProvider,
+    ProviderError,
+    ProviderUnreachable,
+    QuotaExceeded,
+)
 
 _PREFERRED_EXCHANGES = {"NASDAQ", "NYSE"}
 _PREFERRED_INSTRUMENT_TYPES = {"Common Stock", "ETF"}
@@ -96,8 +101,15 @@ class TwelveDataProvider(DataProvider):
         }
 
         await _throttle()
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.get(f"{self._base_url}/time_series", params=params)
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.get(f"{self._base_url}/time_series", params=params)
+        except httpx.HTTPError as exc:
+            # Rete o TLS, non un rifiuto del servizio: e' passeggero, e chi
+            # chiama deve poterlo distinguere per riprovare invece di allarmare.
+            raise ProviderUnreachable(
+                f"Twelve Data non raggiungibile per {formatted_symbol}: {exc}"
+            ) from exc
 
         try:
             payload = resp.json()

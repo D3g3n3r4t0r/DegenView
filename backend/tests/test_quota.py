@@ -105,3 +105,69 @@ def test_a_new_pause_speaks_again(loop):
     loop._notify_quota_once("u1", "stock", "x")
     loop._quota_pause_until[loop._quota_key("stock", "x")] = time.time() + 5000
     assert loop._notify_quota_once("u1", "stock", "x") is True
+
+
+# --- provider irraggiungibile ---------------------------------------------
+#
+# Stessa famiglia, reazione diversa: la quota si esaurisce e resta esaurita,
+# la rete cade e quasi sempre torna al giro dopo. È arrivata sulla bacheca come
+# "⚠️ Errore monitoraggio BTCUSDT [1d]: MEXC non raggiungibile ... tlsv1 alert
+# internal error" — un errore che poi non si è più ripresentato.
+
+
+def test_unreachable_is_a_provider_error_but_not_a_quota_error():
+    from app.providers.base import ProviderUnreachable
+
+    assert issubclass(ProviderUnreachable, ProviderError)
+    assert not issubclass(ProviderUnreachable, QuotaExceeded)
+
+
+def test_the_first_failure_pauses_but_says_nothing(loop):
+    """Un errore TLS che al giro dopo non si ripresenta non vale un messaggio."""
+    streak = loop._pause_for_unreachable("crypto", "mexc")
+    assert streak == 1
+    assert loop._quota_paused("crypto", "mexc")
+    assert loop._notify_unreachable_once("crypto", "mexc", streak) is False
+
+
+def test_it_speaks_once_the_outage_lasts(loop):
+    for _ in range(loop._UNREACHABLE_SPEAK_AFTER - 1):
+        loop._pause_for_unreachable("crypto", "mexc")
+    streak = loop._pause_for_unreachable("crypto", "mexc")
+    assert loop._notify_unreachable_once("crypto", "mexc", streak) is True
+
+
+def test_it_says_it_only_once_while_the_outage_lasts(loop):
+    for _ in range(6):
+        streak = loop._pause_for_unreachable("crypto", "mexc")
+        loop._notify_unreachable_once("crypto", "mexc", streak)
+    spoken = sum(1 for k in loop._quota_notified if k[0] is None)
+    assert spoken == 1
+
+
+def test_the_wait_grows_with_the_streak(loop):
+    import time as _t
+
+    loop._pause_for_unreachable("crypto", "mexc")
+    first = loop._quota_pause_until[loop._quota_key("crypto", "mexc")] - _t.time()
+    for _ in range(3):
+        loop._pause_for_unreachable("crypto", "mexc")
+    later = loop._quota_pause_until[loop._quota_key("crypto", "mexc")] - _t.time()
+    assert later > first
+
+
+def test_a_successful_read_resets_everything(loop):
+    """Altrimenti un guasto di ieri farebbe scattare l'allarme al primo
+    inciampo di domani."""
+    for _ in range(4):
+        streak = loop._pause_for_unreachable("crypto", "mexc")
+        loop._notify_unreachable_once("crypto", "mexc", streak)
+    loop._provider_recovered("crypto", "mexc")
+    assert loop._pause_for_unreachable("crypto", "mexc") == 1
+    assert loop._notify_unreachable_once("crypto", "mexc", 1) is False
+
+
+def test_exchanges_are_counted_separately(loop):
+    loop._pause_for_unreachable("crypto", "mexc")
+    loop._pause_for_unreachable("crypto", "mexc")
+    assert loop._pause_for_unreachable("crypto", "binance") == 1
