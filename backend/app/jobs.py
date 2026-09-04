@@ -26,7 +26,7 @@ import time
 import uuid
 from typing import Any, Literal
 
-State = Literal["in corso", "finito", "fallito"]
+State = Literal["in corso", "finito", "fallito", "annullato"]
 
 _MAX_LOG_LINES = 400
 _KEEP_FINISHED_S = 900          # un quarto d'ora: il tempo di leggere il risultato
@@ -104,6 +104,21 @@ def fail(job_id: str, error: str) -> None:
         job["state"] = "fallito"
         job["error"] = error[:600]
         job["finished_at"] = time.time()
+
+
+def cancelled(job_id: str) -> dict | None:
+    """Fermata su richiesta: non e' un fallimento e non va raccontata come tale.
+
+    Un lavoro fermato apposta che compare come "fallito" fa cercare un guasto
+    che non c'e'.
+    """
+    with _lock:
+        job = _jobs.get(job_id)
+        if job is None:
+            return None
+        job["state"] = "annullato"
+        job["finished_at"] = time.time()
+        return job
 
 
 def get(job_id: str, owner_id: str | None = None, since: int = 0) -> dict | None:

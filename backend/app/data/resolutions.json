@@ -30,10 +30,12 @@
   },
   "seed-0006": {
     "status": "risolto",
-    "summary": "Interruttore tema nella barra in alto, con i colori del grafico che seguono davvero.",
-    "detail": "Il CSS supportava gia' [data-theme], ma non bastava: i colori del grafico non stanno nel CSS, sono opzioni passate alla libreria alla creazione delle serie. Un interruttore che cambiava solo il CSS avrebbe lasciato candele chiare su sfondo nero.\n\nCOLORS era una const scelta una volta sola all'avvio da prefers-color-scheme, con 40 riferimenti sparsi nel file. Riassegnarla li avrebbe lasciati legati alla vecchia palette. Ora l'oggetto resta lo stesso e viene sostituito il contenuto: i riferimenti leggono al momento della chiamata, quindi continuano a funzionare senza toccarne nessuno. Verificato: identita' preservata, tutte e 28 le chiavi cambiano.\n\nLa scelta viene ricordata. Se non ne fai una, il tema continua a seguire il sistema — passando a scuro la sera te lo ritrovi.",
-    "next": "Nessuno.",
-    "commit": "vedi git log su main"
+    "at": 1788525469,
+    "summary": "Il grafico restava nero al cambio tema: si ridisegnavano i dati, non le opzioni del grafico.",
+    "detail": "I colori del grafico non stanno nel CSS: sono opzioni passate alla libreria alla creazione. Cambiando tema si riassegnava la tavolozza e si ridisegnava, ma ridisegnare aggiorna i DATI delle serie — sfondo, griglia, crosshair e colori delle linee restavano quelli con cui il grafico era nato. Ora vengono riapplicati esplicitamente a tutti e quattro i riquadri e alle loro serie. Con una guardia: la funzione gira anche al primo avvio, prima che i grafici esistano, e toccarli li' avrebbe rifatto esattamente l'errore che aveva spento l'app.",
+    "files": [
+      "frontend/static/app.js"
+    ]
   },
   "seed-0012": {
     "status": "risolto",
@@ -249,6 +251,22 @@
       "frontend/static/app.js",
       "frontend/index.html",
       "frontend/static/style.css"
+    ]
+  },
+  "5a878834": {
+    "status": "risolto",
+    "at": 1788525469,
+    "summary": "Nella finestra del log c'e' il tasto 'Ferma': la ricerca si interrompe al backtest successivo.",
+    "detail": "La richiesta segna solo la volonta' di fermare; e' la ricerca che se ne accorge, e il controllo sta nel punto per cui passa ogni singolo backtest — non alle sole svolte del log. Cosi' fermarsi costa al massimo il tempo di un backtest invece di un ottavo del budget, anche durante la mappatura dei confini, che e' la fase piu' lunga. Una ricerca fermata risulta 'annullata' e non 'fallita': un lavoro interrotto apposta che compare come fallito fa cercare un guasto che non c'e'. Il tasto compare solo mentre e' in corso, e nessuno puo' fermare la ricerca di un altro.",
+    "files": [
+      "backend/app/analysis/cancel.py",
+      "backend/app/jobs.py",
+      "backend/app/main.py",
+      "backend/app/analysis/plateau.py",
+      "backend/app/analysis/optimize.py",
+      "backend/tests/test_cancel.py",
+      "frontend/static/app.js",
+      "frontend/index.html"
     ]
   }
 }

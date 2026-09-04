@@ -37,6 +37,7 @@ from app import trading_log
 from app import favorites as favorites_store
 from app import watchlist as watchlist_store
 from app.analysis.backtest import run_backtest
+from app.analysis.cancel import SearchCancelled
 from app.analysis.confluence import compute_confluence
 from app.analysis.indicators import compute_indicators
 from app.analysis.fibonacci import compute_fib_zones
@@ -1746,6 +1747,7 @@ async def _optimize_payload(
     backtest_interval: str,
     constraints: "Constraints",
     say=None,
+    should_stop=None,
 ) -> "OptimizeResult":
     """Costruisce la risposta dell'ottimizzazione, una volta sola.
 
@@ -1783,7 +1785,7 @@ async def _optimize_payload(
                 partial(
                     run_pipeline, strategy_name, df, backtest_params.model_dump(),
                     accept=(constraints.accepts if constraints.active else None),
-                    progress=say,
+                    progress=say, should_stop=should_stop,
                 )
             )
         except ValueError as exc:
@@ -1842,6 +1844,7 @@ async def _optimize_payload(
             partial(
                 optimize_strategy, strategy_name, df, backtest_params.model_dump(),
                 mode=mode, constraints=constraints, progress=say,
+                should_stop=should_stop,
             )
         )
     except NoCandidateMeetsConstraints as exc:
@@ -2073,6 +2076,7 @@ async def start_optimize(
             body = await _optimize_payload(
                 strategy_name, df, backtest_params, mode, ltf_interval,
                 backtest_interval, constraints, say,
+                should_stop=lambda: jobs_store.cancel_requested(job_id),
             )
             jobs_store.finish(job_id, body.model_dump(mode="json"))
 
@@ -2091,6 +2095,9 @@ async def start_optimize(
                                            _optimizer_summary(symbol, strategy_name, mode, body))
                     jobs_store.log(job_id, "riepilogo mandato su Telegram")
             jobs_store.log(job_id, "fatto")
+        except SearchCancelled:
+            jobs_store.log(job_id, "fermata su richiesta")
+            jobs_store.cancelled(job_id)
         except NoCandidateMeetsConstraints as exc:
             jobs_store.fail(job_id, str(exc))
         except ProviderError as exc:
@@ -2111,6 +2118,20 @@ async def start_optimize(
 
     asyncio.create_task(_run())
     return {"job_id": job_id}
+
+
+@app.post("/api/jobs/{job_id}/cancel")
+async def cancel_job(
+    job_id: str, user: User | None = Depends(auth.get_current_user_optional)
+) -> dict:
+    """Ferma una ricerca in corso.
+
+    Segna soltanto la richiesta: il lavoro se ne accorge al backtest successivo,
+    quindi si ferma entro una frazione di secondo invece che a fase finita.
+    """
+    if not jobs_store.request_cancel(job_id, owner_id=user.id if user else None):
+        raise HTTPException(status_code=404, detail="Lavoro non trovato o scaduto")
+    return {"ok": True}
 
 
 @app.get("/api/jobs/{job_id}")

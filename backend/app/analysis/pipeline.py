@@ -150,6 +150,7 @@ def run_pipeline(
     seed: int = 0,
     accept: Callable[[BacktestResult], bool] | None = None,
     progress: Callable[[str], None] | None = None,
+    should_stop: Callable[[], bool] | None = None,
 ) -> PipelineResult:
     """Deterministic parameter selection. Same inputs, same answer, always.
 
@@ -209,6 +210,7 @@ def run_pipeline(
             # pianori…" e poi silenzio per minuti non dice se sta lavorando ne'
             # che cosa sta facendo.
             progress=say,
+            should_stop=should_stop,
         )
         total_evals += res.evaluations
         say(f"variante {cs.label}: {res.evaluations} backtest, "

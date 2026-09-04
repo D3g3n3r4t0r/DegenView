@@ -47,6 +47,7 @@ import numpy as np
 import pandas as pd
 
 from app.analysis.backtest import run_backtest
+from app.analysis.cancel import stop_if_asked
 from app.analysis.sensitivity import PARAM_SPACES, ParamSpace
 from app.models import BacktestResult
 
@@ -228,6 +229,7 @@ def partition_axes(
     tol: float = 0.004,
     counter: dict | None = None,
     progress: Callable[[str], None] | None = None,
+    should_stop: Callable[[], bool] | None = None,
 ) -> list[AxisPartition]:
     """Partition every axis into cells, taking the union of boundaries found
     from several base points.
@@ -246,6 +248,7 @@ def partition_axes(
         found: list[float] = []
         for base in base_points:
             def probe(u: float, _dim=dim, _base=base) -> Fingerprint:
+                stop_if_asked(should_stop)
                 point = np.array(_base, dtype=float)
                 point[_dim] = u
                 bt = run_backtest(df, space.to_params(point), backtest_params,
@@ -410,6 +413,7 @@ def plateau_search(
     space: ParamSpace | None = None,
     objective: Callable[[BacktestResult], float] = _plateau_objective,
     progress: Callable[[str], None] | None = None,
+    should_stop: Callable[[], bool] | None = None,
 ) -> PlateauResult:
     """Find the widest good plateau rather than the highest point.
 
@@ -429,6 +433,10 @@ def plateau_search(
     notes: list[str] = []
 
     def evaluate(u: np.ndarray) -> tuple[BacktestResult, float]:
+        # Il controllo sta qui e non alle sole svolte del log: e' il punto per
+        # cui passa ogni backtest, quindi fermarsi costa al massimo il tempo di
+        # quello in corso invece di un ottavo del budget.
+        stop_if_asked(should_stop)
         bt = run_backtest(df, space.to_params(u), bp, strategy_name=strategy_name)
         counter["n"] += 1
         return bt, objective(bt)
@@ -437,7 +445,8 @@ def plateau_search(
     say(f"cerco i confini su {space.d} assi: dove il risultato cambia, non dove cambia il parametro")
     bases = np.vstack([np.full(space.d, 0.5), rng.random((max(base_points - 1, 0), space.d))])
     parts = partition_axes(df, strategy_name, space, bp, bases,
-                           coarse=coarse, tol=tol, counter=counter, progress=say)
+                           coarse=coarse, tol=tol, counter=counter, progress=say,
+                           should_stop=should_stop)
 
     grid_cells = 1
     for p in parts:
