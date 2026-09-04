@@ -224,6 +224,76 @@
     ],
   };
 
+  // ── Leggere un campo numerico senza produrre un 422 ────────────────────────
+  //
+  // Tre modi diversi di scrivere un numero finivano tutti nello stesso errore
+  // muto — "Errore 422" — ed erano tre cose diverse:
+  //
+  //   * il campo svuotato per riscriverlo, e la richiesta parte in quel
+  //     momento: `len=` arriva al server come stringa vuota;
+  //   * la virgola decimale. `1,5` in un <input type="number"> non e' un
+  //     numero per il browser, che restituisce stringa vuota — e la virgola
+  //     e' come scrive i decimali chi usa questa app;
+  //   * un decimale dentro un parametro che e' un numero di barre. `27,5`
+  //     barre non esiste, ma nessuno lo diceva.
+  //
+  // Qui il valore viene normalizzato e RISCRITTO nel campo: cosi' quello che
+  // gira e' quello che si legge a schermo. Sostituirlo in silenzio, lasciando
+  // scritto altro, sarebbe peggio dell'errore.
+  //
+  // Un campo e' intero quando non dichiara `step` — e' la stessa distinzione
+  // che fa il modello lato server (int contro float), e c'e' un test che
+  // verifica che le due restino allineate.
+  function fieldIsInteger(field) {
+    return field.step === undefined;
+  }
+
+  function parseLooseNumber(raw) {
+    const text = String(raw ?? "").trim().replace(",", ".");
+    if (text === "") return null;
+    const n = Number(text);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function fieldNumber(input, field) {
+    let n = parseLooseNumber(input.value);
+    if (n === null) n = Number(field.default);
+    if (fieldIsInteger(field)) n = Math.round(n);
+    if (field.min !== undefined && n < field.min) n = field.min;
+    if (field.max !== undefined && n > field.max) n = field.max;
+    const text = String(n);
+    if (input.value !== text) input.value = text;
+    return text;
+  }
+
+  // I quattro campi del backtest non stanno nella tabella dei parametri:
+  // vivono in pagina. Stessa regola, stessa riscrittura.
+  function inputNumber(input, fallback, opts) {
+    if (!input) return String(fallback);
+    return fieldNumber(input, {
+      default: fallback,
+      step: opts && opts.integer ? undefined : (opts && opts.step) || 0.01,
+      min: opts ? opts.min : undefined,
+      max: opts ? opts.max : undefined,
+    });
+  }
+
+  // I parametri di una strategia come oggetto, per chi li manda in JSON
+  // (alert e archivio) invece che in query. Stesse regole: mai un NaN, che in
+  // JSON diventa null e arriverebbe al server come parametro cancellato.
+  function collectStrategyParams(container, strategyName) {
+    const out = {};
+    if (!container) return out;
+    (STRATEGY_PARAM_FIELDS[strategyName] || []).forEach((field) => {
+      const input = container.querySelector(`[name="${field.key}"]`);
+      if (!input) return;
+      if (field.type === "checkbox") out[field.key] = input.checked;
+      else if (field.type === "select") out[field.key] = input.value;
+      else out[field.key] = Number(fieldNumber(input, field));
+    });
+    return out;
+  }
+
   // One dropdown is all the user picks — HTF/MTF for the multi-timeframe SMC
   // confluence engine are derived automatically from it (two and four steps
   // up the canonical ladder), instead of three interval pickers that could
@@ -1907,11 +1977,7 @@
       return;
     }
     if (!labState.symbol) return;
-    const params = {};
-    labEl("lab-params-fields").querySelectorAll("[name]").forEach((input) => {
-      params[input.name] = input.type === "checkbox" ? input.checked
-        : input.type === "number" ? Number(input.value) : input.value;
-    });
+    const params = collectStrategyParams(labEl("lab-params-fields"), labState.strategy);
     const resp = await fetch("/api/archive", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -3692,13 +3758,14 @@
 
   function getStrategyAndBacktestQuery() {
     const form = el("params-form");
-    const data = new FormData(form);
     const params = new URLSearchParams();
     const strategyName = el("active-strategy-select").value;
     (STRATEGY_PARAM_FIELDS[strategyName] || []).forEach((field) => {
       const input = form.elements[field.key];
       if (!input) return;
-      params.set(field.key, field.type === "checkbox" ? input.checked : data.get(field.key));
+      params.set(field.key, field.type === "checkbox" ? input.checked
+        : field.type === "select" ? input.value
+        : fieldNumber(input, field));
     });
     // Backtest params: always 100% equity, no fees — the Lab is the place to
     // experiment; the chart's own backtest always uses clean defaults.
@@ -3731,10 +3798,12 @@
           .join("");
         label.innerHTML = `${field.label} <select name="${field.key}">${options}</select>`;
       } else {
-        const min = field.min !== undefined ? ` min="${field.min}"` : "";
-        const max = field.max !== undefined ? ` max="${field.max}"` : "";
-        const step = field.step !== undefined ? ` step="${field.step}"` : "";
-        label.innerHTML = `${field.label} <input type="number" name="${field.key}" value="${field.default}"${min}${max}${step} />`;
+        // Testo con tastiera numerica, non <input type="number">: quello
+        // scarta la virgola decimale a seconda del browser — la butta via in
+        // silenzio o svuota il campo — e in entrambi i casi quello che parte
+        // non e' quello che era stato scritto. Qui il testo resta com'e' e
+        // lo normalizza fieldNumber() al momento di mandarlo.
+        label.innerHTML = `${field.label} <input type="text" inputmode="decimal" name="${field.key}" value="${field.default}" />`;
       }
       container.appendChild(label);
     });
@@ -5465,10 +5534,10 @@
     params.set("exchange", exchange);
     params.set("ltf_interval", labState.tf);
     params.set("strategy_name", strategyName);
-    params.set("initial_capital", labEl("lab-initial-capital").value);
-    params.set("qty_pct_of_equity", labEl("lab-qty-pct").value);
-    params.set("commission_pct", labEl("lab-commission").value);
-    params.set("slippage_pct", labEl("lab-slippage").value);
+    params.set("initial_capital", inputNumber(labEl("lab-initial-capital"), 10000, { min: 1 }));
+    params.set("qty_pct_of_equity", inputNumber(labEl("lab-qty-pct"), 100, { min: 1, max: 100 }));
+    params.set("commission_pct", inputNumber(labEl("lab-commission"), 0, { min: 0 }));
+    params.set("slippage_pct", inputNumber(labEl("lab-slippage"), 0, { min: 0 }));
     params.set("stop_loss_pct", "0");
     params.set("take_profit_pct", "0");
     const container = labEl("lab-params-fields");
@@ -5476,7 +5545,9 @@
     fields.forEach((field) => {
       const input = container.querySelector(`[name="${field.key}"]`);
       if (!input) return;
-      params.set(field.key, field.type === "checkbox" ? input.checked : input.value);
+      params.set(field.key, field.type === "checkbox" ? input.checked
+        : field.type === "select" ? input.value
+        : fieldNumber(input, field));
     });
     return params;
   }
@@ -5683,10 +5754,8 @@
           .join("");
         label.innerHTML = `<span>${field.label}</span><select name="${field.key}">${options}</select>`;
       } else {
-        const min = field.min !== undefined ? ` min="${field.min}"` : "";
-        const max = field.max !== undefined ? ` max="${field.max}"` : "";
-        const step = field.step !== undefined ? ` step="${field.step}"` : "";
-        label.innerHTML = `<span>${field.label}</span><input type="number" name="${field.key}" value="${field.default}"${min}${max}${step} />`;
+        // Vedi la nota in renderStrategyParamsFields(): testo, non number.
+        label.innerHTML = `<span>${field.label}</span><input type="text" inputmode="decimal" name="${field.key}" value="${field.default}" />`;
       }
       container.appendChild(label);
     });
@@ -6155,16 +6224,7 @@
         }
 
         // 3. Save the Lab's optimized params so the alert uses the same settings
-        const labParams = {};
-        const fields = STRATEGY_PARAM_FIELDS[labState.strategy] || [];
-        const container = labEl("lab-params-fields");
-        fields.forEach((f) => {
-          const input = container.querySelector(`[name="${f.key}"]`);
-          if (!input) return;
-          labParams[f.key] = f.type === "checkbox" ? input.checked
-            : f.type === "number" ? parseFloat(input.value)
-            : input.value;
-        });
+        const labParams = collectStrategyParams(labEl("lab-params-fields"), labState.strategy);
         if (Object.keys(labParams).length > 0) {
           await fetch(`/api/watchlist/${entry.id}/strategy_params`, {
             method: "PATCH",

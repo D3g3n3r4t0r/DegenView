@@ -305,5 +305,19 @@
       "frontend/static/app.js",
       "frontend/static/style.css"
     ]
+  },
+  "seed-0025": {
+    "status": "risolto",
+    "at": 1788538821,
+    "summary": "Un campo numerico vuoto, o con la virgola, o con un decimale dove va un numero intero: tutti e tre finivano nello stesso 422 muto.",
+    "detail": "Il 422 lo genera FastAPI prima di entrare nell'endpoint, quando un parametro non ha la forma dichiarata, e il suo messaggio e' una lista di oggetti che in pagina diventava solo 'Errore 422' — un numero che non dice ne' quale campo ne' cosa ci voleva. I modi di arrivarci erano tre, e sono tre cose diverse: il campo svuotato per riscriverlo, con la richiesta che parte in quel momento (len= arriva al server come stringa vuota); la virgola decimale, che in un campo <input type=number> a seconda del browser viene buttata via in silenzio — 1,5 diventa 15 — oppure svuota il campo; e un decimale dentro un parametro che conta barre, dove 27,5 barre non esistono ma nessuno lo diceva. Ora i campi dei parametri sono di testo con tastiera numerica: la virgola resta scritta com'e' ed e' la pagina a normalizzarla. Il valore viene corretto e RISCRITTO nel campo prima di partire, cosi' quello che gira e' quello che si legge a schermo; sostituirlo in silenzio lasciando scritto altro sarebbe peggio dell'errore. E se un 422 ricapita da qualche altra parte, ora e' una frase invece di un numero: 'Parametri non validi — len: serve un numero intero (campo vuoto)'. Un test nuovo tiene allineate la tabella dei campi della pagina e il modello del server: un parametro che la pagina manda e il server non dichiara veniva scartato in silenzio, e la strategia girava con un default diverso da quello scritto a schermo — lo stesso errore, ma senza nemmeno il 422 a segnalarlo.",
+    "files": [
+      "backend/app/main.py",
+      "backend/tests/test_param_fields.py",
+      "backend/tests/test_validation_message.py",
+      "frontend/index.html",
+      "frontend/static/app.js",
+      "frontend/static/style.css"
+    ]
   }
 }

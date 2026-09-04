@@ -1851,6 +1851,7 @@ body {
 }
 
 .params-form input[type="number"],
+.params-form input[inputmode="decimal"],
 .params-form select {
   background: var(--bg-panel);
   border: 1.5px solid var(--border-strong);
@@ -2606,6 +2607,7 @@ body {
   }
 
   .params-form input[type="number"],
+  .params-form input[inputmode="decimal"],
   .params-form select,
   .interval-select,
   #pine-script-name,
@@ -2741,6 +2743,7 @@ body {
 }
 .lab-params-grid label.full-width { grid-column: 1 / -1; flex-direction: row; align-items: center; gap: 8px; }
 .lab-params-grid input[type=number],
+.lab-params-grid input[inputmode="decimal"],
 .lab-params-grid select {
   background: var(--bg-panel);
   border: 1.5px solid var(--border-strong);
@@ -2750,6 +2753,7 @@ body {
   outline: none; width: 100%;
 }
 .lab-params-grid input[type=number]:focus,
+.lab-params-grid input[inputmode="decimal"]:focus,
 .lab-params-grid select:focus { border-color: var(--accent); }
 
 .lab-bt-details {
