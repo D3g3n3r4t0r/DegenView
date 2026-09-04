@@ -539,6 +539,11 @@ class StrategyParamsQuery(BaseModel):
     volatilityfilter: bool = True
     volatilitystdevlength: int = 16
     volatilitystdevmalength: int = 44
+    # Zero = spenta, cioe' il comportamento storico. Vedi la nota nel modulo
+    # delle strategie: e' in unita' di sigma perche' deve valere uguale su
+    # qualsiasi coppia.
+    slope_threshold_sigma: float = 0.0
+    slope_sigma_length: int = 100
 
     # Accumulo/Distribuzione (long-term) — exposed as independent toggles
     # rather than baked into a silent OR: each condition was added reactively

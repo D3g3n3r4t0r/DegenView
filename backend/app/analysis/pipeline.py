@@ -167,6 +167,14 @@ def run_pipeline(
     gate = regime_gate(df_in, strategy_name)
     say(f"gate di regime: {'superato' if gate.passed else 'NON superato'} — {gate.reason}")
     stats = estimate_series_stats(df_in)
+    # Le scale della coppia, dette prima di cercare: sono quelle che decidono
+    # dove ha senso cercare. Un'efficienza bassa significa che la serie fa molta
+    # strada senza percorrere distanza — e' la firma di una coppia agitata e
+    # senza direzione, quella su cui un incrocio puro entra sul rumore.
+    say(f"scale della coppia: volatilita' per barra {stats.sigma_bar:.2%}, "
+        f"efficienza {stats.efficiency_ratio:.3f} "
+        f"({'direzione' if stats.efficiency_ratio >= 0.05 else 'poca direzione'})"
+        + ("" if stats.illiquidity is None else f", illiquidita' {stats.illiquidity:.1e}"))
     notes: list[str] = []
     if not gate.passed:
         # Reported, not enforced. Refusing outright would change the behaviour

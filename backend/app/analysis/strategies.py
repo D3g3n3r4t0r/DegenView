@@ -19,6 +19,23 @@ DEFAULT_PARAMS = {
     "volatilityfilter": True,
     "volatilitystdevlength": 16,
     "volatilitystdevmalength": 44,
+    # Quanta pendenza serve perche' conti come direzione, misurata in deviazioni
+    # standard della pendenza stessa.
+    #
+    # Lorenzo e' un incrocio puro: due medie della pendenza si incrociano e si
+    # entra, qualunque sia l'ampiezza del movimento. Su una coppia liquida con
+    # un trend vero e' ragionevole; su una altcoin che oscilla del 15% al giorno
+    # senza andare da nessuna parte, gli incroci arrivano dal rumore e la
+    # strategia entra ed esce su oscillazioni che non sono direzione.
+    #
+    # La soglia e' in unita' di sigma e non in valore assoluto perche' deve
+    # significare la stessa cosa su ogni coppia: 0.002 di pendenza e' enorme su
+    # una coppia che fa lo 0.5% al giorno e invisibile su una che ne fa il 15%.
+    #
+    # Zero di default, cioe' spenta: accenderla cambia tutti i risultati
+    # storici, e quel cambiamento va chiesto, non subito.
+    "slope_threshold_sigma": 0.0,
+    "slope_sigma_length": 100,
 }
 
 # Contrarian counterpart to Lorenzo: instead of riding a trend, it looks for
@@ -105,6 +122,18 @@ def compute_signals(df: pd.DataFrame, params: dict | None = None) -> pd.DataFram
 
     base_long = ema_slope_fast > ema_slope_slow
     base_short = ema_slope_fast < ema_slope_slow
+
+    # Freno sul rumore: la pendenza deve superare k volte la propria deviazione
+    # standard recente. Normalizzata sulla pendenza stessa e non sul prezzo,
+    # cosi' la stessa k vale su qualsiasi coppia. A zero non tocca niente — e
+    # non e' solo una soglia inefficace, e' proprio il ramo che non viene
+    # eseguito, quindi i risultati restano identici bit per bit.
+    k = float(p.get("slope_threshold_sigma", 0.0) or 0.0)
+    if k > 0:
+        slope_sigma = slope.rolling(int(p.get("slope_sigma_length", 100))).std(ddof=0)
+        strong = (ema_slope_fast.abs() > k * slope_sigma).fillna(False)
+        base_long = base_long & strong
+        base_short = base_short & strong
 
     entry_long, entry_short = base_long, base_short
     if p["trendfilter"]:

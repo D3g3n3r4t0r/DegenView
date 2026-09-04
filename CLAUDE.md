@@ -61,6 +61,15 @@ Confonderle è il modo più facile di sbagliare: un filtro che chiede persistenz
   una serie senza edge: PBO 0.56 su 5 candidati (soglia 0.20), DSR 0.02. Il
   primo giudica la *selezione*, il secondo corregge un *numero* — un risultato
   può superare l'uno e fallire l'altro.
+- **La volatilità da sola non dice niente; l'efficienza sì.** Rapporto di
+  Kaufman (distanza percorsa / strada fatta) su daily reali: BTCUSDT 0.037,
+  KASUSDT 0.006, PEPEUSDT 0.008. Una serie sintetica in trend fa 0.54. È la
+  misura che separa "si muove molto" da "va da qualche parte".
+- **La soglia di pendenza in unità di sigma paga sulle coppie agitate.**
+  `slope_threshold_sigma=0.5` su daily reali: PEPEUSDT +195.6%→+230.6% con
+  drawdown 14.2%→10.0% e PF 2.88→4.55; KASUSDT +120.0%→+124.4% con DD
+  32.2%→28.2%; BTCUSDT invariato. A 1.0 peggiora ovunque. Default 0 (spenta):
+  accenderla cambia tutti i risultati storici.
 - **Più parametri = risultato peggiore.** Il ramo di Lorenzo a 4 parametri batte
   quello a 8 sia in-sample sia fuori campione.
 
