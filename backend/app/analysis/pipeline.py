@@ -149,6 +149,7 @@ def run_pipeline(
     min_trades: int = 8,
     seed: int = 0,
     accept: Callable[[BacktestResult], bool] | None = None,
+    progress: Callable[[str], None] | None = None,
 ) -> PipelineResult:
     """Deterministic parameter selection. Same inputs, same answer, always.
 
@@ -159,9 +160,12 @@ def run_pipeline(
     a filter pushed down there would carve holes in the surface being measured.
     A branch whose finalists all fail the filter contributes nothing."""
     bp = backtest_params or {}
+    say = progress or (lambda _m: None)
     df_in, df_val, df_out = _three_way_split(df)
+    say(f"suddivisione: {len(df_in)} allenamento · {len(df_val)} validazione · {len(df_out)} test")
 
     gate = regime_gate(df_in, strategy_name)
+    say(f"gate di regime: {'superato' if gate.passed else 'NON superato'} — {gate.reason}")
     stats = estimate_series_stats(df_in)
     notes: list[str] = []
     if not gate.passed:
@@ -175,6 +179,7 @@ def run_pipeline(
 
     spaces: list[ConstrainedSpace] = build_spaces(strategy_name, stats, target_entries)
     spaces.sort(key=lambda s: s.d)   # simplest branch first
+    say(f"{len(spaces)} varianti da esplorare: {', '.join(cs.label for cs in spaces)}")
 
     outcomes: list[BranchOutcome] = []
     total_evals = 0
@@ -185,6 +190,7 @@ def run_pipeline(
     finalists: list[PlateauCandidate] = []
 
     for cs in spaces:
+        say(f"variante {cs.label} ({cs.d} parametri): mappatura dei pianori…")
         res = plateau_search(
             strategy_name, df_in, bp,
             base_points=1, coarse=coarse, tol=tol,
@@ -192,6 +198,9 @@ def run_pipeline(
             min_trades=min_trades, space=cs.as_param_space(), seed=seed,
         )
         total_evals += res.evaluations
+        say(f"variante {cs.label}: {res.evaluations} backtest, "
+            f"{'griglia enumerata' if res.enumerated else 'griglia campionata'}, "
+            f"{len(res.candidates)} finalisti")
         outcomes.append(BranchOutcome(
             label=cs.label, dims=cs.d, enumerated=res.enumerated,
             best=res.best, evaluations=res.evaluations,
@@ -279,6 +288,8 @@ def run_pipeline(
         notes.append("at least one branch exceeded the enumeration budget and was "
                      "sampled; results from those branches are not seed independent")
 
+    say(f"variante scelta: {incumbent_label}")
+
     # Out-of-sample validation on the held-out tail.
     oos_return: float | None = None
     overfitted = False
@@ -322,6 +333,7 @@ def run_pipeline(
     # campione: accostarle per posizione confronterebbe il terzo trade di una
     # configurazione con il terzo di un'altra, avvenuto mesi dopo, e la misura
     # leggerebbe quel disallineamento invece della sovra-ottimizzazione.
+    say("controlli finali: Sharpe deflazionato e sovra-ottimizzazione")
     pbo: PBOResult | None = None
     if len(finalists) >= 2:
         grid = [int(ts.timestamp()) for ts in df_in.index]

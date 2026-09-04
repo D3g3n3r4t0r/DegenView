@@ -1,16 +1,37 @@
 import asyncio
 import time
+from datetime import datetime, timedelta, timezone
 
 import httpx
 import pandas as pd
 from cachetools import TTLCache
 
 from app.config import settings
-from app.providers.base import DataProvider, ProviderError
+from app.providers.base import DataProvider, ProviderError, QuotaExceeded
 
 _PREFERRED_EXCHANGES = {"NASDAQ", "NYSE"}
 _PREFERRED_INSTRUMENT_TYPES = {"Common Stock", "ETF"}
 _MAX_SUGGESTIONS = 8
+# I crediti Twelve Data si azzerano a mezzanotte UTC: e' il momento in cui vale
+# la pena riprovare, non fra un minuto. Il codice 429 lo dice, ma il piano
+# gratuito risponde spesso con 400 e il motivo solo nel testo, quindi si guarda
+# anche quello.
+_QUOTA_PHRASES = ("api credits", "run out of api credits", "daily limit", "out of credits")
+
+
+def _is_quota_error(code, message: str) -> bool:
+    if code in (429, "429"):
+        return True
+    text = (message or "").lower()
+    return any(phrase in text for phrase in _QUOTA_PHRASES)
+
+
+def _seconds_to_utc_midnight() -> int:
+    now = datetime.now(timezone.utc)
+    tomorrow = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    return max(60, int((tomorrow - now).total_seconds()))
+
+
 _CANONICAL_TO_INTERVAL = {
     "1m": "1min",
     "5m": "5min",
@@ -84,7 +105,10 @@ class TwelveDataProvider(DataProvider):
             raise ProviderError(f"Risposta non valida da Twelve Data per {formatted_symbol}") from exc
 
         if isinstance(payload, dict) and payload.get("status") == "error":
-            raise ProviderError(payload.get("message", f"Errore Twelve Data per {formatted_symbol}"))
+            message = payload.get("message", f"Errore Twelve Data per {formatted_symbol}")
+            if _is_quota_error(payload.get("code"), message):
+                raise QuotaExceeded(message, retry_after_s=_seconds_to_utc_midnight())
+            raise ProviderError(message)
 
         values = payload.get("values") if isinstance(payload, dict) else None
         if not values:

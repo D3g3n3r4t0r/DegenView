@@ -32,6 +32,7 @@ from app import issues as issues_store
 from app import rate_limit
 from app.trading.executor import place_order_for_signal
 from app import archive as archive_store
+from app import jobs as jobs_store
 from app import trading_log
 from app import favorites as favorites_store
 from app import watchlist as watchlist_store
@@ -75,7 +76,7 @@ import app.price_alerts as price_alerts_store
 from app.models import PriceAlert, PriceAlertCondition, StrategySignal
 from app.pine import PineError, PineInterpreter, is_strategy_style, parse_program, scan_inputs
 from app.pine import storage as pine_storage
-from app.providers.base import DataProvider, ProviderError
+from app.providers.base import DataProvider, ProviderError, QuotaExceeded
 from app.providers.binance import BinanceProvider
 from app.providers.binance import format_symbol as format_binance_symbol
 from app.providers.kucoin import KucoinProvider
@@ -195,6 +196,8 @@ async def _watchlist_alert_loop() -> None:
             owner = auth.get_user(entry.owner_id)
             if owner is None or not owner.telegram_chat_id or not _telegram_allowed(owner):
                 continue  # no chat_id yet, or this account isn't on the Telegram delivery allowlist
+            if _quota_paused(entry.asset_type, entry.exchange):
+                continue
             provider = get_provider(entry.asset_type, entry.exchange)
             try:
                 df = await fetch_ohlcv_canonical(
@@ -317,6 +320,20 @@ async def _watchlist_alert_loop() -> None:
                                             owner.telegram_chat_id,
                                             f"⚠️ Ordine FALLITO <b>{entry.symbol}</b> [{signal.type}]: {exc}",
                                         ))
+            except QuotaExceeded as exc:
+                # I crediti del piano sono finiti: non c'e' niente da riprovare
+                # fra un minuto. Senza questa pausa arrivava un messaggio di
+                # "errore monitoraggio" per ticker per minuto — un guasto
+                # apparente al posto di un limite di piano.
+                _pause_for_quota(entry.asset_type, entry.exchange, exc)
+                if _notify_quota_once(owner.id, entry.asset_type, entry.exchange):
+                    asyncio.create_task(telegram.send_to(
+                        owner.telegram_chat_id,
+                        f"⏸️ <b>Crediti dati esauriti</b> ({entry.exchange if entry.asset_type == 'crypto' else 'Twelve Data'})\n"
+                        f"Il monitoraggio dei titoli riprende automaticamente quando la quota si azzera. "
+                        f"Le crypto non sono toccate.\n\n<i>{exc}</i>",
+                    ))
+                continue
             except Exception as exc:  # noqa: BLE001
                 logger.error("Alert loop error for %s: %s", entry.symbol, exc, exc_info=True)
                 if settings.telegram_bot_token and owner.telegram_chat_id and _telegram_allowed(owner):
@@ -326,6 +343,38 @@ async def _watchlist_alert_loop() -> None:
                             f"⚠️ Errore monitoraggio <b>{entry.symbol}</b> [{entry.interval}]: {exc}",
                         )
                     )
+
+
+# --- pausa per quota esaurita ------------------------------------------------
+# Chiave = (asset_type, exchange) e non l'utente: la quota e' del piano, quindi
+# e' condivisa; fermare solo chi ha incontrato l'errore lascerebbe gli altri a
+# consumarne altri e a ricevere lo stesso messaggio a turno.
+_quota_pause_until: dict[tuple[str, str], float] = {}
+_quota_notified: dict[tuple[str, str, str], float] = {}
+
+
+def _quota_key(asset_type: str, exchange: str) -> tuple[str, str]:
+    return (asset_type, exchange if asset_type == "crypto" else "twelvedata")
+
+
+def _quota_paused(asset_type: str, exchange: str) -> bool:
+    return _quota_pause_until.get(_quota_key(asset_type, exchange), 0.0) > _time.time()
+
+
+def _pause_for_quota(asset_type: str, exchange: str, exc: QuotaExceeded) -> None:
+    wait = exc.retry_after_s or 3600
+    _quota_pause_until[_quota_key(asset_type, exchange)] = _time.time() + wait
+    logger.warning("quota esaurita su %s/%s: pausa di %ss", asset_type, exchange, wait)
+
+
+def _notify_quota_once(owner_id: str, asset_type: str, exchange: str) -> bool:
+    """Un messaggio per utente e per pausa, non uno per ticker per minuto."""
+    k = (owner_id,) + _quota_key(asset_type, exchange)
+    until = _quota_pause_until.get(_quota_key(asset_type, exchange), 0.0)
+    if _quota_notified.get(k, 0.0) >= until:
+        return False
+    _quota_notified[k] = until
+    return True
 
 
 _LAST_SHA_FILE = Path(__file__).resolve().parent.parent / "data" / "last_deploy_sha.txt"
@@ -1623,46 +1672,26 @@ class OptimizeResult(BaseModel):
     overfitting: Overfitting | None = None
 
 
-@app.get("/api/optimize", response_model=OptimizeResult)
-async def optimize_strategy_endpoint(
-    symbol: str = Query(..., min_length=1, max_length=20),
-    asset_type: AssetType = Query("stock"),
-    exchange: CryptoExchange = Query("mexc"),
-    ltf_interval: IntervalChoice = Query(DEFAULT_INTERVALS["ltf"]),
-    strategy_name: str = Query(DEFAULT_STRATEGY),
-    backtest_params: BacktestParamsQuery = Depends(),
-    mode: str = Query("random", pattern="^(random|grid|plateau)$"),
-    # Filtri opzionali sul risultato. `None` = nessun vincolo, ed e' distinto
-    # da 0, che e' il vincolo piu' stringente ("nessun trade in perdita",
-    # "drawdown nullo") e va potuto chiedere.
-    min_losing_trades: int | None = Query(None, ge=0, le=1000),
-    max_losing_trades: int | None = Query(None, ge=0, le=1000),
-    max_drawdown_pct: float | None = Query(None, ge=0.0, le=100.0),
-) -> OptimizeResult:
-    """Random-search parameter tuning for any strategy in the registry —
-    same deep-history df the backtest itself uses (see
-    backtest_interval_for), so results here match what re-running the
-    backtest with the winning params will show. CPU-bound (~120 backtest
-    simulations, ~15-25s), so it runs off the event loop via a thread —
-    otherwise it would stall every other request (including other users')
-    for its whole duration."""
-    symbol = symbol.strip()
-    if not symbol:
-        raise HTTPException(status_code=400, detail="Ticker mancante")
-    if not is_optimizable(strategy_name):
-        raise HTTPException(status_code=400, detail=f"Ottimizzazione non disponibile per {strategy_name}")
+async def _optimize_payload(
+    strategy_name: str,
+    df,
+    backtest_params: "BacktestParamsQuery",
+    mode: str,
+    ltf_interval: str,
+    backtest_interval: str,
+    constraints: "Constraints",
+    say=None,
+) -> "OptimizeResult":
+    """Costruisce la risposta dell'ottimizzazione, una volta sola.
 
-    provider = get_provider(asset_type, exchange)
-    backtest_interval = backtest_interval_for(ltf_interval)
-    cache_key = (f"{asset_type}:{exchange}:{symbol.upper()}:backtest", backtest_interval, settings.backtest_candles)
+    La usano sia la GET diretta sia il lavoro seguito in diretta: due copie di
+    questa costruzione divergerebbero al primo campo aggiunto, e il campo
+    mancherebbe proprio nel percorso che non si guarda mai a mano.
 
-    try:
-        df = await _fetch_cached(cache_key, provider, symbol, backtest_interval, settings.backtest_candles)
-    except ProviderError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-    if df.empty:
-        raise HTTPException(status_code=502, detail=f"Nessun dato per {symbol}")
-
+    `say` riceve le righe di avanzamento; senza, la ricerca gira muta come
+    prima.
+    """
+    say = say or (lambda _m: None)
     data_used = DataUsed(
         interval=backtest_interval,
         candles=len(df),
@@ -1678,12 +1707,6 @@ async def optimize_strategy_endpoint(
         ),
     )
 
-    constraints = Constraints(
-        min_losing_trades=min_losing_trades,
-        max_losing_trades=max_losing_trades,
-        max_drawdown_pct=max_drawdown_pct,
-    )
-
     if mode == "plateau":
         # Deterministic path: same inputs give the same answer, because the
         # cell grid is enumerated rather than sampled wherever it fits the
@@ -1692,8 +1715,11 @@ async def optimize_strategy_endpoint(
         # 0% (Gabriele) and from 225.1% to 0% (Lorenzo).
         try:
             pr = await asyncio.to_thread(
-                run_pipeline, strategy_name, df, backtest_params.model_dump(),
-                accept=(constraints.accepts if constraints.active else None),
+                partial(
+                    run_pipeline, strategy_name, df, backtest_params.model_dump(),
+                    accept=(constraints.accepts if constraints.active else None),
+                    progress=say,
+                )
             )
         except ValueError as exc:
             raise HTTPException(
@@ -1748,8 +1774,10 @@ async def optimize_strategy_endpoint(
 
     try:
         best_params, best_bt, trials, oos_return, overfitted, top_results = await asyncio.to_thread(
-            optimize_strategy, strategy_name, df, backtest_params.model_dump(),
-            mode=mode, constraints=constraints,
+            partial(
+                optimize_strategy, strategy_name, df, backtest_params.model_dump(),
+                mode=mode, constraints=constraints, progress=say,
+            )
         )
     except NoCandidateMeetsConstraints as exc:
         # 422 e non 500: la richiesta e' valida, e' il risultato a non esistere
@@ -1781,6 +1809,148 @@ async def optimize_strategy_endpoint(
             for c in top_results
         ],
     )
+
+
+@app.get("/api/optimize", response_model=OptimizeResult)
+async def optimize_strategy_endpoint(
+    symbol: str = Query(..., min_length=1, max_length=20),
+    asset_type: AssetType = Query("stock"),
+    exchange: CryptoExchange = Query("mexc"),
+    ltf_interval: IntervalChoice = Query(DEFAULT_INTERVALS["ltf"]),
+    strategy_name: str = Query(DEFAULT_STRATEGY),
+    backtest_params: BacktestParamsQuery = Depends(),
+    mode: str = Query("random", pattern="^(random|grid|plateau)$"),
+    # Filtri opzionali sul risultato. `None` = nessun vincolo, ed e' distinto
+    # da 0, che e' il vincolo piu' stringente ("nessun trade in perdita",
+    # "drawdown nullo") e va potuto chiedere.
+    min_losing_trades: int | None = Query(None, ge=0, le=1000),
+    max_losing_trades: int | None = Query(None, ge=0, le=1000),
+    max_drawdown_pct: float | None = Query(None, ge=0.0, le=100.0),
+) -> OptimizeResult:
+    """Random-search parameter tuning for any strategy in the registry —
+    same deep-history df the backtest itself uses (see
+    backtest_interval_for), so results here match what re-running the
+    backtest with the winning params will show. CPU-bound (~120 backtest
+    simulations, ~15-25s), so it runs off the event loop via a thread —
+    otherwise it would stall every other request (including other users')
+    for its whole duration."""
+    symbol = symbol.strip()
+    if not symbol:
+        raise HTTPException(status_code=400, detail="Ticker mancante")
+    if not is_optimizable(strategy_name):
+        raise HTTPException(status_code=400, detail=f"Ottimizzazione non disponibile per {strategy_name}")
+
+    provider = get_provider(asset_type, exchange)
+    backtest_interval = backtest_interval_for(ltf_interval)
+    cache_key = (f"{asset_type}:{exchange}:{symbol.upper()}:backtest", backtest_interval, settings.backtest_candles)
+
+    try:
+        df = await _fetch_cached(cache_key, provider, symbol, backtest_interval, settings.backtest_candles)
+    except ProviderError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if df.empty:
+        raise HTTPException(status_code=502, detail=f"Nessun dato per {symbol}")
+
+    constraints = Constraints(
+        min_losing_trades=min_losing_trades,
+        max_losing_trades=max_losing_trades,
+        max_drawdown_pct=max_drawdown_pct,
+    )
+    return await _optimize_payload(
+        strategy_name, df, backtest_params, mode, ltf_interval,
+        backtest_interval, constraints,
+    )
+
+
+# --- Ottimizzazione seguita in diretta ---------------------------------------
+# Una ricerca stabile puo' durare minuti, e tenerla dentro una GET significa
+# tenere aperta quella richiesta per tutto il tempo: il proxy davanti all'app la
+# chiude, il browser la lascia cadere, e quello che torna non e' piu' JSON ma una
+# pagina d'errore. Safari prova a leggerla come JSON e risponde "The string did
+# not match the expected pattern" — il messaggio finito sulla bacheca, che non
+# nomina l'ottimizzazione perche' non e' l'ottimizzazione ad aver fallito.
+#
+# Qui la richiesta apre un lavoro e torna subito; il lavoro prosegue per conto
+# suo e accumula righe di log che il client chiede quando vuole.
+
+
+@app.post("/api/optimize/start")
+async def start_optimize(
+    symbol: str = Query(..., min_length=1, max_length=20),
+    asset_type: AssetType = Query("stock"),
+    exchange: CryptoExchange = Query("mexc"),
+    ltf_interval: IntervalChoice = Query(DEFAULT_INTERVALS["ltf"]),
+    strategy_name: str = Query(DEFAULT_STRATEGY),
+    backtest_params: BacktestParamsQuery = Depends(),
+    mode: str = Query("random", pattern="^(random|grid|plateau)$"),
+    min_losing_trades: int | None = Query(None, ge=0, le=1000),
+    max_losing_trades: int | None = Query(None, ge=0, le=1000),
+    max_drawdown_pct: float | None = Query(None, ge=0.0, le=100.0),
+    user: User | None = Depends(auth.get_current_user_optional),
+) -> dict:
+    symbol = symbol.strip()
+    if not symbol:
+        raise HTTPException(status_code=400, detail="Ticker mancante")
+    if not is_optimizable(strategy_name):
+        raise HTTPException(status_code=400, detail=f"Ottimizzazione non disponibile per {strategy_name}")
+
+    owner_id = user.id if user else ""
+    job_id = jobs_store.create(owner_id, "optimize", f"{symbol.upper()} · {strategy_name} · {mode}")
+
+    constraints = Constraints(
+        min_losing_trades=min_losing_trades,
+        max_losing_trades=max_losing_trades,
+        max_drawdown_pct=max_drawdown_pct,
+    )
+
+    async def _run() -> None:
+        try:
+            jobs_store.log(job_id, f"scarico i dati di {symbol.upper()}…")
+            provider = get_provider(asset_type, exchange)
+            backtest_interval = backtest_interval_for(ltf_interval)
+            cache_key = (f"{asset_type}:{exchange}:{symbol.upper()}:backtest",
+                         backtest_interval, settings.backtest_candles)
+            df = await _fetch_cached(cache_key, provider, symbol, backtest_interval,
+                                     settings.backtest_candles)
+            if df.empty:
+                jobs_store.fail(job_id, f"Nessun dato per {symbol}")
+                return
+            jobs_store.log(job_id, f"{len(df)} candele a {backtest_interval}")
+
+            def say(message: str) -> None:
+                jobs_store.log(job_id, message)
+
+            body = await _optimize_payload(
+                strategy_name, df, backtest_params, mode, ltf_interval,
+                backtest_interval, constraints, say,
+            )
+            jobs_store.log(job_id, "fatto")
+            jobs_store.finish(job_id, body.model_dump(mode="json"))
+        except NoCandidateMeetsConstraints as exc:
+            jobs_store.fail(job_id, str(exc))
+        except ProviderError as exc:
+            jobs_store.fail(job_id, f"Dati non disponibili: {exc}")
+        except Exception as exc:  # noqa: BLE001
+            # Ampio di proposito: gira staccato dalla richiesta, quindi
+            # un'eccezione non intercettata qui non raggiunge nessuno e il
+            # lavoro resterebbe "in corso" per sempre.
+            logger.error("ottimizzazione fallita per %s: %s", symbol, exc, exc_info=True)
+            jobs_store.fail(job_id, str(exc))
+
+    asyncio.create_task(_run())
+    return {"job_id": job_id}
+
+
+@app.get("/api/jobs/{job_id}")
+async def job_status(
+    job_id: str,
+    since: int = Query(0, ge=0),
+    user: User | None = Depends(auth.get_current_user_optional),
+) -> dict:
+    job = jobs_store.get(job_id, owner_id=user.id if user else None, since=since)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Lavoro non trovato o scaduto")
+    return job
 
 
 # --- Diario degli ordini automatici ------------------------------------------

@@ -156,17 +156,38 @@ def test_shipped_resolutions_file_is_valid():
         assert val.get("summary"), f"{key} senza summary"
 
 
-def test_seed_ids_match_the_shipped_resolutions():
-    """Le risoluzioni si agganciano per id: un id che non esiste fra le voci
-    iniziali è una diagnosi scritta che nessuno vedrà mai."""
+def test_seed_resolutions_point_at_a_real_seed_entry():
+    """Le risoluzioni si agganciano per id: un id `seed-` che non esiste fra le
+    voci iniziali è una diagnosi scritta che nessuno vedrà mai."""
     from app import issues as mod
 
     importlib.reload(mod)
     seed_ids = {s[0] for s in mod._SEED}
     res_ids = {k for k in json.loads(
         mod._RESOLUTIONS_FILE.read_text(encoding="utf-8")) if not k.startswith("_")}
-    orphans = res_ids - seed_ids
+    orphans = {k for k in res_ids if k.startswith("seed-")} - seed_ids
     assert not orphans, f"risoluzioni senza voce corrispondente: {orphans}"
+
+
+def test_non_seed_resolutions_use_a_server_generated_id():
+    """Le altre risposte a segnalazioni scritte dall'app: il loro id vive sul
+    volume, quindi da qui non si può verificare che esista.
+
+    Quello che si può verificare è la *forma*: `add_issue` genera otto caratteri
+    esadecimali. Un id inventato o storpiato non aggancia nulla e la diagnosi
+    resta invisibile — che è lo stesso guasto del test sopra, per l'altra metà
+    della bacheca.
+    """
+    import re
+
+    from app import issues as mod
+
+    importlib.reload(mod)
+    res_ids = {k for k in json.loads(
+        mod._RESOLUTIONS_FILE.read_text(encoding="utf-8")) if not k.startswith("_")}
+    others = {k for k in res_ids if not k.startswith("seed-")}
+    bad = {k for k in others if not re.fullmatch(r"[0-9a-f]{8}", k)}
+    assert not bad, f"id che nessuna segnalazione può avere: {bad}"
 
 
 # --- la lista iniziale --------------------------------------------------------

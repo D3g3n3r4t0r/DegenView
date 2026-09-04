@@ -24,8 +24,8 @@ import heapq
 import itertools
 import math
 import random
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
-from typing import Iterator
 
 from app.analysis.backtest import run_backtest
 from app.analysis.strategies import (
@@ -311,6 +311,7 @@ def optimize_strategy(
     mode: str = "random",
     top_n: int = _TOP_N,
     constraints: Constraints | None = None,
+    progress: Callable[[str], None] | None = None,
 ) -> tuple[dict, BacktestResult, int, float | None, bool, list[dict]]:
     """Search for the best parameters and return the top-N candidates.
 
@@ -329,6 +330,10 @@ def optimize_strategy(
 
     rng = random.Random(seed)
     constraints = constraints or _NO_CONSTRAINTS
+    # Le righe di avanzamento sono a scatti fissi e non a ogni tentativo: un
+    # log che scorre piu' veloce di quanto si legga non dice piu' di uno lento,
+    # e con 3000 valutazioni sarebbe solo peso.
+    say = progress or (lambda _m: None)
     ticker_volatility = _calc_volatility(df)
 
     oos_candles = max(int(len(df) * 0.30), _MIN_OOS_CANDLES)
@@ -377,6 +382,10 @@ def optimize_strategy(
         elif score > heap[0][0]:
             heapq.heapreplace(heap, entry)
 
+    say(f"{len(df_in)} candele in campione, {len(df_out)} fuori campione")
+    if constraints.active:
+        say(f"filtri attivi: {constraints.describe()}")
+
     # Always evaluate defaults first
     default_bt = run_backtest(df_in, default_params, backtest_params, strategy_name=strategy_name)
     _consider(dict(default_params), default_bt)
@@ -384,17 +393,29 @@ def optimize_strategy(
 
     use_grid = mode == "grid" and strategy_name in _GRID_SPACES
     if use_grid:
+        total = grid_size(strategy_name)
+        say(f"griglia completa: {total} combinazioni")
+        step = max(1, total // 20)
         for candidate_delta in _grid_candidates(strategy_name):
             candidate = {**default_params, **candidate_delta}
             bt = run_backtest(df_in, candidate, backtest_params, strategy_name=strategy_name)
             evaluated += 1
             _consider(candidate, bt)
+            if evaluated % step == 0:
+                say(f"{evaluated}/{total} — migliori in classifica: {len(heap)}")
     else:
+        say(f"ricerca casuale: {trials} tentativi")
+        step = max(1, trials // 20)
         for _ in range(trials):
             candidate = random_params_fn(rng)
             bt = run_backtest(df_in, candidate, backtest_params, strategy_name=strategy_name)
             evaluated += 1
             _consider(candidate, bt)
+            if evaluated % step == 0:
+                say(f"{evaluated}/{trials} — migliori in classifica: {len(heap)}")
+
+    if rejected_by_constraints:
+        say(f"{rejected_by_constraints} configurazioni escluse dai filtri")
 
     if not heap and constraints.active and rejected_by_constraints:
         raise NoCandidateMeetsConstraints(constraints, evaluated, rejected_by_constraints)
@@ -409,6 +430,8 @@ def optimize_strategy(
 
     # Sort descending by score
     top_candidates = sorted(heap, key=lambda x: x[0], reverse=True)
+
+    say(f"{len(heap)} candidati distinti: verifica fuori campione")
 
     # Run OOS for every top candidate
     top_results: list[dict] = []
