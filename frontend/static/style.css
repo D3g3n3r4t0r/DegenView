@@ -3646,3 +3646,17 @@ details.issue-card > summary:focus-visible { outline: 2px solid var(--accent); o
 }
 .mo-pair-hint.ok { color: var(--accent); }
 .mo-pair-hint.warn { color: var(--ink-dim); }
+
+/* Archivio: il pulsante che porta la configurazione salvata sull'alert, e la
+   riga che dice cosa e' stato applicato — senza, "attivato" e "attivato con i
+   parametri giusti" si leggono uguali. */
+.arch-alert {
+  background: transparent; border: 1.5px solid var(--accent);
+  color: var(--accent); border-radius: 7px;
+  padding: 4px 9px; font-size: 10.5px; cursor: pointer;
+}
+.arch-alert:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.arch-alert:disabled { opacity: 0.6; cursor: default; }
+.arch-status { margin: 6px 0 0; font-size: 10.5px; line-height: 1.4; color: var(--ink-dim); }
+.arch-status.ok { color: var(--accent); }
+.arch-status.error { color: var(--bear, #ff4560); }
