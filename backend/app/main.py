@@ -2798,6 +2798,7 @@ _INDEX_HTML = (
     .read_text(encoding="utf-8")
     .replace('href="/static/style.css"', f'href="/static/style.css?v={_ASSET_VERSION}"')
     .replace('src="/static/app.js"', f'src="/static/app.js?v={_ASSET_VERSION}"')
+    .replace("</head>", f'<meta name="lae-asset-version" content="{_ASSET_VERSION}" />\n</head>')
 )
 
 
@@ -2814,6 +2815,18 @@ _SNIPER_HTML = (
 # succedeva: il deploy era andato, la pagina no. Gli asset restano cacheabili
 # per sempre proprio perche' l'URL cambia con il contenuto.
 _HTML_HEADERS = {"Cache-Control": "no-cache"}
+
+
+@app.get("/api/version")
+async def asset_version() -> dict:
+    """La versione degli asset che il server sta servendo adesso.
+
+    Serve alla pagina per accorgersi di essere vecchia. Il `no-cache` sull'HTML
+    risolve il problema dal deploy in poi, ma chi aveva gia' la pagina in cache
+    da prima puo' restarci per ore — ed e' successo: uno vedeva il grafico nero
+    dopo che la correzione era in produzione da un pezzo.
+    """
+    return {"asset_version": _ASSET_VERSION}
 
 
 @app.get("/")

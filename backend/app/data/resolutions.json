@@ -30,11 +30,13 @@
   },
   "seed-0006": {
     "status": "risolto",
-    "at": 1788525469,
+    "at": 1788526050,
     "summary": "Il grafico restava nero al cambio tema: si ridisegnavano i dati, non le opzioni del grafico.",
-    "detail": "I colori del grafico non stanno nel CSS: sono opzioni passate alla libreria alla creazione. Cambiando tema si riassegnava la tavolozza e si ridisegnava, ma ridisegnare aggiorna i DATI delle serie — sfondo, griglia, crosshair e colori delle linee restavano quelli con cui il grafico era nato. Ora vengono riapplicati esplicitamente a tutti e quattro i riquadri e alle loro serie. Con una guardia: la funzione gira anche al primo avvio, prima che i grafici esistano, e toccarli li' avrebbe rifatto esattamente l'errore che aveva spento l'app.",
+    "detail": "I colori del grafico non stanno nel CSS: sono opzioni passate alla libreria alla creazione. Cambiando tema si riassegnava la tavolozza e si ridisegnava, ma ridisegnare aggiorna i DATI delle serie — sfondo, griglia, crosshair e colori delle linee restavano quelli con cui il grafico era nato. Ora vengono riapplicati esplicitamente a tutti e quattro i riquadri e alle loro serie. Con una guardia: la funzione gira anche al primo avvio, prima che i grafici esistano, e toccarli li' avrebbe rifatto esattamente l'errore che aveva spento l'app. Poi e' ricapitato su un altro computer, con la correzione gia' in produzione: il browser aveva ancora in cache la pagina vecchia, quindi continuava a chiedere il vecchio app.js. Il `no-cache` sull'HTML vale dal deploy in poi e non raggiunge chi la pagina l'aveva gia'. Ora la pagina porta scritta dentro la versione con cui e' stata costruita, chiede al server quale sta servendo e, se non coincidono, si ricarica — una volta sola per versione, perche' ricaricare all'infinito sarebbe peggio del difetto.",
     "files": [
-      "frontend/static/app.js"
+      "frontend/static/app.js",
+      "backend/app/main.py",
+      "backend/tests/test_caching.py"
     ]
   },
   "seed-0012": {

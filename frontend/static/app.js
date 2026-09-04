@@ -4879,6 +4879,31 @@
   }
 
 
+  // Una pagina vecchia non se ne accorge da sola. Il `no-cache` sull'HTML vale
+  // dal deploy in poi, ma chi l'aveva gia' in cache da prima puo' restarci per
+  // ore: e' successo davvero — grafico nero dopo che la correzione era in
+  // produzione da un pezzo, perche' il browser continuava a chiedere il vecchio
+  // app.js. Qui la pagina chiede al server quale versione sta servendo e, se
+  // non e' la sua, si ricarica una volta sola.
+  async function checkAssetVersion() {
+    const meta = document.querySelector('meta[name="lae-asset-version"]');
+    const mine = meta ? meta.getAttribute("content") : "";
+    if (!mine) return;
+    try {
+      const resp = await fetch("/api/version", { cache: "no-store" });
+      if (!resp.ok) return;
+      const { asset_version: live } = await resp.json();
+      if (!live || live === mine) return;
+      // Una sola ricarica per versione: se dopo il giro la pagina fosse ancora
+      // vecchia — cache intermedia, proxy — ricaricare all'infinito sarebbe
+      // peggio del difetto che sto correggendo.
+      const key = `lae.reloaded.${live}`;
+      if (sessionStorage.getItem(key)) return;
+      sessionStorage.setItem(key, "1");
+      location.reload();
+    } catch { /* offline: la pagina vecchia e' comunque meglio di niente */ }
+  }
+
   function bindTheme() {
     const btn = el("theme-toggle-btn");
     if (btn) {
@@ -6166,6 +6191,7 @@
     bindRail();
     bindIssues();
     bindTheme();
+    checkAssetVersion();
     bindLabFilters();
     bindArchive();
     bindTradingJournal();

@@ -55,3 +55,30 @@ def test_the_version_follows_the_bytes_not_the_commit():
     v1 = main._compute_asset_version()
     assert v1 == main._ASSET_VERSION
     assert len(v1) == 10
+
+
+# --- la pagina si accorge di essere vecchia --------------------------------
+#
+# Il `no-cache` sull'HTML vale dal deploy in poi. Chi aveva già la pagina in
+# cache da prima può restarci per ore, ed è successo: grafico nero dopo che la
+# correzione era in produzione da un pezzo, perché il browser continuava a
+# chiedere il vecchio app.js.
+
+
+def test_the_page_carries_the_version_it_was_built_with(client):
+    html = client.get("/").text
+    assert f'content="{main._ASSET_VERSION}"' in html
+    assert 'name="lae-asset-version"' in html
+
+
+def test_the_server_says_which_version_it_serves(client):
+    resp = client.get("/api/version")
+    assert resp.status_code == 200
+    assert resp.json()["asset_version"] == main._ASSET_VERSION
+
+
+def test_the_two_agree_so_a_fresh_page_never_reloads(client):
+    """Se non coincidessero, ogni caricamento farebbe una ricarica in più."""
+    html = client.get("/").text
+    live = client.get("/api/version").json()["asset_version"]
+    assert f'content="{live}"' in html
