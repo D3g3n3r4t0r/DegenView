@@ -179,7 +179,8 @@ def run_pipeline(
 
     spaces: list[ConstrainedSpace] = build_spaces(strategy_name, stats, target_entries)
     spaces.sort(key=lambda s: s.d)   # simplest branch first
-    say(f"{len(spaces)} varianti da esplorare: {', '.join(cs.label for cs in spaces)}")
+    say(f"{len(spaces)} variant{'e' if len(spaces) == 1 else 'i'} da esplorare: "
+        f"{', '.join(cs.label for cs in spaces)}")
 
     outcomes: list[BranchOutcome] = []
     total_evals = 0
@@ -190,17 +191,21 @@ def run_pipeline(
     finalists: list[PlateauCandidate] = []
 
     for cs in spaces:
-        say(f"variante {cs.label} ({cs.d} parametri): mappatura dei pianori…")
+        say(f"— variante {cs.label} ({cs.d} parametri)")
         res = plateau_search(
             strategy_name, df_in, bp,
             base_points=1, coarse=coarse, tol=tol,
             max_grid_evals=max_evals_per_branch,
             min_trades=min_trades, space=cs.as_param_space(), seed=seed,
+            # Le fasi della mappatura escono nello stesso log: "mappatura dei
+            # pianori…" e poi silenzio per minuti non dice se sta lavorando ne'
+            # che cosa sta facendo.
+            progress=say,
         )
         total_evals += res.evaluations
         say(f"variante {cs.label}: {res.evaluations} backtest, "
             f"{'griglia enumerata' if res.enumerated else 'griglia campionata'}, "
-            f"{len(res.candidates)} finalisti")
+            f"{len(res.candidates)} finalist{'a' if len(res.candidates) == 1 else 'i'}")
         outcomes.append(BranchOutcome(
             label=cs.label, dims=cs.d, enumerated=res.enumerated,
             best=res.best, evaluations=res.evaluations,
