@@ -71,6 +71,13 @@
   // Riassegnare la variabile invece li lascerebbe legati alla vecchia palette.
   const COLORS = {};
 
+  // Dichiarata qui e non piu' in basso: `applyTheme` gira subito, prima ancora
+  // che il resto del file venga valutato, e con `const` in fondo cadeva nella
+  // temporal dead zone — "Cannot access 'el' before initialization". Non un
+  // difetto parziale: l'eccezione interrompe l'intero modulo, quindi la pagina
+  // restava ferma sul suo stato vuoto senza che nulla si inizializzasse.
+  const el = (id) => document.getElementById(id);
+
   const THEME_KEY = "lae.theme";
 
   function preferredTheme() {
@@ -781,7 +788,6 @@
   let stochChart, stochKSeries, stochDSeries;
   let equityChart, equitySeries;
 
-  const el = (id) => document.getElementById(id);
   const tooltipEl = el("tooltip");
 
   // Chart containers start hidden (display:none) until the first search
