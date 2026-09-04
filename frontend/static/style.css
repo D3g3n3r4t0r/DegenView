@@ -3463,3 +3463,75 @@ body {
 .jr-detail { color: var(--ink-dim); font-size: 10.5px; word-break: break-word; }
 .jr-when { margin-left: auto; color: var(--ink-dim); font-size: 10.5px; white-space: nowrap; }
 .lab-regime-sub { color: var(--ink-dim); font-weight: 400; }
+
+/* --- Finestra di avanzamento dell'ottimizzazione ---------------------------
+   Una ricerca lunga, senza niente a schermo, è indistinguibile da una bloccata:
+   è la ragione per cui è stata chiesta. */
+.opt-progress {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(0, 0, 0, .45);
+  padding: 16px;
+}
+@media (min-width: 761px) { .opt-progress { align-items: center; } }
+.opt-progress-card {
+  width: min(560px, 100%);
+  max-height: min(70vh, 560px);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--accent);
+}
+.opt-progress.done .opt-progress-card { border-top-color: var(--bull); }
+.opt-progress.failed .opt-progress-card { border-top-color: var(--bear); }
+.opt-progress-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px; font-weight: 600; color: var(--ink);
+}
+.opt-progress-time { margin-left: auto; color: var(--ink-dim); font-weight: 400; font-variant-numeric: tabular-nums; }
+.opt-progress-close {
+  border: 0; background: transparent; color: var(--ink-dim);
+  font: inherit; cursor: pointer; padding: 0 2px;
+}
+.opt-progress-close:hover { color: var(--ink); }
+.opt-spinner {
+  width: 11px; height: 11px; flex: 0 0 auto;
+  border: 2px solid var(--border); border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: opt-spin .9s linear infinite;
+}
+.opt-progress.done .opt-spinner, .opt-progress.failed .opt-spinner { animation: none; border-top-color: var(--border); }
+@keyframes opt-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .opt-spinner { animation: none; } }
+.opt-progress-sub { padding: 8px 12px 0; color: var(--ink-dim); font-size: 11.5px; }
+.opt-progress-log {
+  flex: 1 1 auto;
+  overflow: auto;
+  margin: 8px 0 0;
+  padding: 0 12px 12px;
+  list-style: none;
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+.opt-progress-log li { display: flex; gap: 8px; color: var(--ink); }
+.opt-progress-log .opt-t {
+  color: var(--ink-dim);
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 44px;
+  text-align: right;
+}
+.opt-progress-foot {
+  padding: 9px 12px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--ink);
+}
+.opt-progress-foot.ok { color: var(--bull); }
+.opt-progress-foot.error { color: var(--bear); }

@@ -1866,6 +1866,112 @@
     if (save) save.addEventListener("click", saveLabToArchive);
   }
 
+  // ── Ottimizzazione seguita in diretta ──────────────────────────────────────
+  //
+  // L'errore arrivato sulla bacheca — "The string did not match the expected
+  // pattern" — e' Safari che prova a leggere come JSON una pagina d'errore:
+  // la richiesta lunga era caduta prima di rispondere. Ora la ricerca e' un
+  // lavoro che il server porta avanti per conto suo e di cui qui si chiede lo
+  // stato, quindi non c'e' piu' nessuna richiesta lunga da far cadere.
+
+  const optProgress = {
+    jobId: null,
+    seen: 0,
+    timer: null,
+    onDone: null,
+    onFail: null,
+  };
+
+  // Una risposta non-JSON non deve arrivare a JSON.parse: il messaggio che ne
+  // esce parla di stringhe e non dice nulla di cosa e' andato storto.
+  async function readJson(resp) {
+    const text = await resp.text();
+    try {
+      return JSON.parse(text);
+    } catch {
+      const head = text.trim().slice(0, 120);
+      throw new Error(
+        `Il server ha risposto ${resp.status} ${resp.statusText || ""} senza JSON`
+        + (head ? ` — "${head}"` : "")
+      );
+    }
+  }
+
+  function openOptProgress(title, subtitle) {
+    el("opt-progress-title").textContent = title;
+    el("opt-progress-sub").textContent = subtitle || "";
+    el("opt-progress-log").innerHTML = "";
+    el("opt-progress-time").textContent = "0s";
+    el("opt-progress-foot").classList.add("hidden");
+    el("opt-progress").classList.remove("hidden");
+    el("opt-progress").classList.remove("done", "failed");
+  }
+
+  function closeOptProgress() {
+    el("opt-progress").classList.add("hidden");
+    if (optProgress.timer) { clearTimeout(optProgress.timer); optProgress.timer = null; }
+    optProgress.jobId = null;
+  }
+
+  function appendOptLog(lines) {
+    const list = el("opt-progress-log");
+    lines.forEach((line) => {
+      const li = document.createElement("li");
+      li.innerHTML = `<span class="opt-t">${line.t.toFixed(1)}s</span>${escapeHtml(line.m)}`;
+      list.appendChild(li);
+    });
+    // Solo se l'utente non ha scorso indietro a leggere: trascinargli via la
+    // riga che sta guardando e' peggio che non seguire l'ultima.
+    const nearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 40;
+    if (nearBottom) list.scrollTop = list.scrollHeight;
+  }
+
+  function optProgressFoot(text, kind) {
+    const foot = el("opt-progress-foot");
+    foot.textContent = text;
+    foot.className = "opt-progress-foot " + (kind || "");
+    foot.classList.remove("hidden");
+    el("opt-progress").classList.add(kind === "error" ? "failed" : "done");
+  }
+
+  // Un lavoro si segue chiedendo solo le righe nuove: `since` e' quante se ne
+  // hanno gia', cosi' ogni giro porta le novita' invece del log intero.
+  async function pollJob(jobId) {
+    optProgress.jobId = jobId;
+    optProgress.seen = 0;
+    return new Promise((resolve, reject) => {
+      const tick = async () => {
+        if (optProgress.jobId !== jobId) return;   // chiuso o sostituito
+        try {
+          const resp = await fetch(`/api/jobs/${jobId}?since=${optProgress.seen}`);
+          if (!resp.ok) {
+            const body = await readJson(resp).catch(() => ({}));
+            throw new Error(body.detail || `Lavoro non raggiungibile (${resp.status})`);
+          }
+          const job = await readJson(resp);
+          optProgress.seen = job.log_total;
+          appendOptLog(job.log || []);
+          el("opt-progress-time").textContent = `${job.elapsed_s.toFixed(0)}s`;
+          if (job.state === "finito") {
+            optProgressFoot("Fatto. Risultato applicato al Laboratorio.", "ok");
+            resolve(job.result);
+            return;
+          }
+          if (job.state === "fallito") {
+            optProgressFoot(job.error || "Ottimizzazione fallita.", "error");
+            reject(new Error(job.error || "Ottimizzazione fallita"));
+            return;
+          }
+          optProgress.timer = setTimeout(tick, 1000);
+        } catch (err) {
+          optProgressFoot(err.message || "Errore di rete.", "error");
+          reject(err);
+        }
+      };
+      tick();
+    });
+  }
+
   // ── Diario degli ordini automatici ─────────────────────────────────────────
   //
   // La riga che sarebbe servita mesi fa: un segnale c'era, e l'ordine non e'
@@ -5514,11 +5620,16 @@
       const params = buildLabQuery();
       if (optMode !== "random") params.set("mode", optMode);
       applyLabFilters(params);
-      const url = `/api/optimize?${params.toString()}`;
-      const resp = await fetch(url);
+      const startResp = await fetch(`/api/optimize/start?${params.toString()}`, { method: "POST" });
+      const started = await readJson(startResp);
+      if (!startResp.ok) throw new Error(typeof started.detail === "string" ? started.detail : `Errore ${startResp.status}`);
       if (seq !== labState.seq) return;
-      const body = await resp.json();
-      if (!resp.ok) throw new Error(typeof body.detail === "string" ? body.detail : `Errore ${resp.status}`);
+      openOptProgress(
+        optMode === "plateau" ? "Ricerca stabile in corso" : "Ottimizzazione in corso",
+        `${labState.displaySymbol || labState.symbol} · ${labState.strategy}`
+      );
+      const body = await pollJob(started.job_id);
+      if (seq !== labState.seq) return;
       // Apply optimized params to the lab fields
       const container = labEl("lab-params-fields");
       Object.entries(body.params).forEach(([key, value]) => {
@@ -5785,6 +5896,7 @@
     bindLabFilters();
     bindArchive();
     bindTradingJournal();
+    el("opt-progress-close").addEventListener("click", closeOptProgress);
     bindTabs();
     bindDrawRail();
     bindMobileDrawTools();

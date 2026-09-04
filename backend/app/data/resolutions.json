@@ -110,5 +110,46 @@
       "frontend/static/app.js",
       "frontend/index.html"
     ]
+  },
+  "b419c83a": {
+    "status": "risolto",
+    "summary": "Non era l'ottimizzazione ad aver fallito: era la richiesta a non essere sopravvissuta. Ora la ricerca e' un lavoro seguito in diretta, con la finestra di log che avevi chiesto.",
+    "detail": "'The string did not match the expected pattern' e' il messaggio di Safari quando JSON.parse riceve qualcosa che non e' JSON. La ricerca stabile puo' durare minuti, e tenendola dentro una GET quella richiesta doveva restare aperta per tutto il tempo: il proxy davanti all'app la chiude, il browser la lascia cadere, e quello che tornava era una pagina d'errore letta come JSON. Per questo il messaggio non nominava l'ottimizzazione. Ora si apre un lavoro e la richiesta torna subito; il lavoro prosegue per conto suo e accumula righe di log che l'app chiede una volta al secondo, portandosi solo le novita'. Non c'e' piu' nessuna richiesta lunga da far cadere. La finestra mostra le fasi mentre succedono: quante candele, il gate di regime con il suo verdetto, le varianti da esplorare, i backtest per variante, i controlli finali. Su KASUSDT daily, ricerca rapida: 26 righe in 14 secondi, +670.6% su 43 trade. In piu' nessuna risposta passa piu' per JSON.parse alla cieca: se non e' JSON viene detto lo stato HTTP e l'inizio di cio' che e' arrivato, invece di un messaggio che parla di stringhe.",
+    "files": [
+      "backend/app/jobs.py",
+      "backend/app/main.py",
+      "backend/app/analysis/pipeline.py",
+      "backend/app/analysis/optimize.py",
+      "backend/tests/test_jobs.py",
+      "frontend/index.html",
+      "frontend/static/app.js",
+      "frontend/static/style.css"
+    ]
+  },
+  "b16c473f": {
+    "status": "risolto",
+    "summary": "Stessa cosa della segnalazione sull'errore di ottimizzazione: risolta li'.",
+    "detail": "Arrivata senza testo oltre al titolo, nello stesso momento dell'altra e sullo stesso punto dell'app. Trattata come la stessa cosa: la ricerca ora e' un lavoro seguito in diretta e la richiesta non resta piu' appesa. Se intendevi altro, riscrivila con quello che vedi e la guardo a parte.",
+    "files": [
+      "backend/app/jobs.py",
+      "backend/app/main.py"
+    ]
+  },
+  "a2e0c033": {
+    "status": "risolto",
+    "summary": "Non e' un guasto: sono i crediti giornalieri di Twelve Data. Ora il monitoraggio si mette in pausa fino all'azzeramento e lo dice una volta sola.",
+    "detail": "L'errore veniva trattato come un guasto qualunque, quindi riprovato al giro dopo — e il controllo gira ogni minuto, per ogni ticker. Ne usciva un messaggio allarmante al minuto per una cosa che non e' rotta e che si risolve da sola. Ora quel caso e' riconosciuto a parte (codice 429, oppure il testo che parla di crediti: il piano gratuito risponde 400 e mette il motivo solo nel messaggio) e la reazione e' opposta a quella di un errore normale: invece di riprovare, ci si ferma fino a mezzanotte UTC, quando i crediti si azzerano. La pausa e' del piano, non dell'utente: fermare solo chi ha incontrato l'errore lascerebbe gli altri a consumarne altri e a ricevere lo stesso messaggio a turno. Le crypto non sono toccate, perche' hanno provider diversi. Il messaggio arriva una volta per pausa e dice cosa e' successo e che riprende da solo, invece di 'Errore monitoraggio' — che suggeriva qualcosa di rotto.",
+    "files": [
+      "backend/app/providers/base.py",
+      "backend/app/providers/twelvedata.py",
+      "backend/app/main.py",
+      "backend/tests/test_quota.py"
+    ]
+  },
+  "94071e69": {
+    "status": "risolto",
+    "summary": "Voce di prova: la bacheca funziona, il messaggio e' arrivato.",
+    "detail": "Nessuna azione. La chiudo per lasciare in elenco solo cose vere.",
+    "files": []
   }
 }
