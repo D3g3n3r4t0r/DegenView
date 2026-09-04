@@ -346,5 +346,28 @@
     "files": [
       "backend/tests/test_gabriele2.py"
     ]
+  },
+  "df8d6d05": {
+    "status": "risolto",
+    "at": 1788562571,
+    "summary": "Nell'archivio ogni strategia ha ora 'Attiva l'alert': accende il monitoraggio con i parametri archiviati, il timeframe compreso.",
+    "detail": "Il ponte che mancava. L'archivio conservava i parametri trovati dalla ricerca, ma restava una fotografia: per farli lavorare bisognava riscriverli a mano nella scheda del ticker, e chi non lo faceva teneva acceso un alert sui valori di default della strategia — identico d'aspetto a uno ottimizzato e diverso in tutto il resto. Il pulsante crea (o riusa) la voce di watchlist, scrive i parametri, imposta il timeframe della voce archiviata per quella strategia e poi accende: i parametri li legge il server dalla voce d'archivio, non dal browser, come gia' fa per le metriche. C'era anche un difetto d'ordine nel percorso 'Attiva segnali' del Laboratorio: accendeva prima e salvava i parametri dopo. Accendere e' il momento in cui viene scattata la fotografia che finisce in archivio, quindi quella fotografia nasceva con i parametri di default e restava a dire che l'alert era partito con una configurazione che non ha mai avuto. Ora i parametri si scrivono prima dell'interruttore, e un test tiene fermo l'ordine.",
+    "files": [
+      "backend/app/main.py",
+      "backend/tests/test_apply_config.py",
+      "backend/tests/test_archive_to_alert.py",
+      "frontend/static/app.js",
+      "frontend/static/style.css"
+    ]
+  },
+  "70a6bedd": {
+    "status": "risolto",
+    "at": 1788562571,
+    "summary": "'Applica al grafico' portava solo il pair: ora porta anche timeframe, strategia e i suoi parametri.",
+    "detail": "I trade disegnati sul grafico vengono da un backtest fatto con quattro cose insieme: pair, timeframe, strategia e i parametri di quella strategia. Applicando dal Laboratorio ne cambiava una sola — il pair — e le altre tre restavano quelle del grafico: i trade finivano sopra il grafico di un'altra configurazione, e sembravano semplicemente sbagliati. Ora il passaggio e' uno solo e le porta tutte e quattro, compreso il ridisegno dei campi dei parametri (ogni strategia ha i suoi) e il riallineamento della ruota dei timeframe su mobile. Lo stesso percorso lo usa anche 'Applica al grafico' dall'archivio, che aveva lo stesso difetto piu' uno suo: non impostava nemmeno il timeframe della strategia archiviata. Un test verifica che i due percorsi passino entrambi da li' e che quel punto tocchi tutte e quattro le cose: riapplicare solo una parte fa fallire la suite.",
+    "files": [
+      "backend/tests/test_apply_config.py",
+      "frontend/static/app.js"
+    ]
   }
 }

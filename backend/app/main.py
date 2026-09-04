@@ -2408,6 +2408,51 @@ async def add_archive_entry(
     return entry
 
 
+@app.post("/api/archive/{entry_id}/apply-to-alert")
+async def apply_archive_entry_to_alert(
+    entry_id: str, user: User = Depends(auth.get_current_user)
+) -> dict:
+    """Accende l'alert con ESATTAMENTE la configurazione archiviata.
+
+    Il ponte che mancava. L'archivio conserva i parametri trovati da una
+    ricerca, ma restava una fotografia: per farli lavorare bisognava riscriverli
+    a mano nella scheda del ticker, e chi non lo faceva si ritrovava un alert
+    acceso sui valori di default della strategia — identico d'aspetto a uno
+    ottimizzato, e diverso in tutto il resto. Qui i parametri li prende dalla
+    voce d'archivio, non dal client: la stessa regola per cui le metriche
+    l'archivio le misura invece di accettarle.
+    """
+    entry = archive_store.get(entry_id, user.id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Voce d'archivio non trovata")
+    strategy_name = entry.get("strategy_name", "")
+    if strategy_name not in AVAILABLE_STRATEGIES:
+        raise HTTPException(status_code=400, detail=f"Strategia sconosciuta: {strategy_name}")
+
+    watch = watchlist_store.add_entry(
+        user.id, entry["symbol"], entry["asset_type"],
+        exchange=entry.get("exchange", "mexc"),
+        interval=entry.get("interval", DEFAULT_INTERVALS["ltf"]),
+        on_close=True,
+    )
+    # Prima i parametri, poi l'interruttore: accendere scatta la fotografia
+    # d'archivio, e farla prima registrerebbe i default — l'archivio direbbe
+    # che l'alert e' partito con una configurazione diversa da quella che sta
+    # girando.
+    watchlist_store.set_strategy_params(watch.id, strategy_name, entry.get("params") or {})
+    watchlist_store.set_strategy_interval(watch.id, strategy_name, entry.get("interval"))
+    updated = await toggle_watchlist_strategy(
+        watch.id, WatchlistStrategyToggleRequest(strategy_name=strategy_name, enabled=True), user
+    )
+    return {
+        "ok": True,
+        "watchlist_entry": updated,
+        "strategy_name": strategy_name,
+        "params": entry.get("params") or {},
+        "interval": entry.get("interval"),
+    }
+
+
 @app.patch("/api/archive/{entry_id}")
 async def update_archive_note(
     entry_id: str, req: ArchiveNoteIn, user: User = Depends(auth.get_current_user)

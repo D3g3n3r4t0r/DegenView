@@ -1993,8 +1993,10 @@
           ${e.note ? `<div class="arch-note">${escapeHtml(e.note)}</div>` : ""}
           <div class="arch-actions">
             <button type="button" class="arch-apply" data-id="${e.id}">Applica al grafico</button>
+            <button type="button" class="arch-alert" data-id="${e.id}">Attiva l'alert</button>
             <button type="button" class="arch-del" data-id="${e.id}">Elimina</button>
           </div>
+          <p class="arch-status hidden" data-status="${e.id}"></p>
         </li>`;
     }).join("");
 
@@ -2011,6 +2013,45 @@
       });
     });
 
+    // Accendere l'alert con i parametri archiviati. Prima l'unico modo era
+    // riscriverli a mano nella scheda del ticker, e chi non lo faceva teneva
+    // acceso un alert sui valori di default — uguale d'aspetto a uno
+    // ottimizzato. I parametri li applica il server leggendoli dalla voce
+    // d'archivio, non da qui.
+    list.querySelectorAll(".arch-alert").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.dataset.id;
+        const status = list.querySelector(`[data-status="${id}"]`);
+        const say = (text, kind) => {
+          if (!status) return;
+          status.textContent = text;
+          status.className = "arch-status" + (kind ? " " + kind : "");
+          status.classList.remove("hidden");
+        };
+        const entry = items.find((x) => x.id === id);
+        btn.disabled = true;
+        const prev = btn.textContent;
+        btn.textContent = "…";
+        try {
+          const resp = await fetch(`/api/archive/${id}/apply-to-alert`, { method: "POST" });
+          const data = await readJson(resp);
+          if (!resp.ok) {
+            say("✗ " + (data.detail || `Errore ${resp.status}`), "error");
+            return;
+          }
+          const n = Object.keys(data.params || {}).length;
+          say(`✓ Alert attivo su ${entry ? entry.symbol : ""} (${data.interval || ""}) — `
+              + `${data.strategy_name}, ${n ? n + " parametri archiviati applicati" : "parametri di default"}`, "ok");
+          loadWatchlist();
+        } catch (err) {
+          say("✗ Errore di rete", "error");
+        } finally {
+          btn.disabled = false;
+          btn.textContent = prev;
+        }
+      });
+    });
+
     // Una sola ricontrollata, e solo se c'e' davvero qualcosa da aspettare:
     // un polling perenne per una lista che cambia una volta al mese sarebbe
     // traffico speso per nulla.
@@ -2019,24 +2060,56 @@
     }
   }
 
-  function applyArchiveEntry(entry) {
-    state.assetType = entry.asset_type;
-    state.cryptoExchange = entry.exchange;
-    el("ticker-input").value = entry.symbol;
-    const stratSel = el("active-strategy-select");
-    if (stratSel && stratSel.value !== entry.strategy_name) {
-      stratSel.value = entry.strategy_name;
-      renderStrategyParamsFields();
+  // Portare una configurazione sul grafico e' una cosa sola, e va fatta
+  // INTERA: pair, timeframe, strategia e i parametri di quella strategia. I
+  // trade disegnati sul grafico vengono da un backtest fatto con tutti e
+  // quattro; cambiarne solo una parte disegna i trade di una configurazione
+  // sopra il grafico di un'altra, e sembrano semplicemente sbagliati. Era la
+  // segnalazione: "devono sempre coincidere".
+  function applyConfigToChart({ assetType, exchange, symbol, displaySymbol,
+                                interval, strategyName, params }) {
+    if (assetType) state.assetType = assetType;
+    if (exchange) state.cryptoExchange = exchange;
+    if (symbol) el("ticker-input").value = displaySymbol || symbol;
+
+    const tfSelect = el("interval-primary");
+    if (tfSelect && interval && tfSelect.value !== interval) {
+      // Solo se il timeframe e' uno di quelli in elenco: assegnare un valore
+      // che non c'e' lascerebbe il select su quello di prima, in silenzio.
+      const known = Array.from(tfSelect.options).some((o) => o.value === interval);
+      if (known) {
+        tfSelect.value = interval;
+        syncMobileTfWheel();
+      }
     }
+
+    const stratSel = el("active-strategy-select");
+    if (stratSel && strategyName && stratSel.value !== strategyName) {
+      stratSel.value = strategyName;
+      renderStrategyParamsFields();   // ogni strategia ha campi suoi
+      updateOptimizeButtonVisibility();
+    }
+
     const container = el("strategy-params-fields");
-    if (container) {
-      Object.entries(entry.params || {}).forEach(([key, value]) => {
+    if (container && params) {
+      Object.entries(params).forEach(([key, value]) => {
         const input = container.querySelector(`[name="${key}"]`);
         if (!input) return;
         if (input.type === "checkbox") input.checked = !!value;
         else input.value = value;
       });
     }
+  }
+
+  function applyArchiveEntry(entry) {
+    applyConfigToChart({
+      assetType: entry.asset_type,
+      exchange: entry.exchange,
+      symbol: entry.symbol,
+      interval: entry.interval,
+      strategyName: entry.strategy_name,
+      params: entry.params,
+    });
     runAnalysis(entry.symbol);
   }
 
@@ -6224,10 +6297,19 @@
 
     labEl("lab-apply-btn").addEventListener("click", () => {
       if (!labState.symbol || !labState.lastBt) return;
-      // Switch main chart to lab's ticker+params
-      state.assetType = labState.assetType;
-      state.cryptoExchange = labState.exchange;
-      el("ticker-input").value = labState.displaySymbol || labState.symbol;
+      // Tutta la configurazione, non solo il pair: prima il grafico prendeva
+      // il ticker del laboratorio ma restava sul proprio timeframe e sulla
+      // propria strategia, con i propri parametri. I trade disegnati erano
+      // quelli di un'altra cosa.
+      applyConfigToChart({
+        assetType: labState.assetType,
+        exchange: el("lab-exchange-select")?.value || labState.exchange,
+        symbol: labState.symbol,
+        displaySymbol: labState.displaySymbol,
+        interval: labState.tf,
+        strategyName: labState.strategy,
+        params: collectStrategyParams(labEl("lab-params-fields"), labState.strategy),
+      });
       // Sync lab backtest params into the main form so the chart backtest
       // uses the same capital/equity/commission as the Lab result just shown.
       const syncField = (name, labId) => {
@@ -6285,7 +6367,26 @@
         }
         const entry = await addResp.json();
 
-        // 2. Enable the strategy on this watchlist entry
+        // 2. I parametri trovati dal laboratorio PRIMA di accendere. Accendere
+        // scatta la fotografia che finisce in archivio: fatta prima, quella
+        // fotografia registra i parametri di default e resta a dire che
+        // l'alert e' partito con la configurazione non ottimizzata — cioe'
+        // l'archivio racconta una cosa diversa da quella che sta girando.
+        const labParams = collectStrategyParams(labEl("lab-params-fields"), labState.strategy);
+        if (Object.keys(labParams).length > 0) {
+          const paramsResp = await fetch(`/api/watchlist/${entry.id}/strategy_params`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ strategy_name: labState.strategy, params: labParams }),
+          });
+          if (!paramsResp.ok) {
+            const err = await paramsResp.json().catch(() => ({}));
+            show("Parametri non salvati: " + (err.detail || paramsResp.status), true);
+            btn.disabled = false; btn.textContent = prevText; return;
+          }
+        }
+
+        // 3. Ora si accende, con i parametri gia' al loro posto
         const stratResp = await fetch(`/api/watchlist/${entry.id}/strategy`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -6296,16 +6397,8 @@
           show("Strategia non attivata: " + (err.detail || stratResp.status), true);
           btn.disabled = false; btn.textContent = prevText; return;
         }
-
-        // 3. Save the Lab's optimized params so the alert uses the same settings
-        const labParams = collectStrategyParams(labEl("lab-params-fields"), labState.strategy);
-        if (Object.keys(labParams).length > 0) {
-          await fetch(`/api/watchlist/${entry.id}/strategy_params`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ strategy_name: labState.strategy, params: labParams }),
-          });
-        }
+        loadWatchlist();
+        loadArchive();
 
         show(`✅ Segnali attivi per ${labState.symbol} (${labState.tf}) — ${labState.strategy}`, false);
         btn.textContent = "✅ Attivo";
