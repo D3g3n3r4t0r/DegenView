@@ -4568,6 +4568,7 @@
     "aperto": "Aperto",
     "in corso": "In corso",
     "risolto": "Risolto",
+    "riaperto": "Riaperto",
     "scartato": "Scartato",
   };
 
@@ -4599,7 +4600,8 @@
     const counts = body.counts || {};
     const cEl = el("issues-counts");
     if (cEl) {
-      cEl.innerHTML = ["aperto", "in corso", "risolto"]
+      cEl.innerHTML = ["aperto", "riaperto", "in corso", "risolto"]
+        .filter((k) => counts[k] || k !== "riaperto")
         .map((k) => `<span class="issues-count is-${k.replace(" ", "-")}">`
           + `<b>${counts[k] || 0}</b> ${ISSUE_STATUS_LABEL[k].toLowerCase()}</span>`)
         .join("");
@@ -4612,7 +4614,9 @@
     }
     // Aperte per prime: una bacheca che apre sulle cose gia' chiuse nasconde
     // proprio quelle su cui bisogna agire.
-    const order = { "aperto": 0, "in corso": 1, "risolto": 2, "scartato": 3 };
+    // Le riaperte per prime: sono quelle su cui una correzione non ha risolto,
+    // ed e' l'informazione piu' urgente della bacheca.
+    const order = { "riaperto": 0, "aperto": 1, "in corso": 2, "risolto": 3, "scartato": 4 };
     const prio = { alta: 0, media: 1, bassa: 2 };
     const sorted = [...items].sort((a, b) =>
       (order[a.status] ?? 9) - (order[b.status] ?? 9)
@@ -4638,8 +4642,53 @@
           ${r.next ? `<p class="issue-res-next"><b>Prossimo passo:</b> ${escapeHtml(r.next)}</p>` : ""}
           ${r.commit ? `<p class="issue-res-commit">commit <code>${escapeHtml(r.commit)}</code></p>` : ""}
         </div>` : ""}
+        ${(it.replies || []).map((rp) => `
+          <div class="issue-reply ${rp.side === "claude" ? "from-claude" : ""}">
+            <span class="ir-who">${rp.side === "claude" ? "Claude" : escapeHtml(rp.author || "tu")}</span>
+            ${rp.reopen ? '<span class="ir-reopen">riaperta</span>' : ""}
+            <p>${escapeHtml(rp.text)}</p>
+          </div>`).join("")}
+        <form class="issue-reply-form" data-issue="${escapeHtml(it.id)}">
+          <textarea rows="2" placeholder="Rispondi — se il problema si vede ancora, dillo qui" required></textarea>
+          <div class="irf-row">
+            <label><input type="checkbox" name="reopen" /> Non risolto, riapri</label>
+            <button type="submit">Invia</button>
+          </div>
+          <p class="irf-status hidden"></p>
+        </form>
       </article>`;
     }).join("");
+
+    list.querySelectorAll(".issue-reply-form").forEach((form) => {
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const area = form.querySelector("textarea");
+        const status = form.querySelector(".irf-status");
+        const reopen = form.querySelector('[name="reopen"]').checked;
+        const text = area.value.trim();
+        if (!text) return;
+        status.classList.remove("hidden");
+        status.textContent = "Invio…";
+        try {
+          const resp = await fetch(`/api/issues/${form.dataset.issue}/replies`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text, reopen }),
+          });
+          if (!resp.ok) {
+            const body = await resp.json().catch(() => ({}));
+            status.textContent = body.detail === "Accesso richiesto"
+              ? "Accedi per rispondere."
+              : (body.detail || "Non inviata.");
+            return;
+          }
+          area.value = "";
+          loadIssues();
+        } catch {
+          status.textContent = "Rete non raggiungibile.";
+        }
+      });
+    });
   }
 
 

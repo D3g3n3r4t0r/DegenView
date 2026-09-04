@@ -20,7 +20,17 @@ appartengono a chi le ha scritte.
 | | dove vive | chi scrive |
 |---|---|---|
 | segnalazioni | volume Fly, `data/issues.json` | loro, dall'app |
+| risposte loro | volume Fly, `data/issue_replies.json` | loro, dall'app |
 | risoluzioni | repo, `app/data/resolutions.json` | Claude, via git |
+| risposte Claude | repo, `app/data/replies.json` | Claude, via git |
+
+Ogni problema segnalato in chat va **anche** sulla bacheca: una voce in `_SEED`
+con la sua risoluzione. Altrimenti resta solo nella conversazione, e la bacheca
+racconta metà del lavoro.
+
+Una risposta con `reopen` riapre la voce: "risolto" lo decide chi ha segnalato.
+Per richiuderla serve una risoluzione con un campo `at` più recente della
+riapertura — senza `at`, la riapertura vince sempre.
 
 L'unione avviene in lettura, per `id`. Un id che non corrisponde a nessuna
 segnalazione è una diagnosi che nessuno vedrà mai — c'è un test che lo verifica.

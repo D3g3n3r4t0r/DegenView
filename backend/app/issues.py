@@ -28,6 +28,11 @@ from typing import Literal
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 _DATA_DIR.mkdir(parents=True, exist_ok=True)
 _STORE_FILE = _DATA_DIR / "issues.json"
+# Le risposte seguono la stessa divisione delle segnalazioni: quelle scritte
+# dall'app vivono sul volume e appartengono a chi le scrive, quelle di Claude
+# arrivano col deploy. Un botta e risposta in cui una parte puo' riscrivere le
+# parole dell'altra non e' una conversazione.
+_REPLIES_FILE = _DATA_DIR / "issue_replies.json"
 # Quali voci della lista iniziale sono gia' state inserite. Serve a distinguere
 # "mai inserita" da "inserita e poi cancellata": senza questo file l'unico modo
 # per non resuscitare una voce cancellata era non inserirne mai di nuove.
@@ -35,17 +40,19 @@ _SEEDED_FILE = _DATA_DIR / "seeded_ids.json"
 
 # Versionato in git e distribuito col deploy: è il lato di Claude.
 _RESOLUTIONS_FILE = Path(__file__).resolve().parent / "data" / "resolutions.json"
+_CLAUDE_REPLIES_FILE = Path(__file__).resolve().parent / "data" / "replies.json"
 
 _MAX_ISSUES = 500
 
 Status = Literal["aperto", "in corso", "risolto", "scartato"]
 Priority = Literal["alta", "media", "bassa"]
 
-_VALID_STATUS = {"aperto", "in corso", "risolto", "scartato"}
+_VALID_STATUS = {"aperto", "in corso", "risolto", "scartato", "riaperto"}
 _VALID_PRIORITY = {"alta", "media", "bassa"}
 
 _issues: list[dict] = []
 _seeded_ids: set[str] = set()
+_replies: list[dict] = []
 
 
 def _load() -> None:
@@ -65,6 +72,63 @@ def _save() -> None:
         _STORE_FILE.write_text(json.dumps(_issues, ensure_ascii=False), encoding="utf-8")
     except OSError:
         pass
+
+
+def _load_replies() -> None:
+    if not _REPLIES_FILE.exists():
+        return
+    try:
+        raw = json.loads(_REPLIES_FILE.read_text(encoding="utf-8"))
+        if isinstance(raw, list):
+            _replies.clear()
+            _replies.extend(x for x in raw if isinstance(x, dict))
+    except (json.JSONDecodeError, OSError):
+        pass
+
+
+def _save_replies() -> None:
+    try:
+        _REPLIES_FILE.write_text(json.dumps(_replies, ensure_ascii=False), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _claude_replies() -> dict[str, list[dict]]:
+    """Le risposte di Claude, rilette a ogni richiesta come le risoluzioni."""
+    try:
+        raw = json.loads(_CLAUDE_REPLIES_FILE.read_text(encoding="utf-8"))
+        return raw if isinstance(raw, dict) else {}
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def add_reply(issue_id: str, text: str, author: str = "", reopen: bool = False) -> dict:
+    """Una risposta a una segnalazione, con la possibilita' di riaprirla.
+
+    Riaprire serve perche' "risolto" lo decide chi ha scritto la segnalazione,
+    non chi ha scritto la correzione: se il problema si vede ancora, la voce
+    deve tornare in cima all'elenco invece di restare chiusa per decreto.
+    """
+    text = (text or "").strip()
+    if not text:
+        raise ValueError("Risposta vuota")
+    entry = {
+        "id": uuid.uuid4().hex[:8],
+        "issue_id": issue_id,
+        "text": text[:4000],
+        "author": (author or "").strip()[:120],
+        "created_at": int(time.time()),
+        "reopen": bool(reopen),
+    }
+    _replies.append(entry)
+    _save_replies()
+    if reopen:
+        for it in _issues:
+            if it["id"] == issue_id:
+                it["reopened_at"] = entry["created_at"]
+                _save()
+                break
+    return entry
 
 
 def _load_seeded() -> None:
@@ -125,6 +189,22 @@ _SEED = [
     ("seed-0011", "Il trading automatico non ha mai piazzato un ordine",
      "Trovato lavorando sugli alert, non segnalato: non c'era modo di accorgersene. "
      "Nessun errore, nessun log, semplicemente nessun ordine.", "alta"),
+    ("seed-0013", "Il sito non carica piu': resta la schermata vuota",
+     "Segnalato con screenshot da telefono: nav e testo iniziale visibili, ma niente funziona.", "alta"),
+    ("seed-0014", "La pagina resta vecchia dopo un deploy",
+     "Il log dell'ottimizzazione mostrava ancora la versione precedente mentre in produzione c'era gia' quella nuova.", "alta"),
+    ("seed-0015", "L'ottimizzazione fallisce con un errore che non parla di ottimizzazione",
+     "'The string did not match the expected pattern', e nessun modo di sapere se sta lavorando.", "alta"),
+    ("seed-0016", "La ricerca sembra tirare i dadi",
+     "Deve capire la strategia e concentrarsi come fa un navigatore, non provare ogni strada.", "alta"),
+    ("seed-0017", "La strategia non tiene conto della volatilita' delle coppie poco liquide",
+     "Su altcoin che si muovono molto senza un trend vero rende male.", "alta"),
+    ("seed-0018", "Se chiudo il browser perdo l'ottimizzazione in corso",
+     "Deve continuare, avvisarmi su Telegram alla fine e restare salvata in un archivio.", "alta"),
+    ("seed-0019", "Il sito diventa irraggiungibile mentre gira una ricerca",
+     "Segnalato dal vivo durante una ricerca stabile.", "alta"),
+    ("seed-0020", "L'indicatore non e' allineato al prezzo",
+     "Segnalato con screenshot: il pannello sotto il grafico non e' agganciato alle stesse candele.", "alta"),
     ("seed-0012", "Voci della lista iniziale che non comparivano piu' sulla bacheca",
      "Trovato controllando la bacheca dal vivo: seed-0011 non c'era, e la sua risoluzione "
      "restava senza voce a cui agganciarsi.", "media"),
@@ -169,12 +249,14 @@ def _seed() -> None:
 
 _load()
 _load_seeded()
+_load_replies()
 _seed()
 
 
 def list_issues() -> list[dict]:
     """Segnalazioni con la risoluzione agganciata, le più recenti per prime."""
     res = _resolutions()
+    mine = _claude_replies()
     out = []
     for it in _issues:
         merged = dict(it)
@@ -186,6 +268,16 @@ def list_issues() -> list[dict]:
             # solo perché nessuno ha aggiornato il campo a mano.
             if r.get("status") in _VALID_STATUS:
                 merged["status"] = r["status"]
+        # …tranne quando chi l'ha scritta dice che il problema si vede ancora.
+        # Una risoluzione senza data si considera piu' vecchia di qualsiasi
+        # riapertura: chiudere per decreto una voce riaperta sarebbe il modo
+        # piu' veloce di rendere inutile la bacheca.
+        reopened = int(it.get("reopened_at", 0) or 0)
+        if reopened and reopened > int((r or {}).get("at", 0) or 0):
+            merged["status"] = "riaperto"
+        thread = [dict(x, side="loro") for x in _replies if x.get("issue_id") == it["id"]]
+        thread += [dict(x, side="claude") for x in mine.get(it["id"], [])]
+        merged["replies"] = sorted(thread, key=lambda x: x.get("created_at", 0))
         out.append(merged)
     return sorted(out, key=lambda x: x.get("created_at", 0), reverse=True)
 

@@ -165,5 +165,79 @@
       "backend/app/main.py",
       "backend/tests/test_quota.py"
     ]
+  },
+  "seed-0013": {
+    "status": "risolto",
+    "summary": "app.js moriva alla prima riga: `applyTheme` usava `el` dichiarato settecento righe piu' sotto.",
+    "detail": "Temporal dead zone: l'eccezione interrompe l'intero modulo, quindi non si inizializzava niente e restava lo stato vuoto. Il server rispondeva 200 e il file arrivava intatto, per questo da fuori non si vedeva. Trovato aprendo l'app in un browser headless contro un server locale. `el` ora e' dichiarato prima di chi lo usa.",
+    "files": [
+      "frontend/static/app.js"
+    ]
+  },
+  "seed-0014": {
+    "status": "risolto",
+    "summary": "L'HTML era messo in cache, e con lui il vecchio numero di versione degli asset.",
+    "detail": "Il numero di versione (`?v=hash`) vive solo nell'HTML: tenendo in cache la pagina si teneva anche il vecchio numero, e il browser continuava a chiedere il vecchio app.js. Ora la pagina e' servita `no-cache` e viene sempre rivalidata; in cambio gli asset con `?v=` sono `immutable`, e quelli senza si rivalidano.",
+    "files": [
+      "backend/app/main.py",
+      "backend/tests/test_caching.py"
+    ]
+  },
+  "seed-0015": {
+    "status": "risolto",
+    "summary": "Non era l'ottimizzazione a fallire: era la richiesta a non sopravvivere. Ora e' un lavoro seguito in diretta.",
+    "detail": "Quel messaggio e' Safari che prova a leggere come JSON una pagina d'errore. Una ricerca stabile dura minuti e la richiesta veniva chiusa dal proxy. Ora si apre un lavoro, la richiesta torna subito e l'app chiede le righe di log una volta al secondo. La finestra mostra le fasi mentre succedono, mappatura dei pianori compresa: un asse alla volta con i confini trovati, la griglia, l'avanzamento sulle celle, quante volte ogni finalista regge alle scosse.",
+    "files": [
+      "backend/app/jobs.py",
+      "backend/app/main.py",
+      "backend/app/analysis/plateau.py",
+      "frontend/static/app.js"
+    ]
+  },
+  "seed-0016": {
+    "status": "risolto",
+    "summary": "Il sorteggio delle celle e' stato sostituito da un'espansione best-first: si apre sempre la piu' promettente.",
+    "detail": "Era l'unico punto in cui la ricerca tirava i dadi: quando la griglia superava il budget, le celle venivano estratte a caso. Ora il reticolo e' un grafo e si tiene una coda ordinata per promessa: le regioni che vanno male restano in fondo e non vengono mai aperte. Misurato su KASUSDT daily, ramo a 7 parametri, 93312 celle, budget 700: guidata 57.44 contro 50.39 / 26.93 / 37.35 di tre semi diversi. Ed e' deterministica, quindi non esiste piu' nessun ramo non riproducibile.",
+    "files": [
+      "backend/app/analysis/plateau.py",
+      "backend/tests/test_guided_search.py"
+    ]
+  },
+  "seed-0017": {
+    "status": "risolto",
+    "summary": "Aggiunte le misure della coppia (volatilita' ed efficienza) e una soglia di pendenza in unita' di sigma.",
+    "detail": "Gli intervalli si ancoravano solo alla struttura temporale. Ora si misurano anche sigma per barra ed efficienza di Kaufman (distanza percorsa / strada fatta), che separa 'si muove molto' da 'va da qualche parte': BTCUSDT 0.037, KASUSDT 0.006, PEPEUSDT 0.008 contro 0.54 di un trend sintetico. Lorenzo era un incrocio puro senza soglia, quindi su una coppia agitata entrava sul rumore per costruzione: `slope_threshold_sigma` chiede che la pendenza superi k volte la propria deviazione standard, in unita' di sigma cosi' la stessa k vale su ogni coppia. A k=0.5 su daily reali: PEPEUSDT +195.6%->+230.6% con drawdown 14.2%->10.0% e PF 2.88->4.55; KASUSDT +120.0%->+124.4% con DD 32.2%->28.2%; BTCUSDT invariato. Default 0 (spenta), l'ottimizzatore la cerca in [0, 1.2].",
+    "files": [
+      "backend/app/analysis/priors.py",
+      "backend/app/analysis/strategies.py",
+      "backend/tests/test_volatility_prior.py"
+    ]
+  },
+  "seed-0018": {
+    "status": "risolto",
+    "summary": "La ricerca finisce comunque, viene archiviata e arriva un riepilogo su Telegram.",
+    "detail": "Girava gia' sul server, ma il risultato viveva solo nella risposta a chi restava collegato. Ora a fine corsa viene archiviata con i numeri appena misurati (rieseguire il backtest potrebbe dare un numero diverso, il feed nel frattempo si allunga) e con il modo in cui ci si e' arrivati: modalita', backtest, gate, determinismo, PBO. Il riepilogo Telegram porta anche i verdetti e non solo il rendimento.",
+    "files": [
+      "backend/app/archive.py",
+      "backend/app/main.py",
+      "backend/tests/test_optimizer_delivery.py"
+    ]
+  },
+  "seed-0019": {
+    "status": "risolto",
+    "summary": "Era la memoria: ogni candidato teneva la sua lista di trade, 280 MB su una macchina da 512.",
+    "detail": "Una macchina senza memoria non e' lenta, e' spenta — ed e' cosi' che si vede da fuori. I candidati ora tengono i numeri e la curva di equity (serve al PBO) ma non i trade, e la riserva viene potata a qualche centinaio; i trade del vincitore si ricalcolano alla fine con un backtest solo. Misurato sullo stesso ramo da 3000 celle: picco da 280 MB a 148 MB.",
+    "files": [
+      "backend/app/analysis/plateau.py",
+      "backend/app/analysis/pipeline.py"
+    ]
+  },
+  "seed-0020": {
+    "status": "risolto",
+    "summary": "Le serie degli indicatori saltavano le barre di riscaldamento, quindi i pannelli slittavano rispetto al prezzo.",
+    "detail": "I pannelli sotto il grafico sono sincronizzati per indice logico: una serie con meno punti fa corrispondere l'indice N a una candela diversa. Con un RSI a 14 periodi lo scarto e' di 14 barre, e si vede sull'asse dei tempi. Ora ogni candela produce un punto, vuoto dove il valore non c'e' ancora, e tutte le scale dei prezzi hanno la stessa larghezza minima cosi' anche le aree di disegno coincidono.",
+    "files": [
+      "frontend/static/app.js"
+    ]
   }
 }
