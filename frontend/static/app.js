@@ -1897,13 +1897,13 @@
   // lavoro che il server porta avanti per conto suo e di cui qui si chiede lo
   // stato, quindi non c'e' piu' nessuna richiesta lunga da far cadere.
 
-  const optProgress = {
-    jobId: null,
-    seen: 0,
-    timer: null,
-    onDone: null,
-    onFail: null,
-  };
+  // Piu' ricerche insieme, ognuna con la sua storia. Il lavoro vive sul
+  // server: chiudere la finestra non lo ferma e non deve nemmeno farlo
+  // sparire di vista, altrimenti l'unico modo di sapere a che punto e' era
+  // tenere aperta una finestra per nove minuti.
+  const optJobs = new Map();   // id -> {id, title, sub, state, elapsed, log, seen, error, result, applied}
+  let optViewing = null;       // quale lavoro sta guardando la finestra
+  let optTimer = null;
 
   // Una risposta non-JSON non deve arrivare a JSON.parse: il messaggio che ne
   // esce parla di stringhe e non dice nulla di cosa e' andato storto.
@@ -1920,24 +1920,59 @@
     }
   }
 
-  function openOptProgress(title, subtitle) {
-    el("opt-progress-title").textContent = title;
+  function optRunning() {
+    return [...optJobs.values()].filter((j) => j.state === "in corso");
+  }
+
+  function renderOptPill() {
+    const pill = el("opt-pill");
+    if (!pill) return;
+    const running = optRunning();
+    const done = [...optJobs.values()].filter((j) => j.state !== "in corso" && !j.seenDone);
+    if (!running.length && !done.length) { pill.classList.add("hidden"); return; }
+
+    if (running.length) {
+      const secs = Math.max(...running.map((j) => j.elapsed || 0));
+      pill.className = "opt-pill";
+      pill.innerHTML = `<span class="op-spin" aria-hidden="true"></span>`
+        + `<span class="op-text">${running.length === 1 ? "1 ricerca" : running.length + " ricerche"} · `
+        + `${Math.floor(secs / 60)}:${String(Math.floor(secs % 60)).padStart(2, "0")}</span>`;
+      pill.title = running.map((j) => j.sub).join(" · ");
+    } else {
+      const failed = done.filter((j) => j.state === "fallito").length;
+      pill.className = "opt-pill " + (failed ? "failed" : "done");
+      pill.innerHTML = `<span class="op-mark">${failed ? "✕" : "✓"}</span>`
+        + `<span class="op-text">${failed ? "ricerca fallita" : "salvata in archivio"}</span>`;
+    }
+    pill.classList.remove("hidden");
+  }
+
+  function openOptProgress(jobId) {
+    const job = optJobs.get(jobId);
+    if (!job) return;
+    optViewing = jobId;
+    job.seenDone = true;
+    el("opt-progress-title").textContent = job.title;
     // La ricerca gira sul server: chiudere questa finestra, la scheda o il
     // telefono non la ferma. Va detto, altrimenti si resta a guardare.
-    el("opt-progress-sub").textContent =
-      (subtitle ? subtitle + " — " : "")
-      + "puoi chiudere: continua sul server, arriva un riepilogo su Telegram e finisce in archivio.";
-    el("opt-progress-log").innerHTML = "";
-    el("opt-progress-time").textContent = "0s";
-    el("opt-progress-foot").classList.add("hidden");
-    el("opt-progress").classList.remove("hidden");
-    el("opt-progress").classList.remove("done", "failed");
+    el("opt-progress-sub").textContent = job.sub
+      + " — puoi chiudere: continua sul server, resta un indicatore in basso, "
+      + "arriva un riepilogo su Telegram e finisce in archivio.";
+    const list = el("opt-progress-log");
+    list.innerHTML = "";
+    appendOptLog(job.log);
+    el("opt-progress-time").textContent = `${Math.round(job.elapsed || 0)}s`;
+    el("opt-progress").classList.remove("hidden", "done", "failed");
+    if (job.state !== "in corso") optProgressFoot(job.footText, job.footKind);
+    renderOptPill();
   }
 
   function closeOptProgress() {
+    // Solo la finestra si chiude: il lavoro resta, e la pastiglia continua a
+    // dire a che punto e'.
     el("opt-progress").classList.add("hidden");
-    if (optProgress.timer) { clearTimeout(optProgress.timer); optProgress.timer = null; }
-    optProgress.jobId = null;
+    optViewing = null;
+    renderOptPill();
   }
 
   function appendOptLog(lines) {
@@ -1955,49 +1990,94 @@
 
   function optProgressFoot(text, kind) {
     const foot = el("opt-progress-foot");
+    if (!foot || !text) return;
     foot.textContent = text;
     foot.className = "opt-progress-foot " + (kind || "");
     foot.classList.remove("hidden");
     el("opt-progress").classList.add(kind === "error" ? "failed" : "done");
   }
 
+  function startOptPolling() {
+    if (optTimer) return;
+    const tick = async () => {
+      const running = optRunning();
+      if (!running.length) { optTimer = null; renderOptPill(); return; }
+      await Promise.all(running.map(pollOnce));
+      renderOptPill();
+      optTimer = setTimeout(tick, 1000);
+    };
+    optTimer = setTimeout(tick, 600);
+  }
+
   // Un lavoro si segue chiedendo solo le righe nuove: `since` e' quante se ne
   // hanno gia', cosi' ogni giro porta le novita' invece del log intero.
-  async function pollJob(jobId) {
-    optProgress.jobId = jobId;
-    optProgress.seen = 0;
-    return new Promise((resolve, reject) => {
-      const tick = async () => {
-        if (optProgress.jobId !== jobId) return;   // chiuso o sostituito
-        try {
-          const resp = await fetch(`/api/jobs/${jobId}?since=${optProgress.seen}`);
-          if (!resp.ok) {
-            const body = await readJson(resp).catch(() => ({}));
-            throw new Error(body.detail || `Lavoro non raggiungibile (${resp.status})`);
-          }
-          const job = await readJson(resp);
-          optProgress.seen = job.log_total;
-          appendOptLog(job.log || []);
-          el("opt-progress-time").textContent = `${job.elapsed_s.toFixed(0)}s`;
-          if (job.state === "finito") {
-            optProgressFoot("Fatto. Applicato al Laboratorio e salvato in archivio.", "ok");
-            loadArchive();
-            resolve(job.result);
-            return;
-          }
-          if (job.state === "fallito") {
-            optProgressFoot(job.error || "Ottimizzazione fallita.", "error");
-            reject(new Error(job.error || "Ottimizzazione fallita"));
-            return;
-          }
-          optProgress.timer = setTimeout(tick, 1000);
-        } catch (err) {
-          optProgressFoot(err.message || "Errore di rete.", "error");
-          reject(err);
-        }
-      };
-      tick();
+  async function pollOnce(job) {
+    try {
+      const resp = await fetch(`/api/jobs/${job.id}?since=${job.seen}`);
+      if (!resp.ok) {
+        const body = await readJson(resp).catch(() => ({}));
+        throw new Error(body.detail || `Lavoro non raggiungibile (${resp.status})`);
+      }
+      const data = await readJson(resp);
+      job.seen = data.log_total;
+      job.elapsed = data.elapsed_s;
+      job.log.push(...(data.log || []));
+      if (optViewing === job.id) {
+        appendOptLog(data.log || []);
+        el("opt-progress-time").textContent = `${Math.round(job.elapsed)}s`;
+      }
+      if (data.state === "finito") {
+        job.state = "finito";
+        job.result = data.result;
+        job.footText = "Fatto. Salvata in archivio.";
+        job.footKind = "ok";
+        job.seenDone = optViewing === job.id;
+        if (optViewing === job.id) optProgressFoot(job.footText, job.footKind);
+        onOptFinished(job);
+      } else if (data.state === "fallito") {
+        job.state = "fallito";
+        job.error = data.error || "Ottimizzazione fallita";
+        job.footText = job.error;
+        job.footKind = "error";
+        job.seenDone = optViewing === job.id;
+        if (optViewing === job.id) optProgressFoot(job.footText, job.footKind);
+        labEl("lab-status").textContent = "Errore ottimizzazione: " + job.error;
+        labEl("lab-status").classList.remove("hidden");
+      }
+    } catch (err) {
+      job.state = "fallito";
+      job.error = err.message || "Errore di rete";
+      job.footText = job.error;
+      job.footKind = "error";
+      if (optViewing === job.id) optProgressFoot(job.footText, job.footKind);
+    }
+  }
+
+  // I risultati si applicano al Laboratorio solo se sta ancora guardando la
+  // stessa cosa: con piu' ricerche in volo, sovrascrivere i campi con quelli
+  // di un'altra coppia sarebbe peggio che non applicarli.
+  function onOptFinished(job) {
+    loadArchive();
+    const body = job.result;
+    if (!body) return;
+    if (labState.symbol !== job.symbol || labState.strategy !== job.strategy) {
+      labEl("lab-status").textContent =
+        `Ricerca su ${job.symbol} conclusa: è in archivio (il Laboratorio ora mostra altro).`;
+      labEl("lab-status").classList.remove("hidden");
+      return;
+    }
+    const container = labEl("lab-params-fields");
+    Object.entries(body.params).forEach(([key, value]) => {
+      const input = container.querySelector(`[name="${key}"]`);
+      if (!input) return;
+      if (input.type === "checkbox") input.checked = !!value;
+      else input.value = value;
     });
+    labEl("lab-status").classList.add("hidden");
+    renderLabResults(body.backtest);
+    renderDataUsed(body);
+    renderRegimeBox(body);
+    renderBranchBox(body);
   }
 
   // ── Diario degli ordini automatici ─────────────────────────────────────────
@@ -5689,74 +5769,46 @@
       labEl("lab-status").classList.remove("hidden");
       return;
     }
-    const seq = ++labState.seq;
-    const runBtn = labEl("lab-run-btn");
-    const optBtn = labEl("lab-optimize-btn");
-    runBtn.disabled = true;
+    const optMode = labOptMode();
     labEl("lab-result-block").classList.add("hidden");
     labEl("lab-apply-strip").classList.add("hidden");
-    const optMode = labOptMode();
-    labEl("lab-status").textContent =
-      optMode === "plateau"
-        ? "Ricerca stabile in corso… mappa i pianori invece del picco (1–5 min). Il risultato sarà riproducibile."
-        : optMode === "grid"
-        ? "Grid search in corso… ogni combinazione testata (~30–50s)"
-        : "Ottimizzazione in corso… (10–25s)";
     labEl("lab-data-used").classList.add("hidden");
     labEl("lab-regime-box").classList.add("hidden");
     labEl("lab-branch-box").classList.add("hidden");
+    labEl("lab-status").textContent = "Avvio…";
     labEl("lab-status").classList.remove("hidden");
-    await withAsyncButton(optBtn, async () => {
-      const params = buildLabQuery();
-      if (optMode !== "random") params.set("mode", optMode);
-      applyLabFilters(params);
-      const startResp = await fetch(`/api/optimize/start?${params.toString()}`, { method: "POST" });
-      const started = await readJson(startResp);
-      if (!startResp.ok) throw new Error(typeof started.detail === "string" ? started.detail : `Errore ${startResp.status}`);
-      if (seq !== labState.seq) return;
-      openOptProgress(
-        optMode === "plateau" ? "Ricerca stabile in corso" : "Ottimizzazione in corso",
-        `${labState.displaySymbol || labState.symbol} · ${labState.strategy}`
-      );
-      const body = await pollJob(started.job_id);
-      if (seq !== labState.seq) return;
-      // Apply optimized params to the lab fields
-      const container = labEl("lab-params-fields");
-      Object.entries(body.params).forEach(([key, value]) => {
-        const input = container.querySelector(`[name="${key}"]`);
-        if (!input) return;
-        if (input.type === "checkbox") input.checked = !!value;
-        else input.value = value;
-      });
-      labEl("lab-status").classList.add("hidden");
-      renderLabResults(body.backtest);
-      renderDataUsed(body);
-      renderRegimeBox(body);
-      renderBranchBox(body);
 
-      // Auto-apply to main chart: copy params to main form and refresh signals
-      state.assetType = labState.assetType;
-      state.cryptoExchange = labState.exchange;
-      el("ticker-input").value = labState.displaySymbol || labState.symbol;
-      const mainStratSel = el("active-strategy-select");
-      if (mainStratSel && mainStratSel.value !== labState.strategy) {
-        mainStratSel.value = labState.strategy;
-        renderStrategyParamsFields();
+    const params = buildLabQuery();
+    if (optMode !== "random") params.set("mode", optMode);
+    applyLabFilters(params);
+    try {
+      const resp = await fetch(`/api/optimize/start?${params.toString()}`, { method: "POST" });
+      const started = await readJson(resp);
+      if (!resp.ok) {
+        throw new Error(typeof started.detail === "string" ? started.detail : `Errore ${resp.status}`);
       }
-      const mainParamsContainer = el("strategy-params-fields");
-      if (mainParamsContainer) {
-        Object.entries(body.params).forEach(([key, value]) => {
-          const input = mainParamsContainer.querySelector(`[name="${key}"]`);
-          if (!input) return;
-          if (input.type === "checkbox") input.checked = !!value;
-          else input.value = value;
-        });
-      }
-      runAnalysis(labState.symbol);
-    }).catch((err) => {
-      if (seq !== labState.seq) return;
+      const symbol = labState.symbol;
+      optJobs.set(started.job_id, {
+        id: started.job_id,
+        symbol,
+        strategy: labState.strategy,
+        title: optMode === "plateau" ? "Ricerca stabile in corso" : "Ottimizzazione in corso",
+        sub: `${labState.displaySymbol || symbol} · ${labState.strategy}`,
+        state: "in corso",
+        elapsed: 0,
+        log: [],
+        seen: 0,
+        seenDone: false,
+      });
+      openOptProgress(started.job_id);
+      startOptPolling();
+      // Il pulsante torna subito disponibile: il lavoro e' sul server, quindi
+      // niente vieta di lanciarne un altro mentre questo continua.
+      labEl("lab-status").textContent =
+        "In corso sul server. Puoi chiudere la finestra o lanciarne un'altra.";
+    } catch (err) {
       labEl("lab-status").textContent = "Errore ottimizzazione: " + (err.message || "");
-    }).finally(() => { runBtn.disabled = false; });
+    }
   }
 
   // Lab ticker autocomplete
@@ -5987,6 +6039,17 @@
     bindArchive();
     bindTradingJournal();
     el("opt-progress-close").addEventListener("click", closeOptProgress);
+    // La pastiglia riapre il log del lavoro piu' recente: e' l'unico modo di
+    // tornare a vedere una ricerca dopo aver chiuso la finestra.
+    const pill = el("opt-pill");
+    if (pill) {
+      pill.addEventListener("click", () => {
+        const running = optRunning();
+        const target = running.length ? running[running.length - 1]
+          : [...optJobs.values()].pop();
+        if (target) openOptProgress(target.id);
+      });
+    }
     bindTabs();
     bindDrawRail();
     bindMobileDrawTools();

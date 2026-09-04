@@ -3563,3 +3563,37 @@ body {
 .irf-status { margin: 0; font-size: 11px; color: var(--ink-dim); }
 .issue-card.is-riaperto { border-left-color: var(--bear); }
 .issues-count.is-riaperto b { color: var(--bear); }
+
+/* --- Pastiglia della ricerca in corso -------------------------------------
+   Sta sopra la barra di navigazione su mobile e in basso a destra altrove. */
+.opt-pill {
+  position: fixed;
+  right: 14px;
+  bottom: 74px;
+  z-index: 55;
+  display: flex; align-items: center; gap: 7px;
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  background: var(--bg-panel);
+  color: var(--ink);
+  font: inherit; font-size: 12px;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .28);
+}
+@media (min-width: 761px) { .opt-pill { bottom: 18px; } }
+.opt-pill.done { border-left-color: var(--bull); }
+.opt-pill.failed { border-left-color: var(--bear); }
+.opt-pill .op-text { font-variant-numeric: tabular-nums; }
+.opt-pill .op-mark { font-weight: 700; }
+.opt-pill.done .op-mark { color: var(--bull); }
+.opt-pill.failed .op-mark { color: var(--bear); }
+.op-spin {
+  width: 11px; height: 11px; flex: 0 0 auto;
+  border: 2px solid var(--border); border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: opt-spin .9s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .op-spin { animation: none; border-top-color: var(--accent); }
+}
