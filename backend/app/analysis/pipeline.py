@@ -318,7 +318,12 @@ def run_pipeline(
             overfitted = oos_return < is_return
 
     vol = stats.as_dict()
-    best_bt = incumbent.backtest.model_copy(update={"oos_trades": oos_trades})
+    # I trade in campione del vincitore: la ricerca non li conserva (sarebbero
+    # centinaia di MB per migliaia di candidati), quindi si ricalcolano qui con
+    # un backtest solo, sugli stessi parametri e sugli stessi dati.
+    winner_bt = run_backtest(df_in, incumbent.params, bp, strategy_name=strategy_name)
+    total_evals += 1
+    best_bt = winner_bt.model_copy(update={"oos_trades": oos_trades})
 
     # Deflate the winner's Sharpe by how many configurations were actually
     # tried. The expected maximum Sharpe under no skill grows with the number

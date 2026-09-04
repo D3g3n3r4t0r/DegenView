@@ -326,3 +326,25 @@ def test_without_a_callback_the_search_is_silent_and_unchanged():
     assert (quiet.best is None) == (loud.best is None)
     if quiet.best is not None:
         assert quiet.best.params == loud.best.params
+
+
+def test_the_search_does_not_hoard_the_trade_lists():
+    """Una macchina senza memoria non è lenta, è spenta.
+
+    Con i trade attaccati a ogni candidato, un ramo da 3000 celle arrivava a
+    280 MB su una macchina che ne ha 512 — e il sito diventava irraggiungibile
+    mentre girava una ricerca. Ora i candidati portano i numeri e la curva di
+    equity (che serve al PBO); i trade del vincitore si ricalcolano alla fine.
+    """
+    res, _lines = _run_with_log(max_grid_evals=40)
+    for c in res.candidates:
+        assert c.backtest.trades == []
+        assert c.backtest.equity_curve, "la curva serve al PBO, non va buttata"
+
+
+def test_the_kept_pool_stays_bounded(monkeypatch):
+    from app.analysis import plateau as mod
+
+    monkeypatch.setattr(mod, "_MAX_KEPT", 6)
+    res, _lines = _run_with_log(max_grid_evals=120, finalists=3)
+    assert res.best is not None, "potare non deve svuotare la classifica"

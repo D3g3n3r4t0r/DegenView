@@ -2221,7 +2221,10 @@
     const baseOptions = {
       layout: { background: { color: COLORS.paperBg }, textColor: COLORS.inkDim, fontFamily: "'JetBrains Mono', 'IBM Plex Mono', monospace" },
       grid: { vertLines: { color: chartGridColor }, horzLines: { color: chartGridColor } },
-      rightPriceScale: { borderColor: COLORS.gridMajor },
+      // Larghezza minima uguale per tutte le scale: senza, il pannello con le
+      // etichette più corte disegna un'area più larga e le sue barre non
+      // cadono sotto quelle del prezzo.
+      rightPriceScale: { borderColor: COLORS.gridMajor, minimumWidth: 72 },
       timeScale: { borderColor: COLORS.gridMajor, timeVisible: true, secondsVisible: false },
       crosshair: {
         mode: LightweightCharts.CrosshairMode.Normal,
@@ -2393,12 +2396,22 @@
     overlays.hitZones = [];
   }
 
+  // Una barra per candela, sempre — anche dove l'indicatore non ha ancora un
+  // valore. Le barre di riscaldamento diventano punti vuoti ("whitespace"),
+  // che la libreria accetta e non disegna.
+  //
+  // Saltarle sembrava innocuo e non lo era: i pannelli sotto il grafico sono
+  // sincronizzati per INDICE logico, quindi una serie con meno punti fa
+  // corrispondere l'indice N a una candela diversa e il pannello scivola
+  // rispetto al prezzo. Con un RSI a 14 periodi lo scarto è di 14 barre, e si
+  // vede a occhio sull'asse dei tempi.
   function seriesFromIndicatorValues(candles, values) {
     const out = [];
     for (let i = 0; i < candles.length; i++) {
-      if (values[i] !== null && values[i] !== undefined) {
-        out.push({ time: candles[i].time, value: values[i] });
-      }
+      const v = values[i];
+      out.push(v === null || v === undefined || Number.isNaN(v)
+        ? { time: candles[i].time }
+        : { time: candles[i].time, value: v });
     }
     return out;
   }
