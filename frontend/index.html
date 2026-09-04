@@ -126,6 +126,17 @@
           </div>
           <p id="issue-form-status" class="issue-form-status"></p>
         </form>
+        <div class="issues-tools">
+          <input type="search" id="issues-search" placeholder="Cerca fra le segnalazioni…" autocomplete="off" />
+          <select id="issues-filter">
+            <option value="tutte">Tutte</option>
+            <option value="da-fare">Da fare</option>
+            <option value="aperto">Aperte</option>
+            <option value="riaperto">Riaperte</option>
+            <option value="risolto">Risolte</option>
+          </select>
+        </div>
+        <p id="issues-found" class="issues-found hidden"></p>
         <div id="issues-list" class="issues-list"></div>
       </div>
     </div>
