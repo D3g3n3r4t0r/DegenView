@@ -13,7 +13,8 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -504,6 +505,58 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Liquidity Analysis Engine", lifespan=lifespan)
 app.add_middleware(GZipMiddleware, minimum_size=500)
+
+
+# Un 422 e' l'unica risposta d'errore che l'app non scrive da se': la genera
+# FastAPI prima di entrare nell'endpoint, e il suo `detail` e' una lista di
+# oggetti pensata per un client che la sappia leggere. In pagina diventava
+# "Errore 422", cioe' un numero che non dice ne' quale campo ne' cosa ci
+# voleva — la segnalazione di Lorenzo. Qui la lista diventa una frase, con il
+# nome del parametro e il valore ricevuto: sbagliare resta possibile, non
+# capire cosa si e' sbagliato no.
+
+_VALIDATION_WORDING = {
+    "int_parsing": "serve un numero intero",
+    "int_from_float": "serve un numero intero, senza decimali",
+    "int_type": "serve un numero intero",
+    "float_parsing": "serve un numero",
+    "float_type": "serve un numero",
+    "bool_parsing": "serve vero o falso",
+    "literal_error": "valore non ammesso",
+    "enum": "valore non ammesso",
+    "missing": "parametro obbligatorio mancante",
+    "string_too_short": "troppo corto",
+    "string_too_long": "troppo lungo",
+    "greater_than_equal": "troppo piccolo",
+    "less_than_equal": "troppo grande",
+    "string_pattern_mismatch": "valore non ammesso",
+}
+
+
+def _validation_message(errors: list[dict]) -> str:
+    parts: list[str] = []
+    for err in errors[:4]:
+        loc = [str(x) for x in err.get("loc", ()) if x not in ("query", "body", "path")]
+        field = ".".join(loc) or "richiesta"
+        wording = _VALIDATION_WORDING.get(err.get("type", ""), err.get("msg", "valore non valido"))
+        got = err.get("input", None)
+        # Il valore ricevuto e' meta' della diagnosi: "serve un numero intero"
+        # senza il "ricevuto ''" non fa capire che il campo era rimasto vuoto.
+        if isinstance(got, str):
+            shown = f' (ricevuto "{got[:40]}")' if got != "" else " (campo vuoto)"
+        elif got is None:
+            shown = ""
+        else:
+            shown = f" (ricevuto {str(got)[:40]})"
+        parts.append(f"{field}: {wording}{shown}")
+    if len(errors) > 4:
+        parts.append(f"e altri {len(errors) - 4}")
+    return "Parametri non validi — " + " · ".join(parts)
+
+
+@app.exception_handler(RequestValidationError)
+async def _readable_validation_error(request: Request, exc: RequestValidationError):
+    return JSONResponse(status_code=422, content={"detail": _validation_message(exc.errors())})
 
 _app_start = _time.time()
 

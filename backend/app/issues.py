@@ -212,6 +212,8 @@ _SEED = [
     ("seed-0024", "Esportare i trade del backtest in Excel",
      "Cliccando sul numero di trade, poter scaricare tutto in un file con i grafici per "
      "riverificare il portafoglio.", "media"),
+    ("seed-0025", "Errore 422 quando si avvia la strategia",
+     "Premendo per far girare la strategia arriva 'Errore 422' e non parte niente.", "alta"),
     ("seed-0021", "Chiudendo il log non si sa piu' a che punto e' l'ottimizzazione",
      "Serve un indicatore che resti visibile finche' non e' salvata in archivio, e poter lanciare "
      "un'altra ricerca senza aspettare la prima.", "media"),
