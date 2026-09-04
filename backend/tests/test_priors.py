@@ -11,7 +11,6 @@ import pytest
 from app.analysis.priors import (
     _narrow,
     band_multiplier_for_frequency,
-    branch_grid_estimate,
     build_spaces,
     estimate_series_stats,
     unconstrained_dims,

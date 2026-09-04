@@ -87,7 +87,7 @@ Confonderle è il modo più facile di sbagliare: un filtro che chiede persistenz
 
 ```
 cd backend && .venv/bin/python -m pytest tests/ -q
-ruff check backend/app backend/tests
+ruff check backend/ --select E,F,W --ignore E501   # identico alla CI
 node --check frontend/static/app.js
 ```
 
