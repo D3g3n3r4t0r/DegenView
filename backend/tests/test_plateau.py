@@ -286,7 +286,8 @@ def test_the_grid_size_is_stated_before_the_cells_are_tried():
 
 def test_the_progress_through_the_cells_is_reported():
     _res, lines = _run_with_log()
-    assert any(line.startswith("celle ") and "/" in line for line in lines)
+    assert any(line.startswith("celle ") and "configurazioni distinte" in line
+               for line in lines)
 
 
 def test_the_shake_test_says_how_often_each_finalist_holds():
@@ -304,11 +305,14 @@ def test_the_winner_is_announced_with_its_stability():
     assert any(line.startswith("scelto:") and "stabile" in line for line in lines)
 
 
-def test_sampling_instead_of_enumerating_is_said_out_loud():
-    """Non è un dettaglio: è la parte del risultato che non è riproducibile."""
+def test_guided_expansion_instead_of_enumerating_is_said_out_loud():
+    """Prima questa riga avvisava che quella parte non era riproducibile; ora
+    l'espansione guidata non sorteggia più, e il log dice cosa fa davvero."""
     res, lines = _run_with_log(max_grid_evals=8)
     assert not res.enumerated
-    assert any("campiono" in line and "riproducibile" in line for line in lines)
+    assert any("per ordine di promessa" in line for line in lines)
+    assert any("espansione guidata" in line for line in lines)
+    assert not any("riproducibile" in line for line in lines)
 
 
 def test_without_a_callback_the_search_is_silent_and_unchanged():

@@ -51,6 +51,10 @@ Confonderle è il modo più facile di sbagliare: un filtro che chiede persistenz
   parametro danno 5 risultati distinti; il 98% dei passi non cambia nulla. I
   metodi che presuppongono continuità (Nelder-Mead, CMA-ES, ottimizzazione
   bayesiana con kernel lisci) qui non si applicano.
+- **L'espansione guidata batte il sorteggio a parità di budget.** KASUSDT
+  daily, ramo a 7 parametri, 93 312 celle, budget 700: guidata 57.44 contro
+  50.39 / 26.93 / 37.35 di tre semi diversi. Ed è deterministica, quindi non
+  esiste più nessun ramo "non riproducibile".
 - **La ricerca casuale è una lotteria.** Stessa serie, cambia solo il seed:
   `cv_oos` 66% su Gabriele, 225% su Lorenzo. Con la pipeline deterministica
   scende a 0% — ma solo dove le celle si enumerano.
