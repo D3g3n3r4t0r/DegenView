@@ -990,6 +990,12 @@
         strategy: el("active-strategy-select")?.value || "",
         layers: { ...state.layers },
         log_scale: el("log-scale-toggle")?.checked || false,
+        // Il tema viaggia con l'account e non col dispositivo: era salvato solo
+        // nel browser, quindi lo stesso utente su due computer vedeva due temi
+        // diversi — e chi non aveva mai scelto seguiva le impostazioni del suo
+        // sistema operativo, che e' il motivo per cui uno vedeva bianco e
+        // l'altro nero.
+        theme: document.documentElement.getAttribute("data-theme") || "",
       };
       try {
         await fetch("/api/preferences", {
@@ -4733,7 +4739,26 @@
     }
   }
 
+  // Cosa e' stato cercato e filtrato: tenuto fuori dal render, altrimenti ogni
+  // ricarica (ne parte una a ogni risposta inviata) riporterebbe l'elenco a
+  // capo mentre stai leggendo.
+  const issuesView = { query: "", filter: "tutte" };
+  let issuesLast = null;
+
+  function issueMatches(it, q) {
+    if (!q) return true;
+    const hay = [it.title, it.detail, it.id, it.priority, it.status,
+                 it.resolution ? it.resolution.summary : "",
+                 it.resolution ? it.resolution.detail : "",
+                 ...(it.replies || []).map((r) => r.text)]
+      .join(" ").toLowerCase();
+    // Tutte le parole devono comparire, non una qualsiasi: cercare "grafico
+    // tema" deve restringere, non allargare.
+    return q.toLowerCase().split(/\s+/).filter(Boolean).every((w) => hay.includes(w));
+  }
+
   function renderIssues(body) {
+    issuesLast = body;
     const items = body.items || [];
     const counts = body.counts || {};
     const cEl = el("issues-counts");
@@ -4756,7 +4781,27 @@
     // ed e' l'informazione piu' urgente della bacheca.
     const order = { "riaperto": 0, "aperto": 1, "in corso": 2, "risolto": 3, "scartato": 4 };
     const prio = { alta: 0, media: 1, bassa: 2 };
-    const sorted = [...items].sort((a, b) =>
+    const wanted = issuesView.filter;
+    const filtered = items.filter((it) => {
+      if (wanted === "da-fare" && it.status === "risolto") return false;
+      if (wanted !== "tutte" && wanted !== "da-fare" && it.status !== wanted) return false;
+      return issueMatches(it, issuesView.query);
+    });
+
+    const found = el("issues-found");
+    if (found) {
+      const filtering = issuesView.query || wanted !== "tutte";
+      found.textContent = filtering
+        ? `${filtered.length} su ${items.length}`
+        : "";
+      found.classList.toggle("hidden", !filtering);
+    }
+    if (!filtered.length) {
+      list.innerHTML = '<p class="issues-empty">Nessuna segnalazione corrisponde.</p>';
+      return;
+    }
+
+    const sorted = [...filtered].sort((a, b) =>
       (order[a.status] ?? 9) - (order[b.status] ?? 9)
       || (prio[a.priority] ?? 9) - (prio[b.priority] ?? 9));
 
@@ -4765,12 +4810,16 @@
       const when = it.created_at
         ? new Date(it.created_at * 1000).toLocaleDateString("it-IT")
         : "";
-      return `<article class="issue-card is-${(it.status || "aperto").replace(" ", "-")}">
-        <header class="issue-head">
+      // Richiudibile: con venticinque voci, venticinque diagnosi aperte tutte
+      // insieme sono un muro. Restano aperte quelle su cui c'e' da fare, e
+      // quelle che stai cercando.
+      const openByDefault = it.status !== "risolto" || !!issuesView.query;
+      return `<details class="issue-card is-${(it.status || "aperto").replace(" ", "-")}"${openByDefault ? " open" : ""}>
+        <summary class="issue-head">
           <span class="issue-status">${ISSUE_STATUS_LABEL[it.status] || it.status}</span>
           <span class="issue-prio p-${it.priority}">${it.priority}</span>
           <span class="issue-title">${escapeHtml(it.title)}</span>
-        </header>
+        </summary>
         ${it.detail ? `<p class="issue-detail">${escapeHtml(it.detail)}</p>` : ""}
         <p class="issue-meta">${escapeHtml(it.author || "")}${when ? " · " + when : ""} · <code>${escapeHtml(it.id)}</code></p>
         ${r ? `<div class="issue-res">
@@ -4794,7 +4843,7 @@
           </div>
           <p class="irf-status hidden"></p>
         </form>
-      </article>`;
+      </details>`;
     }).join("");
 
     list.querySelectorAll(".issue-reply-form").forEach((form) => {
@@ -4836,6 +4885,7 @@
       btn.addEventListener("click", () => {
         const now = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
         applyTheme(now);
+        savePreferences();   // cosi' la scelta ti segue sull'altro computer
       });
     }
     // Se non e' mai stata fatta una scelta esplicita, il tema continua a
@@ -4851,6 +4901,23 @@
   }
 
   function bindIssues() {
+    const search = el("issues-search");
+    if (search) {
+      // Si filtra su quello che c'e' gia' in memoria: la bacheca sta in una
+      // risposta sola, quindi cercare non deve fare un giro sul server.
+      search.addEventListener("input", () => {
+        issuesView.query = search.value.trim();
+        if (issuesLast) renderIssues(issuesLast);
+      });
+    }
+    const filter = el("issues-filter");
+    if (filter) {
+      filter.addEventListener("change", () => {
+        issuesView.filter = filter.value;
+        if (issuesLast) renderIssues(issuesLast);
+      });
+    }
+
     const form = el("issue-form");
     if (!form) return;
     form.addEventListener("submit", async (e) => {
@@ -5332,6 +5399,12 @@
         const inp = document.querySelector(`[data-layer="${k}"]`);
         if (inp) inp.checked = v;
       });
+    }
+    // Il tema scelto sull'account vince su quello del dispositivo, ma solo se
+    // una scelta e' stata fatta davvero: chi non ha mai toccato l'interruttore
+    // continua a seguire il proprio sistema.
+    if (prefs?.theme === "dark" || prefs?.theme === "light") {
+      applyTheme(prefs.theme);
     }
     if (prefs?.log_scale) {
       const tog = el("log-scale-toggle");

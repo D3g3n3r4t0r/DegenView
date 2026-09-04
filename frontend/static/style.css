@@ -3603,3 +3603,26 @@ body {
 }
 .opt-progress-stop:hover { background: var(--bear); color: var(--bg-panel); }
 .opt-progress-stop:disabled { opacity: .5; cursor: default; }
+
+/* --- Ricerca e schede richiudibili sulla bacheca --------------------------- */
+.issues-tools { display: flex; gap: 6px; margin: 10px 0 6px; }
+.issues-tools input[type="search"] {
+  flex: 1; min-width: 0; padding: 7px 9px; font: inherit; font-size: 12px;
+  border: 1px solid var(--border); background: var(--bg); color: var(--ink);
+}
+.issues-tools select {
+  padding: 7px 8px; font: inherit; font-size: 12px;
+  border: 1px solid var(--border); background: var(--bg-raised); color: var(--ink);
+}
+.issues-found { margin: 0 0 6px; font-size: 11px; color: var(--ink-dim); }
+details.issue-card > summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+}
+details.issue-card > summary::-webkit-details-marker { display: none; }
+details.issue-card > summary::after {
+  content: "▸"; margin-left: auto; color: var(--ink-dim); font-size: 11px;
+}
+details.issue-card[open] > summary::after { content: "▾"; }
+details.issue-card > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

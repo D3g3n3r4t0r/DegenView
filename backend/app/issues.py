@@ -205,6 +205,10 @@ _SEED = [
      "Segnalato dal vivo durante una ricerca stabile.", "alta"),
     ("seed-0020", "L'indicatore non e' allineato al prezzo",
      "Segnalato con screenshot: il pannello sotto il grafico non e' agganciato alle stesse candele.", "alta"),
+    ("seed-0022", "Lo stesso account vede il tema chiaro su un computer e scuro su un altro",
+     "Gabriele dal suo pc non vede lo sfondo bianco.", "media"),
+    ("seed-0023", "Le segnalazioni sono tante e non si trovano",
+     "Serve un elenco richiudibile e una ricerca per parole chiave.", "media"),
     ("seed-0021", "Chiudendo il log non si sa piu' a che punto e' l'ottimizzazione",
      "Serve un indicatore che resti visibile finche' non e' salvata in archivio, e poter lanciare "
      "un'altra ricerca senza aspettare la prima.", "media"),

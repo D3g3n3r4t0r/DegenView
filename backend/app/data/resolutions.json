@@ -268,5 +268,25 @@
       "frontend/static/app.js",
       "frontend/index.html"
     ]
+  },
+  "seed-0022": {
+    "status": "risolto",
+    "at": 1788525740,
+    "summary": "Il tema era salvato nel browser, non nell'account: ora la scelta segue chi accede.",
+    "detail": "Non e' un guasto, e' dove stava scritto. La scelta finiva nel `localStorage` del dispositivo, quindi lo stesso utente su due computer vedeva due temi diversi. E chi non aveva mai toccato l'interruttore seguiva le impostazioni del proprio sistema operativo: se il tuo e' chiaro e quello di Gabriele e' scuro, vedete due cose diverse pur avendo lo stesso account. Ora la scelta esplicita viene salvata fra le preferenze dell'account e riapplicata all'accesso, quindi ti segue sull'altro computer. Chi non ha mai scelto continua a seguire il proprio sistema, che e' il comportamento giusto per il primo avvio.",
+    "files": [
+      "frontend/static/app.js"
+    ]
+  },
+  "seed-0023": {
+    "status": "risolto",
+    "at": 1788525740,
+    "summary": "Ricerca per parole chiave, filtro per stato, e schede richiudibili.",
+    "detail": "Con venticinque voci, venticinque diagnosi aperte tutte insieme sono un muro. Ora ogni scheda si apre e si chiude, e restano aperte solo quelle su cui c'e' da fare — piu' quelle che stai cercando. La ricerca guarda titolo, dettaglio, id, priorita', stato, la diagnosi e tutte le risposte del filo, e pretende che TUTTE le parole compaiano: cercare 'grafico tema' deve restringere, non allargare. Il filtro accanto ha anche 'Da fare', che tiene aperte e riaperte insieme. Il filtro non si perde quando l'elenco si ricarica — succede a ogni risposta inviata, e riportarlo a capo mentre stai leggendo sarebbe il modo piu' veloce di rendere inutile la ricerca.",
+    "files": [
+      "frontend/index.html",
+      "frontend/static/app.js",
+      "frontend/static/style.css"
+    ]
   }
 }
