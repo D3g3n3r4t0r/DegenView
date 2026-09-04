@@ -32,6 +32,7 @@ from app import issues as issues_store
 from app import rate_limit
 from app.trading.executor import place_order_for_signal
 from app import archive as archive_store
+from app import trading_log
 from app import favorites as favorites_store
 from app import watchlist as watchlist_store
 from app.analysis.backtest import run_backtest
@@ -253,11 +254,31 @@ async def _watchlist_alert_loop() -> None:
                         entry_id=entry.id,
                         owner_id=owner.id,
                     )
-                    # Auto-execute orders if trading credentials are configured for this exchange
+                    # Esecuzione automatica degli ordini, se l'exchange e'
+                    # configurato. Ogni esito finisce nel diario: e' un percorso
+                    # che, funzionando, non diceva nulla — ed e' esattamente cosi'
+                    # che e' rimasto morto per mesi senza che nessuno potesse
+                    # accorgersene.
                     cred = owner.trading_credentials.get(entry.exchange)
-                    if cred and cred.enabled:
+                    if cred and fresh:
                         api_key, api_secret, passphrase = auth.get_decrypted_credential(owner, entry.exchange)
-                        if api_key and api_secret:
+                        skip = ""
+                        if not cred.enabled:
+                            skip = "esecuzione automatica disattivata per questo exchange"
+                        elif not (api_key and api_secret):
+                            skip = "chiavi API mancanti o non leggibili"
+                        if skip:
+                            # Registrato solo per chi l'exchange l'ha configurato:
+                            # per tutti gli altri non c'e' nulla da segnalare, e
+                            # riempire il diario di "non configurato" lo
+                            # renderebbe illeggibile proprio a chi lo consulta.
+                            for signal in fresh:
+                                trading_log.record(
+                                    owner.id, symbol=entry.symbol, exchange=entry.exchange,
+                                    strategy_name=strategy_name, signal_type=signal.type,
+                                    outcome="saltato", detail=skip, price=signal.price,
+                                )
+                        else:
                             # I segnali arrivano dalla chiamata sopra. Richiederli
                             # qui tornava sempre vuoto — find_new_signals li aveva
                             # gia' marcati come visti — quindi nessun ordine e'
@@ -270,8 +291,27 @@ async def _watchlist_alert_loop() -> None:
                                         api_key, api_secret, passphrase,
                                     )
                                     logger.info("Order placed for %s %s: %s", entry.symbol, signal.type, result)
+                                    trading_log.record(
+                                        owner.id, symbol=entry.symbol, exchange=entry.exchange,
+                                        strategy_name=strategy_name, signal_type=signal.type,
+                                        outcome="eseguito", detail=str(result)[:400], price=signal.price,
+                                    )
+                                    if owner.telegram_chat_id and _telegram_allowed(owner):
+                                        # Un ordine partito va detto quanto uno
+                                        # fallito: era l'unico dei due casi che
+                                        # restava muto.
+                                        asyncio.create_task(telegram.send_to(
+                                            owner.telegram_chat_id,
+                                            f"💱 Ordine ESEGUITO <b>{entry.symbol}</b> [{signal.type}] "
+                                            f"su {entry.exchange} a {signal.price:g}",
+                                        ))
                                 except Exception as exc:
                                     logger.error("Order failed for %s %s: %s", entry.symbol, signal.type, exc)
+                                    trading_log.record(
+                                        owner.id, symbol=entry.symbol, exchange=entry.exchange,
+                                        strategy_name=strategy_name, signal_type=signal.type,
+                                        outcome="fallito", detail=str(exc), price=signal.price,
+                                    )
                                     if owner.telegram_chat_id and _telegram_allowed(owner):
                                         asyncio.create_task(telegram.send_to(
                                             owner.telegram_chat_id,
@@ -1718,6 +1758,24 @@ async def optimize_strategy_endpoint(
             for c in top_results
         ],
     )
+
+
+# --- Diario degli ordini automatici ------------------------------------------
+
+
+@app.get("/api/trading/journal")
+async def trading_journal(user: User = Depends(auth.get_current_user)) -> dict:
+    """Cosa ha fatto davvero l'esecuzione automatica.
+
+    Distinguere "nessun segnale" da "c'era un segnale e l'ordine non e' partito"
+    e' l'intera informazione utile, e prima non era da nessuna parte.
+    """
+    return {"items": trading_log.list_for(user.id, limit=50)}
+
+
+@app.delete("/api/trading/journal")
+async def clear_trading_journal(user: User = Depends(auth.get_current_user)) -> dict:
+    return {"removed": trading_log.clear(user.id)}
 
 
 # --- Archivio strategie ------------------------------------------------------

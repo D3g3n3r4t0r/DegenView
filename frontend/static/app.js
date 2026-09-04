@@ -997,6 +997,7 @@
       updateTelegramSetupUI();
       loadWatchlist();
       loadArchive();
+      loadTradingJournal();
       loadAlertLog();
       loadPriceAlerts();
       startAlertLogPoll();
@@ -1863,6 +1864,59 @@
     if (refresh) refresh.addEventListener("click", loadArchive);
     const save = labEl("lab-archive-btn");
     if (save) save.addEventListener("click", saveLabToArchive);
+  }
+
+  // ── Diario degli ordini automatici ─────────────────────────────────────────
+  //
+  // La riga che sarebbe servita mesi fa: un segnale c'era, e l'ordine non e'
+  // partito perche' le chiavi mancavano. Senza, i due casi — nessun segnale e
+  // percorso morto — si vedevano identici, cioe' non si vedevano affatto.
+
+  async function loadTradingJournal() {
+    if (!state.user) return;
+    const list = el("journal-list");
+    if (!list) return;
+    try {
+      const resp = await fetch("/api/trading/journal");
+      if (!resp.ok) return;
+      const body = await resp.json();
+      renderTradingJournal(body.items || []);
+    } catch {
+      list.innerHTML = '<li class="panel-hint">Diario non raggiungibile.</li>';
+    }
+  }
+
+  function renderTradingJournal(items) {
+    const list = el("journal-list");
+    const count = el("journal-count");
+    if (!list) return;
+    if (count) count.textContent = items.length ? String(items.length) : "";
+    if (!items.length) {
+      list.innerHTML = '<li class="panel-hint">Nessun tentativo registrato. Con le chiavi configurate, qui compare ogni ordine — eseguito, fallito o saltato, con il motivo.</li>';
+      return;
+    }
+    const when = (ts) => {
+      const diff = Math.floor(Date.now() / 1000) - ts;
+      if (diff < 60) return "ora";
+      if (diff < 3600) return `${Math.floor(diff / 60)}m fa`;
+      if (diff < 86400) return `${Math.floor(diff / 3600)}h fa`;
+      return new Date(ts * 1000).toLocaleDateString("it-IT", { day: "2-digit", month: "short" });
+    };
+    const mark = { eseguito: "✓", fallito: "✕", saltato: "–" };
+    list.innerHTML = items.map((e) => `
+      <li class="journal-row ${escapeHtml(e.outcome)}">
+        <span class="jr-mark">${mark[e.outcome] || "·"}</span>
+        <span class="jr-body">
+          <span class="jr-head">${escapeHtml(e.symbol)} · ${escapeHtml(e.signal_type)} · ${escapeHtml(e.exchange)}</span>
+          <span class="jr-detail">${escapeHtml(e.strategy_name)}${e.detail ? " — " + escapeHtml(e.detail) : ""}</span>
+        </span>
+        <span class="jr-when">${when(e.ts)}</span>
+      </li>`).join("");
+  }
+
+  function bindTradingJournal() {
+    const btn = el("journal-refresh-btn");
+    if (btn) btn.addEventListener("click", loadTradingJournal);
   }
 
   // ── Alert log ──────────────────────────────────────────────────────────────
@@ -5716,6 +5770,7 @@
     bindTheme();
     bindLabFilters();
     bindArchive();
+    bindTradingJournal();
     bindTabs();
     bindDrawRail();
     bindMobileDrawTools();
