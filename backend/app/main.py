@@ -1,5 +1,6 @@
 import asyncio
 import hashlib
+import io
 import httpx
 import itertools
 import json
@@ -38,6 +39,7 @@ from app import favorites as favorites_store
 from app import watchlist as watchlist_store
 from app.analysis.backtest import run_backtest
 from app.analysis.cancel import SearchCancelled
+from app.export import build_backtest_workbook
 from app.analysis.confluence import compute_confluence
 from app.analysis.indicators import compute_indicators
 from app.analysis.fibonacci import compute_fib_zones
@@ -1876,6 +1878,59 @@ async def _optimize_payload(
             )
             for c in top_results
         ],
+    )
+
+
+@app.get("/api/export/backtest.xlsx")
+async def export_backtest(
+    symbol: str = Query(..., min_length=1, max_length=20),
+    asset_type: AssetType = Query("stock"),
+    exchange: CryptoExchange = Query("mexc"),
+    ltf_interval: IntervalChoice = Query(DEFAULT_INTERVALS["ltf"]),
+    strategy_name: str = Query(DEFAULT_STRATEGY),
+    strategy_params: StrategyParamsQuery = Depends(),
+    backtest_params: BacktestParamsQuery = Depends(),
+) -> StreamingResponse:
+    """Il backtest come foglio di calcolo, con i grafici dentro.
+
+    Rieseguito qui invece di ricevere i numeri dal browser: un foglio costruito
+    su quello che il client afferma sarebbe un foglio di affermazioni. Costa un
+    backtest, che e' la stessa cosa che l'utente ha appena guardato.
+    """
+    symbol = symbol.strip()
+    if not symbol:
+        raise HTTPException(status_code=400, detail="Ticker mancante")
+    if strategy_name not in AVAILABLE_STRATEGIES:
+        raise HTTPException(status_code=400, detail=f"Strategia sconosciuta: {strategy_name}")
+
+    provider = get_provider(asset_type, exchange)
+    backtest_interval = backtest_interval_for(ltf_interval)
+    cache_key = (f"{asset_type}:{exchange}:{symbol.upper()}:backtest",
+                 backtest_interval, settings.backtest_candles)
+    try:
+        df = await _fetch_cached(cache_key, provider, symbol, backtest_interval,
+                                 settings.backtest_candles)
+    except ProviderError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if df.empty:
+        raise HTTPException(status_code=502, detail=f"Nessun dato per {symbol}")
+
+    sp = strategy_params.model_dump()
+    bp = backtest_params.model_dump()
+    bt = await asyncio.to_thread(
+        partial(run_backtest, df, sp, bp, strategy_name=strategy_name)
+    )
+    bt = bt.model_copy(update={"interval": backtest_interval})
+    blob = await asyncio.to_thread(
+        partial(build_backtest_workbook, bt, symbol=symbol, strategy_name=strategy_name,
+                chart_interval=ltf_interval, params=sp, backtest_params=bp)
+    )
+    stamp = _time.strftime("%Y%m%d-%H%M")
+    name = f"backtest-{symbol.upper()}-{backtest_interval}-{stamp}.xlsx"
+    return StreamingResponse(
+        io.BytesIO(blob),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{name}"'},
     )
 
 
