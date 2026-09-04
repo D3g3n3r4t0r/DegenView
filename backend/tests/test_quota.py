@@ -50,8 +50,12 @@ def test_the_retry_moment_is_the_reset_not_a_minute_from_now():
 def loop(monkeypatch):
     from app import main as mod
 
+    # Anche la serie di fallimenti: senza, un test che l'ha gia' portata al
+    # massimo fa partire il successivo da li' e l'attesa non puo' piu' crescere.
+    # E' caduto cosi', nella suite completa e non da solo.
     mod._quota_pause_until.clear()
     mod._quota_notified.clear()
+    mod._unreachable_streak.clear()
     return mod
 
 
