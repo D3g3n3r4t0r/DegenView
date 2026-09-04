@@ -39,8 +39,11 @@ from app.analysis.priors import ConstrainedSpace, build_spaces, estimate_series_
 from app.analysis.regime import GateDecision, regime_gate
 from app.analysis.validation import (
     DSRResult,
+    PBOResult,
+    align_equity_curves,
     deflated_sharpe_ratio,
     periods_per_year_from_curve,
+    probability_of_backtest_overfitting,
     returns_from_equity_curve,
 )
 from app.models import BacktestResult
@@ -83,6 +86,7 @@ class PipelineResult:
     deterministic: bool
     series_stats: dict
     dsr: DSRResult | None = None
+    pbo: PBOResult | None = None
     notes: list[str] = field(default_factory=list)
 
     def summary(self) -> str:
@@ -176,6 +180,9 @@ def run_pipeline(
     total_evals = 0
     all_enumerated = True
     scored: list[tuple[float, bool, int, str, PlateauCandidate, int]] = []
+    # I finalisti di tutti i rami, per il PBO: la sovra-ottimizzazione si misura
+    # sull'insieme fra cui si e' scelto, non sul solo vincitore.
+    finalists: list[PlateauCandidate] = []
 
     for cs in spaces:
         res = plateau_search(
@@ -192,6 +199,7 @@ def run_pipeline(
         ))
         if not res.enumerated:
             all_enumerated = False
+        finalists.extend(res.candidates)
         pick = res.best
         if accept is not None:
             pick = next((c for c in res.candidates if accept(c.backtest)), None)
@@ -309,13 +317,34 @@ def run_pipeline(
             f"distinguishable from the best of that many attempts on noise"
         )
 
+    # Probabilita' di sovra-ottimizzazione (CSCV). Le curve di equity nascono
+    # per trade, quindi vengono prima riportate sulla griglia temporale del
+    # campione: accostarle per posizione confronterebbe il terzo trade di una
+    # configurazione con il terzo di un'altra, avvenuto mesi dopo, e la misura
+    # leggerebbe quel disallineamento invece della sovra-ottimizzazione.
+    pbo: PBOResult | None = None
+    if len(finalists) >= 2:
+        grid = [int(ts.timestamp()) for ts in df_in.index]
+        matrix = align_equity_curves([c.backtest.equity_curve for c in finalists], grid)
+        if matrix.size:
+            pbo = probability_of_backtest_overfitting(matrix)
+            if pbo.pbo is not None and not pbo.acceptable:
+                notes.append(
+                    f"PBO {pbo.pbo:.2f} su {pbo.n_candidates} candidati "
+                    f"({pbo.n_splits} suddivisioni): la configurazione scelta "
+                    f"finisce sotto la mediana fuori campione piu' spesso di "
+                    f"quanto una selezione sana comporti"
+                )
+            elif pbo.pbo is None and pbo.note:
+                notes.append(f"PBO non calcolabile: {pbo.note}")
+
     return PipelineResult(
         strategy=strategy_name, params=incumbent.params, backtest=best_bt,
         out_of_sample_return_pct=oos_return, overfitted=overfitted,
         evaluations=total_evals, gate=gate, chosen_branch=incumbent_label,
         branches=outcomes,
         deterministic=all_enumerated,
-        series_stats=vol, dsr=dsr, notes=notes,
+        series_stats=vol, dsr=dsr, pbo=pbo, notes=notes,
     )
 
 

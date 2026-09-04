@@ -5182,6 +5182,20 @@
         + (ok ? "" : " — non distinguibile dal migliore di altrettanti tentativi sul rumore")
         + "</div>");
     }
+    // Il PBO non e' un doppione dello Sharpe deflazionato: quello corregge un
+    // numero, questo giudica la selezione. Un risultato puo' superare l'uno e
+    // fallire l'altro, e i due casi si leggono diversamente.
+    const o = body.overfitting;
+    if (o && o.pbo != null) {
+      bits.push(
+        `<div class="lab-regime-det ${o.acceptable ? "ok" : "warn"}">`
+        + `Sovra-ottimizzazione ${(o.pbo * 100).toFixed(0)}% `
+        + `<span class="lab-regime-sub">(${o.n_candidates} candidati, ${o.n_splits} suddivisioni)</span>`
+        + (o.acceptable
+          ? " — la configurazione scelta regge anche sulle metà che non l'hanno selezionata"
+          : " — quanto spesso, fra i candidati, il migliore in campione finisce sotto la mediana fuori campione")
+        + "</div>");
+    }
     (body.pipeline_notes || []).forEach((n) => {
       bits.push(`<div class="lab-regime-note">${escapeHtml(n)}</div>`);
     });
