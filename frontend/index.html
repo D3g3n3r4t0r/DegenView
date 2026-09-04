@@ -528,6 +528,15 @@
               </div>
               <p class="panel-hint trading-auto-hint">Quando scatta un segnale dalla watchlist, viene piazzato un ordine reale sull'exchange. Inserisci le API key con permessi di trading (non di prelievo).</p>
               <div id="trading-credentials-list" class="trading-cred-list"></div>
+
+              <!-- Diario: distinguere "nessun segnale" da "c'era un segnale e
+                   l'ordine non e' partito" e' l'intera informazione utile. -->
+              <div class="section-title-row" style="margin-top:14px">
+                <span class="section-eyebrow">Diario ordini</span>
+                <span id="journal-count" class="section-count"></span>
+                <button type="button" id="journal-refresh-btn" class="section-action-btn">Aggiorna</button>
+              </div>
+              <ul id="journal-list" class="journal-list"></ul>
             </div>
 
             <!-- Ordine manuale -->

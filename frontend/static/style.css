@@ -3441,3 +3441,24 @@ body {
   border: 1px solid var(--border); background: var(--bg-raised); color: var(--ink-dim);
 }
 .lab-archive-btn:hover { color: var(--ink); }
+
+/* --- Diario degli ordini automatici ---------------------------------------- */
+.journal-list { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.journal-row {
+  display: flex; align-items: flex-start; gap: 8px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--ink-dim);
+  background: var(--bg-panel);
+  padding: 6px 8px;
+  font-size: 11.5px;
+}
+.journal-row.eseguito { border-left-color: var(--bull); }
+.journal-row.fallito { border-left-color: var(--bear); }
+.journal-row.saltato { border-left-color: var(--accent); }
+.jr-mark { font-weight: 700; width: 12px; text-align: center; color: var(--ink-dim); }
+.journal-row.eseguito .jr-mark { color: var(--bull); }
+.journal-row.fallito .jr-mark { color: var(--bear); }
+.jr-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.jr-head { color: var(--ink); }
+.jr-detail { color: var(--ink-dim); font-size: 10.5px; word-break: break-word; }
+.jr-when { margin-left: auto; color: var(--ink-dim); font-size: 10.5px; white-space: nowrap; }
