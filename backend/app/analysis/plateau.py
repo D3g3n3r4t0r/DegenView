@@ -57,6 +57,11 @@ Fingerprint = tuple
 
 # Fixed seed for the drift perturbations. Not a tunable: changing it changes
 # the answer, and the point of this module is that the answer does not move.
+# Quanti candidati la ricerca tiene in memoria prima di potare. I finalisti
+# sono una dozzina, quindi una riserva di qualche centinaio e' abbondante; oltre
+# si accumulano solo configurazioni che non entreranno mai in classifica.
+_MAX_KEPT = 400
+
 _DRIFT_SEED = 20260903
 
 
@@ -489,10 +494,22 @@ def plateau_search(
         seen_fp.add(fp)
         widths = np.array([parts[d].width_at(float(u[d])) for d in range(space.d)])
         cands.append(PlateauCandidate(
-            u=u, params=space.to_params(u), backtest=bt, score=sc,
+            # L'elenco dei trade non serve a nessuno qui: la classifica si fa
+            # sui numeri, la curva di equity serve al PBO, e i trade del
+            # vincitore vengono ricalcolati alla fine con un backtest solo.
+            # Tenerli per migliaia di candidati significa centinaia di MB su una
+            # macchina che ne ha 512 — e una macchina senza memoria non e' lenta,
+            # e' spenta.
+            u=u, params=space.to_params(u), score=sc,
+            backtest=bt.model_copy(update={"trades": []}),
             cell_widths=widths,
             log_volume=float(np.sum(np.log(np.maximum(widths, 1e-12)))),
         ))
+        if len(cands) > _MAX_KEPT:
+            # Si tiene solo la parte alta: i finalisti escono da li', e i
+            # candidati scartati non rientrerebbero comunque in classifica.
+            cands.sort(key=lambda c: (c.score, c.log_volume), reverse=True)
+            del cands[_MAX_KEPT // 2:]
         return sc
 
     if enumerated:
