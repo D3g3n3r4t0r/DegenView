@@ -1766,6 +1766,21 @@
         : '<div class="arch-pending">Backtest in corso…</div>';
       const params = Object.entries(e.params || {})
         .map(([k, v]) => `${escapeHtml(k)}=${escapeHtml(String(v))}`).join(" · ");
+      // Come si è arrivati a quei parametri. Senza, due risultati con lo stesso
+      // rendimento — uno enumerato e uno sorteggiato, uno con il gate superato
+      // e uno no — sembrerebbero la stessa cosa.
+      const o = e.optimizer || {};
+      const flags = [];
+      if (o.mode) flags.push(`ricerca ${o.mode === "plateau" ? "stabile" : o.mode === "grid" ? "griglia" : "rapida"}`);
+      if (o.evaluations) flags.push(`${o.evaluations} backtest`);
+      if (o.out_of_sample_return_pct != null) {
+        flags.push(`fuori campione ${o.out_of_sample_return_pct >= 0 ? "+" : ""}${o.out_of_sample_return_pct.toFixed(1)}%`);
+      }
+      const warn = [];
+      if (o.regime_passed === false) warn.push("gate non superato");
+      if (o.overfitted) warn.push("sovradattato");
+      if (o.deterministic === false) warn.push("in parte campionata");
+      if (o.pbo != null && o.pbo >= 0.2) warn.push(`sovra-ottimizzazione ${(o.pbo * 100).toFixed(0)}%`);
       return `
         <li class="arch-card" data-id="${e.id}">
           <div class="arch-head">
@@ -1775,6 +1790,8 @@
             <span class="arch-date">${when(e.created_at)}</span>
           </div>
           ${body}
+          ${flags.length ? `<div class="arch-how">${flags.map(escapeHtml).join(" · ")}</div>` : ""}
+          ${warn.length ? `<div class="arch-warn">⚠ ${warn.map(escapeHtml).join(" · ")}</div>` : ""}
           ${params ? `<div class="arch-params">${params}</div>` : '<div class="arch-params">parametri di default</div>'}
           ${e.note ? `<div class="arch-note">${escapeHtml(e.note)}</div>` : ""}
           <div class="arch-actions">
@@ -1899,7 +1916,11 @@
 
   function openOptProgress(title, subtitle) {
     el("opt-progress-title").textContent = title;
-    el("opt-progress-sub").textContent = subtitle || "";
+    // La ricerca gira sul server: chiudere questa finestra, la scheda o il
+    // telefono non la ferma. Va detto, altrimenti si resta a guardare.
+    el("opt-progress-sub").textContent =
+      (subtitle ? subtitle + " — " : "")
+      + "puoi chiudere: continua sul server, arriva un riepilogo su Telegram e finisce in archivio.";
     el("opt-progress-log").innerHTML = "";
     el("opt-progress-time").textContent = "0s";
     el("opt-progress-foot").classList.add("hidden");
@@ -1953,7 +1974,8 @@
           appendOptLog(job.log || []);
           el("opt-progress-time").textContent = `${job.elapsed_s.toFixed(0)}s`;
           if (job.state === "finito") {
-            optProgressFoot("Fatto. Risultato applicato al Laboratorio.", "ok");
+            optProgressFoot("Fatto. Applicato al Laboratorio e salvato in archivio.", "ok");
+            loadArchive();
             resolve(job.result);
             return;
           }

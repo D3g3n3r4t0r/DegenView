@@ -34,7 +34,7 @@ _STORE_FILE = _DATA_DIR / "strategy_archive.json"
 
 _MAX_PER_OWNER = 200
 
-Source = Literal["alert", "manuale"]
+Source = Literal["alert", "manuale", "ottimizzazione"]
 State = Literal["in corso", "pronto", "fallito"]
 
 _entries: list[dict] = []
@@ -82,6 +82,7 @@ def create(
     source: Source = "manuale",
     watchlist_entry_id: str = "",
     note: str = "",
+    optimizer: dict | None = None,
 ) -> dict:
     """Registra la voce subito, senza numeri: li riempie `attach_result`.
 
@@ -103,6 +104,12 @@ def create(
         "source": source,
         "watchlist_entry_id": watchlist_entry_id,
         "note": (note or "").strip()[:500],
+        # Come si e' arrivati a questi parametri: modalita', quanti backtest,
+        # il verdetto del gate, la stabilita' misurata. Senza, fra sei mesi
+        # l'archivio direbbe quali parametri erano attivi ma non se valevano
+        # qualcosa — e i due risultati con lo stesso rendimento, uno enumerato
+        # e uno sorteggiato, sembrerebbero la stessa cosa.
+        "optimizer": dict(optimizer or {}),
         "state": "in corso",
         "metrics": None,
         "error": "",
