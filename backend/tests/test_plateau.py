@@ -228,3 +228,97 @@ def test_prefers_a_wide_plateau_over_a_narrow_spike(monkeypatch):
     r = plateau_search(GABRIELE, _df(), max_grid_evals=100000, seed=0)
     assert r.best is not None
     assert r.best.backtest.total_return_pct < 400.0
+
+
+# --- il log della mappatura -----------------------------------------------
+#
+# "mappatura dei pianori…" e poi silenzio per minuti non dice se sta lavorando
+# né che cosa sta facendo. Queste righe sono la spiegazione del metodo mentre
+# accade, quindi valgono quanto il risultato: se smettono di uscire, la ricerca
+# torna a essere una scatola chiusa.
+
+
+def _series(n=420, seed=5):
+    import numpy as np
+    import pandas as pd
+
+    rng = np.random.default_rng(seed)
+    close = 100 * np.exp(np.cumsum(rng.normal(0.001, 0.02, n)))
+    return pd.DataFrame(
+        {
+            "open": close * (1 + rng.normal(0, 0.002, n)),
+            "high": close * (1 + abs(rng.normal(0, 0.01, n))),
+            "low": close * (1 - abs(rng.normal(0, 0.01, n))),
+            "close": close,
+            "volume": rng.uniform(1e6, 5e6, n),
+        },
+        index=pd.date_range("2022-01-01", periods=n, freq="D"),
+    )
+
+
+def _run_with_log(**kw):
+    from app.analysis.plateau import plateau_search
+
+    opts = {"base_points": 1, "coarse": 4, "max_grid_evals": 120,
+            "finalists": 3, "probe_samples": 4}
+    opts.update(kw)
+    lines: list[str] = []
+    res = plateau_search("Gabriele (RSI+BB reversal)", _series(), {},
+                         progress=lines.append, **opts)
+    return res, lines
+
+
+def test_every_axis_reports_its_own_partition():
+    """È la mappatura, detta a voce: un asse alla volta, tagliato dove il
+    risultato cambia davvero."""
+    res, lines = _run_with_log()
+    for part in res.partitions:
+        assert any(f"asse {part.name}:" in line for line in lines), f"asse muto: {part.name}"
+
+
+def test_the_grid_size_is_stated_before_the_cells_are_tried():
+    res, lines = _run_with_log()
+    grid = next(i for i, line in enumerate(lines) if line.startswith("griglia:"))
+    cells = next(i for i, line in enumerate(lines) if line.startswith("provo il centro"))
+    assert grid < cells
+    assert f"= {res.grid_cells} celle" in lines[grid]
+
+
+def test_the_progress_through_the_cells_is_reported():
+    _res, lines = _run_with_log()
+    assert any(line.startswith("celle ") and "/" in line for line in lines)
+
+
+def test_the_shake_test_says_how_often_each_finalist_holds():
+    """Il numero che decide la classifica: quante volte su quante regge."""
+    _res, lines = _run_with_log()
+    shaken = [line for line in lines if line.startswith("finalista ")]
+    assert shaken, "nessun finalista raccontato"
+    assert all("regge" in line and "su" in line for line in shaken)
+
+
+def test_the_winner_is_announced_with_its_stability():
+    res, lines = _run_with_log()
+    if not res.candidates:
+        pytest.skip("nessun candidato su questa serie")
+    assert any(line.startswith("scelto:") and "stabile" in line for line in lines)
+
+
+def test_sampling_instead_of_enumerating_is_said_out_loud():
+    """Non è un dettaglio: è la parte del risultato che non è riproducibile."""
+    res, lines = _run_with_log(max_grid_evals=8)
+    assert not res.enumerated
+    assert any("campiono" in line and "riproducibile" in line for line in lines)
+
+
+def test_without_a_callback_the_search_is_silent_and_unchanged():
+    from app.analysis.plateau import plateau_search
+
+    quiet = plateau_search("Gabriele (RSI+BB reversal)", _series(), {},
+                           base_points=1, coarse=4, max_grid_evals=120,
+                           finalists=3, probe_samples=4)
+    loud, _lines = _run_with_log()
+    assert quiet.evaluations == loud.evaluations
+    assert (quiet.best is None) == (loud.best is None)
+    if quiet.best is not None:
+        assert quiet.best.params == loud.best.params
