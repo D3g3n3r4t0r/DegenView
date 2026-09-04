@@ -38,6 +38,7 @@ output instead of an assumption in the design.
 
 from __future__ import annotations
 
+import heapq
 import math
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -289,6 +290,104 @@ def _plateau_objective(bt: BacktestResult, min_trades: int = 8) -> float:
 # --- search ------------------------------------------------------------------
 
 
+# --- espansione guidata ------------------------------------------------------
+
+
+def _lattice_starts(sizes: list[int], n_starts: int) -> list[tuple[int, ...]]:
+    """Punti di partenza sparsi sul reticolo, senza sorteggio.
+
+    Servono piu' partenze perche' un'espansione avida da un punto solo si
+    accontenta della prima regione buona che incontra. Sparse pero' in modo
+    deterministico — multipli interi di numeri primi presi modulo il numero di
+    celle, un reticolo alla Korobov — e non casuali: la ricerca guidata esiste
+    anche per togliere la variabilita' fra corse, e ripescarla nel punto di
+    partenza sarebbe autolesionista.
+    """
+    primes = (1, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43)
+    out: list[tuple[int, ...]] = []
+    seen: set[tuple[int, ...]] = set()
+    for k in range(n_starts * 4):
+        node = tuple((k * primes[d % len(primes)]) % sizes[d] for d in range(len(sizes)))
+        if node in seen:
+            continue
+        seen.add(node)
+        out.append(node)
+        if len(out) >= n_starts:
+            break
+    return out
+
+
+def _guided_cells(
+    sizes: list[int],
+    centers: list[np.ndarray],
+    parts: list[AxisPartition],
+    budget: int,
+    consider: Callable[[np.ndarray], float],
+    n_starts: int = 8,
+    say: Callable[[str], None] = lambda _m: None,
+) -> int:
+    """Espansione best-first sulle celle, invece di estrarne a caso.
+
+    Il reticolo delle celle e' un grafo: due celle sono vicine se differiscono
+    di un passo su un asse solo. Si tiene una coda delle celle gia' viste
+    ordinata per quanto promettono, si apre sempre la migliore e si valutano le
+    sue vicine. Le regioni che vanno male restano in fondo alla coda e non
+    vengono mai aperte — non per una regola che le esclude, ma perche' il budget
+    finisce prima di arrivarci. E' la stessa ragione per cui un navigatore non
+    percorre tutte le strade: ne apre poche, sempre la piu' promettente.
+
+    Due proprieta' che il sorteggio non poteva dare: a parita' di backtest si
+    guarda dove il risultato e' buono invece che ovunque con la stessa
+    probabilita', e non essendoci estrazioni due corse sulla stessa serie danno
+    lo stesso risultato.
+
+    La priorita' e' il punteggio del centro, con il logaritmo del volume della
+    cella come spareggio: fra due celle che valgono uguale si apre prima la piu'
+    larga, perche' una cella larga e' gia' un pianoro.
+    """
+    d = len(sizes)
+    visited: set[tuple[int, ...]] = set()
+    heap: list[tuple[float, float, int, tuple[int, ...]]] = []
+    order = 0
+    used = 0
+
+    def volume_of(node: tuple[int, ...]) -> float:
+        widths = [parts[i].cell_bounds(node[i])[1] - parts[i].cell_bounds(node[i])[0]
+                  for i in range(d)]
+        return float(np.sum(np.log(np.maximum(widths, 1e-12))))
+
+    def push(node: tuple[int, ...]) -> None:
+        nonlocal order, used
+        if node in visited or used >= budget:
+            return
+        visited.add(node)
+        score = consider(np.array([centers[i][node[i]] for i in range(d)]))
+        used += 1
+        order += 1
+        if math.isfinite(score):
+            heapq.heappush(heap, (-score, -volume_of(node), order, node))
+
+    for node in _lattice_starts(sizes, n_starts):
+        push(node)
+
+    opened = 0
+    while heap and used < budget:
+        _s, _v, _o, node = heapq.heappop(heap)
+        opened += 1
+        for axis in range(d):
+            for step in (-1, 1):
+                nxt = list(node)
+                nxt[axis] += step
+                if 0 <= nxt[axis] < sizes[axis]:
+                    push(tuple(nxt))
+            if used >= budget:
+                break
+
+    say(f"espansione guidata: {used} celle valutate aprendo le {opened} piu' promettenti "
+        f"da {n_starts} partenze — nessun sorteggio, stessa serie stesso risultato")
+    return used
+
+
 def plateau_search(
     strategy_name: str,
     df: pd.DataFrame,
@@ -358,34 +457,35 @@ def plateau_search(
                     break
                 idx[d] = 0
     else:
-        say(f"{grid_cells} celle oltre il budget di {max_grid_evals}: ne campiono "
-            f"{max_grid_evals} invece di enumerarle tutte — questa parte non e' riproducibile")
+        say(f"{grid_cells} celle oltre il budget di {max_grid_evals}: invece di "
+            f"sorteggiarne {max_grid_evals} le apro per ordine di promessa")
         notes.append(
             f"grid of {grid_cells} cells exceeds budget {max_grid_evals}; "
-            f"sampling cell-centre combinations instead of enumerating"
+            f"expanded best-first from the most promising cells instead of "
+            f"enumerating — deterministic, no sampling"
         )
-        seen: set[tuple[int, ...]] = set()
-        while len(points) < max_grid_evals:
-            combo = tuple(int(rng.integers(len(centers[d]))) for d in range(space.d))
-            if combo in seen:
-                continue
-            seen.add(combo)
-            points.append(np.array([centers[d][combo[d]] for d in range(space.d)]))
 
-    say(f"provo il centro di {len(points)} celle"
-        + (" (enumerate tutte)" if enumerated else " (campionate)"))
     seen_fp: set[Fingerprint] = set()
     cands: list[PlateauCandidate] = []
-    step_report = max(1, len(points) // 8)
-    for done, u in enumerate(points, start=1):
+    tried = {"n": 0}
+    step_report = max(1, (len(points) if enumerated else max_grid_evals) // 8)
+
+    def consider_point(u: np.ndarray) -> float:
+        """Valuta il centro di una cella e lo tiene se porta qualcosa di nuovo.
+
+        Restituisce il punteggio anche per un duplicato: all'espansione guidata
+        serve per decidere dove andare, e togliergliela la lascerebbe cieca
+        proprio dove il terreno e' piatto.
+        """
         bt, sc = evaluate(u)
-        if done % step_report == 0:
-            say(f"celle {done}/{len(points)} — {len(cands)} configurazioni distinte finora")
+        tried["n"] += 1
+        if tried["n"] % step_report == 0:
+            say(f"celle {tried['n']} — {len(cands)} configurazioni distinte finora")
         if not math.isfinite(sc):
-            continue
+            return sc
         fp = _fingerprint(bt)
         if fp in seen_fp:
-            continue
+            return sc
         seen_fp.add(fp)
         widths = np.array([parts[d].width_at(float(u[d])) for d in range(space.d)])
         cands.append(PlateauCandidate(
@@ -393,13 +493,22 @@ def plateau_search(
             cell_widths=widths,
             log_volume=float(np.sum(np.log(np.maximum(widths, 1e-12)))),
         ))
+        return sc
+
+    if enumerated:
+        say(f"provo il centro di {len(points)} celle (enumerate tutte)")
+        for u in points:
+            consider_point(u)
+    else:
+        _guided_cells([len(c) for c in centers], centers, parts,
+                      max_grid_evals, consider_point, say=say)
 
     if not cands:
         return PlateauResult(strategy_name, parts, [], counter["n"], counter["boundary"],
                              grid_cells, enumerated, None,
                              notes + ["no finite-score candidate found"])
 
-    say(f"{len(cands)} configurazioni distinte su {len(points)} celle: le altre "
+    say(f"{len(cands)} configurazioni distinte su {tried['n']} celle provate: le altre "
         f"producono esattamente gli stessi trade")
 
     _naive_pool = [c for c in cands if c.backtest.num_trades >= min_trades] or cands
