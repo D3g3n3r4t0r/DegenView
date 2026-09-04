@@ -239,5 +239,16 @@
     "files": [
       "frontend/static/app.js"
     ]
+  },
+  "seed-0021": {
+    "status": "risolto",
+    "at": 1788522682,
+    "summary": "Chiudendo la finestra resta una pastiglia con il tempo che scorre, e si possono lanciare piu' ricerche insieme.",
+    "detail": "Il lavoro girava gia' sul server, ma appena si chiudeva la finestra spariva anche di vista: l'unico modo di sapere a che punto fosse una ricerca da nove minuti era tenerla aperta. Ora ogni ricerca vive in un elenco che continua a essere interrogato comunque, e in basso resta una pastiglia con la rotella e il cronometro; a fine corsa diventa verde e dice 'salvata in archivio', o rossa se e' fallita. Toccandola si riapre il log, con tutte le righe di prima: vengono tenute in memoria, non ricaricate da zero. Il pulsante non si blocca piu': lanciarne una seconda mentre la prima continua e' ora la cosa normale, e ognuna ha il suo log. I risultati vengono applicati al Laboratorio solo se sta ancora guardando la stessa coppia e la stessa strategia — con piu' ricerche in volo, sovrascrivere i campi con quelli di un'altra coppia sarebbe peggio che non applicarli; in quel caso lo dice e la lascia in archivio.",
+    "files": [
+      "frontend/static/app.js",
+      "frontend/index.html",
+      "frontend/static/style.css"
+    ]
   }
 }

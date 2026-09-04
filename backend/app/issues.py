@@ -205,6 +205,9 @@ _SEED = [
      "Segnalato dal vivo durante una ricerca stabile.", "alta"),
     ("seed-0020", "L'indicatore non e' allineato al prezzo",
      "Segnalato con screenshot: il pannello sotto il grafico non e' agganciato alle stesse candele.", "alta"),
+    ("seed-0021", "Chiudendo il log non si sa piu' a che punto e' l'ottimizzazione",
+     "Serve un indicatore che resti visibile finche' non e' salvata in archivio, e poter lanciare "
+     "un'altra ricerca senza aspettare la prima.", "media"),
     ("seed-0012", "Voci della lista iniziale che non comparivano piu' sulla bacheca",
      "Trovato controllando la bacheca dal vivo: seed-0011 non c'era, e la sua risoluzione "
      "restava senza voce a cui agganciarsi.", "media"),
