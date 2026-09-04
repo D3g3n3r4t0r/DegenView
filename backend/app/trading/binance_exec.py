@@ -8,6 +8,44 @@ import httpx
 BINANCE_BASE = "https://api.binance.com"
 MEXC_BASE = "https://api.mexc.com"
 
+# MEXC espone la stessa API v3 di Binance — stessi percorsi, stessa firma
+# HMAC, stessi nomi dei parametri — tranne l'intestazione con cui si presenta
+# la chiave. Mandare a MEXC quella di Binance produce
+# {"code":400,"msg":"api key required"}: la chiave c'era, ma nella busta
+# sbagliata, e il messaggio dell'exchange dice "manca" perche' dal suo punto di
+# vista mancava davvero. Il modulo dei saldi usa da sempre l'intestazione
+# giusta, ed e' per questo che i saldi si vedevano mentre gli ordini no.
+_API_KEY_HEADER = {
+    "binance": "X-MBX-APIKEY",
+    "mexc": "X-MEXC-APIKEY",
+}
+
+# Gli errori piu' comuni dei due exchange, tradotti in cosa fare. Il testo
+# grezzo resta comunque nel messaggio: e' quello che serve per capire il caso
+# che qui non e' previsto.
+_HINTS = {
+    "api key required": "la chiave non e' arrivata all'exchange",
+    "signature for this request is not valid": "il secret non corrisponde alla chiave",
+    "invalid api key": "chiave non valida, o non abilitata al trading spot",
+    "api key info invalid": "chiave non valida per questo exchange",
+    "invalid symbol": "questo pair non esiste su questo exchange",
+    "oversold": "saldo insufficiente per l'importo richiesto",
+    "insufficient position": "saldo insufficiente per l'importo richiesto",
+    "not authorized": "alla chiave manca il permesso di fare ordini (spot trading)",
+    # Non "ip" e basta: comparirebbe dentro parole qualunque del messaggio.
+    "ip white": "l'indirizzo del server non e' fra quelli ammessi dalla chiave",
+    "ip address": "l'indirizzo del server non e' fra quelli ammessi dalla chiave",
+}
+
+
+def _explain(exchange: str, action: str, body: str) -> RuntimeError:
+    """L'errore dell'exchange piu' cosa significa, quando lo sappiamo."""
+    low = body.lower()
+    for needle, hint in _HINTS.items():
+        if needle in low:
+            return RuntimeError(f"{exchange} {action} error: {body} — {hint}")
+    return RuntimeError(f"{exchange} {action} error: {body}")
+
 
 def _base_asset(symbol: str) -> str:
     """Strip USDT or BTC suffix to get the base asset (e.g. BTCUSDT → BTC)."""
@@ -34,8 +72,10 @@ async def place_order(
     api_key: str,
     api_secret: str,
 ) -> dict:
+    if exchange not in _API_KEY_HEADER:
+        raise RuntimeError(f"Exchange non gestito da questo esecutore: {exchange}")
     base_url = BINANCE_BASE if exchange == "binance" else MEXC_BASE
-    headers = {"X-MBX-APIKEY": api_key}
+    headers = {_API_KEY_HEADER[exchange]: api_key}
 
     async with httpx.AsyncClient(base_url=base_url, headers=headers) as client:
         order_params: dict = {"symbol": symbol, "side": side, "type": "MARKET"}
@@ -46,7 +86,7 @@ async def place_order(
             else:
                 resp = await client.get(f"/api/v3/account?{_sign(api_secret, {})}")
                 if resp.status_code >= 400:
-                    raise RuntimeError(f"{exchange} account error: {resp.text}")
+                    raise _explain(exchange, "account", resp.text)
                 balances = {b["asset"]: float(b["free"]) for b in resp.json()["balances"]}
                 free_usdt = balances.get("USDT", 0.0)
                 order_params["quoteOrderQty"] = free_usdt * size_value / 100
@@ -55,14 +95,14 @@ async def place_order(
             if size_mode == "fixed_usdt":
                 price_resp = await client.get(f"/api/v3/ticker/price?symbol={symbol}")
                 if price_resp.status_code >= 400:
-                    raise RuntimeError(f"{exchange} price error: {price_resp.text}")
+                    raise _explain(exchange, "price", price_resp.text)
                 price = float(price_resp.json()["price"])
                 qty = size_value / price
             else:
                 base = _base_asset(symbol)
                 resp = await client.get(f"/api/v3/account?{_sign(api_secret, {})}")
                 if resp.status_code >= 400:
-                    raise RuntimeError(f"{exchange} account error: {resp.text}")
+                    raise _explain(exchange, "account", resp.text)
                 balances = {b["asset"]: float(b["free"]) for b in resp.json()["balances"]}
                 free = balances.get(base, 0.0)
                 qty = free * size_value / 100
@@ -73,5 +113,5 @@ async def place_order(
         signed_qs = _sign(api_secret, order_params)
         order_resp = await client.post(f"/api/v3/order?{signed_qs}")
         if order_resp.status_code >= 400:
-            raise RuntimeError(f"{exchange} order error: {order_resp.text}")
+            raise _explain(exchange, "order", order_resp.text)
         return order_resp.json()
