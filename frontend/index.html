@@ -573,7 +573,11 @@
                   </div>
                   <div class="mo-field mo-field-grow">
                     <label class="mo-label">Pair</label>
-                    <input type="text" id="manual-symbol" class="mo-input" placeholder="es. BTCUSDT" autocomplete="off" />
+                    <div class="mo-pair-field">
+                      <input type="text" id="manual-symbol" class="mo-input" placeholder="es. BTCUSDT" autocomplete="off" />
+                      <ul id="manual-symbol-suggestions" class="suggestions hidden"></ul>
+                    </div>
+                    <p id="manual-pair-hint" class="mo-pair-hint hidden"></p>
                   </div>
                 </div>
 

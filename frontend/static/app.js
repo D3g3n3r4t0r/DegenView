@@ -452,7 +452,10 @@
       this._p2 = p2;
       this._fillColor = fillColor;
       this._borderColor = borderColor;
-      // { edges: "box" | "horizontal", midline: bool }
+      // { extendRight: bool } — una zona non ancora riempita non finisce
+      // sull'ultima candela: continua a valere finche' il prezzo non ci torna
+      // dentro, ed e' cosi' che la disegna TradingView. Fermarla sull'ultima
+      // barra le fa sembrare tutte scadute.
       this._style = style || {};
     }
     draw(target) {
@@ -461,35 +464,26 @@
         const ctx = scope.context;
         const h = positionsBox(this._p1.x, this._p2.x, scope.horizontalPixelRatio);
         const v = positionsBox(this._p1.y, this._p2.y, scope.verticalPixelRatio);
+        // Fino al bordo destro del riquadro, non fino all'ultima candela: lo
+        // spazio vuoto a destra del grafico fa parte del futuro in cui la zona
+        // e' ancora valida.
+        const width = this._style.extendRight
+          ? Math.max(0, scope.bitmapSize.width - h.position)
+          : h.length;
         ctx.fillStyle = this._fillColor;
-        ctx.fillRect(h.position, v.position, h.length, v.length);
+        ctx.fillRect(h.position, v.position, width, v.length);
         ctx.strokeStyle = this._borderColor;
         ctx.lineWidth = 1;
-        if (this._style.edges === "horizontal") {
-          // Solo i due bordi di prezzo. Un'imbalance è definita da due livelli,
-          // non da un intervallo di tempo: i bordi verticali disegnano un
-          // inizio e una fine che la zona non ha, e sono la ragione per cui
-          // queste zone si leggevano come rettangoli invece che come fasce.
+        if (this._style.extendRight) {
+          // Tre lati: quello destro chiuderebbe una zona che non e' finita.
           ctx.beginPath();
+          ctx.moveTo(h.position + 0.5, v.position);
+          ctx.lineTo(h.position + 0.5, v.position + v.length);
           ctx.moveTo(h.position, v.position + 0.5);
-          ctx.lineTo(h.position + h.length, v.position + 0.5);
+          ctx.lineTo(h.position + width, v.position + 0.5);
           ctx.moveTo(h.position, v.position + v.length - 0.5);
-          ctx.lineTo(h.position + h.length, v.position + v.length - 0.5);
+          ctx.lineTo(h.position + width, v.position + v.length - 0.5);
           ctx.stroke();
-          if (this._style.midline && v.length > 6) {
-            // Il punto medio del gap: è il livello su cui la zona viene di
-            // solito considerata "consumata a metà", e senza di esso la fascia
-            // non dice dove sta il suo centro.
-            const mid = v.position + v.length / 2;
-            ctx.save();
-            ctx.setLineDash([3 * scope.horizontalPixelRatio, 3 * scope.horizontalPixelRatio]);
-            ctx.globalAlpha = 0.6;
-            ctx.beginPath();
-            ctx.moveTo(h.position, mid);
-            ctx.lineTo(h.position + h.length, mid);
-            ctx.stroke();
-            ctx.restore();
-          }
         } else {
           ctx.strokeRect(h.position, v.position, h.length, v.length);
         }
@@ -1311,8 +1305,81 @@
     });
   }
 
+  // Il pair dell'ordine manuale si scrive a mano, ed e' l'unico campo di
+  // tutta l'app che manda denaro vero senza che nessuno abbia confermato che
+  // quella stringa esista sull'exchange scelto. Qui ha gli stessi
+  // suggerimenti della watchlist, dalla stessa fonte (/api/symbols), filtrati
+  // sull'exchange selezionato. Tre exchange su sei non hanno un provider dati
+  // in questa app: li' il campo resta libero, ma lo dice invece di lasciar
+  // credere che il silenzio sia una conferma.
+  const MANUAL_PAIR_EXCHANGES = new Set(["mexc", "binance", "kucoin"]);
+
+  function manualPairHint(text, kind) {
+    const p = el("manual-pair-hint");
+    if (!p) return;
+    p.textContent = text || "";
+    p.className = "mo-pair-hint" + (kind ? " " + kind : "");
+    p.classList.toggle("hidden", !text);
+  }
+
+  const moSuggest = makeSuggestController({
+    listId: "manual-symbol-suggestions",
+    anchorId: "manual-symbol",
+    fetchItems: async (query) => {
+      const exchange = el("manual-exchange")?.value;
+      if (!MANUAL_PAIR_EXCHANGES.has(exchange)) return [];
+      const resp = await fetch(`/api/symbols?query=${encodeURIComponent(query)}`);
+      const all = resp.ok ? await resp.json() : [];
+      return all.filter((s) => s.asset_type === "crypto" && s.provider === exchange);
+    },
+    onSelect: (item) => {
+      el("manual-symbol").value = item.symbol;
+      moSuggest.resolved = item;
+      moSuggest.clear();
+      manualPairHint(`✓ ${item.symbol} — ${item.exchange}`, "ok");
+    },
+  });
+  let moSuggestTimer = null;
+
+  function bindManualPairAutocomplete() {
+    const input = el("manual-symbol");
+    const exchangeSel = el("manual-exchange");
+    if (!input) return;
+
+    function unverifiedNotice() {
+      const exchange = exchangeSel?.value;
+      if (!MANUAL_PAIR_EXCHANGES.has(exchange)) {
+        manualPairHint(`Su ${exchange} il pair non si puo' verificare da qui: `
+          + "scrivilo come lo scrive l'exchange.", "warn");
+        return true;
+      }
+      return false;
+    }
+
+    input.addEventListener("input", () => {
+      moSuggest.resolved = null;   // scrivere annulla la conferma precedente
+      manualPairHint("");
+      const value = input.value.trim();
+      clearTimeout(moSuggestTimer);
+      if (!value) { moSuggest.clear(); unverifiedNotice(); return; }
+      if (unverifiedNotice()) { moSuggest.clear(); return; }
+      moSuggestTimer = setTimeout(() => moSuggest.fetch(value), 300);
+    });
+    input.addEventListener("keydown", (e) => moSuggest.handleKey(e));
+    input.addEventListener("blur", () => setTimeout(() => moSuggest.clear(), 150));
+    exchangeSel?.addEventListener("change", () => {
+      // Cambiare exchange invalida la conferma: lo stesso nome puo' non
+      // esistere altrove, o esistere scritto in un altro modo.
+      moSuggest.resolved = null;
+      moSuggest.clear();
+      manualPairHint("");
+      unverifiedNotice();
+    });
+  }
+
   function bindManualOrderUI() {
     let activeSide = "BUY";
+    bindManualPairAutocomplete();
 
     function syncSideUI() {
       document.querySelectorAll(".mo-side-tab").forEach(btn => {
@@ -1374,12 +1441,15 @@
         });
         const data = await resp.json().catch(() => ({}));
         if (resp.ok) {
-          statusEl.textContent = `✓ Ordine ${activeSide} inviato`;
+          statusEl.textContent = `✓ Ordine ${activeSide} ${data.symbol || symbol} inviato`;
           statusEl.classList.add("ok");
         } else {
           statusEl.textContent = `✗ ${data.detail || "Errore " + resp.status}`;
           statusEl.classList.add("error");
         }
+        // Riuscito o fallito, il tentativo e' ora nel diario: il riquadro di
+        // stato sparisce ricaricando la pagina, il diario no.
+        loadTradingJournal();
       } catch (_) {
         statusEl.textContent = "✗ Errore di rete";
         statusEl.classList.add("error");
@@ -3418,7 +3488,11 @@
           // Niente scritta sopra le imbalance: su TradingView il box e' muto e
           // il nome sta nel tooltip. La fascia con la mediana che avevo messo
           // prima era una mia invenzione, non lo stile di riferimento.
-          isFvg ? "" : LEVEL_SHORT_LABELS[lvl.type]
+          isFvg ? "" : LEVEL_SHORT_LABELS[lvl.type],
+          // Non riempita = ancora valida, e continua oltre l'ultima candela.
+          // Riempita = si ferma dove il prezzo l'ha richiusa, che e' il punto
+          // di tutta l'informazione.
+          isFvg && !lvl.mitigated ? { extendRight: true } : undefined
         );
       } else {
         const line = candleSeries.createPriceLine({

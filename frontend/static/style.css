@@ -3636,3 +3636,13 @@ details.issue-card > summary:focus-visible { outline: 2px solid var(--accent); o
   border: 1px solid var(--bull); background: transparent; color: var(--bull);
 }
 .lab-trades-export:hover { background: var(--bull); color: var(--bg-panel); }
+
+/* Campo Pair dell'ordine manuale: i suggerimenti si ancorano al campo, non
+   alla riga, altrimenti l'elenco si apre spostato rispetto a dove si scrive. */
+.mo-pair-field { position: relative; }
+.mo-pair-hint {
+  margin: 4px 0 0; font-size: 10.5px; line-height: 1.35;
+  color: var(--ink-dim);
+}
+.mo-pair-hint.ok { color: var(--accent); }
+.mo-pair-hint.warn { color: var(--ink-dim); }

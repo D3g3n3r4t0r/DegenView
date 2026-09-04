@@ -86,9 +86,12 @@
   },
   "seed-0004": {
     "status": "risolto",
-    "summary": "Le FVG ora sono fasce orizzontali con il livello mediano, non rettangoli con i bordi verticali.",
-    "detail": "Un'imbalance e' definita da due prezzi, non da un intervallo di tempo: i bordi verticali disegnavano un inizio e una fine che la zona non ha, ed erano la ragione per cui si leggeva come un rettangolo invece che come una fascia. Ora restano i due bordi di prezzo, esteso fino alla mitigazione (o fino all'ultima candela se non e' ancora avvenuta), piu' la mediana tratteggiata, che e' il livello su cui la zona viene di solito considerata consumata a meta'. Gli order block restano rettangoli: li' l'estensione temporale e' parte di cosa sono.",
+    "at": 1788555101,
+    "summary": "Box grigi che continuano oltre l'ultima candela finche' non sono riempiti, uno per ogni vuoto, e le zone ancora aperte non spariscono piu' dietro a quelle gia' richiuse.",
+    "detail": "Questa voce e' passata per due miei errori, e li lascio scritti perche' la cronologia serva: prima ne avevo fatto delle fasce orizzontali con la mediana tratteggiata, che era una cosa inventata da me e non lo stile di riferimento; poi sono tornato ai box grigi neutri, senza scritta sopra, come nello screenshot di TradingView. Restavano tre differenze vere, tutte e tre misurabili senza discutere di gusti. (1) I box si fermavano sull'ultima candela: un vuoto non ancora riempito invece continua a valere finche' il prezzo non ci rientra, e ora si estende fino al bordo destro, con il lato destro aperto — chiuderlo disegnerebbe una fine che la zona non ha. Quelli gia' riempiti si fermano dove il prezzo li ha richiusi, che e' l'informazione che portano. (2) I vuoti consecutivi venivano fusi in un box solo: l'altezza risultante e' un intervallo di prezzo che come vuoto non e' mai esistito, e si sarebbe considerato richiuso a meta' quando il prezzo rientrava soltanto nel primo. Ora ce n'e' uno per gap. (3) Il grafico teneva i sei piu' recenti, riempiti compresi, quindi un vuoto aperto da mesi — l'unico tipo che si guarda davvero — spariva appena se ne formavano e richiudevano altri sei piu' recenti. Ora le zone ancora aperte hanno la precedenza sulle chiuse. Resta la correzione precedente sulla partenza: il vuoto sta fra la prima e la terza candela, non dalla candela di mezzo che segna la libreria.",
     "files": [
+      "backend/app/analysis/smc_engine.py",
+      "backend/tests/test_fvg_levels.py",
       "frontend/static/app.js"
     ]
   },
@@ -315,6 +318,21 @@
       "backend/app/main.py",
       "backend/tests/test_param_fields.py",
       "backend/tests/test_validation_message.py",
+      "frontend/index.html",
+      "frontend/static/app.js",
+      "frontend/static/style.css"
+    ]
+  },
+  "f8cf09c3": {
+    "status": "risolto",
+    "at": 1788555101,
+    "summary": "MEXC riceveva la chiave nell'intestazione di Binance, che per lui non esiste: da li' 'api key required' con la chiave configurata. E il pair ora si verifica prima di mandare l'ordine.",
+    "detail": "Due difetti nella stessa segnalazione. Il primo: MEXC espone la stessa API di Binance — stessi percorsi, stessa firma, stessi parametri — tranne l'intestazione con cui si presenta la chiave. L'esecutore era condiviso fra i due exchange, e condivideva anche quella: a MEXC arrivava X-MBX-APIKEY invece di X-MEXC-APIKEY. La chiave c'era, ma nella busta sbagliata, e 'api key required' era vero dal punto di vista di MEXC. Il modulo dei saldi ha sempre usato l'intestazione giusta, ed e' esattamente per questo che i saldi si vedevano mentre gli ordini no: due percorsi verso lo stesso account, uno solo autenticato. C'e' ora un test che manda un ordine finto e guarda l'intestazione. Il secondo: il pair si scrive a mano, ed era l'unico campo dell'app che muove denaro vero senza che niente confermasse che quella stringa esista sull'exchange scelto. Ora ha i suggerimenti come la watchlist, e il server verifica il pair prima di mandare l'ordine — su MEXC, Binance e KuCoin, dove abbiamo i dati; su Kraken, Coinbase e Bitstamp non possiamo, e il campo lo dice invece di lasciar credere che il silenzio sia una conferma. In piu' gli errori dell'exchange arrivano tradotti in cosa fare (chiave non arrivata, secret che non corrisponde, permesso spot mancante, IP non ammesso), con il testo originale sempre in coda. Infine l'ordine manuale finisce nel diario, riuscito o fallito: era l'unico percorso che non ci finiva, ed e' proprio quello su cui e' arrivata questa segnalazione — il fallimento viveva solo nel riquadro di stato, che sparisce ricaricando la pagina.",
+    "files": [
+      "backend/app/main.py",
+      "backend/app/trading/binance_exec.py",
+      "backend/tests/test_manual_order.py",
+      "backend/tests/test_mexc_order.py",
       "frontend/index.html",
       "frontend/static/app.js",
       "frontend/static/style.css"

@@ -1083,18 +1083,58 @@ async def place_manual_order(body: ManualOrderRequest, user: User = Depends(auth
     api_key, api_secret, passphrase = auth.get_decrypted_credential(user, body.exchange)
     if not api_key or not api_secret:
         raise HTTPException(status_code=400, detail="API key o secret mancanti — configurali prima nella sezione Trading automatico")
+
+    # Il pair si verifica prima di mandare l'ordine, dove abbiamo un provider
+    # per quell'exchange. Scriverlo a mano e' l'unico modo che c'e' di
+    # indicarlo, e un pair inesistente o quotato altrove tornava indietro come
+    # errore dell'exchange — cioe' dopo aver provato a comprare qualcosa. Un
+    # controllo qui costa una chiamata e dice il nome esatto atteso.
+    symbol = body.symbol.strip().upper()
+    if not symbol:
+        raise HTTPException(status_code=400, detail="Pair mancante")
+    if body.exchange in ("mexc", "binance", "kucoin"):
+        symbol = canonical_symbol(symbol, "crypto", body.exchange)
+        provider = get_provider("crypto", body.exchange)
+        try:
+            probe = await provider.fetch_ohlcv(symbol, "1d", 2)
+        except ProviderError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Pair {symbol} non trovato su {body.exchange}: {exc}",
+            ) from exc
+        if probe.empty:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Pair {symbol} non trovato su {body.exchange}. Controlla il nome esatto "
+                       "(es. BTCUSDT) e che sia quotato su questo exchange.",
+            )
+
     from app.models import StrategySignal
     signal_type = "entry_long" if body.side == "BUY" else "entry_short"
     fake_signal = StrategySignal(time=int(_time.time()), type=signal_type, price=0.0, label="manual")
     try:
         result = await place_order_for_signal(
-            body.exchange, body.symbol, fake_signal,
+            body.exchange, symbol, fake_signal,
             body.size_mode, body.size_value,
             api_key, api_secret, passphrase,
         )
     except RuntimeError as exc:
+        # Anche un ordine manuale va nel diario. Era l'unico percorso che non
+        # ci finiva, ed e' esattamente quello su cui e' arrivata la
+        # segnalazione: il fallimento viveva solo nel riquadro di stato, che
+        # sparisce ricaricando la pagina.
+        trading_log.record(
+            user.id, symbol=symbol, exchange=body.exchange,
+            strategy_name="manuale", signal_type=signal_type,
+            outcome="fallito", detail=str(exc),
+        )
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    return {"ok": True, "result": result}
+    trading_log.record(
+        user.id, symbol=symbol, exchange=body.exchange,
+        strategy_name="manuale", signal_type=signal_type,
+        outcome="eseguito", detail=str(result)[:400],
+    )
+    return {"ok": True, "result": result, "symbol": symbol}
 
 
 @app.get("/api/balances")

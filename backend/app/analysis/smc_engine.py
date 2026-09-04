@@ -21,7 +21,16 @@ def _cap_recent_per_type(levels: list[LiquidityLevel]) -> list[LiquidityLevel]:
         grouped.setdefault(lvl.type, []).append(lvl)
     out: list[LiquidityLevel] = []
     for level_type, group in grouped.items():
-        group.sort(key=lambda l: l.start_time, reverse=True)  # noqa: E741
+        if level_type == "fvg":
+            # Fra le imbalance, quelle non ancora riempite vengono prima delle
+            # riempite anche se piu' vecchie: una zona ancora aperta e' un
+            # livello che il prezzo puo' tornare a cercare, una gia' richiusa
+            # e' cronaca. Tenendo solo le piu' recenti, un vuoto aperto da
+            # mesi — esattamente quello che si guarda — spariva dal grafico
+            # perche' nel frattempo se ne erano formate e richiuse altre sei.
+            group.sort(key=lambda l: (l.mitigated, -l.start_time))  # noqa: E741
+        else:
+            group.sort(key=lambda l: l.start_time, reverse=True)  # noqa: E741
         out.extend(group[: _LEVEL_LIMIT_PER_TYPE.get(level_type, 6)])
     return out
 
@@ -116,7 +125,13 @@ def _order_block_levels(df: pd.DataFrame, swings: pd.DataFrame) -> list[Liquidit
 
 
 def _fvg_levels(df: pd.DataFrame) -> list[LiquidityLevel]:
-    fvg = smc.fvg(df, join_consecutive=True)
+    # Ogni vuoto per conto suo, non fusi. L'unione dei consecutivi produceva un
+    # box alto quanto due o tre imbalance messe insieme — un intervallo di
+    # prezzo che come vuoto non e' mai esistito, e che si richiude "a meta'"
+    # quando il prezzo rientra nel primo dei gap fusi. TradingView ne disegna
+    # uno per gap, ed e' anche l'unico modo in cui l'altezza del box significa
+    # qualcosa.
+    fvg = smc.fvg(df, join_consecutive=False)
     out = []
     for pos, row in fvg.dropna(subset=["FVG"]).iterrows():
         direction = "bullish" if row["FVG"] > 0 else "bearish"
