@@ -27,7 +27,20 @@ jobs:
 
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
+      # Il builder remoto di Fly ogni tanto risponde 403 "internal error" prima
+      # ancora di costruire: non e' il nostro codice, e riprovare subito
+      # funziona. Senza questo, un guasto loro lasciava la produzione indietro
+      # di un commit finche' qualcuno non se ne accorgeva.
       - name: Deploy
-        run: flyctl deploy --remote-only
+        run: |
+          for attempt in 1 2 3; do
+            if flyctl deploy --remote-only; then
+              exit 0
+            fi
+            echo "tentativo $attempt fallito; riprovo fra 30s"
+            sleep 30
+          done
+          echo "tre tentativi falliti"
+          exit 1
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
