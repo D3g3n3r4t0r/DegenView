@@ -2601,7 +2601,25 @@ async def live_feed(websocket: WebSocket) -> None:
         await mexc_stream_manager.remove_client(websocket)
 
 
-app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR / "static")), name="static")
+class _VersionedStatic(StaticFiles):
+    """File statici con la cache decisa dall'URL.
+
+    Con `?v=<hash>` il contenuto non puo' cambiare senza cambiare l'URL, quindi
+    si puo' tenere per sempre. Senza, si rivalida ogni volta: e' l'URL che
+    qualcuno puo' aver salvato o che arriva da una pagina vecchia, e servirlo
+    dalla cache significherebbe servire codice di due deploy fa.
+    """
+
+    async def get_response(self, path: str, scope):
+        response = await super().get_response(path, scope)
+        query = scope.get("query_string", b"").decode("latin-1")
+        response.headers["Cache-Control"] = (
+            "public, max-age=31536000, immutable" if "v=" in query else "no-cache"
+        )
+        return response
+
+
+app.mount("/static", _VersionedStatic(directory=str(FRONTEND_DIR / "static")), name="static")
 
 
 def _compute_asset_version() -> str:
@@ -2636,11 +2654,19 @@ _SNIPER_HTML = (
 )
 
 
+# L'HTML non si mette in cache: e' l'unico posto dove vive il numero di
+# versione degli asset. Se il browser tiene la pagina, tiene anche il vecchio
+# `?v=`, e continua a chiedere il vecchio app.js — che e' esattamente cosa
+# succedeva: il deploy era andato, la pagina no. Gli asset restano cacheabili
+# per sempre proprio perche' l'URL cambia con il contenuto.
+_HTML_HEADERS = {"Cache-Control": "no-cache"}
+
+
 @app.get("/")
 async def index() -> HTMLResponse:
-    return HTMLResponse(_INDEX_HTML)
+    return HTMLResponse(_INDEX_HTML, headers=_HTML_HEADERS)
 
 
 @app.get("/sniper")
 async def sniper_app() -> HTMLResponse:
-    return HTMLResponse(_SNIPER_HTML)
+    return HTMLResponse(_SNIPER_HTML, headers=_HTML_HEADERS)
