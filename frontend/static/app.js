@@ -5882,6 +5882,20 @@
     drawer.classList.remove("hidden");
   }
 
+  el("lab-trades-export").addEventListener("click", () => {
+    // Il file lo costruisce il server rieseguendo il backtest sugli stessi
+    // parametri: cosi' i numeri del foglio sono misurati, non riportati da qui.
+    // Basta un link — nessun fetch, nessun blob: il browser scarica e la pagina
+    // resta dov'e'.
+    const params = buildLabQuery();
+    const link = document.createElement("a");
+    link.href = `/api/export/backtest.xlsx?${params.toString()}`;
+    link.rel = "noopener";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  });
+
   el("lab-trades-close").addEventListener("click", () => {
     el("lab-trades-drawer").classList.add("hidden");
   });

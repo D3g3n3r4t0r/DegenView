@@ -290,5 +290,20 @@
       "frontend/static/app.js",
       "frontend/static/style.css"
     ]
+  },
+  "seed-0024": {
+    "status": "risolto",
+    "at": 1788529222,
+    "summary": "Nel pannello dei trade c'e' '⤓ Excel': tre fogli e tre grafici, con i totali come formule.",
+    "detail": "Il file ha Riepilogo, Trade ed Equity (piu' 'Trade fuori campione' quando c'e'). I grafici sono dentro: la curva del capitale con il massimo raggiunto, il calo dal massimo, e il risultato di ogni singola operazione a barre — quest'ultimo serve a vedere se il totale viene da molti trade simili o da uno solo enorme, due storie che la percentuale finale racconta uguali. Due scelte che rendono il file utile invece che decorativo. I totali sono FORMULE: cancelli tre righe di trade e il riepilogo si aggiorna, mentre un totale incollato resterebbe quello di prima sembrando ancora giusto. E le percentuali sono frazioni: il backtest le porta come 4.7 per '4,7%', e scritte cosi' con formato percentuale Excel mostrerebbe 470%. Il foglio lo costruisce il server rieseguendo il backtest sugli stessi parametri, non riportando i numeri che il browser ha in pagina: un foglio costruito su quello che il client afferma sarebbe un foglio di affermazioni.",
+    "files": [
+      "backend/app/export.py",
+      "backend/app/main.py",
+      "backend/requirements.txt",
+      "backend/tests/test_export.py",
+      "frontend/index.html",
+      "frontend/static/app.js",
+      "frontend/static/style.css"
+    ]
   }
 }

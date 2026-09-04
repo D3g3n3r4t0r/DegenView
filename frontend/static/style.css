@@ -3626,3 +3626,9 @@ details.issue-card > summary::after {
 }
 details.issue-card[open] > summary::after { content: "▾"; }
 details.issue-card > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.lab-trades-export {
+  margin-left: auto; margin-right: 8px;
+  font: inherit; font-size: 11.5px; padding: 3px 10px; cursor: pointer;
+  border: 1px solid var(--bull); background: transparent; color: var(--bull);
+}
+.lab-trades-export:hover { background: var(--bull); color: var(--bg-panel); }
