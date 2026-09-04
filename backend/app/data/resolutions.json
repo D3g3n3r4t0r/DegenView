@@ -337,5 +337,14 @@
       "frontend/static/app.js",
       "frontend/static/style.css"
     ]
+  },
+  "eb43d341": {
+    "status": "risolto",
+    "at": 1788555384,
+    "summary": "Gabriele 2 e' gia' esattamente questo Pine: verificato barra per barra contro una trascrizione letterale dello script.",
+    "detail": "Il test trascrive il Pine alla lettera — rma di Wilder con il suo ternario, sma per la base delle Bollinger, stdev di popolazione — e confronta i segnali con quelli della strategia: coincidono su ogni barra. Anche gli input coincidono: 14, 20, 2.0, soglie 28 e 72. La stdev di popolazione non e' un dettaglio: quella campionaria, che e' il default di pandas, allarga le bande e sposta i segnali senza che niente sembri rotto, e ora c'e' un test anche su quella. L'unica cosa che lo script non dice e' cosa fare della posizione: e' uno study con due alertcondition, non una strategy — la riga strategy() e' commentata. Le due condizioni dicono quando entrare long e quando entrare short, non quando uscire. Gabriele 2 le legge nel modo che permette di stare su entrambi i lati: la posizione si ribalta invece di restare piatta fra i due estremi. Gabriele 1 resta long-only, dove l'ipercomprato chiude e basta — due letture degli stessi due alert, tenute separate perche' la prima gira sugli alert gia' attivi.",
+    "files": [
+      "backend/tests/test_gabriele2.py"
+    ]
   }
 }
