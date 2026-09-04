@@ -1519,6 +1519,21 @@ class OptimizeCandidate(BaseModel):
     overfitted: bool = False
 
 
+class Overfitting(BaseModel):
+    """Quanto spesso, fra i candidati considerati, il migliore in campione
+    finisce sotto la mediana fuori campione.
+
+    Non e' un doppione dello Sharpe deflazionato: quello corregge un numero,
+    questo giudica la selezione. Un risultato puo' superare l'uno e fallire
+    l'altro, e i due casi vanno letti diversamente."""
+
+    pbo: float | None = None
+    acceptable: bool = False
+    n_candidates: int = 0
+    n_splits: int = 0
+    note: str = ""
+
+
 class RegimeInfo(BaseModel):
     """Whether the strategy had an edge to find on this series at all.
 
@@ -1605,6 +1620,7 @@ class OptimizeResult(BaseModel):
     chosen_branch: str | None = None
     pipeline_notes: list[str] = []
     deflated_sharpe: DeflatedSharpe | None = None
+    overfitting: Overfitting | None = None
 
 
 @app.get("/api/optimize", response_model=OptimizeResult)
@@ -1700,6 +1716,13 @@ async def optimize_strategy_endpoint(
                     sharpe=pr.dsr.sharpe, deflated=pr.dsr.deflated,
                     sharpe_threshold=pr.dsr.sharpe_threshold,
                     n_trials=pr.dsr.n_trials, acceptable=pr.dsr.acceptable,
+                )
+            ),
+            overfitting=(
+                None if pr.pbo is None else Overfitting(
+                    pbo=pr.pbo.pbo, acceptable=pr.pbo.acceptable,
+                    n_candidates=pr.pbo.n_candidates, n_splits=pr.pbo.n_splits,
+                    note=pr.pbo.note,
                 )
             ),
             regime=RegimeInfo(

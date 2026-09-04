@@ -3462,3 +3462,4 @@ body {
 .jr-head { color: var(--ink); }
 .jr-detail { color: var(--ink-dim); font-size: 10.5px; word-break: break-word; }
 .jr-when { margin-left: auto; color: var(--ink-dim); font-size: 10.5px; white-space: nowrap; }
+.lab-regime-sub { color: var(--ink-dim); font-weight: 400; }

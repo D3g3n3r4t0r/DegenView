@@ -164,3 +164,92 @@ def test_correcting_the_scale_changes_the_number_not_the_verdict():
     right = deflated_sharpe_ratio(r, n_trials=3802, periods_per_year=ppy)
     assert wrong.sharpe > right.sharpe * 3
     assert wrong.acceptable == right.acceptable
+
+
+# --- allineamento delle curve per il PBO ----------------------------------
+#
+# Il PBO vuole una matrice T x N confrontabile riga per riga. Le curve di equity
+# nascono per trade, quindi ognuna ha i suoi istanti: accostarle per posizione
+# confronterebbe il terzo trade di una configurazione con il terzo di un'altra,
+# avvenuto mesi dopo, e la misura leggerebbe quel disallineamento invece della
+# sovra-ottimizzazione. Questi test bloccano quel modo di sbagliare.
+
+
+def _grid(n, step=86400, start=1_600_000_000):
+    return [start + i * step for i in range(n)]
+
+
+def test_curves_with_different_lengths_produce_one_matrix():
+    from app.analysis.validation import align_equity_curves
+
+    g = _grid(10)
+    a = [(g[0], 100.0), (g[3], 110.0), (g[7], 120.0)]
+    b = [(g[0], 100.0), (g[1], 95.0), (g[8], 130.0)]
+    m = align_equity_curves([a, b], g)
+    assert m.shape == (9, 2)
+
+
+def test_equity_is_held_flat_between_trades_not_interpolated():
+    """Fra un trade e il successivo la posizione e' chiusa: interpolare
+    inventerebbe movimenti mai avvenuti."""
+    import numpy as np
+
+    from app.analysis.validation import align_equity_curves
+
+    g = _grid(6)
+    curve = [(g[0], 100.0), (g[3], 110.0)]
+    m = align_equity_curves([curve, [(g[0], 100.0), (g[2], 90.0), (g[4], 95.0)]], g)
+    col = m[:, 0]
+    assert np.count_nonzero(np.abs(col) > 1e-12) == 1, "un solo salto, non una rampa"
+    assert col[2] == pytest.approx(0.10)
+
+
+def test_a_trade_lands_on_the_grid_step_that_contains_it():
+    from app.analysis.validation import align_equity_curves
+
+    g = _grid(5)
+    curve = [(g[0], 100.0), (g[1] + 3600, 105.0)]   # a metà fra due punti
+    other = [(g[0], 100.0), (g[3], 80.0)]
+    m = align_equity_curves([curve, other], g)
+    assert m[0, 0] == pytest.approx(0.0)
+    assert m[1, 0] == pytest.approx(0.05), "conta il punto successivo, non quello in corso"
+
+
+def test_flat_candidates_are_dropped():
+    """Una colonna piatta pareggia con qualsiasi altra e falserebbe il
+    confronto fra le due metà."""
+    from app.analysis.validation import align_equity_curves
+
+    g = _grid(8)
+    flat = [(g[0], 100.0), (g[7], 100.0)]
+    moving = [(g[0], 100.0), (g[2], 120.0), (g[5], 90.0)]
+    m = align_equity_curves([flat, moving], g)
+    assert m.shape[1] == 1
+
+
+def test_no_usable_curve_gives_an_empty_matrix_not_a_crash():
+    from app.analysis.validation import align_equity_curves
+
+    assert align_equity_curves([], _grid(5)).size == 0
+    assert align_equity_curves([[(1, 100.0)]], _grid(5)).size == 0
+
+
+def test_the_aligned_matrix_feeds_pbo():
+    import numpy as np
+
+    from app.analysis.validation import align_equity_curves, probability_of_backtest_overfitting
+
+    rng = np.random.default_rng(3)
+    g = _grid(400)
+    curves = []
+    for k in range(8):
+        eq, v = [], 100.0
+        for i in range(0, 400, 4):
+            v *= 1 + rng.normal(0.001 * (k - 4) / 4, 0.02)
+            eq.append((g[i], v))
+        curves.append(eq)
+    m = align_equity_curves(curves, g)
+    res = probability_of_backtest_overfitting(m)
+    assert res.pbo is not None
+    assert 0.0 <= res.pbo <= 1.0
+    assert res.n_candidates == m.shape[1]

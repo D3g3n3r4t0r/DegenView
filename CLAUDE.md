@@ -57,6 +57,10 @@ Confonderle è il modo più facile di sbagliare: un filtro che chiede persistenz
 - **Su KASUSDT daily nessuna delle due strategie ha edge.** Il gate blocca
   entrambe (VR≈1.15, indistinguibile da random walk), tutti i seed danno OOS
   negativo, e buy-and-hold faceva +643%.
+- **Il PBO conferma il verdetto dello Sharpe deflazionato, non lo duplica.** Su
+  una serie senza edge: PBO 0.56 su 5 candidati (soglia 0.20), DSR 0.02. Il
+  primo giudica la *selezione*, il secondo corregge un *numero* — un risultato
+  può superare l'uno e fallire l'altro.
 - **Più parametri = risultato peggiore.** Il ramo di Lorenzo a 4 parametri batte
   quello a 8 sia in-sample sia fuori campione.
 

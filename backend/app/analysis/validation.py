@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import math
 import statistics
+from collections.abc import Sequence
 from dataclasses import dataclass
 from itertools import combinations
 
@@ -189,6 +190,50 @@ def deflated_sharpe_ratio(
         sharpe_threshold=sr0 * math.sqrt(periods_per_year),
         n_trials=n_trials, skew=skew, kurtosis=kurt,
     )
+
+
+def align_equity_curves(
+    curves: Sequence[Sequence[tuple[int, float]]],
+    grid: Sequence[int],
+) -> np.ndarray:
+    """Curve di equity diverse, riportate sulla stessa griglia temporale.
+
+    Serve al PBO, che vuole una matrice T x N di rendimenti confrontabili riga
+    per riga. Le curve nascono per trade, quindi ognuna ha i suoi istanti e le
+    sue lunghezze: accostarle per posizione confronterebbe il terzo trade di una
+    configurazione con il terzo di un'altra, avvenuto mesi dopo — e il PBO
+    misurerebbe quel disallineamento invece della sovra-ottimizzazione.
+
+    L'equity fra un trade e il successivo e' costante (la posizione e' chiusa),
+    quindi il valore su ogni punto della griglia e' l'ultimo noto a quell'istante
+    — nessuna interpolazione, che inventerebbe movimenti mai avvenuti. Prima del
+    primo trade vale il capitale iniziale della curva.
+
+    Restituisce una matrice (len(grid) - 1) x N di rendimenti per periodo.
+    Le colonne senza dati utilizzabili vengono scartate.
+    """
+    g = np.asarray(list(grid), dtype=float)
+    cols: list[np.ndarray] = []
+    for curve in curves:
+        if not curve or len(curve) < 2:
+            continue
+        ts = np.array([t for t, _ in curve], dtype=float)
+        vals = np.array([v for _, v in curve], dtype=float)
+        # searchsorted a destra: l'ultimo punto con tempo <= t della griglia.
+        idx = np.searchsorted(ts, g, side="right") - 1
+        idx = np.clip(idx, 0, len(vals) - 1)
+        level = vals[idx]
+        prev = level[:-1]
+        with np.errstate(divide="ignore", invalid="ignore"):
+            ret = np.where(prev > 0, (level[1:] - prev) / prev, np.nan)
+        if not np.any(np.isfinite(ret)) or np.allclose(np.nan_to_num(ret), 0.0):
+            # Una colonna piatta non porta informazione e, sommata, pareggia
+            # con qualsiasi altra: falserebbe i confronti fra le meta'.
+            continue
+        cols.append(ret)
+    if not cols:
+        return np.empty((0, 0), dtype=float)
+    return np.column_stack(cols)
 
 
 def periods_per_year_from_curve(equity_curve: list[tuple[int, float]]) -> float:
