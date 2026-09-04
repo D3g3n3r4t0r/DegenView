@@ -3537,3 +3537,29 @@ body {
 .opt-progress-foot.error { color: var(--bear); }
 .arch-how { margin-top: 5px; font-size: 10.5px; color: var(--ink-dim); }
 .arch-warn { margin-top: 4px; font-size: 10.5px; color: var(--accent); }
+
+/* --- Risposte alle segnalazioni ------------------------------------------- */
+.issue-reply {
+  margin-top: 6px; padding: 6px 9px; font-size: 12px;
+  border-left: 2px solid var(--border); background: var(--bg-raised);
+}
+.issue-reply.from-claude { border-left-color: var(--accent); }
+.issue-reply p { margin: 3px 0 0; color: var(--ink); white-space: pre-wrap; }
+.ir-who { font-size: 10.5px; color: var(--ink-dim); font-weight: 600; }
+.ir-reopen {
+  font-size: 10px; margin-left: 6px; padding: 0 5px;
+  border: 1px solid var(--bear); color: var(--bear);
+}
+.issue-reply-form { margin-top: 8px; display: flex; flex-direction: column; gap: 5px; }
+.issue-reply-form textarea {
+  width: 100%; padding: 6px 8px; font: inherit; font-size: 12px;
+  border: 1px solid var(--border); background: var(--bg); color: var(--ink); resize: vertical;
+}
+.irf-row { display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--ink-dim); }
+.irf-row button {
+  margin-left: auto; font: inherit; font-size: 11px; padding: 4px 10px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--bg-raised); color: var(--ink);
+}
+.irf-status { margin: 0; font-size: 11px; color: var(--ink-dim); }
+.issue-card.is-riaperto { border-left-color: var(--bear); }
+.issues-count.is-riaperto b { color: var(--bear); }

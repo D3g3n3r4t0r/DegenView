@@ -2271,10 +2271,30 @@ class IssueIn(BaseModel):
     priority: str = "media"
 
 
+class IssueReplyIn(BaseModel):
+    text: str
+    # "risolto" lo decide chi ha scritto la segnalazione, non chi ha scritto la
+    # correzione: se il problema si vede ancora, la voce torna aperta.
+    reopen: bool = False
+
+
 class IssuePatch(BaseModel):
     status: str | None = None
     priority: str | None = None
     detail: str | None = None
+
+
+@app.post("/api/issues/{issue_id}/replies")
+async def reply_to_issue(
+    issue_id: str, req: IssueReplyIn, user: User = Depends(auth.get_current_user)
+) -> dict:
+    if not any(i["id"] == issue_id for i in issues_store.list_issues()):
+        raise HTTPException(status_code=404, detail="Segnalazione non trovata")
+    try:
+        return issues_store.add_reply(issue_id, req.text, author=user.email,
+                                      reopen=req.reopen)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.get("/api/issues")
@@ -2286,6 +2306,7 @@ async def list_issues() -> dict:
             "aperto": sum(1 for i in items if i.get("status") == "aperto"),
             "in corso": sum(1 for i in items if i.get("status") == "in corso"),
             "risolto": sum(1 for i in items if i.get("status") == "risolto"),
+            "riaperto": sum(1 for i in items if i.get("status") == "riaperto"),
         },
     }
 

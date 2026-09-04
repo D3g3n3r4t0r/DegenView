@@ -281,3 +281,95 @@ def test_edits_to_a_seed_entry_are_not_overwritten(seeding):
     voce = next(it for it in seeding._issues if it["id"] == iid)
     assert voce["status"] == "in corso"
     assert voce["detail"] == "con dettagli aggiunti"
+
+
+# --- risposte -------------------------------------------------------------
+#
+# "Risolto" lo decide chi ha scritto la segnalazione, non chi ha scritto la
+# correzione: senza un modo di rispondere, una voce chiusa per decreto resta
+# chiusa anche se il problema si vede ancora.
+
+
+@pytest.fixture()
+def board(tmp_path, monkeypatch):
+    from app import issues as mod
+
+    monkeypatch.setattr(mod, "_STORE_FILE", tmp_path / "issues.json")
+    monkeypatch.setattr(mod, "_SEEDED_FILE", tmp_path / "seeded.json")
+    monkeypatch.setattr(mod, "_RESOLUTIONS_FILE", tmp_path / "res.json")
+    monkeypatch.setattr(mod, "_REPLIES_FILE", tmp_path / "replies.json")
+    monkeypatch.setattr(mod, "_CLAUDE_REPLIES_FILE", tmp_path / "claude.json")
+    mod._issues.clear()
+    mod._replies.clear()
+    mod._seeded_ids.clear()
+    return mod
+
+
+def test_a_reply_lands_on_its_issue(board):
+    iid = board.add_issue("bug")["id"]
+    board.add_reply(iid, "succede ancora", author="io@x.it")
+    it = board.list_issues()[0]
+    assert [r["text"] for r in it["replies"]] == ["succede ancora"]
+    assert it["replies"][0]["side"] == "loro"
+
+
+def test_an_empty_reply_is_refused(board):
+    iid = board.add_issue("bug")["id"]
+    with pytest.raises(ValueError):
+        board.add_reply(iid, "   ")
+
+
+def test_replies_survive_a_reload(board):
+    iid = board.add_issue("bug")["id"]
+    board.add_reply(iid, "ancora")
+    board._replies.clear()
+    board._load_replies()
+    assert len(board.list_issues()[0]["replies"]) == 1
+
+
+def test_the_two_sides_are_merged_in_time_order(board):
+    """Le risposte di Claude arrivano col deploy, le vostre dal volume: nessuna
+    delle due parti può riscrivere le parole dell'altra."""
+    iid = board.add_issue("bug")["id"]
+    board.add_reply(iid, "seconda")
+    board._replies[-1]["created_at"] = 200
+    _write_resolutions(board, {})
+    board._CLAUDE_REPLIES_FILE.write_text(
+        json.dumps({iid: [{"text": "prima", "created_at": 100}]}), encoding="utf-8")
+    thread = board.list_issues()[0]["replies"]
+    assert [r["text"] for r in thread] == ["prima", "seconda"]
+    assert [r["side"] for r in thread] == ["claude", "loro"]
+
+
+def test_reopening_beats_a_resolution(board):
+    """Il caso che conta: Claude l'ha segnata risolta, il problema si vede
+    ancora."""
+    iid = board.add_issue("bug")["id"]
+    _write_resolutions(board, {iid: {"summary": "fatto", "status": "risolto"}})
+    assert board.list_issues()[0]["status"] == "risolto"
+    board.add_reply(iid, "non è risolto", reopen=True)
+    assert board.list_issues()[0]["status"] == "riaperto"
+
+
+def test_a_plain_reply_does_not_reopen(board):
+    iid = board.add_issue("bug")["id"]
+    _write_resolutions(board, {iid: {"summary": "fatto", "status": "risolto"}})
+    board.add_reply(iid, "grazie")
+    assert board.list_issues()[0]["status"] == "risolto"
+
+
+def test_a_newer_resolution_closes_a_reopened_issue(board):
+    """Altrimenti una voce riaperta resterebbe rossa per sempre, anche dopo la
+    correzione vera."""
+    iid = board.add_issue("bug")["id"]
+    board.add_reply(iid, "non è risolto", reopen=True)
+    later = board._replies[-1]["created_at"] + 10
+    _write_resolutions(board, {iid: {"summary": "ora sì", "status": "risolto", "at": later}})
+    assert board.list_issues()[0]["status"] == "risolto"
+
+
+def test_a_resolution_without_a_date_never_wins_over_a_reopen(board):
+    iid = board.add_issue("bug")["id"]
+    board.add_reply(iid, "no", reopen=True)
+    _write_resolutions(board, {iid: {"summary": "vecchia", "status": "risolto"}})
+    assert board.list_issues()[0]["status"] == "riaperto"
