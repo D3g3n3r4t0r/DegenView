@@ -127,7 +127,11 @@ def _fvg_levels(df: pd.DataFrame) -> list[LiquidityLevel]:
                 direction=direction,
                 price_high=float(row["Top"]),
                 price_low=float(row["Bottom"]),
-                start_time=_ts(df, pos),
+                # La libreria segna la candela di mezzo, ma il vuoto e' fra la
+                # PRIMA e la TERZA: un box che parte da quella di mezzo copre
+                # meta' del movimento che l'ha creato e comincia una barra dopo
+                # rispetto a come lo disegna TradingView.
+                start_time=_ts(df, max(int(pos) - 1, 0)),
                 end_time=mitigated_ts,
                 mitigated=mitigated_ts is not None,
                 label=f"Fair Value Gap {'rialzista' if direction == 'bullish' else 'ribassista'}",
