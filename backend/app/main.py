@@ -1934,6 +1934,91 @@ async def optimize_strategy_endpoint(
 # suo e accumula righe di log che il client chiede quando vuole.
 
 
+def _archive_optimizer_result(owner_id: str, symbol: str, asset_type: str,
+                              exchange: str, ltf_interval: str, strategy_name: str,
+                              mode: str, body: "OptimizeResult") -> dict:
+    """Mette il risultato nell'archivio, gia' completo di numeri.
+
+    Le metriche non vengono ricalcolate: sono quelle del backtest che la ricerca
+    ha appena eseguito, quindi rieseguirlo significherebbe rifare lo stesso
+    lavoro e rischiare un numero diverso per via del feed che nel frattempo si
+    e' allungato.
+    """
+    bt = body.backtest
+    entry = archive_store.create(
+        owner_id=owner_id, symbol=symbol, asset_type=asset_type, exchange=exchange,
+        interval=ltf_interval, strategy_name=strategy_name, params=body.params,
+        backtest_params={}, source="ottimizzazione",
+        note=f"Ricerca {_MODE_LABEL.get(mode, mode)}",
+        optimizer={
+            "mode": mode,
+            "evaluations": body.trials_evaluated,
+            "out_of_sample_return_pct": body.out_of_sample_return_pct,
+            "overfitted": body.overfitted,
+            "deterministic": body.deterministic,
+            "chosen_branch": body.chosen_branch,
+            "regime_passed": None if body.regime is None else body.regime.passed,
+            "regime_reason": "" if body.regime is None else body.regime.reason,
+            "deflated_sharpe": None if body.deflated_sharpe is None else body.deflated_sharpe.deflated,
+            "pbo": None if body.overfitting is None else body.overfitting.pbo,
+        },
+    )
+    archive_store.attach_result(entry["id"], {
+        "interval": bt.interval,
+        "candles": None if body.data_used is None else body.data_used.candles,
+        "total_return_pct": bt.total_return_pct,
+        "num_trades": bt.num_trades,
+        "win_rate_pct": bt.win_rate_pct,
+        "max_drawdown_pct": bt.max_drawdown_pct,
+        "profit_factor": bt.profit_factor,
+        "sharpe_ratio": bt.sharpe_ratio,
+        "initial_capital": bt.initial_capital,
+        "final_equity": bt.final_equity,
+        "data_start": bt.data_start,
+        "data_end": bt.data_end,
+    })
+    return entry
+
+
+_MODE_LABEL = {"random": "rapida", "grid": "griglia", "plateau": "stabile"}
+
+
+def _optimizer_summary(symbol: str, strategy_name: str, mode: str,
+                       body: "OptimizeResult") -> str:
+    """Il riepilogo che arriva a ricerca finita.
+
+    Porta anche i verdetti, non solo il rendimento: un +646% con il gate non
+    superato e una stabilita' dello 0% e' un numero da non usare, e mandare
+    solo il primo dei tre lo farebbe sembrare un risultato.
+    """
+    bt = body.backtest
+    lines = [
+        f"🔬 <b>Ottimizzazione conclusa</b> — {symbol.upper()}",
+        f"{strategy_name} · ricerca {_MODE_LABEL.get(mode, mode)} · {body.trials_evaluated} backtest",
+        "",
+        f"In campione: <b>{bt.total_return_pct:+.1f}%</b> su {bt.num_trades} trade "
+        f"(drawdown {bt.max_drawdown_pct:.1f}%)",
+    ]
+    if body.out_of_sample_return_pct is not None:
+        lines.append(f"Fuori campione: <b>{body.out_of_sample_return_pct:+.1f}%</b>"
+                     + (" ⚠️ sovradattato" if body.overfitted else ""))
+    if body.regime is not None and not body.regime.passed:
+        lines.append("⚠️ Gate di regime non superato: su questa serie la strategia "
+                     "non ha un edge misurabile, il risultato è adattamento al rumore.")
+    if body.deflated_sharpe is not None and body.deflated_sharpe.deflated is not None \
+            and not body.deflated_sharpe.acceptable:
+        lines.append(f"⚠️ Affidabilità {body.deflated_sharpe.deflated * 100:.0f}% "
+                     f"dopo correzione per {body.deflated_sharpe.n_trials} tentativi.")
+    if body.overfitting is not None and body.overfitting.pbo is not None \
+            and not body.overfitting.acceptable:
+        lines.append(f"⚠️ Sovra-ottimizzazione {body.overfitting.pbo * 100:.0f}%.")
+    if body.deterministic is False:
+        lines.append("ℹ️ Parte della griglia è stata campionata: quel pezzo non è riproducibile.")
+    lines.append("")
+    lines.append("Salvata nell'archivio strategie, scheda Watchlist.")
+    return "\n".join(lines)
+
+
 @app.post("/api/optimize/start")
 async def start_optimize(
     symbol: str = Query(..., min_length=1, max_length=20),
@@ -1984,8 +2069,23 @@ async def start_optimize(
                 strategy_name, df, backtest_params, mode, ltf_interval,
                 backtest_interval, constraints, say,
             )
-            jobs_store.log(job_id, "fatto")
             jobs_store.finish(job_id, body.model_dump(mode="json"))
+
+            # Il lavoro e' finito anche se nessuno stava guardando: la ricerca
+            # gira sul server, quindi chiudere Safari o perdere la linea non la
+            # ferma. Perche' quel risultato non si perda con la scheda, viene
+            # archiviato e annunciato.
+            if owner_id:
+                archived = _archive_optimizer_result(owner_id, symbol, asset_type,
+                                                     exchange, ltf_interval, strategy_name,
+                                                     mode, body)
+                jobs_store.log(job_id, f"salvata in archivio ({archived['id']})")
+                user_now = auth.get_user(owner_id)
+                if user_now and user_now.telegram_chat_id and _telegram_allowed(user_now):
+                    await telegram.send_to(user_now.telegram_chat_id,
+                                           _optimizer_summary(symbol, strategy_name, mode, body))
+                    jobs_store.log(job_id, "riepilogo mandato su Telegram")
+            jobs_store.log(job_id, "fatto")
         except NoCandidateMeetsConstraints as exc:
             jobs_store.fail(job_id, str(exc))
         except ProviderError as exc:
@@ -1996,6 +2096,13 @@ async def start_optimize(
             # lavoro resterebbe "in corso" per sempre.
             logger.error("ottimizzazione fallita per %s: %s", symbol, exc, exc_info=True)
             jobs_store.fail(job_id, str(exc))
+            if owner_id:
+                user_now = auth.get_user(owner_id)
+                if user_now and user_now.telegram_chat_id and _telegram_allowed(user_now):
+                    await telegram.send_to(
+                        user_now.telegram_chat_id,
+                        f"⚠️ <b>Ottimizzazione fallita</b> — {symbol.upper()} · {strategy_name}\n{exc}",
+                    )
 
     asyncio.create_task(_run())
     return {"job_id": job_id}

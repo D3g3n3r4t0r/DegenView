@@ -3535,3 +3535,5 @@ body {
 }
 .opt-progress-foot.ok { color: var(--bull); }
 .opt-progress-foot.error { color: var(--bear); }
+.arch-how { margin-top: 5px; font-size: 10.5px; color: var(--ink-dim); }
+.arch-warn { margin-top: 4px; font-size: 10.5px; color: var(--accent); }
