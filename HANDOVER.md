@@ -72,6 +72,54 @@ ripetute qui apposta — un solo posto da tenere aggiornato.
 
 ## Filoni di lavoro aperti (pluri-sessione)
 
+### Ridisegno dell'interfaccia — `seed-0028` — **in corso**
+
+Lorenzo: «voglio un overhaul generale del design di tutto il sito visto le
+tante funzioni implementate serve occhio globale che inserisca ogni funzione
+in modo moderno e visualizzato in modo efficace», poi «DEVI METTERE IN
+DISCUSSIONE OGNI COSA», poi «voglio TUTTO UGUALE» rispetto al prototipo
+navigabile che aveva approvato.
+
+Principio: l'architettura si nomina per **intento**, non per oggetto. Le tab
+erano nominate per oggetto e quella Alert era diventata una discarica di
+sette funzioni, con dentro un ordine a denaro reale.
+
+**Fatto**:
+- Sistema di design «Instrument»: fondo nero-freddo con tinta verde, accento
+  menta speso con parsimonia, colore semantico separato dall'accento, numeri
+  hero in Instrument Serif (mai in colonna: non ha cifre tabellari).
+- Una sola navigazione (sidebar) al posto di tre sovrapposte (rail + tab +
+  menu Altro). Pilota il meccanismo delle tab esistente invece di duplicarlo,
+  quindi resta un solo posto che decide quale contenuto e' vivo. Rail, tab e
+  Altro restano nel DOM perche' `app.js` ci si aggancia.
+- Aree: Analizza / Lab / Sorveglia / **Opera** / Scopri. Il trading e' uscito
+  dalla tab Alert. Il Lab e' a due colonne a tutta larghezza.
+- Il grafico non sparisce mai: largo in Analizza, a colonna altrove, fascia
+  bassa sotto i 1250px.
+- UI futures completa (era il punto 2 del piano `seed-0027`): leva a cursore,
+  anteprima obbligatoria da `/api/trading/futures/quote`, conferma esplicita
+  che nomina leva e prezzo di liquidazione. Ogni modifica invalida la
+  conferma e azzera l'anteprima. Tetto UI allineato a `MAX_FUTURES_LEVERAGE`
+  (10, non 20).
+- Endpoint `GET /api/trading/futures/positions` (sola lettura, non tocca
+  l'executor) + posizioni con la distanza dalla liquidazione disegnata come
+  lancetta su nastro.
+- Mappa dei candidati nel Lab: i dieci `top_candidates` che il backend
+  restituiva da sempre e che nessuna schermata aveva mai mostrato.
+
+**Da fare**:
+1. **Riportare il Token Sniper dentro l'app.** E' ancora `sniper.html`, una
+   pagina a se' con tema e font suoi. E' il pezzo piu' grosso che manca per
+   dire che il ridisegno e' finito.
+2. Sorveglia a tre colonne come nel prototipo (watchlist con sparkline,
+   alert attivi, storico a timeline).
+3. Analizza: striscia di statistiche sotto il grafico e barre di confluenza,
+   che nel prototipo c'erano.
+
+Prototipo navigabile di riferimento (Artifact): «Liquidity Instrument».
+
+---
+
 ### Operazioni futures — `seed-0027` — **in corso**
 
 Piano completo approvato e scritto (era in
@@ -110,10 +158,11 @@ in-place a un modulo spot esistente, sempre un modulo nuovo affiancato.
    testnet vere di Lorenzo. Bloccante prima di considerare l'esecuzione
    reale pronta: nessun ordine e' mai stato mandato a un server Binance
    vero, solo a trasporti finti nei test.
-2. **Frontend**: form leva/margine, mostrare l'anteprima di
-   `/api/trading/futures/quote` prima della conferma, avviso di
-   liquidazione stimata sul grafico. Deliberatamente non ancora fatto: si
-   disegna solo dopo che il motore e' verificato (punto 1).
+2. ~~**Frontend**: form leva/margine, anteprima, avviso di liquidazione.~~
+   **Fatto** nel ridisegno (`seed-0028`), area Opera. Nota: e' stato
+   disegnato prima della verifica su testnet, non dopo come previsto qui —
+   Lorenzo ha scelto di procedere sapendolo. Il punto 1 resta bloccante
+   prima di considerare l'esecuzione reale pronta.
 3. **MEXC futures**, poi **KuCoin futures** — solo dopo che Binance e'
    stabile in produzione da tempo. Kraken/Coinbase/Bitstamp futures restano
    fuori perimetro (disponibilita'/complessita' non giustificano il rischio
@@ -149,6 +198,17 @@ chiesto con le sue parole.
   → "procedi" due volte, prima per le fasi 0-2 (motore di backtest a leva),
   poi per le fasi 3-4 (esecuzione reale Binance + guardrail). Vedi la
   sezione sopra per lo stato dettagliato.
+- **Ridisegno + futures in produzione** (`seed-0028`, `0029`, `0030`):
+  Lorenzo ha chiesto prima le proposte di design, poi ha bocciato il primo
+  giro («stai facendo della roba di merda... voglio vedere ogni schermata non
+  solo graficamente parlando») e ha chiesto un solo prototipo navigabile.
+  Approvato quello, «OK PUBBLICA TUTTO»: i futures sono stati uniti a `main`
+  e deployati sapendo che la verifica testnet non c'era ancora — scelta sua,
+  dichiarata. Poi tre richieste puntuali durante il lavoro: il flag sulla
+  candela di esecuzione (`seed-0029`), il grafico sempre visibile in ogni
+  schermata, e la tracciatura di ogni operazione sul grafico (`seed-0030`).
+  Trovato e corretto lungo la strada: la Bacheca non si apriva dalla sidebar
+  (il gestore «click fuori» la richiudeva nello stesso click).
 - **Questo file**: Lorenzo ha chiesto che ogni conversazione lasci memoria
   in GitHub, cosi' una chat diversa sappia da dove riprendere senza dover
   rileggere tutto. Riscritto `HANDOVER.md` (era rimasto fermo a una
