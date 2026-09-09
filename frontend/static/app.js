@@ -1119,6 +1119,10 @@
     if (loggedIn) emailEl.textContent = state.user.email;
     el("alert-login-prompt").classList.toggle("hidden", loggedIn);
     el("alert-authenticated").classList.toggle("hidden", !loggedIn);
+    // Opera e' un'area separata da Alert ma con lo stesso cancello: le chiavi
+    // di trading sono per utente, non per browser.
+    el("opera-login-prompt").classList.toggle("hidden", loggedIn);
+    el("opera-authenticated").classList.toggle("hidden", !loggedIn);
     if (loggedIn) {
       el("telegram-chat-id-input").value = state.user.telegram_chat_id || "";
       updateTelegramSetupUI();
@@ -1466,6 +1470,186 @@
     syncSliderUnit();
   }
   bindManualOrderUI();
+
+  // ── Ordine futures ────────────────────────────────────────────────────
+  // Tenuto separato dallo spot come il backend: nessuna funzione dello spot
+  // viene riusata qui, cosi' un errore su questo lato non puo' arrivare a un
+  // ordine spot. Il tetto di leva e' comunque riapplicato dal server.
+  const MAX_FUTURES_LEVERAGE_UI = 10;
+  let futuresSide = "BUY";
+  let futuresQuote = null;
+  let futuresQuoteTimer = null;
+
+  function futuresSizeMode() {
+    const checked = document.querySelector('input[name="futures-size-mode"]:checked');
+    return checked ? checked.value : "fixed_usdt";
+  }
+
+  function renderFuturesQuote() {
+    const lev = Number(el("futures-leverage").value);
+    el("futures-lev-val").textContent = lev + "×";
+    el("futures-confirm-lev").textContent = lev + "×";
+    const cap = el("futures-lev-cap");
+    cap.textContent = lev >= MAX_FUTURES_LEVERAGE_UI ? "tetto server raggiunto" : `tetto server ${MAX_FUTURES_LEVERAGE_UI}×`;
+    cap.classList.toggle("lev-cap-hot", lev >= 7);
+
+    const q = futuresQuote;
+    const setv = (id, txt, cls) => {
+      const node = el(id);
+      node.textContent = txt;
+      node.className = cls || "";
+    };
+    if (!q) {
+      setv("fq-notional", "—"); setv("fq-margin", "—");
+      setv("fq-liq", "—"); setv("fq-dist", "—");
+      el("futures-confirm-liq").textContent = "—";
+      return;
+    }
+    const dist = (q.liquidation_price / q.mark_price - 1) * 100;
+    setv("fq-notional", fmtNum(q.notional, 2) + " USDT");
+    setv("fq-margin", fmtNum(q.margin_used, 2) + " USDT" + (q.margin_sufficient ? "" : " — insufficiente"),
+         q.margin_sufficient ? "" : "fq-bad");
+    setv("fq-liq", fmtNum(q.liquidation_price, 2), "fq-bad");
+    setv("fq-dist", (dist >= 0 ? "+" : "") + dist.toFixed(1) + "%",
+         Math.abs(dist) < 8 ? "fq-bad" : Math.abs(dist) < 15 ? "fq-warn" : "fq-ok");
+    el("futures-confirm-liq").textContent = fmtNum(q.liquidation_price, 2);
+  }
+
+  function fmtNum(v, d) {
+    if (v === null || v === undefined || Number.isNaN(v)) return "—";
+    return Number(v).toLocaleString("it-IT", { minimumFractionDigits: d || 0, maximumFractionDigits: d || 0 });
+  }
+
+  // L'anteprima e' obbligatoria: senza una quote fresca il bottone resta
+  // spento, cosi' non si puo' confermare una liquidazione che non si e' vista.
+  async function refreshFuturesQuote() {
+    const symbol = el("futures-symbol").value.trim().toUpperCase();
+    if (!symbol || !state.user) { futuresQuote = null; renderFuturesQuote(); updateFuturesExecuteState(); return; }
+    try {
+      const res = await fetch("/api/trading/futures/quote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          exchange: el("futures-exchange").value,
+          symbol,
+          side: futuresSide,
+          size_mode: futuresSizeMode(),
+          size_value: Number(el("futures-size-val").value) || 0,
+          leverage: Number(el("futures-leverage").value),
+        }),
+      });
+      futuresQuote = res.ok ? await res.json() : null;
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setFuturesStatus(err.detail || "Anteprima non disponibile", true);
+      } else {
+        el("futures-order-status").classList.add("hidden");
+      }
+    } catch {
+      futuresQuote = null;
+    }
+    renderFuturesQuote();
+    updateFuturesExecuteState();
+  }
+
+  function queueFuturesQuote() {
+    // Ogni modifica invalida la conferma: non si conferma un numero vecchio.
+    el("futures-confirm-box").checked = false;
+    futuresQuote = null;
+    renderFuturesQuote();
+    updateFuturesExecuteState();
+    clearTimeout(futuresQuoteTimer);
+    futuresQuoteTimer = setTimeout(refreshFuturesQuote, 350);
+  }
+
+  function updateFuturesExecuteState() {
+    const btn = el("futures-execute-btn");
+    if (!btn) return;
+    const ok = !!futuresQuote && futuresQuote.margin_sufficient && el("futures-confirm-box").checked;
+    btn.disabled = !ok;
+    btn.textContent = (futuresSide === "BUY" ? "APRI LONG" : "APRI SHORT")
+      + (futuresQuote ? " " + Number(el("futures-leverage").value) + "×" : "");
+    btn.classList.toggle("mo-execute-buy", futuresSide === "BUY");
+    btn.classList.toggle("mo-execute-sell", futuresSide === "SELL");
+  }
+
+  function setFuturesStatus(msg, isError) {
+    const node = el("futures-order-status");
+    node.textContent = msg;
+    node.classList.remove("hidden");
+    node.classList.toggle("error", !!isError);
+  }
+
+  async function submitFuturesOrder() {
+    const btn = el("futures-execute-btn");
+    btn.disabled = true;
+    setFuturesStatus("Invio ordine…", false);
+    try {
+      const res = await fetch("/api/trading/futures/order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          exchange: el("futures-exchange").value,
+          symbol: el("futures-symbol").value.trim().toUpperCase(),
+          side: futuresSide,
+          size_mode: futuresSizeMode(),
+          size_value: Number(el("futures-size-val").value) || 0,
+          leverage: Number(el("futures-leverage").value),
+          confirm: true,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setFuturesStatus(data.detail || "Ordine rifiutato", true);
+      } else {
+        setFuturesStatus("Ordine eseguito.", false);
+        el("futures-confirm-box").checked = false;
+        futuresQuote = null;
+        renderFuturesQuote();
+        loadJournal?.();
+      }
+    } catch (e) {
+      setFuturesStatus("Errore di rete: " + e.message, true);
+    }
+    updateFuturesExecuteState();
+  }
+
+  function bindFuturesOrderUI() {
+    if (!el("futures-execute-btn")) return;
+
+    document.querySelectorAll("[data-futures-side]").forEach((tab) => {
+      tab.addEventListener("click", () => {
+        futuresSide = tab.dataset.futuresSide;
+        document.querySelectorAll("[data-futures-side]").forEach((t) => t.classList.toggle("mo-tab-active", t === tab));
+        queueFuturesQuote();
+      });
+    });
+
+    el("futures-leverage").addEventListener("input", () => { renderFuturesQuote(); queueFuturesQuote(); });
+
+    const slider = el("futures-size-slider");
+    const valInput = el("futures-size-val");
+    slider.addEventListener("input", () => {
+      valInput.value = futuresSizeMode() === "pct_balance" ? slider.value : slider.value * 10;
+      queueFuturesQuote();
+    });
+    valInput.addEventListener("input", queueFuturesQuote);
+    el("futures-symbol").addEventListener("input", queueFuturesQuote);
+    document.querySelectorAll('input[name="futures-size-mode"]').forEach((r) => {
+      r.addEventListener("change", () => {
+        el("futures-size-unit").textContent = futuresSizeMode() === "pct_balance" ? "%" : "USDT";
+        queueFuturesQuote();
+      });
+    });
+    el("futures-confirm-box").addEventListener("change", updateFuturesExecuteState);
+    el("futures-execute-btn").addEventListener("click", submitFuturesOrder);
+    el("opera-login-btn")?.addEventListener("click", () => openAuthModal("login"));
+
+    renderFuturesQuote();
+    updateFuturesExecuteState();
+  }
+
+  bindFuturesOrderUI();
 
   function openAuthModal(mode, opts) {
     authMode = mode || "login";
@@ -5805,7 +5989,7 @@
   // (and its internal .tabs) that desktop already has. Script Pine and Saldi
   // are reached through the Altro menu, not the bottom nav itself, so they
   // still map onto the same mechanism without a 6th/7th tab.
-  const RIGHT_PANEL_TITLES = { backtest: "Backtest", alert: "Alert", saldi: "Saldi", analisi: "Analisi", watchlist: "Watchlist" };
+  const RIGHT_PANEL_TITLES = { backtest: "Backtest", alert: "Alert", opera: "Opera", saldi: "Saldi", analisi: "Analisi", watchlist: "Watchlist" };
 
   function showMobileScreen(target) {
     if (!window.matchMedia("(max-width: 760px)").matches) return;
@@ -5817,7 +6001,7 @@
     document.querySelector(".right-panel").classList.remove("mobile-open");
     el("draw-rail").classList.remove("mobile-tools-open");
 
-    const NAV_TARGET_FOR = { script: "altro", saldi: "altro", analisi: "altro", watchlist: "altro", backtest: "altro", issues: "altro" };
+    const NAV_TARGET_FOR = { script: "altro", saldi: "altro", analisi: "altro", watchlist: "altro", backtest: "altro", issues: "altro", opera: "altro" };
     const navTarget = NAV_TARGET_FOR[target] || target;
     document.querySelectorAll(".mobile-nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.mobileTarget === navTarget));
 

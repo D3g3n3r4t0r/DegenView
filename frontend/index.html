@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;600;700&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
     rel="stylesheet"
   />
   <link rel="stylesheet" href="/static/style.css" />
@@ -251,6 +251,7 @@
         <button type="button" class="tab active" data-tab="backtest">Backtest</button>
         <button type="button" class="tab" data-tab="watchlist">Watchlist</button>
         <button type="button" class="tab" data-tab="alert">Alert</button>
+        <button type="button" class="tab" data-tab="opera">Opera</button>
         <button type="button" class="tab" data-tab="analisi">Analisi</button>
         <button type="button" class="tab hidden" id="balances-tab-btn" data-tab="saldi">Saldi</button>
         <a href="/sniper" class="tab tab-link" title="Apre il Token Sniper in una nuova app">Sniper ↗</a>
@@ -532,6 +533,114 @@
             </div>
             <ul id="alert-log-list" class="alert-log-cards"></ul>
 
+            <div class="alert-footnote">
+              <label class="layer-toggle"><input type="checkbox" id="strategy-notify-toggle" /> Notifiche browser (strategia integrata)</label>
+              <ul id="strategy-alert-log" class="alert-log"></ul>
+              <p class="strategy-disclaimer">
+                Notifiche su una condizione tecnica definita dall'utente. Non sono raccomandazioni di investimento.
+              </p>
+              <button type="button" id="open-script-from-alert" class="pine-secondary-link hidden">Script Pine personalizzato →</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-content" data-tab-content="opera">
+        <div class="panel">
+          <h3>Opera <span class="risk-badge">denaro reale</span></h3>
+          <p class="panel-hint">Tutto cio che puo spendere sta qui e solo qui, separato per quanto puo farti male &mdash; non per quale exchange lo esegue.</p>
+
+          <div id="opera-login-prompt" class="alert-login-prompt hidden">
+            <p class="panel-hint">Accedi per operare: ogni utente ha le proprie chiavi, cifrate lato server.</p>
+            <button type="button" id="opera-login-btn">Accedi o registrati</button>
+          </div>
+
+          <div id="opera-authenticated" class="hidden">
+            <!-- ── Posizioni aperte ── -->
+            <div class="section-title-row">
+              <span class="section-eyebrow">Posizioni aperte</span>
+              <span id="positions-count" class="section-count"></span>
+              <button type="button" id="positions-refresh-btn" class="section-action-btn">Aggiorna</button>
+            </div>
+            <p class="panel-hint">Finche' una posizione a leva resta aperta, la distanza dalla liquidazione e' l'unico numero che conta davvero.</p>
+            <ul id="positions-list" class="positions-list"></ul>
+
+            <!-- ── Futures ── -->
+            <div class="trading-auto-section futures-section">
+              <div class="section-title-row trading-auto-header">
+                <span class="section-eyebrow">Ordine futures</span>
+                <span class="trading-auto-badge futures-badge">⚠️ Leva — denaro reale</span>
+              </div>
+              <p class="panel-hint">Margine isolato, chiusure sempre <code>reduceOnly</code>. Il server rifiuta l'ordine senza conferma esplicita, ricontrolla il tetto di leva e verifica il margine sul saldo vero: la spunta qui sotto e' il primo di tre cancelli, non l'unico.</p>
+
+              <div id="futures-credentials-list" class="trading-cred-list"></div>
+
+              <div class="manual-order-form futures-order-form">
+                <div class="mo-row">
+                  <div class="mo-field">
+                    <label class="mo-label">Exchange</label>
+                    <select id="futures-exchange" class="mo-select">
+                      <option value="binance">Binance Futures</option>
+                    </select>
+                  </div>
+                  <div class="mo-field mo-field-grow">
+                    <label class="mo-label">Pair</label>
+                    <div class="mo-pair-field">
+                      <input type="text" id="futures-symbol" class="mo-input" placeholder="es. BTCUSDT" autocomplete="off" />
+                      <ul id="futures-symbol-suggestions" class="suggestions hidden"></ul>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="mo-side-tabs">
+                  <button type="button" class="mo-side-tab mo-buy-tab mo-tab-active" data-futures-side="BUY">LONG</button>
+                  <button type="button" class="mo-side-tab mo-sell-tab" data-futures-side="SELL">SHORT</button>
+                </div>
+
+                <!-- Leva: una lancetta si vede prima di un errore, un numero
+                     in un campo lo racconta dopo. -->
+                <div class="lev-block">
+                  <div class="lev-head">
+                    <span class="mo-label">Leva</span>
+                    <span id="futures-lev-val" class="lev-val">3×</span>
+                    <span class="lev-spacer"></span>
+                    <span id="futures-lev-cap" class="lev-cap">tetto server 10×</span>
+                  </div>
+                  <input type="range" id="futures-leverage" class="lev-slider" min="1" max="10" value="3" step="1" />
+                  <div class="lev-scale"><span>1×</span><span>3×</span><span>5×</span><span>7×</span><span>10×</span></div>
+                  <div class="lev-mode">margine <b>isolato</b> — forzato</div>
+                </div>
+
+                <div class="mo-size-mode-row">
+                  <label class="mo-radio-label"><input type="radio" name="futures-size-mode" value="fixed_usdt" checked /> Margine USDT</label>
+                  <label class="mo-radio-label"><input type="radio" name="futures-size-mode" value="pct_balance" /> % saldo</label>
+                </div>
+
+                <div class="mo-slider-row">
+                  <input type="range" id="futures-size-slider" class="mo-slider" min="1" max="100" value="10" step="1" />
+                  <div class="mo-slider-val-wrap">
+                    <input type="number" id="futures-size-val" class="mo-slider-val-input" value="100" min="1" step="1" />
+                    <span class="mo-slider-unit" id="futures-size-unit">USDT</span>
+                  </div>
+                </div>
+
+                <!-- Anteprima da /api/trading/futures/quote -->
+                <div id="futures-quote" class="futures-quote">
+                  <div class="fq-row"><span>Notional</span><span id="fq-notional">—</span></div>
+                  <div class="fq-row"><span>Margine richiesto</span><span id="fq-margin">—</span></div>
+                  <div class="fq-row fq-liq"><span>Liquidazione stimata</span><span id="fq-liq">—</span></div>
+                  <div class="fq-row"><span>Distanza dalla liquidazione</span><span id="fq-dist">—</span></div>
+                </div>
+
+                <label class="futures-confirm">
+                  <input type="checkbox" id="futures-confirm-box" />
+                  <span>Confermo: denaro reale, leva <b id="futures-confirm-lev">3×</b>, liquidazione stimata a <b id="futures-confirm-liq">—</b></span>
+                </label>
+
+                <button type="button" id="futures-execute-btn" class="mo-execute-btn mo-execute-buy" disabled>APRI LONG</button>
+                <div id="futures-order-status" class="manual-order-status hidden"></div>
+              </div>
+            </div>
             <!-- Trading Automatico -->
             <div class="trading-auto-section">
               <div class="section-title-row trading-auto-header">
@@ -607,15 +716,6 @@
 
                 <div id="manual-order-status" class="manual-order-status hidden"></div>
               </div>
-            </div>
-
-            <div class="alert-footnote">
-              <label class="layer-toggle"><input type="checkbox" id="strategy-notify-toggle" /> Notifiche browser (strategia integrata)</label>
-              <ul id="strategy-alert-log" class="alert-log"></ul>
-              <p class="strategy-disclaimer">
-                Notifiche su una condizione tecnica definita dall'utente. Non sono raccomandazioni di investimento.
-              </p>
-              <button type="button" id="open-script-from-alert" class="pine-secondary-link hidden">Script Pine personalizzato →</button>
             </div>
           </div>
         </div>
