@@ -49,6 +49,60 @@
   <div id="error-banner" class="error-banner hidden"></div>
 
   <main class="cockpit">
+    <!-- Navigazione unica: prima c'erano tre sistemi paralleli (rail a
+         sinistra, tab a destra, menu Altro su mobile) che si duplicavano a
+         vicenda. Ogni voce e' un intento, non un oggetto. -->
+    <aside class="sidenav" id="sidenav">
+      <div class="sidenav-group">
+        <div class="sidenav-label">Lavoro</div>
+        <button type="button" class="sidenav-item active" data-area="analizza">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>
+          <span>Analizza</span>
+        </button>
+        <button type="button" class="sidenav-item" data-area="lab" data-tab-target="backtest">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3v6.5L4.2 18A2 2 0 006 21h12a2 2 0 001.8-3L15 9.5V3"/><path d="M8 3h8"/><path d="M7.5 14h9"/></svg>
+          <span>Lab</span>
+        </button>
+        <button type="button" class="sidenav-item" data-area="sorveglia" data-tab-target="alert">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 01-3.4 0"/></svg>
+          <span>Sorveglia</span>
+        </button>
+        <button type="button" class="sidenav-item" data-area="opera" data-tab-target="opera">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+          <span>Opera</span>
+        </button>
+        <a class="sidenav-item" href="/sniper">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg>
+          <span>Scopri</span>
+        </a>
+      </div>
+
+      <div class="sidenav-group">
+        <div class="sidenav-label">Riferimento</div>
+        <button type="button" class="sidenav-item" data-area="analisi" data-tab-target="analisi">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5a2 2 0 012-2h11l3 3v13a2 2 0 01-2 2H6a2 2 0 01-2-2z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
+          <span>Struttura</span>
+        </button>
+        <button type="button" class="sidenav-item sidenav-saldi hidden" id="sidenav-saldi" data-area="saldi" data-tab-target="saldi">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>
+          <span>Saldi</span>
+        </button>
+        <button type="button" class="sidenav-item" id="sidenav-script" data-area="script">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 4 12 9 6"/><polyline points="15 6 20 12 15 18"/></svg>
+          <span>Script Pine</span>
+        </button>
+        <button type="button" class="sidenav-item" id="sidenav-issues" data-area="issues">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/></svg>
+          <span>Bacheca</span>
+          <span id="sidenav-issues-badge" class="sidenav-badge hidden"></span>
+        </button>
+      </div>
+
+      <div class="sidenav-foot">
+        <div class="sys-row"><span class="sys-led"></span><span id="sidenav-watch-status">Watcher</span></div>
+        <div class="sys-row"><span class="sys-led" id="sidenav-tg-led"></span><span id="sidenav-tg-status">Telegram</span></div>
+      </div>
+    </aside>
     <nav class="rail">
       <button type="button" class="rail-btn" id="rail-levels-btn" title="Livelli, struttura e indicatori">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" width="18" height="18">

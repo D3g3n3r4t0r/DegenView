@@ -455,13 +455,15 @@ body {
 
 .panel:last-child { border-bottom: none; }
 
+/* I titoli sono neutri: l'ambra resta riservata a cio' che avvisa, se
+   colora anche le intestazioni non avvisa piu' di niente. */
 .panel h3 {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--stamp);
-  margin: 0 0 8px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: var(--ink);
+  margin: 0 0 9px;
 }
 
 .interval-label {
@@ -1150,10 +1152,10 @@ body {
 
 .section-eyebrow {
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 9.5px;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--stamp);
+  letter-spacing: 0.1em;
+  color: var(--ink-faint);
 }
 
 .section-count {
@@ -3864,3 +3866,427 @@ details.issue-card > summary:focus-visible { outline: 2px solid var(--accent); o
 }
 .liq-needle { position: absolute; top: 2px; width: 4px; height: 25px; border-radius: 2px; background: var(--ink); transform: translateX(-50%); }
 .liq-foot { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 10.5px; }
+
+/* ============================================================
+   Instrument — impianto di navigazione
+   Una sola barra a sinistra al posto di tre sistemi paralleli
+   (rail + tab a destra + menu "Altro"). Ogni voce e' un intento:
+   Analizza / Lab / Sorveglia / Opera / Scopri. Fuori da Analizza il
+   grafico si toglie di mezzo e l'area di lavoro prende tutta la
+   larghezza — il Lab, che e' la schermata piu' densa del prodotto,
+   non puo' vivere in una colonna da 300px.
+   ============================================================ */
+.sidenav {
+  flex: 0 0 var(--nav-w);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 8px;
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+}
+.sidenav-group { padding-bottom: 10px; }
+.sidenav-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  padding: 6px 8px 7px;
+}
+.sidenav-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 9px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--ink-dim);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.sidenav-item:hover { background: var(--bg-raised); color: var(--ink); }
+.sidenav-item.active { background: var(--bg-sunk); color: var(--ink); font-weight: 600; }
+.sidenav-item.active::before {
+  content: "";
+  position: absolute;
+  left: -8px; top: 8px; bottom: 8px;
+  width: 2px;
+  border-radius: 0 2px 2px 0;
+  background: var(--accent);
+}
+.sidenav-item svg { width: 16px; height: 16px; flex-shrink: 0; }
+.sidenav-badge {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  padding: 1px 6px;
+  border-radius: 99px;
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.sidenav-foot {
+  margin-top: auto;
+  padding: 10px 8px 4px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.sys-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink-faint);
+}
+.sys-led {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--bull);
+  box-shadow: 0 0 0 3px var(--bull-soft);
+  flex-shrink: 0;
+}
+.sys-led.off { background: var(--ink-faint); box-shadow: none; }
+
+/* Il rail vecchio e il menu Altro sono sostituiti dalla sidebar: restano
+   nel DOM perche' app.js ci si appoggia, ma non si vedono piu' su desktop. */
+@media (min-width: 761px) {
+  .cockpit > .rail { display: none; }
+  .cockpit > .altro-panel { display: none; }
+
+  /* Le tab del pannello restano il motore (app.js le usa per scegliere il
+     contenuto), ma la sidebar e' l'interfaccia: mostrarle entrambe
+     significherebbe di nuovo due navigazioni per la stessa cosa. */
+  .right-panel > .tabs { display: none; }
+  .right-panel > .drawer-header { display: none; }
+
+  /* Analizza: grafico al centro, livelli a sinistra, lettura a destra. */
+  .cockpit[data-area="analizza"] .chart-area { display: flex; }
+  .cockpit[data-area="analizza"] .right-panel { flex: 0 0 320px; }
+
+  /* Ogni altra area: il grafico si toglie, il lavoro prende tutto. */
+  .cockpit:not([data-area="analizza"]) .chart-area { display: none; }
+  .cockpit:not([data-area="analizza"]) .levels-panel.open { display: none; }
+  .cockpit:not([data-area="analizza"]) .right-panel {
+    flex: 1 1 auto;
+    border-left: none;
+    background: var(--bg);
+  }
+  /* A tutta larghezza il contenuto va incolonnato, non steso su 1600px:
+     una riga di testo lunga quanto lo schermo non si legge. */
+  .cockpit:not([data-area="analizza"]) .tab-content.active {
+    padding: 22px 26px 40px;
+  }
+  .cockpit:not([data-area="analizza"]) .tab-content.active > .panel {
+    max-width: 1180px;
+    width: 100%;
+    margin: 0 auto;
+  }
+
+  /* Il Lab su larghezza piena: impostazione a sinistra, risultato a destra,
+     invece di una colonna sola lunga due schermate. */
+  .cockpit[data-area="lab"] .lab-panel {
+    display: grid;
+    grid-template-columns: minmax(280px, 360px) 1fr;
+    gap: 0 26px;
+    align-items: start;
+    max-width: 1180px;
+  }
+  .cockpit[data-area="lab"] .lab-panel > .lab-ticker-row,
+  .cockpit[data-area="lab"] .lab-panel > .lab-tf-row,
+  .cockpit[data-area="lab"] .lab-panel > .lab-divider,
+  .cockpit[data-area="lab"] .lab-panel > .lab-strat-header,
+  .cockpit[data-area="lab"] .lab-panel > .lab-params-grid,
+  .cockpit[data-area="lab"] .lab-panel > .lab-bt-details,
+  .cockpit[data-area="lab"] .lab-panel > .lab-action-row,
+  .cockpit[data-area="lab"] .lab-panel > .lab-mode-picker,
+  .cockpit[data-area="lab"] .lab-panel > .lab-filters { grid-column: 1; }
+  .cockpit[data-area="lab"] .lab-panel > .lab-data-used,
+  .cockpit[data-area="lab"] .lab-panel > .lab-regime-box,
+  .cockpit[data-area="lab"] .lab-panel > .lab-branch-box,
+  .cockpit[data-area="lab"] .lab-panel > .lab-status,
+  .cockpit[data-area="lab"] .lab-panel > .lab-result-block,
+  .cockpit[data-area="lab"] .lab-panel > .lab-apply-strip,
+  .cockpit[data-area="lab"] .lab-panel > .lab-signal-status { grid-column: 2; }
+
+  /* Sorveglia e Opera: le sezioni diventano colonne affiancate invece di
+     una pila infinita da scorrere. */
+  .cockpit[data-area="sorveglia"] .tab-content.active > .panel,
+  .cockpit[data-area="opera"] .tab-content.active > .panel { max-width: 1180px; }
+}
+
+/* Il pannello a tutta larghezza non deve stirare i controlli: un campo
+   di testo largo 1100px e' peggio di uno largo 300. */
+.cockpit:not([data-area="analizza"]) .manual-order-form,
+.cockpit:not([data-area="analizza"]) .futures-order-form { max-width: 520px; }
+
+/* ============================================================
+   Instrument — componenti
+   Il vocabolario di classi resta quello che app.js gia' genera: qui
+   cambia solo come si vedono. Un pannello diventa una scheda con un
+   bordo vero, i controlli hanno tutti la stessa altezza e lo stesso
+   raggio, e il colore semantico compare solo dove c'e' davvero uno
+   stato da leggere.
+   ============================================================ */
+
+/* ── superfici ── */
+.panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 12px;
+  padding-bottom: 14px;
+}
+.panel:last-child { border-bottom: 1px solid var(--border); }
+.cockpit[data-area="analizza"] .right-panel .panel { border-radius: 6px; }
+
+.panel-hint {
+  color: var(--ink-dim);
+  font-size: 11.5px;
+  line-height: 1.55;
+  margin: 0 0 10px;
+}
+
+/* ── controlli: stessa altezza, stesso raggio, stesso peso ── */
+input[type="text"], input[type="search"], input[type="number"],
+input[type="email"], input[type="password"], select, textarea {
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 7px 9px;
+  outline: none;
+  transition: border-color 0.12s;
+}
+input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+input::placeholder, textarea::placeholder { color: var(--ink-faint); }
+select { cursor: pointer; }
+
+/* ── bottoni ── */
+#search-btn, .lab-btn-run, #issue-submit, #auth-submit-btn,
+#telegram-chat-id-save, #pine-apply-btn, #alert-login-btn, #opera-login-btn {
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  color: var(--accent-ink);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px 14px;
+  cursor: pointer;
+  transition: filter 0.12s;
+}
+#search-btn:hover, .lab-btn-run:hover, #issue-submit:hover,
+#auth-submit-btn:hover, #alert-login-btn:hover, #opera-login-btn:hover { filter: brightness(1.08); }
+
+.lab-btn-opt, .section-action-btn, #pine-analyze-btn, #auth-toggle-btn,
+#auth-logout-btn, .lab-apply-btn, .lab-signal-btn, .lab-archive-btn,
+.lab-trades-export, .drawer-close-btn {
+  background: var(--bg-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  font-weight: 500;
+  padding: 6px 11px;
+  cursor: pointer;
+}
+.lab-btn-opt:hover, .section-action-btn:hover, #auth-toggle-btn:hover { border-color: var(--ink-faint); }
+
+/* ── segmenti (timeframe, filtri asset) ── */
+.lab-tf-row, .asset-toggle {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  width: fit-content;
+}
+.lab-tf-btn, .wl-asset-btn {
+  background: none;
+  border: none;
+  border-radius: 5px;
+  padding: 5px 11px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-dim);
+  cursor: pointer;
+}
+.lab-tf-btn.active, .wl-asset-btn.active {
+  background: var(--bg-panel);
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: var(--shadow);
+}
+
+/* ── pillole di stato ── */
+.section-count, .trading-auto-badge, .readonly-badge, .lab-filters-badge {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.05em;
+  padding: 2px 8px;
+  border-radius: 99px;
+  border: 1px solid var(--border-strong);
+  color: var(--ink-dim);
+}
+.trading-auto-badge {
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-color: color-mix(in srgb, var(--danger) 32%, transparent);
+}
+.readonly-badge {
+  color: var(--bull);
+  background: var(--bull-soft);
+  border-color: color-mix(in srgb, var(--bull) 32%, transparent);
+}
+
+.section-title-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 8px;
+}
+
+/* ── righe di elenco: watchlist, archivio, storico, diario ── */
+.wl-rows, .watchlist-cards, .archive-cards, .alert-log-cards,
+.journal-list, .pa-list, .trading-cred-list, .issues-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 7px;
+}
+.wl-rows > li, .watchlist-cards > li, .archive-cards > li,
+.alert-log-cards > li, .journal-list > li, .pa-list > li {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 9px 11px;
+  font-size: 12px;
+  transition: border-color 0.12s, background 0.12s;
+}
+.wl-rows > li:hover, .watchlist-cards > li:hover { border-color: var(--border-strong); background: var(--bg-raised); }
+
+/* ── toolbar ── */
+.toolbar {
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  gap: 10px;
+  padding: 9px 16px;
+}
+.brand {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.ticker-field input {
+  min-width: 230px;
+  font-family: var(--font-mono);
+}
+.theme-toggle-btn {
+  width: 30px; height: 30px;
+  display: grid; place-items: center;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--ink-dim);
+  cursor: pointer;
+}
+.theme-toggle-btn:hover { color: var(--ink); }
+
+/* ── tabelle ── */
+table { border-collapse: collapse; width: 100%; font-size: 12px; }
+th {
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  font-weight: 500;
+  padding: 7px 9px;
+  border-bottom: 1px solid var(--border);
+}
+td {
+  padding: 8px 9px;
+  border-bottom: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Lab: il risultato e' il pezzo forte, trattalo come tale ── */
+.lab-return-hero { display: flex; align-items: baseline; gap: 12px; margin: 4px 0 10px; }
+.lab-return-val {
+  font-family: var(--font-num);
+  font-size: 46px;
+  line-height: 1;
+  letter-spacing: -0.01em;
+}
+.lab-result-block {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+}
+.lab-stat-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.lab-stat-chips > div {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  border: 1px solid var(--border-strong);
+  border-radius: 99px;
+  padding: 3px 10px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-dim);
+}
+.lab-stat-chips .chip-val { color: var(--ink); font-weight: 600; }
+
+.lab-mode-opt {
+  display: block;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 9px 10px;
+  margin-bottom: 6px;
+  cursor: pointer;
+}
+.lab-mode-opt:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.lab-mode-name { font-weight: 600; font-size: 12px; display: block; margin-bottom: 2px; }
+.lab-mode-desc { font-size: 11px; color: var(--ink-dim); line-height: 1.45; display: block; }
+
+/* ── livelli: interruttori, non spunte ── */
+.layer-toggle {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 7px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.layer-toggle:hover { background: var(--bg-raised); }
+
+/* ── stato vuoto ── */
+.empty-state {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
