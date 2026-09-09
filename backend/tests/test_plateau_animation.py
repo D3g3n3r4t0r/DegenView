@@ -154,9 +154,9 @@ def test_an_axis_still_being_searched_shows_something_instead_of_nothing():
     crescere."""
     js = _js()
     assert "axisBusy" in js
-    start = js.index("if (plateauAnim.axisBusy > 0)")
-    body = js[start:start + 900]
-    assert "al lavoro" in body
+    start = js.index("function plateauActBoundaries(")
+    body = js[start:start + 3000]
+    assert "isBusy" in body and "al lavoro" in body
 
 
 def test_finishing_an_axis_clears_its_own_busy_counter():
