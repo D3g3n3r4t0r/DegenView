@@ -65,6 +65,20 @@ _MAX_KEPT = 400
 
 _DRIFT_SEED = 20260903
 
+# Quanti backtest al massimo fra una riga di avanzamento e la prossima.
+# Usato sia mentre si mappa un asse sia mentre si aprono le celle — in
+# entrambi i posti il sintomo segnalato dal vivo era lo stesso: minuti di
+# silenzio con una strategia pesante, perche' "un ottavo del totale" su una
+# ricerca grande (le migliaia di celle non sono rare) puo' voler dire
+# centinaia di backtest fra una riga e la prossima.
+_PROGRESS_STEP = 12
+
+
+def _report_interval(total: int) -> int:
+    """Un ottavo del totale, ma non oltre _PROGRESS_STEP: basta per non
+    intasare di righe una ricerca piccola, che gia' arriva in fretta."""
+    return max(1, min(_PROGRESS_STEP, total // 8))
+
 
 def _fingerprint(bt: BacktestResult) -> Fingerprint:
     return (round(bt.total_return_pct, 6), bt.num_trades, round(bt.max_drawdown_pct, 6))
@@ -263,7 +277,7 @@ def partition_axes(
                     # blocco: segnalato dal vivo. Questa non cambia la
                     # mappatura, e' solo il segno che si sta ancora cercando.
                     local = counter["n"] - before
-                    if local % 12 == 0:
+                    if local % _PROGRESS_STEP == 0:
                         say(f"asse {name}: ancora al lavoro — {local} backtest finora")
                 return _fingerprint(bt)
 
@@ -491,7 +505,7 @@ def plateau_search(
     seen_fp: set[Fingerprint] = set()
     cands: list[PlateauCandidate] = []
     tried = {"n": 0}
-    step_report = max(1, (len(points) if enumerated else max_grid_evals) // 8)
+    step_report = _report_interval(len(points) if enumerated else max_grid_evals)
 
     def consider_point(u: np.ndarray) -> float:
         """Valuta il centro di una cella e lo tiene se porta qualcosa di nuovo.
