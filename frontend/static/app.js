@@ -2343,9 +2343,13 @@
   function plateauAnimTheme() {
     const cs = getComputedStyle(document.documentElement);
     const g = (n) => cs.getPropertyValue(n).trim();
-    return { ink: g("--ink"), dim: g("--ink-dim"), accent: g("--accent"),
-             bull: g("--bull"), bear: g("--bear"), border: g("--border"),
-             raised: g("--bg-raised") };
+    // --accent NON e' usato qui: in tema chiaro l'app lo tiene nero (e' il
+    // colore dei pulsanti, non un colore di dato), e sui blocchi diventava
+    // esattamente il nero brutto segnalato. --bull e' verde in entrambi i
+    // temi ed e' gia' il colore che l'app usa per "sale/va bene" — qui fa lo
+    // stesso lavoro: la tinta di quanto una cella o un finalista rende.
+    return { ink: g("--ink"), dim: g("--ink-dim"), bull: g("--bull"),
+             bear: g("--bear"), border: g("--border"), raised: g("--bg-raised") };
   }
 
   // Un blocco isometrico a tre facce — sopra chiara, fianco scuro — e' tutto
@@ -2415,7 +2419,7 @@
       plateauAnim.axes.forEach((a, i) => {
         const x = pad + i * ((W - pad * 2) / slots);
         const h = 10 + (baseY - 34) * (a.cells / maxCells);
-        plateauDrawBlock(ctx, x, w, baseY, h, T.accent, plateauShade(T.accent, -40));
+        plateauDrawBlock(ctx, x, w, baseY, h, T.bull, plateauShade(T.bull, -40));
         ctx.fillStyle = T.dim; ctx.font = mono(9);
         ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
         ctx.fillText(String(a.cells), x + w / 2, baseY - h - 6);
@@ -2450,14 +2454,14 @@
         const cellFrac = (i + 0.5) / cols;
         const isOpen = cellFrac <= opened / budget;
         const isDistinctish = isOpen && cellFrac <= (opened / budget) * distinctFrac;
-        const fill = isDistinctish ? T.accent : isOpen ? plateauShade(T.accent, 60) : T.raised;
-        const dark = isOpen ? plateauShade(T.accent, -30) : T.border;
+        const fill = isDistinctish ? T.bull : isOpen ? plateauShade(T.bull, 60) : T.raised;
+        const dark = isOpen ? plateauShade(T.bull, -30) : T.border;
         plateauDrawBlock(ctx, pad + i * cw, cw - 2, rowBottom, ch, fill, dark);
       }
       ctx.font = mono(10);
       ctx.fillStyle = T.ink;
       ctx.fillText(`${opened.toLocaleString("it-IT")} celle aperte`, pad, rowBottom + 14);
-      ctx.fillStyle = T.accent;
+      ctx.fillStyle = T.bull;
       ctx.fillText(`${plateauAnim.distinctSoFar.toLocaleString("it-IT")} configurazioni distinte`, pad, rowBottom + 30);
     } else if (act === 3 || act === 4) {
       const title = act === 4 ? "La scelta" : "Lo scuotimento";
@@ -2474,7 +2478,7 @@
         const x = pad + i * slotW;
         const w = Math.min(34, slotW - 12);
         const h = 12 + (baseY - 60) * (Math.abs(f.ret) / maxRet);
-        const color = isPicked ? T.accent : (isLast ? T.ink : T.border);
+        const color = isPicked ? T.bull : (isLast ? plateauShade(T.bull, 35) : T.border);
         const dark = plateauShade(color === T.border ? "#888888" : color, -40);
         plateauDrawBlock(ctx, x + (slotW - w) / 2, w, baseY, h, color, dark);
         // Il cerchio di puntini: verde quanto ha retto, rosso quanto no — sono
