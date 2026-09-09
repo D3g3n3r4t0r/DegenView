@@ -649,6 +649,10 @@ class BacktestParamsQuery(BaseModel):
     slippage_pct: float = 0.02
     stop_loss_pct: float = 0.0
     take_profit_pct: float = 0.0
+    # Quando si considera eseguito il segnale: alla chiusura della candela
+    # che lo genera (storico, ottimista) oppure all'apertura della candela
+    # dopo (realizzabile). Vedi DEFAULT_BACKTEST_PARAMS in backtest.py.
+    fill_at: Literal["signal_close", "next_open"] = "signal_close"
 
 
 class TradingCredentialRequest(BaseModel):

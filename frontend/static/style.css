@@ -3969,13 +3969,33 @@ details.issue-card > summary:focus-visible { outline: 2px solid var(--accent); o
   .right-panel > .tabs { display: none; }
   .right-panel > .drawer-header { display: none; }
 
-  /* Analizza: grafico al centro, livelli a sinistra, lettura a destra. */
-  .cockpit[data-area="analizza"] .chart-area { display: flex; }
+  /* Il grafico non sparisce mai: e' il contesto di tutto il resto. Cambia
+     solo quanto spazio si prende. In Analizza comanda lui; altrove si
+     stringe a colonna e lascia il lavoro davanti, ma resta guardabile e
+     vivo — un backtest o un ordine si leggono meglio con la serie sotto
+     gli occhi. */
+  .cockpit .chart-area { display: flex; min-width: 0; }
+  .cockpit[data-area="analizza"] .chart-area { flex: 1 1 auto; }
   .cockpit[data-area="analizza"] .right-panel { flex: 0 0 320px; }
 
-  /* Ogni altra area: il grafico si toglie, il lavoro prende tutto. */
-  .cockpit:not([data-area="analizza"]) .chart-area { display: none; }
+  .cockpit:not([data-area="analizza"]) .chart-area {
+    flex: 0 0 clamp(300px, 32%, 520px);
+    border-right: 1px solid var(--border);
+  }
   .cockpit:not([data-area="analizza"]) .levels-panel.open { display: none; }
+
+  /* Sotto i 1250px la colonna del grafico toglierebbe troppo al lavoro:
+     diventa una fascia bassa sopra il contenuto invece che una colonna. */
+  @media (max-width: 1250px) {
+    .cockpit:not([data-area="analizza"]) { flex-wrap: wrap; }
+    .cockpit:not([data-area="analizza"]) .chart-area {
+      flex: 1 1 100%;
+      max-height: 230px;
+      border-right: none;
+      border-bottom: 1px solid var(--border);
+      order: -1;
+    }
+  }
   .cockpit:not([data-area="analizza"]) .right-panel {
     flex: 1 1 auto;
     border-left: none;
@@ -3992,32 +4012,26 @@ details.issue-card > summary:focus-visible { outline: 2px solid var(--accent); o
     margin: 0 auto;
   }
 
-  /* Il Lab su larghezza piena: impostazione a sinistra, risultato a destra,
-     invece di una colonna sola lunga due schermate. */
+  /* Il Lab su larghezza piena: impostazione a sinistra, risultato a destra.
+     I blocchi del risultato stanno in un contenitore solo (creato da
+     groupLabResultColumn), altrimenti la griglia li spinge nella riga che
+     occupano nel DOM e la colonna destra resta vuota per mezzo schermo. */
   .cockpit[data-area="lab"] .lab-panel {
     display: grid;
-    grid-template-columns: minmax(280px, 360px) 1fr;
+    grid-template-columns: minmax(280px, 380px) 1fr;
     gap: 0 26px;
     align-items: start;
     max-width: 1180px;
   }
-  .cockpit[data-area="lab"] .lab-panel > .lab-ticker-row,
-  .cockpit[data-area="lab"] .lab-panel > .lab-tf-row,
-  .cockpit[data-area="lab"] .lab-panel > .lab-divider,
-  .cockpit[data-area="lab"] .lab-panel > .lab-strat-header,
-  .cockpit[data-area="lab"] .lab-panel > .lab-params-grid,
-  .cockpit[data-area="lab"] .lab-panel > .lab-bt-details,
-  .cockpit[data-area="lab"] .lab-panel > .lab-action-row,
-  .cockpit[data-area="lab"] .lab-panel > .lab-mode-picker,
-  .cockpit[data-area="lab"] .lab-panel > .lab-filters { grid-column: 1; }
-  .cockpit[data-area="lab"] .lab-panel > .lab-plateau-box,
-  .cockpit[data-area="lab"] .lab-panel > .lab-data-used,
-  .cockpit[data-area="lab"] .lab-panel > .lab-regime-box,
-  .cockpit[data-area="lab"] .lab-panel > .lab-branch-box,
-  .cockpit[data-area="lab"] .lab-panel > .lab-status,
-  .cockpit[data-area="lab"] .lab-panel > .lab-result-block,
-  .cockpit[data-area="lab"] .lab-panel > .lab-apply-strip,
-  .cockpit[data-area="lab"] .lab-panel > .lab-signal-status { grid-column: 2; }
+  .cockpit[data-area="lab"] .lab-panel > *:not(.lab-results-col) { grid-column: 1; }
+  .cockpit[data-area="lab"] .lab-results-col {
+    grid-column: 2;
+    grid-row: 1 / span 99;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+  }
 
   /* Sorveglia e Opera: le sezioni diventano colonne affiancate invece di
      una pila infinita da scorrere. */
@@ -4320,3 +4334,37 @@ td {
 .bull { color: var(--bull); }
 .bear { color: var(--bear); }
 .warnc { color: var(--warn); }
+
+/* Ipotesi di esecuzione, accanto al risultato: due rendimenti ottenuti con
+   ipotesi diverse non si confrontano, quindi l'ipotesi va letta insieme al
+   numero e non cercata nelle impostazioni. */
+.fill-tag {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  padding: 2px 7px;
+  border-radius: 99px;
+  border: 1px solid var(--border-strong);
+  color: var(--ink-dim);
+  cursor: help;
+}
+.fill-tag.fill-optimistic { color: var(--warn); background: var(--warn-soft); border-color: color-mix(in srgb, var(--warn) 32%, transparent); }
+.fill-tag.fill-real { color: var(--bull); background: var(--bull-soft); border-color: color-mix(in srgb, var(--bull) 32%, transparent); }
+.lab-fill-at { grid-column: 1 / -1; }
+.lab-fill-hint { grid-column: 1 / -1; margin-top: 4px; }
+
+/* Con il grafico che resta in colonna, il Lab a due colonne ha senso solo
+   se ne avanza abbastanza: sotto questa soglia impostazione e risultato
+   tornano incolonnati invece di stringersi entrambi fino a diventare
+   illeggibili. */
+@media (max-width: 1560px) {
+  .cockpit[data-area="lab"] .lab-panel {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .cockpit[data-area="lab"] .lab-panel > *:not(.lab-results-col),
+  .cockpit[data-area="lab"] .lab-results-col {
+    grid-column: 1;
+    grid-row: auto;
+  }
+}

@@ -143,6 +143,8 @@
         <h3>Indicatori</h3>
         <label class="layer-toggle"><input type="checkbox" id="strategy-markers-toggle" checked /> Marker strategia sul grafico</label>
         <label class="layer-toggle"><input type="checkbox" id="backtest-trades-toggle" /> Trade del backtest sul grafico</label>
+        <label class="layer-toggle"><input type="checkbox" id="executed-orders-toggle" checked /> Ordini realmente eseguiti</label>
+        <p class="panel-hint">Ogni ordine partito davvero &mdash; a mano o dalla strategia &mdash; resta segnato sulla serie con il prezzo di riempimento.</p>
         <p id="backtest-trades-note" class="panel-hint hidden"></p>
         <label class="layer-toggle"><input type="checkbox" data-layer="ema" checked /> EMA 20 / 50</label>
         <label class="layer-toggle"><input type="checkbox" data-layer="bbands" /> Bollinger Bands</label>
@@ -370,6 +372,13 @@
               <label>% equity/trade <input type="text" inputmode="decimal" id="lab-qty-pct" value="100" /></label>
               <label>Commissione % <input type="text" inputmode="decimal" id="lab-commission" value="0" /></label>
               <label>Slippage % <input type="text" inputmode="decimal" id="lab-slippage" value="0" /></label>
+              <label class="lab-fill-at">Esecuzione del segnale
+                <select id="lab-fill-at">
+                  <option value="signal_close">Chiusura della candela del segnale</option>
+                  <option value="next_open">Apertura della candela successiva</option>
+                </select>
+              </label>
+              <p class="panel-hint lab-fill-hint">Alla <b>chiusura</b> si compra al prezzo con cui il segnale e' stato calcolato: si conosce solo nell'istante in cui la candela chiude, quindi e' l'ipotesi ottimista. All&rsquo;<b>apertura successiva</b> si compra dove si puo' davvero: e' il numero realizzabile, ed e' quasi sempre piu' basso.</p>
             </div>
           </details>
 

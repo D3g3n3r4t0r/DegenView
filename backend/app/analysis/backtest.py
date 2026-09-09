@@ -14,6 +14,21 @@ from app.models import BacktestResult, BacktestTrade, StrategySignal
 # same behavior as before this was added. Set either > 0 to close a position
 # the moment a bar's intrabar high/low crosses that level, independent of
 # whatever the strategy's own exit signal says.
+# fill_at dice *quando* si compra rispetto alla candela che ha generato il
+# segnale, ed e' la differenza fra un backtest ottimista e uno realizzabile:
+#
+#   "signal_close" — si riempie alla chiusura della candela del segnale.
+#       E' il comportamento storico di questo motore. Presuppone di poter
+#       transare esattamente a quel prezzo, che pero' si conosce solo *nel
+#       momento in cui* la candela chiude: nella pratica quel riempimento
+#       non esiste, tranne che con un ordine a mercato sparato sul campanello.
+#   "next_open"    — si riempie all'apertura della candela successiva.
+#       E' cio' che si puo' davvero ottenere: il segnale e' confermato solo a
+#       candela chiusa, e la prima occasione di eseguire e' la barra dopo.
+#
+# Il default resta "signal_close" apposta: cambiarlo qui sposterebbe in
+# silenzio ogni risultato storico gia' archiviato. Chi vuole il numero
+# realizzabile lo chiede esplicitamente.
 DEFAULT_BACKTEST_PARAMS = {
     "initial_capital": 10000.0,
     "qty_pct_of_equity": 30.0,
@@ -21,6 +36,7 @@ DEFAULT_BACKTEST_PARAMS = {
     "slippage_pct": 0.02,
     "stop_loss_pct": 0.0,
     "take_profit_pct": 0.0,
+    "fill_at": "signal_close",
 }
 
 _ENTRY_TYPES = {"entry_long", "entry_short"}
@@ -50,11 +66,34 @@ def run_backtest(
     trades: list[BacktestTrade] = []
     equity_curve: list[tuple[int, float]] = [(int(df.index[0].timestamp()), equity)]
 
+    # Apertura della barra successiva, per il riempimento realizzabile.
+    # Costruita una volta sola: cercarla dentro il ciclo sarebbe una scansione
+    # per ogni segnale.
+    next_open_by_ts: dict[int, float] = {}
+    if bp.get("fill_at") == "next_open":
+        timestamps = [int(ts.timestamp()) for ts in df.index]
+        opens = df["open"].tolist()
+        for idx in range(len(timestamps) - 1):
+            next_open_by_ts[timestamps[idx]] = float(opens[idx + 1])
+
     open_trade: dict | None = None  # {direction, entry_time, entry_price}
+
+    def _signal_fill_price(signal: StrategySignal) -> float | None:
+        """Prezzo grezzo a cui si considera eseguito questo segnale.
+
+        Con "next_open" un segnale sull'ultima candela disponibile non ha
+        una barra successiva su cui riempire: quel trade non e' eseguibile e
+        va scartato, non riempito al prezzo di chiusura come ripiego."""
+        if bp.get("fill_at") != "next_open":
+            return signal.price
+        return next_open_by_ts.get(signal.time)
 
     def _open(direction: str, signal: StrategySignal) -> None:
         nonlocal open_trade
-        fill = _fill_price(signal.price, bp["slippage_pct"], "buy" if direction == "long" else "sell")
+        raw = _signal_fill_price(signal)
+        if raw is None:
+            return
+        fill = _fill_price(raw, bp["slippage_pct"], "buy" if direction == "long" else "sell")
         open_trade = {"direction": direction, "entry_time": signal.time, "entry_price": fill}
 
     def _close_at(raw_price: float, time: int) -> None:
@@ -125,12 +164,19 @@ def run_backtest(
         signal = event_by_ts.get(t)
         if signal is None:
             continue
+        # L'uscita segue la stessa regola dell'ingresso: se l'ingresso non e'
+        # eseguibile alla chiusura del segnale, nemmeno l'uscita lo e'.
+        # Un'uscita senza barra successiva resta aperta, e viene chiusa dal
+        # riepilogo di fine serie come qualunque altra posizione ancora viva.
+        exit_raw = _signal_fill_price(signal)
         if signal.type in _ENTRY_TYPES:
             _open("long" if signal.type == "entry_long" else "short", signal)
         elif signal.type in _EXIT_TYPES:
-            _close_at(signal.price, signal.time)
+            if exit_raw is not None:
+                _close_at(exit_raw, signal.time)
         elif signal.type in _FLIP_TYPES:
-            _close_at(signal.price, signal.time)
+            if exit_raw is not None:
+                _close_at(exit_raw, signal.time)
             _open("long" if signal.type == "flip_to_long" else "short", signal)
 
     wins = [t for t in trades if t.pnl_abs > 0]
@@ -167,6 +213,9 @@ def run_backtest(
 
     return BacktestResult(
         interval="",  # caller (app.main) fills in the interval the df it passed actually was
+        # Dichiarato nel risultato: chi legge il rendimento deve poter sapere a
+        # che prezzo si e' entrati senza risalire alla richiesta.
+        fill_at=str(bp.get("fill_at", "signal_close")),
         initial_capital=bp["initial_capital"],
         final_equity=equity,
         total_return_pct=(equity - bp["initial_capital"]) / bp["initial_capital"] * 100,
