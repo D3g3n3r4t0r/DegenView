@@ -692,10 +692,14 @@
                     <span class="mo-label">Leva</span>
                     <span id="futures-lev-val" class="lev-val">3×</span>
                     <span class="lev-spacer"></span>
-                    <span id="futures-lev-cap" class="lev-cap">tetto server 10×</span>
+                    <span id="futures-lev-cap" class="lev-cap">tetto server 1×</span>
                   </div>
-                  <input type="range" id="futures-leverage" class="lev-slider" min="1" max="10" value="3" step="1" />
-                  <div id="futures-lev-scale" class="lev-scale"><span>1×</span><span>3×</span><span>5×</span><span>7×</span><span>10×</span></div>
+                  <!-- Valori iniziali coerenti con MAX_FUTURES_LEVERAGE=1 lato server —
+                       applyFuturesExchangeLimits() li aggiorna comunque appena arriva
+                       la risposta di /api/auth/futures, questo e' solo lo stato prima
+                       che il JS giri, per non mostrare un 3x che verrebbe subito smentito. -->
+                  <input type="range" id="futures-leverage" class="lev-slider" min="1" max="1" value="1" step="1" />
+                  <div id="futures-lev-scale" class="lev-scale"><span>1×</span></div>
                   <!-- Kraken non ha isolated margin (vedi registry.py): qui
                        si dice, invece di far credere che il rischio sia
                        sempre confinato al margine della posizione. -->

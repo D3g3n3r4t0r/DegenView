@@ -1188,7 +1188,12 @@ async def get_futures_credentials(user: User = Depends(auth.get_current_user)) -
         cred = user.futures_credentials.get(exchange)
         common = dict(
             exchange=exchange, name=adapter.name, needs_passphrase=adapter.needs_passphrase,
-            max_leverage=adapter.max_leverage, isolated_margin=adapter.isolated_margin,
+            # Il tetto vero e' il piu' basso fra i due: il frontend non deve
+            # mai mostrare uno slider che arriva piu' in alto di quanto il
+            # server accetterebbe davvero (vedi i controlli su MAX_FUTURES_LEVERAGE
+            # in questo stesso file e in auth.set_futures_credential).
+            max_leverage=min(MAX_FUTURES_LEVERAGE, adapter.max_leverage),
+            isolated_margin=adapter.isolated_margin,
             key_hint=adapter.key_hint,
         )
         if cred is None:
