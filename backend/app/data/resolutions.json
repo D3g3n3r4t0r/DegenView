@@ -410,5 +410,23 @@
       "backend/tests/test_futures_trading_api.py",
       "backend/app/issues.py"
     ]
+  },
+  "seed-0028": {
+    "status": "in corso",
+    "at": 1788955487,
+    "summary": "Architettura rifatta per intento invece che per oggetto: Analizza, Lab, Sorveglia, Opera, Scopri. Una sola navigazione al posto di tre, il Lab a tutta larghezza, e il trading tolto dalla tab Alert dove un ordine con denaro reale stava sotto un'etichetta che diceva “Alert”.",
+    "detail": "Le tab erano nominate per oggetto e la tab Alert era diventata una discarica: setup Telegram, watchlist, soglie di prezzo, archivio strategie, storico, chiavi API, diario ordini e ordine manuale, tutti impilati in una colonna da 320px. In parallelo c'erano tre navigazioni sovrapposte (rail a sinistra, tab a destra, menu Altro su mobile) che portavano alle stesse schermate chiamandole in modi diversi. Ora la sidebar e' l'unica interfaccia e pilota il meccanismo delle tab gia' esistente invece di duplicarlo; il grafico resta visibile in ogni area, largo in Analizza e a colonna altrove, perche' un backtest e un ordine si leggono meglio con la serie sotto gli occhi. Resta da riportare il Token Sniper dentro l'app: e' ancora una pagina a se' con un tema suo."
+  },
+  "seed-0029": {
+    "status": "risolto",
+    "at": 1788955487,
+    "summary": "Aggiunto il flag fill_at. “signal_close” riempie alla chiusura della candela del segnale (il comportamento storico, ottimista); “next_open” riempie all'apertura della candela dopo, che e' cio' che si puo' davvero ottenere. L'ipotesi usata e' scritta accanto al risultato.",
+    "detail": "Il motore riempiva da sempre a df.loc[ts, “close”], cioe' al prezzo con cui il segnale e' stato calcolato: un prezzo che si conosce solo nell'istante in cui la candela chiude. Il default resta signal_close apposta, perche' cambiarlo avrebbe spostato in silenzio ogni risultato gia' archiviato. Un segnale sull'ultima candela non ha una barra successiva su cui riempire: quel trade viene scartato invece di ripiegare sulla chiusura. Misurato su una serie con gap veri, il riempimento realizzabile rende meno (-4.36% contro -3.65%); su crypto 24/7 i due valori coincidono, perche' li' l'apertura e' identica alla chiusura precedente."
+  },
+  "seed-0030": {
+    "status": "risolto",
+    "at": 1788955487,
+    "summary": "Gli ordini realmente eseguiti sono ora marker propri sul grafico, con l'origine (la strategia che li ha generati oppure “manuale”) e il prezzo di riempimento.",
+    "detail": "Il diario registrava gia' tutto ma viveva solo come elenco. Ora le voci andate a buon fine vengono agganciate alla candela che le contiene e disegnate insieme ai segnali della strategia, cosi' la differenza fra cio' che la strategia diceva e cio' che e' successo si legge a colpo d'occhio. Solo gli ordini riusciti disegnano: un tentativo fallito appartiene al diario, non alla serie dei prezzi. Si aggiornano a ogni analisi e dopo ogni ordine inviato."
   }
 }

@@ -6092,6 +6092,10 @@
       });
     });
     document.addEventListener("click", (e) => {
+      // La sidebar e' il modo legittimo di aprire questi pannelli: senza
+      // questa riga lo stesso click che apre la Bacheca la richiude subito
+      // dopo, perche' in fase di risalita risulta un "click fuori".
+      if (e.target.closest && e.target.closest(".sidenav")) return;
       RAIL_PANELS.forEach(([btnId, panelId]) => {
         const btn = el(btnId);
         const panel = el(panelId);
@@ -7400,8 +7404,13 @@
     const drawerFor = { script: "script-panel", issues: "issues-panel" };
     if (drawerFor[area]) {
       openPanel(drawerFor[area]);
+      // L'area viene dichiarata anche per questi: da cassetto stretto sopra
+      // il grafico diventano una colonna di lettura vera, che e' cio' che
+      // servono a essere — la bacheca si legge, non si sbircia.
+      cockpit.dataset.area = area;
       if (area === "issues") loadIssues();
       document.querySelectorAll(".sidenav-item").forEach((b) => b.classList.toggle("active", b === item));
+      resizeAllCharts();
       return;
     }
 
