@@ -907,6 +907,22 @@
           </span>
           <span class="altro-menu-chev">›</span>
         </button>
+        <!-- Il bottone "Modalità Semplice" nel .toolbar (in alto) non esiste
+             su mobile: .toolbar ha display:none sotto i 760px (vedi
+             style.css), quindi era irraggiungibile da telefono — proprio il
+             dispositivo per cui la modalità semplice esiste. Voce gemella
+             qui, stesso id del bottone di sempre cosi' simple-mode.js non
+             deve sapere quale dei due e' stato premuto. -->
+        <button type="button" id="altro-simple-mode-item" class="altro-menu-item">
+          <span class="altro-menu-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/></svg>
+          </span>
+          <span class="altro-menu-text">
+            <span class="altro-menu-title">Modalità Semplice</span>
+            <span class="altro-menu-sub">Grafico, strategia e attivazione in pochi passaggi</span>
+          </span>
+          <span class="altro-menu-chev">›</span>
+        </button>
         <button type="button" id="altro-opera-item" class="altro-menu-item">
           <span class="altro-menu-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
