@@ -2270,15 +2270,18 @@
   // Solo per la modalita' "stabile" (plateau_search): e' l'unica che scrive nel
   // log le cinque fasi di cui parla — confini, griglia, apertura guidata,
   // scuotimento, scelta. Il log gia' le dice a parole; qui sono le stesse
-  // frasi, lette e disegnate, non un secondo canale dal server. Stilizzata
-  // apposta: il log non manda il punteggio di ogni singola cella, quindi
-  // l'apertura si vede come una barra che si riempie (celle aperte / celle
-  // distinte), non come un terreno con un rilievo — quello richiederebbe il
+  // frasi, lette e disegnate, non un secondo canale dal server. Il disegno
+  // gira su un ciclo continuo (particelle, impulsi, aloni che respirano):
+  // e' quello che rende "viva" un'attesa che altrimenti sarebbe un elenco di
+  // righe. Stilizzata di proposito: il log non manda il punteggio di ogni
+  // singola cella, quindi l'apertura si vede come un campo che si accende via
+  // via che le celle vengono aperte (celle aperte / celle distinte, numeri
+  // veri), non come un terreno con un rilievo — quello richiederebbe il
   // server a mandare coordinate che oggi non manda, e sarebbe inventarsele.
   // Lo scuotimento e la scelta invece sono per intero numeri veri: li' il log
   // gia' porta rendimento, trade e quante volte un finalista regge.
   const plateauAnim = {
-    canvas: null, ctx: null, raf: null,
+    canvas: null, ctx: null, raf: null, t0: null,
     totalAxes: 0, axes: [], axisBusy: 0, gridCells: 0, budget: 0,
     openedSoFar: 0, distinctSoFar: 0, openedFinal: 0, distinctFinal: 0,
     finalistsExpected: 0, probeSamples: 0, finalists: [], picked: null,
@@ -2290,6 +2293,26 @@
       openedSoFar: 0, distinctSoFar: 0, openedFinal: 0, distinctFinal: 0,
       finalistsExpected: 0, probeSamples: 0, finalists: [], picked: null,
     });
+  }
+
+  // Un generatore deterministico: la stessa stringa da' sempre la stessa
+  // sequenza. Serve a disegnare forme che sembrano libere (il tracciato a
+  // gradini di un asse, la disposizione delle particelle) senza che
+  // ridisegnare lo stesso stato — un ridimensionamento, un riapertura della
+  // finestra — le faccia saltare in un'altra posizione.
+  function plateauSeed(str) {
+    let h = 2166136261;
+    for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return h >>> 0;
+  }
+  function plateauRng(seed) {
+    let s = seed >>> 0;
+    return function () {
+      s = (s + 0x6d2b79f5) | 0;
+      let t = Math.imul(s ^ (s >>> 15), 1 | s);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
   }
 
   // Le frasi sono quelle scritte da plateau.py — vedi say(...) li' dentro.
@@ -2336,7 +2359,9 @@
   function plateauAnimFeed(lines) {
     if (!lines || !lines.length) return;
     lines.forEach((line) => plateauAnimParseLine(line.m));
-    plateauAnimDraw();
+    // Il disegno non parte da qui: gira per conto suo (plateauAnimLoop), cosi'
+    // le particelle e gli aloni continuano a muoversi anche nei secondi fra
+    // una riga di log e la prossima invece di restare fermi in attesa.
   }
 
   function plateauAnimAct() {
@@ -2351,38 +2376,13 @@
     const cs = getComputedStyle(document.documentElement);
     const g = (n) => cs.getPropertyValue(n).trim();
     // --accent NON e' usato qui: in tema chiaro l'app lo tiene nero (e' il
-    // colore dei pulsanti, non un colore di dato), e sui blocchi diventava
-    // esattamente il nero brutto segnalato. --bull e' verde in entrambi i
-    // temi ed e' gia' il colore che l'app usa per "sale/va bene" — qui fa lo
-    // stesso lavoro: la tinta di quanto una cella o un finalista rende.
-    return { ink: g("--ink"), dim: g("--ink-dim"), bull: g("--bull"),
-             bear: g("--bear"), border: g("--border"), raised: g("--bg-raised") };
-  }
-
-  // Un blocco isometrico a tre facce — sopra chiara, fianco scuro — e' tutto
-  // quello che serve perche' si legga come un cubo invece che come un
-  // rettangolo. Nessuna libreria, nessuna sfumatura: e' la stessa regola
-  // "minimal" del resto del pannello.
-  function plateauDrawBlock(ctx, x, w, baseY, h, color, dark) {
-    const skew = Math.min(w, h) * 0.28;
-    ctx.fillStyle = color;
-    ctx.fillRect(x, baseY - h, w, h);
-    ctx.fillStyle = dark;
-    ctx.beginPath();
-    ctx.moveTo(x + w, baseY - h);
-    ctx.lineTo(x + w + skew, baseY - h - skew);
-    ctx.lineTo(x + w + skew, baseY - skew);
-    ctx.lineTo(x + w, baseY);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.moveTo(x, baseY - h);
-    ctx.lineTo(x + skew, baseY - h - skew);
-    ctx.lineTo(x + w + skew, baseY - h - skew);
-    ctx.lineTo(x + w, baseY - h);
-    ctx.closePath();
-    ctx.fill();
+    // colore dei pulsanti, non un colore di dato). --bull e' verde in
+    // entrambi i temi ed e' gia' il colore che l'app usa per "sale/va bene".
+    return {
+      ink: g("--ink"), dim: g("--ink-dim"), bull: g("--bull"), bear: g("--bear"),
+      border: g("--border"), raised: g("--bg-raised"), panel: g("--bg-panel"),
+      dark: document.documentElement.getAttribute("data-theme") === "dark",
+    };
   }
 
   function plateauShade(hex, amt) {
@@ -2396,7 +2396,283 @@
     return `rgb(${r},${gg},${b})`;
   }
 
-  function plateauAnimDraw() {
+  function plateauAlpha(hex, a) {
+    const m = /^#([0-9a-f]{6})$/i.exec(hex.trim());
+    if (!m) return hex;
+    const n = parseInt(m[1], 16);
+    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+  }
+
+  // Un alone morbido: un cerchio pieno con un bordo che sfuma verso
+  // trasparente. E' il mattone di tutta l'estetica "particelle" — un punto
+  // acceso, un impulso, il bagliore dietro un numero.
+  function plateauGlow(ctx, x, y, r, color, alpha, dark) {
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, plateauAlpha(color, alpha));
+    g.addColorStop(1, plateauAlpha(color, 0));
+    if (dark) { ctx.save(); ctx.globalCompositeOperation = "lighter"; }
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.fill();
+    if (dark) ctx.restore();
+  }
+
+  // Un anello che si espande e sfuma — l'impulso sonar/battito che ricorre
+  // in piu' atti (l'asse ancora al lavoro, il finalista scosso, la scelta).
+  // `phase` in [0,1): 0 = appena nato, 1 = appena svanito.
+  function plateauRing(ctx, x, y, rMax, phase, color, width, dark) {
+    const r = 4 + rMax * phase;
+    const alpha = (1 - phase) * 0.55;
+    if (alpha <= 0.01) return;
+    if (dark) { ctx.save(); ctx.globalCompositeOperation = "lighter"; }
+    ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832);
+    ctx.strokeStyle = plateauAlpha(color, alpha);
+    ctx.lineWidth = width || 1.4;
+    ctx.stroke();
+    if (dark) ctx.restore();
+  }
+
+  const easeOut = (x) => 1 - Math.pow(1 - Math.min(Math.max(x, 0), 1), 3);
+  const clamp01 = (x) => Math.min(Math.max(x, 0), 1);
+
+  // Il campo di sfondo: una manciata di puntini fiochi che respirano piano.
+  // Costa pochissimo e da' subito la sensazione che qualcosa sia vivo, anche
+  // nell'istante prima che arrivi la prima riga di log.
+  const PLATEAU_FIELD = (() => {
+    const rng = plateauRng(plateauSeed("campo"));
+    return Array.from({ length: 46 }, () => ({ fx: rng(), fy: rng(), ph: rng() * 6.283, sp: 0.4 + rng() * 0.5 }));
+  })();
+
+  function plateauField(ctx, W, H, t, T) {
+    PLATEAU_FIELD.forEach((p) => {
+      const a = 0.10 + 0.10 * (0.5 + 0.5 * Math.sin(t / 1000 * p.sp + p.ph));
+      ctx.beginPath();
+      ctx.arc(p.fx * W, p.fy * H, 1.1, 0, 6.2832);
+      ctx.fillStyle = plateauAlpha(T.dim.startsWith("#") ? T.dim : "#888888", a);
+      ctx.fill();
+    });
+  }
+
+  // ── Atto 1: i confini — ogni asse e' un canale che traccia dove il
+  // risultato cambia, come un tracciato che si aggiorna dal vivo. E' quello
+  // che l'algoritmo fa per davvero: percorrere l'asse e segnare i gradini. ──
+  function plateauStepPath(seedStr, steps, x0, x1, yMid, amp) {
+    const rng = plateauRng(plateauSeed(seedStr));
+    const n = Math.max(1, steps);
+    const xs = [x0];
+    for (let i = 1; i < n; i++) xs.push(x0 + (x1 - x0) * (i / n));
+    xs.push(x1);
+    let level = rng() > 0.5 ? 1 : -1;
+    const pts = [];
+    for (let i = 0; i < xs.length - 1; i++) {
+      const y = yMid + level * amp * (0.4 + 0.6 * rng());
+      pts.push([xs[i], y], [xs[i + 1], y]);
+      level = -level;
+    }
+    return pts;
+  }
+
+  function plateauActBoundaries(ctx, W, H, t, T, pad) {
+    const label = `I confini — asse ${plateauAnim.axes.length}/${plateauAnim.totalAxes || "?"}`;
+    ctx.font = `500 10px var(--font-mono)`; ctx.fillStyle = T.dim;
+    ctx.textAlign = "left"; ctx.textBaseline = "top";
+    ctx.fillText(label, pad, 6);
+
+    const lanes = Math.max(plateauAnim.totalAxes, plateauAnim.axes.length + 1, 3);
+    const top = 26, bottom = H - 10;
+    const laneH = Math.min(30, (bottom - top) / lanes);
+    const x0 = pad, x1 = W - pad - 78;
+
+    for (let i = 0; i < lanes; i++) {
+      const y = top + i * laneH + laneH / 2;
+      const axis = plateauAnim.axes[i];
+      const isBusy = !axis && i === plateauAnim.axes.length && plateauAnim.axisBusy > 0;
+
+      ctx.strokeStyle = T.border; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
+
+      if (axis) {
+        const pts = plateauStepPath(axis.name, Math.max(axis.cells, 2), x0, x1, y, laneH * 0.32);
+        ctx.beginPath();
+        ctx.strokeStyle = T.bull; ctx.lineWidth = 1.6;
+        if (T.dark) { ctx.shadowColor = T.bull; ctx.shadowBlur = 6; }
+        pts.forEach(([px, py], k) => (k === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py)));
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        // una scintilla che ripercorre il tracciato in loop — il "sto
+        // ancora leggendo questo asse", anche a mappatura gia' fatta.
+        const period = 2600 + (i % 3) * 400;
+        const along = ((t + i * 700) % period) / period;
+        const segIdx = Math.min(pts.length - 2, Math.floor(along * (pts.length - 1)));
+        const segT = along * (pts.length - 1) - segIdx;
+        const hx = pts[segIdx][0] + (pts[segIdx + 1][0] - pts[segIdx][0]) * segT;
+        const hy = pts[segIdx][1] + (pts[segIdx + 1][1] - pts[segIdx][1]) * segT;
+        plateauGlow(ctx, hx, hy, 7, T.bull, T.dark ? 0.9 : 0.55, T.dark);
+        ctx.beginPath(); ctx.arc(hx, hy, 2, 0, 6.2832); ctx.fillStyle = T.bull; ctx.fill();
+
+        ctx.font = "400 9px var(--font-mono)"; ctx.fillStyle = T.dim;
+        ctx.textAlign = "left"; ctx.textBaseline = "middle";
+        ctx.fillText(`${axis.name.length > 9 ? axis.name.slice(0, 8) + "…" : axis.name} · ${axis.cells}`, x1 + 6, y);
+      } else if (isBusy) {
+        const scan = 0.5 + 0.5 * Math.sin(t / 420);
+        const sx = x0 + (x1 - x0) * (0.5 + 0.46 * Math.sin(t / 900));
+        plateauGlow(ctx, sx, y, 8 + 3 * scan, T.bull, T.dark ? 0.7 : 0.4, T.dark);
+        ctx.beginPath(); ctx.arc(sx, y, 2.4, 0, 6.2832); ctx.fillStyle = T.bull; ctx.fill();
+        ctx.font = "400 9px var(--font-mono)"; ctx.fillStyle = T.bull;
+        ctx.textAlign = "left"; ctx.textBaseline = "middle";
+        ctx.fillText(`${plateauAnim.axisBusy} bt · al lavoro…`, x1 + 6, y);
+      } else {
+        ctx.font = "400 9px var(--font-mono)"; ctx.fillStyle = T.border;
+        ctx.textAlign = "left"; ctx.textBaseline = "middle";
+        ctx.fillText("in attesa", x1 + 6, y);
+      }
+    }
+  }
+
+  // ── Atto 2: la griglia — un battito che annuncia quante combinazioni ci
+  // sono, prima di aprirle una per una. ──
+  function plateauActGrid(ctx, W, H, t, T) {
+    const cx = W / 2, cy = H / 2 - 4;
+    for (let i = 0; i < 3; i++) {
+      const phase = ((t / 1600) + i / 3) % 1;
+      plateauRing(ctx, cx, cy, Math.min(W, H) * 0.42, phase, T.bull, 1.4, T.dark);
+    }
+    plateauGlow(ctx, cx, cy, 46, T.bull, T.dark ? 0.22 : 0.10, T.dark);
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.font = "700 21px var(--font-mono)"; ctx.fillStyle = T.ink;
+    ctx.fillText(plateauAnim.gridCells.toLocaleString("it-IT") + " celle", cx, cy - 8);
+    ctx.font = "400 10px var(--font-mono)"; ctx.fillStyle = T.dim;
+    ctx.fillText(plateauAnim.budget
+      ? `budget di ${plateauAnim.budget.toLocaleString("it-IT")} backtest`
+      : "provate tutte", cx, cy + 15);
+  }
+
+  // ── Atto 3: l'apertura guidata — una spirale che si accende dal centro
+  // verso fuori, nell'ordine in cui le celle vengono davvero aperte
+  // (best-first: si parte da poche partenze e ci si espande verso il
+  // promettente). L'angolo aureo la fa leggere come cresciuta, non piazzata. ──
+  const PLATEAU_GOLDEN = 2.399963229728653;
+
+  function plateauActOpen(ctx, W, H, t, T) {
+    ctx.font = "500 10px var(--font-mono)"; ctx.fillStyle = T.dim;
+    ctx.textAlign = "left"; ctx.textBaseline = "top";
+    ctx.fillText("L'apertura guidata", 14, 6);
+    ctx.textAlign = "right";
+    ctx.fillText(`${plateauAnim.gridCells.toLocaleString("it-IT")} celle · budget `
+      + `${(plateauAnim.budget || plateauAnim.gridCells).toLocaleString("it-IT")}`, W - 14, 6);
+    ctx.textAlign = "left";
+
+    const budget = plateauAnim.budget || plateauAnim.gridCells || 1;
+    const opened = plateauAnim.openedSoFar || 0;
+    const frac = clamp01(opened / budget);
+    const distinctFrac = opened ? plateauAnim.distinctSoFar / opened : 0;
+
+    const total = 220;
+    const cx = W / 2, cy = H / 2 + 6;
+    const scale = Math.min(W, H) * 0.052;
+    const litCount = Math.round(total * frac);
+
+    for (let k = 0; k < total; k++) {
+      const ang = k * PLATEAU_GOLDEN;
+      const r = scale * Math.sqrt(k);
+      const x = cx + r * Math.cos(ang), y = cy + r * Math.sin(ang);
+      if (x < 2 || x > W - 2 || y < 22 || y > H - 4) continue;
+      const lit = k < litCount;
+      const bright = lit && (k / Math.max(litCount, 1)) < distinctFrac;
+      if (!lit) {
+        ctx.beginPath(); ctx.arc(x, y, 1, 0, 6.2832);
+        ctx.fillStyle = T.border; ctx.fill();
+        continue;
+      }
+      const isNewest = k === litCount - 1;
+      const size = bright ? 2.6 : 1.7;
+      if (bright || isNewest) plateauGlow(ctx, x, y, isNewest ? 12 : 6, T.bull, T.dark ? 0.55 : 0.3, T.dark);
+      ctx.beginPath(); ctx.arc(x, y, size, 0, 6.2832);
+      ctx.fillStyle = bright ? T.bull : plateauShade(T.bull, T.dark ? -10 : 70);
+      ctx.fill();
+      if (isNewest) {
+        const pulse = 0.5 + 0.5 * Math.sin(t / 220);
+        ctx.beginPath(); ctx.arc(x, y, 4 + pulse * 3, 0, 6.2832);
+        ctx.strokeStyle = plateauAlpha(T.bull, 0.6); ctx.lineWidth = 1.2; ctx.stroke();
+      }
+    }
+
+    ctx.font = "400 10px var(--font-mono)"; ctx.fillStyle = T.ink;
+    ctx.fillText(`${opened.toLocaleString("it-IT")} celle aperte`, 14, H - 26);
+    ctx.fillStyle = T.bull;
+    ctx.fillText(`${plateauAnim.distinctSoFar.toLocaleString("it-IT")} configurazioni distinte`, 14, H - 12);
+  }
+
+  // ── Atti 4-5: lo scuotimento e la scelta — orbite di puntini veri (verdi
+  // quanto ha retto, rossi quanto no) intorno a ogni finalista. ──
+  function plateauActShakeAndPick(ctx, W, H, t, T, act) {
+    const title = act === 4 ? "La scelta" : "Lo scuotimento";
+    ctx.font = "500 10px var(--font-mono)"; ctx.fillStyle = T.dim;
+    ctx.textAlign = "left"; ctx.textBaseline = "top";
+    ctx.fillText(title, 14, 6);
+
+    const list = plateauAnim.finalists;
+    const n = Math.max(list.length, plateauAnim.finalistsExpected, 1);
+    const pad = 20, top = 30, bottom = H - 24;
+    const slotW = (W - pad * 2) / n;
+    const maxRet = Math.max(1, ...list.map((f) => Math.abs(f.ret)));
+
+    list.forEach((f, i) => {
+      const isPicked = act === 4 && plateauAnim.picked
+        && Math.abs(f.ret - plateauAnim.picked.ret) < 0.05 && f.trades === plateauAnim.picked.trades;
+      const isActive = i === list.length - 1 && act === 3;
+      const cx = pad + slotW * (i + 0.5);
+      const cy = top + (bottom - top) * (1 - clamp01(Math.abs(f.ret) / maxRet) * 0.82) - (bottom - top) * 0.06;
+      const baseR = 5 + 5 * clamp01(Math.abs(f.ret) / maxRet);
+      const r = isPicked ? baseR + 3 + Math.sin(t / 260) * 1.4 : baseR;
+      const color = isPicked || isActive ? T.bull : T.border;
+
+      if (isPicked) {
+        for (let k = 0; k < 3; k++) {
+          const phase = ((t / 1100) + k / 3) % 1;
+          plateauRing(ctx, cx, cy, 30, phase, T.bull, 1.3, T.dark);
+        }
+        plateauGlow(ctx, cx, cy, 26, T.bull, T.dark ? 0.32 : 0.16, T.dark);
+      } else if (isActive) {
+        const phase = (t / 900) % 1;
+        plateauRing(ctx, cx, cy, 20, phase, T.bull, 1.1, T.dark);
+      }
+
+      // Le orbite: puntini veri, uno per spostamento, verde se il finalista
+      // ha retto quella volta, rosso se no — sono i numeri dello scuotimento,
+      // non una stima. Quelli rossi, sul finalista attivo, si allontanano
+      // invece di stare fermi: e' l'unico modo di "vedere" un fallimento.
+      const dotN = f.agreeTotal || 0;
+      for (let d = 0; d < dotN; d++) {
+        const spin = isActive || isPicked ? t / (isPicked ? 5200 : 2600) : 0;
+        const ang = (d / dotN) * 6.2832 + spin;
+        const survived = d < f.agreeN;
+        const orbit = r + 8 + (survived ? 0 : (isActive ? 10 * clamp01((t % 2600) / 2600) : 8));
+        const dx = cx + Math.cos(ang) * orbit, dy = cy + Math.sin(ang) * orbit * 0.62;
+        const fade = survived ? 1 : (isActive ? 1 - clamp01((t % 2600) / 2600) * 0.7 : 0.45);
+        ctx.beginPath(); ctx.arc(dx, dy, 1.5, 0, 6.2832);
+        ctx.fillStyle = plateauAlpha(survived ? T.bull : T.bear, fade);
+        ctx.fill();
+      }
+
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, 6.2832);
+      ctx.fillStyle = color; ctx.fill();
+
+      ctx.font = "400 9px var(--font-mono)"; ctx.fillStyle = T.dim;
+      ctx.textAlign = "center"; ctx.textBaseline = "top";
+      ctx.fillText(`${f.ret >= 0 ? "+" : ""}${f.ret.toFixed(0)}%`, cx, bottom + 4);
+    });
+
+    if (act === 4 && plateauAnim.picked) {
+      ctx.font = "600 11px var(--font-mono)"; ctx.fillStyle = T.ink;
+      ctx.textAlign = "right"; ctx.textBaseline = "top";
+      ctx.fillText(`stabile ${plateauAnim.picked.stablePct}% delle volte`, W - 14, 6);
+    }
+    ctx.textAlign = "left"; ctx.textBaseline = "top";
+    ctx.fillStyle = T.border;
+    ctx.fillRect(pad, bottom, W - pad * 2, 1);
+  }
+
+  function plateauAnimDraw(now) {
     const canvas = plateauAnim.canvas;
     if (!canvas || canvas.classList.contains("hidden")) return;
     const ctx = plateauAnim.ctx;
@@ -2407,131 +2683,37 @@
       canvas.height = Math.round(H * dpr);
     }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, W, H);
     const T = plateauAnimTheme();
-    const pad = 14, baseY = H - 22;
-    const mono = (s, w) => `${w || 400} ${s}px var(--font-mono)`;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = T.panel; ctx.fillRect(0, 0, W, H);
 
-    ctx.font = mono(10, 500);
-    ctx.fillStyle = T.dim;
-    ctx.textAlign = "left"; ctx.textBaseline = "top";
+    if (plateauAnim.t0 === null) plateauAnim.t0 = now || performance.now();
+    const t = (now || performance.now()) - plateauAnim.t0;
+
+    plateauField(ctx, W, H, t, T);
 
     const act = plateauAnimAct();
+    if (act === 0) plateauActBoundaries(ctx, W, H, t, T, 14);
+    else if (act === 1) plateauActGrid(ctx, W, H, t, T);
+    else if (act === 2) plateauActOpen(ctx, W, H, t, T);
+    else plateauActShakeAndPick(ctx, W, H, t, T, act);
+  }
 
-    if (act === 0) {
-      ctx.fillText(`I confini — asse ${plateauAnim.axes.length}/${plateauAnim.totalAxes || "?"}`, pad, 8);
-      const maxCells = Math.max(1, ...plateauAnim.axes.map((a) => a.cells));
-      const slots = Math.max(plateauAnim.totalAxes, plateauAnim.axes.length, 1);
-      const w = Math.min(46, (W - pad * 2) / slots - 10);
-      plateauAnim.axes.forEach((a, i) => {
-        const x = pad + i * ((W - pad * 2) / slots);
-        const h = 10 + (baseY - 34) * (a.cells / maxCells);
-        plateauDrawBlock(ctx, x, w, baseY, h, T.bull, plateauShade(T.bull, -40));
-        ctx.fillStyle = T.dim; ctx.font = mono(9);
-        ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
-        ctx.fillText(String(a.cells), x + w / 2, baseY - h - 6);
-        ctx.fillText(a.name.length > 10 ? a.name.slice(0, 9) + "…" : a.name, x + w / 2, baseY + 12);
-        ctx.textAlign = "left"; ctx.textBaseline = "top";
-      });
-      if (plateauAnim.axisBusy > 0) {
-        // L'asse su cui si sta lavorando adesso, prima che la sua riga
-        // finale arrivi: un contorno tratteggiato che cresce a ogni
-        // aggiornamento, cosi' il pannello non resta muto per decine di
-        // secondi mentre un asse pesante finisce di essere mappato.
-        const i = plateauAnim.axes.length;
-        const x = pad + i * ((W - pad * 2) / slots);
-        const h = Math.min(baseY - 34, 16 + plateauAnim.axisBusy * 1.4);
-        ctx.save();
-        ctx.setLineDash([3, 3]);
-        ctx.strokeStyle = T.bull; ctx.lineWidth = 1.3;
-        ctx.strokeRect(x, baseY - h, w, h);
-        ctx.restore();
-        ctx.fillStyle = T.dim; ctx.font = mono(9);
-        ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
-        ctx.fillText(`${plateauAnim.axisBusy} bt`, x + w / 2, baseY - h - 6);
-        ctx.fillText("al lavoro…", x + w / 2, baseY + 12);
-        ctx.textAlign = "left"; ctx.textBaseline = "top";
-      }
-      ctx.fillStyle = T.border;
-      ctx.fillRect(pad, baseY, W - pad * 2, 1);
-    } else if (act === 1) {
-      ctx.fillText("La griglia", pad, 8);
-      ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.font = mono(22, 700); ctx.fillStyle = T.ink;
-      ctx.fillText(plateauAnim.gridCells.toLocaleString("it-IT") + " celle", W / 2, H / 2 - 8);
-      ctx.font = mono(10); ctx.fillStyle = T.dim;
-      ctx.fillText(plateauAnim.budget
-        ? `budget di ${plateauAnim.budget.toLocaleString("it-IT")} backtest`
-        : "provate tutte", W / 2, H / 2 + 14);
-      ctx.textAlign = "left"; ctx.textBaseline = "top";
-    } else if (act === 2) {
-      ctx.fillText("L'apertura guidata", pad, 8);
-      ctx.textAlign = "right";
-      ctx.fillText(`${plateauAnim.gridCells.toLocaleString("it-IT")} celle · budget `
-        + `${(plateauAnim.budget || plateauAnim.gridCells).toLocaleString("it-IT")}`, W - pad, 8);
-      ctx.textAlign = "left";
-      const budget = plateauAnim.budget || plateauAnim.gridCells || 1;
-      const cols = 40;
-      const opened = plateauAnim.openedSoFar || 0;
-      const distinctFrac = opened ? plateauAnim.distinctSoFar / opened : 0;
-      const cw = (W - pad * 2) / cols, ch = 20;
-      const rowBottom = 84;
-      for (let i = 0; i < cols; i++) {
-        const cellFrac = (i + 0.5) / cols;
-        const isOpen = cellFrac <= opened / budget;
-        const isDistinctish = isOpen && cellFrac <= (opened / budget) * distinctFrac;
-        const fill = isDistinctish ? T.bull : isOpen ? plateauShade(T.bull, 60) : T.raised;
-        const dark = isOpen ? plateauShade(T.bull, -30) : T.border;
-        plateauDrawBlock(ctx, pad + i * cw, cw - 2, rowBottom, ch, fill, dark);
-      }
-      ctx.font = mono(10);
-      ctx.fillStyle = T.ink;
-      ctx.fillText(`${opened.toLocaleString("it-IT")} celle aperte`, pad, rowBottom + 14);
-      ctx.fillStyle = T.bull;
-      ctx.fillText(`${plateauAnim.distinctSoFar.toLocaleString("it-IT")} configurazioni distinte`, pad, rowBottom + 30);
-    } else if (act === 3 || act === 4) {
-      const title = act === 4 ? "La scelta" : "Lo scuotimento";
-      ctx.fillText(title, pad, 8);
-      const list = plateauAnim.finalists;
-      const n = Math.max(list.length, plateauAnim.finalistsExpected, 1);
-      const slotW = (W - pad * 2) / n;
-      const rets = list.map((f) => Math.abs(f.ret));
-      const maxRet = Math.max(1, ...rets);
-      list.forEach((f, i) => {
-        const isPicked = act === 4 && plateauAnim.picked
-          && Math.abs(f.ret - plateauAnim.picked.ret) < 0.05 && f.trades === plateauAnim.picked.trades;
-        const isLast = i === list.length - 1 && act === 3;
-        const x = pad + i * slotW;
-        const w = Math.min(34, slotW - 12);
-        const h = 12 + (baseY - 60) * (Math.abs(f.ret) / maxRet);
-        const color = isPicked ? T.bull : (isLast ? plateauShade(T.bull, 35) : T.border);
-        const dark = plateauShade(color === T.border ? "#888888" : color, -40);
-        plateauDrawBlock(ctx, x + (slotW - w) / 2, w, baseY, h, color, dark);
-        // Il cerchio di puntini: verde quanto ha retto, rosso quanto no — sono
-        // i numeri veri dello scuotimento, non una stima.
-        const cx = x + slotW / 2, cy = baseY - h - 14;
-        const dotN = f.agreeTotal || 0;
-        for (let d = 0; d < dotN; d++) {
-          const ang = (d / dotN) * Math.PI * 2 - Math.PI / 2;
-          const dx = cx + Math.cos(ang) * 9, dy = cy + Math.sin(ang) * 9 * 0.55;
-          ctx.beginPath(); ctx.arc(dx, dy, 1.6, 0, 6.2832);
-          ctx.fillStyle = d < f.agreeN ? T.bull : T.bear;
-          ctx.fill();
-        }
-        ctx.font = mono(9); ctx.fillStyle = T.dim;
-        ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
-        ctx.fillText(`${f.ret >= 0 ? "+" : ""}${f.ret.toFixed(0)}%`, cx, baseY + 12);
-        ctx.textAlign = "left"; ctx.textBaseline = "top";
-      });
-      if (act === 4 && plateauAnim.picked) {
-        ctx.font = mono(11, 600); ctx.fillStyle = T.ink;
-        ctx.textAlign = "right"; ctx.textBaseline = "top";
-        ctx.fillText(`stabile ${plateauAnim.picked.stablePct}% delle volte`, W - pad, 8);
-        ctx.textAlign = "left";
-      }
-      ctx.fillStyle = T.border;
-      ctx.fillRect(pad, baseY, W - pad * 2, 1);
-    }
+  // Il ciclo gira solo mentre il pannello e' aperto su una ricerca stabile:
+  // e' l'unico costo continuo di tutta questa roba, e uno solo, piccolo
+  // canvas non pesa — ma non ha senso farlo girare quando non lo vede nessuno.
+  function plateauAnimLoop(now) {
+    plateauAnim.raf = null;
+    if (!plateauAnim.canvas || plateauAnim.canvas.classList.contains("hidden")) return;
+    plateauAnimDraw(now);
+    plateauAnim.raf = requestAnimationFrame(plateauAnimLoop);
+  }
+  function plateauAnimStart() {
+    if (plateauAnim.raf) return;
+    plateauAnim.raf = requestAnimationFrame(plateauAnimLoop);
+  }
+  function plateauAnimStop() {
+    if (plateauAnim.raf) { cancelAnimationFrame(plateauAnim.raf); plateauAnim.raf = null; }
   }
 
   function plateauAnimShow(job) {
@@ -2541,9 +2723,11 @@
     if (!plateauAnim.ctx) plateauAnim.ctx = canvas.getContext("2d");
     const isPlateau = job.mode === "plateau";
     canvas.classList.toggle("hidden", !isPlateau);
-    if (!isPlateau) return;
+    if (!isPlateau) { plateauAnimStop(); return; }
     plateauAnimReset();
+    plateauAnim.t0 = null;   // la prossima draw() la fissa di nuovo, per questa apertura
     plateauAnimFeed(job.log);
+    plateauAnimStart();
   }
 
   function openOptProgress(jobId) {
@@ -2572,6 +2756,7 @@
     // Solo la finestra si chiude: il lavoro resta, e la pastiglia continua a
     // dire a che punto e'.
     el("opt-progress").classList.add("hidden");
+    plateauAnimStop();
     optViewing = null;
     renderOptPill();
   }
