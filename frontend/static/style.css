@@ -1311,6 +1311,10 @@ body {
 
 .wl-exch { font-family: var(--font-mono); font-size: 10px; color: var(--ink-dim); margin-top: 1px; }
 
+.wl-spark-wrap { flex: 0 0 auto; width: 48px; height: 24px; display: flex; align-items: center; justify-content: center; }
+.wl-spark { display: block; width: 48px; height: 24px; }
+.wl-spark-empty { font-family: var(--font-mono); font-size: 11px; color: var(--ink-faint); }
+
 .wl-right { text-align: right; flex-shrink: 0; }
 
 .wl-price {
@@ -3119,15 +3123,29 @@ body {
 .section-action-btn:hover { border-color: var(--ink-dim); color: var(--ink); }
 
 .alert-log-cards { list-style: none; padding: 0; margin: .4rem 0; display: flex; flex-direction: column; gap: .3rem; }
-.alert-log-row { display: flex; align-items: center; gap: .5rem; padding: .4rem .5rem; border-radius: 4px; background: var(--bg-raised); font-size: .8rem; }
-.al-icon { font-size: 1rem; width: 1.2rem; text-align: center; }
-.al-icon.bull { color: var(--bull); }
-.al-icon.bear { color: var(--bear); }
+/* ── Storico alert: timeline invece della lista piatta ──
+   Stessa <li class="alert-log-row"> generata da renderAlertLog(), solo il
+   contenitore diventa una linea temporale: pallino colorato a sinistra +
+   traccia verticale che collega le voci, come nel prototipo. */
+#alert-log-list { position: relative; padding-left: 2px; }
+.alert-log-row { display: flex; align-items: flex-start; gap: .55rem; padding: 0 0 .85rem; font-size: .8rem; position: relative; }
+.alert-log-row::before {
+  content: ""; position: absolute; left: 5px; top: 15px; bottom: 0; width: 1px;
+  background: var(--border);
+}
+.alert-log-row:last-child::before { display: none; }
+.al-icon {
+  font-size: .62rem; width: 11px; height: 11px; line-height: 11px; text-align: center;
+  border-radius: 50%; flex: 0 0 auto; margin-top: 2px; z-index: 1;
+  background: var(--bg-panel); border: 2px solid var(--border-strong);
+}
+.al-icon.bull { color: var(--bull); border-color: var(--bull); }
+.al-icon.bear { color: var(--bear); border-color: var(--bear); }
 .al-body { flex: 1; display: flex; flex-wrap: wrap; gap: .15rem .4rem; min-width: 0; }
 .al-symbol { font-weight: 700; font-size: .82rem; }
 .al-strat { color: var(--ink-dim); font-size: .74rem; }
-.al-label { font-size: .78rem; }
-.al-time { color: var(--ink-dim); font-size: .72rem; white-space: nowrap; }
+.al-label { font-size: .78rem; flex-basis: 100%; }
+.al-time { color: var(--ink-faint); font-size: .7rem; font-family: var(--font-mono); white-space: nowrap; }
 
 /* ── Price alerts form + list ── */
 .pa-form { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; margin: .5rem 0; }
@@ -3141,23 +3159,33 @@ body {
 .pa-form button[type="submit"]:hover { opacity: .85; }
 
 .pa-list { list-style: none; padding: 0; margin: .4rem 0; display: flex; flex-direction: column; gap: .4rem; }
-.pa-card { padding: .5rem .6rem; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-raised); font-size: .8rem; }
-.pa-card.pa-inactive { opacity: .55; }
-.pa-head { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; }
+/* ── Card alert su prezzo: piu' chiare per gli alert attivi ── */
+.pa-card {
+  padding: .7rem .8rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-panel);
+  box-shadow: var(--shadow);
+  font-size: .8rem;
+}
+.pa-card.pa-inactive { opacity: .55; box-shadow: none; }
+.pa-head { display: flex; align-items: center; gap: .45rem; flex-wrap: wrap; }
 .pa-symbol { font-weight: 700; font-size: .85rem; }
 .pa-dir { font-weight: 600; font-size: .8rem; }
-.pa-price { font-variant-numeric: tabular-nums; font-size: .82rem; }
-.pa-badge { padding: .1rem .35rem; border-radius: 3px; font-size: .7rem; font-weight: 600; letter-spacing: .03em; }
-.pa-badge.once { background: rgba(240,165,0,.18); color: #c87800; }
-.pa-badge.repeat { background: rgba(0,201,125,.18); color: #009860; }
-.pa-badge.inactive { background: var(--bg); color: var(--ink-dim); border: 1px solid var(--border); }
-.pa-note { font-size: .75rem; color: var(--ink-dim); margin: .2rem 0; }
-.pa-meta { font-size: .73rem; color: var(--ink-dim); margin: .15rem 0; }
-.pa-actions { display: flex; gap: .4rem; margin-top: .3rem; }
-.pa-toggle-btn, .pa-del-btn { padding: .2rem .5rem; border: 1px solid var(--border); border-radius: 4px; background: none; color: var(--ink); font-size: .75rem; cursor: pointer; }
+.pa-dir.bull { color: var(--bull); }
+.pa-dir.bear { color: var(--bear); }
+.pa-price { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: .82rem; margin-left: auto; }
+.pa-badge { padding: .12rem .4rem; border-radius: 99px; font-size: .68rem; font-weight: 600; letter-spacing: .03em; }
+.pa-badge.once { background: var(--warn-soft); color: var(--warn); }
+.pa-badge.repeat { background: var(--bull-soft); color: var(--bull); }
+.pa-badge.inactive { background: var(--bg-sunk); color: var(--ink-faint); border: 1px solid var(--border); }
+.pa-note { font-size: .75rem; color: var(--ink-dim); margin: .35rem 0 0; }
+.pa-meta { font-size: .72rem; color: var(--ink-faint); font-family: var(--font-mono); margin: .3rem 0 0; }
+.pa-actions { display: flex; gap: .4rem; margin-top: .5rem; }
+.pa-toggle-btn, .pa-del-btn { padding: .25rem .55rem; border: 1px solid var(--border); border-radius: 6px; background: none; color: var(--ink); font-size: .75rem; cursor: pointer; }
 .pa-toggle-btn:hover { border-color: var(--ink-dim); }
 .pa-del-btn { color: var(--bear); border-color: transparent; }
-.pa-del-btn:hover { border-color: var(--bear); background: rgba(255,69,96,.08); }
+.pa-del-btn:hover { border-color: var(--bear); background: var(--bear-soft); }
 
 /* ── Watchlist per-strategy sub-rows ── */
 .strat-sub-row { display: flex; align-items: center; gap: .4rem; margin-top: .25rem; flex-wrap: wrap; }
