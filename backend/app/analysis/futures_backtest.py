@@ -21,6 +21,7 @@ import math
 
 import pandas as pd
 
+from app.analysis.futures_math import DEFAULT_MAINTENANCE_MARGIN_RATE, liquidation_price
 from app.analysis.strategies import DEFAULT_STRATEGY, confirmed_events
 from app.models import MAX_FUTURES_LEVERAGE, BacktestResult, BacktestTrade, StrategySignal
 
@@ -32,13 +33,8 @@ DEFAULT_FUTURES_PARAMS = {
     "stop_loss_pct": 0.0,
     "take_profit_pct": 0.0,
     "leverage": 1,
-    # Tasso di manutenzione margine per la posizione, in frazione (0.005 =
-    # 0.5%). Valore prudente per fascia di leva bassa/media su un perpetuo
-    # BTCUSDT — fonte: tabella dei livelli di margine pubblicata da Binance
-    # per BTCUSDT-PERP (binance.com/it/futures/trading-rules/perpetual/leverage-margin).
-    # Non e' calibrato per simbolo: un default ragionevole, non un dato reale
-    # per ogni ticker — va sempre passato esplicitamente quando lo si conosce.
-    "maintenance_margin_rate": 0.005,
+    # Vedi app.analysis.futures_math per la fonte del default.
+    "maintenance_margin_rate": DEFAULT_MAINTENANCE_MARGIN_RATE,
     # Funding rate per 8h, in frazione. 0 = nessun dato di funding
     # disponibile per questa serie storica: il costo NON viene inventato,
     # resta zero e basta.
@@ -58,12 +54,6 @@ class InvalidLeverageError(ValueError):
 
 def _fill_price(price: float, pct: float, side: str) -> float:
     return price * (1 + pct / 100) if side == "buy" else price * (1 - pct / 100)
-
-
-def _liquidation_price(entry: float, direction: str, leverage: int, maint_rate: float) -> float:
-    if direction == "long":
-        return entry * (1 - 1 / leverage + maint_rate)
-    return entry * (1 + 1 / leverage - maint_rate)
 
 
 def run_futures_backtest(
@@ -98,7 +88,7 @@ def run_futures_backtest(
         nonlocal open_trade
         fill = _fill_price(signal.price, bp["slippage_pct"], "buy" if direction == "long" else "sell")
         margin_used = equity * (bp["qty_pct_of_equity"] / 100)
-        liq_price = _liquidation_price(fill, direction, leverage, maint_rate)
+        liq_price = liquidation_price(fill, direction, leverage, maint_rate)
         open_trade = {
             "direction": direction,
             "entry_time": signal.time,

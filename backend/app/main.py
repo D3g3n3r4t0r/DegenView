@@ -32,13 +32,16 @@ except (AttributeError, ValueError):
 from app import auth
 from app import issues as issues_store
 from app import rate_limit
-from app.trading.executor import place_order_for_signal
+from app.trading.executor import place_futures_order_for_signal, place_order_for_signal
+from app.trading import binance_futures_exec
+from app.models import MAX_FUTURES_LEVERAGE
 from app import archive as archive_store
 from app import jobs as jobs_store
 from app import trading_log
 from app import favorites as favorites_store
 from app import watchlist as watchlist_store
 from app.analysis.backtest import run_backtest
+from app.analysis.futures_math import DEFAULT_MAINTENANCE_MARGIN_RATE, liquidation_price
 from app.analysis.cancel import SearchCancelled
 from app.export import build_backtest_workbook
 from app.analysis.confluence import compute_confluence
@@ -109,6 +112,11 @@ if getattr(sys, "frozen", False):
 else:
     FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent / "frontend"
 WATCHLIST_POLL_SECONDS = 60
+
+# Ordine stabile per l'elenco delle credenziali futures esposte
+# dall'endpoint — solo Binance per ora, vedi executor.SUPPORTED_FUTURES_EXCHANGES
+# e il piano "Operazioni futures" per il rollout a un exchange alla volta.
+SUPPORTED_FUTURES_EXCHANGES_ORDERED = ("binance",)
 
 twelvedata_provider = TwelveDataProvider()
 mexc_provider = MexcProvider()
@@ -663,6 +671,26 @@ class TradingCredentialOut(BaseModel):
     size_value: float
 
 
+class FuturesCredentialRequest(BaseModel):
+    exchange: str
+    api_key: str = ""     # empty = keep existing
+    api_secret: str = ""  # empty = keep existing
+    enabled: bool = False  # kill switch — spegnibile senza toccare le chiavi
+    size_mode: Literal["fixed_usdt", "pct_balance"] = "fixed_usdt"
+    size_value: float = 50.0
+    leverage: int = 1
+
+
+class FuturesCredentialOut(BaseModel):
+    exchange: str
+    api_key_set: bool
+    api_secret_set: bool
+    enabled: bool
+    size_mode: str
+    size_value: float
+    leverage: int
+
+
 async def _safe_search(
     provider: DataProvider, query: str, asset_type: AssetType, provider_id: str
 ) -> list[SymbolSuggestion]:
@@ -1133,6 +1161,153 @@ async def place_manual_order(body: ManualOrderRequest, user: User = Depends(auth
         user.id, symbol=symbol, exchange=body.exchange,
         strategy_name="manuale", signal_type=signal_type,
         outcome="eseguito", detail=str(result)[:400],
+    )
+    return {"ok": True, "result": result, "symbol": symbol}
+
+
+@app.get("/api/auth/futures", response_model=list[FuturesCredentialOut])
+async def get_futures_credentials(user: User = Depends(auth.get_current_user)) -> list[FuturesCredentialOut]:
+    out = []
+    for exchange in SUPPORTED_FUTURES_EXCHANGES_ORDERED:
+        cred = user.futures_credentials.get(exchange)
+        if cred is None:
+            out.append(FuturesCredentialOut(exchange=exchange, api_key_set=False, api_secret_set=False,
+                                             enabled=False, size_mode="fixed_usdt", size_value=50.0, leverage=1))
+        else:
+            out.append(FuturesCredentialOut(
+                exchange=exchange, api_key_set=bool(cred.api_key_enc), api_secret_set=bool(cred.api_secret_enc),
+                enabled=cred.enabled, size_mode=cred.size_mode, size_value=cred.size_value, leverage=cred.leverage,
+            ))
+    return out
+
+
+@app.patch("/api/auth/futures")
+async def set_futures_credential_endpoint(body: FuturesCredentialRequest, user: User = Depends(auth.get_current_user)):
+    if body.exchange not in SUPPORTED_FUTURES_EXCHANGES_ORDERED:
+        raise HTTPException(status_code=400, detail=f"Futures non ancora supportati per questo exchange: {body.exchange}")
+    try:
+        auth.set_futures_credential(
+            user.id, body.exchange, body.api_key, body.api_secret,
+            body.enabled, body.size_mode, body.size_value, body.leverage,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True}
+
+
+class FuturesQuoteRequest(BaseModel):
+    exchange: str
+    symbol: str
+    side: Literal["BUY", "SELL"]
+    size_mode: Literal["fixed_usdt", "pct_balance"] = "fixed_usdt"
+    size_value: float
+    leverage: int = 1
+
+
+@app.post("/api/trading/futures/quote")
+async def quote_futures_order(body: FuturesQuoteRequest, user: User = Depends(auth.get_current_user)):
+    """Anteprima obbligatoria prima di un ordine futures manuale: leva,
+    margine impegnato e prezzo di liquidazione stimato — mai un click
+    singolo come per lo spot (vedi il piano "Operazioni futures", Fase 4)."""
+    if body.exchange not in SUPPORTED_FUTURES_EXCHANGES_ORDERED:
+        raise HTTPException(status_code=400, detail=f"Futures non ancora supportati per questo exchange: {body.exchange}")
+    cred = user.futures_credentials.get(body.exchange)
+    if not cred:
+        raise HTTPException(status_code=400, detail="Credenziali futures non configurate per questo exchange")
+    api_key, api_secret = auth.get_decrypted_futures_credential(user, body.exchange)
+    if not api_key or not api_secret:
+        raise HTTPException(status_code=400, detail="API key o secret mancanti")
+    if not (1 <= body.leverage <= MAX_FUTURES_LEVERAGE):
+        raise HTTPException(status_code=400, detail=f"Leva {body.leverage}x fuori dal limite consentito (1-{MAX_FUTURES_LEVERAGE}x)")
+
+    symbol = body.symbol.strip().upper()
+    headers = {"X-MBX-APIKEY": api_key}
+    async with httpx.AsyncClient(base_url=binance_futures_exec.FAPI_BASE, headers=headers, timeout=15.0) as client:
+        try:
+            mark = await binance_futures_exec.get_mark_price(client, symbol)
+            available = await binance_futures_exec.get_available_margin_usdt(client, api_secret)
+        except binance_futures_exec.FuturesExecutionError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    margin_used = body.size_value if body.size_mode == "fixed_usdt" else available * body.size_value / 100
+    direction = "long" if body.side == "BUY" else "short"
+    liq_price = liquidation_price(mark, direction, body.leverage, DEFAULT_MAINTENANCE_MARGIN_RATE)
+    sufficient = margin_used <= available
+    return {
+        "symbol": symbol, "mark_price": mark, "leverage": body.leverage,
+        "margin_used": margin_used, "notional": margin_used * body.leverage,
+        "liquidation_price": liq_price, "available_margin": available,
+        "margin_sufficient": sufficient,
+    }
+
+
+class FuturesOrderRequest(BaseModel):
+    exchange: str
+    symbol: str
+    side: Literal["BUY", "SELL"]
+    size_mode: Literal["fixed_usdt", "pct_balance"] = "fixed_usdt"
+    size_value: float
+    leverage: int = 1
+    confirm: bool = False  # deve essere vero: nessun ordine futures parte senza conferma esplicita
+
+
+@app.post("/api/trading/futures/order")
+async def place_manual_futures_order(body: FuturesOrderRequest, user: User = Depends(auth.get_current_user)):
+    if not body.confirm:
+        raise HTTPException(status_code=400, detail="Conferma richiesta: mostra prima l'anteprima (/api/trading/futures/quote)")
+    if body.exchange not in SUPPORTED_FUTURES_EXCHANGES_ORDERED:
+        raise HTTPException(status_code=400, detail=f"Futures non ancora supportati per questo exchange: {body.exchange}")
+    cred = user.futures_credentials.get(body.exchange)
+    if not cred:
+        raise HTTPException(status_code=400, detail="Credenziali futures non configurate per questo exchange")
+    if not cred.enabled:
+        # Kill switch: spegnibile senza toccare le chiavi — vale anche per
+        # l'ordine manuale, non solo per l'esecuzione automatica.
+        raise HTTPException(status_code=400, detail="Esecuzione futures disattivata per questo exchange")
+    api_key, api_secret = auth.get_decrypted_futures_credential(user, body.exchange)
+    if not api_key or not api_secret:
+        raise HTTPException(status_code=400, detail="API key o secret mancanti")
+    if not (1 <= body.leverage <= MAX_FUTURES_LEVERAGE):
+        raise HTTPException(status_code=400, detail=f"Leva {body.leverage}x fuori dal limite consentito (1-{MAX_FUTURES_LEVERAGE}x)")
+
+    symbol = body.symbol.strip().upper()
+
+    # Controllo pre-trade del margine disponibile: letto per davvero
+    # dall'exchange, non dalla cache — vedi il piano, Fase 4.
+    headers = {"X-MBX-APIKEY": api_key}
+    async with httpx.AsyncClient(base_url=binance_futures_exec.FAPI_BASE, headers=headers, timeout=15.0) as client:
+        try:
+            available = await binance_futures_exec.get_available_margin_usdt(client, api_secret)
+        except binance_futures_exec.FuturesExecutionError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+    margin_needed = body.size_value if body.size_mode == "fixed_usdt" else available * body.size_value / 100
+    if margin_needed > available:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Margine insufficiente: servono {margin_needed:.2f} USDT, disponibili {available:.2f} USDT",
+        )
+
+    from app.models import StrategySignal
+    signal_type = "entry_long" if body.side == "BUY" else "entry_short"
+    fake_signal = StrategySignal(time=int(_time.time()), type=signal_type, price=0.0, label="manual")
+    detail_prefix = f"leva {body.leverage}x — "
+    try:
+        result = await place_futures_order_for_signal(
+            body.exchange, symbol, fake_signal,
+            body.size_mode, body.size_value, body.leverage,
+            api_key, api_secret,
+        )
+    except RuntimeError as exc:
+        trading_log.record(
+            user.id, symbol=symbol, exchange=body.exchange,
+            strategy_name="manuale futures", signal_type=signal_type,
+            outcome="fallito", detail=detail_prefix + str(exc),
+        )
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    trading_log.record(
+        user.id, symbol=symbol, exchange=body.exchange,
+        strategy_name="manuale futures", signal_type=signal_type,
+        outcome="eseguito", detail=(detail_prefix + str(result))[:400],
     )
     return {"ok": True, "result": result, "symbol": symbol}
 
