@@ -164,6 +164,10 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0031", "La sezione Watchlist non si trovava piu' da desktop",
+     "Dopo il ridisegno (seed-0028), 'Sorveglia' nella sidebar apriva solo la tab Alert: la lista dei "
+     "ticker rapidi (tab Watchlist, i preferiti da un clic) non aveva piu' nessuna voce di navigazione "
+     "su desktop, solo dal menu mobile 'Altro'.", "alta"),
     ("seed-0028", "Ridisegnare il sito: ogni funzione al suo posto",
      "Il prodotto e' cresciuto per innesti e ogni funzione era disegnata bene da sola, ma nessuna "
      "parlava la lingua delle altre. Serve un occhio globale che rimetta in discussione dove sta "
