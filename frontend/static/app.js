@@ -7618,6 +7618,13 @@
     // sostituiscono il lavoro con del testo da leggere.
     if (area === "livelli") {
       cockpit.dataset.area = "analizza";
+      // Il grafico allargato nasconde il pannello Livelli via CSS (regola
+      // pensata per quando il flyout era solo un'appendice di Analizza): chi
+      // clicca Livelli lo vuole vedere, quindi l'allargamento cede il posto
+      // invece di lasciare il pannello invisibile senza spiegazione.
+      if (cockpit.classList.contains("chart-wide")) {
+        el("chart-expand-btn")?.click();
+      }
       openPanel("levels-panel");
       document.querySelectorAll(".sidenav-item").forEach((b) => b.classList.toggle("active", b === item));
       resizeAllCharts();
