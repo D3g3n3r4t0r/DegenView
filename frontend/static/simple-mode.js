@@ -8,8 +8,16 @@
 
   const LS_KEY = "simpleModeActive";
   const root = document.getElementById("simple-mode-root");
-  const toggleBtn = document.getElementById("simple-mode-toggle-btn");
-  if (!root || !toggleBtn) return;
+  // Due punti d'ingresso: il bottone nel .toolbar (desktop — .toolbar ha
+  // display:none sotto i 760px, vedi style.css) e la voce nel menu "Altro"
+  // (mobile). Nessuno dei due e' obbligatorio da solo: quello che conta e'
+  // che almeno uno esista, altrimenti la modalita' non e' raggiungibile da
+  // nessun dispositivo.
+  const toggleBtns = [
+    document.getElementById("simple-mode-toggle-btn"),
+    document.getElementById("altro-simple-mode-item"),
+  ].filter(Boolean);
+  if (!root || !toggleBtns.length) return;
 
   // Trading exchanges Simple Mode offers for live execution. Limited to the
   // subset backend/app/auth.py's set_trading_credential() actually accepts
@@ -880,7 +888,12 @@
     document.head.appendChild(style);
   }
 
-  toggleBtn.addEventListener("click", () => setActive(root.classList.contains("hidden")));
+  toggleBtns.forEach((btn) => btn.addEventListener("click", () => {
+    // Sull'Altro mobile il click deve anche richiudere quel pannello,
+    // altrimenti resta aperto sopra la modalita' semplice appena attivata.
+    document.getElementById("altro-panel")?.classList.remove("mobile-open");
+    setActive(root.classList.contains("hidden"));
+  }));
 
   injectStyle();
   initHideRule();
