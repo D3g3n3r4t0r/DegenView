@@ -202,6 +202,49 @@ def get_decrypted_credential(user: User, exchange: str) -> tuple[str, str, str]:
     return _dec(cred.api_key_enc, _SECRET), _dec(cred.api_secret_enc, _SECRET), _dec(cred.passphrase_enc, _SECRET)
 
 
+def set_futures_credential(
+    user_id: str,
+    exchange: str,
+    api_key: str,
+    api_secret: str,
+    enabled: bool,
+    size_mode: str,
+    size_value: float,
+    leverage: int,
+) -> User | None:
+    """Modello e file separati da set_trading_credential() apposta — vedi
+    FuturesCredential nel piano "Operazioni futures": un bug qui non deve
+    poter toccare le credenziali spot, e viceversa."""
+    from app.models import MAX_FUTURES_LEVERAGE, FuturesCredential
+    if not (1 <= leverage <= MAX_FUTURES_LEVERAGE):
+        raise ValueError(f"Leva {leverage}x fuori dal limite consentito (1-{MAX_FUTURES_LEVERAGE}x)")
+    user = _users.get(user_id)
+    if user is None:
+        return None
+    creds = dict(user.futures_credentials)
+    existing = creds.get(exchange, FuturesCredential())
+    creds[exchange] = FuturesCredential(
+        api_key_enc=_enc(api_key, _SECRET) if api_key else existing.api_key_enc,
+        api_secret_enc=_enc(api_secret, _SECRET) if api_secret else existing.api_secret_enc,
+        enabled=enabled,
+        size_mode=size_mode,
+        size_value=size_value,
+        leverage=leverage,
+    )
+    updated = user.model_copy(update={"futures_credentials": creds})
+    _users[user_id] = updated
+    _save_users()
+    return updated
+
+
+def get_decrypted_futures_credential(user: User, exchange: str) -> tuple[str, str]:
+    """Returns (api_key, api_secret) decrypted. Empty strings if not configured."""
+    cred = user.futures_credentials.get(exchange)
+    if cred is None:
+        return "", ""
+    return _dec(cred.api_key_enc, _SECRET), _dec(cred.api_secret_enc, _SECRET)
+
+
 def make_session_cookie(user_id: str) -> str:
     expires = int(time.time()) + SESSION_MAX_AGE_SECONDS
     payload = f"{user_id}:{expires}"
