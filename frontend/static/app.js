@@ -4551,6 +4551,31 @@
       .filter(Boolean);
   }
 
+
+  // Striscia sotto il grafico. Legge quello che c'e' gia' in state.data:
+  // nessuna chiamata in piu', si aggiorna quando si aggiorna il grafico.
+  function renderChartStats() {
+    const box = el("chart-stats");
+    if (!box) return;
+    const candles = state.data && state.data.candles;
+    if (!candles || !candles.length) { box.classList.add("hidden"); return; }
+    const first = candles[0], last = candles[candles.length - 1];
+    const hi = Math.max(...candles.map((c) => c.high));
+    const lo = Math.min(...candles.map((c) => c.low));
+    const chg = (last.close / first.close - 1) * 100;
+    const fmt = (v) => Number(v).toLocaleString("it-IT", { maximumFractionDigits: v < 10 ? 6 : 2 });
+    el("cs-last").textContent = fmt(last.close);
+    const c = el("cs-chg");
+    c.textContent = (chg >= 0 ? "+" : "") + chg.toFixed(2) + "%";
+    c.className = "cs-v " + (chg >= 0 ? "bull" : "bear");
+    el("cs-high").textContent = fmt(hi);
+    el("cs-low").textContent = fmt(lo);
+    el("cs-bars").textContent = candles.length;
+    const pos = el("strategy-position-badge");
+    el("cs-pos").textContent = pos ? pos.textContent : "—";
+    box.classList.remove("hidden");
+  }
+
   function applyChartMarkers() {
     if (!candleSeries) return;
     let markers = [];
@@ -4836,8 +4861,21 @@
       range.textContent = `${z.price_low.toPrecision(6)} — ${z.price_high.toPrecision(6)}`;
       const label = document.createElement("div");
       label.textContent = z.label;
+      // Il punteggio come barra: quante conferme coincidono in quella zona si
+      // confronta a colpo d'occhio fra righe, un numero no.
+      const maxScore = Math.max(...summary.top_confluence_zones.map((x) => x.score || 0), 1);
+      const bar = document.createElement("div");
+      bar.className = "cz-bar";
+      const fill = document.createElement("i");
+      fill.style.width = `${Math.round(((z.score || 0) / maxScore) * 100)}%`;
+      bar.appendChild(fill);
+      const tfs = document.createElement("span");
+      tfs.className = "cz-tf";
+      tfs.textContent = `${(z.timeframes || []).length} TF`;
       li.appendChild(label);
       li.appendChild(range);
+      li.appendChild(bar);
+      li.appendChild(tfs);
       list.appendChild(li);
     });
   }
@@ -5710,6 +5748,7 @@
 
     _lastStrategySignals = strategyState.signals;
     applyChartMarkers();
+    renderChartStats();
     // Gli ordini veri arrivano da un'altra sorgente: si ricaricano a ogni
     // analisi, altrimenti cambiando ticker resterebbero quelli di prima.
     loadExecutedOrders();
