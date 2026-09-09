@@ -4010,6 +4010,7 @@ details.issue-card > summary:focus-visible { outline: 2px solid var(--accent); o
   .cockpit[data-area="lab"] .lab-panel > .lab-action-row,
   .cockpit[data-area="lab"] .lab-panel > .lab-mode-picker,
   .cockpit[data-area="lab"] .lab-panel > .lab-filters { grid-column: 1; }
+  .cockpit[data-area="lab"] .lab-panel > .lab-plateau-box,
   .cockpit[data-area="lab"] .lab-panel > .lab-data-used,
   .cockpit[data-area="lab"] .lab-panel > .lab-regime-box,
   .cockpit[data-area="lab"] .lab-panel > .lab-branch-box,
@@ -4290,3 +4291,32 @@ td {
   font-family: var(--font-mono);
   font-size: 12px;
 }
+
+/* ── Mappa del plateau ──────────────────────────────────────────────
+   I dieci candidati migliori disegnati sui due parametri che variano di
+   piu'. Non e' decorazione: dice se il vincitore sta dentro un'area che
+   regge o se e' un punto isolato — la domanda che la ricerca stabile si
+   pone, resa guardabile. */
+.lab-plateau-box {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  margin-bottom: 12px;
+}
+.plateau-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 6px;
+}
+.plateau-svg { display: block; overflow: visible; }
+.plateau-note {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--ink-dim);
+  margin: 8px 0 0;
+}
+.bull { color: var(--bull); }
+.bear { color: var(--bear); }
+.warnc { color: var(--warn); }

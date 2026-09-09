@@ -1204,6 +1204,49 @@ class FuturesQuoteRequest(BaseModel):
     leverage: int = 1
 
 
+@app.get("/api/trading/futures/positions")
+async def list_futures_positions(user: User = Depends(auth.get_current_user)):
+    """Sola lettura: le posizioni a leva aperte, con la distanza dalla
+    liquidazione gia' calcolata. Non puo' in nessun caso inviare un ordine —
+    per questo non chiede conferma e non tocca l'executor."""
+    out: list[dict] = []
+    for exchange in SUPPORTED_FUTURES_EXCHANGES_ORDERED:
+        cred = user.futures_credentials.get(exchange)
+        if not cred:
+            continue
+        api_key, api_secret = auth.get_decrypted_futures_credential(user, exchange)
+        if not api_key or not api_secret:
+            continue
+        headers = {"X-MBX-APIKEY": api_key}
+        async with httpx.AsyncClient(base_url=binance_futures_exec.FAPI_BASE, headers=headers, timeout=15.0) as client:
+            try:
+                positions = await binance_futures_exec.get_open_positions(client, api_secret)
+            except binance_futures_exec.FuturesExecutionError:
+                # Un exchange che non risponde non deve nascondere gli altri.
+                continue
+        for pos in positions:
+            amt = float(pos.get("positionAmt", 0))
+            mark = float(pos.get("markPrice", 0) or 0)
+            liq = float(pos.get("liquidationPrice", 0) or 0)
+            out.append({
+                "exchange": exchange,
+                "symbol": pos.get("symbol"),
+                "side": "long" if amt > 0 else "short",
+                "quantity": abs(amt),
+                "entry_price": float(pos.get("entryPrice", 0) or 0),
+                "mark_price": mark,
+                "leverage": int(float(pos.get("leverage", 1) or 1)),
+                "margin": float(pos.get("isolatedMargin", 0) or 0),
+                "notional": abs(float(pos.get("notional", 0) or 0)),
+                "unrealized_pnl": float(pos.get("unRealizedProfit", 0) or 0),
+                "liquidation_price": liq,
+                # Quanto puo' muoversi il prezzo prima della liquidazione: e'
+                # il numero che la schermata mette in evidenza.
+                "distance_to_liquidation_pct": ((liq / mark - 1) * 100) if (mark and liq) else None,
+            })
+    return out
+
+
 @app.post("/api/trading/futures/quote")
 async def quote_futures_order(body: FuturesQuoteRequest, user: User = Depends(auth.get_current_user)):
     """Anteprima obbligatoria prima di un ordine futures manuale: leva,

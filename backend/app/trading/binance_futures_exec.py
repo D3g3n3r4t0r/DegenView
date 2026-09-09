@@ -88,6 +88,16 @@ async def get_position_risk(client: httpx.AsyncClient, symbol: str, api_secret: 
     return None
 
 
+async def get_open_positions(client: httpx.AsyncClient, api_secret: str) -> list[dict]:
+    """Tutte le posizioni aperte, non solo quella di un simbolo. Serve alla
+    schermata Opera: finche' una posizione a leva resta aperta, saperla
+    aperta e' piu' importante di qualunque altro numero della pagina."""
+    resp = await client.get(f"/fapi/v2/positionRisk?{_sign(api_secret, {})}")
+    if resp.status_code >= 400:
+        raise _explain("positionRisk", resp.text)
+    return [p for p in resp.json() if float(p.get("positionAmt", 0)) != 0]
+
+
 async def _set_leverage(client: httpx.AsyncClient, symbol: str, leverage: int, api_secret: str) -> None:
     params = {"symbol": symbol, "leverage": leverage}
     resp = await client.post(f"/fapi/v1/leverage?{_sign(api_secret, params)}")
