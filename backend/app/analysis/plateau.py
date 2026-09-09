@@ -256,6 +256,15 @@ def partition_axes(
                 if counter is not None:
                     counter["n"] = counter.get("n", 0) + 1
                     counter["boundary"] = counter.get("boundary", 0) + 1
+                    # Un asse pesante (piu' punti base, piu' bisezioni) puo'
+                    # metterci decine di secondi prima della prima riga —
+                    # "asse X: ..." arriva solo a fine ricerca su quell'asse.
+                    # Nel frattempo il log restava fermo, ed e' sembrato un
+                    # blocco: segnalato dal vivo. Questa non cambia la
+                    # mappatura, e' solo il segno che si sta ancora cercando.
+                    local = counter["n"] - before
+                    if local % 12 == 0:
+                        say(f"asse {name}: ancora al lavoro — {local} backtest finora")
                 return _fingerprint(bt)
 
             found.extend(locate_boundaries(probe, coarse=coarse, tol=tol))
