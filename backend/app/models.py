@@ -94,6 +94,10 @@ class BacktestTrade(BaseModel):
 
 
 class BacktestResult(BaseModel):
+    # Dichiarato nel risultato, non solo nella richiesta: un numero di
+    # rendimento senza sapere a che prezzo si e' entrati non e' confrontabile
+    # con nessun altro.
+    fill_at: str = "signal_close"
     # The interval the simulation actually ran on — deliberately coarser
     # than the chart's own timeframe when that's finer than daily, so this
     # can differ from whatever TimeframeAnalysis.interval says for "ltf".

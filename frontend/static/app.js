@@ -1603,6 +1603,8 @@
         setFuturesStatus(data.detail || "Ordine rifiutato", true);
       } else {
         setFuturesStatus("Ordine eseguito.", false);
+        loadExecutedOrders();
+        loadPositions();
         el("futures-confirm-box").checked = false;
         futuresQuote = null;
         renderFuturesQuote();
@@ -4481,6 +4483,74 @@
   // scritture separate si cancellerebbero a vicenda.
   let _lastStrategySignals = [];
 
+
+  // ── Ordini reali sul grafico ──────────────────────────────────────────
+  // Un segnale della strategia e un ordine davvero eseguito non sono la
+  // stessa cosa, e finora sul grafico si vedeva solo il primo: la domanda
+  // "ma quella volta sono entrato davvero?" non aveva risposta guardando la
+  // serie. Gli ordini del diario diventano marker propri — forma piena,
+  // etichetta con il prezzo di riempimento — cosi' la differenza fra cosa
+  // la strategia diceva e cosa e' successo si legge a colpo d'occhio.
+  let _executedOrders = [];
+
+  async function loadExecutedOrders() {
+    if (!state.user) { _executedOrders = []; return; }
+    try {
+      const res = await fetch("/api/trading/journal?limit=200");
+      if (!res.ok) { _executedOrders = []; return; }
+      const data = await res.json();
+      _executedOrders = Array.isArray(data) ? data : (data.entries || []);
+    } catch {
+      _executedOrders = [];   // il grafico deve reggere anche senza diario
+    }
+    applyChartMarkers();
+  }
+
+  function buildExecutedOrderMarkers() {
+    if (!_executedOrders.length || !state.data) return [];
+    const chartSymbol = (state.data.symbol || "").toUpperCase();
+    const candles = state.data.candles || [];
+    if (!candles.length) return [];
+
+    // Il diario segna l'istante dell'ordine, che quasi mai coincide con
+    // l'inizio di una candela: va agganciato alla barra che lo contiene.
+    const times = candles.map((c) => c.time);
+    const snap = (t) => {
+      if (t < times[0]) return null;
+      let lo = 0, hi = times.length - 1, best = null;
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        if (times[mid] <= t) { best = times[mid]; lo = mid + 1; } else { hi = mid - 1; }
+      }
+      return best;
+    };
+
+    return _executedOrders
+      .filter((o) => {
+        if ((o.symbol || "").toUpperCase() !== chartSymbol) return false;
+        // Solo gli ordini andati a buon fine lasciano traccia: un tentativo
+        // fallito appartiene al diario, non alla serie dei prezzi.
+        return o.outcome === "ok" || o.outcome === "executed" || o.outcome === "eseguito";
+      })
+      .map((o) => {
+        const t = snap(o.ts);
+        if (t === null) return null;
+        const isBuy = /long|buy|entry/i.test(o.signal_type || "");
+        const auto = o.strategy_name && o.strategy_name !== "manuale";
+        const price = o.price ? ` @ ${o.price}` : "";
+        return {
+          time: t,
+          position: isBuy ? "belowBar" : "aboveBar",
+          color: isBuy ? COLORS.bull : COLORS.bear,
+          shape: isBuy ? "arrowUp" : "arrowDown",
+          // L'etichetta dice sempre da dove viene l'ordine: automatico dalla
+          // strategia, oppure premuto a mano.
+          text: `● ${auto ? o.strategy_name : "manuale"}${price}`,
+        };
+      })
+      .filter(Boolean);
+  }
+
   function applyChartMarkers() {
     if (!candleSeries) return;
     let markers = [];
@@ -4490,6 +4560,12 @@
     const tradesToggle = el("backtest-trades-toggle");
     if (tradesToggle && tradesToggle.checked) {
       markers = markers.concat(buildBacktestTradeMarkers());
+    }
+    // Gli ordini realmente eseguiti si vedono sempre: non sono un livello
+    // che si accende, sono cio' che e' successo davvero.
+    const ordersToggle = el("executed-orders-toggle");
+    if (!ordersToggle || ordersToggle.checked) {
+      markers = markers.concat(buildExecutedOrderMarkers());
     }
     // La libreria pretende marker in ordine di tempo crescente; unendo due
     // elenchi l'ordine si perde.
@@ -5634,6 +5710,9 @@
 
     _lastStrategySignals = strategyState.signals;
     applyChartMarkers();
+    // Gli ordini veri arrivano da un'altra sorgente: si ricaricano a ogni
+    // analisi, altrimenti cambiando ticker resterebbero quelli di prima.
+    loadExecutedOrders();
   }
 
   function renderPineBacktest(bt) {
@@ -6283,6 +6362,7 @@
     el("alert-log-clear-btn").addEventListener("click", () => clearAlertLog());
 
     el("strategy-markers-toggle").addEventListener("change", applyChartMarkers);
+    el("executed-orders-toggle")?.addEventListener("change", applyChartMarkers);
 
     const btTrades = el("backtest-trades-toggle");
     if (btTrades) {
@@ -6457,6 +6537,7 @@
       qty_pct_of_equity: Number(inputNumber(labEl("lab-qty-pct"), 100, { min: 1, max: 100 })),
       commission_pct: Number(inputNumber(labEl("lab-commission"), 0, { min: 0 })),
       slippage_pct: Number(inputNumber(labEl("lab-slippage"), 0, { min: 0 })),
+      fill_at: labEl("lab-fill-at")?.value || "signal_close",
     };
   }
 
@@ -6475,6 +6556,7 @@
     params.set("qty_pct_of_equity", inputNumber(labEl("lab-qty-pct"), 100, { min: 1, max: 100 }));
     params.set("commission_pct", inputNumber(labEl("lab-commission"), 0, { min: 0 }));
     params.set("slippage_pct", inputNumber(labEl("lab-slippage"), 0, { min: 0 }));
+    params.set("fill_at", labEl("lab-fill-at")?.value || "signal_close");
     params.set("stop_loss_pct", "0");
     params.set("take_profit_pct", "0");
     const container = labEl("lab-params-fields");
@@ -6889,7 +6971,15 @@
     const de = fmtDate(bt.data_end);
     const dateRange = ds && de ? ` · <span class="meta-dates">${ds} → ${de}</span>` : "";
 
-    labEl("lab-result-meta").innerHTML = `<button type="button" class="lab-trades-link">${bt.num_trades} trade</button> · ${bt.interval || labState.tf}${dateRange}`;
+    // Quale ipotesi di esecuzione ha prodotto questi numeri va detto accanto ai
+    // numeri, non sepolto in un pannello di impostazioni: due rendimenti
+    // ottenuti con ipotesi diverse non sono confrontabili fra loro.
+    const fillAt = bt.fill_at || "signal_close";
+    const fillTag = fillAt === "next_open"
+      ? ' · <span class="fill-tag fill-real" title="Ingressi e uscite riempiti all&rsquo;apertura della candela successiva al segnale: il prezzo che si puo&rsquo; davvero ottenere.">apertura successiva</span>'
+      : ' · <span class="fill-tag fill-optimistic" title="Ingressi e uscite riempiti alla chiusura della candela che genera il segnale: quel prezzo si conosce solo nell&rsquo;istante in cui la candela chiude.">chiusura del segnale</span>';
+
+    labEl("lab-result-meta").innerHTML = `<button type="button" class="lab-trades-link">${bt.num_trades} trade</button> · ${bt.interval || labState.tf}${dateRange}${fillTag}`;
 
     // 3-chip base row + optional Sharpe chip
     let chipsHtml = `
@@ -7335,6 +7425,27 @@
     resizeAllCharts();
   }
 
+
+  // Il Lab a tutta larghezza vuole due colonne vere. Con la sola griglia CSS
+  // i blocchi del risultato finivano nella riga corrispondente al loro posto
+  // nel DOM, cioe' sotto tutti i controlli: colonna destra vuota per mezzo
+  // schermo e il risultato spinto in fondo. Raggruppandoli in un contenitore
+  // solo la colonna parte in alto. Gli id non cambiano, app.js li ritrova.
+  function groupLabResultColumn() {
+    const panel = el("lab-panel");
+    if (!panel || panel.querySelector(".lab-results-col")) return;
+    const col = document.createElement("div");
+    col.className = "lab-results-col";
+    [
+      "lab-plateau-box", "lab-data-used", "lab-regime-box", "lab-branch-box",
+      "lab-status", "lab-result-block", "lab-apply-strip", "lab-signal-status",
+    ].forEach((id) => {
+      const node = document.getElementById(id);
+      if (node) col.appendChild(node);
+    });
+    panel.appendChild(col);
+  }
+
   function bindSidenav() {
     document.querySelectorAll(".sidenav-item[data-area]").forEach((btn) => {
       btn.addEventListener("click", () => setArea(btn.dataset.area));
@@ -7379,6 +7490,7 @@
       });
     }
     bindTabs();
+    groupLabResultColumn();
     bindSidenav();
     bindDrawRail();
     bindMobileDrawTools();
