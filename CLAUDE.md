@@ -2,6 +2,11 @@
 
 ## Da fare a ogni conversazione, prima di altro
 
+Leggi `HANDOVER.md`: e' la memoria fra una conversazione e l'altra — filoni
+di lavoro pluri-sessione, il loro stato, e un log di cosa Lorenzo ha chiesto
+e perche'. Una chat diversa da quella che ha fatto l'ultimo lavoro deve
+poter ripartire da li' senza rileggere tutta la cronologia precedente.
+
 Leggi la bacheca segnalazioni:
 
 ```
@@ -11,6 +16,14 @@ curl -s https://liquidity-analysis-engine.fly.dev/api/issues
 Sono i problemi che Lorenzo e chi lavora con lui hanno scritto dall'app. Se ce
 ne sono di nuovi o di aperti, dillo subito e proponi da quale partire, senza
 aspettare che te lo chiedano.
+
+Dopo un lavoro non banale (un piano nuovo, piu' sessioni sullo stesso filone,
+una decisione presa insieme a Lorenzo) aggiorna anche `HANDOVER.md` — stato
+del filone, cosa resta, e una riga nel log delle conversazioni con le parole
+di Lorenzo, non solo un riassunto tecnico. Un piano scritto con lo strumento
+di planning locale (`ExitPlanMode`) non e' mai versionato da solo: il suo
+contenuto va riportato qui o si perde alla fine della sessione — nessuna
+chat futura potra' piu' leggerlo.
 
 Quando risolvi qualcosa, scrivi la risoluzione in
 `backend/app/data/resolutions.json`, con chiave uguale all'`id` della
