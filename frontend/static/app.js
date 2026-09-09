@@ -1643,10 +1643,66 @@
     });
     el("futures-confirm-box").addEventListener("change", updateFuturesExecuteState);
     el("futures-execute-btn").addEventListener("click", submitFuturesOrder);
+    el("positions-refresh-btn")?.addEventListener("click", loadPositions);
     el("opera-login-btn")?.addEventListener("click", () => openAuthModal("login"));
 
     renderFuturesQuote();
     updateFuturesExecuteState();
+  }
+
+
+  // ── Posizioni aperte ──────────────────────────────────────────────────
+  // Sola lettura. La distanza dalla liquidazione e' disegnata come nastro
+  // con lancetta invece che scritta in una riga: una lancetta nel rosso si
+  // vede prima di un errore, un numero in tabella lo racconta dopo.
+  async function loadPositions() {
+    const list = el("positions-list");
+    if (!list || !state.user) return;
+    try {
+      const res = await fetch("/api/trading/futures/positions");
+      if (!res.ok) { list.innerHTML = ""; el("positions-count").textContent = ""; return; }
+      renderPositions(await res.json());
+    } catch {
+      /* una posizione non mostrata e' meno grave di una pagina rotta */
+    }
+  }
+
+  function renderPositions(positions) {
+    const list = el("positions-list");
+    const count = el("positions-count");
+    count.textContent = positions.length ? `${positions.length} aperte` : "";
+    if (!positions.length) {
+      list.innerHTML = '<li class="pos-empty">Nessuna posizione a leva aperta.</li>';
+      return;
+    }
+    list.innerHTML = positions.map((p) => {
+      const pnl = p.unrealized_pnl || 0;
+      const dist = p.distance_to_liquidation_pct;
+      // La lancetta: 0% = liquidazione, 25% o piu' di margine = zona verde.
+      const safety = dist === null || dist === undefined ? 0.5
+        : Math.max(0, Math.min(1, Math.abs(dist) / 25));
+      const distClass = dist === null || dist === undefined ? ""
+        : Math.abs(dist) < 8 ? "bear" : Math.abs(dist) < 15 ? "warnc" : "bull";
+      return `<li class="pos-item leveraged">
+        <div class="pos-item-top">
+          <span class="trading-auto-badge futures-badge">${p.leverage}× isolato</span>
+          <b>${p.symbol}</b>
+          <span class="section-count">${p.side === "long" ? "LONG" : "SHORT"}</span>
+          <span class="section-count">${p.exchange}</span>
+        </div>
+        <div class="pos-pnl ${pnl >= 0 ? "bull" : "bear"}">${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}</div>
+        <div class="fq-row"><span>Ingresso / mark</span><span>${p.entry_price} → ${p.mark_price}</span></div>
+        <div class="fq-row"><span>Quantita / margine</span><span>${p.quantity} · ${p.margin.toFixed(2)} USDT</span></div>
+        <div class="liq-track">
+          <div class="liq-track-bg"></div>
+          <div class="liq-needle" style="left:${(safety * 100).toFixed(1)}%"></div>
+        </div>
+        <div class="liq-foot">
+          <span class="bear">liq. ${p.liquidation_price}</span>
+          <span class="${distClass}">${dist === null || dist === undefined ? "—" : (dist >= 0 ? "+" : "") + dist.toFixed(1) + "%"}</span>
+        </div>
+      </li>`;
+    }).join("");
   }
 
   bindFuturesOrderUI();
@@ -3056,6 +3112,7 @@
     });
     labEl("lab-status").classList.add("hidden");
     renderLabResults(body.backtest);
+    renderPlateauMap(body);
     renderDataUsed(body);
     renderRegimeBox(body);
     renderBranchBox(body);
@@ -6720,6 +6777,93 @@
     ctx.fill();
   }
 
+
+  // ── Mappa del plateau ─────────────────────────────────────────────────
+  // Il backend restituisce da sempre i dieci candidati migliori con il loro
+  // punteggio, e il commento accanto al modello dice a cosa servono: far
+  // vedere la dispersione, perche' una rosa i cui membri litigano e' essa
+  // stessa il segnale che il vincitore e' un colpo di fortuna. Nessuna
+  // schermata li aveva mai mostrati. Qui diventano una mappa: i due
+  // parametri che variano di piu' sugli assi, il punteggio nel colore, il
+  // vincitore marcato. Se il rombo sta in mezzo a celle chiare regge; se sta
+  // da solo in mezzo al vuoto, quel risultato non si ripetera'.
+  function renderPlateauMap(body) {
+    const box = labEl("lab-plateau-box");
+    if (!box) return;
+    const cands = (body && body.top_candidates) || [];
+    if (cands.length < 3) { box.classList.add("hidden"); box.innerHTML = ""; return; }
+
+    // Gli assi sono i due parametri numerici che cambiano davvero: mostrare
+    // un parametro costante sprecherebbe meta' della mappa.
+    const keys = Object.keys(cands[0].params || {}).filter((k) => {
+      const vals = cands.map((c) => c.params[k]);
+      return vals.every((v) => typeof v === "number") && new Set(vals).size > 1;
+    });
+    if (keys.length < 2) { box.classList.add("hidden"); box.innerHTML = ""; return; }
+
+    const spread = (k) => {
+      const vals = cands.map((c) => c.params[k]);
+      return (Math.max(...vals) - Math.min(...vals)) / (Math.abs(Math.max(...vals)) || 1);
+    };
+    const [kx, ky] = keys.sort((a, b) => spread(b) - spread(a)).slice(0, 2);
+
+    const xs = cands.map((c) => c.params[kx]);
+    const ys = cands.map((c) => c.params[ky]);
+    const scores = cands.map((c) => c.score);
+    const xMin = Math.min(...xs), xMax = Math.max(...xs);
+    const yMin = Math.min(...ys), yMax = Math.max(...ys);
+    const sMin = Math.min(...scores), sMax = Math.max(...scores);
+    const norm = (v, lo, hi) => (hi === lo ? 0.5 : (v - lo) / (hi - lo));
+
+    const W = 300, H = 210, padL = 40, padB = 30, padT = 12, padR = 12;
+    const px = (v) => padL + norm(v, xMin, xMax) * (W - padL - padR);
+    const py = (v) => H - padB - norm(v, yMin, yMax) * (H - padT - padB);
+
+    const dots = cands.map((c) => {
+      const t = norm(c.score, sMin, sMax);
+      const r = 5 + t * 6;
+      const best = c.rank === 1;
+      const fill = `color-mix(in srgb, var(--accent) ${Math.round(18 + t * 72)}%, var(--bg-sunk))`;
+      return `<g>
+        <circle cx="${px(c.params[kx]).toFixed(1)}" cy="${py(c.params[ky]).toFixed(1)}" r="${r.toFixed(1)}"
+          fill="${fill}" stroke="${best ? "var(--accent)" : "var(--border-strong)"}" stroke-width="${best ? 2 : 1}">
+          <title>#${c.rank} · score ${c.score.toFixed(2)} · ${kx}=${c.params[kx]} ${ky}=${c.params[ky]} · rend. ${c.total_return_pct.toFixed(1)}% · DD ${c.max_drawdown_pct.toFixed(1)}%</title>
+        </circle>
+        ${best ? `<text x="${px(c.params[kx]).toFixed(1)}" y="${(py(c.params[ky]) + 3.5).toFixed(1)}" text-anchor="middle" font-size="9" fill="var(--accent-ink)">◆</text>` : ""}
+      </g>`;
+    }).join("");
+
+    // Quanto e' isolato il vincitore: la stessa domanda che la ricerca
+    // stabile si pone, scritta in una riga.
+    const best = cands.find((c) => c.rank === 1) || cands[0];
+    const near = cands.filter((c) => c !== best && c.score >= best.score * 0.9).length;
+    const verdict = near >= 3
+      ? `<b class="bull">${near} vicini</b> entro il 10% del migliore: l'area regge.`
+      : near >= 1
+      ? `<b class="warnc">solo ${near}</b> entro il 10% del migliore: area stretta.`
+      : `<b class="bear">nessun vicino</b> entro il 10%: il migliore e' isolato, difficile che si ripeta.`;
+
+    box.classList.remove("hidden");
+    box.innerHTML = `
+      <div class="plateau-head">
+        <span class="section-eyebrow">Mappa dei candidati</span>
+        <span class="section-count">${cands.length} in rosa</span>
+      </div>
+      <svg class="plateau-svg" viewBox="0 0 ${W} ${H}" width="100%" role="img"
+           aria-label="Dispersione dei candidati migliori su ${kx} e ${ky}">
+        <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${H - padB}" stroke="var(--border)"/>
+        <line x1="${padL}" y1="${H - padB}" x2="${W - padR}" y2="${H - padB}" stroke="var(--border)"/>
+        <text x="${padL - 6}" y="${padT + 8}" text-anchor="end" font-size="9" fill="var(--ink-faint)" font-family="var(--font-mono)">${yMax}</text>
+        <text x="${padL - 6}" y="${H - padB}" text-anchor="end" font-size="9" fill="var(--ink-faint)" font-family="var(--font-mono)">${yMin}</text>
+        <text x="${padL}" y="${H - padB + 13}" font-size="9" fill="var(--ink-faint)" font-family="var(--font-mono)">${xMin}</text>
+        <text x="${W - padR}" y="${H - padB + 13}" text-anchor="end" font-size="9" fill="var(--ink-faint)" font-family="var(--font-mono)">${xMax}</text>
+        <text x="${W / 2}" y="${H - 3}" text-anchor="middle" font-size="9" fill="var(--ink-dim)" font-family="var(--font-mono)">${kx}</text>
+        <text x="10" y="${H / 2}" font-size="9" fill="var(--ink-dim)" font-family="var(--font-mono)" transform="rotate(-90 10 ${H / 2})" text-anchor="middle">${ky}</text>
+        ${dots}
+      </svg>
+      <p class="plateau-note">${verdict} Il cerchio piu' grande e chiaro e' il punteggio piu' alto; <b>◆</b> e' la configurazione scelta.</p>`;
+  }
+
   function renderLabResults(bt) {
     labState.lastBt = bt;
     const pct = bt.total_return_pct;
@@ -7178,6 +7322,8 @@
 
     cockpit.dataset.area = area;
     document.querySelectorAll(".sidenav-item").forEach((b) => b.classList.toggle("active", b === item));
+
+    if (area === "opera") loadPositions();
 
     const tabTarget = item && item.dataset.tabTarget;
     if (tabTarget) {
