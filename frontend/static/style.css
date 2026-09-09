@@ -4352,10 +4352,15 @@ td {
 .lab-mode-name { font-weight: 600; font-size: 12px; display: block; margin-bottom: 2px; }
 .lab-mode-desc { font-size: 11px; color: var(--ink-dim); line-height: 1.45; display: block; }
 
-/* ── livelli: interruttori, non spunte ── */
+/* ── livelli: interruttori, non spunte ──
+   La checkbox nativa e' ridisegnata come uno switch (traccia + pallino
+   che scorre) invece di una spunta quadrata — stesso <input
+   type="checkbox">, stesso data-layer/id letto da app.js, cambia solo
+   l'aspetto. */
 .layer-toggle {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 9px;
   padding: 6px 7px;
   border-radius: 6px;
@@ -4363,6 +4368,59 @@ td {
   cursor: pointer;
 }
 .layer-toggle:hover { background: var(--bg-raised); }
+
+.layer-toggle input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  flex: 0 0 auto;
+  width: 30px;
+  height: 17px;
+  margin: 0;
+  border-radius: 20px;
+  background: var(--bg-sunk);
+  border: 1px solid var(--border-strong);
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.layer-toggle input[type="checkbox"]::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--ink-faint);
+  transition: left .15s, background .15s;
+}
+.layer-toggle input[type="checkbox"]:checked {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.layer-toggle input[type="checkbox"]:checked::after {
+  left: 14px;
+  background: var(--accent);
+}
+.layer-toggle input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Livelli: due gruppi visivamente separati — struttura di mercato prima,
+   indicatori classici dopo — come nel prototipo. */
+.levels-panel .panel h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.levels-panel .panel h3::before {
+  content: "";
+  width: 3px;
+  height: 13px;
+  border-radius: 2px;
+  background: var(--accent);
+}
 
 /* ── stato vuoto ── */
 .empty-state {
