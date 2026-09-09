@@ -5418,9 +5418,31 @@
       exch.textContent = isActive ? "In grafico ora" : entry.asset_type === "crypto" ? `${entry.exchange} · crypto` : "azioni";
       main.appendChild(exch);
 
+      const quote = state.favoriteQuotes[entry.id];
+      // Sparkline: the /api/favorites/quotes endpoint only ever gives the
+      // last price and the day-over-day % change, never a full history —
+      // so a full wiggly line would be invented data. What IS real is the
+      // two points that change_pct already implies (yesterday's close,
+      // derived from price and pct, and today's price): draw those, not a
+      // fabricated curve.
+      const sparkWrap = document.createElement("div");
+      sparkWrap.className = "wl-spark-wrap";
+      if (quote && quote.price != null && quote.change_pct != null) {
+        const prevClose = quote.price / (1 + quote.change_pct / 100);
+        const up = quote.change_pct >= 0;
+        const y0 = 20, y1 = up ? 4 : 20, yMid = up ? 20 : 4;
+        // simple 2-segment path: flat lead-in, then the real move.
+        sparkWrap.innerHTML =
+          `<svg class="wl-spark" viewBox="0 0 48 24" role="img" aria-label="Variazione ${quote.change_pct.toFixed(2)}%">` +
+          `<path d="M2,${y0} L24,${y0} L46,${y1}" fill="none" stroke="${up ? "var(--bull)" : "var(--bear)"}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>` +
+          `<circle cx="46" cy="${y1}" r="2" fill="${up ? "var(--bull)" : "var(--bear)"}"/>` +
+          `</svg>`;
+      } else {
+        sparkWrap.innerHTML = `<span class="wl-spark-empty">—</span>`;
+      }
+
       const right = document.createElement("div");
       right.className = "wl-right";
-      const quote = state.favoriteQuotes[entry.id];
       const price = document.createElement("div");
       price.className = "wl-price";
       price.textContent =
@@ -5447,6 +5469,7 @@
 
       li.appendChild(avatar);
       li.appendChild(main);
+      li.appendChild(sparkWrap);
       li.appendChild(right);
       li.appendChild(remove);
       li.addEventListener("click", () => {
