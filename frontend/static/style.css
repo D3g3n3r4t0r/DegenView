@@ -4440,3 +4440,27 @@ td {
 @media (min-width: 1600px) {
   .cockpit[data-area="sorveglia"] #alert-authenticated { column-count: 3; }
 }
+
+/* ── Allargare il grafico da qualsiasi area ── */
+.chart-expand-btn {
+  position: absolute; top: 8px; right: 10px; z-index: 6;
+  width: 28px; height: 28px; display: grid; place-items: center;
+  border: 1px solid var(--border); border-radius: 6px;
+  background: var(--bg-panel); color: var(--ink-dim); cursor: pointer;
+}
+.chart-expand-btn:hover { color: var(--ink); border-color: var(--border-strong); }
+.chart-expand-btn.active { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+
+@media (min-width: 761px) {
+  /* Allargato, il grafico si prende la parte del leone e il lavoro si
+     stringe a una colonna ancora usabile — non sparisce, cosi' non si
+     perde il punto in cui si era. */
+  .cockpit.chart-wide:not([data-area="analizza"]):not([data-area="issues"]) .chart-area {
+    flex: 1 1 auto;
+  }
+  .cockpit.chart-wide:not([data-area="analizza"]):not([data-area="issues"]) .right-panel {
+    flex: 0 0 clamp(300px, 30%, 460px);
+  }
+  .cockpit.chart-wide[data-area="analizza"] .right-panel { display: none; }
+  .cockpit.chart-wide[data-area="analizza"] .levels-panel.open { display: none; }
+}

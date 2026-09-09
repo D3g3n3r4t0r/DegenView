@@ -7494,6 +7494,31 @@
     panel.appendChild(col);
   }
 
+
+  // Allargare il grafico vale in ogni area, non solo in Analizza: a volte
+  // serve guardarlo e basta, senza cambiare schermata e perdere il punto in
+  // cui si era. La scelta resta fra un ricaricamento e l'altro.
+  function bindChartExpand() {
+    const btn = el("chart-expand-btn");
+    if (!btn) return;
+    const cockpit = document.querySelector(".cockpit");
+    const apply = (on) => {
+      cockpit.classList.toggle("chart-wide", on);
+      btn.classList.toggle("active", on);
+      btn.setAttribute("aria-pressed", String(on));
+      btn.title = on ? "Restringi il grafico" : "Allarga il grafico";
+      resizeAllCharts();
+    };
+    let saved = false;
+    try { saved = localStorage.getItem("lae-chart-wide") === "1"; } catch { saved = false; }
+    apply(saved);
+    btn.addEventListener("click", () => {
+      const on = !cockpit.classList.contains("chart-wide");
+      try { localStorage.setItem("lae-chart-wide", on ? "1" : "0"); } catch { /* modalita' privata */ }
+      apply(on);
+    });
+  }
+
   function bindSidenav() {
     document.querySelectorAll(".sidenav-item[data-area]").forEach((btn) => {
       btn.addEventListener("click", () => setArea(btn.dataset.area));
@@ -7547,6 +7572,7 @@
     bindTabs();
     groupLabResultColumn();
     bindSidenav();
+    bindChartExpand();
     bindDrawRail();
     bindMobileDrawTools();
     bindAuth();
