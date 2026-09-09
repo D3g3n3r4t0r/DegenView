@@ -121,6 +121,20 @@ node --check frontend/static/app.js
 LibreOffice in sandbox non ricalcola i file Excel: `recalc.py` fallisce
 all'avvio, non per colpa del file.
 
+## Consumo di token
+
+Ogni richiesta rimanda l'intera conversazione: il costo cresce con i giri, non
+con la difficolta'. Regole che Lorenzo ha chiesto esplicitamente:
+
+- Leggi solo i pezzi di file che servono (`sed -n`, `grep`), mai file interi da
+  migliaia di righe per cercare una funzione.
+- Raggruppa le chiamate indipendenti in un solo messaggio.
+- Non rileggere un file dopo averlo modificato per "verificare": se `Edit` non
+  ha dato errore, la modifica c'e'.
+- Niente comandi ripetuti per controllare la stessa cosa gia' verificata.
+- Risposte sintetiche: dire cosa e' cambiato e cosa resta, senza riepiloghi
+  lunghi ne' ripetizioni di quanto gia' detto.
+
 ## Lingua
 
 Lorenzo scrive in italiano. Rispondi in italiano; commenti e messaggi di commit
