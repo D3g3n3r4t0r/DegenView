@@ -7158,11 +7158,17 @@
       : near >= 1
       ? `<b class="warnc">solo ${near}</b> entro il 10% del migliore: area stretta.`
       : `<b class="bear">nessun vicino</b> entro il 10%: il migliore e' isolato, difficile che si ripeta.`;
+    const badge = near >= 3
+      ? `<span class="plateau-badge plateau-badge-bull">Plateau stabile</span>`
+      : near >= 1
+      ? `<span class="plateau-badge plateau-badge-warn">Area stretta</span>`
+      : `<span class="plateau-badge plateau-badge-bear">Isolato</span>`;
 
     box.classList.remove("hidden");
     box.innerHTML = `
       <div class="plateau-head">
         <span class="section-eyebrow">Mappa dei candidati</span>
+        ${badge}
         <span class="section-count">${cands.length} in rosa</span>
       </div>
       <svg class="plateau-svg" viewBox="0 0 ${W} ${H}" width="100%" role="img"

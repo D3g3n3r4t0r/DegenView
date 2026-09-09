@@ -4323,19 +4323,35 @@ td {
   border-radius: var(--radius);
   padding: 14px;
 }
-.lab-stat-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+/* Stat cards: same markup/classes app.js already fills (chip-lbl/chip-val),
+   redrawn as a grid of small cards instead of pills — matches the
+   prototype's stat-tile treatment. */
+.lab-stat-chips { display: grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); gap: 8px; margin-top: 10px; }
 .lab-stat-chips > div {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 5px;
-  border: 1px solid var(--border-strong);
-  border-radius: 99px;
-  padding: 3px 10px;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  color: var(--ink-dim);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg-raised);
+  border-radius: var(--radius);
+  padding: 9px 11px;
 }
-.lab-stat-chips .chip-val { color: var(--ink); font-weight: 600; }
+.lab-stat-chips .chip-lbl {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-faint);
+}
+.lab-stat-chips .chip-val {
+  font-family: var(--font-num);
+  font-size: 19px;
+  font-weight: 500;
+  color: var(--ink);
+}
+.lab-stat-chips .chip-val.pos { color: var(--bull); }
+.lab-stat-chips .chip-val.neg { color: var(--bear); }
 
 .lab-mode-opt {
   display: block;
@@ -4447,6 +4463,18 @@ td {
   gap: 9px;
   margin-bottom: 6px;
 }
+.plateau-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 99px;
+  font-size: 10.5px;
+  font-weight: 600;
+}
+.plateau-badge-bull { color: var(--bull); background: var(--bull-soft); }
+.plateau-badge-warn { color: var(--warn); background: var(--warn-soft); }
+.plateau-badge-bear { color: var(--bear); background: var(--bear-soft); }
 .plateau-svg { display: block; overflow: visible; }
 .plateau-note {
   font-size: 11px;
