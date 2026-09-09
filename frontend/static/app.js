@@ -1134,6 +1134,7 @@
       startAlertLogPoll();
       loadBalances();
       loadTradingCredentials();
+      loadFuturesCredentials();
       loadFavorites();
     } else {
       setBalancesVisible(false);
@@ -1475,23 +1476,60 @@
   // Tenuto separato dallo spot come il backend: nessuna funzione dello spot
   // viene riusata qui, cosi' un errore su questo lato non puo' arrivare a un
   // ordine spot. Il tetto di leva e' comunque riapplicato dal server.
-  const MAX_FUTURES_LEVERAGE_UI = 10;
+  //
+  // Gli exchange non sono piu' un elenco scritto qui: arrivano da
+  // /api/auth/futures, la stessa chiamata che porta le credenziali, perche'
+  // il perimetro (leva accessibile dall'Europa — vedi registry.py sul
+  // backend) e' deciso in un posto solo.
+  let futuresExchanges = []; // [{exchange, name, needs_passphrase, max_leverage, isolated_margin, ...}]
   let futuresSide = "BUY";
   let futuresQuote = null;
   let futuresQuoteTimer = null;
+
+  function currentFuturesExchangeInfo() {
+    const slug = el("futures-exchange")?.value;
+    return futuresExchanges.find((x) => x.exchange === slug) || null;
+  }
 
   function futuresSizeMode() {
     const checked = document.querySelector('input[name="futures-size-mode"]:checked');
     return checked ? checked.value : "fixed_usdt";
   }
 
+  // Il tetto di leva e se il margine e' davvero isolato dipendono
+  // dall'exchange scelto (Kraken non ha isolated — vedi registry.py):
+  // aggiorna lo slider e l'avviso quando cambia la tendina.
+  function applyFuturesExchangeLimits() {
+    const info = currentFuturesExchangeInfo();
+    const maxLev = info ? info.max_leverage : 10;
+    const slider = el("futures-leverage");
+    slider.max = maxLev;
+    if (Number(slider.value) > maxLev) slider.value = maxLev;
+    const scale = el("futures-lev-scale");
+    if (scale) {
+      const steps = [1, Math.round(maxLev * 0.3) || 1, Math.round(maxLev * 0.5), Math.round(maxLev * 0.7), maxLev];
+      scale.innerHTML = [...new Set(steps)].map((s) => `<span>${s}×</span>`).join("");
+    }
+    const modeNode = el("futures-margin-mode");
+    if (modeNode) {
+      modeNode.innerHTML = info && !info.isolated_margin
+        ? 'margine <b>condiviso</b> — questo exchange non ha isolated: una posizione che va male intacca le altre'
+        : 'margine <b>isolato</b> — forzato';
+      modeNode.classList.toggle("lev-mode-warn", !!(info && !info.isolated_margin));
+    }
+    const passField = el("futures-passphrase-field");
+    if (passField) passField.classList.toggle("hidden", !(info && info.needs_passphrase));
+  }
+
   function renderFuturesQuote() {
+    const info = currentFuturesExchangeInfo();
+    const maxLev = info ? info.max_leverage : 10;
     const lev = Number(el("futures-leverage").value);
     el("futures-lev-val").textContent = lev + "×";
     el("futures-confirm-lev").textContent = lev + "×";
     const cap = el("futures-lev-cap");
-    cap.textContent = lev >= MAX_FUTURES_LEVERAGE_UI ? "tetto server raggiunto" : `tetto server ${MAX_FUTURES_LEVERAGE_UI}×`;
-    cap.classList.toggle("lev-cap-hot", lev >= 7);
+    cap.textContent = lev >= maxLev ? "tetto server raggiunto" : `tetto server ${maxLev}×`;
+    cap.classList.toggle("lev-cap-hot", lev >= maxLev * 0.7);
 
     const q = futuresQuote;
     const setv = (id, txt, cls) => {
@@ -1538,6 +1576,9 @@
           leverage: Number(el("futures-leverage").value),
         }),
       });
+      // La quote non manda mai la passphrase: usa quella gia' salvata sul
+      // server, come chiave e secret — vedi submitFuturesOrder per lo stesso
+      // principio sull'ordine vero.
       futuresQuote = res.ok ? await res.json() : null;
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -1616,8 +1657,139 @@
     updateFuturesExecuteState();
   }
 
+  // Le opzioni del select e le card delle credenziali vengono dalla stessa
+  // risposta: un solo giro di rete, e l'elenco degli exchange non puo' mai
+  // disallinearsi fra le due parti dello schermo.
+  async function loadFuturesCredentials() {
+    try {
+      const resp = await fetch("/api/auth/futures");
+      if (resp.status === 401) return;
+      if (!resp.ok) return;
+      futuresExchanges = await resp.json();
+      renderFuturesExchangeOptions();
+      renderFuturesCredentials();
+      applyFuturesExchangeLimits();
+    } catch (_) {
+      // rete assente — i controlli restano con i valori di default
+    }
+  }
+
+  function renderFuturesExchangeOptions() {
+    const select = el("futures-exchange");
+    if (!select) return;
+    const prev = select.value;
+    select.innerHTML = futuresExchanges.map((x) =>
+      `<option value="${x.exchange}">${x.name}</option>`).join("");
+    if (futuresExchanges.some((x) => x.exchange === prev)) select.value = prev;
+  }
+
+  function renderFuturesCredentials() {
+    const container = el("futures-credentials-list");
+    if (!container) return;
+    container.innerHTML = futuresExchanges.map((c) => {
+      const summaryText = c.api_key_set ? "🔑 Chiave configurata — modifica" : "Configura chiave API";
+      const riskNote = c.isolated_margin ? "" :
+        `<p class="panel-hint futures-risk-note">${c.name} non ha margine isolato: una posizione che va male puo' intaccare le altre sul conto.</p>`;
+      const passphraseField = c.needs_passphrase
+        ? `<label>Passphrase ${c.passphrase_set ? "" : "<span class=\"trading-cred-missing\">obbligatoria</span>"} <input type="password" class="futures-cred-passphrase" placeholder="lascia vuoto per non cambiare" /></label>`
+        : "";
+      return `<div class="trading-cred-card" data-exchange="${c.exchange}">
+        <div class="trading-cred-exchange-row">
+          <span class="trading-cred-name">${c.name}</span>
+          <label class="trading-enabled-toggle">
+            <input type="checkbox" class="futures-cred-enabled-cb" ${c.enabled ? "checked" : ""}> Attivo
+          </label>
+        </div>
+        ${riskNote}
+        <details class="trading-cred-details">
+          <summary>${summaryText}</summary>
+          <div class="trading-cred-fields">
+            <p class="panel-hint">${c.key_hint || ""}</p>
+            <label>API Key <input type="text" class="futures-cred-api-key" placeholder="lascia vuoto per non cambiare" autocomplete="off" /></label>
+            <label>API Secret <input type="password" class="futures-cred-api-secret" placeholder="lascia vuoto per non cambiare" autocomplete="off" /></label>
+            ${passphraseField}
+            <div class="trading-size-row">
+              <label>Tipo size
+                <select class="futures-cred-size-mode">
+                  <option value="fixed_usdt" ${c.size_mode === "fixed_usdt" ? "selected" : ""}>USDT fisso</option>
+                  <option value="pct_balance" ${c.size_mode === "pct_balance" ? "selected" : ""}>% saldo</option>
+                </select>
+              </label>
+              <label>Valore <input type="number" class="futures-cred-size-val" value="${c.size_value}" min="1" step="1" /></label>
+              <label>Leva default <input type="number" class="futures-cred-leverage" value="${c.leverage}" min="1" max="${c.max_leverage}" step="1" /></label>
+            </div>
+            <button type="button" class="trading-save-btn">Salva</button>
+            <span class="trading-save-status"></span>
+          </div>
+        </details>
+      </div>`;
+    }).join("");
+
+    container.addEventListener("click", async function handleFuturesCredSave(e) {
+      if (!e.target.classList.contains("trading-save-btn")) return;
+      const card = e.target.closest(".trading-cred-card");
+      if (!card) return;
+      const exchange = card.dataset.exchange;
+      const statusEl = card.querySelector(".trading-save-status");
+      const body = {
+        exchange,
+        api_key: card.querySelector(".futures-cred-api-key")?.value || "",
+        api_secret: card.querySelector(".futures-cred-api-secret")?.value || "",
+        passphrase: card.querySelector(".futures-cred-passphrase")?.value || "",
+        enabled: card.querySelector(".futures-cred-enabled-cb")?.checked || false,
+        size_mode: card.querySelector(".futures-cred-size-mode")?.value || "fixed_usdt",
+        size_value: parseFloat(card.querySelector(".futures-cred-size-val")?.value) || 50,
+        leverage: parseInt(card.querySelector(".futures-cred-leverage")?.value, 10) || 1,
+      };
+      try {
+        const resp = await fetch("/api/auth/futures", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (resp.ok) {
+          statusEl.textContent = "Salvato ✓";
+          loadFuturesCredentials();
+          setTimeout(() => { statusEl.textContent = ""; }, 3000);
+        } else {
+          const err = await resp.json().catch(() => ({}));
+          statusEl.textContent = err.detail || `Errore (${resp.status})`;
+        }
+      } catch (_) {
+        statusEl.textContent = "Errore di rete";
+      }
+    }, { once: true }); // il container viene ricreato a ogni loadFuturesCredentials()
+
+    container.addEventListener("change", async function handleFuturesCredToggle(e) {
+      if (!e.target.classList.contains("futures-cred-enabled-cb")) return;
+      const card = e.target.closest(".trading-cred-card");
+      if (!card) return;
+      const exchange = card.dataset.exchange;
+      try {
+        await fetch("/api/auth/futures", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            exchange, api_key: "", api_secret: "", passphrase: "",
+            enabled: e.target.checked,
+            size_mode: card.querySelector(".futures-cred-size-mode")?.value || "fixed_usdt",
+            size_value: parseFloat(card.querySelector(".futures-cred-size-val")?.value) || 50,
+            leverage: parseInt(card.querySelector(".futures-cred-leverage")?.value, 10) || 1,
+          }),
+        });
+      } catch (_) {
+        // silenzioso: il toggle torna visivamente com'era al prossimo load
+      }
+    }, { once: true });
+  }
+
   function bindFuturesOrderUI() {
     if (!el("futures-execute-btn")) return;
+
+    el("futures-exchange")?.addEventListener("change", () => {
+      applyFuturesExchangeLimits();
+      queueFuturesQuote();
+    });
 
     document.querySelectorAll("[data-futures-side]").forEach((tab) => {
       tab.addEventListener("click", () => {
@@ -7440,6 +7612,18 @@
 
     // I drawer (Livelli, Script, Bacheca) sono flyout sopra il grafico:
     // restano solo dentro Analizza, dove c'e' un grafico su cui contano.
+    // Livelli e' un cassetto accanto al grafico, non una colonna di lettura:
+    // i suoi interruttori agiscono sulla serie che si sta guardando, quindi
+    // l'area resta Analizza e il grafico resta largo. Gli altri due invece
+    // sostituiscono il lavoro con del testo da leggere.
+    if (area === "livelli") {
+      cockpit.dataset.area = "analizza";
+      openPanel("levels-panel");
+      document.querySelectorAll(".sidenav-item").forEach((b) => b.classList.toggle("active", b === item));
+      resizeAllCharts();
+      return;
+    }
+
     const drawerFor = { script: "script-panel", issues: "issues-panel" };
     if (drawerFor[area]) {
       openPanel(drawerFor[area]);

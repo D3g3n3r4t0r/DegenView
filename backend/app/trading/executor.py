@@ -1,21 +1,19 @@
 from app.models import StrategySignal
 from app.trading import (
     binance_exec,
-    binance_futures_exec,
     bitstamp_exec,
     coinbase_exec,
     kraken_exec,
     kucoin_exec,
 )
+from app.trading.futures import registry as futures_registry
+from app.trading.futures.base import FuturesCreds
 
 SUPPORTED_EXCHANGES = {"binance", "mexc", "kucoin", "kraken", "coinbase", "bitstamp"}
 
-# Rollout deliberatamente a un exchange alla volta (vedi il piano "Operazioni
-# futures"): MEXC/KuCoin futures arrivano solo dopo che Binance e' stabile in
-# produzione da tempo — l'API futures di ogni exchange e' un prodotto a se',
-# non una variante dello spot, quindi ognuno serve il proprio modulo dedicato
-# prima di poter entrare qui.
-SUPPORTED_FUTURES_EXCHANGES = {"binance"}
+# Quali exchange fanno futures non si decide piu' qui: lo dice il registro
+# degli adattatori, che e' anche l'unico posto dove si aggiunge il prossimo.
+SUPPORTED_FUTURES_EXCHANGES = set(futures_registry.SUPPORTED_FUTURES_EXCHANGES)
 
 
 async def place_futures_order_for_signal(
@@ -27,6 +25,7 @@ async def place_futures_order_for_signal(
     leverage: int,
     api_key: str,
     api_secret: str,
+    passphrase: str = "",
 ) -> dict:
     """Separato da place_order_for_signal() apposta: mai un parametro
     is_futures su quella funzione, per lo stesso principio di isolamento
@@ -36,28 +35,26 @@ async def place_futures_order_for_signal(
     exit_short deve RICOMPRARE per chiuderla, non e' un noop. E per lo
     stesso motivo un flip non puo' limitarsi ad aprire nella nuova
     direzione — deve prima chiudere quello che c'e' gia' aperto, o si
-    finirebbe con l'esposizione raddoppiata invece che ribaltata."""
-    if exchange != "binance":
-        raise ValueError(f"Futures non ancora supportati per questo exchange: {exchange}")
+    finirebbe con l'esposizione raddoppiata invece che ribaltata.
+
+    Il nome dell'exchange non compare piu' in questa funzione: la logica dei
+    segnali e' la stessa per tutti, e le differenze fra piattaforme vivono
+    dentro l'adattatore. Aggiungere un exchange non tocca questo file."""
+    adapter = futures_registry.get(exchange)
+    creds = FuturesCreds(api_key=api_key, api_secret=api_secret, passphrase=passphrase)
 
     t = signal.type
     if t in ("exit_long", "exit_short"):
-        result = await binance_futures_exec.close_position(symbol, api_key, api_secret)
+        result = await adapter.close_position(symbol, creds)
         return result or {"skipped": True, "reason": "nessuna posizione aperta da chiudere"}
     if t in ("flip_to_long", "flip_to_short"):
-        await binance_futures_exec.close_position(symbol, api_key, api_secret)
+        await adapter.close_position(symbol, creds)
         side = "BUY" if t == "flip_to_long" else "SELL"
-        return await binance_futures_exec.place_futures_order(
-            symbol, side, size_mode, size_value, leverage, api_key, api_secret
-        )
+        return await adapter.place_order(symbol, side, size_mode, size_value, leverage, creds)
     if t == "entry_long":
-        return await binance_futures_exec.place_futures_order(
-            symbol, "BUY", size_mode, size_value, leverage, api_key, api_secret
-        )
+        return await adapter.place_order(symbol, "BUY", size_mode, size_value, leverage, creds)
     if t == "entry_short":
-        return await binance_futures_exec.place_futures_order(
-            symbol, "SELL", size_mode, size_value, leverage, api_key, api_secret
-        )
+        return await adapter.place_order(symbol, "SELL", size_mode, size_value, leverage, creds)
     return {"skipped": True, "reason": "no-op signal type"}
 
 

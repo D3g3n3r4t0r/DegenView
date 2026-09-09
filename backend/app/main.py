@@ -33,7 +33,8 @@ from app import auth
 from app import issues as issues_store
 from app import rate_limit
 from app.trading.executor import place_futures_order_for_signal, place_order_for_signal
-from app.trading import binance_futures_exec
+from app.trading.futures import registry as futures_registry
+from app.trading.futures.base import FuturesCreds, FuturesExecutionError
 from app.models import MAX_FUTURES_LEVERAGE
 from app import archive as archive_store
 from app import jobs as jobs_store
@@ -113,10 +114,11 @@ else:
     FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent / "frontend"
 WATCHLIST_POLL_SECONDS = 60
 
-# Ordine stabile per l'elenco delle credenziali futures esposte
-# dall'endpoint — solo Binance per ora, vedi executor.SUPPORTED_FUTURES_EXCHANGES
-# e il piano "Operazioni futures" per il rollout a un exchange alla volta.
-SUPPORTED_FUTURES_EXCHANGES_ORDERED = ("binance",)
+# L'elenco degli exchange futures vive nel registro degli adattatori: qui
+# c'e' solo il nome vecchio, perche' non ci sia una seconda lista che possa
+# essere in disaccordo con la prima. Il perimetro (leva accessibile
+# dall'Europa) e' spiegato in app/trading/futures/registry.py.
+SUPPORTED_FUTURES_EXCHANGES_ORDERED = futures_registry.SUPPORTED_FUTURES_EXCHANGES
 
 twelvedata_provider = TwelveDataProvider()
 mexc_provider = MexcProvider()
@@ -679,6 +681,7 @@ class FuturesCredentialRequest(BaseModel):
     exchange: str
     api_key: str = ""     # empty = keep existing
     api_secret: str = ""  # empty = keep existing
+    passphrase: str = ""  # empty = keep existing — serve su OKX e Bitget
     enabled: bool = False  # kill switch — spegnibile senza toccare le chiavi
     size_mode: Literal["fixed_usdt", "pct_balance"] = "fixed_usdt"
     size_value: float = 50.0
@@ -687,8 +690,16 @@ class FuturesCredentialRequest(BaseModel):
 
 class FuturesCredentialOut(BaseModel):
     exchange: str
+    name: str
     api_key_set: bool
     api_secret_set: bool
+    passphrase_set: bool
+    needs_passphrase: bool
+    # Il tetto e' del singolo exchange, non piu' uno solo per tutti: la
+    # schermata deve poter fermare il cursore dove lo ferma il server.
+    max_leverage: int
+    isolated_margin: bool
+    key_hint: str
     enabled: bool
     size_mode: str
     size_value: float
@@ -1173,13 +1184,22 @@ async def place_manual_order(body: ManualOrderRequest, user: User = Depends(auth
 async def get_futures_credentials(user: User = Depends(auth.get_current_user)) -> list[FuturesCredentialOut]:
     out = []
     for exchange in SUPPORTED_FUTURES_EXCHANGES_ORDERED:
+        adapter = futures_registry.get(exchange)
         cred = user.futures_credentials.get(exchange)
+        common = dict(
+            exchange=exchange, name=adapter.name, needs_passphrase=adapter.needs_passphrase,
+            max_leverage=adapter.max_leverage, isolated_margin=adapter.isolated_margin,
+            key_hint=adapter.key_hint,
+        )
         if cred is None:
-            out.append(FuturesCredentialOut(exchange=exchange, api_key_set=False, api_secret_set=False,
-                                             enabled=False, size_mode="fixed_usdt", size_value=50.0, leverage=1))
+            out.append(FuturesCredentialOut(
+                **common, api_key_set=False, api_secret_set=False, passphrase_set=False,
+                enabled=False, size_mode="fixed_usdt", size_value=50.0, leverage=1,
+            ))
         else:
             out.append(FuturesCredentialOut(
-                exchange=exchange, api_key_set=bool(cred.api_key_enc), api_secret_set=bool(cred.api_secret_enc),
+                **common, api_key_set=bool(cred.api_key_enc), api_secret_set=bool(cred.api_secret_enc),
+                passphrase_set=bool(cred.passphrase_enc),
                 enabled=cred.enabled, size_mode=cred.size_mode, size_value=cred.size_value, leverage=cred.leverage,
             ))
     return out
@@ -1189,10 +1209,23 @@ async def get_futures_credentials(user: User = Depends(auth.get_current_user)) -
 async def set_futures_credential_endpoint(body: FuturesCredentialRequest, user: User = Depends(auth.get_current_user)):
     if body.exchange not in SUPPORTED_FUTURES_EXCHANGES_ORDERED:
         raise HTTPException(status_code=400, detail=f"Futures non ancora supportati per questo exchange: {body.exchange}")
+    adapter = futures_registry.get(body.exchange)
+    existing_cred = user.futures_credentials.get(body.exchange)
+    has_passphrase = bool(body.passphrase) or bool(existing_cred and existing_cred.passphrase_enc)
+    if adapter.needs_passphrase and not has_passphrase:
+        raise HTTPException(status_code=400, detail=f"{adapter.name} richiede una passphrase oltre a chiave e secret")
+    # Il tetto e' quello di questo exchange, non il massimo globale: un
+    # cursore che arriva a 10x su un adattatore che ne sopporta solo 5 deve
+    # fermarsi prima di raggiungere il server, ma il server e' l'ultima
+    # parola in ogni caso.
+    max_lev = min(MAX_FUTURES_LEVERAGE, adapter.max_leverage)
+    if not (1 <= body.leverage <= max_lev):
+        raise HTTPException(status_code=400, detail=f"Leva {body.leverage}x fuori dal limite di {adapter.name} (1-{max_lev}x)")
     try:
         auth.set_futures_credential(
             user.id, body.exchange, body.api_key, body.api_secret,
             body.enabled, body.size_mode, body.size_value, body.leverage,
+            passphrase=body.passphrase,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -1218,36 +1251,17 @@ async def list_futures_positions(user: User = Depends(auth.get_current_user)):
         cred = user.futures_credentials.get(exchange)
         if not cred:
             continue
-        api_key, api_secret = auth.get_decrypted_futures_credential(user, exchange)
+        api_key, api_secret, passphrase = auth.get_decrypted_futures_credential(user, exchange)
         if not api_key or not api_secret:
             continue
-        headers = {"X-MBX-APIKEY": api_key}
-        async with httpx.AsyncClient(base_url=binance_futures_exec.FAPI_BASE, headers=headers, timeout=15.0) as client:
-            try:
-                positions = await binance_futures_exec.get_open_positions(client, api_secret)
-            except binance_futures_exec.FuturesExecutionError:
-                # Un exchange che non risponde non deve nascondere gli altri.
-                continue
-        for pos in positions:
-            amt = float(pos.get("positionAmt", 0))
-            mark = float(pos.get("markPrice", 0) or 0)
-            liq = float(pos.get("liquidationPrice", 0) or 0)
-            out.append({
-                "exchange": exchange,
-                "symbol": pos.get("symbol"),
-                "side": "long" if amt > 0 else "short",
-                "quantity": abs(amt),
-                "entry_price": float(pos.get("entryPrice", 0) or 0),
-                "mark_price": mark,
-                "leverage": int(float(pos.get("leverage", 1) or 1)),
-                "margin": float(pos.get("isolatedMargin", 0) or 0),
-                "notional": abs(float(pos.get("notional", 0) or 0)),
-                "unrealized_pnl": float(pos.get("unRealizedProfit", 0) or 0),
-                "liquidation_price": liq,
-                # Quanto puo' muoversi il prezzo prima della liquidazione: e'
-                # il numero che la schermata mette in evidenza.
-                "distance_to_liquidation_pct": ((liq / mark - 1) * 100) if (mark and liq) else None,
-            })
+        adapter = futures_registry.get(exchange)
+        creds = FuturesCreds(api_key=api_key, api_secret=api_secret, passphrase=passphrase)
+        try:
+            positions = await adapter.open_positions(creds)
+        except FuturesExecutionError:
+            # Un exchange che non risponde non deve nascondere gli altri.
+            continue
+        out.extend(p.as_dict() for p in positions)
     return out
 
 
@@ -1261,30 +1275,37 @@ async def quote_futures_order(body: FuturesQuoteRequest, user: User = Depends(au
     cred = user.futures_credentials.get(body.exchange)
     if not cred:
         raise HTTPException(status_code=400, detail="Credenziali futures non configurate per questo exchange")
-    api_key, api_secret = auth.get_decrypted_futures_credential(user, body.exchange)
+    api_key, api_secret, passphrase = auth.get_decrypted_futures_credential(user, body.exchange)
     if not api_key or not api_secret:
         raise HTTPException(status_code=400, detail="API key o secret mancanti")
-    if not (1 <= body.leverage <= MAX_FUTURES_LEVERAGE):
-        raise HTTPException(status_code=400, detail=f"Leva {body.leverage}x fuori dal limite consentito (1-{MAX_FUTURES_LEVERAGE}x)")
+    adapter = futures_registry.get(body.exchange)
+    if adapter.needs_passphrase and not passphrase:
+        raise HTTPException(status_code=400, detail=f"{adapter.name} richiede una passphrase, non ancora salvata")
+    max_lev = min(MAX_FUTURES_LEVERAGE, adapter.max_leverage)
+    if not (1 <= body.leverage <= max_lev):
+        raise HTTPException(status_code=400, detail=f"Leva {body.leverage}x fuori dal limite di {adapter.name} (1-{max_lev}x)")
 
     symbol = body.symbol.strip().upper()
-    headers = {"X-MBX-APIKEY": api_key}
-    async with httpx.AsyncClient(base_url=binance_futures_exec.FAPI_BASE, headers=headers, timeout=15.0) as client:
-        try:
-            mark = await binance_futures_exec.get_mark_price(client, symbol)
-            available = await binance_futures_exec.get_available_margin_usdt(client, api_secret)
-        except binance_futures_exec.FuturesExecutionError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
+    creds = FuturesCreds(api_key=api_key, api_secret=api_secret, passphrase=passphrase)
+    try:
+        mark = await adapter.mark_price(symbol, creds)
+        available = await adapter.available_margin(creds)
+    except FuturesExecutionError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     margin_used = body.size_value if body.size_mode == "fixed_usdt" else available * body.size_value / 100
     direction = "long" if body.side == "BUY" else "short"
+    # Kraken non ha isolated margin: la liquidazione qui e' comunque
+    # calcolata come se lo fosse, perche' e' il numero che dice quanto puo'
+    # muoversi il prezzo, ma senza isolated la perdita puo' non fermarsi li'
+    # — per questo l'anteprima porta anche `isolated_margin`.
     liq_price = liquidation_price(mark, direction, body.leverage, DEFAULT_MAINTENANCE_MARGIN_RATE)
     sufficient = margin_used <= available
     return {
         "symbol": symbol, "mark_price": mark, "leverage": body.leverage,
         "margin_used": margin_used, "notional": margin_used * body.leverage,
         "liquidation_price": liq_price, "available_margin": available,
-        "margin_sufficient": sufficient,
+        "margin_sufficient": sufficient, "isolated_margin": adapter.isolated_margin,
     }
 
 
@@ -1311,22 +1332,25 @@ async def place_manual_futures_order(body: FuturesOrderRequest, user: User = Dep
         # Kill switch: spegnibile senza toccare le chiavi — vale anche per
         # l'ordine manuale, non solo per l'esecuzione automatica.
         raise HTTPException(status_code=400, detail="Esecuzione futures disattivata per questo exchange")
-    api_key, api_secret = auth.get_decrypted_futures_credential(user, body.exchange)
+    api_key, api_secret, passphrase = auth.get_decrypted_futures_credential(user, body.exchange)
     if not api_key or not api_secret:
         raise HTTPException(status_code=400, detail="API key o secret mancanti")
-    if not (1 <= body.leverage <= MAX_FUTURES_LEVERAGE):
-        raise HTTPException(status_code=400, detail=f"Leva {body.leverage}x fuori dal limite consentito (1-{MAX_FUTURES_LEVERAGE}x)")
+    adapter = futures_registry.get(body.exchange)
+    if adapter.needs_passphrase and not passphrase:
+        raise HTTPException(status_code=400, detail=f"{adapter.name} richiede una passphrase, non ancora salvata")
+    max_lev = min(MAX_FUTURES_LEVERAGE, adapter.max_leverage)
+    if not (1 <= body.leverage <= max_lev):
+        raise HTTPException(status_code=400, detail=f"Leva {body.leverage}x fuori dal limite di {adapter.name} (1-{max_lev}x)")
 
     symbol = body.symbol.strip().upper()
+    creds = FuturesCreds(api_key=api_key, api_secret=api_secret, passphrase=passphrase)
 
     # Controllo pre-trade del margine disponibile: letto per davvero
-    # dall'exchange, non dalla cache — vedi il piano, Fase 4.
-    headers = {"X-MBX-APIKEY": api_key}
-    async with httpx.AsyncClient(base_url=binance_futures_exec.FAPI_BASE, headers=headers, timeout=15.0) as client:
-        try:
-            available = await binance_futures_exec.get_available_margin_usdt(client, api_secret)
-        except binance_futures_exec.FuturesExecutionError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
+    # dall'exchange, non dalla cache.
+    try:
+        available = await adapter.available_margin(creds)
+    except FuturesExecutionError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     margin_needed = body.size_value if body.size_mode == "fixed_usdt" else available * body.size_value / 100
     if margin_needed > available:
         raise HTTPException(
@@ -1342,7 +1366,7 @@ async def place_manual_futures_order(body: FuturesOrderRequest, user: User = Dep
         result = await place_futures_order_for_signal(
             body.exchange, symbol, fake_signal,
             body.size_mode, body.size_value, body.leverage,
-            api_key, api_secret,
+            api_key, api_secret, passphrase=passphrase,
         )
     except RuntimeError as exc:
         trading_log.record(
