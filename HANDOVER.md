@@ -76,6 +76,36 @@ ripetute qui apposta — un solo posto da tenere aggiornato.
 
 ## Filoni di lavoro aperti (pluri-sessione)
 
+### Modalita' semplificata — **da iniziare, non ancora pianificata**
+
+Lorenzo, con le sue parole: «voglio anche che ci sia una modalita'
+semplificata, sia del sito web che dell'applicazione [...] una persona
+possa con un grafico [...] scegliere la strategia piu' adeguata,
+visualizzare gli ingressi e le uscite in modo chiaro, con un backtest
+magari che appare [...] in un click impostare [...] con una modalita'
+guidata le API per l'exchange [...] arrivare al punto in cui uno puo' con
+pochi passaggi abilitare l'allarme alle operazioni in automatico per quella
+determinata strategia [...] un bottone che uno preme e il sito entra in
+modalita' semplificata sia su telefono che sul sito web [...] Voglio un UI
+estremamente semplificata, pero' non per questo povera di dettagli
+grafici [...] bella».
+
+Flusso richiesto, in ordine: grafico ben visibile → scegliere la strategia
+→ vedere ingressi/uscite chiari sul grafico → backtest che appare
+→ wizard guidato per le API dell'exchange → un click per abilitare
+alert+esecuzione automatica di quella strategia su quel ticker. Un
+interruttore ("modalita' semplificata") accende questo percorso al posto
+dell'interfaccia normale, su desktop e mobile.
+
+Non ancora iniziato: nessun prototipo, nessuna decisione su come convive
+con l'interfaccia esistente (schermata separata? overlay sopra Analizza?).
+Stesso metodo usato per il restyling (`seed-0028` sotto) va seguito anche
+qui: prima un Artifact di riferimento da fare approvare, poi implementare
+nel codice vero — non saltare il passaggio anche se la richiesta e' gia'
+molto dettagliata.
+
+---
+
 ### Ridisegno dell'interfaccia — `seed-0028` — **in corso**
 
 Lorenzo: «voglio un overhaul generale del design di tutto il sito visto le
