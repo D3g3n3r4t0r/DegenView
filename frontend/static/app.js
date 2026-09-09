@@ -6419,6 +6419,7 @@
     el("altro-analisi-item").addEventListener("click", () => showMobileScreen("analisi"));
     el("altro-watchlist-item").addEventListener("click", () => showMobileScreen("watchlist"));
     el("altro-backtest-item").addEventListener("click", () => showMobileScreen("backtest"));
+    el("altro-opera-item").addEventListener("click", () => showMobileScreen("opera"));
   }
 
   function bindUI() {
