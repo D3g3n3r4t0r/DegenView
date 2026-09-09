@@ -2090,37 +2090,26 @@ body {
 
 /* ---- Script Pine panel ---- */
 
-.pine-panel .panel-hint { margin: 0 0 8px; font-size: 11px; line-height: 1.4; color: var(--ink-dim); }
+.pine-panel .panel-hint { margin: 0 0 10px; font-size: 11px; line-height: 1.4; color: var(--ink-dim); }
 
+/* Select, nome script, upload e campi param: stessi controlli unificati del
+   resto dell'app (bg-raised, bordo 1px, raggio 6px) invece del vecchio
+   bordo 1.5px / raggio 8px che stonava con Livelli e Bacheca. */
 .pine-script-select {
   width: 100%;
-  background: var(--bg-panel);
-  border: 1.5px solid var(--border-strong);
-  color: var(--ink);
-  border-radius: 8px;
-  padding: 6px 8px;
-  font-size: 11.5px;
-  font-family: var(--font-mono);
   margin-bottom: 8px;
 }
 
 #pine-editor-wrap {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 #pine-script-name,
 .pine-params-form input[type="text"],
 .pine-params-form input[type="number"],
 .pine-signal-mapping select {
-  background: var(--bg-panel);
-  border: 1.5px solid var(--border-strong);
-  color: var(--ink);
-  border-radius: 8px;
-  padding: 6px 8px;
-  font-size: 11.5px;
-  font-family: var(--font-mono);
   width: 100%;
 }
 
@@ -2131,8 +2120,8 @@ body {
 }
 
 .pine-editor {
-  border: 1.5px solid var(--border-strong);
-  border-radius: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
   overflow: hidden;
 }
 
@@ -2157,28 +2146,33 @@ body {
 
 .pine-actions {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   flex-wrap: wrap;
+  margin-top: 2px;
 }
 
+/* Stesso linguaggio bottoni del resto dell'app: sans-serif, case normale,
+   bg-raised/border-strong per i secondari — non piu' mono maiuscolo su
+   fondo pieno, che era rimasto indietro rispetto al restyle. */
 .pine-actions button,
 .pine-params-form button[type="submit"] {
   flex: 1;
-  background: var(--ink);
-  color: var(--bg);
-  border: 1.5px solid var(--ink);
-  border-radius: 8px;
-  padding: 7px 6px;
-  font-size: 10.5px;
-  font-family: var(--font-mono);
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
+  background: var(--bg-raised);
+  color: var(--ink);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 7px 11px;
+  font-size: 11.5px;
+  font-family: var(--font-sans);
+  font-weight: 500;
   cursor: pointer;
   min-width: 0;
+  transition: filter 0.12s, border-color 0.12s;
 }
+.pine-actions button:hover { border-color: var(--ink-faint); }
 
-.pine-danger { background: var(--bear) !important; border-color: var(--bear) !important; }
-.pine-secondary { background: transparent !important; color: var(--ink) !important; }
+.pine-danger { background: var(--bear-soft) !important; color: var(--bear) !important; border-color: color-mix(in srgb, var(--bear) 32%, transparent) !important; }
+.pine-secondary { background: transparent !important; color: var(--ink-dim) !important; }
 
 .pine-status {
   font-size: 11px;
