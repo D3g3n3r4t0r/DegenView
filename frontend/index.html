@@ -621,9 +621,11 @@
             <div class="section-title-row" style="margin-top:16px">
               <span class="section-eyebrow">Archivio strategie</span>
               <span id="archive-count" class="section-count"></span>
+              <button type="button" id="archive-import-btn" class="section-action-btn" title="Carica un file esportato da un altro account">Importa</button>
+              <input type="file" id="archive-import-file" accept="application/json" class="hidden" />
               <button type="button" id="archive-refresh-btn" class="section-action-btn">Aggiorna</button>
             </div>
-            <p class="panel-hint">Ogni volta che attivi una strategia su un ticker, la configurazione viene fotografata qui con il backtest del momento. Serve a ritrovare, mesi dopo, con che cosa era partita e che cosa prometteva.</p>
+            <p class="panel-hint">Ogni volta che attivi una strategia su un ticker, la configurazione viene fotografata qui con il backtest del momento. Serve a ritrovare, mesi dopo, con che cosa era partita e che cosa prometteva. Il pulsante "Condividi" su ogni voce scarica un file da importare su un altro account.</p>
             <ul id="archive-list" class="archive-cards"></ul>
 
             <!-- Alert log (storico) -->

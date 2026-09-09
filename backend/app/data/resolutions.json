@@ -1,5 +1,41 @@
 {
   "_README": "Scritto da Claude, versionato in git, distribuito col deploy. Le chiavi sono gli id delle segnalazioni. Non modificare a mano dall'app: verrebbe sovrascritto al deploy successivo.",
+  "cbc105c2": {
+    "status": "risolto",
+    "at": 1788995000,
+    "summary": "Leva futures gia' bloccata a 1x ovunque, lato server: nessun ordine automatico o manuale puo' partire con leva superiore.",
+    "detail": "MAX_FUTURES_LEVERAGE = 1 in models.py, controllato in tre punti di main.py (salvataggio credenziali, anteprima, ordine) piu' in auth.py — nessuno di questi passa per il client, quindi un form modificato da devtools non puo' aggirarlo. Il cursore nel form futures ora ha min=max=1x, coerente col tetto server.",
+    "files": ["backend/app/models.py", "backend/app/main.py", "frontend/index.html"]
+  },
+  "ae0296aa": {
+    "status": "risolto",
+    "at": 1788995100,
+    "summary": "MEXC futures non c'e' per scelta deliberata, non una dimenticanza: MEXC ha i futures ma non la licenza per offrirli in UE.",
+    "detail": "Il perimetro (vedi seed-0027 e backend/app/trading/futures/registry.py) include solo gli exchange con licenza per derivati a leva al retail europeo: Binance, Bybit, OKX, Bitget, Kraken. MEXC resta escluso insieme a KuCoin, per lo stesso motivo normativo — non e' un limite tecnico, e il registro accoglierebbe un adattatore MEXC con un file piu' una riga se la decisione normativa cambiasse. Nessun codice da correggere; segnalo qui perche' resti scritto da qualche parte il perche'.",
+    "files": []
+  },
+  "08724a7b": {
+    "status": "risolto",
+    "at": 1788995200,
+    "summary": "I parametri per strategia sugli alert (Sorveglia) sparivano per una corsa fra due caricamenti, non perche' rimossi: la lista si disegnava prima che l'elenco delle strategie fosse pronto.",
+    "detail": "CAUSA: `checkAuth()` chiama `loadWatchlist()` presto, per mostrare qualcosa il prima possibile; `populateStrategySelects()` (che riempie `state.availableStrategies`) gira molto dopo nella sequenza di avvio. La riga di ogni ticker in watchlist itera su `state.availableStrategies` per disegnare il toggle e l'ingranaggio dei parametri per ciascuna strategia — se quell'array e' ancora vuoto in quel momento, la riga mostra solo timeframe e 'chiusura candela', senza nessuna strategia. Codice presente e mai stato tolto: solo una corsa fra due `await` che a seconda della velocita' della rete a volte perdeva.\n\nFIX: dopo che `populateStrategySelects()` finisce, se la watchlist ha gia' disegnato righe le ridisegna con l'elenco ora completo — un `loadWatchlist()` in piu', stesso pattern gia' usato altrove nel file per tenere la lista sincronizzata.",
+    "files": ["frontend/static/app.js"]
+  },
+  "8e1350ce": {
+    "status": "risolto",
+    "at": 1788995300,
+    "summary": "Non aggiunta cosi' com'era chiesta: per le strategie di questo motore (basate su indicatori) un'esecuzione davvero intrabar richiederebbe dati che il backtest non ha, e fingerla sarebbe un numero inventato — lo stesso principio che ha guidato fill_at finora.",
+    "detail": "Il menu 'Esecuzione del segnale' del Lab ha due opzioni, entrambe verificabili sui dati OHLC che il backtest usa davvero: 'signal_close' (riempimento alla chiusura della candela del segnale, ottimista) e 'next_open' (apertura della candela successiva, realizzabile — seed-0029). Una terza opzione 'appena la condizione si verifica' avrebbe senso per un alert dal vivo su uno stream di prezzo continuo (e infatti esiste gia' li': il toggle 'Alla chiusura della candela' sulla watchlist, disattivabile per valutare la candela ancora in formazione) — ma le strategie di questo motore leggono EMA/RSI/Bollinger ecc., indicatori che si possono calcolare solo con la candela chiusa. Un backtest storico su barre OHLC non ha modo di sapere *a che prezzo esatto* la condizione sarebbe diventata vera un istante prima della chiusura, perche' quel dato (i tick dentro la barra) non viene scaricato da nessun provider di questa app: qualunque prezzo si scegliesse (l'apertura della stessa barra, una media OHLC) sarebbe una approssimazione spacciata per precisione, esattamente il tipo di numero che CLAUDE.md chiede di non produrre.\n\nSe l'intento e' replicare nel backtest lo stesso comportamento del toggle 'live' (valutare la candela ancora aperta), servirebbe prima scaricare dati a granularita' piu' fine per simulare l'interno di ogni barra — un lavoro via via piu' grande di un'opzione in un menu a tendina, e da discutere prima di cominciare: che granularita', quanto storico in piu' da scaricare, se ne vale il costo per ogni ticker/timeframe. Non implementato in autonomia per questo motivo; resta un filone da riprendere con una decisione esplicita su cosa 'appena si verifica' deve significare per un backtest.",
+    "files": []
+  },
+  "1c2880d2": {
+    "status": "in corso",
+    "at": 1788995400,
+    "summary": "Condivisione strategie archiviate tra account: Lorenzo ha chiarito il meccanismo (export/import di un file di configurazione, non un link o una condivisione diretta fra utenti) mentre il resto della bacheca era in lavorazione. Non ancora implementata.",
+    "detail": "Decisione presa in chat: un file scaricabile che 'eredita ogni dettaglio' della voce d'archivio (ticker, strategia, parametri, metriche misurate), importabile da un altro account per ricrearla li'. Piu' semplice e piu' sicuro di una condivisione live fra account (nessun accesso cross-account da gestire, nessun permesso da disegnare): l'utente che riceve il file decide se e quando importarlo, e i numeri restano quelli misurati da chi ha esportato finche' non si rigira un backtest.",
+    "next": "Implementare: un pulsante 'Esporta' sulla voce d'archivio che scarica un JSON con symbol/asset_type/exchange/interval/strategy_name/params/metrics/optimizer; un pulsante 'Importa' altrove nell'archivio che legge quel file e chiama archive_store.create()+attach_result() per l'utente che importa. Attenzione a non fidarsi ciecamente delle metriche nel file importato allo stesso modo di quelle calcolate in proprio — vanno probabilmente marcate come 'importate, non verificate da questo account' finche' non si rigira il backtest in locale.",
+    "files": []
+  },
   "seed-0031": {
     "status": "risolto",
     "at": 1788983700,
