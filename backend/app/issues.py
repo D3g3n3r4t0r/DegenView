@@ -220,6 +220,10 @@ _SEED = [
     ("seed-0012", "Voci della lista iniziale che non comparivano piu' sulla bacheca",
      "Trovato controllando la bacheca dal vivo: seed-0011 non c'era, e la sua risoluzione "
      "restava senza voce a cui agganciarsi.", "media"),
+    ("seed-0026", "Visualizzare in modo stilizzato cosa sta facendo la ricerca stabile",
+     "Durante la ricerca stabile, un'animazione che mostri graficamente l'equivalente di "
+     "quello che l'algoritmo sta facendo — non serve fedele al dettaglio, basta che sia "
+     "bella e minimale.", "bassa"),
 ]
 
 
