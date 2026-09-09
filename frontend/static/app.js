@@ -7459,6 +7459,13 @@
     document.querySelectorAll(".sidenav-item[data-area]").forEach((btn) => {
       btn.addEventListener("click", () => setArea(btn.dataset.area));
     });
+    // Chi arriva dallo Sniper (o da un link salvato) chiede un'area precisa:
+    // senza questo tornerebbe sempre su Analizza, perdendo il punto in cui era.
+    const wanted = new URLSearchParams(location.search).get("area");
+    if (wanted && document.querySelector(`.sidenav-item[data-area="${wanted}"]`)) {
+      setArea(wanted);
+      return;
+    }
     // Analizza mostra la lettura della struttura nella colonna di destra:
     // e' il commento al grafico, non una schermata a se'.
     setArea("analizza");
