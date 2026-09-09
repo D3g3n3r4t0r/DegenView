@@ -274,3 +274,34 @@ chiesto con le sue parole.
   locale senza Python 3.12: verificata solo la sintassi
   (`py_compile`), non lanciata la suite pytest/ruff — segnalato sopra come
   da fare.
+
+## Modalità Semplice (wizard guidato) — branch `claude/simple-mode`
+
+Prototipo approvato via Artifact dopo tre giri di revisione, implementato in
+`frontend/static/simple-mode.js` (nuovo file, non tocca `app.js`) + un
+bottone/contenitore aggiunti a `frontend/index.html`. Zero endpoint nuovi:
+ogni passo chiama API già esistenti (`/api/symbols`, `/api/archive`,
+`/api/strategies`, `/api/analyze`, `/api/optimize/start` + polling
+`/api/jobs`, `/api/auth/trading`, `/api/watchlist` + PATCH
+strategy/strategy_params, `/api/archive/{id}/apply-to-alert` per lo
+shortcut da archivio). Stato persistito in `localStorage` (`simpleModeActive`).
+
+Scelte fatte in autonomia, da rivedere con Lorenzo se non vanno bene:
+- **Solo spot**: niente `/api/auth/futures` — coerente con la leva limitata
+  a 1x server-wide.
+- **Exchange offerti nel wizard**: Binance, KuCoin, Kraken (il prototipo
+  mockava "Bybit", che `auth.set_trading_credential` non supporta — sostituito
+  con KuCoin per restare a 3 card).
+- **Ticker azionari**: niente step exchange/esecuzione automatica (solo
+  spot crypto ha `place_order_for_signal`); l'attivazione diventa "solo
+  avviso Telegram", dichiarato onestamente nella UI.
+- **Stima tempo ottimizzazione**: il backend non traccia una percentuale
+  reale (solo `elapsed_s` in jobs.py). Stima lato client con le stesse
+  soglie già comunicate altrove (Rapida 10-25s, Stabile 1-5min), che passa a
+  "quasi fatto" oltre il range invece di un countdown che sbaglia in silenzio.
+- **Uscita durante l'ottimizzazione**: permessa sempre — il job gira
+  server-side e continua anche se si esce dal wizard (i risultati con
+  `owner_id` finiscono comunque in archivio).
+- Verificato in Browser pane con backend mockato via `fetch` (nessun Python
+  3.12 in questo ambiente): tutti gli 8 passi (0-7), desktop e 375px. Non
+  verificato contro il backend reale — da rifare a mano o in CI.
