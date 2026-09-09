@@ -76,33 +76,58 @@ ripetute qui apposta — un solo posto da tenere aggiornato.
 
 ## Filoni di lavoro aperti (pluri-sessione)
 
-### Modalita' semplificata — **da iniziare, non ancora pianificata**
+### Modalita' semplificata — **implementata, non ancora verificata su backend vero**
 
 Lorenzo, con le sue parole: «voglio anche che ci sia una modalita'
-semplificata, sia del sito web che dell'applicazione [...] una persona
-possa con un grafico [...] scegliere la strategia piu' adeguata,
-visualizzare gli ingressi e le uscite in modo chiaro, con un backtest
-magari che appare [...] in un click impostare [...] con una modalita'
-guidata le API per l'exchange [...] arrivare al punto in cui uno puo' con
-pochi passaggi abilitare l'allarme alle operazioni in automatico per quella
-determinata strategia [...] un bottone che uno preme e il sito entra in
-modalita' semplificata sia su telefono che sul sito web [...] Voglio un UI
-estremamente semplificata, pero' non per questo povera di dettagli
-grafici [...] bella».
+semplificata [...] una persona possa con un grafico [...] scegliere la
+strategia piu' adeguata, visualizzare gli ingressi e le uscite in modo
+chiaro, con un backtest magari che appare [...] in un click impostare [...]
+con una modalita' guidata le API per l'exchange [...] arrivare al punto in
+cui uno puo' con pochi passaggi abilitare l'allarme alle operazioni in
+automatico [...] Voglio un UI estremamente semplificata, pero' non per
+questo povera di dettagli grafici [...] bella». Poi, rivisto un primo
+prototipo: «tutte le funzioni di backtesting siano comunque attive anche
+nella modalita' semplificata [...] voglio poter comunque ottimizzare la
+strategia secondo la logica gia' attuale, con tutte le modalita' di
+ottimizzazione che abbiamo [...] sia chiaro quanti minuti restano al
+termine». Poi ancora: se un ticker ha gia' strategie approvate in
+archivio, mostrarle prima di proporre un nuovo backtest.
 
-Flusso richiesto, in ordine: grafico ben visibile → scegliere la strategia
-→ vedere ingressi/uscite chiari sul grafico → backtest che appare
-→ wizard guidato per le API dell'exchange → un click per abilitare
-alert+esecuzione automatica di quella strategia su quel ticker. Un
-interruttore ("modalita' semplificata") accende questo percorso al posto
-dell'interfaccia normale, su desktop e mobile.
+Fatta tre giri di prototipo (Artifact, approvati uno alla volta) prima di
+toccare il codice — link nel log delle conversazioni sotto. Implementazione
+vera in `frontend/static/simple-mode.js` (nuovo file, ~890 righe, CSS
+scoped sotto `#simple-mode-root`, zero id/classi di `app.js` toccate) +
+4 righe in `index.html` (bottone toggle + contenitore). **Nessun endpoint
+backend nuovo**: ogni passo del wizard chiama API gia' esistenti e vere —
+`/api/symbols`, `/api/analyze`, `/api/archive` (filtrato client-side per
+ticker), `/api/strategies`, `/api/optimize/start` + polling `/api/jobs/{id}`,
+`/api/auth/trading`, e per l'attivazione `/api/archive/{id}/apply-to-alert`
+(ramo archivio) oppure `POST /api/watchlist` + `PATCH .../strategy_params`
++ `PATCH .../strategy` (ramo nuova strategia) — quest'ultima PATCH e' quella
+che fa scattare l'esecuzione automatica reale, tramite lo stesso watcher
+in background che gia' esisteva.
 
-Non ancora iniziato: nessun prototipo, nessuna decisione su come convive
-con l'interfaccia esistente (schermata separata? overlay sopra Analizza?).
-Stesso metodo usato per il restyling (`seed-0028` sotto) va seguito anche
-qui: prima un Artifact di riferimento da fare approvare, poi implementare
-nel codice vero — non saltare il passaggio anche se la richiesta e' gia'
-molto dettagliata.
+Scelte fatte in autonomia durante l'implementazione: solo spot (coerente
+con leva 1x server-wide, vedi sotto); exchange nel wizard Binance/KuCoin/
+Kraken invece di Binance/Bybit/Kraken del prototipo (il backend supporta
+questi tre per lo spot, non Bybit); per i ticker azionari niente step
+exchange, l'attivazione diventa solo avviso Telegram (dichiarato in UI,
+l'esecuzione automatica esiste solo per crypto spot); countdown
+dell'ottimizzazione onesto — stima client-side su `elapsed_s` reale contro
+le soglie gia' note (10-25s/1-5min), con "quasi fatto" invece di un
+countdown che sbaglia oltre soglia; uscita sempre permessa durante
+l'ottimizzazione, il lavoro continua server-side comunque.
+
+Verificato dall'agente contro mock fedeli agli schemi Pydantic reali (il
+Python 3.12 non e' disponibile in questo ambiente, niente backend vero da
+avviare) — poi ri-verificato da Claude leggendo il diff a mano: ogni
+endpoint, payload e campo di risposta citato esiste davvero nel backend
+con lo stesso nome (controllato uno per uno prima del merge).
+
+**Da fare**: verifica manuale end-to-end contro il backend vero in
+produzione (nessuna sessione ha ancora potuto testarlo con un account e
+un'ottimizzazione reali) — bloccante prima di considerarla pronta per
+davvero, stessa cautela gia' vista per i futures multi-exchange.
 
 ---
 
