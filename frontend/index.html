@@ -38,6 +38,7 @@
     </div>
 
     <div class="toolbar-spacer"></div>
+    <button type="button" id="simple-mode-toggle-btn" title="Passa alla Modalità Semplice">Modalità Semplice</button>
     <button type="submit" form="search-form" id="search-btn">Analizza</button>
     <div class="auth-widget">
       <span id="auth-user-email" class="auth-user-email hidden"></span>
@@ -47,6 +48,8 @@
   </header>
 
   <div id="error-banner" class="error-banner hidden"></div>
+
+  <div id="simple-mode-root" class="hidden"></div>
 
   <main class="cockpit">
     <!-- Navigazione unica: prima c'erano tre sistemi paralleli (rail a
@@ -1090,5 +1093,6 @@
   <script src="https://unpkg.com/lightweight-charts@4/dist/lightweight-charts.standalone.production.js"></script>
   <script src="https://unpkg.com/codemirror@5.65.16/lib/codemirror.js"></script>
   <script src="/static/app.js"></script>
+  <script src="/static/simple-mode.js" defer></script>
 </body>
 </html>

@@ -1,0 +1,890 @@
+// Simple Mode — a guided wizard that orchestrates the SAME real backend
+// endpoints the normal cockpit UI uses (/api/symbols, /api/analyze,
+// /api/strategies, /api/optimize/start, /api/jobs, /api/auth/trading,
+// /api/watchlist, /api/archive). No new backend endpoints. See HANDOVER.md
+// for the approved prototype this follows.
+(function () {
+  "use strict";
+
+  const LS_KEY = "simpleModeActive";
+  const root = document.getElementById("simple-mode-root");
+  const toggleBtn = document.getElementById("simple-mode-toggle-btn");
+  if (!root || !toggleBtn) return;
+
+  // Trading exchanges Simple Mode offers for live execution. Limited to the
+  // subset backend/app/auth.py's set_trading_credential() actually accepts
+  // (binance/mexc/kucoin/kraken/coinbase/bitstamp) — the prototype mocked
+  // "Bybit", which the backend does not support, so it is replaced here with
+  // KuCoin. Spot only: futures leverage is capped at 1x server-wide, so the
+  // wizard never touches /api/auth/futures.
+  const TRADING_EXCHANGES = [
+    { id: "binance", name: "Binance", color: "#f0b90b", letter: "B",
+      steps: ["Accedi a Binance → Gestione API nel tuo profilo.", "Crea una nuova chiave, attiva solo “Lettura” e “Trading Spot”.", "Copia chiave e chiave segreta qui sotto — non condividerle altrove."] },
+    { id: "kucoin", name: "KuCoin", color: "#24ae8f", letter: "K",
+      steps: ["Vai su KuCoin → API Management dal tuo profilo.", "Crea una chiave con permessi “General” e “Trade”, mai “Withdraw”.", "Incolla chiave e segreto qui: restano cifrati sul nostro sistema."] },
+    { id: "kraken", name: "Kraken", color: "#5741d9", letter: "K",
+      steps: ["Su Kraken vai in Impostazioni → Sicurezza → Chiavi API.", "Crea una chiave con “Query Funds” e “Create & Modify Orders” attivi.", "Inserisci i due valori qui sotto per completare il collegamento."] },
+  ];
+
+  // Optimization timing: the backend does not track a real completion
+  // percentage, only elapsed seconds (see jobs.py). These are the same
+  // typical ranges already communicated elsewhere in the app ("Rapida:
+  // 10-25s", "Stabile: 1-5 min") — used here only to drive an honest,
+  // self-correcting countdown, never presented as more precise than that.
+  const OPT_TYPICAL_S = { fast: 17, stable: 150 };
+
+  const state = {
+    step: 0,
+    query: "",
+    ticker: null, // {symbol, name, exchange, asset_type, provider}
+    lastCandles: null,
+    archiveEntry: null, // chosen "già pronto" archive item, or null
+    archiveList: [],
+    strategies: [],
+    strategy: null, // strategy name string
+    analysis: null, // last /api/analyze response used for the backtest step
+    optMode: "stable",
+    optJobId: null,
+    optPollTimer: null,
+    optResult: null, // {params, backtest:{...}, overfitted}
+    tradingExchange: TRADING_EXCHANGES[0].id,
+    watchlistEntry: null,
+  };
+
+  function h(strings, ...vals) {
+    return strings.reduce((acc, s, i) => acc + s + (vals[i] !== undefined ? vals[i] : ""), "");
+  }
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+  function fmtPct(v, digits) {
+    if (v == null || Number.isNaN(v)) return "—";
+    digits = digits == null ? 1 : digits;
+    return (v >= 0 ? "+" : "") + v.toFixed(digits) + "%";
+  }
+  function fmtNum(v) {
+    if (v == null) return "—";
+    return Number(v).toLocaleString("it-IT", { maximumFractionDigits: v >= 1000 ? 0 : 2 });
+  }
+
+  async function api(path, opts) {
+    const resp = await fetch(path, Object.assign({ headers: { "Content-Type": "application/json" } }, opts || {}));
+    if (resp.status === 401) {
+      const err = new Error("auth");
+      err.needsAuth = true;
+      throw err;
+    }
+    let body = null;
+    try { body = await resp.json(); } catch (_e) { /* no body */ }
+    if (!resp.ok) {
+      const detail = (body && body.detail) ? body.detail : `Errore ${resp.status}`;
+      throw new Error(detail);
+    }
+    return body;
+  }
+
+  function requireLogin() {
+    const btn = document.getElementById("auth-toggle-btn");
+    if (btn) btn.click();
+  }
+
+  // ---- CSS injected once, scoped under #simple-mode-root -------------------
+  function injectStyle() {
+    if (document.getElementById("simple-mode-style")) return;
+    const style = document.createElement("style");
+    style.id = "simple-mode-style";
+    style.textContent = `
+#simple-mode-root{--sm-accent:var(--accent,#0b8f68);--sm-bull:#0b8f68;--sm-bear:#cf3a2a;--sm-warn:#a86a06;
+  --sm-bg:var(--bg,#f4f6f5);--sm-panel:var(--panel-bg,#fff);--sm-raised:#eef1ef;--sm-sunk:#e6eae7;
+  --sm-border:#dfe4e1;--sm-border-strong:#c9d1cc;--sm-ink:var(--text,#0e1513);--sm-ink-dim:#54615c;--sm-ink-faint:#84918c;
+  position:fixed;inset:0;z-index:500;overflow-y:auto;background:var(--sm-bg);font-family:-apple-system,BlinkMacSystemFont,"Instrument Sans",sans-serif;}
+@media (prefers-color-scheme:dark){#simple-mode-root:not([data-sm-theme="light"]){--sm-bg:#080b0c;--sm-panel:#0f1416;--sm-raised:#141b1e;--sm-sunk:#1a2327;--sm-border:#1e282c;--sm-border-strong:#2c393e;--sm-ink:#e6eeec;--sm-ink-dim:#93a49f;--sm-ink-faint:#63736f;--sm-accent:#4fd8a8;--sm-bull:#3ecf8e;--sm-bear:#ff6b5e;}}
+#simple-mode-root[data-sm-theme="dark"]{--sm-bg:#080b0c;--sm-panel:#0f1416;--sm-raised:#141b1e;--sm-sunk:#1a2327;--sm-border:#1e282c;--sm-border-strong:#2c393e;--sm-ink:#e6eeec;--sm-ink-dim:#93a49f;--sm-ink-faint:#63736f;--sm-accent:#4fd8a8;--sm-bull:#3ecf8e;--sm-bear:#ff6b5e;}
+#simple-mode-root *{box-sizing:border-box;}
+#simple-mode-root.hidden{display:none;}
+#simple-mode-root .sm-app{max-width:460px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;position:relative;color:var(--sm-ink);}
+@media (min-width:860px){#simple-mode-root .sm-app{max-width:640px;}}
+#simple-mode-root .sm-topbar{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--sm-border);position:sticky;top:0;background:var(--sm-bg);z-index:20;}
+#simple-mode-root .sm-brand{display:flex;align-items:center;gap:8px;font-weight:600;font-size:13px;white-space:nowrap;}
+#simple-mode-root .sm-brand .dot{width:8px;height:8px;border-radius:50%;background:var(--sm-accent);}
+#simple-mode-root .sm-progress-track{flex:1;height:3px;background:var(--sm-sunk);border-radius:2px;overflow:hidden;}
+#simple-mode-root .sm-progress-fill{height:100%;background:var(--sm-accent);border-radius:2px;transition:width .3s;width:0%;}
+#simple-mode-root .sm-stepcount{font-family:monospace;font-size:11px;color:var(--sm-ink-faint);white-space:nowrap;}
+#simple-mode-root .sm-exit{border:1px solid var(--sm-border);background:var(--sm-panel);color:var(--sm-ink-dim);border-radius:20px;padding:5px 10px;font-size:11px;cursor:pointer;white-space:nowrap;}
+#simple-mode-root main.sm-step{flex:1;padding:20px 16px 110px;display:none;flex-direction:column;}
+#simple-mode-root main.sm-step.active{display:flex;}
+#simple-mode-root .sm-eyebrow{font-family:monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--sm-ink-faint);margin-bottom:8px;}
+#simple-mode-root .sm-title{font-size:22px;font-weight:600;letter-spacing:-.01em;margin:0 0 8px;}
+#simple-mode-root .sm-sub{font-size:14px;color:var(--sm-ink-dim);line-height:1.5;margin:0 0 18px;}
+#simple-mode-root .sm-ctabar{position:fixed;left:0;right:0;bottom:0;z-index:30;background:linear-gradient(to top,var(--sm-bg) 65%,transparent);padding:16px 16px 18px;}
+#simple-mode-root .sm-ctabar-inner{max-width:460px;margin:0 auto;display:flex;gap:10px;}
+@media (min-width:860px){#simple-mode-root .sm-ctabar-inner{max-width:640px;}}
+#simple-mode-root .sm-btn{font-size:15px;font-weight:600;border-radius:8px;padding:14px 16px;border:1px solid var(--sm-border-strong);background:var(--sm-panel);color:var(--sm-ink);cursor:pointer;flex:1;}
+#simple-mode-root .sm-btn:disabled{opacity:.4;cursor:not-allowed;}
+#simple-mode-root .sm-btn.primary{background:var(--sm-accent);border-color:var(--sm-accent);color:#04140e;}
+#simple-mode-root .sm-btn.ghost{flex:0 0 auto;background:transparent;}
+#simple-mode-root .sm-search-box{display:flex;align-items:center;gap:8px;background:var(--sm-panel);border:1px solid var(--sm-border);border-radius:8px;padding:12px 14px;margin-bottom:12px;}
+#simple-mode-root .sm-search-box input{border:none;outline:none;background:transparent;color:var(--sm-ink);font-size:16px;width:100%;}
+#simple-mode-root .sm-list{display:flex;flex-direction:column;gap:6px;margin-bottom:16px;}
+#simple-mode-root .sm-row{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;border:1px solid var(--sm-border);border-radius:8px;background:var(--sm-panel);cursor:pointer;}
+#simple-mode-root .sm-row.active{border-color:var(--sm-accent);box-shadow:0 0 0 1px var(--sm-accent) inset;}
+#simple-mode-root .sm-row .sym{font-weight:600;font-size:14px;}
+#simple-mode-root .sm-row .name{color:var(--sm-ink-faint);font-size:12px;}
+#simple-mode-root .sm-card{background:var(--sm-panel);border:1px solid var(--sm-border);border-radius:8px;padding:14px;margin-bottom:14px;}
+#simple-mode-root .sm-price{font-size:28px;font-style:italic;letter-spacing:-.01em;font-family:Georgia,serif;}
+#simple-mode-root .up{color:var(--sm-bull);} #simple-mode-root .down{color:var(--sm-bear);}
+#simple-mode-root .sm-strat-grid,#simple-mode-root .sm-opt-grid,#simple-mode-root .sm-archive-grid{display:flex;flex-direction:column;gap:10px;margin-bottom:16px;}
+#simple-mode-root .sm-strat-card,#simple-mode-root .sm-opt-card,#simple-mode-root .sm-archive-card{border:1px solid var(--sm-border);background:var(--sm-panel);border-radius:8px;padding:14px;cursor:pointer;}
+#simple-mode-root .sm-strat-card.active,#simple-mode-root .sm-opt-card.active{border-color:var(--sm-accent);box-shadow:0 0 0 1px var(--sm-accent) inset;}
+#simple-mode-root .sm-strat-name{font-weight:600;font-size:15px;}
+#simple-mode-root .sm-strat-tag{font-family:monospace;font-size:10px;text-transform:uppercase;color:var(--sm-ink-faint);background:var(--sm-sunk);padding:2px 7px;border-radius:20px;margin-left:8px;}
+#simple-mode-root .sm-strat-desc{font-size:13px;color:var(--sm-ink-dim);line-height:1.45;margin-top:6px;}
+#simple-mode-root .sm-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;}
+#simple-mode-root .sm-stat{background:var(--sm-raised);border-radius:8px;padding:10px;text-align:center;}
+#simple-mode-root .sm-stat .lbl{font-family:monospace;font-size:10px;text-transform:uppercase;color:var(--sm-ink-faint);margin-bottom:4px;}
+#simple-mode-root .sm-stat .val{font-size:18px;font-style:italic;font-family:Georgia,serif;}
+#simple-mode-root .sm-legend{display:flex;gap:14px;justify-content:center;margin-top:8px;font-size:11px;color:var(--sm-ink-dim);}
+#simple-mode-root .sm-legend i{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:5px;}
+#simple-mode-root .sm-wait{display:flex;flex-direction:column;align-items:center;padding:24px 10px;background:var(--sm-panel);border:1px solid var(--sm-border);border-radius:8px;margin-bottom:14px;text-align:center;}
+#simple-mode-root .sm-wait-pct{font-size:42px;font-style:italic;font-family:Georgia,serif;}
+#simple-mode-root .sm-wait-eta{font-family:monospace;font-size:12.5px;color:var(--sm-ink-dim);margin-top:4px;}
+#simple-mode-root .sm-wait-bar-track{width:100%;max-width:280px;height:5px;background:var(--sm-sunk);border-radius:3px;overflow:hidden;margin-top:14px;}
+#simple-mode-root .sm-wait-bar-fill{height:100%;width:0%;background:var(--sm-accent);border-radius:3px;transition:width .3s linear;}
+#simple-mode-root .sm-wait-log{font-family:monospace;font-size:11px;color:var(--sm-ink-faint);margin-top:12px;min-height:32px;}
+#simple-mode-root .sm-exch-grid{display:flex;gap:10px;margin-bottom:14px;}
+#simple-mode-root .sm-exch-opt{flex:1;border:1px solid var(--sm-border);background:var(--sm-panel);border-radius:8px;padding:12px 6px;text-align:center;cursor:pointer;}
+#simple-mode-root .sm-exch-opt.active{border-color:var(--sm-accent);box-shadow:0 0 0 1px var(--sm-accent) inset;}
+#simple-mode-root .sm-exch-badge{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:#0e1513;margin:0 auto 6px;}
+#simple-mode-root .sm-field{margin-bottom:10px;}
+#simple-mode-root .sm-field label{display:block;font-size:11px;font-family:monospace;color:var(--sm-ink-faint);margin-bottom:5px;text-transform:uppercase;}
+#simple-mode-root .sm-field input{width:100%;padding:11px 12px;border:1px solid var(--sm-border);border-radius:8px;background:var(--sm-raised);color:var(--sm-ink);font-family:monospace;font-size:13px;}
+#simple-mode-root .sm-exch-steps{background:var(--sm-panel);border:1px solid var(--sm-border);border-radius:8px;padding:12px 14px;margin-bottom:14px;}
+#simple-mode-root .sm-exch-steps ol{margin:0;padding-left:18px;font-size:13px;color:var(--sm-ink-dim);line-height:1.6;}
+#simple-mode-root .sm-review-card{background:var(--sm-panel);border:1px solid var(--sm-border);border-radius:8px;padding:2px 14px;margin-bottom:14px;}
+#simple-mode-root .sm-review-row{display:flex;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--sm-border);font-size:13px;}
+#simple-mode-root .sm-review-row:last-child{border-bottom:none;}
+#simple-mode-root .sm-review-row .k{color:var(--sm-ink-faint);}
+#simple-mode-root .sm-review-row .v{font-weight:600;font-family:monospace;}
+#simple-mode-root .sm-explain{background:var(--sm-raised);border-radius:8px;padding:12px;font-size:12.5px;color:var(--sm-ink-dim);line-height:1.6;margin-bottom:10px;}
+#simple-mode-root .sm-error{background:rgba(207,58,42,.12);border:1px solid var(--sm-bear);color:var(--sm-bear);border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:12px;}
+#simple-mode-root .sm-pulse-wrap{display:flex;flex-direction:column;align-items:center;text-align:center;padding:26px 10px 10px;}
+#simple-mode-root .sm-pulse{width:60px;height:60px;border-radius:50%;background:rgba(11,143,104,.14);display:flex;align-items:center;justify-content:center;margin-bottom:18px;}
+#simple-mode-root .sm-pulse .core{width:13px;height:13px;border-radius:50%;background:var(--sm-accent);}
+#simple-mode-root .sm-status-card{width:100%;background:var(--sm-panel);border:1px solid var(--sm-border);border-radius:8px;padding:2px 14px;margin-top:18px;}
+#simple-mode-root .sm-status-row{display:flex;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--sm-border);font-size:13px;}
+#simple-mode-root .sm-status-row:last-child{border-bottom:none;}
+#simple-mode-root .sm-live-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--sm-bull);margin-right:6px;}
+#simple-mode-root .sm-welcome{flex:1;display:flex;flex-direction:column;justify-content:center;padding:0 16px 100px;}
+#simple-mode-root .sm-welcome .kicker{font-family:monospace;font-size:12px;color:var(--sm-accent);text-transform:uppercase;margin-bottom:12px;}
+#simple-mode-root .sm-welcome h1{font-size:28px;line-height:1.2;margin-bottom:12px;}
+#simple-mode-root .sm-welcome p{font-size:14px;color:var(--sm-ink-dim);line-height:1.6;margin-bottom:18px;}
+#simple-mode-root .sm-feat{display:flex;gap:8px;font-size:13px;color:var(--sm-ink-dim);margin-bottom:8px;}
+#simple-mode-root .sm-feat b{color:var(--sm-ink);}
+#simple-mode-root .sm-badge{display:inline-flex;align-items:center;gap:5px;font-family:monospace;font-size:10px;text-transform:uppercase;color:var(--sm-accent);background:rgba(11,143,104,.12);padding:3px 8px;border-radius:20px;margin-bottom:8px;}
+#simple-mode-root .sm-muted{color:var(--sm-ink-faint);font-size:12px;}
+`;
+    document.head.appendChild(style);
+  }
+
+  // ---- Skeleton shell --------------------------------------------------
+  function renderShell() {
+    root.innerHTML = `
+<div class="sm-app">
+  <div class="sm-topbar" id="sm-topbar" style="display:none;">
+    <div class="sm-brand"><span class="dot"></span>Liquidity Engine</div>
+    <div class="sm-progress-track"><div class="sm-progress-fill" id="sm-progfill"></div></div>
+    <div class="sm-stepcount" id="sm-stepcount">1/6</div>
+    <button type="button" class="sm-exit" id="sm-exit-btn">Esci</button>
+  </div>
+  <div id="sm-steps"></div>
+</div>`;
+    document.getElementById("sm-exit-btn").addEventListener("click", () => setActive(false));
+  }
+
+  const TOTAL_STEPS = 6;
+
+  function setTopbar(stepLabel, frac) {
+    const bar = document.getElementById("sm-topbar");
+    if (frac == null) { bar.style.display = "none"; return; }
+    bar.style.display = "flex";
+    document.getElementById("sm-progfill").style.width = (frac * 100) + "%";
+    document.getElementById("sm-stepcount").textContent = stepLabel;
+  }
+
+  // ------------------------------------------------------------------
+  // STEP 0 — welcome
+  // ------------------------------------------------------------------
+  function stepWelcome() {
+    setTopbar("", null);
+    document.getElementById("sm-steps").innerHTML = `
+<main class="sm-step active">
+  <div class="sm-welcome">
+    <div class="kicker">Modalità Semplice</div>
+    <h1>Trova un ticker,<br>scegli una strategia,<br>lascia lavorare l'algoritmo.</h1>
+    <p>Lo stesso motore di Liquidity Engine, senza pannelli tecnici. Ogni passo di questa guida chiama le stesse API reali della modalità normale.</p>
+    <div class="sm-feat"><b>1.</b> Cerca il ticker e guarda il grafico live.</div>
+    <div class="sm-feat"><b>2.</b> Scegli una strategia tra quelle disponibili.</div>
+    <div class="sm-feat"><b>3.</b> Verifica ingressi e uscite sul backtest reale.</div>
+    <div class="sm-feat"><b>4.</b> Ottimizza — Rapida o Stabile.</div>
+    <div class="sm-feat"><b>5.</b> Collega l'exchange e attiva con un tocco.</div>
+  </div>
+  <div class="sm-ctabar"><div class="sm-ctabar-inner"><button class="sm-btn primary" id="sm-start-btn">Inizia</button></div></div>
+</main>`;
+    document.getElementById("sm-start-btn").addEventListener("click", () => go(1));
+  }
+
+  // ------------------------------------------------------------------
+  // STEP 1 — ticker search (real /api/symbols)
+  // ------------------------------------------------------------------
+  let searchDebounce = null;
+  function stepTicker() {
+    setTopbar("1/" + TOTAL_STEPS, 1 / TOTAL_STEPS);
+    document.getElementById("sm-steps").innerHTML = `
+<main class="sm-step active">
+  <div class="sm-eyebrow">Passo 1 di ${TOTAL_STEPS}</div>
+  <h1 class="sm-title">Cosa vuoi seguire?</h1>
+  <p class="sm-sub">Cerca un ticker — azioni o crypto. Stessa ricerca della modalità normale.</p>
+  <div class="sm-search-box"><input id="sm-ticker-input" placeholder="BTC, ETH, AAPL…" autocomplete="off"></div>
+  <div id="sm-ticker-error"></div>
+  <div class="sm-list" id="sm-ticker-list"></div>
+  <div id="sm-chart-card"></div>
+  <div class="sm-ctabar"><div class="sm-ctabar-inner">
+    <button class="sm-btn ghost" id="sm-back-btn">Indietro</button>
+    <button class="sm-btn primary" id="sm-continue-btn" disabled>Continua</button>
+  </div></div>
+</main>`;
+    document.getElementById("sm-back-btn").addEventListener("click", () => go(0));
+    document.getElementById("sm-continue-btn").addEventListener("click", onFromTicker);
+    const input = document.getElementById("sm-ticker-input");
+    input.value = state.query;
+    input.addEventListener("input", (e) => {
+      state.query = e.target.value;
+      clearTimeout(searchDebounce);
+      searchDebounce = setTimeout(() => searchTickers(state.query), 250);
+    });
+    if (state.ticker) {
+      renderChartCard();
+      document.getElementById("sm-continue-btn").disabled = false;
+    }
+    if (state.query) searchTickers(state.query);
+  }
+
+  async function searchTickers(query) {
+    const list = document.getElementById("sm-ticker-list");
+    if (!query || query.trim().length < 1) { list.innerHTML = ""; return; }
+    try {
+      const items = await api(`/api/symbols?query=${encodeURIComponent(query.trim())}`);
+      list.innerHTML = "";
+      (items || []).slice(0, 12).forEach((item) => {
+        const row = document.createElement("div");
+        row.className = "sm-row" + (state.ticker && state.ticker.symbol === item.symbol && state.ticker.provider === item.provider ? " active" : "");
+        row.innerHTML = `<div><div class="sym">${esc(item.symbol)}</div><div class="name">${esc(item.name)} · ${esc(item.exchange)}</div></div>`;
+        row.addEventListener("click", () => selectTicker(item));
+        list.appendChild(row);
+      });
+      if (!items || !items.length) list.innerHTML = `<div class="sm-muted">Nessun risultato.</div>`;
+    } catch (e) {
+      list.innerHTML = `<div class="sm-error">${esc(e.message)}</div>`;
+    }
+  }
+
+  function tickerExchangeForAnalyze(item) {
+    // /api/analyze's `exchange` query only matters for asset_type=crypto and
+    // only accepts mexc/binance/kucoin (the *data* providers) — unrelated to
+    // which exchange the user later connects for live execution.
+    if (item.asset_type !== "crypto") return "mexc";
+    return ["mexc", "binance", "kucoin"].includes(item.provider) ? item.provider : "mexc";
+  }
+
+  async function selectTicker(item) {
+    state.ticker = {
+      symbol: item.symbol,
+      name: item.name,
+      asset_type: item.asset_type,
+      exchange: tickerExchangeForAnalyze(item),
+    };
+    state.archiveEntry = null;
+    document.getElementById("sm-continue-btn").disabled = true;
+    document.getElementById("sm-chart-card").innerHTML = `<div class="sm-card sm-muted">Carico il grafico…</div>`;
+    try {
+      const strategies = await ensureStrategies();
+      const defaultStrategy = strategies[0];
+      const analysis = await api(`/api/analyze?symbol=${encodeURIComponent(item.symbol)}&asset_type=${item.asset_type}&exchange=${state.ticker.exchange}&strategy_name=${encodeURIComponent(defaultStrategy)}`);
+      state.lastCandles = (analysis.timeframes.ltf && analysis.timeframes.ltf.candles) || [];
+      renderChartCard();
+      document.getElementById("sm-continue-btn").disabled = false;
+    } catch (e) {
+      document.getElementById("sm-chart-card").innerHTML = `<div class="sm-error">${esc(e.message)}</div>`;
+    }
+    searchTickers(state.query);
+  }
+
+  function renderChartCard() {
+    const card = document.getElementById("sm-chart-card");
+    if (!card || !state.ticker) return;
+    const candles = state.lastCandles || [];
+    const last = candles[candles.length - 1];
+    const first = candles.length > 24 ? candles[candles.length - 24] : candles[0];
+    const price = last ? last.close : null;
+    const chg = last && first ? ((last.close - first.close) / first.close) * 100 : null;
+    card.innerHTML = `
+<div class="sm-card">
+  <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;">
+    <div><div class="sm-eyebrow" style="margin-bottom:2px;">${esc(state.ticker.symbol)}</div><div class="sm-price">${price != null ? fmtNum(price) : "—"}</div></div>
+    <div class="${chg != null && chg >= 0 ? "up" : "down"}" style="font-family:monospace;font-size:12px;">${chg != null ? fmtPct(chg) : "—"}</div>
+  </div>
+  <svg viewBox="0 0 400 130" width="100%" height="130" preserveAspectRatio="none" id="sm-mini-chart"></svg>
+</div>`;
+    drawSparkline(document.getElementById("sm-mini-chart"), candles.map((c) => c.close));
+  }
+
+  function drawSparkline(svg, closes) {
+    if (!svg || !closes.length) return;
+    const w = 400, h = 130, pad = 6;
+    const min = Math.min(...closes), max = Math.max(...closes);
+    const x = (i) => pad + i * ((w - 2 * pad) / Math.max(1, closes.length - 1));
+    const y = (v) => h - pad - ((v - min) / (max - min || 1)) * (h - 2 * pad);
+    let path = "";
+    closes.forEach((v, i) => { path += (i === 0 ? "M" : "L") + x(i) + " " + y(v) + " "; });
+    const up = closes[closes.length - 1] >= closes[0];
+    const col = up ? "var(--sm-bull)" : "var(--sm-bear)";
+    svg.innerHTML = `<path d="${path}" fill="none" stroke="${col}" stroke-width="2"/>`;
+  }
+
+  async function onFromTicker() {
+    try {
+      const items = await api("/api/archive");
+      const norm = (s) => (s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+      const matches = (items.items || []).filter((it) =>
+        norm(it.symbol) === norm(state.ticker.symbol) && it.state === "pronto"
+      );
+      state.archiveList = matches;
+      if (matches.length) go(1.5); else go(2);
+    } catch (e) {
+      if (e.needsAuth) { requireLogin(); return; }
+      // Archive lookup failing shouldn't block the wizard — fall through.
+      go(2);
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // STEP 1.5 — archive (already-vetted strategies for this ticker)
+  // ------------------------------------------------------------------
+  function stepArchive() {
+    setTopbar("Archivio", 1.2 / TOTAL_STEPS);
+    document.getElementById("sm-steps").innerHTML = `
+<main class="sm-step active">
+  <div class="sm-eyebrow">Già nel tuo archivio</div>
+  <h1 class="sm-title">Hai già lavorato su ${esc(state.ticker.symbol)}</h1>
+  <p class="sm-sub">Queste configurazioni sono già state ottimizzate e misurate su questo ticker (dati reali da /api/archive). Riprendine una così com'è, o impostane una nuova da zero.</p>
+  <div class="sm-archive-grid" id="sm-archive-grid"></div>
+  <button class="sm-btn ghost" style="margin-bottom:90px;" id="sm-archive-fresh">Testa una strategia nuova invece</button>
+  <div class="sm-ctabar"><div class="sm-ctabar-inner"><button class="sm-btn ghost" id="sm-back-btn">Indietro</button></div></div>
+</main>`;
+    document.getElementById("sm-back-btn").addEventListener("click", () => go(1));
+    document.getElementById("sm-archive-fresh").addEventListener("click", () => { state.archiveEntry = null; go(2); });
+    const grid = document.getElementById("sm-archive-grid");
+    state.archiveList.forEach((entry) => {
+      const m = entry.metrics || {};
+      const retUp = (m.total_return_pct || 0) >= 0;
+      const card = document.createElement("div");
+      card.className = "sm-archive-card";
+      card.innerHTML = `
+        <div style="display:flex;justify-content:space-between;"><b>${esc(entry.strategy_name)}</b><span class="sm-muted">${esc((entry.created_at || "").slice(0, 10))}</span></div>
+        <div class="sm-summary" style="margin-top:10px;">
+          <div class="sm-stat"><div class="lbl">Rendimento</div><div class="val ${retUp ? "up" : "down"}">${fmtPct(m.total_return_pct)}</div></div>
+          <div class="sm-stat"><div class="lbl">Drawdown</div><div class="val down">${fmtPct(m.max_drawdown_pct)}</div></div>
+          <div class="sm-stat"><div class="lbl">Operazioni</div><div class="val">${m.num_trades != null ? m.num_trades : "—"}</div></div>
+        </div>
+        <button class="sm-btn primary" style="margin-top:10px;">Usa questa</button>`;
+      card.querySelector("button").addEventListener("click", () => {
+        state.archiveEntry = entry;
+        state.strategy = entry.strategy_name;
+        go(3);
+      });
+      grid.appendChild(card);
+    });
+  }
+
+  // ------------------------------------------------------------------
+  // STEP 2 — strategy (real /api/strategies)
+  // ------------------------------------------------------------------
+  const STRAT_DESC = [
+    { match: /lorenzo/i, tag: "Trend", desc: "Incrocio EMA sulla derivata di una media — segue la continuazione del trend dominante." },
+    { match: /gabriele/i, tag: "Mean-reversion", desc: "RSI + banda di Bollinger — cerca eccessi di prezzo e ne sfrutta il rientro." },
+    { match: /accumulo|distribuzione/i, tag: "Contro-trend", desc: "Divergenze RSI sugli swing — entra contro il movimento agli estremi." },
+  ];
+  function describeStrategy(name) {
+    const hit = STRAT_DESC.find((d) => d.match.test(name));
+    return hit || { tag: "Strategia", desc: "Logica proprietaria del motore di analisi." };
+  }
+
+  let strategiesCache = null;
+  async function ensureStrategies() {
+    if (strategiesCache) return strategiesCache;
+    strategiesCache = await api("/api/strategies");
+    return strategiesCache;
+  }
+
+  async function stepStrategy() {
+    setTopbar("2/" + TOTAL_STEPS, 2 / TOTAL_STEPS);
+    document.getElementById("sm-steps").innerHTML = `
+<main class="sm-step active">
+  <div class="sm-eyebrow">Passo 2 di ${TOTAL_STEPS}</div>
+  <h1 class="sm-title">Scegli la strategia</h1>
+  <p class="sm-sub">Ogni strategia ragiona in modo diverso su <b>${esc(state.ticker.symbol)}</b>. La vedrai al lavoro sul grafico reale al passo successivo.</p>
+  <div class="sm-strat-grid" id="sm-strat-grid"><div class="sm-muted">Carico le strategie…</div></div>
+  <div class="sm-ctabar"><div class="sm-ctabar-inner">
+    <button class="sm-btn ghost" id="sm-back-btn">Indietro</button>
+    <button class="sm-btn primary" id="sm-to-backtest-btn" disabled>Vedi il backtest</button>
+  </div></div>
+</main>`;
+    document.getElementById("sm-back-btn").addEventListener("click", () => go(1));
+    document.getElementById("sm-to-backtest-btn").addEventListener("click", () => go(3));
+    try {
+      const strategies = await ensureStrategies();
+      state.strategies = strategies;
+      renderStrategyGrid();
+    } catch (e) {
+      document.getElementById("sm-strat-grid").innerHTML = `<div class="sm-error">${esc(e.message)}</div>`;
+    }
+  }
+
+  function renderStrategyGrid() {
+    const grid = document.getElementById("sm-strat-grid");
+    grid.innerHTML = "";
+    state.strategies.forEach((name) => {
+      const info = describeStrategy(name);
+      const card = document.createElement("div");
+      card.className = "sm-strat-card" + (state.strategy === name ? " active" : "");
+      card.innerHTML = `<div><span class="sm-strat-name">${esc(name)}</span><span class="sm-strat-tag">${info.tag}</span></div><div class="sm-strat-desc">${info.desc}</div>`;
+      card.addEventListener("click", () => { state.strategy = name; renderStrategyGrid(); document.getElementById("sm-to-backtest-btn").disabled = false; });
+      grid.appendChild(card);
+    });
+  }
+
+  // ------------------------------------------------------------------
+  // STEP 3 — backtest (real /api/analyze -> ltf backtest + candles)
+  // ------------------------------------------------------------------
+  async function stepBacktest() {
+    setTopbar("3/" + TOTAL_STEPS, 3 / TOTAL_STEPS);
+    const fromArchive = !!state.archiveEntry;
+    document.getElementById("sm-steps").innerHTML = `
+<main class="sm-step active">
+  <div class="sm-eyebrow">Passo 3 di ${TOTAL_STEPS}</div>
+  ${fromArchive ? '<span class="sm-badge">◆ Dall\'archivio</span>' : ""}
+  <h1 class="sm-title">Backtest — ${esc(state.strategy)}</h1>
+  <p class="sm-sub">Su ${esc(state.ticker.symbol)}. Ogni ingresso e uscita generato dalla strategia è segnato sul grafico reale.</p>
+  <div id="sm-bt-body"><div class="sm-muted">Eseguo il backtest…</div></div>
+  <div class="sm-ctabar"><div class="sm-ctabar-inner">
+    <button class="sm-btn ghost" id="sm-back-btn">Indietro</button>
+    <button class="sm-btn primary" id="sm-bt-continue" disabled>${fromArchive ? "Continua" : "Ottimizza la strategia"}</button>
+  </div></div>
+</main>`;
+    document.getElementById("sm-back-btn").addEventListener("click", () => go(fromArchive ? 1.5 : 2));
+    document.getElementById("sm-bt-continue").addEventListener("click", () => go(fromArchive ? 5 : 4));
+
+    try {
+      const params = fromArchive ? (state.archiveEntry.params || {}) : {};
+      const qs = new URLSearchParams({
+        symbol: state.ticker.symbol, asset_type: state.ticker.asset_type,
+        exchange: state.ticker.exchange, strategy_name: state.strategy,
+      });
+      Object.keys(params).forEach((k) => qs.set(`strategy_params.${k}`, params[k]));
+      const analysis = await api(`/api/analyze?${qs.toString()}`);
+      state.analysis = analysis;
+      const bt = analysis.backtests.ltf;
+      const candles = analysis.timeframes.ltf.candles;
+      const body = document.getElementById("sm-bt-body");
+      const m = fromArchive ? (state.archiveEntry.metrics || {}) : {
+        total_return_pct: bt.total_return_pct, max_drawdown_pct: bt.max_drawdown_pct, num_trades: bt.num_trades,
+      };
+      body.innerHTML = `
+        <div class="sm-summary">
+          <div class="sm-stat"><div class="lbl">Rendimento</div><div class="val ${(m.total_return_pct || 0) >= 0 ? "up" : "down"}">${fmtPct(m.total_return_pct)}</div></div>
+          <div class="sm-stat"><div class="lbl">Max drawdown</div><div class="val down">${fmtPct(m.max_drawdown_pct)}</div></div>
+          <div class="sm-stat"><div class="lbl">Operazioni</div><div class="val">${m.num_trades != null ? m.num_trades : "—"}</div></div>
+        </div>
+        <div class="sm-card">
+          <svg id="sm-real-chart" viewBox="0 0 400 240" width="100%" height="240" preserveAspectRatio="none"></svg>
+          <div class="sm-legend"><span><i style="background:var(--sm-bull)"></i>Ingresso</span><span><i style="background:var(--sm-bear)"></i>Uscita</span></div>
+        </div>`;
+      drawCandleChart(document.getElementById("sm-real-chart"), candles, bt.trades || []);
+      document.getElementById("sm-bt-continue").disabled = false;
+    } catch (e) {
+      document.getElementById("sm-bt-body").innerHTML = e.needsAuth
+        ? `<div class="sm-error">Devi accedere per usare questa funzione.</div>`
+        : `<div class="sm-error">${esc(e.message)}</div>`;
+      if (e.needsAuth) requireLogin();
+    }
+  }
+
+  function drawCandleChart(svg, candles, trades) {
+    if (!svg || !candles || !candles.length) return;
+    const n = candles.length, w = 400, h = 240, padT = 8, padB = 8;
+    const vals = candles.flatMap((c) => [c.high, c.low]);
+    const min = Math.min(...vals), max = Math.max(...vals);
+    const cw = w / n;
+    const x = (i) => i * cw + cw / 2;
+    const y = (v) => padT + (h - padT - padB) - ((v - min) / (max - min || 1)) * (h - padT - padB);
+    let candlesSvg = "";
+    candles.forEach((c, i) => {
+      const up = c.close >= c.open;
+      const col = up ? "var(--sm-bull)" : "var(--sm-bear)";
+      const cx = x(i);
+      candlesSvg += `<line x1="${cx}" y1="${y(c.high)}" x2="${cx}" y2="${y(c.low)}" stroke="${col}" stroke-width="1"/>`;
+      const bTop = y(Math.max(c.open, c.close)), bBot = y(Math.min(c.open, c.close));
+      candlesSvg += `<rect x="${cx - cw * 0.32}" y="${bTop}" width="${cw * 0.64}" height="${Math.max(1, bBot - bTop)}" fill="${col}"/>`;
+    });
+    const timeToIdx = new Map(candles.map((c, i) => [c.time, i]));
+    let markers = "";
+    (trades || []).forEach((t) => {
+      const entryIdx = timeToIdx.get(t.entry_time);
+      const exitIdx = t.exit_time != null ? timeToIdx.get(t.exit_time) : null;
+      if (entryIdx != null) {
+        const cx = x(entryIdx), cy = y(t.entry_price);
+        markers += `<path d="M${cx - 5} ${cy + 9} L${cx + 5} ${cy + 9} L${cx} ${cy - 2} Z" fill="var(--sm-bull)"/>`;
+      }
+      if (exitIdx != null && t.exit_price != null) {
+        const cx = x(exitIdx), cy = y(t.exit_price);
+        markers += `<path d="M${cx - 5} ${cy - 9} L${cx + 5} ${cy - 9} L${cx} ${cy + 2} Z" fill="var(--sm-bear)"/>`;
+      }
+    });
+    svg.innerHTML = candlesSvg + markers;
+  }
+
+  // ------------------------------------------------------------------
+  // STEP 4 — optimize (real /api/optimize/start + /api/jobs polling)
+  // ------------------------------------------------------------------
+  function stepOptimize() {
+    setTopbar("4/" + TOTAL_STEPS, 4 / TOTAL_STEPS);
+    document.getElementById("sm-steps").innerHTML = `
+<main class="sm-step active">
+  <div class="sm-eyebrow">Passo 4 di ${TOTAL_STEPS}</div>
+  <h1 class="sm-title">Ottimizza i parametri</h1>
+  <p class="sm-sub">Cerca la combinazione di parametri migliore per <b>${esc(state.strategy)}</b> su <b>${esc(state.ticker.symbol)}</b>.</p>
+  <div id="sm-opt-body"></div>
+  <div id="sm-opt-cta" class="sm-ctabar"><div class="sm-ctabar-inner">
+    <button class="sm-btn ghost" id="sm-back-btn">Indietro</button>
+    <button class="sm-btn primary" id="sm-opt-start">Avvia ottimizzazione</button>
+  </div></div>
+</main>`;
+    document.getElementById("sm-back-btn").addEventListener("click", () => go(3));
+    document.getElementById("sm-opt-start").addEventListener("click", startOptimization);
+    renderOptChoice();
+  }
+
+  function renderOptChoice() {
+    document.getElementById("sm-opt-body").innerHTML = `
+<div class="sm-opt-grid">
+  <div class="sm-opt-card${state.optMode === "fast" ? " active" : ""}" data-mode="fast">
+    <b>Rapida</b> <span class="sm-muted">· 200 tentativi casuali · 10–25s (stima)</span>
+    <div class="sm-strat-desc">Esplora in fretta lo spazio dei parametri. Il risultato può variare a ogni esecuzione.</div>
+  </div>
+  <div class="sm-opt-card${state.optMode === "stable" ? " active" : ""}" data-mode="stable">
+    <b>Stabile</b> <span class="sm-muted">· ricerca guidata esaustiva · 1–5 min (stima)</span>
+    <div class="sm-strat-desc">Cerca la configurazione che regge alle variazioni di mercato, non il picco fortunato. Deterministica: stesso risultato a ogni esecuzione.</div>
+  </div>
+</div>`;
+    document.querySelectorAll("#simple-mode-root .sm-opt-card").forEach((card) => {
+      card.classList.toggle("active", card.dataset.mode === state.optMode);
+      card.addEventListener("click", () => { state.optMode = card.dataset.mode; renderOptChoice(); });
+    });
+  }
+
+  async function startOptimization() {
+    document.getElementById("sm-opt-cta").style.display = "none";
+    const backtestParams = new URLSearchParams({
+      symbol: state.ticker.symbol, asset_type: state.ticker.asset_type,
+      exchange: state.ticker.exchange, strategy_name: state.strategy,
+      mode: state.optMode === "fast" ? "random" : "plateau",
+      ltf_interval: "1d",
+    });
+    document.getElementById("sm-opt-body").innerHTML = `
+<div class="sm-wait">
+  <div class="sm-wait-pct" id="sm-wait-pct">0%</div>
+  <div class="sm-wait-eta" id="sm-wait-eta">stima in corso…</div>
+  <div class="sm-wait-bar-track"><div class="sm-wait-bar-fill" id="sm-wait-bar"></div></div>
+  <div class="sm-wait-log" id="sm-wait-log">Avvio ottimizzazione…</div>
+</div>`;
+    try {
+      const resp = await api(`/api/optimize/start?${backtestParams.toString()}`, { method: "POST" });
+      state.optJobId = resp.job_id;
+      pollOptJob();
+    } catch (e) {
+      document.getElementById("sm-opt-body").innerHTML = `<div class="sm-error">${esc(e.message)}</div>`;
+      document.getElementById("sm-opt-cta").style.display = "flex";
+      if (e.needsAuth) requireLogin();
+    }
+  }
+
+  function pollOptJob() {
+    let since = 0;
+    const typical = OPT_TYPICAL_S[state.optMode] || 60;
+    clearTimeout(state.optPollTimer);
+    const tick = async () => {
+      try {
+        const job = await api(`/api/jobs/${state.optJobId}?since=${since}`);
+        since = job.log_total;
+        const elapsed = job.elapsed_s || 0;
+        // Honest estimate: elapsed time is real (jobs.py), the "typical"
+        // range is the same figure already shown in the normal UI. Once we
+        // cross it we stop pretending to count down and say so.
+        const pct = Math.min(99, (elapsed / typical) * 100);
+        document.getElementById("sm-wait-pct").textContent = Math.floor(pct) + "%";
+        document.getElementById("sm-wait-bar").style.width = pct + "%";
+        const remaining = typical - elapsed;
+        document.getElementById("sm-wait-eta").textContent = remaining > 2
+          ? `stima: circa ${Math.ceil(remaining)}s rimanenti`
+          : "quasi fatto — può volerci qualche secondo in più del previsto";
+        const lastLog = job.log && job.log.length ? job.log[job.log.length - 1] : null;
+        if (lastLog) document.getElementById("sm-wait-log").textContent = lastLog;
+        if (job.state === "finito") { onOptDone(job); return; }
+        if (job.state === "fallito") { onOptFailed(job.error || "Ottimizzazione fallita"); return; }
+        if (job.state === "annullato") { onOptFailed("Ottimizzazione annullata"); return; }
+        state.optPollTimer = setTimeout(tick, 1200);
+      } catch (e) {
+        onOptFailed(e.message);
+      }
+    };
+    tick();
+  }
+
+  function onOptFailed(msg) {
+    document.getElementById("sm-opt-body").innerHTML = `<div class="sm-error">${esc(msg)}</div>`;
+    document.getElementById("sm-opt-cta").style.display = "flex";
+  }
+
+  function onOptDone(job) {
+    const result = job.result;
+    state.optResult = result;
+    document.getElementById("sm-wait-pct") && (document.getElementById("sm-wait-pct").textContent = "100%");
+    const bt = result.backtest || {};
+    document.getElementById("sm-opt-body").innerHTML = `
+<div class="sm-summary">
+  <div class="sm-stat"><div class="lbl">Rendimento ott.</div><div class="val ${(bt.total_return_pct || 0) >= 0 ? "up" : "down"}">${fmtPct(bt.total_return_pct)}</div></div>
+  <div class="sm-stat"><div class="lbl">Max drawdown</div><div class="val down">${fmtPct(bt.max_drawdown_pct)}</div></div>
+  <div class="sm-stat"><div class="lbl">Fuori campione</div><div class="val ${result.overfitted ? "down" : "up"}">${result.overfitted ? "overfit" : "regge"}</div></div>
+</div>
+<div class="sm-explain">Parametri trovati: <code>${esc(JSON.stringify(result.params))}</code>. Verranno applicati alla strategia quando la attivi. ${result.overfitted ? "Attenzione: il test fuori campione suggerisce che questi parametri potrebbero non reggere su dati futuri." : "Il test fuori campione conferma che regge oltre i dati usati per trovarli."}</div>
+<div class="sm-ctabar"><div class="sm-ctabar-inner">
+  <button class="sm-btn ghost" id="sm-opt-review">Rivedi grafico</button>
+  <button class="sm-btn primary" id="sm-opt-next">${state.ticker.asset_type === "crypto" ? "Collega exchange" : "Continua"}</button>
+</div></div>`;
+    document.getElementById("sm-opt-review").addEventListener("click", () => go(3));
+    document.getElementById("sm-opt-next").addEventListener("click", () => go(state.ticker.asset_type === "crypto" ? 5 : 6));
+  }
+
+  // ------------------------------------------------------------------
+  // STEP 5 — exchange (real PATCH /api/auth/trading). Skipped for stocks:
+  // place_order_for_signal only executes on the crypto trading exchanges.
+  // ------------------------------------------------------------------
+  function stepExchange() {
+    if (state.ticker.asset_type !== "crypto") { go(6); return; }
+    setTopbar("5/" + TOTAL_STEPS, 5 / TOTAL_STEPS);
+    document.getElementById("sm-steps").innerHTML = `
+<main class="sm-step active">
+  <div class="sm-eyebrow">Passo 5 di ${TOTAL_STEPS}</div>
+  <h1 class="sm-title">Collega il tuo exchange</h1>
+  <p class="sm-sub">Serve solo una chiave API spot con permessi di trading — mai un accesso ai prelievi. Solo spot: la leva è limitata a 1x su tutta l'app.</p>
+  <div class="sm-exch-grid" id="sm-exch-grid"></div>
+  <div class="sm-exch-steps"><ol id="sm-exch-steps"></ol></div>
+  <div class="sm-field"><label>Chiave API</label><input id="sm-api-key" placeholder="••••••••••••••••"></div>
+  <div class="sm-field"><label>Chiave segreta</label><input id="sm-api-secret" type="password" placeholder="••••••••••••••••"></div>
+  <div id="sm-exch-error"></div>
+  <div class="sm-ctabar"><div class="sm-ctabar-inner">
+    <button class="sm-btn ghost" id="sm-back-btn">Indietro</button>
+    <button class="sm-btn primary" id="sm-exch-continue">Continua</button>
+  </div></div>
+</main>`;
+    document.getElementById("sm-back-btn").addEventListener("click", () => go(4));
+    document.getElementById("sm-exch-continue").addEventListener("click", onExchangeContinue);
+    const grid = document.getElementById("sm-exch-grid");
+    TRADING_EXCHANGES.forEach((ex) => {
+      const opt = document.createElement("div");
+      opt.className = "sm-exch-opt" + (state.tradingExchange === ex.id ? " active" : "");
+      opt.innerHTML = `<div class="sm-exch-badge" style="background:${ex.color}">${ex.letter}</div><div style="font-size:12px;font-weight:600;">${ex.name}</div>`;
+      opt.addEventListener("click", () => { state.tradingExchange = ex.id; renderExchGrid(); });
+      grid.appendChild(opt);
+    });
+    renderExchGrid();
+  }
+  function renderExchGrid() {
+    document.querySelectorAll("#simple-mode-root .sm-exch-opt").forEach((opt, i) => opt.classList.toggle("active", TRADING_EXCHANGES[i].id === state.tradingExchange));
+    const ex = TRADING_EXCHANGES.find((e) => e.id === state.tradingExchange);
+    document.getElementById("sm-exch-steps").innerHTML = ex.steps.map((s) => `<li>${esc(s)}</li>`).join("");
+  }
+  async function onExchangeContinue() {
+    const apiKey = document.getElementById("sm-api-key").value.trim();
+    const apiSecret = document.getElementById("sm-api-secret").value.trim();
+    if (!apiKey || !apiSecret) {
+      document.getElementById("sm-exch-error").innerHTML = `<div class="sm-error">Inserisci chiave e secret, oppure torna indietro se vuoi solo l'avviso Telegram senza esecuzione automatica.</div>`;
+      return;
+    }
+    try {
+      await api("/api/auth/trading", {
+        method: "PATCH",
+        body: JSON.stringify({ exchange: state.tradingExchange, api_key: apiKey, api_secret: apiSecret, enabled: true, size_mode: "fixed_usdt", size_value: 50 }),
+      });
+      go(6);
+    } catch (e) {
+      document.getElementById("sm-exch-error").innerHTML = `<div class="sm-error">${esc(e.message)}</div>`;
+      if (e.needsAuth) requireLogin();
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // STEP 6 — review + activate (real sequence of watchlist/archive calls)
+  // ------------------------------------------------------------------
+  function stepReview() {
+    setTopbar("6/" + TOTAL_STEPS, 6 / TOTAL_STEPS);
+    const isCrypto = state.ticker.asset_type === "crypto";
+    document.getElementById("sm-steps").innerHTML = `
+<main class="sm-step active">
+  <div class="sm-eyebrow">Passo 6 di ${TOTAL_STEPS}</div>
+  <h1 class="sm-title">Pronto ad attivare</h1>
+  <p class="sm-sub">Controlla il riepilogo, poi premi Attiva.</p>
+  <div class="sm-review-card">
+    <div class="sm-review-row"><span class="k">Ticker</span><span class="v">${esc(state.ticker.symbol)}</span></div>
+    <div class="sm-review-row"><span class="k">Strategia</span><span class="v">${esc(state.strategy)}</span></div>
+    <div class="sm-review-row"><span class="k">Ottimizzazione</span><span class="v">${state.archiveEntry ? "dall'archivio" : (state.optResult ? (state.optMode === "fast" ? "Rapida" : "Stabile") : "parametri di default")}</span></div>
+    <div class="sm-review-row"><span class="k">Esecuzione</span><span class="v">${isCrypto ? esc(TRADING_EXCHANGES.find((e) => e.id === state.tradingExchange).name) : "solo avviso (nessun exchange)"}</span></div>
+  </div>
+  <div class="sm-explain">${isCrypto
+      ? `Quando la strategia rileva un segnale su <b>${esc(state.ticker.symbol)}</b>, ricevi un avviso Telegram e, se hai collegato le chiavi exchange, l'app esegue automaticamente l'ordine spot secondo i parametri scelti qui. Puoi disattivare in qualsiasi momento dalla watchlist.`
+      : `${esc(state.ticker.symbol)} è un titolo azionario: l'esecuzione automatica è disponibile solo per crypto spot. Attivando riceverai solo l'avviso Telegram quando la strategia genera un segnale.`}</div>
+  <div id="sm-activate-error"></div>
+  <div class="sm-ctabar"><div class="sm-ctabar-inner">
+    <button class="sm-btn ghost" id="sm-back-btn">Indietro</button>
+    <button class="sm-btn primary" id="sm-activate-btn">Attiva strategia</button>
+  </div></div>
+</main>`;
+    document.getElementById("sm-back-btn").addEventListener("click", () => go(isCrypto ? 5 : 4));
+    document.getElementById("sm-activate-btn").addEventListener("click", onActivate);
+  }
+
+  async function onActivate() {
+    const btn = document.getElementById("sm-activate-btn");
+    btn.disabled = true;
+    btn.textContent = "Attivo…";
+    try {
+      let entry;
+      if (state.archiveEntry) {
+        // Single real call: apply-to-alert does watchlist add + params +
+        // strategy toggle server-side, atomically, from the archived
+        // configuration — this is the exact 3-step sequence described below,
+        // already implemented on the backend for the archive path.
+        const res = await api(`/api/archive/${state.archiveEntry.id}/apply-to-alert`, { method: "POST" });
+        entry = res.watchlist_entry;
+      } else {
+        // Real 3-call sequence: add to watchlist if missing, then push any
+        // optimized params, then flip the strategy toggle — the toggle is
+        // what makes the background watcher call place_order_for_signal()
+        // once trading credentials for this exchange are enabled.
+        const existing = await api("/api/watchlist");
+        entry = existing.find((e) => e.symbol.toUpperCase() === state.ticker.symbol.toUpperCase() && e.asset_type === state.ticker.asset_type);
+        if (!entry) {
+          entry = await api("/api/watchlist", {
+            method: "POST",
+            body: JSON.stringify({ symbol: state.ticker.symbol, asset_type: state.ticker.asset_type, exchange: state.ticker.exchange, interval: "1d", on_close: true }),
+          });
+        }
+        if (state.optResult && state.optResult.params) {
+          entry = await api(`/api/watchlist/${entry.id}/strategy_params`, {
+            method: "PATCH",
+            body: JSON.stringify({ strategy_name: state.strategy, params: state.optResult.params }),
+          });
+        }
+        entry = await api(`/api/watchlist/${entry.id}/strategy`, {
+          method: "PATCH",
+          body: JSON.stringify({ strategy_name: state.strategy, enabled: true }),
+        });
+      }
+      state.watchlistEntry = entry;
+      go(7);
+    } catch (e) {
+      document.getElementById("sm-activate-error").innerHTML = `<div class="sm-error">${esc(e.message)}</div>`;
+      btn.disabled = false;
+      btn.textContent = "Attiva strategia";
+      if (e.needsAuth) requireLogin();
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // STEP 7 — listening (real watchlist entry state, not a placeholder)
+  // ------------------------------------------------------------------
+  function stepListening() {
+    setTopbar("", null);
+    const entry = state.watchlistEntry || {};
+    const isListening = (entry.strategies || []).includes(state.strategy);
+    document.getElementById("sm-steps").innerHTML = `
+<main class="sm-step active">
+  <div class="sm-pulse-wrap">
+    <div class="sm-pulse"><div class="core"></div></div>
+    <h1 style="font-size:20px;margin:0;">${isListening ? "Strategia in ascolto" : "Attivazione registrata"}</h1>
+    <p class="sm-muted" style="max-width:38ch;margin-top:8px;"><b>${esc(state.strategy)}</b> è ${isListening ? "attiva" : "in fase di attivazione"} su <b>${esc(state.ticker.symbol)}</b>. Riceverai un avviso Telegram al prossimo segnale${state.ticker.asset_type === "crypto" ? ", e l'ordine partirà da solo se le chiavi exchange sono collegate." : "."}</p>
+    <div class="sm-status-card">
+      <div class="sm-status-row"><span class="k">Stato</span><span class="v"><span class="sm-live-dot"></span>${isListening ? "In ascolto" : "Da verificare"}</span></div>
+      <div class="sm-status-row"><span class="k">Voce watchlist</span><span class="v">${esc(entry.id || "—")}</span></div>
+      <div class="sm-status-row"><span class="k">Timeframe</span><span class="v">${esc(entry.interval || "—")}</span></div>
+    </div>
+  </div>
+  <div class="sm-ctabar"><div class="sm-ctabar-inner"><button class="sm-btn primary" id="sm-restart-btn">Nuova strategia</button></div></div>
+</main>`;
+    document.getElementById("sm-restart-btn").addEventListener("click", () => {
+      Object.assign(state, { step: 0, ticker: null, archiveEntry: null, strategy: null, analysis: null, optResult: null, optJobId: null, watchlistEntry: null, query: "" });
+      go(0);
+    });
+  }
+
+  // ------------------------------------------------------------------
+  // Router
+  // ------------------------------------------------------------------
+  function go(step) {
+    clearTimeout(state.optPollTimer);
+    state.step = step;
+    window.scrollTo(0, 0);
+    if (step === 0) return stepWelcome();
+    if (step === 1) return stepTicker();
+    if (step === 1.5) return stepArchive();
+    if (step === 2) return stepStrategy();
+    if (step === 3) return stepBacktest();
+    if (step === 4) return stepOptimize();
+    if (step === 5) return stepExchange();
+    if (step === 6) return stepReview();
+    if (step === 7) return stepListening();
+  }
+
+  // ------------------------------------------------------------------
+  // Mode toggle + persistence
+  // ------------------------------------------------------------------
+  function setActive(active) {
+    try { localStorage.setItem(LS_KEY, active ? "1" : "0"); } catch (_e) { /* ignore */ }
+    root.classList.toggle("hidden", !active);
+    document.querySelectorAll("header.toolbar, main.cockpit, nav.mobile-nav, footer.disclaimer, #mobile-drawer-backdrop").forEach((elm) => {
+      elm.classList.toggle("sm-force-hidden", active);
+    });
+    if (active) {
+      renderShell();
+      go(state.step || 0);
+    } else {
+      clearTimeout(state.optPollTimer);
+    }
+  }
+
+  function initHideRule() {
+    if (document.getElementById("simple-mode-hide-rule")) return;
+    const style = document.createElement("style");
+    style.id = "simple-mode-hide-rule";
+    style.textContent = ".sm-force-hidden{display:none!important;}";
+    document.head.appendChild(style);
+  }
+
+  toggleBtn.addEventListener("click", () => setActive(root.classList.contains("hidden")));
+
+  injectStyle();
+  initHideRule();
+  let startActive = false;
+  try { startActive = localStorage.getItem(LS_KEY) === "1"; } catch (_e) { /* ignore */ }
+  if (startActive) setActive(true);
+})();
