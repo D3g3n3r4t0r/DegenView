@@ -3810,6 +3810,25 @@ details.issue-card > summary:focus-visible { outline: 2px solid var(--accent); o
   font-size: 11px; color: var(--ink-dim); margin-top: 7px;
   padding-top: 7px; border-top: 1px solid var(--border);
 }
+/* Kraken non ha isolated margin (vedi registry.py sul backend): qui il
+   messaggio cambia colore per non farlo leggere come lo stesso avviso
+   rassicurante che vale per gli altri quattro exchange. */
+.lev-mode-warn { color: var(--danger); }
+
+.futures-risk-note {
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  background: var(--danger-soft);
+  border-radius: 6px;
+  padding: 6px 9px;
+  margin: 6px 0;
+}
+
+.trading-cred-missing {
+  color: var(--danger);
+  font-size: 10px;
+  font-weight: 600;
+}
 
 .futures-quote {
   border: 1px solid var(--border);

@@ -42,7 +42,11 @@ backend/app/
 ├── trading/
 │   ├── executor.py            # dispatch spot (place_order_for_signal) e futures (place_futures_order_for_signal)
 │   ├── binance_exec.py, kucoin_exec.py, kraken_exec.py, coinbase_exec.py, bitstamp_exec.py  # spot
-│   └── binance_futures_exec.py                # futures — solo Binance per ora
+│   ├── binance_futures_exec.py                # implementazione Binance futures (avvolta da futures/binance.py)
+│   └── futures/                # un adattatore per exchange, dietro un'interfaccia comune
+│       ├── base.py             # FuturesAdapter (interfaccia), Position, FuturesCreds
+│       ├── registry.py         # unico posto che decide quali exchange esistono — perimetro UE qui
+│       ├── binance.py, bybit.py, okx.py, bitget.py, kraken.py
 ├── pine/                      # interprete Pine Script custom
 ├── sniper/                    # token sniper DexScreener
 ├── live/                      # WebSocket stream MEXC
@@ -122,56 +126,66 @@ Prototipo navigabile di riferimento (Artifact): «Liquidity Instrument».
 
 ### Operazioni futures — `seed-0027` — **in corso**
 
-Piano completo approvato e scritto (era in
-`/root/.claude/plans/warm-floating-quasar.md`, locale alla sessione che l'ha
-scritto — **non versionato**, quindi il piano vero e proprio non e'
-recuperabile da una chat diversa: quello che segue e' il riassunto che conta).
+Piano originale (fasi 0-4, solo Binance) approvato e scritto in una sessione
+precedente — vedi sotto per dov'e' finito. Principio guida invariato: leva e
+margine sono l'estensione piu' pericolosa possibile per questo sistema —
+isolamento totale dal codice spot, mai una modifica in-place a un modulo
+spot esistente, sempre un modulo nuovo affiancato.
 
-Principio guida: leva e margine sono l'estensione piu' pericolosa possibile
-per questo sistema — isolamento totale dal codice spot, mai una modifica
-in-place a un modulo spot esistente, sempre un modulo nuovo affiancato.
+**Cambio di perimetro (questa sessione)**: Lorenzo ha chiesto futures per
+"tutti gli exchange dove si puo' operare in leva in Europa", non solo
+MEXC/KuCoin come previsto dal piano originale. MiCA/ESMA limitano i derivati
+al retail UE, e non tutti gli exchange gia' collegati per lo spot li offrono
+li': **Coinbase e Bitstamp restano fuori** (niente derivati a leva per il
+retail UE), **MEXC e KuCoin restano fuori** (hanno i futures ma non la
+licenza UE), aggiunti invece **Bybit, OKX, Bitget, Kraken** — tutti con
+licenza per offrire derivati a leva in Europa, insieme a Binance che c'era
+gia'. Deciso senza chiedere conferma esplicita nel corso della sessione:
+Lorenzo ha detto "procedi" dopo aver visto il perimetro proposto.
 
-**Fatto** (fasi 0-4 del piano, solo Binance):
-- Modello dati additivo: `FuturesCredential` (separato da
-  `ExchangeCredential`), `MAX_FUTURES_LEVERAGE` come tetto lato server,
-  campi opzionali su `BacktestTrade`/`BacktestResult` (nessun trade spot
-  esistente cambia).
-- `futures_backtest.py`: leva, margine isolated, liquidazione intrabar con
-  la stessa precedenza dello stop/target esistente, funding ogni 8h.
-- `binance_futures_exec.py`: `/fapi/v1/...`, isolated+leva dichiarate prima
-  di ogni ordine, margine letto per davvero dall'exchange, chiusura solo
-  con ordini `reduceOnly`.
-- `executor.py`: `place_futures_order_for_signal()` separata dallo spot —
-  qui `exit_short` ricompra (short vero, non un noop come nello spot), un
-  flip chiude prima di riaprire.
-- Guardrail lato server: cap di leva applicato al salvataggio credenziali E
-  a ogni ordine, `/api/trading/futures/order` rifiuta senza `confirm:true`,
-  kill switch (`FuturesCredential.enabled`) blocca anche a conferma data,
-  controllo margine pre-trade contro il saldo vero, `/api/trading/futures/quote`
-  per l'anteprima (margine, notional, liquidazione stimata).
-- 24 test nuovi (`test_futures_backtest.py`, `test_binance_futures_exec.py`,
-  `test_futures_trading_api.py`), tutti su trasporti finti — nessuno puo'
-  spendere margine vero. Suite completa verde (388+), nessuna regressione.
+**Fatto**:
+- Fasi 0-4 del piano originale, solo Binance (sessione precedente): modello
+  dati (`FuturesCredential`, `MAX_FUTURES_LEVERAGE`), `futures_backtest.py`
+  (leva/margine isolated/liquidazione intrabar/funding), `binance_futures_exec.py`
+  (`/fapi/v1/...`), guardrail lato server (cap di leva, `confirm:true`
+  obbligatorio, kill switch, controllo margine pre-trade), endpoint
+  `/api/trading/futures/quote` per l'anteprima.
+- **Multi-exchange (questa sessione)**: `app/trading/futures/` — pacchetto
+  nuovo con un'interfaccia comune (`base.py`, classe `FuturesAdapter`, sei
+  metodi) e un registro (`registry.py`) che e' l'unico posto che decide
+  quali exchange esistono. `binance.py` avvolge il modulo esistente senza
+  riscriverlo (zero rischio su cio' che gia' funzionava); `bybit.py`,
+  `okx.py`, `bitget.py`, `kraken.py` sono adattatori nuovi, ciascuno con le
+  sue trappole documentate nel proprio file (firma diversa, quantita' in
+  contratti vs monete su OKX, Kraken senza isolated margin). `executor.py` e
+  `main.py` non nominano piu' un exchange specifico: chiedono l'adattatore
+  al registro. Frontend: select exchange, tetto di leva e avviso
+  isolated/condiviso pilotati da `/api/auth/futures` (non piu' scritti a
+  mano nell'HTML), piu' la UI di configurazione credenziali per i quattro
+  exchange nuovi (prima non esisteva — solo il form d'ordine c'era).
+  Dettaglio tecnico completo in `resolutions.json` sotto `seed-0027`.
+- Fix nello stesso giro: la sezione **Livelli & Indicatori** era diventata
+  irraggiungibile su desktop dopo il ridisegno `seed-0028` (il rail che la
+  apriva e' nascosto, e nessuna voce della sidebar la sostituiva) —
+  segnalazione `e599667e`, ora una voce sidebar propria. Vedi
+  `resolutions.json`.
 
 **Da fare, in quest'ordine**:
-1. **Verifica manuale in Binance Futures testnet** — richiede chiavi API
-   testnet vere di Lorenzo. Bloccante prima di considerare l'esecuzione
-   reale pronta: nessun ordine e' mai stato mandato a un server Binance
-   vero, solo a trasporti finti nei test.
-2. ~~**Frontend**: form leva/margine, anteprima, avviso di liquidazione.~~
-   **Fatto** nel ridisegno (`seed-0028`), area Opera. Nota: e' stato
-   disegnato prima della verifica su testnet, non dopo come previsto qui —
-   Lorenzo ha scelto di procedere sapendolo. Il punto 1 resta bloccante
-   prima di considerare l'esecuzione reale pronta.
-3. **MEXC futures**, poi **KuCoin futures** — solo dopo che Binance e'
-   stabile in produzione da tempo. Kraken/Coinbase/Bitstamp futures restano
-   fuori perimetro (disponibilita'/complessita' non giustificano il rischio
-   ora).
+1. **Verifica manuale in testnet (o importi minimi) su ciascun exchange** —
+   richiede chiavi API vere, anche solo di test. Bloccante prima di fidarsi
+   dell'esecuzione reale: nessun ordine e' mai stato mandato a un server
+   vero su nessuno dei cinque, solo a trasporti finti nei test.
+2. **Non verificato in questa sessione**: niente ambiente Python 3.12
+   disponibile sulla macchina per lanciare `pytest`/`ruff` per davvero — solo
+   controllo sintattico (`py_compile`) e revisione a mano. Da lanciare la
+   suite completa alla prima occasione con l'ambiente giusto.
+3. MEXC e KuCoin restano fuori per perimetro normativo, non per limite
+   tecnico: il registro accoglie un nuovo adattatore con un file piu' una
+   riga in `registry.py`, se la decisione cambiasse.
 
-File coinvolti: `backend/app/models.py`, `backend/app/analysis/futures_backtest.py`,
-`backend/app/analysis/futures_math.py`, `backend/app/trading/binance_futures_exec.py`,
-`backend/app/trading/executor.py`, `backend/app/auth.py`, `backend/app/main.py`,
-i tre file di test sopra, `backend/app/issues.py`, `backend/app/data/resolutions.json`.
+File coinvolti: vedi l'elenco completo in `resolutions.json` sotto `seed-0027`
+(troppo lungo per ripeterlo qui — include tutto `app/trading/futures/`,
+`executor.py`, `main.py`, `auth.py`, i tre file frontend, i test).
 
 ---
 
@@ -215,3 +229,18 @@ chiesto con le sue parole.
   sessione molto piu' vecchia — auth JWT, PR #68, nessuna delle strutture
   attuali) e aggiunta la sua lettura al workflow obbligatorio in
   `CLAUDE.md`.
+- **Futures multi-exchange** (`seed-0027`, continuazione): "i futures devono
+  essere realizzati non per binance, ma per tutti gli exchange dove si puo'
+  effettuare operazioni in leva in europa, procedi" — segnalato che
+  MiCA/ESMA limitano i derivati al retail UE e che non tutti gli exchange
+  gia' collegati li offrono li' (Coinbase/Bitstamp niente derivati UE,
+  MEXC/KuCoin hanno i futures ma non la licenza UE), poi proceduto con
+  Bybit/OKX/Bitget/Kraken accanto a Binance. Nello stesso giro, chiesto
+  anche di guardare i punti aperti in bacheca: trovato e risolto
+  `e599667e` (Livelli & Indicatori irraggiungibile dopo il ridisegno). Poi
+  chiesto di strutturare la repo perche' una chat diversa non debba
+  rileggere tutto — risposta: questo file esisteva gia' per quello, qui
+  aggiornato con lo stato del lavoro invece di ricostruito da zero. Ambiente
+  locale senza Python 3.12: verificata solo la sintassi
+  (`py_compile`), non lanciata la suite pytest/ruff — segnalato sopra come
+  da fare.

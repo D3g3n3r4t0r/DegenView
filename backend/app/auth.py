@@ -211,6 +211,7 @@ def set_futures_credential(
     size_mode: str,
     size_value: float,
     leverage: int,
+    passphrase: str = "",
 ) -> User | None:
     """Modello e file separati da set_trading_credential() apposta — vedi
     FuturesCredential nel piano "Operazioni futures": un bug qui non deve
@@ -226,6 +227,9 @@ def set_futures_credential(
     creds[exchange] = FuturesCredential(
         api_key_enc=_enc(api_key, _SECRET) if api_key else existing.api_key_enc,
         api_secret_enc=_enc(api_secret, _SECRET) if api_secret else existing.api_secret_enc,
+        # Vuota = non cambiare, come per chiave e secret: chi salva solo un
+        # cambio di leva non deve riscrivere tutte le credenziali.
+        passphrase_enc=_enc(passphrase, _SECRET) if passphrase else existing.passphrase_enc,
         enabled=enabled,
         size_mode=size_mode,
         size_value=size_value,
@@ -237,12 +241,19 @@ def set_futures_credential(
     return updated
 
 
-def get_decrypted_futures_credential(user: User, exchange: str) -> tuple[str, str]:
-    """Returns (api_key, api_secret) decrypted. Empty strings if not configured."""
+def get_decrypted_futures_credential(user: User, exchange: str) -> tuple[str, str, str]:
+    """Returns (api_key, api_secret, passphrase) decrypted. Empty strings if
+    not configured. La passphrase resta vuota dove l'exchange non la chiede
+    (Binance, Bybit, Kraken) ed e' obbligatoria dove la chiede (OKX,
+    Bitget) — a saperlo e' l'adattatore, non questo modulo."""
     cred = user.futures_credentials.get(exchange)
     if cred is None:
-        return "", ""
-    return _dec(cred.api_key_enc, _SECRET), _dec(cred.api_secret_enc, _SECRET)
+        return "", "", ""
+    return (
+        _dec(cred.api_key_enc, _SECRET),
+        _dec(cred.api_secret_enc, _SECRET),
+        _dec(cred.passphrase_enc, _SECRET),
+    )
 
 
 def make_session_cookie(user_id: str) -> str:

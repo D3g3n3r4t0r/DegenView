@@ -25,7 +25,7 @@ def client(tmp_path, monkeypatch):
         api_key_enc="a", api_secret_enc="b", enabled=True,
         size_mode="fixed_usdt", size_value=100.0, leverage=5,
     )
-    monkeypatch.setattr(auth, "get_decrypted_futures_credential", lambda u, e: ("key", "secret"))
+    monkeypatch.setattr(auth, "get_decrypted_futures_credential", lambda u, e: ("key", "secret", ""))
     main.app.dependency_overrides[auth.get_current_user] = lambda: user
     with TestClient(main.app) as c:
         yield c
@@ -62,8 +62,10 @@ def test_saving_a_credential_at_the_cap_is_accepted(client):
 
 
 def test_unsupported_exchange_is_rejected_before_touching_credentials(client):
+    # mexc ha i futures ma non e' nel registro: nessuna licenza UE per i
+    # derivati (vedi app/trading/futures/registry.py).
     resp = client.patch("/api/auth/futures", json={
-        "exchange": "kraken", "api_key": "k", "api_secret": "s",
+        "exchange": "mexc", "api_key": "k", "api_secret": "s",
         "enabled": True, "leverage": 1,
     })
     assert resp.status_code == 400
