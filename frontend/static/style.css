@@ -3889,17 +3889,22 @@ details.issue-card > summary:focus-visible { outline: 2px solid var(--accent); o
 /* Distanza dalla liquidazione: una lancetta su un nastro si legge prima
    di un numero in tabella — e' l'unico dato che conta finche' la
    posizione resta aperta. */
-.liq-track { position: relative; height: 26px; margin: 10px 0 4px; }
-.liq-track-bg {
-  position: absolute; left: 0; right: 0; top: 10px; height: 9px; border-radius: 99px;
-  background: linear-gradient(to right,
-    var(--danger) 0%, var(--danger) 22%,
-    var(--warn) 22%, var(--warn) 46%,
-    var(--bull) 46%, var(--bull) 100%);
-  opacity: 0.42;
+.liq-gauge { display: flex; flex-direction: column; align-items: center; margin: 8px 0 2px; }
+.liq-gauge-svg { width: 168px; max-width: 100%; height: auto; }
+.liq-arc { fill: none; stroke-width: 9; stroke-linecap: round; opacity: 0.55; }
+.liq-arc-danger { stroke: var(--danger); }
+.liq-arc-warn { stroke: var(--warn); }
+.liq-arc-bull { stroke: var(--bull); }
+.liq-gauge-needle { stroke: var(--ink); stroke-width: 2.5; stroke-linecap: round; transition: x2 .3s ease, y2 .3s ease; }
+.liq-gauge-hub { fill: var(--ink); }
+.liq-gauge-label {
+  font-family: var(--font-mono); font-size: 10px; text-transform: uppercase;
+  letter-spacing: .06em; margin-top: -6px; font-weight: 600;
 }
-.liq-needle { position: absolute; top: 2px; width: 4px; height: 25px; border-radius: 2px; background: var(--ink); transform: translateX(-50%); }
-.liq-foot { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 10.5px; }
+.liq-gauge-label.bear { color: var(--danger); }
+.liq-gauge-label.warnc { color: var(--warn); }
+.liq-gauge-label.bull { color: var(--bull); }
+.liq-foot { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 10.5px; margin-top: 2px; }
 
 /* ============================================================
    Instrument — impianto di navigazione

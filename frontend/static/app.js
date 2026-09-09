@@ -1841,6 +1841,27 @@
     }
   }
 
+  // Gauge SVG a lancetta per la distanza da liquidazione: semicerchio con
+  // tre settori (danger/warn/bull, stessa soglia del vecchio nastro) e una
+  // lancetta che ruota da -90deg (liquidazione) a +90deg (zona sicura).
+  function renderLiqGauge(safety, distClass) {
+    const angle = -90 + safety * 180;
+    const rad = (angle - 90) * Math.PI / 180;
+    const cx = 60, cy = 54, r = 22;
+    const nx = (cx + r * Math.cos(rad)).toFixed(1);
+    const ny = (cy + r * Math.sin(rad)).toFixed(1);
+    return `<div class="liq-gauge">
+      <svg viewBox="0 0 120 62" class="liq-gauge-svg">
+        <path d="M 8 54 A 52 52 0 0 1 33.6 11.8" class="liq-arc liq-arc-danger" />
+        <path d="M 33.6 11.8 A 52 52 0 0 1 86.4 11.8" class="liq-arc liq-arc-warn" />
+        <path d="M 86.4 11.8 A 52 52 0 0 1 112 54" class="liq-arc liq-arc-bull" />
+        <line x1="${cx}" y1="${cy}" x2="${nx}" y2="${ny}" class="liq-gauge-needle" />
+        <circle cx="${cx}" cy="${cy}" r="4" class="liq-gauge-hub" />
+      </svg>
+      <div class="liq-gauge-label ${distClass}">${distClass === "bear" ? "vicino" : distClass === "warnc" ? "attenzione" : "sicuro"}</div>
+    </div>`;
+  }
+
   function renderPositions(positions) {
     const list = el("positions-list");
     const count = el("positions-count");
@@ -1867,10 +1888,7 @@
         <div class="pos-pnl ${pnl >= 0 ? "bull" : "bear"}">${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}</div>
         <div class="fq-row"><span>Ingresso / mark</span><span>${p.entry_price} → ${p.mark_price}</span></div>
         <div class="fq-row"><span>Quantita / margine</span><span>${p.quantity} · ${p.margin.toFixed(2)} USDT</span></div>
-        <div class="liq-track">
-          <div class="liq-track-bg"></div>
-          <div class="liq-needle" style="left:${(safety * 100).toFixed(1)}%"></div>
-        </div>
+        ${renderLiqGauge(safety, distClass)}
         <div class="liq-foot">
           <span class="bear">liq. ${p.liquidation_price}</span>
           <span class="${distClass}">${dist === null || dist === undefined ? "—" : (dist >= 0 ? "+" : "") + dist.toFixed(1) + "%"}</span>
