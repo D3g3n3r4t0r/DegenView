@@ -4392,8 +4392,15 @@ td {
   }
   .cockpit[data-area="issues"] .right-panel,
   .cockpit[data-area="script"] .right-panel { display: none; }
-  .cockpit[data-area="issues"] .chart-area,
   .cockpit[data-area="script"] .chart-area {
+    flex: 1 1 auto;
+    border-right: none;
+  }
+  /* Nella Bacheca il grafico non serve: si leggono segnalazioni, non prezzi.
+     Via il grafico, la bacheca prende tutta la pagina. */
+  .cockpit[data-area="issues"] .chart-area { display: none; }
+  .cockpit[data-area="issues"] #issues-panel.open {
+    width: auto;
     flex: 1 1 auto;
     border-right: none;
   }
