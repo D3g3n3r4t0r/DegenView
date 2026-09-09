@@ -28,6 +28,7 @@ def _real_lines() -> list[str]:
         "cerco i confini su 5 assi: dove il risultato cambia, non dove cambia il parametro",
         "asse rsi_length: 8 confini → 9 intervalli (70 backtest)",
         "asse bb_mult: 1 confine → 2 intervalli (22 backtest)",  # singolare
+        "asse len: ancora al lavoro — 12 backtest finora",
         "griglia: 9 × 5 × 2 × 8 × 6 = 4320 celle",
         "griglia: 9 × 5 = 45 celle · inerti su questa serie: bb_mult",  # con la coda
         "4320 celle oltre il budget di 400: invece di sorteggiarne 400 le apro per ordine di promessa",
@@ -139,6 +140,29 @@ def test_plateau_py_still_says_the_five_things_the_animation_listens_for():
         "spostamenti casuali di",
         "finalista {rank}",
         "scelto: ",
+        "ancora al lavoro",
     ]
     missing = [n for n in needles if n not in src]
     assert not missing, f"frasi che plateau.py non scrive piu': {missing}"
+
+
+def test_an_axis_still_being_searched_shows_something_instead_of_nothing():
+    """Segnalato dal vivo con uno screenshot: il pannello restava fermo su
+    "asse 0/5" per una quindicina di secondi senza muovere nulla, ne' nel
+    disegno ne' nel log — un asse pesante puo' metterci cosi' tanto prima
+    della sua riga finale. Questo e' il contatore che nel frattempo si vede
+    crescere."""
+    js = _js()
+    assert "axisBusy" in js
+    start = js.index("if (plateauAnim.axisBusy > 0)")
+    body = js[start:start + 900]
+    assert "al lavoro" in body
+
+
+def test_finishing_an_axis_clears_its_own_busy_counter():
+    """Altrimenti il contorno tratteggiato dell'asse appena chiuso resterebbe
+    a schermo mentre il prossimo asse comincia, mostrando un numero vecchio."""
+    js = _js()
+    start = js.index("^asse (.+?): (\\d+) confin")
+    block = js[start:start + 300]
+    assert "plateauAnim.axisBusy = 0" in block

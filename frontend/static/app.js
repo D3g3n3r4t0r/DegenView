@@ -2279,14 +2279,14 @@
   // gia' porta rendimento, trade e quante volte un finalista regge.
   const plateauAnim = {
     canvas: null, ctx: null, raf: null,
-    totalAxes: 0, axes: [], gridCells: 0, budget: 0,
+    totalAxes: 0, axes: [], axisBusy: 0, gridCells: 0, budget: 0,
     openedSoFar: 0, distinctSoFar: 0, openedFinal: 0, distinctFinal: 0,
     finalistsExpected: 0, probeSamples: 0, finalists: [], picked: null,
   };
 
   function plateauAnimReset() {
     Object.assign(plateauAnim, {
-      totalAxes: 0, axes: [], gridCells: 0, budget: 0,
+      totalAxes: 0, axes: [], axisBusy: 0, gridCells: 0, budget: 0,
       openedSoFar: 0, distinctSoFar: 0, openedFinal: 0, distinctFinal: 0,
       finalistsExpected: 0, probeSamples: 0, finalists: [], picked: null,
     });
@@ -2300,6 +2300,13 @@
       plateauAnim.totalAxes = +mm[1];
     } else if ((mm = /^asse (.+?): (\d+) confin\w+ \S+ (\d+) intervall\w+ \((\d+) backtest\)/.exec(m))) {
       plateauAnim.axes.push({ name: mm[1], boundaries: +mm[2], cells: +mm[3], usedBt: +mm[4] });
+      plateauAnim.axisBusy = 0;   // quell'asse e' chiuso, si riparte da zero sul prossimo
+    } else if ((mm = /^asse .+?: ancora al lavoro \S+ (\d+) backtest finora/.exec(m))) {
+      // Un asse pesante puo' metterci decine di secondi prima della riga che
+      // lo chiude: senza questa, il pannello restava fermo su "asse N/tot"
+      // senza dire nulla — sembrava bloccato. Non e' un asse in piu', e'
+      // quanto si e' gia' lavorato su quello ancora aperto.
+      plateauAnim.axisBusy = +mm[1];
     } else if ((mm = /= (\d+) celle(?:\s|$)/.exec(m)) && m.startsWith("griglia:")) {
       plateauAnim.gridCells = +mm[1];
     } else if ((mm = /^(\d+) celle oltre il budget di (\d+):/.exec(m))) {
@@ -2426,6 +2433,25 @@
         ctx.fillText(a.name.length > 10 ? a.name.slice(0, 9) + "…" : a.name, x + w / 2, baseY + 12);
         ctx.textAlign = "left"; ctx.textBaseline = "top";
       });
+      if (plateauAnim.axisBusy > 0) {
+        // L'asse su cui si sta lavorando adesso, prima che la sua riga
+        // finale arrivi: un contorno tratteggiato che cresce a ogni
+        // aggiornamento, cosi' il pannello non resta muto per decine di
+        // secondi mentre un asse pesante finisce di essere mappato.
+        const i = plateauAnim.axes.length;
+        const x = pad + i * ((W - pad * 2) / slots);
+        const h = Math.min(baseY - 34, 16 + plateauAnim.axisBusy * 1.4);
+        ctx.save();
+        ctx.setLineDash([3, 3]);
+        ctx.strokeStyle = T.bull; ctx.lineWidth = 1.3;
+        ctx.strokeRect(x, baseY - h, w, h);
+        ctx.restore();
+        ctx.fillStyle = T.dim; ctx.font = mono(9);
+        ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
+        ctx.fillText(`${plateauAnim.axisBusy} bt`, x + w / 2, baseY - h - 6);
+        ctx.fillText("al lavoro…", x + w / 2, baseY + 12);
+        ctx.textAlign = "left"; ctx.textBaseline = "top";
+      }
       ctx.fillStyle = T.border;
       ctx.fillRect(pad, baseY, W - pad * 2, 1);
     } else if (act === 1) {
