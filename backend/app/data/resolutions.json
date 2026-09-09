@@ -391,5 +391,17 @@
       "frontend/static/style.css",
       "backend/tests/test_plateau_animation.py"
     ]
+  },
+  "seed-0027": {
+    "status": "in corso",
+    "at": 1788945000,
+    "summary": "Piano completo scritto e approvato. Prima fase implementata: motore di backtest a leva, isolato dal motore spot esistente — nessuna esecuzione reale ancora, come vuole il piano.",
+    "detail": "Le fasi 0-2 del piano sono fatte: modello dati additivo (FuturesCredential separato da ExchangeCredential, mai una migrazione automatica da spot; MAX_FUTURES_LEVERAGE come tetto lato server), un nuovo modulo backend/app/analysis/futures_backtest.py — non una modifica di backtest.py — che aggiunge leva, margine isolated, controllo di liquidazione intrabar con la stessa precedenza gia' usata per stop/target (prima del segnale della strategia sulla stessa barra), e accrual del funding ogni 8h. Sette test in test_futures_backtest.py provano: leva 1x economicamente identica allo spot (stesso equity finale, zero liquidazioni), una liquidazione forzata che chiude al prezzo di liquidazione perdendo per intero il margine impegnato, il funding calcolato contro il conto a mano, e il rifiuto di leva fuori dal limite prima ancora di far girare il backtest. Nessun test esistente e' cambiato: 371 passati, la stessa suite di prima piu' i sette nuovi. Restano le fasi 3 (esecuzione reale, un exchange alla volta a partire da Binance Futures) e 4 (guardrail: cap di leva, solo isolated, controllo margine pre-trade, kill switch, conferma esplicita) — nessuna delle due e' cominciata: si parte solo da qui dopo che l'utente ha visto i risultati in backtest.",
+    "files": [
+      "backend/app/models.py",
+      "backend/app/analysis/futures_backtest.py",
+      "backend/tests/test_futures_backtest.py",
+      "backend/app/issues.py"
+    ]
   }
 }

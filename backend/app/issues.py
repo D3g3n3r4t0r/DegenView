@@ -224,6 +224,10 @@ _SEED = [
      "Durante la ricerca stabile, un'animazione che mostri graficamente l'equivalente di "
      "quello che l'algoritmo sta facendo — non serve fedele al dettaglio, basta che sia "
      "bella e minimale.", "bassa"),
+    ("seed-0027", "Operazioni futures: leva, margine, liquidazione",
+     "Introdurre le operazioni futures — completo, accurato e a prova di errore: leva, "
+     "margine isolated, liquidazione intrabar, funding. Prima solo in backtest, esecuzione "
+     "reale solo dopo validazione, exchange per exchange.", "media"),
 ]
 
 
