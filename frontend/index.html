@@ -71,6 +71,17 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3v6.5L4.2 18A2 2 0 006 21h12a2 2 0 001.8-3L15 9.5V3"/><path d="M8 3h8"/><path d="M7.5 14h9"/></svg>
           <span>Lab</span>
         </button>
+        <!-- "Watchlist" (ticker rapidi, tab-content="watchlist") non aveva
+             nessuna voce raggiungibile da desktop dopo il ridisegno: solo il
+             menu mobile "Altro" ci arrivava (altro-watchlist-item). Stesso
+             tipo di buco lasciato da Livelli (seed e599667e), stessa
+             correzione: una voce sidebar propria invece di infilarla dentro
+             Sorveglia, perche' sono due elenchi concettualmente diversi
+             (ticker da tenere d'occhio vs alert configurati). -->
+        <button type="button" class="sidenav-item" data-area="ticker" data-tab-target="watchlist">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17.3 6.2 20.5l1.1-6.5L2.5 9.3l6.5-.9L12 2.5l3 5.9 6.5.9-4.8 4.7 1.1 6.5z"/></svg>
+          <span>Watchlist</span>
+        </button>
         <button type="button" class="sidenav-item" data-area="sorveglia" data-tab-target="alert">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 01-3.4 0"/></svg>
           <span>Sorveglia</span>
