@@ -871,6 +871,12 @@
     activePineIsStrategy: true,
     pineActive: false,
     pineLastResult: null,
+    // I parametri di ESECUZIONE del backtest (capitale, taglia, commissione,
+    // slippage) con cui e' stato applicato l'ultimo risultato del Laboratorio
+    // o dell'archivio — null quando non e' mai stato applicato niente, e in
+    // quel caso il grafico usa i suoi valori "puliti" di sempre (100%
+    // equity, zero costi). Vedi getStrategyAndBacktestQuery().
+    chartBacktestOverride: null,
     availableStrategies: [],
     logScale: false,
     // Kept minimal by default — every structure/liquidity level draws its own
@@ -1994,6 +2000,7 @@
           <div class="arch-actions">
             <button type="button" class="arch-apply" data-id="${e.id}">Applica al grafico</button>
             <button type="button" class="arch-alert" data-id="${e.id}">Attiva l'alert</button>
+            <button type="button" class="arch-export" data-id="${e.id}">⤓ Excel</button>
             <button type="button" class="arch-del" data-id="${e.id}">Elimina</button>
           </div>
           <p class="arch-status hidden" data-status="${e.id}"></p>
@@ -2010,6 +2017,34 @@
       btn.addEventListener("click", () => {
         const entry = items.find((x) => x.id === btn.dataset.id);
         if (entry) applyArchiveEntry(entry);
+      });
+    });
+
+    // Esportare dall'archivio senza dover prima riportare i parametri sul
+    // Laboratorio: il file lo costruisce comunque il server rieseguendo il
+    // backtest sui parametri della voce, non su numeri che qui arriverebbero
+    // solo riportati. Un campo lasciato "di default" (params/backtest_params
+    // vuoti — succede per le voci piu' vecchie, o quelle nate da un alert) si
+    // manda cosi' com'e': il server applica i suoi stessi valori di default,
+    // gli stessi con cui questa voce e' stata misurata la prima volta.
+    list.querySelectorAll(".arch-export").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const entry = items.find((x) => x.id === btn.dataset.id);
+        if (!entry) return;
+        const params = new URLSearchParams();
+        params.set("symbol", entry.symbol);
+        params.set("asset_type", entry.asset_type);
+        params.set("exchange", entry.exchange);
+        params.set("ltf_interval", entry.interval);
+        params.set("strategy_name", entry.strategy_name);
+        Object.entries(entry.params || {}).forEach(([k, v]) => params.set(k, v));
+        Object.entries(entry.backtest_params || {}).forEach(([k, v]) => params.set(k, v));
+        const link = document.createElement("a");
+        link.href = `/api/export/backtest.xlsx?${params.toString()}`;
+        link.rel = "noopener";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
       });
     });
 
@@ -2067,10 +2102,17 @@
   // sopra il grafico di un'altra, e sembrano semplicemente sbagliati. Era la
   // segnalazione: "devono sempre coincidere".
   function applyConfigToChart({ assetType, exchange, symbol, displaySymbol,
-                                interval, strategyName, params }) {
+                                interval, strategyName, params, backtestParams }) {
     if (assetType) state.assetType = assetType;
     if (exchange) state.cryptoExchange = exchange;
     if (symbol) el("ticker-input").value = displaySymbol || symbol;
+
+    // I costi e la taglia con cui e' stato trovato questo risultato vengono
+    // con lui — vedi getStrategyAndBacktestQuery(). Un chiamante che non li
+    // passa proprio (l'archivio, quando la voce non li ha mai registrati)
+    // lascia l'override cosi' com'era invece di azzerarlo: e' meglio
+    // riproporre l'ultimo applicato che tornare in silenzio ai valori puliti.
+    if (backtestParams) state.chartBacktestOverride = { ...backtestParams };
 
     const tfSelect = el("interval-primary");
     if (tfSelect && interval && tfSelect.value !== interval) {
@@ -2102,6 +2144,12 @@
   }
 
   function applyArchiveEntry(entry) {
+    // Le voci vecchie sono state salvate quando l'archivio ignorava ancora i
+    // costi impostati dall'utente (backtest_params arrivava sempre vuoto):
+    // per quelle un oggetto vuoto {} e' onesto, non un difetto — non c'e'
+    // niente da riproporre. Per le nuove, sono i quattro valori veri.
+    const bp = entry.backtest_params && Object.keys(entry.backtest_params).length
+      ? entry.backtest_params : null;
     applyConfigToChart({
       assetType: entry.asset_type,
       exchange: entry.exchange,
@@ -2109,7 +2157,9 @@
       interval: entry.interval,
       strategyName: entry.strategy_name,
       params: entry.params,
+      backtestParams: bp,
     });
+    if (!bp) state.chartBacktestOverride = null;
     runAnalysis(entry.symbol);
   }
 
@@ -2131,7 +2181,12 @@
         ltf_interval: labState.tf,
         strategy_name: labState.strategy,
         params,
-        backtest_params: {},
+        // I quattro campi che l'utente ha davvero impostato, non i default:
+        // altrimenti l'archivio ricalcola un backtest con capitale/taglia/
+        // costi diversi da quello appena mostrato in schermo, e la voce
+        // salvata racconta un risultato che non e' quello che ha convinto a
+        // salvarla.
+        backtest_params: labBacktestParams(),
       }),
     });
     const status = labEl("lab-status");
@@ -2210,6 +2265,257 @@
     pill.classList.remove("hidden");
   }
 
+  // ── La ricerca stabile, disegnata ───────────────────────────────────────────
+  //
+  // Solo per la modalita' "stabile" (plateau_search): e' l'unica che scrive nel
+  // log le cinque fasi di cui parla — confini, griglia, apertura guidata,
+  // scuotimento, scelta. Il log gia' le dice a parole; qui sono le stesse
+  // frasi, lette e disegnate, non un secondo canale dal server. Stilizzata
+  // apposta: il log non manda il punteggio di ogni singola cella, quindi
+  // l'apertura si vede come una barra che si riempie (celle aperte / celle
+  // distinte), non come un terreno con un rilievo — quello richiederebbe il
+  // server a mandare coordinate che oggi non manda, e sarebbe inventarsele.
+  // Lo scuotimento e la scelta invece sono per intero numeri veri: li' il log
+  // gia' porta rendimento, trade e quante volte un finalista regge.
+  const plateauAnim = {
+    canvas: null, ctx: null, raf: null,
+    totalAxes: 0, axes: [], gridCells: 0, budget: 0,
+    openedSoFar: 0, distinctSoFar: 0, openedFinal: 0, distinctFinal: 0,
+    finalistsExpected: 0, probeSamples: 0, finalists: [], picked: null,
+  };
+
+  function plateauAnimReset() {
+    Object.assign(plateauAnim, {
+      totalAxes: 0, axes: [], gridCells: 0, budget: 0,
+      openedSoFar: 0, distinctSoFar: 0, openedFinal: 0, distinctFinal: 0,
+      finalistsExpected: 0, probeSamples: 0, finalists: [], picked: null,
+    });
+  }
+
+  // Le frasi sono quelle scritte da plateau.py — vedi say(...) li' dentro.
+  // Un parametro che ne cambiasse la forma va cambiato in entrambi i posti.
+  function plateauAnimParseLine(m) {
+    let mm;
+    if ((mm = /^cerco i confini su (\d+) assi/.exec(m))) {
+      plateauAnim.totalAxes = +mm[1];
+    } else if ((mm = /^asse (.+?): (\d+) confin\w+ \S+ (\d+) intervall\w+ \((\d+) backtest\)/.exec(m))) {
+      plateauAnim.axes.push({ name: mm[1], boundaries: +mm[2], cells: +mm[3], usedBt: +mm[4] });
+    } else if ((mm = /= (\d+) celle(?:\s|$)/.exec(m)) && m.startsWith("griglia:")) {
+      plateauAnim.gridCells = +mm[1];
+    } else if ((mm = /^(\d+) celle oltre il budget di (\d+):/.exec(m))) {
+      plateauAnim.gridCells = +mm[1];
+      plateauAnim.budget = +mm[2];
+    } else if ((mm = /^provo il centro di (\d+) celle \(enumerate tutte\)/.exec(m))) {
+      plateauAnim.budget = +mm[1];
+    } else if ((mm = /^celle (\d+) \S+ (\d+) configurazioni distinte finora/.exec(m))) {
+      plateauAnim.openedSoFar = +mm[1];
+      plateauAnim.distinctSoFar = +mm[2];
+    } else if ((mm = /^(\d+) configurazioni distinte su (\d+) celle provate/.exec(m))) {
+      plateauAnim.distinctFinal = +mm[1];
+      plateauAnim.openedFinal = +mm[2];
+    } else if ((mm = /ne scuoto (\d+) con (\d+) spostamenti/.exec(m))) {
+      plateauAnim.finalistsExpected = +mm[1];
+      plateauAnim.probeSamples = +mm[2];
+    } else if ((mm = /^finalista (\d+)\/(\d+): regge (\d+) volt\w+ su (\d+) \S+ ([+-][\d.]+)% su (\d+) trade/.exec(m))) {
+      plateauAnim.finalists.push({
+        rank: +mm[1], total: +mm[2], agreeN: +mm[3], agreeTotal: +mm[4],
+        ret: parseFloat(mm[5]), trades: +mm[6],
+      });
+    } else if ((mm = /^scelto: ([+-][\d.]+)% su (\d+) trade, stabile (\d+)% delle volte/.exec(m))) {
+      plateauAnim.picked = { ret: parseFloat(mm[1]), trades: +mm[2], stablePct: +mm[3] };
+    }
+  }
+
+  function plateauAnimFeed(lines) {
+    if (!lines || !lines.length) return;
+    lines.forEach((line) => plateauAnimParseLine(line.m));
+    plateauAnimDraw();
+  }
+
+  function plateauAnimAct() {
+    if (plateauAnim.picked) return 4;
+    if (plateauAnim.finalists.length || plateauAnim.finalistsExpected) return 3;
+    if (plateauAnim.gridCells && !plateauAnim.openedFinal) return 2;
+    if (plateauAnim.gridCells) return 1;
+    return 0;
+  }
+
+  function plateauAnimTheme() {
+    const cs = getComputedStyle(document.documentElement);
+    const g = (n) => cs.getPropertyValue(n).trim();
+    return { ink: g("--ink"), dim: g("--ink-dim"), accent: g("--accent"),
+             bull: g("--bull"), bear: g("--bear"), border: g("--border"),
+             raised: g("--bg-raised") };
+  }
+
+  // Un blocco isometrico a tre facce — sopra chiara, fianco scuro — e' tutto
+  // quello che serve perche' si legga come un cubo invece che come un
+  // rettangolo. Nessuna libreria, nessuna sfumatura: e' la stessa regola
+  // "minimal" del resto del pannello.
+  function plateauDrawBlock(ctx, x, w, baseY, h, color, dark) {
+    const skew = Math.min(w, h) * 0.28;
+    ctx.fillStyle = color;
+    ctx.fillRect(x, baseY - h, w, h);
+    ctx.fillStyle = dark;
+    ctx.beginPath();
+    ctx.moveTo(x + w, baseY - h);
+    ctx.lineTo(x + w + skew, baseY - h - skew);
+    ctx.lineTo(x + w + skew, baseY - skew);
+    ctx.lineTo(x + w, baseY);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x, baseY - h);
+    ctx.lineTo(x + skew, baseY - h - skew);
+    ctx.lineTo(x + w + skew, baseY - h - skew);
+    ctx.lineTo(x + w, baseY - h);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  function plateauShade(hex, amt) {
+    // hex e' un valore CSS qualunque (var risolta) — se non e' #rrggbb lo
+    // restituisce com'e', va bene anche senza scurirlo.
+    const m = /^#([0-9a-f]{6})$/i.exec(hex.trim());
+    if (!m) return hex;
+    const n = parseInt(m[1], 16);
+    const clamp = (v) => Math.max(0, Math.min(255, v));
+    const r = clamp(((n >> 16) & 255) + amt), gg = clamp(((n >> 8) & 255) + amt), b = clamp((n & 255) + amt);
+    return `rgb(${r},${gg},${b})`;
+  }
+
+  function plateauAnimDraw() {
+    const canvas = plateauAnim.canvas;
+    if (!canvas || canvas.classList.contains("hidden")) return;
+    const ctx = plateauAnim.ctx;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const W = canvas.clientWidth || 600, H = canvas.clientHeight || 148;
+    if (canvas.width !== Math.round(W * dpr) || canvas.height !== Math.round(H * dpr)) {
+      canvas.width = Math.round(W * dpr);
+      canvas.height = Math.round(H * dpr);
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    const T = plateauAnimTheme();
+    const pad = 14, baseY = H - 22;
+    const mono = (s, w) => `${w || 400} ${s}px var(--font-mono)`;
+
+    ctx.font = mono(10, 500);
+    ctx.fillStyle = T.dim;
+    ctx.textAlign = "left"; ctx.textBaseline = "top";
+
+    const act = plateauAnimAct();
+
+    if (act === 0) {
+      ctx.fillText(`I confini — asse ${plateauAnim.axes.length}/${plateauAnim.totalAxes || "?"}`, pad, 8);
+      const maxCells = Math.max(1, ...plateauAnim.axes.map((a) => a.cells));
+      const slots = Math.max(plateauAnim.totalAxes, plateauAnim.axes.length, 1);
+      const w = Math.min(46, (W - pad * 2) / slots - 10);
+      plateauAnim.axes.forEach((a, i) => {
+        const x = pad + i * ((W - pad * 2) / slots);
+        const h = 10 + (baseY - 34) * (a.cells / maxCells);
+        plateauDrawBlock(ctx, x, w, baseY, h, T.accent, plateauShade(T.accent, -40));
+        ctx.fillStyle = T.dim; ctx.font = mono(9);
+        ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
+        ctx.fillText(String(a.cells), x + w / 2, baseY - h - 6);
+        ctx.fillText(a.name.length > 10 ? a.name.slice(0, 9) + "…" : a.name, x + w / 2, baseY + 12);
+        ctx.textAlign = "left"; ctx.textBaseline = "top";
+      });
+      ctx.fillStyle = T.border;
+      ctx.fillRect(pad, baseY, W - pad * 2, 1);
+    } else if (act === 1) {
+      ctx.fillText("La griglia", pad, 8);
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.font = mono(22, 700); ctx.fillStyle = T.ink;
+      ctx.fillText(plateauAnim.gridCells.toLocaleString("it-IT") + " celle", W / 2, H / 2 - 8);
+      ctx.font = mono(10); ctx.fillStyle = T.dim;
+      ctx.fillText(plateauAnim.budget
+        ? `budget di ${plateauAnim.budget.toLocaleString("it-IT")} backtest`
+        : "provate tutte", W / 2, H / 2 + 14);
+      ctx.textAlign = "left"; ctx.textBaseline = "top";
+    } else if (act === 2) {
+      ctx.fillText("L'apertura guidata", pad, 8);
+      ctx.textAlign = "right";
+      ctx.fillText(`${plateauAnim.gridCells.toLocaleString("it-IT")} celle · budget `
+        + `${(plateauAnim.budget || plateauAnim.gridCells).toLocaleString("it-IT")}`, W - pad, 8);
+      ctx.textAlign = "left";
+      const budget = plateauAnim.budget || plateauAnim.gridCells || 1;
+      const cols = 40;
+      const opened = plateauAnim.openedSoFar || 0;
+      const distinctFrac = opened ? plateauAnim.distinctSoFar / opened : 0;
+      const cw = (W - pad * 2) / cols, ch = 20;
+      const rowBottom = 84;
+      for (let i = 0; i < cols; i++) {
+        const cellFrac = (i + 0.5) / cols;
+        const isOpen = cellFrac <= opened / budget;
+        const isDistinctish = isOpen && cellFrac <= (opened / budget) * distinctFrac;
+        const fill = isDistinctish ? T.accent : isOpen ? plateauShade(T.accent, 60) : T.raised;
+        const dark = isOpen ? plateauShade(T.accent, -30) : T.border;
+        plateauDrawBlock(ctx, pad + i * cw, cw - 2, rowBottom, ch, fill, dark);
+      }
+      ctx.font = mono(10);
+      ctx.fillStyle = T.ink;
+      ctx.fillText(`${opened.toLocaleString("it-IT")} celle aperte`, pad, rowBottom + 14);
+      ctx.fillStyle = T.accent;
+      ctx.fillText(`${plateauAnim.distinctSoFar.toLocaleString("it-IT")} configurazioni distinte`, pad, rowBottom + 30);
+    } else if (act === 3 || act === 4) {
+      const title = act === 4 ? "La scelta" : "Lo scuotimento";
+      ctx.fillText(title, pad, 8);
+      const list = plateauAnim.finalists;
+      const n = Math.max(list.length, plateauAnim.finalistsExpected, 1);
+      const slotW = (W - pad * 2) / n;
+      const rets = list.map((f) => Math.abs(f.ret));
+      const maxRet = Math.max(1, ...rets);
+      list.forEach((f, i) => {
+        const isPicked = act === 4 && plateauAnim.picked
+          && Math.abs(f.ret - plateauAnim.picked.ret) < 0.05 && f.trades === plateauAnim.picked.trades;
+        const isLast = i === list.length - 1 && act === 3;
+        const x = pad + i * slotW;
+        const w = Math.min(34, slotW - 12);
+        const h = 12 + (baseY - 60) * (Math.abs(f.ret) / maxRet);
+        const color = isPicked ? T.accent : (isLast ? T.ink : T.border);
+        const dark = plateauShade(color === T.border ? "#888888" : color, -40);
+        plateauDrawBlock(ctx, x + (slotW - w) / 2, w, baseY, h, color, dark);
+        // Il cerchio di puntini: verde quanto ha retto, rosso quanto no — sono
+        // i numeri veri dello scuotimento, non una stima.
+        const cx = x + slotW / 2, cy = baseY - h - 14;
+        const dotN = f.agreeTotal || 0;
+        for (let d = 0; d < dotN; d++) {
+          const ang = (d / dotN) * Math.PI * 2 - Math.PI / 2;
+          const dx = cx + Math.cos(ang) * 9, dy = cy + Math.sin(ang) * 9 * 0.55;
+          ctx.beginPath(); ctx.arc(dx, dy, 1.6, 0, 6.2832);
+          ctx.fillStyle = d < f.agreeN ? T.bull : T.bear;
+          ctx.fill();
+        }
+        ctx.font = mono(9); ctx.fillStyle = T.dim;
+        ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
+        ctx.fillText(`${f.ret >= 0 ? "+" : ""}${f.ret.toFixed(0)}%`, cx, baseY + 12);
+        ctx.textAlign = "left"; ctx.textBaseline = "top";
+      });
+      if (act === 4 && plateauAnim.picked) {
+        ctx.font = mono(11, 600); ctx.fillStyle = T.ink;
+        ctx.textAlign = "right"; ctx.textBaseline = "top";
+        ctx.fillText(`stabile ${plateauAnim.picked.stablePct}% delle volte`, W - pad, 8);
+        ctx.textAlign = "left";
+      }
+      ctx.fillStyle = T.border;
+      ctx.fillRect(pad, baseY, W - pad * 2, 1);
+    }
+  }
+
+  function plateauAnimShow(job) {
+    const canvas = el("opt-progress-anim");
+    if (!canvas) return;
+    plateauAnim.canvas = canvas;
+    if (!plateauAnim.ctx) plateauAnim.ctx = canvas.getContext("2d");
+    const isPlateau = job.mode === "plateau";
+    canvas.classList.toggle("hidden", !isPlateau);
+    if (!isPlateau) return;
+    plateauAnimReset();
+    plateauAnimFeed(job.log);
+  }
+
   function openOptProgress(jobId) {
     const job = optJobs.get(jobId);
     if (!job) return;
@@ -2224,6 +2530,7 @@
     const list = el("opt-progress-log");
     list.innerHTML = "";
     appendOptLog(job.log);
+    plateauAnimShow(job);
     el("opt-progress-time").textContent = `${Math.round(job.elapsed || 0)}s`;
     el("opt-progress").classList.remove("hidden", "done", "failed");
     el("opt-progress-stop").classList.toggle("hidden", job.state !== "in corso");
@@ -2288,6 +2595,7 @@
       job.log.push(...(data.log || []));
       if (optViewing === job.id) {
         appendOptLog(data.log || []);
+        if (job.mode === "plateau") plateauAnimFeed(data.log || []);
         el("opt-progress-time").textContent = `${Math.round(job.elapsed)}s`;
       }
       if (data.state === "annullato") {
@@ -3914,12 +4222,18 @@
         : field.type === "select" ? input.value
         : fieldNumber(input, field));
     });
-    // Backtest params: always 100% equity, no fees — the Lab is the place to
-    // experiment; the chart's own backtest always uses clean defaults.
-    params.set("initial_capital", "10000");
-    params.set("qty_pct_of_equity", "100");
-    params.set("commission_pct", "0");
-    params.set("slippage_pct", "0");
+    // Backtest params: puliti per default — 100% equity, zero costi — cosi'
+    // il grafico resta un riferimento stabile quando si sceglie una
+    // strategia dalla toolbar. Ma se l'ultima cosa fatta e' stata "Applica al
+    // grafico" dal Laboratorio o dall'archivio, il grafico deve mostrare
+    // ESATTAMENTE quel backtest — capitale, taglia, commissione, slippage
+    // compresi — non una sua versione ripulita: e' la segnalazione
+    // "i trade continuano a non essere correttamente applicati".
+    const bp = state.chartBacktestOverride;
+    params.set("initial_capital", String(bp ? bp.initial_capital : 10000));
+    params.set("qty_pct_of_equity", String(bp ? bp.qty_pct_of_equity : 100));
+    params.set("commission_pct", String(bp ? bp.commission_pct : 0));
+    params.set("slippage_pct", String(bp ? bp.slippage_pct : 0));
     params.set("stop_loss_pct", "0");
     params.set("take_profit_pct", "0");
     params.set("strategy_name", strategyName);
@@ -5375,6 +5689,10 @@
       e.preventDefault();
       const symbol = el("ticker-input").value.trim();
       if (!symbol) return;
+      // Cercare un ticker a mano e' l'uscita dal contesto di "sto guardando
+      // il risultato che ho applicato": da qui il grafico torna al suo
+      // backtest pulito, come prima che qualcosa venisse applicato.
+      state.chartBacktestOverride = null;
       // No suggestion explicitly picked (e.g. hit Enter right away) — if the
       // typed text exactly matches a suggestion already fetched, use its
       // asset type/exchange instead of falling back to whatever was set last.
@@ -5404,6 +5722,9 @@
     });
 
     el("active-strategy-select").addEventListener("change", () => {
+      // Scegliere una strategia dalla toolbar e' manuale, non "riproponi
+      // quello che ho trovato nel Laboratorio": stessa uscita di sopra.
+      state.chartBacktestOverride = null;
       renderStrategyParamsFields();
       updateOptimizeButtonVisibility();
       if (state.data) runAnalysis(state.data.symbol);
@@ -5669,6 +5990,19 @@
   };
 
   function labEl(id) { return document.getElementById(id); }
+
+  // Gli stessi quattro campi letti da buildLabQuery(), ma come oggetto: e'
+  // quello che "Applica al grafico" porta con se', cosi' il grafico riproduce
+  // esattamente il backtest appena mostrato invece di una sua versione
+  // ripulita.
+  function labBacktestParams() {
+    return {
+      initial_capital: Number(inputNumber(labEl("lab-initial-capital"), 10000, { min: 1 })),
+      qty_pct_of_equity: Number(inputNumber(labEl("lab-qty-pct"), 100, { min: 1, max: 100 })),
+      commission_pct: Number(inputNumber(labEl("lab-commission"), 0, { min: 0 })),
+      slippage_pct: Number(inputNumber(labEl("lab-slippage"), 0, { min: 0 })),
+    };
+  }
 
   function buildLabQuery() {
     const strategyName = labState.strategy || "";
@@ -6178,6 +6512,7 @@
         id: started.job_id,
         symbol,
         strategy: labState.strategy,
+        mode: optMode,
         title: optMode === "plateau" ? "Ricerca stabile in corso" : "Ottimizzazione in corso",
         sub: `${labState.displaySymbol || symbol} · ${labState.strategy}`,
         state: "in corso",
@@ -6309,18 +6644,8 @@
         interval: labState.tf,
         strategyName: labState.strategy,
         params: collectStrategyParams(labEl("lab-params-fields"), labState.strategy),
+        backtestParams: labBacktestParams(),
       });
-      // Sync lab backtest params into the main form so the chart backtest
-      // uses the same capital/equity/commission as the Lab result just shown.
-      const syncField = (name, labId) => {
-        const mainInput = document.querySelector(`[name="${name}"][form="params-form"], #params-form [name="${name}"]`);
-        const labInput = labEl(labId);
-        if (mainInput && labInput) mainInput.value = labInput.value;
-      };
-      syncField("initial_capital", "lab-initial-capital");
-      syncField("qty_pct_of_equity", "lab-qty-pct");
-      syncField("commission_pct", "lab-commission");
-      syncField("slippage_pct", "lab-slippage");
       runAnalysis(labState.symbol);
       // Switch to Backtest tab so user sees the matching result
       document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === "backtest"));
@@ -6473,6 +6798,7 @@
     let relocateTimer = null;
     window.addEventListener("resize", () => {
       resizeAllCharts();
+      plateauAnimDraw();
       clearTimeout(relocateTimer);
       relocateTimer = setTimeout(() => {
         relocateChartSettings();

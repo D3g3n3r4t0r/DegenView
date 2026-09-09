@@ -792,6 +792,12 @@
         <button type="button" id="opt-progress-close" class="opt-progress-close" aria-label="Chiudi">✕</button>
       </div>
       <div id="opt-progress-sub" class="opt-progress-sub"></div>
+      <!-- Solo per la ricerca stabile: le stesse cinque fasi del log, disegnate.
+           Stilizzata apposta - non e' un replay esatto dei punteggi (quelli il
+           log non li manda cella per cella), e' la stessa storia a colpo d'occhio
+           invece che da leggere riga per riga. -->
+      <canvas id="opt-progress-anim" class="opt-progress-anim hidden" width="600" height="220"
+        role="img" aria-label="Le fasi della ricerca stabile: confini degli assi, apertura delle celle, scuotimento dei finalisti, scelta."></canvas>
       <ol id="opt-progress-log" class="opt-progress-log"></ol>
       <div id="opt-progress-foot" class="opt-progress-foot hidden"></div>
     </div>

@@ -362,12 +362,34 @@
   },
   "70a6bedd": {
     "status": "risolto",
-    "at": 1788562571,
-    "summary": "'Applica al grafico' portava solo il pair: ora porta anche timeframe, strategia e i suoi parametri.",
-    "detail": "I trade disegnati sul grafico vengono da un backtest fatto con quattro cose insieme: pair, timeframe, strategia e i parametri di quella strategia. Applicando dal Laboratorio ne cambiava una sola — il pair — e le altre tre restavano quelle del grafico: i trade finivano sopra il grafico di un'altra configurazione, e sembravano semplicemente sbagliati. Ora il passaggio e' uno solo e le porta tutte e quattro, compreso il ridisegno dei campi dei parametri (ogni strategia ha i suoi) e il riallineamento della ruota dei timeframe su mobile. Lo stesso percorso lo usa anche 'Applica al grafico' dall'archivio, che aveva lo stesso difetto piu' uno suo: non impostava nemmeno il timeframe della strategia archiviata. Un test verifica che i due percorsi passino entrambi da li' e che quel punto tocchi tutte e quattro le cose: riapplicare solo una parte fa fallire la suite.",
+    "at": 1788935706,
+    "summary": "Applicare dal Laboratorio ora porta anche capitale, taglia, commissione e slippage — non solo pair/timeframe/strategia. Prima venivano azzerati in silenzio.",
+    "detail": "Il primo giro (quando questa voce era ancora aperta la prima volta) aveva sistemato pair, timeframe e strategia: 'Applica al grafico' ora li porta tutti insieme, ed e' rimasto cosi'. La riapertura diceva 'i trade continuano a non essere applicati correttamente', e cercando sul serio ho trovato il pezzo che mancava: i parametri di ESECUZIONE del backtest — capitale iniziale, quanto capitale per operazione, commissione, slippage. Il grafico li scriveva come letterali fissi (100% equity, zero costi) qualunque cosa il Laboratorio avesse usato — 'il grafico usa sempre valori puliti', diceva il commento nel codice, ed era vero ma non era quello che 'Applica al grafico' prometteva di fare. La riga che avrebbe dovuto sincronizzarli cercava un campo dell'HTML che non esiste piu' da quando la scheda 'Strategia' e' stata tolta dall'interfaccia: cercava sempre a vuoto, e non copiava mai niente. Con una commissione dello 0,06% e taglia al 30% dell'equity — i valori realistici che il Laboratorio suggerisce di default — il rendimento totale del grafico e il P&L di ogni singola operazione finivano diversi da quelli appena mostrati nel Laboratorio, pur avendo (dopo il primo fix) lo stesso pair e la stessa strategia: sembrava ancora 'non applicato bene'. Verificato dal vivo con un backtest a 54 operazioni: prima dava un rendimento diverso applicando; ora il numero e le operazioni coincidono esattamente, cifra per cifra. Ho sistemato anche a monte: salvare nel l'archivio mandava sempre backtest_params vuoti (mai i valori impostati), quindi anche l'archivio ricalcolava con costi diversi da quelli mostrati al salvataggio — ora salva quelli veri, e 'Applica al grafico' dall'archivio li riporta a loro volta. Cercare un ticker a mano, o cambiare strategia dalla barra in alto, riporta il grafico ai suoi valori puliti come prima: quel comportamento resta per chi non sta riproponendo un risultato del Laboratorio.",
     "files": [
-      "backend/tests/test_apply_config.py",
-      "frontend/static/app.js"
+      "frontend/static/app.js",
+      "backend/tests/test_backtest_override.py"
+    ]
+  },
+  "30f3f03f": {
+    "status": "risolto",
+    "at": 1788935706,
+    "summary": "Ogni voce dell'archivio ha ora '⤓ Excel': scarica lo stesso file del Laboratorio senza dover prima riportare i parametri li'.",
+    "detail": "Non serviva un endpoint nuovo — /api/export/backtest.xlsx gia' accetta tutto quello che una voce d'archivio conosce (coppia, exchange, timeframe, strategia, parametri, parametri di backtest). Il pulsante manda la stessa richiesta che gia' manda il Laboratorio, con i valori letti dalla voce salvata invece che dai campi in pagina — e il server rieseguendo il backtest, come sempre: un foglio costruito su quello che il browser afferma sarebbe un foglio di affermazioni. Un campo che la voce non ha mai registrato (le voci piu' vecchie, o quelle nate da un alert acceso dalla watchlist) si manda cosi' com'e', vuoto: il server applica i suoi stessi valori di default, gli stessi con cui quella voce e' stata misurata la prima volta — scriverne uno fisso qui avrebbe prodotto un file con numeri diversi da quelli gia' mostrati in pagina.",
+    "files": [
+      "frontend/static/app.js",
+      "backend/tests/test_archive_export.py"
+    ]
+  },
+  "seed-0026": {
+    "status": "risolto",
+    "at": 1788937222,
+    "summary": "Durante la ricerca stabile il pannello del log ora ha sopra un disegno a blocchi minimale: le stesse cinque fasi del log, viste invece che lette.",
+    "detail": "Cinque atti, gli stessi che la ricerca stabile gia' scrive nel log: i confini che tagliano ogni asse dove il risultato cambia, la griglia di celle, l'apertura guidata, lo scuotimento dei finalisti, la scelta. Non e' un secondo canale dal server: il disegno legge le stesse righe di testo che il log gia' riceve (con espressioni regolari incollate al loro testo esatto — un test nuovo tiene ferma quella corrispondenza), quindi non serve alcuna modifica al backend. Confini e apertura si vedono come un blocco che si alza per ogni asse trovato e una barra che si riempie man mano che le celle vengono aperte (celle aperte / configurazioni distinte, entrambi numeri veri) — non un terreno con un rilievo per cella, perche' il log non manda un punteggio per ogni singola cella e disegnarne uno inventato sarebbe stato prendere in giro chi guarda. Lo scuotimento e la scelta invece sono per intero numeri veri: ogni finalista e' una colonna alta quanto il suo rendimento, con un anello di puntini verdi e rossi che sono esattamente 'quante volte ha retto lo spostamento' — quello il log lo manda gia'. Verificato dal vivo facendo girare due ricerche stabili vere sul server (una da 692 backtest, una da 1367): tutte e cinque le fasi si vedono, coi numeri giusti, fino alla scelta finale. Il pannello resta chiuso — e il disegno non si aggiorna — quando la finestra del log e' chiusa: una ricerca dura minuti, e nessuno deve pagarla in fotogrammi disegnati a vuoto. Solo per la modalita' 'stabile': le altre due non scrivono queste cinque fasi, e il pannello resta invisibile.",
+    "files": [
+      "frontend/index.html",
+      "frontend/static/app.js",
+      "frontend/static/style.css",
+      "backend/tests/test_plateau_animation.py"
     ]
   }
 }

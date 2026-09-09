@@ -3515,6 +3515,13 @@ body {
 @keyframes opt-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .opt-spinner { animation: none; } }
 .opt-progress-sub { padding: 8px 12px 0; color: var(--ink-dim); font-size: 11.5px; }
+.opt-progress-anim {
+  display: block; width: 100%; height: 148px;
+  margin: 8px 0 0;
+  background: var(--bg-raised);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
 .opt-progress-log {
   flex: 1 1 auto;
   overflow: auto;
