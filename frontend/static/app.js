@@ -7153,6 +7153,55 @@
     bindUI();
     bindLabUI();
     bindMobileNav();
+
+  // ── Sidebar ───────────────────────────────────────────────────────────
+  // Unica navigazione su desktop. Non duplica la logica delle tab: le
+  // pilota, cosi' resta un solo posto che decide quale contenuto e' vivo.
+  function setArea(area) {
+    const cockpit = document.querySelector(".cockpit");
+    const item = document.querySelector(`.sidenav-item[data-area="${area}"]`);
+
+    // I drawer (Livelli, Script, Bacheca) sono flyout sopra il grafico:
+    // restano solo dentro Analizza, dove c'e' un grafico su cui contano.
+    const drawerFor = { script: "script-panel", issues: "issues-panel" };
+    if (drawerFor[area]) {
+      openPanel(drawerFor[area]);
+      if (area === "issues") loadIssues();
+      document.querySelectorAll(".sidenav-item").forEach((b) => b.classList.toggle("active", b === item));
+      return;
+    }
+
+    RAIL_PANELS.forEach(([btnId, pid]) => {
+      el(pid).classList.remove("open");
+      el(btnId).classList.remove("active");
+    });
+
+    cockpit.dataset.area = area;
+    document.querySelectorAll(".sidenav-item").forEach((b) => b.classList.toggle("active", b === item));
+
+    const tabTarget = item && item.dataset.tabTarget;
+    if (tabTarget) {
+      document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === tabTarget));
+      document.querySelectorAll(".tab-content").forEach((c) => {
+        c.classList.toggle("active", c.dataset.tabContent === tabTarget);
+      });
+    }
+    resizeAllCharts();
+  }
+
+  function bindSidenav() {
+    document.querySelectorAll(".sidenav-item[data-area]").forEach((btn) => {
+      btn.addEventListener("click", () => setArea(btn.dataset.area));
+    });
+    // Analizza mostra la lettura della struttura nella colonna di destra:
+    // e' il commento al grafico, non una schermata a se'.
+    setArea("analizza");
+    document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === "analisi"));
+    document.querySelectorAll(".tab-content").forEach((c) => {
+      c.classList.toggle("active", c.dataset.tabContent === "analisi");
+    });
+  }
+
     bindRail();
     bindIssues();
     bindTheme();
@@ -7184,6 +7233,7 @@
       });
     }
     bindTabs();
+    bindSidenav();
     bindDrawRail();
     bindMobileDrawTools();
     bindAuth();
