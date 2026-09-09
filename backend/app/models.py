@@ -84,6 +84,13 @@ class BacktestTrade(BaseModel):
     pnl_pct: float
     pnl_abs: float
     equity_after: float
+    # Futures-only fields — None/0 on every spot trade, so existing trades
+    # serialize identically to before these were added.
+    leverage: int | None = None
+    liquidation_price: float | None = None
+    funding_paid: float = 0.0
+    margin_used: float | None = None
+    liquidated: bool = False
 
 
 class BacktestResult(BaseModel):
@@ -106,6 +113,9 @@ class BacktestResult(BaseModel):
     max_consecutive_losses: int | None = None
     ticker_volatility_pct: float | None = None   # ATR(14)/close medio × 100
     oos_trades: list[BacktestTrade] = []          # trade out-of-sample (solo ottimizzazione)
+    # Futures-only: quante posizioni si sono chiuse per liquidazione invece
+    # che per segnale della strategia — 0 su ogni backtest spot.
+    liquidated_count: int = 0
 
 
 class ExchangeCredential(BaseModel):
@@ -117,12 +127,34 @@ class ExchangeCredential(BaseModel):
     size_value: float = 50.0   # USDT amount or percentage (0-100)
 
 
+# Massimo assoluto di leva consentito ovunque nel sistema, controllato
+# lato server indipendentemente da cosa manda il frontend — un form
+# modificabile da devtools non deve poter aggirarlo. Vedi il piano
+# "Operazioni futures" (seed-futures-0001).
+MAX_FUTURES_LEVERAGE = 10
+
+
+class FuturesCredential(BaseModel):
+    """Credenziali futures — modello separato da ExchangeCredential apposta:
+    un bug qui non deve poter toccare l'esecuzione spot, e viceversa."""
+
+    api_key_enc: str = ""
+    api_secret_enc: str = ""
+    passphrase_enc: str = ""
+    enabled: bool = False       # kill switch: spegnibile senza toccare le chiavi
+    size_mode: Literal["fixed_usdt", "pct_balance"] = "fixed_usdt"
+    size_value: float = 50.0
+    leverage: int = 1           # default 1 = economicamente equivalente allo spot
+    margin_mode: Literal["isolated"] = "isolated"  # mai cross: vedi il piano
+
+
 class User(BaseModel):
     id: str
     email: str
     password_hash: str
     telegram_chat_id: str = ""  # user pastes this in from their own DM with the shared bot
     trading_credentials: dict[str, ExchangeCredential] = {}  # key = exchange slug ("binance", "mexc", "kucoin")
+    futures_credentials: dict[str, FuturesCredential] = {}  # key = exchange slug — mai popolato da trading_credentials
     preferences: dict = {}  # last session state: ticker, interval, strategy, layers, etc.
 
 
