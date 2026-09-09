@@ -2659,6 +2659,72 @@ async def add_archive_entry(
     return entry
 
 
+@app.get("/api/archive/{entry_id}/export")
+async def export_archive_entry(entry_id: str, user: User = Depends(auth.get_current_user)) -> dict:
+    """Un file scaricabile che porta 'ogni dettaglio' di una voce d'archivio,
+    per ricrearla identica su un altro account (seed-0031, `1c2880d2`).
+
+    Deliberatamente un file, non un link o un accesso condiviso: chi riceve
+    decide se e quando importarlo, e non c'e' nessun permesso cross-account
+    da disegnare o da poter sbagliare."""
+    entry = archive_store.get(entry_id, user.id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Voce d'archivio non trovata")
+    return {
+        "liquidity_engine_archive_export": 1,
+        "symbol": entry["symbol"], "asset_type": entry["asset_type"],
+        "exchange": entry["exchange"], "interval": entry["interval"],
+        "strategy_name": entry["strategy_name"], "params": entry.get("params") or {},
+        "backtest_params": entry.get("backtest_params") or {},
+        "metrics": entry.get("metrics"), "optimizer": entry.get("optimizer") or {},
+        "note": entry.get("note", ""),
+        "exported_at": int(_time.time()),
+    }
+
+
+class ArchiveImportIn(BaseModel):
+    liquidity_engine_archive_export: int = 0
+    symbol: str
+    asset_type: AssetType = "crypto"
+    exchange: CryptoExchange = "mexc"
+    interval: IntervalChoice = DEFAULT_INTERVALS["ltf"]
+    strategy_name: str
+    params: dict = {}
+    backtest_params: dict = {}
+    metrics: dict | None = None
+    optimizer: dict = {}
+    note: str = ""
+
+
+@app.post("/api/archive/import")
+async def import_archive_entry(req: ArchiveImportIn, user: User = Depends(auth.get_current_user)) -> dict:
+    """Ricrea una voce d'archivio da un file esportato da un altro account.
+
+    Le metriche nel file non sono verificate da chi importa — sono la misura
+    di chi ha esportato, su dati che nel frattempo possono essere cambiati.
+    Restano nella voce (altrimenti l'importazione sarebbe inutile), ma la
+    nota lo dice esplicitamente, e chi vuole un numero suo puo' sempre
+    riapplicare la voce e rigirare il backtest."""
+    if req.strategy_name not in AVAILABLE_STRATEGIES:
+        raise HTTPException(status_code=400, detail=f"Strategia sconosciuta: {req.strategy_name}")
+    symbol = req.symbol.strip()
+    if not symbol:
+        raise HTTPException(status_code=400, detail="Ticker mancante")
+    note = f"Importata da un altro account{': ' + req.note if req.note else ''} — metriche non verificate qui"
+    entry = archive_store.create(
+        owner_id=user.id, symbol=symbol, asset_type=req.asset_type,
+        exchange=req.exchange, interval=req.interval,
+        strategy_name=req.strategy_name, params=req.params,
+        backtest_params=req.backtest_params, source="manuale", note=note[:500],
+        optimizer=req.optimizer,
+    )
+    if req.metrics:
+        archive_store.attach_result(entry["id"], req.metrics)
+    else:
+        archive_store.attach_error(entry["id"], "Nessuna metrica nel file importato")
+    return archive_store.get(entry["id"], user.id)
+
+
 @app.post("/api/archive/{entry_id}/apply-to-alert")
 async def apply_archive_entry_to_alert(
     entry_id: str, user: User = Depends(auth.get_current_user)

@@ -2433,6 +2433,7 @@
             <button type="button" class="arch-apply" data-id="${e.id}">Applica al grafico</button>
             <button type="button" class="arch-alert" data-id="${e.id}">Attiva l'alert</button>
             <button type="button" class="arch-export" data-id="${e.id}">⤓ Excel</button>
+            <button type="button" class="arch-share" data-id="${e.id}">⇪ Condividi</button>
             <button type="button" class="arch-del" data-id="${e.id}">Elimina</button>
           </div>
           <p class="arch-status hidden" data-status="${e.id}"></p>
@@ -2449,6 +2450,28 @@
       btn.addEventListener("click", () => {
         const entry = items.find((x) => x.id === btn.dataset.id);
         if (entry) applyArchiveEntry(entry);
+      });
+    });
+
+    // Condividi: scarica il file che un altro account puo' importare
+    // (1c2880d2) — il server lo costruisce dalla voce vera, non da questi
+    // dati gia' in pagina, cosi' non puo' divergere da cio' che ha davvero.
+    list.querySelectorAll(".arch-share").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        try {
+          const resp = await fetch(`/api/archive/${btn.dataset.id}/export`);
+          if (!resp.ok) throw new Error(`Errore ${resp.status}`);
+          const data = await resp.json();
+          const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `${data.symbol}-${data.strategy_name}.json`.replace(/[^\w.\-]+/g, "_");
+          a.click();
+          URL.revokeObjectURL(url);
+        } catch (err) {
+          alert("Impossibile esportare: " + err.message);
+        }
       });
     });
 
@@ -2634,6 +2657,35 @@
     if (refresh) refresh.addEventListener("click", loadArchive);
     const save = labEl("lab-archive-btn");
     if (save) save.addEventListener("click", saveLabToArchive);
+
+    // Importa: file scaricato da un altro account via "Condividi" — lo si
+    // manda cosi' com'e' al server, che ricrea la voce e segna le metriche
+    // come non verificate qui (1c2880d2).
+    const importBtn = el("archive-import-btn");
+    const importFile = el("archive-import-file");
+    if (importBtn && importFile) {
+      importBtn.addEventListener("click", () => importFile.click());
+      importFile.addEventListener("change", async () => {
+        const file = importFile.files[0];
+        importFile.value = "";
+        if (!file) return;
+        try {
+          const data = JSON.parse(await file.text());
+          const resp = await fetch("/api/archive/import", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data),
+          });
+          if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            throw new Error(err.detail || `Errore ${resp.status}`);
+          }
+          loadArchive();
+        } catch (err) {
+          alert("Impossibile importare: " + err.message);
+        }
+      });
+    }
   }
 
   // ── Ottimizzazione seguita in diretta ──────────────────────────────────────
@@ -6762,6 +6814,15 @@
     // active-strategy-select must be populated before the auto-load below
     // reads its value, or the request goes out with an empty strategy_name.
     await populateStrategySelects();
+    // La watchlist puo' gia' essere stata caricata (checkAuth() la chiama
+    // presto, per mostrare qualcosa prima possibile) con
+    // state.availableStrategies ancora vuoto: ogni riga rendeva solo
+    // timeframe/chiusura, senza i toggle/parametri per strategia — la
+    // segnalazione "mancano le impostazioni per verificare i parametri della
+    // strategia" era questa corsa, non una funzione rimossa. Ridisegnarla
+    // ora che le strategie ci sono la corregge senza aspettare un'altra
+    // azione dell'utente.
+    if (el("watchlist-list")?.children.length) loadWatchlist();
     initLabState(state.availableStrategies || []);
     // Ripristina l'ultima sessione dal server; fallback a BTC/MEXC.
     const prefs = await loadPreferences();
