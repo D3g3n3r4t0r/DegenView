@@ -3960,6 +3960,21 @@ details.issue-card > summary:focus-visible { outline: 2px solid var(--accent); o
   flex-direction: column;
   gap: 7px;
 }
+
+/* .sidenav is the desktop "single navigation" (see the comment above it in
+   index.html) — it duplicates the bottom .mobile-nav below 760px and had no
+   mobile rule at all, so it rendered as a full-height list of text items
+   stacked above the chart, pushing every screen's real content off the
+   bottom of a 375px viewport. This has to come after the unconditional
+   `.sidenav { display: flex }` above (same specificity, source order wins)
+   rather than living in the big ≤760px block earlier in the file, which sits
+   before this rule and would otherwise lose the cascade. The bottom nav is
+   the mobile router; .sidenav-item clicks/`.active` toggling in app.js are
+   unaffected by hiding the container, since it's plain CSS display and not
+   conditional rendering. */
+@media (max-width: 760px) {
+  .sidenav { display: none; }
+}
 .sys-row {
   display: flex;
   align-items: center;
