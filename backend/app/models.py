@@ -135,7 +135,7 @@ class ExchangeCredential(BaseModel):
 # lato server indipendentemente da cosa manda il frontend — un form
 # modificabile da devtools non deve poter aggirarlo. Vedi il piano
 # "Operazioni futures" (seed-futures-0001).
-MAX_FUTURES_LEVERAGE = 10
+MAX_FUTURES_LEVERAGE = 1
 
 
 class FuturesCredential(BaseModel):
