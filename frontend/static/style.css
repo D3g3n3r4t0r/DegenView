@@ -3338,6 +3338,32 @@ body {
 .issue-card.is-risolto { border-left-color: var(--bull, #00c97d); opacity: .72; }
 .issue-card.is-scartato { opacity: .5; }
 
+/* ── Bacheca: board a tre colonne invece della lista piatta ──
+   Stessa card di prima (issue-card, invariata) e stesso form di risposta;
+   qui cambia solo come vengono raggruppate — per stato, in tre colonne.
+   "riaperto" resta nella colonna Aperto (e' ancora da fare), "scartato"
+   in Risolto (e' comunque chiuso). Di default le colonne sono impilate
+   (il pannello di sinistra e' stretto, 260px); solo alla vista larga
+   della bacheca (vedi piu' sotto) stanno una accanto all'altra. */
+.issues-board { display: flex; flex-direction: column; gap: 14px; }
+.board-col { min-width: 0; }
+.board-col-hd {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--ink-dim); margin-bottom: 8px; padding: 0 2px;
+}
+.board-col-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: var(--ink-faint); }
+.board-col-dot.is-aperto { background: var(--bear); }
+.board-col-dot.is-in-corso { background: var(--warn); }
+.board-col-dot.is-risolto { background: var(--bull); }
+.board-count {
+  margin-left: auto; background: var(--bg-sunk); border-radius: 99px;
+  padding: 1px 7px; font-size: 10px; color: var(--ink-faint); font-family: var(--font-mono);
+}
+.board-col-body { display: flex; flex-direction: column; gap: 1px; background: var(--border); border-radius: var(--radius); overflow: hidden; }
+.board-col-body:empty { display: none; }
+.board-col-empty { padding: 10px 12px; margin: 0; background: var(--bg); }
+
 .issue-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .issue-status {
   font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
@@ -4572,13 +4598,14 @@ td {
     flex: 1 1 auto;
     border-right: none;
   }
-  /* Le segnalazioni a colonna larga stanno in griglia, non in fila indiana. */
-  .cockpit[data-area="issues"] .issues-list {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 10px;
-    align-items: start;
+  /* Le segnalazioni a colonna larga stanno in board, tre colonne affiancate
+     invece che impilate — Aperto / In corso / Risolto. */
+  .cockpit[data-area="issues"] .issues-board {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 16px;
   }
+  .cockpit[data-area="issues"] .board-col { flex: 1 1 0; min-width: 0; }
 }
 
 /* ── Striscia di lettura sotto il grafico ── */

@@ -6122,7 +6122,10 @@
       (order[a.status] ?? 9) - (order[b.status] ?? 9)
       || (prio[a.priority] ?? 9) - (prio[b.priority] ?? 9));
 
-    list.innerHTML = sorted.map((it) => {
+    // Stessa card di sempre (stesso <details class="issue-card">, stesso
+    // form di risposta) — solo estratta in una funzione cosi' la si puo'
+    // smistare in tre colonne invece che in un'unica lista piatta.
+    const cardHtml = (it) => {
       const r = it.resolution;
       const when = it.created_at
         ? new Date(it.created_at * 1000).toLocaleDateString("it-IT")
@@ -6161,7 +6164,33 @@
           <p class="irf-status hidden"></p>
         </form>
       </details>`;
-    }).join("");
+    };
+
+    // Board a tre colonne: stessa lista ordinata, smistata per stato invece
+    // che mostrata in fila. "riaperto" resta con "aperto" (e' ancora da
+    // fare), "scartato" con "risolto" (e' comunque chiuso).
+    const columns = [
+      { key: "aperto", label: "Aperto", items: [] },
+      { key: "in-corso", label: "In corso", items: [] },
+      { key: "risolto", label: "Risolto", items: [] },
+    ];
+    const colFor = (status) => {
+      if (status === "in corso") return 1;
+      if (status === "risolto" || status === "scartato") return 2;
+      return 0; // aperto, riaperto
+    };
+    sorted.forEach((it) => columns[colFor(it.status)].items.push(it));
+
+    list.innerHTML = `<div class="issues-board">${columns.map((col) => `
+      <div class="board-col" data-col="${col.key}">
+        <div class="board-col-hd">
+          <span class="board-col-dot is-${col.key}"></span>${col.label}
+          <span class="board-count">${col.items.length}</span>
+        </div>
+        <div class="board-col-body">
+          ${col.items.length ? col.items.map(cardHtml).join("") : '<p class="issues-empty board-col-empty">Niente qui.</p>'}
+        </div>
+      </div>`).join("")}</div>`;
 
     list.querySelectorAll(".issue-reply-form").forEach((form) => {
       form.addEventListener("submit", async (e) => {
