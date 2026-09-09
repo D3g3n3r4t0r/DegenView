@@ -2339,6 +2339,11 @@ body {
     background: var(--bg);
     z-index: 40;
     padding: 0;
+    /* The fixed .disclaimer footer bar (z-index 45) sits on top of these
+       panels near the bottom nav — without this, its last ~30px covered
+       whatever content the panel happened to scroll to (e.g. Opera's
+       Notional/Margine richiesto rows, right above the execute button). */
+    padding-bottom: 30px;
     display: none;
   }
 
@@ -2670,18 +2675,28 @@ body {
 
   /* Compliance: the disclaimer must stay reachable even in the fixed
      app-shell, not disappear because there's no room for a normal footer.
-     Stacked above the chart-strip (which sits right above the bottom
-     nav) so the two never overlap. */
+     Default clears just the bottom nav (52px) -- the extra 60px for the
+     chart-strip only applies on the chart screen itself (see override
+     below); every other screen (Opera, Lab, Sorveglia, Struttura, Script
+     Pine, Bacheca...) was losing an extra unexplained 60px at the bottom
+     to a floating gap, with the disclaimer bar sitting mid-air above it
+     and covering the last row of real content (e.g. Notional/Margine
+     richiesto on Opera). */
   .disclaimer {
     position: fixed;
     left: 0;
     right: 0;
-    bottom: calc(52px + env(safe-area-inset-bottom) + 60px);
+    bottom: calc(52px + env(safe-area-inset-bottom));
     z-index: 45;
     font-size: 8px;
     line-height: 1.25;
     padding: 3px 8px;
     border-top: 1px solid var(--border-strong);
+  }
+  /* Chart screen only: the chart-strip sits between the disclaimer and the
+     bottom nav, so push the disclaimer up to clear it too. */
+  .mobile-chart-strip:not(.hidden) ~ .disclaimer {
+    bottom: calc(52px + env(safe-area-inset-bottom) + 60px);
   }
 }
 
