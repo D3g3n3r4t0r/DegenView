@@ -4368,3 +4368,29 @@ td {
     grid-row: auto;
   }
 }
+
+/* Bacheca e Script non sono sbirciate di sfuggita: si leggono. Aperti dalla
+   sidebar diventano una colonna larga, e il pannello di destra si toglie di
+   mezzo invece di contendere lo spazio a un testo che va letto per intero. */
+@media (min-width: 761px) {
+  .cockpit[data-area="issues"] #issues-panel.open,
+  .cockpit[data-area="script"] #script-panel.open {
+    display: flex;
+    width: clamp(420px, 46vw, 760px);
+    border-right: 1px solid var(--border);
+  }
+  .cockpit[data-area="issues"] .right-panel,
+  .cockpit[data-area="script"] .right-panel { display: none; }
+  .cockpit[data-area="issues"] .chart-area,
+  .cockpit[data-area="script"] .chart-area {
+    flex: 1 1 auto;
+    border-right: none;
+  }
+  /* Le segnalazioni a colonna larga stanno in griglia, non in fila indiana. */
+  .cockpit[data-area="issues"] .issues-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 10px;
+    align-items: start;
+  }
+}

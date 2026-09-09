@@ -164,6 +164,18 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0028", "Ridisegnare il sito: ogni funzione al suo posto",
+     "Il prodotto e' cresciuto per innesti e ogni funzione era disegnata bene da sola, ma nessuna "
+     "parlava la lingua delle altre. Serve un occhio globale che rimetta in discussione dove sta "
+     "ogni cosa, non solo che colore ha.", "alta"),
+    ("seed-0029", "Il backtest non dice a che prezzo entra",
+     "Non era possibile sapere se una candela viene considerata alla chiusura oppure nel momento in "
+     "cui il segnale si verifica. Due rendimenti calcolati con ipotesi diverse non sono confrontabili, "
+     "e l'ipotesi non era scritta da nessuna parte.", "alta"),
+    ("seed-0030", "Le operazioni eseguite non lasciano traccia sul grafico",
+     "Il grafico mostrava cosa la strategia diceva, mai cosa e' successo davvero: guardando la serie "
+     "non si poteva rispondere alla domanda \"quella volta sono entrato o no?\". Ogni operazione, "
+     "manuale o automatica, deve restare segnata.", "alta"),
     ("seed-0001", "Bug grafico sui trade del backtest", "", "media"),
     ("seed-0002", "Salvare il backtest in database quando si attiva un alert",
      "Una volta attivato l'alert di una strategia bisogna poter accedere al backtesting e salvarlo, "
