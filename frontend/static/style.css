@@ -4394,3 +4394,31 @@ td {
     align-items: start;
   }
 }
+
+/* ── Striscia di lettura sotto il grafico ── */
+.chart-stats { display: flex; border-top: 1px solid var(--border); background: var(--bg-panel); flex-shrink: 0; }
+.cs-cell { flex: 1; padding: 8px 12px; border-right: 1px solid var(--border); min-width: 0; }
+.cs-cell:last-child { border-right: none; }
+.cs-k { display: block; font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 3px; }
+.cs-v { font-family: var(--font-mono); font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* ── Confluenze: il punteggio come barra ── */
+.confluence-list > li { display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.confluence-list > li:last-child { border-bottom: none; }
+.cz-range { font-family: var(--font-mono); font-size: 11px; color: var(--ink-dim); }
+.cz-bar { grid-column: 1; height: 4px; border-radius: 99px; background: var(--bg-sunk); overflow: hidden; }
+.cz-bar i { display: block; height: 100%; background: var(--violet); border-radius: 99px; }
+.cz-tf { grid-column: 2; grid-row: 3; font-family: var(--font-mono); font-size: 9.5px; color: var(--violet); }
+
+/* ── Sorveglia a colonne: le sezioni si affiancano invece di impilarsi in
+   una pila lunga due schermate. Le colonne del testo tengono insieme
+   titolo e lista perche' un titolo orfano in fondo a una colonna non dice
+   piu' a cosa si riferisce. ── */
+@media (min-width: 1100px) {
+  .cockpit[data-area="sorveglia"] #alert-authenticated { column-count: 2; column-gap: 22px; }
+  .cockpit[data-area="sorveglia"] #alert-authenticated > * { break-inside: avoid; }
+  .cockpit[data-area="sorveglia"] #alert-authenticated > .section-title-row { break-after: avoid; }
+}
+@media (min-width: 1600px) {
+  .cockpit[data-area="sorveglia"] #alert-authenticated { column-count: 3; }
+}
