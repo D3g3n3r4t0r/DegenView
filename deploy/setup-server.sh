@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Prepara un server Ubuntu 24.04 appena creato a ospitare il sistema.
+# Prepara un server Ubuntu (24.04 o piu recente) appena creato a ospitare il sistema.
 #
 # Da eseguire UNA VOLTA SOLA, come root, sul server nuovo:
 #
@@ -59,13 +59,28 @@ ufw allow 443/tcp >/dev/null
 ufw --force enable >/dev/null
 
 log "SSH: solo chiave, niente password"
-sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
-sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config
-# Su Ubuntu 24.04 la configurazione vera puo' stare in un frammento che
-# rimette la password a "yes": senza questo, la riga sopra non ha effetto.
+# sshd tiene il PRIMO valore che incontra, non l'ultimo, e i frammenti si
+# leggono in ordine alfabetico. Su Ubuntu cloud c'e' gia' un
+# 50-cloud-init.conf che dice "PasswordAuthentication yes": un file 99-
+# arriverebbe troppo tardi e non avrebbe alcun effetto. Da qui il nome 00-.
 mkdir -p /etc/ssh/sshd_config.d
-printf 'PasswordAuthentication no\nPermitRootLogin prohibit-password\n' > /etc/ssh/sshd_config.d/99-hardening.conf
-systemctl reload ssh || systemctl reload sshd
+{
+	echo 'PasswordAuthentication no'
+	echo 'PermitRootLogin prohibit-password'
+	echo 'KbdInteractiveAuthentication no'
+} > /etc/ssh/sshd_config.d/00-hardening.conf
+# E si spegne anche dove qualcun altro l'ha gia' accesa.
+grep -rl "PasswordAuthentication" /etc/ssh/sshd_config.d/ 2>/dev/null | while read -r f; do
+	[ "$f" = "/etc/ssh/sshd_config.d/00-hardening.conf" ] && continue
+	sed -i 's/^PasswordAuthentication.*/PasswordAuthentication no/' "$f"
+done
+sshd -t   # meglio accorgersene qui che dopo, senza modo di rientrare
+# Dalla 25.10 SSH e' attivato dal socket: ssh.service non e' un'unita' viva e
+# "reload ssh" fallisce. Con set -e quel fallimento fermava tutto il resto
+# dello script: swap e aggiornamenti automatici non venivano mai configurati,
+# e nessuno se ne accorgeva perche' lo script sembrava finito.
+systemctl restart ssh.socket 2>/dev/null || systemctl reload ssh 2>/dev/null || systemctl reload sshd 2>/dev/null || true
+sshd -T | grep -E "^passwordauthentication" || true
 
 log "fail2ban"
 systemctl enable --now fail2ban
