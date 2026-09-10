@@ -164,6 +164,10 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0037", "Durante un deploy il sito mostra un errore grezzo",
+     "Quando c'e' un deploy in corso vorrei che chi si collega veda un avviso invece di un errore, "
+     "cosi' non sembra che il sito sia rotto.",
+     "media"),
     ("seed-0036", "Il grafico non proietta il prezzo corrente sull'asse",
      "Serve la linea del prezzo attuale che arriva fino all'asse con l'etichetta, come su TradingView, "
      "su ogni grafico.",
