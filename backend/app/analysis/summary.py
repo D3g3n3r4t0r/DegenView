@@ -1,3 +1,4 @@
+import math
 from typing import Literal
 
 from app.models import AnalysisSummary, Candle, ConfluenceZone, IndicatorSeries, LiquidityLevel, TimeframeAnalysis
@@ -6,6 +7,23 @@ Bias = Literal["bullish", "bearish", "neutral"]
 
 _BIAS_IT = {"bullish": "rialzista", "bearish": "ribassista", "neutral": "neutrale"}
 _TF_LABEL = {"htf": "HTF", "mtf": "MTF", "ltf": "LTF"}
+
+
+def _fmt_price(x: float) -> str:
+    # Plain-language text for non-quants: never scientific notation (that's what
+    # ".4g" gave us for 5+ digit prices like BTC), and Italian punctuation
+    # (punto per le migliaia, virgola per i decimali) to match the rest of the app.
+    if x == 0:
+        s = "0,00"
+    elif abs(x) >= 1:
+        s = f"{x:,.2f}"
+        s = s.replace(",", "\0").replace(".", ",").replace("\0", ".")
+    else:
+        # Small prices (e.g. a memecoin at 0.00001142) need enough decimals to
+        # show a few significant digits instead of rounding straight to 0,00.
+        decimals = max(2, -int(math.floor(math.log10(abs(x)))) + 2)
+        s = f"{x:.{decimals}f}".replace(".", ",")
+    return s
 
 
 def determine_bias(levels: list[LiquidityLevel]) -> Bias:
@@ -76,7 +94,7 @@ def _long_term_context(current_price: float, htf_analysis: TimeframeAnalysis) ->
         else:
             zone = "equilibrio"
         lines.append(
-            f"Prezzo al {pct:.0f}% del range strutturale HTF ({low:.4g}–{high:.4g}) — zona di {zone}."
+            f"Prezzo al {pct:.0f}% del range strutturale HTF ({_fmt_price(low)}–{_fmt_price(high)}) — zona di {zone}."
         )
 
     zone_types = ("order_block", "fvg", "eqh", "eql")
@@ -88,12 +106,12 @@ def _long_term_context(current_price: float, htf_analysis: TimeframeAnalysis) ->
         lvl = max(below, key=lambda l: (l.price_high + l.price_low) / 2)  # noqa: E741
         mid = (lvl.price_high + lvl.price_low) / 2
         dist_pct = (mid - current_price) / current_price * 100
-        lines.append(f"Livello HTF non mitigato più vicino sotto: {lvl.label} a {mid:.4g} ({dist_pct:+.1f}%).")
+        lines.append(f"Livello HTF non mitigato più vicino sotto: {lvl.label} a {_fmt_price(mid)} ({dist_pct:+.1f}%).")
     if above:
         lvl = min(above, key=lambda l: (l.price_high + l.price_low) / 2)  # noqa: E741
         mid = (lvl.price_high + lvl.price_low) / 2
         dist_pct = (mid - current_price) / current_price * 100
-        lines.append(f"Livello HTF non mitigato più vicino sopra: {lvl.label} a {mid:.4g} ({dist_pct:+.1f}%).")
+        lines.append(f"Livello HTF non mitigato più vicino sopra: {lvl.label} a {_fmt_price(mid)} ({dist_pct:+.1f}%).")
 
     return lines
 
@@ -126,13 +144,13 @@ def build_summary(
         z = top_zones[0]
         parts.append(
             f"Zona di confluenza più rilevante ({'/'.join(t.upper() for t in z.timeframes)}) "
-            f"tra {z.price_low:.4g} e {z.price_high:.4g}: {z.label}."
+            f"tra {_fmt_price(z.price_low)} e {_fmt_price(z.price_high)}: {z.label}."
         )
     parts.append(f"Gap non mitigati attivi su tutti i timeframe: {unmitigated_gaps}.")
     if nearest_above is not None:
-        parts.append(f"Prossima zona di liquidità sopra il prezzo corrente: {nearest_above:.4g}.")
+        parts.append(f"Prossima zona di liquidità sopra il prezzo corrente: {_fmt_price(nearest_above)}.")
     if nearest_below is not None:
-        parts.append(f"Prossima zona di liquidità sotto il prezzo corrente: {nearest_below:.4g}.")
+        parts.append(f"Prossima zona di liquidità sotto il prezzo corrente: {_fmt_price(nearest_below)}.")
 
     indicator_readout: list[str] = []
     for tf_key in ("htf", "mtf", "ltf"):

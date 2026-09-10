@@ -342,7 +342,7 @@
       <div class="tabs">
         <button type="button" class="tab active" data-tab="backtest">Backtest</button>
         <button type="button" class="tab" data-tab="watchlist">Watchlist</button>
-        <button type="button" class="tab" data-tab="alert">Alert</button>
+        <button type="button" class="tab" data-tab="alert">Sorveglia</button>
         <button type="button" class="tab" data-tab="opera">Opera</button>
         <button type="button" class="tab" data-tab="analisi">Analisi</button>
         <button type="button" class="tab hidden" id="balances-tab-btn" data-tab="saldi">Saldi</button>
@@ -537,10 +537,10 @@
           <ul id="favorite-rows" class="wl-rows"></ul>
           <p id="favorite-empty" class="wl-empty hidden">
             <span class="wl-empty-icon">☆</span><br />
-            Nessun ticker salvato.<br />Aggiungine uno per passare da un grafico all'altro con un clic.
+            Nessun ticker salvato.<br />Aggiungine uno per passare da un grafico all'altro con un clic, e da qui attivi anche alert automatici e ordini automatici sulle strategie.
           </p>
 
-          <p class="wl-hint">Clicca un ticker per caricarlo nel grafico. Il pallino <b>●</b> indica che hai un alert Telegram attivo su quel ticker — gestiscilo dalla tab <b>Alert</b>.</p>
+          <p class="wl-hint">Clicca un ticker per caricarlo nel grafico. Il pallino <b>●</b> indica che hai un alert Telegram attivo su quel ticker — gestiscilo dalla tab <b>Sorveglia</b>.</p>
         </div>
       </div>
 
@@ -683,7 +683,7 @@
               <div class="manual-order-form futures-order-form">
                 <div class="mo-row">
                   <div class="mo-field">
-                    <label class="mo-label">Exchange</label>
+                    <label class="mo-label" for="futures-exchange">Exchange</label>
                     <!-- Le opzioni le scrive renderFuturesExchangeOptions() da
                          /api/auth/futures: l'elenco degli exchange futures
                          vive nel registro backend, non qui — un exchange
@@ -691,7 +691,7 @@
                     <select id="futures-exchange" class="mo-select"></select>
                   </div>
                   <div class="mo-field mo-field-grow">
-                    <label class="mo-label">Pair</label>
+                    <label class="mo-label" for="futures-symbol">Pair</label>
                     <div class="mo-pair-field">
                       <input type="text" id="futures-symbol" class="mo-input" placeholder="es. BTCUSDT" autocomplete="off" />
                       <ul id="futures-symbol-suggestions" class="suggestions hidden"></ul>
@@ -708,7 +708,7 @@
                      in un campo lo racconta dopo. -->
                 <div class="lev-block">
                   <div class="lev-head">
-                    <span class="mo-label">Leva</span>
+                    <label class="mo-label" for="futures-leverage">Leva</label>
                     <span id="futures-lev-val" class="lev-val">3×</span>
                     <span class="lev-spacer"></span>
                     <span id="futures-lev-cap" class="lev-cap">tetto server 1×</span>
@@ -727,7 +727,7 @@
 
                 <!-- Solo per gli exchange con needs_passphrase (OKX, Bitget). -->
                 <div id="futures-passphrase-field" class="mo-field hidden">
-                  <label class="mo-label">Passphrase</label>
+                  <label class="mo-label" for="futures-passphrase">Passphrase</label>
                   <input type="password" id="futures-passphrase" class="mo-input" placeholder="lascia vuoto per non cambiare" autocomplete="off" />
                 </div>
 
@@ -790,7 +790,7 @@
                 <!-- Exchange + Pair -->
                 <div class="mo-row">
                   <div class="mo-field">
-                    <label class="mo-label">Exchange</label>
+                    <label class="mo-label" for="manual-exchange">Exchange</label>
                     <select id="manual-exchange" class="mo-select">
                       <option value="mexc">MEXC</option>
                       <option value="binance">Binance</option>
@@ -801,7 +801,7 @@
                     </select>
                   </div>
                   <div class="mo-field mo-field-grow">
-                    <label class="mo-label">Pair</label>
+                    <label class="mo-label" for="manual-symbol">Pair</label>
                     <div class="mo-pair-field">
                       <input type="text" id="manual-symbol" class="mo-input" placeholder="es. BTCUSDT" autocomplete="off" />
                       <ul id="manual-symbol-suggestions" class="suggestions hidden"></ul>
@@ -1077,7 +1077,7 @@
     <button type="button" class="mobile-nav-btn" data-mobile-target="alert">
       <svg class="mobile-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/>
-      </svg>Alert
+      </svg>Sorveglia
     </button>
     <button type="button" class="mobile-nav-btn" data-mobile-target="altro">
       <svg class="mobile-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">

@@ -1,5 +1,87 @@
 {
   "_README": "Scritto da Claude, versionato in git, distribuito col deploy. Le chiavi sono gli id delle segnalazioni. Non modificare a mano dall'app: verrebbe sovrascritto al deploy successivo.",
+  "seed-0040": {
+    "status": "risolto",
+    "at": 1789069000,
+    "summary": "--bull scurito da #0b8f68 a #0a835f: il contrasto del bottone APRI LONG in tema chiaro passa da 4,08:1 a 4,75:1, sopra la soglia AA. Tema scuro gia' a posto (9,51:1), non toccato.",
+    "detail": "Calcolato con la formula WCAG relative luminance. Il colore resta chiaramente verde/rialzista, solo un grado piu' scuro.",
+    "files": [
+      "frontend/static/style.css"
+    ]
+  },
+  "seed-0041": {
+    "status": "risolto",
+    "at": 1789069100,
+    "summary": "Il pallino LIVE ora ha un'eccezione mirata dentro prefers-reduced-motion: cambia colore ogni 2,4s invece di pulsare, cosi' resta distinguibile 'vivo' da 'fermo' senza essere un'animazione decorativa.",
+    "detail": "La regola globale che azzera tutte le @keyframes per accessibilita' lasciava il pallino fisso acceso, indistinguibile da un feed morto. La nuova regola vince per specificita' del selettore (.live-dot batte *) e usa un cambio di background-color, non opacity/movimento.",
+    "files": [
+      "frontend/static/style.css"
+    ]
+  },
+  "seed-0042": {
+    "status": "risolto",
+    "at": 1789069200,
+    "summary": "Aggiunta _fmt_price() in summary.py: niente piu' notazione scientifica, punteggiatura italiana, decimali adattivi per i prezzi piccoli.",
+    "detail": "Le 6 occorrenze di :.4g (che per un prezzo a 5+ cifre come BTC producevano notazione scientifica) sono sostituite da una funzione che sceglie i decimali in base alla grandezza del numero — 2 decimali fissi sopra 1, abbastanza cifre significative sotto 1 (una memecoin a 0,00001142 non si arrotonda piu' a 0,00). Due test nuovi coprono i due casi.",
+    "files": [
+      "backend/app/analysis/summary.py",
+      "backend/tests/test_summary_price_format.py"
+    ]
+  },
+  "seed-0043": {
+    "status": "risolto",
+    "at": 1789069300,
+    "summary": "Le 6 label dei form Opera (Exchange, Pair, Leva, Passphrase, futures e spot) ora hanno for= collegato all'id del controllo — uno screen reader le associa correttamente.",
+    "detail": "'Leva' era uno <span>, non una <label>: convertito. Tutte le altre riusano gli id gia' presenti sui controlli, nessun id nuovo necessario.",
+    "files": [
+      "frontend/index.html"
+    ]
+  },
+  "seed-0044": {
+    "status": "risolto",
+    "at": 1789069400,
+    "summary": "Testo residuo 'Alert' corretto in 'Sorveglia' nella tab-bar mobile, nel bottone tab desktop e nell'hint della watchlist.",
+    "detail": "Tre punti trovati per lo stesso motivo: il nome della tab e' cambiato in Sorveglia col ridisegno (seed-0028) ma il testo visibile in tre punti era rimasto com'era. Attributi data-* usati da app.js non toccati, solo il testo a schermo.",
+    "files": [
+      "frontend/index.html"
+    ]
+  },
+  "seed-0045": {
+    "status": "risolto",
+    "at": 1789069500,
+    "summary": "Lo stato vuoto della watchlist ora dice anche che da li' si attivano alert e ordini automatici, non solo lo switch fra grafici.",
+    "detail": "Una frase in piu', non un paragrafo nuovo.",
+    "files": [
+      "frontend/index.html"
+    ]
+  },
+  "seed-0046": {
+    "status": "risolto",
+    "at": 1789069600,
+    "summary": "Il gate di regime ora ha un tooltip per ciascuna sigla (VR, z, p, H) e una frase che incrocia VR e p-value per dire se la direzione osservata e' reale o solo rumore.",
+    "detail": "Prima le quattro sigle comparivano nude mentre Sharpe e PBO nello stesso pannello avevano gia' una spiegazione discorsiva. Il VR da solo, senza guardare la significativita' (p-value), non basta a concludere nulla — la nuova frase incrocia i due: 'vera direzione' solo se il VR e' lontano da 1 di almeno 0,1 E il p-value e' sotto 0,05.",
+    "files": [
+      "frontend/static/app.js"
+    ]
+  },
+  "seed-0047": {
+    "status": "risolto",
+    "at": 1789069700,
+    "summary": "I chip Sharpe e Profit factor hanno ora un title che spiega cosa significano in linguaggio semplice.",
+    "detail": "",
+    "files": [
+      "frontend/static/app.js"
+    ]
+  },
+  "seed-0048": {
+    "status": "risolto",
+    "at": 1789069800,
+    "summary": "Sotto il selettore '% saldo' nell'ordine spot manuale ora compare il saldo libero, per MEXC e KuCoin (riusando /api/balances, gia' usato dalla tab Saldi). Per gli altri quattro exchange dice esplicitamente che il saldo non e' disponibile li', invece di tacere.",
+    "detail": "/api/balances oggi copre solo MEXC e KuCoin (credenziali server, non per-exchange arbitrario): estenderlo a Binance/Kraken/Coinbase/Bitstamp richiederebbe un endpoint nuovo — rimandato, e' un allargamento di scope, non un fix. Verificato che l'account di test rientra nell'allowlist balance_visible_emails che gia' protegge questo endpoint.",
+    "files": [
+      "frontend/static/app.js"
+    ]
+  },
   "seed-0038": {
     "status": "risolto",
     "at": 1789068000,

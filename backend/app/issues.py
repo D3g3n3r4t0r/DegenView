@@ -164,6 +164,15 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0040", "Bottone leva sotto la soglia di contrasto", "Il bottone APRI LONG aveva un contrasto di 4,08:1, sotto la soglia AA di 4,5:1 richiesta per il testo.", "media"),
+    ("seed-0041", "Pallino LIVE invisibile con animazioni ridotte", "Con 'riduci le animazioni' attivo nel sistema, il pallino che dice se il feed prezzi e' vivo restava fisso acceso.", "media"),
+    ("seed-0042", "Prezzi in notazione scientifica nel testo di analisi", "Il riepilogo struttura scriveva prezzi tipo 7.672e+04 invece di un numero leggibile.", "media"),
+    ("seed-0043", "Label dei form di trading senza collegamento accessibile", "I campi di Opera (Exchange, Pair, Leva, Passphrase) avevano etichette visive non collegate ai controlli.", "media"),
+    ("seed-0044", "Testi e nomi vecchi rimasti dopo il ridisegno", "La tab-bar mobile e alcuni testi dicevano ancora 'Alert' invece di 'Sorveglia'.", "bassa"),
+    ("seed-0045", "Watchlist vuota non spiega cosa si puo' fare da li'", "Lo stato vuoto della watchlist non menzionava che da li' si attivano anche alert e ordini automatici.", "bassa"),
+    ("seed-0046", "Il gate di regime (VR/z/p/H) non si spiega da solo", "Le sigle del gate di regime comparivano senza spiegazione, mentre Sharpe e PBO nello stesso pannello si' — e VR da solo, senza il p-value, non basta a concludere niente.", "media"),
+    ("seed-0047", "Chip Sharpe e Profit factor senza spiegazione", "I due numeri comparivano colorati ma senza dire cosa significano a chi non e' un quant.", "bassa"),
+    ("seed-0048", "'% saldo' nell'ordine spot ordina alla cieca", "Scegliendo la taglia come percentuale del saldo, il saldo vero non si vedeva da nessuna parte.", "media"),
     ("seed-0038", "Ordine spot manuale senza conferma",
      "L'ordine spot in Opera partiva al primo click, senza anteprima ne' conferma, a differenza dei futures.",
      "alta"),
