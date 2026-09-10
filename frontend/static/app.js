@@ -1976,7 +1976,7 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email, password }),
         });
-        const body = await resp.json();
+        const body = await readJson(resp);
         if (!resp.ok) {
           errorEl.textContent = body.detail || "Errore, riprova.";
           errorEl.classList.remove("hidden");
@@ -1988,7 +1988,7 @@
         closeAuthModal();
         if (!appStarted) startApp();
       } catch (err) {
-        errorEl.textContent = "Errore di rete.";
+        errorEl.textContent = err.message || "Errore di rete.";
         errorEl.classList.remove("hidden");
       }
     });
@@ -2551,7 +2551,12 @@
               + `${data.strategy_name}, ${n ? n + " parametri archiviati applicati" : "parametri di default"}`, "ok");
           loadWatchlist();
         } catch (err) {
-          say("✗ Errore di rete", "error");
+          // readJson() alza un errore che nomina stato e corpo della risposta
+          // (un 502 di Caddy, una pagina di login, un HTML qualsiasi). Scriverlo
+          // qui e' l'unica differenza fra "il server ha risposto male" e "il
+          // browser non e' arrivato al server": scartarlo lasciava un "Errore
+          // di rete" che non si puo' diagnosticare.
+          say("✗ " + (err.message || "Errore di rete"), "error");
         } finally {
           btn.disabled = false;
           btn.textContent = prev;
