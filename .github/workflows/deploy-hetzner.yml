@@ -61,6 +61,11 @@ jobs:
             git reset --hard origin/main
             cd deploy
             docker compose up -d --build
+            # Il Caddyfile e' montato come volume: compose non vede che e'
+            # cambiato e lascia Caddy con la configurazione vecchia. E'
+            # successo davvero — le intestazioni di sicurezza nuove non sono
+            # arrivate in produzione finche' non l'ho riavviato a mano.
+            docker compose restart caddy
             # Le immagini vecchie riempiono i 40 GB del disco in qualche
             # decina di deploy: qui si buttano subito, non quando il disco
             # e' pieno e il sito non riparte.
