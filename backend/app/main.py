@@ -151,8 +151,22 @@ def backtest_interval_for(ltf_interval: str) -> str:
     return _BACKTEST_MIN_INTERVAL
 
 
+async def _no_results() -> list:
+    """Segnaposto per la ricerca quando le azioni sono spente: la gather
+    vuole comunque qualcosa da attendere."""
+    return []
+
+
 def get_provider(asset_type: AssetType, exchange: CryptoExchange = "mexc") -> DataProvider:
     if asset_type != "crypto":
+        if not settings.stocks_enabled:
+            # Meglio dirlo qui, una volta, che lasciare che fallisca piu'
+            # avanti con "chiave TwelveData mancante" — un errore che parla
+            # di una chiave quando il problema e' che le azioni sono spente.
+            raise HTTPException(
+                status_code=400,
+                detail="Le azioni sono disattivate: questo sistema opera solo su crypto (USDT/USDC).",
+            )
         return twelvedata_provider
     if exchange == "binance":
         return binance_provider
@@ -744,7 +758,8 @@ async def search_symbols(query: str = Query(..., min_length=1, max_length=20)) -
     # upfront "stock vs crypto" toggle. The user picks the asset from results
     # that already say which market/exchange it's on.
     stock_res, mexc_res, kucoin_res = await asyncio.gather(
-        _safe_search(twelvedata_provider, query, "stock", "stock"),
+        _safe_search(twelvedata_provider, query, "stock", "stock")
+        if settings.stocks_enabled else _no_results(),
         _safe_search(mexc_provider, query, "crypto", "mexc"),
         _safe_search(kucoin_provider, query, "crypto", "kucoin"),
     )

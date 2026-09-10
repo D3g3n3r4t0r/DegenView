@@ -525,7 +525,10 @@
             <button type="submit" title="Aggiungi alla watchlist">+</button>
           </form>
 
-          <div class="asset-toggle small" id="favorite-filter">
+          <!-- Le azioni sono spente (settings.stocks_enabled): un filtro fra
+               due categorie quando ne esiste una sola non filtra niente. Gli
+               elementi restano nel DOM perche' app.js ci si aggancia. -->
+          <div class="asset-toggle small hidden" id="favorite-filter">
             <button type="button" data-favorite-filter="all" class="wl-asset-btn active">Tutti</button>
             <button type="button" data-favorite-filter="stock" class="wl-asset-btn">Azioni</button>
             <button type="button" data-favorite-filter="crypto" class="wl-asset-btn">Crypto</button>
@@ -579,9 +582,9 @@
 
             <details class="wl-options-details">
               <summary>Opzioni — asset, exchange, timeframe, chiusura candela</summary>
-              <div class="asset-toggle small">
-                <button type="button" data-watchlist-asset="stock" class="wl-asset-btn active">Azioni</button>
-                <button type="button" data-watchlist-asset="crypto" class="wl-asset-btn">Crypto</button>
+              <div class="asset-toggle small hidden">
+                <button type="button" data-watchlist-asset="stock" class="wl-asset-btn">Azioni</button>
+                <button type="button" data-watchlist-asset="crypto" class="wl-asset-btn active">Crypto</button>
               </div>
               <select id="watchlist-exchange" class="hidden">
                 <option value="mexc">MEXC</option>
@@ -983,9 +986,9 @@
         <button type="button" id="mts-close-btn" class="mts-close">Chiudi</button>
       </div>
       <div class="mts-tabs">
-        <button type="button" class="mts-tab active" data-filter="all">Tutti</button>
-        <button type="button" class="mts-tab" data-filter="stock">Azioni</button>
-        <button type="button" class="mts-tab" data-filter="crypto">Crypto</button>
+        <button type="button" class="mts-tab active hidden" data-filter="all">Tutti</button>
+        <button type="button" class="mts-tab hidden" data-filter="stock">Azioni</button>
+        <button type="button" class="mts-tab hidden" data-filter="crypto">Crypto</button>
       </div>
     </div>
     <ul id="mts-list" class="mts-list"></ul>
