@@ -1,5 +1,19 @@
 {
   "_README": "Scritto da Claude, versionato in git, distribuito col deploy. Le chiavi sono gli id delle segnalazioni. Non modificare a mano dall'app: verrebbe sovrascritto al deploy successivo.",
+  "seed-0034": {
+    "status": "risolto",
+    "at": 1788995300,
+    "summary": "Non bastava filtrare i risultati: lo sniper e' costruito per cercare lanci, e chi cerca lanci trova meme coin. Cambiato cosa entra nell'archivio, non solo cosa ne esce.",
+    "detail": "Le cause erano tre, tutte a monte del filtro. Un agente interrogava Pump.fun ogni cinque minuti, ed e' un lanciatore di meme coin. Le soglie d'ingresso (capitalizzazione minima 1.000 $, liquidita' 500 $, eta' fino a 30 giorni) descrivono esattamente quell'universo. E il tetto di capitalizzazione a 15 milioni escludeva attivamente i progetti seri, che stanno sopra. Ora, con le meme coin spente (nuovo default, interruttore sniper_memecoins_enabled): l'agente Pump.fun non parte, il tetto sparisce, e in lettura si applica una seconda soglia molto piu' alta (app/sniper/quality.py). Un token la supera in due modi: perche' un exchange centralizzato lo ha gia' quotato — la verifica l'ha fatta qualcun altro — oppure perche' ha eta' (30 giorni minimo), liquidita' (250.000 $), capitalizzazione (5 milioni), volume 24h (100.000 $) e un sito del progetto. Il controllo sul nome viene per primo e batte anche la quotazione: DOGE e' quotato ovunque e resta una meme coin. In senso opposto e' prudente: 'ape' e 'cat' contano solo come parole intere, cosi' Aptos e Catalyst non vengono buttati. Otto test coprono i casi, compreso quello che conta davvero: una meme coin con fondamentali da progetto vero, che solo il nome tradisce.",
+    "files": [
+      "backend/app/sniper/quality.py",
+      "backend/app/sniper/agents.py",
+      "backend/app/sniper/scanner.py",
+      "backend/app/config.py",
+      "backend/app/main.py",
+      "backend/tests/test_sniper_quality.py"
+    ]
+  },
   "seed-0033": {
     "status": "risolto",
     "at": 1788995200,

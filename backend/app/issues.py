@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0034", "Lo sniper propone meme coin invece di progetti seri",
+     "Voglio vedere solo crypto legittime, o quantomeno progetti seri: le meme coin non mi interessano.",
+     "alta"),
     ("seed-0032", "Il tema non viaggiava davvero con l'account",
      "Il frontend mandava 'theme' a PUT /api/preferences ma l'allowlist del backend non lo includeva: "
      "il valore veniva scartato in silenzio e il tema restava legato al browser, non all'account.",
