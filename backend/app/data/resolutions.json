@@ -1,5 +1,14 @@
 {
   "_README": "Scritto da Claude, versionato in git, distribuito col deploy. Le chiavi sono gli id delle segnalazioni. Non modificare a mano dall'app: verrebbe sovrascritto al deploy successivo.",
+  "seed-0049": {
+    "status": "risolto",
+    "at": 1789071000,
+    "summary": "Il pulsante Salva del pannello futures usava { once: true } su un contenitore che non viene mai ricreato, presumendo per errore che lo fosse: al primo salvataggio fallito (es. leva sopra il tetto server, o una passphrase mancante su OKX/Bitget) il listener si autodistruggeva senza essere rimpiazzato, e ogni click successivo restava silenzioso.",
+    "detail": "renderFuturesCredentials() riscrive solo l'innerHTML del contenitore #futures-credentials-list, il nodo resta lo stesso; il rebind del listener avveniva solo dentro il ramo 'salvataggio riuscito' di loadFuturesCredentials(), quindi un fallimento lo consumava per il resto della sessione senza sostituirlo. Stesso difetto sul toggle 'Attivo' (evento change). Corretto legando entrambi gli handler una volta sola con un flag su dataset, indipendente da quante volte il markup interno viene rigenerato — non serve piu' che il salvataggio riesca perche' il pulsante continui a rispondere.",
+    "files": [
+      "frontend/static/app.js"
+    ]
+  },
   "seed-0040": {
     "status": "risolto",
     "at": 1789069000,
