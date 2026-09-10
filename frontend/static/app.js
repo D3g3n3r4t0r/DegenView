@@ -1406,6 +1406,57 @@
     });
   }
 
+  // "% saldo" senza mostrare il saldo ordina alla cieca: l'utente non sa a
+  // quanti USDT corrisponde finche' l'ordine non e' gia' partito. Riusiamo
+  // /api/balances (la stessa fonte della tab Saldi), che oggi copre solo
+  // MEXC e KuCoin: per gli altri quattro exchange lo diciamo esplicitamente
+  // invece di lasciar credere che il silenzio sia un numero pari a zero.
+  const MANUAL_BALANCE_EXCHANGES = new Set(["mexc", "kucoin"]);
+
+  function ensureManualBalanceHint() {
+    let hint = el("manual-balance-hint");
+    if (hint) return hint;
+    const row = document.querySelector(".mo-size-mode-row");
+    if (!row) return null;
+    hint = document.createElement("p");
+    hint.id = "manual-balance-hint";
+    hint.style.cssText = "font-size:12px;margin:6px 0 0;color:var(--ink-dim);";
+    row.insertAdjacentElement("afterend", hint);
+    return hint;
+  }
+
+  async function updateManualBalanceHint() {
+    const hint = ensureManualBalanceHint();
+    if (!hint) return;
+    const mode = document.querySelector('input[name="mo-size-mode"]:checked')?.value;
+    if (mode !== "pct_balance") { hint.classList.add("hidden"); return; }
+    hint.classList.remove("hidden");
+    const exchange = el("manual-exchange")?.value;
+    if (!MANUAL_BALANCE_EXCHANGES.has(exchange)) {
+      hint.style.color = "var(--warn)";
+      hint.textContent = "Saldo non disponibile qui per questo exchange.";
+      return;
+    }
+    hint.style.color = "var(--ink-dim)";
+    hint.textContent = "Saldo libero: caricamento…";
+    try {
+      const resp = await fetch("/api/balances");
+      if (!resp.ok) throw new Error("bad status");
+      const body = await resp.json();
+      const acct = body[exchange];
+      const usdt = acct?.balances?.find((b) => b.asset === "USDT");
+      if (usdt) {
+        hint.textContent = `Saldo libero: ${usdt.total.toLocaleString("it-IT", { maximumFractionDigits: 2 })} USDT`;
+      } else {
+        hint.style.color = "var(--warn)";
+        hint.textContent = "Nessun saldo USDT su questo exchange.";
+      }
+    } catch (_) {
+      hint.style.color = "var(--warn)";
+      hint.textContent = "Saldo non disponibile (errore di rete).";
+    }
+  }
+
   function bindManualOrderUI() {
     let activeSide = "BUY";
     bindManualPairAutocomplete();
@@ -1478,6 +1529,7 @@
       r.addEventListener("change", () => {
         syncSliderUnit();
         updateManualConfirmSummary(); invalidateManualConfirm();
+        updateManualBalanceHint();
       });
     });
 
@@ -1493,7 +1545,9 @@
     });
     el("manual-exchange")?.addEventListener("change", () => {
       updateManualConfirmSummary(); invalidateManualConfirm();
+      updateManualBalanceHint();
     });
+    updateManualBalanceHint();
     el("manual-symbol")?.addEventListener("input", () => {
       updateManualConfirmSummary(); updateManualExecuteState(); invalidateManualConfirm();
     });
@@ -7116,11 +7170,31 @@
       + `${ok ? "✓ Regime compatibile" : "⚠ Regime non compatibile"}</div>`);
     bits.push(`<div class="lab-regime-reason">${escapeHtml(r.reason || "")}</div>`);
     const stats = [];
-    if (r.variance_ratio != null) stats.push(`VR ${r.variance_ratio.toFixed(3)}`);
-    if (r.vr_z != null) stats.push(`z ${r.vr_z >= 0 ? "+" : ""}${r.vr_z.toFixed(2)}`);
-    if (r.vr_p_one_sided != null) stats.push(`p ${r.vr_p_one_sided.toFixed(4)}`);
-    if (r.hurst != null) stats.push(`H ${r.hurst.toFixed(3)}`);
+    if (r.variance_ratio != null) {
+      stats.push(`<span title="Variance ratio: quanto la varianza dei rendimenti su piu' periodi si allontana da quella di una passeggiata aleatoria. 1.0 = random walk.">VR ${r.variance_ratio.toFixed(3)}</span>`);
+    }
+    if (r.vr_z != null) {
+      stats.push(`<span title="Punteggio z del VR: quante deviazioni standard e' lontano da 1 (random walk).">z ${r.vr_z >= 0 ? "+" : ""}${r.vr_z.toFixed(2)}</span>`);
+    }
+    if (r.vr_p_one_sided != null) {
+      stats.push(`<span title="P-value one-sided: probabilita' di vedere questo VR (o piu' estremo) se la serie fosse davvero una passeggiata aleatoria. Sotto 0.05 e' considerato significativo.">p ${r.vr_p_one_sided.toFixed(4)}</span>`);
+    }
+    if (r.hurst != null) {
+      stats.push(`<span title="Esponente di Hurst: sopra 0.5 indica persistenza (trend), sotto 0.5 inversione, 0.5 e' random walk.">H ${r.hurst.toFixed(3)}</span>`);
+    }
     if (stats.length) bits.push(`<div class="lab-regime-stats">${stats.join(" · ")}</div>`);
+    // Il VR da solo non basta: e' la combinazione con il p-value che dice se
+    // la direzione osservata e' reale o solo rumore campionato.
+    if (r.variance_ratio != null && r.vr_p_one_sided != null) {
+      const vr = r.variance_ratio;
+      const p = r.vr_p_one_sided;
+      const farFromOne = Math.abs(vr - 1) >= 0.1;
+      const significant = p < 0.05;
+      const regimeVerdict = (farFromOne && significant)
+        ? `VR ${vr < 1 ? "sotto" : "sopra"} 1 in modo significativo (p ${p.toFixed(4)}): la serie mostra una vera direzione, non solo rumore.`
+        : `VR vicino a 1 o non significativo (p ${p.toFixed(4)}): la serie si comporta come una passeggiata aleatoria, non si vede una direzione affidabile.`;
+      bits.push(`<div class="lab-regime-sub">${regimeVerdict}</div>`);
+    }
     if (det != null) {
       bits.push(`<div class="lab-regime-det ${det ? "ok" : "warn"}">`
         + (det
@@ -7426,8 +7500,8 @@
     let chipsHtml = `
       <div><div class="chip-lbl">Win rate</div><div class="chip-val ${bt.win_rate_pct >= 50 ? "pos" : "neg"}">${wr}</div></div>
       <div><div class="chip-lbl">Drawdown</div><div class="chip-val neg">${dd}</div></div>
-      <div><div class="chip-lbl">Prof. factor</div><div class="chip-val">${pf}</div></div>`;
-    if (sharpe !== null) chipsHtml += `<div><div class="chip-lbl">Sharpe</div><div class="chip-val ${parseFloat(sharpe) >= 1 ? "pos" : ""}">${sharpe}</div></div>`;
+      <div><div class="chip-lbl">Prof. factor</div><div class="chip-val" title="Quanto si guadagna sui trade vincenti rispetto a quanto si perde su quelli perdenti: sopra 1 vuol dire che il sistema e' in utile complessivo.">${pf}</div></div>`;
+    if (sharpe !== null) chipsHtml += `<div><div class="chip-lbl">Sharpe</div><div class="chip-val ${parseFloat(sharpe) >= 1 ? "pos" : ""}" title="Rendimento rispetto al rischio preso: sopra 1 e' considerato buono, sotto 0 significa perdere rischiando.">${sharpe}</div></div>`;
     if (consec !== null) chipsHtml += `<div><div class="chip-lbl">Max loss streak</div><div class="chip-val neg">${consec}</div></div>`;
     labEl("lab-stat-chips").innerHTML = chipsHtml;
     labEl("lab-result-block").classList.remove("hidden");

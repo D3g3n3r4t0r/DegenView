@@ -21,7 +21,7 @@
   --accent: #0b8f68;
   --accent-soft: rgba(11, 143, 104, 0.10);
   --accent-ink: #ffffff;
-  --bull: #0b8f68;
+  --bull: #0a835f;
   --bull-soft: rgba(11, 143, 104, 0.14);
   --bear: #cf3a2a;
   --bear-soft: rgba(207, 58, 42, 0.12);
@@ -4690,6 +4690,23 @@ td {
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
   }
+
+  /* Eccezione mirata: il pallino LIVE non decora, dice "il feed prezzi e'
+     vivo". Azzerato come tutto il resto diventa indistinguibile da un feed
+     morto con il pallino rimasto acceso. Qui vince sulla regola globale
+     sopra (stessa !important, selettore piu' specifico di "*") con un
+     cambio di colore lento: non e' "movimento", e' un segnale di stato. */
+  .live-dot {
+    animation-name: live-pulse-reduced;
+    animation-duration: 2.4s !important;
+    animation-timing-function: ease-in-out;
+    animation-iteration-count: infinite !important;
+  }
+}
+
+@keyframes live-pulse-reduced {
+  0%, 100% { background-color: var(--bull); }
+  50% { background-color: var(--bull-soft); }
 }
 
 /* ── entrata dei pannelli ──────────────────────────────────────────── */
