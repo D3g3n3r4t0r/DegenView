@@ -12,3 +12,6 @@ desktop-app/src-tauri/target/
 desktop-app/src-tauri/binaries/
 backend/uvicorn.log
 backend/data/
+
+# Segreti del deploy self-hosted
+deploy/.env
