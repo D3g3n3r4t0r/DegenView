@@ -26,8 +26,22 @@
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "SAMEORIGIN"
 		Referrer-Policy "strict-origin-when-cross-origin"
+		# Niente fotocamera, microfono, posizione o portafogli: questa pagina
+		# non ne ha bisogno, e dichiararlo impedisce a uno script iniettato di
+		# chiederli al posto nostro.
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+		# Da dove puo' arrivare il codice che gira qui dentro. Un XSS che
+		# riuscisse a entrare non potrebbe comunque mandare i dati altrove:
+		# connect-src limita le chiamate all'origine stessa, e form-action
+		# impedisce di spedire un modulo a un dominio esterno.
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'self'; form-action 'self'; base-uri 'self'; object-src 'none'"
 		-Server
 	}
+
+	# Nessuno deve poter leggere il diario degli accessi o file nascosti
+	# finiti li' per sbaglio.
+	@nascosti path /.* /*/.*
+	respond @nascosti 404
 
 	# Le ricerche lunghe non devono essere tagliate dal proxy: una stabile
 	# su Lorenzo puo' durare piu' di dieci minuti, e un timeout piu' corto

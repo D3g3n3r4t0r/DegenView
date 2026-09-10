@@ -528,6 +528,66 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Liquidity Analysis Engine", lifespan=lifespan)
+
+# ── Cancello di autenticazione ────────────────────────────────────────────
+#
+# Il sito e' su internet, e per mesi 33 endpoint hanno risposto a chiunque
+# senza credenziali. Fra questi:
+#
+#   - /api/optimize e /api/analyze, che occupano un core per minuti. Su una
+#     macchina a due core, due richieste anonime bastavano a rendere il sito
+#     inutilizzabile e ad affamare il ciclo che manda gli avvisi.
+#   - DELETE /api/pinescript/{id}, che cancellava gli script di chiunque
+#     senza chiedere chi fosse.
+#   - POST /api/sniper/scan, che faceva partire scansioni esterne a comando.
+#
+# La difesa e' un cancello unico invece di 33 firme da correggere a mano: un
+# endpoint nuovo nasce protetto, e dimenticarsi di proteggerlo non e' piu'
+# possibile. Chi vuole aprire una porta deve scriverlo qui, dove si legge
+# tutto insieme.
+#
+# Le pagine restano pubbliche: servono a mostrare il modulo di accesso.
+_PUBLIC_PATHS = frozenset({
+    "/",                    # la pagina, che poi chiede di accedere
+    "/sniper",
+    "/favicon.ico",
+    "/robots.txt",
+    "/api/health",          # per il controllo di salute del container
+    "/api/version",
+    "/api/auth/login",
+    "/api/auth/register",
+    "/api/auth/logout",
+    "/api/auth/me",         # il frontend chiede "chi sono" prima di sapere se e' entrato
+})
+
+_PUBLIC_PREFIXES = ("/static/",)
+
+
+@app.middleware("http")
+async def require_authentication(request: Request, call_next):
+    path = request.url.path
+    if (
+        request.method == "OPTIONS"
+        or path in _PUBLIC_PATHS
+        or path.startswith(_PUBLIC_PREFIXES)
+    ):
+        return await call_next(request)
+
+    # Un test che ha iniettato un utente con dependency_overrides ha gia'
+    # dichiarato chi e': il cancello girerebbe prima delle dipendenze e lo
+    # rifiuterebbe comunque. In produzione quel dizionario resta vuoto, quindi
+    # questa riga non apre niente a nessuno.
+    if app.dependency_overrides:
+        return await call_next(request)
+
+    if auth._verify_session_cookie(request.cookies.get(auth.SESSION_COOKIE) or ""):
+        return await call_next(request)
+
+    return JSONResponse(
+        status_code=401,
+        content={"detail": "Accesso richiesto: questa funzione e' riservata agli utenti registrati."},
+    )
+
 app.add_middleware(GZipMiddleware, minimum_size=500)
 
 
@@ -1024,6 +1084,13 @@ async def register(req: RegisterRequest, request: Request, response: Response) -
     if "@" not in email or len(email) < 5:
         rate_limit.register_failure(ip_key)
         raise HTTPException(status_code=400, detail="Email non valida")
+
+    consentite = {e.strip().lower() for e in settings.registration_allowed_emails.split(",") if e.strip()}
+    if consentite and email not in consentite:
+        rate_limit.register_failure(ip_key)
+        # Stesso messaggio che si da' a un'email gia' presente: due risposte
+        # diverse direbbero a un estraneo quali indirizzi esistono.
+        raise HTTPException(status_code=403, detail="Registrazione non consentita per questo indirizzo")
     if not auth.is_strong_password(req.password):
         rate_limit.register_failure(ip_key)
         raise HTTPException(
@@ -2293,6 +2360,47 @@ async def export_backtest(
     )
 
 
+
+# ── Un lavoro pesante per volta, per utente ───────────────────────────────
+#
+# Una ricerca stabile su Lorenzo vale circa 5000 backtest e tiene occupato un
+# core per minuti. La macchina ne ha due, e uno serve a rispondere alle
+# richieste e a far girare il ciclo che manda gli avvisi.
+#
+# Senza questo limite, dieci richieste lanciate insieme — per errore, per
+# impazienza, o apposta — mettono in coda dieci ricerche e il sito smette di
+# rispondere. Il limite non impedisce di ottimizzare: impedisce di
+# ottimizzare dieci cose contemporaneamente, che non serviva a nessuno.
+_ricerche_in_corso: dict[str, float] = {}
+_LIMITE_RICERCA_SECONDI = 30 * 60   # oltre, si presume che sia morta
+
+
+def _inizia_lavoro_pesante(owner_id: str) -> None:
+    """Alza la mano per questo utente, o spiega perche' non si puo'."""
+    adesso = _time.time()
+    # Le voci vecchie si scartano qui invece che con un compito periodico:
+    # un processo riavviato non deve lasciare nessuno bloccato per sempre.
+    for chiave, quando in list(_ricerche_in_corso.items()):
+        if adesso - quando > _LIMITE_RICERCA_SECONDI:
+            _ricerche_in_corso.pop(chiave, None)
+
+    if owner_id in _ricerche_in_corso:
+        da_quanto = int(adesso - _ricerche_in_corso[owner_id])
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                f"Hai gia' una ricerca in corso da {da_quanto // 60} min {da_quanto % 60} s. "
+                "Aspetta che finisca: due ricerche insieme non vanno piu' veloci, "
+                "si rubano il processore a vicenda."
+            ),
+        )
+    _ricerche_in_corso[owner_id] = adesso
+
+
+def _finisci_lavoro_pesante(owner_id: str) -> None:
+    _ricerche_in_corso.pop(owner_id, None)
+
+
 @app.get("/api/optimize", response_model=OptimizeResult)
 async def optimize_strategy_endpoint(
     symbol: str = Query(..., min_length=1, max_length=20),
@@ -2308,6 +2416,7 @@ async def optimize_strategy_endpoint(
     min_losing_trades: int | None = Query(None, ge=0, le=1000),
     max_losing_trades: int | None = Query(None, ge=0, le=1000),
     max_drawdown_pct: float | None = Query(None, ge=0.0, le=100.0),
+    user: User = Depends(auth.get_current_user),
 ) -> OptimizeResult:
     """Random-search parameter tuning for any strategy in the registry —
     same deep-history df the backtest itself uses (see
@@ -2316,6 +2425,31 @@ async def optimize_strategy_endpoint(
     simulations, ~15-25s), so it runs off the event loop via a thread —
     otherwise it would stall every other request (including other users')
     for its whole duration."""
+    _inizia_lavoro_pesante(user.id)
+    try:
+        return await _optimize_body(
+            symbol, asset_type, exchange, ltf_interval, strategy_name,
+            backtest_params, mode, min_losing_trades, max_losing_trades, max_drawdown_pct,
+        )
+    finally:
+        _finisci_lavoro_pesante(user.id)
+
+
+async def _optimize_body(
+    symbol: str,
+    asset_type: AssetType,
+    exchange: CryptoExchange,
+    ltf_interval: IntervalChoice,
+    strategy_name: str,
+    backtest_params: "BacktestParamsQuery",
+    mode: str,
+    min_losing_trades: int | None,
+    max_losing_trades: int | None,
+    max_drawdown_pct: float | None,
+) -> OptimizeResult:
+    """Il lavoro vero. Sta a parte perche' il contatore delle ricerche in
+    corso va riabbassato anche quando qualcosa esplode a meta', e un
+    `finally` avvolto attorno a duecento righe non si legge."""
     symbol = symbol.strip()
     if not symbol:
         raise HTTPException(status_code=400, detail="Ticker mancante")

@@ -17,6 +17,13 @@ COPY backend/app_entry.py ./backend/app_entry.py
 COPY frontend ./frontend
 
 # Run uvicorn from the backend sub-dir so `app.main` import resolves
+# Il processo non gira da root: se un giorno qualcosa dentro l'app venisse
+# sfruttato, chi entra si trova un utente senza privilegi invece del padrone
+# del container. La cartella dei dati resta scrivibile perche' e' li' che
+# vivono segnalazioni, utenti e diario ordini.
+RUN useradd --system --uid 10001 --create-home appuser     && mkdir -p /srv/backend/data     && chown -R appuser:appuser /srv
+USER appuser
+
 WORKDIR /srv/backend
 EXPOSE 8000
 CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

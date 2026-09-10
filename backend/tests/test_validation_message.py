@@ -12,13 +12,22 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
+from app import auth
 from app.main import app
+from app.models import User
 
 
 @pytest.fixture
 def client():
+    # Gli endpoint sono dietro autenticazione: senza un utente questi test
+    # riceverebbero 401 e non arriverebbero mai a leggere il messaggio di
+    # validazione, che e' l'unica cosa che vogliono verificare.
+    app.dependency_overrides[auth.get_current_user] = lambda: User(
+        id="test", email="test@example.com", password_hash="x"
+    )
     with TestClient(app) as c:
         yield c
+    app.dependency_overrides.clear()
 
 
 def _detail(resp) -> str:
