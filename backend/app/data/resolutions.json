@@ -1,5 +1,15 @@
 {
   "_README": "Scritto da Claude, versionato in git, distribuito col deploy. Le chiavi sono gli id delle segnalazioni. Non modificare a mano dall'app: verrebbe sovrascritto al deploy successivo.",
+  "seed-0052": {
+    "status": "risolto",
+    "at": 1789074600,
+    "summary": "Trovata grazie al nuovo registro errori (seed-0050): ogni scrittura su disco (users.json, favorites.json, preferenze, credenziali spot e futures) falliva con PermissionError su /srv/backend/data. Non un bug del codice applicativo — il volume Docker era rimasto di proprieta' dell'utente sbagliato dopo che il container ha smesso di girare come root (seed-0031).",
+    "detail": "Il Dockerfile faceva chown -R appuser:appuser /srv AL BUILD, prima che il volume /srv/backend/data venisse montato a runtime: il chown vale solo per il layer dell'immagine, Docker ci sovrappone poi il volume vero con qualunque proprietario avesse gia' (root, da prima del cambio di seed-0031). Risultato: appuser non poteva scrivere niente, e ogni endpoint che salva qualcosa rispondeva 500. Fix strutturale, non un comando a mano una tantum: il container ora parte come root (docker-entrypoint.sh), fa chown -R appuser:appuser /srv/backend/data a OGNI avvio, poi passa i privilegi ad appuser e lancia uvicorn — si ripara da solo a ogni deploy o riavvio, invece di richiedere un intervento manuale sul server se il volume cambia proprietario per qualunque motivo in futuro.",
+    "files": [
+      "Dockerfile",
+      "docker-entrypoint.sh"
+    ]
+  },
   "seed-0051": {
     "status": "in corso",
     "at": 1789074000,
