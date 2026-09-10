@@ -285,6 +285,29 @@ bottiglia piu' stretto del prodotto. E' un interruttore, non una rimozione.
 
 ---
 
+### Sicurezza del sito pubblico — `seed-0031` — **fatto**
+
+Con `liquidityengine.app` in chiaro su internet, l'audit ha trovato **33
+endpoint senza autenticazione**. I due che contano: `/api/optimize`, che
+occupa un core per minuti — due richieste anonime bastavano a mettere giu' il
+sito su due core e ad affamare il ciclo che manda gli avvisi — e
+`DELETE /api/pinescript/{id}`, che cancellava gli script di chiunque.
+
+Chiusi con **un cancello unico** (middleware) invece di 33 firme: un endpoint
+nuovo nasce protetto. Il cancello si fa da parte quando `dependency_overrides`
+e' popolato, perche' un test che ha iniettato un utente ha gia' dichiarato chi
+e'; in produzione quel dizionario resta vuoto.
+
+Aggiunti anche: registrazione ristretta a un elenco, una ricerca pesante per
+utente alla volta, CSP e Permissions-Policy, container non-root.
+
+**Trappola da ricordare**: il Caddyfile e' un volume montato, quindi
+`docker compose up -d` **non** ricarica Caddy quando cambia. Le intestazioni
+nuove sono rimaste ferme in produzione finche' non l'ho riavviato a mano; ora
+il workflow fa `restart caddy` a ogni deploy.
+
+---
+
 ## Log delle conversazioni
 
 Ordine cronologico, piu' recenti in fondo. Scritto perche' una chat diversa

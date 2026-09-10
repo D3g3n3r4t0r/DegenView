@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0031", "Il sito e' pubblico e le API rispondono a chiunque",
+     "Con il trasloco su un dominio pubblico serve verificare che le funzioni pesanti e i dati "
+     "non siano raggiungibili senza credenziali.", "alta"),
     ("seed-0031", "La sezione Watchlist non si trovava piu' da desktop",
      "Dopo il ridisegno (seed-0028), 'Sorveglia' nella sidebar apriva solo la tab Alert: la lista dei "
      "ticker rapidi (tab Watchlist, i preferiti da un clic) non aveva piu' nessuna voce di navigazione "

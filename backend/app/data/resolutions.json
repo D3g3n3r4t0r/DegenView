@@ -5,7 +5,11 @@
     "at": 1788995000,
     "summary": "Leva futures gia' bloccata a 1x ovunque, lato server: nessun ordine automatico o manuale puo' partire con leva superiore.",
     "detail": "MAX_FUTURES_LEVERAGE = 1 in models.py, controllato in tre punti di main.py (salvataggio credenziali, anteprima, ordine) piu' in auth.py — nessuno di questi passa per il client, quindi un form modificato da devtools non puo' aggirarlo. Il cursore nel form futures ora ha min=max=1x, coerente col tetto server.",
-    "files": ["backend/app/models.py", "backend/app/main.py", "frontend/index.html"]
+    "files": [
+      "backend/app/models.py",
+      "backend/app/main.py",
+      "frontend/index.html"
+    ]
   },
   "ae0296aa": {
     "status": "risolto",
@@ -19,7 +23,9 @@
     "at": 1788995200,
     "summary": "I parametri per strategia sugli alert (Sorveglia) sparivano per una corsa fra due caricamenti, non perche' rimossi: la lista si disegnava prima che l'elenco delle strategie fosse pronto.",
     "detail": "CAUSA: `checkAuth()` chiama `loadWatchlist()` presto, per mostrare qualcosa il prima possibile; `populateStrategySelects()` (che riempie `state.availableStrategies`) gira molto dopo nella sequenza di avvio. La riga di ogni ticker in watchlist itera su `state.availableStrategies` per disegnare il toggle e l'ingranaggio dei parametri per ciascuna strategia — se quell'array e' ancora vuoto in quel momento, la riga mostra solo timeframe e 'chiusura candela', senza nessuna strategia. Codice presente e mai stato tolto: solo una corsa fra due `await` che a seconda della velocita' della rete a volte perdeva.\n\nFIX: dopo che `populateStrategySelects()` finisce, se la watchlist ha gia' disegnato righe le ridisegna con l'elenco ora completo — un `loadWatchlist()` in piu', stesso pattern gia' usato altrove nel file per tenere la lista sincronizzata.",
-    "files": ["frontend/static/app.js"]
+    "files": [
+      "frontend/static/app.js"
+    ]
   },
   "8e1350ce": {
     "status": "risolto",
@@ -38,17 +44,19 @@
   },
   "seed-0031": {
     "status": "risolto",
-    "at": 1788983700,
-    "summary": "La tab Watchlist (ticker rapidi/preferiti) non aveva nessuna voce raggiungibile da desktop dopo il ridisegno — stesso buco lasciato da Livelli (e599667e), stessa correzione: una voce sidebar propria.",
-    "detail": "CAUSA: `data-tab-content=\"watchlist\"` (favorite-rows, i ticker da un clic) e `data-tab-content=\"alert\"` (Telegram/alert prezzo/archivio/storico) sono due tab-content distinti, ma la voce sidebar 'Sorveglia' punta solo a `data-tab-target=\"alert\"`. L'unica via a Watchlist era `altro-watchlist-item` nel menu mobile — su desktop, dove il rail/menu Altro sono nascosti dal ridisegno, non c'era alcuna via. Notato mentre Lorenzo segnalava 'la watchlist e' sparita'.\n\nFIX: nuova voce 'Watchlist' nella sidebar, subito sopra 'Sorveglia' (che resta per l'Alert — le due liste sono concettualmente diverse: ticker da tenere d'occhio vs alert configurati, tenerle separate invece di infilare la seconda dentro la prima). Nessun cambio al meccanismo esistente delle tab, solo la voce di ingresso mancante.",
-    "files": ["frontend/index.html"]
+    "at": 1789054628,
+    "summary": "Trovati 33 endpoint aperti a chiunque, fra cui /api/optimize (occupa un core per minuti: due richieste anonime bastavano a rendere il sito inutilizzabile e ad affamare il ciclo degli avvisi) e DELETE /api/pinescript/{id}, che cancellava gli script di chiunque senza chiedere chi fosse. Chiusi con un cancello unico.",
+    "detail": "Un middleware al posto di 33 firme corrette a mano: un endpoint nuovo nasce protetto e dimenticarsene non e' piu' possibile. Restano pubbliche solo le pagine, il controllo di salute e gli endpoint di accesso. In piu': registrazione ristretta a un elenco (un account raggiunge l'ottimizzatore e le chiavi di trading; un indirizzo rifiutato riceve lo stesso messaggio di uno gia' presente, cosi' non si possono enumerare gli account), una ricerca pesante per utente alla volta, CSP e Permissions-Policy, 404 sui file nascosti, e il container che gira come utente senza privilegi."
   },
   "e599667e": {
     "status": "risolto",
     "at": 1788970800,
     "summary": "La sezione Livelli & Indicatori era raggiungibile solo dall'icona del vecchio rail, e il ridisegno (seed-0028) nasconde il rail su desktop: da li' in poi non c'era piu' modo di aprirla.",
     "detail": "CAUSA: il pannello #levels-panel si apriva solo tramite RAIL_PANELS, agganciato ai bottoni #rail-levels-btn/#rail-issues-btn/#rail-script-btn dentro <nav class=\"rail\">. Il redesign di seed-0028 ha spostato la navigazione nella sidebar e nascosto .rail su desktop con `.cockpit > .rail { display: none }`, ma nessuna voce della sidebar puntava a quel pannello — Script e Bacheca erano stati portati nella sidebar come drawer, Livelli no. Il codice restava tutto funzionante, l'interruttore per raggiungerlo era sparito.\n\nFIX: nuova voce 'Livelli' nella sidebar (gruppo Lavoro, prima di Lab). apre lo stesso #levels-panel di sempre con openPanel(), ma resta nell'area Analizza invece di diventare colonna di lettura come Bacheca/Script: i suoi interruttori agiscono sul grafico che si sta guardando, quindi il grafico deve restare visibile e largo mentre il pannello e' aperto.\n\nSECONDO GIRO (segnalato da Lorenzo dopo il primo fix: 'non vedo niente su Livelli'): la causa era diversa da quella temuta, non un residuo dello stesso bug. Una regola CSS preesistente (`.cockpit.chart-wide[data-area=\"analizza\"] .levels-panel.open { display: none }`) nasconde il pannello quando il grafico e' allargato — scritta quando Livelli era solo un'appendice interna di Analizza, dove aveva senso cedere il posto al grafico. Con Livelli ora raggiungibile come voce di navigazione propria (e con data-area che resta 'analizza' apposta, per la stessa ragione descritta sopra), chi ci arrivava con il grafico gia' allargato trovava il pannello invisibile senza nessun indizio del perche'. FIX: aprire Livelli spegne prima l'allargamento del grafico (`chart-expand-btn` click programmatico), cosi' il pannello e' sempre visibile quando lo si apre di proposito.",
-    "files": ["frontend/index.html", "frontend/static/app.js"]
+    "files": [
+      "frontend/index.html",
+      "frontend/static/app.js"
+    ]
   },
   "seed-0007": {
     "status": "risolto",
