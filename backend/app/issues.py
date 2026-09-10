@@ -164,6 +164,7 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0051", "Nessun avviso Telegram al deploy", "Dopo un deploy su main non arriva piu' il messaggio Telegram che elenca le modifiche.", "media"),
     ("seed-0050", "Nessun modo di vedere gli errori 500 senza SSH", "Quando qualcosa si rompe davvero sul server, il traceback vive solo nei log del container: nessuno lo vede finche' non lo segnalo io.", "alta"),
     ("seed-0049", "Salvare le credenziali futures a volte non fa nulla", "Dopo un primo tentativo che fallisce, il pulsante Salva nel pannello futures smette di rispondere del tutto: nessun errore, nessuna richiesta.", "alta"),
     ("seed-0040", "Bottone leva sotto la soglia di contrasto", "Il bottone APRI LONG aveva un contrasto di 4,08:1, sotto la soglia AA di 4,5:1 richiesta per il testo.", "media"),

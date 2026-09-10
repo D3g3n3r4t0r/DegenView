@@ -470,7 +470,15 @@ _GITHUB_REPO = "lorenzocorazzi-wq/liquidity-analysis-engine"
 
 
 async def _notify_deploy() -> None:
-    if not settings.telegram_bot_token or not settings.github_api_token:
+    # Nessuna delle uscite qui sotto era loggata: un token mancante o
+    # scaduto spegneva l'avviso di deploy senza lasciare traccia da nessuna
+    # parte, ne' nei log del container ne' altrove — lo stesso tipo di
+    # silenzio che il progetto ha gia' imparato a non tollerare (seed-0025).
+    if not settings.telegram_bot_token:
+        logger.warning("Notifica deploy saltata: TELEGRAM_BOT_TOKEN non configurato")
+        return
+    if not settings.github_api_token:
+        logger.warning("Notifica deploy saltata: GITHUB_API_TOKEN non configurato")
         return
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
@@ -482,7 +490,8 @@ async def _notify_deploy() -> None:
             )
             r.raise_for_status()
             commits = r.json()
-    except Exception:
+    except Exception as exc:
+        logger.warning("Notifica deploy saltata: richiesta a GitHub fallita — %s", exc)
         return
     if not commits:
         return
