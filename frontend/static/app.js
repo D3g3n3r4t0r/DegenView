@@ -848,7 +848,10 @@
   // ---- App state ----
   const state = {
     user: null, // { id, email, telegram_chat_id } | null — set by checkAuth()
-    assetType: "stock",
+    // Crypto per difetto: le azioni sono spente lato server
+    // (settings.stocks_enabled), e partire da "stock" faceva sbagliare la
+    // prima richiesta a ogni caricamento.
+    assetType: "crypto",
     cryptoExchange: "mexc", // set automatically from the picked search suggestion
     // Always "ltf" now — the single timeframe dropdown *is* the chart's
     // timeframe; MTF/HTF exist only for the derived confluence context.

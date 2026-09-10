@@ -16,6 +16,12 @@ else:
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=_ENV_FILE, env_file_encoding="utf-8")
 
+    # Le azioni sono spente: qui si opera solo in USDT/USDC. Tenerle accese
+    # significava dipendere da TwelveData (7 richieste al minuto, il collo di
+    # bottiglia piu' stretto del sistema) e ricevere avvisi di errore per
+    # ticker che nessuno guarda. Rimettila a True e tutto torna com'era.
+    stocks_enabled: bool = False
+
     twelve_data_api_key: str = ""
     twelve_data_base_url: str = "https://api.twelvedata.com"
 
