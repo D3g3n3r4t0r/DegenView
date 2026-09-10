@@ -1,5 +1,24 @@
 {
   "_README": "Scritto da Claude, versionato in git, distribuito col deploy. Le chiavi sono gli id delle segnalazioni. Non modificare a mano dall'app: verrebbe sovrascritto al deploy successivo.",
+  "seed-0038": {
+    "status": "risolto",
+    "at": 1789068000,
+    "summary": "L'ordine spot manuale ora richiede una conferma esplicita che nomina lato, coppia, exchange e taglia, invalidata da ogni modifica — lo stesso principio gia' applicato ai futures.",
+    "detail": "submitManualOrder() spediva l'ordine reale al primo click su BUY/SELL, senza nessun passaggio intermedio: unico gradino di rischio scoperto rispetto ai futures, che hanno anteprima obbligatoria e conferma esplicita. Costruire una vera anteprima di prezzo per lo spot avrebbe richiesto un endpoint nuovo (i futures ce l'hanno gia', /api/trading/futures/quote, lo spot no) — rimandato: e' un allargamento della superficie, non un fix. Applicata invece la parte che chiude il rischio senza backend nuovo: una casella di conferma con un riepilogo testuale (lato, coppia, exchange, taglia) che si azzera a ogni modifica di exchange/coppia/lato/taglia, esattamente come gia' fa futures-confirm-box per la leva. Il pulsante BUY/SELL resta disabilitato finche' la coppia non e' scritta e la conferma non e' spuntata.",
+    "files": [
+      "frontend/index.html",
+      "frontend/static/app.js"
+    ]
+  },
+  "seed-0039": {
+    "status": "risolto",
+    "at": 1789068100,
+    "summary": "La voce sidebar 'Analizza' non aveva un tabTarget (giusto: e' solo il grafico), ma il codice non nascondeva il pannello gia' attivo — l'HTML statico marca 'Backtest' attivo di default, quindi al primo avvio la sidebar diceva Analizza e lo schermo mostrava il Lab.",
+    "detail": "setArea() faceva `if (tabTarget) { ...sincronizza tab e tab-content... }`: quando tabTarget mancava (solo per 'analizza', l'unica voce senza pannello laterale) il ramo veniva saltato del tutto, e qualunque tab-content fosse gia' marcato 'active' nell'HTML restava a schermo. Ora la sincronizzazione gira sempre: senza tabTarget, tab e tab-content vengono tutti disattivati esplicitamente invece di essere lasciati come capitava.",
+    "files": [
+      "frontend/static/app.js"
+    ]
+  },
   "seed-0037": {
     "status": "risolto",
     "at": 1789064500,
