@@ -23,7 +23,7 @@ def client(tmp_path, monkeypatch):
     user = User(id="u1", email="l@example.com", password_hash="x")
     user.futures_credentials["binance"] = FuturesCredential(
         api_key_enc="a", api_secret_enc="b", enabled=True,
-        size_mode="fixed_usdt", size_value=100.0, leverage=5,
+        size_mode="fixed_usdt", size_value=100.0, leverage=MAX_FUTURES_LEVERAGE,
     )
     monkeypatch.setattr(auth, "get_decrypted_futures_credential", lambda u, e: ("key", "secret", ""))
     main.app.dependency_overrides[auth.get_current_user] = lambda: user
@@ -34,7 +34,7 @@ def client(tmp_path, monkeypatch):
 
 def _order(client, **kw):
     body = {"exchange": "binance", "symbol": "BTCUSDT", "side": "BUY",
-            "size_mode": "fixed_usdt", "size_value": 100.0, "leverage": 5, "confirm": True}
+            "size_mode": "fixed_usdt", "size_value": 100.0, "leverage": MAX_FUTURES_LEVERAGE, "confirm": True}
     body.update(kw)
     return client.post("/api/trading/futures/order", json=body)
 
@@ -62,10 +62,12 @@ def test_saving_a_credential_at_the_cap_is_accepted(client):
 
 
 def test_unsupported_exchange_is_rejected_before_touching_credentials(client):
-    # mexc ha i futures ma non e' nel registro: nessuna licenza UE per i
-    # derivati (vedi app/trading/futures/registry.py).
+    # Coinbase non offre futures accessibili in UE e non ha un adattatore:
+    # e' l'esempio buono di exchange fuori dal registro. (Prima qui c'era
+    # mexc, che nel frattempo e' stato aggiunto su richiesta esplicita —
+    # un test che nomina un venue vero invecchia con il registro.)
     resp = client.patch("/api/auth/futures", json={
-        "exchange": "mexc", "api_key": "k", "api_secret": "s",
+        "exchange": "coinbase", "api_key": "k", "api_secret": "s",
         "enabled": True, "leverage": 1,
     })
     assert resp.status_code == 400
@@ -92,7 +94,7 @@ def test_the_kill_switch_blocks_the_order_even_with_confirm(client, monkeypatch)
     user = User(id="u1", email="l@example.com", password_hash="x")
     user.futures_credentials["binance"] = FuturesCredential(
         api_key_enc="a", api_secret_enc="b", enabled=False,  # spento
-        size_mode="fixed_usdt", size_value=100.0, leverage=5,
+        size_mode="fixed_usdt", size_value=100.0, leverage=MAX_FUTURES_LEVERAGE,
     )
     main.app.dependency_overrides[auth.get_current_user] = lambda: user
     resp = _order(client)
@@ -143,7 +145,7 @@ def test_sufficient_margin_lets_the_order_through_and_journals_the_leverage(clie
     entries = tl.list_for("u1")
     assert len(entries) == 1
     assert entries[0]["outcome"] == "eseguito"
-    assert "leva 5x" in entries[0]["detail"]
+    assert f"leva {MAX_FUTURES_LEVERAGE}x" in entries[0]["detail"]
 
 
 def test_a_failed_order_is_journalled_with_its_leverage_too(client, monkeypatch):
@@ -159,7 +161,7 @@ def test_a_failed_order_is_journalled_with_its_leverage_too(client, monkeypatch)
     assert resp.status_code == 502
     entries = tl.list_for("u1")
     assert entries[0]["outcome"] == "fallito"
-    assert "leva 5x" in entries[0]["detail"]
+    assert f"leva {MAX_FUTURES_LEVERAGE}x" in entries[0]["detail"]
 
 
 # --- quote/anteprima ----------------------------------------------------------
@@ -176,13 +178,13 @@ def test_quote_reports_leverage_margin_and_liquidation_price(client, monkeypatch
     monkeypatch.setattr(bfe, "get_available_margin_usdt", _balance)
     resp = client.post("/api/trading/futures/quote", json={
         "exchange": "binance", "symbol": "BTCUSDT", "side": "BUY",
-        "size_mode": "fixed_usdt", "size_value": 100.0, "leverage": 5,
+        "size_mode": "fixed_usdt", "size_value": 100.0, "leverage": MAX_FUTURES_LEVERAGE,
     })
     assert resp.status_code == 200
     data = resp.json()
-    assert data["leverage"] == 5
+    assert data["leverage"] == MAX_FUTURES_LEVERAGE
     assert data["margin_used"] == 100.0
-    assert data["notional"] == 500.0
+    assert data["notional"] == 100.0 * MAX_FUTURES_LEVERAGE
     assert data["margin_sufficient"] is True
     # Long a leva 5x: prezzo di liquidazione sotto l'entry.
     assert data["liquidation_price"] < 100.0

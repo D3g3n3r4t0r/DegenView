@@ -137,6 +137,16 @@ class ExchangeCredential(BaseModel):
 # "Operazioni futures" (seed-futures-0001).
 MAX_FUTURES_LEVERAGE = 1
 
+# Tetto della *simulazione*, separato da quello dell'esecuzione.
+#
+# Sono due domande diverse: "quanta leva posso rischiare davvero" e "quanta
+# leva voglio studiare". Applicare il tetto dell'esecuzione anche al motore
+# di backtest lo rendeva inutile — a 1x una posizione isolata non si
+# liquida mai, quindi liquidazione e funding, che sono il motivo per cui
+# quel motore esiste, non erano piu' osservabili. Simulare non muove
+# denaro: qui il limite serve solo a impedire numeri assurdi.
+MAX_SIMULATED_LEVERAGE = 10
+
 
 class FuturesCredential(BaseModel):
     """Credenziali futures — modello separato da ExchangeCredential apposta:
