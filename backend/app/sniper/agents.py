@@ -315,8 +315,14 @@ async def _geckoterminal_trending_loop() -> None:
 
 async def start_all() -> list[asyncio.Task]:
     """Start all agents as background tasks. Call from app lifespan."""
-    tasks = [
-        asyncio.create_task(_pump_fun_loop(), name="agent:pump_fun"),
+    from app.config import settings
+
+    tasks = []
+    # Pump.fun e' un lanciatore di meme coin: acceso, l'archivio si riempie di
+    # quello qualunque filtro si metta a valle.
+    if settings.sniper_memecoins_enabled:
+        tasks.append(asyncio.create_task(_pump_fun_loop(), name="agent:pump_fun"))
+    tasks += [
         asyncio.create_task(_dexscreener_boost_loop(), name="agent:dex_boost"),
         asyncio.create_task(_geckoterminal_trending_loop(), name="agent:gecko_trending"),
         asyncio.create_task(_market_harvest_loop(), name="agent:market_harvest"),

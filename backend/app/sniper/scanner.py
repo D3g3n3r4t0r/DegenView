@@ -78,12 +78,17 @@ class RawToken:
 
 
 def _passes_primary(token: RawToken) -> tuple[bool, str]:
+    from app.config import settings
+
     mc = token.market_cap
     # Only filter on MC when the data is actually present
     if mc is not None:
         if mc < MC_MIN:
             return False, f"MC ${mc:,.0f} troppo basso"
-        if mc > MC_MAX:
+        # Il tetto serve a tenere fuori chi e' gia' esploso quando si cercano
+        # lanci. Se le meme coin sono spente si cerca l'opposto — un progetto
+        # serio sta quasi sempre sopra i 15M — e il tetto va tolto.
+        if settings.sniper_memecoins_enabled and mc > MC_MAX:
             return False, f"MC ${mc:,.0f} troppo alto"
     if token.liquidity_usd < LIQUIDITY_MIN:
         return False, f"Liquidity ${token.liquidity_usd:,.0f}"

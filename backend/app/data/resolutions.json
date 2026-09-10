@@ -1,5 +1,15 @@
 {
   "_README": "Scritto da Claude, versionato in git, distribuito col deploy. Le chiavi sono gli id delle segnalazioni. Non modificare a mano dall'app: verrebbe sovrascritto al deploy successivo.",
+  "seed-0033": {
+    "status": "risolto",
+    "at": 1788995200,
+    "summary": "La Watchlist ha una voce sua nella barra laterale: prima, dopo il ridisegno, da desktop non c'era piu' modo di arrivarci.",
+    "detail": "Aveva anche un difetto suo, invisibile: la voce era duplicata con l'id di un'altra segnalazione (seed-0031, la chiusura degli endpoint pubblici), quindi due voci diverse condividevano la stessa chiave e la risoluzione dell'una compariva sotto l'altra. Ora ha un id proprio. La voce di navigazione esiste in frontend/index.html con data-area='ticker' e apre la scheda Watchlist.",
+    "files": [
+      "backend/app/issues.py",
+      "frontend/index.html"
+    ]
+  },
   "seed-0032": {
     "status": "risolto",
     "at": 1788995100,

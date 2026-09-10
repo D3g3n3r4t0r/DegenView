@@ -22,6 +22,12 @@ class Settings(BaseSettings):
     # ticker che nessuno guarda. Rimettila a True e tutto torna com'era.
     stocks_enabled: bool = False
 
+    # Lo sniper nasce come cacciatore di lanci, e un cacciatore di lanci trova
+    # meme coin: Pump.fun e' un lanciatore di meme, e le soglie d'ingresso
+    # (MC $1k, liquidita' $500, 30 giorni) sono quelle. Spento, il feed
+    # Pump.fun non parte e l'archivio smette di riempirsi di quella roba.
+    sniper_memecoins_enabled: bool = False
+
     twelve_data_api_key: str = ""
     twelve_data_base_url: str = "https://api.twelvedata.com"
 
