@@ -1851,6 +1851,18 @@
       </div>`;
     }).join("");
 
+    // Delega sul contenitore, che e' un nodo persistente: renderFuturesCredentials()
+    // riscrive solo il suo innerHTML a ogni chiamata, non lo ricrea. Un
+    // { once: true } qui presumeva il contrario: bastava che il primo
+    // salvataggio fallisse (leva oltre il tetto server, per esempio) perche'
+    // quel listener si autodistruggesse senza che uno nuovo lo sostituisse
+    // (il rebind avveniva solo dentro il ramo "successo"), e ogni click
+    // successivo su Salva restava silenzioso — nessuna richiesta, nessun
+    // errore. Il flag sotto lega gli handler una volta sola per davvero,
+    // indipendentemente da quante volte il markup interno viene rigenerato.
+    if (container.dataset.futuresHandlersBound) return;
+    container.dataset.futuresHandlersBound = "1";
+
     container.addEventListener("click", async function handleFuturesCredSave(e) {
       if (!e.target.classList.contains("trading-save-btn")) return;
       const card = e.target.closest(".trading-cred-card");
@@ -1884,7 +1896,7 @@
       } catch (_) {
         statusEl.textContent = "Errore di rete";
       }
-    }, { once: true }); // il container viene ricreato a ogni loadFuturesCredentials()
+    });
 
     container.addEventListener("change", async function handleFuturesCredToggle(e) {
       if (!e.target.classList.contains("futures-cred-enabled-cb")) return;
@@ -1906,7 +1918,7 @@
       } catch (_) {
         // silenzioso: il toggle torna visivamente com'era al prossimo load
       }
-    }, { once: true });
+    });
   }
 
   function bindFuturesOrderUI() {

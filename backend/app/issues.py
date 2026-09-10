@@ -164,6 +164,7 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0049", "Salvare le credenziali futures a volte non fa nulla", "Dopo un primo tentativo che fallisce, il pulsante Salva nel pannello futures smette di rispondere del tutto: nessun errore, nessuna richiesta.", "alta"),
     ("seed-0040", "Bottone leva sotto la soglia di contrasto", "Il bottone APRI LONG aveva un contrasto di 4,08:1, sotto la soglia AA di 4,5:1 richiesta per il testo.", "media"),
     ("seed-0041", "Pallino LIVE invisibile con animazioni ridotte", "Con 'riduci le animazioni' attivo nel sistema, il pallino che dice se il feed prezzi e' vivo restava fisso acceso.", "media"),
     ("seed-0042", "Prezzi in notazione scientifica nel testo di analisi", "Il riepilogo struttura scriveva prezzi tipo 7.672e+04 invece di un numero leggibile.", "media"),
