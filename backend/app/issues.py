@@ -164,6 +164,10 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0035", "\"Errore di rete\" sull'archivio, senza dire altro",
+     "Premendo 'Attiva l'alert' su una voce d'archivio compare 'Errore di rete' e basta: non si capisce "
+     "se il server non ha risposto o se ha risposto male.",
+     "media"),
     ("seed-0034", "Lo sniper propone meme coin invece di progetti seri",
      "Voglio vedere solo crypto legittime, o quantomeno progetti seri: le meme coin non mi interessano.",
      "alta"),

@@ -1,5 +1,14 @@
 {
   "_README": "Scritto da Claude, versionato in git, distribuito col deploy. Le chiavi sono gli id delle segnalazioni. Non modificare a mano dall'app: verrebbe sovrascritto al deploy successivo.",
+  "seed-0035": {
+    "status": "risolto",
+    "at": 1788995400,
+    "summary": "La diagnosi c'era gia' e veniva buttata via: readJson() alza un errore che nomina stato e corpo della risposta, e il gestore lo sostituiva con un 'Errore di rete' fisso.",
+    "detail": "Il messaggio confondeva due cose diverse: 'il browser non e' arrivato al server' e 'il server ha risposto qualcosa che non e' JSON' (un 502 di Caddy, una pagina di login, un HTML qualsiasi). Nel secondo caso readJson() alza gia' un errore con stato, statusText e le prime parole del corpo — il catch nell'archivio lo scartava e ne scriveva uno generico, e nel modale d'accesso c'era lo stesso difetto. Ora entrambi mostrano err.message, e il modale d'accesso usa readJson() invece di resp.json() nudo, cosi' un errore non-JSON non diventa un 'Unexpected token' incomprensibile. Verificato nel frattempo che l'endpoint in produzione risponde correttamente (401 JSON in ~1 s), quindi l'errore visto era lato browser o transitorio: la prossima volta lo dira' da solo.",
+    "files": [
+      "frontend/static/app.js"
+    ]
+  },
   "seed-0034": {
     "status": "risolto",
     "at": 1788995300,
