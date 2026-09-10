@@ -164,6 +164,7 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0052", "Ogni salvataggio da 500 - Permission denied sul volume", "Salvare credenziali, preferenze o preferiti dava Internal Server Error: il volume dati non era scrivibile dall'utente del container.", "alta"),
     ("seed-0051", "Nessun avviso Telegram al deploy", "Dopo un deploy su main non arriva piu' il messaggio Telegram che elenca le modifiche.", "media"),
     ("seed-0050", "Nessun modo di vedere gli errori 500 senza SSH", "Quando qualcosa si rompe davvero sul server, il traceback vive solo nei log del container: nessuno lo vede finche' non lo segnalo io.", "alta"),
     ("seed-0049", "Salvare le credenziali futures a volte non fa nulla", "Dopo un primo tentativo che fallisce, il pulsante Salva nel pannello futures smette di rispondere del tutto: nessun errore, nessuna richiesta.", "alta"),

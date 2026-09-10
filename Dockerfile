@@ -15,15 +15,17 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/app ./backend/app
 COPY backend/app_entry.py ./backend/app_entry.py
 COPY frontend ./frontend
+COPY docker-entrypoint.sh ./docker-entrypoint.sh
 
 # Run uvicorn from the backend sub-dir so `app.main` import resolves
-# Il processo non gira da root: se un giorno qualcosa dentro l'app venisse
-# sfruttato, chi entra si trova un utente senza privilegi invece del padrone
-# del container. La cartella dei dati resta scrivibile perche' e' li' che
-# vivono segnalazioni, utenti e diario ordini.
-RUN useradd --system --uid 10001 --create-home appuser     && mkdir -p /srv/backend/data     && chown -R appuser:appuser /srv
-USER appuser
+# Il processo applicativo non gira da root: se un giorno qualcosa dentro
+# l'app venisse sfruttato, chi entra si trova un utente senza privilegi
+# invece del padrone del container. Ma il volume dati e' montato DOPO
+# questo chown (a runtime, non al build) — vedi docker-entrypoint.sh per
+# perche' il container deve comunque PARTIRE come root.
+RUN useradd --system --uid 10001 --create-home appuser     && mkdir -p /srv/backend/data     && chown -R appuser:appuser /srv     && chmod +x /srv/docker-entrypoint.sh
 
 WORKDIR /srv/backend
 EXPOSE 8000
+ENTRYPOINT ["/srv/docker-entrypoint.sh"]
 CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
