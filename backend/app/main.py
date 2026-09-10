@@ -3566,8 +3566,14 @@ async def asset_version() -> dict:
     risolve il problema dal deploy in poi, ma chi aveva gia' la pagina in cache
     da prima puo' restarci per ore — ed e' successo: uno vedeva il grafico nero
     dopo che la correzione era in produzione da un pezzo.
+
+    `deployed_at` e' quando QUESTO processo e' partito, non quando il commit
+    e' stato scritto: un deploy riavvia sempre il container, quindi coincide
+    con l'ultimo deploy riuscito — ed e' la risposta diretta alla domanda
+    "il sito e' aggiornato o sto guardando una versione vecchia?", senza
+    doverlo dedurre dal fatto che un messaggio Telegram sia arrivato o no.
     """
-    return {"asset_version": _ASSET_VERSION}
+    return {"asset_version": _ASSET_VERSION, "deployed_at": int(_app_start)}
 
 
 @app.get("/")

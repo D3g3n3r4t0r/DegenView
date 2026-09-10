@@ -6437,6 +6437,21 @@
   // produzione da un pezzo, perche' il browser continuava a chiedere il vecchio
   // app.js. Qui la pagina chiede al server quale versione sta servendo e, se
   // non e' la sua, si ricarica una volta sola.
+  // Quando il server e' partito l'ultima volta, scritto nel piede della
+  // sidebar: la stessa domanda che ha creato confusione in chat ("ma e'
+  // stato distribuito davvero?") qui si legge a schermo invece di dedurla
+  // da un messaggio Telegram che puo' anche non arrivare (seed-0051).
+  function renderDeployInfo(deployedAtEpoch) {
+    const el2 = el("sidenav-deploy-info");
+    if (!el2 || !deployedAtEpoch) return;
+    const d = new Date(deployedAtEpoch * 1000);
+    const stamp = d.toLocaleString("it-IT", {
+      day: "2-digit", month: "2-digit", year: "2-digit",
+      hour: "2-digit", minute: "2-digit",
+    });
+    el2.textContent = `Aggiornato ${stamp}`;
+  }
+
   async function checkAssetVersion() {
     const meta = document.querySelector('meta[name="lae-asset-version"]');
     const mine = meta ? meta.getAttribute("content") : "";
@@ -6444,7 +6459,8 @@
     try {
       const resp = await fetch("/api/version", { cache: "no-store" });
       if (!resp.ok) return;
-      const { asset_version: live } = await resp.json();
+      const { asset_version: live, deployed_at } = await resp.json();
+      renderDeployInfo(deployed_at);
       if (!live || live === mine) return;
       // Una sola ricarica per versione: se dopo il giro la pagina fosse ancora
       // vecchia — cache intermedia, proxy — ricaricare all'infinito sarebbe
