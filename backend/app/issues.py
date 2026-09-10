@@ -164,6 +164,10 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0036", "Il grafico non proietta il prezzo corrente sull'asse",
+     "Serve la linea del prezzo attuale che arriva fino all'asse con l'etichetta, come su TradingView, "
+     "su ogni grafico.",
+     "media"),
     ("seed-0035", "\"Errore di rete\" sull'archivio, senza dire altro",
      "Premendo 'Attiva l'alert' su una voce d'archivio compare 'Errore di rete' e basta: non si capisce "
      "se il server non ha risposto o se ha risposto male.",

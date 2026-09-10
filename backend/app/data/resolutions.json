@@ -1,5 +1,14 @@
 {
   "_README": "Scritto da Claude, versionato in git, distribuito col deploy. Le chiavi sono gli id delle segnalazioni. Non modificare a mano dall'app: verrebbe sovrascritto al deploy successivo.",
+  "seed-0036": {
+    "status": "risolto",
+    "at": 1788995500,
+    "summary": "La linea c'era gia' ma era invisibile: il colore lo prendeva dal corpo dell'ultima candela, e le candele rialziste qui sono vuote.",
+    "detail": "Lightweight Charts disegna di suo la proiezione del prezzo corrente fino all'asse, ma se priceLineColor non e' dichiarato lo eredita dal colore dell'ultima candela. Questo grafico usa candele rialziste vuote (upColor trasparente, stile hollow): dopo ogni candela verde la linea diventava trasparente e l'etichetta del prezzo spariva — cioe' proprio quando serve. Ora il colore e' dichiarato (ambra), la linea e' tratteggiata e l'etichetta sull'asse e' sempre accesa; il colore viene riapplicato anche al cambio di tema, altrimenti restava quello del tema precedente. Stesso trattamento sui pannelli RSI, MACD e Stocastico, cosi' ogni grafico dice il proprio valore corrente sul proprio asse. Il prezzo segue la diretta dove c'e' lo stream WebSocket, perche' la linea mostra l'ultimo punto della serie e quello lo aggiorna gia' candleSeries.update().",
+    "files": [
+      "frontend/static/app.js"
+    ]
+  },
   "seed-0035": {
     "status": "risolto",
     "at": 1788995400,

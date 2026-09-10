@@ -142,6 +142,7 @@
       candleSeries.applyOptions({
         downColor: COLORS.bear, borderUpColor: COLORS.bull, borderDownColor: COLORS.bear,
         wickUpColor: COLORS.bull, wickDownColor: COLORS.bear,
+        priceLineColor: COLORS.stamp,
       });
     }
     if (rsiSeries) rsiSeries.applyOptions({ color: COLORS.rsi });
@@ -3627,12 +3628,23 @@
       borderDownColor: COLORS.bear,
       wickUpColor: COLORS.bull,
       wickDownColor: COLORS.bear,
+      // La proiezione del prezzo corrente fino all'asse, come su TradingView.
+      // Il colore va detto: lasciato vuoto la libreria lo prende dal corpo
+      // dell'ultima candela, e qui le candele rialziste sono vuote
+      // (upColor trasparente, stile hollow) — quindi dopo una candela verde
+      // la linea e' trasparente e l'etichetta del prezzo sparisce, che e'
+      // esattamente quando serve.
+      priceLineVisible: true,
+      priceLineColor: COLORS.stamp,
+      priceLineWidth: 1,
+      priceLineStyle: LightweightCharts.LineStyle.Dashed,
+      lastValueVisible: true,
     });
     observeResize(mainContainer, mainChart);
 
     const rsiContainer = el("rsi-chart");
     rsiChart = LightweightCharts.createChart(rsiContainer, baseOptions);
-    rsiSeries = rsiChart.addLineSeries({ color: COLORS.rsi, lineWidth: 2 });
+    rsiSeries = rsiChart.addLineSeries({ color: COLORS.rsi, lineWidth: 2, priceLineVisible: true, priceLineStyle: LightweightCharts.LineStyle.Dashed, priceLineWidth: 1, lastValueVisible: true });
     rsiSeries.createPriceLine({ price: 70, color: "rgba(255,69,96,0.45)", lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: "OB" });
     rsiSeries.createPriceLine({ price: 50, color: "rgba(110,120,134,0.35)", lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dotted, axisLabelVisible: false, title: "" });
     rsiSeries.createPriceLine({ price: 30, color: "rgba(0,214,143,0.45)", lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: "OS" });
@@ -3640,7 +3652,7 @@
 
     const macdContainer = el("macd-chart");
     macdChart = LightweightCharts.createChart(macdContainer, baseOptions);
-    macdLineSeries = macdChart.addLineSeries({ color: COLORS.macd, lineWidth: 2 });
+    macdLineSeries = macdChart.addLineSeries({ color: COLORS.macd, lineWidth: 2, priceLineVisible: true, priceLineStyle: LightweightCharts.LineStyle.Dashed, priceLineWidth: 1, lastValueVisible: true });
     macdSignalSeries = macdChart.addLineSeries({ color: COLORS.macdSignal, lineWidth: 1 });
     macdHistSeries = macdChart.addHistogramSeries({ color: "rgba(91,156,246,0.3)" });
     macdLineSeries.createPriceLine({ price: 0, color: "rgba(110,120,134,0.5)", lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Solid, axisLabelVisible: false, title: "" });
@@ -3648,7 +3660,7 @@
 
     const stochContainer = el("stoch-chart");
     stochChart = LightweightCharts.createChart(stochContainer, baseOptions);
-    stochKSeries = stochChart.addLineSeries({ color: COLORS.rsi, lineWidth: 2 });
+    stochKSeries = stochChart.addLineSeries({ color: COLORS.rsi, lineWidth: 2, priceLineVisible: true, priceLineStyle: LightweightCharts.LineStyle.Dashed, priceLineWidth: 1, lastValueVisible: true });
     stochDSeries = stochChart.addLineSeries({ color: COLORS.stamp, lineWidth: 1 });
     stochKSeries.createPriceLine({ price: 80, color: "rgba(255,69,96,0.45)", lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: "OB" });
     stochKSeries.createPriceLine({ price: 50, color: "rgba(110,120,134,0.35)", lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dotted, axisLabelVisible: false, title: "" });
