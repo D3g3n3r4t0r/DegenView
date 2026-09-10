@@ -1,5 +1,14 @@
 {
   "_README": "Scritto da Claude, versionato in git, distribuito col deploy. Le chiavi sono gli id delle segnalazioni. Non modificare a mano dall'app: verrebbe sovrascritto al deploy successivo.",
+  "seed-0051": {
+    "status": "in corso",
+    "at": 1789074000,
+    "summary": "_notify_deploy() usciva in silenzio se mancava TELEGRAM_BOT_TOKEN o GITHUB_API_TOKEN, o se la chiamata a GitHub falliva — nessun log, nessuna traccia. Ora ciascuna di queste tre uscite scrive nei log del container il motivo esatto.",
+    "detail": "Non e' ancora la risoluzione del problema, solo la diagnosi resa possibile: prima non c'era modo di distinguere 'i token sono a posto ma qualcos'altro si e' rotto' da 'manca un token' senza leggere il codice. Sospetto concreto, da verificare sul server: GITHUB_API_TOKEN in deploy/.env e' marcato facoltativo nel template e potrebbe non essere mai stato portato nel trasloco da Fly a Hetzner, come gia' successo con la chiave TwelveData (vedi HANDOVER.md). Serve accesso al server per confermare — segnato 'in corso', non 'risolto', perche' la causa reale non e' ancora verificata.",
+    "files": [
+      "backend/app/main.py"
+    ]
+  },
   "seed-0050": {
     "status": "risolto",
     "at": 1789073500,
