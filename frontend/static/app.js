@@ -1410,6 +1410,33 @@
     let activeSide = "BUY";
     bindManualPairAutocomplete();
 
+    // La conferma nomina esattamente cosa sta per partire, come per i futures:
+    // exchange, pair, lato, taglia. Qualunque campo cambi dopo, la spunta si
+    // resetta — non si conferma un ordine diverso da quello che si e' letto.
+    function invalidateManualConfirm() {
+      const box = el("manual-confirm-box");
+      if (box) box.checked = false;
+      updateManualExecuteState();
+    }
+
+    function updateManualConfirmSummary() {
+      const summary = el("manual-confirm-summary");
+      if (!summary) return;
+      const exchange = el("manual-exchange")?.value || "—";
+      const symbol = el("manual-symbol")?.value.trim().toUpperCase() || "—";
+      const sizeVal = el("manual-size-val")?.value || "—";
+      const unit = el("manual-size-unit")?.textContent || "";
+      summary.textContent = `${activeSide} ${symbol} su ${exchange}, ${sizeVal}${unit}`;
+    }
+
+    function updateManualExecuteState() {
+      const btn = el("manual-execute-btn");
+      if (!btn) return;
+      const symbol = el("manual-symbol")?.value.trim();
+      const confirmed = !!el("manual-confirm-box")?.checked;
+      btn.disabled = !symbol || !confirmed;
+    }
+
     function syncSideUI() {
       document.querySelectorAll(".mo-side-tab").forEach(btn => {
         btn.classList.toggle("mo-tab-active", btn.dataset.side === activeSide);
@@ -1441,17 +1468,36 @@
     }
 
     document.querySelectorAll(".mo-side-tab").forEach(btn => {
-      btn.addEventListener("click", () => { activeSide = btn.dataset.side; syncSideUI(); });
+      btn.addEventListener("click", () => {
+        activeSide = btn.dataset.side; syncSideUI();
+        updateManualConfirmSummary(); invalidateManualConfirm();
+      });
     });
 
     document.querySelectorAll('input[name="mo-size-mode"]').forEach(r => {
-      r.addEventListener("change", syncSliderUnit);
+      r.addEventListener("change", () => {
+        syncSliderUnit();
+        updateManualConfirmSummary(); invalidateManualConfirm();
+      });
     });
 
     const slider = el("manual-size-slider");
     const valInput = el("manual-size-val");
-    slider?.addEventListener("input", () => { if (valInput) valInput.value = slider.value; });
-    valInput?.addEventListener("input", () => { if (slider) slider.value = valInput.value; });
+    slider?.addEventListener("input", () => {
+      if (valInput) valInput.value = slider.value;
+      updateManualConfirmSummary(); invalidateManualConfirm();
+    });
+    valInput?.addEventListener("input", () => {
+      if (slider) slider.value = valInput.value;
+      updateManualConfirmSummary(); invalidateManualConfirm();
+    });
+    el("manual-exchange")?.addEventListener("change", () => {
+      updateManualConfirmSummary(); invalidateManualConfirm();
+    });
+    el("manual-symbol")?.addEventListener("input", () => {
+      updateManualConfirmSummary(); updateManualExecuteState(); invalidateManualConfirm();
+    });
+    el("manual-confirm-box")?.addEventListener("change", updateManualExecuteState);
 
     async function submitManualOrder() {
       const exchange = el("manual-exchange")?.value;
@@ -1460,6 +1506,11 @@
       const sizeValue = parseFloat(el("manual-size-val")?.value);
       const statusEl = el("manual-order-status");
       if (!symbol) { statusEl.textContent = "Inserisci il pair (es. BTCUSDT)"; statusEl.classList.remove("hidden"); return; }
+      if (!el("manual-confirm-box")?.checked) {
+        statusEl.textContent = "Conferma l'ordine prima di inviarlo";
+        statusEl.classList.remove("hidden");
+        return;
+      }
       statusEl.textContent = "Invio ordine…";
       statusEl.classList.remove("hidden", "ok", "error");
       try {
@@ -1479,6 +1530,7 @@
         // Riuscito o fallito, il tentativo e' ora nel diario: il riquadro di
         // stato sparisce ricaricando la pagina, il diario no.
         loadTradingJournal();
+        invalidateManualConfirm();
       } catch (_) {
         statusEl.textContent = "✗ Errore di rete";
         statusEl.classList.add("error");
@@ -1487,6 +1539,8 @@
 
     el("manual-execute-btn")?.addEventListener("click", submitManualOrder);
     syncSliderUnit();
+    updateManualConfirmSummary();
+    updateManualExecuteState();
   }
   bindManualOrderUI();
 
@@ -7826,13 +7880,15 @@
 
     if (area === "opera") loadPositions();
 
+    // "Analizza" e' l'unica voce senza tabTarget: e' il solo grafico, senza
+    // pannello. Senza questo else il tab-content marcato "active" nell'HTML
+    // statico (Backtest) restava visibile — Analizza attiva in sidebar,
+    // Lab a schermo, non sincronizzati al primo caricamento.
     const tabTarget = item && item.dataset.tabTarget;
-    if (tabTarget) {
-      document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === tabTarget));
-      document.querySelectorAll(".tab-content").forEach((c) => {
-        c.classList.toggle("active", c.dataset.tabContent === tabTarget);
-      });
-    }
+    document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", !!tabTarget && t.dataset.tab === tabTarget));
+    document.querySelectorAll(".tab-content").forEach((c) => {
+      c.classList.toggle("active", !!tabTarget && c.dataset.tabContent === tabTarget);
+    });
     requestAnimationFrame(() => resizeAllCharts(true));
   }
 

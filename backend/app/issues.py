@@ -164,6 +164,12 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0038", "Ordine spot manuale senza conferma",
+     "L'ordine spot in Opera partiva al primo click, senza anteprima ne' conferma, a differenza dei futures.",
+     "alta"),
+    ("seed-0039", "Analizza e Lab non sincronizzati al primo caricamento",
+     "La sidebar mostra Analizza attivo ma il pannello a schermo e' quello del Lab, al primo avvio dell'app.",
+     "media"),
     ("seed-0037", "Durante un deploy il sito mostra un errore grezzo",
      "Quando c'e' un deploy in corso vorrei che chi si collega veda un avviso invece di un errore, "
      "cosi' non sembra che il sito sia rotto.",

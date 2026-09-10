@@ -831,8 +831,15 @@
                   </div>
                 </div>
 
+                <!-- Conferma esplicita: prima non c'era nessun passaggio fra il click
+                     e l'ordine reale, a differenza dei futures qui accanto. -->
+                <label class="futures-confirm">
+                  <input type="checkbox" id="manual-confirm-box" />
+                  <span>Confermo: denaro reale, <b id="manual-confirm-summary">—</b></span>
+                </label>
+
                 <!-- Execute button -->
-                <button type="button" id="manual-execute-btn" class="mo-execute-btn mo-execute-buy">BUY</button>
+                <button type="button" id="manual-execute-btn" class="mo-execute-btn mo-execute-buy" disabled>BUY</button>
 
                 <div id="manual-order-status" class="manual-order-status hidden"></div>
               </div>
