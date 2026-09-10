@@ -642,6 +642,56 @@ def _validation_message(errors: list[dict]) -> str:
 async def _readable_validation_error(request: Request, exc: RequestValidationError):
     return JSONResponse(status_code=422, content={"detail": _validation_message(exc.errors())})
 
+
+@app.exception_handler(Exception)
+async def _unhandled_error_handler(request: Request, exc: Exception):
+    """Un 500 vero — quello che prima si vedeva solo nei log del container,
+    irraggiungibili da qui senza SSH. Registrato su file (server_errors.json,
+    sul volume) e letto da GET /api/errors, cosi' una sessione futura puo'
+    consultarlo con una richiesta HTTP invece di aspettare che qualcuno lo
+    segnali. Un avviso Telegram parte nello stesso istante, con un raffreddamento
+    di 5 minuti per lo stesso errore ripetuto — un bug che rifiorisce a ogni
+    retry non deve mandare un messaggio al secondo.
+
+    Non intercetta gli HTTPException (hanno gia' un handler piu' specifico
+    prima di questo): qui arrivano solo le eccezioni che nessun endpoint si
+    aspettava.
+    """
+    from app import error_log
+    from app.notify import telegram
+
+    user_id = None
+    try:
+        user = await auth.get_current_user_optional(
+            request.cookies.get(auth.SESSION_COOKIE)
+        )
+        user_id = user.id if user else None
+    except Exception:  # noqa: BLE001 — non deve mai impedire di registrare l'errore vero
+        pass
+
+    logger.exception("Errore non gestito su %s %s", request.method, request.url.path)
+    entry, should_alert = error_log.record(
+        method=request.method, path=request.url.path, exc=exc, user_id=user_id,
+    )
+    if should_alert:
+        asyncio.create_task(telegram.send_message(
+            f"🔴 Errore 500 su {entry['method']} {entry['path']}\n"
+            f"{entry['exc_type']}: {entry['message']}"
+        ))
+    return JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
+
+
+@app.get("/api/errors")
+async def list_server_errors(
+    limit: int = Query(50, ge=1, le=200),
+    user: User = Depends(auth.get_current_user),
+) -> dict:
+    """Gli ultimi errori 500 veri, con traceback — protetto dallo stesso
+    cancello di seed-0031 (non e' in _PUBLIC_PATHS), non serve altro controllo."""
+    from app import error_log
+    return {"errors": error_log.recent(limit)}
+
+
 _app_start = _time.time()
 
 @app.get("/api/health")
