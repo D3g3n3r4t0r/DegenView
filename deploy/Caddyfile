@@ -1,0 +1,48 @@
+# Caddy sta davanti all'app e si occupa di HTTPS.
+#
+# Il certificato Let's Encrypt lo chiede e lo rinnova da solo: non c'e'
+# niente da ricordarsi ogni novanta giorni, che e' il modo classico in cui
+# un sito auto-ospitato smette di funzionare senza che nessuno tocchi nulla.
+#
+# Perche' serve davvero: l'autenticazione dell'app viaggia su un cookie
+# firmato. Su HTTP quel cookie passa in chiaro, e chi sta sulla stessa rete
+# puo' riusarlo — su un sistema che tiene chiavi di trading non e' un
+# rischio accettabile.
+#
+# DOMINIO: sostituisci le due righe qui sotto con il tuo dominio vero prima
+# di avviare. Finche' resta un segnaposto, Caddy non ottiene il certificato.
+
+{$SITE_DOMAIN} {
+	# L'app non e' esposta su internet: parla solo con Caddy, sulla rete
+	# interna di compose.
+	reverse_proxy app:8000
+
+	encode zstd gzip
+
+	header {
+		# Il browser parla solo in HTTPS con questo sito, anche se qualcuno
+		# gli passa un link http://
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	# Le ricerche lunghe non devono essere tagliate dal proxy: una stabile
+	# su Lorenzo puo' durare piu' di dieci minuti, e un timeout piu' corto
+	# la ucciderebbe proprio quando sta per finire.
+	reverse_proxy /api/optimize* app:8000 {
+		transport http {
+			read_timeout 30m
+			write_timeout 30m
+		}
+	}
+
+	log {
+		output file /data/access.log {
+			roll_size 10mb
+			roll_keep 5
+		}
+	}
+}

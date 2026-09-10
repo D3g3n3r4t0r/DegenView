@@ -1,0 +1,56 @@
+# Come gira il sistema su un server proprio (Hetzner CX22 o qualunque altro).
+#
+# Due container soli: l'app, e Caddy davanti che si occupa di HTTPS. Caddy
+# ottiene e rinnova il certificato Let's Encrypt da solo, quindi non c'e'
+# niente da ricordarsi ogni tre mesi.
+#
+# I dati (segnalazioni, utenti, diario ordini, alert sul prezzo) vivono in un
+# volume: sopravvivono a ogni ricostruzione dell'immagine. E' l'equivalente
+# del volume montato su Fly, stesso percorso dentro il container.
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    # I segreti arrivano da .env, che non entra mai in git (vedi .gitignore).
+    env_file: .env
+    volumes:
+      - app-data:/srv/backend/data
+    # Non esposto fuori: ci parla solo Caddy, sulla rete interna di compose.
+    # Cosi' l'app non e' raggiungibile su internet se non via HTTPS.
+    expose:
+      - "8000"
+    healthcheck:
+      # Se l'app muore — la ricerca che si mangia la memoria e' successo
+      # davvero — Docker la fa ripartire, e gli alert riprendono da soli
+      # invece di restare fermi finche' qualcuno se ne accorge.
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/', timeout=5)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+    # Un tetto alla memoria: la ricerca puo' morire, il resto della macchina
+    # no. Senza questo un'ottimizzazione pesante puo' portarsi giu' anche
+    # Caddy, e allora il sito non risponde nemmeno per dire che e' rotto.
+    mem_limit: 3g
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data      # certificati: vanno persi solo se cancelli questo
+      - caddy-config:/config
+    depends_on:
+      - app
+
+volumes:
+  app-data:
+  caddy-data:
+  caddy-config:

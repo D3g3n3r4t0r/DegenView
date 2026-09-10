@@ -1,0 +1,9 @@
+# Git su Windows converte i fine-riga in CRLF. Va bene per il codice, non
+# per i file che Linux esegue: uno script .sh con CRLF muore subito con
+# "bash: \r: command not found", e un Caddyfile con CRLF viene rifiutato.
+# Questi restano LF ovunque, qualunque sia la macchina che li tocca.
+*.sh text eol=lf
+Dockerfile text eol=lf
+deploy/Caddyfile text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf

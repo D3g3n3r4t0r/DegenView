@@ -1,0 +1,88 @@
+name: Deploy to Hetzner
+
+# Stesso patto che c'era con Fly: si spinge su main e va in produzione da
+# solo. Cambia solo dove atterra.
+#
+# Il lint resta il cancello prima del deploy, e i test adesso ci sono
+# accanto: su Fly giravano solo i controlli di stile, e per giorni sette
+# test sono rimasti rossi su main senza che nessuno lo sapesse, perche' la
+# pipeline era verde. Un deploy che non sa se il codice funziona non e' un
+# cancello, e' una porta aperta.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  verify:
+    name: Lint e test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'   # obbligatorio: pandas-ta non si installa su 3.11
+
+      - name: Lint
+        run: |
+          pip install ruff
+          ruff check backend/ --select E,F,W --ignore E501
+
+      - name: Frontend
+        run: node --check frontend/static/app.js
+
+      - name: Test
+        run: |
+          pip install -r backend/requirements.txt pytest
+          cd backend && python -m pytest tests/ -q
+
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs: verify
+    concurrency: deploy-hetzner   # un deploy alla volta, mai due sovrapposti
+
+    steps:
+      - name: Collegati al server e aggiorna
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_USER }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          # Una ricostruzione con le dipendenze puo' durare parecchi minuti
+          # su due vCPU: meglio aspettare che tagliare a meta' un deploy.
+          command_timeout: 30m
+          script: |
+            set -e
+            cd /opt/liquidity
+            git fetch --quiet origin main
+            git reset --hard origin/main
+            cd deploy
+            docker compose up -d --build
+            # Le immagini vecchie riempiono i 40 GB del disco in qualche
+            # decina di deploy: qui si buttano subito, non quando il disco
+            # e' pieno e il sito non riparte.
+            docker image prune -f
+
+      - name: Verifica che risponda
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_USER }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          script: |
+            # Il deploy non e' finito quando il container parte: e' finito
+            # quando l'app risponde. Senza questo controllo un avvio fallito
+            # risulterebbe comunque "deploy riuscito".
+            for i in $(seq 1 30); do
+              if docker exec deploy-app-1 python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/', timeout=5)" 2>/dev/null; then
+                echo "L'app risponde."
+                exit 0
+              fi
+              sleep 10
+            done
+            echo "L'app non ha risposto entro cinque minuti." >&2
+            docker compose -f /opt/liquidity/deploy/docker-compose.yml logs --tail 50 app >&2
+            exit 1
