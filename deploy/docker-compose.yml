@@ -40,6 +40,12 @@ services:
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
+    # Solo il dominio, non tutto .env: a Caddy servono zero segreti, e un
+    # container che non li ha non puo' perderli. Senza questa riga il
+    # Caddyfile si ritrova un nome vuoto e diventa un blocco di opzioni
+    # globali, che e' esattamente l'errore che ha dato al primo avvio.
+    environment:
+      SITE_DOMAIN: ${SITE_DOMAIN:?SITE_DOMAIN mancante in deploy/.env}
     ports:
       - "80:80"
       - "443:443"
