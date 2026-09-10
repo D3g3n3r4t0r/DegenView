@@ -1,5 +1,14 @@
 {
   "_README": "Scritto da Claude, versionato in git, distribuito col deploy. Le chiavi sono gli id delle segnalazioni. Non modificare a mano dall'app: verrebbe sovrascritto al deploy successivo.",
+  "seed-0037": {
+    "status": "risolto",
+    "at": 1789064500,
+    "summary": "Caddy mostra una pagina 'Aggiornamento in corso' invece del 502 grezzo, per tutta la finestra in cui l'app e' irraggiungibile.",
+    "detail": "Durante docker compose up --build il container app si ferma e riparte: per una manciata di secondi Caddy non trova nessuno dietro il reverse_proxy e rispondeva con un 502 senza contesto, indistinguibile da un sito rotto per davvero. Aggiunto un blocco handle_errors nel Caddyfile che intercetta 502/503/504 e risponde con una pagina statica (503, refresh automatico ogni 8 secondi) che dice 'Aggiornamento in corso'. Non serve nessun avviso scritto a mano prima del deploy: la pagina la genera Caddy stesso, scatta automaticamente esattamente nella finestra in cui l'app non risponde, qualunque ne sia la causa (deploy, riavvio, crash) — e sparisce da sola non appena il nuovo container e' su, senza bisogno di rimuoverla. Verificato facendo girare Caddy in locale con la stessa configurazione, senza nessun app dietro: risponde 503 con la pagina giusta.",
+    "files": [
+      "deploy/Caddyfile"
+    ]
+  },
   "seed-0036": {
     "status": "risolto",
     "at": 1788995500,
