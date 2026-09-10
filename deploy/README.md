@@ -14,7 +14,7 @@ Fly **1,69 s**, portatile **0,41 s**. Un CX22 sta nel mezzo, intorno ai
 ## Cosa serve
 
 - Un server Ubuntu 24.04 (Hetzner CX22: 2 vCPU, 4 GB, ~4–5 €/mese)
-- Un dominio che punti all'IP del server
+- Il dominio `liquidityengine.app` (registrato, DNS su Cloudflare) puntato all'IP del server
 - I cinque segreti che erano su Fly
 
 ## Primo avvio
