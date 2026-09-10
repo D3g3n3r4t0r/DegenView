@@ -164,6 +164,10 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0032", "Il tema non viaggiava davvero con l'account",
+     "Il frontend mandava 'theme' a PUT /api/preferences ma l'allowlist del backend non lo includeva: "
+     "il valore veniva scartato in silenzio e il tema restava legato al browser, non all'account.",
+     "media"),
     ("seed-0031", "Il sito e' pubblico e le API rispondono a chiunque",
      "Con il trasloco su un dominio pubblico serve verificare che le funzioni pesanti e i dati "
      "non siano raggiungibili senza credenziali.", "alta"),

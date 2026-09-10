@@ -1513,7 +1513,8 @@ async def put_preferences(
 ) -> dict:
     # Allowlist the keys we actually care about — ignore anything unknown
     allowed = {"ticker", "asset_type", "exchange", "interval", "strategy", "strategy_params",
-               "layers", "log_scale", "lab_ticker", "lab_asset_type", "lab_exchange", "lab_interval"}
+               "layers", "log_scale", "lab_ticker", "lab_asset_type", "lab_exchange", "lab_interval",
+               "theme"}
     filtered = {k: v for k, v in body.items() if k in allowed}
     auth.set_preferences(user.id, filtered)
     return filtered

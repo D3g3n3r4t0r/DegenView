@@ -1,5 +1,14 @@
 {
   "_README": "Scritto da Claude, versionato in git, distribuito col deploy. Le chiavi sono gli id delle segnalazioni. Non modificare a mano dall'app: verrebbe sovrascritto al deploy successivo.",
+  "seed-0032": {
+    "status": "risolto",
+    "at": 1788995100,
+    "summary": "Aggiunta 'theme' all'allowlist di PUT /api/preferences: il tema ora viaggia davvero con l'account.",
+    "detail": "Il frontend salva gia' 'theme' nel corpo di PUT /api/preferences (per far seguire il tema all'account e non al browser), ma l'allowlist server-side filtrava le chiavi ignote e 'theme' non c'era: veniva scartato senza errore, quindi il tema restava di fatto legato al dispositivo nonostante il codice dicesse il contrario. Aggiunta la chiave all'insieme 'allowed' in put_preferences (main.py); nessun'altra modifica necessaria, GET /api/preferences e la lettura lato client (applyTheme) c'erano gia'.",
+    "files": [
+      "backend/app/main.py"
+    ]
+  },
   "cbc105c2": {
     "status": "risolto",
     "at": 1788995000,
