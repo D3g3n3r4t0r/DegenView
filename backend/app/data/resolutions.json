@@ -1,5 +1,17 @@
 {
   "_README": "Scritto da Claude, versionato in git, distribuito col deploy. Le chiavi sono gli id delle segnalazioni. Non modificare a mano dall'app: verrebbe sovrascritto al deploy successivo.",
+  "seed-0050": {
+    "status": "risolto",
+    "at": 1789073500,
+    "summary": "Un handler globale intercetta ogni 500 vero, lo registra su file (server_errors.json, sul volume) e manda un avviso Telegram nello stesso istante. GET /api/errors lo rende consultabile con una richiesta HTTP, senza bisogno di SSH.",
+    "detail": "Prima un'eccezione non gestita finiva solo nei log del container (stdout di uvicorn), irraggiungibili senza accesso al server. Ora @app.exception_handler(Exception) registra ogni errore (via, metodo, tipo, messaggio, traceback, utente se autenticato) e avvisa su Telegram con un raffreddamento di 5 minuti per lo stesso errore ripetuto, cosi' un bug che rifiorisce a ogni retry non spamma. Il client continua a vedere lo stesso 500 generico di sempre, nessun cambio di comportamento visibile; solo gli HTTPException intenzionali restano gestiti dai loro handler piu' specifici, invariati. L'endpoint di lettura e' protetto dallo stesso cancello di seed-0031 (non e' nella lista pubblica), quindi non serve nessun controllo aggiuntivo. Una sessione futura puo' ora consultare /api/errors a inizio conversazione, come gia' fa con /api/issues, e sapere di problemi non ancora segnalati.",
+    "files": [
+      "backend/app/error_log.py",
+      "backend/app/main.py",
+      "backend/tests/test_error_log.py",
+      ".gitignore"
+    ]
+  },
   "seed-0049": {
     "status": "risolto",
     "at": 1789071000,
