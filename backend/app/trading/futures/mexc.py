@@ -1,0 +1,218 @@
+"""MEXC perpetui USDT — API contract v1, simboli `BTC_USDT`.
+
+Tre cose di MEXC che non assomigliano agli altri exchange di questo
+pacchetto, e che sono anche i tre modi piu' facili di sbagliare qui:
+
+1. **La quantita' e' in contratti, non in monete.** `vol` conta contratti,
+   e un contratto vale `contractSize` monete (0.0001 BTC su BTC_USDT).
+   Mandare le monete al posto dei contratti significa aprire una posizione
+   diecimila volte piu' grande di quella voluta: per questo il valore del
+   contratto si legge dall'exchange prima di ogni ordine e non si presume.
+
+2. **Il lato dell'ordine e' un numero, e distingue aprire da chiudere.**
+   1 = apri long, 3 = apri short, 2 = chiudi short, 4 = chiudi long. Una
+   chiusura usa i codici di chiusura, che sono l'equivalente MEXC del
+   `reduceOnly` degli altri: non possono aprire niente.
+
+3. **La firma non e' sulla query string.** E' su
+   `accessKey + timestamp + parametri`, dove i parametri sono la query
+   ordinata per un GET e il corpo JSON esatto per un POST — come su Bybit,
+   quindi il corpo si serializza una volta sola e si spedisce quello.
+
+Nota sul perimetro: MEXC non ha licenza UE per i derivati, a differenza di
+Kraken, Bybit, OKX e Bitget. E' stato aggiunto su richiesta esplicita di
+Lorenzo, che ha scelto sapendolo. Vedi il commento in `registry.py`.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import hmac
+import json
+import time
+import urllib.parse
+
+import httpx
+
+from app.trading.futures.base import FuturesAdapter, FuturesCreds, Position, explain
+
+BASE = "https://contract.mexc.com"
+
+_HINTS = {
+    "600": "parametro rifiutato da MEXC",
+    "1002": "il contratto non esiste o non e' abilitato",
+    "2001": "la chiave non e' abilitata al trading su contratti",
+    "2005": "margine insufficiente per l'importo richiesto",
+    "30004": "posizione insufficiente per chiudere questa quantita'",
+    # Questo capita a molti conti: MEXC ha chiuso l'invio ordini via API sui
+    # contratti se non e' stato abilitato esplicitamente. Senza questa
+    # traduzione l'errore che arriva non spiega niente.
+    "not support": "questo conto non ha l'invio ordini sui contratti abilitato via API — va chiesto a MEXC",
+    "maintenance": "MEXC non risponde (manutenzione o problema loro)",
+}
+
+
+class MexcFutures(FuturesAdapter):
+    slug = "mexc"
+    name = "MEXC Futures"
+    needs_passphrase = False
+    max_leverage = 10
+    key_hint = (
+        "Chiave API con permesso «Contract Trading». Attenzione: su molti conti MEXC "
+        "l'invio ordini sui contratti via API e' disattivato di default e va richiesto "
+        "all'assistenza — una chiave corretta puo' comunque essere rifiutata all'ordine."
+    )
+
+    def symbol_for(self, symbol: str) -> str:
+        """BTCUSDT -> BTC_USDT. Un simbolo gia' nella forma MEXC passa intatto."""
+        s = symbol.strip().upper()
+        if "_" in s:
+            return s
+        for quote in ("USDT", "USDC"):
+            if s.endswith(quote):
+                return f"{s[:-len(quote)]}_{quote}"
+        return s
+
+    # ── firma ─────────────────────────────────────────────────────────────
+
+    def _headers(self, creds: FuturesCreds, payload: str) -> dict:
+        ts = str(int(time.time() * 1000))
+        raw = creds.api_key + ts + payload
+        sign = hmac.new(creds.api_secret.encode(), raw.encode(), hashlib.sha256).hexdigest()
+        return {
+            "ApiKey": creds.api_key,
+            "Request-Time": ts,
+            "Signature": sign,
+            "Content-Type": "application/json",
+        }
+
+    def _unwrap(self, resp: httpx.Response, action: str):
+        if resp.status_code >= 400:
+            raise explain("mexc", action, resp.text, _HINTS)
+        body = resp.json()
+        # Come Bybit: 200 non basta, l'esito vero e' nel corpo.
+        if not body.get("success", True) or str(body.get("code", "0")) not in ("0", "200"):
+            raise explain("mexc", action, f'{body.get("code")} {body.get("message", "")}', _HINTS)
+        return body.get("data")
+
+    async def _get(self, path: str, params: dict, creds: FuturesCreds, action: str):
+        query = urllib.parse.urlencode(sorted(params.items()))
+        async with httpx.AsyncClient(base_url=BASE, timeout=15.0) as c:
+            resp = await c.get(f"{path}?{query}" if query else path,
+                               headers=self._headers(creds, query))
+        return self._unwrap(resp, action)
+
+    async def _post(self, path: str, body: dict, creds: FuturesCreds, action: str):
+        payload = json.dumps(body, separators=(",", ":"))
+        async with httpx.AsyncClient(base_url=BASE, timeout=15.0) as c:
+            resp = await c.post(path, headers=self._headers(creds, payload), content=payload)
+        return self._unwrap(resp, action)
+
+    # ── letture ───────────────────────────────────────────────────────────
+
+    async def available_margin(self, creds: FuturesCreds) -> float:
+        data = await self._get("/api/v1/private/account/asset/USDT", {}, creds, "saldo")
+        if not data:
+            return 0.0
+        return float(data.get("availableBalance") or data.get("availableOpen") or 0)
+
+    async def mark_price(self, symbol: str, creds: FuturesCreds) -> float:
+        # Pubblico: un prezzo non deve poter fallire per una chiave sbagliata.
+        async with httpx.AsyncClient(base_url=BASE, timeout=15.0) as c:
+            resp = await c.get("/api/v1/contract/ticker", params={"symbol": self.symbol_for(symbol)})
+        data = self._unwrap(resp, "prezzo")
+        row = data[0] if isinstance(data, list) else data
+        if not row:
+            raise explain("mexc", "prezzo", f"symbol {symbol} sconosciuto", _HINTS)
+        # fairPrice e' il mark su cui MEXC calcola la liquidazione; lastPrice
+        # e' solo l'ultimo scambio, e usarlo sposterebbe il prezzo di
+        # liquidazione mostrato rispetto a quello vero.
+        return float(row.get("fairPrice") or row.get("lastPrice") or 0)
+
+    async def _contract_size(self, symbol: str) -> float:
+        """Quante monete vale un contratto. Letto ogni volta e mai presunto:
+        e' il numero che separa un ordine giusto da uno enorme."""
+        async with httpx.AsyncClient(base_url=BASE, timeout=15.0) as c:
+            resp = await c.get("/api/v1/contract/detail", params={"symbol": symbol})
+        data = self._unwrap(resp, "dati del contratto")
+        row = data[0] if isinstance(data, list) else data
+        size = float((row or {}).get("contractSize") or 0)
+        if size <= 0:
+            raise explain("mexc", "dati del contratto",
+                          f"contractSize assente per {symbol}", _HINTS)
+        return size
+
+    async def open_positions(self, creds: FuturesCreds) -> list[Position]:
+        data = await self._get("/api/v1/private/position/open_positions", {}, creds, "posizioni") or []
+        out = []
+        for p in data:
+            vol = float(p.get("holdVol") or 0)
+            if vol == 0:
+                continue
+            sym = p.get("symbol", "")
+            # positionType: 1 long, 2 short.
+            is_long = int(p.get("positionType") or 1) == 1
+            mark = float(p.get("holdAvgPrice") or 0)
+            try:
+                csize = await self._contract_size(sym)
+            except Exception:
+                csize = 1.0
+            qty = vol * csize
+            entry = float(p.get("openAvgPrice") or 0)
+            out.append(Position(
+                exchange=self.slug, symbol=sym,
+                side="long" if is_long else "short", quantity=qty,
+                entry_price=entry, mark_price=mark,
+                leverage=int(float(p.get("leverage") or 1)),
+                margin=float(p.get("im") or p.get("oim") or 0),
+                notional=qty * mark,
+                unrealized_pnl=float(p.get("realised") or 0) + (mark - entry) * qty * (1 if is_long else -1),
+                liquidation_price=float(p.get("liquidatePrice") or 0),
+            ))
+        return out
+
+    # ── scritture ─────────────────────────────────────────────────────────
+
+    async def place_order(self, symbol, side, size_mode, size_value, leverage, creds):
+        sym = self.symbol_for(symbol)
+        available = await self.available_margin(creds)
+        notional = self._notional(size_mode, size_value, leverage, available)
+        mark = await self.mark_price(sym, creds)
+        csize = await self._contract_size(sym)
+        if mark <= 0:
+            raise explain("mexc", "ordine", "prezzo di mercato non disponibile", _HINTS)
+        vol = notional / mark / csize
+        if vol < 1:
+            raise explain(
+                "mexc", "ordine",
+                f"la dimensione richiesta vale {vol:.3f} contratti, meno del minimo di 1 "
+                f"(un contratto = {csize} unita' a {mark:.4f})", _HINTS,
+            )
+        return await self._post("/api/v1/private/order/submit", {
+            "symbol": sym,
+            "price": 0,                 # ignorato dagli ordini a mercato
+            "vol": int(vol),            # contratti interi: MEXC rifiuta i decimali
+            "side": 1 if side == "BUY" else 3,   # 1 apri long, 3 apri short
+            "type": 5,                  # 5 = mercato
+            "openType": 1,              # 1 = isolated, mai cross
+            "leverage": leverage,
+        }, creds, "ordine")
+
+    async def close_position(self, symbol: str, creds: FuturesCreds) -> dict | None:
+        sym = self.symbol_for(symbol)
+        pos = next((p for p in await self.open_positions(creds) if p.symbol == sym), None)
+        if pos is None:
+            return None
+        csize = await self._contract_size(sym)
+        vol = max(1, int(round(pos.quantity / csize)))
+        return await self._post("/api/v1/private/order/submit", {
+            "symbol": sym,
+            "price": 0,
+            "vol": vol,
+            # 4 chiude un long, 2 chiude uno short: sono codici di chiusura,
+            # l'equivalente MEXC del reduceOnly — non possono aprire nulla.
+            "side": 4 if pos.side == "long" else 2,
+            "type": 5,
+            "openType": 1,
+            "leverage": pos.leverage,
+        }, creds, "chiusura")

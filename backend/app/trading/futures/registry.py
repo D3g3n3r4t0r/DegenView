@@ -30,6 +30,7 @@ from app.trading.futures.binance import BinanceFutures
 from app.trading.futures.bitget import BitgetFutures
 from app.trading.futures.bybit import BybitFutures
 from app.trading.futures.kraken import KrakenFutures
+from app.trading.futures.mexc import MexcFutures
 from app.trading.futures.okx import OkxFutures
 
 # L'ordine e' quello con cui compaiono sullo schermo: Binance per primo
@@ -40,6 +41,9 @@ _ADAPTERS: tuple[FuturesAdapter, ...] = (
     OkxFutures(),
     BitgetFutures(),
     KrakenFutures(),
+    # MEXC non ha licenza UE per i derivati, a differenza dei quattro sopra:
+    # e' qui perche' Lorenzo l'ha chiesto sapendolo, non per una svista.
+    MexcFutures(),
 )
 
 ADAPTERS: dict[str, FuturesAdapter] = {a.slug: a for a in _ADAPTERS}
