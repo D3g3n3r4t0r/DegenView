@@ -35,6 +35,13 @@ class Settings(BaseSettings):
     # alerts going out, until this is opened up more broadly.
     telegram_allowed_emails: str = "you@example.com,friend@example.com"
 
+    # Chi puo' aprire un account. Il sito e' pubblico, e un account non e' un
+    # dettaglio estetico: da' accesso all'ottimizzatore, che occupa un core
+    # per minuti, e alla parte che conserva chiavi di trading. Vuoto =
+    # registrazione aperta a chiunque (com'era prima, e non e' una buona idea
+    # su un indirizzo pubblico).
+    registration_allowed_emails: str = "you@example.com,friend@example.com"
+
     # Read-only exchange account credentials, used ONLY for GET
     # account/balance endpoints (app/exchange_balances.py) — never for any
     # order/trade/withdrawal endpoint. Empty = that exchange's balance card
