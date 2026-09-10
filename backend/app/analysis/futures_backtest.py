@@ -23,7 +23,7 @@ import pandas as pd
 
 from app.analysis.futures_math import DEFAULT_MAINTENANCE_MARGIN_RATE, liquidation_price
 from app.analysis.strategies import DEFAULT_STRATEGY, confirmed_events
-from app.models import MAX_FUTURES_LEVERAGE, BacktestResult, BacktestTrade, StrategySignal
+from app.models import MAX_SIMULATED_LEVERAGE, BacktestResult, BacktestTrade, StrategySignal
 
 DEFAULT_FUTURES_PARAMS = {
     "initial_capital": 10000.0,
@@ -65,9 +65,12 @@ def run_futures_backtest(
 ) -> BacktestResult:
     bp = {**DEFAULT_FUTURES_PARAMS, **(backtest_params or {})}
     leverage = int(bp["leverage"])
-    if leverage < 1 or leverage > MAX_FUTURES_LEVERAGE:
+    # Il tetto della simulazione, non quello dell'esecuzione: qui non parte
+    # nessun ordine, e limitare lo studio al rischio consentito dal vivo
+    # significava non poter piu' osservare una liquidazione.
+    if leverage < 1 or leverage > MAX_SIMULATED_LEVERAGE:
         raise InvalidLeverageError(
-            f"Leva {leverage}x fuori dal limite consentito (1-{MAX_FUTURES_LEVERAGE}x)"
+            f"Leva {leverage}x fuori dal limite simulabile (1-{MAX_SIMULATED_LEVERAGE}x)"
         )
     maint_rate = bp["maintenance_margin_rate"]
     funding_rate_8h = bp["funding_rate_8h"]

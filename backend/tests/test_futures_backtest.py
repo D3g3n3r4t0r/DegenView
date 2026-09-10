@@ -18,7 +18,7 @@ from app.analysis.futures_backtest import (
     InvalidLeverageError,
     run_futures_backtest,
 )
-from app.models import MAX_FUTURES_LEVERAGE
+from app.models import MAX_SIMULATED_LEVERAGE
 
 
 def _trending_series(n=300, seed=7) -> pd.DataFrame:
@@ -122,6 +122,7 @@ def test_funding_accrues_on_an_open_position_across_funding_hours():
     # Ogni barra alle 00/08/16 UTC mentre la posizione e' aperta attraversa
     # un orario di funding, barra di chiusura inclusa (si e' rimasti dentro
     # fino a quell'istante): barre a index 1,2,3,4 — 4 attraversamenti.
+    #
     margin_used = 10000.0 * 0.5
     notional = margin_used * 2
     expected_funding = notional * 0.0004 * 4
@@ -135,7 +136,7 @@ def test_default_leverage_is_one():
 def test_leverage_above_the_cap_is_rejected_before_running():
     df = _trending_series()
     with pytest.raises(InvalidLeverageError):
-        run_futures_backtest(df, None, {"leverage": MAX_FUTURES_LEVERAGE + 1},
+        run_futures_backtest(df, None, {"leverage": MAX_SIMULATED_LEVERAGE + 1},
                               strategy_name="Lorenzo (trend-follower)")
 
 
