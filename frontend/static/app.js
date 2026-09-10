@@ -925,15 +925,29 @@
     ro.observe(container);
   }
 
-  function resizeAllCharts() {
+  // `refit` va chiesto quando a cambiare e' stato il *layout*, non la
+  // finestra: passando da Analizza al Lab la colonna del grafico si
+  // restringe, e ridimensionare la tela senza riadattare l'intervallo
+  // visibile lasciava le candele schiacciate in un angolo con mezzo
+  // riquadro bianco. Su un semplice ridimensionamento della finestra non
+  // si riadatta invece niente, o si butterebbe via lo zoom dell'utente a
+  // ogni pixel.
+  function resizeAllCharts(refit = false) {
     [
       [el("main-chart"), mainChart],
       [el("rsi-chart"), rsiChart],
       [el("macd-chart"), macdChart],
       [el("stoch-chart"), stochChart],
     ].forEach(([container, chart]) => {
+      // I sub-chart nascono solo quando il loro indicatore viene acceso:
+      // prima di allora qui c'e' null, e senza questo controllo l'errore
+      // fermava anche il ridimensionamento dei grafici che esistono.
+      if (!container || !chart) return;
       if (container.clientWidth > 0 && container.clientHeight > 0) {
         chart.resize(container.clientWidth, container.clientHeight);
+        if (refit) {
+          try { chart.timeScale().fitContent(); } catch { /* niente dati ancora */ }
+        }
       }
     });
   }
@@ -7781,7 +7795,7 @@
       cockpit.dataset.area = area;
       if (area === "issues") loadIssues();
       document.querySelectorAll(".sidenav-item").forEach((b) => b.classList.toggle("active", b === item));
-      resizeAllCharts();
+      requestAnimationFrame(() => resizeAllCharts(true));
       return;
     }
 
@@ -7802,7 +7816,7 @@
         c.classList.toggle("active", c.dataset.tabContent === tabTarget);
       });
     }
-    resizeAllCharts();
+    requestAnimationFrame(() => resizeAllCharts(true));
   }
 
 
@@ -7839,7 +7853,7 @@
       btn.classList.toggle("active", on);
       btn.setAttribute("aria-pressed", String(on));
       btn.title = on ? "Restringi il grafico" : "Allarga il grafico";
-      resizeAllCharts();
+      requestAnimationFrame(() => resizeAllCharts(true));
     };
     let saved = false;
     try { saved = localStorage.getItem("lae-chart-wide") === "1"; } catch { saved = false; }
