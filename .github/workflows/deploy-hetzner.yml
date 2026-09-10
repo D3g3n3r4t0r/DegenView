@@ -9,9 +9,13 @@ name: Deploy to Hetzner
 # pipeline era verde. Un deploy che non sa se il codice funziona non e' un
 # cancello, e' una porta aperta.
 
+# Per ora si lancia solo a mano (Actions -> Deploy to Hetzner -> Run
+# workflow). Quando il server e' in piedi, i segreti sono impostati e il
+# sito risponde, si toglie il commento qui sotto e il deploy torna
+# automatico a ogni push, come era su Fly.
 on:
-  push:
-    branches: [main]
+  # push:
+  #   branches: [main]
   workflow_dispatch:
 
 jobs:
