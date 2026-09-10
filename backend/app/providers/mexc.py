@@ -81,7 +81,16 @@ class MexcProvider(DataProvider):
                         raise ProviderError(f"Risposta non valida da MEXC per {formatted_symbol}") from exc
 
                     if isinstance(payload, dict) and "code" in payload:
-                        raise ProviderError(payload.get("msg", f"Errore MEXC per {formatted_symbol}"))
+                        # Il messaggio grezzo di MEXC ("Invalid symbol.") non dice
+                        # ne' quale simbolo ne' come scriverlo giusto — chi lo legge
+                        # deve indovinare da solo se ha sbagliato exchange, formato
+                        # o nome. Il simbolo che abbiamo davvero mandato e un
+                        # suggerimento concreto valgono piu' del codice d'errore.
+                        raw = payload.get("msg", "errore sconosciuto")
+                        raise ProviderError(
+                            f"MEXC non riconosce {formatted_symbol}: {raw}. "
+                            f"Controlla che sia scritto come lo scrive MEXC, es. BTCUSDT."
+                        )
                     if not payload:
                         break
 

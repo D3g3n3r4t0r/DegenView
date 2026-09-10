@@ -876,13 +876,14 @@ async def search_symbols(query: str = Query(..., min_length=1, max_length=20)) -
     # Single unified search across stocks and both crypto exchanges — no
     # upfront "stock vs crypto" toggle. The user picks the asset from results
     # that already say which market/exchange it's on.
-    stock_res, mexc_res, kucoin_res = await asyncio.gather(
+    stock_res, mexc_res, kucoin_res, binance_res = await asyncio.gather(
         _safe_search(twelvedata_provider, query, "stock", "stock")
         if settings.stocks_enabled else _no_results(),
         _safe_search(mexc_provider, query, "crypto", "mexc"),
         _safe_search(kucoin_provider, query, "crypto", "kucoin"),
+        _safe_search(binance_provider, query, "crypto", "binance"),
     )
-    merged = _interleave(stock_res, mexc_res, kucoin_res)
+    merged = _interleave(stock_res, mexc_res, kucoin_res, binance_res)
     return _rank_suggestions(merged, query)[:25]
 
 

@@ -1,5 +1,18 @@
 {
   "_README": "Scritto da Claude, versionato in git, distribuito col deploy. Le chiavi sono gli id delle segnalazioni. Non modificare a mano dall'app: verrebbe sovrascritto al deploy successivo.",
+  "seed-0053": {
+    "status": "risolto",
+    "at": 1789078200,
+    "summary": "Due difetti concorrenti. Spot: /api/symbols interrogava solo stock, MEXC e KuCoin — Binance era gia' implementato come provider (search_symbols) ma mai incluso nella ricerca combinata, quindi scegliendo Binance il campo Pair non trovava mai nulla. Futures: il campo Pair non aveva alcun autocomplete (l'elenco suggerimenti esisteva nell'HTML ma niente lo popolava), e su MEXC un simbolo sconosciuto dava un IndexError non gestito (mark_price()/_contract_size() leggevano data[0] su una lista vuota) invece del messaggio chiaro gia' previsto.",
+    "detail": "Fix: aggiunto binance_provider al asyncio.gather di /api/symbols in backend/app/main.py; aggiunta una guardia su lista vuota in backend/app/trading/futures/mexc.py; aggiunto un vero controller di autocomplete per il campo futures-symbol in app.js (stesso pattern di moSuggest per lo spot), abilitato per mexc e binance — gli unici due exchange futures che /api/symbols copre davvero.",
+    "files": [
+      "backend/app/main.py",
+      "backend/app/trading/futures/mexc.py",
+      "frontend/static/app.js",
+      "backend/tests/test_mexc_futures.py",
+      "backend/tests/test_symbols_search.py"
+    ]
+  },
   "seed-0052": {
     "status": "risolto",
     "at": 1789074600,

@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0053", "Nessun pair trovato su spot (Binance) e futures (MEXC)",
+     "In Opera, scegliendo Binance il campo Pair non suggeriva mai nulla (il backend non interrogava quel provider); sui futures MEXC il campo Pair non aveva alcun autocomplete e un simbolo sconosciuto dava un errore 500 generico invece del messaggio previsto.",
+     "alta"),
     ("seed-0052", "Ogni salvataggio da 500 - Permission denied sul volume", "Salvare credenziali, preferenze o preferiti dava Internal Server Error: il volume dati non era scrivibile dall'utente del container.", "alta"),
     ("seed-0051", "Nessun avviso Telegram al deploy", "Dopo un deploy su main non arriva piu' il messaggio Telegram che elenca le modifiche.", "media"),
     ("seed-0050", "Nessun modo di vedere gli errori 500 senza SSH", "Quando qualcosa si rompe davvero sul server, il traceback vive solo nei log del container: nessuno lo vede finche' non lo segnalo io.", "alta"),

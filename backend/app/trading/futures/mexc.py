@@ -121,7 +121,10 @@ class MexcFutures(FuturesAdapter):
         async with httpx.AsyncClient(base_url=BASE, timeout=15.0) as c:
             resp = await c.get("/api/v1/contract/ticker", params={"symbol": self.symbol_for(symbol)})
         data = self._unwrap(resp, "prezzo")
-        row = data[0] if isinstance(data, list) else data
+        # Un simbolo sconosciuto (o mal formato) torna qui come lista vuota,
+        # non come 404 o corpo d'errore: data[0] senza guardia crasherebbe
+        # con IndexError invece del messaggio chiaro sotto.
+        row = (data[0] if data else None) if isinstance(data, list) else data
         if not row:
             raise explain("mexc", "prezzo", f"symbol {symbol} sconosciuto", _HINTS)
         # fairPrice e' il mark su cui MEXC calcola la liquidazione; lastPrice
@@ -135,7 +138,9 @@ class MexcFutures(FuturesAdapter):
         async with httpx.AsyncClient(base_url=BASE, timeout=15.0) as c:
             resp = await c.get("/api/v1/contract/detail", params={"symbol": symbol})
         data = self._unwrap(resp, "dati del contratto")
-        row = data[0] if isinstance(data, list) else data
+        # Stesso caso di mark_price: un simbolo sconosciuto torna come lista
+        # vuota, non come errore — data[0] senza guardia crasherebbe qui.
+        row = (data[0] if data else None) if isinstance(data, list) else data
         size = float((row or {}).get("contractSize") or 0)
         if size <= 0:
             raise explain("mexc", "dati del contratto",

@@ -1222,6 +1222,23 @@
   const TRADING_EXCHANGE_NAMES = { mexc: "MEXC", binance: "Binance", kucoin: "KuCoin", kraken: "Kraken", coinbase: "Coinbase", bitstamp: "Bitstamp" };
   const TRADING_EXCHANGES = Object.keys(TRADING_EXCHANGE_NAMES);
 
+  // seed-0025 (il 422 muto sui parametri di strategia) ha gia' stabilito il
+  // principio: un valore non valido non si sostituisce in silenzio, mandando
+  // al server un numero diverso da quello scritto a schermo. Qui il campo
+  // pilota quanto denaro si muove per trade sugli ordini automatici, quindi
+  // lo stesso difetto conta ancora di piu'. Il valore corretto viene
+  // RISCRITTO nel campo prima di partire, cosi' quello che gira e' quello
+  // che si legge.
+  function readNumericField(input, fallback, { min = 0, max = Infinity, integer = false } = {}) {
+    if (!input) return fallback;
+    let v = integer ? parseInt(input.value, 10) : parseFloat(input.value);
+    if (!Number.isFinite(v) || v < min || v > max) {
+      v = fallback;
+      input.value = String(fallback);
+    }
+    return v;
+  }
+
   async function loadTradingCredentials() {
     try {
       const resp = await fetch("/api/auth/trading");
@@ -1287,7 +1304,7 @@
         passphrase: card.querySelector(".trading-passphrase")?.value || "",
         enabled: card.querySelector(".trading-enabled-cb")?.checked || false,
         size_mode: card.querySelector(".trading-size-mode")?.value || "fixed_usdt",
-        size_value: parseFloat(card.querySelector(".trading-size-val")?.value) || 10,
+        size_value: readNumericField(card.querySelector(".trading-size-val"), 10, { min: 1 }),
       };
       try {
         const resp = await fetch("/api/auth/trading", {
@@ -1320,7 +1337,7 @@
         passphrase: "",
         enabled: e.target.checked,
         size_mode: card.querySelector(".trading-size-mode")?.value || "fixed_usdt",
-        size_value: parseFloat(card.querySelector(".trading-size-val")?.value) || 10,
+        size_value: readNumericField(card.querySelector(".trading-size-val"), 10, { min: 1 }),
       };
       try {
         await fetch("/api/auth/trading", {
@@ -1612,6 +1629,34 @@
   let futuresQuote = null;
   let futuresQuoteTimer = null;
 
+  // Stesso principio del pair manuale spot (vedi MANUAL_PAIR_EXCHANGES piu'
+  // sopra): niente autocomplete non e' una conferma, e' silenzio. Qui il
+  // campo restava muto per ogni exchange futures — bug segnalato da Lorenzo
+  // su MEXC ("non trova nessun pair" scrivendo BTCUSDT). /api/symbols oggi
+  // copre solo mexc e kucoin fra i provider crypto, e fra i futures solo
+  // mexc e' anche in quell'elenco: e' l'unico per cui possiamo verificare
+  // il pair da qui, cosi' com'e' per lo spot.
+  const FUTURES_PAIR_EXCHANGES = new Set(["mexc", "binance"]);
+
+  const futuresSuggest = makeSuggestController({
+    listId: "futures-symbol-suggestions",
+    anchorId: "futures-symbol",
+    fetchItems: async (query) => {
+      const exchange = el("futures-exchange")?.value;
+      if (!FUTURES_PAIR_EXCHANGES.has(exchange)) return [];
+      const resp = await fetch(`/api/symbols?query=${encodeURIComponent(query)}`);
+      const all = resp.ok ? await resp.json() : [];
+      return all.filter((s) => s.asset_type === "crypto" && s.provider === exchange);
+    },
+    onSelect: (item) => {
+      el("futures-symbol").value = item.symbol;
+      futuresSuggest.resolved = item;
+      futuresSuggest.clear();
+      queueFuturesQuote();
+    },
+  });
+  let futuresSuggestTimer = null;
+
   function currentFuturesExchangeInfo() {
     const slug = el("futures-exchange")?.value;
     return futuresExchanges.find((x) => x.exchange === slug) || null;
@@ -1876,8 +1921,8 @@
         passphrase: card.querySelector(".futures-cred-passphrase")?.value || "",
         enabled: card.querySelector(".futures-cred-enabled-cb")?.checked || false,
         size_mode: card.querySelector(".futures-cred-size-mode")?.value || "fixed_usdt",
-        size_value: parseFloat(card.querySelector(".futures-cred-size-val")?.value) || 50,
-        leverage: parseInt(card.querySelector(".futures-cred-leverage")?.value, 10) || 1,
+        size_value: readNumericField(card.querySelector(".futures-cred-size-val"), 50, { min: 1 }),
+        leverage: readNumericField(card.querySelector(".futures-cred-leverage"), 1, { min: 1, max: parseInt(card.querySelector(".futures-cred-leverage")?.max, 10) || 1, integer: true }),
       };
       try {
         const resp = await fetch("/api/auth/futures", {
@@ -1911,8 +1956,8 @@
             exchange, api_key: "", api_secret: "", passphrase: "",
             enabled: e.target.checked,
             size_mode: card.querySelector(".futures-cred-size-mode")?.value || "fixed_usdt",
-            size_value: parseFloat(card.querySelector(".futures-cred-size-val")?.value) || 50,
-            leverage: parseInt(card.querySelector(".futures-cred-leverage")?.value, 10) || 1,
+            size_value: readNumericField(card.querySelector(".futures-cred-size-val"), 50, { min: 1 }),
+            leverage: readNumericField(card.querySelector(".futures-cred-leverage"), 1, { min: 1, max: parseInt(card.querySelector(".futures-cred-leverage")?.max, 10) || 1, integer: true }),
           }),
         });
       } catch (_) {
@@ -1926,6 +1971,10 @@
 
     el("futures-exchange")?.addEventListener("change", () => {
       applyFuturesExchangeLimits();
+      // Cambiare exchange invalida la conferma dell'autocomplete: lo stesso
+      // pair puo' non esistere altrove, o esistere scritto in un altro modo.
+      futuresSuggest.resolved = null;
+      futuresSuggest.clear();
       queueFuturesQuote();
     });
 
@@ -1946,7 +1995,16 @@
       queueFuturesQuote();
     });
     valInput.addEventListener("input", queueFuturesQuote);
-    el("futures-symbol").addEventListener("input", queueFuturesQuote);
+    el("futures-symbol").addEventListener("input", () => {
+      futuresSuggest.resolved = null; // scrivere annulla la scelta precedente
+      queueFuturesQuote();
+      const value = el("futures-symbol").value.trim();
+      clearTimeout(futuresSuggestTimer);
+      if (!value) { futuresSuggest.clear(); return; }
+      futuresSuggestTimer = setTimeout(() => futuresSuggest.fetch(value), 300);
+    });
+    el("futures-symbol").addEventListener("keydown", (e) => futuresSuggest.handleKey(e));
+    el("futures-symbol").addEventListener("blur", () => setTimeout(() => futuresSuggest.clear(), 150));
     document.querySelectorAll('input[name="futures-size-mode"]').forEach((r) => {
       r.addEventListener("change", () => {
         el("futures-size-unit").textContent = futuresSizeMode() === "pct_balance" ? "%" : "USDT";

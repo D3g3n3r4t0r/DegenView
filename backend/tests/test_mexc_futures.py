@@ -196,6 +196,23 @@ def test_a_body_that_says_failure_raises_even_on_http_200(monkeypatch):
     assert "abilitata al trading su contratti" in str(exc.value)
 
 
+def test_unknown_symbol_gives_a_specific_message_not_a_bare_not_found(monkeypatch):
+    """Bug segnalato da Lorenzo: su Futures/MEXC il pair "non si trova". La
+    causa vera era l'assenza di autocomplete sul campo (frontend, nessun
+    exchange futures ce l'aveva) — la conversione di formato qui e' gia'
+    corretta (vedi test sopra). Questo test blocca una regressione diversa:
+    se MEXC non riconosce un simbolo, l'errore deve nominare il simbolo,
+    non un "non trovato" generico che sembra un problema di rete."""
+    def handler(request):
+        return _ok([])   # MEXC risponde 200 con lista vuota per un contratto inesistente
+
+    _patch(monkeypatch, handler)
+    with pytest.raises(FuturesExecutionError) as exc:
+        _run(MexcFutures().mark_price("NOTAREALCOINUSDT", CREDS))
+    assert "NOTAREALCOINUSDT" in str(exc.value)
+    assert "sconosciuto" in str(exc.value)
+
+
 def test_positions_are_converted_from_contracts_to_coins(monkeypatch):
     def handler(request):
         p = request.url.path
