@@ -3031,10 +3031,30 @@ async def sniper_candidates(
     min_liq: float = Query(0.0, ge=0, description="Minimum liquidity_usd"),
     max_mc: float = Query(0.0, ge=0, description="Maximum market_cap (0 = no limit)"),
     exclude_cex: bool = Query(False, description="Exclude CEX-listed tokens"),
+    serious_only: bool = Query(True, description="Solo progetti seri: esclude le meme coin"),
     limit: int = Query(0, ge=0, description="Max results (0 = all)"),
 ) -> dict:
     from app.sniper import cache as sniper_cache
+    from app.sniper.quality import is_serious
     candidates = sniper_cache.get_candidates()
+    quality: dict[str, str] = {}
+    if serious_only:
+        kept = []
+        for c in candidates:
+            ok, why = is_serious(
+                symbol=c.symbol,
+                name=c.name,
+                liquidity_usd=c.liquidity_usd,
+                market_cap=c.market_cap,
+                volume_h24=c.volume_h24,
+                age_hours=c.age_hours,
+                website=c.website,
+                cex_listed=c.cex_listed,
+            )
+            if ok:
+                quality[c.token_address] = why
+                kept.append(c)
+        candidates = kept
     if chain:
         candidates = [c for c in candidates if c.chain_id == chain]
     if min_score:
@@ -3072,11 +3092,13 @@ async def sniper_candidates(
                 "first_seen": c.first_seen,
                 "last_updated": c.last_updated,
                 "cex_listed": c.cex_listed,
+                "quality_reason": quality.get(c.token_address),
             }
             for c in candidates
         ],
         "last_scan": sniper_cache.last_scan_ts(),
         "count": len(candidates),
+        "serious_only": serious_only,
     }
 
 
