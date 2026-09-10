@@ -1,0 +1,220 @@
+"""MEXC futures — nessuna chiamata di rete vera: ogni test sostituisce il
+trasporto con httpx.MockTransport, cosi' non possono mai spendere margine.
+
+Il grosso di questi test sta su una cosa sola: la conversione fra monete e
+contratti. Su MEXC `vol` conta contratti, e un contratto di BTC_USDT vale
+0.0001 BTC — sbagliare quella divisione apre una posizione diecimila volte
+piu' grande di quella chiesta, e non e' un errore che si nota dal codice.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+
+import httpx
+import pytest
+
+from app.trading.futures.base import FuturesCreds, FuturesExecutionError
+from app.trading.futures.mexc import MexcFutures
+
+_RealAsyncClient = httpx.AsyncClient
+CREDS = FuturesCreds(api_key="key", api_secret="secret")
+
+
+def _patch(monkeypatch, handler):
+    def factory(*args, **kwargs):
+        kwargs["transport"] = httpx.MockTransport(handler)
+        return _RealAsyncClient(*args, **kwargs)
+    monkeypatch.setattr(httpx, "AsyncClient", factory)
+
+
+def _run(coro):
+    return asyncio.run(coro)
+
+
+def _ok(data):
+    return httpx.Response(200, json={"success": True, "code": 0, "data": data})
+
+
+def test_symbol_is_translated_to_the_mexc_form():
+    a = MexcFutures()
+    assert a.symbol_for("BTCUSDT") == "BTC_USDT"
+    assert a.symbol_for("ETHUSDT") == "ETH_USDT"
+    # Gia' nella forma MEXC: non va tradotto due volte.
+    assert a.symbol_for("BTC_USDT") == "BTC_USDT"
+
+
+def test_mark_price_uses_fair_price_not_last_trade(monkeypatch):
+    """fairPrice e' il prezzo su cui MEXC calcola la liquidazione. Usare
+    lastPrice sposterebbe la liquidazione mostrata rispetto a quella vera."""
+    def handler(request):
+        return _ok({"symbol": "BTC_USDT", "lastPrice": 61000, "fairPrice": 60800})
+
+    _patch(monkeypatch, handler)
+    assert _run(MexcFutures().mark_price("BTCUSDT", CREDS)) == 60800.0
+
+
+def test_order_size_is_in_contracts_not_in_coins(monkeypatch):
+    """1000 USDT di nozionale a 50 000, con contratti da 0.0001 BTC:
+    0.02 BTC = 200 contratti. Se `vol` arrivasse in monete sarebbe 0."""
+    sent = {}
+
+    def handler(request):
+        p = request.url.path
+        if p == "/api/v1/contract/ticker":
+            return _ok({"fairPrice": 50000})
+        if p == "/api/v1/contract/detail":
+            return _ok({"contractSize": 0.0001})
+        if p == "/api/v1/private/account/asset/USDT":
+            return _ok({"availableBalance": 10000})
+        if p == "/api/v1/private/order/submit":
+            sent.update(json.loads(request.content))
+            return _ok({"orderId": "1"})
+        raise AssertionError(f"percorso inatteso: {p}")
+
+    _patch(monkeypatch, handler)
+    _run(MexcFutures().place_order("BTCUSDT", "BUY", "fixed_usdt", 1000.0, 1, CREDS))
+
+    assert sent["vol"] == 200          # 1000 / 50000 / 0.0001
+    assert isinstance(sent["vol"], int)  # MEXC rifiuta i decimali
+    assert sent["side"] == 1           # 1 = apri long
+    assert sent["type"] == 5           # 5 = mercato
+    assert sent["openType"] == 1       # 1 = isolated, mai cross
+
+
+def test_short_uses_the_open_short_code(monkeypatch):
+    sent = {}
+
+    def handler(request):
+        p = request.url.path
+        if p == "/api/v1/contract/ticker":
+            return _ok({"fairPrice": 50000})
+        if p == "/api/v1/contract/detail":
+            return _ok({"contractSize": 0.0001})
+        if p == "/api/v1/private/account/asset/USDT":
+            return _ok({"availableBalance": 10000})
+        if p == "/api/v1/private/order/submit":
+            sent.update(json.loads(request.content))
+            return _ok({"orderId": "2"})
+        raise AssertionError(p)
+
+    _patch(monkeypatch, handler)
+    _run(MexcFutures().place_order("BTCUSDT", "SELL", "fixed_usdt", 500.0, 1, CREDS))
+    assert sent["side"] == 3           # 3 = apri short
+
+
+def test_an_order_below_one_contract_is_refused_not_rounded(monkeypatch):
+    """Meglio un errore che spiega, che un ordine arrotondato a zero — o,
+    peggio, arrotondato a uno e quindi piu' grande del richiesto."""
+    def handler(request):
+        p = request.url.path
+        if p == "/api/v1/contract/ticker":
+            return _ok({"fairPrice": 50000})
+        if p == "/api/v1/contract/detail":
+            return _ok({"contractSize": 1})     # un contratto = 1 BTC
+        if p == "/api/v1/private/account/asset/USDT":
+            return _ok({"availableBalance": 10000})
+        raise AssertionError(p)
+
+    _patch(monkeypatch, handler)
+    with pytest.raises(FuturesExecutionError) as exc:
+        _run(MexcFutures().place_order("BTCUSDT", "BUY", "fixed_usdt", 100.0, 1, CREDS))
+    assert "contratti" in str(exc.value)
+
+
+def test_closing_a_long_uses_the_close_code_and_cannot_open(monkeypatch):
+    """4 chiude un long: e' il reduceOnly di MEXC. Un ordine di apertura al
+    contrario (3 = apri short) raddoppierebbe l'esposizione invece di
+    chiuderla."""
+    sent = {}
+
+    def handler(request):
+        p = request.url.path
+        if p == "/api/v1/private/position/open_positions":
+            return _ok([{
+                "symbol": "BTC_USDT", "holdVol": 200, "positionType": 1,
+                "openAvgPrice": 50000, "holdAvgPrice": 51000,
+                "leverage": 3, "im": 333.0, "liquidatePrice": 34000,
+            }])
+        if p == "/api/v1/contract/detail":
+            return _ok({"contractSize": 0.0001})
+        if p == "/api/v1/private/order/submit":
+            sent.update(json.loads(request.content))
+            return _ok({"orderId": "3"})
+        raise AssertionError(p)
+
+    _patch(monkeypatch, handler)
+    _run(MexcFutures().close_position("BTCUSDT", CREDS))
+    assert sent["side"] == 4           # 4 = chiudi long
+    assert sent["vol"] == 200
+
+
+def test_closing_a_short_uses_the_other_close_code(monkeypatch):
+    sent = {}
+
+    def handler(request):
+        p = request.url.path
+        if p == "/api/v1/private/position/open_positions":
+            return _ok([{
+                "symbol": "BTC_USDT", "holdVol": 50, "positionType": 2,
+                "openAvgPrice": 50000, "holdAvgPrice": 49000,
+                "leverage": 2, "im": 100.0, "liquidatePrice": 60000,
+            }])
+        if p == "/api/v1/contract/detail":
+            return _ok({"contractSize": 0.0001})
+        if p == "/api/v1/private/order/submit":
+            sent.update(json.loads(request.content))
+            return _ok({"orderId": "4"})
+        raise AssertionError(p)
+
+    _patch(monkeypatch, handler)
+    _run(MexcFutures().close_position("BTCUSDT", CREDS))
+    assert sent["side"] == 2           # 2 = chiudi short
+
+
+def test_closing_nothing_returns_none_and_sends_no_order(monkeypatch):
+    def handler(request):
+        if request.url.path == "/api/v1/private/position/open_positions":
+            return _ok([])
+        raise AssertionError("non doveva essere spedito nessun ordine")
+
+    _patch(monkeypatch, handler)
+    assert _run(MexcFutures().close_position("BTCUSDT", CREDS)) is None
+
+
+def test_a_body_that_says_failure_raises_even_on_http_200(monkeypatch):
+    """MEXC risponde 200 anche quando rifiuta: l'esito vero e' nel corpo."""
+    def handler(request):
+        return httpx.Response(200, json={"success": False, "code": 2001,
+                                         "message": "contract trading not support"})
+
+    _patch(monkeypatch, handler)
+    with pytest.raises(FuturesExecutionError) as exc:
+        _run(MexcFutures().mark_price("BTCUSDT", CREDS))
+    # L'errore piu' comune su MEXC va spiegato, non riportato com'e'.
+    assert "abilitata al trading su contratti" in str(exc.value)
+
+
+def test_positions_are_converted_from_contracts_to_coins(monkeypatch):
+    def handler(request):
+        p = request.url.path
+        if p == "/api/v1/private/position/open_positions":
+            return _ok([{
+                "symbol": "BTC_USDT", "holdVol": 200, "positionType": 1,
+                "openAvgPrice": 50000, "holdAvgPrice": 51000,
+                "leverage": 3, "im": 333.0, "liquidatePrice": 34000,
+            }])
+        if p == "/api/v1/contract/detail":
+            return _ok({"contractSize": 0.0001})
+        raise AssertionError(p)
+
+    _patch(monkeypatch, handler)
+    positions = _run(MexcFutures().open_positions(CREDS))
+    assert len(positions) == 1
+    pos = positions[0]
+    assert pos.quantity == pytest.approx(0.02)     # 200 contratti x 0.0001
+    assert pos.side == "long"
+    assert pos.liquidation_price == 34000
+    # Il long e' in guadagno: 51000 contro 50000 di carico.
+    assert pos.unrealized_pnl > 0
