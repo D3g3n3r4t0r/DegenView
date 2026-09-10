@@ -10,7 +10,7 @@ poter ripartire da li' senza rileggere tutta la cronologia precedente.
 Leggi la bacheca segnalazioni:
 
 ```
-curl -s https://liquidity-analysis-engine.fly.dev/api/issues
+curl -s https://liquidityengine.app/api/issues
 ```
 
 Sono i problemi che Lorenzo e chi lavora con lui hanno scritto dall'app. Se ce
@@ -50,7 +50,9 @@ segnalazione è una diagnosi che nessuno vedrà mai — c'è un test che lo veri
 
 ## Il progetto
 
-FastAPI + frontend vanilla JS, deploy automatico su Fly da `main` (2-3 minuti).
+FastAPI + frontend vanilla JS, deploy automatico da `main` su un server
+proprio (Hetzner CX23, ~2 minuti). Vedi `deploy/README.md`. Fly e' spento ma
+resta come via di ritorno.
 Il codice sta in `backend/app`, il frontend in `frontend/`.
 
 **Python 3.12 obbligatorio** — `pandas-ta` non si installa su 3.11. Se la shell
