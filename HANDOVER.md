@@ -15,6 +15,11 @@ lavori pluri-sessione, decisioni prese, stato di piani approvati.
 ## Stato del repo
 
 - **Repo**: `lorenzocorazzi-wq/liquidity-analysis-engine`
+- **Dove gira**: server proprio Hetzner CX23 a Norimberga (2 core, 4 GB,
+  6,70 EUR/mese), dominio **liquidityengine.app**. Deploy automatico a ogni
+  push su `main`: lint + **test** + deploy (vedi `deploy/README.md`).
+  **Fly e' spento** (`flyctl scale count 0`) ma resta come via di ritorno:
+  `scale count 1` e si sposta il DNS.
 - **Branch di lavoro**: `claude/interface-design-m6q27s`
 - **Deploy**: FastAPI su Fly.io, auto-deploy da `main` (~2-3 min) — **non**
   dal branch di lavoro, che va unito a `main` perche' vada in produzione
@@ -241,6 +246,42 @@ Lorenzo ha detto "procedi" dopo aver visto il perimetro proposto.
 File coinvolti: vedi l'elenco completo in `resolutions.json` sotto `seed-0027`
 (troppo lungo per ripeterlo qui — include tutto `app/trading/futures/`,
 `executor.py`, `main.py`, `auth.py`, i tre file frontend, i test).
+
+---
+
+### Trasloco da Fly a un server proprio — **fatto**
+
+Il motivo non era la velocita': era che su 512 MB una ricerca aveva gia'
+saturato la memoria e ucciso il processo, e un processo morto sono avvisi che
+non arrivano. Lorenzo: *"non mi interessa velocizzare la strategia del cazzo,
+basta che gestisca gli allarmi e i vari segnali"*.
+
+Misurato prima di decidere (`/api/analyze` BTCUSDT 1d, a caldo): Fly **1,69 s**,
+oggi **0,19 s**.
+
+Come e' andata la scelta della macchina: le CX erano esaurite, e la prima
+alternativa mostrata dalla console (CPX22, 23,78 EUR) costava tre volte
+troppo. L'API di Hetzner ha poi rivelato il **CX23 a 6,70 EUR**, che
+l'interfaccia non proponeva. Da qui una regola utile: **per la
+disponibilita' e i prezzi chiedere all'API, non leggere la console**.
+
+Due difetti dello script di setup trovati sul campo, entrambi corretti:
+`sshd` tiene il **primo** valore che legge e i frammenti si leggono in ordine
+alfabetico, quindi il file `99-` non disattivava niente contro il
+`50-cloud-init.conf` di Ubuntu (ora e' `00-`); e da Ubuntu 25.10 SSH e'
+attivato dal socket, quindi `reload ssh` fallisce e con `set -e` fermava tutto
+il resto dello script senza che si notasse.
+
+**Da fare**: la chiave TwelveData non e' stata portata (le azioni sono spente,
+vedi sotto). Se un giorno servissero, va rimessa in `deploy/.env`.
+
+### Azioni disattivate — **fatto**
+
+`settings.stocks_enabled = False`. Una voce `BTC/USD` in watchlist, marcata
+come azione, mandava avvisi di errore su una chiave TwelveData mancante.
+Lorenzo opera solo in USDT/USDC. Spegnendole sparisce anche la dipendenza da
+TwelveData, che col suo limite di 7 richieste al minuto era il collo di
+bottiglia piu' stretto del prodotto. E' un interruttore, non una rimozione.
 
 ---
 

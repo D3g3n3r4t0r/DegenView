@@ -1,9 +1,17 @@
 name: Deploy to Fly.io
 
+# Fly non ospita piu' il sistema: da settembre 2026 gira su un server
+# proprio (vedi deploy/README.md), e liquidityengine.app punta li'.
+#
+# Il trigger su push e' tolto apposta. Lasciato acceso, il primo push
+# avrebbe ricreato la macchina che avevamo appena spento: due watcher
+# sulla stessa watchlist significano avvisi doppi, e una macchina accesa
+# significa pagarla. Resta lanciabile a mano, perche' come via di ritorno
+# vale la pena tenerlo: `flyctl scale count 1` e un run da qui.
 on:
-  push:
-    branches: [main]          # deploy automatico ad ogni push su main
-  workflow_dispatch:          # deploy manuale dal tab "Actions" di GitHub
+  # push:
+  #   branches: [main]
+  workflow_dispatch:
 
 jobs:
   lint:
