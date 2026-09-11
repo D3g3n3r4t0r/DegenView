@@ -143,7 +143,13 @@ def run_pipeline(
     df: pd.DataFrame,
     backtest_params: dict | None = None,
     target_entries: int = 40,
-    max_evals_per_branch: int = 3000,
+    # 700 e' il budget misurato come gia' sufficiente su un ramo a 7 parametri
+    # (93 312 celle): guidata 57.44 contro 50.39/26.93/37.35 di tre semi
+    # diversi (vedi CLAUDE.md). Il default precedente, 3000, spendeva oltre
+    # quattro volte quel budget per un guadagno marginale — su piu' rami in
+    # sequenza e' quello che rendeva la modalita' Stabile lenta al punto da
+    # sembrare bloccata.
+    max_evals_per_branch: int = 700,
     coarse: int = 6,
     tol: float = 0.01,
     min_trades: int = 8,
