@@ -1280,7 +1280,7 @@ body {
 .wl-row-strats { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
 .wl-row-strat-item { font-size: .8rem; display: flex; align-items: center; gap: 6px; }
 .wl-mini-badge { font-size: .65rem; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--border); color: var(--ink-dim); }
-.wl-mini-badge.danger { border-color: #d64545; color: #d64545; }
+.wl-mini-badge.danger { border-color: var(--bear); color: var(--bear); }
 
 .wl-row.active {
   background: color-mix(in srgb, var(--accent) 7%, transparent);
@@ -3219,12 +3219,12 @@ body {
 .wl-mode-btn { padding: .25rem .6rem; border: 1px solid var(--border); border-radius: 999px; background: var(--bg); color: var(--ink); font-size: .72rem; cursor: pointer; opacity: .6; }
 .wl-mode-btn.active { opacity: 1; font-weight: 600; }
 .wl-mode-btn:not(.wl-mode-danger).active { border-color: var(--accent); color: var(--accent); }
-.wl-mode-btn.wl-mode-danger.active { border-color: #d64545; color: #d64545; background: rgba(214,69,69,.08); }
+.wl-mode-btn.wl-mode-danger.active { border-color: var(--bear); color: var(--bear); background: color-mix(in srgb, var(--bear) 10%, transparent); }
 .wl-autotrade-hint { font-size: .72rem; margin-top: .2rem; }
 
 .wl-activate-wrap { margin-top: 8px; }
 .wl-activate-btn { padding: .35rem .7rem; border: 1px dashed var(--accent); border-radius: 6px; background: transparent; color: var(--accent); font-size: .8rem; font-weight: 600; cursor: pointer; }
-.wl-activate-flow { margin-top: 8px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel-2, var(--bg)); }
+.wl-activate-flow { margin-top: 8px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-panel); }
 .wl-flow-q { font-size: .8rem; margin: 0 0 8px; }
 .wl-mode-row { display: flex; gap: 8px; flex-wrap: wrap; }
 .wl-activate-flow input { display: block; width: 100%; margin-bottom: 6px; padding: .3rem .5rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--ink); font-size: .78rem; }
