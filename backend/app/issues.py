@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0059", "Kraken senza aggiornamento in tempo reale, solo ogni 60s",
+     "Solo MEXC aveva un feed live via websocket; Binance, KuCoin e Kraken restavano a polling REST ogni 60 secondi (badge 'Agg. ogni 60s'). Kraken ha un feed pubblico websocket v2 gratuito, mai collegato.",
+     "media"),
     ("seed-0058", "Kraken: 'Timeframe 1M non supportato' selezionando 1d",
      "Selezionare 1d come intervallo principale sceglie automaticamente 1M come HTF (contesto di lungo periodo) per l'analisi multi-timeframe — Kraken non ha un intervallo mensile nativo nella sua API pubblica e il provider lo segnalava come errore invece di calcolarlo dalle candele giornaliere.",
      "media"),
