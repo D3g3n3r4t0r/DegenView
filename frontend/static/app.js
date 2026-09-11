@@ -378,9 +378,15 @@
         if (!ctrl.suggestions.length) { list.classList.add("hidden"); return; }
         if (_anchorEl) {
           const rect = _anchorEl.getBoundingClientRect();
-          list.style.left = `${rect.left}px`;
+          // Un anchor piu' largo dello schermo (es. l'hero del ticker in Lab
+          // su viewport stretti) spingeva il riquadro fuori dal bordo destro,
+          // dove restava invisibile invece di sparire in modo ovvio — clampare
+          // qui vale per ogni suggerimento futuro, non solo per quello di oggi.
+          const width = Math.min(rect.width, window.innerWidth - 16);
+          const left = Math.min(Math.max(rect.left, 8), window.innerWidth - width - 8);
+          list.style.left = `${left}px`;
           list.style.top = `${rect.bottom + 4}px`;
-          list.style.width = `${rect.width}px`;
+          list.style.width = `${width}px`;
         }
         ctrl.suggestions.forEach((item, i) => {
           const li = document.createElement("li");
