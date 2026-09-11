@@ -246,10 +246,13 @@
   },
   "ae0296aa": {
     "status": "risolto",
-    "at": 1788995100,
-    "summary": "MEXC futures non c'e' per scelta deliberata, non una dimenticanza: MEXC ha i futures ma non la licenza per offrirli in UE.",
-    "detail": "Il perimetro (vedi seed-0027 e backend/app/trading/futures/registry.py) include solo gli exchange con licenza per derivati a leva al retail europeo: Binance, Bybit, OKX, Bitget, Kraken. MEXC resta escluso insieme a KuCoin, per lo stesso motivo normativo — non e' un limite tecnico, e il registro accoglierebbe un adattatore MEXC con un file piu' una riga se la decisione normativa cambiasse. Nessun codice da correggere; segnalo qui perche' resti scritto da qualche parte il perche'.",
-    "files": []
+    "at": 1789113000,
+    "summary": "Riaperta da whitekobra chiedendo MEXC futures comunque, licenza UE o no ('anche Binance non ce l'ha per ora, il software si usa anche fuori UE'). Richiesta accolta: MexcFutures() e' nel registro (backend/app/trading/futures/registry.py), esposto da /api/auth/futures insieme agli altri cinque exchange — selezionabile in Opera oggi.",
+    "detail": "La risoluzione precedente (12:23 del giorno prima) diceva 'escluso per scelta normativa, nessun codice da correggere' — ma nel frattempo l'adattatore MEXC e' stato aggiunto al registro apposta, con un commento che lo attribuisce esplicitamente a questa richiesta ('Lorenzo l'ha chiesto sapendolo, non per una svista'). La bacheca pero' non l'aveva mai registrato: la voce restava 'riaperta' anche se il codice gia' soddisfaceva la richiesta. Verificato ora: SUPPORTED_FUTURES_EXCHANGES (registry.py) include 'mexc', e /api/auth/futures lo restituisce fra le credenziali configurabili.",
+    "files": [
+      "backend/app/trading/futures/registry.py",
+      "backend/app/trading/futures/mexc.py"
+    ]
   },
   "08724a7b": {
     "status": "risolto",
