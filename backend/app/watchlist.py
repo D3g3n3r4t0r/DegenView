@@ -170,6 +170,21 @@ def set_alert_frequency(entry_id: str, strategy_name: str, frequency: str) -> Wa
     return updated
 
 
+def set_auto_trade(entry_id: str, strategy_name: str, enabled: bool) -> WatchlistEntry | None:
+    entry = _entries.get(entry_id)
+    if entry is None:
+        return None
+    auto_trade = dict(entry.auto_trade)
+    if enabled:
+        auto_trade[strategy_name] = True
+    else:
+        auto_trade.pop(strategy_name, None)
+    updated = entry.model_copy(update={"auto_trade": auto_trade})
+    _entries[entry_id] = updated
+    _save()
+    return updated
+
+
 def set_strategy_interval(entry_id: str, strategy_name: str, interval: str | None) -> WatchlistEntry | None:
     """interval=None resets this strategy to use the entry's default interval."""
     entry = _entries.get(entry_id)

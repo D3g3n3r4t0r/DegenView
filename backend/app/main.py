@@ -92,6 +92,8 @@ from app.providers.base import (
 )
 from app.providers.binance import BinanceProvider
 from app.providers.binance import format_symbol as format_binance_symbol
+from app.providers.kraken import KrakenProvider
+from app.providers.kraken import format_symbol as format_kraken_symbol
 from app.providers.kucoin import KucoinProvider
 from app.providers.kucoin import format_symbol as format_kucoin_symbol
 from app.providers.mexc import MexcProvider
@@ -124,6 +126,7 @@ twelvedata_provider = TwelveDataProvider()
 mexc_provider = MexcProvider()
 binance_provider = BinanceProvider()
 kucoin_provider = KucoinProvider()
+kraken_provider = KrakenProvider()
 
 
 def _telegram_allowed(user: User) -> bool:
@@ -172,6 +175,8 @@ def get_provider(asset_type: AssetType, exchange: CryptoExchange = "mexc") -> Da
         return binance_provider
     if exchange == "kucoin":
         return kucoin_provider
+    if exchange == "kraken":
+        return kraken_provider
     return mexc_provider
 
 
@@ -190,6 +195,8 @@ def canonical_symbol(symbol: str, asset_type: AssetType, exchange: CryptoExchang
         return format_binance_symbol(symbol)
     if exchange == "kucoin":
         return format_kucoin_symbol(symbol)
+    if exchange == "kraken":
+        return format_kraken_symbol(symbol)
     return format_mexc_symbol(symbol)
 
 
@@ -297,7 +304,10 @@ async def _watchlist_alert_loop() -> None:
                     # che e' rimasto morto per mesi senza che nessuno potesse
                     # accorgersene.
                     cred = owner.trading_credentials.get(entry.exchange)
-                    if cred and fresh:
+                    # Opt-in per singola strategia/ticker (dalla watchlist): un
+                    # exchange abilitato non basta piu' da solo a far partire
+                    # ordini su OGNI strategia che ci gira sopra.
+                    if cred and fresh and entry.auto_trade.get(strategy_name):
                         api_key, api_secret, passphrase = auth.get_decrypted_credential(owner, entry.exchange)
                         skip = ""
                         if not cred.enabled:
@@ -883,14 +893,15 @@ async def search_symbols(query: str = Query(..., min_length=1, max_length=20)) -
     # Single unified search across stocks and both crypto exchanges — no
     # upfront "stock vs crypto" toggle. The user picks the asset from results
     # that already say which market/exchange it's on.
-    stock_res, mexc_res, kucoin_res, binance_res = await asyncio.gather(
+    stock_res, mexc_res, kucoin_res, binance_res, kraken_res = await asyncio.gather(
         _safe_search(twelvedata_provider, query, "stock", "stock")
         if settings.stocks_enabled else _no_results(),
         _safe_search(mexc_provider, query, "crypto", "mexc"),
         _safe_search(kucoin_provider, query, "crypto", "kucoin"),
         _safe_search(binance_provider, query, "crypto", "binance"),
+        _safe_search(kraken_provider, query, "crypto", "kraken"),
     )
-    merged = _interleave(stock_res, mexc_res, kucoin_res, binance_res)
+    merged = _interleave(stock_res, mexc_res, kucoin_res, binance_res, kraken_res)
     return _rank_suggestions(merged, query)[:25]
 
 
@@ -1738,6 +1749,21 @@ async def set_watchlist_alert_frequency(
 ) -> WatchlistEntry:
     _owned_entry_or_404(entry_id, user)
     return watchlist_store.set_alert_frequency(entry_id, req.strategy_name, req.frequency)
+
+
+class WatchlistAutoTradeRequest(BaseModel):
+    strategy_name: str
+    enabled: bool
+
+
+@app.patch("/api/watchlist/{entry_id}/auto_trade", response_model=WatchlistEntry)
+async def set_watchlist_auto_trade(
+    entry_id: str, req: WatchlistAutoTradeRequest, user: User = Depends(auth.get_current_user)
+) -> WatchlistEntry:
+    if req.strategy_name not in AVAILABLE_STRATEGIES:
+        raise HTTPException(status_code=400, detail=f"Strategia sconosciuta: {req.strategy_name}")
+    _owned_entry_or_404(entry_id, user)
+    return watchlist_store.set_auto_trade(entry_id, req.strategy_name, req.enabled)
 
 
 class WatchlistStrategyIntervalRequest(BaseModel):

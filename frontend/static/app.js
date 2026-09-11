@@ -1365,7 +1365,7 @@
   // sull'exchange selezionato. Tre exchange su sei non hanno un provider dati
   // in questa app: li' il campo resta libero, ma lo dice invece di lasciar
   // credere che il silenzio sia una conferma.
-  const MANUAL_PAIR_EXCHANGES = new Set(["mexc", "binance", "kucoin"]);
+  const MANUAL_PAIR_EXCHANGES = new Set(["mexc", "binance", "kucoin", "kraken"]);
 
   function manualPairHint(text, kind) {
     const p = el("manual-pair-hint");
@@ -1640,10 +1640,10 @@
   // sopra): niente autocomplete non e' una conferma, e' silenzio. Qui il
   // campo restava muto per ogni exchange futures — bug segnalato da Lorenzo
   // su MEXC ("non trova nessun pair" scrivendo BTCUSDT). /api/symbols copre
-  // mexc, binance e kucoin fra i provider crypto; fra i futures solo mexc e
-  // binance sono anche exchange futures registrati, quindi sono gli unici
-  // due per cui possiamo verificare il pair da qui.
-  const FUTURES_PAIR_EXCHANGES = new Set(["mexc", "binance"]);
+  // mexc, binance, kucoin e kraken fra i provider crypto; fra i futures mexc,
+  // binance e kraken sono anche exchange futures registrati (kucoin no),
+  // quindi sono i tre per cui possiamo verificare il pair da qui.
+  const FUTURES_PAIR_EXCHANGES = new Set(["mexc", "binance", "kraken"]);
 
   const futuresSuggest = makeSuggestController({
     listId: "futures-symbol-suggestions",
@@ -2516,6 +2516,39 @@
           freqRow.appendChild(stratIvSel);
           freqRow.appendChild(testBtn);
           body.appendChild(freqRow);
+
+          // Alert vs trading automatico: la decisione vive qui, per strategia
+          // e per ticker — non piu' un interruttore unico per exchange in Opera.
+          const tradeRow = document.createElement("div");
+          tradeRow.className = "strat-sub-row wl-autotrade-row";
+          const isAuto = !!entry.auto_trade?.[name];
+          const alertBtn = document.createElement("button");
+          alertBtn.type = "button";
+          alertBtn.className = "wl-mode-btn" + (isAuto ? "" : " active");
+          alertBtn.textContent = "Solo alert";
+          const autoBtn = document.createElement("button");
+          autoBtn.type = "button";
+          autoBtn.className = "wl-mode-btn wl-mode-danger" + (isAuto ? " active" : "");
+          autoBtn.textContent = "Trading automatico";
+          const setMode = async (auto) => {
+            alertBtn.classList.toggle("active", !auto);
+            autoBtn.classList.toggle("active", auto);
+            await fetch(`/api/watchlist/${entry.id}/auto_trade`, {
+              method: "PATCH", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ strategy_name: name, enabled: auto }),
+            });
+          };
+          alertBtn.addEventListener("click", () => setMode(false));
+          autoBtn.addEventListener("click", () => setMode(true));
+          tradeRow.appendChild(alertBtn);
+          tradeRow.appendChild(autoBtn);
+          body.appendChild(tradeRow);
+          if (isAuto) {
+            const hint = document.createElement("p");
+            hint.className = "panel-hint wl-autotrade-hint";
+            hint.textContent = `Ordini reali su ${entry.exchange.toUpperCase()} ad ogni segnale — richiede API key configurate e abilitate in Opera per questo exchange.`;
+            body.appendChild(hint);
+          }
 
           // Last trigger + count (async fetch stats)
           const statsRow = document.createElement("div");

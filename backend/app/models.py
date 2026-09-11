@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from app.timeframes import IntervalChoice
 
 AssetType = Literal["stock", "crypto"]
-CryptoExchange = Literal["mexc", "binance", "kucoin"]
+CryptoExchange = Literal["mexc", "binance", "kucoin", "kraken"]
 TimeframeKey = Literal["htf", "mtf", "ltf"]
 LevelType = Literal["order_block", "fvg", "eqh", "eql", "bos", "choch"]
 
@@ -16,7 +16,7 @@ class SymbolSuggestion(BaseModel):
     name: str
     exchange: str  # human label, e.g. "NASDAQ", "MEXC (USDT)", "Binance (USDT)"
     asset_type: AssetType
-    provider: Literal["stock", "mexc", "binance", "kucoin"]
+    provider: Literal["stock", "mexc", "binance", "kucoin", "kraken"]
 
 
 class Candle(BaseModel):
@@ -192,6 +192,12 @@ class WatchlistEntry(BaseModel):
     strategy_params: dict[str, dict] = {}  # per-strategy parameter overrides, keyed by strategy name; missing/empty = use that strategy's defaults
     alert_frequency: dict[str, Literal["once", "every"]] = {}  # "once" | "every" per strategy; default "every"
     strategy_intervals: dict[str, str] = {}  # per-strategy timeframe override; missing = use entry.interval
+    # Per-strategy opt-in a ordini reali: default False ovunque, quindi ogni
+    # strategia esistente resta "solo alert" finche' l'utente non lo sceglie
+    # esplicitamente da questa voce. Le chiavi API restano una precondizione
+    # separata (owner.trading_credentials) — questo flag decide solo se
+    # QUESTA strategia su QUESTO ticker puo' usarle.
+    auto_trade: dict[str, bool] = {}
 
 
 class PriceAlertCondition(str, Enum):
