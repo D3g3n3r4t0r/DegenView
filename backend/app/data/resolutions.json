@@ -1,5 +1,15 @@
 {
   "_README": "Scritto da Claude, versionato in git, distribuito col deploy. Le chiavi sono gli id delle segnalazioni. Non modificare a mano dall'app: verrebbe sovrascritto al deploy successivo.",
+  "seed-0058": {
+    "status": "risolto",
+    "at": 1789134000,
+    "summary": "Kraken non ha mai avuto un intervallo mensile nativo nella sua API pubblica (il piu' largo e' 10080 minuti, una settimana) — e selezionare 1d come intervallo principale sceglie automaticamente 1M come HTF per l'analisi multi-timeframe (mappatura frontend gia' esistente, non un bug di quella): l'errore compariva sempre, per ogni ticker Kraken analizzato a 1d, non solo su casi rari.",
+    "detail": "backend/app/providers/kraken.py: fetch_ohlcv() ora intercetta interval=='1M' PRIMA di guardare la tabella di conversione in minuti, chiede invece le candele giornaliere (fino a outputsize*30, comunque tappate a 720) e le piega a gruppi di 30 con resample_by_count() — stesso meccanismo gia' usato altrove nell'app per 2D/3D/5D, qui dentro perche' Kraken e' l'unico fra i quattro provider senza mensile nativo. Aggiunto test_fetch_ohlcv_synthesizes_1M_from_daily_candles in test_kraken_provider.py, che verifica sia la richiesta sottostante (sempre a 1440 minuti) sia il numero di candele restituite dopo il piegamento.",
+    "files": [
+      "backend/app/providers/kraken.py",
+      "backend/tests/test_kraken_provider.py"
+    ]
+  },
   "seed-0057": {
     "status": "risolto",
     "at": 1789133000,

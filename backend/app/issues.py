@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0058", "Kraken: 'Timeframe 1M non supportato' selezionando 1d",
+     "Selezionare 1d come intervallo principale sceglie automaticamente 1M come HTF (contesto di lungo periodo) per l'analisi multi-timeframe — Kraken non ha un intervallo mensile nativo nella sua API pubblica e il provider lo segnalava come errore invece di calcolarlo dalle candele giornaliere.",
+     "media"),
     ("seed-0057", "Attivare il trading automatico su una strategia non era chiaro: bisognava passare da Opera e scegliere l'exchange fra troppi",
      "In Opera si sceglieva l'exchange fra una lista lunga prima di poter fare qualsiasi cosa, e il trading automatico era un interruttore unico per exchange che valeva per TUTTE le strategie attive li' sopra — nessun modo di dire 'questa strategia solo alert, quest'altra anche ordini reali'.",
      "media"),
