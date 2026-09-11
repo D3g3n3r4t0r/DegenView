@@ -475,6 +475,39 @@ vivo, Lorenzo ha chiesto tre correzioni in rapida successione:
    l'errore reale se il server rifiuta, invece di ricaricare in silenzio
    come se fosse andato tutto bene.
 
+**Ottavo giro — Kraken: dati mensili e feed live**: dopo aver corretto il
+flusso di attivazione, due segnalazioni puntuali su Kraken, sempre nella
+stessa serata:
+- «ma dio cane ti avevo chiesto di implementare tutto da kraken.. usare
+  tutte le sue API» — Kraken era rimasto REST-only (60s di polling, come
+  Binance/KuCoin), mentre MEXC ha un feed live via websocket. Aggiunto
+  `backend/app/live/kraken_stream.py`, che collega il feed pubblico OHLC
+  v2 di Kraken (`wss://ws.kraken.com/v2`, JSON — piu' semplice del
+  protobuf di MEXC), con la stessa architettura di `mexc_stream.py` (un
+  manager, un websocket a monte per (simbolo, intervalli) attivo). Il
+  simbolo per il feed v2 non e' quello REST (vuole "BTC/USD" con slash,
+  non "XBTUSD") — nuovo `KrakenProvider.get_ws_symbol()` che lo ricava
+  dalla stessa lista AssetPairs gia' usata per la ricerca. `/ws/live` ora
+  prende un parametro `exchange` e sceglie il manager giusto.
+- Trovato scrivendo il test per `get_ws_symbol`: `"XXBT".lstrip("XZ")`
+  toglie TUTTE le X/Z iniziali, non solo una — un base a 4 lettere come
+  "XXBT" (bitcoin) diventava "BT" invece di "XBT". Bug vero, presente fin
+  dal primo giro Kraken (seed-0056), mai notato perche' nessun test
+  controllava il valore esatto del base, solo che l'exchange contenesse
+  "USD". Corretto estraendo `_strip_kraken_prefix()`, riusata sia dal
+  nuovo codice sia da `search_symbols()`.
+- Prima ancora, un'altra segnalazione Kraken nello stesso filo: «se
+  seleziono 1d voglio 1d» dopo un errore "Timeframe 1M non supportato".
+  Non era un bug del selettore — scegliere 1d come intervallo principale
+  deriva automaticamente un HTF di 1M per il contesto di lungo periodo
+  (comportamento esistente, uguale su tutti gli exchange), e Kraken non ha
+  un intervallo mensile nativo. Corretto sintetizzando 1M da 30 candele
+  giornaliere (`resample_by_count`), stesso meccanismo gia' usato per
+  2D/3D/5D. Lorenzo ha poi chiesto separatamente di eliminare ogni traccia
+  dei vecchi tasti HTF/MTF/LTF (sostituiti dal menu a tendina) — trovata e
+  rimossa `TF_LABELS`, una costante morta mai referenziata, unico residuo
+  rimasto in `app.js`.
+
 Non ancora fatto, per scelta (segnalato, non dimenticato):
 - l'ordine manuale one-off dentro il pannello richiudibile (avanzate, in
   fondo a Sorveglia) resta un form con la sua scelta exchange, non una
@@ -482,7 +515,11 @@ Non ancora fatto, per scelta (segnalato, non dimenticato):
   guadagno cosmetico, e nessuno l'ha chiesto esplicitamente;
 - nessuna verifica dal vivo con chiavi vere dell'esecuzione futures
   automatica da watchlist (stessa cautela gia' segnata sotto "Operazioni
-  futures" — nessun ordine futures e' mai partito verso un server vero).
+  futures" — nessun ordine futures e' mai partito verso un server vero);
+- il feed live Kraken non e' stato verificato con una sessione reale nel
+  browser (solo test unitari con trasporto finto, come tutto il resto di
+  questo provider) — se il canale "ohlc" v2 si comporta diversamente da
+  come documentato, va vista dal vivo.
 
 ## Log delle conversazioni
 
