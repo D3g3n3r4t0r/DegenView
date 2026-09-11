@@ -3038,9 +3038,11 @@ async def import_archive_entry(req: ArchiveImportIn, user: User = Depends(auth.g
 
 class ApplyToAlertRequest(BaseModel):
     # False di default: attivare da archivio senza dirlo esplicitamente non
-    # deve mettere in moto ordini reali. La Modalita' Semplice lo manda True
-    # solo dopo che l'utente ha collegato un exchange nel suo passo dedicato.
+    # deve mettere in moto ordini reali. La Modalita' Semplice e la
+    # diramazione nella watchlist lo mandano True solo dopo che l'utente ha
+    # scelto esplicitamente "operazioni automatiche".
     auto_trade: bool = False
+    market: Literal["spot", "futures"] = "spot"
 
 
 @app.post("/api/archive/{entry_id}/apply-to-alert")
@@ -3081,6 +3083,13 @@ async def apply_archive_entry_to_alert(
     )
     if req.auto_trade:
         updated = watchlist_store.set_auto_trade(watch.id, strategy_name, True)
+        if req.market == "futures":
+            if watch.exchange not in futures_registry.SUPPORTED_FUTURES_EXCHANGES:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"{watch.exchange} non ha un adattatore futures registrato",
+                )
+            updated = watchlist_store.set_market(watch.id, strategy_name, "futures")
     return {
         "ok": True,
         "watchlist_entry": updated,
