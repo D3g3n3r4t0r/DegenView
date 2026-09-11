@@ -521,6 +521,51 @@ Non ancora fatto, per scelta (segnalato, non dimenticato):
   questo provider) — se il canale "ohlc" v2 si comporta diversamente da
   come documentato, va vista dal vivo.
 
+---
+
+### Layout: il grafico "si sposta" cambiando tab — `seed-0060` — **in corso, riaperto**
+
+Lorenzo, subito dopo il giro Kraken: «il passaggio dalle varie tab
+"analizza" "livelli" "lab" e "watchlist" e sorveglia, deve dare l'effetto
+che il grafico non si sposti mai, ma che si adeguino le interfacce
+lateralmente non modificando la posizione del grafico... sennò il layout
+si scompiglia sempre».
+
+**Primo tentativo (sbagliato, rivertito nello stesso giro)**: `.chart-area`
+aveva due comportamenti opposti — in Analizza `flex:1 1 auto` (tutto lo
+spazio libero, pannello fisso a 320px), altrove `flex:0 0
+clamp(300px,32%,520px)` (larghezza fissa, pannello che assorbe il resto).
+Ho reso `.chart-area` sempre alla larghezza fissa stretta, in ogni area.
+Risultato: il salto fra tab e' sparito, ma il grafico in Analizza — lo
+schermo dedicato a guardarlo — e' diventato piccolo. Screenshot del Lab
+alla mano, Lorenzo: «si ma ora il grafico ha poco spazio; sei cosi
+stupido?», poi «il sito usa malissimo gli spazi.. fa schifo», poi «il
+layout di tutte le tab fa cacare, il passaggio da ogni tab ancora peggio.
+fai studiare il layout ad un team di esperti e usa tutte le skill di
+design che ti avevo dato per ottimizzare lo spazio nel migliore dei modi».
+Rivertito subito (`git revert`) — il grafico e' tornato come prima di
+questo giro: grande in Analizza, stretto altrove.
+
+**La tensione di fondo, non ancora risolta**: Analizza e' uno schermo
+*guarda il grafico* (chart grande, pannello di lettura stretto); Lab e
+Sorveglia sono schermi *lavora sul form* (form/griglia larghi, chart di
+riferimento stretto). Dare a `.chart-area` UNA sola larghezza fissa serve
+bene uno dei due bisogni e male l'altro, in entrambe le direzioni. Il vero
+problema che Lorenzo segnala nel Lab — la fetta destra vuota finche' non
+c'e' un risultato di backtest, dentro `.lab-panel { grid-template-columns:
+minmax(280px,380px) 1fr }` — e' un difetto di quello schermo specifico
+(un placeholder/empty-state che manca), non necessariamente qualcosa che
+una larghezza-fissa del grafico risolverebbe.
+
+**Prossimo passo proposto, non ancora fatto**: non un'altra modifica CSS
+scritta a occhio e provata in produzione — la stessa causa di tutto questo
+giro. Un mockup (Artifact) di ogni tab con le proporzioni vere, da
+rivedere e approvare PRIMA di toccare `style.css`, applicando
+`ui-design-principles` (gerarchia con peso/colore non solo dimensione,
+niente riempimento forzato dello schermo, spaziatura sistematica) — la
+stessa strada gia' seguita con successo per il ridisegno generale
+(`seed-0028`, sotto), invece di iterare alla cieca sul sito live.
+
 ## Log delle conversazioni
 
 Ordine cronologico, piu' recenti in fondo. Scritto perche' una chat diversa

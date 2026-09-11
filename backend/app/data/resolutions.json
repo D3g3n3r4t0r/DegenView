@@ -1,10 +1,10 @@
 {
   "_README": "Scritto da Claude, versionato in git, distribuito col deploy. Le chiavi sono gli id delle segnalazioni. Non modificare a mano dall'app: verrebbe sovrascritto al deploy successivo.",
   "seed-0060": {
-    "status": "risolto",
-    "at": 1789138000,
-    "summary": "Il grafico (.chart-area) aveva due comportamenti opposti a seconda dell'area: in Analizza flex:1 1 auto (prende tutto lo spazio libero, il pannello laterale restava fisso a 320px), altrove flex:0 0 clamp(300px,32%,520px) (larghezza fissa, il pannello laterale prendeva il resto). Cambiare tab cambiava quindi la larghezza vera del grafico, non solo il contenuto accanto — l'effetto 'si scompiglia' che Lorenzo ha segnalato. Ora .chart-area ha la stessa larghezza fissa in ogni area, sempre; .right-panel assorbe sempre lo spazio restante. Il pulsante manuale 'Allarga il grafico' (.chart-wide) non e' toccato, lavorava gia' in modo indipendente da quale area fosse attiva.",
-    "detail": "frontend/static/style.css, dentro @media (min-width: 761px): rimossa la regola speciale .cockpit[data-area='analizza'] .chart-area{flex:1 1 auto} e la corrispondente .right-panel{flex:0 0 320px}; la regola .cockpit:not([data-area='analizza']) .chart-area{...} e' diventata .cockpit .chart-area{...} senza qualificatore di area (stesso per .right-panel, .tab-content.active e il relativo .panel). Le regole sotto i 1250px (fascia bassa invece di colonna) e quelle specifiche per Lab/Sorveglia restano come prima, non toccate.",
+    "status": "in corso",
+    "at": 1789139000,
+    "summary": "Riaperto io stesso: il primo tentativo (rendere .chart-area larga uguale in ogni area) ha risolto il salto di larghezza ma ha rimpicciolito il grafico proprio dove serve piu' grande — Analizza, lo schermo dedicato a guardarlo. Rivertito subito (git revert), il grafico e' tornato grande in Analizza e stretto altrove come prima. Il problema di fondo — lo spazio usato male nel passaggio fra tab, specialmente nel Lab (form stretto a sinistra, meta' schermo vuota a destra finche' non c'e' un risultato) — resta vero e non risolto: Lorenzo ha chiesto un ripensamento vero del layout, con le linee guida di design (gerarchia, spaziatura, non riempire per forza tutto lo schermo), non un'altra toppa CSS scritta ad occhio e provata in produzione. Il prossimo passo, se confermato, e' un mockup (Artifact) da approvare prima di toccare di nuovo lo stile vero — stessa strada gia' seguita con successo per il ridisegno generale (seed-0028), invece di iterare alla cieca sul sito live come e' successo qui.",
+    "detail": "Nessun cambio di codice netto rispetto a prima di questo filone: il tentativo in frontend/static/style.css e' stato scritto e poi rivertito nello stesso giro (commit 7331366, poi 49dc182 di revert). Il layout attuale e' quello di sempre. Vedi HANDOVER.md per il resoconto completo del giro e la proposta di percorso.",
     "files": [
       "frontend/static/style.css"
     ]
