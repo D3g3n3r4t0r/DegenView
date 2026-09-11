@@ -557,14 +557,41 @@ minmax(280px,380px) 1fr }` — e' un difetto di quello schermo specifico
 (un placeholder/empty-state che manca), non necessariamente qualcosa che
 una larghezza-fissa del grafico risolverebbe.
 
-**Prossimo passo proposto, non ancora fatto**: non un'altra modifica CSS
-scritta a occhio e provata in produzione — la stessa causa di tutto questo
-giro. Un mockup (Artifact) di ogni tab con le proporzioni vere, da
-rivedere e approvare PRIMA di toccare `style.css`, applicando
-`ui-design-principles` (gerarchia con peso/colore non solo dimensione,
-niente riempimento forzato dello schermo, spaziatura sistematica) — la
-stessa strada gia' seguita con successo per il ridisegno generale
-(`seed-0028`, sotto), invece di iterare alla cieca sul sito live.
+**Chiuso cosi'**: fatto il mockup (Artifact, link sotto) e sottoposto a tre
+revisori indipendenti su richiesta esplicita di Lorenzo ("sottoponi questo
+studio ad un team di agent esperti; usa le skill che ti ho installato
+anche") — un Agent per il layout/gerarchia (`ui-design-principles` +
+`component-gallery`), uno per l'accessibilita' (`wcag-2.2`), uno per
+l'animazione (`transitions-dev` + `transitions-polish`), ciascuno con
+istruzione esplicita di caricare la propria skill prima di giudicare e di
+non modificare nessun file.
+
+Verdetto: il modello a due famiglie (Analizza grafico grande/pannello
+stretto; Lab-Watchlist-Sorveglia grafico stretto/pannello largo) era
+*gia'* quello vero nel codice — non andava unificato, il primo tentativo
+di questo giro era la mossa sbagliata. L'unico bug reale confermato: nel
+Lab, `.lab-results-col` teneva sempre riservata la sua colonna di griglia
+anche prima di un backtest, lasciando meta' schermo vuota. **Fatto**: una
+sola regola CSS con `:has()` che nasconde quella colonna e restringe
+`.lab-panel` a una colonna finche' nessuno dei suoi figli (gia' tutti
+`.hidden` di default) diventa visibile — si riapre da sola quando parte
+una ricerca, zero JS nuovo toccato.
+
+**Deciso di NON implementare**: l'animazione proposta nel mockup per il
+salto Analizza↔resto (`transition: flex-basis`). Il revisore
+transitions-dev/polish ha trovato la tecnica tecnicamente rotta (`auto`
+non interpola in una transizione) e un rischio concreto — il grafico live
+(Lightweight Charts, si ridisegna via `ResizeObserver`) puo' scattare o
+deformarsi durante un resize animato, cosa verificabile solo con un test
+dal vivo che questo ambiente non permette. Restera' uno scatto secco fra
+Analizza e le altre aree, come e' sempre stato — non e' un compromesso
+nascosto, e' scritto qui e nel mockup stesso.
+
+Prima di pushare il fix, Lorenzo ha chiesto la preview («non dovevi farmi
+vedere in anteprima il risultato?») — il mockup e' stato aggiornato con
+l'esito reale (non solo la proposta iniziale) e ripubblicato sullo stesso
+link prima del push in produzione. Mockup: `https://claude.ai/code/
+artifact/66038881-c72c-406b-9ea0-4281c41bf438`.
 
 ## Log delle conversazioni
 
