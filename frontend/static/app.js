@@ -2546,7 +2546,7 @@
           if (isAuto) {
             const hint = document.createElement("p");
             hint.className = "panel-hint wl-autotrade-hint";
-            hint.textContent = `Ordini reali su ${entry.exchange.toUpperCase()} ad ogni segnale — richiede API key configurate e abilitate in Opera per questo exchange.`;
+            hint.textContent = `Ordini reali su ${entry.exchange.toUpperCase()} ad ogni segnale — richiede API key configurate e abilitate qui sotto per questo exchange.`;
             body.appendChild(hint);
 
             // Spot/futures esiste solo dove l'exchange ha anche un adattatore
@@ -2580,7 +2580,7 @@
               if (isFutures) {
                 const futHint = document.createElement("p");
                 futHint.className = "panel-hint wl-autotrade-hint";
-                futHint.textContent = "Leva e margine secondo le credenziali futures configurate in Opera per questo exchange.";
+                futHint.textContent = "Leva e margine secondo le credenziali futures configurate qui sotto per questo exchange.";
                 body.appendChild(futHint);
               }
             }
@@ -6766,7 +6766,7 @@
   // (and its internal .tabs) that desktop already has. Script Pine and Saldi
   // are reached through the Altro menu, not the bottom nav itself, so they
   // still map onto the same mechanism without a 6th/7th tab.
-  const RIGHT_PANEL_TITLES = { backtest: "Backtest", alert: "Alert", opera: "Opera", saldi: "Saldi", analisi: "Analisi", watchlist: "Watchlist" };
+  const RIGHT_PANEL_TITLES = { backtest: "Backtest", alert: "Alert", saldi: "Saldi", analisi: "Analisi", watchlist: "Watchlist" };
 
   function showMobileScreen(target) {
     if (!window.matchMedia("(max-width: 760px)").matches) return;
@@ -6778,7 +6778,7 @@
     document.querySelector(".right-panel").classList.remove("mobile-open");
     el("draw-rail").classList.remove("mobile-tools-open");
 
-    const NAV_TARGET_FOR = { script: "altro", saldi: "altro", analisi: "altro", watchlist: "altro", backtest: "altro", issues: "altro", opera: "altro" };
+    const NAV_TARGET_FOR = { script: "altro", saldi: "altro", analisi: "altro", watchlist: "altro", backtest: "altro", issues: "altro" };
     const navTarget = NAV_TARGET_FOR[target] || target;
     document.querySelectorAll(".mobile-nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.mobileTarget === navTarget));
 
@@ -6845,7 +6845,6 @@
     el("altro-analisi-item").addEventListener("click", () => showMobileScreen("analisi"));
     el("altro-watchlist-item").addEventListener("click", () => showMobileScreen("watchlist"));
     el("altro-backtest-item").addEventListener("click", () => showMobileScreen("backtest"));
-    el("altro-opera-item").addEventListener("click", () => showMobileScreen("opera"));
   }
 
   function bindUI() {
@@ -8114,7 +8113,7 @@
     cockpit.dataset.area = area;
     document.querySelectorAll(".sidenav-item").forEach((b) => b.classList.toggle("active", b === item));
 
-    if (area === "opera") loadPositions();
+    if (area === "sorveglia") loadPositions();
 
     // "Analizza" e' l'unica voce senza tabTarget: e' il solo grafico, senza
     // pannello. Senza questo else il tab-content marcato "active" nell'HTML

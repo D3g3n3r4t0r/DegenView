@@ -1,18 +1,18 @@
 {
   "_README": "Scritto da Claude, versionato in git, distribuito col deploy. Le chiavi sono gli id delle segnalazioni. Non modificare a mano dall'app: verrebbe sovrascritto al deploy successivo.",
   "seed-0057": {
-    "status": "in corso",
-    "at": 1789123000,
-    "summary": "Secondo giro: ora anche i futures partono dalla watchlist, non solo lo spot. Ogni strategia attiva su un ticker ha un interruttore 'Solo alert'/'Trading automatico', e se l'exchange ha un adattatore futures registrato (Binance, Kraken, MEXC) compare anche la scelta 'Spot'/'Futures (leva)' — l'exchange resta sempre quello gia' associato al ticker, mai un picker separato. Corretto nello stesso giro un effetto collaterale del primo passo: la Modalita' Semplice attivava l'esecuzione reale tramite il vecchio meccanismo (interruttore per-exchange), che il nuovo gate per-strategia avrebbe silenziosamente disattivato — ora manda esplicitamente auto_trade=true quando l'utente ha collegato un exchange nel suo passo dedicato.",
-    "detail": "backend: WatchlistEntry.market (dict strategia->'spot'|'futures'), endpoint PATCH /api/watchlist/{id}/market (rifiuta 'futures' se l'exchange non e' nel registro futures), _watchlist_alert_loop ora ha un ramo futures analogo a quello spot (place_futures_order_for_signal, owner.futures_credentials, leva dalla credenziale futures dell'exchange). apply-to-alert accetta un body {auto_trade: bool} e imposta il flag dopo aver acceso la strategia; simple-mode.js lo passa quando l'utente ha configurato un exchange nel passo 5, sia per il ramo archivio sia per quello 'strategia nuova'. Non ancora fatto: rimuovere da Opera il picker exchange-per-ordine dell'ordine manuale one-off e spostarlo dentro la card del ticker; Opera resta per ora il posto per configurare le chiavi (spot e futures).",
+    "status": "risolto",
+    "at": 1789127000,
+    "summary": "Terzo giro, quello finale: la tab Opera e' sparita. Le chiavi exchange, le posizioni aperte, il diario ordini e l'ordine manuale one-off vivono ora dentro Sorveglia, sotto le strategie della watchlist — stessa area, non piu' una tab a se' con un exchange da scegliere prima di ogni cosa. Nessuna funzionalita' persa: e' la stessa sezione, spostata. Prima di questo: ogni strategia attiva su un ticker ha un interruttore 'Solo alert'/'Trading automatico', e se l'exchange ha un adattatore futures registrato (Binance, Kraken, MEXC) anche 'Spot'/'Futures (leva)' — l'exchange resta sempre quello gia' associato al ticker, mai un picker separato. Corretto lungo la strada un effetto collaterale: la Modalita' Semplice attivava l'esecuzione reale col vecchio meccanismo (interruttore per-exchange), che il nuovo gate per-strategia avrebbe silenziosamente disattivato — ora manda esplicitamente auto_trade=true quando l'utente ha collegato un exchange nel suo passo dedicato.",
+    "detail": "backend: WatchlistEntry.auto_trade (dict strategia->bool) e .market (dict strategia->'spot'|'futures'), endpoint PATCH /api/watchlist/{id}/auto_trade e /market, _watchlist_alert_loop esegue ordini reali solo se auto_trade e' acceso per quella strategia, con un ramo spot e uno futures (place_order_for_signal / place_futures_order_for_signal, credenziali del mercato scelto). apply-to-alert accetta {auto_trade: bool}; simple-mode.js lo manda true solo dopo aver collegato un exchange nel suo passo 5. frontend: il tab-content 'opera' e' diventato un secondo blocco con data-tab-content='alert' (stesso tab, due div affiancati) — sidenav e tab-bar non hanno piu' una voce Opera, il menu mobile 'Altro' neppure (Sorveglia c'e' gia' nella barra mobile). Le regole CSS a colonne che erano per [data-area='opera'] ora sono per [data-area='sorveglia']. Nessun id cambiato (trading-credentials-list, futures-credentials-list, positions-list, journal-list, manual-*, futures-*): tutta la logica di rendering, salvataggio credenziali ed esecuzione ordini in app.js e' rimasta intatta, ha solo cambiato dove appare. Non ancora fatto, per scelta: un ordine manuale one-off restava un form con la sua scelta exchange (non ancora una card per-ticker); rimandato perche' tocca molto piu' codice per un guadagno cosmetico, e nessuno l'ha richiesto esplicitamente.",
     "files": [
       "backend/app/models.py",
       "backend/app/watchlist.py",
       "backend/app/main.py",
+      "frontend/index.html",
       "frontend/static/app.js",
       "frontend/static/style.css",
-      "frontend/static/simple-mode.js",
-      "frontend/index.html"
+      "frontend/static/simple-mode.js"
     ]
   },
   "seed-0056": {

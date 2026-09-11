@@ -4155,10 +4155,9 @@ details.issue-card > summary:focus-visible { outline: 2px solid var(--accent); o
     min-width: 0;
   }
 
-  /* Sorveglia e Opera: le sezioni diventano colonne affiancate invece di
-     una pila infinita da scorrere. */
-  .cockpit[data-area="sorveglia"] .tab-content.active > .panel,
-  .cockpit[data-area="opera"] .tab-content.active > .panel { max-width: 1180px; }
+  /* Sorveglia: le sezioni diventano colonne affiancate invece di una pila
+     infinita da scorrere. */
+  .cockpit[data-area="sorveglia"] .tab-content.active > .panel { max-width: 1180px; }
 }
 
 /* Il pannello a tutta larghezza non deve stirare i controlli: un campo di
@@ -4169,12 +4168,12 @@ details.issue-card > summary:focus-visible { outline: 2px solid var(--accent); o
 .cockpit:not([data-area="analizza"]) .futures-order-form { max-width: 560px; }
 
 @media (min-width: 1100px) {
-  .cockpit[data-area="opera"] #opera-authenticated { column-count: 2; column-gap: 24px; }
-  .cockpit[data-area="opera"] #opera-authenticated > * { break-inside: avoid; }
-  .cockpit[data-area="opera"] #opera-authenticated > .section-title-row { break-after: avoid; }
+  .cockpit[data-area="sorveglia"] #opera-authenticated { column-count: 2; column-gap: 24px; }
+  .cockpit[data-area="sorveglia"] #opera-authenticated > * { break-inside: avoid; }
+  .cockpit[data-area="sorveglia"] #opera-authenticated > .section-title-row { break-after: avoid; }
 }
 @media (min-width: 1700px) {
-  .cockpit[data-area="opera"] #opera-authenticated { column-count: 3; }
+  .cockpit[data-area="sorveglia"] #opera-authenticated { column-count: 3; }
 }
 
 /* ============================================================
