@@ -450,6 +450,31 @@ codice — un'ambiguita' che e' costata due giri di lavoro nella direzione
 sbagliata. Se emerge di nuovo un'istruzione su "watchlist", verificare
 SUBITO quale delle due tab prima di scrivere codice, non dopo.
 
+**Sesto e settimo giro — rifiniture, stessa sera**: provato il flusso dal
+vivo, Lorenzo ha chiesto tre correzioni in rapida successione:
+1. «quando aggiungo il ticker sulla watchlist pero' poi non mi chiedi
+   quale strategia applicarci» — aggiungere un ticker ora apre da solo il
+   pannello e salta dritto alla prima domanda (alert/automatico), senza
+   dover aprire la riga a mano e cliccare "+ Attiva" in piu'.
+2. «perche' nel caso non ci sia in archivio voglio poterla testare
+   direttamente in questa tab» — nuovo stepFresh(): se l'archivio e' vuoto
+   per quel ticker (o l'utente lo preferisce comunque, link sempre
+   presente), si sceglie una strategia con i parametri di default e parte
+   da li', stessa sequenza di chiamate gia' usata da Modalita' Semplice per
+   il suo ramo "strategia nuova".
+3. «quando seleziono la strategia dall'elenco voglio visualizzare i
+   dettagli delle strategie che si trovano nell'archivio in modo chiaro
+   non soltanto la percentuale.. ma diocane abbiamo i dati.. usali» +
+   «e comunque dopo che la seleziono non la memorizza come scelta» — le
+   card dell'archivio ora mostrano trade/win rate/drawdown/profit
+   factor/Sharpe/intervallo, non solo il rendimento. E trovata la causa
+   piu' probabile del secondo problema: il click ignorava una risposta di
+   errore del server trattandola come successo (fetch non rifiuta la
+   promise sui codici 4xx/5xx, solo su errori di rete veri) — ora ogni
+   card ha un pulsante "Usa questa" con uno stato proprio che mostra
+   l'errore reale se il server rifiuta, invece di ricaricare in silenzio
+   come se fosse andato tutto bene.
+
 Non ancora fatto, per scelta (segnalato, non dimenticato):
 - l'ordine manuale one-off dentro il pannello richiudibile (avanzate, in
   fondo a Sorveglia) resta un form con la sua scelta exchange, non una
