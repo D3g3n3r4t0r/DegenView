@@ -2284,6 +2284,171 @@
     return panel;
   }
 
+  // Diramazione richiesta esplicitamente: ticker -> "solo alert" o "anche
+  // operazioni automatiche" -> (se automatiche) spot/futures -> (se manca
+  // la chiave) collegala li' -> scegli la strategia dall'archivio. Niente
+  // lista di exchange sempre visibile: la chiave si chiede solo quando e
+  // dove serve davvero.
+  function buildActivationFlow(entry) {
+    const wrap = document.createElement("div");
+    wrap.className = "wl-activate-wrap";
+
+    const openBtn = document.createElement("button");
+    openBtn.type = "button";
+    openBtn.className = "wl-activate-btn";
+    openBtn.textContent = "+ Attiva strategia da archivio";
+    wrap.appendChild(openBtn);
+
+    const box = document.createElement("div");
+    box.className = "wl-activate-flow hidden";
+    wrap.appendChild(box);
+
+    let flowMode = null;   // "alert" | "auto"
+    let flowMarket = "spot";
+
+    const mkBtn = (label, onClick, danger) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "wl-mode-btn" + (danger ? " wl-mode-danger" : "");
+      b.textContent = label;
+      b.addEventListener("click", onClick);
+      return b;
+    };
+
+    function stepMode() {
+      box.innerHTML = "";
+      const q = document.createElement("p");
+      q.className = "wl-flow-q";
+      q.textContent = `${entry.symbol}: questa strategia deve solo avvisarti, o anche operare da sola?`;
+      box.appendChild(q);
+      const row = document.createElement("div");
+      row.className = "wl-mode-row";
+      row.appendChild(mkBtn("Solo alert", () => { flowMode = "alert"; stepArchive(); }));
+      row.appendChild(mkBtn("Anche operazioni automatiche", () => {
+        flowMode = "auto";
+        if (FUTURES_PAIR_EXCHANGES.has(entry.exchange)) stepMarket(); else stepCredCheck();
+      }, true));
+      box.appendChild(row);
+    }
+
+    function stepMarket() {
+      box.innerHTML = "";
+      const q = document.createElement("p");
+      q.className = "wl-flow-q";
+      q.textContent = `Su ${entry.exchange.toUpperCase()}: spot o futures a leva?`;
+      box.appendChild(q);
+      const row = document.createElement("div");
+      row.className = "wl-mode-row";
+      row.appendChild(mkBtn("Spot", () => { flowMarket = "spot"; stepCredCheck(); }));
+      row.appendChild(mkBtn("Futures (leva)", () => { flowMarket = "futures"; stepCredCheck(); }, true));
+      box.appendChild(row);
+    }
+
+    async function stepCredCheck() {
+      box.innerHTML = `<p class="wl-flow-q">Verifico la chiave API…</p>`;
+      const endpoint = flowMarket === "futures" ? "/api/auth/futures" : "/api/auth/trading";
+      let list = [];
+      try { list = await fetch(endpoint).then((r) => r.json()); } catch { list = []; }
+      const cred = Array.isArray(list) ? list.find((c) => c.exchange === entry.exchange) : null;
+      const connected = !!(cred && cred.api_key_set && cred.enabled);
+      if (connected) stepArchive(); else stepConnect(cred);
+    }
+
+    function stepConnect(cred) {
+      box.innerHTML = "";
+      const q = document.createElement("p");
+      q.className = "wl-flow-q";
+      q.textContent = `Collega ${entry.exchange.toUpperCase()} (${flowMarket === "futures" ? "futures" : "spot"}) — chiave con permessi di trading, mai di prelievo.`;
+      box.appendChild(q);
+      const keyInput = document.createElement("input");
+      keyInput.type = "text"; keyInput.placeholder = "API Key"; keyInput.autocomplete = "off";
+      const secretInput = document.createElement("input");
+      secretInput.type = "password"; secretInput.placeholder = "API Secret"; secretInput.autocomplete = "off";
+      box.appendChild(keyInput);
+      box.appendChild(secretInput);
+      let passInput = null;
+      if (entry.exchange === "kucoin" || cred?.needs_passphrase) {
+        passInput = document.createElement("input");
+        passInput.type = "password"; passInput.placeholder = "Passphrase"; passInput.autocomplete = "off";
+        box.appendChild(passInput);
+      }
+      const status = document.createElement("span");
+      status.className = "wl-flow-status";
+      const submitBtn = document.createElement("button");
+      submitBtn.type = "button";
+      submitBtn.className = "wl-mode-btn wl-mode-danger active";
+      submitBtn.textContent = "Connetti";
+      submitBtn.addEventListener("click", async () => {
+        if (!keyInput.value || !secretInput.value) { status.textContent = "Chiave e secret obbligatori"; return; }
+        submitBtn.disabled = true;
+        const endpoint = flowMarket === "futures" ? "/api/auth/futures" : "/api/auth/trading";
+        const body = {
+          exchange: entry.exchange, api_key: keyInput.value, api_secret: secretInput.value,
+          passphrase: passInput?.value || "", enabled: true, size_mode: "fixed_usdt", size_value: 50,
+        };
+        try {
+          const resp = await fetch(endpoint, {
+            method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+          });
+          if (resp.ok) stepArchive();
+          else status.textContent = (await resp.json().catch(() => ({}))).detail || `Errore (${resp.status})`;
+        } catch { status.textContent = "Errore di rete"; }
+        submitBtn.disabled = false;
+      });
+      box.appendChild(submitBtn);
+      box.appendChild(status);
+    }
+
+    async function stepArchive() {
+      box.innerHTML = `<p class="wl-flow-q">Carico l'archivio…</p>`;
+      let data = { items: [] };
+      try { data = await fetch("/api/archive").then((r) => r.json()); } catch { /* fallback sotto */ }
+      const norm = (s) => (s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+      const matches = (data.items || []).filter((it) =>
+        norm(it.symbol) === norm(entry.symbol) && it.asset_type === entry.asset_type &&
+        it.exchange === entry.exchange && it.state === "pronto"
+      );
+      box.innerHTML = "";
+      if (!matches.length) {
+        const p = document.createElement("p");
+        p.className = "panel-hint";
+        p.textContent = `Nessuna configurazione pronta in archivio per ${entry.symbol} su ${entry.exchange.toUpperCase()}. Attiva prima una strategia dalla lista qui sotto (anche con i parametri di default), poi torna qui per scegliere alert o automatico.`;
+        box.appendChild(p);
+        return;
+      }
+      const q = document.createElement("p");
+      q.className = "wl-flow-q";
+      q.textContent = "Scegli la strategia dall'archivio:";
+      box.appendChild(q);
+      matches.forEach((it) => {
+        const card = document.createElement("button");
+        card.type = "button";
+        card.className = "wl-archive-pick";
+        const ret = it.metrics?.total_return_pct;
+        card.innerHTML = `<b>${it.strategy_name}</b> — ${ret != null ? ret.toFixed(1) + "%" : "—"}`;
+        card.addEventListener("click", async () => {
+          card.disabled = true;
+          try {
+            await fetch(`/api/archive/${it.id}/apply-to-alert`, {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ auto_trade: flowMode === "auto", market: flowMarket }),
+            });
+          } finally {
+            loadWatchlist();
+          }
+        });
+        box.appendChild(card);
+      });
+    }
+
+    openBtn.addEventListener("click", () => {
+      box.classList.toggle("hidden");
+      if (!box.classList.contains("hidden")) stepMode();
+    });
+
+    return wrap;
+  }
+
   async function loadWatchlist() {
     let entries = [];
     try {
@@ -2392,6 +2557,8 @@
       onCloseRow.appendChild(onCloseLabel);
       onCloseRow.appendChild(onCloseToggle);
       body.appendChild(onCloseRow);
+
+      body.appendChild(buildActivationFlow(entry));
 
       state.availableStrategies.forEach((name) => {
         const isOn = entry.strategies.includes(name);
