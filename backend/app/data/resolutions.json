@@ -1,5 +1,14 @@
 {
   "_README": "Scritto da Claude, versionato in git, distribuito col deploy. Le chiavi sono gli id delle segnalazioni. Non modificare a mano dall'app: verrebbe sovrascritto al deploy successivo.",
+  "seed-0055": {
+    "status": "risolto",
+    "at": 1789112400,
+    "summary": "/api/issues (GET) non era nell'elenco dei percorsi pubblici del middleware di autenticazione globale introdotto con l'indurimento di sicurezza (seed-0031). Ogni curl anonimo alla bacheca — compreso quello che CLAUDE.md chiede di fare a inizio conversazione — riceveva un 401 invece dei dati, e il fallimento era indistinguibile da 'bacheca vuota'.",
+    "detail": "Aggiunto /api/issues a _PUBLIC_PATHS in backend/app/main.py. POST /api/issues resta protetto comunque, dalla sua dependency (auth.get_current_user), non dal cancello globale — nessuna apertura in piu' su quel fronte. Verificato con un test diretto: GET senza cookie ora risponde 200, POST senza cookie resta 401.",
+    "files": [
+      "backend/app/main.py"
+    ]
+  },
   "seed-0054": {
     "status": "risolto",
     "at": 1789107600,

@@ -567,6 +567,13 @@ _PUBLIC_PATHS = frozenset({
     "/api/auth/register",
     "/api/auth/logout",
     "/api/auth/me",         # il frontend chiede "chi sono" prima di sapere se e' entrato
+    "/api/issues",          # la bacheca: CLAUDE.md dice di leggerla con un curl senza
+                            # login a inizio sessione — il gate globale (seed-0031) la
+                            # bloccava da quando e' stato introdotto, senza che nessuna
+                            # sessione se ne accorgesse perche' il fallimento e' silenzioso
+                            # (un 401 che sembra "nessuna segnalazione nuova"). GET soltanto
+                            # nei fatti: POST /api/issues resta protetto dalla sua stessa
+                            # dependency (auth.get_current_user), non da questa lista.
 })
 
 _PUBLIC_PREFIXES = ("/static/",)

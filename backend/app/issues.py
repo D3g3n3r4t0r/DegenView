@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0055", "La bacheca (/api/issues) chiedeva login, rompendo la lettura automatica a inizio sessione",
+     "CLAUDE.md dice di controllare 'curl -s https://liquidityengine.app/api/issues' prima di ogni conversazione, ma il cancello di autenticazione globale (seed-0031) bloccava quella richiesta con un 401 silenzioso: sembrava 'nessuna segnalazione nuova' invece di 'non ci sono nemmeno arrivato'.",
+     "alta"),
     ("seed-0054", "Ricerca Stabile troppo lenta, sceglie configurazioni poco robuste",
      "Gabriele: dopo ~10 minuti sembra bloccarsi su piu' ticker, e spesso sceglie una configurazione che regge solo 1-2 scosse su 14 senza che sia chiaro cosa significhi.",
      "alta"),
