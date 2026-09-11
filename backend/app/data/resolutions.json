@@ -1,5 +1,33 @@
 {
   "_README": "Scritto da Claude, versionato in git, distribuito col deploy. Le chiavi sono gli id delle segnalazioni. Non modificare a mano dall'app: verrebbe sovrascritto al deploy successivo.",
+  "seed-0057": {
+    "status": "in corso",
+    "at": 1789120000,
+    "summary": "Primo passo: ogni strategia attiva su un ticker in watchlist ha ora un interruttore proprio 'Solo alert' / 'Trading automatico' (default: solo alert), invece del vecchio interruttore unico per exchange che valeva per tutto cio' che girava li' sopra. L'exchange resta quello gia' associato al ticker — nessun picker aggiuntivo. Le chiavi API restano configurate in Opera, come prima.",
+    "detail": "backend: nuovo campo WatchlistEntry.auto_trade (dict strategia->bool, default vuoto), endpoint PATCH /api/watchlist/{id}/auto_trade, e _watchlist_alert_loop ora esegue ordini reali solo se entry.auto_trade[strategy] e' True (oltre alle condizioni gia' esistenti su credenziali/enabled). frontend: nella card di ogni ticker in Sorveglia, sotto ogni strategia attiva, due pulsanti 'Solo alert'/'Trading automatico'. Non ancora fatto, e rimandato di proposito: rimuovere da Opera il picker exchange-per-ordine e spostare l'ordine manuale one-off dentro la card del ticker — Opera per ora resta il posto per configurare le chiavi API e per ordini manuali/futures, cambia solo cosa decide se una strategia opera da sola.",
+    "files": [
+      "backend/app/models.py",
+      "backend/app/watchlist.py",
+      "backend/app/main.py",
+      "frontend/static/app.js",
+      "frontend/static/style.css",
+      "frontend/index.html"
+    ]
+  },
+  "seed-0056": {
+    "status": "risolto",
+    "at": 1789119000,
+    "summary": "Aggiunto Kraken come quarto provider dati spot (crypto), pubblico e senza chiavi. Limite reale dichiarato: l'endpoint OHLC di Kraken non pagina all'indietro, massimo 720 candele per intervallo qualunque sia la storia richiesta.",
+    "detail": "Nuovo backend/app/providers/kraken.py (KrakenProvider: fetch_ohlcv, search_symbols, format_symbol che mappa BTC->XBT). Registrato in main.py (get_provider, canonical_symbol, /api/symbols) e in models.py (CryptoExchange, SymbolSuggestion.provider). Aggiunto alle select del frontend (lab, watchlist) e ai set MANUAL_PAIR_EXCHANGES/FUTURES_PAIR_EXCHANGES in app.js. 5 nuovi test in backend/tests/test_kraken_provider.py, tutti con httpx.MockTransport (nessuna chiamata di rete vera). Verificato anche dal vivo contro le vere API Kraken.",
+    "files": [
+      "backend/app/providers/kraken.py",
+      "backend/app/models.py",
+      "backend/app/main.py",
+      "backend/tests/test_kraken_provider.py",
+      "frontend/index.html",
+      "frontend/static/app.js"
+    ]
+  },
   "seed-0055": {
     "status": "risolto",
     "at": 1789112400,

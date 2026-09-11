@@ -164,6 +164,12 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0057", "Attivare il trading automatico su una strategia non era chiaro: bisognava passare da Opera e scegliere l'exchange fra troppi",
+     "In Opera si sceglieva l'exchange fra una lista lunga prima di poter fare qualsiasi cosa, e il trading automatico era un interruttore unico per exchange che valeva per TUTTE le strategie attive li' sopra — nessun modo di dire 'questa strategia solo alert, quest'altra anche ordini reali'.",
+     "media"),
+    ("seed-0056", "Kraken non era fra gli exchange dati spot, solo un'opzione morta nei menu",
+     "Kraken mette a disposizione API pubbliche complete per dati OHLC e ricerca simboli, ma non c'era nessun provider collegato: chi lo selezionava non trovava mai nessun ticker.",
+     "bassa"),
     ("seed-0055", "La bacheca (/api/issues) chiedeva login, rompendo la lettura automatica a inizio sessione",
      "CLAUDE.md dice di controllare 'curl -s https://liquidityengine.app/api/issues' prima di ogni conversazione, ma il cancello di autenticazione globale (seed-0031) bloccava quella richiesta con un 401 silenzioso: sembrava 'nessuna segnalazione nuova' invece di 'non ci sono nemmeno arrivato'.",
      "alta"),
