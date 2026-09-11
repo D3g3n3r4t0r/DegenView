@@ -874,6 +874,7 @@
     watchlistAssetType: "stock",
     favorites: [], // [{ id, symbol, asset_type, exchange }] — Watchlist tab, quick chart navigation
     favoriteQuotes: {}, // entry id -> { price, change_pct } from /api/favorites/quotes
+    autoOpenFavoriteId: null, // ticker appena aggiunto: apre la riga e chiede subito la strategia
     favoriteFilter: "all", // "all" | "stock" | "crypto"
     alertEntries: [], // last /api/watchlist load — cross-checked for the favorite row's alert-bell indicator
     pineScripts: [],
@@ -2289,7 +2290,7 @@
   // la chiave) collegala li' -> scegli la strategia dall'archivio. Niente
   // lista di exchange sempre visibile: la chiave si chiede solo quando e
   // dove serve davvero.
-  function buildActivationFlow(entry) {
+  function buildActivationFlow(entry, autoOpen) {
     const wrap = document.createElement("div");
     wrap.className = "wl-activate-wrap";
 
@@ -2412,8 +2413,9 @@
       if (!matches.length) {
         const p = document.createElement("p");
         p.className = "panel-hint";
-        p.textContent = `Nessuna configurazione pronta in archivio per ${entry.symbol} su ${entry.exchange.toUpperCase()}. Attiva prima una strategia dalla lista qui sotto (anche con i parametri di default), poi torna qui per scegliere alert o automatico.`;
+        p.textContent = `Nessuna configurazione pronta in archivio per ${entry.symbol} su ${entry.exchange.toUpperCase()}.`;
         box.appendChild(p);
+        stepFresh();
         return;
       }
       const q = document.createElement("p");
@@ -2439,12 +2441,74 @@
         });
         box.appendChild(card);
       });
+      const freshBtn = document.createElement("button");
+      freshBtn.type = "button";
+      freshBtn.className = "wl-activate-btn";
+      freshBtn.textContent = "Testa una strategia nuova invece";
+      freshBtn.addEventListener("click", () => { box.innerHTML = ""; stepFresh(); });
+      box.appendChild(freshBtn);
+    }
+
+    // Niente in archivio (o l'utente lo vuole comunque): sceglie la
+    // strategia con i parametri di default e parte da li', direttamente in
+    // questa tab — senza dover prima passare da un backtest o da Sorveglia.
+    function stepFresh() {
+      const q = document.createElement("p");
+      q.className = "wl-flow-q";
+      q.textContent = "Testa una strategia con i parametri di default:";
+      box.appendChild(q);
+      (state.availableStrategies || []).forEach((name) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "wl-archive-pick";
+        btn.textContent = name;
+        btn.addEventListener("click", async () => {
+          btn.disabled = true;
+          try {
+            const watch = await fetch("/api/watchlist", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                symbol: entry.symbol, asset_type: entry.asset_type,
+                exchange: entry.exchange, interval: entry.interval || "1d", on_close: true,
+              }),
+            }).then((r) => r.json());
+            await fetch(`/api/watchlist/${watch.id}/strategy`, {
+              method: "PATCH", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ strategy_name: name, enabled: true }),
+            });
+            if (flowMode === "auto") {
+              await fetch(`/api/watchlist/${watch.id}/auto_trade`, {
+                method: "PATCH", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ strategy_name: name, enabled: true }),
+              });
+              if (flowMarket === "futures") {
+                await fetch(`/api/watchlist/${watch.id}/market`, {
+                  method: "PATCH", headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ strategy_name: name, market: "futures" }),
+                });
+              }
+            }
+          } finally {
+            loadWatchlist();
+            loadArchive();
+          }
+        });
+        box.appendChild(btn);
+      });
     }
 
     openBtn.addEventListener("click", () => {
       box.classList.toggle("hidden");
       if (!box.classList.contains("hidden")) stepMode();
     });
+
+    // Un ticker appena aggiunto chiede subito la strategia, senza dover
+    // prima aprire la riga e poi cliccare "+ Attiva" — due clic in meno
+    // esattamente dove Lorenzo si aspettava la domanda.
+    if (autoOpen) {
+      box.classList.remove("hidden");
+      stepMode();
+    }
 
     return wrap;
   }
@@ -5872,6 +5936,9 @@
     const openIds = new Set(
       Array.from(rows.querySelectorAll(".wl-row-wrap.open")).map((li) => li.dataset.favId)
     );
+    const autoOpenId = state.autoOpenFavoriteId;
+    if (autoOpenId) openIds.add(autoOpenId);
+    state.autoOpenFavoriteId = null; // un solo giro: non riaprirlo ad ogni refresh successivo
     rows.innerHTML = "";
 
     const items = state.favorites.filter(
@@ -6016,7 +6083,7 @@
       const expand = document.createElement("div");
       expand.className = "wl-row-expand";
       wrap.appendChild(expand);
-      if (wrap.classList.contains("open")) renderFavoriteExpansion(wrap, entry);
+      if (wrap.classList.contains("open")) renderFavoriteExpansion(wrap, entry, entry.id === autoOpenId);
 
       rows.appendChild(wrap);
     });
@@ -6027,7 +6094,7 @@
   // gia', creato da un'attivazione precedente) e sempre il modo per
   // aggiungerne un'altra — stesso buildActivationFlow usato in Sorveglia,
   // qui e' solo il punto da cui si apre.
-  function renderFavoriteExpansion(wrap, favEntry) {
+  function renderFavoriteExpansion(wrap, favEntry, autoOpen) {
     const box = wrap.querySelector(".wl-row-expand");
     box.innerHTML = "";
     const match = (state.alertEntries || []).find(
@@ -6050,7 +6117,7 @@
       hint.textContent = "Gestione fine (parametri, frequenza, timeframe) resta nella tab Sorveglia.";
       box.appendChild(hint);
     }
-    box.appendChild(buildActivationFlow(match || favEntry));
+    box.appendChild(buildActivationFlow(match || favEntry, autoOpen));
   }
 
   function bindFavorites() {
@@ -6069,7 +6136,7 @@
       }
       if (!resolved) return; // no matching ticker — nothing to add
 
-      await fetch("/api/favorites", {
+      const created = await fetch("/api/favorites", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -6077,10 +6144,13 @@
           asset_type: resolved.asset_type,
           exchange: resolved.provider || "mexc",
         }),
-      });
+      }).then((r) => r.json()).catch(() => null);
       input.value = "";
       favSuggest.resolved = null;
       favSuggest.clear();
+      // Chiede subito la strategia sul ticker appena aggiunto — non serve
+      // aprire la riga a mano e poi cliccare "+ Attiva".
+      if (created?.id) state.autoOpenFavoriteId = created.id;
       loadFavorites();
     });
 
