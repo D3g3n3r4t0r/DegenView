@@ -371,22 +371,30 @@ duplicato nella scheda classica di Sorveglia, che tiene invece la lista
 strategie con parametri modificabili a mano (uso diverso, non lo stesso
 percorso).
 
-Non ancora fatto, per scelta:
-- rimuovere davvero il picker-exchange da Opera per l'ordine manuale, e
-  spostare un ordine manuale one-off dentro la card del ticker in
-  Sorveglia (bottone rapido, niente scelta exchange perche' e' gia' quello
-  del ticker) — mockup desktop gia' fatto (`Desktop.dc.html`) ma superato
-  da questa svolta, da rifare se serve ancora;
-- Opera per ora resta il posto per configurare le chiavi API spot e
-  futures — non ha lo stesso problema di "cento exchange" (e' una lista di
-  configurazione, non un flusso d'ordine) — e per ordini futures/manuali
-  che non partono da una strategia in watchlist; se anche questo va
-  assorbito nel nuovo flusso o resta un percorso separato per operazioni
-  ad-hoc e' una domanda ancora aperta, da riportare a Lorenzo;
+**Terzo giro, stesso filo**: Lorenzo, secco: «opera sparisce». Fatto per
+davvero: la tab Opera non esiste piu' (sidenav, tab-bar, menu mobile
+"Altro" ripuliti). Il suo contenuto — credenziali exchange (spot e
+futures), posizioni aperte, diario ordini, ordine manuale one-off — vive
+ora dentro Sorveglia, sotto le strategie della watchlist, come un secondo
+blocco della stessa tab invece che una tab a se'. Tecnica usata apposta per
+il rischio basso: il div che prima aveva `data-tab-content="opera"` ha
+semplicemente cambiato quell'attributo in `"alert"` — restano due `<div>`
+fratelli con lo stesso `data-tab-content`, entrambi si accendono insieme
+quando si apre Sorveglia. Nessun id toccato (`trading-credentials-list`,
+`positions-list`, `journal-list`, `manual-*`, `futures-*`...), quindi zero
+righe di logica di rendering/salvataggio/esecuzione in `app.js` riscritte —
+solo dove il blocco appare nel DOM e' cambiato. Le regole CSS a colonne
+che erano `[data-area="opera"]` sono ora `[data-area="sorveglia"]`.
+
+Non ancora fatto, per scelta (segnalato, non dimenticato):
+- l'ordine manuale one-off resta un form con la sua scelta exchange, non
+  ancora una card per-ticker dentro Sorveglia — mockup desktop gia' fatto
+  (`Desktop.dc.html`) ma superato da questa svolta; rimandato perche' tocca
+  molto piu' codice per un guadagno cosmetico, e nessuno l'ha chiesto
+  esplicitamente finora;
 - nessuna verifica dal vivo con chiavi vere dell'esecuzione futures
   automatica da watchlist (stessa cautela gia' segnata sotto "Operazioni
-  futures" — nessun ordine futures e' mai partito verso un server vero, ne'
-  da Opera ne' ora da qui).
+  futures" — nessun ordine futures e' mai partito verso un server vero).
 
 ## Log delle conversazioni
 
