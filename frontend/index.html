@@ -89,10 +89,6 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 01-3.4 0"/></svg>
           <span>Sorveglia</span>
         </button>
-        <button type="button" class="sidenav-item" data-area="opera" data-tab-target="opera">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
-          <span>Opera</span>
-        </button>
         <a class="sidenav-item" href="/sniper">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg>
           <span>Scopri</span>
@@ -344,7 +340,6 @@
         <button type="button" class="tab active" data-tab="backtest">Backtest</button>
         <button type="button" class="tab" data-tab="watchlist">Watchlist</button>
         <button type="button" class="tab" data-tab="alert">Sorveglia</button>
-        <button type="button" class="tab" data-tab="opera">Opera</button>
         <button type="button" class="tab" data-tab="analisi">Analisi</button>
         <button type="button" class="tab hidden" id="balances-tab-btn" data-tab="saldi">Saldi</button>
         <a href="/sniper" class="tab tab-link" title="Apre il Token Sniper in una nuova app">Sniper ↗</a>
@@ -653,10 +648,10 @@
         </div>
       </div>
 
-      <div class="tab-content" data-tab-content="opera">
+      <div class="tab-content" data-tab-content="alert">
         <div class="panel">
-          <h3>Opera <span class="risk-badge">denaro reale</span></h3>
-          <p class="panel-hint">Tutto cio che puo spendere sta qui e solo qui, separato per quanto puo farti male &mdash; non per quale exchange lo esegue.</p>
+          <h3>Chiavi, posizioni e ordini manuali <span class="risk-badge">denaro reale</span></h3>
+          <p class="panel-hint">Configura qui le chiavi degli exchange. Se una strategia qui sopra e' su "Trading automatico", parte da sola con queste chiavi — qui sotto restano le posizioni aperte, il diario e l'ordine manuale one-off.</p>
 
           <div id="opera-login-prompt" class="alert-login-prompt hidden">
             <p class="panel-hint">Accedi per operare: ogni utente ha le proprie chiavi, cifrate lato server.</p>
@@ -935,16 +930,6 @@
           <span class="altro-menu-text">
             <span class="altro-menu-title">Modalità Semplice</span>
             <span class="altro-menu-sub">Grafico, strategia e attivazione in pochi passaggi</span>
-          </span>
-          <span class="altro-menu-chev">›</span>
-        </button>
-        <button type="button" id="altro-opera-item" class="altro-menu-item">
-          <span class="altro-menu-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
-          </span>
-          <span class="altro-menu-text">
-            <span class="altro-menu-title">Opera <span class="risk-badge">denaro reale</span></span>
-            <span class="altro-menu-sub">Posizioni, ordine spot, ordine futures a leva</span>
           </span>
           <span class="altro-menu-chev">›</span>
         </button>
