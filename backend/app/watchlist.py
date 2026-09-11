@@ -185,6 +185,21 @@ def set_auto_trade(entry_id: str, strategy_name: str, enabled: bool) -> Watchlis
     return updated
 
 
+def set_market(entry_id: str, strategy_name: str, market: str) -> WatchlistEntry | None:
+    entry = _entries.get(entry_id)
+    if entry is None:
+        return None
+    markets = dict(entry.market)
+    if market == "spot":
+        markets.pop(strategy_name, None)  # spot e' il default implicito
+    else:
+        markets[strategy_name] = market
+    updated = entry.model_copy(update={"market": markets})
+    _entries[entry_id] = updated
+    _save()
+    return updated
+
+
 def set_strategy_interval(entry_id: str, strategy_name: str, interval: str | None) -> WatchlistEntry | None:
     """interval=None resets this strategy to use the entry's default interval."""
     entry = _entries.get(entry_id)

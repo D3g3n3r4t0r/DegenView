@@ -198,6 +198,11 @@ class WatchlistEntry(BaseModel):
     # separata (owner.trading_credentials) — questo flag decide solo se
     # QUESTA strategia su QUESTO ticker puo' usarle.
     auto_trade: dict[str, bool] = {}
+    # Mercato su cui l'esecuzione automatica opera, per strategia — assente
+    # o "spot" e' lo stesso comportamento di sempre. "futures" richiede che
+    # entry.exchange sia anche un exchange futures registrato (vedi
+    # app/trading/futures/registry.py); il server lo rifiuta altrimenti.
+    market: dict[str, Literal["spot", "futures"]] = {}
 
 
 class PriceAlertCondition(str, Enum):

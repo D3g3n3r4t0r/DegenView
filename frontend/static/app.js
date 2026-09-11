@@ -2548,6 +2548,42 @@
             hint.className = "panel-hint wl-autotrade-hint";
             hint.textContent = `Ordini reali su ${entry.exchange.toUpperCase()} ad ogni segnale — richiede API key configurate e abilitate in Opera per questo exchange.`;
             body.appendChild(hint);
+
+            // Spot/futures esiste solo dove l'exchange ha anche un adattatore
+            // futures registrato — stesso insieme usato per l'autocomplete
+            // pair futures in Opera (FUTURES_PAIR_EXCHANGES).
+            if (FUTURES_PAIR_EXCHANGES.has(entry.exchange)) {
+              const marketRow = document.createElement("div");
+              marketRow.className = "strat-sub-row wl-autotrade-row";
+              const isFutures = entry.market?.[name] === "futures";
+              const spotBtn = document.createElement("button");
+              spotBtn.type = "button";
+              spotBtn.className = "wl-mode-btn" + (isFutures ? "" : " active");
+              spotBtn.textContent = "Spot";
+              const futBtn = document.createElement("button");
+              futBtn.type = "button";
+              futBtn.className = "wl-mode-btn wl-mode-danger" + (isFutures ? " active" : "");
+              futBtn.textContent = "Futures (leva)";
+              const setMarket = async (market) => {
+                spotBtn.classList.toggle("active", market === "spot");
+                futBtn.classList.toggle("active", market === "futures");
+                await fetch(`/api/watchlist/${entry.id}/market`, {
+                  method: "PATCH", headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ strategy_name: name, market }),
+                });
+              };
+              spotBtn.addEventListener("click", () => setMarket("spot"));
+              futBtn.addEventListener("click", () => setMarket("futures"));
+              marketRow.appendChild(spotBtn);
+              marketRow.appendChild(futBtn);
+              body.appendChild(marketRow);
+              if (isFutures) {
+                const futHint = document.createElement("p");
+                futHint.className = "panel-hint wl-autotrade-hint";
+                futHint.textContent = "Leva e margine secondo le credenziali futures configurate in Opera per questo exchange.";
+                body.appendChild(futHint);
+              }
+            }
           }
 
           // Last trigger + count (async fetch stats)

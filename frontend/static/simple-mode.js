@@ -776,13 +776,18 @@
     btn.disabled = true;
     btn.textContent = "Attivo…";
     try {
+      const isCrypto = state.ticker.asset_type === "crypto";
+      const wantsAutoTrade = isCrypto && !!state.tradingExchange;
       let entry;
       if (state.archiveEntry) {
         // Single real call: apply-to-alert does watchlist add + params +
         // strategy toggle server-side, atomically, from the archived
         // configuration — this is the exact 3-step sequence described below,
         // already implemented on the backend for the archive path.
-        const res = await api(`/api/archive/${state.archiveEntry.id}/apply-to-alert`, { method: "POST" });
+        const res = await api(`/api/archive/${state.archiveEntry.id}/apply-to-alert`, {
+          method: "POST",
+          body: JSON.stringify({ auto_trade: wantsAutoTrade }),
+        });
         entry = res.watchlist_entry;
       } else {
         // Real 3-call sequence: add to watchlist if missing, then push any
@@ -807,6 +812,12 @@
           method: "PATCH",
           body: JSON.stringify({ strategy_name: state.strategy, enabled: true }),
         });
+        if (wantsAutoTrade) {
+          entry = await api(`/api/watchlist/${entry.id}/auto_trade`, {
+            method: "PATCH",
+            body: JSON.stringify({ strategy_name: state.strategy, enabled: true }),
+          });
+        }
       }
       state.watchlistEntry = entry;
       go(7);

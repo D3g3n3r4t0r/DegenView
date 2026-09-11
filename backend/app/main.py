@@ -303,10 +303,58 @@ async def _watchlist_alert_loop() -> None:
                     # che, funzionando, non diceva nulla — ed e' esattamente cosi'
                     # che e' rimasto morto per mesi senza che nessuno potesse
                     # accorgersene.
-                    cred = owner.trading_credentials.get(entry.exchange)
                     # Opt-in per singola strategia/ticker (dalla watchlist): un
                     # exchange abilitato non basta piu' da solo a far partire
                     # ordini su OGNI strategia che ci gira sopra.
+                    strategy_market = entry.market.get(strategy_name, "spot")
+                    cred = owner.trading_credentials.get(entry.exchange) if strategy_market == "spot" else None
+                    futures_cred = owner.futures_credentials.get(entry.exchange) if strategy_market == "futures" else None
+                    if futures_cred and fresh and entry.auto_trade.get(strategy_name):
+                        api_key, api_secret, passphrase = auth.get_decrypted_futures_credential(owner, entry.exchange)
+                        skip = ""
+                        if not futures_cred.enabled:
+                            skip = "esecuzione automatica disattivata per questo exchange (futures)"
+                        elif not (api_key and api_secret):
+                            skip = "chiavi API futures mancanti o non leggibili"
+                        if skip:
+                            for signal in fresh:
+                                trading_log.record(
+                                    owner.id, symbol=entry.symbol, exchange=entry.exchange,
+                                    strategy_name=strategy_name, signal_type=signal.type,
+                                    outcome="saltato", detail=skip, price=signal.price,
+                                )
+                        else:
+                            for signal in fresh:
+                                try:
+                                    result = await place_futures_order_for_signal(
+                                        entry.exchange, entry.symbol, signal,
+                                        futures_cred.size_mode, futures_cred.size_value, futures_cred.leverage,
+                                        api_key, api_secret, passphrase,
+                                    )
+                                    logger.info("Futures order placed for %s %s: %s", entry.symbol, signal.type, result)
+                                    trading_log.record(
+                                        owner.id, symbol=entry.symbol, exchange=entry.exchange,
+                                        strategy_name=strategy_name, signal_type=signal.type,
+                                        outcome="eseguito", detail=str(result)[:400], price=signal.price,
+                                    )
+                                    if owner.telegram_chat_id and _telegram_allowed(owner):
+                                        asyncio.create_task(telegram.send_to(
+                                            owner.telegram_chat_id,
+                                            f"💱⚠️ Ordine FUTURES ESEGUITO <b>{entry.symbol}</b> [{signal.type}] "
+                                            f"su {entry.exchange} a {signal.price:g}",
+                                        ))
+                                except Exception as exc:
+                                    logger.error("Futures order failed for %s %s: %s", entry.symbol, signal.type, exc)
+                                    trading_log.record(
+                                        owner.id, symbol=entry.symbol, exchange=entry.exchange,
+                                        strategy_name=strategy_name, signal_type=signal.type,
+                                        outcome="fallito", detail=str(exc), price=signal.price,
+                                    )
+                                    if owner.telegram_chat_id and _telegram_allowed(owner):
+                                        asyncio.create_task(telegram.send_to(
+                                            owner.telegram_chat_id,
+                                            f"⚠️ Ordine FUTURES FALLITO <b>{entry.symbol}</b> [{signal.type}]: {exc}",
+                                        ))
                     if cred and fresh and entry.auto_trade.get(strategy_name):
                         api_key, api_secret, passphrase = auth.get_decrypted_credential(owner, entry.exchange)
                         skip = ""
@@ -1766,6 +1814,26 @@ async def set_watchlist_auto_trade(
     return watchlist_store.set_auto_trade(entry_id, req.strategy_name, req.enabled)
 
 
+class WatchlistMarketRequest(BaseModel):
+    strategy_name: str
+    market: Literal["spot", "futures"]
+
+
+@app.patch("/api/watchlist/{entry_id}/market", response_model=WatchlistEntry)
+async def set_watchlist_market(
+    entry_id: str, req: WatchlistMarketRequest, user: User = Depends(auth.get_current_user)
+) -> WatchlistEntry:
+    if req.strategy_name not in AVAILABLE_STRATEGIES:
+        raise HTTPException(status_code=400, detail=f"Strategia sconosciuta: {req.strategy_name}")
+    entry = _owned_entry_or_404(entry_id, user)
+    if req.market == "futures" and entry.exchange not in futures_registry.SUPPORTED_FUTURES_EXCHANGES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{entry.exchange} non ha un adattatore futures registrato",
+        )
+    return watchlist_store.set_market(entry_id, req.strategy_name, req.market)
+
+
 class WatchlistStrategyIntervalRequest(BaseModel):
     strategy_name: str
     interval: str | None = None  # None resets to entry default
@@ -2968,9 +3036,16 @@ async def import_archive_entry(req: ArchiveImportIn, user: User = Depends(auth.g
     return archive_store.get(entry["id"], user.id)
 
 
+class ApplyToAlertRequest(BaseModel):
+    # False di default: attivare da archivio senza dirlo esplicitamente non
+    # deve mettere in moto ordini reali. La Modalita' Semplice lo manda True
+    # solo dopo che l'utente ha collegato un exchange nel suo passo dedicato.
+    auto_trade: bool = False
+
+
 @app.post("/api/archive/{entry_id}/apply-to-alert")
 async def apply_archive_entry_to_alert(
-    entry_id: str, user: User = Depends(auth.get_current_user)
+    entry_id: str, req: ApplyToAlertRequest = ApplyToAlertRequest(), user: User = Depends(auth.get_current_user)
 ) -> dict:
     """Accende l'alert con ESATTAMENTE la configurazione archiviata.
 
@@ -3004,6 +3079,8 @@ async def apply_archive_entry_to_alert(
     updated = await toggle_watchlist_strategy(
         watch.id, WatchlistStrategyToggleRequest(strategy_name=strategy_name, enabled=True), user
     )
+    if req.auto_trade:
+        updated = watchlist_store.set_auto_trade(watch.id, strategy_name, True)
     return {
         "ok": True,
         "watchlist_entry": updated,
