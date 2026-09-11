@@ -3229,8 +3229,16 @@ body {
 .wl-mode-row { display: flex; gap: 8px; flex-wrap: wrap; }
 .wl-activate-flow input { display: block; width: 100%; margin-bottom: 6px; padding: .3rem .5rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--ink); font-size: .78rem; }
 .wl-flow-status { font-size: .72rem; color: var(--ink-dim); margin-left: 6px; }
-.wl-archive-pick { display: block; width: 100%; text-align: left; padding: .4rem .6rem; margin-bottom: 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--ink); font-size: .8rem; cursor: pointer; }
-.wl-archive-pick:hover { border-color: var(--accent); }
+.wl-archive-pick { display: block; width: 100%; text-align: left; padding: .5rem .6rem; margin-bottom: 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--ink); font-size: .8rem; cursor: pointer; }
+button.wl-archive-pick:hover { border-color: var(--accent); }
+.wl-archive-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+.wl-archive-ret { font-weight: 700; font-variant-numeric: tabular-nums; }
+.wl-archive-ret.up { color: var(--bull); }
+.wl-archive-ret.down { color: var(--bear); }
+.wl-archive-stats { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: .7rem; color: var(--ink-dim); margin-bottom: 6px; }
+.wl-archive-use-btn { padding: .3rem .7rem; border: 1px solid var(--accent); border-radius: 6px; background: transparent; color: var(--accent); font-size: .75rem; font-weight: 600; cursor: pointer; }
+.wl-archive-use-btn:hover { background: var(--accent); color: var(--bg); }
+.wl-archive-use-btn:disabled { opacity: .6; cursor: default; }
 
 .opera-advanced > summary { cursor: pointer; font-weight: 600; font-size: 1.05rem; list-style: none; }
 .opera-advanced > summary::-webkit-details-marker { display: none; }

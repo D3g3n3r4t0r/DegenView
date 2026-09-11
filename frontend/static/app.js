@@ -2422,21 +2422,48 @@
       q.className = "wl-flow-q";
       q.textContent = "Scegli la strategia dall'archivio:";
       box.appendChild(q);
+      const fmtPct = (v) => (v == null ? "—" : `${v > 0 ? "+" : ""}${v.toFixed(1)}%`);
       matches.forEach((it) => {
-        const card = document.createElement("button");
-        card.type = "button";
+        const m = it.metrics || {};
+        const card = document.createElement("div");
         card.className = "wl-archive-pick";
-        const ret = it.metrics?.total_return_pct;
-        card.innerHTML = `<b>${it.strategy_name}</b> — ${ret != null ? ret.toFixed(1) + "%" : "—"}`;
-        card.addEventListener("click", async () => {
-          card.disabled = true;
+        // Ogni dato qui viene da un backtest reale gia' misurato e salvato —
+        // non solo il rendimento, tutto cio' che serve per giudicare se
+        // fidarsi: trade, drawdown, profit factor, sharpe, quante candele.
+        card.innerHTML = `
+          <div class="wl-archive-head"><b>${it.strategy_name}</b><span class="wl-archive-ret ${m.total_return_pct > 0 ? "up" : m.total_return_pct < 0 ? "down" : ""}">${fmtPct(m.total_return_pct)}</span></div>
+          <div class="wl-archive-stats">
+            <span>${m.num_trades ?? "—"} trade</span>
+            <span>win ${m.win_rate_pct != null ? m.win_rate_pct.toFixed(0) + "%" : "—"}</span>
+            <span>DD ${m.max_drawdown_pct != null ? m.max_drawdown_pct.toFixed(1) + "%" : "—"}</span>
+            <span>PF ${m.profit_factor != null ? m.profit_factor.toFixed(2) : "—"}</span>
+            <span>Sharpe ${m.sharpe_ratio != null ? m.sharpe_ratio.toFixed(2) : "—"}</span>
+            <span>${m.interval || entry.interval || "—"} · ${m.candles ?? "—"} candele</span>
+          </div>
+          <button type="button" class="wl-archive-use-btn">Usa questa</button>
+          <span class="wl-flow-status"></span>
+        `;
+        const useBtn = card.querySelector(".wl-archive-use-btn");
+        const status = card.querySelector(".wl-flow-status");
+        useBtn.addEventListener("click", async () => {
+          useBtn.disabled = true;
+          status.textContent = "Attivo…";
           try {
-            await fetch(`/api/archive/${it.id}/apply-to-alert`, {
+            const resp = await fetch(`/api/archive/${it.id}/apply-to-alert`, {
               method: "POST", headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ auto_trade: flowMode === "auto", market: flowMarket }),
             });
-          } finally {
-            loadWatchlist();
+            if (resp.ok) {
+              status.textContent = "✓ Attivata";
+              loadWatchlist();
+            } else {
+              const err = await resp.json().catch(() => ({}));
+              status.textContent = err.detail || `Errore (${resp.status})`;
+              useBtn.disabled = false;
+            }
+          } catch {
+            status.textContent = "Errore di rete";
+            useBtn.disabled = false;
           }
         });
         box.appendChild(card);
