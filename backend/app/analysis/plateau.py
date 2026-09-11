@@ -356,7 +356,6 @@ def _guided_cells(
     consider: Callable[[np.ndarray], float],
     n_starts: int = 8,
     say: Callable[[str], None] = lambda _m: None,
-    patience: int = 150,
 ) -> int:
     """Espansione best-first sulle celle, invece di estrarne a caso.
 
@@ -382,16 +381,6 @@ def _guided_cells(
     heap: list[tuple[float, float, int, tuple[int, ...]]] = []
     order = 0
     used = 0
-    # Se le ultime `patience` celle aperte non hanno battuto il miglior
-    # punteggio visto finora, il resto del budget e' quasi certamente sprecato:
-    # l'espansione best-first apre sempre prima le celle piu' promettenti
-    # rimaste in coda, quindi una serie lunga di celle che non migliorano
-    # niente vuol dire che il pianoro buono, se c'e', e' gia' stato trovato.
-    # Fermarsi qui invece di consumare tutto il budget e' la differenza fra
-    # "trova il trend" e "caccia al tesoro": stesso risultato, molto meno
-    # tempo — deterministico come il resto, non e' un sorteggio anticipato.
-    best_score = -math.inf
-    stall = 0
 
     def volume_of(node: tuple[int, ...]) -> float:
         widths = [parts[i].cell_bounds(node[i])[1] - parts[i].cell_bounds(node[i])[0]
@@ -399,7 +388,7 @@ def _guided_cells(
         return float(np.sum(np.log(np.maximum(widths, 1e-12))))
 
     def push(node: tuple[int, ...]) -> None:
-        nonlocal order, used, best_score, stall
+        nonlocal order, used
         if node in visited or used >= budget:
             return
         visited.add(node)
@@ -407,24 +396,13 @@ def _guided_cells(
         used += 1
         order += 1
         if math.isfinite(score):
-            if score > best_score * (1.01 if best_score > 0 else 0.99):
-                best_score = score
-                stall = 0
-            else:
-                stall += 1
             heapq.heappush(heap, (-score, -volume_of(node), order, node))
-        else:
-            stall += 1
 
     for node in _lattice_starts(sizes, n_starts):
         push(node)
 
     opened = 0
-    stopped_early = False
     while heap and used < budget:
-        if stall >= patience:
-            stopped_early = True
-            break
         _s, _v, _o, node = heapq.heappop(heap)
         opened += 1
         for axis in range(d):
@@ -433,12 +411,11 @@ def _guided_cells(
                 nxt[axis] += step
                 if 0 <= nxt[axis] < sizes[axis]:
                     push(tuple(nxt))
-            if used >= budget or stall >= patience:
+            if used >= budget:
                 break
 
     say(f"espansione guidata: {used} celle valutate aprendo le {opened} piu' promettenti "
-        f"da {n_starts} partenze — nessun sorteggio, stessa serie stesso risultato"
-        + (f" (fermata dopo {patience} celle senza miglioramenti)" if stopped_early else ""))
+        f"da {n_starts} partenze — nessun sorteggio, stessa serie stesso risultato")
     return used
 
 
@@ -455,7 +432,6 @@ def plateau_search(
     probe_radius: float = 0.05,
     probe_samples: int = 14,
     lam: float = 0.75,
-    patience: int = 150,
     seed: int = 0,
     space: ParamSpace | None = None,
     objective: Callable[[BacktestResult], float] = _plateau_objective,
@@ -574,7 +550,7 @@ def plateau_search(
             consider_point(u)
     else:
         _guided_cells([len(c) for c in centers], centers, parts,
-                      max_grid_evals, consider_point, say=say, patience=patience)
+                      max_grid_evals, consider_point, say=say)
 
     if not cands:
         return PlateauResult(strategy_name, parts, [], counter["n"], counter["boundary"],
