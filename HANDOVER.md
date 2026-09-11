@@ -386,12 +386,41 @@ righe di logica di rendering/salvataggio/esecuzione in `app.js` riscritte —
 solo dove il blocco appare nel DOM e' cambiato. Le regole CSS a colonne
 che erano `[data-area="opera"]` sono ora `[data-area="sorveglia"]`.
 
+**Quarto giro — quello che ha risolto davvero**: spostare Opera dentro
+Sorveglia non bastava. Lorenzo, guardando uno screenshot: «ma che stai
+facendo? sta roba avevo chiesto di eliminarla e di passare tutto da
+watchlist» — la griglia con Binance/MEXC/KuCoin/Kraken e una spunta
+"Attivo" su ciascuno era rimasta li', solo in un indirizzo diverso: era
+quello il "cento exchange" da eliminare, non la tab in se'. Poi, alla
+domanda di chiarimento: «ti avevo chiesto che tutto doveva passare da
+watchlist, con l'ordine funzionale che ti avevo chiesto» — cioe' l'ordine
+gia' dato nel secondo giro (ticker -> alert o anche automatico -> strategia
+da archivio), che nel terzo giro non avevo ancora costruito per davvero.
+
+Fatto ora: quella griglia e' un `<details>` chiuso di default in fondo a
+Sorveglia (chiavi, posizioni, diario, ordine manuale — stessa
+funzionalita', ma non piu' la prima cosa che si vede). Ogni ticker in
+watchlist ha un pulsante "+ Attiva strategia da archivio" che apre la
+diramazione vera: solo alert o anche operazioni automatiche -> (se
+automatiche) spot o futures, solo dove l'exchange ha un adattatore futures
+-> la chiave API si chiede in linea, un exchange alla volta, solo se manca
+in quel momento -> scelta della strategia fra le voci d'archivio di quel
+ticker (stesso `/api/archive/{id}/apply-to-alert` gia' esteso nel giro
+precedente). Se l'archivio e' vuoto per quel ticker, il messaggio guida a
+usare prima la lista strategie sotto (esistente, coi parametri di default)
+e tornare poi qui.
+
+**Lezione per la prossima volta**: uno spostamento fisico di markup non e'
+la stessa cosa di risolvere il problema che quel markup rappresentava —
+"cento exchange sempre in vista" era la lamentela originale fin dal primo
+giro, ed e' sopravvissuta due giri interi sotto un indirizzo diverso prima
+che qualcuno (giustamente) se ne accorgesse guardando lo schermo vero.
+
 Non ancora fatto, per scelta (segnalato, non dimenticato):
-- l'ordine manuale one-off resta un form con la sua scelta exchange, non
-  ancora una card per-ticker dentro Sorveglia — mockup desktop gia' fatto
-  (`Desktop.dc.html`) ma superato da questa svolta; rimandato perche' tocca
-  molto piu' codice per un guadagno cosmetico, e nessuno l'ha chiesto
-  esplicitamente finora;
+- l'ordine manuale one-off dentro il pannello richiudibile resta un form
+  con la sua scelta exchange, non una card per-ticker — rimandato perche'
+  tocca molto piu' codice per un guadagno cosmetico, e nessuno l'ha chiesto
+  esplicitamente;
 - nessuna verifica dal vivo con chiavi vere dell'esecuzione futures
   automatica da watchlist (stessa cautela gia' segnata sotto "Operazioni
   futures" — nessun ordine futures e' mai partito verso un server vero).
