@@ -143,7 +143,13 @@ def run_pipeline(
     df: pd.DataFrame,
     backtest_params: dict | None = None,
     target_entries: int = 40,
-    max_evals_per_branch: int = 3000,
+    # 700 e' il budget misurato come gia' sufficiente su un ramo a 7 parametri
+    # (93 312 celle): guidata 57.44 contro 50.39/26.93/37.35 di tre semi
+    # diversi. Un tentativo precedente di usare questo stesso budget con uno
+    # stop anticipato GLOBALE ha rotto la robustezza (vedi patience in
+    # plateau.py); qui il budget basso resta sicuro perche' lo stop anticipato
+    # ora e' per-partenza, non globale.
+    max_evals_per_branch: int = 700,
     coarse: int = 6,
     tol: float = 0.01,
     min_trades: int = 8,

@@ -84,6 +84,34 @@ def _fingerprint(bt: BacktestResult) -> Fingerprint:
     return (round(bt.total_return_pct, 6), bt.num_trades, round(bt.max_drawdown_pct, 6))
 
 
+# Tolleranza per il confronto di robustezza (S4b), separata da _fingerprint:
+# quest'ultimo resta esatto perche' deduplica candidati durante la ricerca (S4a),
+# dove due celle che producono davvero la stessa sequenza di trade DEVONO
+# coincidere bit per bit. Il confronto "regge N su 14" e' un'altra domanda —
+# "questa scossa ha dato sostanzialmente lo stesso risultato?" — e l'uguaglianza
+# esatta al sesto decimale era piu' severa di quanto serve: un singolo tick di
+# differenza sul prezzo di uscita basta a spostare il rendimento oltre quella
+# soglia anche quando il trade e' lo stesso. Bande larghe quanto un cambiamento
+# che un essere umano giudicherebbe "diverso davvero".
+_ROBUSTNESS_RETURN_TOL = 0.01      # ±1% RELATIVO al rendimento del candidato (scala da poche a migliaia di punti)
+_ROBUSTNESS_DRAWDOWN_TOL_PP = 1.0  # ±1 punto percentuale ASSOLUTO — il drawdown e' gia' una percentuale
+                                   # piccola (tipicamente a una o due cifre): una tolleranza RELATIVA a
+                                   # quel numero (1% di 7% = 0.07 punti) sarebbe severa quanto il confronto
+                                   # esatto che questa funzione doveva sostituire. Misurato: la prima
+                                   # versione, con tolleranza relativa anche sul drawdown, dava ancora
+                                   # 'regge 0 volte' anche dopo il fix — il bug era proprio qui.
+_ROBUSTNESS_TRADES_TOL = 1         # ±1 trade
+
+
+def _robustly_close(bt: BacktestResult, base: BacktestResult) -> bool:
+    if abs(bt.num_trades - base.num_trades) > _ROBUSTNESS_TRADES_TOL:
+        return False
+    ret_scale = max(abs(base.total_return_pct), 1.0)
+    if abs(bt.total_return_pct - base.total_return_pct) > _ROBUSTNESS_RETURN_TOL * ret_scale:
+        return False
+    return abs(bt.max_drawdown_pct - base.max_drawdown_pct) <= _ROBUSTNESS_DRAWDOWN_TOL_PP
+
+
 @dataclass
 class AxisPartition:
     """The cells one axis is divided into, in unit-cube coordinates."""
@@ -356,6 +384,7 @@ def _guided_cells(
     consider: Callable[[np.ndarray], float],
     n_starts: int = 8,
     say: Callable[[str], None] = lambda _m: None,
+    patience: int | None = None,
 ) -> int:
     """Espansione best-first sulle celle, invece di estrarne a caso.
 
@@ -375,19 +404,35 @@ def _guided_cells(
     La priorita' e' il punteggio del centro, con il logaritmo del volume della
     cella come spareggio: fra due celle che valgono uguale si apre prima la piu'
     larga, perche' una cella larga e' gia' un pianoro.
-    """
+
+    `patience`: se impostato, ogni partenza (vedi `_lattice_starts`) smette di
+    generare nuovi vicini una volta che le sue ultime `patience` celle aperte
+    non hanno migliorato il suo stesso record — non un contatore globale.
+    Un tentativo precedente con un contatore globale si e' rivelato sbagliato:
+    su un paesaggio a gradini con piu' partenze indipendenti, una partenza puo'
+    restare 'ferma' a lungo mentre un'altra sta ancora trovando terreno buono, e
+    fermare TUTTA la ricerca quando una sola si ferma tagliava via pianori veri
+    prima di trovarli (misurato dal vivo: 12 finalisti su 12 con 'regge 0 volte
+    su 14'). Qui ogni partenza si esaurisce per conto suo; le altre continuano
+    finche' non si esauriscono a loro volta o finisce il budget — nessun taglio
+    globale, quindi lo stesso rischio non si ripresenta."""
     d = len(sizes)
     visited: set[tuple[int, ...]] = set()
-    heap: list[tuple[float, float, int, tuple[int, ...]]] = []
+    # Ogni voce in coda porta anche la partenza (root) da cui discende, per
+    # poter tracciare l'esaurimento partenza per partenza invece che in globale.
+    heap: list[tuple[float, float, int, tuple[int, ...], int]] = []
     order = 0
     used = 0
+    best_score: dict[int, float] = {}
+    stall: dict[int, int] = {}
+    exhausted: set[int] = set()
 
     def volume_of(node: tuple[int, ...]) -> float:
         widths = [parts[i].cell_bounds(node[i])[1] - parts[i].cell_bounds(node[i])[0]
                   for i in range(d)]
         return float(np.sum(np.log(np.maximum(widths, 1e-12))))
 
-    def push(node: tuple[int, ...]) -> None:
+    def push(node: tuple[int, ...], root: int) -> None:
         nonlocal order, used
         if node in visited or used >= budget:
             return
@@ -395,27 +440,42 @@ def _guided_cells(
         score = consider(np.array([centers[i][node[i]] for i in range(d)]))
         used += 1
         order += 1
+        if patience is not None and math.isfinite(score):
+            prev_best = best_score.get(root, -math.inf)
+            if score > prev_best * (1.01 if prev_best > 0 else 0.99):
+                best_score[root] = score
+                stall[root] = 0
+            else:
+                stall[root] = stall.get(root, 0) + 1
+                if stall[root] >= patience:
+                    exhausted.add(root)
         if math.isfinite(score):
-            heapq.heappush(heap, (-score, -volume_of(node), order, node))
+            heapq.heappush(heap, (-score, -volume_of(node), order, node, root))
 
-    for node in _lattice_starts(sizes, n_starts):
-        push(node)
+    starts = _lattice_starts(sizes, n_starts)
+    for root, node in enumerate(starts):
+        push(node, root)
 
     opened = 0
     while heap and used < budget:
-        _s, _v, _o, node = heapq.heappop(heap)
+        _s, _v, _o, node, root = heapq.heappop(heap)
         opened += 1
+        if patience is not None and root in exhausted:
+            continue
         for axis in range(d):
             for step in (-1, 1):
                 nxt = list(node)
                 nxt[axis] += step
                 if 0 <= nxt[axis] < sizes[axis]:
-                    push(tuple(nxt))
+                    push(tuple(nxt), root)
             if used >= budget:
                 break
 
+    stopped_early = patience is not None and len(exhausted) >= len(starts) and used < budget
     say(f"espansione guidata: {used} celle valutate aprendo le {opened} piu' promettenti "
-        f"da {n_starts} partenze — nessun sorteggio, stessa serie stesso risultato")
+        f"da {n_starts} partenze — nessun sorteggio, stessa serie stesso risultato"
+        + (f" (tutte le partenze esaurite dopo {patience} celle senza miglioramenti locali)"
+           if stopped_early else ""))
     return used
 
 
@@ -432,6 +492,7 @@ def plateau_search(
     probe_radius: float = 0.05,
     probe_samples: int = 14,
     lam: float = 0.75,
+    patience: int | None = 150,
     seed: int = 0,
     space: ParamSpace | None = None,
     objective: Callable[[BacktestResult], float] = _plateau_objective,
@@ -550,7 +611,7 @@ def plateau_search(
             consider_point(u)
     else:
         _guided_cells([len(c) for c in centers], centers, parts,
-                      max_grid_evals, consider_point, say=say)
+                      max_grid_evals, consider_point, say=say, patience=patience)
 
     if not cands:
         return PlateauResult(strategy_name, parts, [], counter["n"], counter["boundary"],
@@ -610,14 +671,13 @@ def plateau_search(
         # up to 46%. Sharing one set across candidates also pairs the
         # comparison, so differences in robust_score reflect the candidates
         # rather than the draw.
-        base_fp = _fingerprint(c.backtest)
         probes: list[float] = []
         unchanged = 0
         for eps in drift_set:
             probe_u = np.clip(c.u + eps, 0.0, 1.0)
             bt, sc = evaluate(probe_u)
             probes.append(sc)
-            if _fingerprint(bt) == base_fp:
+            if _robustly_close(bt, c.backtest):
                 unchanged += 1
 
         say(f"finalista {rank}/{len(shortlist)}: regge {unchanged} "
@@ -642,9 +702,14 @@ def plateau_search(
     verified = [c for c in by_promise[:finalists] if c.robust_score is not None]
     # Rank on what was measured, not on what the partition predicted. Phase-E
     # measurement put the axis-approximation error above 50%, so cell width is
-    # demoted to a tiebreak and neighbourhood agreement carries the decision.
+    # demoted to a tiebreak. `neighbourhood_agreement` ("regge N su 14") e'
+    # ORA il criterio primario, non piu' lo spareggio: e' il numero che
+    # l'interfaccia mostra come garanzia di solidita', quindi il vincitore deve
+    # essere davvero quello che regge di piu' — non uno che regge poco ma ha
+    # un punteggio medio-meno-varianza migliore, che e' cio' che poteva succedere
+    # prima (un candidato con agreement basso vinceva comunque su robust_score).
     verified.sort(
-        key=lambda c: (c.robust_score, c.neighbourhood_agreement or 0.0, c.log_volume),
+        key=lambda c: (c.neighbourhood_agreement or 0.0, c.robust_score, c.log_volume),
         reverse=True,
     )
 
