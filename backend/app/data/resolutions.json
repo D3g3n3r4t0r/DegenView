@@ -2,15 +2,16 @@
   "_README": "Scritto da Claude, versionato in git, distribuito col deploy. Le chiavi sono gli id delle segnalazioni. Non modificare a mano dall'app: verrebbe sovrascritto al deploy successivo.",
   "seed-0057": {
     "status": "in corso",
-    "at": 1789120000,
-    "summary": "Primo passo: ogni strategia attiva su un ticker in watchlist ha ora un interruttore proprio 'Solo alert' / 'Trading automatico' (default: solo alert), invece del vecchio interruttore unico per exchange che valeva per tutto cio' che girava li' sopra. L'exchange resta quello gia' associato al ticker — nessun picker aggiuntivo. Le chiavi API restano configurate in Opera, come prima.",
-    "detail": "backend: nuovo campo WatchlistEntry.auto_trade (dict strategia->bool, default vuoto), endpoint PATCH /api/watchlist/{id}/auto_trade, e _watchlist_alert_loop ora esegue ordini reali solo se entry.auto_trade[strategy] e' True (oltre alle condizioni gia' esistenti su credenziali/enabled). frontend: nella card di ogni ticker in Sorveglia, sotto ogni strategia attiva, due pulsanti 'Solo alert'/'Trading automatico'. Non ancora fatto, e rimandato di proposito: rimuovere da Opera il picker exchange-per-ordine e spostare l'ordine manuale one-off dentro la card del ticker — Opera per ora resta il posto per configurare le chiavi API e per ordini manuali/futures, cambia solo cosa decide se una strategia opera da sola.",
+    "at": 1789123000,
+    "summary": "Secondo giro: ora anche i futures partono dalla watchlist, non solo lo spot. Ogni strategia attiva su un ticker ha un interruttore 'Solo alert'/'Trading automatico', e se l'exchange ha un adattatore futures registrato (Binance, Kraken, MEXC) compare anche la scelta 'Spot'/'Futures (leva)' — l'exchange resta sempre quello gia' associato al ticker, mai un picker separato. Corretto nello stesso giro un effetto collaterale del primo passo: la Modalita' Semplice attivava l'esecuzione reale tramite il vecchio meccanismo (interruttore per-exchange), che il nuovo gate per-strategia avrebbe silenziosamente disattivato — ora manda esplicitamente auto_trade=true quando l'utente ha collegato un exchange nel suo passo dedicato.",
+    "detail": "backend: WatchlistEntry.market (dict strategia->'spot'|'futures'), endpoint PATCH /api/watchlist/{id}/market (rifiuta 'futures' se l'exchange non e' nel registro futures), _watchlist_alert_loop ora ha un ramo futures analogo a quello spot (place_futures_order_for_signal, owner.futures_credentials, leva dalla credenziale futures dell'exchange). apply-to-alert accetta un body {auto_trade: bool} e imposta il flag dopo aver acceso la strategia; simple-mode.js lo passa quando l'utente ha configurato un exchange nel passo 5, sia per il ramo archivio sia per quello 'strategia nuova'. Non ancora fatto: rimuovere da Opera il picker exchange-per-ordine dell'ordine manuale one-off e spostarlo dentro la card del ticker; Opera resta per ora il posto per configurare le chiavi (spot e futures).",
     "files": [
       "backend/app/models.py",
       "backend/app/watchlist.py",
       "backend/app/main.py",
       "frontend/static/app.js",
       "frontend/static/style.css",
+      "frontend/static/simple-mode.js",
       "frontend/index.html"
     ]
   },
