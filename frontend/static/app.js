@@ -5720,7 +5720,7 @@
     disconnectLiveFeed();
     const proto = location.protocol === "https:" ? "wss" : "ws";
     const ws = new WebSocket(
-      `${proto}://${location.host}/ws/live?symbol=${encodeURIComponent(symbol)}&${intervalQuery()}`
+      `${proto}://${location.host}/ws/live?symbol=${encodeURIComponent(symbol)}&exchange=${state.cryptoExchange}&${intervalQuery()}`
     );
     state.liveSocket = ws;
 
@@ -5791,16 +5791,18 @@
       renderFavorites();
       savePreferences();
       refreshDeepBacktest(symbol);
-      // Live WS streaming is only wired up for MEXC today; every crypto
-      // symbol still gets the periodic refresh below regardless of exchange.
-      if (state.assetType === "crypto" && state.cryptoExchange === "mexc") {
+      // Live WS streaming is wired up for MEXC and Kraken; every crypto
+      // symbol still gets the periodic refresh below regardless of exchange,
+      // as a fallback if the live feed drops or the pair has no ws channel.
+      const LIVE_WS_EXCHANGES = new Set(["mexc", "kraken"]);
+      if (state.assetType === "crypto" && LIVE_WS_EXCHANGES.has(state.cryptoExchange)) {
         connectLiveFeed(body.symbol);
       }
       if (state.assetType === "crypto") {
         state.liveRefreshTimer = setInterval(() => silentRefresh(body.symbol), 60000);
-        // No WebSocket wired up for Binance yet — say so plainly instead of
-        // leaving the user guessing whether the chart is updating at all.
-        if (state.cryptoExchange !== "mexc") {
+        // No WebSocket wired up for Binance/KuCoin yet — say so plainly
+        // instead of leaving the user guessing whether the chart updates.
+        if (!LIVE_WS_EXCHANGES.has(state.cryptoExchange)) {
           el("polling-badge").classList.remove("hidden");
         }
       }

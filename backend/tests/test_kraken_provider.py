@@ -91,6 +91,22 @@ def test_search_symbols_maps_xbt_back_to_btc_for_display(monkeypatch):
     assert "USD" in results[0]["exchange"]
 
 
+def test_get_ws_symbol_maps_xbt_to_btc_with_slash(monkeypatch):
+    payload = {
+        "result": {
+            "XXBTZUSD": {"altname": "XBTUSD", "wsname": "XBT/USD", "base": "XXBT", "quote": "ZUSD", "status": "online"},
+        }
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=json.dumps(payload))
+
+    monkeypatch.setattr(kraken.httpx, "AsyncClient", _client_factory(handler))
+    provider = KrakenProvider()
+    assert _run(provider.get_ws_symbol("BTCUSD")) == "BTC/USD"
+    assert _run(provider.get_ws_symbol("NOTAPAIR")) is None
+
+
 def test_search_symbols_empty_query_returns_nothing():
     provider = KrakenProvider()
     assert _run(provider.search_symbols("  ")) == []

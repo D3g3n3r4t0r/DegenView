@@ -60,6 +60,7 @@ from app.analysis.strategies import AVAILABLE_STRATEGIES, DEFAULT_STRATEGY, buil
 from app.analysis.summary import build_summary, determine_bias
 from app.cache import get_or_fetch
 from app.config import settings
+from app.live.kraken_stream import kraken_stream_manager
 from app.live.mexc_stream import mexc_stream_manager
 from app.models import (
     AnalysisResponse,
@@ -110,6 +111,10 @@ from app.timeframes import (
 from starlette.middleware.gzip import GZipMiddleware
 
 logger = logging.getLogger(__name__)
+
+# Un manager di stream live per exchange, ciascuno col proprio protocollo
+# pubblico (protobuf su MEXC, JSON su Kraken) — vedi /ws/live sotto.
+_LIVE_STREAM_MANAGERS = {"mexc": mexc_stream_manager, "kraken": kraken_stream_manager}
 if getattr(sys, "frozen", False):
     FRONTEND_DIR = Path(sys._MEIPASS) / "frontend"  # type: ignore[attr-defined]
 else:
@@ -3599,6 +3604,13 @@ async def live_feed(websocket: WebSocket) -> None:
         await websocket.close(code=4000)
         return
 
+    # Default mexc per client vecchi che non mandano ancora il parametro.
+    exchange = params.get("exchange", "mexc")
+    manager = _LIVE_STREAM_MANAGERS.get(exchange)
+    if manager is None:
+        await websocket.close(code=4000)
+        return
+
     intervals = {
         "htf": params.get("htf_interval", DEFAULT_INTERVALS["htf"]),
         "mtf": params.get("mtf_interval", DEFAULT_INTERVALS["mtf"]),
@@ -3606,14 +3618,14 @@ async def live_feed(websocket: WebSocket) -> None:
     }
 
     await websocket.accept()
-    await mexc_stream_manager.add_client(websocket, symbol, intervals)
+    await manager.add_client(websocket, symbol, intervals)
     try:
         while True:
             await websocket.receive_text()
     except WebSocketDisconnect:
         pass
     finally:
-        await mexc_stream_manager.remove_client(websocket)
+        await manager.remove_client(websocket)
 
 
 class _VersionedStatic(StaticFiles):

@@ -1,5 +1,18 @@
 {
   "_README": "Scritto da Claude, versionato in git, distribuito col deploy. Le chiavi sono gli id delle segnalazioni. Non modificare a mano dall'app: verrebbe sovrascritto al deploy successivo.",
+  "seed-0059": {
+    "status": "risolto",
+    "at": 1789137000,
+    "summary": "Kraken era rimasto solo dati REST (aggiornamento ogni 60s, badge 'Agg. ogni 60s' come Binance/KuCoin) mentre solo MEXC aveva un feed live via websocket — non era mai stato promesso ne' costruito il realtime per Kraken, ma Lorenzo lo voleva: 'usa tutte le sue API'. Aggiunto il feed pubblico OHLC v2 di Kraken (wss://ws.kraken.com/v2): scegliendo Kraken il grafico ora si aggiorna in tempo reale come su MEXC, badge LIVE invece del polling.",
+    "detail": "Nuovo backend/app/live/kraken_stream.py (KrakenStreamManager), stessa architettura di mexc_stream.py ma piu' semplice: JSON invece di protobuf, un websocket verso Kraken per client attivo, un canale 'ohlc' per ciascun intervallo htf/mtf/ltf che ha un corrispondente nativo Kraken (niente 1M sintetico, non serve in tempo reale). Il simbolo per il feed v2 non e' quello REST: Kraken usa 'BTC/USD' (con slash, BTC non XBT) mentre l'OHLC REST vuole 'XBTUSD' — nuovo KrakenProvider.get_ws_symbol() lo ricava dalla stessa lista AssetPairs gia' usata per la ricerca. Trovato e corretto nello stesso giro un bug reale gia' presente dal lavoro precedente (seed-0056): str.lstrip('XZ') toglie TUTTE le X/Z iniziali invece di una sola, quindi un base a 4 lettere come 'XXBT' diventava 'BT' invece di 'XBT' — mai notato prima perche' nessun test controllava il valore esatto, solo che contenesse 'USD'. Estratta la logica giusta in _strip_kraken_prefix(), riusata sia da get_ws_symbol() sia da search_symbols(). backend/app/main.py: /ws/live ora legge un parametro exchange e sceglie il manager giusto (default mexc per compatibilita'); frontend: connectLiveFeed manda l'exchange nella query, e la lista di exchange con feed live include ora anche kraken.",
+    "files": [
+      "backend/app/providers/kraken.py",
+      "backend/app/live/kraken_stream.py",
+      "backend/app/main.py",
+      "frontend/static/app.js",
+      "backend/tests/test_kraken_provider.py"
+    ]
+  },
   "seed-0058": {
     "status": "risolto",
     "at": 1789134000,

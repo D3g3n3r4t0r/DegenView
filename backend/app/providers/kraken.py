@@ -26,6 +26,17 @@ _MAX_SUGGESTIONS = 25
 _symbols_cache: TTLCache = TTLCache(maxsize=1, ttl=3600)
 
 
+def _strip_kraken_prefix(code: str) -> str:
+    """Kraken preffisa gli asset legacy con una singola X (crypto) o Z
+    (fiat) quando il codice e' a 4 lettere — 'XXBT' -> 'XBT', 'ZUSD' ->
+    'USD'. str.lstrip("XZ") toglie TUTTE le X/Z iniziali, non solo una: su
+    'XXBT' restituiva 'BT', un bug reale che silenziosamente rompeva la
+    ricerca ogni volta che il base restava a 4 lettere dopo il taglio."""
+    if len(code) == 4 and code[0] in "XZ":
+        return code[1:]
+    return code
+
+
 def format_symbol(symbol: str) -> str:
     symbol = symbol.strip().upper().replace("/", "").replace("-", "")
     for base, alias in _BASE_ALIASES.items():
@@ -109,11 +120,7 @@ class KrakenProvider(DataProvider):
         df = df[~df.index.duplicated(keep="first")]
         return df[["open", "high", "low", "close", "volume"]].tail(min(outputsize, self._MAX_CANDLES))
 
-    async def search_symbols(self, query: str) -> list[dict]:
-        query = query.strip()
-        if not query:
-            return []
-
+    async def _load_pairs(self) -> list[dict]:
         pairs = _symbols_cache.get("all")
         if pairs is None:
             async with httpx.AsyncClient(timeout=15.0) as client:
@@ -122,7 +129,31 @@ class KrakenProvider(DataProvider):
             result = payload.get("result", {}) if isinstance(payload, dict) else {}
             pairs = [v for v in result.values() if not (v.get("status") or "online") != "online"]
             _symbols_cache["all"] = pairs
+        return pairs
 
+    async def get_ws_symbol(self, symbol: str) -> str | None:
+        """Il feed pubblico v2 (wss://ws.kraken.com/v2) vuole 'BTC/USD', non
+        'XBTUSD' come il REST OHLC — usa BTC invece di XBT e sempre lo slash.
+        Nessuna formula fissa la mappa: si cerca il pair nella stessa lista
+        di AssetPairs gia' usata per la ricerca, e se ne leggono base/quote."""
+        formatted = format_symbol(symbol)
+        pairs = await self._load_pairs()
+        for p in pairs:
+            if (p.get("altname") or "").upper() != formatted.upper():
+                continue
+            base = _strip_kraken_prefix(p.get("base") or "")
+            quote = _strip_kraken_prefix(p.get("quote") or "")
+            if base == "XBT":
+                base = "BTC"
+            return f"{base}/{quote}"
+        return None
+
+    async def search_symbols(self, query: str) -> list[dict]:
+        query = query.strip()
+        if not query:
+            return []
+
+        pairs = await self._load_pairs()
         q = query.upper().replace("/", "")
         for base, alias in _BASE_ALIASES.items():
             if q.startswith(base):
@@ -146,8 +177,8 @@ class KrakenProvider(DataProvider):
 
         out = []
         for p in matches[:_MAX_SUGGESTIONS]:
-            base = (p.get("base") or "").lstrip("XZ") if len(p.get("base", "")) == 4 else p.get("base", "")
-            quote = (p.get("quote") or "").lstrip("XZ") if len(p.get("quote", "")) == 4 else p.get("quote", "")
+            base = _strip_kraken_prefix(p.get("base") or "")
+            quote = _strip_kraken_prefix(p.get("quote") or "")
             display_base = "BTC" if base == "XBT" else base
             out.append({
                 "symbol": alt(p),
