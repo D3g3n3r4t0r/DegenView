@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0054", "Ricerca Stabile troppo lenta, sceglie configurazioni poco robuste",
+     "Gabriele: dopo ~10 minuti sembra bloccarsi su piu' ticker, e spesso sceglie una configurazione che regge solo 1-2 scosse su 14 senza che sia chiaro cosa significhi.",
+     "alta"),
     ("seed-0053", "Nessun pair trovato su spot (Binance) e futures (MEXC)",
      "In Opera, scegliendo Binance il campo Pair non suggeriva mai nulla (il backend non interrogava quel provider); sui futures MEXC il campo Pair non aveva alcun autocomplete e un simbolo sconosciuto dava un errore 500 generico invece del messaggio previsto.",
      "alta"),
