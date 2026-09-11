@@ -271,12 +271,14 @@
     "files": []
   },
   "1c2880d2": {
-    "status": "in corso",
-    "at": 1788995400,
-    "summary": "Condivisione strategie archiviate tra account: Lorenzo ha chiarito il meccanismo (export/import di un file di configurazione, non un link o una condivisione diretta fra utenti) mentre il resto della bacheca era in lavorazione. Non ancora implementata.",
-    "detail": "Decisione presa in chat: un file scaricabile che 'eredita ogni dettaglio' della voce d'archivio (ticker, strategia, parametri, metriche misurate), importabile da un altro account per ricrearla li'. Piu' semplice e piu' sicuro di una condivisione live fra account (nessun accesso cross-account da gestire, nessun permesso da disegnare): l'utente che riceve il file decide se e quando importarlo, e i numeri restano quelli misurati da chi ha esportato finche' non si rigira un backtest.",
-    "next": "Implementare: un pulsante 'Esporta' sulla voce d'archivio che scarica un JSON con symbol/asset_type/exchange/interval/strategy_name/params/metrics/optimizer; un pulsante 'Importa' altrove nell'archivio che legge quel file e chiama archive_store.create()+attach_result() per l'utente che importa. Attenzione a non fidarsi ciecamente delle metriche nel file importato allo stesso modo di quelle calcolate in proprio — vanno probabilmente marcate come 'importate, non verificate da questo account' finche' non si rigira il backtest in locale.",
-    "files": []
+    "status": "risolto",
+    "at": 1789113400,
+    "summary": "Implementata: un pulsante 'Condividi' su ogni voce d'archivio scarica un JSON esportato dal server (non dai dati gia' in pagina); un pulsante 'Importa' altrove nell'archivio lo rimanda a /api/archive/import, che ricrea la voce per l'account che importa.",
+    "detail": "Il codice era gia' presente (backend: GET /api/archive/{id}/export e POST /api/archive/import in backend/app/main.py, entrambi con commenti che citano esplicitamente questo id; frontend: pulsanti .arch-share e #archive-import-btn in frontend/static/app.js) — la bacheca segnava ancora 'in corso, da implementare' contro un lavoro gia' consegnato in una sessione successiva. Le metriche importate non vengono riverificate automaticamente: restano quelle di chi ha esportato finche' non si rigira il backtest in locale, come deciso originariamente.",
+    "files": [
+      "backend/app/main.py",
+      "frontend/static/app.js"
+    ]
   },
   "seed-0031": {
     "status": "risolto",
