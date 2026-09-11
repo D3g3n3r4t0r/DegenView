@@ -3,6 +3,7 @@ import pandas as pd
 from cachetools import TTLCache
 
 from app.providers.base import DataProvider, ProviderError, ProviderUnreachable
+from app.resample import resample_by_count
 
 BASE_URL = "https://api.kraken.com"
 _CANONICAL_TO_MINUTES = {
@@ -56,6 +57,17 @@ class KrakenProvider(DataProvider):
         self._base_url = base_url or BASE_URL
 
     async def fetch_ohlcv(self, symbol: str, interval: str, outputsize: int) -> pd.DataFrame:
+        # Kraken non ha un intervallo mensile nativo (il piu' largo che offre
+        # e' 10080 minuti, una settimana): "1M" si ottiene piegando insieme
+        # 30 candele giornaliere, stesso meccanismo di 2D/3D/5D altrove
+        # nell'app, solo qui dentro perche' gli altri provider il mensile
+        # nativo ce l'hanno davvero.
+        if interval == "1M":
+            daily = await self._fetch_raw(symbol, "1d", min(outputsize * 30, self._MAX_CANDLES))
+            return resample_by_count(daily, 30).tail(outputsize)
+        return await self._fetch_raw(symbol, interval, outputsize)
+
+    async def _fetch_raw(self, symbol: str, interval: str, outputsize: int) -> pd.DataFrame:
         formatted_symbol = format_symbol(symbol)
         minutes = _CANONICAL_TO_MINUTES.get(interval)
         if minutes is None:

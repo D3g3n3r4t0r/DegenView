@@ -48,6 +48,20 @@ def test_fetch_ohlcv_parses_result_and_caps_at_720(monkeypatch):
     assert list(df.columns) == ["open", "high", "low", "close", "volume"]
 
 
+def test_fetch_ohlcv_synthesizes_1M_from_daily_candles(monkeypatch):
+    rows = [[1700000000 + i * 86400, "100", "110", "90", "105", "100", "1.5", 10] for i in range(90)]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.params["interval"] == "1440"  # sempre 1d sotto al mensile sintetico
+        return httpx.Response(200, json={"error": [], "result": {"XXBTZUSD": rows, "last": 1}})
+
+    monkeypatch.setattr(kraken.httpx, "AsyncClient", _client_factory(handler))
+    provider = KrakenProvider()
+    df = _run(provider.fetch_ohlcv("BTCUSD", "1M", 3))
+    assert len(df) == 3
+    assert list(df.columns) == ["open", "high", "low", "close", "volume"]
+
+
 def test_fetch_ohlcv_raises_on_kraken_error(monkeypatch):
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json={"error": ["EQuery:Unknown asset pair"], "result": {}})
