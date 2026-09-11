@@ -1,5 +1,14 @@
 {
   "_README": "Scritto da Claude, versionato in git, distribuito col deploy. Le chiavi sono gli id delle segnalazioni. Non modificare a mano dall'app: verrebbe sovrascritto al deploy successivo.",
+  "seed-0060": {
+    "status": "risolto",
+    "at": 1789138000,
+    "summary": "Il grafico (.chart-area) aveva due comportamenti opposti a seconda dell'area: in Analizza flex:1 1 auto (prende tutto lo spazio libero, il pannello laterale restava fisso a 320px), altrove flex:0 0 clamp(300px,32%,520px) (larghezza fissa, il pannello laterale prendeva il resto). Cambiare tab cambiava quindi la larghezza vera del grafico, non solo il contenuto accanto — l'effetto 'si scompiglia' che Lorenzo ha segnalato. Ora .chart-area ha la stessa larghezza fissa in ogni area, sempre; .right-panel assorbe sempre lo spazio restante. Il pulsante manuale 'Allarga il grafico' (.chart-wide) non e' toccato, lavorava gia' in modo indipendente da quale area fosse attiva.",
+    "detail": "frontend/static/style.css, dentro @media (min-width: 761px): rimossa la regola speciale .cockpit[data-area='analizza'] .chart-area{flex:1 1 auto} e la corrispondente .right-panel{flex:0 0 320px}; la regola .cockpit:not([data-area='analizza']) .chart-area{...} e' diventata .cockpit .chart-area{...} senza qualificatore di area (stesso per .right-panel, .tab-content.active e il relativo .panel). Le regole sotto i 1250px (fascia bassa invece di colonna) e quelle specifiche per Lab/Sorveglia restano come prima, non toccate.",
+    "files": [
+      "frontend/static/style.css"
+    ]
+  },
   "seed-0059": {
     "status": "risolto",
     "at": 1789137000,

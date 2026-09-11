@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0060", "Il grafico cambia dimensione/posizione passando da una tab all'altra",
+     "In Analizza il grafico prendeva tutto lo spazio libero, nelle altre aree (Lab, Watchlist, Sorveglia, Livelli) si restringeva a una colonna fissa — il layout 'si scompigliava' a ogni cambio tab invece di restare stabile con solo il pannello laterale che si adegua.",
+     "media"),
     ("seed-0059", "Kraken senza aggiornamento in tempo reale, solo ogni 60s",
      "Solo MEXC aveva un feed live via websocket; Binance, KuCoin e Kraken restavano a polling REST ogni 60 secondi (badge 'Agg. ogni 60s'). Kraken ha un feed pubblico websocket v2 gratuito, mai collegato.",
      "media"),
