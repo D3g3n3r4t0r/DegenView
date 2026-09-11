@@ -361,7 +361,8 @@
       async fetch(query) {
         try {
           ctrl.suggestions = await fetchItems(query);
-        } catch {
+        } catch (err) {
+          console.error("suggerimenti pair falliti per", listId, err);
           ctrl.suggestions = [];
         }
         ctrl.activeIndex = -1;
@@ -1632,10 +1633,10 @@
   // Stesso principio del pair manuale spot (vedi MANUAL_PAIR_EXCHANGES piu'
   // sopra): niente autocomplete non e' una conferma, e' silenzio. Qui il
   // campo restava muto per ogni exchange futures — bug segnalato da Lorenzo
-  // su MEXC ("non trova nessun pair" scrivendo BTCUSDT). /api/symbols oggi
-  // copre solo mexc e kucoin fra i provider crypto, e fra i futures solo
-  // mexc e' anche in quell'elenco: e' l'unico per cui possiamo verificare
-  // il pair da qui, cosi' com'e' per lo spot.
+  // su MEXC ("non trova nessun pair" scrivendo BTCUSDT). /api/symbols copre
+  // mexc, binance e kucoin fra i provider crypto; fra i futures solo mexc e
+  // binance sono anche exchange futures registrati, quindi sono gli unici
+  // due per cui possiamo verificare il pair da qui.
   const FUTURES_PAIR_EXCHANGES = new Set(["mexc", "binance"]);
 
   const futuresSuggest = makeSuggestController({
