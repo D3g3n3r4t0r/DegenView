@@ -416,11 +416,45 @@ la stessa cosa di risolvere il problema che quel markup rappresentava —
 giro, ed e' sopravvissuta due giri interi sotto un indirizzo diverso prima
 che qualcuno (giustamente) se ne accorgesse guardando lo schermo vero.
 
+**Quinto giro — l'indirizzo sbagliato, di nuovo**: il quarto giro aveva
+costruito la diramazione giusta (alert/automatico -> spot/futures ->
+strategia da archivio) ma dentro la tab **Sorveglia**. Lorenzo, guardando
+l'app vera: «si però se clicco sul ticker che ho in watchlist non mi
+permette di fare niente». Alla domanda diretta se intendesse la tab
+"Watchlist" (lista rapida) o "Sorveglia" (le card con le strategie):
+«ti sto dicendo da mezzora che voglio che tutto sia attivato nella
+watchlist (lista rapida) tutto deve originarsi da li». Era la tab
+sbagliata fin dal quarto giro — la diramazione c'era, ma non dove doveva
+essere cliccabile.
+
+Fatto: ogni riga della tab Watchlist (quella con `#favorite-rows`,
+backend `FavoriteEntry`/`/api/favorites` — un modello dati diverso da
+`WatchlistEntry`/`/api/watchlist` che alimenta Sorveglia, cosa che ha
+richiesto un ponte invece di un semplice riuso) ha ora una freccetta
+separata dal clic-sulla-riga (che continua a caricare il grafico, comportamento
+di sempre). La freccetta apre un pannello con le strategie gia' attive su
+quel ticker (se un `WatchlistEntry` corrispondente esiste gia', letto da
+`state.alertEntries` — lo stesso dato che gia' pilotava il pallino
+"alert attivo") e sempre `buildActivationFlow()`, la stessa funzione del
+giro precedente, generica abbastanza da funzionare sia su un
+`WatchlistEntry` sia su un `FavoriteEntry` perche' legge solo
+symbol/exchange/asset_type. Nessun endpoint nuovo: attivare da qui crea o
+riusa il `WatchlistEntry` esattamente come da Sorveglia.
+
+**Lezione, di nuovo**: nell'app ci sono DUE liste che si chiamano
+"watchlist" in punti diversi — quella vera in codice (`WatchlistEntry`,
+tab UI "Sorveglia") e quella che l'utente chiama cosi' (tab UI
+"Watchlist", modello `FavoriteEntry`). Quando Lorenzo dice "watchlist"
+intende quello che vede scritto in UI, non il nome della entita' nel
+codice — un'ambiguita' che e' costata due giri di lavoro nella direzione
+sbagliata. Se emerge di nuovo un'istruzione su "watchlist", verificare
+SUBITO quale delle due tab prima di scrivere codice, non dopo.
+
 Non ancora fatto, per scelta (segnalato, non dimenticato):
-- l'ordine manuale one-off dentro il pannello richiudibile resta un form
-  con la sua scelta exchange, non una card per-ticker — rimandato perche'
-  tocca molto piu' codice per un guadagno cosmetico, e nessuno l'ha chiesto
-  esplicitamente;
+- l'ordine manuale one-off dentro il pannello richiudibile (avanzate, in
+  fondo a Sorveglia) resta un form con la sua scelta exchange, non una
+  card per-ticker — rimandato perche' tocca molto piu' codice per un
+  guadagno cosmetico, e nessuno l'ha chiesto esplicitamente;
 - nessuna verifica dal vivo con chiavi vere dell'esecuzione futures
   automatica da watchlist (stessa cautela gia' segnata sotto "Operazioni
   futures" — nessun ordine futures e' mai partito verso un server vero).
