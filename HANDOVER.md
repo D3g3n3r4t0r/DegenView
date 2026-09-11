@@ -339,23 +339,54 @@ auto_trade` (dict strategia->bool), endpoint PATCH `/api/watchlist/{id}/
 auto_trade`, gate nel loop di alert. Board: seed-0057, **"in corso"
 apposta**, non "risolto": manca ancora il pezzo grosso.
 
-Non ancora fatto, per scelta (mockup gia' esistente su desktop scartato
-insieme a questa svolta — vedi Artifact `Desktop.dc.html` nel filone del
-log sotto, superato dalla richiesta di Lorenzo di partire dalla watchlist
-invece che da un picker exchange):
-- rimuovere davvero il picker-exchange da Opera per l'ordine manuale/
-  futures, e spostare un ordine manuale one-off dentro la card del ticker
-  in Sorveglia (bottone rapido, niente scelta exchange perche' e' gia'
-  quello del ticker);
-- Opera per ora resta il posto per configurare le chiavi API (non ha lo
-  stesso problema di "cento exchange": e' una lista di configurazione, non
-  un flusso d'ordine) e per ordini futures/manuali che non partono da una
-  strategia in watchlist — se anche questo va assorbito nel nuovo flusso
-  o resta un percorso separato per operazioni ad-hoc e' una domanda ancora
-  aperta, da riportare a Lorenzo prima di continuare;
-- l'auto-trading futures (leva) non e' mai stato agganciato al loop della
-  watchlist (solo l'esecuzione manuale in Opera lo usa) — se il nuovo
-  flusso deve coprire anche i futures o restare solo spot va deciso.
+**Secondo giro, stessa sessione**: Lorenzo ha ripreso subito dopo,
+correggendo — «i futures devono essere agganciati alla watchlist perche'
+tutti parte da li', ogni ticker da watchlist deve permettere di diramarsi,
+se attivare solo o alert o anche operazioni automatiche, dopodiche'
+selezionare la strategia (da archivio)». Fatto: ogni strategia con
+"Trading automatico" acceso, se l'exchange del ticker ha un adattatore
+futures registrato (Binance, Kraken, MEXC — intersezione fra i provider
+dati spot e il registro futures, la stessa di `FUTURES_PAIR_EXCHANGES`),
+mostra anche la scelta Spot/Futures; il loop esegue l'ordine futures con
+`place_futures_order_for_signal` usando le credenziali futures gia'
+configurate in Opera (leva compresa). KuCoin/Bybit/OKX/Bitget non possono
+comparire qui: o non hanno adattatore futures o non sono provider dati
+spot nostri, quindi non possono essere l'exchange di un ticker in
+watchlist.
+
+**Bug trovato e corretto nello stesso giro**: il gate per-strategia
+(seed-0057, primo passo) rompeva silenziosamente la Modalita' Semplice —
+quel wizard accende l'esecuzione tramite il vecchio meccanismo
+(interruttore per-exchange in `owner.trading_credentials`), che il nuovo
+`entry.auto_trade[strategy]` di default `False` avrebbe azzerato senza
+errori visibili: chi avesse attivato una strategia dal wizard *credendo*
+di aver acceso l'esecuzione reale, in realta' avrebbe ricevuto solo alert.
+Corretto prima del deploy: `apply-to-alert` accetta ora un body
+`{auto_trade: bool}` e il wizard lo manda `true` solo dopo aver
+effettivamente collegato un exchange nel suo passo dedicato.
+
+"Selezionare la strategia da archivio" **esiste gia'** in Modalita'
+Semplice (`/api/archive/{id}/apply-to-alert`, passo 1.5 del wizard) — non
+duplicato nella scheda classica di Sorveglia, che tiene invece la lista
+strategie con parametri modificabili a mano (uso diverso, non lo stesso
+percorso).
+
+Non ancora fatto, per scelta:
+- rimuovere davvero il picker-exchange da Opera per l'ordine manuale, e
+  spostare un ordine manuale one-off dentro la card del ticker in
+  Sorveglia (bottone rapido, niente scelta exchange perche' e' gia' quello
+  del ticker) — mockup desktop gia' fatto (`Desktop.dc.html`) ma superato
+  da questa svolta, da rifare se serve ancora;
+- Opera per ora resta il posto per configurare le chiavi API spot e
+  futures — non ha lo stesso problema di "cento exchange" (e' una lista di
+  configurazione, non un flusso d'ordine) — e per ordini futures/manuali
+  che non partono da una strategia in watchlist; se anche questo va
+  assorbito nel nuovo flusso o resta un percorso separato per operazioni
+  ad-hoc e' una domanda ancora aperta, da riportare a Lorenzo;
+- nessuna verifica dal vivo con chiavi vere dell'esecuzione futures
+  automatica da watchlist (stessa cautela gia' segnata sotto "Operazioni
+  futures" — nessun ordine futures e' mai partito verso un server vero, ne'
+  da Opera ne' ora da qui).
 
 ## Log delle conversazioni
 
