@@ -4195,6 +4195,18 @@ details.issue-card > summary:focus-visible { outline: 2px solid var(--accent); o
     gap: 12px;
     min-width: 0;
   }
+  /* Prima che ci sia qualcosa da mostrare (nessun figlio di .lab-results-col
+     ancora visibile: ne' un risultato ne' "ricerca in corso") la seconda
+     colonna sparisce invece di restare una meta' di schermo vuota fino al
+     primo backtest — segnalazione seed-0060, "il sito usa malissimo gli
+     spazi". Si riapre da sola appena un figlio perde .hidden. */
+  .cockpit[data-area="lab"] .lab-panel:not(:has(.lab-results-col > *:not(.hidden))) {
+    grid-template-columns: minmax(280px, 420px);
+    max-width: 420px;
+  }
+  .cockpit[data-area="lab"] .lab-panel:not(:has(.lab-results-col > *:not(.hidden))) .lab-results-col {
+    display: none;
+  }
 
   /* Sorveglia: le sezioni diventano colonne affiancate invece di una pila
      infinita da scorrere. */
