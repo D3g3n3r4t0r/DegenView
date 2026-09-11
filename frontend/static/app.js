@@ -154,7 +154,6 @@
 
   applyTheme(preferredTheme(), { persist: false, redraw: false });
 
-  const TF_LABELS = { htf: "HTF", mtf: "MTF", ltf: "LTF" };
   const CANONICAL_INTERVALS = ["1m", "5m", "15m", "30m", "1h", "4h", "1d", "2d", "3d", "5d", "1w", "1M"];
   const DEFAULT_INTERVALS = { htf: "1d", mtf: "1h", ltf: "15m" };
   const DEFAULT_PRIMARY_INTERVAL = "15m";
