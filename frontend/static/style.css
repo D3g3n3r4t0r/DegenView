@@ -1265,6 +1265,23 @@ body {
 
 .wl-row:hover { background: var(--bg-panel); }
 
+/* La riga vera (bordo/sfondo/padding) resta su .wl-row: il wrapper e' solo
+   un contenitore per riga + pannello a comparsa, senza il suo box.
+   Sovrascrive .wl-rows > li apposta, che darebbe un doppio riquadro. */
+.wl-rows > li.wl-row-wrap { list-style: none; background: transparent; border: none; padding: 0; }
+.wl-rows > li.wl-row-wrap:hover { background: transparent; border-color: transparent; }
+.wl-row-wrap > .wl-row { background: var(--bg-panel); border: 1px solid var(--border); border-radius: 6px; }
+.wl-row-wrap > .wl-row:hover { border-color: var(--border-strong); background: var(--bg-raised); }
+.wl-row-wrap.open > .wl-row { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.wl-row-expand { display: none; padding: 8px 9px 10px; border: 1px solid var(--border); border-top: none; border-bottom-left-radius: 6px; border-bottom-right-radius: 6px; background: var(--bg-panel); }
+.wl-row-wrap.open .wl-row-expand { display: block; }
+.wl-row-caret { background: none; border: none; color: var(--ink-dim); font-size: .8rem; cursor: pointer; padding: 4px; flex: 0 0 auto; }
+.wl-row-wrap.open .wl-row-caret { transform: rotate(180deg); color: var(--accent); }
+.wl-row-strats { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
+.wl-row-strat-item { font-size: .8rem; display: flex; align-items: center; gap: 6px; }
+.wl-mini-badge { font-size: .65rem; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--border); color: var(--ink-dim); }
+.wl-mini-badge.danger { border-color: #d64545; color: #d64545; }
+
 .wl-row.active {
   background: color-mix(in srgb, var(--accent) 7%, transparent);
   border-color: color-mix(in srgb, var(--accent) 25%, transparent);

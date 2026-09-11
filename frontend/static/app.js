@@ -5869,6 +5869,9 @@
   function renderFavorites() {
     const rows = el("favorite-rows");
     const empty = el("favorite-empty");
+    const openIds = new Set(
+      Array.from(rows.querySelectorAll(".wl-row-wrap.open")).map((li) => li.dataset.favId)
+    );
     rows.innerHTML = "";
 
     const items = state.favorites.filter(
@@ -5884,7 +5887,11 @@
     const activeSymbol = state.data && state.data.symbol;
 
     items.forEach((entry) => {
-      const li = document.createElement("li");
+      const wrap = document.createElement("li");
+      wrap.className = "wl-row-wrap" + (openIds.has(entry.id) ? " open" : "");
+      wrap.dataset.favId = entry.id;
+
+      const li = document.createElement("div");
       const isActive =
         !!activeSymbol &&
         entry.symbol === activeSymbol &&
@@ -5974,18 +5981,72 @@
         loadFavorites();
       });
 
+      // Il clic sulla riga carica il grafico (comportamento di sempre); la
+      // freccia apre/chiude — separata apposta — il pannello dove si decide
+      // alert/automatico e si sceglie la strategia. E' il punto di ingresso
+      // unico chiesto da Lorenzo: tutto parte da qui, non da una tab diversa.
+      const caret = document.createElement("button");
+      caret.type = "button";
+      caret.className = "wl-row-caret";
+      caret.title = "Alert e trading automatico per questo ticker";
+      caret.textContent = "▾";
+      caret.addEventListener("click", (e) => {
+        e.stopPropagation();
+        wrap.classList.toggle("open");
+        if (wrap.classList.contains("open")) renderFavoriteExpansion(wrap, entry);
+      });
+
       li.appendChild(avatar);
       li.appendChild(main);
       li.appendChild(sparkWrap);
       li.appendChild(right);
+      li.appendChild(caret);
       li.appendChild(remove);
       li.addEventListener("click", () => {
         state.assetType = entry.asset_type;
         if (entry.asset_type === "crypto") state.cryptoExchange = entry.exchange;
         runAnalysis(entry.symbol);
       });
-      rows.appendChild(li);
+      wrap.appendChild(li);
+
+      const expand = document.createElement("div");
+      expand.className = "wl-row-expand";
+      wrap.appendChild(expand);
+      if (wrap.classList.contains("open")) renderFavoriteExpansion(wrap, entry);
+
+      rows.appendChild(wrap);
     });
+  }
+
+  // Pannello aperto dalla freccia di una riga Watchlist: mostra le strategie
+  // gia' attive su questo ticker (se un WatchlistEntry corrispondente esiste
+  // gia', creato da un'attivazione precedente) e sempre il modo per
+  // aggiungerne un'altra — stesso buildActivationFlow usato in Sorveglia,
+  // qui e' solo il punto da cui si apre.
+  function renderFavoriteExpansion(wrap, favEntry) {
+    const box = wrap.querySelector(".wl-row-expand");
+    box.innerHTML = "";
+    const match = (state.alertEntries || []).find(
+      (a) => a.symbol === favEntry.symbol && a.asset_type === favEntry.asset_type && a.exchange === favEntry.exchange
+    );
+    if (match && match.strategies.length) {
+      const list = document.createElement("div");
+      list.className = "wl-row-strats";
+      match.strategies.forEach((name) => {
+        const row = document.createElement("div");
+        row.className = "wl-row-strat-item";
+        const isAuto = !!match.auto_trade?.[name];
+        const isFutures = match.market?.[name] === "futures";
+        row.innerHTML = `<b>${name}</b> <span class="wl-mini-badge${isAuto ? " danger" : ""}">${isAuto ? (isFutures ? "Futures" : "Auto") : "Alert"}</span>`;
+        list.appendChild(row);
+      });
+      box.appendChild(list);
+      const hint = document.createElement("p");
+      hint.className = "panel-hint";
+      hint.textContent = "Gestione fine (parametri, frequenza, timeframe) resta nella tab Sorveglia.";
+      box.appendChild(hint);
+    }
+    box.appendChild(buildActivationFlow(match || favEntry));
   }
 
   function bindFavorites() {
