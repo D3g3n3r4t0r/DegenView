@@ -4132,16 +4132,16 @@ details.issue-card > summary:focus-visible { outline: 2px solid var(--accent); o
   .right-panel > .tabs { display: none; }
   .right-panel > .drawer-header { display: none; }
 
-  /* Il grafico non sparisce MAI, e da qui in poi non si sposta nemmeno:
-     stessa larghezza, stessa posizione, in ogni area — a cambiare e' solo
-     il pannello laterale. Prima Analizza gli dava tutto lo spazio libero
-     (flex:1 1 auto) e le altre aree lo restringevano a una colonna fissa:
-     il grafico saltava di dimensione a ogni cambio tab, e con lui tutto
-     quello che gli sta intorno. Lorenzo l'ha segnalato esplicitamente:
-     "il grafico non si sposti mai, si adeguino le interfacce lateralmente". */
-  .cockpit .chart-area {
-    display: flex;
-    min-width: 0;
+  /* Il grafico non sparisce mai: e' il contesto di tutto il resto. Cambia
+     solo quanto spazio si prende. In Analizza comanda lui; altrove si
+     stringe a colonna e lascia il lavoro davanti, ma resta guardabile e
+     vivo — un backtest o un ordine si leggono meglio con la serie sotto
+     gli occhi. */
+  .cockpit .chart-area { display: flex; min-width: 0; }
+  .cockpit[data-area="analizza"] .chart-area { flex: 1 1 auto; }
+  .cockpit[data-area="analizza"] .right-panel { flex: 0 0 320px; }
+
+  .cockpit:not([data-area="analizza"]) .chart-area {
     flex: 0 0 clamp(300px, 32%, 520px);
     border-right: 1px solid var(--border);
   }
@@ -4150,8 +4150,8 @@ details.issue-card > summary:focus-visible { outline: 2px solid var(--accent); o
   /* Sotto i 1250px la colonna del grafico toglierebbe troppo al lavoro:
      diventa una fascia bassa sopra il contenuto invece che una colonna. */
   @media (max-width: 1250px) {
-    .cockpit { flex-wrap: wrap; }
-    .cockpit .chart-area {
+    .cockpit:not([data-area="analizza"]) { flex-wrap: wrap; }
+    .cockpit:not([data-area="analizza"]) .chart-area {
       flex: 1 1 100%;
       max-height: 230px;
       border-right: none;
@@ -4159,17 +4159,17 @@ details.issue-card > summary:focus-visible { outline: 2px solid var(--accent); o
       order: -1;
     }
   }
-  .cockpit .right-panel {
+  .cockpit:not([data-area="analizza"]) .right-panel {
     flex: 1 1 auto;
     border-left: none;
     background: var(--bg);
   }
   /* A tutta larghezza il contenuto va incolonnato, non steso su 1600px:
      una riga di testo lunga quanto lo schermo non si legge. */
-  .cockpit .tab-content.active {
+  .cockpit:not([data-area="analizza"]) .tab-content.active {
     padding: 22px 26px 40px;
   }
-  .cockpit .tab-content.active > .panel {
+  .cockpit:not([data-area="analizza"]) .tab-content.active > .panel {
     max-width: 1180px;
     width: 100%;
     margin: 0 auto;
