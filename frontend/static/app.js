@@ -5999,8 +5999,12 @@
       li.appendChild(avatar);
       li.appendChild(main);
       li.appendChild(sparkWrap);
-      li.appendChild(right);
+      // La freccetta sta PRIMA di .wl-right apposta: .wl-remove e' assoluto
+      // nell'angolo in alto a destra della riga, la stessa zona dove il
+      // clic per aprire/chiudere aveva finito per finire sotto la ✕ al
+      // passaggio del mouse.
       li.appendChild(caret);
+      li.appendChild(right);
       li.appendChild(remove);
       li.addEventListener("click", () => {
         state.assetType = entry.asset_type;
