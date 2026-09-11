@@ -308,6 +308,55 @@ il workflow fa `restart caddy` a ogni deploy.
 
 ---
 
+### Kraken come provider dati spot — fatto
+
+Lorenzo aveva chiesto una ricerca su cosa offrono le API pubbliche Kraken;
+proposte 5 opzioni, scelta la piu' semplice: Kraken come quarto exchange
+dati (accanto a MEXC/Binance/KuCoin). Implementato in `backend/app/providers/
+kraken.py`: OHLC pubblico + ricerca simboli via AssetPairs, BTC->XBT gestito
+in automatico. Limite reale e dichiarato: Kraken non pagina all'indietro,
+max 720 candele per intervallo. Board: seed-0056, risolto.
+
+### Opera "troppi exchange" / trading automatico poco chiaro — in corso
+
+Lorenzo: «quando faccio ordine su spot o margine vorrei che prima mi
+chiedesse il sistema quale exchange» (poi, per il sito desktop non mobile) —
+e subito dopo, mentre lavoravo al mockup: «per abilitare automaticamente
+una strategia ad eseguire ordini reali non e' molto chiaro attualmente; si
+deve partire dalla watchlist? imposta un sistema semplice che interconnetta
+tutto invece di visualizzare cento exchange nella tab opera [...] una volta
+aggiunto li il ticker; selezionare la strategia; a quel punto dalla
+strategia l'opzione di ottenere solo alert o attivare il trading
+automatico». Confermato con lui: Opera va sostituita da questo flusso
+(non coesistenza), e l'exchange per l'auto-trading e' sempre quello gia'
+associato al ticker in watchlist — nessun picker aggiuntivo.
+
+Primo passo fatto: ogni strategia attiva su un ticker in Sorveglia ha ora
+un interruttore proprio "Solo alert" / "Trading automatico" (default:
+alert), al posto del vecchio interruttore unico per exchange in Opera che
+valeva per ogni strategia attiva li' sopra. Backend: `WatchlistEntry.
+auto_trade` (dict strategia->bool), endpoint PATCH `/api/watchlist/{id}/
+auto_trade`, gate nel loop di alert. Board: seed-0057, **"in corso"
+apposta**, non "risolto": manca ancora il pezzo grosso.
+
+Non ancora fatto, per scelta (mockup gia' esistente su desktop scartato
+insieme a questa svolta — vedi Artifact `Desktop.dc.html` nel filone del
+log sotto, superato dalla richiesta di Lorenzo di partire dalla watchlist
+invece che da un picker exchange):
+- rimuovere davvero il picker-exchange da Opera per l'ordine manuale/
+  futures, e spostare un ordine manuale one-off dentro la card del ticker
+  in Sorveglia (bottone rapido, niente scelta exchange perche' e' gia'
+  quello del ticker);
+- Opera per ora resta il posto per configurare le chiavi API (non ha lo
+  stesso problema di "cento exchange": e' una lista di configurazione, non
+  un flusso d'ordine) e per ordini futures/manuali che non partono da una
+  strategia in watchlist — se anche questo va assorbito nel nuovo flusso
+  o resta un percorso separato per operazioni ad-hoc e' una domanda ancora
+  aperta, da riportare a Lorenzo prima di continuare;
+- l'auto-trading futures (leva) non e' mai stato agganciato al loop della
+  watchlist (solo l'esecuzione manuale in Opera lo usa) — se il nuovo
+  flusso deve coprire anche i futures o restare solo spot va deciso.
+
 ## Log delle conversazioni
 
 Ordine cronologico, piu' recenti in fondo. Scritto perche' una chat diversa
