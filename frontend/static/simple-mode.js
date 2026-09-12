@@ -158,8 +158,14 @@
 #simple-mode-root .sm-search-box{display:flex;align-items:center;gap:8px;background:var(--sm-panel);border:1px solid var(--sm-border);border-radius:8px;padding:12px 14px;margin-bottom:12px;}
 #simple-mode-root .sm-search-box input{border:none;outline:none;background:transparent;color:var(--sm-ink);font-size:16px;width:100%;}
 #simple-mode-root .sm-list{display:flex;flex-direction:column;gap:6px;margin-bottom:16px;}
-#simple-mode-root .sm-row{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;border:1px solid var(--sm-border);border-radius:8px;background:var(--sm-panel);cursor:pointer;}
-#simple-mode-root .sm-row.active{border-color:var(--sm-accent);box-shadow:0 0 0 1px var(--sm-accent) inset;}
+#simple-mode-root .sm-row{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;border:1px solid var(--sm-border);border-radius:8px;background:var(--sm-panel);cursor:pointer;transition:transform .1s,background .15s,border-color .15s;}
+#simple-mode-root .sm-row:active{transform:scale(0.97);background:var(--sm-raised);}
+#simple-mode-root .sm-row.active{border-color:var(--sm-accent);box-shadow:0 0 0 1px var(--sm-accent) inset;background:var(--sm-raised);}
+#simple-mode-root .sm-row-check{display:none;color:var(--sm-accent);font-weight:700;font-size:16px;}
+#simple-mode-root .sm-row.active:not(.loading) .sm-row-check{display:inline-block;}
+#simple-mode-root .sm-row-spinner{display:none;width:15px;height:15px;border-radius:50%;border:2px solid var(--sm-border-strong);border-top-color:var(--sm-accent);animation:sm-spin .6s linear infinite;flex:0 0 auto;}
+#simple-mode-root .sm-row.loading .sm-row-spinner{display:inline-block;}
+@keyframes sm-spin{to{transform:rotate(360deg);}}
 #simple-mode-root .sm-row .sym{font-weight:600;font-size:14px;}
 #simple-mode-root .sm-row .name{color:var(--sm-ink-faint);font-size:12px;}
 #simple-mode-root .sm-card{background:var(--sm-panel);border:1px solid var(--sm-border);border-radius:8px;padding:14px;margin-bottom:14px;}
@@ -336,8 +342,17 @@
       (items || []).slice(0, 12).forEach((item) => {
         const row = document.createElement("div");
         row.className = "sm-row" + (state.ticker && state.ticker.symbol === item.symbol && state.ticker.provider === item.provider ? " active" : "");
-        row.innerHTML = `<div><div class="sym">${esc(item.symbol)}</div><div class="name">${esc(item.name)} · ${esc(item.exchange)}</div></div>`;
-        row.addEventListener("click", () => selectTicker(item));
+        row.innerHTML = `<div><div class="sym">${esc(item.symbol)}</div><div class="name">${esc(item.name)} · ${esc(item.exchange)}</div></div><span class="sm-row-check">✓</span><span class="sm-row-spinner"></span>`;
+        // Il tocco deve rispondere SUBITO, non solo quando il backtest
+        // reale (qualche secondo, rete vera) finisce e la lista viene
+        // ridisegnata — a Lorenzo sembrava che il click non avesse fatto
+        // niente. Evidenzio la riga e mostro uno spinner al volo, prima
+        // ancora di chiamare selectTicker().
+        row.addEventListener("click", () => {
+          list.querySelectorAll(".sm-row").forEach((r) => r.classList.remove("active", "loading"));
+          row.classList.add("active", "loading");
+          selectTicker(item);
+        });
         list.appendChild(row);
       });
       if (!items || !items.length) list.innerHTML = `<div class="sm-muted">Nessun risultato.</div>`;
@@ -358,6 +373,12 @@
     state.ticker = {
       symbol: item.symbol,
       name: item.name,
+      // Serve solo per far combaciare la riga giusta quando la lista viene
+      // ridisegnata (vedi il confronto in searchTickers) — prima non era
+      // mai salvato, quindi quel confronto falliva sempre e la riga
+      // scelta perdeva l'evidenziazione non appena il backtest reale
+      // finiva e la lista si ridisegnava.
+      provider: item.provider,
       asset_type: item.asset_type,
       exchange: tickerExchangeForAnalyze(item),
     };

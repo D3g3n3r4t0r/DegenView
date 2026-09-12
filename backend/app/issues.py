@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0066", "Modalita' Semplice: selezionare un ticker sembra non fare niente finche' non arriva il grafico",
+     "Lorenzo: 'quando seleziono il ticket il click non produce un'accettazione grafica, ma sembra che non carichi anche se in realta' il ticket e' stato selezionato e poi il grafico arriva... voglio un effetto quando seleziono il ticket che mi faccia capire che sia selezionato'.",
+     "bassa"),
     ("seed-0065", "Modalita' Semplice: impossibile testare una chiave exchange senza perderla, e timeframe incoerente fra backtest/ottimizzazione/attivazione",
      "Lorenzo, dopo seed-0064: 'voglio poterle testare, voglio poter capire se queste api funzionano subito... non voglio che siano non salvate. Voglio che il processo sia quello ufficiale, però con un'opzione in più... vuoi testarle subito? ... mi permetti di visualizzare il saldo... e di poter fare un ordine manuale... perché voglio che tu capisca proprio perché tante volte che ti chiedo di sistemare questa cosa dei ticket dello spot e del futures che voglio che non accada più'. Anche: 'devo già aver selezionato i timeframe sulla quale voglio che la strategia lavori' e il riepilogo finale deve mostrarlo.",
      "media"),
