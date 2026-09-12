@@ -1,5 +1,12 @@
 {
   "_README": "Scritto da Claude, versionato in git, distribuito col deploy. Le chiavi sono gli id delle segnalazioni. Non modificare a mano dall'app: verrebbe sovrascritto al deploy successivo.",
+  "seed-0069": {
+    "status": "risolto",
+    "at": 1789213579,
+    "summary": "Aggiunto il timeframe scelto (state.interval) al testo sotto il titolo negli step Backtest e Ottimizza ('Su INJUSDT · timeframe 4h...'), oltre alla riga gia' presente nel riepilogo finale (step 6). Una funzione tfLabel() unica traduce l'id interno (15m/1h/4h/1d/1w) nell'etichetta mostrata, riusata in tutti e tre i punti invece di tre lookup separati.",
+    "detail": "Nessun cambio di logica: solo testo aggiunto, verificato dal vivo con Playwright su una voce d'archivio con interval=4h — 'Su INJUSDT · timeframe 4h' compare correttamente sotto il titolo dello step Backtest.",
+    "files": ["frontend/static/simple-mode.js"]
+  },
   "seed-0068": {
     "status": "risolto",
     "at": 1789205191,

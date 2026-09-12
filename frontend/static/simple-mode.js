@@ -55,6 +55,9 @@
     { id: "1d", label: "1g" },
     { id: "1w", label: "1sett" },
   ];
+  function tfLabel(id) {
+    return (SIMPLE_INTERVALS.find((t) => t.id === id) || {}).label || id;
+  }
 
   const state = {
     step: 0,
@@ -603,7 +606,7 @@ body:has(#simple-mode-root:not(.hidden)) #opt-pill{z-index:600;}
   <div class="sm-eyebrow">Passo 3 di ${TOTAL_STEPS}</div>
   ${fromArchive ? '<span class="sm-badge">◆ Dall\'archivio</span>' : ""}
   <h1 class="sm-title">Backtest — ${esc(state.strategy)}</h1>
-  <p class="sm-sub">Su ${esc(state.ticker.symbol)}. Ogni ingresso e uscita generato dalla strategia è segnato sul grafico reale.</p>
+  <p class="sm-sub">Su <b>${esc(state.ticker.symbol)}</b> · timeframe <b>${esc(tfLabel(state.interval))}</b>. Ogni ingresso e uscita generato dalla strategia è segnato sul grafico reale.</p>
   <div id="sm-bt-body"><div class="sm-muted">Eseguo il backtest…</div></div>
   <div class="sm-ctabar"><div class="sm-ctabar-inner">
     <button class="sm-btn ghost" id="sm-back-btn">Indietro</button>
@@ -790,7 +793,7 @@ body:has(#simple-mode-root:not(.hidden)) #opt-pill{z-index:600;}
 <main class="sm-step active">
   <div class="sm-eyebrow">Passo 4 di ${TOTAL_STEPS}</div>
   <h1 class="sm-title">Ottimizza i parametri</h1>
-  <p class="sm-sub">Cerca la combinazione di parametri migliore per <b>${esc(state.strategy)}</b> su <b>${esc(state.ticker.symbol)}</b>.</p>
+  <p class="sm-sub">Cerca la combinazione di parametri migliore per <b>${esc(state.strategy)}</b> su <b>${esc(state.ticker.symbol)}</b> · timeframe <b>${esc(tfLabel(state.interval))}</b>.</p>
   <div id="sm-opt-body"></div>
   <div id="sm-opt-cta" class="sm-ctabar"><div class="sm-ctabar-inner">
     <button class="sm-btn ghost" id="sm-back-btn">Indietro</button>
@@ -1144,7 +1147,7 @@ ${ex.id === "kucoin" ? '<div class="sm-field"><label>Passphrase</label><input id
   <p class="sm-sub">Controlla il riepilogo, poi premi Attiva.</p>
   <div class="sm-review-card">
     <div class="sm-review-row"><span class="k">Ticker</span><span class="v">${esc(state.ticker.symbol)}</span></div>
-    <div class="sm-review-row"><span class="k">Timeframe</span><span class="v">${esc(SIMPLE_INTERVALS.find((t) => t.id === state.interval)?.label || state.interval)}</span></div>
+    <div class="sm-review-row"><span class="k">Timeframe</span><span class="v">${esc(tfLabel(state.interval))}</span></div>
     <div class="sm-review-row"><span class="k">Strategia</span><span class="v">${esc(state.strategy)}</span></div>
     <div class="sm-review-row"><span class="k">Ottimizzazione</span><span class="v">${state.archiveEntry ? "dall'archivio" : (state.optResult ? (state.optMode === "fast" ? "Rapida" : "Stabile") : "parametri di default")}</span></div>
     <div class="sm-review-row"><span class="k">Esecuzione</span><span class="v">${isCrypto ? esc(TRADING_EXCHANGES.find((e) => e.id === state.tradingExchange).name) + (state.connTested ? " — connessione testata ✓" : "") : "solo avviso (nessun exchange)"}</span></div>
