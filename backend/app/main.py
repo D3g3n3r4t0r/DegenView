@@ -879,6 +879,7 @@ class TradingCredentialOut(BaseModel):
     enabled: bool
     size_mode: str
     size_value: float
+    created_at: float = 0.0  # epoch seconds; 0 = mai configurata
 
 
 class FuturesCredentialRequest(BaseModel):
@@ -908,6 +909,7 @@ class FuturesCredentialOut(BaseModel):
     size_mode: str
     size_value: float
     leverage: int
+    created_at: float = 0.0  # epoch seconds; 0 = mai configurata
 
 
 _SEARCH_PROVIDER_TIMEOUT_S = 5.0
@@ -1313,6 +1315,7 @@ async def get_trading_credentials(user: User = Depends(auth.get_current_user)) -
                 enabled=cred.enabled,
                 size_mode=cred.size_mode,
                 size_value=cred.size_value,
+                created_at=cred.created_at,
             ))
     return out
 
@@ -1326,6 +1329,12 @@ async def set_trading_credential(body: TradingCredentialRequest, user: User = De
         user.id, body.exchange, body.api_key, body.api_secret, body.passphrase,
         body.enabled, body.size_mode, body.size_value,
     )
+    return {"ok": True}
+
+
+@app.delete("/api/auth/trading/{exchange}")
+async def delete_trading_credential(exchange: str, user: User = Depends(auth.get_current_user)):
+    auth.delete_trading_credential(user.id, exchange)
     return {"ok": True}
 
 
@@ -1428,6 +1437,7 @@ async def get_futures_credentials(user: User = Depends(auth.get_current_user)) -
                 **common, api_key_set=bool(cred.api_key_enc), api_secret_set=bool(cred.api_secret_enc),
                 passphrase_set=bool(cred.passphrase_enc),
                 enabled=cred.enabled, size_mode=cred.size_mode, size_value=cred.size_value, leverage=cred.leverage,
+                created_at=cred.created_at,
             ))
     return out
 
@@ -1456,6 +1466,12 @@ async def set_futures_credential_endpoint(body: FuturesCredentialRequest, user: 
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True}
+
+
+@app.delete("/api/auth/futures/{exchange}")
+async def delete_futures_credential(exchange: str, user: User = Depends(auth.get_current_user)):
+    auth.delete_futures_credential(user.id, exchange)
     return {"ok": True}
 
 

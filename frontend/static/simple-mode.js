@@ -19,19 +19,26 @@
   ].filter(Boolean);
   if (!root || !toggleBtns.length) return;
 
-  // Trading exchanges Simple Mode offers for live execution. Limited to the
-  // subset backend/app/auth.py's set_trading_credential() actually accepts
-  // (binance/mexc/kucoin/kraken/coinbase/bitstamp) — the prototype mocked
-  // "Bybit", which the backend does not support, so it is replaced here with
-  // KuCoin. Spot only: futures leverage is capped at 1x server-wide, so the
-  // wizard never touches /api/auth/futures.
+  // Trading exchanges Simple Mode offers for live execution — the full set
+  // backend/app/auth.py's set_trading_credential() accepts
+  // (binance/mexc/kucoin/kraken/coinbase/bitstamp), not just the first
+  // three: seed-0064 asked explicitly for all of them here, same as the
+  // desktop "Trading automatico" panel already offers. Spot only: futures
+  // leverage is capped at 1x server-wide, so the wizard never touches
+  // /api/auth/futures.
   const TRADING_EXCHANGES = [
     { id: "binance", name: "Binance", color: "#f0b90b", letter: "B",
       steps: ["Accedi a Binance → Gestione API nel tuo profilo.", "Crea una nuova chiave, attiva solo “Lettura” e “Trading Spot”.", "Copia chiave e chiave segreta qui sotto — non condividerle altrove."] },
+    { id: "mexc", name: "MEXC", color: "#1b73e8", letter: "M",
+      steps: ["Accedi a MEXC → Gestione API dal tuo profilo.", "Crea una chiave con permessi di lettura e trading spot, mai prelievo.", "Copia chiave e chiave segreta qui sotto."] },
     { id: "kucoin", name: "KuCoin", color: "#24ae8f", letter: "K",
       steps: ["Vai su KuCoin → API Management dal tuo profilo.", "Crea una chiave con permessi “General” e “Trade”, mai “Withdraw”.", "Incolla chiave e segreto qui: restano cifrati sul nostro sistema."] },
     { id: "kraken", name: "Kraken", color: "#5741d9", letter: "K",
       steps: ["Su Kraken vai in Impostazioni → Sicurezza → Chiavi API.", "Crea una chiave con “Query Funds” e “Create & Modify Orders” attivi.", "Inserisci i due valori qui sotto per completare il collegamento."] },
+    { id: "coinbase", name: "Coinbase", color: "#0052ff", letter: "C",
+      steps: ["Su Coinbase Advanced Trade vai in Impostazioni → API.", "Crea una chiave con permessi “View” e “Trade”, mai “Transfer”.", "Incolla chiave e segreto qui sotto."] },
+    { id: "bitstamp", name: "Bitstamp", color: "#2e3a59", letter: "B",
+      steps: ["Su Bitstamp vai in Account → Sicurezza → API Access.", "Crea una chiave con permessi di lettura saldo e piazzamento ordini.", "Incolla chiave e segreto qui sotto."] },
   ];
 
   // Optimization timing: the backend does not track a real completion
@@ -159,8 +166,8 @@
 #simple-mode-root .sm-wait-bar-track{width:100%;max-width:280px;height:5px;background:var(--sm-sunk);border-radius:3px;overflow:hidden;margin-top:14px;}
 #simple-mode-root .sm-wait-bar-fill{height:100%;width:0%;background:var(--sm-accent);border-radius:3px;transition:width .3s linear;}
 #simple-mode-root .sm-wait-log{font-family:monospace;font-size:11px;color:var(--sm-ink-faint);margin-top:12px;min-height:32px;}
-#simple-mode-root .sm-exch-grid{display:flex;gap:10px;margin-bottom:14px;}
-#simple-mode-root .sm-exch-opt{flex:1;border:1px solid var(--sm-border);background:var(--sm-panel);border-radius:8px;padding:12px 6px;text-align:center;cursor:pointer;}
+#simple-mode-root .sm-exch-grid{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;}
+#simple-mode-root .sm-exch-opt{flex:1 1 28%;min-width:80px;border:1px solid var(--sm-border);background:var(--sm-panel);border-radius:8px;padding:12px 6px;text-align:center;cursor:pointer;}
 #simple-mode-root .sm-exch-opt.active{border-color:var(--sm-accent);box-shadow:0 0 0 1px var(--sm-accent) inset;}
 #simple-mode-root .sm-exch-badge{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:#0e1513;margin:0 auto 6px;}
 #simple-mode-root .sm-field{margin-bottom:10px;}
@@ -190,6 +197,9 @@
 #simple-mode-root .sm-feat b{color:var(--sm-ink);}
 #simple-mode-root .sm-badge{display:inline-flex;align-items:center;gap:5px;font-family:monospace;font-size:10px;text-transform:uppercase;color:var(--sm-accent);background:rgba(11,143,104,.12);padding:3px 8px;border-radius:20px;margin-bottom:8px;}
 #simple-mode-root .sm-muted{color:var(--sm-ink-faint);font-size:12px;}
+#simple-mode-root .sm-deploy-info{text-align:center;font-family:monospace;font-size:10.5px;color:var(--sm-ink-faint);padding:6px 0 90px;}
+#simple-mode-root .sm-real-chart-mount{height:440px;border:1px solid var(--sm-border);border-radius:8px;overflow:hidden;margin-bottom:10px;background:var(--sm-panel);display:flex;flex-direction:column;}
+#simple-mode-root .sm-real-chart-mount .chart-area{flex:1;min-height:0;}
 `;
     document.head.appendChild(style);
   }
@@ -205,8 +215,28 @@
     <button type="button" class="sm-exit" id="sm-exit-btn">Esci</button>
   </div>
   <div id="sm-steps"></div>
+  <div class="sm-deploy-info" id="sm-deploy-info"></div>
 </div>`;
     document.getElementById("sm-exit-btn").addEventListener("click", () => setActive(false));
+    loadDeployInfo();
+  }
+
+  // Stessa domanda del piede della sidebar desktop ("quando e' stato
+  // distribuito davvero"), qui perche' Modalita' Semplice non condivide
+  // quel DOM — vedi renderDeployInfo() in app.js.
+  async function loadDeployInfo() {
+    const el2 = document.getElementById("sm-deploy-info");
+    if (!el2) return;
+    try {
+      const resp = await fetch("/api/version", { cache: "no-store" });
+      if (!resp.ok) return;
+      const { deployed_at } = await resp.json();
+      if (!deployed_at) return;
+      const stamp = new Date(deployed_at * 1000).toLocaleString("it-IT", {
+        day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit",
+      });
+      el2.textContent = `Aggiornato ${stamp}`;
+    } catch (_e) { /* offline: non mostrare nulla piuttosto che un dato falso */ }
   }
 
   const TOTAL_STEPS = 6;
@@ -395,23 +425,54 @@
     state.archiveList.forEach((entry) => {
       const m = entry.metrics || {};
       const retUp = (m.total_return_pct || 0) >= 0;
+      // created_at e' epoca in secondi (vedi archive.py), non una stringa
+      // ISO: uno .slice() qui interrompeva silenziosamente il rendering
+      // dell'intera lista al primo elemento con voci in archivio.
+      const when = entry.created_at ? new Date(entry.created_at * 1000).toLocaleDateString("it-IT", { day: "2-digit", month: "short", year: "2-digit" }) : "—";
+      const params = Object.entries(entry.params || {}).map(([k, v]) => `${esc(k)}=${esc(String(v))}`).join(" · ");
       const card = document.createElement("div");
       card.className = "sm-archive-card";
       card.innerHTML = `
-        <div style="display:flex;justify-content:space-between;"><b>${esc(entry.strategy_name)}</b><span class="sm-muted">${esc((entry.created_at || "").slice(0, 10))}</span></div>
+        <div style="display:flex;justify-content:space-between;"><b>${esc(entry.strategy_name)}</b><span class="sm-muted">${esc(when)}</span></div>
         <div class="sm-summary" style="margin-top:10px;">
           <div class="sm-stat"><div class="lbl">Rendimento</div><div class="val ${retUp ? "up" : "down"}">${fmtPct(m.total_return_pct)}</div></div>
           <div class="sm-stat"><div class="lbl">Drawdown</div><div class="val down">${fmtPct(m.max_drawdown_pct)}</div></div>
           <div class="sm-stat"><div class="lbl">Operazioni</div><div class="val">${m.num_trades != null ? m.num_trades : "—"}</div></div>
         </div>
-        <button class="sm-btn primary" style="margin-top:10px;">Usa questa</button>`;
-      card.querySelector("button").addEventListener("click", () => {
+        <div class="sm-muted" style="margin-top:6px;">Profit factor ${fmtNum(m.profit_factor)} · ${m.candles != null ? m.candles + " candele · " : ""}${esc(entry.interval || "")}</div>
+        ${params ? `<div class="sm-muted" style="margin-top:4px;">${params}</div>` : ""}
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <button class="sm-btn primary" data-act="use" style="flex:1;">Usa questa</button>
+          <button class="sm-btn ghost" data-act="export" style="flex:0 0 auto;">⤓ Excel</button>
+        </div>`;
+      card.querySelector('[data-act="use"]').addEventListener("click", () => {
         state.archiveEntry = entry;
         state.strategy = entry.strategy_name;
         go(3);
       });
+      card.querySelector('[data-act="export"]').addEventListener("click", () => exportArchiveEntryToExcel(entry));
       grid.appendChild(card);
     });
+  }
+
+  // Stesso meccanismo del pulsante "⤓ Excel" sul sito: il server ririsulta
+  // il backtest dai parametri della voce (mai da numeri gia' in pagina) e
+  // costruisce il file — vedi /api/export/backtest.xlsx in main.py.
+  function exportArchiveEntryToExcel(entry) {
+    const params = new URLSearchParams();
+    params.set("symbol", entry.symbol);
+    params.set("asset_type", entry.asset_type);
+    params.set("exchange", entry.exchange);
+    params.set("ltf_interval", entry.interval);
+    params.set("strategy_name", entry.strategy_name);
+    Object.entries(entry.params || {}).forEach(([k, v]) => params.set(k, v));
+    Object.entries(entry.backtest_params || {}).forEach(([k, v]) => params.set(k, v));
+    const link = document.createElement("a");
+    link.href = `/api/export/backtest.xlsx?${params.toString()}`;
+    link.rel = "noopener";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
   }
 
   // ------------------------------------------------------------------
@@ -502,7 +563,6 @@
       const analysis = await api(`/api/analyze?${qs.toString()}`);
       state.analysis = analysis;
       const bt = analysis.backtests.ltf;
-      const candles = analysis.timeframes.ltf.candles;
       const body = document.getElementById("sm-bt-body");
       const m = fromArchive ? (state.archiveEntry.metrics || {}) : {
         total_return_pct: bt.total_return_pct, max_drawdown_pct: bt.max_drawdown_pct, num_trades: bt.num_trades,
@@ -513,11 +573,29 @@
           <div class="sm-stat"><div class="lbl">Max drawdown</div><div class="val down">${fmtPct(m.max_drawdown_pct)}</div></div>
           <div class="sm-stat"><div class="lbl">Operazioni</div><div class="val">${m.num_trades != null ? m.num_trades : "—"}</div></div>
         </div>
-        <div class="sm-card">
-          <svg id="sm-real-chart" viewBox="0 0 400 240" width="100%" height="240" preserveAspectRatio="none"></svg>
-          <div class="sm-legend"><span><i style="background:var(--sm-bull)"></i>Ingresso</span><span><i style="background:var(--sm-bear)"></i>Uscita</span></div>
-        </div>`;
-      drawCandleChart(document.getElementById("sm-real-chart"), candles, bt.trades || []);
+        <div class="sm-real-chart-mount" id="sm-real-chart-mount"><div class="sm-muted">Carico il grafico reale…</div></div>
+        <button class="sm-btn ghost" id="sm-bt-export" style="width:100%;margin:10px 0;">⤓ Esporta i trade in Excel</button>`;
+      document.getElementById("sm-bt-export").addEventListener("click", () => exportBacktestToExcel(params));
+      // Grafico reale: il VERO .chart-area del sito (LightweightCharts,
+      // indicatori, marker di ingresso/uscita), spostato qui invece di
+      // ridisegnato — vedi window.LiquidityChartBridge in app.js. Se il
+      // ponte non e' disponibile (script non ancora caricato) la pagina
+      // resta comunque utilizzabile, solo senza quel riquadro.
+      if (window.LiquidityChartBridge) {
+        const mount = document.getElementById("sm-real-chart-mount");
+        window.LiquidityChartBridge.mount(mount);
+        await window.LiquidityChartBridge.show({
+          assetType: state.ticker.asset_type,
+          exchange: state.ticker.exchange,
+          symbol: state.ticker.symbol,
+          interval: "1d",
+          strategyName: state.strategy,
+          params,
+          backtestParams: fromArchive ? state.archiveEntry.backtest_params : null,
+        }, state.ticker.symbol);
+      } else {
+        document.getElementById("sm-real-chart-mount").innerHTML = `<div class="sm-muted">Grafico non disponibile in questo momento.</div>`;
+      }
       document.getElementById("sm-bt-continue").disabled = false;
     } catch (e) {
       document.getElementById("sm-bt-body").innerHTML = e.needsAuth
@@ -525,6 +603,20 @@
         : `<div class="sm-error">${esc(e.message)}</div>`;
       if (e.needsAuth) requireLogin();
     }
+  }
+
+  function exportBacktestToExcel(strategyParams) {
+    const qs = new URLSearchParams({
+      symbol: state.ticker.symbol, asset_type: state.ticker.asset_type,
+      exchange: state.ticker.exchange, ltf_interval: "1d", strategy_name: state.strategy,
+    });
+    Object.entries(strategyParams || {}).forEach(([k, v]) => qs.set(k, v));
+    const link = document.createElement("a");
+    link.href = `/api/export/backtest.xlsx?${qs.toString()}`;
+    link.rel = "noopener";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
   }
 
   function drawCandleChart(svg, candles, trades) {
@@ -687,18 +779,23 @@
   // STEP 5 — exchange (real PATCH /api/auth/trading). Skipped for stocks:
   // place_order_for_signal only executes on the crypto trading exchanges.
   // ------------------------------------------------------------------
-  function stepExchange() {
+  let savedCredsCache = null;
+  async function ensureSavedCreds() {
+    if (savedCredsCache) return savedCredsCache;
+    try { savedCredsCache = await api("/api/auth/trading"); } catch (_e) { savedCredsCache = []; }
+    return savedCredsCache;
+  }
+
+  async function stepExchange() {
     if (state.ticker.asset_type !== "crypto") { go(6); return; }
     setTopbar("5/" + TOTAL_STEPS, 5 / TOTAL_STEPS);
     document.getElementById("sm-steps").innerHTML = `
 <main class="sm-step active">
   <div class="sm-eyebrow">Passo 5 di ${TOTAL_STEPS}</div>
   <h1 class="sm-title">Collega il tuo exchange</h1>
-  <p class="sm-sub">Serve solo una chiave API spot con permessi di trading — mai un accesso ai prelievi. Solo spot: la leva è limitata a 1x su tutta l'app.</p>
+  <p class="sm-sub">Serve solo una chiave API spot con permessi di trading — mai un accesso ai prelievi. Solo spot: la leva è limitata a 1x su tutta l'app. Le chiavi sono cifrate e non vengono mai ripresentate una volta salvate.</p>
   <div class="sm-exch-grid" id="sm-exch-grid"></div>
-  <div class="sm-exch-steps"><ol id="sm-exch-steps"></ol></div>
-  <div class="sm-field"><label>Chiave API</label><input id="sm-api-key" placeholder="••••••••••••••••"></div>
-  <div class="sm-field"><label>Chiave segreta</label><input id="sm-api-secret" type="password" placeholder="••••••••••••••••"></div>
+  <div id="sm-exch-body"></div>
   <div id="sm-exch-error"></div>
   <div class="sm-ctabar"><div class="sm-ctabar-inner">
     <button class="sm-btn ghost" id="sm-back-btn">Indietro</button>
@@ -708,10 +805,12 @@
     document.getElementById("sm-back-btn").addEventListener("click", () => go(4));
     document.getElementById("sm-exch-continue").addEventListener("click", onExchangeContinue);
     const grid = document.getElementById("sm-exch-grid");
+    const saved = await ensureSavedCreds();
     TRADING_EXCHANGES.forEach((ex) => {
       const opt = document.createElement("div");
+      const isSaved = saved.some((c) => c.exchange === ex.id && c.api_key_set);
       opt.className = "sm-exch-opt" + (state.tradingExchange === ex.id ? " active" : "");
-      opt.innerHTML = `<div class="sm-exch-badge" style="background:${ex.color}">${ex.letter}</div><div style="font-size:12px;font-weight:600;">${ex.name}</div>`;
+      opt.innerHTML = `<div class="sm-exch-badge" style="background:${ex.color}">${ex.letter}</div><div style="font-size:12px;font-weight:600;">${ex.name}</div>${isSaved ? '<div class="sm-muted" style="margin-top:2px;">🔒 salvata</div>' : ""}`;
       opt.addEventListener("click", () => { state.tradingExchange = ex.id; renderExchGrid(); });
       grid.appendChild(opt);
     });
@@ -720,11 +819,31 @@
   function renderExchGrid() {
     document.querySelectorAll("#simple-mode-root .sm-exch-opt").forEach((opt, i) => opt.classList.toggle("active", TRADING_EXCHANGES[i].id === state.tradingExchange));
     const ex = TRADING_EXCHANGES.find((e) => e.id === state.tradingExchange);
-    document.getElementById("sm-exch-steps").innerHTML = ex.steps.map((s) => `<li>${esc(s)}</li>`).join("");
+    const saved = (savedCredsCache || []).find((c) => c.exchange === ex.id);
+    const body = document.getElementById("sm-exch-body");
+    if (saved && saved.api_key_set) {
+      const when = saved.created_at ? new Date(saved.created_at * 1000).toLocaleDateString("it-IT", { day: "2-digit", month: "short", year: "numeric" }) : null;
+      body.innerHTML = `
+<div class="sm-card">
+  <div style="display:flex;justify-content:space-between;align-items:center;">
+    <span>🔒 Chiave ${esc(ex.name)} già salvata${when ? " — registrata il " + esc(when) : ""}</span>
+  </div>
+  <p class="sm-sub" style="margin:8px 0 0;">Nessun bisogno di reinserirla: prosegui e verrà usata quella già collegata. Serve cambiarla? Vai in Sorveglia da desktop.</p>
+</div>`;
+    } else {
+      body.innerHTML = `
+<div class="sm-exch-steps"><ol>${ex.steps.map((s) => `<li>${esc(s)}</li>`).join("")}</ol></div>
+<div class="sm-field"><label>Chiave API</label><input id="sm-api-key" placeholder="••••••••••••••••"></div>
+<div class="sm-field"><label>Chiave segreta</label><input id="sm-api-secret" type="password" placeholder="••••••••••••••••"></div>
+${ex.id === "kucoin" ? '<div class="sm-field"><label>Passphrase</label><input id="sm-api-passphrase" type="password" placeholder="••••••••••••••••"></div>' : ""}`;
+    }
   }
   async function onExchangeContinue() {
+    const saved = (savedCredsCache || []).find((c) => c.exchange === state.tradingExchange);
+    if (saved && saved.api_key_set) { go(6); return; }
     const apiKey = document.getElementById("sm-api-key").value.trim();
     const apiSecret = document.getElementById("sm-api-secret").value.trim();
+    const passphrase = document.getElementById("sm-api-passphrase")?.value.trim() || "";
     if (!apiKey || !apiSecret) {
       document.getElementById("sm-exch-error").innerHTML = `<div class="sm-error">Inserisci chiave e secret, oppure torna indietro se vuoi solo l'avviso Telegram senza esecuzione automatica.</div>`;
       return;
@@ -732,8 +851,9 @@
     try {
       await api("/api/auth/trading", {
         method: "PATCH",
-        body: JSON.stringify({ exchange: state.tradingExchange, api_key: apiKey, api_secret: apiSecret, enabled: true, size_mode: "fixed_usdt", size_value: 50 }),
+        body: JSON.stringify({ exchange: state.tradingExchange, api_key: apiKey, api_secret: apiSecret, passphrase, enabled: true, size_mode: "fixed_usdt", size_value: 50 }),
       });
+      savedCredsCache = null;
       go(6);
     } catch (e) {
       document.getElementById("sm-exch-error").innerHTML = `<div class="sm-error">${esc(e.message)}</div>`;
@@ -863,6 +983,12 @@
     clearTimeout(state.optPollTimer);
     state.step = step;
     window.scrollTo(0, 0);
+    // Il grafico reale (vedi stepBacktest) e' il vero nodo .chart-area del
+    // sito, spostato qui dentro — questo step riscrive #sm-steps con
+    // innerHTML, che distruggerebbe quel nodo (e i chart LightweightCharts
+    // dentro) se non lo si riporta al suo posto prima. Idempotente: se non
+    // era montato qui, restore() non fa nulla.
+    if (step !== 3 && window.LiquidityChartBridge) window.LiquidityChartBridge.restore();
     if (step === 0) return stepWelcome();
     if (step === 1) return stepTicker();
     if (step === 1.5) return stepArchive();
@@ -878,6 +1004,7 @@
   // Mode toggle + persistence
   // ------------------------------------------------------------------
   function setActive(active) {
+    if (!active && window.LiquidityChartBridge) window.LiquidityChartBridge.restore();
     try { localStorage.setItem(LS_KEY, active ? "1" : "0"); } catch (_e) { /* ignore */ }
     root.classList.toggle("hidden", !active);
     document.querySelectorAll("header.toolbar, main.cockpit, nav.mobile-nav, footer.disclaimer, #mobile-drawer-backdrop").forEach((elm) => {

@@ -1264,7 +1264,11 @@
 
     container.innerHTML = creds.filter(c => TRADING_EXCHANGES.includes(c.exchange)).map(c => {
       const name = TRADING_EXCHANGE_NAMES[c.exchange] || c.exchange;
-      const summaryText = c.api_key_set ? "🔑 Chiave configurata — modifica" : "Configura chiave API";
+      const summaryText = c.api_key_set ? "Modifica chiave" : "Configura chiave API";
+      const savedNote = c.api_key_set
+        ? `<div class="trading-cred-saved">🔒 Chiave salvata e cifrata${c.created_at ? " — registrata il " + escapeHtml(new Date(c.created_at * 1000).toLocaleDateString("it-IT", { day: "2-digit", month: "short", year: "numeric" })) : ""}
+             <button type="button" class="trading-cred-delete-btn" title="Elimina questa chiave">Elimina</button></div>`
+        : "";
       const passphraseField = c.exchange === "kucoin"
         ? `<label>Passphrase <input type="password" class="trading-passphrase" placeholder="lascia vuoto per non cambiare" /></label>`
         : "";
@@ -1275,6 +1279,7 @@
             <input type="checkbox" class="trading-enabled-cb" ${c.enabled ? "checked" : ""}> Attivo
           </label>
         </div>
+        ${savedNote}
         <details class="trading-cred-details">
           <summary>${summaryText}</summary>
           <div class="trading-cred-fields">
@@ -1329,6 +1334,17 @@
       } catch (_) {
         statusEl.textContent = "Errore di rete";
       }
+    });
+
+    // Elimina: la chiave sparisce subito (nessuna riconferma richiesta,
+    // l'azione e' gia' dietro un pannello aperto solo apposta) e la card
+    // torna allo stato "non configurata" senza dover ricaricare la pagina.
+    container.addEventListener("click", async function handleTradingDelete(e) {
+      if (!e.target.classList.contains("trading-cred-delete-btn")) return;
+      const card = e.target.closest(".trading-cred-card");
+      if (!card) return;
+      await fetch(`/api/auth/trading/${card.dataset.exchange}`, { method: "DELETE" });
+      loadTradingCredentials();
     });
 
     // Enabled toggle handler (event delegation)
@@ -1865,7 +1881,11 @@
     const container = el("futures-credentials-list");
     if (!container) return;
     container.innerHTML = futuresExchanges.map((c) => {
-      const summaryText = c.api_key_set ? "🔑 Chiave configurata — modifica" : "Configura chiave API";
+      const summaryText = c.api_key_set ? "Modifica chiave" : "Configura chiave API";
+      const savedNote = c.api_key_set
+        ? `<div class="trading-cred-saved">🔒 Chiave salvata e cifrata${c.created_at ? " — registrata il " + escapeHtml(new Date(c.created_at * 1000).toLocaleDateString("it-IT", { day: "2-digit", month: "short", year: "numeric" })) : ""}
+             <button type="button" class="trading-cred-delete-btn" title="Elimina questa chiave">Elimina</button></div>`
+        : "";
       const riskNote = c.isolated_margin ? "" :
         `<p class="panel-hint futures-risk-note">${c.name} non ha margine isolato: una posizione che va male puo' intaccare le altre sul conto.</p>`;
       const passphraseField = c.needs_passphrase
@@ -1878,6 +1898,7 @@
             <input type="checkbox" class="futures-cred-enabled-cb" ${c.enabled ? "checked" : ""}> Attivo
           </label>
         </div>
+        ${savedNote}
         ${riskNote}
         <details class="trading-cred-details">
           <summary>${summaryText}</summary>
@@ -1948,6 +1969,14 @@
       } catch (_) {
         statusEl.textContent = "Errore di rete";
       }
+    });
+
+    container.addEventListener("click", async function handleFuturesCredDelete(e) {
+      if (!e.target.classList.contains("trading-cred-delete-btn")) return;
+      const card = e.target.closest(".trading-cred-card");
+      if (!card) return;
+      await fetch(`/api/auth/futures/${card.dataset.exchange}`, { method: "DELETE" });
+      loadFuturesCredentials();
     });
 
     container.addEventListener("change", async function handleFuturesCredToggle(e) {
@@ -8602,5 +8631,46 @@
       }, 150);
     });
   });
+
+  // Ponte minimo per Modalita' Semplice (simple-mode.js, un modulo isolato
+  // separato): sposta il VERO nodo .chart-area — non una sua
+  // ricostruzione — dentro un contenitore di quel modulo quando serve
+  // mostrare li' grafico, indicatori e ingressi, e lo riporta al suo posto
+  // in seguito. Stesso grafico, stessa pipeline (applyConfigToChart +
+  // runAnalysis), mai una copia: e' il requisito esplicito di seed-0064
+  // ("le nostre grafiche, non un altro grafico").
+  const _chartAreaHome = { parent: null, next: null };
+  window.LiquidityChartBridge = {
+    mount(container) {
+      const area = document.querySelector(".chart-area");
+      if (!area || !container) return false;
+      if (!_chartAreaHome.parent) {
+        _chartAreaHome.parent = area.parentNode;
+        _chartAreaHome.next = area.nextSibling;
+      }
+      container.innerHTML = "";
+      container.appendChild(area);
+      resizeAllCharts(true);
+      return true;
+    },
+    restore() {
+      const area = document.querySelector(".chart-area");
+      if (area && _chartAreaHome.parent && area.parentNode !== _chartAreaHome.parent) {
+        _chartAreaHome.parent.insertBefore(area, _chartAreaHome.next);
+        resizeAllCharts(true);
+      }
+    },
+    // cfg: lo stesso oggetto di applyConfigToChart (assetType, exchange,
+    // symbol, interval, strategyName, params, backtestParams).
+    show(cfg, symbol) {
+      applyConfigToChart(cfg);
+      // Stesso comportamento di applyArchiveEntry(): un chiamante che passa
+      // backtestParams=null intende costi/taglia di default, non "lascia
+      // l'ultimo override attivo" — altrimenti un giro precedente (desktop
+      // o un'altra voce) resterebbe applicato in silenzio.
+      if (!cfg.backtestParams) state.chartBacktestOverride = null;
+      return runAnalysis(symbol);
+    },
+  };
 
 })();

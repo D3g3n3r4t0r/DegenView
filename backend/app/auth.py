@@ -180,15 +180,45 @@ def set_trading_credential(
     if user is None:
         return None
     creds = dict(user.trading_credentials)
+    existing = creds.get(exchange, ExchangeCredential())
+    new_key = _enc(api_key, _SECRET) if api_key else existing.api_key_enc
     creds[exchange] = ExchangeCredential(
-        api_key_enc=_enc(api_key, _SECRET) if api_key else creds.get(exchange, ExchangeCredential()).api_key_enc,
-        api_secret_enc=_enc(api_secret, _SECRET) if api_secret else creds.get(exchange, ExchangeCredential()).api_secret_enc,
-        passphrase_enc=_enc(passphrase, _SECRET) if passphrase else creds.get(exchange, ExchangeCredential()).passphrase_enc,
+        api_key_enc=new_key,
+        api_secret_enc=_enc(api_secret, _SECRET) if api_secret else existing.api_secret_enc,
+        passphrase_enc=_enc(passphrase, _SECRET) if passphrase else existing.passphrase_enc,
         enabled=enabled,
         size_mode=size_mode,
         size_value=size_value,
+        # Impostata solo la prima volta che la chiave smette di essere vuota —
+        # una modifica successiva (leva, size, toggle) non deve azzerare la
+        # data di registrazione mostrata all'utente.
+        created_at=existing.created_at or (time.time() if new_key else 0.0),
     )
     updated = user.model_copy(update={"trading_credentials": creds})
+    _users[user_id] = updated
+    _save_users()
+    return updated
+
+
+def delete_trading_credential(user_id: str, exchange: str) -> User | None:
+    user = _users.get(user_id)
+    if user is None:
+        return None
+    creds = dict(user.trading_credentials)
+    creds.pop(exchange, None)
+    updated = user.model_copy(update={"trading_credentials": creds})
+    _users[user_id] = updated
+    _save_users()
+    return updated
+
+
+def delete_futures_credential(user_id: str, exchange: str) -> User | None:
+    user = _users.get(user_id)
+    if user is None:
+        return None
+    creds = dict(user.futures_credentials)
+    creds.pop(exchange, None)
+    updated = user.model_copy(update={"futures_credentials": creds})
     _users[user_id] = updated
     _save_users()
     return updated
@@ -224,8 +254,9 @@ def set_futures_credential(
         return None
     creds = dict(user.futures_credentials)
     existing = creds.get(exchange, FuturesCredential())
+    new_key = _enc(api_key, _SECRET) if api_key else existing.api_key_enc
     creds[exchange] = FuturesCredential(
-        api_key_enc=_enc(api_key, _SECRET) if api_key else existing.api_key_enc,
+        api_key_enc=new_key,
         api_secret_enc=_enc(api_secret, _SECRET) if api_secret else existing.api_secret_enc,
         # Vuota = non cambiare, come per chiave e secret: chi salva solo un
         # cambio di leva non deve riscrivere tutte le credenziali.
@@ -234,6 +265,7 @@ def set_futures_credential(
         size_mode=size_mode,
         size_value=size_value,
         leverage=leverage,
+        created_at=existing.created_at or (time.time() if new_key else 0.0),
     )
     updated = user.model_copy(update={"futures_credentials": creds})
     _users[user_id] = updated

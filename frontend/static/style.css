@@ -3088,6 +3088,8 @@ body {
 .trading-cred-name { font-weight: 600; font-size: .85rem; }
 .trading-enabled-toggle { display: flex; align-items: center; gap: .4rem; font-size: .8rem; cursor: pointer; }
 .trading-enabled-toggle input[type="checkbox"] { accent-color: var(--accent); }
+.trading-cred-saved { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .5rem .75rem; font-size: .78rem; color: var(--ink-dim); background: var(--bg-panel); border-top: 1px solid var(--border); }
+.trading-cred-delete-btn { border: 1px solid var(--border-strong); background: transparent; color: var(--bear); border-radius: 4px; padding: .2rem .55rem; font-size: .75rem; cursor: pointer; white-space: nowrap; }
 .trading-cred-details { border-top: 1px solid var(--border); }
 .trading-cred-details > summary { padding: .5rem .75rem; cursor: pointer; font-size: .8rem; color: var(--accent); }
 .trading-cred-fields { display: flex; flex-direction: column; gap: .6rem; padding: .75rem; background: var(--bg-panel); }
