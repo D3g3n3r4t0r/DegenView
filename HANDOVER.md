@@ -819,6 +819,20 @@ chiesto con le sue parole.
   un lavoro "fallito" al primo errore di rete qualsiasi (un 503 durante un
   deploy incluso), anche se la ricerca sul server proseguiva tranquilla;
   ora regge fino a 5 giri falliti di fila prima di arrendersi davvero.
+- **Modalita' Semplice, grafico da archivio rotto + click sull'ingresso**
+  (`seed-0068`): "se seleziono una strategia dall'archivio... non e' che
+  devo riselezionare il ticker, vedi che mi chiede il ticker di nuovo?"
+  Bug vero: `LiquidityChartBridge.show()` trattava un `backtest_params={}`
+  (voce d'archivio senza costi mai registrati — comune, non un difetto)
+  come un override reale invece che "nessuno" ({} e' truthy in JS), quindi
+  ogni campo costo finiva 'undefined' nella query, il server rispondeva
+  422 e il grafico restava vuoto senza dirlo — corretto con lo stesso
+  controllo (`Object.keys(...).length`) che applyArchiveEntry() sul sito
+  gia' usa. Aggiunta anche la richiesta esplicita: un tocco sul grafico
+  reale (`onChartClick()`, nuovo, `mainChart.subscribeClick()`) apre ed
+  evidenzia l'operazione piu' vicina in un elenco proprio sotto il
+  grafico — stessi dati del pulsante "N trade" del Laboratorio, non quel
+  pannello spostato (e' pensato per restare incollato ai suoi risultati).
 - **Modalita' Semplice, tocco senza risposta** (`seed-0066`): "quando
   seleziono il ticket il click non produce un'accettazione grafica...
   sembra che non carichi anche se in realta' e' stato selezionato". Aggiunto

@@ -218,6 +218,13 @@ body:has(#simple-mode-root:not(.hidden)) #opt-pill{z-index:600;}
 #simple-mode-root .sm-tf-btn{border:1px solid var(--sm-border);background:var(--sm-panel);color:var(--sm-ink);border-radius:20px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer;}
 #simple-mode-root .sm-tf-btn.active{border-color:var(--sm-accent);background:var(--sm-accent);color:#04140e;}
 #simple-mode-root .sm-real-chart-mount{height:440px;border:1px solid var(--sm-border);border-radius:8px;overflow:hidden;margin-bottom:10px;background:var(--sm-panel);display:flex;flex-direction:column;}
+#simple-mode-root .sm-trades-panel{max-height:260px;overflow-y:auto;border:1px solid var(--sm-border);border-radius:8px;margin-bottom:10px;background:var(--sm-panel);}
+#simple-mode-root .sm-trade-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 12px;border-bottom:1px solid var(--sm-border);font-size:12.5px;transition:background .3s;}
+#simple-mode-root .sm-trade-row:last-child{border-bottom:none;}
+#simple-mode-root .sm-trade-row .dir{font-weight:600;flex:0 0 auto;}
+#simple-mode-root .sm-trade-row .dates{color:var(--sm-ink-dim);font-family:monospace;font-size:11px;flex:1;text-align:center;}
+#simple-mode-root .sm-trade-row .pnl{font-weight:600;font-family:monospace;flex:0 0 auto;}
+#simple-mode-root .sm-trade-row.sm-trade-flash{background:rgba(11,143,104,.18);}
 #simple-mode-root .sm-real-chart-mount .chart-area{flex:1;min-height:0;}
 `;
     document.head.appendChild(style);
@@ -628,14 +635,23 @@ body:has(#simple-mode-root:not(.hidden)) #opt-pill{z-index:600;}
           <div class="sm-stat"><div class="lbl">Operazioni</div><div class="val">${m.num_trades != null ? m.num_trades : "—"}</div></div>
         </div>
         <div class="sm-real-chart-mount" id="sm-real-chart-mount"><div class="sm-muted">Carico il grafico reale…</div></div>
+        <p class="sm-muted" style="margin:4px 0 10px;">Tocca un punto del grafico per aprire l'operazione più vicina qui sotto.</p>
+        <button type="button" class="sm-btn ghost" id="sm-trades-toggle" style="width:100%;margin-bottom:8px;">▸ ${m.num_trades != null ? m.num_trades : (bt.trades || []).length} operazioni</button>
+        <div id="sm-trades-panel" class="sm-trades-panel" hidden></div>
         <button class="sm-btn ghost" id="sm-bt-export" style="width:100%;margin:10px 0;">⤓ Esporta i trade in Excel</button>`;
       document.getElementById("sm-bt-export").addEventListener("click", () => exportBacktestToExcel(params));
+      renderTradesPanel(bt);
       // Grafico reale: il VERO .chart-area del sito (LightweightCharts,
       // indicatori, marker di ingresso/uscita), spostato qui invece di
       // ridisegnato — vedi window.LiquidityChartBridge in app.js. Se il
       // ponte non e' disponibile (script non ancora caricato) la pagina
       // resta comunque utilizzabile, solo senza quel riquadro.
       if (window.LiquidityChartBridge) {
+        // Come applyArchiveEntry() sul sito: le voci vecchie hanno
+        // backtest_params={} (mai registrato niente, non e' un difetto) —
+        // va trattato come "nessun override", mai passato cosi' com'e'.
+        const bp = fromArchive && state.archiveEntry.backtest_params && Object.keys(state.archiveEntry.backtest_params).length
+          ? state.archiveEntry.backtest_params : null;
         const mount = document.getElementById("sm-real-chart-mount");
         window.LiquidityChartBridge.mount(mount);
         await window.LiquidityChartBridge.show({
@@ -645,8 +661,16 @@ body:has(#simple-mode-root:not(.hidden)) #opt-pill{z-index:600;}
           interval: state.interval,
           strategyName: state.strategy,
           params,
-          backtestParams: fromArchive ? state.archiveEntry.backtest_params : null,
+          backtestParams: bp,
         }, state.ticker.symbol);
+        // Un tocco sul grafico reale apre l'operazione piu' vicina nella
+        // lista qui sotto — "ogni ingresso se ci clicco mi deve rimandare
+        // alla transazione effettuata dalla strategia" (seed-0068). Una
+        // sola sottoscrizione alla volta: onChartClick() sostituisce da
+        // sola quella di un montaggio precedente.
+        if (window.LiquidityChartBridge.onChartClick) {
+          window.LiquidityChartBridge.onChartClick((time) => selectTradeNear(bt, time));
+        }
       } else {
         document.getElementById("sm-real-chart-mount").innerHTML = `<div class="sm-muted">Grafico non disponibile in questo momento.</div>`;
       }
@@ -656,6 +680,56 @@ body:has(#simple-mode-root:not(.hidden)) #opt-pill{z-index:600;}
         ? `<div class="sm-error">Devi accedere per usare questa funzione.</div>`
         : `<div class="sm-error">${esc(e.message)}</div>`;
       if (e.needsAuth) requireLogin();
+    }
+  }
+
+  // Stessi dati del pulsante "N trade" del Laboratorio (bt.trades/oos_trades
+  // del backtest reale) — una tabella propria invece di spostare il
+  // pannello del Laboratorio, che e' pensato per stare incollato ai suoi
+  // stessi risultati e non per essere spostato altrove.
+  function renderTradesPanel(bt) {
+    const toggle = document.getElementById("sm-trades-toggle");
+    const panel = document.getElementById("sm-trades-panel");
+    if (!toggle || !panel) return;
+    const trades = (bt.trades || []).concat(bt.oos_trades || []);
+    const fmtTs = (s) => new Date(s * 1000).toLocaleDateString("it-IT", { day: "2-digit", month: "short", year: "2-digit" });
+    panel.innerHTML = trades.length
+      ? `<div class="sm-trades-list">${trades.map((t, i) => {
+          const isWin = t.pnl_abs > 0;
+          const dir = t.direction === "long" ? "▲ Long" : "▼ Short";
+          return `<div class="sm-trade-row" id="sm-trade-${i}">
+            <span class="dir ${t.direction === "long" ? "up" : "down"}">${dir}</span>
+            <span class="dates">${fmtTs(t.entry_time)} → ${t.exit_time ? fmtTs(t.exit_time) : "aperta"}</span>
+            <span class="pnl ${isWin ? "up" : "down"}">${t.pnl_pct >= 0 ? "+" : ""}${t.pnl_pct.toFixed(2)}%</span>
+          </div>`;
+        }).join("")}</div>`
+      : `<p class="sm-muted">Nessuna operazione in questo periodo.</p>`;
+    toggle.addEventListener("click", () => {
+      const hidden = panel.hidden;
+      panel.hidden = !hidden;
+      toggle.textContent = toggle.textContent.replace(hidden ? "▸" : "▾", hidden ? "▾" : "▸");
+    });
+  }
+
+  // Trova l'operazione il cui ingresso o uscita e' piu' vicino al tempo
+  // toccato sul grafico (stessa unita' — secondi — di entry_time/exit_time),
+  // apre il pannello se era chiuso e ci scorre sopra con un lampeggio.
+  function selectTradeNear(bt, time) {
+    const trades = (bt.trades || []).concat(bt.oos_trades || []);
+    if (!trades.length) return;
+    let best = 0, bestDist = Infinity;
+    trades.forEach((t, i) => {
+      const d = Math.min(Math.abs(t.entry_time - time), Math.abs((t.exit_time || t.entry_time) - time));
+      if (d < bestDist) { bestDist = d; best = i; }
+    });
+    const panel = document.getElementById("sm-trades-panel");
+    const toggle = document.getElementById("sm-trades-toggle");
+    if (panel && panel.hidden) { panel.hidden = false; if (toggle) toggle.textContent = toggle.textContent.replace("▸", "▾"); }
+    const row = document.getElementById(`sm-trade-${best}`);
+    if (row) {
+      row.scrollIntoView({ behavior: "smooth", block: "center" });
+      row.classList.add("sm-trade-flash");
+      setTimeout(() => row.classList.remove("sm-trade-flash"), 1500);
     }
   }
 
@@ -1202,7 +1276,10 @@ ${ex.id === "kucoin" ? '<div class="sm-field"><label>Passphrase</label><input id
   // Mode toggle + persistence
   // ------------------------------------------------------------------
   function setActive(active) {
-    if (!active && window.LiquidityChartBridge) window.LiquidityChartBridge.restore();
+    if (!active && window.LiquidityChartBridge) {
+      window.LiquidityChartBridge.restore();
+      window.LiquidityChartBridge.offChartClick?.();
+    }
     try { localStorage.setItem(LS_KEY, active ? "1" : "0"); } catch (_e) { /* ignore */ }
     root.classList.toggle("hidden", !active);
     document.querySelectorAll("header.toolbar, main.cockpit, nav.mobile-nav, footer.disclaimer, #mobile-drawer-backdrop").forEach((elm) => {

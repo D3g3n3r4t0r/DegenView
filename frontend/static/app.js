@@ -8692,11 +8692,34 @@
     show(cfg, symbol) {
       applyConfigToChart(cfg);
       // Stesso comportamento di applyArchiveEntry(): un chiamante che passa
-      // backtestParams=null intende costi/taglia di default, non "lascia
-      // l'ultimo override attivo" — altrimenti un giro precedente (desktop
-      // o un'altra voce) resterebbe applicato in silenzio.
-      if (!cfg.backtestParams) state.chartBacktestOverride = null;
+      // backtestParams nullo O VUOTO ({}) intende costi/taglia di default,
+      // non "lascia l'ultimo override attivo" — un oggetto vuoto e' truthy
+      // in JS, quindi un controllo solo su `if (!cfg.backtestParams)`
+      // lasciava passare {} come se fosse un override reale: ogni campo
+      // (initial_capital, qty_pct_of_equity, ...) restava undefined e
+      // finiva cosi', come testo, nella query — 422 "serve un numero
+      // (ricevuto 'undefined')". Le voci d'archivio piu' vecchie hanno
+      // sempre backtest_params={} (mai registrato niente), quindi questo
+      // non e' un caso raro.
+      if (!cfg.backtestParams || !Object.keys(cfg.backtestParams).length) state.chartBacktestOverride = null;
       return runAnalysis(symbol);
+    },
+    // Un click sul grafico reale -> il tempo (in secondi, stessa unita' di
+    // t.entry_time/exit_time nei trade) della candela toccata. Chi chiama
+    // trova da solo il trade piu' vicino a quel tempo — qui non si sa cosa
+    // farne, solo dove e' avvenuto il click. Ogni chiamata sostituisce la
+    // precedente sottoscrizione: un solo ascoltatore alla volta, mai
+    // accumulati a ogni nuovo montaggio del grafico.
+    onChartClick(cb) {
+      if (!mainChart) return () => {};
+      if (this._clickUnsub) this._clickUnsub();
+      const handler = (param) => { if (param && param.time) cb(param.time); };
+      mainChart.subscribeClick(handler);
+      this._clickUnsub = () => mainChart.unsubscribeClick(handler);
+      return this._clickUnsub;
+    },
+    offChartClick() {
+      if (this._clickUnsub) { this._clickUnsub(); this._clickUnsub = null; }
     },
   };
 
