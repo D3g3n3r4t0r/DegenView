@@ -120,7 +120,36 @@ def test_an_order_below_one_contract_is_refused_not_rounded(monkeypatch):
     _patch(monkeypatch, handler)
     with pytest.raises(FuturesExecutionError) as exc:
         _run(MexcFutures().place_order("BTCUSDT", "BUY", "fixed_usdt", 100.0, 1, CREDS))
-    assert "contratti" in str(exc.value)
+    message = str(exc.value)
+    assert "contratti" in message
+    # Il numero di contratti da solo non dice cosa fare: il margine minimo
+    # in USDT si', perche' e' l'unita' in cui chi legge sta ragionando.
+    # 1 contratto = 1 BTC a 50000, leva 1x -> serve almeno 50000 USDT.
+    assert "50000.00 USDT" in message
+
+
+def test_min_vol_above_one_is_respected_not_assumed_to_be_one(monkeypatch):
+    """Bug reale trovato dopo una segnalazione (KASUSDT): il minimo di
+    mercato di MEXC non e' sempre 1 contratto, e' `minVol` — un campo del
+    contratto che va letto, non presunto. Un ordine da 2 contratti passava
+    con la vecchia soglia fissa (>= 1) mentre l'exchange lo avrebbe
+    rifiutato con minVol=3."""
+    def handler(request):
+        p = request.url.path
+        if p == "/api/v1/contract/ticker":
+            return _ok({"fairPrice": 0.0352})
+        if p == "/api/v1/contract/detail":
+            return _ok({"contractSize": 1000, "minVol": 3})
+        if p == "/api/v1/private/account/asset/USDT":
+            return _ok({"availableBalance": 1000})
+        raise AssertionError(p)
+
+    _patch(monkeypatch, handler)
+    # 2 contratti di nozionale (2*1000*0.0352 = 70.4 USDT), sotto minVol=3.
+    with pytest.raises(FuturesExecutionError) as exc:
+        _run(MexcFutures().place_order("KASUSDT", "BUY", "fixed_usdt", 70.4, 1, CREDS))
+    message = str(exc.value)
+    assert "minimo di 3" in message
 
 
 def test_closing_a_long_uses_the_close_code_and_cannot_open(monkeypatch):

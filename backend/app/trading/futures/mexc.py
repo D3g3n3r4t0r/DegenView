@@ -132,9 +132,14 @@ class MexcFutures(FuturesAdapter):
         # liquidazione mostrato rispetto a quello vero.
         return float(row.get("fairPrice") or row.get("lastPrice") or 0)
 
-    async def _contract_size(self, symbol: str) -> float:
-        """Quante monete vale un contratto. Letto ogni volta e mai presunto:
-        e' il numero che separa un ordine giusto da uno enorme."""
+    async def _contract_spec(self, symbol: str) -> tuple[float, float]:
+        """Quante monete vale un contratto (`contractSize`) e quanti
+        contratti serve almeno per un ordine (`minVol`). Letti ogni volta e
+        mai presunti: sono i due numeri che separano un ordine giusto da uno
+        enorme, o da un rifiuto che non spiega perche'. minVol NON e' sempre
+        1 — assumerlo lo era su BTC_USDT (dove infatti vale 1) ma non e'
+        garantito per ogni pair, e sbagliarlo per difetto rifiuta ordini
+        validi mentre per eccesso li lascia passare quando non dovrebbero."""
         async with httpx.AsyncClient(base_url=BASE, timeout=15.0) as c:
             resp = await c.get("/api/v1/contract/detail", params={"symbol": symbol})
         data = self._unwrap(resp, "dati del contratto")
@@ -145,6 +150,11 @@ class MexcFutures(FuturesAdapter):
         if size <= 0:
             raise explain("mexc", "dati del contratto",
                           f"contractSize assente per {symbol}", _HINTS)
+        min_vol = float((row or {}).get("minVol") or 1)
+        return size, min_vol
+
+    async def _contract_size(self, symbol: str) -> float:
+        size, _ = await self._contract_spec(symbol)
         return size
 
     async def open_positions(self, creds: FuturesCreds) -> list[Position]:
@@ -185,13 +195,29 @@ class MexcFutures(FuturesAdapter):
         if mark <= 0:
             raise explain("mexc", "ordine", "prezzo di mercato non disponibile", _HINTS)
         notional = self._capped(self._notional(size_mode, size_value, leverage, available, mark), max_usdt)
-        csize = await self._contract_size(sym)
+        csize, min_vol = await self._contract_spec(sym)
         vol = notional / mark / csize
-        if vol < 1:
+        # Il troncamento a intero (MEXC rifiuta i decimali) puo' far
+        # scendere sotto il minimo un valore che sembrava sufficiente da
+        # float — es. vol=1.99 con minVol=2 diventerebbe 1 e verrebbe
+        # rifiutato dall'exchange con un errore diverso da questo, che pero'
+        # avremmo potuto anticipare qui.
+        if int(vol) < min_vol:
+            # Non e' un errore di configurazione: il nozionale richiesto
+            # (spesso una % piccola del saldo, o un tetto stretto) e'
+            # sotto il minimo di mercato per questo pair su MEXC — un
+            # contratto vale gia' parecchi USDT a leva 1x, e su alcuni pair
+            # il minimo e' piu' di un contratto (minVol), non sempre 1: va
+            # letto dall'exchange, mai presunto. Il numero di contratti da
+            # solo non dice a chi legge cosa fare; il margine minimo in
+            # USDT si', perche' e' l'unita' in cui ragiona.
+            min_notional = csize * mark * min_vol
+            min_margin = min_notional / leverage
             raise explain(
                 "mexc", "ordine",
-                f"la dimensione richiesta vale {vol:.3f} contratti, meno del minimo di 1 "
-                f"(un contratto = {csize} unita' a {mark:.4f})", _HINTS,
+                f"la dimensione richiesta vale {vol:.3f} contratti, meno del minimo di {min_vol:g} "
+                f"(un contratto = {csize} unita' a {mark:.4f}, {min_notional:.2f} USDT di nozionale) "
+                f"— serve almeno {min_margin:.2f} USDT di margine con leva {leverage}x", _HINTS,
             )
         return await self._post("/api/v1/private/order/submit", {
             "symbol": sym,
