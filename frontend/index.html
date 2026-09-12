@@ -11,7 +11,8 @@
     rel="stylesheet"
   />
   <link rel="stylesheet" href="/static/style.css" />
-  <link rel="stylesheet" href="https://unpkg.com/codemirror@5.65.16/lib/codemirror.css" />
+  <!-- Vendorizzato invece di caricato da unpkg, stesso motivo del grafico piu' in basso. -->
+  <link rel="stylesheet" href="/static/codemirror.css" />
 </head>
 <body>
   <header class="toolbar">
@@ -1106,8 +1107,12 @@
 
   <div id="alert-toast-container" class="alert-toast-container"></div>
 
-  <script src="https://unpkg.com/lightweight-charts@4/dist/lightweight-charts.standalone.production.js"></script>
-  <script src="https://unpkg.com/codemirror@5.65.16/lib/codemirror.js"></script>
+  <!-- Vendorizzata invece di caricata da unpkg: un CDN di terze parti irraggiungibile
+       (rete dell'utente, blocco, disservizio) mandava in eccezione initCharts() prima
+       che qualunque altro bind (ricerca ticker, form, navigazione) potesse partire —
+       vedi la guardia in DOMContentLoaded per la seconda meta' della stessa correzione. -->
+  <script src="/static/lightweight-charts.standalone.production.js"></script>
+  <script src="/static/codemirror.js"></script>
   <script src="/static/app.js"></script>
   <script src="/static/simple-mode.js" defer></script>
 </body>

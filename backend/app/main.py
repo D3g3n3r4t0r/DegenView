@@ -909,12 +909,20 @@ class FuturesCredentialOut(BaseModel):
     leverage: int
 
 
+_SEARCH_PROVIDER_TIMEOUT_S = 5.0
+
+
 async def _safe_search(
     provider: DataProvider, query: str, asset_type: AssetType, provider_id: str
 ) -> list[SymbolSuggestion]:
     try:
-        results = await provider.search_symbols(query)
-    except Exception:  # noqa: BLE001 — any provider failure must not sink combined search
+        results = await asyncio.wait_for(provider.search_symbols(query), timeout=_SEARCH_PROVIDER_TIMEOUT_S)
+    except Exception:  # noqa: BLE001 — any provider failure/timeout must not sink combined search
+        # Un provider lento o irraggiungibile non deve far aspettare (o
+        # affondare) la ricerca combinata: asyncio.gather aspetta TUTTE le
+        # gambe, quindi senza un tetto qui un solo exchange in difficolta'
+        # rendeva "non trova piu' i pair" vero per ogni exchange insieme a
+        # lui — sia in Lab sia negli ordini spot/futures, stesso endpoint.
         return []
     return [SymbolSuggestion(**r, asset_type=asset_type, provider=provider_id) for r in results]
 
