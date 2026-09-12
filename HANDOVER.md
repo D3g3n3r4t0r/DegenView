@@ -781,6 +781,21 @@ chiesto con le sue parole.
   locale senza Python 3.12: verificata solo la sintassi
   (`py_compile`), non lanciata la suite pytest/ruff — segnalato sopra come
   da fare.
+- **Modalita' Semplice, seguito** (`seed-0064`): dopo Diagnosi (`seed-0062`)
+  e il bottone nascosto da desktop (`seed-0063`), Lorenzo ha chiesto in un
+  solo messaggio: dropdown archivio con tutti i dettagli e i trade
+  esportabili in Excel "come sul sito", il grafico della Modalita' Semplice
+  uguale a quello vero ("le nostre grafiche, non un altro grafico"), le
+  chiavi API mai richieste due volte con data/modifica/cancellazione
+  visibili, l'eliminazione della "tab piena di caselle da riempire", e
+  tutti gli exchange configurati invece di tre. Fatto tutto tranne
+  l'eliminazione totale del pannello Sorveglia (vedi sopra il perche' —
+  decisione da confermare, non presa da solo). Il pezzo piu' delicato e'
+  stato il grafico: invece di ridisegnarlo, spostato il vero nodo
+  `.chart-area` dentro Modalita' Semplice con un piccolo ponte
+  (`window.LiquidityChartBridge`) e restituito al suo posto ad ogni cambio
+  di step — verificato dal vivo con Playwright che il nodo si sposta
+  davvero e i marker sono quelli reali del backtest, non un disegno.
 
 ## Modalità Semplice (wizard guidato) — branch `claude/simple-mode`
 
@@ -812,3 +827,46 @@ Scelte fatte in autonomia, da rivedere con Lorenzo se non vanno bene:
 - Verificato in Browser pane con backend mockato via `fetch` (nessun Python
   3.12 in questo ambiente): tutti gli 8 passi (0-7), desktop e 375px. Non
   verificato contro il backend reale — da rifare a mano o in CI.
+
+### Seguito — seed-0064 (archivio, grafico reale, exchange completi, chiavi)
+
+Lorenzo, subito dopo seed-0062/63, ha chiesto sei cose insieme. Fatte (vedi
+`resolutions.json` sotto `seed-0064` per il dettaglio tecnico completo):
+
+1. Step archivio con metriche complete (rendimento/drawdown/operazioni/PF/
+   candele/parametri) + pulsante Excel reale (`/api/export/backtest.xlsx`).
+   Corretto anche un bug vero trovato per strada: `created_at` e' un epoch
+   (int), uno `.slice()` sul valore ci interrompeva silenziosamente il
+   rendering dell'intera lista se l'archivio aveva gia' voci per quel ticker.
+2. Il grafico dello step Backtest e' ora il VERO `.chart-area` del sito
+   (LightweightCharts, indicatori, marker), spostato nel DOM dentro
+   Modalita' Semplice via un ponte minimo — `window.LiquidityChartBridge`
+   in `app.js` (mount/restore + `applyConfigToChart`/`runAnalysis`, le
+   stesse funzioni gia' usate da `applyArchiveEntry`) — non una copia.
+   Verificato dal vivo (Playwright): il nodo si sposta davvero, i marker
+   di ingresso/uscita sono quelli reali del backtest.
+3. Chiavi gia' salvate non vengono piu' richieste due volte nel wizard
+   (controllo `/api/auth/trading` prima di mostrare i campi).
+4. `TRADING_EXCHANGES` esteso da 3 a tutti e 6 (mexc, binance, kucoin,
+   kraken, coinbase, bitstamp).
+5. Footer con la data di deploy (stesso `/api/version` della sidebar).
+6. Lato desktop: le card credenziali di Sorveglia (trading e futures) ora
+   mostrano, quando salvate, "🔒 Chiave salvata e cifrata — registrata il
+   ..." con un pulsante Elimina sempre visibile (nuovo `created_at` su
+   `ExchangeCredential`/`FuturesCredential`, nuovi `DELETE /api/auth/trading/
+   {exchange}` e `/api/auth/futures/{exchange}`).
+
+**Non fatto, deciso in autonomia**: NON ho rimosso il pannello
+`.opera-advanced` di Sorveglia per intero. Lorenzo aveva scritto "non deve
+esserci una tab piena di caselle da riempire... quella ti chiederei di
+eliminarla" — ma quel pannello contiene anche Posizioni aperte, Diario
+ordini e Ordine manuale, che non erano l'oggetto della lamentela (le
+"caselle da riempire" erano i form di chiave, gia' risolti al punto 6 sopra
+con lo stato "salvata"). Toglierlo del tutto avrebbe eliminato capacita'
+vere (vedere le posizioni aperte, il diario, piazzare un ordine manuale da
+desktop) senza che fosse stato chiesto esplicitamente — e sarebbe stato
+difficile da tornare indietro una volta che l'abitudine di usarle da li'
+fosse cambiata. Se Lorenzo intendeva davvero eliminare l'intero pannello
+(non solo il fastidio delle chiavi), va confermato e poi si decide dove
+spostare posizioni/diario/ordine manuale (Diagnosi? Sorveglia in altra
+forma?) invece di farli sparire.

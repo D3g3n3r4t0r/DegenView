@@ -129,6 +129,7 @@ class ExchangeCredential(BaseModel):
     enabled: bool = False      # whether to auto-execute orders on this exchange
     size_mode: Literal["fixed_usdt", "pct_balance"] = "fixed_usdt"
     size_value: float = 50.0   # USDT amount or percentage (0-100)
+    created_at: float = 0.0    # epoch seconds; set once, when api_key_enc first becomes non-empty
 
 
 # Massimo assoluto di leva consentito ovunque nel sistema, controllato
@@ -160,6 +161,7 @@ class FuturesCredential(BaseModel):
     size_value: float = 50.0
     leverage: int = 1           # default 1 = economicamente equivalente allo spot
     margin_mode: Literal["isolated"] = "isolated"  # mai cross: vedi il piano
+    created_at: float = 0.0     # epoch seconds; set once, when api_key_enc first becomes non-empty
 
 
 class User(BaseModel):

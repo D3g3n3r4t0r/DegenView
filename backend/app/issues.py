@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0064", "Modalita' Semplice: nessun archivio, grafico non reale, pochi exchange, chiavi da rifare ogni volta",
+     "Lorenzo, dopo seed-0062/63: 'vorrei anche che quando sempre in modalita' semplice sia permesso di selezionare la strategia... accedere all'archivio... vedendo tutti i dettagli... esportarli in Excel'; 'il grafico che tu mi mostri nella versione semplificata... deve essere dello stesso tipo di quello raffigurato nel sito originario, le nostre grafiche, non un altro grafico'; 'una volta che uno inserito le API devono sparire... non deve esserci una tab piena di caselle da riempire'; 'ci deve essere tutti gli exchange, non soltanto per i tre'.",
+     "media"),
     ("seed-0063", "Modalita' Semplice visibile anche da desktop",
      "Il bottone 'Modalita' Semplice' compariva nella toolbar desktop, non solo nel menu mobile 'Altro' — ma e' pensata solo per il telefono, su desktop il resto dell'app e' gia' raggiungibile per intero.",
      "bassa"),
