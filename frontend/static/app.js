@@ -1815,6 +1815,54 @@
     node.classList.toggle("error", !!isError);
   }
 
+  // Quando il rifiuto e' solo "l'esecuzione e' spenta per questo exchange"
+  // (kill switch, cred.enabled=false — vedi place_manual_futures_order),
+  // il problema si risolve con un tocco: un bottone qui, non solo il
+  // messaggio, invece di far tornare la persona su alla card giusta a
+  // cercare il toggle "Attivo" (segnalazione 6237708e).
+  function offerFuturesActivation(exchange) {
+    const node = el("futures-order-status");
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "futures-activate-btn";
+    btn.textContent = "Attiva ora";
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      btn.textContent = "Attivo…";
+      try {
+        const cred = getFuturesCredCache(exchange);
+        await fetch("/api/auth/futures", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            exchange,
+            api_key: "", api_secret: "", passphrase: "",
+            enabled: true,
+            size_mode: cred?.size_mode || "fixed_usdt",
+            size_value: cred?.size_value || 50,
+            leverage: cred?.leverage || 1,
+          }),
+        });
+        await loadFuturesCredentials();
+        setFuturesStatus(`Esecuzione attivata per ${exchange.toUpperCase()} — premi di nuovo per inviare l'ordine.`, false);
+      } catch (_e) {
+        btn.disabled = false;
+        btn.textContent = "Attiva ora";
+      }
+    });
+    node.appendChild(document.createTextNode(" "));
+    node.appendChild(btn);
+  }
+
+  // Il PATCH di attivazione deve rimandare size/leva gia' impostati per
+  // quell'exchange, non i default: altrimenti "Attiva ora" azzererebbe in
+  // silenzio una taglia o una leva gia' scelte in precedenza. futuresExchanges
+  // (la cache caricata da loadFuturesCredentials) e' l'unica fonte gia' in
+  // memoria — nessuna richiesta in piu' solo per leggerla.
+  function getFuturesCredCache(exchange) {
+    return (futuresExchanges || []).find((c) => c.exchange === exchange);
+  }
+
   async function submitFuturesOrder() {
     const btn = el("futures-execute-btn");
     btn.disabled = true;
@@ -1835,7 +1883,11 @@
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setFuturesStatus(data.detail || "Ordine rifiutato", true);
+        const detail = data.detail || "Ordine rifiutato";
+        setFuturesStatus(detail, true);
+        if (typeof detail === "string" && detail.includes("disattivata")) {
+          offerFuturesActivation(el("futures-exchange").value);
+        }
       } else {
         setFuturesStatus("Ordine eseguito.", false);
         loadExecutedOrders();

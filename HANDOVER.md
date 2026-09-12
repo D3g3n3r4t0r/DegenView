@@ -833,6 +833,18 @@ chiesto con le sue parole.
   evidenzia l'operazione piu' vicina in un elenco proprio sotto il
   grafico — stessi dati del pulsante "N trade" del Laboratorio, non quel
   pannello spostato (e' pensato per restare incollato ai suoi risultati).
+- **Ordine futures disattivato + Sorveglia incasinata da mobile**
+  (`6237708e`, segnalazione reale da whitekobra@icloud.com, non da
+  Lorenzo): l'errore "Esecuzione futures disattivata per questo exchange"
+  non diceva dove accenderla. Ora nomina l'exchange e, nel form d'ordine
+  futures, aggiunge un pulsante "Attiva ora" accanto al rifiuto — un
+  tocco accende il toggle senza tornare su alla card giusta. Lorenzo,
+  guardando la stessa vista: "da mobile questa vista è veramente
+  incasinata" — le quattro sotto-sezioni del pannello 'Chiavi exchange,
+  posizioni, diario, ordine manuale' (Posizioni, Ordine futures, Trading
+  automatico, Ordine manuale) erano tutte scaricate in un'unica colonna
+  lunghissima; ognuna e' ora un dettaglio proprio, chiuso finche' non
+  serve.
 - **Modalita' Semplice, tocco senza risposta** (`seed-0066`): "quando
   seleziono il ticket il click non produce un'accettazione grafica...
   sembra che non carichi anche se in realta' e' stato selezionato". Aggiunto

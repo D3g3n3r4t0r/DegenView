@@ -3140,6 +3140,8 @@ body {
 .manual-order-status { font-size: .8rem; padding: .35rem .5rem; border-radius: 4px; background: var(--bg-raised, var(--bg-panel)); }
 .manual-order-status.ok { color: var(--bull); }
 .manual-order-status.error { color: var(--bear); }
+.futures-activate-btn { border: 1px solid var(--bear); background: transparent; color: var(--bear); border-radius: 4px; padding: .25rem .6rem; font-size: .78rem; font-weight: 600; cursor: pointer; }
+.futures-activate-btn:disabled { opacity: .6; cursor: default; }
 
 /* Token Sniper now lives at /sniper as its own standalone app (frontend/sniper.html) */
 .tab-link { display: flex; align-items: center; text-decoration: none; }
@@ -3247,6 +3249,19 @@ button.wl-archive-pick:hover { border-color: var(--accent); }
 .opera-advanced > summary::before { content: "▸ "; color: var(--ink-dim); }
 .opera-advanced[open] > summary::before { content: "▾ "; }
 .opera-advanced > summary .risk-badge { margin-left: 6px; }
+
+/* Sotto-sezioni di .opera-advanced (posizioni, futures, trading automatico,
+   ordine manuale): ognuna un dettaglio proprio, chiuso finche' non serve —
+   invece di scaricare tutto in un'unica colonna, che su un telefono era
+   uno scroll enorme senza punti di riferimento (segnalazione di Lorenzo). */
+.opera-sub { border: 1px solid var(--border); border-radius: 6px; margin-top: 10px; background: var(--bg-panel); }
+.opera-sub > summary { cursor: pointer; list-style: none; padding: .6rem .75rem; font-weight: 600; font-size: .88rem; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.opera-sub > summary::-webkit-details-marker { display: none; }
+.opera-sub > summary::before { content: "▸ "; color: var(--ink-dim); font-weight: 400; }
+.opera-sub[open] > summary::before { content: "▾ "; }
+.opera-sub > summary .section-count:not(:empty) { font-family: var(--font-mono); font-size: .75rem; color: var(--ink-dim); font-weight: 400; }
+.opera-sub > summary .trading-auto-badge { margin-left: auto; }
+.opera-sub > .opera-sub-body, .opera-sub > .trading-auto-section { padding: 0 .75rem .75rem; margin-top: 0; }
 .wl-test-btn { padding: .2rem .45rem; border: 1px solid var(--border); border-radius: 4px; background: none; cursor: pointer; font-size: .8rem; }
 .wl-test-btn:hover { background: var(--bg-raised); }
 .strat-stats { color: var(--ink-dim); font-size: .73rem; }

@@ -673,21 +673,28 @@
           </div>
 
           <div id="opera-authenticated" class="hidden">
+            <!-- Ogni sotto-sezione e' un dettaglio proprio, chiuso di default:
+                 prima erano tutte scaricate in un'unica colonna lunghissima
+                 (posizioni + 6 card futures + leva + trading automatico +
+                 diario + ordine manuale, tutto insieme) — su un telefono era
+                 un solo scroll enorme senza punti di riferimento. Ora e' un
+                 piccolo menu di sezioni: si apre solo quella che serve. -->
             <!-- ── Posizioni aperte ── -->
-            <div class="section-title-row">
-              <span class="section-eyebrow">Posizioni aperte</span>
-              <span id="positions-count" class="section-count"></span>
-              <button type="button" id="positions-refresh-btn" class="section-action-btn">Aggiorna</button>
-            </div>
-            <p class="panel-hint">Finche' una posizione a leva resta aperta, la distanza dalla liquidazione e' l'unico numero che conta davvero.</p>
-            <ul id="positions-list" class="positions-list"></ul>
+            <details class="opera-sub">
+              <summary>Posizioni aperte <span id="positions-count" class="section-count"></span></summary>
+              <div class="opera-sub-body">
+                <div class="section-title-row">
+                  <button type="button" id="positions-refresh-btn" class="section-action-btn">Aggiorna</button>
+                </div>
+                <p class="panel-hint">Finche' una posizione a leva resta aperta, la distanza dalla liquidazione e' l'unico numero che conta davvero.</p>
+                <ul id="positions-list" class="positions-list"></ul>
+              </div>
+            </details>
 
             <!-- ── Futures ── -->
-            <div class="trading-auto-section futures-section">
-              <div class="section-title-row trading-auto-header">
-                <span class="section-eyebrow">Ordine futures</span>
-                <span class="trading-auto-badge futures-badge">⚠️ Leva — denaro reale</span>
-              </div>
+            <details class="opera-sub">
+              <summary>Ordine futures <span class="trading-auto-badge futures-badge">⚠️ Leva — denaro reale</span></summary>
+              <div class="trading-auto-section futures-section">
               <p class="panel-hint">Margine isolato, chiusure sempre <code>reduceOnly</code>. Il server rifiuta l'ordine senza conferma esplicita, ricontrolla il tetto di leva e verifica il margine sul saldo vero: la spunta qui sotto e' il primo di tre cancelli, non l'unico.</p>
 
               <div id="futures-credentials-list" class="trading-cred-list"></div>
@@ -772,13 +779,13 @@
                 <button type="button" id="futures-execute-btn" class="mo-execute-btn mo-execute-buy" disabled>APRI LONG</button>
                 <div id="futures-order-status" class="manual-order-status hidden"></div>
               </div>
-            </div>
-            <!-- Trading Automatico -->
-            <div class="trading-auto-section">
-              <div class="section-title-row trading-auto-header">
-                <span class="section-eyebrow">Trading automatico</span>
-                <span class="trading-auto-badge">⚠️ Denaro reale</span>
               </div>
+            </details>
+
+            <!-- Trading Automatico -->
+            <details class="opera-sub">
+              <summary>Trading automatico <span class="trading-auto-badge">⚠️ Denaro reale</span></summary>
+              <div class="trading-auto-section">
               <p class="panel-hint trading-auto-hint">Configura qui le API key con permessi di trading (non di prelievo). Quale strategia puo' usarle si decide dalla tab Sorveglia, ticker per ticker: "Solo alert" o "Trading automatico".</p>
               <div id="trading-credentials-list" class="trading-cred-list"></div>
 
@@ -790,14 +797,13 @@
                 <button type="button" id="journal-refresh-btn" class="section-action-btn">Aggiorna</button>
               </div>
               <ul id="journal-list" class="journal-list"></ul>
-            </div>
+              </div>
+            </details>
 
             <!-- Ordine manuale -->
-            <div class="trading-auto-section">
-              <div class="section-title-row trading-auto-header">
-                <span class="section-eyebrow">Ordine manuale</span>
-                <span class="trading-auto-badge">⚠️ Denaro reale</span>
-              </div>
+            <details class="opera-sub">
+              <summary>Ordine manuale <span class="trading-auto-badge">⚠️ Denaro reale</span></summary>
+              <div class="trading-auto-section">
               <div class="manual-order-form">
                 <!-- Exchange + Pair -->
                 <div class="mo-row">
@@ -855,7 +861,8 @@
 
                 <div id="manual-order-status" class="manual-order-status hidden"></div>
               </div>
-            </div>
+              </div>
+            </details>
           </div>
         </details>
       </div>

@@ -1,5 +1,12 @@
 {
   "_README": "Scritto da Claude, versionato in git, distribuito col deploy. Le chiavi sono gli id delle segnalazioni. Non modificare a mano dall'app: verrebbe sovrascritto al deploy successivo.",
+  "6237708e": {
+    "status": "risolto",
+    "at": 1789216290,
+    "summary": "Il messaggio 'Esecuzione futures disattivata per questo exchange' non diceva dove attivarla. Ora nomina l'exchange ('...per MEXC Futures') e, nel form di ordine futures manuale (Sorveglia → Alert → pannello 'Chiavi exchange...' → Ordine futures), un rifiuto per questo motivo aggiunge subito un pulsante 'Attiva ora' accanto al messaggio: un tocco accende il toggle senza dover tornare su alla card MEXC a cercarlo. La chiave e i suoi altri parametri (size, leva) restano quelli gia' salvati — 'Attiva ora' cambia solo enabled, non li tocca.",
+    "detail": "Verificato dal vivo con Playwright: con una chiave MEXC salvata ma disattivata, l'ordine viene rifiutato con il nuovo messaggio e il pulsante compare; cliccandolo, PATCH /api/auth/futures imposta enabled=true (confermato rileggendo GET /api/auth/futures subito dopo) e lo status si aggiorna invitando a reinviare l'ordine. Nello stesso giro, sistemata anche la vista mobile dell'intero pannello 'Chiavi exchange, posizioni, diario, ordine manuale' (Lorenzo, sulla stessa segnalazione: 'da mobile questa vista è veramente incasinata'): le quattro sotto-sezioni (Posizioni aperte, Ordine futures, Trading automatico, Ordine manuale) erano tutte scaricate in un'unica colonna lunghissima — su un telefono uno scroll enorme senza punti di riferimento. Ognuna e' ora un dettaglio proprio, chiuso finche' non serve: si apre solo quella che interessa. Nessun id o comportamento di salvataggio toccato, solo la struttura di presentazione.",
+    "files": ["backend/app/main.py", "frontend/static/app.js", "frontend/static/style.css", "frontend/index.html"]
+  },
   "seed-0069": {
     "status": "risolto",
     "at": 1789213579,

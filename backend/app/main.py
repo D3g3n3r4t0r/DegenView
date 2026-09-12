@@ -1611,14 +1611,21 @@ async def place_manual_futures_order(body: FuturesOrderRequest, user: User = Dep
     cred = user.futures_credentials.get(body.exchange)
     if not cred:
         raise HTTPException(status_code=400, detail="Credenziali futures non configurate per questo exchange")
+    adapter = futures_registry.get(body.exchange)
     if not cred.enabled:
         # Kill switch: spegnibile senza toccare le chiavi — vale anche per
-        # l'ordine manuale, non solo per l'esecuzione automatica.
-        raise HTTPException(status_code=400, detail="Esecuzione futures disattivata per questo exchange")
+        # l'ordine manuale, non solo per l'esecuzione automatica. Il
+        # messaggio nomina l'exchange e dove si accende, invece di lasciare
+        # che chi legge debba andare a cercarlo da solo (segnalazione
+        # 6237708e: "devi attivare l'esecuzione" — il messaggio prima non
+        # lo diceva).
+        raise HTTPException(
+            status_code=400,
+            detail=f"Esecuzione futures disattivata per {adapter.name} — attivala col toggle \"Attivo\" sulla sua card qui sopra, oppure premi \"Attiva ora\" qui sotto.",
+        )
     api_key, api_secret, passphrase = auth.get_decrypted_futures_credential(user, body.exchange)
     if not api_key or not api_secret:
         raise HTTPException(status_code=400, detail="API key o secret mancanti")
-    adapter = futures_registry.get(body.exchange)
     if adapter.needs_passphrase and not passphrase:
         raise HTTPException(status_code=400, detail=f"{adapter.name} richiede una passphrase, non ancora salvata")
     max_lev = min(MAX_FUTURES_LEVERAGE, adapter.max_leverage)
