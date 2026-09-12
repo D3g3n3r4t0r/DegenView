@@ -1,5 +1,28 @@
 {
   "_README": "Scritto da Claude, versionato in git, distribuito col deploy. Le chiavi sono gli id delle segnalazioni. Non modificare a mano dall'app: verrebbe sovrascritto al deploy successivo.",
+  "seed-0063": {
+    "status": "risolto",
+    "at": 1789200000,
+    "summary": "Rimosso il bottone 'Modalita' Semplice' dalla toolbar desktop (index.html) — resta solo l'ingresso dal menu mobile 'Altro', che gia' esisteva apposta perche' la toolbar desktop e' nascosta sotto i 760px. simple-mode.js non aveva bisogno di nessun cambio: cerca entrambi gli id e scarta quelli assenti con .filter(Boolean).",
+    "detail": "Nessun controllo per-dispositivo aggiunto: la modalita' resta raggiungibile solo tramite l'unico bottone rimasto (mobile), quindi su desktop non compare mai — se in futuro serve un blocco esplicito (es. contro un accesso diretto al pannello), va aggiunto a parte.",
+    "files": ["frontend/index.html", "frontend/static/simple-mode.js"]
+  },
+  "seed-0062": {
+    "status": "risolto",
+    "at": 1789200000,
+    "summary": "Nuova sezione 'Diagnosi' (voce propria in sidebar, pannello a comparsa) per testare una chiave exchange (spot o futures) e vedere saldo/margine PRIMA di fidarsene, piu' un ordine di prova spot minimo — costruita come modulo isolato, come chiesto esplicitamente ('circoscritta... permettere a te di rimettere a posto in poco tempo'). Verificata dal vivo con un browser vero (Playwright, server locale): apertura/chiusura del pannello, cambio spot/futures, elenco exchange futures letto dal registro reale, messaggio corretto quando non c'e' nessuna chiave salvata da provare.",
+    "detail": "backend/app/diagnostics.py (nuovo file, isolato apposta): test_spot_connection() legge il saldo vero da mexc/binance/kucoin/kraken/coinbase/bitstamp riusando le firme HMAC gia' scritte nei moduli di esecuzione esistenti (nessuna duplicazione: import e chiamata delle funzioni private di firma, non riscritte); test_futures_connection() usa adapter.available_margin() gia' esistente per ogni exchange futures nel registro. Aggiunte get_all_balances() a kraken_exec.py e coinbase_exec.py (mancavano un modo di leggere TUTTI i saldi, solo uno per volta esisteva). Nuovo endpoint POST /api/diagnostics/test-connection in main.py (solo lettura, mai un ordine): se non gli si passano chiavi esplicite usa quelle gia' salvate dall'utente, altrimenti prova quelle date senza salvarle. 10 nuovi test in backend/tests/test_diagnostics.py, tutti con trasporto di rete finto. Frontend: nuovo file frontend/static/diagnostics.js (stesso pattern isolato di simple-mode.js, un div vuoto in index.html popolato in JS), voce sidebar propria senza data-area (non fa parte del sistema di tab del cockpit, quindi zero rischio di interferire con quello). L'ordine di prova e' solo spot e usa l'endpoint POST /api/trading/order gia' esistente e in uso altrove (stessa richiesta di conferma esplicita, stesso diario ordini) — i futures rimandano al form completo in Sorveglia, che ha l'anteprima di liquidazione che qui non avrebbe senso riprodurre.",
+    "files": [
+      "backend/app/diagnostics.py",
+      "backend/app/trading/kraken_exec.py",
+      "backend/app/trading/coinbase_exec.py",
+      "backend/app/main.py",
+      "backend/tests/test_diagnostics.py",
+      "frontend/index.html",
+      "frontend/static/diagnostics.js",
+      "frontend/static/style.css"
+    ]
+  },
   "8151937b": {
     "status": "risolto",
     "at": 1789197000,

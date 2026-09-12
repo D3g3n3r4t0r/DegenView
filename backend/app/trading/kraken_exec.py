@@ -36,6 +36,25 @@ def _kraken_headers(
     }
 
 
+async def get_all_balances(api_key: str, api_secret: str) -> dict[str, float]:
+    """Tutti i saldi non nulli dell'account, chiave grezza di Kraken (es.
+    'ZUSD', 'XXBT') — la sezione Diagnosi li normalizza per la UI."""
+    path = "/0/private/Balance"
+    url = KRAKEN_BASE + path
+    nonce = str(int(time.time() * 1000))
+    data: dict[str, str] = {"nonce": nonce}
+    headers = _kraken_headers(api_key, api_secret, path, data)
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(url, data=data, headers=headers)
+    if resp.status_code != 200:
+        raise RuntimeError(f"Kraken Balance request failed with HTTP {resp.status_code}: {resp.text}")
+    body = resp.json()
+    if body.get("error"):
+        raise RuntimeError(f"Kraken Balance API error: {body['error']}")
+    result: dict[str, str] = body.get("result", {})
+    return {k: float(v) for k, v in result.items() if float(v) > 0}
+
+
 async def _get_balance(
     api_key: str,
     api_secret: str,

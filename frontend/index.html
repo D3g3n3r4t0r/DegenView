@@ -39,7 +39,10 @@
     </div>
 
     <div class="toolbar-spacer"></div>
-    <button type="button" id="simple-mode-toggle-btn" title="Passa alla Modalità Semplice">Modalità Semplice</button>
+    <!-- Modalita' Semplice e' pensata per il telefono (grafico+strategia in
+         pochi passaggi): su desktop, dove il resto dell'app e' gia'
+         raggiungibile per intero, non deve esistere ne' essere visibile —
+         resta solo l'ingresso dal menu "Altro" mobile, piu' in basso. -->
     <button type="submit" form="search-form" id="search-btn">Analizza</button>
     <div class="auth-widget">
       <span id="auth-user-email" class="auth-user-email hidden"></span>
@@ -51,6 +54,7 @@
   <div id="error-banner" class="error-banner hidden"></div>
 
   <div id="simple-mode-root" class="hidden"></div>
+  <div id="diagnosi-root" class="hidden"></div>
 
   <main class="cockpit">
     <!-- Navigazione unica: prima c'erano tre sistemi paralleli (rail a
@@ -114,6 +118,15 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/></svg>
           <span>Bacheca</span>
           <span id="sidenav-issues-badge" class="sidenav-badge hidden"></span>
+        </button>
+        <!-- Niente data-area apposta: non fa parte del sistema di tab del
+             cockpit (niente grafico, niente pannello laterale) — un pannello
+             a se', acceso/spento solo da diagnostics.js. Isolamento voluto
+             esplicitamente: se qui dentro qualcosa si rompe, si aggiusta
+             dentro quel file soltanto. -->
+        <button type="button" class="sidenav-item" id="sidenav-diagnosi">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 1 4 4v1.34A5 5 0 0 1 20 12v3a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5v-3a5 5 0 0 1 4-4.9V6a4 4 0 0 1 4-4z"/><path d="M9 12h.01M15 12h.01M9 16h6"/><path d="M4 10h2M18 10h2M4 15h1M19 15h1"/></svg>
+          <span>Diagnosi</span>
         </button>
       </div>
 
@@ -1115,5 +1128,6 @@
   <script src="/static/codemirror.js"></script>
   <script src="/static/app.js"></script>
   <script src="/static/simple-mode.js" defer></script>
+  <script src="/static/diagnostics.js" defer></script>
 </body>
 </html>

@@ -60,6 +60,7 @@ from app.analysis.strategies import AVAILABLE_STRATEGIES, DEFAULT_STRATEGY, buil
 from app.analysis.summary import build_summary, determine_bias
 from app.cache import get_or_fetch
 from app.config import settings
+from app import diagnostics
 from app.live.kraken_stream import kraken_stream_manager
 from app.live.mexc_stream import mexc_stream_manager
 from app.models import (
@@ -1456,6 +1457,46 @@ async def set_futures_credential_endpoint(body: FuturesCredentialRequest, user: 
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"ok": True}
+
+
+class DiagnosticsTestRequest(BaseModel):
+    exchange: str
+    market: Literal["spot", "futures"] = "spot"
+    # Vuoti = usa le chiavi gia' salvate per questo exchange/mercato. Non
+    # vuoti = prova QUESTE senza salvarle — utile per verificare una chiave
+    # nuova prima di scriverla sopra quella che magari funziona ancora.
+    api_key: str = ""
+    api_secret: str = ""
+    passphrase: str = ""
+
+
+@app.post("/api/diagnostics/test-connection")
+async def diagnostics_test_connection(
+    body: DiagnosticsTestRequest, user: User = Depends(auth.get_current_user)
+) -> dict:
+    """Prova solo a LEGGERE il saldo — mai un ordine, mai una scrittura.
+    Pensata per essere il primo passo prima di fidarsi di una chiave, non
+    un sostituto della conferma che ogni ordine reale chiede comunque."""
+    api_key, api_secret, passphrase = body.api_key, body.api_secret, body.passphrase
+    if not api_key and not api_secret:
+        # Nessuna chiave data esplicitamente: prova quella gia' salvata.
+        if body.market == "futures":
+            api_key, api_secret, passphrase = auth.get_decrypted_futures_credential(user, body.exchange)
+        else:
+            api_key, api_secret, passphrase = auth.get_decrypted_credential(user, body.exchange)
+        if not api_key or not api_secret:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Nessuna chiave salvata per {body.exchange} ({body.market}) — inseriscine una per provarla.",
+            )
+    try:
+        if body.market == "futures":
+            margin = await diagnostics.test_futures_connection(body.exchange, api_key, api_secret, passphrase)
+            return {"ok": True, "market": "futures", "exchange": body.exchange, "margin_usdt": margin}
+        balances = await diagnostics.test_spot_connection(body.exchange, api_key, api_secret, passphrase)
+        return {"ok": True, "market": "spot", "exchange": body.exchange, "balances": balances}
+    except diagnostics.DiagnosticsError as exc:
+        return {"ok": False, "market": body.market, "exchange": body.exchange, "error": str(exc)}
 
 
 class FuturesQuoteRequest(BaseModel):
