@@ -806,6 +806,13 @@ chiesto con le sue parole.
   "tante volte" chiede di sistemare le incongruenze fra spot e futures:
   trovata e corretta una vera, la Modalita' Semplice usava tre timeframe
   diversi (backtest, grafico, ottimizzazione) senza dirlo.
+- **Modalita' Semplice, tocco senza risposta** (`seed-0066`): "quando
+  seleziono il ticket il click non produce un'accettazione grafica...
+  sembra che non carichi anche se in realta' e' stato selezionato". Aggiunto
+  un effetto di pressione immediato + spinner sulla riga. Trovato un bug
+  vero dietro il sintomo: `state.ticker` non salvava mai `provider`, quindi
+  l'evidenziazione "selezionato" spariva sempre al primo ridisegno della
+  lista — non era solo lentezza percepita, l'indicatore visivo era rotto.
 
 ## Modalità Semplice (wizard guidato) — branch `claude/simple-mode`
 
