@@ -593,6 +593,78 @@ l'esito reale (non solo la proposta iniziale) e ripubblicato sullo stesso
 link prima del push in produzione. Mockup: `https://claude.ai/code/
 artifact/66038881-c72c-406b-9ea0-4281c41bf438`.
 
+---
+
+### Cambio di metodo: dal ragionare sul codice al guardare un browser vero
+
+Lorenzo, dopo l'ennesimo giro sbagliato sul layout: «comunque una volta
+eri piu bravo, guardavi il tuo browser e facevi le cose bene». Aveva
+ragione — questo ambiente HA Playwright e Chromium pre-installati
+(`/opt/pw-browsers/chromium-1194`), utilizzabili con Python 3.11 di
+sistema (`pip show playwright` → gia' presente, niente da installare).
+Il proxy dell'agente non regge le connessioni websocket-based del browser
+verso l'esterno (`ws_closed_mid_exchange` su qualunque host, non solo il
+sito), ma **in locale funziona perfettamente**: avviare il backend vero
+(`uvicorn app.main:app` dalla cartella `backend`, con
+`REGISTRATION_ALLOWED_EMAILS` esteso via env var per potersi registrare
+un utente di test) e puntarci Playwright su `127.0.0.1` bypassa il proxy
+del tutto (localhost e' sempre escluso). Usato per verificare DAL VIVO,
+prima di scrivere qualunque correzione basata solo su rilettura di CSS/JS.
+
+**Cosa e' saltato fuori aprendo davvero un browser**, dopo due
+segnalazioni fresche di un utente reale («non trova piu' i pair nel Lab»,
+«i pair su ordini spot e futures continuano a non essere trovati») e una
+vecchia mai chiusa («il riempimento automatico appare troppo a destra e
+sparisce dallo schermo»):
+
+1. **`LightweightCharts is not defined`** — se il CDN esterno (unpkg.com)
+   da cui si caricavano il grafico e l'editor CodeMirror non risponde per
+   qualunque motivo, la chiamata sincrona non protetta a
+   `initCharts()`/`initPineEditor()` lanciava un'eccezione dentro la
+   stessa sequenza async di avvio che poi chiama `bindUI`, `bindLabUI`,
+   il caricamento watchlist — un errore li' interrompeva silenziosamente
+   TUTTO quello che doveva agganciarsi dopo, ricerca ticker compresa,
+   ovunque nel sito. Riprodotto bloccando lo script in Playwright:
+   la ricerca smetteva di funzionare esattamente come nelle segnalazioni.
+   Corretto due volte: entrambe le librerie ora vivono in
+   `frontend/static/` (vendorizzate, MIT/Apache 2.0, nessun CDN di terze
+   parti come singolo punto di guasto), e le due chiamate sono dentro un
+   try/catch cosi' un fallimento futuro resta un problema suo.
+2. **Un bug CSS reale, mai notato prima** — `.tab-content.active >
+   .panel` aveva un'animazione d'entrata con `transform: translateY(...)`.
+   Un transform su un antenato crea un nuovo containing block per ogni
+   discendente `position:fixed` per tutta la durata in cui l'animazione
+   resta "attached" (sempre, con `fill-mode: both`) — e i riquadri di
+   suggerimento (`.suggestions`) sono `position:fixed`, calcolati in JS
+   con coordinate assolute rispetto allo SCHERMO. Risultato misurato dal
+   vivo: il riquadro del Lab diceva `left: 1171px` nel suo stile inline,
+   ma `getBoundingClientRect()` lo piazzava a `left: 2330` su uno schermo
+   largo 2000px — completamente fuori bordo, con un raddoppio
+   dell'offset (posizione del pannello + posizione voluta). Corretto
+   togliendo il `transform` dalle animazioni `lae-sali`/`lae-risultato`
+   (resta solo la dissolvenza in opacita', stesso effetto percepito) —
+   fix application-wide, non solo per il Lab: qualunque tab con un
+   dropdown `position:fixed` dentro il proprio pannello di primo livello
+   aveva la stessa falla latente (verificato anche sul campo Pair
+   dell'ordine manuale in Sorveglia).
+3. Aggiunto anche un timeout di 5s per provider dentro `_safe_search()`
+   (backend): senza, un exchange lento o irraggiungibile (rilevante ora
+   che Kraken e' stato aggiunto) avrebbe fatto aspettare — o fallire —
+   la ricerca combinata su TUTTI gli exchange insieme a lui, perche'
+   `asyncio.gather` aspetta ogni gamba fino in fondo.
+
+Tutte e tre le correzioni verificate prima/dopo con lo stesso script
+Playwright locale, non solo dedotte dal codice. Board: `8151937b`,
+`2a7fd905`, `54cbf520` (segnalazioni vere, chiuse), `seed-0061` (la causa
+di fondo, tracciata anche internamente).
+
+**Lezione per la prossima volta**: quando questo ambiente lo permette
+(localhost, non un sito esterno dietro il proxy websocket), guardare
+davvero un browser prima di dichiarare un fix pronto costa pochi minuti
+e trova bug che la sola lettura del codice non avrebbe mai fatto
+emergere — vale la pena farlo sempre, non solo quando qualcuno lo chiede
+esplicitamente dopo un giro sbagliato.
+
 ## Log delle conversazioni
 
 Ordine cronologico, piu' recenti in fondo. Scritto perche' una chat diversa
