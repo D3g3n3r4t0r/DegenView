@@ -1,5 +1,33 @@
 {
   "_README": "Scritto da Claude, versionato in git, distribuito col deploy. Le chiavi sono gli id delle segnalazioni. Non modificare a mano dall'app: verrebbe sovrascritto al deploy successivo.",
+  "8151937b": {
+    "status": "risolto",
+    "at": 1789197000,
+    "summary": "Riprodotto dal vivo (server locale + browser vero, non solo lettura del codice): il riquadro dei suggerimenti nel Lab appariva davvero a x=2330 su uno schermo largo 2000px — completamente fuori bordo — anche se il suo stesso stile inline diceva 'left: 1171px'. Causa: .tab-content.active > .panel (che avvolge ogni pannello, compreso quello del Lab) aveva un'animazione d'entrata con un transform (translateY). Un transform su un antenato crea, per tutta la durata in cui l'animazione resta 'attached' (cioe' sempre, con fill-mode both), un nuovo sistema di coordinate per ogni discendente position:fixed — e i riquadri di suggerimento sono proprio position:fixed, calcolati in JS rispetto allo SCHERMO. Il risultato era una posizione calcolata due volte: una volta giusta in JS, una volta rifatta (sbagliata) dal browser rispetto al pannello invece che allo schermo.",
+    "detail": "frontend/static/style.css: tolto il transform (translateY/scale) dalle animazioni lae-sali e lae-risultato, lasciando solo la dissolvenza in opacita' — stesso effetto d'entrata percepito, senza l'effetto collaterale sul containing block. Non e' un fix solo per il Lab: qualunque tab con un menu a comparsa position:fixed dentro il proprio pannello di primo livello aveva lo stesso problema latente (verificato anche sul campo Pair dell'ordine manuale in Sorveglia). Verificato con un browser vero (Playwright) contro un server locale, prima e dopo la correzione.",
+    "files": ["frontend/static/style.css"]
+  },
+  "2a7fd905": {
+    "status": "risolto",
+    "at": 1789197000,
+    "summary": "Stessa causa di 8151937b nella maggior parte dei casi (il riquadro dei suggerimenti finiva fuori schermo, sembrava che 'non trovasse' nulla mentre i risultati arrivavano regolarmente) — risolta con la stessa correzione. Trovata anche una seconda causa possibile, piu' rara ma piu' grave: se una libreria esterna caricata da CDN (il grafico o l'editor Script Pine) non si carica per qualunque motivo, un errore non gestito bloccava l'intera inizializzazione della pagina, ricerca dei pair compresa, ovunque nel sito. Corretta anche quella, per sicurezza, anche se non e' detto fosse la causa di questo caso specifico.",
+    "detail": "Vedi il dettaglio completo in 8151937b (fix CSS) e in seed-0061 (fix CDN/inizializzazione). Riprodotto e verificato dal vivo con un browser reale contro un server locale prima di pubblicare la correzione.",
+    "files": ["frontend/static/style.css", "frontend/static/app.js", "frontend/index.html", "backend/app/main.py"]
+  },
+  "54cbf520": {
+    "status": "risolto",
+    "at": 1789197000,
+    "summary": "Stessa causa e stessa correzione di 2a7fd905 — il campo ticker del Lab e' proprio quello in cui il bug del riquadro fuori schermo (8151937b) e' stato riprodotto e diagnosticato.",
+    "detail": "Vedi il dettaglio completo in 8151937b e seed-0061.",
+    "files": ["frontend/static/style.css", "frontend/static/app.js", "frontend/index.html", "backend/app/main.py"]
+  },
+  "seed-0061": {
+    "status": "risolto",
+    "at": 1789197000,
+    "summary": "Trovato investigando le segnalazioni sui pair introvabili: index.html caricava il grafico (Lightweight Charts) e l'editor Script Pine (CodeMirror) da unpkg.com. Se uno dei due CDN non risponde, per qualunque motivo (rete dell'utente, blocco, disservizio), la chiamata sincrona non protetta a initCharts()/initPineEditor() lanciava un'eccezione — e siccome gira dentro la stessa sequenza async di avvio che poi chiama bindUI, bindLabUI, il caricamento della watchlist eccetera, un errore li' interrompeva silenziosamente tutto quello che doveva partire dopo. Verificato dal vivo: bloccando quegli script in un browser vero, la ricerca dei pair smetteva di funzionare esattamente come descritto nelle segnalazioni.",
+    "detail": "Entrambe le librerie sono ora servite dal nostro stesso server (frontend/static/lightweight-charts.standalone.production.js, frontend/static/codemirror.js e .css) invece che da unpkg.com — un CDN di terze parti non e' piu' un singolo punto di guasto per funzioni che non c'entrano nulla con lui. In piu', initCharts() e initPineEditor() sono ora dentro un try/catch: se in futuro uno dei due fallisce comunque, resta un problema suo, non affonda piu' il resto del sito. Aggiunto anche un timeout di 5s per provider dentro _safe_search() (backend): senza, un exchange lento o irraggiungibile (rilevante ora che Kraken e' stato aggiunto) avrebbe fatto aspettare — o fallire — la ricerca combinata su TUTTI gli exchange insieme a lui, perche' asyncio.gather aspetta ogni gamba.",
+    "files": ["frontend/index.html", "frontend/static/app.js", "frontend/static/lightweight-charts.standalone.production.js", "frontend/static/codemirror.js", "frontend/static/codemirror.css", "backend/app/main.py"]
+  },
   "seed-0060": {
     "status": "risolto",
     "at": 1789140000,
