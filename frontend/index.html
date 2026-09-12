@@ -753,15 +753,32 @@
                 <div class="mo-size-mode-row">
                   <label class="mo-radio-label"><input type="radio" name="futures-size-mode" value="fixed_usdt" checked /> Margine USDT</label>
                   <label class="mo-radio-label"><input type="radio" name="futures-size-mode" value="pct_balance" /> % saldo</label>
+                  <!-- Quantita' di moneta base (es. 0.05 BTC), non un importo:
+                       serve un'unita' propria e nessuno slider percentuale,
+                       altrimenti "500" scritto qui potrebbe voler dire 500
+                       USDT o 500 BTC a seconda di quale radio e' selezionata
+                       — esattamente la confusione che questo terzo modo
+                       esiste per evitare, non per introdurre. -->
+                  <label class="mo-radio-label"><input type="radio" name="futures-size-mode" value="base_qty" /> Quantità</label>
                 </div>
 
-                <div class="mo-slider-row">
+                <div class="mo-slider-row" id="futures-size-slider-row">
                   <input type="range" id="futures-size-slider" class="mo-slider" min="1" max="100" value="10" step="1" />
                   <div class="mo-slider-val-wrap">
                     <input type="number" id="futures-size-val" class="mo-slider-val-input" value="100" min="1" step="1" />
                     <span class="mo-slider-unit" id="futures-size-unit">USDT</span>
                   </div>
                 </div>
+                <!-- Solo per "Quantità": niente slider (nessuna scala ha senso
+                     per un numero di monete che va da 0.0001 BTC a milioni di
+                     un memecoin), solo il campo libero con l'unita' vera. -->
+                <div class="mo-slider-row hidden" id="futures-qty-row">
+                  <div class="mo-slider-val-wrap" style="margin-left:auto;">
+                    <input type="number" id="futures-qty-val" class="mo-slider-val-input" value="0" min="0" step="any" placeholder="0.00" />
+                    <span class="mo-slider-unit" id="futures-qty-unit">token</span>
+                  </div>
+                </div>
+                <p class="panel-hint hidden" id="futures-qty-hint">Non un importo in dollari: la quantità della moneta stessa (es. 0,05 = 0,05 BTC). L'anteprima qui sotto mostra sempre l'equivalente reale in USDT prima di confermare.</p>
 
                 <!-- Anteprima da /api/trading/futures/quote -->
                 <div id="futures-quote" class="futures-quote">

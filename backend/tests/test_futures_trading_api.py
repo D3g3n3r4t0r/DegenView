@@ -188,3 +188,58 @@ def test_quote_reports_leverage_margin_and_liquidation_price(client, monkeypatch
     assert data["margin_sufficient"] is True
     # Long a leva 5x: prezzo di liquidazione sotto l'entry.
     assert data["liquidation_price"] < 100.0
+
+
+def test_quote_in_base_qty_converts_quantity_to_margin_via_mark_price(client, monkeypatch):
+    """0.5 unita' a 100 di prezzo mark, leva 1x (il tetto server in questo
+    ambiente) -> nozionale 50, margine 50 — non 0.5 USDT come se fosse
+    fixed_usdt, e non una frazione del saldo come pct_balance: base_qty
+    ragiona sempre in quantita' di moneta base."""
+    async def _mark(client_, symbol):
+        return 100.0
+
+    async def _balance(client_, secret):
+        return 500.0
+
+    monkeypatch.setattr(bfe, "get_mark_price", _mark)
+    monkeypatch.setattr(bfe, "get_available_margin_usdt", _balance)
+    resp = client.post("/api/trading/futures/quote", json={
+        "exchange": "binance", "symbol": "BTCUSDT", "side": "BUY",
+        "size_mode": "base_qty", "size_value": 0.5, "leverage": MAX_FUTURES_LEVERAGE,
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["notional"] == pytest.approx(50.0)
+    assert data["margin_used"] == pytest.approx(50.0 / MAX_FUTURES_LEVERAGE)
+    assert data["margin_sufficient"] is True
+
+
+def test_order_in_base_qty_reaches_the_executor_with_its_own_mode_and_value(client, monkeypatch):
+    """Il controllo di margine sufficiente (endpoint /order, prima di
+    chiamare l'executor) deve reggere anche in base_qty: qui il saldo e'
+    ampio apposta, cosi' il test isola solo che size_mode/size_value
+    arrivano intatti a place_futures_order_for_signal, senza essere
+    ricalcolati in USDT lungo la strada."""
+    seen = {}
+
+    async def _balance(client_, secret):
+        return 100000.0  # ampio, cosi' il controllo di margine non blocca l'ordine
+
+    async def _capture(exchange, symbol, signal, size_mode, size_value, leverage, api_key, api_secret, passphrase=""):
+        seen["size_mode"] = size_mode
+        seen["size_value"] = size_value
+        return {"orderId": 1}
+
+    monkeypatch.setattr(bfe, "get_available_margin_usdt", _balance)
+    monkeypatch.setattr(bfe, "get_mark_price", lambda client_, symbol: _async(100.0))
+    monkeypatch.setattr(main, "place_futures_order_for_signal", _capture)
+    body = {"exchange": "binance", "symbol": "BTCUSDT", "side": "BUY",
+            "size_mode": "base_qty", "size_value": 0.03, "leverage": MAX_FUTURES_LEVERAGE, "confirm": True}
+    resp = client.post("/api/trading/futures/order", json=body)
+    assert resp.status_code == 200
+    assert seen["size_mode"] == "base_qty"
+    assert seen["size_value"] == 0.03
+
+
+async def _async(value):
+    return value

@@ -155,8 +155,8 @@ class OkxFutures(FuturesAdapter):
         await self._call("POST", "/api/v5/account/set-leverage", creds, "leva",
                          {"instId": inst, "lever": str(leverage), "mgnMode": "isolated"})
         available = await self.available_margin(creds)
-        notional = self._notional(size_mode, size_value, leverage, available)
         mark = await self.mark_price(inst, creds)
+        notional = self._notional(size_mode, size_value, leverage, available, mark)
         ct_val = await self._contract_value(inst)
         coins = float(self._qty(notional, mark, step=8))
         contracts = coins / ct_val

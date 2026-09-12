@@ -108,6 +108,31 @@ def test_pct_balance_sizes_against_real_available_margin(monkeypatch):
     assert seen_notional["qty"] == pytest.approx(10.0, rel=1e-6)
 
 
+def test_base_qty_sends_the_exact_quantity_typed(monkeypatch):
+    """size_value in base_qty e' gia' la quantita' di moneta base voluta
+    (es. 0.05 BTC): non va ricalcolata da un importo, e la leva non deve
+    moltiplicarla — a differenza di fixed_usdt/pct_balance, dove la leva
+    amplifica il nozionale, qui la quantita' e' esattamente quella scritta."""
+    seen = {}
+
+    def handler(request):
+        if request.url.path == "/fapi/v1/marginType":
+            return httpx.Response(200, json={"msg": "success"})
+        if request.url.path == "/fapi/v1/leverage":
+            return httpx.Response(200, json={"leverage": 10})
+        if request.url.path == "/fapi/v1/premiumIndex":
+            return httpx.Response(200, json={"markPrice": "50000.0"})
+        if request.url.path == "/fapi/v1/order":
+            q = dict(urllib.parse.parse_qsl(request.url.query.decode()))
+            seen["qty"] = float(q["quantity"])
+            return httpx.Response(200, json={"orderId": 4})
+        raise AssertionError(request.url.path)
+
+    monkeypatch.setattr(bfe.httpx, "AsyncClient", _client_factory(handler))
+    _run(bfe.place_futures_order("BTCUSDT", "BUY", "base_qty", 0.05, 10, "key", "secret"))
+    assert seen["qty"] == pytest.approx(0.05, rel=1e-6)
+
+
 def test_close_position_uses_reduce_only_and_the_opposite_side(monkeypatch):
     posted = {}
 
