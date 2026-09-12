@@ -120,7 +120,7 @@ class FuturesAdapter(abc.ABC):
         self,
         symbol: str,
         side: str,          # "BUY" | "SELL"
-        size_mode: str,     # "fixed_usdt" | "pct_balance"
+        size_mode: str,     # "fixed_usdt" | "pct_balance" | "base_qty"
         size_value: float,
         leverage: int,
         creds: FuturesCreds,
@@ -134,7 +134,25 @@ class FuturesAdapter(abc.ABC):
 
     # ── utilita' condivise ────────────────────────────────────────────────
 
-    def _notional(self, size_mode: str, size_value: float, leverage: int, available: float) -> float:
+    def _notional(
+        self, size_mode: str, size_value: float, leverage: int, available: float,
+        mark: float | None = None,
+    ) -> float:
+        """Valore nozionale della posizione, in USDT.
+
+        `base_qty` e' l'unico modo dove size_value e' gia' una quantita' di
+        moneta base (es. 0.05 BTC), non un importo — richiede il prezzo mark
+        per convertirla in nozionale, a differenza degli altri due modi che
+        ragionano gia' in USDT/percentuale. Aggiunto apposta perche' un
+        importo in dollari e una quantita' in token sono facili da scambiare
+        per errore quando si scrive lo stesso numero in un campo che sembra
+        uguale: 500 puo' voler dire 500 USDT o 500 BTC, e la differenza e'
+        dell'ordine dei milioni.
+        """
+        if size_mode == "base_qty":
+            if not mark or mark <= 0:
+                raise FuturesExecutionError("Prezzo di mercato non disponibile per questo simbolo")
+            return size_value * mark
         margin = size_value if size_mode == "fixed_usdt" else available * size_value / 100
         return margin * leverage
 

@@ -1519,7 +1519,7 @@ class FuturesQuoteRequest(BaseModel):
     exchange: str
     symbol: str
     side: Literal["BUY", "SELL"]
-    size_mode: Literal["fixed_usdt", "pct_balance"] = "fixed_usdt"
+    size_mode: Literal["fixed_usdt", "pct_balance", "base_qty"] = "fixed_usdt"
     size_value: float
     leverage: int = 1
 
@@ -1576,7 +1576,16 @@ async def quote_futures_order(body: FuturesQuoteRequest, user: User = Depends(au
     except FuturesExecutionError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    margin_used = body.size_value if body.size_mode == "fixed_usdt" else available * body.size_value / 100
+    if body.size_mode == "fixed_usdt":
+        margin_used = body.size_value
+    elif body.size_mode == "base_qty":
+        # size_value e' gia' una quantita' di moneta base (es. 0.05 BTC):
+        # il margine e' il nozionale a quel prezzo, diviso la leva — non un
+        # importo da moltiplicare come negli altri due modi. Vedi
+        # FuturesAdapter._notional per lo stesso calcolo lato ordine reale.
+        margin_used = (body.size_value * mark) / body.leverage
+    else:
+        margin_used = available * body.size_value / 100
     direction = "long" if body.side == "BUY" else "short"
     # Kraken non ha isolated margin: la liquidazione qui e' comunque
     # calcolata come se lo fosse, perche' e' il numero che dice quanto puo'
@@ -1596,7 +1605,7 @@ class FuturesOrderRequest(BaseModel):
     exchange: str
     symbol: str
     side: Literal["BUY", "SELL"]
-    size_mode: Literal["fixed_usdt", "pct_balance"] = "fixed_usdt"
+    size_mode: Literal["fixed_usdt", "pct_balance", "base_qty"] = "fixed_usdt"
     size_value: float
     leverage: int = 1
     confirm: bool = False  # deve essere vero: nessun ordine futures parte senza conferma esplicita
@@ -1641,7 +1650,24 @@ async def place_manual_futures_order(body: FuturesOrderRequest, user: User = Dep
         available = await adapter.available_margin(creds)
     except FuturesExecutionError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    margin_needed = body.size_value if body.size_mode == "fixed_usdt" else available * body.size_value / 100
+    if body.size_mode == "fixed_usdt":
+        margin_needed = body.size_value
+    elif body.size_mode == "base_qty":
+        # Senza questo ramo, size_value (una quantita' di moneta base, es.
+        # 0.03 BTC) sarebbe caduto nell'else e letto come percentuale del
+        # saldo — 0.03% di qualunque cifra e' minuscolo, quindi il controllo
+        # di margine qui sotto sarebbe passato SEMPRE, indipendentemente dal
+        # nozionale reale dell'ordine. Lo stesso calcolo di
+        # FuturesAdapter._notional, ripetuto qui perche' il controllo
+        # pre-trade e l'esecuzione vera restano deliberatamente due letture
+        # separate del margine (mai una cache condivisa fra le due).
+        try:
+            mark = await adapter.mark_price(symbol, creds)
+        except FuturesExecutionError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        margin_needed = (body.size_value * mark) / body.leverage
+    else:
+        margin_needed = available * body.size_value / 100
     if margin_needed > available:
         raise HTTPException(
             status_code=400,

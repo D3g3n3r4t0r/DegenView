@@ -852,6 +852,24 @@ chiesto con le sue parole.
   vero dietro il sintomo: `state.ticker` non salvava mai `provider`, quindi
   l'evidenziazione "selezionato" spariva sempre al primo ridisegno della
   lista — non era solo lentezza percepita, l'indicatore visivo era rotto.
+- **Ordine futures: quantita' diretta in token** (`seed-0070`): Lorenzo,
+  pensando ad alta voce su un rischio vero — "si rischia dei disastri se
+  uno puo' [inserire] migliaia di dollari... e te li seleziona invece come
+  dollari, come unita' di misura token diventa un delirio" — poi "procedi,
+  in caso analizza con attenzione anche altre strade e rendi professionale
+  questa cosa per i futures". Aggiunto un terzo modo di taglia
+  all'ordine futures manuale, "Quantità" (base_qty), con un campo proprio
+  (niente slider — non ha senso una scala percentuale per un numero di
+  token che va da 0.0001 a milioni) etichettato con l'asset vero del pair.
+  Il paracadute resta l'anteprima gia' obbligatoria: mostra sempre il
+  nozionale/margine reali in USDT prima di confermare, qualunque modo si
+  scelga. Trovato per strada un bug di sicurezza vero: il controllo di
+  margine pre-ordine, senza il nuovo ramo, avrebbe letto una quantita' di
+  token come percentuale del saldo (praticamente zero) e sarebbe passato
+  sempre, indipendentemente dal nozionale reale — corretto nello stesso
+  giro. Deliberatamente non toccato lo spot manuale (manca ancora
+  un'anteprima li', ma costruirla per sei exchange e' un lavoro a se') —
+  segnalato come seguito, non deciso da solo.
 
 ## Modalità Semplice (wizard guidato) — branch `claude/simple-mode`
 

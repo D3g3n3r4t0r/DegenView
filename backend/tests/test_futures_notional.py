@@ -1,0 +1,42 @@
+"""FuturesAdapter._notional() e' condivisa da tutti gli adattatori futures
+(bybit, okx, bitget, kraken, mexc — binance ha la sua copia in
+binance_futures_exec.py, testata a parte). Un test qui solo copre il calcolo
+per tutti insieme, invece di ripeterlo in ogni file di adattatore.
+"""
+
+from __future__ import annotations
+
+import pytest
+
+from app.trading.futures.base import FuturesExecutionError
+from app.trading.futures.kraken import KrakenFutures
+
+adapter = KrakenFutures()
+
+
+def test_fixed_usdt_ignores_available_and_uses_leverage():
+    # 100 USDT di margine, leva 5x = 500 di nozionale, qualunque sia il saldo.
+    assert adapter._notional("fixed_usdt", 100.0, 5, available=99999.0) == pytest.approx(500.0)
+
+
+def test_pct_balance_uses_available_and_leverage():
+    # 20% di 1000 USDT disponibili = 200 di margine, leva 3x = 600 di nozionale.
+    assert adapter._notional("pct_balance", 20.0, 3, available=1000.0) == pytest.approx(600.0)
+
+
+def test_base_qty_is_quantity_times_mark_ignoring_leverage():
+    # 0.05 BTC a 50000 = 2500 di nozionale — la leva non moltiplica una
+    # quantita' gia' data, solo un importo (a differenza degli altri due modi).
+    assert adapter._notional("base_qty", 0.05, 10, available=0.0, mark=50000.0) == pytest.approx(2500.0)
+
+
+def test_base_qty_without_mark_price_fails_loudly():
+    """Un nozionale calcolato senza prezzo sarebbe silenziosamente zero — un
+    ordine 'gratis' non e' un errore piu' innocuo, e' peggio: parte."""
+    with pytest.raises(FuturesExecutionError, match="Prezzo di mercato non disponibile"):
+        adapter._notional("base_qty", 0.05, 10, available=0.0, mark=None)
+
+
+def test_base_qty_with_zero_mark_price_fails_loudly():
+    with pytest.raises(FuturesExecutionError, match="Prezzo di mercato non disponibile"):
+        adapter._notional("base_qty", 0.05, 10, available=0.0, mark=0.0)

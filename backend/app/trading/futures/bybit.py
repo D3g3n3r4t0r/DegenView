@@ -145,8 +145,9 @@ class BybitFutures(FuturesAdapter):
         sym = self.symbol_for(symbol)
         await self._prepare(sym, leverage, creds)
         available = await self.available_margin(creds)
-        notional = self._notional(size_mode, size_value, leverage, available)
-        qty = self._qty(notional, await self.mark_price(sym, creds), step=3)
+        mark = await self.mark_price(sym, creds)
+        notional = self._notional(size_mode, size_value, leverage, available, mark)
+        qty = self._qty(notional, mark, step=3)
         return await self._post("/v5/order/create", {
             "category": "linear", "symbol": sym,
             "side": "Buy" if side == "BUY" else "Sell",

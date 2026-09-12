@@ -163,8 +163,9 @@ class KrakenFutures(FuturesAdapter):
         await self._call("PUT", f"{PREFIX}/leveragepreferences", creds, "leva",
                          {"symbol": sym, "maxLeverage": str(leverage)})
         available = await self.available_margin(creds)
-        notional = self._notional(size_mode, size_value, leverage, available)
-        qty = self._qty(notional, await self.mark_price(sym, creds), step=4)
+        mark = await self.mark_price(sym, creds)
+        notional = self._notional(size_mode, size_value, leverage, available, mark)
+        qty = self._qty(notional, mark, step=4)
         return await self._call("POST", f"{PREFIX}/sendorder", creds, "ordine", {
             "orderType": "mkt", "symbol": sym,
             "side": "buy" if side == "BUY" else "sell", "size": qty,

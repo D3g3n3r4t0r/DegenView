@@ -161,16 +161,23 @@ async def place_futures_order(
         await _set_isolated_margin(client, symbol, api_secret)
         await _set_leverage(client, symbol, leverage, api_secret)
 
+        mark = await get_mark_price(client, symbol)
+        if mark <= 0:
+            raise FuturesExecutionError("Prezzo di mercato non disponibile per questo simbolo")
+
         if size_mode == "fixed_usdt":
             notional = size_value * leverage
+        elif size_mode == "base_qty":
+            # Quantita' di moneta base gia' data (es. 0.05 BTC): niente
+            # conversione da un importo, e' gia' quello che si vuole
+            # comprare — vedi FuturesAdapter._notional per lo stesso
+            # principio sugli altri exchange.
+            notional = size_value * mark
         else:
             available = await get_available_margin_usdt(client, api_secret)
             margin = available * size_value / 100
             notional = margin * leverage
 
-        mark = await get_mark_price(client, symbol)
-        if mark <= 0:
-            raise FuturesExecutionError("Prezzo di mercato non disponibile per questo simbolo")
         qty = notional / mark
         if qty <= 0:
             raise FuturesExecutionError("Quantità calcolata zero o negativa — margine insufficiente")

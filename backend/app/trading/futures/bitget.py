@@ -130,8 +130,9 @@ class BitgetFutures(FuturesAdapter):
         await self._call("POST", "/api/v2/mix/account/set-leverage", creds, "leva",
                          body={**common, "leverage": str(leverage)}, tolerate=("40808",))
         available = await self.available_margin(creds)
-        notional = self._notional(size_mode, size_value, leverage, available)
-        qty = self._qty(notional, await self.mark_price(sym, creds), step=4)
+        mark = await self.mark_price(sym, creds)
+        notional = self._notional(size_mode, size_value, leverage, available, mark)
+        qty = self._qty(notional, mark, step=4)
         return {"data": await self._call("POST", "/api/v2/mix/order/place-order", creds, "ordine",
                                          body={**common, "marginMode": "isolated",
                                                "size": qty, "side": side.lower(),

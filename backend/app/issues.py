@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0070", "Ordine futures manuale: nessun modo di piazzare una quantita' di token diretta senza rischiare di confondere USDT e unita'",
+     "Lorenzo: 'si rischia dei disastri se uno puo' [inserire] migliaia di dollari dentro e se va a pescare in maniera sbagliata e te li seleziona invece come dollari, come unita' di misura token diventa un delirio... stavo pensando alla possibilita' di fargli fare dall'app direttamente in token, ma e' un casino perche' poi hai un'unita' di misura fissa per tutti... bisognerebbe provare a fargli switchare a lui'.",
+     "media"),
     ("seed-0069", "Modalita' Semplice: nessun riferimento al timeframe nello step Backtest/Ottimizza",
      "Lorenzo: 'non trovo il riferimento del timeframe...' — lo step Backtest mostrava solo il ticker, senza dire su quale timeframe la strategia stava lavorando.",
      "bassa"),

@@ -1690,6 +1690,39 @@
     return checked ? checked.value : "fixed_usdt";
   }
 
+  // "Quantità" (base_qty) ha un campo suo, separato dallo slider USDT/%:
+  // stesso numero scritto in caselle diverse a seconda del modo, mai lo
+  // stesso campo reinterpretato — e' la fonte piu' comune di ordini
+  // sbagliati di un fattore mille (500 lette come USDT invece che come
+  // quantita' di un token, o viceversa).
+  function futuresSizeValue() {
+    if (futuresSizeMode() === "base_qty") return Number(el("futures-qty-val").value) || 0;
+    return Number(el("futures-size-val").value) || 0;
+  }
+
+  // Estrae l'asset base dal pair per etichettare il campo "Quantità" con la
+  // sua vera unita' (es. BTCUSDT -> BTC) invece di un generico "token" —
+  // la stessa euristica usata lato server per lo spot (_base_asset).
+  function baseAssetFromSymbol(symbol) {
+    const s = (symbol || "").trim().toUpperCase();
+    for (const quote of ["USDT", "USDC", "BTC", "ETH"]) {
+      if (s.length > quote.length && s.endsWith(quote)) return s.slice(0, -quote.length);
+    }
+    return s || "token";
+  }
+
+  // Mostra il campo giusto per il modo scelto: slider+USDT/% per gli altri
+  // due, solo il numero libero per Quantità — nessuno slider ha una scala
+  // sensata per una quantita' di token, che va da 0.0001 a milioni a
+  // seconda della moneta.
+  function updateFuturesSizeUI() {
+    const isQty = futuresSizeMode() === "base_qty";
+    el("futures-size-slider-row").classList.toggle("hidden", isQty);
+    el("futures-qty-row").classList.toggle("hidden", !isQty);
+    el("futures-qty-hint").classList.toggle("hidden", !isQty);
+    if (isQty) el("futures-qty-unit").textContent = baseAssetFromSymbol(el("futures-symbol").value);
+  }
+
   // Il tetto di leva e se il margine e' davvero isolato dipendono
   // dall'exchange scelto (Kraken non ha isolated — vedi registry.py):
   // aggiorna lo slider e l'avviso quando cambia la tendina.
@@ -1766,7 +1799,7 @@
           symbol,
           side: futuresSide,
           size_mode: futuresSizeMode(),
-          size_value: Number(el("futures-size-val").value) || 0,
+          size_value: futuresSizeValue(),
           leverage: Number(el("futures-leverage").value),
         }),
       });
@@ -1876,7 +1909,7 @@
           symbol: el("futures-symbol").value.trim().toUpperCase(),
           side: futuresSide,
           size_mode: futuresSizeMode(),
-          size_value: Number(el("futures-size-val").value) || 0,
+          size_value: futuresSizeValue(),
           leverage: Number(el("futures-leverage").value),
           confirm: true,
         }),
@@ -2085,6 +2118,7 @@
     valInput.addEventListener("input", queueFuturesQuote);
     el("futures-symbol").addEventListener("input", () => {
       futuresSuggest.resolved = null; // scrivere annulla la scelta precedente
+      if (futuresSizeMode() === "base_qty") el("futures-qty-unit").textContent = baseAssetFromSymbol(el("futures-symbol").value);
       queueFuturesQuote();
       const value = el("futures-symbol").value.trim();
       clearTimeout(futuresSuggestTimer);
@@ -2093,9 +2127,11 @@
     });
     el("futures-symbol").addEventListener("keydown", (e) => futuresSuggest.handleKey(e));
     el("futures-symbol").addEventListener("blur", () => setTimeout(() => futuresSuggest.clear(), 150));
+    el("futures-qty-val").addEventListener("input", queueFuturesQuote);
     document.querySelectorAll('input[name="futures-size-mode"]').forEach((r) => {
       r.addEventListener("change", () => {
         el("futures-size-unit").textContent = futuresSizeMode() === "pct_balance" ? "%" : "USDT";
+        updateFuturesSizeUI();
         queueFuturesQuote();
       });
     });
@@ -2104,6 +2140,7 @@
     el("positions-refresh-btn")?.addEventListener("click", loadPositions);
     el("opera-login-btn")?.addEventListener("click", () => openAuthModal("login"));
 
+    updateFuturesSizeUI();
     renderFuturesQuote();
     updateFuturesExecuteState();
   }

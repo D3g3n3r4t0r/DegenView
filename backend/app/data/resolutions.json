@@ -1,5 +1,26 @@
 {
   "_README": "Scritto da Claude, versionato in git, distribuito col deploy. Le chiavi sono gli id delle segnalazioni. Non modificare a mano dall'app: verrebbe sovrascritto al deploy successivo.",
+  "seed-0070": {
+    "status": "risolto",
+    "at": 1789219487,
+    "summary": "Aggiunto un terzo modo di taglia all'ordine futures manuale: 'Quantità' (base_qty), accanto a 'Margine USDT' e '% saldo' — un campo SUO, non lo stesso numero reinterpretato: selezionandolo lo slider sparisce (nessuna scala percentuale ha senso per una quantita' di token, che va da 0.0001 a milioni a seconda della moneta) e resta solo un campo libero etichettato con l'asset vero estratto dal pair (es. 'BTC' da BTCUSDT), con sotto un avviso esplicito ('Non un importo in dollari: la quantità della moneta stessa'). Il paracadute vero pero' e' che l'anteprima (gia' obbligatoria prima di ogni ordine futures) mostra SEMPRE il nozionale e il margine reali in USDT, qualunque modo si scelga — quindi anche scrivendo la quantita' 'sbagliata' per errore, il numero in dollari che ne risulta si vede prima di confermare, non dopo.",
+    "detail": "Lato server: FuturesAdapter._notional() (base.py, condivisa da bybit/okx/bitget/kraken/mexc) accetta ora un mark price opzionale e calcola il nozionale come quantita'×prezzo per base_qty, invece di margine×leva come negli altri due modi — la leva non amplifica una quantita' gia' data, solo un importo. binance_futures_exec.py (esecuzione separata, non passa da base.py) ha lo stesso ramo. Aggiornati anche gli endpoint /api/trading/futures/quote e /api/trading/futures/order (main.py) per calcolare margin_used/margin_needed allo stesso modo. Trovato e corretto un bug di sicurezza vero mentre lo implementavo: il controllo di margine PRE-ordine in /api/trading/futures/order calcolava margin_needed con lo stesso if/else di prima dell'aggiunta — senza il nuovo ramo, size_value in base_qty (una quantita', es. 0.03 BTC) sarebbe caduto nell'else e letto come PERCENTUALE del saldo (0.03% — praticamente zero), quindi il controllo di margine sufficiente sarebbe passato SEMPRE indipendentemente dal nozionale reale dell'ordine. 3 nuovi test sulla matematica condivisa (test_futures_notional.py), 1 su Binance (quantita' esatta mandata all'ordine, non ricalcolata), 2 sull'endpoint (quote e ordine in base_qty) — 437 test totali passano. Non toccato lo spot manuale: manca del tutto un'anteprima prima di eseguire (a differenza dei futures), e costruirla per sei exchange diversi e' un lavoro a se' — segnalato a Lorenzo come seguito, non deciso da solo.",
+    "files": [
+      "backend/app/trading/futures/base.py",
+      "backend/app/trading/futures/bybit.py",
+      "backend/app/trading/futures/okx.py",
+      "backend/app/trading/futures/bitget.py",
+      "backend/app/trading/futures/kraken.py",
+      "backend/app/trading/futures/mexc.py",
+      "backend/app/trading/binance_futures_exec.py",
+      "backend/app/main.py",
+      "backend/tests/test_futures_notional.py",
+      "backend/tests/test_binance_futures_exec.py",
+      "backend/tests/test_futures_trading_api.py",
+      "frontend/index.html",
+      "frontend/static/app.js"
+    ]
+  },
   "6237708e": {
     "status": "risolto",
     "at": 1789216290,
