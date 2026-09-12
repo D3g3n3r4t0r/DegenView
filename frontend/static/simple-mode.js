@@ -48,6 +48,21 @@
   // self-correcting countdown, never presented as more precise than that.
   const OPT_TYPICAL_S = { fast: 17, stable: 150 };
 
+  // Timeframe scelto una volta sola allo step Strategia e riusato ovunque
+  // dopo — backtest, ottimizzazione, export, watchlist. Prima ogni passo
+  // aveva il suo timeframe (il backtest usava il default del server, il
+  // grafico "1d" fisso, l'ottimizzazione "1d" fisso, la watchlist "1d"
+  // fisso): esattamente il tipo di disallineamento fra cio' che si vede e
+  // cio' che gira davvero di cui Lorenzo si e' lamentato piu' volte
+  // (seed-0007, backtest/ottimizzazione su feed diversi senza dirlo).
+  const SIMPLE_INTERVALS = [
+    { id: "15m", label: "15m" },
+    { id: "1h", label: "1h" },
+    { id: "4h", label: "4h" },
+    { id: "1d", label: "1g" },
+    { id: "1w", label: "1sett" },
+  ];
+
   const state = {
     step: 0,
     query: "",
@@ -57,12 +72,14 @@
     archiveList: [],
     strategies: [],
     strategy: null, // strategy name string
+    interval: "1d", // timeframe su cui la strategia lavora — vedi sopra
     analysis: null, // last /api/analyze response used for the backtest step
     optMode: "stable",
     optJobId: null,
     optPollTimer: null,
     optResult: null, // {params, backtest:{...}, overfitted}
     tradingExchange: TRADING_EXCHANGES[0].id,
+    connTested: false, // esito dell'ultimo test di connessione in questa sessione del wizard
     watchlistEntry: null,
   };
 
@@ -198,6 +215,9 @@
 #simple-mode-root .sm-badge{display:inline-flex;align-items:center;gap:5px;font-family:monospace;font-size:10px;text-transform:uppercase;color:var(--sm-accent);background:rgba(11,143,104,.12);padding:3px 8px;border-radius:20px;margin-bottom:8px;}
 #simple-mode-root .sm-muted{color:var(--sm-ink-faint);font-size:12px;}
 #simple-mode-root .sm-deploy-info{text-align:center;font-family:monospace;font-size:10.5px;color:var(--sm-ink-faint);padding:6px 0 90px;}
+#simple-mode-root .sm-tf-row{display:flex;gap:8px;flex-wrap:wrap;}
+#simple-mode-root .sm-tf-btn{border:1px solid var(--sm-border);background:var(--sm-panel);color:var(--sm-ink);border-radius:20px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer;}
+#simple-mode-root .sm-tf-btn.active{border-color:var(--sm-accent);background:var(--sm-accent);color:#04140e;}
 #simple-mode-root .sm-real-chart-mount{height:440px;border:1px solid var(--sm-border);border-radius:8px;overflow:hidden;margin-bottom:10px;background:var(--sm-panel);display:flex;flex-direction:column;}
 #simple-mode-root .sm-real-chart-mount .chart-area{flex:1;min-height:0;}
 `;
@@ -502,7 +522,9 @@
   <div class="sm-eyebrow">Passo 2 di ${TOTAL_STEPS}</div>
   <h1 class="sm-title">Scegli la strategia</h1>
   <p class="sm-sub">Ogni strategia ragiona in modo diverso su <b>${esc(state.ticker.symbol)}</b>. La vedrai al lavoro sul grafico reale al passo successivo.</p>
-  <div class="sm-strat-grid" id="sm-strat-grid"><div class="sm-muted">Carico le strategie…</div></div>
+  <div class="sm-eyebrow" style="margin-top:4px;">Su quale timeframe deve lavorare?</div>
+  <div class="sm-tf-row" id="sm-tf-row"></div>
+  <div class="sm-strat-grid" id="sm-strat-grid" style="margin-top:14px;"><div class="sm-muted">Carico le strategie…</div></div>
   <div class="sm-ctabar"><div class="sm-ctabar-inner">
     <button class="sm-btn ghost" id="sm-back-btn">Indietro</button>
     <button class="sm-btn primary" id="sm-to-backtest-btn" disabled>Vedi il backtest</button>
@@ -510,6 +532,7 @@
 </main>`;
     document.getElementById("sm-back-btn").addEventListener("click", () => go(1));
     document.getElementById("sm-to-backtest-btn").addEventListener("click", () => go(3));
+    renderTfRow();
     try {
       const strategies = await ensureStrategies();
       state.strategies = strategies;
@@ -517,6 +540,17 @@
     } catch (e) {
       document.getElementById("sm-strat-grid").innerHTML = `<div class="sm-error">${esc(e.message)}</div>`;
     }
+  }
+
+  function renderTfRow() {
+    const row = document.getElementById("sm-tf-row");
+    if (!row) return;
+    row.innerHTML = SIMPLE_INTERVALS.map((tf) =>
+      `<button type="button" class="sm-tf-btn${tf.id === state.interval ? " active" : ""}" data-tf="${tf.id}">${esc(tf.label)}</button>`
+    ).join("");
+    row.querySelectorAll(".sm-tf-btn").forEach((btn) => {
+      btn.addEventListener("click", () => { state.interval = btn.dataset.tf; renderTfRow(); });
+    });
   }
 
   function renderStrategyGrid() {
@@ -538,6 +572,11 @@
   async function stepBacktest() {
     setTopbar("3/" + TOTAL_STEPS, 3 / TOTAL_STEPS);
     const fromArchive = !!state.archiveEntry;
+    // Un solo timeframe per tutta la pipeline: dall'archivio si eredita
+    // quello con cui la voce e' stata misurata (non ha senso "sceglierne"
+    // un altro senza rifare il backtest), da zero e' quello scelto allo
+    // step Strategia.
+    if (fromArchive) state.interval = state.archiveEntry.interval || state.interval;
     document.getElementById("sm-steps").innerHTML = `
 <main class="sm-step active">
   <div class="sm-eyebrow">Passo 3 di ${TOTAL_STEPS}</div>
@@ -558,6 +597,7 @@
       const qs = new URLSearchParams({
         symbol: state.ticker.symbol, asset_type: state.ticker.asset_type,
         exchange: state.ticker.exchange, strategy_name: state.strategy,
+        ltf_interval: state.interval,
       });
       Object.keys(params).forEach((k) => qs.set(`strategy_params.${k}`, params[k]));
       const analysis = await api(`/api/analyze?${qs.toString()}`);
@@ -588,7 +628,7 @@
           assetType: state.ticker.asset_type,
           exchange: state.ticker.exchange,
           symbol: state.ticker.symbol,
-          interval: "1d",
+          interval: state.interval,
           strategyName: state.strategy,
           params,
           backtestParams: fromArchive ? state.archiveEntry.backtest_params : null,
@@ -608,7 +648,7 @@
   function exportBacktestToExcel(strategyParams) {
     const qs = new URLSearchParams({
       symbol: state.ticker.symbol, asset_type: state.ticker.asset_type,
-      exchange: state.ticker.exchange, ltf_interval: "1d", strategy_name: state.strategy,
+      exchange: state.ticker.exchange, ltf_interval: state.interval, strategy_name: state.strategy,
     });
     Object.entries(strategyParams || {}).forEach(([k, v]) => qs.set(k, v));
     const link = document.createElement("a");
@@ -698,7 +738,7 @@
       symbol: state.ticker.symbol, asset_type: state.ticker.asset_type,
       exchange: state.ticker.exchange, strategy_name: state.strategy,
       mode: state.optMode === "fast" ? "random" : "plateau",
-      ltf_interval: "1d",
+      ltf_interval: state.interval,
     });
     document.getElementById("sm-opt-body").innerHTML = `
 <div class="sm-wait">
@@ -811,7 +851,7 @@
       const isSaved = saved.some((c) => c.exchange === ex.id && c.api_key_set);
       opt.className = "sm-exch-opt" + (state.tradingExchange === ex.id ? " active" : "");
       opt.innerHTML = `<div class="sm-exch-badge" style="background:${ex.color}">${ex.letter}</div><div style="font-size:12px;font-weight:600;">${ex.name}</div>${isSaved ? '<div class="sm-muted" style="margin-top:2px;">🔒 salvata</div>' : ""}`;
-      opt.addEventListener("click", () => { state.tradingExchange = ex.id; renderExchGrid(); });
+      opt.addEventListener("click", () => { state.tradingExchange = ex.id; state.connTested = false; renderExchGrid(); });
       grid.appendChild(opt);
     });
     renderExchGrid();
@@ -840,7 +880,7 @@ ${ex.id === "kucoin" ? '<div class="sm-field"><label>Passphrase</label><input id
   }
   async function onExchangeContinue() {
     const saved = (savedCredsCache || []).find((c) => c.exchange === state.tradingExchange);
-    if (saved && saved.api_key_set) { go(6); return; }
+    if (saved && saved.api_key_set) { go(5.5); return; }
     const apiKey = document.getElementById("sm-api-key").value.trim();
     const apiSecret = document.getElementById("sm-api-secret").value.trim();
     const passphrase = document.getElementById("sm-api-passphrase")?.value.trim() || "";
@@ -849,16 +889,163 @@ ${ex.id === "kucoin" ? '<div class="sm-field"><label>Passphrase</label><input id
       return;
     }
     try {
+      // Il processo resta quello ufficiale: la chiave si salva qui, per
+      // davvero, con lo stesso endpoint che usa Sorveglia — il passo
+      // successivo la testa SENZA richiederla di nuovo (vedi
+      // stepTestConnection: api_key/api_secret vuoti = usa quella salvata).
       await api("/api/auth/trading", {
         method: "PATCH",
         body: JSON.stringify({ exchange: state.tradingExchange, api_key: apiKey, api_secret: apiSecret, passphrase, enabled: true, size_mode: "fixed_usdt", size_value: 50 }),
       });
       savedCredsCache = null;
-      go(6);
+      state.connTested = false;
+      go(5.5);
     } catch (e) {
       document.getElementById("sm-exch-error").innerHTML = `<div class="sm-error">${esc(e.message)}</div>`;
       if (e.needsAuth) requireLogin();
     }
+  }
+
+  // ------------------------------------------------------------------
+  // STEP 5.5 — test the just-saved connection: balance + an optional real
+  // manual order, before committing to automatic activation. Lorenzo,
+  // verbatim: "voglio semplicemente... una volta che le ho inserite [le
+  // API], vuoi testarle subito? ... mi permetti sia di visualizzare il
+  // saldo... e di poter fare un ordine quindi manuale". The keys used here
+  // are the ones just saved by onExchangeContinue via the official
+  // PATCH /api/auth/trading flow — never re-entered, never re-asked.
+  // ------------------------------------------------------------------
+  function stepTestConnection() {
+    setTopbar("Test", 5.5 / TOTAL_STEPS);
+    const ex = TRADING_EXCHANGES.find((e) => e.id === state.tradingExchange);
+    document.getElementById("sm-steps").innerHTML = `
+<main class="sm-step active">
+  <div class="sm-eyebrow">Prima di attivare</div>
+  <h1 class="sm-title">Vuoi testare subito ${esc(ex.name)}?</h1>
+  <p class="sm-sub">Un tentativo di connessione con la chiave appena salvata: vedi il saldo vero, e se vuoi puoi provare anche un ordine manuale — cosi' sai che funziona prima di lasciare che sia la strategia a operare da sola.</p>
+  <div id="sm-conn-body"></div>
+  <div class="sm-ctabar"><div class="sm-ctabar-inner">
+    <button class="sm-btn ghost" id="sm-back-btn">Indietro</button>
+    <button class="sm-btn primary" id="sm-conn-continue">Continua</button>
+  </div></div>
+</main>`;
+    document.getElementById("sm-back-btn").addEventListener("click", () => go(5));
+    document.getElementById("sm-conn-continue").addEventListener("click", () => go(6));
+    renderConnPrompt();
+  }
+
+  function renderConnPrompt() {
+    const ex = TRADING_EXCHANGES.find((e) => e.id === state.tradingExchange);
+    document.getElementById("sm-conn-body").innerHTML = `
+<div class="sm-card" style="text-align:center;">
+  <p style="margin:0 0 12px;">Vuoi testare subito la connessione con <b>${esc(ex.name)}</b>?</p>
+  <div style="display:flex;gap:10px;justify-content:center;">
+    <button class="sm-btn primary" id="sm-conn-yes">Sì, testala ora</button>
+    <button class="sm-btn ghost" id="sm-conn-no">Salta il test</button>
+  </div>
+</div>`;
+    document.getElementById("sm-conn-yes").addEventListener("click", runConnectionTest);
+    document.getElementById("sm-conn-no").addEventListener("click", () => go(6));
+  }
+
+  async function runConnectionTest() {
+    const ex = TRADING_EXCHANGES.find((e) => e.id === state.tradingExchange);
+    const body = document.getElementById("sm-conn-body");
+    body.innerHTML = `
+<div class="sm-pulse-wrap" style="padding:20px 10px 6px;">
+  <div class="sm-pulse"><div class="core"></div></div>
+  <p class="sm-muted">Provo la connessione con ${esc(ex.name)}…</p>
+</div>`;
+    try {
+      // api_key/api_secret vuoti = il server usa la chiave appena salvata,
+      // mai una reinserita qui — stesso endpoint gia' usato da Diagnosi.
+      const res = await api("/api/diagnostics/test-connection", {
+        method: "POST",
+        body: JSON.stringify({ exchange: state.tradingExchange, market: "spot", api_key: "", api_secret: "", passphrase: "" }),
+      });
+      if (!res.ok) {
+        state.connTested = false;
+        body.innerHTML = `
+<div class="sm-card">
+  <p class="sm-error" style="margin:0;">✕ ${esc(res.error)}</p>
+  <div style="display:flex;gap:10px;margin-top:10px;">
+    <button class="sm-btn primary" id="sm-conn-retry">Riprova</button>
+    <button class="sm-btn ghost" id="sm-conn-skip">Continua comunque</button>
+  </div>
+</div>`;
+        document.getElementById("sm-conn-retry").addEventListener("click", runConnectionTest);
+        document.getElementById("sm-conn-skip").addEventListener("click", () => go(6));
+        return;
+      }
+      state.connTested = true;
+      const rows = res.balances || [];
+      body.innerHTML = `
+<div class="sm-card">
+  <p class="sm-ok" style="margin:0 0 10px;color:var(--sm-bull);">✓ Connesso a ${esc(ex.name)} — saldo reale:</p>
+  ${rows.length
+      ? `<div class="sm-summary" style="grid-template-columns:repeat(${Math.min(3, rows.length)},1fr);">${rows.slice(0, 6).map((b) => `<div class="sm-stat"><div class="lbl">${esc(b.asset)}</div><div class="val">${fmtNum(b.free)}</div></div>`).join("")}</div>`
+      : `<p class="sm-muted" style="margin:0;">Nessun saldo positivo su questo account.</p>`}
+</div>
+<div class="sm-card" id="sm-order-prompt">
+  <p style="margin:0 0 10px;">Vuoi provare anche un ordine manuale di prova? <span class="sm-muted">(denaro reale, richiede conferma esplicita)</span></p>
+  <button class="sm-btn ghost" id="sm-conn-order-btn">Prova un ordine manuale</button>
+</div>`;
+      document.getElementById("sm-conn-order-btn").addEventListener("click", renderTestOrderForm);
+    } catch (e) {
+      state.connTested = false;
+      body.innerHTML = `<div class="sm-error">${esc(e.message)}</div>`;
+      if (e.needsAuth) requireLogin();
+    }
+  }
+
+  let testOrderSide = "BUY";
+  function renderTestOrderForm() {
+    const box = document.getElementById("sm-order-prompt");
+    box.innerHTML = `
+  <p style="margin:0 0 10px;">Ordine manuale di prova — <b>${esc(state.ticker.asset_type === "crypto" ? state.ticker.symbol : "")}</b></p>
+  <div class="sm-field"><label>Pair</label><input id="sm-test-order-symbol" placeholder="es. BTCUSDT" value="${esc(state.ticker.asset_type === "crypto" ? state.ticker.symbol : "")}"></div>
+  <div style="display:flex;gap:8px;margin-bottom:10px;">
+    <button type="button" class="sm-tf-btn active" id="sm-test-side-buy" style="flex:1;">BUY</button>
+    <button type="button" class="sm-tf-btn" id="sm-test-side-sell" style="flex:1;">SELL</button>
+  </div>
+  <div class="sm-field"><label>USDT</label><input id="sm-test-order-usdt" type="number" value="10" min="1" step="1"></div>
+  <label style="display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:var(--sm-ink-dim);margin-bottom:10px;">
+    <input type="checkbox" id="sm-test-order-confirm" style="margin-top:3px;">
+    <span>Confermo: e' denaro reale, un ordine di prova su ${esc(TRADING_EXCHANGES.find((e) => e.id === state.tradingExchange).name)}.</span>
+  </label>
+  <button class="sm-btn primary" id="sm-test-order-exec" disabled style="width:100%;">Esegui ordine di prova</button>
+  <div id="sm-test-order-result" style="margin-top:8px;"></div>`;
+    testOrderSide = "BUY";
+    const buyBtn = document.getElementById("sm-test-side-buy");
+    const sellBtn = document.getElementById("sm-test-side-sell");
+    const execBtn = document.getElementById("sm-test-order-exec");
+    const confirmBox = document.getElementById("sm-test-order-confirm");
+    buyBtn.addEventListener("click", () => { testOrderSide = "BUY"; buyBtn.classList.add("active"); sellBtn.classList.remove("active"); execBtn.textContent = "Esegui ordine di prova (BUY)"; });
+    sellBtn.addEventListener("click", () => { testOrderSide = "SELL"; sellBtn.classList.add("active"); buyBtn.classList.remove("active"); execBtn.textContent = "Esegui ordine di prova (SELL)"; });
+    confirmBox.addEventListener("change", () => { execBtn.disabled = !confirmBox.checked; });
+    execBtn.addEventListener("click", async () => {
+      const symbol = document.getElementById("sm-test-order-symbol").value.trim().toUpperCase();
+      const out = document.getElementById("sm-test-order-result");
+      if (!symbol) { out.innerHTML = `<div class="sm-error">Pair mancante</div>`; return; }
+      execBtn.disabled = true;
+      out.innerHTML = `<p class="sm-muted">Invio…</p>`;
+      try {
+        await api("/api/trading/order", {
+          method: "POST",
+          body: JSON.stringify({
+            exchange: state.tradingExchange, symbol, side: testOrderSide,
+            size_mode: "fixed_usdt", size_value: parseFloat(document.getElementById("sm-test-order-usdt").value) || 0,
+          }),
+        });
+        out.innerHTML = `<p style="color:var(--sm-bull);">✓ Ordine inviato — vedi il diario ordini in Sorveglia (desktop) per il dettaglio.</p>`;
+        confirmBox.checked = false;
+      } catch (e) {
+        out.innerHTML = `<div class="sm-error">${esc(e.message)}</div>`;
+        if (e.needsAuth) requireLogin();
+      } finally {
+        execBtn.disabled = !confirmBox.checked;
+      }
+    });
   }
 
   // ------------------------------------------------------------------
@@ -874,9 +1061,10 @@ ${ex.id === "kucoin" ? '<div class="sm-field"><label>Passphrase</label><input id
   <p class="sm-sub">Controlla il riepilogo, poi premi Attiva.</p>
   <div class="sm-review-card">
     <div class="sm-review-row"><span class="k">Ticker</span><span class="v">${esc(state.ticker.symbol)}</span></div>
+    <div class="sm-review-row"><span class="k">Timeframe</span><span class="v">${esc(SIMPLE_INTERVALS.find((t) => t.id === state.interval)?.label || state.interval)}</span></div>
     <div class="sm-review-row"><span class="k">Strategia</span><span class="v">${esc(state.strategy)}</span></div>
     <div class="sm-review-row"><span class="k">Ottimizzazione</span><span class="v">${state.archiveEntry ? "dall'archivio" : (state.optResult ? (state.optMode === "fast" ? "Rapida" : "Stabile") : "parametri di default")}</span></div>
-    <div class="sm-review-row"><span class="k">Esecuzione</span><span class="v">${isCrypto ? esc(TRADING_EXCHANGES.find((e) => e.id === state.tradingExchange).name) : "solo avviso (nessun exchange)"}</span></div>
+    <div class="sm-review-row"><span class="k">Esecuzione</span><span class="v">${isCrypto ? esc(TRADING_EXCHANGES.find((e) => e.id === state.tradingExchange).name) + (state.connTested ? " — connessione testata ✓" : "") : "solo avviso (nessun exchange)"}</span></div>
   </div>
   <div class="sm-explain">${isCrypto
       ? `Quando la strategia rileva un segnale su <b>${esc(state.ticker.symbol)}</b>, ricevi un avviso Telegram e, se hai collegato le chiavi exchange, l'app esegue automaticamente l'ordine spot secondo i parametri scelti qui. Puoi disattivare in qualsiasi momento dalla watchlist.`
@@ -887,7 +1075,7 @@ ${ex.id === "kucoin" ? '<div class="sm-field"><label>Passphrase</label><input id
     <button class="sm-btn primary" id="sm-activate-btn">Attiva strategia</button>
   </div></div>
 </main>`;
-    document.getElementById("sm-back-btn").addEventListener("click", () => go(isCrypto ? 5 : 4));
+    document.getElementById("sm-back-btn").addEventListener("click", () => go(isCrypto ? 5.5 : 4));
     document.getElementById("sm-activate-btn").addEventListener("click", onActivate);
   }
 
@@ -919,7 +1107,7 @@ ${ex.id === "kucoin" ? '<div class="sm-field"><label>Passphrase</label><input id
         if (!entry) {
           entry = await api("/api/watchlist", {
             method: "POST",
-            body: JSON.stringify({ symbol: state.ticker.symbol, asset_type: state.ticker.asset_type, exchange: state.ticker.exchange, interval: "1d", on_close: true }),
+            body: JSON.stringify({ symbol: state.ticker.symbol, asset_type: state.ticker.asset_type, exchange: state.ticker.exchange, interval: state.interval, on_close: true }),
           });
         }
         if (state.optResult && state.optResult.params) {
@@ -971,7 +1159,7 @@ ${ex.id === "kucoin" ? '<div class="sm-field"><label>Passphrase</label><input id
   <div class="sm-ctabar"><div class="sm-ctabar-inner"><button class="sm-btn primary" id="sm-restart-btn">Nuova strategia</button></div></div>
 </main>`;
     document.getElementById("sm-restart-btn").addEventListener("click", () => {
-      Object.assign(state, { step: 0, ticker: null, archiveEntry: null, strategy: null, analysis: null, optResult: null, optJobId: null, watchlistEntry: null, query: "" });
+      Object.assign(state, { step: 0, ticker: null, archiveEntry: null, strategy: null, interval: "1d", analysis: null, optResult: null, optJobId: null, connTested: false, watchlistEntry: null, query: "" });
       go(0);
     });
   }
@@ -996,6 +1184,7 @@ ${ex.id === "kucoin" ? '<div class="sm-field"><label>Passphrase</label><input id
     if (step === 3) return stepBacktest();
     if (step === 4) return stepOptimize();
     if (step === 5) return stepExchange();
+    if (step === 5.5) return stepTestConnection();
     if (step === 6) return stepReview();
     if (step === 7) return stepListening();
   }
