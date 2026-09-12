@@ -1101,3 +1101,51 @@ noleggio in una regione non-UE va bene) e il suo indirizzo va messo in
 `deploy/.env` sul server di produzione. Finche' non e' impostato, gli
 ordini futures MEXC restano bloccati come ora — il codice e' pronto a
 usarlo appena c'e'.
+
+### Chiuso — seed-0073 (design "AI slop", pulizia sistemica CSS)
+
+Lorenzo: "tutto il sito sembra fatto da ai slop". Invece di ricontrollare a
+occhio, diagnosticato con `impeccable` (github.com/pbakaus/impeccable, 67.5k
+stelle — verificato prima di eseguirlo, dopo che un primo tentativo di
+Lorenzo di farmelo installare via un link/comando sospetto era stato
+correttamente rifiutato): 145 problemi deterministici su `index.html` e
+`sniper.html`, concentrati in poche categorie sistemiche (testo troppo
+piccolo, striscia colorata spessa su un lato delle card — il tell piu'
+riconoscibile del design generato da AI — bordo sottile+ombra larga,
+contrasto insufficiente nel tema scuro).
+
+Corretto per categoria, non caso per caso: 241 dichiarazioni font-size
+alzate (+ il token `--text-xs`), 14 punti con la striscia laterale rimossa
+o assottigliata, 3 bordi ridondanti tolti dove c'era gia' un'ombra larga,
+contrasto del testo piu' tenue nel tema scuro alzato al minimo WCAG AA
+(calcolato con la formula di luminanza relativa, non a tentativi),
+un'animazione di `width` (causa reflow) sostituita con `transform: scaleX()`
+sulla barra di progresso della Modalita' Semplice. Da 145 a 15 problemi
+residui — quelli rimasti sono scelte deliberate gia' documentate nel codice
+(il serif per i numeri, gli indicatori "live" pulsanti, la voce a em-dash di
+tutto il progetto) o richiedono un'analisi del DOM renderizzato che il tool
+non espone abbastanza in dettaglio (4 istanze di testo lungo in maiuscolo,
+non isolate). Non toccati senza conferma esplicita — sono scelte di stile
+del progetto, non difetti di questa pagina.
+
+Nello stesso filone, Lorenzo ha chiesto di installare "tutti" i repo di una
+lista da un articolo Medium — rifiutato l'installazione cieca (12 progetti
+ignoti, nessun bisogno preciso dichiarato), proposto di analizzarli prima
+se ne indica uno specifico. Nessun repo installato da quella lista.
+
+Verificato dal vivo con Playwright (desktop 1280px e mobile 390px, anonimo e
+autenticato) che nessuna modifica ha rotto il layout. `node --check` su
+tutti i JS toccati, 452 test backend passano (nessuno di questi cambi tocca
+il backend), ruff pulito.
+
+- **Design "AI slop"** (`seed-0073`): Lorenzo, secco: "tutto il sito sembra
+  fatto da ai slop". Diagnosticato con lo strumento open source
+  `impeccable` invece di ricontrollare a occhio (verificato su GitHub prima
+  di usarlo, dopo aver rifiutato un primo tentativo di installazione via
+  link/comando sospetto) — 145 problemi, risolti per categoria (font-size,
+  striscia laterale colorata, bordo+ombra ridondante, contrasto) invece che
+  uno per uno, su sua richiesta esplicita: "fixa tutto occhio ai token, fai
+  efficienza". Sceso a 15 residui, tutti scelte deliberate o a bassa
+  priorita'. Rifiutata anche una richiesta di installare "tutti" i repo di
+  una lista da un articolo Medium — poi chiarita da Lorenzo come "analizza,
+  mica installare alla cieca".

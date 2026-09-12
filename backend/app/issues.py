@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0073", "Il sito sembra 'AI slop': testo minuscolo, bordi/ombre da template generico",
+     "Lorenzo: 'tutto il sito sembra fatto da ai slop'. Scansione con lo strumento impeccable (61 regole deterministiche): 145 problemi, concentrati in pochi pattern sistemici (testo sotto gli 11px funzionali/12px di corpo, bordo colorato spesso su un lato delle card, bordo sottile+ombra larga).",
+     "media"),
     ("seed-0072", "Ordine futures MEXC bloccato da un firewall/CDN, letto erroneamente come permesso mancante",
      "Lorenzo: ordine manuale con 50 USDT rifiutato con una pagina HTML 'Access Denied' di Akamai — il codice la leggeva come errore di chiave. Causa probabile: IP europeo del server negato da MEXC su /order/submit per i derivati.",
      "media"),

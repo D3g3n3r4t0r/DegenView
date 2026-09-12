@@ -136,7 +136,7 @@
 #simple-mode-root .sm-brand{display:flex;align-items:center;gap:8px;font-weight:600;font-size:13px;white-space:nowrap;}
 #simple-mode-root .sm-brand .dot{width:8px;height:8px;border-radius:50%;background:var(--sm-accent);}
 #simple-mode-root .sm-progress-track{flex:1;height:3px;background:var(--sm-sunk);border-radius:2px;overflow:hidden;}
-#simple-mode-root .sm-progress-fill{height:100%;background:var(--sm-accent);border-radius:2px;transition:width .3s;width:0%;}
+#simple-mode-root .sm-progress-fill{height:100%;width:100%;background:var(--sm-accent);border-radius:2px;transition:transform .3s;transform:scaleX(0);transform-origin:left;}
 #simple-mode-root .sm-stepcount{font-family:monospace;font-size:11px;color:var(--sm-ink-faint);white-space:nowrap;}
 #simple-mode-root .sm-exit{border:1px solid var(--sm-border);background:var(--sm-panel);color:var(--sm-ink-dim);border-radius:20px;padding:5px 10px;font-size:11px;cursor:pointer;white-space:nowrap;}
 #simple-mode-root main.sm-step{flex:1;padding:20px 16px 110px;display:none;flex-direction:column;}
@@ -274,7 +274,7 @@ body:has(#simple-mode-root:not(.hidden)) #opt-pill{z-index:600;}
     const bar = document.getElementById("sm-topbar");
     if (frac == null) { bar.style.display = "none"; return; }
     bar.style.display = "flex";
-    document.getElementById("sm-progfill").style.width = (frac * 100) + "%";
+    document.getElementById("sm-progfill").style.transform = `scaleX(${frac})`;
     document.getElementById("sm-stepcount").textContent = stepLabel;
   }
 
