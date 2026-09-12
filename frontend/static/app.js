@@ -3264,6 +3264,10 @@
   // sparire di vista, altrimenti l'unico modo di sapere a che punto e' era
   // tenere aperta una finestra per nove minuti.
   const optJobs = new Map();   // id -> {id, title, sub, state, elapsed, log, seen, error, result, applied}
+  // Quanti giri di polling consecutivi falliti si accettano (503 di un
+  // deploy, un timeout) prima di arrendersi davvero e segnare il lavoro
+  // come fallito lato client — vedi pollOnce().
+  const _POLL_MAX_FAILURES = 5;
   let optViewing = null;       // quale lavoro sta guardando la finestra
   let optTimer = null;
 
@@ -3844,13 +3848,27 @@
 
   // Un lavoro si segue chiedendo solo le righe nuove: `since` e' quante se ne
   // hanno gia', cosi' ogni giro porta le novita' invece del log intero.
+  //
+  // Un intoppo di un solo giro (503 durante un deploy, un timeout di rete)
+  // NON significa che la ricerca sul server sia morta — prima bastava un
+  // giro sfortunato su nove minuti di polling per marcare "fallita" una
+  // ricerca che sul server stava proseguendo tranquilla. Solo un 404 vero
+  // (il job non c'e' piu' — il processo e' stato riavviato e la memoria
+  // persa per davvero) e' un fallimento definitivo; qualunque altro errore
+  // si accetta fino a _POLL_MAX_FAILURES giri consecutivi prima di arrendersi.
   async function pollOnce(job) {
     try {
       const resp = await fetch(`/api/jobs/${job.id}?since=${job.seen}`);
-      if (!resp.ok) {
+      if (resp.status === 404) {
         const body = await readJson(resp).catch(() => ({}));
-        throw new Error(body.detail || `Lavoro non raggiungibile (${resp.status})`);
+        const err = new Error(body.detail || "Lavoro non trovato o scaduto");
+        err.terminal = true;
+        throw err;
       }
+      if (!resp.ok) {
+        throw new Error(`Lavoro non raggiungibile (${resp.status})`);
+      }
+      job.pollFailures = 0;
       const data = await readJson(resp);
       job.seen = data.log_total;
       job.elapsed = data.elapsed_s;
@@ -3889,6 +3907,15 @@
         labEl("lab-status").classList.remove("hidden");
       }
     } catch (err) {
+      job.pollFailures = (job.pollFailures || 0) + 1;
+      if (!err.terminal && job.pollFailures < _POLL_MAX_FAILURES) {
+        // Non definitivo, e non ancora troppi giri persi: il prossimo tick
+        // (fra un secondo, vedi startOptPolling) riprova da solo — niente
+        // scritto nel piede (quello segnala solo stati definitivi: farlo
+        // qui marcherebbe la finestra come "fatta" o "fallita" per un
+        // intoppo che al giro successivo potrebbe gia' essersi risolto).
+        return;
+      }
       job.state = "fallito";
       job.error = err.message || "Errore di rete";
       job.footText = job.error;
@@ -8670,6 +8697,37 @@
       // o un'altra voce) resterebbe applicato in silenzio.
       if (!cfg.backtestParams) state.chartBacktestOverride = null;
       return runAnalysis(symbol);
+    },
+  };
+
+  // Stesso ponte, per la finestra di avanzamento dell'ottimizzazione
+  // (#opt-progress — animazione della ricerca stabile, log reale, pulsante
+  // Ferma gia' cablato su /api/jobs/{id}/cancel). Modalita' Semplice chiama
+  // gia' da sola POST /api/optimize/start (i parametri del suo wizard non
+  // coincidono con quelli del Laboratorio); da qui in poi e' la STESSA
+  // finestra, la STESSA mappa di lavori (optJobs) e lo STESSO polling —
+  // seed-0067, "eredita tutta la logica anche grafica che abbiamo creato
+  // nel sito per ottimizzazione stabile".
+  window.LiquidityOptBridge = {
+    start(jobId, { symbol, strategy, mode, title, sub } = {}) {
+      optJobs.set(jobId, {
+        id: jobId, symbol, strategy, mode,
+        title: title || (mode === "plateau" ? "Ricerca stabile in corso" : "Ottimizzazione in corso"),
+        sub: sub || `${symbol} · ${strategy}`,
+        state: "in corso", elapsed: 0, log: [], seen: 0, seenDone: false,
+      });
+      openOptProgress(jobId);
+      startOptPolling();
+    },
+    // Letto dalla stessa mappa che il polling reale aggiorna — nessuna
+    // seconda chiamata di rete solo per sapere a che punto e'.
+    getState(jobId) {
+      const job = optJobs.get(jobId);
+      if (!job) return null;
+      return { state: job.state, result: job.result, error: job.error };
+    },
+    close() {
+      closeOptProgress();
     },
   };
 
