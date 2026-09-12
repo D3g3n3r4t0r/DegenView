@@ -41,13 +41,6 @@
       steps: ["Su Bitstamp vai in Account → Sicurezza → API Access.", "Crea una chiave con permessi di lettura saldo e piazzamento ordini.", "Incolla chiave e segreto qui sotto."] },
   ];
 
-  // Optimization timing: the backend does not track a real completion
-  // percentage, only elapsed seconds (see jobs.py). These are the same
-  // typical ranges already communicated elsewhere in the app ("Rapida:
-  // 10-25s", "Stabile: 1-5 min") — used here only to drive an honest,
-  // self-correcting countdown, never presented as more precise than that.
-  const OPT_TYPICAL_S = { fast: 17, stable: 150 };
-
   // Timeframe scelto una volta sola allo step Strategia e riusato ovunque
   // dopo — backtest, ottimizzazione, export, watchlist. Prima ogni passo
   // aveva il suo timeframe (il backtest usava il default del server, il
@@ -183,12 +176,6 @@
 #simple-mode-root .sm-stat .val{font-size:18px;font-style:italic;font-family:Georgia,serif;}
 #simple-mode-root .sm-legend{display:flex;gap:14px;justify-content:center;margin-top:8px;font-size:11px;color:var(--sm-ink-dim);}
 #simple-mode-root .sm-legend i{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:5px;}
-#simple-mode-root .sm-wait{display:flex;flex-direction:column;align-items:center;padding:24px 10px;background:var(--sm-panel);border:1px solid var(--sm-border);border-radius:8px;margin-bottom:14px;text-align:center;}
-#simple-mode-root .sm-wait-pct{font-size:42px;font-style:italic;font-family:Georgia,serif;}
-#simple-mode-root .sm-wait-eta{font-family:monospace;font-size:12.5px;color:var(--sm-ink-dim);margin-top:4px;}
-#simple-mode-root .sm-wait-bar-track{width:100%;max-width:280px;height:5px;background:var(--sm-sunk);border-radius:3px;overflow:hidden;margin-top:14px;}
-#simple-mode-root .sm-wait-bar-fill{height:100%;width:0%;background:var(--sm-accent);border-radius:3px;transition:width .3s linear;}
-#simple-mode-root .sm-wait-log{font-family:monospace;font-size:11px;color:var(--sm-ink-faint);margin-top:12px;min-height:32px;}
 #simple-mode-root .sm-exch-grid{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;}
 #simple-mode-root .sm-exch-opt{flex:1 1 28%;min-width:80px;border:1px solid var(--sm-border);background:var(--sm-panel);border-radius:8px;padding:12px 6px;text-align:center;cursor:pointer;}
 #simple-mode-root .sm-exch-opt.active{border-color:var(--sm-accent);box-shadow:0 0 0 1px var(--sm-accent) inset;}
@@ -221,6 +208,12 @@
 #simple-mode-root .sm-badge{display:inline-flex;align-items:center;gap:5px;font-family:monospace;font-size:10px;text-transform:uppercase;color:var(--sm-accent);background:rgba(11,143,104,.12);padding:3px 8px;border-radius:20px;margin-bottom:8px;}
 #simple-mode-root .sm-muted{color:var(--sm-ink-faint);font-size:12px;}
 #simple-mode-root .sm-deploy-info{text-align:center;font-family:monospace;font-size:10.5px;color:var(--sm-ink-faint);padding:6px 0 90px;}
+/* La finestra reale di avanzamento ottimizzazione (#opt-progress, vedi
+   window.LiquidityOptBridge in app.js) vive fuori da #simple-mode-root e
+   normalmente sta sotto (z-index:60) — qui, mentre la Modalita' Semplice
+   e' aperta (z-index:500), deve stare sopra invece che sparire dietro. */
+body:has(#simple-mode-root:not(.hidden)) #opt-progress,
+body:has(#simple-mode-root:not(.hidden)) #opt-pill{z-index:600;}
 #simple-mode-root .sm-tf-row{display:flex;gap:8px;flex-wrap:wrap;}
 #simple-mode-root .sm-tf-btn{border:1px solid var(--sm-border);background:var(--sm-panel);color:var(--sm-ink);border-radius:20px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer;}
 #simple-mode-root .sm-tf-btn.active{border-color:var(--sm-accent);background:var(--sm-accent);color:#04140e;}
@@ -761,17 +754,25 @@
       mode: state.optMode === "fast" ? "random" : "plateau",
       ltf_interval: state.interval,
     });
-    document.getElementById("sm-opt-body").innerHTML = `
-<div class="sm-wait">
-  <div class="sm-wait-pct" id="sm-wait-pct">0%</div>
-  <div class="sm-wait-eta" id="sm-wait-eta">stima in corso…</div>
-  <div class="sm-wait-bar-track"><div class="sm-wait-bar-fill" id="sm-wait-bar"></div></div>
-  <div class="sm-wait-log" id="sm-wait-log">Avvio ottimizzazione…</div>
-</div>`;
+    document.getElementById("sm-opt-body").innerHTML = `<p class="sm-muted">Avvio…</p>`;
     try {
       const resp = await api(`/api/optimize/start?${backtestParams.toString()}`, { method: "POST" });
       state.optJobId = resp.job_id;
-      pollOptJob();
+      // La ricerca gira nella STESSA finestra del sito (animazione della
+      // ricerca stabile, log reale, pulsante "Ferma" gia' cablato) invece
+      // di una riscritta qui — vedi window.LiquidityOptBridge in app.js.
+      if (window.LiquidityOptBridge) {
+        window.LiquidityOptBridge.start(resp.job_id, {
+          symbol: state.ticker.symbol,
+          strategy: state.strategy,
+          mode: state.optMode === "fast" ? "random" : "plateau",
+        });
+        document.getElementById("sm-opt-body").innerHTML = `<p class="sm-muted">La ricerca gira nella finestra qui sopra. Puoi fermarla in qualsiasi momento da li'.</p>`;
+        watchOptBridge();
+      } else {
+        document.getElementById("sm-opt-body").innerHTML = `<div class="sm-error">Finestra di avanzamento non disponibile in questo momento — riprova.</div>`;
+        document.getElementById("sm-opt-cta").style.display = "flex";
+      }
     } catch (e) {
       document.getElementById("sm-opt-body").innerHTML = `<div class="sm-error">${esc(e.message)}</div>`;
       document.getElementById("sm-opt-cta").style.display = "flex";
@@ -779,34 +780,22 @@
     }
   }
 
-  function pollOptJob() {
-    let since = 0;
-    const typical = OPT_TYPICAL_S[state.optMode] || 60;
+  // Nessuna seconda chiamata di rete: LiquidityOptBridge.getState() legge
+  // dalla stessa mappa che il polling reale del sito gia' aggiorna da
+  // solo — qui si controlla solo se e' il momento di far avanzare la guida.
+  function watchOptBridge() {
     clearTimeout(state.optPollTimer);
-    const tick = async () => {
-      try {
-        const job = await api(`/api/jobs/${state.optJobId}?since=${since}`);
-        since = job.log_total;
-        const elapsed = job.elapsed_s || 0;
-        // Honest estimate: elapsed time is real (jobs.py), the "typical"
-        // range is the same figure already shown in the normal UI. Once we
-        // cross it we stop pretending to count down and say so.
-        const pct = Math.min(99, (elapsed / typical) * 100);
-        document.getElementById("sm-wait-pct").textContent = Math.floor(pct) + "%";
-        document.getElementById("sm-wait-bar").style.width = pct + "%";
-        const remaining = typical - elapsed;
-        document.getElementById("sm-wait-eta").textContent = remaining > 2
-          ? `stima: circa ${Math.ceil(remaining)}s rimanenti`
-          : "quasi fatto — può volerci qualche secondo in più del previsto";
-        const lastLog = job.log && job.log.length ? job.log[job.log.length - 1] : null;
-        if (lastLog) document.getElementById("sm-wait-log").textContent = lastLog;
-        if (job.state === "finito") { onOptDone(job); return; }
-        if (job.state === "fallito") { onOptFailed(job.error || "Ottimizzazione fallita"); return; }
-        if (job.state === "annullato") { onOptFailed("Ottimizzazione annullata"); return; }
-        state.optPollTimer = setTimeout(tick, 1200);
-      } catch (e) {
-        onOptFailed(e.message);
-      }
+    const tick = () => {
+      // L'utente ha lasciato questo passo (Indietro, Esci): il lavoro
+      // prosegue sul server per conto suo, ma non c'e' piu' nessuna guida
+      // qui ad aspettarlo — fermare il controllo invece di scrivere in un
+      // #sm-opt-body che non esiste piu'.
+      if (!document.getElementById("sm-opt-body")) return;
+      const st = window.LiquidityOptBridge.getState(state.optJobId);
+      if (st && st.state === "finito") { window.LiquidityOptBridge.close(); onOptDone({ result: st.result }); return; }
+      if (st && st.state === "fallito") { window.LiquidityOptBridge.close(); onOptFailed(st.error || "Ottimizzazione fallita"); return; }
+      if (st && st.state === "annullato") { window.LiquidityOptBridge.close(); onOptFailed("Ottimizzazione annullata."); return; }
+      state.optPollTimer = setTimeout(tick, 800);
     };
     tick();
   }
@@ -819,7 +808,6 @@
   function onOptDone(job) {
     const result = job.result;
     state.optResult = result;
-    document.getElementById("sm-wait-pct") && (document.getElementById("sm-wait-pct").textContent = "100%");
     const bt = result.backtest || {};
     document.getElementById("sm-opt-body").innerHTML = `
 <div class="sm-summary">

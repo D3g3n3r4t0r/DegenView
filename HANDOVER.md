@@ -806,6 +806,19 @@ chiesto con le sue parole.
   "tante volte" chiede di sistemare le incongruenze fra spot e futures:
   trovata e corretta una vera, la Modalita' Semplice usava tre timeframe
   diversi (backtest, grafico, ottimizzazione) senza dirlo.
+- **Modalita' Semplice, ottimizzazione ereditata dal sito** (`seed-0067`):
+  "eredita tutta la logica anche grafica che abbiamo creato nel sito per
+  ottimizzazione stabile... permettimi anche di fermarla". Lo step
+  Ottimizza ora apre la STESSA finestra del Laboratorio (stessa animazione,
+  stesso log, stesso pulsante Ferma) tramite un nuovo ponte
+  (`window.LiquidityOptBridge`), sullo stesso modello di
+  `LiquidityChartBridge`. Trovati e corretti due bug veri per strada: la
+  vecchia barra propria di Modalita' Semplice mostrava "[object Object]"
+  (assegnava l'intera riga di log invece del solo testo), e — piu' serio,
+  e non specifico di Modalita' Semplice — `pollOnce()` in app.js segnava
+  un lavoro "fallito" al primo errore di rete qualsiasi (un 503 durante un
+  deploy incluso), anche se la ricerca sul server proseguiva tranquilla;
+  ora regge fino a 5 giri falliti di fila prima di arrendersi davvero.
 - **Modalita' Semplice, tocco senza risposta** (`seed-0066`): "quando
   seleziono il ticket il click non produce un'accettazione grafica...
   sembra che non carichi anche se in realta' e' stato selezionato". Aggiunto
