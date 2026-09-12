@@ -15,6 +15,7 @@ import json
 import httpx
 import pytest
 
+from app.trading.futures import mexc as mexc_module
 from app.trading.futures.base import FuturesCreds, FuturesExecutionError
 from app.trading.futures.mexc import MexcFutures
 
@@ -35,6 +36,34 @@ def _run(coro):
 
 def _ok(data):
     return httpx.Response(200, json={"success": True, "code": 0, "data": data})
+
+
+def test_no_proxy_env_var_means_direct_call(monkeypatch):
+    monkeypatch.delenv("MEXC_FUTURES_PROXY", raising=False)
+    assert mexc_module._proxy() is None
+
+
+def test_proxy_env_var_is_read_and_reaches_the_client(monkeypatch):
+    """Un IP europeo puo' essere bloccato da MEXC su /order/submit (blocco
+    di rete, non di chiave — vedi il commento in cima al modulo). La via
+    scelta e' instradare solo questo exchange attraverso un proxy fuori UE,
+    impostato con questa env var — verificato qui che arriva davvero al
+    client httpx, non solo che la funzione la legge."""
+    monkeypatch.setenv("MEXC_FUTURES_PROXY", "http://example-proxy:8080")
+    assert mexc_module._proxy() == "http://example-proxy:8080"
+
+    seen_kwargs = {}
+    real_client = httpx.AsyncClient
+
+    def spy(*args, **kwargs):
+        seen_kwargs.update(kwargs)
+        kwargs.pop("proxy", None)
+        kwargs["transport"] = httpx.MockTransport(lambda r: _ok({"fairPrice": 50000}))
+        return real_client(*args, **kwargs)
+
+    monkeypatch.setattr(httpx, "AsyncClient", spy)
+    _run(MexcFutures().mark_price("BTCUSDT", CREDS))
+    assert seen_kwargs.get("proxy") == "http://example-proxy:8080"
 
 
 def test_symbol_is_translated_to_the_mexc_form():

@@ -1062,3 +1062,42 @@ non cercare un bug che non c'e'.
   1x qui (voluto, "in leva1x... resta a 1x SEMPRE"), stesso pair stessa
   formula. Lorenzo ha verificato di persona: "hai ragione tu, serve 35.20
   usdt" — nessun bug, il messaggio d'errore era gia' corretto.
+- **Blocco di rete MEXC futures** (`seed-0072`): Lorenzo, dopo il tetto di
+  leva: "abbiamo provato con 50 usdt e ottenuto questo errore" con incollata
+  una pagina Akamai "Access Denied" che il codice leggeva come permesso
+  mancante. Chiesto come procedere, Lorenzo ha scelto "instrada MEXC
+  futures fuori UE" — aggiunta la env var `MEXC_FUTURES_PROXY`, non ancora
+  configurata in produzione (serve un proxy vero, non procurabile da qui).
+
+### Aperto — seed-0072 (blocco di rete MEXC futures, serve un proxy fuori UE)
+
+Dopo aver chiarito il tetto di leva (sopra), Lorenzo ha provato un ordine
+manuale da 50 USDT su MEXC futures e ha incollato l'errore esatto: una
+pagina HTML "Access Denied" di Akamai/Edgesuite, non una risposta di MEXC.
+Il codice leggeva "permission" dentro quel testo e lo traduceva (sbagliando
+di nuovo) in "manca il permesso della chiave" — corretto: `explain()` in
+`base.py` ora riconosce una pagina di blocco CDN (contiene "access denied" +
+"edgesuite"/"akamai" dentro tag HTML) PRIMA di cercare le parole chiave
+generiche, e dice esplicitamente che e' un blocco di rete, non un problema
+di chiave.
+
+Causa probabile della richiesta bloccata: coerente con quanto il codice
+stesso dice da mesi (`registry.py`: "MEXC non ha licenza UE per i
+derivati... aggiunto su richiesta esplicita di Lorenzo, che ha scelto
+sapendolo"), l'IP europeo del server (Hetzner, Germania) viene negato da
+MEXC specificamente su `/order/submit` — le chiamate di sola lettura
+(prezzo, saldo) probabilmente passano, l'invio ordine no.
+
+Chiesto a Lorenzo come procedere fra "prova comunque", "instrada fuori UE" e
+"lascia perdere MEXC futures" — ha scelto **instradare fuori UE**. Aggiunta
+la capacita' lato codice: `MEXC_FUTURES_PROXY` (env var, vuota di default =
+comportamento invariato) instrada le sole chiamate a MEXC futures
+attraverso un proxy/VPS scelto da lui — nessun altro exchange futures ne
+risente. Documentata in `deploy/.env.example`.
+
+**Non fatto, non posso farlo da qui**: procurare e configurare il proxy
+vero. Serve un server/proxy fuori UE (Lorenzo decide dove — un VPS a
+noleggio in una regione non-UE va bene) e il suo indirizzo va messo in
+`deploy/.env` sul server di produzione. Finche' non e' impostato, gli
+ordini futures MEXC restano bloccati come ora — il codice e' pronto a
+usarlo appena c'e'.
