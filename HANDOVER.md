@@ -966,3 +966,60 @@ usava "1d" fisso, l'ottimizzazione un altro "1d" fisso ancora). Aggiunto un
 selettore di timeframe allo step Strategia, un solo `state.interval` usato
 ovunque dopo. Verificato dal vivo (log del server) che backtest e
 ottimizzazione arrivano davvero con lo stesso intervallo.
+
+### Seguito — seed-0071 (tetto per strategia, % saldo su MEXC)
+
+Filone nato da una lunga spiegazione vocale di Lorenzo sul rischio di usare
+importi fissi per il trading automatico ("se io devo fare ordini
+frammentati non c'e' verso che funzioni [con importo fisso]... l'unico modo
+e' fare con una percentuale del saldo"), ma con un problema vero quando piu'
+strategie condividono lo stesso exchange: "io magari voglio fare 10 ordini
+da 500 dollari l'uno con il bot, ma se lui pesca con la percentuale e'
+finita". Soluzione concordata nel dialogo: tenere la % di saldo com'e' (mai
+guardare la quantita' di token), ma lasciare impostare un **tetto massimo in
+USDT** per singola strategia al momento di attivare l'operativa automatica —
+non un importo fisso che sostituisce la percentuale, un limite sopra di
+essa. Punto fermo ribadito piu' volte da Lorenzo: la chiusura di una
+posizione (incluso un flip) deve sempre chiudere per intero, il tetto non
+deve mai poterla toccare, e se un flip si riapre con meno saldo di prima
+"non deve accadere l'errore" — il sistema deve riadattarsi da solo.
+
+Implementato: `WatchlistEntry.size_cap_usdt` (dict per strategia) +
+`PATCH /api/watchlist/{id}/size_cap`, propagato come `max_usdt` opzionale
+attraverso `executor.py`, tutti i 5 moduli spot e tutti i 6 adattatori
+futures — applicato SOLO lato ingresso/BUY, mai su `close_position` o sul
+lato SELL (che su alcuni segnali e' una chiusura mascherata). UI: il tetto
+si chiede nel flusso di attivazione ("Anche operazioni automatiche" →
+tetto facoltativo prima di scegliere la strategia) e resta modificabile
+sotto ogni strategia gia' attiva in Sorveglia.
+
+Nello stesso giro, risolto anche un secondo report separato di Lorenzo: "%
+saldo non funziona su MEXC". Verificato via documentazione ufficiale MEXC
+(non supposizione) che l'endpoint di lettura saldo richiede un permesso
+`SPOT_ACCOUNT_READ` distinto da quello di trading — una chiave con solo
+trading fa fallire silenziosamente ogni ordine a percentuale (che deve
+leggere il saldo) mentre l'importo fisso continua a funzionare, spiegando
+esattamente il sintomo riportato. Aggiunto un messaggio d'errore specifico
+per questo caso in `binance_exec.py` invece del generico "no permission".
+
+Verificato dal vivo: endpoint size_cap via curl (persistenza, azzeramento),
+campo tetto su strategia gia' attiva via Playwright (valore iniziale letto
+correttamente, modifica salvata e confermata rileggendo la watchlist). Non
+riverificato dal vivo il tetto durante l'attivazione di un ticker nuovo
+tramite browser (il resto della UI di attivazione — autocomplete pair — non
+e' cambiato da questo lavoro), ma la stessa funzione `stepCap()` e la stessa
+chiamata PATCH sono usate in entrambi i percorsi. 445 test totali passano,
+ruff pulito.
+
+## Log delle conversazioni (continua)
+
+- **Tetto per strategia + % saldo su MEXC** (`seed-0071`): Lorenzo, voce
+  lunga: "io magari voglio fare 10 ordini da 500 dollari l'uno con il bot,
+  ma se lui pesca con la percentuale e' finita... l'importo massimo...
+  preinserito in fase di allestimento della strategia prima di attivare
+  l'alert... per la chiusura ovviamente comando close position... senza
+  stare a guardare controvalori, semplicemente la chiude". Poi, separato:
+  "voglio usare la % del saldo per gli ordini automatici... pero' sembra
+  non funzionare su mexc.. verifica se lo accetta". Chiuso con "sistema fai
+  tutto tu, mi fido" — implementato tetto per strategia (mai sulle
+  chiusure) e diagnosticato/segnalato il permesso mancante su MEXC.

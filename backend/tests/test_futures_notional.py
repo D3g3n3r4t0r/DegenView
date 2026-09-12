@@ -40,3 +40,18 @@ def test_base_qty_without_mark_price_fails_loudly():
 def test_base_qty_with_zero_mark_price_fails_loudly():
     with pytest.raises(FuturesExecutionError, match="Prezzo di mercato non disponibile"):
         adapter._notional("base_qty", 0.05, 10, available=0.0, mark=0.0)
+
+
+def test_capped_clamps_notional_to_the_max():
+    # Tetto per singolo ingresso: 600 di nozionale con tetto 200 diventa 200.
+    assert adapter._capped(600.0, 200.0) == pytest.approx(200.0)
+
+
+def test_capped_leaves_notional_untouched_when_below_the_max():
+    assert adapter._capped(150.0, 200.0) == pytest.approx(150.0)
+
+
+def test_capped_with_no_max_is_a_noop():
+    # 0/None significano "nessun tetto" — vedi WatchlistEntry.size_cap_usdt.
+    assert adapter._capped(600.0, None) == pytest.approx(600.0)
+    assert adapter._capped(600.0, 0.0) == pytest.approx(600.0)

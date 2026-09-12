@@ -1,5 +1,34 @@
 {
   "_README": "Scritto da Claude, versionato in git, distribuito col deploy. Le chiavi sono gli id delle segnalazioni. Non modificare a mano dall'app: verrebbe sovrascritto al deploy successivo.",
+  "seed-0071": {
+    "status": "risolto",
+    "at": 1789222862,
+    "summary": "Aggiunto un tetto (in USDT) impostabile per singola strategia/ticker, che limita quanto puo' valere un SINGOLO ordine automatico di ingresso — senza cambiare il fatto che la taglia resta calcolata in % del saldo (o importo fisso) della credenziale exchange, condivisa da tutte le strategie. Il tetto si imposta nel flusso di attivazione, prima di accendere l'operativa automatica ('Tetto massimo per singolo ordine di ingresso, facoltativo'), e resta modificabile dopo, sotto ogni strategia gia' attiva in Sorveglia. Vuoto/0 = nessun tetto, comportamento di sempre. Si applica SOLO agli ingressi: le chiusure (close_position) chiudono sempre per intero, mai limitate da questo — inclusi i flip, dove prima si chiude tutto e solo la riapertura nella nuova direzione rispetta il tetto. Separatamente: diagnosticato (documentazione ufficiale MEXC) che '% saldo non funziona su MEXC' e' quasi certamente una chiave API senza il permesso SPOT_ACCOUNT_READ (distinto dal permesso di trading) — serve per leggere il saldo, passo che l'importo fisso salta del tutto. Aggiunto un messaggio d'errore specifico per questo caso invece del generico 'no permission'.",
+    "detail": "Nuovo campo WatchlistEntry.size_cap_usdt (dict per strategia) e endpoint PATCH /api/watchlist/{id}/size_cap. Il tetto viaggia come parametro max_usdt opzionale attraverso tutta la catena di esecuzione: executor.py (place_order_for_signal/place_futures_order_for_signal, applicato solo lato BUY/entry, mai lato SELL/close — un SELL qui puo' essere sia un entry_short sintetico sia un vero exit_long, e limitarlo rischierebbe di lasciare aperta meta' di una chiusura); i 5 moduli spot (binance_exec include mexc, kucoin_exec, kraken_exec, coinbase_exec, bitstamp_exec) clampano l'importo lato buy prima di mandarlo; i 6 adattatori futures (bybit/okx/bitget/kraken/mexc/binance) usano il nuovo FuturesAdapter._capped(notional, max_usdt), chiamato solo da place_order, mai da close_position. Il ciclo di controllo in main.py legge entry.size_cap_usdt.get(strategy_name) e lo passa a entrambe le chiamate di esecuzione; i messaggi Telegram di ordine eseguito ora indicano il tetto quando applicato. Lato MEXC: due nuove voci in binance_exec._HINTS per i codici 'no authority'/'no permission to access the endpoint' che spiegano il permesso di lettura saldo mancante. Aggiunti test: FuturesAdapter._capped (3 casi), endpoint PATCH size_cap (persistenza, azzeramento, validazione, per-strategia-non-per-entry) — 445 test totali passano, ruff pulito. Verificato dal vivo: impostare/modificare il tetto su una strategia gia' attiva salva subito (PATCH osservato via rete), il valore persiste dopo reload.",
+    "files": [
+      "backend/app/models.py",
+      "backend/app/watchlist.py",
+      "backend/app/main.py",
+      "backend/app/trading/executor.py",
+      "backend/app/trading/binance_exec.py",
+      "backend/app/trading/bitstamp_exec.py",
+      "backend/app/trading/kucoin_exec.py",
+      "backend/app/trading/kraken_exec.py",
+      "backend/app/trading/coinbase_exec.py",
+      "backend/app/trading/binance_futures_exec.py",
+      "backend/app/trading/futures/base.py",
+      "backend/app/trading/futures/bybit.py",
+      "backend/app/trading/futures/okx.py",
+      "backend/app/trading/futures/bitget.py",
+      "backend/app/trading/futures/kraken.py",
+      "backend/app/trading/futures/mexc.py",
+      "backend/app/trading/futures/binance.py",
+      "backend/tests/test_futures_notional.py",
+      "backend/tests/test_watchlist_size_cap.py",
+      "frontend/static/app.js",
+      "frontend/static/style.css"
+    ]
+  },
   "seed-0070": {
     "status": "risolto",
     "at": 1789219487,

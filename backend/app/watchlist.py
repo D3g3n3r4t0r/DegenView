@@ -185,6 +185,24 @@ def set_auto_trade(entry_id: str, strategy_name: str, enabled: bool) -> Watchlis
     return updated
 
 
+def set_size_cap(entry_id: str, strategy_name: str, cap_usdt: float | None) -> WatchlistEntry | None:
+    """cap_usdt None o <= 0 rimuove il tetto (torna al comportamento di
+    sempre: usa il size_mode/size_value della credenziale exchange senza
+    limiti aggiuntivi)."""
+    entry = _entries.get(entry_id)
+    if entry is None:
+        return None
+    caps = dict(entry.size_cap_usdt)
+    if cap_usdt and cap_usdt > 0:
+        caps[strategy_name] = cap_usdt
+    else:
+        caps.pop(strategy_name, None)
+    updated = entry.model_copy(update={"size_cap_usdt": caps})
+    _entries[entry_id] = updated
+    _save()
+    return updated
+
+
 def set_market(entry_id: str, strategy_name: str, market: str) -> WatchlistEntry | None:
     entry = _entries.get(entry_id)
     if entry is None:

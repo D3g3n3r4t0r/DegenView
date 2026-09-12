@@ -49,6 +49,7 @@ async def place_order(
     api_key: str,
     api_secret: str,
     passphrase: str,
+    max_usdt: float | None = None,
 ) -> dict:
     base = _base_asset(symbol)
 
@@ -74,6 +75,11 @@ async def place_order(
                 funds_or_size = free * size_value / 100
         else:
             funds_or_size = size_value
+
+        # Tetto per singolo ingresso — solo lato buy (funds, in USDT), mai
+        # lato sell (size, in moneta base): vedi place_order_for_signal.
+        if side == "buy" and max_usdt:
+            funds_or_size = min(funds_or_size, max_usdt)
 
         if funds_or_size <= 0:
             raise RuntimeError("Quantità calcolata zero o negativa — saldo insufficiente")

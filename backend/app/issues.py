@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0071", "Trading automatico: nessun tetto per strategia, e % saldo non funzionava su MEXC",
+     "Lorenzo (voce): 'io magari voglio fare 10 ordini da 500 dollari l'uno con il bot, ma se lui pesca con la percentuale e' finita' — la credenziale exchange (size_mode/size_value) e' UNA sola, condivisa da tutte le strategie automatiche che ci operano sopra, quindi non basta a limitare quanto rischia ciascuna. Separatamente: 'voglio usare la % del saldo per gli ordini automatici... pero' sembra non funzionare su mexc'.",
+     "media"),
     ("seed-0070", "Ordine futures manuale: nessun modo di piazzare una quantita' di token diretta senza rischiare di confondere USDT e unita'",
      "Lorenzo: 'si rischia dei disastri se uno puo' [inserire] migliaia di dollari dentro e se va a pescare in maniera sbagliata e te li seleziona invece come dollari, come unita' di misura token diventa un delirio... stavo pensando alla possibilita' di fargli fare dall'app direttamente in token, ma e' un casino perche' poi hai un'unita' di misura fissa per tutti... bisognerebbe provare a fargli switchare a lui'.",
      "media"),

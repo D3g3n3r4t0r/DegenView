@@ -137,6 +137,7 @@ async def place_order(
     size_value: float,
     api_key: str,
     api_secret: str,
+    max_usdt: float | None = None,
 ) -> dict:
     """Place a market order on Coinbase Advanced Trade.
 
@@ -169,12 +170,17 @@ async def place_order(
     # Determine order size field and value
     if side == "BUY":
         if size_mode == "fixed_usdt":
-            quote_size = str(size_value)
+            quote_amount = size_value
         else:  # pct_balance
             # Determine quote currency from product_id (part after the dash)
             quote_currency = product_id.split("-")[1]
             usdt_balance = await _get_balance(api_key, api_secret, quote_currency)
-            quote_size = str(usdt_balance * size_value / 100.0)
+            quote_amount = usdt_balance * size_value / 100.0
+        # Tetto per singolo ingresso — solo lato buy (quote_size, in USDT),
+        # mai lato sell (base_size, in moneta base): vedi place_order_for_signal.
+        if max_usdt:
+            quote_amount = min(quote_amount, max_usdt)
+        quote_size = str(quote_amount)
 
         order_config: dict = {"market_market_ioc": {"quote_size": quote_size}}
 

@@ -26,6 +26,7 @@ async def place_futures_order_for_signal(
     api_key: str,
     api_secret: str,
     passphrase: str = "",
+    max_usdt: float | None = None,
 ) -> dict:
     """Separato da place_order_for_signal() apposta: mai un parametro
     is_futures su quella funzione, per lo stesso principio di isolamento
@@ -50,11 +51,11 @@ async def place_futures_order_for_signal(
     if t in ("flip_to_long", "flip_to_short"):
         await adapter.close_position(symbol, creds)
         side = "BUY" if t == "flip_to_long" else "SELL"
-        return await adapter.place_order(symbol, side, size_mode, size_value, leverage, creds)
+        return await adapter.place_order(symbol, side, size_mode, size_value, leverage, creds, max_usdt=max_usdt)
     if t == "entry_long":
-        return await adapter.place_order(symbol, "BUY", size_mode, size_value, leverage, creds)
+        return await adapter.place_order(symbol, "BUY", size_mode, size_value, leverage, creds, max_usdt=max_usdt)
     if t == "entry_short":
-        return await adapter.place_order(symbol, "SELL", size_mode, size_value, leverage, creds)
+        return await adapter.place_order(symbol, "SELL", size_mode, size_value, leverage, creds, max_usdt=max_usdt)
     return {"skipped": True, "reason": "no-op signal type"}
 
 
@@ -67,28 +68,36 @@ async def place_order_for_signal(
     api_key: str,
     api_secret: str,
     passphrase: str = "",
+    max_usdt: float | None = None,
 ) -> dict:
-    """Map signal type to BUY/SELL and call the right exchange executor."""
+    """Map signal type to BUY/SELL and call the right exchange executor.
+
+    max_usdt e' un tetto per singolo ordine, applicato SOLO lato BUY (aprire
+    una posizione) da ciascun esecutore — mai lato SELL: un SELL qui puo'
+    essere sia "entry_short" sintetico (vendi tutto, vai in cassa) sia un
+    vero exit_long, e i due condividono lo stesso side senza modo di
+    distinguerli da qui. Limitare un SELL vorrebbe dire lasciare aperta
+    meta' di una posizione che si voleva chiudere per intero."""
     side = _signal_to_side(signal.type)
     if side is None:
         return {"skipped": True, "reason": "no-op signal type"}
 
     if exchange in ("binance", "mexc"):
         return await binance_exec.place_order(
-            exchange, symbol, side, size_mode, size_value, api_key, api_secret
+            exchange, symbol, side, size_mode, size_value, api_key, api_secret, max_usdt=max_usdt
         )
     elif exchange == "kucoin":
         kucoin_symbol = _to_kucoin_symbol(symbol)
         kucoin_side = side.lower()
         return await kucoin_exec.place_order(
-            kucoin_symbol, kucoin_side, size_mode, size_value, api_key, api_secret, passphrase
+            kucoin_symbol, kucoin_side, size_mode, size_value, api_key, api_secret, passphrase, max_usdt=max_usdt
         )
     elif exchange == "kraken":
-        return await kraken_exec.place_order(symbol, side, size_mode, size_value, api_key, api_secret)
+        return await kraken_exec.place_order(symbol, side, size_mode, size_value, api_key, api_secret, max_usdt=max_usdt)
     elif exchange == "coinbase":
-        return await coinbase_exec.place_order(symbol, side, size_mode, size_value, api_key, api_secret)
+        return await coinbase_exec.place_order(symbol, side, size_mode, size_value, api_key, api_secret, max_usdt=max_usdt)
     elif exchange == "bitstamp":
-        return await bitstamp_exec.place_order(symbol, side, size_mode, size_value, api_key, api_secret)
+        return await bitstamp_exec.place_order(symbol, side, size_mode, size_value, api_key, api_secret, max_usdt=max_usdt)
     else:
         raise ValueError(f"Unsupported exchange: {exchange}")
 

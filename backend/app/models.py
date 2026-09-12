@@ -205,6 +205,15 @@ class WatchlistEntry(BaseModel):
     # entry.exchange sia anche un exchange futures registrato (vedi
     # app/trading/futures/registry.py); il server lo rifiuta altrimenti.
     market: dict[str, Literal["spot", "futures"]] = {}
+    # Tetto in USDT per SINGOLO ingresso automatico di questa strategia su
+    # questo ticker — assente/0 = nessun tetto, si usa il size_mode/size_value
+    # della credenziale exchange cosi' com'e' (comportamento di sempre).
+    # Impostato apposta per strategia, non sull'exchange: quella credenziale
+    # e' condivisa da tutte le strategie che ci operano sopra, quindi non
+    # basta da sola a limitare quanto rischia CIASCUNA. Si applica solo agli
+    # ingressi (mai alle chiusure, che devono sempre chiudere per intero) —
+    # vedi place_order_for_signal/place_futures_order_for_signal.
+    size_cap_usdt: dict[str, float] = {}
 
 
 class PriceAlertCondition(str, Enum):

@@ -49,6 +49,7 @@ async def place_order(
     size_value: float,
     api_key: str,
     api_secret: str,
+    max_usdt: float | None = None,
 ) -> dict:
     pair = _bitstamp_pair(symbol)
 
@@ -62,6 +63,10 @@ async def place_order(
                 amount = usdt_avail * size_value / 100.0
             else:
                 raise ValueError(f"Unknown size_mode: {size_mode}")
+            # Tetto per singolo ingresso, indipendente dal size_mode — mai
+            # applicato lato SELL (vedi place_order_for_signal in executor.py).
+            if max_usdt:
+                amount = min(amount, max_usdt)
 
             url = f"{BITSTAMP_BASE}/api/v2/buy/market/{pair}/"
             params = _auth_params(api_key, api_secret)

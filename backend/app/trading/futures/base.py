@@ -124,6 +124,7 @@ class FuturesAdapter(abc.ABC):
         size_value: float,
         leverage: int,
         creds: FuturesCreds,
+        max_usdt: float | None = None,  # tetto sul nozionale del SINGOLO ingresso
     ) -> dict:
         """Apre a mercato, dopo aver dichiarato isolated e la leva."""
 
@@ -155,6 +156,15 @@ class FuturesAdapter(abc.ABC):
             return size_value * mark
         margin = size_value if size_mode == "fixed_usdt" else available * size_value / 100
         return margin * leverage
+
+    @staticmethod
+    def _capped(notional: float, max_usdt: float | None) -> float:
+        """Tetto sul nozionale di un SINGOLO ingresso — mai chiamato da
+        close_position, che chiude sempre per intero. Vedi WatchlistEntry.
+        size_cap_usdt: impostato per strategia, non per exchange, perche' la
+        credenziale exchange e' condivisa da tutte le strategie che ci
+        operano sopra."""
+        return min(notional, max_usdt) if max_usdt else notional
 
     @staticmethod
     def _qty(notional: float, mark: float, step: int = 6) -> str:

@@ -147,7 +147,7 @@ class OkxFutures(FuturesAdapter):
             ))
         return out
 
-    async def place_order(self, symbol, side, size_mode, size_value, leverage, creds):
+    async def place_order(self, symbol, side, size_mode, size_value, leverage, creds, max_usdt=None):
         inst = self.symbol_for(symbol)
         # 59000 = ci sono posizioni aperte e la modalita' non si puo'
         # cambiare: la leva richiesta non viene applicata, quindi e' un
@@ -156,7 +156,7 @@ class OkxFutures(FuturesAdapter):
                          {"instId": inst, "lever": str(leverage), "mgnMode": "isolated"})
         available = await self.available_margin(creds)
         mark = await self.mark_price(inst, creds)
-        notional = self._notional(size_mode, size_value, leverage, available, mark)
+        notional = self._capped(self._notional(size_mode, size_value, leverage, available, mark), max_usdt)
         ct_val = await self._contract_value(inst)
         coins = float(self._qty(notional, mark, step=8))
         contracts = coins / ct_val

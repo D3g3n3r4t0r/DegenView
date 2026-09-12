@@ -3225,6 +3225,9 @@ body {
 .wl-mode-btn:not(.wl-mode-danger).active { border-color: var(--accent); color: var(--accent); }
 .wl-mode-btn.wl-mode-danger.active { border-color: var(--bear); color: var(--bear); background: color-mix(in srgb, var(--bear) 10%, transparent); }
 .wl-autotrade-hint { font-size: .72rem; margin-top: .2rem; }
+.wl-cap-row { display: flex; align-items: center; gap: 8px; margin-top: .4rem; flex-wrap: wrap; }
+.wl-cap-label { font-size: .72rem; color: var(--ink-dim); }
+.wl-cap-input { width: 90px; padding: .2rem .35rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--ink); font-size: .75rem; }
 
 .wl-activate-wrap { margin-top: 8px; }
 .wl-activate-btn { padding: .35rem .7rem; border: 1px dashed var(--accent); border-radius: 6px; background: transparent; color: var(--accent); font-size: .8rem; font-weight: 600; cursor: pointer; }

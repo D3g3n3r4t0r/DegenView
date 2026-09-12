@@ -150,6 +150,7 @@ async def place_futures_order(
     leverage: int,
     api_key: str,
     api_secret: str,
+    max_usdt: float | None = None,
 ) -> dict:
     """Piazza un ordine market su Binance Futures, dichiarando prima leva e
     margin mode isolated. Il controllo di margine sufficiente e la
@@ -177,6 +178,11 @@ async def place_futures_order(
             available = await get_available_margin_usdt(client, api_secret)
             margin = available * size_value / 100
             notional = margin * leverage
+
+        # Tetto per singolo ingresso — mai applicato da close_position, che
+        # chiude sempre per intero. Vedi FuturesAdapter._capped.
+        if max_usdt:
+            notional = min(notional, max_usdt)
 
         qty = notional / mark
         if qty <= 0:

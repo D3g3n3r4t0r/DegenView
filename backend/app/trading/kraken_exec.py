@@ -144,6 +144,7 @@ async def place_order(
     size_value: float,
     api_key: str,
     api_secret: str,
+    max_usdt: float | None = None,
 ) -> dict:
     """Place a market order on Kraken.
 
@@ -184,6 +185,11 @@ async def place_order(
             volume = usdt_balance * size_value / 100.0
         else:
             raise RuntimeError(f"Unknown size_mode: {size_mode!r}")
+
+        # Tetto per singolo ingresso — solo lato buy, dove volume e' gia' in
+        # USDT (oflags=viqc); mai lato sell, dove volume e' in moneta base.
+        if max_usdt:
+            volume = min(volume, max_usdt)
 
         data["volume"] = str(volume)
         data["oflags"] = "viqc"  # volume in quote currency (USDT)

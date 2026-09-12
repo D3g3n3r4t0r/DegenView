@@ -141,12 +141,12 @@ class BybitFutures(FuturesAdapter):
                           "buyLeverage": lev, "sellLeverage": lev},
                          creds, "leva", tolerate=(110043,))
 
-    async def place_order(self, symbol, side, size_mode, size_value, leverage, creds):
+    async def place_order(self, symbol, side, size_mode, size_value, leverage, creds, max_usdt=None):
         sym = self.symbol_for(symbol)
         await self._prepare(sym, leverage, creds)
         available = await self.available_margin(creds)
         mark = await self.mark_price(sym, creds)
-        notional = self._notional(size_mode, size_value, leverage, available, mark)
+        notional = self._capped(self._notional(size_mode, size_value, leverage, available, mark), max_usdt)
         qty = self._qty(notional, mark, step=3)
         return await self._post("/v5/order/create", {
             "category": "linear", "symbol": sym,
