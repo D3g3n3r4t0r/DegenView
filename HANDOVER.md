@@ -665,6 +665,67 @@ e trova bug che la sola lettura del codice non avrebbe mai fatto
 emergere — vale la pena farlo sempre, non solo quando qualcuno lo chiede
 esplicitamente dopo un giro sbagliato.
 
+---
+
+### Diagnosi (test di collegamento exchange) e Modalita' Semplice solo mobile — `seed-0062`, `seed-0063` — **fatto**
+
+Lorenzo, in un unico messaggio con piu' richieste: «A modalita' semplice,
+quindi da mobile, soprattutto perche' quella nasce solo da mobile e fa in
+modo che da desktop non sia visibile e non ci sia insomma. Vorrei poter
+anche eseguire delle prove [...] effettuare il test con una tab dedicata
+di diagnosi [...] per effettuare dei test preliminari di collegamento
+all'exchange. E vorrei anche che fosse visualizzato il saldo una volta
+collegate le API. Prima di poter fare poi le vere operazioni. In ogni
+caso vorrei poter fare anche operazioni manuali, quindi provare proprio a
+fare il test. E questa sezione diagnosi deve servire proprio come debug.
+Deve essere circoscritta e permettere poi a te nel caso in cui vengano
+fuori dei problemi di poter rimettere a posto in poco tempo.»
+
+**Modalita' Semplice**: tolto il bottone dalla toolbar desktop in
+`index.html` — resta solo l'ingresso dal menu mobile "Altro", che gia'
+esisteva (la toolbar desktop e' nascosta sotto i 760px, era per quello
+che il bottone mobile era stato duplicato in origine). `simple-mode.js`
+non ha avuto bisogno di nessun cambio: cercava gia' entrambi gli id e
+scartava quelli assenti.
+
+**Diagnosi**: sezione nuova, voce propria in sidebar (senza `data-area`:
+non fa parte del sistema di tab del cockpit apposta, zero rischio di
+interferire con quello), costruita come modulo isolato — esattamente
+come richiesto, sullo stesso modello di `simple-mode.js`:
+- `backend/app/diagnostics.py` (nuovo file): `test_spot_connection()`
+  legge il saldo vero da mexc/binance/kucoin/kraken/coinbase/bitstamp
+  riusando le firme HMAC gia' scritte nei moduli di esecuzione esistenti
+  (import delle funzioni private di firma, non riscritte — niente
+  duplicazione); `test_futures_connection()` usa `adapter.
+  available_margin()` gia' esistente per ogni exchange futures nel
+  registro. Aggiunte `get_all_balances()` a `kraken_exec.py` e
+  `coinbase_exec.py` (prima esisteva solo un lookup per una singola
+  valuta alla volta). Nuovo endpoint `POST /api/diagnostics/
+  test-connection`, sola lettura — se non gli si passano chiavi esplicite
+  usa quelle gia' salvate dall'utente, altrimenti prova quelle date senza
+  salvarle (utile per provare una chiave nuova prima di sovrascrivere
+  quella che magari funziona ancora). 10 test nuovi, tutti con trasporto
+  di rete finto.
+- `frontend/static/diagnostics.js` (nuovo file): pannello a comparsa,
+  toggle spot/futures, test di connessione con esito (saldo o errore), e
+  un ordine di prova minimo — solo spot, tramite l'endpoint gia'
+  esistente e in uso altrove `POST /api/trading/order` (stessa richiesta
+  di conferma esplicita, stesso diario ordini — nessuna logica d'ordine
+  duplicata). I futures rimandano al form completo di Sorveglia: quello
+  ha l'anteprima di liquidazione, che qui non avrebbe senso riprodurre in
+  piccolo.
+- **Verificato dal vivo con un browser vero** (Playwright, server
+  locale, stesso metodo appena descritto sopra): apertura/chiusura del
+  pannello, cambio spot/futures, l'elenco degli exchange futures letto
+  per davvero dal registro (non hardcoded), e il messaggio corretto
+  quando non c'e' ancora nessuna chiave salvata da provare. Screenshot
+  presi e controllati, non solo il DOM.
+
+Non fatto per scelta: nessun controllo esplicito "sei su desktop?" per
+Modalita' Semplice (basta togliere l'unico bottone rimasto); l'ordine di
+prova futures dentro Diagnosi (rimanda al form di Sorveglia invece di
+duplicarlo).
+
 ## Log delle conversazioni
 
 Ordine cronologico, piu' recenti in fondo. Scritto perche' una chat diversa
