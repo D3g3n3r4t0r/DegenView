@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0061", "Un CDN irraggiungibile (grafico o Script Pine) bloccava silenziosamente tutto il sito, ricerca pair compresa",
+     "index.html caricava Lightweight Charts e CodeMirror da unpkg.com; se uno dei due non rispondeva, un'eccezione non gestita nella sequenza di avvio impediva a ogni altro bind (ricerca ticker in Lab, ordini spot/futures, navigazione) di partire — trovato investigando le segnalazioni 54cbf520 e 2a7fd905 sui pair introvabili.",
+     "alta"),
     ("seed-0060", "Il grafico cambia dimensione/posizione passando da una tab all'altra",
      "In Analizza il grafico prendeva tutto lo spazio libero, nelle altre aree (Lab, Watchlist, Sorveglia, Livelli) si restringeva a una colonna fissa — il layout 'si scompigliava' a ogni cambio tab invece di restare stabile con solo il pannello laterale che si adegua.",
      "media"),
