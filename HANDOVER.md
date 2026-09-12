@@ -1016,8 +1016,30 @@ correttamente, modifica salvata e confermata rileggendo la watchlist). Non
 riverificato dal vivo il tetto durante l'attivazione di un ticker nuovo
 tramite browser (il resto della UI di attivazione — autocomplete pair — non
 e' cambiato da questo lavoro), ma la stessa funzione `stepCap()` e la stessa
-chiamata PATCH sono usate in entrambi i percorsi. 447 test totali passano,
+chiamata PATCH sono usate in entrambi i percorsi. 448 test totali passano,
 ruff pulito.
+
+Terzo giro sullo stesso filone: Lorenzo ha riportato l'ordine futures manuale
+MEXC "sempre lo stesso errore" con la %, incollando il testo esatto ("la
+dimensione richiesta vale 0.284 contratti, meno del minimo di 1... serve
+almeno 35.20 USDT di margine con leva 1x"). Trovato e corretto un vero bug di
+robustezza (il codice presumeva sempre minVol=1 contratto invece di leggerlo
+dall'exchange — su KASUSDT valeva comunque 1, ma non e' garantito per ogni
+pair), MA il messaggio d'errore era gia' corretto: con `MAX_FUTURES_LEVERAGE`
+bloccato a 1x (voluto, "resta a 1x SEMPRE" — Lorenzo lo ha ribadito quando gli
+ho chiesto se alzarlo), il margine coincide col nozionale intero, e MEXC
+impone un minimo di 1 contratto = 1000 KAS = 35.20 USDT su quel pair a
+qualunque leva. Su MEXC direttamente lo stesso ordine con 20 USDT passava
+solo perche' la' la leva era 20x (margine 35.20/20 = 1.76 USDT), non 1x —
+stesso pair, stessa formula, leva diversa. Lorenzo ha verificato di persona e
+confermato: "hai ragione tu, serve 35.20 usdt". Nessun bug residuo: il tetto
+di leva a 1x resta per scelta esplicita sua, quindi su pair a nozionale
+minimo alto come KASUSDT serve piu' saldo/percentuale per aprire una
+posizione, e il messaggio d'errore ora lo dice in modo chiaro (USDT, non solo
+contratti). Lezione per chi riprende questo filone: quando Lorenzo riporta
+"stesso errore, sempre" non e' detto sia un bug — a volte e' l'exchange che
+rifiuta correttamente, e il lavoro giusto e' rendere il messaggio azionabile,
+non cercare un bug che non c'e'.
 
 ## Log delle conversazioni (continua)
 
@@ -1035,3 +1057,8 @@ ruff pulito.
   intuizione — "erroneamente secondo me acquistavi 10 kaspa invece di 10
   dollari di controvalore" — che era la causa vera, poi confermata e
   corretta (quoteOrderQty trattato da MEXC come quantita', non importo).
+  Terzo giro sul futures manuale: "e perche' dentro app mexc con il telefono
+  riesco a operare con 20 usdt?" — spiegato che li' la leva era 20x contro
+  1x qui (voluto, "in leva1x... resta a 1x SEMPRE"), stesso pair stessa
+  formula. Lorenzo ha verificato di persona: "hai ragione tu, serve 35.20
+  usdt" — nessun bug, il messaggio d'errore era gia' corretto.
