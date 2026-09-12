@@ -1,5 +1,12 @@
 {
   "_README": "Scritto da Claude, versionato in git, distribuito col deploy. Le chiavi sono gli id delle segnalazioni. Non modificare a mano dall'app: verrebbe sovrascritto al deploy successivo.",
+  "seed-0066": {
+    "status": "risolto",
+    "at": 1789203953,
+    "summary": "La riga del ticker ora risponde subito al tocco (leggero effetto di pressione CSS, bordo verde immediato) e mostra uno spinner mentre il backtest reale gira in sotto — prima non c'era nessun segnale finche' il grafico non arrivava, qualche secondo dopo. Trovato e corretto anche un bug vero che stava dietro al sintomo: state.ticker non salvava mai il campo provider, quindi il confronto in searchTickers() che decide quale riga evidenziare come 'selezionata' falliva sempre — la spunta ✓ verde che dovrebbe restare sulla riga scelta spariva non appena la lista si ridisegnava alla fine di selectTicker(), dando davvero l'impressione che il click non avesse avuto effetto.",
+    "detail": "frontend/static/simple-mode.js: aggiunto provider a state.ticker in selectTicker(); il click sulla riga aggiunge subito le classi active+loading (evidenziazione + spinner) prima ancora di chiamare selectTicker(), che le rimuove implicitamente quando la lista si ridisegna a fine caricamento con la spunta al posto dello spinner. Verificato dal vivo con Playwright: la classe 'active' resta sulla riga giusta anche dopo il ricaricamento (prima non restava mai, con qualunque ticker).",
+    "files": ["frontend/static/simple-mode.js"]
+  },
   "seed-0065": {
     "status": "risolto",
     "at": 1789203476,
