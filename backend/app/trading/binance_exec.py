@@ -101,7 +101,24 @@ async def place_order(
             # applicato lato SELL (vedi place_order_for_signal in executor.py).
             if max_usdt:
                 quote_qty = min(quote_qty, max_usdt)
-            order_params["quoteOrderQty"] = quote_qty
+            if exchange == "mexc":
+                # MEXC dichiara quoteOrderQty a documentazione, ma su piu'
+                # pair (specie quelli meno liquidi) lo ignora e tratta il
+                # numero come quantita' di moneta base — un ordine da "10
+                # USDT" diventa "10 monete", spesso molto piu' del saldo
+                # disponibile. Bypassato calcolando la quantita' noi stessi
+                # dal prezzo corrente e mandando "quantity", come gia' si fa
+                # per il lato SELL qui sotto — MEXC quella la rispetta sempre.
+                price_resp = await client.get(f"/api/v3/ticker/price?symbol={symbol}")
+                if price_resp.status_code >= 400:
+                    raise _explain(exchange, "price", price_resp.text)
+                price = float(price_resp.json()["price"])
+                if price <= 0:
+                    raise RuntimeError("Prezzo di mercato non disponibile per questo simbolo")
+                qty = quote_qty / price
+                order_params["quantity"] = f"{qty:.6f}".rstrip("0").rstrip(".")
+            else:
+                order_params["quoteOrderQty"] = quote_qty
 
         else:  # SELL
             if size_mode == "fixed_usdt":

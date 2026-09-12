@@ -993,14 +993,22 @@ si chiede nel flusso di attivazione ("Anche operazioni automatiche" →
 tetto facoltativo prima di scegliere la strategia) e resta modificabile
 sotto ogni strategia gia' attiva in Sorveglia.
 
-Nello stesso giro, risolto anche un secondo report separato di Lorenzo: "%
-saldo non funziona su MEXC". Verificato via documentazione ufficiale MEXC
-(non supposizione) che l'endpoint di lettura saldo richiede un permesso
-`SPOT_ACCOUNT_READ` distinto da quello di trading — una chiave con solo
-trading fa fallire silenziosamente ogni ordine a percentuale (che deve
-leggere il saldo) mentre l'importo fisso continua a funzionare, spiegando
-esattamente il sintomo riportato. Aggiunto un messaggio d'errore specifico
-per questo caso in `binance_exec.py` invece del generico "no permission".
+Nello stesso giro, indagato anche un secondo report separato di Lorenzo: "%
+saldo non funziona su MEXC". Prima diagnosi (permesso `SPOT_ACCOUNT_READ`
+mancante) **sbagliata** — Lorenzo ha mostrato lo screenshot dell'API
+Management di MEXC coi permessi tutti presenti, e ha lui stesso indicato la
+causa vera: "erroneamente secondo me acquistavi 10 kaspa invece di 10
+dollari di controvalore in kaspa (superando il balance)". Aveva ragione:
+`quoteOrderQty` (il parametro con cui si dice "spendi X USDT", usato per
+ogni ordine automatico) su MEXC viene trattato su piu' pair come una
+QUANTITA' di moneta, non un importo — un ordine da 10 USDT diventava un
+ordine da 10 monete, quasi sempre oltre il saldo disponibile. Bypassato
+calcolando noi la quantita' dal prezzo corrente e mandando `quantity`
+invece di `quoteOrderQty`, solo per MEXC (Binance resta sul parametro
+originale, che li' funziona davvero come documentato). Non verificabile con
+denaro reale in sandbox (rete bloccata verso gli exchange) — verificato che
+il payload mandato all'ordine e' quello giusto (2 nuovi test in
+`test_mexc_order.py`).
 
 Verificato dal vivo: endpoint size_cap via curl (persistenza, azzeramento),
 campo tetto su strategia gia' attiva via Playwright (valore iniziale letto
@@ -1008,7 +1016,7 @@ correttamente, modifica salvata e confermata rileggendo la watchlist). Non
 riverificato dal vivo il tetto durante l'attivazione di un ticker nuovo
 tramite browser (il resto della UI di attivazione — autocomplete pair — non
 e' cambiato da questo lavoro), ma la stessa funzione `stepCap()` e la stessa
-chiamata PATCH sono usate in entrambi i percorsi. 445 test totali passano,
+chiamata PATCH sono usate in entrambi i percorsi. 447 test totali passano,
 ruff pulito.
 
 ## Log delle conversazioni (continua)
@@ -1022,4 +1030,8 @@ ruff pulito.
   "voglio usare la % del saldo per gli ordini automatici... pero' sembra
   non funzionare su mexc.. verifica se lo accetta". Chiuso con "sistema fai
   tutto tu, mi fido" — implementato tetto per strategia (mai sulle
-  chiusure) e diagnosticato/segnalato il permesso mancante su MEXC.
+  chiusure). Sul bug MEXC, prima diagnosi sbagliata (permesso mancante):
+  Lorenzo ha corretto con lo screenshot dei permessi e la sua stessa
+  intuizione — "erroneamente secondo me acquistavi 10 kaspa invece di 10
+  dollari di controvalore" — che era la causa vera, poi confermata e
+  corretta (quoteOrderQty trattato da MEXC come quantita', non importo).
