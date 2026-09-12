@@ -1,5 +1,12 @@
 {
   "_README": "Scritto da Claude, versionato in git, distribuito col deploy. Le chiavi sono gli id delle segnalazioni. Non modificare a mano dall'app: verrebbe sovrascritto al deploy successivo.",
+  "seed-0068": {
+    "status": "risolto",
+    "at": 1789205191,
+    "summary": "Il grafico reale nello step Backtest di Modalita' Semplice, attivato da una voce d'archivio, mostrava sempre 'Cerca un ticker per iniziare l'analisi' invece dei dati — dava davvero l'impressione di dover riselezionare il ticker. Causa: window.LiquidityChartBridge.show() (app.js) copiava il comportamento di applyArchiveEntry() ma con un controllo piu' debole — un backtest_params={} (voce d'archivio senza costi mai registrati, caso comune e onesto, non un difetto) e' un oggetto VUOTO ma comunque truthy in JS: passava il controllo 'if (!cfg.backtestParams)' come se fosse un override vero, lasciando ogni campo (initial_capital, qty_pct_of_equity, commission_pct, slippage_pct) a 'undefined' — il server rispondeva 422 ('serve un numero, ricevuto undefined'), l'errore veniva assorbito dentro runAnalysis() e il grafico restava sullo stato vuoto iniziale senza dirlo chiaramente. Corretto il controllo per trattare {} come nessun override (stesso Object.keys(...).length gia' usato in applyArchiveEntry sul sito), sia nel ponte sia nella chiamata di Modalita' Semplice.",
+    "detail": "Aggiunta anche la funzione richiesta esplicitamente: un tocco sul grafico reale (window.LiquidityChartBridge.onChartClick(), nuovo — usa mainChart.subscribeClick() di LightweightCharts) trova l'operazione piu' vicina nel tempo fra i trade reali del backtest e la apre/evidenzia in un elenco sotto il grafico (nuovo pannello Simple-Mode, dati identici al pulsante 'N trade' del Laboratorio — stessi t.entry_time/exit_time/pnl_pct — non una tabella nel Laboratorio stesso, che e' pensata per stare incollata ai suoi risultati e non per essere spostata). Verificato dal vivo con Playwright: una voce d'archivio reale (INJUSDT, backtest_params={}) ora mostra il grafico con 35 operazioni segnate; toccando il grafico l'operazione piu' vicina si apre e lampeggia nell'elenco.",
+    "files": ["frontend/static/app.js", "frontend/static/simple-mode.js"]
+  },
   "seed-0067": {
     "status": "risolto",
     "at": 1789204526,

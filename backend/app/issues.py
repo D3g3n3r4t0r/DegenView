@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0068", "Modalita' Semplice: da archivio il grafico chiede il ticker di nuovo, e nessun collegamento fra un ingresso e l'operazione",
+     "Lorenzo: 'se io seleziono una strategia dall'archivio, il ticker e' sottinteso, per cui tu quando carichi il grafico... non e' che devo riselezionare il ticker, vedi che mi chiede il ticker di nuovo? Tu mi devi far vedere il grafico aggiornato per quella strategia con quegli ingressi precisi... e ogni ingresso se ci clicco mi deve rimandare alla transazione effettuata dalla strategia'.",
+     "alta"),
     ("seed-0067", "Modalita' Semplice: l'ottimizzazione finisce in errore, log illeggibile, nessun modo di fermarla",
      "Lorenzo: 'la strategia di ottimizzazione da errori alla fine e quindi non funziona, pero c'e' anche questa casella chiamata object che non si sa che cosa vuol dire. Eredita tutta la logica anche grafica che abbiamo creato nel sito per ottimizzazione stabile... Permettimi anche di fermarla se voglio fermarla, perche' vorrei poter cambiare idea'.",
      "alta"),
