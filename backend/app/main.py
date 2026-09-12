@@ -7,6 +7,8 @@ import json
 import logging
 import sys
 import time as _time
+
+import pandas as pd
 from contextlib import asynccontextmanager
 from functools import partial
 from pathlib import Path
@@ -2297,6 +2299,8 @@ async def deep_backtest(
     strategy_name: str = Query(DEFAULT_STRATEGY),
     strategy_params: StrategyParamsQuery = Depends(),
     backtest_params: BacktestParamsQuery = Depends(),
+    start_date: str | None = Query(None, description="YYYY-MM-DD, incluso — ritaglia la serie prima del backtest"),
+    end_date: str | None = Query(None, description="YYYY-MM-DD, incluso — ritaglia la serie prima del backtest"),
 ) -> BacktestResult:
     """The backtest's own, deliberately coarser fetch (see
     backtest_interval_for) instead of the ltf df the chart uses — reaches
@@ -2323,6 +2327,26 @@ async def deep_backtest(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     if df.empty:
         raise HTTPException(status_code=502, detail=f"Nessun dato per {symbol}")
+
+    # Ritaglio per periodo, facoltativo — sulla cache gia' scaricata, non su
+    # una nuova chiamata al provider: la finestra richiesta e' sempre un
+    # sottoinsieme di quella gia' presa (settings.backtest_candles candele),
+    # mai piu' ampia. Il range va applicato PRIMA del backtest, non dopo:
+    # tagliare i trade risultanti lascerebbe dentro operazioni aperte fuori
+    # dal periodo scelto.
+    if start_date or end_date:
+        # Ogni provider fa gia' df.set_index("datetime") prima di tornare —
+        # il ritaglio e' sull'indice, non su una colonna "datetime" che qui
+        # non esiste piu'.
+        if start_date:
+            df = df[df.index >= pd.Timestamp(start_date, tz="UTC")]
+        if end_date:
+            df = df[df.index < pd.Timestamp(end_date, tz="UTC") + pd.Timedelta(days=1)]
+        if df.empty:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Nessuna candela per {symbol} nel periodo richiesto — prova un intervallo piu' ampio.",
+            )
 
     result = run_backtest(df, strategy_params.model_dump(), backtest_params.model_dump(), strategy_name=strategy_name)
     return result.model_copy(update={"interval": backtest_interval})
