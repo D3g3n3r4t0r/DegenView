@@ -796,6 +796,16 @@ chiesto con le sue parole.
   (`window.LiquidityChartBridge`) e restituito al suo posto ad ogni cambio
   di step — verificato dal vivo con Playwright che il nodo si sposta
   davvero e i marker sono quelli reali del backtest, non un disegno.
+- **Modalita' Semplice, correzione** (`seed-0065`): Lorenzo ha respinto la
+  prima idea di come collegare l'exchange ("Non ci siamo affatto") —
+  chiarendo che non voleva un ciclo inserisci/prova/butta via, ma il
+  processo ufficiale (chiave salvata per davvero) con un'opzione in piu'
+  subito dopo per testarla senza reinserirla, vedere il saldo vero e
+  provare un ordine manuale. Nello stesso messaggio ha ricordato che il
+  timeframe va scelto prima e recapitolato alla fine — motivo per cui
+  "tante volte" chiede di sistemare le incongruenze fra spot e futures:
+  trovata e corretta una vera, la Modalita' Semplice usava tre timeframe
+  diversi (backtest, grafico, ottimizzazione) senza dirlo.
 
 ## Modalità Semplice (wizard guidato) — branch `claude/simple-mode`
 
@@ -870,3 +880,25 @@ fosse cambiata. Se Lorenzo intendeva davvero eliminare l'intero pannello
 (non solo il fastidio delle chiavi), va confermato e poi si decide dove
 spostare posizioni/diario/ordine manuale (Diagnosi? Sorveglia in altra
 forma?) invece di farli sparire.
+
+### Seguito — seed-0065 (testare la chiave subito, timeframe coerente)
+
+Lorenzo ha corretto il punto piu' delicato di seed-0064: non voleva
+"inserire, provare, buttare via" — voleva che il processo di salvataggio
+restasse quello ufficiale (PATCH /api/auth/trading, invariato) ma con
+un'opzione in piu' subito dopo: "vuoi testarle subito?". Aggiunto un passo
+5.5 fra Exchange e Riepilogo che fa esattamente questo — chiama
+`/api/diagnostics/test-connection` con chiavi vuote (usa quella appena
+salvata, non la richiede mai di nuovo), mostra saldo vero o errore vero, e
+offre un ordine manuale di prova (`/api/trading/order`, stesso endpoint di
+Diagnosi — niente testnet in questa piattaforma, quindi denaro reale
+dichiarato, mai finto).
+
+Nello stesso giro ho trovato e sistemato la causa di fondo per cui Lorenzo
+torna spesso su "la cosa dei ticket dello spot e del futures": la Modalita'
+Semplice usava tre timeframe diversi in tre punti diversi senza dirlo (il
+backtest non passava affatto l'intervallo al server, il grafico accanto
+usava "1d" fisso, l'ottimizzazione un altro "1d" fisso ancora). Aggiunto un
+selettore di timeframe allo step Strategia, un solo `state.interval` usato
+ovunque dopo. Verificato dal vivo (log del server) che backtest e
+ottimizzazione arrivano davvero con lo stesso intervallo.
