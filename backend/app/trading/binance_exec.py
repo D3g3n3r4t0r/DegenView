@@ -35,6 +35,12 @@ _HINTS = {
     # Non "ip" e basta: comparirebbe dentro parole qualunque del messaggio.
     "ip white": "l'indirizzo del server non e' fra quelli ammessi dalla chiave",
     "ip address": "l'indirizzo del server non e' fra quelli ammessi dalla chiave",
+    # MEXC risponde cosi' quando la chiave puo' fare ordini ma non puo'
+    # leggere il saldo — succede solo con "% saldo" (che deve leggerlo prima
+    # di calcolare quanto ordinare), mai con un importo fisso, che salta
+    # questo passaggio: da qui il sintomo "fisso funziona, percentuale no".
+    "no authority": "alla chiave manca il permesso di lettura saldo (account) — serve oltre a quello di trading",
+    "no permission to access the endpoint": "alla chiave manca il permesso di lettura saldo (account) — serve oltre a quello di trading",
 }
 
 
@@ -71,6 +77,7 @@ async def place_order(
     size_value: float,
     api_key: str,
     api_secret: str,
+    max_usdt: float | None = None,
 ) -> dict:
     if exchange not in _API_KEY_HEADER:
         raise RuntimeError(f"Exchange non gestito da questo esecutore: {exchange}")
@@ -82,14 +89,19 @@ async def place_order(
 
         if side == "BUY":
             if size_mode == "fixed_usdt":
-                order_params["quoteOrderQty"] = size_value
+                quote_qty = size_value
             else:
                 resp = await client.get(f"/api/v3/account?{_sign(api_secret, {})}")
                 if resp.status_code >= 400:
                     raise _explain(exchange, "account", resp.text)
                 balances = {b["asset"]: float(b["free"]) for b in resp.json()["balances"]}
                 free_usdt = balances.get("USDT", 0.0)
-                order_params["quoteOrderQty"] = free_usdt * size_value / 100
+                quote_qty = free_usdt * size_value / 100
+            # Tetto per singolo ingresso, indipendente dal size_mode — mai
+            # applicato lato SELL (vedi place_order_for_signal in executor.py).
+            if max_usdt:
+                quote_qty = min(quote_qty, max_usdt)
+            order_params["quoteOrderQty"] = quote_qty
 
         else:  # SELL
             if size_mode == "fixed_usdt":

@@ -332,10 +332,11 @@ async def _watchlist_alert_loop() -> None:
                         else:
                             for signal in fresh:
                                 try:
+                                    cap = entry.size_cap_usdt.get(strategy_name)
                                     result = await place_futures_order_for_signal(
                                         entry.exchange, entry.symbol, signal,
                                         futures_cred.size_mode, futures_cred.size_value, futures_cred.leverage,
-                                        api_key, api_secret, passphrase,
+                                        api_key, api_secret, passphrase, max_usdt=cap,
                                     )
                                     logger.info("Futures order placed for %s %s: %s", entry.symbol, signal.type, result)
                                     trading_log.record(
@@ -344,10 +345,11 @@ async def _watchlist_alert_loop() -> None:
                                         outcome="eseguito", detail=str(result)[:400], price=signal.price,
                                     )
                                     if owner.telegram_chat_id and _telegram_allowed(owner):
+                                        cap_note = f" (tetto {cap:g} USDT)" if cap else ""
                                         asyncio.create_task(telegram.send_to(
                                             owner.telegram_chat_id,
                                             f"💱⚠️ Ordine FUTURES ESEGUITO <b>{entry.symbol}</b> [{signal.type}] "
-                                            f"su {entry.exchange} a {signal.price:g}",
+                                            f"su {entry.exchange} a {signal.price:g}{cap_note}",
                                         ))
                                 except Exception as exc:
                                     logger.error("Futures order failed for %s %s: %s", entry.symbol, signal.type, exc)
@@ -386,10 +388,11 @@ async def _watchlist_alert_loop() -> None:
                             # mai partito, in silenzio.
                             for signal in fresh:
                                 try:
+                                    cap = entry.size_cap_usdt.get(strategy_name)
                                     result = await place_order_for_signal(
                                         entry.exchange, entry.symbol, signal,
                                         cred.size_mode, cred.size_value,
-                                        api_key, api_secret, passphrase,
+                                        api_key, api_secret, passphrase, max_usdt=cap,
                                     )
                                     logger.info("Order placed for %s %s: %s", entry.symbol, signal.type, result)
                                     trading_log.record(
@@ -401,10 +404,11 @@ async def _watchlist_alert_loop() -> None:
                                         # Un ordine partito va detto quanto uno
                                         # fallito: era l'unico dei due casi che
                                         # restava muto.
+                                        cap_note = f" (tetto {cap:g} USDT)" if cap else ""
                                         asyncio.create_task(telegram.send_to(
                                             owner.telegram_chat_id,
                                             f"💱 Ordine ESEGUITO <b>{entry.symbol}</b> [{signal.type}] "
-                                            f"su {entry.exchange} a {signal.price:g}",
+                                            f"su {entry.exchange} a {signal.price:g}{cap_note}",
                                         ))
                                 except Exception as exc:
                                     logger.error("Order failed for %s %s: %s", entry.symbol, signal.type, exc)
@@ -1915,6 +1919,23 @@ async def set_watchlist_auto_trade(
         raise HTTPException(status_code=400, detail=f"Strategia sconosciuta: {req.strategy_name}")
     _owned_entry_or_404(entry_id, user)
     return watchlist_store.set_auto_trade(entry_id, req.strategy_name, req.enabled)
+
+
+class WatchlistSizeCapRequest(BaseModel):
+    strategy_name: str
+    cap_usdt: float = 0.0  # 0 = nessun tetto
+
+
+@app.patch("/api/watchlist/{entry_id}/size_cap", response_model=WatchlistEntry)
+async def set_watchlist_size_cap(
+    entry_id: str, req: WatchlistSizeCapRequest, user: User = Depends(auth.get_current_user)
+) -> WatchlistEntry:
+    if req.strategy_name not in AVAILABLE_STRATEGIES:
+        raise HTTPException(status_code=400, detail=f"Strategia sconosciuta: {req.strategy_name}")
+    if req.cap_usdt < 0:
+        raise HTTPException(status_code=400, detail="Il tetto non puo' essere negativo")
+    _owned_entry_or_404(entry_id, user)
+    return watchlist_store.set_size_cap(entry_id, req.strategy_name, req.cap_usdt)
 
 
 class WatchlistMarketRequest(BaseModel):

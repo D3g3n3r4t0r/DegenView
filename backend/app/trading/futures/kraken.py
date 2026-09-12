@@ -156,7 +156,7 @@ class KrakenFutures(FuturesAdapter):
             ))
         return out
 
-    async def place_order(self, symbol, side, size_mode, size_value, leverage, creds):
+    async def place_order(self, symbol, side, size_mode, size_value, leverage, creds, max_usdt=None):
         sym = self.symbol_for(symbol)
         # Kraken non ha isolated: la leva massima per simbolo e' l'unico
         # argine che si puo' imporre prima dell'ordine, e lo imponiamo.
@@ -164,7 +164,7 @@ class KrakenFutures(FuturesAdapter):
                          {"symbol": sym, "maxLeverage": str(leverage)})
         available = await self.available_margin(creds)
         mark = await self.mark_price(sym, creds)
-        notional = self._notional(size_mode, size_value, leverage, available, mark)
+        notional = self._capped(self._notional(size_mode, size_value, leverage, available, mark), max_usdt)
         qty = self._qty(notional, mark, step=4)
         return await self._call("POST", f"{PREFIX}/sendorder", creds, "ordine", {
             "orderType": "mkt", "symbol": sym,

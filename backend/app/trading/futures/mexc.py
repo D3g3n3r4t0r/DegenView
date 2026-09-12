@@ -178,13 +178,13 @@ class MexcFutures(FuturesAdapter):
 
     # ── scritture ─────────────────────────────────────────────────────────
 
-    async def place_order(self, symbol, side, size_mode, size_value, leverage, creds):
+    async def place_order(self, symbol, side, size_mode, size_value, leverage, creds, max_usdt=None):
         sym = self.symbol_for(symbol)
         available = await self.available_margin(creds)
         mark = await self.mark_price(sym, creds)
         if mark <= 0:
             raise explain("mexc", "ordine", "prezzo di mercato non disponibile", _HINTS)
-        notional = self._notional(size_mode, size_value, leverage, available, mark)
+        notional = self._capped(self._notional(size_mode, size_value, leverage, available, mark), max_usdt)
         csize = await self._contract_size(sym)
         vol = notional / mark / csize
         if vol < 1:

@@ -120,7 +120,7 @@ class BitgetFutures(FuturesAdapter):
             ))
         return out
 
-    async def place_order(self, symbol, side, size_mode, size_value, leverage, creds):
+    async def place_order(self, symbol, side, size_mode, size_value, leverage, creds, max_usdt=None):
         sym = self.symbol_for(symbol)
         common = {"symbol": sym, "productType": PRODUCT, "marginCoin": MARGIN_COIN}
         # 40808/22002 qui significano "era gia' cosi'": lo stato voluto e'
@@ -131,7 +131,7 @@ class BitgetFutures(FuturesAdapter):
                          body={**common, "leverage": str(leverage)}, tolerate=("40808",))
         available = await self.available_margin(creds)
         mark = await self.mark_price(sym, creds)
-        notional = self._notional(size_mode, size_value, leverage, available, mark)
+        notional = self._capped(self._notional(size_mode, size_value, leverage, available, mark), max_usdt)
         qty = self._qty(notional, mark, step=4)
         return {"data": await self._call("POST", "/api/v2/mix/order/place-order", creds, "ordine",
                                          body={**common, "marginMode": "isolated",

@@ -53,11 +53,11 @@ class BinanceFutures(FuturesAdapter):
             ))
         return out
 
-    async def place_order(self, symbol, side, size_mode, size_value, leverage, creds):
+    async def place_order(self, symbol, side, size_mode, size_value, leverage, creds, max_usdt=None):
         try:
             return await _b.place_futures_order(
                 self.symbol_for(symbol), side, size_mode, size_value, leverage,
-                creds.api_key, creds.api_secret,
+                creds.api_key, creds.api_secret, max_usdt=max_usdt,
             )
         except _b.FuturesExecutionError as exc:
             raise FuturesExecutionError(str(exc)) from exc

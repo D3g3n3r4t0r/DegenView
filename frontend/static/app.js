@@ -2423,6 +2423,7 @@
 
     let flowMode = null;   // "alert" | "auto"
     let flowMarket = "spot";
+    let flowCap = 0;       // tetto USDT per singolo ingresso automatico, 0 = nessuno
 
     const mkBtn = (label, onClick, danger) => {
       const b = document.createElement("button");
@@ -2469,7 +2470,41 @@
       try { list = await fetch(endpoint).then((r) => r.json()); } catch { list = []; }
       const cred = Array.isArray(list) ? list.find((c) => c.exchange === entry.exchange) : null;
       const connected = !!(cred && cred.api_key_set && cred.enabled);
-      if (connected) stepArchive(); else stepConnect(cred);
+      if (!connected) { stepConnect(cred); return; }
+      // Il tetto ha senso solo per l'operativa automatica: un alert da solo
+      // non manda mai ordini, quindi non c'e' niente da limitare.
+      if (flowMode === "auto") stepCap(); else stepArchive();
+    }
+
+    // Tetto in USDT sul SINGOLO ingresso automatico di questa strategia —
+    // impostato qui, prima di attivare, perche' la credenziale exchange e'
+    // condivisa da tutte le strategie che ci operano sopra e da sola non
+    // basta a limitare quanto rischia ciascuna. Mai applicato alle chiusure,
+    // che chiudono sempre per intero.
+    function stepCap() {
+      box.innerHTML = "";
+      const q = document.createElement("p");
+      q.className = "wl-flow-q";
+      q.textContent = "Tetto massimo per singolo ordine di ingresso (facoltativo):";
+      box.appendChild(q);
+      const hint = document.createElement("p");
+      hint.className = "panel-hint";
+      hint.textContent = "Lascia vuoto per usare sempre l'importo/percentuale impostati sulla chiave exchange, senza limiti aggiuntivi. Non tocca mai le chiusure, che chiudono per intero.";
+      box.appendChild(hint);
+      const capInput = document.createElement("input");
+      capInput.type = "number";
+      capInput.min = "0";
+      capInput.step = "1";
+      capInput.placeholder = "Nessun tetto (es. 500 per 500 USDT)";
+      box.appendChild(capInput);
+      const row = document.createElement("div");
+      row.className = "wl-mode-row";
+      row.appendChild(mkBtn("Continua", () => {
+        const v = parseFloat(capInput.value);
+        flowCap = Number.isFinite(v) && v > 0 ? v : 0;
+        stepArchive();
+      }, true));
+      box.appendChild(row);
     }
 
     function stepConnect(cred) {
@@ -2508,7 +2543,7 @@
           const resp = await fetch(endpoint, {
             method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
           });
-          if (resp.ok) stepArchive();
+          if (resp.ok) { if (flowMode === "auto") stepCap(); else stepArchive(); }
           else status.textContent = (await resp.json().catch(() => ({}))).detail || `Errore (${resp.status})`;
         } catch { status.textContent = "Errore di rete"; }
         submitBtn.disabled = false;
@@ -2571,6 +2606,16 @@
               body: JSON.stringify({ auto_trade: flowMode === "auto", market: flowMarket }),
             });
             if (resp.ok) {
+              if (flowMode === "auto" && flowCap > 0) {
+                const applied = await resp.json().catch(() => null);
+                const watchId = applied?.watchlist_entry?.id;
+                if (watchId) {
+                  await fetch(`/api/watchlist/${watchId}/size_cap`, {
+                    method: "PATCH", headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ strategy_name: it.strategy_name, cap_usdt: flowCap }),
+                  });
+                }
+              }
               status.textContent = "✓ Attivata";
               loadWatchlist();
             } else {
@@ -2629,6 +2674,12 @@
                 await fetch(`/api/watchlist/${watch.id}/market`, {
                   method: "PATCH", headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({ strategy_name: name, market: "futures" }),
+                });
+              }
+              if (flowCap > 0) {
+                await fetch(`/api/watchlist/${watch.id}/size_cap`, {
+                  method: "PATCH", headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ strategy_name: name, cap_usdt: flowCap }),
                 });
               }
             }
@@ -2959,6 +3010,37 @@
                 body.appendChild(futHint);
               }
             }
+
+            // Tetto USDT per singolo ingresso di QUESTA strategia — la
+            // credenziale exchange (size_mode/size_value) e' condivisa da
+            // tutte le strategie che ci operano sopra, quindi da sola non
+            // basta a limitare quanto rischia ciascuna. Mai sulle chiusure.
+            const capRow = document.createElement("div");
+            capRow.className = "strat-sub-row wl-cap-row";
+            const capLabel = document.createElement("span");
+            capLabel.className = "wl-cap-label";
+            capLabel.textContent = "Tetto per ingresso (USDT):";
+            const capInput = document.createElement("input");
+            capInput.type = "number";
+            capInput.min = "0";
+            capInput.step = "1";
+            capInput.className = "wl-cap-input";
+            capInput.placeholder = "nessuno";
+            capInput.value = entry.size_cap_usdt?.[name] || "";
+            let capTimer = null;
+            capInput.addEventListener("input", () => {
+              clearTimeout(capTimer);
+              capTimer = setTimeout(async () => {
+                const v = parseFloat(capInput.value);
+                await fetch(`/api/watchlist/${entry.id}/size_cap`, {
+                  method: "PATCH", headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ strategy_name: name, cap_usdt: Number.isFinite(v) && v > 0 ? v : 0 }),
+                });
+              }, 600);
+            });
+            capRow.appendChild(capLabel);
+            capRow.appendChild(capInput);
+            body.appendChild(capRow);
           }
 
           // Last trigger + count (async fetch stats)
