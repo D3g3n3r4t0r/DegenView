@@ -22,6 +22,16 @@ pacchetto, e che sono anche i tre modi piu' facili di sbagliare qui:
 Nota sul perimetro: MEXC non ha licenza UE per i derivati, a differenza di
 Kraken, Bybit, OKX e Bitget. E' stato aggiunto su richiesta esplicita di
 Lorenzo, che ha scelto sapendolo. Vedi il commento in `registry.py`.
+
+Nota sulla rete: `contract.mexc.com/api/v1/private/order/submit` puo'
+rifiutare un IP europeo con un blocco Akamai (pagina "Access Denied", non
+una risposta dell'API — vedi `explain()` in base.py, che la riconosce
+apposta prima delle parole chiave generiche). Se capita, e' il server che
+esegue l'ordine ad avere un IP europeo, non un problema di chiave: la via
+scelta e' instradare SOLO le chiamate a questo exchange attraverso un proxy
+fuori UE, impostato con `MEXC_FUTURES_PROXY` (es.
+"http://utente:password@host:porta" o "socks5://host:porta") — mai le
+chiamate agli altri cinque exchange, che restano dirette.
 """
 
 from __future__ import annotations
@@ -29,6 +39,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import os
 import time
 import urllib.parse
 
@@ -37,6 +48,13 @@ import httpx
 from app.trading.futures.base import FuturesAdapter, FuturesCreds, Position, explain
 
 BASE = "https://contract.mexc.com"
+
+
+# None = nessun proxy, chiamata diretta (comportamento di sempre finche' non
+# viene impostata sull'ambiente del server).
+def _proxy() -> str | None:
+    return os.environ.get("MEXC_FUTURES_PROXY", "").strip() or None
+
 
 _HINTS = {
     "600": "parametro rifiutato da MEXC",
@@ -97,14 +115,14 @@ class MexcFutures(FuturesAdapter):
 
     async def _get(self, path: str, params: dict, creds: FuturesCreds, action: str):
         query = urllib.parse.urlencode(sorted(params.items()))
-        async with httpx.AsyncClient(base_url=BASE, timeout=15.0) as c:
+        async with httpx.AsyncClient(base_url=BASE, timeout=15.0, proxy=_proxy()) as c:
             resp = await c.get(f"{path}?{query}" if query else path,
                                headers=self._headers(creds, query))
         return self._unwrap(resp, action)
 
     async def _post(self, path: str, body: dict, creds: FuturesCreds, action: str):
         payload = json.dumps(body, separators=(",", ":"))
-        async with httpx.AsyncClient(base_url=BASE, timeout=15.0) as c:
+        async with httpx.AsyncClient(base_url=BASE, timeout=15.0, proxy=_proxy()) as c:
             resp = await c.post(path, headers=self._headers(creds, payload), content=payload)
         return self._unwrap(resp, action)
 
@@ -118,7 +136,7 @@ class MexcFutures(FuturesAdapter):
 
     async def mark_price(self, symbol: str, creds: FuturesCreds) -> float:
         # Pubblico: un prezzo non deve poter fallire per una chiave sbagliata.
-        async with httpx.AsyncClient(base_url=BASE, timeout=15.0) as c:
+        async with httpx.AsyncClient(base_url=BASE, timeout=15.0, proxy=_proxy()) as c:
             resp = await c.get("/api/v1/contract/ticker", params={"symbol": self.symbol_for(symbol)})
         data = self._unwrap(resp, "prezzo")
         # Un simbolo sconosciuto (o mal formato) torna qui come lista vuota,
@@ -140,7 +158,7 @@ class MexcFutures(FuturesAdapter):
         1 — assumerlo lo era su BTC_USDT (dove infatti vale 1) ma non e'
         garantito per ogni pair, e sbagliarlo per difetto rifiuta ordini
         validi mentre per eccesso li lascia passare quando non dovrebbero."""
-        async with httpx.AsyncClient(base_url=BASE, timeout=15.0) as c:
+        async with httpx.AsyncClient(base_url=BASE, timeout=15.0, proxy=_proxy()) as c:
             resp = await c.get("/api/v1/contract/detail", params={"symbol": symbol})
         data = self._unwrap(resp, "dati del contratto")
         # Stesso caso di mark_price: un simbolo sconosciuto torna come lista

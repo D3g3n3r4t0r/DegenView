@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0072", "Ordine futures MEXC bloccato da un firewall/CDN, letto erroneamente come permesso mancante",
+     "Lorenzo: ordine manuale con 50 USDT rifiutato con una pagina HTML 'Access Denied' di Akamai — il codice la leggeva come errore di chiave. Causa probabile: IP europeo del server negato da MEXC su /order/submit per i derivati.",
+     "media"),
     ("seed-0071", "Trading automatico: nessun tetto per strategia, e % saldo non funzionava su MEXC",
      "Lorenzo (voce): 'io magari voglio fare 10 ordini da 500 dollari l'uno con il bot, ma se lui pesca con la percentuale e' finita' — la credenziale exchange (size_mode/size_value) e' UNA sola, condivisa da tutte le strategie automatiche che ci operano sopra, quindi non basta a limitare quanto rischia ciascuna. Separatamente: 'voglio usare la % del saldo per gli ordini automatici... pero' sembra non funzionare su mexc'.",
      "media"),
