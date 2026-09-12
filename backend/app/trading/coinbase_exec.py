@@ -48,6 +48,24 @@ def _cb_headers(
     }
 
 
+async def get_all_balances(api_key: str, api_secret: str) -> list[dict]:
+    """Tutti gli account con saldo disponibile > 0 — la sezione Diagnosi li
+    normalizza per la UI."""
+    path = "/api/v3/brokerage/accounts"
+    headers = _cb_headers(api_key, api_secret, "GET", path, "")
+    async with httpx.AsyncClient() as client:
+        response = await client.get(COINBASE_BASE + path, headers=headers, timeout=10.0)
+    if response.status_code != 200:
+        raise RuntimeError(f"Failed to fetch accounts: HTTP {response.status_code} — {response.text}")
+    accounts: list[dict] = response.json().get("accounts", [])
+    out = []
+    for account in accounts:
+        value = float(account.get("available_balance", {}).get("value", "0") or 0)
+        if value > 0:
+            out.append({"asset": account.get("currency", "?"), "free": value})
+    return out
+
+
 async def _get_balance(
     api_key: str,
     api_secret: str,

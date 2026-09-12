@@ -8,11 +8,11 @@
 
   const LS_KEY = "simpleModeActive";
   const root = document.getElementById("simple-mode-root");
-  // Due punti d'ingresso: il bottone nel .toolbar (desktop — .toolbar ha
-  // display:none sotto i 760px, vedi style.css) e la voce nel menu "Altro"
-  // (mobile). Nessuno dei due e' obbligatorio da solo: quello che conta e'
-  // che almeno uno esista, altrimenti la modalita' non e' raggiungibile da
-  // nessun dispositivo.
+  // Un solo punto d'ingresso voluto: la voce nel menu "Altro" (mobile).
+  // Modalita' Semplice e' pensata per il telefono; su desktop non deve
+  // esistere ne' essere raggiungibile. Il primo id (bottone nel vecchio
+  // .toolbar desktop) e' stato rimosso da index.html — resta cercato qui
+  // solo per compatibilita', .filter(Boolean) lo scarta se assente.
   const toggleBtns = [
     document.getElementById("simple-mode-toggle-btn"),
     document.getElementById("altro-simple-mode-item"),

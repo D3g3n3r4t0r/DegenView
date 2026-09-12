@@ -164,6 +164,12 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0063", "Modalita' Semplice visibile anche da desktop",
+     "Il bottone 'Modalita' Semplice' compariva nella toolbar desktop, non solo nel menu mobile 'Altro' — ma e' pensata solo per il telefono, su desktop il resto dell'app e' gia' raggiungibile per intero.",
+     "bassa"),
+    ("seed-0062", "Nessun modo di testare una chiave API o vedere il saldo prima di operare",
+     "Lorenzo: 'vorrei poter effettuare dei test preliminari di collegamento all'exchange... vorrei anche che fosse visualizzato il saldo una volta collegate le API, prima di poter fare poi le vere operazioni... vorrei poter fare anche operazioni manuali, quindi provare proprio a fare il test'. Chiesta esplicitamente una sezione isolata ('circoscritta'), cosi' un problema li' dentro si sistema in poco tempo senza toccare il resto.",
+     "media"),
     ("seed-0061", "Un CDN irraggiungibile (grafico o Script Pine) bloccava silenziosamente tutto il sito, ricerca pair compresa",
      "index.html caricava Lightweight Charts e CodeMirror da unpkg.com; se uno dei due non rispondeva, un'eccezione non gestita nella sequenza di avvio impediva a ogni altro bind (ricerca ticker in Lab, ordini spot/futures, navigazione) di partire — trovato investigando le segnalazioni 54cbf520 e 2a7fd905 sui pair introvabili.",
      "alta"),
