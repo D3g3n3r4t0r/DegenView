@@ -195,6 +195,22 @@ COMMON_HINTS = {
 
 def explain(exchange: str, action: str, body: str, hints: dict[str, str] | None = None) -> FuturesExecutionError:
     low = body.lower()
+    # Una pagina HTML di un CDN (Akamai/Edgesuite e simili) davanti
+    # all'exchange, non una risposta dell'API — capita quando il server che
+    # gira l'app viene bloccato a livello di rete prima ancora di arrivare
+    # all'exchange (es. un IP europeo su un endpoint che l'exchange nega per
+    # motivi regolatori sui derivati, indipendentemente da chiave o
+    # permessi). Va riconosciuta PRIMA delle parole chiave generiche: quella
+    # pagina contiene spesso "permission"/"access", che altrimenti verrebbe
+    # letta come un problema della chiave API — diagnosi sbagliata, e
+    # incolperebbe una chiave che non c'entra.
+    if "<html" in low and ("access denied" in low or "edgesuite" in low or "akamai" in low):
+        return FuturesExecutionError(
+            f"{exchange} futures {action}: la richiesta e' stata bloccata da un firewall/CDN "
+            f"davanti all'exchange, non da un errore della chiave API — probabile blocco di rete "
+            f"sul server che esegue l'ordine (es. IP europeo su un endpoint che l'exchange nega "
+            f"per i derivati, indipendentemente da permessi o credenziali)."
+        )
     for needle, hint in {**COMMON_HINTS, **(hints or {})}.items():
         if needle in low:
             return FuturesExecutionError(f"{exchange} futures {action}: {body} — {hint}")
