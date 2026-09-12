@@ -4768,9 +4768,20 @@ td {
 }
 
 /* ── entrata dei pannelli ──────────────────────────────────────────── */
+/* Solo opacity, MAI transform: un transform su .panel (anche innocuo come
+   questo translateY) crea un nuovo containing block per ogni discendente
+   position:fixed, finche' l'animazione resta "attached" via fill-mode
+   both — cioe' sempre, una volta che la tab e' attiva. Le liste di
+   suggerimenti (.suggestions, position:fixed, calcolate in JS rispetto
+   al VIEWPORT) che vivono dentro un .panel animato finivano quindi
+   posizionate rispetto al pannello, non allo schermo — un raddoppio
+   dell'offset che le spediva fuori dal bordo destro (segnalazione
+   8151937b, "il riempimento automatico... appare troppo a destra e
+   sparisce"). Bug reale, non solo nel Lab: qualunque tab con un
+   dropdown position:fixed dentro il suo .panel di primo livello lo aveva. */
 @keyframes lae-sali {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: none; }
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 /* Solo il contenuto che cambia davvero quando si passa da un'area
@@ -4792,8 +4803,8 @@ td {
 /* E' il momento che conta: la ricerca e' finita e c'e' un numero. Entra
    con una scala appena percettibile, non con un rimbalzo da cartone. */
 @keyframes lae-risultato {
-  from { opacity: 0; transform: scale(0.985) translateY(8px); }
-  to   { opacity: 1; transform: none; }
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 .lab-result-block:not(.hidden) {
   animation: lae-risultato 300ms cubic-bezier(0.22, 0.61, 0.36, 1) both;

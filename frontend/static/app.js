@@ -7438,7 +7438,16 @@
   // chart waits behind auth so nothing renders before the page unlocks.
   async function startApp() {
     appStarted = true;
-    initPineEditor();
+    try {
+      // Stessa guardia di initCharts() sopra, stesso motivo: se l'editor
+      // Pine non parte non deve portarsi dietro bindPineUI, il caricamento
+      // strategie e l'auto-load del ticker che vengono subito dopo in
+      // questa stessa funzione — sarebbe un intero avvio dell'app rotto
+      // per un componente che quasi nessuno apre in ogni sessione.
+      initPineEditor();
+    } catch (err) {
+      console.error("initPineEditor() fallito — lo Script Pine potrebbe non funzionare, il resto dell'app si', continuo:", err);
+    }
     bindPineUI();
     loadPineScripts();
     relocateChartSettings();
@@ -8389,7 +8398,19 @@
   document.addEventListener("DOMContentLoaded", async () => {
     populateIntervalSelects();
     buildMobileTfWheel();
-    initCharts();
+    try {
+      // Se la libreria del grafico non si carica (CDN irraggiungibile,
+      // rete dell'utente, disservizio) initCharts() lanciava un'eccezione
+      // non gestita qui, e da un handler async una throw non catturata
+      // fermava tutto cio' che veniva dopo — bindUI, bindLabUI, la ricerca
+      // ticker, ogni form — con nessun errore visibile: sembrava che il
+      // sito "non trovasse piu' i pair" ovunque, quando in realta' nessun
+      // listener si era mai agganciato. Isolato qui: un grafico che non
+      // parte resta un problema del grafico, non di tutto il resto.
+      initCharts();
+    } catch (err) {
+      console.error("initCharts() fallito — il grafico potrebbe non funzionare, il resto dell'app si', continuo:", err);
+    }
     bindUI();
     bindLabUI();
     bindMobileNav();
