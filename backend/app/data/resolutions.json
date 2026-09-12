@@ -1,5 +1,27 @@
 {
   "_README": "Scritto da Claude, versionato in git, distribuito col deploy. Le chiavi sono gli id delle segnalazioni. Non modificare a mano dall'app: verrebbe sovrascritto al deploy successivo.",
+  "ee624db5": {
+    "status": "risolto",
+    "at": 1789253135,
+    "summary": "Aggiunto un periodo di riferimento facoltativo nel Lab, subito dopo la tendina del pair (come richiesto): due campi data (Dal / Al) piu' una X per rimuoverlo. Vuoto = tutta la storia disponibile, comportamento di sempre. Quando impostato, il backtest gira SOLO sulle candele in quel periodo — il ritaglio avviene prima di calcolare segnali e trade, non dopo su un risultato gia' fatto (altrimenti resterebbero dentro operazioni aperte fuori dal periodo scelto, o ne mancherebbero di valide).",
+    "detail": "Nuovi parametri opzionali start_date/end_date (query string, formato YYYY-MM-DD) su GET /api/backtest/deep. Il DataFrame arriva dai provider gia' indicizzato per data (ogni provider fa df.set_index(\"datetime\")); il ritaglio e' df[df.index >= start] / df[df.index < end + 1 giorno] — end_date e' incluso per l'intera giornata, non escluso a mezzanotte. Un periodo senza candele torna 400 con un messaggio chiaro invece di un risultato vuoto silenzioso. Lato frontend: due <input type=\"date\"> in frontend/index.html (.lab-daterange-row) fra il selettore exchange e le pillole del timeframe, letti da buildLabQuery() in app.js solo se valorizzati. Non toccato l'endpoint di ottimizzazione (l'ho lasciato fuori scope, la segnalazione parla esplicitamente di backtest — se serve anche li' e' un seguito naturale). 5 nuovi test (test_backtest_date_range.py: nessun range = tutta la storia, range che restringe, end_date inclusivo, range fuori dai dati = 400 chiaro, solo start_date) — 457 test totali passano. Verificato dal vivo con Playwright: la richiesta di rete porta davvero start_date/end_date, la risposta ha data_start/data_end dentro il periodo scelto su BTCUSDT reale (gennaio-marzo 2024).",
+    "files": [
+      "backend/app/main.py",
+      "backend/tests/test_backtest_date_range.py",
+      "frontend/index.html",
+      "frontend/static/app.js",
+      "frontend/static/style.css"
+    ]
+  },
+  "5c5aad89": {
+    "status": "risolto",
+    "at": 1789253135,
+    "summary": "\"L'applicazione dei trade delle strategie sul grafico continuano a non corrispondere\" — bug reale, ricorrente nel tempo (da qui il \"continuano\"), diverso dai precedenti gia' chiusi su questo tema (seed-0030, seed-0036, 70a6bedd). Causa: il refresh automatico ogni 60 secondi (per tenere il grafico aggiornato senza WebSocket su alcuni exchange) sovrascriveva l'INTERO stato con la risposta rapida di /api/analyze — che calcola il backtest solo sull'ultima pagina di candele, non su tutta la storia — cancellando il backtest \"profondo\" (tutta la storia, arrivato prima in background) gia' caricato. Risultato: i marker sul grafico coincidevano con quelli veri solo per i primi secondi dopo il caricamento, poi tornavano a un sottoinsieme di trade diverso ogni minuto, indefinitamente.",
+    "detail": "In frontend/static/app.js, silentRefresh() (chiamata ogni 60s per ogni simbolo crypto) faceva `state.data = await resp.json()` senza guardare cosa c'era gia' dentro state.data.backtests — il backtest profondo per il timeframe attivo, scritto da refreshDeepBacktest() dopo il primo caricamento, veniva perso ad ogni giro. Corretto salvando state.data.backtests PRIMA di sovrascrivere state.data, e rifondendolo dentro dopo (spread: prima i valori superficiali appena arrivati, poi quelli profondi gia' in cache sopra — cosi' un timeframe non ancora approfondito resta comunque aggiornato, mentre uno gia' approfondito non regredisce). Diagnosticato con un agente di ricerca dedicato sul codice (non supposizione): citazioni esatte in app.js sia per silentRefresh (dove si rompeva) sia per refreshDeepBacktest (dove si scriveva la cache buona). Non ha un test automatico dedicato: il bug dipende dal timer di 60 secondi e da due chiamate di rete in sequenza, difficile da isolare senza un ambiente end-to-end reale — verificato leggendo il codice, non dal vivo con un timer di un minuto in sandbox. `node --check` su app.js pulito, nessuna altra modifica.",
+    "files": [
+      "frontend/static/app.js"
+    ]
+  },
   "seed-0073": {
     "status": "risolto in gran parte",
     "at": 1789238631,

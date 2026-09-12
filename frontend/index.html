@@ -393,6 +393,20 @@
             </select>
           </div>
 
+          <!-- Periodo di riferimento, facoltativo: vuoto = tutta la storia
+               disponibile (comportamento di sempre). -->
+          <div class="lab-daterange-row" id="lab-daterange-row">
+            <label class="lab-daterange-field">
+              <span>Dal</span>
+              <input type="date" id="lab-date-start" class="lab-daterange-input" />
+            </label>
+            <label class="lab-daterange-field">
+              <span>Al</span>
+              <input type="date" id="lab-date-end" class="lab-daterange-input" />
+            </label>
+            <button type="button" id="lab-daterange-clear" class="lab-daterange-clear" title="Rimuovi il periodo, usa tutta la storia disponibile">✕</button>
+          </div>
+
           <!-- Timeframe pills -->
           <div class="lab-tf-row" id="lab-tf-row">
             <button type="button" class="lab-tf-btn" data-lab-tf="4h">4h</button>

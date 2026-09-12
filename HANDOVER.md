@@ -1149,3 +1149,35 @@ il backend), ruff pulito.
   priorita'. Rifiutata anche una richiesta di installare "tutti" i repo di
   una lista da un articolo Medium — poi chiarita da Lorenzo come "analizza,
   mica installare alla cieca".
+
+### Chiuso — ee624db5 e 5c5aad89 (periodo di riferimento in Lab, bug marker grafico)
+
+Lorenzo: "risolvi tutti i punti aperti nel sito" — controllata la bacheca,
+4 segnalazioni vere ancora aperte da whitekobra. Risolte le due scoperte e
+chiare:
+
+- **ee624db5**: periodo di riferimento (data inizio/fine) nel Lab, subito
+  dopo il pair come chiesto. Il ritaglio avviene sul DataFrame prima del
+  backtest (non sui trade dopo), con un errore chiaro se il periodo non ha
+  candele invece di un risultato vuoto silenzioso.
+- **5c5aad89** ("l'applicazione dei trade... continuano a non
+  corrispondere" — bug ricorrente, non uno nuovo): diagnosticato con un
+  agente di ricerca dedicato invece di rileggere tutto a mano. Causa: il
+  refresh automatico ogni 60s (`silentRefresh`) sovrascriveva l'intero stato
+  con la risposta rapida di `/api/analyze` (backtest su una sola pagina di
+  candele), cancellando il backtest "profondo" (tutta la storia) gia'
+  caricato in background — i marker sul grafico tornavano a un sottoinsieme
+  diverso di trade ogni minuto, indefinitamente. Corretto preservando la
+  cache profonda attraverso ogni refresh silenzioso.
+
+Le altre due segnalazioni aperte (3cbd3308: dividere "Sorveglia" in tre
+sezioni; b7419455: spostare "Watchlist" dentro "Analizza") sono
+ristrutturazioni di navigazione, non fix scoperti — restano da affrontare
+con la stessa cautela usata in passato per richieste simili (seed-0064: mai
+spostare/eliminare sezioni intere senza verificare con Lorenzo cosa
+succede a cio' che contengono).
+
+Verificato dal vivo con Playwright: il selettore di periodo compare dove
+richiesto, la richiesta di rete porta davvero start_date/end_date, il
+risultato rispetta il periodo su BTCUSDT reale. 457 test totali passano
+(5 nuovi per il periodo), ruff pulito, node --check su app.js.

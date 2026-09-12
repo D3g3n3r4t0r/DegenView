@@ -2779,6 +2779,33 @@ body {
 /* #lab-suggestions inherits position:fixed + z-index:60 from .suggestions
    (JS sets left/top via getBoundingClientRect). No override needed. */
 
+.lab-daterange-row {
+  display: flex; align-items: flex-end; gap: 8px; margin-bottom: 12px;
+}
+.lab-daterange-field {
+  display: flex; flex-direction: column; gap: 3px; flex: 1;
+  font-size: 12px; color: var(--ink-dim);
+}
+.lab-daterange-input {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 6px 8px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--ink);
+}
+.lab-daterange-clear {
+  flex-shrink: 0;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--ink-dim);
+  width: 32px; height: 32px;
+  cursor: pointer;
+}
+.lab-daterange-clear:hover { color: var(--ink); border-color: var(--border-strong); }
+
 .lab-tf-row {
   display: flex; gap: 5px; margin-bottom: 12px;
 }

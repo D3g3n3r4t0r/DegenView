@@ -5978,7 +5978,19 @@
         showTabError("error-banner", `Aggiornamento automatico fallito (${resp.status}).`);
         return;
       }
+      // Il backtest "profondo" gia' caricato (refreshDeepBacktest, sulla
+      // storia intera) e' sempre piu' completo di quello "superficiale" che
+      // /api/analyze ricalcola ogni volta (solo l'ultima pagina di candele)
+      // — sovrascriverlo qui senza guardare riportava indietro i marker sul
+      // grafico a un sottoinsieme di trade diverso ogni 60 secondi, anche
+      // dopo che il profondo era gia' arrivato una volta. Le chiavi del
+      // profondo vincono; quelle di un timeframe non ancora approfondito
+      // restano quelle fresche appena arrivate.
+      const deepBacktests = state.data.backtests;
       state.data = await resp.json();
+      if (deepBacktests) {
+        state.data.backtests = { ...state.data.backtests, ...deepBacktests };
+      }
       render();
     } catch (err) {
       /* keep last known state; live ticks keep flowing independently */
@@ -7775,6 +7787,12 @@
     params.set("fill_at", labEl("lab-fill-at")?.value || "signal_close");
     params.set("stop_loss_pct", "0");
     params.set("take_profit_pct", "0");
+    // Periodo facoltativo: vuoto = tutta la storia disponibile (comportamento
+    // di sempre). Il backend ritaglia la serie PRIMA del backtest, non dopo.
+    const dateStart = labEl("lab-date-start")?.value;
+    const dateEnd = labEl("lab-date-end")?.value;
+    if (dateStart) params.set("start_date", dateStart);
+    if (dateEnd) params.set("end_date", dateEnd);
     const container = labEl("lab-params-fields");
     const fields = STRATEGY_PARAM_FIELDS[strategyName] || [];
     fields.forEach((field) => {
@@ -8488,6 +8506,12 @@
       labEl("lab-tf-row").querySelectorAll(".lab-tf-btn").forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
       labState.tf = btn.dataset.labTf;
+    });
+
+    // Periodo di riferimento del backtest, facoltativo
+    labEl("lab-daterange-clear").addEventListener("click", () => {
+      labEl("lab-date-start").value = "";
+      labEl("lab-date-end").value = "";
     });
 
     // Strategy select — keep toolbar in sync so chart markers match the lab
