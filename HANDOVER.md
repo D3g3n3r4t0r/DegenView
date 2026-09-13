@@ -1102,6 +1102,23 @@ noleggio in una regione non-UE va bene) e il suo indirizzo va messo in
 ordini futures MEXC restano bloccati come ora — il codice e' pronto a
 usarlo appena c'e'.
 
+**Seguito — endpoint sbagliato, non (solo) un blocco di rete**: il supporto
+MEXC ha risposto indicando un endpoint diverso per piazzare ordini futures:
+`order/create` al posto di `order/submit`, 4 richieste/2 secondi. Il
+messaggio sbagliava l'host (diceva `api.mexc.com`, che e' quello SPOT), ma
+prima di toccare codice che sposta denaro reale ho verificato il cambio di
+path in modo indipendente: un problema identico e' documentato su ccxt
+(issue #28532, libreria open source), stessa correzione esatta — host
+`contract.mexc.com` invariato, solo `submit` -> `create`. Corretto in
+`mexc.py` (entrambe le chiamate di piazzamento ordine, apertura e
+chiusura), test aggiornati di conseguenza. Diagnosi precedente (permesso
+account da attivare via assistenza) forse solo in parte giusta, forse
+irrilevante — `order/submit` semplicemente non era mai stato l'endpoint
+giusto. **Non verificato con un ordine reale**: questo ambiente non ha
+credenziali MEXC vere — serve una conferma di Lorenzo con un ordine piccolo
+di prova. Il proxy extra-UE resta configurabile per l'eventualita' che il
+blocco Akamai si ripresenti sul nuovo endpoint.
+
 ### Chiuso — seed-0073 (design "AI slop", pulizia sistemica CSS)
 
 Lorenzo: "tutto il sito sembra fatto da ai slop". Invece di ricontrollare a

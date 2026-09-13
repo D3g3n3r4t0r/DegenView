@@ -44,7 +44,7 @@ def test_no_proxy_env_var_means_direct_call(monkeypatch):
 
 
 def test_proxy_env_var_is_read_and_reaches_the_client(monkeypatch):
-    """Un IP europeo puo' essere bloccato da MEXC su /order/submit (blocco
+    """Un IP europeo puo' essere bloccato da MEXC su /order/create (blocco
     di rete, non di chiave — vedi il commento in cima al modulo). La via
     scelta e' instradare solo questo exchange attraverso un proxy fuori UE,
     impostato con questa env var — verificato qui che arriva davvero al
@@ -97,7 +97,7 @@ def test_order_size_is_in_contracts_not_in_coins(monkeypatch):
             return _ok({"contractSize": 0.0001})
         if p == "/api/v1/private/account/asset/USDT":
             return _ok({"availableBalance": 10000})
-        if p == "/api/v1/private/order/submit":
+        if p == "/api/v1/private/order/create":
             sent.update(json.loads(request.content))
             return _ok({"orderId": "1"})
         raise AssertionError(f"percorso inatteso: {p}")
@@ -123,7 +123,7 @@ def test_short_uses_the_open_short_code(monkeypatch):
             return _ok({"contractSize": 0.0001})
         if p == "/api/v1/private/account/asset/USDT":
             return _ok({"availableBalance": 10000})
-        if p == "/api/v1/private/order/submit":
+        if p == "/api/v1/private/order/create":
             sent.update(json.loads(request.content))
             return _ok({"orderId": "2"})
         raise AssertionError(p)
@@ -197,7 +197,7 @@ def test_closing_a_long_uses_the_close_code_and_cannot_open(monkeypatch):
             }])
         if p == "/api/v1/contract/detail":
             return _ok({"contractSize": 0.0001})
-        if p == "/api/v1/private/order/submit":
+        if p == "/api/v1/private/order/create":
             sent.update(json.loads(request.content))
             return _ok({"orderId": "3"})
         raise AssertionError(p)
@@ -221,7 +221,7 @@ def test_closing_a_short_uses_the_other_close_code(monkeypatch):
             }])
         if p == "/api/v1/contract/detail":
             return _ok({"contractSize": 0.0001})
-        if p == "/api/v1/private/order/submit":
+        if p == "/api/v1/private/order/create":
             sent.update(json.loads(request.content))
             return _ok({"orderId": "4"})
         raise AssertionError(p)
