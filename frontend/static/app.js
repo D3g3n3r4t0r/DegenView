@@ -2640,7 +2640,7 @@
 
     // Niente in archivio (o l'utente lo vuole comunque): sceglie la
     // strategia con i parametri di default e parte da li', direttamente in
-    // questa tab — senza dover prima passare da un backtest o da Sorveglia.
+    // questa tab — senza dover prima passare da un backtest o da Alert.
     function stepFresh() {
       const q = document.createElement("p");
       q.className = "wl-flow-q";
@@ -6359,7 +6359,7 @@
   // Pannello aperto dalla freccia di una riga Watchlist: mostra le strategie
   // gia' attive su questo ticker (se un WatchlistEntry corrispondente esiste
   // gia', creato da un'attivazione precedente) e sempre il modo per
-  // aggiungerne un'altra — stesso buildActivationFlow usato in Sorveglia,
+  // aggiungerne un'altra — stesso buildActivationFlow usato in Alert,
   // qui e' solo il punto da cui si apre.
   function renderFavoriteExpansion(wrap, favEntry, autoOpen) {
     const box = wrap.querySelector(".wl-row-expand");
@@ -6381,7 +6381,7 @@
       box.appendChild(list);
       const hint = document.createElement("p");
       hint.className = "panel-hint";
-      hint.textContent = "Gestione fine (parametri, frequenza, timeframe) resta nella tab Sorveglia.";
+      hint.textContent = "Gestione fine (parametri, frequenza, timeframe) resta nella tab Alert.";
       box.appendChild(hint);
     }
     box.appendChild(buildActivationFlow(match || favEntry, autoOpen));
@@ -7335,7 +7335,7 @@
   // (and its internal .tabs) that desktop already has. Script Pine and Saldi
   // are reached through the Altro menu, not the bottom nav itself, so they
   // still map onto the same mechanism without a 6th/7th tab.
-  const RIGHT_PANEL_TITLES = { backtest: "Backtest", alert: "Alert", saldi: "Saldi", analisi: "Analisi", watchlist: "Watchlist" };
+  const RIGHT_PANEL_TITLES = { backtest: "Backtest", alert: "Alert", strategie: "Strategie", trading: "Trading", saldi: "Saldi", analisi: "Analisi", watchlist: "Watchlist" };
 
   function showMobileScreen(target) {
     if (!window.matchMedia("(max-width: 760px)").matches) return;
@@ -7347,7 +7347,7 @@
     document.querySelector(".right-panel").classList.remove("mobile-open");
     el("draw-rail").classList.remove("mobile-tools-open");
 
-    const NAV_TARGET_FOR = { script: "altro", saldi: "altro", analisi: "altro", watchlist: "altro", backtest: "altro", issues: "altro" };
+    const NAV_TARGET_FOR = { script: "altro", saldi: "altro", analisi: "altro", watchlist: "altro", backtest: "altro", issues: "altro", strategie: "altro", trading: "altro" };
     const navTarget = NAV_TARGET_FOR[target] || target;
     document.querySelectorAll(".mobile-nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.mobileTarget === navTarget));
 
@@ -7414,6 +7414,8 @@
     el("altro-analisi-item").addEventListener("click", () => showMobileScreen("analisi"));
     el("altro-watchlist-item").addEventListener("click", () => showMobileScreen("watchlist"));
     el("altro-backtest-item").addEventListener("click", () => showMobileScreen("backtest"));
+    el("altro-strategie-item").addEventListener("click", () => showMobileScreen("strategie"));
+    el("altro-trading-item").addEventListener("click", () => showMobileScreen("trading"));
   }
 
   function bindUI() {
@@ -8715,12 +8717,11 @@
     cockpit.dataset.area = area;
     document.querySelectorAll(".sidenav-item").forEach((b) => b.classList.toggle("active", b === item));
 
-    if (area === "sorveglia") loadPositions();
+    if (area === "trading") loadPositions();
 
-    // "Analizza" e' l'unica voce senza tabTarget: e' il solo grafico, senza
-    // pannello. Senza questo else il tab-content marcato "active" nell'HTML
-    // statico (Backtest) restava visibile — Analizza attiva in sidebar,
-    // Lab a schermo, non sincronizzati al primo caricamento.
+    // Senza questo, il tab-content marcato "active" nell'HTML statico
+    // (Backtest) restava visibile per qualunque voce non ancora sincronizzata
+    // al primo caricamento.
     const tabTarget = item && item.dataset.tabTarget;
     document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", !!tabTarget && t.dataset.tab === tabTarget));
     document.querySelectorAll(".tab-content").forEach((c) => {

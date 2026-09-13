@@ -63,7 +63,11 @@
     <aside class="sidenav" id="sidenav">
       <div class="sidenav-group">
         <div class="sidenav-label">Lavoro</div>
-        <button type="button" class="sidenav-item active" data-area="analizza">
+        <!-- Segnalazione b7419455: la colonna destra restava vuota qui (Analizza
+             era l'unica voce senza tabTarget), mentre Watchlist non aveva una
+             voce propria raggiungibile da desktop. La stessa lista di ticker
+             riempie ora lo spazio che prima non mostrava niente. -->
+        <button type="button" class="sidenav-item active" data-area="analizza" data-tab-target="watchlist">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>
           <span>Analizza</span>
         </button>
@@ -79,20 +83,23 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3v6.5L4.2 18A2 2 0 006 21h12a2 2 0 001.8-3L15 9.5V3"/><path d="M8 3h8"/><path d="M7.5 14h9"/></svg>
           <span>Lab</span>
         </button>
-        <!-- "Watchlist" (ticker rapidi, tab-content="watchlist") non aveva
-             nessuna voce raggiungibile da desktop dopo il ridisegno: solo il
-             menu mobile "Altro" ci arrivava (altro-watchlist-item). Stesso
-             tipo di buco lasciato da Livelli (seed e599667e), stessa
-             correzione: una voce sidebar propria invece di infilarla dentro
-             Sorveglia, perche' sono due elenchi concettualmente diversi
-             (ticker da tenere d'occhio vs alert configurati). -->
-        <button type="button" class="sidenav-item" data-area="ticker" data-tab-target="watchlist">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17.3 6.2 20.5l1.1-6.5L2.5 9.3l6.5-.9L12 2.5l3 5.9 6.5.9-4.8 4.7 1.1 6.5z"/></svg>
-          <span>Watchlist</span>
-        </button>
-        <button type="button" class="sidenav-item" data-area="sorveglia" data-tab-target="alert">
+        <!-- Watchlist (ticker rapidi) non e' piu' una destinazione propria:
+             segnalazione b7419455, integrata nella colonna destra di
+             Analizza, dove prima c'era spazio vuoto. -->
+        <button type="button" class="sidenav-item" data-area="alert" data-tab-target="alert">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 01-3.4 0"/></svg>
-          <span>Sorveglia</span>
+          <span>Alert</span>
+        </button>
+        <!-- Sorveglia era sovraffollata: alert + archivio strategie + trading
+             tutti nella stessa sezione (segnalazione 3cbd3308). Tre voci
+             distinte, ciascuna con un solo intento. -->
+        <button type="button" class="sidenav-item" data-area="strategie" data-tab-target="strategie">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+          <span>Strategie</span>
+        </button>
+        <button type="button" class="sidenav-item" data-area="trading" data-tab-target="trading">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 9l-5 5-4-4-4 4"/></svg>
+          <span>Trading</span>
         </button>
         <a class="sidenav-item" href="/sniper">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg>
@@ -353,7 +360,7 @@
       <div class="tabs">
         <button type="button" class="tab active" data-tab="backtest">Backtest</button>
         <button type="button" class="tab" data-tab="watchlist">Watchlist</button>
-        <button type="button" class="tab" data-tab="alert">Sorveglia</button>
+        <button type="button" class="tab" data-tab="alert">Alert</button>
         <button type="button" class="tab" data-tab="analisi">Analisi</button>
         <button type="button" class="tab hidden" id="balances-tab-btn" data-tab="saldi">Saldi</button>
         <a href="/sniper" class="tab tab-link" title="Apre il Token Sniper in una nuova app">Sniper ↗</a>
@@ -565,7 +572,7 @@
             Nessun ticker salvato.<br />Aggiungine uno per passare da un grafico all'altro con un clic, e da qui attivi anche alert automatici e ordini automatici sulle strategie.
           </p>
 
-          <p class="wl-hint">Clicca un ticker per caricarlo nel grafico. Il pallino <b>●</b> indica che hai un alert Telegram attivo su quel ticker — gestiscilo dalla tab <b>Sorveglia</b>.</p>
+          <p class="wl-hint">Clicca un ticker per caricarlo nel grafico. Il pallino <b>●</b> indica che hai un alert Telegram attivo su quel ticker — gestiscilo dalla tab <b>Alert</b>.</p>
         </div>
       </div>
 
@@ -646,17 +653,6 @@
 
             <ul id="watchlist-list" class="watchlist-cards"></ul>
 
-            <!-- Archivio delle strategie attivate -->
-            <div class="section-title-row" style="margin-top:16px">
-              <span class="section-eyebrow">Archivio strategie</span>
-              <span id="archive-count" class="section-count"></span>
-              <button type="button" id="archive-import-btn" class="section-action-btn" title="Carica un file esportato da un altro account">Importa</button>
-              <input type="file" id="archive-import-file" accept="application/json" class="hidden" />
-              <button type="button" id="archive-refresh-btn" class="section-action-btn">Aggiorna</button>
-            </div>
-            <p class="panel-hint">Ogni volta che attivi una strategia su un ticker, la configurazione viene fotografata qui con il backtest del momento. Serve a ritrovare, mesi dopo, con che cosa era partita e che cosa prometteva. Il pulsante "Condividi" su ogni voce scarica un file da importare su un altro account.</p>
-            <ul id="archive-list" class="archive-cards"></ul>
-
             <!-- Alert log (storico) -->
             <div class="section-title-row" style="margin-top:16px">
               <span class="section-eyebrow">Storico alert</span>
@@ -676,10 +672,26 @@
         </div>
       </div>
 
-      <div class="tab-content" data-tab-content="alert">
+      <div class="tab-content" data-tab-content="strategie">
+        <div class="panel">
+          <h3>Strategie</h3>
+          <!-- Archivio delle strategie attivate -->
+          <div class="section-title-row">
+            <span class="section-eyebrow">Archivio strategie</span>
+            <span id="archive-count" class="section-count"></span>
+            <button type="button" id="archive-import-btn" class="section-action-btn" title="Carica un file esportato da un altro account">Importa</button>
+            <input type="file" id="archive-import-file" accept="application/json" class="hidden" />
+            <button type="button" id="archive-refresh-btn" class="section-action-btn">Aggiorna</button>
+          </div>
+          <p class="panel-hint">Ogni volta che attivi una strategia su un ticker, la configurazione viene fotografata qui con il backtest del momento. Serve a ritrovare, mesi dopo, con che cosa era partita e che cosa prometteva. Il pulsante "Condividi" su ogni voce scarica un file da importare su un altro account.</p>
+          <ul id="archive-list" class="archive-cards"></ul>
+        </div>
+      </div>
+
+      <div class="tab-content" data-tab-content="trading">
         <details class="panel opera-advanced">
           <summary>Chiavi exchange, posizioni, diario, ordine manuale <span class="risk-badge">denaro reale</span></summary>
-          <p class="panel-hint">Di solito non serve aprire questo pannello: attivando "Trading automatico" su una strategia in Sorveglia, se manca la chiave te la chiede li'. Qui dentro solo per gestire chiavi gia' configurate, vedere le posizioni aperte o piazzare un ordine manuale fuori da una strategia.</p>
+          <p class="panel-hint">Di solito non serve aprire questo pannello: attivando "Trading automatico" su una strategia in Alert, se manca la chiave te la chiede li'. Qui dentro solo per gestire chiavi gia' configurate, vedere le posizioni aperte o piazzare un ordine manuale fuori da una strategia.</p>
 
           <div id="opera-login-prompt" class="alert-login-prompt hidden">
             <p class="panel-hint">Accedi per operare: ogni utente ha le proprie chiavi, cifrate lato server.</p>
@@ -817,7 +829,7 @@
             <details class="opera-sub">
               <summary>Trading automatico <span class="trading-auto-badge">⚠️ Denaro reale</span></summary>
               <div class="trading-auto-section">
-              <p class="panel-hint trading-auto-hint">Configura qui le API key con permessi di trading (non di prelievo). Quale strategia puo' usarle si decide dalla tab Sorveglia, ticker per ticker: "Solo alert" o "Trading automatico".</p>
+              <p class="panel-hint trading-auto-hint">Configura qui le API key con permessi di trading (non di prelievo). Quale strategia puo' usarle si decide dalla tab Alert, ticker per ticker: "Solo alert" o "Trading automatico".</p>
               <div id="trading-credentials-list" class="trading-cred-list"></div>
 
               <!-- Diario: distinguere "nessun segnale" da "c'era un segnale e
@@ -1005,6 +1017,26 @@
           </span>
           <span class="altro-menu-chev">›</span>
         </button>
+        <button type="button" id="altro-strategie-item" class="altro-menu-item">
+          <span class="altro-menu-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+          </span>
+          <span class="altro-menu-text">
+            <span class="altro-menu-title">Strategie</span>
+            <span class="altro-menu-sub">Archivio delle strategie attivate</span>
+          </span>
+          <span class="altro-menu-chev">›</span>
+        </button>
+        <button type="button" id="altro-trading-item" class="altro-menu-item">
+          <span class="altro-menu-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 9l-5 5-4-4-4 4"/></svg>
+          </span>
+          <span class="altro-menu-text">
+            <span class="altro-menu-title">Trading</span>
+            <span class="altro-menu-sub">Chiavi exchange, posizioni, ordine manuale</span>
+          </span>
+          <span class="altro-menu-chev">›</span>
+        </button>
         <button type="button" id="altro-analisi-item" class="altro-menu-item">
           <span class="altro-menu-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>
@@ -1117,7 +1149,7 @@
     <button type="button" class="mobile-nav-btn" data-mobile-target="alert">
       <svg class="mobile-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/>
-      </svg>Sorveglia
+      </svg>Alert
     </button>
     <button type="button" class="mobile-nav-btn" data-mobile-target="altro">
       <svg class="mobile-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">

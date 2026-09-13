@@ -86,7 +86,7 @@
             <h2>Diagnosi <span class="risk-badge">denaro reale</span></h2>
             <button type="button" class="diag-close" id="diag-close-btn" title="Chiudi">✕</button>
           </div>
-          <p class="panel-hint">Prova una chiave prima di fidartene: qui si legge solo il saldo, non si piazza mai un ordine senza che tu prema apposta "Esegui" qui sotto. Le chiavi salvate restano quelle di Sorveglia — questa sezione non ne crea di nuove.</p>
+          <p class="panel-hint">Prova una chiave prima di fidartene: qui si legge solo il saldo, non si piazza mai un ordine senza che tu prema apposta "Esegui" qui sotto. Le chiavi salvate restano quelle di Trading — questa sezione non ne crea di nuove.</p>
 
           <div class="diag-mode-row">
             <button type="button" class="wl-mode-btn ${!isFutures ? "active" : ""}" id="diag-mode-spot">Spot</button>
@@ -114,8 +114,8 @@
           <div class="diag-section" id="diag-order-section">
             <div class="section-title-row"><span class="section-eyebrow">2 · Ordine di prova (solo spot)</span></div>
             <p class="panel-hint">${isFutures
-              ? "Per i futures usa il form completo in Sorveglia — leva e margine hanno bisogno dell'anteprima di liquidazione, non riprodotta qui apposta."
-              : "Richiede una chiave gia' salvata e abilitata in Sorveglia (non basta la chiave provata sopra al volo)."}</p>
+              ? "Per i futures usa il form completo in Trading — leva e margine hanno bisogno dell'anteprima di liquidazione, non riprodotta qui apposta."
+              : "Richiede una chiave gia' salvata e abilitata in Trading (non basta la chiave provata sopra al volo)."}</p>
             ${isFutures ? "" : `
             <div class="mo-row">
               <div class="mo-field mo-field-grow">
@@ -222,7 +222,7 @@
             size_value: parseFloat(document.getElementById("diag-order-usdt").value) || 0,
           }),
         });
-        out.innerHTML = `<p class="diag-ok">✓ Ordine inviato — vedi il diario ordini in Sorveglia per il dettaglio.</p>`;
+        out.innerHTML = `<p class="diag-ok">✓ Ordine inviato — vedi il diario ordini in Trading per il dettaglio.</p>`;
         confirmBox.checked = false;
       } catch (err) {
         if (err.needsAuth) { document.getElementById("auth-toggle-btn")?.click(); return; }
