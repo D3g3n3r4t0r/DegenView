@@ -1224,3 +1224,36 @@ Altro mobile apre gli stessi pannelli col titolo corretto, la colonna destra
 di Analizza mostra la watchlist. `node --check` pulito su tutti i JS
 toccati, 457 test backend passano (nessuno tocca il frontend, confermano
 solo che il server non e' stato smosso).
+
+### Chiuso — Strategie raggruppate per ticker, con freccetta e consiglio automatico
+
+Tre richieste in sequenza sulla tab Strategie, tutte di Lorenzo: "raggruppiamole
+per ticker, sennò ce troppa confusione" — poi "inserisci freccetta per
+nascondere o espandere i vari archivi" — poi "una scelta automatica che in
+base ai vari risultati ti permette di scegliere quella giusta aiutandoti a
+interpretare anche i dati dei back test".
+
+- **Raggruppamento**: le voci archiviate erano una lista piatta, mischiate fra
+  ticker diversi. Raggruppate per simbolo (Map, ordine di prima comparsa —
+  segue quello gia' dato dal server, piu' recenti prima), col ticker come
+  titolo di gruppo invece che ripetuto su ogni card.
+- **Freccetta**: ogni gruppo e' un `<details>/<summary>` nativo (stesso
+  pattern gia' usato da `.opera-sub` in Trading) — zero JS nuovo per il
+  toggle, aperto di default.
+- **Consiglio automatico**: per ogni ticker con almeno due voci utilizzabili,
+  un confronto fra quelle gia' salvate — non un numero nuovo, la stessa
+  logica dei controlli gia' mostrati su ogni card (gate di regime, PBO,
+  sovradattamento, deterministico), ridotta a un ordinamento. Un gate saltato
+  pesa piu' di qualunque differenza di rendimento; il rendimento fuori
+  campione conta piu' di quello in-sample quando c'e' (stima meno viziata);
+  pochi trade abbassano la fiducia. Se nessuna voce e' pulita lo dice
+  esplicitamente ("trattale come esplorative") invece di consigliarne
+  comunque una — la "meno peggio" prende un badge neutro, non quello verde
+  "Consigliata", cosi' i due stati non si confondono a colpo d'occhio.
+  Verificato con tre scenari sintetici via Playwright (route mockate su
+  `/api/archive`): un caso dove la voce con rendimento piu' alto (+40%) viene
+  scartata a favore di una piu' modesta ma pulita (+13% fuori campione) perche'
+  la prima e' sovradattata; un caso dove tutte le voci sono segnalate; un
+  caso con una sola voce (nessun confronto, nessun box). Tutto lato frontend,
+  nessun endpoint nuovo: i dati (`optimizer.*`) arrivano gia' con ogni voce
+  d'archivio. `node --check` pulito.
