@@ -102,42 +102,59 @@
     "at": 1789216290,
     "summary": "Il messaggio 'Esecuzione futures disattivata per questo exchange' non diceva dove attivarla. Ora nomina l'exchange ('...per MEXC Futures') e, nel form di ordine futures manuale (Sorveglia → Alert → pannello 'Chiavi exchange...' → Ordine futures), un rifiuto per questo motivo aggiunge subito un pulsante 'Attiva ora' accanto al messaggio: un tocco accende il toggle senza dover tornare su alla card MEXC a cercarlo. La chiave e i suoi altri parametri (size, leva) restano quelli gia' salvati — 'Attiva ora' cambia solo enabled, non li tocca.",
     "detail": "Verificato dal vivo con Playwright: con una chiave MEXC salvata ma disattivata, l'ordine viene rifiutato con il nuovo messaggio e il pulsante compare; cliccandolo, PATCH /api/auth/futures imposta enabled=true (confermato rileggendo GET /api/auth/futures subito dopo) e lo status si aggiorna invitando a reinviare l'ordine. Nello stesso giro, sistemata anche la vista mobile dell'intero pannello 'Chiavi exchange, posizioni, diario, ordine manuale' (Lorenzo, sulla stessa segnalazione: 'da mobile questa vista è veramente incasinata'): le quattro sotto-sezioni (Posizioni aperte, Ordine futures, Trading automatico, Ordine manuale) erano tutte scaricate in un'unica colonna lunghissima — su un telefono uno scroll enorme senza punti di riferimento. Ognuna e' ora un dettaglio proprio, chiuso finche' non serve: si apre solo quella che interessa. Nessun id o comportamento di salvataggio toccato, solo la struttura di presentazione.",
-    "files": ["backend/app/main.py", "frontend/static/app.js", "frontend/static/style.css", "frontend/index.html"]
+    "files": [
+      "backend/app/main.py",
+      "frontend/static/app.js",
+      "frontend/static/style.css",
+      "frontend/index.html"
+    ]
   },
   "seed-0069": {
     "status": "risolto",
     "at": 1789213579,
     "summary": "Aggiunto il timeframe scelto (state.interval) al testo sotto il titolo negli step Backtest e Ottimizza ('Su INJUSDT · timeframe 4h...'), oltre alla riga gia' presente nel riepilogo finale (step 6). Una funzione tfLabel() unica traduce l'id interno (15m/1h/4h/1d/1w) nell'etichetta mostrata, riusata in tutti e tre i punti invece di tre lookup separati.",
     "detail": "Nessun cambio di logica: solo testo aggiunto, verificato dal vivo con Playwright su una voce d'archivio con interval=4h — 'Su INJUSDT · timeframe 4h' compare correttamente sotto il titolo dello step Backtest.",
-    "files": ["frontend/static/simple-mode.js"]
+    "files": [
+      "frontend/static/simple-mode.js"
+    ]
   },
   "seed-0068": {
     "status": "risolto",
     "at": 1789205191,
     "summary": "Il grafico reale nello step Backtest di Modalita' Semplice, attivato da una voce d'archivio, mostrava sempre 'Cerca un ticker per iniziare l'analisi' invece dei dati — dava davvero l'impressione di dover riselezionare il ticker. Causa: window.LiquidityChartBridge.show() (app.js) copiava il comportamento di applyArchiveEntry() ma con un controllo piu' debole — un backtest_params={} (voce d'archivio senza costi mai registrati, caso comune e onesto, non un difetto) e' un oggetto VUOTO ma comunque truthy in JS: passava il controllo 'if (!cfg.backtestParams)' come se fosse un override vero, lasciando ogni campo (initial_capital, qty_pct_of_equity, commission_pct, slippage_pct) a 'undefined' — il server rispondeva 422 ('serve un numero, ricevuto undefined'), l'errore veniva assorbito dentro runAnalysis() e il grafico restava sullo stato vuoto iniziale senza dirlo chiaramente. Corretto il controllo per trattare {} come nessun override (stesso Object.keys(...).length gia' usato in applyArchiveEntry sul sito), sia nel ponte sia nella chiamata di Modalita' Semplice.",
     "detail": "Aggiunta anche la funzione richiesta esplicitamente: un tocco sul grafico reale (window.LiquidityChartBridge.onChartClick(), nuovo — usa mainChart.subscribeClick() di LightweightCharts) trova l'operazione piu' vicina nel tempo fra i trade reali del backtest e la apre/evidenzia in un elenco sotto il grafico (nuovo pannello Simple-Mode, dati identici al pulsante 'N trade' del Laboratorio — stessi t.entry_time/exit_time/pnl_pct — non una tabella nel Laboratorio stesso, che e' pensata per stare incollata ai suoi risultati e non per essere spostata). Verificato dal vivo con Playwright: una voce d'archivio reale (INJUSDT, backtest_params={}) ora mostra il grafico con 35 operazioni segnate; toccando il grafico l'operazione piu' vicina si apre e lampeggia nell'elenco.",
-    "files": ["frontend/static/app.js", "frontend/static/simple-mode.js"]
+    "files": [
+      "frontend/static/app.js",
+      "frontend/static/simple-mode.js"
+    ]
   },
   "seed-0067": {
     "status": "risolto",
     "at": 1789204526,
     "summary": "Lo step Ottimizza di Modalita' Semplice non riscrive piu' la sua propria barra di progresso: apre la STESSA finestra usata dal Laboratorio (#opt-progress in index.html) tramite un nuovo ponte, window.LiquidityOptBridge in app.js — stessa animazione della ricerca stabile (canvas con le cinque fasi), stesso log reale riga per riga, stesso pulsante 'Ferma' gia' cablato su POST /api/jobs/{id}/cancel. La mappa dei lavori (optJobs) e il polling (startOptPolling/pollOnce) restano gli stessi del sito: Modalita' Semplice si limita a registrarci il proprio job e a controllare lo stato gia' aggiornato in quella mappa (nessuna seconda chiamata di rete). Risolto anche 'la casella [object Object]': era un bug della vecchia barra di progresso propria di Modalita' Semplice, che assegnava a .textContent l'intera riga di log {t, m} invece del solo campo m — sparito insieme alla barra, dato che ora il log lo scrive appendOptLog() del sito, che lo fa gia' bene.",
     "detail": "Trovata e corretta anche la causa vera dell'errore 503 in fondo alla ricerca: pollOnce() in app.js (usato sia dal Laboratorio sia, ora, da Modalita' Semplice) segnava un lavoro come 'fallito' lato client al primissimo giro di polling che tornava un errore qualsiasi — un 503 durante un deploy, un timeout di rete — anche se la ricerca sul server stava proseguendo tranquilla. Ora un errore non definitivo (tutto tranne un 404 vero, che significa che il processo e' stato riavviato e la memoria del lavoro persa per davvero) si accetta fino a 5 giri consecutivi prima di arrendersi: un intoppo di un secondo non interrompe piu' nove minuti di ricerca. Bug preesistente, non introdotto in questa sessione, e non specifico di Modalita' Semplice — la correzione vale anche per il Laboratorio desktop. Aggiunto anche un override di z-index (solo mentre Modalita' Semplice e' aperta) perche' la finestra, che nel sito vive a z-index:60, non finisca nascosta dietro l'overlay di Modalita' Semplice (z-index:500). Verificato dal vivo con Playwright: la finestra reale si apre con l'animazione e il log corretto, e il pulsante Ferma annulla davvero il lavoro e riporta il controllo alla guida.",
-    "files": ["frontend/static/app.js", "frontend/static/simple-mode.js"]
+    "files": [
+      "frontend/static/app.js",
+      "frontend/static/simple-mode.js"
+    ]
   },
   "seed-0066": {
     "status": "risolto",
     "at": 1789203953,
     "summary": "La riga del ticker ora risponde subito al tocco (leggero effetto di pressione CSS, bordo verde immediato) e mostra uno spinner mentre il backtest reale gira in sotto — prima non c'era nessun segnale finche' il grafico non arrivava, qualche secondo dopo. Trovato e corretto anche un bug vero che stava dietro al sintomo: state.ticker non salvava mai il campo provider, quindi il confronto in searchTickers() che decide quale riga evidenziare come 'selezionata' falliva sempre — la spunta ✓ verde che dovrebbe restare sulla riga scelta spariva non appena la lista si ridisegnava alla fine di selectTicker(), dando davvero l'impressione che il click non avesse avuto effetto.",
     "detail": "frontend/static/simple-mode.js: aggiunto provider a state.ticker in selectTicker(); il click sulla riga aggiunge subito le classi active+loading (evidenziazione + spinner) prima ancora di chiamare selectTicker(), che le rimuove implicitamente quando la lista si ridisegna a fine caricamento con la spunta al posto dello spinner. Verificato dal vivo con Playwright: la classe 'active' resta sulla riga giusta anche dopo il ricaricamento (prima non restava mai, con qualunque ticker).",
-    "files": ["frontend/static/simple-mode.js"]
+    "files": [
+      "frontend/static/simple-mode.js"
+    ]
   },
   "seed-0065": {
     "status": "risolto",
     "at": 1789203476,
     "summary": "Aggiunto un passo 'Prima di attivare' (5.5, fra Exchange e Riepilogo) nel wizard: dopo che la chiave e' stata salvata dal flusso ufficiale (PATCH /api/auth/trading, invariato), chiede esplicitamente 'Vuoi testare subito {exchange}?'. Se si', chiama POST /api/diagnostics/test-connection con api_key/api_secret VUOTI — il server usa quindi la chiave appena salvata, mai una reinserita — mostra un caricamento animato e poi il saldo vero (o l'errore, con Riprova/Continua comunque). Dopo un test riuscito offre un ordine manuale di prova (pair, BUY/SELL, importo USDT, conferma esplicita, stesso endpoint POST /api/trading/order gia' usato da Diagnosi e dal form manuale di Sorveglia — stesso avviso 'denaro reale', nessun ambiente fittizio: questa piattaforma non ha un testnet spot, e dirlo chiaramente evita di far credere il contrario). Il riepilogo finale (step 6) ora mostra anche il Timeframe scelto e, se il test e' stato fatto, 'connessione testata ✓' accanto all'exchange.",
     "detail": "Nello stesso giro, sistemato il problema di fondo per cui Lorenzo si lamenta spesso ('la cosa dei ticket dello spot e del futures'): la Modalita' Semplice usava tre timeframe diversi in tre punti diversi senza dirlo — il backtest (step 3) non passava affatto ltf_interval al server (default 15m), il grafico reale mostrato li' accanto veniva pero' aperto con interval='1d' fisso, e l'ottimizzazione (step 4) usava ltf_interval='1d' fisso indipendentemente da cosa si era visto nel backtest. Aggiunto un selettore di timeframe (15m/1h/4h/1g/1sett) allo step Strategia, salvato in state.interval e riusato identico in backtest, grafico, export Excel, ottimizzazione e creazione della voce watchlist — un solo timeframe per tutta la pipeline, mai piu' 'il grafico dice una cosa, l'esecuzione ne fa un'altra'. Verificato dal vivo (Playwright + log del server locale): selezionando 4h, sia /api/analyze sia /api/optimize/start arrivano al server con ltf_interval=4h. Verificato anche il nuovo passo di test: con una chiave finta, la chiamata reale a Binance torna un errore vero (geo-restrizione), mostrato pulito con Riprova/Continua comunque — la UI non si rompe e non finge un successo.",
-    "files": ["frontend/static/simple-mode.js"]
+    "files": [
+      "frontend/static/simple-mode.js"
+    ]
   },
   "seed-0064": {
     "status": "risolto",
@@ -158,7 +175,10 @@
     "at": 1789200000,
     "summary": "Rimosso il bottone 'Modalita' Semplice' dalla toolbar desktop (index.html) — resta solo l'ingresso dal menu mobile 'Altro', che gia' esisteva apposta perche' la toolbar desktop e' nascosta sotto i 760px. simple-mode.js non aveva bisogno di nessun cambio: cerca entrambi gli id e scarta quelli assenti con .filter(Boolean).",
     "detail": "Nessun controllo per-dispositivo aggiunto: la modalita' resta raggiungibile solo tramite l'unico bottone rimasto (mobile), quindi su desktop non compare mai — se in futuro serve un blocco esplicito (es. contro un accesso diretto al pannello), va aggiunto a parte.",
-    "files": ["frontend/index.html", "frontend/static/simple-mode.js"]
+    "files": [
+      "frontend/index.html",
+      "frontend/static/simple-mode.js"
+    ]
   },
   "seed-0062": {
     "status": "risolto",
@@ -181,28 +201,47 @@
     "at": 1789197000,
     "summary": "Riprodotto dal vivo (server locale + browser vero, non solo lettura del codice): il riquadro dei suggerimenti nel Lab appariva davvero a x=2330 su uno schermo largo 2000px — completamente fuori bordo — anche se il suo stesso stile inline diceva 'left: 1171px'. Causa: .tab-content.active > .panel (che avvolge ogni pannello, compreso quello del Lab) aveva un'animazione d'entrata con un transform (translateY). Un transform su un antenato crea, per tutta la durata in cui l'animazione resta 'attached' (cioe' sempre, con fill-mode both), un nuovo sistema di coordinate per ogni discendente position:fixed — e i riquadri di suggerimento sono proprio position:fixed, calcolati in JS rispetto allo SCHERMO. Il risultato era una posizione calcolata due volte: una volta giusta in JS, una volta rifatta (sbagliata) dal browser rispetto al pannello invece che allo schermo.",
     "detail": "frontend/static/style.css: tolto il transform (translateY/scale) dalle animazioni lae-sali e lae-risultato, lasciando solo la dissolvenza in opacita' — stesso effetto d'entrata percepito, senza l'effetto collaterale sul containing block. Non e' un fix solo per il Lab: qualunque tab con un menu a comparsa position:fixed dentro il proprio pannello di primo livello aveva lo stesso problema latente (verificato anche sul campo Pair dell'ordine manuale in Sorveglia). Verificato con un browser vero (Playwright) contro un server locale, prima e dopo la correzione.",
-    "files": ["frontend/static/style.css"]
+    "files": [
+      "frontend/static/style.css"
+    ]
   },
   "2a7fd905": {
     "status": "risolto",
     "at": 1789197000,
     "summary": "Stessa causa di 8151937b nella maggior parte dei casi (il riquadro dei suggerimenti finiva fuori schermo, sembrava che 'non trovasse' nulla mentre i risultati arrivavano regolarmente) — risolta con la stessa correzione. Trovata anche una seconda causa possibile, piu' rara ma piu' grave: se una libreria esterna caricata da CDN (il grafico o l'editor Script Pine) non si carica per qualunque motivo, un errore non gestito bloccava l'intera inizializzazione della pagina, ricerca dei pair compresa, ovunque nel sito. Corretta anche quella, per sicurezza, anche se non e' detto fosse la causa di questo caso specifico.",
     "detail": "Vedi il dettaglio completo in 8151937b (fix CSS) e in seed-0061 (fix CDN/inizializzazione). Riprodotto e verificato dal vivo con un browser reale contro un server locale prima di pubblicare la correzione.",
-    "files": ["frontend/static/style.css", "frontend/static/app.js", "frontend/index.html", "backend/app/main.py"]
+    "files": [
+      "frontend/static/style.css",
+      "frontend/static/app.js",
+      "frontend/index.html",
+      "backend/app/main.py"
+    ]
   },
   "54cbf520": {
     "status": "risolto",
     "at": 1789197000,
     "summary": "Stessa causa e stessa correzione di 2a7fd905 — il campo ticker del Lab e' proprio quello in cui il bug del riquadro fuori schermo (8151937b) e' stato riprodotto e diagnosticato.",
     "detail": "Vedi il dettaglio completo in 8151937b e seed-0061.",
-    "files": ["frontend/static/style.css", "frontend/static/app.js", "frontend/index.html", "backend/app/main.py"]
+    "files": [
+      "frontend/static/style.css",
+      "frontend/static/app.js",
+      "frontend/index.html",
+      "backend/app/main.py"
+    ]
   },
   "seed-0061": {
     "status": "risolto",
     "at": 1789197000,
     "summary": "Trovato investigando le segnalazioni sui pair introvabili: index.html caricava il grafico (Lightweight Charts) e l'editor Script Pine (CodeMirror) da unpkg.com. Se uno dei due CDN non risponde, per qualunque motivo (rete dell'utente, blocco, disservizio), la chiamata sincrona non protetta a initCharts()/initPineEditor() lanciava un'eccezione — e siccome gira dentro la stessa sequenza async di avvio che poi chiama bindUI, bindLabUI, il caricamento della watchlist eccetera, un errore li' interrompeva silenziosamente tutto quello che doveva partire dopo. Verificato dal vivo: bloccando quegli script in un browser vero, la ricerca dei pair smetteva di funzionare esattamente come descritto nelle segnalazioni.",
     "detail": "Entrambe le librerie sono ora servite dal nostro stesso server (frontend/static/lightweight-charts.standalone.production.js, frontend/static/codemirror.js e .css) invece che da unpkg.com — un CDN di terze parti non e' piu' un singolo punto di guasto per funzioni che non c'entrano nulla con lui. In piu', initCharts() e initPineEditor() sono ora dentro un try/catch: se in futuro uno dei due fallisce comunque, resta un problema suo, non affonda piu' il resto del sito. Aggiunto anche un timeout di 5s per provider dentro _safe_search() (backend): senza, un exchange lento o irraggiungibile (rilevante ora che Kraken e' stato aggiunto) avrebbe fatto aspettare — o fallire — la ricerca combinata su TUTTI gli exchange insieme a lui, perche' asyncio.gather aspetta ogni gamba.",
-    "files": ["frontend/index.html", "frontend/static/app.js", "frontend/static/lightweight-charts.standalone.production.js", "frontend/static/codemirror.js", "frontend/static/codemirror.css", "backend/app/main.py"]
+    "files": [
+      "frontend/index.html",
+      "frontend/static/app.js",
+      "frontend/static/lightweight-charts.standalone.production.js",
+      "frontend/static/codemirror.js",
+      "frontend/static/codemirror.css",
+      "backend/app/main.py"
+    ]
   },
   "seed-0060": {
     "status": "risolto",
@@ -997,5 +1036,28 @@
     "at": 1788955487,
     "summary": "Gli ordini realmente eseguiti sono ora marker propri sul grafico, con l'origine (la strategia che li ha generati oppure “manuale”) e il prezzo di riempimento.",
     "detail": "Il diario registrava gia' tutto ma viveva solo come elenco. Ora le voci andate a buon fine vengono agganciate alla candela che le contiene e disegnate insieme ai segnali della strategia, cosi' la differenza fra cio' che la strategia diceva e cio' che e' successo si legge a colpo d'occhio. Solo gli ordini riusciti disegnano: un tentativo fallito appartiene al diario, non alla serie dei prezzi. Si aggiornano a ogni analisi e dopo ogni ordine inviato."
+  },
+  "3cbd3308": {
+    "status": "risolto",
+    "at": 1789283735,
+    "summary": "\"La sezione 'Sorveglia' e' sovraffollata\" — divisa in tre destinazioni distinte, come proposto: Alert (solo Telegram/alert prezzo/config per ticker), Strategie (solo l'archivio delle strategie attivate), Trading (chiavi exchange, posizioni, diario, ordine manuale — era gia' un pannello a se', ora e' una voce di navigazione a se').",
+    "detail": "Nessun backend toccato, solo HTML/CSS/JS. In frontend/index.html: la sezione 'Archivio strategie' (prima incastrata dentro il primo blocco alert, fra 'Alert su prezzo' e 'Storico alert') e' uscita in un tab-content proprio data-tab-content=\"strategie\"; il secondo blocco alert (.opera-advanced, chiavi/posizioni/ordini) e' ridiventato data-tab-content=\"trading\". Aggiunte due voci .sidenav-item (desktop) per Strategie e Trading, e due voci nel menu Altro (mobile) con i relativi binding in bindMobileNav() e le entry in RIGHT_PANEL_TITLES/NAV_TARGET_FOR (app.js). L'area 'sorveglia' e' stata rinominata 'alert' (solo l'id interno, l'etichetta era gia' proposta di cambiare da Lorenzo con la lista delle tre sezioni) — grep esaustivo di ogni riferimento prima di procedere: rinominato anche il caso speciale in setArea() (loadPositions() ora scatta su \"trading\", dove vivono davvero le posizioni) e le regole CSS a colonne multiple in style.css (#opera-authenticated e #alert-authenticated erano entrambe agganciate a [data-area=\"sorveglia\"], ora ciascuna sul suo nuovo data-area) — senza questo la vista desktop avrebbe perso silenziosamente il layout a colonne. Aggiornati anche una decina di testi/commenti sparsi (simple-mode.js, diagnostics.js, sniper.html) che dicevano \"vai in Sorveglia\" per chiavi/diario ordini (ora Trading) o per la gestione fine degli alert per ticker (ora Alert). Verificato dal vivo con Playwright (desktop 1400px e mobile 390px, bypassando il gate di login con dispatchEvent diretto sui bottoni): clic su Alert/Strategie/Trading attiva il tab-content giusto, #archive-list e #opera-authenticated si trovano dentro le tab corrette, il menu Altro mobile apre gli stessi pannelli col titolo giusto. node --check pulito su tutti i JS toccati, 457 test backend passano (nessuno di questi tocca il frontend, ma confermano che nulla lato server e' stato smosso).",
+    "files": [
+      "frontend/index.html",
+      "frontend/static/app.js",
+      "frontend/static/style.css",
+      "frontend/static/simple-mode.js",
+      "frontend/static/diagnostics.js",
+      "frontend/sniper.html"
+    ]
+  },
+  "b7419455": {
+    "status": "risolto",
+    "at": 1789283735,
+    "summary": "\"La sezione 'Watchlist' potrebbe essere integrata nella sezione 'Analizza', sfruttando lo spazio della colonna a destra attualmente vuota\" — fatto esattamente cosi'.",
+    "detail": "'Analizza' era l'unica voce della sidenav senza data-tab-target: apposta, per lasciare solo il grafico senza pannello — ma questo lasciava la colonna destra (.right-panel, larga 320px su desktop quando l'area e' analizza) vuota di suo, mentre Watchlist non aveva piu' una voce raggiungibile da desktop dopo il ridisegno della navigazione (solo il menu Altro su mobile ci arrivava). Aggiunto data-tab-target=\"watchlist\" al bottone Analizza in frontend/index.html: ora entrando in Analizza il tab-content watchlist si attiva automaticamente nella colonna destra, con la stessa logica generica gia' usata da ogni altra voce (setArea() in app.js non ha richiesto modifiche, il ramo tabTarget la gestiva gia'). Rimossa la voce sidenav separata data-area=\"ticker\" (desktop): Watchlist non e' piu' una destinazione propria. La voce nel menu Altro (mobile, altro-watchlist-item) resta invariata — su mobile non esiste una 'colonna destra', quindi li' resta un suo schermo a tutto schermo raggiungibile dall'Altro, come backtest/analisi/eccetera. Verificato dal vivo con Playwright: entrando in Analizza il tab-content watchlist risulta active e il right-panel visibile a 320px; nessun riferimento residuo a data-area=\"ticker\" in app.js.",
+    "files": [
+      "frontend/index.html"
+    ]
   }
 }

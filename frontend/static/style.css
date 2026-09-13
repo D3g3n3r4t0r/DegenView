@@ -1997,7 +1997,7 @@ body {
 
 /* Righe-card come il resto del restyle (confluence-list, wl-rows): un
    accento a sinistra invece del bordo tratteggiato, coerente con Livelli
-   e Sorveglia. */
+   e Alert. */
 .indicator-readout li {
   background: var(--bg-panel);
   border: 1px solid var(--border);
@@ -4054,7 +4054,7 @@ details.issue-card > summary:focus-visible { outline: 2px solid var(--accent); o
    Instrument — impianto di navigazione
    Una sola barra a sinistra al posto di tre sistemi paralleli
    (rail + tab a destra + menu "Altro"). Ogni voce e' un intento:
-   Analizza / Lab / Sorveglia / Opera / Scopri. Fuori da Analizza il
+   Analizza / Lab / Alert / Strategie / Trading / Scopri. Fuori da Analizza il
    grafico si toglie di mezzo e l'area di lavoro prende tutta la
    larghezza — il Lab, che e' la schermata piu' densa del prodotto,
    non puo' vivere in una colonna da 300px.
@@ -4243,9 +4243,11 @@ details.issue-card > summary:focus-visible { outline: 2px solid var(--accent); o
     display: none;
   }
 
-  /* Sorveglia: le sezioni diventano colonne affiancate invece di una pila
-     infinita da scorrere. */
-  .cockpit[data-area="sorveglia"] .tab-content.active > .panel { max-width: 1180px; }
+  /* Alert, Strategie, Trading: le sezioni diventano colonne affiancate
+     invece di una pila infinita da scorrere. */
+  .cockpit[data-area="alert"] .tab-content.active > .panel,
+  .cockpit[data-area="strategie"] .tab-content.active > .panel,
+  .cockpit[data-area="trading"] .tab-content.active > .panel { max-width: 1180px; }
 }
 
 /* Il pannello a tutta larghezza non deve stirare i controlli: un campo di
@@ -4256,12 +4258,12 @@ details.issue-card > summary:focus-visible { outline: 2px solid var(--accent); o
 .cockpit:not([data-area="analizza"]) .futures-order-form { max-width: 560px; }
 
 @media (min-width: 1100px) {
-  .cockpit[data-area="sorveglia"] #opera-authenticated { column-count: 2; column-gap: 24px; }
-  .cockpit[data-area="sorveglia"] #opera-authenticated > * { break-inside: avoid; }
-  .cockpit[data-area="sorveglia"] #opera-authenticated > .section-title-row { break-after: avoid; }
+  .cockpit[data-area="trading"] #opera-authenticated { column-count: 2; column-gap: 24px; }
+  .cockpit[data-area="trading"] #opera-authenticated > * { break-inside: avoid; }
+  .cockpit[data-area="trading"] #opera-authenticated > .section-title-row { break-after: avoid; }
 }
 @media (min-width: 1700px) {
-  .cockpit[data-area="sorveglia"] #opera-authenticated { column-count: 3; }
+  .cockpit[data-area="trading"] #opera-authenticated { column-count: 3; }
 }
 
 /* ============================================================
@@ -4726,17 +4728,17 @@ td {
 .cz-bar i { display: block; height: 100%; background: var(--violet); border-radius: 99px; }
 .cz-tf { grid-column: 2; grid-row: 3; font-family: var(--font-mono); font-size: 11px; color: var(--violet); }
 
-/* ── Sorveglia a colonne: le sezioni si affiancano invece di impilarsi in
+/* ── Alert a colonne: le sezioni si affiancano invece di impilarsi in
    una pila lunga due schermate. Le colonne del testo tengono insieme
    titolo e lista perche' un titolo orfano in fondo a una colonna non dice
    piu' a cosa si riferisce. ── */
 @media (min-width: 1100px) {
-  .cockpit[data-area="sorveglia"] #alert-authenticated { column-count: 2; column-gap: 22px; }
-  .cockpit[data-area="sorveglia"] #alert-authenticated > * { break-inside: avoid; }
-  .cockpit[data-area="sorveglia"] #alert-authenticated > .section-title-row { break-after: avoid; }
+  .cockpit[data-area="alert"] #alert-authenticated { column-count: 2; column-gap: 22px; }
+  .cockpit[data-area="alert"] #alert-authenticated > * { break-inside: avoid; }
+  .cockpit[data-area="alert"] #alert-authenticated > .section-title-row { break-after: avoid; }
 }
 @media (min-width: 1600px) {
-  .cockpit[data-area="sorveglia"] #alert-authenticated { column-count: 3; }
+  .cockpit[data-area="alert"] #alert-authenticated { column-count: 3; }
 }
 
 /* ── Allargare il grafico da qualsiasi area ── */

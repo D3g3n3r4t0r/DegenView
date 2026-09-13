@@ -1150,6 +1150,13 @@ il backend), ruff pulito.
   una lista da un articolo Medium — poi chiarita da Lorenzo come "analizza,
   mica installare alla cieca".
 
+- **Bacheca segnalazioni** ("risolvi tutti i punti aperti nel sito"):
+  trovate e chiuse le due segnalazioni scoperte e chiare (ee624db5,
+  5c5aad89). Sulle altre due, ristrutturazioni di navigazione, ho segnalato
+  la cautela del progetto (seed-0064) prima di procedere; Lorenzo: "Procedi
+  su entrambe ora" — implementate entrambe (3cbd3308, b7419455) nella stessa
+  sessione.
+
 ### Chiuso — ee624db5 e 5c5aad89 (periodo di riferimento in Lab, bug marker grafico)
 
 Lorenzo: "risolvi tutti i punti aperti nel sito" — controllata la bacheca,
@@ -1181,3 +1188,39 @@ Verificato dal vivo con Playwright: il selettore di periodo compare dove
 richiesto, la richiesta di rete porta davvero start_date/end_date, il
 risultato rispetta il periodo su BTCUSDT reale. 457 test totali passano
 (5 nuovi per il periodo), ruff pulito, node --check su app.js.
+
+### Chiuso — 3cbd3308 e b7419455 (Sorveglia divisa in tre, Watchlist in Analizza)
+
+Lorenzo, alla proposta di come procedere sulle due ristrutturazioni rimaste
+aperte: "Procedi su entrambe ora" — via libera esplicito, dopo che gli avevo
+segnalato che non erano piccoli fix ma ristrutturazioni di navigazione (lo
+stesso tipo di cautela di seed-0064).
+
+- **3cbd3308** ("la sezione Sorveglia e' sovraffollata... tre sezioni
+  diverse: Alert, Strategie, Trading"): fatto esattamente cosi'. L'Archivio
+  strategie e' uscito dal blocco Alert in un suo tab-content; il secondo
+  blocco (chiavi exchange/posizioni/ordine manuale, gia' un `<details
+  class="opera-advanced">` a se') e' diventato la tab Trading. Due nuove
+  voci in sidebar (desktop) e nel menu Altro (mobile). L'area interna
+  `sorveglia` e' stata rinominata `alert` — grep esaustivo di ogni
+  riferimento prima di toccare nulla, perche' due regole CSS a colonne
+  multiple (`#opera-authenticated`, `#alert-authenticated`) erano agganciate
+  proprio a `[data-area="sorveglia"]`: senza risistemarle il layout desktop
+  a colonne sarebbe sparito senza errori visibili.
+- **b7419455** ("Watchlist potrebbe essere integrata nella sezione
+  Analizza, sfruttando la colonna a destra attualmente vuota"): "Analizza"
+  era l'unica voce della sidebar senza `data-tab-target`, apposta per
+  lasciare solo il grafico — ma questo lasciava la colonna destra (320px,
+  sempre presente su desktop in quell'area) vuota di suo. Bastava dargli
+  `data-tab-target="watchlist"`: la logica generica di `setArea()` gia'
+  gestiva il resto, zero codice nuovo in JS. Rimossa la voce sidebar separata
+  per Watchlist (desktop); su mobile resta raggiungibile dal menu Altro,
+  dove ha ancora senso come schermata a se'.
+
+Nessun backend toccato. Verificato dal vivo con Playwright (desktop 1400px
+e mobile 390px, bypassando il gate di login con eventi dispatchati
+direttamente sui bottoni): ogni area attiva il tab-content giusto, il menu
+Altro mobile apre gli stessi pannelli col titolo corretto, la colonna destra
+di Analizza mostra la watchlist. `node --check` pulito su tutti i JS
+toccati, 457 test backend passano (nessuno tocca il frontend, confermano
+solo che il server non e' stato smosso).

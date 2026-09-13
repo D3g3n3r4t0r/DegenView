@@ -954,7 +954,7 @@ body:has(#simple-mode-root:not(.hidden)) #opt-pill{z-index:600;}
   <div style="display:flex;justify-content:space-between;align-items:center;">
     <span>🔒 Chiave ${esc(ex.name)} già salvata${when ? " — registrata il " + esc(when) : ""}</span>
   </div>
-  <p class="sm-sub" style="margin:8px 0 0;">Nessun bisogno di reinserirla: prosegui e verrà usata quella già collegata. Serve cambiarla? Vai in Sorveglia da desktop.</p>
+  <p class="sm-sub" style="margin:8px 0 0;">Nessun bisogno di reinserirla: prosegui e verrà usata quella già collegata. Serve cambiarla? Vai in Trading da desktop.</p>
 </div>`;
     } else {
       body.innerHTML = `
@@ -976,7 +976,7 @@ ${ex.id === "kucoin" ? '<div class="sm-field"><label>Passphrase</label><input id
     }
     try {
       // Il processo resta quello ufficiale: la chiave si salva qui, per
-      // davvero, con lo stesso endpoint che usa Sorveglia — il passo
+      // davvero, con lo stesso endpoint che usa Trading — il passo
       // successivo la testa SENZA richiederla di nuovo (vedi
       // stepTestConnection: api_key/api_secret vuoti = usa quella salvata).
       await api("/api/auth/trading", {
@@ -1123,7 +1123,7 @@ ${ex.id === "kucoin" ? '<div class="sm-field"><label>Passphrase</label><input id
             size_mode: "fixed_usdt", size_value: parseFloat(document.getElementById("sm-test-order-usdt").value) || 0,
           }),
         });
-        out.innerHTML = `<p style="color:var(--sm-bull);">✓ Ordine inviato — vedi il diario ordini in Sorveglia (desktop) per il dettaglio.</p>`;
+        out.innerHTML = `<p style="color:var(--sm-bull);">✓ Ordine inviato — vedi il diario ordini in Trading (desktop) per il dettaglio.</p>`;
         confirmBox.checked = false;
       } catch (e) {
         out.innerHTML = `<div class="sm-error">${esc(e.message)}</div>`;
