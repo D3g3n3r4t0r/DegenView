@@ -27,15 +27,20 @@ Nota sulla rete: `contract.mexc.com/api/v1/private/order/submit` (endpoint
 usato qui fino a seed-0072) poteva rifiutare un IP europeo con un blocco
 Akamai (pagina "Access Denied", non una risposta dell'API — vedi `explain()`
 in base.py, che la riconosce apposta prima delle parole chiave generiche).
-Il supporto MEXC ha poi confermato che l'endpoint giusto per piazzare un
-ordine e' `order/create`, non `order/submit` — non documentato e non piu'
-mantenuto (confermato anche da un problema identico riportato su ccxt,
-issue #28532: stesso host `contract.mexc.com`, stesso payload, cambia solo
-il nome dell'azione). Corretto qui; il proxy extra-UE (`MEXC_FUTURES_PROXY`,
-es. "http://utente:password@host:porta" o "socks5://host:porta") resta
-comunque configurabile per l'eventualita' che il blocco si ripresenti su
-questo endpoint — mai le chiamate agli altri cinque exchange, che restano
-dirette.
+Il supporto MEXC ha indicato `order/create` su `api.mexc.com` come fix.
+Cambiato prima solo il path (tenendo `contract.mexc.com`, ritenuto — a
+torto — l'unico dettaglio giusto del messaggio) non ha risolto: stesso
+blocco identico. Verificato allora il codice sorgente vero di ccxt (non un
+riassunto) — MEXC ha migrato l'intera API contract, pubblica e privata, sotto
+`api.mexc.com` (`/api/v1/contract/...` pubblica, `/api/v1/private/...`
+privata): `contract.mexc.com` e' il dominio legacy, ancora vivo per le
+letture pubbliche (`/ping` risponde) ma evidentemente non piu' quello dietro
+cui MEXC lascia passare gli ordini. Il supporto aveva ragione su host E
+path; l'errore di averlo scartato era mio. Il proxy extra-UE
+(`MEXC_FUTURES_PROXY`, es. "http://utente:password@host:porta" o
+"socks5://host:porta") resta comunque configurabile per l'eventualita' di un
+futuro blocco geografico reale — mai le chiamate agli altri cinque exchange,
+che restano dirette.
 """
 
 from __future__ import annotations
@@ -51,7 +56,7 @@ import httpx
 
 from app.trading.futures.base import FuturesAdapter, FuturesCreds, Position, explain
 
-BASE = "https://contract.mexc.com"
+BASE = "https://api.mexc.com"
 
 
 # None = nessun proxy, chiamata diretta (comportamento di sempre finche' non

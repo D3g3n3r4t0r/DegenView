@@ -64,7 +64,7 @@ def test_a_cdn_block_page_is_not_read_as_a_key_permission_error():
     incolpando una chiave che non c'entra nulla col problema vero."""
     body = (
         '<HTML><HEAD><TITLE>Access Denied</TITLE></HEAD><BODY><H1>Access Denied</H1>'
-        'You don\'t have permission to access "http://contract.mexc.com/api/v1/private/order/create" '
+        'You don\'t have permission to access "http://api.mexc.com/api/v1/private/order/create" '
         'on this server.<P>Reference #18.9ad53b17.1789225538.fbe04e1a</P></BODY></HTML>'
     )
     err = explain("mexc", "ordine", body)
