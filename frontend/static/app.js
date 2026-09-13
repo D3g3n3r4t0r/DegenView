@@ -3180,11 +3180,13 @@
     });
     list.innerHTML = [...groups.entries()].map(([symbol, entries]) => `
       <li class="arch-group">
-        <div class="arch-group-head">
-          <span class="arch-symbol">${escapeHtml(symbol)}</span>
-          <span class="arch-group-count">${entries.length}</span>
-        </div>
-        <ul class="arch-group-cards">${entries.map(renderCard).join("")}</ul>
+        <details class="arch-group-details" open>
+          <summary class="arch-group-head">
+            <span class="arch-symbol">${escapeHtml(symbol)}</span>
+            <span class="arch-group-count">${entries.length}</span>
+          </summary>
+          <ul class="arch-group-cards">${entries.map(renderCard).join("")}</ul>
+        </details>
       </li>`).join("");
 
     list.querySelectorAll(".arch-del").forEach((btn) => {
