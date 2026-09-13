@@ -3619,10 +3619,15 @@ button.wl-archive-pick:hover { border-color: var(--accent); }
 .archive-cards { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
 .arch-group { list-style: none; }
 .arch-group-head {
+  cursor: pointer; list-style: none;
   display: flex; align-items: baseline; gap: 8px;
   padding-bottom: 4px; margin-bottom: 6px;
   border-bottom: 1px solid var(--border);
 }
+.arch-group-head::-webkit-details-marker { display: none; }
+.arch-group-head::before { content: "▾ "; color: var(--ink-dim); font-weight: 400; }
+.arch-group-details:not([open]) .arch-group-head::before { content: "▸ "; }
+.arch-group-details:not([open]) .arch-group-head { margin-bottom: 0; border-bottom: none; }
 .arch-group-head .arch-symbol { font-size: 14px; }
 .arch-group-count {
   font-size: 11px; color: var(--ink-dim);
