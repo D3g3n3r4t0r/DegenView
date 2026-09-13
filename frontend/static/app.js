@@ -3115,7 +3115,20 @@
     const when = (ts) => new Date(ts * 1000).toLocaleDateString("it-IT",
       { day: "2-digit", month: "short", year: "2-digit" });
 
-    const renderCard = (e) => {
+    // Condivisa fra la card (dove avvisa) e il confronto fra voci dello
+    // stesso ticker (dove pesa nel punteggio) — gli stessi controlli devono
+    // dire la stessa cosa nei due posti, non due versioni leggermente diverse.
+    const warnFlagsFor = (e) => {
+      const o = e.optimizer || {};
+      const warn = [];
+      if (o.regime_passed === false) warn.push("gate non superato");
+      if (o.overfitted) warn.push("sovradattato");
+      if (o.deterministic === false) warn.push("in parte campionata");
+      if (o.pbo != null && o.pbo >= 0.2) warn.push(`sovra-ottimizzazione ${(o.pbo * 100).toFixed(0)}%`);
+      return warn;
+    };
+
+    const renderCard = (e, badge) => {
       const m = e.metrics;
       const body = e.state === "pronto" && m
         ? `<div class="arch-metrics">
@@ -3140,14 +3153,16 @@
       if (o.out_of_sample_return_pct != null) {
         flags.push(`fuori campione ${o.out_of_sample_return_pct >= 0 ? "+" : ""}${o.out_of_sample_return_pct.toFixed(1)}%`);
       }
-      const warn = [];
-      if (o.regime_passed === false) warn.push("gate non superato");
-      if (o.overfitted) warn.push("sovradattato");
-      if (o.deterministic === false) warn.push("in parte campionata");
-      if (o.pbo != null && o.pbo >= 0.2) warn.push(`sovra-ottimizzazione ${(o.pbo * 100).toFixed(0)}%`);
+      const warn = warnFlagsFor(e);
+      const badgeHtml = badge === "best"
+        ? '<span class="arch-best-badge" title="Fra le voci di questo ticker, quella che regge meglio ai controlli">★ Consigliata</span>'
+        : badge === "least-bad"
+        ? '<span class="arch-best-badge arch-caution-badge" title="Nessuna voce di questo ticker supera tutti i controlli — questa e\' la meno peggio">meno peggio</span>'
+        : "";
       return `
-        <li class="arch-card" data-id="${e.id}">
+        <li class="arch-card${badge === "best" ? " arch-best" : ""}" data-id="${e.id}">
           <div class="arch-head">
+            ${badgeHtml}
             <span class="arch-strat">${escapeHtml(e.strategy_name)}</span>
             <span class="arch-src">${e.source === "alert" ? "da alert" : "salvata a mano"}</span>
             <span class="arch-date">${when(e.created_at)}</span>
@@ -3168,6 +3183,64 @@
         </li>`;
     };
 
+    // Confronto fra le voci di uno stesso ticker: non un punteggio arbitrario,
+    // ma la stessa logica gia' usata per i warning sulla card, ridotta a un
+    // ordinamento. Un gate saltato pesa piu' di qualunque differenza di
+    // rendimento (coerente con "il PBO conferma il verdetto dello Sharpe
+    // deflazionato" — i controlli statistici vengono prima del numero), il
+    // rendimento fuori campione conta piu' di quello in-sample quando c'e'
+    // (e' la stima meno viziata), e pochi trade valgono meno fiducia.
+    const scoreEntry = (e) => {
+      if (e.state !== "pronto" || !e.metrics) return null;
+      const m = e.metrics;
+      const o = e.optimizer || {};
+      const flags = warnFlagsFor(e);
+      const usedOOS = o.out_of_sample_return_pct != null;
+      const ret = usedOOS ? o.out_of_sample_return_pct : m.total_return_pct;
+      const dd = Math.abs(m.max_drawdown_pct || 0);
+      const tradeConfidence = Math.min(1, (m.num_trades || 0) / 20);
+      const riskAdjusted = ret / (1 + dd / 100);
+      const score = riskAdjusted * (0.5 + 0.5 * tradeConfidence) - flags.length * 50;
+      return { entry: e, score, flags, ret, usedOOS, dd };
+    };
+
+    const buildRecommendation = (entries) => {
+      const scored = entries.map(scoreEntry).filter(Boolean);
+      if (scored.length < 2) return null;
+      scored.sort((a, b) => b.score - a.score);
+      const [best, runnerUp] = scored;
+
+      const bits = [];
+      bits.push(best.flags.length
+        ? `⚠ ${best.flags.join(", ")}`
+        : "nessun controllo statistico saltato");
+      bits.push(`${best.usedOOS ? "rendimento fuori campione" : "rendimento"} ${pct(best.ret)}, drawdown ${pct(-best.dd)}`);
+      const deltaRet = best.ret - runnerUp.ret;
+      if (Math.abs(deltaRet) >= 0.5) {
+        bits.push(`${deltaRet >= 0 ? "sopra" : "sotto"} la seconda voce di ${Math.abs(deltaRet).toFixed(1)} punti`);
+      }
+      if (best.flags.length === 0 && runnerUp.flags.length > 0) {
+        bits.push("le altre saltano almeno un controllo");
+      }
+
+      // Nessuna voce pulita: dirlo chiaro invece di consigliarne comunque una
+      // come se fosse affidabile — coerente con "il gate blocca" del progetto,
+      // qui applicato a un confronto invece che a un singolo risultato.
+      const allFlagged = scored.every((s) => s.flags.length > 0);
+
+      return {
+        // Il badge verde "Consigliata" sulla card avrebbe contraddetto
+        // l'avviso qui sopra se applicato anche quando nessuna voce e' pulita
+        // — in quel caso la migliore resta segnalata, ma come "meno peggio",
+        // non come una scelta approvata.
+        bestId: allFlagged ? null : best.entry.id,
+        leastBadId: allFlagged ? best.entry.id : null,
+        html: allFlagged
+          ? `<div class="arch-recommend arch-recommend-warn">Nessuna voce di ${escapeHtml(best.entry.symbol)} supera tutti i controlli — trattale come esplorative, non come segnale operativo. Quella che regge meglio: <b>${escapeHtml(best.entry.strategy_name)}</b> (${bits.map(escapeHtml).join(" · ")}).</div>`
+          : `<div class="arch-recommend">★ Consigliata: <b>${escapeHtml(best.entry.strategy_name)}</b> — ${bits.map(escapeHtml).join(" · ")}</div>`,
+      };
+    };
+
     // Con tante strategie salvate diventava una lista piatta da scorrere
     // senza punti di riferimento, tutte mischiate fra ticker diversi.
     // Raggruppate per simbolo (ordine di prima comparsa, che segue quello
@@ -3178,16 +3251,22 @@
       if (!groups.has(e.symbol)) groups.set(e.symbol, []);
       groups.get(e.symbol).push(e);
     });
-    list.innerHTML = [...groups.entries()].map(([symbol, entries]) => `
+    list.innerHTML = [...groups.entries()].map(([symbol, entries]) => {
+      const rec = buildRecommendation(entries);
+      return `
       <li class="arch-group">
         <details class="arch-group-details" open>
           <summary class="arch-group-head">
             <span class="arch-symbol">${escapeHtml(symbol)}</span>
             <span class="arch-group-count">${entries.length}</span>
           </summary>
-          <ul class="arch-group-cards">${entries.map(renderCard).join("")}</ul>
+          ${rec ? rec.html : ""}
+          <ul class="arch-group-cards">${entries.map((e) => renderCard(e,
+            rec && e.id === rec.bestId ? "best" : rec && e.id === rec.leastBadId ? "least-bad" : null,
+          )).join("")}</ul>
         </details>
-      </li>`).join("");
+      </li>`;
+    }).join("");
 
     list.querySelectorAll(".arch-del").forEach((btn) => {
       btn.addEventListener("click", async () => {

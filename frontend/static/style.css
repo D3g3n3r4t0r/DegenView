@@ -3634,12 +3634,31 @@ button.wl-archive-pick:hover { border-color: var(--accent); }
   border: 1px solid var(--border); border-radius: 99px; padding: 0 7px;
 }
 .arch-group-cards { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+/* Confronto automatico fra le voci di uno stesso ticker: quale regge meglio
+   ai controlli statistici, non solo quale ha il rendimento piu' alto. */
+.arch-recommend {
+  font-size: 12px; color: var(--ink);
+  background: var(--accent-soft);
+  border-left: 3px solid var(--accent);
+  padding: 6px 9px;
+  margin-bottom: 8px;
+}
+.arch-recommend-warn {
+  background: var(--danger-soft);
+  border-left-color: var(--danger);
+}
 .arch-card {
   border: 1px solid var(--border);
   background: var(--bg-panel);
   padding: 8px 10px;
   font-size: 12px;
 }
+.arch-card.arch-best { border-color: var(--accent); }
+.arch-best-badge {
+  font-size: 11px; font-weight: 700; color: var(--accent);
+  border: 1px solid var(--accent); border-radius: 99px; padding: 0 7px;
+}
+.arch-caution-badge { color: var(--danger); border-color: var(--danger); font-weight: 400; }
 .arch-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
 .arch-symbol { font-weight: 700; color: var(--ink); }
 .arch-strat { color: var(--ink-dim); }
