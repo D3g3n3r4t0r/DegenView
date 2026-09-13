@@ -23,15 +23,19 @@ Nota sul perimetro: MEXC non ha licenza UE per i derivati, a differenza di
 Kraken, Bybit, OKX e Bitget. E' stato aggiunto su richiesta esplicita di
 Lorenzo, che ha scelto sapendolo. Vedi il commento in `registry.py`.
 
-Nota sulla rete: `contract.mexc.com/api/v1/private/order/submit` puo'
-rifiutare un IP europeo con un blocco Akamai (pagina "Access Denied", non
-una risposta dell'API — vedi `explain()` in base.py, che la riconosce
-apposta prima delle parole chiave generiche). Se capita, e' il server che
-esegue l'ordine ad avere un IP europeo, non un problema di chiave: la via
-scelta e' instradare SOLO le chiamate a questo exchange attraverso un proxy
-fuori UE, impostato con `MEXC_FUTURES_PROXY` (es.
-"http://utente:password@host:porta" o "socks5://host:porta") — mai le
-chiamate agli altri cinque exchange, che restano dirette.
+Nota sulla rete: `contract.mexc.com/api/v1/private/order/submit` (endpoint
+usato qui fino a seed-0072) poteva rifiutare un IP europeo con un blocco
+Akamai (pagina "Access Denied", non una risposta dell'API — vedi `explain()`
+in base.py, che la riconosce apposta prima delle parole chiave generiche).
+Il supporto MEXC ha poi confermato che l'endpoint giusto per piazzare un
+ordine e' `order/create`, non `order/submit` — non documentato e non piu'
+mantenuto (confermato anche da un problema identico riportato su ccxt,
+issue #28532: stesso host `contract.mexc.com`, stesso payload, cambia solo
+il nome dell'azione). Corretto qui; il proxy extra-UE (`MEXC_FUTURES_PROXY`,
+es. "http://utente:password@host:porta" o "socks5://host:porta") resta
+comunque configurabile per l'eventualita' che il blocco si ripresenti su
+questo endpoint — mai le chiamate agli altri cinque exchange, che restano
+dirette.
 """
 
 from __future__ import annotations
@@ -237,7 +241,7 @@ class MexcFutures(FuturesAdapter):
                 f"(un contratto = {csize} unita' a {mark:.4f}, {min_notional:.2f} USDT di nozionale) "
                 f"— serve almeno {min_margin:.2f} USDT di margine con leva {leverage}x", _HINTS,
             )
-        return await self._post("/api/v1/private/order/submit", {
+        return await self._post("/api/v1/private/order/create", {
             "symbol": sym,
             "price": 0,                 # ignorato dagli ordini a mercato
             "vol": int(vol),            # contratti interi: MEXC rifiuta i decimali
@@ -254,7 +258,7 @@ class MexcFutures(FuturesAdapter):
             return None
         csize = await self._contract_size(sym)
         vol = max(1, int(round(pos.quantity / csize)))
-        return await self._post("/api/v1/private/order/submit", {
+        return await self._post("/api/v1/private/order/create", {
             "symbol": sym,
             "price": 0,
             "vol": vol,
