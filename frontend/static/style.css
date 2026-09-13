@@ -3616,7 +3616,19 @@ button.wl-archive-pick:hover { border-color: var(--accent); }
 }
 
 /* --- Archivio strategie ---------------------------------------------------- */
-.archive-cards { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.archive-cards { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.arch-group { list-style: none; }
+.arch-group-head {
+  display: flex; align-items: baseline; gap: 8px;
+  padding-bottom: 4px; margin-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.arch-group-head .arch-symbol { font-size: 14px; }
+.arch-group-count {
+  font-size: 11px; color: var(--ink-dim);
+  border: 1px solid var(--border); border-radius: 99px; padding: 0 7px;
+}
+.arch-group-cards { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .arch-card {
   border: 1px solid var(--border);
   background: var(--bg-panel);
@@ -4399,7 +4411,7 @@ select { cursor: pointer; }
 }
 
 /* ── righe di elenco: watchlist, archivio, storico, diario ── */
-.wl-rows, .watchlist-cards, .archive-cards, .alert-log-cards,
+.wl-rows, .watchlist-cards, .alert-log-cards,
 .journal-list, .pa-list, .trading-cred-list, .issues-list {
   list-style: none;
   margin: 0;
@@ -4407,7 +4419,9 @@ select { cursor: pointer; }
   display: grid;
   gap: 7px;
 }
-.wl-rows > li, .watchlist-cards > li, .archive-cards > li,
+/* .archive-cards ha una sua regola dedicata piu' sopra (raggruppata per
+   ticker: gruppi senza bordo proprio, le card dentro ce l'hanno gia'). */
+.wl-rows > li, .watchlist-cards > li,
 .alert-log-cards > li, .journal-list > li, .pa-list > li {
   background: var(--bg-panel);
   border: 1px solid var(--border);
@@ -4862,7 +4876,7 @@ td {
 /* ── righe vive ────────────────────────────────────────────────────── */
 .wl-rows > li,
 .watchlist-cards > li,
-.archive-cards > li,
+.arch-group-cards > li,
 .alert-log-cards > li,
 .journal-list > li,
 .issues-list > * {

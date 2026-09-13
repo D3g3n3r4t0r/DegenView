@@ -3115,7 +3115,7 @@
     const when = (ts) => new Date(ts * 1000).toLocaleDateString("it-IT",
       { day: "2-digit", month: "short", year: "2-digit" });
 
-    list.innerHTML = items.map((e) => {
+    const renderCard = (e) => {
       const m = e.metrics;
       const body = e.state === "pronto" && m
         ? `<div class="arch-metrics">
@@ -3148,7 +3148,6 @@
       return `
         <li class="arch-card" data-id="${e.id}">
           <div class="arch-head">
-            <span class="arch-symbol">${escapeHtml(e.symbol)}</span>
             <span class="arch-strat">${escapeHtml(e.strategy_name)}</span>
             <span class="arch-src">${e.source === "alert" ? "da alert" : "salvata a mano"}</span>
             <span class="arch-date">${when(e.created_at)}</span>
@@ -3167,7 +3166,26 @@
           </div>
           <p class="arch-status hidden" data-status="${e.id}"></p>
         </li>`;
-    }).join("");
+    };
+
+    // Con tante strategie salvate diventava una lista piatta da scorrere
+    // senza punti di riferimento, tutte mischiate fra ticker diversi.
+    // Raggruppate per simbolo (ordine di prima comparsa, che segue quello
+    // gia' dato dal server — piu' recenti prima), col ticker come titolo
+    // invece che ripetuto su ogni card.
+    const groups = new Map();
+    items.forEach((e) => {
+      if (!groups.has(e.symbol)) groups.set(e.symbol, []);
+      groups.get(e.symbol).push(e);
+    });
+    list.innerHTML = [...groups.entries()].map(([symbol, entries]) => `
+      <li class="arch-group">
+        <div class="arch-group-head">
+          <span class="arch-symbol">${escapeHtml(symbol)}</span>
+          <span class="arch-group-count">${entries.length}</span>
+        </div>
+        <ul class="arch-group-cards">${entries.map(renderCard).join("")}</ul>
+      </li>`).join("");
 
     list.querySelectorAll(".arch-del").forEach((btn) => {
       btn.addEventListener("click", async () => {
