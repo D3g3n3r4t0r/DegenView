@@ -1119,31 +1119,29 @@ credenziali MEXC vere — serve una conferma di Lorenzo con un ordine piccolo
 di prova. Il proxy extra-UE resta configurabile per l'eventualita' che il
 blocco Akamai si ripresenti sul nuovo endpoint.
 
-**Seguito 2 — il fix dell'endpoint NON risolve, torna la diagnosi originale**:
-Lorenzo ha riprovato con `order/create` gia' in produzione — stesso identico
-blocco Akamai/CDN, parola per parola. L'endpoint quindi non era la causa (ma
-resta corretto: `order/create` e' comunque quello giusto e documentato,
-tenuto cosi'). Ho fatto un passo falso qui: ho richiesto di nuovo se il
-proxy extra-UE fosse configurato, come se la questione geografica fosse
-ancora aperta — Lorenzo mi ha corretto giustamente, l'avevo gia' verificata
-IO STESSO mesi fa (tre reti diverse, incluso il proxy Vultr fuori UE, stesso
-blocco su tutte). Non richiedere piu' questa verifica: e' chiusa. La diagnosi
-torna quindi quella originale di seed-0072 — permesso account per l'invio
-ordini futures via API, non attivato, interruttore separato da quello del
-trading da app (che funziona) — e il suggerimento del supporto sull'endpoint
-era un vicolo cieco, non la causa vera.
-
-**Messaggio pronto per il supporto MEXC** (prossimo passo, non tecnico —
-Lorenzo lo manda quando vuole):
-
-> Ho aggiornato il codice per usare `order/create` su `contract.mexc.com`
-> come suggerito, ma ricevo lo stesso identico blocco "Access Denied" (pagina
-> HTML Akamai/Edgesuite, non una risposta JSON dell'API) sia dal mio server
-> in Europa sia da un proxy dedicato fuori UE (testato apposta per escludere
-> un blocco geografico). Il trading manuale da app funziona regolarmente
-> sullo stesso account. Potete verificare se sul mio account e' abilitato il
-> permesso di invio ordini futures VIA API (distinto dal trading da app)?
-> Se non lo e', vi chiedo di attivarlo.
+**Seguito 2 — il fix del path da solo NON basta, avevo scartato meta' del
+suggerimento**: Lorenzo ha riprovato con `order/create` gia' in produzione
+(su `contract.mexc.com`, host tenuto invariato) — stesso identico blocco
+Akamai/CDN. Nel dubbio ho ri-chiesto se il proxy extra-UE fosse configurato,
+come se la questione geografica fosse ancora aperta: Lorenzo mi ha corretto,
+l'avevo gia' verificata IO STESSO mesi fa (tre reti diverse, incluso il
+proxy Vultr fuori UE, stesso blocco su tutte) — non richiederla piu', e'
+chiusa. Quello pero' mi ha fatto riverificare tutto da capo, e stavolta sul
+codice sorgente vero di ccxt (`ts/src/mexc.ts`), non su un riassunto
+dell'abstract file: MEXC ha spostato l'intera API contract, pubblica e
+privata, sotto `api.mexc.com` — `contract.mexc.com` e' un dominio legacy,
+ancora vivo per le letture pubbliche (`/ping` risponde) ma evidentemente non
+piu' quello dietro cui passano gli ordini. Il supporto MEXC aveva ragione su
+ENTRAMBI i dettagli (host e path); scartare l'host la volta scorsa e'
+stato un errore mio, non un problema della loro risposta. Cambiato
+`BASE` in `mexc.py` da `contract.mexc.com` a `api.mexc.com` — si applica a
+tutto il modulo (saldo, posizioni, prezzo, ordine), verificato dal vivo
+prima di committare che `api.mexc.com/api/v1/contract/ticker` risponde con
+dati reali. **Non ancora verificato con un ordine reale** — serve la
+conferma di Lorenzo. Se anche questo dovesse dare lo stesso blocco, allora
+si', torna in campo la diagnosi del permesso account (invio ordini futures
+via API, interruttore separato dal trading da app) — ma non prima di aver
+visto fallire anche host e path corretti insieme.
 
 ### Chiuso — seed-0073 (design "AI slop", pulizia sistemica CSS)
 
