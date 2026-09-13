@@ -1119,6 +1119,32 @@ credenziali MEXC vere — serve una conferma di Lorenzo con un ordine piccolo
 di prova. Il proxy extra-UE resta configurabile per l'eventualita' che il
 blocco Akamai si ripresenti sul nuovo endpoint.
 
+**Seguito 2 — il fix dell'endpoint NON risolve, torna la diagnosi originale**:
+Lorenzo ha riprovato con `order/create` gia' in produzione — stesso identico
+blocco Akamai/CDN, parola per parola. L'endpoint quindi non era la causa (ma
+resta corretto: `order/create` e' comunque quello giusto e documentato,
+tenuto cosi'). Ho fatto un passo falso qui: ho richiesto di nuovo se il
+proxy extra-UE fosse configurato, come se la questione geografica fosse
+ancora aperta — Lorenzo mi ha corretto giustamente, l'avevo gia' verificata
+IO STESSO mesi fa (tre reti diverse, incluso il proxy Vultr fuori UE, stesso
+blocco su tutte). Non richiedere piu' questa verifica: e' chiusa. La diagnosi
+torna quindi quella originale di seed-0072 — permesso account per l'invio
+ordini futures via API, non attivato, interruttore separato da quello del
+trading da app (che funziona) — e il suggerimento del supporto sull'endpoint
+era un vicolo cieco, non la causa vera.
+
+**Messaggio pronto per il supporto MEXC** (prossimo passo, non tecnico —
+Lorenzo lo manda quando vuole):
+
+> Ho aggiornato il codice per usare `order/create` su `contract.mexc.com`
+> come suggerito, ma ricevo lo stesso identico blocco "Access Denied" (pagina
+> HTML Akamai/Edgesuite, non una risposta JSON dell'API) sia dal mio server
+> in Europa sia da un proxy dedicato fuori UE (testato apposta per escludere
+> un blocco geografico). Il trading manuale da app funziona regolarmente
+> sullo stesso account. Potete verificare se sul mio account e' abilitato il
+> permesso di invio ordini futures VIA API (distinto dal trading da app)?
+> Se non lo e', vi chiedo di attivarlo.
+
 ### Chiuso — seed-0073 (design "AI slop", pulizia sistemica CSS)
 
 Lorenzo: "tutto il sito sembra fatto da ai slop". Invece di ricontrollare a
