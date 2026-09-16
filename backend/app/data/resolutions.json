@@ -1124,13 +1124,15 @@
     ]
   },
   "seed-0077": {
-    "status": "risolto",
-    "at": 1789539644,
-    "summary": "Il messaggio dice ora QUANDO si e' formato il segnale, non solo quanto valeva: \"Prezzo al segnale: 6.285 — 14 set, 2 giorni fa\" piu' \"Prezzo ora: 5.424 (-13.7%)\". Verificato sui prezzi reali di INJUSDT prima di toccare il codice: 6.285 e' esattamente la chiusura del 14 settembre, il 15 ha aperto a 6.285 ed e' crollata a 5.438, il 16 stava a 5.424 — cioe' il numero che Lorenzo vedeva. Nessun dato sbagliato: un segnale di due giorni prima consegnato senza data.",
-    "detail": "Un segnale resta notificabile per _MAX_SIGNAL_AGE_BARS (3) barre dopo essersi formato; su un daily sono tre giorni. Quella finestra non e' una svista, serve a impedire che una deduplica che perde lo stato riversi su Telegram tutti i segnali storici in blocco (e' successo). Finche' resta cosi', il ritardo va reso visibile invece che nascosto. Il prezzo attuale arriva dall'ultima chiusura della serie su cui la strategia e' stata calcolata, e viene mostrato solo se differisce di almeno lo 0,2% — su un segnale appena nato ripetere lo stesso numero due volte sarebbe rumore. 5 test in test_alert_message_age.py, incluso il caso INJ reale. Resta aperta una decisione per Lorenzo: stringere la finestra sui timeframe alti (3 barre -> 1 su daily) cambierebbe quali alert partono, e la stessa lista alimenta l'esecuzione automatica degli ordini.",
+    "status": "risolto — causa vera trovata e misurata",
+    "at": 1789541000,
+    "summary": "Prima diagnosi incompleta: avevo aggiunto la data al messaggio, ma Lorenzo ha giustamente insistito — \"non basta la data, deve arrivare l'alert alla chiusura della candela del timeframe considerato\". Aveva ragione, e la causa non era la finestra di freschezza: era una DOPPIA protezione contro la candela in formazione. Il watcher toglie gia' la barra non chiusa (drop_unclosed_candle) per le voci \"alla chiusura della candela\"; confirmed_events ne scartava POI un'altra (df.index[-2]), come se l'ultima fosse sempre ancora in formazione. L'ultima riga rimasta — una candela chiusa e definitiva — veniva quindi trattata come non confermata, e il suo segnale emergeva solo al giro dopo: su un daily, un giorno intero. Misurato, non dedotto: simulazione su 10 ticker reali, 21 alert su 26 in ritardo di +24,0 ore ESATTE, su ogni ticker e ogni strategia. Dopo la correzione: 26 su 26 entro un minuto (il giro del watcher). Stesso esito verificato su 4h.",
+    "detail": "Aggiunto `last_bar_closed` a confirmed_events(), che resta False di default: quella funzione alimenta anche run_backtest(), e cambiarne il default avrebbe spostato i numeri di ogni risultato storico gia' archiviato. Lo passa build_strategy_state() tramite last_bar_is_closed(), che deduce la durata della barra dalla distanza fra le ultime due (vale anche per gli intervalli sintetici 2d/3d/5d senza doverla far passare). Nuovo strumento tools/simulate_alerts.py: riproduce la storia barra per barra passando dalle funzioni VERE di produzione (drop_unclosed_candle, build_strategy_state, find_new_signals, format_signal_message) e stampa i messaggi Telegram con il ritardo di ciascuno rispetto alla chiusura della sua candela — una simulazione che riscrivesse la logica non dimostrerebbe niente sulla logica. Esce con codice 1 se trova anche un solo alert in ritardo, quindi e' riusabile come controllo. 4 test nuovi (test_signal_not_delayed_a_bar.py) che tengono ferme entrambe le meta' della regola: un segnale su candela chiusa parte subito, uno su candela in formazione no. Corretto anche il testo del messaggio: l'eta' si misura dalla CHIUSURA della candela, non dalla sua apertura, altrimenti un alert puntuale su un daily si annunciava \"un giorno fa\".",
     "files": [
+      "backend/app/analysis/strategies.py",
       "backend/app/notify/alerts.py",
-      "backend/app/main.py",
+      "backend/tools/simulate_alerts.py",
+      "backend/tests/test_signal_not_delayed_a_bar.py",
       "backend/tests/test_alert_message_age.py"
     ]
   }
