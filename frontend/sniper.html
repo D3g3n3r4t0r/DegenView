@@ -615,7 +615,8 @@ tbody tr.top5-row:hover{ background: rgba(240,180,41,.12); }
         <button class="export-btn" id="exportBtn" onclick="exportExcel()">⬇ Excel</button>
       </div>
       <div class="filters" id="chainFilters">
-        <button class="chip active" data-chain="all">Tutte</button>
+        <button class="chip active" data-chain="robinhood">RBH ★</button>
+        <button class="chip" data-chain="all">Tutte</button>
         <button class="chip" data-chain="ethereum">ETH</button>
         <button class="chip" data-chain="bsc">BSC</button>
         <button class="chip" data-chain="base">BASE</button>
@@ -819,7 +820,7 @@ async function loadXlsx(){
   const chainFilters = document.getElementById('chainFilters');
 
   let candidates = [];
-  let activeChain = 'all';
+  let activeChain = 'robinhood';
   let activeSort = 'last_updated';
   let excludeCex = false;
   let eventCount = 0;

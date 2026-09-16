@@ -1556,3 +1556,34 @@ Lorenzo (in ordine di sessione): "se apro la tab lab con il grafico compresso la
 - "aspetta c'è confusione; io lab e livelli li farei coesistere così" → fatto.
 - "quando disegno i rettangoli a volte spariscono nel grafico.. risolvi questo problema" → fatto.
 - "implementa la parte dei segnali che mi hai proposto" → fatto.
+
+---
+
+## Sessione 2026-09-16 (b) — Divergenze RSI, auto-zoom, popup marker, Sniper su Robinhood Chain
+
+**Divergenze RSI sul grafico** (`commit 7d072a7`):
+- Layer "Divergenze RSI" (default off) nel pannello Livelli.
+- ZigZag swing detection su N=4 barre → trova swing highs/lows confermati.
+- Regular bearish (prezzo HH + RSI LH) e regular bullish (prezzo LL + RSI HL).
+- Rendering su draw-canvas: linea piena sottile + dot + etichetta per confermato; tratteggio animato + dot pulsante per forming (swing recente non ancora confermato).
+- Colori token sito: `#ff4560` bearish, `#00d68f` bullish. Etichette JetBrains Mono.
+- Max 3 divergenze per tipo, le più recenti.
+
+**Auto-zoom 7 giorni + popup marker** (`commit f225de3`):
+- Dopo ogni `render()` il grafico si posiziona sugli ultimi 7 giorni invece di `fitContent()`. Calcola le barre per 7 giorni in base all'intervallo (es. 15m=672 barre, 4h=42 barre). `Alt+R` resetta alla vista completa.
+- Click su qualsiasi segnale automatico (pattern, hints, strategia) apre un popup con: descrizione plain-language del calcolo + barra forza 1-10 con colore (verde ≥8, ambra ≥6, teal sotto). Click fuori chiude. Definito in `MARKER_INFO`.
+
+**Sniper: focus Robinhood Chain** (`commit corrente`):
+- `scanner.py`: aggiunta `"robinhood"` a `SUPPORTED_CHAINS` e `GECKO_NETWORKS` (id GeckoTerminal: `"robinhood"`). DEXScreener supporta già `chainId="robinhood"`.
+- `sniper.html`: chip "RBH ★" è ora il primo e default attivo. `activeChain` parte da `'robinhood'`. Gli altri chip restano per accesso manuale.
+- Nota: i filtri `serious_only=True` + `is_serious()` in `quality.py` già escludono meme coin — nessun cambio necessario lì.
+- Idea API aggiuntive (CoinGecko, DeFiLlama, Messari per TVL/revenue/audit su Robinhood Chain): registrata su bacheca come `seed-0078`, non implementata.
+
+**Stato**: su `main` in produzione. Robinhood Chain disponibile da prossima scansione (~5 min).
+
+**Log (parole di Lorenzo)**:
+- "come vedi quando io apro il grafico con un time frame basso visualizzo tutto in modo molto confusionario" → auto-zoom 7gg implementato.
+- "ogni indicatore che viene indicato automaticamente se io ci clicco voglio visualizzare come viene calcolato e a livello di potenza di segnale quanto è impattante su una scala da 1 a 10" → popup marker implementato.
+- "voglio anche che il sito che utilizziamo per sniperare le crypto on-chain, sia dedicato alla Robinhood Chain esclusivamente in questa fase" → fatto, default RBH.
+- "non voglio meme coin, ma progetti che promettono di fare cose interessanti" → già filtrato da `is_serious()`, nessun cambio; scanner ora include Robinhood Chain.
+- "introduciamo anche altri sistemi per scansionare al meglio il mercato... non è prioritario, teniamocelo in bacheca" → seed-0078 aperto.

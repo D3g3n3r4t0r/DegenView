@@ -1124,6 +1124,10 @@
       "frontend/static/style.css"
     ]
   },
+  "seed-0078": {
+    "status": "aperto",
+    "summary": "Idea: integrare API pubbliche di terze parti (CoinGecko, DeFiLlama, Messari, Token Terminal) per arricchire il profilo dei progetti sullo Sniper — TVL, revenue, developer activity, audit status — così da filtrare meglio i 'progetti seri' da quelli che sembrano seri. Da valutare anche l'API pubblica di Robinhood Chain stessa se esiste. Non prioritario: da sbloccare dopo che lo Sniper è stabile su Robinhood Chain."
+  },
   "seed-0077": {
     "status": "risolto — causa vera trovata e misurata",
     "at": 1789541000,
