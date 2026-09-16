@@ -6004,7 +6004,58 @@
     popup.classList.remove("hidden");
   }
 
-  // ── Motore previsionale breakout ──────────────────────────────────────────
+  // ── Motore previsionale breakout (multi-timeframe) ────────────────────────
+
+  // Gerarchia: per ogni intervallo, quale è il contesto (1 livello su) e il macro (2 livelli su)
+  const TF_HIERARCHY = {
+    "1m":  { context: "15m", macro: "1h"  },
+    "5m":  { context: "1h",  macro: "4h"  },
+    "15m": { context: "1h",  macro: "4h"  },
+    "30m": { context: "4h",  macro: "1d"  },
+    "1h":  { context: "4h",  macro: "1d"  },
+    "4h":  { context: "1d",  macro: "1w"  },
+    "1d":  { context: "1w",  macro: "1M"  },
+    "2d":  { context: "1w",  macro: "1M"  },
+    "3d":  { context: "1w",  macro: "1M"  },
+    "5d":  { context: "1M",  macro: null  },
+    "1w":  { context: "1M",  macro: null  },
+    "1M":  { context: null,  macro: null  },
+  };
+
+  // Trova l'analisi per intervallo (le chiavi di timeframes sono ID, non intervalli)
+  function _analysisByInterval(intervalStr) {
+    if (!state.data || !state.data.timeframes) return null;
+    return Object.values(state.data.timeframes).find((a) => a.interval === intervalStr) || null;
+  }
+
+  // Calcola direzione di trend per un dato insieme di candele e indicatori
+  // Restituisce { dir: "bull"|"bear"|"neutral", pct, emaSlope, label }
+  function _computeTrend(candles, indicators, label) {
+    if (!candles || candles.length < 5) return null;
+    const N = Math.min(50, candles.length);
+    const recent = candles.slice(-N);
+
+    // Priorità 1: slope EMA (usa EMA20 → EMA50 → qualsiasi EMA)
+    const ema = findIndicator(indicators || [], "EMA20")
+             || findIndicator(indicators || [], "EMA50")
+             || findIndicator(indicators || [], "EMA");
+    if (ema) {
+      const vals = seriesFromIndicatorValues(candles, ema).filter((d) => d.value != null).slice(-10);
+      if (vals.length >= 4) {
+        const slope = (vals[vals.length - 1].value - vals[0].value) / vals[0].value * 100;
+        const dir = slope > 0.15 ? "bull" : slope < -0.15 ? "bear" : "neutral";
+        const strength = Math.min(1, Math.abs(slope) / 3);
+        return { dir, strength, label, detail: `EMA slope ${slope > 0 ? "+" : ""}${slope.toFixed(2)}%` };
+      }
+    }
+
+    // Fallback: prezzo first vs last sulle ultime N candele
+    const first = recent[0].close, last = recent[recent.length - 1].close;
+    const pct = (last - first) / first * 100;
+    const dir = pct > 0.5 ? "bull" : pct < -0.5 ? "bear" : "neutral";
+    const strength = Math.min(1, Math.abs(pct) / 5);
+    return { dir, strength, label, detail: `${pct > 0 ? "+" : ""}${pct.toFixed(2)}% su ${N} candele` };
+  }
 
   function predictBreakout() {
     if (!mainChart || !state.data) return null;
@@ -6013,6 +6064,9 @@
     if (!analysis || !analysis.candles || analysis.candles.length < 10) return null;
 
     const allCandles = analysis.candles;
+    const iv = analysis.interval || "1d";
+
+    // Range visibile
     let range = { from: 0, to: allCandles.length - 1 };
     try {
       const vr = mainChart.timeScale().getVisibleLogicalRange();
@@ -6023,17 +6077,49 @@
 
     let bullPts = 0, bearPts = 0;
     const factors = [];
+    const mtfContext = [];
 
-    // 1. Trend: confronto prima metà vs seconda metà del range visibile
+    // ── A. Analisi multi-timeframe (contesto + macro) ──────────────────────
+    const hier = TF_HIERARCHY[iv] || {};
+
+    // Macro (peso 4): definisce la direzione di lungo periodo
+    if (hier.macro) {
+      const mA = _analysisByInterval(hier.macro);
+      const mt = mA ? _computeTrend(mA.candles, mA.indicators || [], hier.macro) : null;
+      if (mt && mt.dir !== "neutral") {
+        const pts = 4 * mt.strength;
+        if (mt.dir === "bull") bullPts += pts; else bearPts += pts;
+        mtfContext.push({ tf: hier.macro, dir: mt.dir, detail: mt.detail, role: "macro" });
+      } else {
+        mtfContext.push({ tf: hier.macro, dir: mt ? "neutral" : "n/d", detail: mt ? mt.detail : "non caricato", role: "macro" });
+      }
+    }
+
+    // Contesto (peso 2.5): definisce il bias intermedio
+    if (hier.context) {
+      const cA = _analysisByInterval(hier.context);
+      const ct = cA ? _computeTrend(cA.candles, cA.indicators || [], hier.context) : null;
+      if (ct && ct.dir !== "neutral") {
+        const pts = 2.5 * ct.strength;
+        if (ct.dir === "bull") bullPts += pts; else bearPts += pts;
+        mtfContext.push({ tf: hier.context, dir: ct.dir, detail: ct.detail, role: "context" });
+      } else {
+        mtfContext.push({ tf: hier.context, dir: ct ? "neutral" : "n/d", detail: ct ? ct.detail : "non caricato", role: "context" });
+      }
+    }
+
+    // ── B. Analisi locale (candele visibili) ───────────────────────────────
+
+    // B1. Trend locale: prima metà vs seconda metà
     const half = Math.floor(visible.length / 2);
     const avgFirst = visible.slice(0, half).reduce((s, c) => s + c.close, 0) / half;
     const avgSecond = visible.slice(half).reduce((s, c) => s + c.close, 0) / (visible.length - half);
     const trendPct = (avgSecond - avgFirst) / avgFirst * 100;
-    if (trendPct > 0.3) { bullPts += 2; factors.push({ label: `Trend rialzista +${trendPct.toFixed(2)}%`, dir: "bull" }); }
-    else if (trendPct < -0.3) { bearPts += 2; factors.push({ label: `Trend ribassista ${trendPct.toFixed(2)}%`, dir: "bear" }); }
-    else { factors.push({ label: "Trend laterale", dir: "neutral" }); }
+    if (trendPct > 0.3) { bullPts += 2; factors.push({ label: `Trend locale +${trendPct.toFixed(2)}%`, dir: "bull" }); }
+    else if (trendPct < -0.3) { bearPts += 2; factors.push({ label: `Trend locale ${trendPct.toFixed(2)}%`, dir: "bear" }); }
+    else { factors.push({ label: "Laterale nel range visibile", dir: "neutral" }); }
 
-    // 2. Struttura swing: HH/HL vs LH/LL
+    // B2. Struttura swing: HH/HL vs LH/LL
     const swings = findSwings(visible, Math.max(2, Math.floor(visible.length / 8)));
     if (swings.highs.length >= 2) {
       const [h1, h2] = swings.highs.slice(-2);
@@ -6046,7 +6132,7 @@
       else { bearPts += 1.5; factors.push({ label: "Minimi decrescenti (LL)", dir: "bear" }); }
     }
 
-    // 3. Divergenze RSI nel range visibile
+    // B3. Divergenze RSI nel range visibile
     const t0 = visible[0].time, t1 = visible[visible.length - 1].time;
     divergenceLines.forEach((d) => {
       if (d.t2 < t0 || d.t1 > t1) return;
@@ -6054,7 +6140,7 @@
       else { bearPts += 2.5; factors.push({ label: "Divergenza RSI ribassista", dir: "bear" }); }
     });
 
-    // 4. Bilancio segnali nel range visibile
+    // B4. Bilancio segnali nel range visibile
     const allMarkers = [
       ...buildStrategyMarkers(_lastStrategySignals || []),
       ...autoPatternMarkers,
@@ -6064,10 +6150,10 @@
     const bullSig = visMarkers.filter((m) => m.text && (m.text.includes("↑") || m.text.includes("long") || m.text.includes("RSI−"))).length;
     const bearSig = visMarkers.filter((m) => m.text && (m.text.includes("↓") || m.text.includes("short") || m.text.includes("RSI+"))).length;
     const sigDiff = bullSig - bearSig;
-    if (sigDiff > 0) { bullPts += Math.min(2, sigDiff * 0.5); factors.push({ label: `Segnali rialzisti ${bullSig} vs ribassisti ${bearSig}`, dir: "bull" }); }
-    else if (sigDiff < 0) { bearPts += Math.min(2, -sigDiff * 0.5); factors.push({ label: `Segnali ribassisti ${bearSig} vs rialzisti ${bullSig}`, dir: "bear" }); }
+    if (sigDiff > 0) { bullPts += Math.min(2, sigDiff * 0.5); factors.push({ label: `Segnali: ${bullSig} rialz. vs ${bearSig} rib.`, dir: "bull" }); }
+    else if (sigDiff < 0) { bearPts += Math.min(2, -sigDiff * 0.5); factors.push({ label: `Segnali: ${bearSig} rib. vs ${bullSig} rialz.`, dir: "bear" }); }
 
-    // 5. RSI corrente
+    // B5. RSI corrente
     const rsiRaw = findIndicator(analysis.indicators || [], "RSI14") || findIndicator(analysis.indicators || [], "RSI");
     if (rsiRaw) {
       const rsiMap = {};
@@ -6080,19 +6166,19 @@
       }
     }
 
-    // 6. Momento ultime 3 candele
+    // B6. Momentum ultime 3 candele
     const last3 = visible.slice(-3);
     const greenCount = last3.filter((c) => c.close > c.open).length;
     if (greenCount === 3) { bullPts += 1; factors.push({ label: "3 candele verdi consecutive", dir: "bull" }); }
     else if (greenCount === 0) { bearPts += 1; factors.push({ label: "3 candele rosse consecutive", dir: "bear" }); }
 
-    // 7. Contrazione (inside bar finale → breakout imminente)
+    // B7. Contrazione (inside bar → breakout imminente)
     const lc = visible[visible.length - 1], pc = visible[visible.length - 2];
     if (lc && pc && lc.high < pc.high && lc.low > pc.low) {
       factors.push({ label: "Contrazione: breakout imminente", dir: "neutral" });
     }
 
-    // Risultato
+    // ── Risultato ─────────────────────────────────────────────────────────
     const total = bullPts + bearPts;
     const diff = bullPts - bearPts;
     const absDiff = Math.abs(diff);
@@ -6100,10 +6186,14 @@
     const confidence = Math.max(1, Math.min(10, rawConf));
 
     let direction = "neutral";
-    if (diff > 1) direction = "bull";
-    else if (diff < -1) direction = "bear";
+    if (diff > 1.5) direction = "bull";
+    else if (diff < -1.5) direction = "bear";
 
-    return { direction, bullPts, bearPts, confidence, factors, candleCount: visible.length };
+    // Allineamento con macro: se il locale è contro il macro, abbassa la confidenza
+    const macroCtx = mtfContext.find((m) => m.role === "macro");
+    const aligned = !macroCtx || macroCtx.dir === "n/d" || macroCtx.dir === "neutral" || macroCtx.dir === direction || direction === "neutral";
+
+    return { direction, bullPts, bearPts, confidence, factors, mtfContext, candleCount: visible.length, iv, aligned };
   }
 
   function showBreakoutPopup() {
@@ -6121,6 +6211,19 @@
     const dirColor = res.direction === "bull" ? "#00d68f" : res.direction === "bear" ? "#ff4560" : "#8899aa";
     const confColor = res.confidence >= 7 ? "#00d68f" : res.confidence >= 5 ? "#f2a93b" : "#8899aa";
 
+    // Riga allineamento macro
+    const alignNote = res.aligned
+      ? `<span style="color:#4fd8a8;font-size:10px;font-family:var(--font-mono)">✓ allineato al trend di lungo</span>`
+      : `<span style="color:#f2a93b;font-size:10px;font-family:var(--font-mono)">⚠ contro il trend di lungo</span>`;
+
+    // Barre MTF (macro + context)
+    const mtfRows = res.mtfContext.map((m) => {
+      const icon = m.dir === "bull" ? "▲" : m.dir === "bear" ? "▼" : "→";
+      const col = m.dir === "bull" ? "#00d68f" : m.dir === "bear" ? "#ff4560" : "#8899aa";
+      const roleLabel = m.role === "macro" ? "MACRO" : "CONTESTO";
+      return `<div class="bp-mtf-row"><span class="bp-mtf-tf">${roleLabel} ${m.tf.toUpperCase()}</span><span class="bp-mtf-dir" style="color:${col}">${icon} ${m.dir.toUpperCase()}</span><span class="bp-mtf-detail">${m.detail}</span></div>`;
+    }).join("");
+
     const factorRows = res.factors.slice(0, 6).map((f) => {
       const icon = f.dir === "bull" ? "▲" : f.dir === "bear" ? "▼" : "→";
       const col = f.dir === "bull" ? "#00d68f" : f.dir === "bear" ? "#ff4560" : "#8899aa";
@@ -6129,7 +6232,7 @@
 
     popup.innerHTML = `
       <div class="bp-header">
-        <span class="bp-title">Previsione Breakout</span>
+        <span class="bp-title">Previsione Breakout · ${res.iv.toUpperCase()}</span>
         <button class="marker-popup-close" onclick="document.getElementById('breakout-popup').classList.add('hidden')" aria-label="Chiudi">×</button>
       </div>
       <div class="bp-direction" style="color:${dirColor}">${dirLabel}</div>
@@ -6138,12 +6241,13 @@
         <div class="marker-popup-score-bar" style="flex:1"><div class="marker-popup-score-fill" style="width:${res.confidence * 10}%;background:${confColor}"></div></div>
         <span class="bp-conf-num" style="color:${confColor}">${res.confidence}/10</span>
       </div>
+      <div style="margin-bottom:8px">${alignNote}</div>
+      ${mtfRows ? `<div class="bp-mtf">${mtfRows}</div><div class="bp-section-label">ANALISI LOCALE</div>` : ""}
       <div class="bp-factors">${factorRows}</div>
-      <div class="bp-footer">${res.candleCount} candele analizzate</div>
+      <div class="bp-footer">${res.candleCount} candele visibili · bull ${res.bullPts.toFixed(1)} pt · bear ${res.bearPts.toFixed(1)} pt</div>
     `;
     popup.classList.remove("hidden");
 
-    // click fuori chiude
     setTimeout(() => {
       const close = (e) => {
         if (!popup.contains(e.target) && !el("mobile-strip-predict-btn")?.contains(e.target)) {
