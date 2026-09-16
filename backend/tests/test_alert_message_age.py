@@ -43,7 +43,9 @@ def test_the_real_inj_case_shows_both_prices_and_the_delay():
     )
     assert "6.285" in msg
     assert "14 set" in msg
-    assert "giorni fa" in msg
+    # La candela del 14 chiude a mezzanotte del 15: il 16 e' chiusa da un
+    # giorno, non da due. L'eta' si misura dalla chiusura, non dall'apertura.
+    assert "chiusa un giorno fa" in msg
     # Il prezzo di adesso, e di quanto si e' mosso da allora.
     assert "5.424" in msg
     assert "-13.7%" in msg
@@ -51,13 +53,28 @@ def test_the_real_inj_case_shows_both_prices_and_the_delay():
 
 def test_a_signal_born_now_does_not_repeat_the_same_price_twice():
     """Su un segnale appena nato il "prezzo ora" sarebbe rumore, non trasparenza."""
-    now = _ts("2026-09-16")
+    bar_open = _ts("2026-09-15")
+    now = bar_open + DAY + 60          # un minuto dopo la chiusura della candela
     msg = format_signal_message(
         "BTCUSDT", "1d", "Lorenzo (trend-follower)",
-        _signal(now, 100.0), current_price=100.02, now=now,
+        _signal(bar_open, 100.0), current_price=100.02, now=now,
     )
     assert "Prezzo ora" not in msg
-    assert "meno di un'ora fa" in msg
+    assert "chiusa meno di un'ora fa" in msg
+
+
+def test_the_age_is_measured_from_the_close_not_the_open():
+    """Un alert spedito subito dopo la chiusura non deve annunciarsi vecchio.
+
+    `signal.time` e' l'APERTURA della candela: misurando da li', un alert
+    puntuale su un daily si sarebbe presentato come "un giorno fa" — vecchio
+    di un giorno appena nato.
+    """
+    bar_open = _ts("2026-09-15")
+    just_closed = bar_open + DAY + 60
+    msg = format_signal_message("BTCUSDT", "1d", "S", _signal(bar_open, 100.0), now=just_closed)
+    assert "chiusa meno di un'ora fa" in msg
+    assert "giorni fa" not in msg
 
 
 def test_an_intraday_signal_carries_the_hour_a_daily_one_does_not():

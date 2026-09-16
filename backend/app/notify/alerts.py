@@ -257,23 +257,30 @@ def _when_phrase(ts: int, interval: str, now: int) -> str:
 
     Le due cose insieme perche' rispondono a domande diverse: la data dice su
     quale candela, "due giorni fa" dice se ha ancora senso guardarla.
+
+    `ts` e' l'APERTURA della candela del segnale, ma l'eta' si misura dalla sua
+    CHIUSURA: e' quello il momento in cui il segnale diventa definitivo e
+    azionabile. Misurandola dall'apertura, un alert spedito un minuto dopo la
+    chiusura di una candela giornaliera si sarebbe annunciato come "un giorno
+    fa" — vecchio di un giorno appena nato.
     """
     d = datetime.fromtimestamp(ts, tz=timezone.utc)
-    stamp = f"{d.day} {_MONTHS_IT[d.month - 1]}"
+    stamp = f"candela del {d.day} {_MONTHS_IT[d.month - 1]}"
     # Sui timeframe intraday l'ora e' meta' dell'informazione; su daily e oltre
     # e' rumore (la candela e' il giorno).
     if _INTERVAL_SECONDS.get(interval, 86400) < 86400:
         stamp += f" {d:%H:%M} UTC"
 
-    delta = max(0, now - ts)
+    closed_at = ts + _INTERVAL_SECONDS.get(interval, 86400)
+    delta = max(0, now - closed_at)
     if delta < 3600:
-        rel = "meno di un'ora fa"
+        rel = "chiusa meno di un'ora fa"
     elif delta < 86400:
         hours = delta // 3600
-        rel = "un'ora fa" if hours == 1 else f"{hours} ore fa"
+        rel = "chiusa un'ora fa" if hours == 1 else f"chiusa {hours} ore fa"
     else:
         days = delta // 86400
-        rel = "un giorno fa" if days == 1 else f"{days} giorni fa"
+        rel = "chiusa un giorno fa" if days == 1 else f"chiusa {days} giorni fa"
     return f"{stamp}, {rel}"
 
 
