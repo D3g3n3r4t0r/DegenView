@@ -291,6 +291,7 @@ def format_signal_message(
     signal: StrategySignal,
     current_price: float | None = None,
     now: int | None = None,
+    entry_id: str = "",
 ) -> str:
     """Il messaggio dice sempre QUANDO, non solo quanto.
 
@@ -316,6 +317,26 @@ def format_signal_message(
         drift = (current_price - signal.price) / signal.price
         if abs(drift) >= 0.002:
             lines.append(f"Prezzo ora: {current_price:g} ({drift * 100:+.1f}%)")
+    if entry_id:
+        stats = get_alert_stats(entry_id, strategy_name)
+        count = stats.get("count", 0)
+        last_ts = stats.get("last_ts", 0)
+        if count > 0 and last_ts:
+            delta = (now - last_ts) if now else 0
+            if delta < 86400:
+                when = "oggi"
+            elif delta < 2 * 86400:
+                when = "ieri"
+            elif delta < 7 * 86400:
+                days = delta // 86400
+                when = f"{days} giorni fa"
+            elif delta < 30 * 86400:
+                weeks = delta // (7 * 86400)
+                when = f"{weeks} {'settimana' if weeks == 1 else 'settimane'} fa"
+            else:
+                months = delta // (30 * 86400)
+                when = f"{months} {'mese' if months == 1 else 'mesi'} fa"
+            lines.append(f"Ultimo segnale simile: {when} (#{count} totale)")
     lines.append("")
     lines.append("<i>Notifica su una condizione tecnica rilevata, non è consulenza finanziaria.</i>")
     return "\n".join(lines)

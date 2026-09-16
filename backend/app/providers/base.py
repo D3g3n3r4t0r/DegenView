@@ -38,8 +38,12 @@ class DataProvider(ABC):
     it maps the canonical interval (app.timeframes.IntervalChoice) to its own format."""
 
     @abstractmethod
-    async def fetch_ohlcv(self, symbol: str, interval: str, outputsize: int) -> pd.DataFrame:
-        """Return a DataFrame indexed by UTC datetime, columns: open, high, low, close, volume."""
+    async def fetch_ohlcv(self, symbol: str, interval: str, outputsize: int, since_ms: int | None = None) -> pd.DataFrame:
+        """Return a DataFrame indexed by UTC datetime, columns: open, high, low, close, volume.
+
+        When since_ms is provided, fetch all available candles from that
+        timestamp to now, ignoring outputsize. The caller is responsible for
+        any further slicing."""
         raise NotImplementedError
 
     @abstractmethod

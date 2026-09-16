@@ -35,7 +35,7 @@ _CANDLES = pd.DataFrame(
 
 
 class _Provider:
-    async def fetch_ohlcv(self, symbol, interval, outputsize):
+    async def fetch_ohlcv(self, symbol, interval, outputsize, since_ms=None):
         return _CANDLES
 
 

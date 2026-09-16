@@ -32,6 +32,9 @@ _MAX_PER_OWNER = 200
 
 Outcome = Literal["eseguito", "fallito", "saltato"]
 
+_ENTRY_SIGNALS = {"entry_long", "entry_short", "flip_to_long", "flip_to_short"}
+_EXIT_SIGNALS = {"exit_long", "exit_short", "flip_to_long", "flip_to_short"}
+
 _entries: list[dict] = []
 
 
@@ -64,6 +67,22 @@ def _trim(owner_id: str) -> None:
         del _entries[i]
 
 
+def _find_open_entry(owner_id: str, symbol: str, strategy_name: str) -> dict | None:
+    """Trova l'ultima entrata ancora aperta (senza exit_id) per owner+symbol+strategy."""
+    for e in reversed(_entries):
+        if (
+            e.get("owner_id") == owner_id
+            and e.get("symbol") == symbol
+            and e.get("strategy_name") == strategy_name
+            and e.get("signal_type") in _ENTRY_SIGNALS
+            and e.get("outcome") == "eseguito"
+            and "exit_id" not in e
+            and e.get("price")
+        ):
+            return e
+    return None
+
+
 def record(
     owner_id: str,
     *,
@@ -87,6 +106,23 @@ def record(
         "detail": (detail or "")[:400],
         "price": price,
     }
+
+    # Collega l'uscita all'entrata aperta e calcola il P&L reale.
+    if outcome == "eseguito" and signal_type in _EXIT_SIGNALS and price:
+        open_entry = _find_open_entry(owner_id, symbol, strategy_name)
+        if open_entry and open_entry.get("price"):
+            ep = open_entry["price"]
+            # Long: si guadagna salendo. Short: si guadagna scendendo.
+            # La direzione la dice il signal_type dell'entrata.
+            is_long = open_entry["signal_type"] in ("entry_long", "flip_to_long")
+            pnl_pct = ((price - ep) / ep) * (1 if is_long else -1)
+            entry["pnl_pct"] = round(pnl_pct * 100, 2)
+            entry["entry_price"] = ep
+            entry["entry_id"] = open_entry["id"]
+            open_entry["exit_id"] = entry["id"]
+            open_entry["exit_price"] = price
+            open_entry["pnl_pct"] = entry["pnl_pct"]
+
     _entries.append(entry)
     _trim(owner_id)
     _save()

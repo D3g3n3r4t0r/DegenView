@@ -57,7 +57,7 @@ class KucoinProvider(DataProvider):
     def __init__(self, base_url: str | None = None):
         self._base_url = base_url or BASE_URL
 
-    async def fetch_ohlcv(self, symbol: str, interval: str, outputsize: int) -> pd.DataFrame:
+    async def fetch_ohlcv(self, symbol: str, interval: str, outputsize: int, since_ms: int | None = None) -> pd.DataFrame:
         formatted_symbol = format_symbol(symbol)
         candle_type = _CANONICAL_TO_TYPE.get(interval)
         if candle_type is None:

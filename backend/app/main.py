@@ -108,6 +108,7 @@ from app.providers.twelvedata import TwelveDataProvider
 from app.resample import resample_by_count
 from app.timeframes import (
     DEFAULT_INTERVALS,
+    INTERVAL_SECONDS,
     SYNTHETIC_DAY_INTERVALS,
     IntervalChoice,
     drop_unclosed_candle,
@@ -124,6 +125,8 @@ if getattr(sys, "frozen", False):
 else:
     FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent / "frontend"
 WATCHLIST_POLL_SECONDS = 60
+_WATCHDOG_FILE = Path(__file__).resolve().parent / "data" / "watchdog.json"
+_WATCHDOG_STALE_S = WATCHLIST_POLL_SECONDS * 5  # alert if loop silent for 5 cycles
 
 # L'elenco degli exchange futures vive nel registro degli adattatori: qui
 # c'e' solo il nome vecchio, perche' non ci sia una seconda lista che possa
@@ -199,13 +202,19 @@ def canonical_symbol(symbol: str, asset_type: AssetType, exchange: CryptoExchang
     return format_mexc_symbol(symbol)
 
 
-async def fetch_ohlcv_canonical(provider: DataProvider, symbol: str, interval: str, outputsize: int):
+async def fetch_ohlcv_canonical(provider: DataProvider, symbol: str, interval: str, outputsize: int, since_ms: int | None = None):
     """Like provider.fetch_ohlcv, but transparently synthesizes intervals no
     provider natively supports (2D/3D/5D) by fetching extra 1D candles and
-    folding them down — every call site gets these for free."""
+    folding them down — every call site gets these for free.
+
+    When since_ms is set, outputsize is ignored and the provider fetches all
+    available candles from that timestamp to now."""
     multiple = SYNTHETIC_DAY_INTERVALS.get(interval)
     if multiple is None:
-        return await provider.fetch_ohlcv(symbol, interval, outputsize)
+        return await provider.fetch_ohlcv(symbol, interval, outputsize, since_ms=since_ms)
+    if since_ms is not None:
+        raw = await provider.fetch_ohlcv(symbol, "1d", outputsize, since_ms=since_ms)
+        return resample_by_count(raw, multiple)
     raw = await provider.fetch_ohlcv(symbol, "1d", outputsize * multiple)
     return resample_by_count(raw, multiple).tail(outputsize)
 
@@ -218,6 +227,13 @@ async def _fetch_cached(key: tuple, provider: DataProvider, symbol: str, interva
     return await get_or_fetch(key, _do)
 
 
+async def _fetch_cached_since(key: tuple, provider: DataProvider, symbol: str, interval: str, since_ms: int):
+    """Like _fetch_cached but fetches all candles from since_ms to now."""
+    async def _do():
+        return await fetch_ohlcv_canonical(provider, symbol, interval, 0, since_ms=since_ms)
+    return await get_or_fetch(key, _do)
+
+
 
 async def _watchlist_alert_loop() -> None:
     """Background loop, independent of any browser tab: evaluates every
@@ -227,6 +243,10 @@ async def _watchlist_alert_loop() -> None:
     enabled on that ticker rather than refetching per strategy."""
     while True:
         await asyncio.sleep(WATCHLIST_POLL_SECONDS)
+        try:
+            _WATCHDOG_FILE.write_text(json.dumps({"ts": _time.time()}))
+        except Exception:
+            pass
         if not settings.telegram_bot_token:
             continue
         for entry in watchlist_store.list_entries():
@@ -247,6 +267,18 @@ async def _watchlist_alert_loop() -> None:
                     df = drop_unclosed_candle(df, entry.interval)
                 if df.empty:
                     continue
+                # Stale data detection: last candle older than 2× the interval
+                _iv_s = INTERVAL_SECONDS.get(entry.interval, 0)
+                if _iv_s:
+                    _last_ts = df["datetime"].iloc[-1].timestamp()
+                    _age = _time.time() - _last_ts
+                    if _age > _iv_s * 2:
+                        _hours_old = int(_age / 3600)
+                        _stale_msg = (
+                            f"⚠️ Dati stantii: <b>{entry.symbol}</b> [{entry.interval}] "
+                            f"— ultima candela {_hours_old}h fa"
+                        )
+                        asyncio.create_task(telegram.send_to(owner.telegram_chat_id, _stale_msg))
                 # Price-level alerts (checked once per entry poll regardless of strategies)
                 if df is not None and not df.empty:
                     current_price = float(df["close"].iloc[-1])
@@ -642,6 +674,36 @@ async def _maybe_send_recap() -> None:
         await telegram.send_message(text)
 
 
+async def _watchdog_loop() -> None:
+    """Sends a Telegram alert to all Telegram-enabled users if the watchlist
+    loop goes silent for more than _WATCHDOG_STALE_S seconds."""
+    await asyncio.sleep(_WATCHDOG_STALE_S)
+    while True:
+        await asyncio.sleep(_WATCHDOG_STALE_S)
+        if not settings.telegram_bot_token:
+            continue
+        try:
+            raw = _WATCHDOG_FILE.read_text()
+            last_ts = json.loads(raw).get("ts", 0)
+        except Exception:
+            last_ts = 0
+        if _time.time() - last_ts < _WATCHDOG_STALE_S:
+            continue
+        notified: set[str] = set()
+        for entry in watchlist_store.list_entries():
+            owner = auth.get_user(entry.owner_id)
+            if owner is None or not owner.telegram_chat_id or not _telegram_allowed(owner):
+                continue
+            if owner.id in notified:
+                continue
+            notified.add(owner.id)
+            asyncio.create_task(telegram.send_to(
+                owner.telegram_chat_id,
+                "⚠️ <b>Watchdog</b>: il loop degli alert è silenzioso da più di "
+                f"{int(_WATCHDOG_STALE_S // 60)} minuti. Verificare lo stato del server.",
+            ))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     from app.sniper import cache as sniper_cache
@@ -652,12 +714,14 @@ async def lifespan(app: FastAPI):
     t2 = asyncio.create_task(sniper_cache.polling_loop())
     t3 = asyncio.create_task(enrichment_loop())
     t4 = asyncio.create_task(_weekly_recap_loop())
+    t5 = asyncio.create_task(_watchdog_loop())
     agent_tasks = await sniper_agents.start_all()
     yield
     t1.cancel()
     t2.cancel()
     t3.cancel()
     t4.cancel()
+    t5.cancel()
     for t in agent_tasks:
         t.cancel()
 
@@ -1051,7 +1115,7 @@ def _dispatch_telegram_alerts(
     fresh = find_new_signals(symbol, interval, strategy, frequency=frequency, entry_id=entry_id)
     for signal in fresh:
         message = format_signal_message(symbol, interval, strategy.name, signal,
-                                        current_price=current_price)
+                                        current_price=current_price, entry_id=entry_id or "")
         asyncio.create_task(telegram.send_to(chat_id, message))
         if owner_id:
             alert_log.append_entry(
@@ -1898,6 +1962,35 @@ async def close_manual_futures_position(body: ClosePositionRequest, user: User =
     return {"ok": True, "closed": True, "result": result, "symbol": symbol}
 
 
+class HaltRequest(BaseModel):
+    halt: bool
+
+
+@app.post("/api/trading/halt")
+async def set_trading_halt(body: HaltRequest, user: User = Depends(auth.get_current_user)):
+    """Kill switch: mette in pausa o riprende l'esecuzione automatica degli ordini.
+
+    Non tocca alert, backtest o ottimizzatore — solo l'esecuzione automatica.
+    La chiusura manuale di una posizione esistente ignora il kill switch
+    (vedi /api/trading/futures/close).
+    """
+    allowed_emails = {e.strip().lower() for e in settings.registration_allowed_emails.split(",") if e.strip()}
+    if user.email.lower() not in allowed_emails:
+        raise HTTPException(status_code=403, detail="Non autorizzato")
+    settings.trading_halt = body.halt
+    state = "in pausa" if body.halt else "attiva"
+    return {"ok": True, "trading_halt": body.halt, "detail": f"Esecuzione automatica {state}"}
+
+
+@app.get("/api/trading/halt")
+async def get_trading_halt(user: User = Depends(auth.get_current_user)):
+    """Stato corrente del kill switch."""
+    allowed_emails = {e.strip().lower() for e in settings.registration_allowed_emails.split(",") if e.strip()}
+    if user.email.lower() not in allowed_emails:
+        raise HTTPException(status_code=403, detail="Non autorizzato")
+    return {"trading_halt": settings.trading_halt}
+
+
 @app.get("/api/balances")
 async def get_balances(user: User = Depends(auth.get_current_user)) -> dict:
     if not _balance_visible(user):
@@ -2538,21 +2631,24 @@ async def deep_backtest(
 
     provider = get_provider(asset_type, exchange)
     backtest_interval = backtest_interval_for(ltf_interval)
-    cache_key = (f"{asset_type}:{exchange}:{symbol.upper()}:backtest", backtest_interval, settings.backtest_candles)
-
-    try:
-        df = await _fetch_cached(cache_key, provider, symbol, backtest_interval, settings.backtest_candles)
-    except ProviderError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    # When the user gives a start date, fetch from that date to now — no count
+    # cap. Otherwise fall back to the cached recent-N path.
+    if start_date:
+        since_ms = int(pd.Timestamp(start_date, tz="UTC").timestamp() * 1000)
+        cache_key = (f"{asset_type}:{exchange}:{symbol.upper()}:backtest:since", backtest_interval, since_ms)
+        try:
+            df = await _fetch_cached_since(cache_key, provider, symbol, backtest_interval, since_ms)
+        except ProviderError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+    else:
+        cache_key = (f"{asset_type}:{exchange}:{symbol.upper()}:backtest", backtest_interval, settings.backtest_candles)
+        try:
+            df = await _fetch_cached(cache_key, provider, symbol, backtest_interval, settings.backtest_candles)
+        except ProviderError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
     if df.empty:
         raise HTTPException(status_code=502, detail=f"Nessun dato per {symbol}")
 
-    # Ritaglio per periodo, facoltativo — sulla cache gia' scaricata, non su
-    # una nuova chiamata al provider: la finestra richiesta e' sempre un
-    # sottoinsieme di quella gia' presa (settings.backtest_candles candele),
-    # mai piu' ampia. Il range va applicato PRIMA del backtest, non dopo:
-    # tagliare i trade risultanti lascerebbe dentro operazioni aperte fuori
-    # dal periodo scelto.
     df = _slice_to_period(df, symbol, start_date, end_date)
 
     result = run_backtest(df, strategy_params.model_dump(), backtest_params.model_dump(), strategy_name=strategy_name)
@@ -2977,12 +3073,19 @@ async def _optimize_body(
 
     provider = get_provider(asset_type, exchange)
     backtest_interval = backtest_interval_for(ltf_interval)
-    cache_key = (f"{asset_type}:{exchange}:{symbol.upper()}:backtest", backtest_interval, settings.backtest_candles)
-
-    try:
-        df = await _fetch_cached(cache_key, provider, symbol, backtest_interval, settings.backtest_candles)
-    except ProviderError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if start_date:
+        since_ms = int(pd.Timestamp(start_date, tz="UTC").timestamp() * 1000)
+        cache_key = (f"{asset_type}:{exchange}:{symbol.upper()}:backtest:since", backtest_interval, since_ms)
+        try:
+            df = await _fetch_cached_since(cache_key, provider, symbol, backtest_interval, since_ms)
+        except ProviderError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+    else:
+        cache_key = (f"{asset_type}:{exchange}:{symbol.upper()}:backtest", backtest_interval, settings.backtest_candles)
+        try:
+            df = await _fetch_cached(cache_key, provider, symbol, backtest_interval, settings.backtest_candles)
+        except ProviderError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
     if df.empty:
         raise HTTPException(status_code=502, detail=f"Nessun dato per {symbol}")
     df = _slice_to_period(df, symbol, start_date, end_date)
@@ -3131,10 +3234,15 @@ async def start_optimize(
             jobs_store.log(job_id, f"scarico i dati di {symbol.upper()}…")
             provider = get_provider(asset_type, exchange)
             backtest_interval = backtest_interval_for(ltf_interval)
-            cache_key = (f"{asset_type}:{exchange}:{symbol.upper()}:backtest",
-                         backtest_interval, settings.backtest_candles)
-            df = await _fetch_cached(cache_key, provider, symbol, backtest_interval,
-                                     settings.backtest_candles)
+            if start_date:
+                _since_ms = int(pd.Timestamp(start_date, tz="UTC").timestamp() * 1000)
+                _ck = (f"{asset_type}:{exchange}:{symbol.upper()}:backtest:since", backtest_interval, _since_ms)
+                df = await _fetch_cached_since(_ck, provider, symbol, backtest_interval, _since_ms)
+            else:
+                cache_key = (f"{asset_type}:{exchange}:{symbol.upper()}:backtest",
+                             backtest_interval, settings.backtest_candles)
+                df = await _fetch_cached(cache_key, provider, symbol, backtest_interval,
+                                         settings.backtest_candles)
             if df.empty:
                 jobs_store.fail(job_id, f"Nessun dato per {symbol}")
                 return

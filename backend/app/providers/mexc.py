@@ -46,11 +46,12 @@ class MexcProvider(DataProvider):
     # date has been reached and there's nothing earlier to fetch.
     _PAGE_LIMIT = 500
     _MAX_PAGES = 20
+    _MAX_PAGES_SINCE = 10000
 
     def __init__(self, base_url: str | None = None):
         self._base_url = base_url or BASE_URL
 
-    async def fetch_ohlcv(self, symbol: str, interval: str, outputsize: int) -> pd.DataFrame:
+    async def fetch_ohlcv(self, symbol: str, interval: str, outputsize: int, since_ms: int | None = None) -> pd.DataFrame:
         formatted_symbol = format_symbol(symbol)
         api_interval = _CANONICAL_TO_INTERVAL[interval]
         # MEXC silently ignores a lone endTime (no startTime) and just
@@ -62,10 +63,11 @@ class MexcProvider(DataProvider):
 
         rows: list[list] = []
         end_time: int | None = None
-        remaining = outputsize
+        max_pages = self._MAX_PAGES_SINCE if since_ms is not None else self._MAX_PAGES
+        remaining = int(1e9) if since_ms is not None else outputsize
         try:
-            async with httpx.AsyncClient(timeout=15.0) as client:
-                for _ in range(self._MAX_PAGES):
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                for _ in range(max_pages):
                     if remaining <= 0:
                         break
                     limit = min(remaining, self._PAGE_LIMIT)
@@ -81,11 +83,6 @@ class MexcProvider(DataProvider):
                         raise ProviderError(f"Risposta non valida da MEXC per {formatted_symbol}") from exc
 
                     if isinstance(payload, dict) and "code" in payload:
-                        # Il messaggio grezzo di MEXC ("Invalid symbol.") non dice
-                        # ne' quale simbolo ne' come scriverlo giusto — chi lo legge
-                        # deve indovinare da solo se ha sbagliato exchange, formato
-                        # o nome. Il simbolo che abbiamo davvero mandato e un
-                        # suggerimento concreto valgono piu' del codice d'errore.
                         raw = payload.get("msg", "errore sconosciuto")
                         raise ProviderError(
                             f"MEXC non riconosce {formatted_symbol}: {raw}. "
@@ -96,13 +93,13 @@ class MexcProvider(DataProvider):
 
                     rows.extend(payload)
                     remaining -= len(payload)
+                    earliest = min(int(row[0]) for row in payload)
                     if len(payload) < limit:
                         break  # short page — reached the symbol's listing date
-                    end_time = min(int(row[0]) for row in payload) - 1
+                    if since_ms is not None and earliest <= since_ms:
+                        break  # reached the requested origin
+                    end_time = earliest - 1
         except httpx.HTTPError as exc:
-            # A page beyond the first failing (network blip, proxy hiccup)
-            # doesn't have to sink the whole fetch — whatever was already
-            # collected is still usable history, just less of it.
             if not rows:
                 raise ProviderUnreachable(f"MEXC non raggiungibile per {formatted_symbol}: {exc}") from exc
 
@@ -119,6 +116,9 @@ class MexcProvider(DataProvider):
 
         df = df.set_index("datetime").sort_index()
         df = df[~df.index.duplicated(keep="first")]
+        if since_ms is not None:
+            df = df[df.index >= pd.Timestamp(since_ms, unit="ms", tz="UTC")]
+            return df[["open", "high", "low", "close", "volume"]]
         return df[["open", "high", "low", "close", "volume"]].tail(outputsize)
 
     async def search_symbols(self, query: str) -> list[dict]:

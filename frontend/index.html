@@ -329,7 +329,7 @@
           </button>
         </nav>
         <div id="chart-wrap" class="chart-wrap hidden">
-          <div id="main-chart" class="main-chart"></div>
+          <div id="main-chart" class="main-chart"><canvas id="draw-canvas"></canvas></div>
           <div id="rsi-chart" class="sub-chart hidden"></div>
           <div id="macd-chart" class="sub-chart hidden"></div>
           <div id="stoch-chart" class="sub-chart hidden"></div>
@@ -459,7 +459,7 @@
                   <option value="next_open">Apertura della candela successiva</option>
                 </select>
               </label>
-              <p class="panel-hint lab-fill-hint">Alla <b>chiusura</b> si compra al prezzo con cui il segnale e' stato calcolato: si conosce solo nell'istante in cui la candela chiude, quindi e' l'ipotesi ottimista. All&rsquo;<b>apertura successiva</b> si compra dove si puo' davvero: e' il numero realizzabile, ed e' quasi sempre piu' basso.</p>
+              <p class="panel-hint lab-fill-hint">Alla <b>chiusura</b> il segnale arriva nell&rsquo;istante in cui la candela chiude: il prezzo e' quello del segnale stesso, ottimista perche&rsquo; nella realta&rsquo; non si e' ancora potuto agire. All&rsquo;<b>apertura successiva</b> il segnale arriva alla chiusura ma l&rsquo;ordine viene eseguito all&rsquo;apertura della candela dopo: e' lo scenario realistico, il prezzo ottenibile davvero.</p>
             </div>
           </details>
 

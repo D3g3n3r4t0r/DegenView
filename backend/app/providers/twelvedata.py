@@ -82,7 +82,7 @@ class TwelveDataProvider(DataProvider):
         self._api_key = api_key or settings.twelve_data_api_key
         self._base_url = base_url or settings.twelve_data_base_url
 
-    async def fetch_ohlcv(self, symbol: str, interval: str, outputsize: int) -> pd.DataFrame:
+    async def fetch_ohlcv(self, symbol: str, interval: str, outputsize: int, since_ms: int | None = None) -> pd.DataFrame:
         if not self._api_key:
             raise ProviderError("Chiave API Twelve Data mancante. Impostala in backend/.env")
 

@@ -41,25 +41,24 @@ class BinanceProvider(DataProvider):
     # Binance's klines endpoint caps a single request at 1000 rows — paged
     # the same way as MexcProvider (see its docstring) for anything deeper.
     _PAGE_LIMIT = 1000
-    _MAX_PAGES = 20
+    _MAX_PAGES = 20        # used only for the outputsize-based (recent-N) path
+    _MAX_PAGES_SINCE = 10000  # effectively unlimited for the since_ms deep-fetch path
 
     def __init__(self, base_url: str | None = None):
         self._base_url = base_url or BASE_URL
 
-    async def fetch_ohlcv(self, symbol: str, interval: str, outputsize: int) -> pd.DataFrame:
+    async def fetch_ohlcv(self, symbol: str, interval: str, outputsize: int, since_ms: int | None = None) -> pd.DataFrame:
         formatted_symbol = format_symbol(symbol)
         api_interval = _CANONICAL_TO_INTERVAL[interval]
-        # A lone endTime (no startTime) was unreliable on MEXC's identically
-        # shaped klines endpoint — always sending both here too rather than
-        # trusting endTime alone to window the page.
         interval_ms = INTERVAL_SECONDS[interval] * 1000
 
         rows: list[list] = []
         end_time: int | None = None
-        remaining = outputsize
+        max_pages = self._MAX_PAGES_SINCE if since_ms is not None else self._MAX_PAGES
+        remaining = int(1e9) if since_ms is not None else outputsize
         try:
-            async with httpx.AsyncClient(timeout=15.0) as client:
-                for _ in range(self._MAX_PAGES):
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                for _ in range(max_pages):
                     if remaining <= 0:
                         break
                     limit = min(remaining, self._PAGE_LIMIT)
@@ -81,9 +80,12 @@ class BinanceProvider(DataProvider):
 
                     rows.extend(payload)
                     remaining -= len(payload)
+                    earliest = min(int(row[0]) for row in payload)
                     if len(payload) < limit:
                         break  # short page — reached the symbol's listing date
-                    end_time = min(int(row[0]) for row in payload) - 1
+                    if since_ms is not None and earliest <= since_ms:
+                        break  # we've reached the requested origin
+                    end_time = earliest - 1
         except httpx.HTTPError as exc:
             if not rows:
                 raise ProviderUnreachable(f"Binance non raggiungibile per {formatted_symbol}: {exc}") from exc
@@ -101,6 +103,9 @@ class BinanceProvider(DataProvider):
 
         df = df.set_index("datetime").sort_index()
         df = df[~df.index.duplicated(keep="first")]
+        if since_ms is not None:
+            df = df[df.index >= pd.Timestamp(since_ms, unit="ms", tz="UTC")]
+            return df[["open", "high", "low", "close", "volume"]]
         return df[["open", "high", "low", "close", "volume"]].tail(outputsize)
 
     async def search_symbols(self, query: str) -> list[dict]:
