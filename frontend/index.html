@@ -832,6 +832,11 @@
                   <div class="fq-row"><span>Margine richiesto</span><span id="fq-margin">—</span></div>
                   <div class="fq-row fq-liq"><span>Liquidazione stimata</span><span id="fq-liq">—</span></div>
                   <div class="fq-row"><span>Distanza dalla liquidazione</span><span id="fq-dist">—</span></div>
+                  <!-- Compare solo quando l'exchange arrotonda la dimensione
+                       (MEXC conta contratti interi): i numeri qui sopra sono
+                       gia' quelli veri, questa riga dice perche' non
+                       coincidono con l'importo chiesto. -->
+                  <p id="fq-rounding-note" class="fq-rounding-note hidden"></p>
                 </div>
 
                 <label class="futures-confirm">

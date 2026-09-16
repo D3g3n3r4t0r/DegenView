@@ -1805,11 +1805,20 @@
       node.textContent = txt;
       node.className = cls || "";
     };
+    const note = el("fq-rounding-note");
     if (!q) {
       setv("fq-notional", "—"); setv("fq-margin", "—");
       setv("fq-liq", "—"); setv("fq-dist", "—");
       el("futures-confirm-liq").textContent = "—";
+      if (note) note.classList.add("hidden");
       return;
+    }
+    // L'exchange puo' arrotondare la dimensione (MEXC conta contratti
+    // interi): quando succede, l'anteprima lo dice invece di mostrare
+    // l'importo chiesto e lasciar scoprire dopo quello eseguito.
+    if (note) {
+      note.textContent = q.rounding_note || "";
+      note.classList.toggle("hidden", !q.rounding_note);
     }
     const dist = (q.liquidation_price / q.mark_price - 1) * 100;
     setv("fq-notional", fmtNum(q.notional, 2) + " USDT");

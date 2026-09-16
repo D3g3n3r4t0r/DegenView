@@ -133,6 +133,27 @@ class FuturesAdapter(abc.ABC):
         """Chiude per intero la posizione su questo simbolo. `None` se non
         c'era niente da chiudere — non e' un errore."""
 
+    async def effective_notional(
+        self,
+        symbol: str,
+        notional: float,
+        mark: float,
+        creds: FuturesCreds,
+    ) -> tuple[float, str]:
+        """Quanto verrebbe impegnato DAVVERO, e perche' se differisce.
+
+        L'anteprima di un ordine mostrava l'importo chiesto (es. l'80% del
+        saldo) come se fosse quello che sarebbe finito a mercato. Su exchange
+        che quantizzano la dimensione — MEXC conta contratti interi, e un
+        contratto su KAS vale mille monete — l'ordine vero ne usa meno: 40
+        USDT chiesti diventavano 34,40, senza che niente lo dicesse prima.
+
+        Il default non arrotonda niente (chi non quantizza non deve
+        dichiarare nulla), quindi aggiungere questo metodo non cambia il
+        comportamento di nessun adattatore che non lo sovrascriva.
+        """
+        return notional, ""
+
     # ── utilita' condivise ────────────────────────────────────────────────
 
     def _notional(

@@ -215,6 +215,26 @@ class MexcFutures(FuturesAdapter):
 
     # ── scritture ─────────────────────────────────────────────────────────
 
+    async def effective_notional(self, symbol, notional, mark, creds):
+        """Il nozionale vero dopo l'arrotondamento ai contratti interi.
+
+        Stessa aritmetica di place_order() qui sotto — `notional / mark /
+        csize`, troncato — perche' un'anteprima che calcola in modo anche solo
+        leggermente diverso dall'ordine e' peggio di nessuna anteprima.
+        """
+        sym = self.symbol_for(symbol)
+        if mark <= 0:
+            return notional, ""
+        csize, _ = await self._contract_spec(sym)
+        contracts = int(notional / mark / csize)
+        if contracts < 1:
+            return notional, ""
+        real = contracts * csize * mark
+        if abs(real - notional) / notional < 0.005:
+            return real, ""
+        return real, (f"{contracts} contratti da {csize:g} — MEXC non accetta frazioni di contratto, "
+                      f"quindi l'ordine usa {real:.2f} USDT invece di {notional:.2f}")
+
     async def place_order(self, symbol, side, size_mode, size_value, leverage, creds, max_usdt=None):
         sym = self.symbol_for(symbol)
         available = await self.available_margin(creds)

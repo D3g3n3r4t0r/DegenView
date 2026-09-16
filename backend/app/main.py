@@ -1662,6 +1662,22 @@ async def quote_futures_order(body: FuturesQuoteRequest, user: User = Depends(au
         margin_used = (body.size_value * mark) / body.leverage
     else:
         margin_used = available * body.size_value / 100
+    # Cosa verrebbe impegnato DAVVERO: su MEXC la dimensione si arrotonda a
+    # contratti interi, quindi l'importo chiesto e quello eseguito possono non
+    # coincidere. Mostrare il primo e spedire il secondo e' esattamente il
+    # difetto segnalato ("doveva essere 40 dollari ma ne ha usati 34 e
+    # qualcosa"): l'anteprima esiste per non avere sorprese dopo il click.
+    rounding_note = ""
+    try:
+        effective, rounding_note = await adapter.effective_notional(
+            symbol, margin_used * body.leverage, mark, creds,
+        )
+        margin_used = effective / body.leverage
+    except FuturesExecutionError:
+        # L'anteprima resta utile anche se la specifica del contratto non e'
+        # leggibile: meglio il numero teorico che nessun numero.
+        pass
+
     direction = "long" if body.side == "BUY" else "short"
     # Kraken non ha isolated margin: la liquidazione qui e' comunque
     # calcolata come se lo fosse, perche' e' il numero che dice quanto puo'
@@ -1674,6 +1690,7 @@ async def quote_futures_order(body: FuturesQuoteRequest, user: User = Depends(au
         "margin_used": margin_used, "notional": margin_used * body.leverage,
         "liquidation_price": liq_price, "available_margin": available,
         "margin_sufficient": sufficient, "isolated_margin": adapter.isolated_margin,
+        "rounding_note": rounding_note,
     }
 
 
