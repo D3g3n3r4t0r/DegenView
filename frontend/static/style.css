@@ -4287,6 +4287,8 @@ details.issue-card > summary:focus-visible { outline: 2px solid var(--accent); o
   }
   .cockpit:not([data-area="analizza"]) .right-panel {
     flex: 1 1 auto;
+    min-width: 0;
+    overflow-x: hidden;
     border-left: none;
     background: var(--bg);
   }
