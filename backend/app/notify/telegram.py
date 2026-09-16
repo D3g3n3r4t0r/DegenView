@@ -9,6 +9,23 @@ Setup (una tantum, fuori da questo codice):
      https://api.telegram.org/bot<TOKEN>/getUpdates dopo il passo 2 e leggi "chat":{"id": ...}.
   4. Metti quell'id in TELEGRAM_CHAT_IDS in backend/.env (più id separati da virgola
      se vuoi notificare più persone/chat).
+
+Due canali distinti, non uno
+----------------------------
+Le notifiche di questo progetto sono di due tipi, e non si leggono allo stesso
+modo: un segnale operativo si guarda subito, un "nuovo deploy completato" no.
+
+  * **Alert di trading** (ingressi, uscite, alert di prezzo) -> `send_to()`,
+    alla chat PERSONALE di ciascun utente (`User.telegram_chat_id`, che ognuno
+    imposta dall'app). Sono per chi opera.
+  * **Messaggi di sistema** (deploy, errori 500) -> `send_message()`, alle chat
+    in `TELEGRAM_DEV_CHAT_IDS` — o, se non impostata, a `TELEGRAM_CHAT_IDS`
+    come è sempre stato. Sono per chi sviluppa.
+
+Se le due finiscono nella stessa conversazione è solo perché puntano allo
+stesso chat_id: basta un gruppo Telegram nuovo (stesso bot, nessun bot da
+ricreare) il cui id va in `TELEGRAM_DEV_CHAT_IDS`. Per trovarlo:
+`.venv/bin/python -m tools.telegram_chat_ids`.
 """
 
 import logging
@@ -22,8 +39,18 @@ logger = logging.getLogger("telegram_notify")
 API_BASE = "https://api.telegram.org"
 
 
+def _split(raw: str) -> list[str]:
+    return [c.strip() for c in raw.split(",") if c.strip()]
+
+
 def _chat_ids() -> list[str]:
-    return [c.strip() for c in settings.telegram_chat_ids.split(",") if c.strip()]
+    """Le chat dei messaggi di sistema (deploy, errori 500).
+
+    `TELEGRAM_DEV_CHAT_IDS` vince quando c'e'; altrimenti si ricade su
+    `TELEGRAM_CHAT_IDS`, che e' dove finivano prima — cosi' separare i due
+    canali e' una riga in `.env`, non una migrazione.
+    """
+    return _split(settings.telegram_dev_chat_ids) or _split(settings.telegram_chat_ids)
 
 
 def is_configured() -> bool:

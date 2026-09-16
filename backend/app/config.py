@@ -33,6 +33,10 @@ class Settings(BaseSettings):
 
     telegram_bot_token: str = ""
     telegram_chat_ids: str = ""  # comma-separated
+    # Dove finiscono i messaggi di SISTEMA (deploy, errori 500), separati dagli
+    # alert di trading che vanno alla chat personale di ogni utente. Vuota =
+    # vanno in telegram_chat_ids, com'e' sempre stato.
+    telegram_dev_chat_ids: str = ""  # comma-separated
     github_api_token: str = ""   # PAT for fetching commit history on deploy notify
 
     # Registration is open to anyone, but actual Telegram delivery is
