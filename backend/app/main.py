@@ -107,7 +107,6 @@ from app.providers.mexc import format_symbol as format_mexc_symbol
 from app.providers.twelvedata import TwelveDataProvider
 from app.resample import resample_by_count
 from app.timeframes import (
-    CANONICAL_INTERVALS,
     DEFAULT_INTERVALS,
     SYNTHETIC_DAY_INTERVALS,
     IntervalChoice,
@@ -149,19 +148,9 @@ def _balance_visible(user: User) -> bool:
     return not allowed or user.email.lower() in allowed
 
 
-_BACKTEST_MIN_INTERVAL = "1d"
-
-
 def backtest_interval_for(ltf_interval: str) -> str:
-    """The backtest deliberately runs on a coarser feed than whatever the
-    chart happens to be set to — a fixed candle budget covers years at "1d"
-    but only hours at "1m", and the user is after the deepest history the
-    exchange has, not a simulation tied to the chart's own granularity.
-    Never goes coarser than the chart itself, though: if ltf is already
-    "1w"/"1M" there's nothing to gain by stepping back down to daily."""
-    if CANONICAL_INTERVALS.index(ltf_interval) >= CANONICAL_INTERVALS.index(_BACKTEST_MIN_INTERVAL):
-        return ltf_interval
-    return _BACKTEST_MIN_INTERVAL
+    """The backtest runs on the same interval the chart is set to."""
+    return ltf_interval
 
 
 async def _no_results() -> list:
@@ -2661,12 +2650,9 @@ class DeflatedSharpe(BaseModel):
 class DataUsed(BaseModel):
     """Su quali dati e' realmente girata l'ottimizzazione.
 
-    Senza questi campi il risultato non e' riproducibile a mano nemmeno in
-    linea di principio: l'ottimizzazione non usa il timeframe del grafico ma
-    quello derivato da backtest_interval_for(), con un minimo di 1d, e un
-    numero di candele diverso. Stessi parametri su feed diversi danno lo stesso
-    ordine di rendimento e un numero di trade completamente diverso — misurato
-    su KASUSDT: 27 trade a 1d contro 186 a 4h."""
+    Senza questi campi il risultato non e' riproducibile a mano: due feed
+    diversi danno lo stesso ordine di rendimento ma trade completamente diversi.
+    Mostrato sempre, anche quando il timeframe coincide con quello del grafico."""
 
     interval: str
     candles: int
