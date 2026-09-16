@@ -1,4 +1,5 @@
 import asyncio
+import datetime as _dt
 import hashlib
 import io
 import httpx
@@ -83,6 +84,7 @@ from app.exchange_balances import BalanceFetchError, fetch_kucoin_balances, fetc
 from app.notify import telegram
 from app.notify import alert_log
 from app.notify import alerts
+from app.notify import weekly_recap
 from app.notify.alerts import find_new_signals, format_signal_message, record_alert_sent, get_all_stats_for_entry
 import app.price_alerts as price_alerts_store
 from app.models import PriceAlert, PriceAlertCondition, StrategySignal
@@ -585,12 +587,60 @@ async def _notify_deploy() -> None:
             new_commits = commits[:5]
     lines = []
     for c in new_commits:
-        msg = c["commit"]["message"].splitlines()[0][:80]
+        # I messaggi di commit sono in inglese per convenzione (CLAUDE.md), ma
+        # questa notifica la legge Lorenzo: `italian_line` prende il trailer
+        # "Aggiornamento:" quando c'e' e ricade sul titolo quando manca.
+        msg = weekly_recap.italian_line(c["commit"]["message"])[:120]
         sha_short = c["sha"][:7]
         lines.append(f"• <code>{sha_short}</code> {msg}")
     changelog = "\n".join(lines) if lines else "• (nessun commit trovato)"
     text = f"🚀 <b>Nuovo deploy completato</b>\n\n<b>Modifiche:</b>\n{changelog}"
     await telegram.send_message(text)
+
+
+_LAST_RECAP_FILE = Path(__file__).resolve().parent.parent / "data" / "last_weekly_recap.txt"
+_RECAP_POLL_SECONDS = 1800
+
+
+async def _weekly_recap_loop() -> None:
+    """Riepilogo settimanale sul canale di sistema, lunedi' mattina.
+
+    Vive qui dentro e non in un cron sul server per la stessa ragione per cui
+    ci vive il watcher: un lavoro che sta nel repo si riavvia col deploy, si
+    legge nel codice, e non sopravvive per sbaglio su una macchina che nessuno
+    guarda piu'. La settimana gia' inviata e' su file, quindi un riavvio di
+    lunedi' mattina non lo rimanda una seconda volta.
+    """
+    while True:
+        await asyncio.sleep(_RECAP_POLL_SECONDS)
+        if not settings.telegram_bot_token or not settings.github_api_token:
+            continue
+        now = int(_time.time())
+        last = _LAST_RECAP_FILE.read_text(encoding="utf-8").strip() if _LAST_RECAP_FILE.exists() else ""
+        if not weekly_recap.should_send(now, last):
+            continue
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                since = _dt.datetime.fromtimestamp(now - 7 * 86400, tz=_dt.timezone.utc).isoformat()
+                r = await client.get(
+                    f"https://api.github.com/repos/{_GITHUB_REPO}/commits",
+                    headers={"Authorization": f"Bearer {settings.github_api_token}",
+                             "Accept": "application/vnd.github+json"},
+                    params={"per_page": 100, "since": since},
+                )
+                r.raise_for_status()
+                messages = [c["commit"]["message"] for c in r.json()]
+        except Exception as exc:                      # noqa: BLE001
+            logger.warning("Riepilogo settimanale saltato: richiesta a GitHub fallita — %s", exc)
+            continue
+
+        text = weekly_recap.build_recap(messages, now)
+        # La settimana si segna comunque: una settimana senza niente da dire e'
+        # gestita, non e' un tentativo fallito da ripetere ogni mezz'ora.
+        _LAST_RECAP_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _LAST_RECAP_FILE.write_text(weekly_recap.current_week_key(now), encoding="utf-8")
+        if text:
+            await telegram.send_message(text)
 
 
 @asynccontextmanager
@@ -602,11 +652,13 @@ async def lifespan(app: FastAPI):
     t1 = asyncio.create_task(_watchlist_alert_loop())
     t2 = asyncio.create_task(sniper_cache.polling_loop())
     t3 = asyncio.create_task(enrichment_loop())
+    t4 = asyncio.create_task(_weekly_recap_loop())
     agent_tasks = await sniper_agents.start_all()
     yield
     t1.cancel()
     t2.cancel()
     t3.cancel()
+    t4.cancel()
     for t in agent_tasks:
         t.cancel()
 

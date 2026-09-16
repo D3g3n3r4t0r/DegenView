@@ -141,3 +141,22 @@ con la difficolta'. Regole che Lorenzo ha chiesto esplicitamente:
 
 Lorenzo scrive in italiano. Rispondi in italiano; commenti e messaggi di commit
 in inglese, come il resto del codice.
+
+**Ma le notifiche che legge lui sono in italiano sempre** ("i messaggi degli
+aggiornamenti li voglio in italiano sempre"). L'avviso di deploy e il riepilogo
+settimanale elencano i commit, che sono in inglese: per questo ogni commit
+porta un trailer con la riga italiana gia' pronta, in fondo al messaggio, prima
+delle righe di attribuzione.
+
+```
+Fire alerts at the candle close, not one bar later
+
+<corpo in inglese>
+
+Aggiornamento: gli alert partono alla chiusura della candela, non un giorno dopo
+```
+
+Una frase sola, che dica cosa cambia **per chi usa il sito** — non cosa cambia
+nel codice. Senza trailer non si rompe niente: `italian_line()` ricade sul
+titolo inglese, che e' meglio di un buco, ma il messaggio smette di essere
+tutto in italiano. Vedi `app/notify/weekly_recap.py`.
