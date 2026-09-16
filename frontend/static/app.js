@@ -8716,25 +8716,7 @@
     });
 
     // Timeframe pills
-    // Il backtest non gira mai sotto 1d: backtest_interval_for() lato server
-    // riporta a "1d" qualunque timeframe piu' stretto, perche' il budget di
-    // candele (5000) su un 1m coprirebbe tre giorni. Finche' resta cosi'
-    // (segnalazione seed-0007), sceglierne uno piu' stretto deve DIRLO: senza
-    // questa nota, "15m" e "1h" restituiscono lo stesso identico risultato di
-    // "1d" e sembrano tre misure diverse che per caso coincidono.
     const LAB_TF_ORDER = ["1m", "5m", "15m", "30m", "1h", "4h", "1d", "2d", "3d", "5d", "1w", "1M"];
-    const LAB_BACKTEST_MIN_TF = "1d";
-
-    function updateLabTfClampNote() {
-      const note = labEl("lab-tf-clamp-note");
-      if (!note) return;
-      const clamped = LAB_TF_ORDER.indexOf(labState.tf) < LAB_TF_ORDER.indexOf(LAB_BACKTEST_MIN_TF);
-      note.classList.toggle("hidden", !clamped);
-      if (clamped) {
-        note.textContent = `Il backtest gira comunque su ${LAB_BACKTEST_MIN_TF}: sotto questa soglia `
-          + `la storia disponibile sarebbe troppo corta. Il risultato sara' identico a quello di ${LAB_BACKTEST_MIN_TF}.`;
-      }
-    }
 
     labEl("lab-tf-row").addEventListener("click", (e) => {
       const btn = e.target.closest(".lab-tf-btn");
@@ -8742,9 +8724,7 @@
       labEl("lab-tf-row").querySelectorAll(".lab-tf-btn").forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
       labState.tf = btn.dataset.labTf;
-      updateLabTfClampNote();
     });
-    updateLabTfClampNote();
 
     // Periodo di riferimento del backtest, facoltativo
     labEl("lab-daterange-clear").addEventListener("click", () => {

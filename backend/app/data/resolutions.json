@@ -597,9 +597,10 @@
   },
   "seed-0007": {
     "status": "risolto",
-    "summary": "Il feed realmente usato ora e' dichiarato nella risposta e mostrato nel Lab, con l'avviso quando differisce dal grafico.",
-    "detail": "CAUSA: /api/analyze (il grafico) legge il timeframe che scegli tu con 3000 candele. /api/optimize chiama backtest_interval_for(), che forza il minimo a 1d, con 5000 candele. Deliberato — cerca piu' storia possibile — ma invisibile.\n\nMisurato su KASUSDT, stessi parametri di Lorenzo:\n  1d (ottimizzatore): 1438 candele -> 27 trade, +120,0%\n  4h (grafico):       8623 candele -> 186 trade, +66,4%\n\nRendimenti dello stesso ordine, trade 7 volte diversi. Nessun errore di calcolo: due feed diversi.\n\nFIX: la risposta ora porta data_used {interval, candles, chart_interval, differs_from_chart, note}, e il Lab lo mostra accanto al risultato. Quando differisce, il riquadro si evidenzia e dice testualmente su quale timeframe impostare il grafico per riprodurre quel risultato a mano.\n\nMostrato sempre, anche quando i due coincidono: sapere che combaciano e' informazione quanto sapere che divergono.",
-    "next": "Il comportamento non e' cambiato — l'ottimizzazione continua a cercare la storia piu' profonda, che e' la scelta giusta. Ora pero' e' dichiarata invece che nascosta, quindi il risultato e' riproducibile.",
+    "at": 1789539720,
+    "summary": "Il backtest ora gira sul timeframe che scegli tu, anche sotto 1d. Prima era bloccato a 1d.",
+    "detail": "CAUSA: backtest_interval_for() forzava il minimo a 1d. Deliberato originariamente per avere piu' storia, ma impediva di fare backtest reali su 4h, 1h, 15m.\n\nFIX: il clamp e' stato rimosso. Il backtest ora usa esattamente il timeframe selezionato nel Lab, per il backtest e per l'ottimizzazione. Con 5000 candele: 4h ~ 2.3 anni, 1h ~ 7 mesi, 15m ~ 7.5 settimane.",
+    "next": "",
     "commit": "vedi git log su main"
   },
   "seed-0010": {
