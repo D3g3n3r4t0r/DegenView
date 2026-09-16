@@ -909,6 +909,7 @@
       patterns: false,
       hints: false,
       divergences: false,
+      angleLines: false,
     },
   };
 
@@ -6785,6 +6786,65 @@
     syncMobileTfWheel();
   }
 
+  // Disegna le linee di pendenza tra i punti di swing sul grafico principale.
+  // Ogni leg è una LineSeries a due punti: colore = intensità dell'angolo.
+  //   rosso vivo  = impulso ripido (bear)     verde vivo = impulso ripido (bull)
+  //   sfumato     = leg moderato              grigio     = leg piatto / compressione
+  // L'ultimo leg usa un tratto più spesso e mostra l'etichetta angolo/ATR.
+  function renderAngleLines(candles, indicators) {
+    if (!candles || candles.length < 6) return;
+    const atr = _atrAt(candles, candles.length - 1);
+    if (atr <= 0) return;
+
+    const swings = findSwings(candles, Math.max(3, Math.floor(candles.length / 12)));
+    const pts = [];
+    swings.highs.forEach(p => pts.push({ i: p.i, price: p.price, time: candles[p.i]?.time }));
+    swings.lows.forEach(p =>  pts.push({ i: p.i, price: p.price, time: candles[p.i]?.time }));
+    pts.sort((a, b) => a.i - b.i);
+
+    // Mantieni solo gli ultimi 10 leg per non affollare
+    const legs = [];
+    for (let k = 1; k < pts.length; k++) {
+      const bars = pts[k].i - pts[k - 1].i;
+      if (bars < 1 || !pts[k - 1].time || !pts[k].time) continue;
+      const slope = (pts[k].price - pts[k - 1].price) / (bars * atr);
+      legs.push({ from: pts[k - 1], to: pts[k], slope });
+    }
+    const recentLegs = legs.slice(-10);
+
+    // Intensità massima per normalizzare i colori
+    const maxAbs = recentLegs.reduce((m, l) => Math.max(m, Math.abs(l.slope)), 0.01);
+
+    recentLegs.forEach((leg, idx) => {
+      const isLast = idx === recentLegs.length - 1;
+      const norm = Math.min(1, Math.abs(leg.slope) / maxAbs);
+      const isBull = leg.slope >= 0;
+
+      // Colore: pieno sui leg forti, sbiadito sui deboli
+      let color;
+      if (norm > 0.55) {
+        color = isBull ? `rgba(0,214,143,${0.55 + norm * 0.45})` : `rgba(255,69,96,${0.55 + norm * 0.45})`;
+      } else {
+        color = `rgba(120,130,150,${0.25 + norm * 0.4})`;
+      }
+
+      const s = mainChart.addLineSeries({
+        color,
+        lineWidth: isLast ? 2 : 1,
+        lineStyle: isLast ? LightweightCharts.LineStyle.Solid : LightweightCharts.LineStyle.Dashed,
+        priceLineVisible: false,
+        lastValueVisible: isLast,
+        title: isLast ? `∠${(leg.slope > 0 ? "+" : "")}${leg.slope.toFixed(2)}σ/b` : "",
+        crosshairMarkerVisible: false,
+      });
+      s.setData([
+        { time: leg.from.time, value: leg.from.price },
+        { time: leg.to.time,   value: leg.to.price   },
+      ]);
+      addLineOverlay(mainChart, s, null, mainChart);
+    });
+  }
+
   function render() {
     if (!state.data) return;
     clearOverlays();
@@ -6986,6 +7046,7 @@
     applyAutoPatterns();
     applyContextualHints();
     applyDivergences();
+    if (state.layers.angleLines) renderAngleLines(candles, analysis.indicators || []);
 
     renderSummary();
     renderStrategy();
