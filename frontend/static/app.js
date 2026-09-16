@@ -1928,7 +1928,14 @@
         el("futures-confirm-box").checked = false;
         futuresQuote = null;
         renderFuturesQuote();
-        loadJournal?.();
+        // La funzione si chiama loadTradingJournal: `loadJournal?.()` non era
+        // una chiamata facoltativa ma un nome inesistente, e `?.` non protegge
+        // da una variabile mai dichiarata — lanciava un ReferenceError PROPRIO
+        // QUI, dentro il ramo del successo, e il catch qui sotto lo riscriveva
+        // come "Errore di rete": l'ordine era passato davvero e l'interfaccia
+        // diceva il contrario, sullo stesso schermo da cui si rischia di
+        // rifarlo una seconda volta.
+        loadTradingJournal();
       }
     } catch (e) {
       setFuturesStatus("Errore di rete: " + e.message, true);
