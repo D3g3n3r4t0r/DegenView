@@ -108,6 +108,7 @@ from app.providers.twelvedata import TwelveDataProvider
 from app.resample import resample_by_count
 from app.timeframes import (
     DEFAULT_INTERVALS,
+    INTERVAL_SECONDS,
     SYNTHETIC_DAY_INTERVALS,
     IntervalChoice,
     drop_unclosed_candle,
@@ -124,6 +125,8 @@ if getattr(sys, "frozen", False):
 else:
     FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent / "frontend"
 WATCHLIST_POLL_SECONDS = 60
+_WATCHDOG_FILE = Path(__file__).resolve().parent / "data" / "watchdog.json"
+_WATCHDOG_STALE_S = WATCHLIST_POLL_SECONDS * 5  # alert if loop silent for 5 cycles
 
 # L'elenco degli exchange futures vive nel registro degli adattatori: qui
 # c'e' solo il nome vecchio, perche' non ci sia una seconda lista che possa
@@ -227,6 +230,10 @@ async def _watchlist_alert_loop() -> None:
     enabled on that ticker rather than refetching per strategy."""
     while True:
         await asyncio.sleep(WATCHLIST_POLL_SECONDS)
+        try:
+            _WATCHDOG_FILE.write_text(json.dumps({"ts": _time.time()}))
+        except Exception:
+            pass
         if not settings.telegram_bot_token:
             continue
         for entry in watchlist_store.list_entries():
@@ -247,6 +254,18 @@ async def _watchlist_alert_loop() -> None:
                     df = drop_unclosed_candle(df, entry.interval)
                 if df.empty:
                     continue
+                # Stale data detection: last candle older than 2× the interval
+                _iv_s = INTERVAL_SECONDS.get(entry.interval, 0)
+                if _iv_s:
+                    _last_ts = df["datetime"].iloc[-1].timestamp()
+                    _age = _time.time() - _last_ts
+                    if _age > _iv_s * 2:
+                        _hours_old = int(_age / 3600)
+                        _stale_msg = (
+                            f"⚠️ Dati stantii: <b>{entry.symbol}</b> [{entry.interval}] "
+                            f"— ultima candela {_hours_old}h fa"
+                        )
+                        asyncio.create_task(telegram.send_to(owner.telegram_chat_id, _stale_msg))
                 # Price-level alerts (checked once per entry poll regardless of strategies)
                 if df is not None and not df.empty:
                     current_price = float(df["close"].iloc[-1])
@@ -642,6 +661,36 @@ async def _maybe_send_recap() -> None:
         await telegram.send_message(text)
 
 
+async def _watchdog_loop() -> None:
+    """Sends a Telegram alert to all Telegram-enabled users if the watchlist
+    loop goes silent for more than _WATCHDOG_STALE_S seconds."""
+    await asyncio.sleep(_WATCHDOG_STALE_S)
+    while True:
+        await asyncio.sleep(_WATCHDOG_STALE_S)
+        if not settings.telegram_bot_token:
+            continue
+        try:
+            raw = _WATCHDOG_FILE.read_text()
+            last_ts = json.loads(raw).get("ts", 0)
+        except Exception:
+            last_ts = 0
+        if _time.time() - last_ts < _WATCHDOG_STALE_S:
+            continue
+        notified: set[str] = set()
+        for entry in watchlist_store.list_entries():
+            owner = auth.get_user(entry.owner_id)
+            if owner is None or not owner.telegram_chat_id or not _telegram_allowed(owner):
+                continue
+            if owner.id in notified:
+                continue
+            notified.add(owner.id)
+            asyncio.create_task(telegram.send_to(
+                owner.telegram_chat_id,
+                "⚠️ <b>Watchdog</b>: il loop degli alert è silenzioso da più di "
+                f"{int(_WATCHDOG_STALE_S // 60)} minuti. Verificare lo stato del server.",
+            ))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     from app.sniper import cache as sniper_cache
@@ -652,12 +701,14 @@ async def lifespan(app: FastAPI):
     t2 = asyncio.create_task(sniper_cache.polling_loop())
     t3 = asyncio.create_task(enrichment_loop())
     t4 = asyncio.create_task(_weekly_recap_loop())
+    t5 = asyncio.create_task(_watchdog_loop())
     agent_tasks = await sniper_agents.start_all()
     yield
     t1.cancel()
     t2.cancel()
     t3.cancel()
     t4.cancel()
+    t5.cancel()
     for t in agent_tasks:
         t.cancel()
 
