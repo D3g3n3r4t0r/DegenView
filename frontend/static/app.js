@@ -908,6 +908,7 @@
       fibonacci: false,
       patterns: false,
       hints: false,
+      divergences: false,
     },
   };
 
@@ -5101,6 +5102,9 @@
     if (drawCanvas.width !== w || drawCanvas.height !== h) { drawCanvas.width = w; drawCanvas.height = h; }
     drawCtx.clearRect(0, 0, w, h);
 
+    // Divergence lines (RSI divergences on price chart)
+    renderDivergences(drawCtx, performance.now());
+
     // Pattern zones (RSI divergence highlights)
     autoPatternZones.forEach((z) => {
       const x1 = timeToX(z.time1), x2 = timeToX(z.time2);
@@ -5273,6 +5277,134 @@
   // cosa sta accadendo e se ci si sta avvicinando a un reversal.
 
   let contextualHintMarkers = [];
+  let divergenceLines = []; // [{type:'bear'|'bull', t1,t2, p1,p2, confirmed}]
+
+  // ── Swing point detection (ZigZag) ────────────────────────────────────────
+  function findSwings(candles, n = 5) {
+    const highs = [], lows = [];
+    for (let i = n; i < candles.length - n; i++) {
+      let isHigh = true, isLow = true;
+      for (let j = i - n; j <= i + n; j++) {
+        if (j === i) continue;
+        if (candles[j].high >= candles[i].high) isHigh = false;
+        if (candles[j].low  <= candles[i].low)  isLow  = false;
+      }
+      if (isHigh) highs.push({ i, time: candles[i].time, price: candles[i].high });
+      if (isLow)  lows.push({ i, time: candles[i].time, price: candles[i].low });
+    }
+    return { highs, lows };
+  }
+
+  // ── Divergence detection ──────────────────────────────────────────────────
+  function detectDivergences(candles, indicators) {
+    const lines = [];
+    if (!candles || candles.length < 20) return lines;
+
+    const rsiRaw = findIndicator(indicators, "RSI14") || findIndicator(indicators, "RSI");
+    if (!rsiRaw) return lines;
+    const rsiMap = {};
+    seriesFromIndicatorValues(candles, rsiRaw).forEach((d) => { if (d.value != null) rsiMap[d.time] = d.value; });
+
+    const swingN = 4;
+    const { highs, lows } = findSwings(candles, swingN);
+    const lastI = candles.length - 1;
+    const confirmBars = swingN; // una swing è confermata dopo N barre
+
+    // Bearish: prezzo HH, RSI LH — prendo le ultime 2 coppie di highs
+    for (let a = Math.max(0, highs.length - 4); a < highs.length - 1; a++) {
+      for (let b = a + 1; b < highs.length; b++) {
+        const h1 = highs[a], h2 = highs[b];
+        if (h2.price <= h1.price) continue; // serve HH
+        const rsi1 = rsiMap[h1.time], rsi2 = rsiMap[h2.time];
+        if (rsi1 == null || rsi2 == null) continue;
+        if (rsi2 >= rsi1 - 2) continue; // serve LH su RSI (divergenza)
+        const confirmed = (lastI - h2.i) >= confirmBars;
+        lines.push({ type: "bear", t1: h1.time, t2: h2.time, p1: h1.price, p2: h2.price, rsi1, rsi2, confirmed });
+      }
+    }
+
+    // Bullish: prezzo LL, RSI HL — prendo le ultime 2 coppie di lows
+    for (let a = Math.max(0, lows.length - 4); a < lows.length - 1; a++) {
+      for (let b = a + 1; b < lows.length; b++) {
+        const l1 = lows[a], l2 = lows[b];
+        if (l2.price >= l1.price) continue; // serve LL
+        const rsi1 = rsiMap[l1.time], rsi2 = rsiMap[l2.time];
+        if (rsi1 == null || rsi2 == null) continue;
+        if (rsi2 <= rsi1 + 2) continue; // serve HL su RSI (divergenza)
+        const confirmed = (lastI - l2.i) >= confirmBars;
+        lines.push({ type: "bull", t1: l1.time, t2: l2.time, p1: l1.price, p2: l2.price, rsi1, rsi2, confirmed });
+      }
+    }
+
+    // Limita a max 3 per tipo, le più recenti
+    const bears = lines.filter(d => d.type === "bear").slice(-3);
+    const bulls = lines.filter(d => d.type === "bull").slice(-3);
+    return [...bears, ...bulls];
+  }
+
+  function applyDivergences() {
+    divergenceLines = [];
+    if (!state.layers.divergences || !state.data) return;
+    const tf = state.activeTimeframe;
+    const analysis = state.data.timeframes[tf];
+    if (!analysis) return;
+    divergenceLines = detectDivergences(analysis.candles, analysis.indicators || []);
+  }
+
+  // ── Divergence rendering (chiamato dentro renderDrawCanvas) ───────────────
+  function renderDivergences(ctx, ts) {
+    if (!state.layers.divergences || !divergenceLines.length) return;
+
+    divergenceLines.forEach((d) => {
+      const x1 = timeToXEdge(d.t1), x2 = timeToXEdge(d.t2);
+      const y1 = priceToY(d.p1), y2 = priceToY(d.p2);
+      if (x1 === null || x2 === null || y1 === null || y2 === null) return;
+
+      const color = d.type === "bear" ? "#ff4560" : "#00d68f";
+      const colorA = d.type === "bear" ? "rgba(255,69,96," : "rgba(0,214,143,";
+
+      ctx.save();
+      ctx.lineCap = "round";
+
+      if (d.confirmed) {
+        // linea piena sottile
+        ctx.strokeStyle = colorA + "0.55)";
+        ctx.lineWidth = 1.2;
+        ctx.setLineDash([]);
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+        // dot agli endpoint
+        [{ x: x1, y: y1 }, { x: x2, y: y2 }].forEach(({ x, y }) => {
+          ctx.beginPath(); ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+          ctx.fillStyle = colorA + "0.8)"; ctx.fill();
+        });
+        // etichetta al midpoint
+        const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+        const label = d.type === "bear" ? "div↓" : "div↑";
+        ctx.font = "9px 'JetBrains Mono', monospace";
+        ctx.textAlign = "center";
+        const tw = ctx.measureText(label).width;
+        ctx.fillStyle = "rgba(8,11,12,0.75)";
+        ctx.fillRect(mx - tw / 2 - 3, my - 8, tw + 6, 12);
+        ctx.fillStyle = colorA + "0.85)";
+        ctx.fillText(label, mx, my + 2);
+      } else {
+        // linea tratteggiata (forming) con dot pulsante sull'estremità destra
+        const dash = ts * 0.04 % 10;
+        ctx.strokeStyle = colorA + "0.4)";
+        ctx.lineWidth = 1;
+        ctx.setLineDash([5, 4]);
+        ctx.lineDashOffset = -dash;
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+        ctx.setLineDash([]);
+        // dot pulsante
+        const pulse = 0.45 + 0.35 * Math.sin(ts * 0.004);
+        ctx.beginPath(); ctx.arc(x2, y2, 3.5, 0, Math.PI * 2);
+        ctx.fillStyle = colorA + pulse + ")"; ctx.fill();
+      }
+
+      ctx.restore();
+    });
+  }
 
   function detectContextualHints(candles, indicators) {
     const markers = [];
@@ -6193,6 +6325,7 @@
 
     applyAutoPatterns();
     applyContextualHints();
+    applyDivergences();
 
     renderSummary();
     renderStrategy();
