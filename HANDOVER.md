@@ -1517,3 +1517,42 @@ sul grafico devi aggiungere molte funzioni", "procedi" (pattern recognition).
 - Nulla di urgente su questo filone. Il pattern recognition e' basico
   (rule-based) — se Lorenzo vuole affinare le soglie o aggiungere pattern
   (shooting star, morning star) si fa in pochi minuti.
+
+---
+
+### Fatto — Lab+Livelli coesistono, rettangoli che spariscono, nuovi strumenti di disegno, segnali contestuali
+
+Lorenzo (in ordine di sessione): "se apro la tab lab con il grafico compresso la visualizzazione fa schifo" → "ora se clicco su tab nn c'è piu il grafico" → "aspetta c'è confusione; io lab e livelli li farei coesistere così" [screenshot con Livelli aperto affiancato al grafico] → "senza possibilità di passare dall'uno all'altro, eventualmente una x per nascondere la tab o l'una o l'altra" → "quando disegno i rettangoli a volte spariscono nel grafico.. risolvi questo problema, e aggiungi strumenti grafici; come tradingview" → "implementa la parte dei segnali che mi hai proposto" → "Committa tutto e deploya".
+
+**Lab+Livelli coesistono** (`commit 14a9e25`):
+- Rimossa la regola CSS `.cockpit[data-area="lab"] .chart-area { display: none; }` che nascondeva il grafico nella tab Lab — era la causa del "grafico sparito".
+- Lab e Livelli non si escludono a vicenda: il Lab vive nel `right-panel` come tab, i Livelli sono un cassetto separato a sinistra — possono stare aperti insieme senza conflitti di layout.
+- Aggiunto handler desktop per il pulsante ✕ in `bindRail()`: prima il pulsante chiamava `showMobileScreen()` che su desktop non fa niente. Ora chiude il cassetto/pannello e torna ad Analizza.
+
+**Rettangoli che spariscono** (`commit 7f17145`):
+- Causa: `mainChart.timeScale().timeToCoordinate(time)` ritorna `null` per tempi fuori dal range caricato (non solo fuori dallo schermo), quindi tutte le forme con un punto fuori dai dati caricati sparivano.
+- Aggiunta `timeToXEdge(time)`: se `timeToCoordinate` ritorna null, usa `getVisibleRange()` per capire da che lato siamo e restituisce −4 (sinistra) o `width+4` (destra). I rettangoli restano visibili anche scorrendo fino all'inizio.
+
+**Nuovi strumenti di disegno**:
+- `extended_line`: linea che si estende su tutto il canvas in entrambe le direzioni (via `extendLineToBounds()`).
+- `hray`: raggio orizzontale che parte dal punto cliccato e va verso destra.
+- `ellipse`: ellisse con `ctx.ellipse()`.
+- `channel`: canale parallelo a 3 punti — la terza click piazza la seconda retta parallela alla prima, con riempimento semitrasparente. Anteprima ghost funzionante anche per tool a 3 punti.
+- Aggiornati `DRAW_TOOL_POINTS`, `DRAW_TOOL_LABELS`, `hitTestDrawing()`, menu contestuale.
+
+**Segnali contestuali** (`state.layers.hints`, default off):
+- Toggle "Segnali contestuali" nella sidebar livelli.
+- `detectContextualHints(candles, indicators)` analizza le ultime candele e produce marker sul grafico:
+  - Angolo EMA: deceleration (slope scende rispetto alla media) → "↘ Trend rallenta" / "↗ Trend rallenta"; accelerazione forte → "⚡ Trend forte ↑/↓". Slope normalizzato per ATR rolling — scale-independent fra asset diversi.
+  - Pattern body: 3 corpi restringenti nella stessa direzione → "⚠ Esaurimento ↑/↓"; inside bar (range < ATR×0.6) → "◼ Contrazione"; marubozu (body/range > 0.88) → "→ Momentum ↑/↓".
+  - RSI combinato: RSI>72 + candela ribassista + upper wick → "↙ Satura RSI+"; RSI<28 + bullish + lower wick → "↗ Esausto RSI−"; RSI 43-57 + corpo piccolo (ultima barra) → "~ Indecisione".
+- `applyContextualHints()` chiama `applyChartMarkers()` — i marker si fondono con quelli di pattern e backtest.
+- Chiamato da `render()` ad ogni aggiornamento dati.
+
+**Stato**: entrambi i commit su `main`, in produzione. 504 test passano, ruff pulito, JS sintassi ok.
+
+**Log (parole di Lorenzo)**:
+- "ora se clicco su tab nn c'è piu il grafico.. ma che stai facendo" → causa rimossa.
+- "aspetta c'è confusione; io lab e livelli li farei coesistere così" → fatto.
+- "quando disegno i rettangoli a volte spariscono nel grafico.. risolvi questo problema" → fatto.
+- "implementa la parte dei segnali che mi hai proposto" → fatto.
