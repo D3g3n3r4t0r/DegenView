@@ -365,6 +365,7 @@
       </div>
       <div id="tooltip" class="chart-tooltip hidden"></div>
       <div id="marker-popup" class="marker-popup hidden" role="dialog" aria-modal="true"></div>
+      <div id="breakout-popup" class="breakout-popup hidden" role="dialog" aria-modal="true"></div>
     </section>
 
     <aside class="right-panel">
@@ -1145,6 +1146,9 @@
          Grafico (see showMobileScreen/updateMobileChartStrip in app.js). -->
     <div id="mobile-strip-tools" class="strip-tools hidden">
       <div class="strip-divider"></div>
+      <button type="button" id="mobile-strip-predict-btn" class="strip-tool-btn strip-predict-btn" title="Previsione breakout">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20 L8 13 L12 17 L18 9 L22 12"/><polyline points="17 9 22 9 22 14"/></svg>
+      </button>
       <button type="button" id="mobile-strip-draw-btn" class="strip-tool-btn" title="Strumenti di disegno">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
       </button>

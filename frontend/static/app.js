@@ -4657,6 +4657,7 @@
     bindDrawClickCapture();
     bindChartContextMenu();
     bindMarkerClickPopup();
+    bindBreakoutButton();
     initDrawCanvas();
     chartsReady = true;
   }
@@ -6002,6 +6003,165 @@
     popup.style.top  = `${Math.max(8, top)}px`;
     popup.classList.remove("hidden");
   }
+
+  // ── Motore previsionale breakout ──────────────────────────────────────────
+
+  function predictBreakout() {
+    if (!mainChart || !state.data) return null;
+    const tf = state.activeTimeframe;
+    const analysis = state.data.timeframes[tf];
+    if (!analysis || !analysis.candles || analysis.candles.length < 10) return null;
+
+    const allCandles = analysis.candles;
+    let range = { from: 0, to: allCandles.length - 1 };
+    try {
+      const vr = mainChart.timeScale().getVisibleLogicalRange();
+      if (vr) { range.from = Math.max(0, Math.floor(vr.from)); range.to = Math.min(allCandles.length - 1, Math.ceil(vr.to)); }
+    } catch {}
+    const visible = allCandles.slice(range.from, range.to + 1);
+    if (visible.length < 6) return null;
+
+    let bullPts = 0, bearPts = 0;
+    const factors = [];
+
+    // 1. Trend: confronto prima metà vs seconda metà del range visibile
+    const half = Math.floor(visible.length / 2);
+    const avgFirst = visible.slice(0, half).reduce((s, c) => s + c.close, 0) / half;
+    const avgSecond = visible.slice(half).reduce((s, c) => s + c.close, 0) / (visible.length - half);
+    const trendPct = (avgSecond - avgFirst) / avgFirst * 100;
+    if (trendPct > 0.3) { bullPts += 2; factors.push({ label: `Trend rialzista +${trendPct.toFixed(2)}%`, dir: "bull" }); }
+    else if (trendPct < -0.3) { bearPts += 2; factors.push({ label: `Trend ribassista ${trendPct.toFixed(2)}%`, dir: "bear" }); }
+    else { factors.push({ label: "Trend laterale", dir: "neutral" }); }
+
+    // 2. Struttura swing: HH/HL vs LH/LL
+    const swings = findSwings(visible, Math.max(2, Math.floor(visible.length / 8)));
+    if (swings.highs.length >= 2) {
+      const [h1, h2] = swings.highs.slice(-2);
+      if (h2.price > h1.price) { bullPts += 1.5; factors.push({ label: "Massimi crescenti (HH)", dir: "bull" }); }
+      else { bearPts += 1.5; factors.push({ label: "Massimi decrescenti (LH)", dir: "bear" }); }
+    }
+    if (swings.lows.length >= 2) {
+      const [l1, l2] = swings.lows.slice(-2);
+      if (l2.price > l1.price) { bullPts += 1.5; factors.push({ label: "Minimi crescenti (HL)", dir: "bull" }); }
+      else { bearPts += 1.5; factors.push({ label: "Minimi decrescenti (LL)", dir: "bear" }); }
+    }
+
+    // 3. Divergenze RSI nel range visibile
+    const t0 = visible[0].time, t1 = visible[visible.length - 1].time;
+    divergenceLines.forEach((d) => {
+      if (d.t2 < t0 || d.t1 > t1) return;
+      if (d.type === "bull") { bullPts += 2.5; factors.push({ label: "Divergenza RSI rialzista", dir: "bull" }); }
+      else { bearPts += 2.5; factors.push({ label: "Divergenza RSI ribassista", dir: "bear" }); }
+    });
+
+    // 4. Bilancio segnali nel range visibile
+    const allMarkers = [
+      ...buildStrategyMarkers(_lastStrategySignals || []),
+      ...autoPatternMarkers,
+      ...contextualHintMarkers,
+    ];
+    const visMarkers = allMarkers.filter((m) => m.time >= t0 && m.time <= t1);
+    const bullSig = visMarkers.filter((m) => m.text && (m.text.includes("↑") || m.text.includes("long") || m.text.includes("RSI−"))).length;
+    const bearSig = visMarkers.filter((m) => m.text && (m.text.includes("↓") || m.text.includes("short") || m.text.includes("RSI+"))).length;
+    const sigDiff = bullSig - bearSig;
+    if (sigDiff > 0) { bullPts += Math.min(2, sigDiff * 0.5); factors.push({ label: `Segnali rialzisti ${bullSig} vs ribassisti ${bearSig}`, dir: "bull" }); }
+    else if (sigDiff < 0) { bearPts += Math.min(2, -sigDiff * 0.5); factors.push({ label: `Segnali ribassisti ${bearSig} vs rialzisti ${bullSig}`, dir: "bear" }); }
+
+    // 5. RSI corrente
+    const rsiRaw = findIndicator(analysis.indicators || [], "RSI14") || findIndicator(analysis.indicators || [], "RSI");
+    if (rsiRaw) {
+      const rsiMap = {};
+      seriesFromIndicatorValues(allCandles, rsiRaw).forEach((d) => { if (d.value != null) rsiMap[d.time] = d.value; });
+      const lastRSI = rsiMap[visible[visible.length - 1].time];
+      if (lastRSI != null) {
+        if (lastRSI < 35) { bullPts += 1; factors.push({ label: `RSI ipervenduto (${lastRSI.toFixed(0)})`, dir: "bull" }); }
+        else if (lastRSI > 65) { bearPts += 1; factors.push({ label: `RSI ipercomprato (${lastRSI.toFixed(0)})`, dir: "bear" }); }
+        else { factors.push({ label: `RSI neutro (${lastRSI.toFixed(0)})`, dir: "neutral" }); }
+      }
+    }
+
+    // 6. Momento ultime 3 candele
+    const last3 = visible.slice(-3);
+    const greenCount = last3.filter((c) => c.close > c.open).length;
+    if (greenCount === 3) { bullPts += 1; factors.push({ label: "3 candele verdi consecutive", dir: "bull" }); }
+    else if (greenCount === 0) { bearPts += 1; factors.push({ label: "3 candele rosse consecutive", dir: "bear" }); }
+
+    // 7. Contrazione (inside bar finale → breakout imminente)
+    const lc = visible[visible.length - 1], pc = visible[visible.length - 2];
+    if (lc && pc && lc.high < pc.high && lc.low > pc.low) {
+      factors.push({ label: "Contrazione: breakout imminente", dir: "neutral" });
+    }
+
+    // Risultato
+    const total = bullPts + bearPts;
+    const diff = bullPts - bearPts;
+    const absDiff = Math.abs(diff);
+    const rawConf = total > 0 ? Math.round((absDiff / total) * 7 + absDiff * 0.3) : 0;
+    const confidence = Math.max(1, Math.min(10, rawConf));
+
+    let direction = "neutral";
+    if (diff > 1) direction = "bull";
+    else if (diff < -1) direction = "bear";
+
+    return { direction, bullPts, bearPts, confidence, factors, candleCount: visible.length };
+  }
+
+  function showBreakoutPopup() {
+    const res = predictBreakout();
+    const popup = el("breakout-popup");
+    if (!popup) return;
+
+    if (!res) {
+      popup.innerHTML = `<div class="bp-header"><span class="bp-title">Previsione</span><button class="marker-popup-close" onclick="document.getElementById('breakout-popup').classList.add('hidden')">×</button></div><p style="color:var(--ink-dim);font-size:12px;margin:8px 0 0">Dati insufficienti nel range visibile.</p>`;
+      popup.classList.remove("hidden");
+      return;
+    }
+
+    const dirLabel = res.direction === "bull" ? "▲ RIALZISTA" : res.direction === "bear" ? "▼ RIBASSISTA" : "→ NEUTRO";
+    const dirColor = res.direction === "bull" ? "#00d68f" : res.direction === "bear" ? "#ff4560" : "#8899aa";
+    const confColor = res.confidence >= 7 ? "#00d68f" : res.confidence >= 5 ? "#f2a93b" : "#8899aa";
+
+    const factorRows = res.factors.slice(0, 6).map((f) => {
+      const icon = f.dir === "bull" ? "▲" : f.dir === "bear" ? "▼" : "→";
+      const col = f.dir === "bull" ? "#00d68f" : f.dir === "bear" ? "#ff4560" : "#8899aa";
+      return `<div class="bp-factor"><span class="bp-factor-icon" style="color:${col}">${icon}</span><span class="bp-factor-label">${f.label}</span></div>`;
+    }).join("");
+
+    popup.innerHTML = `
+      <div class="bp-header">
+        <span class="bp-title">Previsione Breakout</span>
+        <button class="marker-popup-close" onclick="document.getElementById('breakout-popup').classList.add('hidden')" aria-label="Chiudi">×</button>
+      </div>
+      <div class="bp-direction" style="color:${dirColor}">${dirLabel}</div>
+      <div class="bp-conf-row">
+        <span class="bp-conf-label">CONFIDENZA</span>
+        <div class="marker-popup-score-bar" style="flex:1"><div class="marker-popup-score-fill" style="width:${res.confidence * 10}%;background:${confColor}"></div></div>
+        <span class="bp-conf-num" style="color:${confColor}">${res.confidence}/10</span>
+      </div>
+      <div class="bp-factors">${factorRows}</div>
+      <div class="bp-footer">${res.candleCount} candele analizzate</div>
+    `;
+    popup.classList.remove("hidden");
+
+    // click fuori chiude
+    setTimeout(() => {
+      const close = (e) => {
+        if (!popup.contains(e.target) && !el("mobile-strip-predict-btn")?.contains(e.target)) {
+          popup.classList.add("hidden");
+          document.removeEventListener("pointerdown", close, true);
+        }
+      };
+      document.addEventListener("pointerdown", close, true);
+    }, 50);
+  }
+
+  function bindBreakoutButton() {
+    const btn = el("mobile-strip-predict-btn");
+    if (!btn) return;
+    btn.addEventListener("click", showBreakoutPopup);
+  }
+
+  // ── fine motore previsionale ───────────────────────────────────────────────
 
   function bindMarkerClickPopup() {
     const popup = el("marker-popup");
