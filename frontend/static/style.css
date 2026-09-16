@@ -4863,10 +4863,10 @@ td {
   /* Allargato, il grafico si prende la parte del leone e il lavoro si
      stringe a una colonna ancora usabile — non sparisce, cosi' non si
      perde il punto in cui si era. */
-  .cockpit.chart-wide:not([data-area="analizza"]):not([data-area="issues"]) .chart-area {
+  .cockpit.chart-wide:not([data-area="analizza"]):not([data-area="issues"]):not([data-area="lab"]) .chart-area {
     flex: 1 1 auto;
   }
-  .cockpit.chart-wide:not([data-area="analizza"]):not([data-area="issues"]) .right-panel {
+  .cockpit.chart-wide:not([data-area="analizza"]):not([data-area="issues"]):not([data-area="lab"]) .right-panel {
     flex: 0 0 clamp(300px, 30%, 460px);
   }
   .cockpit.chart-wide[data-area="analizza"] .right-panel { display: none; }
