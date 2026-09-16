@@ -907,6 +907,7 @@
       stoch: false,
       fibonacci: false,
       patterns: false,
+      hints: false,
     },
   };
 
@@ -4863,15 +4864,19 @@
   // "ghost" preview between the first and second click; the Cursor tool
   // hit-tests existing drawings and removes one on click. No drag-to-resize
   // of an already-placed drawing yet — that's a later iteration.
-  const DRAW_TOOL_POINTS = { cursor: 0, trend_line: 2, hline: 1, rectangle: 2, range: 2, fib: 2, text: 1, arrow: 2 };
+  const DRAW_TOOL_POINTS = { cursor: 0, trend_line: 2, hline: 1, hray: 1, extended_line: 2, rectangle: 2, range: 2, fib: 2, text: 1, arrow: 2, channel: 3, ellipse: 2 };
   const DRAW_TOOL_LABELS = {
     trend_line: "Linea di tendenza",
+    extended_line: "Linea estesa",
     hline: "Linea orizzontale",
+    hray: "Raggio orizzontale",
     rectangle: "Rettangolo",
     range: "Misura (prezzo + tempo)",
     fib: "Ritracciamento Fibonacci",
     text: "Testo",
     arrow: "Freccia",
+    channel: "Canale parallelo",
+    ellipse: "Ellisse",
   };
 
   const drawState = {
@@ -4921,6 +4926,28 @@
   function priceToY(price) {
     return candleSeries ? candleSeries.priceToCoordinate(price) : null;
   }
+  // timeToX clampato: se il tempo e' fuori dal range dei dati caricati
+  // (timeToCoordinate restituisce null) lo proietta al bordo corretto del canvas
+  // invece di abbandonare il disegno — cosi' rettangoli e linee rimangono
+  // visibili anche dopo aver scrollato oltre il punto di origine.
+  function timeToXEdge(time) {
+    const x = timeToX(time);
+    if (x !== null) return x;
+    try {
+      const vr = mainChart.timeScale().getVisibleRange();
+      if (vr) return time <= vr.from ? -4 : (drawCanvas ? drawCanvas.width + 4 : 9999);
+    } catch {}
+    return null;
+  }
+  // Estende una linea definita da (x1,y1)→(x2,y2) fino ai bordi del canvas.
+  function extendLineToBounds(x1, y1, x2, y2, w, h) {
+    if (x1 === x2) return { lx1: x1, ly1: 0, lx2: x1, ly2: h };
+    const slope = (y2 - y1) / (x2 - x1);
+    return {
+      lx1: 0, ly1: y1 + slope * (0 - x1),
+      lx2: w, ly2: y1 + slope * (w - x1),
+    };
+  }
 
   function renderOneDrawing(d, isSelected, isGhost) {
     const ctx = drawCtx;
@@ -4933,11 +4960,14 @@
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
 
+    const W = drawCanvas ? drawCanvas.width : 0;
+    const H = drawCanvas ? drawCanvas.height : 0;
+
     if (d.type === "hline") {
       const y = priceToY(d.points[0].price);
       if (y === null) { ctx.restore(); return; }
       ctx.setLineDash([5, 3]);
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(drawCanvas.width, y); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
       if (d.text) {
         ctx.setLineDash([]); ctx.fillStyle = baseColor;
         ctx.font = "12px system-ui, sans-serif"; ctx.fillText(d.text, 6, y - 4);
@@ -4945,8 +4975,21 @@
       ctx.restore(); return;
     }
 
+    if (d.type === "hray") {
+      const y = priceToY(d.points[0].price);
+      const x0 = timeToXEdge(d.points[0].time);
+      if (y === null || x0 === null) { ctx.restore(); return; }
+      ctx.setLineDash([5, 3]);
+      ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(W, y); ctx.stroke();
+      ctx.setLineDash([]); ctx.fillStyle = baseColor;
+      ctx.font = "12px system-ui, sans-serif"; ctx.fillText(d.text || "", x0 + 4, y - 4);
+      ctx.restore(); return;
+    }
+
     const [p1, p2] = d.points;
-    const x1 = timeToX(p1.time), y1 = priceToY(p1.price);
+    // Usa coordinate clampate ai bordi: i punti fuori dal range dati
+    // vengono proiettati al bordo invece di restituire null e nascondere il disegno.
+    const x1 = timeToXEdge(p1.time), y1 = priceToY(p1.price);
     if (x1 === null || y1 === null) { ctx.restore(); return; }
 
     if (d.type === "text") {
@@ -4957,7 +5000,7 @@
       ctx.restore(); return;
     }
 
-    const x2 = timeToX(p2.time), y2 = priceToY(p2.price);
+    const x2 = timeToXEdge(p2.time), y2 = priceToY(p2.price);
     if (x2 === null || y2 === null) { ctx.restore(); return; }
 
     ctx.setLineDash([]);
@@ -4973,6 +5016,14 @@
         ctx.lineTo(x2 - sz * Math.cos(angle + Math.PI / 6), y2 - sz * Math.sin(angle + Math.PI / 6));
         ctx.stroke();
       }
+    } else if (d.type === "extended_line") {
+      const { lx1, ly1, lx2, ly2 } = extendLineToBounds(x1, y1, x2, y2, W, H);
+      ctx.beginPath(); ctx.moveTo(lx1, ly1); ctx.lineTo(lx2, ly2); ctx.stroke();
+      // Piccolo marcatore ai due punti originali
+      ctx.globalAlpha *= 0.5;
+      ctx.beginPath(); ctx.arc(x1, y1, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x2, y2, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = isGhost ? 0.55 : 1;
     } else if (d.type === "rectangle" || d.type === "range") {
       const fx = Math.min(x1, x2), fy = Math.min(y1, y2), fw = Math.abs(x2 - x1), fh = Math.abs(y2 - y1);
       ctx.fillStyle = d.type === "range" ? "rgba(192,122,30,0.12)" : "rgba(31,78,107,0.12)";
@@ -4981,6 +5032,12 @@
         ctx.setLineDash([]); ctx.fillStyle = COLORS.stamp;
         ctx.font = "11px system-ui, sans-serif"; ctx.fillText(d.text, fx + 4, fy - 4);
       }
+    } else if (d.type === "ellipse") {
+      const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2;
+      const rx = Math.abs(x2 - x1) / 2, ry = Math.abs(y2 - y1) / 2;
+      ctx.fillStyle = "rgba(31,78,107,0.10)";
+      ctx.beginPath(); ctx.ellipse(cx, cy, Math.max(rx, 1), Math.max(ry, 1), 0, 0, Math.PI * 2);
+      ctx.fill(); ctx.stroke();
     } else if (d.type === "fib") {
       FIB_LEVELS.forEach((ratio) => {
         const price = p1.price + ratio * (p2.price - p1.price);
@@ -4993,6 +5050,28 @@
         ctx.fillStyle = baseColor; ctx.font = "10px system-ui, sans-serif";
         ctx.fillText(ratio.toFixed(3), Math.max(x1, x2) + 4, fy + 3);
       });
+    } else if (d.type === "channel") {
+      // Con 2 punti mostra solo la linea principale (ghost del primo segmento)
+      if (d.points.length < 3) {
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+        ctx.restore(); return;
+      }
+      const p3 = d.points[2];
+      const x3 = timeToXEdge(p3.time), y3 = priceToY(p3.price);
+      if (x3 === null || y3 === null) { ctx.restore(); return; }
+      // Linea principale p1→p2
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+      // Linea parallela traslata verticalmente di (y3-y1)
+      const dy = y3 - y1;
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath(); ctx.moveTo(x1, y1 + dy); ctx.lineTo(x2, y2 + dy); ctx.stroke();
+      ctx.setLineDash([]);
+      // Fill canale
+      ctx.fillStyle = "rgba(31,78,107,0.07)";
+      ctx.beginPath();
+      ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
+      ctx.lineTo(x2, y2 + dy); ctx.lineTo(x1, y1 + dy);
+      ctx.closePath(); ctx.fill();
     }
     ctx.restore();
   }
@@ -5046,12 +5125,12 @@
       if (isSelected) renderHandles(d);
     });
 
-    // Ghost preview while placing second point
-    if (drawState.tool !== "cursor" && drawState.pending.length === 1 && lastCrosshairPoint) {
-      const p1 = drawState.pending[0];
+    // Ghost preview mentre si piazza il secondo (o terzo) punto
+    if (drawState.tool !== "cursor" && drawState.pending.length >= 1 && lastCrosshairPoint) {
       const price2 = candleSeries.coordinateToPrice(lastCrosshairPoint.y);
       if (price2 !== null) {
-        renderOneDrawing({ type: drawState.tool, points: [p1, { time: lastCrosshairPoint.time, price: price2 }] }, false, true);
+        const ghostPts = [...drawState.pending, { time: lastCrosshairPoint.time, price: price2 }];
+        renderOneDrawing({ type: drawState.tool, points: ghostPts }, false, true);
       }
     }
   }
@@ -5188,6 +5267,145 @@
     applyChartMarkers();
   }
 
+  // ---- Segnali contestuali — "cosa sta succedendo al grafico" ----
+  // Non indicatori classici: annotazioni che leggono le candele,
+  // l'angolo del trend EMA e l'RSI per dire in italiano semplice
+  // cosa sta accadendo e se ci si sta avvicinando a un reversal.
+
+  let contextualHintMarkers = [];
+
+  function detectContextualHints(candles, indicators) {
+    const markers = [];
+    if (!candles || candles.length < 10) return markers;
+
+    // Ricava valori EMA20 e RSI14 dalla lista indicatori
+    const emaRaw = findIndicator(indicators, "EMA20") || findIndicator(indicators, "EMA 20/50");
+    const rsiRaw = findIndicator(indicators, "RSI14") || findIndicator(indicators, "RSI");
+    const emaMap = {}, rsiMap = {};
+    if (emaRaw) seriesFromIndicatorValues(candles, emaRaw).forEach((d) => { if (d.value != null) emaMap[d.time] = d.value; });
+    if (rsiRaw) seriesFromIndicatorValues(candles, rsiRaw).forEach((d) => { if (d.value != null) rsiMap[d.time] = d.value; });
+
+    // ATR rolling (14 periodi) per normalizzare le pendenze
+    const atrWindow = 14;
+    function atrAt(i) {
+      const start = Math.max(0, i - atrWindow + 1);
+      let sum = 0, n = 0;
+      for (let k = start; k <= i; k++) {
+        const c = candles[k], prev = candles[k - 1];
+        if (!prev) continue;
+        const tr = Math.max(c.high - c.low, Math.abs(c.high - prev.close), Math.abs(c.low - prev.close));
+        sum += tr; n++;
+      }
+      return n > 0 ? sum / n : 1;
+    }
+
+    // Pendenza EMA: delta tra barra corrente e N barre fa, normalizzata su ATR.
+    // Valori assoluti > 0.5 = trend significativo; < 0.1 = piatto.
+    const SLOPE_WINDOW = 5;
+
+    for (let i = Math.max(SLOPE_WINDOW + 2, 3); i < candles.length; i++) {
+      const c = candles[i];
+      const prev = candles[i - 1];
+      const prev2 = candles[i - 2];
+      const t = c.time;
+
+      const body = Math.abs(c.close - c.open);
+      const range = c.high - c.low || 0.0001;
+      const isBull = c.close >= c.open;
+      const upperWick = c.high - Math.max(c.open, c.close);
+      const lowerWick = Math.min(c.open, c.close) - c.low;
+      const prevBody = Math.abs(prev.close - prev.open);
+      const prev2Body = Math.abs(prev2.close - prev2.open);
+      const prevBull = prev.close >= prev.open;
+      const atr = atrAt(i);
+
+      const rsi = rsiMap[t];
+      const emaNow = emaMap[t];
+      const emaPrev = emaMap[prev.time];
+      const emaPrev5 = emaMap[candles[i - SLOPE_WINDOW]?.time];
+
+      // ── Analisi angolo trend EMA ─────────────────────────────────────────
+      if (emaNow != null && emaPrev != null && emaPrev5 != null && atr > 0) {
+        const slope = (emaNow - emaPrev) / atr;           // slope corrente
+        const slopePrev = (emaPrev - emaPrev5) / (atr * SLOPE_WINDOW); // slope media recente
+
+        const trendUp = slope > 0.08;
+        const trendDown = slope < -0.08;
+        const slopeAccel = Math.abs(slope) > Math.abs(slopePrev) * 1.3;
+        const slopeDecel = Math.abs(slopePrev) > 0.05 && Math.abs(slope) < Math.abs(slopePrev) * 0.6;
+
+        if (slopeDecel && trendUp && i === candles.length - 1) {
+          markers.push({ time: t, position: "aboveBar", color: "#f59e0b", shape: "circle", text: "↘ Trend rallenta" });
+        } else if (slopeDecel && trendDown && i === candles.length - 1) {
+          markers.push({ time: t, position: "belowBar", color: "#f59e0b", shape: "circle", text: "↗ Trend rallenta" });
+        }
+
+        // Trend forte in accelerazione — solo sull'ultima candela per non affollare
+        if (slopeAccel && Math.abs(slope) > 0.3 && i === candles.length - 1) {
+          const col = trendUp ? "#22c55e" : "#ef4444";
+          const lbl = trendUp ? "⚡ Trend forte ↑" : "⚡ Trend forte ↓";
+          markers.push({ time: t, position: trendUp ? "belowBar" : "aboveBar", color: col, shape: "arrowUp", text: lbl });
+        }
+      }
+
+      // ── Esaurimento del trend (3 candele stessa dir con corpi decrescenti) ──
+      if (i >= 3) {
+        const c3 = candles[i - 2];
+        const allUp = isBull && prevBull && c3.close >= c3.open;
+        const allDown = !isBull && !prevBull && c3.close < c3.open;
+        const shrinking = body < prevBody && prevBody < prev2Body;
+        if ((allUp || allDown) && shrinking && body < atr * 0.4) {
+          const col = allUp ? "#f59e0b" : "#f59e0b";
+          const lbl = allUp ? "⚠ Esaurimento ↑" : "⚠ Esaurimento ↓";
+          markers.push({ time: t, position: allUp ? "aboveBar" : "belowBar", color: col, shape: "circle", text: lbl });
+        }
+      }
+
+      // ── Inside bar — contrazione di volatilità ──────────────────────────
+      if (c.high < prev.high && c.low > prev.low && range < atr * 0.6) {
+        markers.push({ time: t, position: "aboveBar", color: "#a78bfa", shape: "circle", text: "◼ Contrazione" });
+        continue; // non sovrapporre altri segnali sulla stessa barra
+      }
+
+      // ── Marubozu — momentum puro senza wick ────────────────────────────
+      if (body / range > 0.88 && range > atr * 0.8) {
+        const col = isBull ? "#22c55e" : "#ef4444";
+        const lbl = isBull ? "→ Momentum ↑" : "→ Momentum ↓";
+        markers.push({ time: t, position: isBull ? "belowBar" : "aboveBar", color: col, shape: isBull ? "arrowUp" : "arrowDown", text: lbl });
+        continue;
+      }
+
+      // ── Segnali combinati RSI + candela ────────────────────────────────
+      if (rsi != null) {
+        if (rsi > 72 && !isBull && upperWick > body * 0.8) {
+          markers.push({ time: t, position: "aboveBar", color: "#ef4444", shape: "arrowDown", text: "↙ Satura RSI+" });
+          continue;
+        }
+        if (rsi < 28 && isBull && lowerWick > body * 0.8) {
+          markers.push({ time: t, position: "belowBar", color: "#22c55e", shape: "arrowUp", text: "↗ Esausto RSI−" });
+          continue;
+        }
+        // RSI neutrale su zona di supporto/resistenza (range 43-57)
+        if (rsi >= 43 && rsi <= 57 && body / range < 0.35 && i === candles.length - 1) {
+          markers.push({ time: t, position: "aboveBar", color: "#6b7280", shape: "circle", text: "~ Indecisione" });
+        }
+      }
+    }
+
+    return markers;
+  }
+
+  function applyContextualHints() {
+    if (!candleSeries) return;
+    contextualHintMarkers = [];
+    if (!state.layers.hints || !state.data) return;
+    const tf = state.activeTimeframe;
+    const analysis = state.data.timeframes[tf];
+    if (!analysis) return;
+    contextualHintMarkers = detectContextualHints(analysis.candles, analysis.indicators || []);
+    applyChartMarkers();
+  }
+
   function clearGhost() {}
 
   // ---- Cursor tool: hit-test existing drawings, click to delete ----
@@ -5207,26 +5425,40 @@
       const y = candleSeries.priceToCoordinate(d.points[0].price);
       return y !== null && Math.abs(py - y) <= HIT_TOLERANCE_PX;
     }
-    const ts = mainChart.timeScale();
-    const [p1, p2] = d.points; // text has only p1 — handled below before p2 is ever touched
-    const x1 = ts.timeToCoordinate(p1.time);
+    if (d.type === "hray") {
+      const y = candleSeries.priceToCoordinate(d.points[0].price);
+      const x0 = timeToXEdge(d.points[0].time);
+      return y !== null && x0 !== null && px >= x0 - HIT_TOLERANCE_PX && Math.abs(py - y) <= HIT_TOLERANCE_PX;
+    }
+    const [p1, p2] = d.points;
+    const x1 = timeToXEdge(p1.time);
     const y1 = candleSeries.priceToCoordinate(p1.price);
     if (x1 === null || y1 === null) return false;
     if (d.type === "text") {
       return Math.hypot(px - x1, py - y1) <= 14;
     }
-    const x2 = ts.timeToCoordinate(p2.time);
+    if (!p2) return false;
+    const x2 = timeToXEdge(p2.time);
     const y2 = candleSeries.priceToCoordinate(p2.price);
     if (x2 === null || y2 === null) return false;
     if (d.type === "trend_line" || d.type === "arrow") {
       return distanceToSegment(px, py, x1, y1, x2, y2) <= HIT_TOLERANCE_PX;
     }
-    if (d.type === "rectangle" || d.type === "range") {
+    if (d.type === "extended_line") {
+      const W = drawCanvas ? drawCanvas.width : 1000;
+      const H = drawCanvas ? drawCanvas.height : 600;
+      const { lx1, ly1, lx2, ly2 } = extendLineToBounds(x1, y1, x2, y2, W, H);
+      return distanceToSegment(px, py, lx1, ly1, lx2, ly2) <= HIT_TOLERANCE_PX;
+    }
+    if (d.type === "rectangle" || d.type === "range" || d.type === "ellipse") {
       const xa = Math.min(x1, x2) - HIT_TOLERANCE_PX;
       const xb = Math.max(x1, x2) + HIT_TOLERANCE_PX;
       const ya = Math.min(y1, y2) - HIT_TOLERANCE_PX;
       const yb = Math.max(y1, y2) + HIT_TOLERANCE_PX;
       return px >= xa && px <= xb && py >= ya && py <= yb;
+    }
+    if (d.type === "channel") {
+      return distanceToSegment(px, py, x1, y1, x2, y2) <= HIT_TOLERANCE_PX;
     }
     if (d.type === "fib") {
       const xa = Math.min(x1, x2) - HIT_TOLERANCE_PX;
@@ -5529,7 +5761,7 @@
 
         drawState.pending.push({ time, price });
         const needed = DRAW_TOOL_POINTS[drawState.tool];
-        if (drawState.pending.length === 1 && needed === 2) {
+        if (drawState.pending.length === 1 && needed >= 2) {
           startGhost(drawState.tool, { time, price });
         } else if (drawState.pending.length >= needed) {
           finalizeDrawing();
@@ -5578,8 +5810,12 @@
         { label: "Apri nel Lab →", action: () => { setArea("lab"); } },
         { separator: true },
         { label: "Linea orizzontale", action: () => setDrawTool("hline") },
+        { label: "Raggio orizzontale →", action: () => setDrawTool("hray") },
         { label: "Linea di tendenza", action: () => setDrawTool("trend_line") },
+        { label: "Linea estesa ↔", action: () => setDrawTool("extended_line") },
         { label: "Rettangolo", action: () => setDrawTool("rectangle") },
+        { label: "Ellisse", action: () => setDrawTool("ellipse") },
+        { label: "Canale parallelo", action: () => setDrawTool("channel") },
         { label: "Freccia", action: () => setDrawTool("arrow") },
         { label: "Fibonacci", action: () => setDrawTool("fib") },
         { label: "Testo", action: () => setDrawTool("text") },
@@ -5956,6 +6192,7 @@
     }
 
     applyAutoPatterns();
+    applyContextualHints();
 
     renderSummary();
     renderStrategy();
@@ -6151,6 +6388,10 @@
     // Pattern automatici (doji, engulfing, ecc.) — layer opzionale
     if (state.layers.patterns) {
       markers = markers.concat(autoPatternMarkers);
+    }
+    // Segnali contestuali (angolo trend, esaurimento, RSI combinato, ecc.)
+    if (state.layers.hints) {
+      markers = markers.concat(contextualHintMarkers);
     }
     // La libreria pretende marker in ordine di tempo crescente; unendo due
     // elenchi l'ordine si perde.

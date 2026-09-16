@@ -179,6 +179,7 @@
         <label class="layer-toggle"><input type="checkbox" data-layer="confluence" /> Zone di confluenza</label>
         <label class="layer-toggle"><input type="checkbox" data-layer="fibonacci" /> Fibonacci automatico</label>
         <label class="layer-toggle"><input type="checkbox" data-layer="patterns" /> Pattern automatici</label>
+        <label class="layer-toggle"><input type="checkbox" data-layer="hints" /> Segnali contestuali</label>
       </div>
       <div class="panel">
         <h3>Indicatori</h3>
@@ -306,11 +307,23 @@
           <button type="button" class="draw-tool-btn" data-draw-tool="trend_line" title="Linea di tendenza">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 20 L20 4"/></svg>
           </button>
+          <button type="button" class="draw-tool-btn" data-draw-tool="extended_line" title="Linea estesa (si allunga ai bordi)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 21 L22 3"/><circle cx="8" cy="15" r="2" fill="currentColor" stroke="none" opacity=".5"/><circle cx="16" cy="7" r="2" fill="currentColor" stroke="none" opacity=".5"/></svg>
+          </button>
           <button type="button" class="draw-tool-btn" data-draw-tool="hline" title="Linea orizzontale">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 12 H21"/></svg>
           </button>
+          <button type="button" class="draw-tool-btn" data-draw-tool="hray" title="Raggio orizzontale (da punto verso destra)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 12 H21"/><path d="M18 9 L21 12 L18 15"/></svg>
+          </button>
           <button type="button" class="draw-tool-btn" data-draw-tool="rectangle" title="Rettangolo">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="6" width="16" height="12" rx="1"/></svg>
+          </button>
+          <button type="button" class="draw-tool-btn" data-draw-tool="ellipse" title="Ellisse">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="12" rx="9" ry="6"/></svg>
+          </button>
+          <button type="button" class="draw-tool-btn" data-draw-tool="channel" title="Canale parallelo (3 punti)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 7 L21 3"/><path d="M3 17 L21 13" stroke-dasharray="4 3"/></svg>
           </button>
           <button type="button" class="draw-tool-btn" data-draw-tool="range" title="Misura (prezzo + tempo)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 19 L19 5 M5 19 H10 M5 19 V14 M19 5 H14 M19 5 V10"/></svg>
