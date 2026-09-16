@@ -6138,6 +6138,62 @@
     return   { phase: "LATERALE",     trend, confidence: 0.40, retracePct, exhaustSignals };
   }
 
+  // ── Impulse angle measurement (Agent 0 — highest priority) ───────────────
+  // Misura l'angolo di ogni leg di swing (slope = prezzo/barra normalizzato per ATR)
+  // e rileva quando l'angolo si appiattisce + le chiusure si comprimono.
+  // Questa è la dinamica più importante: impulso ripido → decel angolare → compressione → rottura inversa.
+  function _measureImpulseAngle(candles, swings) {
+    const nil = { impulseDir: null, impulseAngle: 0, decelRatio: 1, isDecelerating: false, compression: 0, compressing: false };
+    if (candles.length < 12) return nil;
+    const atr = _atrAt(candles, candles.length - 1);
+    if (atr <= 0) return nil;
+
+    // Costruisce una sequenza di leg dai punti di swing ordinati per barra
+    const pts = [];
+    swings.highs.forEach(p => pts.push({ i: p.i, price: p.price }));
+    swings.lows.forEach(p =>  pts.push({ i: p.i, price: p.price }));
+    pts.sort((a, b) => a.i - b.i);
+
+    const legs = [];
+    for (let k = 1; k < pts.length; k++) {
+      const bars = pts[k].i - pts[k - 1].i;
+      if (bars < 1) continue;
+      // slope normalizzato: unità di ATR per barra — è l'angolo del leg
+      legs.push({ slope: (pts[k].price - pts[k - 1].price) / (bars * atr), bars });
+    }
+    if (legs.length < 2) return nil;
+
+    // Confronta leg recenti vs leg precedenti
+    const nR  = Math.min(3, Math.ceil(legs.length / 2));
+    const rec = legs.slice(-nR);
+    const prv = legs.slice(-nR * 2, -nR);
+
+    const avgAbs = arr => arr.reduce((s, l) => s + Math.abs(l.slope), 0) / arr.length;
+    const avgAbsRec = avgAbs(rec);
+    const avgAbsPrv = prv.length > 0 ? avgAbs(prv) : avgAbsRec;
+    const decelRatio = avgAbsPrv > 0.01 ? avgAbsRec / avgAbsPrv : 1;
+
+    // Direzione dell'impulso che sta decelerando (dai leg precedenti)
+    const prvNetSlope = prv.length > 0 ? prv.reduce((s, l) => s + l.slope, 0) / prv.length : 0;
+    const impulseDir  = prvNetSlope > 0.12 ? "bull" : prvNetSlope < -0.12 ? "bear" : null;
+    const impulseAngle = avgAbsPrv;
+
+    // Decelerazione: leg recenti significativamente meno ripidi dei precedenti
+    const isDecelerating = decelRatio < 0.62 && impulseAngle > 0.18;
+
+    // Compressione: le ultime chiusure sono molto ravvicinate rispetto all'ATR
+    const last8 = candles.slice(-Math.min(8, candles.length));
+    const cls   = last8.map(c => c.close);
+    const meanC = cls.reduce((a, b) => a + b, 0) / cls.length;
+    const stdC  = Math.sqrt(cls.reduce((s, c) => s + (c - meanC) ** 2, 0) / cls.length);
+    const compression = Math.max(0, Math.min(1, 1 - stdC / (atr * 0.9)));
+
+    // Compressing: cluster di chiusure ravvicinate dopo un impulso ripido
+    const compressing = isDecelerating && compression > 0.48;
+
+    return { impulseDir, impulseAngle, decelRatio, isDecelerating, compression, compressing };
+  }
+
   // ── Velocity/deceleration measurement (Agent 2) ───────────────────────────
   function _measureVelocity(candles, indicators) {
     if (!candles || candles.length < 20)
@@ -6249,19 +6305,28 @@
       mtfContext.push({ tf: hier.context, dir: ct ? ct.dir : "neutral", detail: ct ? ct.detail : "—", role: "context" });
     }
 
-    // ── B. Phase + velocity ─────────────────────────────────────────────────
+    // ── B. Phase + velocity + impulse angle ────────────────────────────────
     const swings = findSwings(visible, Math.max(3, Math.floor(visible.length / 8)));
     const phaseResult = _detectPhase(visible, swings);
     const vel = _measureVelocity(visible, indicators);
+    const impAngle = _measureImpulseAngle(visible, swings);
 
     const phase = phaseResult.phase;
     const trend = phaseResult.trend;
     const resumeDir = macroBias !== "neutral" ? macroBias : trend !== "flat" ? trend : "neutral";
 
+    // Quando c'è decel angolare + compressione, la direzione attesa è il CONTRARIO dell'impulso
+    const direction = (impAngle.compressing && impAngle.impulseDir)
+      ? (impAngle.impulseDir === "bear" ? "bull" : "bear")
+      : resumeDir;
+
     // ── C. Gate conditions ──────────────────────────────────────────────────
-    const gatePhase   = phase === "ESAURIMENTO" || phase === "PIVOT";
-    const gateMacro   = macroBias !== "neutral";
-    const gateVelocity = resumeDir === "bull" ? vel.composite > 0.10 : resumeDir === "bear" ? vel.composite < -0.10 : false;
+    // La compressione post-impulso è di per sé un gate: bypassa gatePhase e gateVelocity
+    const gatePhase    = phase === "ESAURIMENTO" || phase === "PIVOT" || impAngle.compressing;
+    const gateMacro    = macroBias !== "neutral";
+    const gateVelocity = impAngle.compressing
+      ? true
+      : (direction === "bull" ? vel.composite > 0.10 : direction === "bear" ? vel.composite < -0.10 : false);
 
     let currentRSI = null;
     const rsiRawMain = findIndicator(indicators, "RSI14") || findIndicator(indicators, "RSI");
@@ -6273,59 +6338,71 @@
     const gateRSI = currentRSI == null || (resumeDir === "bull" ? currentRSI < 72 : currentRSI > 28);
     const gateATR  = _atrAt(visible, visible.length - 1) / (visible[visible.length - 1].close || 1) * 100 > 0.05;
 
-    const setupValid = gatePhase && (gateMacro || trend !== "flat") && gateVelocity && gateRSI && gateATR;
+    const setupValid = gatePhase && (gateMacro || trend !== "flat" || impAngle.compressing) && gateVelocity && gateRSI && gateATR;
 
-    // ── D. Quality scoring (Agent 3) ─────────────────────────────────────
+    // ── D. Quality scoring ────────────────────────────────────────────────
+    // Pesi: F0=25 F1=22 F2=16 F3=11 F4=10 F5=8 F6=5 F7=3 = 100
     const factors = [];
     let setupScore = 0;
 
     {
       const t0 = visible[0].time, t1v = visible[visible.length - 1].time;
 
-      // F1. RSI divergence (28%)
-      const relDivs = divergenceLines.filter(d => d.t2 >= t0 && d.t1 <= t1v && d.type === (resumeDir === "bull" ? "bull" : "bear"));
-      if (relDivs.length > 0) { setupScore += 28; factors.push({ label: "Divergenza RSI confermata", present: true }); }
+      // F0. Decel angolare + compressione (25%) — segnale più importante
+      if (impAngle.compressing) {
+        setupScore += 25;
+        factors.push({ label: `Angolo impulso in decel. (${(impAngle.decelRatio * 100).toFixed(0)}%) + compressione`, present: true });
+      } else if (impAngle.isDecelerating) {
+        setupScore += 12;
+        factors.push({ label: `Angolo impulso in decel. (${(impAngle.decelRatio * 100).toFixed(0)}%)`, present: true });
+      } else {
+        factors.push({ label: "Nessuna decel. angolare", present: false });
+      }
+
+      // F1. RSI divergence (22%)
+      const relDivs = divergenceLines.filter(d => d.t2 >= t0 && d.t1 <= t1v && d.type === (direction === "bull" ? "bull" : "bear"));
+      if (relDivs.length > 0) { setupScore += 22; factors.push({ label: "Divergenza RSI confermata", present: true }); }
       else { factors.push({ label: "Nessuna divergenza RSI", present: false }); }
 
-      // F2. Swing structure HL/LH (20%)
-      const hasStruct = resumeDir === "bull"
+      // F2. Swing structure HL/LH (16%)
+      const hasStruct = direction === "bull"
         ? swings.lows.length >= 2 && swings.lows.slice(-1)[0].price > swings.lows.slice(-2)[0].price
         : swings.highs.length >= 2 && swings.highs.slice(-1)[0].price < swings.highs.slice(-2)[0].price;
-      if (hasStruct) { setupScore += 20; factors.push({ label: resumeDir === "bull" ? "Minimi crescenti (HL)" : "Massimi decrescenti (LH)", present: true }); }
-      else { factors.push({ label: resumeDir === "bull" ? "Struttura HL non confermata" : "Struttura LH non confermata", present: false }); }
+      if (hasStruct) { setupScore += 16; factors.push({ label: direction === "bull" ? "Minimi crescenti (HL)" : "Massimi decrescenti (LH)", present: true }); }
+      else { factors.push({ label: direction === "bull" ? "Struttura HL non confermata" : "Struttura LH non confermata", present: false }); }
 
-      // F3. MTF alignment (15%)
-      const mtfAligned = macroBias !== "neutral" && contextBias !== "neutral" && macroBias === contextBias && macroBias === resumeDir;
-      if (mtfAligned) { setupScore += 15; factors.push({ label: `MTF allineati ${hier.macro || ""}+${hier.context || ""}`, present: true }); }
+      // F3. MTF alignment (11%)
+      const mtfAligned = macroBias !== "neutral" && contextBias !== "neutral" && macroBias === contextBias && macroBias === direction;
+      if (mtfAligned) { setupScore += 11; factors.push({ label: `MTF allineati ${hier.macro || ""}+${hier.context || ""}`, present: true }); }
       else { factors.push({ label: "MTF non allineati", present: false }); }
 
-      // F4. Slope/body deceleration (13%)
+      // F4. Slope/body deceleration (10%)
       const hasDecel = vel.slopeDeccel > 0.3 || vel.bodyDeccel > 0.3 || (vel.swingDeccel != null && vel.swingDeccel > 0.3);
-      if (hasDecel) { setupScore += 13; factors.push({ label: `Decelerazione ${vel.slopeDeccel > vel.bodyDeccel ? "slope" : "body"}`, present: true }); }
+      if (hasDecel) { setupScore += 10; factors.push({ label: `Decelerazione ${vel.slopeDeccel > vel.bodyDeccel ? "slope" : "body"}`, present: true }); }
       else { factors.push({ label: "Nessuna decelerazione significativa", present: false }); }
 
-      // F5. Inside bar / NR (10%)
+      // F5. Inside bar / NR (8%)
       const lc = visible[visible.length - 1], pc = visible[visible.length - 2];
       const isInsideBar = lc && pc && lc.high < pc.high && lc.low > pc.low;
       const isNR = lc && pc && (lc.high - lc.low) < (pc.high - pc.low) * 0.75;
-      if (isInsideBar || isNR) { setupScore += 10; factors.push({ label: isInsideBar ? "Inside bar (compressione)" : "NR: range in riduzione", present: true }); }
+      if (isInsideBar || isNR) { setupScore += 8; factors.push({ label: isInsideBar ? "Inside bar (compressione)" : "NR: range in riduzione", present: true }); }
       else { factors.push({ label: "Nessuna contrazione", present: false }); }
 
-      // F6. Exhaustion signal count (8%)
-      if (phaseResult.exhaustSignals >= 2) { setupScore += 8; factors.push({ label: `${phaseResult.exhaustSignals} segnali esaurimento`, present: true }); }
+      // F6. Exhaustion signal count (5%)
+      if (phaseResult.exhaustSignals >= 2) { setupScore += 5; factors.push({ label: `${phaseResult.exhaustSignals} segnali esaurimento`, present: true }); }
       else { factors.push({ label: "Esaurimento non confermato", present: false }); }
 
-      // F7. Velocity composite (6%)
-      if (Math.abs(vel.composite) > 0.20) { setupScore += 6; factors.push({ label: `Momentum ${vel.composite > 0 ? "in riduzione" : "in aumento"} (${(vel.composite*100).toFixed(0)}%)`, present: true }); }
+      // F7. Velocity composite (3%)
+      if (Math.abs(vel.composite) > 0.20) { setupScore += 3; factors.push({ label: `Momentum ${vel.composite > 0 ? "in riduzione" : "in aumento"} (${(vel.composite*100).toFixed(0)}%)`, present: true }); }
       else { factors.push({ label: "Momentum stabile", present: false }); }
     }
 
     const phaseLabels = {
       "IMPULSO":        "Trend in corso — attendi ritracciamento",
       "RITRACCIAMENTO": "Ritracciamento in atto",
-      "ESAURIMENTO":    "Ritracciamento in esaurimento",
+      "ESAURIMENTO":    impAngle.compressing ? `Impulso ${impAngle.impulseDir === "bear" ? "ribassista" : "rialzista"} esaurito — attesa rottura` : "Ritracciamento in esaurimento",
       "PIVOT":          "Pivot confermato — setup attivo",
-      "LATERALE":       "Struttura laterale",
+      "LATERALE":       impAngle.compressing ? `Compressione post-impulso ${impAngle.impulseDir === "bear" ? "ribassista" : "rialzista"}` : "Struttura laterale",
     };
 
     const scoreColor  = setupScore >= 75 ? "#00d68f" : setupScore >= 50 ? "#f2a93b" : "#8899aa";
@@ -6335,14 +6412,15 @@
                         phase === "IMPULSO" ? "Attendi ritracciamento" : "Nessun setup attivo";
 
     let keyLevel = null;
-    if (resumeDir === "bull" && swings.lows.length > 0)
+    if (direction === "bull" && swings.lows.length > 0)
       keyLevel = { price: swings.lows.slice(-1)[0].price, desc: "Ultimo swing low — supporto" };
-    else if (resumeDir === "bear" && swings.highs.length > 0)
+    else if (direction === "bear" && swings.highs.length > 0)
       keyLevel = { price: swings.highs.slice(-1)[0].price, desc: "Ultimo swing high — resistenza" };
 
-    const mainRisk = !gateMacro       ? "Bias macro non determinato" :
+    const mainRisk = impAngle.compressing && !gateMacro ? "Macro non allineata alla rottura attesa" :
+                     !gateMacro       ? "Bias macro non determinato" :
                      !gateVelocity    ? "Momentum ancora nella direzione del ritracciamento" :
-                     !gateRSI         ? (resumeDir === "bull" ? "RSI in zona ipercomprata" : "RSI in zona ipervenduta") :
+                     !gateRSI         ? (direction === "bull" ? "RSI in zona ipercomprata" : "RSI in zona ipervenduta") :
                      phaseResult.retracePct > 0.618 ? "Ritracciamento profondo — possibile inversione strutturale" :
                      "Setup nella norma";
 
@@ -6351,7 +6429,7 @@
       phaseConf: phaseResult.confidence, retracePct: phaseResult.retracePct,
       velocity: vel, setupValid, setupScore, scoreColor,
       timeWindow, keyLevel, mainRisk, factors, direction: resumeDir,
-      mtfContext, candleCount: visible.length, iv,
+      impAngle, mtfContext, candleCount: visible.length, iv,
       aligned: macroBias === "neutral" || macroBias === resumeDir,
       macroBias, contextBias,
     };
