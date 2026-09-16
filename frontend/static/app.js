@@ -7186,32 +7186,60 @@
     box.classList.remove("hidden");
   }
 
+  // Distanza minima in barre tra marker di pattern/hint sullo stesso lato.
+  // I marker di strategia, backtest e ordini eseguiti non vengono filtrati.
+  const MARKER_MIN_BAR_GAP = 4;
+
+  function _thinMarkers(toThin, candles) {
+    if (!candles || !candles.length || !toThin.length) return toThin;
+    // time→barIndex lookup
+    const barIdx = new Map();
+    candles.forEach((c, i) => barIdx.set(c.time, i));
+    const getIdx = t => { const v = barIdx.get(t); return v !== undefined ? v : -1; };
+
+    // Priority groups: strategy/trade/orders skip thinning; pattern/hint are thinned
+    const result = [];
+    const lastPerSide = { aboveBar: -Infinity, belowBar: -Infinity };
+    for (const m of toThin) {
+      const idx = getIdx(m.time);
+      const side = m.position === "belowBar" ? "belowBar" : "aboveBar";
+      if (idx < 0 || idx - lastPerSide[side] >= MARKER_MIN_BAR_GAP) {
+        result.push(m);
+        lastPerSide[side] = idx;
+      }
+    }
+    return result;
+  }
+
   function applyChartMarkers() {
     if (!candleSeries) return;
-    let markers = [];
+    const candles = state.data?.timeframes?.[state.activeTimeframe]?.candles || [];
+    let fixed = [];   // strategy/trades/orders — never thinned
+    let thinnable = []; // patterns + hints — subject to distance filter
+
     if (el("strategy-markers-toggle").checked) {
-      markers = markers.concat(buildStrategyMarkers(_lastStrategySignals));
+      fixed = fixed.concat(buildStrategyMarkers(_lastStrategySignals));
     }
     const tradesToggle = el("backtest-trades-toggle");
     if (tradesToggle && tradesToggle.checked) {
-      markers = markers.concat(buildBacktestTradeMarkers());
+      fixed = fixed.concat(buildBacktestTradeMarkers());
     }
-    // Gli ordini realmente eseguiti si vedono sempre: non sono un livello
-    // che si accende, sono cio' che e' successo davvero.
     const ordersToggle = el("executed-orders-toggle");
     if (!ordersToggle || ordersToggle.checked) {
-      markers = markers.concat(buildExecutedOrderMarkers());
+      fixed = fixed.concat(buildExecutedOrderMarkers());
     }
-    // Pattern automatici (doji, engulfing, ecc.) — layer opzionale
     if (state.layers.patterns) {
-      markers = markers.concat(autoPatternMarkers);
+      thinnable = thinnable.concat(autoPatternMarkers);
     }
-    // Segnali contestuali (angolo trend, esaurimento, RSI combinato, ecc.)
     if (state.layers.hints) {
-      markers = markers.concat(contextualHintMarkers);
+      thinnable = thinnable.concat(contextualHintMarkers);
     }
-    // La libreria pretende marker in ordine di tempo crescente; unendo due
-    // elenchi l'ordine si perde.
+
+    // Ordina per tempo poi applica il filtro di distanza
+    thinnable.sort((a, b) => a.time - b.time);
+    const thinned = _thinMarkers(thinnable, candles);
+
+    const markers = fixed.concat(thinned);
     markers.sort((a, b) => a.time - b.time);
     candleSeries.setMarkers(markers);
   }
