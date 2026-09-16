@@ -6798,15 +6798,15 @@
 
     const swings = findSwings(candles, Math.max(3, Math.floor(candles.length / 12)));
     const pts = [];
-    swings.highs.forEach(p => pts.push({ i: p.i, price: p.price, time: candles[p.i]?.time }));
-    swings.lows.forEach(p =>  pts.push({ i: p.i, price: p.price, time: candles[p.i]?.time }));
+    swings.highs.forEach(p => pts.push({ i: p.i, price: p.price, time: p.time }));
+    swings.lows.forEach(p =>  pts.push({ i: p.i, price: p.price, time: p.time }));
     pts.sort((a, b) => a.i - b.i);
 
     // Mantieni solo gli ultimi 10 leg per non affollare
     const legs = [];
     for (let k = 1; k < pts.length; k++) {
       const bars = pts[k].i - pts[k - 1].i;
-      if (bars < 1 || !pts[k - 1].time || !pts[k].time) continue;
+      if (bars < 1 || !pts[k - 1].time || !pts[k].time || pts[k].time <= pts[k - 1].time) continue;
       const slope = (pts[k].price - pts[k - 1].price) / (bars * atr);
       legs.push({ from: pts[k - 1], to: pts[k], slope });
     }
