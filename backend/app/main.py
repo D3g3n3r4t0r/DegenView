@@ -612,35 +612,45 @@ async def _weekly_recap_loop() -> None:
     lunedi' mattina non lo rimanda una seconda volta.
     """
     while True:
+        # Il controllo viene PRIMA dell'attesa: un riepilogo che tocca a
+        # lunedi' alle 9 non deve arrivare alle 9 e mezza solo perche' il
+        # deploy e' capitato un minuto prima.
+        if settings.telegram_bot_token and settings.github_api_token:
+            await _maybe_send_recap()
         await asyncio.sleep(_RECAP_POLL_SECONDS)
-        if not settings.telegram_bot_token or not settings.github_api_token:
-            continue
-        now = int(_time.time())
-        last = _LAST_RECAP_FILE.read_text(encoding="utf-8").strip() if _LAST_RECAP_FILE.exists() else ""
-        if not weekly_recap.should_send(now, last):
-            continue
-        try:
-            async with httpx.AsyncClient(timeout=15.0) as client:
-                since = _dt.datetime.fromtimestamp(now - 7 * 86400, tz=_dt.timezone.utc).isoformat()
-                r = await client.get(
-                    f"https://api.github.com/repos/{_GITHUB_REPO}/commits",
-                    headers={"Authorization": f"Bearer {settings.github_api_token}",
-                             "Accept": "application/vnd.github+json"},
-                    params={"per_page": 100, "since": since},
-                )
-                r.raise_for_status()
-                messages = [c["commit"]["message"] for c in r.json()]
-        except Exception as exc:                      # noqa: BLE001
-            logger.warning("Riepilogo settimanale saltato: richiesta a GitHub fallita — %s", exc)
-            continue
 
-        text = weekly_recap.build_recap(messages, now)
-        # La settimana si segna comunque: una settimana senza niente da dire e'
-        # gestita, non e' un tentativo fallito da ripetere ogni mezz'ora.
-        _LAST_RECAP_FILE.parent.mkdir(parents=True, exist_ok=True)
-        _LAST_RECAP_FILE.write_text(weekly_recap.current_week_key(now), encoding="utf-8")
-        if text:
-            await telegram.send_message(text)
+
+async def _maybe_send_recap() -> None:
+    now = int(_time.time())
+    last = _LAST_RECAP_FILE.read_text(encoding="utf-8").strip() if _LAST_RECAP_FILE.exists() else ""
+    # Alla primissima attivazione parte subito, senza aspettare lunedi': una
+    # funzione di notifica che non si vede finche' non capita il giorno giusto
+    # e' indistinguibile da una che non funziona — ed e' esattamente il dubbio
+    # che c'e' stato con l'avviso di deploy.
+    if last and not weekly_recap.should_send(now, last):
+        return
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            since = _dt.datetime.fromtimestamp(now - 7 * 86400, tz=_dt.timezone.utc).isoformat()
+            r = await client.get(
+                f"https://api.github.com/repos/{_GITHUB_REPO}/commits",
+                headers={"Authorization": f"Bearer {settings.github_api_token}",
+                         "Accept": "application/vnd.github+json"},
+                params={"per_page": 100, "since": since},
+            )
+            r.raise_for_status()
+            messages = [c["commit"]["message"] for c in r.json()]
+    except Exception as exc:                      # noqa: BLE001
+        logger.warning("Riepilogo settimanale saltato: richiesta a GitHub fallita — %s", exc)
+        return
+
+    text = weekly_recap.build_recap(messages, now)
+    # La settimana si segna comunque: una settimana senza niente da dire e'
+    # gestita, non e' un tentativo fallito da ripetere ogni mezz'ora.
+    _LAST_RECAP_FILE.parent.mkdir(parents=True, exist_ok=True)
+    _LAST_RECAP_FILE.write_text(weekly_recap.current_week_key(now), encoding="utf-8")
+    if text:
+        await telegram.send_message(text)
 
 
 @asynccontextmanager

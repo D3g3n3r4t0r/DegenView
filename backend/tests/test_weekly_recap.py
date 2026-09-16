@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 from app.notify.weekly_recap import (
     build_recap,
     current_week_key,
+    has_italian_line,
     italian_line,
     should_send,
 )
@@ -48,6 +49,22 @@ def test_without_a_trailer_the_subject_is_used_rather_than_skipping_the_commit()
 
 def test_an_empty_message_does_not_produce_an_empty_bullet():
     assert italian_line("   ") == "(senza descrizione)"
+
+
+def test_the_attribution_trailers_do_not_leak_into_the_italian_line():
+    """Succede davvero: a seconda di come il messaggio viene composto, le righe
+    di attribuzione finiscono attaccate alla nostra."""
+    msg = ("Titolo inglese\n\n"
+           "Aggiornamento: ora si puo' chiudere la posizione dal sito"
+           "Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>")
+    assert italian_line(msg) == "ora si puo' chiudere la posizione dal sito"
+
+
+def test_a_long_line_is_cut_on_a_word_not_mid_syllable():
+    msg = "Aggiornamento: " + "parola " * 60
+    line = italian_line(msg)
+    assert line.endswith("…")
+    assert "parol…" not in line
 
 
 # ── il messaggio ─────────────────────────────────────────────────────────
@@ -95,6 +112,32 @@ def test_a_missing_resolutions_file_does_not_break_the_recap(tmp_path):
                        resolutions_path=tmp_path / "non-esiste.json")
     assert text is not None
     assert "una modifica" in text
+
+
+def test_english_commits_are_counted_but_never_printed(tmp_path):
+    """"In italiano sempre" significa che una riga inglese non ci entra.
+
+    Un elenco di titoli inglesi dentro un messaggio italiano non e' "quasi
+    italiano": e' un messaggio che non mantiene la promessa. I commit senza
+    riga italiana restano pero' nel conteggio, perche' sono avvenuti.
+    """
+    now = _ts("2026-09-21")
+    res = _write_resolutions(tmp_path, {})
+    text = build_recap(
+        ["Fix the MEXC futures host", "Refactor the executor",
+         "Qualcosa\n\nAggiornamento: ora si puo' chiudere la posizione dal sito"],
+        now, resolutions_path=res,
+    )
+    assert "Modifiche al codice: 3" in text
+    assert "ora si puo' chiudere la posizione dal sito" in text
+    assert "MEXC futures host" not in text
+    assert "Refactor" not in text
+
+
+def test_has_italian_line_distinguishes_a_real_trailer_from_a_fallback():
+    assert has_italian_line("Titolo\n\nAggiornamento: testo vero") is True
+    assert has_italian_line("Titolo\n\nAggiornamento:   ") is False
+    assert has_italian_line("Solo un titolo inglese") is False
 
 
 # ── quando parte ─────────────────────────────────────────────────────────
