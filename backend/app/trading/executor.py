@@ -1,4 +1,6 @@
 from app.models import StrategySignal
+from app.trading.audit import log_order
+from app.trading.circuit_breaker import check_halt
 from app.trading import (
     binance_exec,
     bitstamp_exec,
@@ -41,22 +43,38 @@ async def place_futures_order_for_signal(
     Il nome dell'exchange non compare piu' in questa funzione: la logica dei
     segnali e' la stessa per tutti, e le differenze fra piattaforme vivono
     dentro l'adattatore. Aggiungere un exchange non tocca questo file."""
+    allowed, reason = check_halt()
+    if not allowed:
+        result = {"skipped": True, "reason": reason}
+        log_order("skip", exchange, symbol, signal.type, result, is_futures=True)
+        return result
+
     adapter = futures_registry.get(exchange)
     creds = FuturesCreds(api_key=api_key, api_secret=api_secret, passphrase=passphrase)
 
     t = signal.type
     if t in ("exit_long", "exit_short"):
         result = await adapter.close_position(symbol, creds)
-        return result or {"skipped": True, "reason": "nessuna posizione aperta da chiudere"}
+        result = result or {"skipped": True, "reason": "nessuna posizione aperta da chiudere"}
+        log_order("submit", exchange, symbol, t, result, is_futures=True)
+        return result
     if t in ("flip_to_long", "flip_to_short"):
         await adapter.close_position(symbol, creds)
         side = "BUY" if t == "flip_to_long" else "SELL"
-        return await adapter.place_order(symbol, side, size_mode, size_value, leverage, creds, max_usdt=max_usdt)
+        result = await adapter.place_order(symbol, side, size_mode, size_value, leverage, creds, max_usdt=max_usdt)
+        log_order("submit", exchange, symbol, t, result, is_futures=True)
+        return result
     if t == "entry_long":
-        return await adapter.place_order(symbol, "BUY", size_mode, size_value, leverage, creds, max_usdt=max_usdt)
+        result = await adapter.place_order(symbol, "BUY", size_mode, size_value, leverage, creds, max_usdt=max_usdt)
+        log_order("submit", exchange, symbol, t, result, is_futures=True)
+        return result
     if t == "entry_short":
-        return await adapter.place_order(symbol, "SELL", size_mode, size_value, leverage, creds, max_usdt=max_usdt)
-    return {"skipped": True, "reason": "no-op signal type"}
+        result = await adapter.place_order(symbol, "SELL", size_mode, size_value, leverage, creds, max_usdt=max_usdt)
+        log_order("submit", exchange, symbol, t, result, is_futures=True)
+        return result
+    result = {"skipped": True, "reason": "no-op signal type"}
+    log_order("skip", exchange, symbol, t, result, is_futures=True)
+    return result
 
 
 async def place_order_for_signal(
@@ -78,28 +96,38 @@ async def place_order_for_signal(
     vero exit_long, e i due condividono lo stesso side senza modo di
     distinguerli da qui. Limitare un SELL vorrebbe dire lasciare aperta
     meta' di una posizione che si voleva chiudere per intero."""
+    allowed, reason = check_halt()
+    if not allowed:
+        result = {"skipped": True, "reason": reason}
+        log_order("skip", exchange, symbol, signal.type, result)
+        return result
+
     side = _signal_to_side(signal.type)
     if side is None:
-        return {"skipped": True, "reason": "no-op signal type"}
+        result = {"skipped": True, "reason": "no-op signal type"}
+        log_order("skip", exchange, symbol, signal.type, result)
+        return result
 
     if exchange in ("binance", "mexc"):
-        return await binance_exec.place_order(
+        result = await binance_exec.place_order(
             exchange, symbol, side, size_mode, size_value, api_key, api_secret, max_usdt=max_usdt
         )
     elif exchange == "kucoin":
         kucoin_symbol = _to_kucoin_symbol(symbol)
         kucoin_side = side.lower()
-        return await kucoin_exec.place_order(
+        result = await kucoin_exec.place_order(
             kucoin_symbol, kucoin_side, size_mode, size_value, api_key, api_secret, passphrase, max_usdt=max_usdt
         )
     elif exchange == "kraken":
-        return await kraken_exec.place_order(symbol, side, size_mode, size_value, api_key, api_secret, max_usdt=max_usdt)
+        result = await kraken_exec.place_order(symbol, side, size_mode, size_value, api_key, api_secret, max_usdt=max_usdt)
     elif exchange == "coinbase":
-        return await coinbase_exec.place_order(symbol, side, size_mode, size_value, api_key, api_secret, max_usdt=max_usdt)
+        result = await coinbase_exec.place_order(symbol, side, size_mode, size_value, api_key, api_secret, max_usdt=max_usdt)
     elif exchange == "bitstamp":
-        return await bitstamp_exec.place_order(symbol, side, size_mode, size_value, api_key, api_secret, max_usdt=max_usdt)
+        result = await bitstamp_exec.place_order(symbol, side, size_mode, size_value, api_key, api_secret, max_usdt=max_usdt)
     else:
         raise ValueError(f"Unsupported exchange: {exchange}")
+    log_order("submit", exchange, symbol, signal.type, result)
+    return result
 
 
 def _signal_to_side(signal_type: str) -> str | None:
