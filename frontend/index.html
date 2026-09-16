@@ -415,13 +415,28 @@
           </div>
 
           <!-- Timeframe pills -->
+          <!-- Tutti i timeframe supportati dal backend (CANONICAL_INTERVALS).
+               2d e 5d mancavano pur essendo gia' gestiti (sintetizzati per
+               ricampionamento dalle candele giornaliere). Sotto 1d il
+               backtest NON gira sul timeframe scelto: backtest_interval_for()
+               lo riporta a 1d, ed e' la segnalazione seed-0007 — finche'
+               resta cosi', la nota qui sotto lo dice invece di lasciar
+               credere che "15m" e "1d" siano due misure diverse. -->
           <div class="lab-tf-row" id="lab-tf-row">
+            <button type="button" class="lab-tf-btn" data-lab-tf="1m">1m</button>
+            <button type="button" class="lab-tf-btn" data-lab-tf="5m">5m</button>
+            <button type="button" class="lab-tf-btn" data-lab-tf="15m">15m</button>
+            <button type="button" class="lab-tf-btn" data-lab-tf="30m">30m</button>
+            <button type="button" class="lab-tf-btn" data-lab-tf="1h">1h</button>
             <button type="button" class="lab-tf-btn" data-lab-tf="4h">4h</button>
             <button type="button" class="lab-tf-btn active" data-lab-tf="1d">1d</button>
+            <button type="button" class="lab-tf-btn" data-lab-tf="2d">2d</button>
             <button type="button" class="lab-tf-btn" data-lab-tf="3d">3d</button>
+            <button type="button" class="lab-tf-btn" data-lab-tf="5d">5d</button>
             <button type="button" class="lab-tf-btn" data-lab-tf="1w">1w</button>
             <button type="button" class="lab-tf-btn" data-lab-tf="1M">1M</button>
           </div>
+          <p id="lab-tf-clamp-note" class="lab-tf-clamp-note hidden"></p>
 
           <div class="lab-divider"></div>
 
