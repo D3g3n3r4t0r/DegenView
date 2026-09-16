@@ -6446,19 +6446,23 @@
     renderStrategy();
     renderBacktest();
     resizeAllCharts();
-    zoomToRecentDays(7);
+    zoomToOptimal();
   }
 
   // Mappa stringa intervallo → minuti per candle
   const IV_MINUTES = { "1m":1,"5m":5,"15m":15,"30m":30,"1h":60,"4h":240,"1d":1440,"2d":2880,"3d":4320,"5d":7200,"1w":10080,"1M":43200 };
 
-  function zoomToRecentDays(days) {
+  // Giorni ottimali per ogni timeframe: abbastanza candele da vedere struttura, non troppo da fare rumore
+  const IV_OPTIMAL_DAYS = { "1m":0.25,"5m":0.5,"15m":1.5,"30m":3,"1h":7,"4h":21,"1d":90,"2d":180,"3d":270,"5d":365,"1w":730,"1M":1825 };
+
+  function zoomToOptimal() {
     if (!mainChart || !state.data) { try { mainChart && mainChart.timeScale().fitContent(); } catch {} return; }
     const tf = state.activeTimeframe;
     const analysis = state.data.timeframes[tf];
     if (!analysis || !analysis.candles || !analysis.candles.length) { try { mainChart.timeScale().fitContent(); } catch {} return; }
     const iv = analysis.interval || el("interval-primary")?.value || "1d";
     const mins = IV_MINUTES[iv] || 1440;
+    const days = IV_OPTIMAL_DAYS[iv] || 7;
     const candlesPerDay = 1440 / mins;
     const targetBars = Math.ceil(days * candlesPerDay);
     const total = analysis.candles.length;
