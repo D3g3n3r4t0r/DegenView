@@ -6226,17 +6226,27 @@
     const hier = TF_HIERARCHY[iv] || {};
     let macroBias = "neutral", contextBias = "neutral";
 
+    // Proxy macro: if higher TF not loaded, use last N candles of current TF as a stand-in
+    const _trendOrProxy = (tfStr, windowPct, role) => {
+      const a = _analysisByInterval(tfStr);
+      if (a) return _computeTrend(a.candles, a.indicators || [], tfStr);
+      // fallback: use a proportional tail of allCandles
+      const n = Math.max(20, Math.floor(allCandles.length * windowPct));
+      const proxy = allCandles.slice(-n);
+      const t = _computeTrend(proxy, indicators, tfStr);
+      if (t) t.detail = `stima su ${n} candele ${iv}`;
+      return t;
+    };
+
     if (hier.macro) {
-      const mA = _analysisByInterval(hier.macro);
-      const mt = mA ? _computeTrend(mA.candles, mA.indicators || [], hier.macro) : null;
+      const mt = _trendOrProxy(hier.macro, 0.6, "macro");
       macroBias = mt ? mt.dir : "neutral";
-      mtfContext.push({ tf: hier.macro, dir: mt ? mt.dir : "n/d", detail: mt ? mt.detail : "non caricato", role: "macro" });
+      mtfContext.push({ tf: hier.macro, dir: mt ? mt.dir : "neutral", detail: mt ? mt.detail : "—", role: "macro" });
     }
     if (hier.context) {
-      const cA = _analysisByInterval(hier.context);
-      const ct = cA ? _computeTrend(cA.candles, cA.indicators || [], hier.context) : null;
+      const ct = _trendOrProxy(hier.context, 0.3, "context");
       contextBias = ct ? ct.dir : "neutral";
-      mtfContext.push({ tf: hier.context, dir: ct ? ct.dir : "n/d", detail: ct ? ct.detail : "non caricato", role: "context" });
+      mtfContext.push({ tf: hier.context, dir: ct ? ct.dir : "neutral", detail: ct ? ct.detail : "—", role: "context" });
     }
 
     // ── B. Phase + velocity ─────────────────────────────────────────────────
