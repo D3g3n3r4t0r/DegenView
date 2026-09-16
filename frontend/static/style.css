@@ -2809,15 +2809,23 @@ body {
 .lab-tf-row {
   display: flex; gap: 5px; margin-bottom: 12px;
 }
+.lab-tf-clamp-note {
+  margin: -6px 0 12px;
+  font-size: 11px;
+  color: var(--warn, var(--ink-dim));
+  line-height: 1.35;
+}
 .lab-tf-btn {
-  flex: 1;
   background: var(--bg-panel);
   border: 1.5px solid var(--border-strong);
   border-radius: 7px;
   padding: 6px 2px;
   font-family: var(--font-mono); font-size: 11px; font-weight: 700;
   color: var(--ink-dim); cursor: pointer;
-  text-align: center; text-transform: uppercase;
+  /* Niente maiuscolo: "1m" (un minuto) e "1M" (un mese) sono due timeframe
+     diversi che si distinguono SOLO per quel carattere. Finche' i timeframe
+     erano cinque, da 4h in su, la differenza non esisteva; ora si'. */
+  text-align: center;
 }
 .lab-tf-btn.active {
   background: var(--accent); border-color: var(--accent); color: #fff;
@@ -4415,6 +4423,14 @@ select { cursor: pointer; }
   border: 1px solid var(--border);
   border-radius: 7px;
   width: fit-content;
+}
+/* I timeframe sono dodici, non piu' cinque: in fila unica escono dallo
+   schermo su un telefono. Va a capo restando lo stesso controllo segmentato,
+   e `max-width` impedisce che `width: fit-content` qui sopra pretenda una
+   riga piu' larga del contenitore. */
+.lab-tf-row {
+  flex-wrap: wrap;
+  max-width: 100%;
 }
 .lab-tf-btn, .wl-asset-btn {
   background: none;
