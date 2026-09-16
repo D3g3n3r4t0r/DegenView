@@ -1051,7 +1051,7 @@ def _dispatch_telegram_alerts(
     fresh = find_new_signals(symbol, interval, strategy, frequency=frequency, entry_id=entry_id)
     for signal in fresh:
         message = format_signal_message(symbol, interval, strategy.name, signal,
-                                        current_price=current_price)
+                                        current_price=current_price, entry_id=entry_id or "")
         asyncio.create_task(telegram.send_to(chat_id, message))
         if owner_id:
             alert_log.append_entry(
@@ -1896,6 +1896,35 @@ async def close_manual_futures_position(body: ClosePositionRequest, user: User =
         outcome="eseguito", detail=str(result)[:400],
     )
     return {"ok": True, "closed": True, "result": result, "symbol": symbol}
+
+
+class HaltRequest(BaseModel):
+    halt: bool
+
+
+@app.post("/api/trading/halt")
+async def set_trading_halt(body: HaltRequest, user: User = Depends(auth.get_current_user)):
+    """Kill switch: mette in pausa o riprende l'esecuzione automatica degli ordini.
+
+    Non tocca alert, backtest o ottimizzatore — solo l'esecuzione automatica.
+    La chiusura manuale di una posizione esistente ignora il kill switch
+    (vedi /api/trading/futures/close).
+    """
+    allowed_emails = {e.strip().lower() for e in settings.registration_allowed_emails.split(",") if e.strip()}
+    if user.email.lower() not in allowed_emails:
+        raise HTTPException(status_code=403, detail="Non autorizzato")
+    settings.trading_halt = body.halt
+    state = "in pausa" if body.halt else "attiva"
+    return {"ok": True, "trading_halt": body.halt, "detail": f"Esecuzione automatica {state}"}
+
+
+@app.get("/api/trading/halt")
+async def get_trading_halt(user: User = Depends(auth.get_current_user)):
+    """Stato corrente del kill switch."""
+    allowed_emails = {e.strip().lower() for e in settings.registration_allowed_emails.split(",") if e.strip()}
+    if user.email.lower() not in allowed_emails:
+        raise HTTPException(status_code=403, detail="Non autorizzato")
+    return {"trading_halt": settings.trading_halt}
 
 
 @app.get("/api/balances")

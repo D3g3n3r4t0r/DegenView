@@ -88,5 +88,10 @@ class Settings(BaseSettings):
     # and stop there; it's a ceiling, not a target.
     backtest_candles: int = 5000
 
+    # Kill switch: mette in pausa tutta l'esecuzione automatica degli ordini
+    # senza toccare alert, backtest o ottimizzatore. Si attiva via endpoint
+    # POST /api/trading/halt (richiede autenticazione) o da .env.
+    trading_halt: bool = False
+
 
 settings = Settings()
