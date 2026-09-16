@@ -5280,6 +5280,7 @@
 
   let contextualHintMarkers = [];
   let divergenceLines = []; // [{type:'bear'|'bull', t1,t2, p1,p2, confirmed}]
+  let _predictBtnTimer = null;
 
   // ── Swing point detection (ZigZag) ────────────────────────────────────────
   function findSwings(candles, n = 5) {
@@ -6346,14 +6347,9 @@
     };
   }
 
-  function showBreakoutPopup() {
-    const res = predictBreakout();
-    const popup = el("breakout-popup");
-    if (!popup) return;
-
+  function _renderBreakoutResult(res, popup) {
     if (!res) {
       popup.innerHTML = `<div class="bp-header"><span class="bp-title">Analisi Setup</span><button class="marker-popup-close" onclick="document.getElementById('breakout-popup').classList.add('hidden')">×</button></div><p style="color:var(--ink-dim);font-size:12px;margin:8px 0 0">Dati insufficienti nel range visibile.</p>`;
-      popup.classList.remove("hidden");
       return;
     }
 
@@ -6415,6 +6411,45 @@
       };
       document.addEventListener("pointerdown", close, true);
     }, 50);
+  }
+
+  function schedulePredictButton(delaySec = 5) {
+    const btn = el("mobile-strip-predict-btn");
+    if (!btn) return;
+    btn.classList.remove("predict-ready", "predict-thinking");
+    clearTimeout(_predictBtnTimer);
+    _predictBtnTimer = setTimeout(() => {
+      btn.classList.add("predict-ready");
+    }, delaySec * 1000);
+  }
+
+  function showBreakoutPopup() {
+    const popup = el("breakout-popup");
+    const btn = el("mobile-strip-predict-btn");
+    if (!popup) return;
+
+    // Show loading state immediately
+    popup.innerHTML = `
+      <div class="bp-header">
+        <span class="bp-title">Analisi Setup</span>
+        <button class="marker-popup-close" onclick="document.getElementById('breakout-popup').classList.add('hidden')" aria-label="Chiudi">×</button>
+      </div>
+      <div class="bp-thinking">
+        <div class="bp-dots"><span></span><span></span><span></span></div>
+        <div class="bp-thinking-label">Analisi in corso…</div>
+      </div>
+    `;
+    popup.classList.remove("hidden");
+    if (btn) btn.classList.add("predict-thinking");
+
+    setTimeout(() => {
+      const res = predictBreakout();
+      _renderBreakoutResult(res, popup);
+      if (btn) {
+        btn.classList.remove("predict-thinking");
+        btn.classList.add("predict-ready");
+      }
+    }, 2000);
   }
 
   function bindBreakoutButton() {
@@ -6892,6 +6927,7 @@
     try {
       mainChart.timeScale().setVisibleLogicalRange({ from: fromBar, to: total + 2 });
     } catch { try { mainChart.timeScale().fitContent(); } catch {} }
+    schedulePredictButton(5);
   }
 
   function renderStrategy() {
