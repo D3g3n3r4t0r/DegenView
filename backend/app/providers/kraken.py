@@ -67,7 +67,7 @@ class KrakenProvider(DataProvider):
     def __init__(self, base_url: str | None = None):
         self._base_url = base_url or BASE_URL
 
-    async def fetch_ohlcv(self, symbol: str, interval: str, outputsize: int) -> pd.DataFrame:
+    async def fetch_ohlcv(self, symbol: str, interval: str, outputsize: int, since_ms: int | None = None) -> pd.DataFrame:
         # Kraken non ha un intervallo mensile nativo (il piu' largo che offre
         # e' 10080 minuti, una settimana): "1M" si ottiene piegando insieme
         # 30 candele giornaliere, stesso meccanismo di 2D/3D/5D altrove
