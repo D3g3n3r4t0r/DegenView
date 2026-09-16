@@ -164,6 +164,18 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0077", "Alert Telegram: il prezzo mostrato era quello della candela del segnale, senza dire quando",
+     "Lorenzo: 'ho ricevuto questo avviso dal bot: INJUSDT [1D] Ingresso long rilevato, Prezzo: 6.285 — ma il prezzo attuale e' 5,43$... inoltre mi sembra strano l'ingresso long dopo una correzione'. Il 6.285 era la chiusura del 14 settembre, consegnata il 16 dopo un -13,5%: il segnale era nato PRIMA della correzione, non dentro. Il messaggio pero' mostrava solo quel prezzo, senza data, quindi un segnale di due giorni prima si leggeva come uno di adesso.",
+     "alta"),
+    ("seed-0076", "Anteprima ordine futures: prometteva l'importo chiesto, l'ordine ne usava meno",
+     "Dal socio di Lorenzo: 'non ha usato la giusta percentuale del portafoglio... 80%, quindi doveva essere 40 dollari ma ne ha usati 34 e qualcosa, come se avesse ordinato con il contract'. Intuizione giusta: su MEXC la dimensione si conta in contratti interi, e un contratto su KAS vale 1000 monete (~34,40 USDT). 40 USDT sono 1,16 contratti, troncati a 1. L'ordine era corretto; a mentire era l'anteprima, che mostrava i 40 chiesti.",
+     "media"),
+    ("seed-0075", "Nessun modo di chiudere una posizione dal sito, ne' spot ne' futures",
+     "Dal socio di Lorenzo, con una posizione MEXC aperta: 'Ma l'opzione per chiudere la posizione non c'e'?'. Le posizioni erano sola lettura e non esisteva nemmeno l'endpoint: close_position c'era, ma lo raggiungeva solo il trading automatico sui segnali di uscita. Chi apriva dal sito poteva solo guardare, e per uscire doveva passare dall'app dell'exchange. Lorenzo: 'la chiusura deve esserci anche per lo spot'.",
+     "alta"),
+    ("seed-0074", "Un ordine futures riuscito veniva mostrato come 'Errore di rete'",
+     "Lorenzo: 'Errore di rete: Can't find variable: loadJournal'. Il messaggio arrivava dal ramo del SUCCESSO: dopo un ordine eseguito, la chiamata a una funzione inesistente (loadJournal, il nome vero e' loadTradingJournal) lanciava un ReferenceError che il catch riscriveva come errore di rete. L'ordine era passato davvero, sullo stesso schermo da cui si rischiava di rifarlo una seconda volta.",
+     "alta"),
     ("seed-0073", "Il sito sembra 'AI slop': testo minuscolo, bordi/ombre da template generico",
      "Lorenzo: 'tutto il sito sembra fatto da ai slop'. Scansione con lo strumento impeccable (61 regole deterministiche): 145 problemi, concentrati in pochi pattern sistemici (testo sotto gli 11px funzionali/12px di corpo, bordo colorato spesso su un lato delle card, bordo sottile+ombra larga).",
      "media"),

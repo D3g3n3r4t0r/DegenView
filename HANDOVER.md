@@ -1298,3 +1298,70 @@ interpretare anche i dati dei back test".
   caso con una sola voce (nessun confronto, nessun box). Tutto lato frontend,
   nessun endpoint nuovo: i dati (`optimizer.*`) arrivano gia' con ogni voce
   d'archivio. `node --check` pulito.
+
+### Chiuso — chiusura posizioni, anteprima onesta, alert datati, bacheca svuotata
+
+Sessione lunga, partita da "procedi, inoltre chiudi i punti aperti sul sito".
+Cinque interventi piu' tre segnalazioni di bacheca. Il filo comune, non
+cercato ma evidente a posteriori: **quasi tutti erano l'interfaccia che
+diceva una cosa mentre il sistema ne faceva un'altra.**
+
+- **seed-0074** — `loadJournal?.()` non era una chiamata facoltativa ma un
+  nome inesistente (la funzione e' `loadTradingJournal`), e `?.` non protegge
+  da una variabile mai dichiarata. Lanciava un ReferenceError dentro il ramo
+  del successo, e il `catch` lo riscriveva in "Errore di rete": ordine
+  passato, interfaccia che diceva il contrario. Valore soprattutto
+  diagnostico — quel messaggio puo' nascere SOLO dal percorso di successo,
+  quindi dimostrava che il fix dell'host MEXC aveva funzionato mentre lo si
+  dava ancora per fallito, e che una posizione era davvero aperta.
+- **seed-0075** — non esisteva modo di chiudere una posizione dal sito, ne'
+  spot ne' futures: `close_position` c'era ma lo raggiungeva solo il trading
+  automatico. Due decisioni, entrambe con un test che le tiene ferme: il
+  kill switch NON blocca una chiusura (impedisce nuova esposizione; se
+  bloccasse l'uscita, spegnerlo con una posizione aperta significherebbe
+  restare intrappolati), e "niente da chiudere" si dice invece di spacciarlo
+  per chiusura riuscita. Sullo spot chiudere = vendere il 100% della moneta
+  base, che e' gia' cio' che fa un `exit_long`.
+- **seed-0076** — l'anteprima futures prometteva l'importo chiesto (40 USDT)
+  mentre l'ordine ne usava 34,40: su MEXC la dimensione si conta in contratti
+  interi, e un contratto KAS vale 1000 monete. L'ordine era giusto, mentiva
+  l'anteprima. L'arrotondamento e' specifico dell'exchange, quindi si chiede
+  all'adattatore (`effective_notional`, default che non arrotonda: gli altri
+  cinque exchange invariati) invece di ricopiarne l'aritmetica nell'endpoint.
+- **seed-0077** — l'alert Telegram mostrava il prezzo della candela del
+  segnale senza dire quando. Su INJUSDT: "Prezzo: 6.285" era la chiusura del
+  14 settembre, consegnata il 16 dopo un -13,5%. Sembrava una strategia che
+  compra dentro una correzione; era un ingresso nato prima e consegnato dopo.
+  Verificato sui prezzi reali PRIMA di toccare il codice. Ora il messaggio
+  porta data, "quanto fa" e prezzo attuale con la deriva.
+- **0e5497f6** — nel Lab 5 timeframe su 12. Ora ci sono tutti, e quelli sotto
+  1d dichiarano che il backtest gira comunque su 1d (`backtest_interval_for`
+  lo riporta li' perche' 5000 candele su un 1m sono tre giorni di storia).
+  Prima quel riporto era silenzioso: e' la vecchia seed-0007, che resta
+  aperta per la parte vera — togliere il clamp cambierebbe ogni risultato
+  storico del Lab, non si fa senza dirlo.
+- **6ba09078** — il periodo del Lab valeva solo per il backtest. Il frontend
+  le date all'ottimizzatore le mandava gia' (stessa `buildLabQuery()`): era
+  il backend a ignorarle in silenzio. Ignorare un parametro che arriva e'
+  peggio che rifiutarlo, perche' non lascia traccia. Il ritaglio ora vive in
+  una funzione sola usata da entrambe le strade.
+- **6a914943** — chiusa dal suo autore ("Problema da ignorare"), registrata
+  per non lasciarla aperta a tempo indefinito.
+
+**Due decisioni aperte, entrambe di Lorenzo, entrambe con numeri veri:**
+
+1. *Finestra di freschezza dei segnali.* `_MAX_SIGNAL_AGE_BARS = 3` su un
+   daily significa tre giorni, e la stessa lista che manda l'alert alimenta
+   l'esecuzione automatica degli ordini — quindi una condizione di due giorni
+   fa puo' piazzare un ordine a mercato al prezzo di oggi. Stringerla (3 -> 1
+   sui timeframe alti) cambia quali alert partono.
+2. *Il clamp del backtest a 1d* (seed-0007). Col budget di 5000 candele, 4h
+   coprirebbe 2,3 anni e 1h sette mesi: storia piu' che sufficiente, oggi
+   buttata. Toglierlo cambia ogni risultato storico del Lab.
+
+**Un errore mio da non ripetere**, segnalato da Lorenzo con "secondo me ti
+stai perdendo": ho cambiato tre volte diagnosi sull'endpoint MEXC in una
+conversazione sola, inseguendo riassunti di ricerche web invece di verificare
+il codice sorgente vero. Quando ho finalmente letto `ts/src/mexc.ts` di ccxt
+invece di un riassunto, la risposta era li' e il supporto MEXC aveva ragione
+su host E path. Su codice che muove denaro: fonte primaria, sempre.
