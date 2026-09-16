@@ -6786,11 +6786,9 @@
     syncMobileTfWheel();
   }
 
-  // Disegna le linee di pendenza tra i punti di swing sul grafico principale.
-  // Ogni leg è una LineSeries a due punti: colore = intensità dell'angolo.
-  //   rosso vivo  = impulso ripido (bear)     verde vivo = impulso ripido (bull)
-  //   sfumato     = leg moderato              grigio     = leg piatto / compressione
-  // L'ultimo leg usa un tratto più spesso e mostra l'etichetta angolo/ATR.
+  // Disegna le linee di pendenza tra i punti di swing usando LinePrimitive.
+  //   rosso vivo  = impulso bear ripido    verde vivo = impulso bull ripido
+  //   grigio      = leg debole / compressione
   function renderAngleLines(candles, indicators) {
     if (!candles || candles.length < 6) return;
     const atr = _atrAt(candles, candles.length - 1);
@@ -6802,7 +6800,6 @@
     swings.lows.forEach(p =>  pts.push({ i: p.i, price: p.price, time: p.time }));
     pts.sort((a, b) => a.i - b.i);
 
-    // Mantieni solo gli ultimi 10 leg per non affollare
     const legs = [];
     for (let k = 1; k < pts.length; k++) {
       const bars = pts[k].i - pts[k - 1].i;
@@ -6810,38 +6807,38 @@
       const slope = (pts[k].price - pts[k - 1].price) / (bars * atr);
       legs.push({ from: pts[k - 1], to: pts[k], slope });
     }
-    const recentLegs = legs.slice(-10);
+    if (!legs.length) return;
 
-    // Intensità massima per normalizzare i colori
+    const recentLegs = legs.slice(-10);
     const maxAbs = recentLegs.reduce((m, l) => Math.max(m, Math.abs(l.slope)), 0.01);
 
     recentLegs.forEach((leg, idx) => {
       const isLast = idx === recentLegs.length - 1;
       const norm = Math.min(1, Math.abs(leg.slope) / maxAbs);
       const isBull = leg.slope >= 0;
-
-      // Colore: pieno sui leg forti, sbiadito sui deboli
       let color;
-      if (norm > 0.55) {
-        color = isBull ? `rgba(0,214,143,${0.55 + norm * 0.45})` : `rgba(255,69,96,${0.55 + norm * 0.45})`;
+      if (norm > 0.45) {
+        const alpha = 0.5 + norm * 0.5;
+        color = isBull ? `rgba(0,214,143,${alpha.toFixed(2)})` : `rgba(255,69,96,${alpha.toFixed(2)})`;
       } else {
-        color = `rgba(120,130,150,${0.25 + norm * 0.4})`;
+        color = `rgba(140,150,165,${(0.30 + norm * 0.40).toFixed(2)})`;
       }
+      const width = isLast ? 2 : 1;
+      const prim = new LinePrimitive(
+        { time: leg.from.time, price: leg.from.price },
+        { time: leg.to.time,   price: leg.to.price   },
+        color, width, false
+      );
+      candleSeries.attachPrimitive(prim);
+      overlays.primitives.push({ series: candleSeries, primitive: prim });
 
-      const s = mainChart.addLineSeries({
-        color,
-        lineWidth: isLast ? 2 : 1,
-        lineStyle: isLast ? LightweightCharts.LineStyle.Solid : LightweightCharts.LineStyle.Dashed,
-        priceLineVisible: false,
-        lastValueVisible: isLast,
-        title: isLast ? `∠${(leg.slope > 0 ? "+" : "")}${leg.slope.toFixed(2)}σ/b` : "",
-        crosshairMarkerVisible: false,
-      });
-      s.setData([
-        { time: leg.from.time, value: leg.from.price },
-        { time: leg.to.time,   value: leg.to.price   },
-      ]);
-      addLineOverlay(mainChart, s, null, mainChart);
+      // Etichetta sul punto finale del leg (è un timestamp di candela reale)
+      if (isLast || norm > 0.55) {
+        const label = `${leg.slope > 0 ? "+" : ""}${leg.slope.toFixed(1)}σ`;
+        const textPrim = new TextPrimitive({ time: leg.to.time, price: leg.to.price }, label, color);
+        candleSeries.attachPrimitive(textPrim);
+        overlays.primitives.push({ series: candleSeries, primitive: textPrim });
+      }
     });
   }
 
