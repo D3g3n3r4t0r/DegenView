@@ -270,7 +270,7 @@ async def _watchlist_alert_loop() -> None:
                 # Stale data detection: last candle older than 2× the interval
                 _iv_s = INTERVAL_SECONDS.get(entry.interval, 0)
                 if _iv_s:
-                    _last_ts = df["datetime"].iloc[-1].timestamp()
+                    _last_ts = df.index[-1].timestamp()
                     _age = _time.time() - _last_ts
                     if _age > _iv_s * 2:
                         _hours_old = int(_age / 3600)
