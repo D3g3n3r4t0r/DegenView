@@ -1,3 +1,5 @@
+import time
+
 import numpy as np
 import pandas as pd
 import pandas_ta  # noqa: F401  (registers the .ta accessor on DataFrame)
@@ -454,11 +456,27 @@ _LABELS = {
 }
 
 
+def last_bar_is_closed(df: pd.DataFrame) -> bool:
+    """Se l'ultima barra della serie e' gia' chiusa o si sta ancora formando.
+
+    La durata della barra si deduce dalla distanza fra le ultime due, invece
+    di farsela passare: cosi' vale anche per gli intervalli sintetici (2d/3d/5d,
+    ricampionati) senza che ogni chiamante debba sapere quale sia.
+    """
+    if len(df) < 2:
+        return False
+    bar_seconds = (df.index[-1] - df.index[-2]).total_seconds()
+    if bar_seconds <= 0:
+        return False
+    return df.index[-1].timestamp() + bar_seconds <= time.time()
+
+
 def confirmed_events(
     df: pd.DataFrame,
     params: dict | None = None,
     signals: pd.DataFrame | None = None,
     strategy_name: str = DEFAULT_STRATEGY,
+    last_bar_closed: bool = False,
 ) -> tuple[list[StrategySignal], int]:
     """All confirmed position-transition events for the full window (uncapped —
     used for backtesting), plus the resulting final position (1/0/-1).
@@ -469,6 +487,20 @@ def confirmed_events(
     timestamp. We still fold it into the returned position for a live-ish
     badge, but never emit it as a confirmed event.
 
+    `last_bar_closed` esiste perche' quella regola, applicata alla cieca,
+    ritardava ogni alert di una barra intera. Il watcher, per le voci con
+    "alla chiusura della candela", toglie gia' la barra in formazione
+    (drop_unclosed_candle): l'ultima riga che resta e' quindi una barra
+    CHIUSA, e scartarla comunque come "non confermata" significava aspettare
+    la barra successiva per accorgersi di un segnale gia' definitivo — su un
+    daily, un giorno intero. E' quello che e' successo su INJUSDT: incrocio
+    alla chiusura del 14 settembre, notifica il 16.
+
+    Resta `False` di default apposta: i backtest passano la serie cosi' com'e'
+    (barra in formazione inclusa) e devono continuare a vedere esattamente i
+    segnali di prima — questo parametro non deve cambiare un solo numero
+    storico. Lo passa `build_strategy_state`, che sa distinguere i due casi.
+
     `signals` lets callers (e.g. the Pine Script engine) inject an
     already-computed entry_long/entry_short/exit_long/exit_short frame
     instead of dispatching to a registered strategy by name.
@@ -476,7 +508,10 @@ def confirmed_events(
     if signals is None:
         compute_fn = STRATEGY_REGISTRY.get(strategy_name, compute_signals)
         signals = compute_fn(df, params)
-    last_confirmed_ts = df.index[-2] if len(df) > 1 else None
+    if last_bar_closed:
+        last_confirmed_ts = df.index[-1] if len(df) else None
+    else:
+        last_confirmed_ts = df.index[-2] if len(df) > 1 else None
 
     position = 0  # 0 flat, 1 long, -1 short
     events: list[StrategySignal] = []
@@ -525,6 +560,13 @@ def confirmed_events(
 def build_strategy_state(
     name: str, df: pd.DataFrame, params: dict | None = None, signals: pd.DataFrame | None = None
 ) -> StrategyState:
-    events, position = confirmed_events(df, params, signals=signals, strategy_name=name)
+    # A differenza del backtest, qui la serie puo' gia' essere stata ripulita
+    # dalla barra in formazione (il watcher lo fa per le voci "alla chiusura
+    # della candela"): in quel caso l'ultima riga e' una barra chiusa, e
+    # trattarla come non confermata ritarderebbe l'alert di una barra intera.
+    events, position = confirmed_events(
+        df, params, signals=signals, strategy_name=name,
+        last_bar_closed=last_bar_is_closed(df),
+    )
     position_label = {1: "long", -1: "short", 0: "flat"}[position]
     return StrategyState(name=name, position=position_label, signals=events[-_MAX_ALERTS_RETURNED:])
