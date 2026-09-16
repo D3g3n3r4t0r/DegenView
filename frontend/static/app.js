@@ -4374,11 +4374,24 @@
       return new Date(ts * 1000).toLocaleDateString("it-IT", { day: "2-digit", month: "short" });
     };
     const mark = { eseguito: "✓", fallito: "✕", saltato: "–" };
+    const pnlLabel = (e) => {
+      if (e.pnl_pct == null) return "";
+      const sign = e.pnl_pct >= 0 ? "+" : "";
+      const cls = e.pnl_pct >= 0 ? "jr-pnl bull" : "jr-pnl bear";
+      return `<span class="${cls}">${sign}${e.pnl_pct.toFixed(2)}%</span>`;
+    };
+    const priceLabel = (e) => {
+      if (!e.price) return "";
+      if (e.entry_price && e.exit_price == null) return `@ ${e.price}`;
+      if (e.entry_price) return `${e.entry_price} → ${e.price}`;
+      if (e.exit_price) return `→ ${e.price}`;
+      return `@ ${e.price}`;
+    };
     list.innerHTML = items.map((e) => `
       <li class="journal-row ${escapeHtml(e.outcome)}">
         <span class="jr-mark">${mark[e.outcome] || "·"}</span>
         <span class="jr-body">
-          <span class="jr-head">${escapeHtml(e.symbol)} · ${escapeHtml(e.signal_type)} · ${escapeHtml(e.exchange)}</span>
+          <span class="jr-head">${escapeHtml(e.symbol)} · ${escapeHtml(e.signal_type)} · ${escapeHtml(e.exchange)} <span class="jr-price">${priceLabel(e)}</span>${pnlLabel(e)}</span>
           <span class="jr-detail">${escapeHtml(e.strategy_name)}${e.detail ? " — " + escapeHtml(e.detail) : ""}</span>
         </span>
         <span class="jr-when">${when(e.ts)}</span>
