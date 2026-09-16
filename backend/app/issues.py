@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0078", "Idea: arricchire i profili Sniper con API pubbliche (TVL, revenue, audit)",
+     "Lorenzo: 'introduciamo anche altri sistemi per scansionare al meglio il mercato, laddove sia disponibile qualche API online pubblica'. Candidati: CoinGecko (cap, volume), DeFiLlama (TVL, revenue per chain), Messari (developer activity), Token Terminal (protocol revenue), API nativa Robinhood Chain se esiste. Non prioritario: sbloccare dopo che lo Sniper e' stabile su Robinhood Chain.",
+     "bassa"),
     ("seed-0077", "Alert Telegram: il prezzo mostrato era quello della candela del segnale, senza dire quando",
      "Lorenzo: 'ho ricevuto questo avviso dal bot: INJUSDT [1D] Ingresso long rilevato, Prezzo: 6.285 — ma il prezzo attuale e' 5,43$... inoltre mi sembra strano l'ingresso long dopo una correzione'. Il 6.285 era la chiusura del 14 settembre, consegnata il 16 dopo un -13,5%: il segnale era nato PRIMA della correzione, non dentro. Il messaggio pero' mostrava solo quel prezzo, senza data, quindi un segnale di due giorni prima si leggeva come uno di adesso.",
      "alta"),

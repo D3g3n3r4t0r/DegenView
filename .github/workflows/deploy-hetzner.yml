@@ -36,7 +36,7 @@ jobs:
       - name: Test
         run: |
           pip install -r backend/requirements.txt pytest
-          cd backend && python -m pytest tests/ -q
+          cd backend && PYTHONPATH=. python -m pytest tests/ -q
 
   deploy:
     name: Deploy
