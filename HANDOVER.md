@@ -1416,3 +1416,11 @@ quando manca, restano dove sono sempre stati. Nessun bot nuovo da creare, basta
 un gruppo con dentro lo stesso bot. Per l'id: `tools/telegram_chat_ids.py`
 (prima serviva aprire getUpdates a mano col token nella barra degli indirizzi —
 lo strumento il token non lo stampa mai, nemmeno in un errore).
+
+**Configurato e verificato in produzione (16 set):** `TELEGRAM_DEV_CHAT_IDS`
+punta a un gruppo Telegram dedicato, con dentro lo stesso bot di sempre.
+Deploy ed errori 500 arrivano li'; gli alert di trading restano nella chat
+personale di ciascun utente. Serviva anche `GITHUB_API_TOKEN` (fine-grained,
+solo questo repo, Contents: Read): senza, l'avviso di deploy veniva saltato in
+silenzio, perche' il suo testo elenca i commit presi da GitHub — sintomo
+identico a "la chat e' configurata male", causa diversa.
