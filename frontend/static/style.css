@@ -4303,6 +4303,11 @@ details.issue-card > summary:focus-visible { outline: 2px solid var(--accent); o
     margin: 0 auto;
   }
 
+  /* Il Lab su larghezza piena: il mini-grafico laterale non serve mentre
+     si configura un backtest — si nasconde, e il Lab prende tutta la
+     larghezza come fa la tab Segnalazioni. */
+  .cockpit[data-area="lab"] .chart-area { display: none; }
+
   /* Il Lab su larghezza piena: impostazione a sinistra, risultato a destra.
      I blocchi del risultato stanno in un contenitore solo (creato da
      groupLabResultColumn), altrimenti la griglia li spinge nella riga che
@@ -4770,7 +4775,7 @@ td {
    se ne avanza abbastanza: sotto questa soglia impostazione e risultato
    tornano incolonnati invece di stringersi entrambi fino a diventare
    illeggibili. */
-@media (max-width: 1560px) {
+@media (max-width: 900px) {
   .cockpit[data-area="lab"] .lab-panel {
     grid-template-columns: 1fr;
     gap: 12px;
