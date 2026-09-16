@@ -6453,7 +6453,7 @@
   const IV_MINUTES = { "1m":1,"5m":5,"15m":15,"30m":30,"1h":60,"4h":240,"1d":1440,"2d":2880,"3d":4320,"5d":7200,"1w":10080,"1M":43200 };
 
   // Giorni ottimali per ogni timeframe: abbastanza candele da vedere struttura, non troppo da fare rumore
-  const IV_OPTIMAL_DAYS = { "1m":0.25,"5m":0.5,"15m":1.5,"30m":3,"1h":7,"4h":21,"1d":90,"2d":180,"3d":270,"5d":365,"1w":730,"1M":1825 };
+  const IV_OPTIMAL_DAYS = { "1m":0.04,"5m":0.17,"15m":0.5,"30m":1,"1h":2,"4h":8,"1d":50,"2d":100,"3d":150,"5d":250,"1w":350,"1M":1500 };
 
   function zoomToOptimal() {
     if (!mainChart || !state.data) { try { mainChart && mainChart.timeScale().fitContent(); } catch {} return; }
