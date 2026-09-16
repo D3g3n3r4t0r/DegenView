@@ -25,7 +25,7 @@ from app.providers.base import ProviderError
 
 class _Provider:
     def __init__(self, frame): self._frame = frame
-    async def fetch_ohlcv(self, symbol, interval, outputsize):
+    async def fetch_ohlcv(self, symbol, interval, outputsize, since_ms=None):
         if isinstance(self._frame, Exception):
             raise self._frame
         return self._frame

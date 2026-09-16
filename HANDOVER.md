@@ -1424,3 +1424,54 @@ personale di ciascun utente. Serviva anche `GITHUB_API_TOKEN` (fine-grained,
 solo questo repo, Contents: Read): senza, l'avviso di deploy veniva saltato in
 silenzio, perche' il suo testo elenca i commit presi da GitHub — sintomo
 identico a "la chat e' configurata male", causa diversa.
+
+---
+
+### Fatto — backtest sub-1D, kill switch, audit trail, alert contestuali
+
+Lorenzo: "il backtest deve essere possibile farlo anche con timeframe
+inferiori a 1D" + "applica tutto" (piano di evoluzione v2).
+
+**Backtest sub-1D (seed-0007)**:
+- Rimosso `_BACKTEST_MIN_INTERVAL = "1d"` e `backtest_interval_for()` ora e'
+  un passthrough puro — nessun clamp.
+- Frontend: rimossa la nota UI che avvisava del clamp, rimosso `LAB_BACKTEST_MIN_TF`.
+- `resolutions.json` aggiornato con la risoluzione definitiva.
+- 504 test passano, ruff pulito, JS sintassi ok.
+
+**Kill switch** (`trading_halt`):
+- `settings.trading_halt: bool = False` in `config.py`.
+- `backend/app/trading/circuit_breaker.py` — `check_halt()` ritorna
+  `(allowed, reason)`.
+- Entrambi i path in `executor.py` (spot e futures) lo chiamano all'ingresso
+  e tornano `{"skipped": True, reason}` senza toccare l'exchange.
+- Endpoint `POST /api/trading/halt` e `GET /api/trading/halt` (solo per le
+  email in `registration_allowed_emails`) per abilitare/disabilitare a
+  runtime senza riavviare.
+- La chiusura manuale (`/api/trading/futures/close`) **ignora** il kill
+  switch per design: spengere il trading con una posizione aperta non deve
+  impedirti di uscirne.
+
+**Audit trail** (`data/audit.jsonl`):
+- `backend/app/trading/audit.py` — `log_order(action, exchange, symbol,
+  signal_type, result, ...)` scrive una riga JSONL per ogni azione
+  (submit/skip). Mai solleva eccezioni.
+- `executor.py` chiama `log_order()` dopo ogni percorso: submit riuscito,
+  skip per halt, skip per no-op signal type.
+
+**Alert contestuali**:
+- `format_signal_message()` ora accetta `entry_id` (opzionale) e, se ci
+  sono segnali precedenti registrati in `_stats`, aggiunge una riga tipo
+  "Ultimo segnale simile: 3 giorni fa (#7 totale)".
+- Il call site in `main.py` passa gia' `entry_id`.
+- Il conteggio aumenta dopo l'invio, non prima: il primo alert non mostra
+  "Ultimo segnale: adesso".
+
+**Stato**: commit `c0325ff` su `claude/sync-previous-changes-1sr7ql`,
+non ancora su `main` — aspetta merge.
+
+**Da fare ancora (dal piano v2)**:
+- Verifica manuale in testnet su ciascun exchange futures (Bybit, OKX,
+  Bitget, Kraken — mai mandato un ordine a un server vero).
+- PostgreSQL + multi-utente + Stripe: multi-sessione, fuori portata qui.
+- Onboarding flow, pricing page: frontend, fuori portata qui.

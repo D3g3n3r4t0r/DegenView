@@ -4374,11 +4374,24 @@
       return new Date(ts * 1000).toLocaleDateString("it-IT", { day: "2-digit", month: "short" });
     };
     const mark = { eseguito: "✓", fallito: "✕", saltato: "–" };
+    const pnlLabel = (e) => {
+      if (e.pnl_pct == null) return "";
+      const sign = e.pnl_pct >= 0 ? "+" : "";
+      const cls = e.pnl_pct >= 0 ? "jr-pnl bull" : "jr-pnl bear";
+      return `<span class="${cls}">${sign}${e.pnl_pct.toFixed(2)}%</span>`;
+    };
+    const priceLabel = (e) => {
+      if (!e.price) return "";
+      if (e.entry_price && e.exit_price == null) return `@ ${e.price}`;
+      if (e.entry_price) return `${e.entry_price} → ${e.price}`;
+      if (e.exit_price) return `→ ${e.price}`;
+      return `@ ${e.price}`;
+    };
     list.innerHTML = items.map((e) => `
       <li class="journal-row ${escapeHtml(e.outcome)}">
         <span class="jr-mark">${mark[e.outcome] || "·"}</span>
         <span class="jr-body">
-          <span class="jr-head">${escapeHtml(e.symbol)} · ${escapeHtml(e.signal_type)} · ${escapeHtml(e.exchange)}</span>
+          <span class="jr-head">${escapeHtml(e.symbol)} · ${escapeHtml(e.signal_type)} · ${escapeHtml(e.exchange)} <span class="jr-price">${priceLabel(e)}</span>${pnlLabel(e)}</span>
           <span class="jr-detail">${escapeHtml(e.strategy_name)}${e.detail ? " — " + escapeHtml(e.detail) : ""}</span>
         </span>
         <span class="jr-when">${when(e.ts)}</span>
@@ -4639,6 +4652,8 @@
 
     mainChart.subscribeCrosshairMove(handleCrosshairMove);
     bindDrawClickCapture();
+    bindChartContextMenu();
+    initDrawCanvas();
     chartsReady = true;
   }
 
@@ -4654,6 +4669,7 @@
     lastCrosshairPoint =
       param.point && param.time !== undefined ? { x: param.point.x, y: param.point.y, time: param.time } : null;
     updateGhost();
+    updateHandleDrag();
     updateDragPreview();
     updateCursorHover();
     if (!param.point || param.time === undefined || !overlays.hitZones.length) {
@@ -4861,7 +4877,8 @@
     tool: "cursor",
     pending: [],
     drawings: [],
-    attached: {}, // id -> { priceLine } | { primitives: [...] }
+    attached: {}, // id -> { priceLine } — only used for hline type (axis label)
+    selected: null, // id of the selected drawing
   };
 
   function drawStorageKey() {
@@ -4892,46 +4909,151 @@
     return `${sign}${dPrice.toFixed(2)} (${sign}${pct.toFixed(2)}%) · ${timeLabel}`;
   }
 
-  // ---- Live preview while placing a 2-point drawing ----
-  let drawGhost = null; // { primitives: [...] } — a real primitive instance whose point2 we mutate every mousemove
+  // ---- Canvas2D drawing engine — replaces TW primitive-based user drawings ----
+  let drawCanvas = null;
+  let drawCtx = null;
+  let drawRafId = null;
 
-  function makeDrawingPrimitives(type, p1, p2) {
-    const color = COLORS.accent;
-    if (type === "trend_line") return [new LinePrimitive(p1, p2, color, 2, false)];
-    if (type === "arrow") return [new LinePrimitive(p1, p2, color, 2, true)];
-    if (type === "rectangle") return [new RectanglePrimitive(p1, p2, "rgba(31, 78, 107, 0.12)", color)];
-    if (type === "range") return [new RectanglePrimitive(p1, p2, "rgba(192, 122, 30, 0.12)", COLORS.stamp)];
-    if (type === "fib") return [new FibPrimitive(p1, p2, color)];
-    return [];
+  function timeToX(time) {
+    return mainChart ? mainChart.timeScale().timeToCoordinate(time) : null;
+  }
+  function priceToY(price) {
+    return candleSeries ? candleSeries.priceToCoordinate(price) : null;
   }
 
-  function startGhost(type, point1) {
-    const primitives = makeDrawingPrimitives(type, point1, point1);
-    primitives.forEach((prim) => candleSeries.attachPrimitive(prim));
-    drawGhost = { primitives };
-  }
+  function renderOneDrawing(d, isSelected, isGhost) {
+    const ctx = drawCtx;
+    const baseColor = isSelected ? "#5b9cf6" : COLORS.accent;
+    const lineW = isSelected ? 2.5 : 1.5;
+    ctx.save();
+    ctx.globalAlpha = isGhost ? 0.55 : 1.0;
+    ctx.strokeStyle = baseColor;
+    ctx.lineWidth = lineW;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
 
-  function updateGhost() {
-    if (!drawGhost || !lastCrosshairPoint) return;
-    const price = candleSeries.coordinateToPrice(lastCrosshairPoint.y);
-    if (price === null) return;
-    const point2 = { time: lastCrosshairPoint.time, price };
-    drawGhost.primitives.forEach((prim) => {
-      prim.point2 = point2;
-    });
-  }
-
-  function clearGhost() {
-    if (!drawGhost) return;
-    drawGhost.primitives.forEach((prim) => {
-      try {
-        candleSeries.detachPrimitive(prim);
-      } catch (e) {
-        /* already gone */
+    if (d.type === "hline") {
+      const y = priceToY(d.points[0].price);
+      if (y === null) { ctx.restore(); return; }
+      ctx.setLineDash([5, 3]);
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(drawCanvas.width, y); ctx.stroke();
+      if (d.text) {
+        ctx.setLineDash([]); ctx.fillStyle = baseColor;
+        ctx.font = "12px system-ui, sans-serif"; ctx.fillText(d.text, 6, y - 4);
       }
-    });
-    drawGhost = null;
+      ctx.restore(); return;
+    }
+
+    const [p1, p2] = d.points;
+    const x1 = timeToX(p1.time), y1 = priceToY(p1.price);
+    if (x1 === null || y1 === null) { ctx.restore(); return; }
+
+    if (d.type === "text") {
+      ctx.setLineDash([]); ctx.fillStyle = baseColor;
+      ctx.font = "bold 13px system-ui, sans-serif";
+      ctx.fillText(d.text || "Testo", x1 + 6, y1);
+      ctx.beginPath(); ctx.arc(x1, y1, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.restore(); return;
+    }
+
+    const x2 = timeToX(p2.time), y2 = priceToY(p2.price);
+    if (x2 === null || y2 === null) { ctx.restore(); return; }
+
+    ctx.setLineDash([]);
+    if (d.type === "trend_line" || d.type === "arrow") {
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+      if (d.type === "arrow") {
+        const angle = Math.atan2(y2 - y1, x2 - x1);
+        const sz = 10;
+        ctx.beginPath();
+        ctx.moveTo(x2, y2);
+        ctx.lineTo(x2 - sz * Math.cos(angle - Math.PI / 6), y2 - sz * Math.sin(angle - Math.PI / 6));
+        ctx.moveTo(x2, y2);
+        ctx.lineTo(x2 - sz * Math.cos(angle + Math.PI / 6), y2 - sz * Math.sin(angle + Math.PI / 6));
+        ctx.stroke();
+      }
+    } else if (d.type === "rectangle" || d.type === "range") {
+      const fx = Math.min(x1, x2), fy = Math.min(y1, y2), fw = Math.abs(x2 - x1), fh = Math.abs(y2 - y1);
+      ctx.fillStyle = d.type === "range" ? "rgba(192,122,30,0.12)" : "rgba(31,78,107,0.12)";
+      ctx.beginPath(); ctx.rect(fx, fy, fw, fh); ctx.fill(); ctx.stroke();
+      if (d.type === "range" && d.text) {
+        ctx.setLineDash([]); ctx.fillStyle = COLORS.stamp;
+        ctx.font = "11px system-ui, sans-serif"; ctx.fillText(d.text, fx + 4, fy - 4);
+      }
+    } else if (d.type === "fib") {
+      FIB_LEVELS.forEach((ratio) => {
+        const price = p1.price + ratio * (p2.price - p1.price);
+        const fy = priceToY(price);
+        if (fy === null) return;
+        ctx.globalAlpha = (isGhost ? 0.55 : 1) * (ratio === 0.618 ? 1 : 0.65);
+        ctx.setLineDash(ratio === 0 || ratio === 1 ? [] : [4, 3]);
+        ctx.beginPath(); ctx.moveTo(Math.min(x1, x2), fy); ctx.lineTo(Math.max(x1, x2), fy); ctx.stroke();
+        ctx.setLineDash([]); ctx.globalAlpha = isGhost ? 0.55 : 1;
+        ctx.fillStyle = baseColor; ctx.font = "10px system-ui, sans-serif";
+        ctx.fillText(ratio.toFixed(3), Math.max(x1, x2) + 4, fy + 3);
+      });
+    }
+    ctx.restore();
   }
+
+  const HANDLE_RADIUS = 5;
+
+  function renderHandles(d) {
+    if (!drawCtx) return;
+    const pts = d.type === "hline" || d.type === "text" ? [d.points[0]] : d.points;
+    const ctx = drawCtx;
+    ctx.save();
+    pts.forEach((p) => {
+      const x = timeToX(p.time), y = priceToY(p.price);
+      if (x === null || y === null) return;
+      ctx.beginPath(); ctx.arc(x, y, HANDLE_RADIUS, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffffff"; ctx.fill();
+      ctx.strokeStyle = COLORS.accent; ctx.lineWidth = 2; ctx.stroke();
+    });
+    ctx.restore();
+  }
+
+  function renderDrawCanvas() {
+    if (!drawCanvas || !drawCtx || !candleSeries || !mainChart) return;
+    const container = el("main-chart");
+    if (!container) return;
+    const w = container.clientWidth, h = container.clientHeight;
+    if (drawCanvas.width !== w || drawCanvas.height !== h) { drawCanvas.width = w; drawCanvas.height = h; }
+    drawCtx.clearRect(0, 0, w, h);
+
+    drawState.drawings.forEach((d) => {
+      const isSelected = drawState.selected === d.id;
+      renderOneDrawing(d, isSelected, false);
+      if (isSelected) renderHandles(d);
+    });
+
+    // Ghost preview while placing second point
+    if (drawState.tool !== "cursor" && drawState.pending.length === 1 && lastCrosshairPoint) {
+      const p1 = drawState.pending[0];
+      const price2 = candleSeries.coordinateToPrice(lastCrosshairPoint.y);
+      if (price2 !== null) {
+        renderOneDrawing({ type: drawState.tool, points: [p1, { time: lastCrosshairPoint.time, price: price2 }] }, false, true);
+      }
+    }
+  }
+
+  function startDrawRaf() {
+    if (drawRafId) return;
+    function loop() { renderDrawCanvas(); drawRafId = requestAnimationFrame(loop); }
+    drawRafId = requestAnimationFrame(loop);
+  }
+
+  function initDrawCanvas() {
+    drawCanvas = el("draw-canvas");
+    if (!drawCanvas) return;
+    drawCtx = drawCanvas.getContext("2d");
+    startDrawRaf();
+  }
+
+  // Ghost/preview stubs — kept for call-site compat; RAF handles rendering
+  function startGhost() {}
+  function updateGhost() {}
+  function clearGhost() {}
 
   // ---- Cursor tool: hit-test existing drawings, click to delete ----
   const HIT_TOLERANCE_PX = 6;
@@ -4990,9 +5112,25 @@
     return null;
   }
 
+  function findHitHandle(px, py) {
+    if (!drawState.selected) return null;
+    const d = drawState.drawings.find((d) => d.id === drawState.selected);
+    if (!d || d.type === "hline") return null;
+    const pts = d.type === "text" ? [d.points[0]] : d.points;
+    for (let i = 0; i < pts.length; i++) {
+      const x = timeToX(pts[i].time), y = priceToY(pts[i].price);
+      if (x !== null && y !== null && Math.hypot(px - x, py - y) <= HANDLE_RADIUS + 4) {
+        return { drawing: d, handleIndex: i };
+      }
+    }
+    return null;
+  }
+
   function updateCursorHover() {
     const container = el("main-chart");
-    if (!container || drawState.tool !== "cursor" || !lastCrosshairPoint || dragState) return;
+    if (!container || drawState.tool !== "cursor" || !lastCrosshairPoint || dragState || handleDragState) return;
+    const handle = findHitHandle(lastCrosshairPoint.x, lastCrosshairPoint.y);
+    if (handle) { container.style.cursor = "crosshair"; return; }
     const hit = findHitDrawing(lastCrosshairPoint.x, lastCrosshairPoint.y);
     container.style.cursor = hit ? "pointer" : "default";
   }
@@ -5001,42 +5139,31 @@
   // point by the same time/price delta — no per-endpoint resize yet) ----
   let dragState = null; // { drawing, startTime, startPrice, originalPoints }
 
-  // Mutates the already-attached primitives' own point1/point2 in place —
-  // no detach/reattach, no new objects — so a drag stays smooth even at
-  // mousemove frequency. Mirrors how the placement ghost preview already
-  // avoids that same churn.
   function repositionDrawingPrimitives(d) {
+    // Canvas2D reads d.points directly — only hline needs priceLine sync
+    if (d.type !== "hline") return;
     const ref = drawState.attached[d.id];
-    if (!ref) return;
-    if (ref.priceLine) {
-      candleSeries.removePriceLine(ref.priceLine);
-      ref.priceLine = candleSeries.createPriceLine({
-        price: d.points[0].price,
-        color: COLORS.accent,
-        lineWidth: 1,
-        lineStyle: LightweightCharts.LineStyle.Dashed,
-        axisLabelVisible: true,
-        title: d.text || "",
-      });
-      return;
-    }
-    if (!ref.primitives || !ref.primitives.length) return;
-    const [p1, p2] = d.points;
-    if (d.type === "text") {
-      ref.primitives[0].point = p1;
-      return;
-    }
-    if (d.type === "range") {
-      ref.primitives[0].point1 = p1;
-      ref.primitives[0].point2 = p2;
-      if (ref.primitives[1]) {
-        ref.primitives[1].point = p1.price >= p2.price ? p1 : p2;
-        ref.primitives[1].text = d.text || "";
-      }
-      return;
-    }
-    ref.primitives[0].point1 = p1;
-    ref.primitives[0].point2 = p2;
+    if (!ref?.priceLine) return;
+    candleSeries.removePriceLine(ref.priceLine);
+    ref.priceLine = candleSeries.createPriceLine({
+      price: d.points[0].price, color: COLORS.accent, lineWidth: 1,
+      lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: d.text || "",
+    });
+  }
+
+  // Handle drag: moves a single endpoint (resize)
+  let handleDragState = null; // { drawing, handleIndex, startTime, startPrice, originalPoints }
+
+  function updateHandleDrag() {
+    if (!handleDragState || !lastCrosshairPoint) return;
+    const price = candleSeries.coordinateToPrice(lastCrosshairPoint.y);
+    if (price === null) return;
+    const d = handleDragState.drawing;
+    d.points = handleDragState.originalPoints.map((p, i) =>
+      i === handleDragState.handleIndex ? { time: lastCrosshairPoint.time, price } : { ...p }
+    );
+    if (d.type === "range") d.text = formatRangeLabel(d.points[0], d.points[1]);
+    repositionDrawingPrimitives(d);
   }
 
   function updateDragPreview() {
@@ -5053,49 +5180,26 @@
 
   function attachDrawing(d) {
     if (!candleSeries) return;
-    const color = COLORS.accent;
+    // hline: keep as a price-line so the axis label is shown
     if (d.type === "hline") {
       const line = candleSeries.createPriceLine({
         price: d.points[0].price,
-        color,
+        color: COLORS.accent,
         lineWidth: 1,
         lineStyle: LightweightCharts.LineStyle.Dashed,
         axisLabelVisible: true,
         title: d.text || "",
       });
       drawState.attached[d.id] = { priceLine: line };
-      return;
     }
-    const [p1, p2] = d.points;
-    const primitives = makeDrawingPrimitives(d.type, p1, p2);
-    if (d.type === "range") {
-      const topPoint = p1.price >= p2.price ? p1 : p2;
-      primitives.push(new TextPrimitive(topPoint, d.text || "", COLORS.stamp));
-    } else if (d.type === "text") {
-      primitives.push(new TextPrimitive(p1, d.text || "", color));
-    }
-    primitives.forEach((prim) => candleSeries.attachPrimitive(prim));
-    drawState.attached[d.id] = { primitives };
+    // All other types rendered by Canvas2D — nothing to attach
   }
 
   function detachDrawing(id) {
     const ref = drawState.attached[id];
     if (!ref) return;
     if (ref.priceLine) {
-      try {
-        candleSeries.removePriceLine(ref.priceLine);
-      } catch (e) {
-        /* already gone */
-      }
-    }
-    if (ref.primitives) {
-      ref.primitives.forEach((p) => {
-        try {
-          candleSeries.detachPrimitive(p);
-        } catch (e) {
-          /* already gone */
-        }
-      });
+      try { candleSeries.removePriceLine(ref.priceLine); } catch {}
     }
     delete drawState.attached[id];
   }
@@ -5144,6 +5248,7 @@
   function removeDrawing(id) {
     detachDrawing(id);
     drawState.drawings = drawState.drawings.filter((d) => d.id !== id);
+    if (drawState.selected === id) drawState.selected = null;
     saveDrawings();
     renderDrawingsList();
   }
@@ -5209,33 +5314,38 @@
   function bindDrawClickCapture() {
     const container = el("main-chart");
     let downPos = null;
-    // Capture phase on document, not a bubble-phase listener on the
-    // container: the chart library attaches its own pointer handlers
-    // directly on its internal canvas for pan/zoom/crosshair, and those can
-    // stop the event from ever bubbling back up to a container-level
-    // listener. A capture-phase listener runs top-down before that,
-    // guaranteeing delivery regardless of what the library does with it.
     document.addEventListener(
       "pointerdown",
       (e) => {
         if (!container.contains(e.target)) return;
         downPos = { x: e.clientX, y: e.clientY };
-        if (drawState.tool === "cursor" && lastCrosshairPoint) {
-          const hit = findHitDrawing(lastCrosshairPoint.x, lastCrosshairPoint.y);
-          if (hit) {
-            const startPrice = candleSeries.coordinateToPrice(lastCrosshairPoint.y);
-            if (startPrice !== null) {
-              dragState = {
-                drawing: hit,
-                startTime: lastCrosshairPoint.time,
-                startPrice,
-                originalPoints: hit.points.map((p) => ({ ...p })),
-              };
-              // Suspend pan/zoom for the drag itself — cursor mode leaves
-              // them on by default (see setDrawTool) so empty-space drags
-              // still pan the chart normally.
-              mainChart.applyOptions({ handleScroll: false, handleScale: false });
-            }
+        if (drawState.tool !== "cursor" || !lastCrosshairPoint) return;
+
+        // 1. Handle hit → resize drag
+        const handleHit = findHitHandle(lastCrosshairPoint.x, lastCrosshairPoint.y);
+        if (handleHit) {
+          handleDragState = {
+            drawing: handleHit.drawing,
+            handleIndex: handleHit.handleIndex,
+            originalPoints: handleHit.drawing.points.map((p) => ({ ...p })),
+          };
+          mainChart.applyOptions({ handleScroll: false, handleScale: false });
+          return;
+        }
+
+        // 2. Body hit → select + translate drag
+        const hit = findHitDrawing(lastCrosshairPoint.x, lastCrosshairPoint.y);
+        if (hit) {
+          drawState.selected = hit.id;
+          const startPrice = candleSeries.coordinateToPrice(lastCrosshairPoint.y);
+          if (startPrice !== null) {
+            dragState = {
+              drawing: hit,
+              startTime: lastCrosshairPoint.time,
+              startPrice,
+              originalPoints: hit.points.map((p) => ({ ...p })),
+            };
+            mainChart.applyOptions({ handleScroll: false, handleScale: false });
           }
         }
       },
@@ -5245,7 +5355,7 @@
       "pointerup",
       (e) => {
         if (!downPos) {
-          dragState = null;
+          dragState = null; handleDragState = null;
           return;
         }
         const dx = e.clientX - downPos.x;
@@ -5253,24 +5363,28 @@
         const moved = Math.hypot(dx, dy) > DRAW_CLICK_TOLERANCE_PX;
         downPos = null;
 
-        if (dragState) {
-          const dragged = dragState.drawing;
-          dragState = null;
-          mainChart.applyOptions({ handleScroll: true, handleScale: true }); // cursor tool always keeps these on
-          if (moved) {
-            saveDrawings(); // points were already updated live during the drag
-          } else {
-            removeDrawing(dragged.id); // pressed and released without moving — same as the old click-to-delete
-          }
+        if (handleDragState) {
+          handleDragState = null;
+          mainChart.applyOptions({ handleScroll: true, handleScale: true });
+          if (moved) saveDrawings();
           return;
         }
 
-        if (!state.data || moved) return; // empty-space drag → native chart panning already handled it
-        if (!lastCrosshairPoint) return; // pointer never registered a valid chart position
+        if (dragState) {
+          dragState = null;
+          mainChart.applyOptions({ handleScroll: true, handleScale: true });
+          if (moved) saveDrawings();
+          // no-move click on a drawing: keep selected, don't delete
+          return;
+        }
+
+        if (!state.data || moved) return;
+        if (!lastCrosshairPoint) return;
 
         if (drawState.tool === "cursor") {
+          // Click on empty space → deselect
           const hit = findHitDrawing(lastCrosshairPoint.x, lastCrosshairPoint.y);
-          if (hit) removeDrawing(hit.id);
+          if (!hit) drawState.selected = null;
           return;
         }
 
@@ -5281,7 +5395,7 @@
         drawState.pending.push({ time, price });
         const needed = DRAW_TOOL_POINTS[drawState.tool];
         if (drawState.pending.length === 1 && needed === 2) {
-          startGhost(drawState.tool, { time, price }); // live preview until the second click
+          startGhost(drawState.tool, { time, price });
         } else if (drawState.pending.length >= needed) {
           finalizeDrawing();
         }
@@ -5289,8 +5403,83 @@
       true
     );
     document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && drawState.tool !== "cursor") setDrawTool("cursor");
+      if (e.key === "Escape") {
+        if (drawState.tool !== "cursor") setDrawTool("cursor");
+        else drawState.selected = null;
+        return;
+      }
+      const tag = document.activeElement?.tagName;
+      if ((e.key === "Delete" || e.key === "Backspace") && tag !== "INPUT" && tag !== "TEXTAREA" && tag !== "SELECT") {
+        if (drawState.selected) { removeDrawing(drawState.selected); drawState.selected = null; }
+      }
     });
+  }
+
+  function bindChartContextMenu() {
+    const container = el("main-chart");
+    let menuEl = null;
+    let ctxPrice = null;
+
+    function closeMenu() {
+      if (menuEl) { menuEl.remove(); menuEl = null; }
+    }
+
+    function openMenu(clientX, clientY, price) {
+      closeMenu();
+      ctxPrice = price;
+      const sym = (el("ticker-input")?.value || "").trim().toUpperCase() || "—";
+      const priceStr = price != null ? price.toFixed(4).replace(/\.?0+$/, (m, o, s) => s.includes(".") ? "" : m) : null;
+      const items = [
+        { label: "Reimposta visualizzazione", key: "Alt+R", action: () => { try { mainChart.timeScale().fitContent(); } catch { /* */ } } },
+        priceStr ? { label: `Copia prezzo  ${priceStr}`, action: () => navigator.clipboard?.writeText(priceStr) } : null,
+        { separator: true },
+        priceStr ? { label: `Aggiungi alert su ${sym} a ${priceStr}…`, action: () => {
+          const tab = document.querySelector('[data-tab="alert"]');
+          if (tab) tab.click();
+          const inp = document.getElementById("pa-price");
+          if (inp) { inp.value = priceStr; inp.focus(); }
+        }} : null,
+        { label: "Linea orizzontale al prezzo", action: () => {
+          if (price == null) return;
+          const nowSec = Math.floor(Date.now() / 1000);
+          if (overlays.horizontalLines == null) overlays.horizontalLines = [];
+          const line = candleSeries.createPriceLine({ price, color: "rgba(120,130,180,0.7)", lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: priceStr || "" });
+          overlays.horizontalLines.push(line);
+        }},
+        { separator: true },
+        { label: "Impostazioni grafico…", action: () => { const btn = document.getElementById("chart-settings-btn"); if (btn) btn.click(); } },
+      ].filter(Boolean);
+
+      menuEl = document.createElement("ul");
+      menuEl.className = "chart-ctx-menu";
+      items.forEach((item) => {
+        const li = document.createElement("li");
+        if (item.separator) { li.className = "chart-ctx-sep"; menuEl.appendChild(li); return; }
+        li.className = "chart-ctx-item";
+        const span = document.createElement("span"); span.textContent = item.label; li.appendChild(span);
+        if (item.key) { const k = document.createElement("span"); k.className = "chart-ctx-key"; k.textContent = item.key; li.appendChild(k); }
+        li.addEventListener("mousedown", (e) => { e.preventDefault(); closeMenu(); item.action(); });
+        menuEl.appendChild(li);
+      });
+
+      const vw = window.innerWidth, vh = window.innerHeight;
+      document.body.appendChild(menuEl);
+      const mw = menuEl.offsetWidth || 240, mh = menuEl.offsetHeight || 160;
+      menuEl.style.left = (clientX + mw > vw ? clientX - mw : clientX) + "px";
+      menuEl.style.top  = (clientY + mh > vh ? clientY - mh : clientY) + "px";
+    }
+
+    document.addEventListener("contextmenu", (e) => {
+      if (!container.contains(e.target)) return;
+      e.preventDefault();
+      const price = lastCrosshairPoint && candleSeries
+        ? candleSeries.coordinateToPrice(lastCrosshairPoint.y)
+        : null;
+      openMenu(e.clientX, e.clientY, price);
+    }, true);
+
+    document.addEventListener("mousedown", (e) => { if (menuEl && !menuEl.contains(e.target)) closeMenu(); }, true);
+    document.addEventListener("keydown",    (e) => { if (e.key === "Escape") closeMenu(); }, true);
   }
 
   function bindDrawRail() {
