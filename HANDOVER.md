@@ -1365,3 +1365,54 @@ conversazione sola, inseguendo riassunti di ricerche web invece di verificare
 il codice sorgente vero. Quando ho finalmente letto `ts/src/mexc.ts` di ccxt
 invece di un riassunto, la risposta era li' e il supporto MEXC aveva ragione
 su host E path. Su codice che muove denaro: fonte primaria, sempre.
+
+### Chiuso — l'alert in ritardo di una barra (la causa vera di seed-0077)
+
+Avevo chiuso seed-0077 mettendo la data nel messaggio. Lorenzo ha insistito, e
+aveva ragione: **"non basta la data, deve arrivare l'alert alla chiusura della
+candela del timeframe considerato, non tre giorni dopo... e' importante che
+questa cosa non accada con nessun alert"**. La data rendeva visibile il
+sintomo; il difetto era sotto.
+
+**La causa**: due protezioni contro la candela in formazione, sovrapposte.
+Il watcher, per le voci "alla chiusura della candela", toglie gia' la barra
+non chiusa (`drop_unclosed_candle`). Poi `confirmed_events` ne scartava
+un'altra (`df.index[-2]`), come se l'ultima fosse sempre ancora in
+formazione. Quindi l'ultima riga rimasta — una candela chiusa, definitiva —
+veniva trattata come non confermata, e il suo segnale emergeva solo al giro
+successivo. Su un daily: **un giorno intero, ogni volta**.
+
+**Non dedotto, misurato.** Lorenzo ha chiesto esplicitamente una simulazione
+("fai un bel backtest... voglio vedere i messaggi che partono su Telegram
+perche' voglio proprio vedere lo script che lavora"), ed e' stata la cosa
+giusta da chiedere: `backend/tools/simulate_alerts.py` riproduce la storia
+barra per barra su 10 ticker veri, passando dalle funzioni di produzione e non
+da una loro imitazione, e stampa ogni messaggio col suo ritardo.
+
+- prima: **21 alert su 26 in ritardo, tutti di +24,0 ore esatte** — ogni
+  ticker, ogni strategia. Non un caso isolato di INJUSDT.
+- dopo: **26 su 26 entro un minuto** (il giro del watcher). Uguale su 4h.
+
+Lo strumento esce con codice 1 se trova anche un solo alert in ritardo, quindi
+resta riusabile come controllo prima di toccare la logica dei segnali.
+
+`confirmed_events` alimenta anche `run_backtest`, quindi `last_bar_closed` e'
+**False di default**: nessun numero storico si e' mosso (486 test verdi). Lo
+passa solo `build_strategy_state`, che sa distinguere i due casi.
+
+Corretto anche il testo: l'eta' si misura dalla CHIUSURA della candela, non
+dalla sua apertura — altrimenti un alert puntuale su un daily si annunciava
+"un giorno fa", vecchio di un giorno appena nato.
+
+### Fatto — due chat Telegram separate
+
+Lorenzo: gli alert di trading in una chat, i messaggi di avanzamento del
+software in un'altra. La separazione **esisteva gia' nel codice** — `send_to()`
+per gli alert (chat personale di ogni utente), `send_message()` per deploy ed
+errori 500 — ma finivano insieme perche' puntavano allo stesso chat_id.
+
+Aggiunta `TELEGRAM_DEV_CHAT_IDS`: quando c'e', i messaggi di sistema vanno li';
+quando manca, restano dove sono sempre stati. Nessun bot nuovo da creare, basta
+un gruppo con dentro lo stesso bot. Per l'id: `tools/telegram_chat_ids.py`
+(prima serviva aprire getUpdates a mano col token nella barra degli indirizzi —
+lo strumento il token non lo stampa mai, nemmeno in un errore).
