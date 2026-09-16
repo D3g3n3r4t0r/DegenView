@@ -4046,6 +4046,12 @@ details.issue-card > summary:focus-visible { outline: 2px solid var(--accent); o
   border-bottom: 1px solid var(--border);
 }
 .fq-row:last-child { border-bottom: none; }
+.fq-rounding-note {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--warn, var(--ink-dim));
+}
 .fq-row > span:first-child { color: var(--ink-dim); }
 .fq-row > span:last-child { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 .fq-liq > span:last-child { font-weight: 600; }
