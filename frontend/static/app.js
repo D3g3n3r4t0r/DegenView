@@ -906,6 +906,7 @@
       macd: false,
       stoch: false,
       fibonacci: false,
+      patterns: false,
     },
   };
 
@@ -5021,6 +5022,23 @@
     if (drawCanvas.width !== w || drawCanvas.height !== h) { drawCanvas.width = w; drawCanvas.height = h; }
     drawCtx.clearRect(0, 0, w, h);
 
+    // Pattern zones (RSI divergence highlights)
+    autoPatternZones.forEach((z) => {
+      const x1 = timeToX(z.time1), x2 = timeToX(z.time2);
+      const y1 = priceToY(z.price1), y2 = priceToY(z.price2);
+      if (x1 === null || x2 === null || y1 === null || y2 === null) return;
+      drawCtx.save();
+      drawCtx.fillStyle = z.color;
+      drawCtx.strokeStyle = z.color.replace("0.15", "0.5");
+      drawCtx.lineWidth = 1;
+      const fx = Math.min(x1, x2), fy = Math.min(y1, y2), fw = Math.abs(x2 - x1), fh = Math.abs(y2 - y1);
+      drawCtx.beginPath(); drawCtx.rect(fx, fy, fw, fh); drawCtx.fill(); drawCtx.stroke();
+      drawCtx.fillStyle = z.color.replace("0.15", "0.8");
+      drawCtx.font = "10px system-ui, sans-serif";
+      drawCtx.fillText(z.label, fx + 2, fy - 3);
+      drawCtx.restore();
+    });
+
     drawState.drawings.forEach((d) => {
       const isSelected = drawState.selected === d.id;
       renderOneDrawing(d, isSelected, false);
@@ -5053,6 +5071,121 @@
   // Ghost/preview stubs — kept for call-site compat; RAF handles rendering
   function startGhost() {}
   function updateGhost() {}
+
+  // ---- Auto pattern recognition ----
+  let autoPatternMarkers = []; // TW series markers for candle patterns
+  let autoPatternZones = [];   // { time1, time2, price1, price2, color, label }
+
+  function detectCandlePatterns(candles, rsiValues) {
+    const markers = [];
+    const zones = [];
+    const rsiMap = {};
+    if (rsiValues) rsiValues.forEach((r) => { if (r.value != null) rsiMap[r.time] = r.value; });
+
+    for (let i = 2; i < candles.length; i++) {
+      const c = candles[i], prev = candles[i - 1], prev2 = candles[i - 2];
+      const body = Math.abs(c.close - c.open);
+      const range = c.high - c.low || 0.0001;
+      const isBull = c.close > c.open;
+      const upperWick = c.high - Math.max(c.open, c.close);
+      const lowerWick = Math.min(c.open, c.close) - c.low;
+      const prevBody = Math.abs(prev.close - prev.open);
+      const prevBull = prev.close > prev.open;
+
+      // Doji: body ≤ 10% of range
+      if (body / range <= 0.10 && range > 0) {
+        markers.push({ time: c.time, position: "aboveBar", color: "#a78bfa", shape: "circle", text: "Doji" });
+        continue;
+      }
+
+      // Hammer: at bottom, lower wick ≥ 2× body, upper wick ≤ 0.3× body
+      if (!isBull && lowerWick >= 2 * body && upperWick <= 0.3 * body && prev.close < prev2.close) {
+        markers.push({ time: c.time, position: "belowBar", color: "#34d399", shape: "arrowUp", text: "Hammer" });
+        continue;
+      }
+
+      // Inverted Hammer: upper wick ≥ 2× body, lower wick ≤ 0.3× body
+      if (upperWick >= 2 * body && lowerWick <= 0.3 * body && !isBull) {
+        markers.push({ time: c.time, position: "aboveBar", color: "#f87171", shape: "arrowDown", text: "Inv.Hammer" });
+        continue;
+      }
+
+      // Bullish engulfing
+      if (isBull && !prevBull && c.open <= prev.close && c.close >= prev.open && body > prevBody * 0.9) {
+        markers.push({ time: c.time, position: "belowBar", color: "#34d399", shape: "arrowUp", text: "Eng↑" });
+        continue;
+      }
+
+      // Bearish engulfing
+      if (!isBull && prevBull && c.open >= prev.close && c.close <= prev.open && body > prevBody * 0.9) {
+        markers.push({ time: c.time, position: "aboveBar", color: "#f87171", shape: "arrowDown", text: "Eng↓" });
+        continue;
+      }
+
+      // Momentum slowdown: last 3 candles same direction but shrinking body
+      if (i >= 3) {
+        const prev3 = candles[i - 3];
+        const p3Body = Math.abs(prev2.close - prev2.open);
+        const p2Body = Math.abs(prev.close - prev.open);
+        const sameDir = (prev3.close > prev3.open) === (prev2.close > prev2.open) && (prev2.close > prev2.open) === prevBull;
+        if (sameDir && p3Body > p2Body && p2Body > prevBody * 1.1 && body < prevBody * 0.6) {
+          markers.push({ time: c.time, position: prevBull ? "aboveBar" : "belowBar", color: "#fbbf24", shape: "circle", text: "Rallenta" });
+          continue;
+        }
+      }
+    }
+
+    // RSI divergence: look for swing lows/highs in last 30 candles
+    const lookback = Math.min(30, candles.length - 1);
+    const start = candles.length - lookback;
+    for (let i = start + 5; i < candles.length - 2; i++) {
+      const rsiCur = rsiMap[candles[i].time];
+      if (rsiCur == null) continue;
+
+      // Bullish RSI divergence: price lower low, RSI higher low
+      let lowestPriceIdx = i;
+      for (let j = start; j < i; j++) { if (candles[j].low < candles[lowestPriceIdx].low) lowestPriceIdx = j; }
+      if (lowestPriceIdx !== i && candles[i].low < candles[lowestPriceIdx].low * 1.01) {
+        const rsiRef = rsiMap[candles[lowestPriceIdx].time];
+        if (rsiRef != null && rsiCur > rsiRef + 3 && rsiCur < 45) {
+          const t1 = candles[lowestPriceIdx].time, t2 = candles[i].time;
+          const p = Math.min(candles[lowestPriceIdx].low, candles[i].low) * 0.998;
+          zones.push({ time1: t1, time2: t2, price1: p * 0.997, price2: p, color: "rgba(52,211,153,0.15)", label: "Div RSI↑" });
+        }
+      }
+
+      // Bearish RSI divergence: price higher high, RSI lower high
+      let highestPriceIdx = i;
+      for (let j = start; j < i; j++) { if (candles[j].high > candles[highestPriceIdx].high) highestPriceIdx = j; }
+      if (highestPriceIdx !== i && candles[i].high > candles[highestPriceIdx].high * 0.99) {
+        const rsiRef = rsiMap[candles[highestPriceIdx].time];
+        if (rsiRef != null && rsiCur < rsiRef - 3 && rsiCur > 55) {
+          const t1 = candles[highestPriceIdx].time, t2 = candles[i].time;
+          const p = Math.max(candles[highestPriceIdx].high, candles[i].high) * 1.002;
+          zones.push({ time1: t1, time2: t2, price1: p, price2: p * 1.003, color: "rgba(248,113,113,0.15)", label: "Div RSI↓" });
+        }
+      }
+    }
+
+    return { markers, zones };
+  }
+
+  function applyAutoPatterns() {
+    if (!candleSeries) return;
+    autoPatternMarkers = [];
+    autoPatternZones = [];
+    if (!state.layers.patterns || !state.data) return;
+    const tf = state.activeTimeframe;
+    const analysis = state.data.timeframes[tf];
+    if (!analysis) return;
+    const candles = analysis.candles;
+    const rsiValues = findIndicator(analysis.indicators, "RSI14");
+    const rsiSeries = rsiValues ? seriesFromIndicatorValues(candles, rsiValues).filter((d) => d.value != null) : null;
+    const { markers, zones } = detectCandlePatterns(candles, rsiSeries);
+    autoPatternMarkers = markers;
+    autoPatternZones = zones;
+    applyChartMarkers();
+  }
   function clearGhost() {}
 
   // ---- Cursor tool: hit-test existing drawings, click to delete ----
@@ -5432,6 +5565,7 @@
       const items = [
         { label: "Reimposta visualizzazione", key: "Alt+R", action: () => { try { mainChart.timeScale().fitContent(); } catch { /* */ } } },
         priceStr ? { label: `Copia prezzo  ${priceStr}`, action: () => navigator.clipboard?.writeText(priceStr) } : null,
+        { label: `Copia simbolo  ${sym}`, action: () => navigator.clipboard?.writeText(sym) },
         { separator: true },
         priceStr ? { label: `Aggiungi alert su ${sym} a ${priceStr}…`, action: () => {
           const tab = document.querySelector('[data-tab="alert"]');
@@ -5439,13 +5573,14 @@
           const inp = document.getElementById("pa-price");
           if (inp) { inp.value = priceStr; inp.focus(); }
         }} : null,
-        { label: "Linea orizzontale al prezzo", action: () => {
-          if (price == null) return;
-          const nowSec = Math.floor(Date.now() / 1000);
-          if (overlays.horizontalLines == null) overlays.horizontalLines = [];
-          const line = candleSeries.createPriceLine({ price, color: "rgba(120,130,180,0.7)", lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: priceStr || "" });
-          overlays.horizontalLines.push(line);
-        }},
+        { label: "Apri nel Lab →", action: () => { setArea("lab"); } },
+        { separator: true },
+        { label: "Linea orizzontale", action: () => setDrawTool("hline") },
+        { label: "Linea di tendenza", action: () => setDrawTool("trend_line") },
+        { label: "Rettangolo", action: () => setDrawTool("rectangle") },
+        { label: "Freccia", action: () => setDrawTool("arrow") },
+        { label: "Fibonacci", action: () => setDrawTool("fib") },
+        { label: "Testo", action: () => setDrawTool("text") },
         { separator: true },
         { label: "Impostazioni grafico…", action: () => { const btn = document.getElementById("chart-settings-btn"); if (btn) btn.click(); } },
       ].filter(Boolean);
@@ -5818,6 +5953,8 @@
       });
     }
 
+    applyAutoPatterns();
+
     renderSummary();
     renderStrategy();
     renderBacktest();
@@ -6008,6 +6145,10 @@
     const ordersToggle = el("executed-orders-toggle");
     if (!ordersToggle || ordersToggle.checked) {
       markers = markers.concat(buildExecutedOrderMarkers());
+    }
+    // Pattern automatici (doji, engulfing, ecc.) — layer opzionale
+    if (state.layers.patterns) {
+      markers = markers.concat(autoPatternMarkers);
     }
     // La libreria pretende marker in ordine di tempo crescente; unendo due
     // elenchi l'ordine si perde.
@@ -9123,6 +9264,24 @@
     document.querySelectorAll(".sidenav-item").forEach((b) => b.classList.toggle("active", b === item));
 
     if (area === "trading") loadPositions();
+
+    // Quando l'utente apre il Lab, aggiorna il simbolo con quello attivo sul
+    // grafico — evita di trovare BTCUSDT quando si stava guardando INJUSDT.
+    if (area === "lab" && state.data && state.data.symbol) {
+      const sym = state.data.symbol;
+      if (labState.symbol !== sym) {
+        labState.symbol = sym;
+        labState.displaySymbol = sym.replace(/USDT$|USD$|BTC$|ETH$/, "") || sym;
+        const val = el("lab-ticker-val");
+        if (val) val.textContent = sym;
+        // Sync exchange if possible
+        const exchSelect = el("lab-exchange-select");
+        if (exchSelect && state.exchange && exchSelect.querySelector(`option[value="${state.exchange}"]`)) {
+          exchSelect.value = state.exchange;
+          labState.exchange = state.exchange;
+        }
+      }
+    }
 
     // Senza questo, il tab-content marcato "active" nell'HTML statico
     // (Backtest) restava visibile per qualunque voce non ancora sincronizzata
