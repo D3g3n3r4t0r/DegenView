@@ -713,6 +713,11 @@
                   <button type="button" id="positions-refresh-btn" class="section-action-btn">Aggiorna</button>
                 </div>
                 <p class="panel-hint">Finche' una posizione a leva resta aperta, la distanza dalla liquidazione e' l'unico numero che conta davvero.</p>
+                <!-- Fuori dalla lista apposta: l'esito di una chiusura deve
+                     sopravvivere al ridisegno che la chiusura stessa provoca
+                     (la posizione appena chiusa sparisce dalla lista, e con
+                     lei sparirebbe la conferma di averla chiusa). -->
+                <p id="positions-close-status" class="pos-close-status hidden"></p>
                 <ul id="positions-list" class="positions-list"></ul>
               </div>
             </details>
@@ -903,6 +908,16 @@
                 <button type="button" id="manual-execute-btn" class="mo-execute-btn mo-execute-buy" disabled>BUY</button>
 
                 <div id="manual-order-status" class="manual-order-status hidden"></div>
+
+                <!-- Chiusura spot: vendere tutto il saldo di quel pair. Si
+                     poteva gia' fare scrivendo SELL + % saldo + 100 a mano,
+                     ma era un percorso da ricostruire ogni volta, proprio nel
+                     momento in cui si ha fretta di uscire. -->
+                <div class="mo-close-row">
+                  <button type="button" id="spot-close-btn" class="mo-close-btn">Chiudi posizione — vendi tutto</button>
+                  <p class="mo-close-hint">Vende il 100% della moneta base del pair qui sopra, a mercato.</p>
+                </div>
+                <div id="spot-close-status" class="manual-order-status hidden"></div>
               </div>
               </div>
             </details>

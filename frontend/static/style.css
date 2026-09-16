@@ -4066,6 +4066,33 @@ details.issue-card > summary:focus-visible { outline: 2px solid var(--accent); o
 .pos-pnl { font-family: var(--font-num); font-size: 30px; line-height: 1; }
 .pos-empty { color: var(--ink-faint); font-size: 12px; padding: 10px 0; }
 
+/* Chiusura posizione: rossa perche' muove denaro reale, ma non urlata —
+   quando serve si sta gia' guardando la lancetta della liquidazione. */
+.pos-actions { margin-top: 10px; }
+.pos-close-btn, .mo-close-btn {
+  font: inherit;
+  font-size: 12px;
+  padding: 6px 12px;
+  cursor: pointer;
+  color: var(--danger);
+  background: var(--danger-soft);
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
+  border-radius: 6px;
+}
+.pos-close-btn:hover:not(:disabled), .mo-close-btn:hover:not(:disabled) {
+  border-color: var(--danger);
+}
+.pos-close-btn:disabled, .mo-close-btn:disabled { opacity: .55; cursor: default; }
+.pos-close-status { margin-top: 6px; font-size: 12px; color: var(--ink-dim); }
+.pos-close-status.ok { color: var(--bull); }
+.pos-close-status.error { color: var(--danger); }
+.mo-close-row {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.mo-close-hint { margin: 6px 0 0; font-size: 11px; color: var(--ink-dim); }
+
 /* Distanza dalla liquidazione: una lancetta su un nastro si legge prima
    di un numero in tabella — e' l'unico dato che conta finche' la
    posizione resta aperta. */

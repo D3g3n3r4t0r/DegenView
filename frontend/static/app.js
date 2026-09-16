@@ -1631,7 +1631,48 @@
       }
     }
 
+    // Chiusura spot: non passa dalla casella di conferma del form qui sopra
+    // (che descrive l'ordine BUY/SELL con la sua dimensione, un'altra cosa) —
+    // ha la sua conferma, che nomina il pair e dice che vende tutto.
+    async function submitSpotClose() {
+      const exchange = el("manual-exchange")?.value;
+      const symbol = el("manual-symbol")?.value.trim().toUpperCase();
+      const statusEl = el("spot-close-status");
+      if (!symbol) {
+        statusEl.textContent = "Inserisci il pair da chiudere (es. BTCUSDT)";
+        statusEl.className = "manual-order-status error";
+        return;
+      }
+      if (!confirm(`Vendere TUTTO il saldo di ${symbol} su ${exchange}?\n\nOrdine a mercato, denaro reale.`)) return;
+      const btn = el("spot-close-btn");
+      btn.disabled = true;
+      statusEl.textContent = "Chiusura…";
+      statusEl.className = "manual-order-status";
+      try {
+        const resp = await fetch("/api/trading/spot/close", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ exchange, symbol, confirm: true }),
+        });
+        const data = await readJson(resp);
+        if (resp.ok) {
+          statusEl.textContent = `✓ Venduto tutto il saldo di ${data.symbol || symbol}`;
+          statusEl.className = "manual-order-status ok";
+        } else {
+          statusEl.textContent = `✗ ${data.detail || "Errore " + resp.status}`;
+          statusEl.className = "manual-order-status error";
+        }
+        loadTradingJournal();
+      } catch (err) {
+        statusEl.textContent = "✗ " + (err.message || "Errore di rete");
+        statusEl.className = "manual-order-status error";
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
     el("manual-execute-btn")?.addEventListener("click", submitManualOrder);
+    el("spot-close-btn")?.addEventListener("click", submitSpotClose);
     syncSliderUnit();
     updateManualConfirmSummary();
     updateManualExecuteState();
@@ -2154,9 +2195,11 @@
 
 
   // ── Posizioni aperte ──────────────────────────────────────────────────
-  // Sola lettura. La distanza dalla liquidazione e' disegnata come nastro
-  // con lancetta invece che scritta in una riga: una lancetta nel rosso si
-  // vede prima di un errore, un numero in tabella lo racconta dopo.
+  // La distanza dalla liquidazione e' disegnata come nastro con lancetta
+  // invece che scritta in una riga: una lancetta nel rosso si vede prima di
+  // un errore, un numero in tabella lo racconta dopo. Non e' piu' sola
+  // lettura: da qui si chiude, perche' vedere una posizione a lega andare
+  // storta senza poterci fare niente e' il modo peggiore di guardarla.
   async function loadPositions() {
     const list = el("positions-list");
     if (!list || !state.user) return;
@@ -2221,8 +2264,64 @@
           <span class="bear">liq. ${p.liquidation_price}</span>
           <span class="${distClass}">${dist === null || dist === undefined ? "—" : (dist >= 0 ? "+" : "") + dist.toFixed(1) + "%"}</span>
         </div>
+        <div class="pos-actions">
+          <button type="button" class="pos-close-btn" data-exchange="${escapeHtml(p.exchange)}" data-symbol="${escapeHtml(p.symbol)}">Chiudi posizione</button>
+        </div>
       </li>`;
     }).join("");
+    bindCloseButtons(list, "futures");
+  }
+
+  // Chiusura, spot e futures: due endpoint diversi ma lo stesso gesto e la
+  // stessa cautela — una conferma esplicita, il pulsante bloccato mentre
+  // parte, e l'esito scritto sulla card invece che in un alert che sparisce.
+  function bindCloseButtons(root, market) {
+    root.querySelectorAll(".pos-close-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const exchange = btn.dataset.exchange;
+        const symbol = btn.dataset.symbol;
+        const what = market === "futures"
+          ? `Chiudere la posizione ${symbol} su ${exchange}?`
+          : `Vendere TUTTO il saldo di ${symbol} su ${exchange}?`;
+        if (!confirm(`${what}\n\nOrdine a mercato, denaro reale.`)) return;
+        // Lo stato vive fuori dalla lista: loadPositions() qui sotto la
+        // ridisegna, e una conferma scritta dentro la card sparirebbe
+        // insieme alla posizione appena chiusa.
+        const status = el("positions-close-status");
+        const say = (text, kind) => {
+          if (!status) return;
+          status.textContent = `${symbol}: ${text}`;
+          status.className = "pos-close-status" + (kind ? " " + kind : "");
+          status.classList.remove("hidden");
+        };
+        btn.disabled = true;
+        const prev = btn.textContent;
+        btn.textContent = "Chiusura…";
+        try {
+          const resp = await fetch(`/api/trading/${market}/close`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ exchange, symbol, confirm: true }),
+          });
+          const data = await readJson(resp);
+          if (!resp.ok) {
+            say("✗ " + (data.detail || `Errore ${resp.status}`), "error");
+            return;
+          }
+          // closed:false = non c'era niente da chiudere. Non e' un errore, ma
+          // nemmeno un successo da festeggiare: dirlo com'e'.
+          say(data.closed === false ? (data.detail || "Nessuna posizione da chiudere.") : "✓ Posizione chiusa.",
+              data.closed === false ? "" : "ok");
+          loadPositions();
+          loadTradingJournal();
+        } catch (err) {
+          say("✗ " + (err.message || "Errore di rete"), "error");
+        } finally {
+          btn.disabled = false;
+          btn.textContent = prev;
+        }
+      });
+    });
   }
 
   bindFuturesOrderUI();

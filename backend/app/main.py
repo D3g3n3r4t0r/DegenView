@@ -1417,6 +1417,69 @@ async def place_manual_order(body: ManualOrderRequest, user: User = Depends(auth
     return {"ok": True, "result": result, "symbol": symbol}
 
 
+class ClosePositionRequest(BaseModel):
+    """Stessa forma per spot e futures: chiudere e' sempre "quel pair, su quel
+    exchange, tutto" — non c'e' una dimensione da scegliere."""
+
+    exchange: str
+    symbol: str
+    confirm: bool = False
+
+
+@app.post("/api/trading/spot/close")
+async def close_manual_spot_position(body: ClosePositionRequest, user: User = Depends(auth.get_current_user)):
+    """Vendere tutta la moneta detenuta di un pair: la chiusura, sullo spot.
+
+    Sullo spot non esiste una "posizione" da chiudere come nei futures —
+    esiste un saldo. Chiudere quindi significa vendere il 100% della moneta
+    base libera, che e' esattamente cio' che fa gia' un exit_long: nessuna
+    logica nuova negli esecutori, solo il percorso che prima si poteva
+    imboccare solo da un segnale automatico o scrivendo "100 / percentuale"
+    a mano nel form dell'ordine manuale.
+    """
+    if not body.confirm:
+        raise HTTPException(status_code=400, detail="Conferma richiesta per vendere tutta la posizione")
+    supported = {"binance", "mexc", "kucoin", "kraken", "coinbase", "bitstamp"}
+    if body.exchange not in supported:
+        raise HTTPException(status_code=400, detail=f"Exchange non supportato: {body.exchange}")
+    cred = user.trading_credentials.get(body.exchange)
+    if not cred:
+        raise HTTPException(status_code=400, detail="Credenziali non configurate per questo exchange")
+    api_key, api_secret, passphrase = auth.get_decrypted_credential(user, body.exchange)
+    if not api_key or not api_secret:
+        raise HTTPException(status_code=400, detail="API key o secret mancanti")
+
+    symbol = body.symbol.strip().upper()
+    if not symbol:
+        raise HTTPException(status_code=400, detail="Pair mancante")
+
+    from app.models import StrategySignal
+    # exit_long -> SELL, e "pct_balance 100" e' tutto il saldo libero della
+    # moneta base. Il tetto per ordine (max_usdt) non si applica ai SELL
+    # apposta — vedi place_order_for_signal: limitarlo lascerebbe aperta
+    # meta' della posizione che si e' chiesto di chiudere.
+    fake_signal = StrategySignal(time=int(_time.time()), type="exit_long", price=0.0, label="chiusura manuale")
+    try:
+        result = await place_order_for_signal(
+            body.exchange, symbol, fake_signal,
+            "pct_balance", 100.0,
+            api_key, api_secret, passphrase,
+        )
+    except RuntimeError as exc:
+        trading_log.record(
+            user.id, symbol=symbol, exchange=body.exchange,
+            strategy_name="chiusura manuale", signal_type="exit_long",
+            outcome="fallito", detail=str(exc),
+        )
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    trading_log.record(
+        user.id, symbol=symbol, exchange=body.exchange,
+        strategy_name="chiusura manuale", signal_type="exit_long",
+        outcome="eseguito", detail=str(result)[:400],
+    )
+    return {"ok": True, "closed": True, "result": result, "symbol": symbol}
+
+
 @app.get("/api/auth/futures", response_model=list[FuturesCredentialOut])
 async def get_futures_credentials(user: User = Depends(auth.get_current_user)) -> list[FuturesCredentialOut]:
     out = []
@@ -1703,6 +1766,61 @@ async def place_manual_futures_order(body: FuturesOrderRequest, user: User = Dep
         outcome="eseguito", detail=(detail_prefix + str(result))[:400],
     )
     return {"ok": True, "result": result, "symbol": symbol}
+
+
+@app.post("/api/trading/futures/close")
+async def close_manual_futures_position(body: ClosePositionRequest, user: User = Depends(auth.get_current_user)):
+    """Chiudere a mano una posizione a leva aperta.
+
+    Esisteva solo la chiusura automatica sui segnali di uscita: chi apriva
+    una posizione — anche dall'ordine manuale qui sopra — poteva poi solo
+    guardarla, e per uscire doveva andare sull'app dell'exchange. Con la
+    leva quella distanza si paga.
+    """
+    if not body.confirm:
+        raise HTTPException(status_code=400, detail="Conferma richiesta per chiudere una posizione")
+    if body.exchange not in SUPPORTED_FUTURES_EXCHANGES_ORDERED:
+        raise HTTPException(status_code=400, detail=f"Futures non supportati per questo exchange: {body.exchange}")
+    cred = user.futures_credentials.get(body.exchange)
+    if not cred:
+        raise HTTPException(status_code=400, detail="Credenziali futures non configurate per questo exchange")
+    adapter = futures_registry.get(body.exchange)
+    # Nessun controllo su cred.enabled, a differenza dell'apertura: il kill
+    # switch esiste per impedire NUOVA esposizione, e una chiusura la riduce
+    # sempre. Spegnerlo con una posizione aperta e poi non poterla piu'
+    # chiudere da qui sarebbe esattamente il modo di restare intrappolati in
+    # una posizione a leva — il contrario di cio' per cui quel toggle c'e'.
+    api_key, api_secret, passphrase = auth.get_decrypted_futures_credential(user, body.exchange)
+    if not api_key or not api_secret:
+        raise HTTPException(status_code=400, detail="API key o secret mancanti")
+    if adapter.needs_passphrase and not passphrase:
+        raise HTTPException(status_code=400, detail=f"{adapter.name} richiede una passphrase, non ancora salvata")
+
+    symbol = body.symbol.strip().upper()
+    creds = FuturesCreds(api_key=api_key, api_secret=api_secret, passphrase=passphrase)
+    try:
+        result = await adapter.close_position(symbol, creds)
+    except FuturesExecutionError as exc:
+        trading_log.record(
+            user.id, symbol=symbol, exchange=body.exchange,
+            strategy_name="chiusura manuale futures", signal_type="exit",
+            outcome="fallito", detail=str(exc),
+        )
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    # close_position() torna None quando non c'e' niente da chiudere: dirlo
+    # com'e', invece di un "chiusa" che farebbe credere di essere usciti da
+    # una posizione che qualcun altro (o un segnale di uscita) aveva gia'
+    # chiuso.
+    if result is None:
+        return {"ok": True, "closed": False, "symbol": symbol,
+                "detail": f"Nessuna posizione aperta su {symbol} da chiudere."}
+    trading_log.record(
+        user.id, symbol=symbol, exchange=body.exchange,
+        strategy_name="chiusura manuale futures", signal_type="exit",
+        outcome="eseguito", detail=str(result)[:400],
+    )
+    return {"ok": True, "closed": True, "result": result, "symbol": symbol}
 
 
 @app.get("/api/balances")
