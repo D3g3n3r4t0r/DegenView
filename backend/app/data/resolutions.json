@@ -1057,5 +1057,81 @@
     "files": [
       "frontend/index.html"
     ]
+  },
+  "0e5497f6": {
+    "status": "risolto",
+    "at": 1789539644,
+    "summary": "Nel Lab c'erano 5 timeframe su 12 supportati dal backend. Ora ci sono tutti. 2d e 5d mancavano pur essendo gia' gestiti (sintetizzati ricampionando le candele giornaliere): quelli funzionano come gli altri. I timeframe sotto 1d meritano una precisazione, ed e' scritta a schermo quando li selezioni: il backtest NON gira su di essi — backtest_interval_for() riporta a 1d qualunque intervallo piu' stretto, perche' il budget di 5000 candele su un 1m coprirebbe tre giorni di storia. Prima quel riporto era silenzioso (e' la vecchia segnalazione seed-0007): scegliere 4h dava il risultato di 1d senza dirlo. Ora selezionare un timeframe sotto 1d mostra una riga che lo dichiara, invece di restituire un numero identico a quello di 1d e lasciarlo passare per una misura diversa.",
+    "detail": "frontend/index.html: i dodici bottoni di CANONICAL_INTERVALS in #lab-tf-row, piu' #lab-tf-clamp-note. app.js: updateLabTfClampNote() mostra la nota quando il timeframe scelto sta sotto 1d. Due difetti introdotti dai dodici bottoni, entrambi trovati guardando lo schermo e non il codice: (1) `text-transform: uppercase` rendeva \"1m\" (un minuto) e \"1M\" (un mese) graficamente identici — tolto, finche' i timeframe erano cinque e partivano da 4h la differenza non esisteva; (2) la riga unica con `width: fit-content` usciva dallo schermo su un telefono — ora va a capo (flex-wrap + max-width), verificato a 390px oltre che a 1400px. Nessuna modifica al backend: il clamp resta quello di sempre, cambia solo che adesso lo dichiara. Alzare o togliere il clamp e' una decisione separata (cambierebbe ogni risultato storico del Lab) e resta aperta come seed-0007.",
+    "files": [
+      "frontend/index.html",
+      "frontend/static/app.js",
+      "frontend/static/style.css"
+    ]
+  },
+  "6ba09078": {
+    "status": "risolto",
+    "at": 1789539644,
+    "summary": "Il periodo (data inizio/fine) valeva solo per il backtest, non per l'ottimizzazione. Ora vale per entrambi. La cosa interessante e' che il Lab le date all'ottimizzatore le mandava gia': frontend e backtest costruiscono la richiesta con la stessa buildLabQuery(), quindi start_date/end_date arrivavano anche a /api/optimize — ed erano ignorate in silenzio. I parametri venivano cercati su tutta la storia disponibile e poi il loro backtest, quello si' ritagliato al periodo, veniva mostrato accanto: due misure diverse presentate come la stessa. Era un buco che avevo lasciato io quando ho aggiunto il periodo (ee624db5), scrivendolo come scelta di perimetro — ma ignorare un parametro che arriva e' peggio che rifiutarlo, perche' non lascia traccia.",
+    "detail": "Il ritaglio vive ora in una funzione condivisa (_slice_to_period in main.py) usata sia da /api/backtest/deep sia dalle due strade dell'ottimizzazione (/api/optimize sincrono e /api/optimize/start a job), cosi' non possono piu' divergere. Sulla strada a job il periodo senza candele non puo' diventare un 400 — il job e' gia' partito e il suo unico canale e' il proprio log — quindi fallisce il job con lo stesso messaggio. Tre test nuovi (test_optimize_date_range.py) che guardano la serie che arriva davvero all'ottimizzatore, non solo la risposta: senza periodo la storia intera, con periodo solo le candele dentro, e un periodo fuori dai dati e' un 400 chiaro invece di una ricerca silenziosa su tutto. Nessuna modifica al frontend: mandava gia' le date.",
+    "files": [
+      "backend/app/main.py",
+      "backend/tests/test_optimize_date_range.py"
+    ]
+  },
+  "6a914943": {
+    "status": "chiusa da chi l'ha aperta",
+    "at": 1789539644,
+    "summary": "Chiesti chiarimenti su quali risultati dell'ottimizzazione siano utilizzabili come segnale operativo negli alert, citando il messaggio \"Nessuna voce di KASUSDT supera tutti i controlli — trattale come esplorative, non come segnale operativo\". Poi la risposta di chi l'ha aperta sulla bacheca stessa: \"Problema da ignorare\". Nessuna modifica al codice, registrata qui solo perche' non resti aperta a tempo indefinito una voce che il suo autore ha gia' chiuso. Se la domanda dovesse tornare: quel messaggio viene dal confronto automatico fra le voci d'archivio di uno stesso ticker, e dice esattamente cio' che sembra — su quel ticker nessuna configurazione supera i controlli statistici (gate di regime, sovradattamento, PBO), quindi nessuna delle due va accesa come alert operativo.",
+    "detail": "Nessun file toccato.",
+    "files": []
+  },
+  "seed-0074": {
+    "status": "risolto",
+    "at": 1789539644,
+    "summary": "`loadJournal?.()` in app.js non era una chiamata facoltativa ma un nome che non esiste — la funzione si chiama loadTradingJournal. L'operatore `?.` protegge da un valore undefined, non da una variabile mai dichiarata: quindi lanciava un ReferenceError, e lo lanciava dentro il ramo del successo (dopo \"Ordine eseguito\"), dove il catch lo riscriveva in \"Errore di rete\". Risultato: l'ordine era andato a buon fine e l'interfaccia diceva il contrario, sullo stesso schermo da cui si rischia di rifarlo.",
+    "detail": "Una riga in frontend/static/app.js. Il valore di questa segnalazione e' stato soprattutto diagnostico: e' arrivata mentre si dava per scontato che l'ordine MEXC fosse ancora bloccato, e invece dimostrava il contrario — quel messaggio d'errore puo' essere prodotto SOLO dal percorso di successo, quindi il fix dell'host (seed-0072) aveva funzionato e una posizione era davvero aperta.",
+    "files": [
+      "frontend/static/app.js"
+    ]
+  },
+  "seed-0075": {
+    "status": "risolto",
+    "at": 1789539644,
+    "summary": "Aggiunta la chiusura manuale, spot e futures. Sui futures un pulsante su ogni card di posizione aperta (POST /api/trading/futures/close); sullo spot un pulsante sotto l'ordine manuale che vende il 100% della moneta base del pair (POST /api/trading/spot/close) — sullo spot non esiste una posizione da chiudere, esiste un saldo, e venderlo tutto e' esattamente cio' che fa gia' un exit_long, quindi nessuna logica nuova negli esecutori.",
+    "detail": "Due scelte deliberate, entrambe coperte da test. (1) Il kill switch NON blocca una chiusura: esiste per impedire nuova esposizione, e se bloccasse anche l'uscita spegnerlo con una posizione aperta significherebbe restare intrappolati dentro — il contrario di cio' per cui c'e'. (2) \"Nessuna posizione da chiudere\" viene detto com'e', non spacciato per una chiusura riuscita, cosi' non si legge come essere usciti da qualcosa che qualcun altro aveva gia' chiuso. Conferma esplicita obbligatoria su entrambi i percorsi, esito scritto sulla card (fuori dalla lista, che la chiusura stessa ridisegna — difetto trovato con Playwright: il messaggio spariva subito) e ogni tentativo nel diario ordini. 7 test nuovi in test_close_position.py.",
+    "files": [
+      "backend/app/main.py",
+      "backend/tests/test_close_position.py",
+      "frontend/index.html",
+      "frontend/static/app.js",
+      "frontend/static/style.css"
+    ]
+  },
+  "seed-0076": {
+    "status": "risolto",
+    "at": 1789539644,
+    "summary": "L'anteprima mostra ora il nozionale VERO, quello dopo l'arrotondamento dell'exchange, e quando i due differiscono dice perche': \"1 contratti da 1000 — MEXC non accetta frazioni di contratto, quindi l'ordine usa 34.40 USDT invece di 40.00\". L'ordine non aveva nulla di sbagliato: era l'anteprima a mostrare l'importo chiesto come se fosse quello che sarebbe finito a mercato, che vanifica l'unica ragione per cui un'anteprima e' obbligatoria.",
+    "detail": "L'arrotondamento e' specifico dell'exchange, quindi lo si chiede all'adattatore invece di ricopiarne l'aritmetica nell'endpoint: nuovo metodo opzionale FuturesAdapter.effective_notional(), il cui default non arrotonda niente — gli altri cinque exchange si comportano esattamente come prima. MEXC lo sovrascrive con la stessa identica espressione usata da place_order (notional / mark / csize, troncato), perche' un'anteprima che calcola anche solo leggermente diverso dall'ordine e' peggio di nessuna anteprima: c'e' un test che tiene ferma proprio quella corrispondenza. La nota compare solo quando c'e' qualcosa da spiegare. 5 test in test_futures_quote_rounding.py, incluso il caso reale 40 -> 34,40.",
+    "files": [
+      "backend/app/trading/futures/base.py",
+      "backend/app/trading/futures/mexc.py",
+      "backend/app/main.py",
+      "backend/tests/test_futures_quote_rounding.py",
+      "frontend/index.html",
+      "frontend/static/app.js",
+      "frontend/static/style.css"
+    ]
+  },
+  "seed-0077": {
+    "status": "risolto",
+    "at": 1789539644,
+    "summary": "Il messaggio dice ora QUANDO si e' formato il segnale, non solo quanto valeva: \"Prezzo al segnale: 6.285 — 14 set, 2 giorni fa\" piu' \"Prezzo ora: 5.424 (-13.7%)\". Verificato sui prezzi reali di INJUSDT prima di toccare il codice: 6.285 e' esattamente la chiusura del 14 settembre, il 15 ha aperto a 6.285 ed e' crollata a 5.438, il 16 stava a 5.424 — cioe' il numero che Lorenzo vedeva. Nessun dato sbagliato: un segnale di due giorni prima consegnato senza data.",
+    "detail": "Un segnale resta notificabile per _MAX_SIGNAL_AGE_BARS (3) barre dopo essersi formato; su un daily sono tre giorni. Quella finestra non e' una svista, serve a impedire che una deduplica che perde lo stato riversi su Telegram tutti i segnali storici in blocco (e' successo). Finche' resta cosi', il ritardo va reso visibile invece che nascosto. Il prezzo attuale arriva dall'ultima chiusura della serie su cui la strategia e' stata calcolata, e viene mostrato solo se differisce di almeno lo 0,2% — su un segnale appena nato ripetere lo stesso numero due volte sarebbe rumore. 5 test in test_alert_message_age.py, incluso il caso INJ reale. Resta aperta una decisione per Lorenzo: stringere la finestra sui timeframe alti (3 barre -> 1 su daily) cambierebbe quali alert partono, e la stessa lista alimenta l'esecuzione automatica degli ordini.",
+    "files": [
+      "backend/app/notify/alerts.py",
+      "backend/app/main.py",
+      "backend/tests/test_alert_message_age.py"
+    ]
   }
 }
