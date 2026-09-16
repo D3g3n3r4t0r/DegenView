@@ -1467,11 +1467,53 @@ inferiori a 1D" + "applica tutto" (piano di evoluzione v2).
 - Il conteggio aumenta dopo l'invio, non prima: il primo alert non mostra
   "Ultimo segnale: adesso".
 
-**Stato**: commit `c0325ff` su `claude/sync-previous-changes-1sr7ql`,
-non ancora su `main` — aspetta merge.
+**Stato**: tutto su `main` (commit `43418ed`).
 
 **Da fare ancora (dal piano v2)**:
 - Verifica manuale in testnet su ciascun exchange futures (Bybit, OKX,
   Bitget, Kraken — mai mandato un ordine a un server vero).
 - PostgreSQL + multi-utente + Stripe: multi-sessione, fuori portata qui.
 - Onboarding flow, pricing page: frontend, fuori portata qui.
+
+---
+
+### Fatto — Canvas2D drawing engine + pattern recognition + UX grafico
+
+Lorenzo: "procedi con opzione A" (Canvas2D overlay), "vedi che schifo?"
+(Lab tab con BTCUSDT invece del simbolo attivo), "nel menu col tasto destro
+sul grafico devi aggiungere molte funzioni", "procedi" (pattern recognition).
+
+**Canvas2D drawing engine** (PR #69, poi continuato):
+- `<canvas id="draw-canvas">` overlay su `#main-chart`, z-index 5,
+  pointer-events none.
+- RAF loop `renderDrawCanvas()` a 60fps ridisegna tutti i disegni.
+- Selezione + handle drag per ridimensionare endpoint (TradingView-like).
+- Delete key cancella il disegno selezionato, Escape deseleziona/cancella tool.
+- hline mantiene la `priceLine` di TW per l'etichetta sull'asse Y.
+- Tutti gli altri tipi (trend_line, arrow, rectangle, range, fib, text):
+  puri Canvas2D.
+
+**Pattern automatici** (`state.layers.patterns`, default off):
+- Toggle "Pattern automatici" nella sidebar livelli.
+- `detectCandlePatterns(candles, rsiValues)` ritorna `{ markers, zones }`.
+- Candle patterns (doji, hammer, inv. hammer, engulfing bull/bear, momentum
+  slowdown) → `candleSeries.setMarkers()` via `applyChartMarkers()`.
+- RSI divergence (bull: price lower low + RSI higher low; bear: viceversa)
+  → rettangoli colorati renderizzati sul Canvas2D overlay.
+
+**Menu contestuale** (tasto destro sul grafico):
+- Aggiunto: copia simbolo, apri nel Lab →, linea orizzontale, linea di
+  tendenza, rettangolo, freccia, fibonacci, testo.
+
+**Lab fix**:
+- Aprire il tab Lab copia il simbolo e l'exchange attivi dal grafico in
+  `labState`.
+- CSS: `right-panel` ottiene `min-width: 0; overflow-x: hidden` — il pannello
+  risultati non trabocca più a destra.
+
+**Stato**: commit `43418ed` su `main`, in produzione.
+
+**Da fare**:
+- Nulla di urgente su questo filone. Il pattern recognition e' basico
+  (rule-based) — se Lorenzo vuole affinare le soglie o aggiungere pattern
+  (shooting star, morning star) si fa in pochi minuti.
