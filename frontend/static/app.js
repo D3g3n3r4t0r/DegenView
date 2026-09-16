@@ -6794,7 +6794,7 @@
     const atr = _atrAt(candles, candles.length - 1);
     if (atr <= 0) return;
 
-    const swings = findSwings(candles, Math.max(3, Math.floor(candles.length / 12)));
+    const swings = findSwings(candles, 5);
     const pts = [];
     swings.highs.forEach(p => pts.push({ i: p.i, price: p.price, time: p.time }));
     swings.lows.forEach(p =>  pts.push({ i: p.i, price: p.price, time: p.time }));
