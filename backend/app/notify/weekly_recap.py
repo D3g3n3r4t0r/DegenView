@@ -32,8 +32,37 @@ from pathlib import Path
 _RESOLUTIONS_FILE = Path(__file__).resolve().parent.parent / "data" / "resolutions.json"
 
 _TRAILER = "Aggiornamento:"
+# I trailer di attribuzione stanno in fondo al messaggio, subito dopo il
+# nostro: se finiscono attaccati (capita, a seconda di come il messaggio viene
+# composto) la riga italiana si porterebbe dietro "Co-Authored-By: ...".
+_ATTRIBUTION = ("Co-Authored-By:", "Claude-Session:", "Signed-off-by:")
 _MONTHS_IT = ["gen", "feb", "mar", "apr", "mag", "giu",
               "lug", "ago", "set", "ott", "nov", "dic"]
+
+
+def _clip(text: str, limit: int) -> str:
+    """Taglia su uno spazio, non a meta' parola, e lo dichiara con i puntini."""
+    text = text.strip()
+    if len(text) <= limit:
+        return text
+    cut = text[:limit].rsplit(" ", 1)[0].rstrip(" ,;:-—")
+    return f"{cut}…"
+
+
+def _strip_attribution(text: str) -> str:
+    for marker in _ATTRIBUTION:
+        idx = text.find(marker)
+        if idx != -1:
+            text = text[:idx]
+    return text.strip()
+
+
+def has_italian_line(commit_message: str) -> bool:
+    """Se questo commit porta davvero una riga italiana, o solo il titolo."""
+    return any(
+        line.strip().startswith(_TRAILER) and line.strip()[len(_TRAILER):].strip()
+        for line in commit_message.splitlines()
+    )
 
 
 def italian_line(commit_message: str) -> str:
@@ -45,10 +74,12 @@ def italian_line(commit_message: str) -> str:
     for line in commit_message.splitlines():
         stripped = line.strip()
         if stripped.startswith(_TRAILER):
-            text = stripped[len(_TRAILER):].strip()
+            text = _strip_attribution(stripped[len(_TRAILER):])
             if text:
-                return text[:160]
-    return commit_message.splitlines()[0][:160] if commit_message.strip() else "(senza descrizione)"
+                return _clip(text, 160)
+    if not commit_message.strip():
+        return "(senza descrizione)"
+    return _clip(commit_message.splitlines()[0], 160)
 
 
 def _fmt_day(d: datetime) -> str:
@@ -77,7 +108,7 @@ def _resolutions_since(since: int, path: Path | None = None) -> list[str]:
             continue
         # Solo la prima frase: un riepilogo e' un indice, non l'archivio.
         first = summary.split(". ")[0].rstrip(".")
-        out.append(f"• <b>{issue_id}</b> — {first[:180]}")
+        out.append(f"• <b>{issue_id}</b> — {_clip(first, 170)}")
     return out
 
 
@@ -98,9 +129,15 @@ def build_recap(
     end = datetime.fromtimestamp(now, tz=timezone.utc)
 
     resolved = _resolutions_since(since, resolutions_path)
-    changes = [italian_line(m) for m in commit_messages]
+    # Solo le modifiche che hanno una riga italiana: un elenco di titoli
+    # inglesi dentro un messaggio italiano non e' "quasi italiano", e' un
+    # messaggio che non mantiene la promessa. Quelle senza trailer restano
+    # nel conteggio, perche' sono avvenute e vanno dichiarate — semplicemente
+    # non hanno una frase da leggere.
+    described = [italian_line(m) for m in commit_messages if has_italian_line(m)]
+    total_changes = len(commit_messages)
 
-    if not resolved and not changes:
+    if not resolved and not total_changes:
         return None
 
     parts = [f"📋 <b>Riepilogo settimanale</b> — {_fmt_day(start)} / {_fmt_day(end)}", ""]
@@ -112,11 +149,11 @@ def build_recap(
             parts.append(f"… e altre {len(resolved) - 12}")
         parts.append("")
 
-    if changes:
-        parts.append(f"<b>Modifiche al sito ({len(changes)}):</b>")
-        parts.extend(f"• {c}" for c in changes[:15])
-        if len(changes) > 15:
-            parts.append(f"… e altre {len(changes) - 15}")
+    if total_changes:
+        parts.append(f"<b>Modifiche al codice: {total_changes}</b>")
+        parts.extend(f"• {c}" for c in described[:15])
+        if len(described) > 15:
+            parts.append(f"… e altre {len(described) - 15} descritte")
     else:
         parts.append("<i>Nessuna modifica al codice in questo periodo.</i>")
 
