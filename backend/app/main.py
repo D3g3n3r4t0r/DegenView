@@ -202,13 +202,19 @@ def canonical_symbol(symbol: str, asset_type: AssetType, exchange: CryptoExchang
     return format_mexc_symbol(symbol)
 
 
-async def fetch_ohlcv_canonical(provider: DataProvider, symbol: str, interval: str, outputsize: int):
+async def fetch_ohlcv_canonical(provider: DataProvider, symbol: str, interval: str, outputsize: int, since_ms: int | None = None):
     """Like provider.fetch_ohlcv, but transparently synthesizes intervals no
     provider natively supports (2D/3D/5D) by fetching extra 1D candles and
-    folding them down — every call site gets these for free."""
+    folding them down — every call site gets these for free.
+
+    When since_ms is set, outputsize is ignored and the provider fetches all
+    available candles from that timestamp to now."""
     multiple = SYNTHETIC_DAY_INTERVALS.get(interval)
     if multiple is None:
-        return await provider.fetch_ohlcv(symbol, interval, outputsize)
+        return await provider.fetch_ohlcv(symbol, interval, outputsize, since_ms=since_ms)
+    if since_ms is not None:
+        raw = await provider.fetch_ohlcv(symbol, "1d", outputsize, since_ms=since_ms)
+        return resample_by_count(raw, multiple)
     raw = await provider.fetch_ohlcv(symbol, "1d", outputsize * multiple)
     return resample_by_count(raw, multiple).tail(outputsize)
 
@@ -218,6 +224,13 @@ async def _fetch_cached(key: tuple, provider: DataProvider, symbol: str, interva
     route doesn't need to declare its own inner do_fetch closure."""
     async def _do():
         return await fetch_ohlcv_canonical(provider, symbol, interval, outputsize)
+    return await get_or_fetch(key, _do)
+
+
+async def _fetch_cached_since(key: tuple, provider: DataProvider, symbol: str, interval: str, since_ms: int):
+    """Like _fetch_cached but fetches all candles from since_ms to now."""
+    async def _do():
+        return await fetch_ohlcv_canonical(provider, symbol, interval, 0, since_ms=since_ms)
     return await get_or_fetch(key, _do)
 
 
@@ -2618,21 +2631,24 @@ async def deep_backtest(
 
     provider = get_provider(asset_type, exchange)
     backtest_interval = backtest_interval_for(ltf_interval)
-    cache_key = (f"{asset_type}:{exchange}:{symbol.upper()}:backtest", backtest_interval, settings.backtest_candles)
-
-    try:
-        df = await _fetch_cached(cache_key, provider, symbol, backtest_interval, settings.backtest_candles)
-    except ProviderError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    # When the user gives a start date, fetch from that date to now — no count
+    # cap. Otherwise fall back to the cached recent-N path.
+    if start_date:
+        since_ms = int(pd.Timestamp(start_date, tz="UTC").timestamp() * 1000)
+        cache_key = (f"{asset_type}:{exchange}:{symbol.upper()}:backtest:since", backtest_interval, since_ms)
+        try:
+            df = await _fetch_cached_since(cache_key, provider, symbol, backtest_interval, since_ms)
+        except ProviderError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+    else:
+        cache_key = (f"{asset_type}:{exchange}:{symbol.upper()}:backtest", backtest_interval, settings.backtest_candles)
+        try:
+            df = await _fetch_cached(cache_key, provider, symbol, backtest_interval, settings.backtest_candles)
+        except ProviderError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
     if df.empty:
         raise HTTPException(status_code=502, detail=f"Nessun dato per {symbol}")
 
-    # Ritaglio per periodo, facoltativo — sulla cache gia' scaricata, non su
-    # una nuova chiamata al provider: la finestra richiesta e' sempre un
-    # sottoinsieme di quella gia' presa (settings.backtest_candles candele),
-    # mai piu' ampia. Il range va applicato PRIMA del backtest, non dopo:
-    # tagliare i trade risultanti lascerebbe dentro operazioni aperte fuori
-    # dal periodo scelto.
     df = _slice_to_period(df, symbol, start_date, end_date)
 
     result = run_backtest(df, strategy_params.model_dump(), backtest_params.model_dump(), strategy_name=strategy_name)
@@ -3057,12 +3073,19 @@ async def _optimize_body(
 
     provider = get_provider(asset_type, exchange)
     backtest_interval = backtest_interval_for(ltf_interval)
-    cache_key = (f"{asset_type}:{exchange}:{symbol.upper()}:backtest", backtest_interval, settings.backtest_candles)
-
-    try:
-        df = await _fetch_cached(cache_key, provider, symbol, backtest_interval, settings.backtest_candles)
-    except ProviderError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if start_date:
+        since_ms = int(pd.Timestamp(start_date, tz="UTC").timestamp() * 1000)
+        cache_key = (f"{asset_type}:{exchange}:{symbol.upper()}:backtest:since", backtest_interval, since_ms)
+        try:
+            df = await _fetch_cached_since(cache_key, provider, symbol, backtest_interval, since_ms)
+        except ProviderError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+    else:
+        cache_key = (f"{asset_type}:{exchange}:{symbol.upper()}:backtest", backtest_interval, settings.backtest_candles)
+        try:
+            df = await _fetch_cached(cache_key, provider, symbol, backtest_interval, settings.backtest_candles)
+        except ProviderError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
     if df.empty:
         raise HTTPException(status_code=502, detail=f"Nessun dato per {symbol}")
     df = _slice_to_period(df, symbol, start_date, end_date)
@@ -3211,10 +3234,15 @@ async def start_optimize(
             jobs_store.log(job_id, f"scarico i dati di {symbol.upper()}…")
             provider = get_provider(asset_type, exchange)
             backtest_interval = backtest_interval_for(ltf_interval)
-            cache_key = (f"{asset_type}:{exchange}:{symbol.upper()}:backtest",
-                         backtest_interval, settings.backtest_candles)
-            df = await _fetch_cached(cache_key, provider, symbol, backtest_interval,
-                                     settings.backtest_candles)
+            if start_date:
+                _since_ms = int(pd.Timestamp(start_date, tz="UTC").timestamp() * 1000)
+                _ck = (f"{asset_type}:{exchange}:{symbol.upper()}:backtest:since", backtest_interval, _since_ms)
+                df = await _fetch_cached_since(_ck, provider, symbol, backtest_interval, _since_ms)
+            else:
+                cache_key = (f"{asset_type}:{exchange}:{symbol.upper()}:backtest",
+                             backtest_interval, settings.backtest_candles)
+                df = await _fetch_cached(cache_key, provider, symbol, backtest_interval,
+                                         settings.backtest_candles)
             if df.empty:
                 jobs_store.fail(job_id, f"Nessun dato per {symbol}")
                 return
