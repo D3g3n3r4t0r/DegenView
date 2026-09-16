@@ -2415,6 +2415,32 @@ async def analyze(
     )
 
 
+def _slice_to_period(df, symbol: str, start_date: str | None, end_date: str | None):
+    """Ritaglia la serie al periodo chiesto, PRIMA che venga usata.
+
+    Sta qui, condiviso, perche' il periodo del Lab deve valere sia per il
+    backtest sia per l'ottimizzazione: applicarlo a uno solo dei due significa
+    ottimizzare su anni di storia e poi mostrare il risultato accanto a un
+    backtest fatto su tre mesi, come se fossero la stessa misura
+    (segnalazione 6ba09078).
+    """
+    if not (start_date or end_date):
+        return df
+    # Ogni provider fa gia' df.set_index("datetime") prima di tornare —
+    # il ritaglio e' sull'indice, non su una colonna "datetime" che qui
+    # non esiste piu'.
+    if start_date:
+        df = df[df.index >= pd.Timestamp(start_date, tz="UTC")]
+    if end_date:
+        df = df[df.index < pd.Timestamp(end_date, tz="UTC") + pd.Timedelta(days=1)]
+    if df.empty:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Nessuna candela per {symbol} nel periodo richiesto — prova un intervallo piu' ampio.",
+        )
+    return df
+
+
 @app.get("/api/backtest/deep", response_model=BacktestResult)
 async def deep_backtest(
     symbol: str = Query(..., min_length=1, max_length=20),
@@ -2459,19 +2485,7 @@ async def deep_backtest(
     # mai piu' ampia. Il range va applicato PRIMA del backtest, non dopo:
     # tagliare i trade risultanti lascerebbe dentro operazioni aperte fuori
     # dal periodo scelto.
-    if start_date or end_date:
-        # Ogni provider fa gia' df.set_index("datetime") prima di tornare —
-        # il ritaglio e' sull'indice, non su una colonna "datetime" che qui
-        # non esiste piu'.
-        if start_date:
-            df = df[df.index >= pd.Timestamp(start_date, tz="UTC")]
-        if end_date:
-            df = df[df.index < pd.Timestamp(end_date, tz="UTC") + pd.Timedelta(days=1)]
-        if df.empty:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Nessuna candela per {symbol} nel periodo richiesto — prova un intervallo piu' ampio.",
-            )
+    df = _slice_to_period(df, symbol, start_date, end_date)
 
     result = run_backtest(df, strategy_params.model_dump(), backtest_params.model_dump(), strategy_name=strategy_name)
     return result.model_copy(update={"interval": backtest_interval})
@@ -2851,6 +2865,8 @@ async def optimize_strategy_endpoint(
     min_losing_trades: int | None = Query(None, ge=0, le=1000),
     max_losing_trades: int | None = Query(None, ge=0, le=1000),
     max_drawdown_pct: float | None = Query(None, ge=0.0, le=100.0),
+    start_date: str | None = Query(None, description="YYYY-MM-DD, incluso — stesso periodo del backtest"),
+    end_date: str | None = Query(None, description="YYYY-MM-DD, incluso — stesso periodo del backtest"),
     user: User = Depends(auth.get_current_user),
 ) -> OptimizeResult:
     """Random-search parameter tuning for any strategy in the registry —
@@ -2865,6 +2881,7 @@ async def optimize_strategy_endpoint(
         return await _optimize_body(
             symbol, asset_type, exchange, ltf_interval, strategy_name,
             backtest_params, mode, min_losing_trades, max_losing_trades, max_drawdown_pct,
+            start_date, end_date,
         )
     finally:
         _finisci_lavoro_pesante(user.id)
@@ -2881,6 +2898,8 @@ async def _optimize_body(
     min_losing_trades: int | None,
     max_losing_trades: int | None,
     max_drawdown_pct: float | None,
+    start_date: str | None = None,
+    end_date: str | None = None,
 ) -> OptimizeResult:
     """Il lavoro vero. Sta a parte perche' il contatore delle ricerche in
     corso va riabbassato anche quando qualcosa esplode a meta', e un
@@ -2901,6 +2920,7 @@ async def _optimize_body(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     if df.empty:
         raise HTTPException(status_code=502, detail=f"Nessun dato per {symbol}")
+    df = _slice_to_period(df, symbol, start_date, end_date)
 
     constraints = Constraints(
         min_losing_trades=min_losing_trades,
@@ -3022,6 +3042,8 @@ async def start_optimize(
     min_losing_trades: int | None = Query(None, ge=0, le=1000),
     max_losing_trades: int | None = Query(None, ge=0, le=1000),
     max_drawdown_pct: float | None = Query(None, ge=0.0, le=100.0),
+    start_date: str | None = Query(None, description="YYYY-MM-DD, incluso — stesso periodo del backtest"),
+    end_date: str | None = Query(None, description="YYYY-MM-DD, incluso — stesso periodo del backtest"),
     user: User | None = Depends(auth.get_current_user_optional),
 ) -> dict:
     symbol = symbol.strip()
@@ -3051,6 +3073,15 @@ async def start_optimize(
             if df.empty:
                 jobs_store.fail(job_id, f"Nessun dato per {symbol}")
                 return
+            if start_date or end_date:
+                try:
+                    df = _slice_to_period(df, symbol, start_date, end_date)
+                except HTTPException as exc:
+                    # Qui non c'e' nessuna risposta HTTP da restituire: il job
+                    # e' gia' partito e il suo unico canale e' il proprio log.
+                    jobs_store.fail(job_id, exc.detail)
+                    return
+                jobs_store.log(job_id, f"periodo {start_date or 'inizio'} → {end_date or 'fine'}")
             jobs_store.log(job_id, f"{len(df)} candele a {backtest_interval}")
 
             def say(message: str) -> None:
