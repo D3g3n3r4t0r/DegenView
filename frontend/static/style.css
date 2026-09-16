@@ -894,6 +894,47 @@ body {
   margin-top: 4px;
 }
 .strip-predict-btn { color: #4fd8a8; }
+.bp-mtf {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  background: var(--bg-raised);
+  border-radius: 8px;
+  margin-bottom: 10px;
+}
+.bp-mtf-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 11px;
+}
+.bp-mtf-tf {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: .05em;
+  color: var(--ink-dim);
+  min-width: 80px;
+}
+.bp-mtf-dir {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  min-width: 60px;
+}
+.bp-mtf-detail {
+  color: var(--ink-dim);
+  font-size: 10px;
+  opacity: .7;
+}
+.bp-section-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: .08em;
+  color: var(--border-strong);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
 
 /* ── fine breakout popup ──────────────────────────────────────────────── */
 
