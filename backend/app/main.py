@@ -305,6 +305,11 @@ async def _watchlist_alert_loop() -> None:
                         frequency=frequency,
                         entry_id=entry.id,
                         owner_id=owner.id,
+                        # L'ultima chiusura della serie su cui la strategia e'
+                        # stata calcolata: serve al messaggio per dire quanto
+                        # il prezzo si e' mosso da quando il segnale e' nato.
+                        current_price=(float(strat_df["close"].iloc[-1])
+                                       if not strat_df.empty else None),
                     )
                     # Esecuzione automatica degli ordini, se l'exchange e'
                     # configurato. Ogni esito finisce nel diario: e' un percorso
@@ -983,6 +988,7 @@ def _dispatch_telegram_alerts(
     frequency: str = "every",
     entry_id: str = "",
     owner_id: str = "",
+    current_price: float | None = None,
 ) -> list[StrategySignal]:
     """Manda le notifiche e RESTITUISCE i segnali che le hanno generate.
 
@@ -993,7 +999,8 @@ def _dispatch_telegram_alerts(
     """
     fresh = find_new_signals(symbol, interval, strategy, frequency=frequency, entry_id=entry_id)
     for signal in fresh:
-        message = format_signal_message(symbol, interval, strategy.name, signal)
+        message = format_signal_message(symbol, interval, strategy.name, signal,
+                                        current_price=current_price)
         asyncio.create_task(telegram.send_to(chat_id, message))
         if owner_id:
             alert_log.append_entry(

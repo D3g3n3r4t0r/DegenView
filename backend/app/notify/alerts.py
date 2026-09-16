@@ -6,6 +6,7 @@ Also tracks last-alert time and total count per (entry_id, strategy_name).
 
 import json
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 from app.models import StrategySignal, StrategyState
@@ -247,12 +248,67 @@ def get_all_stats_for_entry(entry_id: str) -> dict[str, dict]:
 
 _LABEL_IT = {"htf": "HTF", "mtf": "MTF", "ltf": "LTF"}
 
+_MONTHS_IT = ["gen", "feb", "mar", "apr", "mag", "giu",
+              "lug", "ago", "set", "ott", "nov", "dic"]
 
-def format_signal_message(symbol: str, interval: str, strategy_name: str, signal: StrategySignal) -> str:
+
+def _when_phrase(ts: int, interval: str, now: int) -> str:
+    """Quando e' successo, in data e in "quanto fa".
+
+    Le due cose insieme perche' rispondono a domande diverse: la data dice su
+    quale candela, "due giorni fa" dice se ha ancora senso guardarla.
+    """
+    d = datetime.fromtimestamp(ts, tz=timezone.utc)
+    stamp = f"{d.day} {_MONTHS_IT[d.month - 1]}"
+    # Sui timeframe intraday l'ora e' meta' dell'informazione; su daily e oltre
+    # e' rumore (la candela e' il giorno).
+    if _INTERVAL_SECONDS.get(interval, 86400) < 86400:
+        stamp += f" {d:%H:%M} UTC"
+
+    delta = max(0, now - ts)
+    if delta < 3600:
+        rel = "meno di un'ora fa"
+    elif delta < 86400:
+        hours = delta // 3600
+        rel = "un'ora fa" if hours == 1 else f"{hours} ore fa"
+    else:
+        days = delta // 86400
+        rel = "un giorno fa" if days == 1 else f"{days} giorni fa"
+    return f"{stamp}, {rel}"
+
+
+def format_signal_message(
+    symbol: str,
+    interval: str,
+    strategy_name: str,
+    signal: StrategySignal,
+    current_price: float | None = None,
+    now: int | None = None,
+) -> str:
+    """Il messaggio dice sempre QUANDO, non solo quanto.
+
+    Prima mostrava `signal.price` da solo: il prezzo della candela del
+    segnale, presentato come se fosse quello di adesso. Un segnale puo'
+    arrivare fino a _MAX_SIGNAL_AGE_BARS barre dopo essersi formato — su un
+    daily, giorni — e in mezzo il prezzo si muove. E' successo davvero su
+    INJUSDT: notifica con "Prezzo: 6.285", che era la chiusura di due giorni
+    prima, mentre il mercato stava a 5.42 dopo un -13,5%. Letto cosi'
+    sembrava una strategia che compra dentro una correzione; era invece un
+    ingresso generato prima della correzione e consegnato dopo.
+    """
+    now = int(time.time()) if now is None else now
     tf_label = _LABEL_IT.get(interval, interval.upper())
-    return (
-        f"📊 <b>{symbol}</b> [{tf_label}] — {strategy_name}\n"
-        f"{signal.label}\n"
-        f"Prezzo: {signal.price:g}\n\n"
-        f"<i>Notifica su una condizione tecnica rilevata, non è consulenza finanziaria.</i>"
-    )
+    lines = [
+        f"📊 <b>{symbol}</b> [{tf_label}] — {strategy_name}",
+        signal.label,
+        f"Prezzo al segnale: {signal.price:g} — {_when_phrase(signal.time, interval, now)}",
+    ]
+    # Il prezzo di adesso solo quando dice qualcosa: su un segnale appena nato
+    # ripetere lo stesso numero due volte e' rumore, non trasparenza.
+    if current_price and signal.price:
+        drift = (current_price - signal.price) / signal.price
+        if abs(drift) >= 0.002:
+            lines.append(f"Prezzo ora: {current_price:g} ({drift * 100:+.1f}%)")
+    lines.append("")
+    lines.append("<i>Notifica su una condizione tecnica rilevata, non è consulenza finanziaria.</i>")
+    return "\n".join(lines)
