@@ -4652,6 +4652,7 @@
 
     mainChart.subscribeCrosshairMove(handleCrosshairMove);
     bindDrawClickCapture();
+    bindChartContextMenu();
     chartsReady = true;
   }
 
@@ -5304,6 +5305,73 @@
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape" && drawState.tool !== "cursor") setDrawTool("cursor");
     });
+  }
+
+  function bindChartContextMenu() {
+    const container = el("main-chart");
+    let menuEl = null;
+    let ctxPrice = null;
+
+    function closeMenu() {
+      if (menuEl) { menuEl.remove(); menuEl = null; }
+    }
+
+    function openMenu(clientX, clientY, price) {
+      closeMenu();
+      ctxPrice = price;
+      const sym = (el("ticker-input")?.value || "").trim().toUpperCase() || "—";
+      const priceStr = price != null ? price.toFixed(4).replace(/\.?0+$/, (m, o, s) => s.includes(".") ? "" : m) : null;
+      const items = [
+        { label: "Reimposta visualizzazione", key: "Alt+R", action: () => { try { mainChart.timeScale().fitContent(); } catch { /* */ } } },
+        priceStr ? { label: `Copia prezzo  ${priceStr}`, action: () => navigator.clipboard?.writeText(priceStr) } : null,
+        { separator: true },
+        priceStr ? { label: `Aggiungi alert su ${sym} a ${priceStr}…`, action: () => {
+          const tab = document.querySelector('[data-tab="alert"]');
+          if (tab) tab.click();
+          const inp = document.getElementById("pa-price");
+          if (inp) { inp.value = priceStr; inp.focus(); }
+        }} : null,
+        { label: "Linea orizzontale al prezzo", action: () => {
+          if (price == null) return;
+          const nowSec = Math.floor(Date.now() / 1000);
+          if (overlays.horizontalLines == null) overlays.horizontalLines = [];
+          const line = candleSeries.createPriceLine({ price, color: "rgba(120,130,180,0.7)", lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: priceStr || "" });
+          overlays.horizontalLines.push(line);
+        }},
+        { separator: true },
+        { label: "Impostazioni grafico…", action: () => { const btn = document.getElementById("chart-settings-btn"); if (btn) btn.click(); } },
+      ].filter(Boolean);
+
+      menuEl = document.createElement("ul");
+      menuEl.className = "chart-ctx-menu";
+      items.forEach((item) => {
+        const li = document.createElement("li");
+        if (item.separator) { li.className = "chart-ctx-sep"; menuEl.appendChild(li); return; }
+        li.className = "chart-ctx-item";
+        const span = document.createElement("span"); span.textContent = item.label; li.appendChild(span);
+        if (item.key) { const k = document.createElement("span"); k.className = "chart-ctx-key"; k.textContent = item.key; li.appendChild(k); }
+        li.addEventListener("mousedown", (e) => { e.preventDefault(); closeMenu(); item.action(); });
+        menuEl.appendChild(li);
+      });
+
+      const vw = window.innerWidth, vh = window.innerHeight;
+      document.body.appendChild(menuEl);
+      const mw = menuEl.offsetWidth || 240, mh = menuEl.offsetHeight || 160;
+      menuEl.style.left = (clientX + mw > vw ? clientX - mw : clientX) + "px";
+      menuEl.style.top  = (clientY + mh > vh ? clientY - mh : clientY) + "px";
+    }
+
+    document.addEventListener("contextmenu", (e) => {
+      if (!container.contains(e.target)) return;
+      e.preventDefault();
+      const price = lastCrosshairPoint && candleSeries
+        ? candleSeries.coordinateToPrice(lastCrosshairPoint.y)
+        : null;
+      openMenu(e.clientX, e.clientY, price);
+    }, true);
+
+    document.addEventListener("mousedown", (e) => { if (menuEl && !menuEl.contains(e.target)) closeMenu(); }, true);
+    document.addEventListener("keydown",    (e) => { if (e.key === "Escape") closeMenu(); }, true);
   }
 
   function bindDrawRail() {
