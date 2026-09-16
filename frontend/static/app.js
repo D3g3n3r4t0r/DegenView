@@ -4656,6 +4656,7 @@
     mainChart.subscribeCrosshairMove(handleCrosshairMove);
     bindDrawClickCapture();
     bindChartContextMenu();
+    bindMarkerClickPopup();
     initDrawCanvas();
     chartsReady = true;
   }
@@ -5914,6 +5915,120 @@
     });
   }
 
+  // ── Marker click popup ────────────────────────────────────────────────────
+  // Ogni tipo di segnale contestuale ha una descrizione e un peso 1-10.
+  const MARKER_INFO = {
+    "↘ Trend rallenta": {
+      desc: "L'EMA20 accelerava verso l'alto ma ora sta rallentando. Il momentum del trend in corso si sta esaurendo — può precedere una pausa o un reversal.",
+      score: 6,
+    },
+    "↗ Trend rallenta": {
+      desc: "L'EMA20 accelerava verso il basso ma ora rallenta. Il momentum ribassista si indebolisce — potenziale pavimento a breve.",
+      score: 6,
+    },
+    "⚡ Trend forte ↑": {
+      desc: "Pendenza EMA in forte accelerazione rialzista (>0.3 ATR per barra). Trend momentum elevato: pull-back brevi e poco profondi tipicamente.",
+      score: 8,
+    },
+    "⚡ Trend forte ↓": {
+      desc: "Pendenza EMA in forte accelerazione ribassista. Pressione di vendita intensa: evitare long contro-trend senza conferma.",
+      score: 8,
+    },
+    "⚠ Esaurimento ↑": {
+      desc: "Tre candele rialziste consecutive con corpi decrescenti — il rialzo perde forza. Frequente prima di un ritracciamento o consolidamento.",
+      score: 5,
+    },
+    "⚠ Esaurimento ↓": {
+      desc: "Tre candele ribassiste consecutive con corpi decrescenti — il ribasso perde forza. Potenziale rimbalzo tecnico a breve.",
+      score: 5,
+    },
+    "◼ Contrazione": {
+      desc: "Inside bar: massimo e minimo contenuti nella candela precedente, range < 0.6 ATR. Compressione di volatilità — spesso precede un breakout direzionale.",
+      score: 7,
+    },
+    "→ Momentum ↑": {
+      desc: "Marubozu rialzista: corpo > 88% del range, senza wick significativi. Acquirenti in pieno controllo per tutta la candela.",
+      score: 7,
+    },
+    "→ Momentum ↓": {
+      desc: "Marubozu ribassista: venditori dominanti senza respiro. Spesso continua nella candela successiva.",
+      score: 7,
+    },
+    "↙ Satura RSI+": {
+      desc: "RSI > 72 + candela ribassista con wick superiore lungo. Doppio segnale di ipercomprato: il prezzo ha provato livelli alti ma è stato respinto.",
+      score: 8,
+    },
+    "↗ Esausto RSI−": {
+      desc: "RSI < 28 + candela rialzista con wick inferiore lungo. Doppio segnale di ipervenduto: il prezzo ha testato i minimi ma è rimbalzato.",
+      score: 8,
+    },
+    "~ Indecisione": {
+      desc: "RSI neutro (43-57) + corpo piccolo (<35% del range). Nessuna forza direzionale: meglio attendere una candela di conferma prima di entrare.",
+      score: 3,
+    },
+    "IN long": { desc: "Segnale di ingresso long dalla strategia attiva.", score: 9 },
+    "IN short": { desc: "Segnale di ingresso short dalla strategia attiva.", score: 9 },
+    "OUT": { desc: "Segnale di uscita dalla posizione corrente.", score: 8 },
+  };
+
+  function scoreColor(s) {
+    if (s >= 8) return "#00d68f";
+    if (s >= 6) return "#f2a93b";
+    return "#4fd8a8";
+  }
+
+  function showMarkerPopup(marker, px, py) {
+    const popup = el("marker-popup");
+    const info = MARKER_INFO[marker.text] || { desc: "Segnale automatico del grafico.", score: 5 };
+    const fillColor = scoreColor(info.score);
+    popup.innerHTML = `
+      <div class="marker-popup-header">
+        <span class="marker-popup-label" style="color:${marker.color}">${marker.text}</span>
+        <button class="marker-popup-close" onclick="document.getElementById('marker-popup').classList.add('hidden')" aria-label="Chiudi">×</button>
+      </div>
+      <div class="marker-popup-desc">${info.desc}</div>
+      <div class="marker-popup-score">
+        <span class="marker-popup-score-label">PESO</span>
+        <div class="marker-popup-score-bar"><div class="marker-popup-score-fill" style="width:${info.score*10}%;background:${fillColor}"></div></div>
+        <span class="marker-popup-score-num" style="color:${fillColor}">${info.score}/10</span>
+      </div>`;
+    // Posiziona vicino al click, tenendosi nei bordi
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const W = 280, H = 160;
+    let left = px + 14, top = py + 14;
+    if (left + W > vw - 8) left = px - W - 8;
+    if (top + H > vh - 8) top = py - H - 8;
+    popup.style.left = `${Math.max(8, left)}px`;
+    popup.style.top  = `${Math.max(8, top)}px`;
+    popup.classList.remove("hidden");
+  }
+
+  function bindMarkerClickPopup() {
+    const popup = el("marker-popup");
+    // Click fuori dal popup lo chiude
+    document.addEventListener("pointerdown", (e) => {
+      if (popup && !popup.contains(e.target)) popup.classList.add("hidden");
+    }, { capture: true });
+
+    // subscribeClick di LightweightCharts: click disambiguato da drag
+    mainChart.subscribeClick((param) => {
+      if (!param || param.time === undefined) return;
+      // Raccoglie tutti i marker correnti (strategy + pattern + hints)
+      const allMarkers = [
+        ...buildStrategyMarkers(_lastStrategySignals || []),
+        ...autoPatternMarkers,
+        ...contextualHintMarkers,
+      ];
+      // Trova il marker con lo stesso time (o a 1 barra di distanza)
+      const hit = allMarkers.find((m) => Math.abs(m.time - param.time) < 2);
+      if (!hit) return;
+      const rect = el("main-chart").getBoundingClientRect();
+      const px = rect.left + (param.point?.x || 0);
+      const py = rect.top  + (param.point?.y || 0);
+      showMarkerPopup(hit, px, py);
+    });
+  }
+
   function bindChartContextMenu() {
     const container = el("main-chart");
     let menuEl = null;
@@ -6331,7 +6446,26 @@
     renderStrategy();
     renderBacktest();
     resizeAllCharts();
-    mainChart.timeScale().fitContent();
+    zoomToRecentDays(7);
+  }
+
+  // Mappa stringa intervallo → minuti per candle
+  const IV_MINUTES = { "1m":1,"5m":5,"15m":15,"30m":30,"1h":60,"4h":240,"1d":1440,"2d":2880,"3d":4320,"5d":7200,"1w":10080,"1M":43200 };
+
+  function zoomToRecentDays(days) {
+    if (!mainChart || !state.data) { try { mainChart && mainChart.timeScale().fitContent(); } catch {} return; }
+    const tf = state.activeTimeframe;
+    const analysis = state.data.timeframes[tf];
+    if (!analysis || !analysis.candles || !analysis.candles.length) { try { mainChart.timeScale().fitContent(); } catch {} return; }
+    const iv = analysis.interval || el("interval-primary")?.value || "1d";
+    const mins = IV_MINUTES[iv] || 1440;
+    const candlesPerDay = 1440 / mins;
+    const targetBars = Math.ceil(days * candlesPerDay);
+    const total = analysis.candles.length;
+    const fromBar = Math.max(0, total - targetBars);
+    try {
+      mainChart.timeScale().setVisibleLogicalRange({ from: fromBar, to: total + 2 });
+    } catch { try { mainChart.timeScale().fitContent(); } catch {} }
   }
 
   function renderStrategy() {
