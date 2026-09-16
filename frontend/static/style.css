@@ -4303,43 +4303,10 @@ details.issue-card > summary:focus-visible { outline: 2px solid var(--accent); o
     margin: 0 auto;
   }
 
-  /* Il Lab su larghezza piena: il mini-grafico laterale non serve mentre
-     si configura un backtest — si nasconde, e il Lab prende tutta la
-     larghezza come fa la tab Segnalazioni. */
-  .cockpit[data-area="lab"] .chart-area { display: none; }
-
-  /* Il Lab su larghezza piena: impostazione a sinistra, risultato a destra.
-     I blocchi del risultato stanno in un contenitore solo (creato da
-     groupLabResultColumn), altrimenti la griglia li spinge nella riga che
-     occupano nel DOM e la colonna destra resta vuota per mezzo schermo. */
-  .cockpit[data-area="lab"] .lab-panel {
-    display: grid;
-    grid-template-columns: minmax(280px, 380px) 1fr;
-    gap: 0 26px;
-    align-items: start;
-    max-width: 1180px;
-  }
-  .cockpit[data-area="lab"] .lab-panel > *:not(.lab-results-col) { grid-column: 1; }
-  .cockpit[data-area="lab"] .lab-results-col {
-    grid-column: 2;
-    grid-row: 1 / span 99;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    min-width: 0;
-  }
-  /* Prima che ci sia qualcosa da mostrare (nessun figlio di .lab-results-col
-     ancora visibile: ne' un risultato ne' "ricerca in corso") la seconda
-     colonna sparisce invece di restare una meta' di schermo vuota fino al
-     primo backtest — segnalazione seed-0060, "il sito usa malissimo gli
-     spazi". Si riapre da sola appena un figlio perde .hidden. */
-  .cockpit[data-area="lab"] .lab-panel:not(:has(.lab-results-col > *:not(.hidden))) {
-    grid-template-columns: minmax(280px, 420px);
-    max-width: 420px;
-  }
-  .cockpit[data-area="lab"] .lab-panel:not(:has(.lab-results-col > *:not(.hidden))) .lab-results-col {
-    display: none;
-  }
+  /* Lab e Livelli coesistono: il grafico resta visibile, il Lab occupa
+     il pannello destro come qualunque altra tab (Analisi, Alert, ecc.).
+     Nessun nascondimento del chart-area — e' il pannello laterale destro
+     a contenere il Lab, non una pagina a se'. */
 
   /* Alert, Strategie, Trading: le sezioni diventano colonne affiancate
      invece di una pila infinita da scorrere. */
@@ -4771,21 +4738,6 @@ td {
 .lab-fill-at { grid-column: 1 / -1; }
 .lab-fill-hint { grid-column: 1 / -1; margin-top: 4px; }
 
-/* Con il grafico che resta in colonna, il Lab a due colonne ha senso solo
-   se ne avanza abbastanza: sotto questa soglia impostazione e risultato
-   tornano incolonnati invece di stringersi entrambi fino a diventare
-   illeggibili. */
-@media (max-width: 900px) {
-  .cockpit[data-area="lab"] .lab-panel {
-    grid-template-columns: 1fr;
-    gap: 12px;
-  }
-  .cockpit[data-area="lab"] .lab-panel > *:not(.lab-results-col),
-  .cockpit[data-area="lab"] .lab-results-col {
-    grid-column: 1;
-    grid-row: auto;
-  }
-}
 
 /* Bacheca e Script non sono sbirciate di sfuggita: si leggono. Aperti dalla
    sidebar diventano una colonna larga, e il pannello di destra si toglie di
@@ -4863,10 +4815,10 @@ td {
   /* Allargato, il grafico si prende la parte del leone e il lavoro si
      stringe a una colonna ancora usabile — non sparisce, cosi' non si
      perde il punto in cui si era. */
-  .cockpit.chart-wide:not([data-area="analizza"]):not([data-area="issues"]):not([data-area="lab"]) .chart-area {
+  .cockpit.chart-wide:not([data-area="analizza"]):not([data-area="issues"]) .chart-area {
     flex: 1 1 auto;
   }
-  .cockpit.chart-wide:not([data-area="analizza"]):not([data-area="issues"]):not([data-area="lab"]) .right-panel {
+  .cockpit.chart-wide:not([data-area="analizza"]):not([data-area="issues"]) .right-panel {
     flex: 0 0 clamp(300px, 30%, 460px);
   }
   .cockpit.chart-wide[data-area="analizza"] .right-panel { display: none; }

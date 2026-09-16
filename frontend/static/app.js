@@ -7858,6 +7858,36 @@
         resizeAllCharts();
       });
     });
+
+    // Desktop: il tasto ✕ Chiudi dentro ogni pannello laterale chiude
+    // il pannello e riporta il focus sull'item Analizza nella sidenav.
+    RAIL_PANELS.forEach(([btnId, panelId]) => {
+      const panel = el(panelId);
+      const btn = el(btnId);
+      const closeBtn = panel?.querySelector(".drawer-close-btn");
+      if (!closeBtn) return;
+      closeBtn.addEventListener("click", () => {
+        if (window.matchMedia("(max-width: 760px)").matches) return;
+        panel.classList.remove("open");
+        btn.classList.remove("active");
+        const analizzaItem = document.querySelector(".sidenav-item[data-area='analizza']");
+        document.querySelectorAll(".sidenav-item").forEach((b) => b.classList.toggle("active", b === analizzaItem));
+        resizeAllCharts();
+      });
+    });
+
+    // Desktop: ✕ Chiudi nel pannello destro mentre si e' nel Lab → torna
+    // ad Analizza (la tab di default che mostra watchlist + grafico affiancati).
+    const rightPanelClose = document.querySelector(".right-panel .drawer-close-btn");
+    if (rightPanelClose) {
+      rightPanelClose.addEventListener("click", () => {
+        if (window.matchMedia("(max-width: 760px)").matches) return;
+        const cockpit = document.querySelector(".cockpit");
+        if (cockpit && cockpit.dataset.area === "lab") {
+          setArea("analizza");
+        }
+      });
+    }
   }
 
   function bindTabs() {
