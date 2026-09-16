@@ -5297,6 +5297,18 @@
     return { highs, lows };
   }
 
+  function _atrAt(candles, i, w = 14) {
+    const start = Math.max(1, i - w + 1);
+    let sum = 0, n = 0;
+    for (let k = start; k <= i; k++) {
+      const c = candles[k], prev = candles[k - 1];
+      if (!prev) continue;
+      const tr = Math.max(c.high - c.low, Math.abs(c.high - prev.close), Math.abs(c.low - prev.close));
+      sum += tr; n++;
+    }
+    return n > 0 ? sum / n : 1;
+  }
+
   // ── Divergence detection ──────────────────────────────────────────────────
   function detectDivergences(candles, indicators) {
     const lines = [];
@@ -6057,6 +6069,139 @@
     return { dir, strength, label, detail: `${pct > 0 ? "+" : ""}${pct.toFixed(2)}% su ${N} candele` };
   }
 
+  // ── Phase detection (Agent 1) ─────────────────────────────────────────────
+  function _detectPhase(candles, swings) {
+    if (candles.length < 20 || swings.highs.length < 2 || swings.lows.length < 2)
+      return { phase: "LATERALE", trend: "flat", confidence: 0.2, retracePct: 0, exhaustSignals: 0 };
+
+    const bodyOf  = c => Math.abs(c.close - c.open);
+    const rangeOf = c => c.high - c.low || 0.0001;
+    const wickLo  = c => Math.min(c.open, c.close) - c.low;
+    const wickHi  = c => c.high - Math.max(c.open, c.close);
+    const bodyRatio = c => bodyOf(c) / rangeOf(c);
+
+    const H = swings.highs, L = swings.lows;
+    let bullScore = 0, bearScore = 0;
+    const rH = H.slice(-3), rL = L.slice(-3);
+    for (let k = 1; k < rH.length; k++) rH[k].price > rH[k-1].price ? bullScore++ : bearScore++;
+    for (let k = 1; k < rL.length; k++) rL[k].price > rL[k-1].price ? bullScore++ : bearScore++;
+    let trend = bullScore >= bearScore + 2 ? "bull" : bearScore >= bullScore + 2 ? "bear" : "flat";
+
+    if (trend === "flat") return { phase: "LATERALE", trend, confidence: 0.3, retracePct: 0, exhaustSignals: 0 };
+
+    const last  = candles[candles.length - 1];
+    const last3 = candles.slice(-3);
+
+    const apexPoint = trend === "bull" ? H.slice(-1)[0] : L.slice(-1)[0];
+    const basePoint  = trend === "bull" ? L.slice(-2)[0] : H.slice(-2)[0];
+    const impulseRange = basePoint ? Math.abs(apexPoint.price - basePoint.price) : 0;
+    const currentDelta = trend === "bull" ? apexPoint.price - last.close : last.close - apexPoint.price;
+    const retracePct   = impulseRange > 0 ? Math.max(0, currentDelta / impulseRange) : 0;
+
+    const retrSwings = (trend === "bull" ? L : H).slice(-3);
+    let exhaustSignals = 0;
+    if (retrSwings.length === 3) {
+      const [s0, s1, s2] = retrSwings;
+      const sp = (a, b) => Math.abs(b.price - a.price) / Math.max(1, b.i - a.i);
+      if (sp(s1, s2) < sp(s0, s1) * 0.70) exhaustSignals++;
+      const d1 = s1.i - s0.i, d2 = s2.i - s1.i;
+      if (d1 > 0 && d2 < d1 * 0.65) exhaustSignals++;
+    }
+    const wicks = last3.map(c => rangeOf(c) > 0 ? (trend === "bull" ? wickLo(c) : wickHi(c)) / rangeOf(c) : 0);
+    if (wicks[2] > wicks[0] * 1.4) exhaustSignals++;
+    const prev5avg = candles.slice(-8, -3).reduce((s, c) => s + bodyOf(c), 0) / 5;
+    const last3avg = last3.reduce((s, c) => s + bodyOf(c), 0) / 3;
+    if (prev5avg > 0 && last3avg < prev5avg * 0.40) exhaustSignals++;
+
+    const lastRetracPeak = (trend === "bull" ? H : L).slice(-1)[0];
+    const bosConfirmed = lastRetracPeak && (trend === "bull"
+      ? last.close > lastRetracPeak.price
+      : last.close < lastRetracPeak.price);
+
+    const HH = H.slice(-2), HL = L.slice(-2);
+    const structOk = trend === "bull"
+      ? HH.length === 2 && HH[1].price > HH[0].price && HL.length === 2 && HL[1].price > HL[0].price
+      : HH.length === 2 && HH[1].price < HH[0].price && HL.length === 2 && HL[1].price < HL[0].price;
+    const avgBR = last3.reduce((s, c) => s + bodyRatio(c), 0) / 3;
+    const trendCandles = trend === "bull" ? last3.filter(c => c.close > c.open).length : last3.filter(c => c.close < c.open).length;
+    const isImpulse = structOk && avgBR >= 0.55 && trendCandles >= 2;
+
+    if (bosConfirmed && retracePct > 0.10)
+      return { phase: "PIVOT",        trend, confidence: 0.85, retracePct, exhaustSignals };
+    if (exhaustSignals >= 2 && retracePct > 0.20)
+      return { phase: "ESAURIMENTO",  trend, confidence: Math.min(0.95, 0.60 + exhaustSignals * 0.10), retracePct, exhaustSignals };
+    if (retracePct > 0.236)
+      return { phase: "RITRACCIAMENTO", trend, confidence: 0.75, retracePct, exhaustSignals };
+    if (isImpulse)
+      return { phase: "IMPULSO",      trend, confidence: 0.80, retracePct, exhaustSignals };
+    return   { phase: "LATERALE",     trend, confidence: 0.40, retracePct, exhaustSignals };
+  }
+
+  // ── Velocity/deceleration measurement (Agent 2) ───────────────────────────
+  function _measureVelocity(candles, indicators) {
+    if (!candles || candles.length < 20)
+      return { slopeDeccel: 0, bodyDeccel: 0, swingDeccel: null, rsiVelocity: 0, composite: 0 };
+
+    const N = 10, last = candles.length - 1;
+    const atr = _atrAt(candles, last);
+    const clamp01 = v => Math.max(0, Math.min(1, v));
+    const clamp11 = v => Math.max(-1, Math.min(1, v));
+
+    let slopeDeccel = 0;
+    if (candles.length >= 2 * N) {
+      const linreg = arr => {
+        const n = arr.length, xm = (n-1)/2, ym = arr.reduce((a,b) => a+b, 0) / n;
+        let num = 0, den = 0;
+        for (let j = 0; j < n; j++) { num += (j-xm)*(arr[j]-ym); den += (j-xm)**2; }
+        return den > 0 ? num/den : 0;
+      };
+      const closes = candles.map(c => c.close);
+      const sC = linreg(closes.slice(-N)) / atr;
+      const sP = linreg(closes.slice(-2*N, -N)) / atr;
+      if (Math.abs(sP) > 0.05)
+        slopeDeccel = clamp01((Math.abs(sP) - Math.abs(sC)) / (Math.abs(sP) + 0.001));
+    }
+
+    let bodyDeccel = 0;
+    if (candles.length >= 6) {
+      const sl = candles.slice(-6);
+      const b = sl.map(c => Math.abs(c.close - c.open) / atr);
+      const recent = (b[3]+b[4]+b[5]) / 3, older = (b[0]+b[1]+b[2]) / 3;
+      const bearN = sl.slice(-3).filter(c => c.close < c.open).length;
+      if (older > 0.15 && bearN >= 2)
+        bodyDeccel = clamp01((older - recent) / (older + 0.001));
+    }
+
+    let swingDeccel = null;
+    const sw60 = findSwings(candles.slice(-60), 4);
+    const swLo60 = sw60.lows;
+    if (swLo60.length >= 3) {
+      const [s0, s1, s2] = swLo60.slice(-3);
+      const ss = (a, b) => (b.i - a.i) > 0 ? ((b.price - a.price) / (b.i - a.i)) / atr : 0;
+      const sAB = ss(s0, s1), sBC = ss(s1, s2);
+      if (sAB < 0 && sBC < 0)
+        swingDeccel = clamp01((Math.abs(sAB) - Math.abs(sBC)) / (Math.abs(sAB) + 0.001));
+    }
+
+    let rsiVelocity = 0;
+    const rsiRawV = findIndicator(indicators || [], "RSI14") || findIndicator(indicators || [], "RSI");
+    if (rsiRawV) {
+      const rs = seriesFromIndicatorValues(candles, rsiRawV).filter(d => d.value != null);
+      if (rs.length >= 7) {
+        const rv = rs.slice(-7).map(d => d.value);
+        const dC = (rv[6]-rv[3])/3, dP = (rv[3]-rv[0])/3;
+        rsiVelocity = clamp11((dC - dP) / 10);
+      }
+    }
+
+    let composite = swingDeccel !== null
+      ? slopeDeccel*0.35 + bodyDeccel*0.25 + swingDeccel*0.30 + rsiVelocity*0.10
+      : slopeDeccel*0.40 + bodyDeccel*0.30 + rsiVelocity*0.30;
+    composite = clamp11(composite * 2 - 1);
+
+    return { slopeDeccel, bodyDeccel, swingDeccel, rsiVelocity, composite };
+  }
+
   function predictBreakout() {
     if (!mainChart || !state.data) return null;
     const tf = state.activeTimeframe;
@@ -6064,9 +6209,9 @@
     if (!analysis || !analysis.candles || analysis.candles.length < 10) return null;
 
     const allCandles = analysis.candles;
+    const indicators = analysis.indicators || [];
     const iv = analysis.interval || "1d";
 
-    // Range visibile
     let range = { from: 0, to: allCandles.length - 1 };
     try {
       const vr = mainChart.timeScale().getVisibleLogicalRange();
@@ -6075,125 +6220,130 @@
     const visible = allCandles.slice(range.from, range.to + 1);
     if (visible.length < 6) return null;
 
-    let bullPts = 0, bearPts = 0;
-    const factors = [];
+    // ── A. MTF context ──────────────────────────────────────────────────────
     const mtfContext = [];
-
-    // ── A. Analisi multi-timeframe (contesto + macro) ──────────────────────
     const hier = TF_HIERARCHY[iv] || {};
+    let macroBias = "neutral", contextBias = "neutral";
 
-    // Macro (peso 4): definisce la direzione di lungo periodo
     if (hier.macro) {
       const mA = _analysisByInterval(hier.macro);
       const mt = mA ? _computeTrend(mA.candles, mA.indicators || [], hier.macro) : null;
-      if (mt && mt.dir !== "neutral") {
-        const pts = 4 * mt.strength;
-        if (mt.dir === "bull") bullPts += pts; else bearPts += pts;
-        mtfContext.push({ tf: hier.macro, dir: mt.dir, detail: mt.detail, role: "macro" });
-      } else {
-        mtfContext.push({ tf: hier.macro, dir: mt ? "neutral" : "n/d", detail: mt ? mt.detail : "non caricato", role: "macro" });
-      }
+      macroBias = mt ? mt.dir : "neutral";
+      mtfContext.push({ tf: hier.macro, dir: mt ? mt.dir : "n/d", detail: mt ? mt.detail : "non caricato", role: "macro" });
     }
-
-    // Contesto (peso 2.5): definisce il bias intermedio
     if (hier.context) {
       const cA = _analysisByInterval(hier.context);
       const ct = cA ? _computeTrend(cA.candles, cA.indicators || [], hier.context) : null;
-      if (ct && ct.dir !== "neutral") {
-        const pts = 2.5 * ct.strength;
-        if (ct.dir === "bull") bullPts += pts; else bearPts += pts;
-        mtfContext.push({ tf: hier.context, dir: ct.dir, detail: ct.detail, role: "context" });
-      } else {
-        mtfContext.push({ tf: hier.context, dir: ct ? "neutral" : "n/d", detail: ct ? ct.detail : "non caricato", role: "context" });
-      }
+      contextBias = ct ? ct.dir : "neutral";
+      mtfContext.push({ tf: hier.context, dir: ct ? ct.dir : "n/d", detail: ct ? ct.detail : "non caricato", role: "context" });
     }
 
-    // ── B. Analisi locale (candele visibili) ───────────────────────────────
+    // ── B. Phase + velocity ─────────────────────────────────────────────────
+    const swings = findSwings(visible, Math.max(3, Math.floor(visible.length / 8)));
+    const phaseResult = _detectPhase(visible, swings);
+    const vel = _measureVelocity(visible, indicators);
 
-    // B1. Trend locale: prima metà vs seconda metà
-    const half = Math.floor(visible.length / 2);
-    const avgFirst = visible.slice(0, half).reduce((s, c) => s + c.close, 0) / half;
-    const avgSecond = visible.slice(half).reduce((s, c) => s + c.close, 0) / (visible.length - half);
-    const trendPct = (avgSecond - avgFirst) / avgFirst * 100;
-    if (trendPct > 0.3) { bullPts += 2; factors.push({ label: `Trend locale +${trendPct.toFixed(2)}%`, dir: "bull" }); }
-    else if (trendPct < -0.3) { bearPts += 2; factors.push({ label: `Trend locale ${trendPct.toFixed(2)}%`, dir: "bear" }); }
-    else { factors.push({ label: "Laterale nel range visibile", dir: "neutral" }); }
+    const phase = phaseResult.phase;
+    const trend = phaseResult.trend;
+    const resumeDir = macroBias !== "neutral" ? macroBias : trend !== "flat" ? trend : "neutral";
 
-    // B2. Struttura swing: HH/HL vs LH/LL
-    const swings = findSwings(visible, Math.max(2, Math.floor(visible.length / 8)));
-    if (swings.highs.length >= 2) {
-      const [h1, h2] = swings.highs.slice(-2);
-      if (h2.price > h1.price) { bullPts += 1.5; factors.push({ label: "Massimi crescenti (HH)", dir: "bull" }); }
-      else { bearPts += 1.5; factors.push({ label: "Massimi decrescenti (LH)", dir: "bear" }); }
+    // ── C. Gate conditions ──────────────────────────────────────────────────
+    const gatePhase   = phase === "ESAURIMENTO" || phase === "PIVOT";
+    const gateMacro   = macroBias !== "neutral";
+    const gateVelocity = resumeDir === "bull" ? vel.composite > 0.10 : resumeDir === "bear" ? vel.composite < -0.10 : false;
+
+    let currentRSI = null;
+    const rsiRawMain = findIndicator(indicators, "RSI14") || findIndicator(indicators, "RSI");
+    if (rsiRawMain) {
+      const rm = {};
+      seriesFromIndicatorValues(allCandles, rsiRawMain).forEach(d => { if (d.value != null) rm[d.time] = d.value; });
+      currentRSI = rm[visible[visible.length - 1].time];
     }
-    if (swings.lows.length >= 2) {
-      const [l1, l2] = swings.lows.slice(-2);
-      if (l2.price > l1.price) { bullPts += 1.5; factors.push({ label: "Minimi crescenti (HL)", dir: "bull" }); }
-      else { bearPts += 1.5; factors.push({ label: "Minimi decrescenti (LL)", dir: "bear" }); }
+    const gateRSI = currentRSI == null || (resumeDir === "bull" ? currentRSI < 72 : currentRSI > 28);
+    const gateATR  = _atrAt(visible, visible.length - 1) / (visible[visible.length - 1].close || 1) * 100 > 0.05;
+
+    const setupValid = gatePhase && (gateMacro || trend !== "flat") && gateVelocity && gateRSI && gateATR;
+
+    // ── D. Quality scoring (Agent 3) ─────────────────────────────────────
+    const factors = [];
+    let setupScore = 0;
+
+    {
+      const t0 = visible[0].time, t1v = visible[visible.length - 1].time;
+
+      // F1. RSI divergence (28%)
+      const relDivs = divergenceLines.filter(d => d.t2 >= t0 && d.t1 <= t1v && d.type === (resumeDir === "bull" ? "bull" : "bear"));
+      if (relDivs.length > 0) { setupScore += 28; factors.push({ label: "Divergenza RSI confermata", present: true }); }
+      else { factors.push({ label: "Nessuna divergenza RSI", present: false }); }
+
+      // F2. Swing structure HL/LH (20%)
+      const hasStruct = resumeDir === "bull"
+        ? swings.lows.length >= 2 && swings.lows.slice(-1)[0].price > swings.lows.slice(-2)[0].price
+        : swings.highs.length >= 2 && swings.highs.slice(-1)[0].price < swings.highs.slice(-2)[0].price;
+      if (hasStruct) { setupScore += 20; factors.push({ label: resumeDir === "bull" ? "Minimi crescenti (HL)" : "Massimi decrescenti (LH)", present: true }); }
+      else { factors.push({ label: resumeDir === "bull" ? "Struttura HL non confermata" : "Struttura LH non confermata", present: false }); }
+
+      // F3. MTF alignment (15%)
+      const mtfAligned = macroBias !== "neutral" && contextBias !== "neutral" && macroBias === contextBias && macroBias === resumeDir;
+      if (mtfAligned) { setupScore += 15; factors.push({ label: `MTF allineati ${hier.macro || ""}+${hier.context || ""}`, present: true }); }
+      else { factors.push({ label: "MTF non allineati", present: false }); }
+
+      // F4. Slope/body deceleration (13%)
+      const hasDecel = vel.slopeDeccel > 0.3 || vel.bodyDeccel > 0.3 || (vel.swingDeccel != null && vel.swingDeccel > 0.3);
+      if (hasDecel) { setupScore += 13; factors.push({ label: `Decelerazione ${vel.slopeDeccel > vel.bodyDeccel ? "slope" : "body"}`, present: true }); }
+      else { factors.push({ label: "Nessuna decelerazione significativa", present: false }); }
+
+      // F5. Inside bar / NR (10%)
+      const lc = visible[visible.length - 1], pc = visible[visible.length - 2];
+      const isInsideBar = lc && pc && lc.high < pc.high && lc.low > pc.low;
+      const isNR = lc && pc && (lc.high - lc.low) < (pc.high - pc.low) * 0.75;
+      if (isInsideBar || isNR) { setupScore += 10; factors.push({ label: isInsideBar ? "Inside bar (compressione)" : "NR: range in riduzione", present: true }); }
+      else { factors.push({ label: "Nessuna contrazione", present: false }); }
+
+      // F6. Exhaustion signal count (8%)
+      if (phaseResult.exhaustSignals >= 2) { setupScore += 8; factors.push({ label: `${phaseResult.exhaustSignals} segnali esaurimento`, present: true }); }
+      else { factors.push({ label: "Esaurimento non confermato", present: false }); }
+
+      // F7. Velocity composite (6%)
+      if (Math.abs(vel.composite) > 0.20) { setupScore += 6; factors.push({ label: `Momentum ${vel.composite > 0 ? "in riduzione" : "in aumento"} (${(vel.composite*100).toFixed(0)}%)`, present: true }); }
+      else { factors.push({ label: "Momentum stabile", present: false }); }
     }
 
-    // B3. Divergenze RSI nel range visibile
-    const t0 = visible[0].time, t1 = visible[visible.length - 1].time;
-    divergenceLines.forEach((d) => {
-      if (d.t2 < t0 || d.t1 > t1) return;
-      if (d.type === "bull") { bullPts += 2.5; factors.push({ label: "Divergenza RSI rialzista", dir: "bull" }); }
-      else { bearPts += 2.5; factors.push({ label: "Divergenza RSI ribassista", dir: "bear" }); }
-    });
+    const phaseLabels = {
+      "IMPULSO":        "Trend in corso — attendi ritracciamento",
+      "RITRACCIAMENTO": "Ritracciamento in atto",
+      "ESAURIMENTO":    "Ritracciamento in esaurimento",
+      "PIVOT":          "Pivot confermato — setup attivo",
+      "LATERALE":       "Struttura laterale",
+    };
 
-    // B4. Bilancio segnali nel range visibile
-    const allMarkers = [
-      ...buildStrategyMarkers(_lastStrategySignals || []),
-      ...autoPatternMarkers,
-      ...contextualHintMarkers,
-    ];
-    const visMarkers = allMarkers.filter((m) => m.time >= t0 && m.time <= t1);
-    const bullSig = visMarkers.filter((m) => m.text && (m.text.includes("↑") || m.text.includes("long") || m.text.includes("RSI−"))).length;
-    const bearSig = visMarkers.filter((m) => m.text && (m.text.includes("↓") || m.text.includes("short") || m.text.includes("RSI+"))).length;
-    const sigDiff = bullSig - bearSig;
-    if (sigDiff > 0) { bullPts += Math.min(2, sigDiff * 0.5); factors.push({ label: `Segnali: ${bullSig} rialz. vs ${bearSig} rib.`, dir: "bull" }); }
-    else if (sigDiff < 0) { bearPts += Math.min(2, -sigDiff * 0.5); factors.push({ label: `Segnali: ${bearSig} rib. vs ${bullSig} rialz.`, dir: "bear" }); }
+    const scoreColor  = setupScore >= 75 ? "#00d68f" : setupScore >= 50 ? "#f2a93b" : "#8899aa";
+    const timeWindow  = phase === "PIVOT" ? "Entry confermata" :
+                        phase === "ESAURIMENTO" ? "1-3 candele al pivot" :
+                        phase === "RITRACCIAMENTO" ? "Attendi segnali di esaurimento" :
+                        phase === "IMPULSO" ? "Attendi ritracciamento" : "Nessun setup attivo";
 
-    // B5. RSI corrente
-    const rsiRaw = findIndicator(analysis.indicators || [], "RSI14") || findIndicator(analysis.indicators || [], "RSI");
-    if (rsiRaw) {
-      const rsiMap = {};
-      seriesFromIndicatorValues(allCandles, rsiRaw).forEach((d) => { if (d.value != null) rsiMap[d.time] = d.value; });
-      const lastRSI = rsiMap[visible[visible.length - 1].time];
-      if (lastRSI != null) {
-        if (lastRSI < 35) { bullPts += 1; factors.push({ label: `RSI ipervenduto (${lastRSI.toFixed(0)})`, dir: "bull" }); }
-        else if (lastRSI > 65) { bearPts += 1; factors.push({ label: `RSI ipercomprato (${lastRSI.toFixed(0)})`, dir: "bear" }); }
-        else { factors.push({ label: `RSI neutro (${lastRSI.toFixed(0)})`, dir: "neutral" }); }
-      }
-    }
+    let keyLevel = null;
+    if (resumeDir === "bull" && swings.lows.length > 0)
+      keyLevel = { price: swings.lows.slice(-1)[0].price, desc: "Ultimo swing low — supporto" };
+    else if (resumeDir === "bear" && swings.highs.length > 0)
+      keyLevel = { price: swings.highs.slice(-1)[0].price, desc: "Ultimo swing high — resistenza" };
 
-    // B6. Momentum ultime 3 candele
-    const last3 = visible.slice(-3);
-    const greenCount = last3.filter((c) => c.close > c.open).length;
-    if (greenCount === 3) { bullPts += 1; factors.push({ label: "3 candele verdi consecutive", dir: "bull" }); }
-    else if (greenCount === 0) { bearPts += 1; factors.push({ label: "3 candele rosse consecutive", dir: "bear" }); }
+    const mainRisk = !gateMacro       ? "Bias macro non determinato" :
+                     !gateVelocity    ? "Momentum ancora nella direzione del ritracciamento" :
+                     !gateRSI         ? (resumeDir === "bull" ? "RSI in zona ipercomprata" : "RSI in zona ipervenduta") :
+                     phaseResult.retracePct > 0.618 ? "Ritracciamento profondo — possibile inversione strutturale" :
+                     "Setup nella norma";
 
-    // B7. Contrazione (inside bar → breakout imminente)
-    const lc = visible[visible.length - 1], pc = visible[visible.length - 2];
-    if (lc && pc && lc.high < pc.high && lc.low > pc.low) {
-      factors.push({ label: "Contrazione: breakout imminente", dir: "neutral" });
-    }
-
-    // ── Risultato ─────────────────────────────────────────────────────────
-    const total = bullPts + bearPts;
-    const diff = bullPts - bearPts;
-    const absDiff = Math.abs(diff);
-    const rawConf = total > 0 ? Math.round((absDiff / total) * 7 + absDiff * 0.3) : 0;
-    const confidence = Math.max(1, Math.min(10, rawConf));
-
-    let direction = "neutral";
-    if (diff > 1.5) direction = "bull";
-    else if (diff < -1.5) direction = "bear";
-
-    // Allineamento con macro: se il locale è contro il macro, abbassa la confidenza
-    const macroCtx = mtfContext.find((m) => m.role === "macro");
-    const aligned = !macroCtx || macroCtx.dir === "n/d" || macroCtx.dir === "neutral" || macroCtx.dir === direction || direction === "neutral";
-
-    return { direction, bullPts, bearPts, confidence, factors, mtfContext, candleCount: visible.length, iv, aligned };
+    return {
+      phase, phaseLabel: phaseLabels[phase] || phase, trend, phaseTrend: trend,
+      phaseConf: phaseResult.confidence, retracePct: phaseResult.retracePct,
+      velocity: vel, setupValid, setupScore, scoreColor,
+      timeWindow, keyLevel, mainRisk, factors, direction: resumeDir,
+      mtfContext, candleCount: visible.length, iv,
+      aligned: macroBias === "neutral" || macroBias === resumeDir,
+      macroBias, contextBias,
+    };
   }
 
   function showBreakoutPopup() {
@@ -6202,54 +6352,62 @@
     if (!popup) return;
 
     if (!res) {
-      popup.innerHTML = `<div class="bp-header"><span class="bp-title">Previsione</span><button class="marker-popup-close" onclick="document.getElementById('breakout-popup').classList.add('hidden')">×</button></div><p style="color:var(--ink-dim);font-size:12px;margin:8px 0 0">Dati insufficienti nel range visibile.</p>`;
+      popup.innerHTML = `<div class="bp-header"><span class="bp-title">Analisi Setup</span><button class="marker-popup-close" onclick="document.getElementById('breakout-popup').classList.add('hidden')">×</button></div><p style="color:var(--ink-dim);font-size:12px;margin:8px 0 0">Dati insufficienti nel range visibile.</p>`;
       popup.classList.remove("hidden");
       return;
     }
 
-    const dirLabel = res.direction === "bull" ? "▲ RIALZISTA" : res.direction === "bear" ? "▼ RIBASSISTA" : "→ NEUTRO";
+    const dirLabel = res.direction === "bull" ? "▲ LONG" : res.direction === "bear" ? "▼ SHORT" : "→ NEUTRO";
     const dirColor = res.direction === "bull" ? "#00d68f" : res.direction === "bear" ? "#ff4560" : "#8899aa";
-    const confColor = res.confidence >= 7 ? "#00d68f" : res.confidence >= 5 ? "#f2a93b" : "#8899aa";
+    const phaseColors = { "IMPULSO": "#8899aa", "RITRACCIAMENTO": "#f2a93b", "ESAURIMENTO": "#ffb347", "PIVOT": "#00d68f", "LATERALE": "#667788" };
+    const phaseColor = phaseColors[res.phase] || "#8899aa";
 
-    // Riga allineamento macro
-    const alignNote = res.aligned
-      ? `<span style="color:#4fd8a8;font-size:10px;font-family:var(--font-mono)">✓ allineato al trend di lungo</span>`
-      : `<span style="color:#f2a93b;font-size:10px;font-family:var(--font-mono)">⚠ contro il trend di lungo</span>`;
-
-    // Barre MTF (macro + context)
-    const mtfRows = res.mtfContext.map((m) => {
+    const mtfRows = res.mtfContext.map(m => {
       const icon = m.dir === "bull" ? "▲" : m.dir === "bear" ? "▼" : "→";
-      const col = m.dir === "bull" ? "#00d68f" : m.dir === "bear" ? "#ff4560" : "#8899aa";
-      const roleLabel = m.role === "macro" ? "MACRO" : "CONTESTO";
-      return `<div class="bp-mtf-row"><span class="bp-mtf-tf">${roleLabel} ${m.tf.toUpperCase()}</span><span class="bp-mtf-dir" style="color:${col}">${icon} ${m.dir.toUpperCase()}</span><span class="bp-mtf-detail">${m.detail}</span></div>`;
+      const col  = m.dir === "bull" ? "#00d68f" : m.dir === "bear" ? "#ff4560" : "#8899aa";
+      return `<div class="bp-mtf-row"><span class="bp-mtf-tf">${m.role === "macro" ? "MACRO" : "CONTESTO"} ${m.tf.toUpperCase()}</span><span class="bp-mtf-dir" style="color:${col}">${icon} ${m.dir.toUpperCase()}</span><span class="bp-mtf-detail">${m.detail}</span></div>`;
     }).join("");
 
-    const factorRows = res.factors.slice(0, 6).map((f) => {
-      const icon = f.dir === "bull" ? "▲" : f.dir === "bear" ? "▼" : "→";
-      const col = f.dir === "bull" ? "#00d68f" : f.dir === "bear" ? "#ff4560" : "#8899aa";
-      return `<div class="bp-factor"><span class="bp-factor-icon" style="color:${col}">${icon}</span><span class="bp-factor-label">${f.label}</span></div>`;
+    const factorRows = res.factors.map(f => {
+      const col = f.present ? (res.direction === "bull" ? "#00d68f" : "#ff4560") : "#445566";
+      return `<div class="bp-factor"><span class="bp-factor-icon" style="color:${col}">${f.present ? "✓" : "·"}</span><span class="bp-factor-label" style="opacity:${f.present ? "1" : "0.5"}">${f.label}</span></div>`;
     }).join("");
+
+    const keyLevelHtml = res.keyLevel
+      ? `<div class="bp-factor" style="margin-top:4px"><span class="bp-factor-icon" style="color:#8899aa">⊙</span><span class="bp-factor-label">${res.keyLevel.price.toLocaleString(undefined, {maximumFractionDigits:6})} — ${res.keyLevel.desc}</span></div>`
+      : "";
+
+    const retrStr = res.retracePct > 0 ? ` · retr. ${(res.retracePct * 100).toFixed(0)}%` : "";
+    const velStr  = ` · vel. ${(res.velocity.composite * 100).toFixed(0)}%`;
 
     popup.innerHTML = `
       <div class="bp-header">
-        <span class="bp-title">Previsione Breakout · ${res.iv.toUpperCase()}</span>
+        <span class="bp-title">Setup · ${res.iv.toUpperCase()}</span>
         <button class="marker-popup-close" onclick="document.getElementById('breakout-popup').classList.add('hidden')" aria-label="Chiudi">×</button>
       </div>
-      <div class="bp-direction" style="color:${dirColor}">${dirLabel}</div>
-      <div class="bp-conf-row">
-        <span class="bp-conf-label">CONFIDENZA</span>
-        <div class="marker-popup-score-bar" style="flex:1"><div class="marker-popup-score-fill" style="width:${res.confidence * 10}%;background:${confColor}"></div></div>
-        <span class="bp-conf-num" style="color:${confColor}">${res.confidence}/10</span>
+      <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:4px">
+        <span style="font-family:var(--font-mono);font-size:10px;font-weight:700;color:${phaseColor};text-transform:uppercase;letter-spacing:.06em">${res.phase}</span>
+        <span style="color:${dirColor};font-size:16px;font-weight:700">${dirLabel}</span>
       </div>
-      <div style="margin-bottom:8px">${alignNote}</div>
-      ${mtfRows ? `<div class="bp-mtf">${mtfRows}</div><div class="bp-section-label">ANALISI LOCALE</div>` : ""}
-      <div class="bp-factors">${factorRows}</div>
-      <div class="bp-footer">${res.candleCount} candele visibili · bull ${res.bullPts.toFixed(1)} pt · bear ${res.bearPts.toFixed(1)} pt</div>
+      <div style="font-size:11px;color:var(--ink-dim);margin-bottom:8px">${res.phaseLabel}</div>
+      ${res.setupValid ? `
+      <div class="bp-conf-row" style="margin-bottom:4px">
+        <span class="bp-conf-label">SETUP SCORE</span>
+        <div class="marker-popup-score-bar" style="flex:1"><div class="marker-popup-score-fill" style="width:${res.setupScore}%;background:${res.scoreColor}"></div></div>
+        <span class="bp-conf-num" style="color:${res.scoreColor}">${res.setupScore}/100</span>
+      </div>
+      <div style="font-size:10px;color:var(--ink-dim);margin-bottom:8px">⏱ ${res.timeWindow}</div>
+      ` : `<div style="font-size:11px;color:#8899aa;margin-bottom:8px">⏳ ${res.timeWindow}</div>`}
+      ${mtfRows ? `<div class="bp-mtf" style="margin-bottom:6px">${mtfRows}</div>` : ""}
+      <div class="bp-section-label">${res.setupValid ? "FATTORI QUALITÀ" : "STRUTTURA"}</div>
+      <div class="bp-factors">${factorRows}${keyLevelHtml}</div>
+      ${res.setupValid ? `<div style="font-size:10px;color:#8899aa;margin-top:4px">⚠ ${res.mainRisk}</div>` : ""}
+      <div class="bp-footer">${res.candleCount} candele${velStr}${retrStr}</div>
     `;
     popup.classList.remove("hidden");
 
     setTimeout(() => {
-      const close = (e) => {
+      const close = e => {
         if (!popup.contains(e.target) && !el("mobile-strip-predict-btn")?.contains(e.target)) {
           popup.classList.add("hidden");
           document.removeEventListener("pointerdown", close, true);
