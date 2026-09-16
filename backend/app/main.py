@@ -2548,8 +2548,10 @@ async def analyze(
         # the full 500-bar history — that history was ~2/3 of this endpoint's
         # response size for two timeframes nothing ever renders.
         if tf_key != "ltf":
-            candles = candles[-2:]
-            indicators = [ind.model_copy(update={"values": ind.values[-2:]}) for ind in indicators]
+            # Keep enough bars for frontend MTF trend computation (needs ~10+)
+            # while still trimming the bulk of the history to save bandwidth.
+            candles = candles[-50:]
+            indicators = [ind.model_copy(update={"values": ind.values[-50:]}) for ind in indicators]
         timeframes[tf_key] = TimeframeAnalysis(
             interval=intervals[tf_key],
             candles=candles,
