@@ -17,6 +17,7 @@ backend/app/data/server_errors.json
 backend/app/data/issues.json
 backend/app/data/issue_replies.json
 backend/app/data/seeded_ids.json
+backend/app/data/watchdog.json
 
 # Segreti del deploy self-hosted
 deploy/.env
