@@ -943,8 +943,10 @@
   // "Frattali": ricopia un intervallo di candele gia' successo subito dopo
   // l'ultima candela vera, come un TradingView-style pattern replay — per
   // confrontare a occhio se un movimento passato si sta ripetendo ora.
-  // Ogni voce: { id, series, label, startTime }.
+  // Ogni voce: { id, series, label, startTime, interval, projected }.
   let fractalReplays = [];
+  let selectedFractalId = null;
+  let fractalDrag = null; // { id, startX, pxPerBar, originalProjected }
 
   const tooltipEl = el("tooltip");
 
@@ -5041,6 +5043,22 @@
       ctx.restore(); return;
     }
 
+    // Il frattale seleziona un INTERVALLO DI TEMPO, non un'area di prezzo: un
+    // rettangolo (come "range") suggerisce che anche l'altezza scelta conti,
+    // mentre l'unica cosa che conta e' quali candele cadono fra le due x. Due
+    // linee verticali tratteggiate, una per punto, lo dicono senza ambiguita'.
+    if (d.type === "fractal") {
+      const x1 = timeToXEdge(d.points[0].time);
+      const x2 = timeToXEdge(d.points[1].time);
+      if (x1 === null || x2 === null) { ctx.restore(); return; }
+      ctx.setLineDash([5, 3]);
+      [x1, x2].forEach((x) => {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+      });
+      ctx.setLineDash([]);
+      ctx.restore(); return;
+    }
+
     const [p1, p2] = d.points;
     // Usa coordinate clampate ai bordi: i punti fuori dal range dati
     // vengono proiettati al bordo invece di restituire null e nascondere il disegno.
@@ -5188,12 +5206,7 @@
       const price2 = candleSeries.coordinateToPrice(lastCrosshairPoint.y);
       if (price2 !== null) {
         const ghostPts = [...drawState.pending, { time: lastCrosshairPoint.time, price: price2 }];
-        // Il frattale non ha una forma propria: mentre si sceglie l'intervallo
-        // da ricopiare, l'anteprima e' lo stesso box tratteggiato del tool
-        // "range" — e' letteralmente quello che si sta facendo, selezionare
-        // un intervallo.
-        const ghostType = drawState.tool === "fractal" ? "range" : drawState.tool;
-        renderOneDrawing({ type: ghostType, points: ghostPts }, false, true);
+        renderOneDrawing({ type: drawState.tool, points: ghostPts }, false, true);
       }
     }
   }
@@ -5899,6 +5912,8 @@
       label.remove();
     });
     fractalReplays = [];
+    selectedFractalId = null;
+    fractalDrag = null;
   }
 
   function removeFractalReplay(id) {
@@ -5907,6 +5922,7 @@
     try { mainChart.removeSeries(entry.series); } catch { /* gia' rimossa */ }
     entry.label.remove();
     fractalReplays = fractalReplays.filter((f) => f.id !== id);
+    if (selectedFractalId === id) selectedFractalId = null;
   }
 
   // Piazza la label ("Frattale ✕") sopra l'inizio della copia, e la
@@ -5924,6 +5940,17 @@
       label.style.top = `${8 + i * 22}px`;
       label.classList.remove("hidden");
     });
+  }
+
+  function selectFractal(id) {
+    selectedFractalId = id;
+    fractalReplays.forEach((f) => f.label.classList.toggle("selected", f.id === id));
+  }
+
+  function deselectFractal() {
+    if (!selectedFractalId) return;
+    selectedFractalId = null;
+    fractalReplays.forEach((f) => f.label.classList.remove("selected"));
   }
 
   function createFractalReplay(p1, p2) {
@@ -5970,17 +5997,78 @@
     const container = el("main-chart");
     const label = document.createElement("div");
     label.className = "fractal-label";
+    label.title = "Trascina per spostare nel tempo";
     label.innerHTML = `<span>🔮 Frattale — ${segment.length} candele ricopiate</span>` +
       `<button type="button" class="fractal-label-close" title="Rimuovi">✕</button>`;
     label.querySelector(".fractal-label-close").addEventListener("click", (e) => {
       e.stopPropagation();
       removeFractalReplay(id);
     });
+    // Trascinabile in tempo: la label e' l'unica maniglia (le candele vere
+    // e la copia occupano lo stesso canvas, e distinguerle al pixel per
+    // farne un bersaglio di drag affidabile sarebbe fragile). Un click senza
+    // trascinare seleziona/deseleziona invece — Canc rimuove il selezionato.
+    label.addEventListener("mousedown", (e) => {
+      if (e.target.closest(".fractal-label-close")) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const entry = fractalReplays.find((f) => f.id === id);
+      if (!entry) return;
+      const xA = mainChart.timeScale().timeToCoordinate(entry.projected[0].time);
+      const xB = mainChart.timeScale().timeToCoordinate(
+        entry.projected[Math.min(1, entry.projected.length - 1)].time
+      );
+      const pxPerBar = (xA !== null && xB !== null && xB !== xA) ? Math.abs(xB - xA) : 8;
+      fractalDrag = {
+        id, startX: e.clientX, pxPerBar,
+        baseLeft: parseFloat(label.style.left) || 0,
+        originalProjected: entry.projected.map((p) => ({ ...p })),
+        moved: false,
+      };
+      // Senza disattivarlo, il grafico sotto la label continua a interpretare
+      // lo stesso trascinamento come un pan mentre il mouse scivola dalla
+      // label al canvas: le due logiche si accavallavano, ognuna spostando
+      // la copia a modo suo nello stesso gesto.
+      mainChart.applyOptions({ handleScroll: false, handleScale: false });
+    });
     container.appendChild(label);
 
-    fractalReplays.push({ id, series, label, startTime: projected[0].time });
+    fractalReplays.push({ id, series, label, startTime: projected[0].time, interval, projected });
     repositionFractalLabels();
   }
+
+  document.addEventListener("mousemove", (e) => {
+    if (!fractalDrag) return;
+    const entry = fractalReplays.find((f) => f.id === fractalDrag.id);
+    if (!entry) { fractalDrag = null; return; }
+    const dx = e.clientX - fractalDrag.startX;
+    if (Math.abs(dx) > DRAW_CLICK_TOLERANCE_PX) fractalDrag.moved = true;
+    const deltaBars = Math.round(dx / fractalDrag.pxPerBar);
+    const shifted = fractalDrag.originalProjected.map((p) => ({
+      ...p, time: p.time + deltaBars * entry.interval,
+    }));
+    entry.series.setData(shifted);
+    entry.projected = shifted;
+    entry.startTime = shifted[0].time;
+    // La label segue il dito in pixel puri durante il trascinamento — non
+    // ricalcolata da timeToCoordinate ad ogni passo, che qui oscillava fra
+    // due valori vicini (il grafico rivaluta la propria griglia mentre le
+    // candele sotto si muovono nello stesso istante). Il riallineamento
+    // esatto, ricavato dal tempo vero, avviene una volta sola al rilascio.
+    entry.label.style.left = `${Math.max(0, fractalDrag.baseLeft + dx)}px`;
+  });
+  document.addEventListener("mouseup", () => {
+    if (!fractalDrag) return;
+    if (!fractalDrag.moved) selectFractal(fractalDrag.id);
+    fractalDrag = null;
+    if (mainChart) mainChart.applyOptions({ handleScroll: drawState.tool === "cursor", handleScale: drawState.tool === "cursor" });
+    // Niente riallineamento da timeToCoordinate qui: il grafico riflette lo
+    // spostamento con un ritardo di un frame rispetto a setData(), e
+    // richiamarlo subito riportava la label alla posizione di partenza.
+    // La posizione in pixel lasciata dal trascinamento e' gia' quella giusta
+    // (stessa scala delle candele sotto); il prossimo pan/zoom/resize la
+    // ricalcola comunque dal tempo vero.
+  });
 
   function bindDrawClickCapture() {
     const container = el("main-chart");
@@ -6056,6 +6144,7 @@
           // Click on empty space → deselect
           const hit = findHitDrawing(lastCrosshairPoint.x, lastCrosshairPoint.y);
           if (!hit) drawState.selected = null;
+          deselectFractal();
           return;
         }
 
@@ -6076,12 +6165,13 @@
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") {
         if (drawState.tool !== "cursor") setDrawTool("cursor");
-        else drawState.selected = null;
+        else { drawState.selected = null; deselectFractal(); }
         return;
       }
       const tag = document.activeElement?.tagName;
       if ((e.key === "Delete" || e.key === "Backspace") && tag !== "INPUT" && tag !== "TEXTAREA" && tag !== "SELECT") {
         if (drawState.selected) { removeDrawing(drawState.selected); drawState.selected = null; }
+        if (selectedFractalId) removeFractalReplay(selectedFractalId);
       }
     });
   }
@@ -10108,6 +10198,15 @@
       const tog = el("log-scale-toggle");
       if (tog) tog.checked = true;
       state.logScale = true;
+      // La spunta e lo stato non bastano da soli: il grafico nasce sempre in
+      // scala lineare (baseOptions non dichiara un mode), e senza questa
+      // riga restava lineare anche con la preferenza gia' salvata su log,
+      // finche' non si ritoccava a mano l'interruttore. "a volte la
+      // visualizzazione appare in scala lineare" — sempre, in realta', al
+      // primo caricamento con la preferenza gia' attiva.
+      if (mainChart) {
+        mainChart.priceScale("right").applyOptions({ mode: LightweightCharts.PriceScaleMode.Logarithmic });
+      }
     }
     runAnalysis(ticker);
   }
