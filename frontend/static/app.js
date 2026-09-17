@@ -940,6 +940,12 @@
   let customOscCharts = {}; // indicator id -> { container, chart }
   const CUSTOM_IND_COLORS = ["#5b9cf6", "#f6a25b", "#c17ee8", "#5bc9c9", "#e85b8f", "#a8c95b"];
 
+  // "Frattali": ricopia un intervallo di candele gia' successo subito dopo
+  // l'ultima candela vera, come un TradingView-style pattern replay — per
+  // confrontare a occhio se un movimento passato si sta ripetendo ora.
+  // Ogni voce: { id, series, label, startTime }.
+  let fractalReplays = [];
+
   const tooltipEl = el("tooltip");
 
   // Chart containers start hidden (display:none) until the first search
@@ -979,6 +985,7 @@
         }
       }
     });
+    repositionFractalLabels();
   }
 
   function populateIntervalSelects() {
@@ -4668,6 +4675,7 @@
       Object.values(customOscCharts).forEach(({ chart }) => {
         try { chart.timeScale().setVisibleLogicalRange(range); } catch { /* in fase di rimozione */ }
       });
+      repositionFractalLabels();
     });
 
     // Il valore dell'RSI va letto sul punto della curva, non dove capita il
@@ -4911,7 +4919,7 @@
   // "ghost" preview between the first and second click; the Cursor tool
   // hit-tests existing drawings and removes one on click. No drag-to-resize
   // of an already-placed drawing yet — that's a later iteration.
-  const DRAW_TOOL_POINTS = { cursor: 0, trend_line: 2, hline: 1, hray: 1, extended_line: 2, rectangle: 2, range: 2, fib: 2, text: 1, arrow: 2, channel: 3, ellipse: 2 };
+  const DRAW_TOOL_POINTS = { cursor: 0, trend_line: 2, hline: 1, hray: 1, extended_line: 2, rectangle: 2, range: 2, fib: 2, text: 1, arrow: 2, channel: 3, ellipse: 2, fractal: 2 };
   const DRAW_TOOL_LABELS = {
     trend_line: "Linea di tendenza",
     extended_line: "Linea estesa",
@@ -5180,7 +5188,12 @@
       const price2 = candleSeries.coordinateToPrice(lastCrosshairPoint.y);
       if (price2 !== null) {
         const ghostPts = [...drawState.pending, { time: lastCrosshairPoint.time, price: price2 }];
-        renderOneDrawing({ type: drawState.tool, points: ghostPts }, false, true);
+        // Il frattale non ha una forma propria: mentre si sceglie l'intervallo
+        // da ricopiare, l'anteprima e' lo stesso box tratteggiato del tool
+        // "range" — e' letteralmente quello che si sta facendo, selezionare
+        // un intervallo.
+        const ghostType = drawState.tool === "fractal" ? "range" : drawState.tool;
+        renderOneDrawing({ type: ghostType, points: ghostPts }, false, true);
       }
     }
   }
@@ -5820,6 +5833,7 @@
 
   function loadDrawingsForSymbol() {
     clearAllDrawingPrimitives();
+    clearFractalReplays();
     drawState.drawings = [];
     const key = drawStorageKey();
     if (key) {
@@ -5839,6 +5853,16 @@
     const type = drawState.tool;
     const points = drawState.pending;
     drawState.pending = [];
+
+    // Il frattale non e' un disegno come gli altri (linea, rettangolo...):
+    // non aggiunge una forma sul grafico, ricopia un pezzo di storia vero
+    // subito dopo l'ultima candela. Vive nella sua lista a parte
+    // (fractalReplays), non in drawState.drawings.
+    if (type === "fractal") {
+      createFractalReplay(points[0], points[1]);
+      setDrawTool("cursor");
+      return;
+    }
 
     let text;
     if (type === "text") {
@@ -5868,6 +5892,95 @@
   // disabled for the duration so the chart doesn't drift under the cursor
   // while placing a point (see setDrawTool).
   const DRAW_CLICK_TOLERANCE_PX = 6;
+
+  function clearFractalReplays() {
+    fractalReplays.forEach(({ series, label }) => {
+      try { mainChart.removeSeries(series); } catch { /* gia' rimossa */ }
+      label.remove();
+    });
+    fractalReplays = [];
+  }
+
+  function removeFractalReplay(id) {
+    const entry = fractalReplays.find((f) => f.id === id);
+    if (!entry) return;
+    try { mainChart.removeSeries(entry.series); } catch { /* gia' rimossa */ }
+    entry.label.remove();
+    fractalReplays = fractalReplays.filter((f) => f.id !== id);
+  }
+
+  // Piazza la label ("Frattale ✕") sopra l'inizio della copia, e la
+  // riposiziona ad ogni pan/zoom/resize — non e' un elemento del canvas dei
+  // disegni, e' un div assoluto sopra #main-chart, come il badge di rimozione
+  // degli overlay e la legenda degli indicatori.
+  function repositionFractalLabels() {
+    if (!mainChart || !fractalReplays.length) return;
+    fractalReplays.forEach(({ label, startTime }, i) => {
+      const x = mainChart.timeScale().timeToCoordinate(startTime);
+      if (x === null) { label.classList.add("hidden"); return; }
+      // Impilate una sopra l'altra quando piu' frattali cadono vicini, invece
+      // di sovrapporsi illeggibili.
+      label.style.left = `${Math.max(0, x)}px`;
+      label.style.top = `${8 + i * 22}px`;
+      label.classList.remove("hidden");
+    });
+  }
+
+  function createFractalReplay(p1, p2) {
+    const analysis = state.data && state.data.timeframes && state.data.timeframes[state.activeTimeframe];
+    const candles = analysis && analysis.candles;
+    if (!candles || candles.length < 2) return;
+    const t0 = Math.min(p1.time, p2.time);
+    const t1 = Math.max(p1.time, p2.time);
+    const segment = candles.filter((c) => c.time >= t0 && c.time <= t1);
+    if (segment.length < 3) {
+      const banner = el("error-banner");
+      banner.textContent = "Seleziona un intervallo più ampio: servono almeno 3 candele da ricopiare.";
+      banner.classList.remove("hidden");
+      return;
+    }
+    const baseClose = segment[0].close;
+    if (!baseClose) return;
+    const lastCandle = candles[candles.length - 1];
+    const interval = candles.length >= 2
+      ? candles[candles.length - 1].time - candles[candles.length - 2].time
+      : 86400;
+
+    const projected = segment.map((c, i) => {
+      const scale = (v) => lastCandle.close * (v / baseClose);
+      return {
+        time: lastCandle.time + interval * (i + 1),
+        open: scale(c.open), high: scale(c.high), low: scale(c.low), close: scale(c.close),
+      };
+    });
+
+    const id = `fr${Date.now()}${Math.random().toString(36).slice(2, 7)}`;
+    const series = mainChart.addCandlestickSeries({
+      upColor: "rgba(140,120,255,0.45)",
+      downColor: "rgba(140,120,255,0.20)",
+      borderUpColor: "#8c78ff",
+      borderDownColor: "#8c78ff",
+      wickUpColor: "#8c78ff",
+      wickDownColor: "#8c78ff",
+      priceLineVisible: false,
+      lastValueVisible: false,
+    });
+    series.setData(projected);
+
+    const container = el("main-chart");
+    const label = document.createElement("div");
+    label.className = "fractal-label";
+    label.innerHTML = `<span>🔮 Frattale — ${segment.length} candele ricopiate</span>` +
+      `<button type="button" class="fractal-label-close" title="Rimuovi">✕</button>`;
+    label.querySelector(".fractal-label-close").addEventListener("click", (e) => {
+      e.stopPropagation();
+      removeFractalReplay(id);
+    });
+    container.appendChild(label);
+
+    fractalReplays.push({ id, series, label, startTime: projected[0].time });
+    repositionFractalLabels();
+  }
 
   function bindDrawClickCapture() {
     const container = el("main-chart");
@@ -6716,6 +6829,8 @@
         { label: "Freccia", action: () => setDrawTool("arrow") },
         { label: "Fibonacci", action: () => setDrawTool("fib") },
         { label: "Testo", action: () => setDrawTool("text") },
+        { separator: true },
+        { label: "Frattale (ricopia un intervallo)", action: () => setDrawTool("fractal") },
         { separator: true },
         { label: "Impostazioni grafico…", action: () => { const btn = document.getElementById("chart-settings-btn"); if (btn) btn.click(); } },
       ].filter(Boolean);

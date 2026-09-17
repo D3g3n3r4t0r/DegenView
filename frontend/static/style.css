@@ -4182,6 +4182,24 @@ button.wl-archive-pick:hover { border-color: var(--accent); }
 .sub-chart:hover .osc-remove-btn { opacity: 1; }
 .osc-remove-btn:hover { background: var(--bear); color: #fff; border-color: var(--bear); }
 
+/* Etichetta del frattale ricopiato: ancorata all'inizio della copia, si
+   sposta con pan/zoom (repositionFractalLabels). Il viola distingue a colpo
+   d'occhio la copia dalle candele vere sotto (stesso viola delle candele
+   della copia stessa). */
+.fractal-label {
+  position: absolute; top: 8px; left: 0; z-index: 6;
+  display: inline-flex; align-items: center; gap: 6px; width: max-content;
+  background: var(--bg-panel); border: 1px solid #8c78ff; border-radius: 4px;
+  padding: 2px 4px 2px 8px; font-size: 11px; color: var(--ink);
+  box-shadow: 0 1px 3px rgba(0,0,0,.15);
+}
+.fractal-label.hidden { display: none; }
+.fractal-label-close {
+  font: inherit; font-size: 12px; line-height: 1; border: none; background: none;
+  color: var(--ink-dim); cursor: pointer; padding: 1px 3px;
+}
+.fractal-label-close:hover { color: var(--bear); }
+
 /* Il pulsante nella toolbar in alto — stesso spazio vuoto a destra dei
    controlli del grafico, prima occupato solo dallo spacer flessibile. */
 .toolbar-indicators-btn {
