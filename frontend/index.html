@@ -125,7 +125,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 4 12 9 6"/><polyline points="15 6 20 12 15 18"/></svg>
           <span>Script Pine</span>
         </button>
-        <button type="button" class="sidenav-item" id="sidenav-indicators" data-area="indicators">
+        <button type="button" class="sidenav-item" id="sidenav-indicators">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
           <span>Libreria</span>
         </button>
@@ -168,11 +168,6 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
           <polyline points="9 18 4 12 9 6"/>
           <polyline points="15 6 20 12 15 18"/>
-        </svg>
-      </button>
-      <button type="button" class="rail-btn hidden" id="rail-indicators-btn" title="Libreria indicatori">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
-          <circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/>
         </svg>
       </button>
     </nav>
@@ -302,15 +297,20 @@
       </div>
     </div>
 
-    <div id="indicator-library-panel" class="levels-panel indicator-library-panel">
-      <div class="drawer-header">
-        <span>Libreria indicatori</span>
-        <button type="button" class="drawer-close-btn" data-close-drawer>✕ Chiudi</button>
-      </div>
-      <div class="panel indicator-library-body">
-        <p class="panel-hint">151 indicatori open source (pandas-ta), ognuno con la spiegazione di cosa misura. Quelli <b>sul prezzo</b> disegnano una linea sopra le candele; quelli <b>a riquadro</b> aprono un pannello proprio sotto il grafico — così nulla si affolla finché non lo scegli.</p>
-        <input type="search" id="indicator-library-search" placeholder="Cerca per nome o per cosa vuoi vedere (es. \"volatilità\", \"volume\", \"trend\")…" autocomplete="off" />
-        <div id="indicator-library-list" class="indicator-library-list"></div>
+    <div id="indicator-library-modal" class="indicator-modal-overlay hidden">
+      <div class="indicator-modal" role="dialog" aria-modal="true" aria-label="Libreria indicatori">
+        <div class="indicator-modal-header">
+          <h3>Indicatori, con spiegazione</h3>
+          <button type="button" id="indicator-modal-close" class="indicator-modal-close" aria-label="Chiudi">✕</button>
+        </div>
+        <div class="indicator-modal-search">
+          <input type="search" id="indicator-library-search" placeholder="Cerca per nome o per cosa vuoi vedere (es. “volatilità”, “volume”, “trend”)…" autocomplete="off" />
+        </div>
+        <div class="indicator-modal-body">
+          <nav id="indicator-modal-nav" class="indicator-modal-nav"></nav>
+          <div id="indicator-library-list" class="indicator-library-list"></div>
+        </div>
+        <p class="indicator-modal-hint">151 indicatori open source (pandas-ta). Quelli <b>sul prezzo</b> disegnano una linea sopra le candele; quelli <b>a riquadro</b> aprono un pannello sotto il grafico — nulla si affolla finché non lo scegli.</p>
       </div>
     </div>
 
@@ -376,7 +376,10 @@
           </button>
         </nav>
         <div id="chart-wrap" class="chart-wrap hidden">
-          <div id="main-chart" class="main-chart"><canvas id="draw-canvas"></canvas></div>
+          <div id="main-chart" class="main-chart"><canvas id="draw-canvas"></canvas>
+            <button type="button" id="overlay-remove-badge" class="overlay-remove-badge hidden" title="Rimuovi questo indicatore">✕</button>
+            <div id="chart-indicator-legend" class="chart-indicator-legend"></div>
+          </div>
           <div id="rsi-chart" class="sub-chart hidden"></div>
           <div id="macd-chart" class="sub-chart hidden"></div>
           <div id="stoch-chart" class="sub-chart hidden"></div>
