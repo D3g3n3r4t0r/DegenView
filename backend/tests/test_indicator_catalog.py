@@ -36,6 +36,19 @@ def test_every_indicator_is_overlay_or_oscillator():
     assert all(s.kind in ("overlay", "oscillator") for s in ic.CATALOG)
 
 
+def test_every_indicator_has_its_own_description():
+    # Lorenzo: "non conosco i nomi cosi non so cosa cercare" — un fallback
+    # generico per categoria basterebbe a non rompere l'endpoint, ma non
+    # basterebbe a spiegare niente. Ogni id deve avere la sua riga dedicata.
+    missing = [s.id for s in ic.CATALOG if s.id not in ic.DESCRIPTIONS]
+    assert not missing, f"indicatori senza descrizione dedicata: {missing}"
+
+
+def test_catalog_payload_includes_description():
+    payload = ic.catalog_payload()
+    assert all(entry["description"] for entry in payload)
+
+
 @pytest.mark.parametrize(
     "indicator_id",
     ["rsi", "supertrend", "macd", "adx", "obv", "vwap", "donchian", "bbands"],

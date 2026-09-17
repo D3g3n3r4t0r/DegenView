@@ -1590,7 +1590,7 @@ Lorenzo (in ordine di sessione): "se apro la tab lab con il grafico compresso la
 
 ---
 
-### Libreria indicatori community (pandas-ta) — `seed-0079` — **fatto**
+### Libreria indicatori community (pandas-ta) — `seed-0079`, `seed-0080` — **fatto**
 
 Lorenzo, guardando il documento di presentazione preparato in questa
 sessione: "ma il discorso della libreria di indicatori open source fatti da
@@ -1645,3 +1645,42 @@ con `setTimeout(fn, 0)`.
 518 passed, ruff pulito, verifica end-to-end nel browser reale (login,
 ricerca, aggiunta/rimozione di piu' indicatori, controllo che i riquadri
 dinamici nel DOM tornino al numero di partenza dopo la rimozione).
+
+**Secondo giro — `seed-0080`, stesso filone**: appena vista la prima
+versione, Lorenzo: "si mavoglio una libreria dove visualizzo tutto cone
+spiegazioni, cosi capisco cosa attivare, non conosco i nomi cosi non so
+cosa cercare". Poi, con uno screenshot e un cerchio giallo sullo spazio
+vuoto della toolbar in alto: "sfruttiamo questo spazio evidenziato in
+giallo, per inserisci un po' di cosine tra cui questa libreria".
+
+Fatto: scritta una descrizione dedicata per ciascuno dei 151 indicatori
+(`DESCRIPTIONS` in `indicator_catalog.py`, una riga a testa — cosa misura,
+non il nome tecnico) invece del solo fallback per categoria, con un test
+che verifica la copertura completa. Rifatta l'interfaccia da zero: non piu'
+una tendina che si nasconde finche' non cerchi, ma un pannello ampio nuovo
+(`#indicator-library-panel`, stessa famiglia larga di Bacheca/Script Pine,
+non il piccolo cassetto di Livelli) sfogliabile per categoria con
+`<details>` — chiusi sfogliando, aperti durante una ricerca — ogni voce con
+nome, tag sul-prezzo/riquadro-proprio e descrizione. Tre punti d'ingresso:
+il pulsante "Sfoglia la libreria" dentro Livelli (gia' c'era), una voce
+propria in sidebar ("Libreria"), e un pulsante nuovo esattamente nello
+spazio vuoto della toolbar che Lorenzo aveva cerchiato.
+
+**Bug trovato verificando dal vivo con Playwright** (di nuovo, non a
+rilettura di codice): sia il pulsante della toolbar sia quello dentro
+Livelli aprivano il pannello e lo richiudevano nello stesso click. Causa:
+il bottone genera un click *sintetico* su `#sidenav-indicators` per
+riusare esattamente lo stesso percorso di apertura di ogni altro pannello
+(niente logica duplicata) — quel click sintetico apre il pannello
+correttamente. Ma il click *originale* dell'utente, dopo che il proprio
+handler ritorna, continua a risalire fino al listener globale in `bindUI`
+(`RAIL_PANELS`) che chiude ogni pannello aperto quando il click arriva da
+fuori la sidebar — e quel listener non riconosce ne' il bottone ne' il
+pannello appena aperto come "dentro", quindi lo richiude subito.
+Risolto con `e.stopPropagation()` sui due bottoni nuovi.
+
+16 test in `test_indicator_catalog.py` (due aggiunti: copertura descrizioni
++ presenza nel payload), suite completa 520 passed, ruff pulito, verificato
+dal vivo con Playwright: apertura da entrambi i punti d'ingresso, ricerca
+libera, categoria che si espande, aggiunta di un indicatore con conferma
+del chip sincronizzato fra i due pannelli.
