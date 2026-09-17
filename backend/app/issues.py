@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0083", "Voce sidebar \"Libreria\" tolta, ridondante col pulsante Indicatori in toolbar",
+     "Lorenzo: 'elimina la tab libreria, tanto abbiamo già indicatori in alto'. Il modale della libreria aveva tre punti d'ingresso (voce sidebar, pulsante nella toolbar, pulsante dentro Livelli) — tolta la voce sidebar, che duplicava il pulsante toolbar senza motivo. Restano il pulsante in toolbar (l'ingresso principale) e quello dentro Livelli (contestuale, per chi ha gia' aperto quel pannello).",
+     "bassa"),
     ("seed-0082", "Indicatori della libreria: rimozione al passaggio del mouse, nome a grafico, modale con preferiti",
      "Tre richieste di Lorenzo nella stessa serata sullo stesso filone. Prima: 'quando aggiungo indicatori dalla libreria voglio poterli togliere cliccandoci sopra al grafico e rimuovendoli' — poi affinata: 'la rimozione deve avvenire tramite un flag che appare con una x se passo il cursore sugli indicatori, qualunque essi siano a grafico', per non rimuovere per sbaglio con un click diretto. Poi: 'voglio vedere il nome degli indicatori a grafico una volta attivati; voglio poterci entrare e capire come ragionano, ora se li attivo finiscono nel grafico ma non so cosa sono e cosa ho attivo'. Infine, con uno screenshot di TradingView: 'riesci a copiare l'interfaccia [...] PRECISAMENTE UGUALE?' — spiegato che il design esatto di un prodotto di terzi non e' riproducibile (non e' un limite tecnico), ma la struttura funzionale si': modale centrale con colonna categorie e Preferiti invece del disegno esatto.",
      "media"),
