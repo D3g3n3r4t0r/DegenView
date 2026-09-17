@@ -4118,6 +4118,62 @@ button.wl-archive-pick:hover { border-color: var(--accent); }
 }
 .indicator-library-open-btn:hover { background: var(--bg); border-color: var(--accent, var(--ink)); }
 
+/* Rimozione al passaggio del mouse: una "x" appare vicino alla linea invece
+   di rimuovere al primo click, cosi' non capita per sbaglio mentre si guarda
+   il grafico. Uniforme per le linee sul prezzo (badge posizionato dal JS in
+   base alla crosshair) e per i riquadri oscillatore (bottone fisso
+   nell'angolo, rivelato in CSS al passaggio sopra il riquadro). */
+.overlay-remove-badge {
+  position: absolute; z-index: 5; width: 20px; height: 20px; padding: 0;
+  border-radius: 50%; border: 1px solid var(--border-strong);
+  background: var(--bg-panel); color: var(--bear); font-size: 12px; line-height: 1;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 1px 4px rgba(0,0,0,.25); transform: translate(-50%, -50%);
+}
+.overlay-remove-badge.hidden { display: none; }
+.overlay-remove-badge:hover { background: var(--bear); color: #fff; border-color: var(--bear); }
+
+/* Legenda in alto a sinistra sul grafico: nome di ogni indicatore attivo
+   (dalla libreria), sempre visibile — non solo mentre ci passi sopra il
+   mouse. Click sul nome spiega cosa misura, click sulla x lo rimuove. */
+.chart-indicator-legend {
+  /* Sotto la riga di LIVE/Agg. ogni 60s (top:10px, left:46px, z-index:15),
+     non sovrapposta: un chip qui intercettava i click destinati a quei
+     badge, e viceversa. */
+  position: absolute; top: 40px; left: 8px; z-index: 4;
+  display: flex; flex-direction: column; gap: 3px; pointer-events: none;
+}
+.chart-legend-chip {
+  pointer-events: auto; display: inline-flex; align-items: center; gap: 5px;
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: 4px; padding: 2px 4px 2px 8px; font-size: 11px; width: max-content;
+  box-shadow: 0 1px 3px rgba(0,0,0,.15);
+}
+.chart-legend-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.chart-legend-name { cursor: pointer; color: var(--ink); }
+.chart-legend-name:hover { text-decoration: underline; }
+.chart-legend-chip button {
+  font: inherit; font-size: 12px; line-height: 1; border: none; background: none;
+  color: var(--ink-dim); cursor: pointer; padding: 1px 3px;
+}
+.chart-legend-chip button:hover { color: var(--bear); }
+
+.sub-chart { position: relative; }
+.osc-chart-title {
+  position: absolute; top: 6px; left: 8px; z-index: 4; font-size: 11px;
+  font-weight: 600; color: var(--ink-dim); cursor: pointer; pointer-events: auto;
+}
+.osc-chart-title:hover { color: var(--ink); text-decoration: underline; }
+.osc-remove-btn {
+  position: absolute; top: 6px; right: 8px; z-index: 5; width: 20px; height: 20px;
+  padding: 0; border-radius: 50%; border: 1px solid var(--border-strong);
+  background: var(--bg-panel); color: var(--bear); font-size: 12px; line-height: 1;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  opacity: 0; transition: opacity .12s;
+}
+.sub-chart:hover .osc-remove-btn { opacity: 1; }
+.osc-remove-btn:hover { background: var(--bear); color: #fff; border-color: var(--bear); }
+
 /* Il pulsante nella toolbar in alto — stesso spazio vuoto a destra dei
    controlli del grafico, prima occupato solo dallo spacer flessibile. */
 .toolbar-indicators-btn {
@@ -4128,36 +4184,80 @@ button.wl-archive-pick:hover { border-color: var(--accent); }
 }
 .toolbar-indicators-btn:hover { color: var(--ink); border-color: var(--ink-dim); background: var(--bg-raised); }
 
-/* Pannello ampio (stessa famiglia di Bacheca/Script Pine — si legge, non si
-   sbircia): elenco sfogliabile per categoria con la spiegazione di ognuno,
-   cosi' chi non conosce i nomi puo' comunque capire cosa attivare. */
-.indicator-library-body { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }
+/* Libreria indicatori come modale centrale (non un cassetto laterale):
+   Lorenzo — "vorrei che si aprisse in verticale e non che si aprisse una
+   finestra laterale" — colonna categorie a sinistra, ricerca e risultati
+   a destra, stesso schema di un pannello "aggiungi indicatore" comune ma
+   con l'estetica del sito, non quella di una piattaforma di terzi. */
+.indicator-modal-overlay {
+  position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,.5);
+  display: flex; align-items: center; justify-content: center; padding: 24px;
+}
+.indicator-modal-overlay.hidden { display: none; }
+.indicator-modal {
+  width: min(880px, 100%); height: min(640px, 100%); background: var(--bg-panel);
+  border: 1px solid var(--border-strong); border-radius: 10px;
+  display: flex; flex-direction: column; overflow: hidden;
+  box-shadow: 0 12px 40px rgba(0,0,0,.35);
+}
+.indicator-modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px; border-bottom: 1px solid var(--border);
+}
+.indicator-modal-header h3 { margin: 0; font-size: 15px; font-weight: 600; color: var(--ink); }
+.indicator-modal-close {
+  font: inherit; font-size: 16px; line-height: 1; border: none; background: none;
+  color: var(--ink-dim); cursor: pointer; padding: 4px 6px;
+}
+.indicator-modal-close:hover { color: var(--ink); }
+.indicator-modal-search { padding: 12px 16px 0; flex: none; }
 #indicator-library-search {
   width: 100%; box-sizing: border-box; padding: 9px 10px; font: inherit; font-size: 13px;
   border: 1px solid var(--border); background: var(--bg); color: var(--ink);
-  margin-bottom: 10px; flex: none;
 }
-.indicator-library-list { overflow-y: auto; flex: 1 1 auto; min-height: 0; }
-.icl-group { border-bottom: 1px solid var(--border); }
-.icl-group > summary {
-  cursor: pointer; list-style: none; padding: 9px 4px;
-  font-family: var(--font-mono); font-size: 11.5px; font-weight: 600;
-  letter-spacing: .04em; text-transform: uppercase; color: var(--ink-dim);
-  display: flex; align-items: center; gap: 8px;
+.indicator-modal-body { display: flex; flex: 1 1 auto; min-height: 0; }
+.indicator-modal-nav {
+  flex: 0 0 168px; overflow-y: auto; padding: 12px 8px; border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 1px;
 }
-.icl-group > summary::-webkit-details-marker { display: none; }
-.icl-group > summary::before { content: "▸"; color: var(--ink-dim); transition: transform .12s; }
-.icl-group[open] > summary::before { transform: rotate(90deg); }
-.icl-group > summary:hover { color: var(--ink); }
-.icl-count {
-  font-weight: 400; color: var(--ink-dim); background: var(--bg-raised);
-  border-radius: 999px; padding: 1px 7px; font-size: 10.5px;
+.indicator-modal-nav-label {
+  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--ink-dim); padding: 10px 8px 4px; }
+.indicator-modal-nav-label:first-child { padding-top: 2px; }
+.indicator-modal-nav button {
+  font: inherit; font-size: 12.5px; text-align: left; padding: 6px 8px; border-radius: 5px;
+  border: none; background: none; color: var(--ink-dim); cursor: pointer;
+  display: flex; align-items: center; justify-content: space-between; gap: 6px;
+}
+.indicator-modal-nav button:hover { background: var(--bg-raised); color: var(--ink); }
+.indicator-modal-nav button.active { background: var(--bg-raised); color: var(--ink); font-weight: 600; }
+.indicator-modal-nav button .icl-count {
+  font-weight: 400; color: var(--ink-dim); background: var(--bg);
+  border-radius: 999px; padding: 1px 6px; font-size: 10px;
+}
+.indicator-library-list { overflow-y: auto; flex: 1 1 auto; min-height: 0; padding: 4px 0; }
+.indicator-modal-hint {
+  margin: 0; padding: 10px 16px; font-size: 11.5px; line-height: 1.4; color: var(--ink-dim);
+  border-top: 1px solid var(--border); flex: none;
+}
+.icl-group-label {
+  font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--ink-dim); padding: 10px 16px 4px;
 }
 .icl-item {
-  padding: 9px 6px 11px 20px; cursor: pointer; border-top: 1px solid var(--border);
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 8px 16px; cursor: pointer; border-top: 1px solid var(--border);
 }
+.icl-item:first-child, .icl-group-label + .icl-item { border-top: none; }
 .icl-item:hover { background: var(--bg-raised); }
-.icl-item.active { background: var(--accent-mute, rgba(0,214,143,.1)); border-left: 2px solid var(--bull, #00d68f); padding-left: 18px; }
+.icl-item.active { background: var(--accent-mute, rgba(0,214,143,.1)); }
+.icl-star {
+  flex: none; margin-top: 1px; background: none; border: none; padding: 0 2px;
+  font-size: 14px; line-height: 1; color: var(--ink-dim); cursor: pointer;
+}
+.icl-star:hover { color: var(--gold, #d9a441); }
+.icl-star.on { color: var(--gold, #d9a441); }
+.icl-item-main { flex: 1 1 auto; min-width: 0; }
 .icl-item-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 .icl-item-label { font-size: 13.5px; font-weight: 600; color: var(--ink); }
 .icl-kind {
@@ -4165,7 +4265,13 @@ button.wl-archive-pick:hover { border-color: var(--accent); }
   text-transform: uppercase; letter-spacing: .03em;
 }
 .icl-desc { margin: 3px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--ink-dim); }
-.icl-empty { padding: 16px 6px; font-size: 13px; color: var(--ink-dim); }
+.icl-empty { padding: 16px; font-size: 13px; color: var(--ink-dim); }
+
+@media (max-width: 760px) {
+  .indicator-modal-overlay { padding: 0; }
+  .indicator-modal { width: 100%; height: 100%; border-radius: 0; }
+  .indicator-modal-nav { flex-basis: 128px; }
+}
 
 /* --- Ricerca e schede richiudibili sulla bacheca --------------------------- */
 .issues-tools { display: flex; gap: 6px; margin: 10px 0 6px; }
@@ -5029,17 +5135,14 @@ td {
    mezzo invece di contendere lo spazio a un testo che va letto per intero. */
 @media (min-width: 761px) {
   .cockpit[data-area="issues"] #issues-panel.open,
-  .cockpit[data-area="script"] #script-panel.open,
-  .cockpit[data-area="indicators"] #indicator-library-panel.open {
+  .cockpit[data-area="script"] #script-panel.open {
     display: flex;
     width: clamp(420px, 46vw, 760px);
     border-right: 1px solid var(--border);
   }
   .cockpit[data-area="issues"] .right-panel,
-  .cockpit[data-area="script"] .right-panel,
-  .cockpit[data-area="indicators"] .right-panel { display: none; }
-  .cockpit[data-area="script"] .chart-area,
-  .cockpit[data-area="indicators"] .chart-area {
+  .cockpit[data-area="script"] .right-panel { display: none; }
+  .cockpit[data-area="script"] .chart-area {
     flex: 1 1 auto;
     border-right: none;
   }

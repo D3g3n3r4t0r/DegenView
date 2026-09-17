@@ -896,6 +896,7 @@
     // specifici di un simbolo.
     indicatorCatalog: null, // popolato al primo uso da /api/indicators/catalog
     customIndicators: JSON.parse(localStorage.getItem("customIndicators") || "[]"), // [{id, label, kind}]
+    favoriteIndicatorIds: new Set(JSON.parse(localStorage.getItem("favoriteIndicatorIds") || "[]")),
     // Kept minimal by default — every structure/liquidity level draws its own
     // chart label, and turning them all on at once buries the price action
     // (especially on narrow screens).
@@ -4680,6 +4681,7 @@
     bindDrawClickCapture();
     bindChartContextMenu();
     bindMarkerClickPopup();
+    bindCustomOverlayRemoval();
     bindBreakoutButton();
     initDrawCanvas();
     chartsReady = true;
@@ -6594,6 +6596,67 @@
       const px = rect.left + (param.point?.x || 0);
       const py = rect.top  + (param.point?.y || 0);
       showMarkerPopup(hit, px, py);
+    });
+  }
+
+  // Un indicatore aggiunto dalla libreria si toglie passandoci sopra il
+  // mouse: appare una "x" vicino alla linea, si clicca quella e si
+  // rimuove — niente rimozione al primo click sul grafico, che sarebbe
+  // troppo facile da far scattare per sbaglio mentre si guarda il prezzo.
+  // Per gli overlay (linee sul prezzo, disegnate su canvas, non elementi
+  // DOM separati) serve un test di prossimita' verticale ad ogni
+  // movimento della crosshair: subscribeCrosshairMove da' il valore di
+  // ogni serie al tempo corrente (param.seriesData), non se il cursore e'
+  // visivamente sopra quella linea — lo si ricava confrontando la
+  // coordinata y del valore con quella del cursore, con qualche pixel di
+  // tolleranza. Attivo solo con lo strumento cursore: con un altro
+  // strumento selezionato si sta disegnando, non rimuovendo indicatori.
+  const OVERLAY_HIT_TOLERANCE_PX = 6;
+  let hoveredOverlayId = null;
+  let overlayBadgePinned = false; // true mentre il mouse e' sopra il badge stesso
+
+  function bindCustomOverlayRemoval() {
+    const badge = el("overlay-remove-badge");
+    if (!badge) return;
+    // Il badge e' un elemento DOM sopra il canvas del grafico: appena il
+    // cursore lo raggiunge, il grafico sotto smette di ricevere il
+    // movimento e subscribeCrosshairMove non arriva piu' — senza questa
+    // guardia il badge sparirebbe un attimo prima di poterci cliccare
+    // sopra, rendendolo impossibile da usare.
+    badge.addEventListener("mouseenter", () => { overlayBadgePinned = true; });
+    badge.addEventListener("mouseleave", () => {
+      overlayBadgePinned = false;
+      badge.classList.add("hidden");
+    });
+    mainChart.subscribeCrosshairMove((param) => {
+      if (overlayBadgePinned) return;
+      if (drawState.tool !== "cursor" || !param || !param.point || !param.seriesData || !customOverlaySeriesList.length) {
+        hoveredOverlayId = null;
+        badge.classList.add("hidden");
+        return;
+      }
+      for (const entry of customOverlaySeriesList) {
+        const data = param.seriesData.get(entry.series);
+        if (data == null) continue;
+        const value = typeof data === "object" ? data.value : data;
+        if (value == null) continue;
+        const y = entry.series.priceToCoordinate(value);
+        if (y == null) continue;
+        if (Math.abs(y - param.point.y) <= OVERLAY_HIT_TOLERANCE_PX) {
+          hoveredOverlayId = entry.id;
+          badge.style.left = `${param.point.x}px`;
+          badge.style.top = `${y}px`;
+          badge.classList.remove("hidden");
+          return;
+        }
+      }
+      hoveredOverlayId = null;
+      badge.classList.add("hidden");
+    });
+    badge.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (hoveredOverlayId) toggleCustomIndicator(hoveredOverlayId);
+      badge.classList.add("hidden");
     });
   }
 
@@ -8638,7 +8701,6 @@
     ["rail-levels-btn", "levels-panel"],
     ["rail-issues-btn", "issues-panel"],
     ["rail-script-btn", "script-panel"],
-    ["rail-indicators-btn", "indicator-library-panel"],
   ];
 
 
@@ -9088,11 +9150,10 @@
     el("script-panel").classList.remove("mobile-open");
     el("altro-panel").classList.remove("mobile-open");
     el("issues-panel").classList.remove("mobile-open");
-    el("indicator-library-panel").classList.remove("mobile-open");
     document.querySelector(".right-panel").classList.remove("mobile-open");
     el("draw-rail").classList.remove("mobile-tools-open");
 
-    const NAV_TARGET_FOR = { script: "altro", saldi: "altro", analisi: "altro", watchlist: "altro", backtest: "altro", issues: "altro", strategie: "altro", trading: "altro", indicators: "altro" };
+    const NAV_TARGET_FOR = { script: "altro", saldi: "altro", analisi: "altro", watchlist: "altro", backtest: "altro", issues: "altro", strategie: "altro", trading: "altro" };
     const navTarget = NAV_TARGET_FOR[target] || target;
     document.querySelectorAll(".mobile-nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.mobileTarget === navTarget));
 
@@ -9108,8 +9169,6 @@
       el("levels-panel").classList.add("mobile-open");
     } else if (target === "script") {
       el("script-panel").classList.add("mobile-open");
-    } else if (target === "indicators") {
-      el("indicator-library-panel").classList.add("mobile-open");
     } else if (target === "altro") {
       el("altro-panel").classList.add("mobile-open");
     } else if (target === "issues") {
@@ -9136,7 +9195,6 @@
       showMobileScreen(
         panelId === "script-panel" ? "script"
         : panelId === "issues-panel" ? "issues"
-        : panelId === "indicator-library-panel" ? "indicators"
         : "levels");
       return;
     }
@@ -9158,7 +9216,10 @@
       btn.addEventListener("click", () => showMobileScreen("chart"));
     });
     el("open-script-from-altro").addEventListener("click", () => openPanel("script-panel"));
-    el("open-indicators-from-altro").addEventListener("click", () => openPanel("indicator-library-panel"));
+    el("open-indicators-from-altro").addEventListener("click", () => {
+      showMobileScreen("chart"); // chiude il menu Altro, il modale sta sopra a tutto
+      openIndicatorLibraryModal();
+    });
     el("altro-saldi-item").addEventListener("click", () => showMobileScreen("saldi"));
     el("altro-analisi-item").addEventListener("click", () => showMobileScreen("analisi"));
     el("altro-watchlist-item").addEventListener("click", () => showMobileScreen("watchlist"));
@@ -9168,11 +9229,13 @@
   }
 
   // ── Libreria indicatori (pandas-ta, 151 voci) ─────────────────────────────
-  // Pannello a se' (non piu' una tendina nascosta finche' non si cerca):
-  // Lorenzo, dopo la prima versione — "non conosco i nomi cosi non so cosa
-  // cercare" — voleva poter sfogliare, con la spiegazione di ciascuno.
-  // Elenco completo raggruppato per categoria, ricerca facoltativa per
-  // restringere quando si sa gia' cosa cercare.
+  // Modale centrale (non un cassetto laterale): Lorenzo — "vorrei che si
+  // aprisse in verticale e non che si aprisse una finestra laterale" —
+  // colonna categorie a sinistra (con Preferiti), ricerca e risultati a
+  // destra. Elenco completo con la spiegazione di ciascuno, perche' "non
+  // conosco i nomi cosi non so cosa cercare".
+  let indicatorLibraryFilter = null; // null = tutti; "__favorites"; oppure un id di categoria
+
   async function ensureIndicatorCatalog() {
     if (state.indicatorCatalog) return state.indicatorCatalog;
     try {
@@ -9184,45 +9247,105 @@
     return state.indicatorCatalog;
   }
 
+  function toggleFavoriteIndicator(id) {
+    if (state.favoriteIndicatorIds.has(id)) state.favoriteIndicatorIds.delete(id);
+    else state.favoriteIndicatorIds.add(id);
+    localStorage.setItem("favoriteIndicatorIds", JSON.stringify([...state.favoriteIndicatorIds]));
+    renderIndicatorModalNav();
+    renderIndicatorLibraryList(el("indicator-library-search")?.value || "");
+  }
+
+  function renderIndicatorModalNav() {
+    const nav = el("indicator-modal-nav");
+    if (!nav) return;
+    const catalog = state.indicatorCatalog || [];
+    const byCategory = new Map(); // category id -> {label, count}
+    catalog.forEach((s) => {
+      if (!byCategory.has(s.category)) byCategory.set(s.category, { label: s.category_label, count: 0 });
+      byCategory.get(s.category).count += 1;
+    });
+    const favCount = state.favoriteIndicatorIds.size;
+    const btn = (filterVal, label, count, extraClass) =>
+      `<button type="button" data-filter="${filterVal}" class="${filterVal === indicatorLibraryFilter ? "active" : ""} ${extraClass || ""}">` +
+      `<span>${escapeHtml(label)}</span><span class="icl-count">${count}</span></button>`;
+    const parts = [
+      indicatorLibraryFilter === null
+        ? `<button type="button" data-filter="" class="active"><span>Tutti</span><span class="icl-count">${catalog.length}</span></button>`
+        : `<button type="button" data-filter=""><span>Tutti</span><span class="icl-count">${catalog.length}</span></button>`,
+      btn("__favorites", "★ Preferiti", favCount),
+      `<div class="indicator-modal-nav-label">Categorie</div>`,
+    ];
+    [...byCategory.entries()]
+      .sort((a, b) => a[1].label.localeCompare(b[1].label))
+      .forEach(([catId, info]) => parts.push(btn(catId, info.label, info.count)));
+    nav.innerHTML = parts.join("");
+    nav.querySelectorAll("[data-filter]").forEach((b) => {
+      b.addEventListener("click", () => {
+        indicatorLibraryFilter = b.dataset.filter || null;
+        renderIndicatorModalNav();
+        renderIndicatorLibraryList(el("indicator-library-search")?.value || "");
+      });
+    });
+  }
+
   function renderIndicatorLibraryList(filterText) {
     const box = el("indicator-library-list");
     if (!box) return;
     const catalog = state.indicatorCatalog || [];
     const q = (filterText || "").trim().toLowerCase();
     const activeIds = new Set(state.customIndicators.map((c) => c.id));
+
+    let base = catalog;
+    if (indicatorLibraryFilter === "__favorites") {
+      base = catalog.filter((s) => state.favoriteIndicatorIds.has(s.id));
+    } else if (indicatorLibraryFilter) {
+      base = catalog.filter((s) => s.category === indicatorLibraryFilter);
+    }
     const filtered = q
-      ? catalog.filter((s) =>
+      ? base.filter((s) =>
           s.label.toLowerCase().includes(q) || s.id.includes(q) ||
           s.category_label.toLowerCase().includes(q) || (s.description || "").toLowerCase().includes(q))
-      : catalog;
+      : base;
+
     if (!filtered.length) {
-      box.innerHTML = '<div class="icl-empty">Nessun indicatore trovato — prova un altro termine.</div>';
+      const msg = indicatorLibraryFilter === "__favorites"
+        ? "Nessun preferito ancora — clicca la stella su un indicatore per aggiungerlo qui."
+        : "Nessun indicatore trovato — prova un altro termine.";
+      box.innerHTML = `<div class="icl-empty">${msg}</div>`;
       return;
     }
+
+    // Un filtro di categoria (o i preferiti) mostra gia' un unico gruppo:
+    // l'intestazione di categoria ha senso solo sfogliando "Tutti".
+    const groupByCategory = indicatorLibraryFilter === null;
     const byCategory = new Map();
     filtered.forEach((s) => {
-      if (!byCategory.has(s.category_label)) byCategory.set(s.category_label, []);
-      byCategory.get(s.category_label).push(s);
+      const key = groupByCategory ? s.category_label : "__flat";
+      if (!byCategory.has(key)) byCategory.set(key, []);
+      byCategory.get(key).push(s);
     });
-    // Durante una ricerca ogni gruppo si apre da solo (poche righe, si vuole
-    // vedere subito il risultato); sfogliando senza filtro restano chiusi,
-    // 151 righe di colpo sarebbero solo scroll.
-    const openAttr = q ? " open" : "";
+
+    const rowHtml = (s) => {
+      const isActive = activeIds.has(s.id);
+      const isFav = state.favoriteIndicatorIds.has(s.id);
+      return `<div class="icl-item${isActive ? " active" : ""}" data-indicator-id="${escapeHtml(s.id)}">` +
+        `<button type="button" class="icl-star${isFav ? " on" : ""}" data-fav-indicator="${escapeHtml(s.id)}" title="${isFav ? "Togli dai preferiti" : "Aggiungi ai preferiti"}">${isFav ? "★" : "☆"}</button>` +
+        `<div class="icl-item-main"><div class="icl-item-head"><span class="icl-item-label">${escapeHtml(s.label)}</span>` +
+        `<span class="icl-kind">${s.kind === "overlay" ? "sul prezzo" : "riquadro proprio"}</span></div>` +
+        `<p class="icl-desc">${escapeHtml(s.description || "")}</p></div></div>`;
+    };
     const parts = [];
-    byCategory.forEach((items, catLabel) => {
-      parts.push(`<details class="icl-group"${openAttr}><summary>${escapeHtml(catLabel)} <span class="icl-count">${items.length}</span></summary>`);
-      items.forEach((s) => {
-        const isActive = activeIds.has(s.id);
-        parts.push(
-          `<div class="icl-item${isActive ? " active" : ""}" data-indicator-id="${escapeHtml(s.id)}">` +
-          `<div class="icl-item-head"><span class="icl-item-label">${escapeHtml(s.label)}</span>` +
-          `<span class="icl-kind">${s.kind === "overlay" ? "sul prezzo" : "riquadro proprio"}</span></div>` +
-          `<p class="icl-desc">${escapeHtml(s.description || "")}</p></div>`
-        );
-      });
-      parts.push("</details>");
+    byCategory.forEach((items, key) => {
+      if (groupByCategory) parts.push(`<div class="icl-group-label">${escapeHtml(key)}</div>`);
+      items.forEach((s) => parts.push(rowHtml(s)));
     });
     box.innerHTML = parts.join("");
+    box.querySelectorAll("[data-fav-indicator]").forEach((star) => {
+      star.addEventListener("click", (e) => {
+        e.stopPropagation();
+        toggleFavoriteIndicator(star.dataset.favIndicator);
+      });
+    });
     box.querySelectorAll("[data-indicator-id]").forEach((row) => {
       row.addEventListener("click", () => toggleCustomIndicator(row.dataset.indicatorId));
     });
@@ -9242,6 +9365,66 @@
     box.querySelectorAll("[data-remove-indicator]").forEach((btn) => {
       btn.addEventListener("click", () => toggleCustomIndicator(btn.dataset.removeIndicator));
     });
+  }
+
+  // Legenda fissa in alto a sinistra sul grafico: senza, un indicatore
+  // aggiunto dalla libreria finisce come una linea o un riquadro anonimo —
+  // Lorenzo: "se li attivo finiscono nel grafico ma non so cosa sono e cosa
+  // ho attivo". Click sul nome apre la spiegazione (stessa riga scritta nel
+  // catalogo), click sulla x lo rimuove — stessa lista di sempre,
+  // semplicemente resa visibile anche sopra il grafico, non solo in Livelli.
+  function renderChartIndicatorLegend() {
+    const box = el("chart-indicator-legend");
+    if (!box) return;
+    if (!state.customIndicators.length) {
+      box.innerHTML = "";
+      return;
+    }
+    box.innerHTML = state.customIndicators
+      .map((c, i) => {
+        const color = CUSTOM_IND_COLORS[i % CUSTOM_IND_COLORS.length];
+        return `<span class="chart-legend-chip">` +
+          `<span class="chart-legend-dot" style="background:${color}"></span>` +
+          `<span class="chart-legend-name" data-info-indicator="${escapeHtml(c.id)}">${escapeHtml(c.label)}</span>` +
+          `<button type="button" data-remove-indicator="${escapeHtml(c.id)}" title="Rimuovi">✕</button></span>`;
+      })
+      .join("");
+    box.querySelectorAll("[data-remove-indicator]").forEach((btn) => {
+      btn.addEventListener("click", () => toggleCustomIndicator(btn.dataset.removeIndicator));
+    });
+    box.querySelectorAll("[data-info-indicator]").forEach((nameEl) => {
+      nameEl.addEventListener("click", (e) => {
+        showIndicatorInfoPopup(nameEl.dataset.infoIndicator, e.clientX, e.clientY);
+      });
+    });
+  }
+
+  // Popup con la spiegazione di un indicatore attivo — riusa lo stesso
+  // elemento e la stessa logica di chiusura di showMarkerPopup (click
+  // fuori lo chiude, gia' agganciato da bindMarkerClickPopup), con un
+  // contenuto diverso: qui non c'e' un punteggio 1-10, solo nome e
+  // descrizione dalla libreria.
+  function showIndicatorInfoPopup(indId, px, py) {
+    const popup = el("marker-popup");
+    const spec = (state.indicatorCatalog || []).find((s) => s.id === indId);
+    if (!popup || !spec) return;
+    popup.innerHTML = `
+      <div class="marker-popup-header">
+        <span class="marker-popup-label">${escapeHtml(spec.label)}</span>
+        <button class="marker-popup-close" onclick="document.getElementById('marker-popup').classList.add('hidden')" aria-label="Chiudi">×</button>
+      </div>
+      <div class="marker-popup-desc">${escapeHtml(spec.description || "")}</div>
+      <div class="marker-popup-score">
+        <span class="marker-popup-score-label">${spec.kind === "overlay" ? "SUL PREZZO" : "RIQUADRO PROPRIO"}</span>
+      </div>`;
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const W = 280, H = 120;
+    let left = px + 10, top = py + 10;
+    if (left + W > vw - 8) left = px - W - 8;
+    if (top + H > vh - 8) top = py - H - 8;
+    popup.style.left = `${Math.max(8, left)}px`;
+    popup.style.top  = `${Math.max(8, top)}px`;
+    popup.classList.remove("hidden");
   }
 
   function toggleCustomIndicator(id) {
@@ -9265,51 +9448,53 @@
       const search = el("indicator-library-search");
       renderIndicatorLibraryList(search ? search.value : "");
       renderActiveIndicatorChips();
+      renderChartIndicatorLegend();
     }, 0);
     refreshCustomIndicators();
   }
 
+  // Modale indipendente dal sistema di pannelli laterali (RAIL_PANELS):
+  // niente cassetto, niente area del cockpit da cambiare, funziona identico
+  // su desktop e mobile. Tre punti d'ingresso (toolbar, sidebar, Livelli)
+  // chiamano tutti la stessa apertura diretta — senza il giro di click
+  // sintetico che serviva quando era un cassetto (e senza il bug di
+  // richiusura che quel giro portava con se').
+  let indicatorCatalogLoaded = false;
+
+  async function openIndicatorLibraryModal() {
+    if (!indicatorCatalogLoaded) {
+      indicatorCatalogLoaded = true;
+      await ensureIndicatorCatalog();
+    }
+    renderIndicatorModalNav();
+    renderIndicatorLibraryList(el("indicator-library-search")?.value || "");
+    el("indicator-library-modal")?.classList.remove("hidden");
+    el("indicator-library-search")?.focus();
+  }
+
+  function closeIndicatorLibraryModal() {
+    el("indicator-library-modal")?.classList.add("hidden");
+  }
+
   function bindIndicatorCatalog() {
     const search = el("indicator-library-search");
-    if (!search) return;
-    let loaded = false;
-    const load = async () => {
-      if (loaded) return;
-      loaded = true;
-      await ensureIndicatorCatalog();
-      renderIndicatorLibraryList(search.value);
-    };
-    // Popolata al primo utilizzo (focus sulla ricerca o apertura del
-    // pannello), non al caricamento della pagina: 151 righe di markup non
-    // servono a chi non apre mai la libreria.
-    search.addEventListener("focus", load);
-    el("rail-indicators-btn")?.addEventListener("click", load);
-    el("sidenav-indicators")?.addEventListener("click", load);
+    const modal = el("indicator-library-modal");
+    if (!search || !modal) return;
     search.addEventListener("input", () => renderIndicatorLibraryList(search.value));
 
-    // Due scorciatoie che portano allo stesso posto: il pulsante dentro
-    // Livelli (per chi ha gia' aperto quel pannello) e quello in cima alla
-    // pagina (per chi no) aprono entrambi la libreria vera cliccando la
-    // stessa voce di sidebar, cosi' seguono esattamente lo stesso percorso
-    // di apertura/stato-attivo di ogni altro pannello, senza duplicarlo.
-    // stopPropagation: questi due bottoni vivono fuori dalla sidebar (uno nel
-    // pannello Livelli, uno nella toolbar in alto). Senza fermare la
-    // risalita, il click sintetico su #sidenav-indicators apre il pannello
-    // correttamente, ma poi il click ORIGINALE continua a risalire fino al
-    // listener globale che chiude i pannelli su un click "fuori dalla
-    // sidebar" (bindUI, RAIL_PANELS) — quel listener non riconosce ne'
-    // questo bottone ne' il pannello appena aperto come "dentro", e lo
-    // richiude nello stesso click che doveva aprirlo.
-    el("open-indicator-library-btn")?.addEventListener("click", (e) => {
-      e.stopPropagation();
-      el("sidenav-indicators").click();
-    });
-    el("toolbar-indicators-btn")?.addEventListener("click", (e) => {
-      e.stopPropagation();
-      el("sidenav-indicators").click();
+    el("indicator-modal-close")?.addEventListener("click", closeIndicatorLibraryModal);
+    // Click sullo sfondo scuro chiude; click dentro il riquadro no.
+    modal.addEventListener("click", (e) => { if (e.target === modal) closeIndicatorLibraryModal(); });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !modal.classList.contains("hidden")) closeIndicatorLibraryModal();
     });
 
+    el("open-indicator-library-btn")?.addEventListener("click", () => openIndicatorLibraryModal());
+    el("toolbar-indicators-btn")?.addEventListener("click", () => openIndicatorLibraryModal());
+    el("sidenav-indicators")?.addEventListener("click", () => openIndicatorLibraryModal());
+
     renderActiveIndicatorChips();
+    renderChartIndicatorLegend();
   }
 
   function dynamicSubChartOptions() {
@@ -9382,7 +9567,7 @@
           const line = mainChart.addLineSeries({ color, lineWidth: 1.4, priceLineVisible: false, lastValueVisible: false });
           const points = times.map((t, k) => ({ time: t, value: s.values[k] })).filter((d) => d.value !== null && d.value !== undefined);
           line.setData(points);
-          customOverlaySeriesList.push({ chart: mainChart, series: line });
+          customOverlaySeriesList.push({ chart: mainChart, series: line, id: ind.id });
         });
       } else {
         const container = document.createElement("div");
@@ -9400,6 +9585,33 @@
         const range = mainChart.timeScale().getVisibleLogicalRange();
         if (range) chart.timeScale().setVisibleLogicalRange(range);
         observeResize(container, chart);
+        // Il riquadro appartiene a un solo indicatore: una "x" appare
+        // nell'angolo al passaggio del mouse (CSS, .sub-chart:hover), stesso
+        // comportamento delle linee sul prezzo — niente rimozione al primo
+        // click, solo quando si clicca la x apposta.
+        const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.className = "osc-remove-btn";
+        removeBtn.title = "Rimuovi questo indicatore";
+        removeBtn.textContent = "✕";
+        removeBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          toggleCustomIndicator(ind.id);
+        });
+        container.appendChild(removeBtn);
+        // Nome sempre visibile (non solo al passaggio del mouse, a
+        // differenza della x): senza, un riquadro con solo delle linee
+        // colorate non dice quale indicatore sia. Click sul nome apre la
+        // spiegazione — la stessa scritta nella libreria.
+        const title = document.createElement("span");
+        title.className = "osc-chart-title";
+        title.textContent = ind.label;
+        title.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const rect = container.getBoundingClientRect();
+          showIndicatorInfoPopup(ind.id, rect.left + 10, rect.top + 24);
+        });
+        container.appendChild(title);
         customOscCharts[ind.id] = { container, chart };
       }
     }
@@ -10686,7 +10898,7 @@
       return;
     }
 
-    const drawerFor = { script: "script-panel", issues: "issues-panel", indicators: "indicator-library-panel" };
+    const drawerFor = { script: "script-panel", issues: "issues-panel" };
     if (drawerFor[area]) {
       openPanel(drawerFor[area]);
       // L'area viene dichiarata anche per questi: da cassetto stretto sopra

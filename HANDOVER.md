@@ -1710,3 +1710,68 @@ restano quelle finche' non le spegne una volta dai toggle in Livelli — da
 qui non c'e' accesso al database di produzione per resettarle al posto
 suo, e non e' stato chiesto di farlo. Una volta spente restano spente:
 `savePreferences()` salva lo stato lasciato, non lo riaccende mai da solo.
+
+---
+
+### Libreria indicatori — terzo giro: rimozione, nome a grafico, modale con preferiti — `seed-0082` — **fatto**
+
+Stessa serata del filone libreria (`seed-0079`/`0080`), tre richieste in
+fila mentre Lorenzo provava il sito dal vivo.
+
+**Prima**: "quando aggiungo indicatori dalla libreria voglio poterli
+togliere cliccandoci sopra al grafico e rimuovendoli" — poi affinata
+subito dopo, senza aspettare che finissi: "la rimozione deve avvenire
+tramite un flag che appare con una x se passo il cursore sugli
+indicatori, qualunque essi siano a grafico". Fatto cosi': per gli overlay
+(linee sul prezzo) un badge DOM appare quando il cursore e' entro 6px
+dalla linea (calcolato da `priceToCoordinate`, non a tentativi — la prima
+verifica con una scansione a griglia larga non trovava mai la linea,
+serviva leggere il valore vero da `param.seriesData` e convertirlo in
+coordinata schermo); per i riquadri oscillatore, un bottone sempre nel DOM
+rivelato in CSS al passaggio del mouse sopra il riquadro (piu' semplice:
+il riquadro appartiene a un solo indicatore, nessun hit-test necessario).
+Un dettaglio non ovvio: il badge, essendo un elemento DOM sopra il canvas,
+occludeva il grafico sottostante appena il cursore lo raggiungeva —
+`subscribeCrosshairMove` smetteva di ricevere il movimento e il badge
+spariva un istante prima di poterci cliccare sopra. Risolto con
+mouseenter/mouseleave sul badge stesso che "lo tengono acceso" finche' il
+mouse ci sta sopra.
+
+**Seconda, subito dopo**: "voglio vedere il nome degli indicatori a
+grafico una volta attivati; voglio poterci entrare e capire come
+ragionano, ora se li attivo finiscono nel grafico ma non so cosa sono e
+cosa ho attivo". Aggiunta una legenda fissa in alto a sinistra sul
+grafico (`#chart-indicator-legend`) che elenca ogni indicatore attivo con
+pallino colorato e nome cliccabile — stessa lista gia' mostrata come chip
+in Livelli, resa visibile anche sopra il grafico. Click sul nome (in
+legenda o nel titolo di un riquadro oscillatore) apre un popup con la
+stessa descrizione scritta nella libreria — riusa l'elemento e la logica
+di chiusura di `showMarkerPopup()`. Trovato in verifica dal vivo: la
+legenda a `top:8px` si sovrapponeva al badge LIVE/Agg.ogni60s (stesso
+angolo, z-index piu' alto, intercettava i click) — spostata a `top:40px`.
+
+**Terza**: con uno screenshot del pannello "Indicatori, metriche e
+strategie" di TradingView: "riesci a copiare l'interfaccia [...] in toto?
+PRECISAMENTE UGUALE?". Spiegato il limite prima di procedere: non e'
+tecnico, e' che il design esatto di un prodotto di terzi non e'
+riproducibile — la struttura funzionale si'. Fatto: la libreria non e'
+piu' un cassetto laterale (`#indicator-library-panel`, dentro
+`RAIL_PANELS`/`drawerFor`/mappature mobile) ma un modale centrale
+(`#indicator-library-modal`, overlay fisso indipendente dal sistema di
+pannelli — stesso comportamento identico su desktop e mobile, niente piu'
+logica separata per i due). Colonna categorie a sinistra (Tutti,
+Preferiti, poi le 9 categorie reali con conteggio), ricerca in alto,
+risultati a destra con stella per i preferiti (persistiti in
+`localStorage`, chiave `favoriteIndicatorIds`). Rimossa tutta l'idraulica
+che il cassetto richiedeva, incluso il meccanismo di click
+sintetico+`stopPropagation` introdotto nel giro precedente per evitare che
+il pannello si auto-richiudesse — con un modale quel problema non esiste
+proprio: chiusura solo su bottone ✕, click sullo sfondo scuro, o Escape.
+
+Verificato dal vivo con Playwright ad ogni passo (non solo a rilettura di
+codice): badge overlay che appare esattamente sulla linea e resta
+cliccabile avvicinandocisi col mouse; bottone oscillatore rivelato in
+hover; modale aperto da tutti e tre i punti d'ingresso (toolbar, sidebar,
+Livelli), navigazione fra categorie, filtro preferiti, ricerca, tre modi
+di chiudere; legenda sincronizzata, popup di spiegazione col testo giusto.
+Suite completa 520 passed, ruff pulito.
