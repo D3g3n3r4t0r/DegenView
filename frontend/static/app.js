@@ -7397,7 +7397,8 @@
   function buildExecutedOrderMarkers() {
     if (!_executedOrders.length || !state.data) return [];
     const chartSymbol = (state.data.symbol || "").toUpperCase();
-    const candles = state.data.candles || [];
+    const tf = state.data.timeframes && state.data.timeframes[state.activeTimeframe];
+    const candles = (tf && tf.candles) || [];
     if (!candles.length) return [];
 
     // Il diario segna l'istante dell'ordine, che quasi mai coincide con
@@ -7445,7 +7446,8 @@
   function renderChartStats() {
     const box = el("chart-stats");
     if (!box) return;
-    const candles = state.data && state.data.candles;
+    const tf = state.data && state.data.timeframes && state.data.timeframes[state.activeTimeframe];
+    const candles = tf && tf.candles;
     if (!candles || !candles.length) { box.classList.add("hidden"); return; }
     const first = candles[0], last = candles[candles.length - 1];
     const hi = Math.max(...candles.map((c) => c.high));
