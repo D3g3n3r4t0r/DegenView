@@ -10599,7 +10599,10 @@
       const params = buildLabQuery();
       const resp = await fetch(`/api/backtest/deep?${params.toString()}`);
       if (seq !== labState.seq) return;
-      if (!resp.ok) throw new Error(`Errore ${resp.status}`);
+      if (!resp.ok) {
+        const body = await resp.json().catch(() => ({}));
+        throw new Error(typeof body.detail === "string" ? body.detail : `Errore ${resp.status}`);
+      }
       const bt = await resp.json();
       labEl("lab-status").classList.add("hidden");
       renderLabResults(bt);
