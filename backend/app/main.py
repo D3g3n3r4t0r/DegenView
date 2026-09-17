@@ -707,23 +707,23 @@ async def _watchdog_loop() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    from app.sniper import cache as sniper_cache
-    from app.sniper import agents as sniper_agents
-    from app.sniper.cex_check import enrichment_loop
     asyncio.create_task(_notify_deploy())
     t1 = asyncio.create_task(_watchlist_alert_loop())
-    t2 = asyncio.create_task(sniper_cache.polling_loop())
-    t3 = asyncio.create_task(enrichment_loop())
     t4 = asyncio.create_task(_weekly_recap_loop())
     t5 = asyncio.create_task(_watchdog_loop())
-    agent_tasks = await sniper_agents.start_all()
+    sniper_tasks: list[asyncio.Task] = []
+    if settings.sniper_enabled:
+        from app.sniper import cache as sniper_cache
+        from app.sniper import agents as sniper_agents
+        from app.sniper.cex_check import enrichment_loop
+        sniper_tasks.append(asyncio.create_task(sniper_cache.polling_loop()))
+        sniper_tasks.append(asyncio.create_task(enrichment_loop()))
+        sniper_tasks.extend(await sniper_agents.start_all())
     yield
     t1.cancel()
-    t2.cancel()
-    t3.cancel()
     t4.cancel()
     t5.cancel()
-    for t in agent_tasks:
+    for t in sniper_tasks:
         t.cancel()
 
 
@@ -3817,6 +3817,8 @@ async def sniper_candidates(
 
 @app.post("/api/sniper/scan")
 async def sniper_trigger_scan() -> dict:
+    if not settings.sniper_enabled:
+        raise HTTPException(status_code=503, detail="Sniper spento")
     from app.sniper import cache as sniper_cache
     added = await sniper_cache.run_scan()
     return {"ok": True, "added": added, "total": len(sniper_cache.get_candidates())}
@@ -3910,6 +3912,8 @@ async def sniper_market(
 
 @app.post("/api/sniper/market-scan")
 async def sniper_market_trigger_scan() -> dict:
+    if not settings.sniper_enabled:
+        raise HTTPException(status_code=503, detail="Sniper spento")
     from app.sniper import market as sniper_market_mod
 
     added = await sniper_market_mod.run_market_scan()
@@ -3921,6 +3925,8 @@ async def sniper_market_import() -> dict:
     """Apply the sniper's primary filter + on-chain scoring to every token
     currently in the market store and add qualifying ones to the sniper
     candidate archive. Progress is streamed via /api/sniper/market-stream."""
+    if not settings.sniper_enabled:
+        raise HTTPException(status_code=503, detail="Sniper spento")
     from app.sniper import market as sniper_market_mod
 
     if sniper_market_mod.import_in_progress():

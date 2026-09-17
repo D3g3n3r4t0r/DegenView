@@ -28,6 +28,14 @@ class Settings(BaseSettings):
     # Pump.fun non parte e l'archivio smette di riempirsi di quella roba.
     sniper_memecoins_enabled: bool = False
 
+    # Interruttore generale, separato da quello sopra (che spegne solo il
+    # feed Pump.fun): a False nessuno dei tre loop di fondo dello sniper
+    # parte (polling dell'archivio, arricchimento CEX, agenti), e le scansioni
+    # manuali rispondono che il servizio e' spento invece di girare comunque.
+    # Rimettilo a True per riaccenderlo — nient'altro cambia. Spento su
+    # richiesta di Lorenzo il 17/09.
+    sniper_enabled: bool = False
+
     twelve_data_api_key: str = ""
     twelve_data_base_url: str = "https://api.twelvedata.com"
 
