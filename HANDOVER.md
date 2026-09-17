@@ -1775,3 +1775,15 @@ hover; modale aperto da tutti e tre i punti d'ingresso (toolbar, sidebar,
 Livelli), navigazione fra categorie, filtro preferiti, ricerca, tre modi
 di chiudere; legenda sincronizzata, popup di spiegazione col testo giusto.
 Suite completa 520 passed, ruff pulito.
+
+**Quarto giro, subito dopo — `seed-0083`**: Lorenzo, appena vista la
+libreria come modale: "elimina la tab libreria, tanto abbiamo già
+indicatori in alto". Tolta la voce "Libreria" dalla sidebar (gruppo
+Riferimento) — restavano tre punti d'ingresso allo stesso modale (sidebar,
+toolbar, dentro Livelli), il pulsante in toolbar la duplicava senza
+motivo. Il modale era gia' indipendente dal sistema di pannelli laterali
+dal giro precedente, quindi togliere un punto d'ingresso non tocca la
+logica di apertura/chiusura — solo il bottone e il suo listener. Restano
+due punti d'ingresso: il pulsante in toolbar (principale) e quello dentro
+Livelli (contestuale). Verificato dal vivo: voce sparita dalla sidebar,
+entrambi gli ingressi rimasti aprono ancora il modale correttamente.

@@ -9491,7 +9491,6 @@
 
     el("open-indicator-library-btn")?.addEventListener("click", () => openIndicatorLibraryModal());
     el("toolbar-indicators-btn")?.addEventListener("click", () => openIndicatorLibraryModal());
-    el("sidenav-indicators")?.addEventListener("click", () => openIndicatorLibraryModal());
 
     renderActiveIndicatorChips();
     renderChartIndicatorLegend();
