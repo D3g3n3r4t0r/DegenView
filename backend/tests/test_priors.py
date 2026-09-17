@@ -182,17 +182,30 @@ def test_branch_decomposition_shrinks_the_grid_by_orders_of_magnitude():
         assert after < before / 10
 
 
-def test_gabriele_loses_the_band_width_as_a_free_dimension():
+def test_gabriele_only_searches_rsi_overbought_and_oversold():
+    """72f880af: il tasto Ottimizza tocca solo RSI ipercomprato/ipervenduto —
+    lunghezza RSI, lunghezza Bollinger e moltiplicatore restano ai valori di
+    chi cerca, non sono dimensioni della ricerca."""
     st = estimate_series_stats(_series(_ar1(900, 0.2, 12)))
     cs = build_spaces(GABRIELE, st, target_entries=40)[0]
-    assert "bb_mult" not in cs.dims
-    assert cs.d == 4
-    fixed = cs.to_params(np.full(cs.d, 0.5))["bb_mult"]
-    assert fixed == pytest.approx(cs.fixed["bb_mult"])
-    # every point in the cube agrees on it — it is derived, not searched
-    rng = np.random.default_rng(13)
-    for u in [rng.random(cs.d) for _ in range(20)]:
-        assert cs.to_params(u)["bb_mult"] == pytest.approx(fixed)
+    assert set(cs.dims) == {"rsi_oversold", "rsi_overbought"}
+    assert cs.d == 2
+    for key in ("rsi_length", "bb_length", "bb_mult"):
+        fixed = cs.to_params(np.full(cs.d, 0.5))[key]
+        assert fixed == pytest.approx(cs.fixed[key])
+        # every point in the cube agrees on it — it is held, not searched
+        rng = np.random.default_rng(13)
+        for u in [rng.random(cs.d) for _ in range(20)]:
+            assert cs.to_params(u)[key] == pytest.approx(fixed)
+
+
+def test_gabriele_holds_caller_supplied_values():
+    st = estimate_series_stats(_series(_ar1(900, 0.2, 21)))
+    cs = build_spaces(GABRIELE, st, locked={"rsi_length": 9, "bb_length": 25, "bb_mult": 1.4})[0]
+    params = cs.to_params(np.full(cs.d, 0.3))
+    assert params["rsi_length"] == 9
+    assert params["bb_length"] == 25
+    assert params["bb_mult"] == pytest.approx(1.4)
 
 
 def test_spaces_record_why_each_constraint_applied_or_did_not():

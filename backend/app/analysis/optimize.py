@@ -158,7 +158,7 @@ def _score(bt: BacktestResult, volatility_pct: float = 2.0) -> float:
     return calmar * (0.55 + 0.20 * pf_bonus + 0.15 * sharpe_bonus + 0.10 * trade_conf)
 
 
-def _random_lorenzo_params(rng: random.Random) -> dict:
+def _random_lorenzo_params(rng: random.Random, base: dict | None = None) -> dict:
     slope_fast = rng.randint(2, 30)
     slope_slow = rng.randint(slope_fast + 3, 80)
     return {
@@ -175,7 +175,7 @@ def _random_lorenzo_params(rng: random.Random) -> dict:
     }
 
 
-def _random_exhaustion_params(rng: random.Random) -> dict:
+def _random_exhaustion_params(rng: random.Random, base: dict | None = None) -> dict:
     rsi_oversold = rng.randint(20, 45)
     rsi_overbought = rng.randint(55, 80)
     return {
@@ -202,11 +202,15 @@ def _random_exhaustion_params(rng: random.Random) -> dict:
     }
 
 
-def _random_gabriele_params(rng: random.Random) -> dict:
+def _random_gabriele_params(rng: random.Random, base: dict | None = None) -> dict:
+    """Solo RSI ipercomprato/ipervenduto sono cercati: lunghezza RSI,
+    lunghezza Bollinger e moltiplicatore restano ai valori di chi cerca
+    (segnalazione 72f880af)."""
+    base = base or {}
     return {
-        "rsi_length": rng.randint(7, 25),
-        "bb_length": rng.randint(10, 40),
-        "bb_mult": round(rng.uniform(1.0, 3.5), 2),
+        "rsi_length": base.get("rsi_length", 14),
+        "bb_length": base.get("bb_length", 20),
+        "bb_mult": base.get("bb_mult", 2.0),
         "rsi_oversold": rng.randint(15, 40),
         "rsi_overbought": rng.randint(60, 85),
     }
@@ -220,12 +224,11 @@ _STRATEGY_SPACES: dict[str, tuple[dict, callable]] = {
 }
 
 _GRID_GABRIELE = {
-    "rsi_length":     [7, 10, 14, 18, 21],
-    "bb_length":      [10, 15, 20, 25, 30],
-    "bb_mult":        [1.0, 1.5, 2.0, 2.5, 3.0],
     "rsi_oversold":   [18, 22, 26, 30, 35],
     "rsi_overbought": [65, 70, 75, 80, 85],
-}  # 5^5 = 3 125 combinations
+}  # 5^2 = 25 combinations — lunghezza RSI/Bollinger e moltiplicatore restano
+   # ai valori di chi cerca (default_params), non sono una dimensione della
+   # griglia (segnalazione 72f880af)
 
 _GRID_EXHAUSTION = {
     "swing_length":        [4, 8, 12],
@@ -314,6 +317,7 @@ def optimize_strategy(
     constraints: Constraints | None = None,
     progress: Callable[[str], None] | None = None,
     should_stop: Callable[[], bool] | None = None,
+    base_params: dict | None = None,
 ) -> tuple[dict, BacktestResult, int, float | None, bool, list[dict]]:
     """Search for the best parameters and return the top-N candidates.
 
@@ -329,6 +333,11 @@ def optimize_strategy(
     if strategy_name not in _STRATEGY_SPACES:
         raise ValueError(f"Nessuno spazio di parametri definito per {strategy_name!r}")
     default_params, random_params_fn = _STRATEGY_SPACES[strategy_name]
+    # I valori attualmente nei campi di chi cerca sostituiscono i default per
+    # ogni parametro che la ricerca di questa strategia non genera da sola
+    # (per Gabriele: tutto tranne RSI ipercomprato/ipervenduto).
+    if base_params:
+        default_params = {**default_params, **base_params}
 
     rng = random.Random(seed)
     constraints = constraints or _NO_CONSTRAINTS
@@ -411,7 +420,7 @@ def optimize_strategy(
         step = max(1, trials // 20)
         for _ in range(trials):
             stop_if_asked(should_stop)
-            candidate = random_params_fn(rng)
+            candidate = random_params_fn(rng, default_params)
             bt = run_backtest(df_in, candidate, backtest_params, strategy_name=strategy_name)
             evaluated += 1
             _consider(candidate, bt)
