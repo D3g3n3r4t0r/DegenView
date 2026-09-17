@@ -1818,3 +1818,43 @@ non implementata), `seed-0054`/`seed-0051`/`seed-0028`/`seed-0027`
 
 Verificato con `pytest tests/test_issues.py` e la suite completa (520
 passed) + ruff pulito prima di committare.
+
+## Le due segnalazioni genuinamente aperte, chiuse
+
+Lorenzo: "lavora sui punti aperti e risolvili" — riferito ai due unici
+rimasti senza risoluzione, `72f880af` e `37637f11`, entrambe scritte da
+whitekobra dall'app.
+
+**`72f880af`** — "Gabriele nel Lab lascia sempre predefiniti RSI
+LENGTH/BOLLINGER LENGTH/MOLTIPLICATORE, interviene solo su
+ipercomprato/ipervenduto." Verificato eseguendo `run_pipeline()` (il
+percorso "Ricerca stabile") su tre serie sintetiche diverse: lunghezza
+RSI e lunghezza Bollinger uscivano ogni volta diverse (16/32, 10/20,
+7/10 candele), il moltiplicatore Bollinger restava sempre identico. Non
+un difetto della ricerca: in `priors.py` (`_gabriele_space`) il
+moltiplicatore e' derivato di proposito dalla frequenza di ingresso
+voluta ("quanti segnali vuoi vedere") invece che cercato per tentativi —
+scelta gia' spiegata nel codice con la sua logica statistica. Il problema
+vero era che questa scelta non si capiva dai risultati: la nota che il
+motore gia' generava ("bb_mult derived from...") era in inglese tecnico.
+Riscritta in italiano semplice, dicendo esplicitamente che lunghezza RSI
+e Bollinger restano cercate — nessuna modifica alla logica di ricerca.
+
+**`37637f11`** — "ora che il backtest gira anche sotto 1D, sostituisci
+'Apertura della candela successiva' con 'al momento in cui si verifica
+la condizione'." Tolta l'opzione dal menu Parametri backtest del Lab.
+L'opzione rimasta ("Chiusura della candela del segnale") e' stata
+rinominata "Al momento in cui si verifica la condizione": per un segnale
+basato su indicatori (RSI, medie, Bollinger) sono lo stesso istante —
+l'indicatore si puo' verificare solo alla chiusura della candela che lo
+calcola, ed e' anche il momento in cui parte l'alert dal vivo (stessa
+logica di seed-0077). Non serviva un terzo meccanismo di esecuzione,
+solo chiamare con il suo nome quello che il motore gia' fa. Il backend
+continua ad accettare `next_open` per compatibilita' con ottimizzazioni
+gia' archiviate che lo referenziano — tolta solo l'opzione dal menu.
+
+Verificato: `node --check` pulito, suite completa 520 passed, ruff
+pulito. Restano da fare (non toccati, non richiesti): la voce
+"Decidere la finestra di freschezza del segnale sui timeframe alti"
+(serve una scelta di Lorenzo) e le segnalazioni genuinamente "in corso"
+(`seed-0054`, `seed-0051`, `seed-0028`, `seed-0027`, `seed-0072`).
