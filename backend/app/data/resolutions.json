@@ -1170,5 +1170,24 @@
     "at": 1789655348,
     "summary": "Tolta la voce \"Libreria\" dalla sidebar (gruppo Riferimento): duplicava il pulsante \"Indicatori\" gia' in toolbar. Restano due punti d'ingresso, non tre: il pulsante in toolbar e quello dentro Livelli.",
     "detail": "Rimosso il bottone #sidenav-indicators da index.html e il suo listener in bindIndicatorCatalog() (app.js). Nessuna altra dipendenza: il modale (#indicator-library-modal) e' gia' indipendente dal sistema di pannelli laterali dal giro precedente (seed-0082), quindi togliere questo punto d'ingresso non tocca la logica di apertura/chiusura. Verificato dal vivo con Playwright: la voce non compare piu' in sidebar, il modale si apre correttamente sia dal pulsante toolbar sia da quello dentro Livelli."
+  },
+  "72f880af": {
+    "status": "risolto",
+    "at": 1789657947,
+    "summary": "Verificato che il moltiplicatore Bollinger e' fissato di proposito, non per un limite della ricerca: nel percorso \"Ricerca stabile\" (plateau) la larghezza della banda viene DERIVATA dalla frequenza di ingresso desiderata invece che cercata a tentativi — una scelta interpretabile (\"quanti segnali voglio vedere\") al posto di un numero trovato per tentativi, spiegata nel codice (backend/app/analysis/priors.py). Lunghezza RSI e lunghezza Bollinger restano invece cercate nei dati, e la ricerca casuale/a griglia le fa variare tutte e cinque: confermato eseguendo la pipeline su tre serie diverse, dove lunghezza RSI e lunghezza Bollinger sono uscite ogni volta diverse (16/32, 10/20, 7/10) mentre solo il moltiplicatore restava fisso — esattamente il comportamento descritto nella segnalazione, ma per un motivo statistico dichiarato, non un difetto. Il problema reale era che questa scelta non si vedeva da nessuna parte nei risultati: la nota gia' generata dal motore (\"bb_mult derived from...\") era troppo tecnica per capire che non era un blocco. Riscritta in italiano semplice, dicendo esplicitamente che lunghezza RSI e Bollinger restano cercate.",
+    "detail": "backend/app/analysis/priors.py, _gabriele_space(): nota del ramo \"gabriele-constrained\" riscritta da \"bb_mult=X derived from N entries over M bars\" a una frase che dice esplicitamente che il moltiplicatore e' fissato per scelta (non cercato) e che lunghezza RSI/Bollinger restano invece cercate nei dati. La nota compare gia' nei risultati del Lab quando si usa la modalita' \"Ricerca stabile\" (renderRegimeBox in app.js, riga ~10176). Nessuna modifica alla logica di ricerca: il comportamento era corretto, mancava solo la spiegazione leggibile. Verificato eseguendo run_pipeline() su tre serie sintetiche con dinamiche diverse (semi 1/2/3): rsi_length e bb_length variano (16/10/7 e 32/20/10), bb_mult resta identico come atteso dal disegno. 520 test passano, ruff pulito.",
+    "files": [
+      "backend/app/analysis/priors.py"
+    ]
+  },
+  "37637f11": {
+    "status": "risolto",
+    "at": 1789657947,
+    "summary": "Tolta l'opzione \"Apertura della candela successiva\" dai Parametri backtest del Lab, come chiesto (\"inutile\" ora che il backtest gira su tutti i timeframe). L'unica opzione rimasta, \"Chiusura della candela del segnale\", e' stata rinominata \"Al momento in cui si verifica la condizione\": e' letteralmente lo stesso istante — un segnale basato su indicatori (RSI, medie, Bollinger) si puo' verificare solo alla chiusura della candela che lo genera, e quello e' anche il momento in cui parte l'alert dal vivo (stessa logica gia' misurata e corretta in seed-0077). Non serviva un terzo meccanismo: serviva chiamare con il suo nome quello che il motore fa gia'.",
+    "detail": "frontend/index.html: rimossa <option value=\"next_open\">, rinominata l'opzione \"signal_close\" e riscritto il testo esplicativo sotto il menu. frontend/static/app.js: aggiornata l'etichetta e il tooltip mostrati accanto ai risultati del backtest (riga ~10439) per riflettere il nuovo nome, senza piu' definirla \"ottimistica\" — non lo e', e' il prezzo reale di chi reagisce all'alert alla chiusura della candela. Il backend (backtest.py, main.py) non e' stato toccato: continua ad accettare \"next_open\" come valore valido per compatibilita' con backtest e ottimizzazioni gia' archiviati che lo referenziano, semplicemente non viene piu' offerto nel menu. node --check pulito, 520 test passano, ruff pulito.",
+    "files": [
+      "frontend/index.html",
+      "frontend/static/app.js"
+    ]
   }
 }
