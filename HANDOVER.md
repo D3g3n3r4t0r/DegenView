@@ -1684,3 +1684,29 @@ Risolto con `e.stopPropagation()` sui due bottoni nuovi.
 dal vivo con Playwright: apertura da entrambi i punti d'ingresso, ricerca
 libera, categoria che si espande, aggiunta di un indicatore con conferma
 del chip sincronizzato fra i due pannelli.
+
+---
+
+### Grafico affollato di default — `seed-0081` — **fatto**
+
+Lorenzo, con uno screenshot di INJUSDT pieno di etichette sovrapposte
+(pattern, segnali contestuali dell'esaurimento, MACD, Stocastico):
+"sta visualizzazione non ha senso vederla; di predefinito fai che non ci
+sa nessun indicatore acceso".
+
+Controllato `state.layers` in `app.js`: nel codice erano gia' tutti spenti
+tranne uno solo, EMA 20/50. Il resto del disordine nello screenshot veniva
+dalle preferenze salvate sul suo account (`/api/preferences`, campo
+`layers`) — ogni sessione le ricorda e le ripropone identiche al prossimo
+accesso, indipendentemente dal default del codice. Fatto: spento anche
+l'ultimo default rimasto (EMA), sia nello stato JS sia nel `checked` del
+checkbox in `index.html`. Verificato dal vivo registrando un account senza
+preferenze pregresse: grafico con solo candele, nessun livello acceso,
+nessun sub-chart aperto.
+
+**Non risolto per il suo account specifico**: le preferenze gia' salvate
+da Lorenzo (con pattern/hints/macd/stoch accesi da una sessione precedente)
+restano quelle finche' non le spegne una volta dai toggle in Livelli — da
+qui non c'e' accesso al database di produzione per resettarle al posto
+suo, e non e' stato chiesto di farlo. Una volta spente restano spente:
+`savePreferences()` salva lo stato lasciato, non lo riaccende mai da solo.

@@ -905,7 +905,7 @@
       liquidity: false,
       structure: false,
       confluence: false,
-      ema: true,
+      ema: false,
       bbands: false,
       vwap: false,
       rsi: false,
