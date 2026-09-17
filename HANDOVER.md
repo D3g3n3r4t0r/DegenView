@@ -1787,3 +1787,34 @@ logica di apertura/chiusura — solo il bottone e il suo listener. Restano
 due punti d'ingresso: il pulsante in toolbar (principale) e quello dentro
 Livelli (contestuale). Verificato dal vivo: voce sparita dalla sidebar,
 entrambi gli ingressi rimasti aprono ancora il modale correttamente.
+
+## Bacheca: pulizia stati bloccati su "aperto"
+
+Lorenzo: "ci sono segnalazioni aperte, chiudi tutte quelle risolte".
+Controllate tutte le 11 non-`risolto` fra le 113 segnalazioni live
+(`curl https://liquidityengine.app/api/issues`). Trovato che 4 avevano
+gia' una risoluzione sostanziale in `resolutions.json` ma con uno
+`status` descrittivo invece del valore canonico atteso da `_VALID_STATUS`
+(`backend/app/issues.py:50`) — la funzione di merge (riga 439) scarta lo
+stato non riconosciuto e la voce resta "aperto" come nel seed originale,
+anche se il lavoro e' finito. Non un bug di logica: solo status scritti a
+mano in modo descrittivo invece che nel valore atteso.
+
+Normalizzati in `resolutions.json` (mai toccato `issues.json`, che resta
+sul volume Fly e appartiene a chi scrive le segnalazioni):
+- `seed-0077` (alert Telegram in ritardo di un giorno intero) → `risolto`
+  — causa trovata e misurata, 26/26 alert puntuali dopo il fix.
+- `seed-0073` (sito "sembra AI slop") → `risolto` — 145→15 problemi
+  residui, tutti bassa priorita' o scelte deliberate gia' documentate.
+- `6a914943` (dubbio su segnali KASUSDT) → `scartato` — chiusa dallo
+  stesso autore della segnalazione ("Problema da ignorare").
+
+Lasciata `in corso` `seed-0072` (fix MEXC futures, host+endpoint): il
+testo della risoluzione stessa dice che serve conferma con un ordine
+reale, non ancora fatta. Restano genuinamente aperte/in corso e non
+toccate: `72f880af` e `37637f11` (nessun fix scritto), `seed-0078` (idea
+non implementata), `seed-0054`/`seed-0051`/`seed-0028`/`seed-0027`
+(davvero in corso).
+
+Verificato con `pytest tests/test_issues.py` e la suite completa (520
+passed) + ruff pulito prima di committare.
