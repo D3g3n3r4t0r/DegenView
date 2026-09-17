@@ -4100,34 +4100,7 @@ button.wl-archive-pick:hover { border-color: var(--accent); }
 .opt-progress-stop:disabled { opacity: .5; cursor: default; }
 
 /* --- Libreria indicatori (pandas-ta, 151 voci) ----------------------------- */
-#indicator-catalog-search {
-  width: 100%; box-sizing: border-box; padding: 7px 9px; font: inherit; font-size: 12px;
-  border: 1px solid var(--border); background: var(--bg); color: var(--ink);
-  margin-bottom: 6px;
-}
-.indicator-catalog-list {
-  max-height: 260px; overflow-y: auto; border: 1px solid var(--border);
-  background: var(--bg); margin-bottom: 8px;
-}
-.indicator-catalog-list.hidden { display: none; }
-.icl-group-label {
-  position: sticky; top: 0; background: var(--bg-raised); color: var(--ink-dim);
-  font-family: var(--font-mono); font-size: 10px; letter-spacing: .05em; text-transform: uppercase;
-  padding: 5px 9px; border-bottom: 1px solid var(--border);
-}
-.icl-item {
-  display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  padding: 6px 9px; font-size: 12.5px; cursor: pointer; border-bottom: 1px solid var(--border);
-}
-.icl-item:last-child { border-bottom: none; }
-.icl-item:hover { background: var(--bg-raised); }
-.icl-item.active { background: var(--accent-mute, rgba(0,214,143,.12)); }
-.icl-item .icl-kind {
-  font-family: var(--font-mono); font-size: 9.5px; color: var(--ink-dim); flex: none;
-}
-.icl-empty { padding: 10px 9px; font-size: 12px; color: var(--ink-dim); }
-
-.active-indicators-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.active-indicators-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
 .indicator-chip {
   display: inline-flex; align-items: center; gap: 6px;
   border: 1px solid var(--border); background: var(--bg-raised);
@@ -4138,6 +4111,61 @@ button.wl-archive-pick:hover { border-color: var(--accent); }
   color: var(--ink-dim); cursor: pointer; padding: 2px 4px;
 }
 .indicator-chip button:hover { color: var(--bear); }
+.indicator-library-open-btn {
+  width: 100%; padding: 8px 10px; font: inherit; font-size: 12.5px; font-weight: 600;
+  border: 1px solid var(--border); background: var(--bg-raised); color: var(--ink);
+  cursor: pointer; text-align: left;
+}
+.indicator-library-open-btn:hover { background: var(--bg); border-color: var(--accent, var(--ink)); }
+
+/* Il pulsante nella toolbar in alto — stesso spazio vuoto a destra dei
+   controlli del grafico, prima occupato solo dallo spacer flessibile. */
+.toolbar-indicators-btn {
+  display: flex; align-items: center; gap: 6px; padding: 6px 11px;
+  font: inherit; font-size: 12.5px; font-weight: 600;
+  border: 1px solid var(--border); background: transparent; color: var(--ink-dim);
+  border-radius: 6px; cursor: pointer; white-space: nowrap;
+}
+.toolbar-indicators-btn:hover { color: var(--ink); border-color: var(--ink-dim); background: var(--bg-raised); }
+
+/* Pannello ampio (stessa famiglia di Bacheca/Script Pine — si legge, non si
+   sbircia): elenco sfogliabile per categoria con la spiegazione di ognuno,
+   cosi' chi non conosce i nomi puo' comunque capire cosa attivare. */
+.indicator-library-body { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }
+#indicator-library-search {
+  width: 100%; box-sizing: border-box; padding: 9px 10px; font: inherit; font-size: 13px;
+  border: 1px solid var(--border); background: var(--bg); color: var(--ink);
+  margin-bottom: 10px; flex: none;
+}
+.indicator-library-list { overflow-y: auto; flex: 1 1 auto; min-height: 0; }
+.icl-group { border-bottom: 1px solid var(--border); }
+.icl-group > summary {
+  cursor: pointer; list-style: none; padding: 9px 4px;
+  font-family: var(--font-mono); font-size: 11.5px; font-weight: 600;
+  letter-spacing: .04em; text-transform: uppercase; color: var(--ink-dim);
+  display: flex; align-items: center; gap: 8px;
+}
+.icl-group > summary::-webkit-details-marker { display: none; }
+.icl-group > summary::before { content: "▸"; color: var(--ink-dim); transition: transform .12s; }
+.icl-group[open] > summary::before { transform: rotate(90deg); }
+.icl-group > summary:hover { color: var(--ink); }
+.icl-count {
+  font-weight: 400; color: var(--ink-dim); background: var(--bg-raised);
+  border-radius: 999px; padding: 1px 7px; font-size: 10.5px;
+}
+.icl-item {
+  padding: 9px 6px 11px 20px; cursor: pointer; border-top: 1px solid var(--border);
+}
+.icl-item:hover { background: var(--bg-raised); }
+.icl-item.active { background: var(--accent-mute, rgba(0,214,143,.1)); border-left: 2px solid var(--bull, #00d68f); padding-left: 18px; }
+.icl-item-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.icl-item-label { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+.icl-kind {
+  font-family: var(--font-mono); font-size: 9.5px; color: var(--ink-dim); flex: none;
+  text-transform: uppercase; letter-spacing: .03em;
+}
+.icl-desc { margin: 3px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--ink-dim); }
+.icl-empty { padding: 16px 6px; font-size: 13px; color: var(--ink-dim); }
 
 /* --- Ricerca e schede richiudibili sulla bacheca --------------------------- */
 .issues-tools { display: flex; gap: 6px; margin: 10px 0 6px; }
@@ -5001,14 +5029,17 @@ td {
    mezzo invece di contendere lo spazio a un testo che va letto per intero. */
 @media (min-width: 761px) {
   .cockpit[data-area="issues"] #issues-panel.open,
-  .cockpit[data-area="script"] #script-panel.open {
+  .cockpit[data-area="script"] #script-panel.open,
+  .cockpit[data-area="indicators"] #indicator-library-panel.open {
     display: flex;
     width: clamp(420px, 46vw, 760px);
     border-right: 1px solid var(--border);
   }
   .cockpit[data-area="issues"] .right-panel,
-  .cockpit[data-area="script"] .right-panel { display: none; }
-  .cockpit[data-area="script"] .chart-area {
+  .cockpit[data-area="script"] .right-panel,
+  .cockpit[data-area="indicators"] .right-panel { display: none; }
+  .cockpit[data-area="script"] .chart-area,
+  .cockpit[data-area="indicators"] .chart-area {
     flex: 1 1 auto;
     border-right: none;
   }

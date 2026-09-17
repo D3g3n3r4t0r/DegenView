@@ -8638,6 +8638,7 @@
     ["rail-levels-btn", "levels-panel"],
     ["rail-issues-btn", "issues-panel"],
     ["rail-script-btn", "script-panel"],
+    ["rail-indicators-btn", "indicator-library-panel"],
   ];
 
 
@@ -9087,10 +9088,11 @@
     el("script-panel").classList.remove("mobile-open");
     el("altro-panel").classList.remove("mobile-open");
     el("issues-panel").classList.remove("mobile-open");
+    el("indicator-library-panel").classList.remove("mobile-open");
     document.querySelector(".right-panel").classList.remove("mobile-open");
     el("draw-rail").classList.remove("mobile-tools-open");
 
-    const NAV_TARGET_FOR = { script: "altro", saldi: "altro", analisi: "altro", watchlist: "altro", backtest: "altro", issues: "altro", strategie: "altro", trading: "altro" };
+    const NAV_TARGET_FOR = { script: "altro", saldi: "altro", analisi: "altro", watchlist: "altro", backtest: "altro", issues: "altro", strategie: "altro", trading: "altro", indicators: "altro" };
     const navTarget = NAV_TARGET_FOR[target] || target;
     document.querySelectorAll(".mobile-nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.mobileTarget === navTarget));
 
@@ -9106,6 +9108,8 @@
       el("levels-panel").classList.add("mobile-open");
     } else if (target === "script") {
       el("script-panel").classList.add("mobile-open");
+    } else if (target === "indicators") {
+      el("indicator-library-panel").classList.add("mobile-open");
     } else if (target === "altro") {
       el("altro-panel").classList.add("mobile-open");
     } else if (target === "issues") {
@@ -9132,6 +9136,7 @@
       showMobileScreen(
         panelId === "script-panel" ? "script"
         : panelId === "issues-panel" ? "issues"
+        : panelId === "indicator-library-panel" ? "indicators"
         : "levels");
       return;
     }
@@ -9153,6 +9158,7 @@
       btn.addEventListener("click", () => showMobileScreen("chart"));
     });
     el("open-script-from-altro").addEventListener("click", () => openPanel("script-panel"));
+    el("open-indicators-from-altro").addEventListener("click", () => openPanel("indicator-library-panel"));
     el("altro-saldi-item").addEventListener("click", () => showMobileScreen("saldi"));
     el("altro-analisi-item").addEventListener("click", () => showMobileScreen("analisi"));
     el("altro-watchlist-item").addEventListener("click", () => showMobileScreen("watchlist"));
@@ -9162,6 +9168,11 @@
   }
 
   // ── Libreria indicatori (pandas-ta, 151 voci) ─────────────────────────────
+  // Pannello a se' (non piu' una tendina nascosta finche' non si cerca):
+  // Lorenzo, dopo la prima versione — "non conosco i nomi cosi non so cosa
+  // cercare" — voleva poter sfogliare, con la spiegazione di ciascuno.
+  // Elenco completo raggruppato per categoria, ricerca facoltativa per
+  // restringere quando si sa gia' cosa cercare.
   async function ensureIndicatorCatalog() {
     if (state.indicatorCatalog) return state.indicatorCatalog;
     try {
@@ -9173,32 +9184,43 @@
     return state.indicatorCatalog;
   }
 
-  function renderIndicatorCatalogList(filterText) {
-    const box = el("indicator-catalog-list");
+  function renderIndicatorLibraryList(filterText) {
+    const box = el("indicator-library-list");
     if (!box) return;
     const catalog = state.indicatorCatalog || [];
     const q = (filterText || "").trim().toLowerCase();
     const activeIds = new Set(state.customIndicators.map((c) => c.id));
     const filtered = q
-      ? catalog.filter((s) => s.label.toLowerCase().includes(q) || s.id.includes(q) || s.category_label.toLowerCase().includes(q))
+      ? catalog.filter((s) =>
+          s.label.toLowerCase().includes(q) || s.id.includes(q) ||
+          s.category_label.toLowerCase().includes(q) || (s.description || "").toLowerCase().includes(q))
       : catalog;
     if (!filtered.length) {
-      box.innerHTML = '<div class="icl-empty">Nessun indicatore trovato.</div>';
+      box.innerHTML = '<div class="icl-empty">Nessun indicatore trovato — prova un altro termine.</div>';
       return;
     }
-    let lastCat = null;
-    const parts = [];
+    const byCategory = new Map();
     filtered.forEach((s) => {
-      if (s.category_label !== lastCat) {
-        parts.push(`<div class="icl-group-label">${escapeHtml(s.category_label)}</div>`);
-        lastCat = s.category_label;
-      }
-      const isActive = activeIds.has(s.id);
-      parts.push(
-        `<div class="icl-item${isActive ? " active" : ""}" data-indicator-id="${escapeHtml(s.id)}">` +
-        `<span>${escapeHtml(s.label)}</span>` +
-        `<span class="icl-kind">${s.kind === "overlay" ? "sul prezzo" : "riquadro proprio"}</span></div>`
-      );
+      if (!byCategory.has(s.category_label)) byCategory.set(s.category_label, []);
+      byCategory.get(s.category_label).push(s);
+    });
+    // Durante una ricerca ogni gruppo si apre da solo (poche righe, si vuole
+    // vedere subito il risultato); sfogliando senza filtro restano chiusi,
+    // 151 righe di colpo sarebbero solo scroll.
+    const openAttr = q ? " open" : "";
+    const parts = [];
+    byCategory.forEach((items, catLabel) => {
+      parts.push(`<details class="icl-group"${openAttr}><summary>${escapeHtml(catLabel)} <span class="icl-count">${items.length}</span></summary>`);
+      items.forEach((s) => {
+        const isActive = activeIds.has(s.id);
+        parts.push(
+          `<div class="icl-item${isActive ? " active" : ""}" data-indicator-id="${escapeHtml(s.id)}">` +
+          `<div class="icl-item-head"><span class="icl-item-label">${escapeHtml(s.label)}</span>` +
+          `<span class="icl-kind">${s.kind === "overlay" ? "sul prezzo" : "riquadro proprio"}</span></div>` +
+          `<p class="icl-desc">${escapeHtml(s.description || "")}</p></div>`
+        );
+      });
+      parts.push("</details>");
     });
     box.innerHTML = parts.join("");
     box.querySelectorAll("[data-indicator-id]").forEach((row) => {
@@ -9237,31 +9259,56 @@
     // stacca dal DOM l'elemento appena cliccato, e il listener globale che
     // chiude i pannelli alla pressione "fuori" (bindUI, RAIL_PANELS) vede
     // l'evento risalire da un nodo ormai scollegato — panel.contains(e.target)
-    // torna false e richiude il pannello Livelli nello stesso click che
-    // doveva solo aggiungere l'indicatore.
+    // torna false e richiude il pannello nello stesso click che doveva solo
+    // aggiungere l'indicatore.
     setTimeout(() => {
-      const search = el("indicator-catalog-search");
-      renderIndicatorCatalogList(search ? search.value : "");
+      const search = el("indicator-library-search");
+      renderIndicatorLibraryList(search ? search.value : "");
       renderActiveIndicatorChips();
     }, 0);
     refreshCustomIndicators();
   }
 
   function bindIndicatorCatalog() {
-    const search = el("indicator-catalog-search");
-    const box = el("indicator-catalog-list");
-    if (!search || !box) return;
-    search.addEventListener("focus", async () => {
+    const search = el("indicator-library-search");
+    if (!search) return;
+    let loaded = false;
+    const load = async () => {
+      if (loaded) return;
+      loaded = true;
       await ensureIndicatorCatalog();
-      box.classList.remove("hidden");
-      renderIndicatorCatalogList(search.value);
+      renderIndicatorLibraryList(search.value);
+    };
+    // Popolata al primo utilizzo (focus sulla ricerca o apertura del
+    // pannello), non al caricamento della pagina: 151 righe di markup non
+    // servono a chi non apre mai la libreria.
+    search.addEventListener("focus", load);
+    el("rail-indicators-btn")?.addEventListener("click", load);
+    el("sidenav-indicators")?.addEventListener("click", load);
+    search.addEventListener("input", () => renderIndicatorLibraryList(search.value));
+
+    // Due scorciatoie che portano allo stesso posto: il pulsante dentro
+    // Livelli (per chi ha gia' aperto quel pannello) e quello in cima alla
+    // pagina (per chi no) aprono entrambi la libreria vera cliccando la
+    // stessa voce di sidebar, cosi' seguono esattamente lo stesso percorso
+    // di apertura/stato-attivo di ogni altro pannello, senza duplicarlo.
+    // stopPropagation: questi due bottoni vivono fuori dalla sidebar (uno nel
+    // pannello Livelli, uno nella toolbar in alto). Senza fermare la
+    // risalita, il click sintetico su #sidenav-indicators apre il pannello
+    // correttamente, ma poi il click ORIGINALE continua a risalire fino al
+    // listener globale che chiude i pannelli su un click "fuori dalla
+    // sidebar" (bindUI, RAIL_PANELS) — quel listener non riconosce ne'
+    // questo bottone ne' il pannello appena aperto come "dentro", e lo
+    // richiude nello stesso click che doveva aprirlo.
+    el("open-indicator-library-btn")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      el("sidenav-indicators").click();
     });
-    search.addEventListener("input", () => renderIndicatorCatalogList(search.value));
-    document.addEventListener("click", (e) => {
-      if (!e.target.closest("#indicator-catalog-search") && !e.target.closest("#indicator-catalog-list")) {
-        box.classList.add("hidden");
-      }
+    el("toolbar-indicators-btn")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      el("sidenav-indicators").click();
     });
+
     renderActiveIndicatorChips();
   }
 
@@ -10639,7 +10686,7 @@
       return;
     }
 
-    const drawerFor = { script: "script-panel", issues: "issues-panel" };
+    const drawerFor = { script: "script-panel", issues: "issues-panel", indicators: "indicator-library-panel" };
     if (drawerFor[area]) {
       openPanel(drawerFor[area]);
       // L'area viene dichiarata anche per questi: da cassetto stretto sopra
