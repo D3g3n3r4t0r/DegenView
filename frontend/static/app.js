@@ -8848,6 +8848,12 @@
           </div>
           <p class="irf-status hidden"></p>
         </form>
+        <div class="issue-manual-row" data-issue="${escapeHtml(it.id)}">
+          ${it.status === "risolto" || it.status === "scartato"
+            ? `<button type="button" class="issue-manual-btn is-reopen" data-status="aperto">Riapri</button>`
+            : `<button type="button" class="issue-manual-btn is-close" data-status="risolto">Chiudi manualmente</button>`}
+          <p class="issue-manual-status hidden"></p>
+        </div>
       </details>`;
     };
 
@@ -8904,6 +8910,37 @@
           loadIssues();
         } catch {
           status.textContent = "Rete non raggiungibile.";
+        }
+      });
+    });
+
+    list.querySelectorAll(".issue-manual-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const row = btn.closest(".issue-manual-row");
+        const statusEl = row.querySelector(".issue-manual-status");
+        const issueId = row.dataset.issue;
+        const newStatus = btn.dataset.status;
+        btn.disabled = true;
+        statusEl.classList.remove("hidden");
+        statusEl.textContent = newStatus === "risolto" ? "Chiudo…" : "Riapro…";
+        try {
+          const resp = await fetch(`/api/issues/${issueId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: newStatus }),
+          });
+          if (!resp.ok) {
+            const body = await resp.json().catch(() => ({}));
+            statusEl.textContent = body.detail === "Accesso richiesto"
+              ? "Accedi per farlo."
+              : (body.detail || "Non riuscito.");
+            btn.disabled = false;
+            return;
+          }
+          loadIssues();
+        } catch {
+          statusEl.textContent = "Rete non raggiungibile.";
+          btn.disabled = false;
         }
       });
     });
