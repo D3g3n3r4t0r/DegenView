@@ -4811,6 +4811,25 @@
     return out;
   }
 
+  // Stessa cosa ma per gli indicatori custom (libreria pandas-ta), che
+  // arrivano come due array paralleli (times/values) invece che gia' incollati
+  // alle candele. Un punto "vuoto" (senza value) invece di ometterlo del tutto
+  // e' quello che tiene l'indice logico allineato al grafico principale: se si
+  // filtrano via i valori nulli del periodo di riscaldamento, la serie ha meno
+  // punti delle candele e lo stesso indice logico smette di puntare alla
+  // stessa data nei due grafici — la barra sincronizzata mostra un pezzo
+  // diverso di storia in ciascuno (segnalato su ENTROPY e altri).
+  function pointsFromTimesValues(times, values) {
+    const out = [];
+    for (let i = 0; i < times.length; i++) {
+      const v = values[i];
+      out.push(v === null || v === undefined || Number.isNaN(v)
+        ? { time: times[i] }
+        : { time: times[i], value: v });
+    }
+    return out;
+  }
+
   function findIndicator(indicators, name) {
     const found = indicators.find((s) => s.name === name);
     return found ? found.values : null;
@@ -9601,7 +9620,7 @@
         seriesList.forEach((s, i) => {
           const color = CUSTOM_IND_COLORS[i % CUSTOM_IND_COLORS.length];
           const line = mainChart.addLineSeries({ color, lineWidth: 1.4, priceLineVisible: false, lastValueVisible: false });
-          const points = times.map((t, k) => ({ time: t, value: s.values[k] })).filter((d) => d.value !== null && d.value !== undefined);
+          const points = pointsFromTimesValues(times, s.values);
           line.setData(points);
           customOverlaySeriesList.push({ chart: mainChart, series: line, id: ind.id });
         });
@@ -9615,7 +9634,7 @@
         seriesList.forEach((s, i) => {
           const color = CUSTOM_IND_COLORS[i % CUSTOM_IND_COLORS.length];
           const line = chart.addLineSeries({ color, lineWidth: 1.4 });
-          const points = times.map((t, k) => ({ time: t, value: s.values[k] })).filter((d) => d.value !== null && d.value !== undefined);
+          const points = pointsFromTimesValues(times, s.values);
           line.setData(points);
         });
         const range = mainChart.timeScale().getVisibleLogicalRange();
