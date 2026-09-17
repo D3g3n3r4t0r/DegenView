@@ -134,7 +134,7 @@
         horzLine: { color: COLORS.inkDim, labelBackgroundColor: COLORS.ink },
       },
     };
-    [mainChart, rsiChart, macdChart, stochChart].forEach((c) => {
+    [mainChart, rsiChart, macdChart, stochChart, ...Object.values(customOscCharts).map((x) => x.chart)].forEach((c) => {
       if (c) { try { c.applyOptions(opts); } catch { /* grafico non ancora creato */ } }
     });
     // Anche le serie portano colori propri, decisi alla creazione.
@@ -890,6 +890,12 @@
     chartBacktestOverride: null,
     availableStrategies: [],
     logScale: false,
+    // Libreria indicatori pandas-ta (151 voci) selezionati dall'utente dalla
+    // tendina cercabile — persistono per browser, indipendenti dal ticker
+    // aperto, perche' sono strumenti generici come EMA/RSI, non livelli
+    // specifici di un simbolo.
+    indicatorCatalog: null, // popolato al primo uso da /api/indicators/catalog
+    customIndicators: JSON.parse(localStorage.getItem("customIndicators") || "[]"), // [{id, label, kind}]
     // Kept minimal by default — every structure/liquidity level draws its own
     // chart label, and turning them all on at once buries the price action
     // (especially on narrow screens).
@@ -924,6 +930,15 @@
   let stochChart, stochKSeries, stochDSeries;
   let equityChart, equitySeries;
 
+  // Indicatori scelti dalla libreria pandas-ta: quelli "overlay" vivono come
+  // linee extra su mainChart (in overlaySeriesList, ripulite ad ogni giro
+  // insieme al resto in clearOverlays); quelli "oscillator" aprono un
+  // riquadro proprio, creato e distrutto dinamicamente perche' — a differenza
+  // di RSI/MACD/Stocastico — non hanno un contenitore fisso in index.html.
+  let customOverlaySeriesList = [];
+  let customOscCharts = {}; // indicator id -> { container, chart }
+  const CUSTOM_IND_COLORS = ["#5b9cf6", "#f6a25b", "#c17ee8", "#5bc9c9", "#e85b8f", "#a8c95b"];
+
   const tooltipEl = el("tooltip");
 
   // Chart containers start hidden (display:none) until the first search
@@ -950,6 +965,7 @@
       [el("rsi-chart"), rsiChart],
       [el("macd-chart"), macdChart],
       [el("stoch-chart"), stochChart],
+      ...Object.values(customOscCharts).map(({ container, chart }) => [container, chart]),
     ].forEach(([container, chart]) => {
       // I sub-chart nascono solo quando il loro indicatore viene acceso:
       // prima di allora qui c'e' null, e senza questo controllo l'errore
@@ -4645,6 +4661,12 @@
       rsiChart.timeScale().setVisibleLogicalRange(range);
       macdChart.timeScale().setVisibleLogicalRange(range);
       stochChart.timeScale().setVisibleLogicalRange(range);
+      // customOscCharts si popola/svuota dinamicamente (vedi
+      // refreshCustomIndicators) — questa callback e' registrata una sola
+      // volta ma legge il contenuto corrente dell'oggetto ad ogni chiamata.
+      Object.values(customOscCharts).forEach(({ chart }) => {
+        try { chart.timeScale().setVisibleLogicalRange(range); } catch { /* in fase di rimozione */ }
+      });
     });
 
     // Il valore dell'RSI va letto sul punto della curva, non dove capita il
@@ -7050,6 +7072,7 @@
     renderBacktest();
     resizeAllCharts();
     zoomToOptimal();
+    refreshCustomIndicators();
   }
 
   // Mappa stringa intervallo → minuti per candle
@@ -9138,7 +9161,205 @@
     el("altro-trading-item").addEventListener("click", () => showMobileScreen("trading"));
   }
 
+  // ── Libreria indicatori (pandas-ta, 151 voci) ─────────────────────────────
+  async function ensureIndicatorCatalog() {
+    if (state.indicatorCatalog) return state.indicatorCatalog;
+    try {
+      const resp = await fetch("/api/indicators/catalog");
+      state.indicatorCatalog = resp.ok ? await resp.json() : [];
+    } catch {
+      state.indicatorCatalog = [];
+    }
+    return state.indicatorCatalog;
+  }
+
+  function renderIndicatorCatalogList(filterText) {
+    const box = el("indicator-catalog-list");
+    if (!box) return;
+    const catalog = state.indicatorCatalog || [];
+    const q = (filterText || "").trim().toLowerCase();
+    const activeIds = new Set(state.customIndicators.map((c) => c.id));
+    const filtered = q
+      ? catalog.filter((s) => s.label.toLowerCase().includes(q) || s.id.includes(q) || s.category_label.toLowerCase().includes(q))
+      : catalog;
+    if (!filtered.length) {
+      box.innerHTML = '<div class="icl-empty">Nessun indicatore trovato.</div>';
+      return;
+    }
+    let lastCat = null;
+    const parts = [];
+    filtered.forEach((s) => {
+      if (s.category_label !== lastCat) {
+        parts.push(`<div class="icl-group-label">${escapeHtml(s.category_label)}</div>`);
+        lastCat = s.category_label;
+      }
+      const isActive = activeIds.has(s.id);
+      parts.push(
+        `<div class="icl-item${isActive ? " active" : ""}" data-indicator-id="${escapeHtml(s.id)}">` +
+        `<span>${escapeHtml(s.label)}</span>` +
+        `<span class="icl-kind">${s.kind === "overlay" ? "sul prezzo" : "riquadro proprio"}</span></div>`
+      );
+    });
+    box.innerHTML = parts.join("");
+    box.querySelectorAll("[data-indicator-id]").forEach((row) => {
+      row.addEventListener("click", () => toggleCustomIndicator(row.dataset.indicatorId));
+    });
+  }
+
+  function renderActiveIndicatorChips() {
+    const box = el("active-indicators-chips");
+    if (!box) return;
+    if (!state.customIndicators.length) {
+      box.innerHTML = "";
+      return;
+    }
+    box.innerHTML = state.customIndicators
+      .map((c) => `<span class="indicator-chip">${escapeHtml(c.label)}` +
+        `<button type="button" data-remove-indicator="${escapeHtml(c.id)}" title="Rimuovi">✕</button></span>`)
+      .join("");
+    box.querySelectorAll("[data-remove-indicator]").forEach((btn) => {
+      btn.addEventListener("click", () => toggleCustomIndicator(btn.dataset.removeIndicator));
+    });
+  }
+
+  function toggleCustomIndicator(id) {
+    const catalog = state.indicatorCatalog || [];
+    const idx = state.customIndicators.findIndex((c) => c.id === id);
+    if (idx >= 0) {
+      state.customIndicators.splice(idx, 1);
+    } else {
+      const spec = catalog.find((s) => s.id === id);
+      if (!spec) return;
+      state.customIndicators.push({ id: spec.id, label: spec.label, kind: spec.kind });
+    }
+    localStorage.setItem("customIndicators", JSON.stringify(state.customIndicators));
+    // Rimandato al prossimo tick: sostituire subito l'HTML della lista
+    // stacca dal DOM l'elemento appena cliccato, e il listener globale che
+    // chiude i pannelli alla pressione "fuori" (bindUI, RAIL_PANELS) vede
+    // l'evento risalire da un nodo ormai scollegato — panel.contains(e.target)
+    // torna false e richiude il pannello Livelli nello stesso click che
+    // doveva solo aggiungere l'indicatore.
+    setTimeout(() => {
+      const search = el("indicator-catalog-search");
+      renderIndicatorCatalogList(search ? search.value : "");
+      renderActiveIndicatorChips();
+    }, 0);
+    refreshCustomIndicators();
+  }
+
+  function bindIndicatorCatalog() {
+    const search = el("indicator-catalog-search");
+    const box = el("indicator-catalog-list");
+    if (!search || !box) return;
+    search.addEventListener("focus", async () => {
+      await ensureIndicatorCatalog();
+      box.classList.remove("hidden");
+      renderIndicatorCatalogList(search.value);
+    });
+    search.addEventListener("input", () => renderIndicatorCatalogList(search.value));
+    document.addEventListener("click", (e) => {
+      if (!e.target.closest("#indicator-catalog-search") && !e.target.closest("#indicator-catalog-list")) {
+        box.classList.add("hidden");
+      }
+    });
+    renderActiveIndicatorChips();
+  }
+
+  function dynamicSubChartOptions() {
+    return {
+      layout: { background: { color: COLORS.paperBg }, textColor: COLORS.inkDim, fontFamily: "'JetBrains Mono', 'IBM Plex Mono', monospace" },
+      grid: { vertLines: { color: COLORS.gridMinor }, horzLines: { color: COLORS.gridMinor } },
+      rightPriceScale: { borderColor: COLORS.gridMajor, minimumWidth: 72 },
+      timeScale: { borderColor: COLORS.gridMajor, timeVisible: true, secondsVisible: false },
+    };
+  }
+
+  // Calcola e disegna gli indicatori scelti dalla libreria. Chiamata alla
+  // fine di ogni render(): ripulisce le linee/riquadri del giro precedente e
+  // li ricrea da zero, cosi' cambiare ticker o timeframe non lascia residui
+  // di un simbolo diverso appesi al grafico.
+  //
+  // Due click ravvicinati sulla libreria (o un render() che scatta mentre
+  // la chiamata precedente e' ancora in volo sulla rete) avviano due
+  // esecuzioni sovrapposte: senza guardia, quella piu' vecchia riprende
+  // dopo il proprio await e aggiunge un secondo riquadro per lo stesso
+  // indicatore, gia' creato nel frattempo da quella piu' recente. Un
+  // numero di sequenza fa desistere ogni esecuzione superata non appena
+  // se ne accorge, subito dopo il primo punto di attesa.
+  let indicatorsRefreshSeq = 0;
+  async function refreshCustomIndicators() {
+    const mySeq = ++indicatorsRefreshSeq;
+    customOverlaySeriesList.forEach(({ chart, series }) => {
+      try { chart.removeSeries(series); } catch { /* gia' rimossa */ }
+    });
+    customOverlaySeriesList = [];
+    Object.values(customOscCharts).forEach(({ container, chart }) => {
+      try { chart.remove(); } catch { /* gia' rimosso */ }
+      container.remove();
+    });
+    customOscCharts = {};
+
+    if (!state.customIndicators.length || !state.data || !mainChart) return;
+    const symbol = state.data.symbol;
+    const analysis = state.data.timeframes[state.activeTimeframe];
+    const interval = analysis && analysis.interval;
+    if (!symbol || !interval) return;
+
+    for (const ind of state.customIndicators) {
+      let data;
+      try {
+        const resp = await fetch("/api/indicators/compute", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            symbol,
+            asset_type: state.assetType,
+            exchange: state.cryptoExchange || "mexc",
+            timeframe: state.activeTimeframe,
+            interval,
+            indicator: ind.id,
+            params: {},
+          }),
+        });
+        if (!resp.ok) continue;
+        data = await resp.json();
+      } catch {
+        continue; // un indicatore che fallisce non deve bloccare gli altri
+      }
+      if (mySeq !== indicatorsRefreshSeq) return; // superata da un'esecuzione piu' recente
+      const times = data.times || [];
+      const seriesList = data.series || [];
+      if (data.kind === "overlay") {
+        seriesList.forEach((s, i) => {
+          const color = CUSTOM_IND_COLORS[i % CUSTOM_IND_COLORS.length];
+          const line = mainChart.addLineSeries({ color, lineWidth: 1.4, priceLineVisible: false, lastValueVisible: false });
+          const points = times.map((t, k) => ({ time: t, value: s.values[k] })).filter((d) => d.value !== null && d.value !== undefined);
+          line.setData(points);
+          customOverlaySeriesList.push({ chart: mainChart, series: line });
+        });
+      } else {
+        const container = document.createElement("div");
+        container.className = "sub-chart";
+        const wrap = el("chart-wrap");
+        if (!wrap) continue;
+        wrap.appendChild(container);
+        const chart = LightweightCharts.createChart(container, dynamicSubChartOptions());
+        seriesList.forEach((s, i) => {
+          const color = CUSTOM_IND_COLORS[i % CUSTOM_IND_COLORS.length];
+          const line = chart.addLineSeries({ color, lineWidth: 1.4 });
+          const points = times.map((t, k) => ({ time: t, value: s.values[k] })).filter((d) => d.value !== null && d.value !== undefined);
+          line.setData(points);
+        });
+        const range = mainChart.timeScale().getVisibleLogicalRange();
+        if (range) chart.timeScale().setVisibleLogicalRange(range);
+        observeResize(container, chart);
+        customOscCharts[ind.id] = { container, chart };
+      }
+    }
+  }
+
   function bindUI() {
+    bindIndicatorCatalog();
     document.querySelectorAll("[data-layer]").forEach((input) => {
       input.addEventListener("change", () => {
         state.layers[input.dataset.layer] = input.checked;

@@ -50,6 +50,7 @@ from app.analysis.cancel import SearchCancelled
 from app.export import build_backtest_workbook
 from app.analysis.confluence import compute_confluence
 from app.analysis.indicators import compute_indicators
+from app.analysis import indicator_catalog
 from app.analysis.fibonacci import compute_fib_zones
 from app.analysis.optimize import (
     Constraints,
@@ -1296,6 +1297,54 @@ async def run_pinescript(script_id: str, req: PineRunRequest) -> dict:
     strategy = build_strategy_state(f"Script: {_meta['name']}", df, signals=signals)
     backtest = run_backtest(df, None, req.backtest_params.model_dump(), signals=signals)
     return {"needs_mapping": False, "strategy": strategy.model_dump(), "backtest": backtest.model_dump()}
+
+
+@app.get("/api/indicators/catalog")
+async def get_indicator_catalog() -> list[dict]:
+    """Libreria a tendina: tutti gli indicatori di pandas-ta non ancora
+    cablati in compute_indicators(), con la classificazione overlay/oscillator
+    che decide dove il frontend li disegna."""
+    return indicator_catalog.catalog_payload()
+
+
+class IndicatorComputeRequest(BaseModel):
+    symbol: str
+    asset_type: AssetType
+    exchange: CryptoExchange = "mexc"
+    timeframe: TimeframeKey = "mtf"
+    interval: IntervalChoice | None = None
+    indicator: str
+    params: dict = {}
+
+
+@app.post("/api/indicators/compute")
+async def compute_indicator_route(req: IndicatorComputeRequest) -> dict:
+    symbol = req.symbol.strip()
+    if not symbol:
+        raise HTTPException(status_code=400, detail="Ticker mancante")
+    interval = req.interval or DEFAULT_INTERVALS[req.timeframe]
+    provider = get_provider(req.asset_type, req.exchange)
+    try:
+        df = await _fetch_cached(
+            (f"ind:{req.asset_type}:{req.exchange}:{symbol.upper()}", interval, settings.ltf_candles),
+            provider, symbol, interval, settings.ltf_candles,
+        )
+    except ProviderError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if df.empty:
+        raise HTTPException(status_code=502, detail=f"Nessun dato per {symbol} su {interval}")
+
+    try:
+        series = indicator_catalog.compute_indicator(df, req.indicator, req.params)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    spec = indicator_catalog.CATALOG_BY_ID.get(req.indicator)
+    return {
+        "kind": spec.kind if spec else "oscillator",
+        "times": [int(ts.timestamp()) for ts in df.index],
+        "series": [s.model_dump() for s in series],
+    }
 
 
 class RegisterRequest(BaseModel):

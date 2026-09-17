@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0079", "Libreria indicatori community (pandas-ta) collegata, con tendina cercabile",
+     "Lorenzo aveva chiesto se si potesse accedere a indicatori open source fatti dalla community, come su TradingView. Gli script Pine reali non sono portabili (l'interprete custom del sito copre solo un sottoinsieme del linguaggio), ma pandas-ta era gia' una dipendenza installata e ne usava solo 6 dei 151 disponibili. Collegati tutti e 151, dietro una tendina cercabile in Livelli & Indicatori — 'non voglio affollamento nel grafico, servira' una libreria a tendina da dove selezionarli' — cosi' nessuno si calcola finche' non viene scelto esplicitamente. Ogni indicatore e' classificato overlay (va sul prezzo) o oscillator (apre un riquadro proprio, creato e distrutto dinamicamente). Verificato dal vivo con Playwright: aggiunta/rimozione crea e distrugge il riquadro senza lasciare residui.",
+     "media"),
     ("seed-0078", "Idea: arricchire i profili Sniper con API pubbliche (TVL, revenue, audit)",
      "Lorenzo: 'introduciamo anche altri sistemi per scansionare al meglio il mercato, laddove sia disponibile qualche API online pubblica'. Candidati: CoinGecko (cap, volume), DeFiLlama (TVL, revenue per chain), Messari (developer activity), Token Terminal (protocol revenue), API nativa Robinhood Chain se esiste. Non prioritario: sbloccare dopo che lo Sniper e' stabile su Robinhood Chain.",
      "bassa"),

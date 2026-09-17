@@ -4099,6 +4099,46 @@ button.wl-archive-pick:hover { border-color: var(--accent); }
 .opt-progress-stop:hover { background: var(--bear); color: var(--bg-panel); }
 .opt-progress-stop:disabled { opacity: .5; cursor: default; }
 
+/* --- Libreria indicatori (pandas-ta, 151 voci) ----------------------------- */
+#indicator-catalog-search {
+  width: 100%; box-sizing: border-box; padding: 7px 9px; font: inherit; font-size: 12px;
+  border: 1px solid var(--border); background: var(--bg); color: var(--ink);
+  margin-bottom: 6px;
+}
+.indicator-catalog-list {
+  max-height: 260px; overflow-y: auto; border: 1px solid var(--border);
+  background: var(--bg); margin-bottom: 8px;
+}
+.indicator-catalog-list.hidden { display: none; }
+.icl-group-label {
+  position: sticky; top: 0; background: var(--bg-raised); color: var(--ink-dim);
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: .05em; text-transform: uppercase;
+  padding: 5px 9px; border-bottom: 1px solid var(--border);
+}
+.icl-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 6px 9px; font-size: 12.5px; cursor: pointer; border-bottom: 1px solid var(--border);
+}
+.icl-item:last-child { border-bottom: none; }
+.icl-item:hover { background: var(--bg-raised); }
+.icl-item.active { background: var(--accent-mute, rgba(0,214,143,.12)); }
+.icl-item .icl-kind {
+  font-family: var(--font-mono); font-size: 9.5px; color: var(--ink-dim); flex: none;
+}
+.icl-empty { padding: 10px 9px; font-size: 12px; color: var(--ink-dim); }
+
+.active-indicators-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.indicator-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid var(--border); background: var(--bg-raised);
+  border-radius: 999px; padding: 3px 6px 3px 10px; font-size: 12px; color: var(--ink);
+}
+.indicator-chip button {
+  font: inherit; font-size: 13px; line-height: 1; border: none; background: none;
+  color: var(--ink-dim); cursor: pointer; padding: 2px 4px;
+}
+.indicator-chip button:hover { color: var(--bear); }
+
 /* --- Ricerca e schede richiudibili sulla bacheca --------------------------- */
 .issues-tools { display: flex; gap: 6px; margin: 10px 0 6px; }
 .issues-tools input[type="search"] {

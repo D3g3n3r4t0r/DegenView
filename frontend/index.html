@@ -198,6 +198,13 @@
         <label class="layer-toggle"><input type="checkbox" data-layer="stoch" /> Stocastico (14,3)</label>
       </div>
       <div class="panel">
+        <h3>Libreria indicatori</h3>
+        <p class="panel-hint">151 indicatori open source (pandas-ta), oltre ai 6 già cablati sopra. Cercane uno e aggiungilo: quelli sul prezzo vanno sul grafico principale, gli altri aprono un riquadro proprio — così il grafico non si affolla di quello che non stai usando.</p>
+        <input type="search" id="indicator-catalog-search" placeholder="Cerca un indicatore (es. supertrend, ichimoku, adx)…" autocomplete="off" />
+        <div id="indicator-catalog-list" class="indicator-catalog-list hidden"></div>
+        <div id="active-indicators-chips" class="active-indicators-chips"></div>
+      </div>
+      <div class="panel">
         <h3>Disegni sul grafico</h3>
         <p class="panel-hint">Usa gli strumenti nella colonna a sinistra del grafico (o il pulsante matita sul grafico, su mobile). Persistono per questo ticker anche dopo un ricaricamento della pagina (salvati in questo browser).</p>
         <ul id="draw-list" class="draw-list"></ul>

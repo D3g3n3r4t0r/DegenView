@@ -1587,3 +1587,61 @@ Lorenzo (in ordine di sessione): "se apro la tab lab con il grafico compresso la
 - "voglio anche che il sito che utilizziamo per sniperare le crypto on-chain, sia dedicato alla Robinhood Chain esclusivamente in questa fase" → fatto, default RBH.
 - "non voglio meme coin, ma progetti che promettono di fare cose interessanti" → già filtrato da `is_serious()`, nessun cambio; scanner ora include Robinhood Chain.
 - "introduciamo anche altri sistemi per scansionare al meglio il mercato... non è prioritario, teniamocelo in bacheca" → seed-0078 aperto.
+
+---
+
+### Libreria indicatori community (pandas-ta) — `seed-0079` — **fatto**
+
+Lorenzo, guardando il documento di presentazione preparato in questa
+sessione: "ma il discorso della libreria di indicatori open source fatti da
+utenti come su TradingView? esiste questa possibilita'?". Spiegato il
+limite reale: gli script Pine della community TradingView non sono
+portabili — l'interprete custom del sito (`backend/app/pine/`) copre solo
+un sottoinsieme del linguaggio, niente `security()`/array/librerie — ma
+`pandas-ta` era gia' una dipendenza installata (vedi `CLAUDE.md`, la usava
+gia' `indicators.py`) e ne sfruttava solo 6 funzioni delle 151 disponibili.
+
+Lorenzo ha chiesto di collegarle tutte, ponendo lui stesso il vincolo giusto:
+"non voglio che ci sia affollamento nel grafico, servira' una libreria a
+tendina da dove selezionarli no?".
+
+**Fatto**: `backend/app/analysis/indicator_catalog.py` introspeziona
+`pandas_ta.Category` e costruisce un catalogo di 151 voci — `OVERRIDES` a
+mano per gli indicatori con output o parametri non banali (supertrend,
+ichimoku, macd, bbands, adx, donchian, keltner, psar, chandelier_exit,
+cdl_pattern...), default ragionevole per il resto. Ogni voce e' classificata
+`overlay` (va sul prezzo) o `oscillator` (riquadro proprio). Due endpoint:
+`GET /api/indicators/catalog` e `POST /api/indicators/compute` (riusa
+`_fetch_cached`, lo stesso helper di `/api/pinescript/run`). Frontend: campo
+di ricerca dentro Livelli & Indicatori, raggruppato per categoria; click
+aggiunge un chip e ricalcola — overlay diventano linee su `mainChart`,
+oscillator aprono un `<div class="sub-chart">` creato/distrutto a runtime e
+sincronizzato sul time-scale principale. Persistenza in `localStorage`
+(`customIndicators`), indipendente dal ticker aperto.
+
+**Due bug trovati verificando dal vivo con Playwright** (non a rilettura di
+codice):
+1. I default dichiarati in `OVERRIDES` non venivano applicati quando il
+   chiamante non passava parametri — `supertrend` prendeva `length=7` di
+   pandas-ta invece del 10 dichiarato. `compute_indicator()` ora parte dai
+   default dello spec e li sovrascrive solo con quanto arriva da fuori.
+2. Due click ravvicinati sulla libreria avviavano due esecuzioni asincrone
+   sovrapposte di `refreshCustomIndicators()`: quella piu' vecchia, ripresa
+   dopo il proprio `await`, aggiungeva un secondo riquadro duplicato per lo
+   stesso indicatore gia' creato dalla piu' recente. Risolto con un numero
+   di sequenza che fa desistere ogni esecuzione superata subito dopo il
+   primo punto di attesa.
+
+Un terzo bug di UI, scoperto nello stesso giro di test ma non specifico di
+questa feature: cliccare una voce della tendina sostituiva subito l'HTML
+della lista, staccando dal DOM il nodo che aveva generato il click prima che
+l'evento risalisse al listener globale che chiude i pannelli su un click
+"fuori" (`RAIL_PANELS` in `bindUI`) — quel listener vedeva un nodo scollegato
+e richiudeva il pannello Livelli nello stesso click che doveva solo
+aggiungere l'indicatore. Risolto rimandando il re-render al tick successivo
+con `setTimeout(fn, 0)`.
+
+14 test nuovi in `backend/tests/test_indicator_catalog.py`, suite completa
+518 passed, ruff pulito, verifica end-to-end nel browser reale (login,
+ricerca, aggiunta/rimozione di piu' indicatori, controllo che i riquadri
+dinamici nel DOM tornino al numero di partenza dopo la rimozione).
