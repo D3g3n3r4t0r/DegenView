@@ -349,43 +349,46 @@ def _lorenzo_space(stats: SeriesStats, trendfilter: bool, volatilityfilter: bool
     )
 
 
-def _gabriele_space(stats: SeriesStats, target_entries: int) -> ConstrainedSpace:
-    """Gabriele with the band width derived rather than searched."""
-    bb_mult = band_multiplier_for_frequency(target_entries, stats.n)
+def _gabriele_space(stats: SeriesStats, target_entries: int,
+                    locked: dict | None = None) -> ConstrainedSpace:
+    """Gabriele con lunghezza RSI, lunghezza Bollinger e moltiplicatore presi
+    da chi cerca, non dalla ricerca.
 
-    hl = stats.ou_half_life
-    if hl is None:
-        bb_lo, bb_hi, bb_note = 10, 40, "bb_length left unnarrowed: no half-life estimate"
-    else:
-        bb_lo, bb_hi, bb_note = _narrow((10, 40), (hl, hl * 3.0),
-                                        f"bb_length (half-life={hl:.1f})")
+    Richiesto esplicitamente (segnalazione 72f880af / whitekobra): il tasto
+    Ottimizza per le due varianti Gabriele deve toccare solo RSI ipercomprato
+    e ipervenduto, lasciando gli altri tre esattamente ai valori impostati nei
+    campi del Lab. Prima qui c'era una derivazione statistica del
+    moltiplicatore (dalla frequenza di ingresso voluta) e una ricerca di
+    lunghezza RSI/Bollinger — tecnica valida ma non quello che e' stato
+    chiesto: chi imposta quei tre numeri a mano vuole che restino quelli.
+    """
+    locked = locked or {}
+    rsi_length = int(locked.get("rsi_length", 14))
+    bb_length = int(locked.get("bb_length", 20))
+    bb_mult = float(locked.get("bb_mult", band_multiplier_for_frequency(target_entries, stats.n)))
 
     # If the band already selects a 2-sigma event, an RSI threshold of 45 is
     # not a second filter: it fires on nearly everything the band caught.
     rsi_os_hi = 30 if bb_mult >= 2.0 else 40
 
-    dims = ("rsi_length", "bb_length", "rsi_oversold", "rsi_overbought")
+    dims = ("rsi_oversold", "rsi_overbought")
 
     def to_params(u: np.ndarray) -> dict:
-        bb_length = _i(u[1], bb_lo, bb_hi)
-        # Two indicators on the same horizon are one signal counted twice.
-        rsi_hi = max(7, min(25, bb_length // 2))
         return {
-            "rsi_length": _i(u[0], 7, max(8, rsi_hi)),
+            "rsi_length": rsi_length,
             "bb_length": bb_length,
             "bb_mult": bb_mult,
-            "rsi_oversold": _i(u[2], 15, rsi_os_hi),
-            "rsi_overbought": _i(u[3], 60, 85),
+            "rsi_oversold": _i(u[0], 15, rsi_os_hi),
+            "rsi_overbought": _i(u[1], 60, 85),
         }
 
     return ConstrainedSpace(
         label="gabriele-constrained", dims=dims, to_params=to_params,
-        fixed={"bb_mult": bb_mult},
-        notes=[f"moltiplicatore Bollinger fissato a {bb_mult:.2f} per scelta (non cercato): "
-               f"deriva dal voler vedere circa {target_entries} ingressi su {stats.n} candele, "
-               "non dal comportamento specifico di questo titolo — lunghezza RSI e lunghezza "
-               "Bollinger restano invece cercate nei dati",
-               bb_note, f"rsi_oversold capped at {rsi_os_hi}", "rsi_length <= bb_length/2"],
+        fixed={"rsi_length": rsi_length, "bb_length": bb_length, "bb_mult": bb_mult},
+        notes=[f"lunghezza RSI={rsi_length}, lunghezza Bollinger={bb_length}, "
+               f"moltiplicatore={bb_mult:.2f}: presi dai campi impostati, non cercati — "
+               "solo RSI ipercomprato e ipervenduto vengono cercati",
+               f"rsi_oversold capped at {rsi_os_hi}"],
     )
 
 
@@ -446,18 +449,22 @@ def build_spaces(
     strategy_name: str,
     stats: SeriesStats,
     target_entries: int = 40,
+    locked: dict | None = None,
 ) -> list[ConstrainedSpace]:
     """Constrained space(s) for a strategy.
 
     Lorenzo returns one space per switch combination — the branches have
     genuinely different dimension, so treating them as one 10-dimensional
     space both overstates the problem and wastes the search.
+
+    `locked` (Gabriele only) are the values currently set in the caller's own
+    param fields, held fixed instead of searched or derived.
     """
     if strategy_name == "Lorenzo (trend-follower)":
         return [_lorenzo_space(stats, tf, vf)
                 for tf in (False, True) for vf in (False, True)]
     if strategy_name in ("Gabriele (RSI+BB reversal)", "Gabriele 2 (RSI+BB long/short)"):
-        return [_gabriele_space(stats, target_entries)]
+        return [_gabriele_space(stats, target_entries, locked)]
     if strategy_name == "Accumulo / Distribuzione (long-term)":
         return [_exhaustion_space(stats)]
     raise ValueError(f"Nessuno spazio vincolato per {strategy_name!r}")

@@ -2837,6 +2837,7 @@ async def _optimize_payload(
     constraints: "Constraints",
     say=None,
     should_stop=None,
+    strategy_params: dict | None = None,
 ) -> "OptimizeResult":
     """Costruisce la risposta dell'ottimizzazione, una volta sola.
 
@@ -2875,6 +2876,7 @@ async def _optimize_payload(
                     run_pipeline, strategy_name, df, backtest_params.model_dump(),
                     accept=(constraints.accepts if constraints.active else None),
                     progress=say, should_stop=should_stop,
+                    locked_params=strategy_params,
                 )
             )
         except ValueError as exc:
@@ -2933,7 +2935,7 @@ async def _optimize_payload(
             partial(
                 optimize_strategy, strategy_name, df, backtest_params.model_dump(),
                 mode=mode, constraints=constraints, progress=say,
-                should_stop=should_stop,
+                should_stop=should_stop, base_params=strategy_params,
             )
         )
     except NoCandidateMeetsConstraints as exc:
@@ -3069,6 +3071,7 @@ async def optimize_strategy_endpoint(
     exchange: CryptoExchange = Query("mexc"),
     ltf_interval: IntervalChoice = Query(DEFAULT_INTERVALS["ltf"]),
     strategy_name: str = Query(DEFAULT_STRATEGY),
+    strategy_params: StrategyParamsQuery = Depends(),
     backtest_params: BacktestParamsQuery = Depends(),
     mode: str = Query("random", pattern="^(random|grid|plateau)$"),
     # Filtri opzionali sul risultato. `None` = nessun vincolo, ed e' distinto
@@ -3093,7 +3096,7 @@ async def optimize_strategy_endpoint(
         return await _optimize_body(
             symbol, asset_type, exchange, ltf_interval, strategy_name,
             backtest_params, mode, min_losing_trades, max_losing_trades, max_drawdown_pct,
-            start_date, end_date,
+            start_date, end_date, strategy_params.model_dump(),
         )
     finally:
         _finisci_lavoro_pesante(user.id)
@@ -3112,6 +3115,7 @@ async def _optimize_body(
     max_drawdown_pct: float | None,
     start_date: str | None = None,
     end_date: str | None = None,
+    strategy_params: dict | None = None,
 ) -> OptimizeResult:
     """Il lavoro vero. Sta a parte perche' il contatore delle ricerche in
     corso va riabbassato anche quando qualcosa esplode a meta', e un
@@ -3148,7 +3152,7 @@ async def _optimize_body(
     )
     return await _optimize_payload(
         strategy_name, df, backtest_params, mode, ltf_interval,
-        backtest_interval, constraints,
+        backtest_interval, constraints, strategy_params=strategy_params,
     )
 
 
@@ -3256,6 +3260,7 @@ async def start_optimize(
     exchange: CryptoExchange = Query("mexc"),
     ltf_interval: IntervalChoice = Query(DEFAULT_INTERVALS["ltf"]),
     strategy_name: str = Query(DEFAULT_STRATEGY),
+    strategy_params: StrategyParamsQuery = Depends(),
     backtest_params: BacktestParamsQuery = Depends(),
     mode: str = Query("random", pattern="^(random|grid|plateau)$"),
     min_losing_trades: int | None = Query(None, ge=0, le=1000),
@@ -3315,6 +3320,7 @@ async def start_optimize(
                 strategy_name, df, backtest_params, mode, ltf_interval,
                 backtest_interval, constraints, say,
                 should_stop=lambda: jobs_store.cancel_requested(job_id),
+                strategy_params=strategy_params.model_dump(),
             )
             jobs_store.finish(job_id, body.model_dump(mode="json"))
 

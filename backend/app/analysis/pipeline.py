@@ -157,6 +157,7 @@ def run_pipeline(
     accept: Callable[[BacktestResult], bool] | None = None,
     progress: Callable[[str], None] | None = None,
     should_stop: Callable[[], bool] | None = None,
+    locked_params: dict | None = None,
 ) -> PipelineResult:
     """Deterministic parameter selection. Same inputs, same answer, always.
 
@@ -192,7 +193,7 @@ def run_pipeline(
         notes.append("regime gate did NOT pass — result is fitted to a series "
                      "where this strategy has no measurable edge")
 
-    spaces: list[ConstrainedSpace] = build_spaces(strategy_name, stats, target_entries)
+    spaces: list[ConstrainedSpace] = build_spaces(strategy_name, stats, target_entries, locked_params)
     spaces.sort(key=lambda s: s.d)   # simplest branch first
     say(f"{len(spaces)} variant{'e' if len(spaces) == 1 else 'i'} da esplorare: "
         f"{', '.join(cs.label for cs in spaces)}")
