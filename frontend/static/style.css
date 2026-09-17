@@ -4187,13 +4187,15 @@ button.wl-archive-pick:hover { border-color: var(--accent); }
    d'occhio la copia dalle candele vere sotto (stesso viola delle candele
    della copia stessa). */
 .fractal-label {
-  position: absolute; top: 8px; left: 0; z-index: 6;
+  position: absolute; top: 8px; left: 0; z-index: 6; cursor: grab;
   display: inline-flex; align-items: center; gap: 6px; width: max-content;
   background: var(--bg-panel); border: 1px solid #8c78ff; border-radius: 4px;
   padding: 2px 4px 2px 8px; font-size: 11px; color: var(--ink);
   box-shadow: 0 1px 3px rgba(0,0,0,.15);
 }
 .fractal-label.hidden { display: none; }
+.fractal-label:active { cursor: grabbing; }
+.fractal-label.selected { border-color: #5b9cf6; box-shadow: 0 0 0 2px rgba(91,156,246,.35); }
 .fractal-label-close {
   font: inherit; font-size: 12px; line-height: 1; border: none; background: none;
   color: var(--ink-dim); cursor: pointer; padding: 1px 3px;
