@@ -503,11 +503,10 @@
               <label>Slippage % <input type="text" inputmode="decimal" id="lab-slippage" value="0" /></label>
               <label class="lab-fill-at">Esecuzione del segnale
                 <select id="lab-fill-at">
-                  <option value="signal_close">Chiusura della candela del segnale</option>
-                  <option value="next_open">Apertura della candela successiva</option>
+                  <option value="signal_close">Al momento in cui si verifica la condizione</option>
                 </select>
               </label>
-              <p class="panel-hint lab-fill-hint">Alla <b>chiusura</b> il segnale arriva nell&rsquo;istante in cui la candela chiude: il prezzo e' quello del segnale stesso, ottimista perche&rsquo; nella realta&rsquo; non si e' ancora potuto agire. All&rsquo;<b>apertura successiva</b> il segnale arriva alla chiusura ma l&rsquo;ordine viene eseguito all&rsquo;apertura della candela dopo: e' lo scenario realistico, il prezzo ottenibile davvero.</p>
+              <p class="panel-hint lab-fill-hint">L&rsquo;ordine si riempie al prezzo di chiusura della candela che verifica la condizione — lo stesso istante in cui, dal vivo, arriva l&rsquo;alert. E&rsquo; il prezzo che si otterrebbe davvero reagendo subito, su qualunque timeframe.</p>
             </div>
           </details>
 

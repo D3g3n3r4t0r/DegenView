@@ -10438,7 +10438,7 @@
     const fillAt = bt.fill_at || "signal_close";
     const fillTag = fillAt === "next_open"
       ? ' · <span class="fill-tag fill-real" title="Ingressi e uscite riempiti all&rsquo;apertura della candela successiva al segnale: il prezzo che si puo&rsquo; davvero ottenere.">apertura successiva</span>'
-      : ' · <span class="fill-tag fill-optimistic" title="Ingressi e uscite riempiti alla chiusura della candela che genera il segnale: quel prezzo si conosce solo nell&rsquo;istante in cui la candela chiude.">chiusura del segnale</span>';
+      : ' · <span class="fill-tag fill-real" title="Ingressi e uscite riempiti al prezzo di chiusura della candela che verifica la condizione: lo stesso istante in cui, dal vivo, arriva l&rsquo;alert.">al verificarsi della condizione</span>';
 
     labEl("lab-result-meta").innerHTML = `<button type="button" class="lab-trades-link">${bt.num_trades} trade</button> · ${bt.interval || labState.tf}${dateRange}${fillTag}`;
 

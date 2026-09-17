@@ -381,7 +381,10 @@ def _gabriele_space(stats: SeriesStats, target_entries: int) -> ConstrainedSpace
     return ConstrainedSpace(
         label="gabriele-constrained", dims=dims, to_params=to_params,
         fixed={"bb_mult": bb_mult},
-        notes=[f"bb_mult={bb_mult:.2f} derived from {target_entries} entries over {stats.n} bars",
+        notes=[f"moltiplicatore Bollinger fissato a {bb_mult:.2f} per scelta (non cercato): "
+               f"deriva dal voler vedere circa {target_entries} ingressi su {stats.n} candele, "
+               "non dal comportamento specifico di questo titolo — lunghezza RSI e lunghezza "
+               "Bollinger restano invece cercate nei dati",
                bb_note, f"rsi_oversold capped at {rsi_os_hi}", "rsi_length <= bb_length/2"],
     )
 
