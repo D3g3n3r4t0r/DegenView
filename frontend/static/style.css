@@ -4058,6 +4058,14 @@ button.wl-archive-pick:hover { border-color: var(--accent); }
 }
 .irf-status { margin: 0; font-size: 12px; color: var(--ink-dim); }
 .issue-card.is-riaperto { border-left-color: var(--bear); }
+.issue-manual-row { margin-top: 6px; display: flex; align-items: center; gap: 8px; }
+.issue-manual-btn {
+  font: inherit; font-size: 12px; padding: 4px 10px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--bg-raised); color: var(--ink);
+}
+.issue-manual-btn.is-close { border-color: var(--bull, #00c97d); color: var(--bull, #00c97d); }
+.issue-manual-btn.is-reopen { border-color: var(--bear, #ff4560); color: var(--bear, #ff4560); }
+.issue-manual-status { margin: 0; font-size: 12px; color: var(--ink-dim); }
 .issues-count.is-riaperto b { color: var(--bear); }
 
 /* --- Pastiglia della ricerca in corso -------------------------------------
