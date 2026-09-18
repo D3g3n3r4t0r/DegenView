@@ -2894,10 +2894,20 @@
         ${entry.on_close ? '<span class="wl-close-badge" title="Alert alla chiusura della candela">CLOSE</span>' : ""}
         ${hasCustomParams ? '<span class="wl-custom-badge" title="Uno o più parametri personalizzati">★</span>' : ""}
         <span class="wl-summary">${activeCount ? `${activeCount} attiv${activeCount === 1 ? "a" : "e"}` : "nessuna attiva"}</span>
+        <button type="button" class="wl-head-remove" title="Rimuovi questo ticker dalla watchlist">✕</button>
         <span class="wl-caret">▾</span>
       `;
+      // La x sulla riga chiusa toglie l'intero ticker senza dover prima
+      // aprirla — quella dentro la riga aperta ("Rimuovi ticker" in fondo)
+      // restava l'unica strada, e Lorenzo l'ha chiesta qui perché non si vede
+      // finché non espandi.
+      head.querySelector(".wl-head-remove").addEventListener("click", async (e) => {
+        e.stopPropagation();
+        await fetch(`/api/watchlist/${entry.id}`, { method: "DELETE" });
+        loadWatchlist();
+      });
       head.addEventListener("click", (e) => {
-        if (e.target.closest(".wl-remove")) return;
+        if (e.target.closest(".wl-head-remove")) return;
         card.classList.toggle("open");
       });
 

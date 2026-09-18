@@ -1708,6 +1708,19 @@ body {
   transition: transform 0.15s;
 }
 
+.wl-head-remove {
+  flex-shrink: 0;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  color: var(--ink-dim);
+  font-size: 10px; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+}
+.wl-head-remove:hover { background: var(--bear); color: #fff; border-color: var(--bear); }
+
 .tick-card.open .wl-caret { transform: rotate(180deg); }
 
 .tick-card-body {

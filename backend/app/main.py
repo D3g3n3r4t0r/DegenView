@@ -2345,8 +2345,11 @@ async def test_watchlist_alert(
         return {"sent": False, "signal": None}
     signal = strategy.signals[-1]
     msg = f"🧪 TEST — {format_signal_message(entry.symbol, interval, strategy_name, signal)}"
-    asyncio.create_task(telegram.send_to(user.telegram_chat_id, msg))
-    return {"sent": True, "signal": signal.type}
+    # Atteso, non lanciato e dimenticato: e' il pulsante che serve proprio a
+    # sapere se l'invio funziona, quindi deve riportare l'esito vero — non
+    # "sent: true" a prescindere da come va la chiamata a Telegram.
+    ok = await telegram.send_to(user.telegram_chat_id, msg)
+    return {"sent": ok, "signal": signal.type}
 
 
 # ── Alert log ──────────────────────────────────────────────────────────────────
