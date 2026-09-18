@@ -1895,8 +1895,37 @@ async def request_onchain_reveal(chain: OnchainChain, user: User = Depends(auth.
 
 @app.get("/api/onchain/wallets/reveal/status/{token}")
 async def onchain_reveal_status(token: str, user: User = Depends(auth.get_current_user)) -> dict:
-    """Il browser fa polling qui in attesa che il telefono approvi."""
+    """Il browser fa polling qui in attesa che il telefono approvi.
+    Rimasto per chi non puo' usare SSE (fallback) — l'app nuova usa
+    /reveal/stream/{token} sotto."""
     return {"status": onchain_reveal.status(token, user.id)}
+
+
+@app.get("/api/onchain/wallets/reveal/stream/{token}")
+async def onchain_reveal_stream(token: str, user: User = Depends(auth.get_current_user)) -> StreamingResponse:
+    """Stessa attesa di /reveal/status, ma spinta appena cambia invece che
+    tirata ogni 2.5s — un'attesa breve (2 minuti al massimo) non merita un
+    ritardo medio di oltre un secondo tra il vero istante dell'approvazione
+    e quando il browser se ne accorge. Nessuna coda pub/sub nuova: il token
+    vive solo qualche minuto, un poll interno ogni 300ms basta e non
+    aggiunge stato da mantenere altrove."""
+    async def event_gen():
+        last = None
+        for _ in range(400):  # 400 * 300ms = 120s, lo stesso TTL del token
+            current = onchain_reveal.status(token, user.id)
+            if current != last:
+                yield f"data: {json.dumps({'status': current})}\n\n"
+                last = current
+            if current in ("approved", "expired"):
+                return
+            await asyncio.sleep(0.3)
+        yield f"data: {json.dumps({'status': 'expired'})}\n\n"
+
+    return StreamingResponse(
+        event_gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 class OnchainRevealApproveRequest(BaseModel):
@@ -4506,10 +4535,12 @@ _SNIPER_HTML = (
 # a colpo d'occhio — tutto inline, nessuna dipendenza dal resto del sito.
 _ONCHAIN_APPROVE_HTML = (FRONTEND_DIR / "onchain-approve.html").read_text(encoding="utf-8")
 _ONCHAIN_PASSKEY_SETUP_HTML = (FRONTEND_DIR / "onchain-passkey-setup.html").read_text(encoding="utf-8")
-# Pagina di servizio per collaudare la Fase 1 (crea wallet, saldo, rivelazione)
-# senza dover chiamare l'API a mano — non e' il pannello finale, che vivra'
-# dentro Sorveglia/Opera una volta che questa fase e' verificata dal vivo.
-_ONCHAIN_WALLET_TEST_HTML = (FRONTEND_DIR / "onchain-wallet-test.html").read_text(encoding="utf-8")
+# Prima alpha del programma dedicato al wallet on-chain — pagina a se',
+# separata da index.html apposta (nessuna confusione col resto del sito):
+# crea wallet, saldo, storico, rivelazione a due dispositivi con animazioni
+# e SSE. Il trading (Fase 2-4 del piano) resta segnato come non attivo,
+# non inventato per sembrare piu' pronto di quanto sia.
+_ONCHAIN_APP_HTML = (FRONTEND_DIR / "onchain-app.html").read_text(encoding="utf-8")
 
 
 # L'HTML non si mette in cache: e' l'unico posto dove vive il numero di
@@ -4558,6 +4589,6 @@ async def onchain_passkey_setup_page() -> HTMLResponse:
     return HTMLResponse(_ONCHAIN_PASSKEY_SETUP_HTML, headers=_HTML_HEADERS)
 
 
-@app.get("/onchain-wallet-test.html")
-async def onchain_wallet_test_page() -> HTMLResponse:
-    return HTMLResponse(_ONCHAIN_WALLET_TEST_HTML, headers=_HTML_HEADERS)
+@app.get("/onchain-app.html")
+async def onchain_app_page() -> HTMLResponse:
+    return HTMLResponse(_ONCHAIN_APP_HTML, headers=_HTML_HEADERS)
