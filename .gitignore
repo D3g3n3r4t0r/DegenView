@@ -18,6 +18,8 @@ backend/app/data/issues.json
 backend/app/data/issue_replies.json
 backend/app/data/seeded_ids.json
 backend/app/data/watchdog.json
+backend/app/data/onchain_ledger.db
+backend/app/data/onchain_ledger.db-*
 
 # Segreti del deploy self-hosted
 deploy/.env

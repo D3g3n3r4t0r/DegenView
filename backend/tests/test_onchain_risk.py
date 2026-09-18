@@ -1,0 +1,92 @@
+"""Guardrail di rischio — tetti confermati da Lorenzo (20 USD/operazione,
+100 USD/giorno, 15% di concentrazione), price impact, circuit breaker."""
+
+from __future__ import annotations
+
+from app.config import settings
+from app.trading.onchain import ledger, risk
+
+
+def _fresh_db(tmp_path, monkeypatch):
+    monkeypatch.setattr(ledger, "_DB_FILE", tmp_path / "ledger.db")
+    ledger._init_db()
+
+
+def test_per_trade_cap_rejects_above_20_usd():
+    assert settings.onchain_max_usd_per_trade == 20.0
+    ok, reason = risk.check_per_trade_cap(20.01)
+    assert ok is False
+    assert "20" in reason
+    ok, _ = risk.check_per_trade_cap(20.0)
+    assert ok is True
+
+
+def test_daily_cap_accumulates_across_orders(tmp_path, monkeypatch):
+    _fresh_db(tmp_path, monkeypatch)
+    assert settings.onchain_max_usd_per_day == 100.0
+    ledger.reserve("k1", "u1", "solana", "TOKEN", "s", "buy", "real", 20.0)
+    ledger.mark_confirmed("k1", executed_qty=1.0, executed_price_usd=20.0)
+    ok, _ = risk.check_daily_cap("u1", "solana", 79.99)
+    assert ok is True
+    ok, reason = risk.check_daily_cap("u1", "solana", 80.01)
+    assert ok is False
+    assert "tetto giornaliero" in reason
+
+
+def test_concentration_cap_blocks_over_15_percent(tmp_path, monkeypatch):
+    _fresh_db(tmp_path, monkeypatch)
+    assert settings.onchain_max_token_concentration_pct == 15.0
+    # Prima posizione mai aperta: nessun portafoglio da confrontare, si passa.
+    ok, _ = risk.check_concentration("u1", "solana", "TOKEN_A", 20.0)
+    assert ok is True
+
+    ledger.reserve("k1", "u1", "solana", "TOKEN_A", "s", "buy", "real", 20.0)
+    ledger.mark_confirmed("k1", executed_qty=1.0, executed_price_usd=20.0)
+    ledger.reserve("k2", "u1", "solana", "TOKEN_B", "s", "buy", "real", 80.0)
+    ledger.mark_confirmed("k2", executed_qty=1.0, executed_price_usd=80.0)
+    # Portafoglio: 100 USD totali. Aggiungere 20 su TOKEN_A -> 40/120 = 33% -> rifiuta.
+    ok, reason = risk.check_concentration("u1", "solana", "TOKEN_A", 20.0)
+    assert ok is False
+    assert "concentrazione" in reason
+    # Aggiungere 5 su TOKEN_A -> 25/105 = 23.8% -> ancora rifiuta.
+    ok, _ = risk.check_concentration("u1", "solana", "TOKEN_A", 5.0)
+    assert ok is False
+    # Un nuovo TOKEN_C con size piccola resta sotto il 15% del nuovo totale.
+    ok, _ = risk.check_concentration("u1", "solana", "TOKEN_C", 1.0)
+    assert ok is True
+
+
+def test_price_impact_rejects_above_5_percent():
+    ok, _ = risk.check_price_impact(4.99)
+    assert ok is True
+    ok, reason = risk.check_price_impact(5.01)
+    assert ok is False
+    assert "5" in reason
+
+
+def test_circuit_breaker_blocks_new_orders_once_tripped(tmp_path, monkeypatch):
+    _fresh_db(tmp_path, monkeypatch)
+    ok, _ = risk.check_circuit_breaker("u1", "solana")
+    assert ok is True
+    for _ in range(5):
+        ledger.record_trade_outcome("u1", "solana", -1.0)
+    ok, reason = risk.check_circuit_breaker("u1", "solana")
+    assert ok is False
+    assert "circuit breaker" in reason
+
+
+def test_run_all_checks_stops_at_first_failure(tmp_path, monkeypatch):
+    _fresh_db(tmp_path, monkeypatch)
+    for _ in range(5):
+        ledger.record_trade_outcome("u1", "solana", -1.0)
+    # circuit breaker scattato: deve fermarsi li', anche con una size assurda
+    ok, reason = risk.run_all_checks("u1", "solana", "TOKEN", 999.0, 0.1)
+    assert ok is False
+    assert "circuit breaker" in reason
+
+
+def test_run_all_checks_passes_a_clean_order(tmp_path, monkeypatch):
+    _fresh_db(tmp_path, monkeypatch)
+    ok, reason = risk.run_all_checks("u1", "solana", "TOKEN", 20.0, 0.5)
+    assert ok is True
+    assert reason == ""
