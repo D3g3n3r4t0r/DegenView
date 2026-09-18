@@ -124,6 +124,43 @@
     font-size: 11.5px; color: var(--amber); background: rgba(224,171,61,.08);
     border: 1px solid rgba(224,171,61,.25); border-radius: 7px; padding: 8px 10px; margin-top: 4px;
   }
+  .dim-note { font-size: 11.5px; color: var(--ink-dim); margin: 4px 0 10px; }
+
+  .risk-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; }
+  .risk-cell {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
+  }
+  .risk-cell .k { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-dim); }
+  .risk-cell .v { font-size: 15px; font-weight: 700; color: var(--ink); margin-top: 2px; }
+  .breaker-pill {
+    display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 8px 10px;
+    border-radius: 8px; font-size: 12.5px; font-weight: 600;
+    background: linear-gradient(135deg, rgba(47,214,150,.16), rgba(47,214,150,.05));
+    border: 1px solid rgba(47,214,150,.18);
+  }
+  .breaker-pill.tripped {
+    background: linear-gradient(135deg, rgba(255,90,110,.18), rgba(255,90,110,.05));
+    border-color: rgba(255,90,110,.22); color: var(--danger);
+  }
+  .breaker-pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+  .breaker-pill.tripped .dot { background: var(--danger); }
+
+  #simulate-form label:first-of-type { margin-top: 0; }
+  #simulate-form input, #simulate-form select {
+    width: 100%; box-sizing: border-box; padding: 8px 10px; border-radius: 7px;
+    border: 1.5px solid var(--border); background: var(--bg); color: var(--ink); font-size: 13.5px;
+  }
+  #simulate-form button {
+    width: 100%; margin-top: 12px; padding: 9px; border-radius: 7px; border: none;
+    background: linear-gradient(135deg, #4beeb0, var(--accent)); color: #08150f;
+    font-weight: 700; font-size: 13px; cursor: pointer;
+  }
+  #simulate-form button:disabled { opacity: .5; }
+  .sim-outcome {
+    margin-top: 10px; padding: 9px 11px; border-radius: 8px; font-size: 12.5px;
+  }
+  .sim-outcome.accepted { background: rgba(47,214,150,.1); border: 1px solid rgba(47,214,150,.28); color: var(--accent); }
+  .sim-outcome.rejected { background: rgba(255,90,110,.1); border: 1px solid rgba(255,90,110,.28); color: var(--danger); }
 
   .tx-list { list-style: none; margin: 8px 0 0; padding: 0; }
   .tx-list li { display: flex; justify-content: space-between; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
@@ -220,10 +257,31 @@
           </div>
         </details>
 
-        <details class="section">
+        <details class="section" id="sec-risk">
           <summary>Limiti & sicurezza<span></span></summary>
+          <div class="body" id="risk-body">
+            <p class="dim-note">Apri per leggere lo stato vero.</p>
+          </div>
+        </details>
+
+        <details class="section" id="sec-simulate">
+          <summary>Prova una simulazione (Fase 2)<span></span></summary>
           <div class="body">
-            <p class="placeholder-note">Fase 3 — non ancora attiva. Tetto di concentrazione per token e circuit breaker automatico arrivano insieme all'esecuzione reale, non prima.</p>
+            <p class="dim-note">Stessi guardrail della Fase 3 — nessuna chiave, nessuna transazione. Utile per vedere se un ordine passerebbe i controlli.</p>
+            <form id="simulate-form">
+              <label class="field-label" for="sim-token">Token (simbolo o indirizzo)</label>
+              <input id="sim-token" type="text" placeholder="es. TOKEN" required />
+              <label class="field-label" for="sim-side">Lato</label>
+              <select id="sim-side"><option value="buy">Compra</option><option value="sell">Vendi</option></select>
+              <label class="field-label" for="sim-notional">Size (USD)</label>
+              <input id="sim-notional" type="number" min="0" step="0.01" value="10" required />
+              <label class="field-label" for="sim-impact">Price impact stimato (%)</label>
+              <input id="sim-impact" type="number" min="0" step="0.01" value="0.5" required />
+              <label class="field-label" for="sim-price">Prezzo del token (USD)</label>
+              <input id="sim-price" type="number" min="0" step="0.000001" value="1" required />
+              <button type="submit">Simula</button>
+            </form>
+            <div id="simulate-result"></div>
           </div>
         </details>
 
@@ -444,6 +502,89 @@
       });
     } catch (err) {
       body.innerHTML = `<p style="margin:6px 0;color:var(--danger)">${err.message}</p>`;
+    }
+  });
+
+  // --- Limiti & sicurezza: stato vero da /api/onchain/risk/status, letto
+  // ad ogni apertura della sezione — mai una volta sola, i tetti cambiano nel giorno.
+  let riskLoadedFor = null;
+  el("sec-risk").addEventListener("toggle", () => {
+    if (el("sec-risk").open && riskLoadedFor !== state.chain) loadRiskStatus();
+  });
+
+  async function loadRiskStatus() {
+    const body = el("risk-body");
+    body.innerHTML = '<p class="dim-note">Leggo lo stato…</p>';
+    try {
+      const resp = await fetch(`/api/onchain/risk/status/${state.chain}`);
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.detail || "errore");
+      riskLoadedFor = state.chain;
+      const cb = data.circuit_breaker;
+      body.innerHTML = `
+        <div class="risk-grid">
+          <div class="risk-cell"><div class="k">Tetto per trade</div><div class="v">$${data.per_trade_cap_usd}</div></div>
+          <div class="risk-cell"><div class="k">Tetto giornaliero</div><div class="v">$${data.daily_cap_usd}</div></div>
+          <div class="risk-cell"><div class="k">Spesa oggi</div><div class="v">$${data.daily_spent_usd}</div></div>
+          <div class="risk-cell"><div class="k">Concentrazione max</div><div class="v">${data.concentration_cap_pct}%</div></div>
+        </div>
+        <div class="breaker-pill ${cb.tripped ? "tripped" : ""}" id="breaker-pill">
+          <span class="dot"></span>
+          <span id="breaker-text">${cb.tripped ? `Circuit breaker scattato — ${cb.consecutive_losses} perdite di fila` : "Circuit breaker a riposo"}</span>
+        </div>
+        ${cb.tripped ? '<button type="button" class="btn-sm" id="breaker-reset-btn" style="margin-top:8px;width:100%">Riattiva manualmente</button>' : ""}
+        <p class="dim-note" style="margin-top:8px">Esecuzione reale: ${data.execution_enabled ? "attiva" : "spenta"}.</p>`;
+      if (cb.tripped) {
+        el("breaker-reset-btn").addEventListener("click", async () => {
+          try {
+            const r = await fetch(`/api/onchain/risk/circuit-breaker/${state.chain}/reset`, { method: "POST" });
+            const d = await r.json();
+            if (!r.ok) throw new Error(d.detail || "errore");
+            riskLoadedFor = null;
+            loadRiskStatus();
+          } catch (err) {
+            alert(err.message || "Errore di rete.");
+          }
+        });
+      }
+    } catch (err) {
+      body.innerHTML = `<p class="dim-note" style="color:var(--danger)">${err.message}</p>`;
+    }
+  }
+
+  document.querySelectorAll(".chain-chip").forEach((btn) => {
+    btn.addEventListener("click", () => { riskLoadedFor = null; });
+  });
+
+  // --- Simulazione Fase 2: stessi guardrail, nessuna chiave, nessuna rete on-chain.
+  el("simulate-form").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const out = el("simulate-result");
+    const btn = ev.target.querySelector("button[type=submit]");
+    btn.disabled = true;
+    out.innerHTML = '<p class="dim-note">Simulo…</p>';
+    try {
+      const resp = await fetch("/api/onchain/simulate", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chain: state.chain,
+          token: el("sim-token").value.trim(),
+          strategy_name: "manuale",
+          side: el("sim-side").value,
+          notional_usd: parseFloat(el("sim-notional").value),
+          price_impact_pct: parseFloat(el("sim-impact").value),
+          price_usd: parseFloat(el("sim-price").value),
+        }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.detail || "errore");
+      out.innerHTML = `<div class="sim-outcome ${data.accepted ? "accepted" : "rejected"}">
+        ${data.accepted ? "Ordine accettato dai guardrail." : data.reason}</div>`;
+      if (data.accepted) { riskLoadedFor = null; }
+    } catch (err) {
+      out.innerHTML = `<div class="sim-outcome rejected">${err.message}</div>`;
+    } finally {
+      btn.disabled = false;
     }
   });
 
