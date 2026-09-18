@@ -7067,6 +7067,7 @@
         { label: "Linea di tendenza", action: () => setDrawTool("trend_line") },
         { label: "Linea estesa ↔", action: () => setDrawTool("extended_line") },
         { label: "Rettangolo", action: () => setDrawTool("rectangle") },
+        { label: "Righello (misura prezzo/tempo)", action: () => setDrawTool("range") },
         { label: "Ellisse", action: () => setDrawTool("ellipse") },
         { label: "Canale parallelo", action: () => setDrawTool("channel") },
         { label: "Freccia", action: () => setDrawTool("arrow") },
