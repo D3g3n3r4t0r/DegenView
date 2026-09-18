@@ -42,6 +42,12 @@
     word-break: break-all; color: #e0ab3d;
   }
   .dim { color: #5c6158; font-size: 12px; }
+  .tx-list { list-style: none; margin: 10px 0 0; padding: 0; }
+  .tx-list li {
+    display: flex; justify-content: space-between; gap: 8px; padding: 7px 0;
+    border-bottom: 1px solid #262820; font-size: 12.5px;
+  }
+  .tx-list a { color: #2fd696; font-family: ui-monospace, monospace; text-decoration: none; }
 </style>
 </head>
 <body>
@@ -95,8 +101,10 @@
       <div class="balance dim">Saldo non ancora richiesto</div>
       <div class="actions">
         <button type="button" class="secondary" data-act="balance">Vedi saldo</button>
+        <button type="button" class="secondary" data-act="tx">Transazioni</button>
         <button type="button" class="secondary" data-act="reveal">Rivela chiave</button>
       </div>
+      <div class="tx-slot"></div>
       <div class="reveal-slot"></div>
     `;
     const balanceEl = div.querySelector(".balance");
@@ -110,6 +118,36 @@
         balanceEl.classList.remove("dim");
       } catch (err) {
         balanceEl.textContent = err.message || "Errore di rete.";
+      }
+    });
+
+    const txSlot = div.querySelector(".tx-slot");
+    div.querySelector('[data-act="tx"]').addEventListener("click", async () => {
+      txSlot.innerHTML = '<p class="dim" style="margin-top:10px">Leggo le transazioni…</p>';
+      try {
+        const resp = await fetch(`/api/onchain/wallets/${w.chain}/transactions`);
+        const body = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(body.detail || `Errore ${resp.status}`);
+        if (!body.available) {
+          txSlot.innerHTML = `<p class="dim" style="margin-top:10px">${body.reason}
+            <a href="${body.explorer_url}" target="_blank" style="color:#2fd696">Apri l'explorer →</a></p>`;
+          return;
+        }
+        if (!body.transactions.length) {
+          txSlot.innerHTML = '<p class="dim" style="margin-top:10px">Nessuna transazione ancora.</p>';
+          return;
+        }
+        txSlot.innerHTML = '<ul class="tx-list"></ul>';
+        const ul = txSlot.querySelector(".tx-list");
+        body.transactions.forEach((t) => {
+          const li = document.createElement("li");
+          const when = t.block_time ? new Date(t.block_time * 1000).toLocaleString("it-IT") : "";
+          li.innerHTML = `<a href="${t.explorer_url}" target="_blank">${t.signature.slice(0, 10)}…</a>
+            <span class="dim">${t.status} · ${when}</span>`;
+          ul.appendChild(li);
+        });
+      } catch (err) {
+        txSlot.innerHTML = `<p class="msg err">${err.message || "Errore di rete."}</p>`;
       }
     });
 

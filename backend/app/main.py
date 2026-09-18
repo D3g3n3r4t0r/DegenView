@@ -2021,6 +2021,19 @@ async def onchain_wallet_balance(chain: OnchainChain, user: User = Depends(auth.
     return {"chain": chain, "address": wallet.address, "native_balance": native, "native_unit": unit}
 
 
+@app.get("/api/onchain/wallets/{chain}/transactions")
+async def onchain_wallet_transactions(chain: OnchainChain, user: User = Depends(auth.get_current_user)) -> dict:
+    _require_onchain_enabled()
+    wallet = user.onchain_wallets.get(chain)
+    if wallet is None:
+        raise HTTPException(status_code=404, detail="Nessun wallet su questa chain — creane uno prima")
+    try:
+        result = await onchain_balances.recent_transactions(chain, wallet.address)
+    except Exception as exc:  # noqa: BLE001 — un RPC pubblico irraggiungibile non deve essere un 500 muto
+        raise HTTPException(status_code=502, detail=f"RPC non raggiungibile: {exc}") from exc
+    return {"chain": chain, "address": wallet.address, **result}
+
+
 class FuturesQuoteRequest(BaseModel):
     exchange: str
     symbol: str

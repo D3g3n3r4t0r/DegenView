@@ -1,13 +1,22 @@
-"""Saldo di un wallet on-chain, sola lettura via RPC pubblico — nessuna
-chiave coinvolta qui, solo l'indirizzo (che e' pubblico per definizione)."""
+"""Saldo e storico transazioni di un wallet on-chain, sola lettura —
+nessuna chiave coinvolta qui, solo l'indirizzo (che e' pubblico per
+definizione)."""
 import httpx
 
 from app.models import OnchainChain
 
 SOLANA_RPC = "https://api.mainnet-beta.solana.com"
 ROBINHOOD_RPC = "https://rpc.mainnet.chain.robinhood.com"
+# L'explorer ufficiale (Blockscout) e' dietro una sfida Cloudflare che una
+# richiesta da server non supera — verificato dal vivo, non solo letto:
+# risponde "Just a moment..." a qualunque User-Agent, anche il path legacy
+# /api?module=... in stile Etherscan. Un vero browser la risolve da solo
+# (esegue il JS della sfida), un backend no — per questo lo storico
+# Robinhood Chain qui sotto e' un link all'explorer, non dati incorporati.
+ROBINHOOD_EXPLORER = "https://robinhoodchain.blockscout.com"
 LAMPORTS_PER_SOL = 1_000_000_000
 WEI_PER_ETH = 10**18
+_MAX_TRANSACTIONS = 20
 
 
 async def native_balance(chain: OnchainChain, address: str) -> float:
@@ -39,3 +48,44 @@ async def _robinhood_balance(address: str) -> float:
     if "error" in data:
         raise RuntimeError(f"RPC Robinhood Chain: {data['error']}")
     return int(data["result"], 16) / WEI_PER_ETH
+
+
+async def recent_transactions(chain: OnchainChain, address: str) -> dict:
+    """Le ultime transazioni per un indirizzo. Su Solana e' un dato vero
+    (l'RPC pubblico lo offre nativamente); su Robinhood Chain e' un link
+    all'explorer con la spiegazione del perche' — vedi il commento sopra
+    ROBINHOOD_EXPLORER. Meglio dirlo chiaro che restituire una lista vuota
+    che sembra "nessuna transazione" quando in realta' e' "non raggiungibile
+    da qui"."""
+    if chain == "solana":
+        return {"available": True, "transactions": await _solana_transactions(address)}
+    if chain == "robinhood":
+        return {
+            "available": False,
+            "transactions": [],
+            "explorer_url": f"{ROBINHOOD_EXPLORER}/address/{address}",
+            "reason": "L'explorer di Robinhood Chain e' protetto da una verifica anti-bot che una "
+                      "richiesta dal server non supera — apri il link per vedere lo storico vero.",
+        }
+    raise ValueError(f"Chain non supportata: {chain}")
+
+
+async def _solana_transactions(address: str) -> list[dict]:
+    payload = {
+        "jsonrpc": "2.0", "id": 1, "method": "getSignaturesForAddress",
+        "params": [address, {"limit": _MAX_TRANSACTIONS}],
+    }
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        resp = await client.post(SOLANA_RPC, json=payload)
+    data = resp.json()
+    if "error" in data:
+        raise RuntimeError(f"RPC Solana: {data['error']}")
+    return [
+        {
+            "signature": row["signature"],
+            "block_time": row.get("blockTime"),
+            "status": "fallita" if row.get("err") else "riuscita",
+            "explorer_url": f"https://explorer.solana.com/tx/{row['signature']}",
+        }
+        for row in (data.get("result") or [])
+    ]
