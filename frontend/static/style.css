@@ -234,6 +234,12 @@ body {
   width: 100%;
   font-size: 13px;
   font-family: var(--font-mono);
+  /* Un simbolo DEX ("BASE@chain:indirizzo_pool") non ci sta in questa
+     casella larga quanto un ticker CEX — invece di tagliarlo senza
+     dirlo, lo segnala con "…"; il testo completo resta leggibile nel
+     tooltip nativo (title, impostato in selectSuggestion) e navigabile
+     col cursore da fermo. */
+  text-overflow: ellipsis;
 }
 
 #ticker-input:focus, .interval-select:focus, .params-form input:focus, .params-form select:focus,
