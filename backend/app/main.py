@@ -4493,6 +4493,10 @@ _SNIPER_HTML = (
 # a colpo d'occhio — tutto inline, nessuna dipendenza dal resto del sito.
 _ONCHAIN_APPROVE_HTML = (FRONTEND_DIR / "onchain-approve.html").read_text(encoding="utf-8")
 _ONCHAIN_PASSKEY_SETUP_HTML = (FRONTEND_DIR / "onchain-passkey-setup.html").read_text(encoding="utf-8")
+# Pagina di servizio per collaudare la Fase 1 (crea wallet, saldo, rivelazione)
+# senza dover chiamare l'API a mano — non e' il pannello finale, che vivra'
+# dentro Sorveglia/Opera una volta che questa fase e' verificata dal vivo.
+_ONCHAIN_WALLET_TEST_HTML = (FRONTEND_DIR / "onchain-wallet-test.html").read_text(encoding="utf-8")
 
 
 # L'HTML non si mette in cache: e' l'unico posto dove vive il numero di
@@ -4539,3 +4543,8 @@ async def onchain_approve_page() -> HTMLResponse:
 @app.get("/onchain-passkey-setup.html")
 async def onchain_passkey_setup_page() -> HTMLResponse:
     return HTMLResponse(_ONCHAIN_PASSKEY_SETUP_HTML, headers=_HTML_HEADERS)
+
+
+@app.get("/onchain-wallet-test.html")
+async def onchain_wallet_test_page() -> HTMLResponse:
+    return HTMLResponse(_ONCHAIN_WALLET_TEST_HTML, headers=_HTML_HEADERS)
