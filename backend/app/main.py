@@ -775,6 +775,15 @@ app = FastAPI(title="Liquidity Analysis Engine", lifespan=lifespan)
 _PUBLIC_PATHS = frozenset({
     "/",                    # la pagina, che poi chiede di accedere
     "/sniper",
+    # Le tre pagine del wallet on-chain: la shell HTML deve caricarsi sempre,
+    # come "/" — sono le singole chiamate API al loro interno (protette da
+    # auth.get_current_user) a decidere se mostrare dati o un errore. Senza
+    # questa riga onchain-approve.html non si sarebbe mai potuta apire da un
+    # telefono che non ha MAI fatto login (il caso normale di chi scansiona
+    # il QR), non solo onchain-app.html vista da loggati.
+    "/onchain-app.html",
+    "/onchain-approve.html",
+    "/onchain-passkey-setup.html",
     "/favicon.ico",
     "/robots.txt",
     "/api/health",          # per il controllo di salute del container
