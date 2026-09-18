@@ -87,6 +87,7 @@
   .fresh-badge { font-size: 11px; color: var(--ink-dim); display: flex; align-items: center; justify-content: center; gap: 5px; margin-top: 6px; }
   .fresh-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--ink-dim); transition: background .3s; }
   .fresh-dot.live { background: var(--accent); }
+  .hero-spark { display: block; margin: 10px auto 0; }
 
   .empty-hero { text-align: center; padding: 30px 0; color: var(--ink-dim); font-size: 13px; }
   .empty-hero button {
@@ -300,6 +301,7 @@
     slot.innerHTML = `
       <div class="hero">
         <div class="hero-balance" id="hero-balance-digits">${shownBalance}<span class="hero-unit">${unit}</span></div>
+        <canvas class="hero-spark" id="hero-spark" width="280" height="56"></canvas>
         <div class="hero-addr">${address.slice(0, 12)}…${address.slice(-6)}
           <button type="button" id="copy-addr-btn" title="Copia">⧉</button>
         </div>
@@ -309,7 +311,59 @@
     el("sections").hidden = false;
     el("copy-addr-btn").addEventListener("click", () => navigator.clipboard?.writeText(address));
 
+    drawSparkline(readHistory(state.chain));
     fetchBalance();
+  }
+
+  // --- Storico saldo: solo punti letti per davvero, mai inventati — la
+  // linea resta piatta/assente finche' non ci sono almeno due letture vere.
+  function historyKey(chain) { return `onchain_balance_history_${chain}`; }
+  function readHistory(chain) {
+    try { return JSON.parse(localStorage.getItem(historyKey(chain)) || "[]"); } catch { return []; }
+  }
+  function appendHistory(chain, value) {
+    const hist = readHistory(chain);
+    hist.push({ t: Date.now(), v: value });
+    while (hist.length > 60) hist.shift();
+    try { localStorage.setItem(historyKey(chain), JSON.stringify(hist)); } catch { /* storage piena o bloccata */ }
+    return hist;
+  }
+
+  function drawSparkline(hist) {
+    const canvas = el("hero-spark");
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const w = canvas.width, h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+    if (hist.length < 2) return; // niente da disegnare onestamente
+
+    const values = hist.map((p) => p.v);
+    const min = Math.min(...values), max = Math.max(...values);
+    const range = max - min || 1;
+    const pad = 4;
+    const toX = (i) => pad + (i / (values.length - 1)) * (w - pad * 2);
+    const toY = (v) => h - pad - ((v - min) / range) * (h - pad * 2);
+    const points = values.map((v, i) => [toX(i), toY(v)]);
+    const rising = values[values.length - 1] >= values[0];
+    const color = rising ? "47,214,150" : "255,90,110"; // accent / danger, stesse tinte del design system
+
+    // Area sfumata sotto la linea, come l'equity curve del sito principale.
+    const grad = ctx.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, `rgba(${color},0.28)`);
+    grad.addColorStop(1, `rgba(${color},0)`);
+    ctx.beginPath();
+    ctx.moveTo(points[0][0], h);
+    points.forEach(([x, y]) => ctx.lineTo(x, y));
+    ctx.lineTo(points[points.length - 1][0], h);
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    ctx.beginPath();
+    points.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
+    ctx.strokeStyle = `rgb(${color})`;
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
   }
 
   async function fetchBalance() {
@@ -328,6 +382,7 @@
         renderDigits(digitsEl, String(body.native_balance));
         digitsEl.appendChild(unitSpan || document.createTextNode(""));
       }
+      drawSparkline(appendHistory(state.chain, body.native_balance));
       if (dot) { dot.classList.add("live"); }
       const ft = el("fresh-text");
       if (ft) ft.textContent = "aggiornato ora";
