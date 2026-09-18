@@ -946,7 +946,8 @@
   // Ogni voce: { id, series, label, startTime, interval, projected }.
   let fractalReplays = [];
   let selectedFractalId = null;
-  let fractalDrag = null; // { id, startX, pxPerBar, originalProjected }
+  // { id, startTime, startPrice, startPixelX, baseLabelLeft, originalProjected, moved }
+  let fractalDragState = null;
 
   const tooltipEl = el("tooltip");
 
@@ -4721,6 +4722,7 @@
     updateGhost();
     updateHandleDrag();
     updateDragPreview();
+    updateFractalDrag();
     updateCursorHover();
     if (!param.point || param.time === undefined || !overlays.hitZones.length) {
       tooltipEl.classList.add("hidden");
@@ -5923,7 +5925,7 @@
     });
     fractalReplays = [];
     selectedFractalId = null;
-    fractalDrag = null;
+    fractalDragState = null;
   }
 
   function removeFractalReplay(id) {
@@ -6007,39 +6009,23 @@
     const container = el("main-chart");
     const label = document.createElement("div");
     label.className = "fractal-label";
-    label.title = "Trascina per spostare nel tempo";
+    label.title = "Trascina qui o direttamente sulle candele per spostare il frattale";
     label.innerHTML = `<span>🔮 Frattale — ${segment.length} candele ricopiate</span>` +
       `<button type="button" class="fractal-label-close" title="Rimuovi">✕</button>`;
     label.querySelector(".fractal-label-close").addEventListener("click", (e) => {
       e.stopPropagation();
       removeFractalReplay(id);
     });
-    // Trascinabile in tempo: la label e' l'unica maniglia (le candele vere
-    // e la copia occupano lo stesso canvas, e distinguerle al pixel per
-    // farne un bersaglio di drag affidabile sarebbe fragile). Un click senza
-    // trascinare seleziona/deseleziona invece — Canc rimuove il selezionato.
+    // La label resta un secondo modo di afferrare il frattale (comodo
+    // quando le candele sono strette), ma il trascinamento vero avviene
+    // sulle candele stesse — vedi hitTestFractal/startFractalDrag, agganciati
+    // al pointerdown del grafico in bindDrawClickCapture.
     label.addEventListener("mousedown", (e) => {
       if (e.target.closest(".fractal-label-close")) return;
       e.preventDefault();
       e.stopPropagation();
       const entry = fractalReplays.find((f) => f.id === id);
-      if (!entry) return;
-      const xA = mainChart.timeScale().timeToCoordinate(entry.projected[0].time);
-      const xB = mainChart.timeScale().timeToCoordinate(
-        entry.projected[Math.min(1, entry.projected.length - 1)].time
-      );
-      const pxPerBar = (xA !== null && xB !== null && xB !== xA) ? Math.abs(xB - xA) : 8;
-      fractalDrag = {
-        id, startX: e.clientX, pxPerBar,
-        baseLeft: parseFloat(label.style.left) || 0,
-        originalProjected: entry.projected.map((p) => ({ ...p })),
-        moved: false,
-      };
-      // Senza disattivarlo, il grafico sotto la label continua a interpretare
-      // lo stesso trascinamento come un pan mentre il mouse scivola dalla
-      // label al canvas: le due logiche si accavallavano, ognuna spostando
-      // la copia a modo suo nello stesso gesto.
-      mainChart.applyOptions({ handleScroll: false, handleScale: false });
+      if (entry) startFractalDrag(entry);
     });
     container.appendChild(label);
 
@@ -6047,38 +6033,95 @@
     repositionFractalLabels();
   }
 
-  document.addEventListener("mousemove", (e) => {
-    if (!fractalDrag) return;
-    const entry = fractalReplays.find((f) => f.id === fractalDrag.id);
-    if (!entry) { fractalDrag = null; return; }
-    const dx = e.clientX - fractalDrag.startX;
-    if (Math.abs(dx) > DRAW_CLICK_TOLERANCE_PX) fractalDrag.moved = true;
-    const deltaBars = Math.round(dx / fractalDrag.pxPerBar);
-    const shifted = fractalDrag.originalProjected.map((p) => ({
-      ...p, time: p.time + deltaBars * entry.interval,
+  // Un frattale e' "colpito" se il punto cade nel suo intervallo di tempo E
+  // nella fascia di prezzo che occupa (massimo/minimo di tutta la copia, con
+  // un margine): un candlestick non ha un unico hit-test come una linea, e
+  // provare a colpire esattamente un corpo/stoppino sarebbe fragile — questo
+  // basta a renderlo afferrabile ovunque sopra le sue barre.
+  const FRACTAL_HIT_PAD_PX = 8;
+
+  function hitTestFractal(time, py) {
+    for (let i = fractalReplays.length - 1; i >= 0; i--) {
+      const entry = fractalReplays[i];
+      const times = entry.projected.map((p) => p.time);
+      const tMin = Math.min(...times), tMax = Math.max(...times);
+      if (time < tMin || time > tMax) continue;
+      const highs = entry.projected.map((p) => p.high);
+      const lows = entry.projected.map((p) => p.low);
+      const yTop = entry.series.priceToCoordinate(Math.max(...highs));
+      const yBottom = entry.series.priceToCoordinate(Math.min(...lows));
+      if (yTop === null || yBottom === null) continue;
+      if (py >= yTop - FRACTAL_HIT_PAD_PX && py <= yBottom + FRACTAL_HIT_PAD_PX) return entry;
+    }
+    return null;
+  }
+
+  function startFractalDrag(entry) {
+    if (!lastCrosshairPoint) return;
+    const price = candleSeries.coordinateToPrice(lastCrosshairPoint.y);
+    if (price === null) return;
+    fractalDragState = {
+      id: entry.id,
+      startTime: lastCrosshairPoint.time,
+      startPrice: price,
+      startPixelX: lastCrosshairPoint.x,
+      baseLabelLeft: parseFloat(entry.label.style.left) || 0,
+      originalProjected: entry.projected.map((p) => ({ ...p })),
+      moved: false,
+    };
+    // Senza disattivarlo, il grafico sotto interpreta lo stesso trascinamento
+    // anche come pan/zoom: le due logiche si accavallavano, ognuna spostando
+    // la copia (o il grafico) a modo suo nello stesso gesto.
+    mainChart.applyOptions({ handleScroll: false, handleScale: false });
+  }
+
+  // setData() su una serie puo' far scattare un nuovo evento di crosshair-move
+  // in modo sincrono (il grafico si ridisegna, il cursore risulta "ancora"
+  // sopra dati appena cambiati) — senza questa guardia quell'evento richiama
+  // updateFractalDrag() da dentro se stessa, ricorsione che non si ferma mai
+  // finche' non esaurisce lo stack ("Maximum call stack size exceeded").
+  let _updatingFractalDrag = false;
+
+  function updateFractalDrag() {
+    if (_updatingFractalDrag) return;
+    if (!fractalDragState || !lastCrosshairPoint) return;
+    const entry = fractalReplays.find((f) => f.id === fractalDragState.id);
+    if (!entry) { fractalDragState = null; return; }
+    const price = candleSeries.coordinateToPrice(lastCrosshairPoint.y);
+    if (price === null) return;
+    const dTimeRaw = lastCrosshairPoint.time - fractalDragState.startTime;
+    const deltaBars = Math.round(dTimeRaw / entry.interval);
+    const dPrice = price - fractalDragState.startPrice;
+    if (Math.abs(dTimeRaw) >= entry.interval || Math.abs(dPrice) > 0) fractalDragState.moved = true;
+    const shifted = fractalDragState.originalProjected.map((p) => ({
+      time: p.time + deltaBars * entry.interval,
+      open: p.open + dPrice, high: p.high + dPrice, low: p.low + dPrice, close: p.close + dPrice,
     }));
-    entry.series.setData(shifted);
+    _updatingFractalDrag = true;
+    try {
+      entry.series.setData(shifted);
+    } finally {
+      _updatingFractalDrag = false;
+    }
     entry.projected = shifted;
     entry.startTime = shifted[0].time;
-    // La label segue il dito in pixel puri durante il trascinamento — non
-    // ricalcolata da timeToCoordinate ad ogni passo, che qui oscillava fra
-    // due valori vicini (il grafico rivaluta la propria griglia mentre le
-    // candele sotto si muovono nello stesso istante). Il riallineamento
-    // esatto, ricavato dal tempo vero, avviene una volta sola al rilascio.
-    entry.label.style.left = `${Math.max(0, fractalDrag.baseLeft + dx)}px`;
-  });
-  document.addEventListener("mouseup", () => {
-    if (!fractalDrag) return;
-    if (!fractalDrag.moved) selectFractal(fractalDrag.id);
-    fractalDrag = null;
+    // La label segue il cursore in pixel puri (differenza dalla posizione X
+    // del crosshair all'inizio del trascinamento) invece di essere ricavata
+    // da timeToCoordinate ad ogni fotogramma: richiamato subito dopo
+    // setData() quel valore era di un fotogramma indietro e la label
+    // tornava a saltellare verso la posizione di partenza.
+    entry.label.style.left = `${Math.max(0, fractalDragState.baseLabelLeft + (lastCrosshairPoint.x - fractalDragState.startPixelX))}px`;
+  }
+
+  function finishFractalDrag() {
+    if (!fractalDragState) return;
+    if (!fractalDragState.moved) selectFractal(fractalDragState.id);
+    fractalDragState = null;
     if (mainChart) mainChart.applyOptions({ handleScroll: drawState.tool === "cursor", handleScale: drawState.tool === "cursor" });
-    // Niente riallineamento da timeToCoordinate qui: il grafico riflette lo
-    // spostamento con un ritardo di un frame rispetto a setData(), e
-    // richiamarlo subito riportava la label alla posizione di partenza.
-    // La posizione in pixel lasciata dal trascinamento e' gia' quella giusta
-    // (stessa scala delle candele sotto); il prossimo pan/zoom/resize la
-    // ricalcola comunque dal tempo vero.
-  });
+    // Niente riallineamento verticale della label da timeToCoordinate qui,
+    // stesso motivo di sopra — resta dove il trascinamento l'ha lasciata; il
+    // prossimo pan/zoom/resize la ricalcola comunque dal tempo vero.
+  }
 
   function bindDrawClickCapture() {
     const container = el("main-chart");
@@ -6116,7 +6159,14 @@
             };
             mainChart.applyOptions({ handleScroll: false, handleScale: false });
           }
+          return;
         }
+
+        // 3. Frattale colpito direttamente sulle sue candele → trascina
+        // liberamente (tempo e prezzo insieme), come chiesto: prima si
+        // spostava solo in orizzontale e solo afferrando la label.
+        const fractalHit = hitTestFractal(lastCrosshairPoint.time, lastCrosshairPoint.y);
+        if (fractalHit) startFractalDrag(fractalHit);
       },
       true
     );
@@ -6147,11 +6197,19 @@
           return;
         }
 
+        if (fractalDragState) {
+          finishFractalDrag();
+          return;
+        }
+
         if (!state.data || moved) return;
         if (!lastCrosshairPoint) return;
 
         if (drawState.tool === "cursor") {
-          // Click on empty space → deselect
+          // Click on empty space → deselect. Un click su un frattale non
+          // arriva qui: e' gia' stato gestito sopra da finishFractalDrag
+          // (ogni frattale colpito al pointerdown avvia un drag, anche se
+          // poi non si muove).
           const hit = findHitDrawing(lastCrosshairPoint.x, lastCrosshairPoint.y);
           if (!hit) drawState.selected = null;
           deselectFractal();
