@@ -8951,10 +8951,12 @@
       const when = it.created_at
         ? new Date(it.created_at * 1000).toLocaleDateString("it-IT")
         : "";
-      // Richiudibile: con venticinque voci, venticinque diagnosi aperte tutte
-      // insieme sono un muro. Restano aperte quelle su cui c'e' da fare, e
+      // Richiudibile: con decine di voci, tenerle tutte aperte di default
+      // (anche solo quelle "da fare") e' un muro di testo — ogni colonna
+      // diventa una parete di risoluzioni e form invece di un elenco
+      // leggibile. Restano compatte finche' non le si apre a mano, tranne
       // quelle che stai cercando.
-      const openByDefault = it.status !== "risolto" || !!issuesView.query;
+      const openByDefault = !!issuesView.query;
       return `<details class="issue-card is-${(it.status || "aperto").replace(" ", "-")}"${openByDefault ? " open" : ""}>
         <summary class="issue-head">
           <span class="issue-status">${ISSUE_STATUS_LABEL[it.status] || it.status}</span>
