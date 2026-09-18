@@ -21,7 +21,10 @@
   * { box-sizing: border-box; }
   body {
     font-family: -apple-system, system-ui, sans-serif;
-    background: var(--bg); color: var(--ink);
+    background:
+      radial-gradient(760px 420px at 50% -80px, rgba(47,214,150,.10), transparent 65%),
+      var(--bg);
+    color: var(--ink);
     margin: 0; padding: 20px 16px 56px;
     -webkit-tap-highlight-color: transparent;
   }
@@ -37,10 +40,15 @@
   /* --- stato aggregato, livello 0 --- */
   .status-row {
     display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 10px;
-    background: var(--accent-soft); font-size: 13px; font-weight: 600; margin-bottom: 16px;
-    transition: background .15s ease;
+    background: linear-gradient(135deg, rgba(47,214,150,.16), rgba(47,214,150,.05));
+    border: 1px solid rgba(47,214,150,.18);
+    font-size: 13px; font-weight: 600; margin-bottom: 16px;
+    transition: background .15s ease, border-color .15s ease;
   }
-  .status-row.warn { background: var(--danger-soft); color: var(--danger); }
+  .status-row.warn {
+    background: linear-gradient(135deg, rgba(255,90,110,.18), rgba(255,90,110,.05));
+    border-color: rgba(255,90,110,.22); color: var(--danger);
+  }
   .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
   .status-row.warn .status-dot { background: var(--danger); }
 
@@ -50,13 +58,21 @@
     flex: 1; padding: 9px; border-radius: 9px; border: 1.5px solid var(--border);
     background: transparent; color: var(--ink-dim); font-size: 13px; font-weight: 600; cursor: pointer;
   }
-  .chain-chip.active { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+  .chain-chip.active {
+    border-color: transparent; color: #08150f;
+    background: linear-gradient(135deg, #4beeb0, var(--accent));
+  }
 
   /* --- saldo hero --- */
-  .hero { text-align: center; padding: 18px 0 22px; }
+  .hero { text-align: center; padding: 18px 0 22px; position: relative; }
+  .hero::before {
+    content: ""; position: absolute; inset: -10px auto auto 50%; width: 260px; height: 140px;
+    transform: translateX(-50%); border-radius: 50%; pointer-events: none;
+    background: radial-gradient(closest-side, rgba(47,214,150,.16), transparent);
+  }
   .hero-balance {
     font-family: "Instrument Serif", Georgia, serif; font-size: 44px; line-height: 1;
-    display: inline-flex; gap: 1px;
+    display: inline-flex; gap: 1px; position: relative;
   }
   .hero-balance .digit { display: inline-block; overflow: hidden; height: 1em; position: relative; }
   .hero-balance .digit span {
@@ -75,7 +91,7 @@
   .empty-hero { text-align: center; padding: 30px 0; color: var(--ink-dim); font-size: 13px; }
   .empty-hero button {
     margin-top: 12px; padding: 10px 18px; border-radius: 8px; border: none;
-    background: var(--accent); color: #08150f; font-weight: 700; font-size: 13.5px; cursor: pointer;
+    background: linear-gradient(135deg, #4beeb0, var(--accent)); color: #08150f; font-weight: 700; font-size: 13.5px; cursor: pointer;
   }
 
   #login-screen { padding: 20px 0; }
@@ -86,7 +102,7 @@
   }
   #login-form button {
     width: 100%; margin-top: 16px; padding: 11px; border-radius: 8px; border: none;
-    background: var(--accent); color: #08150f; font-weight: 700; font-size: 14px; cursor: pointer;
+    background: linear-gradient(135deg, #4beeb0, var(--accent)); color: #08150f; font-weight: 700; font-size: 14px; cursor: pointer;
   }
   #login-form button:disabled { opacity: .5; }
 
