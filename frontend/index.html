@@ -443,24 +443,30 @@
             </div>
             <select id="lab-exchange-select" class="lab-exchange-select">
               <option value="mexc">MEXC</option>
+              <option value="binance">Binance</option>
               <option value="kucoin">KuCoin</option>
               <option value="kraken">Kraken</option>
             </select>
           </div>
 
           <!-- Periodo di riferimento, facoltativo: vuoto = tutta la storia
-               disponibile (comportamento di sempre). -->
-          <div class="lab-daterange-row" id="lab-daterange-row">
-            <label class="lab-daterange-field">
-              <span>Dal</span>
-              <input type="date" id="lab-date-start" class="lab-daterange-input" />
-            </label>
-            <label class="lab-daterange-field">
-              <span>Al</span>
-              <input type="date" id="lab-date-end" class="lab-daterange-input" />
-            </label>
-            <button type="button" id="lab-daterange-clear" class="lab-daterange-clear" title="Rimuovi il periodo, usa tutta la storia disponibile">✕</button>
-          </div>
+               disponibile (comportamento di sempre). Chiuso di default: due
+               campi data vuoti in bella vista, per chi non li usa quasi mai,
+               occupavano spazio senza dire niente. -->
+          <details class="lab-daterange-details">
+            <summary>Periodo di riferimento (facoltativo)</summary>
+            <div class="lab-daterange-row" id="lab-daterange-row">
+              <label class="lab-daterange-field">
+                <span>Dal</span>
+                <input type="date" id="lab-date-start" class="lab-daterange-input" />
+              </label>
+              <label class="lab-daterange-field">
+                <span>Al</span>
+                <input type="date" id="lab-date-end" class="lab-daterange-input" />
+              </label>
+              <button type="button" id="lab-daterange-clear" class="lab-daterange-clear" title="Rimuovi il periodo, usa tutta la storia disponibile">✕</button>
+            </div>
+          </details>
 
           <!-- Timeframe pills -->
           <!-- Tutti i timeframe supportati dal backend (CANONICAL_INTERVALS).
