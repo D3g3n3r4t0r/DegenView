@@ -4205,6 +4205,17 @@ button.wl-archive-pick:hover { border-color: var(--accent); }
 .sub-chart:hover .osc-remove-btn { opacity: 1; }
 .osc-remove-btn:hover { background: var(--bear); color: #fff; border-color: var(--bear); }
 
+.sub-chart-resize-handle {
+  position: absolute; top: -3px; left: 0; right: 0; height: 7px; z-index: 6;
+  cursor: ns-resize; touch-action: none;
+}
+.sub-chart-resize-handle::after {
+  content: ""; display: block; margin: 3px auto 0; width: 36px; height: 2.5px;
+  border-radius: 2px; background: var(--border-strong); opacity: 0; transition: opacity .12s;
+}
+.sub-chart:hover .sub-chart-resize-handle::after,
+.sub-chart-resize-handle:hover::after { opacity: 1; background: var(--accent); }
+
 /* Etichetta del frattale ricopiato: ancorata all'inizio della copia, si
    sposta con pan/zoom (repositionFractalLabels). Il viola distingue a colpo
    d'occhio la copia dalle candele vere sotto (stesso viola delle candele

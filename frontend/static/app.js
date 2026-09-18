@@ -962,6 +962,51 @@
     ro.observe(container);
   }
 
+  const SUB_CHART_MIN_H = 70;
+  const SUB_CHART_MAX_H = 420;
+
+  function loadSubChartHeights() {
+    try { return JSON.parse(localStorage.getItem("subChartHeights") || "{}"); } catch { return {}; }
+  }
+
+  function saveSubChartHeight(key, h) {
+    const all = loadSubChartHeights();
+    all[key] = h;
+    try { localStorage.setItem("subChartHeights", JSON.stringify(all)); } catch { /* storage piena o bloccata */ }
+  }
+
+  // Un manico in cima al riquadro (RSI/MACD/Stocastico, o uno degli
+  // oscillatori custom creati al volo) — trascinarlo su/giu' regola solo
+  // quel riquadro, l'altezza persiste per browser cosi' non si riparte da
+  // zero ad ogni ricarica. observeResize() gia' presente si accorge da solo
+  // del nuovo container.clientHeight, niente da richiamare qui a mano.
+  function makeSubChartResizable(container, key) {
+    const saved = loadSubChartHeights()[key];
+    if (saved) container.style.height = `${saved}px`;
+    const handle = document.createElement("div");
+    handle.className = "sub-chart-resize-handle";
+    handle.title = "Trascina per regolare l'ampiezza";
+    container.appendChild(handle);
+    let startY = 0, startH = 0;
+    const onMove = (e) => {
+      const h = Math.max(SUB_CHART_MIN_H, Math.min(SUB_CHART_MAX_H, startH + (startY - e.clientY)));
+      container.style.height = `${h}px`;
+    };
+    const onUp = () => {
+      document.removeEventListener("pointermove", onMove);
+      document.removeEventListener("pointerup", onUp);
+      saveSubChartHeight(key, container.clientHeight);
+    };
+    handle.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      startY = e.clientY;
+      startH = container.clientHeight;
+      document.addEventListener("pointermove", onMove);
+      document.addEventListener("pointerup", onUp);
+    });
+  }
+
   // `refit` va chiesto quando a cambiare e' stato il *layout*, non la
   // finestra: passando da Analizza al Lab la colonna del grafico si
   // restringe, e ridimensionare la tela senza riadattare l'intervallo
@@ -4673,6 +4718,10 @@
     stochKSeries.createPriceLine({ price: 20, color: "rgba(0,214,143,0.45)", lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: "OS" });
     observeResize(stochContainer, stochChart);
 
+    makeSubChartResizable(rsiContainer, "rsi-chart");
+    makeSubChartResizable(macdContainer, "macd-chart");
+    makeSubChartResizable(stochContainer, "stoch-chart");
+
     // equity-chart panel removed — equityChart/equitySeries stay null
     equityChart = null;
     equitySeries = null;
@@ -5856,6 +5905,38 @@
     renderDrawingsList();
   }
 
+  // Spegne ogni indicatore che vive sul prezzo (livelli strutturali, EMA,
+  // Bollinger, VWAP, Fibonacci, retta d'angolo, indicatori custom "overlay"
+  // dalla libreria pandas-ta) — RSI/MACD/Stocastico restano fuori, hanno un
+  // riquadro proprio e non sono "sul prezzo".
+  function clearAllPriceIndicators() {
+    const priceLayerKeys = Object.keys(state.layers).filter(
+      (k) => k !== "rsi" && k !== "macd" && k !== "stoch"
+    );
+    let changed = false;
+    priceLayerKeys.forEach((k) => {
+      if (state.layers[k]) { state.layers[k] = false; changed = true; }
+    });
+    document.querySelectorAll("[data-layer]").forEach((input) => {
+      if (priceLayerKeys.includes(input.dataset.layer)) input.checked = false;
+    });
+    const hadOverlay = state.customIndicators.some((c) => c.kind === "overlay");
+    if (hadOverlay) {
+      state.customIndicators = state.customIndicators.filter((c) => c.kind !== "overlay");
+      localStorage.setItem("customIndicators", JSON.stringify(state.customIndicators));
+      changed = true;
+    }
+    if (!changed) return;
+    render();
+    requestAnimationFrame(() => resizeAllCharts());
+    savePreferences();
+    refreshCustomIndicators();
+    const search = el("indicator-library-search");
+    renderIndicatorLibraryList(search ? search.value : "");
+    renderActiveIndicatorChips();
+    renderChartIndicatorLegend();
+  }
+
   function loadDrawingsForSymbol() {
     clearAllDrawingPrimitives();
     clearFractalReplays();
@@ -6989,6 +7070,13 @@
         { label: "Testo", action: () => setDrawTool("text") },
         { separator: true },
         { label: "Frattale (ricopia un intervallo)", action: () => setDrawTool("fractal") },
+        { separator: true },
+        drawState.drawings.length
+          ? { label: "Rimuovi tutti i disegni", action: () => {
+              if (window.confirm("Cancellare tutti i disegni su questo grafico?")) clearAllDrawings();
+            } }
+          : null,
+        { label: "Rimuovi tutti gli indicatori sul prezzo", action: () => clearAllPriceIndicators() },
         { separator: true },
         { label: "Impostazioni grafico…", action: () => { const btn = document.getElementById("chart-settings-btn"); if (btn) btn.click(); } },
       ].filter(Boolean);
@@ -9917,6 +10005,7 @@
         const range = mainChart.timeScale().getVisibleLogicalRange();
         if (range) chart.timeScale().setVisibleLogicalRange(range);
         observeResize(container, chart);
+        makeSubChartResizable(container, `custom:${ind.id}`);
         // Il riquadro appartiene a un solo indicatore: una "x" appare
         // nell'angolo al passaggio del mouse (CSS, .sub-chart:hover), stesso
         // comportamento delle linee sul prezzo — niente rimozione al primo
