@@ -36,6 +36,19 @@ class Settings(BaseSettings):
     # richiesta di Lorenzo il 17/09.
     sniper_enabled: bool = False
 
+    # Interruttore generale per l'intero sistema wallet on-chain (Fase 1: solo
+    # generazione chiave + saldo, ancora nessuna firma) — a False ogni
+    # endpoint /api/onchain/* risponde "disattivato" invece di girare
+    # comunque. Serve come leva unica in caso di incidente: non tocca i dati
+    # gia' salvati (le chiavi restano cifrate al loro posto), spegne solo
+    # l'accesso.
+    onchain_enabled: bool = True
+
+    # Serve solo a costruire il link/QR di approvazione dal telefono per
+    # rivelare una chiave on-chain — un URL relativo non e' scansionabile da
+    # un secondo dispositivo.
+    public_base_url: str = "https://liquidityengine.app"
+
     twelve_data_api_key: str = ""
     twelve_data_base_url: str = "https://api.twelvedata.com"
 

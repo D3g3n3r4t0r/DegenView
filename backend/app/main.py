@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import datetime as _dt
 import hashlib
 import io
@@ -10,6 +11,7 @@ import sys
 import time as _time
 
 import pandas as pd
+import qrcode
 from contextlib import asynccontextmanager
 from functools import partial
 from pathlib import Path
@@ -74,6 +76,7 @@ from app.models import (
     Candle,
     CryptoExchange,
     FavoriteEntry,
+    OnchainChain,
     StrategyState,
     SymbolSuggestion,
     TimeframeAnalysis,
@@ -81,6 +84,10 @@ from app.models import (
     User,
     WatchlistEntry,
 )
+from app.trading.onchain import balances as onchain_balances
+from app.trading.onchain import keys as onchain_keys
+from app.trading.onchain import passkey as onchain_passkey
+from app.trading.onchain import reveal_requests as onchain_reveal
 from app.exchange_balances import BalanceFetchError, fetch_kucoin_balances, fetch_mexc_balances
 from app.notify import telegram
 from app.notify import alert_log
@@ -1772,6 +1779,246 @@ async def diagnostics_test_connection(
         return {"ok": True, "market": "spot", "exchange": body.exchange, "balances": balances}
     except diagnostics.DiagnosticsError as exc:
         return {"ok": False, "market": body.market, "exchange": body.exchange, "error": str(exc)}
+
+
+@app.post("/api/auth/passkey/register/options")
+async def passkey_register_options(user: User = Depends(auth.get_current_user)) -> dict:
+    """Chiamata da un browser gia' loggato — e' l'iscrizione, non il
+    flusso di rivelazione: Face ID/Touch ID qui autorizza solo se stesso
+    a diventare un modo per approvare in futuro, non rivela niente."""
+    options_json, state_token = onchain_passkey.start_registration(user)
+    return {"options": options_json, "state_token": state_token}
+
+
+class PasskeyRegisterVerifyRequest(BaseModel):
+    state_token: str
+    credential: dict
+    label: str = ""
+
+
+@app.post("/api/auth/passkey/register/verify")
+async def passkey_register_verify(
+    body: PasskeyRegisterVerifyRequest, user: User = Depends(auth.get_current_user)
+) -> dict:
+    try:
+        passkey = onchain_passkey.finish_registration(user, body.state_token, body.credential, body.label)
+    except Exception as exc:  # noqa: BLE001 — errore di verifica WebAuthn, mai un 500 muto
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    auth.add_passkey(user.id, passkey)
+    return {"ok": True, "label": passkey.label or "Passkey", "created_at": passkey.created_at}
+
+
+@app.get("/api/auth/passkey")
+async def list_passkeys(user: User = Depends(auth.get_current_user)) -> list[dict]:
+    return [{"credential_id": pk.credential_id, "label": pk.label, "created_at": pk.created_at} for pk in user.passkeys]
+
+
+@app.delete("/api/auth/passkey/{credential_id}")
+async def remove_passkey(credential_id: str, user: User = Depends(auth.get_current_user)) -> dict:
+    auth.delete_passkey(user.id, credential_id)
+    return {"ok": True}
+
+
+def _require_onchain_enabled() -> None:
+    if not settings.onchain_enabled:
+        raise HTTPException(
+            status_code=400,
+            detail="Il sistema wallet on-chain e' spento (interruttore generale) — nessuna chiave, saldo o "
+                   "rivelazione e' raggiungibile finche' non viene riacceso.",
+        )
+
+
+class OnchainWalletCreateRequest(BaseModel):
+    chain: OnchainChain
+
+
+@app.get("/api/onchain/wallets")
+async def list_onchain_wallets(user: User = Depends(auth.get_current_user)) -> list[dict]:
+    """Solo indirizzo e stato — la chiave privata non lascia mai auth.py,
+    men che meno in una risposta HTTP."""
+    _require_onchain_enabled()
+    return [
+        {"chain": chain, "address": w.address, "enabled": w.enabled, "created_at": w.created_at}
+        for chain, w in user.onchain_wallets.items()
+    ]
+
+
+@app.post("/api/onchain/wallets")
+async def create_onchain_wallet(
+    body: OnchainWalletCreateRequest, user: User = Depends(auth.get_current_user)
+) -> dict:
+    _require_onchain_enabled()
+    updated = auth.create_onchain_wallet(user.id, body.chain)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    w = updated.onchain_wallets[body.chain]
+    return {
+        "chain": body.chain, "address": w.address, "enabled": w.enabled, "created_at": w.created_at,
+        "backup_reminder": "Salva questa chiave altrove appena puoi (bottone 'Rivela chiave'): se il "
+                            "server perde questo dato, il wallet non e' recuperabile in nessun altro modo.",
+    }
+
+
+class OnchainWalletEnabledRequest(BaseModel):
+    enabled: bool
+
+
+@app.patch("/api/onchain/wallets/{chain}")
+async def set_onchain_wallet_enabled(
+    chain: OnchainChain, body: OnchainWalletEnabledRequest, user: User = Depends(auth.get_current_user)
+) -> dict:
+    _require_onchain_enabled()
+    updated = auth.set_onchain_wallet_enabled(user.id, chain, body.enabled)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Nessun wallet su questa chain — creane uno prima")
+    w = updated.onchain_wallets[chain]
+    return {"chain": chain, "address": w.address, "enabled": w.enabled, "created_at": w.created_at}
+
+
+@app.post("/api/onchain/wallets/{chain}/reveal/request")
+async def request_onchain_reveal(chain: OnchainChain, user: User = Depends(auth.get_current_user)) -> dict:
+    """Primo passo della rivelazione: genera un token effimero (2 minuti,
+    uso unico) e il QR/link che lo porta su un secondo dispositivo. La
+    chiave vera e propria non e' ancora raggiungibile da qui — serve
+    approvarlo dal telefono (vedi /api/onchain/reveal/approve) e poi
+    consumarlo su /reveal. Un browser da solo, anche loggato, non basta."""
+    _require_onchain_enabled()
+    if chain not in user.onchain_wallets:
+        raise HTTPException(status_code=404, detail="Nessun wallet su questa chain — creane uno prima")
+    token = onchain_reveal.create(user.id, chain)
+    approve_url = f"{settings.public_base_url}/onchain-approve.html?token={token}"
+    qr_buf = io.BytesIO()
+    qrcode.make(approve_url).save(qr_buf, format="PNG")
+    qr_data_uri = "data:image/png;base64," + base64.b64encode(qr_buf.getvalue()).decode()
+    return {"token": token, "approve_url": approve_url, "qr_data_uri": qr_data_uri, "expires_in_s": 120}
+
+
+@app.get("/api/onchain/wallets/reveal/status/{token}")
+async def onchain_reveal_status(token: str, user: User = Depends(auth.get_current_user)) -> dict:
+    """Il browser fa polling qui in attesa che il telefono approvi."""
+    return {"status": onchain_reveal.status(token, user.id)}
+
+
+class OnchainRevealApproveRequest(BaseModel):
+    email: str
+    password: str
+    token: str
+
+
+@app.post("/api/onchain/reveal/approve")
+async def approve_onchain_reveal(body: OnchainRevealApproveRequest) -> dict:
+    """Chiamata dalla pagina sul TELEFONO, apposta senza richiedere il
+    cookie di sessione del browser (e' un altro dispositivo) — l'identita'
+    la stabilisce la password, come al login. Un token che non appartiene
+    a chi ha inserito quella password non si approva."""
+    verified = auth.verify_login(body.email, body.password)
+    if verified is None:
+        raise HTTPException(status_code=401, detail="Email o password errate")
+    if not onchain_reveal.approve(body.token, verified.id):
+        raise HTTPException(status_code=400, detail="Richiesta scaduta o non valida — riprova dal browser")
+    return {"ok": True}
+
+
+class OnchainRevealPasskeyOptionsRequest(BaseModel):
+    email: str
+
+
+@app.post("/api/onchain/reveal/passkey/options")
+async def onchain_reveal_passkey_options(body: OnchainRevealPasskeyOptionsRequest) -> dict:
+    """Primo passo di Face ID/Touch ID sul telefono: serve solo l'email
+    per sapere quali passkey proporre — nessuna password ancora, nessuna
+    conferma di chi sia davvero finche' la firma biometrica non torna."""
+    user = auth.find_by_email(body.email)
+    if user is None or not user.passkeys:
+        raise HTTPException(status_code=400, detail="Nessun passkey registrato per questa email — usa la password.")
+    options_json, state_token = onchain_passkey.start_authentication(user)
+    return {"options": options_json, "state_token": state_token}
+
+
+class OnchainRevealPasskeyVerifyRequest(BaseModel):
+    email: str
+    token: str
+    state_token: str
+    credential: dict
+
+
+@app.post("/api/onchain/reveal/passkey/verify")
+async def onchain_reveal_passkey_verify(body: OnchainRevealPasskeyVerifyRequest) -> dict:
+    user = auth.find_by_email(body.email)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Email non riconosciuta")
+    try:
+        new_sign_count = onchain_passkey.finish_authentication(user, body.state_token, body.credential)
+    except Exception as exc:  # noqa: BLE001 — errore di verifica WebAuthn, mai un 500 muto
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    auth.update_passkey_sign_count(user.id, body.credential.get("id", ""), new_sign_count)
+    if not onchain_reveal.approve(body.token, user.id):
+        raise HTTPException(status_code=400, detail="Richiesta scaduta o non valida — riprova dal browser")
+    return {"ok": True}
+
+
+class OnchainRevealRequest(BaseModel):
+    token: str
+
+
+@app.post("/api/onchain/wallets/{chain}/reveal")
+async def reveal_onchain_wallet(
+    chain: OnchainChain, body: OnchainRevealRequest, user: User = Depends(auth.get_current_user)
+) -> dict:
+    """L'unico endpoint di tutto il sito che restituisce un segreto invece
+    di limitarsi a impostarlo (le chiavi exchange non si rileggono mai,
+    ma quelle sono custodite dall'exchange — questo wallet e' il fondo
+    stesso, quindi deve poter uscire di qui: Phantom/MetaMask, non solo
+    questo sito). Nessun log, nessuna cache — letta e cifrata di nuovo a
+    ogni chiamata, mai tenuta in chiaro piu' del necessario per rispondere.
+    Richiede un token approvato dal telefono (vedi /reveal/request): la
+    sola sessione del browser non basta piu'."""
+    _require_onchain_enabled()
+    if chain not in user.onchain_wallets:
+        raise HTTPException(status_code=404, detail="Nessun wallet su questa chain — creane uno prima")
+    if not onchain_reveal.consume(body.token, user.id, chain):
+        raise HTTPException(
+            status_code=403,
+            detail="Nessuna approvazione valida per questo wallet — scansiona di nuovo il QR dal telefono.",
+        )
+    try:
+        private_key_hex = auth.get_decrypted_onchain_private_key(user, chain)
+    except auth.OnchainKeyIntegrityError as exc:
+        # Notifica sempre, non solo un log: un dato corrotto qui non e' un
+        # bug da correggere con calma, e' un wallet potenzialmente
+        # irraggiungibile — chi possiede l'account deve saperlo subito.
+        if user.telegram_chat_id and _telegram_allowed(user):
+            asyncio.create_task(telegram.send_to(
+                user.telegram_chat_id, f"🚨 Wallet on-chain ({chain}): {exc}",
+            ))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    if user.telegram_chat_id and _telegram_allowed(user):
+        asyncio.create_task(telegram.send_to(
+            user.telegram_chat_id, f"🔓 Chiave on-chain rivelata ({chain}, {user.onchain_wallets[chain].address})",
+        ))
+    return {
+        "chain": chain,
+        "address": user.onchain_wallets[chain].address,
+        "private_key": onchain_keys.to_import_format(chain, private_key_hex),
+        "import_as": "Phantom/Solflare — Importa chiave privata" if chain == "solana"
+        else "MetaMask/Rabby — Importa account",
+        "warning": "Chiunque veda questa chiave puo' svuotare il wallet. Non farne screenshot, "
+                   "non condividerla in chat: importala e chiudi questa schermata.",
+    }
+
+
+@app.get("/api/onchain/wallets/{chain}/balance")
+async def onchain_wallet_balance(chain: OnchainChain, user: User = Depends(auth.get_current_user)) -> dict:
+    _require_onchain_enabled()
+    wallet = user.onchain_wallets.get(chain)
+    if wallet is None:
+        raise HTTPException(status_code=404, detail="Nessun wallet su questa chain — creane uno prima")
+    try:
+        native = await onchain_balances.native_balance(chain, wallet.address)
+    except Exception as exc:  # noqa: BLE001 — un RPC pubblico irraggiungibile non deve essere un 500 muto
+        raise HTTPException(status_code=502, detail=f"RPC non raggiungibile: {exc}") from exc
+    unit = "SOL" if chain == "solana" else "ETH"
+    return {"chain": chain, "address": wallet.address, "native_balance": native, "native_unit": unit}
 
 
 class FuturesQuoteRequest(BaseModel):
@@ -4241,6 +4488,12 @@ _SNIPER_HTML = (
     .replace('href="/static/style.css"', f'href="/static/style.css?v={_ASSET_VERSION}"')
 )
 
+# Pagina a se', niente app.js/style.css: e' quella che si apre scansionando
+# il QR per rivelare una chiave on-chain, deve restare piccola e verificabile
+# a colpo d'occhio — tutto inline, nessuna dipendenza dal resto del sito.
+_ONCHAIN_APPROVE_HTML = (FRONTEND_DIR / "onchain-approve.html").read_text(encoding="utf-8")
+_ONCHAIN_PASSKEY_SETUP_HTML = (FRONTEND_DIR / "onchain-passkey-setup.html").read_text(encoding="utf-8")
+
 
 # L'HTML non si mette in cache: e' l'unico posto dove vive il numero di
 # versione degli asset. Se il browser tiene la pagina, tiene anche il vecchio
@@ -4276,3 +4529,13 @@ async def index() -> HTMLResponse:
 @app.get("/sniper")
 async def sniper_app() -> HTMLResponse:
     return HTMLResponse(_SNIPER_HTML, headers=_HTML_HEADERS)
+
+
+@app.get("/onchain-approve.html")
+async def onchain_approve_page() -> HTMLResponse:
+    return HTMLResponse(_ONCHAIN_APPROVE_HTML, headers=_HTML_HEADERS)
+
+
+@app.get("/onchain-passkey-setup.html")
+async def onchain_passkey_setup_page() -> HTMLResponse:
+    return HTMLResponse(_ONCHAIN_PASSKEY_SETUP_HTML, headers=_HTML_HEADERS)
