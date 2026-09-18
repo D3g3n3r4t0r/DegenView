@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Wallet on-chain — collaudo Fase 1</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    font-family: -apple-system, system-ui, sans-serif;
+    background: #0e1410; color: #eceae2;
+    margin: 0; padding: 24px 18px 48px;
+    display: flex; justify-content: center;
+  }
+  .card { max-width: 440px; width: 100%; }
+  h1 { font-size: 18px; margin: 0 0 6px; }
+  h2 { font-size: 13.5px; color: #a2a596; text-transform: uppercase; letter-spacing: .04em; margin: 28px 0 10px; }
+  p.lead { color: #a2a596; font-size: 13.5px; margin: 0 0 6px; }
+  .row { display: flex; gap: 10px; }
+  button {
+    flex: 1; padding: 11px; border-radius: 8px; border: none;
+    background: #2fd696; color: #08150f; font-weight: 700; font-size: 14px; cursor: pointer;
+  }
+  button.secondary { background: transparent; color: #eceae2; border: 1.5px solid #33352a; font-weight: 600; }
+  button:disabled { opacity: .5; cursor: default; }
+  .msg { margin-top: 12px; font-size: 13.5px; }
+  .msg.ok { color: #2fd696; }
+  .msg.err { color: #ff5a6e; }
+  .wallet {
+    border: 1.5px solid #33352a; border-radius: 10px; padding: 14px; margin-top: 12px;
+  }
+  .wallet .addr { font-family: ui-monospace, monospace; font-size: 12.5px; word-break: break-all; color: #eceae2; }
+  .wallet .chain { font-size: 11.5px; color: #5c6158; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px; }
+  .wallet .balance { font-size: 13.5px; color: #a2a596; margin-top: 8px; }
+  .wallet .actions { display: flex; gap: 8px; margin-top: 10px; }
+  .wallet .actions button { padding: 8px; font-size: 12.5px; }
+  .reveal-box { margin-top: 12px; text-align: center; }
+  .reveal-box img { width: 200px; height: 200px; border-radius: 8px; }
+  .key-box {
+    margin-top: 12px; padding: 10px; border-radius: 8px; background: rgba(224,171,61,.1);
+    border: 1px solid rgba(224,171,61,.3); font-family: ui-monospace, monospace; font-size: 12px;
+    word-break: break-all; color: #e0ab3d;
+  }
+  .dim { color: #5c6158; font-size: 12px; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>Wallet on-chain — collaudo Fase 1</h1>
+    <p class="lead">Pagina di servizio, non il pannello finale: crea un wallet, guarda il saldo, prova la rivelazione con Face ID/Touch ID. Devi essere gia' loggato sul sito in questo browser.</p>
+
+    <h2>Crea nuovo</h2>
+    <div class="row">
+      <button id="create-solana" type="button">Solana</button>
+      <button id="create-robinhood" type="button">Robinhood Chain</button>
+    </div>
+    <p id="create-msg" class="msg" hidden></p>
+
+    <h2>I tuoi wallet</h2>
+    <div id="list"></div>
+  </div>
+
+<script>
+  const createMsg = document.getElementById("create-msg");
+  function say(el, text, kind) {
+    el.hidden = false;
+    el.className = kind ? `msg ${kind}` : "msg";
+    el.textContent = text;
+  }
+
+  async function createWallet(chain) {
+    say(createMsg, "Creazione in corso…");
+    try {
+      const resp = await fetch("/api/onchain/wallets", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chain }),
+      });
+      const body = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(body.detail || `Errore ${resp.status}`);
+      say(createMsg, `Wallet ${chain} pronto: ${body.address}`, "ok");
+      loadList();
+    } catch (err) {
+      say(createMsg, err.message || "Errore di rete.", "err");
+    }
+  }
+  document.getElementById("create-solana").addEventListener("click", () => createWallet("solana"));
+  document.getElementById("create-robinhood").addEventListener("click", () => createWallet("robinhood"));
+
+  function walletCard(w) {
+    const div = document.createElement("div");
+    div.className = "wallet";
+    div.innerHTML = `
+      <div class="chain">${w.chain}</div>
+      <div class="addr">${w.address}</div>
+      <div class="balance dim">Saldo non ancora richiesto</div>
+      <div class="actions">
+        <button type="button" class="secondary" data-act="balance">Vedi saldo</button>
+        <button type="button" class="secondary" data-act="reveal">Rivela chiave</button>
+      </div>
+      <div class="reveal-slot"></div>
+    `;
+    const balanceEl = div.querySelector(".balance");
+    div.querySelector('[data-act="balance"]').addEventListener("click", async () => {
+      balanceEl.textContent = "Leggo il saldo…";
+      try {
+        const resp = await fetch(`/api/onchain/wallets/${w.chain}/balance`);
+        const body = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(body.detail || `Errore ${resp.status}`);
+        balanceEl.textContent = `${body.native_balance} ${body.native_unit}`;
+        balanceEl.classList.remove("dim");
+      } catch (err) {
+        balanceEl.textContent = err.message || "Errore di rete.";
+      }
+    });
+
+    const revealSlot = div.querySelector(".reveal-slot");
+    div.querySelector('[data-act="reveal"]').addEventListener("click", () => startReveal(w.chain, revealSlot));
+    return div;
+  }
+
+  async function startReveal(chain, slot) {
+    slot.innerHTML = '<p class="dim" style="margin-top:10px">Genero il QR…</p>';
+    let resp, body;
+    try {
+      resp = await fetch(`/api/onchain/wallets/${chain}/reveal/request`, { method: "POST" });
+      body = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(body.detail || `Errore ${resp.status}`);
+    } catch (err) {
+      slot.innerHTML = `<p class="msg err">${err.message || "Errore di rete."}</p>`;
+      return;
+    }
+    slot.innerHTML = `
+      <div class="reveal-box">
+        <img src="${body.qr_data_uri}" alt="QR di approvazione" />
+        <p class="dim">Scansiona dal telefono — o <a href="${body.approve_url}" style="color:#2fd696">apri il link</a> se sei gia' sul telefono. Scade in 2 minuti.</p>
+        <p class="dim" id="reveal-status">In attesa di approvazione…</p>
+      </div>
+    `;
+    const statusEl = slot.querySelector("#reveal-status");
+    const token = body.token;
+    const poll = setInterval(async () => {
+      const st = await fetch(`/api/onchain/wallets/reveal/status/${token}`).then((r) => r.json()).catch(() => null);
+      if (!st) return;
+      if (st.status === "approved") {
+        clearInterval(poll);
+        statusEl.textContent = "Approvato — rivelo la chiave…";
+        try {
+          const revealResp = await fetch(`/api/onchain/wallets/${chain}/reveal`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ token }),
+          });
+          const revealBody = await revealResp.json();
+          if (!revealResp.ok) throw new Error(revealBody.detail || `Errore ${revealResp.status}`);
+          slot.innerHTML = `
+            <p class="dim" style="margin-top:10px">${revealBody.import_as}</p>
+            <div class="key-box">${revealBody.private_key}</div>
+            <p class="dim">${revealBody.warning}</p>
+          `;
+        } catch (err) {
+          slot.innerHTML = `<p class="msg err">${err.message}</p>`;
+        }
+      } else if (st.status === "expired") {
+        clearInterval(poll);
+        statusEl.textContent = "Scaduto — premi di nuovo Rivela chiave.";
+      }
+    }, 2500);
+  }
+
+  async function loadList() {
+    const list = document.getElementById("list");
+    const resp = await fetch("/api/onchain/wallets");
+    if (!resp.ok) {
+      list.innerHTML = '<p class="msg err">Devi essere loggato sul sito in questo browser.</p>';
+      return;
+    }
+    const items = await resp.json();
+    list.innerHTML = "";
+    if (!items.length) {
+      list.innerHTML = '<p class="dim">Nessun wallet ancora — creane uno sopra.</p>';
+      return;
+    }
+    items.forEach((w) => list.appendChild(walletCard(w)));
+  }
+
+  loadList();
+</script>
+</body>
+</html>
