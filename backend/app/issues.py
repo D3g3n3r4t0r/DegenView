@@ -482,6 +482,12 @@ def update_issue(issue_id: str, *, status: str | None = None,
             if status not in _VALID_STATUS:
                 raise ValueError(f"Stato non valido: {status}")
             it["status"] = status
+            # list_issues() rilegge lo stato dalla risoluzione quando ce n'e'
+            # una: senza segnare anche qui la riapertura, un "Riapri" manuale
+            # spariva al giro dopo perche' la vecchia risoluzione "risolto"
+            # tornava a vincere sul merge.
+            if status in ("aperto", "riaperto"):
+                it["reopened_at"] = int(time.time())
         if priority is not None:
             if priority not in _VALID_PRIORITY:
                 raise ValueError(f"Priorità non valida: {priority}")
