@@ -96,6 +96,48 @@ def test_reveal_token_scoped_to_its_own_chain(client):
     assert wrong_chain.status_code == 403
 
 
+def test_reveal_stream_yields_approved_immediately_if_already_approved(client):
+    client.post("/api/onchain/wallets", json={"chain": "solana"})
+    req = client.post("/api/onchain/wallets/solana/reveal/request").json()
+    token = req["token"]
+    client.post("/api/onchain/reveal/approve", json={
+        "email": "wallet-test@example.com", "password": _PASSWORD, "token": token,
+    })
+    with client.stream("GET", f"/api/onchain/wallets/reveal/stream/{token}") as resp:
+        assert resp.status_code == 200
+        line = next(resp.iter_lines())
+        assert "approved" in line
+
+
+def test_reveal_stream_pushes_the_moment_the_phone_approves(client):
+    import concurrent.futures
+
+    client.post("/api/onchain/wallets", json={"chain": "solana"})
+    req = client.post("/api/onchain/wallets/solana/reveal/request").json()
+    token = req["token"]
+    seen: list[str] = []
+
+    def read_stream():
+        with client.stream("GET", f"/api/onchain/wallets/reveal/stream/{token}") as resp:
+            for line in resp.iter_lines():
+                if line.startswith("data:"):
+                    seen.append(line)
+                if "approved" in line:
+                    break
+
+    with concurrent.futures.ThreadPoolExecutor() as pool:
+        future = pool.submit(read_stream)
+        import time
+        time.sleep(0.5)
+        client.post("/api/onchain/reveal/approve", json={
+            "email": "wallet-test@example.com", "password": _PASSWORD, "token": token,
+        })
+        future.result(timeout=10)
+
+    assert any("pending" in line for line in seen)
+    assert any("approved" in line for line in seen)
+
+
 def test_kill_switch_blocks_every_onchain_endpoint(client, monkeypatch):
     monkeypatch.setattr(main.settings, "onchain_enabled", False)
     assert client.get("/api/onchain/wallets").status_code == 400
