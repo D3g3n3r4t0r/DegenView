@@ -10922,9 +10922,15 @@
     labEl("lab-ticker-input").value = "";
     labEl("lab-ticker-input").blur();
     labEl("lab-suggestions").classList.add("hidden");
-    // Sync exchange selector to match the result's provider
+    // Sync exchange selector to match the result's provider — solo se il
+    // menu offre davvero quel valore: assegnare un value senza <option>
+    // corrispondente lascia il <select> silenziosamente vuoto (segnalato da
+    // Lorenzo su CRVUSDT/Binance: "exchange: valore non ammesso, campo
+    // vuoto" — il menu non aveva ancora Binance fra le opzioni).
     const sel = el("lab-exchange-select");
-    if (sel && item.provider) sel.value = item.provider;
+    if (sel && item.provider && [...sel.options].some((o) => o.value === item.provider)) {
+      sel.value = item.provider;
+    }
   }
 
   function bindLabUI() {
