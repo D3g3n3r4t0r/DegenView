@@ -3594,7 +3594,11 @@
                                 interval, strategyName, params, backtestParams }) {
     if (assetType) state.assetType = assetType;
     if (exchange) state.cryptoExchange = exchange;
-    if (symbol) el("ticker-input").value = displaySymbol || symbol;
+    if (symbol) {
+      const shown = displaySymbol || symbol;
+      el("ticker-input").value = shown;
+      el("ticker-input").title = shown;
+    }
 
     // I costi e la taglia con cui e' stato trovato questo risultato vengono
     // con lui — vedi getStrategyAndBacktestQuery(). Un chiamante che non li
@@ -8661,7 +8665,12 @@
   }
 
   function selectSuggestion(item) {
-    el("ticker-input").value = item.symbol;
+    const input = el("ticker-input");
+    input.value = item.symbol;
+    // Un simbolo DEX non ci sta nella casella (vedi CSS, text-overflow):
+    // il title nativo lo mostra per intero al passaggio del mouse invece
+    // di lasciarlo leggibile solo trascinando il cursore da fermo.
+    input.title = item.symbol;
     state.assetType = item.asset_type;
     if (item.asset_type === "crypto") state.cryptoExchange = item.provider;
     hideSuggestions();
@@ -10334,6 +10343,7 @@
     state.cryptoExchange = prefs?.exchange || "mexc";
     const ticker = prefs?.ticker || "BTC";
     el("ticker-input").value = ticker;
+    el("ticker-input").title = ticker;
     if (prefs?.interval) {
       const sel = el("interval-primary");
       if (sel) sel.value = prefs.interval;

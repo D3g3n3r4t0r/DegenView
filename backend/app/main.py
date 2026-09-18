@@ -2523,7 +2523,10 @@ async def get_favorite_quotes(user: User = Depends(auth.get_current_user)) -> li
 
 @app.get("/api/analyze", response_model=AnalysisResponse)
 async def analyze(
-    symbol: str = Query(..., min_length=1, max_length=20),
+    # 80, non 20: un pair DEX e' "BASE@chain:pool_address", e un indirizzo
+    # Solana da solo arriva a 44 caratteri base58 — lo stesso limite vale
+    # per ogni altro endpoint GET che accetta un symbol qui sotto.
+    symbol: str = Query(..., min_length=1, max_length=80),
     asset_type: AssetType = Query("stock"),
     exchange: CryptoExchange = Query("mexc"),
     htf_interval: IntervalChoice = Query(DEFAULT_INTERVALS["htf"]),
@@ -2677,7 +2680,7 @@ def _slice_to_period(df, symbol: str, start_date: str | None, end_date: str | No
 
 @app.get("/api/backtest/deep", response_model=BacktestResult)
 async def deep_backtest(
-    symbol: str = Query(..., min_length=1, max_length=20),
+    symbol: str = Query(..., min_length=1, max_length=80),
     asset_type: AssetType = Query("stock"),
     exchange: CryptoExchange = Query("mexc"),
     ltf_interval: IntervalChoice = Query(DEFAULT_INTERVALS["ltf"]),
@@ -2994,7 +2997,7 @@ async def _optimize_payload(
 
 @app.get("/api/export/backtest.xlsx")
 async def export_backtest(
-    symbol: str = Query(..., min_length=1, max_length=20),
+    symbol: str = Query(..., min_length=1, max_length=80),
     asset_type: AssetType = Query("stock"),
     exchange: CryptoExchange = Query("mexc"),
     ltf_interval: IntervalChoice = Query(DEFAULT_INTERVALS["ltf"]),
@@ -3088,7 +3091,7 @@ def _finisci_lavoro_pesante(owner_id: str) -> None:
 
 @app.get("/api/optimize", response_model=OptimizeResult)
 async def optimize_strategy_endpoint(
-    symbol: str = Query(..., min_length=1, max_length=20),
+    symbol: str = Query(..., min_length=1, max_length=80),
     asset_type: AssetType = Query("stock"),
     exchange: CryptoExchange = Query("mexc"),
     ltf_interval: IntervalChoice = Query(DEFAULT_INTERVALS["ltf"]),
@@ -3277,7 +3280,7 @@ def _optimizer_summary(symbol: str, strategy_name: str, mode: str,
 
 @app.post("/api/optimize/start")
 async def start_optimize(
-    symbol: str = Query(..., min_length=1, max_length=20),
+    symbol: str = Query(..., min_length=1, max_length=80),
     asset_type: AssetType = Query("stock"),
     exchange: CryptoExchange = Query("mexc"),
     ltf_interval: IntervalChoice = Query(DEFAULT_INTERVALS["ltf"]),
