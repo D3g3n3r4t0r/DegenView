@@ -26,6 +26,18 @@ def client(tmp_path, monkeypatch):
     main.app.dependency_overrides.clear()
 
 
+def test_onchain_pages_load_without_a_session():
+    """La shell HTML deve caricarsi sempre, come "/" — altrimenti
+    onchain-approve.html non si potrebbe MAI apire da un telefono che non
+    ha ancora fatto login, il caso normale di chi scansiona il QR."""
+    assert main.app.dependency_overrides == {}, "questo test vuole il cancello vero, non un mock"
+    with TestClient(main.app) as anon:
+        for path in ("/onchain-app.html", "/onchain-approve.html", "/onchain-passkey-setup.html"):
+            resp = anon.get(path)
+            assert resp.status_code == 200, path
+            assert "text/html" in resp.headers["content-type"]
+
+
 def test_create_then_list_wallet(client):
     resp = client.post("/api/onchain/wallets", json={"chain": "solana"})
     assert resp.status_code == 200
