@@ -1210,6 +1210,6 @@
       "backend/app/main.py",
       "frontend/static/app.js"
     ],
-    "next": "Non verificato dal vivo (nessun ambiente con le dipendenze Python installate in questa sessione): mappatura GeckoTerminal aggregate/timeframe da confermare con una ricerca e un grafico reali, e verificare i tempi di risposta per non sforare il timeout di 5s della ricerca combinata."
+    "next": "Verificato dal vivo da Lorenzo: il primo giro rifiutava ogni ticker DEX con \"symbol: troppo lungo\" (limite max_length=20 su /api/analyze e affini, un indirizzo Solana da solo arriva a 44 caratteri) — alzato a 80 su tutti i GET che accettano symbol in query. Aggiunto anche title nativo sul campo ticker per leggere il simbolo intero al passaggio del mouse quando non ci sta nella casella."
   }
 }
