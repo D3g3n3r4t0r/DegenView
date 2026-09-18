@@ -88,6 +88,27 @@ def test_robinhood_balance_parses_hex_wei(monkeypatch):
     assert balance == pytest.approx(1.0)
 
 
+def test_solana_transactions_parsed(monkeypatch):
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"jsonrpc": "2.0", "id": 1, "result": [
+            {"signature": "sig1", "blockTime": 1700000000, "err": None},
+            {"signature": "sig2", "blockTime": 1700000100, "err": {"InstructionError": [0, "x"]}},
+        ]})
+
+    monkeypatch.setattr(httpx, "AsyncClient", _client_factory(handler))
+    result = _run(onchain_balances.recent_transactions("solana", "Fake11111111111111111111111111111111111111"))
+    assert result["available"] is True
+    assert [t["status"] for t in result["transactions"]] == ["riuscita", "fallita"]
+    assert result["transactions"][0]["explorer_url"].endswith("sig1")
+
+
+def test_robinhood_transactions_fall_back_to_explorer_link():
+    result = _run(onchain_balances.recent_transactions("robinhood", "0xdead"))
+    assert result["available"] is False
+    assert result["transactions"] == []
+    assert "0xdead" in result["explorer_url"]
+
+
 def test_rpc_error_response_raises(monkeypatch):
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json={"jsonrpc": "2.0", "id": 1, "error": {"code": -32602, "message": "bad address"}})
