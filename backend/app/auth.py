@@ -21,7 +21,7 @@ from pathlib import Path
 
 from fastapi import Cookie, HTTPException
 
-from app.models import User
+from app.models import OnchainChain, OnchainWallet, Passkey, User
 from app.trading.crypto import encrypt as _enc, decrypt as _dec
 
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
@@ -56,6 +56,11 @@ def _get_secret() -> bytes:
 
 
 _SECRET = _get_secret()
+# Segreto derivato, non riusato: _SECRET firma anche i cookie di sessione, e
+# una chiave che sposta fondi veri non deve dipendere dallo stesso materiale
+# di una che autentica un browser. HMAC come PRF con un'etichetta fissa —
+# stesso principio di HKDF, senza bisogno di una libreria in piu'.
+_ONCHAIN_SECRET = hmac.new(_SECRET, b"onchain-wallet-v1", hashlib.sha256).digest()
 
 
 def _load_users() -> None:
@@ -286,6 +291,107 @@ def get_decrypted_futures_credential(user: User, exchange: str) -> tuple[str, st
         _dec(cred.api_secret_enc, _SECRET),
         _dec(cred.passphrase_enc, _SECRET),
     )
+
+
+def create_onchain_wallet(user_id: str, chain: OnchainChain) -> User | None:
+    """Genera una chiave nuova per quella chain — mai due volte: una
+    seconda chiamata su una chain che ha gia' un wallet lo lascia intatto
+    (rigenerare in silenzio orfanerebbe qualunque fondo gia' mandato al
+    vecchio indirizzo). Nasce spenta (enabled=False): un kill switch
+    esplicito va acceso a parte, non e' un effetto collaterale del crearla."""
+    from app.trading.onchain.keys import generate  # import qui: onchain.keys non deve mai importare auth
+
+    user = _users.get(user_id)
+    if user is None:
+        return None
+    if chain in user.onchain_wallets:
+        return user
+    key = generate(chain)
+    wallets = dict(user.onchain_wallets)
+    wallets[chain] = OnchainWallet(
+        address=key.address,
+        private_key_enc=_enc(key.private_key_hex, _ONCHAIN_SECRET),
+        enabled=False,
+        created_at=time.time(),
+    )
+    updated = user.model_copy(update={"onchain_wallets": wallets})
+    _users[user_id] = updated
+    _save_users()
+    return updated
+
+
+def set_onchain_wallet_enabled(user_id: str, chain: OnchainChain, enabled: bool) -> User | None:
+    user = _users.get(user_id)
+    if user is None or chain not in user.onchain_wallets:
+        return None
+    wallets = dict(user.onchain_wallets)
+    wallets[chain] = wallets[chain].model_copy(update={"enabled": enabled})
+    updated = user.model_copy(update={"onchain_wallets": wallets})
+    _users[user_id] = updated
+    _save_users()
+    return updated
+
+
+class OnchainKeyIntegrityError(Exception):
+    """La chiave decifrata non ricava piu' l'indirizzo salvato — non e'
+    un errore silenzioso da ignorare: il cifrario usato altrove in questo
+    file basta per un'API key (l'exchange la rifiuta se sbagliata), ma qui
+    una corruzione andrebbe rilevata prima di firmare qualunque cosa con
+    lei, non dopo aver perso l'accesso al wallet."""
+
+
+def get_decrypted_onchain_private_key(user: User, chain: OnchainChain) -> str:
+    from app.trading.onchain.keys import address_from_private_key
+
+    wallet = user.onchain_wallets.get(chain)
+    if wallet is None:
+        return ""
+    private_key_hex = _dec(wallet.private_key_enc, _ONCHAIN_SECRET)
+    if not private_key_hex:
+        return ""
+    if address_from_private_key(chain, private_key_hex) != wallet.address:
+        raise OnchainKeyIntegrityError(
+            f"La chiave decifrata per {chain} non corrisponde all'indirizzo salvato "
+            f"({wallet.address}) — dato corrotto, non usata."
+        )
+    return private_key_hex
+
+
+def add_passkey(user_id: str, passkey: Passkey) -> User | None:
+    user = _users.get(user_id)
+    if user is None:
+        return None
+    updated = user.model_copy(update={"passkeys": [*user.passkeys, passkey]})
+    _users[user_id] = updated
+    _save_users()
+    return updated
+
+
+def delete_passkey(user_id: str, credential_id: str) -> User | None:
+    user = _users.get(user_id)
+    if user is None:
+        return None
+    updated = user.model_copy(update={"passkeys": [pk for pk in user.passkeys if pk.credential_id != credential_id]})
+    _users[user_id] = updated
+    _save_users()
+    return updated
+
+
+def update_passkey_sign_count(user_id: str, credential_id: str, new_sign_count: int) -> User | None:
+    """Aggiornato dopo OGNI autenticazione riuscita — un sign_count che
+    smette di crescere rispetto a quello salvato e' come WebAuthn segnala
+    un passkey clonato, quindi va scritto subito, non in un giro comodo."""
+    user = _users.get(user_id)
+    if user is None:
+        return None
+    passkeys = [
+        pk.model_copy(update={"sign_count": new_sign_count}) if pk.credential_id == credential_id else pk
+        for pk in user.passkeys
+    ]
+    updated = user.model_copy(update={"passkeys": passkeys})
+    _users[user_id] = updated
+    _save_users()
+    return updated
 
 
 def make_session_cookie(user_id: str) -> str:

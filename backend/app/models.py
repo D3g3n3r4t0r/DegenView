@@ -164,6 +164,39 @@ class FuturesCredential(BaseModel):
     created_at: float = 0.0     # epoch seconds; set once, when api_key_enc first becomes non-empty
 
 
+OnchainChain = Literal["solana", "robinhood"]
+
+
+class OnchainWallet(BaseModel):
+    """Un wallet generato da noi, mai importato: la chiave privata nasce
+    cifrata sul server (stesso schema di FuturesCredential) e non e' mai
+    stata altrove — non e' legato a nessuna identita', a differenza di un
+    wallet aperto su un servizio KYC. Modello separato da FuturesCredential
+    apposta: qui non c'e' un exchange che fa da rete di sicurezza (nessun
+    prelievo bloccabile, nessun controllo anti-frode) — un bug qui non deve
+    poter toccare le credenziali exchange, e viceversa."""
+
+    address: str = ""
+    private_key_enc: str = ""
+    enabled: bool = False       # kill switch: spegnibile senza toccare la chiave
+    created_at: float = 0.0
+
+
+class Passkey(BaseModel):
+    """Un passkey WebAuthn (Face ID/Touch ID su iPhone, biometria/PIN su
+    Android) registrato per approvare la rivelazione di una chiave
+    on-chain da un secondo dispositivo, senza dover ridigitare la password
+    li'. Solo materiale pubblico: credential_id e public_key non bastano a
+    nessuno per autenticarsi come l'utente, la firma vera resta dentro
+    l'elemento sicuro del telefono e non lo lascia mai."""
+
+    credential_id: str      # base64url
+    public_key: str         # base64url della chiave pubblica COSE
+    sign_count: int = 0
+    label: str = ""         # es. "iPhone di Lorenzo" — solo per riconoscerlo in una lista, non usato per verificare
+    created_at: float = 0.0
+
+
 class User(BaseModel):
     id: str
     email: str
@@ -171,6 +204,8 @@ class User(BaseModel):
     telegram_chat_id: str = ""  # user pastes this in from their own DM with the shared bot
     trading_credentials: dict[str, ExchangeCredential] = {}  # key = exchange slug ("binance", "mexc", "kucoin")
     futures_credentials: dict[str, FuturesCredential] = {}  # key = exchange slug — mai popolato da trading_credentials
+    onchain_wallets: dict[OnchainChain, OnchainWallet] = {}  # key = chain ("solana", "robinhood")
+    passkeys: list[Passkey] = []
     preferences: dict = {}  # last session state: ticker, interval, strategy, layers, etc.
 
 

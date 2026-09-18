@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Passkey per la rivelazione — Liquidity Engine</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    font-family: -apple-system, system-ui, sans-serif;
+    background: #0e1410; color: #eceae2;
+    margin: 0; padding: 24px 18px 40px;
+    display: flex; justify-content: center;
+  }
+  .card { max-width: 420px; width: 100%; }
+  h1 { font-size: 18px; margin: 0 0 6px; }
+  p.lead { color: #a2a596; font-size: 13.5px; margin: 0 0 22px; }
+  label { display: block; font-size: 12.5px; color: #a2a596; margin: 14px 0 5px; }
+  input {
+    width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 8px;
+    border: 1.5px solid #33352a; background: #1d1f17; color: #eceae2; font-size: 15px;
+  }
+  button {
+    width: 100%; margin-top: 14px; padding: 11px; border-radius: 8px; border: none;
+    background: #2fd696; color: #08150f; font-weight: 700; font-size: 14.5px; cursor: pointer;
+  }
+  button:disabled { opacity: .5; cursor: default; }
+  .msg { margin-top: 16px; font-size: 13.5px; }
+  .msg.ok { color: #2fd696; }
+  .msg.err { color: #ff5a6e; }
+  ul { list-style: none; margin: 18px 0 0; padding: 0; }
+  li {
+    display: flex; justify-content: space-between; align-items: center; gap: 10px;
+    padding: 10px 0; border-bottom: 1px solid #33352a; font-size: 13.5px;
+  }
+  li button { width: auto; margin: 0; background: transparent; color: #ff5a6e; padding: 4px 8px; font-weight: 600; font-size: 12.5px; }
+  .dim { color: #5c6158; font-size: 12px; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>Passkey per rivelare una chiave on-chain</h1>
+    <p class="lead">Registra Face ID, Touch ID o l'equivalente Android su questo dispositivo: da qui in poi potrai approvare la rivelazione di una chiave privata dal telefono senza ridigitare la password. Devi essere gia' loggato sul sito in questo stesso browser.</p>
+
+    <label for="label">Nome per riconoscerlo (opzionale)</label>
+    <input id="label" type="text" placeholder="es. iPhone di Lorenzo" />
+    <button id="register-btn" type="button">Registra Face ID / Touch ID</button>
+
+    <p id="msg" class="msg" hidden></p>
+
+    <ul id="list"></ul>
+  </div>
+
+<script>
+  const msg = document.getElementById("msg");
+  function say(text, kind) {
+    msg.hidden = false;
+    msg.className = kind ? `msg ${kind}` : "msg";
+    msg.textContent = text;
+  }
+
+  async function loadList() {
+    const resp = await fetch("/api/auth/passkey");
+    if (!resp.ok) { say("Devi essere loggato sul sito in questo browser per gestire i passkey.", "err"); return; }
+    const items = await resp.json();
+    const list = document.getElementById("list");
+    list.innerHTML = "";
+    if (!items.length) {
+      list.innerHTML = '<li class="dim">Nessun passkey registrato ancora.</li>';
+      return;
+    }
+    items.forEach((pk) => {
+      const li = document.createElement("li");
+      const when = pk.created_at ? new Date(pk.created_at * 1000).toLocaleDateString("it-IT") : "";
+      li.innerHTML = `<span>${pk.label || "Passkey"} <span class="dim">· ${when}</span></span>`;
+      const del = document.createElement("button");
+      del.textContent = "Rimuovi";
+      del.addEventListener("click", async () => {
+        await fetch(`/api/auth/passkey/${encodeURIComponent(pk.credential_id)}`, { method: "DELETE" });
+        loadList();
+      });
+      li.appendChild(del);
+      list.appendChild(li);
+    });
+  }
+
+  document.getElementById("register-btn").addEventListener("click", async () => {
+    const btn = document.getElementById("register-btn");
+    if (!window.PublicKeyCredential) { say("Questo browser non supporta i passkey.", "err"); return; }
+    btn.disabled = true;
+    say("Chiedo le opzioni…");
+    try {
+      const optResp = await fetch("/api/auth/passkey/register/options", { method: "POST" });
+      const optBody = await optResp.json().catch(() => ({}));
+      if (!optResp.ok) throw new Error(optBody.detail || "Devi essere loggato sul sito in questo browser.");
+
+      say("Segui la richiesta di Face ID / Touch ID…");
+      const creationOptions = PublicKeyCredential.parseCreationOptionsFromJSON(JSON.parse(optBody.options));
+      const credential = await navigator.credentials.create({ publicKey: creationOptions });
+
+      say("Salvataggio…");
+      const verResp = await fetch("/api/auth/passkey/register/verify", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          state_token: optBody.state_token,
+          credential: credential.toJSON(),
+          label: document.getElementById("label").value.trim(),
+        }),
+      });
+      const verBody = await verResp.json().catch(() => ({}));
+      if (!verResp.ok) throw new Error(verBody.detail || `Errore ${verResp.status}`);
+      say("Passkey registrato.", "ok");
+      document.getElementById("label").value = "";
+      loadList();
+    } catch (err) {
+      say(err.message || "Registrazione non riuscita.", "err");
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  loadList();
+</script>
+</body>
+</html>

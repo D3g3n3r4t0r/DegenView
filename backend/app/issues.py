@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0085", "Fase 1 del trading automatico on-chain: wallet generato sul server, sola lettura",
+     "Lorenzo: 'si potrebbe iniziare ad imbastire il sistema per il trading automatico anche su wallet on-chain'. Chiarito con lui: custodia della chiave sul server (non un servizio esterno), nessuna conferma manuale per operazione — l'automazione deve dipendere solo dalla strategia — e wallet 'privacy driven' nel senso di generato da zero da noi, mai legato a un'identita', non tecniche di offuscamento on-chain. Chain scelte: Solana e Robinhood Chain (L2 Arbitrum Orbit di Robinhood, live da luglio 2026, chain id 4663). Questa e' solo la Fase 1 del piano (generazione chiave + saldo, nessuna firma reale) — le fasi successive (simulazione, poi esecuzione vera con tetti/allowlist) restano da fare, apposta.",
+     "media"),
     ("seed-0084", "Ticker DEX (on-chain) nel ticker del sito principale, non solo nello Sniper",
      "Lorenzo: 'riusciamo ad ottenere anche i ticker di dex scanner?' — chiarito: non dentro lo Sniper (gia' collegato li'), ma nel campo ticker del grafico/backtest principale. Ricerca per nome/simbolo come i pair CEX, su tutte le chain gia' coperte dallo Sniper.",
      "media"),

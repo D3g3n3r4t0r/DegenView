@@ -1211,5 +1211,21 @@
       "frontend/static/app.js"
     ],
     "next": "Verificato dal vivo da Lorenzo: il primo giro rifiutava ogni ticker DEX con \"symbol: troppo lungo\" (limite max_length=20 su /api/analyze e affini, un indirizzo Solana da solo arriva a 44 caratteri) — alzato a 80 su tutti i GET che accettano symbol in query. Aggiunto anche title nativo sul campo ticker per leggere il simbolo intero al passaggio del mouse quando non ci sta nella casella."
+  },
+  "seed-0085": {
+    "status": "in corso",
+    "at": 1789766420,
+    "summary": "Fase 1 del piano wallet on-chain: generazione di una chiave (Solana + Robinhood Chain), cifrata sul server (segreto separato da quello dei cookie), lettura del saldo via RPC pubblico, e rivelazione della chiave protetta da un secondo dispositivo (Face ID/Touch ID via WebAuthn, con la password come rete di sicurezza) invece della sola sessione del browser. Nessuna firma di transazione esiste ancora — questa fase non muove nessun fondo.",
+    "detail": "Nuovo modello OnchainWallet (models.py): address + private_key_enc (stesso cifrario XOR/HMAC di trading/crypto.py, gia' usato per le credenziali exchange) + kill switch enabled, di default spento. User.onchain_wallets: dict[chain, OnchainWallet]. Nuovo modulo backend/app/trading/onchain/: keys.py genera la coppia di chiavi (solders.Keypair per Solana, eth_account.Account per Robinhood Chain/EVM) e la puo' far corrispondere di nuovo all'indirizzo salvato; balances.py legge il saldo nativo (SOL/ETH) via RPC pubblico (api.mainnet-beta.solana.com, rpc.mainnet.chain.robinhood.com) senza mai toccare la chiave. auth.py: create_onchain_wallet() (idempotente — non rigenera mai una chiave che esiste gia', orfanerebbe i fondi mandati al vecchio indirizzo), set_onchain_wallet_enabled(), get_decrypted_onchain_private_key(). Endpoint nuovi: GET/POST /api/onchain/wallets (mai la chiave privata nella risposta), PATCH .../{chain} (kill switch), GET .../{chain}/balance. Verificato dal vivo in questa sessione, non solo per lettura del codice: generato un ambiente Python 3.12 vero con le nuove dipendenze (eth-account, solders), fatto un giro reale di generazione+cifratura+decifratura+verifica indirizzo, interrogati per davvero i due RPC pubblici (rispondono nel formato che il codice si aspetta), e lanciata l'intera suite (531 passati, 1 skip) + ruff, entrambi puliti. Giro di irrobustimento, stessa sessione: segreto di cifratura derivato via HMAC apposta separato da quello dei cookie di sessione (backend/app/auth.py, _ONCHAIN_SECRET); controllo d'integrita' ad ogni decifratura (l'indirizzo ricavato deve corrispondere a quello salvato, altrimenti OnchainKeyIntegrityError + avviso Telegram); interruttore generale server-wide (settings.onchain_enabled) che blocca ogni endpoint /api/onchain/*; rivelazione della chiave a due dispositivi — il browser genera un QR (token da 2 minuti, uso unico, backend/app/trading/onchain/reveal_requests.py), il telefono lo scansiona e approva con Face ID/Touch ID (WebAuthn — backend/app/trading/onchain/passkey.py, registrazione da onchain-passkey-setup.html, approvazione da onchain-approve.html) o, se il passkey non c'e' o non funziona, con la password dell'account come rete di sicurezza; ogni rivelazione riuscita manda un avviso Telegram. Un test end-to-end ha trovato un bug reale prima del push (il token si autodistruggeva al primo tentativo prematuro del browser, prima ancora dell'approvazione) — corretto in reveal_requests.consume(). 557 test passano, ruff pulito.",
+    "files": [
+      "backend/app/models.py",
+      "backend/app/auth.py",
+      "backend/app/main.py",
+      "backend/app/trading/onchain/keys.py",
+      "backend/app/trading/onchain/balances.py",
+      "backend/tests/test_onchain_wallet.py",
+      "backend/requirements.txt"
+    ],
+    "next": "La cerimonia WebAuthn vera (firma biometrica reale) non e' verificabile in questo ambiente sandbox — serve un iPhone/Android vero sul sito in produzione per il primo collaudo davvero. Fase 2 (simulazione/paper trading), poi Fase 3 (firma reale, con tetti/allowlist/slippage) restano da fare."
   }
 }

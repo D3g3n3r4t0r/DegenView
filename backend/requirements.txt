@@ -11,3 +11,9 @@ cachetools==7.1.7
 protobuf==7.36.0
 websockets==17.0.1
 openpyxl==3.1.5
+eth-account==0.13.7
+solders==0.23.0
+base58==2.1.1
+qrcode==8.2
+pillow==11.3.0
+webauthn==3.0.0
