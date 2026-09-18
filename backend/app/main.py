@@ -86,8 +86,11 @@ from app.models import (
 )
 from app.trading.onchain import balances as onchain_balances
 from app.trading.onchain import keys as onchain_keys
+from app.trading.onchain import ledger as onchain_ledger
 from app.trading.onchain import passkey as onchain_passkey
+from app.trading.onchain import quotes as onchain_quotes
 from app.trading.onchain import reveal_requests as onchain_reveal
+from app.trading.onchain import simulate as onchain_simulate
 from app.exchange_balances import BalanceFetchError, fetch_kucoin_balances, fetch_mexc_balances
 from app.notify import telegram
 from app.notify import alert_log
@@ -2070,6 +2073,94 @@ async def onchain_wallet_transactions(chain: OnchainChain, user: User = Depends(
     except Exception as exc:  # noqa: BLE001 — un RPC pubblico irraggiungibile non deve essere un 500 muto
         raise HTTPException(status_code=502, detail=f"RPC non raggiungibile: {exc}") from exc
     return {"chain": chain, "address": wallet.address, **result}
+
+
+# ── Fase 2/3 del piano: guardrail, simulazione, esecuzione reale (spenta) ──
+# Nessuna chiave tocca questi endpoint: quote e simulazione lavorano su
+# indirizzi/importi pubblici, l'esecuzione reale resta dietro
+# settings.onchain_execution_enabled (Fase 3, non ancora accesa).
+
+class OnchainQuoteSolanaRequest(BaseModel):
+    input_mint: str
+    output_mint: str
+    amount_lamports: int
+    slippage_bps: int = 50
+
+
+@app.post("/api/onchain/quote/solana")
+async def onchain_quote_solana(body: OnchainQuoteSolanaRequest, user: User = Depends(auth.get_current_user)) -> dict:
+    """Preventivo reale via Jupiter — nessuna chiave, nessun impegno a
+    eseguire. E' il price_impact_pct che risk.check_price_impact() confronta
+    con la soglia prima di qualunque simulazione o (in futuro) ordine vero."""
+    _require_onchain_enabled()
+    try:
+        quote = await onchain_quotes.jupiter_quote(
+            body.input_mint, body.output_mint, body.amount_lamports, body.slippage_bps,
+        )
+    except Exception as exc:  # noqa: BLE001 — un aggregatore irraggiungibile non deve essere un 500 muto
+        raise HTTPException(status_code=502, detail=f"Jupiter non raggiungibile: {exc}") from exc
+    return {k: v for k, v in quote.items() if k != "raw"}
+
+
+class OnchainSimulateRequest(BaseModel):
+    chain: OnchainChain
+    token: str
+    strategy_name: str
+    side: Literal["buy", "sell"]
+    notional_usd: float
+    price_impact_pct: float
+    price_usd: float
+
+
+@app.post("/api/onchain/simulate")
+async def onchain_simulate_order(body: OnchainSimulateRequest, user: User = Depends(auth.get_current_user)) -> dict:
+    """Fase 2: paper trading. Stessi guardrail della Fase 3 (tetti, price
+    impact, concentrazione, circuit breaker), ma mode='simulated' nel
+    ledger — nessuna chiave letta, nessuna transazione, mai."""
+    _require_onchain_enabled()
+    return onchain_simulate.simulate_order(
+        user.id, body.chain, body.token, body.strategy_name, body.side,
+        body.notional_usd, body.price_impact_pct, body.price_usd,
+    )
+
+
+@app.get("/api/onchain/ledger/pending")
+async def onchain_ledger_pending(user: User = Depends(auth.get_current_user)) -> list[dict]:
+    """Ordini 'submitted' senza mai una conferma — quello che un riavvio a
+    meta' lascia indietro (vedi ledger.pending_unconfirmed). Utile per
+    controllare a mano che la riconciliazione non abbia niente in sospeso."""
+    _require_onchain_enabled()
+    return onchain_ledger.pending_unconfirmed(user.id)
+
+
+@app.get("/api/onchain/positions/{chain}")
+async def onchain_positions(chain: OnchainChain, user: User = Depends(auth.get_current_user)) -> list[dict]:
+    _require_onchain_enabled()
+    return onchain_ledger.get_all_positions(user.id, chain)
+
+
+@app.get("/api/onchain/risk/status/{chain}")
+async def onchain_risk_status(chain: OnchainChain, user: User = Depends(auth.get_current_user)) -> dict:
+    _require_onchain_enabled()
+    breaker = onchain_ledger.breaker_status(user.id, chain)
+    spent_today = onchain_ledger.get_daily_spent(user.id, chain)
+    return {
+        "chain": chain,
+        "circuit_breaker": breaker,
+        "daily_spent_usd": spent_today,
+        "daily_cap_usd": settings.onchain_max_usd_per_day,
+        "per_trade_cap_usd": settings.onchain_max_usd_per_trade,
+        "concentration_cap_pct": settings.onchain_max_token_concentration_pct,
+        "execution_enabled": settings.onchain_execution_enabled,
+    }
+
+
+@app.post("/api/onchain/risk/circuit-breaker/{chain}/reset")
+async def onchain_reset_circuit_breaker(chain: OnchainChain, user: User = Depends(auth.get_current_user)) -> dict:
+    """Riattivazione MANUALE apposta — mai automatica, vedi il piano."""
+    _require_onchain_enabled()
+    onchain_ledger.reset_breaker(user.id, chain)
+    return onchain_ledger.breaker_status(user.id, chain)
 
 
 class FuturesQuoteRequest(BaseModel):

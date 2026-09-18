@@ -49,6 +49,20 @@ class Settings(BaseSettings):
     # un secondo dispositivo.
     public_base_url: str = "https://liquidityengine.app"
 
+    # Fase 3 (esecuzione reale) — interruttore SEPARATO da onchain_enabled:
+    # quello sopra spegne tutto (anche la sola lettura del saldo), questo
+    # spegne SOLO la firma/invio di una transazione vera. Nasce a False
+    # apposta: il codice che firma esiste e passa i suoi test, ma nessuna
+    # transazione vera parte finche' non lo si accende esplicitamente da qui
+    # — mai da un parametro di richiesta, che l'utente potrebbe alzare per
+    # sbaglio.
+    onchain_execution_enabled: bool = False
+    # Confermati da Lorenzo il 19/09/2026 — non aumentabili da nessun
+    # parametro di richiesta, solo cambiando questo file/env.
+    onchain_max_usd_per_trade: float = 20.0
+    onchain_max_usd_per_day: float = 100.0
+    onchain_max_token_concentration_pct: float = 15.0  # % del capitale gestito in un solo token
+
     twelve_data_api_key: str = ""
     twelve_data_base_url: str = "https://api.twelvedata.com"
 
