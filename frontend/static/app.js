@@ -7555,7 +7555,8 @@
   function buildExecutedOrderMarkers() {
     if (!_executedOrders.length || !state.data) return [];
     const chartSymbol = (state.data.symbol || "").toUpperCase();
-    const candles = state.data.candles || [];
+    const tf = state.data.timeframes && state.data.timeframes[state.activeTimeframe];
+    const candles = (tf && tf.candles) || [];
     if (!candles.length) return [];
 
     // Il diario segna l'istante dell'ordine, che quasi mai coincide con
@@ -7603,7 +7604,8 @@
   function renderChartStats() {
     const box = el("chart-stats");
     if (!box) return;
-    const candles = state.data && state.data.candles;
+    const tf = state.data && state.data.timeframes && state.data.timeframes[state.activeTimeframe];
+    const candles = tf && tf.candles;
     if (!candles || !candles.length) { box.classList.add("hidden"); return; }
     const first = candles[0], last = candles[candles.length - 1];
     const hi = Math.max(...candles.map((c) => c.high));
@@ -9107,10 +9109,12 @@
       const when = it.created_at
         ? new Date(it.created_at * 1000).toLocaleDateString("it-IT")
         : "";
-      // Richiudibile: con venticinque voci, venticinque diagnosi aperte tutte
-      // insieme sono un muro. Restano aperte quelle su cui c'e' da fare, e
+      // Richiudibile: con decine di voci, tenerle tutte aperte di default
+      // (anche solo quelle "da fare") e' un muro di testo — ogni colonna
+      // diventa una parete di risoluzioni e form invece di un elenco
+      // leggibile. Restano compatte finche' non le si apre a mano, tranne
       // quelle che stai cercando.
-      const openByDefault = it.status !== "risolto" || !!issuesView.query;
+      const openByDefault = !!issuesView.query;
       return `<details class="issue-card is-${(it.status || "aperto").replace(" ", "-")}"${openByDefault ? " open" : ""}>
         <summary class="issue-head">
           <span class="issue-status">${ISSUE_STATUS_LABEL[it.status] || it.status}</span>
