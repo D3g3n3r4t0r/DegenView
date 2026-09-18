@@ -78,6 +78,18 @@
     background: var(--accent); color: #08150f; font-weight: 700; font-size: 13.5px; cursor: pointer;
   }
 
+  #login-screen { padding: 20px 0; }
+  .field-label { display: block; font-size: 12px; color: var(--ink-dim); margin: 12px 0 5px; }
+  #login-form input {
+    width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 8px;
+    border: 1.5px solid var(--border); background: var(--panel); color: var(--ink); font-size: 15px;
+  }
+  #login-form button {
+    width: 100%; margin-top: 16px; padding: 11px; border-radius: 8px; border: none;
+    background: var(--accent); color: #08150f; font-weight: 700; font-size: 14px; cursor: pointer;
+  }
+  #login-form button:disabled { opacity: .5; }
+
   /* --- accordion --- */
   details.section {
     border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px; overflow: hidden;
@@ -159,41 +171,54 @@
     </header>
     <p class="sub">Fase 1: custodia, saldo, storico, rivelazione a due dispositivi. Il trading automatico (Fase 2-4) non è ancora attivo — richiede ancora i tetti di rischio da confermare.</p>
 
-    <div id="status-row" class="status-row">
-      <span class="status-dot"></span>
-      <span id="status-text">Protezioni Fase 1 attive — nessuna firma possibile da qui</span>
+    <div id="login-screen" hidden>
+      <form id="login-form">
+        <label class="field-label" for="login-email">Email</label>
+        <input id="login-email" type="email" autocomplete="username" required />
+        <label class="field-label" for="login-password">Password</label>
+        <input id="login-password" type="password" autocomplete="current-password" required />
+        <button type="submit">Accedi</button>
+        <p class="msg" id="login-msg" hidden></p>
+      </form>
     </div>
 
-    <div class="chain-chips">
-      <button type="button" class="chain-chip active" data-chain="solana">Solana</button>
-      <button type="button" class="chain-chip" data-chain="robinhood">Robinhood Chain</button>
-    </div>
+    <div id="app-shell" hidden>
+      <div id="status-row" class="status-row">
+        <span class="status-dot"></span>
+        <span id="status-text">Protezioni Fase 1 attive — nessuna firma possibile da qui</span>
+      </div>
 
-    <div id="hero-slot"></div>
+      <div class="chain-chips">
+        <button type="button" class="chain-chip active" data-chain="solana">Solana</button>
+        <button type="button" class="chain-chip" data-chain="robinhood">Robinhood Chain</button>
+      </div>
 
-    <div id="sections" hidden>
-      <details class="section" id="sec-history">
-        <summary>Saldo & storico<span></span></summary>
-        <div class="body" id="history-body">
-          <button type="button" class="btn-sm" id="load-history-btn">Carica transazioni</button>
-        </div>
-      </details>
+      <div id="hero-slot"></div>
 
-      <details class="section">
-        <summary>Limiti & sicurezza<span></span></summary>
-        <div class="body">
-          <p class="placeholder-note">Fase 3 — non ancora attiva. Tetto di concentrazione per token e circuit breaker automatico arrivano insieme all'esecuzione reale, non prima.</p>
-        </div>
-      </details>
+      <div id="sections" hidden>
+        <details class="section" id="sec-history">
+          <summary>Saldo & storico<span></span></summary>
+          <div class="body" id="history-body">
+            <button type="button" class="btn-sm" id="load-history-btn">Carica transazioni</button>
+          </div>
+        </details>
 
-      <details class="section">
-        <summary>Auto-trade on-chain<span></span></summary>
-        <div class="body">
-          <p class="placeholder-note">Fase 4 — non ancora attiva. Si aggancia allo stesso interruttore per-strategia già in Sorveglia, solo dopo che l'esecuzione reale è verificata.</p>
-        </div>
-      </details>
+        <details class="section">
+          <summary>Limiti & sicurezza<span></span></summary>
+          <div class="body">
+            <p class="placeholder-note">Fase 3 — non ancora attiva. Tetto di concentrazione per token e circuit breaker automatico arrivano insieme all'esecuzione reale, non prima.</p>
+          </div>
+        </details>
 
-      <button type="button" class="btn-sm reveal-btn" id="reveal-btn" style="width:100%">Rivela chiave privata</button>
+        <details class="section">
+          <summary>Auto-trade on-chain<span></span></summary>
+          <div class="body">
+            <p class="placeholder-note">Fase 4 — non ancora attiva. Si aggancia allo stesso interruttore per-strategia già in Sorveglia, solo dopo che l'esecuzione reale è verificata.</p>
+          </div>
+        </details>
+
+        <button type="button" class="btn-sm reveal-btn" id="reveal-btn" style="width:100%">Rivela chiave privata</button>
+      </div>
     </div>
   </div>
 
@@ -464,7 +489,51 @@
     renderHero();
   }
 
-  loadWallets();
+  // --- Sessione: stessa identita' del sito principale, nessun login separato ---
+  async function checkSession() {
+    let loggedIn = false;
+    try {
+      const resp = await fetch("/api/auth/me");
+      const body = await resp.json();
+      loggedIn = Boolean(body.user);
+    } catch { /* rete offline al primo carico: tratta come non loggato, si riprova al login */ }
+
+    if (loggedIn) {
+      el("login-screen").hidden = true;
+      el("app-shell").hidden = false;
+      loadWallets();
+    } else {
+      el("app-shell").hidden = true;
+      el("login-screen").hidden = false;
+    }
+  }
+
+  el("login-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = e.target.querySelector("button");
+    const msg = el("login-msg");
+    btn.disabled = true;
+    msg.hidden = true;
+    try {
+      const resp = await fetch("/api/auth/login", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: el("login-email").value.trim(),
+          password: el("login-password").value,
+        }),
+      });
+      const body = await resp.json();
+      if (!resp.ok) throw new Error(body.detail || "Email o password errati");
+      await checkSession();
+    } catch (err) {
+      msg.hidden = false;
+      msg.className = "msg err";
+      msg.textContent = err.message || "Errore di rete.";
+      btn.disabled = false;
+    }
+  });
+
+  checkSession();
 </script>
 </body>
 </html>
