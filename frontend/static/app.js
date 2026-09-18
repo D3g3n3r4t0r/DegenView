@@ -8713,7 +8713,7 @@
       sym.textContent = item.symbol;
       const badge = document.createElement("span");
       badge.className = "mts-badge";
-      badge.textContent = item.asset_type === "crypto" ? "crypto" : "azioni";
+      badge.textContent = item.asset_type === "crypto" ? "crypto" : item.asset_type === "dex" ? "dex" : "azioni";
       symRow.appendChild(sym);
       symRow.appendChild(badge);
       const name = document.createElement("span");

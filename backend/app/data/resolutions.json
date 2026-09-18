@@ -1198,5 +1198,18 @@
     "files": [
       "backend/app/issues.py"
     ]
+  },
+  "seed-0084": {
+    "status": "risolto",
+    "at": 1789732802,
+    "summary": "Nuovo provider (dexscreener) collegato al campo ticker del sito principale (grafico/backtest, non lo Sniper): ricerca per nome/simbolo su DexScreener, candele reali da GeckoTerminal, sulle 11 chain gia' validate per lo Sniper.",
+    "detail": "backend/app/providers/dexscreener.py (nuovo): search_symbols() interroga /latest/dex/search di DexScreener e filtra sulle chain di app.sniper.scanner.SUPPORTED_CHAINS (stesso elenco, non duplicato); fetch_ohlcv() usa /networks/{network}/pools/{pool}/ohlcv/{timeframe} di GeckoTerminal (stessa fonte gia' usata dallo Sniper per i pool nuovi), con gli intervalli senza aggregato nativo (30m/1w/1M) ottenuti prendendo l'aggregato piu' fine e ripiegandolo con resample_by_count(), lo stesso schema gia' usato per 2D/3D/5D altrove. Il simbolo canonico di un pair DEX non e' un ticker leggibile come BTCUSDT: e' \"BASE@chain:pool_address\", l'unico modo di portare chain+indirizzo del pool dentro la singola stringa che analyze/backtest passano in giro — si arriva scegliendo un risultato della ricerca, non digitando a mano. models.py: AssetType ora ha anche \"dex\", SymbolSuggestion.provider anche \"dexscreener\". main.py: get_provider()/canonical_symbol() smistano \"dex\" al nuovo provider prima del ramo stock; /api/symbols include dexscreener nella ricerca combinata; il loop di alert della watchlist NON tenta piu' auto-trade per una entry asset_type==\"dex\" (l'exchange configurato resterebbe uno a caso, un pair on-chain non e' negoziabile su nessun CEX). Deliberatamente non toccato: watchlist/preferiti restano pensati per crypto CEX/azioni, aggiungerci un ticker DEX non e' stato chiesto.",
+    "files": [
+      "backend/app/providers/dexscreener.py",
+      "backend/app/models.py",
+      "backend/app/main.py",
+      "frontend/static/app.js"
+    ],
+    "next": "Non verificato dal vivo (nessun ambiente con le dipendenze Python installate in questa sessione): mappatura GeckoTerminal aggregate/timeframe da confermare con una ricerca e un grafico reali, e verificare i tempi di risposta per non sforare il timeout di 5s della ricerca combinata."
   }
 }

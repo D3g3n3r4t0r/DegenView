@@ -99,6 +99,7 @@ from app.providers.base import (
 )
 from app.providers.binance import BinanceProvider
 from app.providers.binance import format_symbol as format_binance_symbol
+from app.providers.dexscreener import DexScreenerProvider
 from app.providers.kraken import KrakenProvider
 from app.providers.kraken import format_symbol as format_kraken_symbol
 from app.providers.kucoin import KucoinProvider
@@ -140,6 +141,7 @@ mexc_provider = MexcProvider()
 binance_provider = BinanceProvider()
 kucoin_provider = KucoinProvider()
 kraken_provider = KrakenProvider()
+dexscreener_provider = DexScreenerProvider()
 
 
 def _telegram_allowed(user: User) -> bool:
@@ -164,6 +166,12 @@ async def _no_results() -> list:
 
 
 def get_provider(asset_type: AssetType, exchange: CryptoExchange = "mexc") -> DataProvider:
+    if asset_type == "dex":
+        # Un pair on-chain non e' su nessuno dei quattro exchange: l'unico
+        # provider che sa cosa farne del suo simbolo canonico (BASE@chain:pool)
+        # e' questo, a prescindere da cosa dice `exchange` (che qui non ha
+        # nemmeno senso — resta il default della richiesta).
+        return dexscreener_provider
     if asset_type != "crypto":
         if not settings.stocks_enabled:
             # Meglio dirlo qui, una volta, che lasciare che fallisca piu'
@@ -192,6 +200,10 @@ def canonical_symbol(symbol: str, asset_type: AssetType, exchange: CryptoExchang
     it, typing "BTC" versus clicking the "BTCUSDT" suggestion produced two
     different symbols for the same chart, and drawings saved under one
     never showed up under the other."""
+    if asset_type == "dex":
+        # Gia' canonico com'e' arrivato dalla ricerca (BASE@chain:pool) —
+        # non c'e' un formato "come lo scrive l'utente" da normalizzare.
+        return symbol.strip()
     if asset_type != "crypto":
         return symbol.strip().upper()
     if exchange == "binance":
@@ -344,8 +356,14 @@ async def _watchlist_alert_loop() -> None:
                     # exchange abilitato non basta piu' da solo a far partire
                     # ordini su OGNI strategia che ci gira sopra.
                     strategy_market = entry.market.get(strategy_name, "spot")
-                    cred = owner.trading_credentials.get(entry.exchange) if strategy_market == "spot" else None
-                    futures_cred = owner.futures_credentials.get(entry.exchange) if strategy_market == "futures" else None
+                    # Un pair on-chain non e' su nessun exchange configurabile:
+                    # entry.exchange resta il default CryptoExchange della
+                    # entry, e senza questo controllo un auto-trade acceso per
+                    # sbaglio su un ticker DEX manderebbe un simbolo inventato
+                    # (BASE@chain:pool) a un exchange vero.
+                    is_dex = entry.asset_type == "dex"
+                    cred = owner.trading_credentials.get(entry.exchange) if strategy_market == "spot" and not is_dex else None
+                    futures_cred = owner.futures_credentials.get(entry.exchange) if strategy_market == "futures" and not is_dex else None
                     if futures_cred and fresh and entry.auto_trade.get(strategy_name):
                         api_key, api_secret, passphrase = auth.get_decrypted_futures_credential(owner, entry.exchange)
                         skip = ""
@@ -1084,15 +1102,16 @@ async def search_symbols(query: str = Query(..., min_length=1, max_length=20)) -
     # Single unified search across stocks and both crypto exchanges — no
     # upfront "stock vs crypto" toggle. The user picks the asset from results
     # that already say which market/exchange it's on.
-    stock_res, mexc_res, kucoin_res, binance_res, kraken_res = await asyncio.gather(
+    stock_res, mexc_res, kucoin_res, binance_res, kraken_res, dex_res = await asyncio.gather(
         _safe_search(twelvedata_provider, query, "stock", "stock")
         if settings.stocks_enabled else _no_results(),
         _safe_search(mexc_provider, query, "crypto", "mexc"),
         _safe_search(kucoin_provider, query, "crypto", "kucoin"),
         _safe_search(binance_provider, query, "crypto", "binance"),
         _safe_search(kraken_provider, query, "crypto", "kraken"),
+        _safe_search(dexscreener_provider, query, "dex", "dexscreener"),
     )
-    merged = _interleave(stock_res, mexc_res, kucoin_res, binance_res, kraken_res)
+    merged = _interleave(stock_res, mexc_res, kucoin_res, binance_res, kraken_res, dex_res)
     return _rank_suggestions(merged, query)[:25]
 
 
