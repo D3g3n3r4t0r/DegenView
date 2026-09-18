@@ -1189,5 +1189,14 @@
       "frontend/index.html",
       "frontend/static/app.js"
     ]
+  },
+  "cb880f04": {
+    "status": "risolto",
+    "at": 1789722669,
+    "summary": "Il pulsante \"Riapri\" manuale su una voce chiusa non teneva davvero: al giro dopo la vecchia risoluzione (status \"risolto\") tornava a vincere sul merge in lettura, perche solo la risposta con la spunta \"Non risolto, riapri\" segnava reopened_at — il bottone manuale cambiava lo stato grezzo ma non quel campo.",
+    "detail": "backend/app/issues.py, update_issue(): quando lo status passato e \"aperto\" o \"riaperto\" (il caso del bottone manuale), ora scrive anche it[\"reopened_at\"] = now, lo stesso campo che add_reply() gia scriveva per la riapertura via risposta. list_issues() confronta reopened_at con resolution.at e fa vincere la riapertura solo se piu recente — prima il bottone manuale non toccava quel campo, quindi la risoluzione precedente vinceva sempre al refresh successivo.",
+    "files": [
+      "backend/app/issues.py"
+    ]
   }
 }
