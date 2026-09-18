@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0084", "Ticker DEX (on-chain) nel ticker del sito principale, non solo nello Sniper",
+     "Lorenzo: 'riusciamo ad ottenere anche i ticker di dex scanner?' — chiarito: non dentro lo Sniper (gia' collegato li'), ma nel campo ticker del grafico/backtest principale. Ricerca per nome/simbolo come i pair CEX, su tutte le chain gia' coperte dallo Sniper.",
+     "media"),
     ("seed-0083", "Voce sidebar \"Libreria\" tolta, ridondante col pulsante Indicatori in toolbar",
      "Lorenzo: 'elimina la tab libreria, tanto abbiamo già indicatori in alto'. Il modale della libreria aveva tre punti d'ingresso (voce sidebar, pulsante nella toolbar, pulsante dentro Livelli) — tolta la voce sidebar, che duplicava il pulsante toolbar senza motivo. Restano il pulsante in toolbar (l'ingresso principale) e quello dentro Livelli (contestuale, per chi ha gia' aperto quel pannello).",
      "bassa"),

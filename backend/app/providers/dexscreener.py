@@ -1,0 +1,171 @@
+"""Pair DEX (on-chain), come ticker del sito principale — non lo Sniper.
+
+Due API diverse per due bisogni diversi, entrambe pubbliche e gratuite:
+
+* DexScreener (`/latest/dex/search`) per la RICERCA per nome/simbolo — ha
+  metadati ricchi (nome, DEX, liquidita') ma la sua API pubblica non da'
+  candele storiche, solo prezzo/volume attuali.
+* GeckoTerminal (`/networks/{network}/pools/{pool}/ohlcv/{timeframe}`) per
+  le CANDELE — stesso servizio gia' usato dallo Sniper per i pool nuovi,
+  qui interrogato per un pool specifico invece che per una chain intera.
+
+Le chain sono quelle gia' validate per lo Sniper (app.sniper.scanner):
+stesso elenco, stessa mappa verso i network id di GeckoTerminal — un pool
+trovabile via ricerca DexScreener ma non elencato li' non e' una chain che
+abbiamo mai deciso di supportare altrove nel sito.
+
+Il "symbol" canonico che questo provider restituisce/accetta non e' un
+ticker leggibile come "BTCUSDT": e' `BASE@chain:pair_address`, l'unico modo
+di portare chain+indirizzo del pool (necessari per le candele) dentro la
+singola stringa che il resto del sito passa in giro. Non digitabile a
+mano in modo utile — si arriva qui scegliendo un risultato della ricerca,
+mai scrivendo il simbolo a memoria.
+"""
+import re
+
+import httpx
+import pandas as pd
+from cachetools import TTLCache
+
+from app.providers.base import DataProvider, ProviderError, ProviderUnreachable
+from app.resample import resample_by_count
+from app.sniper.scanner import GECKO_NETWORKS, SUPPORTED_CHAINS
+
+DEXSCREENER_SEARCH_URL = "https://api.dexscreener.com/latest/dex/search"
+GECKOTERMINAL_BASE = "https://api.geckoterminal.com/api/v2"
+_MAX_SUGGESTIONS = 25
+_SEARCH_CACHE_TTL_S = 30  # il prezzo cambia in continuazione, la lista dei pool no
+
+_search_cache: TTLCache = TTLCache(maxsize=200, ttl=_SEARCH_CACHE_TTL_S)
+
+_SYMBOL_RE = re.compile(r"^(?P<base>.+)@(?P<chain>[a-z]+):(?P<pool>0x[a-fA-F0-9]+|[1-9A-HJ-NP-Za-km-z]+)$")
+
+# GeckoTerminal accetta solo questi aggregati per timeframe; i nostri
+# intervalli senza corrispondenza diretta si ottengono prendendo l'aggregato
+# piu' fine disponibile e ripiegandolo con lo stesso resample_by_count usato
+# altrove per 2D/3D/5D — non e' un caso speciale nuovo, e' lo stesso schema.
+_INTERVAL_TO_GECKO = {
+    "1m": ("minute", 1, 1),
+    "5m": ("minute", 5, 1),
+    "15m": ("minute", 15, 1),
+    "30m": ("minute", 15, 2),
+    "1h": ("hour", 1, 1),
+    "4h": ("hour", 4, 1),
+    "1d": ("day", 1, 1),
+    "1w": ("day", 1, 7),
+    "1M": ("day", 1, 30),
+}
+
+
+def make_symbol(base_symbol: str, chain: str, pool_address: str) -> str:
+    return f"{base_symbol}@{chain}:{pool_address}"
+
+
+def _parse_symbol(symbol: str) -> tuple[str, str, str]:
+    m = _SYMBOL_RE.match(symbol.strip())
+    if not m:
+        raise ProviderError(
+            f"'{symbol}' non e' un pair DEX riconoscibile: va scelto da un risultato "
+            "della ricerca, non digitato a mano."
+        )
+    return m["base"], m["chain"], m["pool"]
+
+
+class DexScreenerProvider(DataProvider):
+    """Crypto on-chain — nessuna chiave richiesta, sola lettura.
+
+    Non e' un exchange con cui operare (niente ordini, niente credenziali):
+    solo prezzo e candele per un pool specifico, per guardarlo con gli
+    stessi strumenti di analisi del resto del sito.
+    """
+
+    def __init__(self, dexscreener_base: str | None = None, geckoterminal_base: str | None = None):
+        self._dexscreener_base = dexscreener_base or DEXSCREENER_SEARCH_URL
+        self._geckoterminal_base = geckoterminal_base or GECKOTERMINAL_BASE
+
+    async def fetch_ohlcv(self, symbol: str, interval: str, outputsize: int, since_ms: int | None = None) -> pd.DataFrame:
+        _base, chain, pool = _parse_symbol(symbol)
+        network = GECKO_NETWORKS.get(chain)
+        if network is None:
+            raise ProviderError(f"Chain '{chain}' non supportata")
+        timeframe, aggregate, fold = _INTERVAL_TO_GECKO.get(interval, ("day", 1, 1))
+
+        limit = min(max(outputsize * fold, fold), 1000) if since_ms is None else 1000
+        url = f"{self._geckoterminal_base}/networks/{network}/pools/{pool}/ohlcv/{timeframe}"
+        params = {"aggregate": aggregate, "limit": limit, "currency": "usd"}
+        try:
+            async with httpx.AsyncClient(timeout=20.0) as client:
+                resp = await client.get(url, params=params)
+        except httpx.HTTPError as exc:
+            raise ProviderUnreachable(f"GeckoTerminal non raggiungibile per {symbol}: {exc}") from exc
+
+        if resp.status_code == 404:
+            raise ProviderError(f"Pool non trovato su {chain}: {pool}")
+        try:
+            payload = resp.json()
+        except ValueError as exc:
+            raise ProviderError(f"Risposta non valida da GeckoTerminal per {symbol}") from exc
+
+        rows = (
+            payload.get("data", {}).get("attributes", {}).get("ohlcv_list", [])
+            if isinstance(payload, dict) else []
+        )
+        if not rows:
+            raise ProviderError(f"Nessun dato disponibile per {symbol} ({interval})")
+
+        # [timestamp_s, open, high, low, close, volume], piu' recenti prima.
+        df = pd.DataFrame(rows, columns=["open_time", "open", "high", "low", "close", "volume"])
+        df["datetime"] = pd.to_datetime(df["open_time"].astype("int64"), unit="s", utc=True)
+        for col in ("open", "high", "low", "close", "volume"):
+            df[col] = df[col].astype(float)
+        df = df.set_index("datetime").sort_index()
+        df = df[~df.index.duplicated(keep="first")]
+        df = df[["open", "high", "low", "close", "volume"]]
+
+        if fold > 1:
+            df = resample_by_count(df, fold)
+        if since_ms is not None:
+            return df[df.index >= pd.Timestamp(since_ms, unit="ms", tz="UTC")]
+        return df.tail(outputsize)
+
+    async def search_symbols(self, query: str) -> list[dict]:
+        query = query.strip()
+        if not query:
+            return []
+
+        pairs = _search_cache.get(query.lower())
+        if pairs is None:
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    resp = await client.get(self._dexscreener_base, params={"q": query})
+                payload = resp.json()
+            except (httpx.HTTPError, ValueError):
+                return []  # una ricerca DEX che non risponde non deve affondare la combinata
+            pairs = payload.get("pairs") or [] if isinstance(payload, dict) else []
+            _search_cache[query.lower()] = pairs
+
+        candidates = [p for p in pairs if p.get("chainId") in SUPPORTED_CHAINS and p.get("pairAddress")]
+        # Piu' liquidita' prima: la stessa coppia ha spesso pool doppioni su
+        # DEX diversi della stessa chain, e quello con piu' liquidita' e'
+        # quello che vale la pena guardare per primo.
+        candidates.sort(key=lambda p: float((p.get("liquidity") or {}).get("usd") or 0), reverse=True)
+
+        out = []
+        seen_pools = set()
+        for p in candidates:
+            pool = p["pairAddress"]
+            if pool in seen_pools:
+                continue
+            seen_pools.add(pool)
+            base = p.get("baseToken", {})
+            quote = p.get("quoteToken", {})
+            base_symbol = base.get("symbol") or "?"
+            symbol = make_symbol(base_symbol, p["chainId"], pool)
+            out.append({
+                "symbol": symbol,
+                "name": f"{base_symbol}/{quote.get('symbol', '?')} · {base.get('name', '')}".strip(" ·"),
+                "exchange": f"DexScreener ({p['chainId']} · {p.get('dexId', '?')})",
+            })
+            if len(out) >= _MAX_SUGGESTIONS:
+                break
+        return out
