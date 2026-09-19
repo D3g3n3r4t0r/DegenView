@@ -421,10 +421,14 @@
     const address = wallet?.address || cached?.address || "";
     const unit = state.chain === "solana" ? "SOL" : "ETH";
     const shownBalance = cached ? cached.native_balance : "—";
+    const usdValue = cached && cached.native_usd_value != null ? cached.native_usd_value : null;
+    const balanceHtml = usdValue != null
+      ? formatUsd(usdValue)
+      : `${shownBalance}<span class="hero-unit">${unit}</span>`;
     slot.innerHTML = `
       <p class="balance-label">Saldo</p>
       <div class="hero">
-        <div class="hero-balance" id="hero-balance-digits">${shownBalance}<span class="hero-unit">${unit}</span></div>
+        <div class="hero-balance" id="hero-balance-digits">${balanceHtml}</div>
         <div class="hero-addr">${address.slice(0, 12)}…${address.slice(-6)}
           <button type="button" id="copy-addr-btn" title="Copia">⧉</button>
         </div>
@@ -446,26 +450,36 @@
     fab.hidden = false;
     fab.onclick = startReveal;
 
-    renderHoldings(unit, shownBalance);
+    renderHoldings(unit, shownBalance, usdValue);
     fetchBalance();
     loadOnchainPositions();
+  }
+
+  // "$" + centesimi in due parti come nello screenshot di riferimento
+  // (dollaro piccolo davanti, centesimi leggermente piu' piccoli in coda) —
+  // solo quando prices.native_price_usd ha risposto: mai un cambio inventato.
+  function formatUsd(value) {
+    const dollars = Math.trunc(value);
+    const cents = Math.round((value - dollars) * 100).toString().padStart(2, "0");
+    return `<span class="dollar">$</span>${dollars}<span class="cents">.${cents}</span>`;
   }
 
   // --- Lista "asset", stile token-row: il saldo nativo (sempre) piu' le
   // posizioni reali del ledger on-chain (Fase 2/3/4) se ce ne sono — mai
   // un token inventato solo per riempire la lista.
-  function renderHoldings(unit, nativeBalance) {
+  function renderHoldings(unit, nativeBalance, usdValue) {
     const slot = el("holdings-slot");
     const initial = unit === "SOL" ? "S" : "E";
+    const value = usdValue != null ? `$${usdValue.toFixed(2)}` : `${nativeBalance} ${unit}`;
     slot.innerHTML = `
       <div class="holdings-list" id="holdings-list">
         <div class="holding-row">
           <div class="holding-icon">${initial}</div>
           <div class="holding-main">
             <div class="name">${unit === "SOL" ? "Solana" : "Robinhood Chain"}</div>
-            <div class="sub">${nativeBalance} · nativo</div>
+            <div class="sub">${nativeBalance} ${unit} · nativo</div>
           </div>
-          <div class="holding-value">${nativeBalance} ${unit}</div>
+          <div class="holding-value">${value}</div>
         </div>
       </div>`;
   }
@@ -531,11 +545,18 @@
       if (!resp.ok) throw new Error(body.detail || "errore");
       writeCache(state.chain, body);
       const digitsEl = el("hero-balance-digits");
+      const unit = state.chain === "solana" ? "SOL" : "ETH";
       if (digitsEl) {
-        const unitSpan = digitsEl.querySelector(".hero-unit");
-        renderDigits(digitsEl, String(body.native_balance));
-        digitsEl.appendChild(unitSpan || document.createTextNode(""));
+        if (body.native_usd_value != null) {
+          digitsEl.innerHTML = formatUsd(body.native_usd_value);
+        } else {
+          const unitSpan = digitsEl.querySelector(".hero-unit");
+          renderDigits(digitsEl, String(body.native_balance));
+          digitsEl.appendChild(unitSpan || document.createTextNode(""));
+        }
       }
+      renderHoldings(unit, body.native_balance, body.native_usd_value);
+      loadOnchainPositions();  // renderHoldings appena sopra ha svuotato le righe delle posizioni: le rimette
       appendHistory(state.chain, body.native_balance);
       if (dot) { dot.classList.add("live"); }
       const ft = el("fresh-text");

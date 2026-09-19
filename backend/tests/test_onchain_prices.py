@@ -1,0 +1,75 @@
+"""Prezzo USD del gas token, per la hero della UI. Verificato anche con
+una vera chiamata di rete (GeckoTerminal e' pubblico, nessuna chiave) —
+lo stesso spirito di test_jupiter_quote_real_network_call."""
+from __future__ import annotations
+
+import asyncio
+
+import httpx
+
+from app.trading.onchain import prices
+
+_RealAsyncClient = httpx.AsyncClient
+
+
+def _run(coro):
+    return asyncio.run(coro)
+
+
+def _client_factory(handler):
+    def factory(*args, **kwargs):
+        transport = httpx.MockTransport(handler)
+        kwargs.pop("proxies", None)
+        return _RealAsyncClient(*args, transport=transport, **kwargs)
+    return factory
+
+
+def test_native_price_usd_real_network_call_solana():
+    prices._cache.clear()
+    price = _run(prices.native_price_usd("solana"))
+    assert price is not None
+    assert price > 0
+
+
+def test_native_price_usd_real_network_call_robinhood():
+    prices._cache.clear()
+    price = _run(prices.native_price_usd("robinhood"))
+    assert price is not None
+    assert price > 0
+
+
+def test_native_price_usd_returns_none_on_http_error(monkeypatch):
+    prices._cache.clear()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500, text="boom")
+
+    monkeypatch.setattr(httpx, "AsyncClient", _client_factory(handler))
+    assert _run(prices.native_price_usd("solana")) is None
+
+
+def test_native_price_usd_returns_none_on_malformed_payload(monkeypatch):
+    prices._cache.clear()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"data": {"attributes": {}}})
+
+    monkeypatch.setattr(httpx, "AsyncClient", _client_factory(handler))
+    assert _run(prices.native_price_usd("solana")) is None
+
+
+def test_native_price_usd_is_cached_within_ttl(monkeypatch):
+    prices._cache.clear()
+    calls = {"count": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["count"] += 1
+        return httpx.Response(200, json={
+            "data": {"attributes": {"token_prices": {"So111...": "123.45"}}},
+        })
+
+    monkeypatch.setattr(httpx, "AsyncClient", _client_factory(handler))
+    first = _run(prices.native_price_usd("solana"))
+    second = _run(prices.native_price_usd("solana"))
+    assert first == second == 123.45
+    assert calls["count"] == 1

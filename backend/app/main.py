@@ -89,6 +89,7 @@ from app.trading.onchain import execute as onchain_execute
 from app.trading.onchain import keys as onchain_keys
 from app.trading.onchain import ledger as onchain_ledger
 from app.trading.onchain import passkey as onchain_passkey
+from app.trading.onchain import prices as onchain_prices
 from app.trading.onchain import quotes as onchain_quotes
 from app.trading.onchain import reveal_requests as onchain_reveal
 from app.trading.onchain import simulate as onchain_simulate
@@ -2078,7 +2079,14 @@ async def onchain_wallet_balance(chain: OnchainChain, user: User = Depends(auth.
     except Exception as exc:  # noqa: BLE001 — un RPC pubblico irraggiungibile non deve essere un 500 muto
         raise HTTPException(status_code=502, detail=f"RPC non raggiungibile: {exc}") from exc
     unit = "SOL" if chain == "solana" else "ETH"
-    return {"chain": chain, "address": wallet.address, "native_balance": native, "native_unit": unit}
+    # None se GeckoTerminal non risponde — mai un "$" calcolato su un
+    # prezzo inventato: la UI mostra solo le unita' native in quel caso.
+    price_usd = await onchain_prices.native_price_usd(chain)
+    return {
+        "chain": chain, "address": wallet.address, "native_balance": native, "native_unit": unit,
+        "native_price_usd": price_usd,
+        "native_usd_value": native * price_usd if price_usd is not None else None,
+    }
 
 
 @app.get("/api/onchain/wallets/{chain}/transactions")
