@@ -7,11 +7,11 @@
 <style>
   :root {
     color-scheme: dark;
-    --bg: #0e1410;
-    --panel: #161b15;
-    --ink: #eceae2;
-    --ink-dim: #8b9086;
-    --border: rgba(255,255,255,.08);
+    --bg: #000000;
+    --panel: #14161a;
+    --ink: #f5f5f2;
+    --ink-dim: #8b8e93;
+    --border: rgba(255,255,255,.09);
     --accent: #2fd696;
     --accent-soft: rgba(47,214,150,.12);
     --danger: #ff5a6e;
@@ -21,21 +21,72 @@
   * { box-sizing: border-box; }
   body {
     font-family: -apple-system, system-ui, sans-serif;
-    background:
-      radial-gradient(760px 420px at 50% -80px, rgba(47,214,150,.10), transparent 65%),
-      var(--bg);
+    background: var(--bg);
     color: var(--ink);
-    margin: 0; padding: 20px 16px 56px;
+    margin: 0; padding: 14px 16px 90px;
     -webkit-tap-highlight-color: transparent;
   }
   .wrap { max-width: 460px; margin: 0 auto; }
-  header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 4px; }
-  h1 { font-size: 15px; font-weight: 700; margin: 0; letter-spacing: -.01em; }
-  .alpha-tag {
-    font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--amber);
-    border: 1px solid rgba(224,171,61,.35); border-radius: 5px; padding: 2px 6px;
+  header {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 18px; min-height: 28px;
   }
-  p.sub { color: var(--ink-dim); font-size: 12.5px; margin: 2px 0 20px; }
+  .nav-back {
+    background: none; border: none; color: var(--ink); font-size: 20px; line-height: 1;
+    padding: 2px 4px 2px 0; cursor: pointer; opacity: .85;
+  }
+  h1 { font-size: 13px; font-weight: 600; margin: 0; letter-spacing: -.01em; text-transform: lowercase; color: var(--ink-dim); }
+  .alpha-tag {
+    font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--amber);
+    border: 1px solid rgba(224,171,61,.35); border-radius: 5px; padding: 1px 6px; margin-left: auto;
+  }
+  p.sub { color: var(--ink-dim); font-size: 12.5px; margin: -8px 0 20px; }
+
+  /* --- toast pillola (esito ultima azione) --- */
+  .toast-pill {
+    display: flex; align-items: center; gap: 10px; justify-content: center;
+    background: rgba(255,255,255,.06); border-radius: 999px; padding: 10px 18px;
+    margin: 0 0 22px; text-align: center; position: relative;
+  }
+  .toast-pill .ok-dot {
+    width: 18px; height: 18px; border-radius: 50%; background: rgba(47,214,150,.18);
+    color: var(--accent); display: flex; align-items: center; justify-content: center;
+    font-size: 11px; flex-shrink: 0;
+  }
+  .toast-pill .txt { font-size: 13px; }
+  .toast-pill .txt b { display: block; font-weight: 700; }
+  .toast-pill .txt small { color: var(--ink-dim); font-size: 11px; }
+  .toast-pill .close-x {
+    position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+    background: none; border: none; color: var(--ink-dim); font-size: 15px; cursor: pointer;
+  }
+
+  /* --- lista holding, stile "token row" --- */
+  .balance-label { font-size: 13px; color: var(--ink-dim); margin: 4px 0 2px; }
+  .holdings-list { margin-top: 26px; }
+  .holding-row {
+    display: flex; align-items: center; gap: 12px; padding: 13px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .holding-row:last-child { border-bottom: none; }
+  .holding-icon {
+    width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px; font-weight: 700; color: #06120c;
+    background: linear-gradient(135deg, #4beeb0, var(--accent));
+  }
+  .holding-icon.dim { background: var(--panel); color: var(--ink-dim); border: 1px solid var(--border); }
+  .holding-main { flex: 1; min-width: 0; }
+  .holding-main .name { font-size: 15px; font-weight: 600; }
+  .holding-main .sub { font-size: 12.5px; color: var(--ink-dim); margin-top: 1px; }
+  .holding-value { font-size: 15px; font-weight: 600; text-align: right; white-space: nowrap; }
+
+  /* --- FAB --- */
+  .fab {
+    position: fixed; right: 22px; bottom: 26px; width: 56px; height: 56px; border-radius: 50%;
+    background: #f2f2f0; color: #0a0a0a; border: none; font-size: 26px; font-weight: 400;
+    box-shadow: 0 6px 18px rgba(0,0,0,.5); cursor: pointer; z-index: 20;
+    display: flex; align-items: center; justify-content: center;
+  }
 
   /* --- stato aggregato, livello 0 --- */
   .status-row {
@@ -64,36 +115,48 @@
   }
 
   /* --- saldo hero --- */
-  .hero { text-align: center; padding: 18px 0 22px; position: relative; }
-  .hero::before {
-    content: ""; position: absolute; inset: -10px auto auto 50%; width: 260px; height: 140px;
-    transform: translateX(-50%); border-radius: 50%; pointer-events: none;
-    background: radial-gradient(closest-side, rgba(47,214,150,.16), transparent);
-  }
+  .hero { text-align: left; padding: 2px 0 0; position: relative; }
   .hero-balance {
-    font-family: "Instrument Serif", Georgia, serif; font-size: 44px; line-height: 1;
-    display: inline-flex; gap: 1px; position: relative;
+    font-family: -apple-system, system-ui, sans-serif; font-size: 46px; font-weight: 600; line-height: 1;
+    display: inline-flex; align-items: flex-start; gap: 1px; position: relative; letter-spacing: -.01em;
   }
+  .hero-balance .dollar { font-size: 22px; font-weight: 600; margin-right: 2px; margin-top: 4px; }
+  .hero-balance .cents { font-size: 26px; font-weight: 600; align-self: flex-end; margin-bottom: 2px; }
   .hero-balance .digit { display: inline-block; overflow: hidden; height: 1em; position: relative; }
   .hero-balance .digit span {
     display: block; transition: transform .2s cubic-bezier(.22,1,.36,1);
   }
-  .hero-unit { font-size: 15px; color: var(--ink-dim); margin-left: 6px; }
+  .hero-unit { font-size: 15px; color: var(--ink-dim); margin-left: 6px; align-self: center; }
   .hero-addr {
-    margin-top: 8px; font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--ink-dim);
-    display: flex; align-items: center; justify-content: center; gap: 6px;
+    margin-top: 10px; font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--ink-dim);
+    display: flex; align-items: center; gap: 6px;
   }
   .hero-addr button { background: none; border: none; color: var(--ink-dim); cursor: pointer; font-size: 11px; padding: 2px; }
-  .fresh-badge { font-size: 11px; color: var(--ink-dim); display: flex; align-items: center; justify-content: center; gap: 5px; margin-top: 6px; }
+  .fresh-badge { font-size: 11px; color: var(--ink-dim); display: flex; align-items: center; gap: 5px; margin-top: 6px; }
   .fresh-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--ink-dim); transition: background .3s; }
   .fresh-dot.live { background: var(--accent); }
-  .hero-spark { display: block; margin: 10px auto 0; }
+  .hero-spark { display: none; }
 
-  .empty-hero { text-align: center; padding: 30px 0; color: var(--ink-dim); font-size: 13px; }
+  .empty-hero { text-align: left; padding: 10px 0 20px; color: var(--ink-dim); font-size: 13px; }
   .empty-hero button {
     margin-top: 12px; padding: 10px 18px; border-radius: 8px; border: none;
     background: linear-gradient(135deg, #4beeb0, var(--accent)); color: #08150f; font-weight: 700; font-size: 13.5px; cursor: pointer;
   }
+
+  /* --- CTA pill sotto il saldo, stile "Start protecting your wealth" --- */
+  .cta-pill {
+    display: flex; align-items: center; gap: 12px; width: 100%; margin-top: 22px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 16px;
+    padding: 12px 14px; cursor: pointer; text-align: left; color: var(--ink); font-family: inherit;
+  }
+  .cta-pill .cta-icon {
+    width: 36px; height: 36px; border-radius: 50%; background: rgba(255,255,255,.06);
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 15px;
+  }
+  .cta-pill .cta-text { flex: 1; }
+  .cta-pill .cta-text .t1 { font-size: 14px; font-weight: 600; }
+  .cta-pill .cta-text .t2 { font-size: 12px; color: var(--ink-dim); margin-top: 1px; }
+  .cta-pill .chev { color: var(--ink-dim); font-size: 16px; }
 
   #login-screen { padding: 20px 0; }
   .field-label { display: block; font-size: 12px; color: var(--ink-dim); margin: 12px 0 5px; }
@@ -220,10 +283,11 @@
 <body>
   <div class="wrap">
     <header>
-      <h1>Wallet on-chain</h1>
+      <button type="button" class="nav-back" onclick="history.back()" aria-label="Indietro">‹</button>
+      <h1>wallet on-chain</h1>
       <span class="alpha-tag">alpha</span>
     </header>
-    <p class="sub">Fase 1: custodia, saldo, storico, rivelazione a due dispositivi. Il trading automatico (Fase 2-4) non è ancora attivo — richiede ancora i tetti di rischio da confermare.</p>
+    <div id="toast-slot"></div>
 
     <div id="login-screen" hidden>
       <form id="login-form">
@@ -237,17 +301,13 @@
     </div>
 
     <div id="app-shell" hidden>
-      <div id="status-row" class="status-row">
-        <span class="status-dot"></span>
-        <span id="status-text">Protezioni Fase 1 attive — nessuna firma possibile da qui</span>
-      </div>
-
       <div class="chain-chips">
         <button type="button" class="chain-chip active" data-chain="solana">Solana</button>
         <button type="button" class="chain-chip" data-chain="robinhood">Robinhood Chain</button>
       </div>
 
       <div id="hero-slot"></div>
+      <div id="holdings-slot"></div>
 
       <div id="sections" hidden>
         <details class="section" id="sec-history">
@@ -297,6 +357,8 @@
     </div>
   </div>
 
+  <button type="button" class="fab" id="fab-btn" aria-label="Azione rapida" hidden>+</button>
+
   <div class="overlay" id="overlay" hidden>
     <div class="overlay-card" id="overlay-card"></div>
   </div>
@@ -342,14 +404,17 @@
 
   async function renderHero() {
     const slot = el("hero-slot");
+    const fab = el("fab-btn");
     const cached = readCache(state.chain);
     const wallet = state.wallets[state.chain];
 
     if (!wallet && !cached) {
-      slot.innerHTML = `<div class="empty-hero">Nessun wallet ${state.chain} ancora.<br/>
-        <button type="button" id="create-btn">Crea wallet</button></div>`;
+      slot.innerHTML = `<p class="balance-label">Saldo</p>
+        <div class="empty-hero">Nessun wallet ${state.chain} ancora.</div>`;
       el("sections").hidden = true;
-      el("create-btn").addEventListener("click", createWallet);
+      el("holdings-slot").innerHTML = "";
+      fab.hidden = false;
+      fab.onclick = createWallet;
       return;
     }
 
@@ -357,20 +422,75 @@
     const unit = state.chain === "solana" ? "SOL" : "ETH";
     const shownBalance = cached ? cached.native_balance : "—";
     slot.innerHTML = `
+      <p class="balance-label">Saldo</p>
       <div class="hero">
         <div class="hero-balance" id="hero-balance-digits">${shownBalance}<span class="hero-unit">${unit}</span></div>
-        <canvas class="hero-spark" id="hero-spark" width="280" height="56"></canvas>
         <div class="hero-addr">${address.slice(0, 12)}…${address.slice(-6)}
           <button type="button" id="copy-addr-btn" title="Copia">⧉</button>
         </div>
         <div class="fresh-badge"><span class="fresh-dot" id="fresh-dot"></span>
           <span id="fresh-text">${cached ? freshBadgeText(cached.at) : "in attesa del primo saldo"}</span></div>
+        <button type="button" class="cta-pill" id="cta-reveal">
+          <span class="cta-icon">🛡</span>
+          <span class="cta-text">
+            <span class="t1">Rivela chiave privata</span>
+            <span class="t2">Richiede il tuo telefono, mai solo da qui</span>
+          </span>
+          <span class="chev">›</span>
+        </button>
       </div>`;
     el("sections").hidden = false;
     el("copy-addr-btn").addEventListener("click", () => navigator.clipboard?.writeText(address));
+    el("cta-reveal").addEventListener("click", startReveal);
 
-    drawSparkline(readHistory(state.chain));
+    fab.hidden = false;
+    fab.onclick = startReveal;
+
+    renderHoldings(unit, shownBalance);
     fetchBalance();
+    loadOnchainPositions();
+  }
+
+  // --- Lista "asset", stile token-row: il saldo nativo (sempre) piu' le
+  // posizioni reali del ledger on-chain (Fase 2/3/4) se ce ne sono — mai
+  // un token inventato solo per riempire la lista.
+  function renderHoldings(unit, nativeBalance) {
+    const slot = el("holdings-slot");
+    const initial = unit === "SOL" ? "S" : "E";
+    slot.innerHTML = `
+      <div class="holdings-list" id="holdings-list">
+        <div class="holding-row">
+          <div class="holding-icon">${initial}</div>
+          <div class="holding-main">
+            <div class="name">${unit === "SOL" ? "Solana" : "Robinhood Chain"}</div>
+            <div class="sub">${nativeBalance} · nativo</div>
+          </div>
+          <div class="holding-value">${nativeBalance} ${unit}</div>
+        </div>
+      </div>`;
+  }
+
+  async function loadOnchainPositions() {
+    try {
+      const resp = await fetch(`/api/onchain/positions/${state.chain}`);
+      if (!resp.ok) return;
+      const positions = await resp.json();
+      if (!positions.length) return;
+      const list = el("holdings-list");
+      if (!list) return;
+      positions.forEach((p) => {
+        const row = document.createElement("div");
+        row.className = "holding-row";
+        row.innerHTML = `
+          <div class="holding-icon dim">${p.token.slice(0, 1).toUpperCase()}</div>
+          <div class="holding-main">
+            <div class="name">${p.token}</div>
+            <div class="sub">${p.quantity.toFixed(4)} · on-chain</div>
+          </div>
+          <div class="holding-value">$${p.cost_usd.toFixed(2)}</div>`;
+        list.appendChild(row);
+      });
+    } catch { /* lista posizioni: un fallimento qui non deve rompere la hero */ }
   }
 
   // --- Storico saldo: solo punti letti per davvero, mai inventati — la
@@ -387,41 +507,17 @@
     return hist;
   }
 
-  function drawSparkline(hist) {
-    const canvas = el("hero-spark");
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    const w = canvas.width, h = canvas.height;
-    ctx.clearRect(0, 0, w, h);
-    if (hist.length < 2) return; // niente da disegnare onestamente
-
-    const values = hist.map((p) => p.v);
-    const min = Math.min(...values), max = Math.max(...values);
-    const range = max - min || 1;
-    const pad = 4;
-    const toX = (i) => pad + (i / (values.length - 1)) * (w - pad * 2);
-    const toY = (v) => h - pad - ((v - min) / range) * (h - pad * 2);
-    const points = values.map((v, i) => [toX(i), toY(v)]);
-    const rising = values[values.length - 1] >= values[0];
-    const color = rising ? "47,214,150" : "255,90,110"; // accent / danger, stesse tinte del design system
-
-    // Area sfumata sotto la linea, come l'equity curve del sito principale.
-    const grad = ctx.createLinearGradient(0, 0, 0, h);
-    grad.addColorStop(0, `rgba(${color},0.28)`);
-    grad.addColorStop(1, `rgba(${color},0)`);
-    ctx.beginPath();
-    ctx.moveTo(points[0][0], h);
-    points.forEach(([x, y]) => ctx.lineTo(x, y));
-    ctx.lineTo(points[points.length - 1][0], h);
-    ctx.closePath();
-    ctx.fillStyle = grad;
-    ctx.fill();
-
-    ctx.beginPath();
-    points.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
-    ctx.strokeStyle = `rgb(${color})`;
-    ctx.lineWidth = 1.6;
-    ctx.stroke();
+  // --- Toast pillola, stile "10 USDC shielded — Confirmed": una conferma
+  // visibile dopo un'azione, non solo un cambio silenzioso di stato.
+  function showToast(title, subtitle) {
+    const slot = el("toast-slot");
+    slot.innerHTML = `
+      <div class="toast-pill">
+        <span class="ok-dot">✓</span>
+        <span class="txt"><b>${title}</b><small>${subtitle}</small></span>
+        <button type="button" class="close-x" aria-label="Chiudi">✕</button>
+      </div>`;
+    slot.querySelector(".close-x").addEventListener("click", () => { slot.innerHTML = ""; });
   }
 
   async function fetchBalance() {
@@ -440,7 +536,7 @@
         renderDigits(digitsEl, String(body.native_balance));
         digitsEl.appendChild(unitSpan || document.createTextNode(""));
       }
-      drawSparkline(appendHistory(state.chain, body.native_balance));
+      appendHistory(state.chain, body.native_balance);
       if (dot) { dot.classList.add("live"); }
       const ft = el("fresh-text");
       if (ft) ft.textContent = "aggiornato ora";
@@ -461,6 +557,7 @@
       if (!resp.ok) throw new Error(body.detail || "errore");
       state.wallets[state.chain] = body;
       renderHero();
+      showToast("Wallet creato", `${body.address.slice(0, 10)}… su ${state.chain}`);
     } catch (err) {
       alert(err.message || "Errore di rete.");
     }
@@ -580,7 +677,10 @@
       if (!resp.ok) throw new Error(data.detail || "errore");
       out.innerHTML = `<div class="sim-outcome ${data.accepted ? "accepted" : "rejected"}">
         ${data.accepted ? "Ordine accettato dai guardrail." : data.reason}</div>`;
-      if (data.accepted) { riskLoadedFor = null; }
+      if (data.accepted) {
+        riskLoadedFor = null;
+        showToast("Simulazione confermata", `${el("sim-token").value.trim()} · ${el("sim-side").value === "buy" ? "acquisto" : "vendita"}`);
+      }
     } catch (err) {
       out.innerHTML = `<div class="sim-outcome rejected">${err.message}</div>`;
     } finally {
