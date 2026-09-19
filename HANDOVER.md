@@ -12,6 +12,29 @@ lavori pluri-sessione, decisioni prese, stato di piani approvati.
 
 ---
 
+## Proposta grafica wallet on-chain (set 2026)
+
+Lorenzo: "rendi questa UI moderna, rapida, ottimizzata, al passo coi tempi,
+questa in screenshot sembra un excel, preparami una proposta grafica".
+
+Prototipo navigabile in `frontend/onchain-app-proposal.html` (file a se',
+non sostituisce ancora `onchain-app.html`). Idee portanti:
+
+- le 4 fisarmoniche (`Saldo & storico`, `Limiti & sicurezza`, `Simulazione`,
+  `Auto-trade`) diventano una riga di 4 azioni sotto il saldo + fogli dal basso;
+- stato pericoloso sempre visibile in due chip (sola lettura / auto-trade off),
+  colore semantico separato dall'accento menta;
+- `Rivela chiave privata` fuori dalla lista, riga propria bordata di rosso;
+- sparkline 24h e badge di freschezza per rendere visibile la resa da cache;
+- token identici a `style.css` (chiaro + scuro), mentre la pagina attuale e'
+  bloccata su `color-scheme: dark`;
+- tab bar Wallet/Strategie/Attivita'/Impostazioni per le fasi 3-4.
+
+Da decidere con Lorenzo: se portare il redesign dentro `onchain-app.html`
+o tenerlo come pagina nuova.
+
+---
+
 ## Stato del repo
 
 - **Repo**: `lorenzocorazzi-wq/liquidity-analysis-engine`
