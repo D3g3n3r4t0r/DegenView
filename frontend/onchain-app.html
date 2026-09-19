@@ -4,279 +4,232 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Wallet on-chain (alpha) — Liquidity Engine</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>
+  /* Stessi token del sito principale (frontend/static/style.css) — non una
+     tavolozza a parte per questa pagina. */
   :root {
-    color-scheme: dark;
-    --bg: #000000;
-    --panel: #14161a;
-    --ink: #f5f5f2;
-    --ink-dim: #8b8e93;
-    --border: rgba(255,255,255,.09);
-    --accent: #2fd696;
-    --accent-soft: rgba(47,214,150,.12);
-    --danger: #ff5a6e;
-    --danger-soft: rgba(255,90,110,.12);
-    --amber: #e0ab3d;
+    --bg: #f4f6f5;
+    --panel: #ffffff;
+    --raised: #eef1ef;
+    --border: #dfe4e1;
+    --ink: #0e1513;
+    --ink-dim: #54615c;
+    --ink-faint: #84918c;
+    --accent: #0b8f68;
+    --accent-soft: rgba(11, 143, 104, 0.10);
+    --accent-ink: #ffffff;
+    --danger: #c02616;
+    --danger-soft: rgba(192, 38, 22, 0.12);
+    --amber: #a86a06;
+    --amber-soft: rgba(168, 106, 6, 0.13);
+    --shadow: 0 1px 2px rgba(16, 32, 28, 0.06), 0 8px 24px -16px rgba(16, 32, 28, 0.28);
+    --sans: "Instrument Sans", -apple-system, system-ui, "Segoe UI", sans-serif;
+    --serif: "Instrument Serif", Georgia, "Times New Roman", serif;
+    --mono: "JetBrains Mono", ui-monospace, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #080b0c; --panel: #0f1416; --raised: #141b1e; --border: #1e282c;
+      --ink: #e6eeec; --ink-dim: #93a49f; --ink-faint: #788781;
+      --accent: #4fd8a8; --accent-soft: rgba(79, 216, 168, 0.12); --accent-ink: #05130e;
+      --danger: #ff4d3d; --danger-soft: rgba(255, 77, 61, 0.14);
+      --amber: #f2a93b; --amber-soft: rgba(242, 169, 59, 0.14);
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 32px -20px rgba(0,0,0,.9);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #080b0c; --panel: #0f1416; --raised: #141b1e; --border: #1e282c;
+    --ink: #e6eeec; --ink-dim: #93a49f; --ink-faint: #788781;
+    --accent: #4fd8a8; --accent-soft: rgba(79, 216, 168, 0.12); --accent-ink: #05130e;
+    --danger: #ff4d3d; --danger-soft: rgba(255, 77, 61, 0.14);
+    --amber: #f2a93b; --amber-soft: rgba(242, 169, 59, 0.14);
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 32px -20px rgba(0,0,0,.9);
   }
   * { box-sizing: border-box; }
   body {
-    font-family: -apple-system, system-ui, sans-serif;
-    background: var(--bg);
-    color: var(--ink);
-    margin: 0; padding: 14px 16px 90px;
+    font-family: var(--sans);
+    background: var(--bg); color: var(--ink);
+    margin: 0; padding: 14px 16px calc(84px + env(safe-area-inset-bottom, 0px));
     -webkit-tap-highlight-color: transparent;
   }
   .wrap { max-width: 460px; margin: 0 auto; }
-  header {
-    display: flex; align-items: center; gap: 10px; margin-bottom: 18px; min-height: 28px;
-  }
-  .nav-back {
-    background: none; border: none; color: var(--ink); font-size: 20px; line-height: 1;
-    padding: 2px 4px 2px 0; cursor: pointer; opacity: .85;
-  }
+
+  header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; min-height: 28px; }
+  .nav-back { background: none; border: none; color: var(--ink); font-size: 20px; line-height: 1; padding: 2px 4px 2px 0; cursor: pointer; opacity: .85; }
   h1 { font-size: 13px; font-weight: 600; margin: 0; letter-spacing: -.01em; text-transform: lowercase; color: var(--ink-dim); }
-  .alpha-tag {
-    font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--amber);
-    border: 1px solid rgba(224,171,61,.35); border-radius: 5px; padding: 1px 6px; margin-left: auto;
-  }
-  p.sub { color: var(--ink-dim); font-size: 12.5px; margin: -8px 0 20px; }
+  .alpha-tag { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--amber); background: var(--amber-soft); border-radius: 999px; padding: 2px 8px; margin-left: auto; }
 
   /* --- toast pillola (esito ultima azione) --- */
-  .toast-pill {
-    display: flex; align-items: center; gap: 10px; justify-content: center;
-    background: rgba(255,255,255,.06); border-radius: 999px; padding: 10px 18px;
-    margin: 0 0 22px; text-align: center; position: relative;
-  }
-  .toast-pill .ok-dot {
-    width: 18px; height: 18px; border-radius: 50%; background: rgba(47,214,150,.18);
-    color: var(--accent); display: flex; align-items: center; justify-content: center;
-    font-size: 11px; flex-shrink: 0;
-  }
+  .toast-pill { display: flex; align-items: center; gap: 10px; background: var(--panel); border: 1px solid var(--border); border-radius: 999px; padding: 10px 16px; margin: 0 0 16px; position: relative; box-shadow: var(--shadow); }
+  .toast-pill .ok-dot { width: 18px; height: 18px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 11px; flex-shrink: 0; }
   .toast-pill .txt { font-size: 13px; }
   .toast-pill .txt b { display: block; font-weight: 700; }
   .toast-pill .txt small { color: var(--ink-dim); font-size: 11px; }
-  .toast-pill .close-x {
-    position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
-    background: none; border: none; color: var(--ink-dim); font-size: 15px; cursor: pointer;
-  }
-
-  /* --- lista holding, stile "token row" --- */
-  .balance-label { font-size: 13px; color: var(--ink-dim); margin: 4px 0 2px; }
-  .holdings-list { margin-top: 26px; }
-  .holding-row {
-    display: flex; align-items: center; gap: 12px; padding: 13px 0;
-    border-bottom: 1px solid var(--border);
-  }
-  .holding-row:last-child { border-bottom: none; }
-  .holding-icon {
-    width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 15px; font-weight: 700; color: #06120c;
-    background: linear-gradient(135deg, #4beeb0, var(--accent));
-  }
-  .holding-icon.dim { background: var(--panel); color: var(--ink-dim); border: 1px solid var(--border); }
-  .holding-main { flex: 1; min-width: 0; }
-  .holding-main .name { font-size: 15px; font-weight: 600; }
-  .holding-main .sub { font-size: 12.5px; color: var(--ink-dim); margin-top: 1px; }
-  .holding-value { font-size: 15px; font-weight: 600; text-align: right; white-space: nowrap; }
-
-  /* --- FAB --- */
-  .fab {
-    position: fixed; right: 22px; bottom: 26px; width: 56px; height: 56px; border-radius: 50%;
-    background: #f2f2f0; color: #0a0a0a; border: none; font-size: 26px; font-weight: 400;
-    box-shadow: 0 6px 18px rgba(0,0,0,.5); cursor: pointer; z-index: 20;
-    display: flex; align-items: center; justify-content: center;
-  }
-
-  /* --- stato aggregato, livello 0 --- */
-  .status-row {
-    display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 10px;
-    background: linear-gradient(135deg, rgba(47,214,150,.16), rgba(47,214,150,.05));
-    border: 1px solid rgba(47,214,150,.18);
-    font-size: 13px; font-weight: 600; margin-bottom: 16px;
-    transition: background .15s ease, border-color .15s ease;
-  }
-  .status-row.warn {
-    background: linear-gradient(135deg, rgba(255,90,110,.18), rgba(255,90,110,.05));
-    border-color: rgba(255,90,110,.22); color: var(--danger);
-  }
-  .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
-  .status-row.warn .status-dot { background: var(--danger); }
-
-  /* --- chain chips --- */
-  .chain-chips { display: flex; gap: 8px; margin-bottom: 18px; }
-  .chain-chip {
-    flex: 1; padding: 9px; border-radius: 9px; border: 1.5px solid var(--border);
-    background: transparent; color: var(--ink-dim); font-size: 13px; font-weight: 600; cursor: pointer;
-  }
-  .chain-chip.active {
-    border-color: transparent; color: #08150f;
-    background: linear-gradient(135deg, #4beeb0, var(--accent));
-  }
-
-  /* --- saldo hero --- */
-  .hero { text-align: left; padding: 2px 0 0; position: relative; }
-  .hero-balance {
-    font-family: -apple-system, system-ui, sans-serif; font-size: 46px; font-weight: 600; line-height: 1;
-    display: inline-flex; align-items: flex-start; gap: 1px; position: relative; letter-spacing: -.01em;
-  }
-  .hero-balance .dollar { font-size: 22px; font-weight: 600; margin-right: 2px; margin-top: 4px; }
-  .hero-balance .cents { font-size: 26px; font-weight: 600; align-self: flex-end; margin-bottom: 2px; }
-  .hero-balance .digit { display: inline-block; overflow: hidden; height: 1em; position: relative; }
-  .hero-balance .digit span {
-    display: block; transition: transform .2s cubic-bezier(.22,1,.36,1);
-  }
-  .hero-unit { font-size: 15px; color: var(--ink-dim); margin-left: 6px; align-self: center; }
-  .hero-addr {
-    margin-top: 10px; font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--ink-dim);
-    display: flex; align-items: center; gap: 6px;
-  }
-  .hero-addr button { background: none; border: none; color: var(--ink-dim); cursor: pointer; font-size: 11px; padding: 2px; }
-  .fresh-badge { font-size: 11px; color: var(--ink-dim); display: flex; align-items: center; gap: 5px; margin-top: 6px; }
-  .fresh-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--ink-dim); transition: background .3s; }
-  .fresh-dot.live { background: var(--accent); }
-  .hero-spark { display: none; }
-
-  .empty-hero { text-align: left; padding: 10px 0 20px; color: var(--ink-dim); font-size: 13px; }
-  .empty-hero button {
-    margin-top: 12px; padding: 10px 18px; border-radius: 8px; border: none;
-    background: linear-gradient(135deg, #4beeb0, var(--accent)); color: #08150f; font-weight: 700; font-size: 13.5px; cursor: pointer;
-  }
-
-  /* --- CTA pill sotto il saldo, stile "Start protecting your wealth" --- */
-  .cta-pill {
-    display: flex; align-items: center; gap: 12px; width: 100%; margin-top: 22px;
-    background: var(--panel); border: 1px solid var(--border); border-radius: 16px;
-    padding: 12px 14px; cursor: pointer; text-align: left; color: var(--ink); font-family: inherit;
-  }
-  .cta-pill .cta-icon {
-    width: 36px; height: 36px; border-radius: 50%; background: rgba(255,255,255,.06);
-    display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 15px;
-  }
-  .cta-pill .cta-text { flex: 1; }
-  .cta-pill .cta-text .t1 { font-size: 14px; font-weight: 600; }
-  .cta-pill .cta-text .t2 { font-size: 12px; color: var(--ink-dim); margin-top: 1px; }
-  .cta-pill .chev { color: var(--ink-dim); font-size: 16px; }
+  .toast-pill .close-x { margin-left: auto; background: none; border: none; color: var(--ink-faint); font-size: 15px; cursor: pointer; }
 
   #login-screen { padding: 20px 0; }
   .field-label { display: block; font-size: 12px; color: var(--ink-dim); margin: 12px 0 5px; }
-  #login-form input {
+  #login-form input, #simulate-form input, #simulate-form select {
     width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 8px;
-    border: 1.5px solid var(--border); background: var(--panel); color: var(--ink); font-size: 15px;
+    border: 1.5px solid var(--border); background: var(--raised); color: var(--ink); font-size: 15px; font-family: inherit;
   }
-  #login-form button {
-    width: 100%; margin-top: 16px; padding: 11px; border-radius: 8px; border: none;
-    background: linear-gradient(135deg, #4beeb0, var(--accent)); color: #08150f; font-weight: 700; font-size: 14px; cursor: pointer;
+  #login-form button, .primary-btn {
+    width: 100%; margin-top: 16px; padding: 11px; border-radius: 10px; border: none;
+    background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 14px; cursor: pointer; font-family: inherit;
   }
-  #login-form button:disabled { opacity: .5; }
+  #login-form button:disabled, .primary-btn:disabled { opacity: .5; }
+  .msg { font-size: 12.5px; margin-top: 8px; }
+  .msg.err { color: var(--danger); }
+  .msg.ok { color: var(--accent); }
 
-  /* --- accordion --- */
-  details.section {
-    border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px; overflow: hidden;
-    background: var(--panel);
+  /* --- segmented control (chain) --- */
+  .seg { position: relative; display: grid; grid-template-columns: 1fr 1fr; background: var(--raised); border-radius: 11px; padding: 3px; margin-bottom: 18px; }
+  .seg .thumb { position: absolute; inset: 3px 50% 3px 3px; background: var(--panel); border-radius: 9px; box-shadow: var(--shadow); transition: transform .26s cubic-bezier(.32,.72,0,1); }
+  .seg[data-i="1"] .thumb { transform: translateX(100%); }
+  .seg button { position: relative; z-index: 1; background: none; border: none; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--ink-dim); padding: 8px 4px; cursor: pointer; border-radius: 9px; }
+  .seg button[aria-selected="true"] { color: var(--ink); }
+
+  /* --- saldo hero --- */
+  .balance-label { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); margin: 4px 0 4px; }
+  .hero-balance { font-family: var(--serif); font-size: 48px; line-height: .95; letter-spacing: -.01em; display: flex; align-items: flex-start; gap: 1px; font-variant-numeric: tabular-nums; }
+  .hero-balance .dollar { font-size: 22px; margin-top: 8px; color: var(--ink-dim); }
+  .hero-balance .cents { font-size: 26px; margin-top: 16px; color: var(--ink-dim); }
+  .hero-balance .digit { display: inline-block; overflow: hidden; height: 1em; position: relative; }
+  .hero-balance .digit span { display: block; transition: transform .2s cubic-bezier(.22,1,.36,1); }
+  .hero-unit { font-size: 15px; color: var(--ink-dim); margin-left: 6px; align-self: center; }
+  .hero-meta { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  .addr-btn { font-family: var(--mono); font-size: 11.5px; color: var(--ink-faint); background: var(--raised); border: none; border-radius: 7px; padding: 4px 8px; cursor: pointer; }
+  .live-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--ink-dim); }
+  .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-faint); transition: background .3s; }
+  .live-dot.live { background: var(--accent); }
+  @media (prefers-reduced-motion: no-preference) { .live-dot.live { animation: pulse 2.4s ease-in-out infinite; } }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+
+  .hero-spark { width: 100%; height: 48px; display: block; margin-top: 10px; }
+
+  .empty-hero { padding: 10px 0 20px; color: var(--ink-dim); font-size: 13px; }
+  .empty-hero button { margin-top: 12px; padding: 10px 18px; border-radius: 10px; border: none; background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 13.5px; cursor: pointer; font-family: inherit; }
+
+  /* --- azioni rapide --- */
+  .actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 18px; }
+  .act { background: var(--raised); border: none; border-radius: 12px; padding: 11px 4px 9px; color: var(--ink); font: inherit; font-size: 10.5px; font-weight: 600; display: flex; flex-direction: column; align-items: center; gap: 5px; cursor: pointer; transition: transform .12s ease; }
+  .act:active { transform: scale(.96); }
+  .act.primary { background: var(--accent); color: var(--accent-ink); }
+  .act svg { width: 17px; height: 17px; }
+
+  /* --- stato in due chip --- */
+  .state-row { display: flex; gap: 8px; margin-top: 14px; }
+  .chip { flex: 1; display: flex; flex-direction: column; gap: 2px; padding: 9px 10px; border-radius: 11px; background: var(--panel); border: 1px solid var(--border); }
+  .chip b { font-size: 12.5px; font-weight: 600; display: flex; align-items: center; gap: 5px; }
+  .chip small { font-size: 10.5px; color: var(--ink-faint); }
+  .chip.ok b { color: var(--accent); }
+  .chip.stop b { color: var(--danger); }
+
+  /* --- lista asset, stile token-row --- */
+  .sect-h { display: flex; align-items: baseline; justify-content: space-between; margin: 22px 0 -6px; }
+  .sect-h span { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); }
+  .sect-h button { background: none; border: none; font-size: 11.5px; color: var(--accent); cursor: pointer; font-family: inherit; }
+  .holdings-list { display: flex; flex-direction: column; margin-top: 8px; }
+  .holding-row { display: flex; align-items: center; gap: 11px; padding: 11px 0; border-bottom: 1px solid var(--border); }
+  .holding-row:last-child { border-bottom: none; }
+  .holding-icon { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 700; color: var(--accent-ink); background: var(--accent); flex-shrink: 0; }
+  .holding-icon.dim { background: var(--raised); color: var(--ink-dim); border: 1px solid var(--border); }
+  .holding-main { flex: 1; min-width: 0; }
+  .holding-main .name { font-size: 14px; font-weight: 600; }
+  .holding-main .sub { font-size: 11.5px; color: var(--ink-faint); margin-top: 1px; }
+  .holding-value { text-align: right; font-variant-numeric: tabular-nums; }
+  .holding-value b { display: block; font-size: 14px; font-weight: 600; }
+  .holding-value small { font-size: 11.5px; color: var(--ink-faint); }
+
+  /* --- riga pericolosa, fuori dalla lista --- */
+  .danger-row { display: flex; align-items: center; gap: 10px; width: 100%; margin-top: 18px; padding: 11px 12px; border-radius: 12px; border: 1px solid var(--danger-soft); background: var(--danger-soft); cursor: pointer; font-family: inherit; text-align: left; }
+  .danger-row .t { flex: 1; }
+  .danger-row b { display: block; font-size: 12.5px; color: var(--danger); }
+  .danger-row small { font-size: 10.5px; color: var(--ink-dim); }
+  .danger-row .chev { color: var(--ink-faint); }
+
+  /* --- tabbar --- */
+  .tabbar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 15;
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    border-top: 1px solid var(--border); background: var(--panel);
+    padding: 7px 6px calc(9px + env(safe-area-inset-bottom, 0px));
+    max-width: 460px; margin: 0 auto;
   }
-  details.section summary {
-    padding: 12px 14px; font-size: 13.5px; font-weight: 600; cursor: pointer; list-style: none;
-    display: flex; justify-content: space-between; align-items: center;
+  .tab { background: none; border: none; font: inherit; font-size: 9.5px; font-weight: 600; color: var(--ink-faint); display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; padding: 3px 0; }
+  .tab[aria-current="page"] { color: var(--ink); }
+  .tab svg { width: 18px; height: 18px; }
+
+  /* --- sheet dal basso --- */
+  .sheet-bg { position: fixed; inset: 0; background: rgba(6,9,7,.5); opacity: 0; pointer-events: none; transition: opacity .22s ease; z-index: 40; }
+  .sheet-bg.open { opacity: 1; pointer-events: auto; }
+  .sheet {
+    position: fixed; left: 0; right: 0; bottom: 0; max-width: 460px; margin: 0 auto;
+    background: var(--panel); border-radius: 20px 20px 0 0; border-top: 1px solid var(--border);
+    padding: 10px 18px calc(20px + env(safe-area-inset-bottom, 0px));
+    transform: translateY(101%); transition: transform .3s cubic-bezier(.32,.72,0,1);
+    max-height: 82vh; overflow-y: auto; z-index: 41;
   }
-  details.section summary::-webkit-details-marker { display: none; }
-  details.section summary::after { content: "›"; transform: rotate(90deg); color: var(--ink-dim); transition: transform .15s; }
-  details.section[open] summary::after { transform: rotate(270deg); }
-  details.section .body { padding: 0 14px 14px; font-size: 12.5px; color: var(--ink-dim); }
-  .placeholder-note {
-    font-size: 11.5px; color: var(--amber); background: rgba(224,171,61,.08);
-    border: 1px solid rgba(224,171,61,.25); border-radius: 7px; padding: 8px 10px; margin-top: 4px;
-  }
-  .dim-note { font-size: 11.5px; color: var(--ink-dim); margin: 4px 0 10px; }
+  .sheet.open { transform: translateY(0); }
+  .grab { width: 36px; height: 4px; border-radius: 2px; background: var(--border); margin: 0 auto 12px; }
+  .sheet h3 { font-size: 15px; margin: 0 0 4px; }
+  .sheet p.desc { font-size: 12.5px; color: var(--ink-dim); line-height: 1.5; margin: 0 0 12px; }
+  .sheet .close { width: 100%; margin-top: 14px; background: var(--raised); color: var(--ink); border: none; border-radius: 11px; padding: 11px; font: inherit; font-weight: 600; font-size: 13px; cursor: pointer; }
 
   .risk-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; }
-  .risk-cell {
-    background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
-  }
-  .risk-cell .k { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-dim); }
+  .risk-cell { background: var(--raised); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+  .risk-cell .k { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-faint); }
   .risk-cell .v { font-size: 15px; font-weight: 700; color: var(--ink); margin-top: 2px; }
-  .breaker-pill {
-    display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 8px 10px;
-    border-radius: 8px; font-size: 12.5px; font-weight: 600;
-    background: linear-gradient(135deg, rgba(47,214,150,.16), rgba(47,214,150,.05));
-    border: 1px solid rgba(47,214,150,.18);
-  }
-  .breaker-pill.tripped {
-    background: linear-gradient(135deg, rgba(255,90,110,.18), rgba(255,90,110,.05));
-    border-color: rgba(255,90,110,.22); color: var(--danger);
-  }
+  .breaker-pill { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 8px 10px; border-radius: 8px; font-size: 12.5px; font-weight: 600; background: var(--accent-soft); border: 1px solid var(--border); color: var(--accent); }
+  .breaker-pill.tripped { background: var(--danger-soft); color: var(--danger); }
   .breaker-pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
   .breaker-pill.tripped .dot { background: var(--danger); }
+  .btn-sm { padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--raised); color: var(--ink); font-size: 12px; cursor: pointer; margin-top: 8px; width: 100%; font-family: inherit; }
 
   #simulate-form label:first-of-type { margin-top: 0; }
-  #simulate-form input, #simulate-form select {
-    width: 100%; box-sizing: border-box; padding: 8px 10px; border-radius: 7px;
-    border: 1.5px solid var(--border); background: var(--bg); color: var(--ink); font-size: 13.5px;
-  }
-  #simulate-form button {
-    width: 100%; margin-top: 12px; padding: 9px; border-radius: 7px; border: none;
-    background: linear-gradient(135deg, #4beeb0, var(--accent)); color: #08150f;
-    font-weight: 700; font-size: 13px; cursor: pointer;
-  }
+  #simulate-form button { width: 100%; margin-top: 12px; padding: 10px; border-radius: 8px; border: none; background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 13px; cursor: pointer; font-family: inherit; }
   #simulate-form button:disabled { opacity: .5; }
-  .sim-outcome {
-    margin-top: 10px; padding: 9px 11px; border-radius: 8px; font-size: 12.5px;
-  }
-  .sim-outcome.accepted { background: rgba(47,214,150,.1); border: 1px solid rgba(47,214,150,.28); color: var(--accent); }
-  .sim-outcome.rejected { background: rgba(255,90,110,.1); border: 1px solid rgba(255,90,110,.28); color: var(--danger); }
+  .sim-outcome { margin-top: 10px; padding: 9px 11px; border-radius: 8px; font-size: 12.5px; }
+  .sim-outcome.accepted { background: var(--accent-soft); border: 1px solid var(--border); color: var(--accent); }
+  .sim-outcome.rejected { background: var(--danger-soft); border: 1px solid var(--border); color: var(--danger); }
 
   .tx-list { list-style: none; margin: 8px 0 0; padding: 0; }
-  .tx-list li { display: flex; justify-content: space-between; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
-  .tx-list a { color: var(--accent); font-family: ui-monospace, monospace; text-decoration: none; }
-  .btn-sm {
-    padding: 7px 10px; border-radius: 7px; border: 1px solid var(--border); background: transparent;
-    color: var(--ink); font-size: 12px; cursor: pointer; margin-top: 6px;
-  }
-  .reveal-btn { border-color: var(--danger); color: var(--danger); }
+  .tx-list li { display: flex; justify-content: space-between; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+  .tx-list a { color: var(--accent); font-family: var(--mono); text-decoration: none; }
 
-  /* --- overlay rivelazione --- */
-  .overlay {
-    position: fixed; inset: 0; background: rgba(6,9,7,.88); backdrop-filter: blur(4px);
-    display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 50;
-  }
+  .kv-row { display: flex; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 12.5px; }
+  .kv-row:last-of-type { border-bottom: none; }
+  .kv-row span { color: var(--ink-faint); }
+  .kv-row b { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; }
+  .toggle-row .t b { display: block; font-size: 13px; }
+  .toggle-row .t small { font-size: 11px; color: var(--ink-faint); }
+  .switch { position: relative; width: 42px; height: 24px; border-radius: 999px; background: var(--raised); border: 1px solid var(--border); cursor: pointer; flex-shrink: 0; }
+  .switch .knob { position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: var(--ink-faint); transition: transform .18s ease, background .18s ease; }
+  .switch.on { background: var(--accent-soft); border-color: var(--accent); }
+  .switch.on .knob { transform: translateX(18px); background: var(--accent); }
+
+  /* --- overlay rivelazione (QR/passkey), sopra le sheet --- */
+  .overlay { position: fixed; inset: 0; background: rgba(6,9,7,.6); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 50; }
   .overlay[hidden] { display: none; }
-  .overlay-card {
-    background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
-    padding: 22px; max-width: 340px; width: 100%; text-align: center;
-  }
+  .overlay-card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 22px; max-width: 340px; width: 100%; text-align: center; box-shadow: var(--shadow); }
   .overlay-card h2 { font-size: 14.5px; margin: 0 0 4px; }
   .overlay-card p.small { font-size: 12px; color: var(--ink-dim); margin: 0 0 14px; }
   .qr-ring-wrap { position: relative; width: 200px; height: 200px; margin: 0 auto 14px; }
   .qr-ring-wrap img { width: 200px; height: 200px; border-radius: 10px; display: block; }
   .qr-ring-wrap svg { position: absolute; inset: -6px; transform: rotate(-90deg); }
   .qr-ring-wrap circle.track { stroke: var(--border); fill: none; stroke-width: 3; }
-  .qr-ring-wrap circle.progress {
-    stroke: var(--accent); fill: none; stroke-width: 3; stroke-linecap: round;
-    transition: stroke-dashoffset 1s linear;
-  }
-  .check-pop {
-    width: 72px; height: 72px; border-radius: 50%; background: var(--accent-soft);
-    display: flex; align-items: center; justify-content: center; margin: 0 auto 14px;
-    animation: pop .3s cubic-bezier(.22,1.5,.36,1);
-  }
+  .qr-ring-wrap circle.progress { stroke: var(--accent); fill: none; stroke-width: 3; stroke-linecap: round; transition: stroke-dashoffset 1s linear; }
+  .check-pop { width: 72px; height: 72px; border-radius: 50%; background: var(--accent-soft); display: flex; align-items: center; justify-content: center; margin: 0 auto 14px; animation: pop .3s cubic-bezier(.22,1.5,.36,1); }
   .check-pop svg { width: 34px; height: 34px; stroke: var(--accent); }
   @keyframes pop { from { transform: scale(.7); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-  .key-box {
-    margin-top: 4px; padding: 10px; border-radius: 8px; background: rgba(224,171,61,.1);
-    border: 1px solid rgba(224,171,61,.3); font-family: ui-monospace, monospace; font-size: 11.5px;
-    word-break: break-all; color: var(--amber); text-align: left;
-  }
-  .overlay-close {
-    margin-top: 14px; background: none; border: none; color: var(--ink-dim);
-    font-size: 12.5px; cursor: pointer; text-decoration: underline;
-  }
-  .msg { font-size: 12.5px; margin-top: 8px; }
-  .msg.err { color: var(--danger); }
-  .msg.ok { color: var(--accent); }
+  .key-box { margin-top: 4px; padding: 10px; border-radius: 8px; background: var(--amber-soft); border: 1px solid var(--amber); font-family: var(--mono); font-size: 11.5px; word-break: break-all; color: var(--amber); text-align: left; }
+  .overlay-close { margin-top: 14px; background: none; border: none; color: var(--ink-dim); font-size: 12.5px; cursor: pointer; text-decoration: underline; }
 
   @media (prefers-reduced-motion: reduce) {
-    .hero-balance .digit span, details.section summary::after, .fresh-dot,
-    .qr-ring-wrap circle.progress, .check-pop { transition: none !important; animation: none !important; }
+    .hero-balance .digit span, .live-dot, .qr-ring-wrap circle.progress, .check-pop, .seg .thumb, .sheet, .switch .knob { transition: none !important; animation: none !important; }
   }
 </style>
 </head>
@@ -301,63 +254,78 @@
     </div>
 
     <div id="app-shell" hidden>
-      <div class="chain-chips">
-        <button type="button" class="chain-chip active" data-chain="solana">Solana</button>
-        <button type="button" class="chain-chip" data-chain="robinhood">Robinhood Chain</button>
+      <div class="seg" id="seg" data-i="0">
+        <div class="thumb"></div>
+        <button type="button" aria-selected="true" data-chain="solana">Solana</button>
+        <button type="button" aria-selected="false" data-chain="robinhood">Robinhood</button>
       </div>
 
       <div id="hero-slot"></div>
-      <div id="holdings-slot"></div>
 
-      <div id="sections" hidden>
-        <details class="section" id="sec-history">
-          <summary>Saldo & storico<span></span></summary>
-          <div class="body" id="history-body">
-            <button type="button" class="btn-sm" id="load-history-btn">Carica transazioni</button>
-          </div>
-        </details>
-
-        <details class="section" id="sec-risk">
-          <summary>Limiti & sicurezza<span></span></summary>
-          <div class="body" id="risk-body">
-            <p class="dim-note">Apri per leggere lo stato vero.</p>
-          </div>
-        </details>
-
-        <details class="section" id="sec-simulate">
-          <summary>Prova una simulazione (Fase 2)<span></span></summary>
-          <div class="body">
-            <p class="dim-note">Stessi guardrail della Fase 3 — nessuna chiave, nessuna transazione. Utile per vedere se un ordine passerebbe i controlli.</p>
-            <form id="simulate-form">
-              <label class="field-label" for="sim-token">Token (simbolo o indirizzo)</label>
-              <input id="sim-token" type="text" placeholder="es. TOKEN" required />
-              <label class="field-label" for="sim-side">Lato</label>
-              <select id="sim-side"><option value="buy">Compra</option><option value="sell">Vendi</option></select>
-              <label class="field-label" for="sim-notional">Size (USD)</label>
-              <input id="sim-notional" type="number" min="0" step="0.01" value="10" required />
-              <label class="field-label" for="sim-impact">Price impact stimato (%)</label>
-              <input id="sim-impact" type="number" min="0" step="0.01" value="0.5" required />
-              <label class="field-label" for="sim-price">Prezzo del token (USD)</label>
-              <input id="sim-price" type="number" min="0" step="0.000001" value="1" required />
-              <button type="submit">Simula</button>
-            </form>
-            <div id="simulate-result"></div>
-          </div>
-        </details>
-
-        <details class="section">
-          <summary>Auto-trade on-chain<span></span></summary>
-          <div class="body">
-            <p class="placeholder-note">Fase 4 — non ancora attiva. Si aggancia allo stesso interruttore per-strategia già in Sorveglia, solo dopo che l'esecuzione reale è verificata.</p>
-          </div>
-        </details>
-
-        <button type="button" class="btn-sm reveal-btn" id="reveal-btn" style="width:100%">Rivela chiave privata</button>
+      <div id="actions-row" hidden class="actions">
+        <button type="button" class="act primary" data-sheet="simulate">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 18 L9 11 L13 14 L20 5"/><path d="M15 5h5v5"/></svg>
+          Simula
+        </button>
+        <button type="button" class="act" data-sheet="receive">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 4v13"/><path d="M6 12l6 6 6-6"/><path d="M4 20h16"/></svg>
+          Ricevi
+        </button>
+        <button type="button" class="act" data-sheet="history">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/></svg>
+          Storico
+        </button>
+        <button type="button" class="act" data-sheet="risk">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z"/></svg>
+          Limiti
+        </button>
       </div>
+
+      <div id="state-row" class="state-row" hidden>
+        <div class="chip ok"><b>Sola lettura</b><small>nessuna firma possibile da qui</small></div>
+        <div class="chip stop" id="autotrade-chip"><b>Auto-trade off</b><small>fase 4, non attiva</small></div>
+      </div>
+
+      <div id="holdings-section" hidden>
+        <div class="sect-h"><span>Asset</span><button type="button" data-sheet="history">Storico</button></div>
+        <div id="holdings-slot"></div>
+      </div>
+
+      <button type="button" class="danger-row" id="danger-reveal" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="1.8" width="20" height="20"><path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z"/><circle cx="12" cy="11" r="2"/><path d="M12 13v3"/></svg>
+        <span class="t"><b>Rivela chiave privata</b><small>serve il tuo telefono, mai solo da qui</small></span>
+        <span class="chev">›</span>
+      </button>
     </div>
   </div>
 
-  <button type="button" class="fab" id="fab-btn" aria-label="Azione rapida" hidden>+</button>
+  <nav class="tabbar" id="tabbar" hidden>
+    <button type="button" class="tab" aria-current="page">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="6" width="18" height="13" rx="3"/><path d="M16 12h3"/></svg>
+      Wallet
+    </button>
+    <button type="button" class="tab" id="tab-strategie">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 17l5-6 4 3 7-8"/></svg>
+      Strategie
+    </button>
+    <button type="button" class="tab" data-sheet="history">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>
+      Attività
+    </button>
+    <button type="button" class="tab" data-sheet="settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>
+      Impostazioni
+    </button>
+  </nav>
+
+  <div class="sheet-bg" id="sheet-bg"></div>
+  <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sh-t">
+    <div class="grab"></div>
+    <h3 id="sh-t">—</h3>
+    <p class="desc" id="sh-p"></p>
+    <div id="sh-body"></div>
+    <button type="button" class="close" id="sh-x">Chiudi</button>
+  </div>
 
   <div class="overlay" id="overlay" hidden>
     <div class="overlay-card" id="overlay-card"></div>
@@ -378,8 +346,6 @@
   }
 
   function renderDigits(container, text) {
-    // Un "roll" per cifra invece di un fade generico — solo su transform/opacity,
-    // sempre interpolabile; sotto reduced-motion diventa una sostituzione istantanea.
     container.innerHTML = "";
     for (const ch of text) {
       if (/[0-9]/.test(ch) && !REDUCE_MOTION) {
@@ -402,19 +368,27 @@
     return `agg. ${Math.round(s / 60)}min fa`;
   }
 
+  function formatUsd(value) {
+    const dollars = Math.trunc(value);
+    const cents = Math.round((value - dollars) * 100).toString().padStart(2, "0");
+    return `<span class="dollar">$</span>${dollars}<span class="cents">.${cents}</span>`;
+  }
+
   async function renderHero() {
     const slot = el("hero-slot");
-    const fab = el("fab-btn");
     const cached = readCache(state.chain);
     const wallet = state.wallets[state.chain];
 
     if (!wallet && !cached) {
       slot.innerHTML = `<p class="balance-label">Saldo</p>
-        <div class="empty-hero">Nessun wallet ${state.chain} ancora.</div>`;
-      el("sections").hidden = true;
-      el("holdings-slot").innerHTML = "";
-      fab.hidden = false;
-      fab.onclick = createWallet;
+        <div class="empty-hero">Nessun wallet ${state.chain} ancora.<br/>
+        <button type="button" id="create-btn">Crea wallet</button></div>`;
+      el("actions-row").hidden = true;
+      el("state-row").hidden = true;
+      el("holdings-section").hidden = true;
+      el("danger-reveal").hidden = true;
+      el("tabbar").hidden = true;
+      el("create-btn").addEventListener("click", createWallet);
       return;
     }
 
@@ -427,41 +401,39 @@
       : `${shownBalance}<span class="hero-unit">${unit}</span>`;
     slot.innerHTML = `
       <p class="balance-label">Saldo</p>
-      <div class="hero">
-        <div class="hero-balance" id="hero-balance-digits">${balanceHtml}</div>
-        <div class="hero-addr">${address.slice(0, 12)}…${address.slice(-6)}
-          <button type="button" id="copy-addr-btn" title="Copia">⧉</button>
-        </div>
-        <div class="fresh-badge"><span class="fresh-dot" id="fresh-dot"></span>
-          <span id="fresh-text">${cached ? freshBadgeText(cached.at) : "in attesa del primo saldo"}</span></div>
-        <button type="button" class="cta-pill" id="cta-reveal">
-          <span class="cta-icon">🛡</span>
-          <span class="cta-text">
-            <span class="t1">Rivela chiave privata</span>
-            <span class="t2">Richiede il tuo telefono, mai solo da qui</span>
-          </span>
-          <span class="chev">›</span>
-        </button>
-      </div>`;
-    el("sections").hidden = false;
-    el("copy-addr-btn").addEventListener("click", () => navigator.clipboard?.writeText(address));
-    el("cta-reveal").addEventListener("click", startReveal);
+      <div class="hero-balance" id="hero-balance-digits">${balanceHtml}</div>
+      <div class="hero-meta">
+        <button type="button" class="addr-btn" id="copy-addr-btn">${address.slice(0, 10)}…${address.slice(-6)} ⧉</button>
+        <span class="live-badge"><span class="live-dot" id="live-dot"></span>
+          <span id="fresh-text">${cached ? freshBadgeText(cached.at) : "in attesa del primo saldo"}</span></span>
+      </div>
+      <svg class="hero-spark" id="hero-spark" viewBox="0 0 300 48" preserveAspectRatio="none" hidden>
+        <defs><linearGradient id="spark-grad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="var(--accent)" stop-opacity=".28"/>
+          <stop offset="100%" stop-color="var(--accent)" stop-opacity="0"/>
+        </linearGradient></defs>
+        <path id="spark-fill" fill="url(#spark-grad)" d=""/>
+        <path id="spark-line" fill="none" stroke="var(--accent)" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" d=""/>
+      </svg>`;
 
-    fab.hidden = false;
-    fab.onclick = startReveal;
+    el("copy-addr-btn").addEventListener("click", () => {
+      navigator.clipboard?.writeText(address);
+      const btn = el("copy-addr-btn"); const old = btn.textContent;
+      btn.textContent = "copiato ✓";
+      setTimeout(() => { btn.textContent = old; }, 1200);
+    });
+
+    el("actions-row").hidden = false;
+    el("state-row").hidden = false;
+    el("holdings-section").hidden = false;
+    el("danger-reveal").hidden = false;
+    el("tabbar").hidden = false;
 
     renderHoldings(unit, shownBalance, usdValue);
+    drawSparkline(readHistory(state.chain));
     fetchBalance();
     loadOnchainPositions();
-  }
-
-  // "$" + centesimi in due parti come nello screenshot di riferimento
-  // (dollaro piccolo davanti, centesimi leggermente piu' piccoli in coda) —
-  // solo quando prices.native_price_usd ha risposto: mai un cambio inventato.
-  function formatUsd(value) {
-    const dollars = Math.trunc(value);
-    const cents = Math.round((value - dollars) * 100).toString().padStart(2, "0");
-    return `<span class="dollar">$</span>${dollars}<span class="cents">.${cents}</span>`;
+    loadAutoTradeChip();
   }
 
   // --- Lista "asset", stile token-row: il saldo nativo (sempre) piu' le
@@ -470,16 +442,18 @@
   function renderHoldings(unit, nativeBalance, usdValue) {
     const slot = el("holdings-slot");
     const initial = unit === "SOL" ? "S" : "E";
-    const value = usdValue != null ? `$${usdValue.toFixed(2)}` : `${nativeBalance} ${unit}`;
+    const valueHtml = usdValue != null
+      ? `<b>$${usdValue.toFixed(2)}</b><small>${nativeBalance} ${unit}</small>`
+      : `<b>${nativeBalance} ${unit}</b><small>nativo</small>`;
     slot.innerHTML = `
       <div class="holdings-list" id="holdings-list">
         <div class="holding-row">
           <div class="holding-icon">${initial}</div>
           <div class="holding-main">
             <div class="name">${unit === "SOL" ? "Solana" : "Robinhood Chain"}</div>
-            <div class="sub">${nativeBalance} ${unit} · nativo</div>
+            <div class="sub">${unit} · nativo</div>
           </div>
-          <div class="holding-value">${value}</div>
+          <div class="holding-value">${valueHtml}</div>
         </div>
       </div>`;
   }
@@ -501,10 +475,27 @@
             <div class="name">${p.token}</div>
             <div class="sub">${p.quantity.toFixed(4)} · on-chain</div>
           </div>
-          <div class="holding-value">$${p.cost_usd.toFixed(2)}</div>`;
+          <div class="holding-value"><b>$${p.cost_usd.toFixed(2)}</b></div>`;
         list.appendChild(row);
       });
     } catch { /* lista posizioni: un fallimento qui non deve rompere la hero */ }
+  }
+
+  // Riflette settings.onchain_execution_enabled sul chip "Auto-trade": lo
+  // stesso interruttore che execute.py controlla prima di inviare qualunque
+  // transazione — mai un'etichetta scollegata dallo stato vero.
+  async function loadAutoTradeChip() {
+    try {
+      const resp = await fetch(`/api/onchain/risk/status/${state.chain}`);
+      if (!resp.ok) return;
+      const data = await resp.json();
+      const chip = el("autotrade-chip");
+      if (!chip) return;
+      chip.className = `chip ${data.execution_enabled ? "ok" : "stop"}`;
+      chip.innerHTML = data.execution_enabled
+        ? "<b>Auto-trade on</b><small>esecuzione reale attiva</small>"
+        : "<b>Auto-trade off</b><small>fase 4, non attiva</small>";
+    } catch { /* il chip resta sul default onesto ("off") */ }
   }
 
   // --- Storico saldo: solo punti letti per davvero, mai inventati — la
@@ -521,8 +512,26 @@
     return hist;
   }
 
-  // --- Toast pillola, stile "10 USDC shielded — Confirmed": una conferma
-  // visibile dopo un'azione, non solo un cambio silenzioso di stato.
+  function drawSparkline(hist) {
+    const svg = el("hero-spark");
+    if (!svg) return;
+    if (hist.length < 2) { svg.hidden = true; return; }
+    svg.hidden = false;
+    const values = hist.map((p) => p.v);
+    const min = Math.min(...values), max = Math.max(...values);
+    const range = max - min || 1;
+    const w = 300, h = 48, pad = 3;
+    const toX = (i) => pad + (i / (values.length - 1)) * (w - pad * 2);
+    const toY = (v) => h - pad - ((v - min) / range) * (h - pad * 2);
+    const pts = values.map((v, i) => [toX(i), toY(v)]);
+    const line = pts.map(([x, y], i) => (i === 0 ? `M${x},${y}` : `L${x},${y}`)).join(" ");
+    const fill = `${line} L${pts[pts.length - 1][0]},${h} L${pts[0][0]},${h} Z`;
+    el("spark-line").setAttribute("d", line);
+    el("spark-fill").setAttribute("d", fill);
+  }
+
+  // --- Toast pillola: una conferma visibile dopo un'azione, non solo un
+  // cambio silenzioso di stato.
   function showToast(title, subtitle) {
     const slot = el("toast-slot");
     slot.innerHTML = `
@@ -535,7 +544,7 @@
   }
 
   async function fetchBalance() {
-    const dot = el("fresh-dot");
+    const dot = el("live-dot");
     try {
       const resp = await Promise.race([
         fetch(`/api/onchain/wallets/${state.chain}/balance`),
@@ -557,7 +566,7 @@
       }
       renderHoldings(unit, body.native_balance, body.native_usd_value);
       loadOnchainPositions();  // renderHoldings appena sopra ha svuotato le righe delle posizioni: le rimette
-      appendHistory(state.chain, body.native_balance);
+      drawSparkline(appendHistory(state.chain, body.native_usd_value ?? body.native_balance));
       if (dot) { dot.classList.add("live"); }
       const ft = el("fresh-text");
       if (ft) ft.textContent = "aggiornato ora";
@@ -584,55 +593,147 @@
     }
   }
 
-  document.querySelectorAll(".chain-chip").forEach((btn) => {
+  // --- Segmented control (chain) ---
+  const seg = el("seg");
+  seg.querySelectorAll("button").forEach((btn, i) => {
     btn.addEventListener("click", () => {
-      document.querySelectorAll(".chain-chip").forEach((b) => b.classList.remove("active"));
-      btn.classList.add("active");
+      seg.dataset.i = String(i);
+      seg.querySelectorAll("button").forEach((b) => b.setAttribute("aria-selected", String(b === btn)));
       state.chain = btn.dataset.chain;
+      riskLoadedFor = null;
       renderHero();
     });
   });
 
-  el("load-history-btn").addEventListener("click", async () => {
-    const body = el("history-body");
-    body.innerHTML = '<p style="margin:6px 0">Leggo le transazioni…</p>';
-    try {
-      const resp = await fetch(`/api/onchain/wallets/${state.chain}/transactions`);
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.detail || "errore");
-      if (!data.available) {
-        body.innerHTML = `<p style="margin:6px 0">${data.reason}
-          <a href="${data.explorer_url}" target="_blank" style="color:var(--accent)">Apri l'explorer →</a></p>`;
-        return;
-      }
-      if (!data.transactions.length) {
-        body.innerHTML = '<p style="margin:6px 0">Nessuna transazione ancora.</p>';
-        return;
-      }
-      body.innerHTML = '<ul class="tx-list"></ul>';
-      const ul = body.querySelector(".tx-list");
-      data.transactions.forEach((t) => {
-        const li = document.createElement("li");
-        const when = t.block_time ? new Date(t.block_time * 1000).toLocaleString("it-IT") : "";
-        li.innerHTML = `<a href="${t.explorer_url}" target="_blank">${t.signature.slice(0, 10)}…</a>
-          <span>${t.status} · ${when}</span>`;
-        ul.appendChild(li);
-      });
-    } catch (err) {
-      body.innerHTML = `<p style="margin:6px 0;color:var(--danger)">${err.message}</p>`;
-    }
-  });
-
-  // --- Limiti & sicurezza: stato vero da /api/onchain/risk/status, letto
-  // ad ogni apertura della sezione — mai una volta sola, i tetti cambiano nel giorno.
+  // ============================================================
+  // Sheet dal basso: contenuto reale per ogni azione, mai un placeholder
+  // statico. Ogni loader riempie #sh-body con dati veri presi al momento
+  // dell'apertura — i tetti/il saldo/le transazioni cambiano nel tempo.
+  // ============================================================
+  const sheetBg = el("sheet-bg"), sheet = el("sheet");
   let riskLoadedFor = null;
-  el("sec-risk").addEventListener("toggle", () => {
-    if (el("sec-risk").open && riskLoadedFor !== state.chain) loadRiskStatus();
-  });
 
-  async function loadRiskStatus() {
-    const body = el("risk-body");
-    body.innerHTML = '<p class="dim-note">Leggo lo stato…</p>';
+  function openSheet(title, subtitle) {
+    el("sh-t").textContent = title;
+    el("sh-p").textContent = subtitle;
+    sheetBg.classList.add("open");
+    sheet.classList.add("open");
+  }
+  function closeSheet() { sheetBg.classList.remove("open"); sheet.classList.remove("open"); }
+  sheetBg.addEventListener("click", closeSheet);
+  el("sh-x").addEventListener("click", closeSheet);
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSheet(); });
+
+  function openSimulateSheet() {
+    openSheet("Simulazione (fase 2)", "Stessi guardrail della fase 3 — nessuna chiave, nessuna transazione. Serve a vedere se un ordine passerebbe i controlli.");
+    el("sh-body").innerHTML = `
+      <form id="simulate-form">
+        <label class="field-label" for="sim-token">Token (simbolo o indirizzo)</label>
+        <input id="sim-token" type="text" placeholder="es. TOKEN" required />
+        <label class="field-label" for="sim-side">Lato</label>
+        <select id="sim-side"><option value="buy">Compra</option><option value="sell">Vendi</option></select>
+        <label class="field-label" for="sim-notional">Size (USD)</label>
+        <input id="sim-notional" type="number" min="0" step="0.01" value="10" required />
+        <label class="field-label" for="sim-impact">Price impact stimato (%)</label>
+        <input id="sim-impact" type="number" min="0" step="0.01" value="0.5" required />
+        <label class="field-label" for="sim-price">Prezzo del token (USD)</label>
+        <input id="sim-price" type="number" min="0" step="0.000001" value="1" required />
+        <button type="submit">Simula</button>
+      </form>
+      <div id="simulate-result"></div>`;
+    el("simulate-form").addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const out = el("simulate-result");
+      const btn = ev.target.querySelector("button[type=submit]");
+      btn.disabled = true;
+      out.innerHTML = '<p class="desc">Simulo…</p>';
+      try {
+        const resp = await fetch("/api/onchain/simulate", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chain: state.chain,
+            token: el("sim-token").value.trim(),
+            strategy_name: "manuale",
+            side: el("sim-side").value,
+            notional_usd: parseFloat(el("sim-notional").value),
+            price_impact_pct: parseFloat(el("sim-impact").value),
+            price_usd: parseFloat(el("sim-price").value),
+          }),
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.detail || "errore");
+        out.innerHTML = `<div class="sim-outcome ${data.accepted ? "accepted" : "rejected"}">
+          ${data.accepted ? "Ordine accettato dai guardrail." : data.reason}</div>`;
+        if (data.accepted) {
+          riskLoadedFor = null;
+          showToast("Simulazione confermata", `${el("sim-token").value.trim()} · ${el("sim-side").value === "buy" ? "acquisto" : "vendita"}`);
+        }
+      } catch (err) {
+        out.innerHTML = `<div class="sim-outcome rejected">${err.message}</div>`;
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  }
+
+  function openReceiveSheet() {
+    const wallet = state.wallets[state.chain];
+    const address = wallet?.address || readCache(state.chain)?.address || "";
+    const unit = state.chain === "solana" ? "SOL" : "ETH";
+    const chainName = state.chain === "solana" ? "Solana" : "Robinhood Chain (id 4663)";
+    openSheet("Ricevi", `Indirizzo ${chainName}. Manda solo asset di questa chain: un invio da un'altra rete va perso.`);
+    el("sh-body").innerHTML = `
+      <div class="kv-row"><span>Indirizzo</span><b style="font-family:var(--mono);font-size:11.5px">${address}</b></div>
+      <div class="kv-row"><span>Chain</span><b>${chainName}</b></div>
+      <div class="kv-row"><span>Asset nativo</span><b>${unit}</b></div>
+      <button type="button" class="btn-sm" id="receive-copy-btn">Copia indirizzo</button>`;
+    el("receive-copy-btn").addEventListener("click", () => {
+      navigator.clipboard?.writeText(address);
+      showToast("Indirizzo copiato", address.slice(0, 10) + "…" + address.slice(-6));
+    });
+  }
+
+  function openHistorySheet() {
+    openSheet("Storico", "Le transazioni arrivano dall'RPC pubblico al momento dell'apertura, non al caricamento della pagina.");
+    const body = el("sh-body");
+    body.innerHTML = '<p class="desc">Leggo le transazioni…</p>';
+    (async () => {
+      try {
+        const resp = await fetch(`/api/onchain/wallets/${state.chain}/transactions`);
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.detail || "errore");
+        if (!data.available) {
+          body.innerHTML = `<p class="desc">${data.reason}
+            <a href="${data.explorer_url}" target="_blank" style="color:var(--accent)">Apri l'explorer →</a></p>`;
+          return;
+        }
+        if (!data.transactions.length) {
+          body.innerHTML = '<p class="desc">Nessuna transazione ancora.</p>';
+          return;
+        }
+        body.innerHTML = '<ul class="tx-list"></ul>';
+        const ul = body.querySelector(".tx-list");
+        data.transactions.forEach((t) => {
+          const li = document.createElement("li");
+          const when = t.block_time ? new Date(t.block_time * 1000).toLocaleString("it-IT") : "";
+          li.innerHTML = `<a href="${t.explorer_url}" target="_blank">${t.signature.slice(0, 10)}…</a>
+            <span>${t.status} · ${when}</span>`;
+          ul.appendChild(li);
+        });
+      } catch (err) {
+        body.innerHTML = `<p class="desc" style="color:var(--danger)">${err.message}</p>`;
+      }
+    })();
+  }
+
+  function openRiskSheet() {
+    openSheet("Limiti & sicurezza", "Tetti e interruttore generale. Finché l'esecuzione reale non è verificata, il wallet resta in sola lettura.");
+    const body = el("sh-body");
+    body.innerHTML = '<p class="desc">Leggo lo stato…</p>';
+    loadRiskStatus(body);
+  }
+
+  async function loadRiskStatus(body) {
     try {
       const resp = await fetch(`/api/onchain/risk/status/${state.chain}`);
       const data = await resp.json();
@@ -646,12 +747,12 @@
           <div class="risk-cell"><div class="k">Spesa oggi</div><div class="v">$${data.daily_spent_usd}</div></div>
           <div class="risk-cell"><div class="k">Concentrazione max</div><div class="v">${data.concentration_cap_pct}%</div></div>
         </div>
-        <div class="breaker-pill ${cb.tripped ? "tripped" : ""}" id="breaker-pill">
+        <div class="breaker-pill ${cb.tripped ? "tripped" : ""}">
           <span class="dot"></span>
-          <span id="breaker-text">${cb.tripped ? `Circuit breaker scattato — ${cb.consecutive_losses} perdite di fila` : "Circuit breaker a riposo"}</span>
+          <span>${cb.tripped ? `Circuit breaker scattato — ${cb.consecutive_losses} perdite di fila` : "Circuit breaker a riposo"}</span>
         </div>
-        ${cb.tripped ? '<button type="button" class="btn-sm" id="breaker-reset-btn" style="margin-top:8px;width:100%">Riattiva manualmente</button>' : ""}
-        <p class="dim-note" style="margin-top:8px">Esecuzione reale: ${data.execution_enabled ? "attiva" : "spenta"}.</p>`;
+        ${cb.tripped ? '<button type="button" class="btn-sm" id="breaker-reset-btn">Riattiva manualmente</button>' : ""}
+        <div class="kv-row" style="margin-top:8px"><span>Esecuzione reale</span><b>${data.execution_enabled ? "attiva" : "spenta"}</b></div>`;
       if (cb.tripped) {
         el("breaker-reset-btn").addEventListener("click", async () => {
           try {
@@ -659,59 +760,76 @@
             const d = await r.json();
             if (!r.ok) throw new Error(d.detail || "errore");
             riskLoadedFor = null;
-            loadRiskStatus();
+            loadRiskStatus(body);
+            loadAutoTradeChip();
           } catch (err) {
             alert(err.message || "Errore di rete.");
           }
         });
       }
     } catch (err) {
-      body.innerHTML = `<p class="dim-note" style="color:var(--danger)">${err.message}</p>`;
+      body.innerHTML = `<p class="desc" style="color:var(--danger)">${err.message}</p>`;
     }
   }
 
-  document.querySelectorAll(".chain-chip").forEach((btn) => {
-    btn.addEventListener("click", () => { riskLoadedFor = null; });
-  });
+  function openKeySheet() {
+    openSheet("Rivela chiave privata", "Richiede il riconoscimento sul tuo telefono (Face ID/Touch ID o password), non la sola sessione del browser.");
+    el("sh-body").innerHTML = `
+      <div class="kv-row"><span>Metodo</span><b>QR + WebAuthn/password</b></div>
+      <div class="kv-row"><span>Scadenza del QR</span><b>2 minuti</b></div>
+      <button type="button" class="primary-btn" id="key-start-btn">Rivela ora</button>`;
+    el("key-start-btn").addEventListener("click", () => {
+      closeSheet();
+      startReveal();
+    });
+  }
 
-  // --- Simulazione Fase 2: stessi guardrail, nessuna chiave, nessuna rete on-chain.
-  el("simulate-form").addEventListener("submit", async (ev) => {
-    ev.preventDefault();
-    const out = el("simulate-result");
-    const btn = ev.target.querySelector("button[type=submit]");
-    btn.disabled = true;
-    out.innerHTML = '<p class="dim-note">Simulo…</p>';
-    try {
-      const resp = await fetch("/api/onchain/simulate", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chain: state.chain,
-          token: el("sim-token").value.trim(),
-          strategy_name: "manuale",
-          side: el("sim-side").value,
-          notional_usd: parseFloat(el("sim-notional").value),
-          price_impact_pct: parseFloat(el("sim-impact").value),
-          price_usd: parseFloat(el("sim-price").value),
-        }),
-      });
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.detail || "errore");
-      out.innerHTML = `<div class="sim-outcome ${data.accepted ? "accepted" : "rejected"}">
-        ${data.accepted ? "Ordine accettato dai guardrail." : data.reason}</div>`;
-      if (data.accepted) {
-        riskLoadedFor = null;
-        showToast("Simulazione confermata", `${el("sim-token").value.trim()} · ${el("sim-side").value === "buy" ? "acquisto" : "vendita"}`);
-      }
-    } catch (err) {
-      out.innerHTML = `<div class="sim-outcome rejected">${err.message}</div>`;
-    } finally {
-      btn.disabled = false;
+  function openSettingsSheet() {
+    const wallet = state.wallets[state.chain];
+    openSheet("Impostazioni", `Wallet ${state.chain === "solana" ? "Solana" : "Robinhood Chain"} — attiva/disattiva senza cancellarlo.`);
+    if (!wallet) {
+      el("sh-body").innerHTML = '<p class="desc">Nessun wallet su questa chain ancora.</p>';
+      return;
     }
+    renderSettingsToggle(wallet.enabled !== false);
+  }
+
+  function renderSettingsToggle(enabled) {
+    el("sh-body").innerHTML = `
+      <div class="toggle-row">
+        <div class="t"><b>Wallet attivo</b><small>spento: resta visibile ma nessuna operazione lo riguarda</small></div>
+        <button type="button" class="switch ${enabled ? "on" : ""}" id="wallet-toggle"><span class="knob"></span></button>
+      </div>`;
+    el("wallet-toggle").addEventListener("click", async () => {
+      try {
+        const resp = await fetch(`/api/onchain/wallets/${state.chain}`, {
+          method: "PATCH", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ enabled: !enabled }),
+        });
+        const body = await resp.json();
+        if (!resp.ok) throw new Error(body.detail || "errore");
+        state.wallets[state.chain] = { ...state.wallets[state.chain], enabled: body.enabled };
+        renderSettingsToggle(body.enabled);
+      } catch (err) {
+        alert(err.message || "Errore di rete.");
+      }
+    });
+  }
+
+  document.querySelectorAll("[data-sheet]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const key = btn.dataset.sheet;
+      if (key === "simulate") openSimulateSheet();
+      else if (key === "receive") openReceiveSheet();
+      else if (key === "history") openHistorySheet();
+      else if (key === "risk") openRiskSheet();
+      else if (key === "settings") openSettingsSheet();
+    });
   });
+  el("danger-reveal").addEventListener("click", openKeySheet);
+  el("tab-strategie").addEventListener("click", () => { window.location.href = "/"; });
 
   // --- Rivelazione: overlay con QR, SSE per l'esito, Face ID/password sul telefono ---
-  el("reveal-btn").addEventListener("click", startReveal);
-
   async function startReveal() {
     const overlay = el("overlay");
     const card = el("overlay-card");
