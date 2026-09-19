@@ -59,8 +59,23 @@ backend/app/
 
 frontend/
 ├── index.html
-└── static/{app.js, style.css}
+├── onchain-app.html           # wallet on-chain: solo markup + CSS, nessuno script inline
+└── static/
+    ├── {app.js, style.css}    # il sito principale, un file solo, come sempre
+    └── onchain/               # moduli ES del wallet (vedi sotto)
 ```
+
+Il wallet on-chain e' l'unica parte del frontend a non essere un file
+solo: `static/onchain/{main,api,store,format,sheets,sparkline,reveal}.js`
+sono moduli ES veri, importati per nome (`@onchain/api.js`) tramite un
+import map che `main.py` genera al volo (`_onchain_importmap`). Serve a
+mettere il `?v=<hash>` **anche sugli import interni** di un modulo, che il
+browser risolve da solo e che nessuna replace sull'HTML raggiungerebbe —
+senza, dopo un deploy Safari continuerebbe a servire i vecchi moduli.
+Resta zero build: niente Node nel Dockerfile, niente bundler. Se si
+aggiunge o rinomina un modulo non serve toccare nulla (la mappa si
+costruisce dalla cartella), e `test_onchain_frontend_modules.py` verifica
+che ogni import scritto nei moduli sia risolvibile.
 
 Le tre strategie e le cose misurate/pericolose sono in `CLAUDE.md`, non
 ripetute qui apposta — un solo posto da tenere aggiornato.
@@ -1858,3 +1873,69 @@ pulito. Restano da fare (non toccati, non richiesti): la voce
 "Decidere la finestra di freschezza del segnale sui timeframe alti"
 (serve una scelta di Lorenzo) e le segnalazioni genuinamente "in corso"
 (`seed-0054`, `seed-0051`, `seed-0028`, `seed-0027`, `seed-0072`).
+
+## Sessione 2026-09-19 — Wallet on-chain: Fase 3/4 vere e frontend rifatto
+
+**Fase 3/4, entrambe le chain.** Lorenzo: *"completa tutto il progetto
+rendilo operativo"* → *"fai anche 3/4 fase"*. Solana aveva gia' il
+percorso reale (Jupiter, verificato dal vivo fino all'invio). Robinhood
+Chain no, e il blocco era l'indirizzo del router Uniswap: le fonti si
+contraddicevano (doc ufficiale `0x8876…0904`, un blog terzo parlava di un
+redeploy a `0x06afBA43…`). Risolto verificando **dal vivo**, non leggendo
+una pagina: `docs.robinhood.com/chain/contracts` da' WETH
+`0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73` e USDG
+`0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168`, e una `getPool()` vera sul
+V3Factory trova pool reali su tutti e quattro i fee tier. Un quote vero
+da QuoterV2: 0.01 WETH → ~26,19 USDG, coerente con un prezzo ETH
+plausibile. Il selettore `exactInputSingle` (`0x04e45aaf`) l'ho
+ricalcolato con `eth_utils.keccak`, non preso a memoria.
+Attenzione: gli indirizzi `USDC`/`WETH` sulla pagina Uniswap sono quelli
+di **Ethereum mainnet**, usati come esempio di codice — usarli per uno
+swap vero manderebbe fondi a un contratto che li' non esiste.
+
+Cosa **non** e' stato fatto, e va detto: su Robinhood Chain nessun invio
+reale e' mai stato provato. Firma, quote, nonce e gas price sono
+verificati dal vivo; il broadcast no. `onchain_execution_enabled` resta
+`False` di default su entrambe le chain — lo accende Lorenzo.
+
+**Fase 4 dalla watchlist: ancora ferma, per un motivo preciso.** Il
+simbolo dei pair DEX e' `BASE@chain:pool`, che porta l'indirizzo del
+*pool* ma non quello del *token* (mint su Solana, contratto su EVM), e
+senza quello non si puo' chiedere un quote. Il loop ora registra
+"saltato" con questo motivo invece di restare muto. Per chiuderla serve
+salvare il mint address quando si aggiunge un pair dalla ricerca
+DexScreener.
+
+**Frontend del wallet, rifatto due volte.** Prima passata su uno
+screenshot di un'app wallet che piaceva a Lorenzo. Poi lui: *"rendilo
+meno ai slop, hai le skill installate apposta"* — e aveva ragione: il
+grafico disegnava una tendenza da due letture (linea piatta + rampa, che
+si legge come "il saldo e' esploso"), il saldo era scritto due volte a
+400px di distanza, due chip bordati annunciavano due fatti che non
+cambiano mai, e la tabbar in basso inventava un'app dove "Attivita'"
+apriva la stessa sheet del bottone sopra. Tolto tutto.
+
+Poi: *"voglio una grafica anche moderna con tecnologie moderne per front
+end"*. Gli ho posto la scelta che cambiava davvero qualcosa — framework
+con build step nel Dockerfile, oppure la piattaforma — e ha scelto
+**zero build**. Quindi: moduli ES + import map generata dal server,
+`<dialog>` nativo per sheet e overlay (top-layer, `::backdrop`, trappola
+del focus ed Escape sono del browser, non piu' reimplementati male),
+`@starting-style` + `transition-behavior: allow-discrete` per entrata e
+uscita senza timer JS, View Transitions sul cambio chain (il saldo si
+interpola invece di sparire), `@layer` per la cascata, `light-dark()` al
+posto di tre blocchi di token duplicati, `oklch()` + `color-mix()`,
+container query sulla fila delle azioni, `AbortSignal.timeout()` al posto
+della `Promise.race` con `setTimeout`, `Intl` per valuta e tempi
+relativi.
+
+Due bug trovati guardando la pagina renderizzata, non leggendo il codice:
+`Intl` in `it-IT` scrive `"8,87 USD"` e il mio codice lo ricomponeva come
+`"USD8,87"` (ora gli importi in dollari usano `en-US`, il simbolo davanti,
+come i tetti `$20` del resto dell'app; le quantita' di token restano in
+italiano); e `[hidden]` veniva sovrascritto da ogni regola con `display`,
+quindi il toast vuoto restava visibile — serve `[hidden]{display:none
+!important}` in `@layer base`.
+
+Verificato: 633 passed, ruff pulito, `node --check` su tutti i moduli,
+resa controllata in chiaro e scuro con il backend vero in locale.
