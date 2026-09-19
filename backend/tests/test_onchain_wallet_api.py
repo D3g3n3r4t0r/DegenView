@@ -201,3 +201,55 @@ def test_balance_reads_public_rpc(client, monkeypatch):
     resp = client.get("/api/onchain/wallets/solana/balance")
     assert resp.status_code == 200
     assert resp.json()["native_balance"] == pytest.approx(2.0)
+
+
+def test_balance_includes_usd_value_from_price_feed(client, monkeypatch):
+    from app.trading.onchain import prices as onchain_prices
+
+    client.post("/api/onchain/wallets", json={"chain": "solana"})
+    onchain_prices._cache.clear()
+
+    def rpc_handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"jsonrpc": "2.0", "id": 1, "result": {"value": 2_000_000_000}})
+
+    def price_handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"data": {"attributes": {"token_prices": {"x": "150.0"}}}})
+
+    real_client = httpx.AsyncClient
+
+    def dispatch(request: httpx.Request) -> httpx.Response:
+        return price_handler(request) if "geckoterminal" in str(request.url) else rpc_handler(request)
+
+    def factory(*args, **kwargs):
+        kwargs.pop("proxies", None)
+        return real_client(*args, transport=httpx.MockTransport(dispatch), **kwargs)
+
+    monkeypatch.setattr(httpx, "AsyncClient", factory)
+    resp = client.get("/api/onchain/wallets/solana/balance")
+    body = resp.json()
+    assert body["native_price_usd"] == pytest.approx(150.0)
+    assert body["native_usd_value"] == pytest.approx(300.0)  # 2.0 SOL * 150 USD
+
+
+def test_balance_native_usd_value_is_none_when_price_feed_fails(client, monkeypatch):
+    from app.trading.onchain import prices as onchain_prices
+
+    client.post("/api/onchain/wallets", json={"chain": "solana"})
+    onchain_prices._cache.clear()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "geckoterminal" in str(request.url):
+            return httpx.Response(500, text="boom")
+        return httpx.Response(200, json={"jsonrpc": "2.0", "id": 1, "result": {"value": 2_000_000_000}})
+
+    real_client = httpx.AsyncClient
+
+    def factory(*args, **kwargs):
+        kwargs.pop("proxies", None)
+        return real_client(*args, transport=httpx.MockTransport(handler), **kwargs)
+
+    monkeypatch.setattr(httpx, "AsyncClient", factory)
+    resp = client.get("/api/onchain/wallets/solana/balance")
+    body = resp.json()
+    assert body["native_price_usd"] is None
+    assert body["native_usd_value"] is None
