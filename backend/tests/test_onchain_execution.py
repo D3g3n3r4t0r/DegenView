@@ -56,3 +56,40 @@ def test_sign_evm_transaction_produces_a_valid_signed_tx():
 
     recovered = Account.recover_transaction(raw)
     assert recovered.lower() == acct.address.lower()
+
+
+def test_build_swap_router02_calldata_matches_the_verified_selector():
+    """04e45aaf e' keccak256("exactInputSingle((address,address,uint24,address,
+    uint256,uint256,uint160))")[:4] — ricalcolato qui, non copiato a memoria.
+    Il resto del test controlla solo che l'ABI encoding sia quello atteso
+    per lo standard exactInputSingle di SwapRouter02: NON verifica una
+    chiamata reale a un pool su Robinhood Chain, che questa sessione non ha."""
+    from eth_utils import keccak
+
+    selector = keccak(text="exactInputSingle((address,address,uint24,address,uint256,uint256,uint160))")[:4]
+    assert selector == execution._SELECTOR_EXACT_INPUT_SINGLE
+
+    token_in = "0x" + "11" * 20
+    token_out = "0x" + "22" * 20
+    recipient = "0x" + "33" * 20
+    calldata = execution.build_swap_router02_calldata(
+        token_in, token_out, fee=3000, recipient=recipient,
+        amount_in=1_000_000, amount_out_minimum=990_000,
+    )
+    assert calldata[:4] == selector
+    assert len(calldata) == 4 + 7 * 32  # 7 campi statici, nessuno dinamico
+    # I due indirizzi e il recipient devono comparire, allineati a 32 byte,
+    # esattamente come li ha passati la chiamata.
+    body = calldata[4:]
+    assert body[12:32].hex() == "11" * 20
+    assert body[32 + 12:64].hex() == "22" * 20
+    assert int.from_bytes(body[64:96], "big") == 3000
+    assert body[96 + 12:128].hex() == "33" * 20
+    assert int.from_bytes(body[128:160], "big") == 1_000_000
+    assert int.from_bytes(body[160:192], "big") == 990_000
+
+
+def test_robinhood_swap_router02_address_is_checksummed():
+    from eth_utils import to_checksum_address
+
+    assert execution.ROBINHOOD_SWAP_ROUTER02 == to_checksum_address(execution.ROBINHOOD_SWAP_ROUTER02)

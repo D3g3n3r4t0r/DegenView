@@ -11,12 +11,25 @@ da chi chiama) -> reserve() sul ledger -> firma -> (quando abilitato) invio
 import base64
 
 import httpx
+from eth_abi import encode as _abi_encode
 from eth_account import Account
+from eth_utils import to_checksum_address
 from solders.keypair import Keypair
 from solders.transaction import VersionedTransaction
 
 JUPITER_SWAP_URL = "https://lite-api.jup.ag/swap/v1/swap"
 ROBINHOOD_RPC = "https://rpc.mainnet.chain.robinhood.com"
+
+# Verificato il 19/09/2026 su due fonti indipendenti e coerenti fra loro:
+# developers.uniswap.org/docs/protocols/v3/deployments/v3-robinhood-chain-deployments
+# (che riporta anche il Permit2 singleton universale 0x000000...78BA3, identico
+# su ogni chain — un controllo di autenticita' in piu') e docs.robinhood.com/chain.
+# SwapRouter02 (Uniswap v3), non v2: piu' semplice da incapsulare senza una
+# libreria ABI completa, un solo metodo (exactInputSingle) da codificare.
+ROBINHOOD_SWAP_ROUTER02 = to_checksum_address("0xcaf681a66d020601342297493863e78c959e5cb2")
+# keccak256("exactInputSingle((address,address,uint24,address,uint256,uint256,uint160))")[:4]
+# — calcolato con eth_utils.keccak in questa sessione, non a memoria.
+_SELECTOR_EXACT_INPUT_SINGLE = bytes.fromhex("04e45aaf")
 
 
 async def build_signed_solana_swap(private_key_hex: str, quote: dict) -> bytes:
@@ -67,6 +80,27 @@ def sign_evm_transaction(private_key_hex: str, tx: dict) -> bytes:
     testato: e' la parte che NON dipende da quale contratto si chiami."""
     signed = Account.sign_transaction(tx, private_key_hex)
     return bytes(signed.raw_transaction)
+
+
+def build_swap_router02_calldata(
+    token_in: str, token_out: str, fee: int, recipient: str,
+    amount_in: int, amount_out_minimum: int, sqrt_price_limit_x96: int = 0,
+) -> bytes:
+    """Codifica ABI di SwapRouter02.exactInputSingle — selettore verificato
+    sopra + eth_abi (la libreria standard dell'ecosistema, non una
+    reimplementazione fatta a mano dello spec ABI). NON ancora verificata
+    contro una chiamata reale a un pool vero su Robinhood Chain: nessun
+    indirizzo di pool/fee tier noto in questa sessione per farlo. Chi
+    chiama non deve firmare una transazione costruita qui senza aver prima
+    controllato fee/amount_out_minimum contro un quote fresco."""
+    encoded = _abi_encode(
+        ["(address,address,uint24,address,uint256,uint256,uint160)"],
+        [(
+            to_checksum_address(token_in), to_checksum_address(token_out), fee,
+            to_checksum_address(recipient), amount_in, amount_out_minimum, sqrt_price_limit_x96,
+        )],
+    )
+    return _SELECTOR_EXACT_INPUT_SINGLE + encoded
 
 
 async def send_signed_evm_tx(raw_tx_bytes: bytes) -> str:
