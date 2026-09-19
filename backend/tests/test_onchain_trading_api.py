@@ -7,6 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app import auth, main
+from app.trading.onchain import execute as onchain_execute
 from app.trading.onchain import ledger as onchain_ledger
 
 SOL_MINT = "So11111111111111111111111111111111111111112"
@@ -77,6 +78,38 @@ def test_circuit_breaker_reset_via_api(client):
     assert resp.status_code == 200
     assert resp.json()["tripped"] is False
     assert client.get("/api/onchain/risk/status/solana").json()["circuit_breaker"]["tripped"] is False
+
+
+def test_execute_solana_real_quote_signs_but_does_not_send(client, monkeypatch):
+    """Quote reale via Jupiter (rete vera), firma mockata: verifica il
+    percorso end-to-end dell'endpoint senza mai toccare la rete Solana per
+    l'invio. onchain_execution_enabled resta False (default): il guardrail
+    finale deve fermarsi lui, non l'endpoint."""
+    auth.create_onchain_wallet(client.owner_id, "solana")
+
+    async def _fake_build(private_key_hex, quote):
+        return b"signed-tx-bytes"
+
+    monkeypatch.setattr(onchain_execute.execution, "build_signed_solana_swap", _fake_build)
+
+    resp = client.post("/api/onchain/execute/solana", json={
+        "token": "USDC", "strategy_name": "lorenzo", "side": "buy",
+        "input_mint": SOL_MINT, "output_mint": USDC_MINT, "amount_lamports": 10_000_000,
+        "notional_usd": 15.0, "price_usd": 2.0,
+    })
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["accepted"] is False
+    assert "disattivata" in body["reason"]
+
+
+def test_execute_solana_without_wallet_is_rejected(client):
+    resp = client.post("/api/onchain/execute/solana", json={
+        "token": "USDC", "strategy_name": "lorenzo", "side": "buy",
+        "input_mint": SOL_MINT, "output_mint": USDC_MINT, "amount_lamports": 10_000_000,
+        "notional_usd": 15.0, "price_usd": 2.0,
+    })
+    assert resp.status_code == 400
 
 
 def test_kill_switch_blocks_the_new_endpoints_too(client, monkeypatch):

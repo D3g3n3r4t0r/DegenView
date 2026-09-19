@@ -85,6 +85,7 @@ from app.models import (
     WatchlistEntry,
 )
 from app.trading.onchain import balances as onchain_balances
+from app.trading.onchain import execute as onchain_execute
 from app.trading.onchain import keys as onchain_keys
 from app.trading.onchain import ledger as onchain_ledger
 from app.trading.onchain import passkey as onchain_passkey
@@ -481,6 +482,24 @@ async def _watchlist_alert_loop() -> None:
                                             owner.telegram_chat_id,
                                             f"⚠️ Ordine FALLITO <b>{entry.symbol}</b> [{signal.type}]: {exc}",
                                         ))
+                    if is_dex and fresh and entry.auto_trade.get(strategy_name):
+                        # Fase 4, aggancio onesto: il segnale c'e', il wallet
+                        # on-chain c'e', ma il simbolo BASE@chain:pool non porta
+                        # l'indirizzo del token (mint su Solana, contratto su
+                        # EVM) che execute_order/quote richiedono — il pool
+                        # address da solo non basta a chiedere un quote a
+                        # Jupiter. Finche' quell'indirizzo non e' salvato sulla
+                        # entry (richiede toccare la ricerca DexScreener), ogni
+                        # segnale finisce qui, mai in una firma.
+                        for signal in fresh:
+                            trading_log.record(
+                                owner.id, symbol=entry.symbol, exchange=entry.exchange,
+                                strategy_name=strategy_name, signal_type=signal.type,
+                                outcome="saltato",
+                                detail="esecuzione automatica on-chain non ancora collegata: "
+                                       "manca l'indirizzo del token, non solo del pool",
+                                price=signal.price,
+                            )
             except ProviderUnreachable as exc:
                 # Rete, TLS, proxy: quasi sempre passeggero. Si mette in pausa
                 # quel provider con attesa crescente e si parla solo se il buco
@@ -2121,6 +2140,48 @@ async def onchain_simulate_order(body: OnchainSimulateRequest, user: User = Depe
     return onchain_simulate.simulate_order(
         user.id, body.chain, body.token, body.strategy_name, body.side,
         body.notional_usd, body.price_impact_pct, body.price_usd,
+    )
+
+
+class OnchainExecuteSolanaRequest(BaseModel):
+    token: str
+    strategy_name: str
+    side: Literal["buy", "sell"]
+    input_mint: str
+    output_mint: str
+    amount_lamports: int
+    notional_usd: float
+    price_usd: float
+    slippage_bps: int = 50
+
+
+@app.post("/api/onchain/execute/solana")
+async def onchain_execute_solana(
+    body: OnchainExecuteSolanaRequest, user: User = Depends(auth.get_current_user),
+) -> dict:
+    """Fase 4: l'ordine vero su Solana — stessi guardrail della Fase 2/3,
+    ma con la chiave del wallet e (solo se settings.onchain_execution_enabled)
+    un invio reale. Il quote e' preso fresco da Jupiter qui dentro, mai
+    accettato dal client: e' l'unica fonte di price_impact_pct affidabile
+    per i guardrail. Robinhood Chain non ha un percorso equivalente ancora
+    (vedi execute.py) e viene rifiutata onestamente da execute_order."""
+    _require_onchain_enabled()
+    if "solana" not in user.onchain_wallets:
+        raise HTTPException(status_code=400, detail="Nessun wallet Solana per questo utente.")
+    try:
+        quote = await onchain_quotes.jupiter_quote(
+            body.input_mint, body.output_mint, body.amount_lamports, body.slippage_bps,
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"Jupiter non raggiungibile: {exc}") from exc
+    try:
+        private_key_hex = auth.get_decrypted_onchain_private_key(user, "solana")
+    except auth.OnchainKeyIntegrityError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return await onchain_execute.execute_order(
+        user.id, "solana", body.token, body.strategy_name, body.side,
+        body.notional_usd, quote["price_impact_pct"], body.price_usd,
+        private_key_hex, quote,
     )
 
 
