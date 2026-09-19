@@ -93,3 +93,22 @@ def test_robinhood_swap_router02_address_is_checksummed():
     from eth_utils import to_checksum_address
 
     assert execution.ROBINHOOD_SWAP_ROUTER02 == to_checksum_address(execution.ROBINHOOD_SWAP_ROUTER02)
+
+
+ROBINHOOD_WETH = "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73"
+ROBINHOOD_USDG = "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168"
+
+
+def test_build_signed_robinhood_swap_real_nonce_and_gas_price():
+    """Genera un wallet usa-e-getta (0 ETH sopra, mai in grado di finire
+    davvero in chain), legge nonce e gas price VERI da Robinhood Chain, e
+    firma una vera exactInputSingle sul pool WETH/USDG. Nessun invio: come
+    per Solana, questo test verifica la firma, mai il broadcast."""
+    acct = Account.create()
+    signed = _run(execution.build_signed_robinhood_swap(
+        acct.key.hex(), ROBINHOOD_WETH, ROBINHOOD_USDG, 3000, 10**16, 1,
+    ))
+    assert isinstance(signed, bytes)
+    assert len(signed) > 0
+    recovered = Account.recover_transaction(signed)
+    assert recovered.lower() == acct.address.lower()

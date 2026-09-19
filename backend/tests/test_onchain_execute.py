@@ -30,14 +30,68 @@ def _quote():
     return {"in_amount": 1_000_000, "out_amount": 2_000_000, "price_impact_pct": 0.5, "raw": {}}
 
 
-def test_robinhood_chain_is_rejected_honestly(tmp_path, monkeypatch):
+def test_unsupported_chain_is_rejected_honestly(tmp_path, monkeypatch):
     _fresh_db(tmp_path, monkeypatch)
     result = _run(execute.execute_order(
-        "u1", "robinhood", "TOKEN", "lorenzo", "buy", 10.0, 0.5, 2.0, "deadbeef", _quote(),
+        "u1", "ethereum", "TOKEN", "lorenzo", "buy", 10.0, 0.5, 2.0, "deadbeef", _quote(),
     ))
     assert result["accepted"] is False
-    assert "non ancora implementata" in result["reason"]
+    assert "non supportata" in result["reason"]
     assert result["idempotency_key"] is None
+
+
+def _robinhood_quote():
+    return {
+        "token_in": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+        "token_out": "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168",
+        "fee": 3000, "amount_in": 10**16, "amount_out_minimum": 25_000_000,
+    }
+
+
+def test_robinhood_execution_disabled_signs_but_never_sends(tmp_path, monkeypatch):
+    _fresh_db(tmp_path, monkeypatch)
+    monkeypatch.setattr(execute.settings, "onchain_execution_enabled", False)
+
+    async def _fake_build_robinhood(private_key_hex, token_in, token_out, fee, amount_in, amount_out_minimum):
+        return b"signed-evm-tx"
+
+    monkeypatch.setattr(execute.execution, "build_signed_robinhood_swap", _fake_build_robinhood)
+    sent = {"called": False}
+
+    async def _spy_send(raw_tx_bytes):
+        sent["called"] = True
+        return "should-not-happen"
+
+    monkeypatch.setattr(execute.execution, "send_signed_evm_tx", _spy_send)
+
+    result = _run(execute.execute_order(
+        "u1", "robinhood", "TOKEN", "lorenzo", "buy", 10.0, 0.5, 2.0, "deadbeef", _robinhood_quote(),
+    ))
+    assert result["accepted"] is False
+    assert "disattivata" in result["reason"]
+    assert sent["called"] is False
+
+
+def test_robinhood_execution_enabled_sends_and_confirms(tmp_path, monkeypatch):
+    _fresh_db(tmp_path, monkeypatch)
+    monkeypatch.setattr(execute.settings, "onchain_execution_enabled", True)
+
+    async def _fake_build_robinhood(private_key_hex, token_in, token_out, fee, amount_in, amount_out_minimum):
+        return b"signed-evm-tx"
+
+    async def _fake_send_evm(raw_tx_bytes):
+        return "0xfaketxhash"
+
+    monkeypatch.setattr(execute.execution, "build_signed_robinhood_swap", _fake_build_robinhood)
+    monkeypatch.setattr(execute.execution, "send_signed_evm_tx", _fake_send_evm)
+
+    result = _run(execute.execute_order(
+        "u1", "robinhood", "TOKEN", "lorenzo", "buy", 10.0, 0.5, 2.0, "deadbeef", _robinhood_quote(),
+    ))
+    assert result["accepted"] is True
+    assert result["tx_signature"] == "0xfaketxhash"
+    order = ledger.get_order(result["idempotency_key"])
+    assert order["status"] == "confirmed"
 
 
 def test_rejected_by_risk_guardrail_never_signs(tmp_path, monkeypatch):
