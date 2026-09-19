@@ -1,17 +1,21 @@
 """Fase 4: l'ordine vero, non simulato — stessi guardrail di simulate.py,
 ma con una chiave, una rete, e (solo se acceso) un invio reale.
 
-Solo Solana ha un percorso di invio reale in questa sessione: Jupiter e'
-verificato dal vivo fino alla firma e all'invio compresi. Robinhood Chain
-resta al "firma ma non invia" (execution.sign_evm_transaction) perche' non
-esiste ancora un indirizzo di router Uniswap verificato su cui costruire
-la chiamata ABI — vedi execution.py. Chiamare execute_order con
-chain="robinhood" fallisce sempre, onestamente, invece di far finta.
+Entrambe le chain hanno ora un percorso di firma reale: Solana via
+Jupiter (verificato dal vivo fino all'invio), Robinhood Chain via
+SwapRouter02.exactInputSingle (router/QuoterV2/Factory tutti verificati
+dal vivo il 19/09/2026 — vedi quotes.py/execution.py) — ma quest'ultima
+NON e' mai stata provata con un invio vero (nessuna transazione reale
+mandata in questa sessione, solo quote e getPool in lettura): il codice
+di firma e' reale, l'esperienza dal vivo dell'invio no. Non un motivo per
+bloccarla del tutto (il guardrail di settings.onchain_execution_enabled
+resta comunque spento di default), ma un motivo per accenderla con
+prudenza — size piccole, prima operazione osservata a mano.
 
 settings.onchain_execution_enabled resta la sola porta che decide se
 l'invio (mai la firma) parte davvero: qui e' controllato esplicitamente,
-non delegato a execution.send_signed_solana_tx (che di proposito non lo
-controlla da solo)."""
+non delegato a execution.send_signed_solana_tx/send_signed_evm_tx (che di
+proposito non lo controllano da soli)."""
 import uuid
 
 from app.config import settings
@@ -27,13 +31,9 @@ async def execute_order(
     if not ok:
         return {"accepted": False, "reason": reason, "idempotency_key": None, "tx_signature": None}
 
-    if chain != "solana":
-        return {
-            "accepted": False,
-            "reason": f"esecuzione reale non ancora implementata su {chain} "
-                       "(router Uniswap non verificato)",
-            "idempotency_key": None, "tx_signature": None,
-        }
+    if chain not in ("solana", "robinhood"):
+        return {"accepted": False, "reason": f"chain non supportata: {chain}",
+                "idempotency_key": None, "tx_signature": None}
 
     idempotency_key = f"live-{uuid.uuid4().hex}"
     if not ledger.reserve(idempotency_key, owner_id, chain, token, strategy_name, side, "live", notional_usd):
@@ -41,7 +41,13 @@ async def execute_order(
                 "idempotency_key": None, "tx_signature": None}
 
     try:
-        signed = await execution.build_signed_solana_swap(private_key_hex, quote)
+        if chain == "solana":
+            signed = await execution.build_signed_solana_swap(private_key_hex, quote)
+        else:
+            signed = await execution.build_signed_robinhood_swap(
+                private_key_hex, quote["token_in"], quote["token_out"], quote["fee"],
+                quote["amount_in"], quote["amount_out_minimum"],
+            )
     except Exception as exc:
         ledger.mark_failed(idempotency_key, f"firma fallita: {exc}")
         return {"accepted": False, "reason": f"firma fallita: {exc}",
@@ -53,7 +59,10 @@ async def execute_order(
                 "idempotency_key": idempotency_key, "tx_signature": None}
 
     try:
-        signature = await execution.send_signed_solana_tx(signed)
+        if chain == "solana":
+            signature = await execution.send_signed_solana_tx(signed)
+        else:
+            signature = await execution.send_signed_evm_tx(signed)
     except Exception as exc:
         ledger.mark_failed(idempotency_key, f"invio fallito: {exc}")
         return {"accepted": False, "reason": f"invio fallito: {exc}",

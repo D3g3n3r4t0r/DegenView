@@ -2163,8 +2163,7 @@ async def onchain_execute_solana(
     ma con la chiave del wallet e (solo se settings.onchain_execution_enabled)
     un invio reale. Il quote e' preso fresco da Jupiter qui dentro, mai
     accettato dal client: e' l'unica fonte di price_impact_pct affidabile
-    per i guardrail. Robinhood Chain non ha un percorso equivalente ancora
-    (vedi execute.py) e viene rifiutata onestamente da execute_order."""
+    per i guardrail."""
     _require_onchain_enabled()
     if "solana" not in user.onchain_wallets:
         raise HTTPException(status_code=400, detail="Nessun wallet Solana per questo utente.")
@@ -2182,6 +2181,56 @@ async def onchain_execute_solana(
         user.id, "solana", body.token, body.strategy_name, body.side,
         body.notional_usd, quote["price_impact_pct"], body.price_usd,
         private_key_hex, quote,
+    )
+
+
+class OnchainExecuteRobinhoodRequest(BaseModel):
+    token: str
+    strategy_name: str
+    side: Literal["buy", "sell"]
+    token_in: str
+    token_out: str
+    fee: int
+    amount_in: int
+    notional_usd: float
+    price_usd: float
+    max_slippage_pct: float = 1.0
+
+
+@app.post("/api/onchain/execute/robinhood")
+async def onchain_execute_robinhood(
+    body: OnchainExecuteRobinhoodRequest, user: User = Depends(auth.get_current_user),
+) -> dict:
+    """Fase 4 su Robinhood Chain: stesso schema di execute/solana — quote
+    fresco (Factory + QuoterV2, verificati dal vivo) preso qui dentro, mai
+    dal client, poi guardrail, firma, e (solo se acceso) invio reale via
+    SwapRouter02. A differenza di Solana, nessun invio vero e' mai stato
+    provato in questa sessione: il percorso e' reale (indirizzi e ABI
+    verificati dal vivo, quote vero sul pool WETH/USDG), ma senza
+    l'esperienza pratica del broadcast — vedi execute.py."""
+    _require_onchain_enabled()
+    if "robinhood" not in user.onchain_wallets:
+        raise HTTPException(status_code=400, detail="Nessun wallet Robinhood Chain per questo utente.")
+    try:
+        pool = await onchain_quotes.get_pool(body.token_in, body.token_out, body.fee)
+        if pool is None:
+            raise HTTPException(status_code=400, detail="Nessun pool per questa coppia/fee tier.")
+        quote = await onchain_quotes.uniswap_v3_quote(body.token_in, body.token_out, body.fee, body.amount_in)
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"Robinhood Chain non raggiungibile: {exc}") from exc
+    try:
+        private_key_hex = auth.get_decrypted_onchain_private_key(user, "robinhood")
+    except auth.OnchainKeyIntegrityError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    amount_out_minimum = int(quote["amount_out"] * (1 - body.max_slippage_pct / 100))
+    return await onchain_execute.execute_order(
+        user.id, "robinhood", body.token, body.strategy_name, body.side,
+        body.notional_usd, quote["price_impact_pct"], body.price_usd,
+        private_key_hex,
+        {"token_in": body.token_in, "token_out": body.token_out, "fee": body.fee,
+         "amount_in": body.amount_in, "amount_out_minimum": amount_out_minimum},
     )
 
 

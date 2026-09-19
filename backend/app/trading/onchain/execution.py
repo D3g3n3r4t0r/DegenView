@@ -114,3 +114,41 @@ async def send_signed_evm_tx(raw_tx_bytes: bytes) -> str:
     if "error" in data:
         raise RuntimeError(f"Invio Robinhood Chain fallito: {data['error']}")
     return data["result"]  # tx hash
+
+
+async def _robinhood_rpc(method: str, params: list) -> str:
+    payload = {"jsonrpc": "2.0", "id": 1, "method": method, "params": params}
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        resp = await client.post(ROBINHOOD_RPC, json=payload)
+    data = resp.json()
+    if "error" in data:
+        raise RuntimeError(f"RPC Robinhood Chain ({method}): {data['error']}")
+    return data["result"]
+
+
+async def build_signed_robinhood_swap(
+    private_key_hex: str, token_in: str, token_out: str, fee: int,
+    amount_in: int, amount_out_minimum: int, gas_limit: int = 300_000,
+) -> bytes:
+    """Costruisce ed firma una vera exactInputSingle su SwapRouter02 —
+    nonce e gas price letti dal vivo via RPC (mai inventati), gas_limit
+    fisso e prudente (uno swap Uniswap v3 a un solo hop ne usa tipicamente
+    150-220k: 300k lascia margine senza essere assurdo). MAI l'invio, per
+    lo stesso motivo di build_signed_solana_swap: quello resta dietro
+    settings.onchain_execution_enabled, controllato da chi chiama."""
+    account = Account.from_key(private_key_hex)
+    nonce_hex = await _robinhood_rpc("eth_getTransactionCount", [account.address, "pending"])
+    gas_price_hex = await _robinhood_rpc("eth_gasPrice", [])
+    calldata = build_swap_router02_calldata(
+        token_in, token_out, fee, account.address, amount_in, amount_out_minimum,
+    )
+    tx = {
+        "nonce": int(nonce_hex, 16),
+        "to": ROBINHOOD_SWAP_ROUTER02,
+        "value": 0,
+        "gas": gas_limit,
+        "gasPrice": int(gas_price_hex, 16),
+        "chainId": 4663,
+        "data": "0x" + calldata.hex(),
+    }
+    return sign_evm_transaction(private_key_hex, tx)

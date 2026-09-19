@@ -112,6 +112,53 @@ def test_execute_solana_without_wallet_is_rejected(client):
     assert resp.status_code == 400
 
 
+ROBINHOOD_WETH = "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73"
+ROBINHOOD_USDG = "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168"
+
+
+def test_execute_robinhood_real_quote_signs_but_does_not_send(client, monkeypatch):
+    """Quote reale via Factory + QuoterV2 (rete vera), firma mockata —
+    stesso schema del test Solana equivalente. execution_enabled resta
+    False (default): l'endpoint deve fermarsi al guardrail finale."""
+    auth.create_onchain_wallet(client.owner_id, "robinhood")
+
+    async def _fake_build(private_key_hex, token_in, token_out, fee, amount_in, amount_out_minimum):
+        return b"signed-evm-tx"
+
+    monkeypatch.setattr(onchain_execute.execution, "build_signed_robinhood_swap", _fake_build)
+
+    resp = client.post("/api/onchain/execute/robinhood", json={
+        "token": "USDG", "strategy_name": "lorenzo", "side": "buy",
+        "token_in": ROBINHOOD_WETH, "token_out": ROBINHOOD_USDG, "fee": 3000,
+        "amount_in": 10**16, "notional_usd": 15.0, "price_usd": 1.0,
+    })
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["accepted"] is False
+    assert "disattivata" in body["reason"]
+
+
+def test_execute_robinhood_without_wallet_is_rejected(client):
+    resp = client.post("/api/onchain/execute/robinhood", json={
+        "token": "USDG", "strategy_name": "lorenzo", "side": "buy",
+        "token_in": ROBINHOOD_WETH, "token_out": ROBINHOOD_USDG, "fee": 3000,
+        "amount_in": 10**16, "notional_usd": 15.0, "price_usd": 1.0,
+    })
+    assert resp.status_code == 400
+
+
+def test_execute_robinhood_unknown_pool_is_rejected(client):
+    auth.create_onchain_wallet(client.owner_id, "robinhood")
+    fake_token = "0x000000000000000000000000000000000000dEaD"
+    resp = client.post("/api/onchain/execute/robinhood", json={
+        "token": "FAKE", "strategy_name": "lorenzo", "side": "buy",
+        "token_in": ROBINHOOD_WETH, "token_out": fake_token, "fee": 3000,
+        "amount_in": 10**16, "notional_usd": 15.0, "price_usd": 1.0,
+    })
+    assert resp.status_code == 400
+    assert "Nessun pool" in resp.json()["detail"]
+
+
 def test_kill_switch_blocks_the_new_endpoints_too(client, monkeypatch):
     monkeypatch.setattr(main.settings, "onchain_enabled", False)
     assert client.post("/api/onchain/quote/solana", json={

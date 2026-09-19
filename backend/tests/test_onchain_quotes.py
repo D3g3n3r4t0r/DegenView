@@ -111,3 +111,52 @@ def test_uniswap_v2_price_impact_raises_on_empty_pool(monkeypatch):
     monkeypatch.setattr(httpx, "AsyncClient", _client_factory(handler))
     with pytest.raises(RuntimeError, match="senza liquidita"):
         _run(quotes.uniswap_v2_price_impact(pool, token0, 1_000))
+
+
+# WETH e USDG reali su Robinhood Chain (docs.robinhood.com/chain/contracts),
+# usati per una vera chiamata di rete: lo stesso spirito di
+# test_jupiter_quote_real_network_call, non solo un RPC finto.
+ROBINHOOD_WETH = "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73"
+ROBINHOOD_USDG = "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168"
+
+
+def test_get_pool_real_network_call_finds_the_weth_usdg_pool():
+    pool = _run(quotes.get_pool(ROBINHOOD_WETH, ROBINHOOD_USDG, 3000))
+    assert pool is not None
+    assert pool.startswith("0x") and len(pool) == 42
+
+
+def test_get_pool_real_network_call_returns_none_for_a_fee_tier_without_a_pool():
+    # Un token/fee inventato non ha mai un pool: getPool ritorna l'indirizzo zero.
+    fake_token = "0x000000000000000000000000000000000000dEaD"
+    pool = _run(quotes.get_pool(ROBINHOOD_WETH, fake_token, 3000))
+    assert pool is None
+
+
+def test_uniswap_v3_quote_real_network_call_on_the_weth_usdg_pool():
+    result = _run(quotes.uniswap_v3_quote(ROBINHOOD_WETH, ROBINHOOD_USDG, 3000, 10**16))  # 0.01 WETH
+    assert result["amount_out"] > 0
+    assert result["price_impact_pct"] >= 0
+
+
+def test_uniswap_v3_quote_mocked_price_impact_scales_with_trade_size(monkeypatch):
+    """quoteExactInputSingle non-lineare per costruzione (x*y=k dentro le
+    tick range): un ordine 1000 volte piu' grande della size di riferimento
+    deve dare un price impact piu' alto, mai piu' basso."""
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = request.content.decode()
+        assert quotes._SELECTOR_QUOTE_EXACT_INPUT_SINGLE.hex() in body
+        # decodifica l'ultimo argomento (amount_in) dalla calldata per
+        # rispondere con un amountOut coerente con una leggera curva.
+        from eth_abi import decode as abi_decode
+        raw = bytes.fromhex(body.split('"data":"0x')[1].split('"')[0][8:])
+        _, _, amount_in, _, _ = abi_decode(["address", "address", "uint256", "uint24", "uint160"], raw)
+        amount_out = amount_in * 2 - (amount_in * amount_in) // 10**19  # curva concava finta
+        from eth_abi import encode as abi_encode
+        result_hex = "0x" + abi_encode(["uint256", "uint160", "uint32", "uint256"], [amount_out, 0, 1, 21000]).hex()
+        return httpx.Response(200, json={"jsonrpc": "2.0", "id": 1, "result": result_hex})
+
+    monkeypatch.setattr(httpx, "AsyncClient", _client_factory(handler))
+    small = _run(quotes.uniswap_v3_quote(ROBINHOOD_WETH, ROBINHOOD_USDG, 3000, 10**15))
+    large = _run(quotes.uniswap_v3_quote(ROBINHOOD_WETH, ROBINHOOD_USDG, 3000, 10**17))
+    assert large["price_impact_pct"] > small["price_impact_pct"]
