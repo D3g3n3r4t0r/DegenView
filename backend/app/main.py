@@ -1443,6 +1443,19 @@ class StrategyParamsQuery(BaseModel):
     bb_length: int = 20
     bb_mult: float = 2.0
 
+    # Lorenzo HF (minuti on-chain). Shares len/slopeFlen/slopeSlen/slope_* with
+    # Lorenzo, whose defaults win here: the page always sends the whole field
+    # set of the active strategy, so they only apply to a bare API call.
+    vwap_filter: bool = True
+    er_len: int = 10
+    er_min: float = 0.5
+    vr_len: int = 60
+    vr_min: float = 1.0
+    volume_len: int = 30
+    volume_mult: float = 0.0
+    atr_len: int = 14
+    trail_atr: float = 4.0
+
 
 class BacktestParamsQuery(BaseModel):
     initial_capital: float = 10000.0
