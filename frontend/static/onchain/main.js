@@ -55,6 +55,8 @@ const view = {
   sniperStateText: $("#sniper-state-text"),
   actions: $("#actions"),
   reveal: $("#reveal-row"),
+  more: $("#more-btn"),
+  moreSheet: $("#more"),
   empty: $("#onchain-empty-state"),
   toast: $("#toast"),
 };
@@ -68,7 +70,7 @@ function paintChainStatic() {
   const hasWallet = Boolean(wallet || cached);
 
   view.chainLabel.textContent = `${label}${suffix}`;
-  for (const node of [view.actions, view.status, view.reveal, view.marketOrderRow, view.bottomPanel, view.sniperCard]) {
+  for (const node of [view.actions, view.status, view.reveal, view.more, view.marketOrderRow, view.bottomPanel, view.sniperCard]) {
     if (node) node.hidden = !hasWallet;
   }
   view.empty.hidden = hasWallet;
@@ -363,6 +365,13 @@ $$("[data-sheet]").forEach((button) =>
   button.addEventListener("click", () => SHEETS[button.dataset.sheet]?.()));
 
 view.reveal.addEventListener("click", () => sheets.openKey({ onStart: startReveal }));
+
+// Menu "⋯": si chiude da solo sul tocco di una voce (la voce apre il suo
+// foglio) o fuori dal pannello.
+view.more.addEventListener("click", () => view.moreSheet.showModal());
+view.moreSheet.addEventListener("click", (event) => {
+  if (event.target === view.moreSheet || event.target.closest("button")) view.moreSheet.close();
+});
 
 view.empty.querySelector("[data-create]").addEventListener("click", async (event) => {
   const button = event.currentTarget;

@@ -933,7 +933,6 @@
   .status-strip > :nth-child(3) { animation-delay: 80ms; }
   .market-card  { animation-delay: 100ms; }
   .order-panel  { animation-delay: 140ms; }
-  .reveal-row   { animation-delay: 180ms; }
 
   /* Tab content is rebuilt with innerHTML on every switch: each new node
      fades in, so a tab change reads as a change instead of a jump. Not
@@ -993,10 +992,6 @@
   /* The QR and the approved tick land with a small pop. */
   .qr, .reveal-done { animation: rise .3s var(--ease-out) backwards; }
 
-  @media (prefers-reduced-motion: no-preference) {
-    html { scroll-behavior: smooth; }
-  }
-
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
       animation-duration: .001ms !important;
@@ -1008,6 +1003,67 @@
     ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) {
       animation: none !important;
     }
+  }
+}
+
+/* ============================================================
+   Minimal. Lorenzo: "rendere l'app completamente minimal e mega
+   moderna? troppi tasti" e "pochi clic, pochi cambi di schermata,
+   niente scorrimenti eccessivi". Sempre a schermo resta solo cio'
+   che serve a ogni visita (saldo, grafico, ordine, posizioni); il
+   resto sta nel menu "⋯". Blocco in coda, cosi' vince sulle regole
+   dei componenti sopra senza toccarle.
+   ============================================================ */
+@layer components {
+  /* --- menu "⋯" ---------------------------------------------------- */
+  .more-btn {
+    display: grid; place-items: center; inline-size: 38px; block-size: 38px; padding: 0;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px; color: var(--ink-dim);
+    & svg { inline-size: 18px; block-size: 18px; fill: currentColor; }
+    &:hover { color: var(--ink); }
+  }
+  .more-sheet {
+    & .menu-list { display: flex; flex-direction: column; gap: 2px; margin-block-end: 12px; }
+    & .reveal-row { margin-block-end: 4px; }
+  }
+  .menu-item {
+    display: flex; align-items: center; gap: 14px; inline-size: 100%; text-align: start;
+    background: none; border: 0; border-radius: 14px; padding: 10px 8px;
+    & b { display: block; font-size: 14px; font-weight: 600; }
+    & small { font-size: 12px; color: var(--ink-faint); }
+    &:hover { background: var(--raised); }
+  }
+  .menu-ic {
+    display: grid; place-items: center; flex-shrink: 0; inline-size: 36px; block-size: 36px;
+    border-radius: 12px; background: var(--raised); color: var(--accent); font-size: 15px;
+  }
+
+  /* --- stato: il saldo e due pillole, non tre card ----------------- */
+  .status-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .balance-card {
+    flex: 1 0 100%; background: none; border: 0; padding: 0 2px;
+    & .amount { font-size: 34px; }
+    @container (width >= 640px) { flex: 1 1 auto; }
+  }
+  .sniper-card, .security-card {
+    display: flex; flex-direction: row; align-items: center; gap: 8px; padding: 7px 12px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
+    & .label { margin: 0; font-size: 10.5px; }
+    & .sniper-state, & .value { margin: 0; }
+  }
+  .sniper-card .sniper-state { font-size: 13px; font-weight: 600; gap: 7px; }
+  .sniper-card .pulse { inline-size: 7px; block-size: 7px; box-shadow: none; }
+  .sniper-card .sniper-tags, .security-card .sub { display: none; }
+  .security-card .value { font-size: 13px; }
+
+  /* L'interruttore dello sniper vive nella tab Sniper: fuori da li' e' un
+     paragrafo in piu' fra lo swap e il fondo del pannello. */
+  .order-panel:not(:has([data-order-tab="sniper"].mo-tab-active)) .sniper-box { display: none; }
+
+  /* Da telefono l'indirizzo e' gia' in "⋯ > Ricevi": al suo posto il menu. */
+  @container (width < 640px) {
+    .topbar .addr-chip { display: none; }
+    .topbar .more-btn { grid-column: 2; grid-row: 1; }
   }
 }
 </style>
@@ -1033,6 +1089,9 @@
         </div>
         <button type="button" class="addr-chip" id="topbar-address" title="Copia l'indirizzo">
           <span class="avatar" aria-hidden="true"></span><span id="topbar-address-text">—</span>
+        </button>
+        <button type="button" class="more-btn" id="more-btn" aria-haspopup="dialog" aria-controls="more" aria-label="Altre azioni" hidden>
+          <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="4" cy="10" r="1.7"/><circle cx="10" cy="10" r="1.7"/><circle cx="16" cy="10" r="1.7"/></svg>
         </button>
       </div>
     </header>
@@ -1120,20 +1179,8 @@
             </div>
             <p>Ogni nuovo token scoperto su questa chain con liquidità &gt; $3.000 ed età &lt; 72h entra in watchlist con la strategia attiva. L'esecuzione resta soggetta ai tetti di rischio e al circuit breaker.</p>
           </div>
-
-          <div class="actions" id="actions" hidden>
-            <button type="button" class="action" data-sheet="receive">↓ Ricevi</button>
-            <button type="button" class="action" data-sheet="send">↑ Invia</button>
-            <button type="button" class="action" data-sheet="risk">◧ Limiti</button>
-            <button type="button" class="action" data-sheet="simulate">▶ Simula</button>
-          </div>
         </section>
       </div>
-
-      <button type="button" class="reveal-row" id="reveal-row" hidden>
-        <span class="t"><b>Rivela chiave privata</b><small>Serve il tuo telefono — mai solo da questa pagina</small></span>
-        <span class="chev">›</span>
-      </button>
 
       <section class="empty" id="onchain-empty-state" hidden>
         Nessun wallet <span data-chain-name></span> ancora.
@@ -1153,6 +1200,23 @@
     <p class="sheet-desc"></p>
     <div class="sheet-body"></div>
     <button type="button" class="btn-quiet sheet-close">Chiudi</button>
+  </dialog>
+
+  <!-- Menu "⋯": le azioni che non servono a ogni visita (ricevi, invia,
+       limiti, simula, chiave) stanno qui invece che sempre a schermo.
+       Lorenzo: "rendere l'app completamente minimal e mega moderna? troppi tasti". -->
+  <dialog class="sheet more-sheet" id="more" aria-label="Altre azioni">
+    <div class="grip" aria-hidden="true"></div>
+    <div class="menu-list" id="actions" hidden>
+      <button type="button" class="menu-item" data-sheet="receive"><span class="menu-ic" aria-hidden="true">↓</span><span><b>Ricevi</b><small>Indirizzo e QR del wallet</small></span></button>
+      <button type="button" class="menu-item" data-sheet="send"><span class="menu-ic" aria-hidden="true">↑</span><span><b>Invia</b><small>Manda token a un altro indirizzo</small></span></button>
+      <button type="button" class="menu-item" data-sheet="risk"><span class="menu-ic" aria-hidden="true">◧</span><span><b>Limiti e sicurezza</b><small>Tetti di spesa, circuit breaker</small></span></button>
+      <button type="button" class="menu-item" data-sheet="simulate"><span class="menu-ic" aria-hidden="true">▶</span><span><b>Simula</b><small>Prova un ordine senza firmare</small></span></button>
+    </div>
+    <button type="button" class="reveal-row" id="reveal-row" hidden>
+      <span class="t"><b>Rivela chiave privata</b><small>Serve il tuo telefono — mai solo da questa pagina</small></span>
+      <span class="chev">›</span>
+    </button>
   </dialog>
 
   <dialog class="modal" id="reveal">
