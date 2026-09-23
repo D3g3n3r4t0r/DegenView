@@ -366,10 +366,21 @@ $$("[data-sheet]").forEach((button) =>
 
 view.reveal.addEventListener("click", () => sheets.openKey({ onStart: startReveal }));
 
-// Menu "⋯": si chiude da solo sul tocco di una voce (la voce apre il suo
+// Menu "⋯" (solo sulla pagina a se': la copia nella tab Trading non ce
+// l'ha, da qui i ?.): si chiude da solo sul tocco di una voce (la voce apre il suo
 // foglio) o fuori dal pannello.
-view.more.addEventListener("click", () => view.moreSheet.showModal());
-view.moreSheet.addEventListener("click", (event) => {
+view.more?.addEventListener("click", () => view.moreSheet.showModal());
+
+// Da telefono tab, rete e filtri non sono a schermo: le voci del menu
+// premono il controllo nascosto e portano la vista sul suo pannello.
+$$("#more [data-proxy]").forEach((item) => item.addEventListener("click", () => {
+  const target = $(item.dataset.proxy);
+  target?.click();
+  target?.closest("section")?.scrollIntoView({ block: "start" });
+}));
+$("#more [data-switch-chain]")?.addEventListener("click", () =>
+  $('#chain-switch button[aria-selected="false"]')?.click());
+view.moreSheet?.addEventListener("click", (event) => {
   if (event.target === view.moreSheet || event.target.closest("button")) view.moreSheet.close();
 });
 

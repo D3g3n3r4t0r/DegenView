@@ -1015,6 +1015,10 @@
    dei componenti sopra senza toccarle.
    ============================================================ */
 @layer components {
+  /* Wallet/Strategie/Attivita'/Impostazioni ripetevano le tab sotto il
+     grafico e "⋯ > Limiti": tolti, scelto da Lorenzo. */
+  .topbar .nav-pills { display: none; }
+
   /* --- menu "⋯" ---------------------------------------------------- */
   .more-btn {
     display: grid; place-items: center; inline-size: 38px; block-size: 38px; padding: 0;
@@ -1060,10 +1064,77 @@
      paragrafo in piu' fra lo swap e il fondo del pannello. */
   .order-panel:not(:has([data-order-tab="sniper"].mo-tab-active)) .sniper-box { display: none; }
 
-  /* Da telefono l'indirizzo e' gia' in "⋯ > Ricevi": al suo posto il menu. */
+  /* ------------------------------------------------------------------
+     Telefono. Lorenzo: "rendi l'app da mobile un'esperienza
+     SEMPLICISSIMA, persino guidata se serve [...] non voglio tasti".
+     A schermo: marchio + ⋯, saldo, grafico, lo swap a passi, i tuoi
+     token. Tab, rete, filtri del grafico, azioni secondarie: nel menu ⋯,
+     che le preme per conto tuo (data-proxy in main.js).
+     ------------------------------------------------------------------ */
   @container (width < 640px) {
-    .topbar .addr-chip { display: none; }
-    .topbar .more-btn { grid-column: 2; grid-row: 1; }
+    .topbar {
+      display: flex; flex-wrap: nowrap;
+      & .addr-chip, & .switcher { display: none; }
+      & .topbar-right { display: flex; margin-inline-start: auto; }
+    }
+
+    .balance-card { padding-block: 4px 0;
+      & .amount { font-size: 42px; letter-spacing: -.02em; }
+    }
+    /* Le pillole di stato solo quando dicono qualcosa: lo sniper se acceso. */
+    .security-card, .sniper-card:not(:has(.pulse:not([hidden]))) { display: none; }
+
+    /* Grafico, poi ordine, poi token: lo swap sta sotto il token che guardi. */
+    .market-order-row { display: flex; flex-direction: column; align-items: stretch; gap: 14px; }
+    .market-card { display: contents; }
+    .market-panel, .bottom-panel {
+      background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px;
+    }
+    .market-panel { order: 1; }
+    .order-panel { order: 2; padding: 16px; }
+    .bottom-panel { order: 3; }
+    .tf-pills, .metrics-row { display: none; }
+    .chart-head { margin-block-end: 10px; }
+    .market-chart { block-size: 170px; }
+
+    /* Le tab restano (le preme il menu) ma se ne vede solo il titolo. */
+    #order-tabs, .bottom-tabs {
+      background: none; border: 0; padding: 0; margin: 0 0 12px; gap: 0;
+      & .mo-side-tab:not(.mo-tab-active) { display: none; }
+      & .mo-tab-active {
+        flex: none; padding: 0; background: none; color: var(--ink); pointer-events: none;
+        font-size: 15px; font-weight: 700; text-align: start; border: 0;
+      }
+      & .mo-side-tab::before, & .mo-side-tab::after { display: none; }
+    }
+    .bottom-panel .bottom-panel-body { max-block-size: none; overflow: visible; }
+
+    /* Swap a passi: prima quanto, poi cosa ricevi; riepilogo e conferma
+       compaiono solo quando c'e' un importo da confermare. */
+    .swap-form .swap-field::before {
+      display: block; margin-block-end: 8px; font-size: 12px; font-weight: 600; color: var(--ink-dim);
+      content: "1  Quanto vuoi scambiare";
+    }
+    .swap-form .swap-field.is-readonly::before { content: "2  Cosa ricevi"; }
+    .swap-form:has(#swap-amount:placeholder-shown) :is(.route-info, .swap-confirm) { display: none; }
+    .route-info div:nth-child(2) { display: none; }  /* il percorso (Jupiter/Uniswap) non serve a schermo */
+  }
+}
+
+/* Il menu vive nel top-layer, fuori dal contenitore della pagina: qui
+   conta la finestra. Da telefono e' una griglia di tessere; da computer
+   solo le quattro azioni di sempre, perche' tab e rete sono a schermo. */
+@layer components {
+  @media (width >= 672px) { .menu-mobile { display: none; } }
+  @media (width < 672px) {
+    .more-sheet .menu-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+    .more-sheet .menu-item {
+      flex-direction: column; justify-content: center; gap: 8px; text-align: center;
+      padding: 14px 4px; background: var(--raised); border-radius: 16px;
+      & b { font-size: 12.5px; font-weight: 600; }
+      & small { display: none; }
+    }
+    .more-sheet .menu-ic { background: var(--panel); }
   }
 }
 </style>
@@ -1208,8 +1279,16 @@
   <dialog class="sheet more-sheet" id="more" aria-label="Altre azioni">
     <div class="grip" aria-hidden="true"></div>
     <div class="menu-list" id="actions" hidden>
+      <button type="button" class="menu-item menu-mobile" data-proxy='[data-order-tab="swap"]'><span class="menu-ic" aria-hidden="true">⇅</span><span><b>Scambia</b></span></button>
+      <button type="button" class="menu-item menu-mobile" data-proxy='[data-order-tab="limit"]'><span class="menu-ic" aria-hidden="true">⇥</span><span><b>Ordine limite</b></span></button>
+      <button type="button" class="menu-item menu-mobile" data-proxy='[data-order-tab="sniper"]'><span class="menu-ic" aria-hidden="true">◎</span><span><b>Sniper</b></span></button>
       <button type="button" class="menu-item" data-sheet="receive"><span class="menu-ic" aria-hidden="true">↓</span><span><b>Ricevi</b><small>Indirizzo e QR del wallet</small></span></button>
       <button type="button" class="menu-item" data-sheet="send"><span class="menu-ic" aria-hidden="true">↑</span><span><b>Invia</b><small>Manda token a un altro indirizzo</small></span></button>
+      <button type="button" class="menu-item menu-mobile" data-switch-chain><span class="menu-ic" aria-hidden="true">⇄</span><span><b>Cambia rete</b></span></button>
+      <button type="button" class="menu-item menu-mobile" data-proxy='[data-bottom-tab="positions"]'><span class="menu-ic" aria-hidden="true">▤</span><span><b>Posizioni</b></span></button>
+      <button type="button" class="menu-item menu-mobile" data-proxy='[data-bottom-tab="history"]'><span class="menu-ic" aria-hidden="true">↺</span><span><b>Storico</b></span></button>
+      <button type="button" class="menu-item menu-mobile" data-proxy='[data-bottom-tab="orders"]'><span class="menu-ic" aria-hidden="true">☰</span><span><b>Ordini aperti</b></span></button>
+      <button type="button" class="menu-item menu-mobile" data-proxy='[data-bottom-tab="strategies"]'><span class="menu-ic" aria-hidden="true">✦</span><span><b>Strategie</b></span></button>
       <button type="button" class="menu-item" data-sheet="risk"><span class="menu-ic" aria-hidden="true">◧</span><span><b>Limiti e sicurezza</b><small>Tetti di spesa, circuit breaker</small></span></button>
       <button type="button" class="menu-item" data-sheet="simulate"><span class="menu-ic" aria-hidden="true">▶</span><span><b>Simula</b><small>Prova un ordine senza firmare</small></span></button>
     </div>
