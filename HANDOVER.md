@@ -2503,3 +2503,59 @@ Non applicato dal piano originale, dichiarato non nascosto: un feed
 prezzi DEX in tempo reale stile websocket (non esiste un provider
 gratuito affidabile multi-chain — resta il polling a 8s mentre il
 grafico e' aperto).
+
+## Revisione "deve essere come un exchange", con un team di esperti — 2026-09-23
+
+Lorenzo, dopo aver visto il mockup solo-grafico: "ok si ma io ti ho
+chiesto di rivedere tutto, usa team di esperti perche' l'esperienza deve
+essere come un exchange". Lanciati 3 agenti in parallelo (visual design,
+UX/interazione da exchange vero, information architecture) a leggere il
+codice reale e proporre una revisione concreta, non aggettivi. Le tre
+proposte convergevano sullo stesso punto: il problema non erano i
+colori, era che grafico e form d'ordine stavano dietro un tap, come
+un'app mobile generica, non come un terminale.
+
+Applicato (non tutto quello che i tre report proponevano — il resto e'
+materiale per un prossimo giro, elencato sotto):
+
+- **Grafico e pannello ordine sempre visibili**, affiancati da 640px di
+  contenitore (`.market-order-row`, container query, non media query —
+  vale sia sulla pagina a se' sia incorporata nella tab Trading).
+  `chart.js`, `swap.js`, `limitOrders.js` sono passati da `open*()` che
+  apriva una sheet a `mount*(container)` che si monta in un elemento
+  persistente — stesso HTML generato, contenitore diverso.
+- **Pannello inferiore a tab** (Posizioni/Ordini aperti/Storico/
+  Strategie) al posto di quattro bottoni che aprivano quattro sheet
+  separate — "cosa ho, cosa ho ordinato, cosa e' successo" in un unico
+  posto, montato pigro (solo la tab attiva chiama la sua API).
+- **Griglia azioni da 9 a 3**: restano solo Ricevi, Limiti, Simula — le
+  altre sei erano gia' tutte promosse a sempre-visibili.
+- **Certezza dei totali**: il portafoglio dice "≥ $X" (non "$X") quando
+  l'elenco e' parziale (Robinhood Chain) o un token non ha un prezzo
+  noto — mai un totale che sembra definitivo e non lo e'.
+- **Palette**: neutri portati sull'asse del violetto (erano rimasti
+  verde-teal, stonavano contro l'accento rosa/violetto di prima); nuovi
+  token `--up`/`--down` separati da `--danger` (un ribasso di prezzo e
+  un ordine rifiutato sono due concetti diversi, non lo stesso rosso).
+
+Verifica: 706 passed (backend non toccato dal punto di vista logico,
+solo i moduli frontend), ruff pulito, `node --check` pulito su tutti i
+moduli onchain, bilanciamento di parentesi CSS e tag HTML verificato a
+mano (un mismatch di un `</div>` in `index.html` e' preesistente,
+verificato risalire a prima di questa sessione — non introdotto ora).
+Anteprima mostrata a Lorenzo via screenshot Playwright della CSS reale
+con contenuto finto, prima di applicare al codice.
+
+**Non ancora applicato dai tre report**, per un prossimo giro:
+- Selezione rapida coppie/preferiti, slippage visibile e modificabile,
+  stima gas, countdown di scadenza del preventivo (UX report, punto 2).
+- Collegare il token scelto nel grafico al form d'ordine di default
+  (oggi ognuno ha il suo picker indipendente — un aggancio richiede che
+  il picker del grafico risolva anche i decimali, non solo l'indirizzo).
+- P&L non realizzato per posizione, distanza % dal target su ogni
+  ordine limite aperto, riconciliazione visiva "saldo reale vs. tracciato
+  dal ledger" (IA report, punti 2-3).
+- Non verificato dal vivo con Playwright autenticato (nessun wallet
+  reale popolato in questa sessione) — se qualcosa nel pannello ordine o
+  nel pannello inferiore sembra vuoto/rotto dopo il deploy, e' il primo
+  punto da controllare.
