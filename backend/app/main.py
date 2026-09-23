@@ -276,6 +276,13 @@ _ONCHAIN_QUOTE_TOKEN = {
     "robinhood": "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168",
 }
 _ONCHAIN_QUOTE_DECIMALS = 6
+
+# Decimali del nativo: hardcoded, non da decimals() sul contratto, per lo
+# stesso motivo per cui il frontend (swap.js) non li chiede mai a runtime —
+# visto in produzione: decimals() sull'indirizzo nativo di Robinhood Chain
+# puo' tornare None (non e' garantito un ERC20 vero, e' un indirizzo di
+# routing), e "10 ** None" mandava in errore /api/onchain/price.
+_NATIVE_DECIMALS = {"solana": 9, "robinhood": 18}
 _ROBINHOOD_FEE_TIERS = (500, 3000, 10000, 100)
 
 
@@ -2443,8 +2450,14 @@ async def onchain_live_price(chain: str, address: str, user: User = Depends(auth
     if address.lower() == quote_token.lower():
         return {"price_usd": 1.0}  # il token di quota e' la stablecoin stessa
 
+    native_address = onchain_prices.NATIVE_TOKEN_ADDRESS[chain]
     try:
-        decimals = await onchain_token_metadata.get_token_decimals(chain, address)
+        if address.lower() == native_address.lower():
+            decimals = _NATIVE_DECIMALS[chain]
+        else:
+            decimals = await onchain_token_metadata.get_token_decimals(chain, address)
+        if decimals is None:
+            raise HTTPException(status_code=502, detail="Decimali del token non recuperabili.")
         one_unit = 10 ** decimals
         if chain == "solana":
             quote = await onchain_quotes.jupiter_quote(address, quote_token, one_unit, 50)

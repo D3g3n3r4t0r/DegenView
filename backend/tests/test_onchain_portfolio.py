@@ -136,3 +136,30 @@ def test_live_price_reuses_the_swap_quote_for_a_1_unit_amount(client, monkeypatc
     resp = client.get("/api/onchain/price/solana/SomeMint111111111111111111111111111111111")
     assert resp.status_code == 200
     assert resp.json()["price_usd"] == 3.5
+
+
+def test_live_price_for_native_token_never_calls_get_token_decimals(client, monkeypatch):
+    """Visto in produzione: decimals() sull'indirizzo nativo di Robinhood
+    Chain puo' tornare None (non e' garantito un ERC20 vero), e
+    "10 ** None" mandava in errore l'endpoint. I decimali del nativo sono
+    hardcoded (come nel frontend), mai chiesti al contratto."""
+    from app.trading.onchain import quotes as onchain_quotes
+    from app.trading.onchain import token_metadata as onchain_token_metadata
+
+    async def _boom(chain, address):
+        raise AssertionError("non deve mai chiedere i decimali del nativo al contratto")
+
+    async def _fake_uniswap_quote(token_in, token_out, fee, amount_in):
+        assert amount_in == 10**18  # 1 unita' intera di ETH (18 decimali), non un wei
+        return {"amount_out": 3_500_000, "price_impact_pct": 0.1}
+
+    async def _fake_get_pool(token_in, token_out, fee):
+        return {"address": "pool"}
+
+    monkeypatch.setattr(onchain_token_metadata, "get_token_decimals", _boom)
+    monkeypatch.setattr(onchain_quotes, "uniswap_v3_quote", _fake_uniswap_quote)
+    monkeypatch.setattr(onchain_quotes, "get_pool", _fake_get_pool)
+
+    resp = client.get("/api/onchain/price/robinhood/0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73")
+    assert resp.status_code == 200
+    assert resp.json()["price_usd"] == 3.5
