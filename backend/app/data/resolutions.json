@@ -1310,5 +1310,19 @@
   "seed-0096": {
     "status": "risolto",
     "summary": "Copiando l'indirizzo del sito l'amico vedeva solo il login, e la registrazione e' chiusa a due email. Ora c'e' il link ospite: da liquidityengine.app/admin/ospiti (solo amministratori) si crea un link con un nome e una scadenza (7 giorni di base, massimo 90), gia' copiato per mandarlo. Chi lo apre entra senza account nel wallet on-chain e nel resto del sito, con la scritta 'Ospite · sola lettura' in basso: vede grafici, analisi, radar e scanner, ma non i tuoi wallet, saldi, chiavi, watchlist o alert. Ogni modifica (swap, ordini, wallet, strategie, pilota, alert, impostazioni, segnalazioni) e' rifiutata dal server, non solo nascosta; chiusi anche l'ottimizzatore e le pagine admin. Revocare il link dalla stessa pagina lo chiude subito anche su chi l'ha gia' aperto."
+  },
+  "seed-0097": {
+    "status": "risolto",
+    "at": 1790202085,
+    "summary": "Il grafico vuoto di FLIP non veniva da DexScreener ma da GeckoTerminal, la fonte delle candele: oltre ~30 richieste al minuto risponde 'troppe richieste', e grafico, backtest dei listing, alert e pilota lo interrogavano tutti insieme. Il rifiuto veniva letto come 'nessun dato'. Ora tutte le richieste passano da un solo varco: la stessa richiesta nei 15 secondi si fa una volta, c'e' un tetto al minuto con una riserva per chi guarda un grafico, un rifiuto si riprova dopo 2 e 4 secondi, e se GeckoTerminal rifiuta ancora si usa l'ultima risposta buona. La pagina non mostra piu' errori con l'indirizzo grezzo: riprova da sola ogni 4 secondi. I listing salvati prima del filtro (JEANCOIN a $532k, BUTT a $110k, senza controlli) non compaiono piu'. Token Sniffer, che chiede un piano a pagamento, e' sostituito da GoPlus, API pubblica: su Solana boccia i token con mint aperto, conti congelabili, saldi modificabili, tasse di trasferimento; il link al report ora porta a RugCheck. Il radar si muove: una linea che scorre, cosa sta controllando adesso, i pool nuovi negli ultimi 10 minuti e gli scartati che contano in tempo reale. Toccando un token c'e' la pagella: voto complessivo (eccellente, buono, sufficiente, mediocre), una barra per ogni filtro, e i dati GitHub completi (commit, giorni attivi, autori, stelle, fork, licenza, ultimo push). In fondo al radar la sezione degli scartati, uno per token, con il motivo e i controlli che li hanno fermati. L'avviso 'dati stantii' non parte piu' sui pool DEX, dove un minuto senza scambi non ha candela, e sugli altri parte una volta sola.",
+    "files": [
+      "backend/app/providers/dexscreener.py",
+      "backend/app/trading/onchain/legit.py",
+      "backend/app/trading/onchain/listings.py",
+      "backend/app/trading/onchain/radar.py",
+      "backend/app/main.py",
+      "frontend/static/onchain/radar.js",
+      "frontend/onchain-app.html"
+    ]
   }
 }

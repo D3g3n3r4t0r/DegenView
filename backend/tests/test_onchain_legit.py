@@ -79,9 +79,18 @@ TOKEN = {"chain": "solana", "symbol": "ACME", "name": "Acme Protocol", "token_ad
 LINKS = {"websites": ["https://acme.io"], "socials": [{"type": "twitter", "url": "https://x.com/acme"}]}
 
 
-def _net(repo_commits=12, lp=100):
+GOPLUS_CLEAN = {"mintable": {"status": "0"}, "freezable": {"status": "0"}, "closable": {"status": "0"},
+                "balance_mutable_authority": {"status": "0"}, "transfer_fee": {}, "transfer_hook": [],
+                "transfer_fee_upgradable": {"status": "0"}, "non_transferable": "0",
+                "default_account_state": "1", "metadata_mutable": {"status": "0"}}
+
+
+def _net(repo_commits=12, lp=100, goplus=GOPLUS_CLEAN):
     def handler(req: httpx.Request) -> httpx.Response:
         url = str(req.url)
+        if "gopluslabs.io/api/v1/solana" in url:
+            assert req.url.params["contract_addresses"] == "Mint111"
+            return httpx.Response(200, json={"code": 1, "result": {"Mint111": goplus} if goplus else None})
         if "rugcheck" in url:
             return httpx.Response(200, json={"risks": [], "lpLockedPct": lp})
         if url.startswith("https://acme.io"):
@@ -101,7 +110,6 @@ def public_dns(monkeypatch):
         return host != "127.0.0.1"
     monkeypatch.setattr(legit, "_public_host", ok)
     monkeypatch.setattr(legit.settings, "anthropic_api_key", "")
-    monkeypatch.setattr(legit.settings, "tokensniffer_api_key", "")
 
 
 def _assess(token=TOKEN, links=LINKS, **net):
@@ -146,37 +154,40 @@ def test_claude_verdict_can_only_reject(monkeypatch):
     assert out["status"] == "fail" and "solo hype" in out["reason"]
 
 
-@pytest.mark.parametrize("report, ok", [
-    (None, None),
-    ({"status": "pending"}, None),
-    ({"status": "ready", "score": 90, "is_flagged": True}, False),
-    ({"status": "ready", "score": 90, "exploits": ["honeypot"]}, False),
-    ({"status": "ready", "score": 40, "tests": [{"id": "t1", "description": "Owner can mint", "result": False}]}, False),
-    ({"status": "ready", "score": 85, "tests": [{"id": "t1", "result": True}]}, True),
+@pytest.mark.parametrize("change, ok", [
+    ({}, True),
+    ({"mintable": {"status": "1"}}, False),
+    ({"freezable": {"status": "1"}}, False),
+    ({"default_account_state": "2"}, False),
+    ({"balance_mutable_authority": {"status": "1"}}, False),
+    ({"transfer_fee": {"fee_rate": "0.25"}}, False),
+    ({"transfer_hook": [{"address": "x"}]}, False),
+    ({"metadata_mutable": {"status": "1"}}, True),
 ])
-def test_tokensniffer(report, ok):
-    assert legit.judge_tokensniffer(report)["ok"] is ok
+def test_goplus_solana(change, ok):
+    assert legit.judge_goplus_solana({**GOPLUS_CLEAN, **change})["ok"] is ok
 
 
-def test_tokensniffer_is_a_filter_when_the_key_is_set(monkeypatch):
-    monkeypatch.setattr(legit.settings, "tokensniffer_api_key", "k")
-    base = _net()
-
-    def handler(req):
-        if "tokensniffer.com" in str(req.url):
-            assert req.headers["X-API-Key"] == "k" and "/tokens/solana/Mint111" in str(req.url)
-            return httpx.Response(200, json={"status": "ready", "score": 20, "is_flagged": False})
-        return base.handle_request(req)
-
-    async def go():
-        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as c:
-            return await legit.assess(TOKEN, LINKS, c)
-    out = asyncio.run(go())
-    assert out["status"] == "fail" and out["reason"].startswith("Token Sniffer")
-    assert out["tokensniffer"] == "https://tokensniffer.com/token/solana/Mint111"
+def test_goplus_is_a_public_filter_without_any_key():
+    out = _assess(goplus={**GOPLUS_CLEAN, "freezable": {"status": "1"}})
+    assert out["status"] == "fail" and out["reason"].startswith("GoPlus")
+    assert out["scan_url"] == "https://rugcheck.xyz/tokens/Mint111"
 
 
-def test_without_a_key_the_report_link_stays_and_nothing_blocks():
+def test_goplus_silent_waits():
+    out = _assess(goplus=None)
+    assert out["status"] == "wait" and "GoPlus" in out["reason"]
+
+
+def test_report_card_says_how_well_each_filter_was_passed():
     out = _assess()
-    sniff = next(c for c in out["checks"] if c["key"] == "sniffer")
-    assert sniff["detail"] == "non attivo" and out["status"] == "ok" and out["tokensniffer"]
+    by_key = {c["key"]: c for c in out["checks"]}
+    assert by_key["security"]["score"] == 100 and by_key["security"]["grade"] == "eccellente"
+    assert by_key["contract"]["score"] == 100
+    gh = by_key["github"]
+    assert gh["facts"]["repo"] == "acme/core" and gh["facts"]["active_days"] == 5 and 0 < gh["score"] < 100
+    assert out["report"]["counted"] == 5 and out["report"]["grade"] in {g for _, g in legit.GRADES}
+
+
+def test_grades():
+    assert [legit.grade(s) for s in (95, 75, 60, 20)] == ["eccellente", "buono", "sufficiente", "mediocre"]
