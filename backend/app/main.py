@@ -2169,17 +2169,20 @@ class OnchainSimulateRequest(BaseModel):
     notional_usd: float
     price_impact_pct: float
     price_usd: float
+    pool_address: str | None = None  # opzionale: allowlist pool + size dinamica (vedi pool_safety.py)
 
 
 @app.post("/api/onchain/simulate")
 async def onchain_simulate_order(body: OnchainSimulateRequest, user: User = Depends(auth.get_current_user)) -> dict:
     """Fase 2: paper trading. Stessi guardrail della Fase 3 (tetti, price
-    impact, concentrazione, circuit breaker), ma mode='simulated' nel
-    ledger — nessuna chiave letta, nessuna transazione, mai."""
+    impact, concentrazione, circuit breaker, allowlist pool se pool_address
+    e' passato), ma mode='simulated' nel ledger — nessuna chiave letta,
+    nessuna transazione, mai."""
     _require_onchain_enabled()
-    return onchain_simulate.simulate_order(
+    return await onchain_simulate.simulate_order(
         user.id, body.chain, body.token, body.strategy_name, body.side,
         body.notional_usd, body.price_impact_pct, body.price_usd,
+        pool_address=body.pool_address,
     )
 
 
@@ -2193,6 +2196,7 @@ class OnchainExecuteSolanaRequest(BaseModel):
     notional_usd: float
     price_usd: float
     slippage_bps: int = 50
+    pool_address: str | None = None  # opzionale: indirizzo del pool/pair per l'allowlist (DexScreener, vedi pool_safety.py)
 
 
 @app.post("/api/onchain/execute/solana")
@@ -2203,7 +2207,13 @@ async def onchain_execute_solana(
     ma con la chiave del wallet e (solo se settings.onchain_execution_enabled)
     un invio reale. Il quote e' preso fresco da Jupiter qui dentro, mai
     accettato dal client: e' l'unica fonte di price_impact_pct affidabile
-    per i guardrail."""
+    per i guardrail.
+
+    Jupiter aggrega su piu' pool, quindi non c'e' un unico "pool_address"
+    che il quote possa dare da solo: se il client conosce il pool
+    principale (es. dal frontend/sniper) lo passa lui, e allowlist + size
+    dinamica lo usano; se non lo passa, il comportamento resta quello di
+    prima (nessuna riduzione, nessun controllo di allowlist)."""
     _require_onchain_enabled()
     if "solana" not in user.onchain_wallets:
         raise HTTPException(status_code=400, detail="Nessun wallet Solana per questo utente.")
@@ -2220,7 +2230,7 @@ async def onchain_execute_solana(
     return await onchain_execute.execute_order(
         user.id, "solana", body.token, body.strategy_name, body.side,
         body.notional_usd, quote["price_impact_pct"], body.price_usd,
-        private_key_hex, quote,
+        private_key_hex, quote, pool_address=body.pool_address,
     )
 
 
@@ -2247,7 +2257,13 @@ async def onchain_execute_robinhood(
     SwapRouter02. A differenza di Solana, nessun invio vero e' mai stato
     provato in questa sessione: il percorso e' reale (indirizzi e ABI
     verificati dal vivo, quote vero sul pool WETH/USDG), ma senza
-    l'esperienza pratica del broadcast — vedi execute.py."""
+    l'esperienza pratica del broadcast — vedi execute.py.
+
+    Niente pool_address passato a execute_order qui: DexScreener non
+    indicizza ancora Robinhood Chain (troppo nuova, vedi pool_safety.py),
+    quindi l'allowlist pool fallirebbe chiusa su ogni ordine per un dato
+    che nessuna fonte reale puo' dare oggi — non e' un buco nascosto, e'
+    la stessa scelta "mai fabbricare dati" del resto del modulo."""
     _require_onchain_enabled()
     if "robinhood" not in user.onchain_wallets:
         raise HTTPException(status_code=400, detail="Nessun wallet Robinhood Chain per questo utente.")

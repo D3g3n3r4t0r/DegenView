@@ -77,6 +77,14 @@ def _init_db() -> None:
                 reason TEXT,
                 PRIMARY KEY (owner_id, chain)
             );
+            CREATE TABLE IF NOT EXISTS pool_liquidity_history (
+                chain TEXT NOT NULL,
+                pool_address TEXT NOT NULL,
+                liquidity_usd REAL NOT NULL,
+                recorded_at REAL NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_pool_liquidity_history_lookup
+                ON pool_liquidity_history (chain, pool_address, recorded_at);
         """)
 
 
@@ -233,6 +241,32 @@ def breaker_status(owner_id: str, chain: str) -> dict:
         if row is None:
             return {"tripped": False, "consecutive_losses": 0, "reason": None}
         return {"tripped": bool(row["tripped_at"]), "consecutive_losses": row["consecutive_losses"], "reason": row["reason"]}
+
+
+def record_pool_liquidity(chain: str, pool_address: str, liquidity_usd: float, recorded_at: float | None = None) -> None:
+    """Una lettura in piu' nello storico del pool — serve solo a
+    pool_safety.check_liquidity_drop per trovare il massimo dell'ultima
+    ora. Non c'e' un upsert: ogni lettura e' un tentativo di ordine,
+    vogliamo la serie intera, non l'ultimo valore."""
+    with _lock, _connect() as conn:
+        conn.execute(
+            "INSERT INTO pool_liquidity_history (chain, pool_address, liquidity_usd, recorded_at) VALUES (?, ?, ?, ?)",
+            (chain, pool_address, liquidity_usd, recorded_at if recorded_at is not None else time.time()),
+        )
+
+
+def max_pool_liquidity_since(chain: str, pool_address: str, since: float | None = None) -> float | None:
+    """Massimo storico di liquidita' del pool dopo `since` (default: l'ora
+    scorsa). None se non c'e' ancora nessuna lettura — la primissima volta
+    che si vede questo pool."""
+    since = since if since is not None else time.time() - 3600
+    with _lock, _connect() as conn:
+        row = conn.execute(
+            "SELECT MAX(liquidity_usd) AS m FROM pool_liquidity_history "
+            "WHERE chain = ? AND pool_address = ? AND recorded_at >= ?",
+            (chain, pool_address, since),
+        ).fetchone()
+        return row["m"] if row and row["m"] is not None else None
 
 
 def reset_breaker(owner_id: str, chain: str) -> None:
