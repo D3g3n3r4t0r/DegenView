@@ -4,6 +4,7 @@ definizione)."""
 import httpx
 
 from app.models import OnchainChain
+from app.trading.onchain import rpc_client
 
 SOLANA_RPC = "https://api.mainnet-beta.solana.com"
 ROBINHOOD_RPC = "https://rpc.mainnet.chain.robinhood.com"
@@ -31,23 +32,16 @@ async def native_balance(chain: OnchainChain, address: str) -> float:
 
 
 async def _solana_balance(address: str) -> float:
-    payload = {"jsonrpc": "2.0", "id": 1, "method": "getBalance", "params": [address]}
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        resp = await client.post(SOLANA_RPC, json=payload)
-    data = resp.json()
-    if "error" in data:
-        raise RuntimeError(f"RPC Solana: {data['error']}")
-    return data["result"]["value"] / LAMPORTS_PER_SOL
+    # Passa dal rpc_client (fallback multi-endpoint + circuit breaker): e'
+    # la chiamata piu' frequente di tutto il sistema on-chain (saldo,
+    # /admin/status, ogni apertura wallet).
+    result = await rpc_client.call_rpc("solana", "getBalance", [address])
+    return result["value"] / LAMPORTS_PER_SOL
 
 
 async def _robinhood_balance(address: str) -> float:
-    payload = {"jsonrpc": "2.0", "id": 1, "method": "eth_getBalance", "params": [address, "latest"]}
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        resp = await client.post(ROBINHOOD_RPC, json=payload)
-    data = resp.json()
-    if "error" in data:
-        raise RuntimeError(f"RPC Robinhood Chain: {data['error']}")
-    return int(data["result"], 16) / WEI_PER_ETH
+    result = await rpc_client.call_rpc("robinhood", "eth_getBalance", [address, "latest"])
+    return int(result, 16) / WEI_PER_ETH
 
 
 async def recent_transactions(chain: OnchainChain, address: str) -> dict:
