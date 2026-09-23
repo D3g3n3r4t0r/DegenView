@@ -311,7 +311,11 @@ function mountBottomTab(tab) {
 }
 
 $$("#bottom-tabs .mo-side-tab").forEach((tab) => {
-  tab.addEventListener("click", () => mountBottomTab(tab.dataset.bottomTab));
+  tab.addEventListener("click", () => {
+    const name = tab.dataset.bottomTab;
+    mountBottomTab(name);
+    setNav(name === "strategies" || name === "history" ? name : "wallet");
+  });
 });
 
 /* ------------------------------------------------------------------ toast */
@@ -361,6 +365,46 @@ const SHEETS = {
 };
 $$("[data-sheet]").forEach((button) =>
   button.addEventListener("click", () => SHEETS[button.dataset.sheet]?.()));
+
+/* ------------------------------------------------------ navigazione in alto */
+// Strategie e Attivita' sono tab del pannello in basso, Impostazioni e' il
+// foglio dei limiti: la barra ci porta li' invece di restare decorativa.
+
+function setNav(target) {
+  $$("[data-nav]").forEach((pill) => {
+    const current = pill.dataset.nav === target;
+    pill.classList.toggle("is-current", current);
+    if (current) pill.setAttribute("aria-current", "true");
+    else pill.removeAttribute("aria-current");
+  });
+}
+
+const NAV = {
+  wallet: () => {
+    if (!view.bottomPanel.hidden) mountBottomTab("positions");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  },
+  strategies: () => showBottomTab("strategies"),
+  history: () => showBottomTab("history"),
+  settings: () => SHEETS.risk(),
+};
+
+function showBottomTab(tab) {
+  if (view.bottomPanel.hidden) {
+    toast("Nessun wallet", "crea prima un wallet su questa chain");
+    return;
+  }
+  mountBottomTab(tab);
+  view.bottomPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+$$("[data-nav]").forEach((pill) =>
+  pill.addEventListener("click", () => {
+    if (view.shell.hidden) return;
+    const target = pill.dataset.nav;
+    if (target !== "settings") setNav(target);
+    NAV[target]?.();
+  }));
 
 view.reveal.addEventListener("click", () => sheets.openKey({ onStart: startReveal }));
 
