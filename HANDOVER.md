@@ -2342,3 +2342,114 @@ Il motore di esecuzione (execute_order, guardrail di rischio, ledger)
 resta quello on-chain di oggi — cio' che si eredita e' la UX del form,
 non il codice che esegue, che e' gia' specifico per exchange centralizzati
 vs. wallet on-chain e non va unificato.
+
+## Piano: ecosistema DEX completo dentro il wallet on-chain — 2026-09-23
+
+Lorenzo: "nell'ottica di utilizzo on-chain dobbiamo ridurre al limite
+queste complicanze: dobbiamo creare un app in stile dex con grafici
+(ereditati dal sito principale) con minor delay possibile; avere
+possibilita' di attivare le strategie dell'archivio; visualizzare
+ingressi etc, direttamente su app on-chain; avere un wallet per capire il
+portafoglio; avere una copia delle transazioni per capire cosa e'
+accaduto in passato". Non ancora applicato — questo e' il piano completo,
+i pezzi minori (ordini limite, ricerca token, restyle rosa/violetto) gia'
+fatti in questa sessione restano dentro, non si buttano via.
+
+Idea guida: **un'unica app** (`onchain-app.html`, gia' esiste), non un
+secondo sito. Quattro pannelli sempre raggiungibili da una barra in
+basso o laterale (stile DEX mobile: Grafico / Strategie / Wallet /
+Storico), non piu' sheet che si aprono una sopra l'altra per ogni azione.
+
+### 1. Grafico ereditato dal sito, non ricostruito
+
+- Il sito principale gia' disegna candele DEX vere per i pair `@chain:pool`
+  via `/api/candles` + GeckoTerminal (`providers/dexscreener.py`,
+  `GECKO_NETWORKS`) e la libreria Lightweight Charts — stesso identico
+  motore, non un secondo grafico da scrivere.
+- Il wallet apre il grafico del PAIR che sta per scambiare (quello scelto
+  nel token-picker, gia' costruito questa sessione) passando il suo
+  `symbol` DEX (`BASE@chain:pool`, gia' quello che il picker restituisce
+  dalla ricerca) allo stesso componente chart — non serve duplicare
+  candele/indicatori, solo un `<script>` condiviso o un modulo importato
+  dal bundle esistente (`app.js` e' un file solo, oggi non modulare: va
+  isolata la sola funzione di disegno chart in un modulo ES riusabile da
+  entrambe le pagine, senza portarsi dietro tutto il resto del sito).
+- **Delay**: GeckoTerminal aggiorna a intervalli (non tick-by-tick); per
+  "minor delay possibile" senza inventare un feed nuovo, il grafico apre
+  gia' con l'ultima candela nota dalla cache del sito (stesso principio
+  della hero: mostrare subito il dato in cache, poi aggiornare) e fa
+  polling piu' stretto (5-10s) solo mentre il pannello grafico e' aperto,
+  non sempre — un websocket DEX vero (non esiste un feed gratuito
+  affidabile multi-chain oggi) resta fuori scope, dichiarato non nascosto.
+
+### 2. Attivare le strategie dell'archivio sul wallet
+
+- Le tre strategie (Lorenzo, Gabriele, Accumulo/Distribuzione) girano gia'
+  in automatico sulla Watchlist, col trading automatico che gia' oggi (da
+  questa sessione) sa eseguire buy E sell on-chain — il pezzo che manca
+  e' SOLO l'interfaccia, non il motore.
+- Nuovo pannello "Strategie" DENTRO il wallet: lista dei token della
+  Watchlist collegabili a questa chain (quelli con `base_token_address`
+  compilato), ciascuno con lo stesso interruttore "Trading automatico" e
+  un selettore della strategia (le stesse tre, stesso backend) — non un
+  secondo sistema di attivazione, la stessa API della Watchlist
+  (`/api/watchlist/*`) letta e scritta da qui invece che dall'altra tab.
+- Aggiungere un token a questo pannello dal wallet stesso usa lo stesso
+  token-picker per ticker gia' costruito per lo swap — un solo modo di
+  cercare un token in tutta l'app, mai due.
+
+### 3. Ingressi/segnali visibili sul grafico dell'app on-chain
+
+- Il sito principale disegna gia' marker sul grafico per gli ordini del
+  diario ("diario... diventano marker propri" — vedi `app.js`, sezione
+  marker). Lo stesso meccanismo si applica al grafico del wallet: ogni
+  ordine (swap manuale, ordine limite eseguito, o trade automatico da una
+  strategia) diventa un marker sulla stessa candela in cui e' avvenuto —
+  non un secondo indicatore, la stessa funzione di marking riusata.
+- Non solo eseguiti: un segnale non ancora eseguito (es. un ordine
+  limite ancora `open` che aspetta il target) si disegna come riga
+  orizzontale al prezzo target (`createPriceLine`, gia' usata da RSI per
+  le bande overbought/oversold) — vedere "a che punto sono" senza aprire
+  una sheet a parte.
+
+### 4. Wallet come portafoglio, non solo saldo nativo
+
+- Gia' esiste (`assets`/`positions`) ma mostra solo le posizioni aperte
+  via QUESTO sito — non "cosa detiene davvero il wallet on-chain" (che
+  potrebbe avere ricevuto token anche da fuori questa app). Serve un
+  secondo sguardo, via RPC vera (Solana `getTokenAccountsByOwner`, EVM
+  `eth_call` sui contratti token noti o un indexer) per elencare TUTTI i
+  saldi token del wallet, non solo quelli che il ledger locale ha
+  tracciato — oggi la distinzione fra "cosa ho comprato da qui" e "cosa
+  c'e' davvero nel wallet" non e' visibile, ed e' esattamente il tipo di
+  scollamento che la riconciliazione (Fase SRE, gia' in piedi per gli
+  ordini pending) dovrebbe generalizzare anche qui.
+
+### 5. Storico come "cosa e' successo", non tre schermate diverse
+
+- Oggi ci sono TRE fonti separate: "Storico" (transazioni RPC grezze),
+  "Diario" (ordini di questo sito, gia' unificato swap+limite questa
+  sessione). Da unire in un solo pannello "Storico" con due viste (Ordini
+  di questa app / Transazioni on-chain grezze) invece di due bottoni
+  diversi che sembrano fare la stessa cosa.
+
+### Cosa NON e' nel piano (dichiarato, non nascosto)
+
+- Un feed prezzi DEX in tempo reale stile CEX (websocket) — non esiste
+  un provider gratuito affidabile multi-chain, il polling piu' stretto
+  del punto 1 e' il compromesso.
+- Un secondo motore di esecuzione per le strategie sul wallet — usano lo
+  stesso motore (execute_order, guardrail, ledger) di sempre.
+
+### Ordine di lavoro proposto
+
+1. Isolare il componente chart del sito in un modulo ES riusabile (serve
+   a questo E a niente si rompe sul sito, e' un'estrazione, non una
+   riscrittura) — poi montarlo nel wallet.
+2. Pannello "Strategie" nel wallet (stessa API Watchlist, nuova UI).
+3. Marker degli ordini + price line dei target sul grafico del wallet.
+4. Portafoglio vero (saldi RPC, non solo posizioni tracciate).
+5. Unificazione dei tre pannelli storico in uno.
+
+Non iniziato: in attesa di conferma su quale punto affrontare prima —
+il punto 1 (grafico) e' il piu' visibile e il prerequisito del punto 3.
