@@ -150,7 +150,7 @@ async function refreshOpenOrders(chain) {
     if (!orders.length) { list.innerHTML = "<li>Nessun ordine limite aperto.</li>"; return; }
     list.innerHTML = orders.map((o) => `
       <li data-id="${o.id}">
-        <span>${o.direction === "buy_below" ? "Compra se scende a" : "Vendi se sale a"} ${formatUsd(o.target_price_usd)}
+        <span><span class="status-dot" data-status="${o.status}"></span>${o.direction === "buy_below" ? "Compra se scende a" : "Vendi se sale a"} ${formatUsd(o.target_price_usd)}
           <small>${o.amount_in} ${o.token_in_symbol} → ${o.token_out_symbol}</small></span>
         <button type="button" class="btn-quiet" data-cancel="${o.id}">Annulla</button>
       </li>`).join("");
@@ -183,12 +183,12 @@ export async function openOrderDiary() {
 
     sheets.setBody(`<ul class="tx-list">${rows.map((row) => row.kind === "swap" ? `
       <li>
-        <span>${row.side === "buy" ? "Compra" : "Vendi"} ${row.token}
+        <span><span class="status-dot" data-status="${row.status}"></span><b>${row.side === "buy" ? "Compra" : "Vendi"} ${row.token}</b>
           <small>${formatUsd(row.size_usd)} · ${STATUS_LABEL[row.status] ?? row.status}${row.reason ? ` — ${row.reason}` : ""}</small></span>
         <span>${new Date(row.at * 1000).toLocaleString("it-IT")}</span>
       </li>` : `
       <li>
-        <span>Limite ${row.pair}
+        <span><span class="status-dot" data-status="${row.status}"></span><b>Limite ${row.pair}</b>
           <small>${row.direction === "buy_below" ? "compra se scende a" : "vendi se sale a"} ${formatUsd(row.target_price_usd)}
           · ${STATUS_LABEL[row.status] ?? row.status}${row.reason ? ` — ${row.reason}` : ""}</small></span>
         <span>${new Date(row.at * 1000).toLocaleString("it-IT")}</span>
