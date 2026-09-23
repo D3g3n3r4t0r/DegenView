@@ -4,1028 +4,637 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Wallet on-chain (alpha) — Liquidity Engine</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif&family=JetBrains+Mono:wght@400;500&display=swap" />
 <style>
+/* ============================================================
+   Wallet on-chain — stesso sistema "Instrument" del resto del
+   sito, scritto con la piattaforma di oggi: @layer per la cascata,
+   light-dark() al posto di tre blocchi di token duplicati, oklch
+   per i colori e color-mix per derivarne le varianti.
+   ============================================================ */
+@layer tokens, base, layout, components, motion;
+
+@layer tokens {
   :root {
+    /* Una sola dichiarazione per token: light-dark() sceglie da sola in
+       base a color-scheme, quindi niente @media + [data-theme] ripetuti
+       tre volte con il rischio che una delle tre resti indietro. */
     color-scheme: light dark;
-    --bg: #f2f4f3;
-    --panel: #ffffff;
-    --raised: #e9edeb;
-    --border: rgba(12, 22, 19, .10);
-    --ink: #0c1513;
-    --ink-dim: #5c6a65;
-    --ink-faint: #8d9a95;
-    --accent: #0b9c6f;
-    --accent-ink: #ffffff;
-    --accent-soft: rgba(11, 156, 111, .12);
-    --danger: #d03a2c;
-    --danger-soft: rgba(208, 58, 44, .12);
-    --amber: #9c6a08;
-    --amber-soft: rgba(156, 106, 8, .13);
-    --shadow: 0 1px 2px rgba(10, 24, 20, .05), 0 22px 40px -28px rgba(10, 24, 20, .45);
-    --mono: ui-monospace, "SFMono-Regular", Menlo, monospace;
-    --r: 14px;
+
+    --bg:        light-dark(oklch(97.1% 0.002 165), oklch(14.6% 0.006 219));
+    --panel:     light-dark(oklch(100%  0     0),   oklch(18.7% 0.009 224));
+    --raised:    light-dark(oklch(95.5% 0.004 157), oklch(21.6% 0.012 226));
+    --line:      light-dark(oklch(91.4% 0.007 160), oklch(26.9% 0.016 224));
+    --ink:       light-dark(oklch(18.8% 0.011 176), oklch(94.3% 0.009 180));
+    --ink-dim:   light-dark(oklch(48.0% 0.018 170), oklch(70.4% 0.020 176));
+    --ink-faint: light-dark(oklch(64.5% 0.017 171), oklch(60.9% 0.020 170));
+
+    --accent:     light-dark(oklch(57.7% 0.119 165), oklch(79.5% 0.138 166));
+    --accent-ink: light-dark(oklch(100%  0     0),   oklch(17.1% 0.023 170));
+    --danger:     light-dark(oklch(52.5% 0.191 30),  oklch(67.1% 0.217 29));
+    --amber:      light-dark(oklch(57.8% 0.124 69),  oklch(78.7% 0.147 73));
+
+    /* Le varianti tenui si derivano, non si riscrivono a mano: una sola
+       fonte per ogni tinta, e la mescola avviene in oklch, dove il 12%
+       di un colore pesa quanto il 12% di un altro. */
+    --accent-soft: color-mix(in oklch, var(--accent) 12%, transparent);
+    --danger-soft: color-mix(in oklch, var(--danger) 12%, transparent);
+    --amber-soft:  color-mix(in oklch, var(--amber)  15%, transparent);
+    --hover:       color-mix(in oklch, var(--ink) 6%, transparent);
+
+    --shadow: 0 1px 2px light-dark(oklch(20% 0.02 180 / .07), oklch(0% 0 0 / .5)),
+              0 12px 32px -20px light-dark(oklch(20% 0.02 180 / .35), oklch(0% 0 0 / .9));
+
+    --sans:  "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+    --serif: "Instrument Serif", Georgia, "Times New Roman", serif;
+    --mono:  "JetBrains Mono", ui-monospace, monospace;
+
+    --radius: 12px;
+    --gap: 16px;
   }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --bg: #070909;
-      --panel: #101415;
-      --raised: #171d1f;
-      --border: rgba(228, 238, 235, .10);
-      --ink: #f1f5f3;
-      --ink-dim: #97a29e;
-      --ink-faint: #6f7a77;
-      --accent: #37e0a0;
-      --accent-ink: #05150e;
-      --accent-soft: rgba(55, 224, 160, .13);
-      --danger: #ff6376;
-      --danger-soft: rgba(255, 99, 118, .14);
-      --amber: #e8b44c;
-      --amber-soft: rgba(232, 180, 76, .14);
-      --shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 26px 50px -30px rgba(0, 0, 0, .9);
+
+  /* La scelta esplicita del tema vince sul sistema, in entrambe le
+     direzioni, senza ridichiarare un solo token. */
+  :root[data-theme="light"] { color-scheme: light; }
+  :root[data-theme="dark"]  { color-scheme: dark; }
+}
+
+@layer base {
+  * { box-sizing: border-box; }
+
+  /* Una regola d'autore con `display` batte il `[hidden]` del browser, che
+     e' un selettore d'attributo senza peso: senza questa riga il toast e le
+     sezioni ancora da riempire compaiono vuote appena gli si da' un
+     display. Sta in @layer base proprio per questo — con !important, perche'
+     deve vincere su qualunque componente. */
+  [hidden] { display: none !important; }
+
+  body {
+    margin: 0;
+    padding-block: 14px calc(36px + env(safe-area-inset-bottom, 0px));
+    padding-inline: var(--gap);
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.45;
+    -webkit-tap-highlight-color: transparent;
+    text-wrap: pretty;
+  }
+
+  h1, h2, h3 { text-wrap: balance; margin: 0; }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+@layer layout {
+  .page {
+    max-width: 460px;
+    margin-inline: auto;
+    /* Le sezioni si distanziano col gap del contenitore: niente margini
+       per elemento che si sommano o collassano a vicenda. */
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+    container-type: inline-size;
+  }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    & .back { color: var(--ink); text-decoration: none; font-size: 20px; line-height: 1; opacity: .8; }
+    & h1 { font-size: 13px; font-weight: 600; color: var(--ink-dim); text-transform: lowercase; }
+    & .tag {
+      margin-left: auto; font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+      color: var(--amber); background: var(--amber-soft); border-radius: 999px; padding: 2px 9px;
     }
   }
-  :root[data-theme="dark"] {
-    --bg: #070909;
-    --panel: #101415;
-    --raised: #171d1f;
-    --border: rgba(228, 238, 235, .10);
-    --ink: #f1f5f3;
-    --ink-dim: #97a29e;
-    --ink-faint: #6f7a77;
-    --accent: #37e0a0;
-    --accent-ink: #05150e;
-    --accent-soft: rgba(55, 224, 160, .13);
-    --danger: #ff6376;
-    --danger-soft: rgba(255, 99, 118, .14);
-    --amber: #e8b44c;
-    --amber-soft: rgba(232, 180, 76, .14);
-    --shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 26px 50px -30px rgba(0, 0, 0, .9);
+
+  .stack { display: flex; flex-direction: column; gap: 22px; }
+}
+
+@layer components {
+  /* --- selettore della chain ------------------------------------- */
+  .switcher {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    background: var(--raised);
+    border-radius: var(--radius);
+    padding: 3px;
+
+    & .thumb {
+      position: absolute;
+      inset: 3px 50% 3px 3px;
+      background: var(--panel);
+      border-radius: calc(var(--radius) - 3px);
+      box-shadow: var(--shadow);
+      transition: translate .28s cubic-bezier(.32,.72,0,1);
+    }
+    &[data-selected="robinhood"] .thumb { translate: 100% 0; }
+
+    & button {
+      position: relative;
+      background: none; border: 0; border-radius: calc(var(--radius) - 3px);
+      padding: 9px 4px; font-size: 13px; font-weight: 600; color: var(--ink-dim);
+      transition: color .2s;
+      &[aria-selected="true"] { color: var(--ink); }
+    }
   }
 
-  * { box-sizing: border-box; }
-  html, body { height: 100%; }
-  body {
-    font-family: -apple-system, system-ui, "Segoe UI", sans-serif;
-    background: var(--bg); color: var(--ink); margin: 0;
-    padding: calc(12px + env(safe-area-inset-top, 0px)) 16px calc(24px + env(safe-area-inset-bottom, 0px));
-    -webkit-tap-highlight-color: transparent;
-  }
-  .wrap { max-width: 460px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
-
-  header { display: flex; align-items: center; gap: 10px; min-height: 28px; }
-  .nav-back {
-    background: none; border: none; color: var(--ink-dim); font-size: 20px; line-height: 1;
-    padding: 2px 6px 2px 0; cursor: pointer;
-  }
-  h1 { font-size: 13px; font-weight: 600; margin: 0; letter-spacing: -.01em; }
-  .alpha-tag {
-    font-size: 9.5px; text-transform: uppercase; letter-spacing: .09em; color: var(--amber);
-    background: var(--amber-soft); border-radius: 999px; padding: 3px 8px; margin-left: auto;
+  /* --- saldo ------------------------------------------------------ */
+  .label {
+    font-size: 11px; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--ink-faint); margin-block-end: 4px;
   }
 
-  /* --- toast pillola --- */
-  .toast-pill {
-    display: flex; align-items: center; gap: 10px; background: var(--raised);
-    border-radius: 999px; padding: 9px 16px; position: relative;
-  }
-  .toast-pill .ok-dot {
-    width: 18px; height: 18px; border-radius: 50%; background: var(--accent-soft);
-    color: var(--accent); display: flex; align-items: center; justify-content: center;
-    font-size: 11px; flex-shrink: 0;
-  }
-  .toast-pill .txt { font-size: 13px; }
-  .toast-pill .txt b { display: block; font-weight: 600; }
-  .toast-pill .txt small { color: var(--ink-dim); font-size: 11px; }
-  .toast-pill .close-x {
-    position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
-    background: none; border: none; color: var(--ink-faint); font-size: 14px; cursor: pointer;
+  .amount {
+    font-family: var(--serif);
+    font-size: clamp(44px, 14cqi, 54px);
+    line-height: 1;
+    letter-spacing: -.015em;
+    font-variant-numeric: tabular-nums;
+    /* Il browser interpola questa cifra fra una chain e l'altra invece di
+       farla sparire e riapparire: vedi selectChain() in main.js. */
+    view-transition-name: wallet-balance;
+
+    & .unit-mark { font-size: .45em; color: var(--ink-dim); }
+    & .cents { font-size: .54em; color: var(--ink-dim); }
   }
 
-  /* --- segmented control chain --- */
-  .seg { position: relative; display: grid; grid-template-columns: 1fr 1fr; background: var(--raised); border-radius: 11px; padding: 3px; }
-  .seg .thumb {
-    position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc(50% - 3px);
-    background: var(--panel); border-radius: 9px; box-shadow: 0 1px 3px rgba(0, 0, 0, .18);
-    transition: transform .26s cubic-bezier(.32, .72, 0, 1);
-  }
-  .seg[data-i="1"] .thumb { transform: translateX(100%); }
-  .seg button {
-    position: relative; z-index: 1; background: none; border: none; font: inherit; font-size: 12.5px;
-    font-weight: 600; color: var(--ink-dim); padding: 8px 4px; cursor: pointer; border-radius: 9px;
-  }
-  .seg button[aria-selected="true"] { color: var(--ink); }
+  .meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-block-start: 10px; }
 
-  /* --- hero saldo --- */
-  .balance-label { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); margin: 0 0 4px; }
-  .hero-balance {
-    font-size: 46px; font-weight: 600; line-height: 1; letter-spacing: -.02em;
-    display: inline-flex; align-items: flex-start; gap: 1px; font-variant-numeric: tabular-nums;
-  }
-  .hero-balance .dollar { font-size: 22px; margin-right: 2px; margin-top: 4px; color: var(--ink-dim); }
-  .hero-balance .cents { font-size: 26px; align-self: flex-end; margin-bottom: 3px; color: var(--ink-dim); }
-  .hero-balance .digit { display: inline-block; overflow: hidden; height: 1em; position: relative; }
-  .hero-balance .digit span { display: block; transition: transform .2s cubic-bezier(.22, 1, .36, 1); }
-  .hero-unit { font-size: 15px; color: var(--ink-dim); margin-left: 6px; align-self: center; }
-  .hero-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 9px; }
-  .hero-addr {
-    font-family: var(--mono); font-size: 11.5px; color: var(--ink-faint);
-    background: var(--raised); border: none; border-radius: 7px; padding: 4px 8px; cursor: pointer;
-  }
-  .fresh-badge { font-size: 11px; color: var(--ink-dim); display: flex; align-items: center; gap: 5px; }
-  .fresh-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-faint); transition: background .3s; }
-  .fresh-dot.live { background: var(--accent); }
-  @media (prefers-reduced-motion: no-preference) {
-    .fresh-dot.live { animation: pulse 2.4s ease-in-out infinite; }
-  }
-  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
-  .hero-spark { width: 100%; height: 46px; display: block; margin-top: 10px; }
-
-  .empty-hero { padding: 10px 0 4px; color: var(--ink-dim); font-size: 13px; }
-  .empty-hero button {
-    display: block; margin-top: 12px; padding: 11px 18px; border-radius: 11px; border: none;
-    background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 13.5px; cursor: pointer;
+  .addr {
+    font-family: var(--mono); font-size: 11.5px; color: var(--ink-dim);
+    background: none; border: 0; border-block-end: 1px dotted var(--line); padding: 0 0 1px;
+    view-transition-name: wallet-address;
   }
 
-  /* --- riga azioni --- */
-  .actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-  .act {
-    background: var(--raised); border: none; border-radius: 12px; padding: 10px 4px 8px;
-    color: var(--ink); font: inherit; font-size: 10.5px; font-weight: 600;
-    display: flex; flex-direction: column; align-items: center; gap: 5px; cursor: pointer;
-    transition: transform .12s ease;
-  }
-  .act:active { transform: scale(.96); }
-  .act.primary { background: var(--accent); color: var(--accent-ink); }
-  .act svg { width: 17px; height: 17px; }
+  .live {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11px; color: var(--ink-faint);
 
-  /* --- chip di stato --- */
-  .state-chips { display: flex; gap: 8px; }
-  .chip {
-    flex: 1; display: flex; flex-direction: column; gap: 2px; padding: 9px 10px;
-    border-radius: 11px; background: var(--panel); border: 1px solid var(--border);
-  }
-  .chip b { font-size: 12.5px; font-weight: 600; }
-  .chip small { font-size: 10.5px; color: var(--ink-faint); }
-  .chip.ok b { color: var(--accent); }
-  .chip.stop b { color: var(--danger); }
-
-  /* --- lista asset --- */
-  .sect-h { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 2px; }
-  .sect-h span { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); }
-  .sect-h button { background: none; border: none; font: inherit; font-size: 11.5px; color: var(--accent); cursor: pointer; padding: 0; }
-  .holding-row { display: flex; align-items: center; gap: 11px; padding: 11px 0; border-bottom: 1px solid var(--border); }
-  .holding-row:last-child { border-bottom: none; }
-  .holding-icon {
-    width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0; display: flex;
-    align-items: center; justify-content: center; font-size: 13px; font-weight: 700;
-    color: var(--accent-ink); background: var(--accent);
-  }
-  .holding-icon.dim { background: var(--raised); color: var(--ink-dim); }
-  .holding-main { flex: 1; min-width: 0; }
-  .holding-main .name { font-size: 14px; font-weight: 600; }
-  .holding-main .sub { font-size: 11.5px; color: var(--ink-faint); margin-top: 1px; }
-  .holding-value { font-size: 14px; font-weight: 600; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
-
-  /* --- riga chiave privata --- */
-  .danger-row {
-    display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
-    padding: 11px 12px; border-radius: 12px; border: 1px solid var(--danger-soft);
-    background: var(--danger-soft); cursor: pointer; font: inherit; color: var(--ink);
-  }
-  .danger-row .t { flex: 1; }
-  .danger-row b { display: block; font-size: 12.5px; color: var(--danger); }
-  .danger-row small { font-size: 10.5px; color: var(--ink-dim); }
-  .danger-row .chev { color: var(--ink-faint); }
-
-  /* --- login --- */
-  #login-screen { padding: 12px 0; }
-  .field-label { display: block; font-size: 12px; color: var(--ink-dim); margin: 12px 0 5px; }
-  #login-form input {
-    width: 100%; padding: 10px 12px; border-radius: 9px;
-    border: 1.5px solid var(--border); background: var(--panel); color: var(--ink); font-size: 15px;
-  }
-  #login-form button {
-    width: 100%; margin-top: 16px; padding: 11px; border-radius: 10px; border: none;
-    background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 14px; cursor: pointer;
-  }
-  #login-form button:disabled { opacity: .5; }
-
-  /* --- foglio dal basso --- */
-  .sheet-bg {
-    position: fixed; inset: 0; background: rgba(4, 8, 7, .55); z-index: 40;
-    opacity: 0; pointer-events: none; transition: opacity .22s ease;
-  }
-  .sheet-bg.open { opacity: 1; pointer-events: auto; }
-  .sheet {
-    position: fixed; left: 0; right: 0; bottom: 0; z-index: 41; margin: 0 auto; max-width: 460px;
-    background: var(--panel); border-radius: 20px 20px 0 0; border-top: 1px solid var(--border);
-    box-shadow: var(--shadow); padding: 10px 18px calc(22px + env(safe-area-inset-bottom, 0px));
-    transform: translateY(101%); transition: transform .3s cubic-bezier(.32, .72, 0, 1);
-    max-height: 82vh; overflow-y: auto;
-  }
-  .sheet.open { transform: translateY(0); }
-  .grab { width: 36px; height: 4px; border-radius: 2px; background: var(--border); margin: 0 auto 12px; }
-  .sheet h2 { font-size: 15px; margin: 0 0 6px; }
-  .panel { display: none; }
-  .panel.on { display: block; }
-  .sheet-close {
-    width: 100%; margin-top: 16px; background: var(--raised); color: var(--ink); border: none;
-    border-radius: 11px; padding: 11px; font: inherit; font-weight: 600; font-size: 13px; cursor: pointer;
+    & .dot {
+      inline-size: 6px; block-size: 6px; border-radius: 50%;
+      background: var(--ink-faint); transition: background .3s;
+      &.is-live { background: var(--accent); }
+    }
   }
 
-  .placeholder-note {
-    font-size: 11.5px; color: var(--amber); background: var(--amber-soft);
-    border: 1px solid var(--amber-soft); border-radius: 8px; padding: 9px 10px;
+  /* --- sequenza delle letture ------------------------------------- */
+  .spark {
+    & svg { inline-size: 100%; block-size: 44px; display: block; }
+    & .spark-fill { fill: url(#spark-gradient); }
+    & .spark-line { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
+    & .spark-end { fill: var(--accent); }
+    & .scale {
+      display: flex; justify-content: space-between;
+      font-size: 10.5px; color: var(--ink-faint); font-variant-numeric: tabular-nums;
+      margin-block-start: 4px;
+    }
   }
-  .dim-note { font-size: 11.5px; color: var(--ink-dim); margin: 4px 0 10px; }
 
-  .risk-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; }
-  .risk-cell { background: var(--raised); border-radius: 10px; padding: 9px 11px; }
-  .risk-cell .k { font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-faint); }
-  .risk-cell .v { font-size: 15px; font-weight: 700; color: var(--ink); margin-top: 2px; font-variant-numeric: tabular-nums; }
-  .breaker-pill {
-    display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 9px 11px;
-    border-radius: 10px; font-size: 12.5px; font-weight: 600;
+  /* --- riga di stato ---------------------------------------------- */
+  .status {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; color: var(--ink-dim);
+
+    & .dot { inline-size: 6px; block-size: 6px; border-radius: 50%; background: var(--ink-faint); flex-shrink: 0; }
+    &[data-armed="true"] .dot { background: var(--amber); }
+    &[data-armed="true"] { color: var(--ink); }
+  }
+
+  /* --- azioni ------------------------------------------------------
+     Quattro pari: su un wallet in sola lettura nessuna di queste e'
+     l'azione principale, e dipingerne una di verde direbbe il contrario. */
+  .actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+
+  /* Sotto i 340px la fila di quattro comprime le etichette: meglio 2x2.
+     Misura il contenitore, non la finestra. */
+  @container (width < 340px) {
+    .actions { grid-template-columns: 1fr 1fr; }
+  }
+
+  .action {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    background: var(--raised); border: 0; border-radius: var(--radius);
+    padding: 12px 4px 10px; font-size: 11px; font-weight: 600;
+    transition: background .15s, scale .12s;
+
+    & svg { inline-size: 17px; block-size: 17px; color: var(--ink-dim); }
+    &:hover { background: color-mix(in oklch, var(--raised), var(--ink) 4%); }
+    &:active { scale: .96; }
+  }
+
+  /* --- elenco asset ------------------------------------------------ */
+  .assets {
+    & .label { margin-block-end: 6px; }
+    & ul { list-style: none; margin: 0; padding: 0; }
+  }
+
+  .asset {
+    display: flex; align-items: center; gap: 11px;
+    padding-block: 11px;
+    border-block-end: 1px solid var(--line);
+    &:last-child { border-block-end: 0; }
+
+    & .asset-mark {
+      inline-size: 30px; block-size: 30px; border-radius: 50%;
+      display: grid; place-items: center; flex-shrink: 0;
+      font-size: 12px; font-weight: 700;
+      background: var(--accent); color: var(--accent-ink);
+      &.is-token { background: var(--raised); color: var(--ink-dim); }
+    }
+    & .asset-name { flex: 1; min-width: 0;
+      & b { display: block; font-size: 14px; font-weight: 600; }
+      & small { font-size: 11.5px; color: var(--ink-faint); }
+    }
+    & .asset-value { text-align: end; font-variant-numeric: tabular-nums;
+      & b { display: block; font-size: 14px; font-weight: 600; }
+      & small { font-size: 11.5px; color: var(--ink-faint); }
+    }
+  }
+
+  /* --- la riga che espone la chiave --------------------------------
+     Separata da un filo sopra, non da un blocco rosso pieno: il rosso
+     dice "questa e' l'unica voce che tira fuori la chiave", e un
+     riquadro colorato lo urla anche quando nessuno sta per premerlo. */
+  .reveal-row {
+    display: flex; align-items: center; gap: 11px; width: 100%;
+    background: none; border: 0; border-block-start: 1px solid var(--line);
+    padding: 16px 0 0; text-align: start;
+
+    & svg { color: var(--danger); flex-shrink: 0; }
+    & .t { flex: 1;
+      & b { display: block; font-size: 13px; font-weight: 600; color: var(--danger); }
+      & small { font-size: 11px; color: var(--ink-faint); }
+    }
+    & .chev { color: var(--ink-faint); }
+  }
+
+  /* --- stato vuoto -------------------------------------------------- */
+  .empty { color: var(--ink-dim); font-size: 13px; }
+
+  /* --- pulsanti ----------------------------------------------------- */
+  .btn-primary, .btn-quiet, .btn-danger {
+    inline-size: 100%; border: 0; border-radius: 10px; padding: 11px;
+    font-size: 13px; font-weight: 600; margin-block-start: 14px;
+    transition: background .15s;
+  }
+  .btn-primary { background: var(--accent); color: var(--accent-ink); &:disabled { opacity: .5; } }
+  .btn-quiet   { background: var(--raised); color: var(--ink); &:hover { background: var(--hover); } }
+  .btn-danger  { background: var(--danger-soft); color: var(--danger); }
+
+  /* --- moduli -------------------------------------------------------- */
+  .form {
+    display: flex; flex-direction: column; gap: 4px;
+
+    & label { font-size: 12px; color: var(--ink-dim); margin-block-start: 10px; }
+    & input, & select {
+      inline-size: 100%; padding: 10px 12px; border-radius: 9px;
+      border: 1.5px solid var(--line); background: var(--raised); font-size: 15px;
+      &:focus-visible { border-color: var(--accent); outline: none; }
+    }
+    & .form-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+      & > span { display: flex; flex-direction: column; gap: 4px; }
+    }
+  }
+
+  .outcome {
+    display: block; margin-block-start: 12px; padding: 10px 12px;
+    border-radius: 10px; font-size: 12.5px; background: var(--raised);
+    &[data-tone="ok"] { background: var(--accent-soft); color: var(--accent); }
+    &[data-tone="no"] { background: var(--danger-soft); color: var(--danger); }
+  }
+
+  /* --- coppie chiave/valore ------------------------------------------ */
+  .kv {
+    margin: 0;
+    & > div {
+      display: flex; justify-content: space-between; gap: 12px;
+      padding-block: 9px; border-block-end: 1px solid var(--line);
+      &:last-child { border-block-end: 0; }
+    }
+    & dt { color: var(--ink-faint); font-size: 12.5px; }
+    & dd { margin: 0; font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  }
+
+  .address-block {
+    font-family: var(--mono); font-size: 12px; line-height: 1.6; word-break: break-all;
+    background: var(--raised); border-radius: 10px; padding: 10px 12px; margin: 0 0 4px;
+  }
+
+  /* --- misuratore della spesa ----------------------------------------
+     Una barra dice "quanto ne resta" a colpo d'occhio; due numeri
+     affiancati obbligano a fare la divisione a mente. */
+  .meter {
+    margin-block-start: 14px;
+    & .meter-head {
+      display: flex; justify-content: space-between; align-items: baseline;
+      font-size: 12px; color: var(--ink-dim); margin-block-end: 6px;
+      & b { color: var(--ink); font-variant-numeric: tabular-nums; }
+    }
+    & .meter-track { block-size: 5px; border-radius: 999px; background: var(--raised); overflow: hidden; }
+    & .meter-bar {
+      block-size: 100%; inline-size: var(--fill, 0%); border-radius: 999px;
+      background: var(--accent); transition: inline-size .4s cubic-bezier(.32,.72,0,1);
+    }
+  }
+
+  .breaker {
+    display: flex; align-items: center; gap: 8px;
+    margin-block-start: 14px; padding: 9px 11px; border-radius: 10px;
+    font-size: 12.5px; font-weight: 600;
     background: var(--accent-soft); color: var(--accent);
-  }
-  .breaker-pill.tripped { background: var(--danger-soft); color: var(--danger); }
-  .breaker-pill .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
 
-  #simulate-form label:first-of-type { margin-top: 0; }
-  #simulate-form input, #simulate-form select {
-    width: 100%; padding: 9px 11px; border-radius: 9px;
-    border: 1.5px solid var(--border); background: var(--bg); color: var(--ink); font-size: 13.5px;
-  }
-  #simulate-form button {
-    width: 100%; margin-top: 12px; padding: 10px; border-radius: 10px; border: none;
-    background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 13px; cursor: pointer;
-  }
-  #simulate-form button:disabled { opacity: .5; }
-  .sim-outcome { margin-top: 10px; padding: 9px 11px; border-radius: 9px; font-size: 12.5px; }
-  .sim-outcome.accepted { background: var(--accent-soft); color: var(--accent); }
-  .sim-outcome.rejected { background: var(--danger-soft); color: var(--danger); }
-
-  .tx-list { list-style: none; margin: 8px 0 0; padding: 0; }
-  .tx-list li {
-    display: flex; justify-content: space-between; gap: 8px; padding: 7px 0;
-    border-bottom: 1px solid var(--border); font-size: 12px; color: var(--ink-dim);
-  }
-  .tx-list a { color: var(--accent); font-family: var(--mono); text-decoration: none; }
-  .btn-sm {
-    padding: 9px 12px; border-radius: 9px; border: 1px solid var(--border); background: transparent;
-    color: var(--ink); font: inherit; font-size: 12.5px; cursor: pointer;
-  }
-  .addr-box {
-    font-family: var(--mono); font-size: 12px; word-break: break-all; color: var(--ink);
-    background: var(--raised); border-radius: 10px; padding: 11px 12px; margin: 8px 0 10px;
+    & .breaker-dot { inline-size: 7px; block-size: 7px; border-radius: 50%; background: currentColor; }
+    &[data-tripped="true"] { background: var(--danger-soft); color: var(--danger); }
   }
 
-  /* --- overlay rivelazione --- */
-  .overlay {
-    position: fixed; inset: 0; background: rgba(6, 9, 7, .88); backdrop-filter: blur(4px);
-    display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 50;
+  /* --- interruttore --------------------------------------------------
+     Lo stato sta in aria-checked, che e' gia' quello che legge un lettore
+     di schermo: lo stile ci si attacca sopra invece di duplicarlo in una
+     classe che JS deve ricordarsi di sincronizzare. */
+  .switch-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    margin-block-start: 16px; padding-block-start: 16px; border-block-start: 1px solid var(--line);
+    & b { display: block; font-size: 13px; }
+    & small { font-size: 11px; color: var(--ink-faint); }
   }
-  .overlay[hidden] { display: none; }
-  .overlay-card {
-    background: var(--panel); border: 1px solid var(--border); border-radius: 16px;
-    padding: 22px; max-width: 340px; width: 100%; text-align: center;
-  }
-  .overlay-card h2 { font-size: 14.5px; margin: 0 0 4px; }
-  .overlay-card p.small { font-size: 12px; color: var(--ink-dim); margin: 0 0 14px; }
-  .qr-ring-wrap { position: relative; width: 200px; height: 200px; margin: 0 auto 14px; }
-  .qr-ring-wrap img { width: 200px; height: 200px; border-radius: 10px; display: block; max-width: 100%; }
-  .qr-ring-wrap svg { position: absolute; inset: -6px; transform: rotate(-90deg); }
-  .qr-ring-wrap circle.track { stroke: var(--border); fill: none; stroke-width: 3; }
-  .qr-ring-wrap circle.progress {
-    stroke: var(--accent); fill: none; stroke-width: 3; stroke-linecap: round;
-    transition: stroke-dashoffset 1s linear;
-  }
-  .check-pop {
-    width: 72px; height: 72px; border-radius: 50%; background: var(--accent-soft);
-    display: flex; align-items: center; justify-content: center; margin: 0 auto 14px;
-    animation: pop .3s cubic-bezier(.22, 1.5, .36, 1);
-  }
-  .check-pop svg { width: 34px; height: 34px; stroke: var(--accent); }
-  @keyframes pop { from { transform: scale(.7); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-  .key-box {
-    margin-top: 4px; padding: 10px; border-radius: 9px; background: var(--amber-soft);
-    font-family: var(--mono); font-size: 11.5px; word-break: break-all; color: var(--amber); text-align: left;
-  }
-  .overlay-close {
-    margin-top: 14px; background: none; border: none; color: var(--ink-dim);
-    font: inherit; font-size: 12.5px; cursor: pointer; text-decoration: underline;
-  }
-  .msg { font-size: 12.5px; margin-top: 8px; }
-  .msg.err { color: var(--danger); }
-  .msg.ok { color: var(--accent); }
 
-  button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .switch {
+    position: relative; inline-size: 44px; block-size: 26px; flex-shrink: 0;
+    border-radius: 999px; border: 1px solid var(--line); background: var(--raised);
+    transition: background .2s, border-color .2s;
+
+    &::after {
+      content: ""; position: absolute; inset-block-start: 3px; inset-inline-start: 3px;
+      inline-size: 18px; block-size: 18px; border-radius: 50%;
+      background: var(--ink-faint);
+      transition: translate .2s cubic-bezier(.32,.72,0,1), background .2s;
+    }
+    &[aria-checked="true"] {
+      background: var(--accent-soft); border-color: var(--accent);
+      &::after { translate: 18px 0; background: var(--accent); }
+    }
+    &:disabled { opacity: .5; }
+  }
+
+  .sheet-note { font-size: 12.5px; color: var(--ink-dim); margin: 0;
+    &.is-error { color: var(--danger); }
+    & a { color: var(--accent); }
+  }
+
+  .tx-list {
+    list-style: none; margin: 0; padding: 0;
+    & li {
+      display: flex; justify-content: space-between; gap: 10px;
+      padding-block: 9px; border-block-end: 1px solid var(--line); font-size: 12px;
+      &:last-child { border-block-end: 0; }
+    }
+    & a { color: var(--accent); font-family: var(--mono); text-decoration: none; }
+    & span { color: var(--ink-faint); }
+  }
+
+  /* --- avviso temporaneo ---------------------------------------------- */
+  .toast {
+    position: fixed; inset-block-end: calc(16px + env(safe-area-inset-bottom, 0px));
+    inset-inline: var(--gap); margin-inline: auto; max-inline-size: 428px; z-index: 30;
+    display: flex; align-items: center; gap: 10px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
+    padding: 11px 16px; box-shadow: var(--shadow);
+
+    & .toast-mark {
+      inline-size: 18px; block-size: 18px; border-radius: 50%; flex-shrink: 0;
+      display: grid; place-items: center; font-size: 11px;
+      background: var(--accent-soft); color: var(--accent);
+    }
+    & .toast-title { font-size: 13px; font-weight: 700; display: block; }
+    & .toast-detail { font-size: 11px; color: var(--ink-dim); }
+    & .toast-close { margin-inline-start: auto; background: none; border: 0; color: var(--ink-faint); }
+  }
+
+  /* --- pannelli dal basso ---------------------------------------------
+     <dialog> nativo: top-layer, ::backdrop, trappola del focus, Escape e
+     inertizzazione del resto della pagina sono del browser, non miei. */
+  .sheet, .modal {
+    border: 0; padding: 0; background: none; color: var(--ink);
+    &::backdrop { background: oklch(12% 0.01 200 / .5); }
+  }
+
+  .sheet {
+    max-inline-size: 460px; inline-size: 100%;
+    margin: auto auto 0;                       /* ancorato in basso */
+    max-block-size: 86dvh;
+    background: var(--panel);
+    border-start-start-radius: 22px; border-start-end-radius: 22px;
+    border-block-start: 1px solid var(--line);
+    padding: 10px 18px calc(20px + env(safe-area-inset-bottom, 0px));
+    overflow-y: auto;
+
+    & .grip { inline-size: 36px; block-size: 4px; border-radius: 2px; background: var(--line); margin: 0 auto 14px; }
+    & .sheet-title { font-size: 16px; font-weight: 600; }
+    & .sheet-desc { font-size: 12.5px; color: var(--ink-dim); margin: 4px 0 14px; }
+    /* Il testo descrittivo sparisce se vuoto, invece di lasciare un buco. */
+    & .sheet-desc:empty { display: none; }
+  }
+
+  .modal {
+    max-inline-size: 340px; inline-size: 100%; margin: auto;
+    background: var(--panel); border-radius: 18px; border: 1px solid var(--line);
+    padding: 24px 22px; text-align: center; box-shadow: var(--shadow);
+  }
+
+  .reveal-hint { font-size: 12px; color: var(--ink-dim); margin: 12px 0 0; }
+  .reveal-status { font-size: 12.5px; color: var(--ink-dim); margin: 14px 0 0;
+    &.is-error { color: var(--danger); }
+  }
+  .secret {
+    font-family: var(--mono); font-size: 11.5px; word-break: break-all; text-align: start;
+    background: var(--amber-soft); color: var(--amber);
+    border-radius: 10px; padding: 12px; margin: 12px 0 0;
+  }
+
+  .qr {
+    position: relative; inline-size: 212px; block-size: 212px; margin-inline: auto;
+
+    & img { inline-size: 200px; block-size: 200px; border-radius: 12px; margin: 6px; display: block; }
+    & svg { position: absolute; inset: 0; rotate: -90deg; }
+    & .qr-track { fill: none; stroke: var(--line); stroke-width: 3; }
+    & .qr-progress {
+      fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round;
+      stroke-dasharray: 641; stroke-dashoffset: 0;
+      animation: drain var(--ttl, 120s) linear forwards;
+    }
+  }
+
+  .reveal-done {
+    inline-size: 68px; block-size: 68px; border-radius: 50%; margin: 0 auto 4px;
+    display: grid; place-items: center; background: var(--accent-soft);
+    & svg { inline-size: 32px; block-size: 32px; stroke: var(--accent); }
+  }
+}
+
+@layer motion {
+  /* Entrata e uscita dei pannelli in CSS puro: @starting-style da' lo
+     stato "prima dell'apertura" e transition-behavior porta display nella
+     transizione, cosi' non serve nessun timer in JavaScript. */
+  .sheet, .modal {
+    transition: translate .32s cubic-bezier(.32,.72,0,1), opacity .25s, display .32s allow-discrete;
+  }
+  .sheet { translate: 0 0; }
+  .sheet:not([open]) { translate: 0 100%; }
+  @starting-style { .sheet[open] { translate: 0 100%; } }
+
+  .modal[open] { opacity: 1; scale: 1; }
+  .modal:not([open]) { opacity: 0; scale: .96; }
+  @starting-style { .modal[open] { opacity: 0; scale: .96; } }
+
+  .sheet::backdrop, .modal::backdrop {
+    transition: opacity .25s, display .25s allow-discrete;
+    opacity: 1;
+  }
+  .sheet:not([open])::backdrop, .modal:not([open])::backdrop { opacity: 0; }
+  @starting-style { .sheet[open]::backdrop, .modal[open]::backdrop { opacity: 0; } }
+
+  @keyframes drain { to { stroke-dashoffset: 641; } }
 
   @media (prefers-reduced-motion: reduce) {
-    .hero-balance .digit span, .fresh-dot, .qr-ring-wrap circle.progress,
-    .check-pop, .sheet, .sheet-bg, .seg .thumb { transition: none !important; animation: none !important; }
+    *, *::before, *::after {
+      animation-duration: .001ms !important;
+      transition-duration: .001ms !important;
+    }
+    /* Anche la transizione fra le chain: senza questo il browser
+       animerebbe comunque il morphing del saldo. */
+    ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) {
+      animation: none !important;
+    }
   }
+}
 </style>
+<!--onchain-importmap-->
 </head>
 <body>
-  <div class="wrap">
-    <header>
-      <button type="button" class="nav-back" onclick="history.back()" aria-label="Indietro">‹</button>
-      <h1>Wallet on-chain</h1>
-      <span class="alpha-tag">alpha</span>
+  <div class="page">
+    <header class="topbar">
+      <!-- Un link vero, non history.back(): questa pagina si apre anche da
+           zero (QR, link salvato) e li' "indietro" non avrebbe dove andare. -->
+      <a class="back" href="/" aria-label="Torna al sito">‹</a>
+      <h1>wallet on-chain</h1>
+      <span class="tag">alpha</span>
     </header>
-    <div id="toast-slot"></div>
 
-    <div id="login-screen" hidden>
-      <form id="login-form">
-        <label class="field-label" for="login-email">Email</label>
-        <input id="login-email" type="email" autocomplete="username" required />
-        <label class="field-label" for="login-password">Password</label>
-        <input id="login-password" type="password" autocomplete="current-password" required />
-        <button type="submit">Accedi</button>
-        <p class="msg" id="login-msg" hidden></p>
+    <section id="login-screen" hidden>
+      <form class="form" id="login-form">
+        <label for="login-email">Email</label>
+        <input id="login-email" name="email" type="email" autocomplete="username" required />
+        <label for="login-password">Password</label>
+        <input id="login-password" name="password" type="password" autocomplete="current-password" required />
+        <button type="submit" class="btn-primary">Accedi</button>
+        <p class="sheet-note is-error" id="login-error" hidden></p>
       </form>
-    </div>
+    </section>
 
-    <div id="app-shell" hidden>
-      <div class="seg" id="chain-seg" data-i="0">
-        <div class="thumb"></div>
-        <button type="button" class="chain-chip" data-chain="solana" data-i="0" aria-selected="true">Solana</button>
-        <button type="button" class="chain-chip" data-chain="robinhood" data-i="1" aria-selected="false">Robinhood</button>
+    <div id="app-shell" class="stack" hidden>
+      <div class="switcher" id="chain-switch" data-selected="solana" role="tablist" aria-label="Chain">
+        <span class="thumb" aria-hidden="true"></span>
+        <button type="button" role="tab" aria-selected="true" data-chain="solana">Solana</button>
+        <button type="button" role="tab" aria-selected="false" data-chain="robinhood">Robinhood</button>
       </div>
 
-      <div id="hero-slot"></div>
-
-      <div id="live-blocks" hidden>
-        <div class="actions" style="margin-bottom:18px">
-          <button class="act primary" type="button" data-sheet="sim">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><path d="M4 18 L9 11 L13 14 L20 5"/><path d="M15 5h5v5"/></svg>
-            Simula
-          </button>
-          <button class="act" type="button" data-sheet="recv">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><path d="M12 4v13"/><path d="M6 12l6 6 6-6"/><path d="M4 20h16"/></svg>
-            Ricevi
-          </button>
-          <button class="act" type="button" data-sheet="hist">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/></svg>
-            Storico
-          </button>
-          <button class="act" type="button" data-sheet="risk">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z"/></svg>
-            Limiti
-          </button>
+      <section>
+        <p class="label">Saldo · <span id="chain-label">Solana</span></p>
+        <div class="amount" id="balance">—</div>
+        <div class="meta">
+          <button type="button" class="addr" id="address" title="Copia l'indirizzo"></button>
+          <span class="live"><span class="dot" id="live-dot"></span><span id="fresh"></span></span>
         </div>
 
-        <div class="state-chips" style="margin-bottom:18px">
-          <div class="chip ok" id="chip-exec"><b>Sola lettura</b><small>nessuna firma possibile</small></div>
-          <div class="chip stop" id="chip-auto"><b>Auto-trade off</b><small>fase 4, non attiva</small></div>
+        <div class="spark" id="spark" hidden>
+          <svg viewBox="0 0 300 44" aria-hidden="true">
+            <defs>
+              <linearGradient id="spark-gradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="var(--accent)" stop-opacity=".22" />
+                <stop offset="100%" stop-color="var(--accent)" stop-opacity="0" />
+              </linearGradient>
+            </defs>
+            <path class="spark-fill" d="" />
+            <path class="spark-line" d="" />
+            <circle class="spark-end" r="2.6" cx="0" cy="0" />
+          </svg>
+          <p class="scale"><span class="spark-lo"></span><span class="spark-span"></span><span class="spark-hi"></span></p>
         </div>
+      </section>
 
-        <div style="margin-bottom:18px">
-          <div class="sect-h"><span>Asset</span><button type="button" data-sheet="hist">Storico</button></div>
-          <div id="holdings-slot"></div>
-        </div>
+      <p class="status" id="status" data-armed="false" hidden>
+        <span class="dot"></span>
+        <span id="status-text">Sola lettura — nessuna firma parte da questa pagina.</span>
+      </p>
 
-        <button type="button" class="danger-row" id="reveal-btn">
-          <svg viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="1.8" width="20" height="20" aria-hidden="true"><path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z"/><circle cx="12" cy="11" r="2"/><path d="M12 13v3"/></svg>
-          <span class="t"><b>Rivela chiave privata</b><small>serve il tuo telefono, mai solo da qui</small></span>
-          <span class="chev">›</span>
+      <div class="actions" id="actions" hidden>
+        <button type="button" class="action" data-sheet="receive">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 4v13" /><path d="M6 12l6 6 6-6" /><path d="M4 20h16" /></svg>
+          Ricevi
+        </button>
+        <button type="button" class="action" data-sheet="history">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="8" /><path d="M12 7v5l3 2" /></svg>
+          Storico
+        </button>
+        <button type="button" class="action" data-sheet="risk">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z" /></svg>
+          Limiti
+        </button>
+        <button type="button" class="action" data-sheet="simulate">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 18 L9 11 L13 14 L20 5" /><path d="M15 5h5v5" /></svg>
+          Simula
         </button>
       </div>
+
+      <section class="assets" id="assets" hidden>
+        <p class="label">Posizioni</p>
+        <ul id="asset-list"></ul>
+      </section>
+
+      <button type="button" class="reveal-row" id="reveal-row" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="19" height="19"><path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z" /><circle cx="12" cy="11" r="2" /><path d="M12 13v3" /></svg>
+        <span class="t"><b>Rivela chiave privata</b><small>serve il tuo telefono, mai solo da qui</small></span>
+        <span class="chev">›</span>
+      </button>
+
+      <section class="empty" id="empty-state" hidden>
+        Nessun wallet <span data-chain-name></span> ancora.
+        <button type="button" class="btn-primary" data-create>Crea wallet</button>
+      </section>
     </div>
   </div>
 
-  <div class="sheet-bg" id="sheet-bg"></div>
-  <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
-    <div class="grab"></div>
-    <h2 id="sheet-title">—</h2>
-
-    <div class="panel" id="panel-hist">
-      <p class="dim-note">Le transazioni arrivano dall'RPC pubblico, solo quando le chiedi.</p>
-      <div id="history-body">
-        <button type="button" class="btn-sm" id="load-history-btn">Carica transazioni</button>
-      </div>
-    </div>
-
-    <div class="panel" id="panel-risk">
-      <div id="risk-body"><p class="dim-note">Leggo lo stato…</p></div>
-    </div>
-
-    <div class="panel" id="panel-recv">
-      <p class="dim-note">Manda solo asset di questa chain: un invio da un'altra rete va perso.</p>
-      <div class="addr-box" id="recv-addr">—</div>
-      <button type="button" class="btn-sm" id="recv-copy" style="width:100%">Copia indirizzo</button>
-    </div>
-
-    <div class="panel" id="panel-sim">
-      <p class="dim-note">Stessi guardrail della Fase 3 — nessuna chiave, nessuna transazione. Serve a vedere se un ordine passerebbe i controlli.</p>
-      <form id="simulate-form">
-        <label class="field-label" for="sim-token">Token (simbolo o indirizzo)</label>
-        <input id="sim-token" type="text" placeholder="es. TOKEN" required />
-        <label class="field-label" for="sim-side">Lato</label>
-        <select id="sim-side"><option value="buy">Compra</option><option value="sell">Vendi</option></select>
-        <label class="field-label" for="sim-notional">Size (USD)</label>
-        <input id="sim-notional" type="number" min="0" step="0.01" value="10" required />
-        <label class="field-label" for="sim-impact">Price impact stimato (%)</label>
-        <input id="sim-impact" type="number" min="0" step="0.01" value="0.5" required />
-        <label class="field-label" for="sim-price">Prezzo del token (USD)</label>
-        <input id="sim-price" type="number" min="0" step="0.000001" value="1" required />
-        <button type="submit">Simula</button>
-      </form>
-      <div id="simulate-result"></div>
-    </div>
-
-    <button type="button" class="sheet-close" id="sheet-close">Chiudi</button>
+  <div class="toast" id="toast" role="status" hidden>
+    <span class="toast-mark" aria-hidden="true">✓</span>
+    <span><span class="toast-title"></span><span class="toast-detail"></span></span>
+    <button type="button" class="toast-close" aria-label="Chiudi">✕</button>
   </div>
 
-  <div class="overlay" id="overlay" hidden>
-    <div class="overlay-card" id="overlay-card"></div>
-  </div>
+  <dialog class="sheet" id="sheet">
+    <div class="grip" aria-hidden="true"></div>
+    <h2 class="sheet-title"></h2>
+    <p class="sheet-desc"></p>
+    <div class="sheet-body"></div>
+    <button type="button" class="btn-quiet sheet-close">Chiudi</button>
+  </dialog>
 
-<script>
-  const REDUCE_MOTION = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const state = { chain: "solana", wallets: {} };
+  <dialog class="modal" id="reveal">
+    <div class="reveal-body"></div>
+  </dialog>
 
-  function el(id) { return document.getElementById(id); }
-
-  function cacheKey(chain) { return `onchain_balance_cache_${chain}`; }
-  function readCache(chain) {
-    try { return JSON.parse(localStorage.getItem(cacheKey(chain)) || "null"); } catch { return null; }
-  }
-  function writeCache(chain, data) {
-    try { localStorage.setItem(cacheKey(chain), JSON.stringify({ ...data, at: Date.now() })); } catch { /* storage piena o bloccata */ }
-  }
-
-  function renderDigits(container, text) {
-    // Un "roll" per cifra invece di un fade generico — solo su transform/opacity,
-    // sempre interpolabile; sotto reduced-motion diventa una sostituzione istantanea.
-    container.innerHTML = "";
-    for (const ch of text) {
-      if (/[0-9]/.test(ch) && !REDUCE_MOTION) {
-        const wrap = document.createElement("span");
-        wrap.className = "digit";
-        const span = document.createElement("span");
-        span.textContent = ch;
-        wrap.appendChild(span);
-        container.appendChild(wrap);
-      } else {
-        container.appendChild(document.createTextNode(ch));
-      }
-    }
-  }
-
-  function freshBadgeText(atMs) {
-    const s = Math.round((Date.now() - atMs) / 1000);
-    if (s < 5) return "aggiornato ora";
-    if (s < 60) return `agg. ${s}s fa`;
-    return `agg. ${Math.round(s / 60)}min fa`;
-  }
-
-  // --- Foglio dal basso: un solo contenitore, un pannello per volta. Sostituisce
-  // le quattro fisarmoniche — il saldo resta leggibile, il dettaglio e' a un tocco.
-  const SHEET_TITLES = { hist: "Saldo & storico", risk: "Limiti & sicurezza", recv: "Ricevi", sim: "Prova una simulazione (Fase 2)" };
-  let openPanel = null;
-
-  function openSheet(key) {
-    if (!SHEET_TITLES[key]) return;
-    openPanel = key;
-    el("sheet-title").textContent = SHEET_TITLES[key];
-    document.querySelectorAll(".panel").forEach((p) => p.classList.toggle("on", p.id === `panel-${key}`));
-    el("sheet").classList.add("open");
-    el("sheet-bg").classList.add("open");
-    if (key === "risk" && riskLoadedFor !== state.chain) loadRiskStatus();
-    if (key === "recv") {
-      const w = state.wallets[state.chain] || readCache(state.chain);
-      el("recv-addr").textContent = w?.address || "—";
-    }
-  }
-
-  function closeSheet() {
-    openPanel = null;
-    el("sheet").classList.remove("open");
-    el("sheet-bg").classList.remove("open");
-  }
-
-  document.addEventListener("click", (ev) => {
-    const trigger = ev.target.closest("[data-sheet]");
-    if (trigger) openSheet(trigger.dataset.sheet);
-  });
-  el("sheet-bg").addEventListener("click", closeSheet);
-  el("sheet-close").addEventListener("click", closeSheet);
-  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && openPanel) closeSheet(); });
-
-  el("recv-copy").addEventListener("click", (ev) => {
-    const addr = el("recv-addr").textContent;
-    if (!addr || addr === "—") return;
-    navigator.clipboard?.writeText(addr);
-    const btn = ev.currentTarget;
-    btn.textContent = "Copiato ✓";
-    setTimeout(() => { btn.textContent = "Copia indirizzo"; }, 1400);
-  });
-
-  async function renderHero() {
-    const slot = el("hero-slot");
-    const cached = readCache(state.chain);
-    const wallet = state.wallets[state.chain];
-
-    if (!wallet && !cached) {
-      slot.innerHTML = `<p class="balance-label">Saldo</p>
-        <div class="empty-hero">Nessun wallet ${state.chain} ancora.
-          <button type="button" id="create-wallet-btn">Crea il wallet</button></div>`;
-      el("live-blocks").hidden = true;
-      el("create-wallet-btn").addEventListener("click", createWallet);
-      return;
-    }
-
-    const address = wallet?.address || cached?.address || "";
-    const unit = state.chain === "solana" ? "SOL" : "ETH";
-    const shownBalance = cached ? cached.native_balance : "—";
-    const usdValue = cached && cached.native_usd_value != null ? cached.native_usd_value : null;
-    const balanceHtml = usdValue != null
-      ? formatUsd(usdValue)
-      : `${shownBalance}<span class="hero-unit">${unit}</span>`;
-    slot.innerHTML = `
-      <p class="balance-label">Saldo</p>
-      <div class="hero-balance" id="hero-balance-digits">${balanceHtml}</div>
-      <div class="hero-meta">
-        <button type="button" class="hero-addr" id="copy-addr-btn" title="Copia">${address.slice(0, 10)}…${address.slice(-6)} ⧉</button>
-        <span class="fresh-badge"><span class="fresh-dot" id="fresh-dot"></span>
-          <span id="fresh-text">${cached ? freshBadgeText(cached.at) : "in attesa del primo saldo"}</span></span>
-      </div>
-      <div id="spark-slot"></div>`;
-    el("live-blocks").hidden = false;
-    el("copy-addr-btn").addEventListener("click", (ev) => {
-      navigator.clipboard?.writeText(address);
-      const btn = ev.currentTarget;
-      const old = btn.textContent;
-      btn.textContent = "copiato ✓";
-      setTimeout(() => { btn.textContent = old; }, 1200);
-    });
-
-    renderSpark();
-    renderHoldings(unit, shownBalance, usdValue);
-    fetchBalance();
-    loadOnchainPositions();
-    loadStateChips();
-  }
-
-  // "$" + centesimi in due parti come nello screenshot di riferimento
-  // (dollaro piccolo davanti, centesimi leggermente piu' piccoli in coda) —
-  // solo quando prices.native_price_usd ha risposto: mai un cambio inventato.
-  function formatUsd(value) {
-    const dollars = Math.trunc(value);
-    const cents = Math.round((value - dollars) * 100).toString().padStart(2, "0");
-    return `<span class="dollar">$</span>${dollars}<span class="cents">.${cents}</span>`;
-  }
-
-  // --- Sparkline: solo letture vere dal localStorage. Con meno di due punti
-  // non si disegna niente — una linea inventata varrebbe meno del vuoto.
-  function renderSpark() {
-    const slot = el("spark-slot");
-    if (!slot) return;
-    const hist = readHistory(state.chain).map((p) => Number(p.v)).filter((v) => Number.isFinite(v));
-    if (hist.length < 2) { slot.innerHTML = ""; return; }
-    const min = Math.min(...hist);
-    const max = Math.max(...hist);
-    const span = max - min || 1;
-    const pts = hist.map((v, i) => {
-      const x = (i / (hist.length - 1)) * 300;
-      const y = 42 - ((v - min) / span) * 36;
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    });
-    const line = `M${pts.join(" L")}`;
-    const last = pts[pts.length - 1].split(",");
-    slot.innerHTML = `
-      <svg class="hero-spark" viewBox="0 0 300 46" preserveAspectRatio="none" role="img"
-           aria-label="Saldo nelle ultime ${hist.length} letture, da ${min} a ${max}">
-        <path d="${line} L300,46 L0,46 Z" fill="var(--accent-soft)"></path>
-        <path d="${line}" fill="none" stroke="var(--accent)" stroke-width="1.6"
-              stroke-linejoin="round" stroke-linecap="round"></path>
-        <circle cx="${last[0]}" cy="${last[1]}" r="2.6" fill="var(--accent)"></circle>
-      </svg>`;
-  }
-
-  // --- Chip di stato: quello che conta davvero su un wallet con la chiave sul
-  // server (esecuzione reale accesa o spenta) sta sempre a schermo, non dentro
-  // una sezione da aprire.
-  async function loadStateChips() {
-    const chip = el("chip-exec");
-    try {
-      const resp = await fetch(`/api/onchain/risk/status/${state.chain}`);
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.detail || "errore");
-      const live = Boolean(data.execution_enabled);
-      chip.className = `chip ${live ? "stop" : "ok"}`;
-      chip.innerHTML = live
-        ? "<b>Esecuzione attiva</b><small>gli ordini vanno on-chain</small>"
-        : "<b>Sola lettura</b><small>nessuna firma possibile</small>";
-    } catch {
-      chip.className = "chip";
-      chip.innerHTML = "<b>Stato non letto</b><small>rete non raggiungibile</small>";
-    }
-  }
-
-  // --- Lista "asset", stile token-row: il saldo nativo (sempre) piu' le
-  // posizioni reali del ledger on-chain (Fase 2/3/4) se ce ne sono — mai
-  // un token inventato solo per riempire la lista.
-  function renderHoldings(unit, nativeBalance, usdValue) {
-    const slot = el("holdings-slot");
-    const initial = unit === "SOL" ? "S" : "E";
-    const value = usdValue != null ? `$${usdValue.toFixed(2)}` : `${nativeBalance} ${unit}`;
-    slot.innerHTML = `
-      <div id="holdings-list">
-        <div class="holding-row">
-          <div class="holding-icon">${initial}</div>
-          <div class="holding-main">
-            <div class="name">${unit === "SOL" ? "Solana" : "Robinhood Chain"}</div>
-            <div class="sub">${nativeBalance} ${unit} · nativo</div>
-          </div>
-          <div class="holding-value">${value}</div>
-        </div>
-      </div>`;
-  }
-
-  async function loadOnchainPositions() {
-    try {
-      const resp = await fetch(`/api/onchain/positions/${state.chain}`);
-      if (!resp.ok) return;
-      const positions = await resp.json();
-      if (!positions.length) return;
-      const list = el("holdings-list");
-      if (!list) return;
-      positions.forEach((p) => {
-        const row = document.createElement("div");
-        row.className = "holding-row";
-        row.innerHTML = `
-          <div class="holding-icon dim">${p.token.slice(0, 1).toUpperCase()}</div>
-          <div class="holding-main">
-            <div class="name">${p.token}</div>
-            <div class="sub">${p.quantity.toFixed(4)} · on-chain</div>
-          </div>
-          <div class="holding-value">$${p.cost_usd.toFixed(2)}</div>`;
-        list.appendChild(row);
-      });
-    } catch { /* lista posizioni: un fallimento qui non deve rompere la hero */ }
-  }
-
-  // --- Storico saldo: solo punti letti per davvero, mai inventati — la
-  // linea resta piatta/assente finche' non ci sono almeno due letture vere.
-  function historyKey(chain) { return `onchain_balance_history_${chain}`; }
-  function readHistory(chain) {
-    try { return JSON.parse(localStorage.getItem(historyKey(chain)) || "[]"); } catch { return []; }
-  }
-  function appendHistory(chain, value) {
-    const hist = readHistory(chain);
-    hist.push({ t: Date.now(), v: value });
-    while (hist.length > 60) hist.shift();
-    try { localStorage.setItem(historyKey(chain), JSON.stringify(hist)); } catch { /* storage piena o bloccata */ }
-    return hist;
-  }
-
-  // --- Toast pillola, stile "10 USDC shielded — Confirmed": una conferma
-  // visibile dopo un'azione, non solo un cambio silenzioso di stato.
-  function showToast(title, subtitle) {
-    const slot = el("toast-slot");
-    slot.innerHTML = `
-      <div class="toast-pill">
-        <span class="ok-dot">✓</span>
-        <span class="txt"><b>${title}</b><small>${subtitle}</small></span>
-        <button type="button" class="close-x" aria-label="Chiudi">✕</button>
-      </div>`;
-    slot.querySelector(".close-x").addEventListener("click", () => { slot.innerHTML = ""; });
-  }
-
-  async function fetchBalance() {
-    const dot = el("fresh-dot");
-    try {
-      const resp = await Promise.race([
-        fetch(`/api/onchain/wallets/${state.chain}/balance`),
-        new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 6000)),
-      ]);
-      const body = await resp.json();
-      if (!resp.ok) throw new Error(body.detail || "errore");
-      writeCache(state.chain, body);
-      const digitsEl = el("hero-balance-digits");
-      const unit = state.chain === "solana" ? "SOL" : "ETH";
-      if (digitsEl) {
-        if (body.native_usd_value != null) {
-          digitsEl.innerHTML = formatUsd(body.native_usd_value);
-        } else {
-          const unitSpan = digitsEl.querySelector(".hero-unit");
-          renderDigits(digitsEl, String(body.native_balance));
-          digitsEl.appendChild(unitSpan || document.createTextNode(""));
-        }
-      }
-      renderHoldings(unit, body.native_balance, body.native_usd_value);
-      loadOnchainPositions();  // renderHoldings appena sopra ha svuotato le righe delle posizioni: le rimette
-      appendHistory(state.chain, body.native_balance);
-      renderSpark();
-      if (dot) { dot.classList.add("live"); }
-      const ft = el("fresh-text");
-      if (ft) ft.textContent = "aggiornato ora";
-    } catch {
-      const ft = el("fresh-text");
-      if (ft) ft.textContent = "rete lenta — riprovo…";
-      setTimeout(fetchBalance, 4000);
-    }
-  }
-
-  async function createWallet() {
-    try {
-      const resp = await fetch("/api/onchain/wallets", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chain: state.chain }),
-      });
-      const body = await resp.json();
-      if (!resp.ok) throw new Error(body.detail || "errore");
-      state.wallets[state.chain] = body;
-      renderHero();
-      showToast("Wallet creato", `${body.address.slice(0, 10)}… su ${state.chain}`);
-    } catch (err) {
-      alert(err.message || "Errore di rete.");
-    }
-  }
-
-  document.querySelectorAll(".chain-chip").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      document.querySelectorAll(".chain-chip").forEach((b) => b.setAttribute("aria-selected", "false"));
-      btn.setAttribute("aria-selected", "true");
-      el("chain-seg").dataset.i = btn.dataset.i;
-      state.chain = btn.dataset.chain;
-      riskLoadedFor = null;
-      closeSheet();
-      renderHero();
-    });
-  });
-
-  el("load-history-btn").addEventListener("click", async () => {
-    const body = el("history-body");
-    body.innerHTML = '<p class="dim-note">Leggo le transazioni…</p>';
-    try {
-      const resp = await fetch(`/api/onchain/wallets/${state.chain}/transactions`);
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.detail || "errore");
-      if (!data.available) {
-        body.innerHTML = `<p class="dim-note">${data.reason}
-          <a href="${data.explorer_url}" target="_blank" style="color:var(--accent)">Apri l'explorer →</a></p>`;
-        return;
-      }
-      if (!data.transactions.length) {
-        body.innerHTML = '<p class="dim-note">Nessuna transazione ancora.</p>';
-        return;
-      }
-      body.innerHTML = '<ul class="tx-list"></ul>';
-      const ul = body.querySelector(".tx-list");
-      data.transactions.forEach((t) => {
-        const li = document.createElement("li");
-        const when = t.block_time ? new Date(t.block_time * 1000).toLocaleString("it-IT") : "";
-        li.innerHTML = `<a href="${t.explorer_url}" target="_blank">${t.signature.slice(0, 10)}…</a>
-          <span>${t.status} · ${when}</span>`;
-        ul.appendChild(li);
-      });
-    } catch (err) {
-      body.innerHTML = `<p class="dim-note" style="color:var(--danger)">${err.message}</p>`;
-    }
-  });
-
-  // --- Limiti & sicurezza: stato vero da /api/onchain/risk/status, letto
-  // ad ogni apertura del foglio — mai una volta sola, i tetti cambiano nel giorno.
-  let riskLoadedFor = null;
-
-  async function loadRiskStatus() {
-    const body = el("risk-body");
-    body.innerHTML = '<p class="dim-note">Leggo lo stato…</p>';
-    try {
-      const resp = await fetch(`/api/onchain/risk/status/${state.chain}`);
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.detail || "errore");
-      riskLoadedFor = state.chain;
-      const cb = data.circuit_breaker;
-      body.innerHTML = `
-        <div class="risk-grid">
-          <div class="risk-cell"><div class="k">Tetto per trade</div><div class="v">$${data.per_trade_cap_usd}</div></div>
-          <div class="risk-cell"><div class="k">Tetto giornaliero</div><div class="v">$${data.daily_cap_usd}</div></div>
-          <div class="risk-cell"><div class="k">Spesa oggi</div><div class="v">$${data.daily_spent_usd}</div></div>
-          <div class="risk-cell"><div class="k">Concentrazione max</div><div class="v">${data.concentration_cap_pct}%</div></div>
-        </div>
-        <div class="breaker-pill ${cb.tripped ? "tripped" : ""}" id="breaker-pill">
-          <span class="dot"></span>
-          <span id="breaker-text">${cb.tripped ? `Circuit breaker scattato — ${cb.consecutive_losses} perdite di fila` : "Circuit breaker a riposo"}</span>
-        </div>
-        ${cb.tripped ? '<button type="button" class="btn-sm" id="breaker-reset-btn" style="margin-top:8px;width:100%">Riattiva manualmente</button>' : ""}
-        <p class="dim-note" style="margin-top:8px">Esecuzione reale: ${data.execution_enabled ? "attiva" : "spenta"}.
-          Auto-trade per strategia: Fase 4, non ancora attiva.</p>`;
-      if (cb.tripped) {
-        el("breaker-reset-btn").addEventListener("click", async () => {
-          try {
-            const r = await fetch(`/api/onchain/risk/circuit-breaker/${state.chain}/reset`, { method: "POST" });
-            const d = await r.json();
-            if (!r.ok) throw new Error(d.detail || "errore");
-            riskLoadedFor = null;
-            loadRiskStatus();
-          } catch (err) {
-            alert(err.message || "Errore di rete.");
-          }
-        });
-      }
-    } catch (err) {
-      body.innerHTML = `<p class="dim-note" style="color:var(--danger)">${err.message}</p>`;
-    }
-  }
-
-  // --- Simulazione Fase 2: stessi guardrail, nessuna chiave, nessuna rete on-chain.
-  el("simulate-form").addEventListener("submit", async (ev) => {
-    ev.preventDefault();
-    const out = el("simulate-result");
-    const btn = ev.target.querySelector("button[type=submit]");
-    btn.disabled = true;
-    out.innerHTML = '<p class="dim-note">Simulo…</p>';
-    try {
-      const resp = await fetch("/api/onchain/simulate", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chain: state.chain,
-          token: el("sim-token").value.trim(),
-          strategy_name: "manuale",
-          side: el("sim-side").value,
-          notional_usd: parseFloat(el("sim-notional").value),
-          price_impact_pct: parseFloat(el("sim-impact").value),
-          price_usd: parseFloat(el("sim-price").value),
-        }),
-      });
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.detail || "errore");
-      out.innerHTML = `<div class="sim-outcome ${data.accepted ? "accepted" : "rejected"}">
-        ${data.accepted ? "Ordine accettato dai guardrail." : data.reason}</div>`;
-      if (data.accepted) {
-        riskLoadedFor = null;
-        showToast("Simulazione confermata", `${el("sim-token").value.trim()} · ${el("sim-side").value === "buy" ? "acquisto" : "vendita"}`);
-      }
-    } catch (err) {
-      out.innerHTML = `<div class="sim-outcome rejected">${err.message}</div>`;
-    } finally {
-      btn.disabled = false;
-    }
-  });
-
-  // --- Rivelazione: overlay con QR, SSE per l'esito, Face ID/password sul telefono ---
-  el("reveal-btn").addEventListener("click", startReveal);
-
-  async function startReveal() {
-    const overlay = el("overlay");
-    const card = el("overlay-card");
-    overlay.hidden = false;
-    card.innerHTML = '<p class="small">Genero il QR…</p>';
-    let body;
-    try {
-      const resp = await fetch(`/api/onchain/wallets/${state.chain}/reveal/request`, { method: "POST" });
-      body = await resp.json();
-      if (!resp.ok) throw new Error(body.detail || "errore");
-    } catch (err) {
-      card.innerHTML = `<p class="msg err">${err.message || "Errore di rete."}</p>
-        <button type="button" class="overlay-close">Chiudi</button>`;
-      card.querySelector(".overlay-close").addEventListener("click", () => { overlay.hidden = true; });
-      return;
-    }
-    renderQrStep(card, body);
-  }
-
-  function renderQrStep(card, body) {
-    const R = 94;
-    const C = 2 * Math.PI * R;
-    card.innerHTML = `
-      <h2>Scansiona per rivelare</h2>
-      <p class="small">Dal telefono — o apri il link se sei già lì. Scade in 2 minuti.</p>
-      <div class="qr-ring-wrap">
-        <img src="${body.qr_data_uri}" alt="QR di approvazione" />
-        <svg viewBox="0 0 200 200"><circle class="track" cx="100" cy="100" r="${R}"/>
-          <circle class="progress" id="reveal-ring" cx="100" cy="100" r="${R}"
-            stroke-dasharray="${C}" stroke-dashoffset="0"/></svg>
-      </div>
-      <p class="small"><a href="${body.approve_url}" style="color:var(--accent)">Apri il link sul telefono →</a></p>
-      <p class="msg" id="reveal-status">In attesa di approvazione…</p>
-      <button type="button" class="overlay-close">Annulla</button>
-    `;
-    card.querySelector(".overlay-close").addEventListener("click", () => { el("overlay").hidden = true; });
-
-    const ring = el("reveal-ring");
-    const duration = 120000;
-    const start = Date.now();
-    const tick = () => {
-      if (!ring.isConnected) return;
-      const left = Math.max(0, 1 - (Date.now() - start) / duration);
-      ring.style.strokeDashoffset = String(C * (1 - left));
-      if (left > 0) requestAnimationFrame(tick);
-    };
-    if (!REDUCE_MOTION) requestAnimationFrame(tick);
-
-    listenReveal(body.token, card);
-  }
-
-  function listenReveal(token, card) {
-    const source = new EventSource(`/api/onchain/wallets/reveal/stream/${token}`);
-    source.onmessage = async (ev) => {
-      const data = JSON.parse(ev.data);
-      const statusEl = card.querySelector("#reveal-status");
-      if (data.status === "approved") {
-        source.close();
-        if (statusEl) statusEl.textContent = "Approvato — rivelo la chiave…";
-        await finishReveal(token, card);
-      } else if (data.status === "expired") {
-        source.close();
-        if (statusEl) { statusEl.textContent = "Scaduto — chiudi e riprova."; statusEl.className = "msg err"; }
-      }
-    };
-    source.onerror = () => {
-      // SSE non disponibile (proxy, rete): il fallback e' l'utente che
-      // annulla e riprova — niente polling di riserva in questa alpha.
-      source.close();
-      const statusEl = card.querySelector("#reveal-status");
-      if (statusEl) { statusEl.textContent = "Connessione persa — annulla e riprova."; statusEl.className = "msg err"; }
-    };
-  }
-
-  async function finishReveal(token, card) {
-    try {
-      const resp = await fetch(`/api/onchain/wallets/${state.chain}/reveal`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token }),
-      });
-      const body = await resp.json();
-      if (!resp.ok) throw new Error(body.detail || "errore");
-      card.innerHTML = `
-        <div class="check-pop"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>
-        <p class="small">${body.import_as}</p>
-        <div class="key-box">${body.private_key}</div>
-        <p class="small">${body.warning}</p>
-        <button type="button" class="overlay-close">Chiudi</button>
-      `;
-      card.querySelector(".overlay-close").addEventListener("click", () => { el("overlay").hidden = true; });
-      setTimeout(() => { el("overlay").hidden = true; }, 30000);
-    } catch (err) {
-      card.innerHTML = `<p class="msg err">${err.message}</p><button type="button" class="overlay-close">Chiudi</button>`;
-      card.querySelector(".overlay-close").addEventListener("click", () => { el("overlay").hidden = true; });
-    }
-  }
-
-  async function loadWallets() {
-    try {
-      const resp = await fetch("/api/onchain/wallets");
-      if (!resp.ok) {
-        el("hero-slot").innerHTML = '<p class="empty-hero">Devi essere loggato sul sito in questo browser.</p>';
-        return;
-      }
-      const items = await resp.json();
-      items.forEach((w) => { state.wallets[w.chain] = w; });
-    } catch { /* offline al primo carico: si vede solo la cache, se c'e' */ }
-    renderHero();
-  }
-
-  // --- Sessione: stessa identita' del sito principale, nessun login separato ---
-  async function checkSession() {
-    let loggedIn = false;
-    try {
-      const resp = await fetch("/api/auth/me");
-      const body = await resp.json();
-      loggedIn = Boolean(body.user);
-    } catch { /* rete offline al primo carico: tratta come non loggato, si riprova al login */ }
-
-    if (loggedIn) {
-      el("login-screen").hidden = true;
-      el("app-shell").hidden = false;
-      loadWallets();
-    } else {
-      el("app-shell").hidden = true;
-      el("login-screen").hidden = false;
-    }
-  }
-
-  el("login-form").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const btn = e.target.querySelector("button");
-    const msg = el("login-msg");
-    btn.disabled = true;
-    msg.hidden = true;
-    try {
-      const resp = await fetch("/api/auth/login", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: el("login-email").value.trim(),
-          password: el("login-password").value,
-        }),
-      });
-      const body = await resp.json();
-      if (!resp.ok) throw new Error(body.detail || "Email o password errati");
-      await checkSession();
-    } catch (err) {
-      msg.hidden = false;
-      msg.className = "msg err";
-      msg.textContent = err.message || "Errore di rete.";
-      btn.disabled = false;
-    }
-  });
-
-  checkSession();
-</script>
+  <script type="module" src="/static/onchain/main.js"></script>
 </body>
 </html>
