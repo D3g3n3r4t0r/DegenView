@@ -4,7 +4,13 @@ lo sarebbe anche in reale — questo e' il punto."""
 
 from __future__ import annotations
 
+import asyncio
+
 from app.trading.onchain import ledger, simulate
+
+
+def _run(coro):
+    return asyncio.run(coro)
 
 
 def _fresh_db(tmp_path, monkeypatch):
@@ -14,7 +20,7 @@ def _fresh_db(tmp_path, monkeypatch):
 
 def test_accepted_order_lands_in_the_ledger_as_simulated(tmp_path, monkeypatch):
     _fresh_db(tmp_path, monkeypatch)
-    result = simulate.simulate_order("u1", "solana", "TOKEN", "lorenzo", "buy", 15.0, 0.5, 2.0)
+    result = _run(simulate.simulate_order("u1", "solana", "TOKEN", "lorenzo", "buy", 15.0, 0.5, 2.0))
     assert result["accepted"] is True
     order = ledger.get_order(result["idempotency_key"])
     assert order["mode"] == "simulated"
@@ -26,7 +32,7 @@ def test_accepted_order_lands_in_the_ledger_as_simulated(tmp_path, monkeypatch):
 
 def test_rejected_by_per_trade_cap_never_touches_the_ledger(tmp_path, monkeypatch):
     _fresh_db(tmp_path, monkeypatch)
-    result = simulate.simulate_order("u1", "solana", "TOKEN", "lorenzo", "buy", 999.0, 0.5, 2.0)
+    result = _run(simulate.simulate_order("u1", "solana", "TOKEN", "lorenzo", "buy", 999.0, 0.5, 2.0))
     assert result["accepted"] is False
     assert "tetto per operazione" in result["reason"]
     assert result["idempotency_key"] is None
@@ -35,7 +41,7 @@ def test_rejected_by_per_trade_cap_never_touches_the_ledger(tmp_path, monkeypatc
 
 def test_rejected_by_price_impact_never_touches_the_ledger(tmp_path, monkeypatch):
     _fresh_db(tmp_path, monkeypatch)
-    result = simulate.simulate_order("u1", "solana", "TOKEN", "lorenzo", "buy", 10.0, 9.0, 2.0)
+    result = _run(simulate.simulate_order("u1", "solana", "TOKEN", "lorenzo", "buy", 10.0, 9.0, 2.0))
     assert result["accepted"] is False
     assert "price impact" in result["reason"]
 
@@ -44,6 +50,6 @@ def test_tripped_circuit_breaker_blocks_simulation_too(tmp_path, monkeypatch):
     _fresh_db(tmp_path, monkeypatch)
     for _ in range(5):
         ledger.record_trade_outcome("u1", "solana", -1.0)
-    result = simulate.simulate_order("u1", "solana", "TOKEN", "lorenzo", "buy", 10.0, 0.5, 2.0)
+    result = _run(simulate.simulate_order("u1", "solana", "TOKEN", "lorenzo", "buy", 10.0, 0.5, 2.0))
     assert result["accepted"] is False
     assert "circuit breaker" in result["reason"]

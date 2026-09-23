@@ -6,7 +6,7 @@ rifiuto normale: un ordine rifiutato per slippage o tetto e' un esito
 previsto del sistema, non un errore. reason e' sempre in italiano, e'
 quello che finisce nel log e nell'eventuale notifica."""
 from app.config import settings
-from app.trading.onchain import ledger
+from app.trading.onchain import ledger, pool_safety
 
 
 def check_per_trade_cap(size_usd: float) -> tuple[bool, str]:
@@ -75,21 +75,72 @@ def check_price_impact(price_impact_pct: float) -> tuple[bool, str]:
     return True, ""
 
 
+def clamp_size_to_pool(
+    requested_usd: float,
+    pool_liquidity_usd: float | None,
+    max_pool_pct: float = 1.5,
+    safety_cap_usd: float | None = None,
+) -> float:
+    """Size mai fissa in USD: min(size richiesta, max_pool_pct% della
+    liquidita' del pool, tetto di sicurezza). safety_cap_usd default al
+    tetto per operazione — che run_all_checks controlla comunque dopo, ma
+    applicarlo anche qui evita di calcolare una size "clampata" piu' alta
+    del tetto e poi scoprirlo un passo dopo.
+
+    pool_liquidity_usd non e' sempre disponibile (dipende da chain/quote —
+    vedi pool_safety.fetch_pool_snapshot): quando e' None o zero non si
+    riduce niente, la richiesta torna invariata e resta check_per_trade_cap
+    (chiamato subito dopo da run_all_checks) a rifiutarla se sopra tetto —
+    lo stesso comportamento di sempre. Il tetto di sicurezza qui dentro
+    conta solo insieme a una liquidita' del pool nota: senza quella non
+    c'e' "size dinamica" da applicare, solo una richiesta da lasciare al
+    controllo esistente. Mai bloccare un ordine per una feature nuova che
+    manca di un dato."""
+    if pool_liquidity_usd is None or pool_liquidity_usd <= 0:
+        return requested_usd
+    cap = safety_cap_usd if safety_cap_usd is not None else settings.onchain_max_usd_per_trade
+    return min(requested_usd, pool_liquidity_usd * max_pool_pct / 100.0, cap)
+
+
 def run_all_checks(
     owner_id: str, chain: str, token: str, size_usd: float, price_impact_pct: float,
+    pool_info: dict | None = None,
 ) -> tuple[bool, str]:
     """Tutti i controlli in ordine, ferma al primo che rifiuta — l'ordine
     di questa lista e' quello suggerito dal piano: prima il circuit
     breaker (nessun senso controllare altro se e' gia' scattato), poi i
     tetti in USD (piu' cheap da calcolare), poi price impact (richiede un
-    quote gia' in mano) e concentrazione."""
-    for check, args in (
+    quote gia' in mano) e concentrazione.
+
+    pool_info e' opzionale apposta, per non rompere le chiamate esistenti
+    (e i test) che non hanno ancora un pool da controllare: {"liquidity_usd",
+    "created_at", "reference_max_liquidity_usd", opzionali "min_liquidity_usd"/
+    "min_age_minutes"/"max_drop_pct"}. Quando e' presente, l'allowlist pool
+    (liquidita' minima, eta' minima, crollo di liquidita') viene controllata
+    ad OGNI tentativo, non solo una volta all'ingresso — cosi' chiede il
+    piano."""
+    checks: list[tuple] = [
         (check_circuit_breaker, (owner_id, chain)),
         (check_per_trade_cap, (size_usd,)),
         (check_daily_cap, (owner_id, chain, size_usd)),
         (check_price_impact, (price_impact_pct,)),
         (check_concentration, (owner_id, chain, token, size_usd)),
-    ):
+    ]
+    if pool_info is not None:
+        checks.append((
+            pool_safety.check_liquidity_minimum,
+            (pool_info.get("liquidity_usd"), pool_info.get("min_liquidity_usd", pool_safety.DEFAULT_MIN_LIQUIDITY_USD)),
+        ))
+        checks.append((
+            pool_safety.check_pool_age,
+            (pool_info.get("created_at"), pool_info.get("min_age_minutes", pool_safety.DEFAULT_MIN_POOL_AGE_MINUTES)),
+        ))
+        checks.append((
+            pool_safety.check_liquidity_drop,
+            (pool_info.get("liquidity_usd"), pool_info.get("reference_max_liquidity_usd"),
+             pool_info.get("max_drop_pct", pool_safety.DEFAULT_MAX_LIQUIDITY_DROP_PCT)),
+        ))
+    for check, args in checks:
         ok, reason = check(*args)
         if not ok:
             return False, reason
