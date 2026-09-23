@@ -93,6 +93,7 @@ from app.trading.onchain import prices as onchain_prices
 from app.trading.onchain import quotes as onchain_quotes
 from app.trading.onchain import reveal_requests as onchain_reveal
 from app.trading.onchain import simulate as onchain_simulate
+from app.trading.onchain import twap_jobs as onchain_twap_jobs
 from app.exchange_balances import BalanceFetchError, fetch_kucoin_balances, fetch_mexc_balances
 from app.notify import telegram
 from app.notify import alert_log
@@ -2271,6 +2272,74 @@ async def onchain_execute_robinhood(
         private_key_hex,
         {"token_in": body.token_in, "token_out": body.token_out, "fee": body.fee,
          "amount_in": body.amount_in, "amount_out_minimum": amount_out_minimum},
+    )
+
+
+class OnchainExecuteTwapRequest(BaseModel):
+    chain: OnchainChain
+    token: str
+    strategy_name: str
+    side: Literal["buy", "sell"]
+    total_usd: float
+    price_usd: float
+    pool_liquidity_usd: float
+    # Solana: la fetta scala amount_lamports proporzionalmente a total_amount_lamports
+    input_mint: str | None = None
+    output_mint: str | None = None
+    total_amount_lamports: int | None = None
+    slippage_bps: int = 50
+    # Robinhood: la fetta scala amount_in proporzionalmente a total_amount_in
+    token_in: str | None = None
+    token_out: str | None = None
+    fee: int | None = None
+    total_amount_in: int | None = None
+    max_slippage_pct: float = 1.0
+
+
+@app.post("/api/onchain/execute/twap")
+async def onchain_execute_twap(
+    body: OnchainExecuteTwapRequest, user: User = Depends(auth.get_current_user),
+) -> dict:
+    """Fase 3 del piano: esecuzione scaglionata. Sotto un notional minimo
+    (o su un pool profondo dove il numero di fette collassa a 1) esegue in
+    un colpo unico; altrimenti scaglia via twap_jobs.execute_twap_job(),
+    che persiste il job PRIMA di firmare la prima fetta. Il quote di ogni
+    fetta e' costruito qui (mai dal client) scalando gli importi totali
+    proporzionalmente alla size della fetta."""
+    _require_onchain_enabled()
+    if body.chain not in user.onchain_wallets:
+        raise HTTPException(status_code=400, detail=f"Nessun wallet {body.chain} per questo utente.")
+    try:
+        private_key_hex = auth.get_decrypted_onchain_private_key(user, body.chain)
+    except auth.OnchainKeyIntegrityError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    if body.chain == "solana":
+        if not (body.input_mint and body.output_mint and body.total_amount_lamports):
+            raise HTTPException(status_code=400, detail="input_mint/output_mint/total_amount_lamports richiesti per solana.")
+
+        async def quote_for_slice(slice_usd: float) -> tuple[float, dict]:
+            amount_lamports = max(1, round(body.total_amount_lamports * (slice_usd / body.total_usd)))
+            quote = await onchain_quotes.jupiter_quote(
+                body.input_mint, body.output_mint, amount_lamports, body.slippage_bps,
+            )
+            return quote["price_impact_pct"], quote
+    else:
+        if not (body.token_in and body.token_out and body.fee is not None and body.total_amount_in):
+            raise HTTPException(status_code=400, detail="token_in/token_out/fee/total_amount_in richiesti per robinhood.")
+
+        async def quote_for_slice(slice_usd: float) -> tuple[float, dict]:
+            amount_in = max(1, round(body.total_amount_in * (slice_usd / body.total_usd)))
+            quote = await onchain_quotes.uniswap_v3_quote(body.token_in, body.token_out, body.fee, amount_in)
+            amount_out_minimum = int(quote["amount_out"] * (1 - body.max_slippage_pct / 100))
+            return quote["price_impact_pct"], {
+                "token_in": body.token_in, "token_out": body.token_out, "fee": body.fee,
+                "amount_in": amount_in, "amount_out_minimum": amount_out_minimum,
+            }
+
+    return await onchain_twap_jobs.execute_twap_job(
+        user.id, body.chain, body.token, body.strategy_name, body.side,
+        body.total_usd, body.price_usd, private_key_hex, body.pool_liquidity_usd, quote_for_slice,
     )
 
 
