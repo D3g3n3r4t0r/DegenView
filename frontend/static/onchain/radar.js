@@ -70,13 +70,27 @@ function listen() {
   stream.addEventListener("listing", (event) => {
     let item;
     try { item = JSON.parse(event.data); } catch { return; }
-    if (!data) return;
-    data.listings = [item, ...(data.listings ?? []).filter((x) => lkey(x) !== lkey(item))];
-    paintListings(true);
-    const age = item.created_at ? ` · nato ${ageShort(Date.now() / 1000 - item.created_at)} fa` : "";
-    toast?.(`Nuovo: ${item.symbol}`, `${CHAINS[item.chain] ?? item.chain} · liq. ${usd(item.liquidity_usd)}${age}`);
-    navigator.vibrate?.(25);
+    arrivals.push(item);
+    if (!draining) drain();
   });
+}
+
+// Piu' listing nello stesso istante entrano uno alla volta: ognuno ha il
+// suo momento, invece di un blocco che salta dentro tutto insieme.
+const ARRIVAL_GAP_MS = 480;
+const arrivals = [];
+let draining = false;
+
+function drain() {
+  const item = arrivals.shift();
+  if (!item || !data) { draining = false; return; }
+  draining = true;
+  data.listings = [item, ...(data.listings ?? []).filter((x) => lkey(x) !== lkey(item))];
+  paintListings(true);
+  const age = item.created_at ? ` · nato ${ageShort(Date.now() / 1000 - item.created_at)} fa` : "";
+  toast?.(`Nuovo: ${item.symbol}`, `${CHAINS[item.chain] ?? item.chain} · liq. ${usd(item.liquidity_usd)}${age}`);
+  navigator.vibrate?.(25);
+  setTimeout(drain, ARRIVAL_GAP_MS);
 }
 
 async function refresh() {
@@ -104,7 +118,7 @@ function paint() {
 
   const isFirst = known === null;
   const seen = new Set(proposals.map(key));
-  paintListings(false);
+  paintListings(true);
   root.querySelector("[data-radar-list]").innerHTML = proposals.length
     ? proposals.map((p) => row(p, !isFirst && !known.has(key(p)))).join("")
     : `<li class="pilot-empty">${escapeHtml(emptyText())}</li>`;
@@ -118,18 +132,28 @@ function paint() {
 
 let shownListings = null;
 
+const reducedMotion = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+// animate=false solo per il ticchettio delle eta': ridisegna senza muovere niente.
 function paintListings(animate) {
   const box = root.querySelector("[data-radar-new]");
+  const list = box.querySelector("ul");
   const items = (data.listings ?? []).slice(0, 5);
   box.hidden = items.length === 0;
   const now = Date.now() / 1000;
   const before = shownListings;
-  box.querySelector("ul").innerHTML = items.map((l) => {
+  const firstReveal = animate && before === null && items.length > 0;
+  // FLIP: dove stava ogni riga prima, per farla scivolare al posto nuovo
+  // invece di saltarci quando ne entra una sopra.
+  const tops = new Map([...list.querySelectorAll("[data-listing]")]
+    .map((el) => [el.dataset.listing, el.getBoundingClientRect().top]));
+  list.innerHTML = items.map((l, i) => {
     const age = l.created_at ? now - l.created_at : null;
     const meta = `${CHAINS[l.chain] ?? l.chain} · liq. ${usd(l.liquidity_usd)} · cap ${usd(l.market_cap)}`;
     const isNew = animate && before && !before.has(lkey(l));
+    const cls = firstReveal ? "is-enter" : isNew ? "is-arrival" : "";
     return `
-      <li class="${isNew ? "is-new" : ""}">
+      <li class="${cls}" style="--i:${i}">
         <button type="button" data-listing="${escapeHtml(lkey(l))}">
           <span class="tk" data-chain="${escapeHtml(l.chain)}" aria-hidden="true">${escapeHtml(l.symbol.slice(0, 2))}</span>
           <span class="tk-name"><b>${escapeHtml(l.symbol)}</b><small>${escapeHtml(meta)}</small></span>
@@ -137,7 +161,19 @@ function paintListings(animate) {
         </button>
       </li>`;
   }).join("");
-  shownListings = new Set(items.map(lkey));
+  if (!firstReveal) {
+    const moved = [...list.querySelectorAll("[data-listing]")];
+    moved.forEach((el) => {
+      const was = tops.get(el.dataset.listing);
+      if (was == null || reducedMotion()) return;
+      const dy = was - el.getBoundingClientRect().top;
+      if (Math.abs(dy) > 1) {
+        el.animate([{ transform: `translateY(${dy}px)` }, { transform: "none" }],
+          { duration: 520, easing: "cubic-bezier(.2,.8,.2,1)" });
+      }
+    });
+  }
+  if (items.length) shownListings = new Set(items.map(lkey));
 }
 
 function emptyText() {
