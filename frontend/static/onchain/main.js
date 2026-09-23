@@ -18,6 +18,7 @@ import { mountLimitOrder, mountOpenOrders, mountHistory } from "@onchain/limitOr
 import { mountChart, resetForChainSwitch } from "@onchain/chart.js";
 import { mountStrategies } from "@onchain/strategies.js";
 import { mountPortfolio } from "@onchain/portfolio.js";
+import { openSend } from "@onchain/send.js";
 
 // Sulla pagina a se' (onchain-app.html) la radice e' il documento intero.
 // Fusa dentro la tab Trading, invece, questo modulo viene importato dentro
@@ -240,6 +241,9 @@ view.address.addEventListener("click", async (event) => {
 
 const SHEETS = {
   receive: () => sheets.openReceive(),
+  send: () => openSend({
+    onSent: () => { refreshBalance(); mountBottomTab(currentBottomTab); toast("Inviato", "verifica la firma nello storico"); },
+  }),
   risk: () => sheets.openRisk(() => { refreshStatus(); mountBottomTab(currentBottomTab); }),
   simulate: () => sheets.openSimulate({
     onAccepted: () => { mountBottomTab(currentBottomTab); refreshStatus(); toast("Simulazione accettata", "registrata nel ledger"); },

@@ -64,6 +64,8 @@ export const executeSolana = (body) =>
 export const executeRobinhood = (body) =>
   request("/api/onchain/execute/robinhood", { method: "POST", body, timeoutMs: 45000 });
 
+export const sendToken = (body) => request("/api/onchain/send", { method: "POST", body, timeoutMs: 45000 });
+
 export const requestReveal = (chain) =>
   request(`/api/onchain/wallets/${chain}/reveal/request`, { method: "POST" });
 export const consumeReveal = (chain, token) =>

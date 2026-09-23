@@ -86,6 +86,7 @@ from app.models import (
 )
 from app.trading.onchain import balances as onchain_balances
 from app.trading.onchain import execute as onchain_execute
+from app.trading.onchain import send as onchain_send
 from app.trading.onchain import jito as onchain_jito
 from app.trading.onchain import keys as onchain_keys
 from app.trading.onchain import ledger as onchain_ledger
@@ -2873,6 +2874,61 @@ async def onchain_execute_robinhood(
          "amount_in": body.amount_in, "amount_out_minimum": amount_out_minimum},
     )
     _maybe_alert_onchain_risk_event(user.email, "robinhood", result, body.notional_usd)
+    return result
+
+
+class OnchainSendRequest(BaseModel):
+    chain: OnchainChain
+    to_address: str
+    token_address: str | None = None  # None = il nativo (SOL/ETH)
+    amount: float  # unita' umane, non raw
+    price_usd: float  # per il tetto USD e per il ledger — mai fabbricato: chi chiama lo prende dal prezzo gia' mostrato in UI
+
+
+@app.post("/api/onchain/send")
+async def onchain_send_token(body: OnchainSendRequest, user: User = Depends(auth.get_current_user)) -> dict:
+    """Prelievo: manda crypto (nativo o un token) a un indirizzo qualsiasi
+    — Lorenzo: "aggiungi funzione anche per prelevare le crypto e
+    inviarle ad indirizzi". Stessi guardrail di un ordine manuale (tetto
+    per operazione/giorno, circuit breaker), MAI la concentrazione: un
+    prelievo riduce sempre una posizione, la scelta di diversificazione
+    resta di chi firma. Nessuna validazione dell'indirizzo di
+    destinazione oltre a quella che la firma stessa impone (un indirizzo
+    malformato fa fallire la costruzione della transazione con un errore
+    leggibile) — nessun modo di sapere se un indirizzo VALIDO e' anche
+    quello giusto, e non e' compito di un guardrail automatico deciderlo."""
+    _require_onchain_enabled()
+    if body.chain not in user.onchain_wallets:
+        raise HTTPException(status_code=400, detail=f"Nessun wallet {body.chain} per questo utente.")
+    if body.amount <= 0:
+        raise HTTPException(status_code=400, detail="La size deve essere positiva.")
+
+    is_native = body.token_address is None or body.token_address.lower() == onchain_prices.NATIVE_TOKEN_ADDRESS[body.chain].lower()
+    if is_native:
+        decimals = _NATIVE_DECIMALS[body.chain]
+        token_label = "SOL" if body.chain == "solana" else "ETH"
+    else:
+        try:
+            decimals = await onchain_token_metadata.get_token_decimals(body.chain, body.token_address)
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=502, detail=f"Decimali non recuperabili: {exc}") from exc
+        if decimals is None:
+            raise HTTPException(status_code=502, detail="Decimali del token non recuperabili.")
+        token_label = body.token_address
+
+    amount_raw = int(round(body.amount * 10 ** decimals))
+    notional_usd = body.amount * body.price_usd
+
+    try:
+        private_key_hex = auth.get_decrypted_onchain_private_key(user, body.chain)
+    except auth.OnchainKeyIntegrityError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    result = await onchain_send.send_token(
+        user.id, body.chain, token_label, body.to_address, body.amount, amount_raw,
+        notional_usd, private_key_hex, is_native, body.token_address,
+    )
+    _maybe_alert_onchain_risk_event(user.email, body.chain, result, notional_usd)
     return result
 
 

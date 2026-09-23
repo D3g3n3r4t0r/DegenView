@@ -8,7 +8,7 @@ import asyncio
 
 from eth_account import Account
 from solders.keypair import Keypair
-from solders.transaction import VersionedTransaction
+from solders.transaction import Transaction, VersionedTransaction
 
 from app.trading.onchain import execution, quotes
 
@@ -112,3 +112,79 @@ def test_build_signed_robinhood_swap_real_nonce_and_gas_price():
     assert len(signed) > 0
     recovered = Account.recover_transaction(signed)
     assert recovered.lower() == acct.address.lower()
+
+
+def test_build_signed_solana_native_transfer_real_network_call():
+    """Wallet usa-e-getta, blockhash vero da rete: verifica che la
+    transazione firmata sia valida per QUESTA chiave, non che l'invio
+    riesca (nessun saldo sopra, quindi rifiuterebbe comunque)."""
+    key = Keypair()
+    destination = Keypair().pubkey()
+    signed = _run(execution.build_signed_solana_native_transfer(bytes(key).hex(), str(destination), 1000))
+    tx = Transaction.from_bytes(signed)
+    assert len(tx.signatures) == 1
+    tx.verify()
+
+
+def test_build_signed_solana_token_transfer_creates_dest_account_when_missing(monkeypatch):
+    key = Keypair()
+    mint = str(Keypair().pubkey())
+    destination = str(Keypair().pubkey())
+
+    calls = []
+
+    async def _fake_call_rpc(chain, method, params):
+        calls.append(method)
+        if method == "getLatestBlockhash":
+            return {"value": {"blockhash": str(Keypair().pubkey())}}
+        if method == "getAccountInfo":
+            return {"value": None}  # il token account del destinatario non esiste ancora
+        raise AssertionError(f"chiamata inattesa: {method}")
+
+    monkeypatch.setattr(execution.rpc_client, "call_rpc", _fake_call_rpc)
+    signed = _run(execution.build_signed_solana_token_transfer(bytes(key).hex(), mint, destination, 500_000))
+    tx = Transaction.from_bytes(signed)
+    assert len(tx.signatures) == 1
+    tx.verify()
+    # Due istruzioni: crea l'account associato del destinatario, poi trasferisce.
+    assert len(tx.message.instructions) == 2
+    assert "getAccountInfo" in calls
+
+
+def test_build_signed_solana_token_transfer_skips_creation_when_dest_exists(monkeypatch):
+    key = Keypair()
+    mint = str(Keypair().pubkey())
+    destination = str(Keypair().pubkey())
+
+    async def _fake_call_rpc(chain, method, params):
+        if method == "getLatestBlockhash":
+            return {"value": {"blockhash": str(Keypair().pubkey())}}
+        if method == "getAccountInfo":
+            return {"value": {"data": ["", "base64"], "owner": "x"}}  # esiste gia'
+        raise AssertionError(f"chiamata inattesa: {method}")
+
+    monkeypatch.setattr(execution.rpc_client, "call_rpc", _fake_call_rpc)
+    signed = _run(execution.build_signed_solana_token_transfer(bytes(key).hex(), mint, destination, 500_000))
+    tx = Transaction.from_bytes(signed)
+    assert len(tx.message.instructions) == 1  # solo il trasferimento, niente creazione
+
+
+def test_build_signed_evm_native_transfer_real_network_call():
+    acct = Account.create()
+    destination = "0x000000000000000000000000000000000000dEaD"
+    raw = _run(execution.build_signed_evm_native_transfer(acct.key.hex(), destination, 1000))
+    recovered = Account.recover_transaction(raw)
+    assert recovered.lower() == acct.address.lower()
+
+
+def test_build_signed_evm_token_transfer_real_network_call():
+    acct = Account.create()
+    token = "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168"  # USDG
+    destination = "0x000000000000000000000000000000000000dEaD"
+    raw = _run(execution.build_signed_evm_token_transfer(acct.key.hex(), token, destination, 1_000_000))
+    from eth_account._utils.legacy_transactions import Transaction as _LegacyTx
+    decoded = _LegacyTx.from_bytes(raw)
+    data = bytes(decoded.data)
+    assert data[:4] == execution._SELECTOR_ERC20_TRANSFER
+    assert int.from_bytes(data[4 + 12:4 + 32], "big") == int(destination, 16)
+    assert int.from_bytes(data[4 + 32:4 + 64], "big") == 1_000_000

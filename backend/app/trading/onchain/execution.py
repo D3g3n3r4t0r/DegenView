@@ -15,11 +15,16 @@ from eth_abi import encode as _abi_encode
 from eth_account import Account
 from eth_utils import to_checksum_address
 from solders.hash import Hash
+from solders.instruction import AccountMeta, Instruction
 from solders.keypair import Keypair
 from solders.message import Message
 from solders.pubkey import Pubkey
 from solders.system_program import TransferParams, transfer
+from solders.token import ID as SPL_TOKEN_PROGRAM_ID
+from solders.token.associated import get_associated_token_address
 from solders.transaction import Transaction, VersionedTransaction
+
+from app.trading.onchain import rpc_client
 
 JUPITER_SWAP_URL = "https://lite-api.jup.ag/swap/v1/swap"
 ROBINHOOD_RPC = "https://rpc.mainnet.chain.robinhood.com"
@@ -78,6 +83,144 @@ async def build_signed_solana_tip_tx(private_key_hex: str, tip_account: str, tip
     tx = Transaction.new_unsigned(msg)
     tx.sign([kp], blockhash)
     return bytes(tx)
+
+
+async def _solana_recent_blockhash() -> Hash:
+    """Passa da rpc_client (fallback multi-endpoint), non da un URL fisso —
+    a differenza di build_signed_solana_tip_tx, scritta prima che
+    rpc_client esistesse: qui non c'e' un motivo per ripetere lo stesso
+    limite in codice nuovo."""
+    result = await rpc_client.call_rpc("solana", "getLatestBlockhash", [])
+    return Hash.from_string(result["value"]["blockhash"])
+
+
+async def build_signed_solana_native_transfer(private_key_hex: str, to_address: str, lamports: int) -> bytes:
+    """Prelievo: un trasferimento SOL nativo puro (System Program), stessa
+    istruzione gia' verificata dal vivo in build_signed_solana_tip_tx —
+    qui la destinazione e' un indirizzo qualsiasi scelto dall'utente, non
+    uno degli 8 tip account fissi di Jito."""
+    kp = Keypair.from_bytes(bytes.fromhex(private_key_hex))
+    blockhash = await _solana_recent_blockhash()
+    ix = transfer(TransferParams(
+        from_pubkey=kp.pubkey(), to_pubkey=Pubkey.from_string(to_address), lamports=lamports,
+    ))
+    msg = Message.new_with_blockhash([ix], kp.pubkey(), blockhash)
+    tx = Transaction.new_unsigned(msg)
+    tx.sign([kp], blockhash)
+    return bytes(tx)
+
+
+# Instruction discriminator del Token Program (non-checked "Transfer",
+# indice 3 nell'enum TokenInstruction) e del Associated Token Account
+# Program ("Create", nessun dato — l'unica istruzione che il programma
+# offriva alla sua prima versione, quella ancora deployata sull'indirizzo
+# canonico). Nessuna libreria spl-token in requirements.txt: solders da'
+# solo le primitive (Instruction, Pubkey, l'indirizzo derivato), l'encoding
+# della singola istruzione e' pochi byte, non vale una dipendenza in piu'.
+_SPL_TRANSFER_INSTRUCTION = 3
+ASSOCIATED_TOKEN_PROGRAM_ID = Pubkey.from_string("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")
+SYSTEM_PROGRAM_ID = Pubkey.from_string("11111111111111111111111111111111")
+
+
+async def build_signed_solana_token_transfer(
+    private_key_hex: str, mint_address: str, to_address: str, amount_raw: int,
+) -> bytes:
+    """Prelievo di un token SPL (non il nativo): trasferisce dal token
+    account associato del wallet a quello del destinatario, creandolo
+    prima se non esiste ancora — un destinatario che non ha mai ricevuto
+    quel token non ha un token account li' ad aspettarlo. La creazione
+    dell'account e' verificata solo per costruzione (stesso schema
+    dell'Associated Token Account Program, documentato pubblicamente),
+    non contro un invio reale in questa sessione — a differenza del
+    trasferimento nativo sopra, che ripete un'istruzione gia' vista
+    davvero in un bundle Jito andato a buon fine."""
+    kp = Keypair.from_bytes(bytes.fromhex(private_key_hex))
+    mint = Pubkey.from_string(mint_address)
+    to_owner = Pubkey.from_string(to_address)
+    source_ata = get_associated_token_address(kp.pubkey(), mint)
+    dest_ata = get_associated_token_address(to_owner, mint)
+
+    dest_info = await rpc_client.call_rpc("solana", "getAccountInfo", [str(dest_ata), {"encoding": "base64"}])
+    dest_exists = dest_info.get("value") is not None
+
+    instructions = []
+    if not dest_exists:
+        instructions.append(Instruction(
+            program_id=ASSOCIATED_TOKEN_PROGRAM_ID,
+            data=bytes(),
+            accounts=[
+                AccountMeta(kp.pubkey(), is_signer=True, is_writable=True),   # payer
+                AccountMeta(dest_ata, is_signer=False, is_writable=True),     # nuovo account associato
+                AccountMeta(to_owner, is_signer=False, is_writable=False),    # proprietario del nuovo account
+                AccountMeta(mint, is_signer=False, is_writable=False),
+                AccountMeta(SYSTEM_PROGRAM_ID, is_signer=False, is_writable=False),
+                AccountMeta(SPL_TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
+            ],
+        ))
+    instructions.append(Instruction(
+        program_id=SPL_TOKEN_PROGRAM_ID,
+        data=bytes([_SPL_TRANSFER_INSTRUCTION]) + amount_raw.to_bytes(8, "little"),
+        accounts=[
+            AccountMeta(source_ata, is_signer=False, is_writable=True),
+            AccountMeta(dest_ata, is_signer=False, is_writable=True),
+            AccountMeta(kp.pubkey(), is_signer=True, is_writable=False),
+        ],
+    ))
+
+    blockhash = await _solana_recent_blockhash()
+    msg = Message.new_with_blockhash(instructions, kp.pubkey(), blockhash)
+    tx = Transaction.new_unsigned(msg)
+    tx.sign([kp], blockhash)
+    return bytes(tx)
+
+
+async def build_signed_evm_native_transfer(private_key_hex: str, to_address: str, amount_wei: int) -> bytes:
+    """Prelievo del nativo (ETH) su Robinhood Chain: una transazione EVM
+    semplice, nessuna calldata — stesso nonce/gas-price dal vivo di
+    build_signed_robinhood_swap, gas_limit 21000 (lo standard di un
+    trasferimento nativo, mai piu' di quello per definizione)."""
+    account = Account.from_key(private_key_hex)
+    nonce_hex = await _robinhood_rpc("eth_getTransactionCount", [account.address, "pending"])
+    gas_price_hex = await _robinhood_rpc("eth_gasPrice", [])
+    gas_price = (int(gas_price_hex, 16) * 12) // 10  # stesso margine del 20% di build_signed_robinhood_swap
+    tx = {
+        "nonce": int(nonce_hex, 16),
+        "to": to_checksum_address(to_address),
+        "value": amount_wei,
+        "gas": 21000,
+        "gasPrice": gas_price,
+        "chainId": 4663,
+        "data": "0x",
+    }
+    return sign_evm_transaction(private_key_hex, tx)
+
+
+_SELECTOR_ERC20_TRANSFER = bytes.fromhex("a9059cbb")  # keccak256("transfer(address,uint256)")[:4]
+
+
+async def build_signed_evm_token_transfer(
+    private_key_hex: str, token_address: str, to_address: str, amount_raw: int, gas_limit: int = 80_000,
+) -> bytes:
+    """Prelievo di un token ERC20 su Robinhood Chain: transfer(address,
+    uint256) sul contratto del token, value=0 — stesso schema di encoding
+    ABI di build_swap_router02_calldata, un solo metodo standard."""
+    account = Account.from_key(private_key_hex)
+    nonce_hex = await _robinhood_rpc("eth_getTransactionCount", [account.address, "pending"])
+    gas_price_hex = await _robinhood_rpc("eth_gasPrice", [])
+    gas_price = (int(gas_price_hex, 16) * 12) // 10
+    calldata = _SELECTOR_ERC20_TRANSFER + _abi_encode(
+        ["address", "uint256"], [to_checksum_address(to_address), amount_raw],
+    )
+    tx = {
+        "nonce": int(nonce_hex, 16),
+        "to": to_checksum_address(token_address),
+        "value": 0,
+        "gas": gas_limit,
+        "gasPrice": gas_price,
+        "chainId": 4663,
+        "data": "0x" + calldata.hex(),
+    }
+    return sign_evm_transaction(private_key_hex, tx)
 
 
 async def send_signed_solana_tx(signed_tx_bytes: bytes) -> str:
