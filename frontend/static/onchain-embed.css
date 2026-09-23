@@ -1,0 +1,541 @@
+/* ============================================================
+   Wallet on-chain — stesso sistema "Instrument" del resto del
+   sito, scritto con la piattaforma di oggi: @layer per la cascata,
+   light-dark() al posto di tre blocchi di token duplicati, oklch
+   per i colori e color-mix per derivarne le varianti.
+   ============================================================ */
+@layer tokens, base, layout, components, motion;
+
+@layer tokens {
+  #onchain-embed {
+    /* Una sola dichiarazione per token: light-dark() sceglie da sola in
+       base a color-scheme, quindi niente @media + [data-theme] ripetuti
+       tre volte con il rischio che una delle tre resti indietro. */
+    color-scheme: light dark;
+
+    --bg:        light-dark(oklch(97.1% 0.002 165), oklch(14.6% 0.006 219));
+    --panel:     light-dark(oklch(100%  0     0),   oklch(18.7% 0.009 224));
+    --raised:    light-dark(oklch(95.5% 0.004 157), oklch(21.6% 0.012 226));
+    --line:      light-dark(oklch(91.4% 0.007 160), oklch(26.9% 0.016 224));
+    --ink:       light-dark(oklch(18.8% 0.011 176), oklch(94.3% 0.009 180));
+    --ink-dim:   light-dark(oklch(48.0% 0.018 170), oklch(70.4% 0.020 176));
+    --ink-faint: light-dark(oklch(64.5% 0.017 171), oklch(60.9% 0.020 170));
+
+    --accent:     light-dark(oklch(57.7% 0.119 165), oklch(79.5% 0.138 166));
+    --accent-ink: light-dark(oklch(100%  0     0),   oklch(17.1% 0.023 170));
+    --danger:     light-dark(oklch(52.5% 0.191 30),  oklch(67.1% 0.217 29));
+    --amber:      light-dark(oklch(57.8% 0.124 69),  oklch(78.7% 0.147 73));
+
+    /* Le varianti tenui si derivano, non si riscrivono a mano: una sola
+       fonte per ogni tinta, e la mescola avviene in oklch, dove il 12%
+       di un colore pesa quanto il 12% di un altro. */
+    --accent-soft: color-mix(in oklch, var(--accent) 12%, transparent);
+    --danger-soft: color-mix(in oklch, var(--danger) 12%, transparent);
+    --amber-soft:  color-mix(in oklch, var(--amber)  15%, transparent);
+    --hover:       color-mix(in oklch, var(--ink) 6%, transparent);
+
+    --shadow: 0 1px 2px light-dark(oklch(20% 0.02 180 / .07), oklch(0% 0 0 / .5)),
+              0 12px 32px -20px light-dark(oklch(20% 0.02 180 / .35), oklch(0% 0 0 / .9));
+
+    --sans:  "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+    --serif: "Instrument Serif", Georgia, "Times New Roman", serif;
+    --mono:  "JetBrains Mono", ui-monospace, monospace;
+
+    --radius: 12px;
+    --gap: 16px;
+  }
+
+  /* La scelta esplicita del tema vince sul sistema, in entrambe le
+     direzioni, senza ridichiarare un solo token. */
+}
+
+@layer base {
+  #onchain-embed * { box-sizing: border-box; }
+
+  /* Una regola d'autore con `display` batte il `[hidden]` del browser, che
+     e' un selettore d'attributo senza peso: senza questa riga il toast e le
+     sezioni ancora da riempire compaiono vuote appena gli si da' un
+     display. Sta in @layer base proprio per questo — con !important, perche'
+     deve vincere su qualunque componente. */
+  #onchain-embed [hidden] { display: none !important; }
+
+  #onchain-embed {
+    margin: 0;
+    padding-block: 14px calc(36px + env(safe-area-inset-bottom, 0px));
+    padding-inline: var(--gap);
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.45;
+    -webkit-tap-highlight-color: transparent;
+    text-wrap: pretty;
+  }
+
+  #onchain-embed h1, #onchain-embed h2, #onchain-embed h3 { text-wrap: balance; margin: 0; }
+  #onchain-embed button, #onchain-embed input, #onchain-embed select { font: inherit; color: inherit; }
+  #onchain-embed button { cursor: pointer; }
+
+  #onchain-embed :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+@layer layout {
+  #onchain-embed .page {
+    max-width: 460px;
+    margin-inline: auto;
+    /* Le sezioni si distanziano col gap del contenitore: niente margini
+       per elemento che si sommano o collassano a vicenda. */
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+    container-type: inline-size;
+  }
+
+  #onchain-embed .topbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    & .back { color: var(--ink); text-decoration: none; font-size: 20px; line-height: 1; opacity: .8; }
+    & h1 { font-size: 13px; font-weight: 600; color: var(--ink-dim); text-transform: lowercase; }
+    & .tag {
+      margin-left: auto; font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+      color: var(--amber); background: var(--amber-soft); border-radius: 999px; padding: 2px 9px;
+    }
+  }
+
+  #onchain-embed .stack { display: flex; flex-direction: column; gap: 22px; }
+}
+
+@layer components {
+  /* --- selettore della chain ------------------------------------- */
+  #onchain-embed .switcher {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    background: var(--raised);
+    border-radius: var(--radius);
+    padding: 3px;
+
+    & .thumb {
+      position: absolute;
+      inset: 3px 50% 3px 3px;
+      background: var(--panel);
+      border-radius: calc(var(--radius) - 3px);
+      box-shadow: var(--shadow);
+      transition: translate .28s cubic-bezier(.32,.72,0,1);
+    }
+    &[data-selected="robinhood"] .thumb { translate: 100% 0; }
+
+    & button {
+      position: relative;
+      background: none; border: 0; border-radius: calc(var(--radius) - 3px);
+      padding: 9px 4px; font-size: 13px; font-weight: 600; color: var(--ink-dim);
+      transition: color .2s;
+      &[aria-selected="true"] { color: var(--ink); }
+    }
+  }
+
+  /* --- saldo ------------------------------------------------------ */
+  #onchain-embed .label {
+    font-size: 11px; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--ink-faint); margin-block-end: 4px;
+  }
+
+  #onchain-embed .amount {
+    font-family: var(--serif);
+    font-size: clamp(44px, 14cqi, 54px);
+    line-height: 1;
+    letter-spacing: -.015em;
+    font-variant-numeric: tabular-nums;
+    /* Il browser interpola questa cifra fra una chain e l'altra invece di
+       farla sparire e riapparire: vedi selectChain() in main.js. */
+    view-transition-name: wallet-balance;
+
+    & .unit-mark { font-size: .45em; color: var(--ink-dim); }
+    & .cents { font-size: .54em; color: var(--ink-dim); }
+  }
+
+  #onchain-embed .meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-block-start: 10px; }
+
+  #onchain-embed .addr {
+    font-family: var(--mono); font-size: 11.5px; color: var(--ink-dim);
+    background: none; border: 0; border-block-end: 1px dotted var(--line); padding: 0 0 1px;
+    view-transition-name: wallet-address;
+  }
+
+  #onchain-embed .live {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11px; color: var(--ink-faint);
+
+    & .dot {
+      inline-size: 6px; block-size: 6px; border-radius: 50%;
+      background: var(--ink-faint); transition: background .3s;
+      &.is-live { background: var(--accent); }
+    }
+  }
+
+  /* --- sequenza delle letture ------------------------------------- */
+  #onchain-embed .spark {
+    & svg { inline-size: 100%; block-size: 44px; display: block; }
+    & .spark-fill { fill: url(#spark-gradient); }
+    & .spark-line { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
+    & .spark-end { fill: var(--accent); }
+    & .scale {
+      display: flex; justify-content: space-between;
+      font-size: 10.5px; color: var(--ink-faint); font-variant-numeric: tabular-nums;
+      margin-block-start: 4px;
+    }
+  }
+
+  /* --- riga di stato ---------------------------------------------- */
+  #onchain-embed .status {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; color: var(--ink-dim);
+
+    & .dot { inline-size: 6px; block-size: 6px; border-radius: 50%; background: var(--ink-faint); flex-shrink: 0; }
+    &[data-armed="true"] .dot { background: var(--amber); }
+    &[data-armed="true"] { color: var(--ink); }
+  }
+
+  /* --- azioni ------------------------------------------------------
+     Quattro pari: su un wallet in sola lettura nessuna di queste e'
+     l'azione principale, e dipingerne una di verde direbbe il contrario. */
+  #onchain-embed .actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+
+  /* Da 400px la fila intera (ricevi/storico/limiti/simula/swap) ci sta
+     in cinque; sotto, tre per riga: misura il contenitore, non la finestra. */
+  @container (width >= 400px) {
+    #onchain-embed .actions { grid-template-columns: repeat(5, 1fr); }
+  }
+
+  #onchain-embed .action {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    background: var(--raised); border: 0; border-radius: var(--radius);
+    padding: 12px 4px 10px; font-size: 11px; font-weight: 600;
+    transition: background .15s, scale .12s;
+
+    & svg { inline-size: 17px; block-size: 17px; color: var(--ink-dim); }
+    &:hover { background: color-mix(in oklch, var(--raised), var(--ink) 4%); }
+    &:active { scale: .96; }
+  }
+
+  /* --- elenco asset ------------------------------------------------ */
+  #onchain-embed .assets {
+    & .label { margin-block-end: 6px; }
+    & ul { list-style: none; margin: 0; padding: 0; }
+  }
+
+  #onchain-embed .asset {
+    display: flex; align-items: center; gap: 11px;
+    padding-block: 11px;
+    border-block-end: 1px solid var(--line);
+    &:last-child { border-block-end: 0; }
+
+    & .asset-mark {
+      inline-size: 30px; block-size: 30px; border-radius: 50%;
+      display: grid; place-items: center; flex-shrink: 0;
+      font-size: 12px; font-weight: 700;
+      background: var(--accent); color: var(--accent-ink);
+      &.is-token { background: var(--raised); color: var(--ink-dim); }
+    }
+    & .asset-name { flex: 1; min-width: 0;
+      & b { display: block; font-size: 14px; font-weight: 600; }
+      & small { font-size: 11.5px; color: var(--ink-faint); }
+    }
+    & .asset-value { text-align: end; font-variant-numeric: tabular-nums;
+      & b { display: block; font-size: 14px; font-weight: 600; }
+      & small { font-size: 11.5px; color: var(--ink-faint); }
+    }
+  }
+
+  /* --- la riga che espone la chiave --------------------------------
+     Separata da un filo sopra, non da un blocco rosso pieno: il rosso
+     dice "questa e' l'unica voce che tira fuori la chiave", e un
+     riquadro colorato lo urla anche quando nessuno sta per premerlo. */
+  #onchain-embed .reveal-row {
+    display: flex; align-items: center; gap: 11px; width: 100%;
+    background: none; border: 0; border-block-start: 1px solid var(--line);
+    padding: 16px 0 0; text-align: start;
+
+    & svg { color: var(--danger); flex-shrink: 0; }
+    & .t { flex: 1;
+      & b { display: block; font-size: 13px; font-weight: 600; color: var(--danger); }
+      & small { font-size: 11px; color: var(--ink-faint); }
+    }
+    & .chev { color: var(--ink-faint); }
+  }
+
+  /* --- stato vuoto -------------------------------------------------- */
+  #onchain-embed .empty { color: var(--ink-dim); font-size: 13px; }
+
+  /* --- pulsanti ----------------------------------------------------- */
+  #onchain-embed .btn-primary, #onchain-embed .btn-quiet, #onchain-embed .btn-danger {
+    inline-size: 100%; border: 0; border-radius: 10px; padding: 11px;
+    font-size: 13px; font-weight: 600; margin-block-start: 14px;
+    transition: background .15s;
+  }
+  #onchain-embed .btn-primary { background: var(--accent); color: var(--accent-ink); &:disabled { opacity: .5; } }
+  #onchain-embed .btn-quiet   { background: var(--raised); color: var(--ink); &:hover { background: var(--hover); } }
+  #onchain-embed .btn-danger  { background: var(--danger-soft); color: var(--danger); }
+
+  /* --- moduli -------------------------------------------------------- */
+  #onchain-embed .form {
+    display: flex; flex-direction: column; gap: 4px;
+
+    & label { font-size: 12px; color: var(--ink-dim); margin-block-start: 10px; }
+    & input, & select {
+      inline-size: 100%; padding: 10px 12px; border-radius: 9px;
+      border: 1.5px solid var(--line); background: var(--raised); font-size: 15px;
+      &:focus-visible { border-color: var(--accent); outline: none; }
+    }
+    & .form-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+      & > span { display: flex; flex-direction: column; gap: 4px; }
+    }
+  }
+
+  #onchain-embed .outcome {
+    display: block; margin-block-start: 12px; padding: 10px 12px;
+    border-radius: 10px; font-size: 12.5px; background: var(--raised);
+    word-break: break-word;
+    &[data-tone="ok"] { background: var(--accent-soft); color: var(--accent); }
+    &[data-tone="no"] { background: var(--danger-soft); color: var(--danger); }
+  }
+
+  /* --- swap ------------------------------------------------------- */
+  #onchain-embed .swap-row {
+    display: flex; align-items: center; gap: 10px;
+    border: 1.5px solid var(--line); border-radius: 9px; background: var(--raised);
+    padding-inline-end: 12px;
+
+    & input, & output { flex: 1; padding: 10px 12px; font-size: 17px; font-variant-numeric: tabular-nums; }
+    & input { border: 0; background: none; border-radius: 9px 0 0 9px; }
+    & input:focus-visible { outline: none; box-shadow: inset 0 0 0 1.5px var(--accent); border-radius: 9px; }
+    & .swap-unit { font-size: 13px; font-weight: 600; color: var(--ink-dim); }
+    &.is-readonly { background: var(--panel); }
+  }
+  #onchain-embed .swap-max {
+    flex-shrink: 0; border: 0; background: var(--accent-soft); color: var(--accent);
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
+    border-radius: 6px; padding: 5px 8px; cursor: pointer;
+  }
+  #onchain-embed .swap-available, #onchain-embed .swap-usd {
+    font-size: 11.5px; color: var(--ink-faint); margin-block: 4px 0;
+  }
+  #onchain-embed .swap-arrow {
+    text-align: center; color: var(--ink-faint); font-size: 15px; margin-block: 4px;
+  }
+  #onchain-embed .swap-detail {
+    font-size: 12px; color: var(--ink-dim); margin-block-start: 6px; min-block-size: 1.4em;
+    &.is-warn { color: var(--amber); }
+  }
+  #onchain-embed .sheet-note.is-warn { color: var(--amber); background: var(--amber-soft); border-radius: 9px; padding: 9px 11px; margin-block-end: 10px; }
+
+  /* --- coppie chiave/valore ------------------------------------------ */
+  #onchain-embed .kv {
+    margin: 0;
+    & > div {
+      display: flex; justify-content: space-between; gap: 12px;
+      padding-block: 9px; border-block-end: 1px solid var(--line);
+      &:last-child { border-block-end: 0; }
+    }
+    & dt { color: var(--ink-faint); font-size: 12.5px; }
+    & dd { margin: 0; font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  }
+
+  #onchain-embed .address-block {
+    font-family: var(--mono); font-size: 12px; line-height: 1.6; word-break: break-all;
+    background: var(--raised); border-radius: 10px; padding: 10px 12px; margin: 0 0 4px;
+  }
+
+  /* --- misuratore della spesa ----------------------------------------
+     Una barra dice "quanto ne resta" a colpo d'occhio; due numeri
+     affiancati obbligano a fare la divisione a mente. */
+  #onchain-embed .meter {
+    margin-block-start: 14px;
+    & .meter-head {
+      display: flex; justify-content: space-between; align-items: baseline;
+      font-size: 12px; color: var(--ink-dim); margin-block-end: 6px;
+      & b { color: var(--ink); font-variant-numeric: tabular-nums; }
+    }
+    & .meter-track { block-size: 5px; border-radius: 999px; background: var(--raised); overflow: hidden; }
+    & .meter-bar {
+      block-size: 100%; inline-size: var(--fill, 0%); border-radius: 999px;
+      background: var(--accent); transition: inline-size .4s cubic-bezier(.32,.72,0,1);
+    }
+  }
+
+  #onchain-embed .breaker {
+    display: flex; align-items: center; gap: 8px;
+    margin-block-start: 14px; padding: 9px 11px; border-radius: 10px;
+    font-size: 12.5px; font-weight: 600;
+    background: var(--accent-soft); color: var(--accent);
+
+    & .breaker-dot { inline-size: 7px; block-size: 7px; border-radius: 50%; background: currentColor; }
+    &[data-tripped="true"] { background: var(--danger-soft); color: var(--danger); }
+  }
+
+  /* --- interruttore --------------------------------------------------
+     Lo stato sta in aria-checked, che e' gia' quello che legge un lettore
+     di schermo: lo stile ci si attacca sopra invece di duplicarlo in una
+     classe che JS deve ricordarsi di sincronizzare. */
+  #onchain-embed .switch-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    margin-block-start: 16px; padding-block-start: 16px; border-block-start: 1px solid var(--line);
+    & b { display: block; font-size: 13px; }
+    & small { font-size: 11px; color: var(--ink-faint); }
+  }
+
+  #onchain-embed .switch {
+    position: relative; inline-size: 44px; block-size: 26px; flex-shrink: 0;
+    border-radius: 999px; border: 1px solid var(--line); background: var(--raised);
+    transition: background .2s, border-color .2s;
+
+    &::after {
+      content: ""; position: absolute; inset-block-start: 3px; inset-inline-start: 3px;
+      inline-size: 18px; block-size: 18px; border-radius: 50%;
+      background: var(--ink-faint);
+      transition: translate .2s cubic-bezier(.32,.72,0,1), background .2s;
+    }
+    &[aria-checked="true"] {
+      background: var(--accent-soft); border-color: var(--accent);
+      &::after { translate: 18px 0; background: var(--accent); }
+    }
+    &:disabled { opacity: .5; }
+  }
+
+  .sheet-note { font-size: 12.5px; color: var(--ink-dim); margin: 0;
+    &.is-error { color: var(--danger); }
+    & a { color: var(--accent); }
+  }
+
+  #onchain-embed .tx-list {
+    list-style: none; margin: 0; padding: 0;
+    & li {
+      display: flex; justify-content: space-between; gap: 10px;
+      padding-block: 9px; border-block-end: 1px solid var(--line); font-size: 12px;
+      &:last-child { border-block-end: 0; }
+    }
+    & a { color: var(--accent); font-family: var(--mono); text-decoration: none; }
+    & span { color: var(--ink-faint); }
+  }
+
+  /* --- avviso temporaneo ---------------------------------------------- */
+  #onchain-embed .toast {
+    position: fixed; inset-block-end: calc(16px + env(safe-area-inset-bottom, 0px));
+    inset-inline: var(--gap); margin-inline: auto; max-inline-size: 428px; z-index: 30;
+    display: flex; align-items: center; gap: 10px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
+    padding: 11px 16px; box-shadow: var(--shadow);
+
+    & .toast-mark {
+      inline-size: 18px; block-size: 18px; border-radius: 50%; flex-shrink: 0;
+      display: grid; place-items: center; font-size: 11px;
+      background: var(--accent-soft); color: var(--accent);
+    }
+    & .toast-title { font-size: 13px; font-weight: 700; display: block; }
+    & .toast-detail { font-size: 11px; color: var(--ink-dim); }
+    & .toast-close { margin-inline-start: auto; background: none; border: 0; color: var(--ink-faint); }
+  }
+
+  /* --- pannelli dal basso ---------------------------------------------
+     <dialog> nativo: top-layer, ::backdrop, trappola del focus, Escape e
+     inertizzazione del resto della pagina sono del browser, non miei. */
+  #onchain-embed .sheet, #onchain-embed .modal {
+    border: 0; padding: 0; background: none; color: var(--ink);
+    &::backdrop { background: oklch(12% 0.01 200 / .5); }
+  }
+
+  #onchain-embed .sheet {
+    max-inline-size: 460px; inline-size: 100%;
+    margin: auto auto 0;                       /* ancorato in basso */
+    max-block-size: 86dvh;
+    background: var(--panel);
+    border-start-start-radius: 22px; border-start-end-radius: 22px;
+    border-block-start: 1px solid var(--line);
+    padding: 10px 18px calc(20px + env(safe-area-inset-bottom, 0px));
+    overflow-y: auto;
+
+    & .grip { inline-size: 36px; block-size: 4px; border-radius: 2px; background: var(--line); margin: 0 auto 14px; }
+    & .sheet-title { font-size: 16px; font-weight: 600; }
+    & .sheet-desc { font-size: 12.5px; color: var(--ink-dim); margin: 4px 0 14px; }
+    /* Il testo descrittivo sparisce se vuoto, invece di lasciare un buco. */
+    & .sheet-desc:empty { display: none; }
+  }
+
+  #onchain-embed .modal {
+    max-inline-size: 340px; inline-size: 100%; margin: auto;
+    background: var(--panel); border-radius: 18px; border: 1px solid var(--line);
+    padding: 24px 22px; text-align: center; box-shadow: var(--shadow);
+  }
+
+  #onchain-embed .reveal-hint { font-size: 12px; color: var(--ink-dim); margin: 12px 0 0; }
+  .reveal-status { font-size: 12.5px; color: var(--ink-dim); margin: 14px 0 0;
+    &.is-error { color: var(--danger); }
+  }
+  #onchain-embed .secret {
+    font-family: var(--mono); font-size: 11.5px; word-break: break-all; text-align: start;
+    background: var(--amber-soft); color: var(--amber);
+    border-radius: 10px; padding: 12px; margin: 12px 0 0;
+  }
+
+  #onchain-embed .qr {
+    position: relative; inline-size: 212px; block-size: 212px; margin-inline: auto;
+
+    & img { inline-size: 200px; block-size: 200px; border-radius: 12px; margin: 6px; display: block; }
+    & svg { position: absolute; inset: 0; rotate: -90deg; }
+    & .qr-track { fill: none; stroke: var(--line); stroke-width: 3; }
+    & .qr-progress {
+      fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round;
+      stroke-dasharray: 641; stroke-dashoffset: 0;
+      animation: drain var(--ttl, 120s) linear forwards;
+    }
+  }
+
+  #onchain-embed .reveal-done {
+    inline-size: 68px; block-size: 68px; border-radius: 50%; margin: 0 auto 4px;
+    display: grid; place-items: center; background: var(--accent-soft);
+    & svg { inline-size: 32px; block-size: 32px; stroke: var(--accent); }
+  }
+}
+
+@layer motion {
+  /* Entrata e uscita dei pannelli in CSS puro: @starting-style da' lo
+     stato "prima dell'apertura" e transition-behavior porta display nella
+     transizione, cosi' non serve nessun timer in JavaScript. */
+  #onchain-embed .sheet, #onchain-embed .modal {
+    transition: translate .32s cubic-bezier(.32,.72,0,1), opacity .25s, display .32s allow-discrete;
+  }
+  #onchain-embed .sheet { translate: 0 0; }
+  #onchain-embed .sheet:not([open]) { translate: 0 100%; }
+  @starting-style { #onchain-embed .sheet[open] { translate: 0 100%; } }
+
+  #onchain-embed .modal[open] { opacity: 1; scale: 1; }
+  #onchain-embed .modal:not([open]) { opacity: 0; scale: .96; }
+  @starting-style { #onchain-embed .modal[open] { opacity: 0; scale: .96; } }
+
+  #onchain-embed .sheet::backdrop, #onchain-embed .modal::backdrop {
+    transition: opacity .25s, display .25s allow-discrete;
+    opacity: 1;
+  }
+  #onchain-embed .sheet:not([open])::backdrop, #onchain-embed .modal:not([open])::backdrop { opacity: 0; }
+  @starting-style { #onchain-embed .sheet[open]::backdrop, #onchain-embed .modal[open]::backdrop { opacity: 0; } }
+
+  @keyframes drain { to { stroke-dashoffset: 641; } }
+
+  @media (prefers-reduced-motion: reduce) {
+    #onchain-embed *, #onchain-embed *::before, #onchain-embed *::after {
+      animation-duration: .001ms !important;
+      transition-duration: .001ms !important;
+    }
+    /* Anche la transizione fra le chain: senza questo il browser
+       animerebbe comunque il morphing del saldo. */
+    ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) {
+      animation: none !important;
+    }
+  }
+}
