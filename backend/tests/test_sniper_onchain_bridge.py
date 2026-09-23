@@ -24,6 +24,11 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(auth, "_USERS_FILE", tmp_path / "users.json")
     monkeypatch.setattr(watchlist_store, "_STORE_FILE", tmp_path / "watchlist.json")
     monkeypatch.setattr(onchain_ledger, "_DB_FILE", tmp_path / "ledger.db")
+    monkeypatch.setattr(main.onchain_listings, "recent", lambda: [])
+
+    async def _vet_ok(candidate):
+        return {"status": "ok", "reason": "", "checks": []}
+    monkeypatch.setattr(main, "_pilot_vet", _vet_ok)
     onchain_ledger._init_db()
     auth._users.clear()
     watchlist_store._entries.clear()
@@ -77,11 +82,11 @@ def test_bridge_adds_qualifying_candidate_with_lorenzo_strategy(client, monkeypa
     async def _fake_get_candidates():
         return [candidate]
 
-    async def _fake_fetch_ohlcv(symbol, interval, outputsize):
+    async def _fake_fetch_ohlcv(self, symbol, interval, outputsize, since_ms=None):
         return pd.DataFrame({"open": [1], "high": [1], "low": [1], "close": [1], "volume": [1]})
 
     monkeypatch.setattr("app.sniper.cache.get_candidates", lambda: [candidate])
-    monkeypatch.setattr(main.dexscreener_provider, "fetch_ohlcv", _fake_fetch_ohlcv)
+    monkeypatch.setattr(main.dexscreener_provider.__class__, "fetch_ohlcv", _fake_fetch_ohlcv)
 
     _run(main._sniper_onchain_bridge_tick())
 
@@ -106,3 +111,44 @@ def test_bridge_skips_low_liquidity_candidate(client, monkeypatch):
     _run(main._sniper_onchain_bridge_tick())
 
     assert watchlist_store.list_entries(client.owner_id) == []
+
+
+def test_bridge_never_hands_the_pilot_a_token_that_fails_the_filter(client, monkeypatch):
+    client.post("/api/onchain/wallets", json={"chain": "solana"})
+    client.patch("/api/onchain/sniper-autotrade/solana", json={"enabled": True})
+    monkeypatch.setattr(main.settings, "sniper_enabled", True)
+
+    async def _vet_fail(candidate):
+        return {"status": "fail", "reason": "RugCheck: Mint authority", "checks": []}
+    monkeypatch.setattr(main, "_pilot_vet", _vet_fail)
+    big = _fake_candidate(symbol="BIG", token_address="Big1", pair_address="BigPool", market_cap=900_000)
+    monkeypatch.setattr("app.sniper.cache.get_candidates", lambda: [_fake_candidate(), big])
+
+    _run(main._sniper_onchain_bridge_tick())
+
+    assert watchlist_store.list_entries(client.owner_id) == []
+
+
+def test_bridge_takes_vetted_listings_on_an_interval_that_fits_their_age(client, monkeypatch):
+    import time as _t
+    client.post("/api/onchain/wallets", json={"chain": "solana"})
+    client.patch("/api/onchain/sniper-autotrade/solana", json={"enabled": True})
+    monkeypatch.setattr(main.settings, "sniper_enabled", True)
+    listing = {"chain": "solana", "symbol": "ACME", "name": "Acme", "token_address": "AcmeMint",
+               "pair_address": "AcmePool", "liquidity_usd": 20_000, "market_cap": 80_000,
+               "created_at": _t.time() - 1800, "website": "https://acme.io"}
+    monkeypatch.setattr(main.onchain_listings, "recent", lambda: [listing])
+    monkeypatch.setattr("app.sniper.cache.get_candidates", lambda: [])
+
+    async def _vet_never(candidate):
+        raise AssertionError("un listing e' gia' verificato")
+    monkeypatch.setattr(main, "_pilot_vet", _vet_never)
+
+    async def _fake_fetch_ohlcv(self, symbol, interval, outputsize, since_ms=None):
+        return pd.DataFrame({"open": [1], "high": [1], "low": [1], "close": [1], "volume": [1]})
+    monkeypatch.setattr(main.dexscreener_provider.__class__, "fetch_ohlcv", _fake_fetch_ohlcv)
+
+    _run(main._sniper_onchain_bridge_tick())
+
+    entry = watchlist_store.list_entries(client.owner_id)[0]
+    assert entry.symbol == "ACME@solana:AcmePool" and entry.interval == "1m"
