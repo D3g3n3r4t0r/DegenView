@@ -218,7 +218,7 @@
   /* Solo le azioni che restano dialog veri (Ricevi, Limiti, Simula) —
      vedi onchain-app.html: grafico, swap, ordini limite, portafoglio,
      strategie e storico sono ora sempre visibili. */
-  #onchain-embed .actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; max-inline-size: 340px; }
+  #onchain-embed .actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; max-inline-size: 420px; }
 
   /* Non piu' una griglia a due colonne fissa — vedi onchain-app.html:
      e' .market-order-row sotto ad affiancare grafico e ordine quando il

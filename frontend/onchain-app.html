@@ -244,7 +244,7 @@
      grafico, swap, ordini limite, portafoglio, strategie e storico sono
      ora sempre visibili, non piu' bottoni uguali in questa griglia — vedi
      .market-order-row e .bottom-panel. Tre pari, non piu' nove. */
-  .actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; max-inline-size: 340px; }
+  .actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; max-inline-size: 420px; }
 
   /* --- layout da desktop ---------------------------------------------
      Non piu' una griglia a due colonne fissa: da quando grafico e
@@ -760,6 +760,10 @@
         <button type="button" class="action" data-sheet="receive">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 4v13" /><path d="M6 12l6 6 6-6" /><path d="M4 20h16" /></svg>
           Ricevi
+        </button>
+        <button type="button" class="action" data-sheet="send">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 20V7" /><path d="M6 11l6-6 6 6" /><path d="M4 20h16" /></svg>
+          Invia
         </button>
         <button type="button" class="action" data-sheet="risk">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z" /></svg>
