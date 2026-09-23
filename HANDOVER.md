@@ -2453,3 +2453,53 @@ Storico), non piu' sheet che si aprono una sopra l'altra per ogni azione.
 
 Non iniziato: in attesa di conferma su quale punto affrontare prima —
 il punto 1 (grafico) e' il piu' visibile e il prerequisito del punto 3.
+
+## Applicazione del piano ecosistema DEX — 2026-09-23 (stessa sessione)
+
+Lorenzo: "applica tutto" (sul piano ecosistema DEX scritto sopra).
+Applicati i punti 1, 2, 4, 5; il punto 3 (marker/target sul grafico) e'
+entrato insieme al punto 1, non come pezzo separato.
+
+- **Grafico**: nuovo `/api/onchain/chart/{chain}/{address}` (trova il
+  pool migliore per liquidita' su DexScreener, poi le stesse candele di
+  `providers/dexscreener.py` — leggero apposta, niente strategia/backtest
+  come `/api/analyze`). Pannello nuovo (`chart.js`) con Lightweight
+  Charts (stesso motore del sito, script gia' servito da `/static/`),
+  polling 8s mentre resta aperto, marker sugli ordini eseguiti e righe
+  orizzontali sui target degli ordini limite ancora aperti.
+- **Strategie**: pannello (`strategies.js`) che espone il trading
+  automatico della Watchlist (stessa API: `/api/watchlist`,
+  `/strategy`, `/auto_trade`) filtrato ai token con `base_token_address`
+  sulla chain corrente — nessun secondo motore. Aggiungere un NUOVO
+  token resta nella tab Watchlist del sito (la ricerca li' risolve gia'
+  simbolo DEX + pool insieme; duplicarla con solo l'indirizzo dato dal
+  picker del wallet avrebbe richiesto ricostruire un pool a mano, un
+  rischio reale non necessario).
+- **Portafoglio reale**: `/api/onchain/portfolio/{chain}` +
+  `balances.all_token_balances()`. Solana: elenco completo via
+  `getTokenAccountsByOwner`. Robinhood Chain: NON esaustivo — scan dei
+  soli token noti a questo sito (quota token + indirizzi visti in un
+  ordine limite), perche' Blockscout e' dietro una sfida Cloudflare che
+  un backend non supera (verificato in una sessione precedente) e non
+  c'e' un indexer pubblico alternativo. Il campo `partial: true` lo dice
+  al frontend, che mostra un avviso — mai un elenco che sembra completo
+  e non lo e'.
+- **Storico unificato**: "Storico" (transazioni RPC grezze) e "Diario"
+  (ordini di questo sito) erano due bottoni per la stessa idea — uniti
+  in una sola sheet "Storico" con due tab (Ordini / Transazioni on-chain).
+- Griglia delle azioni: da conteggio di colonne fisso (doveva cambiare
+  ad ogni azione aggiunta) a `repeat(auto-fill, minmax(64px, 1fr))` —
+  nove azioni oggi, la decima non richiede toccare il CSS.
+
+Verifica: 704 passed (+ i test gia' noti come intermittenti di rete),
+ruff pulito, `node --check` pulito su tutti i moduli onchain nuovi e
+modificati. Non verificato dal vivo con Playwright in questa sessione
+(nessun accesso a un wallet gia' popolato con token reali per provare
+grafico/portafoglio contro dati veri) — la prima cosa da controllare se
+qualcosa nel grafico o nel portafoglio sembra vuoto/sbagliato dopo il
+deploy.
+
+Non applicato dal piano originale, dichiarato non nascosto: un feed
+prezzi DEX in tempo reale stile websocket (non esiste un provider
+gratuito affidabile multi-chain — resta il polling a 8s mentre il
+grafico e' aperto).
