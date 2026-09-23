@@ -2309,3 +2309,36 @@ in piedi, non inventando un secondo sistema.
 4. Cronologia unificata.
 
 Non iniziato: in attesa di conferma su quale punto affrontare prima.
+
+### Chiarimento del piano sopra — 2026-09-23, stessa sessione
+
+Lorenzo: "eredita la parte di trading dal sito originale
+https://liquidityengine.app/; però voglio avere appunto un esperienza UI
+tipo un dex". Non un secondo motore da inventare: i pattern
+dell'"Ordine manuale" (Trading → Chiavi exchange, posizioni, diario,
+ordine manuale) sono gia' la stessa cosa concettuale di uno swap/ordine
+limite, solo su un exchange centralizzato — vanno ereditati come
+INTERAZIONE, vestiti da DEX:
+
+- **Tabs BUY/SELL** del form manuale → stessa coppia di tab nello swap
+  DEX per la direzione (oggi lo swap ha solo "vendi X, ricevi Y" senza
+  un concetto esplicito di lato).
+- **Slider "USDT fisso" / "% saldo"** → stesso slider per la size di uno
+  swap o di un ordine limite, invece del solo campo numerico con "Max"
+  di oggi — coerente col resto del sito, non un secondo modo di scrivere
+  una size.
+- **Checkbox di conferma esplicita** ("Confermo: denaro reale, X") prima
+  del bottone di esecuzione → sostituisce il `window.confirm()` del
+  browser usato oggi nello swap onchain, che stona con lo stile DEX e con
+  il resto del sito.
+- **"Chiudi posizione — vendi tutto"** → lo stesso shortcut ha senso
+  anche per una posizione on-chain (vendere il 100% di un token della
+  watchlist/posizioni al prezzo di mercato), non solo per i pair CEX.
+- **Diario** → e' il precedente diretto della "cronologia ordini" del
+  piano sopra: stessa idea (elenco di cio' che e' successo, con
+  esito), qui estesa a includere anche gli ordini limite ancora aperti.
+
+Il motore di esecuzione (execute_order, guardrail di rischio, ledger)
+resta quello on-chain di oggi — cio' che si eredita e' la UX del form,
+non il codice che esegue, che e' gia' specifico per exchange centralizzati
+vs. wallet on-chain e non va unificato.
