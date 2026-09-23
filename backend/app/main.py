@@ -7,6 +7,7 @@ import httpx
 import itertools
 import json
 import logging
+import re
 import sys
 import time as _time
 
@@ -6029,8 +6030,10 @@ def _render_onchain_app(user: User | None) -> str:
     )
     # La sezione giusta e' visibile dal primo disegno, non dopo che il JS ha
     # chiesto chi sei: prima la pagina restava vuota fino a quel momento.
-    target = 'id="app-shell" class="stack" hidden' if user else 'id="login-screen" hidden'
-    return html.replace(target, target.removesuffix(" hidden"), 1)
+    # Si cerca per id, non per l'intero tag: un attributo aggiunto al tag
+    # (data-view del Pilota) bastava a far fallire il replace in silenzio.
+    target = "app-shell" if user else "login-screen"
+    return re.sub(rf'(<[^>]*\bid="{target}"[^>]*?) hidden>', r"\1>", html, count=1)
 
 
 @app.get("/onchain-app.html")
