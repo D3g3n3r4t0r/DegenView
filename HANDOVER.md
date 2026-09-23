@@ -2708,3 +2708,16 @@ GeckoTerminal filtrato su Robinhood (verificato = `coingecko_coin_id`,
 pool senza scambi = liquidita' zero). Un token per ticker. DexScreener
 resta solo come ripiego se la fonte non risponde. GeckoTerminal da' 429
 sopra ~30 richieste/minuto: la cache e' di 60s per (chain, query).
+
+---
+
+## Deploy congiunto #70–#73 — 2026-09-23
+
+Lorenzo: "DEPOLYA TUTTO". #73 (Pilota) e' entrato da solo; #70, #71, #72
+sono entrati insieme dal branch `claude/deploy-all-sneda2`. Id della
+bacheca rinumerati per non sovrapporsi: #70 `seed-0086`, #71 `seed-0087`,
+#72 `seed-0088` (telefono) e `seed-0090` (ticker), #73 `seed-0089`.
+I tasti in alto di #70 restano nel DOM ma #73 li nasconde via CSS.
+Conflitto non testuale trovato e sistemato: il `data-view` aggiunto da #73
+a `#app-shell` rompeva il replace di #71 che mostra la sezione giusta al
+primo disegno; ora `_render_onchain_app()` cerca l'elemento per id.
