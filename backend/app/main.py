@@ -94,6 +94,7 @@ from app.trading.onchain import quotes as onchain_quotes
 from app.trading.onchain import reveal_requests as onchain_reveal
 from app.trading.onchain import rpc_client as onchain_rpc_client
 from app.trading.onchain import simulate as onchain_simulate
+from app.trading.onchain import token_metadata as onchain_token_metadata
 from app.trading.onchain import twap_jobs as onchain_twap_jobs
 from app.exchange_balances import BalanceFetchError, fetch_kucoin_balances, fetch_mexc_balances
 from app.notify import telegram
@@ -280,11 +281,13 @@ _ROBINHOOD_FEE_TIERS = (500, 3000, 10000, 100)
 async def _run_onchain_auto_trade(owner: User, entry: WatchlistEntry, strategy_name: str, fresh: list) -> None:
     """Fase 4 vera: da segnale a firma, quando l'indirizzo del token c'e'.
 
-    Solo per il lato BUY (entry_long/flip_to_long): comprare si paga sempre
-    nello stabile di quote, i cui decimali sono noti e verificati sopra.
-    Vendere (exit_long/flip_to_short) richiederebbe i decimali del token
-    BASE per convertire una quantita' in unita' raw, e quelli non sono
-    salvati da nessuna parte in questa entry — meglio dirlo che indovinarli:
+    BUY (entry_long/flip_to_long): comprare si paga sempre nello stabile di
+    quote, i cui decimali sono noti e verificati sopra.
+    SELL (exit_long/flip_to_short): venduta la posizione registrata sul
+    ledger, letta in unita' umane; convertita in unita' raw con i decimali
+    veri del token BASE (token_metadata.get_token_decimals, letti dalla
+    mint/contratto — mai indovinati). Se i decimali non si ottengono (RPC
+    irraggiungibile, token strano), resta "saltato" con la ragione onesta:
     un decimals sbagliato manda un multiplo o una frazione dell'importo
     voluto, non un errore leggibile.
     """
@@ -333,43 +336,79 @@ async def _run_onchain_auto_trade(owner: User, entry: WatchlistEntry, strategy_n
         return
 
     cap = entry.size_cap_usdt.get(strategy_name) or settings.onchain_max_usd_per_trade
-    amount_in = int(cap * (10 ** _ONCHAIN_QUOTE_DECIMALS))
+    buy_amount_in = int(cap * (10 ** _ONCHAIN_QUOTE_DECIMALS))
 
     for signal in fresh:
-        if signal.type not in ("entry_long", "flip_to_long"):
+        is_buy = signal.type in ("entry_long", "flip_to_long")
+        is_sell = signal.type in ("exit_long", "flip_to_short")
+        if not is_buy and not is_sell:
             trading_log.record(
                 owner.id, symbol=entry.symbol, exchange=entry.exchange,
                 strategy_name=strategy_name, signal_type=signal.type,
-                outcome="saltato",
-                detail="vendita on-chain non ancora collegata: servono i decimali del token, "
-                       "non salvati sulla entry — solo gli ingressi (buy) sono automatici per ora",
+                outcome="saltato", detail=f"tipo di segnale non gestito dall'auto-trade on-chain: {signal.type}",
                 price=signal.price,
             )
             continue
+
+        if is_sell:
+            decimals = await onchain_token_metadata.get_token_decimals(chain, entry.base_token_address)
+            if decimals is None:
+                trading_log.record(
+                    owner.id, symbol=entry.symbol, exchange=entry.exchange,
+                    strategy_name=strategy_name, signal_type=signal.type,
+                    outcome="saltato",
+                    detail="vendita saltata: decimali del token non ottenibili dal vero contratto/mint "
+                           "(RPC irraggiungibile o token non riconosciuto) — mai indovinati",
+                    price=signal.price,
+                )
+                continue
+            position = onchain_ledger.get_position(owner.id, chain, entry.base_token_address)
+            quantity = position["quantity"]
+            if quantity <= 0:
+                trading_log.record(
+                    owner.id, symbol=entry.symbol, exchange=entry.exchange,
+                    strategy_name=strategy_name, signal_type=signal.type,
+                    outcome="saltato", detail="nessuna posizione registrata su questo token da vendere",
+                    price=signal.price,
+                )
+                continue
+            sell_amount_in = int(quantity * (10 ** decimals))
+            notional_usd = quantity * signal.price
+
         try:
             private_key_hex = auth.get_decrypted_onchain_private_key(owner, chain)
             if chain == "solana":
-                quote = await onchain_quotes.jupiter_quote(quote_token, entry.base_token_address, amount_in)
-                result = await onchain_execute.execute_order(
-                    owner.id, "solana", entry.base_token_address, strategy_name, "buy",
-                    cap, quote["price_impact_pct"], signal.price, private_key_hex, quote,
-                )
+                if is_buy:
+                    quote = await onchain_quotes.jupiter_quote(quote_token, entry.base_token_address, buy_amount_in)
+                    result = await onchain_execute.execute_order(
+                        owner.id, "solana", entry.base_token_address, strategy_name, "buy",
+                        cap, quote["price_impact_pct"], signal.price, private_key_hex, quote,
+                    )
+                else:
+                    quote = await onchain_quotes.jupiter_quote(entry.base_token_address, quote_token, sell_amount_in)
+                    result = await onchain_execute.execute_order(
+                        owner.id, "solana", entry.base_token_address, strategy_name, "sell",
+                        notional_usd, quote["price_impact_pct"], signal.price, private_key_hex, quote,
+                    )
             else:
+                token_in, token_out = (quote_token, entry.base_token_address) if is_buy \
+                    else (entry.base_token_address, quote_token)
                 pool = None
                 fee = None
                 for candidate_fee in _ROBINHOOD_FEE_TIERS:
-                    pool = await onchain_quotes.get_pool(quote_token, entry.base_token_address, candidate_fee)
+                    pool = await onchain_quotes.get_pool(token_in, token_out, candidate_fee)
                     if pool is not None:
                         fee = candidate_fee
                         break
                 if pool is None:
                     raise RuntimeError("nessun pool Uniswap v3 trovato per questo token su nessun fee tier")
-                v3_quote = await onchain_quotes.uniswap_v3_quote(quote_token, entry.base_token_address, fee, amount_in)
+                amount_in = buy_amount_in if is_buy else sell_amount_in
+                v3_quote = await onchain_quotes.uniswap_v3_quote(token_in, token_out, fee, amount_in)
                 amount_out_minimum = int(v3_quote["amount_out"] * 0.99)  # 1% di slippage, come il default dell'endpoint manuale
                 result = await onchain_execute.execute_order(
-                    owner.id, "robinhood", entry.base_token_address, strategy_name, "buy",
-                    cap, v3_quote["price_impact_pct"], signal.price, private_key_hex,
-                    {"token_in": quote_token, "token_out": entry.base_token_address, "fee": fee,
+                    owner.id, "robinhood", entry.base_token_address, strategy_name, "buy" if is_buy else "sell",
+                    cap if is_buy else notional_usd, v3_quote["price_impact_pct"], signal.price, private_key_hex,
+                    {"token_in": token_in, "token_out": token_out, "fee": fee,
                      "amount_in": amount_in, "amount_out_minimum": amount_out_minimum},
                 )
             outcome = "eseguito" if result.get("accepted") else "saltato"
