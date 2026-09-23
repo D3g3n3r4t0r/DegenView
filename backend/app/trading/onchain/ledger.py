@@ -18,6 +18,7 @@ non deve firmare niente in quel caso, il tentativo e' gia' in corso o concluso.
 import sqlite3
 import threading
 import time
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -85,6 +86,18 @@ def _init_db() -> None:
             );
             CREATE INDEX IF NOT EXISTS idx_pool_liquidity_history_lookup
                 ON pool_liquidity_history (chain, pool_address, recorded_at);
+            CREATE TABLE IF NOT EXISTS discrepancies (
+                id TEXT PRIMARY KEY,
+                owner_id TEXT NOT NULL,
+                chain TEXT NOT NULL,
+                token TEXT NOT NULL,
+                ledger_usd REAL NOT NULL,
+                real_balance_usd REAL NOT NULL,
+                diff_pct REAL NOT NULL,
+                status TEXT NOT NULL DEFAULT 'open',
+                opened_at REAL NOT NULL,
+                reviewed_at REAL
+            );
         """)
 
 
@@ -166,6 +179,23 @@ def mark_failed(idempotency_key: str, reason: str) -> None:
         conn.execute(
             "UPDATE orders SET status = 'failed', reason = ?, updated_at = ? WHERE idempotency_key = ?",
             (reason, time.time(), idempotency_key),
+        )
+
+
+def mark_confirmed_signature_only(idempotency_key: str) -> None:
+    """Usata SOLO dalla riconciliazione post-crash (reconciliation.py): la
+    firma e' confermata on-chain via RPC, ma qui NON tocchiamo posizioni
+    né spesa giornaliera come fa mark_confirmed(). Motivo: la size e il
+    prezzo davvero eseguiti richiederebbero di leggere i log della
+    transazione (variazioni di saldo token), non implementato — vedi
+    reconciliation.py. Serve solo a togliere l'ordine da
+    pending_unconfirmed() cosi' un nuovo segnale non resti bloccato dietro
+    un ordine che in realta' e' gia' chiuso; le posizioni restano quelle
+    scritte l'ultima volta che *questo* processo ha visto la conferma."""
+    with _lock, _connect() as conn:
+        conn.execute(
+            "UPDATE orders SET status = 'confirmed', updated_at = ? WHERE idempotency_key = ?",
+            (time.time(), idempotency_key),
         )
 
 
@@ -267,6 +297,55 @@ def max_pool_liquidity_since(chain: str, pool_address: str, since: float | None 
             (chain, pool_address, since),
         ).fetchone()
         return row["m"] if row and row["m"] is not None else None
+
+
+def open_discrepancy(
+    owner_id: str, chain: str, token: str, ledger_usd: float, real_balance_usd: float, diff_pct: float,
+) -> str:
+    """Registra una discrepanza saldo-vero-vs-ledger da rivedere a mano —
+    mai corretta in automatico (vedi reconciliation.check_position_discrepancy)."""
+    discrepancy_id = uuid.uuid4().hex
+    with _lock, _connect() as conn:
+        conn.execute(
+            "INSERT INTO discrepancies (id, owner_id, chain, token, ledger_usd, real_balance_usd, "
+            "diff_pct, status, opened_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'open', ?)",
+            (discrepancy_id, owner_id, chain, token, ledger_usd, real_balance_usd, diff_pct, time.time()),
+        )
+    return discrepancy_id
+
+
+def has_open_discrepancy(owner_id: str, chain: str, token: str) -> bool:
+    """risk.run_all_checks la puo' chiamare per bloccare nuovi ordini su
+    quel token+wallet finche' la discrepanza non e' rivista a mano."""
+    with _lock, _connect() as conn:
+        row = conn.execute(
+            "SELECT 1 FROM discrepancies WHERE owner_id = ? AND chain = ? AND token = ? AND status = 'open' LIMIT 1",
+            (owner_id, chain, token),
+        ).fetchone()
+        return row is not None
+
+
+def list_discrepancies(owner_id: str | None = None, status: str | None = None) -> list[dict]:
+    with _lock, _connect() as conn:
+        query = "SELECT * FROM discrepancies WHERE 1=1"
+        params: list = []
+        if owner_id is not None:
+            query += " AND owner_id = ?"
+            params.append(owner_id)
+        if status is not None:
+            query += " AND status = ?"
+            params.append(status)
+        return [dict(r) for r in conn.execute(query, params).fetchall()]
+
+
+def review_discrepancy(discrepancy_id: str) -> None:
+    """Chiusura MANUALE apposta, stesso principio di reset_breaker: nessuna
+    revisione automatica di una discrepanza di saldo."""
+    with _lock, _connect() as conn:
+        conn.execute(
+            "UPDATE discrepancies SET status = 'reviewed', reviewed_at = ? WHERE id = ?",
+            (time.time(), discrepancy_id),
+        )
 
 
 def reset_breaker(owner_id: str, chain: str) -> None:
