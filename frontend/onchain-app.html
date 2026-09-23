@@ -1491,6 +1491,28 @@
   .radar[data-running="true"] .radar-dot::after { animation-duration: .9s; }
   .radar-new { margin-block-end: 10px; padding-block-end: 6px; border-block-end: 1px solid var(--line);
     & h4 { margin: 6px 4px 0; font-size: 11.5px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-faint); } }
+  /* Appena usciti: all'apertura le righe entrano una dopo l'altra; un
+     listing che arriva dopo cade dall'alto, le altre scivolano giu' (FLIP
+     in radar.js) e la sua riga si accende un attimo. Solo opacity,
+     transform e filter. */
+  .radar .radar-new li.is-enter { animation: listing-in .6s cubic-bezier(.2,.8,.2,1) backwards;
+    animation-delay: calc(var(--i) * 90ms + 60ms); }
+  .radar .radar-new li.is-arrival { animation: listing-drop .62s cubic-bezier(.2,.9,.25,1.15) backwards;
+    & button { animation: listing-flash 2.6s ease-out; }
+    & .tk { animation: listing-ring 1.4s cubic-bezier(0,0,.2,1) .15s; }
+    & .num { animation: listing-in .5s cubic-bezier(.2,.8,.2,1) .2s backwards; }
+  }
+  .radar .radar-new li.is-enter .tk::after {
+    animation: listing-pop .45s cubic-bezier(.3,1.6,.5,1) backwards; animation-delay: calc(var(--i) * 90ms + 320ms); }
+  .radar .radar-new li.is-arrival .tk::after { animation: listing-pop .45s cubic-bezier(.3,1.6,.5,1) .3s backwards; }
+  @keyframes listing-in { from { opacity: 0; translate: 0 14px; filter: blur(6px); } }
+  @keyframes listing-drop { from { opacity: 0; translate: 0 -18px; scale: .96; filter: blur(4px); } }
+  @keyframes listing-flash { from { background: var(--live-soft); } }
+  @keyframes listing-ring { from { box-shadow: 0 0 0 0 color-mix(in oklch, var(--live) 55%, transparent); }
+    to { box-shadow: 0 0 0 14px transparent; } }
+  @keyframes listing-pop { from { scale: 0; } }
+  @media (prefers-reduced-motion: reduce) {
+    .radar .radar-new li :is(*), .radar .radar-new li { animation: none !important; } }
   .radar-foot { margin: 6px 4px 0; font-size: 11.5px; color: var(--ink-faint); }
   .radar-live { margin-inline-start: auto; align-self: start; font-size: 11.5px; color: var(--live);
     display: inline-flex; align-items: center; gap: 6px;
