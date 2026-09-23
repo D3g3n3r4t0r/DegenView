@@ -138,6 +138,26 @@ def test_execute_robinhood_real_quote_signs_but_does_not_send(client, monkeypatc
     assert "disattivata" in body["reason"]
 
 
+def test_quote_robinhood_real_network_call(client):
+    resp = client.post("/api/onchain/quote/robinhood", json={
+        "token_in": ROBINHOOD_WETH, "token_out": ROBINHOOD_USDG, "fee": 3000, "amount_in": 10**16,
+    })
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["out_amount"] > 0
+    assert body["price_impact_pct"] >= 0
+    assert body["pool"].startswith("0x")
+
+
+def test_quote_robinhood_without_a_pool_is_rejected(client):
+    resp = client.post("/api/onchain/quote/robinhood", json={
+        "token_in": ROBINHOOD_WETH, "token_out": "0x000000000000000000000000000000000000dEaD",
+        "fee": 3000, "amount_in": 10**16,
+    })
+    assert resp.status_code == 400
+    assert "Nessun pool" in resp.json()["detail"]
+
+
 def test_execute_robinhood_without_wallet_is_rejected(client):
     resp = client.post("/api/onchain/execute/robinhood", json={
         "token": "USDG", "strategy_name": "lorenzo", "side": "buy",

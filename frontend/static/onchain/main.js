@@ -12,6 +12,7 @@ import { startReveal } from "@onchain/reveal.js";
 import * as sheets from "@onchain/sheets.js";
 import { drawSparkline } from "@onchain/sparkline.js";
 import { appendHistory, chainInfo, readCache, readHistory, state, writeCache } from "@onchain/store.js";
+import { openSwap } from "@onchain/swap.js";
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -198,6 +199,9 @@ const SHEETS = {
   risk: () => sheets.openRisk(() => { refreshStatus(); refreshPositions(); }),
   simulate: () => sheets.openSimulate({
     onAccepted: () => { refreshPositions(); refreshStatus(); toast("Simulazione accettata", "registrata nel ledger"); },
+  }),
+  swap: () => openSwap({
+    onExecuted: () => { refreshBalance(); refreshPositions(); toast("Swap inviato", "verifica la firma nello storico"); },
   }),
 };
 document.querySelectorAll("[data-sheet]").forEach((button) =>
