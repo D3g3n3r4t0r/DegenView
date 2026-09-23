@@ -12,6 +12,26 @@ lavori pluri-sessione, decisioni prese, stato di piani approvati.
 
 ---
 
+## Link ospite in sola lettura — `seed-0096`, branch `claude/link-ospite-asb5wj`
+
+Lorenzo (23/09/2026): "vorrei pubblicare un link per condividere questo sito
+[...] con un amico che lo possa utilizzare senza ovviamente poter modificare
+niente, quindi solo la lettura".
+
+Scelte (default del coordinatore, non ancora discusse con Lorenzo): niente
+account (la registrazione resta chiusa), ma un token con scadenza e
+revocabile creato da `/admin/ospiti`. L'ospite e' un utente sintetico vuoto
+(`app/guest.py`): vede grafici, radar, scanner, NON i wallet/saldi/watchlist
+di Lorenzo. Blocco nel middleware di `main.py`: solo GET, salvo
+`GUEST_WRITE_ALLOWED`; chiusi `/admin`, `/api/errors`, `/api/optimize`.
+Revoca immediata (il cookie rilegge il link a ogni richiesta).
+
+Resta: se Lorenzo vuole che l'amico veda il SUO pilota/radar in sola lettura
+(non un utente vuoto), va aggiunta una modalita' "specchio" — espone saldi e
+indirizzi, quindi solo su sua richiesta esplicita.
+
+---
+
 ## Wallet on-chain: il "Pilota" — `seed-0089` — PR #73, branch `claude/ui-animations-heolhv`
 
 Lorenzo, in piu' messaggi (set 2026): "troppi tasti", "pochi clic, pochi
