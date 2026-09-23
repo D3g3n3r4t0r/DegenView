@@ -91,6 +91,7 @@ from app.trading.onchain import jito as onchain_jito
 from app.trading.onchain import keys as onchain_keys
 from app.trading.onchain import ledger as onchain_ledger
 from app.trading.onchain import passkey as onchain_passkey
+from app.trading.onchain import pilot as onchain_pilot
 from app.trading.onchain import prices as onchain_prices
 from app.trading.onchain import token_search as onchain_tokens
 from app.trading.onchain import quotes as onchain_quotes
@@ -344,6 +345,23 @@ async def _run_onchain_auto_trade(owner: User, entry: WatchlistEntry, strategy_n
             )
         return
 
+    # Il pilota spento vuol dire "non compra piu' niente da solo" su questa
+    # chain — Lorenzo vuole un interruttore solo, e che dica la verita'. Le
+    # uscite restano: spegnere il pilota non deve lasciare una posizione
+    # aperta senza piu' nessuno che la chiuda.
+    if chain not in owner.sniper_autotrade_chains:
+        buys = [s for s in fresh if s.type in ("entry_long", "flip_to_long")]
+        for signal in buys:
+            trading_log.record(
+                owner.id, symbol=entry.symbol, exchange=entry.exchange,
+                strategy_name=strategy_name, signal_type=signal.type,
+                outcome="saltato", detail=f"pilota spento su {chain}: nessun acquisto automatico",
+                price=signal.price,
+            )
+        fresh = [s for s in fresh if s not in buys]
+        if not fresh:
+            return
+
     cap = entry.size_cap_usdt.get(strategy_name) or settings.onchain_max_usd_per_trade
     buy_amount_in = int(cap * (10 ** _ONCHAIN_QUOTE_DECIMALS))
 
@@ -479,6 +497,8 @@ async def _watchlist_alert_loop() -> None:
                     df = drop_unclosed_candle(df, entry.interval)
                 if df.empty:
                     continue
+                if entry.asset_type == "dex":
+                    onchain_pilot.record_evaluation(entry.id, price=float(df["close"].iloc[-1]))
                 # Stale data detection: last candle older than 2× the interval
                 _iv_s = INTERVAL_SECONDS.get(entry.interval, 0)
                 if _iv_s:
@@ -761,15 +781,25 @@ async def _sniper_onchain_bridge_tick() -> None:
 
     from app.sniper import cache as sniper_cache
 
+    seen: dict[str, list[str]] = {chain: [] for chain in users_by_chain}
+    accepted: dict[str, int] = dict.fromkeys(users_by_chain, 0)
     for candidate in sniper_cache.get_candidates():
         interested = users_by_chain.get(candidate.chain_id)
         if not interested:
             continue
+        seen[candidate.chain_id].append(candidate.token_address or candidate.symbol)
+        reason = None
         if candidate.liquidity_usd < _SNIPER_ONCHAIN_MIN_LIQUIDITY_USD:
-            continue
-        if candidate.age_hours > _SNIPER_ONCHAIN_MAX_AGE_HOURS:
-            continue
-        if not candidate.token_address or not candidate.pair_address:
+            reason = f"liquidità ${candidate.liquidity_usd:,.0f} sotto ${_SNIPER_ONCHAIN_MIN_LIQUIDITY_USD:,.0f}"
+        elif candidate.age_hours > _SNIPER_ONCHAIN_MAX_AGE_HOURS:
+            reason = f"troppo vecchio ({candidate.age_hours:.0f} h, massimo {_SNIPER_ONCHAIN_MAX_AGE_HOURS:.0f})"
+        elif not candidate.token_address or not candidate.pair_address:
+            reason = "indirizzo del token o del pool mancante"
+        if reason:
+            onchain_pilot.record_rejection(
+                candidate.chain_id, symbol=candidate.symbol, reason=reason,
+                liquidity_usd=candidate.liquidity_usd, age_hours=candidate.age_hours,
+            )
             continue
         symbol = f"{candidate.symbol}@{candidate.chain_id}:{candidate.pair_address}"
         for user in interested:
@@ -790,12 +820,23 @@ async def _sniper_onchain_bridge_tick() -> None:
                 )
                 watchlist_store.set_strategy_enabled(entry.id, _SNIPER_ONCHAIN_STRATEGY, True)
                 watchlist_store.set_auto_trade(entry.id, _SNIPER_ONCHAIN_STRATEGY, True)
+                accepted[candidate.chain_id] += 1
+                onchain_pilot.record_discovery(
+                    user.id, symbol, name=candidate.name, token_address=candidate.token_address,
+                    liquidity_usd=candidate.liquidity_usd, age_hours=candidate.age_hours,
+                    score=f"{candidate.score_total}/{candidate.score_max}",
+                )
                 logger.info(
                     "sniper_onchain_bridge: %s aggiunto alla watchlist di %s (Lorenzo trend-follower)",
                     symbol, user.email,
                 )
             except Exception:  # noqa: BLE001 — un candidato/utente che fallisce non deve bloccare gli altri
                 logger.exception("sniper_onchain_bridge: errore su %s per %s", symbol, user.email)
+
+    for chain, tokens in seen.items():
+        onchain_pilot.record_scan(
+            chain, seen=tokens, accepted=accepted[chain], interval_s=_SNIPER_ONCHAIN_POLL_SECONDS,
+        )
 
 
 # --- pausa per quota esaurita ------------------------------------------------
@@ -3173,6 +3214,123 @@ async def set_sniper_autotrade(
         raise HTTPException(status_code=400, detail=f"Nessun wallet {chain} per questo utente — crealo prima.")
     updated = auth.set_sniper_autotrade_chain(user.id, chain, body.enabled)
     return {"chains": updated.sniper_autotrade_chains}
+
+
+def _pilot_token_view(user: User, entry: WatchlistEntry, chain: str, positions: dict, journal: list[dict]) -> dict:
+    """Un token sotto il pilota, detto in parole: in che stato e' e perche'."""
+    base_symbol = entry.symbol.split("@", 1)[0]
+    found = onchain_pilot.discovery(user.id, entry.symbol)
+    evaluation = onchain_pilot.last_evaluation(entry.id)
+    mine = [j for j in journal if j.get("symbol") == entry.symbol]
+    position = positions.get((entry.base_token_address or "").lower())
+
+    events = [
+        {"ts": j["ts"], "text": f"Segnale {_PILOT_SIGNAL_WORDS.get(j['signal_type'], j['signal_type'])}: "
+                                f"{j['outcome']}" + (f" — {j['detail']}" if j.get("detail") else "")}
+        for j in mine[:6]
+    ]
+    if found:
+        events.append({"ts": found["added_at"], "text": "Entrato in osservazione (scoperto dallo sniper)"})
+
+    if position:
+        state, label = "in", "In posizione"
+        reason = f"{position['quantity']:g} token, costati ${position['cost_usd']:,.2f}"
+    elif mine and mine[0]["outcome"] != "eseguito":
+        state, label = "blocked", "Segnale non eseguito"
+        reason = mine[0].get("detail") or mine[0]["outcome"]
+    elif mine:
+        state, label = "watch", "Uscito, osservo"
+        reason = f"ultimo ordine: {_PILOT_SIGNAL_WORDS.get(mine[0]['signal_type'], mine[0]['signal_type'])}"
+    else:
+        state, label = "watch", "Osservo il trend"
+        reason = "nessun segnale della strategia finora"
+
+    return {
+        "symbol": base_symbol,
+        "watch_symbol": entry.symbol,
+        "name": (found or {}).get("name") or base_symbol,
+        "token_address": entry.base_token_address,
+        "interval": entry.strategy_intervals.get(_SNIPER_ONCHAIN_STRATEGY, entry.interval),
+        "added_at": (found or {}).get("added_at"),
+        "liquidity_at_add": (found or {}).get("liquidity_usd"),
+        "age_at_add": (found or {}).get("age_hours"),
+        "score": (found or {}).get("score"),
+        "last_eval_at": (evaluation or {}).get("ts"),
+        "last_price": (evaluation or {}).get("price"),
+        "position": position,
+        "state": state,
+        "state_label": label,
+        "reason": reason,
+        "events": sorted(events, key=lambda e: e["ts"], reverse=True),
+    }
+
+
+_PILOT_SIGNAL_WORDS = {
+    "entry_long": "di acquisto", "flip_to_long": "di acquisto",
+    "exit_long": "di vendita", "flip_to_short": "di vendita",
+    "entry_short": "short", "exit_short": "chiusura short",
+}
+
+
+@app.get("/api/onchain/pilot/{chain}")
+async def onchain_pilot_status(chain: OnchainChain, user: User = Depends(auth.get_current_user)) -> dict:
+    """Tutto quello che il pilota fa da solo su una chain, in una risposta:
+    se e' acceso, quando ha guardato l'ultima volta, cosa ha esaminato e
+    scartato, i token che segue e perche', e — prima di tutto — cosa gli
+    impedirebbe di lavorare. Lorenzo: "voglio avere il completo controllo
+    di quello che sta succedendo"."""
+    _require_onchain_enabled()
+    enabled = chain in user.sniper_autotrade_chains
+    breaker = onchain_ledger.breaker_status(user.id, chain)
+    spent_today = onchain_ledger.get_daily_spent(user.id, chain)
+
+    # Cosa lo ferma, in ordine di gravita'. Ogni voce e' una condizione che
+    # il codice controlla davvero (bridge e giro dei segnali), non un'ipotesi.
+    health = [
+        {"key": "wallet", "ok": chain in user.onchain_wallets, "label": "Wallet su questa rete",
+         "detail": "creato" if chain in user.onchain_wallets else "manca: crealo prima"},
+        {"key": "scanner", "ok": settings.sniper_enabled, "label": "Scanner dei token nuovi",
+         "detail": "attivo" if settings.sniper_enabled else "spento sul server: nessun token nuovo arriva"},
+        {"key": "signals", "ok": bool(settings.telegram_bot_token and user.telegram_chat_id and _telegram_allowed(user)),
+         "label": "Controllo dei segnali",
+         "detail": "attivo" if settings.telegram_bot_token and user.telegram_chat_id and _telegram_allowed(user)
+         else "fermo: serve Telegram collegato, senza la strategia non viene valutata"},
+        {"key": "execution", "ok": settings.onchain_execution_enabled, "label": "Ordini reali",
+         "detail": "abilitati" if settings.onchain_execution_enabled else "spenti sul server: i segnali restano solo registrati"},
+        {"key": "breaker", "ok": not breaker.get("tripped"), "label": "Freno di emergenza",
+         "detail": "armato, non scattato" if not breaker.get("tripped") else "scattato: riattivalo da Limiti"},
+    ]
+
+    positions = {p["token"].lower(): p for p in onchain_ledger.get_all_positions(user.id, chain)}
+    journal = trading_log.list_for(user.id, limit=200)
+    tokens = []
+    for entry in watchlist_store.list_entries(user.id):
+        if entry.asset_type != "dex" or not entry.auto_trade.get(_SNIPER_ONCHAIN_STRATEGY):
+            continue
+        # "BASE@chain:pool", lo stesso formato che scrive il ponte.
+        if entry.symbol.partition("@")[2].partition(":")[0] != chain:
+            continue
+        tokens.append(_pilot_token_view(user, entry, chain, positions, journal))
+    order = {"in": 0, "blocked": 1, "watch": 2}
+    tokens.sort(key=lambda t: (order.get(t["state"], 3), -(t["added_at"] or 0)))
+
+    return {
+        "chain": chain,
+        "enabled": enabled,
+        "strategy": _SNIPER_ONCHAIN_STRATEGY,
+        "filters": {"min_liquidity_usd": _SNIPER_ONCHAIN_MIN_LIQUIDITY_USD, "max_age_hours": _SNIPER_ONCHAIN_MAX_AGE_HOURS},
+        "limits": {
+            "per_trade_usd": settings.onchain_max_usd_per_trade,
+            "daily_usd": settings.onchain_max_usd_per_day,
+            "spent_today_usd": spent_today,
+        },
+        "scan": onchain_pilot.scan_state(chain),
+        "signals_every_s": WATCHLIST_POLL_SECONDS,
+        "health": health,
+        "working": enabled and all(h["ok"] for h in health),
+        "tokens": tokens,
+        "rejected": onchain_pilot.rejected(chain)[:8],
+    }
 
 
 @app.post("/api/onchain/risk/circuit-breaker/{chain}/reset")

@@ -110,6 +110,7 @@ export const getLivePrice = (chain, address) => request(`/api/onchain/price/${ch
 // watchlist, con la strategia di Lorenzo attiva, i token scoperti dallo
 // sniper su questa chain — qui solo l'interruttore per utente/chain.
 export const getSniperAutotrade = () => request("/api/onchain/sniper-autotrade");
+export const getPilot = (chain) => request(`/api/onchain/pilot/${chain}`);
 export const setSniperAutotrade = (chain, enabled) =>
   request(`/api/onchain/sniper-autotrade/${chain}`, { method: "PATCH", body: { enabled } });
 
