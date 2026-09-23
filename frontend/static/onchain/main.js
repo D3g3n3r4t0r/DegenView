@@ -8,6 +8,7 @@
  * accanto — questo file monta e smonta, non disegna i form.
  */
 import * as api from "@onchain/api.js";
+import { ApiError } from "@onchain/api.js";
 import { freshness, formatToken, formatUsd, shortAddress, usdParts } from "@onchain/format.js";
 import { startReveal } from "@onchain/reveal.js";
 import * as sheets from "@onchain/sheets.js";
@@ -45,6 +46,11 @@ const view = {
   orderPanelBody: $("#order-panel-body"),
   bottomPanel: $("#bottom-panel"),
   bottomPanelBody: $("#bottom-panel-body"),
+  topbarAddress: $("#topbar-address-text"),
+  sniperCard: $("#sniper-card"),
+  sniperToggle: $("#sniper-toggle"),
+  sniperPulse: $("#sniper-pulse"),
+  sniperStateText: $("#sniper-state-text"),
   actions: $("#actions"),
   reveal: $("#reveal-row"),
   empty: $("#onchain-empty-state"),
@@ -60,7 +66,7 @@ function paintChainStatic() {
   const hasWallet = Boolean(wallet || cached);
 
   view.chainLabel.textContent = `${label}${suffix}`;
-  for (const node of [view.actions, view.status, view.reveal, view.marketOrderRow, view.bottomPanel]) node.hidden = !hasWallet;
+  for (const node of [view.actions, view.status, view.reveal, view.marketOrderRow, view.bottomPanel, view.sniperCard]) node.hidden = !hasWallet;
   view.empty.hidden = hasWallet;
   view.balance.hidden = !hasWallet;
   view.address.hidden = !hasWallet;
@@ -73,6 +79,8 @@ function paintChainStatic() {
 
   const address = wallet?.address ?? cached?.address ?? "";
   view.address.textContent = shortAddress(address);
+  view.topbarAddress.textContent = shortAddress(address);
+  view.topbarAddress.closest("button").dataset.full = address;
   view.address.dataset.full = address;
   view.fresh.textContent = cached ? freshness(cached.at) : "in attesa del primo saldo";
   paintBalance(cached, unit);
@@ -114,10 +122,44 @@ function loadChainData() {
   if (view.empty.hidden === false) return;  // nessun wallet: niente da chiedere
   refreshBalance();
   refreshStatus();
+  refreshSniperCard();
   mountChart(view.marketPanel);
   mountOrderTab(currentOrderTab);
   mountBottomTab(currentBottomTab);
 }
+
+// Ponte sniper -> Lorenzo (2026-09-23): chip promossa fuori dal tab
+// Strategie, con lo stesso interruttore che il backend legge prima di
+// aggiungere da solo un token alla watchlist su questa chain.
+async function refreshSniperCard() {
+  const chain = state.chain;
+  try {
+    const { chains } = await api.getSniperAutotrade();
+    if (chain !== state.chain) return;
+    paintSniperCard(chains.includes(chain));
+  } catch { /* resta lo stato di default, spento */ }
+}
+
+function paintSniperCard(enabled) {
+  view.sniperToggle.setAttribute("aria-checked", String(enabled));
+  view.sniperPulse.hidden = !enabled;
+  view.sniperStateText.textContent = enabled ? "Attivo su questa chain" : "Spento";
+}
+
+view.sniperToggle.addEventListener("click", async () => {
+  const chain = state.chain;
+  const next = view.sniperToggle.getAttribute("aria-checked") !== "true";
+  view.sniperToggle.disabled = true;
+  try {
+    const { chains } = await api.setSniperAutotrade(chain, next);
+    paintSniperCard(chains.includes(chain));
+    toast(next ? "Auto-trade sniper attivo" : "Auto-trade sniper spento", chainInfo().label);
+  } catch (error) {
+    toast("Non riuscito", error instanceof ApiError ? error.message : "errore inatteso");
+  } finally {
+    view.sniperToggle.disabled = false;
+  }
+});
 
 let balanceRetry = null;
 
@@ -234,6 +276,12 @@ $$("[data-chain]").forEach((tab) => {
 });
 
 view.address.addEventListener("click", async (event) => {
+  const button = event.currentTarget;
+  await navigator.clipboard?.writeText(button.dataset.full ?? "");
+  toast("Indirizzo copiato", shortAddress(button.dataset.full ?? ""));
+});
+
+$("#topbar-address")?.addEventListener("click", async (event) => {
   const button = event.currentTarget;
   await navigator.clipboard?.writeText(button.dataset.full ?? "");
   toast("Indirizzo copiato", shortAddress(button.dataset.full ?? ""));
