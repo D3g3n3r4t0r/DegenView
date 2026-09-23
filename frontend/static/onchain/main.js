@@ -16,7 +16,7 @@ import { drawSparkline } from "@onchain/sparkline.js";
 import { appendHistory, chainInfo, readCache, readHistory, state, writeCache } from "@onchain/store.js";
 import { mountSwap } from "@onchain/swap.js";
 import { mountLimitOrder, mountOpenOrders, mountHistory } from "@onchain/limitOrders.js";
-import { mountChart, resetForChainSwitch } from "@onchain/chart.js";
+import { mountChart, onTokenChanged, resetForChainSwitch, setToken as setChartToken } from "@onchain/chart.js";
 import { mountStrategies } from "@onchain/strategies.js";
 import { mountPortfolio } from "@onchain/portfolio.js";
 import { openSend } from "@onchain/send.js";
@@ -119,6 +119,7 @@ async function selectChain(next) {
   if (document.startViewTransition) await document.startViewTransition(swap).updateCallbackDone;
   else swap();
   resetForChainSwitch(); // il token in vista non appartiene piu' alla chain nuova
+  presetToken = null;
   loadChainData();
 }
 
@@ -263,6 +264,48 @@ async function refreshStatus() {
 
 let currentOrderTab = "swap";
 
+// Un token si sceglie una volta sola: quello scelto sul grafico diventa
+// l'altra gamba di swap e limite, e quello scelto nel pannello ordine
+// sposta il grafico. Prima erano due scelte separate, e da telefono il
+// pannello ordine sta due schermate sotto il grafico — Lorenzo: "se
+// seleziono un token si aprono troppe schermate".
+let presetToken = null;
+let presetSeq = 0;
+const tokenInfoCache = new Map();
+
+async function resolvePreset(token) {
+  const key = `${state.chain}:${token.address.toLowerCase()}`;
+  if (!tokenInfoCache.has(key)) {
+    const info = await api.getTokenInfo(state.chain, token.address);
+    tokenInfoCache.set(key, {
+      address: token.address,
+      decimals: info.decimals,
+      symbol: info.symbol || token.symbolHint || shortAddress(token.address),
+      priceUsd: info.price_usd ?? null,
+    });
+  }
+  return tokenInfoCache.get(key);
+}
+
+onTokenChanged(async (token) => {
+  const seq = ++presetSeq;
+  presetToken = null;
+  if (token && !sheets.isNativeAddress(state.chain, token.address)) {
+    try {
+      presetToken = await resolvePreset(token);
+    } catch (error) {
+      toast("Token non verificato", error.message);
+    }
+  }
+  if (seq !== presetSeq || currentOrderTab === "sniper") return;
+  mountOrderTab(currentOrderTab);
+});
+
+const followInChart = (token) => {
+  presetToken = token;
+  setChartToken({ address: token.address, symbolHint: token.symbol });
+};
+
 function mountOrderTab(tab) {
   currentOrderTab = tab;
   $$("#order-tabs .mo-side-tab").forEach((t) => {
@@ -272,12 +315,16 @@ function mountOrderTab(tab) {
   });
   if (tab === "swap") {
     mountSwap(view.orderPanelBody, {
+      presetToken,
+      onTokenPicked: followInChart,
       onExecuted: () => { refreshBalance(); mountBottomTab(currentBottomTab); toast("Swap inviato", "verifica la firma nello storico"); },
     });
   } else if (tab === "sniper") {
     mountSniperTab(view.orderPanelBody);
   } else {
     mountLimitOrder(view.orderPanelBody, {
+      presetToken,
+      onTokenPicked: followInChart,
       onPlaced: () => { mountBottomTab(currentBottomTab); toast("Ordine limite piazzato", "resta in attesa nello storico"); },
     });
   }
