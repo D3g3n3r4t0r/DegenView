@@ -164,6 +164,12 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0090", "Wallet on-chain: molti ticker non si trovano, e per ogni ticker escono doppioni",
+     "Lorenzo: 'mezzi ticker non funzionano; voglio solo un unico risultato per ticker, quello con il contratto corretto e verificato con liquidità migliore, non voglio dover scegliere altri doppioni'.",
+     "media"),
+    ("seed-0088", "Wallet on-chain da telefono: scegliere un token apre troppe schermate",
+     "Lorenzo: 'rivedi completamente il sito se mi collego da mobile; se seleziono un token si aprono troppe schermate'. Su /onchain-app.html da telefono il token scelto sul grafico non arrivava allo swap: andava riscelto nel pannello ordine, che stava sotto l'elenco delle posizioni, con un secondo foglio e la tastiera aperta in automatico.",
+     "media"),
     ("seed-0087", "Pagina wallet on-chain lenta ad aprirsi",
      "Lorenzo: 'usa un linguaggio di programmazione per rendere il sito velocissimo a costo di fare un refactory'. Misurata onchain-app.html dal vivo: Lighthouse 99 da non loggati, main thread 0,4 s, JS leggero. Il tempo se ne andava in giri di rete in fila prima dei dati (HTML, main.js, poi i suoi import, poi /api/auth/me, poi /api/onchain/wallets, solo dopo il saldo), piu' i font Google che bloccavano il primo disegno e la libreria del grafico senza cache.",
      "media"),

@@ -2636,3 +2636,41 @@ Misurato in locale da loggati (Lighthouse, throttling devtools mobile,
 mediana di 3): inizio saldo 4,1 -> 2,4 s, LCP 4,3 -> 2,6 s, TTI 5,6 -> 3,6 s.
 Il prossimo collo di bottiglia e' la banda per 13 moduli separati e la
 latenza delle chiamate RPC dietro saldo/grafico.
+
+---
+
+## Wallet on-chain da telefono + scelta token unica — 2026-09-23
+
+Lorenzo: "rivedi completamente il sito se mi collego da mobile; se
+seleziono un token si aprono troppe schermate". Segnalazione `seed-0088`.
+
+Causa misurata (Playwright, iPhone 13, API finte): `onTokenChanged` in
+`chart.js` non aveva nessun ascoltatore, quindi il token scelto sul
+grafico non arrivava allo swap; da telefono il pannello ordine stava
+sotto le posizioni (~1200px piu' giu') e il secondo picker apriva la
+tastiera da solo. Fatto:
+
+- `main.js`: il token del grafico (risolto con `getTokenInfo`, in cache)
+  e' `presetToken` di swap e limite; `onTokenPicked` di swap/limite
+  sposta il grafico con `chart.setToken()` (che non riavvisa i listener).
+- `sheets.openTokenPicker`: ricerca in cima, indirizzo incollato
+  riconosciuto nello stesso campo, niente focus automatico su touch,
+  titolo per lato ("Cosa vendi" / "Cosa ricevi").
+- `onchain-app.html`: blocco `@container (width < 640px)` in coda — la
+  `.market-card` diventa `display: contents` per mettere l'ordine fra
+  grafico e posizioni senza toccare il DOM; desktop invariato.
+
+In parallelo sulla stessa pagina: PR #70 (tasti nav, tocca
+`main.js` e la fine di `resolutions.json`/`_SEED`) e il thread
+velocita' (tocca `<head>`). Conflitti attesi solo in quelle code.
+
+Seguito, stessa sessione — Lorenzo: "mezzi ticker non funzionano; voglio
+solo un unico risultato per ticker 'quello con il contratto corretto e
+verificato con liquidità migliore'". `seed-0090`. La ricerca del picker
+non usa piu' DexScreener (30 pool su tutte le chain, contratti veri
+esclusi, copie con pool gonfiati in cima) ma
+`app/trading/onchain/token_search.py`: Jupiter su Solana (`isVerified`),
+GeckoTerminal filtrato su Robinhood (verificato = `coingecko_coin_id`,
+pool senza scambi = liquidita' zero). Un token per ticker. DexScreener
+resta solo come ripiego se la fonte non risponde. GeckoTerminal da' 429
+sopra ~30 richieste/minuto: la cache e' di 60s per (chain, query).
