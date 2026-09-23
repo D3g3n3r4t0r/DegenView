@@ -21,8 +21,10 @@
     --ink-dim:   light-dark(oklch(48.0% 0.018 170), oklch(70.4% 0.020 176));
     --ink-faint: light-dark(oklch(64.5% 0.017 171), oklch(60.9% 0.020 170));
 
-    --accent:     light-dark(oklch(57.7% 0.119 165), oklch(79.5% 0.138 166));
-    --accent-ink: light-dark(oklch(100%  0     0),   oklch(17.1% 0.023 170));
+    /* Rosa/violetto, non piu' verde-teal — vedi onchain-app.html. */
+    --accent:     light-dark(oklch(60.5% 0.223 332), oklch(76.5% 0.185 331));
+    --accent-2:   light-dark(oklch(64.0% 0.190 300), oklch(72.0% 0.170 300));
+    --accent-ink: light-dark(oklch(100%  0     0),   oklch(15.8% 0.030 330));
     --danger:     light-dark(oklch(52.5% 0.191 30),  oklch(67.1% 0.217 29));
     --amber:      light-dark(oklch(57.8% 0.124 69),  oklch(78.7% 0.147 73));
 
@@ -245,8 +247,8 @@
     padding: 12px 4px 10px; font-size: 11px; font-weight: 600;
     transition: background .15s, scale .12s;
 
-    & svg { inline-size: 17px; block-size: 17px; color: var(--ink-dim); }
-    &:hover { background: color-mix(in oklch, var(--raised), var(--ink) 4%); }
+    & svg { inline-size: 17px; block-size: 17px; color: var(--ink-dim); transition: color .15s; }
+    &:hover { background: color-mix(in oklch, var(--raised), var(--ink) 4%); & svg { color: var(--accent); } }
     &:active { scale: .96; }
   }
 
@@ -266,7 +268,7 @@
       inline-size: 30px; block-size: 30px; border-radius: 50%;
       display: grid; place-items: center; flex-shrink: 0;
       font-size: 12px; font-weight: 700;
-      background: var(--accent); color: var(--accent-ink);
+      background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: var(--accent-ink);
       &.is-token { background: var(--raised); color: var(--ink-dim); }
     }
     & .asset-name { flex: 1; min-width: 0;
@@ -305,7 +307,10 @@
     font-size: 13px; font-weight: 600; margin-block-start: 14px;
     transition: background .15s;
   }
-  #onchain-embed .btn-primary { background: var(--accent); color: var(--accent-ink); &:disabled { opacity: .5; } }
+  #onchain-embed .btn-primary {
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: var(--accent-ink); &:disabled { opacity: .5; }
+  }
   #onchain-embed .btn-quiet   { background: var(--raised); color: var(--ink); &:hover { background: var(--hover); } }
   #onchain-embed .btn-danger  { background: var(--danger-soft); color: var(--danger); }
 
@@ -478,12 +483,22 @@
   #onchain-embed .tx-list {
     list-style: none; margin: 0; padding: 0;
     & li {
-      display: flex; justify-content: space-between; gap: 10px;
+      display: flex; justify-content: space-between; align-items: center; gap: 10px;
       padding-block: 9px; border-block-end: 1px solid var(--line); font-size: 12px;
+      font-variant-numeric: tabular-nums;
       &:last-child { border-block-end: 0; }
     }
     & a { color: var(--accent); font-family: var(--mono); text-decoration: none; }
     & span { color: var(--ink-faint); }
+    & b { color: var(--ink); font-weight: 600; }
+  }
+
+  #onchain-embed .status-dot {
+    display: inline-block; inline-size: 7px; block-size: 7px; border-radius: 50%;
+    margin-inline-end: 6px; flex-shrink: 0; background: var(--ink-faint);
+    &[data-status="filled"], &[data-status="confirmed"] { background: var(--accent); }
+    &[data-status="open"], &[data-status="pending"], &[data-status="submitted"] { background: var(--amber); }
+    &[data-status="failed"], &[data-status="cancelled"] { background: var(--danger); }
   }
 
   /* --- avviso temporaneo ---------------------------------------------- */
