@@ -877,6 +877,8 @@ async def _watchdog_loop() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     asyncio.create_task(_notify_deploy())
+    from app.trading.onchain import twap_jobs as onchain_twap_jobs_resume
+    asyncio.create_task(onchain_twap_jobs_resume.resume_running_twap_jobs())
     t1 = asyncio.create_task(_watchlist_alert_loop())
     t4 = asyncio.create_task(_weekly_recap_loop())
     t5 = asyncio.create_task(_watchdog_loop())
@@ -2508,6 +2510,11 @@ async def onchain_execute_twap(
                 body.input_mint, body.output_mint, amount_lamports, body.slippage_bps,
             )
             return quote["price_impact_pct"], quote
+
+        quote_meta = {
+            "input_mint": body.input_mint, "output_mint": body.output_mint,
+            "total_amount_lamports": body.total_amount_lamports, "slippage_bps": body.slippage_bps,
+        }
     else:
         if not (body.token_in and body.token_out and body.fee is not None and body.total_amount_in):
             raise HTTPException(status_code=400, detail="token_in/token_out/fee/total_amount_in richiesti per robinhood.")
@@ -2521,9 +2528,15 @@ async def onchain_execute_twap(
                 "amount_in": amount_in, "amount_out_minimum": amount_out_minimum,
             }
 
+        quote_meta = {
+            "token_in": body.token_in, "token_out": body.token_out, "fee": body.fee,
+            "total_amount_in": body.total_amount_in, "max_slippage_pct": body.max_slippage_pct,
+        }
+
     return await onchain_twap_jobs.execute_twap_job(
         user.id, body.chain, body.token, body.strategy_name, body.side,
         body.total_usd, body.price_usd, private_key_hex, body.pool_liquidity_usd, quote_for_slice,
+        quote_meta=quote_meta,
     )
 
 
