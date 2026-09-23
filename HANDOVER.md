@@ -2787,3 +2787,36 @@ Dedotto dal codice, non provato dal vivo: il percorso v3 manuale
 nessun approve, quindi vendere ETH nativo o un token senza allowance
 dovrebbe andare in revert. Anche questo si risolve col percorso
 aggregatore.
+
+---
+
+## Radar dei token giovani — `seed-0094` — 2026-09-23
+
+Lorenzo: "voglio che nell'applicazione venga informato di quale token appena
+nato, o che ha due o tre settimane di vita con tanta liquidità e bassa
+capitalizzazione [...] quale delle strategie performa bene, una specie di
+alert costante [...] su Solana o su rete Robinhood [...] deve esserci un
+minimo di backtest". Poi, sul grafico: "voglio la stessa grafica del sito
+[...] zoomare [...] vedere in tempo reale gli ingressi e le uscite delle
+strategie [...] che eventualmente potrei attivare oppure no".
+
+Fatto (branch `claude/token-scanner-strategie-a97cto`):
+- `app/trading/onchain/radar.py`: giro ogni 15 min (loop in `lifespan`,
+  `settings.onchain_radar_enabled`), GeckoTerminal su Solana e Robinhood,
+  filtri e soglie come costanti in cima al file. Backtest solo long con
+  costi DEX su tutte le strategie + configurazioni "pronte" dell'archivio
+  (`archive.ready_entries()`). Stato su `data/onchain_radar.json`.
+- Accumulo/Distribuzione e' provata e mostrata ma **mai proposta**
+  (`UNRELIABLE`) finche' `seed-0010` non e' corretto: toglierla da li'
+  quando entra il fix.
+- Frontend `static/onchain/radar.js`: blocco `#radar` nella vista Pilota,
+  foglio con grafico a candele stile `app.js` (lightweight-charts),
+  marker IN/OUT per strategia, live ogni 30 s. L'interruttore per strategia
+  crea/aggiorna una voce di watchlist **solo alert** (`auto_trade` spento).
+- Il grafico del radar NON usa `chart.js` (fonte dati di #78): usa le
+  stesse candele GeckoTerminal del backtest, cosi' i marker coincidono.
+
+Resta: vederlo sul server vero; decidere con Lorenzo se l'alert deve anche
+arrivare su Telegram e se l'interruttore debba poter accendere l'acquisto
+automatico (oggi no, di proposito). Primo giro reale: poche proposte
+(1 su ~100 token), Robinhood ha ancora pochi pool giovani liquidi.
