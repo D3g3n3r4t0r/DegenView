@@ -2129,6 +2129,38 @@ async def onchain_quote_solana(body: OnchainQuoteSolanaRequest, user: User = Dep
     return {k: v for k, v in quote.items() if k != "raw"}
 
 
+class OnchainQuoteRobinhoodRequest(BaseModel):
+    token_in: str
+    token_out: str
+    fee: int = 3000
+    amount_in: int
+
+
+@app.post("/api/onchain/quote/robinhood")
+async def onchain_quote_robinhood(
+    body: OnchainQuoteRobinhoodRequest, user: User = Depends(auth.get_current_user),
+) -> dict:
+    """Preventivo reale su Robinhood Chain: Factory per trovare il pool,
+    QuoterV2 per il prezzo. Nessuna chiave, nessun impegno a eseguire —
+    il gemello di /quote/solana, per l'altra chain."""
+    _require_onchain_enabled()
+    try:
+        pool = await onchain_quotes.get_pool(body.token_in, body.token_out, body.fee)
+        if pool is None:
+            raise HTTPException(status_code=400, detail="Nessun pool per questa coppia su questo fee tier.")
+        quote = await onchain_quotes.uniswap_v3_quote(body.token_in, body.token_out, body.fee, body.amount_in)
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"Robinhood Chain non raggiungibile: {exc}") from exc
+    # "out_amount", non "amount_out" come lo chiama quotes.py: stesso nome
+    # di /quote/solana, cosi' il frontend legge un solo formato per entrambe.
+    return {
+        "pool": pool, "in_amount": body.amount_in,
+        "out_amount": quote["amount_out"], "price_impact_pct": quote["price_impact_pct"],
+    }
+
+
 class OnchainSimulateRequest(BaseModel):
     chain: OnchainChain
     token: str

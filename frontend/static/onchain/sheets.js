@@ -25,14 +25,16 @@ const bodyEl = dialog.querySelector(".sheet-body");
 dialog.addEventListener("click", (event) => { if (event.target === dialog) dialog.close(); });
 dialog.querySelector(".sheet-close").addEventListener("click", () => dialog.close());
 
-function open(title, description) {
+export function openSheet(title, description) {
   titleEl.textContent = title;
   descEl.textContent = description;
   bodyEl.replaceChildren();
   if (!dialog.open) dialog.showModal();
 }
+const open = openSheet;
 
 export const closeSheet = () => dialog.close();
+export const sheetBody = () => bodyEl;
 
 const html = (markup) => {
   const template = document.createElement("template");
@@ -40,8 +42,8 @@ const html = (markup) => {
   return template.content;
 };
 
-const setBody = (markup) => bodyEl.replaceChildren(html(markup));
-const setMessage = (text, tone = "") =>
+export const setBody = (markup) => bodyEl.replaceChildren(html(markup));
+export const setMessage = (text, tone = "") =>
   setBody(`<p class="sheet-note ${tone}">${escapeHtml(text)}</p>`);
 
 /* ---------------------------------------------------------------- Ricevi */

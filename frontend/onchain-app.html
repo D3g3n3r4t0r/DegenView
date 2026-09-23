@@ -216,12 +216,12 @@
   /* --- azioni ------------------------------------------------------
      Quattro pari: su un wallet in sola lettura nessuna di queste e'
      l'azione principale, e dipingerne una di verde direbbe il contrario. */
-  .actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 
-  /* Sotto i 340px la fila di quattro comprime le etichette: meglio 2x2.
-     Misura il contenitore, non la finestra. */
-  @container (width < 340px) {
-    .actions { grid-template-columns: 1fr 1fr; }
+  /* Da 400px la fila intera (ricevi/storico/limiti/simula/swap) ci sta
+     in cinque; sotto, tre per riga: misura il contenitore, non la finestra. */
+  @container (width >= 400px) {
+    .actions { grid-template-columns: repeat(5, 1fr); }
   }
 
   .action {
@@ -312,9 +312,31 @@
   .outcome {
     display: block; margin-block-start: 12px; padding: 10px 12px;
     border-radius: 10px; font-size: 12.5px; background: var(--raised);
+    word-break: break-word;
     &[data-tone="ok"] { background: var(--accent-soft); color: var(--accent); }
     &[data-tone="no"] { background: var(--danger-soft); color: var(--danger); }
   }
+
+  /* --- swap ------------------------------------------------------- */
+  .swap-row {
+    display: flex; align-items: center; gap: 10px;
+    border: 1.5px solid var(--line); border-radius: 9px; background: var(--raised);
+    padding-inline-end: 12px;
+
+    & input, & output { flex: 1; padding: 10px 12px; font-size: 17px; font-variant-numeric: tabular-nums; }
+    & input { border: 0; background: none; border-radius: 9px 0 0 9px; }
+    & input:focus-visible { outline: none; box-shadow: inset 0 0 0 1.5px var(--accent); border-radius: 9px; }
+    & .swap-unit { font-size: 13px; font-weight: 600; color: var(--ink-dim); }
+    &.is-readonly { background: var(--panel); }
+  }
+  .swap-arrow {
+    text-align: center; color: var(--ink-faint); font-size: 15px; margin-block: 4px;
+  }
+  .swap-detail {
+    font-size: 12px; color: var(--ink-dim); margin-block-start: 6px; min-block-size: 1.4em;
+    &.is-warn { color: var(--amber); }
+  }
+  .sheet-note.is-warn { color: var(--amber); background: var(--amber-soft); border-radius: 9px; padding: 9px 11px; margin-block-end: 10px; }
 
   /* --- coppie chiave/valore ------------------------------------------ */
   .kv {
@@ -596,6 +618,10 @@
         <button type="button" class="action" data-sheet="simulate">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 18 L9 11 L13 14 L20 5" /><path d="M15 5h5v5" /></svg>
           Simula
+        </button>
+        <button type="button" class="action" data-sheet="swap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 8h13M17 8l-3-3M17 8l-3 3" /><path d="M20 16H7M7 16l3 3M7 16l3-3" /></svg>
+          Swap
         </button>
       </div>
 

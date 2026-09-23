@@ -48,6 +48,19 @@ export const resetCircuitBreaker = (chain) =>
 
 export const simulateOrder = (order) => request("/api/onchain/simulate", { method: "POST", body: order });
 
+// Lo swap in due tempi, sempre: prima il preventivo (nessuna chiave, nessun
+// impegno), poi — solo se l'utente conferma e solo se il server ha
+// l'esecuzione accesa — l'ordine vero. Il backend rifa' comunque il quote da
+// se' prima di firmare: quello qui sotto serve a far vedere il prezzo, non e'
+// il numero su cui si firma.
+export const quoteSolana = (body) => request("/api/onchain/quote/solana", { method: "POST", body, timeoutMs: 15000 });
+export const quoteRobinhood = (body) => request("/api/onchain/quote/robinhood", { method: "POST", body, timeoutMs: 15000 });
+
+export const executeSolana = (body) =>
+  request("/api/onchain/execute/solana", { method: "POST", body, timeoutMs: 45000 });
+export const executeRobinhood = (body) =>
+  request("/api/onchain/execute/robinhood", { method: "POST", body, timeoutMs: 45000 });
+
 export const requestReveal = (chain) =>
   request(`/api/onchain/wallets/${chain}/reveal/request`, { method: "POST" });
 export const consumeReveal = (chain, token) =>
