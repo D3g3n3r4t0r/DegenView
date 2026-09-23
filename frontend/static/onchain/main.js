@@ -37,6 +37,8 @@ const view = {
   balance: $("#balance"),
   address: $("#address"),
   chainLabel: $("#chain-label"),
+  chainIcon: $("#chain-ic"),
+  chainFlip: $("#chain-flip"),
   fresh: $("#fresh"),
   liveDot: $("#live-dot"),
   spark: $("#spark"),
@@ -65,13 +67,17 @@ const view = {
 
 /* ------------------------------------------------------------------ chain */
 
+const CHAIN_ICON = { solana: "◎", robinhood: "◆" };
+
 function paintChainStatic() {
   const { label, unit, suffix } = chainInfo();
   const cached = readCache(state.chain);
   const wallet = state.wallets[state.chain];
   const hasWallet = Boolean(wallet || cached);
 
-  view.chainLabel.textContent = `${label}${suffix}`;
+  view.chainLabel.textContent = view.chainFlip ? label : `${label}${suffix}`;
+  if (view.chainFlip) view.chainFlip.title = `${label}${suffix} · tocca per cambiare rete`;
+  if (view.chainIcon) view.chainIcon.textContent = CHAIN_ICON[state.chain] ?? "";
   for (const node of [view.actions, view.status, view.reveal, view.more, view.pilot, view.marketOrderRow, view.bottomPanel, view.sniperCard]) {
     if (node) node.hidden = !hasWallet;
   }
@@ -486,8 +492,13 @@ $$("#more [data-proxy]").forEach((item) => item.addEventListener("click", () => 
   target?.click();
   target?.closest("section")?.scrollIntoView({ block: "start" });
 }));
-$("#more [data-switch-chain]")?.addEventListener("click", () =>
-  $('#chain-switch button[aria-selected="false"]')?.click());
+// La rete si cambia dal suo nome, accanto al saldo: un tocco, niente menu.
+view.chainFlip?.addEventListener("click", () => {
+  view.chainFlip.classList.remove("is-flipping");
+  void view.chainFlip.offsetWidth;
+  view.chainFlip.classList.add("is-flipping");
+  $('#chain-switch button[aria-selected="false"]')?.click();
+});
 view.moreSheet?.addEventListener("click", (event) => {
   if (event.target === view.moreSheet || event.target.closest("button")) view.moreSheet.close();
 });
