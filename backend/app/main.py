@@ -5765,11 +5765,30 @@ _SNIPER_HTML = (
     .replace('href="/static/style.css"', f'href="/static/style.css?v={_ASSET_VERSION}"')
 )
 
+def _onchain_modulepreloads(version: str) -> str:
+    """Un <link rel="modulepreload"> per ogni modulo del wallet.
+
+    Senza, il browser scopre gli import di main.js solo dopo averlo scaricato
+    e letto: un secondo giro di rete in fila al primo (~0,8 s misurati dal
+    vivo). Con questi li chiede tutti insieme all'HTML."""
+    return "\n".join(
+        f'<link rel="modulepreload" href="/static/onchain/{module.name}?v={version}" />'
+        for module in _onchain_modules()
+    )
+
+
 _ONCHAIN_APP_HTML = (
     (FRONTEND_DIR / "onchain-app.html")
     .read_text(encoding="utf-8")
     .replace("<!--onchain-importmap-->", _onchain_importmap(_ASSET_VERSION))
+    .replace("<!--onchain-modulepreload-->", _onchain_modulepreloads(_ASSET_VERSION))
     .replace('src="/static/onchain/main.js"', f'src="/static/onchain/main.js?v={_ASSET_VERSION}"')
+    # La libreria del grafico non cambia fra un deploy e l'altro: con il `?v=`
+    # finisce in cache per sempre invece di rivalidarsi a ogni apertura.
+    .replace(
+        'src="/static/lightweight-charts.standalone.production.js"',
+        f'src="/static/lightweight-charts.standalone.production.js?v={_ASSET_VERSION}"',
+    )
 )
 
 
@@ -5819,6 +5838,37 @@ async def onchain_passkey_setup_page() -> HTMLResponse:
     return HTMLResponse(_ONCHAIN_PASSKEY_SETUP_HTML, headers=_HTML_HEADERS)
 
 
+def _onchain_boot_payload(user: User | None) -> dict:
+    """Quello che main.js chiedeva con due richieste in fila (/api/auth/me,
+    poi /api/onchain/wallets), gia' dentro l'HTML. Stessi campi degli
+    endpoint: solo indirizzo e stato, mai una chiave."""
+    if user is None:
+        return {"user": None}
+    payload: dict = {"user": _user_out(user)}
+    if settings.onchain_enabled:
+        payload["wallets"] = [
+            {"chain": chain, "address": w.address, "enabled": w.enabled, "created_at": w.created_at}
+            for chain, w in user.onchain_wallets.items()
+        ]
+    return payload
+
+
+def _render_onchain_app(user: User | None) -> str:
+    # `<` escapato: un valore con "</script>" non puo' chiudere il blocco.
+    data = json.dumps(_onchain_boot_payload(user), separators=(",", ":")).replace("<", "\\u003c")
+    html = _ONCHAIN_APP_HTML.replace(
+        "<!--onchain-boot-->", f'<script type="application/json" id="onchain-boot">{data}</script>'
+    )
+    # La sezione giusta e' visibile dal primo disegno, non dopo che il JS ha
+    # chiesto chi sei: prima la pagina restava vuota fino a quel momento.
+    target = 'id="app-shell" class="stack" hidden' if user else 'id="login-screen" hidden'
+    return html.replace(target, target.removesuffix(" hidden"), 1)
+
+
 @app.get("/onchain-app.html")
-async def onchain_app_page() -> HTMLResponse:
-    return HTMLResponse(_ONCHAIN_APP_HTML, headers=_HTML_HEADERS)
+async def onchain_app_page(user: User | None = Depends(auth.get_current_user_optional)) -> HTMLResponse:
+    # La pagina ora contiene chi sei: nessuna cache condivisa deve tenerla.
+    return HTMLResponse(
+        _render_onchain_app(user),
+        headers={"Cache-Control": "private, no-cache", "Vary": "Cookie"},
+    )

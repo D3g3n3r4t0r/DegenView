@@ -4,9 +4,18 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Wallet on-chain (alpha) — Liquidity Engine</title>
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif&family=JetBrains+Mono:wght@400;500&display=swap" />
+<!-- Font serviti da qui, non da Google: niente due origini in piu' (DNS + TLS)
+     ne' un foglio di stile che blocca il primo disegno. Stessi file latin di
+     Google Fonts (OFL, vedi static/fonts/LICENSE.txt). Instrument Sans non
+     c'e': --sans usa i font di sistema, era scaricato e mai usato. Niente
+     preload: con font-display swap il testo esce subito, e su rete lenta
+     i font rubavano banda ai moduli che portano i dati. -->
+<!--onchain-modulepreload-->
 <style>
+@font-face { font-family: "Instrument Serif"; font-style: normal; font-weight: 400; font-display: swap;
+  src: url(/static/fonts/instrument-serif-latin.woff2?v=1) format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 400 500; font-display: swap;
+  src: url(/static/fonts/jetbrains-mono-latin.woff2?v=1) format("woff2"); }
 /* ============================================================
    Wallet on-chain — stesso sistema "Instrument" del resto del
    sito, scritto con la piattaforma di oggi: @layer per la cascata,
@@ -1083,7 +1092,8 @@
     <button type="button" class="btn-quiet sheet-close">Chiudi</button>
   </dialog>
 
-  <script src="/static/lightweight-charts.standalone.production.js"></script>
+  <!--onchain-boot-->
+  <script async src="/static/lightweight-charts.standalone.production.js"></script>
   <script type="module" src="/static/onchain/main.js"></script>
 </body>
 </html>

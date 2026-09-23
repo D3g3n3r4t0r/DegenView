@@ -56,6 +56,20 @@ export function getCurrentToken() {
   return currentToken;
 }
 
+// La libreria del grafico (160 KB) arriva con un <script async>: la pagina
+// non la aspetta piu' per partire, e il grafico la aspetta insieme alle
+// candele, che arrivano comunque dopo. In index.html e' uno script normale,
+// quindi qui la trova gia' pronta.
+function chartLibrary() {
+  if (window.LightweightCharts) return Promise.resolve(window.LightweightCharts);
+  const tag = document.querySelector('script[src*="lightweight-charts"]');
+  if (!tag) return Promise.reject(new Error("libreria del grafico mancante"));
+  return new Promise((resolve, reject) => {
+    tag.addEventListener("load", () => resolve(window.LightweightCharts), { once: true });
+    tag.addEventListener("error", () => reject(new Error("libreria del grafico non caricata")), { once: true });
+  });
+}
+
 export function mountChart(container) {
   root = container;
   if (!currentToken && DEFAULT_TOKEN[state.chain]) currentToken = { ...DEFAULT_TOKEN[state.chain] };
@@ -161,7 +175,10 @@ function loadAndRender() {
 
   const drawCandles = async () => {
     try {
-      const data = await api.getChart(chain, currentToken.address, currentInterval);
+      const [data, LightweightCharts] = await Promise.all([
+        api.getChart(chain, currentToken.address, currentInterval),
+        chartLibrary(),
+      ]);
       if (!chart) {
         // Area menta, non candele: la linea del mockup approvato — il
         // prezzo di chiusura di ogni candela, stessi dati di prima.

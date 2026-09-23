@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0087", "Pagina wallet on-chain lenta ad aprirsi",
+     "Lorenzo: 'usa un linguaggio di programmazione per rendere il sito velocissimo a costo di fare un refactory'. Misurata onchain-app.html dal vivo: Lighthouse 99 da non loggati, main thread 0,4 s, JS leggero. Il tempo se ne andava in giri di rete in fila prima dei dati (HTML, main.js, poi i suoi import, poi /api/auth/me, poi /api/onchain/wallets, solo dopo il saldo), piu' i font Google che bloccavano il primo disegno e la libreria del grafico senza cache.",
+     "media"),
     ("seed-0086", "Wallet on-chain: i tasti Strategie, Attività e Impostazioni in alto non rispondono",
      "Segnalato dal progetto 'Onchain app performance e pulsanti': su /onchain-app.html la barra in alto mostra Wallet / Strategie / Attività / Impostazioni, ma cliccare le ultime tre non fa nulla.",
      "media"),
