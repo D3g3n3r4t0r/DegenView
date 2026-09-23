@@ -17,8 +17,9 @@ lavori pluri-sessione, decisioni prese, stato di piani approvati.
 Lorenzo: "rendi questa UI moderna, rapida, ottimizzata, al passo coi tempi,
 questa in screenshot sembra un excel, preparami una proposta grafica".
 
-Prototipo navigabile in `frontend/onchain-app-proposal.html` (file a se',
-non sostituisce ancora `onchain-app.html`). Idee portanti:
+Deciso con Lorenzo ("rimaniamo su onchain-app.html"): il redesign e' stato
+portato dentro `frontend/onchain-app.html` e il prototipo separato
+(`onchain-app-proposal.html`) e' stato rimosso. Idee portanti, ora in produzione:
 
 - le 4 fisarmoniche (`Saldo & storico`, `Limiti & sicurezza`, `Simulazione`,
   `Auto-trade`) diventano una riga di 4 azioni sotto il saldo + fogli dal basso;
@@ -30,8 +31,14 @@ non sostituisce ancora `onchain-app.html`). Idee portanti:
   bloccata su `color-scheme: dark`;
 - tab bar Wallet/Strategie/Attivita'/Impostazioni per le fasi 3-4.
 
-Da decidere con Lorenzo: se portare il redesign dentro `onchain-app.html`
-o tenerlo come pagina nuova.
+Tutti gli endpoint e la logica (sessione, saldo da cache + RPC, posizioni,
+rivelazione via QR/SSE, simulazione, circuit breaker) sono invariati: e'
+cambiata solo la scocca. La sparkline usa solo le letture vere salvate in
+localStorage e non si disegna sotto i due punti.
+
+Nota: `tests/test_onchain_prices.py` ha due test che chiamano davvero la rete
+per il prezzo — falliscono in sandbox senza uscita verso l'API prezzi, non per
+questa modifica.
 
 ---
 
