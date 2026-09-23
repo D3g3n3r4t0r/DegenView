@@ -16,23 +16,29 @@ Stesso stile di ledger.py: SQLite, thread.Lock, WAL, stesso file DB (una
 tabella in piu', non un database separato — un job e' comunque figlio
 degli stessi ordini che finiscono in `orders`).
 
-LIMITE NOTO E DICHIARATO: non c'e' uno scheduler in background che, al
-riavvio del processo, riprenda da solo i job con status='running' lasciati
-a meta'. Il job E' persistito (list_running_jobs() lo ritrova), ma la
-ripresa automatica non e' cablata da nessuna parte in questo commit — chi
-lo fara' dovra' richiamare execute_twap_job() con lo stesso quote_for_slice
-e riprendere da job['slices_done']. Senza tempo per farlo bene (serve
-anche capire come si ricostruisce un quote_for_slice per Solana/Robinhood
-al riavvio, che dipende da input specifici del segnale originale), meglio
-dirlo chiaramente qui che fingere una resume automatica che non c'e'.
+RESUME AUTOMATICO: resume_running_twap_jobs() e' cablata nel lifespan di
+main.py (stesso pattern degli altri loop in background del sito) e, ad
+ogni avvio del processo, riprende ogni job 'running' dalla fetta
+slices_done — mai da zero, mai una fetta gia' confermata due volte. Per
+farlo, execute_twap_job() persiste ora anche price_usd e quote_meta (gli
+stessi input specifici della chain che main.py usava solo in memoria per
+costruire quote_for_slice: input/output mint per Solana, token_in/out/fee
+per Robinhood — MAI la chiave privata, che alla ripresa viene ridecriptata
+dall'account dell'owner, non letta dal ledger). Un job creato prima di
+questo campo (o passato senza quote_meta) non e' ricostruibile: resta
+'running' e va richiamato a mano — non viene ignorato in silenzio, vedi
+il log di resume_running_twap_jobs().
 """
 import asyncio
 import json
+import logging
 import time
 import uuid
 from collections.abc import Awaitable, Callable
 
 from app.trading.onchain import execute, ledger, twap
+
+logger = logging.getLogger("onchain_twap_jobs")
 
 # Sotto questo notional, TWAP escluso di proposito (dal piano): il gas per
 # fetta costerebbe piu' del risparmio di slippage su un ordine cosi'
@@ -71,6 +77,15 @@ def _init_db() -> None:
                 updated_at REAL NOT NULL
             );
         """)
+        # Migrazione additiva per DB creati prima di queste colonne: senza
+        # price_usd/quote_meta un job vecchio non e' ricostruibile al
+        # riavvio (vedi resume_running_twap_jobs), ma non deve rompere
+        # l'avvio del processo su un DB esistente.
+        existing_cols = {row["name"] for row in conn.execute("PRAGMA table_info(twap_jobs)").fetchall()}
+        if "price_usd" not in existing_cols:
+            conn.execute("ALTER TABLE twap_jobs ADD COLUMN price_usd REAL")
+        if "quote_meta" not in existing_cols:
+            conn.execute("ALTER TABLE twap_jobs ADD COLUMN quote_meta TEXT")
 
 
 _init_db()
@@ -78,16 +93,20 @@ _init_db()
 
 def _create_job(
     owner_id: str, chain: str, token: str, strategy_name: str, side: str,
-    total_usd: float, slices: list[float],
+    total_usd: float, slices: list[float], price_usd: float,
+    quote_meta: dict | None,
 ) -> str:
     job_id = uuid.uuid4().hex
     now = time.time()
     with ledger._lock, _connect() as conn:
         conn.execute(
             "INSERT INTO twap_jobs (id, owner_id, chain, token, strategy_name, side, total_usd, "
-            "slices_planned, slices_done, status, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 'running', ?, ?)",
-            (job_id, owner_id, chain, token, strategy_name, side, total_usd, json.dumps(slices), now, now),
+            "slices_planned, slices_done, status, price_usd, quote_meta, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 'running', ?, ?, ?, ?)",
+            (
+                job_id, owner_id, chain, token, strategy_name, side, total_usd, json.dumps(slices),
+                price_usd, json.dumps(quote_meta) if quote_meta is not None else None, now, now,
+            ),
         )
     return job_id
 
@@ -99,6 +118,7 @@ def get_job(job_id: str) -> dict | None:
             return None
         job = dict(row)
         job["slices_planned"] = json.loads(job["slices_planned"])
+        job["quote_meta"] = json.loads(job["quote_meta"]) if job.get("quote_meta") else None
         return job
 
 
@@ -116,6 +136,7 @@ def list_running_jobs(owner_id: str | None = None) -> list[dict]:
     jobs = [dict(r) for r in rows]
     for job in jobs:
         job["slices_planned"] = json.loads(job["slices_planned"])
+        job["quote_meta"] = json.loads(job["quote_meta"]) if job.get("quote_meta") else None
     return jobs
 
 
@@ -153,39 +174,25 @@ def request_cancel(job_id: str) -> bool:
     return True
 
 
-async def execute_twap_job(
-    owner_id: str, chain: str, token: str, strategy_name: str, side: str,
-    total_usd: float, price_usd: float, private_key_hex: str,
-    pool_liquidity_usd: float, quote_for_slice: QuoteForSlice,
-    *, min_twap_notional_usd: float = DEFAULT_MIN_TWAP_NOTIONAL_USD,
-    rng=None,
+async def _run_slices(
+    job_id: str, owner_id: str, chain: str, token: str, strategy_name: str, side: str,
+    price_usd: float, private_key_hex: str, slices: list[float], delays: list[float],
+    quote_for_slice: QuoteForSlice, *, start_index: int = 0,
 ) -> dict:
-    """Esegue un segnale come una sola fetta (sotto min_twap_notional_usd,
-    o su un pool profondo dove twap.plan_slices() collassa a 1) o come un
-    vero TWAP scaglionato. Scrive il job nel ledger PRIMA di firmare la
-    prima fetta — e' quello che rende un riavvio ricostruibile (vedi
-    list_running_jobs()), non un dict Python che si perde al riavvio.
+    """Corpo del loop TWAP, condiviso fra un job nuovo (start_index=0) e la
+    ripresa di un job dopo un riavvio (start_index=job['slices_done']): la
+    fetta i e' sempre slices[i], mai rinumerata, cosi' un job ripreso non
+    firma due volte una fetta gia' confermata.
 
-    Ogni fetta e' semplicemente una execute.execute_order() con
-    notional_usd = quella fetta: il quote (che dipende dalla size della
-    fetta, non del totale) lo costruisce quote_for_slice(slice_usd), che
-    chi chiama fornisce perche' solo lui conosce gli input specifici della
-    chain (input/output mint per Solana, token_in/out/fee per Robinhood).
-
-    Al primo fallimento (risk check, firma o invio) si ferma: nessun
-    tentativo sulle fette successive, il job va a 'failed' con la ragione,
-    e il risultato riporta esattamente quante fette sono state eseguite —
-    mai un fallimento silenzioso."""
-    if total_usd < min_twap_notional_usd:
-        slices = [round(total_usd, 2)]
-    else:
-        slices = twap.plan_slices(total_usd, pool_liquidity_usd)
-
-    job_id = _create_job(owner_id, chain, token, strategy_name, side, total_usd, slices)
-    delays = twap.plan_delays_s(len(slices), rng=rng) if len(slices) > 1 else []
-
-    for i, slice_usd in enumerate(slices):
-        if i > 0:
+    delays e' sempre la lista completa (indicizzata sulla posizione nella
+    fetta, non sul punto di ripresa): delays[i-1] e' l'attesa PRIMA della
+    fetta i. Alla ripresa non si attende quella della prima fetta rimasta
+    (start_index stesso trattamento di i==0 nel job originale) — il
+    processo e' appena tornato su, aspettare di nuovo non serve a niente e
+    ritarderebbe solo la ripresa."""
+    for i in range(start_index, len(slices)):
+        slice_usd = slices[i]
+        if i > start_index:
             job = get_job(job_id)
             if job is not None and job["status"] == "cancel_requested":
                 _set_status(job_id, "cancelled", f"fermato dopo {i} fette su {len(slices)} (segnale opposto)")
@@ -220,3 +227,145 @@ async def execute_twap_job(
 
     _set_status(job_id, "completed")
     return {"job_id": job_id, "status": "completed", "slices_done": len(slices), "slices_total": len(slices)}
+
+
+async def execute_twap_job(
+    owner_id: str, chain: str, token: str, strategy_name: str, side: str,
+    total_usd: float, price_usd: float, private_key_hex: str,
+    pool_liquidity_usd: float, quote_for_slice: QuoteForSlice,
+    *, min_twap_notional_usd: float = DEFAULT_MIN_TWAP_NOTIONAL_USD,
+    rng=None, quote_meta: dict | None = None,
+) -> dict:
+    """Esegue un segnale come una sola fetta (sotto min_twap_notional_usd,
+    o su un pool profondo dove twap.plan_slices() collassa a 1) o come un
+    vero TWAP scaglionato. Scrive il job nel ledger PRIMA di firmare la
+    prima fetta — e' quello che rende un riavvio ricostruibile (vedi
+    list_running_jobs()), non un dict Python che si perde al riavvio.
+
+    Ogni fetta e' semplicemente una execute.execute_order() con
+    notional_usd = quella fetta: il quote (che dipende dalla size della
+    fetta, non del totale) lo costruisce quote_for_slice(slice_usd), che
+    chi chiama fornisce perche' solo lui conosce gli input specifici della
+    chain (input/output mint per Solana, token_in/out/fee per Robinhood).
+
+    quote_meta e' la versione persistibile (JSON, nessuna chiave privata)
+    di quegli stessi input specifici della chain: chi chiama lo passa
+    quando vuole che resume_running_twap_jobs() possa ricostruire da solo
+    quote_for_slice dopo un riavvio (vedi _build_quote_for_slice). Senza,
+    il job resta comunque persistito e list_running_jobs() lo ritrova, ma
+    la ripresa automatica lo salta (non ha di che ricostruire il quote).
+
+    Al primo fallimento (risk check, firma o invio) si ferma: nessun
+    tentativo sulle fette successive, il job va a 'failed' con la ragione,
+    e il risultato riporta esattamente quante fette sono state eseguite —
+    mai un fallimento silenzioso."""
+    if total_usd < min_twap_notional_usd:
+        slices = [round(total_usd, 2)]
+    else:
+        slices = twap.plan_slices(total_usd, pool_liquidity_usd)
+
+    job_id = _create_job(owner_id, chain, token, strategy_name, side, total_usd, slices, price_usd, quote_meta)
+    delays = twap.plan_delays_s(len(slices), rng=rng) if len(slices) > 1 else []
+
+    return await _run_slices(
+        job_id, owner_id, chain, token, strategy_name, side, price_usd, private_key_hex,
+        slices, delays, quote_for_slice,
+    )
+
+
+def _build_quote_for_slice(chain: str, total_usd: float, quote_meta: dict) -> QuoteForSlice:
+    """L'inverso di quanto main.py costruisce a mano in
+    /api/onchain/execute/twap: dato il quote_meta persistito alla
+    creazione del job, ricostruisce lo stesso quote_for_slice(slice_usd)
+    che avrebbe usato il chiamante originale — stessa formula di scala
+    (proporzionale a slice_usd/total_usd), stesse chiamate a quotes.py."""
+    from app.trading.onchain import quotes as onchain_quotes
+
+    if chain == "solana":
+        input_mint = quote_meta["input_mint"]
+        output_mint = quote_meta["output_mint"]
+        total_amount_lamports = quote_meta["total_amount_lamports"]
+        slippage_bps = quote_meta.get("slippage_bps", 50)
+
+        async def _quote_for_slice(slice_usd: float) -> tuple[float, dict]:
+            amount_lamports = max(1, round(total_amount_lamports * (slice_usd / total_usd)))
+            quote = await onchain_quotes.jupiter_quote(input_mint, output_mint, amount_lamports, slippage_bps)
+            return quote["price_impact_pct"], quote
+
+        return _quote_for_slice
+
+    token_in = quote_meta["token_in"]
+    token_out = quote_meta["token_out"]
+    fee = quote_meta["fee"]
+    total_amount_in = quote_meta["total_amount_in"]
+    max_slippage_pct = quote_meta.get("max_slippage_pct", 1.0)
+
+    async def _quote_for_slice(slice_usd: float) -> tuple[float, dict]:
+        amount_in = max(1, round(total_amount_in * (slice_usd / total_usd)))
+        quote = await onchain_quotes.uniswap_v3_quote(token_in, token_out, fee, amount_in)
+        amount_out_minimum = int(quote["amount_out"] * (1 - max_slippage_pct / 100))
+        return quote["price_impact_pct"], {
+            "token_in": token_in, "token_out": token_out, "fee": fee,
+            "amount_in": amount_in, "amount_out_minimum": amount_out_minimum,
+        }
+
+    return _quote_for_slice
+
+
+async def resume_running_twap_jobs() -> list[dict]:
+    """Chiamata all'avvio del processo (vedi lifespan in main.py): ogni job
+    lasciato 'running' da un riavvio a meta' viene ripreso dalla fetta
+    slices_done, mai da zero (list_running_jobs() e' la stessa funzione
+    che i test di persistenza gia' usano, non duplicata qui).
+
+    Un solo processo scrive su questo SQLite (WAL + thread.Lock, come
+    ledger.py; deploy/README.md descrive un singolo container Docker su
+    Hetzner, non piu' istanze in parallelo) — se questo dovesse cambiare,
+    due processi che chiamano resume sullo stesso job potrebbero firmare
+    la stessa fetta due volte: qui non c'e' un lock distribuito, solo
+    quello in-process.
+
+    La chiave privata NON e' mai persistita nel ledger: viene ridecriptata
+    al volo dall'account dell'owner, esattamente come fa main.py per una
+    richiesta normale. Un job senza quote_meta (creato prima di questo
+    campo, o passato senza — vedi execute_twap_job) non e' ricostruibile:
+    resta 'running' e va richiamato a mano, non silenziosamente ignorato."""
+    from app import auth
+
+    results = []
+    for job in list_running_jobs():
+        job_id = job["id"]
+        if not job.get("quote_meta"):
+            logger.warning(
+                "[twap-resume] job %s (%s/%s) senza quote_meta: non ricostruibile, resta 'running'.",
+                job_id, job["chain"], job["token"],
+            )
+            continue
+
+        user = auth.get_user(job["owner_id"])
+        if user is None:
+            _set_status(job_id, "failed", "owner non trovato alla ripresa dopo il riavvio")
+            results.append({"job_id": job_id, "status": "failed", "reason": "owner non trovato"})
+            continue
+
+        try:
+            private_key_hex = auth.get_decrypted_onchain_private_key(user, job["chain"])
+        except Exception as exc:  # noqa: BLE001 - un job non ripristinabile va a failed, non muto
+            _set_status(job_id, "failed", f"chiave onchain non decifrabile alla ripresa: {exc}")
+            results.append({"job_id": job_id, "status": "failed", "reason": str(exc)})
+            continue
+
+        quote_for_slice = _build_quote_for_slice(job["chain"], job["total_usd"], job["quote_meta"])
+        slices = job["slices_planned"]
+        delays = twap.plan_delays_s(len(slices)) if len(slices) > 1 else []
+        logger.info(
+            "[twap-resume] riprendo job %s (%s/%s) dalla fetta %d/%d",
+            job_id, job["chain"], job["token"], job["slices_done"] + 1, len(slices),
+        )
+        result = await _run_slices(
+            job_id, job["owner_id"], job["chain"], job["token"], job["strategy_name"], job["side"],
+            job["price_usd"], private_key_hex, slices, delays, quote_for_slice,
+            start_index=job["slices_done"],
+        )
+        results.append(result)
+    return results
