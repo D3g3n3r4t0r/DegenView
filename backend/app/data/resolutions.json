@@ -1277,5 +1277,10 @@
       "frontend/onchain-app.html",
       "frontend/static/onchain/main.js"
     ]
+  },
+  "seed-0093": {
+    "status": "risolto",
+    "at": 1790196936,
+    "summary": "Un tocco sulla cifra del saldo cambia unita': nativa (SOL o ETH), dollari, BTC, e si ricomincia. La scelta resta fra una visita e l'altra (salvata nel browser). Il prezzo BTC arriva dal ticker pubblico di Kraken insieme al saldo; se una fonte di prezzo non risponde, la vista che ne dipende si salta invece di mostrare un numero inventato."
   }
 }
