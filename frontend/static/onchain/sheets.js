@@ -260,19 +260,28 @@ let pickerDebounce = null;
 export const isNativeAddress = (chain, address) =>
   Boolean(address) && address.toLowerCase() === NATIVE_ADDRESS[chain]?.toLowerCase();
 
-// Un solo foglio per scegliere un token, pensato per il pollice: ricerca in
-// cima, sotto i token che hai; scrivere sostituisce la lista invece di
-// allungarla. Su touch niente focus automatico — la tastiera coprirebbe
-// proprio i token che hai, che sono la scelta piu' frequente.
+// Una schermata sola per scegliere un token, a tutto schermo da telefono:
+// campo in alto con "Annulla" accanto, sotto i token che hai; scrivere
+// sostituisce la lista invece di allungarla. Lorenzo: "quando scelgo un
+// token appare sto casino, serve una schermata immersiva e semplice".
+// Il segnaposto non dice "indirizzo": Safari in italiano lo prende per un
+// campo di recapito e propone casa/ufficio sopra la tastiera.
 export function openTokenPicker(chain, { onPick, title = "Scegli token" } = {}) {
   pickerDialog.querySelector(".sheet-title").textContent = title;
+  pickerDialog.setAttribute("aria-label", title);
   pickerBody.innerHTML = `
     <div class="picker-search">
-      <input type="search" id="picker-query" class="mo-input" placeholder="Cerca ticker o incolla indirizzo" autocomplete="off" autocapitalize="characters" spellcheck="false" enterkeyhint="search" />
+      <input type="text" id="picker-query" name="token-query" placeholder="${escapeHtml(title)} · es. SOL, PEPE"
+        autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false"
+        enterkeyhint="search" inputmode="search" data-1p-ignore data-lpignore="true" />
+      <button type="button" class="picker-cancel">Annulla</button>
     </div>
-    <p class="label picker-label" id="picker-label">I tuoi token</p>
-    <ul id="picker-held" class="tx-list picker-list"><li>Leggo il portafoglio…</li></ul>
-    <ul id="picker-results" class="tx-list picker-list" hidden></ul>
+    <div class="picker-scroll">
+      <p class="label picker-label" id="picker-label">I tuoi token</p>
+      <ul id="picker-held" class="tx-list picker-list"><li>Leggo il portafoglio…</li></ul>
+      <ul id="picker-results" class="tx-list picker-list" hidden></ul>
+      <p class="picker-hint">Non c'è? Incolla il contratto del token nel campo in alto.</p>
+    </div>
   `;
   if (!pickerDialog.open) pickerDialog.showModal();
 
@@ -280,9 +289,10 @@ export function openTokenPicker(chain, { onPick, title = "Scegli token" } = {}) 
   const results = pickerBody.querySelector("#picker-results");
   const held = pickerBody.querySelector("#picker-held");
   const label = pickerBody.querySelector("#picker-label");
-  // showModal() mette da solo il focus sul primo campo: su touch va tolto.
-  if (matchMedia("(pointer: coarse)").matches) input.blur();
-  else input.focus();
+  pickerBody.querySelector(".picker-cancel").addEventListener("click", () => pickerDialog.close());
+  // Schermata di ricerca: si scrive subito. I tuoi token restano sopra la
+  // tastiera, perche' la lista parte appena sotto il campo.
+  input.focus();
 
   const pick = (token) => { pickerDialog.close(); onPick?.(token); };
   const wirePicks = (list) => list.querySelectorAll("[data-address]").forEach((li) => {
