@@ -146,7 +146,8 @@ def test_quote_robinhood_real_network_call(client):
     body = resp.json()
     assert body["out_amount"] > 0
     assert body["price_impact_pct"] >= 0
-    assert body["pool"].startswith("0x")
+    # con l'RPC giu' il preventivo arriva dall'aggregatore, senza pool v3
+    assert body["route"] == "aggregator" or body["pool"].startswith("0x")
 
 
 def test_quote_robinhood_without_a_pool_is_rejected(client):
@@ -155,7 +156,7 @@ def test_quote_robinhood_without_a_pool_is_rejected(client):
         "fee": 3000, "amount_in": 10**16,
     })
     assert resp.status_code == 400
-    assert "Nessun pool" in resp.json()["detail"]
+    assert "Nessun mercato" in resp.json()["detail"]
 
 
 def test_execute_robinhood_without_wallet_is_rejected(client):
