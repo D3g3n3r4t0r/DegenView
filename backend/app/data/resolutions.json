@@ -1229,5 +1229,10 @@
       "backend/tests/test_onchain_watchlist_autotrade.py"
     ],
     "next": "La fusione piena della UI wallet dentro il DOM della tab Trading (niente piu' link a una pagina separata, stessi moduli ES riusati inline) resta da fare — quella UI ha il suo ciclo di stato/polling indipendente e portarla dentro senza romperla vale una sessione a se'. Sul lato Fase 4: la vendita on-chain resta bloccata finche' i decimali del token base non vengono salvati da qualche parte (DexScreener non li da' nella ricerca; andrebbero letti con una decimals() reale al momento dell'aggiunta alla watchlist, stessa idea usata qui per USDC/USDG). Nessun invio reale e' mai stato provato su Robinhood Chain in nessuna sessione — resta vero anche qui."
+  },
+  "seed-0087": {
+    "status": "risolto",
+    "at": 1790191149,
+    "summary": "Il token si sceglie una volta sola: quello scelto sul grafico diventa l'altra gamba di swap e ordine limite, e quello scelto nel pannello ordine sposta il grafico. Il foglio di scelta ha la ricerca in cima (accetta anche un indirizzo incollato, niente piu' secondo campo nascosto), su touch non apre la tastiera da solo, e scrivere sostituisce la lista dei tuoi token invece di allungarla. Da telefono la pagina e' una colonna ordinata: testata su due righe, saldo piu' due mezze card di stato, poi grafico, subito sotto swap/limite, poi posizioni; il riquadro sniper compare solo nella tab Sniper, e i campi non fanno piu' zoomare iOS. Desktop invariato."
   }
 }

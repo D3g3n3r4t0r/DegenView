@@ -888,6 +888,82 @@
   .sheet, .modal { background: var(--panel); }
 }
 
+/* ============================================================
+   Telefono. Lorenzo: "rivedi completamente il sito se mi collego
+   da mobile; se seleziono un token si aprono troppe schermate".
+   Sotto i 640px di contenitore la pagina e' una colonna sola:
+   - la testata sta su due righe (marchio + indirizzo, poi chain);
+   - lo stato occupa una riga di saldo e due mezze card, non tre
+     schermate intere prima del grafico;
+   - grafico, ordine e posizioni si susseguono in quest'ordine, cosi'
+     lo swap sta subito sotto il token che si sta guardando invece che
+     dopo l'elenco delle posizioni.
+   ============================================================ */
+@layer components {
+  #picker {
+    min-block-size: min(62dvh, 560px);
+    padding-block-start: 10px;
+    & .picker-search {
+      position: sticky; inset-block-start: -10px; z-index: 1;
+      background: var(--panel); padding-block: 10px 6px; margin-block-start: 8px;
+    }
+    & .picker-search input {
+      inline-size: 100%; box-sizing: border-box; font-size: 16px;
+      background: var(--raised); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px;
+    }
+    & .picker-label { margin: 12px 0 0; }
+    & .picker-list li {
+      min-block-size: 48px; padding-block: 8px; padding-inline: 4px; cursor: pointer; border-radius: 10px;
+      &:active, &:hover { background: var(--raised); }
+    }
+  }
+
+  @container (width < 640px) {
+    .topbar {
+      display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px 10px;
+      & .brand { min-inline-size: 0; }
+      & h1 { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      & .topbar-right { display: contents; }
+      & .addr-chip { grid-column: 2; grid-row: 1; padding: 6px 10px; font-size: 12px; }
+      & .switcher { grid-column: 1 / -1; }
+      & .switcher button { flex: 1; justify-content: center; padding-block: 10px; }
+    }
+
+    .status-strip { grid-template-columns: 1fr 1fr; gap: 10px; }
+    .balance-card { grid-column: 1 / -1; }
+    .status-strip > .status-card:last-child:nth-child(2) { grid-column: 1 / -1; }
+    .sniper-card, .security-card { padding: 12px 14px; }
+    .sniper-card .sniper-state { font-size: 15px; }
+    .sniper-card .sniper-tags, .security-card .sub { display: none; }
+    .security-card .value { font-size: 13px; }
+
+    .market-order-row { display: flex; flex-direction: column; align-items: stretch; gap: 14px; }
+    .market-card { display: contents; }
+    .market-panel, .bottom-panel {
+      background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px;
+    }
+    .market-panel { order: 1; }
+    .order-panel { order: 2; padding: 14px; }
+    .bottom-panel { order: 3; }
+    .market-chart { block-size: 200px; }
+    .chart-head { flex-wrap: wrap; }
+    .bottom-tabs {
+      margin-block-start: 0; gap: 18px; overflow-x: auto; scrollbar-width: none;
+      & .mo-side-tab { white-space: nowrap; }
+    }
+    /* L'interruttore dello sniper e' la tab Sniper: fuori da li' e' un
+       paragrafo in piu' fra lo swap e le azioni. */
+    .order-panel:not(:has([data-order-tab="sniper"].mo-tab-active)) .sniper-box { display: none; }
+    .order-panel .actions .action { padding-inline: 2px; }
+  }
+
+  /* Sotto i 16px iOS ingrandisce la pagina al tocco di un campo, e poi
+     non torna indietro da solo. */
+  @media (pointer: coarse) {
+    .page input:not([type="checkbox"]), dialog input:not([type="checkbox"]), dialog select { font-size: 16px; }
+  }
+}
+
 @layer motion {
   /* Entrata e uscita dei pannelli in CSS puro: @starting-style da' lo
      stato "prima dell'apertura" e transition-behavior porta display nella
