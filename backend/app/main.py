@@ -7,6 +7,7 @@ import httpx
 import itertools
 import json
 import logging
+import re
 import sys
 import time as _time
 
@@ -93,6 +94,7 @@ from app.trading.onchain import ledger as onchain_ledger
 from app.trading.onchain import passkey as onchain_passkey
 from app.trading.onchain import pilot as onchain_pilot
 from app.trading.onchain import prices as onchain_prices
+from app.trading.onchain import token_search as onchain_tokens
 from app.trading.onchain import quotes as onchain_quotes
 from app.trading.onchain import reveal_requests as onchain_reveal
 from app.trading.onchain import rpc_client as onchain_rpc_client
@@ -2660,23 +2662,32 @@ async def onchain_token_search(
     chain: Literal["solana", "robinhood"], query: str = Query(..., min_length=1, max_length=20),
     user: User = Depends(auth.get_current_user),
 ) -> list[dict]:
-    """Ricerca per ticker sulla stessa fonte del resto del sito (DexScreener,
-    tramite dexscreener_provider — Lorenzo: "voglio poter usare il ticker;
-    accedendo alla logica che avevamo gia' implementato... dove ogni ticker
-    veniva beccato anche nei dex"), filtrata alla sola chain del wallet.
-    Sostituisce il prompt() del browser: mai un dialog nativo dentro l'app."""
+    """Un solo token per ticker, il contratto verificato con piu'
+    liquidita' (Lorenzo: "voglio solo un unico risultato per ticker...
+    non voglio dover scegliere altri doppioni"). La fonte e' per chain,
+    vedi onchain_tokens; se non risponde si ripiega sulla ricerca
+    DexScreener del resto del sito, sempre un risultato per ticker ma
+    senza la verifica del contratto."""
     _require_onchain_enabled()
+    try:
+        return await onchain_tokens.search(chain, query)
+    except (httpx.HTTPError, ValueError) as exc:
+        logger.warning("onchain token search via primary source failed (%s): %s", chain, exc)
+
     results = await dexscreener_provider.search_symbols(query)
-    out = []
-    for r in results:
+    out, seen = [], set()
+    for r in results:  # gia' ordinati per liquidita', il primo per ticker vince
         try:
             _base, symbol_chain, _pool = _parse_dex_symbol(r["symbol"])
         except Exception:  # noqa: BLE001 — un simbolo malformato si scarta, non blocca la ricerca
             continue
-        if symbol_chain != chain or not r.get("base_token_address"):
+        ticker = onchain_tokens.normalize_symbol(r["symbol"].split("@")[0])
+        if symbol_chain != chain or not r.get("base_token_address") or ticker in seen:
             continue
+        seen.add(ticker)
         out.append({
-            "symbol": r["symbol"].split("@")[0], "name": r["name"], "address": r["base_token_address"],
+            "symbol": ticker, "name": r["name"], "address": r["base_token_address"],
+            "decimals": None, "verified": False, "liquidity_usd": None,
         })
     return out
 
@@ -5923,11 +5934,30 @@ _SNIPER_HTML = (
     .replace('href="/static/style.css"', f'href="/static/style.css?v={_ASSET_VERSION}"')
 )
 
+def _onchain_modulepreloads(version: str) -> str:
+    """Un <link rel="modulepreload"> per ogni modulo del wallet.
+
+    Senza, il browser scopre gli import di main.js solo dopo averlo scaricato
+    e letto: un secondo giro di rete in fila al primo (~0,8 s misurati dal
+    vivo). Con questi li chiede tutti insieme all'HTML."""
+    return "\n".join(
+        f'<link rel="modulepreload" href="/static/onchain/{module.name}?v={version}" />'
+        for module in _onchain_modules()
+    )
+
+
 _ONCHAIN_APP_HTML = (
     (FRONTEND_DIR / "onchain-app.html")
     .read_text(encoding="utf-8")
     .replace("<!--onchain-importmap-->", _onchain_importmap(_ASSET_VERSION))
+    .replace("<!--onchain-modulepreload-->", _onchain_modulepreloads(_ASSET_VERSION))
     .replace('src="/static/onchain/main.js"', f'src="/static/onchain/main.js?v={_ASSET_VERSION}"')
+    # La libreria del grafico non cambia fra un deploy e l'altro: con il `?v=`
+    # finisce in cache per sempre invece di rivalidarsi a ogni apertura.
+    .replace(
+        'src="/static/lightweight-charts.standalone.production.js"',
+        f'src="/static/lightweight-charts.standalone.production.js?v={_ASSET_VERSION}"',
+    )
 )
 
 
@@ -5977,6 +6007,39 @@ async def onchain_passkey_setup_page() -> HTMLResponse:
     return HTMLResponse(_ONCHAIN_PASSKEY_SETUP_HTML, headers=_HTML_HEADERS)
 
 
+def _onchain_boot_payload(user: User | None) -> dict:
+    """Quello che main.js chiedeva con due richieste in fila (/api/auth/me,
+    poi /api/onchain/wallets), gia' dentro l'HTML. Stessi campi degli
+    endpoint: solo indirizzo e stato, mai una chiave."""
+    if user is None:
+        return {"user": None}
+    payload: dict = {"user": _user_out(user)}
+    if settings.onchain_enabled:
+        payload["wallets"] = [
+            {"chain": chain, "address": w.address, "enabled": w.enabled, "created_at": w.created_at}
+            for chain, w in user.onchain_wallets.items()
+        ]
+    return payload
+
+
+def _render_onchain_app(user: User | None) -> str:
+    # `<` escapato: un valore con "</script>" non puo' chiudere il blocco.
+    data = json.dumps(_onchain_boot_payload(user), separators=(",", ":")).replace("<", "\\u003c")
+    html = _ONCHAIN_APP_HTML.replace(
+        "<!--onchain-boot-->", f'<script type="application/json" id="onchain-boot">{data}</script>'
+    )
+    # La sezione giusta e' visibile dal primo disegno, non dopo che il JS ha
+    # chiesto chi sei: prima la pagina restava vuota fino a quel momento.
+    # Si cerca per id, non per l'intero tag: un attributo aggiunto al tag
+    # (data-view del Pilota) bastava a far fallire il replace in silenzio.
+    target = "app-shell" if user else "login-screen"
+    return re.sub(rf'(<[^>]*\bid="{target}"[^>]*?) hidden>', r"\1>", html, count=1)
+
+
 @app.get("/onchain-app.html")
-async def onchain_app_page() -> HTMLResponse:
-    return HTMLResponse(_ONCHAIN_APP_HTML, headers=_HTML_HEADERS)
+async def onchain_app_page(user: User | None = Depends(auth.get_current_user_optional)) -> HTMLResponse:
+    # La pagina ora contiene chi sei: nessuna cache condivisa deve tenerla.
+    return HTMLResponse(
+        _render_onchain_app(user),
+        headers={"Cache-Control": "private, no-cache", "Vary": "Cookie"},
+    )

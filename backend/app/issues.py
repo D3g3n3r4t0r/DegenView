@@ -164,9 +164,21 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0090", "Wallet on-chain: molti ticker non si trovano, e per ogni ticker escono doppioni",
+     "Lorenzo: 'mezzi ticker non funzionano; voglio solo un unico risultato per ticker, quello con il contratto corretto e verificato con liquidità migliore, non voglio dover scegliere altri doppioni'.",
+     "media"),
     ("seed-0089", "Wallet on-chain: troppi tasti, e con la strategia accesa non si vedeva cosa stava facendo",
      "Lorenzo: 'voglio potermi fidare di questa applicazione visto che quando attivo la strategia utilizzo soldi reali, voglio avere il completo controllo di quello che sta succedendo [...] mi crea confusione un'interfaccia con troppi tasti [...] odio i tasti [...] tanta diagnosi nel momento in cui una strategia e' attiva'. Prima ancora: 'l'app deve funzionare con pochi clic, pochi cambi di schermata' e 'rendi l'app da mobile un'esperienza SEMPLICISSIMA'. Concept 'Pilota' approvato: 'PROCEDI E' PERFETTO'.",
      "alta"),
+    ("seed-0088", "Wallet on-chain da telefono: scegliere un token apre troppe schermate",
+     "Lorenzo: 'rivedi completamente il sito se mi collego da mobile; se seleziono un token si aprono troppe schermate'. Su /onchain-app.html da telefono il token scelto sul grafico non arrivava allo swap: andava riscelto nel pannello ordine, che stava sotto l'elenco delle posizioni, con un secondo foglio e la tastiera aperta in automatico.",
+     "media"),
+    ("seed-0087", "Pagina wallet on-chain lenta ad aprirsi",
+     "Lorenzo: 'usa un linguaggio di programmazione per rendere il sito velocissimo a costo di fare un refactory'. Misurata onchain-app.html dal vivo: Lighthouse 99 da non loggati, main thread 0,4 s, JS leggero. Il tempo se ne andava in giri di rete in fila prima dei dati (HTML, main.js, poi i suoi import, poi /api/auth/me, poi /api/onchain/wallets, solo dopo il saldo), piu' i font Google che bloccavano il primo disegno e la libreria del grafico senza cache.",
+     "media"),
+    ("seed-0086", "Wallet on-chain: i tasti Strategie, Attività e Impostazioni in alto non rispondono",
+     "Segnalato dal progetto 'Onchain app performance e pulsanti': su /onchain-app.html la barra in alto mostra Wallet / Strategie / Attività / Impostazioni, ma cliccare le ultime tre non fa nulla.",
+     "media"),
     ("seed-0085", "Fase 1 del trading automatico on-chain: wallet generato sul server, sola lettura",
      "Lorenzo: 'si potrebbe iniziare ad imbastire il sistema per il trading automatico anche su wallet on-chain'. Chiarito con lui: custodia della chiave sul server (non un servizio esterno), nessuna conferma manuale per operazione — l'automazione deve dipendere solo dalla strategia — e wallet 'privacy driven' nel senso di generato da zero da noi, mai legato a un'identita', non tecniche di offuscamento on-chain. Chain scelte: Solana e Robinhood Chain (L2 Arbitrum Orbit di Robinhood, live da luglio 2026, chain id 4663). Questa e' solo la Fase 1 del piano (generazione chiave + saldo, nessuna firma reale) — le fasi successive (simulazione, poi esecuzione vera con tetti/allowlist) restano da fare, apposta.",
      "media"),

@@ -251,32 +251,43 @@ const pickerDialog = document.querySelector("#picker");
 const pickerBody = pickerDialog.querySelector(".sheet-body");
 pickerDialog.addEventListener("click", (event) => { if (event.target === pickerDialog) pickerDialog.close(); });
 pickerDialog.querySelector(".sheet-close").addEventListener("click", () => pickerDialog.close());
+pickerBody.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && event.target.matches?.("li[data-address]")) event.target.click();
+});
 
 let pickerDebounce = null;
 
-export function openTokenPicker(chain, { onPick } = {}) {
+export const isNativeAddress = (chain, address) =>
+  Boolean(address) && address.toLowerCase() === NATIVE_ADDRESS[chain]?.toLowerCase();
+
+// Un solo foglio per scegliere un token, pensato per il pollice: ricerca in
+// cima, sotto i token che hai; scrivere sostituisce la lista invece di
+// allungarla. Su touch niente focus automatico — la tastiera coprirebbe
+// proprio i token che hai, che sono la scelta piu' frequente.
+export function openTokenPicker(chain, { onPick, title = "Scegli token" } = {}) {
+  pickerDialog.querySelector(".sheet-title").textContent = title;
   pickerBody.innerHTML = `
-    <p class="label" style="margin-block-start:0">I tuoi token</p>
-    <ul id="picker-held" class="tx-list"><li>Leggo il portafoglio…</li></ul>
-    <p class="label" style="margin-block-start:14px">Cerca un altro token</p>
-    <input type="text" id="picker-query" class="mo-input" placeholder="Ticker (es. SOL, PEPE)…" autocomplete="off" />
-    <ul id="picker-results" class="tx-list"><li>Scrivi un ticker per cercare.</li></ul>
-    <details style="margin-block-start:10px">
-      <summary class="swap-detail" style="cursor:pointer">Non lo trovi? Incolla l'indirizzo a mano</summary>
-      <div class="swap-row" style="margin-block-start:8px">
-        <input type="text" id="picker-address" placeholder="Indirizzo del token" autocomplete="off" />
-        <button type="button" class="swap-max" id="picker-address-go">Usa</button>
-      </div>
-    </details>
+    <div class="picker-search">
+      <input type="search" id="picker-query" class="mo-input" placeholder="Cerca ticker o incolla indirizzo" autocomplete="off" autocapitalize="characters" spellcheck="false" enterkeyhint="search" />
+    </div>
+    <p class="label picker-label" id="picker-label">I tuoi token</p>
+    <ul id="picker-held" class="tx-list picker-list"><li>Leggo il portafoglio…</li></ul>
+    <ul id="picker-results" class="tx-list picker-list" hidden></ul>
   `;
   if (!pickerDialog.open) pickerDialog.showModal();
 
   const input = pickerBody.querySelector("#picker-query");
   const results = pickerBody.querySelector("#picker-results");
   const held = pickerBody.querySelector("#picker-held");
-  input.focus();
+  const label = pickerBody.querySelector("#picker-label");
+  // showModal() mette da solo il focus sul primo campo: su touch va tolto.
+  if (matchMedia("(pointer: coarse)").matches) input.blur();
+  else input.focus();
 
   const pick = (token) => { pickerDialog.close(); onPick?.(token); };
+  const wirePicks = (list) => list.querySelectorAll("[data-address]").forEach((li) => {
+    li.addEventListener("click", () => pick({ address: li.dataset.address, symbolHint: li.dataset.symbol || null }));
+  });
 
   // I token che il wallet ha DAVVERO (saldo nativo + portafoglio reale via
   // RPC), non solo la ricerca per ticker — Lorenzo: "quando seleziono cosa
@@ -298,44 +309,69 @@ export function openTokenPicker(chain, { onPick } = {}) {
       }
       if (!rows.length) { held.innerHTML = "<li>Nessun token con saldo trovato.</li>"; return; }
       held.innerHTML = rows.map((r) => `
-        <li data-address="${escapeHtml(r.address)}" style="cursor:pointer">
+        <li data-address="${escapeHtml(r.address)}" data-symbol="${escapeHtml(r.symbol)}" role="button" tabindex="0">
           <span><b>${escapeHtml(r.symbol)}</b>${r.isNative ? " <small>nativo</small>" : ""}</span>
           <span>${formatToken(r.amount)}</span>
         </li>`).join("");
-      held.querySelectorAll("[data-address]").forEach((li) => {
-        li.addEventListener("click", () => pick({ address: li.dataset.address, symbolHint: li.querySelector("b").textContent }));
-      });
+      wirePicks(held);
     } catch (error) {
       held.innerHTML = `<li>${escapeHtml(error.message)}</li>`;
     }
   })();
 
+  const showHeld = (yes) => {
+    held.hidden = !yes;
+    results.hidden = yes;
+    label.textContent = yes ? "I tuoi token" : "Risultati";
+  };
+
   input.addEventListener("input", () => {
     clearTimeout(pickerDebounce);
     const q = input.value.trim();
-    if (q.length < 2) { results.innerHTML = "<li>Scrivi almeno 2 caratteri.</li>"; return; }
+    if (q.length < 2) { showHeld(true); return; }
+    showHeld(false);
+    // Un indirizzo incollato si usa cosi' com'e': niente ricerca per
+    // ticker, niente secondo campo nascosto in un "non lo trovi?".
+    if (looksLikeAddress(q)) {
+      results.innerHTML = `
+        <li data-address="${escapeHtml(q)}" role="button" tabindex="0">
+          <span><b>Usa questo indirizzo</b> <small>${escapeHtml(shortAddress(q))}</small></span>
+        </li>`;
+      wirePicks(results);
+      return;
+    }
     results.innerHTML = "<li>Cerco…</li>";
     pickerDebounce = setTimeout(async () => {
       try {
         const found = await api.searchTokens(chain, q);
+        if (input.value.trim() !== q) return;
         if (!found.length) { results.innerHTML = "<li>Nessun risultato su questa chain.</li>"; return; }
         results.innerHTML = found.map((t) => `
-          <li data-address="${escapeHtml(t.address)}" style="cursor:pointer">
+          <li data-address="${escapeHtml(t.address)}" data-symbol="${escapeHtml(t.symbol)}" role="button" tabindex="0">
             <span><b>${escapeHtml(t.symbol)}</b> <small>${escapeHtml(t.name)}</small></span>
+            <span class="picker-meta">${t.verified ? "<i class=\"is-verified\">verificato</i>" : "<i>non verificato</i>"}${
+              t.liquidity_usd ? ` · liq. ${compactUsd.format(t.liquidity_usd)}` : ""}</span>
           </li>`).join("");
-        results.querySelectorAll("[data-address]").forEach((li) => {
-          li.addEventListener("click", () => pick({ address: li.dataset.address, symbolHint: li.querySelector("b").textContent }));
-        });
+        wirePicks(results);
       } catch (error) {
         results.innerHTML = `<li>${escapeHtml(error.message)}</li>`;
       }
     }, 350);
   });
 
-  pickerBody.querySelector("#picker-address-go").addEventListener("click", () => {
-    const raw = pickerBody.querySelector("#picker-address").value.trim();
-    if (raw) pick({ address: raw, symbolHint: null });
+  input.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    results.querySelector("[data-address]")?.click();
   });
 }
+
+const compactUsd = new Intl.NumberFormat("en-US", {
+  style: "currency", currency: "USD", notation: "compact", maximumFractionDigits: 1,
+});
+
+// Mint Solana (base58, 32-44 caratteri) o contratto EVM (0x + 40 hex).
+const looksLikeAddress = (text) =>
+  /^0x[0-9a-fA-F]{40}$/.test(text) || /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(text);
 
 export { shortAddress };

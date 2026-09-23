@@ -4,9 +4,18 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Wallet on-chain (alpha) — Liquidity Engine</title>
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif&family=JetBrains+Mono:wght@400;500&display=swap" />
+<!-- Font serviti da qui, non da Google: niente due origini in piu' (DNS + TLS)
+     ne' un foglio di stile che blocca il primo disegno. Stessi file latin di
+     Google Fonts (OFL, vedi static/fonts/LICENSE.txt). Instrument Sans non
+     c'e': --sans usa i font di sistema, era scaricato e mai usato. Niente
+     preload: con font-display swap il testo esce subito, e su rete lenta
+     i font rubavano banda ai moduli che portano i dati. -->
+<!--onchain-modulepreload-->
 <style>
+@font-face { font-family: "Instrument Serif"; font-style: normal; font-weight: 400; font-display: swap;
+  src: url(/static/fonts/instrument-serif-latin.woff2?v=1) format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 400 500; font-display: swap;
+  src: url(/static/fonts/jetbrains-mono-latin.woff2?v=1) format("woff2"); }
 /* ============================================================
    Wallet on-chain — stesso sistema "Instrument" del resto del
    sito, scritto con la piattaforma di oggi: @layer per la cascata,
@@ -149,8 +158,10 @@
       background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 4px;
       @container (width >= 900px) { display: flex; }
     }
-    & .nav-pills span {
-      padding: 8px 15px; border-radius: 10px; font-size: 13px; font-weight: 600; color: var(--ink-dim);
+    & .nav-pills button {
+      padding: 8px 15px; border: 0; border-radius: 10px; background: none; cursor: pointer;
+      font: inherit; font-size: 13px; font-weight: 600; color: var(--ink-dim);
+      &:hover { color: var(--ink); }
       &.is-current { background: var(--raised); color: var(--ink); }
     }
     & .topbar-right { display: flex; align-items: center; gap: 8px; margin-inline-start: auto; justify-self: end; flex-wrap: wrap; }
@@ -888,6 +899,86 @@
   .sheet, .modal { background: var(--panel); }
 }
 
+/* ============================================================
+   Telefono. Lorenzo: "rivedi completamente il sito se mi collego
+   da mobile; se seleziono un token si aprono troppe schermate".
+   Sotto i 640px di contenitore la pagina e' una colonna sola:
+   - la testata sta su due righe (marchio + indirizzo, poi chain);
+   - lo stato occupa una riga di saldo e due mezze card, non tre
+     schermate intere prima del grafico;
+   - grafico, ordine e posizioni si susseguono in quest'ordine, cosi'
+     lo swap sta subito sotto il token che si sta guardando invece che
+     dopo l'elenco delle posizioni.
+   ============================================================ */
+@layer components {
+  #picker {
+    min-block-size: min(62dvh, 560px);
+    padding-block-start: 10px;
+    & .picker-search {
+      position: sticky; inset-block-start: -10px; z-index: 1;
+      background: var(--panel); padding-block: 10px 6px; margin-block-start: 8px;
+    }
+    & .picker-search input {
+      inline-size: 100%; box-sizing: border-box; font-size: 16px;
+      background: var(--raised); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px;
+    }
+    & .picker-label { margin: 12px 0 0; }
+    & .picker-meta { font-size: 11.5px; white-space: nowrap;
+      & i { font-style: normal; color: var(--amber); }
+      & i.is-verified { color: var(--mint); }
+    }
+    & .picker-list li {
+      min-block-size: 48px; padding-block: 8px; padding-inline: 4px; cursor: pointer; border-radius: 10px;
+      &:active, &:hover { background: var(--raised); }
+    }
+  }
+
+  @container (width < 640px) {
+    .topbar {
+      display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px 10px;
+      & .brand { min-inline-size: 0; }
+      & h1 { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      & .topbar-right { display: contents; }
+      & .addr-chip { grid-column: 2; grid-row: 1; padding: 6px 10px; font-size: 12px; }
+      & .switcher { grid-column: 1 / -1; }
+      & .switcher button { flex: 1; justify-content: center; padding-block: 10px; }
+    }
+
+    .status-strip { grid-template-columns: 1fr 1fr; gap: 10px; }
+    .balance-card { grid-column: 1 / -1; }
+    .status-strip > .status-card:last-child:nth-child(2) { grid-column: 1 / -1; }
+    .sniper-card, .security-card { padding: 12px 14px; }
+    .sniper-card .sniper-state { font-size: 15px; }
+    .sniper-card .sniper-tags, .security-card .sub { display: none; }
+    .security-card .value { font-size: 13px; }
+
+    .market-order-row { display: flex; flex-direction: column; align-items: stretch; gap: 14px; }
+    .market-card { display: contents; }
+    .market-panel, .bottom-panel {
+      background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px;
+    }
+    .market-panel { order: 1; }
+    .order-panel { order: 2; padding: 14px; }
+    .bottom-panel { order: 3; }
+    .market-chart { block-size: 200px; }
+    .chart-head { flex-wrap: wrap; }
+    .bottom-tabs {
+      margin-block-start: 0; gap: 18px; overflow-x: auto; scrollbar-width: none;
+      & .mo-side-tab { white-space: nowrap; }
+    }
+    /* L'interruttore dello sniper e' la tab Sniper: fuori da li' e' un
+       paragrafo in piu' fra lo swap e le azioni. */
+    .order-panel:not(:has([data-order-tab="sniper"].mo-tab-active)) .sniper-box { display: none; }
+    .order-panel .actions .action { padding-inline: 2px; }
+  }
+
+  /* Sotto i 16px iOS ingrandisce la pagina al tocco di un campo, e poi
+     non torna indietro da solo. */
+  @media (pointer: coarse) {
+    .page input:not([type="checkbox"]), dialog input:not([type="checkbox"]), dialog select { font-size: 16px; }
+  }
+}
+
 @layer motion {
   /* Entrata e uscita dei pannelli in CSS puro: @starting-style da' lo
      stato "prima dell'apertura" e transition-behavior porta display nella
@@ -1373,10 +1464,11 @@
            history.back() — questa pagina si apre anche da zero (QR, link
            salvato) e li' "indietro" non avrebbe dove andare. -->
       <a class="brand" href="/" title="Torna al sito"><span class="brand-dot" aria-hidden="true"></span><h1>Liquidity Engine · Wallet</h1></a>
-      <!-- Solo "Wallet" e' una pagina vera oggi: le altre restano come
-           riferimento visivo del posto dove finiranno, non link rotti. -->
-      <nav class="nav-pills" aria-hidden="true">
-        <span class="is-current">Wallet</span><span>Strategie</span><span>Attività</span><span>Impostazioni</span>
+      <!-- Scorciatoie dentro la stessa pagina: Strategie e Attivita' aprono
+           la tab omonima del pannello in basso, Impostazioni il foglio dei
+           limiti. Nessuna pagina separata esiste ancora. -->
+      <nav class="nav-pills" id="nav-pills" aria-label="Sezioni">
+        <button type="button" class="is-current" data-nav="wallet" aria-current="true">Wallet</button><button type="button" data-nav="strategies">Strategie</button><button type="button" data-nav="history">Attività</button><button type="button" data-nav="settings">Impostazioni</button>
       </nav>
       <div class="topbar-right">
         <div class="switcher" id="chain-switch" data-selected="solana" role="tablist" aria-label="Chain">
@@ -1571,7 +1663,8 @@
     <button type="button" class="btn-quiet sheet-close">Chiudi</button>
   </dialog>
 
-  <script src="/static/lightweight-charts.standalone.production.js"></script>
+  <!--onchain-boot-->
+  <script async src="/static/lightweight-charts.standalone.production.js"></script>
   <script type="module" src="/static/onchain/main.js"></script>
 </body>
 </html>
