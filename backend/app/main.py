@@ -4723,11 +4723,18 @@ def _compute_asset_version() -> str:
     (and therefore the /static/*.css?v=... URL) always changes exactly when
     the files do. Without this, browsers — mobile Safari especially — keep
     serving a stale cached style.css/app.js after a deploy since neither the
-    URL nor any cache-control header ever changed."""
+    URL nor any cache-control header ever changed.
+
+    I moduli di static/onchain/ entrano nello stesso hash: sono serviti dagli
+    stessi URL versionati (via import map, vedi _onchain_importmap) e senza di
+    loro un deploy che tocca solo il wallet non cambierebbe il `?v=`."""
     try:
-        css = (FRONTEND_DIR / "static" / "style.css").read_bytes()
-        js = (FRONTEND_DIR / "static" / "app.js").read_bytes()
-        return hashlib.sha256(css + js).hexdigest()[:10]
+        parts = [
+            (FRONTEND_DIR / "static" / "style.css").read_bytes(),
+            (FRONTEND_DIR / "static" / "app.js").read_bytes(),
+        ]
+        parts += [m.read_bytes() for m in sorted((FRONTEND_DIR / "static" / "onchain").glob("*.js"))]
+        return hashlib.sha256(b"".join(parts)).hexdigest()[:10]
     except OSError:
         return "0"
 
@@ -4753,12 +4760,45 @@ _SNIPER_HTML = (
 # a colpo d'occhio — tutto inline, nessuna dipendenza dal resto del sito.
 _ONCHAIN_APPROVE_HTML = (FRONTEND_DIR / "onchain-approve.html").read_text(encoding="utf-8")
 _ONCHAIN_PASSKEY_SETUP_HTML = (FRONTEND_DIR / "onchain-passkey-setup.html").read_text(encoding="utf-8")
-# Prima alpha del programma dedicato al wallet on-chain — pagina a se',
-# separata da index.html apposta (nessuna confusione col resto del sito):
-# crea wallet, saldo, storico, rivelazione a due dispositivi con animazioni
-# e SSE. Il trading (Fase 2-4 del piano) resta segnato come non attivo,
-# non inventato per sembrare piu' pronto di quanto sia.
-_ONCHAIN_APP_HTML = (FRONTEND_DIR / "onchain-app.html").read_text(encoding="utf-8")
+# Programma dedicato al wallet on-chain — pagina a se', separata da
+# index.html apposta (nessuna confusione col resto del sito): crea wallet,
+# saldo, storico, rivelazione a due dispositivi. Il trading (Fase 2-4 del
+# piano) resta segnato per quello che e', non inventato per sembrare piu'
+# pronto di quanto sia.
+#
+# I suoi moduli ES stanno in static/onchain/ e si importano per nome
+# (`@onchain/api.js`) attraverso un import map generato qui: e' l'unico modo
+# senza bundler di mettere il `?v=` anche sugli import interni di un modulo,
+# che il browser risolve da se' e che nessuna replace sull'HTML raggiunge.
+# Senza, dopo un deploy Safari continuerebbe a servire i vecchi moduli.
+_ONCHAIN_MODULE_DIR = FRONTEND_DIR / "static" / "onchain"
+
+
+def _onchain_modules() -> list[Path]:
+    try:
+        return sorted(_ONCHAIN_MODULE_DIR.glob("*.js"))
+    except OSError:
+        return []
+
+
+def _onchain_importmap(version: str) -> str:
+    imports = {
+        f"@onchain/{module.name}": f"/static/onchain/{module.name}?v={version}"
+        for module in _onchain_modules()
+    }
+    return (
+        '<script type="importmap">'
+        + json.dumps({"imports": imports}, separators=(",", ":"))
+        + "</script>"
+    )
+
+
+_ONCHAIN_APP_HTML = (
+    (FRONTEND_DIR / "onchain-app.html")
+    .read_text(encoding="utf-8")
+    .replace("<!--onchain-importmap-->", _onchain_importmap(_ASSET_VERSION))
+    .replace('src="/static/onchain/main.js"', f'src="/static/onchain/main.js?v={_ASSET_VERSION}"')
+)
 
 
 # L'HTML non si mette in cache: e' l'unico posto dove vive il numero di

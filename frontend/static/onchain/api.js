@@ -1,0 +1,54 @@
+/**
+ * L'unico posto che parla col backend. Ogni chiamata passa da `request`,
+ * quindi il timeout e la forma dell'errore sono uguali ovunque: il resto
+ * dell'app vede o un oggetto, o un ApiError con un messaggio in italiano
+ * gia' pronto da mostrare.
+ */
+
+export class ApiError extends Error {}
+
+const DEFAULT_TIMEOUT_MS = 8000;
+
+async function request(path, { method = "GET", body, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
+  let response;
+  try {
+    response = await fetch(path, {
+      method,
+      headers: body ? { "Content-Type": "application/json" } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+      // AbortSignal.timeout al posto di una Promise.race con setTimeout:
+      // qui la richiesta viene davvero interrotta, non solo ignorata.
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (cause) {
+    throw new ApiError(cause.name === "TimeoutError" ? "rete lenta" : "rete non raggiungibile", { cause });
+  }
+
+  let payload = null;
+  try { payload = await response.json(); } catch { /* 204, o una risposta non-JSON */ }
+
+  if (!response.ok) throw new ApiError(payload?.detail || `errore ${response.status}`);
+  return payload;
+}
+
+export const getSession = () => request("/api/auth/me");
+export const login = (email, password) => request("/api/auth/login", { method: "POST", body: { email, password } });
+
+export const listWallets = () => request("/api/onchain/wallets");
+export const createWallet = (chain) => request("/api/onchain/wallets", { method: "POST", body: { chain } });
+export const setWalletEnabled = (chain, enabled) =>
+  request(`/api/onchain/wallets/${chain}`, { method: "PATCH", body: { enabled } });
+
+export const getBalance = (chain) => request(`/api/onchain/wallets/${chain}/balance`);
+export const getTransactions = (chain) => request(`/api/onchain/wallets/${chain}/transactions`, { timeoutMs: 15000 });
+export const getPositions = (chain) => request(`/api/onchain/positions/${chain}`);
+export const getRiskStatus = (chain) => request(`/api/onchain/risk/status/${chain}`);
+export const resetCircuitBreaker = (chain) =>
+  request(`/api/onchain/risk/circuit-breaker/${chain}/reset`, { method: "POST" });
+
+export const simulateOrder = (order) => request("/api/onchain/simulate", { method: "POST", body: order });
+
+export const requestReveal = (chain) =>
+  request(`/api/onchain/wallets/${chain}/reveal/request`, { method: "POST" });
+export const consumeReveal = (chain, token) =>
+  request(`/api/onchain/wallets/${chain}/reveal`, { method: "POST", body: { token } });
