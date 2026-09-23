@@ -20,7 +20,7 @@ from typing import Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -36,6 +36,7 @@ except (AttributeError, ValueError):
     pass
 
 from app import auth
+from app import guest as guest_links
 from app import issues as issues_store
 from app import rate_limit
 from app.trading.executor import place_futures_order_for_signal, place_order_for_signal
@@ -1202,6 +1203,7 @@ _PUBLIC_PATHS = frozenset({
     "/api/auth/register",
     "/api/auth/logout",
     "/api/auth/me",         # il frontend chiede "chi sono" prima di sapere se e' entrato
+    "/ospite",              # link ospite: controlla il token da se' (app/guest.py)
     "/api/issues",          # la bacheca: CLAUDE.md dice di leggerla con un curl senza
                             # login a inizio sessione — il gate globale (seed-0031) la
                             # bloccava da quando e' stato introdotto, senza che nessuna
@@ -1217,6 +1219,20 @@ _PUBLIC_PREFIXES = ("/static/",)
 @app.middleware("http")
 async def require_authentication(request: Request, call_next):
     path = request.url.path
+    # Ospite (app/guest.py): prima delle porte pubbliche, perche' anche
+    # POST /api/issues passa da _PUBLIC_PATHS. Una sessione vera vince.
+    if (
+        not app.dependency_overrides
+        and not auth._verify_session_cookie(request.cookies.get(auth.SESSION_COOKIE) or "")
+        and guest_links.verify_cookie(request.cookies.get(guest_links.GUEST_COOKIE))
+    ):
+        if guest_links.allows(request.method, path):
+            return await call_next(request)
+        return JSONResponse(
+            status_code=403,
+            content={"detail": "Modalita' ospite: sola lettura, questa azione non e' disponibile."},
+        )
+
     if (
         request.method == "OPTIONS"
         or path in _PUBLIC_PATHS
@@ -1314,7 +1330,7 @@ async def _unhandled_error_handler(request: Request, exc: Exception):
     user_id = None
     try:
         user = await auth.get_current_user_optional(
-            request.cookies.get(auth.SESSION_COOKIE)
+            request.cookies.get(auth.SESSION_COOKIE), request.cookies.get(guest_links.GUEST_COOKIE)
         )
         user_id = user.id if user else None
     except Exception:  # noqa: BLE001 — non deve mai impedire di registrare l'errore vero
@@ -1807,7 +1823,12 @@ class TelegramChatIdRequest(BaseModel):
 
 
 def _user_out(user: User) -> dict:
-    return {"id": user.id, "email": user.email, "telegram_chat_id": user.telegram_chat_id}
+    return {
+        "id": user.id,
+        "email": user.email,
+        "telegram_chat_id": user.telegram_chat_id,
+        "guest": guest_links.is_guest(user),
+    }
 
 
 def _client_ip(request: Request) -> str:
@@ -1894,6 +1915,7 @@ async def login(req: LoginRequest, request: Request, response: Response) -> dict
 @app.post("/api/auth/logout")
 async def logout(response: Response) -> dict:
     response.delete_cookie(auth.SESSION_COOKIE)
+    response.delete_cookie(guest_links.GUEST_COOKIE)
     return {"ok": True}
 
 
@@ -3601,6 +3623,135 @@ def _require_onchain_admin(user: User) -> None:
     if user.email.lower() not in allowed:
         raise HTTPException(status_code=403, detail="Solo un amministratore configurato (settings.admin_emails) "
                                                       "puo' leggere /admin/status.")
+
+
+# ---------------------------------------------------------------- link ospite
+
+class GuestLinkRequest(BaseModel):
+    label: str = ""
+    days: int = guest_links.DEFAULT_DAYS
+
+
+def _require_admin(user: User) -> None:
+    allowed = {e.strip().lower() for e in settings.admin_emails.split(",") if e.strip()}
+    if guest_links.is_guest(user) or user.email.lower() not in allowed:
+        raise HTTPException(status_code=403, detail="Solo un amministratore puo' gestire i link ospite.")
+
+
+def _guest_link_out(link: guest_links.GuestLink, request: Request) -> dict:
+    base = f"{'https' if _is_https(request) else 'http'}://{request.headers.get('host', request.url.netloc)}"
+    return {
+        "id": link.id,
+        "label": link.label,
+        "created_at": link.created_at,
+        "expires_at": link.expires_at,
+        "active": link.active(),
+        "url": f"{base}/ospite?t={link.token}" if link.active() else None,
+    }
+
+
+@app.get("/api/guest-links")
+async def guest_links_list(request: Request, user: User = Depends(auth.get_current_user)) -> list[dict]:
+    _require_admin(user)
+    return [_guest_link_out(link, request) for link in guest_links.list_links()]
+
+
+@app.post("/api/guest-links")
+async def guest_links_create(
+    req: GuestLinkRequest, request: Request, user: User = Depends(auth.get_current_user)
+) -> dict:
+    _require_admin(user)
+    return _guest_link_out(guest_links.create_link(user.email, req.label, req.days), request)
+
+
+@app.delete("/api/guest-links/{link_id}")
+async def guest_links_revoke(link_id: str, request: Request, user: User = Depends(auth.get_current_user)) -> dict:
+    _require_admin(user)
+    link = guest_links.revoke_link(link_id)
+    if link is None:
+        raise HTTPException(status_code=404, detail="Link non trovato")
+    return _guest_link_out(link, request)
+
+
+@app.get("/ospite")
+async def guest_enter(request: Request, t: str = "") -> Response:
+    link = guest_links.find_by_token(t) if t else None
+    if link is None:
+        return HTMLResponse(
+            "<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'>"
+            "<title>Link non valido</title><body style='font:16px system-ui;padding:32px;background:#0b0b0c;color:#ddd'>"
+            "<p>Questo link ospite e' scaduto o e' stato revocato.</p></body>",
+            status_code=410,
+            headers=_HTML_HEADERS,
+        )
+    response = RedirectResponse("/onchain-app.html", status_code=303)
+    response.set_cookie(
+        guest_links.GUEST_COOKIE,
+        guest_links.make_cookie(link),
+        max_age=max(60, int(link.expires_at - _time.time())),
+        httponly=True,
+        samesite="lax",
+        secure=_is_https(request),
+    )
+    return response
+
+
+_GUEST_ADMIN_HTML = """<!doctype html><html lang="it"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Link ospite</title>
+<style>
+body{font:15px/1.45 system-ui,sans-serif;margin:0;padding:24px 16px;background:#0b0b0c;color:#e6e6e6;max-width:640px}
+h1{font-size:18px;margin:0 0 16px}form{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px}
+input,button{font:inherit;font-size:16px;padding:8px 10px;border-radius:8px;border:1px solid #333;background:#151517;color:inherit}
+button{cursor:pointer}ul{list-style:none;padding:0;margin:0}li{padding:10px 0;border-top:1px solid #222}
+.off{opacity:.45}code{word-break:break-all;font-size:13px;color:#9ad}small{color:#888}
+</style>
+<h1>Link ospite &middot; sola lettura</h1>
+<form id="f"><input id="label" placeholder="Per chi (es. Marco)" maxlength="60">
+<input id="days" type="number" min="1" max="90" value="7" style="width:5em"> giorni
+<button>Crea link</button></form>
+<ul id="list"></ul>
+<script>
+const $=s=>document.querySelector(s);
+const day=t=>new Date(t*1000).toLocaleDateString("it-IT",{day:"numeric",month:"short"});
+async function load(){
+  const r=await fetch("/api/guest-links");const rows=r.ok?await r.json():[];
+  $("#list").innerHTML="";
+  for(const l of rows){const li=document.createElement("li");if(!l.active)li.className="off";
+    li.innerHTML=`<b></b> <small>${l.active?"scade il "+day(l.expires_at):"chiuso"}</small><br>`;
+    li.querySelector("b").textContent=l.label||"senza nome";
+    if(l.url){const c=document.createElement("code");c.textContent=l.url;li.append(c," ");
+      const cp=document.createElement("button");cp.textContent="Copia";cp.onclick=()=>navigator.clipboard.writeText(l.url);
+      const rv=document.createElement("button");rv.textContent="Revoca";
+      rv.onclick=async()=>{await fetch("/api/guest-links/"+l.id,{method:"DELETE"});load();};li.append(cp," ",rv);}
+    $("#list").append(li);}
+}
+$("#f").onsubmit=async e=>{e.preventDefault();
+  const r=await fetch("/api/guest-links",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({label:$("#label").value,days:+$("#days").value||7})});
+  if(r.ok){const l=await r.json();try{await navigator.clipboard.writeText(l.url)}catch{};$("#label").value="";}
+  load();};
+load();
+</script></html>"""
+
+
+@app.get("/admin/ospiti")
+async def guest_links_page(user: User = Depends(auth.get_current_user)) -> HTMLResponse:
+    _require_admin(user)
+    return HTMLResponse(_GUEST_ADMIN_HTML, headers={"Cache-Control": "no-store"})
+
+
+_GUEST_BANNER = (
+    '<div role="status" style="position:fixed;left:50%;bottom:12px;transform:translateX(-50%);z-index:2147483647;'
+    'padding:6px 12px;border-radius:999px;background:rgba(20,20,22,.88);color:#e6e6e6;'
+    'font:12px/1.2 system-ui,sans-serif;letter-spacing:.02em;pointer-events:none;'
+    'border:1px solid rgba(255,255,255,.12)">Ospite &middot; sola lettura</div>'
+)
+
+
+def _with_guest_banner(html: str, user: User | None) -> str:
+    if not guest_links.is_guest(user):
+        return html
+    return re.sub(r"(<body[^>]*>)", lambda m: m.group(1) + _GUEST_BANNER, html, count=1)
 
 
 @app.get("/admin/status")
@@ -6242,7 +6393,12 @@ async def asset_version() -> dict:
 
 
 @app.get("/")
-async def index() -> HTMLResponse:
+async def index(user: User | None = Depends(auth.get_current_user_optional)) -> HTMLResponse:
+    if guest_links.is_guest(user):
+        return HTMLResponse(
+            _with_guest_banner(_INDEX_HTML, user),
+            headers={"Cache-Control": "private, no-cache", "Vary": "Cookie"},
+        )
     return HTMLResponse(_INDEX_HTML, headers=_HTML_HEADERS)
 
 
@@ -6287,7 +6443,8 @@ def _render_onchain_app(user: User | None) -> str:
     # Si cerca per id, non per l'intero tag: un attributo aggiunto al tag
     # (data-view del Pilota) bastava a far fallire il replace in silenzio.
     target = "app-shell" if user else "login-screen"
-    return re.sub(rf'(<[^>]*\bid="{target}"[^>]*?) hidden>', r"\1>", html, count=1)
+    html = re.sub(rf'(<[^>]*\bid="{target}"[^>]*?) hidden>', r"\1>", html, count=1)
+    return _with_guest_banner(html, user)
 
 
 @app.get("/onchain-app.html")
