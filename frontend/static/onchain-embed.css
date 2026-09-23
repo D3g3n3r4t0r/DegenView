@@ -208,13 +208,9 @@
   /* --- azioni ------------------------------------------------------
      Quattro pari: su un wallet in sola lettura nessuna di queste e'
      l'azione principale, e dipingerne una di verde direbbe il contrario. */
-  #onchain-embed .actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-
-  /* Sette azioni non stanno in una riga sotto una certa larghezza: 4 per
-     riga fino a 560px di contenitore, tutte in fila da 560px in su. */
-  @container (width >= 560px) {
-    #onchain-embed .actions { grid-template-columns: repeat(7, 1fr); }
-  }
+  /* Nove azioni ormai: auto-fill lascia al contenitore decidere quante
+     per riga, invece di una soglia nuova ad ogni azione aggiunta. */
+  #onchain-embed .actions { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 6px; }
 
   /* --- layout a due colonne, da desktop — vedi onchain-app.html per la
      spiegazione: stessa regola, container query invece che sulla finestra,

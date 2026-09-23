@@ -66,29 +66,6 @@ export function openReceive() {
   });
 }
 
-/* --------------------------------------------------------------- Storico */
-
-export async function openHistory() {
-  open("Storico", "Le transazioni arrivano dall'RPC pubblico ora, non al caricamento della pagina.");
-  setMessage("Leggo le transazioni…");
-  try {
-    const data = await api.getTransactions(state.chain);
-    if (!data.available) {
-      setBody(`<p class="sheet-note">${escapeHtml(data.reason)}
-        <a href="${encodeURI(data.explorer_url)}" target="_blank" rel="noopener">Apri l'explorer →</a></p>`);
-      return;
-    }
-    if (!data.transactions.length) { setMessage("Nessuna transazione ancora."); return; }
-    setBody(`<ul class="tx-list">${data.transactions.map((tx) => `
-      <li>
-        <a href="${encodeURI(tx.explorer_url)}" target="_blank" rel="noopener">${escapeHtml(tx.signature.slice(0, 12))}…</a>
-        <span>${escapeHtml(tx.status)}${tx.block_time ? ` · ${new Date(tx.block_time * 1000).toLocaleString("it-IT")}` : ""}</span>
-      </li>`).join("")}</ul>`);
-  } catch (error) {
-    setMessage(error.message, "is-error");
-  }
-}
-
 /* ---------------------------------------------------------------- Limiti */
 
 export async function openRisk(onChange) {

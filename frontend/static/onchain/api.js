@@ -76,3 +76,18 @@ export const createLimitOrder = (body) => request("/api/onchain/limit-orders", {
 export const listLimitOrders = (chain) => request(`/api/onchain/limit-orders/${chain}`);
 export const cancelLimitOrder = (id) => request(`/api/onchain/limit-orders/${id}`, { method: "DELETE" });
 export const getHistory = (chain) => request(`/api/onchain/history/${chain}`, { timeoutMs: 15000 });
+
+// Ecosistema DEX (piano 2026-09-23): portafoglio reale, grafico ereditato
+// dal motore del sito principale, e le stesse strategie dell'archivio
+// (Watchlist) attivabili da qui invece che da un'altra tab.
+export const getPortfolio = (chain) => request(`/api/onchain/portfolio/${chain}`, { timeoutMs: 15000 });
+export const getChart = (chain, address, interval = "15m") =>
+  request(`/api/onchain/chart/${chain}/${address}?interval=${interval}`, { timeoutMs: 15000 });
+
+export const getStrategies = () => request("/api/strategies");
+export const getWatchlist = () => request("/api/watchlist");
+export const addWatchlistEntry = (body) => request("/api/watchlist", { method: "POST", body });
+export const setWatchlistStrategy = (id, strategyName, enabled) =>
+  request(`/api/watchlist/${id}/strategy`, { method: "PATCH", body: { strategy_name: strategyName, enabled } });
+export const setWatchlistAutoTrade = (id, strategyName, enabled) =>
+  request(`/api/watchlist/${id}/auto_trade`, { method: "PATCH", body: { strategy_name: strategyName, enabled } });

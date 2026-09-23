@@ -14,6 +14,9 @@ import { drawSparkline } from "@onchain/sparkline.js";
 import { appendHistory, chainInfo, readCache, readHistory, state, writeCache } from "@onchain/store.js";
 import { openSwap } from "@onchain/swap.js";
 import { openLimitOrder, openOrderDiary } from "@onchain/limitOrders.js";
+import { openChart } from "@onchain/chart.js";
+import { openStrategies } from "@onchain/strategies.js";
+import { openPortfolio } from "@onchain/portfolio.js";
 
 // Sulla pagina a se' (onchain-app.html) la radice e' il documento intero.
 // Fusa dentro la tab Trading, invece, questo modulo viene importato dentro
@@ -203,7 +206,6 @@ view.address.addEventListener("click", async (event) => {
 
 const SHEETS = {
   receive: () => sheets.openReceive(),
-  history: () => sheets.openHistory(),
   risk: () => sheets.openRisk(() => { refreshStatus(); refreshPositions(); }),
   simulate: () => sheets.openSimulate({
     onAccepted: () => { refreshPositions(); refreshStatus(); toast("Simulazione accettata", "registrata nel ledger"); },
@@ -212,9 +214,12 @@ const SHEETS = {
     onExecuted: () => { refreshBalance(); refreshPositions(); toast("Swap inviato", "verifica la firma nello storico"); },
   }),
   limit: () => openLimitOrder({
-    onPlaced: () => toast("Ordine limite piazzato", "resta in attesa nel diario"),
+    onPlaced: () => toast("Ordine limite piazzato", "resta in attesa nello storico"),
   }),
   diary: () => openOrderDiary(),
+  chart: () => openChart(),
+  strategies: () => openStrategies(),
+  portfolio: () => openPortfolio(),
 };
 $$("[data-sheet]").forEach((button) =>
   button.addEventListener("click", () => SHEETS[button.dataset.sheet]?.()));
