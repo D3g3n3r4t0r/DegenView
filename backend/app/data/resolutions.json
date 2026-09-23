@@ -1230,7 +1230,7 @@
     ],
     "next": "La fusione piena della UI wallet dentro il DOM della tab Trading (niente piu' link a una pagina separata, stessi moduli ES riusati inline) resta da fare — quella UI ha il suo ciclo di stato/polling indipendente e portarla dentro senza romperla vale una sessione a se'. Sul lato Fase 4: la vendita on-chain resta bloccata finche' i decimali del token base non vengono salvati da qualche parte (DexScreener non li da' nella ricerca; andrebbero letti con una decimals() reale al momento dell'aggiunta alla watchlist, stessa idea usata qui per USDC/USDG). Nessun invio reale e' mai stato provato su Robinhood Chain in nessuna sessione — resta vero anche qui."
   },
-  "seed-0086": {
+  "seed-0087": {
     "status": "risolto",
     "at": 1790191024,
     "summary": "Niente cambio di linguaggio: il collo di bottiglia erano i giri di rete, non l'esecuzione (main thread 0,4 s), e una riscrittura non li avrebbe tolti. Tolti invece quelli: sessione e wallet scritti dal server dentro l'HTML (due richieste in fila in meno, e la sezione giusta visibile dal primo disegno invece di una pagina vuota), modulepreload per tutti i moduli (non si aspetta piu' main.js per scoprire gli import), libreria del grafico async e versionata (cache per sempre, non blocca piu' l'avvio), font serviti dal sito invece che da Google (Instrument Sans tolto: non era usato), GET identici in volo uniti in uno (saldo e stato di rischio erano chiesti due volte all'avvio). Misurato in locale da loggati, rete mobile lenta, mediana di 3: inizio caricamento saldo 4,1 s -> 2,4 s, LCP 4,3 s -> 2,6 s, TTI 5,6 s -> 3,6 s, punteggio 65 -> 78."
