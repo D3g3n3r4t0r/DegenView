@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0095", "Radar: solo token legittimi sotto i $100k, con sito, GitHub e Token Sniffer, e il radar come prima pagina",
+     "Lorenzo: 'voglio evitare rug pull, voglio evitare puttanate, stronzate, voglio token legittimi con progetti seri [...] una market cap non oltre i 100.000 dollari [...] voglio avere anche la possibilità con un link di cliccare e andare sul sito del token [...] se si riesce a fare anche questo controllo con Claude sarebbe ideale'. Poi: 'fai un controllo anche per github [...] voglio evitare SHITCOIN e MEMECOIN', 'aggiungi anche il report di token sniffer [...] che ci fa da filtro ulteriore', e 'vorrei che la prima pagina quando entro sia proprio questa qui [...] i pop-up che vanno in una lista e rimangono [...] e il grafico [...] di tutti quelli rilevati quale strategia performerebbe meglio facendo un backtest, in tempo reale con gli ingressi'.",
+     "alta"),
     ("seed-0094", "Wallet on-chain: un alert costante sui token giovani, provati su tutte le strategie",
      "Lorenzo: 'voglio che nell'applicazione venga informato di quale token appena nato, o comunque che ha due o tre settimane di vita con tanta liquidità e bassa capitalizzazione [...] quale delle strategie performa bene, una specie di alert costante che scansionando il mercato mi propone [...] c'è questo ticker su Solana o su rete Robinhood che performerebbe bene con questo tipo di strategia [...] deve esserci un minimo di backtest'. Poi: 'per il grafico [...] voglio la stessa grafica del sito [...] zoomare [...] vedere in tempo reale gli ingressi e le uscite delle strategie se le avessi attivate [...] strategie che eventualmente potrei attivare oppure no'.",
      "alta"),
