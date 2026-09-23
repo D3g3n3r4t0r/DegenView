@@ -47,6 +47,8 @@ const view = {
   bottomPanel: $("#bottom-panel"),
   bottomPanelBody: $("#bottom-panel-body"),
   topbarAddress: $("#topbar-address-text"),
+  statusSub: $("#status-sub"),
+  sniperTags: $("#sniper-tags"),
   sniperCard: $("#sniper-card"),
   sniperToggle: $("#sniper-toggle"),
   sniperPulse: $("#sniper-pulse"),
@@ -66,7 +68,9 @@ function paintChainStatic() {
   const hasWallet = Boolean(wallet || cached);
 
   view.chainLabel.textContent = `${label}${suffix}`;
-  for (const node of [view.actions, view.status, view.reveal, view.marketOrderRow, view.bottomPanel, view.sniperCard]) node.hidden = !hasWallet;
+  for (const node of [view.actions, view.status, view.reveal, view.marketOrderRow, view.bottomPanel, view.sniperCard]) {
+    if (node) node.hidden = !hasWallet;
+  }
   view.empty.hidden = hasWallet;
   view.balance.hidden = !hasWallet;
   view.address.hidden = !hasWallet;
@@ -79,8 +83,10 @@ function paintChainStatic() {
 
   const address = wallet?.address ?? cached?.address ?? "";
   view.address.textContent = shortAddress(address);
-  view.topbarAddress.textContent = shortAddress(address);
-  view.topbarAddress.closest("button").dataset.full = address;
+  if (view.topbarAddress) {
+    view.topbarAddress.textContent = shortAddress(address);
+    view.topbarAddress.closest("button").dataset.full = address;
+  }
   view.address.dataset.full = address;
   view.fresh.textContent = cached ? freshness(cached.at) : "in attesa del primo saldo";
   paintBalance(cached, unit);
@@ -128,31 +134,60 @@ function loadChainData() {
   mountBottomTab(currentBottomTab);
 }
 
-// Ponte sniper -> Lorenzo (2026-09-23): chip promossa fuori dal tab
-// Strategie, con lo stesso interruttore che il backend legge prima di
-// aggiungere da solo un token alla watchlist su questa chain.
+// Ponte sniper -> Lorenzo (2026-09-23): la card in alto dice quanti token
+// della watchlist girano ora con Lorenzo in auto-trade su questa chain, e
+// quali; l'interruttore sta nel pannello ordine. Tutti gli elementi sono
+// opzionali: la copia del wallet dentro la tab Trading (index.html) non
+// li ha, e un null qui fermerebbe l'intero modulo.
+const LORENZO = "Lorenzo (trend-follower)";
+
+function parseChainFromSymbol(symbol) {
+  const m = /^.+@([a-z]+):.+$/.exec(symbol);
+  return m ? m[1] : null;
+}
+
+async function lorenzoAutoEntries(chain) {
+  const entries = await api.getWatchlist();
+  return entries.filter((e) => parseChainFromSymbol(e.symbol) === chain && e.auto_trade?.[LORENZO]);
+}
+
 async function refreshSniperCard() {
+  if (!view.sniperCard && !view.sniperToggle) return;
   const chain = state.chain;
   try {
-    const { chains } = await api.getSniperAutotrade();
+    const [{ chains }, active] = await Promise.all([api.getSniperAutotrade(), lorenzoAutoEntries(chain)]);
     if (chain !== state.chain) return;
-    paintSniperCard(chains.includes(chain));
+    paintSniperCard(chains.includes(chain), active);
   } catch { /* resta lo stato di default, spento */ }
 }
 
-function paintSniperCard(enabled) {
-  view.sniperToggle.setAttribute("aria-checked", String(enabled));
-  view.sniperPulse.hidden = !enabled;
-  view.sniperStateText.textContent = enabled ? "Attivo su questa chain" : "Spento";
+function escapeHtml(text) {
+  return String(text).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
-view.sniperToggle.addEventListener("click", async () => {
+function paintSniperCard(enabled, active = []) {
+  view.sniperToggle?.setAttribute("aria-checked", String(enabled));
+  if (view.sniperPulse) view.sniperPulse.hidden = !enabled;
+  if (view.sniperStateText) {
+    view.sniperStateText.textContent = !enabled
+      ? "Spento"
+      : active.length === 1 ? "1 token attivo" : `${active.length} token attivi`;
+  }
+  if (view.sniperTags) {
+    const tags = active.slice(0, 3).map((e) => `<span>$${escapeHtml(e.symbol.split("@")[0])}</span>`);
+    if (active.length > 3) tags.push(`<span>+${active.length - 3}</span>`);
+    tags.push("<span>soglia liquidità $3k</span>");
+    view.sniperTags.innerHTML = tags.join("");
+  }
+}
+
+view.sniperToggle?.addEventListener("click", async () => {
   const chain = state.chain;
   const next = view.sniperToggle.getAttribute("aria-checked") !== "true";
   view.sniperToggle.disabled = true;
   try {
-    const { chains } = await api.setSniperAutotrade(chain, next);
-    paintSniperCard(chains.includes(chain));
+    await api.setSniperAutotrade(chain, next);
+    await refreshSniperCard();
     toast(next ? "Auto-trade sniper attivo" : "Auto-trade sniper spento", chainInfo().label);
   } catch (error) {
     toast("Non riuscito", error instanceof ApiError ? error.message : "errore inatteso");
@@ -160,6 +195,24 @@ view.sniperToggle.addEventListener("click", async () => {
     view.sniperToggle.disabled = false;
   }
 });
+
+// Tab "Sniper" del pannello ordine: i token che il ponte ha gia' messo in
+// watchlist con Lorenzo in auto-trade su questa chain — sola lettura, lo
+// spegnimento per token resta nel tab Strategie.
+async function mountSniperTab(container) {
+  container.innerHTML = "<p class='sheet-note'>Leggo i token dello sniper…</p>";
+  const chain = state.chain;
+  try {
+    const active = await lorenzoAutoEntries(chain);
+    if (chain !== state.chain) return;
+    container.innerHTML = active.length
+      ? `<ul class="tx-list">${active.map((e) => `
+          <li><span><b>${escapeHtml(e.symbol.split("@")[0])}</b></span><span class="strategy-tag">Lorenzo · auto</span></li>`).join("")}</ul>`
+      : "<p class='sheet-note'>Nessun token in auto-trade con Lorenzo su questa chain. Accendi lo sniper qui sotto: i nuovi token con liquidità oltre $3k e meno di 72h entrano da soli.</p>";
+  } catch (error) {
+    container.innerHTML = `<p class="sheet-note is-error">${escapeHtml(error instanceof ApiError ? error.message : "Errore inatteso.")}</p>`;
+  }
+}
 
 let balanceRetry = null;
 
@@ -191,9 +244,16 @@ async function refreshStatus() {
     const risk = await api.getRiskStatus(chain);
     if (chain !== state.chain) return;
     view.status.dataset.armed = String(Boolean(risk.execution_enabled));
-    view.statusText.textContent = risk.execution_enabled
-      ? `Esecuzione reale attiva — fino a ${formatUsd(risk.per_trade_cap_usd)} per ordine, ${formatUsd(risk.daily_cap_usd)} al giorno.`
-      : "Sola lettura — nessuna firma parte da questa pagina.";
+    if (view.statusSub) {
+      view.statusText.textContent = risk.execution_enabled ? "Esecuzione reale attiva" : "Esecuzione reale spenta";
+      view.statusSub.textContent = risk.execution_enabled
+        ? `Fino a ${formatUsd(risk.per_trade_cap_usd)} per ordine · ${formatUsd(risk.daily_cap_usd)} al giorno`
+        : "Preventivo attivo · nessuna firma automatica";
+    } else {
+      view.statusText.textContent = risk.execution_enabled
+        ? `Esecuzione reale attiva — fino a ${formatUsd(risk.per_trade_cap_usd)} per ordine, ${formatUsd(risk.daily_cap_usd)} al giorno.`
+        : "Sola lettura — nessuna firma parte da questa pagina.";
+    }
   } catch { /* resta la riga di default, che e' quella prudente */ }
 }
 
@@ -214,6 +274,8 @@ function mountOrderTab(tab) {
     mountSwap(view.orderPanelBody, {
       onExecuted: () => { refreshBalance(); mountBottomTab(currentBottomTab); toast("Swap inviato", "verifica la firma nello storico"); },
     });
+  } else if (tab === "sniper") {
+    mountSniperTab(view.orderPanelBody);
   } else {
     mountLimitOrder(view.orderPanelBody, {
       onPlaced: () => { mountBottomTab(currentBottomTab); toast("Ordine limite piazzato", "resta in attesa nello storico"); },

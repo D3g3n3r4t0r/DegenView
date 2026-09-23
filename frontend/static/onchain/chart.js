@@ -29,12 +29,22 @@ import { state } from "@onchain/store.js";
 const CANDLE_REFRESH_MS = 8000; // storia: DexScreener/GeckoTerminal, non fatti per un polling piu' stretto
 const PRICE_REFRESH_MS = 2500;  // corrente: lo stesso quoter dello swap, pensato per un polling stretto
 
+const INTERVALS = ["15m", "1h", "4h", "1d"];
+
+// Senza un token scelto il grafico parte dal nativo della chain invece di
+// un riquadro vuoto: la prima cosa che si vede e' gia' un mercato.
+const DEFAULT_TOKEN = {
+  solana: { address: "So11111111111111111111111111111111111111112", symbolHint: "SOL" },
+  robinhood: null,
+};
+
 let root = null;
 let chart = null;
 let series = null;
 let candleTimer = null;
 let priceTimer = null;
 let currentToken = null;
+let currentInterval = "4h";
 
 // Chi altro deve sapere quale token sta guardando il grafico — il
 // pannello ordine (swap/limite), per compilarsi da solo con la stessa
@@ -48,18 +58,30 @@ export function getCurrentToken() {
 
 export function mountChart(container) {
   root = container;
+  if (!currentToken && DEFAULT_TOKEN[state.chain]) currentToken = { ...DEFAULT_TOKEN[state.chain] };
   paintShell();
   if (currentToken) loadAndRender();
   else setStatus("Scegli un token per vedere il grafico e fare uno swap.");
 }
 
 function paintShell() {
+  chart = null;
+  series = null;
+  const name = currentToken ? currentToken.symbolHint || shortAddr(currentToken.address) : "Scegli un token";
   root.innerHTML = `
-    <button type="button" class="swap-token-pick" id="market-pick-token">
-      ${currentToken ? currentToken.symbolHint || shortAddr(currentToken.address) : "Scegli un token"} ↕
-    </button>
-    <p class="swap-detail" id="market-live-price"></p>
+    <div class="chart-head">
+      <div>
+        <button type="button" class="token-head" id="market-pick-token" title="Cambia token">
+          <span class="token-ic" aria-hidden="true"></span><span id="market-pair">${name}</span><span class="caret">▾</span>
+        </button>
+        <p class="price-line" id="market-live-price"></p>
+      </div>
+      <div class="tf-pills" role="tablist">
+        ${INTERVALS.map((i) => `<button type="button" data-tf="${i}" class="${i === currentInterval ? "is-active" : ""}">${i}</button>`).join("")}
+      </div>
+    </div>
     <div id="market-chart-container" class="market-chart"></div>
+    <div class="metrics-row" id="market-metrics"></div>
     <p class="swap-detail" id="market-status"></p>
   `;
   root.querySelector("#market-pick-token").addEventListener("click", () => {
@@ -72,6 +94,41 @@ function paintShell() {
       },
     });
   });
+  root.querySelectorAll("[data-tf]").forEach((btn) => btn.addEventListener("click", () => {
+    if (!currentToken || btn.dataset.tf === currentInterval) return;
+    currentInterval = btn.dataset.tf;
+    paintShell();
+    loadAndRender();
+  }));
+}
+
+function compactUsd(value) {
+  if (value == null) return "—";
+  if (value >= 1e9) return `$${(value / 1e9).toFixed(1)}B`;
+  if (value >= 1e6) return `$${(value / 1e6).toFixed(1)}M`;
+  if (value >= 1e3) return `$${(value / 1e3).toFixed(1)}k`;
+  return `$${value.toFixed(0)}`;
+}
+
+function formatAge(hours) {
+  if (hours == null) return "—";
+  if (hours < 48) return `${Math.max(1, Math.round(hours))}h`;
+  return `${Math.round(hours / 24)}g`;
+}
+
+function paintStats(stats) {
+  const pair = root?.querySelector("#market-pair");
+  if (pair && stats.base_symbol) pair.textContent = `${stats.base_symbol} / ${stats.quote_symbol ?? "USD"}`;
+  const metrics = root?.querySelector("#market-metrics");
+  if (!metrics) return;
+  const change = stats.price_change_h24;
+  metrics.innerHTML = `
+    <div>Liquidità<b>${compactUsd(stats.liquidity_usd)}</b></div>
+    <div>Volume 24h<b>${compactUsd(stats.volume_h24)}</b></div>
+    <div>Età<b>${formatAge(stats.age_hours)}</b></div>
+    <div>Var. 24h<b class="${change > 0 ? "is-up" : change < 0 ? "is-down" : ""}">${change != null ? `${change > 0 ? "+" : ""}${change}%` : "—"}</b></div>
+  `;
+  root.dataset.change = change ?? "";
 }
 
 function shortAddr(address) {
@@ -92,7 +149,6 @@ export function resetForChainSwitch() {
   chart = null;
   series = null;
   currentToken = null;
-  if (root) { paintShell(); setStatus("Scegli un token per vedere il grafico e fare uno swap."); }
 }
 
 function loadAndRender() {
@@ -105,18 +161,27 @@ function loadAndRender() {
 
   const drawCandles = async () => {
     try {
-      const data = await api.getChart(chain, currentToken.address);
+      const data = await api.getChart(chain, currentToken.address, currentInterval);
       if (!chart) {
+        // Area menta, non candele: la linea del mockup approvato — il
+        // prezzo di chiusura di ogni candela, stessi dati di prima.
         chart = LightweightCharts.createChart(container, {
-          layout: { background: { color: "transparent" }, textColor: getComputedStyle(document.body).color || "#888" },
-          grid: { vertLines: { visible: false }, horzLines: { visible: false } },
-          timeScale: { timeVisible: true },
+          layout: { background: { color: "transparent" }, textColor: "#9aa0ab", fontSize: 11, attributionLogo: false },
+          grid: { vertLines: { color: "rgba(255,255,255,0.03)" }, horzLines: { visible: false } },
+          rightPriceScale: { borderVisible: false },
+          timeScale: { timeVisible: true, borderVisible: false },
+          crosshair: { vertLine: { color: "#5f6672" }, horzLine: { color: "#5f6672" } },
         });
-        series = chart.addCandlestickSeries({ upColor: "var(--up)", downColor: "var(--down)", borderVisible: false });
+        series = chart.addAreaSeries({
+          lineColor: "#2de0a8", lineWidth: 2,
+          topColor: "rgba(45,224,168,0.28)", bottomColor: "rgba(45,224,168,0.02)",
+          priceLineVisible: false,
+        });
       }
-      series.setData(data.candles);
+      series.setData(data.candles.map((c) => ({ time: c.time, value: c.close })));
+      if (data.stats) paintStats(data.stats);
       await paintMarkersAndLimits(chain, data.symbol);
-      setStatus(`${data.symbol} · candele aggiornate ora`);
+      setStatus("");
     } catch (error) {
       setStatus(error instanceof ApiError ? error.message : "Grafico non disponibile.");
     }
@@ -127,7 +192,11 @@ function loadAndRender() {
     if (!priceEl) return;
     try {
       const { price_usd } = await api.getLivePrice(chain, currentToken.address);
-      priceEl.textContent = `Prezzo corrente: ${formatUsd(price_usd)}`;
+      const change = Number(root.dataset.change);
+      priceEl.textContent = root.dataset.change
+        ? `${formatUsd(price_usd)} · ${change > 0 ? "+" : ""}${change}% (24h)`
+        : formatUsd(price_usd);
+      priceEl.classList.toggle("is-down", change < 0);
       priceEl.classList.remove("is-warn");
     } catch (error) {
       priceEl.textContent = error instanceof ApiError ? error.message : "Prezzo corrente non disponibile.";
@@ -154,7 +223,7 @@ async function paintMarkersAndLimits(chain, symbol) {
       .filter((o) => o.status === "confirmed" && o.token === tokenSymbol)
       .map((o) => ({
         time: o.updated_at, position: o.side === "buy" ? "belowBar" : "aboveBar",
-        color: o.side === "buy" ? "var(--up)" : "var(--down)", shape: o.side === "buy" ? "arrowUp" : "arrowDown",
+        color: o.side === "buy" ? "#2de0a8" : "#ff5c5c", shape: o.side === "buy" ? "arrowUp" : "arrowDown",
         text: o.side === "buy" ? "Compra" : "Vendi",
       }))
       .sort((a, b) => a.time - b.time);
