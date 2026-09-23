@@ -95,7 +95,7 @@ def test_chart_endpoint_finds_pool_and_returns_candles(client, monkeypatch):
         async def __aexit__(self, *a): return False
         async def get(self, *a, **k): return _FakeResponse()
 
-    async def _fake_fetch_ohlcv(self, symbol, interval, outputsize, since_ms=None):
+    async def _fake_fetch_ohlcv(self, symbol, interval, outputsize, since_ms=None, token_address=None):
         idx = pd.to_datetime([1_700_000_000, 1_700_000_900], unit="s", utc=True)
         return pd.DataFrame(
             {"open": [1.0, 1.1], "high": [1.2, 1.3], "low": [0.9, 1.0], "close": [1.1, 1.2], "volume": [10, 20]},
