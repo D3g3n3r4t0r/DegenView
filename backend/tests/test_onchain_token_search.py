@@ -120,3 +120,33 @@ def test_search_endpoint_returns_one_token_per_ticker(monkeypatch):
         main.app.dependency_overrides.clear()
     assert resp.status_code == 200
     assert [r["address"] for r in resp.json()] == ["real"]
+
+
+def test_partial_results_are_not_cached(monkeypatch):
+    """Con una fonte caduta si risponde con quel che c'e', ma alla ricerca
+    dopo si riprova: MYCEL spariva per 60s quando GeckoTerminal dava 429."""
+    import asyncio
+
+    import httpx
+
+    calls = {"gecko": 0}
+
+    async def fake_fetch(url, params):
+        if url == token_search.GECKOTERMINAL_SEARCH_URL:
+            calls["gecko"] += 1
+            if calls["gecko"] == 1:
+                raise httpx.HTTPStatusError("429", request=httpx.Request("GET", url), response=httpx.Response(429))
+            return {"data": [], "included": []}
+        return {"pairs": [{"chainId": "robinhood", "pairAddress": "0xp",
+                           "baseToken": {"address": "0xMYCE", "symbol": "MYCE"},
+                           "quoteToken": {"address": "0xS", "symbol": "SHROOM"},
+                           "liquidity": {"usd": 7_000}, "volume": {"h24": 300},
+                           "txns": {"h24": {"buys": 25, "sells": 5}}}]}
+
+    monkeypatch.setattr(token_search, "_fetch_json", fake_fetch)
+    monkeypatch.setattr(token_search, "_cache", {})
+    asyncio.run(token_search.search("robinhood", "MYCE"))
+    assert token_search._cache == {}
+    asyncio.run(token_search.search("robinhood", "MYCE"))
+    assert calls["gecko"] == 2
+    assert ("robinhood", "myce") in token_search._cache

@@ -196,6 +196,11 @@ def merge_candidates(primary: list[dict], extra: list[dict]) -> list[dict]:
 async def _fetch_json(url: str, params: dict) -> object:
     async with httpx.AsyncClient(timeout=8.0) as client:
         resp = await client.get(url, params=params, headers={"accept": "application/json"})
+        if resp.status_code == 429:
+            # GeckoTerminal regge ~30 richieste al minuto: una pausa breve e
+            # un secondo tentativo, invece di perdere la fonte principale.
+            await asyncio.sleep(1.5)
+            resp = await client.get(url, params=params, headers={"accept": "application/json"})
     resp.raise_for_status()
     return resp.json()
 
@@ -233,6 +238,10 @@ async def search(chain: str, query: str) -> list[dict]:
         {k: c[k] for k in ("address", "symbol", "name", "decimals", "verified", "icon", "liquidity_usd")}
         for c in pick_one_per_symbol(candidates, query)
     ]
-    _cache[key] = (time.time(), results)
+    # Un risultato a meta' (una fonte caduta) non si tiene in cache: cercando
+    # MYCEL con GeckoTerminal in 429 uscivano solo i pool DexScreener, senza
+    # MYCEL, e sarebbero rimasti per 60s anche dopo il ritorno della fonte.
+    if not isinstance(main_payload, BaseException) and not isinstance(dex_payload, BaseException):
+        _cache[key] = (time.time(), results)
     return results
 
