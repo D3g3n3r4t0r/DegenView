@@ -12,13 +12,17 @@ il mint vero di Solana non compariva affatto), e i primi posti per
 liquidita' sono spesso copie con un pool gonfiato e zero scambi (BONK:
 $50M di "liquidita'", volume 0, 2 transazioni).
 
-Fonti, una per chain, entrambe pubbliche e senza chiave:
+Fonti, tutte pubbliche e senza chiave, una principale per chain:
 - Solana: ricerca token di Jupiter, che dice se il mint e' verificato;
 - Robinhood Chain: ricerca pool di GeckoTerminal filtrata sulla chain;
-  "verificato" = il token ha una scheda CoinGecko (coingecko_coin_id).
+  "verificato" = il token ha una scheda CoinGecko (coingecko_coin_id);
+piu' la ricerca DexScreener su entrambe, per i token che solo li' si
+trovano (Lorenzo: "io ti scrivo tutta roba che e' presente su Dex
+Scanner").
 """
 from __future__ import annotations
 
+import asyncio
 import time
 from collections.abc import Iterable
 
@@ -28,14 +32,7 @@ JUPITER_SEARCH_URL = "https://lite-api.jup.ag/tokens/v2/search"
 GECKOTERMINAL_SEARCH_URL = "https://api.geckoterminal.com/api/v2/search/pools"
 
 MAX_RESULTS = 10
-# Un token non verificato compare solo sopra questa liquidita': sotto e'
-# quasi sempre una copia appena lanciata, non il token che si cercava.
-MIN_UNVERIFIED_LIQUIDITY_USD = 10_000
-# ...a meno che non si scambi davvero: su Robinhood Chain il BONK piu'
-# scambiato ha $1k di pool e $1.8M di volume giornaliero.
-MIN_UNVERIFIED_VOLUME_USD = 50_000
-# Anche un verificato senza liquidita' non si puo' comprare.
-MIN_LIQUIDITY_USD = 1_000
+DEXSCREENER_SEARCH_URL = "https://api.dexscreener.com/latest/dex/search"
 _CACHE_TTL_S = 60
 _cache: dict[tuple[str, str], tuple[float, list[dict]]] = {}
 
@@ -60,17 +57,17 @@ def pick_one_per_symbol(candidates: Iterable[dict], query: str) -> list[dict]:
     # Solo ticker che contengono la ricerca: le fonti trovano anche per
     # nome ("BonkEarn" cercando BONK) o per l'altro lato del pool (WETH).
     by_ticker = [c for c in candidates if wanted in normalize_symbol(c["symbol"])]
+    # Nessun ticker scartato per poca liquidita' (Lorenzo, 23/09/2026: "non
+    # e' che deve escludermi dei risultati... tutta roba presente su
+    # DexScreener"): la soglia faceva sparire MYCEL, $4.7k di pool su Pons.
+    # Fra piu' contratti con lo stesso ticker vince il verificato, poi chi
+    # ha piu' liquidita' vera, poi chi si scambia di piu'.
     best: dict[str, dict] = {}
     for c in by_ticker or candidates:
         key = normalize_symbol(c["symbol"])
-        if c["liquidity_usd"] < MIN_LIQUIDITY_USD and c.get("volume_usd", 0) < MIN_UNVERIFIED_VOLUME_USD:
-            continue
-        if not c["verified"] and c["liquidity_usd"] < MIN_UNVERIFIED_LIQUIDITY_USD \
-                and c.get("volume_usd", 0) < MIN_UNVERIFIED_VOLUME_USD:
-            continue
-        rank = (c["verified"], c["liquidity_usd"])
+        rank = (c["verified"], c["liquidity_usd"], c.get("volume_usd", 0))
         current = best.get(key)
-        if current is None or rank > (current["verified"], current["liquidity_usd"]):
+        if current is None or rank > (current["verified"], current["liquidity_usd"], current.get("volume_usd", 0)):
             best[key] = c
     ordered = sorted(
         best.values(),
@@ -149,6 +146,53 @@ def _gecko_candidates(payload: object) -> list[dict]:
     return list(by_address.values())
 
 
+def _dexscreener_candidates(payload: object, chain: str) -> list[dict]:
+    """La stessa ricerca che Lorenzo usa a mano: qualsiasi DEX, entrambi i
+    lati del pool. Non dice se un contratto e' verificato, quindi non vince
+    mai contro Jupiter o CoinGecko sullo stesso ticker: aggiunge i token
+    che le altre fonti non vedono."""
+    by_address: dict[str, dict] = {}
+    for pair in (payload.get("pairs") or []) if isinstance(payload, dict) else []:
+        if not isinstance(pair, dict) or pair.get("chainId") != chain:
+            continue
+        reserve = float((pair.get("liquidity") or {}).get("usd") or 0)
+        volume = float((pair.get("volume") or {}).get("h24") or 0)
+        tx = (pair.get("txns") or {}).get("h24") or {}
+        liquidity = reserve if _pool_is_live(reserve, volume, int(tx.get("buys", 0)) + int(tx.get("sells", 0))) else 0.0
+        for side in ("baseToken", "quoteToken"):
+            token = pair.get(side) or {}
+            if not token.get("address"):
+                continue
+            entry = by_address.setdefault(token["address"].lower(), {
+                "address": token["address"],
+                "symbol": normalize_symbol(token.get("symbol")),
+                "name": token.get("name") or "",
+                "decimals": None,
+                "verified": False,
+                "icon": _https_or_none((pair.get("info") or {}).get("imageUrl")) if side == "baseToken" else None,
+                "liquidity_usd": 0.0,
+                "volume_usd": 0.0,
+            })
+            entry["liquidity_usd"] += liquidity
+            entry["volume_usd"] += volume
+    return list(by_address.values())
+
+
+def merge_candidates(primary: list[dict], extra: list[dict]) -> list[dict]:
+    """Stesso contratto da due fonti = un candidato solo: la verifica e
+    i decimali della fonte principale, la liquidita' piu' alta fra le due."""
+    merged = {c["address"].lower(): dict(c) for c in primary}
+    for c in extra:
+        known = merged.get(c["address"].lower())
+        if known is None:
+            merged[c["address"].lower()] = dict(c)
+            continue
+        known["liquidity_usd"] = max(known["liquidity_usd"], c["liquidity_usd"])
+        known["volume_usd"] = max(known.get("volume_usd", 0), c.get("volume_usd", 0))
+        known["icon"] = known.get("icon") or c.get("icon")
+    return list(merged.values())
+
+
 async def _fetch_json(url: str, params: dict) -> object:
     async with httpx.AsyncClient(timeout=8.0) as client:
         resp = await client.get(url, params=params, headers={"accept": "application/json"})
@@ -166,14 +210,24 @@ async def search(chain: str, query: str) -> list[dict]:
         return cached[1]
 
     if chain == "solana":
-        candidates = _jupiter_candidates(await _fetch_json(JUPITER_SEARCH_URL, {"query": query}))
+        primary = _fetch_json(JUPITER_SEARCH_URL, {"query": query})
     elif chain == "robinhood":
-        candidates = _gecko_candidates(await _fetch_json(
+        primary = _fetch_json(
             GECKOTERMINAL_SEARCH_URL,
             {"query": query, "network": "robinhood", "include": "base_token,quote_token"},
-        ))
+        )
     else:
         return []
+    main_payload, dex_payload = await asyncio.gather(
+        primary, _fetch_json(DEXSCREENER_SEARCH_URL, {"q": query}), return_exceptions=True,
+    )
+    if isinstance(main_payload, BaseException) and isinstance(dex_payload, BaseException):
+        raise main_payload
+    main_candidates = [] if isinstance(main_payload, BaseException) else (
+        _jupiter_candidates(main_payload) if chain == "solana" else _gecko_candidates(main_payload)
+    )
+    extra = [] if isinstance(dex_payload, BaseException) else _dexscreener_candidates(dex_payload, chain)
+    candidates = merge_candidates(main_candidates, extra)
 
     results = [
         {k: c[k] for k in ("address", "symbol", "name", "decimals", "verified", "icon", "liquidity_usd")}

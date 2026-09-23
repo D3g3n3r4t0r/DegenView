@@ -21,6 +21,7 @@ singola stringa che il resto del sito passa in giro. Non digitabile a
 mano in modo utile — si arriva qui scegliendo un risultato della ricerca,
 mai scrivendo il simbolo a memoria.
 """
+import asyncio
 import re
 
 import httpx
@@ -83,7 +84,10 @@ class DexScreenerProvider(DataProvider):
         self._dexscreener_base = dexscreener_base or DEXSCREENER_SEARCH_URL
         self._geckoterminal_base = geckoterminal_base or GECKOTERMINAL_BASE
 
-    async def fetch_ohlcv(self, symbol: str, interval: str, outputsize: int, since_ms: int | None = None) -> pd.DataFrame:
+    async def fetch_ohlcv(
+        self, symbol: str, interval: str, outputsize: int, since_ms: int | None = None,
+        token_address: str | None = None,
+    ) -> pd.DataFrame:
         _base, chain, pool = _parse_symbol(symbol)
         network = GECKO_NETWORKS.get(chain)
         if network is None:
@@ -93,9 +97,19 @@ class DexScreenerProvider(DataProvider):
         limit = min(max(outputsize * fold, fold), 1000) if since_ms is None else 1000
         url = f"{self._geckoterminal_base}/networks/{network}/pools/{pool}/ohlcv/{timeframe}"
         params = {"aggregate": aggregate, "limit": limit, "currency": "usd"}
+        # Il prezzo di quale lato del pool: di default GeckoTerminal da' la
+        # base, ma un token puo' essere la quota (MYCE nel pool SHROOM/MYCE).
+        if token_address:
+            params["token"] = token_address
         try:
             async with httpx.AsyncClient(timeout=20.0) as client:
                 resp = await client.get(url, params=params)
+                if resp.status_code == 429:
+                    # ~30 richieste al minuto: una seconda prova dopo una
+                    # pausa breve, invece di una risposta vuota letta come
+                    # "nessun dato".
+                    await asyncio.sleep(1.5)
+                    resp = await client.get(url, params=params)
         except httpx.HTTPError as exc:
             raise ProviderUnreachable(f"GeckoTerminal non raggiungibile per {symbol}: {exc}") from exc
 
