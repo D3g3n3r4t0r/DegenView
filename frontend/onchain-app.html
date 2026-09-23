@@ -912,9 +912,95 @@
 
   @keyframes drain { to { stroke-dashoffset: 641; } }
 
+  /* Everything below animates only translate/scale/opacity: the compositor
+     runs it off the main thread, no layout or paint per frame. Colours and
+     borders keep the transitions they already had above. */
+  :root { --ease-out: cubic-bezier(.2,.8,.2,1); }
+
+  @keyframes rise { from { opacity: 0; translate: 0 10px; } }
+  @keyframes fade-in { from { opacity: 0; translate: 0 4px; } }
+  @keyframes ping { to { scale: 2.6; opacity: 0; } }
+
+  /* Cards come in one after the other when the shell (or a card that was
+     hidden, e.g. the sniper one after a chain switch) appears. `backwards`
+     only: once done the animation leaves no value behind, so hover/active
+     scale transitions keep working. */
+  .status-strip > .status-card, .market-card, .order-panel,
+  .reveal-row, #onchain-empty-state, #login-screen {
+    animation: rise .38s var(--ease-out) backwards;
+  }
+  .status-strip > :nth-child(2) { animation-delay: 40ms; }
+  .status-strip > :nth-child(3) { animation-delay: 80ms; }
+  .market-card  { animation-delay: 100ms; }
+  .order-panel  { animation-delay: 140ms; }
+  .reveal-row   { animation-delay: 180ms; }
+
+  /* Tab content is rebuilt with innerHTML on every switch: each new node
+     fades in, so a tab change reads as a change instead of a jump. Not
+     applied to the chart metrics (repainted on a timer) nor to the token
+     picker results (repainted on every keystroke). */
+  #order-panel-body > *, .bottom-panel-body > *, #sheet .sheet-body > * {
+    animation: fade-in .22s var(--ease-out) backwards;
+  }
+
+  /* Toast slides up on entry. Exit stays instant: [hidden] is
+     display:none !important, which a transition cannot delay. */
+  .toast { transition: opacity .25s, translate .3s var(--ease-out); }
+  @starting-style { .toast { opacity: 0; translate: 0 12px; } }
+
+  /* Press feedback: a small scale-down under the finger / cursor. The
+     transition lists keep the properties each component already animated. */
+  .btn-primary, .btn-quiet, .btn-danger { transition: background .15s, scale .12s var(--ease-out); }
+  .switcher button { transition: color .2s, border-color .2s, background .2s, scale .12s var(--ease-out); }
+  .mo-side-tab { transition: background .15s, color .15s, scale .12s var(--ease-out); }
+  .token-pill, .addr-chip, .tf-pills button, .reveal-row, .swap-max,
+  .token-head, .toast-close { transition: scale .12s var(--ease-out); }
+  :is(.btn-primary, .btn-quiet, .btn-danger, .switcher button, .mo-side-tab, .token-pill,
+      .addr-chip, .tf-pills button, .swap-max, .token-head, .toast-close):active:not(:disabled) { scale: .96; }
+  .reveal-row:active { scale: .985; }
+
+  /* Swap/Limit/Sniper: the gradient pill cross-fades and grows into place
+     instead of snapping from one tab to the other. */
+  #order-tabs .mo-side-tab { position: relative; isolation: isolate; }
+  #order-tabs .mo-side-tab::before {
+    content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    opacity: 0; scale: .9;
+    transition: opacity .2s, scale .28s var(--ease-out);
+  }
+  #order-tabs .mo-tab-active { background: none; }
+  #order-tabs .mo-tab-active::before { opacity: 1; scale: 1; }
+
+  /* Bottom tabs: the underline draws out from the centre (scaleX) instead
+     of a border colour appearing. */
+  .bottom-tabs .mo-side-tab { position: relative; }
+  .bottom-tabs .mo-side-tab::after {
+    content: ""; position: absolute; inset-inline: 0; inset-block-end: -2px; block-size: 2px;
+    border-radius: 2px; background: var(--accent);
+    scale: 0 1; transition: scale .28s var(--ease-out);
+  }
+  .bottom-tabs .mo-tab-active { border-block-end-color: transparent; }
+  .bottom-tabs .mo-tab-active::after { scale: 1 1; }
+
+  /* "Live" signals breathe: a ring that grows and fades, only while the
+     element is shown (display:none stops the animation). */
+  .sniper-card .pulse, .live .dot.is-live { position: relative; }
+  .sniper-card .pulse::after, .live .dot.is-live::after {
+    content: ""; position: absolute; inset: 0; border-radius: 50%;
+    background: inherit; animation: ping 2s cubic-bezier(0,0,.2,1) infinite;
+  }
+
+  /* The QR and the approved tick land with a small pop. */
+  .qr, .reveal-done { animation: rise .3s var(--ease-out) backwards; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    html { scroll-behavior: smooth; }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
       animation-duration: .001ms !important;
+      animation-iteration-count: 1 !important;
       transition-duration: .001ms !important;
     }
     /* Anche la transizione fra le chain: senza questo il browser
