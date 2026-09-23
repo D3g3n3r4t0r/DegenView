@@ -165,6 +165,11 @@ class DexScreenerProvider(DataProvider):
                 "symbol": symbol,
                 "name": f"{base_symbol}/{quote.get('symbol', '?')} · {base.get('name', '')}".strip(" ·"),
                 "exchange": f"DexScreener ({p['chainId']} · {p.get('dexId', '?')})",
+                # L'indirizzo del TOKEN (non del pool): DexScreener lo da'
+                # gia' in baseToken.address, prima scartato perche' usato
+                # solo per symbol/name. Serve a Fase 4 per chiedere un quote
+                # di swap — il pool address da solo non basta.
+                "base_token_address": base.get("address") or None,
             })
             if len(out) >= _MAX_SUGGESTIONS:
                 break

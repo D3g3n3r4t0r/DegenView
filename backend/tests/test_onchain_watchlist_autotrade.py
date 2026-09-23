@@ -1,0 +1,109 @@
+"""Fase 4 dalla watchlist: il ponte segnale -> ordine on-chain, e il pezzo
+che lo sblocca (l'indirizzo del token salvato dalla ricerca DexScreener).
+
+Firma/invio sono mockati qui (verificati con rete vera altrove, vedi
+test_onchain_execute.py/test_onchain_quotes.py) — questo file verifica solo
+che main._run_onchain_auto_trade prenda le decisioni giuste: saltare senza
+indirizzo, saltare le vendite (decimali del token non salvati), comprare
+davvero quando i pezzi ci sono tutti.
+"""
+from __future__ import annotations
+
+import asyncio
+
+import pytest
+
+from app import auth, main, trading_log
+from app.models import OnchainWallet, StrategySignal, User, WatchlistEntry
+from app.trading.onchain import execute as onchain_execute
+from app.trading.onchain import quotes as onchain_quotes
+
+
+def _run(coro):
+    return asyncio.run(coro)
+
+
+def _signal(sig_type: str, price: float = 2.0) -> StrategySignal:
+    return StrategySignal(time=0, type=sig_type, price=price, label="t")
+
+
+def _dex_entry(**overrides) -> WatchlistEntry:
+    base = dict(
+        id="e1", owner_id="u1", symbol="PEPE@solana:Pxxx1111111111111111111111", asset_type="dex",
+        size_cap_usdt={"lorenzo": 10.0},
+    )
+    base.update(overrides)
+    return WatchlistEntry(**base)
+
+
+def _owner(**wallets) -> User:
+    return User(id="u1", email="u1@example.com", password_hash="x", onchain_wallets=wallets)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_log(tmp_path, monkeypatch):
+    monkeypatch.setattr(trading_log, "_STORE_FILE", tmp_path / "journal.json")
+    trading_log._entries.clear()
+    yield
+    trading_log._entries.clear()
+
+
+def test_skipped_without_base_token_address():
+    entry = _dex_entry(base_token_address=None)
+    owner = _owner()
+    _run(main._run_onchain_auto_trade(owner, entry, "lorenzo", [_signal("entry_long")]))
+    logged = trading_log.list_for("u1")
+    assert logged[0]["outcome"] == "saltato"
+    assert "manca l'indirizzo del token" in logged[0]["detail"]
+
+
+def test_skipped_without_wallet_for_chain():
+    entry = _dex_entry(base_token_address="TokenMintAddr222")
+    owner = _owner()  # nessun wallet solana
+    _run(main._run_onchain_auto_trade(owner, entry, "lorenzo", [_signal("entry_long")]))
+    logged = trading_log.list_for("u1")
+    assert logged[0]["outcome"] == "saltato"
+    assert "wallet on-chain" in logged[0]["detail"]
+
+
+def test_sell_signal_skipped_for_missing_decimals(monkeypatch):
+    entry = _dex_entry(base_token_address="TokenMintAddr222")
+    owner = _owner(solana=OnchainWallet(address="Wallet1", private_key_enc="x", enabled=True))
+    _run(main._run_onchain_auto_trade(owner, entry, "lorenzo", [_signal("exit_long")]))
+    logged = trading_log.list_for("u1")
+    assert logged[0]["outcome"] == "saltato"
+    assert "decimali" in logged[0]["detail"]
+
+
+def test_buy_signal_executes_real_order_when_address_and_wallet_present(monkeypatch):
+    entry = _dex_entry(base_token_address="TokenMintAddr222")
+    owner = _owner(solana=OnchainWallet(address="Wallet1", private_key_enc="x", enabled=True))
+
+    async def _fake_quote(input_mint, output_mint, amount_lamports, slippage_bps=50):
+        assert output_mint == "TokenMintAddr222"
+        return {"in_amount": amount_lamports, "out_amount": 1_000, "price_impact_pct": 0.4, "raw": {}}
+
+    monkeypatch.setattr(onchain_quotes, "jupiter_quote", _fake_quote)
+    monkeypatch.setattr(auth, "get_decrypted_onchain_private_key", lambda owner, chain: "deadbeef")
+
+    async def _fake_execute_order(owner_id, chain, token, strategy_name, side, notional_usd,
+                                   price_impact_pct, price_usd, private_key_hex, quote):
+        assert side == "buy"
+        assert token == "TokenMintAddr222"
+        return {"accepted": True, "reason": "", "idempotency_key": "k1", "tx_signature": "sig1"}
+
+    monkeypatch.setattr(onchain_execute, "execute_order", _fake_execute_order)
+
+    _run(main._run_onchain_auto_trade(owner, entry, "lorenzo", [_signal("entry_long")]))
+    logged = trading_log.list_for("u1")
+    assert logged[0]["outcome"] == "eseguito"
+
+
+def test_onchain_globally_disabled_is_skipped(monkeypatch):
+    entry = _dex_entry(base_token_address="TokenMintAddr222")
+    owner = _owner(solana=OnchainWallet(address="Wallet1", private_key_enc="x", enabled=True))
+    monkeypatch.setattr(main.settings, "onchain_enabled", False)
+    _run(main._run_onchain_auto_trade(owner, entry, "lorenzo", [_signal("entry_long")]))
+    logged = trading_log.list_for("u1")
+    assert logged[0]["outcome"] == "saltato"
+    assert "spento" in logged[0]["detail"]
