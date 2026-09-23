@@ -15,6 +15,14 @@ import * as api from "@onchain/api.js";
 import { escapeHtml, formatToken, formatUsd, shortAddress } from "@onchain/format.js";
 import { chainInfo, readCache, state } from "@onchain/store.js";
 
+// Stesso indirizzo nativo duplicato in swap.js/limitOrders.js: qui serve
+// solo per proporre il nativo come "token che hai" nel picker, non per
+// firmare niente.
+const NATIVE_ADDRESS = {
+  solana: "So11111111111111111111111111111111111111112",
+  robinhood: "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+};
+
 const dialog = document.querySelector("#sheet");
 const titleEl = dialog.querySelector(".sheet-title");
 const descEl = dialog.querySelector(".sheet-desc");
@@ -248,6 +256,9 @@ let pickerDebounce = null;
 
 export function openTokenPicker(chain, { onPick } = {}) {
   pickerBody.innerHTML = `
+    <p class="label" style="margin-block-start:0">I tuoi token</p>
+    <ul id="picker-held" class="tx-list"><li>Leggo il portafoglio…</li></ul>
+    <p class="label" style="margin-block-start:14px">Cerca un altro token</p>
     <input type="text" id="picker-query" class="mo-input" placeholder="Ticker (es. SOL, PEPE)…" autocomplete="off" />
     <ul id="picker-results" class="tx-list"><li>Scrivi un ticker per cercare.</li></ul>
     <details style="margin-block-start:10px">
@@ -262,9 +273,42 @@ export function openTokenPicker(chain, { onPick } = {}) {
 
   const input = pickerBody.querySelector("#picker-query");
   const results = pickerBody.querySelector("#picker-results");
+  const held = pickerBody.querySelector("#picker-held");
   input.focus();
 
   const pick = (token) => { pickerDialog.close(); onPick?.(token); };
+
+  // I token che il wallet ha DAVVERO (saldo nativo + portafoglio reale via
+  // RPC), non solo la ricerca per ticker — Lorenzo: "quando seleziono cosa
+  // vendere mi devi far selezionare dalle crypto disponibili nel wallet,
+  // qualunque esse siano".
+  (async () => {
+    try {
+      const { unit } = chainInfo();
+      const [balance, portfolio] = await Promise.all([
+        api.getBalance(chain).catch(() => null),
+        api.getPortfolio(chain).catch(() => ({ holdings: [] })),
+      ]);
+      const rows = [];
+      if (balance) {
+        rows.push({ address: NATIVE_ADDRESS[chain], symbol: unit, amount: balance.native_balance, isNative: true });
+      }
+      for (const h of portfolio.holdings) {
+        if (h.amount > 0) rows.push({ address: h.address, symbol: h.symbol, amount: h.amount, isNative: false });
+      }
+      if (!rows.length) { held.innerHTML = "<li>Nessun token con saldo trovato.</li>"; return; }
+      held.innerHTML = rows.map((r) => `
+        <li data-address="${escapeHtml(r.address)}" style="cursor:pointer">
+          <span><b>${escapeHtml(r.symbol)}</b>${r.isNative ? " <small>nativo</small>" : ""}</span>
+          <span>${formatToken(r.amount)}</span>
+        </li>`).join("");
+      held.querySelectorAll("[data-address]").forEach((li) => {
+        li.addEventListener("click", () => pick({ address: li.dataset.address, symbolHint: li.querySelector("b").textContent }));
+      });
+    } catch (error) {
+      held.innerHTML = `<li>${escapeHtml(error.message)}</li>`;
+    }
+  })();
 
   input.addEventListener("input", () => {
     clearTimeout(pickerDebounce);
