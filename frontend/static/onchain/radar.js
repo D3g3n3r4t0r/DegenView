@@ -44,10 +44,12 @@ const usd = (v) => {
 const age = (h) => (h < 1 ? ageShort(h * 3600) : h < 48 ? `${Math.round(h)} h` : `${Math.round(h / 24)} g`);
 const ago = (ts) => {
   const s = Math.max(0, Math.round(Date.now() / 1000 - ts));
-  return s < 90 ? "ora" : s < 3600 ? `${Math.round(s / 60)} min fa` : `${Math.round(s / 3600)} h fa`;
+  return s < 90 ? "ora" : s < 3600 ? `${Math.round(s / 60)} min fa` : s < 172_800 ? `${Math.round(s / 3600)} h fa`
+    : `${Math.round(s / 86_400)} g fa`;
 };
 const key = (p) => `${p.chain}:${p.token_address}`;
 const lkey = (l) => `${l.chain}:${l.pair_address}`;
+const rkey = (r) => `${r.chain}:${r.token_address || r.pair_address}`;
 const ageShort = (s) => (s < 90 ? `${Math.max(1, Math.round(s))} s` : s < 5400 ? `${Math.round(s / 60)} min` : `${Math.round(s / 3600)} h`);
 // Il timeframe piu' largo che da' ancora 150 candele: come radar.auto_interval.
 const INTERVAL_S = [["4h", 14_400], ["1h", 3_600], ["15m", 900], ["5m", 300], ["1m", 60]];
@@ -67,6 +69,7 @@ export function mountRadar({ toast: notify } = {}) {
     if (row) { pinnedAt = Date.now(); showProposal(row.dataset.radar); return; }
     const listing = event.target.closest("[data-listing]");
     if (listing) { pinnedAt = Date.now(); showListing(listing.dataset.listing); return; }
+    if (event.target.closest("[data-rejected-more]")) { rejectedAll = !rejectedAll; paintRejected(); return; }
     onStageClick(event);
   });
   listen();
@@ -87,6 +90,17 @@ function listen() {
     try { item = JSON.parse(event.data); } catch { return; }
     arrivals.push(item);
     if (!draining) drain();
+  });
+  stream.addEventListener("pulse", (event) => {
+    try { paintPulse(JSON.parse(event.data)); } catch { /* battito perso: arriva il prossimo */ }
+  });
+  stream.addEventListener("rejected", (event) => {
+    let item;
+    try { item = JSON.parse(event.data); } catch { return; }
+    if (!data) return;
+    data.rejected = [item, ...(data.rejected ?? []).filter((x) => rkey(x) !== rkey(item))];
+    paintRejected(rkey(item));
+    flashPulse(`✕ ${item.symbol} scartato · ${item.reason}`);
   });
   stream.addEventListener("update", (event) => {
     let item;
@@ -147,6 +161,8 @@ function paint() {
   const isFirst = known === null;
   const seen = new Set(proposals.map(key));
   paintListings(true);
+  if (data.pulse) paintPulse(data.pulse);
+  paintRejected();
   root.querySelector("[data-radar-list]").innerHTML = proposals.length
     ? proposals.map((p) => row(p, !isFirst && !known.has(key(p)))).join("")
     : `<li class="pilot-empty">${escapeHtml(emptyText())}</li>`;
@@ -155,7 +171,7 @@ function paint() {
   const st = data.listing_status ?? {};
   const parts = Object.entries(chains ?? {}).map(([c, info]) => `${CHAINS[c] ?? c} ${info.seen}`);
   const rejected = st.rejected ? ` · ${st.rejected} scartati dal filtro` : "";
-  const rules = `cap < ${usd(data.filters.mcap_max_usd)} · sito, social, GitHub e anti-rug obbligatori${st.tokensniffer ? " · Token Sniffer" : ""}${st.ai_review ? " · controllo Claude" : ""}`;
+  const rules = `cap < ${usd(data.filters.mcap_max_usd)} · sito, social, GitHub, RugCheck e GoPlus obbligatori${st.ai_review ? " · controllo Claude" : ""}`;
   root.querySelector("[data-radar-foot]").textContent = data.last_scan
     ? `Visti: ${parts.join(" · ")}${rejected} · ${rules}`
     : `Solana e Robinhood · ${rules}`;
@@ -227,6 +243,100 @@ function paintListings(animate) {
   if (items.length) shownListings = new Set(items.map(lkey));
 }
 
+/* ------------------------------------------------------------ il battito */
+
+// Lorenzo: "voglio capire che e' una cosa live [...] deve esserci un senso di
+// movimento". Il server manda ogni 5 s cosa sta guardando: i pool nuovi
+// comparsi, i token in controllo adesso. I numeri scorrono, i nomi cambiano.
+let lastPulse = null;
+let flashTimer = null;
+
+function tween(el, to) {
+  const from = Number(el.dataset.v ?? to);
+  el.dataset.v = String(to);
+  if (from === to || reducedMotion()) { el.textContent = String(to); return; }
+  const t0 = performance.now();
+  const step = (t) => {
+    const k = Math.min(1, (t - t0) / 700);
+    el.textContent = String(Math.round(from + (to - from) * (1 - (1 - k) ** 3)));
+    if (k < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+  el.animate?.([{ color: "var(--live)" }, { color: "inherit" }], { duration: 1200 });
+}
+
+function paintPulse(p) {
+  const box = root?.querySelector("[data-radar-pulse]");
+  if (!box || !p) return;
+  box.hidden = false;
+  lastPulse = p;
+  box.dataset.busy = String((p.checking ?? []).length > 0);
+  tween(box.querySelector("[data-pulse-arrivals]"), p.arrivals_10m ?? 0);
+  tween(box.querySelector("[data-pulse-rejected]"), data?.rejected?.length ?? p.rejected ?? 0);
+  const last = box.querySelector("[data-pulse-last]");
+  last.textContent = p.last_arrival ? `ultimo ${ageShort(Date.now() / 1000 - p.last_arrival)} fa` : "in ascolto";
+  if (flashTimer) return;  // un avviso di scarto resta visibile il suo tempo
+  const now = box.querySelector("[data-pulse-now]");
+  const text = p.checking?.length ? `Controllo ${p.checking.join(", ")}` : "In ascolto sui nuovi pool";
+  if (now.textContent !== text) {
+    now.textContent = text;
+    now.animate?.([{ opacity: 0, translate: "0 6px" }, { opacity: 1, translate: "0 0" }],
+      { duration: 380, easing: "cubic-bezier(.2,.8,.2,1)" });
+  }
+}
+
+function flashPulse(text) {
+  const now = root?.querySelector("[data-pulse-now]");
+  if (!now) return;
+  clearTimeout(flashTimer);
+  now.textContent = text;
+  now.dataset.tone = "no";
+  now.animate?.([{ opacity: 0, translate: "0 6px" }, { opacity: 1, translate: "0 0" }], { duration: 380 });
+  flashTimer = setTimeout(() => {
+    flashTimer = null;
+    delete now.dataset.tone;
+    now.textContent = "";
+    paintPulse(lastPulse);
+  }, 4_000);
+}
+
+/* ------------------------------------------------------------ gli scartati */
+
+// Lorenzo: "scorrendo giu' voglio una sezione che mi faccia vedere tutti
+// quelli che sono stati scartati". Un tocco apre il perche', controllo per
+// controllo, senza grafico: non serve a nessuno quello di un token scartato.
+const REJECTED_SHOWN = 12;
+let rejectedAll = false;
+
+function paintRejected(arrived) {
+  const box = root.querySelector("[data-radar-rejected]");
+  if (!box) return;
+  const all = data.rejected ?? [];
+  box.hidden = all.length === 0;
+  box.querySelector("[data-rejected-count]").textContent = all.length ? `· ${all.length}` : "";
+  const open = new Set([...box.querySelectorAll("details[open]")].map((d) => d.dataset.key));
+  const items = rejectedAll ? all : all.slice(0, REJECTED_SHOWN);
+  box.querySelector("ul").innerHTML = items.map((r) => {
+    const born = r.created_at ? ` · ${ageShort(Math.max(0, r.at - r.created_at))} di vita` : "";
+    const meta = `${CHAINS[r.chain] ?? r.chain}${r.market_cap ? ` · cap ${usd(r.market_cap)}` : ""}${born} · ${ago(r.at)}`;
+    return `
+      <li class="${rkey(r) === arrived ? "is-arrival" : ""}">
+        <details data-key="${escapeHtml(rkey(r))}" ${open.has(rkey(r)) ? "open" : ""}>
+          <summary>
+            <span class="tk" data-chain="${escapeHtml(r.chain)}" aria-hidden="true">${escapeHtml((r.symbol ?? "?").slice(0, 2))}</span>
+            <span class="tk-name"><b>${escapeHtml(r.symbol ?? "?")}</b><small>${escapeHtml(meta)}</small></span>
+            <span class="rj-why">${escapeHtml(r.reason ?? "")}</span>
+          </summary>
+          ${reportCard(r)}
+          <nav class="stage-links">${links(r)}</nav>
+        </details>
+      </li>`;
+  }).join("");
+  const more = box.querySelector("[data-rejected-more]");
+  more.hidden = all.length <= REJECTED_SHOWN;
+  more.textContent = rejectedAll ? "Mostra meno" : `Mostra tutti (${all.length})`;
+}
+
 function emptyText() {
   if (!data.last_scan) return "Al primo giro cerco token fino a 3 settimane, li passo dal filtro anti-rug e li provo su tutte le strategie.";
   const c = Object.values(data.chains ?? {});
@@ -258,6 +368,7 @@ const BULL = "#00d68f";
 const BEAR = "#ff4560";
 const PALETTE = ["#00d68f", "#f0a500", "#6ea8ff", "#ff7ad9", "#c8f169", "#9b6bff"];
 const LIVE_MS = 30_000;
+const RETRY_MS = 4_000;
 
 // { kind, id, p, chart, series, strategies, best, shown:Set, active:Set, timer, fitted, seeded }
 let view = null;
@@ -299,17 +410,70 @@ function links(p) {
     if (s.type === "twitter") out.push(a(s.url, "X"));
     if (s.type === "telegram") out.push(a(s.url, "Telegram"));
   }
-  if (p.tokensniffer) out.push(a(p.tokensniffer, "Token Sniffer"));
+  if (p.scan_url) out.push(a(p.scan_url, "RugCheck"));
   if (p.pair_url) out.push(a(p.pair_url, "DexScreener"));
   return out.join("");
 }
 
-function checksList(checks) {
-  if (!checks?.length) return "";
-  const tone = (ok) => (ok === true ? "ok" : ok === false ? "no" : "info");
+// La pagella: quanto bene ha passato ogni filtro, non solo se l'ha passato.
+// Lorenzo: "un bel benchmark che mi faccia capire [...] se in modo
+// eccellente oppure [...] mediocri".
+const GRADE_TONE = { eccellente: "top", buono: "good", sufficiente: "mid", mediocre: "low" };
+
+function reportCard(p) {
+  const checks = p.checks ?? [];
+  if (!checks.length) return "";
   const mark = (ok) => (ok === true ? "✓" : ok === false ? "✕" : "·");
-  return `<ul class="checks radar-checks">${checks.map((c) => `
-    <li><span class="mark" data-tone="${tone(c.ok)}">${mark(c.ok)}</span><span>${escapeHtml(c.label)}</span><span>${escapeHtml(c.detail ?? "")}</span></li>`).join("")}</ul>`;
+  const tone = (ok) => (ok === true ? "ok" : ok === false ? "no" : "info");
+  const r = p.report;
+  const head = r ? `
+    <div class="rc-head" data-grade="${GRADE_TONE[r.grade] ?? "mid"}">
+      <span class="rc-score">${r.score}</span>
+      <span><b>${escapeHtml(r.grade)}</b><small>media di ${r.counted} controlli · punto debole: ${escapeHtml(r.weakest)}</small></span>
+    </div>` : "";
+  const rows = checks.map((c) => {
+    const bar = c.score == null ? "" : `
+      <span class="rc-meter" data-grade="${GRADE_TONE[c.grade] ?? "mid"}"><span class="rc-bar"><i style="--w:${Math.max(3, Math.min(100, c.score))}%"></i></span><span class="rc-grade">${escapeHtml(c.grade ?? "")} · ${Math.round(c.score)}</span></span>`;
+    return `
+      <li>
+        <span class="mark" data-tone="${tone(c.ok)}">${mark(c.ok)}</span>
+        <span class="rc-label">${escapeHtml(c.label)}</span>
+        <span class="rc-detail">${escapeHtml(c.detail ?? "")}</span>
+        ${bar}
+        ${factsOf(c)}
+      </li>`;
+  }).join("");
+  return `<section class="report-card">${head}<ul class="rc-list">${rows}</ul></section>`;
+}
+
+const when = (iso) => {
+  const t = iso ? Date.parse(iso) : NaN;
+  return Number.isNaN(t) ? null : ago(t / 1000);
+};
+
+function factsOf(c) {
+  const f = c.facts;
+  const pairs = [];
+  if (c.key === "github" && f) {
+    pairs.push(["Repository", f.url ? `<a href="${escapeHtml(f.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(f.repo)} ↗</a>` : escapeHtml(f.repo)]);
+    if (f.description) pairs.push(["Descrizione", escapeHtml(f.description)]);
+    pairs.push(["Linguaggio", escapeHtml(f.language ?? "—")], ["Commit", escapeHtml(String(f.commits))],
+      ["Giorni attivi", String(f.active_days)], ["Autori", String(f.authors)], ["Stelle", String(f.stars)],
+      ["Fork", String(f.forks)], ["Osservatori", String(f.watchers)], ["Issue aperte", String(f.open_issues)],
+      ["Creato", escapeHtml(when(f.created_at) ?? "—")], ["Ultimo push", escapeHtml(when(f.pushed_at) ?? "—")],
+      ["Licenza", escapeHtml(f.license ?? "nessuna")]);
+  } else if (c.key === "site" && f) {
+    pairs.push(["Pagina", `<a href="${escapeHtml(f.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(f.title || f.url)} ↗</a>`],
+      ["Parole", String(f.words)], ["HTTPS", f.https ? "sì" : "no"], ["Cita il contratto", f.cites_contract ? "sì" : "no"]);
+  } else if (c.key === "contract" && f) {
+    pairs.push(["Nome e logo", f.metadata_mutable ? "modificabili" : "bloccati"],
+      ["Tassa di trasferimento", `${f.transfer_fee_pct ?? 0}%`]);
+    if (f.holders) pairs.push(["Holder", escapeHtml(String(f.holders))]);
+  } else if (c.key === "ai" && c.red_flags?.length) {
+    pairs.push(["Campanelli d'allarme", escapeHtml(c.red_flags.join(", "))]);
+  }
+  if (!pairs.length) return "";
+  return `<dl class="rc-facts">${pairs.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("")}</dl>`;
 }
 
 function showListing(id) {
@@ -339,7 +503,7 @@ function openStage(kind, id, p) {
     <div class="radar-chart" data-radar-chart></div>
     <nav class="stage-links">${links(p)}</nav>
     <ul class="radar-strats" data-radar-strats></ul>
-    ${checksList(p.checks)}
+    ${reportCard(p)}
     <p class="radar-note">Backtest solo long con costi DEX (${data?.costs?.commission_pct ?? 0.3}% + ${data?.costs?.slippage_pct ?? 0.5}% per lato), sulle stesse candele del grafico. L'interruttore accende solo l'alert: compra solo il pilota, e solo se lo attivi.</p>`;
   view = { kind, id, p, chart: null, series: null, strategies: [], best: null, shown: new Set(), active: new Set(),
     timer: null, fitted: false, seeded: false };
@@ -419,12 +583,17 @@ async function loadChart() {
     paintStrategies();
     paintStageHead();
     stage.querySelector("[data-radar-live]").textContent = "live";
-  } catch (error) {
+  } catch {
     if (view !== current) return;
     const live = stage.querySelector("[data-radar-live]");
     if (live) live.textContent = "non aggiornato";
-    if (!current.chart) stage.querySelector("[data-radar-chart]").textContent =
-      error?.message ?? "Grafico non disponibile.";
+    // Il token e' su DexScreener: un rifiuto momentaneo della fonte delle
+    // candele si riprova in pochi secondi, senza mostrare errori grezzi.
+    if (!current.chart) {
+      stage.querySelector("[data-radar-chart]").textContent = "Carico le candele…";
+      current.timer = setTimeout(loadChart, RETRY_MS);
+      return;
+    }
   }
   if (view === current) current.timer = setTimeout(loadChart, LIVE_MS);
 }
