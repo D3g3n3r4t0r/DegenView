@@ -84,6 +84,14 @@ def pick_one_per_symbol(candidates: Iterable[dict], query: str) -> list[dict]:
     return ordered[:MAX_RESULTS]
 
 
+def _https_or_none(url: object) -> str | None:
+    """Solo immagini https vere: GeckoTerminal mette "missing.png" quando
+    non ne ha una, e un http:// finirebbe bloccato come contenuto misto."""
+    if isinstance(url, str) and url.startswith("https://") and "missing" not in url:
+        return url
+    return None
+
+
 def _jupiter_candidates(payload: object) -> list[dict]:
     out = []
     for t in payload if isinstance(payload, list) else []:
@@ -95,6 +103,7 @@ def _jupiter_candidates(payload: object) -> list[dict]:
             "name": t.get("name") or "",
             "decimals": t.get("decimals"),
             "verified": bool(t.get("isVerified")),
+            "icon": _https_or_none(t.get("icon")),
             "liquidity_usd": float(t.get("liquidity") or 0),
             "volume_usd": sum(float((t.get("stats24h") or {}).get(k) or 0) for k in ("buyVolume", "sellVolume")),
         })
@@ -130,6 +139,7 @@ def _gecko_candidates(payload: object) -> list[dict]:
                 "name": token.get("name") or "",
                 "decimals": token.get("decimals"),
                 "verified": bool(token.get("coingecko_coin_id")),
+                "icon": _https_or_none(token.get("image_url")),
                 "liquidity_usd": 0.0,
                 "volume_usd": 0.0,
             })
@@ -166,7 +176,7 @@ async def search(chain: str, query: str) -> list[dict]:
         return []
 
     results = [
-        {k: c[k] for k in ("address", "symbol", "name", "decimals", "verified", "liquidity_usd")}
+        {k: c[k] for k in ("address", "symbol", "name", "decimals", "verified", "icon", "liquidity_usd")}
         for c in pick_one_per_symbol(candidates, query)
     ]
     _cache[key] = (time.time(), results)

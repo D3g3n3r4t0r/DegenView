@@ -10,7 +10,7 @@ from app.trading.onchain import token_search
 
 def _c(symbol, address, liquidity, verified=False, volume=0.0):
     return {"symbol": symbol, "address": address, "name": "", "decimals": 6,
-            "verified": verified, "liquidity_usd": liquidity, "volume_usd": volume}
+            "verified": verified, "icon": None, "liquidity_usd": liquidity, "volume_usd": volume}
 
 
 def test_one_result_per_ticker_prefers_verified_over_bigger_copy():
@@ -66,11 +66,13 @@ def test_gecko_pools_with_reserve_but_no_trades_count_as_zero_liquidity():
 def test_jupiter_payload_parsed_with_verification_flag():
     out = token_search._jupiter_candidates([
         {"id": "EKpQ", "symbol": "$WIF", "name": "dogwifhat", "decimals": 6, "isVerified": True,
-         "liquidity": 6_800_000, "stats24h": {"buyVolume": 10, "sellVolume": 5}},
+         "liquidity": 6_800_000, "stats24h": {"buyVolume": 10, "sellVolume": 5},
+         "icon": "https://img.example/wif.png"},
         {"symbol": "NOID"},
     ])
     assert out == [{"address": "EKpQ", "symbol": "WIF", "name": "dogwifhat", "decimals": 6,
-                    "verified": True, "liquidity_usd": 6_800_000.0, "volume_usd": 15.0}]
+                    "verified": True, "icon": "https://img.example/wif.png",
+                    "liquidity_usd": 6_800_000.0, "volume_usd": 15.0}]
 
 
 def test_search_endpoint_returns_one_token_per_ticker(monkeypatch):
