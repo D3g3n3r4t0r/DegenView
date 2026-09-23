@@ -31,9 +31,38 @@ import logging
 import uuid
 
 from app.config import settings
-from app.trading.onchain import execution, ledger, pool_safety, risk
+from app.trading.onchain import execution, jito, ledger, pool_safety, prices, risk
 
 logger = logging.getLogger("onchain_execute")
+
+
+async def _send_solana_with_jito_fallback(
+    correlation_id: str, private_key_hex: str, signed_tx_bytes: bytes, notional_usd: float,
+) -> str:
+    """Piano MEV: instrada via Jito bundle (transazione firmata + tip in un
+    bundle atomico, che riduce la finestra di front-run) e ricade
+    sull'invio diretto via RPC (send_signed_solana_tx, il percorso di
+    prima, mai toccato) se Jito e' spento o non risponde in modo sensato.
+    Un bundle Jito non da' MAI una signature vera e propria come una
+    sendTransaction — da' un bundle_id — quindi in caso di successo il
+    "signature" ritornato qui e' il bundle_id, prefissato per essere
+    distinguibile in log e nel ledger da una signature RPC diretta."""
+    if not settings.onchain_use_jito:
+        return await execution.send_signed_solana_tx(signed_tx_bytes)
+
+    try:
+        sol_price_usd = await prices.native_price_usd("solana") or 0.0
+        tip_lamports = jito.compute_dynamic_tip_lamports(notional_usd, sol_price_usd)
+        tip_account = jito.pick_tip_account()
+        tip_tx = await execution.build_signed_solana_tip_tx(private_key_hex, tip_account, tip_lamports)
+        bundle_id = await jito.send_bundle_via_jito(signed_tx_bytes, tip_tx)
+        logger.info("[%s] inviato via Jito bundle, tip=%d lamports -> %s", correlation_id, tip_lamports, bundle_id,
+                     extra={"correlation_id": correlation_id})
+        return f"jito:{bundle_id}"
+    except Exception as exc:
+        logger.warning("[%s] Jito non disponibile (%s), fallback su invio RPC diretto", correlation_id, exc,
+                        extra={"correlation_id": correlation_id})
+        return await execution.send_signed_solana_tx(signed_tx_bytes)
 
 
 async def execute_order(
@@ -110,7 +139,7 @@ async def execute_order(
 
     try:
         if chain == "solana":
-            signature = await execution.send_signed_solana_tx(signed)
+            signature = await _send_solana_with_jito_fallback(correlation_id, private_key_hex, signed, notional_usd)
         else:
             signature = await execution.send_signed_evm_tx(signed)
     except Exception as exc:

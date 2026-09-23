@@ -86,6 +86,7 @@ from app.models import (
 )
 from app.trading.onchain import balances as onchain_balances
 from app.trading.onchain import execute as onchain_execute
+from app.trading.onchain import jito as onchain_jito
 from app.trading.onchain import keys as onchain_keys
 from app.trading.onchain import ledger as onchain_ledger
 from app.trading.onchain import passkey as onchain_passkey
@@ -349,7 +350,12 @@ async def _run_onchain_auto_trade(owner: User, entry: WatchlistEntry, strategy_n
         try:
             private_key_hex = auth.get_decrypted_onchain_private_key(owner, chain)
             if chain == "solana":
-                quote = await onchain_quotes.jupiter_quote(quote_token, entry.base_token_address, amount_in)
+                # Slippage stretto quando l'invio passa per Jito (piano MEV) —
+                # vedi jito.JITO_SLIPPAGE_BPS per la giustificazione del numero.
+                slippage_bps = onchain_jito.JITO_SLIPPAGE_BPS if settings.onchain_use_jito else 50
+                quote = await onchain_quotes.jupiter_quote(
+                    quote_token, entry.base_token_address, amount_in, slippage_bps,
+                )
                 result = await onchain_execute.execute_order(
                     owner.id, "solana", entry.base_token_address, strategy_name, "buy",
                     cap, quote["price_impact_pct"], signal.price, private_key_hex, quote,
