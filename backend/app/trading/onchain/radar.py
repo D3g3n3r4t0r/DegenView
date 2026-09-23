@@ -16,6 +16,10 @@ Un giro ogni `SCAN_INTERVAL_S`, per Solana e Robinhood Chain:
 3. candele del pool (5m sotto i 4 giorni di vita, 15m sopra) e backtest di
    ogni strategia del registro con i parametri predefiniti, piu' ogni
    configurazione "pronta" dell'archivio;
+3b. prima del backtest, il filtro di legittimita' (legit.py): sito proprio,
+   social, GitHub vero, niente rug o honeypot, nome non da meme, e con la
+   chiave il parere di Claude sul sito. Lorenzo: "voglio token legittimi con
+   progetti seri", cap non oltre i $100k;
 4. si propone il token solo se la migliore supera soglie minime (trade,
    rendimento, profit factor, drawdown) su abbastanza candele.
 
@@ -44,11 +48,12 @@ from pathlib import Path
 import httpx
 import pandas as pd
 
-from app import archive
 from app.analysis.backtest import run_backtest
 from app.analysis.strategies import STRATEGY_REGISTRY, confirmed_events
 from app.providers.base import ProviderError
 from app.providers.dexscreener import DexScreenerProvider, make_symbol
+from app.trading.onchain import legit
+from app.trading.onchain import listings as onchain_listings
 
 logger = logging.getLogger(__name__)
 
@@ -61,10 +66,13 @@ CHAINS = {"solana": "solana", "robinhood": "robinhood"}
 
 # Soglie iniziali: regolabili qui, non da un parametro di richiesta.
 AGE_MAX_DAYS = 21
-LIQ_MIN_USD = 30_000
-MCAP_MAX_USD = 20_000_000
-LIQ_TO_MCAP_MIN = 0.08          # liquidita' almeno l'8% della capitalizzazione
+LIQ_MIN_USD = 8_000
+MCAP_MAX_USD = 100_000          # Lorenzo: "una market cap non oltre i 100.000 dollari"
+LIQ_TO_MCAP_MIN = 0.10          # liquidita' almeno il 10% della capitalizzazione
+MAX_VETTED_PER_CHAIN = 25       # quanti passano dal filtro di legittimita' a giro
 MAX_TESTED_PER_CHAIN = 8        # le candele costano una richiesta a token
+VERDICT_TTL_S = 6 * 3600        # un verdetto "ok"/"fail" vale qualche ora; "wait" si ripete
+DEXSCREENER_PAIRS = "https://api.dexscreener.com/latest/dex/pairs"
 MIN_BARS = 300                  # sotto, un backtest non dice niente
 MIN_TRADES = 3
 MIN_PROFIT_FACTOR = 1.3
@@ -175,10 +183,23 @@ def watch_symbol(symbol: str, chain: str, pool: str) -> str:
     return make_symbol(symbol, chain, pool)
 
 
+INTERVAL_S = {"4h": 14_400, "1h": 3_600, "15m": 900, "5m": 300, "1m": 60}
+CHART_BARS = 150
+
+
+def auto_interval(age_s: float, min_bars: int = CHART_BARS) -> str:
+    """Il timeframe piu' largo che da' ancora `min_bars` candele di storia.
+    Lorenzo: "auto aggiusta le candele col time frame corretto per la storia
+    del token". Un token di 30 minuti resta a 1m (non ce n'e' di meglio)."""
+    for interval, seconds in INTERVAL_S.items():
+        if age_s / seconds >= min_bars:
+            return interval
+    return "1m"
+
+
 def interval_for(age_hours: float) -> str:
-    # 1000 candele al massimo da GeckoTerminal: a 5m sono ~3,5 giorni, a 15m
-    # ~10. Sotto i 4 giorni di vita servono le 5m per avere storia.
-    return "5m" if age_hours < 96 else "15m"
+    # Il backtest delle proposte vuole MIN_BARS candele.
+    return auto_interval(age_hours * 3600, MIN_BARS)
 
 
 def _short(strategy_name: str) -> str:
@@ -186,12 +207,15 @@ def _short(strategy_name: str) -> str:
 
 
 def strategy_configs(entries: list[dict] | None = None) -> list[dict]:
-    """Ogni strategia del registro con i suoi predefiniti, piu' le
-    configurazioni archiviate e pronte (una per coppia strategia+parametri)."""
+    """Ogni strategia del registro con i suoi predefiniti. Le configurazioni
+    dell'archivio entrano solo se passate esplicitamente: sono tarate su altri
+    ticker, e Lorenzo non le vuole vedere ("mi basta vedere le strategie
+    Lorenzo, Accumulo, Gabriele [...] non voglio vedere strategie applicate
+    ad altri ticker")."""
     configs = [{"strategy_name": name, "params": None, "label": _short(name), "source": "predefinita"}
                for name in STRATEGY_REGISTRY]
     seen: set[str] = set()
-    for e in entries if entries is not None else archive.ready_entries():
+    for e in entries or []:
         name = e.get("strategy_name")
         if name not in STRATEGY_REGISTRY or not e.get("params"):
             continue
@@ -284,6 +308,7 @@ _state: dict = {
     "error": "",
 }
 _first_seen: dict[str, float] = {}  # chain:token -> quando e' diventato proposta
+_verdicts: dict[str, tuple[float, dict]] = {}  # chain:token -> (quando, esito di legit.assess)
 
 
 def _load() -> None:
@@ -332,9 +357,41 @@ def reset_for_tests() -> None:
     _state.update(last_scan=0.0, next_scan=0.0, running=False, chains={}, proposals=[], tested=[],
                   configs=0, error="")
     _first_seen.clear()
+    _verdicts.clear()
 
 
 # ---------------------------------------------------------------------- giro
+
+async def _dex_links(client: httpx.AsyncClient, chain: str, pools: list[Pool]) -> dict[str, dict]:
+    """pair -> {websites, socials} da DexScreener, 30 pool per richiesta."""
+    out: dict[str, dict] = {}
+    for i in range(0, len(pools), 30):
+        batch = ",".join(p.pair_address for p in pools[i:i + 30])
+        try:
+            r = await client.get(f"{DEXSCREENER_PAIRS}/{chain}/{batch}")
+            for pair in (r.json() or {}).get("pairs") or [] if r.status_code == 200 else []:
+                out[pair.get("pairAddress") or ""] = legit.links_from_dexscreener(pair)
+        except (httpx.HTTPError, ValueError) as exc:
+            logger.info("radar: DexScreener %s: %s", chain, exc)
+    return out
+
+
+async def vet(client: httpx.AsyncClient, pool: Pool, links: dict) -> dict:
+    key = f"{pool.chain}:{pool.token_address}"
+    cached = _verdicts.get(key)
+    if cached and time.time() - cached[0] < VERDICT_TTL_S:
+        return cached[1]
+    token = {"chain": pool.chain, "symbol": pool.symbol, "name": pool.name, "token_address": pool.token_address,
+             "market_cap": pool.market_cap, "liquidity_usd": pool.liquidity_usd}
+    try:
+        verdict = await legit.assess(token, links, client)
+    except Exception:
+        logger.exception("radar: filtro fallito su %s", pool.symbol)
+        return {"status": "wait", "reason": "controllo non riuscito", "checks": []}
+    if verdict["status"] != "wait":
+        _verdicts[key] = (time.time(), verdict)
+    return verdict
+
 
 async def _fetch_pools(client: httpx.AsyncClient, chain: str) -> list[Pool]:
     network = CHAINS[chain]
@@ -369,10 +426,19 @@ async def scan_once() -> dict:
         async with httpx.AsyncClient(timeout=20.0) as client:
             for chain in CHAINS:
                 pools = await _fetch_pools(client, chain)
-                picked, passing = pick_candidates(pools)
+                picked, passing = pick_candidates(pools, MAX_VETTED_PER_CHAIN)
                 info = {"seen": len({p.token_address for p in pools}), "passing": passing,
-                        "tested": 0, "too_young": 0}
+                        "legit": 0, "rejected": 0, "waiting": 0, "tested": 0, "too_young": 0}
+                links = await _dex_links(client, chain, picked)
+                cleared: list[tuple[Pool, dict]] = []
                 for pool in picked:
+                    verdict = await vet(client, pool, links.get(pool.pair_address) or {})
+                    if verdict["status"] == "ok":
+                        info["legit"] += 1
+                        cleared.append((pool, verdict))
+                    else:
+                        info["rejected" if verdict["status"] == "fail" else "waiting"] += 1
+                for pool, verdict in cleared[:MAX_TESTED_PER_CHAIN]:
                     interval = interval_for(pool.age_hours)
                     try:
                         df = await provider.fetch_ohlcv(make_symbol(pool.symbol, chain, pool.pair_address),
@@ -395,6 +461,9 @@ async def scan_once() -> dict:
                         "market_cap": pool.market_cap, "interval": interval, "bars": len(df),
                         "days": round((df.index[-1] - df.index[0]).total_seconds() / 86400, 1),
                         "hold_pct": outcome["hold_pct"],
+                        "website": verdict.get("website"), "socials": verdict.get("socials") or [],
+                        "github": verdict.get("github"), "checks": verdict.get("checks") or [],
+                        "tokensniffer": verdict.get("tokensniffer"),
                     }
                     best = outcome["best"]
                     if best is None:
@@ -469,10 +538,14 @@ def long_events(events) -> list[dict]:
 
 
 def chart_strategies(df: pd.DataFrame, configs: list[dict]) -> list[dict]:
+    """Ingressi/uscite di ogni strategia e il suo backtest sulle stesse
+    candele, cosi' la lista accanto al grafico dice anche quanto rende."""
     rows = []
     for cfg in configs:
         try:
             events, position = confirmed_events(df, cfg["params"], strategy_name=cfg["strategy_name"])
+            result = run_backtest(df, cfg["params"], BACKTEST_PARAMS, strategy_name=cfg["strategy_name"])
+            m = _long_only(result.trades, BACKTEST_PARAMS["commission_pct"])
         except Exception as exc:
             logger.debug("radar chart: %s fallita: %s", cfg["label"], exc)
             continue
@@ -480,8 +553,18 @@ def chart_strategies(df: pd.DataFrame, configs: list[dict]) -> list[dict]:
             "label": cfg["label"], "strategy_name": cfg["strategy_name"], "params": cfg["params"],
             "source": cfg["source"], "excluded": UNRELIABLE.get(cfg["strategy_name"]),
             "events": long_events(events), "in_position": position > 0,
+            "return_pct": m["return_pct"], "trades": m["trades"], "win_rate": m["win_rate"],
+            "max_dd": m["max_dd"], "qualifies": _qualifies(m),
         })
     return rows
+
+
+def best_row(rows: list[dict]) -> dict | None:
+    """La strategia da mostrare per prima: la migliore che supera le soglie,
+    se no la migliore con almeno un trade. Mai quella che usa dati futuri."""
+    usable = [r for r in rows if not r.get("excluded") and r.get("trades")]
+    ranked = sorted(usable, key=lambda r: (bool(r.get("qualifies")), r["return_pct"]), reverse=True)
+    return ranked[0] if ranked else None
 
 
 async def chart_payload(chain: str, pool: str, symbol: str, interval: str) -> dict:
@@ -505,5 +588,71 @@ async def chart_payload(chain: str, pool: str, symbol: str, interval: str) -> di
             for ts, r in df.iterrows()
         ],
         "strategies": strategies,
+        "best": (best_row(strategies) or {}).get("label"),
         "updated_at": time.time(),
     }
+
+
+# ------------------------------------------------- backtest dei nuovi listing
+
+LISTING_MIN_BARS = 45           # tre quarti d'ora di candele da 1 minuto
+LISTING_TESTED = 20             # i piu' recenti
+LISTINGS_TICK_S = 30
+
+
+def listing_interval(age_s: float) -> str:
+    return auto_interval(age_s)
+
+
+def listing_refresh_s(age_s: float) -> float:
+    return 120 if age_s < 2 * 3600 else 600
+
+
+def summarize_listing_backtest(df: pd.DataFrame, interval: str, configs: list[dict]) -> dict:
+    rows = chart_strategies(df, configs)
+    best = best_row(rows)
+    out = {"at": time.time(), "interval": interval, "bars": len(df), "configs": len(rows)}
+    if best is None:
+        return {**out, "state": "none"}
+    return {**out, "state": "ok" if best["qualifies"] else "weak", "label": best["label"],
+            "strategy_name": best["strategy_name"], "return_pct": best["return_pct"],
+            "trades": best["trades"], "win_rate": best["win_rate"], "max_dd": best["max_dd"],
+            "in_position": best["in_position"],
+            "last_event": best["events"][-1] if best["events"] else None}
+
+
+async def backtest_listing(item: dict, provider: DexScreenerProvider | None = None) -> dict:
+    """Tutte le strategie sulle candele del listing: quale avrebbe reso di
+    piu' finora. Lorenzo: "di tutti quelli rilevati, quale strategia
+    performerebbe meglio facendo un backtest"."""
+    age = time.time() - (item.get("created_at") or item.get("found_at") or time.time())
+    interval = listing_interval(age)
+    df = await (provider or DexScreenerProvider()).fetch_ohlcv(
+        make_symbol(item["symbol"], item["chain"], item["pair_address"]), interval, 1000)
+    if len(df) < LISTING_MIN_BARS:
+        return {"at": time.time(), "interval": interval, "bars": len(df), "state": "young",
+                "need": LISTING_MIN_BARS}
+    return await asyncio.to_thread(summarize_listing_backtest, df, interval, strategy_configs())
+
+
+async def listings_backtest_loop() -> None:
+    await asyncio.sleep(FIRST_SCAN_DELAY_S)
+    provider = DexScreenerProvider()
+    while True:
+        now = time.time()
+        for item in onchain_listings.recent()[:LISTING_TESTED]:
+            age = now - (item.get("created_at") or item.get("found_at") or now)
+            last = (item.get("backtest") or {}).get("at", 0)
+            if now - last < listing_refresh_s(age):
+                continue
+            try:
+                result = await backtest_listing(item, provider)
+            except ProviderError as exc:
+                logger.info("radar: candele del listing %s: %s", item.get("symbol"), exc)
+                result = {**(item.get("backtest") or {}), "at": now}
+            except Exception:
+                logger.exception("radar: backtest del listing %s", item.get("symbol"))
+                result = {**(item.get("backtest") or {}), "at": now}
+            onchain_listings.update_listing(item["chain"], item["pair_address"], backtest=result)
+            await asyncio.sleep(_REQUEST_GAP_S)
+        await asyncio.sleep(LISTINGS_TICK_S)

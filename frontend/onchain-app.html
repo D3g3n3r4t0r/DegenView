@@ -1437,7 +1437,7 @@
     &:hover { background: var(--hover); }
     &:active { scale: .985; }
   }
-  .pilot .tk, .pilot-sheet .tk {
+  .pilot .tk, .pilot-sheet .tk, .radar .tk {
     inline-size: 36px; block-size: 36px; border-radius: 12px; background: var(--raised);
     display: grid; place-items: center; font-size: 12px; font-weight: 600; color: var(--ink-dim);
   }
@@ -1469,7 +1469,7 @@
     & ul { list-style: none; margin: 0; padding: 0; }
     & li { border-block-end: 1px solid var(--line); &:last-child { border: 0; } }
     & li.is-new { animation: rise .6s cubic-bezier(.2,.8,.2,1) backwards; }
-    & button {
+    & .radar-col button {
       display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: 12px; align-items: center;
       inline-size: 100%; padding: 12px 4px; background: none; border: 0; border-radius: 12px; text-align: start;
       transition: background .15s, scale .12s;
@@ -1489,8 +1489,7 @@
       animation: ping 2.2s cubic-bezier(0,0,.2,1) infinite; }
   }
   .radar[data-running="true"] .radar-dot::after { animation-duration: .9s; }
-  .radar-new { margin-block-end: 10px; padding-block-end: 6px; border-block-end: 1px solid var(--line);
-    & h4 { margin: 6px 4px 0; font-size: 11.5px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-faint); } }
+  .radar-new { margin-block-end: 10px; padding-block-end: 6px; border-block-end: 1px solid var(--line); }
   /* Appena usciti: all'apertura le righe entrano una dopo l'altra; un
      listing che arriva dopo cade dall'alto, le altre scivolano giu' (FLIP
      in radar.js) e la sua riga si accende un attimo. Solo opacity,
@@ -1514,11 +1513,35 @@
   @media (prefers-reduced-motion: reduce) {
     .radar .radar-new li :is(*), .radar .radar-new li { animation: none !important; } }
   .radar-foot { margin: 6px 4px 0; font-size: 11.5px; color: var(--ink-faint); }
+  #app-shell[data-view="manual"] #radar { display: none !important; }
+  .radar-grid { display: grid; gap: 18px; align-items: start;
+    @container (width >= 900px) { grid-template-columns: minmax(0, 380px) minmax(0, 1fr); gap: 32px; } }
+  .radar-col { min-inline-size: 0; }
+  .radar-sub, .radar-new h4 { margin: 6px 4px 0; font-size: 11.5px; font-weight: 500; letter-spacing: .04em;
+    text-transform: uppercase; color: var(--ink-faint); }
+  .radar-empty { margin: 8px 4px 10px; font-size: 12.5px; color: var(--ink-faint); }
+  .radar li.is-on > button { background: var(--hover); }
+  .radar-stage { min-inline-size: 0; border-radius: var(--radius); background: var(--panel); padding: 14px 14px 8px;
+    & .tk { flex: none; }
+  }
+  .radar-idle { margin: 0; padding: 40px 12px; text-align: center; font-size: 13.5px; color: var(--ink-faint); }
+  .stage-head { display: flex; align-items: center; gap: 12px; margin-block-end: 6px;
+    & h2 { margin: 0; font-size: 17px; font-weight: 600; }
+    & h2 small { font-size: 12.5px; font-weight: 400; color: var(--ink-faint); }
+    & p { margin: 2px 0 0; font-size: 12px; color: var(--ink-faint); } }
+  .stage-best { margin: 4px 2px 10px; font-size: 13px; color: var(--ink-dim);
+    & [data-sign="up"] { color: var(--up); } & [data-sign="down"] { color: var(--danger); } }
+  .stage-links { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px;
+    & a { padding: 6px 11px; border-radius: 99px; background: var(--raised); color: var(--ink-dim);
+      font-size: 12.5px; text-decoration: none; transition: background .15s, color .15s;
+      &:hover { background: var(--hover); color: var(--ink); } }
+    & a.is-main { background: var(--live-soft); color: var(--live); } }
+  .radar .radar-checks li { grid-template-columns: 20px max-content minmax(0, 1fr); padding: 7px 0; font-size: 13px; }
   .radar-live { margin-inline-start: auto; align-self: start; font-size: 11.5px; color: var(--live);
     display: inline-flex; align-items: center; gap: 6px;
     &::before { content: ""; inline-size: 6px; block-size: 6px; border-radius: 50%; background: currentColor; } }
   .radar-chart { block-size: min(300px, 38dvh); margin: 0 -6px 10px; display: grid; place-items: center;
-    font-size: 13px; color: var(--ink-faint); touch-action: none; }
+    font-size: 13px; color: var(--ink-faint); touch-action: pan-y; }
   .radar-strats { list-style: none; margin: 0 0 12px; padding: 0;
     & li { display: flex; align-items: center; gap: 8px; border-block-end: 1px solid var(--line); }
     & li:last-child { border: 0; }
@@ -1685,6 +1708,28 @@
     </section>
 
     <div id="app-shell" class="stack" data-view="pilot" hidden>
+      <!-- La prima pagina. Lorenzo: "vorrei che la prima pagina quando entro
+           sia proprio questa qui: i pop-up che vanno in una lista e
+           rimangono, e il grafico". A sinistra gli avvisi (ognuno con il suo
+           backtest), a destra il palco: grafico dal vivo del token scelto
+           con gli ingressi della strategia migliore. Lo disegna
+           static/onchain/radar.js. -->
+      <section class="radar" id="radar" hidden>
+        <header><h3><span class="radar-dot" aria-hidden="true"></span>Radar · token nuovi</h3><span data-radar-clock></span></header>
+        <div class="radar-grid">
+          <div class="radar-col">
+            <div class="radar-new" data-radar-new>
+              <h4>Appena usciti</h4>
+              <p class="radar-empty" data-radar-new-empty>Nessun token nuovo ha ancora superato il filtro: cap sotto i $100k, sito, social, GitHub e controllo anti-rug.</p>
+              <ul></ul>
+            </div>
+            <h4 class="radar-sub">Proposte · fino a 3 settimane</h4>
+            <ul data-radar-list></ul>
+            <p class="radar-foot" data-radar-foot></p>
+          </div>
+          <div class="radar-stage" data-radar-stage></div>
+        </div>
+      </section>
       <div class="status-strip">
         <section class="status-card balance-card">
           <p class="label">Saldo su
@@ -1746,17 +1791,6 @@
           </div>
         </div>
         <div class="pilot-side">
-          <!-- Il radar: token giovani su Solana e Robinhood provati su tutte
-               le strategie. Lo disegna static/onchain/radar.js. -->
-          <div class="radar" id="radar" hidden>
-            <header><h3><span class="radar-dot" aria-hidden="true"></span>Radar · token giovani</h3><span data-radar-clock></span></header>
-            <div class="radar-new" data-radar-new hidden>
-              <h4>Appena usciti</h4>
-              <ul></ul>
-            </div>
-            <ul data-radar-list></ul>
-            <p class="radar-foot" data-radar-foot></p>
-          </div>
           <div class="pilot-feed" hidden>
             <header><h3>Cosa sta guardando</h3><span data-updated></span></header>
             <ul></ul>

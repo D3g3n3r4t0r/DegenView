@@ -3,6 +3,7 @@ strategie. Lorenzo: "c'e' questo ticker su Solana o su rete Robinhood che
 performerebbe bene con questo tipo di strategia"."""
 from __future__ import annotations
 
+import asyncio
 import time
 
 import numpy as np
@@ -16,7 +17,7 @@ from app.models import StrategySignal
 from app.trading.onchain import radar
 
 
-def _pool(symbol="NEW", *, liq=100_000, mcap=500_000, age_days=5, token="Tok", pair="Pair"):
+def _pool(symbol="NEW", *, liq=20_000, mcap=80_000, age_days=5, token="Tok", pair="Pair"):
     return radar.Pool(
         chain="solana", symbol=symbol, name=f"{symbol} / SOL", token_address=token, pair_address=pair,
         dex="raydium", liquidity_usd=liq, market_cap=mcap,
@@ -29,8 +30,8 @@ def test_filter_keeps_young_liquid_low_cap_tokens_only():
         _pool("OK"),
         _pool("OLD", age_days=30, token="t2"),
         _pool("THIN", liq=5_000, token="t3"),
-        _pool("BIG", mcap=90_000_000, token="t4"),
-        _pool("SHALLOW", liq=35_000, mcap=5_000_000, token="t5"),  # 0.7% della cap
+        _pool("BIG", mcap=150_000, token="t4"),                    # oltre i $100k
+        _pool("SHALLOW", liq=9_000, mcap=95_000, token="t5"),     # 9% della cap
         _pool("SOL", token="t6"),
         _pool("NOCAP", mcap=None, token="t7"),
     ])
@@ -40,8 +41,8 @@ def test_filter_keeps_young_liquid_low_cap_tokens_only():
 
 def test_one_pool_per_ticker_the_most_liquid():
     picked, _ = radar.pick_candidates([
-        _pool("CAT", liq=40_000, token="copy", pair="p1"),
-        _pool("cat", liq=150_000, token="real", pair="p2"),
+        _pool("CAT", liq=10_000, token="copy", pair="p1"),
+        _pool("cat", liq=30_000, token="real", pair="p2"),
     ])
     assert len(picked) == 1 and picked[0].token_address == "real"
 
@@ -62,6 +63,13 @@ def test_gecko_pool_keeps_address_case():
 def test_interval_needs_finer_candles_for_newborns():
     assert radar.interval_for(30) == "5m"
     assert radar.interval_for(10 * 24) == "15m"
+
+
+@pytest.mark.parametrize("age_s, interval", [
+    (20 * 60, "1m"), (3 * 3600, "1m"), (13 * 3600, "5m"), (2 * 86400, "15m"),
+    (7 * 86400, "1h"), (25 * 86400, "4h")])
+def test_timeframe_follows_the_token_history(age_s, interval):
+    assert radar.auto_interval(age_s) == interval
 
 
 def test_every_registry_strategy_plus_each_ready_archive_config():
@@ -180,3 +188,44 @@ def test_follow_rejects_unknown_strategy(client):
         "chain": "solana", "pool": "P", "symbol": "X", "token_address": "T", "interval": "5m",
         "strategy_name": "Inventata", "enabled": True})
     assert r.status_code == 400
+
+
+def test_every_new_listing_gets_the_best_strategy_by_backtest():
+    out = radar.summarize_listing_backtest(_series(), "1m", radar.strategy_configs([]))
+    assert out["state"] in ("ok", "weak", "none") and out["bars"] == 600
+    if out["state"] != "none":
+        assert out["strategy_name"] not in radar.UNRELIABLE and out["trades"] >= 1
+
+
+def test_listing_too_young_for_a_backtest(monkeypatch):
+    class P:
+        async def fetch_ohlcv(self, symbol, interval, outputsize):
+            assert interval == "1m" and symbol == "NEW@solana:Pool"
+            return _series(20)
+    item = {"chain": "solana", "symbol": "NEW", "pair_address": "Pool", "created_at": time.time() - 900}
+    out = asyncio.run(radar.backtest_listing(item, P()))
+    assert out["state"] == "young" and out["bars"] == 20
+
+
+def test_listing_update_reaches_open_pages(tmp_path, monkeypatch):
+    from app.trading.onchain import listings as L
+    monkeypatch.setattr(L, "_STORE_FILE", tmp_path / "l.json")
+    L.reset_for_tests()
+    L._listings.append({"chain": "solana", "pair_address": "P", "symbol": "NEW"})
+    q = L.subscribe()
+    L.update_listing("solana", "P", backtest={"state": "ok"})
+    assert q.get_nowait() == ("update", {"chain": "solana", "pair_address": "P", "symbol": "NEW",
+                                         "backtest": {"state": "ok"}})
+    L.reset_for_tests()
+
+
+def test_newborn_pool_gets_candles_from_its_trades():
+    from app.providers.dexscreener import candles_from_trades
+    trades = [
+        {"block_timestamp": "2026-09-23T21:48:50Z", "kind": "sell", "price_from_in_usd": "0.9", "volume_in_usd": "5"},
+        {"block_timestamp": "2026-09-23T21:48:10Z", "kind": "buy", "price_to_in_usd": "1.2", "volume_in_usd": "3"},
+        {"block_timestamp": "2026-09-23T21:47:30Z", "kind": "buy", "price_to_in_usd": "1.0", "volume_in_usd": "2"},
+    ]
+    rows = candles_from_trades(trades, 60)
+    t0 = int(pd.Timestamp("2026-09-23T21:47:00Z").timestamp())
+    assert rows == [[t0 + 60, 1.2, 1.2, 0.9, 0.9, 8.0], [t0, 1.0, 1.0, 1.0, 1.0, 2.0]]

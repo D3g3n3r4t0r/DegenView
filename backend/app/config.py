@@ -47,6 +47,14 @@ class Settings(BaseSettings):
     # Radar dei token giovani su Solana e Robinhood (app/trading/onchain/radar.py):
     # sola lettura, propone e non compra. A False il giro di fondo non parte.
     onchain_radar_enabled: bool = True
+    # Facoltativa: con la chiave, Claude legge il sito di ogni token nuovo e
+    # da' un parere prima dell'avviso (app/trading/onchain/legit.py). Vuota =
+    # restano i controlli automatici, il passaggio IA risulta "non attivo".
+    anthropic_api_key: str = ""
+    legit_ai_model: str = "claude-opus-5"
+    # Token Sniffer (piano Pro): punteggio e Smell Test di ogni token proposto.
+    # Vuota = il controllo risulta "non attivo" e il link al report resta.
+    tokensniffer_api_key: str = ""
 
     # Serve solo a costruire il link/QR di approvazione dal telefono per
     # rivelare una chiave on-chain — un URL relativo non e' scansionabile da
