@@ -17,6 +17,10 @@ class SymbolSuggestion(BaseModel):
     exchange: str  # human label, e.g. "NASDAQ", "MEXC (USDT)", "Binance (USDT)"
     asset_type: AssetType
     provider: Literal["stock", "mexc", "binance", "kucoin", "kraken", "dexscreener"]
+    # Solo per provider="dexscreener": l'indirizzo del token BASE (mint su
+    # Solana, contratto su EVM) — il simbolo BASE@chain:pool porta solo
+    # quello del pool, che non basta a chiedere un quote di swap.
+    base_token_address: str | None = None
 
 
 class Candle(BaseModel):
@@ -223,6 +227,11 @@ class WatchlistEntry(BaseModel):
     symbol: str
     asset_type: AssetType
     exchange: CryptoExchange = "mexc"
+    # Solo per asset_type="dex": indirizzo del token base, salvato dalla
+    # ricerca DexScreener al momento in cui la entry viene creata. Assente
+    # per le entry aggiunte prima di questo campo, e in quel caso
+    # l'esecuzione automatica on-chain resta "saltata" — vedi main.py.
+    base_token_address: str | None = None
     strategies: list[str] = []  # which strategies fire Telegram alerts for this ticker
     interval: IntervalChoice = "1d"  # which timeframe those strategies are evaluated on
     on_close: bool = True  # False = also evaluate the still-forming candle (faster, but a signal can vanish before the bar closes)
