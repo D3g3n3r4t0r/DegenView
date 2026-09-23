@@ -31,12 +31,41 @@ def test_exact_ticker_first_and_name_only_matches_dropped():
     assert [r["symbol"] for r in out] == ["BONK", "BONKSOL"]
 
 
-def test_thin_unverified_tokens_hidden_unless_actually_traded():
+def test_thin_tokens_still_listed_after_the_liquid_ones():
+    """Lorenzo cercava MYCEL ($4.7k di pool su Pons) e non usciva: nessun
+    ticker sparisce per poca liquidita', va solo in fondo."""
     out = token_search.pick_one_per_symbol([
         _c("PEPERAT", "thin", 2_000),
-        _c("PEPE", "traded", 1_200, volume=1_800_000),
+        _c("PEPEX", "liquid", 90_000),
+        _c("PEPE", "exact", 1_200),
     ], "pepe")
-    assert [r["address"] for r in out] == ["traded"]
+    assert [r["address"] for r in out] == ["exact", "liquid", "thin"]
+
+
+def test_dexscreener_adds_tokens_the_main_source_misses():
+    payload = {"pairs": [
+        {"chainId": "robinhood", "pairAddress": "0xpool",
+         "baseToken": {"address": "0xMYCE", "symbol": "MYCE", "name": "Mycelium"},
+         "quoteToken": {"address": "0xSHROOM", "symbol": "SHROOM"},
+         "liquidity": {"usd": 7_224}, "volume": {"h24": 362}, "txns": {"h24": {"buys": 30, "sells": 12}},
+         "info": {"imageUrl": "https://img.example/myce.png"}},
+        {"chainId": "solana", "pairAddress": "x",
+         "baseToken": {"address": "sol-myce", "symbol": "MYCE"}, "quoteToken": {"address": "sol", "symbol": "SOL"}},
+    ]}
+    extra = token_search._dexscreener_candidates(payload, "robinhood")
+    merged = token_search.merge_candidates([_c("MYCEL", "0xMYCEL", 4_697)], extra)
+    out = token_search.pick_one_per_symbol(merged, "MYCE")
+    assert [r["address"] for r in out] == ["0xMYCE", "0xMYCEL"]
+    assert out[0]["icon"] == "https://img.example/myce.png"
+
+
+def test_merge_keeps_the_verification_of_the_main_source():
+    merged = token_search.merge_candidates(
+        [_c("WIF", "EKpQ", 6_000_000, verified=True)],
+        [_c("WIF", "ekpq", 7_000_000), _c("WIF", "copy", 9_000_000)],
+    )
+    out = token_search.pick_one_per_symbol(merged, "wif")
+    assert [(r["address"], r["liquidity_usd"]) for r in out] == [("EKpQ", 7_000_000)]
 
 
 def test_gecko_pools_with_reserve_but_no_trades_count_as_zero_liquidity():
