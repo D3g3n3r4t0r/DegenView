@@ -2610,7 +2610,7 @@ Tre cose, in ordine:
    design senza scrivere codice, come chiesto esplicitamente da Lorenzo per
    questa fase.
 
-## Velocita' della pagina wallet on-chain — `seed-0086` — **fatto**
+## Velocita' della pagina wallet on-chain — `seed-0087` — **fatto**
 
 Lorenzo (2026-09-23): "usa un linguaggio di programmazione per rendere il
 sito velocissimo a costo di fare un refactory". Deciso di **non** cambiare
