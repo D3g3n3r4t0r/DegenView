@@ -360,7 +360,7 @@
        (visto dal vivo: "Firma e invia" con la checkbox enorme a sinistra). */
     & input:not([type="checkbox"]):not([type="radio"]), & select {
       inline-size: 100%; padding: 10px 12px; border-radius: 9px;
-      border: 1.5px solid var(--line); background: var(--raised); font-size: 15px;
+      border: 1.5px solid var(--line); background: var(--raised); font-size: 16px;
       &:focus-visible { border-color: var(--accent); outline: none; }
     }
     & .form-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
@@ -1454,10 +1454,69 @@
     & span { color: var(--ink-dim); }
   }
 }
+@layer components {
+  /* Rete: il nome accanto al saldo e' l'interruttore. Un tocco, niente menu. */
+  .topbar #chain-switch { display: none; }
+  .balance-card .label { display: flex; align-items: center; gap: 6px; }
+  .chain-flip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 8px 4px 6px; margin-block: -4px;
+    border: 1px solid var(--line); border-radius: 999px;
+    background: var(--raised); color: var(--ink);
+    font: inherit; cursor: pointer;
+    transition: border-color .2s, scale .12s var(--ease-out);
+    & .chain-ic { color: var(--live); font-size: 12px; }
+    & .flip-ic { color: var(--ink-faint); font-size: 11px; transition: rotate .35s var(--ease-out), color .2s; }
+    &:hover { border-color: var(--ink-faint); & .flip-ic { color: var(--ink); } }
+    &:active { scale: .96; }
+    &.is-flipping .flip-ic { rotate: 180deg; }
+    &.is-flipping #chain-label { animation: chain-in .35s var(--ease-out); }
+  }
+  @keyframes chain-in { from { opacity: 0; translate: 0 4px; } }
+  @media (prefers-reduced-motion: reduce) {
+    .chain-flip .flip-ic { transition: none; }
+    .chain-flip.is-flipping #chain-label { animation: none; }
+  }
+}
+@layer motion {
+  /* Sotto i 16px iOS ingrandisce la pagina quando tocchi un campo, e dopo
+     il login la lascia ingrandita: "appena lo apro e' decentrato". */
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; overflow-x: clip; }
+
+  /* Avvio: DEGEN, poco meno di un secondo, poi si toglie di mezzo. Non
+     blocca niente: la pagina sotto carica e risponde intanto. */
+  .splash {
+    position: fixed; inset: 0; z-index: 1000; pointer-events: none;
+    display: grid; place-content: center; justify-items: center; gap: 18px;
+    background: var(--bg);
+    animation: splash-out .45s var(--ease-out) .85s forwards;
+  }
+  .splash-word {
+    display: flex; gap: .06em; margin: 0;
+    font: 700 clamp(44px, 14vw, 88px)/1 var(--sans); letter-spacing: .04em; color: var(--ink);
+    & span { display: inline-block; opacity: 0; animation: splash-letter .5s var(--ease-out) forwards; }
+    & span:nth-child(2) { animation-delay: .05s; }
+    & span:nth-child(3) { animation-delay: .1s; }
+    & span:nth-child(4) { animation-delay: .15s; }
+    & span:nth-child(5) { animation-delay: .2s; color: var(--live); }
+  }
+  .splash-line {
+    display: block; inline-size: 120px; block-size: 2px; border-radius: 2px; background: var(--live);
+    transform: scaleX(0); animation: splash-line .6s var(--ease-out) .2s forwards;
+  }
+  @keyframes splash-letter { from { opacity: 0; transform: translateY(28px) scale(.96); } to { opacity: 1; transform: none; } }
+  @keyframes splash-line { to { transform: scaleX(1); } }
+  @keyframes splash-out { to { opacity: 0; transform: scale(1.04); visibility: hidden; } }
+  @media (prefers-reduced-motion: reduce) { .splash { display: none; } }
+}
 </style>
 <!--onchain-importmap-->
 </head>
 <body>
+  <div class="splash" id="splash" aria-hidden="true">
+    <p class="splash-word"><span>D</span><span>E</span><span>G</span><span>E</span><span>N</span></p>
+    <span class="splash-line"></span>
+  </div>
   <div class="page">
     <header class="topbar">
       <!-- Il marchio e' anche il ritorno al sito: un link vero, non
@@ -1499,7 +1558,11 @@
     <div id="app-shell" class="stack" data-view="pilot" hidden>
       <div class="status-strip">
         <section class="status-card balance-card">
-          <p class="label">Saldo · <span id="chain-label">Solana</span></p>
+          <p class="label">Saldo su
+            <button type="button" class="chain-flip" id="chain-flip" title="Tocca per cambiare rete">
+              <span class="chain-ic" id="chain-ic" aria-hidden="true">◎</span><span id="chain-label">Solana</span><span class="flip-ic" aria-hidden="true">⇄</span>
+            </button>
+          </p>
           <div class="amount" id="balance">—</div>
           <div class="meta">
             <button type="button" class="addr" id="address" title="Copia l'indirizzo"></button>
@@ -1633,7 +1696,6 @@
       <button type="button" class="menu-item menu-mobile" data-proxy='[data-order-tab="sniper"]'><span class="menu-ic" aria-hidden="true">◎</span><span><b>Sniper</b></span></button>
       <button type="button" class="menu-item" data-sheet="receive"><span class="menu-ic" aria-hidden="true">↓</span><span><b>Ricevi</b><small>Indirizzo e QR del wallet</small></span></button>
       <button type="button" class="menu-item" data-sheet="send"><span class="menu-ic" aria-hidden="true">↑</span><span><b>Invia</b><small>Manda token a un altro indirizzo</small></span></button>
-      <button type="button" class="menu-item menu-mobile" data-switch-chain><span class="menu-ic" aria-hidden="true">⇄</span><span><b>Cambia rete</b></span></button>
       <button type="button" class="menu-item menu-mobile" data-proxy='[data-bottom-tab="positions"]'><span class="menu-ic" aria-hidden="true">▤</span><span><b>Posizioni</b></span></button>
       <button type="button" class="menu-item menu-mobile" data-proxy='[data-bottom-tab="history"]'><span class="menu-ic" aria-hidden="true">↺</span><span><b>Storico</b></span></button>
       <button type="button" class="menu-item menu-mobile" data-proxy='[data-bottom-tab="orders"]'><span class="menu-ic" aria-hidden="true">☰</span><span><b>Ordini aperti</b></span></button>
