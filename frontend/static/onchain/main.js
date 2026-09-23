@@ -13,6 +13,7 @@ import * as sheets from "@onchain/sheets.js";
 import { drawSparkline } from "@onchain/sparkline.js";
 import { appendHistory, chainInfo, readCache, readHistory, state, writeCache } from "@onchain/store.js";
 import { openSwap } from "@onchain/swap.js";
+import { openLimitOrder, openOrderDiary } from "@onchain/limitOrders.js";
 
 // Sulla pagina a se' (onchain-app.html) la radice e' il documento intero.
 // Fusa dentro la tab Trading, invece, questo modulo viene importato dentro
@@ -210,6 +211,10 @@ const SHEETS = {
   swap: () => openSwap({
     onExecuted: () => { refreshBalance(); refreshPositions(); toast("Swap inviato", "verifica la firma nello storico"); },
   }),
+  limit: () => openLimitOrder({
+    onPlaced: () => toast("Ordine limite piazzato", "resta in attesa nel diario"),
+  }),
+  diary: () => openOrderDiary(),
 };
 $$("[data-sheet]").forEach((button) =>
   button.addEventListener("click", () => SHEETS[button.dataset.sheet]?.()));

@@ -55,6 +55,8 @@ export const simulateOrder = (order) => request("/api/onchain/simulate", { metho
 // il numero su cui si firma.
 export const quoteSolana = (body) => request("/api/onchain/quote/solana", { method: "POST", body, timeoutMs: 15000 });
 export const getTokenInfo = (chain, address) => request(`/api/onchain/token/${chain}/${address}`, { timeoutMs: 12000 });
+export const searchTokens = (chain, query) =>
+  request(`/api/onchain/tokens/search?chain=${chain}&query=${encodeURIComponent(query)}`, { timeoutMs: 10000 });
 export const quoteRobinhood = (body) => request("/api/onchain/quote/robinhood", { method: "POST", body, timeoutMs: 15000 });
 
 export const executeSolana = (body) =>
@@ -66,3 +68,11 @@ export const requestReveal = (chain) =>
   request(`/api/onchain/wallets/${chain}/reveal/request`, { method: "POST" });
 export const consumeReveal = (chain, token) =>
   request(`/api/onchain/wallets/${chain}/reveal`, { method: "POST", body: { token } });
+
+// Ordini limite (piano DEX): non un book on-chain vero, size+prezzo+
+// direzione persistiti ed eseguiti dal server quando il prezzo tocca il
+// target — vedi limit_order_loop in main.py.
+export const createLimitOrder = (body) => request("/api/onchain/limit-orders", { method: "POST", body });
+export const listLimitOrders = (chain) => request(`/api/onchain/limit-orders/${chain}`);
+export const cancelLimitOrder = (id) => request(`/api/onchain/limit-orders/${id}`, { method: "DELETE" });
+export const getHistory = (chain) => request(`/api/onchain/history/${chain}`, { timeoutMs: 15000 });

@@ -116,7 +116,7 @@ def clamp_size_to_pool(
 
 def run_all_checks(
     owner_id: str, chain: str, token: str, size_usd: float, price_impact_pct: float,
-    pool_info: dict | None = None,
+    pool_info: dict | None = None, strategy_name: str | None = None,
 ) -> tuple[bool, str]:
     """Tutti i controlli in ordine, ferma al primo che rifiuta — l'ordine
     di questa lista e' quello suggerito dal piano: prima il circuit
@@ -130,15 +130,26 @@ def run_all_checks(
     "min_age_minutes"/"max_drop_pct"}. Quando e' presente, l'allowlist pool
     (liquidita' minima, eta' minima, crollo di liquidita') viene controllata
     ad OGNI tentativo, non solo una volta all'ingresso — cosi' chiede il
-    piano."""
+    piano.
+
+    strategy_name == "manuale" salta SOLO la concentrazione, non gli altri
+    controlli: e' l'unico che decide "quanto diversificare", una scelta che
+    un umano che swappa di sua volonta' puo' prendere lui — Lorenzo l'ha
+    chiesto dopo che uno swap ETH->USDG legittimo (portare tutto in una
+    stablecoin) e' stato respinto perche' USDG sarebbe stato il 100% di un
+    portafoglio on-chain che, di fatto, aveva solo quella posizione tracciata.
+    Un'automazione (watchlist, ordine limite) resta invece sotto il tetto:
+    e' quella che puo' costruire una concentrazione senza che nessuno la
+    stia guardando."""
     checks: list[tuple] = [
         (check_circuit_breaker, (owner_id, chain)),
         (check_discrepancy, (owner_id, chain, token)),
         (check_per_trade_cap, (size_usd,)),
         (check_daily_cap, (owner_id, chain, size_usd)),
         (check_price_impact, (price_impact_pct,)),
-        (check_concentration, (owner_id, chain, token, size_usd)),
     ]
+    if strategy_name != "manuale":
+        checks.append((check_concentration, (owner_id, chain, token, size_usd)))
     if pool_info is not None:
         checks.append((
             pool_safety.check_liquidity_minimum,

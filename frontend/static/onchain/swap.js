@@ -116,6 +116,14 @@ function paintForm(armed) {
         <button type="button" class="swap-max" id="swap-max" ${leg.in.isNative ? "" : "hidden"}>Max</button>
         <span class="swap-unit" id="swap-in-symbol">${leg.in.symbol}</span>
       </div>
+      ${leg.in.isNative && availableToSell(chain) ? `
+      <div class="mo-slider-row">
+        <input type="range" id="swap-pct-slider" class="mo-slider" min="0" max="100" value="0" step="1" />
+        <div class="mo-slider-val-wrap">
+          <input type="number" id="swap-pct-val" class="mo-slider-val-input" value="0" min="0" max="100" step="1" />
+          <span class="mo-slider-unit">%</span>
+        </div>
+      </div>` : ""}
       <button type="button" class="swap-token-pick" id="swap-pick-in">Cambia token in vendita ↕</button>
       <p class="swap-available" id="swap-available">
         ${leg.in.isNative
@@ -137,6 +145,12 @@ function paintForm(armed) {
       <p class="swap-usd" id="swap-out-usd"></p>
 
       <p class="swap-detail" id="swap-detail"></p>
+
+      <label class="swap-confirm">
+        <input type="checkbox" id="swap-confirm-box" />
+        <span>Confermo: denaro reale, <b id="swap-confirm-summary">—</b></span>
+      </label>
+
       <button type="submit" class="btn-primary" id="swap-submit" disabled>Inserisci una size</button>
     </form>
     <output class="outcome" id="swap-outcome" hidden></output>
@@ -146,48 +160,53 @@ function paintForm(armed) {
   const submitButton = sheets.sheetBody().querySelector("#swap-submit");
   const form = sheets.sheetBody().querySelector("#swap-form");
   const maxButton = sheets.sheetBody().querySelector("#swap-max");
+  const confirmBox = sheets.sheetBody().querySelector("#swap-confirm-box");
+  const pctSlider = sheets.sheetBody().querySelector("#swap-pct-slider");
+  const pctVal = sheets.sheetBody().querySelector("#swap-pct-val");
 
-  amountInput.addEventListener("input", () => scheduleQuote(armed));
+  amountInput.addEventListener("input", () => { confirmBox.checked = false; scheduleQuote(armed); });
+  confirmBox.addEventListener("change", () => scheduleQuote(armed));
   maxButton.addEventListener("click", () => {
     const max = availableToSell(chain);
-    if (max != null) { amountInput.value = max; scheduleQuote(armed); }
+    if (max != null) { amountInput.value = max; confirmBox.checked = false; scheduleQuote(armed); }
   });
+  if (pctSlider) {
+    const applyPct = (pct) => {
+      const max = availableToSell(chain) ?? 0;
+      amountInput.value = Math.round(max * (pct / 100) * 1e8) / 1e8;
+      confirmBox.checked = false;
+      scheduleQuote(armed);
+    };
+    pctSlider.addEventListener("input", () => { pctVal.value = pctSlider.value; applyPct(Number(pctSlider.value)); });
+    pctVal.addEventListener("input", () => { pctSlider.value = pctVal.value; applyPct(Number(pctVal.value)); });
+  }
   sheets.sheetBody().querySelector("#swap-pick-in").addEventListener("click", () => pickToken("in", armed));
   sheets.sheetBody().querySelector("#swap-pick-out").addEventListener("click", () => pickToken("out", armed));
-  form.addEventListener("submit", (event) => { event.preventDefault(); confirmAndExecute(armed); });
+  form.addEventListener("submit", (event) => { event.preventDefault(); if (confirmBox.checked) confirmAndExecute(armed); });
 }
 
-// Un mini-modulo, non una sheet nuova: chiede solo l'indirizzo del token e
-// lo risolve (decimali reali, simbolo/prezzo se DexScreener li conosce)
-// prima di sostituire la gamba corrispondente.
-async function pickToken(side, armed) {
+// Il picker vive in sheets.js (dialog dedicato): mai un prompt() del
+// browser dentro l'app.
+function pickToken(side, armed) {
   const chain = state.chain;
-  const raw = window.prompt(
-    side === "in"
-      ? "Indirizzo del token da vendere (mint Solana o contratto EVM). Lascia vuoto per il token nativo."
-      : "Indirizzo del token da ricevere (mint Solana o contratto EVM).",
-  );
-  if (raw === null) return;
-  const address = raw.trim();
-  const submitButton = sheets.sheetBody().querySelector("#swap-submit");
-  submitButton.disabled = true;
-  submitButton.textContent = "Verifico il token…";
-
-  try {
-    if (side === "in" && address === "") {
-      leg.in = { ...NATIVE[chain], priceUsd: state.balance?.native_price_usd ?? null, isNative: true };
-    } else {
-      const resolved = await resolveToken(chain, address);
-      leg[side] = { ...resolved, isNative: false };
-    }
-  } catch (error) {
-    submitButton.disabled = false;
-    submitButton.textContent = "Riprova";
-    window.alert(error instanceof ApiError ? error.message : "Token non riconosciuto.");
-    return;
-  }
-
-  paintForm(armed);
+  sheets.openTokenPicker(chain, {
+    onPick: async ({ address }) => {
+      const submitButton = sheets.sheetBody().querySelector("#swap-submit");
+      if (submitButton) { submitButton.disabled = true; submitButton.textContent = "Verifico il token…"; }
+      try {
+        const resolved = await resolveToken(chain, address);
+        leg[side] = { ...resolved, isNative: false };
+        paintForm(armed);
+      } catch (error) {
+        if (submitButton) submitButton.textContent = "Riprova";
+        const detailEl = sheets.sheetBody().querySelector("#swap-detail");
+        if (detailEl) {
+          detailEl.textContent = error instanceof ApiError ? error.message : "Token non riconosciuto.";
+          detailEl.classList.add("is-warn");
+        }
+      }
+    },
+  });
 }
 
 function scheduleQuote(armed) {
@@ -204,6 +223,8 @@ async function requestQuote(rawAmount, armed) {
   const inUsdEl = sheets.sheetBody().querySelector("#swap-in-usd");
   const outUsdEl = sheets.sheetBody().querySelector("#swap-out-usd");
   const submitButton = sheets.sheetBody().querySelector("#swap-submit");
+  const confirmBox = sheets.sheetBody().querySelector("#swap-confirm-box");
+  const confirmSummary = sheets.sheetBody().querySelector("#swap-confirm-summary");
   if (!(amount > 0)) {
     latestQuote = null;
     outEl.textContent = "—";
@@ -235,7 +256,12 @@ async function requestQuote(rawAmount, armed) {
     detailEl.textContent = `Price impact stimato ${quote.price_impact_pct.toFixed(2)}%`;
     detailEl.classList.toggle("is-warn", quote.price_impact_pct > 1);
 
-    submitButton.disabled = !armed;
+    if (confirmSummary) {
+      confirmSummary.textContent =
+        `${amount} ${leg.in.symbol} → circa ${outAmount.toFixed(6)} ${leg.out.symbol}, `
+        + `price impact ${quote.price_impact_pct.toFixed(2)}%`;
+    }
+    submitButton.disabled = !armed || !confirmBox?.checked;
     submitButton.textContent = armed ? "Firma e invia" : "Esecuzione spenta sul server";
   } catch (error) {
     latestQuote = null;
@@ -253,18 +279,12 @@ function isStable(token) {
 }
 
 async function confirmAndExecute(armed) {
+  // La conferma e' la checkbox spuntata prima del submit (vedi paintForm):
+  // mai un window.confirm() del browser dentro l'app.
   if (!latestQuote || !armed) return;
   const chain = state.chain;
   const outcome = sheets.sheetBody().querySelector("#swap-outcome");
   const submitButton = sheets.sheetBody().querySelector("#swap-submit");
-  const outAmount = fromBaseUnits(latestQuote.out_amount, leg.out.decimals);
-
-  const confirmed = window.confirm(
-    `Confermi lo swap di ${latestQuote.sourceAmount} ${leg.in.symbol} `
-    + `per circa ${outAmount.toFixed(6)} ${leg.out.symbol}?\n\n`
-    + `Price impact stimato: ${latestQuote.price_impact_pct.toFixed(2)}%.`,
-  );
-  if (!confirmed) return;
 
   submitButton.disabled = true;
   submitButton.textContent = "Invio…";

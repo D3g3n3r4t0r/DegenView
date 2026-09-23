@@ -206,12 +206,12 @@
   /* --- azioni ------------------------------------------------------
      Quattro pari: su un wallet in sola lettura nessuna di queste e'
      l'azione principale, e dipingerne una di verde direbbe il contrario. */
-  #onchain-embed .actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  #onchain-embed .actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 
-  /* Da 400px la fila intera (ricevi/storico/limiti/simula/swap) ci sta
-     in cinque; sotto, tre per riga: misura il contenitore, non la finestra. */
-  @container (width >= 400px) {
-    #onchain-embed .actions { grid-template-columns: repeat(5, 1fr); }
+  /* Sette azioni non stanno in una riga sotto una certa larghezza: 4 per
+     riga fino a 560px di contenitore, tutte in fila da 560px in su. */
+  @container (width >= 560px) {
+    #onchain-embed .actions { grid-template-columns: repeat(7, 1fr); }
   }
 
   /* --- layout a due colonne, da desktop — vedi onchain-app.html per la
@@ -233,7 +233,7 @@
     #onchain-embed #chain-switch { grid-area: switch; max-inline-size: 320px; }
     #onchain-embed #app-shell > section:not(.assets):not(.empty) { grid-area: balance; }
     #onchain-embed #status { grid-area: status; }
-    #onchain-embed #actions { grid-area: actions; grid-template-columns: repeat(5, 1fr); }
+    #onchain-embed #actions { grid-area: actions; grid-template-columns: repeat(4, 1fr); }
     #onchain-embed #assets { grid-area: assets; }
     #onchain-embed #reveal-row { grid-area: reveal; }
     #onchain-embed #onchain-empty-state { grid-area: empty; }
@@ -365,6 +365,37 @@
     &.is-warn { color: var(--amber); }
   }
   #onchain-embed .sheet-note.is-warn { color: var(--amber); background: var(--amber-soft); border-radius: 9px; padding: 9px 11px; margin-block-end: 10px; }
+
+  /* --- tab BUY/SELL, ereditate dall'ordine manuale del sito -----------
+     Qui dentro #onchain-embed le variabili del resto del sito (--bull,
+     --bear, ecc.) esisterebbero anche, ma i token del wallet restano la
+     fonte di verita' per questo pannello — stessa regola scoped di
+     onchain-app.html, non le variabili del sito che lo ospita. */
+  #onchain-embed .mo-side-tabs { display: flex; border-radius: var(--radius); overflow: hidden; border: 1.5px solid var(--line); margin-block-end: 4px; }
+  #onchain-embed .mo-side-tab {
+    flex: 1; padding: 9px; border: 0; background: var(--raised); color: var(--ink-dim);
+    font-size: 12px; font-weight: 700; cursor: pointer; letter-spacing: .04em; transition: background .15s, color .15s;
+  }
+  #onchain-embed .mo-buy-tab.mo-tab-active { background: var(--accent); color: var(--accent-ink); }
+  #onchain-embed .mo-sell-tab.mo-tab-active { background: var(--danger); color: #fff; }
+  #onchain-embed .mo-side-tab:not(.mo-tab-active):hover { background: var(--hover); }
+
+  #onchain-embed .swap-confirm {
+    display: flex; align-items: flex-start; gap: 9px;
+    padding: 10px 11px; font-size: 12px; line-height: 1.45;
+    border: 1px solid color-mix(in oklch, var(--danger) 40%, transparent);
+    background: var(--danger-soft);
+    border-radius: 9px; cursor: pointer; margin-block: 10px;
+    & input { margin-block-start: 2px; flex-shrink: 0; }
+  }
+  #onchain-embed .mo-slider-row { display: flex; align-items: center; gap: 10px; margin-block-start: 8px; }
+  #onchain-embed .mo-slider { flex: 1; accent-color: var(--accent); }
+  #onchain-embed .mo-slider-val-wrap { display: flex; align-items: center; gap: 3px; flex-shrink: 0; }
+  #onchain-embed .mo-slider-val-input {
+    width: 3.2em; text-align: end; border: 1.5px solid var(--line); border-radius: 6px;
+    background: var(--raised); padding: 4px 5px; font-size: 12.5px;
+  }
+  #onchain-embed .mo-slider-unit { font-size: 11.5px; color: var(--ink-faint); }
 
   /* --- coppie chiave/valore ------------------------------------------ */
   #onchain-embed .kv {
