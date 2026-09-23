@@ -72,7 +72,15 @@ def add_entry(
     """Upsert: adding a ticker that's already tracked by this owner just
     returns the existing entry (with whatever strategies/interval are
     already on it) instead of creating a duplicate row."""
-    symbol = symbol.strip().upper()
+    # Solo asset_type != "dex": un ticker CEX/azione e' case-insensitive
+    # (BTCUSDT o btcusdt sono lo stesso ticker), ma un simbolo dex
+    # ("BASE@chain:pool") incorpora un indirizzo case-SENSITIVE — un pool
+    # Solana in base58 o un contratto EVM con checksum misto — che
+    # .upper() rendeva irriconoscibile a _parse_symbol() (regex con
+    # `[a-z]+` per la chain e base58 case-sensitive per il pool). Bug
+    # reale, non ipotetico: verificato che PEPE@solana:9xQe... diventa
+    # PEPE@SOLANA:9XQE... e smette di fare match.
+    symbol = symbol.strip() if asset_type == "dex" else symbol.strip().upper()
     for entry in _entries.values():
         if (
             entry.owner_id == owner_id

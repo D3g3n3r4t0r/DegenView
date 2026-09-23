@@ -209,6 +209,12 @@ class User(BaseModel):
     trading_credentials: dict[str, ExchangeCredential] = {}  # key = exchange slug ("binance", "mexc", "kucoin")
     futures_credentials: dict[str, FuturesCredential] = {}  # key = exchange slug — mai popolato da trading_credentials
     onchain_wallets: dict[OnchainChain, OnchainWallet] = {}  # key = chain ("solana", "robinhood")
+    # Chain su cui lo sniper (scanner di nuovi arrivi DEX, gia' in piedi per
+    # il resto del sito) puo' aggiungere da solo un token alla watchlist con
+    # la strategia "lorenzo" attiva — vuoto/assente = spento, mai acceso di
+    # default. L'esecuzione resta comunque dietro onchain_execution_enabled
+    # e gli stessi tetti di rischio di qualunque altro ordine automatico.
+    sniper_autotrade_chains: list[OnchainChain] = []
     passkeys: list[Passkey] = []
     preferences: dict = {}  # last session state: ticker, interval, strategy, layers, etc.
 

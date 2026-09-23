@@ -710,6 +710,93 @@ async def _watchlist_alert_loop() -> None:
                     )
 
 
+_SNIPER_ONCHAIN_STRATEGY = "Lorenzo (trend-follower)"
+_SNIPER_ONCHAIN_MIN_LIQUIDITY_USD = 3000.0
+# "Nuovi arrivi", non token stagionati: lo sniper archivia tutto cio' che ha
+# mai incontrato, questo ponte guarda solo l'arco in cui "nuovo" ha ancora
+# senso — un token con 3 mesi di storia non e' piu' un arrivo da inseguire.
+_SNIPER_ONCHAIN_MAX_AGE_HOURS = 72.0
+_SNIPER_ONCHAIN_POLL_SECONDS = 180
+
+
+async def _sniper_onchain_bridge_loop() -> None:
+    """Ponte fra lo sniper (scanner di nuovi arrivi DEX, gia' in piedi per
+    tutte le chain che copre) e il wallet on-chain — Lorenzo: "la strategia
+    trend follower [...] inglobata sul wallet, così da usarla
+    automaticamente su dei ticker on chain sfruttando la logica dello
+    sniper che già scansionava anche i nuovi arrivi".
+
+    Non un secondo motore di segnali: questo ponte fa SOLO una cosa,
+    aggiungere alla watchlist (upsert, mai un duplicato) i candidati dello
+    sniper su Solana/Robinhood che passano i filtri minimi, con la
+    strategia di Lorenzo attiva — poi e' _watchlist_alert_loop, sopra, a
+    valutare il segnale ed eseguire, con gli STESSI guardrail di ogni
+    altro ordine automatico. Per-utente e opt-in
+    (User.sniper_autotrade_chains, spento di default): nessun utente vede
+    la propria watchlist popolarsi senza averlo acceso lui stesso.
+
+    Richiede telegram_chat_id configurato, come ogni altra entry — non e'
+    un requisito nuovo di questo ponte, e' lo stesso di
+    _watchlist_alert_loop sopra, che salta un'intera entry (alert
+    incluso l'auto-trade) se l'owner non ha il chat_id impostato."""
+    while True:
+        await asyncio.sleep(_SNIPER_ONCHAIN_POLL_SECONDS)
+        try:
+            await _sniper_onchain_bridge_tick()
+        except Exception:  # noqa: BLE001 — il ciclo non deve fermarsi del tutto
+            logger.exception("sniper_onchain_bridge_loop: giro fallito")
+
+
+async def _sniper_onchain_bridge_tick() -> None:
+    """Un giro solo — separato dal `while True` sopra per essere testabile
+    senza dover far girare un loop infinito, stesso schema di
+    _check_limit_order/limit_order_loop."""
+    users_by_chain: dict[str, list[User]] = {}
+    for user in auth.list_users():
+        for chain in user.sniper_autotrade_chains:
+            users_by_chain.setdefault(chain, []).append(user)
+    if not users_by_chain or not settings.sniper_enabled:
+        return  # nessuno l'ha acceso, o lo sniper stesso e' spento: niente da leggere
+
+    from app.sniper import cache as sniper_cache
+
+    for candidate in sniper_cache.get_candidates():
+        interested = users_by_chain.get(candidate.chain_id)
+        if not interested:
+            continue
+        if candidate.liquidity_usd < _SNIPER_ONCHAIN_MIN_LIQUIDITY_USD:
+            continue
+        if candidate.age_hours > _SNIPER_ONCHAIN_MAX_AGE_HOURS:
+            continue
+        if not candidate.token_address or not candidate.pair_address:
+            continue
+        symbol = f"{candidate.symbol}@{candidate.chain_id}:{candidate.pair_address}"
+        for user in interested:
+            if user.onchain_wallets.get(candidate.chain_id) is None:
+                continue
+            try:
+                existing = next(
+                    (e for e in watchlist_store.list_entries(user.id) if e.symbol == symbol), None,
+                )
+                if existing is not None:
+                    continue  # gia' seguito da questo utente, niente da rifare
+                probe = await dexscreener_provider.fetch_ohlcv(symbol, "1d", 2)
+                if probe.empty:
+                    continue
+                entry = watchlist_store.add_entry(
+                    user.id, symbol, "dex", interval="1d", on_close=True,
+                    base_token_address=candidate.token_address,
+                )
+                watchlist_store.set_strategy_enabled(entry.id, _SNIPER_ONCHAIN_STRATEGY, True)
+                watchlist_store.set_auto_trade(entry.id, _SNIPER_ONCHAIN_STRATEGY, True)
+                logger.info(
+                    "sniper_onchain_bridge: %s aggiunto alla watchlist di %s (Lorenzo trend-follower)",
+                    symbol, user.email,
+                )
+            except Exception:  # noqa: BLE001 — un candidato/utente che fallisce non deve bloccare gli altri
+                logger.exception("sniper_onchain_bridge: errore su %s per %s", symbol, user.email)
+
+
 # --- pausa per quota esaurita ------------------------------------------------
 # Chiave = (asset_type, exchange) e non l'utente: la quota e' del piano, quindi
 # e' condivisa; fermare solo chi ha incontrato l'errore lascerebbe gli altri a
@@ -930,6 +1017,7 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(onchain_twap_jobs_resume.resume_running_twap_jobs())
     t1 = asyncio.create_task(_watchlist_alert_loop())
     t6 = asyncio.create_task(limit_order_loop())
+    t7 = asyncio.create_task(_sniper_onchain_bridge_loop())
     t4 = asyncio.create_task(_weekly_recap_loop())
     t5 = asyncio.create_task(_watchdog_loop())
     sniper_tasks: list[asyncio.Task] = []
@@ -943,6 +1031,7 @@ async def lifespan(app: FastAPI):
     yield
     t1.cancel()
     t6.cancel()
+    t7.cancel()
     t4.cancel()
     t5.cancel()
     for t in sniper_tasks:
@@ -3040,6 +3129,29 @@ async def onchain_risk_status(chain: OnchainChain, user: User = Depends(auth.get
         "concentration_cap_pct": settings.onchain_max_token_concentration_pct,
         "execution_enabled": settings.onchain_execution_enabled,
     }
+
+
+class SniperAutotradeRequest(BaseModel):
+    enabled: bool
+
+
+@app.get("/api/onchain/sniper-autotrade")
+async def get_sniper_autotrade(user: User = Depends(auth.get_current_user)) -> dict:
+    return {"chains": user.sniper_autotrade_chains}
+
+
+@app.patch("/api/onchain/sniper-autotrade/{chain}")
+async def set_sniper_autotrade(
+    chain: OnchainChain, body: SniperAutotradeRequest, user: User = Depends(auth.get_current_user),
+) -> dict:
+    """Opt-in per lo sniper che aggiunge da solo nuovi arrivi on-chain alla
+    watchlist con la strategia di Lorenzo attiva — vedi
+    _sniper_onchain_bridge_loop. Spento di default per ogni utente,
+    acceso solo qui, mai da un default globale."""
+    if chain not in user.onchain_wallets:
+        raise HTTPException(status_code=400, detail=f"Nessun wallet {chain} per questo utente — crealo prima.")
+    updated = auth.set_sniper_autotrade_chain(user.id, chain, body.enabled)
+    return {"chains": updated.sniper_autotrade_chains}
 
 
 @app.post("/api/onchain/risk/circuit-breaker/{chain}/reset")
