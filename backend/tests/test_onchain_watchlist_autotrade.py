@@ -16,7 +16,9 @@ import pytest
 from app import auth, main, trading_log
 from app.models import OnchainWallet, StrategySignal, User, WatchlistEntry
 from app.trading.onchain import execute as onchain_execute
+from app.trading.onchain import ledger as onchain_ledger
 from app.trading.onchain import quotes as onchain_quotes
+from app.trading.onchain import token_metadata as onchain_token_metadata
 
 
 def _run(coro):
@@ -95,6 +97,57 @@ def test_buy_signal_executes_real_order_when_address_and_wallet_present(monkeypa
     monkeypatch.setattr(onchain_execute, "execute_order", _fake_execute_order)
 
     _run(main._run_onchain_auto_trade(owner, entry, "lorenzo", [_signal("entry_long")]))
+    logged = trading_log.list_for("u1")
+    assert logged[0]["outcome"] == "eseguito"
+
+
+def test_sell_signal_skipped_without_position_even_with_decimals(monkeypatch):
+    entry = _dex_entry(base_token_address="TokenMintAddr222")
+    owner = _owner(solana=OnchainWallet(address="Wallet1", private_key_enc="x", enabled=True))
+
+    async def _fake_decimals(chain, token_address):
+        return 6
+
+    monkeypatch.setattr(onchain_token_metadata, "get_token_decimals", _fake_decimals)
+    monkeypatch.setattr(onchain_ledger, "get_position", lambda owner_id, chain, token: {"quantity": 0.0, "cost_usd": 0.0})
+
+    _run(main._run_onchain_auto_trade(owner, entry, "lorenzo", [_signal("exit_long")]))
+    logged = trading_log.list_for("u1")
+    assert logged[0]["outcome"] == "saltato"
+    assert "nessuna posizione" in logged[0]["detail"]
+
+
+def test_sell_signal_executes_real_order_when_decimals_and_position_present(monkeypatch):
+    entry = _dex_entry(base_token_address="TokenMintAddr222")
+    owner = _owner(solana=OnchainWallet(address="Wallet1", private_key_enc="x", enabled=True))
+
+    async def _fake_decimals(chain, token_address):
+        assert token_address == "TokenMintAddr222"
+        return 6
+
+    monkeypatch.setattr(onchain_token_metadata, "get_token_decimals", _fake_decimals)
+    monkeypatch.setattr(
+        onchain_ledger, "get_position",
+        lambda owner_id, chain, token: {"quantity": 123.0, "cost_usd": 200.0},
+    )
+
+    async def _fake_quote(input_mint, output_mint, amount_lamports, slippage_bps=50):
+        assert input_mint == "TokenMintAddr222"  # si vende il token base, non lo stabile
+        assert amount_lamports == 123 * 10**6  # convertito nei decimali veri, non indovinati
+        return {"in_amount": amount_lamports, "out_amount": 240, "price_impact_pct": 0.3, "raw": {}}
+
+    monkeypatch.setattr(onchain_quotes, "jupiter_quote", _fake_quote)
+    monkeypatch.setattr(auth, "get_decrypted_onchain_private_key", lambda owner, chain: "deadbeef")
+
+    async def _fake_execute_order(owner_id, chain, token, strategy_name, side, notional_usd,
+                                   price_impact_pct, price_usd, private_key_hex, quote):
+        assert side == "sell"
+        assert token == "TokenMintAddr222"
+        return {"accepted": True, "reason": "", "idempotency_key": "k2", "tx_signature": "sig2"}
+
+    monkeypatch.setattr(onchain_execute, "execute_order", _fake_execute_order)
+
+    _run(main._run_onchain_auto_trade(owner, entry, "lorenzo", [_signal("exit_long")]))
     logged = trading_log.list_for("u1")
     assert logged[0]["outcome"] == "eseguito"
 
