@@ -2609,3 +2609,30 @@ Tre cose, in ordine:
    questa sessione — screenshot Playwright dell'UI attuale e proposta di
    design senza scrivere codice, come chiesto esplicitamente da Lorenzo per
    questa fase.
+
+## Velocita' della pagina wallet on-chain — `seed-0086` — **fatto**
+
+Lorenzo (2026-09-23): "usa un linguaggio di programmazione per rendere il
+sito velocissimo a costo di fare un refactory". Deciso di **non** cambiare
+linguaggio, e detto a lui perche': misurata `onchain-app.html` dal vivo,
+Lighthouse 99 da non loggati, main thread 0,4 s. Il tempo stava nei giri di
+rete in fila prima dei dati, che nessuna riscrittura avrebbe tolto.
+
+Cosa fa ora la pagina (tutto ancora zero build):
+- `onchain_app_page()` in `main.py` legge la sessione e scrive utente +
+  wallet in `<script type="application/json" id="onchain-boot">`, e toglie
+  `hidden` dalla sezione giusta (login o app). `main.js::takeBootData()` lo
+  consuma una volta; senza (index.html, dopo un login) richiede come prima.
+  L'HTML e' quindi personale: `Cache-Control: private, no-cache`.
+- `<!--onchain-modulepreload-->`: un modulepreload per ogni modulo.
+- lightweight-charts `async` e con `?v=`; `chart.js::chartLibrary()` la
+  aspetta insieme alle candele.
+- Font in `static/fonts/` (Instrument Serif, JetBrains Mono); Instrument
+  Sans tolto perche' `--sans` usa font di sistema.
+- `api.js`: GET identici in volo condividono la richiesta; ogni scrittura
+  svuota la mappa.
+
+Misurato in locale da loggati (Lighthouse, throttling devtools mobile,
+mediana di 3): inizio saldo 4,1 -> 2,4 s, LCP 4,3 -> 2,6 s, TTI 5,6 -> 3,6 s.
+Il prossimo collo di bottiglia e' la banda per 13 moduli separati e la
+latenza delle chiamate RPC dietro saldo/grafico.
