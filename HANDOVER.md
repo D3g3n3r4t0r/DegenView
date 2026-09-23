@@ -2559,3 +2559,53 @@ con contenuto finto, prima di applicare al codice.
   reale popolato in questa sessione) — se qualcosa nel pannello ordine o
   nel pannello inferiore sembra vuoto/rotto dopo il deploy, e' il primo
   punto da controllare.
+
+## Sessione 2026-09-23 (c) — Ponte sniper -> Lorenzo -> wallet, test 1000 ticker
+
+Lorenzo: "completa tutte le attivita' in pausa e non concluse. voglio che la
+strategia trend follower di lorenzo sia inglobata sul wallet, cosi' da
+usarla automaticamente su dei ticker on chain sfruttando la logica dello
+sniper che gia' scansionava anche i nuovi arrivi relativi in questo caso a
+solana e robinhood. non puoi usare delle skill che ti permettono di vedere
+la grafica del wallet on chain e propormi soluzioni moderne? senza scrivere
+codice in questa fase?"
+
+Tre cose, in ordine:
+
+1. **Test dei 1000 ticker su Robinhood Chain** (era in pausa): raccolti 153
+   token reali via DexScreener e passati nel path di produzione
+   (`token_metadata.get_token_decimals`, `quotes.find_pool_and_fee`). Nessun
+   crash nuovo. I "429 Too Many Requests" erano il mio script di test troppo
+   aggressivo sull'RPC pubblico, non un bug. 73/153 non hanno pool diretto
+   contro USDG su nessun fee tier Uniswap v3 — stesso limite gia' segnalato
+   per $MYCEL, generalizzato: serve multi-hop, non toccato ora.
+
+2. **Ponte sniper -> Lorenzo -> watchlist -> wallet**: lo sniper (scanner
+   nuovi arrivi Solana/Robinhood, gia' in piedi) puo' ora aggiungere da solo
+   alla watchlist di chi lo attiva i candidati che superano soglie minime di
+   liquidita' (3000$) ed eta' massima (72h), con la strategia di Lorenzo e
+   l'auto-trade gia' accesi sopra. Deliberatamente NON un nuovo motore di
+   segnali: fa solo l'upsert in watchlist, tutto il resto (rilevazione
+   segnale, esecuzione, tetti di rischio, circuit breaker) resta
+   `_watchlist_alert_loop` / `_run_onchain_auto_trade`, gia' testati altrove.
+   Opt-in per utente e per chain (`User.sniper_autotrade_chains`, spento di
+   default — richiede un wallet gia' creato su quella chain). Nuovi endpoint
+   `GET/PATCH /api/onchain/sniper-autotrade[/{chain}]`.
+   **Nessuna leva in UI ancora**: solo endpoint backend, va costruito un
+   controllo visibile (probabilmente nel pannello Strategie del wallet) per
+   dire che e' davvero "inglobata sul wallet" come chiesto.
+   **Vincolo pre-esistente da ricordare**: l'intero `_watchlist_alert_loop`
+   (quindi anche questo ponte) non fa nulla se l'utente non ha
+   `telegram_chat_id` configurato — nessuna eccezione per questa feature.
+   Bug scoperto e corretto nel farlo: `watchlist.add_entry()` metteva in
+   maiuscolo anche i simboli dex (`BASE@chain:pool`), rompendo il match di
+   `_parse_symbol()` su indirizzi case-sensitive (base58 Solana, checksum
+   EVM) — corrotta ogni voce dex mai creata. Ora solo i simboli non-dex
+   vengono uppercased. Test aggiunti, 721 passed (2 falliti in
+   `test_onchain_trading_api.py` sono pre-esistenti, verificato anche su
+   `main` senza queste modifiche). Commit e push su `main` fatti.
+
+3. **Proposta grafica wallet on-chain, solo testo**: ancora da fare in
+   questa sessione — screenshot Playwright dell'UI attuale e proposta di
+   design senza scrivere codice, come chiesto esplicitamente da Lorenzo per
+   questa fase.
