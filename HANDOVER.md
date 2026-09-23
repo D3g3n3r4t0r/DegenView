@@ -2931,3 +2931,41 @@ voglio una sezione [...] scartati".
   (`ANTHROPIC_API_KEY`), non nel repo. Consigliato di rigenerarla.
 - Passati ad altri thread: variante di Lorenzo sui minuti (nessuna variante
   batte i costi DEX fuori campione su 32 pool) e link ospite (PR #85).
+
+---
+
+## Lorenzo HF: Lorenzo sui minuti per i token on-chain — `seed-0098` — 2026-09-23
+
+Lorenzo: "creare un algoritmo di trading adatto per l'alta frequenza per
+cavalcare queste [...] cripto [...] non voglio utilizzare strategie inverse
+[...] quando il prezzo sale sale [...] voglio comunque mantenere la logica di
+quella di Lorenzo però applicata ad un time frame sui minuti, quindi con dei
+filtri diversi". Poi "completa tutto".
+
+- `compute_lorenzo_hf_signals` in `app/analysis/strategies.py`, nel registro
+  come "Lorenzo HF (minuti on-chain)", famiglia trend. Solo long. Stesso
+  incrocio sulla pendenza; filtri: VWAP dal lancio, regime per token
+  (variance ratio mobile >= 1 su 60 barre), efficienza di Kaufman >= 0.5,
+  soglia pendenza 0.5 sigma; uscita all'incrocio o trailing 4 ATR; dopo ogni
+  uscita serve un incrocio nuovo. Volume burst presente ma spento (non
+  aggiungeva nulla). Macchina a stati: emette solo fronti, mai ingresso e
+  uscita sulla stessa barra.
+- Radar: entra da solo (`strategy_configs()` legge il registro). **Non**
+  collegata al pilota con soldi reali: serve un ok esplicito di Lorenzo.
+  Non ottimizzabile dal Lab (nessuno spazio in `optimize.py`); c'e' lo spazio
+  Morris in `sensitivity.py` perche' un test lo richiede.
+- Misure (script fuori repo, dati GeckoTerminal 1m, costi radar, split
+  train/test per md5 dell'indirizzo):
+  - 98 pool, ultime ~16 h: Lorenzo originale mediana -18.5%/token, 14 trade;
+    HF mediana 0%, 4 trade, +1.3% medio a trade dopo i costi; media +6% ma
+    senza i 3 migliori -1.7%. Nessun vantaggio dimostrato: "non perde" nel
+    caso tipico e prende i rari pump grandi.
+  - VR(4) su 1m/5m/15m < 1 su ~80% dei pool: al minuto i token giovani
+    rientrano piu' che proseguire. Il filtro di regime e' quello che conta
+    (media per pool da -20% a ~0); len/slope quasi indifferenti (plateau).
+  - Prime 16 h dopo il lancio (88 pool): campione con forte survivorship
+    (buy and hold mediana +184%). Senza filtro di regime media +47% ma
+    mediana -14%; con filtro mediana 0. Tenuto il filtro.
+  - Un rug su una candela non lo ferma nessun trailing (peggior trade -83%).
+- Resta: se Lorenzo vuole provarla sul pilota, decidere tetti propri (e' una
+  strategia a molte operazioni: con $20 ad acquisto i costi fissi pesano).
