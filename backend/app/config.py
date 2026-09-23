@@ -32,9 +32,10 @@ class Settings(BaseSettings):
     # feed Pump.fun): a False nessuno dei tre loop di fondo dello sniper
     # parte (polling dell'archivio, arricchimento CEX, agenti), e le scansioni
     # manuali rispondono che il servizio e' spento invece di girare comunque.
-    # Rimettilo a True per riaccenderlo — nient'altro cambia. Spento su
-    # richiesta di Lorenzo il 17/09.
-    sniper_enabled: bool = False
+    # Spento su richiesta di Lorenzo il 17/09, riacceso il 23/09 ("non deve
+    # essere spento sul server"). Il pilota pero' prende solo i token che
+    # superano il filtro di legittimita' (vedi _sniper_onchain_bridge_tick).
+    sniper_enabled: bool = True
 
     # Interruttore generale per l'intero sistema wallet on-chain (Fase 1: solo
     # generazione chiave + saldo, ancora nessuna firma) — a False ogni
