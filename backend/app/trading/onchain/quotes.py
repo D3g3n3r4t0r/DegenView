@@ -33,6 +33,15 @@ _SELECTOR_QUOTE_EXACT_INPUT_SINGLE = keccak(
     text="quoteExactInputSingle((address,address,uint256,uint24,uint160))"
 )[:4]
 
+# I quattro fee tier standard di Uniswap v3 — una coppia puo' avere un pool
+# solo su uno di questi, e non e' sempre 0.3% (3000): token piu' volatili o
+# piu' sottili spesso stanno solo sull'1% (10000). L'auto-trade della
+# watchlist gia' li scorreva tutti (main.py, _run_onchain_auto_trade); gli
+# endpoint manuali di quote/execute/prezzo assumevano 3000 fisso — Lorenzo:
+# uno swap di $MYCEL respinto con "nessun pool" quando in realta' il pool
+# c'era, solo su un altro fee tier.
+ROBINHOOD_FEE_TIERS = (500, 3000, 10000, 100)
+
 
 async def jupiter_quote(input_mint: str, output_mint: str, amount_lamports: int, slippage_bps: int = 50) -> dict:
     """Quote reale via Jupiter — nessuna chiave richiesta. price_impact_pct
@@ -109,6 +118,21 @@ async def get_pool(token_a: str, token_b: str, fee: int) -> str | None:
     if int(address, 16) == 0:
         return None
     return to_checksum_address(address)
+
+
+async def find_pool_and_fee(token_in: str, token_out: str, preferred_fee: int | None = None) -> tuple[str, int] | None:
+    """Il pool vero puo' stare su un fee tier diverso da quello che il
+    chiamante si aspetta: prova prima `preferred_fee` (se dato, per non
+    rifare una chiamata quando gia' si sa qual e'), poi tutti gli altri.
+    None se la coppia non ha nessun pool su nessun fee tier — mai un fee
+    tier inventato o assunto per default."""
+    ordered = [preferred_fee, *(f for f in ROBINHOOD_FEE_TIERS if f != preferred_fee)] \
+        if preferred_fee is not None else list(ROBINHOOD_FEE_TIERS)
+    for fee in ordered:
+        pool = await get_pool(token_in, token_out, fee)
+        if pool is not None:
+            return pool, fee
+    return None
 
 
 async def uniswap_v3_quote(token_in: str, token_out: str, fee: int, amount_in: int) -> dict:

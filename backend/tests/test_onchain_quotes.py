@@ -160,3 +160,37 @@ def test_uniswap_v3_quote_mocked_price_impact_scales_with_trade_size(monkeypatch
     small = _run(quotes.uniswap_v3_quote(ROBINHOOD_WETH, ROBINHOOD_USDG, 3000, 10**15))
     large = _run(quotes.uniswap_v3_quote(ROBINHOOD_WETH, ROBINHOOD_USDG, 3000, 10**17))
     assert large["price_impact_pct"] > small["price_impact_pct"]
+
+
+def test_find_pool_and_fee_tries_preferred_fee_first(monkeypatch):
+    """Lorenzo, con $MYCEL: 'nessun pool per questa coppia su questo fee
+    tier' quando il pool c'era, solo su un tier diverso da 3000 — gli
+    endpoint manuali provavano solo 3000, l'auto-trade della watchlist
+    scorreva gia' tutti i tier. find_pool_and_fee() e' l'unico posto ora."""
+    tried = []
+
+    async def _fake_get_pool(token_a, token_b, fee):
+        tried.append(fee)
+        return "0xPool" if fee == 10000 else None
+
+    monkeypatch.setattr(quotes, "get_pool", _fake_get_pool)
+    result = _run(quotes.find_pool_and_fee("A", "B", preferred_fee=3000))
+    assert result == ("0xPool", 10000)
+    assert tried[0] == 3000  # il preferito, provato per primo
+    assert 10000 in tried  # e si ferma non appena trova il pool, non scorre il resto
+
+
+def test_find_pool_and_fee_without_preference_tries_all_tiers(monkeypatch):
+    async def _fake_get_pool(token_a, token_b, fee):
+        return None
+
+    monkeypatch.setattr(quotes, "get_pool", _fake_get_pool)
+    result = _run(quotes.find_pool_and_fee("A", "B"))
+    assert result is None
+
+
+def test_find_pool_and_fee_real_network_call_finds_the_weth_usdg_pool():
+    result = _run(quotes.find_pool_and_fee(ROBINHOOD_WETH, ROBINHOOD_USDG))
+    assert result is not None
+    pool, fee = result
+    assert fee == 3000
