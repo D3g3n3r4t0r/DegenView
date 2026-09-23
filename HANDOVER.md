@@ -2223,3 +2223,89 @@ Il confronto multi-route resta volutamente non implementato con un
 secondo aggregatore (vedi sopra) — se in futuro emerge un secondo
 aggregatore Solana pubblico ben documentato che valga la pena integrare,
 e' quello il punto da riconsiderare.
+
+## Piano: restyle in stile Uniswap + parte operativa (ordini limite, cronologia) — 2026-09-23
+
+Lorenzo: "copia lo stile di questo; per intenderci https://app.uniswap.org/,
+voglio visualizzare anche il wallet, una parte operativa tipo DEX con
+ordini limiti, cronologia ordini". Non ancora applicato — solo il piano,
+da evolvere insieme prima di partire.
+
+### 1. Restyle visivo (stile Uniswap)
+
+- Layout da "app mobile con sheet" a "pagina DEX": barra superiore fissa
+  con selettore chain + indirizzo/saldo sempre visibile (oggi e' dentro lo
+  shell, non in una topbar persistente); il saldo del wallet resta sempre
+  in vista mentre si opera, non solo nella hero.
+- Il pannello di swap diventa una card centrale larga ~460px anche su
+  mobile (Uniswap non fa mai "sheet" per lo swap, e' la pagina stessa) —
+  le altre sheet (storico, limiti, rivela chiave) restano dialog, lo swap
+  no.
+- Selettore token con lista/ricerca invece del prompt() attuale (introdotto
+  in questa sessione per gli indirizzi arbitrari) — stessa ricerca
+  DexScreener gia' usata per la watchlist, con logo/nome se disponibili.
+- Palette: Uniswap usa rosa/violetto su sfondo scuro con card ad alto
+  contrasto; qui i token oklch/light-dark() esistenti restano (tema chiaro
+  e scuro automatici), cambia la palette dei valori --accent/--accent-soft,
+  non la struttura CSS a @layer.
+- Tabella ordini/cronologia in stile Uniswap (righe dense, monospace per i
+  numeri, stato con pallino colorato) al posto delle liste a card attuali.
+
+### 2. Ordini limite — la parte nuova
+
+Ne' Jupiter ne' il router Uniswap v3 su Robinhood Chain eseguono un ordine
+da soli quando il prezzo tocca un livello: un "ordine limite" qui va
+costruito come **ordine persistito + polling che lo esegue da solo quando
+la condizione si avvera**, riusando l'infrastruttura TWAP/watchlist gia'
+in piedi, non inventando un secondo sistema.
+
+- **Tabella `limit_orders`** in `ledger.py` (nuova, stesso pattern di
+  `twap_jobs`/`discrepancies`): id, owner, chain, token_in, token_out,
+  amount_in, target_price_usd, direction (`buy_below`/`sell_above`),
+  status (`open`/`filled`/`cancelled`/`expired`), created_at, expires_at
+  (opzionale), filled_order_id (FK verso `orders` una volta eseguito).
+- **Motore**: un ciclo asyncio nuovo (`limit_order_loop`, accanto a
+  `_watchlist_alert_loop` in `main.py`) che ogni N secondi legge gli ordini
+  `open`, chiede un quote reale (stesso `onchain_quotes`), confronta col
+  target, e se la condizione e' vera chiama `execute.execute_order` con
+  gli stessi guardrail di rischio di oggi (mai un percorso che li scavalca
+  perche' e' "automatico").
+- **Idempotenza**: un ordine limite eseguito una volta passa a `filled` e
+  non viene mai riletto — stesso principio della UNIQUE constraint sul
+  ledger, non un secondo controllo ad-hoc.
+- **Cancellazione**: endpoint `DELETE /api/onchain/limit-orders/{id}` — un
+  ordine `open` diventa `cancelled`, mai eliminato (stessa filosofia delle
+  segnalazioni: non si butta via lo storico).
+- **Scadenza**: opzionale a livello di piano, non di primo taglio — un
+  campo `expires_at` gia' nello schema permette di aggiungerla dopo senza
+  migrazione.
+- **Limite del design**: il prezzo si controlla a intervalli (non e' un
+  book on-chain reale), quindi un target toccato per un istante fra due
+  polling puo' non essere colto — da dire chiaramente in UI ("controllato
+  ogni X secondi", non "eseguito istantaneamente al tocco").
+
+### 3. Cronologia ordini
+
+- Endpoint nuovo che unisce `orders` (dal ledger, gia' esistenti) e
+  `limit_orders` in una lista sola ordinata per tempo, con stato e link
+  alla transazione (Solscan/l'explorer di Robinhood Chain) — oggi lo
+  storico esiste solo come sheet separata via `getTransactions`.
+- Colonne stile Uniswap: tipo (swap/limite), coppia, importo, prezzo,
+  stato, tempo relativo, firma abbreviata con link.
+
+### 4. Wallet sempre visibile
+
+- Il saldo/indirizzo gia' esistono nella hero; nel nuovo layout DEX
+  diventano parte della topbar persistente (punto 1), non uno stato che
+  si perde scorrendo la pagina.
+
+### Ordine di lavoro proposto (da confermare con Lorenzo prima di partire)
+
+1. Restyle (solo CSS/HTML, nessuna nuova logica) — rischio basso, visibile
+   subito.
+2. Tabella + endpoint CRUD ordini limite (senza motore che esegue ancora)
+   — cosi' si vede la UI degli ordini prima di fidarsi del motore.
+3. Motore di esecuzione automatica (il pezzo che tocca i soldi veri).
+4. Cronologia unificata.
+
+Non iniziato: in attesa di conferma su quale punto affrontare prima.
