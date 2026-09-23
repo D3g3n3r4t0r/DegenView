@@ -54,6 +54,7 @@ export const simulateOrder = (order) => request("/api/onchain/simulate", { metho
 // se' prima di firmare: quello qui sotto serve a far vedere il prezzo, non e'
 // il numero su cui si firma.
 export const quoteSolana = (body) => request("/api/onchain/quote/solana", { method: "POST", body, timeoutMs: 15000 });
+export const getTokenInfo = (chain, address) => request(`/api/onchain/token/${chain}/${address}`, { timeoutMs: 12000 });
 export const quoteRobinhood = (body) => request("/api/onchain/quote/robinhood", { method: "POST", body, timeoutMs: 15000 });
 
 export const executeSolana = (body) =>

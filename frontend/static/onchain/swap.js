@@ -11,6 +11,11 @@
  * Il backend rifiuta comunque l'invio se onchain_execution_enabled e' spento
  * (di default lo e'): qui lo si dice PRIMA di far compilare il modulo,
  * non dopo un tentativo fallito.
+ *
+ * Lorenzo: "lo swap deve essere possibile in ogni valuta o crypto possibile"
+ * — non piu' solo nativo→stablecoin: entrambe le gambe sono un indirizzo
+ * qualsiasi sulla chain scelta, con la coppia nativa come scorciatoia di
+ * default (e' l'unica per cui il saldo e' gia' noto senza chiederlo).
  */
 import * as api from "@onchain/api.js";
 import { ApiError } from "@onchain/api.js";
@@ -18,75 +23,106 @@ import { formatUsd } from "@onchain/format.js";
 import * as sheets from "@onchain/sheets.js";
 import { state } from "@onchain/store.js";
 
-// Coppie native pubblicamente note per ogni chain — non e' un elenco di
-// token arbitrari (che richiederebbe un modo per l'utente di specificare
-// un indirizzo, fuori scope qui): sono le uniche due gambe di swap che
-// questa pagina sa quotare senza chiedere altro.
-const PAIRS = {
-  solana: {
-    inputMint: "So11111111111111111111111111111111111111112", inputSymbol: "SOL", inputDecimals: 9,
-    outputMint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", outputSymbol: "USDC", outputDecimals: 6,
-  },
-  robinhood: {
-    inputMint: "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73", inputSymbol: "ETH", inputDecimals: 18,
-    outputMint: "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168", outputSymbol: "USDG", outputDecimals: 6,
-    fee: 3000,
-  },
+// Il token nativo di ogni chain: e' l'unica gamba per cui questa pagina
+// conosce gia' saldo e prezzo senza una chiamata in piu' — usato come
+// default e come sentinella "vendo/ricevo il gas", non come limite.
+const NATIVE = {
+  solana: { address: "So11111111111111111111111111111111111111112", symbol: "SOL", decimals: 9 },
+  robinhood: { address: "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73", symbol: "ETH", decimals: 18 },
+};
+
+// Stablecoin di destinazione predefinita — solo per compilare il campo
+// "Ricevi" al primo apertura: un tocco su "Cambia token" la sostituisce
+// con qualunque altro indirizzo.
+const DEFAULT_OUTPUT = {
+  solana: { address: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", symbol: "USDC", decimals: 6 },
+  robinhood: { address: "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168", symbol: "USDG", decimals: 6, fee: 3000 },
 };
 
 const toBaseUnits = (amount, decimals) => BigInt(Math.round(amount * 10 ** decimals));
 const fromBaseUnits = (amount, decimals) => Number(amount) / 10 ** decimals;
 
-// Il token che si vende e' sempre il gas nativo di questa chain (SOL, ETH):
-// vendere l'intero saldo lascerebbe zero per pagare la transazione stessa, e
-// per Robinhood Chain anche il quote successivo. Riserva fissa e prudente,
-// non una percentuale — a saldi piccoli una percentuale lascia troppo poco.
+// Vendere l'intero saldo nativo lascerebbe zero per pagare la transazione
+// stessa (e per Robinhood Chain anche il quote successivo). Riserva fissa e
+// prudente, non una percentuale — a saldi piccoli una percentuale lascia
+// troppo poco. Si applica solo quando si vende il nativo: un token qualsiasi
+// non paga il gas, quindi non ha bisogno di riserva.
 const GAS_RESERVE = { solana: 0.003, robinhood: 0.0008 };
 
+let leg = { in: null, out: null };
 let latestQuote = null;
 let debounceTimer = null;
+let tokenCache = new Map();
 
-// Il saldo disponibile per lo swap: quanto ha letto la hero (state.balance,
-// aggiornato da main.js ad ogni fetch) meno la riserva di gas — mai un
-// valore da digitare a memoria, e mai negativo.
 function availableToSell(chain) {
   const native = state.balance?.native_balance;
   if (typeof native !== "number") return null;
   const reserve = GAS_RESERVE[chain] ?? 0;
-  // Arrotondato a 8 decimali: sottrarre due float ("0.00337 - 0.0008") da'
-  // artefatti come "0.0025700000000000002" che finirebbero dritti nel
-  // campo — 8 decimali bastano per SOL/ETH e restano sotto la precisione
-  // che questa pagina mostra comunque.
+  // Arrotondato a 8 decimali: sottrarre due float da' artefatti come
+  // "0.0025700000000000002" che finirebbero dritti nel campo.
   return Math.max(0, Math.round((native - reserve) * 1e8) / 1e8);
 }
 
+// Metadati di un token qualsiasi: cache per indirizzo, mai indovinati
+// (i decimali arrivano da lookup on-chain reale, lato backend).
+async function resolveToken(chain, address) {
+  const key = `${chain}:${address.toLowerCase()}`;
+  if (tokenCache.has(key)) return tokenCache.get(key);
+  const info = await api.getTokenInfo(chain, address);
+  const resolved = {
+    address, decimals: info.decimals,
+    symbol: info.symbol || `${address.slice(0, 4)}…${address.slice(-4)}`,
+    priceUsd: info.price_usd,
+  };
+  tokenCache.set(key, resolved);
+  return resolved;
+}
+
 export async function openSwap({ onExecuted } = {}) {
-  const pair = PAIRS[state.chain];
-  sheets.openSheet("Swap", `${pair.inputSymbol} → ${pair.outputSymbol}, esecuzione reale sul wallet di questa chain.`);
+  const chain = state.chain;
+  const native = NATIVE[chain];
+  const defaultOut = DEFAULT_OUTPUT[chain];
+  leg = {
+    in: { ...native, priceUsd: state.balance?.native_price_usd ?? null, isNative: true },
+    out: { ...defaultOut, priceUsd: null, isNative: false },
+  };
+  tokenCache = new Map();
+
+  sheets.openSheet("Swap", "Scambia qualunque token su questa chain — esecuzione reale sul wallet.");
 
   let armed = false;
-  try { armed = Boolean((await api.getRiskStatus(state.chain)).execution_enabled); } catch { /* resta spento */ }
+  try { armed = Boolean((await api.getRiskStatus(chain)).execution_enabled); } catch { /* resta spento */ }
 
-  // Il saldo puo' non essere ancora arrivato (la hero lo chiede in parallelo,
-  // non prima): se manca, lo chiediamo qui apposta, cosi' il campo parte
-  // sempre pieno invece di uno "0.01" indovinato.
-  if (state.balance?.chain !== state.chain) {
-    try { state.balance = await api.getBalance(state.chain); } catch { /* resta quello che c'e', o niente */ }
+  if (state.balance?.chain !== chain) {
+    try { state.balance = await api.getBalance(chain); } catch { /* resta quello che c'e', o niente */ }
   }
-  const available = availableToSell(state.chain);
-  const startAmount = available != null && available > 0 ? available : "";
+  leg.in.priceUsd = state.balance?.native_price_usd ?? null;
 
+  paintForm(armed);
+  onExecuted && (openSwap._onExecuted = onExecuted);
+  const available = availableToSell(chain);
+  const amountInput = sheets.sheetBody().querySelector("#swap-amount");
+  if (available != null && available > 0) { amountInput.value = available; scheduleQuote(armed); }
+}
+
+function paintForm(armed) {
+  const chain = state.chain;
   sheets.setBody(`
     ${armed ? "" : `<p class="sheet-note is-warn">Esecuzione reale spenta su questo server: il preventivo funziona, l'invio no finché non viene accesa.</p>`}
     <form class="form" id="swap-form">
       <label for="swap-amount">Vendi</label>
       <div class="swap-row">
-        <input id="swap-amount" name="amount" type="number" min="0" step="any" value="${startAmount}" required />
-        <button type="button" class="swap-max" id="swap-max">Max</button>
-        <span class="swap-unit">${pair.inputSymbol}</span>
+        <input id="swap-amount" name="amount" type="number" min="0" step="any" value="" required />
+        <button type="button" class="swap-max" id="swap-max" ${leg.in.isNative ? "" : "hidden"}>Max</button>
+        <span class="swap-unit" id="swap-in-symbol">${leg.in.symbol}</span>
       </div>
+      <button type="button" class="swap-token-pick" id="swap-pick-in">Cambia token in vendita ↕</button>
       <p class="swap-available" id="swap-available">
-        ${available != null ? `Disponibile: ${available.toLocaleString("it-IT", { maximumFractionDigits: 6 })} ${pair.inputSymbol} (riserva ${GAS_RESERVE[state.chain]} per il gas)` : "Saldo non disponibile — inserisci una size a mano."}
+        ${leg.in.isNative
+          ? (availableToSell(chain) != null
+              ? `Disponibile: ${availableToSell(chain).toLocaleString("it-IT", { maximumFractionDigits: 6 })} ${leg.in.symbol} (riserva ${GAS_RESERVE[chain]} per il gas)`
+              : "Saldo non disponibile — inserisci una size a mano.")
+          : "Token diverso dal nativo: inserisci la size a mano."}
       </p>
       <p class="swap-usd" id="swap-in-usd"></p>
 
@@ -95,12 +131,13 @@ export async function openSwap({ onExecuted } = {}) {
       <label for="swap-out">Ricevi (stimato)</label>
       <div class="swap-row is-readonly">
         <output id="swap-out">—</output>
-        <span class="swap-unit">${pair.outputSymbol}</span>
+        <span class="swap-unit" id="swap-out-symbol">${leg.out.symbol}</span>
       </div>
+      <button type="button" class="swap-token-pick" id="swap-pick-out">Cambia token da ricevere ↕</button>
       <p class="swap-usd" id="swap-out-usd"></p>
 
       <p class="swap-detail" id="swap-detail"></p>
-      <button type="submit" class="btn-primary" id="swap-submit" disabled>Leggo il preventivo…</button>
+      <button type="submit" class="btn-primary" id="swap-submit" disabled>Inserisci una size</button>
     </form>
     <output class="outcome" id="swap-outcome" hidden></output>
   `);
@@ -110,30 +147,63 @@ export async function openSwap({ onExecuted } = {}) {
   const form = sheets.sheetBody().querySelector("#swap-form");
   const maxButton = sheets.sheetBody().querySelector("#swap-max");
 
-  const refreshQuote = () => {
-    clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(() => requestQuote(pair, amountInput.value, submitButton, armed), 350);
-  };
-  amountInput.addEventListener("input", refreshQuote);
+  amountInput.addEventListener("input", () => scheduleQuote(armed));
   maxButton.addEventListener("click", () => {
-    const max = availableToSell(state.chain);
-    if (max != null) { amountInput.value = max; refreshQuote(); }
+    const max = availableToSell(chain);
+    if (max != null) { amountInput.value = max; scheduleQuote(armed); }
   });
-  if (startAmount !== "") refreshQuote();
-  else { submitButton.disabled = true; submitButton.textContent = "Inserisci una size"; }
-
-  form.addEventListener("submit", (event) => {
-    event.preventDefault();
-    confirmAndExecute(pair, armed, onExecuted);
-  });
+  sheets.sheetBody().querySelector("#swap-pick-in").addEventListener("click", () => pickToken("in", armed));
+  sheets.sheetBody().querySelector("#swap-pick-out").addEventListener("click", () => pickToken("out", armed));
+  form.addEventListener("submit", (event) => { event.preventDefault(); confirmAndExecute(armed); });
 }
 
-async function requestQuote(pair, rawAmount, submitButton, armed) {
+// Un mini-modulo, non una sheet nuova: chiede solo l'indirizzo del token e
+// lo risolve (decimali reali, simbolo/prezzo se DexScreener li conosce)
+// prima di sostituire la gamba corrispondente.
+async function pickToken(side, armed) {
+  const chain = state.chain;
+  const raw = window.prompt(
+    side === "in"
+      ? "Indirizzo del token da vendere (mint Solana o contratto EVM). Lascia vuoto per il token nativo."
+      : "Indirizzo del token da ricevere (mint Solana o contratto EVM).",
+  );
+  if (raw === null) return;
+  const address = raw.trim();
+  const submitButton = sheets.sheetBody().querySelector("#swap-submit");
+  submitButton.disabled = true;
+  submitButton.textContent = "Verifico il token…";
+
+  try {
+    if (side === "in" && address === "") {
+      leg.in = { ...NATIVE[chain], priceUsd: state.balance?.native_price_usd ?? null, isNative: true };
+    } else {
+      const resolved = await resolveToken(chain, address);
+      leg[side] = { ...resolved, isNative: false };
+    }
+  } catch (error) {
+    submitButton.disabled = false;
+    submitButton.textContent = "Riprova";
+    window.alert(error instanceof ApiError ? error.message : "Token non riconosciuto.");
+    return;
+  }
+
+  paintForm(armed);
+}
+
+function scheduleQuote(armed) {
+  clearTimeout(debounceTimer);
+  const amountInput = sheets.sheetBody().querySelector("#swap-amount");
+  debounceTimer = setTimeout(() => requestQuote(amountInput.value, armed), 350);
+}
+
+async function requestQuote(rawAmount, armed) {
+  const chain = state.chain;
   const amount = Number(rawAmount);
   const outEl = sheets.sheetBody().querySelector("#swap-out");
   const detailEl = sheets.sheetBody().querySelector("#swap-detail");
   const inUsdEl = sheets.sheetBody().querySelector("#swap-in-usd");
   const outUsdEl = sheets.sheetBody().querySelector("#swap-out-usd");
+  const submitButton = sheets.sheetBody().querySelector("#swap-submit");
   if (!(amount > 0)) {
     latestQuote = null;
     outEl.textContent = "—";
@@ -148,25 +218,20 @@ async function requestQuote(pair, rawAmount, submitButton, armed) {
   submitButton.disabled = true;
   submitButton.textContent = "Aggiorno il preventivo…";
   detailEl.textContent = "";
-
-  // Prezzo del lato venduto: quello gia' letto dalla hero (GeckoTerminal,
-  // stesso feed della pagina) — mai una seconda fonte per lo stesso numero.
-  const nativePriceUsd = state.balance?.native_price_usd;
-  inUsdEl.textContent = nativePriceUsd != null ? `≈ ${formatUsd(amount * nativePriceUsd)}` : "";
+  inUsdEl.textContent = leg.in.priceUsd != null ? `≈ ${formatUsd(amount * leg.in.priceUsd)}` : "";
 
   try {
-    const amountIn = toBaseUnits(amount, pair.inputDecimals);
-    const quote = state.chain === "solana"
-      ? await api.quoteSolana({ input_mint: pair.inputMint, output_mint: pair.outputMint, amount_lamports: Number(amountIn) })
-      : await api.quoteRobinhood({ token_in: pair.inputMint, token_out: pair.outputMint, fee: pair.fee, amount_in: Number(amountIn) });
+    const amountIn = toBaseUnits(amount, leg.in.decimals);
+    const quote = chain === "solana"
+      ? await api.quoteSolana({ input_mint: leg.in.address, output_mint: leg.out.address, amount_lamports: Number(amountIn) })
+      : await api.quoteRobinhood({ token_in: leg.in.address, token_out: leg.out.address, fee: leg.out.fee ?? leg.in.fee ?? 3000, amount_in: Number(amountIn) });
 
-    latestQuote = { ...quote, amountIn, sourceAmount: amount, nativePriceUsd };
-    const outAmount = fromBaseUnits(quote.out_amount, pair.outputDecimals);
+    latestQuote = { ...quote, amountIn, sourceAmount: amount };
+    const outAmount = fromBaseUnits(quote.out_amount, leg.out.decimals);
     outEl.textContent = outAmount.toLocaleString("it-IT", { maximumFractionDigits: 6 });
-    // USDC/USDG sono stablecoin ancorate al dollaro: e' l'ancoraggio a fare
-    // da prezzo, non un secondo feed — lo dico "stimato" perche' un
-    // de-peg reale (raro ma possibile) lo renderebbe falso.
-    outUsdEl.textContent = `≈ ${formatUsd(outAmount)} (stablecoin, ancorata a 1 USD)`;
+    outUsdEl.textContent = leg.out.priceUsd != null
+      ? `≈ ${formatUsd(outAmount * leg.out.priceUsd)}`
+      : (isStable(leg.out) ? `≈ ${formatUsd(outAmount)} (stablecoin, ancorata a 1 USD)` : "");
     detailEl.textContent = `Price impact stimato ${quote.price_impact_pct.toFixed(2)}%`;
     detailEl.classList.toggle("is-warn", quote.price_impact_pct > 1);
 
@@ -183,17 +248,20 @@ async function requestQuote(pair, rawAmount, submitButton, armed) {
   }
 }
 
-async function confirmAndExecute(pair, armed, onExecuted) {
+function isStable(token) {
+  return ["USDC", "USDG", "USDT"].includes(token.symbol);
+}
+
+async function confirmAndExecute(armed) {
   if (!latestQuote || !armed) return;
+  const chain = state.chain;
   const outcome = sheets.sheetBody().querySelector("#swap-outcome");
   const submitButton = sheets.sheetBody().querySelector("#swap-submit");
-  const outAmount = fromBaseUnits(latestQuote.out_amount, pair.outputDecimals);
+  const outAmount = fromBaseUnits(latestQuote.out_amount, leg.out.decimals);
 
-  // L'ultima parola prima di firmare, col numero appena letto — mai un invio
-  // che parte senza che l'utente abbia visto QUESTO prezzo.
   const confirmed = window.confirm(
-    `Confermi lo swap di ${latestQuote.sourceAmount} ${pair.inputSymbol} `
-    + `per circa ${outAmount.toFixed(6)} ${pair.outputSymbol}?\n\n`
+    `Confermi lo swap di ${latestQuote.sourceAmount} ${leg.in.symbol} `
+    + `per circa ${outAmount.toFixed(6)} ${leg.out.symbol}?\n\n`
     + `Price impact stimato: ${latestQuote.price_impact_pct.toFixed(2)}%.`,
   );
   if (!confirmed) return;
@@ -205,25 +273,25 @@ async function confirmAndExecute(pair, armed, onExecuted) {
   outcome.textContent = "Firmo e invio…";
 
   // I tetti di rischio sono in USD: notional_usd deve essere il controvalore
-  // vero, non l'importo nel token nativo — altrimenti un ordine di 0.01 SOL
-  // passerebbe il tetto per-trade come se costasse "0.01 dollari" invece del
-  // suo prezzo reale. Se il prezzo non e' disponibile, l'importo nativo resta
-  // un fallback dichiarato (sottostima quasi certa, non una sovrastima).
-  const notionalUsd = latestQuote.nativePriceUsd != null
-    ? latestQuote.sourceAmount * latestQuote.nativePriceUsd
+  // vero, non l'importo nel token venduto — se non conosciamo il prezzo
+  // (token non nativo e non tracciato da DexScreener), l'importo nel token
+  // resta un fallback dichiarato (quasi certamente una sottostima, non una
+  // sovrastima: mai un modo per aggirare i tetti verso l'alto).
+  const notionalUsd = leg.in.priceUsd != null
+    ? latestQuote.sourceAmount * leg.in.priceUsd
     : latestQuote.sourceAmount;
 
   try {
-    const result = state.chain === "solana"
+    const result = chain === "solana"
       ? await api.executeSolana({
-          token: pair.outputSymbol, strategy_name: "manuale", side: "buy",
-          input_mint: pair.inputMint, output_mint: pair.outputMint,
+          token: leg.out.symbol, strategy_name: "manuale", side: "buy",
+          input_mint: leg.in.address, output_mint: leg.out.address,
           amount_lamports: Number(latestQuote.amountIn),
           notional_usd: notionalUsd, price_usd: 1,
         })
       : await api.executeRobinhood({
-          token: pair.outputSymbol, strategy_name: "manuale", side: "buy",
-          token_in: pair.inputMint, token_out: pair.outputMint, fee: pair.fee,
+          token: leg.out.symbol, strategy_name: "manuale", side: "buy",
+          token_in: leg.in.address, token_out: leg.out.address, fee: leg.out.fee ?? leg.in.fee ?? 3000,
           amount_in: Number(latestQuote.amountIn),
           notional_usd: notionalUsd, price_usd: 1,
         });
@@ -232,7 +300,7 @@ async function confirmAndExecute(pair, armed, onExecuted) {
     outcome.textContent = result.accepted
       ? `Inviato. Firma: ${result.tx_signature}`
       : result.reason;
-    if (result.accepted) onExecuted?.();
+    if (result.accepted) openSwap._onExecuted?.();
   } catch (error) {
     outcome.dataset.tone = "no";
     outcome.textContent = error instanceof ApiError ? error.message : "Errore inatteso.";
