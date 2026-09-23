@@ -2788,6 +2788,10 @@ nessun approve, quindi vendere ETH nativo o un token senza allowance
 dovrebbe andare in revert. Anche questo si risolve col percorso
 aggregatore.
 
+Seguito (#80 online): con GeckoTerminal in 429 la ricerca MYCEL tornava
+solo i pool DexScreener (niente MYCEL) e li teneva in cache 60s. Ora un
+secondo tentativo sul 429 e nessuna cache se una delle due fonti e' caduta.
+
 ---
 
 ## Radar dei token giovani — `seed-0094` — 2026-09-23
