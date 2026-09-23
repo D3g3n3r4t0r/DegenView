@@ -158,6 +158,12 @@ def list_for(owner_id: str) -> list[dict]:
     return [e for _, e in mine]
 
 
+def ready_entries() -> list[dict]:
+    """Every owner's finished snapshots — the radar tests each configuration
+    on young on-chain tokens."""
+    return [e for e in _entries if e.get("state") == "pronto"]
+
+
 def get(entry_id: str, owner_id: str) -> dict | None:
     for e in _entries:
         if e["id"] == entry_id and e.get("owner_id") == owner_id:

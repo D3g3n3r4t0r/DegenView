@@ -1461,6 +1461,65 @@
     & b { color: var(--ink-dim); font-weight: 500; min-inline-size: 64px; }
   }
 
+  /* --- radar ---------------------------------------------------------- */
+  .radar {
+    & header { display: flex; justify-content: space-between; align-items: baseline; margin: 0 4px 4px; }
+    & h3 { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: var(--ink-dim); }
+    & header > span { font-size: 12px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+    & ul { list-style: none; margin: 0; padding: 0; }
+    & li { border-block-end: 1px solid var(--line); &:last-child { border: 0; } }
+    & li.is-new { animation: rise .6s cubic-bezier(.2,.8,.2,1) backwards; }
+    & button {
+      display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: 12px; align-items: center;
+      inline-size: 100%; padding: 12px 4px; background: none; border: 0; border-radius: 12px; text-align: start;
+      transition: background .15s, scale .12s;
+      &:hover { background: var(--hover); }
+      &:active { scale: .985; }
+    }
+    & .tk { position: relative; }
+    /* La rete come un segno sull'angolo, non una parola in piu'. */
+    & .tk::after { content: ""; position: absolute; inset: auto -2px -2px auto; inline-size: 9px; block-size: 9px;
+      border-radius: 50%; border: 2px solid var(--bg); background: var(--ink-faint); }
+    & .tk[data-chain="solana"]::after { background: #9b6bff; }
+    & .tk[data-chain="robinhood"]::after { background: var(--live); }
+    & .num[data-sign="up"] { color: var(--up); }
+  }
+  .radar-dot { position: relative; inline-size: 6px; block-size: 6px; border-radius: 50%; background: var(--live);
+    &::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: inherit;
+      animation: ping 2.2s cubic-bezier(0,0,.2,1) infinite; }
+  }
+  .radar[data-running="true"] .radar-dot::after { animation-duration: .9s; }
+  .radar-new { margin-block-end: 10px; padding-block-end: 6px; border-block-end: 1px solid var(--line);
+    & h4 { margin: 6px 4px 0; font-size: 11.5px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-faint); } }
+  .radar-foot { margin: 6px 4px 0; font-size: 11.5px; color: var(--ink-faint); }
+  .radar-live { margin-inline-start: auto; align-self: start; font-size: 11.5px; color: var(--live);
+    display: inline-flex; align-items: center; gap: 6px;
+    &::before { content: ""; inline-size: 6px; block-size: 6px; border-radius: 50%; background: currentColor; } }
+  .radar-chart { block-size: min(300px, 38dvh); margin: 0 -6px 10px; display: grid; place-items: center;
+    font-size: 13px; color: var(--ink-faint); touch-action: none; }
+  .radar-strats { list-style: none; margin: 0 0 12px; padding: 0;
+    & li { display: flex; align-items: center; gap: 8px; border-block-end: 1px solid var(--line); }
+    & li:last-child { border: 0; }
+    & li[data-shown="false"] .rs-swatch { background: transparent; }
+    & li[data-shown="false"] b { color: var(--ink-dim); font-weight: 500; }
+  }
+  .rs-show { flex: 1; min-inline-size: 0; display: flex; align-items: center; gap: 12px; padding: 10px 4px;
+    background: none; border: 0; border-radius: 10px; text-align: start; &:hover { background: var(--hover); } }
+  .rs-swatch { inline-size: 12px; block-size: 12px; border-radius: 4px; flex: none;
+    border: 2px solid var(--c); background: var(--c); transition: background .2s; }
+  .rs-switch { position: relative; inline-size: 40px; block-size: 24px; flex: none; border: 0; border-radius: 99px;
+    background: var(--line); transition: background .25s;
+    & span { position: absolute; inset-block-start: 3px; inset-inline-start: 3px; inline-size: 18px; block-size: 18px;
+      border-radius: 50%; background: var(--ink); transition: translate .3s cubic-bezier(.2,.8,.2,1), background .25s; }
+    &[aria-checked="true"] { background: var(--live); & span { translate: 16px 0; background: var(--bg); } }
+  }
+  .radar-stats { margin: 0 0 12px; padding-block-start: 12px; row-gap: 12px;
+    & dd[data-sign="up"] { color: var(--up); } }
+  .radar-note { margin: 0 0 14px; font-size: 12.5px; color: var(--ink-faint); }
+  .radar-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+    & a { display: grid; place-items: center; text-decoration: none; } }
+  @media (prefers-reduced-motion: reduce) { .radar-dot::after, .radar li.is-new { animation: none; } }
+
   /* --- diagnosi -------------------------------------------------------- */
   .pilot-sheet { max-block-size: 88dvh; }
   .diag-head { display: flex; align-items: center; gap: 12px; margin-block-end: 14px;
@@ -1665,6 +1724,17 @@
           </div>
         </div>
         <div class="pilot-side">
+          <!-- Il radar: token giovani su Solana e Robinhood provati su tutte
+               le strategie. Lo disegna static/onchain/radar.js. -->
+          <div class="radar" id="radar" hidden>
+            <header><h3><span class="radar-dot" aria-hidden="true"></span>Radar · token giovani</h3><span data-radar-clock></span></header>
+            <div class="radar-new" data-radar-new hidden>
+              <h4>Appena usciti</h4>
+              <ul></ul>
+            </div>
+            <ul data-radar-list></ul>
+            <p class="radar-foot" data-radar-foot></p>
+          </div>
           <div class="pilot-feed" hidden>
             <header><h3>Cosa sta guardando</h3><span data-updated></span></header>
             <ul></ul>
