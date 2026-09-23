@@ -2,6 +2,7 @@ import asyncio
 import base64
 import datetime as _dt
 import hashlib
+import html
 import io
 import httpx
 import itertools
@@ -94,6 +95,8 @@ from app.trading.onchain import keys as onchain_keys
 from app.trading.onchain import ledger as onchain_ledger
 from app.trading.onchain import passkey as onchain_passkey
 from app.trading.onchain import pilot as onchain_pilot
+from app.trading.onchain import listings as onchain_listings
+from app.trading.onchain import radar as onchain_radar
 from app.trading.onchain import prices as onchain_prices
 from app.trading.onchain import token_search as onchain_tokens
 from app.trading.onchain import quotes as onchain_quotes
@@ -1064,6 +1067,8 @@ async def lifespan(app: FastAPI):
     t7 = asyncio.create_task(_sniper_onchain_bridge_loop())
     t4 = asyncio.create_task(_weekly_recap_loop())
     t5 = asyncio.create_task(_watchdog_loop())
+    radar_tasks = [asyncio.create_task(onchain_radar.radar_loop()),
+                   asyncio.create_task(onchain_listings.listings_loop())] if settings.onchain_radar_enabled else []
     sniper_tasks: list[asyncio.Task] = []
     if settings.sniper_enabled:
         from app.sniper import cache as sniper_cache
@@ -1078,6 +1083,8 @@ async def lifespan(app: FastAPI):
     t7.cancel()
     t4.cancel()
     t5.cancel()
+    for t in radar_tasks:
+        t.cancel()
     for t in sniper_tasks:
         t.cancel()
 
@@ -3340,6 +3347,114 @@ _PILOT_SIGNAL_WORDS = {
     "exit_long": "di vendita", "flip_to_short": "di vendita",
     "entry_short": "short", "exit_short": "chiusura short",
 }
+
+
+@app.get("/api/onchain/radar")
+async def onchain_radar_view(user: User = Depends(auth.get_current_user)) -> dict:
+    """Token giovani su Solana e Robinhood che una strategia dell'archivio
+    avrebbe tradato bene. Proposte, non ordini: vedi app/trading/onchain/radar.py."""
+    _require_onchain_enabled()
+    return {**onchain_radar.snapshot(), "listings": onchain_listings.recent(),
+            "listing_status": onchain_listings.status()}
+
+
+@app.get("/api/onchain/radar/stream")
+async def onchain_radar_stream(user: User = Depends(auth.get_current_user)) -> StreamingResponse:
+    """I listing nuovi spinti al browser appena passano le soglie: niente
+    attesa del prossimo giro di lettura."""
+    _require_onchain_enabled()
+    queue = onchain_listings.subscribe()
+
+    async def event_gen():
+        try:
+            yield ": connesso\n\n"
+            while True:
+                try:
+                    item = await asyncio.wait_for(queue.get(), timeout=15)
+                    yield f"event: listing\ndata: {json.dumps(item)}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": ping\n\n"
+        finally:
+            onchain_listings.unsubscribe(queue)
+
+    return StreamingResponse(event_gen(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+_LISTING_NOTIFY_PER_HOUR = 12
+_listing_notified: dict[str, list[float]] = {}
+
+
+async def _notify_listing(item: dict) -> None:
+    """Telegram a chi ha un wallet on-chain e Telegram collegato: l'app
+    chiusa non deve voler dire saperlo tardi. Al massimo 12 all'ora."""
+    from app.notify import telegram
+    now = _time.time()
+    chain = "Solana" if item["chain"] == "solana" else "Robinhood"
+    age = int((now - item["created_at"]) // 60) if item.get("created_at") else None
+    text = (f"🆕 <b>{html.escape(item['symbol'])}</b> su {chain} · liq. ${item['liquidity_usd']:,.0f}"
+            f" · cap ${item['market_cap']:,.0f}" + (f" · nato {age} min fa" if age is not None else "")
+            + f"\n{item['pair_url']}")
+    for user in auth.list_users():
+        if not user.telegram_chat_id or not user.onchain_wallets or not _telegram_allowed(user):
+            continue
+        sent = [t for t in _listing_notified.get(user.id, []) if now - t < 3600]
+        if len(sent) >= _LISTING_NOTIFY_PER_HOUR:
+            continue
+        _listing_notified[user.id] = sent + [now]
+        asyncio.create_task(telegram.send_to(user.telegram_chat_id, text))
+
+
+onchain_listings.on_listing(_notify_listing)
+
+
+@app.get("/api/onchain/radar/chart")
+async def onchain_radar_chart(
+    chain: Literal["solana", "robinhood"], pool: str, symbol: str,
+    interval: Literal["1m", "5m", "15m"] = "15m", user: User = Depends(auth.get_current_user),
+) -> dict:
+    _require_onchain_enabled()
+    try:
+        payload = await onchain_radar.chart_payload(chain, pool, symbol, interval)
+    except ProviderError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    payload["active"] = _radar_watch_strategies(user.id, onchain_radar.watch_symbol(symbol, chain, pool))
+    return payload
+
+
+def _radar_watch_strategies(owner_id: str, symbol: str) -> list[str]:
+    entry = next((e for e in watchlist_store.list_entries(owner_id) if e.symbol == symbol), None)
+    return list(entry.strategies) if entry else []
+
+
+class RadarFollowRequest(BaseModel):
+    chain: Literal["solana", "robinhood"]
+    pool: str
+    symbol: str
+    token_address: str
+    interval: Literal["1m", "5m", "15m"]
+    strategy_name: str
+    params: dict | None = None
+    enabled: bool
+
+
+@app.post("/api/onchain/radar/follow")
+async def onchain_radar_follow(req: RadarFollowRequest, user: User = Depends(auth.get_current_user)) -> dict:
+    """Attiva (o spegne) una strategia su un token del radar: solo alert.
+    L'acquisto automatico resta una scelta a parte, del pilota."""
+    _require_onchain_enabled()
+    if req.strategy_name not in AVAILABLE_STRATEGIES:
+        raise HTTPException(status_code=400, detail="Strategia sconosciuta")
+    symbol = onchain_radar.watch_symbol(req.symbol, req.chain, req.pool)
+    entry = next((e for e in watchlist_store.list_entries(user.id) if e.symbol == symbol), None)
+    if entry is None and req.enabled:
+        entry = watchlist_store.add_entry(user.id, symbol, "dex", interval=req.interval, on_close=True,
+                                          base_token_address=req.token_address)
+    if entry is not None:
+        watchlist_store.set_strategy_enabled(entry.id, req.strategy_name, req.enabled)
+        if req.enabled:
+            watchlist_store.set_strategy_params(entry.id, req.strategy_name, req.params)
+    return {"active": _radar_watch_strategies(user.id, symbol)}
 
 
 @app.get("/api/onchain/pilot/{chain}")

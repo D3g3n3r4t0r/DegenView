@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0094", "Wallet on-chain: un alert costante sui token giovani, provati su tutte le strategie",
+     "Lorenzo: 'voglio che nell'applicazione venga informato di quale token appena nato, o comunque che ha due o tre settimane di vita con tanta liquidità e bassa capitalizzazione [...] quale delle strategie performa bene, una specie di alert costante che scansionando il mercato mi propone [...] c'è questo ticker su Solana o su rete Robinhood che performerebbe bene con questo tipo di strategia [...] deve esserci un minimo di backtest'. Poi: 'per il grafico [...] voglio la stessa grafica del sito [...] zoomare [...] vedere in tempo reale gli ingressi e le uscite delle strategie se le avessi attivate [...] strategie che eventualmente potrei attivare oppure no'.",
+     "alta"),
     ("seed-0093", "Wallet on-chain: il saldo si vede in una sola unità",
      "Lorenzo: 'in questo momento io visualizzo il saldo in Ethereum, voglio che se clicco su ETH mi switchi la visualizzazione in dollari, in Bitcoin e basta'.",
      "bassa"),

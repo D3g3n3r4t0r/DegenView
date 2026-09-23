@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     # l'accesso.
     onchain_enabled: bool = True
 
+    # Radar dei token giovani su Solana e Robinhood (app/trading/onchain/radar.py):
+    # sola lettura, propone e non compra. A False il giro di fondo non parte.
+    onchain_radar_enabled: bool = True
+
     # Serve solo a costruire il link/QR di approvazione dal telefono per
     # rivelare una chiave on-chain — un URL relativo non e' scansionabile da
     # un secondo dispositivo.

@@ -1,0 +1,509 @@
+"""
+Il radar: token giovani on-chain che una strategia dell'archivio avrebbe
+tradato bene.
+
+Lorenzo: "voglio che nell'applicazione venga informato di quale token appena
+nato, o che ha due o tre settimane di vita con tanta liquidita' e bassa
+capitalizzazione [...] quale delle strategie performa bene [...] deve esserci
+un minimo di backtest".
+
+Un giro ogni `SCAN_INTERVAL_S`, per Solana e Robinhood Chain:
+
+1. pool da GeckoTerminal (piu' scambiati, di tendenza, nuovi);
+2. filtro: eta' <= 21 giorni, liquidita' alta in assoluto e rispetto alla
+   capitalizzazione, capitalizzazione bassa. Un solo pool per ticker, quello
+   con piu' liquidita' (le copie con lo stesso nome ne hanno meno);
+3. candele del pool (5m sotto i 4 giorni di vita, 15m sopra) e backtest di
+   ogni strategia del registro con i parametri predefiniti, piu' ogni
+   configurazione "pronta" dell'archivio;
+4. si propone il token solo se la migliore supera soglie minime (trade,
+   rendimento, profit factor, drawdown) su abbastanza candele.
+
+Solo lettura: propone, non compra e non aggiunge niente alla watchlist.
+
+Due scelte da dichiarare:
+- il backtest e' SOLO LONG (on-chain spot non si va short) e con costi da DEX
+  (0,3% di commissione e 0,5% di slippage per lato, riempimento all'apertura
+  successiva): un rendimento da CEX su un token giovane sarebbe una promessa
+  che il wallet non puo' mantenere;
+- la migliore di N configurazioni e' ottimistica per costruzione. Il numero di
+  configurazioni provate viaggia con la proposta, e il rendimento del semplice
+  tenere il token nello stesso periodo le sta accanto.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+import time
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+
+import httpx
+import pandas as pd
+
+from app import archive
+from app.analysis.backtest import run_backtest
+from app.analysis.strategies import STRATEGY_REGISTRY, confirmed_events
+from app.providers.base import ProviderError
+from app.providers.dexscreener import DexScreenerProvider, make_symbol
+
+logger = logging.getLogger(__name__)
+
+_DATA_DIR = Path(__file__).resolve().parents[2] / "data"
+_DATA_DIR.mkdir(parents=True, exist_ok=True)
+_STORE_FILE = _DATA_DIR / "onchain_radar.json"
+
+GECKO_BASE = "https://api.geckoterminal.com/api/v2"
+CHAINS = {"solana": "solana", "robinhood": "robinhood"}
+
+# Soglie iniziali: regolabili qui, non da un parametro di richiesta.
+AGE_MAX_DAYS = 21
+LIQ_MIN_USD = 30_000
+MCAP_MAX_USD = 20_000_000
+LIQ_TO_MCAP_MIN = 0.08          # liquidita' almeno l'8% della capitalizzazione
+MAX_TESTED_PER_CHAIN = 8        # le candele costano una richiesta a token
+MIN_BARS = 300                  # sotto, un backtest non dice niente
+MIN_TRADES = 3
+MIN_PROFIT_FACTOR = 1.3
+MAX_DRAWDOWN_PCT = 40.0
+MAX_ARCHIVE_CONFIGS = 8
+SCAN_INTERVAL_S = 15 * 60
+FIRST_SCAN_DELAY_S = 45
+_REQUEST_GAP_S = 2.1            # GeckoTerminal gratuito: ~30 richieste/minuto
+
+BACKTEST_PARAMS = {
+    "initial_capital": 1000.0,
+    "qty_pct_of_equity": 100.0,
+    "commission_pct": 0.3,
+    "slippage_pct": 0.5,
+    "fill_at": "next_open",
+}
+
+# Il lato "base" di questi pool non e' un token giovane: e' la moneta di
+# scambio (SOL/USDC, WETH/USDG...).
+_NOT_A_TOKEN = {
+    "SOL", "WSOL", "USDC", "USDT", "USDG", "WETH", "ETH", "DAI", "USDS", "PYUSD",
+    "USD1", "USDE", "BTC", "WBTC", "CBBTC", "JITOSOL", "MSOL", "BNSOL", "JUPSOL",
+}
+
+
+# Provata e mostrata, ma mai proposta: i suoi ingressi usano uno swing che si
+# riconosce solo `swing_length` barre dopo (seed-0010), quindi il suo backtest
+# gonfia il risultato. Via da qui quando quel fix entra.
+UNRELIABLE = {
+    "Accumulo / Distribuzione (long-term)": "usa dati futuri negli ingressi",
+}
+
+
+@dataclass
+class Pool:
+    chain: str
+    symbol: str
+    name: str
+    token_address: str
+    pair_address: str
+    dex: str
+    liquidity_usd: float
+    market_cap: float | None
+    created_ms: int
+
+    @property
+    def age_hours(self) -> float:
+        return (time.time() * 1000 - self.created_ms) / 3_600_000
+
+    @property
+    def pair_url(self) -> str:
+        return f"https://dexscreener.com/{self.chain}/{self.pair_address}"
+
+
+def parse_pool(chain: str, pool: dict) -> Pool | None:
+    """Un pool GeckoTerminal. Gli indirizzi restano come sono: in minuscolo
+    un indirizzo Solana (base58) non e' piu' lo stesso indirizzo."""
+    try:
+        attrs = pool.get("attributes") or {}
+        rel = pool.get("relationships") or {}
+        created = attrs.get("pool_created_at")
+        pair = attrs.get("address") or ""
+        base_id = ((rel.get("base_token") or {}).get("data") or {}).get("id", "")
+        token = base_id.split("_", 1)[-1]
+        if not created or not pair or not token:
+            return None
+        created_ms = int(datetime.fromisoformat(created.replace("Z", "+00:00"))
+                         .astimezone(timezone.utc).timestamp() * 1000)
+        name = attrs.get("name") or "?"
+        mc = attrs.get("market_cap_usd") or attrs.get("fdv_usd")
+        return Pool(
+            chain=chain,
+            symbol=name.split(" / ")[0].strip(),
+            name=name,
+            token_address=token,
+            pair_address=pair,
+            dex=((rel.get("dex") or {}).get("data") or {}).get("id", ""),
+            liquidity_usd=float(attrs.get("reserve_in_usd") or 0),
+            market_cap=float(mc) if mc else None,
+            created_ms=created_ms,
+        )
+    except (TypeError, ValueError):
+        return None
+
+
+def pick_candidates(pools: list[Pool], limit: int = MAX_TESTED_PER_CHAIN) -> tuple[list[Pool], int]:
+    """(da testare, quanti passano il filtro). Un pool per ticker: quello con
+    piu' liquidita'. Ordine: liquidita' rispetto alla capitalizzazione."""
+    best_by_ticker: dict[str, Pool] = {}
+    for p in pools:
+        ticker = p.symbol.upper()
+        if not ticker or ticker in _NOT_A_TOKEN:
+            continue
+        if p.age_hours > AGE_MAX_DAYS * 24 or p.liquidity_usd < LIQ_MIN_USD:
+            continue
+        if not p.market_cap or p.market_cap > MCAP_MAX_USD:
+            continue
+        if p.liquidity_usd / p.market_cap < LIQ_TO_MCAP_MIN:
+            continue
+        held = best_by_ticker.get(ticker)
+        if held is None or p.liquidity_usd > held.liquidity_usd:
+            best_by_ticker[ticker] = p
+    ranked = sorted(best_by_ticker.values(), key=lambda p: p.liquidity_usd / p.market_cap, reverse=True)
+    return ranked[:limit], len(ranked)
+
+
+def watch_symbol(symbol: str, chain: str, pool: str) -> str:
+    return make_symbol(symbol, chain, pool)
+
+
+def interval_for(age_hours: float) -> str:
+    # 1000 candele al massimo da GeckoTerminal: a 5m sono ~3,5 giorni, a 15m
+    # ~10. Sotto i 4 giorni di vita servono le 5m per avere storia.
+    return "5m" if age_hours < 96 else "15m"
+
+
+def _short(strategy_name: str) -> str:
+    return strategy_name.split(" (")[0]
+
+
+def strategy_configs(entries: list[dict] | None = None) -> list[dict]:
+    """Ogni strategia del registro con i suoi predefiniti, piu' le
+    configurazioni archiviate e pronte (una per coppia strategia+parametri)."""
+    configs = [{"strategy_name": name, "params": None, "label": _short(name), "source": "predefinita"}
+               for name in STRATEGY_REGISTRY]
+    seen: set[str] = set()
+    for e in entries if entries is not None else archive.ready_entries():
+        name = e.get("strategy_name")
+        if name not in STRATEGY_REGISTRY or not e.get("params"):
+            continue
+        key = name + json.dumps(e["params"], sort_keys=True)
+        if key in seen:
+            continue
+        seen.add(key)
+        configs.append({
+            "strategy_name": name,
+            "params": dict(e["params"]),
+            "label": f"{_short(name)} · archivio {e.get('symbol', '')} {e.get('interval', '')}".strip(),
+            "source": "archivio",
+        })
+        if len(configs) >= len(STRATEGY_REGISTRY) + MAX_ARCHIVE_CONFIGS:
+            break
+    return configs
+
+
+def _long_only(trades, commission_pct: float) -> dict:
+    """Rendimento composto dei soli long, con i costi del DEX."""
+    equity = peak = 1.0
+    max_dd = gross_win = gross_loss = 0.0
+    wins = n = 0
+    for t in trades:
+        if t.direction != "long":
+            continue
+        n += 1
+        r = t.pnl_pct / 100 - 2 * commission_pct / 100
+        equity *= 1 + r
+        peak = max(peak, equity)
+        max_dd = max(max_dd, (peak - equity) / peak * 100)
+        if r > 0:
+            wins += 1
+            gross_win += r
+        else:
+            gross_loss -= r
+    return {
+        "return_pct": (equity - 1) * 100,
+        "trades": n,
+        "win_rate": wins / n * 100 if n else None,
+        "profit_factor": gross_win / gross_loss if gross_loss > 0 else None,
+        "max_dd": max_dd,
+    }
+
+
+def _qualifies(m: dict) -> bool:
+    if m["trades"] < MIN_TRADES or m["return_pct"] <= 0 or m["max_dd"] > MAX_DRAWDOWN_PCT:
+        return False
+    pf = m["profit_factor"]
+    return pf is None or pf >= MIN_PROFIT_FACTOR
+
+
+def evaluate(df: pd.DataFrame, configs: list[dict]) -> dict:
+    """Backtest di ogni configurazione su `df`. Ritorna la migliore che passa
+    le soglie (o None) e il risultato di tutte, per trasparenza."""
+    tried: list[dict] = []
+    best: dict | None = None
+    for cfg in configs:
+        try:
+            result = run_backtest(df, cfg["params"], BACKTEST_PARAMS, strategy_name=cfg["strategy_name"])
+            m = _long_only(result.trades, BACKTEST_PARAMS["commission_pct"])
+            _events, position = confirmed_events(df, cfg["params"], strategy_name=cfg["strategy_name"])
+        except Exception as exc:  # una strategia che non gira su questa serie non ferma le altre
+            logger.debug("radar: %s fallita: %s", cfg["label"], exc)
+            continue
+        row = {**m, "label": cfg["label"], "strategy_name": cfg["strategy_name"],
+               "source": cfg["source"], "params": cfg["params"], "in_position": position > 0,
+               "excluded": UNRELIABLE.get(cfg["strategy_name"])}
+        tried.append(row)
+        if not row["excluded"] and _qualifies(m) and (best is None or m["return_pct"] > best["return_pct"]):
+            best = row
+    first, last = float(df["close"].iloc[0]), float(df["close"].iloc[-1])
+    return {
+        "best": best,
+        "tried": sorted(tried, key=lambda r: r["return_pct"], reverse=True),
+        "hold_pct": (last / first - 1) * 100 if first > 0 else None,
+    }
+
+
+# ------------------------------------------------------------------- stato
+
+_state: dict = {
+    "last_scan": 0.0,
+    "next_scan": 0.0,
+    "running": False,
+    "chains": {},
+    "proposals": [],
+    "tested": [],
+    "configs": 0,
+    "error": "",
+}
+_first_seen: dict[str, float] = {}  # chain:token -> quando e' diventato proposta
+
+
+def _load() -> None:
+    if not _STORE_FILE.exists():
+        return
+    try:
+        raw = json.loads(_STORE_FILE.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return
+    if isinstance(raw, dict):
+        _state.update({k: v for k, v in raw.get("state", {}).items() if k in _state and k != "running"})
+        _first_seen.update(raw.get("first_seen") or {})
+
+
+def _save() -> None:
+    try:
+        _STORE_FILE.write_text(json.dumps({"state": _state, "first_seen": _first_seen}, ensure_ascii=False),
+                               encoding="utf-8")
+    except OSError:
+        pass
+
+
+_load()
+
+
+def snapshot() -> dict:
+    return {
+        **{k: v for k, v in _state.items()},
+        "filters": {
+            "age_max_days": AGE_MAX_DAYS,
+            "liq_min_usd": LIQ_MIN_USD,
+            "mcap_max_usd": MCAP_MAX_USD,
+            "liq_to_mcap_min": LIQ_TO_MCAP_MIN,
+            "min_bars": MIN_BARS,
+            "min_trades": MIN_TRADES,
+            "min_profit_factor": MIN_PROFIT_FACTOR,
+            "max_drawdown_pct": MAX_DRAWDOWN_PCT,
+        },
+        "costs": {"commission_pct": BACKTEST_PARAMS["commission_pct"],
+                  "slippage_pct": BACKTEST_PARAMS["slippage_pct"]},
+        "interval_s": SCAN_INTERVAL_S,
+    }
+
+
+def reset_for_tests() -> None:
+    _state.update(last_scan=0.0, next_scan=0.0, running=False, chains={}, proposals=[], tested=[],
+                  configs=0, error="")
+    _first_seen.clear()
+
+
+# ---------------------------------------------------------------------- giro
+
+async def _fetch_pools(client: httpx.AsyncClient, chain: str) -> list[Pool]:
+    network = CHAINS[chain]
+    requests = [("pools", {"page": p, "sort": "h24_volume_usd_desc"}) for p in (1, 2, 3)]
+    requests += [("trending_pools", {"page": 1}), ("new_pools", {"page": 1})]
+    pools: list[Pool] = []
+    for endpoint, params in requests:
+        try:
+            resp = await client.get(f"{GECKO_BASE}/networks/{network}/{endpoint}", params=params,
+                                    headers={"Accept": "application/json"})
+            if resp.status_code == 200:
+                pools += [p for p in (parse_pool(chain, x) for x in resp.json().get("data") or []) if p]
+            else:
+                logger.info("radar: GeckoTerminal %s su %s/%s", resp.status_code, chain, endpoint)
+        except (httpx.HTTPError, ValueError) as exc:
+            logger.info("radar: %s/%s non raggiungibile: %s", chain, endpoint, exc)
+        await asyncio.sleep(_REQUEST_GAP_S)
+    return pools
+
+
+async def scan_once() -> dict:
+    """Un giro completo. Non solleva: un errore finisce in `error`."""
+    if _state["running"]:
+        return snapshot()
+    _state["running"] = True
+    provider = DexScreenerProvider()
+    configs = strategy_configs()
+    proposals: list[dict] = []
+    tested: list[dict] = []
+    chains: dict[str, dict] = {}
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            for chain in CHAINS:
+                pools = await _fetch_pools(client, chain)
+                picked, passing = pick_candidates(pools)
+                info = {"seen": len({p.token_address for p in pools}), "passing": passing,
+                        "tested": 0, "too_young": 0}
+                for pool in picked:
+                    interval = interval_for(pool.age_hours)
+                    try:
+                        df = await provider.fetch_ohlcv(make_symbol(pool.symbol, chain, pool.pair_address),
+                                                        interval, 1000)
+                    except ProviderError as exc:
+                        logger.info("radar: candele %s: %s", pool.symbol, exc)
+                        await asyncio.sleep(_REQUEST_GAP_S)
+                        continue
+                    await asyncio.sleep(_REQUEST_GAP_S)
+                    if len(df) < MIN_BARS:
+                        info["too_young"] += 1
+                        continue
+                    info["tested"] += 1
+                    outcome = await asyncio.to_thread(evaluate, df, configs)
+                    base = {
+                        "chain": chain, "symbol": pool.symbol, "name": pool.name,
+                        "token_address": pool.token_address, "pair_address": pool.pair_address,
+                        "pair_url": pool.pair_url, "dex": pool.dex,
+                        "age_hours": round(pool.age_hours, 1), "liquidity_usd": pool.liquidity_usd,
+                        "market_cap": pool.market_cap, "interval": interval, "bars": len(df),
+                        "days": round((df.index[-1] - df.index[0]).total_seconds() / 86400, 1),
+                        "hold_pct": outcome["hold_pct"],
+                    }
+                    best = outcome["best"]
+                    if best is None:
+                        top = next((r for r in outcome["tried"] if not r["excluded"]), None)
+                        tested.append({**base, "best_label": top["label"] if top else None,
+                                       "best_return_pct": top["return_pct"] if top else None})
+                        continue
+                    key = f"{chain}:{pool.token_address}"
+                    found_at = _first_seen.setdefault(key, time.time())
+                    proposals.append({
+                        **base,
+                        "found_at": found_at,
+                        "strategy": best["label"],
+                        "strategy_name": best["strategy_name"],
+                        "source": best["source"],
+                        "params": best["params"],
+                        "return_pct": best["return_pct"],
+                        "trades": best["trades"],
+                        "win_rate": best["win_rate"],
+                        "profit_factor": best["profit_factor"],
+                        "max_dd": best["max_dd"],
+                        "in_position": best["in_position"],
+                        "configs_tried": len(outcome["tried"]),
+                        "tried": [{k: r[k] for k in ("label", "return_pct", "trades", "max_dd", "excluded")}
+                                  for r in outcome["tried"]],
+                    })
+                chains[chain] = info
+        live = {f"{p['chain']}:{p['token_address']}" for p in proposals}
+        for key in list(_first_seen):
+            if key not in live:
+                del _first_seen[key]
+        proposals.sort(key=lambda p: p["return_pct"], reverse=True)
+        _state.update(proposals=proposals, tested=tested, chains=chains, configs=len(configs), error="")
+    except Exception as exc:
+        logger.exception("radar: giro fallito")
+        _state["error"] = str(exc)[:200]
+    finally:
+        now = time.time()
+        _state.update(running=False, last_scan=now, next_scan=now + SCAN_INTERVAL_S)
+        _save()
+    return snapshot()
+
+
+async def radar_loop() -> None:
+    _state["next_scan"] = time.time() + FIRST_SCAN_DELAY_S
+    await asyncio.sleep(FIRST_SCAN_DELAY_S)
+    while True:
+        await scan_once()
+        await asyncio.sleep(SCAN_INTERVAL_S)
+
+
+# ------------------------------------------------------------------ grafico
+
+CHART_TTL_S = 30
+_chart_cache: dict[tuple[str, str], tuple[float, pd.DataFrame]] = {}
+
+# On-chain spot si va solo long: un'inversione verso short e' un'uscita, una
+# verso long un ingresso. Lo short puro non si disegna.
+_LONG_VIEW = {"entry_long": "in", "flip_to_long": "in", "exit_long": "out", "flip_to_short": "out"}
+
+
+def long_events(events) -> list[dict]:
+    out: list[dict] = []
+    holding = False
+    for e in events:
+        kind = _LONG_VIEW.get(e.type)
+        if kind is None or (kind == "in") == holding:
+            continue
+        holding = kind == "in"
+        out.append({"time": e.time, "kind": kind, "price": e.price})
+    return out
+
+
+def chart_strategies(df: pd.DataFrame, configs: list[dict]) -> list[dict]:
+    rows = []
+    for cfg in configs:
+        try:
+            events, position = confirmed_events(df, cfg["params"], strategy_name=cfg["strategy_name"])
+        except Exception as exc:
+            logger.debug("radar chart: %s fallita: %s", cfg["label"], exc)
+            continue
+        rows.append({
+            "label": cfg["label"], "strategy_name": cfg["strategy_name"], "params": cfg["params"],
+            "source": cfg["source"], "excluded": UNRELIABLE.get(cfg["strategy_name"]),
+            "events": long_events(events), "in_position": position > 0,
+        })
+    return rows
+
+
+async def chart_payload(chain: str, pool: str, symbol: str, interval: str) -> dict:
+    """Candele del pool e ingressi/uscite di ogni strategia, sulle stesse
+    candele del backtest. Tenute 30 s: chi guarda aggiorna ogni 30 s."""
+    key = (chain, pool, interval)
+    cached = _chart_cache.get(key)
+    if cached and time.time() - cached[0] < CHART_TTL_S:
+        df = cached[1]
+    else:
+        df = await DexScreenerProvider().fetch_ohlcv(make_symbol(symbol, chain, pool), interval, 1000)
+        _chart_cache[key] = (time.time(), df)
+        if len(_chart_cache) > 64:
+            _chart_cache.pop(next(iter(_chart_cache)))
+    strategies = await asyncio.to_thread(chart_strategies, df, strategy_configs())
+    return {
+        "chain": chain, "pool": pool, "symbol": symbol, "interval": interval,
+        "candles": [
+            {"time": int(ts.timestamp()), "open": float(r.open), "high": float(r.high),
+             "low": float(r.low), "close": float(r.close)}
+            for ts, r in df.iterrows()
+        ],
+        "strategies": strategies,
+        "updated_at": time.time(),
+    }

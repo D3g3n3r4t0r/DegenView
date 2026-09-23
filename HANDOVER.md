@@ -2791,3 +2791,48 @@ aggregatore.
 Seguito (#80 online): con GeckoTerminal in 429 la ricerca MYCEL tornava
 solo i pool DexScreener (niente MYCEL) e li teneva in cache 60s. Ora un
 secondo tentativo sul 429 e nessuna cache se una delle due fonti e' caduta.
+
+---
+
+## Radar dei token giovani — `seed-0094` — 2026-09-23
+
+Lorenzo: "voglio che nell'applicazione venga informato di quale token appena
+nato, o che ha due o tre settimane di vita con tanta liquidità e bassa
+capitalizzazione [...] quale delle strategie performa bene, una specie di
+alert costante [...] su Solana o su rete Robinhood [...] deve esserci un
+minimo di backtest". Poi, sul grafico: "voglio la stessa grafica del sito
+[...] zoomare [...] vedere in tempo reale gli ingressi e le uscite delle
+strategie [...] che eventualmente potrei attivare oppure no".
+
+Fatto (branch `claude/token-scanner-strategie-a97cto`):
+- `app/trading/onchain/radar.py`: giro ogni 15 min (loop in `lifespan`,
+  `settings.onchain_radar_enabled`), GeckoTerminal su Solana e Robinhood,
+  filtri e soglie come costanti in cima al file. Backtest solo long con
+  costi DEX su tutte le strategie + configurazioni "pronte" dell'archivio
+  (`archive.ready_entries()`). Stato su `data/onchain_radar.json`.
+- Accumulo/Distribuzione e' provata e mostrata ma **mai proposta**
+  (`UNRELIABLE`) finche' `seed-0010` non e' corretto: toglierla da li'
+  quando entra il fix.
+- Frontend `static/onchain/radar.js`: blocco `#radar` nella vista Pilota,
+  foglio con grafico a candele stile `app.js` (lightweight-charts),
+  marker IN/OUT per strategia, live ogni 30 s. L'interruttore per strategia
+  crea/aggiorna una voce di watchlist **solo alert** (`auto_trade` spento).
+- Il grafico del radar NON usa `chart.js` (fonte dati di #78): usa le
+  stesse candele GeckoTerminal del backtest, cosi' i marker coincidono.
+
+Seguito, stessa sera. Lorenzo: "ottimizza [...] che non ci siano ritardi e
+che io sia informato sui listing [...] quasi istantaneo". GeckoTerminal ha
+7-8 minuti di ritardo sui pool nuovi e 60 s di cache, quindi
+`app/trading/onchain/listings.py` usa tre fonti (log di creazione pool dal
+nodo Robinhood ogni 3 s, pump.fun laureati ogni 8 s, GeckoTerminal ogni
+60 s) e rilegge i pool in attesa su DexScreener finche' arriva la
+liquidita'. Spinti al browser via SSE (`/api/onchain/radar/stream`),
+Telegram solo per pool < 15 min, max 12/ora per utente. Limite noto: su
+Solana i lanci fuori da pump.fun (Raydium LaunchLab, Meteora...) arrivano
+solo da GeckoTerminal; per l'istantaneo vero servirebbe un RPC Solana a
+pagamento con logsSubscribe.
+
+Resta: vederlo sul server vero; decidere con Lorenzo se l'alert delle
+proposte (non dei listing) deve anche arrivare su Telegram e se l'interruttore debba poter accendere l'acquisto
+automatico (oggi no, di proposito). Primo giro reale: poche proposte
+(1 su ~100 token), Robinhood ha ancora pochi pool giovani liquidi.
