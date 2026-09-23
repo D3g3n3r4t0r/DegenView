@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0097", "Radar: grafico vuoto con DexScreener pieno, token oltre i $100k, scartati e pagella dei filtri",
+     "Lorenzo: 'Se Dex Scanner visualizza correttamente il ticker con tutta la liquidità, eccetera, nel sito nostro non può uscire questo errore inaccettabile, non deve mai succedere' (FLIP su Robinhood: 'Nessun dato disponibile'). E: 'voglio capire che è una cosa live [...] deve esserci un senso di movimento', 'se ci clicco voglio vedere tutti i parametri di GitHub [...] un bel benchmark [...] se in modo eccellente oppure [...] mediocri', 'invece di usare Token Sniffer usa qualche sito che ha delle api pubbliche', 'scorrendo giù voglio una sezione che mi faccia vedere tutti quelli che sono stati scartati'. Più l'avviso Telegram '⚠️ Dati stantii: UBR@solana [...] [1m] — ultima candela 0h fa'.",
+     "alta"),
     ("seed-0096", "Condividere il sito con un amico in sola lettura",
      "Lorenzo: 'vorrei pubblicare un link per condividere questo sito che abbiamo fatto con un amico che lo possa utilizzare senza ovviamente poter modificare niente, quindi solo la lettura. È possibile mostrarglielo se copio il link del sito cosa gli arriva?'",
      "media"),

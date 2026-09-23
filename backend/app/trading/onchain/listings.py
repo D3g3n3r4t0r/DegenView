@@ -68,7 +68,7 @@ VET_RETRY_S = 120             # un token "in attesa" (niente sito, niente report
 VET_CONCURRENCY = 4
 CHART_MIN_BARS = 2            # un listing si mostra solo se il suo grafico c'e' gia'
 CHART_RETRY_S = 15            # GeckoTerminal ha le candele di un pool nuovo dopo 1-5 minuti
-KEEP_REJECTED = 30    # fuori dall'app si avvisa solo di cio' che e' davvero appena uscito
+KEEP_REJECTED = 100   # fuori dall'app si avvisa solo di cio' che e' davvero appena uscito
 
 TICK_S = 3
 CHAIN_POLL_S = 3
@@ -101,6 +101,7 @@ class _Pending:
     vetting: bool = False
     waiting_for: str = ""
     verdict: dict | None = None   # esito "ok" del filtro, tenuto mentre si aspetta il grafico
+    symbol: str = ""
 
 
 _pending: dict[str, _Pending] = {}   # chain:pair
@@ -114,6 +115,8 @@ _http: httpx.AsyncClient | None = None
 _subscribers: list[asyncio.Queue] = []
 _callbacks: list[Callable[[dict], Awaitable[None]]] = []
 _state = {"last_block": 0, "last_tick": 0.0, "sources": {}}
+_arrivals: list[float] = []   # quando sono comparsi i pool nuovi, ultimi 10 minuti
+ARRIVALS_WINDOW_S = 600
 
 
 def _key(chain: str, pair: str) -> str:
@@ -128,13 +131,21 @@ def _load() -> None:
     except (OSError, json.JSONDecodeError):
         return
     if isinstance(raw, dict):
-        _listings.extend(x for x in raw.get("listings", []) if isinstance(x, dict))
+        _listings.extend(x for x in raw.get("listings", []) if isinstance(x, dict) and _passes_today(x))
+        _rejected.extend(x for x in raw.get("rejected", []) if isinstance(x, dict))
         _alerted_tickers.update(raw.get("tickers") or {})
+
+
+def _passes_today(item: dict) -> bool:
+    """I listing salvati prima del filtro (niente controlli, cap oltre il
+    tetto: JEANCOIN a $532k) non restano in lista solo perche' erano gia' li'."""
+    return bool(item.get("checks")) and float(item.get("market_cap") or 0) <= MCAP_MAX_USD
 
 
 def _save() -> None:
     try:
-        _STORE_FILE.write_text(json.dumps({"listings": _listings, "tickers": _alerted_tickers},
+        _STORE_FILE.write_text(json.dumps({"listings": _listings, "rejected": _rejected,
+                                           "tickers": _alerted_tickers},
                                           ensure_ascii=False), encoding="utf-8")
     except OSError:
         pass
@@ -144,7 +155,21 @@ _load()
 
 
 def recent() -> list[dict]:
-    return list(_listings)
+    return [x for x in _listings if _passes_today(x)]
+
+
+def rejected() -> list[dict]:
+    return list(_rejected)
+
+
+def pulse(now: float | None = None) -> dict:
+    """Quello che il radar sta facendo adesso, per far vedere che e' vivo."""
+    now = now or time.time()
+    del _arrivals[:sum(1 for t in _arrivals if now - t > ARRIVALS_WINDOW_S)]
+    checking = sorted({p.symbol for p in _pending.values() if p.symbol and (p.vetting or p.waiting_for)})
+    return {"at": now, "arrivals_10m": len(_arrivals), "last_arrival": _arrivals[-1] if _arrivals else None,
+            "pending": len(_pending), "checking": checking[:6], "rejected": len(_rejected),
+            "last_tick": _state["last_tick"]}
 
 
 def status() -> dict:
@@ -154,7 +179,6 @@ def status() -> dict:
         "rejected": len(_rejected),
         "recent_rejected": _rejected[:8],
         "ai_review": bool(legit.settings.anthropic_api_key),
-        "tokensniffer": bool(legit.settings.tokensniffer_api_key),
         "last_tick": _state["last_tick"],
         "sources": dict(_state["sources"]),
         "thresholds": {"liq_min_usd": LIQ_MIN_USD, "mcap_max_usd": MCAP_MAX_USD,
@@ -184,6 +208,7 @@ def reset_for_tests() -> None:
     _alerted_tickers.clear()
     _listings.clear()
     _rejected.clear()
+    _arrivals.clear()
     _subscribers.clear()
     _state.update(last_block=0, last_tick=0.0, sources={})
 
@@ -201,6 +226,7 @@ def add_pending(chain: str, pair: str, source: str, links: dict | None = None) -
         del _pending[oldest]
         _done[oldest] = time.time()
     _pending[k] = _Pending(chain, pair, source, links=links or {})
+    _arrivals.append(time.time())
     return True
 
 
@@ -297,10 +323,31 @@ async def _publish(item: dict) -> None:
             logger.exception("listings: callback fallita")
 
 
-def _reject(item: dict, reason: str, now: float) -> None:
-    _rejected.insert(0, {"chain": item["chain"], "symbol": item["symbol"], "name": item["name"],
-                         "pair_url": item["pair_url"], "reason": reason, "at": now})
+def note_rejected(item: dict, reason: str, now: float, verdict: dict | None = None,
+                  source: str = "listing") -> dict | None:
+    """Lorenzo: "scorrendo giu' voglio una sezione che mi faccia vedere tutti
+    quelli che sono stati scartati". Uno per token, col perche' e i controlli."""
+    token = item.get("token_address") or item.get("pair_address")
+    if any(r.get("chain") == item.get("chain") and (r.get("token_address") or r.get("pair_address")) == token
+           for r in _rejected):
+        return None
+    verdict = verdict or {}
+    entry = {"chain": item.get("chain"), "symbol": item.get("symbol"), "name": item.get("name"),
+             "token_address": item.get("token_address") or "", "pair_address": item.get("pair_address") or "",
+             "pair_url": item.get("pair_url") or "", "market_cap": item.get("market_cap"),
+             "liquidity_usd": item.get("liquidity_usd"), "created_at": item.get("created_at"),
+             "reason": reason, "at": now, "source": source,
+             "checks": verdict.get("checks") or [], "website": verdict.get("website"),
+             "github": verdict.get("github"), "scan_url": verdict.get("scan_url")}
+    _rejected.insert(0, entry)
     del _rejected[KEEP_REJECTED:]
+    _save()
+    _push("rejected", entry)
+    return entry
+
+
+def _reject(item: dict, reason: str, now: float, verdict: dict | None = None) -> None:
+    note_rejected(item, reason, now, verdict)
 
 
 async def _chart_ready(item: dict) -> bool:
@@ -350,7 +397,7 @@ async def _vet(k: str, pending: _Pending, item: dict, pair: dict) -> dict | None
     del _pending[k]
     _done[k] = now
     if verdict["status"] == "fail":
-        _reject(item, verdict["reason"], now)
+        _reject(item, verdict["reason"], now, verdict)
         return None
     ticker = f"{item['chain']}:{item['symbol'].upper()}"
     if ticker in _alerted_tickers:
@@ -359,7 +406,8 @@ async def _vet(k: str, pending: _Pending, item: dict, pair: dict) -> dict | None
     item.update(found_at=now, source=pending.source,
                 latency_s=round(now - item["created_at"]) if item["created_at"] else None,
                 website=verdict["website"], socials=verdict["socials"], checks=verdict["checks"],
-                ai=verdict.get("ai"), github=verdict.get("github"), tokensniffer=verdict.get("tokensniffer"))
+                ai=verdict.get("ai"), github=verdict.get("github"), scan_url=verdict.get("scan_url"),
+                report=verdict.get("report"))
     await _publish(item)
     return item
 
@@ -390,6 +438,7 @@ async def accept_pairs(pairs: list[dict], now: float | None = None, *, wait: boo
             _done[k] = now
             continue
         pending.vetting = True
+        pending.symbol = item["symbol"]
         tasks.append(_spawn(_vet(k, pending, item, pair)))
     for k, p in list(_pending.items()):
         if _is_expired(p, now) and not p.vetting:
@@ -431,8 +480,8 @@ def telegram_text(item: dict, now: float | None = None, app_url: str = "") -> st
     for s in item.get("socials") or []:
         if s.get("type") in ("twitter", "telegram"):
             links.append(f'<a href="{esc(s["url"], quote=True)}">{"X" if s["type"] == "twitter" else "Telegram"}</a>')
-    if item.get("tokensniffer"):
-        links.append(f'<a href="{esc(item["tokensniffer"], quote=True)}">Token Sniffer</a>')
+    if item.get("scan_url"):
+        links.append(f'<a href="{esc(item["scan_url"], quote=True)}">RugCheck</a>')
     if item.get("pair_url"):
         links.append(f'<a href="{esc(item["pair_url"], quote=True)}">Grafico</a>')
     if app_url:
