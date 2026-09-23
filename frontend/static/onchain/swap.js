@@ -60,6 +60,7 @@ let latestQuote = null;
 let debounceTimer = null;
 let tokenCache = new Map();
 let onExecutedCb = null;
+let onTokenPickedCb = null;
 
 function availableToSell(chain) {
   const native = state.balance?.native_balance;
@@ -89,12 +90,14 @@ async function resolveToken(chain, address) {
  * viene chiamato di nuovo (cambio chain) o smontato da chi possiede il
  * pannello ordine. Un token preselezionato (dal grafico) evita di doverlo
  * scegliere due volte. */
-export async function mountSwap(container, { onExecuted, presetToken } = {}) {
+export async function mountSwap(container, { onExecuted, onTokenPicked, presetToken } = {}) {
   hostEl = container;
   onExecutedCb = onExecuted ?? null;
+  onTokenPickedCb = onTokenPicked ?? null;
   const chain = state.chain;
   const native = NATIVE[chain];
-  const defaultOut = presetToken ?? DEFAULT_OUTPUT[chain];
+  const usablePreset = presetToken && presetToken.address.toLowerCase() !== native.address.toLowerCase();
+  const defaultOut = usablePreset ? presetToken : DEFAULT_OUTPUT[chain];
   leg = {
     in: { ...native, priceUsd: state.balance?.native_price_usd ?? null, isNative: true },
     out: { ...defaultOut, priceUsd: defaultOut.priceUsd ?? null, isNative: defaultOut.address === native.address },
@@ -199,6 +202,7 @@ function paintForm(armed) {
 function pickToken(side, armed) {
   const chain = state.chain;
   sheets.openTokenPicker(chain, {
+    title: side === "in" ? "Cosa vendi" : "Cosa ricevi",
     onPick: async ({ address }) => {
       const submitButton = host().querySelector("#swap-submit");
       if (submitButton) { submitButton.disabled = true; submitButton.textContent = "Verifico il token…"; }
@@ -213,6 +217,7 @@ function pickToken(side, armed) {
         } else {
           const resolved = await resolveToken(chain, address);
           leg[side] = { ...resolved, isNative: false };
+          onTokenPickedCb?.(resolved);
         }
         paintForm(armed);
       } catch (error) {

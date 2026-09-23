@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0087", "Wallet on-chain da telefono: scegliere un token apre troppe schermate",
+     "Lorenzo: 'rivedi completamente il sito se mi collego da mobile; se seleziono un token si aprono troppe schermate'. Su /onchain-app.html da telefono il token scelto sul grafico non arrivava allo swap: andava riscelto nel pannello ordine, che stava sotto l'elenco delle posizioni, con un secondo foglio e la tastiera aperta in automatico.",
+     "media"),
     ("seed-0085", "Fase 1 del trading automatico on-chain: wallet generato sul server, sola lettura",
      "Lorenzo: 'si potrebbe iniziare ad imbastire il sistema per il trading automatico anche su wallet on-chain'. Chiarito con lui: custodia della chiave sul server (non un servizio esterno), nessuna conferma manuale per operazione — l'automazione deve dipendere solo dalla strategia — e wallet 'privacy driven' nel senso di generato da zero da noi, mai legato a un'identita', non tecniche di offuscamento on-chain. Chain scelte: Solana e Robinhood Chain (L2 Arbitrum Orbit di Robinhood, live da luglio 2026, chain id 4663). Questa e' solo la Fase 1 del piano (generazione chiave + saldo, nessuna firma reale) — le fasi successive (simulazione, poi esecuzione vera con tetti/allowlist) restano da fare, apposta.",
      "media"),

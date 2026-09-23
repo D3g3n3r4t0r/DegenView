@@ -2609,3 +2609,30 @@ Tre cose, in ordine:
    questa sessione — screenshot Playwright dell'UI attuale e proposta di
    design senza scrivere codice, come chiesto esplicitamente da Lorenzo per
    questa fase.
+
+---
+
+## Wallet on-chain da telefono + scelta token unica — 2026-09-23
+
+Lorenzo: "rivedi completamente il sito se mi collego da mobile; se
+seleziono un token si aprono troppe schermate". Segnalazione `seed-0087`.
+
+Causa misurata (Playwright, iPhone 13, API finte): `onTokenChanged` in
+`chart.js` non aveva nessun ascoltatore, quindi il token scelto sul
+grafico non arrivava allo swap; da telefono il pannello ordine stava
+sotto le posizioni (~1200px piu' giu') e il secondo picker apriva la
+tastiera da solo. Fatto:
+
+- `main.js`: il token del grafico (risolto con `getTokenInfo`, in cache)
+  e' `presetToken` di swap e limite; `onTokenPicked` di swap/limite
+  sposta il grafico con `chart.setToken()` (che non riavvisa i listener).
+- `sheets.openTokenPicker`: ricerca in cima, indirizzo incollato
+  riconosciuto nello stesso campo, niente focus automatico su touch,
+  titolo per lato ("Cosa vendi" / "Cosa ricevi").
+- `onchain-app.html`: blocco `@container (width < 640px)` in coda — la
+  `.market-card` diventa `display: contents` per mettere l'ordine fra
+  grafico e posizioni senza toccare il DOM; desktop invariato.
+
+In parallelo sulla stessa pagina: PR #70 (tasti nav, tocca
+`main.js` e la fine di `resolutions.json`/`_SEED`) e il thread
+velocita' (tocca `<head>`). Conflitti attesi solo in quelle code.

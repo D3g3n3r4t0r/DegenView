@@ -56,6 +56,16 @@ export function getCurrentToken() {
   return currentToken;
 }
 
+// Il token scelto dal pannello ordine (pillola "Ricevi" dello swap): il
+// grafico lo segue senza riavvisare i listener, che sono proprio il
+// pannello da cui arriva — un giro solo, non un ping-pong.
+export function setToken(token) {
+  if (!root || !token || token.address === currentToken?.address) return;
+  currentToken = token;
+  paintShell();
+  loadAndRender();
+}
+
 export function mountChart(container) {
   root = container;
   if (!currentToken && DEFAULT_TOKEN[state.chain]) currentToken = { ...DEFAULT_TOKEN[state.chain] };
