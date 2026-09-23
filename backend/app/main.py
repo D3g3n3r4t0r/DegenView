@@ -91,6 +91,7 @@ from app.trading.onchain import execute as onchain_execute
 from app.trading.onchain import send as onchain_send
 from app.trading.onchain import jito as onchain_jito
 from app.trading.onchain import keys as onchain_keys
+from app.trading.onchain import legit as onchain_legit
 from app.trading.onchain import ledger as onchain_ledger
 from app.trading.onchain import passkey as onchain_passkey
 from app.trading.onchain import pilot as onchain_pilot
@@ -748,6 +749,53 @@ _SNIPER_ONCHAIN_MIN_LIQUIDITY_USD = 3000.0
 # senso — un token con 3 mesi di storia non e' piu' un arrivo da inseguire.
 _SNIPER_ONCHAIN_MAX_AGE_HOURS = 72.0
 _SNIPER_ONCHAIN_POLL_SECONDS = 180
+# Lorenzo: "voglio evitare rug pull [...] token legittimi con progetti seri
+# [...] market cap non oltre i 100.000 dollari". Vale anche per il pilota,
+# che compra davvero: un candidato dello sniper passa dallo stesso filtro
+# degli avvisi, e i listing gia' verificati entrano direttamente.
+_SNIPER_ONCHAIN_MAX_MCAP_USD = 100_000.0
+_PILOT_VERDICT_TTL_S = 6 * 3600
+_pilot_verdicts: dict[str, tuple[float, dict]] = {}
+
+
+async def _pilot_vet(candidate) -> dict:
+    """Esito del filtro di legittimita' per un candidato dello sniper, tenuto
+    qualche ora (un "wait" no: si riprova al giro dopo)."""
+    key = f"{candidate.chain_id}:{candidate.token_address}"
+    cached = _pilot_verdicts.get(key)
+    if cached and _time.time() - cached[0] < _PILOT_VERDICT_TTL_S:
+        return cached[1]
+    links = onchain_legit.merge_links({
+        "websites": [candidate.website] if candidate.website else [],
+        "socials": [s for s in candidate.socials if isinstance(s, dict)],
+    })
+    token = {"chain": candidate.chain_id, "symbol": candidate.symbol, "name": candidate.name,
+             "token_address": candidate.token_address, "market_cap": candidate.market_cap,
+             "liquidity_usd": candidate.liquidity_usd}
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        verdict = await onchain_legit.assess(token, links, client)
+    if verdict["status"] != "wait":
+        _pilot_verdicts[key] = (_time.time(), verdict)
+    return verdict
+
+
+def _vetted_listing_candidates() -> list:
+    """I listing gia' passati dal filtro, nella forma dei candidati dello
+    sniper: arrivano prima e sono gia' verificati."""
+    from app.sniper.cache import Candidate
+    now = _time.time()
+    out = []
+    for item in onchain_listings.recent():
+        born = item.get("created_at") or item.get("found_at") or now
+        out.append(Candidate(
+            chain_id=item["chain"], token_address=item.get("token_address") or "",
+            pair_address=item.get("pair_address") or "", symbol=item["symbol"], name=item.get("name") or "",
+            dex_id=item.get("dex") or "", pair_url=item.get("pair_url") or "", price_usd=0.0,
+            market_cap=item.get("market_cap"), liquidity_usd=float(item.get("liquidity_usd") or 0),
+            volume_h24=0.0, volume_h1=0.0, age_hours=(now - born) / 3600, buy_sell_ratio=0.0,
+            website=item.get("website"), socials=item.get("socials") or [],
+        ))
+    return out
 
 
 async def _sniper_onchain_bridge_loop() -> None:
@@ -793,9 +841,14 @@ async def _sniper_onchain_bridge_tick() -> None:
 
     seen: dict[str, list[str]] = {chain: [] for chain in users_by_chain}
     accepted: dict[str, int] = dict.fromkeys(users_by_chain, 0)
-    for candidate in sniper_cache.get_candidates():
+    vetted = _vetted_listing_candidates()
+    vetted_keys = {(c.chain_id, c.token_address) for c in vetted}
+    for candidate in vetted + [c for c in sniper_cache.get_candidates()
+                               if (c.chain_id, c.token_address) not in vetted_keys]:
         interested = users_by_chain.get(candidate.chain_id)
         if not interested:
+            continue
+        if (candidate.token_address or candidate.symbol) in seen[candidate.chain_id]:
             continue
         seen[candidate.chain_id].append(candidate.token_address or candidate.symbol)
         reason = None
@@ -805,6 +858,16 @@ async def _sniper_onchain_bridge_tick() -> None:
             reason = f"troppo vecchio ({candidate.age_hours:.0f} h, massimo {_SNIPER_ONCHAIN_MAX_AGE_HOURS:.0f})"
         elif not candidate.token_address or not candidate.pair_address:
             reason = "indirizzo del token o del pool mancante"
+        elif not candidate.market_cap or candidate.market_cap > _SNIPER_ONCHAIN_MAX_MCAP_USD:
+            reason = f"cap {'sconosciuta' if not candidate.market_cap else f'${candidate.market_cap:,.0f}'} oltre ${_SNIPER_ONCHAIN_MAX_MCAP_USD:,.0f}"
+        elif (candidate.chain_id, candidate.token_address) not in vetted_keys:
+            try:
+                verdict = await _pilot_vet(candidate)
+            except Exception:  # noqa: BLE001 — un filtro che non risponde non fa passare niente
+                logger.exception("sniper_onchain_bridge: filtro fallito su %s", candidate.symbol)
+                verdict = {"status": "wait", "reason": "controllo non riuscito"}
+            if verdict["status"] != "ok":
+                reason = verdict["reason"] or "non supera il filtro"
         if reason:
             onchain_pilot.record_rejection(
                 candidate.chain_id, symbol=candidate.symbol, reason=reason,
@@ -821,11 +884,15 @@ async def _sniper_onchain_bridge_tick() -> None:
                 )
                 if existing is not None:
                     continue  # gia' seguito da questo utente, niente da rifare
-                probe = await dexscreener_provider.fetch_ohlcv(symbol, "1d", 2)
+                # Il timeframe segue la storia del token (Lorenzo: "auto
+                # aggiusta le candele col time frame corretto"): a 1d un token
+                # di poche ore non avrebbe mai una candela chiusa.
+                interval = onchain_radar.auto_interval(candidate.age_hours * 3600)
+                probe = await dexscreener_provider.fetch_ohlcv(symbol, interval, 2)
                 if probe.empty:
                     continue
                 entry = watchlist_store.add_entry(
-                    user.id, symbol, "dex", interval="1d", on_close=True,
+                    user.id, symbol, "dex", interval=interval, on_close=True,
                     base_token_address=candidate.token_address,
                 )
                 watchlist_store.set_strategy_enabled(entry.id, _SNIPER_ONCHAIN_STRATEGY, True)

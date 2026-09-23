@@ -23,6 +23,11 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(auth, "_USERS_FILE", tmp_path / "users.json")
     monkeypatch.setattr(watchlist_store, "_STORE_FILE", tmp_path / "watchlist.json")
     monkeypatch.setattr(onchain_ledger, "_DB_FILE", tmp_path / "ledger.db")
+    monkeypatch.setattr(main.onchain_listings, "recent", lambda: [])
+
+    async def _vet_ok(candidate):
+        return {"status": "ok", "reason": "", "checks": []}
+    monkeypatch.setattr(main, "_pilot_vet", _vet_ok)
     monkeypatch.setattr(onchain_pilot, "_STORE_FILE", tmp_path / "pilot.json")
     monkeypatch.setattr(trading_log, "_STORE_FILE", tmp_path / "journal.json")
     onchain_ledger._init_db()

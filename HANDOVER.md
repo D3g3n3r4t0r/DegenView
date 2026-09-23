@@ -2878,3 +2878,9 @@ e il grafico [...] quale strategia performerebbe meglio [...] in tempo reale".
   `radar.auto_interval` (il piu' largo con >= 150 candele); `NoDataYet` in
   `providers/base.py`: il monitoraggio non manda piu' "Errore monitoraggio"
   per un pool senza candele.
+- Scanner del pilota riacceso (`sniper_enabled = True`, era spento dal 17/09):
+  Lorenzo "non deve essere spento sul server". Il ponte
+  `_sniper_onchain_bridge_tick` ora prende prima i listing verificati, poi i
+  candidati dello sniper solo se cap <= $100k e `legit.assess` == ok
+  (`_pilot_vet`, cache 6 h). Intervallo della watchlist = `auto_interval`.
+  Attenzione: il pilota di Lorenzo e' acceso con ordini reali abilitati.
