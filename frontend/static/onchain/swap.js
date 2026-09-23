@@ -120,12 +120,12 @@ function paintForm(armed) {
   host().innerHTML = `
     ${armed ? "" : `<p class="sheet-note is-warn">Esecuzione reale spenta su questo server: il preventivo funziona, l'invio no finché non viene accesa.</p>`}
     <form class="form" id="swap-form">
-      <label for="swap-amount">Vendi</label>
       <div class="swap-row">
         <input id="swap-amount" name="amount" type="number" min="0" step="any" value="" required />
         <button type="button" class="swap-max" id="swap-max" ${leg.in.isNative ? "" : "hidden"}>Max</button>
         <span class="swap-unit" id="swap-in-symbol">${leg.in.symbol}</span>
       </div>
+      <label for="swap-amount" class="field-caption">Vendi</label>
       ${leg.in.isNative && availableToSell(chain) ? `
       <div class="mo-slider-row">
         <input type="range" id="swap-pct-slider" class="mo-slider" min="0" max="100" value="0" step="1" />
@@ -146,11 +146,11 @@ function paintForm(armed) {
 
       <div class="swap-arrow" aria-hidden="true">↓</div>
 
-      <label for="swap-out">Ricevi (stimato)</label>
       <div class="swap-row is-readonly">
         <output id="swap-out">—</output>
         <span class="swap-unit" id="swap-out-symbol">${leg.out.symbol}</span>
       </div>
+      <label for="swap-out" class="field-caption">Ricevi (stimato)</label>
       <button type="button" class="swap-token-pick" id="swap-pick-out">Cambia token da ricevere ↕</button>
       <p class="swap-usd" id="swap-out-usd"></p>
 
