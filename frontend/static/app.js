@@ -11627,3 +11627,23 @@
   };
 
 })();
+
+// Wallet on-chain fuso nella tab Trading (sotto-sezione "Wallet on-chain"):
+// i moduli ES (fetch a /api/onchain/..., in futuro forse un EventSource)
+// partono solo alla prima apertura di questo <details>, non al caricamento
+// della pagina — altrimenti ogni utente del sito farebbe chiamate on-chain
+// anche senza mai voler vedere il wallet. import() dinamico rispetta
+// comunque l'import map dichiarato in <head> (vedi _onchain_importmap in
+// main.py), anche chiamato da questo script classico non-module.
+(function initOnchainEmbedLazy() {
+  const details = document.getElementById("onchain-embed-details");
+  if (!details) return;
+  let started = false;
+  details.addEventListener("toggle", () => {
+    if (!details.open || started) return;
+    started = true;
+    import("@onchain/main.js").catch((error) => {
+      console.error("Wallet on-chain: avvio del modulo fallito", error);
+    });
+  });
+})();
