@@ -97,11 +97,15 @@ def test_page_uses_no_third_party_fonts():
         assert (main.FRONTEND_DIR / href.removeprefix("/")).is_file(), f"{href} non esiste"
 
 
+def _tag(html: str, element_id: str) -> str:
+    return re.search(rf'<[^>]*\bid="{element_id}"[^>]*>', html).group(0)
+
+
 def test_signed_out_page_shows_login_and_boots_without_user():
     html = main._render_onchain_app(None)
     assert _boot(html) == {"user": None}
-    assert 'id="login-screen">' in html
-    assert 'id="app-shell" class="stack" hidden' in html
+    assert not _tag(html, "login-screen").endswith(" hidden>")
+    assert _tag(html, "app-shell").endswith(" hidden>")
 
 
 def test_signed_in_page_ships_user_and_wallets_but_no_key(monkeypatch):
@@ -116,8 +120,8 @@ def test_signed_in_page_ships_user_and_wallets_but_no_key(monkeypatch):
     assert boot["user"]["id"] == "u1"
     assert boot["wallets"] == [{"chain": "solana", "address": "So1ana</script>", "enabled": True, "created_at": 1}]
     assert "SEGRETO" not in html
-    assert 'id="app-shell" class="stack">' in html
-    assert 'id="login-screen" hidden' in html
+    assert not _tag(html, "app-shell").endswith(" hidden>")
+    assert _tag(html, "login-screen").endswith(" hidden>")
 
 
 def test_page_response_is_not_shared_by_caches():
