@@ -66,6 +66,12 @@ class Settings(BaseSettings):
     twelve_data_api_key: str = ""
     twelve_data_base_url: str = "https://api.twelvedata.com"
 
+    # Nessun concetto di "owner/admin" esiste altrove nel sito (User non ha
+    # un ruolo) — /admin/status usa questa allowlist dedicata, stesso
+    # meccanismo di telegram_allowed_emails/registration_allowed_emails
+    # sotto, con lo stesso default (chi gia' amministra il sito oggi).
+    admin_emails: str = "you@example.com,friend@example.com"
+
     telegram_bot_token: str = ""
     telegram_chat_ids: str = ""  # comma-separated
     # Dove finiscono i messaggi di SISTEMA (deploy, errori 500), separati dagli

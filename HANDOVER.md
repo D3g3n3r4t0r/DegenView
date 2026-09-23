@@ -776,6 +776,66 @@ Modalita' Semplice (basta togliere l'unico bottone rimasto); l'ordine di
 prova futures dentro Diagnosi (rimanda al form di Sorveglia invece di
 duplicarlo).
 
+### Osservabilita' SRE + alert di rischio on-chain — piano wallet on-chain — **in corso**
+
+Implementata la parte "osservabilita' operativa (SRE)" del piano di sviluppo
+wallet on-chain, in ordine di priorita' come richiesto:
+
+1. **Fallback multi-RPC con circuit breaker**: `backend/app/trading/onchain/
+   rpc_client.py` (nuovo). `call_rpc(chain, method, params, timeout=15.0)`
+   prova l'endpoint primario, e solo su un errore di TRASPORTO (non un
+   errore applicativo JSON-RPC) prova un secondario; dopo 3 fallimenti
+   consecutivi su un endpoint lo salta per 60s (cooldown). Secondo endpoint
+   Solana: `https://rpc.ankr.com/solana` (reale, pubblico, verificabile).
+   Per Robinhood Chain **nessun secondo endpoint pubblico e' stato trovato**
+   — documentato nel modulo invece di inventarne uno falso. Migrato
+   `balances.py` (saldo, la chiamata piu' frequente) e l'`_eth_call` di
+   `quotes.py` (Robinhood). **Non migrato** (TODO onesto nel docstring):
+   le chiamate di firma/invio in `execution.py` (nonce, gas price, send) —
+   rischio di stato se nonce e invio finissero su endpoint diversi, da
+   valutare con piu' tempo.
+2. **Log strutturati con correlation ID**: `execute_order`/`simulate_order`
+   generano un `correlation_id` (uuid4) loggato su ogni riga e tornato nella
+   risposta. Nessuna persistenza a 30gg dedicata: **gap noto e documentato**
+   nel docstring di `execute.py` — il sito non ha `logging.basicConfig`/
+   `RotatingFileHandler` da nessuna parte (verificato con grep), quindi i
+   log vanno su stdout/stderr senza rotazione propria; la rotazione a 30gg
+   va fatta a livello systemd/docker, non con un sistema di log parallelo.
+3. **`GET /admin/status`**: ordini eseguiti/falliti-per-causa nelle ultime
+   24h (query diretta su `ledger._connect()`), stato circuit breaker per
+   chain, ultimo saldo letto ora per ogni wallet dell'utente, stato del
+   fallback RPC. Protetto da una allowlist email dedicata
+   (`settings.admin_emails`, stesso pattern di `telegram_allowed_emails`) —
+   **non esiste un concetto di owner/admin altrove nel sito**, documentato
+   nel commento invece di far finta che ci fosse.
+4. **`telegram.send_infra_alert()`**: prefisso "⚙️ INFRA:" sullo stesso
+   canale di sistema (`send_message`/`TELEGRAM_DEV_CHAT_IDS`) — un canale
+   Telegram fisicamente separato richiederebbe un secondo bot/chat_id che
+   questa sessione non ha per configurarlo/testarlo dal vivo, **non
+   fabbricato**.
+5. **Alert di rischio**: kill switch (PATCH `/api/onchain/wallets/{chain}`
+   con `enabled: false`), circuit breaker scattato e tetto giornaliero
+   raggiunto (letti dal `reason` di `risk.run_all_checks`, in
+   `_maybe_alert_onchain_risk_event()` in `main.py`), posizione sopra il
+   30% del tetto per-trade (avviso preventivo su ordine accettato). **Rug-
+   check su pool in allowlist: TODO** — `pool_safety.py` non esiste ancora
+   in questo albero (altro agente in parallelo), firma della funzione
+   d'alert lasciata pronta nel commento di `_maybe_alert_onchain_risk_event`.
+
+Test nuovi: `test_onchain_rpc_client.py` (httpx mockato: successo diretto,
+fallback su timeout, nessun fallback su errore applicativo, circuit breaker
+che scatta e si resetta) e `test_admin_status.py` (403 senza allowlist, 200
+con conteggi/circuit breaker/RPC status corretti). Suite completa verde
+(641 passati, 1 skip; l'unico fallimento — talvolta due — e' in
+`test_onchain_prices.py`, gia' noto e non di questa modifica: chiama
+davvero la rete prezzi, che il sandbox non raggiunge sempre), ruff pulito.
+
+**Da fare**: migrare anche le chiamate di firma/invio al `rpc_client`
+(punto 1 sopra); una vera persistenza/rotazione log a 30gg se quella di
+systemd/docker non basta; l'alert rug-check quando `pool_safety.py`
+esistera'; non ancora verificato dal vivo (nessuna chiave RPC/wallet vera
+usata in questa sessione, solo httpx mockato nei test).
+
 ## Log delle conversazioni
 
 Ordine cronologico, piu' recenti in fondo. Scritto perche' una chat diversa

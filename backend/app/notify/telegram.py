@@ -81,6 +81,24 @@ async def send_to(chat_id: str, text: str) -> bool:
             return False
 
 
+async def send_infra_alert(message: str) -> bool:
+    """Alert di infrastruttura on-chain (kill switch, circuit breaker,
+    RPC degradato, riconciliazione disallineata) — piano SRE punto 4.
+
+    Un canale Telegram FISICAMENTE separato dagli alert di trading
+    richiederebbe una seconda configurazione (un secondo bot o un secondo
+    chat_id dedicato) che oggi non esiste in `settings` e che questa
+    sessione non ha modo di testare dal vivo (nessuna chat di test in
+    piu' da verificare) — non va fabbricata una variabile a caso. La
+    soluzione minima e onesta: manda con `send_message()` (le stesse chat
+    di sistema di sempre, `TELEGRAM_DEV_CHAT_IDS`/`TELEGRAM_CHAT_IDS`) ma
+    con un prefisso fisso "⚙️ INFRA:" cosi' e' visivamente distinguibile
+    dagli altri messaggi di sistema nella stessa conversazione. Se in
+    futuro si aggiunge un secondo bot/chat_id dedicato, questa funzione e'
+    l'unico punto da cambiare per farlo diventare un canale vero."""
+    return await send_message(f"⚙️ INFRA: {message}")
+
+
 async def send_message(text: str) -> bool:
     """Manda a tutti i destinatari configurati. Non solleva mai — un errore qui non
     deve mai far fallire l'analisi in corso. Un destinatario che fallisce (es. ha

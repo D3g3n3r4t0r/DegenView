@@ -92,6 +92,7 @@ from app.trading.onchain import passkey as onchain_passkey
 from app.trading.onchain import prices as onchain_prices
 from app.trading.onchain import quotes as onchain_quotes
 from app.trading.onchain import reveal_requests as onchain_reveal
+from app.trading.onchain import rpc_client as onchain_rpc_client
 from app.trading.onchain import simulate as onchain_simulate
 from app.exchange_balances import BalanceFetchError, fetch_kucoin_balances, fetch_mexc_balances
 from app.notify import telegram
@@ -1903,6 +1904,11 @@ async def set_onchain_wallet_enabled(
     updated = auth.set_onchain_wallet_enabled(user.id, chain, body.enabled)
     if updated is None:
         raise HTTPException(status_code=404, detail="Nessun wallet su questa chain — creane uno prima")
+    if not body.enabled:
+        # Kill switch attivato — alert immediato (piano SRE punto 5).
+        asyncio.create_task(telegram.send_infra_alert(
+            f"Kill switch ATTIVATO per il wallet {chain} dell'utente {user.email} — nessun nuovo ordine partira'."
+        ))
     w = updated.onchain_wallets[chain]
     return {"chain": chain, "address": w.address, "enabled": w.enabled, "created_at": w.created_at}
 
@@ -2161,6 +2167,43 @@ async def onchain_quote_robinhood(
     }
 
 
+def _maybe_alert_onchain_risk_event(owner_email: str, chain: str, result: dict, notional_usd: float) -> None:
+    """Alert Telegram immediati per gli eventi di rischio del piano SRE
+    on-chain (punto 5) — chiamato subito dopo simulate_order/execute_order,
+    che sono l'unico posto dove questi eventi accadono davvero oggi.
+
+    "Circuit breaker scattato" e "tetto giornaliero raggiunto" si leggono
+    dal `reason` del rifiuto (risk.run_all_checks si ferma al primo check
+    che fallisce e lo scrive in italiano, gia' pensato per essere loggato/
+    notificato — vedi risk.py). "Posizione sopra il 30% del tetto
+    per-trade" e' un avviso preventivo, non un rifiuto: un ordine ACCETTATO
+    ma vicino al tetto merita un occhio prima che il prossimo lo superi.
+
+    "rug-check fallito su un pool in allowlist": TODO — richiede
+    `pool_safety.py` (allowlist pool), che un'altra sessione/agente stava
+    implementando in parallelo e non esiste ancora in questo albero. Firma
+    prevista per quando arrivera':
+        async def alert_rug_check_failed(owner_email: str, chain: str, token: str, reason: str) -> None
+    da chiamare dove pool_safety segnala il fallimento, con lo stesso
+    `telegram.send_infra_alert()` usato qui sotto."""
+    reason = (result.get("reason") or "")
+    if "circuit breaker attivo" in reason:
+        asyncio.create_task(telegram.send_infra_alert(
+            f"Circuit breaker scattato su {chain} (utente {owner_email}): {reason}"
+        ))
+        return
+    if "tetto giornaliero" in reason:
+        asyncio.create_task(telegram.send_infra_alert(
+            f"Tetto giornaliero raggiunto su {chain} (utente {owner_email}): {reason}"
+        ))
+        return
+    if result.get("accepted") and notional_usd > 0.30 * settings.onchain_max_usd_per_trade:
+        asyncio.create_task(telegram.send_infra_alert(
+            f"Ordine on-chain da {notional_usd:.2f} USD su {chain} (utente {owner_email}) "
+            f"sopra il 30% del tetto per operazione ({settings.onchain_max_usd_per_trade:.2f} USD)."
+        ))
+
+
 class OnchainSimulateRequest(BaseModel):
     chain: OnchainChain
     token: str
@@ -2177,10 +2220,12 @@ async def onchain_simulate_order(body: OnchainSimulateRequest, user: User = Depe
     impact, concentrazione, circuit breaker), ma mode='simulated' nel
     ledger — nessuna chiave letta, nessuna transazione, mai."""
     _require_onchain_enabled()
-    return onchain_simulate.simulate_order(
+    result = onchain_simulate.simulate_order(
         user.id, body.chain, body.token, body.strategy_name, body.side,
         body.notional_usd, body.price_impact_pct, body.price_usd,
     )
+    _maybe_alert_onchain_risk_event(user.email, body.chain, result, body.notional_usd)
+    return result
 
 
 class OnchainExecuteSolanaRequest(BaseModel):
@@ -2217,11 +2262,13 @@ async def onchain_execute_solana(
         private_key_hex = auth.get_decrypted_onchain_private_key(user, "solana")
     except auth.OnchainKeyIntegrityError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
-    return await onchain_execute.execute_order(
+    result = await onchain_execute.execute_order(
         user.id, "solana", body.token, body.strategy_name, body.side,
         body.notional_usd, quote["price_impact_pct"], body.price_usd,
         private_key_hex, quote,
     )
+    _maybe_alert_onchain_risk_event(user.email, "solana", result, body.notional_usd)
+    return result
 
 
 class OnchainExecuteRobinhoodRequest(BaseModel):
@@ -2265,13 +2312,15 @@ async def onchain_execute_robinhood(
     except auth.OnchainKeyIntegrityError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     amount_out_minimum = int(quote["amount_out"] * (1 - body.max_slippage_pct / 100))
-    return await onchain_execute.execute_order(
+    result = await onchain_execute.execute_order(
         user.id, "robinhood", body.token, body.strategy_name, body.side,
         body.notional_usd, quote["price_impact_pct"], body.price_usd,
         private_key_hex,
         {"token_in": body.token_in, "token_out": body.token_out, "fee": body.fee,
          "amount_in": body.amount_in, "amount_out_minimum": amount_out_minimum},
     )
+    _maybe_alert_onchain_risk_event(user.email, "robinhood", result, body.notional_usd)
+    return result
 
 
 @app.get("/api/onchain/ledger/pending")
@@ -2311,6 +2360,79 @@ async def onchain_reset_circuit_breaker(chain: OnchainChain, user: User = Depend
     _require_onchain_enabled()
     onchain_ledger.reset_breaker(user.id, chain)
     return onchain_ledger.breaker_status(user.id, chain)
+
+
+def _require_onchain_admin(user: User) -> None:
+    allowed = {e.strip().lower() for e in settings.admin_emails.split(",") if e.strip()}
+    if user.email.lower() not in allowed:
+        raise HTTPException(status_code=403, detail="Solo un amministratore configurato (settings.admin_emails) "
+                                                      "puo' leggere /admin/status.")
+
+
+@app.get("/admin/status")
+async def admin_status(user: User = Depends(auth.get_current_user)) -> dict:
+    """Piano SRE on-chain, punto 3: paginetta di osservabilita' — ordini
+    eseguiti/rifiutati per causa nelle ultime 24h, stato del circuit
+    breaker per chain, ultimo saldo noto per ogni wallet dell'utente
+    corrente, stato del fallback RPC. Query dirette su ledger._connect(),
+    niente framework di metriche esterno — come chiesto.
+
+    Protezione: nessun concetto di owner/admin esiste altrove in questo
+    sito (User non ha un ruolo), quindi qui si usa una allowlist email
+    dedicata (settings.admin_emails) sopra il normale
+    Depends(auth.get_current_user) — chi non e' in lista prende 403, non
+    solo un utente qualunque loggato.
+
+    Le metriche ordini/circuit-breaker sono AGGREGATE su tutti gli owner
+    del ledger (il "sistema" che il piano chiede di osservare, non solo
+    l'account di chi guarda) — il saldo wallet invece resta per forza per
+    l'utente che chiama (le chiavi/indirizzi sono suoi)."""
+    _require_onchain_admin(user)
+
+    since = _time.time() - 24 * 3600
+    with onchain_ledger._lock, onchain_ledger._connect() as conn:
+        rows = conn.execute(
+            "SELECT chain, status, reason FROM orders WHERE created_at >= ?", (since,),
+        ).fetchall()
+
+    orders_24h = {"executed": 0, "rejected_by_cause": {}, "failed_by_cause": {}, "pending": 0}
+    for row in rows:
+        status = row["status"]
+        if status == "confirmed":
+            orders_24h["executed"] += 1
+        elif status == "failed":
+            cause = (row["reason"] or "sconosciuta").strip()
+            orders_24h["failed_by_cause"][cause] = orders_24h["failed_by_cause"].get(cause, 0) + 1
+        elif status in ("pending", "submitted"):
+            orders_24h["pending"] += 1
+    # I rifiuti dal risk guardrail (run_all_checks) non arrivano mai al
+    # ledger — simulate_order/execute_order tornano prima di ledger.reserve()
+    # — quindi non compaiono come righe qui. Nota onesta, non un bug: il
+    # ledger e' la fonte di verita' per gli ordini RISERVATI, non per ogni
+    # richiesta rifiutata a monte (quelle sono nei log applicativi con
+    # correlation_id, vedi execute.py/simulate.py).
+
+    circuit_breakers = {
+        chain: onchain_ledger.breaker_status(user.id, chain) for chain in ("solana", "robinhood")
+    }
+
+    wallet_balances = {}
+    for chain, wallet in user.onchain_wallets.items():
+        try:
+            wallet_balances[chain] = {
+                "address": wallet.address,
+                "native_balance": await onchain_balances.native_balance(chain, wallet.address),
+                "read_at": _time.time(),
+            }
+        except Exception as exc:  # noqa: BLE001 — un RPC irraggiungibile non deve rompere la pagina intera
+            wallet_balances[chain] = {"address": wallet.address, "native_balance": None, "error": str(exc)}
+
+    return {
+        "orders_last_24h": orders_24h,
+        "circuit_breakers": circuit_breakers,
+        "wallet_balances": wallet_balances,
+        "rpc_fallback": onchain_rpc_client.circuit_status(),
+    }
 
 
 class FuturesQuoteRequest(BaseModel):
