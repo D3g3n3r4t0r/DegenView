@@ -283,7 +283,6 @@ _ONCHAIN_QUOTE_DECIMALS = 6
 # puo' tornare None (non e' garantito un ERC20 vero, e' un indirizzo di
 # routing), e "10 ** None" mandava in errore /api/onchain/price.
 _NATIVE_DECIMALS = {"solana": 9, "robinhood": 18}
-_ROBINHOOD_FEE_TIERS = (500, 3000, 10000, 100)
 
 
 async def _run_onchain_auto_trade(owner: User, entry: WatchlistEntry, strategy_name: str, fresh: list) -> None:
@@ -408,15 +407,10 @@ async def _run_onchain_auto_trade(owner: User, entry: WatchlistEntry, strategy_n
             else:
                 token_in, token_out = (quote_token, entry.base_token_address) if is_buy \
                     else (entry.base_token_address, quote_token)
-                pool = None
-                fee = None
-                for candidate_fee in _ROBINHOOD_FEE_TIERS:
-                    pool = await onchain_quotes.get_pool(token_in, token_out, candidate_fee)
-                    if pool is not None:
-                        fee = candidate_fee
-                        break
-                if pool is None:
+                found = await onchain_quotes.find_pool_and_fee(token_in, token_out)
+                if found is None:
                     raise RuntimeError("nessun pool Uniswap v3 trovato per questo token su nessun fee tier")
+                _pool, fee = found
                 amount_in = buy_amount_in if is_buy else sell_amount_in
                 v3_quote = await onchain_quotes.uniswap_v3_quote(token_in, token_out, fee, amount_in)
                 amount_out_minimum = int(v3_quote["amount_out"] * 0.99)  # 1% di slippage, come il default dell'endpoint manuale
@@ -2316,7 +2310,7 @@ async def onchain_quote_solana(body: OnchainQuoteSolanaRequest, user: User = Dep
 class OnchainQuoteRobinhoodRequest(BaseModel):
     token_in: str
     token_out: str
-    fee: int = 3000
+    fee: int | None = None  # None = trova da solo il fee tier giusto, vedi sotto
     amount_in: int
 
 
@@ -2326,13 +2320,20 @@ async def onchain_quote_robinhood(
 ) -> dict:
     """Preventivo reale su Robinhood Chain: Factory per trovare il pool,
     QuoterV2 per il prezzo. Nessuna chiave, nessun impegno a eseguire —
-    il gemello di /quote/solana, per l'altra chain."""
+    il gemello di /quote/solana, per l'altra chain.
+
+    Il pool di una coppia puo' stare su un fee tier diverso da 0.3%
+    (3000, il default che il frontend usava finora): Lorenzo, con
+    $MYCEL, ha trovato "nessun pool" quando in realta' il pool c'era, su
+    un altro tier. find_pool_and_fee() li prova tutti, provando prima
+    quello passato (se il chiamante lo conosce gia')."""
     _require_onchain_enabled()
     try:
-        pool = await onchain_quotes.get_pool(body.token_in, body.token_out, body.fee)
-        if pool is None:
-            raise HTTPException(status_code=400, detail="Nessun pool per questa coppia su questo fee tier.")
-        quote = await onchain_quotes.uniswap_v3_quote(body.token_in, body.token_out, body.fee, body.amount_in)
+        found = await onchain_quotes.find_pool_and_fee(body.token_in, body.token_out, body.fee)
+        if found is None:
+            raise HTTPException(status_code=400, detail="Nessun pool per questa coppia su nessun fee tier di Uniswap v3.")
+        pool, fee = found
+        quote = await onchain_quotes.uniswap_v3_quote(body.token_in, body.token_out, fee, body.amount_in)
     except HTTPException:
         raise
     except Exception as exc:  # noqa: BLE001
@@ -2340,7 +2341,7 @@ async def onchain_quote_robinhood(
     # "out_amount", non "amount_out" come lo chiama quotes.py: stesso nome
     # di /quote/solana, cosi' il frontend legge un solo formato per entrambe.
     return {
-        "pool": pool, "in_amount": body.amount_in,
+        "pool": pool, "fee": fee, "in_amount": body.amount_in,
         "out_amount": quote["amount_out"], "price_impact_pct": quote["price_impact_pct"],
     }
 
@@ -2462,10 +2463,11 @@ async def onchain_live_price(chain: str, address: str, user: User = Depends(auth
         if chain == "solana":
             quote = await onchain_quotes.jupiter_quote(address, quote_token, one_unit, 50)
         else:
-            pool = await onchain_quotes.get_pool(address, quote_token, 3000)
-            if pool is None:
-                raise HTTPException(status_code=404, detail="Nessun pool per questo token.")
-            quote = await onchain_quotes.uniswap_v3_quote(address, quote_token, 3000, one_unit)
+            found = await onchain_quotes.find_pool_and_fee(address, quote_token)
+            if found is None:
+                raise HTTPException(status_code=404, detail="Nessun pool per questo token su nessun fee tier.")
+            _pool, fee = found
+            quote = await onchain_quotes.uniswap_v3_quote(address, quote_token, fee, one_unit)
     except HTTPException:
         raise
     except Exception as exc:  # noqa: BLE001 — un quote fallito non deve essere un 500 muto
@@ -2634,10 +2636,11 @@ async def _check_limit_order(order: dict) -> None:
         if chain == "solana":
             quote = await onchain_quotes.jupiter_quote(order["token_in"], order["token_out"], amount_in_units, 50)
         else:
-            pool = await onchain_quotes.get_pool(order["token_in"], order["token_out"], 3000)
-            if pool is None:
+            found = await onchain_quotes.find_pool_and_fee(order["token_in"], order["token_out"])
+            if found is None:
                 return
-            quote = await onchain_quotes.uniswap_v3_quote(order["token_in"], order["token_out"], 3000, amount_in_units)
+            _pool, fee = found
+            quote = await onchain_quotes.uniswap_v3_quote(order["token_in"], order["token_out"], fee, amount_in_units)
 
         out_amount_units = quote["out_amount"] / (10 ** order["token_out_decimals"])
         if out_amount_units <= 0:
@@ -2820,7 +2823,7 @@ class OnchainExecuteRobinhoodRequest(BaseModel):
     side: Literal["buy", "sell"]
     token_in: str
     token_out: str
-    fee: int
+    fee: int | None = None  # None = trova da solo il fee tier giusto, come /quote/robinhood
     amount_in: int
     notional_usd: float
     price_usd: float
@@ -2848,10 +2851,11 @@ async def onchain_execute_robinhood(
     if "robinhood" not in user.onchain_wallets:
         raise HTTPException(status_code=400, detail="Nessun wallet Robinhood Chain per questo utente.")
     try:
-        pool = await onchain_quotes.get_pool(body.token_in, body.token_out, body.fee)
-        if pool is None:
-            raise HTTPException(status_code=400, detail="Nessun pool per questa coppia/fee tier.")
-        quote = await onchain_quotes.uniswap_v3_quote(body.token_in, body.token_out, body.fee, body.amount_in)
+        found = await onchain_quotes.find_pool_and_fee(body.token_in, body.token_out, body.fee)
+        if found is None:
+            raise HTTPException(status_code=400, detail="Nessun pool per questa coppia su nessun fee tier di Uniswap v3.")
+        pool, fee = found
+        quote = await onchain_quotes.uniswap_v3_quote(body.token_in, body.token_out, fee, body.amount_in)
     except HTTPException:
         raise
     except Exception as exc:  # noqa: BLE001
@@ -2865,7 +2869,7 @@ async def onchain_execute_robinhood(
         user.id, "robinhood", body.token, body.strategy_name, body.side,
         body.notional_usd, quote["price_impact_pct"], body.price_usd,
         private_key_hex,
-        {"token_in": body.token_in, "token_out": body.token_out, "fee": body.fee,
+        {"token_in": body.token_in, "token_out": body.token_out, "fee": fee,
          "amount_in": body.amount_in, "amount_out_minimum": amount_out_minimum},
     )
     _maybe_alert_onchain_risk_event(user.email, "robinhood", result, body.notional_usd)
