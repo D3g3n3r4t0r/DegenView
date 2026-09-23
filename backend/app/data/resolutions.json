@@ -1324,5 +1324,17 @@
       "frontend/static/onchain/radar.js",
       "frontend/onchain-app.html"
     ]
+  },
+  "seed-0098": {
+    "status": "risolto",
+    "at": 1790203981,
+    "summary": "Nuova strategia 'Lorenzo HF (minuti on-chain)': stessa logica di Lorenzo (pendenza della media, incrocio fra la sua media veloce e lenta, uscita all'incrocio opposto), solo long, con filtri pensati per un token di poche ore. Al posto della EMA a 268 barre, che su un token nuovo non esiste, il prezzo deve stare sopra la VWAP dal lancio (chi ha comprato finora e' in guadagno); al posto del filtro di volatilita' un filtro di regime per token: si entra solo quando i movimenti recenti di quel token proseguono invece di rientrare; poi l'efficienza di Kaufman (il movimento va da qualche parte) e la soglia di pendenza a 0,5 sigma. Un trailing stop a 4 ATR chiude prima dell'incrocio quando un pump si sgonfia, e dopo ogni uscita serve un incrocio nuovo per rientrare. Misurato su 98 pool reali Solana e Robinhood (ultime 16 ore di candele da 1 minuto, 0,3% di commissione e 0,5% di slippage per lato, esecuzione all'apertura dopo): Lorenzo originale mediana -18,5% per token, la nuova 0% con in media 4 operazioni per token invece di 14, guadagno medio per operazione +1,3% dopo i costi. Onesta': non e' un vantaggio dimostrato. Il risultato medio positivo dipende da pochi rialzi grandi (senza i 3 migliori e' -1,7%), e su questi token i prezzi al minuto tendono piu' a rientrare che a proseguire (8 pool su 10), che e' il motivo per cui il filtro di regime conta piu' di tutti gli altri. Un rug su una sola candela non lo ferma nessun trailing: l'uscita e' all'apertura dopo, ovunque sia. La strategia e' nel registro, quindi il radar la prova su ogni token insieme alle altre e la mostra sul grafico; i parametri sono nel Lab. Non e' attivata sul pilota con soldi reali: per farlo serve una tua conferma.",
+    "files": [
+      "backend/app/analysis/strategies.py",
+      "backend/app/analysis/regime.py",
+      "backend/app/analysis/sensitivity.py",
+      "backend/tests/test_lorenzo_hf.py",
+      "frontend/static/app.js"
+    ]
   }
 }
