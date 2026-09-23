@@ -257,4 +257,64 @@ export function positionRow(position) {
     </li>`;
 }
 
+/* --------------------------------------------------------- Ricerca token */
+// Sostituisce il prompt() del browser: mai un dialog nativo dentro l'app
+// (Lorenzo: "sta cosa va fatta all'interno della web app"). Cerca per
+// ticker sulla stessa fonte del resto del sito — DexScreener, gia' usata
+// per i grafici — non un indirizzo digitato a mano come unica via.
+const pickerDialog = document.querySelector("#picker");
+const pickerBody = pickerDialog.querySelector(".sheet-body");
+pickerDialog.addEventListener("click", (event) => { if (event.target === pickerDialog) pickerDialog.close(); });
+pickerDialog.querySelector(".sheet-close").addEventListener("click", () => pickerDialog.close());
+
+let pickerDebounce = null;
+
+export function openTokenPicker(chain, { onPick } = {}) {
+  pickerBody.innerHTML = `
+    <input type="text" id="picker-query" class="mo-input" placeholder="Ticker (es. SOL, PEPE)…" autocomplete="off" />
+    <ul id="picker-results" class="tx-list"><li>Scrivi un ticker per cercare.</li></ul>
+    <details style="margin-block-start:10px">
+      <summary class="swap-detail" style="cursor:pointer">Non lo trovi? Incolla l'indirizzo a mano</summary>
+      <div class="swap-row" style="margin-block-start:8px">
+        <input type="text" id="picker-address" placeholder="Indirizzo del token" autocomplete="off" />
+        <button type="button" class="swap-max" id="picker-address-go">Usa</button>
+      </div>
+    </details>
+  `;
+  if (!pickerDialog.open) pickerDialog.showModal();
+
+  const input = pickerBody.querySelector("#picker-query");
+  const results = pickerBody.querySelector("#picker-results");
+  input.focus();
+
+  const pick = (token) => { pickerDialog.close(); onPick?.(token); };
+
+  input.addEventListener("input", () => {
+    clearTimeout(pickerDebounce);
+    const q = input.value.trim();
+    if (q.length < 2) { results.innerHTML = "<li>Scrivi almeno 2 caratteri.</li>"; return; }
+    results.innerHTML = "<li>Cerco…</li>";
+    pickerDebounce = setTimeout(async () => {
+      try {
+        const found = await api.searchTokens(chain, q);
+        if (!found.length) { results.innerHTML = "<li>Nessun risultato su questa chain.</li>"; return; }
+        results.innerHTML = found.map((t) => `
+          <li data-address="${escapeHtml(t.address)}" style="cursor:pointer">
+            <span><b>${escapeHtml(t.symbol)}</b> <small>${escapeHtml(t.name)}</small></span>
+          </li>`).join("");
+        results.querySelectorAll("[data-address]").forEach((li) => {
+          li.addEventListener("click", () => pick({ address: li.dataset.address, symbolHint: li.querySelector("b").textContent }));
+        });
+      } catch (error) {
+        results.innerHTML = `<li>${escapeHtml(error.message)}</li>`;
+      }
+    }, 350);
+  });
+
+  pickerBody.querySelector("#picker-address-go").addEventListener("click", () => {
+    const raw = pickerBody.querySelector("#picker-address").value.trim();
+    if (raw) pick({ address: raw, symbolHint: null });
+  });
+}
+
 export { shortAddress };

@@ -927,6 +927,7 @@ async def lifespan(app: FastAPI):
     from app.trading.onchain import twap_jobs as onchain_twap_jobs_resume
     asyncio.create_task(onchain_twap_jobs_resume.resume_running_twap_jobs())
     t1 = asyncio.create_task(_watchlist_alert_loop())
+    t6 = asyncio.create_task(limit_order_loop())
     t4 = asyncio.create_task(_weekly_recap_loop())
     t5 = asyncio.create_task(_watchdog_loop())
     sniper_tasks: list[asyncio.Task] = []
@@ -939,6 +940,7 @@ async def lifespan(app: FastAPI):
         sniper_tasks.extend(await sniper_agents.start_all())
     yield
     t1.cancel()
+    t6.cancel()
     t4.cancel()
     t5.cancel()
     for t in sniper_tasks:
@@ -2371,6 +2373,195 @@ async def onchain_token_info(chain: str, address: str, user: User = Depends(auth
             pass
 
     return {"address": address, "decimals": decimals, "symbol": symbol, "price_usd": price_usd}
+
+
+@app.get("/api/onchain/tokens/search")
+async def onchain_token_search(
+    chain: Literal["solana", "robinhood"], query: str = Query(..., min_length=1, max_length=20),
+    user: User = Depends(auth.get_current_user),
+) -> list[dict]:
+    """Ricerca per ticker sulla stessa fonte del resto del sito (DexScreener,
+    tramite dexscreener_provider — Lorenzo: "voglio poter usare il ticker;
+    accedendo alla logica che avevamo gia' implementato... dove ogni ticker
+    veniva beccato anche nei dex"), filtrata alla sola chain del wallet.
+    Sostituisce il prompt() del browser: mai un dialog nativo dentro l'app."""
+    _require_onchain_enabled()
+    results = await dexscreener_provider.search_symbols(query)
+    out = []
+    for r in results:
+        try:
+            _base, symbol_chain, _pool = _parse_dex_symbol(r["symbol"])
+        except Exception:  # noqa: BLE001 — un simbolo malformato si scarta, non blocca la ricerca
+            continue
+        if symbol_chain != chain or not r.get("base_token_address"):
+            continue
+        out.append({
+            "symbol": r["symbol"].split("@")[0], "name": r["name"], "address": r["base_token_address"],
+        })
+    return out
+
+
+# ─────────────────────────────────────────── ordini limite (piano DEX) ────
+
+class LimitOrderCreateRequest(BaseModel):
+    chain: Literal["solana", "robinhood"]
+    token_in: str
+    token_out: str
+    token_in_symbol: str
+    token_out_symbol: str
+    token_in_decimals: int
+    token_out_decimals: int
+    amount_in: float
+    direction: Literal["buy_below", "sell_above"]
+    target_price_usd: float
+
+
+@app.post("/api/onchain/limit-orders")
+async def create_limit_order(body: LimitOrderCreateRequest, user: User = Depends(auth.get_current_user)) -> dict:
+    """Un ordine limite qui non e' un book on-chain vero (ne' Jupiter ne'
+    Uniswap v3 ne hanno uno resting): e' size+prezzo+direzione persistiti,
+    eseguiti da limit_order_loop quando il prezzo tocca il target, con gli
+    stessi guardrail di un ordine manuale — mai un secondo motore che
+    firma scavalcandoli.
+
+    Un lato deve essere il token nativo della chain: e' l'unico per cui
+    questa pagina conosce un prezzo USD affidabile (GeckoTerminal, stesso
+    feed della hero) senza dipendere da DexScreener, che non indicizza
+    Robinhood Chain — un ordine su due token entrambi non nativi non
+    avrebbe un prezzo da confrontare col target."""
+    _require_onchain_enabled()
+    if body.chain not in user.onchain_wallets:
+        raise HTTPException(status_code=400, detail=f"Nessun wallet {body.chain} per questo utente.")
+    native = onchain_prices.NATIVE_TOKEN_ADDRESS[body.chain]
+    if native.lower() not in (body.token_in.lower(), body.token_out.lower()):
+        raise HTTPException(
+            status_code=400,
+            detail="Un ordine limite richiede il token nativo su un lato: e' l'unico prezzo che sappiamo verificare.",
+        )
+    if body.amount_in <= 0 or body.target_price_usd <= 0:
+        raise HTTPException(status_code=400, detail="Size e prezzo target devono essere positivi.")
+    return onchain_ledger.create_limit_order(
+        user.id, body.chain, body.token_in, body.token_out,
+        body.token_in_symbol, body.token_out_symbol, body.token_in_decimals, body.token_out_decimals,
+        body.amount_in, body.direction, body.target_price_usd,
+    )
+
+
+@app.get("/api/onchain/limit-orders/{chain}")
+async def list_limit_orders(chain: str, user: User = Depends(auth.get_current_user)) -> list[dict]:
+    return onchain_ledger.list_limit_orders(user.id, chain)
+
+
+@app.delete("/api/onchain/limit-orders/{order_id}")
+async def cancel_limit_order(order_id: str, user: User = Depends(auth.get_current_user)) -> dict:
+    cancelled = onchain_ledger.cancel_limit_order(order_id, user.id)
+    if not cancelled:
+        raise HTTPException(status_code=404, detail="Ordine non trovato o non piu' annullabile.")
+    return {"cancelled": True}
+
+
+@app.get("/api/onchain/history/{chain}")
+async def onchain_history(chain: str, user: User = Depends(auth.get_current_user)) -> dict:
+    """Cronologia unificata (piano DEX): swap eseguiti e ordini limite,
+    aperti o conclusi, ordinati insieme — non piu' due schermate separate."""
+    orders = onchain_ledger.list_orders(user.id, chain)
+    limit_orders = onchain_ledger.list_limit_orders(user.id, chain)
+    return {
+        "orders": [{
+            "kind": "swap", "id": o["idempotency_key"], "token": o["token"], "side": o["side"],
+            "status": o["status"], "size_usd": o["size_usd"], "tx_signature": o["tx_signature"],
+            "reason": o["reason"], "created_at": o["created_at"], "updated_at": o["updated_at"],
+        } for o in orders],
+        "limit_orders": [{
+            "kind": "limit", "id": lo["id"],
+            "pair": f"{lo['token_in_symbol']}→{lo['token_out_symbol']}",
+            "direction": lo["direction"], "amount_in": lo["amount_in"],
+            "target_price_usd": lo["target_price_usd"], "status": lo["status"],
+            "reason": lo["reason"], "created_at": lo["created_at"], "updated_at": lo["updated_at"],
+        } for lo in limit_orders],
+    }
+
+
+async def _check_limit_order(order: dict) -> None:
+    """Un giro di verifica per un ordine ancora 'open' — mai un'eccezione
+    che risale a limit_order_loop, che deve continuare a girare per tutti
+    gli altri ordini anche se questo fallisce."""
+    chain = order["chain"]
+    native_addr = onchain_prices.NATIVE_TOKEN_ADDRESS[chain]
+    native_is_in = order["token_in"].lower() == native_addr.lower()
+    try:
+        native_usd = await onchain_prices.native_price_usd(chain)
+        if native_usd is None:
+            return  # rete/feed giu' questo giro: ritenta al prossimo, non e' un fallimento dell'ordine
+
+        amount_in_units = int(round(order["amount_in"] * 10 ** order["token_in_decimals"]))
+        if chain == "solana":
+            quote = await onchain_quotes.jupiter_quote(order["token_in"], order["token_out"], amount_in_units, 50)
+        else:
+            pool = await onchain_quotes.get_pool(order["token_in"], order["token_out"], 3000)
+            if pool is None:
+                return
+            quote = await onchain_quotes.uniswap_v3_quote(order["token_in"], order["token_out"], 3000, amount_in_units)
+
+        out_amount_units = quote["out_amount"] / (10 ** order["token_out_decimals"])
+        if out_amount_units <= 0:
+            return
+
+        # Il prezzo USD del lato NON nativo, dedotto dal quote vero (non da
+        # DexScreener, che non copre Robinhood Chain): quanto nativo si
+        # scambia per l'altro token, moltiplicato per il prezzo noto del
+        # nativo — stesso principio di prices.py, mai un numero inventato.
+        current_price_usd = (
+            (order["amount_in"] * native_usd) / out_amount_units if native_is_in
+            else (out_amount_units * native_usd) / order["amount_in"]
+        )
+
+        triggered = (
+            (order["direction"] == "buy_below" and current_price_usd <= order["target_price_usd"])
+            or (order["direction"] == "sell_above" and current_price_usd >= order["target_price_usd"])
+        )
+        if not triggered:
+            return
+
+        user = auth.get_user(order["owner_id"])
+        if user is None:
+            onchain_ledger.mark_limit_order_failed(order["id"], "utente non trovato")
+            return
+        private_key_hex = auth.get_decrypted_onchain_private_key(user, chain)
+
+        notional_usd = order["amount_in"] * native_usd if native_is_in else out_amount_units * native_usd
+        side = "buy" if order["direction"] == "buy_below" else "sell"
+        token = order["token_out_symbol"] if order["direction"] == "buy_below" else order["token_in_symbol"]
+
+        result = await onchain_execute.execute_order(
+            order["owner_id"], chain, token, "ordine limite", side,
+            notional_usd, quote["price_impact_pct"], current_price_usd,
+            private_key_hex, quote,
+        )
+        if result["accepted"]:
+            onchain_ledger.mark_limit_order_filled(order["id"], result["idempotency_key"])
+            _maybe_alert_onchain_risk_event(user.email, chain, result, notional_usd)
+        # Rifiutato dal guardrail (es. tetto giornaliero): resta 'open' e
+        # riprova al giro dopo — un tetto puo' liberarsi, un ordine limite
+        # non deve morire per un rifiuto temporaneo.
+    except auth.OnchainKeyIntegrityError as exc:
+        onchain_ledger.mark_limit_order_failed(order["id"], f"chiave non leggibile: {exc}")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("limit_order_loop: ordine %s, errore nel check: %s", order["id"], exc)
+
+
+async def limit_order_loop() -> None:
+    """Accanto a _watchlist_alert_loop, stesso pattern: un giro periodico
+    che legge lo stato persistito e agisce, mai un secondo processo o un
+    secondo storage."""
+    while True:
+        try:
+            for chain in ("solana", "robinhood"):
+                for order in onchain_ledger.list_open_limit_orders(chain):
+                    await _check_limit_order(order)
+        except Exception:  # noqa: BLE001 — il ciclo non deve mai fermarsi del tutto
+            logger.exception("limit_order_loop: giro fallito")
+        await asyncio.sleep(45)
 
 
 def _maybe_alert_onchain_risk_event(owner_email: str, chain: str, result: dict, notional_usd: float) -> None:

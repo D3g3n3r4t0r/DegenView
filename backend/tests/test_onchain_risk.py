@@ -136,3 +136,27 @@ def test_clamp_size_to_pool_caps_at_safety_cap():
 
 def test_clamp_size_to_pool_never_exceeds_requested():
     assert risk.clamp_size_to_pool(5.0, pool_liquidity_usd=1_000_000.0, safety_cap_usd=20.0) == 5.0
+
+
+def test_run_all_checks_skips_concentration_only_for_manual_orders(tmp_path, monkeypatch):
+    """Lorenzo: uno swap ETH->USDG legittimo (portare tutto in una
+    stablecoin) e' stato respinto perche' USDG sarebbe stato il 100% di un
+    portafoglio con solo quella posizione tracciata. Un umano che swappa
+    di sua volonta' decide lui quanto diversificare; un'automazione
+    (watchlist, ordine limite) resta invece sotto il tetto."""
+    _fresh_db(tmp_path, monkeypatch)
+    called = {"concentration": False}
+
+    def _spy_concentration(*args):
+        called["concentration"] = True
+        return False, "non dovrebbe mai arrivare qui per un ordine manuale"
+
+    monkeypatch.setattr(risk, "check_concentration", _spy_concentration)
+
+    ok, _ = risk.run_all_checks("u1", "solana", "TOKEN_A", 5.0, 0.1, strategy_name="manuale")
+    assert ok is True
+    assert called["concentration"] is False
+
+    ok, reason = risk.run_all_checks("u1", "solana", "TOKEN_A", 5.0, 0.1, strategy_name="ordine limite")
+    assert ok is False
+    assert called["concentration"] is True

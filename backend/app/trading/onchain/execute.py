@@ -98,7 +98,9 @@ async def execute_order(
 
     notional_usd = risk.clamp_size_to_pool(notional_usd, pool_liquidity_usd)
 
-    ok, reason = risk.run_all_checks(owner_id, chain, token, notional_usd, price_impact_pct, pool_info=pool_info)
+    ok, reason = risk.run_all_checks(
+        owner_id, chain, token, notional_usd, price_impact_pct, pool_info=pool_info, strategy_name=strategy_name,
+    )
     if not ok:
         logger.warning("[%s] rifiutato dal risk guardrail: %s", correlation_id, reason,
                         extra={"correlation_id": correlation_id})

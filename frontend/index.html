@@ -1007,6 +1007,14 @@
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 8h13M17 8l-3-3M17 8l-3 3" /><path d="M20 16H7M7 16l3 3M7 16l3-3" /></svg>
                         Swap
                       </button>
+                      <button type="button" class="action" data-sheet="limit">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 12h16" /><path d="M14 6l6 6-6 6" /></svg>
+                        Limite
+                      </button>
+                      <button type="button" class="action" data-sheet="diary">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M6 4h9l3 3v13H6z" /><path d="M9 9h6M9 13h6M9 17h4" /></svg>
+                        Diario
+                      </button>
                     </div>
 
                     <section class="assets" id="assets" hidden>
@@ -1047,6 +1055,13 @@
 
                   <dialog class="modal" id="reveal">
                     <div class="reveal-body"></div>
+                  </dialog>
+
+                  <dialog class="sheet" id="picker">
+                    <div class="grip" aria-hidden="true"></div>
+                    <h2 class="sheet-title">Cerca token</h2>
+                    <div class="sheet-body"></div>
+                    <button type="button" class="btn-quiet sheet-close">Chiudi</button>
                   </dialog>
                 </div>
               </div>
