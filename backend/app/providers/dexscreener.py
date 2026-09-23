@@ -22,7 +22,10 @@ mano in modo utile — si arriva qui scegliendo un risultato della ricerca,
 mai scrivendo il simbolo a memoria.
 """
 import asyncio
+import contextvars
 import re
+import time
+from collections import deque
 
 import httpx
 import pandas as pd
@@ -104,6 +107,93 @@ def _parse_symbol(symbol: str) -> tuple[str, str, str]:
     return m["base"], m["chain"], m["pool"]
 
 
+# GeckoTerminal risponde 429 oltre ~30 richieste al minuto, e grafico,
+# backtest dei listing, alert e pilota lo interrogano tutti insieme: un 429
+# letto come "nessun dato" lasciava vuoto il grafico di un token che
+# DexScreener mostra benissimo (FLIP su Robinhood). Quindi un solo passaggio
+# per tutti: stessa richiesta nei 15 s servita una volta sola, un tetto al
+# minuto con una riserva per chi sta guardando un grafico, e se GeckoTerminal
+# rifiuta comunque, l'ultima risposta buona invece di un errore.
+_GECKO_WINDOW_S = 60.0
+_GECKO_BACKGROUND_PER_MIN = 20
+_GECKO_URGENT_PER_MIN = 28
+_GECKO_FRESH_S = 15.0
+_GECKO_STALE_S = 1800.0
+_GECKO_BACKOFF_S = (2.0, 4.0)
+gecko_urgent: contextvars.ContextVar[bool] = contextvars.ContextVar("gecko_urgent", default=False)
+_gecko_calls: deque[float] = deque()
+_gecko_seen: dict[tuple, tuple[float, dict]] = {}
+_gecko_locks: dict[tuple, asyncio.Lock] = {}
+_gecko_loop: list[int] = [0]
+
+
+class GeckoBusy(NoDataYet):
+    """GeckoTerminal ha rifiutato per troppe richieste: il dato c'e', va
+    solo richiesto fra poco — come un pool appena nato, non un guasto."""
+
+
+def _gecko_lock(key: tuple) -> asyncio.Lock:
+    """Uno per richiesta: due chiamate uguali in contemporanea ne fanno una."""
+    loop = id(asyncio.get_running_loop())
+    if _gecko_loop[0] != loop:
+        _gecko_locks.clear()
+        _gecko_loop[0] = loop
+    for k in [k for k, lock in _gecko_locks.items() if not lock.locked() and k != key]:
+        _gecko_locks.pop(k)
+    return _gecko_locks.setdefault(key, asyncio.Lock())
+
+
+async def _gecko_slot() -> None:
+    cap = _GECKO_URGENT_PER_MIN if gecko_urgent.get() else _GECKO_BACKGROUND_PER_MIN
+    while True:
+        now = time.monotonic()
+        while _gecko_calls and now - _gecko_calls[0] > _GECKO_WINDOW_S:
+            _gecko_calls.popleft()
+        if len(_gecko_calls) < cap:
+            _gecko_calls.append(now)
+            return
+        await asyncio.sleep(min(_GECKO_WINDOW_S - (now - _gecko_calls[0]) + 0.05, 5.0))
+
+
+async def gecko_get(url: str, params: dict | None = None) -> dict | None:
+    """Il JSON di GeckoTerminal, None su 404. GeckoBusy se rifiuta anche
+    dopo le pause e non c'e' una risposta recente da riusare."""
+    key = (url, tuple(sorted((params or {}).items())))
+    seen = _gecko_seen.get(key)
+    if seen and time.monotonic() - seen[0] < _GECKO_FRESH_S:
+        return seen[1]
+    async with _gecko_lock(key):
+        seen = _gecko_seen.get(key)
+        if seen and time.monotonic() - seen[0] < _GECKO_FRESH_S:
+            return seen[1]
+        resp = None
+        for pause in (0.0, *_GECKO_BACKOFF_S):
+            if pause:
+                await asyncio.sleep(pause)
+            await _gecko_slot()
+            async with httpx.AsyncClient(timeout=20.0) as client:
+                resp = await client.get(url, params=params)
+            if resp.status_code != 429:
+                break
+    if resp.status_code == 404:
+        return None
+    if resp.status_code == 429 or resp.status_code >= 500:
+        if seen and time.monotonic() - seen[0] < _GECKO_STALE_S:
+            return seen[1]
+        raise GeckoBusy(f"GeckoTerminal occupato ({resp.status_code})")
+    try:
+        payload = resp.json()
+    except ValueError as exc:
+        raise ProviderError("Risposta non valida da GeckoTerminal") from exc
+    if not isinstance(payload, dict):
+        raise ProviderError("Risposta non valida da GeckoTerminal")
+    _gecko_seen[key] = (time.monotonic(), payload)
+    if len(_gecko_seen) > 512:
+        for old in sorted(_gecko_seen, key=lambda k: _gecko_seen[k][0])[:128]:
+            _gecko_seen.pop(old, None)
+    return payload
+
+
 class DexScreenerProvider(DataProvider):
     """Crypto on-chain — nessuna chiave richiesta, sola lettura.
 
@@ -134,23 +224,11 @@ class DexScreenerProvider(DataProvider):
         if token_address:
             params["token"] = token_address
         try:
-            async with httpx.AsyncClient(timeout=20.0) as client:
-                resp = await client.get(url, params=params)
-                if resp.status_code == 429:
-                    # ~30 richieste al minuto: una seconda prova dopo una
-                    # pausa breve, invece di una risposta vuota letta come
-                    # "nessun dato".
-                    await asyncio.sleep(1.5)
-                    resp = await client.get(url, params=params)
+            payload = await gecko_get(url, params)
         except httpx.HTTPError as exc:
             raise ProviderUnreachable(f"GeckoTerminal non raggiungibile per {symbol}: {exc}") from exc
-
-        if resp.status_code == 404:
+        if payload is None:
             raise ProviderError(f"Pool non trovato su {chain}: {pool}")
-        try:
-            payload = resp.json()
-        except ValueError as exc:
-            raise ProviderError(f"Risposta non valida da GeckoTerminal per {symbol}") from exc
 
         rows = (
             payload.get("data", {}).get("attributes", {}).get("ohlcv_list", [])
@@ -184,10 +262,8 @@ class DexScreenerProvider(DataProvider):
                                 token_address: str | None) -> list[list]:
         url = f"{self._geckoterminal_base}/networks/{network}/pools/{pool}/trades"
         try:
-            async with httpx.AsyncClient(timeout=20.0) as client:
-                resp = await client.get(url)
-            trades = resp.json().get("data") or [] if resp.status_code == 200 else []
-        except (httpx.HTTPError, ValueError):
+            trades = ((await gecko_get(url)) or {}).get("data") or []
+        except (httpx.HTTPError, ProviderError):
             return []
         return candles_from_trades([t.get("attributes") or {} for t in trades], bucket_s, token_address)
 

@@ -50,8 +50,8 @@ import pandas as pd
 
 from app.analysis.backtest import run_backtest
 from app.analysis.strategies import STRATEGY_REGISTRY, confirmed_events
-from app.providers.base import ProviderError
-from app.providers.dexscreener import DexScreenerProvider, make_symbol
+from app.providers.base import NoDataYet, ProviderError
+from app.providers.dexscreener import DexScreenerProvider, gecko_urgent, make_symbol
 from app.trading.onchain import legit
 from app.trading.onchain import listings as onchain_listings
 
@@ -412,6 +412,13 @@ async def _fetch_pools(client: httpx.AsyncClient, chain: str) -> list[Pool]:
     return pools
 
 
+def _as_item(pool: Pool) -> dict:
+    return {"chain": pool.chain, "symbol": pool.symbol, "name": pool.name,
+            "token_address": pool.token_address, "pair_address": pool.pair_address,
+            "pair_url": pool.pair_url, "market_cap": pool.market_cap, "liquidity_usd": pool.liquidity_usd,
+            "created_at": time.time() - pool.age_hours * 3600}
+
+
 async def scan_once() -> dict:
     """Un giro completo. Non solleva: un errore finisce in `error`."""
     if _state["running"]:
@@ -438,6 +445,9 @@ async def scan_once() -> dict:
                         cleared.append((pool, verdict))
                     else:
                         info["rejected" if verdict["status"] == "fail" else "waiting"] += 1
+                    if verdict["status"] == "fail":
+                        onchain_listings.note_rejected(_as_item(pool), verdict["reason"], time.time(),
+                                                       verdict, source="radar")
                 for pool, verdict in cleared[:MAX_TESTED_PER_CHAIN]:
                     interval = interval_for(pool.age_hours)
                     try:
@@ -463,7 +473,7 @@ async def scan_once() -> dict:
                         "hold_pct": outcome["hold_pct"],
                         "website": verdict.get("website"), "socials": verdict.get("socials") or [],
                         "github": verdict.get("github"), "checks": verdict.get("checks") or [],
-                        "tokensniffer": verdict.get("tokensniffer"),
+                        "scan_url": verdict.get("scan_url"), "report": verdict.get("report"),
                     }
                     best = outcome["best"]
                     if best is None:
@@ -575,7 +585,15 @@ async def chart_payload(chain: str, pool: str, symbol: str, interval: str) -> di
     if cached and time.time() - cached[0] < CHART_TTL_S:
         df = cached[1]
     else:
-        df = await DexScreenerProvider().fetch_ohlcv(make_symbol(symbol, chain, pool), interval, 1000)
+        # Chi guarda il grafico passa davanti ai giri in background, e se
+        # GeckoTerminal rifiuta si tiene l'ultimo grafico buono.
+        gecko_urgent.set(True)
+        try:
+            df = await DexScreenerProvider().fetch_ohlcv(make_symbol(symbol, chain, pool), interval, 1000)
+        except NoDataYet:
+            if not cached:
+                raise
+            df = cached[1]
         _chart_cache[key] = (time.time(), df)
         if len(_chart_cache) > 64:
             _chart_cache.pop(next(iter(_chart_cache)))

@@ -164,6 +164,12 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0097", "Radar: grafico vuoto con DexScreener pieno, token oltre i $100k, scartati e pagella dei filtri",
+     "Lorenzo: 'Se Dex Scanner visualizza correttamente il ticker con tutta la liquidità, eccetera, nel sito nostro non può uscire questo errore inaccettabile, non deve mai succedere' (FLIP su Robinhood: 'Nessun dato disponibile'). E: 'voglio capire che è una cosa live [...] deve esserci un senso di movimento', 'se ci clicco voglio vedere tutti i parametri di GitHub [...] un bel benchmark [...] se in modo eccellente oppure [...] mediocri', 'invece di usare Token Sniffer usa qualche sito che ha delle api pubbliche', 'scorrendo giù voglio una sezione che mi faccia vedere tutti quelli che sono stati scartati'. Più l'avviso Telegram '⚠️ Dati stantii: UBR@solana [...] [1m] — ultima candela 0h fa'.",
+     "alta"),
+    ("seed-0096", "Condividere il sito con un amico in sola lettura",
+     "Lorenzo: 'vorrei pubblicare un link per condividere questo sito che abbiamo fatto con un amico che lo possa utilizzare senza ovviamente poter modificare niente, quindi solo la lettura. È possibile mostrarglielo se copio il link del sito cosa gli arriva?'",
+     "media"),
     ("seed-0095", "Radar: solo token legittimi sotto i $100k, con sito, GitHub e Token Sniffer, e il radar come prima pagina",
      "Lorenzo: 'voglio evitare rug pull, voglio evitare puttanate, stronzate, voglio token legittimi con progetti seri [...] una market cap non oltre i 100.000 dollari [...] voglio avere anche la possibilità con un link di cliccare e andare sul sito del token [...] se si riesce a fare anche questo controllo con Claude sarebbe ideale'. Poi: 'fai un controllo anche per github [...] voglio evitare SHITCOIN e MEMECOIN', 'aggiungi anche il report di token sniffer [...] che ci fa da filtro ulteriore', e 'vorrei che la prima pagina quando entro sia proprio questa qui [...] i pop-up che vanno in una lista e rimangono [...] e il grafico [...] di tutti quelli rilevati quale strategia performerebbe meglio facendo un backtest, in tempo reale con gli ingressi'.",
      "alta"),
