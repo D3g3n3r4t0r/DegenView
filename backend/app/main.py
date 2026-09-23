@@ -2336,6 +2336,43 @@ async def onchain_quote_robinhood(
     }
 
 
+@app.get("/api/onchain/token/{chain}/{address}")
+async def onchain_token_info(chain: str, address: str, user: User = Depends(auth.get_current_user)) -> dict:
+    """Metadati minimi per uno swap con un token qualsiasi, non solo le due
+    coppie native che il pannello proponeva finora — Lorenzo: "lo swap deve
+    essere possibile in ogni valuta o crypto possibile". Decimali mai
+    indovinati (stesso principio di seed-0010): lookup on-chain reale.
+    Simbolo e prezzo sono un bonus via DexScreener quando disponibile —
+    oggi solo per Solana, che DexScreener indicizza; su Robinhood Chain
+    restano nulli e il frontend mostra l'indirizzo abbreviato."""
+    _require_onchain_enabled()
+    if chain not in ("solana", "robinhood"):
+        raise HTTPException(status_code=400, detail="Chain non supportata.")
+    try:
+        decimals = await onchain_token_metadata.get_token_decimals(chain, address)
+    except Exception as exc:  # noqa: BLE001 — un indirizzo sbagliato non deve essere un 500 muto
+        raise HTTPException(status_code=502, detail=f"Decimali non recuperabili: {exc}") from exc
+
+    symbol, price_usd = None, None
+    if chain == "solana":
+        try:
+            import httpx as _httpx
+
+            async with _httpx.AsyncClient(timeout=8.0) as client:
+                r = await client.get(f"https://api.dexscreener.com/latest/dex/tokens/{address}")
+            if r.status_code == 200:
+                pairs = [p for p in (r.json().get("pairs") or []) if p.get("chainId") == "solana"]
+                pairs.sort(key=lambda p: float((p.get("liquidity") or {}).get("usd") or 0), reverse=True)
+                if pairs and (pairs[0].get("baseToken", {}).get("address") or "").lower() == address.lower():
+                    symbol = pairs[0]["baseToken"].get("symbol")
+                    raw_price = pairs[0].get("priceUsd")
+                    price_usd = float(raw_price) if raw_price else None
+        except Exception:  # noqa: BLE001 — il prezzo/simbolo sono un bonus, mai bloccanti
+            pass
+
+    return {"address": address, "decimals": decimals, "symbol": symbol, "price_usd": price_usd}
+
+
 def _maybe_alert_onchain_risk_event(owner_email: str, chain: str, result: dict, notional_usd: float) -> None:
     """Alert Telegram immediati per gli eventi di rischio del piano SRE
     on-chain (punto 5) — chiamato subito dopo simulate_order/execute_order,
