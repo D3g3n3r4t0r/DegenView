@@ -20,6 +20,11 @@ _NATIVE_TOKEN = {
     "robinhood": ("robinhood", "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73"),
 }
 
+# Stesso indirizzo di _NATIVE_TOKEN, ma pubblico: il piano ordini limite
+# (main.py) deve sapere qual e' la gamba nativa di un ordine senza
+# duplicare l'indirizzo una terza volta.
+NATIVE_TOKEN_ADDRESS = {chain: addr for chain, (_network, addr) in _NATIVE_TOKEN.items()}
+
 _CACHE_TTL_S = 30  # il prezzo cambia in continuazione, non serve chiederlo ad ogni render
 _cache: dict[str, tuple[float, float]] = {}  # chain -> (price_usd, fetched_at)
 

@@ -170,12 +170,20 @@ async def build_signed_robinhood_swap(
     calldata = build_swap_router02_calldata(
         token_in, token_out, fee, account.address, amount_in, amount_out_minimum,
     )
+    # La base fee si muove blocco per blocco: un gasPrice preso esattamente
+    # a questo istante puo' essere gia' sotto quella del blocco in cui la
+    # transazione arrivera' davvero (visto in produzione: "maxFeePerGas
+    # 50242000 baseFee 50392000", una differenza di frazioni di secondo).
+    # +20% di margine assorbe il movimento normale senza sovrapagare in
+    # modo assurdo — non serve eth_feeHistory per una L2 con base fee
+    # cosi' stabile.
+    gas_price = (int(gas_price_hex, 16) * 12) // 10
     tx = {
         "nonce": int(nonce_hex, 16),
         "to": ROBINHOOD_SWAP_ROUTER02,
         "value": 0,
         "gas": gas_limit,
-        "gasPrice": int(gas_price_hex, 16),
+        "gasPrice": gas_price,
         "chainId": 4663,
         "data": "0x" + calldata.hex(),
     }

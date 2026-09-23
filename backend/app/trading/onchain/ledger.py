@@ -98,6 +98,27 @@ def _init_db() -> None:
                 opened_at REAL NOT NULL,
                 reviewed_at REAL
             );
+            CREATE TABLE IF NOT EXISTS limit_orders (
+                id TEXT PRIMARY KEY,
+                owner_id TEXT NOT NULL,
+                chain TEXT NOT NULL,
+                token_in TEXT NOT NULL,
+                token_out TEXT NOT NULL,
+                token_in_symbol TEXT NOT NULL,
+                token_out_symbol TEXT NOT NULL,
+                token_in_decimals INTEGER NOT NULL,
+                token_out_decimals INTEGER NOT NULL,
+                amount_in REAL NOT NULL,
+                direction TEXT NOT NULL,
+                target_price_usd REAL NOT NULL,
+                status TEXT NOT NULL DEFAULT 'open',
+                filled_idempotency_key TEXT,
+                reason TEXT,
+                created_at REAL NOT NULL,
+                updated_at REAL NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_limit_orders_open
+                ON limit_orders (status, chain);
         """)
 
 
@@ -132,6 +153,17 @@ def get_order(idempotency_key: str) -> dict | None:
     with _lock, _connect() as conn:
         row = conn.execute("SELECT * FROM orders WHERE idempotency_key = ?", (idempotency_key,)).fetchone()
         return dict(row) if row else None
+
+
+def list_orders(owner_id: str, chain: str, limit: int = 100) -> list[dict]:
+    """Per la cronologia unificata (piano DEX): tutti gli ordini di un
+    wallet, piu' recenti prima — non solo quelli ancora 'pending'."""
+    with _lock, _connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM orders WHERE owner_id = ? AND chain = ? ORDER BY created_at DESC LIMIT ?",
+            (owner_id, chain, limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
 
 
 def mark_submitted(idempotency_key: str, tx_signature: str) -> None:
@@ -356,4 +388,93 @@ def reset_breaker(owner_id: str, chain: str) -> None:
             "UPDATE circuit_breaker SET consecutive_losses = 0, tripped_at = NULL, reason = NULL "
             "WHERE owner_id = ? AND chain = ?",
             (owner_id, chain),
+        )
+
+
+# ─────────────────────────────────────────── ordini limite (piano DEX) ────
+# Un ordine limite qui e' size + prezzo obiettivo + direzione, in attesa che
+# un ciclo esterno (limit_order_loop in main.py) lo chiuda chiamando
+# execute.execute_order con gli stessi guardrail di un ordine manuale — mai
+# un secondo motore che firma da solo scavalcando risk.run_all_checks().
+
+def create_limit_order(
+    owner_id: str, chain: str,
+    token_in: str, token_out: str, token_in_symbol: str, token_out_symbol: str,
+    token_in_decimals: int, token_out_decimals: int,
+    amount_in: float, direction: str, target_price_usd: float,
+) -> dict:
+    order_id = uuid.uuid4().hex
+    now = time.time()
+    with _lock, _connect() as conn:
+        conn.execute(
+            "INSERT INTO limit_orders (id, owner_id, chain, token_in, token_out, "
+            "token_in_symbol, token_out_symbol, token_in_decimals, token_out_decimals, "
+            "amount_in, direction, target_price_usd, status, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?)",
+            (order_id, owner_id, chain, token_in, token_out, token_in_symbol, token_out_symbol,
+             token_in_decimals, token_out_decimals, amount_in, direction, target_price_usd, now, now),
+        )
+    return get_limit_order(order_id)
+
+
+def get_limit_order(order_id: str) -> dict | None:
+    with _lock, _connect() as conn:
+        row = conn.execute("SELECT * FROM limit_orders WHERE id = ?", (order_id,)).fetchone()
+        return dict(row) if row else None
+
+
+def list_limit_orders(owner_id: str, chain: str | None = None, status: str | None = None) -> list[dict]:
+    with _lock, _connect() as conn:
+        query = "SELECT * FROM limit_orders WHERE owner_id = ?"
+        params: list = [owner_id]
+        if chain is not None:
+            query += " AND chain = ?"
+            params.append(chain)
+        if status is not None:
+            query += " AND status = ?"
+            params.append(status)
+        query += " ORDER BY created_at DESC"
+        return [dict(r) for r in conn.execute(query, params).fetchall()]
+
+
+def list_open_limit_orders(chain: str | None = None) -> list[dict]:
+    """Letto dal ciclo di esecuzione, non da un utente: nessun owner_id qui,
+    scandisce tutti gli ordini aperti di tutti i wallet su questa chain."""
+    with _lock, _connect() as conn:
+        query = "SELECT * FROM limit_orders WHERE status = 'open'"
+        params: list = []
+        if chain is not None:
+            query += " AND chain = ?"
+            params.append(chain)
+        return [dict(r) for r in conn.execute(query, params).fetchall()]
+
+
+def cancel_limit_order(order_id: str, owner_id: str) -> bool:
+    """Mai una DELETE vera: un ordine cancellato resta nella cronologia,
+    stesso principio delle discrepanze — non si butta via lo storico."""
+    with _lock, _connect() as conn:
+        cur = conn.execute(
+            "UPDATE limit_orders SET status = 'cancelled', updated_at = ? "
+            "WHERE id = ? AND owner_id = ? AND status = 'open'",
+            (time.time(), order_id, owner_id),
+        )
+        return cur.rowcount > 0
+
+
+def mark_limit_order_filled(order_id: str, idempotency_key: str) -> None:
+    with _lock, _connect() as conn:
+        conn.execute(
+            "UPDATE limit_orders SET status = 'filled', filled_idempotency_key = ?, updated_at = ? WHERE id = ?",
+            (idempotency_key, time.time(), order_id),
+        )
+
+
+def mark_limit_order_failed(order_id: str, reason: str) -> None:
+    """Non 'filled' e non piu' 'open': un fallimento del check (non del
+    guardrail — quello lo riprova al giro dopo) chiude l'ordine invece di
+    ritentarlo all'infinito con lo stesso errore."""
+    with _lock, _connect() as conn:
+        conn.execute(
+            "UPDATE limit_orders SET status = 'failed', reason = ?, updated_at = ? WHERE id = ?",
+            (reason, time.time(), order_id),
         )
