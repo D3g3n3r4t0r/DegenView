@@ -2636,3 +2636,14 @@ tastiera da solo. Fatto:
 In parallelo sulla stessa pagina: PR #70 (tasti nav, tocca
 `main.js` e la fine di `resolutions.json`/`_SEED`) e il thread
 velocita' (tocca `<head>`). Conflitti attesi solo in quelle code.
+
+Seguito, stessa sessione — Lorenzo: "mezzi ticker non funzionano; voglio
+solo un unico risultato per ticker 'quello con il contratto corretto e
+verificato con liquidità migliore'". `seed-0088`. La ricerca del picker
+non usa piu' DexScreener (30 pool su tutte le chain, contratti veri
+esclusi, copie con pool gonfiati in cima) ma
+`app/trading/onchain/token_search.py`: Jupiter su Solana (`isVerified`),
+GeckoTerminal filtrato su Robinhood (verificato = `coingecko_coin_id`,
+pool senza scambi = liquidita' zero). Un token per ticker. DexScreener
+resta solo come ripiego se la fonte non risponde. GeckoTerminal da' 429
+sopra ~30 richieste/minuto: la cache e' di 60s per (chain, query).
