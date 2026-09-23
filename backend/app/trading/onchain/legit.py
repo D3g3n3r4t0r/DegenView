@@ -9,9 +9,11 @@ token legittimi con progetti seri". Un listing passa solo se:
 - i controlli on-chain non trovano trappole: RugCheck su Solana (rug,
   rischi "danger", liquidita' non bloccata), GoPlus su Robinhood Chain
   (honeypot, tasse, mint, owner che si riprende il contratto);
-- Token Sniffer (con TOKENSNIFFER_API_KEY) non lo segnala e gli da'
-  almeno `SNIFFER_SCORE_MIN`/100 (Lorenzo: "token sniffer che ci fa da
-  filtro ulteriore");
+- su Solana, GoPlus (API pubblica, senza chiave) non trova poteri nascosti
+  nel contratto: mint, congelamento, saldi modificabili, tasse di
+  trasferimento. Prima era Token Sniffer, ma chiede un piano a pagamento
+  (Lorenzo: "usa qualche sito che ha delle api pubbliche per fare quel
+  controllo");
 - ha un GitHub vero: repository non fork, con commit su piu' giorni
   (Lorenzo: "voglio evitare SHITCOIN e MEMECOIN");
 - con ANTHROPIC_API_KEY, Claude legge il testo del sito e non lo boccia.
@@ -28,6 +30,7 @@ import html
 import ipaddress
 import json
 import logging
+import math
 import re
 import socket
 from urllib.parse import urljoin, urlparse
@@ -47,10 +50,8 @@ LP_LOCKED_MIN_PCT = 80.0
 TAX_MAX_PCT = 10.0
 TOP_HOLDER_MAX_PCT = 30.0
 AI_SCORE_MIN = 6
-TOKENSNIFFER_API = "https://tokensniffer.com/api/v2/tokens/{chain}/{address}"
-TOKENSNIFFER_PAGE = "https://tokensniffer.com/token/{chain}/{address}"
-SNIFFER_CHAINS = {"solana": "solana"}   # Robinhood Chain non e' (ancora) coperta
-SNIFFER_SCORE_MIN = 70
+GOPLUS_SOLANA = "https://api.gopluslabs.io/api/v1/solana/token_security"
+RUGCHECK_PAGE = "https://rugcheck.xyz/tokens/{mint}"
 GITHUB_API = "https://api.github.com"
 GITHUB_MIN_COMMITS = 5
 GITHUB_MIN_DAYS = 2           # commit su almeno due giorni diversi: non un repo riempito in un'ora
@@ -69,8 +70,32 @@ _NOT_A_SITE = (
 _SOCIAL_TYPES = {"twitter", "telegram", "discord"}
 
 
-def _check(key: str, label: str, ok: bool | None, detail: str = "") -> dict:
-    return {"key": key, "label": label, "ok": ok, "detail": detail}
+def _check(key: str, label: str, ok: bool | None, detail: str = "", score: float | None = None,
+           **extra) -> dict:
+    """Un controllo. `score` 0-100 dice COME e' stato superato: Lorenzo vuole
+    capire "se in modo eccellente [...] o mediocre", non solo se e' passato."""
+    out = {"key": key, "label": label, "ok": ok, "detail": detail, **extra}
+    if score is not None:
+        out["score"] = int(max(0, min(100, round(score))))
+        out["grade"] = grade(out["score"])
+    return out
+
+
+GRADES = ((85, "eccellente"), (70, "buono"), (55, "sufficiente"), (0, "mediocre"))
+
+
+def grade(score: float) -> str:
+    return next(label for floor, label in GRADES if score >= floor)
+
+
+def report_card(checks: list[dict]) -> dict | None:
+    """Il voto complessivo: media dei controlli che hanno un punteggio."""
+    scores = [c["score"] for c in checks if c.get("score") is not None]
+    if not scores:
+        return None
+    total = sum(scores) / len(scores)
+    weakest = min((c for c in checks if c.get("score") is not None), key=lambda c: c["score"])
+    return {"score": round(total), "grade": grade(total), "weakest": weakest["label"], "counted": len(scores)}
 
 
 def _host(url: str) -> str:
@@ -213,7 +238,8 @@ def judge_rugcheck(report: dict | None) -> dict:
         return _check("security", "RugCheck", False, f"liquidità bloccata solo al {float(lp):.0f}%")
     warn = len([r for r in report.get("risks") or [] if r.get("level") == "warn"])
     detail = f"liquidità bloccata {float(lp):.0f}%" if lp is not None else "nessun rischio grave"
-    return _check("security", "RugCheck", True, detail + (f" · {warn} avvisi minori" if warn else ""))
+    score = (float(lp) if lp is not None else 85.0) - 8 * warn
+    return _check("security", "RugCheck", True, detail + (f" · {warn} avvisi minori" if warn else ""), score)
 
 
 async def goplus(chain: str, token: str, client: httpx.AsyncClient) -> dict | None:
@@ -262,59 +288,65 @@ def judge_goplus(info: dict | None) -> dict:
         problems.append(f"un portafoglio ha il {top:.0f}%")
     if problems:
         return _check("security", "GoPlus", False, ", ".join(problems[:3]))
-    return _check("security", "GoPlus", True, "niente honeypot, tasse o mint")
+    score = 100 - 10 * (str(info.get("owner_address") or "").strip("0x") != "") - 0.5 * top
+    return _check("security", "GoPlus", True, "niente honeypot, tasse o mint", score)
 
 
-# ------------------------------------------------------------ Token Sniffer
+# ------------------------------------------------- GoPlus, contratto Solana
 
-def tokensniffer_url(chain: str, address: str) -> str | None:
-    slug = SNIFFER_CHAINS.get(chain)
-    return TOKENSNIFFER_PAGE.format(chain=slug, address=address) if slug and address else None
-
-
-async def tokensniffer(chain: str, address: str, client: httpx.AsyncClient) -> dict | None:
-    """Il report, o None se non risponde. {"status": "pending"} finche' lo
-    sta ancora calcolando."""
-    r = await client.get(TOKENSNIFFER_API.format(chain=SNIFFER_CHAINS[chain], address=address),
-                         params={"include_tests": "true"},
-                         headers={"X-API-Key": settings.tokensniffer_api_key}, timeout=10.0)
-    if r.status_code != 200:
-        return None
-    body = r.json()
-    return body if isinstance(body, dict) else None
+def scan_url(chain: str, address: str) -> str | None:
+    """La pagina pubblica dove Lorenzo puo' rileggere l'analisi on-chain."""
+    return RUGCHECK_PAGE.format(mint=address) if chain == "solana" and address else None
 
 
-def judge_tokensniffer(report: dict | None, *, configured: bool = True, covered: bool = True) -> dict:
-    label = "Token Sniffer"
-    if not covered:
-        return _check("sniffer", label, None, "chain non coperta")
-    if not configured:
-        return _check("sniffer", label, None, "non attivo")
-    if report is None:
-        return _check("sniffer", label, None, "non risponde")
-    if report.get("status") != "ready":
-        return _check("sniffer", label, None, "report in preparazione")
-    exploits = [str(x) for x in report.get("exploits") or []]
-    score = report.get("score")
-    failed = [t.get("description") or t.get("id") for t in report.get("tests") or [] if t.get("result") is False]
-    if report.get("is_flagged") or exploits:
-        return _check("sniffer", label, False, "segnalato: " + (", ".join(exploits[:3]) or "truffa nota"))
-    if score is None or float(score) < SNIFFER_SCORE_MIN:
-        detail = f"{score if score is not None else '?'}/100"
-        return _check("sniffer", label, False, detail + (f" · {failed[0]}" if failed else ""))
-    return _check("sniffer", label, True, f"{float(score):.0f}/100" + (f" · {len(failed)} test falliti" if failed else ""))
-
-
-async def check_tokensniffer(chain: str, address: str, client: httpx.AsyncClient) -> dict:
-    if chain not in SNIFFER_CHAINS:
-        return judge_tokensniffer(None, covered=False)
-    if not settings.tokensniffer_api_key:
-        return judge_tokensniffer(None, configured=False)
+async def goplus_solana(mint: str, client: httpx.AsyncClient) -> dict | None:
     try:
-        report = await tokensniffer(chain, address, client)
+        r = await client.get(GOPLUS_SOLANA, params={"contract_addresses": mint}, timeout=8.0)
+        body = r.json()
     except (httpx.HTTPError, ValueError):
-        report = None
-    return judge_tokensniffer(report)
+        return None
+    result = (body or {}).get("result") or {}
+    return result.get(mint) or next(iter(result.values()), None) if isinstance(result, dict) else None
+
+
+def _status(info: dict, key: str) -> bool:
+    value = info.get(key)
+    return str((value.get("status") if isinstance(value, dict) else value) or "0") == "1"
+
+
+def judge_goplus_solana(info: dict | None) -> dict:
+    label = "GoPlus contratto"
+    if not info:
+        return _check("contract", label, None, "non risponde")
+    problems = []
+    if _status(info, "mintable"):
+        problems.append("si puo' stampare altra offerta")
+    if _status(info, "freezable") or str(info.get("default_account_state")) == "2":
+        problems.append("i conti si possono congelare")
+    if _status(info, "balance_mutable_authority"):
+        problems.append("saldi modificabili dal creatore")
+    if _status(info, "closable"):
+        problems.append("conti chiudibili dal creatore")
+    if _status(info, "non_transferable"):
+        problems.append("non trasferibile")
+    if info.get("transfer_hook"):
+        problems.append("trasferimenti con codice esterno")
+    fee = info.get("transfer_fee") or {}
+    try:
+        fee_pct = float(fee.get("fee_rate") or 0) * 100 if isinstance(fee, dict) else 0.0
+    except ValueError:
+        fee_pct = 0.0
+    if fee_pct > TAX_MAX_PCT:
+        problems.append(f"tassa di trasferimento {fee_pct:.0f}%")
+    if _status(info, "transfer_fee_upgradable"):
+        problems.append("tassa modificabile")
+    if problems:
+        return _check("contract", label, False, ", ".join(problems[:3]))
+    mutable = _status(info, "metadata_mutable")
+    detail = "niente mint, congelamento o tasse" + (" · nome e logo ancora modificabili" if mutable else "")
+    return _check("contract", label, True, detail, 100 - 15 * mutable - 5 * bool(fee_pct),
+                  facts={"metadata_mutable": mutable, "transfer_fee_pct": round(fee_pct, 2),
+                         "holders": info.get("holder_count")})
 
 
 # ----------------------------------------------------------------- GitHub
@@ -366,7 +398,22 @@ def judge_github(repo: dict | None, commits: list[dict] | None) -> dict:
         return _check("github", label, False, f"{name}: {len(commits or [])} commit in {len(days)} giorni")
     stars = repo.get("stargazers_count") or 0
     more = "30+" if len(commits) >= 30 else str(len(commits))
-    return _check("github", label, True, f"{name} · {more} commit su {len(days)} giorni · ★{stars}")
+    authors = {((c.get("author") or {}).get("login") or (c.get("commit") or {}).get("author", {}).get("email"))
+               for c in commits} - {None, ""}
+    facts = {
+        "repo": name, "url": repo.get("html_url"), "description": (repo.get("description") or "")[:160],
+        "language": repo.get("language"), "stars": stars, "forks": repo.get("forks_count") or 0,
+        "watchers": repo.get("subscribers_count") or repo.get("watchers_count") or 0,
+        "open_issues": repo.get("open_issues_count") or 0, "commits": more, "active_days": len(days),
+        "authors": len(authors), "created_at": repo.get("created_at"), "pushed_at": repo.get("pushed_at"),
+        "license": ((repo.get("license") or {}).get("spdx_id")) or None,
+    }
+    # Quanto lavoro c'e' dietro: commit (fino a 30 visibili), giorni diversi,
+    # piu' di un autore, qualcuno che lo segue.
+    score = (min(len(commits), 30) / 30 * 35 + min(len(days), 14) / 14 * 30
+             + min(len(authors), 4) / 4 * 15 + min(math.log10(stars + 1) / 2, 1) * 20)
+    return _check("github", label, True, f"{name} · {more} commit su {len(days)} giorni · ★{stars}", score,
+                  facts=facts)
 
 
 async def check_github(urls: list[str], client: httpx.AsyncClient) -> tuple[dict, str | None]:
@@ -457,7 +504,8 @@ def judge_ai(review: dict | None) -> dict:
     if review.get("error"):
         return _check("ai", "Claude sul sito", None, review["error"])
     ok = bool(review.get("legit")) and review["score"] >= AI_SCORE_MIN
-    return _check("ai", "Claude sul sito", ok, f"{review['score']}/10 · {review.get('reason', '')}".strip(" ·"))
+    return _check("ai", "Claude sul sito", ok, f"{review['score']}/10 · {review.get('reason', '')}".strip(" ·"),
+                  review["score"] * 10, red_flags=review.get("red_flags") or [])
 
 
 # ----------------------------------------------------------------- insieme
@@ -470,7 +518,7 @@ async def assess(token: dict, links: dict, client: httpx.AsyncClient) -> dict:
     socials = [s for s in links.get("socials") or [] if s.get("type") in _SOCIAL_TYPES]
     out = {"status": "wait", "reason": "", "checks": [], "website": website, "socials": socials,
            "github": None, "ai": None,
-           "tokensniffer": tokensniffer_url(chain or "", token.get("token_address") or "")}
+           "scan_url": scan_url(chain or "", token.get("token_address") or "")}
 
     def done(status: str, reason: str) -> dict:
         out.update(status=status, reason=reason)
@@ -478,6 +526,7 @@ async def assess(token: dict, links: dict, client: httpx.AsyncClient) -> dict:
 
     meme = _looks_like_meme(token.get("symbol") or "", token.get("name") or "")
     out["checks"].append(_check("name", "Nome", not meme, "da meme coin" if meme else "non da meme"))
+    out["report"] = None
     if meme:
         return done("fail", "nome da meme coin")
 
@@ -491,15 +540,17 @@ async def assess(token: dict, links: dict, client: httpx.AsyncClient) -> dict:
     if sec["ok"] is False:
         return done("fail", f"{sec['label']}: {sec['detail']}")
 
-    sniff = await check_tokensniffer(chain or "", token.get("token_address") or "", client)
-    out["checks"].append(sniff)
-    if sniff["ok"] is False:
-        return done("fail", f"Token Sniffer: {sniff['detail']}")
-    if sniff["detail"] in ("non risponde", "report in preparazione"):
-        return done("wait", f"Token Sniffer {sniff['detail']}")
+    if chain == "solana":
+        contract = judge_goplus_solana(await goplus_solana(token.get("token_address") or "", client))
+        out["checks"].append(contract)
+        if contract["ok"] is False:
+            return done("fail", f"GoPlus: {contract['detail']}")
+        if contract["ok"] is None:
+            return done("wait", f"GoPlus {contract['detail']}")
 
-    out["checks"].append(_check("socials", "Social", bool(socials),
-                                ", ".join(sorted({s["type"] for s in socials})) or "nessuno"))
+    kinds = sorted({s["type"] for s in socials})
+    out["checks"].append(_check("socials", "Social", bool(socials), ", ".join(kinds) or "nessuno",
+                                (0, 60, 85, 100)[min(len(kinds), 3)] if socials else None))
     if not website:
         out["checks"].append(_check("site", "Sito", None, "nessun sito proprio"))
         return done("wait", "manca il sito del progetto")
@@ -509,9 +560,14 @@ async def assess(token: dict, links: dict, client: httpx.AsyncClient) -> dict:
         return done("wait", "sito non raggiungibile")
     address = token.get("token_address") or ""
     mentions = bool(address) and address.lower() in site["text"].lower()
+    words = len(site["text"].split())
     out["checks"].append(_check("site", "Sito", True,
                                 (site.get("title") or _host(site["final_url"]))[:60]
-                                + (" · cita il contratto" if mentions else "")))
+                                + (" · cita il contratto" if mentions else ""),
+                                50 + 25 * mentions + min(words, 800) / 800 * 25,
+                                facts={"url": site["final_url"], "title": site.get("title"), "words": words,
+                                       "https": site["final_url"].startswith("https://"),
+                                       "cites_contract": mentions}))
     if not socials:
         return done("wait", "nessun social collegato")
     if sec["ok"] is None:
@@ -532,4 +588,5 @@ async def assess(token: dict, links: dict, client: httpx.AsyncClient) -> dict:
     out["checks"].append(ai)
     if ai["ok"] is False:
         return done("fail", f"Claude: {review.get('reason') or 'non convince'}")
+    out["report"] = report_card(out["checks"])
     return done("ok", "")

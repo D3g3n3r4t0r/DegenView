@@ -2904,3 +2904,30 @@ e il grafico [...] quale strategia performerebbe meglio [...] in tempo reale".
   candidati dello sniper solo se cap <= $100k e `legit.assess` == ok
   (`_pilot_vet`, cache 6 h). Intervallo della watchlist = `auto_interval`.
   Attenzione: il pilota di Lorenzo e' acceso con ordini reali abilitati.
+
+### Seguito — grafico mai vuoto, scartati, battito, pagella — `seed-0097` — PR #86 — 2026-09-23
+
+Lorenzo: "Se Dex Scanner visualizza correttamente il ticker [...] nel sito
+nostro non può uscire questo errore inaccettabile" (FLIP, poi BUTT: "Nessun
+dato disponibile"); "voglio capire che è una cosa live"; "se ci clicco voglio
+vedere tutti i parametri di GitHub [...] un bel benchmark"; "invece di usare
+Token Sniffer usa qualche sito che ha delle api pubbliche"; "scorrendo giù
+voglio una sezione [...] scartati".
+
+- Causa del grafico vuoto: 429 di GeckoTerminal (~30 req/min) letto come
+  "nessun dato". Ora ogni chiamata passa da `gecko_get()` in
+  `providers/dexscreener.py`: dedup 15 s, tetto 20/min in background e 28/min
+  per chi guarda un grafico (`gecko_urgent`), retry 2 s e 4 s, ultima risposta
+  buona fino a 30 min, altrimenti `GeckoBusy` (sottoclasse di `NoDataYet`).
+  `tests/conftest.py` azzera cache e tetto fra un test e l'altro.
+- Token Sniffer rimosso; `settings.tokensniffer_api_key` resta solo perche'
+  un .env che la contiene non blocchi l'avvio. Al suo posto GoPlus Solana
+  (`judge_goplus_solana`), link al report su RugCheck (`scan_url`).
+- Scartati: `listings.note_rejected()` (anche dal giro del radar), salvati nel
+  file dei listing, 100 al massimo, evento SSE `rejected`. Battito: evento
+  `pulse` ogni 5 s.
+- Avviso "dati stantii" spento sui pool DEX, una volta sola per fermo altrove.
+- Chiave Anthropic: Lorenzo l'ha incollata in chat; va nel `.env` del server
+  (`ANTHROPIC_API_KEY`), non nel repo. Consigliato di rigenerarla.
+- Passati ad altri thread: variante di Lorenzo sui minuti (nessuna variante
+  batte i costi DEX fuori campione su 32 pool) e link ospite (PR #85).

@@ -53,8 +53,8 @@ class Settings(BaseSettings):
     # restano i controlli automatici, il passaggio IA risulta "non attivo".
     anthropic_api_key: str = ""
     legit_ai_model: str = "claude-opus-5"
-    # Token Sniffer (piano Pro): punteggio e Smell Test di ogni token proposto.
-    # Vuota = il controllo risulta "non attivo" e il link al report resta.
+    # Non piu' usata: Token Sniffer e' stato sostituito da GoPlus, pubblico.
+    # Resta perche' un .env che la contiene non blocchi l'avvio.
     tokensniffer_api_key: str = ""
 
     # Serve solo a costruire il link/QR di approvazione dal telefono per
