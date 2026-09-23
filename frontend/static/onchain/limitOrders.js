@@ -168,10 +168,55 @@ async function refreshOpenOrders(chain) {
 
 /* ------------------------------------------------------------- Diario --- */
 
+// Un pannello solo, non tre: "Storico" (transazioni RPC grezze) e
+// "Diario" (ordini di questo sito) sembravano fare la stessa cosa da due
+// bottoni diversi — Lorenzo: "una copia delle transazioni per capire cosa
+// e' accaduto in passato". Due viste dentro lo stesso pannello, non due
+// pannelli.
 export async function openOrderDiary() {
   const chain = state.chain;
-  sheets.openSheet("Diario", "Swap e ordini limite di questo wallet, dal piu' recente.");
-  sheets.setMessage("Leggo il diario…");
+  sheets.openSheet("Storico", "Ordini di questo sito e transazioni grezze del wallet.");
+  sheets.setBody(`
+    <div class="mo-side-tabs" id="diary-tabs">
+      <button type="button" class="mo-side-tab mo-buy-tab mo-tab-active" data-view="orders">Ordini</button>
+      <button type="button" class="mo-side-tab mo-sell-tab" data-view="raw">Transazioni on-chain</button>
+    </div>
+    <div id="diary-body"><p class="sheet-note">Leggo…</p></div>
+  `);
+  sheets.sheetBody().querySelectorAll("#diary-tabs .mo-side-tab").forEach((tab) => {
+    tab.addEventListener("click", () => {
+      sheets.sheetBody().querySelectorAll("#diary-tabs .mo-side-tab").forEach((t) => t.classList.toggle("mo-tab-active", t === tab));
+      renderDiaryView(chain, tab.dataset.view);
+    });
+  });
+  await renderDiaryView(chain, "orders");
+}
+
+async function renderDiaryView(chain, view) {
+  const host = sheets.sheetBody().querySelector("#diary-body");
+  if (!host) return;
+  host.innerHTML = `<p class="sheet-note">Leggo…</p>`;
+
+  if (view === "raw") {
+    try {
+      const data = await api.getTransactions(chain);
+      if (!data.available) {
+        host.innerHTML = `<p class="sheet-note">${data.reason}
+          <a href="${encodeURI(data.explorer_url)}" target="_blank" rel="noopener">Apri l'explorer →</a></p>`;
+        return;
+      }
+      if (!data.transactions.length) { host.innerHTML = "<p class='sheet-note'>Nessuna transazione ancora.</p>"; return; }
+      host.innerHTML = `<ul class="tx-list">${data.transactions.map((tx) => `
+        <li>
+          <a href="${encodeURI(tx.explorer_url)}" target="_blank" rel="noopener">${tx.signature.slice(0, 12)}…</a>
+          <span>${tx.status}${tx.block_time ? ` · ${new Date(tx.block_time * 1000).toLocaleString("it-IT")}` : ""}</span>
+        </li>`).join("")}</ul>`;
+    } catch (error) {
+      host.innerHTML = `<p class="sheet-note is-error">${error.message}</p>`;
+    }
+    return;
+  }
+
   try {
     const data = await api.getHistory(chain);
     const rows = [
@@ -179,9 +224,9 @@ export async function openOrderDiary() {
       ...data.limit_orders.map((o) => ({ ...o, at: o.updated_at })),
     ].sort((a, b) => b.at - a.at);
 
-    if (!rows.length) { sheets.setMessage("Nessun ordine ancora."); return; }
+    if (!rows.length) { host.innerHTML = "<p class='sheet-note'>Nessun ordine ancora.</p>"; return; }
 
-    sheets.setBody(`<ul class="tx-list">${rows.map((row) => row.kind === "swap" ? `
+    host.innerHTML = `<ul class="tx-list">${rows.map((row) => row.kind === "swap" ? `
       <li>
         <span><span class="status-dot" data-status="${row.status}"></span><b>${row.side === "buy" ? "Compra" : "Vendi"} ${row.token}</b>
           <small>${formatUsd(row.size_usd)} · ${STATUS_LABEL[row.status] ?? row.status}${row.reason ? ` — ${row.reason}` : ""}</small></span>
@@ -192,8 +237,8 @@ export async function openOrderDiary() {
           <small>${row.direction === "buy_below" ? "compra se scende a" : "vendi se sale a"} ${formatUsd(row.target_price_usd)}
           · ${STATUS_LABEL[row.status] ?? row.status}${row.reason ? ` — ${row.reason}` : ""}</small></span>
         <span>${new Date(row.at * 1000).toLocaleString("it-IT")}</span>
-      </li>`).join("")}</ul>`);
+      </li>`).join("")}</ul>`;
   } catch (error) {
-    sheets.setMessage(error.message, "is-error");
+    host.innerHTML = `<p class="sheet-note is-error">${error.message}</p>`;
   }
 }

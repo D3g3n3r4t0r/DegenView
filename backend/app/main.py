@@ -2338,22 +2338,14 @@ async def onchain_quote_robinhood(
     }
 
 
-@app.get("/api/onchain/token/{chain}/{address}")
-async def onchain_token_info(chain: str, address: str, user: User = Depends(auth.get_current_user)) -> dict:
-    """Metadati minimi per uno swap con un token qualsiasi, non solo le due
-    coppie native che il pannello proponeva finora — Lorenzo: "lo swap deve
-    essere possibile in ogni valuta o crypto possibile". Decimali mai
-    indovinati (stesso principio di seed-0010): lookup on-chain reale.
-    Simbolo e prezzo sono un bonus via DexScreener quando disponibile —
-    oggi solo per Solana, che DexScreener indicizza; su Robinhood Chain
-    restano nulli e il frontend mostra l'indirizzo abbreviato."""
-    _require_onchain_enabled()
-    if chain not in ("solana", "robinhood"):
-        raise HTTPException(status_code=400, detail="Chain non supportata.")
-    try:
-        decimals = await onchain_token_metadata.get_token_decimals(chain, address)
-    except Exception as exc:  # noqa: BLE001 — un indirizzo sbagliato non deve essere un 500 muto
-        raise HTTPException(status_code=502, detail=f"Decimali non recuperabili: {exc}") from exc
+async def _onchain_token_meta(chain: str, address: str) -> dict:
+    """Metadati minimi per un token qualsiasi: decimali mai indovinati
+    (stesso principio di seed-0010, lookup on-chain reale), simbolo e
+    prezzo come bonus via DexScreener quando disponibile — oggi solo per
+    Solana, che DexScreener indicizza; su Robinhood Chain restano nulli.
+    Condiviso da /token (per lo swap) e /portfolio (per elencare i saldi
+    reali del wallet) — un solo posto che sa risolvere un indirizzo."""
+    decimals = await onchain_token_metadata.get_token_decimals(chain, address)
 
     symbol, price_usd = None, None
     if chain == "solana":
@@ -2373,6 +2365,101 @@ async def onchain_token_info(chain: str, address: str, user: User = Depends(auth
             pass
 
     return {"address": address, "decimals": decimals, "symbol": symbol, "price_usd": price_usd}
+
+
+@app.get("/api/onchain/token/{chain}/{address}")
+async def onchain_token_info(chain: str, address: str, user: User = Depends(auth.get_current_user)) -> dict:
+    """Metadati minimi per uno swap con un token qualsiasi, non solo le due
+    coppie native che il pannello proponeva finora — Lorenzo: "lo swap deve
+    essere possibile in ogni valuta o crypto possibile"."""
+    _require_onchain_enabled()
+    if chain not in ("solana", "robinhood"):
+        raise HTTPException(status_code=400, detail="Chain non supportata.")
+    try:
+        return await _onchain_token_meta(chain, address)
+    except Exception as exc:  # noqa: BLE001 — un indirizzo sbagliato non deve essere un 500 muto
+        raise HTTPException(status_code=502, detail=f"Decimali non recuperabili: {exc}") from exc
+
+
+@app.get("/api/onchain/portfolio/{chain}")
+async def onchain_portfolio(chain: str, user: User = Depends(auth.get_current_user)) -> dict:
+    """Cosa detiene DAVVERO il wallet, non solo le posizioni che questo
+    sito ha tracciato — Lorenzo: "avere un wallet per capire il
+    portafoglio per sapere cosa deteniamo". Su Solana e' completo (RPC
+    vera); su Robinhood Chain e' uno scan dei soli token che questo sito
+    conosce (vedi balances.all_token_balances) — limite dichiarato in
+    `partial`, non nascosto in un elenco che sembra completo e non lo e'."""
+    _require_onchain_enabled()
+    if chain not in ("solana", "robinhood"):
+        raise HTTPException(status_code=400, detail="Chain non supportata.")
+    wallet = user.onchain_wallets.get(chain)
+    if wallet is None:
+        raise HTTPException(status_code=400, detail=f"Nessun wallet {chain} per questo utente.")
+
+    known_evm_tokens = []
+    if chain == "robinhood":
+        known_evm_tokens.append(_ONCHAIN_QUOTE_TOKEN["robinhood"])
+        for order in onchain_ledger.list_limit_orders(user.id, "robinhood"):
+            known_evm_tokens += [order["token_in"], order["token_out"]]
+
+    try:
+        raw_balances = await onchain_balances.all_token_balances(chain, wallet.address, known_evm_tokens)
+    except Exception as exc:  # noqa: BLE001 — l'RPC che non risponde non deve essere un 500 muto
+        raise HTTPException(status_code=502, detail=f"RPC non raggiungibile: {exc}") from exc
+
+    async def _enrich(entry: dict) -> dict:
+        try:
+            meta = await _onchain_token_meta(chain, entry["address"])
+        except Exception:  # noqa: BLE001 — un token che il metadata non risolve resta con l'indirizzo grezzo
+            meta = {"symbol": None, "price_usd": None, "decimals": entry.get("decimals")}
+        amount = entry["amount"] if "amount" in entry else entry["amount_raw"] / (10 ** meta["decimals"])
+        return {
+            "address": entry["address"], "symbol": meta["symbol"] or entry["address"][:6],
+            "amount": amount, "price_usd": meta["price_usd"],
+            "value_usd": amount * meta["price_usd"] if meta["price_usd"] is not None else None,
+        }
+
+    holdings = await asyncio.gather(*(_enrich(e) for e in raw_balances))
+    return {
+        "chain": chain, "holdings": holdings,
+        "partial": chain == "robinhood",  # vedi la docstring: qui non e' un elenco esaustivo
+    }
+
+
+@app.get("/api/onchain/chart/{chain}/{address}")
+async def onchain_chart(
+    chain: str, address: str, interval: str = "15m", user: User = Depends(auth.get_current_user),
+) -> dict:
+    """Candele vere per un token del wallet — stesso motore del sito
+    principale (DexScreener + GeckoTerminal, `providers/dexscreener.py`),
+    non un secondo grafico da inventare. Volutamente leggero: qui non
+    girano strategia/backtest come in /api/analyze, che per un grafico nel
+    wallet sarebbero solo latenza sprecata (Lorenzo: "minor delay
+    possibile")."""
+    _require_onchain_enabled()
+    if chain not in ("solana", "robinhood"):
+        raise HTTPException(status_code=400, detail="Chain non supportata.")
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            r = await client.get(f"https://api.dexscreener.com/latest/dex/tokens/{address}")
+        pairs = [p for p in (r.json().get("pairs") or []) if p.get("chainId") == chain] if r.status_code == 200 else []
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"DexScreener non raggiungibile: {exc}") from exc
+    if not pairs:
+        raise HTTPException(status_code=404, detail="Nessun pool DexScreener per questo token su questa chain.")
+    pairs.sort(key=lambda p: float((p.get("liquidity") or {}).get("usd") or 0), reverse=True)
+    pool_address = pairs[0]["pairAddress"]
+    symbol = f"{pairs[0]['baseToken']['symbol']}@{chain}:{pool_address}"
+    try:
+        df = await dexscreener_provider.fetch_ohlcv(symbol, interval, 200)
+    except ProviderError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    candles = [
+        {"time": int(ts.timestamp()), "open": float(row.open), "high": float(row.high),
+         "low": float(row.low), "close": float(row.close)}
+        for ts, row in df.iterrows()
+    ]
+    return {"symbol": symbol, "pool_address": pool_address, "candles": candles}
 
 
 @app.get("/api/onchain/tokens/search")
