@@ -1229,5 +1229,10 @@
       "backend/tests/test_onchain_watchlist_autotrade.py"
     ],
     "next": "La fusione piena della UI wallet dentro il DOM della tab Trading (niente piu' link a una pagina separata, stessi moduli ES riusati inline) resta da fare — quella UI ha il suo ciclo di stato/polling indipendente e portarla dentro senza romperla vale una sessione a se'. Sul lato Fase 4: la vendita on-chain resta bloccata finche' i decimali del token base non vengono salvati da qualche parte (DexScreener non li da' nella ricerca; andrebbero letti con una decimals() reale al momento dell'aggiunta alla watchlist, stessa idea usata qui per USDC/USDG). Nessun invio reale e' mai stato provato su Robinhood Chain in nessuna sessione — resta vero anche qui."
+  },
+  "seed-0086": {
+    "status": "risolto",
+    "at": 1790190194,
+    "summary": "Causa: i quattro tasti erano segnaposto grafici (span con aria-hidden, nessun gestore di click) lasciati dal redesign 'finché non esistono le pagine'. Ora sono pulsanti veri: Strategie e Attività aprono la tab Strategie / Storico del pannello in basso e ci scorrono sopra, Impostazioni apre il foglio Limiti & sicurezza, Wallet torna in cima sulle Posizioni. Il tasto evidenziato segue anche i click fatti direttamente sulle tab in basso. Senza wallet sulla chain avvisa invece di non fare nulla. Nota: la barra si vede solo sopra i 900px di larghezza, come prima."
   }
 }

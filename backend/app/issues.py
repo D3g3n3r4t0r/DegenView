@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0086", "Wallet on-chain: i tasti Strategie, Attività e Impostazioni in alto non rispondono",
+     "Segnalato dal progetto 'Onchain app performance e pulsanti': su /onchain-app.html la barra in alto mostra Wallet / Strategie / Attività / Impostazioni, ma cliccare le ultime tre non fa nulla.",
+     "media"),
     ("seed-0085", "Fase 1 del trading automatico on-chain: wallet generato sul server, sola lettura",
      "Lorenzo: 'si potrebbe iniziare ad imbastire il sistema per il trading automatico anche su wallet on-chain'. Chiarito con lui: custodia della chiave sul server (non un servizio esterno), nessuna conferma manuale per operazione — l'automazione deve dipendere solo dalla strategia — e wallet 'privacy driven' nel senso di generato da zero da noi, mai legato a un'identita', non tecniche di offuscamento on-chain. Chain scelte: Solana e Robinhood Chain (L2 Arbitrum Orbit di Robinhood, live da luglio 2026, chain id 4663). Questa e' solo la Fase 1 del piano (generazione chiave + saldo, nessuna firma reale) — le fasi successive (simulazione, poi esecuzione vera con tetti/allowlist) restano da fare, apposta.",
      "media"),

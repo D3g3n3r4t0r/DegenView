@@ -149,8 +149,10 @@
       background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 4px;
       @container (width >= 900px) { display: flex; }
     }
-    & .nav-pills span {
-      padding: 8px 15px; border-radius: 10px; font-size: 13px; font-weight: 600; color: var(--ink-dim);
+    & .nav-pills button {
+      padding: 8px 15px; border: 0; border-radius: 10px; background: none; cursor: pointer;
+      font: inherit; font-size: 13px; font-weight: 600; color: var(--ink-dim);
+      &:hover { color: var(--ink); }
       &.is-current { background: var(--raised); color: var(--ink); }
     }
     & .topbar-right { display: flex; align-items: center; gap: 8px; margin-inline-start: auto; justify-self: end; flex-wrap: wrap; }
@@ -934,10 +936,11 @@
            history.back() — questa pagina si apre anche da zero (QR, link
            salvato) e li' "indietro" non avrebbe dove andare. -->
       <a class="brand" href="/" title="Torna al sito"><span class="brand-dot" aria-hidden="true"></span><h1>Liquidity Engine · Wallet</h1></a>
-      <!-- Solo "Wallet" e' una pagina vera oggi: le altre restano come
-           riferimento visivo del posto dove finiranno, non link rotti. -->
-      <nav class="nav-pills" aria-hidden="true">
-        <span class="is-current">Wallet</span><span>Strategie</span><span>Attività</span><span>Impostazioni</span>
+      <!-- Scorciatoie dentro la stessa pagina: Strategie e Attivita' aprono
+           la tab omonima del pannello in basso, Impostazioni il foglio dei
+           limiti. Nessuna pagina separata esiste ancora. -->
+      <nav class="nav-pills" id="nav-pills" aria-label="Sezioni">
+        <button type="button" class="is-current" data-nav="wallet" aria-current="true">Wallet</button><button type="button" data-nav="strategies">Strategie</button><button type="button" data-nav="history">Attività</button><button type="button" data-nav="settings">Impostazioni</button>
       </nav>
       <div class="topbar-right">
         <div class="switcher" id="chain-switch" data-selected="solana" role="tablist" aria-label="Chain">
