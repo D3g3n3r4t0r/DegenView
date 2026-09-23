@@ -182,6 +182,25 @@
       { key: "slope_threshold_sigma", label: "Soglia pendenza (σ)", type: "number", min: 0, max: 3, step: 0.1, default: 0 },
       { key: "slope_sigma_length", label: "Finestra σ pendenza", type: "number", min: 10, default: 100 },
     ],
+    // Lorenzo sulle candele da un minuto dei token on-chain: stesso incrocio
+    // sulla pendenza, filtri pensati per un token di poche ore (VWAP dal
+    // lancio al posto della EMA lunga, regime per token, trailing stop).
+    "Lorenzo HF (minuti on-chain)": [
+      { key: "len", label: "Lunghezza media", type: "number", min: 2, default: 30 },
+      { key: "slopeFlen", label: "Slope veloce", type: "number", min: 1, default: 4 },
+      { key: "slopeSlen", label: "Slope lenta", type: "number", min: 1, default: 14 },
+      { key: "slope_threshold_sigma", label: "Soglia pendenza (σ)", type: "number", min: 0, max: 3, step: 0.1, default: 0.5 },
+      { key: "slope_sigma_length", label: "Finestra σ pendenza", type: "number", min: 10, default: 60 },
+      { key: "vwap_filter", label: "Sopra la VWAP dal lancio", type: "checkbox", default: true },
+      { key: "er_len", label: "Finestra efficienza", type: "number", min: 2, default: 10 },
+      { key: "er_min", label: "Efficienza minima", type: "number", min: 0, max: 1, step: 0.05, default: 0.5 },
+      { key: "vr_len", label: "Finestra regime", type: "number", min: 10, default: 60 },
+      { key: "vr_min", label: "Regime minimo (VR)", type: "number", min: 0, max: 3, step: 0.1, default: 1.0 },
+      { key: "volume_len", label: "Finestra volume", type: "number", min: 3, default: 30 },
+      { key: "volume_mult", label: "Picco di volume (x)", type: "number", min: 0, step: 0.1, default: 0 },
+      { key: "atr_len", label: "Lunghezza ATR", type: "number", min: 2, default: 14 },
+      { key: "trail_atr", label: "Trailing stop (ATR)", type: "number", min: 0, step: 0.5, default: 4 },
+    ],
     "Accumulo / Distribuzione (long-term)": [
       { key: "enable_divergence", label: "Divergenza RSI su swing", type: "checkbox", default: true },
       { key: "enable_contraction", label: "Breakout da contrazione volatilità", type: "checkbox", default: true },

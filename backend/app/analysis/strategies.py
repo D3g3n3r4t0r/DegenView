@@ -351,6 +351,130 @@ def _wilder_rma(series: pd.Series, length: int) -> pd.Series:
     return series.ewm(alpha=1 / length, adjust=False).mean()
 
 
+# Lorenzo on minute candles of young on-chain tokens. Lorenzo asked for "la
+# logica di quella di Lorenzo applicata ad un time frame sui minuti, con dei
+# filtri diversi", trend-following only.
+#
+# The core is unchanged: slope of a moving average, fast/slow EMA of that
+# slope, long while fast > slow, out at the crossunder. What changes is
+# everything the daily version takes for granted:
+#   - a 268-bar trend EMA does not exist on a token that is a few hours old.
+#     The trend filter becomes the VWAP anchored at the first candle: price
+#     above it means the average buyer since launch is in profit;
+#   - minute returns on young DEX pools are mostly anti-persistent (variance
+#     ratio < 1 on ~80% of 98 pools measured in Sept 2026): a rise is more
+#     often given back than extended, and a trend-follower there pays the
+#     ~1.6% DEX round trip on every fake move. The regime gate replaces the
+#     volatility filter: enter only while the token's own rolling variance
+#     ratio says moves are persisting. On that sample it was the one filter
+#     that mattered (mean per pool -20% -> ~0 before the others);
+#   - Kaufman's efficiency ratio keeps only moves that go somewhere, and the
+#     slope threshold in sigma (measured to pay on agitated pairs) is on;
+#   - a pump can give back everything in two candles, well before the slope
+#     EMAs cross. A trailing stop in ATR multiples closes the trade first, and
+#     after any exit a fresh crossover is needed before buying again, so one
+#     trend is never paid for twice. It cannot help against a single-candle
+#     rug: the fill is the next open, wherever that is.
+# The volume burst filter is there but off: on the same sample it did not
+# add anything once the regime gate was on.
+# Long only: on-chain spot cannot go short.
+LORENZO_HF_DEFAULT_PARAMS = {
+    "len": 30,
+    "slopeFlen": 4,
+    "slopeSlen": 14,
+    "slope_threshold_sigma": 0.5,
+    "slope_sigma_length": 60,
+    "vwap_filter": True,
+    "volume_len": 30,
+    "volume_mult": 0.0,
+    "er_len": 10,
+    "er_min": 0.5,
+    "vr_len": 60,
+    "vr_min": 1.0,
+    "atr_len": 14,
+    "trail_atr": 4.0,
+}
+
+
+def compute_lorenzo_hf_signals(df: pd.DataFrame, params: dict | None = None) -> pd.DataFrame:
+    p = {**LORENZO_HF_DEFAULT_PARAMS, **(params or {})}
+    close, high, low, volume = df["close"], df["high"], df["low"], df["volume"]
+
+    ma = close.ewm(span=int(p["len"]), adjust=False).mean()
+    slope = ma.diff() / ma
+    fast = slope.ewm(span=int(p["slopeFlen"]), adjust=False).mean()
+    slow = slope.ewm(span=int(p["slopeSlen"]), adjust=False).mean()
+    crossover = (fast.shift(1) <= slow.shift(1)) & (fast > slow)
+    crossunder = (fast.shift(1) >= slow.shift(1)) & (fast < slow)
+
+    ok = fast > slow
+    k = float(p["slope_threshold_sigma"] or 0.0)
+    if k > 0:
+        sigma = slope.rolling(int(p["slope_sigma_length"]), min_periods=int(p["slopeSlen"])).std(ddof=0)
+        ok &= fast > k * sigma
+    if p["vwap_filter"]:
+        typical = (high + low + close) / 3
+        cum_vol = volume.cumsum()
+        vwap = (typical * volume).cumsum() / cum_vol.where(cum_vol > 0)
+        ok &= close > vwap.fillna(typical.expanding().mean())
+    if p["volume_mult"] and p["volume_mult"] > 0:
+        n = int(p["volume_len"])
+        ref = volume.shift(1).rolling(n, min_periods=max(3, n // 3)).median()
+        burst = volume.rolling(3, min_periods=1).max() >= p["volume_mult"] * ref
+        ok &= burst & (ref > 0)
+    if p["er_min"] and p["er_min"] > 0:
+        n = int(p["er_len"])
+        path = close.diff().abs().rolling(n).sum()
+        ok &= (close - close.shift(n)) / path.where(path > 0) >= p["er_min"]
+    if p["vr_min"] and p["vr_min"] > 0:
+        n, q = int(p["vr_len"]), 4
+        log_c = np.log(close.where(close > 0))
+        var_1 = log_c.diff().rolling(n).var()
+        var_q = log_c.diff(q).rolling(n).var()
+        ok &= var_q / (q * var_1.where(var_1 > 0)) >= p["vr_min"]
+
+    prev_close = close.shift(1)
+    tr = pd.concat([high - low, (high - prev_close).abs(), (low - prev_close).abs()], axis=1).max(axis=1)
+    atr = _wilder_rma(tr, int(p["atr_len"])).to_numpy()
+
+    # Stateful on purpose: the trailing stop needs the high since entry, and
+    # confirmed_events re-enters on any bar where entry_long is true — so this
+    # emits edges only, never an entry and an exit on the same bar.
+    ok_a = ok.fillna(False).to_numpy()
+    xo, xu = crossover.fillna(False).to_numpy(), crossunder.fillna(False).to_numpy()
+    close_a, high_a = close.to_numpy(), high.to_numpy()
+    trail = float(p["trail_atr"] or 0.0)
+    warmup = int(p["slopeSlen"])
+    n_bars = len(df)
+    entry = np.zeros(n_bars, dtype=bool)
+    exit_ = np.zeros(n_bars, dtype=bool)
+    in_pos, armed, peak = False, True, 0.0
+    for i in range(warmup, n_bars):
+        if in_pos:
+            peak = max(peak, high_a[i])
+            stopped = trail > 0 and np.isfinite(atr[i]) and close_a[i] < peak - trail * atr[i]
+            if xu[i] or stopped:
+                exit_[i] = True
+                in_pos, armed = False, False
+            continue
+        if xo[i]:
+            armed = True
+        if armed and ok_a[i]:
+            entry[i] = True
+            in_pos, peak = True, high_a[i]
+
+    false = pd.Series(False, index=df.index)
+    return pd.DataFrame(
+        {
+            "entry_long": pd.Series(entry, index=df.index),
+            "entry_short": false,
+            "exit_long": pd.Series(exit_, index=df.index),
+            "exit_short": false,
+        },
+        index=df.index,
+    )
+
+
 # RSI + Bollinger Bands mean-reversion, ported from a Pine Script v4
 # indicator the user calls "LKI Trading" — supplied as two separate scripts
 # (one for the long alert, one for the short alert), combined here into one.
@@ -441,6 +565,7 @@ STRATEGY_REGISTRY = {
     "Accumulo / Distribuzione (long-term)": compute_exhaustion_signals,
     "Gabriele (RSI+BB reversal)": compute_lki_signals,
     "Gabriele 2 (RSI+BB long/short)": compute_lki2_signals,
+    "Lorenzo HF (minuti on-chain)": compute_lorenzo_hf_signals,
 }
 AVAILABLE_STRATEGIES = list(STRATEGY_REGISTRY.keys())
 DEFAULT_STRATEGY = AVAILABLE_STRATEGIES[0]
