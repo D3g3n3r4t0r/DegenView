@@ -2098,3 +2098,35 @@ ruff pulito, `node --check` pulito.
 Aggiornata anche la voce `seed-0085` in `resolutions.json` con lo stato di
 questa sessione — resta "in corso": la fusione piena della UI e la vendita
 on-chain (decimali del token) sono i due pezzi veri che restano.
+
+## Integrazione dei 4 lavori paralleli sul piano wallet on-chain (2026-09-23)
+
+Lorenzo: "applica tutto il piano con agent e consuma meno token possibili".
+Lanciati 4 agenti in worktree isolate, in parallelo: (1) allowlist pool +
+size dinamica sulla liquidita', (2) TWAP a fette + riconciliazione/recovery
+da crash, (3) osservabilita' SRE (fallback multi-RPC, /admin/status,
+correlation id, alert Telegram di rischio), (4) Fase 4 (mint address nella
+ricerca DEX, sblocco auto-trade BUY dalla watchlist) + Fase 5 (link al
+wallet dentro la tab Trading del sito).
+
+Integrati in sequenza con `git merge` sui rispettivi branch worktree-agent-*.
+Tre merge su quattro hanno avuto conflitti veri (non auto-risolvibili),
+sempre per lo stesso motivo: due agenti diversi hanno aggiunto codice
+all'inizio delle stesse funzioni (`execute_order`/`simulate_order` in
+execute.py/simulate.py, le tabelle SQL in `_init_db()` di ledger.py) —
+mai una vera incompatibilita' di design, solo due aggiunte indipendenti
+nello stesso punto del file. Risolti a mano tenendo entrambe le parti
+(correlation_id generato prima, poi allowlist/size dinamica, poi il check
+di rischio; entrambe le CREATE TABLE mantenute).
+
+Suite finale dopo tutti i merge: 684 passed, 0 falliti, ruff pulito,
+`node --check` pulito su tutti i moduli onchain. Non riverificato dal vivo
+con Playwright dopo il merge (lo aveva gia' fatto l'agente 4 prima di
+integrare) — se qualcosa nella UI sembra rotto dopo il deploy, e' il primo
+posto da controllare.
+
+Resta dal piano, dopo questa sessione: MEV/Jito bundle su Solana, resume
+automatica di un TWAP job dopo un riavvio (il job e' persistito ma nessun
+scheduler lo riprende da solo), fusione piena della UI wallet nel DOM
+della tab Trading (oggi e' un link, non fusa), vendita on-chain dalla
+watchlist (servono i decimali del token base, non salvati).
