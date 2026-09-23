@@ -2709,6 +2709,12 @@ pool senza scambi = liquidita' zero). Un token per ticker. DexScreener
 resta solo come ripiego se la fonte non risponde. GeckoTerminal da' 429
 sopra ~30 richieste/minuto: la cache e' di 60s per (chain, query).
 
+Merge con main (stessa sessione): nel frattempo `main` ha ricevuto il
+layout telefono del Pilota (menu ⋯, swap a passi, stesso riordino
+grafico → ordine → posizioni). Il mio blocco `@container (width < 640px)`
+e' stato tolto perche' doppione; di questa PR restano il flusso token
+unico, il picker e la ricerca ticker.
+
 ---
 
 ## Deploy congiunto #70–#73 — 2026-09-23
