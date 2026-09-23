@@ -2,8 +2,9 @@
  * Attivare le strategie dell'archivio (Lorenzo, Gabriele, Accumulo/
  * Distribuzione) sui token di questo wallet — non un secondo motore:
  * stessa Watchlist, stessa API, stesso trading automatico on-chain che
- * gia' sa comprare e vendere da questa sessione. Qui e' solo l'interfaccia,
- * filtrata ai soli token collegabili a QUESTA chain.
+ * gia' sa comprare e vendere da questa sessione. Sempre visibile nel
+ * pannello inferiore a tab, filtrata ai soli token collegabili a QUESTA
+ * chain — insieme a posizioni/ordini/storico, non in un pannello a se'.
  *
  * Aggiungere un NUOVO token resta nella tab Watchlist del sito: la
  * ricerca per ticker li' risolve gia' simbolo DEX completo (BASE@chain:
@@ -13,7 +14,6 @@
  */
 import * as api from "@onchain/api.js";
 import { ApiError } from "@onchain/api.js";
-import * as sheets from "@onchain/sheets.js";
 import { state } from "@onchain/store.js";
 
 function parseChainFromSymbol(symbol) {
@@ -21,30 +21,29 @@ function parseChainFromSymbol(symbol) {
   return m ? m[1] : null;
 }
 
-export async function openStrategies() {
+export async function mountStrategies(container) {
   const chain = state.chain;
-  sheets.openSheet("Strategie", "Le stesse strategie dell'archivio, sui token di questo wallet — stesso motore, stessi tetti di rischio.");
-  sheets.setMessage("Leggo la watchlist…");
+  container.innerHTML = "<p class='sheet-note'>Leggo la watchlist…</p>";
 
   let strategies = [];
   let entries = [];
   try {
     [strategies, entries] = await Promise.all([api.getStrategies(), api.getWatchlist()]);
   } catch (error) {
-    sheets.setMessage(error instanceof ApiError ? error.message : "Errore inatteso.", "is-error");
+    container.innerHTML = `<p class="sheet-note is-error">${error instanceof ApiError ? error.message : "Errore inatteso."}</p>`;
     return;
   }
 
   const onchainEntries = entries.filter((e) => e.base_token_address && parseChainFromSymbol(e.symbol) === chain);
-  sheets.setBody(`
+  container.innerHTML = `
     <p class="swap-detail">Per aggiungere un nuovo token usa la ricerca nella tab Watchlist del sito — qui attivi solo quelli gia' presenti.</p>
     <ul id="strategies-list" class="tx-list"></ul>
-  `);
-  paintList(onchainEntries, strategies);
+  `;
+  paintList(container, onchainEntries, strategies);
 }
 
-function paintList(entries, strategies) {
-  const list = sheets.sheetBody().querySelector("#strategies-list");
+function paintList(container, entries, strategies) {
+  const list = container.querySelector("#strategies-list");
   if (!list) return;
   if (!entries.length) {
     list.innerHTML = "<li>Nessun token di questa chain in watchlist ancora.</li>";

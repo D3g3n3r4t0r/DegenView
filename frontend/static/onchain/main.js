@@ -1,10 +1,11 @@
 /**
  * Punto d'ingresso della schermata wallet.
  *
- * Tiene insieme tre cose e nient'altro: la sessione, il disegno della
- * schermata per la chain scelta, e il collegamento fra i quattro pulsanti e
- * le sheet. Tutto il resto (rete, formattazione, grafico, pannelli) sta nei
- * moduli accanto.
+ * Tiene insieme la sessione, il disegno della schermata per la chain
+ * scelta, e il collegamento fra i pannelli sempre visibili (grafico,
+ * ordine, posizioni/ordini/storico/strategie) e i pochi dialog rimasti
+ * (Ricevi, Limiti, Simula, Rivela chiave). Tutto il resto sta nei moduli
+ * accanto — questo file monta e smonta, non disegna i form.
  */
 import * as api from "@onchain/api.js";
 import { freshness, formatToken, formatUsd, shortAddress, usdParts } from "@onchain/format.js";
@@ -12,11 +13,11 @@ import { startReveal } from "@onchain/reveal.js";
 import * as sheets from "@onchain/sheets.js";
 import { drawSparkline } from "@onchain/sparkline.js";
 import { appendHistory, chainInfo, readCache, readHistory, state, writeCache } from "@onchain/store.js";
-import { openSwap } from "@onchain/swap.js";
-import { openLimitOrder, openOrderDiary } from "@onchain/limitOrders.js";
-import { openChart } from "@onchain/chart.js";
-import { openStrategies } from "@onchain/strategies.js";
-import { openPortfolio } from "@onchain/portfolio.js";
+import { mountSwap } from "@onchain/swap.js";
+import { mountLimitOrder, mountOpenOrders, mountHistory } from "@onchain/limitOrders.js";
+import { mountChart, resetForChainSwitch } from "@onchain/chart.js";
+import { mountStrategies } from "@onchain/strategies.js";
+import { mountPortfolio } from "@onchain/portfolio.js";
 
 // Sulla pagina a se' (onchain-app.html) la radice e' il documento intero.
 // Fusa dentro la tab Trading, invece, questo modulo viene importato dentro
@@ -38,8 +39,11 @@ const view = {
   spark: $("#spark"),
   status: $("#status"),
   statusText: $("#status-text"),
-  assets: $("#assets"),
-  assetList: $("#asset-list"),
+  marketOrderRow: $("#market-order-row"),
+  marketPanel: $("#market-panel"),
+  orderPanelBody: $("#order-panel-body"),
+  bottomPanel: $("#bottom-panel"),
+  bottomPanelBody: $("#bottom-panel-body"),
   actions: $("#actions"),
   reveal: $("#reveal-row"),
   empty: $("#onchain-empty-state"),
@@ -55,9 +59,8 @@ function paintChainStatic() {
   const hasWallet = Boolean(wallet || cached);
 
   view.chainLabel.textContent = `${label}${suffix}`;
-  for (const node of [view.actions, view.status, view.reveal]) node.hidden = !hasWallet;
+  for (const node of [view.actions, view.status, view.reveal, view.marketOrderRow, view.bottomPanel]) node.hidden = !hasWallet;
   view.empty.hidden = hasWallet;
-  view.assets.hidden = true;
   view.balance.hidden = !hasWallet;
   view.address.hidden = !hasWallet;
 
@@ -100,6 +103,7 @@ async function selectChain(next) {
   const swap = () => paintChainStatic();
   if (document.startViewTransition) await document.startViewTransition(swap).updateCallbackDone;
   else swap();
+  resetForChainSwitch(); // il token in vista non appartiene piu' alla chain nuova
   loadChainData();
 }
 
@@ -108,8 +112,10 @@ async function selectChain(next) {
 function loadChainData() {
   if (view.empty.hidden === false) return;  // nessun wallet: niente da chiedere
   refreshBalance();
-  refreshPositions();
   refreshStatus();
+  mountChart(view.marketPanel);
+  mountOrderTab(currentOrderTab);
+  mountBottomTab(currentBottomTab);
 }
 
 let balanceRetry = null;
@@ -126,38 +132,11 @@ async function refreshBalance() {
     view.liveDot.classList.add("is-live");
     view.fresh.textContent = "aggiornato ora";
     drawSparkline(view.spark, appendHistory(chain, reading.native_usd_value ?? reading.native_balance), sparkFormatter());
-    refreshPositions();
   } catch (error) {
     if (chain !== state.chain) return;
     view.fresh.textContent = `${error.message} — riprovo`;
     balanceRetry = setTimeout(refreshBalance, 5000);
   }
-}
-
-// La lista compare solo se c'e' davvero piu' del saldo nativo: con le sole
-// posizioni a zero ripeterebbe, riga per riga, il numero gia' scritto sopra.
-async function refreshPositions() {
-  const chain = state.chain;
-  let positions = [];
-  try { positions = await api.getPositions(chain); } catch { return; }
-  if (chain !== state.chain) return;
-
-  if (!positions.length) { view.assets.hidden = true; return; }
-
-  const { unit } = chainInfo();
-  const reading = state.balance ?? readCache(chain);
-  const nativeValue = reading?.native_usd_value != null
-    ? `<b>${formatUsd(reading.native_usd_value)}</b><small>${formatToken(reading.native_balance)} ${unit}</small>`
-    : `<b>${reading ? formatToken(reading.native_balance) : "—"} ${unit}</b>`;
-
-  view.assetList.innerHTML = `
-    <li class="asset">
-      <span class="asset-mark">${unit.slice(0, 1)}</span>
-      <span class="asset-name"><b>${unit}</b><small>nativo · paga il gas</small></span>
-      <span class="asset-value">${nativeValue}</span>
-    </li>
-    ${positions.map(sheets.positionRow).join("")}`;
-  view.assets.hidden = false;
 }
 
 // Una riga sola, e dice la cosa che puo' cambiare: se l'esecuzione reale e'
@@ -174,6 +153,61 @@ async function refreshStatus() {
       : "Sola lettura — nessuna firma parte da questa pagina.";
   } catch { /* resta la riga di default, che e' quella prudente */ }
 }
+
+/* --------------------------------------------------------- pannello ordine */
+// Swap e Limite condividono lo stesso spazio, sempre visibile — due tab,
+// non due bottoni che aprono due sheet diverse.
+
+let currentOrderTab = "swap";
+
+function mountOrderTab(tab) {
+  currentOrderTab = tab;
+  $$("#order-tabs .mo-side-tab").forEach((t) => {
+    const active = t.dataset.orderTab === tab;
+    t.classList.toggle("mo-tab-active", active);
+    t.setAttribute("aria-selected", String(active));
+  });
+  if (tab === "swap") {
+    mountSwap(view.orderPanelBody, {
+      onExecuted: () => { refreshBalance(); mountBottomTab(currentBottomTab); toast("Swap inviato", "verifica la firma nello storico"); },
+    });
+  } else {
+    mountLimitOrder(view.orderPanelBody, {
+      onPlaced: () => { mountBottomTab(currentBottomTab); toast("Ordine limite piazzato", "resta in attesa nello storico"); },
+    });
+  }
+}
+
+$$("#order-tabs .mo-side-tab").forEach((tab) => {
+  tab.addEventListener("click", () => mountOrderTab(tab.dataset.orderTab));
+});
+
+/* -------------------------------------------------- pannello inferiore */
+// Posizioni / Ordini aperti / Storico / Strategie: "cosa ho, cosa ho
+// ordinato, cosa e' successo" in un colpo d'occhio, non tre pannelli
+// separati da riaprire ogni volta.
+
+let currentBottomTab = "positions";
+
+function mountBottomTab(tab) {
+  currentBottomTab = tab;
+  $$("#bottom-tabs .mo-side-tab").forEach((t) => {
+    const active = t.dataset.bottomTab === tab;
+    t.classList.toggle("mo-tab-active", active);
+    t.setAttribute("aria-selected", String(active));
+  });
+  const mounters = {
+    positions: mountPortfolio,
+    orders: mountOpenOrders,
+    history: mountHistory,
+    strategies: mountStrategies,
+  };
+  mounters[tab]?.(view.bottomPanelBody);
+}
+
+$$("#bottom-tabs .mo-side-tab").forEach((tab) => {
+  tab.addEventListener("click", () => mountBottomTab(tab.dataset.bottomTab));
+});
 
 /* ------------------------------------------------------------------ toast */
 
@@ -206,20 +240,10 @@ view.address.addEventListener("click", async (event) => {
 
 const SHEETS = {
   receive: () => sheets.openReceive(),
-  risk: () => sheets.openRisk(() => { refreshStatus(); refreshPositions(); }),
+  risk: () => sheets.openRisk(() => { refreshStatus(); mountBottomTab(currentBottomTab); }),
   simulate: () => sheets.openSimulate({
-    onAccepted: () => { refreshPositions(); refreshStatus(); toast("Simulazione accettata", "registrata nel ledger"); },
+    onAccepted: () => { mountBottomTab(currentBottomTab); refreshStatus(); toast("Simulazione accettata", "registrata nel ledger"); },
   }),
-  swap: () => openSwap({
-    onExecuted: () => { refreshBalance(); refreshPositions(); toast("Swap inviato", "verifica la firma nello storico"); },
-  }),
-  limit: () => openLimitOrder({
-    onPlaced: () => toast("Ordine limite piazzato", "resta in attesa nello storico"),
-  }),
-  diary: () => openOrderDiary(),
-  chart: () => openChart(),
-  strategies: () => openStrategies(),
-  portfolio: () => openPortfolio(),
 };
 $$("[data-sheet]").forEach((button) =>
   button.addEventListener("click", () => SHEETS[button.dataset.sheet]?.()));

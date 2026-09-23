@@ -1,5 +1,8 @@
 /**
- * Swap dal sito — Fase 4 vera, non simulata.
+ * Swap — pannello ordine, SEMPRE VISIBILE (non piu' una sheet): la
+ * revisione "deve essere come un exchange" (Lorenzo) ha portato anche
+ * questo fuori dai pannelli a comparsa — un vero exchange non nasconde
+ * il form d'ordine dietro un tap.
  *
  * Due tempi separati anche nell'interfaccia, non solo nel backend:
  * 1. Preventivo: nessuna chiave, nessun impegno. Si aggiorna da solo mentre
@@ -49,10 +52,14 @@ const fromBaseUnits = (amount, decimals) => Number(amount) / 10 ** decimals;
 // non paga il gas, quindi non ha bisogno di riserva.
 const GAS_RESERVE = { solana: 0.003, robinhood: 0.0008 };
 
+let hostEl = null;
+const host = () => hostEl;
+
 let leg = { in: null, out: null };
 let latestQuote = null;
 let debounceTimer = null;
 let tokenCache = new Map();
+let onExecutedCb = null;
 
 function availableToSell(chain) {
   const native = state.balance?.native_balance;
@@ -78,17 +85,21 @@ async function resolveToken(chain, address) {
   return resolved;
 }
 
-export async function openSwap({ onExecuted } = {}) {
+/** Monta il form di swap dentro `container`, che resta cosi' finche' non
+ * viene chiamato di nuovo (cambio chain) o smontato da chi possiede il
+ * pannello ordine. Un token preselezionato (dal grafico) evita di doverlo
+ * scegliere due volte. */
+export async function mountSwap(container, { onExecuted, presetToken } = {}) {
+  hostEl = container;
+  onExecutedCb = onExecuted ?? null;
   const chain = state.chain;
   const native = NATIVE[chain];
-  const defaultOut = DEFAULT_OUTPUT[chain];
+  const defaultOut = presetToken ?? DEFAULT_OUTPUT[chain];
   leg = {
     in: { ...native, priceUsd: state.balance?.native_price_usd ?? null, isNative: true },
-    out: { ...defaultOut, priceUsd: null, isNative: false },
+    out: { ...defaultOut, priceUsd: defaultOut.priceUsd ?? null, isNative: defaultOut.address === native.address },
   };
   tokenCache = new Map();
-
-  sheets.openSheet("Swap", "Scambia qualunque token su questa chain — esecuzione reale sul wallet.");
 
   let armed = false;
   try { armed = Boolean((await api.getRiskStatus(chain)).execution_enabled); } catch { /* resta spento */ }
@@ -99,15 +110,14 @@ export async function openSwap({ onExecuted } = {}) {
   leg.in.priceUsd = state.balance?.native_price_usd ?? null;
 
   paintForm(armed);
-  onExecuted && (openSwap._onExecuted = onExecuted);
   const available = availableToSell(chain);
-  const amountInput = sheets.sheetBody().querySelector("#swap-amount");
+  const amountInput = host().querySelector("#swap-amount");
   if (available != null && available > 0) { amountInput.value = available; scheduleQuote(armed); }
 }
 
 function paintForm(armed) {
   const chain = state.chain;
-  sheets.setBody(`
+  host().innerHTML = `
     ${armed ? "" : `<p class="sheet-note is-warn">Esecuzione reale spenta su questo server: il preventivo funziona, l'invio no finché non viene accesa.</p>`}
     <form class="form" id="swap-form">
       <label for="swap-amount">Vendi</label>
@@ -154,15 +164,15 @@ function paintForm(armed) {
       <button type="submit" class="btn-primary" id="swap-submit" disabled>Inserisci una size</button>
     </form>
     <output class="outcome" id="swap-outcome" hidden></output>
-  `);
+  `;
 
-  const amountInput = sheets.sheetBody().querySelector("#swap-amount");
-  const submitButton = sheets.sheetBody().querySelector("#swap-submit");
-  const form = sheets.sheetBody().querySelector("#swap-form");
-  const maxButton = sheets.sheetBody().querySelector("#swap-max");
-  const confirmBox = sheets.sheetBody().querySelector("#swap-confirm-box");
-  const pctSlider = sheets.sheetBody().querySelector("#swap-pct-slider");
-  const pctVal = sheets.sheetBody().querySelector("#swap-pct-val");
+  const amountInput = host().querySelector("#swap-amount");
+  const submitButton = host().querySelector("#swap-submit");
+  const form = host().querySelector("#swap-form");
+  const maxButton = host().querySelector("#swap-max");
+  const confirmBox = host().querySelector("#swap-confirm-box");
+  const pctSlider = host().querySelector("#swap-pct-slider");
+  const pctVal = host().querySelector("#swap-pct-val");
 
   amountInput.addEventListener("input", () => { confirmBox.checked = false; scheduleQuote(armed); });
   confirmBox.addEventListener("change", () => scheduleQuote(armed));
@@ -180,8 +190,8 @@ function paintForm(armed) {
     pctSlider.addEventListener("input", () => { pctVal.value = pctSlider.value; applyPct(Number(pctSlider.value)); });
     pctVal.addEventListener("input", () => { pctSlider.value = pctVal.value; applyPct(Number(pctVal.value)); });
   }
-  sheets.sheetBody().querySelector("#swap-pick-in").addEventListener("click", () => pickToken("in", armed));
-  sheets.sheetBody().querySelector("#swap-pick-out").addEventListener("click", () => pickToken("out", armed));
+  host().querySelector("#swap-pick-in").addEventListener("click", () => pickToken("in", armed));
+  host().querySelector("#swap-pick-out").addEventListener("click", () => pickToken("out", armed));
   form.addEventListener("submit", (event) => { event.preventDefault(); if (confirmBox.checked) confirmAndExecute(armed); });
 }
 
@@ -191,7 +201,7 @@ function pickToken(side, armed) {
   const chain = state.chain;
   sheets.openTokenPicker(chain, {
     onPick: async ({ address }) => {
-      const submitButton = sheets.sheetBody().querySelector("#swap-submit");
+      const submitButton = host().querySelector("#swap-submit");
       if (submitButton) { submitButton.disabled = true; submitButton.textContent = "Verifico il token…"; }
       try {
         const resolved = await resolveToken(chain, address);
@@ -199,7 +209,7 @@ function pickToken(side, armed) {
         paintForm(armed);
       } catch (error) {
         if (submitButton) submitButton.textContent = "Riprova";
-        const detailEl = sheets.sheetBody().querySelector("#swap-detail");
+        const detailEl = host().querySelector("#swap-detail");
         if (detailEl) {
           detailEl.textContent = error instanceof ApiError ? error.message : "Token non riconosciuto.";
           detailEl.classList.add("is-warn");
@@ -211,20 +221,20 @@ function pickToken(side, armed) {
 
 function scheduleQuote(armed) {
   clearTimeout(debounceTimer);
-  const amountInput = sheets.sheetBody().querySelector("#swap-amount");
+  const amountInput = host().querySelector("#swap-amount");
   debounceTimer = setTimeout(() => requestQuote(amountInput.value, armed), 350);
 }
 
 async function requestQuote(rawAmount, armed) {
   const chain = state.chain;
   const amount = Number(rawAmount);
-  const outEl = sheets.sheetBody().querySelector("#swap-out");
-  const detailEl = sheets.sheetBody().querySelector("#swap-detail");
-  const inUsdEl = sheets.sheetBody().querySelector("#swap-in-usd");
-  const outUsdEl = sheets.sheetBody().querySelector("#swap-out-usd");
-  const submitButton = sheets.sheetBody().querySelector("#swap-submit");
-  const confirmBox = sheets.sheetBody().querySelector("#swap-confirm-box");
-  const confirmSummary = sheets.sheetBody().querySelector("#swap-confirm-summary");
+  const outEl = host().querySelector("#swap-out");
+  const detailEl = host().querySelector("#swap-detail");
+  const inUsdEl = host().querySelector("#swap-in-usd");
+  const outUsdEl = host().querySelector("#swap-out-usd");
+  const submitButton = host().querySelector("#swap-submit");
+  const confirmBox = host().querySelector("#swap-confirm-box");
+  const confirmSummary = host().querySelector("#swap-confirm-summary");
   if (!(amount > 0)) {
     latestQuote = null;
     outEl.textContent = "—";
@@ -283,8 +293,8 @@ async function confirmAndExecute(armed) {
   // mai un window.confirm() del browser dentro l'app.
   if (!latestQuote || !armed) return;
   const chain = state.chain;
-  const outcome = sheets.sheetBody().querySelector("#swap-outcome");
-  const submitButton = sheets.sheetBody().querySelector("#swap-submit");
+  const outcome = host().querySelector("#swap-outcome");
+  const submitButton = host().querySelector("#swap-submit");
 
   submitButton.disabled = true;
   submitButton.textContent = "Invio…";
@@ -320,7 +330,7 @@ async function confirmAndExecute(armed) {
     outcome.textContent = result.accepted
       ? `Inviato. Firma: ${result.tx_signature}`
       : result.reason;
-    if (result.accepted) openSwap._onExecuted?.();
+    if (result.accepted) onExecutedCb?.();
   } catch (error) {
     outcome.dataset.tone = "no";
     outcome.textContent = error instanceof ApiError ? error.message : "Errore inatteso.";
