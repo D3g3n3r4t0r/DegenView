@@ -193,4 +193,9 @@ def test_find_pool_and_fee_real_network_call_finds_the_weth_usdg_pool():
     result = _run(quotes.find_pool_and_fee(ROBINHOOD_WETH, ROBINHOOD_USDG))
     assert result is not None
     pool, fee = result
-    assert fee == 3000
+    # Non un fee tier fisso: su Robinhood Chain il pool WETH/USDG a 3000 e'
+    # stato affiancato da uno a 500 (2026-09-23), e find_pool_and_fee
+    # restituisce il primo tier che esiste. Il contratto e' "un pool vero su
+    # un tier noto", non quale tier il mercato usi oggi.
+    assert fee in quotes.ROBINHOOD_FEE_TIERS
+    assert pool == _run(quotes.get_pool(ROBINHOOD_WETH, ROBINHOOD_USDG, fee))
