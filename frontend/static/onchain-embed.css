@@ -315,7 +315,7 @@
     display: flex; flex-direction: column; gap: 4px;
 
     & label { font-size: 12px; color: var(--ink-dim); margin-block-start: 10px; }
-    & input, & select {
+    & input:not([type="checkbox"]):not([type="radio"]), & select {
       inline-size: 100%; padding: 10px 12px; border-radius: 9px;
       border: 1.5px solid var(--line); background: var(--raised); font-size: 15px;
       &:focus-visible { border-color: var(--accent); outline: none; }
