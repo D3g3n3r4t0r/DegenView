@@ -107,6 +107,9 @@ def test_rejected_by_risk_guardrail_never_signs(tmp_path, monkeypatch):
 def test_execution_disabled_signs_but_never_sends(tmp_path, monkeypatch):
     _fresh_db(tmp_path, monkeypatch)
     monkeypatch.setattr(execute.settings, "onchain_execution_enabled", False)
+    # Jito spento qui: questo test verifica il ramo generico "esecuzione
+    # disattivata", non il routing Jito (che ha i suoi test dedicati sotto).
+    monkeypatch.setattr(execute.settings, "onchain_use_jito", False)
     monkeypatch.setattr(execute.execution, "build_signed_solana_swap", _fake_build_signed)
     sent = {"called": False}
 
@@ -129,6 +132,7 @@ def test_execution_disabled_signs_but_never_sends(tmp_path, monkeypatch):
 def test_execution_enabled_sends_and_confirms(tmp_path, monkeypatch):
     _fresh_db(tmp_path, monkeypatch)
     monkeypatch.setattr(execute.settings, "onchain_execution_enabled", True)
+    monkeypatch.setattr(execute.settings, "onchain_use_jito", False)
     monkeypatch.setattr(execute.execution, "build_signed_solana_swap", _fake_build_signed)
     monkeypatch.setattr(execute.execution, "send_signed_solana_tx", _fake_send)
 
@@ -141,6 +145,68 @@ def test_execution_enabled_sends_and_confirms(tmp_path, monkeypatch):
     assert order["status"] == "confirmed"
     pos = ledger.get_position("u1", "solana", "TOKEN")
     assert pos["quantity"] == 5.0  # 10 USD / 2.0 USD per unita'
+
+
+def test_execution_enabled_with_jito_sends_bundle(tmp_path, monkeypatch):
+    """Con onchain_use_jito acceso (default), il percorso Solana prova
+    prima il bundle Jito (mockato: nessuna rete vera) e usa il bundle_id,
+    prefissato 'jito:', come tx_signature."""
+    _fresh_db(tmp_path, monkeypatch)
+    monkeypatch.setattr(execute.settings, "onchain_execution_enabled", True)
+    monkeypatch.setattr(execute.settings, "onchain_use_jito", True)
+    monkeypatch.setattr(execute.execution, "build_signed_solana_swap", _fake_build_signed)
+
+    async def _fake_price(chain):
+        return 150.0
+
+    async def _fake_tip_tx(private_key_hex, tip_account, tip_lamports):
+        assert tip_account in execute.jito.JITO_TIP_ACCOUNTS
+        assert tip_lamports >= execute.jito.JITO_MIN_TIP_LAMPORTS
+        return b"signed-tip-tx"
+
+    async def _fake_send_bundle(signed_tx_bytes, tip_tx_bytes):
+        assert signed_tx_bytes == b"signed-tx-bytes"
+        assert tip_tx_bytes == b"signed-tip-tx"
+        return "bundle-abc123"
+
+    async def _spy_send_direct(signed_tx_bytes):
+        raise AssertionError("non deve ricadere sull'invio diretto se Jito funziona")
+
+    monkeypatch.setattr(execute.prices, "native_price_usd", _fake_price)
+    monkeypatch.setattr(execute.execution, "build_signed_solana_tip_tx", _fake_tip_tx)
+    monkeypatch.setattr(execute.jito, "send_bundle_via_jito", _fake_send_bundle)
+    monkeypatch.setattr(execute.execution, "send_signed_solana_tx", _spy_send_direct)
+
+    result = _run(execute.execute_order(
+        "u1", "solana", "TOKEN", "lorenzo", "buy", 10.0, 0.5, 2.0, "deadbeef", _quote(),
+    ))
+    assert result["accepted"] is True
+    assert result["tx_signature"] == "jito:bundle-abc123"
+
+
+def test_jito_failure_falls_back_to_direct_send(tmp_path, monkeypatch):
+    """Se Jito non risponde in modo sensato, l'ordine non va perso: ricade
+    sull'invio diretto via RPC (il percorso esistente, mai rimosso)."""
+    _fresh_db(tmp_path, monkeypatch)
+    monkeypatch.setattr(execute.settings, "onchain_execution_enabled", True)
+    monkeypatch.setattr(execute.settings, "onchain_use_jito", True)
+    monkeypatch.setattr(execute.execution, "build_signed_solana_swap", _fake_build_signed)
+
+    async def _fake_price(chain):
+        return 150.0
+
+    async def _broken_tip_tx(private_key_hex, tip_account, tip_lamports):
+        raise RuntimeError("RPC blockhash non disponibile in questo test")
+
+    monkeypatch.setattr(execute.prices, "native_price_usd", _fake_price)
+    monkeypatch.setattr(execute.execution, "build_signed_solana_tip_tx", _broken_tip_tx)
+    monkeypatch.setattr(execute.execution, "send_signed_solana_tx", _fake_send)
+
+    result = _run(execute.execute_order(
+        "u1", "solana", "TOKEN", "lorenzo", "buy", 10.0, 0.5, 2.0, "deadbeef", _quote(),
+    ))
+    assert result["accepted"] is True
+    assert result["tx_signature"] == "fake-signature-123"
 
 
 def test_duplicate_idempotency_key_never_signs_twice(tmp_path, monkeypatch):

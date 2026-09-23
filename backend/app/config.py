@@ -63,6 +63,16 @@ class Settings(BaseSettings):
     onchain_max_usd_per_day: float = 100.0
     onchain_max_token_concentration_pct: float = 15.0  # % del capitale gestito in un solo token
 
+    # Piano MEV: instradare gli ordini Solana via Jito bundle invece
+    # dell'RPC diretto. Acceso di default: la richiesta a Jito (jito.py) e'
+    # verificata contro la doc reale e ricade su send_signed_solana_tx se
+    # non risponde (execute.py) — non e' un percorso che rischia di
+    # bloccare un ordine se Jito e' irraggiungibile. Quello che NON e'
+    # stato verificato dal vivo e' un invio reale con fondi veri (nessuna
+    # tip transaction vera mandata in questa sessione): per questo resta
+    # comunque dietro onchain_execution_enabled come ogni invio.
+    onchain_use_jito: bool = True
+
     twelve_data_api_key: str = ""
     twelve_data_base_url: str = "https://api.twelvedata.com"
 

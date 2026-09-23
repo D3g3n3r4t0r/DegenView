@@ -14,8 +14,12 @@ import httpx
 from eth_abi import encode as _abi_encode
 from eth_account import Account
 from eth_utils import to_checksum_address
+from solders.hash import Hash
 from solders.keypair import Keypair
-from solders.transaction import VersionedTransaction
+from solders.message import Message
+from solders.pubkey import Pubkey
+from solders.system_program import TransferParams, transfer
+from solders.transaction import Transaction, VersionedTransaction
 
 JUPITER_SWAP_URL = "https://lite-api.jup.ag/swap/v1/swap"
 ROBINHOOD_RPC = "https://rpc.mainnet.chain.robinhood.com"
@@ -50,6 +54,30 @@ async def build_signed_solana_swap(private_key_hex: str, quote: dict) -> bytes:
     tx = VersionedTransaction.from_bytes(raw)
     signed = VersionedTransaction(tx.message, [kp])
     return bytes(signed)
+
+
+async def build_signed_solana_tip_tx(private_key_hex: str, tip_account: str, tip_lamports: int) -> bytes:
+    """Costruisce e firma la SECONDA transazione di un bundle Jito: un
+    trasferimento SOL nativo (System Program, nessun programma custom) dal
+    wallet a uno degli 8 tip account ufficiali (vedi jito.py). Serve un
+    blockhash recente vero, letto dallo stesso RPC pubblico usato da
+    send_signed_solana_tx — non uno fittizio, altrimenti il bundle verrebbe
+    scartato per blockhash scaduto."""
+    kp = Keypair.from_bytes(bytes.fromhex(private_key_hex))
+    payload = {"jsonrpc": "2.0", "id": 1, "method": "getLatestBlockhash", "params": []}
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        resp = await client.post("https://api.mainnet-beta.solana.com", json=payload)
+    data = resp.json()
+    if "error" in data:
+        raise RuntimeError(f"getLatestBlockhash fallito: {data['error']}")
+    blockhash = Hash.from_string(data["result"]["value"]["blockhash"])
+    ix = transfer(TransferParams(
+        from_pubkey=kp.pubkey(), to_pubkey=Pubkey.from_string(tip_account), lamports=tip_lamports,
+    ))
+    msg = Message.new_with_blockhash([ix], kp.pubkey(), blockhash)
+    tx = Transaction.new_unsigned(msg)
+    tx.sign([kp], blockhash)
+    return bytes(tx)
 
 
 async def send_signed_solana_tx(signed_tx_bytes: bytes) -> str:
