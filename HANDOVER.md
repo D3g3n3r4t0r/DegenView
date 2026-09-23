@@ -2131,6 +2131,40 @@ scheduler lo riprende da solo), fusione piena della UI wallet nel DOM
 della tab Trading (oggi e' un link, non fusa), vendita on-chain dalla
 watchlist (servono i decimali del token base, non salvati).
 
+## Round 2 — chiusura del piano wallet on-chain (2026-09-23)
+
+Lorenzo: "DEVI COMPLETARE TUTTO, e mergare su main". Secondo giro di 4 agenti
+in worktree isolate sui 4 pezzi rimasti dal round 1: MEV/Jito bundle su
+Solana, resume automatico dei TWAP job dopo un riavvio, vendita on-chain
+dalla watchlist (decimali token via lookup on-chain reale), fusione piena
+della UI wallet nel DOM della tab Trading (non piu' un link).
+
+Il 4° agente (fusione UI) ha esaurito il limite di sessione a meta' lavoro
+ed e' terminato con `status: failed`, ma il lavoro nella sua worktree era
+completo e coerente — verificato e committato a mano (`a7a8147`) invece di
+rilanciarlo da zero.
+
+Merge in sequenza su `main`, 3 su 4 senza conflitti; l'ultimo (fusione UI)
+pulito anche lui. Un conflitto vero in `ledger.py` (due agenti diversi
+hanno aggiunto tabelle e funzioni nello stesso punto di `_init_db()`) —
+risolto tenendo entrambi i set, erano indipendenti. Un altro in `main.py`
+(branch buy/sell dell'auto-trade vs. instradamento Jito) risolto applicando
+`slippage_bps` calcolato in base a Jito a entrambi i rami.
+
+Verifica finale: 690 passed, 2 falliti (chiamate di rete vere, gia' note
+come intermittenti: `test_native_price_usd_real_network_call_robinhood`,
+`test_quote_robinhood_real_network_call`), ruff pulito. Pushato su
+`origin/main` (`29fb461`).
+
+Con questo il piano di sviluppo wallet on-chain e' applicato per intero:
+custody, simulate/execute su entrambe le chain, swap manuale con saldo
+reale e prezzi da DEX, TWAP con resume da crash, riconciliazione/discrepanze,
+allowlist pool + size dinamica, Jito MEV, osservabilita' SRE, auto-trade
+buy/sell dalla watchlist, UI fusa nella tab Trading. Resta aperto solo un
+punto operativo, non di codice: l'attivazione di `ONCHAIN_EXECUTION_ENABLED`
+sul server di produzione (vedi voce sotto), e la rotazione delle credenziali
+esposte durante quell'attivazione (password root Hetzner, secret in `.env`).
+
 ## Sessione 2026-09-23 (worktree separato) — MEV/Jito bundle su Solana
 
 Lorenzo (via piano di sviluppo wallet on-chain): "Solana: instradare via
