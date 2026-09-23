@@ -93,6 +93,7 @@ from app.trading.onchain import keys as onchain_keys
 from app.trading.onchain import ledger as onchain_ledger
 from app.trading.onchain import passkey as onchain_passkey
 from app.trading.onchain import pilot as onchain_pilot
+from app.trading.onchain import radar as onchain_radar
 from app.trading.onchain import prices as onchain_prices
 from app.trading.onchain import token_search as onchain_tokens
 from app.trading.onchain import quotes as onchain_quotes
@@ -1063,6 +1064,7 @@ async def lifespan(app: FastAPI):
     t7 = asyncio.create_task(_sniper_onchain_bridge_loop())
     t4 = asyncio.create_task(_weekly_recap_loop())
     t5 = asyncio.create_task(_watchdog_loop())
+    radar_task = asyncio.create_task(onchain_radar.radar_loop()) if settings.onchain_radar_enabled else None
     sniper_tasks: list[asyncio.Task] = []
     if settings.sniper_enabled:
         from app.sniper import cache as sniper_cache
@@ -1077,6 +1079,8 @@ async def lifespan(app: FastAPI):
     t7.cancel()
     t4.cancel()
     t5.cancel()
+    if radar_task:
+        radar_task.cancel()
     for t in sniper_tasks:
         t.cancel()
 
@@ -3271,6 +3275,63 @@ _PILOT_SIGNAL_WORDS = {
     "exit_long": "di vendita", "flip_to_short": "di vendita",
     "entry_short": "short", "exit_short": "chiusura short",
 }
+
+
+@app.get("/api/onchain/radar")
+async def onchain_radar_view(user: User = Depends(auth.get_current_user)) -> dict:
+    """Token giovani su Solana e Robinhood che una strategia dell'archivio
+    avrebbe tradato bene. Proposte, non ordini: vedi app/trading/onchain/radar.py."""
+    _require_onchain_enabled()
+    return onchain_radar.snapshot()
+
+
+@app.get("/api/onchain/radar/chart")
+async def onchain_radar_chart(
+    chain: Literal["solana", "robinhood"], pool: str, symbol: str,
+    interval: Literal["5m", "15m"] = "15m", user: User = Depends(auth.get_current_user),
+) -> dict:
+    _require_onchain_enabled()
+    try:
+        payload = await onchain_radar.chart_payload(chain, pool, symbol, interval)
+    except ProviderError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    payload["active"] = _radar_watch_strategies(user.id, onchain_radar.watch_symbol(symbol, chain, pool))
+    return payload
+
+
+def _radar_watch_strategies(owner_id: str, symbol: str) -> list[str]:
+    entry = next((e for e in watchlist_store.list_entries(owner_id) if e.symbol == symbol), None)
+    return list(entry.strategies) if entry else []
+
+
+class RadarFollowRequest(BaseModel):
+    chain: Literal["solana", "robinhood"]
+    pool: str
+    symbol: str
+    token_address: str
+    interval: Literal["5m", "15m"]
+    strategy_name: str
+    params: dict | None = None
+    enabled: bool
+
+
+@app.post("/api/onchain/radar/follow")
+async def onchain_radar_follow(req: RadarFollowRequest, user: User = Depends(auth.get_current_user)) -> dict:
+    """Attiva (o spegne) una strategia su un token del radar: solo alert.
+    L'acquisto automatico resta una scelta a parte, del pilota."""
+    _require_onchain_enabled()
+    if req.strategy_name not in AVAILABLE_STRATEGIES:
+        raise HTTPException(status_code=400, detail="Strategia sconosciuta")
+    symbol = onchain_radar.watch_symbol(req.symbol, req.chain, req.pool)
+    entry = next((e for e in watchlist_store.list_entries(user.id) if e.symbol == symbol), None)
+    if entry is None and req.enabled:
+        entry = watchlist_store.add_entry(user.id, symbol, "dex", interval=req.interval, on_close=True,
+                                          base_token_address=req.token_address)
+    if entry is not None:
+        watchlist_store.set_strategy_enabled(entry.id, req.strategy_name, req.enabled)
+        if req.enabled:
+            watchlist_store.set_strategy_params(entry.id, req.strategy_name, req.params)
+    return {"active": _radar_watch_strategies(user.id, symbol)}
 
 
 @app.get("/api/onchain/pilot/{chain}")

@@ -111,6 +111,10 @@ export const getLivePrice = (chain, address) => request(`/api/onchain/price/${ch
 // sniper su questa chain — qui solo l'interruttore per utente/chain.
 export const getSniperAutotrade = () => request("/api/onchain/sniper-autotrade");
 export const getPilot = (chain) => request(`/api/onchain/pilot/${chain}`);
+export const getRadar = () => request("/api/onchain/radar");
+export const getRadarChart = (chain, pool, symbol, interval) =>
+  request(`/api/onchain/radar/chart?${new URLSearchParams({ chain, pool, symbol, interval })}`);
+export const followRadar = (body) => request("/api/onchain/radar/follow", { method: "POST", body });
 export const setSniperAutotrade = (chain, enabled) =>
   request(`/api/onchain/sniper-autotrade/${chain}`, { method: "PATCH", body: { enabled } });
 
