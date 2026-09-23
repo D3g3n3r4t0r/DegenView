@@ -65,3 +65,69 @@ def test_asset_version_changes_when_a_module_changes(tmp_path, monkeypatch):
     finally:
         target.write_bytes(original)
     assert main._compute_asset_version() == before
+
+
+_BOOT_RE = re.compile(r'<script type="application/json" id="onchain-boot">(.*?)</script>', re.S)
+
+
+def _boot(html: str) -> dict:
+    match = _BOOT_RE.search(html)
+    assert match, "i dati di avvio non sono stati iniettati nella pagina"
+    return json.loads(match.group(1))
+
+
+def test_every_module_is_modulepreloaded_with_the_version():
+    # Senza modulepreload gli import di main.js partono solo dopo main.js:
+    # un giro di rete in fila in piu' prima che la pagina faccia qualcosa.
+    for module in main._onchain_modules():
+        link = f'<link rel="modulepreload" href="/static/onchain/{module.name}?v={main._ASSET_VERSION}" />'
+        assert link in main._ONCHAIN_APP_HTML, f"{module.name} non e' precaricato"
+
+
+def test_chart_library_is_versioned_and_async():
+    assert (
+        f'<script async src="/static/lightweight-charts.standalone.production.js?v={main._ASSET_VERSION}">'
+        in main._ONCHAIN_APP_HTML
+    )
+
+
+def test_page_uses_no_third_party_fonts():
+    assert "fonts.googleapis.com" not in main._ONCHAIN_APP_HTML
+    for href in re.findall(r'href="(/static/fonts/[^"?]+)', main._ONCHAIN_APP_HTML):
+        assert (main.FRONTEND_DIR / href.removeprefix("/")).is_file(), f"{href} non esiste"
+
+
+def _tag(html: str, element_id: str) -> str:
+    return re.search(rf'<[^>]*\bid="{element_id}"[^>]*>', html).group(0)
+
+
+def test_signed_out_page_shows_login_and_boots_without_user():
+    html = main._render_onchain_app(None)
+    assert _boot(html) == {"user": None}
+    assert not _tag(html, "login-screen").endswith(" hidden>")
+    assert _tag(html, "app-shell").endswith(" hidden>")
+
+
+def test_signed_in_page_ships_user_and_wallets_but_no_key(monkeypatch):
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(main.settings, "onchain_enabled", True)
+    wallet = SimpleNamespace(address="So1ana</script>", enabled=True, created_at=1, private_key="SEGRETO")
+    user = SimpleNamespace(id="u1", email="a@b.c", telegram_chat_id=None, onchain_wallets={"solana": wallet})
+    html = main._render_onchain_app(user)
+
+    boot = _boot(html)
+    assert boot["user"]["id"] == "u1"
+    assert boot["wallets"] == [{"chain": "solana", "address": "So1ana</script>", "enabled": True, "created_at": 1}]
+    assert "SEGRETO" not in html
+    assert not _tag(html, "app-shell").endswith(" hidden>")
+    assert _tag(html, "login-screen").endswith(" hidden>")
+
+
+def test_page_response_is_not_shared_by_caches():
+    from fastapi.testclient import TestClient
+
+    response = TestClient(main.app).get("/onchain-app.html")
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "private, no-cache"
+    assert _boot(response.text) == {"user": None}

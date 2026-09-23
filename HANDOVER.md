@@ -2643,3 +2643,81 @@ Tre cose, in ordine:
    questa sessione — screenshot Playwright dell'UI attuale e proposta di
    design senza scrivere codice, come chiesto esplicitamente da Lorenzo per
    questa fase.
+
+## Velocita' della pagina wallet on-chain — `seed-0087` — **fatto**
+
+Lorenzo (2026-09-23): "usa un linguaggio di programmazione per rendere il
+sito velocissimo a costo di fare un refactory". Deciso di **non** cambiare
+linguaggio, e detto a lui perche': misurata `onchain-app.html` dal vivo,
+Lighthouse 99 da non loggati, main thread 0,4 s. Il tempo stava nei giri di
+rete in fila prima dei dati, che nessuna riscrittura avrebbe tolto.
+
+Cosa fa ora la pagina (tutto ancora zero build):
+- `onchain_app_page()` in `main.py` legge la sessione e scrive utente +
+  wallet in `<script type="application/json" id="onchain-boot">`, e toglie
+  `hidden` dalla sezione giusta (login o app). `main.js::takeBootData()` lo
+  consuma una volta; senza (index.html, dopo un login) richiede come prima.
+  L'HTML e' quindi personale: `Cache-Control: private, no-cache`.
+- `<!--onchain-modulepreload-->`: un modulepreload per ogni modulo.
+- lightweight-charts `async` e con `?v=`; `chart.js::chartLibrary()` la
+  aspetta insieme alle candele.
+- Font in `static/fonts/` (Instrument Serif, JetBrains Mono); Instrument
+  Sans tolto perche' `--sans` usa font di sistema.
+- `api.js`: GET identici in volo condividono la richiesta; ogni scrittura
+  svuota la mappa.
+
+Misurato in locale da loggati (Lighthouse, throttling devtools mobile,
+mediana di 3): inizio saldo 4,1 -> 2,4 s, LCP 4,3 -> 2,6 s, TTI 5,6 -> 3,6 s.
+Il prossimo collo di bottiglia e' la banda per 13 moduli separati e la
+latenza delle chiamate RPC dietro saldo/grafico.
+
+---
+
+## Wallet on-chain da telefono + scelta token unica — 2026-09-23
+
+Lorenzo: "rivedi completamente il sito se mi collego da mobile; se
+seleziono un token si aprono troppe schermate". Segnalazione `seed-0088`.
+
+Causa misurata (Playwright, iPhone 13, API finte): `onTokenChanged` in
+`chart.js` non aveva nessun ascoltatore, quindi il token scelto sul
+grafico non arrivava allo swap; da telefono il pannello ordine stava
+sotto le posizioni (~1200px piu' giu') e il secondo picker apriva la
+tastiera da solo. Fatto:
+
+- `main.js`: il token del grafico (risolto con `getTokenInfo`, in cache)
+  e' `presetToken` di swap e limite; `onTokenPicked` di swap/limite
+  sposta il grafico con `chart.setToken()` (che non riavvisa i listener).
+- `sheets.openTokenPicker`: ricerca in cima, indirizzo incollato
+  riconosciuto nello stesso campo, niente focus automatico su touch,
+  titolo per lato ("Cosa vendi" / "Cosa ricevi").
+- `onchain-app.html`: blocco `@container (width < 640px)` in coda — la
+  `.market-card` diventa `display: contents` per mettere l'ordine fra
+  grafico e posizioni senza toccare il DOM; desktop invariato.
+
+In parallelo sulla stessa pagina: PR #70 (tasti nav, tocca
+`main.js` e la fine di `resolutions.json`/`_SEED`) e il thread
+velocita' (tocca `<head>`). Conflitti attesi solo in quelle code.
+
+Seguito, stessa sessione — Lorenzo: "mezzi ticker non funzionano; voglio
+solo un unico risultato per ticker 'quello con il contratto corretto e
+verificato con liquidità migliore'". `seed-0090`. La ricerca del picker
+non usa piu' DexScreener (30 pool su tutte le chain, contratti veri
+esclusi, copie con pool gonfiati in cima) ma
+`app/trading/onchain/token_search.py`: Jupiter su Solana (`isVerified`),
+GeckoTerminal filtrato su Robinhood (verificato = `coingecko_coin_id`,
+pool senza scambi = liquidita' zero). Un token per ticker. DexScreener
+resta solo come ripiego se la fonte non risponde. GeckoTerminal da' 429
+sopra ~30 richieste/minuto: la cache e' di 60s per (chain, query).
+
+---
+
+## Deploy congiunto #70–#73 — 2026-09-23
+
+Lorenzo: "DEPOLYA TUTTO". #73 (Pilota) e' entrato da solo; #70, #71, #72
+sono entrati insieme dal branch `claude/deploy-all-sneda2`. Id della
+bacheca rinumerati per non sovrapporsi: #70 `seed-0086`, #71 `seed-0087`,
+#72 `seed-0088` (telefono) e `seed-0090` (ticker), #73 `seed-0089`.
+I tasti in alto di #70 restano nel DOM ma #73 li nasconde via CSS.
+Conflitto non testuale trovato e sistemato: il `data-view` aggiunto da #73
+a `#app-shell` rompeva il replace di #71 che mostra la sezione giusta al
+primo disegno; ora `_render_onchain_app()` cerca l'elemento per id.

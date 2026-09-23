@@ -33,20 +33,24 @@ let hostEl = null;
 const host = () => hostEl;
 let otherToken = null; // { address, symbol, decimals } — l'altra gamba, risolta via picker
 let onPlacedCb = null;
+let onTokenPickedCb = null;
 
 /* ------------------------------------------------------------ Form ord. */
 
 let lastChain = null;
 
-export function mountLimitOrder(container, { onPlaced, presetToken } = {}) {
+export function mountLimitOrder(container, { onPlaced, onTokenPicked, presetToken } = {}) {
   hostEl = container;
   onPlacedCb = onPlaced ?? null;
+  onTokenPickedCb = onTokenPicked ?? null;
   // L'altra gamba scelta su una chain non appartiene alla chain successiva
   // (un mint Solana non e' un contratto EVM): un cambio chain la azzera,
   // non la lascia appesa a un indirizzo della chain sbagliata.
   if (state.chain !== lastChain) otherToken = null;
   lastChain = state.chain;
-  if (presetToken) otherToken = presetToken;
+  if (presetToken && presetToken.address.toLowerCase() !== NATIVE[state.chain].address.toLowerCase()) {
+    otherToken = presetToken;
+  }
   const chain = state.chain;
   const native = NATIVE[chain];
   paintForm(chain, native);
@@ -87,6 +91,7 @@ function paintForm(chain, native) {
 
   host().querySelector("#limit-pick-other").addEventListener("click", () => {
     sheets.openTokenPicker(chain, {
+      title: "Contro quale token",
       onPick: async ({ address }) => {
         const outcome = host().querySelector("#limit-outcome");
         if (address.toLowerCase() === native.address.toLowerCase()) {
@@ -98,6 +103,7 @@ function paintForm(chain, native) {
         try {
           const info = await api.getTokenInfo(chain, address);
           otherToken = { address, symbol: info.symbol || `${address.slice(0, 4)}…${address.slice(-4)}`, decimals: info.decimals };
+          onTokenPickedCb?.(otherToken);
           paintForm(chain, native);
         } catch (error) {
           outcome.hidden = false;

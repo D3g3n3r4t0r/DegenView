@@ -1230,6 +1230,26 @@
     ],
     "next": "La fusione piena della UI wallet dentro il DOM della tab Trading (niente piu' link a una pagina separata, stessi moduli ES riusati inline) resta da fare — quella UI ha il suo ciclo di stato/polling indipendente e portarla dentro senza romperla vale una sessione a se'. Sul lato Fase 4: la vendita on-chain resta bloccata finche' i decimali del token base non vengono salvati da qualche parte (DexScreener non li da' nella ricerca; andrebbero letti con una decimals() reale al momento dell'aggiunta alla watchlist, stessa idea usata qui per USDC/USDG). Nessun invio reale e' mai stato provato su Robinhood Chain in nessuna sessione — resta vero anche qui."
   },
+  "seed-0086": {
+    "status": "risolto",
+    "at": 1790190194,
+    "summary": "Causa: i quattro tasti erano segnaposto grafici (span con aria-hidden, nessun gestore di click) lasciati dal redesign 'finché non esistono le pagine'. Ora sono pulsanti veri: Strategie e Attività aprono la tab Strategie / Storico del pannello in basso e ci scorrono sopra, Impostazioni apre il foglio Limiti & sicurezza, Wallet torna in cima sulle Posizioni. Il tasto evidenziato segue anche i click fatti direttamente sulle tab in basso. Senza wallet sulla chain avvisa invece di non fare nulla. Nota: la barra si vede solo sopra i 900px di larghezza, come prima."
+  },
+  "seed-0087": {
+    "status": "risolto",
+    "at": 1790191024,
+    "summary": "Niente cambio di linguaggio: il collo di bottiglia erano i giri di rete, non l'esecuzione (main thread 0,4 s), e una riscrittura non li avrebbe tolti. Tolti invece quelli: sessione e wallet scritti dal server dentro l'HTML (due richieste in fila in meno, e la sezione giusta visibile dal primo disegno invece di una pagina vuota), modulepreload per tutti i moduli (non si aspetta piu' main.js per scoprire gli import), libreria del grafico async e versionata (cache per sempre, non blocca piu' l'avvio), font serviti dal sito invece che da Google (Instrument Sans tolto: non era usato), GET identici in volo uniti in uno (saldo e stato di rischio erano chiesti due volte all'avvio). Misurato in locale da loggati, rete mobile lenta, mediana di 3: inizio caricamento saldo 4,1 s -> 2,4 s, LCP 4,3 s -> 2,6 s, TTI 5,6 s -> 3,6 s, punteggio 65 -> 78."
+  },
+  "seed-0088": {
+    "status": "risolto",
+    "at": 1790191149,
+    "summary": "Il token si sceglie una volta sola: quello scelto sul grafico diventa l'altra gamba di swap e ordine limite, e quello scelto nel pannello ordine sposta il grafico. Il foglio di scelta ha la ricerca in cima (accetta anche un indirizzo incollato, niente piu' secondo campo nascosto), su touch non apre la tastiera da solo, e scrivere sostituisce la lista dei tuoi token invece di allungarla. Da telefono la pagina e' una colonna ordinata: testata su due righe, saldo piu' due mezze card di stato, poi grafico, subito sotto swap/limite, poi posizioni; il riquadro sniper compare solo nella tab Sniper, e i campi non fanno piu' zoomare iOS. Desktop invariato."
+  },
+  "seed-0090": {
+    "status": "risolto",
+    "at": 1790192400,
+    "summary": "Causa: la ricerca usava DexScreener, che restituisce al massimo 30 pool su tutte le chain, non token. Il contratto vero spesso restava fuori (USDC e WIF di Solana non comparivano proprio) e in cima finivano copie con pool gonfiati da milioni e zero scambi. Ora la fonte e' per chain: su Solana la ricerca token di Jupiter, che dice se il mint e' verificato; su Robinhood Chain GeckoTerminal filtrato sulla chain, dove 'verificato' vuol dire che il token ha una scheda CoinGecko e i pool senza scambi contano zero liquidita'. Esce un solo token per ticker: prima il verificato, poi quello con piu' liquidita' vera. I non verificati compaiono solo se hanno almeno $10k di liquidita' o $50k di volume, con l'etichetta 'non verificato'. Se la fonte non risponde, si ripiega su DexScreener, sempre con un risultato per ticker."
+  },
   "seed-0089": {
     "status": "risolto",
     "at": 1790194172,

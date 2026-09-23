@@ -16,7 +16,7 @@ import { drawSparkline } from "@onchain/sparkline.js";
 import { appendHistory, chainInfo, readCache, readHistory, state, writeCache } from "@onchain/store.js";
 import { mountSwap } from "@onchain/swap.js";
 import { mountLimitOrder, mountOpenOrders, mountHistory } from "@onchain/limitOrders.js";
-import { mountChart, resetForChainSwitch } from "@onchain/chart.js";
+import { mountChart, onTokenChanged, resetForChainSwitch, setToken as setChartToken } from "@onchain/chart.js";
 import { mountStrategies } from "@onchain/strategies.js";
 import { mountPortfolio } from "@onchain/portfolio.js";
 import { openSend } from "@onchain/send.js";
@@ -123,6 +123,7 @@ async function selectChain(next) {
   if (document.startViewTransition) await document.startViewTransition(swap).updateCallbackDone;
   else swap();
   resetForChainSwitch(); // il token in vista non appartiene piu' alla chain nuova
+  presetToken = null;
   loadChainData();
 }
 
@@ -269,6 +270,48 @@ async function refreshStatus() {
 
 let currentOrderTab = "swap";
 
+// Un token si sceglie una volta sola: quello scelto sul grafico diventa
+// l'altra gamba di swap e limite, e quello scelto nel pannello ordine
+// sposta il grafico. Prima erano due scelte separate, e da telefono il
+// pannello ordine sta due schermate sotto il grafico — Lorenzo: "se
+// seleziono un token si aprono troppe schermate".
+let presetToken = null;
+let presetSeq = 0;
+const tokenInfoCache = new Map();
+
+async function resolvePreset(token) {
+  const key = `${state.chain}:${token.address.toLowerCase()}`;
+  if (!tokenInfoCache.has(key)) {
+    const info = await api.getTokenInfo(state.chain, token.address);
+    tokenInfoCache.set(key, {
+      address: token.address,
+      decimals: info.decimals,
+      symbol: info.symbol || token.symbolHint || shortAddress(token.address),
+      priceUsd: info.price_usd ?? null,
+    });
+  }
+  return tokenInfoCache.get(key);
+}
+
+onTokenChanged(async (token) => {
+  const seq = ++presetSeq;
+  presetToken = null;
+  if (token && !sheets.isNativeAddress(state.chain, token.address)) {
+    try {
+      presetToken = await resolvePreset(token);
+    } catch (error) {
+      toast("Token non verificato", error.message);
+    }
+  }
+  if (seq !== presetSeq || currentOrderTab === "sniper") return;
+  mountOrderTab(currentOrderTab);
+});
+
+const followInChart = (token) => {
+  presetToken = token;
+  setChartToken({ address: token.address, symbolHint: token.symbol });
+};
+
 function mountOrderTab(tab) {
   currentOrderTab = tab;
   $$("#order-tabs .mo-side-tab").forEach((t) => {
@@ -278,12 +321,16 @@ function mountOrderTab(tab) {
   });
   if (tab === "swap") {
     mountSwap(view.orderPanelBody, {
+      presetToken,
+      onTokenPicked: followInChart,
       onExecuted: () => { refreshBalance(); mountBottomTab(currentBottomTab); toast("Swap inviato", "verifica la firma nello storico"); },
     });
   } else if (tab === "sniper") {
     mountSniperTab(view.orderPanelBody);
   } else {
     mountLimitOrder(view.orderPanelBody, {
+      presetToken,
+      onTokenPicked: followInChart,
       onPlaced: () => { mountBottomTab(currentBottomTab); toast("Ordine limite piazzato", "resta in attesa nello storico"); },
     });
   }
@@ -317,7 +364,11 @@ function mountBottomTab(tab) {
 }
 
 $$("#bottom-tabs .mo-side-tab").forEach((tab) => {
-  tab.addEventListener("click", () => mountBottomTab(tab.dataset.bottomTab));
+  tab.addEventListener("click", () => {
+    const name = tab.dataset.bottomTab;
+    mountBottomTab(name);
+    setNav(name === "strategies" || name === "history" ? name : "wallet");
+  });
 });
 
 /* ------------------------------------------------------------------ toast */
@@ -367,6 +418,46 @@ const SHEETS = {
 };
 $$("[data-sheet]").forEach((button) =>
   button.addEventListener("click", () => SHEETS[button.dataset.sheet]?.()));
+
+/* ------------------------------------------------------ navigazione in alto */
+// Strategie e Attivita' sono tab del pannello in basso, Impostazioni e' il
+// foglio dei limiti: la barra ci porta li' invece di restare decorativa.
+
+function setNav(target) {
+  $$("[data-nav]").forEach((pill) => {
+    const current = pill.dataset.nav === target;
+    pill.classList.toggle("is-current", current);
+    if (current) pill.setAttribute("aria-current", "true");
+    else pill.removeAttribute("aria-current");
+  });
+}
+
+const NAV = {
+  wallet: () => {
+    if (!view.bottomPanel.hidden) mountBottomTab("positions");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  },
+  strategies: () => showBottomTab("strategies"),
+  history: () => showBottomTab("history"),
+  settings: () => SHEETS.risk(),
+};
+
+function showBottomTab(tab) {
+  if (view.bottomPanel.hidden) {
+    toast("Nessun wallet", "crea prima un wallet su questa chain");
+    return;
+  }
+  mountBottomTab(tab);
+  view.bottomPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+$$("[data-nav]").forEach((pill) =>
+  pill.addEventListener("click", () => {
+    if (view.shell.hidden) return;
+    const target = pill.dataset.nav;
+    if (target !== "settings") setNav(target);
+    NAV[target]?.();
+  }));
 
 view.reveal.addEventListener("click", () => sheets.openKey({ onStart: startReveal }));
 
@@ -439,16 +530,29 @@ $("#login-form").addEventListener("submit", async (event) => {
   }
 });
 
+// Sessione e wallet che il server ha gia' messo nell'HTML (onchain-app.html):
+// due richieste in fila risparmiate. Si usa una volta sola — dopo un login
+// o dentro index.html, che non lo porta, si torna a chiederli.
+function takeBootData() {
+  const node = document.getElementById("onchain-boot");
+  if (!node) return null;
+  node.remove();
+  try { return JSON.parse(node.textContent); } catch { return null; }
+}
+
 async function boot() {
+  const preloaded = takeBootData();
   let signedIn = false;
-  try { signedIn = Boolean((await api.getSession())?.user); } catch { /* offline: si tratta come non loggato */ }
+  if (preloaded) signedIn = Boolean(preloaded.user);
+  else try { signedIn = Boolean((await api.getSession())?.user); } catch { /* offline: si tratta come non loggato */ }
 
   view.login.hidden = signedIn;
   view.shell.hidden = !signedIn;
   if (!signedIn) return;
 
   try {
-    for (const wallet of await api.listWallets()) state.wallets[wallet.chain] = wallet;
+    const wallets = preloaded?.wallets ?? await api.listWallets();
+    for (const wallet of wallets) state.wallets[wallet.chain] = wallet;
   } catch { /* al primo carico senza rete resta la cache locale, se c'e' */ }
 
   paintChainStatic();
