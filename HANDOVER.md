@@ -38,6 +38,10 @@ e desktop. Non ancora visto sul server vero.
   `#more`/`#pilot`: tutto il cablaggio nuovo in `main.js` deve restare
   null-safe.
 
+Seguito (`seed-0091`): la rete si cambia toccando il chip accanto al saldo
+(`#chain-flip`), avvio con DEGEN (`#splash`), campi a 16px contro lo zoom
+di iOS che lasciava la pagina "decentrata".
+
 Resta: vedere il pannello salute sul server vero (probabile scanner spento,
 `onchain_execution_enabled` spento, segnali fermi senza Telegram) e decidere
 con Lorenzo cosa accendere. PR #70, #71, #72 toccano la stessa pagina:
