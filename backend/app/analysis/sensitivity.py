@@ -88,6 +88,24 @@ _LORENZO_DIMS = [
 ]
 
 
+def _lorenzo_hf(u: np.ndarray) -> dict:
+    slope_fast = _i(u[1], 2, 10)
+    return {
+        "len": _i(u[0], 10, 80),
+        "slopeFlen": slope_fast,
+        "slopeSlen": _i(u[2], slope_fast + 3, 40),
+        "slope_threshold_sigma": _f(u[3], 0.0, 1.0),
+        "volume_mult": _f(u[4], 0.0, 3.0),
+        "er_min": _f(u[5], 0.0, 0.7),
+        "trail_atr": _f(u[6], 1.0, 6.0),
+    }
+
+
+_LORENZO_HF_DIMS = [
+    "len", "slopeFlen", "slopeSlen", "slope_threshold_sigma", "volume_mult", "er_min", "trail_atr",
+]
+
+
 def _gabriele(u: np.ndarray) -> dict:
     return {
         "rsi_length": _i(u[0], 7, 25),
@@ -149,6 +167,7 @@ PARAM_SPACES: dict[str, ParamSpace] = {
     "Lorenzo (trend-follower)": ParamSpace(tuple(_LORENZO_DIMS), _lorenzo),
     "Gabriele (RSI+BB reversal)": ParamSpace(tuple(_GABRIELE_DIMS), _gabriele),
     "Gabriele 2 (RSI+BB long/short)": ParamSpace(tuple(_GABRIELE_DIMS), _gabriele),
+    "Lorenzo HF (minuti on-chain)": ParamSpace(tuple(_LORENZO_HF_DIMS), _lorenzo_hf),
     "Accumulo / Distribuzione (long-term)": ParamSpace(tuple(_EXHAUSTION_DIMS), _exhaustion),
 }
 
