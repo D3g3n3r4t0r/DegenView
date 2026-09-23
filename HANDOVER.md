@@ -12,6 +12,41 @@ lavori pluri-sessione, decisioni prese, stato di piani approvati.
 
 ---
 
+## Proposta grafica wallet on-chain (set 2026)
+
+Lorenzo: "rendi questa UI moderna, rapida, ottimizzata, al passo coi tempi,
+questa in screenshot sembra un excel, preparami una proposta grafica".
+
+Deciso con Lorenzo ("rimaniamo su onchain-app.html"): il redesign e' stato
+portato dentro `frontend/onchain-app.html` e il prototipo separato
+(`onchain-app-proposal.html`) e' stato rimosso. Idee portanti, ora in produzione:
+
+- le 4 fisarmoniche (`Saldo & storico`, `Limiti & sicurezza`, `Simulazione`,
+  `Auto-trade`) diventano una riga di 4 azioni sotto il saldo + fogli dal basso;
+- stato pericoloso sempre visibile in due chip (sola lettura / auto-trade off),
+  colore semantico separato dall'accento menta;
+- `Rivela chiave privata` fuori dalla lista, riga propria bordata di rosso;
+- sparkline 24h e badge di freschezza per rendere visibile la resa da cache;
+- token identici a `style.css` (chiaro + scuro), mentre la pagina attuale e'
+  bloccata su `color-scheme: dark`;
+- tab bar Wallet/Strategie/Attivita'/Impostazioni per le fasi 3-4.
+
+Nel frattempo un'altra sessione ha riscritto la stessa pagina su moduli ES
+(`frontend/static/onchain/*.js`): nel merge su `main` ha vinto quella versione,
+piu' avanti della mia (stesse idee, codice separato in moduli + test in
+`backend/tests/test_onchain_frontend_modules.py`).
+
+Tutti gli endpoint e la logica (sessione, saldo da cache + RPC, posizioni,
+rivelazione via QR/SSE, simulazione, circuit breaker) sono invariati: e'
+cambiata solo la scocca. La sparkline usa solo le letture vere salvate in
+localStorage e non si disegna sotto i due punti.
+
+Nota: `tests/test_onchain_prices.py` ha due test che chiamano davvero la rete
+per il prezzo — falliscono in sandbox senza uscita verso l'API prezzi, non per
+questa modifica.
+
+---
+
 ## Stato del repo
 
 - **Repo**: `lorenzocorazzi-wq/liquidity-analysis-engine`
