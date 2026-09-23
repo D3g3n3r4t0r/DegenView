@@ -11,6 +11,8 @@ from eth_abi import decode as _abi_decode
 from eth_abi import encode as _abi_encode
 from eth_utils import keccak, to_checksum_address
 
+from app.trading.onchain import rpc_client
+
 JUPITER_QUOTE_URL = "https://lite-api.jup.ag/swap/v1/quote"
 ROBINHOOD_RPC = "https://rpc.mainnet.chain.robinhood.com"
 
@@ -55,13 +57,11 @@ async def jupiter_quote(input_mint: str, output_mint: str, amount_lamports: int,
 
 
 async def _eth_call(to: str, data: str) -> str:
-    payload = {"jsonrpc": "2.0", "id": 1, "method": "eth_call", "params": [{"to": to, "data": data}, "latest"]}
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        resp = await client.post(ROBINHOOD_RPC, json=payload)
-    body = resp.json()
-    if "error" in body:
-        raise RuntimeError(f"RPC Robinhood Chain: {body['error']}")
-    return body["result"]
+    # Fallback multi-endpoint + circuit breaker (rpc_client): il quote e'
+    # la seconda chiamata piu' frequente dopo il saldo, e per Robinhood
+    # Chain sono due eth_call per ogni quote (getPool + quoteExactInputSingle,
+    # o getReserves + token0 per il v2).
+    return await rpc_client.call_rpc("robinhood", "eth_call", [{"to": to, "data": data}, "latest"])
 
 
 async def uniswap_v2_price_impact(pool_address: str, token_in: str, amount_in: int) -> dict:

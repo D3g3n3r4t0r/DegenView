@@ -15,11 +15,25 @@ prudenza — size piccole, prima operazione osservata a mano.
 settings.onchain_execution_enabled resta la sola porta che decide se
 l'invio (mai la firma) parte davvero: qui e' controllato esplicitamente,
 non delegato a execution.send_signed_solana_tx/send_signed_evm_tx (che di
-proposito non lo controllano da soli)."""
+proposito non lo controllano da soli).
+
+Ogni chiamata genera un correlation_id (uuid4, diverso dalla idempotency_key
+del ledger) loggato su OGNI riga di log di questo ordine — piano SRE punto 2.
+Non e' una persistenza a 30 giorni dedicata: questo processo scrive su
+stdout/stderr senza una rotazione di log configurata da nessuna parte nel
+sito (verificato: nessun logging.basicConfig/RotatingFileHandler in
+main.py o altrove) — chi gestisce il deploy deve avere una rotazione a
+livello di systemd/docker (es. `journalctl`, `docker logs` con
+`max-size`/`max-file`) se vuole i 30 giorni richiesti dal piano. Gap noto,
+non silenziato: costruire qui un secondo sistema di log parallelo solo per
+onchain sarebbe piu' rischio (due fonti di verita' sui log) che beneficio."""
+import logging
 import uuid
 
 from app.config import settings
 from app.trading.onchain import execution, ledger, risk
+
+logger = logging.getLogger("onchain_execute")
 
 
 async def execute_order(
@@ -27,18 +41,29 @@ async def execute_order(
     notional_usd: float, price_impact_pct: float, price_usd: float,
     private_key_hex: str, quote: dict,
 ) -> dict:
+    correlation_id = uuid.uuid4().hex
+    logger.info(
+        "[%s] execute_order owner=%s chain=%s token=%s side=%s notional_usd=%.2f",
+        correlation_id, owner_id, chain, token, side, notional_usd,
+        extra={"correlation_id": correlation_id},
+    )
     ok, reason = risk.run_all_checks(owner_id, chain, token, notional_usd, price_impact_pct)
     if not ok:
-        return {"accepted": False, "reason": reason, "idempotency_key": None, "tx_signature": None}
+        logger.warning("[%s] rifiutato dal risk guardrail: %s", correlation_id, reason,
+                        extra={"correlation_id": correlation_id})
+        return {"accepted": False, "reason": reason, "idempotency_key": None, "tx_signature": None,
+                "correlation_id": correlation_id}
 
     if chain not in ("solana", "robinhood"):
         return {"accepted": False, "reason": f"chain non supportata: {chain}",
-                "idempotency_key": None, "tx_signature": None}
+                "idempotency_key": None, "tx_signature": None, "correlation_id": correlation_id}
 
     idempotency_key = f"live-{uuid.uuid4().hex}"
     if not ledger.reserve(idempotency_key, owner_id, chain, token, strategy_name, side, "live", notional_usd):
+        logger.warning("[%s] idempotency_key duplicata: %s", correlation_id, idempotency_key,
+                        extra={"correlation_id": correlation_id})
         return {"accepted": False, "reason": "ordine gia' in corso (chiave idempotente duplicata)",
-                "idempotency_key": None, "tx_signature": None}
+                "idempotency_key": None, "tx_signature": None, "correlation_id": correlation_id}
 
     try:
         if chain == "solana":
@@ -49,14 +74,17 @@ async def execute_order(
                 quote["amount_in"], quote["amount_out_minimum"],
             )
     except Exception as exc:
+        logger.error("[%s] firma fallita: %s", correlation_id, exc, extra={"correlation_id": correlation_id})
         ledger.mark_failed(idempotency_key, f"firma fallita: {exc}")
         return {"accepted": False, "reason": f"firma fallita: {exc}",
-                "idempotency_key": idempotency_key, "tx_signature": None}
+                "idempotency_key": idempotency_key, "tx_signature": None, "correlation_id": correlation_id}
 
     if not settings.onchain_execution_enabled:
+        logger.info("[%s] esecuzione reale disattivata, ordine non inviato", correlation_id,
+                     extra={"correlation_id": correlation_id})
         ledger.mark_failed(idempotency_key, "esecuzione reale disattivata (onchain_execution_enabled=False)")
         return {"accepted": False, "reason": "esecuzione reale disattivata su questo server",
-                "idempotency_key": idempotency_key, "tx_signature": None}
+                "idempotency_key": idempotency_key, "tx_signature": None, "correlation_id": correlation_id}
 
     try:
         if chain == "solana":
@@ -64,9 +92,10 @@ async def execute_order(
         else:
             signature = await execution.send_signed_evm_tx(signed)
     except Exception as exc:
+        logger.error("[%s] invio fallito: %s", correlation_id, exc, extra={"correlation_id": correlation_id})
         ledger.mark_failed(idempotency_key, f"invio fallito: {exc}")
         return {"accepted": False, "reason": f"invio fallito: {exc}",
-                "idempotency_key": idempotency_key, "tx_signature": None}
+                "idempotency_key": idempotency_key, "tx_signature": None, "correlation_id": correlation_id}
 
     ledger.mark_submitted(idempotency_key, signature)
     ledger.mark_confirmed(
@@ -75,4 +104,6 @@ async def execute_order(
         executed_price_usd=price_usd,
         price_impact_pct=price_impact_pct,
     )
-    return {"accepted": True, "reason": "", "idempotency_key": idempotency_key, "tx_signature": signature}
+    logger.info("[%s] confermato tx=%s", correlation_id, signature, extra={"correlation_id": correlation_id})
+    return {"accepted": True, "reason": "", "idempotency_key": idempotency_key, "tx_signature": signature,
+            "correlation_id": correlation_id}
