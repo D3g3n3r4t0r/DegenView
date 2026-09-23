@@ -2426,6 +2426,42 @@ async def onchain_portfolio(chain: str, user: User = Depends(auth.get_current_us
     }
 
 
+@app.get("/api/onchain/price/{chain}/{address}")
+async def onchain_live_price(chain: str, address: str, user: User = Depends(auth.get_current_user)) -> dict:
+    """Prezzo corrente, non storico — pensato per un polling stretto (2-3s)
+    dove le candele (8s, DexScreener/GeckoTerminal) sarebbero troppo lente.
+    Non e' un feed nuovo: e' lo stesso aggregatore/quoter gia' usato per i
+    preventivi di swap (Jupiter su Solana, QuoterV2 su Robinhood Chain),
+    che a differenza di DexScreener e' fatto apposta per essere interrogato
+    spesso — ogni UI di swap lo fa ad ogni tasto. Chiede il prezzo di 1
+    unita' del token contro il token di quota (USDC/USDG), stessa logica
+    di un preventivo, mai un secondo feed da mantenere."""
+    _require_onchain_enabled()
+    if chain not in ("solana", "robinhood"):
+        raise HTTPException(status_code=400, detail="Chain non supportata.")
+    quote_token = _ONCHAIN_QUOTE_TOKEN[chain]
+    if address.lower() == quote_token.lower():
+        return {"price_usd": 1.0}  # il token di quota e' la stablecoin stessa
+
+    try:
+        decimals = await onchain_token_metadata.get_token_decimals(chain, address)
+        one_unit = 10 ** decimals
+        if chain == "solana":
+            quote = await onchain_quotes.jupiter_quote(address, quote_token, one_unit, 50)
+        else:
+            pool = await onchain_quotes.get_pool(address, quote_token, 3000)
+            if pool is None:
+                raise HTTPException(status_code=404, detail="Nessun pool per questo token.")
+            quote = await onchain_quotes.uniswap_v3_quote(address, quote_token, 3000, one_unit)
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001 — un quote fallito non deve essere un 500 muto
+        raise HTTPException(status_code=502, detail=f"Prezzo non disponibile: {exc}") from exc
+
+    out_amount = quote["out_amount"] if chain == "solana" else quote["amount_out"]
+    return {"price_usd": out_amount / (10 ** _ONCHAIN_QUOTE_DECIMALS)}
+
+
 @app.get("/api/onchain/chart/{chain}/{address}")
 async def onchain_chart(
     chain: str, address: str, interval: str = "15m", user: User = Depends(auth.get_current_user),

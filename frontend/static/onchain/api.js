@@ -83,6 +83,7 @@ export const getHistory = (chain) => request(`/api/onchain/history/${chain}`, { 
 export const getPortfolio = (chain) => request(`/api/onchain/portfolio/${chain}`, { timeoutMs: 15000 });
 export const getChart = (chain, address, interval = "15m") =>
   request(`/api/onchain/chart/${chain}/${address}?interval=${interval}`, { timeoutMs: 15000 });
+export const getLivePrice = (chain, address) => request(`/api/onchain/price/${chain}/${address}`, { timeoutMs: 8000 });
 
 export const getStrategies = () => request("/api/strategies");
 export const getWatchlist = () => request("/api/watchlist");

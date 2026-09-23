@@ -111,3 +111,28 @@ def test_chart_endpoint_finds_pool_and_returns_candles(client, monkeypatch):
     assert body["symbol"] == "FAKE@solana:PoolAddr111"
     assert len(body["candles"]) == 2
     assert body["candles"][0]["close"] == 1.1
+
+
+def test_live_price_for_quote_token_is_always_one(client):
+    resp = client.get("/api/onchain/price/solana/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v")
+    assert resp.status_code == 200
+    assert resp.json()["price_usd"] == 1.0
+
+
+def test_live_price_reuses_the_swap_quote_for_a_1_unit_amount(client, monkeypatch):
+    from app.trading.onchain import quotes as onchain_quotes
+    from app.trading.onchain import token_metadata as onchain_token_metadata
+
+    async def _fake_decimals(chain, address):
+        return 9
+
+    async def _fake_jupiter_quote(input_mint, output_mint, amount_lamports, slippage_bps):
+        assert amount_lamports == 10**9  # 1 unita' intera del token, non un lamport
+        return {"in_amount": amount_lamports, "out_amount": 3_500_000, "price_impact_pct": 0.1, "raw": {}}
+
+    monkeypatch.setattr(onchain_token_metadata, "get_token_decimals", _fake_decimals)
+    monkeypatch.setattr(onchain_quotes, "jupiter_quote", _fake_jupiter_quote)
+
+    resp = client.get("/api/onchain/price/solana/SomeMint111111111111111111111111111111111")
+    assert resp.status_code == 200
+    assert resp.json()["price_usd"] == 3.5
