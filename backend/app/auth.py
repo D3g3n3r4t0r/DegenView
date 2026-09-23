@@ -433,13 +433,25 @@ def _verify_session_cookie(cookie: str) -> str | None:
     return user_id
 
 
-async def get_current_user_optional(session: str | None = Cookie(default=None, alias=SESSION_COOKIE)) -> User | None:
+async def get_current_user_optional(
+    session: str | None = Cookie(default=None, alias=SESSION_COOKIE),
+    guest: str | None = Cookie(default=None),
+) -> User | None:
     user_id = _verify_session_cookie(session) if session else None
-    return _users.get(user_id) if user_id else None
+    if user_id and user_id in _users:
+        return _users[user_id]
+    # Link ospite (app/guest.py): utente sintetico in sola lettura. Una
+    # sessione vera vince sempre, cosi' Lorenzo non diventa ospite a casa sua.
+    from app import guest as guest_links
+    link = guest_links.verify_cookie(guest)
+    return guest_links.guest_user(link) if link else None
 
 
-async def get_current_user(session: str | None = Cookie(default=None, alias=SESSION_COOKIE)) -> User:
-    user = await get_current_user_optional(session)
+async def get_current_user(
+    session: str | None = Cookie(default=None, alias=SESSION_COOKIE),
+    guest: str | None = Cookie(default=None),
+) -> User:
+    user = await get_current_user_optional(session, guest)
     if user is None:
         raise HTTPException(status_code=401, detail="Accesso richiesto")
     return user
