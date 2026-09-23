@@ -472,6 +472,9 @@ async def _run_onchain_auto_trade(owner: User, entry: WatchlistEntry, strategy_n
                 ))
 
 
+_stale_notified: set[str] = set()   # voci gia' avvisate per dati fermi, finche' non ripartono
+
+
 async def _watchlist_alert_loop() -> None:
     """Background loop, independent of any browser tab: evaluates every
     watchlist ticker against each of its enabled strategies and fires
@@ -506,18 +509,24 @@ async def _watchlist_alert_loop() -> None:
                     continue
                 if entry.asset_type == "dex":
                     onchain_pilot.record_evaluation(entry.id, price=float(df["close"].iloc[-1]))
-                # Stale data detection: last candle older than 2× the interval
+                # Dati fermi: l'ultima candela (il suo inizio) piu' vecchia di
+                # tre intervalli. Non sui pool DEX: li' una candela esiste
+                # solo se c'e' uno scambio, e un minuto senza scambi e' un
+                # pool tranquillo, non un dato vecchio — UBR su 1m mandava
+                # "ultima candela 0h fa" a ogni giro. E una volta sola finche'
+                # i dati non ripartono, non a ogni controllo.
                 _iv_s = INTERVAL_SECONDS.get(entry.interval, 0)
-                if _iv_s:
-                    _last_ts = df.index[-1].timestamp()
-                    _age = _time.time() - _last_ts
-                    if _age > _iv_s * 2:
-                        _hours_old = int(_age / 3600)
-                        _stale_msg = (
-                            f"⚠️ Dati stantii: <b>{entry.symbol}</b> [{entry.interval}] "
-                            f"— ultima candela {_hours_old}h fa"
-                        )
-                        asyncio.create_task(telegram.send_to(owner.telegram_chat_id, _stale_msg))
+                if _iv_s and entry.asset_type != "dex":
+                    _age = _time.time() - df.index[-1].timestamp()
+                    if _age <= _iv_s * 3:
+                        _stale_notified.discard(entry.id)
+                    elif entry.id not in _stale_notified:
+                        _stale_notified.add(entry.id)
+                        _old = f"{int(_age // 3600)} h" if _age >= 3600 else f"{int(_age // 60)} min"
+                        asyncio.create_task(telegram.send_to(
+                            owner.telegram_chat_id,
+                            f"⚠️ Dati fermi: <b>{entry.symbol}</b> [{entry.interval}] — ultima candela {_old} fa",
+                        ))
                 # Price-level alerts (checked once per entry poll regardless of strategies)
                 if df is not None and not df.empty:
                     current_price = float(df["close"].iloc[-1])
@@ -3450,6 +3459,7 @@ async def onchain_radar_view(user: User = Depends(auth.get_current_user)) -> dic
     avrebbe tradato bene. Proposte, non ordini: vedi app/trading/onchain/radar.py."""
     _require_onchain_enabled()
     return {**onchain_radar.snapshot(), "listings": onchain_listings.recent(),
+            "rejected": onchain_listings.rejected(), "pulse": onchain_listings.pulse(),
             "listing_status": onchain_listings.status()}
 
 
@@ -3465,10 +3475,12 @@ async def onchain_radar_stream(user: User = Depends(auth.get_current_user)) -> S
             yield ": connesso\n\n"
             while True:
                 try:
-                    event, item = await asyncio.wait_for(queue.get(), timeout=15)
-                    yield f"event: {event}\ndata: {json.dumps(item)}\n\n"
+                    event, item = await asyncio.wait_for(queue.get(), timeout=5)
                 except asyncio.TimeoutError:
-                    yield ": ping\n\n"
+                    # Il battito: cosa sta guardando il radar adesso, cosi'
+                    # la pagina si muove anche quando non passa nessuno.
+                    event, item = "pulse", onchain_listings.pulse()
+                yield f"event: {event}\ndata: {json.dumps(item)}\n\n"
         finally:
             onchain_listings.unsubscribe(queue)
 

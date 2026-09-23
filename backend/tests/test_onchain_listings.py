@@ -160,13 +160,13 @@ def test_telegram_message_links_the_project_site():
             "website": "https://acme.io/?a=1&b=2", "github": "https://github.com/acme/core",
             "socials": [{"type": "twitter", "url": "https://x.com/acme"}],
             "checks": [{"label": "Sito", "ok": True}, {"label": "GitHub", "ok": True}, {"label": "Claude sul sito", "ok": None}],
-            "ai": None, "tokensniffer": "https://tokensniffer.com/token/solana/T"}
+            "ai": None, "scan_url": "https://rugcheck.xyz/tokens/T"}
     text = L.telegram_text(item, now=1000.0 + 300, app_url="https://liquidityengine.app/onchain-app.html#listing=solana:P")
     assert '<a href="https://acme.io/?a=1&amp;b=2">🌐 Sito</a>' in text
     assert "Acme &lt;Protocol&gt;" in text and "nato 5 min fa" in text
     assert "✅ Sito · GitHub\n" in text and "Claude" not in text
     assert 'href="https://github.com/acme/core"' in text and "Apri in DEGEN" in text
-    assert '<a href="https://tokensniffer.com/token/solana/T">Token Sniffer</a>' in text
+    assert '<a href="https://rugcheck.xyz/tokens/T">RugCheck</a>' in text
 
 
 def test_a_listing_without_a_chart_is_never_shown(monkeypatch):
@@ -185,3 +185,38 @@ def test_a_listing_without_a_chart_is_never_shown(monkeypatch):
     pending.next_vet_at = 0
     assert [g["symbol"] for g in _accept([_pair("P1")])] == ["NEW"]
     assert calls == ["NEW"]   # il filtro non si ripete mentre si aspetta il grafico
+
+
+def test_listings_from_before_the_filter_are_dropped(tmp_path):
+    import json
+    checks = [{"key": "site", "ok": True}]
+    L._STORE_FILE.write_text(json.dumps({"listings": [
+        {"symbol": "JEANCOIN", "market_cap": 532_000, "checks": checks},
+        {"symbol": "OLD", "market_cap": 50_000},
+        {"symbol": "GOOD", "market_cap": 80_000, "checks": checks},
+    ], "rejected": [{"chain": "solana", "symbol": "RUG", "token_address": "R", "reason": "rug"}]}))
+    L._load()
+    assert [x["symbol"] for x in L.recent()] == ["GOOD"]
+    assert [x["symbol"] for x in L.rejected()] == ["RUG"]
+
+
+def test_every_rejected_token_is_kept_once_with_its_checks():
+    q = L.subscribe()
+    VERDICTS["RUG"] = {**_verdict("fail", "RugCheck: rug"), "checks": [{"key": "security", "ok": False}]}
+    L.add_pending("solana", "P1", "logs")
+    _accept([_pair(symbol="RUG")])
+    item = {"chain": "solana", "symbol": "RUG", "token_address": "TP1"}
+    assert L.note_rejected(item, "di nuovo", time.time(), source="radar") is None
+    [entry] = L.rejected()
+    assert entry["reason"] == "RugCheck: rug" and entry["checks"][0]["key"] == "security"
+    assert entry["market_cap"] == 80_000 and q.get_nowait()[0] == "rejected"
+    assert "RUG" in L._STORE_FILE.read_text()
+
+
+def test_pulse_counts_arrivals_and_names_what_is_being_checked():
+    L.add_pending("solana", "P1", "logs")
+    L.add_pending("solana", "P2", "logs")
+    L._pending["solana:P1"].vetting = True
+    L._pending["solana:P1"].symbol = "ACME"
+    pulse = L.pulse()
+    assert pulse["arrivals_10m"] == 2 and pulse["checking"] == ["ACME"] and pulse["pending"] == 2
