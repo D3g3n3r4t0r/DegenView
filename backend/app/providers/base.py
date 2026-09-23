@@ -17,6 +17,13 @@ class ProviderUnreachable(ProviderError):
     """
 
 
+class NoDataYet(ProviderError):
+    """Il pool esiste ma non ha ancora candele a quell'intervallo: un token
+    appena nato su un DEX. Non e' un guasto, e' presto — il monitoraggio
+    aspetta in silenzio invece di mandare "Errore monitoraggio" ogni minuto
+    (Lorenzo lo ha ricevuto per PEPENOM a 15m)."""
+
+
 class QuotaExceeded(ProviderError):
     """The provider refused because the plan's quota is spent, not because
     anything is wrong with the request.

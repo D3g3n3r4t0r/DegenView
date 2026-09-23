@@ -28,7 +28,7 @@ import httpx
 import pandas as pd
 from cachetools import TTLCache
 
-from app.providers.base import DataProvider, ProviderError, ProviderUnreachable
+from app.providers.base import DataProvider, NoDataYet, ProviderError, ProviderUnreachable
 from app.resample import resample_by_count
 from app.sniper.scanner import GECKO_NETWORKS, SUPPORTED_CHAINS
 
@@ -56,6 +56,38 @@ _INTERVAL_TO_GECKO = {
     "1w": ("day", 1, 7),
     "1M": ("day", 1, 30),
 }
+
+
+def candles_from_trades(trades: list[dict], bucket_s: int, token_address: str | None = None) -> list[list]:
+    """[t, open, high, low, close, volume] dagli scambi GeckoTerminal, piu'
+    recenti prima come ohlcv_list. Il prezzo e' quello del token scambiato:
+    in un "buy" e' quello ricevuto, in un "sell" quello dato (o, se indicato,
+    il lato che corrisponde a `token_address`)."""
+    points = []
+    for t in trades:
+        try:
+            ts = int(pd.Timestamp(t["block_timestamp"]).timestamp())
+            if token_address and t.get("to_token_address") == token_address:
+                price = float(t["price_to_in_usd"])
+            elif token_address and t.get("from_token_address") == token_address:
+                price = float(t["price_from_in_usd"])
+            else:
+                price = float(t["price_to_in_usd"] if t.get("kind") == "buy" else t["price_from_in_usd"])
+            volume = float(t.get("volume_in_usd") or 0)
+        except (KeyError, TypeError, ValueError):
+            continue
+        if price > 0:
+            points.append((ts, price, volume))
+    buckets: dict[int, list] = {}
+    for ts, price, volume in sorted(points):
+        start = ts - ts % bucket_s
+        row = buckets.get(start)
+        if row is None:
+            buckets[start] = [start, price, price, price, price, volume]
+        else:
+            row[2], row[3], row[4] = max(row[2], price), min(row[3], price), price
+            row[5] += volume
+    return sorted(buckets.values(), reverse=True)
 
 
 def make_symbol(base_symbol: str, chain: str, pool_address: str) -> str:
@@ -124,8 +156,14 @@ class DexScreenerProvider(DataProvider):
             payload.get("data", {}).get("attributes", {}).get("ohlcv_list", [])
             if isinstance(payload, dict) else []
         )
+        if not rows and timeframe == "minute":
+            # Pool appena nato: GeckoTerminal ha gli scambi subito, le candele
+            # qualche minuto dopo. DexScreener il grafico lo mostra da subito
+            # (Lorenzo: "su Dex Screener ci sono sempre"), quindi le candele
+            # si costruiscono dagli scambi.
+            rows = await self._rows_from_trades(network, pool, aggregate * 60, token_address)
         if not rows:
-            raise ProviderError(f"Nessun dato disponibile per {symbol} ({interval})")
+            raise NoDataYet(f"Nessun dato disponibile per {symbol} ({interval})")
 
         # [timestamp_s, open, high, low, close, volume], piu' recenti prima.
         df = pd.DataFrame(rows, columns=["open_time", "open", "high", "low", "close", "volume"])
@@ -141,6 +179,17 @@ class DexScreenerProvider(DataProvider):
         if since_ms is not None:
             return df[df.index >= pd.Timestamp(since_ms, unit="ms", tz="UTC")]
         return df.tail(outputsize)
+
+    async def _rows_from_trades(self, network: str, pool: str, bucket_s: int,
+                                token_address: str | None) -> list[list]:
+        url = f"{self._geckoterminal_base}/networks/{network}/pools/{pool}/trades"
+        try:
+            async with httpx.AsyncClient(timeout=20.0) as client:
+                resp = await client.get(url)
+            trades = resp.json().get("data") or [] if resp.status_code == 200 else []
+        except (httpx.HTTPError, ValueError):
+            return []
+        return candles_from_trades([t.get("attributes") or {} for t in trades], bucket_s, token_address)
 
     async def search_symbols(self, query: str) -> list[dict]:
         query = query.strip()
