@@ -922,20 +922,133 @@
               </div>
             </details>
 
-            <!-- Wallet on-chain: Fase 5 del piano di sviluppo lo vuole
-                 dentro questa tab (stesso posto delle chiavi exchange), non
-                 piu' una pagina isolata che nessuno trova. Passo intermedio
-                 onesto: qui c'e' un ingresso ben visibile che porta alla UI
-                 vera (moduli ES, gia' rifatta con tecnologie moderne — vedi
-                 frontend/static/onchain/), non un link nascosto. La fusione
-                 completa dentro il DOM di questa tab resta da fare: quella
-                 UI ha il suo ciclo di polling/stato indipendente e portarla
-                 qui dentro senza romperla vale una sessione a se'. -->
-            <details class="opera-sub">
+            <!-- Wallet on-chain: fusione vera (Fase 5), non piu' solo un
+                 link. Il pannello e' lo stesso markup di onchain-app.html
+                 (stessi id, stessi moduli ES importati con lo stesso import
+                 map), incapsulato in #onchain-embed cosi' che i selettori
+                 di main.js/sheets.js/reveal.js non catturino un id omonimo
+                 del resto del sito (vedi ROOT in static/onchain/main.js).
+                 I moduli si importano pigramente, alla prima apertura di
+                 questo <details> — vedi initOnchainEmbed() in app.js — non
+                 al caricamento della pagina, altrimenti ogni utente
+                 farebbe fetch/poll on-chain anche senza aprire mai questa
+                 sezione. onchain-app.html resta intatta e raggiungibile
+                 (link diretto, QR salvati) per chi ci arriva da fuori. -->
+            <details class="opera-sub" id="onchain-embed-details">
               <summary>Wallet on-chain <span class="trading-auto-badge">⚠️ Denaro reale</span></summary>
               <div class="opera-sub-body">
-                <p class="panel-hint">Swap DEX su Solana e Robinhood Chain — chiave generata sul server, mai importata. Stessa logica di "denaro reale" delle sezioni qui sopra, ma un'app propria (Fase 5 del piano: qui c'e' l'ingresso, la fusione completa in questa pagina e' ancora da fare).</p>
-                <a href="/onchain-app.html" id="onchain-wallet-open-link" class="section-action-btn" style="display:inline-block;text-decoration:none;">Apri il wallet on-chain →</a>
+                <p class="panel-hint">Swap DEX su Solana e Robinhood Chain — chiave generata sul server, mai importata. Stessa logica di "denaro reale" delle sezioni qui sopra. <a href="/onchain-app.html" target="_blank" rel="noopener">Apri come pagina a se'</a> (utile per il QR di rivelazione chiave, che chiede comunque il telefono).</p>
+                <div id="onchain-embed">
+                  <section id="login-screen" hidden>
+                    <form class="form" id="login-form">
+                      <label for="login-email">Email</label>
+                      <input id="login-email" name="email" type="email" autocomplete="username" required />
+                      <label for="login-password">Password</label>
+                      <input id="login-password" name="password" type="password" autocomplete="current-password" required />
+                      <button type="submit" class="btn-primary">Accedi</button>
+                      <p class="sheet-note is-error" id="login-error" hidden></p>
+                    </form>
+                  </section>
+
+                  <div id="app-shell" class="stack" hidden>
+                    <div class="switcher" id="chain-switch" data-selected="solana" role="tablist" aria-label="Chain">
+                      <span class="thumb" aria-hidden="true"></span>
+                      <button type="button" role="tab" aria-selected="true" data-chain="solana">Solana</button>
+                      <button type="button" role="tab" aria-selected="false" data-chain="robinhood">Robinhood</button>
+                    </div>
+
+                    <section>
+                      <p class="label">Saldo · <span id="chain-label">Solana</span></p>
+                      <div class="amount" id="balance">—</div>
+                      <div class="meta">
+                        <button type="button" class="addr" id="address" title="Copia l'indirizzo"></button>
+                        <span class="live"><span class="dot" id="live-dot"></span><span id="fresh"></span></span>
+                      </div>
+
+                      <div class="spark" id="spark" hidden>
+                        <svg viewBox="0 0 300 44" aria-hidden="true">
+                          <defs>
+                            <linearGradient id="spark-gradient" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stop-color="var(--accent)" stop-opacity=".22" />
+                              <stop offset="100%" stop-color="var(--accent)" stop-opacity="0" />
+                            </linearGradient>
+                          </defs>
+                          <path class="spark-fill" d="" />
+                          <path class="spark-line" d="" />
+                          <circle class="spark-end" r="2.6" cx="0" cy="0" />
+                        </svg>
+                        <p class="scale"><span class="spark-lo"></span><span class="spark-span"></span><span class="spark-hi"></span></p>
+                      </div>
+                    </section>
+
+                    <p class="status" id="status" data-armed="false" hidden>
+                      <span class="dot"></span>
+                      <span id="status-text">Sola lettura — nessuna firma parte da questa pagina.</span>
+                    </p>
+
+                    <div class="actions" id="actions" hidden>
+                      <button type="button" class="action" data-sheet="receive">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 4v13" /><path d="M6 12l6 6 6-6" /><path d="M4 20h16" /></svg>
+                        Ricevi
+                      </button>
+                      <button type="button" class="action" data-sheet="history">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="8" /><path d="M12 7v5l3 2" /></svg>
+                        Storico
+                      </button>
+                      <button type="button" class="action" data-sheet="risk">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z" /></svg>
+                        Limiti
+                      </button>
+                      <button type="button" class="action" data-sheet="simulate">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 18 L9 11 L13 14 L20 5" /><path d="M15 5h5v5" /></svg>
+                        Simula
+                      </button>
+                      <button type="button" class="action" data-sheet="swap">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 8h13M17 8l-3-3M17 8l-3 3" /><path d="M20 16H7M7 16l3 3M7 16l3-3" /></svg>
+                        Swap
+                      </button>
+                    </div>
+
+                    <section class="assets" id="assets" hidden>
+                      <p class="label">Posizioni</p>
+                      <ul id="asset-list"></ul>
+                    </section>
+
+                    <button type="button" class="reveal-row" id="reveal-row" hidden>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="19" height="19"><path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z" /><circle cx="12" cy="11" r="2" /><path d="M12 13v3" /></svg>
+                      <span class="t"><b>Rivela chiave privata</b><small>serve il tuo telefono, mai solo da qui</small></span>
+                      <span class="chev">›</span>
+                    </button>
+
+                    <section class="empty" id="onchain-empty-state" hidden>
+                      Nessun wallet <span data-chain-name></span> ancora.
+                      <button type="button" class="btn-primary" data-create>Crea wallet</button>
+                    </section>
+                  </div>
+
+                  <!-- Toast e dialog del wallet: restano dentro #onchain-embed
+                       cosi' che il "$" scoped di main.js/sheets.js/reveal.js
+                       li trovi (vedi ROOT in static/onchain/main.js). Il
+                       <dialog> nativo si mostra comunque nel top-layer una
+                       volta apri()ato, indipendentemente dall'antenato. -->
+                  <div class="toast" id="toast" role="status" hidden>
+                    <span class="toast-mark" aria-hidden="true">✓</span>
+                    <span><span class="toast-title"></span><span class="toast-detail"></span></span>
+                    <button type="button" class="toast-close" aria-label="Chiudi">✕</button>
+                  </div>
+
+                  <dialog class="sheet" id="sheet">
+                    <div class="grip" aria-hidden="true"></div>
+                    <h2 class="sheet-title"></h2>
+                    <p class="sheet-desc"></p>
+                    <div class="sheet-body"></div>
+                    <button type="button" class="btn-quiet sheet-close">Chiudi</button>
+                  </dialog>
+
+                  <dialog class="modal" id="reveal">
+                    <div class="reveal-body"></div>
+                  </dialog>
+                </div>
               </div>
             </details>
 

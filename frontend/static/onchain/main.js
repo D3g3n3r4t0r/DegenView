@@ -14,7 +14,14 @@ import { drawSparkline } from "@onchain/sparkline.js";
 import { appendHistory, chainInfo, readCache, readHistory, state, writeCache } from "@onchain/store.js";
 import { openSwap } from "@onchain/swap.js";
 
-const $ = (selector) => document.querySelector(selector);
+// Sulla pagina a se' (onchain-app.html) la radice e' il documento intero.
+// Fusa dentro la tab Trading, invece, questo modulo viene importato dentro
+// un contenitore con id "onchain-embed": restringere qui la ricerca evita
+// che un id del wallet (nessuno oggi collide, ma un domani sì) catturi un
+// elemento omonimo del resto del sito invece del suo.
+const ROOT = document.getElementById("onchain-embed") ?? document;
+const $ = (selector) => ROOT.querySelector(selector);
+const $$ = (selector) => ROOT.querySelectorAll(selector);
 
 const view = {
   login: $("#login-screen"),
@@ -31,7 +38,7 @@ const view = {
   assetList: $("#asset-list"),
   actions: $("#actions"),
   reveal: $("#reveal-row"),
-  empty: $("#empty-state"),
+  empty: $("#onchain-empty-state"),
   toast: $("#toast"),
 };
 
@@ -178,9 +185,9 @@ function toast(title, detail) {
 
 /* ---------------------------------------------------------------- comandi */
 
-document.querySelectorAll("[data-chain]").forEach((tab) => {
+$$("[data-chain]").forEach((tab) => {
   tab.addEventListener("click", () => {
-    document.querySelectorAll("[data-chain]").forEach((other) =>
+    $$("[data-chain]").forEach((other) =>
       other.setAttribute("aria-selected", String(other === tab)));
     $("#chain-switch").dataset.selected = tab.dataset.chain;
     selectChain(tab.dataset.chain);
@@ -204,7 +211,7 @@ const SHEETS = {
     onExecuted: () => { refreshBalance(); refreshPositions(); toast("Swap inviato", "verifica la firma nello storico"); },
   }),
 };
-document.querySelectorAll("[data-sheet]").forEach((button) =>
+$$("[data-sheet]").forEach((button) =>
   button.addEventListener("click", () => SHEETS[button.dataset.sheet]?.()));
 
 view.reveal.addEventListener("click", () => sheets.openKey({ onStart: startReveal }));
