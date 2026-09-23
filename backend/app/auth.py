@@ -126,6 +126,10 @@ def get_user(user_id: str) -> User | None:
     return _users.get(user_id)
 
 
+def list_users() -> list[User]:
+    return list(_users.values())
+
+
 def find_by_email(email: str) -> User | None:
     email = email.strip().lower()
     return next((u for u in _users.values() if u.email == email), None)
@@ -155,6 +159,21 @@ def set_telegram_chat_id(user_id: str, chat_id: str) -> User | None:
     if user is None:
         return None
     updated = user.model_copy(update={"telegram_chat_id": chat_id.strip()})
+    _users[user_id] = updated
+    _save_users()
+    return updated
+
+
+def set_sniper_autotrade_chain(user_id: str, chain: str, enabled: bool) -> User | None:
+    user = _users.get(user_id)
+    if user is None:
+        return None
+    chains = set(user.sniper_autotrade_chains)
+    if enabled:
+        chains.add(chain)
+    else:
+        chains.discard(chain)
+    updated = user.model_copy(update={"sniper_autotrade_chains": sorted(chains)})
     _users[user_id] = updated
     _save_users()
     return updated

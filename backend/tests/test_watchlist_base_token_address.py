@@ -40,3 +40,17 @@ def test_upsert_fills_address_on_existing_entry_without_one():
     )
     assert same.id == old.id
     assert same.base_token_address == "TokenMintAddr222"
+
+
+def test_dex_symbol_case_is_preserved_not_uppercased():
+    """Bug reale: .upper() su un simbolo dex rendeva l'indirizzo del pool
+    (base58 case-sensitive su Solana, o un contratto EVM misto) illeggibile
+    a _parse_symbol() — PEPE@solana:9xQe... diventava PEPE@SOLANA:9XQE...
+    e smetteva di fare match con la sua regex."""
+    entry = watchlist_store.add_entry("u1", "pepe@solana:9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin", "dex")
+    assert entry.symbol == "pepe@solana:9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin"
+
+
+def test_non_dex_symbol_is_still_uppercased():
+    entry = watchlist_store.add_entry("u1", "btcusdt", "crypto")
+    assert entry.symbol == "BTCUSDT"
