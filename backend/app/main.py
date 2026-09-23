@@ -92,6 +92,7 @@ from app.trading.onchain import keys as onchain_keys
 from app.trading.onchain import ledger as onchain_ledger
 from app.trading.onchain import passkey as onchain_passkey
 from app.trading.onchain import prices as onchain_prices
+from app.trading.onchain import token_search as onchain_tokens
 from app.trading.onchain import quotes as onchain_quotes
 from app.trading.onchain import reveal_requests as onchain_reveal
 from app.trading.onchain import rpc_client as onchain_rpc_client
@@ -2619,23 +2620,32 @@ async def onchain_token_search(
     chain: Literal["solana", "robinhood"], query: str = Query(..., min_length=1, max_length=20),
     user: User = Depends(auth.get_current_user),
 ) -> list[dict]:
-    """Ricerca per ticker sulla stessa fonte del resto del sito (DexScreener,
-    tramite dexscreener_provider — Lorenzo: "voglio poter usare il ticker;
-    accedendo alla logica che avevamo gia' implementato... dove ogni ticker
-    veniva beccato anche nei dex"), filtrata alla sola chain del wallet.
-    Sostituisce il prompt() del browser: mai un dialog nativo dentro l'app."""
+    """Un solo token per ticker, il contratto verificato con piu'
+    liquidita' (Lorenzo: "voglio solo un unico risultato per ticker...
+    non voglio dover scegliere altri doppioni"). La fonte e' per chain,
+    vedi onchain_tokens; se non risponde si ripiega sulla ricerca
+    DexScreener del resto del sito, sempre un risultato per ticker ma
+    senza la verifica del contratto."""
     _require_onchain_enabled()
+    try:
+        return await onchain_tokens.search(chain, query)
+    except (httpx.HTTPError, ValueError) as exc:
+        logger.warning("onchain token search via primary source failed (%s): %s", chain, exc)
+
     results = await dexscreener_provider.search_symbols(query)
-    out = []
-    for r in results:
+    out, seen = [], set()
+    for r in results:  # gia' ordinati per liquidita', il primo per ticker vince
         try:
             _base, symbol_chain, _pool = _parse_dex_symbol(r["symbol"])
         except Exception:  # noqa: BLE001 — un simbolo malformato si scarta, non blocca la ricerca
             continue
-        if symbol_chain != chain or not r.get("base_token_address"):
+        ticker = onchain_tokens.normalize_symbol(r["symbol"].split("@")[0])
+        if symbol_chain != chain or not r.get("base_token_address") or ticker in seen:
             continue
+        seen.add(ticker)
         out.append({
-            "symbol": r["symbol"].split("@")[0], "name": r["name"], "address": r["base_token_address"],
+            "symbol": ticker, "name": r["name"], "address": r["base_token_address"],
+            "decimals": None, "verified": False, "liquidity_usd": None,
         })
     return out
 

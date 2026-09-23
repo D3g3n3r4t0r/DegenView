@@ -349,6 +349,8 @@ export function openTokenPicker(chain, { onPick, title = "Scegli token" } = {}) 
         results.innerHTML = found.map((t) => `
           <li data-address="${escapeHtml(t.address)}" data-symbol="${escapeHtml(t.symbol)}" role="button" tabindex="0">
             <span><b>${escapeHtml(t.symbol)}</b> <small>${escapeHtml(t.name)}</small></span>
+            <span class="picker-meta">${t.verified ? "<i class=\"is-verified\">verificato</i>" : "<i>non verificato</i>"}${
+              t.liquidity_usd ? ` · liq. ${compactUsd.format(t.liquidity_usd)}` : ""}</span>
           </li>`).join("");
         wirePicks(results);
       } catch (error) {
@@ -363,6 +365,10 @@ export function openTokenPicker(chain, { onPick, title = "Scegli token" } = {}) 
     results.querySelector("[data-address]")?.click();
   });
 }
+
+const compactUsd = new Intl.NumberFormat("en-US", {
+  style: "currency", currency: "USD", notation: "compact", maximumFractionDigits: 1,
+});
 
 // Mint Solana (base58, 32-44 caratteri) o contratto EVM (0x + 40 hex).
 const looksLikeAddress = (text) =>
