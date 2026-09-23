@@ -402,16 +402,29 @@ $("#login-form").addEventListener("submit", async (event) => {
   }
 });
 
+// Sessione e wallet che il server ha gia' messo nell'HTML (onchain-app.html):
+// due richieste in fila risparmiate. Si usa una volta sola — dopo un login
+// o dentro index.html, che non lo porta, si torna a chiederli.
+function takeBootData() {
+  const node = document.getElementById("onchain-boot");
+  if (!node) return null;
+  node.remove();
+  try { return JSON.parse(node.textContent); } catch { return null; }
+}
+
 async function boot() {
+  const preloaded = takeBootData();
   let signedIn = false;
-  try { signedIn = Boolean((await api.getSession())?.user); } catch { /* offline: si tratta come non loggato */ }
+  if (preloaded) signedIn = Boolean(preloaded.user);
+  else try { signedIn = Boolean((await api.getSession())?.user); } catch { /* offline: si tratta come non loggato */ }
 
   view.login.hidden = signedIn;
   view.shell.hidden = !signedIn;
   if (!signedIn) return;
 
   try {
-    for (const wallet of await api.listWallets()) state.wallets[wallet.chain] = wallet;
+    const wallets = preloaded?.wallets ?? await api.listWallets();
+    for (const wallet of wallets) state.wallets[wallet.chain] = wallet;
   } catch { /* al primo carico senza rete resta la cache locale, se c'e' */ }
 
   paintChainStatic();

@@ -9,7 +9,26 @@ export class ApiError extends Error {}
 
 const DEFAULT_TIMEOUT_MS = 8000;
 
-async function request(path, { method = "GET", body, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
+// GET identici in volo insieme diventano una richiesta sola: all'avvio
+// saldo e stato di rischio li chiedevano due pannelli ciascuno, e ogni
+// saldo e' una chiamata RPC vera lato server. Chi arriva dopo riceve la
+// stessa risposta (o lo stesso errore) di chi e' partito per primo.
+const inFlight = new Map();
+
+function request(path, options = {}) {
+  if ((options.method ?? "GET") !== "GET") {
+    inFlight.clear();  // una scrittura rende vecchia qualunque lettura partita prima
+    return send(path, options);
+  }
+  let pending = inFlight.get(path);
+  if (!pending) {
+    pending = send(path, options).finally(() => inFlight.delete(path));
+    inFlight.set(path, pending);
+  }
+  return pending;
+}
+
+async function send(path, { method = "GET", body, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
   let response;
   try {
     response = await fetch(path, {
