@@ -1483,6 +1483,17 @@
      il login la lascia ingrandita: "appena lo apro e' decentrato". */
   html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; overflow-x: clip; }
 
+  /* Mai piu' larga dello schermo. Un indirizzo o un simbolo lungo
+     ("Nessun dato disponibile per MYCE@robinhood:0x9782...") e' una parola
+     sola: senza questi a capo allargava la card, la card allargava la
+     pagina, e iPhone la rimpiccioliva tutta di lato. */
+  body { overflow-x: clip; max-inline-size: 100vw; }
+  :is(p, li, small, dd, td, .swap-detail, .sheet-note, .price-line, .menu-item, .toast) { overflow-wrap: anywhere; }
+  .chart-head > * { min-inline-size: 0; }
+  .token-head { max-inline-size: 100%; min-inline-size: 0; }
+  #market-pair { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  :is(#app-shell, .status-strip, #market-order-row, #bottom-panel, .pilot, .pilot-main, .pilot-side, .market-card, .order-card, .sheet) > * { min-inline-size: 0; }
+
   /* Avvio: DEGEN, poco meno di un secondo, poi si toglie di mezzo. Non
      blocca niente: la pagina sotto carica e risponde intanto. */
   .splash {
