@@ -61,6 +61,18 @@ def check_circuit_breaker(owner_id: str, chain: str) -> tuple[bool, str]:
     return True, ""
 
 
+def check_discrepancy(owner_id: str, chain: str, token: str) -> tuple[bool, str]:
+    """Blocca nuovi ordini su token+wallet con una discrepanza saldo-vero
+    aperta (vedi reconciliation.check_position_discrepancy) — nessuna
+    correzione automatica, serve revisione a mano (ledger.review_discrepancy)."""
+    if ledger.has_open_discrepancy(owner_id, chain, token):
+        return False, (
+            f"{token} su {chain} ha una discrepanza di saldo aperta e non revisionata — "
+            "nuovi ordini bloccati finche' non viene rivista a mano"
+        )
+    return True, ""
+
+
 # Soglie del price impact, dal piano approvato (revisione risk management).
 PRICE_IMPACT_WARN_PCT = 1.0
 PRICE_IMPACT_REJECT_PCT = 5.0
@@ -121,6 +133,7 @@ def run_all_checks(
     piano."""
     checks: list[tuple] = [
         (check_circuit_breaker, (owner_id, chain)),
+        (check_discrepancy, (owner_id, chain, token)),
         (check_per_trade_cap, (size_usd,)),
         (check_daily_cap, (owner_id, chain, size_usd)),
         (check_price_impact, (price_impact_pct,)),
