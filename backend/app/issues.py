@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0091", "Wallet da telefono: pagina decentrata all'apertura, rete da cambiare nel menu, nessun avvio",
+     "Lorenzo, da iPhone: 'quando entro nel sito da mobile fai in modo che tutto sia perfettamente allineato al monitor, adesso appena lo apro e' decentrato, voglio un'animazione anche all'avvio appena mi collego [...] con scritto DEGEN'. E: 'per cambiare rete voglio che ci sia un simbolino [...] che mi faccia capire che posso cambiare rete con un click, senza andare a pigiare il tasto nel menu'.",
+     "media"),
     ("seed-0090", "Wallet on-chain: molti ticker non si trovano, e per ogni ticker escono doppioni",
      "Lorenzo: 'mezzi ticker non funzionano; voglio solo un unico risultato per ticker, quello con il contratto corretto e verificato con liquidità migliore, non voglio dover scegliere altri doppioni'.",
      "media"),

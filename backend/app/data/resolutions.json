@@ -1267,5 +1267,15 @@
       "frontend/static/fonts/"
     ],
     "next": "Sul server vero il pannello salute probabilmente mostrera' scanner spento (sniper_enabled), ordini reali spenti (onchain_execution_enabled) e segnali fermi senza Telegram configurato: sono interruttori del server, non della pagina. Da verificare con Lorenzo quali accendere."
+  },
+  "seed-0091": {
+    "status": "risolto",
+    "at": 1790195738,
+    "summary": "La rete ora si cambia toccando il suo nome accanto al saldo (simbolo della rete e freccine): un tocco e passa all'altra, niente menu; 'Cambia rete' e' uscito dal menu e le due pillole in alto su desktop non servono piu'. La pagina non si sposta piu' di lato: i campi del login erano a 15px, e sotto i 16px iOS ingrandisce la pagina quando li tocchi e la lascia ingrandita anche dopo l'accesso. All'apertura compare DEGEN per meno di un secondo, poi sparisce senza bloccare niente. Poi Lorenzo ('sto errore non deve MAI SUCCEDERE', con uno screenshot): un messaggio del grafico con l'indirizzo intero del token, una parola sola lunghissima, allargava la card e con lei la pagina. Ora ogni testo va a capo anche dentro una parola, le card non possono piu' essere piu' larghe dello schermo e il nome del token si accorcia con i puntini.",
+    "detail": "frontend/onchain-app.html: .form input da 15px a 16px (auto-zoom iOS al focus); html con overflow-x: clip e text-size-adjust 100% come rete di sicurezza; #chain-flip dentro la label del saldo, #chain-switch in topbar nascosto ma rimasto come stato; splash #splash in @layer motion, solo opacity/transform, pointer-events none, nascosto con prefers-reduced-motion. main.js: il chip clicca l'altra chain di #chain-switch e aggiorna icona e title; la copia incorporata in index.html non ha il chip e resta com'era. Verificato con Playwright a 390px: scrollWidth uguale alla larghezza, nessun elemento oltre il bordo, splash a 0.55s e sparito a 1.15s. Blindatura: overflow-wrap: anywhere su p/li/small/messaggi, min-inline-size: 0 sui figli delle griglie principali e di .chart-head, #market-pair con ellissi, body con overflow-x: clip. Provato iniettando l'indirizzo MYCE@robinhood:0x9782... in stato grafico, coppia, prezzo e dettagli swap: nessun elemento oltre i 390px.",
+    "files": [
+      "frontend/onchain-app.html",
+      "frontend/static/onchain/main.js"
+    ]
   }
 }
