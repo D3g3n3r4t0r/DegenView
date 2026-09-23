@@ -20,11 +20,17 @@ Un pool appena creato ha liquidita' zero: la liquidita' arriva dopo. Ogni
 pool trovato resta "in attesa" per `PENDING_TTL_S` e viene riletto su
 DexScreener (30 pool per richiesta) finche' non supera le soglie o scade.
 Solo allora parte l'avviso, una volta per ticker.
+
+Superate le soglie, il token passa dal filtro di legittimita' (legit.py):
+Lorenzo vuole "token legittimi con progetti seri", cap sotto i $100k, e il
+link al sito. Chi non ha ancora sito o report di sicurezza resta in attesa
+e viene riprovato ogni `VET_RETRY_S`; chi e' bocciato non torna piu'.
 """
 
 from __future__ import annotations
 
 import asyncio
+import html
 import json
 import logging
 import time
@@ -33,6 +39,10 @@ from pathlib import Path
 from typing import Awaitable, Callable
 
 import httpx
+
+from app.providers.base import ProviderError
+from app.providers.dexscreener import DexScreenerProvider, make_symbol
+from app.trading.onchain import legit
 
 logger = logging.getLogger(__name__)
 
@@ -46,14 +56,19 @@ PUMPFUN_COINS = "https://frontend-api-v3.pump.fun/coins"
 GECKO_BASE = "https://api.geckoterminal.com/api/v2"
 
 # Soglie dell'avviso: regolabili qui.
-LIQ_MIN_USD = 20_000
-MCAP_MAX_USD = 20_000_000
-LIQ_TO_MCAP_MIN = 0.05
+LIQ_MIN_USD = 8_000
+MCAP_MAX_USD = 100_000        # Lorenzo: "una market cap non oltre i 100.000 dollari"
+LIQ_TO_MCAP_MIN = 0.10
 MAX_AGE_S = 6 * 3600          # oltre, non e' piu' un listing
 PENDING_TTL_S = 2 * 3600      # quanto si aspetta che arrivi la liquidita'
 MAX_PENDING = 300
 KEEP_LISTINGS = 40
-NOTIFY_MAX_AGE_S = 15 * 60    # fuori dall'app si avvisa solo di cio' che e' davvero appena uscito
+NOTIFY_MAX_AGE_S = 60 * 60    # il sito arriva spesso dopo il pool: si aspetta un po' di piu'
+VET_RETRY_S = 120             # un token "in attesa" (niente sito, niente report) si riprova
+VET_CONCURRENCY = 4
+CHART_MIN_BARS = 2            # un listing si mostra solo se il suo grafico c'e' gia'
+CHART_RETRY_S = 15            # GeckoTerminal ha le candele di un pool nuovo dopo 1-5 minuti
+KEEP_REJECTED = 30    # fuori dall'app si avvisa solo di cio' che e' davvero appena uscito
 
 TICK_S = 3
 CHAIN_POLL_S = 3
@@ -81,12 +96,21 @@ class _Pending:
     pair: str
     source: str
     detected_at: float = field(default_factory=time.time)
+    links: dict = field(default_factory=dict)
+    next_vet_at: float = 0.0
+    vetting: bool = False
+    waiting_for: str = ""
+    verdict: dict | None = None   # esito "ok" del filtro, tenuto mentre si aspetta il grafico
 
 
 _pending: dict[str, _Pending] = {}   # chain:pair
 _done: dict[str, float] = {}          # chain:pair -> quando e' stato chiuso (avvisato o scaduto)
 _alerted_tickers: dict[str, float] = {}  # chain:TICKER -> quando
 _listings: list[dict] = []
+_rejected: list[dict] = []
+_tasks: set[asyncio.Task] = set()
+_vet_slots = asyncio.Semaphore(VET_CONCURRENCY)
+_http: httpx.AsyncClient | None = None
 _subscribers: list[asyncio.Queue] = []
 _callbacks: list[Callable[[dict], Awaitable[None]]] = []
 _state = {"last_block": 0, "last_tick": 0.0, "sources": {}}
@@ -126,10 +150,16 @@ def recent() -> list[dict]:
 def status() -> dict:
     return {
         "pending": len(_pending),
+        "vetting": sum(1 for p in _pending.values() if p.waiting_for or p.vetting),
+        "rejected": len(_rejected),
+        "recent_rejected": _rejected[:8],
+        "ai_review": bool(legit.settings.anthropic_api_key),
+        "tokensniffer": bool(legit.settings.tokensniffer_api_key),
         "last_tick": _state["last_tick"],
         "sources": dict(_state["sources"]),
         "thresholds": {"liq_min_usd": LIQ_MIN_USD, "mcap_max_usd": MCAP_MAX_USD,
-                       "liq_to_mcap_min": LIQ_TO_MCAP_MIN, "max_age_h": MAX_AGE_S / 3600},
+                       "liq_to_mcap_min": LIQ_TO_MCAP_MIN, "max_age_h": MAX_AGE_S / 3600,
+                       "requires": ["sito proprio", "social", "controllo anti-rug"]},
     }
 
 
@@ -153,21 +183,24 @@ def reset_for_tests() -> None:
     _done.clear()
     _alerted_tickers.clear()
     _listings.clear()
+    _rejected.clear()
     _subscribers.clear()
     _state.update(last_block=0, last_tick=0.0, sources={})
 
 
 # ------------------------------------------------------------------- scoperta
 
-def add_pending(chain: str, pair: str, source: str) -> bool:
+def add_pending(chain: str, pair: str, source: str, links: dict | None = None) -> bool:
     k = _key(chain, pair)
+    if pair and links and k in _pending:
+        _pending[k].links = legit.merge_links(_pending[k].links, links)
     if not pair or k in _pending or k in _done:
         return False
     if len(_pending) >= MAX_PENDING:  # si sacrifica il piu' vecchio, mai il nuovo
         oldest = min(_pending, key=lambda x: _pending[x].detected_at)
         del _pending[oldest]
         _done[oldest] = time.time()
-    _pending[k] = _Pending(chain, pair, source)
+    _pending[k] = _Pending(chain, pair, source, links=links or {})
     return True
 
 
@@ -185,7 +218,8 @@ def pools_from_logs(logs: list[dict]) -> list[str]:
     return pools
 
 
-def pools_from_pumpfun(coins: list[dict], now: float | None = None) -> list[str]:
+def pools_from_pumpfun(coins: list[dict], now: float | None = None) -> list[tuple[str, dict]]:
+    """(pool, link a sito e social dichiarati su pump.fun)."""
     now = now or time.time()
     out = []
     for c in coins:
@@ -194,7 +228,7 @@ def pools_from_pumpfun(coins: list[dict], now: float | None = None) -> list[str]
         created = (c.get("created_timestamp") or 0) / 1000
         pool = c.get("pump_swap_pool") or c.get("pool_address") or c.get("raydium_pool")
         if pool and now - created <= MAX_AGE_S:
-            out.append(pool)
+            out.append((pool, legit.links_from_pumpfun(c)))
     return out
 
 
@@ -230,15 +264,31 @@ def _is_expired(p: _Pending, now: float) -> bool:
     return now - p.detected_at > PENDING_TTL_S
 
 
+def _push(event: str, item: dict) -> None:
+    for q in list(_subscribers):
+        try:
+            q.put_nowait((event, item))
+        except asyncio.QueueFull:
+            pass
+
+
+def update_listing(chain: str, pair: str, **fields) -> dict | None:
+    """Aggiunge a un listing gia' pubblicato (il backtest del radar) e lo
+    rispinge a chi guarda."""
+    item = next((x for x in _listings if x.get("chain") == chain and x.get("pair_address") == pair), None)
+    if item is None:
+        return None
+    item.update(fields)
+    _save()
+    _push("update", item)
+    return item
+
+
 async def _publish(item: dict) -> None:
     _listings.insert(0, item)
     del _listings[KEEP_LISTINGS:]
     _save()
-    for q in list(_subscribers):
-        try:
-            q.put_nowait(item)
-        except asyncio.QueueFull:
-            pass
+    _push("listing", item)
     fresh = item.get("created_at") and item["found_at"] - item["created_at"] <= NOTIFY_MAX_AGE_S
     for fn in list(_callbacks) if fresh else []:
         try:
@@ -247,31 +297,102 @@ async def _publish(item: dict) -> None:
             logger.exception("listings: callback fallita")
 
 
-async def accept_pairs(pairs: list[dict], now: float | None = None) -> list[dict]:
-    """Chiude i pending che ora superano le soglie. Uno per ticker per chain."""
+def _reject(item: dict, reason: str, now: float) -> None:
+    _rejected.insert(0, {"chain": item["chain"], "symbol": item["symbol"], "name": item["name"],
+                         "pair_url": item["pair_url"], "reason": reason, "at": now})
+    del _rejected[KEEP_REJECTED:]
+
+
+async def _chart_ready(item: dict) -> bool:
+    """Le candele del pool ci sono gia'? Lorenzo: "non deve succedere che se
+    c'e' un token rilevato, se ci clicco non mi carica il grafico. Il
+    controllo deve essere fatto a monte"."""
+    try:
+        df = await DexScreenerProvider().fetch_ohlcv(
+            make_symbol(item["symbol"], item["chain"], item["pair_address"]), "1m", 10)
+    except ProviderError:
+        return False
+    return len(df) >= CHART_MIN_BARS
+
+
+async def _vet(k: str, pending: _Pending, item: dict, pair: dict) -> dict | None:
+    """Il filtro di legittimita' su un listing che ha gia' superato le soglie,
+    poi l'attesa del grafico."""
+    try:
+        async with _vet_slots:
+            verdict = pending.verdict
+            if verdict is None:
+                client = _http or httpx.AsyncClient(timeout=10.0)
+                try:
+                    verdict = await legit.assess(
+                        item, legit.merge_links(pending.links, legit.links_from_dexscreener(pair)), client)
+                finally:
+                    if client is not _http:
+                        await client.aclose()
+            chart = verdict["status"] == "ok" and await _chart_ready(item)
+    except Exception:
+        logger.exception("listings: filtro fallito su %s", item["symbol"])
+        verdict, chart = {"status": "wait", "reason": "controllo non riuscito"}, False
+    finally:
+        pending.vetting = False
+    now = time.time()
+    if _pending.get(k) is not pending:
+        return None  # scaduto o sostituito nel frattempo
+    if verdict["status"] == "wait":
+        pending.next_vet_at = now + VET_RETRY_S
+        pending.waiting_for = verdict["reason"]
+        return None
+    if verdict["status"] == "ok" and not chart:
+        pending.verdict = verdict
+        pending.next_vet_at = now + CHART_RETRY_S
+        pending.waiting_for = "grafico non ancora disponibile"
+        return None
+    del _pending[k]
+    _done[k] = now
+    if verdict["status"] == "fail":
+        _reject(item, verdict["reason"], now)
+        return None
+    ticker = f"{item['chain']}:{item['symbol'].upper()}"
+    if ticker in _alerted_tickers:
+        return None  # una copia con lo stesso nome: il primo che passa vince
+    _alerted_tickers[ticker] = now
+    item.update(found_at=now, source=pending.source,
+                latency_s=round(now - item["created_at"]) if item["created_at"] else None,
+                website=verdict["website"], socials=verdict["socials"], checks=verdict["checks"],
+                ai=verdict.get("ai"), github=verdict.get("github"), tokensniffer=verdict.get("tokensniffer"))
+    await _publish(item)
+    return item
+
+
+def _spawn(coro) -> asyncio.Task:
+    task = asyncio.get_running_loop().create_task(coro)
+    _tasks.add(task)
+    task.add_done_callback(_tasks.discard)
+    return task
+
+
+async def accept_pairs(pairs: list[dict], now: float | None = None, *, wait: bool = False) -> list[dict]:
+    """Manda al filtro i pending che ora superano le soglie. Il filtro gira in
+    parallelo e non ferma la scoperta; `wait=True` lo aspetta (per i test)."""
     now = now or time.time()
-    published = []
+    tasks = []
     for pair in pairs:
         chain = pair.get("chainId")
         k = _key(chain, pair.get("pairAddress") or "")
         pending = _pending.get(k)
-        if pending is None:
+        if pending is None or pending.vetting or now < pending.next_vet_at:
             continue
         item = evaluate_pair(pair, now)
         if item is None:
             continue
-        del _pending[k]
-        _done[k] = now
-        ticker = f"{chain}:{item['symbol'].upper()}"
-        if ticker in _alerted_tickers:
-            continue  # una copia con lo stesso nome: il primo con liquidita' vince
-        _alerted_tickers[ticker] = now
-        item.update(found_at=now, source=pending.source,
-                    latency_s=round(now - item["created_at"]) if item["created_at"] else None)
-        await _publish(item)
-        published.append(item)
+        if f"{chain}:{item['symbol'].upper()}" in _alerted_tickers:
+            del _pending[k]
+            _done[k] = now
+            continue
+        pending.vetting = True
+        tasks.append(_spawn(_vet(k, pending, item, pair)))
     for k, p in list(_pending.items()):
-        if _is_expired(p, now):
+        if _is_expired(p, now) and not p.vetting:
             del _pending[k]
             _done[k] = now
     for k, ts in list(_done.items()):
@@ -280,7 +401,44 @@ async def accept_pairs(pairs: list[dict], now: float | None = None) -> list[dict
     for k, ts in list(_alerted_tickers.items()):
         if now - ts > 7 * 86400:
             del _alerted_tickers[k]
-    return published
+    if not wait or not tasks:
+        return []
+    return [x for x in await asyncio.gather(*tasks) if x]
+
+
+def telegram_text(item: dict, now: float | None = None, app_url: str = "") -> str:
+    """Il messaggio Telegram: numeri, controlli passati e i link cliccabili
+    (sito del progetto, GitHub, grafico). Lorenzo: "voglio avere anche la
+    possibilita' con un link di cliccare e andare sul sito del token"."""
+    now = now or time.time()
+    esc = html.escape
+    chain = "Solana" if item["chain"] == "solana" else "Robinhood"
+    age = int((now - item["created_at"]) // 60) if item.get("created_at") else None
+    lines = [f"🆕 <b>{esc(item['symbol'])}</b> · {esc(item.get('name') or '')} su {chain}",
+             f"liq. ${item['liquidity_usd']:,.0f} · cap ${item['market_cap']:,.0f}"
+             + (f" · nato {age} min fa" if age is not None else "")]
+    passed = [c for c in item.get("checks") or [] if c.get("ok")]
+    if passed:
+        lines.append("✅ " + " · ".join(esc(c["label"]) for c in passed))
+    ai = item.get("ai") or {}
+    if ai.get("reason") and not ai.get("error"):
+        lines.append(f"🤖 {ai.get('score')}/10 · {esc(ai['reason'])}")
+    links = []
+    if item.get("website"):
+        links.append(f'<a href="{esc(item["website"], quote=True)}">🌐 Sito</a>')
+    if item.get("github"):
+        links.append(f'<a href="{esc(item["github"], quote=True)}">GitHub</a>')
+    for s in item.get("socials") or []:
+        if s.get("type") in ("twitter", "telegram"):
+            links.append(f'<a href="{esc(s["url"], quote=True)}">{"X" if s["type"] == "twitter" else "Telegram"}</a>')
+    if item.get("tokensniffer"):
+        links.append(f'<a href="{esc(item["tokensniffer"], quote=True)}">Token Sniffer</a>')
+    if item.get("pair_url"):
+        links.append(f'<a href="{esc(item["pair_url"], quote=True)}">Grafico</a>')
+    if app_url:
+        links.append(f'<a href="{esc(app_url, quote=True)}">Apri in DEGEN</a>')
+    lines.append(" · ".join(links))
+    return "\n".join(lines)
 
 
 # --------------------------------------------------------------------- fonti
@@ -309,8 +467,8 @@ async def _poll_pumpfun(client: httpx.AsyncClient) -> None:
     r = await client.get(PUMPFUN_COINS, params={"offset": 0, "limit": 50, "sort": "last_trade_timestamp",
                                                 "order": "DESC", "complete": "true"})
     if r.status_code == 200 and isinstance(r.json(), list):
-        for pool in pools_from_pumpfun(r.json()):
-            add_pending("solana", pool, "pumpfun")
+        for pool, links in pools_from_pumpfun(r.json()):
+            add_pending("solana", pool, "pumpfun", links)
 
 
 async def _poll_gecko(client: httpx.AsyncClient) -> None:
@@ -357,7 +515,9 @@ START_DELAY_S = 10
 
 async def listings_loop() -> None:
     await asyncio.sleep(START_DELAY_S)
+    global _http
     async with httpx.AsyncClient(timeout=10.0) as client:
+        _http = client
         while True:
             now = time.time()
             _state["last_tick"] = now

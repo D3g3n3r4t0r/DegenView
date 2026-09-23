@@ -2836,3 +2836,45 @@ Resta: vederlo sul server vero; decidere con Lorenzo se l'alert delle
 proposte (non dei listing) deve anche arrivare su Telegram e se l'interruttore debba poter accendere l'acquisto
 automatico (oggi no, di proposito). Primo giro reale: poche proposte
 (1 su ~100 token), Robinhood ha ancora pochi pool giovani liquidi.
+
+### Seguito — filtro di legittimita' e radar come prima pagina — `seed-0095` — 2026-09-23
+
+Lorenzo: "voglio evitare rug pull [...] voglio token legittimi con progetti
+seri [...] market cap non oltre i 100.000 dollari [...] un link per andare sul
+sito del token", poi "fai un controllo anche per github [...] voglio evitare
+SHITCOIN e MEMECOIN", "aggiungi anche il report di token sniffer", e "la prima
+pagina quando entro sia proprio questa qui [...] i pop-up in una lista [...]
+e il grafico [...] quale strategia performerebbe meglio [...] in tempo reale".
+
+- `app/trading/onchain/legit.py`: `assess()` -> ok / fail / wait. Ordine:
+  nome da meme (fail) -> RugCheck/GoPlus (fail) -> Token Sniffer (fail se
+  segnalato o < 70/100; "non attivo" senza chiave) -> social -> sito proprio
+  raggiungibile (wait se manca) -> GitHub non fork, >= 5 commit su >= 2 giorni
+  (fail; wait se GitHub non risponde) -> Claude sul sito (puo' solo bocciare;
+  "non attivo" senza chiave). Il sito si scarica con controllo anti-SSRF
+  (solo IP pubblici, redirect ricontrollati a mano).
+- Soglie nuove: cap <= $100k, liquidita' >= $8k e >= 10% della cap, sia in
+  `listings.py` sia in `radar.py`. I "wait" si riprovano ogni 2 minuti finche'
+  il pending non scade (2 h); gli scartati si contano (`status().rejected`).
+- Telegram (`listings.telegram_text`): link a sito, GitHub, X, Telegram,
+  Token Sniffer, grafico, "Apri in DEGEN". Avviso se il pool ha meno di 1 h.
+- Backtest automatico di ogni listing: `radar.listings_backtest_loop()`,
+  candele 1m (5m oltre 12 h), minimo 45 candele, rifatto ogni 2 min (10 oltre
+  le 2 h); arriva al browser come evento SSE `update`.
+- Prima pagina: `#radar` e' il primo blocco di `#app-shell` (vista Pilota):
+  avvisi a sinistra, palco con grafico dal vivo a destra (di default l'ultimo
+  uscito; un tocco su una riga lo blocca per 3 minuti).
+- **Da fare sul server**: `ANTHROPIC_API_KEY` e `TOKENSNIFFER_API_KEY`
+  (piano Pro) nel `.env`; senza, quei due passaggi risultano "non attivo".
+  GitHub senza token = 60 richieste/ora: `GITHUB_API_TOKEN` c'e' gia' per il
+  deploy e viene usato anche qui.
+- **Prossimo**: link ospite in sola lettura per un amico (Lorenzo ha scelto
+  "link ospite": radar, avvisi e grafici senza login, niente wallet, revocabile).
+- Dopo le prove di Lorenzo dal telefono (stessa sera): listing pubblicato solo
+  con grafico gia' disponibile (`listings._chart_ready`, >= 3 candele 1m,
+  riprova ogni 15 s tenendo l'esito del filtro); solo strategie del registro
+  (`strategy_configs()` non legge piu' l'archivio: "non voglio vedere
+  strategie applicate ad altri ticker"); timeframe automatico
+  `radar.auto_interval` (il piu' largo con >= 150 candele); `NoDataYet` in
+  `providers/base.py`: il monitoraggio non manda piu' "Errore monitoraggio"
+  per un pool senza candele.

@@ -2,7 +2,6 @@ import asyncio
 import base64
 import datetime as _dt
 import hashlib
-import html
 import io
 import httpx
 import itertools
@@ -117,6 +116,7 @@ from app.pine import PineError, PineInterpreter, is_strategy_style, parse_progra
 from app.pine import storage as pine_storage
 from app.providers.base import (
     DataProvider,
+    NoDataYet,
     ProviderError,
     ProviderUnreachable,
     QuotaExceeded,
@@ -711,6 +711,11 @@ async def _watchlist_alert_loop() -> None:
                         f"<i>{exc}</i>",
                     ))
                 continue
+            except NoDataYet as exc:
+                # Pool on-chain appena nato: le candele a quell'intervallo
+                # arrivano da sole. Aspettare non e' un errore da notificare.
+                logger.info("Monitoraggio %s [%s]: %s", entry.symbol, entry.interval, exc)
+                continue
             except QuotaExceeded as exc:
                 # I crediti del piano sono finiti: non c'e' niente da riprovare
                 # fra un minuto. Senza questa pausa arrivava un messaggio di
@@ -1068,7 +1073,8 @@ async def lifespan(app: FastAPI):
     t4 = asyncio.create_task(_weekly_recap_loop())
     t5 = asyncio.create_task(_watchdog_loop())
     radar_tasks = [asyncio.create_task(onchain_radar.radar_loop()),
-                   asyncio.create_task(onchain_listings.listings_loop())] if settings.onchain_radar_enabled else []
+                   asyncio.create_task(onchain_listings.listings_loop()),
+                   asyncio.create_task(onchain_radar.listings_backtest_loop())] if settings.onchain_radar_enabled else []
     sniper_tasks: list[asyncio.Task] = []
     if settings.sniper_enabled:
         from app.sniper import cache as sniper_cache
@@ -3370,8 +3376,8 @@ async def onchain_radar_stream(user: User = Depends(auth.get_current_user)) -> S
             yield ": connesso\n\n"
             while True:
                 try:
-                    item = await asyncio.wait_for(queue.get(), timeout=15)
-                    yield f"event: listing\ndata: {json.dumps(item)}\n\n"
+                    event, item = await asyncio.wait_for(queue.get(), timeout=15)
+                    yield f"event: {event}\ndata: {json.dumps(item)}\n\n"
                 except asyncio.TimeoutError:
                     yield ": ping\n\n"
         finally:
@@ -3390,11 +3396,8 @@ async def _notify_listing(item: dict) -> None:
     chiusa non deve voler dire saperlo tardi. Al massimo 12 all'ora."""
     from app.notify import telegram
     now = _time.time()
-    chain = "Solana" if item["chain"] == "solana" else "Robinhood"
-    age = int((now - item["created_at"]) // 60) if item.get("created_at") else None
-    text = (f"🆕 <b>{html.escape(item['symbol'])}</b> su {chain} · liq. ${item['liquidity_usd']:,.0f}"
-            f" · cap ${item['market_cap']:,.0f}" + (f" · nato {age} min fa" if age is not None else "")
-            + f"\n{item['pair_url']}")
+    link = f"{settings.public_base_url}/onchain-app.html#listing={item['chain']}:{item['pair_address']}"
+    text = onchain_listings.telegram_text(item, now, link)
     for user in auth.list_users():
         if not user.telegram_chat_id or not user.onchain_wallets or not _telegram_allowed(user):
             continue
@@ -3411,7 +3414,7 @@ onchain_listings.on_listing(_notify_listing)
 @app.get("/api/onchain/radar/chart")
 async def onchain_radar_chart(
     chain: Literal["solana", "robinhood"], pool: str, symbol: str,
-    interval: Literal["1m", "5m", "15m"] = "15m", user: User = Depends(auth.get_current_user),
+    interval: Literal["1m", "5m", "15m", "1h", "4h"] = "15m", user: User = Depends(auth.get_current_user),
 ) -> dict:
     _require_onchain_enabled()
     try:
@@ -3432,7 +3435,7 @@ class RadarFollowRequest(BaseModel):
     pool: str
     symbol: str
     token_address: str
-    interval: Literal["1m", "5m", "15m"]
+    interval: Literal["1m", "5m", "15m", "1h", "4h"]
     strategy_name: str
     params: dict | None = None
     enabled: bool
