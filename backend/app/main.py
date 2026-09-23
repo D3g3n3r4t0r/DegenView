@@ -2687,7 +2687,7 @@ async def onchain_token_search(
         seen.add(ticker)
         out.append({
             "symbol": ticker, "name": r["name"], "address": r["base_token_address"],
-            "decimals": None, "verified": False, "liquidity_usd": None,
+            "decimals": None, "verified": False, "icon": None, "liquidity_usd": None,
         })
     return out
 

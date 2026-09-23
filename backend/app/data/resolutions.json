@@ -1242,8 +1242,8 @@
   },
   "seed-0088": {
     "status": "risolto",
-    "at": 1790195000,
-    "summary": "Il token si sceglie una volta sola: quello scelto sul grafico diventa l'altra gamba di swap e ordine limite, e quello scelto nel pannello ordine sposta il grafico. La scelta del token e' una schermata sola, a tutto schermo da telefono (Lorenzo, con uno screenshot: 'appare sto casino, serve una schermata immersiva e semplice'): campo di ricerca in alto con Annulla accanto, sotto i tuoi token, niente pagina visibile dietro, niente Chiudi in fondo. Il segnaposto non dice piu' 'indirizzo', che faceva proporre a iOS gli indirizzi di casa e ufficio sopra la tastiera; un contratto incollato nello stesso campo funziona comunque. Il layout da telefono della pagina e' quello del Pilota, arrivato su main in parallelo."
+    "at": 1790196000,
+    "summary": "Il token si sceglie una volta sola: quello scelto sul grafico diventa l'altra gamba di swap e ordine limite, e quello scelto nel pannello ordine sposta il grafico. La scelta del token e' una schermata sola, a tutto schermo da telefono (Lorenzo, con uno screenshot: 'appare sto casino, serve una schermata immersiva e semplice'): campo di ricerca in alto con Annulla accanto, sotto i tuoi token, niente pagina visibile dietro, niente Chiudi in fondo. Il segnaposto non dice piu' 'indirizzo', che faceva proporre a iOS gli indirizzi di casa e ufficio sopra la tastiera; un contratto incollato nello stesso campo funziona comunque. Il layout da telefono della pagina e' quello del Pilota, arrivato su main in parallelo. Rifinita dopo un secondo screenshot di Lorenzo ('immersivo, pulito e ben fatto'): titolo per uso (Cosa vendi / Cosa ricevi), logo di ogni token, spunta accanto ai verificati, saldo o liquidita' a destra, righe scheletro mentre carica. Il suggerimento di casa/ufficio sopra la tastiera non dipendeva solo dalla parola 'indirizzo': ora il campo e' un vero campo di ricerca (type=search), su cui Safari non propone i contatti."
   },
   "seed-0090": {
     "status": "risolto",

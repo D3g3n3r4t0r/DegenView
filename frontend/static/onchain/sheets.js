@@ -263,24 +263,70 @@ export const isNativeAddress = (chain, address) =>
 // Una schermata sola per scegliere un token, a tutto schermo da telefono:
 // campo in alto con "Annulla" accanto, sotto i token che hai; scrivere
 // sostituisce la lista invece di allungarla. Lorenzo: "quando scelgo un
-// token appare sto casino, serve una schermata immersiva e semplice".
-// Il segnaposto non dice "indirizzo": Safari in italiano lo prende per un
-// campo di recapito e propone casa/ufficio sopra la tastiera.
+// token appare sto casino, serve una schermata immersiva e semplice" e
+// "immersivo, pulito e ben fatto".
+//
+// Il campo e' type=search con name "search": Safari su iOS non propone
+// l'autocompilazione dei contatti (casa/ufficio sopra la tastiera) sui
+// campi di ricerca, mentre autocomplete="off" da solo lo ignora.
+const iconCache = new Map(); // indirizzo -> url, dalle ricerche gia' fatte
+
+const hueOf = (text) => [...text].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) % 360, 7);
+
+function avatar(token) {
+  const icon = token.icon || iconCache.get(token.address.toLowerCase());
+  const letter = escapeHtml((token.symbol || "?").replace(/^\$/, "").slice(0, 1).toUpperCase());
+  return `<span class="tok-av" style="--h:${hueOf(token.address)}" aria-hidden="true">${
+    icon ? `<img src="${escapeHtml(icon)}" alt="" loading="lazy" referrerpolicy="no-referrer" />` : ""}<span>${letter}</span></span>`;
+}
+
+const VERIFIED_MARK = `<svg class="tok-check" viewBox="0 0 16 16" aria-label="verificato"><path d="M8 1.5l1.7 1.2 2.1-.1.7 2 1.7 1.2-.6 2 .6 2-1.7 1.2-.7 2-2.1-.1L8 14.5l-1.7-1.2-2.1.1-.7-2L1.8 10.2l.6-2-.6-2 1.7-1.2.7-2 2.1.1z"/><path class="tick" d="M5.4 8.2l1.8 1.8 3.4-3.6"/></svg>`;
+
+function tokenRow(token, side) {
+  return `
+    <li class="tok-row" data-address="${escapeHtml(token.address)}" data-symbol="${escapeHtml(token.symbol || "")}" role="button" tabindex="0">
+      ${avatar(token)}
+      <span class="tok-main">
+        <span class="tok-sym">${escapeHtml(token.symbol || shortAddress(token.address))}${token.verified ? VERIFIED_MARK : ""}</span>
+        <small>${escapeHtml(token.name || "")}</small>
+      </span>
+      <span class="tok-side">${side}</span>
+    </li>`;
+}
+
+const skeleton = (n) => Array.from({ length: n }, () =>
+  `<li class="tok-row is-skeleton" aria-hidden="true"><span class="tok-av"></span><span class="tok-main"><span></span><small></small></span></li>`).join("");
+
+const note = (text) => `<li class="tok-note">${escapeHtml(text)}</li>`;
+
+// Un'immagine che non carica lascia la lettera sotto, non un riquadro rotto.
+function wireAvatars(list) {
+  list.querySelectorAll(".tok-av img").forEach((img) => {
+    img.addEventListener("error", () => img.remove(), { once: true });
+  });
+}
+
 export function openTokenPicker(chain, { onPick, title = "Scegli token" } = {}) {
   pickerDialog.querySelector(".sheet-title").textContent = title;
   pickerDialog.setAttribute("aria-label", title);
   pickerBody.innerHTML = `
-    <div class="picker-search">
-      <input type="text" id="picker-query" name="token-query" placeholder="${escapeHtml(title)} · es. SOL, PEPE"
-        autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false"
-        enterkeyhint="search" inputmode="search" data-1p-ignore data-lpignore="true" />
-      <button type="button" class="picker-cancel">Annulla</button>
+    <div class="picker-top">
+      <p class="picker-title">${escapeHtml(title)}</p>
+      <div class="picker-search">
+        <label class="picker-field">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="6"/><path d="M13.5 13.5L17 17"/></svg>
+          <input type="search" id="picker-query" name="search" placeholder="Cerca per nome o ticker"
+            aria-label="Cerca token" autocomplete="off" autocorrect="off" autocapitalize="off"
+            spellcheck="false" enterkeyhint="search" data-1p-ignore data-lpignore="true" data-form-type="other" />
+        </label>
+        <button type="button" class="picker-cancel">Annulla</button>
+      </div>
     </div>
     <div class="picker-scroll">
-      <p class="label picker-label" id="picker-label">I tuoi token</p>
-      <ul id="picker-held" class="tx-list picker-list"><li>Leggo il portafoglio…</li></ul>
-      <ul id="picker-results" class="tx-list picker-list" hidden></ul>
-      <p class="picker-hint">Non c'è? Incolla il contratto del token nel campo in alto.</p>
+      <p class="picker-label" id="picker-label">I tuoi token</p>
+      <ul id="picker-held" class="picker-list">${skeleton(2)}</ul>
+      <ul id="picker-results" class="picker-list" hidden></ul>
+      <p class="picker-hint">Non lo trovi? Incolla il contratto del token nel campo in alto.</p>
     </div>
   `;
   if (!pickerDialog.open) pickerDialog.showModal();
@@ -295,9 +341,12 @@ export function openTokenPicker(chain, { onPick, title = "Scegli token" } = {}) 
   input.focus();
 
   const pick = (token) => { pickerDialog.close(); onPick?.(token); };
-  const wirePicks = (list) => list.querySelectorAll("[data-address]").forEach((li) => {
-    li.addEventListener("click", () => pick({ address: li.dataset.address, symbolHint: li.dataset.symbol || null }));
-  });
+  const wirePicks = (list) => {
+    wireAvatars(list);
+    list.querySelectorAll("[data-address]").forEach((li) => {
+      li.addEventListener("click", () => pick({ address: li.dataset.address, symbolHint: li.dataset.symbol || null }));
+    });
+  };
 
   // I token che il wallet ha DAVVERO (saldo nativo + portafoglio reale via
   // RPC), non solo la ricerca per ticker — Lorenzo: "quando seleziono cosa
@@ -312,20 +361,17 @@ export function openTokenPicker(chain, { onPick, title = "Scegli token" } = {}) 
       ]);
       const rows = [];
       if (balance) {
-        rows.push({ address: NATIVE_ADDRESS[chain], symbol: unit, amount: balance.native_balance, isNative: true });
+        rows.push({ address: NATIVE_ADDRESS[chain], symbol: unit, name: "Nativo · paga il gas", amount: balance.native_balance, verified: true });
       }
       for (const h of portfolio.holdings) {
-        if (h.amount > 0) rows.push({ address: h.address, symbol: h.symbol, amount: h.amount, isNative: false });
+        if (h.amount > 0) rows.push({ address: h.address, symbol: h.symbol, name: h.name || "", amount: h.amount });
       }
-      if (!rows.length) { held.innerHTML = "<li>Nessun token con saldo trovato.</li>"; return; }
-      held.innerHTML = rows.map((r) => `
-        <li data-address="${escapeHtml(r.address)}" data-symbol="${escapeHtml(r.symbol)}" role="button" tabindex="0">
-          <span><b>${escapeHtml(r.symbol)}</b>${r.isNative ? " <small>nativo</small>" : ""}</span>
-          <span>${formatToken(r.amount)}</span>
-        </li>`).join("");
+      held.innerHTML = rows.length
+        ? rows.map((r) => tokenRow(r, `<b>${formatToken(r.amount)}</b>`)).join("")
+        : note("Nessun token con saldo in questo wallet.");
       wirePicks(held);
     } catch (error) {
-      held.innerHTML = `<li>${escapeHtml(error.message)}</li>`;
+      held.innerHTML = note(error.message);
     }
   })();
 
@@ -343,30 +389,25 @@ export function openTokenPicker(chain, { onPick, title = "Scegli token" } = {}) 
     // Un indirizzo incollato si usa cosi' com'e': niente ricerca per
     // ticker, niente secondo campo nascosto in un "non lo trovi?".
     if (looksLikeAddress(q)) {
-      results.innerHTML = `
-        <li data-address="${escapeHtml(q)}" role="button" tabindex="0">
-          <span><b>Usa questo indirizzo</b> <small>${escapeHtml(shortAddress(q))}</small></span>
-        </li>`;
+      results.innerHTML = tokenRow({ address: q, symbol: "Contratto incollato", name: shortAddress(q) }, "Usa ›");
       wirePicks(results);
       return;
     }
-    results.innerHTML = "<li>Cerco…</li>";
+    results.innerHTML = skeleton(3);
     pickerDebounce = setTimeout(async () => {
       try {
         const found = await api.searchTokens(chain, q);
         if (input.value.trim() !== q) return;
-        if (!found.length) { results.innerHTML = "<li>Nessun risultato su questa chain.</li>"; return; }
-        results.innerHTML = found.map((t) => `
-          <li data-address="${escapeHtml(t.address)}" data-symbol="${escapeHtml(t.symbol)}" role="button" tabindex="0">
-            <span><b>${escapeHtml(t.symbol)}</b> <small>${escapeHtml(t.name)}</small></span>
-            <span class="picker-meta">${t.verified ? "<i class=\"is-verified\">verificato</i>" : "<i>non verificato</i>"}${
-              t.liquidity_usd ? ` · liq. ${compactUsd.format(t.liquidity_usd)}` : ""}</span>
-          </li>`).join("");
+        if (!found.length) { results.innerHTML = note("Nessun token con questo nome su questa rete."); return; }
+        for (const t of found) if (t.icon) iconCache.set(t.address.toLowerCase(), t.icon);
+        results.innerHTML = found.map((t) => tokenRow(t, `${
+          t.liquidity_usd ? `<span>liq. ${compactUsd.format(t.liquidity_usd)}</span>` : ""}${
+          t.verified ? "" : "<i>non verificato</i>"}`)).join("");
         wirePicks(results);
       } catch (error) {
-        results.innerHTML = `<li>${escapeHtml(error.message)}</li>`;
+        results.innerHTML = note(error.message);
       }
-    }, 350);
+    }, 300);
   });
 
   input.addEventListener("keydown", (event) => {
