@@ -5,17 +5,20 @@
  * leggero: niente strategia/backtest come in /api/analyze, che per un
  * grafico nel wallet sarebbero solo latenza sprecata.
  *
+ * SEMPRE VISIBILE, non piu' dentro una sheet: la revisione "deve essere
+ * come un exchange" (Lorenzo) e' arrivata anche a un team di esperti
+ * consultato in questa sessione — nessun exchange nasconde il grafico
+ * dietro un tap, e' la prima cosa che si vede.
+ *
  * Due velocita', non una sola: le candele (storia, cambia poco) restano
  * su DexScreener/GeckoTerminal ogni 8s, ma il PREZZO CORRENTE aggiorna
  * ogni 2.5s via /api/onchain/price — lo stesso aggregatore/quoter gia'
  * usato per i preventivi di swap (Jupiter su Solana, QuoterV2 su
- * Robinhood Chain), fatto apposta per essere interrogato spesso, a
- * differenza di DexScreener che limita facilmente.
+ * Robinhood Chain), fatto apposta per essere interrogato spesso.
  *
  * Segnali sul grafico: ogni ordine (swap o limite eseguito) di questo
  * token diventa un marker sulla candela in cui e' avvenuto; un ordine
- * limite ancora aperto diventa una riga orizzontale al prezzo target —
- * stessa idea del diario, letta qui invece che come lista.
+ * limite ancora aperto diventa una riga orizzontale al prezzo target.
  */
 import * as api from "@onchain/api.js";
 import { ApiError } from "@onchain/api.js";
@@ -26,52 +29,79 @@ import { state } from "@onchain/store.js";
 const CANDLE_REFRESH_MS = 8000; // storia: DexScreener/GeckoTerminal, non fatti per un polling piu' stretto
 const PRICE_REFRESH_MS = 2500;  // corrente: lo stesso quoter dello swap, pensato per un polling stretto
 
+let root = null;
 let chart = null;
 let series = null;
 let candleTimer = null;
 let priceTimer = null;
 let currentToken = null;
 
-export async function openChart({ token } = {}) {
-  const chain = state.chain;
-  currentToken = token ?? currentToken;
+// Chi altro deve sapere quale token sta guardando il grafico — il
+// pannello ordine (swap/limite), per compilarsi da solo con la stessa
+// coppia invece di farla scegliere due volte.
+const listeners = new Set();
+export const onTokenChanged = (fn) => listeners.add(fn);
 
-  sheets.openSheet("Grafico", "Prezzo corrente ogni 2.5s, candele ogni 8s — stesso motore del sito principale.");
-  sheets.setBody(`
-    <button type="button" class="swap-token-pick" id="chart-pick-token">
-      ${currentToken ? currentToken.symbolHint || currentToken.address.slice(0, 8) : "Scegli un token"} ↕
+export function getCurrentToken() {
+  return currentToken;
+}
+
+export function mountChart(container) {
+  root = container;
+  paintShell();
+  if (currentToken) loadAndRender();
+  else setStatus("Scegli un token per vedere il grafico e fare uno swap.");
+}
+
+function paintShell() {
+  root.innerHTML = `
+    <button type="button" class="swap-token-pick" id="market-pick-token">
+      ${currentToken ? currentToken.symbolHint || shortAddr(currentToken.address) : "Scegli un token"} ↕
     </button>
-    <p class="swap-detail" id="chart-live-price"></p>
-    <div id="chart-container" style="inline-size:100%;block-size:320px;margin-block-start:8px"></div>
-    <p class="swap-detail" id="chart-status"></p>
-  `);
-
-  sheets.sheetBody().querySelector("#chart-pick-token").addEventListener("click", () => {
-    sheets.openTokenPicker(chain, {
-      onPick: (token) => { currentToken = token; loadAndRender(); },
+    <p class="swap-detail" id="market-live-price"></p>
+    <div id="market-chart-container" class="market-chart"></div>
+    <p class="swap-detail" id="market-status"></p>
+  `;
+  root.querySelector("#market-pick-token").addEventListener("click", () => {
+    sheets.openTokenPicker(state.chain, {
+      onPick: (token) => {
+        currentToken = token;
+        listeners.forEach((fn) => fn(token));
+        paintShell();
+        loadAndRender();
+      },
     });
   });
+}
 
-  if (currentToken) loadAndRender();
-  else sheets.sheetBody().querySelector("#chart-status").textContent = "Scegli un token per vedere il grafico.";
+function shortAddr(address) {
+  return `${address.slice(0, 4)}…${address.slice(-4)}`;
+}
 
-  // Il dialog #sheet non notifica la chiusura ai moduli: fermare il
-  // polling quando si chiude evita richieste sprecate a sheet chiusa.
-  const dialog = document.querySelector("#sheet");
-  const stop = () => {
-    clearInterval(candleTimer); clearInterval(priceTimer);
-    dialog.removeEventListener("close", stop);
-  };
-  dialog.addEventListener("close", stop);
+function setStatus(text) {
+  const el = root?.querySelector("#market-status");
+  if (el) el.textContent = text;
+}
+
+// Cambiare chain (Solana/Robinhood) invalida il token in vista: il
+// grafico non deve mostrare una candela che non appartiene piu' alla
+// chain selezionata.
+export function resetForChainSwitch() {
+  clearInterval(candleTimer);
+  clearInterval(priceTimer);
+  chart = null;
+  series = null;
+  currentToken = null;
+  if (root) { paintShell(); setStatus("Scegli un token per vedere il grafico e fare uno swap."); }
 }
 
 function loadAndRender() {
   clearInterval(candleTimer);
   clearInterval(priceTimer);
+  if (!root) return;
   const chain = state.chain;
-  const statusEl = sheets.sheetBody().querySelector("#chart-status");
-  const container = sheets.sheetBody().querySelector("#chart-container");
-  if (!container) return; // la sheet e' stata chiusa mentre la richiesta era in volo
+  const container = root.querySelector("#market-chart-container");
+  if (!container) return;
 
   const drawCandles = async () => {
     try {
@@ -82,18 +112,18 @@ function loadAndRender() {
           grid: { vertLines: { visible: false }, horzLines: { visible: false } },
           timeScale: { timeVisible: true },
         });
-        series = chart.addCandlestickSeries({ upColor: "#26a69a", downColor: "#ef5350", borderVisible: false });
+        series = chart.addCandlestickSeries({ upColor: "var(--up)", downColor: "var(--down)", borderVisible: false });
       }
       series.setData(data.candles);
       await paintMarkersAndLimits(chain, data.symbol);
-      statusEl.textContent = `${data.symbol} · candele aggiornate ora`;
+      setStatus(`${data.symbol} · candele aggiornate ora`);
     } catch (error) {
-      statusEl.textContent = error instanceof ApiError ? error.message : "Grafico non disponibile.";
+      setStatus(error instanceof ApiError ? error.message : "Grafico non disponibile.");
     }
   };
 
   const drawLivePrice = async () => {
-    const priceEl = sheets.sheetBody().querySelector("#chart-live-price");
+    const priceEl = root.querySelector("#market-live-price");
     if (!priceEl) return;
     try {
       const { price_usd } = await api.getLivePrice(chain, currentToken.address);
@@ -124,7 +154,7 @@ async function paintMarkersAndLimits(chain, symbol) {
       .filter((o) => o.status === "confirmed" && o.token === tokenSymbol)
       .map((o) => ({
         time: o.updated_at, position: o.side === "buy" ? "belowBar" : "aboveBar",
-        color: o.side === "buy" ? "#26a69a" : "#ef5350", shape: o.side === "buy" ? "arrowUp" : "arrowDown",
+        color: o.side === "buy" ? "var(--up)" : "var(--down)", shape: o.side === "buy" ? "arrowUp" : "arrowDown",
         text: o.side === "buy" ? "Compra" : "Vendi",
       }))
       .sort((a, b) => a.time - b.time);

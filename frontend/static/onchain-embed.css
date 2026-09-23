@@ -13,13 +13,14 @@
        tre volte con il rischio che una delle tre resti indietro. */
     color-scheme: light dark;
 
-    --bg:        light-dark(oklch(97.1% 0.002 165), oklch(14.6% 0.006 219));
-    --panel:     light-dark(oklch(100%  0     0),   oklch(18.7% 0.009 224));
-    --raised:    light-dark(oklch(95.5% 0.004 157), oklch(21.6% 0.012 226));
-    --line:      light-dark(oklch(91.4% 0.007 160), oklch(26.9% 0.016 224));
-    --ink:       light-dark(oklch(18.8% 0.011 176), oklch(94.3% 0.009 180));
-    --ink-dim:   light-dark(oklch(48.0% 0.018 170), oklch(70.4% 0.020 176));
-    --ink-faint: light-dark(oklch(64.5% 0.017 171), oklch(60.9% 0.020 170));
+    /* Neutri sull'asse del violetto (hue 285) — vedi onchain-app.html. */
+    --bg:        light-dark(oklch(98.2% 0.003 285), oklch(13.2% 0.012 285));
+    --panel:     light-dark(oklch(100%  0     0),   oklch(16.8% 0.014 285));
+    --raised:    light-dark(oklch(96.0% 0.005 285), oklch(20.5% 0.016 285));
+    --line:      light-dark(oklch(92.0% 0.006 285), oklch(25.5% 0.018 285));
+    --ink:       light-dark(oklch(18.8% 0.011 285), oklch(94.3% 0.009 285));
+    --ink-dim:   light-dark(oklch(48.0% 0.018 285), oklch(70.4% 0.020 285));
+    --ink-faint: light-dark(oklch(64.5% 0.017 285), oklch(60.9% 0.020 285));
 
     /* Rosa/violetto, non piu' verde-teal — vedi onchain-app.html. */
     --accent:     light-dark(oklch(60.5% 0.223 332), oklch(76.5% 0.185 331));
@@ -27,6 +28,11 @@
     --accent-ink: light-dark(oklch(100%  0     0),   oklch(15.8% 0.030 330));
     --danger:     light-dark(oklch(52.5% 0.191 30),  oklch(67.1% 0.217 29));
     --amber:      light-dark(oklch(57.8% 0.124 69),  oklch(78.7% 0.147 73));
+
+    --up:      light-dark(oklch(62.0% 0.170 155), oklch(74.0% 0.170 155));
+    --down:    light-dark(oklch(58.0% 0.200 22),  oklch(68.0% 0.190 22));
+    --up-soft:   color-mix(in oklch, var(--up) 14%, transparent);
+    --down-soft: color-mix(in oklch, var(--down) 14%, transparent);
 
     /* Le varianti tenui si derivano, non si riscrivono a mano: una sola
        fonte per ogni tinta, e la mescola avviene in oklch, dove il 12%
@@ -44,6 +50,7 @@
     --mono:  "JetBrains Mono", ui-monospace, monospace;
 
     --radius: 12px;
+    --r-sm: 8px;
     --gap: 16px;
   }
 
@@ -208,33 +215,16 @@
   /* --- azioni ------------------------------------------------------
      Quattro pari: su un wallet in sola lettura nessuna di queste e'
      l'azione principale, e dipingerne una di verde direbbe il contrario. */
-  /* Nove azioni ormai: auto-fill lascia al contenitore decidere quante
-     per riga, invece di una soglia nuova ad ogni azione aggiunta. */
-  #onchain-embed .actions { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 6px; }
+  /* Solo le azioni che restano dialog veri (Ricevi, Limiti, Simula) —
+     vedi onchain-app.html: grafico, swap, ordini limite, portafoglio,
+     strategie e storico sono ora sempre visibili. */
+  #onchain-embed .actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; max-inline-size: 340px; }
 
-  /* --- layout a due colonne, da desktop — vedi onchain-app.html per la
-     spiegazione: stessa regola, container query invece che sulla finestra,
-     cosi' vale anche quando la colonna della tab Trading e' larga. */
+  /* Non piu' una griglia a due colonne fissa — vedi onchain-app.html:
+     e' .market-order-row sotto ad affiancare grafico e ordine quando il
+     contenitore e' largo almeno 640px. */
   @container (width >= 640px) {
-    #onchain-embed #app-shell {
-      display: grid;
-      grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
-      grid-template-areas:
-        "switch  switch"
-        "balance assets"
-        "status  assets"
-        "actions assets"
-        "reveal  empty";
-      gap: 22px 40px;
-      align-items: start;
-    }
-    #onchain-embed #chain-switch { grid-area: switch; max-inline-size: 320px; }
-    #onchain-embed #app-shell > section:not(.assets):not(.empty) { grid-area: balance; }
-    #onchain-embed #status { grid-area: status; }
-    #onchain-embed #actions { grid-area: actions; grid-template-columns: repeat(4, 1fr); }
-    #onchain-embed #assets { grid-area: assets; }
-    #onchain-embed #reveal-row { grid-area: reveal; }
-    #onchain-embed #onchain-empty-state { grid-area: empty; }
+    #onchain-embed #chain-switch { max-inline-size: 320px; }
   }
 
   #onchain-embed .action {
@@ -377,6 +367,7 @@
     flex: 1; padding: 9px; border: 0; background: var(--raised); color: var(--ink-dim);
     font-size: 12px; font-weight: 700; cursor: pointer; letter-spacing: .04em; transition: background .15s, color .15s;
   }
+  #onchain-embed .mo-tab-active { background: var(--accent); color: var(--accent-ink); }
   #onchain-embed .mo-buy-tab.mo-tab-active { background: var(--accent); color: var(--accent-ink); }
   #onchain-embed .mo-sell-tab.mo-tab-active { background: var(--danger); color: #fff; }
   #onchain-embed .mo-side-tab:not(.mo-tab-active):hover { background: var(--hover); }
@@ -474,6 +465,22 @@
   .sheet-note { font-size: 12.5px; color: var(--ink-dim); margin: 0;
     &.is-error { color: var(--danger); }
     & a { color: var(--accent); }
+  }
+
+  /* --- grafico e pannello ordine, sempre visibili — vedi onchain-app.html */
+  #onchain-embed .market-panel, #onchain-embed .order-panel, #onchain-embed .bottom-panel {
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 14px;
+  }
+  #onchain-embed .market-chart { inline-size: 100%; block-size: 260px; margin-block-start: 8px; }
+
+  #onchain-embed .bottom-panel { padding: 0; overflow: hidden;
+    & .mo-side-tabs { border-radius: 0; border: 0; border-block-end: 1px solid var(--line); }
+    & .bottom-panel-body { padding: 14px; max-block-size: 360px; overflow-y: auto; }
+  }
+
+  @container (width >= 640px) {
+    #onchain-embed .market-order-row { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 14px; align-items: start; }
   }
 
   #onchain-embed .tx-list {

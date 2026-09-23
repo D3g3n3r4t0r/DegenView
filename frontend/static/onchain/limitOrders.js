@@ -1,5 +1,8 @@
 /**
- * Ordini limite e diario — la parte "operativa tipo DEX" del piano.
+ * Ordini limite, ordini aperti e storico — la parte "operativa tipo DEX"
+ * del piano, ora tutta SEMPRE VISIBILE (pannello ordine + pannello
+ * inferiore a tab), non piu' dentro sheet separate: un vero exchange
+ * mostra "cosa ho ordinato" e "cosa e' successo" senza doverli aprire.
  *
  * Non un secondo motore: l'interazione eredita l'"Ordine manuale" del
  * resto del sito (tab BUY/SELL, conferma esplicita prima di firmare), ma
@@ -26,21 +29,31 @@ const STATUS_LABEL = {
   open: "In attesa", filled: "Eseguito", cancelled: "Annullato", failed: "Falso",
 };
 
-let otherToken = null; // { address, symbol, decimals } — l'altra gamba, sempre risolta via prompt
+let hostEl = null;
+const host = () => hostEl;
+let otherToken = null; // { address, symbol, decimals } — l'altra gamba, risolta via picker
+let onPlacedCb = null;
 
-export async function openLimitOrder({ onPlaced } = {}) {
+/* ------------------------------------------------------------ Form ord. */
+
+let lastChain = null;
+
+export function mountLimitOrder(container, { onPlaced, presetToken } = {}) {
+  hostEl = container;
+  onPlacedCb = onPlaced ?? null;
+  // L'altra gamba scelta su una chain non appartiene alla chain successiva
+  // (un mint Solana non e' un contratto EVM): un cambio chain la azzera,
+  // non la lascia appesa a un indirizzo della chain sbagliata.
+  if (state.chain !== lastChain) otherToken = null;
+  lastChain = state.chain;
+  if (presetToken) otherToken = presetToken;
   const chain = state.chain;
   const native = NATIVE[chain];
-  otherToken = otherToken ?? null;
-
-  sheets.openSheet("Ordine limite", "Controllato ogni 45 secondi, non istantaneo al tocco del prezzo. Stessi tetti di rischio di un ordine reale.");
   paintForm(chain, native);
-  await refreshOpenOrders(chain);
-  openLimitOrder._onPlaced = onPlaced;
 }
 
 function paintForm(chain, native) {
-  sheets.setBody(`
+  host().innerHTML = `
     <div class="mo-side-tabs" id="limit-direction-tabs">
       <button type="button" class="mo-side-tab mo-buy-tab mo-tab-active" data-direction="buy_below">Compra se scende</button>
       <button type="button" class="mo-side-tab mo-sell-tab" data-direction="sell_above">Vendi se sale</button>
@@ -59,45 +72,45 @@ function paintForm(chain, native) {
           <input id="limit-target" name="target" type="number" min="0" step="any" required /></span>
       </div>
 
+      <p class="swap-detail">Controllato ogni 45 secondi, non istantaneo al tocco del prezzo — stessi tetti di rischio di un ordine reale.</p>
       <button type="submit" class="btn-primary" id="limit-submit">Piazza ordine limite</button>
     </form>
     <output class="outcome" id="limit-outcome" hidden></output>
+  `;
 
-    <p class="label" style="margin-block-start:18px">Ordini aperti</p>
-    <ul id="limit-open-list" class="tx-list"><li>Leggo…</li></ul>
-  `);
-
-  sheets.sheetBody().querySelectorAll("#limit-direction-tabs .mo-side-tab").forEach((tab) => {
+  host().querySelectorAll("#limit-direction-tabs .mo-side-tab").forEach((tab) => {
     tab.addEventListener("click", () => {
-      sheets.sheetBody().querySelectorAll("#limit-direction-tabs .mo-side-tab")
+      host().querySelectorAll("#limit-direction-tabs .mo-side-tab")
         .forEach((t) => t.classList.toggle("mo-tab-active", t === tab));
     });
   });
 
-  sheets.sheetBody().querySelector("#limit-pick-other").addEventListener("click", () => {
+  host().querySelector("#limit-pick-other").addEventListener("click", () => {
     sheets.openTokenPicker(chain, {
       onPick: async ({ address }) => {
         try {
           const info = await api.getTokenInfo(chain, address);
           otherToken = { address, symbol: info.symbol || `${address.slice(0, 4)}…${address.slice(-4)}`, decimals: info.decimals };
           paintForm(chain, native);
-          await refreshOpenOrders(chain);
         } catch (error) {
-          sheets.setMessage(error instanceof ApiError ? error.message : "Token non riconosciuto.", "is-error");
+          const outcome = host().querySelector("#limit-outcome");
+          outcome.hidden = false;
+          outcome.dataset.tone = "no";
+          outcome.textContent = error instanceof ApiError ? error.message : "Token non riconosciuto.";
         }
       },
     });
   });
 
-  sheets.sheetBody().querySelector("#limit-form").addEventListener("submit", (event) => {
+  host().querySelector("#limit-form").addEventListener("submit", (event) => {
     event.preventDefault();
     submitOrder(chain, native);
   });
 }
 
 async function submitOrder(chain, native) {
-  const outcome = sheets.sheetBody().querySelector("#limit-outcome");
-  const submitButton = sheets.sheetBody().querySelector("#limit-submit");
+  const outcome = host().querySelector("#limit-outcome");
+  const submitButton = host().querySelector("#limit-submit");
   if (!otherToken) {
     outcome.hidden = false;
     outcome.dataset.tone = "no";
@@ -105,9 +118,9 @@ async function submitOrder(chain, native) {
     return;
   }
 
-  const direction = sheets.sheetBody().querySelector("#limit-direction-tabs .mo-tab-active").dataset.direction;
-  const amount = Number(sheets.sheetBody().querySelector("#limit-amount").value);
-  const target = Number(sheets.sheetBody().querySelector("#limit-target").value);
+  const direction = host().querySelector("#limit-direction-tabs .mo-tab-active").dataset.direction;
+  const amount = Number(host().querySelector("#limit-amount").value);
+  const target = Number(host().querySelector("#limit-target").value);
   if (!(amount > 0) || !(target > 0)) return;
 
   // "Compra se scende" vende il nativo per l'altro token (si spera che
@@ -131,9 +144,8 @@ async function submitOrder(chain, native) {
     });
     outcome.dataset.tone = "ok";
     outcome.textContent = "Ordine piazzato — resta in attesa finche' il prezzo non tocca il target.";
-    sheets.sheetBody().querySelector("#limit-form").reset();
-    await refreshOpenOrders(chain);
-    openLimitOrder._onPlaced?.();
+    host().querySelector("#limit-form").reset();
+    onPlacedCb?.();
   } catch (error) {
     outcome.dataset.tone = "no";
     outcome.textContent = error instanceof ApiError ? error.message : "Errore inatteso.";
@@ -142,77 +154,78 @@ async function submitOrder(chain, native) {
   }
 }
 
-async function refreshOpenOrders(chain) {
-  const list = sheets.sheetBody().querySelector("#limit-open-list");
-  if (!list) return;
+/* -------------------------------------------------- Ordini aperti (tab) */
+
+export async function mountOpenOrders(container) {
+  const chain = state.chain;
+  container.innerHTML = "<p class='sheet-note'>Leggo…</p>";
   try {
     const orders = (await api.listLimitOrders(chain)).filter((o) => o.status === "open");
-    if (!orders.length) { list.innerHTML = "<li>Nessun ordine limite aperto.</li>"; return; }
-    list.innerHTML = orders.map((o) => `
+    if (!orders.length) { container.innerHTML = "<p class='sheet-note'>Nessun ordine limite aperto.</p>"; return; }
+    container.innerHTML = `<ul class="tx-list">${orders.map((o) => `
       <li data-id="${o.id}">
         <span><span class="status-dot" data-status="${o.status}"></span>${o.direction === "buy_below" ? "Compra se scende a" : "Vendi se sale a"} ${formatUsd(o.target_price_usd)}
           <small>${o.amount_in} ${o.token_in_symbol} → ${o.token_out_symbol}</small></span>
         <button type="button" class="btn-quiet" data-cancel="${o.id}">Annulla</button>
-      </li>`).join("");
-    list.querySelectorAll("[data-cancel]").forEach((button) => {
+      </li>`).join("")}</ul>`;
+    container.querySelectorAll("[data-cancel]").forEach((button) => {
       button.addEventListener("click", async () => {
         button.disabled = true;
-        try { await api.cancelLimitOrder(button.dataset.cancel); await refreshOpenOrders(chain); }
+        try { await api.cancelLimitOrder(button.dataset.cancel); await mountOpenOrders(container); }
         catch { button.disabled = false; }
       });
     });
   } catch (error) {
-    list.innerHTML = `<li>${error.message}</li>`;
+    container.innerHTML = `<p class="sheet-note is-error">${error.message}</p>`;
   }
 }
 
-/* ------------------------------------------------------------- Diario --- */
+/* ------------------------------------------------------------- Storico */
 
 // Un pannello solo, non tre: "Storico" (transazioni RPC grezze) e
 // "Diario" (ordini di questo sito) sembravano fare la stessa cosa da due
 // bottoni diversi — Lorenzo: "una copia delle transazioni per capire cosa
 // e' accaduto in passato". Due viste dentro lo stesso pannello, non due
-// pannelli.
-export async function openOrderDiary() {
+// pannelli, e ora sempre in vista nel pannello inferiore a tab.
+export async function mountHistory(container) {
   const chain = state.chain;
-  sheets.openSheet("Storico", "Ordini di questo sito e transazioni grezze del wallet.");
-  sheets.setBody(`
-    <div class="mo-side-tabs" id="diary-tabs">
+  container.innerHTML = `
+    <div class="mo-side-tabs" id="history-tabs">
       <button type="button" class="mo-side-tab mo-buy-tab mo-tab-active" data-view="orders">Ordini</button>
       <button type="button" class="mo-side-tab mo-sell-tab" data-view="raw">Transazioni on-chain</button>
     </div>
-    <div id="diary-body"><p class="sheet-note">Leggo…</p></div>
-  `);
-  sheets.sheetBody().querySelectorAll("#diary-tabs .mo-side-tab").forEach((tab) => {
+    <div id="history-body"><p class="sheet-note">Leggo…</p></div>
+  `;
+  container.querySelectorAll("#history-tabs .mo-side-tab").forEach((tab) => {
     tab.addEventListener("click", () => {
-      sheets.sheetBody().querySelectorAll("#diary-tabs .mo-side-tab").forEach((t) => t.classList.toggle("mo-tab-active", t === tab));
-      renderDiaryView(chain, tab.dataset.view);
+      container.querySelectorAll("#history-tabs .mo-side-tab").forEach((t) => t.classList.toggle("mo-tab-active", t === tab));
+      renderHistoryView(container, chain, tab.dataset.view);
     });
   });
-  await renderDiaryView(chain, "orders");
+  await renderHistoryView(container, chain, "orders");
 }
 
-async function renderDiaryView(chain, view) {
-  const host = sheets.sheetBody().querySelector("#diary-body");
-  if (!host) return;
-  host.innerHTML = `<p class="sheet-note">Leggo…</p>`;
+async function renderHistoryView(container, chain, view) {
+  const body = container.querySelector("#history-body");
+  if (!body) return;
+  body.innerHTML = `<p class="sheet-note">Leggo…</p>`;
 
   if (view === "raw") {
     try {
       const data = await api.getTransactions(chain);
       if (!data.available) {
-        host.innerHTML = `<p class="sheet-note">${data.reason}
+        body.innerHTML = `<p class="sheet-note">${data.reason}
           <a href="${encodeURI(data.explorer_url)}" target="_blank" rel="noopener">Apri l'explorer →</a></p>`;
         return;
       }
-      if (!data.transactions.length) { host.innerHTML = "<p class='sheet-note'>Nessuna transazione ancora.</p>"; return; }
-      host.innerHTML = `<ul class="tx-list">${data.transactions.map((tx) => `
+      if (!data.transactions.length) { body.innerHTML = "<p class='sheet-note'>Nessuna transazione ancora.</p>"; return; }
+      body.innerHTML = `<ul class="tx-list">${data.transactions.map((tx) => `
         <li>
           <a href="${encodeURI(tx.explorer_url)}" target="_blank" rel="noopener">${tx.signature.slice(0, 12)}…</a>
           <span>${tx.status}${tx.block_time ? ` · ${new Date(tx.block_time * 1000).toLocaleString("it-IT")}` : ""}</span>
         </li>`).join("")}</ul>`;
     } catch (error) {
-      host.innerHTML = `<p class="sheet-note is-error">${error.message}</p>`;
+      body.innerHTML = `<p class="sheet-note is-error">${error.message}</p>`;
     }
     return;
   }
@@ -224,9 +237,9 @@ async function renderDiaryView(chain, view) {
       ...data.limit_orders.map((o) => ({ ...o, at: o.updated_at })),
     ].sort((a, b) => b.at - a.at);
 
-    if (!rows.length) { host.innerHTML = "<p class='sheet-note'>Nessun ordine ancora.</p>"; return; }
+    if (!rows.length) { body.innerHTML = "<p class='sheet-note'>Nessun ordine ancora.</p>"; return; }
 
-    host.innerHTML = `<ul class="tx-list">${rows.map((row) => row.kind === "swap" ? `
+    body.innerHTML = `<ul class="tx-list">${rows.map((row) => row.kind === "swap" ? `
       <li>
         <span><span class="status-dot" data-status="${row.status}"></span><b>${row.side === "buy" ? "Compra" : "Vendi"} ${row.token}</b>
           <small>${formatUsd(row.size_usd)} · ${STATUS_LABEL[row.status] ?? row.status}${row.reason ? ` — ${row.reason}` : ""}</small></span>
@@ -239,6 +252,6 @@ async function renderDiaryView(chain, view) {
         <span>${new Date(row.at * 1000).toLocaleString("it-IT")}</span>
       </li>`).join("")}</ul>`;
   } catch (error) {
-    host.innerHTML = `<p class="sheet-note is-error">${error.message}</p>`;
+    body.innerHTML = `<p class="sheet-note is-error">${error.message}</p>`;
   }
 }
