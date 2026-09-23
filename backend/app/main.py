@@ -85,6 +85,7 @@ from app.models import (
     User,
     WatchlistEntry,
 )
+from app.trading.onchain import aggregator as onchain_aggregator
 from app.trading.onchain import balances as onchain_balances
 from app.trading.onchain import execute as onchain_execute
 from app.trading.onchain import send as onchain_send
@@ -2464,20 +2465,33 @@ async def onchain_quote_robinhood(
     un altro tier. find_pool_and_fee() li prova tutti, provando prima
     quello passato (se il chiamante lo conosce gia')."""
     _require_onchain_enabled()
+    found = None
     try:
         found = await onchain_quotes.find_pool_and_fee(body.token_in, body.token_out, body.fee)
-        if found is None:
-            raise HTTPException(status_code=400, detail="Nessun pool per questa coppia su nessun fee tier di Uniswap v3.")
-        pool, fee = found
-        quote = await onchain_quotes.uniswap_v3_quote(body.token_in, body.token_out, fee, body.amount_in)
-    except HTTPException:
-        raise
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=502, detail=f"Robinhood Chain non raggiungibile: {exc}") from exc
+        if found is not None:
+            pool, fee = found
+            quote = await onchain_quotes.uniswap_v3_quote(body.token_in, body.token_out, fee, body.amount_in)
+    except Exception as exc:  # noqa: BLE001 — l'RPC che cade non ferma il preventivo, ripiega sotto
+        logger.warning("uniswap v3 quote failed %s -> %s: %s", body.token_in, body.token_out, exc)
+        found = None
+    if found is None:
+        # Fuori da Uniswap v3 (MYCE: solo Pons e v4), o con l'RPC giu', il
+        # prezzo arriva da un aggregatore che vede tutti i DEX. Lo swap
+        # non e' ancora collegato a quel percorso: "route" lo dice al frontend.
+        try:
+            quote = await onchain_aggregator.quote(body.token_in, body.token_out, body.amount_in)
+        except onchain_aggregator.AggregatorError as exc:
+            logger.warning("aggregator quote failed %s -> %s: %s", body.token_in, body.token_out, exc)
+            raise HTTPException(status_code=400, detail="Nessun mercato per questa coppia in questo momento.") from exc
+        return {
+            "route": "aggregator", "source": quote["source"], "pool": None, "fee": None,
+            "in_amount": body.amount_in, "out_amount": quote["amount_out"],
+            "price_impact_pct": quote["price_impact_pct"],
+        }
     # "out_amount", non "amount_out" come lo chiama quotes.py: stesso nome
     # di /quote/solana, cosi' il frontend legge un solo formato per entrambe.
     return {
-        "pool": pool, "fee": fee, "in_amount": body.amount_in,
+        "route": "uniswap-v3", "pool": pool, "fee": fee, "in_amount": body.amount_in,
         "out_amount": quote["amount_out"], "price_impact_pct": quote["price_impact_pct"],
     }
 
@@ -2601,16 +2615,64 @@ async def onchain_live_price(chain: str, address: str, user: User = Depends(auth
         else:
             found = await onchain_quotes.find_pool_and_fee(address, quote_token)
             if found is None:
-                raise HTTPException(status_code=404, detail="Nessun pool per questo token su nessun fee tier.")
+                # Fuori da Uniswap v3 (Pons, v4...) il prezzo e' quello del
+                # pool piu' liquido su DexScreener, non un errore a schermo.
+                pairs = await _dexscreener_token_pairs(chain, address)
+                price = _pair_price_usd(pairs[0], address) if pairs else None
+                if price is None:
+                    raise HTTPException(status_code=404, detail="Prezzo non disponibile per questo token.")
+                return {"price_usd": price}
             _pool, fee = found
             quote = await onchain_quotes.uniswap_v3_quote(address, quote_token, fee, one_unit)
     except HTTPException:
         raise
     except Exception as exc:  # noqa: BLE001 — un quote fallito non deve essere un 500 muto
-        raise HTTPException(status_code=502, detail=f"Prezzo non disponibile: {exc}") from exc
+        logger.info("onchain live price failed for %s/%s: %s", chain, address, exc)
+        raise HTTPException(status_code=502, detail="Prezzo non disponibile, riprovo tra poco.") from exc
 
     out_amount = quote["out_amount"] if chain == "solana" else quote["amount_out"]
     return {"price_usd": out_amount / (10 ** _ONCHAIN_QUOTE_DECIMALS)}
+
+
+_DEX_PAIRS_TTL_S = 10
+_dex_pairs_cache: dict[tuple[str, str], tuple[float, list[dict]]] = {}
+
+
+async def _dexscreener_token_pairs(chain: str, address: str) -> list[dict]:
+    """Tutti i pool di un token su una chain, qualsiasi DEX, dal piu'
+    liquido — la stessa vista che Lorenzo usa su DexScreener. Cache breve:
+    grafico e prezzo live la chiedono insieme ogni pochi secondi."""
+    key = (chain, address.lower())
+    cached = _dex_pairs_cache.get(key)
+    if cached and _time.time() - cached[0] < _DEX_PAIRS_TTL_S:
+        return cached[1]
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            r = await client.get(f"https://api.dexscreener.com/latest/dex/tokens/{address}")
+        pairs = [p for p in (r.json().get("pairs") or []) if p.get("chainId") == chain] if r.status_code == 200 else []
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail="DexScreener non risponde, riprovo tra poco.") from exc
+    pairs.sort(key=lambda p: float((p.get("liquidity") or {}).get("usd") or 0), reverse=True)
+    _dex_pairs_cache[key] = (_time.time(), pairs)
+    return pairs
+
+
+def _pair_sides(pair: dict, address: str) -> tuple[dict, dict]:
+    """(il token cercato, l'altro lato): il token puo' essere la quota."""
+    base, quote = pair.get("baseToken") or {}, pair.get("quoteToken") or {}
+    return (quote, base) if (quote.get("address") or "").lower() == address.lower() else (base, quote)
+
+
+def _pair_price_usd(pair: dict, address: str) -> float | None:
+    """priceUsd e' sempre il prezzo della base; per la quota si divide per
+    priceNative (quante quote vale una base)."""
+    if not pair.get("priceUsd"):
+        return None
+    base_usd = float(pair["priceUsd"])
+    if _pair_sides(pair, address)[0] is pair.get("baseToken"):
+        return base_usd
+    native = float(pair.get("priceNative") or 0)
+    return base_usd / native if native else None
 
 
 @app.get("/api/onchain/chart/{chain}/{address}")
@@ -2626,33 +2688,37 @@ async def onchain_chart(
     _require_onchain_enabled()
     if chain not in ("solana", "robinhood"):
         raise HTTPException(status_code=400, detail="Chain non supportata.")
-    try:
-        async with httpx.AsyncClient(timeout=8.0) as client:
-            r = await client.get(f"https://api.dexscreener.com/latest/dex/tokens/{address}")
-        pairs = [p for p in (r.json().get("pairs") or []) if p.get("chainId") == chain] if r.status_code == 200 else []
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=502, detail=f"DexScreener non raggiungibile: {exc}") from exc
+    pairs = await _dexscreener_token_pairs(chain, address)
     if not pairs:
-        raise HTTPException(status_code=404, detail="Nessun pool DexScreener per questo token su questa chain.")
-    pairs.sort(key=lambda p: float((p.get("liquidity") or {}).get("usd") or 0), reverse=True)
-    pool_address = pairs[0]["pairAddress"]
-    symbol = f"{pairs[0]['baseToken']['symbol']}@{chain}:{pool_address}"
-    try:
-        df = await dexscreener_provider.fetch_ohlcv(symbol, interval, 200)
-    except ProviderError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        raise HTTPException(status_code=404, detail="Nessun mercato per questo token su questa chain.")
+    # Il pool piu' liquido puo' non avere candele (GeckoTerminal non lo
+    # indicizza ancora, o limita le richieste): si prova il successivo
+    # invece di lasciare il grafico vuoto.
+    df, top = None, None
+    for pair in pairs[:3]:
+        symbol = f"{pair['baseToken']['symbol']}@{chain}:{pair['pairAddress']}"
+        try:
+            df = await dexscreener_provider.fetch_ohlcv(symbol, interval, 200, token_address=address)
+        except (ProviderError, ProviderUnreachable) as exc:
+            logger.info("onchain chart: no candles from %s: %s", pair["pairAddress"], exc)
+            continue
+        top = pair
+        break
+    if df is None:
+        raise HTTPException(status_code=502, detail="Grafico non disponibile per questo token, riprovo tra poco.")
+    pool_address = top["pairAddress"]
     candles = [
         {"time": int(ts.timestamp()), "open": float(row.open), "high": float(row.high),
          "low": float(row.low), "close": float(row.close)}
         for ts, row in df.iterrows()
     ]
-    top = pairs[0]
     created_ms = top.get("pairCreatedAt")
+    own, other = _pair_sides(top, address)
     stats = {
-        "base_symbol": (top.get("baseToken") or {}).get("symbol"),
-        "quote_symbol": (top.get("quoteToken") or {}).get("symbol"),
-        "price_usd": float(top["priceUsd"]) if top.get("priceUsd") else None,
-        "price_change_h24": (top.get("priceChange") or {}).get("h24"),
+        "base_symbol": own.get("symbol"),
+        "quote_symbol": other.get("symbol"),
+        "price_usd": _pair_price_usd(top, address),
+        "price_change_h24": (top.get("priceChange") or {}).get("h24") if own is top.get("baseToken") else None,
         "liquidity_usd": (top.get("liquidity") or {}).get("usd"),
         "volume_h24": (top.get("volume") or {}).get("h24"),
         "age_hours": (_time.time() * 1000 - created_ms) / 3_600_000 if created_ms else None,
