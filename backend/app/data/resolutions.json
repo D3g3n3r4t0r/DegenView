@@ -1229,5 +1229,23 @@
       "backend/tests/test_onchain_watchlist_autotrade.py"
     ],
     "next": "La fusione piena della UI wallet dentro il DOM della tab Trading (niente piu' link a una pagina separata, stessi moduli ES riusati inline) resta da fare — quella UI ha il suo ciclo di stato/polling indipendente e portarla dentro senza romperla vale una sessione a se'. Sul lato Fase 4: la vendita on-chain resta bloccata finche' i decimali del token base non vengono salvati da qualche parte (DexScreener non li da' nella ricerca; andrebbero letti con una decimals() reale al momento dell'aggiunta alla watchlist, stessa idea usata qui per USDC/USDG). Nessun invio reale e' mai stato provato su Robinhood Chain in nessuna sessione — resta vero anche qui."
+  },
+  "seed-0089": {
+    "status": "risolto",
+    "at": 1790194172,
+    "summary": "La pagina del wallet si apre sul Pilota: saldo, un interruttore solo e l'elenco di cosa la strategia sta guardando in quel momento. Grafico, swap, ordini e impostazioni sono dietro il menu '...', non piu' sulla pagina. Toccando un token si vede perche' e' li', quando la strategia l'ha valutato l'ultima volta, se il budget c'e', se gli ordini reali sono abilitati e cosa e' successo; toccando lo stato si vede se scanner, segnali, esecuzione e circuit breaker sono davvero accesi. Con il pilota spento, sulla sua chain non parte piu' nessun acquisto automatico (le vendite si').",
+    "detail": "Backend: app/trading/onchain/pilot.py registra i giri del ponte sniper (esaminati, accettati, scartati col motivo) e l'ultima valutazione dei segnali per token; le scoperte (liquidita'/eta' al momento dell'aggiunta) sono salvate su file. Nuovo GET /api/onchain/pilot/{chain} con salute (wallet, scanner, segnali, esecuzione, breaker), limiti, token in posizione/bloccati/osservati. _run_onchain_auto_trade salta i BUY se il pilota della chain e' spento. Frontend: static/onchain/pilot.js (vista Pilota, diagnosi per token e salute in fogli dal basso, polling 15s solo con pagina visibile), menu '...' al posto delle 4 pillole in alto e della riga di azioni, font Geist, palette nuova, animazioni solo transform/opacity con reduced-motion. Verificato con Playwright su mobile e desktop, zero errori in console.",
+    "files": [
+      "backend/app/trading/onchain/pilot.py",
+      "backend/app/main.py",
+      "backend/tests/test_onchain_pilot.py",
+      "backend/tests/test_onchain_watchlist_autotrade.py",
+      "frontend/onchain-app.html",
+      "frontend/static/onchain/pilot.js",
+      "frontend/static/onchain/main.js",
+      "frontend/static/onchain/api.js",
+      "frontend/static/fonts/"
+    ],
+    "next": "Sul server vero il pannello salute probabilmente mostrera' scanner spento (sniper_enabled), ordini reali spenti (onchain_execution_enabled) e segnali fermi senza Telegram configurato: sono interruttori del server, non della pagina. Da verificare con Lorenzo quali accendere."
   }
 }

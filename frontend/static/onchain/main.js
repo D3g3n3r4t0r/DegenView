@@ -20,6 +20,7 @@ import { mountChart, resetForChainSwitch } from "@onchain/chart.js";
 import { mountStrategies } from "@onchain/strategies.js";
 import { mountPortfolio } from "@onchain/portfolio.js";
 import { openSend } from "@onchain/send.js";
+import { mountPilot, refreshPilot } from "@onchain/pilot.js";
 
 // Sulla pagina a se' (onchain-app.html) la radice e' il documento intero.
 // Fusa dentro la tab Trading, invece, questo modulo viene importato dentro
@@ -56,6 +57,7 @@ const view = {
   actions: $("#actions"),
   reveal: $("#reveal-row"),
   more: $("#more-btn"),
+  pilot: $("#pilot"),
   moreSheet: $("#more"),
   empty: $("#onchain-empty-state"),
   toast: $("#toast"),
@@ -70,7 +72,7 @@ function paintChainStatic() {
   const hasWallet = Boolean(wallet || cached);
 
   view.chainLabel.textContent = `${label}${suffix}`;
-  for (const node of [view.actions, view.status, view.reveal, view.more, view.marketOrderRow, view.bottomPanel, view.sniperCard]) {
+  for (const node of [view.actions, view.status, view.reveal, view.more, view.pilot, view.marketOrderRow, view.bottomPanel, view.sniperCard]) {
     if (node) node.hidden = !hasWallet;
   }
   view.empty.hidden = hasWallet;
@@ -131,6 +133,7 @@ function loadChainData() {
   refreshBalance();
   refreshStatus();
   refreshSniperCard();
+  refreshPilot();
   mountChart(view.marketPanel);
   mountOrderTab(currentOrderTab);
   mountBottomTab(currentBottomTab);
@@ -190,7 +193,8 @@ view.sniperToggle?.addEventListener("click", async () => {
   try {
     await api.setSniperAutotrade(chain, next);
     await refreshSniperCard();
-    toast(next ? "Auto-trade sniper attivo" : "Auto-trade sniper spento", chainInfo().label);
+    refreshPilot();
+    toast(next ? "Pilota acceso" : "Pilota spento", chainInfo().label);
   } catch (error) {
     toast("Non riuscito", error instanceof ApiError ? error.message : "errore inatteso");
   } finally {
@@ -371,9 +375,22 @@ view.reveal.addEventListener("click", () => sheets.openKey({ onStart: startRevea
 // foglio) o fuori dal pannello.
 view.more?.addEventListener("click", () => view.moreSheet.showModal());
 
+// Due viste: il pilota (di partenza) e grafico+swap a mano. Si passa
+// dall'una all'altra dal menu, mai con un tasto in piu' a schermo.
+function setView(name) {
+  view.shell.dataset.view = name;
+  if (name === "pilot") refreshPilot();
+  window.scrollTo({ top: 0 });
+}
+$$("#more [data-view-switch]").forEach((item) =>
+  item.addEventListener("click", () => setView(item.dataset.viewSwitch)));
+
+mountPilot({ toast, onChange: refreshSniperCard });
+
 // Da telefono tab, rete e filtri non sono a schermo: le voci del menu
 // premono il controllo nascosto e portano la vista sul suo pannello.
 $$("#more [data-proxy]").forEach((item) => item.addEventListener("click", () => {
+  setView("manual");
   const target = $(item.dataset.proxy);
   target?.click();
   target?.closest("section")?.scrollIntoView({ block: "start" });

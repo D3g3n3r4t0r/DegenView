@@ -55,11 +55,13 @@ def _candidate(**overrides):
 
 
 def _scan(monkeypatch, candidates):
-    async def _fake_fetch_ohlcv(symbol, interval, outputsize):
+    async def _fake_fetch_ohlcv(self, symbol, interval, outputsize, since_ms=None):
         return pd.DataFrame({"open": [1], "high": [1], "low": [1], "close": [1], "volume": [1]})
     monkeypatch.setattr(main.settings, "sniper_enabled", True)
     monkeypatch.setattr("app.sniper.cache.get_candidates", lambda: candidates)
-    monkeypatch.setattr(main.dexscreener_provider, "fetch_ohlcv", _fake_fetch_ohlcv)
+    # Sulla classe, non sull'istanza: un attributo d'istanza lasciato dal
+    # ripristino di monkeypatch oscurerebbe le patch di classe dei test dopo.
+    monkeypatch.setattr(main.dexscreener_provider.__class__, "fetch_ohlcv", _fake_fetch_ohlcv)
     _run(main._sniper_onchain_bridge_tick())
 
 
