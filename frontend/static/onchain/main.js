@@ -529,7 +529,7 @@ $$("#more [data-view-switch]").forEach((item) =>
   item.addEventListener("click", () => setView(item.dataset.viewSwitch)));
 
 mountPilot({ toast, onChange: refreshSniperCard });
-mountRadar();
+mountRadar({ toast });
 
 // Da telefono tab, rete e filtri non sono a schermo: le voci del menu
 // premono il controllo nascosto e portano la vista sul suo pannello.

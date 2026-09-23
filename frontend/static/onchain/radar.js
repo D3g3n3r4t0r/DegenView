@@ -15,6 +15,7 @@ import { escapeHtml } from "@onchain/format.js";
 const ROOT = document.getElementById("onchain-embed") ?? document;
 const POLL_MS = 60_000;
 const CHAINS = { solana: "Solana", robinhood: "Robinhood" };
+const SOURCES = { chain: "dalla catena", pumpfun: "pump.fun", gecko: "GeckoTerminal" };
 
 let root = null;
 let sheet = null;
@@ -29,25 +30,53 @@ const usd = (v) => {
   if (v >= 1e3) return `$${Math.round(v / 1e3)}k`;
   return `$${Math.round(v)}`;
 };
-const age = (h) => (h < 48 ? `${Math.round(h)} h` : `${Math.round(h / 24)} g`);
+const age = (h) => (h < 1 ? ageShort(h * 3600) : h < 48 ? `${Math.round(h)} h` : `${Math.round(h / 24)} g`);
 const ago = (ts) => {
   const s = Math.max(0, Math.round(Date.now() / 1000 - ts));
   return s < 90 ? "ora" : s < 3600 ? `${Math.round(s / 60)} min fa` : `${Math.round(s / 3600)} h fa`;
 };
 const key = (p) => `${p.chain}:${p.token_address}`;
+const lkey = (l) => `${l.chain}:${l.pair_address}`;
+const ageShort = (s) => (s < 90 ? `${Math.max(1, Math.round(s))} s` : s < 5400 ? `${Math.round(s / 60)} min` : `${Math.round(s / 3600)} h`);
+const FRESH_S = 15 * 60;
 
-export function mountRadar() {
+let toast = null;
+let stream = null;
+
+export function mountRadar({ toast: notify } = {}) {
+  toast = notify ?? null;
   root = ROOT.querySelector("#radar");
   sheet = ROOT.querySelector("#pilot-sheet");
   if (!root) return;  // la copia del wallet nella tab Trading non ha il radar
   root.addEventListener("click", (event) => {
     const row = event.target.closest("[data-radar]");
     if (row) openProposal(row.dataset.radar);
+    const listing = event.target.closest("[data-listing]");
+    if (listing) openListing(listing.dataset.listing);
   });
+  listen();
+  setInterval(() => data && paintListings(false), 30_000);
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") refresh();
   });
   refresh();
+}
+
+// I listing arrivano spinti dal server appena passano le soglie: il giro
+// di lettura ogni minuto resta solo per il resto del radar.
+function listen() {
+  if (!window.EventSource || stream) return;
+  stream = new EventSource("/api/onchain/radar/stream");
+  stream.addEventListener("listing", (event) => {
+    let item;
+    try { item = JSON.parse(event.data); } catch { return; }
+    if (!data) return;
+    data.listings = [item, ...(data.listings ?? []).filter((x) => lkey(x) !== lkey(item))];
+    paintListings(true);
+    const age = item.created_at ? ` · nato ${ageShort(Date.now() / 1000 - item.created_at)} fa` : "";
+    toast?.(`Nuovo: ${item.symbol}`, `${CHAINS[item.chain] ?? item.chain} · liq. ${usd(item.liquidity_usd)}${age}`);
+    navigator.vibrate?.(25);
+  });
 }
 
 async function refresh() {
@@ -75,7 +104,8 @@ function paint() {
 
   const isFirst = known === null;
   const seen = new Set(proposals.map(key));
-  root.querySelector("ul").innerHTML = proposals.length
+  paintListings(false);
+  root.querySelector("[data-radar-list]").innerHTML = proposals.length
     ? proposals.map((p) => row(p, !isFirst && !known.has(key(p)))).join("")
     : `<li class="pilot-empty">${escapeHtml(emptyText())}</li>`;
   known = seen;
@@ -84,6 +114,30 @@ function paint() {
   root.querySelector("[data-radar-foot]").textContent = data.last_scan
     ? `Visti: ${parts.join(" · ")} · ${data.configs} strategie per token · solo long, costi DEX inclusi`
     : `Solana e Robinhood · età < ${data.filters.age_max_days} g · liquidità > ${usd(data.filters.liq_min_usd)} · cap < ${usd(data.filters.mcap_max_usd)}`;
+}
+
+let shownListings = null;
+
+function paintListings(animate) {
+  const box = root.querySelector("[data-radar-new]");
+  const items = (data.listings ?? []).slice(0, 5);
+  box.hidden = items.length === 0;
+  const now = Date.now() / 1000;
+  const before = shownListings;
+  box.querySelector("ul").innerHTML = items.map((l) => {
+    const age = l.created_at ? now - l.created_at : null;
+    const meta = `${CHAINS[l.chain] ?? l.chain} · liq. ${usd(l.liquidity_usd)} · cap ${usd(l.market_cap)}`;
+    const isNew = animate && before && !before.has(lkey(l));
+    return `
+      <li class="${isNew ? "is-new" : ""}">
+        <button type="button" data-listing="${escapeHtml(lkey(l))}">
+          <span class="tk" data-chain="${escapeHtml(l.chain)}" aria-hidden="true">${escapeHtml(l.symbol.slice(0, 2))}</span>
+          <span class="tk-name"><b>${escapeHtml(l.symbol)}</b><small>${escapeHtml(meta)}</small></span>
+          <span class="tk-state"><span class="num">${age == null ? "—" : ageShort(age)}</span><span class="chip" data-state="${age != null && age < FRESH_S ? "in" : "watch"}">${escapeHtml(SOURCES[l.source] ?? l.source)}</span></span>
+        </button>
+      </li>`;
+  }).join("");
+  shownListings = new Set(items.map(lkey));
 }
 
 function emptyText() {
@@ -148,6 +202,11 @@ async function loadChart() {
     ]);
     if (view !== current) return;
     current.strategies = payload.strategies;
+    // Un listing appena uscito non ha una strategia "migliore": si vedono tutte.
+    if (!current.p.strategy && !current.seeded) {
+      payload.strategies.filter((x) => !x.excluded).forEach((x) => current.shown.add(x.label));
+      current.seeded = true;
+    }
     current.active = new Set(payload.active);
     if (!current.chart) {
       const box = sheet.querySelector("[data-radar-chart]");
@@ -218,7 +277,7 @@ function paintStrategies() {
     const on = view.active.has(s.strategy_name);
     const sub = s.excluded
       ? s.excluded
-      : `${t ? `${pct(t.return_pct)} · ${t.trades} trade · ` : ""}${s.in_position ? "adesso dentro" : "adesso fuori"}`;
+      : `${t ? `${pct(t.return_pct)} · ${t.trades} trade · ` : ""}${s.events.length ? (s.in_position ? "adesso dentro" : "adesso fuori") : "nessun segnale ancora"}`;
     return `
       <li data-shown="${shown}">
         <button type="button" class="rs-show" data-show="${escapeHtml(s.label)}" aria-pressed="${shown}">
@@ -266,25 +325,30 @@ function onSheetClick(event) {
   if (sw) follow(sw.dataset.follow);
 }
 
+function openListing(id) {
+  const l = data?.listings?.find((x) => lkey(x) === id);
+  if (!l || !sheet) return;
+  const age = l.created_at ? Date.now() / 1000 - l.created_at : null;
+  // Troppo giovane per un backtest: il grafico a 1 minuto e le strategie
+  // si vedono lo stesso, i numeri del test no.
+  openSheet({ ...l, interval: "1m", tried: [], strategy: null, age_hours: (age ?? 0) / 3600 }, `
+    <dl class="pilot-stats radar-stats">
+      <div><dt>Liquidità</dt><dd>${usd(l.liquidity_usd)}</dd></div>
+      <div><dt>Cap</dt><dd>${usd(l.market_cap)}</dd></div>
+      <div><dt>Liq. / cap</dt><dd>${Math.round((l.liquidity_usd / l.market_cap) * 100)}%</dd></div>
+      <div><dt>Nato</dt><dd>${age == null ? "—" : `${ageShort(age)}<span> fa</span>`}</dd></div>
+      <div><dt>Visto dopo</dt><dd>${l.latency_s == null ? "—" : ageShort(l.latency_s)}</dd></div>
+      <div><dt>Fonte</dt><dd><span>${escapeHtml(SOURCES[l.source] ?? l.source)}</span></dd></div>
+    </dl>
+    <p class="radar-note">Appena uscito: ancora troppa poca storia per un backtest. Il radar lo riprova da solo quando ne ha abbastanza. L'interruttore accende solo l'alert.</p>`);
+}
+
 function openProposal(id) {
   const p = data?.proposals.find((x) => key(x) === id);
   if (!p || !sheet) return;
-  closeView();
-  if (!sheet.dataset.radarWired) {
-    sheet.dataset.radarWired = "1";
-    sheet.addEventListener("click", onSheetClick);
-    sheet.addEventListener("close", closeView);
-  }
   const ratio = p.market_cap ? p.liquidity_usd / p.market_cap : null;
   const pf = p.profit_factor == null ? "∞" : p.profit_factor.toFixed(1);
-  sheet.querySelector(".pilot-sheet-body").innerHTML = `
-    <header class="diag-head">
-      <span class="tk" aria-hidden="true">${escapeHtml(p.symbol.slice(0, 2))}</span>
-      <div><h2>${escapeHtml(p.symbol)}</h2><p>${escapeHtml(`${CHAINS[p.chain] ?? p.chain} · nato ${age(p.age_hours)} fa · candele ${p.interval}`)}</p></div>
-      <span class="radar-live" data-radar-live>…</span>
-    </header>
-    <div class="radar-chart" data-radar-chart></div>
-    <ul class="radar-strats" data-radar-strats></ul>
+  openSheet(p, `
     <dl class="pilot-stats radar-stats">
       <div><dt>${escapeHtml(p.strategy.split(" · ")[0])}</dt><dd data-sign="up">${pct(p.return_pct)}</dd></div>
       <div><dt>Tenerlo</dt><dd>${pct(p.hold_pct)}</dd></div>
@@ -293,12 +357,30 @@ function openProposal(id) {
       <div><dt>Cap</dt><dd>${usd(p.market_cap)}<span> · ${ratio == null ? "—" : `${Math.round(ratio * 100)}%`}</span></dd></div>
       <div><dt>PF · trade</dt><dd>${pf}<span> · ${p.trades}</span></dd></div>
     </dl>
-    <p class="radar-note">${escapeHtml(`${p.days} g di storia, la migliore di ${p.configs_tried} strategie: numero ottimistico. Solo long, ${data.costs.commission_pct}% + ${data.costs.slippage_pct}% di costi per lato. L'interruttore accende solo l'alert: il pilota non compra da solo.`)}</p>
+    <p class="radar-note">${escapeHtml(`${p.days} g di storia, la migliore di ${p.configs_tried} strategie: numero ottimistico. Solo long, ${data.costs.commission_pct}% + ${data.costs.slippage_pct}% di costi per lato. L'interruttore accende solo l'alert: il pilota non compra da solo.`)}</p>`);
+}
+
+function openSheet(p, details) {
+  closeView();
+  if (!sheet.dataset.radarWired) {
+    sheet.dataset.radarWired = "1";
+    sheet.addEventListener("click", onSheetClick);
+    sheet.addEventListener("close", closeView);
+  }
+  sheet.querySelector(".pilot-sheet-body").innerHTML = `
+    <header class="diag-head">
+      <span class="tk" aria-hidden="true">${escapeHtml(p.symbol.slice(0, 2))}</span>
+      <div><h2>${escapeHtml(p.symbol)}</h2><p>${escapeHtml(`${CHAINS[p.chain] ?? p.chain} · nato ${age(p.age_hours)} fa · candele ${p.interval}`)}</p></div>
+      <span class="radar-live" data-radar-live>…</span>
+    </header>
+    <div class="radar-chart" data-radar-chart></div>
+    <ul class="radar-strats" data-radar-strats></ul>
+    ${details}
     <div class="radar-actions">
       <a class="btn-quiet" href="${escapeHtml(p.pair_url)}" target="_blank" rel="noopener">DexScreener ↗</a>
       <button type="button" class="btn-quiet" data-close>Chiudi</button>
     </div>`;
-  view = { p, chart: null, series: null, strategies: [], shown: new Set([p.strategy]), active: new Set(), timer: null, fitted: false };
+  view = { p, chart: null, series: null, strategies: [], shown: new Set(p.strategy ? [p.strategy] : []), active: new Set(), timer: null, fitted: false };
   if (!sheet.open) sheet.showModal();
   loadChart();
 }

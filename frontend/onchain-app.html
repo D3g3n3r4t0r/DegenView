@@ -1489,6 +1489,8 @@
       animation: ping 2.2s cubic-bezier(0,0,.2,1) infinite; }
   }
   .radar[data-running="true"] .radar-dot::after { animation-duration: .9s; }
+  .radar-new { margin-block-end: 10px; padding-block-end: 6px; border-block-end: 1px solid var(--line);
+    & h4 { margin: 6px 4px 0; font-size: 11.5px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-faint); } }
   .radar-foot { margin: 6px 4px 0; font-size: 11.5px; color: var(--ink-faint); }
   .radar-live { margin-inline-start: auto; align-self: start; font-size: 11.5px; color: var(--live);
     display: inline-flex; align-items: center; gap: 6px;
@@ -1726,7 +1728,11 @@
                le strategie. Lo disegna static/onchain/radar.js. -->
           <div class="radar" id="radar" hidden>
             <header><h3><span class="radar-dot" aria-hidden="true"></span>Radar · token giovani</h3><span data-radar-clock></span></header>
-            <ul></ul>
+            <div class="radar-new" data-radar-new hidden>
+              <h4>Appena usciti</h4>
+              <ul></ul>
+            </div>
+            <ul data-radar-list></ul>
             <p class="radar-foot" data-radar-foot></p>
           </div>
           <div class="pilot-feed" hidden>
