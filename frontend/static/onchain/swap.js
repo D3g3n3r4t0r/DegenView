@@ -117,51 +117,50 @@ export async function mountSwap(container, { onExecuted, presetToken } = {}) {
 
 function paintForm(armed) {
   const chain = state.chain;
+  const available = availableToSell(chain);
+  // Campo alla Uniswap (mockup approvato da Lorenzo): importo grande e
+  // pillola del token sulla stessa riga, didascalia e disponibile sotto,
+  // dentro lo stesso riquadro. La pillola E' il selettore del token.
   host().innerHTML = `
-    ${armed ? "" : `<p class="sheet-note is-warn">Esecuzione reale spenta su questo server: il preventivo funziona, l'invio no finché non viene accesa.</p>`}
-    <form class="form" id="swap-form">
-      <div class="swap-row">
-        <input id="swap-amount" name="amount" type="number" min="0" step="any" value="" required />
-        <button type="button" class="swap-max" id="swap-max" ${leg.in.isNative ? "" : "hidden"}>Max</button>
-        <span class="swap-unit" id="swap-in-symbol">${leg.in.symbol}</span>
-      </div>
-      <label for="swap-amount" class="field-caption">Vendi</label>
-      ${leg.in.isNative && availableToSell(chain) ? `
-      <div class="mo-slider-row">
-        <input type="range" id="swap-pct-slider" class="mo-slider" min="0" max="100" value="0" step="1" />
-        <div class="mo-slider-val-wrap">
-          <input type="number" id="swap-pct-val" class="mo-slider-val-input" value="0" min="0" max="100" step="1" />
-          <span class="mo-slider-unit">%</span>
+    <form class="form swap-form" id="swap-form">
+      <div class="swap-field">
+        <div class="swap-field-top">
+          <input id="swap-amount" name="amount" type="number" min="0" step="any" value="" placeholder="0" required />
+          <button type="button" class="swap-max" id="swap-max" ${leg.in.isNative ? "" : "hidden"}>Max</button>
+          <button type="button" class="token-pill" id="swap-pick-in"><span class="token-ic" aria-hidden="true"></span><span id="swap-in-symbol">${leg.in.symbol}</span> ▾</button>
         </div>
-      </div>` : ""}
-      <button type="button" class="swap-token-pick" id="swap-pick-in">Cambia token in vendita ↕</button>
-      <p class="swap-available" id="swap-available">
-        ${leg.in.isNative
-          ? (availableToSell(chain) != null
-              ? `Disponibile: ${availableToSell(chain).toLocaleString("it-IT", { maximumFractionDigits: 6 })} ${leg.in.symbol} (riserva ${GAS_RESERVE[chain]} per il gas)`
-              : "Saldo non disponibile — inserisci una size a mano.")
-          : "Token diverso dal nativo: inserisci la size a mano."}
-      </p>
-      <p class="swap-usd" id="swap-in-usd"></p>
+        <div class="swap-field-bottom">
+          <label for="swap-amount">Vendi <span id="swap-in-usd"></span></label>
+          <span id="swap-available">${leg.in.isNative
+            ? (available != null ? `Disponibile ${available.toLocaleString("it-IT", { maximumFractionDigits: 6 })} ${leg.in.symbol}` : "Saldo n/d")
+            : "Size a mano"}</span>
+        </div>
+      </div>
 
       <div class="swap-arrow" aria-hidden="true">↓</div>
 
-      <div class="swap-row is-readonly">
-        <output id="swap-out">—</output>
-        <span class="swap-unit" id="swap-out-symbol">${leg.out.symbol}</span>
+      <div class="swap-field is-readonly">
+        <div class="swap-field-top">
+          <output id="swap-out">0</output>
+          <button type="button" class="token-pill" id="swap-pick-out"><span class="token-ic is-out" aria-hidden="true"></span><span id="swap-out-symbol">${leg.out.symbol}</span> ▾</button>
+        </div>
+        <div class="swap-field-bottom">
+          <label for="swap-out">Ricevi (stimato)</label>
+          <span id="swap-out-usd"></span>
+        </div>
       </div>
-      <label for="swap-out" class="field-caption">Ricevi (stimato)</label>
-      <button type="button" class="swap-token-pick" id="swap-pick-out">Cambia token da ricevere ↕</button>
-      <p class="swap-usd" id="swap-out-usd"></p>
 
-      <p class="swap-detail" id="swap-detail"></p>
+      <dl class="route-info">
+        <div><dt>Impatto sul prezzo</dt><dd id="swap-detail">—</dd></div>
+        <div><dt>Percorso</dt><dd>${chain === "solana" ? "Jupiter" : "Uniswap v3"}</dd></div>
+      </dl>
 
       <label class="swap-confirm">
         <input type="checkbox" id="swap-confirm-box" />
         <span>Confermo: denaro reale, <b id="swap-confirm-summary">—</b></span>
       </label>
 
-      <button type="submit" class="btn-primary" id="swap-submit" disabled>Inserisci una size</button>
+      <button type="submit" class="btn-primary cta-btn" id="swap-submit" disabled>Inserisci una size</button>
     </form>
     <output class="outcome" id="swap-outcome" hidden></output>
   `;
@@ -246,8 +245,8 @@ async function requestQuote(rawAmount, armed) {
   const confirmSummary = host().querySelector("#swap-confirm-summary");
   if (!(amount > 0)) {
     latestQuote = null;
-    outEl.textContent = "—";
-    detailEl.textContent = "";
+    outEl.textContent = "0";
+    detailEl.textContent = "—";
     inUsdEl.textContent = "";
     outUsdEl.textContent = "";
     submitButton.disabled = true;
@@ -272,7 +271,7 @@ async function requestQuote(rawAmount, armed) {
     outUsdEl.textContent = leg.out.priceUsd != null
       ? `≈ ${formatUsd(outAmount * leg.out.priceUsd)}`
       : (isStable(leg.out) ? `≈ ${formatUsd(outAmount)} (stablecoin, ancorata a 1 USD)` : "");
-    detailEl.textContent = `Price impact stimato ${quote.price_impact_pct.toFixed(2)}%`;
+    detailEl.textContent = `${quote.price_impact_pct.toFixed(2)}%`;
     detailEl.classList.toggle("is-warn", quote.price_impact_pct > 1);
 
     if (confirmSummary) {

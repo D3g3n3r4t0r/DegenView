@@ -2600,7 +2600,18 @@ async def onchain_chart(
          "low": float(row.low), "close": float(row.close)}
         for ts, row in df.iterrows()
     ]
-    return {"symbol": symbol, "pool_address": pool_address, "candles": candles}
+    top = pairs[0]
+    created_ms = top.get("pairCreatedAt")
+    stats = {
+        "base_symbol": (top.get("baseToken") or {}).get("symbol"),
+        "quote_symbol": (top.get("quoteToken") or {}).get("symbol"),
+        "price_usd": float(top["priceUsd"]) if top.get("priceUsd") else None,
+        "price_change_h24": (top.get("priceChange") or {}).get("h24"),
+        "liquidity_usd": (top.get("liquidity") or {}).get("usd"),
+        "volume_h24": (top.get("volume") or {}).get("h24"),
+        "age_hours": (_time.time() * 1000 - created_ms) / 3_600_000 if created_ms else None,
+    }
+    return {"symbol": symbol, "pool_address": pool_address, "candles": candles, "stats": stats}
 
 
 @app.get("/api/onchain/tokens/search")
