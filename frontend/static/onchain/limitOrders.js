@@ -88,12 +88,18 @@ function paintForm(chain, native) {
   host().querySelector("#limit-pick-other").addEventListener("click", () => {
     sheets.openTokenPicker(chain, {
       onPick: async ({ address }) => {
+        const outcome = host().querySelector("#limit-outcome");
+        if (address.toLowerCase() === native.address.toLowerCase()) {
+          outcome.hidden = false;
+          outcome.dataset.tone = "no";
+          outcome.textContent = `${native.symbol} e' gia' un lato dell'ordine — scegli l'altro token.`;
+          return;
+        }
         try {
           const info = await api.getTokenInfo(chain, address);
           otherToken = { address, symbol: info.symbol || `${address.slice(0, 4)}…${address.slice(-4)}`, decimals: info.decimals };
           paintForm(chain, native);
         } catch (error) {
-          const outcome = host().querySelector("#limit-outcome");
           outcome.hidden = false;
           outcome.dataset.tone = "no";
           outcome.textContent = error instanceof ApiError ? error.message : "Token non riconosciuto.";

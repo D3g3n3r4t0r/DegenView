@@ -204,8 +204,17 @@ function pickToken(side, armed) {
       const submitButton = host().querySelector("#swap-submit");
       if (submitButton) { submitButton.disabled = true; submitButton.textContent = "Verifico il token…"; }
       try {
-        const resolved = await resolveToken(chain, address);
-        leg[side] = { ...resolved, isNative: false };
+        // Il nativo (proposto nel picker fra "i tuoi token") non passa da
+        // resolveToken(): i suoi decimali sono gia' noti, e chiederli al
+        // contratto puo' tornare None su Robinhood Chain (indirizzo di
+        // routing, non garantito un ERC20 vero) — stesso bug gia' visto
+        // sull'endpoint del prezzo live.
+        if (address.toLowerCase() === NATIVE[chain].address.toLowerCase()) {
+          leg[side] = { ...NATIVE[chain], priceUsd: state.balance?.native_price_usd ?? null, isNative: true };
+        } else {
+          const resolved = await resolveToken(chain, address);
+          leg[side] = { ...resolved, isNative: false };
+        }
         paintForm(armed);
       } catch (error) {
         if (submitButton) submitButton.textContent = "Riprova";
