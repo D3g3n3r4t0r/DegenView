@@ -1974,3 +1974,67 @@ quindi il toast vuoto restava visibile — serve `[hidden]{display:none
 
 Verificato: 633 passed, ruff pulito, `node --check` su tutti i moduli,
 resa controllata in chiaro e scuro con il backend vero in locale.
+
+## Sessione 2026-09-23 — Fase 4 sbloccata (lato buy), Fase 5 al passo intermedio
+
+Lorenzo: "completa il piano wallet on-chain — Fase 4 (watchlist -> auto-trade,
+oggi bloccata) e Fase 5 (wallet dentro Sorveglia/Opera, non piu' pagina a se)".
+
+**Fase 4.** Il blocco era esattamente quello documentato: `BASE@chain:pool`
+porta l'indirizzo del pool, non quello del token, e senza quello non si
+chiede un quote. DexScreener nella ricerca da' gia' `baseToken.address` —
+prima scartato, usato solo per symbol/name. Ora `dexscreener.search_symbols`
+lo espone come `base_token_address`, `WatchlistEntry`/`SymbolSuggestion`
+lo portano, `watchlist.add_entry` lo salva alla creazione E lo recupera su
+un upsert che prima non lo aveva (una entry vecchia non resta "saltata"
+per sempre). Il branch di auto-trade in `main.py` (`_run_onchain_auto_trade`)
+ora firma davvero un ordine BUY: Jupiter su Solana, Uniswap v3 su Robinhood
+Chain con discovery del fee tier (100/500/3000/10000), stesso schema degli
+endpoint manuali `/api/onchain/execute/*`. Il token di quotazione e' uno
+stabile fisso per chain (USDC su Solana, USDG su Robinhood Chain) — i
+decimali di entrambi (6) sono verificati dal vivo con una `decimals()`
+reale via RPC, non presi a memoria.
+
+Scelta deliberata, non un buco lasciato per fretta: le VENDITE
+(`exit_long`/`flip_to_short`) restano "saltate", con un motivo esplicito
+("servono i decimali del token, non salvati sulla entry"). Comprare si
+paga sempre nello stabile di quote, i cui decimali sono noti; vendere
+richiederebbe i decimali del token BASE per convertire una quantita' in
+unita' raw — indovinarli manda un multiplo o una frazione dell'importo
+voluto, non un errore leggibile. Restano da salvare quando la entry viene
+creata (una `decimals()` in piu' sulla stessa chiamata che gia' verifica
+il pool), non ancora fatto.
+
+**Fase 5.** Trovato che "Sorveglia" e "Opera" sono nomi interni superati:
+la tab visibile oggi si chiama "Trading" (`data-tab-content="trading"`),
+ma le sue sotto-sezioni sono ancora accordion `<details class="opera-sub">`
+— stesso posto dove vivono le chiavi exchange (Trading automatico,
+Ordine futures/manuale, Posizioni aperte). Aggiunta una nuova sezione
+"Wallet on-chain" con lo stesso schema, fra "Trading automatico" e
+"Ordine manuale": un bottone-link ben visibile a `/onchain-app.html`.
+
+Scelta esplicita (via intermedia, non fusione piena): la UI del wallet ha
+un suo ciclo di stato/polling indipendente (moduli ES, `<dialog>`, View
+Transitions — rifatta la sessione scorsa) e portarla dentro il DOM della
+tab Trading senza romperla vale una sessione a se', non un pezzo di
+questa. Il wallet ora si trova DA DENTRO il sito (prima era un URL
+isolato che nessuno trovava), ma non e' ancora fuso nella pagina.
+
+Verificato dal vivo con Playwright (non solo letto il codice): registrato
+un utente di test con `REGISTRATION_ALLOWED_EMAILS`, login vero, sito
+principale che si carica e naviga (screenshot sloggato e loggato), la
+sezione "Wallet on-chain" visibile e cliccabile dopo aver aperto i due
+accordion, e il link che porta davvero alla pagina del wallet, la quale
+si carica senza errori in console propri (a parte un `ERR_CERT_AUTHORITY_INVALID`
+di rete, non del sito).
+
+Test nuovi: `test_dexscreener_search.py`, `test_watchlist_base_token_address.py`,
+`test_onchain_watchlist_autotrade.py` (firma/invio mockati, come gli altri
+test di execute — la correttezza di quote/firma e' verificata altrove con
+rete vera). Suite completa 644 passed (1 fallimento di rete noto e
+indipendente, `test_onchain_prices.py::test_native_price_usd_real_network_call_robinhood`),
+ruff pulito, `node --check` pulito.
+
+Aggiornata anche la voce `seed-0085` in `resolutions.json` con lo stato di
+questa sessione — resta "in corso": la fusione piena della UI e la vendita
+on-chain (decimali del token) sono i due pezzi veri che restano.

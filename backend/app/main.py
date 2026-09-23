@@ -111,7 +111,7 @@ from app.providers.base import (
 )
 from app.providers.binance import BinanceProvider
 from app.providers.binance import format_symbol as format_binance_symbol
-from app.providers.dexscreener import DexScreenerProvider
+from app.providers.dexscreener import DexScreenerProvider, _parse_symbol as _parse_dex_symbol
 from app.providers.kraken import KrakenProvider
 from app.providers.kraken import format_symbol as format_kraken_symbol
 from app.providers.kucoin import KucoinProvider
@@ -258,6 +258,141 @@ async def _fetch_cached_since(key: tuple, provider: DataProvider, symbol: str, i
         return await fetch_ohlcv_canonical(provider, symbol, interval, 0, since_ms=since_ms)
     return await get_or_fetch(key, _do)
 
+
+
+# Token di quotazione usati per l'auto-trade on-chain dalla watchlist: uno
+# stabile per chain, cosi' l'importo in USD del tetto si converte senza
+# dover conoscere i decimali del token BASE (che invece servono per una
+# vendita, e non sono salvati da nessuna parte — vedi sotto). Decimali
+# verificati dal vivo, non presi a memoria: USDC e' notoriamente 6 su
+# Solana, USDG e' stato letto con una decimals() reale su Robinhood Chain
+# il 2026-09-23 (0x5fc536...d168 -> 6).
+_ONCHAIN_QUOTE_TOKEN = {
+    "solana": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+    "robinhood": "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168",
+}
+_ONCHAIN_QUOTE_DECIMALS = 6
+_ROBINHOOD_FEE_TIERS = (500, 3000, 10000, 100)
+
+
+async def _run_onchain_auto_trade(owner: User, entry: WatchlistEntry, strategy_name: str, fresh: list) -> None:
+    """Fase 4 vera: da segnale a firma, quando l'indirizzo del token c'e'.
+
+    Solo per il lato BUY (entry_long/flip_to_long): comprare si paga sempre
+    nello stabile di quote, i cui decimali sono noti e verificati sopra.
+    Vendere (exit_long/flip_to_short) richiederebbe i decimali del token
+    BASE per convertire una quantita' in unita' raw, e quelli non sono
+    salvati da nessuna parte in questa entry — meglio dirlo che indovinarli:
+    un decimals sbagliato manda un multiplo o una frazione dell'importo
+    voluto, non un errore leggibile.
+    """
+    if not settings.onchain_enabled:
+        for signal in fresh:
+            trading_log.record(
+                owner.id, symbol=entry.symbol, exchange=entry.exchange,
+                strategy_name=strategy_name, signal_type=signal.type,
+                outcome="saltato", detail="sistema wallet on-chain spento (interruttore generale)",
+                price=signal.price,
+            )
+        return
+
+    if not entry.base_token_address:
+        for signal in fresh:
+            trading_log.record(
+                owner.id, symbol=entry.symbol, exchange=entry.exchange,
+                strategy_name=strategy_name, signal_type=signal.type,
+                outcome="saltato",
+                detail="esecuzione automatica on-chain non ancora collegata: "
+                       "manca l'indirizzo del token, non solo del pool",
+                price=signal.price,
+            )
+        return
+
+    try:
+        _base_symbol, chain, _pool = _parse_dex_symbol(entry.symbol)
+    except ProviderError as exc:
+        for signal in fresh:
+            trading_log.record(
+                owner.id, symbol=entry.symbol, exchange=entry.exchange,
+                strategy_name=strategy_name, signal_type=signal.type,
+                outcome="saltato", detail=f"simbolo on-chain non riconosciuto: {exc}", price=signal.price,
+            )
+        return
+
+    quote_token = _ONCHAIN_QUOTE_TOKEN.get(chain)
+    if quote_token is None or chain not in owner.onchain_wallets:
+        for signal in fresh:
+            trading_log.record(
+                owner.id, symbol=entry.symbol, exchange=entry.exchange,
+                strategy_name=strategy_name, signal_type=signal.type,
+                outcome="saltato", detail=f"nessun wallet on-chain configurato per la chain '{chain}'",
+                price=signal.price,
+            )
+        return
+
+    cap = entry.size_cap_usdt.get(strategy_name) or settings.onchain_max_usd_per_trade
+    amount_in = int(cap * (10 ** _ONCHAIN_QUOTE_DECIMALS))
+
+    for signal in fresh:
+        if signal.type not in ("entry_long", "flip_to_long"):
+            trading_log.record(
+                owner.id, symbol=entry.symbol, exchange=entry.exchange,
+                strategy_name=strategy_name, signal_type=signal.type,
+                outcome="saltato",
+                detail="vendita on-chain non ancora collegata: servono i decimali del token, "
+                       "non salvati sulla entry — solo gli ingressi (buy) sono automatici per ora",
+                price=signal.price,
+            )
+            continue
+        try:
+            private_key_hex = auth.get_decrypted_onchain_private_key(owner, chain)
+            if chain == "solana":
+                quote = await onchain_quotes.jupiter_quote(quote_token, entry.base_token_address, amount_in)
+                result = await onchain_execute.execute_order(
+                    owner.id, "solana", entry.base_token_address, strategy_name, "buy",
+                    cap, quote["price_impact_pct"], signal.price, private_key_hex, quote,
+                )
+            else:
+                pool = None
+                fee = None
+                for candidate_fee in _ROBINHOOD_FEE_TIERS:
+                    pool = await onchain_quotes.get_pool(quote_token, entry.base_token_address, candidate_fee)
+                    if pool is not None:
+                        fee = candidate_fee
+                        break
+                if pool is None:
+                    raise RuntimeError("nessun pool Uniswap v3 trovato per questo token su nessun fee tier")
+                v3_quote = await onchain_quotes.uniswap_v3_quote(quote_token, entry.base_token_address, fee, amount_in)
+                amount_out_minimum = int(v3_quote["amount_out"] * 0.99)  # 1% di slippage, come il default dell'endpoint manuale
+                result = await onchain_execute.execute_order(
+                    owner.id, "robinhood", entry.base_token_address, strategy_name, "buy",
+                    cap, v3_quote["price_impact_pct"], signal.price, private_key_hex,
+                    {"token_in": quote_token, "token_out": entry.base_token_address, "fee": fee,
+                     "amount_in": amount_in, "amount_out_minimum": amount_out_minimum},
+                )
+            outcome = "eseguito" if result.get("accepted") else "saltato"
+            trading_log.record(
+                owner.id, symbol=entry.symbol, exchange=entry.exchange,
+                strategy_name=strategy_name, signal_type=signal.type,
+                outcome=outcome, detail=str(result)[:400], price=signal.price,
+            )
+            if result.get("accepted") and owner.telegram_chat_id and _telegram_allowed(owner):
+                asyncio.create_task(telegram.send_to(
+                    owner.telegram_chat_id,
+                    f"💱 Ordine on-chain ESEGUITO <b>{entry.symbol}</b> [{signal.type}] su {chain} a {signal.price:g}",
+                ))
+        except Exception as exc:
+            logger.error("On-chain order failed for %s %s: %s", entry.symbol, signal.type, exc)
+            trading_log.record(
+                owner.id, symbol=entry.symbol, exchange=entry.exchange,
+                strategy_name=strategy_name, signal_type=signal.type,
+                outcome="fallito", detail=str(exc), price=signal.price,
+            )
+            if owner.telegram_chat_id and _telegram_allowed(owner):
+                asyncio.create_task(telegram.send_to(
+                    owner.telegram_chat_id,
+                    f"⚠️ Ordine on-chain FALLITO <b>{entry.symbol}</b> [{signal.type}]: {exc}",
+                ))
 
 
 async def _watchlist_alert_loop() -> None:
@@ -484,23 +619,7 @@ async def _watchlist_alert_loop() -> None:
                                             f"⚠️ Ordine FALLITO <b>{entry.symbol}</b> [{signal.type}]: {exc}",
                                         ))
                     if is_dex and fresh and entry.auto_trade.get(strategy_name):
-                        # Fase 4, aggancio onesto: il segnale c'e', il wallet
-                        # on-chain c'e', ma il simbolo BASE@chain:pool non porta
-                        # l'indirizzo del token (mint su Solana, contratto su
-                        # EVM) che execute_order/quote richiedono — il pool
-                        # address da solo non basta a chiedere un quote a
-                        # Jupiter. Finche' quell'indirizzo non e' salvato sulla
-                        # entry (richiede toccare la ricerca DexScreener), ogni
-                        # segnale finisce qui, mai in una firma.
-                        for signal in fresh:
-                            trading_log.record(
-                                owner.id, symbol=entry.symbol, exchange=entry.exchange,
-                                strategy_name=strategy_name, signal_type=signal.type,
-                                outcome="saltato",
-                                detail="esecuzione automatica on-chain non ancora collegata: "
-                                       "manca l'indirizzo del token, non solo del pool",
-                                price=signal.price,
-                            )
+                        await _run_onchain_auto_trade(owner, entry, strategy_name, fresh)
             except ProviderUnreachable as exc:
                 # Rete, TLS, proxy: quasi sempre passeggero. Si mette in pausa
                 # quel provider con attesa crescente e si parla solo se il buco
@@ -2659,6 +2778,9 @@ class WatchlistAddRequest(BaseModel):
     exchange: CryptoExchange = "mexc"
     interval: IntervalChoice = "1d"
     on_close: bool = True
+    # Solo per asset_type="dex", passato dal risultato della ricerca
+    # DexScreener (o da una entry watchlist gia' esistente che lo porta).
+    base_token_address: str | None = None
 
 
 @app.post("/api/watchlist", response_model=WatchlistEntry)
@@ -2684,7 +2806,8 @@ async def add_watchlist_entry(
         raise HTTPException(status_code=400, detail="Ticker non trovato su questo exchange.")
 
     return watchlist_store.add_entry(
-        user.id, symbol, req.asset_type, exchange=req.exchange, interval=req.interval, on_close=req.on_close
+        user.id, symbol, req.asset_type, exchange=req.exchange, interval=req.interval, on_close=req.on_close,
+        base_token_address=req.base_token_address,
     )
 
 

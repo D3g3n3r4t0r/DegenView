@@ -2850,6 +2850,7 @@
               body: JSON.stringify({
                 symbol: entry.symbol, asset_type: entry.asset_type,
                 exchange: entry.exchange, interval: entry.interval || "1d", on_close: true,
+                base_token_address: entry.base_token_address || null,
               }),
             }).then((r) => r.json());
             await fetch(`/api/watchlist/${watch.id}/strategy`, {
@@ -10167,6 +10168,9 @@
           exchange: el("watchlist-exchange").value,
           interval: el("watchlist-interval").value,
           on_close: el("watchlist-onclose").checked,
+          // Solo per un pair dex: l'indirizzo del token base, gia' nella
+          // ricerca (DexScreener), serve a Fase 4 per un ordine automatico.
+          base_token_address: resolved.base_token_address || null,
         }),
       });
       symbolInput.value = "";
@@ -11089,6 +11093,7 @@
     labState.displaySymbol = item.symbol.replace(/USDT$|USD$|BTC$/, "") || item.symbol;
     labState.assetType = item.asset_type || "crypto";
     labState.exchange = item.provider || "mexc";
+    labState.baseTokenAddress = item.base_token_address || null;
     labSuggest.resolved = item;
     labEl("lab-ticker-val").textContent = item.symbol;
     labEl("lab-ticker-input").value = "";
@@ -11231,6 +11236,7 @@
             exchange: labState.exchange,
             interval: labState.tf,
             on_close: true,
+            base_token_address: labState.baseTokenAddress || null,
           }),
         });
 

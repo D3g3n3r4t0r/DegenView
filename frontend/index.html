@@ -922,6 +922,23 @@
               </div>
             </details>
 
+            <!-- Wallet on-chain: Fase 5 del piano di sviluppo lo vuole
+                 dentro questa tab (stesso posto delle chiavi exchange), non
+                 piu' una pagina isolata che nessuno trova. Passo intermedio
+                 onesto: qui c'e' un ingresso ben visibile che porta alla UI
+                 vera (moduli ES, gia' rifatta con tecnologie moderne — vedi
+                 frontend/static/onchain/), non un link nascosto. La fusione
+                 completa dentro il DOM di questa tab resta da fare: quella
+                 UI ha il suo ciclo di polling/stato indipendente e portarla
+                 qui dentro senza romperla vale una sessione a se'. -->
+            <details class="opera-sub">
+              <summary>Wallet on-chain <span class="trading-auto-badge">⚠️ Denaro reale</span></summary>
+              <div class="opera-sub-body">
+                <p class="panel-hint">Swap DEX su Solana e Robinhood Chain — chiave generata sul server, mai importata. Stessa logica di "denaro reale" delle sezioni qui sopra, ma un'app propria (Fase 5 del piano: qui c'e' l'ingresso, la fusione completa in questa pagina e' ancora da fare).</p>
+                <a href="/onchain-app.html" id="onchain-wallet-open-link" class="section-action-btn" style="display:inline-block;text-decoration:none;">Apri il wallet on-chain →</a>
+              </div>
+            </details>
+
             <!-- Ordine manuale -->
             <details class="opera-sub">
               <summary>Ordine manuale <span class="trading-auto-badge">⚠️ Denaro reale</span></summary>

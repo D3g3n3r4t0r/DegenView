@@ -67,6 +67,7 @@ def add_entry(
     exchange: CryptoExchange = "mexc",
     interval: IntervalChoice = "1d",
     on_close: bool = True,
+    base_token_address: str | None = None,
 ) -> WatchlistEntry:
     """Upsert: adding a ticker that's already tracked by this owner just
     returns the existing entry (with whatever strategies/interval are
@@ -79,6 +80,12 @@ def add_entry(
             and entry.asset_type == asset_type
             and entry.exchange == exchange
         ):
+            # Una entry gia' esistente creata prima di questo campo non ha
+            # l'indirizzo salvato: se la ricerca lo porta ora, lo aggiunge
+            # invece di lasciarla "saltata" per sempre.
+            if base_token_address and not entry.base_token_address:
+                entry.base_token_address = base_token_address
+                _save()
             return entry
 
     entry = WatchlistEntry(
@@ -90,6 +97,7 @@ def add_entry(
         strategies=[],
         interval=interval,
         on_close=on_close,
+        base_token_address=base_token_address,
     )
     _entries[entry.id] = entry
     _save()
