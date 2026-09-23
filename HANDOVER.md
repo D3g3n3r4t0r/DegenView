@@ -2727,3 +2727,11 @@ I tasti in alto di #70 restano nel DOM ma #73 li nasconde via CSS.
 Conflitto non testuale trovato e sistemato: il `data-view` aggiunto da #73
 a `#app-shell` rompeva il replace di #71 che mostra la sezione giusta al
 primo disegno; ora `_render_onchain_app()` cerca l'elemento per id.
+
+Rifinitura (PR nuova, #72 e #75 gia' unite): Lorenzo, secondo screenshot,
+"modifica design di selezione token, voglio immersivo pulito e ben fatto".
+Titolo per uso, loghi (icon di Jupiter / image_url di GeckoTerminal,
+lettera colorata come ripiego), spunta verificato, scheletro in
+caricamento. Il campo e' `type=search name=search`: togliere "indirizzo"
+dal segnaposto non bastava, Safari propone i contatti su qualsiasi campo
+di testo che non sia una ricerca. Da verificare sul telefono vero.
