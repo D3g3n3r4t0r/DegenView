@@ -2739,3 +2739,45 @@ lettera colorata come ripiego), spunta verificato, scheletro in
 caricamento. Il campo e' `type=search name=search`: togliere "indirizzo"
 dal segnaposto non bastava, Safari propone i contatti su qualsiasi campo
 di testo che non sia una ricerca. Da verificare sul telefono vero.
+
+---
+
+## Token fuori da Uniswap v3 (MYCE / MYCEL) — `seed-0092` — 2026-09-23
+
+Lorenzo, screenshot da iPhone su Robinhood Chain: "sto errore non deve
+MAI SUCCEDERE" (grafico vuoto, "Nessun pool per questo token su nessun
+fee tier", "Nessun dato disponibile per MYCE@robinhood:0x..." fuori
+schermo, swap "Preventivo non disponibile"). Aveva cercato MYCEL, non
+MYCE. Poi, correggendo la prima idea (filtrare i token non scambiabili):
+"non e' che deve escludermi dei risultati [...] io ti scrivo tutta roba
+che e' presente su Dex Scanner. Quindi tu devi semplicemente utilizzare
+Dex Scanner e vedrai che trovi tutto".
+
+Misurato: MYCE e MYCEL vivono solo su Pons (pons-v2, pons-v2-dex) e
+Uniswap v4; il sito guardava solo Uniswap v3. La ricerca scartava MYCEL
+($4.7k di pool, sotto la soglia $10k dei non verificati).
+
+Fatto:
+- ricerca senza soglie, DexScreener unito alla fonte principale per
+  indirizzo (`token_search.merge_candidates`); MYCEL esce MYCEL;
+- grafico dal pool DexScreener piu' liquido, con `token=<indirizzo>` a
+  GeckoTerminal (MYCE e' la quota in SHROOM/MYCE), fino a 3 pool, un
+  secondo tentativo sul 429; prezzo live dallo stesso pool fuori da v3;
+- preventivo via `aggregator.py` (KyberSwap, poi LI.FI) quando v3 non ha
+  la coppia o l'RPC cade; risposta con `route: "aggregator"` e lo swap
+  mostra il prezzo senza firmare;
+- nessun indirizzo grezzo nei messaggi d'errore (l'overflow CSS era gia'
+  stato chiuso su main da 4b7aaf2).
+
+Resta, **aspetta il via di Lorenzo** (tocca soldi veri; la modalita'
+automatica ha bloccato la modifica a `execute.py`): firmare lo swap
+preparato dall'aggregatore. Piano: `/route/build` di KyberSwap (o la
+`transactionRequest` di LI.FI) → firmare solo se `to` e' in una lista di
+router (KyberSwap 0x6131B5fa…37b5, LI.FI 0xB477751B…4Af3), approve
+dell'importo esatto se si vende un token, ETH nativo come `value`.
+
+Dedotto dal codice, non provato dal vivo: il percorso v3 manuale
+(`build_signed_robinhood_swap`) manda `value: 0` con `token_in` = WETH e
+nessun approve, quindi vendere ETH nativo o un token senza allowance
+dovrebbe andare in revert. Anche questo si risolve col percorso
+aggregatore.

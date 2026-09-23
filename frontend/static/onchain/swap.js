@@ -194,7 +194,10 @@ function paintForm(armed) {
   }
   host().querySelector("#swap-pick-in").addEventListener("click", () => pickToken("in", armed));
   host().querySelector("#swap-pick-out").addEventListener("click", () => pickToken("out", armed));
-  form.addEventListener("submit", (event) => { event.preventDefault(); if (confirmBox.checked) confirmAndExecute(armed); });
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (confirmBox.checked && latestQuote?.route !== "aggregator") confirmAndExecute(armed);
+  });
 }
 
 // Il picker vive in sheets.js (dialog dedicato): mai un prompt() del
@@ -284,8 +287,13 @@ async function requestQuote(rawAmount, armed) {
         `${amount} ${leg.in.symbol} → circa ${outAmount.toFixed(6)} ${leg.out.symbol}, `
         + `price impact ${quote.price_impact_pct.toFixed(2)}%`;
     }
-    submitButton.disabled = !armed || !confirmBox?.checked;
-    submitButton.textContent = armed ? "Firma e invia" : "Esecuzione spenta sul server";
+    // Fuori da Uniswap v3 il prezzo arriva da un aggregatore (KyberSwap,
+    // LI.FI): si vede quanto si riceverebbe, la firma su quel percorso non
+    // e' ancora collegata.
+    const viaAggregator = quote.route === "aggregator";
+    submitButton.disabled = !armed || viaAggregator || !confirmBox?.checked;
+    submitButton.textContent = !armed ? "Esecuzione spenta sul server"
+      : viaAggregator ? `Prezzo da ${quote.source}: swap in arrivo` : "Firma e invia";
   } catch (error) {
     latestQuote = null;
     outEl.textContent = "—";
