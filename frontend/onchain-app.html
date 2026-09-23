@@ -912,9 +912,90 @@
 
   @keyframes drain { to { stroke-dashoffset: 641; } }
 
+  /* Everything below animates only translate/scale/opacity: the compositor
+     runs it off the main thread, no layout or paint per frame. Colours and
+     borders keep the transitions they already had above. */
+  :root { --ease-out: cubic-bezier(.2,.8,.2,1); }
+
+  @keyframes rise { from { opacity: 0; translate: 0 10px; } }
+  @keyframes fade-in { from { opacity: 0; translate: 0 4px; } }
+  @keyframes ping { to { scale: 2.6; opacity: 0; } }
+
+  /* Cards come in one after the other when the shell (or a card that was
+     hidden, e.g. the sniper one after a chain switch) appears. `backwards`
+     only: once done the animation leaves no value behind, so hover/active
+     scale transitions keep working. */
+  .status-strip > .status-card, .market-card, .order-panel,
+  .reveal-row, #onchain-empty-state, #login-screen {
+    animation: rise .38s var(--ease-out) backwards;
+  }
+  .status-strip > :nth-child(2) { animation-delay: 40ms; }
+  .status-strip > :nth-child(3) { animation-delay: 80ms; }
+  .market-card  { animation-delay: 100ms; }
+  .order-panel  { animation-delay: 140ms; }
+
+  /* Tab content is rebuilt with innerHTML on every switch: each new node
+     fades in, so a tab change reads as a change instead of a jump. Not
+     applied to the chart metrics (repainted on a timer) nor to the token
+     picker results (repainted on every keystroke). */
+  #order-panel-body > *, .bottom-panel-body > *, #sheet .sheet-body > * {
+    animation: fade-in .22s var(--ease-out) backwards;
+  }
+
+  /* Toast slides up on entry. Exit stays instant: [hidden] is
+     display:none !important, which a transition cannot delay. */
+  .toast { transition: opacity .25s, translate .3s var(--ease-out); }
+  @starting-style { .toast { opacity: 0; translate: 0 12px; } }
+
+  /* Press feedback: a small scale-down under the finger / cursor. The
+     transition lists keep the properties each component already animated. */
+  .btn-primary, .btn-quiet, .btn-danger { transition: background .15s, scale .12s var(--ease-out); }
+  .switcher button { transition: color .2s, border-color .2s, background .2s, scale .12s var(--ease-out); }
+  .mo-side-tab { transition: background .15s, color .15s, scale .12s var(--ease-out); }
+  .token-pill, .addr-chip, .tf-pills button, .reveal-row, .swap-max,
+  .token-head, .toast-close { transition: scale .12s var(--ease-out); }
+  :is(.btn-primary, .btn-quiet, .btn-danger, .switcher button, .mo-side-tab, .token-pill,
+      .addr-chip, .tf-pills button, .swap-max, .token-head, .toast-close):active:not(:disabled) { scale: .96; }
+  .reveal-row:active { scale: .985; }
+
+  /* Swap/Limit/Sniper: the gradient pill cross-fades and grows into place
+     instead of snapping from one tab to the other. */
+  #order-tabs .mo-side-tab { position: relative; isolation: isolate; }
+  #order-tabs .mo-side-tab::before {
+    content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    opacity: 0; scale: .9;
+    transition: opacity .2s, scale .28s var(--ease-out);
+  }
+  #order-tabs .mo-tab-active { background: none; }
+  #order-tabs .mo-tab-active::before { opacity: 1; scale: 1; }
+
+  /* Bottom tabs: the underline draws out from the centre (scaleX) instead
+     of a border colour appearing. */
+  .bottom-tabs .mo-side-tab { position: relative; }
+  .bottom-tabs .mo-side-tab::after {
+    content: ""; position: absolute; inset-inline: 0; inset-block-end: -2px; block-size: 2px;
+    border-radius: 2px; background: var(--accent);
+    scale: 0 1; transition: scale .28s var(--ease-out);
+  }
+  .bottom-tabs .mo-tab-active { border-block-end-color: transparent; }
+  .bottom-tabs .mo-tab-active::after { scale: 1 1; }
+
+  /* "Live" signals breathe: a ring that grows and fades, only while the
+     element is shown (display:none stops the animation). */
+  .sniper-card .pulse, .live .dot.is-live { position: relative; }
+  .sniper-card .pulse::after, .live .dot.is-live::after {
+    content: ""; position: absolute; inset: 0; border-radius: 50%;
+    background: inherit; animation: ping 2s cubic-bezier(0,0,.2,1) infinite;
+  }
+
+  /* The QR and the approved tick land with a small pop. */
+  .qr, .reveal-done { animation: rise .3s var(--ease-out) backwards; }
+
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
       animation-duration: .001ms !important;
+      animation-iteration-count: 1 !important;
       transition-duration: .001ms !important;
     }
     /* Anche la transizione fra le chain: senza questo il browser
@@ -922,6 +1003,364 @@
     ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) {
       animation: none !important;
     }
+  }
+}
+
+/* ============================================================
+   Minimal. Lorenzo: "rendere l'app completamente minimal e mega
+   moderna? troppi tasti" e "pochi clic, pochi cambi di schermata,
+   niente scorrimenti eccessivi". Sempre a schermo resta solo cio'
+   che serve a ogni visita (saldo, grafico, ordine, posizioni); il
+   resto sta nel menu "⋯". Blocco in coda, cosi' vince sulle regole
+   dei componenti sopra senza toccarle.
+   ============================================================ */
+@layer components {
+  /* Wallet/Strategie/Attivita'/Impostazioni ripetevano le tab sotto il
+     grafico e "⋯ > Limiti": tolti, scelto da Lorenzo. */
+  .topbar .nav-pills { display: none; }
+
+  /* --- menu "⋯" ---------------------------------------------------- */
+  .more-btn {
+    display: grid; place-items: center; inline-size: 38px; block-size: 38px; padding: 0;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px; color: var(--ink-dim);
+    & svg { inline-size: 18px; block-size: 18px; fill: currentColor; }
+    &:hover { color: var(--ink); }
+  }
+  .more-sheet {
+    & .menu-list { display: flex; flex-direction: column; gap: 2px; margin-block-end: 12px; }
+    & .reveal-row { margin-block-end: 4px; }
+  }
+  .menu-item {
+    display: flex; align-items: center; gap: 14px; inline-size: 100%; text-align: start;
+    background: none; border: 0; border-radius: 14px; padding: 10px 8px;
+    & b { display: block; font-size: 14px; font-weight: 600; }
+    & small { font-size: 12px; color: var(--ink-faint); }
+    &:hover { background: var(--raised); }
+  }
+  .menu-ic {
+    display: grid; place-items: center; flex-shrink: 0; inline-size: 36px; block-size: 36px;
+    border-radius: 12px; background: var(--raised); color: var(--accent); font-size: 15px;
+  }
+
+  /* --- stato: il saldo e due pillole, non tre card ----------------- */
+  .status-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .balance-card {
+    flex: 1 0 100%; background: none; border: 0; padding: 0 2px;
+    & .amount { font-size: 34px; }
+    @container (width >= 640px) { flex: 1 1 auto; }
+  }
+  .sniper-card, .security-card {
+    display: flex; flex-direction: row; align-items: center; gap: 8px; padding: 7px 12px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
+    & .label { margin: 0; font-size: 10.5px; }
+    & .sniper-state, & .value { margin: 0; }
+  }
+  .sniper-card .sniper-state { font-size: 13px; font-weight: 600; gap: 7px; }
+  .sniper-card .pulse { inline-size: 7px; block-size: 7px; box-shadow: none; }
+  .sniper-card .sniper-tags, .security-card .sub { display: none; }
+  .security-card .value { font-size: 13px; }
+
+  /* L'interruttore dello sniper vive nella tab Sniper: fuori da li' e' un
+     paragrafo in piu' fra lo swap e il fondo del pannello. */
+  .order-panel:not(:has([data-order-tab="sniper"].mo-tab-active)) .sniper-box { display: none; }
+
+  /* ------------------------------------------------------------------
+     Telefono. Lorenzo: "rendi l'app da mobile un'esperienza
+     SEMPLICISSIMA, persino guidata se serve [...] non voglio tasti".
+     A schermo: marchio + ⋯, saldo, grafico, lo swap a passi, i tuoi
+     token. Tab, rete, filtri del grafico, azioni secondarie: nel menu ⋯,
+     che le preme per conto tuo (data-proxy in main.js).
+     ------------------------------------------------------------------ */
+  @container (width < 640px) {
+    .topbar {
+      display: flex; flex-wrap: nowrap;
+      & .addr-chip, & .switcher { display: none; }
+      & .topbar-right { display: flex; margin-inline-start: auto; }
+    }
+
+    .balance-card { padding-block: 4px 0;
+      & .amount { font-size: 42px; letter-spacing: -.02em; }
+    }
+    /* Le pillole di stato solo quando dicono qualcosa: lo sniper se acceso. */
+    .security-card, .sniper-card:not(:has(.pulse:not([hidden]))) { display: none; }
+
+    /* Grafico, poi ordine, poi token: lo swap sta sotto il token che guardi. */
+    .market-order-row { display: flex; flex-direction: column; align-items: stretch; gap: 14px; }
+    .market-card { display: contents; }
+    .market-panel, .bottom-panel {
+      background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px;
+    }
+    .market-panel { order: 1; }
+    .order-panel { order: 2; padding: 16px; }
+    .bottom-panel { order: 3; }
+    .tf-pills, .metrics-row { display: none; }
+    .chart-head { margin-block-end: 10px; }
+    .market-chart { block-size: 170px; }
+
+    /* Le tab restano (le preme il menu) ma se ne vede solo il titolo. */
+    #order-tabs, .bottom-tabs {
+      background: none; border: 0; padding: 0; margin: 0 0 12px; gap: 0;
+      & .mo-side-tab:not(.mo-tab-active) { display: none; }
+      & .mo-tab-active {
+        flex: none; padding: 0; background: none; color: var(--ink); pointer-events: none;
+        font-size: 15px; font-weight: 700; text-align: start; border: 0;
+      }
+      & .mo-side-tab::before, & .mo-side-tab::after { display: none; }
+    }
+    .bottom-panel .bottom-panel-body { max-block-size: none; overflow: visible; }
+
+    /* Swap a passi: prima quanto, poi cosa ricevi; riepilogo e conferma
+       compaiono solo quando c'e' un importo da confermare. */
+    .swap-form .swap-field::before {
+      display: block; margin-block-end: 8px; font-size: 12px; font-weight: 600; color: var(--ink-dim);
+      content: "1  Quanto vuoi scambiare";
+    }
+    .swap-form .swap-field.is-readonly::before { content: "2  Cosa ricevi"; }
+    .swap-form:has(#swap-amount:placeholder-shown) :is(.route-info, .swap-confirm) { display: none; }
+    .route-info div:nth-child(2) { display: none; }  /* il percorso (Jupiter/Uniswap) non serve a schermo */
+  }
+}
+
+/* Il menu vive nel top-layer, fuori dal contenitore della pagina: qui
+   conta la finestra. Da telefono e' una griglia di tessere; da computer
+   solo le quattro azioni di sempre, perche' tab e rete sono a schermo. */
+@layer components {
+  @media (width >= 672px) { .menu-mobile { display: none; } }
+  @media (width < 672px) {
+    .more-sheet .menu-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+    .more-sheet .menu-item {
+      flex-direction: column; justify-content: center; gap: 8px; text-align: center;
+      padding: 14px 4px; background: var(--raised); border-radius: 16px;
+      & b { font-size: 12.5px; font-weight: 600; }
+      & small { display: none; }
+    }
+    .more-sheet .menu-ic { background: var(--panel); }
+  }
+}
+
+/* ============================================================
+   Pilota. Lorenzo, dopo il concept: "PROCEDI, E' PERFETTO".
+   Nero pieno, un solo colore vivo (--live) che vuol dire "sta
+   lavorando", niente gradienti viola; Geist per il testo e Geist
+   Mono per i numeri. I token sotto ridefiniscono quelli in cima,
+   cosi' anche grafico, swap e fogli prendono lo stesso aspetto
+   senza riscriverne le regole.
+   ============================================================ */
+@font-face { font-family: "Geist"; font-style: normal; font-weight: 100 900; font-display: swap;
+  src: url(/static/fonts/geist-latin.woff2?v=1) format("woff2"); }
+@font-face { font-family: "Geist Mono"; font-style: normal; font-weight: 100 900; font-display: swap;
+  src: url(/static/fonts/geist-mono-latin.woff2?v=1) format("woff2"); }
+
+@layer tokens {
+  :root {
+    --bg:        #0a0a0b;
+    --panel:     #121214;
+    --raised:    #19191c;
+    --line:      #232327;
+    --ink:       #f3f2ee;
+    --ink-dim:   #a3a29c;
+    --ink-faint: #6b6a66;
+
+    --live:      #c8f169;
+    --live-soft: color-mix(in oklch, var(--live) 14%, transparent);
+    /* L'accento non e' piu' un colore: e' l'inchiostro. I bottoni
+       principali sono pieni e chiari, non rosa. */
+    --accent:     #f3f2ee;
+    --accent-2:   #f3f2ee;
+    --accent-ink: #0a0a0b;
+    --accent-soft: color-mix(in oklch, var(--ink) 9%, transparent);
+    --mint:  var(--live);
+    --up:    #7ee0a6;
+    --down:  #ff7a6b;
+    --danger: #ff7a6b;
+    --amber: #f2c14e;
+
+    --sans: "Geist", -apple-system, system-ui, sans-serif;
+    --mono: "Geist Mono", ui-monospace, monospace;
+    --radius: 22px;
+  }
+}
+
+@layer components {
+  body { background: var(--bg); font-feature-settings: "ss01"; letter-spacing: -.005em; }
+  /* Senza le quattro pillole al centro la testata e' marchio + comandi. */
+  .topbar { display: flex; }
+  .brand-dot { background: var(--live); }
+  .topbar h1 { font-weight: 600; font-size: 15px; }
+  .more-btn { border-color: transparent; background: var(--raised); }
+  .market-card, .order-panel, .market-panel, .bottom-panel { border-color: transparent; }
+  .token-ic, .token-pill .token-ic, .token-pill .token-ic.is-out,
+  .tx-list li:has(> span:first-child > b) > span:first-child::before { background: var(--raised); }
+  .token-pill { background: var(--raised); }
+  .swap-field { border-color: transparent; background: var(--raised); }
+  .swap-form .swap-arrow { background: var(--raised); border-color: var(--panel); }
+  .swap-max { background: var(--accent-soft); color: var(--ink); }
+  .swap-confirm { background: var(--raised); border-color: color-mix(in oklch, var(--danger) 35%, transparent); }
+  .market-chart { background: none; }
+  .sniper-box { background: var(--raised); border-color: var(--line); }
+  .sniper-box .switch[aria-checked="true"] { background: var(--live); }
+  .strategy-tag { background: var(--accent-soft); color: var(--ink) !important; }
+  .num, .amount, .kv dd, .tx-list li { font-variant-numeric: tabular-nums; }
+
+  /* Saldo: il numero e' il titolo della pagina. */
+  .balance-card {
+    & .label { text-transform: none; letter-spacing: 0; font-size: 13px; color: var(--ink-dim); }
+    & .amount { font-size: 46px; font-weight: 600; letter-spacing: -.035em; line-height: 1;
+      & .cents { color: var(--ink-faint); font-weight: 500; } }
+  }
+  /* Le due pillole di stato le sostituisce il pilota. */
+  .status-strip > .sniper-card, .status-strip > .security-card { display: none !important; }
+
+  /* --- due viste ---------------------------------------------------- */
+  #app-shell[data-view="pilot"] :is(#market-order-row, #bottom-panel) { display: none !important; }
+  #app-shell[data-view="manual"] #pilot { display: none !important; }
+
+  /* --- pilota --------------------------------------------------------- */
+  .pilot { display: grid; gap: 22px; align-items: start;
+    @container (width >= 900px) { grid-template-columns: minmax(0, 400px) minmax(0, 1fr); gap: 40px; }
+  }
+  .pilot-main, .pilot-side { display: grid; gap: 14px; min-inline-size: 0; }
+
+  .pilot-card {
+    position: relative; overflow: hidden; border-radius: var(--radius); background: var(--panel);
+    padding: 6px 6px 14px;
+  }
+  .pilot-status {
+    display: flex; align-items: center; gap: 12px; inline-size: 100%; text-align: start;
+    background: none; border: 0; border-radius: 16px; padding: 12px 12px 10px;
+    &:hover { background: var(--hover); }
+  }
+  .pilot-dot {
+    position: relative; inline-size: 10px; block-size: 10px; border-radius: 50%; flex: none;
+    background: var(--ink-faint);
+  }
+  .pilot[data-tone="live"] .pilot-dot { background: var(--live);
+    &::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: inherit;
+      animation: ping 2.2s cubic-bezier(0,0,.2,1) infinite; }
+  }
+  .pilot[data-tone="warn"] .pilot-dot { background: var(--amber); }
+  .pilot-line { flex: 1; min-inline-size: 0; margin: 0;
+    & b { display: block; font-size: 15.5px; font-weight: 600; }
+    & small { display: block; font-size: 13px; color: var(--ink-dim); }
+  }
+  .pilot[data-tone="warn"] .pilot-line small { color: var(--amber); }
+  .pilot-chev { color: var(--ink-faint); font-size: 18px; }
+  .pilot-error { margin: 12px; color: var(--danger); font-size: 13px; }
+
+  .pilot-stats {
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 4px 12px 0;
+    padding-block-start: 12px; border-block-start: 1px solid var(--line);
+    & dt { font-size: 11.5px; color: var(--ink-faint); }
+    & dd { margin: 2px 0 0; font: 500 16px/1.2 var(--mono); letter-spacing: -.02em; }
+    & dd span { color: var(--ink-faint); font-size: 12px; }
+  }
+  /* Il giro di scansione come una linea che passa: si vede che e' vivo
+     senza un numero che cambia ogni secondo. Solo translate. */
+  .pilot-scan { position: absolute; inset: auto 0 0; block-size: 2px; overflow: hidden; }
+  .pilot[data-tone="live"] .pilot-scan::before {
+    content: ""; position: absolute; inset: 0; inline-size: 30%;
+    background: linear-gradient(90deg, transparent, var(--live));
+    animation: sweep 3.2s linear infinite;
+  }
+  @keyframes sweep { from { translate: -100% 0; } to { translate: 340% 0; } }
+
+  .pilot-toggle {
+    display: flex; align-items: center; justify-content: space-between; gap: 14px; inline-size: 100%;
+    padding: 16px 18px; border: 0; border-radius: var(--radius); background: var(--raised); text-align: start;
+    & b { display: block; font-size: 16px; font-weight: 600; }
+    & small { display: block; font-size: 12.5px; color: var(--ink-faint); margin-block-start: 1px; }
+    &:disabled { opacity: .7; }
+  }
+  .pilot-switch {
+    position: relative; inline-size: 52px; block-size: 32px; flex: none; border-radius: 99px;
+    background: var(--line); transition: background .25s;
+    &::after { content: ""; position: absolute; inset-block-start: 3px; inset-inline-start: 3px;
+      inline-size: 26px; block-size: 26px; border-radius: 50%; background: var(--ink);
+      transition: translate .3s cubic-bezier(.2,.8,.2,1), background .25s; }
+  }
+  .pilot-toggle[aria-checked="true"] .pilot-switch { background: var(--live);
+    &::after { translate: 20px 0; background: var(--bg); } }
+
+  .pilot-intro {
+    border-radius: var(--radius); background: var(--panel); padding: 18px;
+    & h2 { font-size: 19px; font-weight: 600; letter-spacing: -.015em; margin-block-end: 6px; }
+    & p { margin: 0; color: var(--ink-dim); font-size: 14px; }
+  }
+  .pilot-rules {
+    list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 1px;
+    background: var(--line); border-radius: 14px; overflow: hidden;
+    & li { display: flex; justify-content: space-between; gap: 12px; padding: 12px 14px; background: var(--raised); font-size: 14px; }
+    & span { color: var(--ink-dim); }
+    & b { font-weight: 500; text-align: end; }
+  }
+
+  .pilot-feed, .pilot-rejected {
+    & header { display: flex; justify-content: space-between; align-items: baseline; margin: 0 4px 4px; }
+    & h3 { font-size: 13px; font-weight: 500; color: var(--ink-dim); }
+    & header span { font-size: 12px; color: var(--ink-faint); }
+    & ul { list-style: none; margin: 0; padding: 0; }
+  }
+  .pilot-feed li { border-block-end: 1px solid var(--line); &:last-child { border: 0; } }
+  .pilot-feed li.is-new { animation: rise .6s cubic-bezier(.2,.8,.2,1) backwards; }
+  .pilot-feed button {
+    display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: 12px; align-items: center;
+    inline-size: 100%; padding: 12px 4px; background: none; border: 0; border-radius: 12px; text-align: start;
+    transition: background .15s, scale .12s;
+    &:hover { background: var(--hover); }
+    &:active { scale: .985; }
+  }
+  .pilot .tk, .pilot-sheet .tk {
+    inline-size: 36px; block-size: 36px; border-radius: 12px; background: var(--raised);
+    display: grid; place-items: center; font-size: 12px; font-weight: 600; color: var(--ink-dim);
+  }
+  .tk-name { min-inline-size: 0;
+    & b { display: block; font-size: 15px; font-weight: 600; }
+    & small { display: block; font-size: 12.5px; color: var(--ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  }
+  .tk-state { display: grid; justify-items: end; gap: 3px;
+    & .num { font: 500 14px var(--mono); letter-spacing: -.02em; }
+  }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--ink-dim); white-space: nowrap;
+    &::before { content: ""; inline-size: 6px; block-size: 6px; border-radius: 50%; background: var(--ink-dim); }
+    &[data-state="in"]::before { background: var(--live); }
+    &[data-state="blocked"]::before { background: var(--amber); }
+  }
+  .pilot-empty { padding: 14px 4px; font-size: 13.5px; color: var(--ink-dim); }
+  .pilot-rejected {
+    & li { display: flex; gap: 10px; padding: 7px 4px; font-size: 12.5px; color: var(--ink-faint); border-block-end: 1px solid var(--line); }
+    & li:last-child { border: 0; }
+    & b { color: var(--ink-dim); font-weight: 500; min-inline-size: 64px; }
+  }
+
+  /* --- diagnosi -------------------------------------------------------- */
+  .pilot-sheet { max-block-size: 88dvh; }
+  .diag-head { display: flex; align-items: center; gap: 12px; margin-block-end: 14px;
+    & h2 { font-size: 22px; font-weight: 600; letter-spacing: -.02em; }
+    & p { margin: 2px 0 0; font-size: 13px; color: var(--ink-dim); }
+  }
+  .verdict {
+    border-radius: 16px; padding: 14px; margin-block-end: 12px; font-size: 14px;
+    background: var(--raised); color: var(--ink-dim);
+    & b { display: block; color: var(--ink); font-weight: 600; margin-block-end: 2px; }
+    &[data-state="in"] { background: var(--live-soft); color: var(--live); }
+    &[data-state="blocked"] { background: color-mix(in oklch, var(--amber) 13%, transparent); color: var(--amber); }
+  }
+  .checks {
+    list-style: none; margin: 0 0 12px; padding: 0;
+    & li { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 10px; align-items: baseline;
+      padding: 10px 0; border-block-end: 1px solid var(--line); font-size: 14px; }
+    & li:last-child { border: 0; }
+    & li > span:last-child { color: var(--ink-dim); font-size: 13px; text-align: end; }
+    & .mark[data-tone="ok"] { color: var(--up); }
+    & .mark[data-tone="no"] { color: var(--danger); }
+    & .mark[data-tone="wait"], & .mark[data-tone="info"] { color: var(--ink-faint); }
+  }
+  .diag-log {
+    list-style: none; margin: 0; padding: 0; font-size: 12.5px;
+    & li { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 8px; padding: 4px 0; }
+    & time { color: var(--ink-faint); white-space: nowrap; }
+    & span { color: var(--ink-dim); }
   }
 }
 </style>
@@ -948,6 +1387,9 @@
         <button type="button" class="addr-chip" id="topbar-address" title="Copia l'indirizzo">
           <span class="avatar" aria-hidden="true"></span><span id="topbar-address-text">—</span>
         </button>
+        <button type="button" class="more-btn" id="more-btn" aria-haspopup="dialog" aria-controls="more" aria-label="Altre azioni" hidden>
+          <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="4" cy="10" r="1.7"/><circle cx="10" cy="10" r="1.7"/><circle cx="16" cy="10" r="1.7"/></svg>
+        </button>
       </div>
     </header>
 
@@ -962,7 +1404,7 @@
       </form>
     </section>
 
-    <div id="app-shell" class="stack" hidden>
+    <div id="app-shell" class="stack" data-view="pilot" hidden>
       <div class="status-strip">
         <section class="status-card balance-card">
           <p class="label">Saldo · <span id="chain-label">Solana</span></p>
@@ -1002,6 +1444,35 @@
         </section>
       </div>
 
+      <!-- Il pilota: la vista di partenza. Lorenzo: "voglio sapere cosa sta
+           monitorando, voglio vedere cosa sta scansionando [...] pochi
+           tasti". Un interruttore, una riga di stato, i token che segue.
+           Il contenuto lo disegna static/onchain/pilot.js. -->
+      <section class="pilot" id="pilot" data-tone="off">
+        <div class="pilot-main">
+          <div class="pilot-card"><p class="pilot-line"><small>Leggo il pilota…</small></p></div>
+          <button type="button" class="pilot-toggle" data-pilot-toggle role="switch" aria-checked="false">
+            <span><b>Pilota automatico</b><small></small></span>
+            <span class="pilot-switch" aria-hidden="true"></span>
+          </button>
+          <div class="pilot-intro" hidden>
+            <h2>Il pilota compra solo quando la strategia lo dice.</h2>
+            <p>Cerca i token nuovi, li segue con la strategia di Lorenzo e ti mostra ogni decisione. Questi sono i suoi limiti:</p>
+            <ul class="pilot-rules" data-rules></ul>
+          </div>
+        </div>
+        <div class="pilot-side">
+          <div class="pilot-feed" hidden>
+            <header><h3>Cosa sta guardando</h3><span data-updated></span></header>
+            <ul></ul>
+          </div>
+          <div class="pilot-rejected" hidden>
+            <header><h3>Scartati di recente</h3></header>
+            <ul></ul>
+          </div>
+        </div>
+      </section>
+
       <!-- Due card come nel mockup approvato: a sinistra mercato +
            posizioni/ordini/storico/strategie, a destra ordine + sniper +
            azioni rapide. -->
@@ -1034,20 +1505,8 @@
             </div>
             <p>Ogni nuovo token scoperto su questa chain con liquidità &gt; $3.000 ed età &lt; 72h entra in watchlist con la strategia attiva. L'esecuzione resta soggetta ai tetti di rischio e al circuit breaker.</p>
           </div>
-
-          <div class="actions" id="actions" hidden>
-            <button type="button" class="action" data-sheet="receive">↓ Ricevi</button>
-            <button type="button" class="action" data-sheet="send">↑ Invia</button>
-            <button type="button" class="action" data-sheet="risk">◧ Limiti</button>
-            <button type="button" class="action" data-sheet="simulate">▶ Simula</button>
-          </div>
         </section>
       </div>
-
-      <button type="button" class="reveal-row" id="reveal-row" hidden>
-        <span class="t"><b>Rivela chiave privata</b><small>Serve il tuo telefono — mai solo da questa pagina</small></span>
-        <span class="chev">›</span>
-      </button>
 
       <section class="empty" id="onchain-empty-state" hidden>
         Nessun wallet <span data-chain-name></span> ancora.
@@ -1067,6 +1526,38 @@
     <p class="sheet-desc"></p>
     <div class="sheet-body"></div>
     <button type="button" class="btn-quiet sheet-close">Chiudi</button>
+  </dialog>
+
+  <!-- Menu "⋯": le azioni che non servono a ogni visita (ricevi, invia,
+       limiti, simula, chiave) stanno qui invece che sempre a schermo.
+       Lorenzo: "rendere l'app completamente minimal e mega moderna? troppi tasti". -->
+  <dialog class="sheet more-sheet" id="more" aria-label="Altre azioni">
+    <div class="grip" aria-hidden="true"></div>
+    <div class="menu-list" id="actions" hidden>
+      <button type="button" class="menu-item" data-view-switch="pilot"><span class="menu-ic" aria-hidden="true">◉</span><span><b>Pilota</b><small>Cosa fa da solo, token seguiti</small></span></button>
+      <button type="button" class="menu-item" data-view-switch="manual"><span class="menu-ic" aria-hidden="true">↗</span><span><b>Grafico e swap</b><small>Compra e vendi a mano</small></span></button>
+      <button type="button" class="menu-item menu-mobile" data-proxy='[data-order-tab="swap"]'><span class="menu-ic" aria-hidden="true">⇅</span><span><b>Scambia</b></span></button>
+      <button type="button" class="menu-item menu-mobile" data-proxy='[data-order-tab="limit"]'><span class="menu-ic" aria-hidden="true">⇥</span><span><b>Ordine limite</b></span></button>
+      <button type="button" class="menu-item menu-mobile" data-proxy='[data-order-tab="sniper"]'><span class="menu-ic" aria-hidden="true">◎</span><span><b>Sniper</b></span></button>
+      <button type="button" class="menu-item" data-sheet="receive"><span class="menu-ic" aria-hidden="true">↓</span><span><b>Ricevi</b><small>Indirizzo e QR del wallet</small></span></button>
+      <button type="button" class="menu-item" data-sheet="send"><span class="menu-ic" aria-hidden="true">↑</span><span><b>Invia</b><small>Manda token a un altro indirizzo</small></span></button>
+      <button type="button" class="menu-item menu-mobile" data-switch-chain><span class="menu-ic" aria-hidden="true">⇄</span><span><b>Cambia rete</b></span></button>
+      <button type="button" class="menu-item menu-mobile" data-proxy='[data-bottom-tab="positions"]'><span class="menu-ic" aria-hidden="true">▤</span><span><b>Posizioni</b></span></button>
+      <button type="button" class="menu-item menu-mobile" data-proxy='[data-bottom-tab="history"]'><span class="menu-ic" aria-hidden="true">↺</span><span><b>Storico</b></span></button>
+      <button type="button" class="menu-item menu-mobile" data-proxy='[data-bottom-tab="orders"]'><span class="menu-ic" aria-hidden="true">☰</span><span><b>Ordini aperti</b></span></button>
+      <button type="button" class="menu-item menu-mobile" data-proxy='[data-bottom-tab="strategies"]'><span class="menu-ic" aria-hidden="true">✦</span><span><b>Strategie</b></span></button>
+      <button type="button" class="menu-item" data-sheet="risk"><span class="menu-ic" aria-hidden="true">◧</span><span><b>Limiti e sicurezza</b><small>Tetti di spesa, circuit breaker</small></span></button>
+      <button type="button" class="menu-item" data-sheet="simulate"><span class="menu-ic" aria-hidden="true">▶</span><span><b>Simula</b><small>Prova un ordine senza firmare</small></span></button>
+    </div>
+    <button type="button" class="reveal-row" id="reveal-row" hidden>
+      <span class="t"><b>Rivela chiave privata</b><small>Serve il tuo telefono — mai solo da questa pagina</small></span>
+      <span class="chev">›</span>
+    </button>
+  </dialog>
+
+  <dialog class="sheet pilot-sheet" id="pilot-sheet" aria-label="Diagnosi del pilota">
+    <div class="grip" aria-hidden="true"></div>
+    <div class="pilot-sheet-body"></div>
   </dialog>
 
   <dialog class="modal" id="reveal">

@@ -38,8 +38,11 @@ def _dex_entry(**overrides) -> WatchlistEntry:
     return WatchlistEntry(**base)
 
 
-def _owner(**wallets) -> User:
-    return User(id="u1", email="u1@example.com", password_hash="x", onchain_wallets=wallets)
+def _owner(pilot: tuple[str, ...] = ("solana",), **wallets) -> User:
+    # Pilota acceso di default: e' la condizione in cui questi test sono
+    # nati. Il caso spento ha il suo test sotto.
+    return User(id="u1", email="u1@example.com", password_hash="x", onchain_wallets=wallets,
+                sniper_autotrade_chains=list(pilot))
 
 
 @pytest.fixture(autouse=True)
@@ -160,3 +163,15 @@ def test_onchain_globally_disabled_is_skipped(monkeypatch):
     logged = trading_log.list_for("u1")
     assert logged[0]["outcome"] == "saltato"
     assert "spento" in logged[0]["detail"]
+
+
+def test_pilot_off_skips_buys_but_keeps_sells(monkeypatch):
+    entry = _dex_entry(base_token_address="TokenMintAddr222")
+    owner = _owner(pilot=(), solana=OnchainWallet(address="Wallet1", private_key_enc="x", enabled=True))
+    _run(main._run_onchain_auto_trade(owner, entry, "lorenzo", [_signal("entry_long"), _signal("exit_long")]))
+    logged = trading_log.list_for("u1")
+    by_type = {e["signal_type"]: e for e in logged}
+    assert by_type["entry_long"]["outcome"] == "saltato"
+    assert "pilota spento" in by_type["entry_long"]["detail"]
+    # La vendita prosegue per la sua strada (qui si ferma sui decimali, non sul pilota).
+    assert "pilota spento" not in by_type["exit_long"]["detail"]
