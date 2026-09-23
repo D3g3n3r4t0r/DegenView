@@ -101,7 +101,7 @@ def test_signed_out_page_shows_login_and_boots_without_user():
     html = main._render_onchain_app(None)
     assert _boot(html) == {"user": None}
     assert 'id="login-screen">' in html
-    assert 'id="app-shell" class="stack" hidden' in html
+    assert re.search(r"id=\"app-shell\"[^>]*\shidden", html)
 
 
 def test_signed_in_page_ships_user_and_wallets_but_no_key(monkeypatch):
@@ -116,7 +116,7 @@ def test_signed_in_page_ships_user_and_wallets_but_no_key(monkeypatch):
     assert boot["user"]["id"] == "u1"
     assert boot["wallets"] == [{"chain": "solana", "address": "So1ana</script>", "enabled": True, "created_at": 1}]
     assert "SEGRETO" not in html
-    assert 'id="app-shell" class="stack">' in html
+    assert not re.search(r"id=\"app-shell\"[^>]*\shidden", html)
     assert 'id="login-screen" hidden' in html
 
 

@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0089", "Wallet on-chain: troppi tasti, e con la strategia accesa non si vedeva cosa stava facendo",
+     "Lorenzo: 'voglio potermi fidare di questa applicazione visto che quando attivo la strategia utilizzo soldi reali, voglio avere il completo controllo di quello che sta succedendo [...] mi crea confusione un'interfaccia con troppi tasti [...] odio i tasti [...] tanta diagnosi nel momento in cui una strategia e' attiva'. Prima ancora: 'l'app deve funzionare con pochi clic, pochi cambi di schermata' e 'rendi l'app da mobile un'esperienza SEMPLICISSIMA'. Concept 'Pilota' approvato: 'PROCEDI E' PERFETTO'.",
+     "alta"),
     ("seed-0087", "Pagina wallet on-chain lenta ad aprirsi",
      "Lorenzo: 'usa un linguaggio di programmazione per rendere il sito velocissimo a costo di fare un refactory'. Misurata onchain-app.html dal vivo: Lighthouse 99 da non loggati, main thread 0,4 s, JS leggero. Il tempo se ne andava in giri di rete in fila prima dei dati (HTML, main.js, poi i suoi import, poi /api/auth/me, poi /api/onchain/wallets, solo dopo il saldo), piu' i font Google che bloccavano il primo disegno e la libreria del grafico senza cache.",
      "media"),
