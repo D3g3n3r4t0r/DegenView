@@ -19,15 +19,36 @@ proposito non lo controllano da soli)."""
 import uuid
 
 from app.config import settings
-from app.trading.onchain import execution, ledger, risk
+from app.trading.onchain import execution, ledger, pool_safety, risk
 
 
 async def execute_order(
     owner_id: str, chain: str, token: str, strategy_name: str, side: str,
     notional_usd: float, price_impact_pct: float, price_usd: float,
     private_key_hex: str, quote: dict,
+    pool_address: str | None = None,
 ) -> dict:
-    ok, reason = risk.run_all_checks(owner_id, chain, token, notional_usd, price_impact_pct)
+    # Allowlist pool + size dinamica, ricalcolate ad ogni tentativo — non
+    # solo alla prima. pool_address opzionale: se manca (chain non ancora
+    # coperta da DexScreener, o il chiamante non lo passa) il comportamento
+    # e' quello di prima, nessuna riduzione e nessun controllo di allowlist.
+    pool_info = None
+    pool_liquidity_usd = None
+    if pool_address is not None:
+        snapshot = await pool_safety.fetch_pool_snapshot(chain, pool_address)
+        pool_liquidity_usd = snapshot["liquidity_usd"] if snapshot else None
+        if pool_liquidity_usd is not None:
+            ledger.record_pool_liquidity(chain, pool_address, pool_liquidity_usd)
+        reference_max = ledger.max_pool_liquidity_since(chain, pool_address)
+        pool_info = {
+            "liquidity_usd": pool_liquidity_usd,
+            "created_at": snapshot["created_at"] if snapshot else None,
+            "reference_max_liquidity_usd": reference_max,
+        }
+
+    notional_usd = risk.clamp_size_to_pool(notional_usd, pool_liquidity_usd)
+
+    ok, reason = risk.run_all_checks(owner_id, chain, token, notional_usd, price_impact_pct, pool_info=pool_info)
     if not ok:
         return {"accepted": False, "reason": reason, "idempotency_key": None, "tx_signature": None}
 

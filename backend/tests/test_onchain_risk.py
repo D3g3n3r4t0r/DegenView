@@ -90,3 +90,49 @@ def test_run_all_checks_passes_a_clean_order(tmp_path, monkeypatch):
     ok, reason = risk.run_all_checks("u1", "solana", "TOKEN", 20.0, 0.5)
     assert ok is True
     assert reason == ""
+
+
+def test_run_all_checks_ignores_pool_info_when_absent(tmp_path, monkeypatch):
+    # pool_info=None (default): nessuna chiamata alle funzioni di allowlist,
+    # le chiamate esistenti restano intatte.
+    _fresh_db(tmp_path, monkeypatch)
+    ok, reason = risk.run_all_checks("u1", "solana", "TOKEN", 20.0, 0.5, pool_info=None)
+    assert ok is True
+    assert reason == ""
+
+
+def test_run_all_checks_rejects_when_pool_info_unverifiable(tmp_path, monkeypatch):
+    _fresh_db(tmp_path, monkeypatch)
+    ok, reason = risk.run_all_checks("u1", "solana", "TOKEN", 20.0, 0.5, pool_info={})
+    assert ok is False
+    assert "non verificabile" in reason
+
+
+def test_run_all_checks_passes_with_healthy_pool_info(tmp_path, monkeypatch):
+    _fresh_db(tmp_path, monkeypatch)
+    import time
+    pool_info = {
+        "liquidity_usd": 5000.0,
+        "created_at": time.time() - 3600,
+        "reference_max_liquidity_usd": 5200.0,
+    }
+    ok, reason = risk.run_all_checks("u1", "solana", "TOKEN", 20.0, 0.5, pool_info=pool_info)
+    assert ok is True
+    assert reason == ""
+
+
+def test_clamp_size_to_pool_without_liquidity_keeps_requested_size():
+    assert risk.clamp_size_to_pool(20.0, None) == 20.0
+
+
+def test_clamp_size_to_pool_caps_at_pool_percentage():
+    # 1.5% di 1000 USD = 15 USD, sotto sia la richiesta (20) sia il tetto (20).
+    assert risk.clamp_size_to_pool(20.0, pool_liquidity_usd=1000.0, safety_cap_usd=20.0) == 15.0
+
+
+def test_clamp_size_to_pool_caps_at_safety_cap():
+    assert risk.clamp_size_to_pool(20.0, pool_liquidity_usd=1_000_000.0, safety_cap_usd=20.0) == 20.0
+
+
+def test_clamp_size_to_pool_never_exceeds_requested():
+    assert risk.clamp_size_to_pool(5.0, pool_liquidity_usd=1_000_000.0, safety_cap_usd=20.0) == 5.0
