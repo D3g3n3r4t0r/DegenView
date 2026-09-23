@@ -2130,3 +2130,62 @@ automatica di un TWAP job dopo un riavvio (il job e' persistito ma nessun
 scheduler lo riprende da solo), fusione piena della UI wallet nel DOM
 della tab Trading (oggi e' un link, non fusa), vendita on-chain dalla
 watchlist (servono i decimali del token base, non salvati).
+
+## Sessione 2026-09-23 (worktree separato) — MEV/Jito bundle su Solana
+
+Lorenzo (via piano di sviluppo wallet on-chain): "Solana: instradare via
+Jito bundle con tip dinamico e slippage stretto [...] bundle atomici
+riducono drasticamente la finestra di front-run".
+
+Nuovo `backend/app/trading/onchain/jito.py`: `send_bundle_via_jito()`
+manda un bundle reale (swap firmato + tip transaction) a
+`https://mainnet.block-engine.jito.wtf:443/api/v1/bundles`, metodo
+`sendBundle`, encoding base64 — endpoint, metodo e formato verificati con
+una ricerca web contro `docs.jito.wtf/lowlatencytxnsend/` (fetch dal
+vivo), non inventati. Gli 8 tip account ufficiali sono presi dalla stessa
+pagina. Tip dinamico (`compute_dynamic_tip_lamports`): proporzionale al
+notional in SOL (5 bps), clampato fra un minimo (1000 lamports, il piede
+della doc) e un massimo configurabile — non un valore fisso.
+
+**Cosa e' verificato dal vivo e cosa no, onestamente:** l'endpoint/metodo/
+formato sono verificati leggendo la doc reale, ma NESSUN bundle vero e'
+mai stato mandato con fondi reali in questa sessione (servirebbe una tip
+transaction con lamports veri sul wallet). I test (`test_onchain_jito.py`)
+mockano la risposta HTTP e verificano solo la forma della richiesta
+(URL, metodo, struttura dei params, encoding, tip account nella lista
+ufficiale) — stesso livello di verifica di quello che execution.py/
+quotes.py avevano gia' documentato per Robinhood Chain.
+
+Wiring in `execute.py`: nuovo `settings.onchain_use_jito` (default
+`True` — la richiesta e' verificata contro la doc, e c'e' un fallback),
+`_send_solana_with_jito_fallback()` prova prima Jito e ricade su
+`execution.send_signed_solana_tx` (invariato, ancora testato com'era) se
+Jito e' spento o lancia un'eccezione qualsiasi. Il `tx_signature`
+ritornato quando passa da Jito e' il bundle_id prefissato `jito:` — un
+bundle non da' una signature RPC come sendTransaction, e confonderli in
+log/ledger sarebbe stato peggio che marcarli diversi. Slippage stretto
+per Jito: `jito.JITO_SLIPPAGE_BPS = 20` (0.2%, contro il default 50 bps/
+0.5% retail) passato a `jupiter_quote` in `main.py` solo quando
+`onchain_use_jito` e' acceso — documentato nel modulo perche' scelto, non
+un numero a caso.
+
+Confronto multi-route: non costruito un secondo aggregatore. Jupiter
+aggrega gia' internamente le route su Solana (e' quello che il piano
+intendeva evitare di duplicare) — documentato come tale in `jito.py`
+invece di un secondo pezzo di codice che farebbe la stessa cosa.
+
+Jitter TWAP: gia' presente (`DEFAULT_JITTER_PCT = 0.35`, dentro il range
+30-40% chiesto dal piano) — nessuna modifica necessaria a `twap.py`.
+
+Verificato: `pytest tests/ -q` verde (695 passed, 1 skip, lo stesso
+fallimento di rete noto e indipendente su `test_native_price_usd_real_
+network_call_robinhood`), `ruff check` pulito. Commit su worktree isolato,
+non pushato — da integrare con `git merge` come gli altri lavori
+paralleli sul piano wallet on-chain.
+
+Resta dal piano dopo questa sessione: resume automatica TWAP dopo
+riavvio, fusione piena UI wallet, vendita on-chain (decimali token base).
+Il confronto multi-route resta volutamente non implementato con un
+secondo aggregatore (vedi sopra) — se in futuro emerge un secondo
+aggregatore Solana pubblico ben documentato che valga la pena integrare,
+e' quello il punto da riconsiderare.
