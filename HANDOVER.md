@@ -2787,3 +2787,7 @@ Dedotto dal codice, non provato dal vivo: il percorso v3 manuale
 nessun approve, quindi vendere ETH nativo o un token senza allowance
 dovrebbe andare in revert. Anche questo si risolve col percorso
 aggregatore.
+
+Seguito (#80 online): con GeckoTerminal in 429 la ricerca MYCEL tornava
+solo i pool DexScreener (niente MYCEL) e li teneva in cache 60s. Ora un
+secondo tentativo sul 429 e nessuna cache se una delle due fonti e' caduta.
