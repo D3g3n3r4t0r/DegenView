@@ -12,6 +12,40 @@ lavori pluri-sessione, decisioni prese, stato di piani approvati.
 
 ---
 
+## Wallet on-chain: il "Pilota" — `seed-0089` — PR #73, branch `claude/ui-animations-heolhv`
+
+Lorenzo, in piu' messaggi (set 2026): "troppi tasti", "pochi clic, pochi
+cambi di schermata", "da mobile SEMPLICISSIMA [...] non voglio tasti", poi
+"a livello di design non ci siamo" e il brief vero: "voglio potermi fidare
+[...] quando attivo la strategia utilizzo soldi reali [...] voglio sapere
+cosa sta monitorando, cosa sta scansionando [...] minimal ma non priva di
+informazioni [...] non deve sembrare fatto da un'IA". Visti i concept:
+"PROCEDI E' PERFETTO".
+
+Stato: implementato, test verdi, verificato con Playwright (mock) su mobile
+e desktop. Non ancora visto sul server vero.
+
+- `onchain-app.html` si apre in vista Pilota (`#app-shell[data-view]`):
+  saldo, stato del pilota (tocco = salute), un interruttore, elenco token
+  seguiti (tocco = diagnosi), scartati di recente. Grafico/swap/ordini sono
+  la vista "manual", raggiungibile dal menu `...` (dialog `#more`).
+- Le 4 pillole di navigazione in alto sono nascoste: scelta di Lorenzo
+  ("Toglierli") su una card.
+- Server: `app/trading/onchain/pilot.py` + `GET /api/onchain/pilot/{chain}`.
+  **Cambio di comportamento**: pilota spento = nessun BUY automatico on-chain
+  su quella chain (le vendite continuano).
+- `index.html` incorpora il wallet con una copia propria del markup, senza
+  `#more`/`#pilot`: tutto il cablaggio nuovo in `main.js` deve restare
+  null-safe.
+
+Resta: vedere il pannello salute sul server vero (probabile scanner spento,
+`onchain_execution_enabled` spento, segnali fermi senza Telegram) e decidere
+con Lorenzo cosa accendere. PR #70, #71, #72 toccano la stessa pagina:
+al merge controllare i conflitti in `onchain-app.html` e gli id seed
+(#70/#71 usano entrambe `seed-0086`).
+
+---
+
 ## Proposta grafica wallet on-chain (set 2026)
 
 Lorenzo: "rendi questa UI moderna, rapida, ottimizzata, al passo coi tempi,
@@ -2647,3 +2681,9 @@ GeckoTerminal filtrato su Robinhood (verificato = `coingecko_coin_id`,
 pool senza scambi = liquidita' zero). Un token per ticker. DexScreener
 resta solo come ripiego se la fonte non risponde. GeckoTerminal da' 429
 sopra ~30 richieste/minuto: la cache e' di 60s per (chain, query).
+
+Merge con main (stessa sessione): nel frattempo `main` ha ricevuto il
+layout telefono del Pilota (menu ⋯, swap a passi, stesso riordino
+grafico → ordine → posizioni). Il mio blocco `@container (width < 640px)`
+e' stato tolto perche' doppione; di questa PR restano il flusso token
+unico, il picker e la ricerca ticker.

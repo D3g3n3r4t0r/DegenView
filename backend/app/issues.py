@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0089", "Wallet on-chain: troppi tasti, e con la strategia accesa non si vedeva cosa stava facendo",
+     "Lorenzo: 'voglio potermi fidare di questa applicazione visto che quando attivo la strategia utilizzo soldi reali, voglio avere il completo controllo di quello che sta succedendo [...] mi crea confusione un'interfaccia con troppi tasti [...] odio i tasti [...] tanta diagnosi nel momento in cui una strategia e' attiva'. Prima ancora: 'l'app deve funzionare con pochi clic, pochi cambi di schermata' e 'rendi l'app da mobile un'esperienza SEMPLICISSIMA'. Concept 'Pilota' approvato: 'PROCEDI E' PERFETTO'.",
+     "alta"),
     ("seed-0088", "Wallet on-chain: molti ticker non si trovano, e per ogni ticker escono doppioni",
      "Lorenzo: 'mezzi ticker non funzionano; voglio solo un unico risultato per ticker, quello con il contratto corretto e verificato con liquidità migliore, non voglio dover scegliere altri doppioni'.",
      "media"),
