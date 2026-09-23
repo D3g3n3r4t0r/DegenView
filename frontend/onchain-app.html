@@ -1708,28 +1708,6 @@
     </section>
 
     <div id="app-shell" class="stack" data-view="pilot" hidden>
-      <!-- La prima pagina. Lorenzo: "vorrei che la prima pagina quando entro
-           sia proprio questa qui: i pop-up che vanno in una lista e
-           rimangono, e il grafico". A sinistra gli avvisi (ognuno con il suo
-           backtest), a destra il palco: grafico dal vivo del token scelto
-           con gli ingressi della strategia migliore. Lo disegna
-           static/onchain/radar.js. -->
-      <section class="radar" id="radar" hidden>
-        <header><h3><span class="radar-dot" aria-hidden="true"></span>Radar · token nuovi</h3><span data-radar-clock></span></header>
-        <div class="radar-grid">
-          <div class="radar-col">
-            <div class="radar-new" data-radar-new>
-              <h4>Appena usciti</h4>
-              <p class="radar-empty" data-radar-new-empty>Nessun token nuovo ha ancora superato il filtro: cap sotto i $100k, sito, social, GitHub e controllo anti-rug.</p>
-              <ul></ul>
-            </div>
-            <h4 class="radar-sub">Proposte · fino a 3 settimane</h4>
-            <ul data-radar-list></ul>
-            <p class="radar-foot" data-radar-foot></p>
-          </div>
-          <div class="radar-stage" data-radar-stage></div>
-        </div>
-      </section>
       <div class="status-strip">
         <section class="status-card balance-card">
           <p class="label">Saldo su
@@ -1773,6 +1751,29 @@
         </section>
       </div>
 
+      <!-- La prima pagina. Lorenzo: "vorrei che la prima pagina quando entro
+           sia proprio questa qui: i pop-up che vanno in una lista e
+           rimangono, e il grafico". A sinistra gli avvisi (ognuno con il suo
+           backtest), a destra il palco: grafico dal vivo del token scelto
+           con gli ingressi della strategia migliore. Lo disegna
+           static/onchain/radar.js. Sopra c'e' solo il saldo ("il saldo va
+           bene inserirlo in cima, il resto poi"). -->
+      <section class="radar" id="radar" hidden>
+        <header><h3><span class="radar-dot" aria-hidden="true"></span>Radar · token nuovi</h3><span data-radar-clock></span></header>
+        <div class="radar-grid">
+          <div class="radar-col">
+            <div class="radar-new" data-radar-new>
+              <h4>Appena usciti</h4>
+              <p class="radar-empty" data-radar-new-empty>Nessun token nuovo ha ancora superato il filtro: cap sotto i $100k, sito, social, GitHub e controllo anti-rug.</p>
+              <ul></ul>
+            </div>
+            <h4 class="radar-sub">Proposte · fino a 3 settimane</h4>
+            <ul data-radar-list></ul>
+            <p class="radar-foot" data-radar-foot></p>
+          </div>
+          <div class="radar-stage" data-radar-stage></div>
+        </div>
+      </section>
       <!-- Il pilota: la vista di partenza. Lorenzo: "voglio sapere cosa sta
            monitorando, voglio vedere cosa sta scansionando [...] pochi
            tasti". Un interruttore, una riga di stato, i token che segue.
