@@ -267,17 +267,21 @@ def judge_rugcheck(report: dict | None) -> dict:
     if danger:
         return _check("security", "RugCheck", False, ", ".join(danger[:3]))
     top, top10 = holder_concentration(report)
+    holders = {"top_holder_pct": round(top, 2), "top10_pct": round(top10, 2)}  # per outcomes.py
     if top > HOLDER_MAX_PCT:
-        return _check("security", "RugCheck", False, f"un solo wallet tiene il {top:.0f}% dell'offerta")
+        return _check("security", "RugCheck", False, f"un solo wallet tiene il {top:.0f}% dell'offerta",
+                      facts=holders)
     if top10 > TOP10_MAX_PCT:
-        return _check("security", "RugCheck", False, f"i primi 10 wallet tengono il {top10:.0f}% dell'offerta")
+        return _check("security", "RugCheck", False, f"i primi 10 wallet tengono il {top10:.0f}% dell'offerta",
+                      facts=holders)
     lp = report.get("lpLockedPct")
     if lp is not None and float(lp) < LP_LOCKED_MIN_PCT:
         return _check("security", "RugCheck", False, f"liquidità bloccata solo al {float(lp):.0f}%")
     warn = len([r for r in report.get("risks") or [] if r.get("level") == "warn"])
     detail = f"liquidità bloccata {float(lp):.0f}%" if lp is not None else "nessun rischio grave"
     score = (float(lp) if lp is not None else 85.0) - 8 * warn
-    return _check("security", "RugCheck", True, detail + (f" · {warn} avvisi minori" if warn else ""), score)
+    return _check("security", "RugCheck", True, detail + (f" · {warn} avvisi minori" if warn else ""), score,
+                  facts={**holders, "lp_locked_pct": float(lp) if lp is not None else None})
 
 
 def holder_concentration(report: dict) -> tuple[float, float]:

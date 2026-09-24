@@ -70,7 +70,13 @@ SIGNAL_MIN_N = 12
 DECISIONS = {"rejected": 0, "tested": 1, "listed": 2, "proposed": 3}
 PASSED = {"tested", "listed", "proposed"}
 CHECK_KEYS = ("name", "security", "contract", "socials", "site", "github", "ai")
-CHECK_LABELS = {"name": "Nome", "security": "Sicurezza (RugCheck/GoPlus)", "contract": "Contratto (GoPlus)",
+# Numeri dei controlli, non solo il voto. Dopo VISE: quanto tengono il primo
+# wallet e i primi 10 (legit.holder_concentration).
+FACT_KEYS = ("top_holder_pct", "top10_pct", "lp_locked_pct")
+RISK_UP = {"top_holder_pct", "top10_pct"}   # qui un numero alto dovrebbe voler dire piu' rug
+CHECK_LABELS = {"top_holder_pct": "Primo wallet %", "top10_pct": "Primi 10 wallet %",
+                "lp_locked_pct": "Liquidità bloccata %",
+                "name": "Nome", "security": "Sicurezza (RugCheck/GoPlus)", "contract": "Contratto (GoPlus)",
                 "socials": "Social", "site": "Sito", "github": "GitHub", "ai": "Claude sul sito",
                 "report": "Pagella complessiva", "mcap": "Capitalizzazione", "liq": "Liquidità",
                 "liq_mcap": "Liquidità / cap", "age_h": "Età"}
@@ -133,13 +139,15 @@ def features(item: dict, now: float | None = None) -> dict:
     age = _num(item.get("age_hours"))
     if age is None and _num(item.get("created_at")):
         age = max(0.0, (now - float(item["created_at"])) / 3600)
-    checks = {}
+    checks, facts = {}, {}
     for c in item.get("checks") or []:
         if c.get("key") in CHECK_KEYS:
             checks[c["key"]] = {"ok": c.get("ok"), "score": c.get("score")}
+        facts.update({k: v for k, v in (c.get("facts") or {}).items() if k in FACT_KEYS})
     report = (item.get("report") or {}).get("score")
     return {"mcap": cap, "liq": liq, "liq_mcap": (liq / cap) if cap and liq else None, "age_h": age,
-            "report": _num(report), "checks": checks, "chain": item.get("chain"),
+            "report": _num(report), "checks": checks, **{k: _num(facts.get(k)) for k in FACT_KEYS},
+            "chain": item.get("chain"),
             "exception": bool(item.get("exception"))}
 
 
@@ -373,7 +381,7 @@ def _value(f: dict, key: str) -> float | None:
     return math.log10(v + 1) if key in ("mcap", "liq", "age_h") else float(v)
 
 
-MODEL_KEYS = ("mcap", "liq", "liq_mcap", "age_h", "report") + CHECK_KEYS
+MODEL_KEYS = ("mcap", "liq", "liq_mcap", "age_h", "report") + FACT_KEYS + CHECK_KEYS
 
 
 def _matrix(rows: list[dict], means: dict | None = None) -> tuple[np.ndarray, dict]:
@@ -488,8 +496,9 @@ def _rate(entries: list[dict], now: float) -> dict:
 
 def signals(now: float | None = None) -> list[dict]:
     """Per ogni controllo e numero: quanto separa i rug e quanto le salite.
-    AUC dei rug sul valore rovesciato: un voto alto dovrebbe voler dire
-    meno rug, quindi 1 = il voto li prevede, 0.5 = inutile, <0.5 = inganna."""
+    Ogni numero nel verso in cui dovrebbe proteggere (voto alto = meno rug,
+    concentrazione alta = piu' rug): 1 = li prevede, 0.5 = inutile, <0.5 =
+    inganna."""
     now = now or time.time()
     data = labelled(now)
     good = [(e, outcome(e, now) == "buono") for e in _journal.values() if outcome(e, now)]
@@ -499,8 +508,9 @@ def signals(now: float | None = None) -> list[dict]:
         gpairs = [(v, y) for e, y in good if (v := _value(e["features"], key)) is not None]
         if len(pairs) < SIGNAL_MIN_N:
             continue
-        a = auc([-v for v, _ in pairs], [y for _, y in pairs])
-        g = auc([v for v, _ in gpairs], [y for _, y in gpairs]) if len(gpairs) >= SIGNAL_MIN_N else None
+        sign = 1 if key in RISK_UP else -1
+        a = auc([sign * v for v, _ in pairs], [y for _, y in pairs])
+        g = auc([-sign * v for v, _ in gpairs], [y for _, y in gpairs]) if len(gpairs) >= SIGNAL_MIN_N else None
         out.append({"key": key, "label": CHECK_LABELS.get(key, key), "n": len(pairs),
                     "rugs": sum(y for _, y in pairs),
                     "rug_auc": round(a, 3) if a is not None else None,
