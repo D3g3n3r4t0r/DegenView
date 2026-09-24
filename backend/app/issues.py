@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0106", "Radar: DREGG deve uscire davvero, e cercare progetti tecnici anche oltre i token freschi",
+     "Lorenzo: 'voglio che drag tu mi verifichi che esca con queste regole, perche' deve uscire [...] estrai punti chiave da questo progetto e applica come regola [...] per altri progetti che possono essere simili dal punto di vista tecnologico [...] devi ampliare le ricerche [...] scandagliare tutto compreso anche X [...] non ci limitiamo a token freschi [...] anche un anno puo' essere giusto'.",
+     "alta"),
     ("seed-0105", "Wallet on-chain: troppi menu e tasti, voglio un'esperienza da DEX",
      "Lorenzo: 'voglio che l'esperienza su questo sito sia paragonabile a un DEX [...] devi rendere l'app migliore, esaminarla nel suo complesso, aggiungere funzioni, perche' e' molto carina adesso, pero' ci sono tanti menu, tanti tasti che potrebbero essere secondo me ridotti'.",
      "media"),

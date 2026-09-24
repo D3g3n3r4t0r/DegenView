@@ -214,7 +214,7 @@ def test_exception_uses_the_radar_rule():
     incredibile su GitHub. La regola e' quella del radar."""
     pushed = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - DAY))
     strong = {"key": "github", "label": "GitHub", "score": 90, "grade": "eccellente",
-              "facts": {"commits": "100+", "active_days": 40, "pushed_at": pushed}}
+              "facts": {"commits": "100+", "total_commits": 5_000, "active_days": 40, "pushed_at": pushed}}
     checks = [strong, {"key": "security", "label": "Sicurezza", "score": 95}]
     report = {"score": 92}
     weak = {**strong, "facts": {**strong["facts"], "active_days": 3}}
