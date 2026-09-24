@@ -12,6 +12,27 @@ lavori pluri-sessione, decisioni prese, stato di piani approvati.
 
 ---
 
+## Presentazione del progetto e token $ENGN — `seed-0105`, branch `claude/project-thread-mn4odz` — 2026-09-24
+
+Lorenzo: "fai una pagina web di presentazione del progetto con slogan
+accattivante in inglese; crea il ticker del token, ci serve lanciarlo [...]
+tasto al centro dove ENTER THE APP [...] due sezioni; una per sniperare
+progetti nuovi con regole (facendole vedere) un'altra [...] seri con
+fondamentali ma sempre microcap [...] devi pensare a tutto". Immagine di
+riferimento scelta: cubo nero con fessura verde, griglia, candele.
+
+- `frontend/engn.html` servita su `/engn` (pubblica). Le soglie in pagina
+  sono segnaposto `{{...}}` riempiti da `_render_engn_page()` con le costanti
+  di `radar.py`: niente numeri copiati a mano.
+- Piano completo (ticker, tokenomics, decisioni aperte, MiCA, social, chiavi)
+  in `docs/lancio-engn.md`. Screenshot in `/mnt/project-files/lancio/`.
+- Resta, tutto col si' di Lorenzo: modalita' di lancio (consigliato Raydium
+  / Meteora con LP bruciato, non pump.fun), SOL di liquidita', verifica
+  legale MiCA, registrare i social, spostare la pagina su `/` o dominio
+  proprio, costruire i livelli per chi detiene.
+
+---
+
 ## Radar DEGEN on-chain — `seed-0099`, `seed-0100`, `seed-0102` — branch `claude/token-scanner-strategie-a97cto`
 
 Thread "Scanner token e strategie". Radar in `app/trading/onchain/radar.py`,
