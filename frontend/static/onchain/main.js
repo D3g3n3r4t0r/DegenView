@@ -95,7 +95,7 @@ function paintChainStatic() {
     view.empty.querySelector("[data-chain-name]").textContent = label;
     view.spark.hidden = true;
     if (view.holdings) view.holdings.hidden = true;
-    if (view.shell.dataset.view !== "pilot") setView("pilot");
+    if (view.shell.dataset.view !== "home") setView("home");
     return;
   }
 
@@ -491,9 +491,11 @@ view.reveal.addEventListener("click", () => sheets.openKey({ onStart: startRevea
 // foglio) o fuori dal pannello.
 view.more?.addEventListener("click", () => view.moreSheet.showModal());
 
-// Tre viste, come un DEX: Radar (pilota + token nuovi), Scambia (grafico e
-// ordine), Portafoglio (saldi, ordini, storico). Le cambia la barra in basso.
-const VIEWS = ["pilot", "manual", "wallet"];
+// Quattro viste, come un DEX. Prima pagina: classifica e scansioni del
+// radar (Lorenzo: "la cosa centrale e' avere la leaderboard"). Poi Scambia,
+// Pilota (l'automazione, in una sezione sua) e Portafoglio (saldo, monete,
+// ordini, storico). Le cambia la barra in basso.
+const VIEWS = ["home", "manual", "auto", "wallet"];
 
 function setView(name) {
   if (!VIEWS.includes(name)) return;
@@ -511,7 +513,7 @@ function setView(name) {
     view.shell.dataset.dir = VIEWS.indexOf(name) > VIEWS.indexOf(from) ? "fwd" : "back";
     document.startViewTransition(paint);
   } else paint();
-  if (name === "pilot") refreshPilot();
+  if (name === "auto") refreshPilot();
   if (name === "wallet" && !view.bottomPanel.hidden) mountBottomTab(currentBottomTab);
   paintHoldings();
 }

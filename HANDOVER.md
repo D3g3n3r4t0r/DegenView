@@ -58,7 +58,13 @@ Lorenzo: "voglio che l'esperienza su questo sito sia paragonabile a un DEX
 - Radar e flusso swap non toccati (altri thread). `index.html` ha una copia
   sua del markup senza dock: il cablaggio resta null-safe.
 
-Resta: il saldo grande in cima e' solo il nativo, non il totale del wallet.
+Seguito (stesso giorno), Lorenzo: "visualizzare il saldo in alto non mi
+interessa piu', la parte di automazione al trading la mettiamo in una sezione
+apposita [...] la cosa centrale e' avere la leaderboard". E: "la leaderboard
+doveva essere in alto appena entro nel sito". Ora le viste sono quattro:
+`home` (classifica in cima, poi radar), `manual` (Scambia), `auto` (Pilota),
+`wallet` (saldo, monete, ricevi/invia, tab). La rete (`#chain-flip`) sta
+nella testata. Visibilita' in un blocco solo di regole `:not([data-view])`.
 ## Radar DEGEN on-chain — `seed-0099`, `seed-0100`, `seed-0102` — branch `claude/token-scanner-strategie-a97cto`
 
 Thread "Scanner token e strategie". Radar in `app/trading/onchain/radar.py`,
