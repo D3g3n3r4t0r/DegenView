@@ -41,6 +41,7 @@ import httpx
 
 from app.config import settings
 from app.sniper.quality import _looks_like_meme
+from app.trading.onchain import outcomes
 
 logger = logging.getLogger(__name__)
 
@@ -644,6 +645,14 @@ async def assess(token: dict, links: dict, client: httpx.AsyncClient) -> dict:
         out["checks"].append(_check("gem", "Sopra $100k", not short, short or "pagella da gemma"))
         if short:
             return done("fail", f"cap ${cap / 1e6:.2f}M: serve una pagella eccellente, {short}")
+    # Gli esiti veri dei token gia' visti (outcomes.py): entra solo quando
+    # prevede i rug fuori campione, e blocca solo con
+    # onchain_memory_gate. Le eccezioni GitHub si mostrano comunque.
+    memory = outcomes.judge(token, out["checks"], out["report"])
+    if memory:
+        out["checks"].append(memory)
+        if memory["ok"] is False and settings.onchain_memory_gate and not token.get("exception"):
+            return done("fail", f"Memoria: {memory['detail']}")
     return done("ok", "")
 
 

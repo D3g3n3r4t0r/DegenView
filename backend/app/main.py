@@ -101,6 +101,7 @@ from app.trading.onchain import jito as onchain_jito
 from app.trading.onchain import keys as onchain_keys
 from app.trading.onchain import legit as onchain_legit
 from app.trading.onchain import ledger as onchain_ledger
+from app.trading.onchain import outcomes as onchain_outcomes
 from app.trading.onchain import passkey as onchain_passkey
 from app.trading.onchain import pilot as onchain_pilot
 from app.trading.onchain import listings as onchain_listings
@@ -1164,7 +1165,8 @@ async def lifespan(app: FastAPI):
     radar_tasks = [asyncio.create_task(onchain_radar.radar_loop()),
                    asyncio.create_task(onchain_listings.listings_loop()),
                    asyncio.create_task(onchain_radar.listings_backtest_loop()),
-                   asyncio.create_task(onchain_leaderboard.leaderboard_loop())] if settings.onchain_radar_enabled else []
+                   asyncio.create_task(onchain_leaderboard.leaderboard_loop()),
+                   asyncio.create_task(onchain_outcomes.outcomes_loop())] if settings.onchain_radar_enabled else []
     sniper_tasks: list[asyncio.Task] = []
     if settings.sniper_enabled:
         from app.sniper import cache as sniper_cache
@@ -3480,6 +3482,14 @@ async def onchain_radar_view(user: User = Depends(auth.get_current_user)) -> dic
     return {**onchain_radar.snapshot(), "listings": onchain_listings.recent(),
             "rejected": onchain_listings.rejected(), "pulse": onchain_listings.pulse(),
             "listing_status": onchain_listings.status()}
+
+
+@app.get("/api/onchain/radar/lessons")
+async def onchain_radar_lessons(user: User = Depends(auth.get_current_user)) -> dict:
+    """Cosa e' successo davvero ai token proposti e scartati, e quali
+    controlli lo prevedevano. Vedi app/trading/onchain/outcomes.py."""
+    _require_onchain_enabled()
+    return {**onchain_outcomes.lessons(), "gate": settings.onchain_memory_gate}
 
 
 @app.get("/api/onchain/leaderboard")
