@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0101", "Wallet on-chain: nello swap non si capisce cosa ho, e scegliere un token fa scendere la pagina",
+     "Lorenzo: 'dovrebbe automaticamente selezionarmi la valuta che ho nel wallet. Io ho fatto degli swap da Ethereum a USDG, ma non e' chiaro che moneta io abbia nel portafoglio. [...] Deve essere selezionata automaticamente la valuta detenuta, quella con maggior quantita'. Poi quando seleziono una valuta per fare lo swap la schermata mi va in basso e mi tocca tornare su'.",
+     "alta"),
     ("seed-0100", "Radar: cap fino a $2M per le gemme, e token scelti e scartati spariti dopo un aggiornamento",
      "Lorenzo: 'alziamo un po' il limite di market cap anche perché il mio obiettivo è trovare delle gemme per cui anche uno o due milioni di market cap potrebbe andare bene però nel momento in cui dal punto di vista GitHub, sito, tokenomics tante cose devono essere perfette [...] adesso ho refreshato il sito e non ho più l'elenco [...] dei token scartati e il token che prima era stato scelto non lo vedo più fa in modo che ogni volta che viene scelto un token venga salvato in database così che io ad ogni accesso possa rivedere anche dopo un riavvio'.",
      "alta"),

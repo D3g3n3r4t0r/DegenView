@@ -329,7 +329,18 @@ export function openTokenPicker(chain, { onPick, title = "Scegli token" } = {}) 
       <p class="picker-hint">Non lo trovi? Incolla il contratto del token nel campo in alto.</p>
     </div>
   `;
-  if (!pickerDialog.open) pickerDialog.showModal();
+  // Da telefono la tastiera della ricerca sposta la pagina sotto il foglio,
+  // e chiuso il foglio ci si ritrovava piu' in basso (Lorenzo: "la
+  // schermata mi va in basso e mi tocca tornare su"). Si torna dov'eri.
+  if (!pickerDialog.open) {
+    const scrollTop = window.scrollY;
+    pickerDialog.addEventListener("close", () => {
+      const back = () => window.scrollTo({ top: scrollTop, behavior: "instant" });
+      requestAnimationFrame(back);
+      setTimeout(back, 350);  // dopo che la tastiera di iOS ha finito di chiudersi
+    }, { once: true });
+    pickerDialog.showModal();
+  }
 
   const input = pickerBody.querySelector("#picker-query");
   const results = pickerBody.querySelector("#picker-results");
