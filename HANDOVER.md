@@ -54,6 +54,14 @@ filtro anti-rug in `legit.py`, frontend `frontend/static/onchain/radar.js`.
   pump.fun per capitalizzazione -> DexScreener (`_fetch_grown_pools`), per
   trovare DREGG. Il GitHub di DREGG (emberian/dregg) non e' raggiungibile
   dalla sandbox: se sul server non entra, il motivo e' fra gli scartati.
+- seed-0106 (DREGG metro): `github_shortfall` ora chiede >=1000 commit totali
+  (`github_commit_total`, Link header), ultimi 100 su >=8 giorni, push entro
+  14 giorni, voto >=75; in `judge_github` una storia lunga vale un team.
+  Eccezioni: sito dichiarato + nome non da meme, `exception_queue` a
+  rotazione (12 per giro), sempre provate, in cima alle proposte anche senza
+  strategia valida (`strategy_ok`). Fonti extra: profili/boost DexScreener.
+  Prova reale DREGG: pagella 89, GitHub 89. Lorenzo lo vuole primo nella
+  classifica (thread "Classifica progetti").
 - Vincolo: il pilota (soldi veri) resta sotto $100k
   (`_SNIPER_ONCHAIN_MAX_MCAP_USD` in main.py). Mai strategie short.
 
