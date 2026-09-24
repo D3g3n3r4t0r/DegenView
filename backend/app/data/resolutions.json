@@ -1387,5 +1387,16 @@
       "frontend/static/onchain/leaderboard.js",
       "frontend/onchain-app.html"
     ]
+  },
+  "seed-0105": {
+    "status": "risolto",
+    "at": 1790230898,
+    "summary": "Via il menu ⋯ con tredici voci, sette delle quali ripetevano tab gia' a schermo. Ora c'e' una barra in basso con tre posti, come in un DEX: Radar (pilota e token nuovi), Scambia (swap, limite, sniper e grafico; da telefono lo swap viene prima del grafico) e Portafoglio (saldi, ordini aperti, storico, strategie, con Ricevi e Invia a portata di pollice). Il tocco sull'indirizzo in alto apre il wallet: ricevi, invia, limiti, simula e chiave. Sotto il saldo una riga compatta mostra le monete che hai, dalla piu' grande; toccarne una apre lo scambio con quella in vendita. Le tab Swap/Limite/Sniper tornano leggibili (la scritta attiva era bianca su bianco).",
+    "files": [
+      "frontend/onchain-app.html",
+      "frontend/static/onchain/main.js",
+      "frontend/static/onchain/holdings.js",
+      "frontend/static/onchain/swap.js"
+    ]
   }
 }
