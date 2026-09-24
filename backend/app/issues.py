@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0111", "I progetti seri non escono: in classifica solo DREGG",
+     "Lorenzo: 'vedo che pero' hai trovato soltanto drag perche' te l'ho detto io [...] devi trovarli, ce ne sono tanti su Robin Hood Chain e su Solana, con low cap e micro cap bisogna che esca fuori qualcosa [...] anche uno, due, tre mesi non e' importante, l'importante e' che siano sotto uno barra due, tre milioni di market cap, non oltre'.",
+     "alta"),
     ("seed-0110", "La memoria deve studiare i token scartati che poi sono esplosi, e le meme vanno cavalcate",
      "Lorenzo: 'ho visto che hai scartato dei token che hanno fatto grandissime percentuali, per cui devi andare a studiare tutti quei casi li' e fare in modo che la prossima volta quei progetti vengano fuori con le stesse caratteristiche. Dobbiamo cavalcare le meme coin sostanzialmente, per cui deve essere anche chiaro che e' un qualcosa di estremamente gambling'.",
      "alta"),
