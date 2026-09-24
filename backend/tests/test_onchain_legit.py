@@ -273,3 +273,37 @@ def test_exception_token_passes_with_an_exceptional_report(monkeypatch):
     out = _assess({**TOKEN, "market_cap": 2_500_000, "exception": True})
     gem = next(c for c in out["checks"] if c["key"] == "gem")
     assert out["status"] == "ok" and gem["ok"] is True
+
+
+def test_platform_repos_are_never_the_project_github():
+    """VISE (rug del 24/09, -93%): il sito linkava pump-fun/pump-public-docs,
+    e il filtro l'aveva preso per il GitHub del progetto."""
+    urls = ["https://github.com/pump-fun/pump-public-docs", "https://github.com/acme/core"]
+    assert legit.github_targets(urls) == [("acme", "core")]
+    vise = {"symbol": "VISE", "name": "Vise"}
+    docs = {"full_name": "pump-fun/pump-public-docs", "description": "Pump.fun public docs"}
+    assert not legit.github_belongs(docs, vise, "https://vise.fun/")
+    assert legit.github_belongs({"full_name": "emberian/dregg"}, {"symbol": "DREGG", "name": "dregg"},
+                                "https://www.dregg.net/")
+    assert legit.github_belongs({"full_name": "x/core", "homepage": "https://acme.io"}, {"symbol": "Q"},
+                                "https://acme.io")
+
+
+def test_someone_elses_repo_fails(monkeypatch):
+    async def foreign(owner, repo, client):
+        return {"full_name": "other/docs", "html_url": "https://github.com/other/docs"}
+    monkeypatch.setattr(legit, "github_repo", foreign)
+    out = _assess({**TOKEN, "symbol": "VISE", "name": "Vise"})
+    assert out["status"] == "fail" and "non e' del progetto" in out["reason"]
+
+
+def test_holder_concentration_ignores_pools_and_fails_whales():
+    report = {"risks": [], "lpLockedPct": 100, "knownAccounts": {"Pool1": {"type": "AMM"}},
+              "markets": [{"pubkey": "Pool1"}],
+              "topHolders": [{"owner": "Pool1", "pct": 74}] + [{"owner": f"w{i}", "pct": 2} for i in range(12)]}
+    assert legit.holder_concentration(report) == (2, 20)
+    assert legit.judge_rugcheck(report)["ok"] is True
+    whale = {**report, "topHolders": report["topHolders"] + [{"owner": "whale", "pct": 22}]}
+    assert "22%" in legit.judge_rugcheck(whale)["detail"]
+    spread = {**report, "topHolders": [{"owner": f"w{i}", "pct": 5} for i in range(10)]}
+    assert "primi 10" in legit.judge_rugcheck(spread)["detail"]
