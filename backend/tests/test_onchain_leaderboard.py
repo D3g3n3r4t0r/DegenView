@@ -246,3 +246,58 @@ def test_market_update_keeps_the_most_liquid_pool_and_launch():
     e = lb._entries[lb._key("solana", "Mmint")]
     assert e["market_cap"] == 90000 and e["liquidity_usd"] == 20000 and e["change_24h"] == 12
     assert e["launched_at"] == 1_000_000_000 and not e["bonding"]
+
+
+# ------------------------------------------------------------- riferimento
+
+from app.trading.onchain import benchmark  # noqa: E402
+
+DREGG_GITHUB = {"description": "Formally verified distributed object-capability OS",
+                "topics": ["lean4", "stark", "zero-knowledge"], "languages_all": ["Rust", "Lean", "TypeScript"],
+                "root_dirs": ["metatheory", "circuit", "node", "blocklace", "sdk", "cli", "docs"],
+                "total_commits": 10_203}
+
+
+def test_dregg_is_the_top_of_its_own_benchmark():
+    sim = benchmark.similarity(benchmark.signals(DREGG_GITHUB, benchmark.site_terms(
+        "machine-checked kernel, zkvm, consensus, wasm playground, no independent external audit, research software")))
+    assert sim["score"] >= 90
+
+
+def test_a_plain_web_project_is_far_from_dregg():
+    web = {"description": "Community token with a website", "languages_all": ["JavaScript", "HTML", "CSS"],
+           "root_dirs": ["public", "src"], "total_commits": 40}
+    assert benchmark.similarity(benchmark.signals(web, benchmark.site_terms("buy, stake, earn")))["score"] <= 10
+
+
+def test_site_terms_are_small():
+    terms = benchmark.site_terms("We use STARK proofs, Plonky3 and a BFT consensus. Research software.")
+    assert terms["zk"] == ["plonky3", "stark"] and "consensus" in terms["protocol"] and terms["candor"]
+
+
+def test_dregg_is_pinned_first_even_with_lower_score():
+    _entry("BEST", 99, 99, 99)
+    lb.add(benchmark.seed_item(), "riferimento")
+    k = lb._key(benchmark.CHAIN, benchmark.TOKEN)
+    lb.apply_analysis(k, {"github": {"key": "github", "score": 70, "facts": DREGG_GITHUB, "flags": [], "fatal": ""},
+                          "tokenomics": {"key": "tokenomics", "score": None, "facts": {}, "flags": [], "fatal": "",
+                                         "pending": "RugCheck"}})
+    b = lb.board()
+    assert b["entries"][0]["symbol"] == "DREGG" and b["entries"][0]["benchmark"] and b["entries"][0]["honor"]
+    assert b["entries"][1]["symbol"] == "BEST"
+
+
+def test_similarity_lifts_a_dregg_like_project():
+    plain = _entry("PLAIN", 80, 80, 80)
+    like = _entry("LIKE", 78, 78, 78)
+    lb.apply_analysis(lb._key("solana", "LIKEmint"),
+                      {"github": {"key": "github", "score": 78, "facts": DREGG_GITHUB, "flags": [], "fatal": ""}})
+    assert lb.final_score(like) > lb.final_score(plain)
+    assert [e["symbol"] for e in lb.board()["entries"]][:2] == ["LIKE", "PLAIN"]
+
+
+def test_benchmark_is_never_excluded():
+    lb.add(benchmark.seed_item(), "riferimento")
+    k = lb._key(benchmark.CHAIN, benchmark.TOKEN)
+    lb.apply_analysis(k, {"site": {"key": "site", "score": 0, "facts": {}, "flags": [], "fatal": "pagina vuota"}})
+    assert k in lb._entries
