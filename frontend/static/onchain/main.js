@@ -517,6 +517,18 @@ function setView(name) {
   if (name === "wallet" && !view.bottomPanel.hidden) mountBottomTab(currentBottomTab);
   paintHoldings();
 }
+// Da computer la barra sta nella testata, al centro, come le tab di un DEX;
+// da telefono resta in basso, sotto il pollice.
+const wide = matchMedia("(width >= 1100px)");
+function placeDock() {
+  const topbar = document.querySelector(".topbar");
+  if (!view.dock || !topbar) return;
+  if (wide.matches) topbar.querySelector(".topbar-right")?.before(view.dock);
+  else document.body.append(view.dock);
+}
+placeDock();
+wide.addEventListener("change", placeDock);
+
 view.dock?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-go]");
   if (button) setView(button.dataset.go);
