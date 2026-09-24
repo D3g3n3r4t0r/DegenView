@@ -240,7 +240,9 @@ async def analyze_github(urls: list[str], client: httpx.AsyncClient, launched_at
     if not repo:
         return judge_github({}, launched_at)
     # Un link a una libreria o a una piattaforma non e' il codice del progetto.
-    if token and not benchmark.is_benchmark(token.get("chain"), token.get("token_address")) \
+    # github_verified: the README names the token's address, proof enough.
+    if token and not token.get("github_verified") \
+            and not benchmark.is_benchmark(token.get("chain"), token.get("token_address")) \
             and not legit.github_belongs(repo, token, website):
         return _pillar("github", 0, {"repo": repo.get("full_name")}, [], "GitHub does not belong to the project")
     return judge_github(await fetch_github(repo["full_name"], client), launched_at)
