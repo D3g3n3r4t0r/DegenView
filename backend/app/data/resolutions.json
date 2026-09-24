@@ -1336,5 +1336,15 @@
       "backend/tests/test_lorenzo_hf.py",
       "frontend/static/app.js"
     ]
+  },
+  "seed-0099": {
+    "status": "risolto",
+    "at": 1790229632,
+    "summary": "La freccia IN stava sulla candela del segnale, ma il backtest compra all'apertura della candela successiva: il grafico mostrava ogni acquisto e ogni vendita una candela prima e a un prezzo diverso da quello del test. Ora frecce IN e OUT stanno sulla candela e al prezzo dove l'acquisto e la vendita avvengono davvero. E tutto e' solo spot: sul radar, nei backtest e negli alert dei token on-chain un segnale short della strategia diventa la vendita di quello che si ha, mai uno short.",
+    "files": [
+      "backend/app/trading/onchain/radar.py",
+      "backend/app/analysis/strategies.py",
+      "backend/app/main.py"
+    ]
   }
 }
