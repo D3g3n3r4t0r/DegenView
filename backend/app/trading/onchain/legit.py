@@ -51,6 +51,14 @@ TAX_MAX_PCT = 10.0
 TOP_HOLDER_MAX_PCT = 30.0
 AI_SCORE_MIN = 6
 GOPLUS_SOLANA = "https://api.gopluslabs.io/api/v1/solana/token_security"
+# Le gemme: sopra i $100k di cap un token si mostra solo se e' quasi
+# perfetto. Pagella complessiva eccellente, nessun controllo sotto "buono",
+# e contratto e liquidita' (la tokenomics che si puo' leggere on-chain)
+# eccellenti anche loro.
+GEM_CAP_USD = 100_000
+GEM_MIN_SCORE = 85
+GEM_MIN_CHECK = 70
+GEM_TOKENOMICS = ("security", "contract")
 RUGCHECK_PAGE = "https://rugcheck.xyz/tokens/{mint}"
 GITHUB_API = "https://api.github.com"
 GITHUB_MIN_COMMITS = 5
@@ -589,4 +597,23 @@ async def assess(token: dict, links: dict, client: httpx.AsyncClient) -> dict:
     if ai["ok"] is False:
         return done("fail", f"Claude: {review.get('reason') or 'non convince'}")
     out["report"] = report_card(out["checks"])
+    cap = float(token.get("market_cap") or 0)
+    if cap > GEM_CAP_USD:
+        short = gem_shortfall(out["checks"], out["report"])
+        out["checks"].append(_check("gem", "Sopra $100k", not short, short or "pagella da gemma"))
+        if short:
+            return done("fail", f"cap ${cap / 1e6:.2f}M: serve una pagella eccellente, {short}")
     return done("ok", "")
+
+
+def gem_shortfall(checks: list[dict], report: dict | None) -> str:
+    """Cosa manca a un token sopra i $100k per essere mostrato ("" = niente)."""
+    if not report or report["score"] < GEM_MIN_SCORE:
+        return f"voto {report['score'] if report else '?'} sotto {GEM_MIN_SCORE}"
+    weak = [c for c in checks if c.get("score") is not None and c["score"] < GEM_MIN_CHECK]
+    if weak:
+        return f"{weak[0]['label']} solo {weak[0]['grade']} ({round(weak[0]['score'])})"
+    for c in checks:
+        if c["key"] in GEM_TOKENOMICS and c.get("score") is not None and c["score"] < GEM_MIN_SCORE:
+            return f"{c['label']} non eccellente ({round(c['score'])})"
+    return ""

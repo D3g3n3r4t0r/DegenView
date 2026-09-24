@@ -2972,7 +2972,7 @@ filtri diversi". Poi "completa tutto".
 
 ---
 
-## Swap come un DEX — `seed-0100` — 2026-09-24
+## Swap come un DEX — `seed-0101` — 2026-09-24
 
 Lorenzo: "voglio che l'esperienza su questo sito sia paragonabile a un DEX
 [...] dovrebbe automaticamente selezionarmi la valuta che ho nel wallet
