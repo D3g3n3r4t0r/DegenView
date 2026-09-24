@@ -2969,3 +2969,26 @@ filtri diversi". Poi "completa tutto".
   - Un rug su una candela non lo ferma nessun trailing (peggior trade -83%).
 - Resta: se Lorenzo vuole provarla sul pilota, decidere tetti propri (e' una
   strategia a molte operazioni: con $20 ad acquisto i costi fissi pesano).
+
+---
+
+## Swap come un DEX — `seed-0101` — 2026-09-24
+
+Lorenzo: "voglio che l'esperienza su questo sito sia paragonabile a un DEX
+[...] dovrebbe automaticamente selezionarmi la valuta che ho nel wallet
+[...] quella con maggior quantita' [...] quando seleziono una valuta la
+schermata mi va in basso". La revisione generale (meno menu e tasti) e'
+di un altro thread; qui solo lo swap.
+
+Fatto: striscia "Nel wallet" sopra lo swap (saldo nativo + portfolio,
+ordinati per valore USD, tocco = vendi quello); gamba "vendi" iniziale =
+token di valore maggiore, "ricevi" = stablecoin se vendi il nativo,
+altrimenti il nativo (o il token del grafico); Disponibile e Max per
+qualsiasi token; freccia che inverte; stesso token sui due lati = scambio.
+Il picker salva `scrollY` all'apertura e lo rimette alla chiusura (due
+volte: subito e dopo 350 ms, per la tastiera di iOS). `_onchain_token_meta`
+ora prende simbolo e prezzo da DexScreener anche su Robinhood.
+
+Limite noto: su Robinhood il portfolio vede solo i token che il sito
+conosce (USDG + quelli degli ordini limite), non tutto il wallet.
+Gli swap via aggregatore restano spenti: aspettano il si' di Lorenzo.
