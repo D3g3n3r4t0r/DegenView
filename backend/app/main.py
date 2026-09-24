@@ -101,6 +101,7 @@ from app.trading.onchain import jito as onchain_jito
 from app.trading.onchain import keys as onchain_keys
 from app.trading.onchain import legit as onchain_legit
 from app.trading.onchain import ledger as onchain_ledger
+from app.trading.onchain import outcomes as onchain_outcomes
 from app.trading.onchain import passkey as onchain_passkey
 from app.trading.onchain import pilot as onchain_pilot
 from app.trading.onchain import listings as onchain_listings
@@ -784,6 +785,8 @@ async def _pilot_vet(candidate) -> dict:
     """Esito del filtro di legittimita' per un candidato dello sniper, tenuto
     qualche ora (un "wait" no: si riprova al giro dopo)."""
     key = f"{candidate.chain_id}:{candidate.token_address}"
+    if key in onchain_outcomes.shamed():
+        return {"status": "fail", "reason": "rug gia' subito", "checks": []}
     cached = _pilot_verdicts.get(key)
     if cached and _time.time() - cached[0] < _PILOT_VERDICT_TTL_S:
         return cached[1]
@@ -807,7 +810,8 @@ def _vetted_listing_candidates() -> list:
     from app.sniper.cache import Candidate
     now = _time.time()
     out = []
-    for item in onchain_listings.recent():
+    # Un rug gia' subito (outcomes.shame) non si ricompra: Lorenzo, "fammi sparire VISE".
+    for item in onchain_outcomes.without_shamed(onchain_listings.recent()):
         born = item.get("created_at") or item.get("found_at") or now
         out.append(Candidate(
             chain_id=item["chain"], token_address=item.get("token_address") or "",
@@ -1164,7 +1168,8 @@ async def lifespan(app: FastAPI):
     radar_tasks = [asyncio.create_task(onchain_radar.radar_loop()),
                    asyncio.create_task(onchain_listings.listings_loop()),
                    asyncio.create_task(onchain_radar.listings_backtest_loop()),
-                   asyncio.create_task(onchain_leaderboard.leaderboard_loop())] if settings.onchain_radar_enabled else []
+                   asyncio.create_task(onchain_leaderboard.leaderboard_loop()),
+                   asyncio.create_task(onchain_outcomes.outcomes_loop())] if settings.onchain_radar_enabled else []
     sniper_tasks: list[asyncio.Task] = []
     if settings.sniper_enabled:
         from app.sniper import cache as sniper_cache
@@ -3477,9 +3482,20 @@ async def onchain_radar_view(user: User = Depends(auth.get_current_user)) -> dic
     """Token giovani su Solana e Robinhood che una strategia dell'archivio
     avrebbe tradato bene. Proposte, non ordini: vedi app/trading/onchain/radar.py."""
     _require_onchain_enabled()
-    return {**onchain_radar.snapshot(), "listings": onchain_listings.recent(),
+    snap, gone = onchain_radar.snapshot(), onchain_outcomes.shamed()
+    return {**snap, "proposals": onchain_outcomes.without_shamed(snap.get("proposals") or [], gone),
+            "tested": onchain_outcomes.without_shamed(snap.get("tested") or [], gone),
+            "listings": onchain_outcomes.without_shamed(onchain_listings.recent(), gone),
             "rejected": onchain_listings.rejected(), "pulse": onchain_listings.pulse(),
-            "listing_status": onchain_listings.status()}
+            "listing_status": onchain_listings.status(), "shame": onchain_outcomes.shame()}
+
+
+@app.get("/api/onchain/radar/lessons")
+async def onchain_radar_lessons(user: User = Depends(auth.get_current_user)) -> dict:
+    """Cosa e' successo davvero ai token proposti e scartati, e quali
+    controlli lo prevedevano. Vedi app/trading/onchain/outcomes.py."""
+    _require_onchain_enabled()
+    return {**onchain_outcomes.lessons(), "gate": settings.onchain_memory_gate}
 
 
 @app.get("/api/onchain/leaderboard")
@@ -3487,7 +3503,8 @@ async def onchain_leaderboard_view(user: User = Depends(auth.get_current_user)) 
     """La classifica dei progetti migliori: GitHub, sito e tokenomics
     analizzati a fondo. Vedi app/trading/onchain/leaderboard.py."""
     _require_onchain_enabled()
-    return onchain_leaderboard.board()
+    board = onchain_leaderboard.board()
+    return {**board, "entries": onchain_outcomes.without_shamed(board.get("entries") or [])}
 
 
 @app.get("/api/onchain/radar/stream")

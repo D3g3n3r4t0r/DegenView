@@ -48,6 +48,11 @@ class Settings(BaseSettings):
     # Radar dei token giovani su Solana e Robinhood (app/trading/onchain/radar.py):
     # sola lettura, propone e non compra. A False il giro di fondo non parte.
     onchain_radar_enabled: bool = True
+    # La memoria degli esiti (app/trading/onchain/outcomes.py) puo' scartare
+    # un token che somiglia ai rug passati. Vale anche per il pilota con soldi
+    # veri, che usa lo stesso filtro: spenta finche' Lorenzo non dice si'.
+    # Spenta, il controllo "Memoria" compare nella pagella ma non blocca.
+    onchain_memory_gate: bool = False
     # Facoltativa: con la chiave, Claude legge il sito di ogni token nuovo e
     # da' un parere prima dell'avviso (app/trading/onchain/legit.py). Vuota =
     # restano i controlli automatici, il passaggio IA risulta "non attivo".

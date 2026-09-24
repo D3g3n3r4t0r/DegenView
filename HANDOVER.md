@@ -12,6 +12,31 @@ lavori pluri-sessione, decisioni prese, stato di piani approvati.
 
 ---
 
+## Memoria del radar ("coscienza") — `seed-0108`, branch `claude/project-thread-40dout`
+
+Lorenzo, dopo il rug su VISE: "dobbiamo implentare una specie di coscienza,
+imparare dai segnali; da cosa effettivamente succede, e migliorare il sistema".
+
+- `app/trading/onchain/outcomes.py`: diario su volume (`onchain_outcomes.json`).
+  Legge (solo lettura) proposte/provati del radar e listing/scartati; segue
+  prezzo e liquidita' su DexScreener ogni 10 min per 7 giorni. Rug = liq <20%
+  d'ingresso, prezzo -80% o pool sparito 3 giri; buono = +50% in qualche momento.
+  Voci viste tardi: ingresso dalle candele 15m (4 per giro, gate GeckoTerminal).
+- Lezione: AUC di ogni controllo su rug e salite (`signals`), regressione
+  logistica numpy con 5 fold deterministici. Entra in `legit.assess` come check
+  "memory" solo con >=40 esiti, >=8 rug, AUC fuori campione >=0.65.
+- Blocca solo con `ONCHAIN_MEMORY_GATE=true` (default spento): il pilota con
+  soldi veri usa lo stesso filtro, serve il si' di Lorenzo. Eccezioni GitHub mai
+  bloccate.
+- API `/api/onchain/radar/lessons`; sezione "Memoria" sotto gli scartati.
+- "Muro delle inculate" (Lorenzo: "fammi sparire VISE [...] sezione ironica
+  dove ci andranno a finire tutte le inculate subite"): `outcomes.shame()` =
+  `SHAME_SEED` (VISE) + rug passati dal filtro. Tolti da proposte, listing,
+  classifica e candidati del pilota (`without_shamed`, `_pilot_vet`).
+
+Resta: accendere il gate quando il modello e' attivo e Lorenzo dice si';
+eventuale ritaratura automatica delle soglie di legit (oggi solo misurate).
+
 ## Wallet come un DEX: barra in basso, niente "⋯" — `seed-0105`, PR #91
 
 Lorenzo: "voglio che l'esperienza su questo sito sia paragonabile a un DEX
