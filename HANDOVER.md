@@ -3020,3 +3020,13 @@ ora prende simbolo e prezzo da DexScreener anche su Robinhood.
 Limite noto: su Robinhood il portfolio vede solo i token che il sito
 conosce (USDG + quelli degli ordini limite), non tutto il wallet.
 Gli swap via aggregatore restano spenti: aspettano il si' di Lorenzo.
+
+## Telegram interi — `seed-0103` — 2026-09-24
+
+Lorenzo: "Inoltre i messaggi su Telegram arrivano tagliati, non sono mai
+completi". Causa: `_notify_deploy` tagliava ogni riga a 120 caratteri e
+`italian_line` a 160 (i trailer "Aggiornamento:" sono spesso 130-180); il
+riepilogo settimanale tagliava a 170 e mostrava al massimo 12/15 voci.
+Ora niente tagli: `telegram._deliver` spezza oltre 4096 caratteri a fine
+riga e, se Telegram rifiuta l'HTML (400), rimanda come testo semplice.
+Radar e pilota non toccati.

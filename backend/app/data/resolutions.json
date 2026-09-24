@@ -1370,5 +1370,11 @@
     "status": "risolto",
     "at": 1790230882,
     "summary": "DREGG non entrava per tre motivi: 88 giorni di vita (limite 3 settimane), $2.5M di capitalizzazione (limite $2M) e liquidita' all'8% della cap (minimo 10%). In piu' non compariva in nessuna lista letta dal radar (pool nuovi, di tendenza, piu' scambiati). Ora il radar legge anche pump.fun ordinato per capitalizzazione, e ammette come eccezione progetti fino a un anno di vita e $20M di cap, con liquidita' almeno $100k e 3% della cap, ma solo con un GitHub eccezionale: almeno 60 degli ultimi 100 commit, lavoro in almeno 20 giorni diversi, ultimo aggiornamento entro 14 giorni, voto GitHub almeno 75, piu' la pagella da gemma (complessivo 85, nessun controllo sotto 70). Nella lista delle proposte sono segnati 'eccezione GitHub'. Il pilota con soldi veri resta sotto i $100k."
+  },
+  "seed-0103": {
+    "status": "risolto",
+    "at": 1790231032,
+    "summary": "I messaggi Telegram arrivano interi. L'avviso di deploy tagliava ogni modifica a 120 caratteri (e il riepilogo settimanale a 160-170, piu' al massimo 12-15 voci): ora ogni riga e' completa e ci sono tutte le modifiche. Un messaggio piu' lungo del limite di Telegram (4096 caratteri) arriva in piu' pezzi divisi a fine riga invece di essere rifiutato, e uno con un carattere che Telegram non sa leggere (un '<' in un errore o in un nome) viene rimandato come testo semplice invece di sparire.",
+    "detail": "app/notify/telegram.py: chunks(), plain(), _deliver() usati da send_to e send_message; main.py _notify_deploy: niente [:120], per_page 100, html escape; weekly_recap.py: niente _clip ne' tetti 12/15, html escape. Test: tests/test_telegram_complete.py."
   }
 }
