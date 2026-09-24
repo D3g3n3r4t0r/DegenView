@@ -202,10 +202,10 @@ function loadChainData() {
 function paintHoldings(force = false) {
   refreshHoldings(view.holdings, {
     force,
-    // Il tocco su una moneta apre lo scambio. Lo swap sceglie da se' la
-    // moneta di partenza; l'evento gli dice quale e' stata toccata.
+    // Il tocco su una moneta apre lo scambio con quella in vendita.
     onPick: (holding) => {
       setView("manual");
+      if (currentOrderTab !== "swap") $('[data-order-tab="swap"]')?.click();
       window.dispatchEvent(new CustomEvent("onchain:swap-from", { detail: holding }));
     },
   });

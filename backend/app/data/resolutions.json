@@ -1365,5 +1365,16 @@
     "at": 1790230297,
     "summary": "Sopra lo swap c'e' la striscia 'Nel wallet' con ogni token che hai, quantita' e valore in dollari; un tocco lo mette in vendita. Lo swap parte gia' dal token che vale di piu' (dopo ETH -> USDG parte da USDG, verso ETH), con l'importo pieno e il 'Disponibile' per qualsiasi token, non solo il nativo, e il tasto Max sempre. La freccia fra i due campi inverte vendi e ricevi, e scegliere lo stesso token dall'altra parte li scambia, come su un DEX. Chiuso il foglio di scelta del token la pagina torna dov'era: la tastiera di iOS la spostava in basso. Su Robinhood Chain i token del wallet hanno nome e prezzo (prima USDG compariva come '0x5fc5' senza valore).",
     "detail": "frontend/static/onchain/swap.js: loadHoldings (saldo + portfolio, cache 20s), availableFor, holdingAsLeg, setLeg, #swap-wallet, #swap-flip, #swap-route; sheets.js: scroll ripristinato alla chiusura del picker; main.py: _onchain_token_meta usa il pool DexScreener su entrambe le chain; onchain-app.html: stili .swap-wallet/.wallet-chip. Provato con Playwright su viewport iPhone 13 con API finte: default USDC ($120) su SOL ($75), tocco, inversione, scelta dal picker con scroll invariato."
+  },
+  "seed-0102": {
+    "status": "risolto",
+    "at": 1790230898,
+    "summary": "Via il menu ⋯ con tredici voci, sette delle quali ripetevano tab gia' a schermo. Ora c'e' una barra in basso con tre posti, come in un DEX: Radar (pilota e token nuovi), Scambia (swap, limite, sniper e grafico; da telefono lo swap viene prima del grafico) e Portafoglio (saldi, ordini aperti, storico, strategie, con Ricevi e Invia a portata di pollice). Il tocco sull'indirizzo in alto apre il wallet: ricevi, invia, limiti, simula e chiave. Sotto il saldo una riga compatta mostra le monete che hai, dalla piu' grande; toccarne una apre lo scambio con quella in vendita. Le tab Swap/Limite/Sniper tornano leggibili (la scritta attiva era bianca su bianco).",
+    "files": [
+      "frontend/onchain-app.html",
+      "frontend/static/onchain/main.js",
+      "frontend/static/onchain/holdings.js",
+      "frontend/static/onchain/swap.js"
+    ]
   }
 }

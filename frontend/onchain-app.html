@@ -1800,23 +1800,12 @@
     &::-webkit-scrollbar { display: none; }
     &[hidden] { display: none; }
   }
-  .hold {
-    display: inline-flex; align-items: baseline; gap: 6px; flex: none; padding: 7px 12px;
-    border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--ink);
-    font-size: 13px; animation: hold-in .35s cubic-bezier(.2, .8, .2, 1) both;
-    & b { font-weight: 600; }
-    & span { font-family: var(--mono); font-size: 12.5px; color: var(--ink-dim); }
-    & small { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); }
-    &.is-top { border-color: color-mix(in oklch, var(--live) 45%, var(--line)); }
-    &.is-top b::before { content: ""; display: inline-block; inline-size: 6px; block-size: 6px; margin-inline-end: 6px;
-      border-radius: 50%; background: var(--live); vertical-align: 2px; }
-    &:hover { background: var(--raised); }
-    &:active { scale: .96; }
-  }
-  .hold:nth-child(2) { animation-delay: 40ms; } .hold:nth-child(3) { animation-delay: 80ms; }
-  .hold:nth-child(n+4) { animation-delay: 120ms; }
+  .holdings .wallet-chip { animation: hold-in .35s cubic-bezier(.2, .8, .2, 1) both; }
+  .holdings .wallet-chip:nth-child(2) { animation-delay: 40ms; }
+  .holdings .wallet-chip:nth-child(n+3) { animation-delay: 80ms; }
+  .holdings .wallet-chip:active { scale: .96; }
   @keyframes hold-in { from { opacity: 0; translate: 0 4px; } }
-  .hold-empty { font-size: 12.5px; color: var(--ink-faint); padding-block: 6px; }
+  .holdings .swap-wallet-empty { margin: 0; padding-block: 6px; }
 
   /* --- Portafoglio -------------------------------------------------- */
   .wallet-view { display: grid; gap: 14px; }
@@ -1857,7 +1846,7 @@
     .more-sheet .menu-list { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   }
   @media (prefers-reduced-motion: reduce) {
-    .dock-thumb, .hold { transition: none; animation: none; }
+    .dock-thumb, .holdings .wallet-chip { transition: none; animation: none; }
   }
 }
 </style>
