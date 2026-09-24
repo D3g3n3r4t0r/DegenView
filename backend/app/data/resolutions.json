@@ -1408,5 +1408,10 @@
     "status": "risolto",
     "at": 1790247960,
     "summary": "Cosa e' successo: VISE (4vXJMB...uRdg) usciva da pump.fun alle 09:00 del 24/09. Tra le 10:51 e le 10:59 e' crollato del 95%: tanti wallet, ognuno con l'1-2% dell'offerta, hanno venduto insieme per circa $19k in un pool piccolo. La liquidita' era bloccata e il contratto pulito, quindi RugCheck e GoPlus lo davano sano. Cosa non avevamo visto: il GitHub. Il sito di VISE linkava solo pump-fun/pump-public-docs, la documentazione pubblica di pump.fun, e il filtro l'aveva preso per il GitHub del progetto, con tanti commit e molto attivo. Senza quel link VISE sarebbe rimasto in attesa e non sarebbe mai stato proposto. Correzione: i repository di piattaforme (pump.fun, Solana, Raydium, Jupiter, Metaplex, Uniswap e simili) non valgono piu' come GitHub di un progetto. Il repository deve essere del progetto: il nome, il simbolo o il sito devono comparire nel proprietario, nel nome, nella homepage o nella descrizione del repository, altrimenti il token e' scartato. In piu' un token e' scartato se un solo wallet tiene oltre il 15% dell'offerta o i primi 10 oltre il 35% (pool e locker esclusi). Ripassato dal filtro nuovo, VISE resta fuori per mancanza di un GitHub suo. Il filtro e' lo stesso per radar, nuovi listing e pilota."
+  },
+  "seed-0108": {
+    "status": "in corso",
+    "at": 1790248250,
+    "summary": "Il radar ora ha una memoria. Ogni token proposto, provato o scartato viene seguito per 7 giorni: prezzo e liquidita' ogni 10 minuti. Se la liquidita' scende sotto il 20% o il prezzo fa -80% e' un rug; se sale del 50% c'era un trend da prendere. Per ogni controllo (sicurezza, contratto, sito, GitHub, Claude, cap, liquidita') misura se prevedeva i rug e le salite. Da quegli esiti impara un punteggio di rischio che compare nella pagella come 'Memoria', ma solo quando prevede i rug anche su token che non ha mai visto, con almeno 40 esiti e 8 rug. Provato su VISE vero: il rug a -93% viene riconosciuto. Per ora la memoria osserva e non scarta niente, perche' lo stesso filtro decide anche per il pilota con soldi veri: serve il si' di Lorenzo."
   }
 }

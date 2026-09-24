@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0108", "Il radar deve imparare da cosa succede davvero ai token che propone e scarta",
+     "Lorenzo: 'dobbiamo implentare una specie di \"coscienza\", imparare dai segnali; da cosa effettivamente succede, e migliorare il sistema'.",
+     "alta"),
     ("seed-0107", "Rug pull su VISE, token proposto: -93%",
      "Lorenzo: 'abbiamo appena subito un rugpull su VISE che era stata proposta, il token ha fatto -93%, impara da questo errore. Cosa non avevamo visto?'",
      "alta"),
