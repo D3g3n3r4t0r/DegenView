@@ -391,6 +391,7 @@ def board() -> dict:
         "examined": _state["examined"], "analyzing": len(_busy), "waiting": waiting,
         "excluded": _excluded[:20], "excluded_total": len(_gone),
         "sources": _state["sources"], "discovery": discovery.status(),
+        "github_rate": legit.github_rate or None,
         "rules": {"weights": depth.WEIGHTS, "similarity_weight": SIMILARITY_WEIGHT, "benchmark": benchmark.NAME, "min_pillar": MIN_PILLAR, "gem_cap_usd": legit.GEM_CAP_USD,
                   "gem_min_score": legit.GEM_MIN_SCORE, "cap_max_usd": CAP_MAX_USD, "max_age_days": MAX_AGE_DAYS,
                   "exception_cap_usd": radar.EXC_MCAP_MAX_USD, "exception_age_days": radar.EXC_AGE_MAX_DAYS},

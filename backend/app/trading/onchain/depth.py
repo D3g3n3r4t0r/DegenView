@@ -107,7 +107,7 @@ async def fetch_github(full_name: str, client: httpx.AsyncClient) -> dict | None
     base = f"{legit.GITHUB_API}/repos/{full_name}"
     h = legit._gh_headers()
     try:
-        repo = await client.get(base, headers=h, timeout=8.0)
+        repo = await legit.gh_get(client, base, headers=h, timeout=8.0)
         if repo.status_code == 404:
             return {}
         if repo.status_code != 200:
@@ -118,7 +118,7 @@ async def fetch_github(full_name: str, client: httpx.AsyncClient) -> dict | None
                                  ("languages", f"{base}/languages", None),
                                  ("root", f"{base}/contents", None),
                                  ("participation", f"{base}/stats/participation", None)):
-            r = await client.get(url, params=params, headers=h, timeout=8.0)
+            r = await legit.gh_get(client, url, params=params, headers=h, timeout=8.0)
             if key == "participation" and r.status_code != 200:
                 out[key] = {}   # 202: GitHub la sta ancora calcolando; si usano i 100 commit
             elif r.status_code in (204, 404, 409):  # vuoto, o niente contributori calcolati
