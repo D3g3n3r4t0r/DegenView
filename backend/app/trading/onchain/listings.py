@@ -35,7 +35,6 @@ import json
 import logging
 import time
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Awaitable, Callable
 
 import httpx
@@ -43,12 +42,11 @@ import httpx
 from app.providers.base import ProviderError
 from app.providers.dexscreener import DexScreenerProvider, make_symbol
 from app.trading.onchain import legit
+from app.trading.onchain.storage import data_file
 
 logger = logging.getLogger(__name__)
 
-_DATA_DIR = Path(__file__).resolve().parents[2] / "data"
-_DATA_DIR.mkdir(parents=True, exist_ok=True)
-_STORE_FILE = _DATA_DIR / "onchain_listings.json"
+_STORE_FILE = data_file("onchain_listings.json")
 
 ROBINHOOD_RPC = "https://rpc.mainnet.chain.robinhood.com"
 DEXSCREENER_PAIRS = "https://api.dexscreener.com/latest/dex/pairs"
@@ -57,18 +55,21 @@ GECKO_BASE = "https://api.geckoterminal.com/api/v2"
 
 # Soglie dell'avviso: regolabili qui.
 LIQ_MIN_USD = 8_000
-MCAP_MAX_USD = 100_000        # Lorenzo: "una market cap non oltre i 100.000 dollari"
+# Lorenzo: "anche uno o due milioni di market cap potrebbe andare bene però
+# [...] GitHub, sito, tokenomics tante cose devono essere perfette". Sopra
+# legit.GEM_CAP_USD passa solo una pagella eccellente.
+MCAP_MAX_USD = 2_000_000
 LIQ_TO_MCAP_MIN = 0.10
 MAX_AGE_S = 6 * 3600          # oltre, non e' piu' un listing
 PENDING_TTL_S = 2 * 3600      # quanto si aspetta che arrivi la liquidita'
 MAX_PENDING = 300
-KEEP_LISTINGS = 40
+KEEP_LISTINGS = 300
 NOTIFY_MAX_AGE_S = 60 * 60    # il sito arriva spesso dopo il pool: si aspetta un po' di piu'
 VET_RETRY_S = 120             # un token "in attesa" (niente sito, niente report) si riprova
 VET_CONCURRENCY = 4
 CHART_MIN_BARS = 2            # un listing si mostra solo se il suo grafico c'e' gia'
 CHART_RETRY_S = 15            # GeckoTerminal ha le candele di un pool nuovo dopo 1-5 minuti
-KEEP_REJECTED = 100   # fuori dall'app si avvisa solo di cio' che e' davvero appena uscito
+KEEP_REJECTED = 500   # fuori dall'app si avvisa solo di cio' che e' davvero appena uscito
 
 TICK_S = 3
 CHAIN_POLL_S = 3

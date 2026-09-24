@@ -1346,5 +1346,18 @@
       "backend/app/analysis/strategies.py",
       "backend/app/main.py"
     ]
+  },
+  "seed-0100": {
+    "status": "risolto",
+    "at": 1790230303,
+    "summary": "Causa della sparizione: listing scelti, scartati, proposte del radar, scoperte del pilota e registro delle operazioni on-chain venivano salvati nella cartella del codice, che il server ricrea a ogni aggiornamento del sito. Ogni rilascio li cancellava. Ora stanno sul disco permanente del server (backend/data), come utenti e watchlist, e restano dopo refresh, riavvii e aggiornamenti; se ne tengono fino a 300 scelti e 500 scartati, con motivo e pagella di ciascuno. Il tetto di capitalizzazione sale a $2M: fino a $100k valgono i filtri di prima, sopra i $100k un token si mostra solo con pagella complessiva almeno 85 (eccellente), nessun controllo sotto 70 (buono) e anti-rug e contratto eccellenti anche loro. Il pilota automatico, che compra con soldi veri, resta limitato ai token sotto i $100k.",
+    "files": [
+      "backend/app/trading/onchain/storage.py",
+      "backend/app/trading/onchain/legit.py",
+      "backend/app/trading/onchain/listings.py",
+      "backend/app/trading/onchain/radar.py",
+      "backend/app/trading/onchain/pilot.py",
+      "backend/app/trading/onchain/ledger.py"
+    ]
   }
 }

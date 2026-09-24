@@ -20,10 +20,10 @@ import threading
 import time
 import uuid
 from datetime import datetime, timezone
-from pathlib import Path
 
-_DB_FILE = Path(__file__).resolve().parent.parent.parent / "data" / "onchain_ledger.db"
-_DB_FILE.parent.mkdir(parents=True, exist_ok=True)
+from app.trading.onchain.storage import data_file
+
+_DB_FILE = data_file("onchain_ledger.db")
 _lock = threading.Lock()
 
 
