@@ -214,28 +214,57 @@ def test_gem_shortfall_names_what_is_missing():
     assert "GoPlus" in legit.gem_shortfall(thin, {"score": 90})
 
 
-def _gh(score=90, commits="100+", days=25, pushed_days_ago=2, now=1_800_000_000):
+def _gh(score=90, total=10_203, days=11, pushed_days_ago=4, now=1_800_000_000):
     from datetime import datetime, timezone
     pushed = datetime.fromtimestamp(now - pushed_days_ago * 86400, timezone.utc).isoformat()
-    return {"score": score, "facts": {"commits": commits, "active_days": days, "pushed_at": pushed}}
+    return {"score": score, "facts": {"commits": "100+", "total_commits": total, "active_days": days,
+                                      "pushed_at": pushed}}
 
 
-def test_github_exception_needs_a_lot_of_recent_work():
+def test_github_exception_measures_depth_like_dregg():
     """Lorenzo: "progetti in quel modo voglio che siano eccezione in quanto
-    tecnicamente incredibili su github"."""
+    tecnicamente incredibili su github". Metro: DREGG, 10 203 commit di un
+    solo autore, ultimi 100 su 11 giorni."""
     now = 1_800_000_000
     assert legit.github_shortfall(_gh(), now) == ""
     assert "sotto 75" in legit.github_shortfall(_gh(score=60), now)
-    assert "12 commit" in legit.github_shortfall(_gh(commits="12"), now)
-    assert "5 giorni" in legit.github_shortfall(_gh(days=5), now)
+    assert "300 commit in tutto" in legit.github_shortfall(_gh(total=300), now)
+    assert "non letti" in legit.github_shortfall(_gh(total=None), now)
+    assert "3 giorni" in legit.github_shortfall(_gh(days=3), now)
     assert "fermo da 40" in legit.github_shortfall(_gh(pushed_days_ago=40), now)
-    assert legit.github_shortfall({"score": 90, "facts": {"commits": "100+", "active_days": 30}}, now)
+
+
+def test_a_long_solo_history_counts_like_a_team():
+    commits = [{"commit": {"author": {"date": f"2026-08-{d:02d}T00:00:00Z"}}, "author": {"login": "emberian"}}
+               for d in range(10, 21) for _ in range(9)]
+    repo = {"full_name": "emberian/dregg", "stargazers_count": 35}
+    short = legit.judge_github(repo, commits)["score"]
+    deep = legit.judge_github(repo, commits, 10_203)
+    assert deep["score"] - short > 10 and deep["score"] >= 85 and deep["facts"]["total_commits"] == 10_203
 
 
 def test_exception_token_fails_without_an_exceptional_github():
     out = _assess({**TOKEN, "market_cap": 2_500_000, "exception": True})
     gem = next(c for c in out["checks"] if c["key"] == "gem")
     assert out["status"] == "fail" and gem["label"] == "Eccezione GitHub" and gem["ok"] is False
+
+
+def test_exception_without_github_fails_at_once():
+    links = {**LINKS}
+    async def go():
+        def handler(req):
+            url = str(req.url)
+            if "gopluslabs.io" in url:
+                return httpx.Response(200, json={"code": 1, "result": {"Mint111": GOPLUS_CLEAN}})
+            if "rugcheck" in url:
+                return httpx.Response(200, json={"risks": [], "lpLockedPct": 100})
+            if url.startswith("https://acme.io"):
+                return httpx.Response(200, headers={"content-type": "text/html"}, text="<title>Acme</title> hi")
+            return httpx.Response(404)
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as c:
+            return await legit.assess({**TOKEN, "exception": True}, links, c)
+    out = asyncio.run(go())
+    assert out["status"] == "fail" and "nessun GitHub" in out["reason"]
 
 
 def test_exception_token_passes_with_an_exceptional_report(monkeypatch):

@@ -1398,5 +1398,10 @@
       "frontend/static/onchain/holdings.js",
       "frontend/static/onchain/swap.js"
     ]
+  },
+  "seed-0106": {
+    "status": "risolto",
+    "at": 1790247278,
+    "summary": "Verificato con i dati veri: con la regola di prima DREGG veniva scartato, perche' chiedeva lavoro in 20 giorni diversi negli ultimi 100 commit e DREGG ne ha 11 (100 commit in sei settimane, quasi tutti di un solo autore, su 10 203 in totale). In piu' tra 63 progetti cresciuti trovati su pump.fun veniva dopo memecoin piu' liquide. La regola ora prende DREGG come metro: conta la profondita' (almeno 1 000 commit in tutto), la continuita' (ultimi 100 commit su almeno 8 giorni, ultimo aggiornamento entro 14 giorni) e una storia lunga vale quanto un team. Le eccezioni devono avere un sito e un nome non da meme, e vengono controllate a rotazione finche' passano tutte. Chi passa appare in cima alle proposte, anche se nessuna strategia l'avrebbe tradato bene. Con i dati reali DREGG passa: pagella 89 eccellente, GitHub 89, anti-rug 97, contratto 100. La ricerca legge anche i profili e i token spinti su DexScreener, che e' dove si vede di quali token si parla (X non ha un'API pubblica gratuita). Il pilota con soldi veri resta sotto i $100k."
   }
 }
