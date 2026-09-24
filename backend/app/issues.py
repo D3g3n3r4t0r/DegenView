@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0105", "Pagina di presentazione del progetto e del token da lanciare",
+     "Lorenzo: 'fai una pagina web di presentazione del progetto con slogan accattivante in inglese; crea il ticker del token, ci serve lanciarlo e inventati anche una tokenomics [...] mi piace lo stile dell'app (che dovra' essere un tasto al centro dove \"ENTER THE APP\") [...] facciamo chiaramente capire che ci sono due sezioni; una per sniperare progetti nuovi con regole (facendole vedere) un'altra sezione per progetti (seri con fondamentali) ma sempre microcap [...] devi pensare a tutto anche a cose che non ti ho detto'.",
+     "alta"),
     ("seed-0104", "Classifica dei progetti migliori, con analisi profonda di GitHub, sito e tokenomics",
      "Lorenzo: 'devi fare una specie di leaderboard che è sostanzialmente una classifica [...] cose estetiche che facciano capire primo posto, secondo posto, terzo posto e deve essere una classifica dinamica [...] aggiornata in tempo reale [...] rigoroso [...] da GitHub E devi controllare i commit insomma deve essere profonda sta cosa la tokenomics non deve essere uno scam il sito deve essere fatto bene magari se riesci ad analizzarne l'html e vedere se è fatto bene o se è solo una pagina di presentazione ma dietro non c'è niente [...] segnalare anche da quanto è che sono usciti [...] e ampliamo anche la chain per i token lanciati su Pump Fun'.",
      "alta"),

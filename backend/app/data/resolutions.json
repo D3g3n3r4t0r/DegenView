@@ -1387,5 +1387,10 @@
       "frontend/static/onchain/leaderboard.js",
       "frontend/onchain-app.html"
     ]
+  },
+  "seed-0105": {
+    "status": "in corso",
+    "at": 1790247483,
+    "summary": "Pagina pubblica /engn in inglese, stile cubo nero e luce verde: slogan 'Find them first. Ride them right.', tasto ENTER THE APP al centro che porta al wallet, due sezioni Sniper (lanci nuovi) e Microcaps (fondamentali) con le regole lette dal codice del radar, strategie solo trend following e solo long spot, token $ENGN (1 miliardo, Solana, 0% tasse, LP bruciato, team 10% con cliff 12 mesi), livelli per chi detiene, roadmap e disclaimer. Piano di lancio in docs/lancio-engn.md. Il token non e' ancora stato creato: serve il si' di Lorenzo su modalita' di lancio, liquidita' iniziale e verifica MiCA."
   }
 }

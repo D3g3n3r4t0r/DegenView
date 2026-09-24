@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Liquidity Engine — $ENGN</title>
+<meta name="description" content="An on-chain wallet that snipes new launches, ranks serious microcaps and trades them with trend-following. Long spot only." />
+<meta property="og:title" content="Liquidity Engine — Find them first. Ride them right." />
+<meta property="og:description" content="Sniper for new launches, fundamentals board for microcaps, trend-following automation. Long spot only." />
+<meta name="theme-color" content="#08090b" />
+<style>
+@font-face { font-family: "Instrument Serif"; font-style: normal; font-weight: 400; font-display: swap;
+  src: url(/static/fonts/instrument-serif-latin.woff2?v=1) format("woff2"); }
+@font-face { font-family: "Geist"; font-style: normal; font-weight: 300 700; font-display: swap;
+  src: url(/static/fonts/geist-latin.woff2?v=1) format("woff2"); }
+@font-face { font-family: "Geist Mono"; font-style: normal; font-weight: 400 600; font-display: swap;
+  src: url(/static/fonts/geist-mono-latin.woff2?v=1) format("woff2"); }
+
+:root {
+  color-scheme: dark;
+  --bg: #08090b;
+  --bg-2: #0e1013;
+  --panel: #121418;
+  --line: #1f232a;
+  --line-2: #2a2f38;
+  --ink: #f2f3f5;
+  --dim: #9aa0ab;
+  --faint: #5f6672;
+  --green: #2de0a8;
+  --green-2: #19b884;
+  --glow: color-mix(in oklch, var(--green) 45%, transparent);
+  --soft: color-mix(in oklch, var(--green) 10%, transparent);
+  --red: #ff5c5c;
+  --serif: "Instrument Serif", Georgia, serif;
+  --sans: "Geist", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --ease: cubic-bezier(.2, .8, .2, 1);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  background: radial-gradient(1200px 700px at 50% -10%, #1a1d22 0%, var(--bg) 60%) fixed, var(--bg);
+  color: var(--ink); font: 15px/1.55 var(--sans); -webkit-font-smoothing: antialiased; overflow-x: hidden;
+}
+a { color: inherit; text-decoration: none; }
+.wrap { width: min(1120px, 100% - 32px); margin-inline: auto; }
+.mono { font-family: var(--mono); }
+.eyebrow { font: 500 11px/1 var(--mono); letter-spacing: .18em; text-transform: uppercase; color: var(--green); }
+
+/* ---------- nav ---------- */
+nav.top {
+  position: fixed; inset: 0 0 auto; z-index: 20; backdrop-filter: blur(14px);
+  background: color-mix(in oklch, var(--bg) 70%, transparent); border-bottom: 1px solid transparent;
+  transition: border-color .3s;
+}
+nav.top.scrolled { border-bottom-color: var(--line); }
+nav.top .wrap { display: flex; align-items: center; gap: 24px; height: 60px; }
+.brand { white-space: nowrap; display: flex; align-items: center; gap: 10px; font: 600 13px/1 var(--mono); letter-spacing: .12em; }
+.brand svg { width: 22px; height: 22px; }
+.ticker-chip { font: 500 11px/1 var(--mono); color: var(--green); border: 1px solid var(--soft); background: var(--soft);
+  padding: 5px 8px; border-radius: 999px; }
+nav.top .links { margin-left: auto; display: flex; gap: 22px; font-size: 13px; color: var(--dim); }
+nav.top .links a:hover { color: var(--ink); }
+.btn-sm { font: 600 12px/1 var(--mono); letter-spacing: .08em; padding: 10px 14px; border-radius: 10px;
+  background: var(--ink); color: var(--bg); }
+@media (max-width: 760px) { nav.top .links { display: none; } nav.top .btn-sm { margin-left: auto; white-space: nowrap; } }
+@media (max-width: 420px) { nav.top .ticker-chip { display: none; } }
+
+/* ---------- hero ---------- */
+.hero { min-height: 100svh; display: grid; place-items: center; text-align: center; padding: 72px 0 40px; position: relative; }
+.stage { width: min(440px, 86vw, 46svh); aspect-ratio: 1; margin: 0 auto -30px; position: relative; }
+.stage svg { width: 100%; height: 100%; overflow: visible; }
+.floor path { stroke: #2a2f38; stroke-width: .6; fill: none; }
+.cube-top { fill: url(#gTop); }
+.cube-l { fill: url(#gLeft); }
+.cube-r { fill: url(#gRight); }
+.slit { stroke: var(--green); stroke-width: 3; fill: none; filter: url(#bloom); animation: pulse 3.2s ease-in-out infinite; }
+.halo { fill: var(--green); opacity: .16; filter: url(#blur); animation: pulse 3.2s ease-in-out infinite; }
+.frame { stroke: #3a404a; stroke-width: .8; fill: none; opacity: .6; }
+.streak { stroke: var(--green); stroke-width: 1; opacity: 0; stroke-linecap: round; animation: streak 2.8s var(--ease) infinite; }
+.streak.w { stroke: #cfd3da; }
+.candles { filter: url(#bloomSm); }
+.candles path { stroke: var(--green); stroke-width: 1.4; stroke-linecap: round;
+  stroke-dasharray: 8; stroke-dashoffset: 8; animation: draw .5s var(--ease) forwards; }
+.cube-g { animation: float 6s ease-in-out infinite; transform-origin: 50% 50%; }
+@keyframes pulse { 50% { opacity: .55; } }
+@keyframes float { 50% { transform: translateY(-6px); } }
+@keyframes streak { 0% { opacity: 0; transform: translateX(40px); } 30% { opacity: .8; } 100% { opacity: 0; transform: translateX(-60px); } }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+
+h1 { font: 400 clamp(46px, 8.6vw, 104px)/.95 var(--serif); letter-spacing: -.02em; }
+h1 em { color: var(--green); font-style: italic; }
+.lede { max-width: 560px; margin: 22px auto 0; color: var(--dim); font-size: clamp(15px, 1.9vw, 17px); }
+.enter {
+  display: inline-flex; align-items: center; gap: 14px; margin-top: 36px; padding: 20px 34px; border-radius: 16px;
+  font: 600 15px/1 var(--mono); letter-spacing: .22em; color: #04130d; background: var(--green);
+  box-shadow: 0 0 0 1px color-mix(in oklch, var(--green) 60%, white 10%), 0 12px 50px -8px var(--glow);
+  position: relative; overflow: hidden; transition: transform .25s var(--ease), box-shadow .25s var(--ease);
+}
+.enter::after { content: ""; position: absolute; inset: 0; transform: translateX(-120%);
+  background: linear-gradient(100deg, transparent 30%, rgba(255,255,255,.45) 50%, transparent 70%);
+  animation: sheen 3.6s var(--ease) infinite 1.2s; }
+.enter:hover { transform: translateY(-2px); box-shadow: 0 0 0 1px var(--green), 0 18px 70px -6px var(--glow); }
+.enter svg { width: 18px; height: 18px; transition: transform .25s var(--ease); }
+.enter:hover svg { transform: translateX(4px); }
+@keyframes sheen { 60%, 100% { transform: translateX(120%); } }
+.meta-row { margin-top: 26px; display: flex; flex-wrap: wrap; gap: 8px 18px; justify-content: center;
+  font: 12px/1 var(--mono); color: var(--faint); }
+.meta-row b { color: var(--dim); font-weight: 500; }
+.live { display: inline-flex; align-items: center; gap: 7px; }
+.live i { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 10px var(--green);
+  animation: blink 1.6s ease-in-out infinite; }
+@keyframes blink { 50% { opacity: .3; } }
+
+/* ---------- sections ---------- */
+section { padding: 110px 0; position: relative; }
+.head { max-width: 640px; margin-bottom: 48px; }
+h2 { font: 400 clamp(36px, 5.4vw, 60px)/1 var(--serif); letter-spacing: -.015em; margin-top: 14px; }
+h2 em { color: var(--green); }
+.head p { color: var(--dim); margin-top: 14px; }
+
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 860px) { .split { grid-template-columns: 1fr; } }
+.card { background: linear-gradient(180deg, var(--panel), var(--bg-2)); border: 1px solid var(--line); border-radius: 20px;
+  padding: 30px; position: relative; overflow: hidden; }
+.card::before { content: ""; position: absolute; inset: -1px -1px auto; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--green), transparent); opacity: .5; }
+.card .num { font: 500 12px/1 var(--mono); color: var(--faint); }
+.card h3 { font: 400 34px/1.05 var(--serif); margin: 14px 0 8px; }
+.card .sub { color: var(--dim); font-size: 14px; }
+.tag { display: inline-block; font: 500 10.5px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase;
+  padding: 5px 8px; border-radius: 6px; border: 1px solid var(--line-2); color: var(--dim); margin-top: 16px; }
+.rules { list-style: none; margin-top: 22px; border-top: 1px solid var(--line); }
+.rules li { display: flex; justify-content: space-between; gap: 16px; padding: 11px 0; border-bottom: 1px solid var(--line);
+  font-size: 13.5px; color: var(--dim); }
+.rules li b { font: 500 13px/1.4 var(--mono); color: var(--ink); text-align: right; white-space: nowrap; }
+.rules li b.g { color: var(--green); }
+.rules li b.r { color: var(--red); }
+.rules .grp { font: 500 10.5px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--faint);
+  padding-top: 18px; border-bottom: 0; }
+
+.flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line);
+  border-radius: 20px; overflow: hidden; margin-top: 16px; }
+.flow div { background: var(--bg-2); padding: 22px; }
+.flow .k { font: 500 11px/1 var(--mono); color: var(--green); letter-spacing: .1em; }
+.flow .t { font-size: 14px; margin-top: 10px; color: var(--dim); }
+.flow .t b { color: var(--ink); font-weight: 500; display: block; margin-bottom: 3px; }
+@media (max-width: 860px) { .flow { grid-template-columns: 1fr 1fr; } }
+
+/* ---------- automation ---------- */
+.auto { display: grid; grid-template-columns: 1.1fr .9fr; gap: 16px; align-items: stretch; }
+@media (max-width: 860px) { .auto { grid-template-columns: 1fr; } }
+.chart { position: relative; height: 100%; min-height: 260px; }
+.chart svg { width: 100%; height: 100%; }
+.chart .price { stroke: #8a909a; stroke-width: 1.3; fill: none; }
+.chart .ema { stroke: var(--green); stroke-width: 1.6; fill: none; filter: url(#bloomSm);
+  stroke-dasharray: 1200; stroke-dashoffset: 1200; }
+.chart.in .ema { animation: drawLong 2.4s var(--ease) forwards .3s; }
+.chart .mk circle { fill: var(--bg); stroke-width: 2; }
+.chart .mk text { font: 600 9px var(--mono); letter-spacing: .08em; }
+.chart .mk { opacity: 0; transition: opacity .5s; }
+.chart.in .mk { opacity: 1; transition-delay: 2.2s; }
+@keyframes drawLong { to { stroke-dashoffset: 0; } }
+.pills { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.pill { font: 500 12px/1 var(--mono); padding: 8px 11px; border-radius: 999px; border: 1px solid var(--line-2); color: var(--dim); }
+.pill.on { color: var(--green); border-color: color-mix(in oklch, var(--green) 40%, transparent); background: var(--soft); }
+.pill.off { text-decoration: line-through; color: var(--faint); }
+
+/* ---------- token ---------- */
+.token { display: grid; grid-template-columns: 340px 1fr; gap: 40px; align-items: center; }
+@media (max-width: 860px) { .token { grid-template-columns: 1fr; } }
+.donut { position: relative; width: 100%; max-width: 340px; aspect-ratio: 1; margin-inline: auto; }
+.donut svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.donut circle { fill: none; stroke-width: 16; transition: stroke-dasharray 1.4s var(--ease), stroke-width .2s; cursor: default; }
+.donut circle:hover { stroke-width: 20; }
+.donut .c { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; }
+.donut .c b { font: 400 44px/1 var(--serif); }
+.donut .c span { font: 11px/1.6 var(--mono); color: var(--faint); letter-spacing: .1em; }
+table.alloc { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+table.alloc th { text-align: left; font: 500 10.5px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase;
+  color: var(--faint); padding: 0 0 12px; }
+table.alloc td { padding: 12px 0; border-top: 1px solid var(--line); color: var(--dim); vertical-align: top; }
+table.alloc td:first-child { color: var(--ink); }
+table.alloc td.p { font-family: var(--mono); color: var(--ink); text-align: right; padding-right: 18px; }
+.sw { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 10px; }
+@media (max-width: 560px) { table.alloc td:last-child, table.alloc th:last-child { display: none; } }
+
+.facts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 48px; }
+@media (max-width: 860px) { .facts { grid-template-columns: 1fr 1fr; } }
+.fact { border: 1px solid var(--line); border-radius: 16px; padding: 18px; background: var(--bg-2); }
+.fact span { font: 500 10.5px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--faint); }
+.fact b { display: block; font: 400 26px/1.1 var(--serif); margin-top: 10px; }
+
+.self { margin-top: 16px; }
+.checks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 24px; margin-top: 18px; }
+@media (max-width: 760px) { .checks { grid-template-columns: 1fr; } }
+.checks div { display: flex; gap: 10px; align-items: baseline; font-size: 14px; color: var(--dim); }
+.checks div::before { content: "✓"; color: var(--green); font-family: var(--mono); }
+
+.tiers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 16px; }
+@media (max-width: 860px) { .tiers { grid-template-columns: 1fr; } }
+.tier h4 { font: 400 26px/1 var(--serif); margin: 12px 0 4px; }
+.tier .hold { font: 500 12px/1 var(--mono); color: var(--green); }
+.tier ul { list-style: none; margin-top: 16px; color: var(--dim); font-size: 13.5px; display: grid; gap: 8px; }
+.tier li::before { content: "— "; color: var(--faint); }
+
+/* ---------- roadmap ---------- */
+.road { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; border-top: 1px solid var(--line-2); }
+@media (max-width: 860px) { .road { grid-template-columns: 1fr; border-top: 0; border-left: 1px solid var(--line-2); } }
+.step { padding: 24px 20px 0 0; position: relative; }
+.step::before { content: ""; position: absolute; top: -5px; left: 0; width: 9px; height: 9px; border-radius: 50%;
+  background: var(--bg); border: 1px solid var(--line-2); }
+.step.done::before { background: var(--green); border-color: var(--green); box-shadow: 0 0 12px var(--green); }
+@media (max-width: 860px) { .step { padding: 0 0 26px 22px; } .step::before { top: 4px; left: -5px; } }
+.step .q { font: 500 11px/1 var(--mono); color: var(--faint); letter-spacing: .12em; }
+.step.done .q { color: var(--green); }
+.step h4 { font: 400 24px/1.1 var(--serif); margin: 10px 0 8px; }
+.step p { font-size: 13.5px; color: var(--dim); }
+
+/* ---------- final ---------- */
+.final { text-align: center; padding: 130px 0; }
+.final h2 { margin: 0 auto; max-width: 780px; }
+.ca { margin: 26px auto 0; display: inline-flex; gap: 10px; align-items: center; font: 12px/1 var(--mono); color: var(--faint);
+  border: 1px dashed var(--line-2); border-radius: 10px; padding: 11px 14px; }
+.ca b { color: var(--dim); font-weight: 500; }
+
+footer { border-top: 1px solid var(--line); padding: 40px 0 60px; color: var(--faint); font-size: 12px; }
+footer .row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 18px; margin-bottom: 22px; }
+footer .soc { display: flex; gap: 18px; font-family: var(--mono); }
+footer .soc a:hover { color: var(--ink); }
+footer p { max-width: 900px; line-height: 1.7; }
+
+/* ---------- reveal ---------- */
+.rv { opacity: 0; transform: translateY(18px); transition: opacity .8s var(--ease), transform .8s var(--ease); }
+.rv.in { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  .rv { opacity: 1; transform: none; }
+  .candles path, .chart .ema { stroke-dashoffset: 0; }
+  .chart .mk { opacity: 1; }
+}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <filter id="bloom" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="3" result="b" /><feMerge><feMergeNode in="b" /><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+    </filter>
+    <filter id="bloomSm" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="1.6" result="b" /><feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+    </filter>
+    <filter id="blur"><feGaussianBlur stdDeviation="18" /></filter>
+    <linearGradient id="gTop" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3a3f47" /><stop offset="1" stop-color="#1b1e23" /></linearGradient>
+    <linearGradient id="gLeft" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#15171b" /><stop offset="1" stop-color="#050607" /></linearGradient>
+    <linearGradient id="gRight" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#101216" /><stop offset="1" stop-color="#030304" /></linearGradient>
+    <radialGradient id="floorFade" cx=".5" cy=".5" r=".5"><stop offset=".35" stop-color="#fff" /><stop offset="1" stop-color="#000" /></radialGradient>
+    <mask id="floorMask"><rect x="0" y="0" width="400" height="400" fill="url(#floorFade)" /></mask>
+  </defs>
+</svg>
+
+<nav class="top" id="nav">
+  <div class="wrap">
+    <a class="brand" href="#top">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 21 7v10l-9 5-9-5V7z" fill="#15171b" stroke="#3a404a" /><path d="M3 12l9 5 9-5" stroke="#2de0a8" stroke-width="1.6" fill="none" /></svg>
+      LIQUIDITY ENGINE
+    </a>
+    <span class="ticker-chip">$ENGN</span>
+    <div class="links">
+      <a href="#sniper">Sniper</a><a href="#microcaps">Microcaps</a><a href="#automation">Automation</a>
+      <a href="#token">Token</a><a href="#roadmap">Roadmap</a>
+    </div>
+    <a class="btn-sm" href="/onchain-app.html">OPEN APP</a>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <div class="wrap">
+    <div class="stage" aria-hidden="true">
+      <svg viewBox="0 0 400 400">
+        <g class="floor" mask="url(#floorMask)">
+          <path d="M20 250 L200 340 L380 250 M50 235 L200 310 L350 235 M80 220 L200 280 L320 220 M110 205 L200 250 L290 205
+                   M20 250 L200 160 L380 250 M50 265 L200 190 L350 265 M80 280 L200 220 L320 280 M110 295 L200 250 L290 295
+                   M140 190 L260 250 M170 175 L290 235 M230 175 L110 235 M260 190 L140 250 M140 310 L260 250 M170 325 L290 265 M230 325 L110 265 M260 310 L140 250" />
+        </g>
+        <ellipse class="halo" cx="200" cy="215" rx="120" ry="40" />
+        <g class="candles" id="candles"></g>
+        <g class="cube-g">
+          <path class="frame" d="M92 110 L200 56 L316 110 M84 118 V262 M324 118 V262" />
+          <line class="streak" x1="300" y1="118" x2="360" y2="90" />
+          <line class="streak w" x1="310" y1="140" x2="372" y2="112" style="animation-delay:.9s" />
+          <line class="streak" x1="40" y1="222" x2="110" y2="190" style="animation-delay:1.6s" />
+          <line class="streak w" x1="60" y1="200" x2="118" y2="174" style="animation-delay:.4s" />
+          <path class="cube-l" d="M110 128 L200 173 L200 283 L110 238 Z" />
+          <path class="cube-r" d="M200 173 L290 128 L290 238 L200 283 Z" />
+          <path class="cube-top" d="M110 128 L200 83 L290 128 L200 173 Z" />
+          <path d="M110 128 L200 173 L290 128" stroke="#4a505a" stroke-width=".8" fill="none" opacity=".7" />
+          <path class="slit" d="M110 186 L200 231 L290 186" />
+        </g>
+      </svg>
+    </div>
+    <p class="eyebrow">On-chain wallet · Sniper · Trend engine</p>
+    <h1 style="margin-top:18px">Find them <em>first.</em><br />Ride them <em>right.</em></h1>
+    <p class="lede">An on-chain wallet that scans every new launch, ranks the microcaps worth owning, and trades them with trend-following. Long spot only. Your keys, your limits.</p>
+    <a class="enter" href="/onchain-app.html">ENTER THE APP
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+    </a>
+    <div class="meta-row">
+      <span class="live"><i></i><b>Radar live</b></span>
+      <span>scan every <b>{{SCAN_MIN}} min</b></span>
+      <span><b>Solana</b> · <b>Robinhood Chain</b> · <b>Pump.fun</b></span>
+    </div>
+  </div>
+</header>
+
+<section id="engine">
+  <div class="wrap">
+    <div class="head rv">
+      <p class="eyebrow">One engine, two boards</p>
+      <h2>New launches and <em>serious</em> microcaps. Never mixed.</h2>
+      <p>Everything the radar sees goes through one of two doors. Each has its own rules, and every rule is public: this page reads them from the same code that runs the scanner.</p>
+    </div>
+    <div class="split">
+      <article class="card rv" id="sniper">
+        <span class="num">01 — SNIPER</span>
+        <h3>Fresh launches, filtered hard.</h3>
+        <p class="sub">Tokens up to {{AGE_MAX_DAYS}} days old with real liquidity. Every candidate is backtested on all strategies before it is shown.</p>
+        <ul class="rules">
+          <li class="grp">Entry</li>
+          <li>Token age <b>≤ {{AGE_MAX_DAYS}} days</b></li>
+          <li>Liquidity <b>≥ ${{LIQ_MIN}}</b></li>
+          <li>Liquidity / market cap <b>≥ {{LIQ_RATIO}}%</b></li>
+          <li>Market cap <b>≤ $100k</b></li>
+          <li>Up to {{MCAP_MAX}} only with report card <b class="g">≥ 85 · no check &lt; 70</b></li>
+          <li class="grp">Backtest gate</li>
+          <li>History <b>≥ {{MIN_BARS}} candles</b></li>
+          <li>Trades <b>≥ {{MIN_TRADES}}</b></li>
+          <li>Profit factor <b class="g">≥ {{MIN_PF}}</b></li>
+          <li>Max drawdown <b class="r">≤ {{MAX_DD}}%</b></li>
+          <li>Fees + slippage <b>included</b></li>
+        </ul>
+        <span class="tag">No memecoins · no shitcoins</span>
+      </article>
+
+      <article class="card rv" id="microcaps">
+        <span class="num">02 — MICROCAPS</span>
+        <h3>Small caps with a real team behind.</h3>
+        <p class="sub">A live leaderboard ranked on code, website and tokenomics. Older or bigger tokens get in only as exceptions, and only if the GitHub is exceptional.</p>
+        <ul class="rules">
+          <li class="grp">Score · 40 / 30 / 30</li>
+          <li>GitHub — commits, contributors, tests, CI <b>40%</b></li>
+          <li>Website — real app behind the page <b>30%</b></li>
+          <li>Tokenomics — holders, mint, tax <b>30%</b></li>
+          <li class="grp">Instant disqualification</li>
+          <li>Creator holds <b class="r">&gt; 15%</b></li>
+          <li>Top holder / top 10 <b class="r">&gt; 20% / &gt; 60%</b></li>
+          <li>Mint or freeze authority <b class="r">active</b></li>
+          <li>Buy / sell tax <b class="r">&gt; 5%</b></li>
+          <li class="grp">GitHub exception</li>
+          <li>Age / market cap <b>≤ 1 year / ≤ ${{EXC_MCAP}}</b></li>
+          <li>Liquidity <b>≥ ${{EXC_LIQ}}</b></li>
+          <li>Commits · active days <b class="g">≥ 60 of 100 · ≥ 20 days</b></li>
+        </ul>
+        <span class="tag">Benchmarked on technical ambition</span>
+      </article>
+    </div>
+
+    <div class="flow rv">
+      <div><span class="k">SCAN</span><p class="t"><b>Every pool, every chain</b>GeckoTerminal, DexScreener, Pump.fun and X chatter.</p></div>
+      <div><span class="k">VET</span><p class="t"><b>Anti-rug, then AI review</b>Public security scanners, contract, site, repo.</p></div>
+      <div><span class="k">TEST</span><p class="t"><b>Backtest all strategies</b>Real candles, real costs, fill on the next bar.</p></div>
+      <div><span class="k">PROPOSE</span><p class="t"><b>You decide, or the pilot does</b>Every pick and every rejection is kept on disk.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="automation">
+  <div class="wrap">
+    <div class="head rv">
+      <p class="eyebrow">Automation</p>
+      <h2>Trend-following. <em>Nothing else.</em></h2>
+      <p>The engine buys when a trend is confirmed and sells when it breaks. It never shorts, never averages down, never bets on a reversal.</p>
+    </div>
+    <div class="auto">
+      <div class="card rv chart" id="chart">
+        <svg viewBox="0 0 600 280" preserveAspectRatio="none" aria-hidden="true">
+          <path class="price" id="pricePath" />
+          <path class="ema" id="emaPath" />
+          <g class="mk" id="marks"></g>
+        </svg>
+      </div>
+      <div class="card rv">
+        <span class="num">STRATEGIES</span>
+        <h3>Spot in, spot out.</h3>
+        <p class="sub">Entries and exits land on the candle they really fill, the same one you see on the chart.</p>
+        <div class="pills">
+          <span class="pill on">Lorenzo · EMA trend</span>
+          <span class="pill on">Lorenzo HF · on-chain minutes</span>
+          <span class="pill">More trend strategies soon</span>
+          <span class="pill off">Short</span>
+          <span class="pill off">Mean reversion</span>
+        </div>
+        <ul class="rules">
+          <li>Pilot per buy <b>≤ $20</b></li>
+          <li>Pilot per day <b>≤ $100</b></li>
+          <li>Pilot market cap <b>≤ $100k</b></li>
+          <li>Large moves <b class="g">passkey approval</b></li>
+          <li>Keys <b>encrypted, yours</b></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="token">
+  <div class="wrap">
+    <div class="head rv">
+      <p class="eyebrow">$ENGN</p>
+      <h2>A token that passes <em>its own filters.</em></h2>
+      <p>1,000,000,000 fixed supply on Solana. Fair launch, liquidity burned, team locked. Built so our own radar would let it in.</p>
+    </div>
+    <div class="token">
+      <div class="donut rv" id="donut">
+        <svg viewBox="0 0 120 120" id="donutSvg"></svg>
+        <div class="c"><b>1B</b><span>FIXED SUPPLY<br />NO MINT · NO TAX</span></div>
+      </div>
+      <div class="rv">
+        <table class="alloc">
+          <thead><tr><th>Allocation</th><th style="text-align:right;padding-right:18px">Share</th><th>Unlock</th></tr></thead>
+          <tbody id="allocBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="facts">
+      <div class="fact rv"><span>Chain</span><b>Solana</b></div>
+      <div class="fact rv"><span>Tax</span><b>0% / 0%</b></div>
+      <div class="fact rv"><span>Liquidity</span><b>LP burned</b></div>
+      <div class="fact rv"><span>Presale / VCs</span><b>None</b></div>
+    </div>
+
+    <div class="card self rv">
+      <span class="num">SELF-CHECK</span>
+      <h3>Run $ENGN through the radar.</h3>
+      <div class="checks">
+        <div>Mint authority revoked</div>
+        <div>Freeze authority revoked</div>
+        <div>Metadata immutable</div>
+        <div>Team 10%, 12-month cliff</div>
+        <div>No wallet above 15% unlocked</div>
+        <div>Public, active GitHub</div>
+      </div>
+    </div>
+
+    <div class="tiers">
+      <div class="card tier rv"><span class="num">TIER 0</span><h4>Scout</h4><span class="hold">free</span>
+        <ul><li>Radar with 15 min delay</li><li>Leaderboard top 10</li><li>Manual swaps</li></ul></div>
+      <div class="card tier rv"><span class="num">TIER 1</span><h4>Sniper</h4><span class="hold">hold 250,000 $ENGN</span>
+        <ul><li>Real-time radar and alerts</li><li>Full leaderboard with scores</li><li>Half swap fee</li></ul></div>
+      <div class="card tier rv"><span class="num">TIER 2</span><h4>Engine</h4><span class="hold">hold 1,000,000 $ENGN</span>
+        <ul><li>Automated trend strategies</li><li>Early access to new strategies</li><li>No swap fee</li></ul></div>
+    </div>
+  </div>
+</section>
+
+<section id="roadmap">
+  <div class="wrap">
+    <div class="head rv">
+      <p class="eyebrow">Roadmap</p>
+      <h2>Shipped first, <em>token second.</em></h2>
+    </div>
+    <div class="road rv">
+      <div class="step done"><span class="q">LIVE</span><h4>The engine</h4><p>Wallet, swaps, radar, leaderboard, trend pilot with hard limits.</p></div>
+      <div class="step"><span class="q">PHASE 1</span><h4>Launch</h4><p>Fair launch on Solana, LP burned, vesting on-chain, contract published here only.</p></div>
+      <div class="step"><span class="q">PHASE 2</span><h4>Holder tiers</h4><p>Wallet-based access, real-time alerts, fee discounts.</p></div>
+      <div class="step"><span class="q">PHASE 3</span><h4>More engines</h4><p>New trend-following strategies, more chains, public track record.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="final">
+  <div class="wrap rv">
+    <p class="eyebrow">Ready</p>
+    <h2 style="margin-top:14px">The chain never sleeps. <em>Neither does the engine.</em></h2>
+    <a class="enter" href="/onchain-app.html">ENTER THE APP
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+    </a>
+    <div><span class="ca">CA <b>not launched yet</b> · only this page will publish it</span></div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="row">
+      <span class="brand">LIQUIDITY ENGINE <span class="ticker-chip">$ENGN</span></span>
+      <div class="soc"><a href="#" aria-disabled="true">X</a><a href="#" aria-disabled="true">Telegram</a><a href="#" aria-disabled="true">GitHub</a><a href="#" aria-disabled="true">Docs</a></div>
+    </div>
+    <p>$ENGN is a utility token that gives access to features of the Liquidity Engine app. It is not an investment, a share, or a claim on revenue, and no return is promised. Crypto assets are highly volatile and you can lose everything you put in. Backtests and past results do not predict future results. Automated strategies can lose money. Nothing on this site is financial advice. Not available where prohibited by law, including to US persons. A crypto-asset white paper will be published before the token is offered.</p>
+  </div>
+</footer>
+
+<script>
+(() => {
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const nav = document.getElementById("nav");
+  addEventListener("scroll", () => nav.classList.toggle("scrolled", scrollY > 10), { passive: true });
+
+  // Candles on the floor, drawn left to right.
+  const cg = document.getElementById("candles");
+  let y = 318;
+  for (let i = 0; i < 22; i++) {
+    const x = 120 + i * 9.2;
+    y += (Math.sin(i * 1.7) * 4) - 2.1;
+    const h = 5 + Math.abs(Math.cos(i * 2.3)) * 9;
+    const base = y - (x - 120) * 0.12;
+    const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    p.setAttribute("d", `M${x} ${base} V${base - h}`);
+    p.style.animationDelay = `${0.6 + i * 0.07}s`;
+    cg.appendChild(p);
+  }
+
+  // Price and trend line, deterministic.
+  const pts = [], ema = [];
+  let v = 200, e = 200;
+  for (let i = 0; i <= 120; i++) {
+    const drift = i < 30 ? 0.4 : i < 80 ? -1.5 : i < 100 ? 0.8 : -0.2;
+    v += drift + Math.sin(i * 0.9) * 5 + Math.cos(i * 2.1) * 3;
+    e += (v - e) * 0.12;
+    pts.push([i * 5, v]); ema.push([i * 5, e]);
+  }
+  const d = a => a.map(([x, yy], i) => `${i ? "L" : "M"}${x.toFixed(1)} ${yy.toFixed(1)}`).join(" ");
+  document.getElementById("pricePath").setAttribute("d", d(pts));
+  document.getElementById("emaPath").setAttribute("d", d(ema));
+  const mk = document.getElementById("marks");
+  const mark = (i, label, color) => {
+    const [x, yy] = pts[i];
+    mk.insertAdjacentHTML("beforeend",
+      `<circle cx="${x}" cy="${yy}" r="5" stroke="${color}"/><text x="${x - 12}" y="${yy + (label === "BUY" ? 22 : -12)}" fill="${color}">${label}</text>`);
+  };
+  mark(38, "BUY", "#2de0a8"); mark(104, "SELL", "#f2f3f5");
+
+  // Allocation.
+  const alloc = [
+    ["Fair launch liquidity", 45, "#2de0a8", "100% at launch · LP burned"],
+    ["Community & early users", 15, "#1f9e78", "Airdrop to app users · 6-month linear"],
+    ["Ecosystem & strategy rewards", 15, "#8ae9c9", "36-month linear, on-chain stream"],
+    ["Treasury (multisig)", 10, "#5f6672", "6-month cliff · 24-month linear"],
+    ["Team", 10, "#9aa0ab", "12-month cliff · 24-month linear"],
+    ["Listings & market making", 5, "#2a2f38", "Locked until first listing"],
+  ];
+  document.getElementById("allocBody").innerHTML = alloc.map(([n, p, c, u]) =>
+    `<tr><td><span class="sw" style="background:${c}"></span>${n}</td><td class="p">${p}%</td><td>${u}</td></tr>`).join("");
+  const svg = document.getElementById("donutSvg");
+  const C = 2 * Math.PI * 48;
+  let off = 0;
+  const arcs = alloc.map(([n, p, c]) => {
+    const el = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    el.setAttribute("cx", 60); el.setAttribute("cy", 60); el.setAttribute("r", 48);
+    el.setAttribute("stroke", c);
+    el.style.strokeDasharray = reduce ? `${C * p / 100 - 0.8} ${C}` : `0 ${C}`;
+    el.style.strokeDashoffset = -off;
+    el.innerHTML = `<title>${n} ${p}%</title>`;
+    off += C * p / 100;
+    svg.appendChild(el);
+    return [el, p];
+  });
+
+  const io = new IntersectionObserver(entries => entries.forEach(en => {
+    if (!en.isIntersecting) return;
+    en.target.classList.add("in");
+    if (en.target.id === "donut") arcs.forEach(([el, p]) => { el.style.strokeDasharray = `${C * p / 100 - 0.8} ${C}`; });
+    io.unobserve(en.target);
+  }), { threshold: 0.15 });
+  document.querySelectorAll(".rv").forEach(el => io.observe(el));
+})();
+</script>
+</body>
+</html>
