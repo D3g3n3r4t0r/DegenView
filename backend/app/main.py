@@ -106,6 +106,7 @@ from app.trading.onchain import pilot as onchain_pilot
 from app.trading.onchain import listings as onchain_listings
 from app.trading.onchain import leaderboard as onchain_leaderboard
 from app.trading.onchain import radar as onchain_radar
+from app import token_launch
 from app.trading.onchain import prices as onchain_prices
 from app.trading.onchain import token_search as onchain_tokens
 from app.trading.onchain import quotes as onchain_quotes
@@ -6473,9 +6474,18 @@ def _render_engn_page() -> str:
 _ENGN_HTML = _render_engn_page()
 
 
+def _engn_contract_box() -> str:
+    """L'indirizzo compare solo dopo il lancio vero (app/token_launch.py)."""
+    done = token_launch.launched()
+    if not done:
+        return '<span class="ca">CA <b>not launched yet</b> · only this page will publish it</span>'
+    mint = _html.escape(done["mint"], quote=True)
+    return (f'<a class="ca" href="https://pump.fun/coin/{mint}" rel="noopener">CA <b>{mint}</b></a>')
+
+
 @app.get("/engn")
 async def engn_page() -> HTMLResponse:
-    return HTMLResponse(_ENGN_HTML, headers=_HTML_HEADERS)
+    return HTMLResponse(_ENGN_HTML.replace("<!--engn-ca-->", _engn_contract_box()), headers=_HTML_HEADERS)
 
 
 @app.get("/onchain-approve.html")
