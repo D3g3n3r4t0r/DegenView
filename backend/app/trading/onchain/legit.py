@@ -33,6 +33,8 @@ import logging
 import math
 import re
 import socket
+import time
+from datetime import datetime
 from urllib.parse import urljoin, urlparse
 
 import httpx
@@ -59,6 +61,13 @@ GEM_CAP_USD = 100_000
 GEM_MIN_SCORE = 85
 GEM_MIN_CHECK = 70
 GEM_TOKENOMICS = ("security", "contract")
+# Le eccezioni: oltre 3 settimane di vita o oltre $2M di cap un token entra
+# solo se e' "tecnicamente incredibile su GitHub" (Lorenzo, su DREGG).
+# Lavoro fitto e recente sugli ultimi 100 commit, oltre alla pagella da gemma.
+EXC_MIN_COMMITS = 60
+EXC_MIN_ACTIVE_DAYS = 20
+EXC_MAX_IDLE_DAYS = 14
+EXC_MIN_GITHUB_SCORE = 75
 RUGCHECK_PAGE = "https://rugcheck.xyz/tokens/{mint}"
 GITHUB_API = "https://api.github.com"
 GITHUB_MIN_COMMITS = 5
@@ -385,7 +394,7 @@ async def github_repo(owner: str, repo: str | None, client: httpx.AsyncClient) -
 
 
 async def github_commits(full_name: str, client: httpx.AsyncClient) -> list[dict] | None:
-    r = await client.get(f"{GITHUB_API}/repos/{full_name}/commits", params={"per_page": 30},
+    r = await client.get(f"{GITHUB_API}/repos/{full_name}/commits", params={"per_page": 100},
                          headers=_gh_headers(), timeout=8.0)
     if r.status_code == 409:  # repository vuoto
         return []
@@ -405,7 +414,7 @@ def judge_github(repo: dict | None, commits: list[dict] | None) -> dict:
     if len(commits or []) < GITHUB_MIN_COMMITS or len(days) < GITHUB_MIN_DAYS:
         return _check("github", label, False, f"{name}: {len(commits or [])} commit in {len(days)} giorni")
     stars = repo.get("stargazers_count") or 0
-    more = "30+" if len(commits) >= 30 else str(len(commits))
+    more = "100+" if len(commits) >= 100 else str(len(commits))
     authors = {((c.get("author") or {}).get("login") or (c.get("commit") or {}).get("author", {}).get("email"))
                for c in commits} - {None, ""}
     facts = {
@@ -598,12 +607,38 @@ async def assess(token: dict, links: dict, client: httpx.AsyncClient) -> dict:
         return done("fail", f"Claude: {review.get('reason') or 'non convince'}")
     out["report"] = report_card(out["checks"])
     cap = float(token.get("market_cap") or 0)
-    if cap > GEM_CAP_USD:
+    if token.get("exception"):
+        short = gem_shortfall(out["checks"], out["report"]) or github_shortfall(gh)
+        out["checks"].append(_check("gem", "Eccezione GitHub", not short, short or "GitHub eccezionale"))
+        if short:
+            return done("fail", f"fuori da eta' o cap, entra solo con un GitHub eccezionale: {short}")
+    elif cap > GEM_CAP_USD:
         short = gem_shortfall(out["checks"], out["report"])
         out["checks"].append(_check("gem", "Sopra $100k", not short, short or "pagella da gemma"))
         if short:
             return done("fail", f"cap ${cap / 1e6:.2f}M: serve una pagella eccellente, {short}")
     return done("ok", "")
+
+
+def github_shortfall(gh: dict, now: float | None = None) -> str:
+    """Cosa manca al GitHub per un'eccezione ("" = niente)."""
+    f = gh.get("facts") or {}
+    commits = f.get("commits")
+    count = 100 if commits == "100+" else int(commits or 0)
+    if (gh.get("score") or 0) < EXC_MIN_GITHUB_SCORE:
+        return f"GitHub {round(gh.get('score') or 0)} sotto {EXC_MIN_GITHUB_SCORE}"
+    if count < EXC_MIN_COMMITS:
+        return f"{count} commit recenti, ne servono {EXC_MIN_COMMITS}"
+    if (f.get("active_days") or 0) < EXC_MIN_ACTIVE_DAYS:
+        return f"lavoro in {f.get('active_days') or 0} giorni, ne servono {EXC_MIN_ACTIVE_DAYS}"
+    pushed = f.get("pushed_at")
+    try:
+        idle = ((now or time.time()) - datetime.fromisoformat(pushed.replace("Z", "+00:00")).timestamp()) / 86400
+    except (AttributeError, ValueError):
+        return "ultimo aggiornamento sconosciuto"
+    if idle > EXC_MAX_IDLE_DAYS:
+        return f"fermo da {idle:.0f} giorni"
+    return ""
 
 
 def gem_shortfall(checks: list[dict], report: dict | None) -> str:

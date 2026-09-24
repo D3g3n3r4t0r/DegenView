@@ -41,7 +41,7 @@ import asyncio
 import json
 import logging
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 
 import httpx
@@ -68,6 +68,18 @@ LIQ_MIN_USD = 8_000
 MCAP_MAX_USD = 2_000_000       # sopra legit.GEM_CAP_USD solo con una pagella eccellente
 LIQ_TO_MCAP_MIN = 0.10          # liquidita' almeno il 10% della capitalizzazione
 MAX_VETTED_PER_CHAIN = 25       # quanti passano dal filtro di legittimita' a giro
+# Le eccezioni (Lorenzo su DREGG: "va bene anche se ha 21 gg e supera i 2 mln,
+# progetti in quel modo voglio che siano eccezione in quanto tecnicamente
+# incredibili su github"): piu' vecchi o piu' grandi, ma con liquidita' vera,
+# e poi l'asticella di legit.github_shortfall.
+EXC_AGE_MAX_DAYS = 365
+EXC_MCAP_MAX_USD = 20_000_000
+EXC_LIQ_MIN_USD = 100_000
+EXC_LIQ_TO_MCAP_MIN = 0.03
+MAX_EXCEPTIONS_PER_CHAIN = 8
+PUMPFUN_COINS = "https://frontend-api-v3.pump.fun/coins"
+PUMPFUN_OFFSETS = (50, 100, 150, 200, 250, 300)   # per cap: da ~$20M a ~$1M
+DEXSCREENER_TOKENS = "https://api.dexscreener.com/tokens/v1"
 MAX_TESTED_PER_CHAIN = 8        # le candele costano una richiesta a token
 VERDICT_TTL_S = 6 * 3600        # un verdetto "ok"/"fail" vale qualche ora; "wait" si ripete
 DEXSCREENER_PAIRS = "https://api.dexscreener.com/latest/dex/pairs"
@@ -115,6 +127,7 @@ class Pool:
     liquidity_usd: float
     market_cap: float | None
     created_ms: int
+    exception: bool = False    # oltre eta' o cap: entra solo con un GitHub eccezionale
 
     @property
     def age_hours(self) -> float:
@@ -175,6 +188,66 @@ def pick_candidates(pools: list[Pool], limit: int = MAX_TESTED_PER_CHAIN) -> tup
             best_by_ticker[ticker] = p
     ranked = sorted(best_by_ticker.values(), key=lambda p: p.liquidity_usd / p.market_cap, reverse=True)
     return ranked[:limit], len(ranked)
+
+
+def pick_exceptions(pools: list[Pool], taken: list[Pool], limit: int = MAX_EXCEPTIONS_PER_CHAIN) -> list[Pool]:
+    """I pool fuori da eta' o cap normali ma dentro i limiti delle eccezioni,
+    i piu' liquidi prima. Mai un ticker gia' scelto per la via normale."""
+    seen = {p.symbol.upper() for p in taken}
+    best: dict[str, Pool] = {}
+    for p in pools:
+        ticker = p.symbol.upper()
+        if not ticker or ticker in _NOT_A_TOKEN or ticker in seen or not p.market_cap:
+            continue
+        normal = p.age_hours <= AGE_MAX_DAYS * 24 and p.market_cap <= MCAP_MAX_USD
+        if normal or p.age_hours > EXC_AGE_MAX_DAYS * 24 or p.market_cap > EXC_MCAP_MAX_USD:
+            continue
+        if p.liquidity_usd < EXC_LIQ_MIN_USD or p.liquidity_usd / p.market_cap < EXC_LIQ_TO_MCAP_MIN:
+            continue
+        if ticker not in best or p.liquidity_usd > best[ticker].liquidity_usd:
+            best[ticker] = p
+    ranked = sorted(best.values(), key=lambda p: p.liquidity_usd, reverse=True)[:limit]
+    return [replace(p, exception=True) for p in ranked]
+
+
+def pool_from_dexscreener(pair: dict) -> Pool | None:
+    base = pair.get("baseToken") or {}
+    try:
+        return Pool(chain=pair.get("chainId") or "", symbol=(base.get("symbol") or "").strip(),
+                    name=base.get("name") or "", token_address=base.get("address") or "",
+                    pair_address=pair.get("pairAddress") or "", dex=pair.get("dexId") or "",
+                    liquidity_usd=float((pair.get("liquidity") or {}).get("usd") or 0),
+                    market_cap=float(pair.get("marketCap") or pair.get("fdv") or 0) or None,
+                    created_ms=int(pair.get("pairCreatedAt") or 0))
+    except (TypeError, ValueError):
+        return None
+
+
+async def _fetch_grown_pools(client: httpx.AsyncClient) -> list[Pool]:
+    """Progetti Solana gia' cresciuti, che le liste per volume o novita' di
+    GeckoTerminal non vedono: pump.fun per capitalizzazione, poi il pool
+    piu' liquido di ognuno da DexScreener."""
+    mints: list[str] = []
+    for offset in PUMPFUN_OFFSETS:
+        try:
+            r = await client.get(PUMPFUN_COINS, params={"offset": offset, "limit": 50, "sort": "market_cap",
+                                                        "order": "DESC", "includeNsfw": "false"})
+            coins = r.json() if r.status_code == 200 else []
+        except (httpx.HTTPError, ValueError):
+            continue
+        for c in coins if isinstance(coins, list) else []:
+            cap = c.get("usd_market_cap") or 0
+            if c.get("mint") and MCAP_MAX_USD / 4 <= cap <= EXC_MCAP_MAX_USD:
+                mints.append(c["mint"])
+    pools: list[Pool] = []
+    for i in range(0, len(mints), 30):
+        try:
+            r = await client.get(f"{DEXSCREENER_TOKENS}/solana/{','.join(mints[i:i + 30])}")
+            pairs = r.json() if r.status_code == 200 else []
+        except (httpx.HTTPError, ValueError):
+            continue
+        pools += [p for p in (pool_from_dexscreener(x) for x in pairs if isinstance(x, dict)) if p]
+    return pools
 
 
 def watch_symbol(symbol: str, chain: str, pool: str) -> str:
@@ -395,7 +468,7 @@ async def vet(client: httpx.AsyncClient, pool: Pool, links: dict) -> dict:
     if cached and time.time() - cached[0] < VERDICT_TTL_S:
         return cached[1]
     token = {"chain": pool.chain, "symbol": pool.symbol, "name": pool.name, "token_address": pool.token_address,
-             "market_cap": pool.market_cap, "liquidity_usd": pool.liquidity_usd}
+             "market_cap": pool.market_cap, "liquidity_usd": pool.liquidity_usd, "exception": pool.exception}
     try:
         verdict = await legit.assess(token, links, client)
     except Exception:
@@ -447,6 +520,8 @@ async def scan_once() -> dict:
             for chain in CHAINS:
                 pools = await _fetch_pools(client, chain)
                 picked, passing = pick_candidates(pools, MAX_VETTED_PER_CHAIN)
+                grown = await _fetch_grown_pools(client) if chain == "solana" else []
+                picked += pick_exceptions(pools + grown, picked)
                 info = {"seen": len({p.token_address for p in pools}), "passing": passing,
                         "legit": 0, "rejected": 0, "waiting": 0, "tested": 0, "too_young": 0}
                 links = await _dex_links(client, chain, picked)
@@ -483,7 +558,7 @@ async def scan_once() -> dict:
                         "age_hours": round(pool.age_hours, 1), "liquidity_usd": pool.liquidity_usd,
                         "market_cap": pool.market_cap, "interval": interval, "bars": len(df),
                         "days": round((df.index[-1] - df.index[0]).total_seconds() / 86400, 1),
-                        "hold_pct": outcome["hold_pct"],
+                        "hold_pct": outcome["hold_pct"], "exception": pool.exception,
                         "website": verdict.get("website"), "socials": verdict.get("socials") or [],
                         "github": verdict.get("github"), "checks": verdict.get("checks") or [],
                         "scan_url": verdict.get("scan_url"), "report": verdict.get("report"),
