@@ -100,3 +100,33 @@
 HTML 503
 	}
 }
+
+# Il sito del token $ENGN su un dominio suo (Lorenzo: "sarebbe ideale
+# utilizzare un sito dedicato non un'estensione dell'attuale"). Mostra solo
+# la pagina /engn e i suoi file statici; tutto il resto, compreso ENTER THE
+# APP, torna al dominio dell'app, dove vive il cookie di accesso.
+getengn.xyz, www.getengn.xyz {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	@www host www.getengn.xyz
+	redir @www https://getengn.xyz{uri} permanent
+
+	handle / {
+		rewrite * /engn
+		reverse_proxy app:8000
+	}
+	handle /static/* {
+		reverse_proxy app:8000
+	}
+	handle {
+		redir https://{$SITE_DOMAIN}{uri}
+	}
+}
