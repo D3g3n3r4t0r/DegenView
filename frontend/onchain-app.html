@@ -153,17 +153,6 @@
       background: linear-gradient(135deg, var(--accent), var(--accent-2));
     }
     & h1 { font-size: 16px; font-weight: 700; color: var(--ink); }
-    & .nav-pills {
-      display: none; align-items: center; gap: 4px;
-      background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 4px;
-      @container (width >= 900px) { display: flex; }
-    }
-    & .nav-pills button {
-      padding: 8px 15px; border: 0; border-radius: 10px; background: none; cursor: pointer;
-      font: inherit; font-size: 13px; font-weight: 600; color: var(--ink-dim);
-      &:hover { color: var(--ink); }
-      &.is-current { background: var(--raised); color: var(--ink); }
-    }
     & .topbar-right { display: flex; align-items: center; gap: 8px; margin-inline-start: auto; justify-self: end; flex-wrap: wrap; }
     & .addr-chip {
       display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-dim);
@@ -1160,10 +1149,6 @@
    dei componenti sopra senza toccarle.
    ============================================================ */
 @layer components {
-  /* Wallet/Strategie/Attivita'/Impostazioni ripetevano le tab sotto il
-     grafico e "⋯ > Limiti": tolti, scelto da Lorenzo. */
-  .topbar .nav-pills { display: none; }
-
   /* --- menu "⋯" ---------------------------------------------------- */
   .more-btn {
     display: grid; place-items: center; inline-size: 38px; block-size: 38px; padding: 0;
@@ -1212,9 +1197,8 @@
   /* ------------------------------------------------------------------
      Telefono. Lorenzo: "rendi l'app da mobile un'esperienza
      SEMPLICISSIMA, persino guidata se serve [...] non voglio tasti".
-     A schermo: marchio + ⋯, saldo, grafico, lo swap a passi, i tuoi
-     token. Tab, rete, filtri del grafico, azioni secondarie: nel menu ⋯,
-     che le preme per conto tuo (data-proxy in main.js).
+     A schermo: marchio + indirizzo, saldo, la vista scelta dalla barra
+     in basso. Rete e filtri del grafico restano nascosti.
      ------------------------------------------------------------------ */
   @container (width < 640px) {
     .topbar {
@@ -1742,6 +1726,128 @@
   @media (prefers-reduced-motion: reduce) { .splash { display: none; } }
 }
 
+/* =====================================================   Tre viste e una barra, come un DEX. Lorenzo: "ci sono tanti
+   menu, tanti tasti che potrebbero essere ridotti". Il "⋯" con
+   tredici voci e' diventato: barra in basso (Radar, Scambia,
+   Portafoglio) + indirizzo in alto (ricevi, invia, limiti, chiave).
+   ============================================================ */
+@layer components {
+  #app-shell[data-view="manual"] :is(#wallet-view, #board),
+  #app-shell[data-view="pilot"] #wallet-view,
+  #app-shell[data-view="wallet"] :is(#pilot, #radar, #board, #market-order-row) { display: none !important; }
+
+  /* In Scambia le monete le mostra lo swap stesso, sopra l'importo. */
+  #app-shell[data-view="manual"] #holdings { display: none !important; }
+  /* Da telefono, come in un DEX, prima lo swap e poi il grafico. */
+  @container (width < 640px) {
+    #app-shell[data-view="manual"] .order-panel { order: 0; }
+  }
+
+  /* Il contenuto non finisce mai sotto la barra. */
+  #app-shell:not([hidden]) { padding-block-end: calc(92px + env(safe-area-inset-bottom)); }
+
+  .dock {
+    position: fixed; z-index: 40; inset-block-end: calc(14px + env(safe-area-inset-bottom)); inset-inline-start: 50%;
+    translate: -50% 0; display: grid; grid-template-columns: repeat(3, 1fr); padding: 5px;
+    inline-size: min(360px, calc(100vw - 32px)); border-radius: 22px;
+    background: color-mix(in oklch, var(--panel) 78%, transparent); border: 1px solid var(--line);
+    backdrop-filter: blur(18px) saturate(1.4); -webkit-backdrop-filter: blur(18px) saturate(1.4);
+    box-shadow: 0 12px 40px rgb(0 0 0 / .45);
+    &[hidden] { display: none; }
+    & button {
+      position: relative; z-index: 1; display: grid; justify-items: center; gap: 3px; padding: 8px 4px 7px;
+      background: none; border: 0; border-radius: 17px; color: var(--ink-faint);
+      font-size: 11px; font-weight: 600; letter-spacing: .01em; transition: color .25s;
+    }
+    & button[aria-current] { color: var(--ink); }
+    & button:not([aria-current]):hover { color: var(--ink-dim); }
+    & svg { inline-size: 21px; block-size: 21px; fill: none; stroke: currentColor; stroke-width: 1.7;
+      stroke-linecap: round; stroke-linejoin: round; }
+    & button[aria-current] svg { stroke: var(--live); }
+    & button:active { scale: .94; }
+  }
+  .dock-thumb {
+    position: absolute; inset-block: 5px; inset-inline-start: 5px; inline-size: calc((100% - 10px) / 3);
+    border-radius: 17px; background: var(--raised); pointer-events: none;
+    transition: translate .42s cubic-bezier(.3, 1.4, .5, 1);
+  }
+  .dock[data-at="1"] .dock-thumb { translate: 100% 0; }
+  .dock[data-at="2"] .dock-thumb { translate: 200% 0; }
+
+  /* Cambio vista: scorre nella direzione della barra. */
+  ::view-transition-old(root), ::view-transition-new(root) { animation-duration: .28s; }
+  #app-shell { view-transition-name: shell; }
+  .dock { view-transition-name: dock; }
+  ::view-transition-old(shell) { animation: shell-out .2s ease-in both; }
+  ::view-transition-new(shell) { animation: shell-in .32s cubic-bezier(.2, .8, .2, 1) both; }
+  @keyframes shell-out { to { opacity: 0; translate: calc(var(--vt-dir, 1) * -18px) 0; } }
+  @keyframes shell-in { from { opacity: 0; translate: calc(var(--vt-dir, 1) * 24px) 0; } }
+  html:has(#app-shell[data-dir="back"]) { --vt-dir: -1; }
+
+  /* L'indirizzo in alto e' la porta del wallet, anche da telefono
+     (solo l'avatar, niente testo). */
+  .topbar .addr-chip[hidden] { display: none; }
+  @container (width < 640px) {
+    .topbar .addr-chip { display: flex !important; padding: 5px; border-radius: 999px;
+      & #topbar-address-text { display: none; } }
+  }
+
+  /* --- cosa hai: una riga che scorre di lato ----------------------- */
+  .holdings {
+    display: flex; gap: 6px; margin-block-start: 12px; overflow-x: auto; scrollbar-width: none;
+    mask-image: linear-gradient(90deg, #000 88%, transparent); padding-inline-end: 24px;
+    &::-webkit-scrollbar { display: none; }
+    &[hidden] { display: none; }
+  }
+  .holdings .wallet-chip { animation: hold-in .35s cubic-bezier(.2, .8, .2, 1) both; }
+  .holdings .wallet-chip:nth-child(2) { animation-delay: 40ms; }
+  .holdings .wallet-chip:nth-child(n+3) { animation-delay: 80ms; }
+  .holdings .wallet-chip:active { scale: .96; }
+  @keyframes hold-in { from { opacity: 0; translate: 0 4px; } }
+  .holdings .swap-wallet-empty { margin: 0; padding-block: 6px; }
+
+  /* --- Portafoglio -------------------------------------------------- */
+  .wallet-view { display: grid; gap: 14px; }
+  .wallet-actions {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+    & button { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 13px;
+      border: 0; border-radius: 16px; background: var(--raised); color: var(--ink); font-size: 14px; font-weight: 600; }
+    & button span { color: var(--live); font-size: 16px; }
+    & button:active { scale: .97; }
+  }
+  .wallet-view .bottom-panel { background: var(--panel); border-radius: var(--radius); padding: 4px 18px 16px; }
+  .wallet-view .bottom-tabs { margin-block-start: 10px; overflow-x: auto; scrollbar-width: none; }
+  .wallet-view .bottom-panel .bottom-panel-body { max-block-size: none; overflow: visible; }
+  /* Da telefono le tab si vedono tutte: sono il contenuto della vista. */
+  @container (width < 640px) {
+    #wallet-view #bottom-tabs {
+      gap: 18px; border-block-end: 1px solid var(--line); margin-block-end: 8px;
+      & .mo-side-tab:not(.mo-tab-active) { display: block; }
+      & .mo-side-tab { pointer-events: auto; padding: 0 0 10px; font-size: 13.5px; }
+      & .mo-tab-active { font-size: 13.5px; font-weight: 600; border-block-end: 2px solid var(--live); padding: 0 0 10px; }
+    }
+    #order-tabs {
+      background: var(--raised); padding: 4px; border-radius: 14px; margin-block-end: 14px; gap: 4px;
+      & .mo-side-tab:not(.mo-tab-active) { display: block; }
+      & .mo-side-tab { pointer-events: auto; padding: 8px; font-size: 13px; text-align: center; flex: 1; border-radius: 11px; }
+      & .mo-tab-active { font-size: 13px; font-weight: 600; text-align: center; flex: 1; }
+    }
+  }
+
+  /* Swap / Limite / Sniper: pillola scura su binario, testo sempre
+     leggibile (prima era bianco su bianco). */
+  #order-tabs .mo-side-tab::before { display: block !important; background: var(--panel) !important; box-shadow: 0 1px 0 rgb(255 255 255 / .04) inset; }
+  #order-tabs .mo-side-tab { color: var(--ink-faint); }
+  #order-tabs .mo-tab-active { color: var(--ink) !important; background: none !important; }
+
+  /* Il menu del wallet: quattro tessere e la chiave. */
+  @media (width < 672px) {
+    .more-sheet .menu-list { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .dock-thumb, .holdings .wallet-chip { transition: none; animation: none; }
+  }
+=======
 /* --- classifica ------------------------------------------------------- */
 @layer components {
   .board {
@@ -1851,23 +1957,16 @@
            history.back() — questa pagina si apre anche da zero (QR, link
            salvato) e li' "indietro" non avrebbe dove andare. -->
       <a class="brand" href="/" title="Torna al sito"><span class="brand-dot" aria-hidden="true"></span><h1>Liquidity Engine · Wallet</h1></a>
-      <!-- Scorciatoie dentro la stessa pagina: Strategie e Attivita' aprono
-           la tab omonima del pannello in basso, Impostazioni il foglio dei
-           limiti. Nessuna pagina separata esiste ancora. -->
-      <nav class="nav-pills" id="nav-pills" aria-label="Sezioni">
-        <button type="button" class="is-current" data-nav="wallet" aria-current="true">Wallet</button><button type="button" data-nav="strategies">Strategie</button><button type="button" data-nav="history">Attività</button><button type="button" data-nav="settings">Impostazioni</button>
-      </nav>
       <div class="topbar-right">
         <div class="switcher" id="chain-switch" data-selected="solana" role="tablist" aria-label="Chain">
           <span class="thumb" aria-hidden="true"></span>
           <button type="button" role="tab" aria-selected="true" data-chain="solana"><span class="chain-ic" aria-hidden="true">◎</span> Solana</button>
           <button type="button" role="tab" aria-selected="false" data-chain="robinhood"><span class="chain-ic" aria-hidden="true">◆</span> Robinhood</button>
         </div>
-        <button type="button" class="addr-chip" id="topbar-address" title="Copia l'indirizzo">
+        <!-- L'indirizzo e' la porta del wallet: ricevi, invia, limiti,
+             chiave. Prima c'erano anche il "⋯" e tredici voci. -->
+        <button type="button" class="addr-chip" id="more-btn" aria-haspopup="dialog" aria-controls="more" aria-label="Il tuo wallet" hidden>
           <span class="avatar" aria-hidden="true"></span><span id="topbar-address-text">—</span>
-        </button>
-        <button type="button" class="more-btn" id="more-btn" aria-haspopup="dialog" aria-controls="more" aria-label="Altre azioni" hidden>
-          <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="4" cy="10" r="1.7"/><circle cx="10" cy="10" r="1.7"/><circle cx="16" cy="10" r="1.7"/></svg>
         </button>
       </div>
     </header>
@@ -1896,6 +1995,10 @@
             <button type="button" class="addr" id="address" title="Copia l'indirizzo"></button>
             <span class="live"><span class="dot" id="live-dot"></span><span id="fresh"></span></span>
           </div>
+          <!-- Cosa hai, a colpo d'occhio: Lorenzo, "non e' chiaro che moneta
+               io abbia nel portafoglio". Una riga, mai a capo, per non
+               spingere giu' il radar. Tocco = apre lo scambio. -->
+          <div class="holdings" id="holdings" hidden></div>
           <div class="spark" id="spark" hidden>
             <svg viewBox="0 0 300 44" aria-hidden="true">
               <defs>
@@ -1942,14 +2045,14 @@
               <h4>Appena usciti</h4>
               <div class="radar-pulse" data-radar-pulse hidden>
                 <span class="rp-scan" aria-hidden="true"></span>
-                <p><span data-pulse-now>In ascolto sui nuovi pool</span></p>
-                <p class="rp-stats"><b data-pulse-arrivals>0</b> pool nuovi in 10 min · <span data-pulse-last></span> · <b data-pulse-rejected>0</b> scartati</p>
+                <p><span data-pulse-now>In ascolto</span></p>
+                <p class="rp-stats"><b data-pulse-arrivals>0</b> nuovi in 10 min<span data-pulse-last></span> · <b data-pulse-rejected>0</b> scartati</p>
               </div>
-              <p class="radar-empty" data-radar-new-empty>Nessun token nuovo ha ancora superato il filtro: cap fino a $2M (sopra i $100k solo con pagella eccellente), sito, social, GitHub e controllo anti-rug.</p>
+              <p class="radar-empty" data-radar-new-empty>Nessuno ha passato il filtro</p>
               <ul></ul>
               <button type="button" class="rj-more" data-listings-more hidden></button>
             </div>
-            <h4 class="radar-sub">Proposte · fino a 3 settimane, oltre solo con GitHub eccezionale</h4>
+            <h4 class="radar-sub">Proposte</h4>
             <ul data-radar-list></ul>
             <p class="radar-foot" data-radar-foot></p>
           </div>
@@ -2008,15 +2111,6 @@
       <div class="market-order-row" id="market-order-row" hidden>
         <div class="market-card">
           <section class="market-panel" id="market-panel"></section>
-          <section class="bottom-panel" id="bottom-panel" hidden>
-            <div class="bottom-tabs" id="bottom-tabs" role="tablist">
-              <button type="button" class="mo-side-tab mo-tab-active" data-bottom-tab="positions" role="tab" aria-selected="true">Posizioni</button>
-              <button type="button" class="mo-side-tab" data-bottom-tab="orders" role="tab" aria-selected="false">Ordini aperti</button>
-              <button type="button" class="mo-side-tab" data-bottom-tab="history" role="tab" aria-selected="false">Storico</button>
-              <button type="button" class="mo-side-tab" data-bottom-tab="strategies" role="tab" aria-selected="false">Strategie</button>
-            </div>
-            <div class="bottom-panel-body" id="bottom-panel-body"></div>
-          </section>
         </div>
 
         <section class="order-panel">
@@ -2037,12 +2131,39 @@
         </section>
       </div>
 
+      <!-- Portafoglio: la terza vista della barra in basso. Saldi,
+           ordini, storico e strategie in un posto solo, con ricevi e
+           invia a portata di pollice. -->
+      <section class="wallet-view" id="wallet-view">
+        <div class="wallet-actions">
+          <button type="button" data-sheet="receive"><span aria-hidden="true">↓</span>Ricevi</button>
+          <button type="button" data-sheet="send"><span aria-hidden="true">↑</span>Invia</button>
+        </div>
+      <section class="bottom-panel" id="bottom-panel" hidden>
+        <div class="bottom-tabs" id="bottom-tabs" role="tablist">
+          <button type="button" class="mo-side-tab mo-tab-active" data-bottom-tab="positions" role="tab" aria-selected="true">Saldi</button>
+          <button type="button" class="mo-side-tab" data-bottom-tab="orders" role="tab" aria-selected="false">Ordini aperti</button>
+          <button type="button" class="mo-side-tab" data-bottom-tab="history" role="tab" aria-selected="false">Storico</button>
+          <button type="button" class="mo-side-tab" data-bottom-tab="strategies" role="tab" aria-selected="false">Strategie</button>
+        </div>
+        <div class="bottom-panel-body" id="bottom-panel-body"></div>
+      </section>
+      </section>
+
       <section class="empty" id="onchain-empty-state" hidden>
         Nessun wallet <span data-chain-name></span> ancora.
         <button type="button" class="btn-primary" data-create>Crea wallet</button>
       </section>
     </div>
   </div>
+  <!-- Tre posti, come un DEX: cosa succede, scambia, cosa ho. Sostituisce
+       il menu "⋯" che passava da una vista all'altra. -->
+  <nav class="dock" id="dock" aria-label="Sezioni" hidden>
+    <span class="dock-thumb" aria-hidden="true"></span>
+    <button type="button" data-go="pilot" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4"/><path d="M12 12 18 6"/></svg><span>Radar</span></button>
+    <button type="button" data-go="manual"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v15M3.5 15.5 7 19l3.5-3.5M17 20V5m-3.5 3.5L17 5l3.5 3.5"/></svg><span>Scambia</span></button>
+    <button type="button" data-go="wallet"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="6" width="17" height="13" rx="3"/><path d="M3.5 10h17M16 14.5h1.5"/></svg><span>Portafoglio</span></button>
+  </nav>
   <div class="toast" id="toast" role="status" hidden>
     <span class="toast-mark" aria-hidden="true">✓</span>
     <span><span class="toast-title"></span><span class="toast-detail"></span></span>
@@ -2063,17 +2184,8 @@
   <dialog class="sheet more-sheet" id="more" aria-label="Altre azioni">
     <div class="grip" aria-hidden="true"></div>
     <div class="menu-list" id="actions" hidden>
-      <button type="button" class="menu-item" data-view-switch="pilot"><span class="menu-ic" aria-hidden="true">◉</span><span><b>Pilota</b><small>Cosa fa da solo, token seguiti</small></span></button>
-      <button type="button" class="menu-item" data-view-switch="manual"><span class="menu-ic" aria-hidden="true">↗</span><span><b>Grafico e swap</b><small>Compra e vendi a mano</small></span></button>
-      <button type="button" class="menu-item menu-mobile" data-proxy='[data-order-tab="swap"]'><span class="menu-ic" aria-hidden="true">⇅</span><span><b>Scambia</b></span></button>
-      <button type="button" class="menu-item menu-mobile" data-proxy='[data-order-tab="limit"]'><span class="menu-ic" aria-hidden="true">⇥</span><span><b>Ordine limite</b></span></button>
-      <button type="button" class="menu-item menu-mobile" data-proxy='[data-order-tab="sniper"]'><span class="menu-ic" aria-hidden="true">◎</span><span><b>Sniper</b></span></button>
       <button type="button" class="menu-item" data-sheet="receive"><span class="menu-ic" aria-hidden="true">↓</span><span><b>Ricevi</b><small>Indirizzo e QR del wallet</small></span></button>
       <button type="button" class="menu-item" data-sheet="send"><span class="menu-ic" aria-hidden="true">↑</span><span><b>Invia</b><small>Manda token a un altro indirizzo</small></span></button>
-      <button type="button" class="menu-item menu-mobile" data-proxy='[data-bottom-tab="positions"]'><span class="menu-ic" aria-hidden="true">▤</span><span><b>Posizioni</b></span></button>
-      <button type="button" class="menu-item menu-mobile" data-proxy='[data-bottom-tab="history"]'><span class="menu-ic" aria-hidden="true">↺</span><span><b>Storico</b></span></button>
-      <button type="button" class="menu-item menu-mobile" data-proxy='[data-bottom-tab="orders"]'><span class="menu-ic" aria-hidden="true">☰</span><span><b>Ordini aperti</b></span></button>
-      <button type="button" class="menu-item menu-mobile" data-proxy='[data-bottom-tab="strategies"]'><span class="menu-ic" aria-hidden="true">✦</span><span><b>Strategie</b></span></button>
       <button type="button" class="menu-item" data-sheet="risk"><span class="menu-ic" aria-hidden="true">◧</span><span><b>Limiti e sicurezza</b><small>Tetti di spesa, circuit breaker</small></span></button>
       <button type="button" class="menu-item" data-sheet="simulate"><span class="menu-ic" aria-hidden="true">▶</span><span><b>Simula</b><small>Prova un ordine senza firmare</small></span></button>
     </div>
