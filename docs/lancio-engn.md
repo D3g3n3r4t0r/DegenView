@@ -29,9 +29,9 @@ nessuna tassa. Circa 79,3% si vende sulla curva; alla laurea circa 20,7% va
 in liquidita' su PumpSwap con LP bruciato. Nessuna prevendita, nessuna quota
 al team.
 
-- **Team:** compra al massimo il 5% dalla curva al lancio, allo stesso prezzo
-  di tutti, e lo blocca 12 mesi in uno stream pubblico (Streamflow). Sotto il
-  15% del creatore che il nostro filtro `depth.py` scarterebbe.
+- **Team: 0%.** Lorenzo: "per la liquidita' come facciamo? Io non voglio
+  mettere soldi". Su pump.fun non serve: la liquidita' la fanno i compratori
+  sulla curva e alla laurea passa da sola su PumpSwap. Nessun dev buy.
 - **Fondi di sviluppo:** le creator fee di pump.fun.
 - **Utilita' (fase 2):** livelli per saldo del wallet collegato — Scout
   gratis (radar con 15 min di ritardo), Sniper 250k (tempo reale, classifica
@@ -60,12 +60,10 @@ Description:
 ## Sequenza di lancio (solo col via di Lorenzo)
 
 1. Creare X e Telegram del progetto, metterli nel footer di `/engn`.
-2. Wallet di deploy nuovo, con SOL per la creazione e il dev buy (<= 5%).
-3. Creare il token su pump.fun con il kit sopra, dev buy nella stessa
-   transazione.
-4. Subito: stream di lock 12 mesi dei token del team, link pubblico.
-5. Pubblicare l'indirizzo su `/engn` (riquadro "CA") e sui social.
-6. Dopo la laurea: profilo DexScreener (logo, banner, sito, social),
+2. Wallet di deploy nuovo, con pochi centesimi di SOL per la creazione.
+3. Creare il token su pump.fun con il kit sopra, senza dev buy.
+4. Pubblicare l'indirizzo su `/engn` (riquadro "CA") e sui social.
+5. Dopo la laurea: profilo DexScreener (logo, banner, sito, social),
    RugCheck, domanda a CoinGecko.
 
 ## Rischi da sapere
