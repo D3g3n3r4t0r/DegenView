@@ -12,6 +12,31 @@ lavori pluri-sessione, decisioni prese, stato di piani approvati.
 
 ---
 
+## Wallet come un DEX: barra in basso, niente "⋯" — `seed-0102`, PR #91
+
+Lorenzo: "voglio che l'esperienza su questo sito sia paragonabile a un DEX
+[...] ci sono tanti menu, tanti tasti che potrebbero essere ridotti".
+
+- `#app-shell[data-view]` ha tre valori: `pilot` (Radar), `manual`
+  (Scambia), `wallet` (Portafoglio). Li cambia `#dock`, la barra fissa in
+  basso (`setView()` in `main.js`, con view transition direzionale).
+- Il menu `#more` si apre dall'indirizzo in alto (`#more-btn` e' ora il
+  chip dell'indirizzo): Ricevi, Invia, Limiti, Simula, chiave. Voci proxy,
+  pillole `nav-pills` e cambio vista dal menu: tolti.
+- `#bottom-panel` (Saldi/Ordini/Storico/Strategie) sta dentro
+  `#wallet-view`, non piu' sotto il grafico.
+- `#holdings` sotto il saldo: `holdings.js` legge `walletHoldings()` da
+  `swap.js` (stessi dati della riga sopra lo swap, PR #89, stessa classe
+  `.wallet-chip`). Tocco = Scambia + evento `onchain:swap-from`, che
+  `swap.js` ascolta e usa come moneta in vendita (`pendingFrom` se lo swap
+  non e' ancora montato).
+- Radar e flusso swap non toccati (altri thread). `index.html` ha una copia
+  sua del markup senza dock: il cablaggio resta null-safe.
+
+Resta: il saldo grande in cima e' solo il nativo, non il totale del wallet.
+
+---
+
 ## Link ospite in sola lettura — `seed-0096`, branch `claude/link-ospite-asb5wj`
 
 Lorenzo (23/09/2026): "vorrei pubblicare un link per condividere questo sito
