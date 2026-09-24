@@ -64,7 +64,13 @@ from app.analysis.optimize import (
 )
 from app.analysis.pipeline import run_pipeline
 from app.analysis.smc_engine import compute_dealing_range, compute_levels, compute_swings
-from app.analysis.strategies import AVAILABLE_STRATEGIES, DEFAULT_STRATEGY, build_strategy_state
+from app.analysis.strategies import (
+    AVAILABLE_STRATEGIES,
+    DEFAULT_STRATEGY,
+    STRATEGY_REGISTRY,
+    build_strategy_state,
+    spot_only,
+)
 from app.analysis.summary import build_summary, determine_bias
 from app.cache import get_or_fetch
 from app.config import settings
@@ -566,7 +572,11 @@ async def _watchlist_alert_loop() -> None:
                     else:
                         strat_df = df
                     params = entry.strategy_params.get(strategy_name) or None
-                    strategy = build_strategy_state(strategy_name, strat_df, params=params)
+                    # Sul DEX si compra e si vende il token, niente short: un
+                    # segnale short e' la vendita di quello che si ha.
+                    spot_signals = (spot_only(STRATEGY_REGISTRY[strategy_name](strat_df, params))
+                                    if entry.asset_type == "dex" and strategy_name in STRATEGY_REGISTRY else None)
+                    strategy = build_strategy_state(strategy_name, strat_df, params=params, signals=spot_signals)
                     frequency = entry.alert_frequency.get(strategy_name, "every")
                     fresh = _dispatch_telegram_alerts(
                         owner.telegram_chat_id,

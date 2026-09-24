@@ -95,11 +95,36 @@ def _sig(t, kind):
     return StrategySignal(time=t, type=kind, price=1.0, label="")
 
 
-def test_chart_draws_long_side_only():
-    events = [_sig(1, "entry_short"), _sig(2, "flip_to_long"), _sig(3, "entry_long"),
-              _sig(4, "flip_to_short"), _sig(5, "exit_short"), _sig(6, "entry_long"), _sig(7, "exit_long")]
+def test_chart_draws_buys_and_sells_only():
+    events = [_sig(1, "entry_short"), _sig(2, "entry_long"), _sig(3, "entry_long"),
+              _sig(4, "exit_long"), _sig(5, "exit_short"), _sig(6, "entry_long"), _sig(7, "exit_long")]
     assert [(e["time"], e["kind"]) for e in radar.long_events(events)] == [
         (2, "in"), (4, "out"), (6, "in"), (7, "out")]
+
+
+def test_marker_sits_on_the_candle_where_the_buy_fills():
+    """Lorenzo: "non appare nel grafico gli ingressi in modo preciso". Il
+    backtest compra all'apertura della candela dopo il segnale: la freccia va li'."""
+    idx = pd.date_range("2026-09-24", periods=4, freq="1min", tz="UTC")
+    df = pd.DataFrame({"open": [1.0, 2.0, 3.0, 4.0], "high": 5.0, "low": 0.5, "close": [1.5, 2.5, 3.5, 4.5]}, index=idx)
+    t = [int(ts.timestamp()) for ts in idx]
+    [buy, sell] = radar.long_events([_sig(t[0], "entry_long"), _sig(t[2], "exit_long")], df)
+    assert (buy["time"], buy["price"], buy["signal_time"]) == (t[1], 2.0, t[0])
+    assert (sell["time"], sell["price"]) == (t[3], 4.0)
+
+
+def test_spot_backtest_never_shorts_and_chart_matches_its_trades():
+    df = _series()
+    cfg = {"strategy_name": "Lorenzo (trend-follower)", "params": {}, "label": "Lorenzo", "source": "base"}
+    result, events, position = radar.run_spot(df, cfg)
+    assert result.trades and all(tr.direction == "long" for tr in result.trades)
+    assert {e.type for e in events} <= {"entry_long", "exit_long"}
+    buys = [e for e in radar.long_events(events, df) if e["kind"] == "in"]
+    t_next = {int(a.timestamp()): int(b.timestamp()) for a, b in zip(df.index, df.index[1:])}
+    closed = [t_next[tr.entry_time] for tr in result.trades]
+    # l'ultimo acquisto ancora aperto e' sul grafico ma non e' un trade chiuso
+    assert [b["time"] for b in buys] == closed + ([buys[-1]["time"]] if len(buys) > len(closed) else [])
+    assert len(buys) - len(closed) == (1 if position > 0 else 0)
 
 
 def _series(n=600):
