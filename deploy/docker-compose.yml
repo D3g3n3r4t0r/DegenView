@@ -51,6 +51,8 @@ services:
       - "443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Il sito statico di $EGGD: lo carica il deploy del repo EGGD.
+      - /opt/eggd/site:/srv/eggd:ro
       - caddy-data:/data      # certificati: vanno persi solo se cancelli questo
       - caddy-config:/config
     depends_on:
