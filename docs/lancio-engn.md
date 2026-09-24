@@ -1,6 +1,6 @@
 # Lancio $ENGN — piano
 
-Stato: **bozza, niente e' stato lanciato o pubblicato fuori dal sito.** Ogni
+Stato: **decisioni prese, niente e' stato lanciato o pubblicato fuori dal sito.** Ogni
 passo irreversibile (creazione del token, liquidita', annunci) aspetta il si'
 esplicito di Lorenzo.
 
@@ -42,16 +42,41 @@ $ENGN (tempo reale, classifica completa, meta' commissione), Engine 1M $ENGN
 (strategie automatiche, nessuna commissione). Soglie da rivedere col prezzo
 di lancio.
 
-## Cose da decidere con Lorenzo
+## Decisioni prese (Lorenzo: "decidi tutto tu, voglio fare un progetto legit")
 
-1. **Pagina alla radice?** Oggi e' su `/engn`; `/` resta l'app. Proposta:
-   dominio separato o `/` solo per chi non ha fatto login.
-2. **Modalita' di lancio.** Consiglio: pool Raydium CPMM o Meteora con LP
-   bruciato, non pump.fun — la nostra stessa regola dice "niente memecoin" e
-   pump.fun lo fa sembrare tale.
-3. **Liquidita' iniziale** in SOL: decide quanto vale il token al minuto zero.
-   Esempio: 45% dell'offerta + 50 SOL -> cap iniziale ~111 SOL.
-4. **Commissione di swap nell'app** (serve a dare senso ai livelli).
+1. **Pagina:** resta su `/engn`. La home `/` non cambia (chi usa l'app
+   classica non perde l'accesso). Al lancio, un dominio dedicato punta a
+   `/engn`.
+2. **Modalita' di lancio:** pool Raydium CPMM SOL/ENGN con LP bruciato, apertura
+   a orario annunciato. Niente pump.fun, niente prevendita, niente round privati.
+3. **Liquidita' iniziale:** 450 000 000 ENGN + 40 SOL. Nessuno riceve token
+   prima del pool, quindi nessuno compra "sotto" il prezzo pubblico.
+4. **Nessuna commissione di swap nell'app al lancio.** I livelli danno
+   funzioni, non sconti: il token non promette flussi di denaro.
+5. **MiCA: si va con il white paper, non con le esenzioni.** Bozza in
+   `docs/whitepaper-engn.md`. Il token non si offre prima della notifica a
+   CONSOB e della revisione di un legale.
+6. **Onesta' in pagina:** tolto tutto cio' che non esiste ancora (sorgente
+   X, social, GitHub pubblico, sconti di commissione); detto chiaro che il
+   pilota non ha ancora un edge dimostrato e che le chiavi sono cifrate sul
+   server ed esportabili.
+
+## Cosa blocca il lancio (serve Lorenzo, non si puo' fare da qui)
+
+- **Una societa'.** Per MiCA (art. 4) chi offre un cripto-asset al pubblico
+  deve essere una persona giuridica: serve una SRL (o altra entita') come
+  offerente, con LEI.
+- **Legale** che rivede e firma il white paper, poi notifica a CONSOB
+  (almeno 20 giorni lavorativi prima dell'offerta).
+- **40 SOL** e un wallet di deploy nuovo.
+- **Account social** a nome del progetto (X, Telegram).
+- Scelta se metterci la faccia: un team riconoscibile e' il segnale di
+  legittimita' piu' forte, ma e' una scelta personale.
+
+Sequenza: societa' -> white paper firmato e notificato -> social e dominio
+-> creazione del token (mint e freeze revocati, metadati immutabili) ->
+stream di vesting -> pool con LP bruciato -> indirizzo pubblicato su `/engn`
+-> profilo DexScreener, RugCheck, CoinGecko.
 
 ## Cose che non hai chiesto ma servono
 

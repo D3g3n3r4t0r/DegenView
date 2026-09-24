@@ -17,11 +17,11 @@ from app.models import StrategySignal
 from app.trading.onchain import radar
 
 
-def _pool(symbol="NEW", *, liq=20_000, mcap=80_000, age_days=5, token="Tok", pair="Pair"):
+def _pool(symbol="NEW", *, liq=20_000, mcap=80_000, age_days=5, token="Tok", pair="Pair", site=None):
     return radar.Pool(
         chain="solana", symbol=symbol, name=f"{symbol} / SOL", token_address=token, pair_address=pair,
         dex="raydium", liquidity_usd=liq, market_cap=mcap,
-        created_ms=int((time.time() - age_days * 86400) * 1000),
+        created_ms=int((time.time() - age_days * 86400) * 1000), site=site,
     )
 
 
@@ -258,24 +258,46 @@ def test_newborn_pool_gets_candles_from_its_trades():
 
 def test_exceptions_take_grown_projects_the_normal_filter_skips():
     """DREGG: 88 giorni, $2.5M di cap, liquidita' 8% della cap."""
-    dregg = _pool("DREGG", liq=203_000, mcap=2_520_000, age_days=88)
-    normal = _pool("OK")
-    thin = _pool("THIN", liq=20_000, mcap=3_000_000, age_days=60)
-    ancient = _pool("OLD", liq=500_000, mcap=5_000_000, age_days=800)
-    huge = _pool("HUGE", liq=5_000_000, mcap=90_000_000, age_days=60)
-    taken = _pool("TAKEN", liq=300_000, mcap=3_000_000, age_days=60)
-    picked = radar.pick_exceptions([dregg, normal, thin, ancient, huge, taken], [_pool("TAKEN")])
+    site = "https://www.dregg.net/"
+    dregg = _pool("DREGG", liq=203_000, mcap=2_520_000, age_days=88, site=site)
+    normal = _pool("OK", site=site)
+    thin = _pool("THIN", liq=20_000, mcap=3_000_000, age_days=60, site=site)
+    ancient = _pool("OLD", liq=500_000, mcap=5_000_000, age_days=800, site=site)
+    huge = _pool("HUGE", liq=5_000_000, mcap=90_000_000, age_days=60, site=site)
+    taken = _pool("TAKEN", liq=300_000, mcap=3_000_000, age_days=60, site=site)
+    nosite = _pool("NOSITE", liq=900_000, mcap=3_000_000, age_days=60)
+    meme = _pool("PEPEDOGE", liq=900_000, mcap=3_000_000, age_days=60, site=site)
+    picked = radar.pick_exceptions([dregg, normal, thin, ancient, huge, taken, nosite, meme], [_pool("TAKEN")])
     assert [p.symbol for p in picked] == ["DREGG"] and picked[0].exception is True
     assert radar.pick_candidates([dregg])[0] == []
+
+
+def test_exception_queue_rotates_so_every_candidate_gets_its_turn(monkeypatch):
+    now = 1_800_000_000
+    cands = [_pool(f"T{i}", token=f"t{i}") for i in range(5)]
+    monkeypatch.setattr(radar, "_verdicts", {
+        "solana:t0": (now - 60, {"status": "fail"}),            # scartato di recente: salta
+        "solana:t1": (now - radar.VERDICT_TTL_S - 1, {"status": "fail"}),  # scaduto: in fondo
+        "solana:t4": (now - radar.VERDICT_TTL_S - 1, {"status": "ok"}),    # gia' passato: in testa
+    })
+    assert [p.token_address for p in radar.exception_queue(cands, now, limit=3)] == ["t4", "t2", "t3"]
+
+
+def test_exceptions_come_first_among_proposals():
+    rows = [{"return_pct": 90}, {"exception": True, "return_pct": -5, "report": {"score": 89}},
+            {"return_pct": 10}, {"exception": True, "return_pct": 50, "report": {"score": 86}}]
+    ranked = sorted(rows, key=radar._proposal_rank)
+    assert [r["return_pct"] for r in ranked] == [-5, 50, 90, 10]
 
 
 def test_pool_from_dexscreener():
     p = radar.pool_from_dexscreener({
         "chainId": "solana", "dexId": "pumpswap", "pairAddress": "Pair1",
         "baseToken": {"address": "Mint1", "name": "dregg", "symbol": "DREGG"},
+        "info": {"websites": [{"url": "https://www.dregg.net/"}]},
         "liquidity": {"usd": 203_000}, "marketCap": 2_520_000, "pairCreatedAt": 1_750_000_000_000})
     assert (p.symbol, p.token_address, p.pair_address, p.market_cap) == ("DREGG", "Mint1", "Pair1", 2_520_000)
-    assert p.pair_url == "https://dexscreener.com/solana/Pair1"
+    assert p.pair_url == "https://dexscreener.com/solana/Pair1" and p.site == "https://www.dregg.net/"
 
 
 def test_grown_pools_come_from_pumpfun_by_market_cap():
@@ -302,3 +324,23 @@ def test_grown_pools_come_from_pumpfun_by_market_cap():
             return await radar._fetch_grown_pools(c)
     pools = asyncio.run(go())
     assert [p.symbol for p in pools] == ["DREGG"]
+
+
+def test_attention_pools_are_the_tokens_people_talk_about():
+    import httpx
+
+    def handler(req):
+        url = str(req.url)
+        if "token-profiles" in url or "token-boosts" in url:
+            return httpx.Response(200, json=[{"chainId": "solana", "tokenAddress": "Mint1"},
+                                             {"chainId": "bsc", "tokenAddress": "0xabc"}])
+        if "tokens/v1/solana/Mint1" in url:
+            return httpx.Response(200, json=[{"chainId": "solana", "pairAddress": "Pair1",
+                                              "baseToken": {"address": "Mint1", "symbol": "TECH"},
+                                              "liquidity": {"usd": 50_000}, "marketCap": 400_000}])
+        return httpx.Response(404)
+
+    async def go():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as c:
+            return await radar._fetch_attention_pools(c, "solana")
+    assert [p.symbol for p in asyncio.run(go())] == ["TECH"]

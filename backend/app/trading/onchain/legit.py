@@ -63,9 +63,11 @@ GEM_MIN_CHECK = 70
 GEM_TOKENOMICS = ("security", "contract")
 # Le eccezioni: oltre 3 settimane di vita o oltre $2M di cap un token entra
 # solo se e' "tecnicamente incredibile su GitHub" (Lorenzo, su DREGG).
-# Lavoro fitto e recente sugli ultimi 100 commit, oltre alla pagella da gemma.
-EXC_MIN_COMMITS = 60
-EXC_MIN_ACTIVE_DAYS = 20
+# Metro: DREGG (emberian/dregg), 10 203 commit, ultimi 100 su 11 giorni in
+# sei settimane, quasi tutto di un solo autore. Conta la profondita' del
+# lavoro (commit totali) e che continui, non quante persone lo firmano.
+EXC_MIN_TOTAL_COMMITS = 1_000
+EXC_MIN_ACTIVE_DAYS = 8         # giorni diversi negli ultimi 100 commit
 EXC_MAX_IDLE_DAYS = 14
 EXC_MIN_GITHUB_SCORE = 75
 RUGCHECK_PAGE = "https://rugcheck.xyz/tokens/{mint}"
@@ -401,7 +403,23 @@ async def github_commits(full_name: str, client: httpx.AsyncClient) -> list[dict
     return r.json() if r.status_code == 200 else None
 
 
-def judge_github(repo: dict | None, commits: list[dict] | None) -> dict:
+async def github_commit_total(full_name: str, client: httpx.AsyncClient) -> int | None:
+    """Commit totali del ramo principale: con una pagina da 1, il numero
+    dell'ultima pagina nel Link e' il conteggio."""
+    r = await client.get(f"{GITHUB_API}/repos/{full_name}/commits", params={"per_page": 1},
+                         headers=_gh_headers(), timeout=8.0)
+    if r.status_code != 200:
+        return None
+    last = r.links.get("last", {}).get("url")
+    if not last:
+        return len(r.json() or [])
+    try:
+        return int(httpx.URL(last).params.get("page") or 0) or None
+    except ValueError:
+        return None
+
+
+def judge_github(repo: dict | None, commits: list[dict] | None, total: int | None = None) -> dict:
     label = "GitHub"
     if repo is None or (repo and commits is None):
         return _check("github", label, None, "GitHub non risponde")
@@ -422,13 +440,15 @@ def judge_github(repo: dict | None, commits: list[dict] | None) -> dict:
         "language": repo.get("language"), "stars": stars, "forks": repo.get("forks_count") or 0,
         "watchers": repo.get("subscribers_count") or repo.get("watchers_count") or 0,
         "open_issues": repo.get("open_issues_count") or 0, "commits": more, "active_days": len(days),
-        "authors": len(authors), "created_at": repo.get("created_at"), "pushed_at": repo.get("pushed_at"),
+        "authors": len(authors), "total_commits": total, "created_at": repo.get("created_at"), "pushed_at": repo.get("pushed_at"),
         "license": ((repo.get("license") or {}).get("spdx_id")) or None,
     }
     # Quanto lavoro c'e' dietro: commit (fino a 30 visibili), giorni diversi,
-    # piu' di un autore, qualcuno che lo segue.
+    # piu' di un autore o una storia lunga (migliaia di commit valgono un
+    # team), qualcuno che lo segue.
+    team = max(min(len(authors), 4) / 4, min(math.log10((total or 0) + 1) / 4, 1))
     score = (min(len(commits), 30) / 30 * 35 + min(len(days), 14) / 14 * 30
-             + min(len(authors), 4) / 4 * 15 + min(math.log10(stars + 1) / 2, 1) * 20)
+             + team * 15 + min(math.log10(stars + 1) / 2, 1) * 20)
     return _check("github", label, True, f"{name} · {more} commit su {len(days)} giorni · ★{stars}", score,
                   facts=facts)
 
@@ -442,9 +462,10 @@ async def check_github(urls: list[str], client: httpx.AsyncClient) -> tuple[dict
         owner, name = next(((o, r) for o, r in targets if r), targets[0])
         repo = await github_repo(owner, name, client)
         commits = await github_commits(repo["full_name"], client) if repo else None
+        total = await github_commit_total(repo["full_name"], client) if commits else None
     except (httpx.HTTPError, ValueError, KeyError, TypeError):
         return _check("github", "GitHub", None, "GitHub non risponde"), None
-    return judge_github(repo, commits), (repo or {}).get("html_url")
+    return judge_github(repo, commits, total), (repo or {}).get("html_url")
 
 
 # --------------------------------------------------------------------- IA
@@ -596,8 +617,14 @@ async def assess(token: dict, links: dict, client: httpx.AsyncClient) -> dict:
     out["checks"].append(gh)
     if gh["ok"] is False:
         return done("fail", f"GitHub: {gh['detail']}")
+    if token.get("exception") and not out["github"] and gh["detail"] == "nessun GitHub":
+        return done("fail", "fuori da eta' o cap, entra solo con un GitHub eccezionale: nessun GitHub")
     if gh["ok"] is None:
         return done("wait", gh["detail"])
+    if token.get("exception") and (short := github_shortfall(gh)):
+        # Prima di spendere una revisione IA su un token che non entrerebbe comunque.
+        out["checks"].append(_check("gem", "Eccezione GitHub", False, short))
+        return done("fail", f"fuori da eta' o cap, entra solo con un GitHub eccezionale: {short}")
 
     review = await ai_review(token, site, {"socials": socials, "github_detail": gh["detail"]})
     out["ai"] = review
@@ -623,14 +650,15 @@ async def assess(token: dict, links: dict, client: httpx.AsyncClient) -> dict:
 def github_shortfall(gh: dict, now: float | None = None) -> str:
     """Cosa manca al GitHub per un'eccezione ("" = niente)."""
     f = gh.get("facts") or {}
-    commits = f.get("commits")
-    count = 100 if commits == "100+" else int(commits or 0)
     if (gh.get("score") or 0) < EXC_MIN_GITHUB_SCORE:
         return f"GitHub {round(gh.get('score') or 0)} sotto {EXC_MIN_GITHUB_SCORE}"
-    if count < EXC_MIN_COMMITS:
-        return f"{count} commit recenti, ne servono {EXC_MIN_COMMITS}"
+    total = f.get("total_commits")
+    if total is None:
+        return "commit totali non letti"
+    if total < EXC_MIN_TOTAL_COMMITS:
+        return f"{total} commit in tutto, ne servono {EXC_MIN_TOTAL_COMMITS}"
     if (f.get("active_days") or 0) < EXC_MIN_ACTIVE_DAYS:
-        return f"lavoro in {f.get('active_days') or 0} giorni, ne servono {EXC_MIN_ACTIVE_DAYS}"
+        return f"ultimi 100 commit in {f.get('active_days') or 0} giorni, ne servono {EXC_MIN_ACTIVE_DAYS}"
     pushed = f.get("pushed_at")
     try:
         idle = ((now or time.time()) - datetime.fromisoformat(pushed.replace("Z", "+00:00")).timestamp()) / 86400

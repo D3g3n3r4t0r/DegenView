@@ -51,6 +51,7 @@ from app.analysis.backtest import run_backtest
 from app.analysis.strategies import STRATEGY_REGISTRY, confirmed_events, spot_only
 from app.providers.base import NoDataYet, ProviderError
 from app.providers.dexscreener import DexScreenerProvider, gecko_urgent, make_symbol
+from app.sniper.quality import _looks_like_meme
 from app.trading.onchain import legit
 from app.trading.onchain import listings as onchain_listings
 from app.trading.onchain.storage import data_file
@@ -76,10 +77,15 @@ EXC_AGE_MAX_DAYS = 365
 EXC_MCAP_MAX_USD = 20_000_000
 EXC_LIQ_MIN_USD = 100_000
 EXC_LIQ_TO_MCAP_MIN = 0.03
-MAX_EXCEPTIONS_PER_CHAIN = 8
+MAX_EXCEPTIONS_PER_CHAIN = 12
 PUMPFUN_COINS = "https://frontend-api-v3.pump.fun/coins"
 PUMPFUN_OFFSETS = (50, 100, 150, 200, 250, 300)   # per cap: da ~$20M a ~$1M
 DEXSCREENER_TOKENS = "https://api.dexscreener.com/tokens/v1"
+# Di cosa si parla: profili aggiornati e token spinti su DexScreener, ognuno
+# col suo X e sito. X da solo non ha un'API pubblica gratuita.
+DEXSCREENER_ATTENTION = ("https://api.dexscreener.com/token-profiles/latest/v1",
+                         "https://api.dexscreener.com/token-boosts/latest/v1",
+                         "https://api.dexscreener.com/token-boosts/top/v1")
 MAX_TESTED_PER_CHAIN = 8        # le candele costano una richiesta a token
 VERDICT_TTL_S = 6 * 3600        # un verdetto "ok"/"fail" vale qualche ora; "wait" si ripete
 DEXSCREENER_PAIRS = "https://api.dexscreener.com/latest/dex/pairs"
@@ -128,6 +134,7 @@ class Pool:
     market_cap: float | None
     created_ms: int
     exception: bool = False    # oltre eta' o cap: entra solo con un GitHub eccezionale
+    site: str | None = None    # sito dichiarato su DexScreener, quando lo si sa gia'
 
     @property
     def age_hours(self) -> float:
@@ -190,14 +197,18 @@ def pick_candidates(pools: list[Pool], limit: int = MAX_TESTED_PER_CHAIN) -> tup
     return ranked[:limit], len(ranked)
 
 
-def pick_exceptions(pools: list[Pool], taken: list[Pool], limit: int = MAX_EXCEPTIONS_PER_CHAIN) -> list[Pool]:
-    """I pool fuori da eta' o cap normali ma dentro i limiti delle eccezioni,
-    i piu' liquidi prima. Mai un ticker gia' scelto per la via normale."""
+def pick_exceptions(pools: list[Pool], taken: list[Pool], limit: int | None = None) -> list[Pool]:
+    """I pool fuori da eta' o cap normali ma dentro i limiti delle eccezioni.
+    Solo chi dichiara un sito vero e non ha un nome da meme: i posti sono
+    pochi e una memecoin liquida non deve rubarli a un progetto. Mai un
+    ticker gia' scelto per la via normale."""
     seen = {p.symbol.upper() for p in taken}
     best: dict[str, Pool] = {}
     for p in pools:
         ticker = p.symbol.upper()
-        if not ticker or ticker in _NOT_A_TOKEN or ticker in seen or not p.market_cap:
+        if not ticker or ticker in _NOT_A_TOKEN or ticker in seen or not p.market_cap or not p.site:
+            continue
+        if _looks_like_meme(p.symbol, p.name):
             continue
         normal = p.age_hours <= AGE_MAX_DAYS * 24 and p.market_cap <= MCAP_MAX_USD
         if normal or p.age_hours > EXC_AGE_MAX_DAYS * 24 or p.market_cap > EXC_MCAP_MAX_USD:
@@ -210,17 +221,71 @@ def pick_exceptions(pools: list[Pool], taken: list[Pool], limit: int = MAX_EXCEP
     return [replace(p, exception=True) for p in ranked]
 
 
+def exception_queue(cands: list[Pool], now: float | None = None, limit: int = MAX_EXCEPTIONS_PER_CHAIN) -> list[Pool]:
+    """Quali eccezioni controllare in questo giro. Chi e' gia' passato
+    resta in testa anche a verdetto scaduto; poi chi non e' mai stato
+    visto; gli scartati tornano solo quando il loro verdetto scade. Cosi'
+    in pochi giri passano tutte, senza sforare i limiti delle API."""
+    now = now or time.time()
+
+    def rank(p: Pool) -> int | None:
+        cached = _verdicts.get(f"{p.chain}:{p.token_address}")
+        if cached is None:
+            return 1
+        if cached[1].get("status") == "ok":
+            return 0
+        return None if now - cached[0] < VERDICT_TTL_S else 2
+
+    queued = [(r, i, p) for i, p in enumerate(cands) if (r := rank(p)) is not None]
+    return [p for _, _, p in sorted(queued)[:limit]]
+
+
 def pool_from_dexscreener(pair: dict) -> Pool | None:
     base = pair.get("baseToken") or {}
+    sites = [w.get("url") for w in (pair.get("info") or {}).get("websites") or [] if isinstance(w, dict)]
     try:
         return Pool(chain=pair.get("chainId") or "", symbol=(base.get("symbol") or "").strip(),
                     name=base.get("name") or "", token_address=base.get("address") or "",
                     pair_address=pair.get("pairAddress") or "", dex=pair.get("dexId") or "",
                     liquidity_usd=float((pair.get("liquidity") or {}).get("usd") or 0),
                     market_cap=float(pair.get("marketCap") or pair.get("fdv") or 0) or None,
-                    created_ms=int(pair.get("pairCreatedAt") or 0))
+                    created_ms=int(pair.get("pairCreatedAt") or 0), site=legit.pick_website(sites))
     except (TypeError, ValueError):
         return None
+
+
+async def _pools_for_tokens(client: httpx.AsyncClient, chain: str, tokens: list[str]) -> list[Pool]:
+    pools: list[Pool] = []
+    tokens = list(dict.fromkeys(tokens))
+    for i in range(0, len(tokens), 30):
+        try:
+            r = await client.get(f"{DEXSCREENER_TOKENS}/{chain}/{','.join(tokens[i:i + 30])}")
+            pairs = r.json() if r.status_code == 200 else []
+        except (httpx.HTTPError, ValueError):
+            continue
+        pools += [p for p in (pool_from_dexscreener(x) for x in pairs if isinstance(x, dict))
+                  if p and p.chain == chain]
+    return pools
+
+
+async def _fetch_attention_pools(client: httpx.AsyncClient, chain: str) -> list[Pool]:
+    tokens: list[str] = []
+    for url in DEXSCREENER_ATTENTION:
+        try:
+            r = await client.get(url)
+            rows = r.json() if r.status_code == 200 else []
+        except (httpx.HTTPError, ValueError):
+            continue
+        tokens += [x["tokenAddress"] for x in rows if isinstance(rows, list)
+                   if isinstance(x, dict) and x.get("chainId") == chain and x.get("tokenAddress")]
+    return await _pools_for_tokens(client, chain, tokens)
+
+
+async def _fetch_extra_pools(client: httpx.AsyncClient, chain: str) -> list[Pool]:
+    """Oltre alle liste di GeckoTerminal: i token di cui si parla e, su
+    Solana, i progetti gia' cresciuti."""
+    grown = await _fetch_grown_pools(client) if chain == "solana" else []
+    return grown + await _fetch_attention_pools(client, chain)
 
 
 async def _fetch_grown_pools(client: httpx.AsyncClient) -> list[Pool]:
@@ -239,15 +304,7 @@ async def _fetch_grown_pools(client: httpx.AsyncClient) -> list[Pool]:
             cap = c.get("usd_market_cap") or 0
             if c.get("mint") and MCAP_MAX_USD / 4 <= cap <= EXC_MCAP_MAX_USD:
                 mints.append(c["mint"])
-    pools: list[Pool] = []
-    for i in range(0, len(mints), 30):
-        try:
-            r = await client.get(f"{DEXSCREENER_TOKENS}/solana/{','.join(mints[i:i + 30])}")
-            pairs = r.json() if r.status_code == 200 else []
-        except (httpx.HTTPError, ValueError):
-            continue
-        pools += [p for p in (pool_from_dexscreener(x) for x in pairs if isinstance(x, dict)) if p]
-    return pools
+    return await _pools_for_tokens(client, "solana", mints)
 
 
 def watch_symbol(symbol: str, chain: str, pool: str) -> str:
@@ -505,6 +562,13 @@ def _as_item(pool: Pool) -> dict:
             "created_at": time.time() - pool.age_hours * 3600}
 
 
+def _proposal_rank(p: dict) -> tuple:
+    """Prima le eccezioni GitHub, per voto; poi le altre, per rendimento."""
+    if p.get("exception"):
+        return (0, -((p.get("report") or {}).get("score") or 0))
+    return (1, -(p.get("return_pct") or 0))
+
+
 async def scan_once() -> dict:
     """Un giro completo. Non solleva: un errore finisce in `error`."""
     if _state["running"]:
@@ -519,9 +583,9 @@ async def scan_once() -> dict:
         async with httpx.AsyncClient(timeout=20.0) as client:
             for chain in CHAINS:
                 pools = await _fetch_pools(client, chain)
+                pools += await _fetch_extra_pools(client, chain)
                 picked, passing = pick_candidates(pools, MAX_VETTED_PER_CHAIN)
-                grown = await _fetch_grown_pools(client) if chain == "solana" else []
-                picked += pick_exceptions(pools + grown, picked)
+                picked += exception_queue(pick_exceptions(pools, picked))
                 info = {"seen": len({p.token_address for p in pools}), "passing": passing,
                         "legit": 0, "rejected": 0, "waiting": 0, "tested": 0, "too_young": 0}
                 links = await _dex_links(client, chain, picked)
@@ -536,7 +600,9 @@ async def scan_once() -> dict:
                     if verdict["status"] == "fail":
                         onchain_listings.note_rejected(_as_item(pool), verdict["reason"], time.time(),
                                                        verdict, source="radar")
-                for pool, verdict in cleared[:MAX_TESTED_PER_CHAIN]:
+                # Le eccezioni si provano sempre: sono poche e sono il motivo del giro.
+                normal = [c for c in cleared if not c[0].exception]
+                for pool, verdict in normal[:MAX_TESTED_PER_CHAIN] + [c for c in cleared if c[0].exception]:
                     interval = interval_for(pool.age_hours)
                     try:
                         df = await provider.fetch_ohlcv(make_symbol(pool.symbol, chain, pool.pair_address),
@@ -564,6 +630,10 @@ async def scan_once() -> dict:
                         "scan_url": verdict.get("scan_url"), "report": verdict.get("report"),
                     }
                     best = outcome["best"]
+                    if best is None and pool.exception:
+                        # Un progetto eccezionale si mostra per quello che e', anche
+                        # se nessuna strategia l'avrebbe tradato bene.
+                        best = next((r for r in outcome["tried"] if not r["excluded"]), None)
                     if best is None:
                         top = next((r for r in outcome["tried"] if not r["excluded"]), None)
                         tested.append({**base, "best_label": top["label"] if top else None,
@@ -573,7 +643,7 @@ async def scan_once() -> dict:
                     found_at = _first_seen.setdefault(key, time.time())
                     proposals.append({
                         **base,
-                        "found_at": found_at,
+                        "found_at": found_at, "strategy_ok": outcome["best"] is not None,
                         "strategy": best["label"],
                         "strategy_name": best["strategy_name"],
                         "source": best["source"],
@@ -593,7 +663,7 @@ async def scan_once() -> dict:
         for key in list(_first_seen):
             if key not in live:
                 del _first_seen[key]
-        proposals.sort(key=lambda p: p["return_pct"], reverse=True)
+        proposals.sort(key=_proposal_rank)
         _state.update(proposals=proposals, tested=tested, chains=chains, configs=len(configs), error="")
     except Exception as exc:
         logger.exception("radar: giro fallito")

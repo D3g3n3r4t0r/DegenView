@@ -68,6 +68,8 @@ let onTokenPickedCb = null;
 // quantita'". Dopo uno swap ETH -> USDG lo swap parte da USDG.
 let holdings = [];
 let holdingsKey = { chain: null, at: 0 };
+let currentArmed = false;
+let pendingFrom = null;  // moneta toccata sotto il saldo prima che lo swap fosse pronto
 const HOLDINGS_TTL_MS = 20_000;  // lo swap si rimonta a ogni token scelto sul grafico
 
 const sameAddress = (a, b) => Boolean(a && b) && a.toLowerCase() === b.toLowerCase();
@@ -158,11 +160,14 @@ export async function mountSwap(container, { onExecuted, onTokenPicked, presetTo
     loadHoldings(chain),
   ]);
   const armed = Boolean(risk?.execution_enabled);
+  currentArmed = armed;
 
   // Si vende quello che si ha di piu' (in dollari), non sempre il nativo.
   leg.in = { ...native, priceUsd: state.balance?.native_price_usd ?? null, isNative: true };
   if (holdings.length) {
-    try { leg.in = await holdingAsLeg(chain, holdings[0]); } catch { /* resta il nativo */ }
+    const start = holdings.find((h) => sameAddress(h.address, pendingFrom)) ?? holdings[0];
+    pendingFrom = null;
+    try { leg.in = await holdingAsLeg(chain, start); } catch { /* resta il nativo */ }
   }
   const usablePreset = presetToken && !sameAddress(presetToken.address, native.address)
     && !sameAddress(presetToken.address, leg.in.address);
@@ -320,6 +325,24 @@ function pickToken(side, armed) {
     },
   });
 }
+
+// Le stesse monete per la riga sotto il saldo (holdings.js): un solo
+// posto che le legge e le ordina.
+export async function walletHoldings(chain, force = false) {
+  await loadHoldings(chain, force);
+  return holdingsKey.chain === chain ? holdings : [];
+}
+
+// Tocco su una moneta sotto il saldo: quella va in vendita. Se lo swap non
+// e' ancora montato, la sceglie mountSwap al posto della piu' grande.
+window.addEventListener("onchain:swap-from", async (event) => {
+  const address = event.detail?.address;
+  if (!address) return;
+  const h = holdingsKey.chain === state.chain && holdings.find((x) => sameAddress(x.address, address));
+  if (!hostEl?.querySelector("#swap-form") || !leg.in || !h) { pendingFrom = address; return; }
+  if (sameAddress(h.address, leg.in.address)) return;
+  try { await setLeg("in", await holdingAsLeg(state.chain, h), currentArmed); } catch { /* resta com'era */ }
+});
 
 // Cambia una gamba. Se diventa uguale all'altra le due si scambiano, come
 // su un DEX. Scegliendo cosa vendere l'importo diventa quanto se ne ha.

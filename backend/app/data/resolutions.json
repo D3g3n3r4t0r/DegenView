@@ -1389,8 +1389,24 @@
     ]
   },
   "seed-0105": {
+    "status": "risolto",
+    "at": 1790230898,
+    "summary": "Via il menu ⋯ con tredici voci, sette delle quali ripetevano tab gia' a schermo. Ora c'e' una barra in basso con tre posti, come in un DEX: Radar (pilota e token nuovi), Scambia (swap, limite, sniper e grafico; da telefono lo swap viene prima del grafico) e Portafoglio (saldi, ordini aperti, storico, strategie, con Ricevi e Invia a portata di pollice). Il tocco sull'indirizzo in alto apre il wallet: ricevi, invia, limiti, simula e chiave. Sotto il saldo una riga compatta mostra le monete che hai, dalla piu' grande; toccarne una apre lo scambio con quella in vendita. Le tab Swap/Limite/Sniper tornano leggibili (la scritta attiva era bianca su bianco).",
+    "files": [
+      "frontend/onchain-app.html",
+      "frontend/static/onchain/main.js",
+      "frontend/static/onchain/holdings.js",
+      "frontend/static/onchain/swap.js"
+    ]
+  },
+  "seed-0106": {
+    "status": "risolto",
+    "at": 1790247278,
+    "summary": "Verificato con i dati veri: con la regola di prima DREGG veniva scartato, perche' chiedeva lavoro in 20 giorni diversi negli ultimi 100 commit e DREGG ne ha 11 (100 commit in sei settimane, quasi tutti di un solo autore, su 10 203 in totale). In piu' tra 63 progetti cresciuti trovati su pump.fun veniva dopo memecoin piu' liquide. La regola ora prende DREGG come metro: conta la profondita' (almeno 1 000 commit in tutto), la continuita' (ultimi 100 commit su almeno 8 giorni, ultimo aggiornamento entro 14 giorni) e una storia lunga vale quanto un team. Le eccezioni devono avere un sito e un nome non da meme, e vengono controllate a rotazione finche' passano tutte. Chi passa appare in cima alle proposte, anche se nessuna strategia l'avrebbe tradato bene. Con i dati reali DREGG passa: pagella 89 eccellente, GitHub 89, anti-rug 97, contratto 100. La ricerca legge anche i profili e i token spinti su DexScreener, che e' dove si vede di quali token si parla (X non ha un'API pubblica gratuita). Il pilota con soldi veri resta sotto i $100k."
+  },
+  "seed-0107": {
     "status": "in corso",
-    "at": 1790247483,
-    "summary": "Pagina pubblica /engn in inglese, stile cubo nero e luce verde: slogan 'Find them first. Ride them right.', tasto ENTER THE APP al centro che porta al wallet, due sezioni Sniper (lanci nuovi) e Microcaps (fondamentali) con le regole lette dal codice del radar, strategie solo trend following e solo long spot, token $ENGN (1 miliardo, Solana, 0% tasse, LP bruciato, team 10% con cliff 12 mesi), livelli per chi detiene, roadmap e disclaimer. Piano di lancio in docs/lancio-engn.md. Il token non e' ancora stato creato: serve il si' di Lorenzo su modalita' di lancio, liquidita' iniziale e verifica MiCA."
+    "at": 1790247875,
+    "summary": "Pagina pubblica /engn in inglese, stile cubo nero e luce verde: slogan 'Find them first. Ride them right.', tasto ENTER THE APP al centro che porta al wallet, due sezioni Sniper (lanci nuovi) e Microcaps (fondamentali) con le regole lette dal codice del radar, strategie solo trend following e solo long spot, token $ENGN (1 miliardo, Solana, 0% tasse, LP bruciato, team 10% con cliff 12 mesi), livelli per chi detiene, roadmap e disclaimer. Piano di lancio in docs/lancio-engn.md. Il token non e' ancora stato creato: serve il si' di Lorenzo su modalita' di lancio, liquidita' iniziale e verifica MiCA. Lorenzo: 'decidi tutto tu, voglio fare un progetto legit'. Deciso: pool Raydium con LP bruciato e 40 SOL, nessuna commissione di swap, pagina senza promesse non vere (niente X, social finti, GitHub pubblico o sconti), white paper MiCA in bozza (docs/whitepaper-engn.md). Blocca il lancio: serve una societa' come offerente, un legale e la notifica a CONSOB."
   }
 }

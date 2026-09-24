@@ -135,6 +135,8 @@ function bars(e) {
 
 function badges(e) {
   const out = [];
+  if (e.benchmark) out.push(`<em data-tone="gold">riferimento</em>`);
+  else if (e.similarity?.score >= 25) out.push(`<em class="bd-sim">≈ DREGG ${e.similarity.score}%</em>`);
   if (e.exception) out.push(`<em data-tone="gold">eccezione</em>`);
   if (e.bonding) out.push(`<em>pump.fun</em>`);
   return out.join("");
@@ -146,10 +148,11 @@ function podiumCard(e, i) {
     <button type="button" data-board="${escapeHtml(k)}" aria-label="${PLACES[i]} posto, ${escapeHtml(e.symbol)}">
       <span class="bd-medal" aria-hidden="true">${i + 1}</span>
       <span class="bd-sym"><b>${escapeHtml(e.symbol)}</b>${move(e)}</span>
-      <span class="bd-total">${score(e.overall?.score)}</span>
+      <span class="bd-total">${score(e.score)}</span>
       ${bars(e)}
       <small><span data-age="${e.launched_at ?? ""}">${since(e.launched_at)}</span> · ${usd(e.market_cap)}</small>
       <span class="bd-tags">${badges(e)}</span>
+      ${e.benchmark ? `<p class="bd-honor">Menzione d'onore</p>` : ""}
     </button>
   </li>`;
 }
@@ -162,7 +165,7 @@ function row(e) {
       <span class="tk-name"><b>${escapeHtml(e.symbol)} ${move(e)}</b>
         <small>uscito <span data-age="${e.launched_at ?? ""}">${since(e.launched_at)}</span> fa · ${usd(e.market_cap)} · ${CHAINS[e.chain] ?? e.chain} ${badges(e)}</small></span>
       ${bars(e)}
-      <span class="bd-total">${score(e.overall?.score)}</span>
+      <span class="bd-total">${score(e.score)}</span>
     </button>
   </li>`;
 }
@@ -207,7 +210,17 @@ function details(e) {
   return `<header><b>${escapeHtml(e.name ?? e.symbol)}</b>
       <small>${CHAINS[e.chain] ?? e.chain} · uscito ${since(e.launched_at)} fa · liquidità ${usd(e.liquidity_usd)}${e.change_24h != null ? ` · 24h ${e.change_24h > 0 ? "+" : ""}${e.change_24h}%` : ""}</small>
       <span>${chart}${scan}</span></header>
+    ${e.honor ? `<p class="bd-honor" style="text-align:start;margin:0 0 12px">${escapeHtml(e.honor)}</p>` : ""}
+    ${traits(e)}
     <div class="bd-pillars">${PILLARS.map(([k, label]) => pillarBlock(e, k, label)).join("")}</div>`;
+}
+
+function traits(e) {
+  const t = e.similarity?.traits ?? [];
+  if (!t.length) return "";
+  const head = e.benchmark ? "Il metro di paragone" : `Somiglianza tecnica a DREGG · ${e.similarity.score}%`;
+  return `<p class="bd-honor" style="text-align:start;margin:0 0 6px">${head}</p><ul class="bd-traits">${t.map((x) =>
+    `<li data-got="${x.got >= 1 ? "1" : x.got > 0 ? "half" : "0"}">${escapeHtml(x.label)}</li>`).join("")}</ul>`;
 }
 
 function paintAges() {
@@ -221,10 +234,7 @@ function paintAges() {
 function paintMeta() {
   const meta = root.querySelector("[data-board-meta]");
   const d = data ?? {};
-  meta.textContent = `${d.examined ?? 0} esaminati · ${d.excluded_total ?? 0} esclusi${d.analyzing ? ` · ${d.analyzing} in analisi` : ""}`;
-  const last = (d.excluded ?? [])[0];
-  root.querySelector("[data-board-foot]").textContent = last
-    ? `Ultimo escluso: ${last.symbol} · ${last.reason.replace(/^(github|site|tokenomics): /, "")}` : "";
+  meta.textContent = `${d.examined ?? 0} esaminati${d.analyzing ? ` · ${d.analyzing} in analisi` : ""}`;
 }
 
 function emptyText() {
