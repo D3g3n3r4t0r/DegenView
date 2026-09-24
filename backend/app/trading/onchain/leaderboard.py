@@ -23,6 +23,11 @@ mln, progetti in quel modo voglio che siano eccezione in quanto tecnicamente
 incredibili su github"): oltre i 21 giorni o i $2M si entra solo se il radar
 l'ha ammesso come eccezione, con la sua stessa regola
 (`legit.github_shortfall` e `legit.gem_shortfall`): una regola sola.
+
+Il riferimento (Lorenzo, 24/09: "mi devi mettere drag al primo posto in
+assoluto con menzione d'onore"): DREGG sta sempre primo, e gli altri si
+ordinano per qualita' (i tre pilastri) e somiglianza tecnica a DREGG
+(`benchmark.py`), 70/30.
 """
 from __future__ import annotations
 
@@ -33,7 +38,7 @@ import time
 
 import httpx
 
-from app.trading.onchain import depth, legit, listings, radar, storage
+from app.trading.onchain import benchmark, depth, legit, listings, radar, storage
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +56,7 @@ MAX_ENTRIES = 400
 KEEP_EXCLUDED = 60
 ANALYZE_CONCURRENCY = 3
 BOARD_SIZE = 50
+SIMILARITY_WEIGHT = 0.30
 MIN_PILLAR = 35                    # sotto, un pilastro e' troppo debole per stare in classifica
 CAP_MAX_USD = radar.MCAP_MAX_USD
 
@@ -111,6 +117,8 @@ def add(item: dict, source: str, now: float | None = None) -> bool:
     if not chain or not token:
         return False
     k = _key(chain, token)
+    if benchmark.is_benchmark(chain, token):
+        _gone.pop(k, None)
     if k in _gone:
         return False
     now = now or time.time()
@@ -136,9 +144,9 @@ def add(item: dict, source: str, now: float | None = None) -> bool:
 
 
 def collect_saved() -> int:
-    """Quello che il radar ha gia' verificato e salvato."""
+    """Quello che il radar ha gia' verificato e salvato, piu' il riferimento."""
     snap = radar.snapshot()
-    n = 0
+    n = add(benchmark.seed_item(), "riferimento")
     for item in listings.recent():
         n += add(item, "listing")
     for item in (snap.get("proposals") or []) + (snap.get("tested") or []):
@@ -217,7 +225,10 @@ def apply_analysis(k: str, result: dict, now: float | None = None) -> None:
         if name == "github" and (pillar.get("facts") or {}).get("url"):
             e["github"] = pillar["facts"]["url"]
     e["overall"] = depth.overall(e["pillars"])
-    if e["overall"]["fatal"]:
+    e["similarity"] = benchmark.similarity(benchmark.signals(
+        (e["pillars"].get("github") or {}).get("facts"),
+        (e["pillars"].get("site") or {}).get("facts", {}).get("tech_terms")))
+    if e["overall"]["fatal"] and not benchmark.is_benchmark(e["chain"], e["token_address"]):
         _exclude(k, e["overall"]["fatal"], now)
     _mark()
 
@@ -253,6 +264,8 @@ def _prune(now: float) -> None:
         launched = e.get("launched_at")
         pending_since = e.get("found_at", now)
         limit = radar.EXC_AGE_MAX_DAYS if exceptional(e) else MAX_AGE_DAYS
+        if benchmark.is_benchmark(e["chain"], e["token_address"]):
+            continue
         if launched and now - launched > limit * 86400:
             _entries.pop(k)
         elif (e.get("overall") or {}).get("pending") and now - pending_since > PENDING_GIVE_UP_S:
@@ -276,6 +289,8 @@ def exceptional(e: dict) -> bool:
 
 def qualifies(e: dict, now: float | None = None) -> str:
     """"" se entra in classifica, altrimenti perche' no."""
+    if benchmark.is_benchmark(e.get("chain"), e.get("token_address")):
+        return ""   # il metro di paragone c'e' sempre, i suoi numeri si vedono comunque
     o = e.get("overall") or {}
     pillars = e.get("pillars") or {}
     if not o or o.get("fatal"):
@@ -304,9 +319,17 @@ def qualifies(e: dict, now: float | None = None) -> str:
     return ""
 
 
+def final_score(e: dict) -> float:
+    """Qualita' (i tre pilastri) e somiglianza tecnica a DREGG."""
+    q = (e.get("overall") or {}).get("score") or 0
+    sim = (e.get("similarity") or {}).get("score") or 0
+    return round((1 - SIMILARITY_WEIGHT) * q + SIMILARITY_WEIGHT * sim, 1)
+
+
 def _rank() -> None:
     ranked = sorted((e for e in _entries.values() if not qualifies(e)),
-                    key=lambda e: (-e["overall"]["score"], -(e.get("launched_at") or 0)))[:BOARD_SIZE]
+                    key=lambda e: (not benchmark.is_benchmark(e["chain"], e["token_address"]),
+                                   -final_score(e), -(e.get("launched_at") or 0)))[:BOARD_SIZE]
     order = [_key(e["chain"], e["token_address"]) for e in ranked]
     now = time.time()
     for i, e in enumerate(ranked, 1):
@@ -330,7 +353,9 @@ def _public(e: dict) -> dict:
     keep = ("chain", "token_address", "pair_address", "symbol", "name", "source", "launched_at", "found_at",
             "market_cap", "liquidity_usd", "change_24h", "website", "github", "socials", "pair_url", "scan_url",
             "image", "bonding", "rank", "rank_before", "moved_at", "overall", "pillars", "checked_at")
-    return {**{k: e.get(k) for k in keep}, "exception": is_big(e)}
+    top = benchmark.is_benchmark(e["chain"], e["token_address"])
+    return {**{k: e.get(k) for k in keep}, "exception": is_big(e) and not top, "score": final_score(e),
+            "similarity": e.get("similarity"), "benchmark": top, "honor": benchmark.HONOR if top else None}
 
 
 def board() -> dict:
@@ -342,7 +367,7 @@ def board() -> dict:
         "examined": _state["examined"], "analyzing": len(_busy), "waiting": waiting,
         "excluded": _excluded[:20], "excluded_total": len(_gone),
         "sources": _state["sources"],
-        "rules": {"weights": depth.WEIGHTS, "min_pillar": MIN_PILLAR, "gem_cap_usd": legit.GEM_CAP_USD,
+        "rules": {"weights": depth.WEIGHTS, "similarity_weight": SIMILARITY_WEIGHT, "benchmark": benchmark.NAME, "min_pillar": MIN_PILLAR, "gem_cap_usd": legit.GEM_CAP_USD,
                   "gem_min_score": legit.GEM_MIN_SCORE, "cap_max_usd": CAP_MAX_USD, "max_age_days": MAX_AGE_DAYS,
                   "exception_cap_usd": radar.EXC_MCAP_MAX_USD, "exception_age_days": radar.EXC_AGE_MAX_DAYS},
     }

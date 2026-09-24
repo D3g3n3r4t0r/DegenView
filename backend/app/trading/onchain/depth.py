@@ -35,7 +35,7 @@ from urllib.parse import urljoin, urlparse
 
 import httpx
 
-from app.trading.onchain import legit
+from app.trading.onchain import benchmark, legit
 
 WEIGHTS = {"github": 0.40, "site": 0.30, "tokenomics": 0.30}
 
@@ -65,7 +65,8 @@ _SECTIONS = {
     "tokenomics": re.compile(r"\btoken\s?omics\b|\btoken distribution\b|\bsupply\b", re.I),
     "audit": re.compile(r"\baudit(ed|s)?\b|certik|hacken|halborn|ottersec|sec3|zellic", re.I),
 }
-_DOCS_HINT = re.compile(r"(^|[/.])(docs?|documentation|whitepaper|litepaper|gitbook|wiki)([/.]|$)", re.I)
+_DOCS_HINT = re.compile(r"(^|[/.])(docs?|documentation|whitepaper|litepaper|gitbook|wiki|developers?|build|"
+                        r"learn|guides?|research|laboratory|lab|spec|specification)([/.]|$)", re.I)
 _APP_HINT = re.compile(r"(^|[/.])(app|dapp|dashboard|launch|platform|beta)([/.]|$)", re.I)
 _APP_TEXT = re.compile(r"\b(launch app|open app|enter app|go to app|use app|try (it|now)|dashboard)\b", re.I)
 RDAP = "https://rdap.org/domain/{domain}"
@@ -147,7 +148,10 @@ def judge_github(data: dict | None, launched_at: float | None = None, now: float
     trivial = sum(1 for m in messages if not m or _TRIVIAL.match(m[0]))
     authors = {(c.get("author") or {}).get("login") or ((c.get("commit") or {}).get("author") or {}).get("email")
                for c in commits} - {None, ""}
-    contributors = len([x for x in data.get("contributors") or [] if isinstance(x, dict)])
+    people = [x for x in data.get("contributors") or [] if isinstance(x, dict)]
+    contributors = len(people)
+    # La somma dei contributi dei primi 30: la storia intera, non solo gli ultimi 100 commit.
+    total_commits = max(sum(int(x.get("contributions") or 0) for x in people), len(commits))
     languages = data.get("languages") or {}
     code = sum(v for v in languages.values() if isinstance(v, (int, float)))
     names = {(x.get("name") or "").lower() for x in data.get("root") or [] if isinstance(x, dict)}
@@ -181,6 +185,11 @@ def judge_github(data: dict | None, launched_at: float | None = None, now: float
         "license": ((repo.get("license") or {}).get("spdx_id")) or None,
         "stars": repo.get("stargazers_count") or 0, "forks": repo.get("forks_count") or 0,
         "trivial_pct": round(trivial_ratio * 100), "created_at": repo.get("created_at"),
+        # Per il confronto con DREGG (benchmark.py).
+        "languages_all": list(languages), "topics": (repo.get("topics") or [])[:12],
+        "root_dirs": sorted(x.get("name") for x in data.get("root") or []
+                            if isinstance(x, dict) and x.get("type") == "dir" and x.get("name")),
+        "total_commits": total_commits,
     }
     flags: list[str] = []
     fatal = ""
@@ -373,6 +382,7 @@ def judge_site(page: dict | None, followed: list[dict], registered_at: float | N
         "builder": page["builder"], "free_host": page["free_host"], "spa": page["spa"],
         "domain_days": None if domain_days is None else round(domain_days),
         "cites_contract": cites, "https": bool(page.get("https")),
+        "tech_terms": benchmark.site_terms(page.get("text") or ""),
     }
     flags: list[str] = []
     if page.get("not_own"):
