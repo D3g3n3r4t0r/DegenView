@@ -12,7 +12,7 @@ lavori pluri-sessione, decisioni prese, stato di piani approvati.
 
 ---
 
-## Presentazione del progetto e token $ENGN — `seed-0107`, branch `claude/project-thread-mn4odz` — 2026-09-24
+## Presentazione del progetto e token $ENGN — `seed-0109`, branch `claude/project-thread-mn4odz` — 2026-09-24
 
 Lorenzo: "fai una pagina web di presentazione del progetto con slogan
 accattivante in inglese; crea il ticker del token, ci serve lanciarlo [...]
@@ -39,6 +39,28 @@ riferimento scelta: cubo nero con fessura verde, griglia, candele.
   proprio, costruire i livelli per chi detiene.
 
 ---
+## Memoria del radar ("coscienza") — `seed-0108`, branch `claude/project-thread-40dout`
+
+Lorenzo, dopo il rug su VISE: "dobbiamo implentare una specie di coscienza,
+imparare dai segnali; da cosa effettivamente succede, e migliorare il sistema".
+
+- `app/trading/onchain/outcomes.py`: diario su volume (`onchain_outcomes.json`).
+  Legge (solo lettura) proposte/provati del radar e listing/scartati; segue
+  prezzo e liquidita' su DexScreener ogni 10 min per 7 giorni. Rug = liq <20%
+  d'ingresso, prezzo -80% o pool sparito 3 giri; buono = +50% in qualche momento.
+  Voci viste tardi: ingresso dalle candele 15m (4 per giro, gate GeckoTerminal).
+- Lezione: AUC di ogni controllo su rug e salite (`signals`), regressione
+  logistica numpy con 5 fold deterministici. Entra in `legit.assess` come check
+  "memory" solo con >=40 esiti, >=8 rug, AUC fuori campione >=0.65.
+- Blocca con `ONCHAIN_MEMORY_GATE` (acceso, pilota compreso: Lorenzo il 24/09,
+  "accendi"). Eccezioni GitHub mai bloccate.
+- API `/api/onchain/radar/lessons`; sezione "Memoria" sotto gli scartati.
+- "Muro delle inculate" (Lorenzo: "fammi sparire VISE [...] sezione ironica
+  dove ci andranno a finire tutte le inculate subite"): `outcomes.shame()` =
+  `SHAME_SEED` (VISE) + rug passati dal filtro. Tolti da proposte, listing,
+  classifica e candidati del pilota (`without_shamed`, `_pilot_vet`).
+
+Resta: eventuale ritaratura automatica delle soglie di legit (oggi solo misurate).
 
 ## Wallet come un DEX: barra in basso, niente "⋯" — `seed-0105`, PR #91
 
@@ -61,7 +83,13 @@ Lorenzo: "voglio che l'esperienza su questo sito sia paragonabile a un DEX
 - Radar e flusso swap non toccati (altri thread). `index.html` ha una copia
   sua del markup senza dock: il cablaggio resta null-safe.
 
-Resta: il saldo grande in cima e' solo il nativo, non il totale del wallet.
+Seguito (stesso giorno), Lorenzo: "visualizzare il saldo in alto non mi
+interessa piu', la parte di automazione al trading la mettiamo in una sezione
+apposita [...] la cosa centrale e' avere la leaderboard". E: "la leaderboard
+doveva essere in alto appena entro nel sito". Ora le viste sono quattro:
+`home` (classifica in cima, poi radar), `manual` (Scambia), `auto` (Pilota),
+`wallet` (saldo, monete, ricevi/invia, tab). La rete (`#chain-flip`) sta
+nella testata. Visibilita' in un blocco solo di regole `:not([data-view])`.
 ## Radar DEGEN on-chain — `seed-0099`, `seed-0100`, `seed-0102` — branch `claude/token-scanner-strategie-a97cto`
 
 Thread "Scanner token e strategie". Radar in `app/trading/onchain/radar.py`,
@@ -90,6 +118,11 @@ filtro anti-rug in `legit.py`, frontend `frontend/static/onchain/radar.js`.
   strategia valida (`strategy_ok`). Fonti extra: profili/boost DexScreener.
   Prova reale DREGG: pagella 89, GitHub 89. Lorenzo lo vuole primo nella
   classifica (thread "Classifica progetti").
+- seed-0107 (rug VISE, -93%): il sito linkava pump-fun/pump-public-docs e
+  passava come GitHub del progetto. Ora `_PLATFORM_GITHUB` esclude i repo di
+  piattaforma, `github_belongs` chiede che il repo sia del progetto, e
+  `holder_concentration` scarta un wallet >15% o top 10 >35%. RugCheck
+  `graphInsidersDetected` NON e' usabile: DREGG ne ha 807.
 - Vincolo: il pilota (soldi veri) resta sotto $100k
   (`_SNIPER_ONCHAIN_MAX_MCAP_USD` in main.py). Mai strategie short.
 

@@ -41,6 +41,7 @@ import httpx
 
 from app.config import settings
 from app.sniper.quality import _looks_like_meme
+from app.trading.onchain import outcomes
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,10 @@ GOPLUS_TOKEN = "https://api.gopluslabs.io/api/v1/token_security/{chain_id}"
 GOPLUS_CHAIN = {"robinhood": "4663"}
 
 LP_LOCKED_MIN_PCT = 80.0
+# Chi tiene troppa offerta puo' svuotare il pool da solo. Pool, locker e
+# conti noti del launchpad non contano.
+HOLDER_MAX_PCT = 15.0
+TOP10_MAX_PCT = 35.0
 TAX_MAX_PCT = 10.0
 TOP_HOLDER_MAX_PCT = 30.0
 AI_SCORE_MIN = 6
@@ -75,6 +80,15 @@ GITHUB_API = "https://api.github.com"
 GITHUB_MIN_COMMITS = 5
 GITHUB_MIN_DAYS = 2           # commit su almeno due giorni diversi: non un repo riempito in un'ora
 _GITHUB_SKIP = {"orgs", "sponsors", "features", "topics", "about", "login", "settings", "marketplace"}
+# Repository di piattaforme e infrastruttura: un sito che li linka non ha
+# per questo un GitHub suo. VISE (rug del 24/09) linkava pump-fun/pump-public-docs.
+_PLATFORM_GITHUB = {"pump-fun", "pumpdotfun", "pumpfun", "solana-labs", "solana-foundation", "solana-developers",
+                    "anza-xyz", "raydium-io", "jup-ag", "metaplex-foundation", "orca-so", "meteoraag",
+                    "meteora-ag", "coral-xyz", "helius-labs", "phantom", "uniswap", "ethereum", "openzeppelin",
+                    "base-org", "base", "coinbase", "robinhood", "dexscreener", "geckoterminal", "rugcheck",
+                    "moonshot-money", "letsbonk", "bonkbot", "believeapp", "vercel", "nextjs", "shadcn-ui"}
+_GENERIC_WORDS = {"the", "coin", "token", "protocol", "finance", "network", "labs", "official", "project",
+                  "dao", "app", "fun", "sol", "solana", "inu", "and"}
 SITE_MAX_BYTES = 400_000
 SITE_TEXT_CHARS = 12_000
 _MAX_REDIRECTS = 3
@@ -189,7 +203,7 @@ def github_targets(urls: list[str]) -> list[tuple[str, str | None]]:
     out: list[tuple[str, str | None]] = []
     for url in urls:
         m = re.match(r"https?://(?:www\.)?github\.com/([A-Za-z0-9-]{1,39})(?:/([A-Za-z0-9._-]{1,100}))?", url or "")
-        if not m or m.group(1).lower() in _GITHUB_SKIP:
+        if not m or m.group(1).lower() in _GITHUB_SKIP or m.group(1).lower() in _PLATFORM_GITHUB:
             continue
         repo = (m.group(2) or "").removesuffix(".git") or None
         target = (m.group(1), repo)
@@ -252,13 +266,47 @@ def judge_rugcheck(report: dict | None) -> dict:
     danger = [r.get("name") or "rischio" for r in report.get("risks") or [] if r.get("level") == "danger"]
     if danger:
         return _check("security", "RugCheck", False, ", ".join(danger[:3]))
+    top, top10 = holder_concentration(report)
+    holders = {"top_holder_pct": round(top, 2), "top10_pct": round(top10, 2)}  # per outcomes.py
+    if top > HOLDER_MAX_PCT:
+        return _check("security", "RugCheck", False, f"un solo wallet tiene il {top:.0f}% dell'offerta",
+                      facts=holders)
+    if top10 > TOP10_MAX_PCT:
+        return _check("security", "RugCheck", False, f"i primi 10 wallet tengono il {top10:.0f}% dell'offerta",
+                      facts=holders)
     lp = report.get("lpLockedPct")
     if lp is not None and float(lp) < LP_LOCKED_MIN_PCT:
         return _check("security", "RugCheck", False, f"liquidità bloccata solo al {float(lp):.0f}%")
     warn = len([r for r in report.get("risks") or [] if r.get("level") == "warn"])
     detail = f"liquidità bloccata {float(lp):.0f}%" if lp is not None else "nessun rischio grave"
     score = (float(lp) if lp is not None else 85.0) - 8 * warn
-    return _check("security", "RugCheck", True, detail + (f" · {warn} avvisi minori" if warn else ""), score)
+    return _check("security", "RugCheck", True, detail + (f" · {warn} avvisi minori" if warn else ""), score,
+                  facts={**holders, "lp_locked_pct": float(lp) if lp is not None else None})
+
+
+def holder_concentration(report: dict) -> tuple[float, float]:
+    """(% del primo wallet, % dei primi 10), senza pool, locker e conti noti."""
+    skip = set((report.get("knownAccounts") or {}).keys())
+    for m in report.get("markets") or []:
+        skip |= {m.get("pubkey"), m.get("liquidityA"), m.get("liquidityB")}
+    skip.discard(None)
+    held = sorted((float(h.get("pct") or 0) for h in report.get("topHolders") or []
+                   if h.get("owner") not in skip and h.get("address") not in skip), reverse=True)
+    return (held[0] if held else 0.0), sum(held[:10])
+
+
+def _stems(text: str) -> set[str]:
+    return {w for w in re.findall(r"[a-z0-9]+", (text or "").lower()) if len(w) >= 3} - _GENERIC_WORDS
+
+
+def github_belongs(repo: dict, token: dict, website: str | None) -> bool:
+    """Il repository e' del progetto: nome, sito o simbolo compaiono in
+    proprietario, nome, homepage o descrizione del repository."""
+    host = _host(website or "")
+    wanted = _stems(token.get("symbol") or "") | _stems(token.get("name") or "") | _stems(host.split(".")[0])
+    hay = "".join(re.findall(r"[a-z0-9]+", " ".join(
+        str(repo.get(k) or "") for k in ("full_name", "homepage", "description")).lower()))
+    return any(w in hay for w in wanted) or bool(host and host in (repo.get("homepage") or "").lower())
 
 
 async def goplus(chain: str, token: str, client: httpx.AsyncClient) -> dict | None:
@@ -453,14 +501,19 @@ def judge_github(repo: dict | None, commits: list[dict] | None, total: int | Non
                   facts=facts)
 
 
-async def check_github(urls: list[str], client: httpx.AsyncClient) -> tuple[dict, str | None]:
-    """(check, link al repository)."""
+async def check_github(urls: list[str], client: httpx.AsyncClient, token: dict | None = None,
+                       website: str | None = None) -> tuple[dict, str | None]:
+    """(check, link al repository). Con `token`, il repository deve essere
+    del progetto: un repository altrui non vale come GitHub."""
     targets = github_targets(urls)
     if not targets:
         return _check("github", "GitHub", None, "nessun GitHub"), None
     try:
         owner, name = next(((o, r) for o, r in targets if r), targets[0])
         repo = await github_repo(owner, name, client)
+        if token and repo and not github_belongs(repo, token, website):
+            return _check("github", "GitHub", False,
+                          f"{repo.get('full_name') or owner} non e' del progetto"), repo.get("html_url")
         commits = await github_commits(repo["full_name"], client) if repo else None
         total = await github_commit_total(repo["full_name"], client) if commits else None
     except (httpx.HTTPError, ValueError, KeyError, TypeError):
@@ -613,7 +666,7 @@ async def assess(token: dict, links: dict, client: httpx.AsyncClient) -> dict:
 
     gh, out["github"] = await check_github(
         (links.get("websites") or []) + [s["url"] for s in links.get("socials") or []] + site.get("github", []),
-        client)
+        client, token, website)
     out["checks"].append(gh)
     if gh["ok"] is False:
         return done("fail", f"GitHub: {gh['detail']}")
@@ -644,6 +697,14 @@ async def assess(token: dict, links: dict, client: httpx.AsyncClient) -> dict:
         out["checks"].append(_check("gem", "Sopra $100k", not short, short or "pagella da gemma"))
         if short:
             return done("fail", f"cap ${cap / 1e6:.2f}M: serve una pagella eccellente, {short}")
+    # Gli esiti veri dei token gia' visti (outcomes.py): entra solo quando
+    # prevede i rug fuori campione, e blocca solo con
+    # onchain_memory_gate. Le eccezioni GitHub si mostrano comunque.
+    memory = outcomes.judge(token, out["checks"], out["report"])
+    if memory:
+        out["checks"].append(memory)
+        if memory["ok"] is False and settings.onchain_memory_gate and not token.get("exception"):
+            return done("fail", f"Memoria: {memory['detail']}")
     return done("ok", "")
 
 

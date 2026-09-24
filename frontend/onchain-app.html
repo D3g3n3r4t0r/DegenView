@@ -1529,7 +1529,7 @@
       animation: radar-scan 2.8s cubic-bezier(.45,0,.55,1) infinite; } }
   .radar-pulse[data-busy="true"] .rp-scan::after { animation-duration: 1.1s; }
   @keyframes radar-scan { from { translate: -100% 0; } to { translate: 340% 0; } }
-  .radar-rejected { margin-block-start: 18px; padding-block-start: 6px; border-block-start: 1px solid var(--line);
+  .radar-rejected, .radar-log { margin-block-start: 18px; padding-block-start: 6px; border-block-start: 1px solid var(--line);
     & ul { list-style: none; margin: 4px 0 0; padding: 0; }
     & li { border-block-end: 1px solid var(--line); }
     & li.is-arrival { animation: listing-drop .62s cubic-bezier(.2,.9,.25,1.15) backwards; }
@@ -1546,6 +1546,10 @@
   }
   .rj-more { margin: 8px 4px 0; padding: 6px 12px; border: 0; border-radius: 99px; background: var(--raised);
     color: var(--ink-dim); font-size: 12.5px; }
+  .radar-log li { display: grid; grid-template-columns: 34px minmax(0, 1fr); column-gap: 10px; align-items: center;
+    padding: 9px 4px; }
+  .radar-shame { & .tk { opacity: 1; filter: grayscale(1); } & .tk-name b { text-decoration: line-through;
+    text-decoration-color: var(--danger); } }
   @media (prefers-reduced-motion: reduce) { .rp-scan::after, .radar-rejected li { animation: none !important; } }
   #app-shell[data-view="manual"] #radar { display: none !important; }
   .radar-grid { display: grid; gap: 18px; align-items: start;
@@ -1732,9 +1736,13 @@
    Portafoglio) + indirizzo in alto (ricevi, invia, limiti, chiave).
    ============================================================ */
 @layer components {
-  #app-shell[data-view="manual"] :is(#wallet-view, #board),
-  #app-shell[data-view="pilot"] #wallet-view,
-  #app-shell[data-view="wallet"] :is(#pilot, #radar, #board, #market-order-row) { display: none !important; }
+  /* Lorenzo: "la cosa centrale e' avere la leaderboard [...] e le
+     scansioni"; il saldo non in cima; l'automazione in una sezione sua.
+     Ogni sezione vive in una vista sola. */
+  #app-shell:not([data-view="home"]) :is(#board, #radar),
+  #app-shell:not([data-view="manual"]) #market-order-row,
+  #app-shell:not([data-view="auto"]) #pilot,
+  #app-shell:not([data-view="wallet"]) :is(.status-strip, #wallet-view) { display: none !important; }
 
   /* In Scambia le monete le mostra lo swap stesso, sopra l'importo. */
   #app-shell[data-view="manual"] #holdings { display: none !important; }
@@ -1748,8 +1756,8 @@
 
   .dock {
     position: fixed; z-index: 40; inset-block-end: calc(14px + env(safe-area-inset-bottom)); inset-inline-start: 50%;
-    translate: -50% 0; display: grid; grid-template-columns: repeat(3, 1fr); padding: 5px;
-    inline-size: min(360px, calc(100vw - 32px)); border-radius: 22px;
+    translate: -50% 0; display: grid; grid-template-columns: repeat(4, 1fr); padding: 5px;
+    inline-size: min(420px, calc(100vw - 32px)); border-radius: 22px;
     background: color-mix(in oklch, var(--panel) 78%, transparent); border: 1px solid var(--line);
     backdrop-filter: blur(18px) saturate(1.4); -webkit-backdrop-filter: blur(18px) saturate(1.4);
     box-shadow: 0 12px 40px rgb(0 0 0 / .45);
@@ -1767,12 +1775,15 @@
     & button:active { scale: .94; }
   }
   .dock-thumb {
-    position: absolute; inset-block: 5px; inset-inline-start: 5px; inline-size: calc((100% - 10px) / 3);
+    position: absolute; inset-block: 5px; inset-inline-start: 5px; inline-size: calc((100% - 10px) / 4);
     border-radius: 17px; background: var(--raised); pointer-events: none;
     transition: translate .42s cubic-bezier(.3, 1.4, .5, 1);
   }
   .dock[data-at="1"] .dock-thumb { translate: 100% 0; }
   .dock[data-at="2"] .dock-thumb { translate: 200% 0; }
+  .dock[data-at="3"] .dock-thumb { translate: 300% 0; }
+  /* La rete, ora che il saldo non e' in cima, sta nella testata. */
+  .topbar .chain-flip { font-size: 13px; }
 
   /* Cambio vista: scorre nella direzione della barra. */
   ::view-transition-old(root), ::view-transition-new(root) { animation-duration: .28s; }
@@ -1847,7 +1858,7 @@
   @media (prefers-reduced-motion: reduce) {
     .dock-thumb, .holdings .wallet-chip { transition: none; animation: none; }
   }
-=======
+}
 /* --- classifica ------------------------------------------------------- */
 @layer components {
   .board {
@@ -1860,7 +1871,7 @@
       cursor: pointer; transition: background .15s, scale .12s; &:active { scale: .985; } }
   }
   .board-podium { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; align-items: end;
-    &[data-count="1"] { grid-template-columns: minmax(0, 1fr); max-inline-size: 240px; }
+    &[data-count="1"] { grid-template-columns: minmax(0, 260px); justify-content: center; }
     &[data-count="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     & li { --metal: var(--gold); order: 2; }
     & li[data-place="2"] { --metal: var(--silver); order: 1; }
@@ -1942,47 +1953,15 @@
   }
   @media (prefers-reduced-motion: reduce) { .board *, .board-podium button::before { animation: none !important; } }
 
-  /* Stile dell'immagine scelta da Lorenzo: nero pieno, griglia isometrica
-     appena visibile, una linea verde che si accende. */
-  .board { --glow: #3ee08f; margin-block: 6px 26px; position: relative; }
-  .board-hero { position: relative; display: flex; justify-content: space-between; align-items: end; gap: 12px;
-    margin: 0 0 14px !important; padding: 22px 18px 18px; border-radius: var(--radius); overflow: hidden;
-    background:
-      linear-gradient(180deg, transparent, color-mix(in oklch, var(--bg) 70%, transparent)),
-      repeating-linear-gradient(30deg, color-mix(in oklch, var(--glow) 7%, transparent) 0 1px, transparent 1px 26px),
-      repeating-linear-gradient(-30deg, color-mix(in oklch, var(--glow) 7%, transparent) 0 1px, transparent 1px 26px),
-      radial-gradient(120% 140% at 80% 0%, #24262b, #0c0d0f 60%);
-    border: 1px solid #1d1f23;
-    &::after { content: ""; position: absolute; inset: auto 0 0 0; block-size: 2px;
-      background: linear-gradient(90deg, transparent, var(--glow) 30%, color-mix(in oklch, var(--glow), white 40%) 50%, var(--glow) 70%, transparent);
-      box-shadow: 0 0 18px 2px color-mix(in oklch, var(--glow) 55%, transparent);
-      animation: board-seam 4s ease-in-out infinite; }
-    & h2 { margin: 2px 0 0; font-size: clamp(22px, 5vw, 30px); font-weight: 600; letter-spacing: -.03em; color: var(--ink); }
-    & > span { font-size: 12px; color: var(--ink-faint); font-variant-numeric: tabular-nums; text-align: end; max-inline-size: 45%; }
-  }
-  .board-kicker { margin: 0; font: 500 11px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--glow);
-    display: flex; align-items: center; gap: 8px;
-    &::before { content: ""; inline-size: 6px; block-size: 6px; border-radius: 50%; background: var(--glow);
-      box-shadow: 0 0 10px var(--glow); animation: board-blink 2s ease-in-out infinite; } }
-  @keyframes board-seam { 50% { opacity: .55; } }
-  @keyframes board-blink { 50% { opacity: .35; } }
-  .board-podium button { background: linear-gradient(160deg, #1a1b1f, #0d0e10 70%) !important; }
-  .board-podium li[data-place="1"] button {
-    background: linear-gradient(160deg, #202226, #0b0c0e 70%) !important;
-    box-shadow: inset 0 -2px 0 color-mix(in oklch, var(--glow) 80%, transparent),
-                0 14px 40px -18px color-mix(in oklch, var(--glow) 70%, transparent); }
+  .board { margin-block: 6px 26px; }
   .bd-honor { margin: 2px 4px 0; font-size: 11.5px; line-height: 1.35; color: var(--ink-dim); text-align: center; }
-  .bd-sim { font: 500 11px var(--mono); color: var(--glow); }
+  .bd-sim { font: 500 11px var(--mono); color: var(--live); }
   .bd-traits { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; padding: 0; list-style: none;
     & li { font-size: 11.5px; padding: 3px 8px; border-radius: 99px; background: var(--raised); color: var(--ink-faint); }
-    & li[data-got="1"] { color: var(--glow); background: color-mix(in oklch, var(--glow) 12%, transparent); }
+    & li[data-got="1"] { color: var(--live); background: color-mix(in oklch, var(--live) 12%, transparent); }
     & li[data-got="half"] { color: var(--ink-dim); } }
   /* Lorenzo: "vedere le scritte delle cose scartate non mi interessa". */
   .radar-rejected { display: none !important; }
-  @media (max-width: 520px) {
-    .board-hero { padding: 16px 14px 14px; & h2 { font-size: 21px; } & > span { font-size: 11px; } }
-  }
-  @media (prefers-reduced-motion: reduce) { .board-hero::after, .board-kicker::before { animation: none; } }
 }
 </style>
 <!--onchain-importmap-->
@@ -1999,6 +1978,9 @@
            salvato) e li' "indietro" non avrebbe dove andare. -->
       <a class="brand" href="/" title="Torna al sito"><span class="brand-dot" aria-hidden="true"></span><h1>Liquidity Engine · Wallet</h1></a>
       <div class="topbar-right">
+        <button type="button" class="chain-flip" id="chain-flip" title="Tocca per cambiare rete">
+          <span class="chain-ic" id="chain-ic" aria-hidden="true">◎</span><span id="chain-label">Solana</span><span class="flip-ic" aria-hidden="true">⇄</span>
+        </button>
         <div class="switcher" id="chain-switch" data-selected="solana" role="tablist" aria-label="Chain">
           <span class="thumb" aria-hidden="true"></span>
           <button type="button" role="tab" aria-selected="true" data-chain="solana"><span class="chain-ic" aria-hidden="true">◎</span> Solana</button>
@@ -2023,14 +2005,10 @@
       </form>
     </section>
 
-    <div id="app-shell" class="stack" data-view="pilot" hidden>
+    <div id="app-shell" class="stack" data-view="home" hidden>
       <div class="status-strip">
         <section class="status-card balance-card">
-          <p class="label">Saldo su
-            <button type="button" class="chain-flip" id="chain-flip" title="Tocca per cambiare rete">
-              <span class="chain-ic" id="chain-ic" aria-hidden="true">◎</span><span id="chain-label">Solana</span><span class="flip-ic" aria-hidden="true">⇄</span>
-            </button>
-          </p>
+          <p class="label">Saldo</p>
           <div class="amount" id="balance">—</div>
           <div class="meta">
             <button type="button" class="addr" id="address" title="Copia l'indirizzo"></button>
@@ -2076,10 +2054,7 @@
            che conta". DREGG sta primo come metro di paragone. La disegna
            static/onchain/leaderboard.js. -->
       <section class="board" id="board" hidden>
-        <header class="board-hero">
-          <div><p class="board-kicker">Classifica live</p><h2>I progetti migliori</h2></div>
-          <span data-board-meta></span>
-        </header>
+        <header><h3>Classifica · progetti migliori</h3><span data-board-meta></span></header>
         <ol class="board-podium" data-board-podium></ol>
         <div class="board-detail" data-board-detail hidden></div>
         <ol class="board-list" data-board-list></ol>
@@ -2118,6 +2093,19 @@
           <h4 class="radar-sub">Scartati dal filtro <span data-rejected-count></span></h4>
           <ul></ul>
           <button type="button" class="rj-more" data-rejected-more hidden></button>
+        </div>
+        <!-- La memoria: cosa e' successo davvero ai token visti (outcomes.py). -->
+        <div class="radar-log" data-radar-memory hidden>
+          <h4 class="radar-sub">Memoria <span data-memory-count></span></h4>
+          <p class="radar-foot" data-memory-line></p>
+          <ul></ul>
+        </div>
+        <!-- Lorenzo: "crea sezione ironica dove ci andranno a finire tutte le
+             inculate subite". I rug passati dal filtro (outcomes.shame). -->
+        <div class="radar-log radar-shame" data-radar-shame hidden>
+          <h4 class="radar-sub">Muro delle inculate <span data-shame-count></span></h4>
+          <p class="radar-foot">Promossi a pieni voti, spariti col malloppo. Da qui non escono più.</p>
+          <ul></ul>
         </div>
       </section>
       <!-- Il pilota: la vista di partenza. Lorenzo: "voglio sapere cosa sta
@@ -2204,8 +2192,9 @@
        il menu "⋯" che passava da una vista all'altra. -->
   <nav class="dock" id="dock" aria-label="Sezioni" hidden>
     <span class="dock-thumb" aria-hidden="true"></span>
-    <button type="button" data-go="pilot" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4"/><path d="M12 12 18 6"/></svg><span>Radar</span></button>
+    <button type="button" data-go="home" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4"/><path d="M12 12 18 6"/></svg><span>Radar</span></button>
     <button type="button" data-go="manual"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v15M3.5 15.5 7 19l3.5-3.5M17 20V5m-3.5 3.5L17 5l3.5 3.5"/></svg><span>Scambia</span></button>
+    <button type="button" data-go="auto"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 3 5 13.5h6L10 21l8-10.5h-6z"/></svg><span>Pilota</span></button>
     <button type="button" data-go="wallet"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="6" width="17" height="13" rx="3"/><path d="M3.5 10h17M16 14.5h1.5"/></svg><span>Portafoglio</span></button>
   </nav>
   <div class="toast" id="toast" role="status" hidden>
