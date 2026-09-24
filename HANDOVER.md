@@ -62,6 +62,11 @@ filtro anti-rug in `legit.py`, frontend `frontend/static/onchain/radar.js`.
   strategia valida (`strategy_ok`). Fonti extra: profili/boost DexScreener.
   Prova reale DREGG: pagella 89, GitHub 89. Lorenzo lo vuole primo nella
   classifica (thread "Classifica progetti").
+- seed-0107 (rug VISE, -93%): il sito linkava pump-fun/pump-public-docs e
+  passava come GitHub del progetto. Ora `_PLATFORM_GITHUB` esclude i repo di
+  piattaforma, `github_belongs` chiede che il repo sia del progetto, e
+  `holder_concentration` scarta un wallet >15% o top 10 >35%. RugCheck
+  `graphInsidersDetected` NON e' usabile: DREGG ne ha 807.
 - Vincolo: il pilota (soldi veri) resta sotto $100k
   (`_SNIPER_ONCHAIN_MAX_MCAP_USD` in main.py). Mai strategie short.
 
