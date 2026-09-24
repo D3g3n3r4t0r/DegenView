@@ -62,13 +62,68 @@ let tokenCache = new Map();
 let onExecutedCb = null;
 let onTokenPickedCb = null;
 
-function availableToSell(chain) {
-  const native = state.balance?.native_balance;
-  if (typeof native !== "number") return null;
-  const reserve = GAS_RESERVE[chain] ?? 0;
-  // Arrotondato a 8 decimali: sottrarre due float da' artefatti come
-  // "0.0025700000000000002" che finirebbero dritti nel campo.
-  return Math.max(0, Math.round((native - reserve) * 1e8) / 1e8);
+// Cosa c'e' nel wallet, dal valore piu' alto: Lorenzo, "devo sapere subito
+// cosa ho disponibile anche quando vado a fare lo swap [...] deve essere
+// selezionata automaticamente la valuta detenuta, quella con maggior
+// quantita'". Dopo uno swap ETH -> USDG lo swap parte da USDG.
+let holdings = [];
+let holdingsKey = { chain: null, at: 0 };
+const HOLDINGS_TTL_MS = 20_000;  // lo swap si rimonta a ogni token scelto sul grafico
+
+const sameAddress = (a, b) => Boolean(a && b) && a.toLowerCase() === b.toLowerCase();
+const fmtAmount = (n) => n.toLocaleString("it-IT", { maximumFractionDigits: n >= 1 ? 4 : 6 });
+
+async function loadHoldings(chain, force = false) {
+  if (!force && holdingsKey.chain === chain && Date.now() - holdingsKey.at < HOLDINGS_TTL_MS) return;
+  const [balance, portfolio] = await Promise.all([
+    api.getBalance(chain).catch(() => (state.balance?.chain === chain ? state.balance : null)),
+    api.getPortfolio(chain).catch(() => ({ holdings: [] })),
+  ]);
+  if (balance) state.balance = balance;
+  const native = NATIVE[chain];
+  const stable = DEFAULT_OUTPUT[chain];
+  const rows = [];
+  if (typeof balance?.native_balance === "number" && balance.native_balance > 0) {
+    rows.push({ ...native, amount: balance.native_balance, priceUsd: balance.native_price_usd ?? null, isNative: true });
+  }
+  for (const h of portfolio.holdings || []) {
+    if (!(h.amount > 0) || sameAddress(h.address, native.address)) continue;
+    const known = sameAddress(h.address, stable.address) ? stable : null;
+    rows.push({
+      address: h.address, symbol: known?.symbol || h.symbol, decimals: known?.decimals ?? null,
+      amount: h.amount, priceUsd: h.price_usd ?? (known ? 1 : null), isNative: false,
+    });
+  }
+  for (const r of rows) r.valueUsd = r.priceUsd != null ? r.amount * r.priceUsd : null;
+  holdings = rows.sort((a, b) => (b.valueUsd ?? -1) - (a.valueUsd ?? -1));
+  holdingsKey = { chain, at: Date.now() };
+}
+
+// Quanto si puo' vendere di un token: il saldo, meno la riserva per il gas
+// se e' il nativo. Per difetto a 8 decimali: sottrarre due float da'
+// artefatti come "0.0025700000000000002", e arrotondare per eccesso
+// chiederebbe piu' di quanto c'e'.
+function availableFor(chain, token) {
+  const h = token && holdings.find((x) => sameAddress(x.address, token.address));
+  if (!h) return null;
+  const reserve = h.isNative ? (GAS_RESERVE[chain] ?? 0) : 0;
+  return Math.max(0, Math.floor((h.amount - reserve) * 1e8) / 1e8);
+}
+
+// Un token del wallet pronto come gamba dello swap: i decimali del nativo
+// e della stablecoin sono noti, gli altri arrivano dal contratto.
+async function holdingAsLeg(chain, h) {
+  if (h.isNative) return { ...NATIVE[chain], priceUsd: h.priceUsd, isNative: true };
+  if (h.decimals != null) return { address: h.address, symbol: h.symbol, decimals: h.decimals, priceUsd: h.priceUsd, isNative: false };
+  const resolved = await resolveToken(chain, h.address);
+  return { ...resolved, symbol: h.symbol || resolved.symbol, priceUsd: h.priceUsd ?? resolved.priceUsd, isNative: false };
+}
+
+// Lato "ricevi" quando non lo sceglie il grafico: dal nativo alla
+// stablecoin, da tutto il resto al nativo.
+function defaultOutFor(chain, inLeg) {
+  if (!inLeg.isNative) return { ...NATIVE[chain], priceUsd: state.balance?.native_price_usd ?? null, isNative: true };
+  return { ...DEFAULT_OUTPUT[chain], priceUsd: null, isNative: false };
 }
 
 // Metadati di un token qualsiasi: cache per indirizzo, mai indovinati
@@ -96,51 +151,70 @@ export async function mountSwap(container, { onExecuted, onTokenPicked, presetTo
   onTokenPickedCb = onTokenPicked ?? null;
   const chain = state.chain;
   const native = NATIVE[chain];
-  const usablePreset = presetToken && presetToken.address.toLowerCase() !== native.address.toLowerCase();
-  const defaultOut = usablePreset ? presetToken : DEFAULT_OUTPUT[chain];
-  leg = {
-    in: { ...native, priceUsd: state.balance?.native_price_usd ?? null, isNative: true },
-    out: { ...defaultOut, priceUsd: defaultOut.priceUsd ?? null, isNative: defaultOut.address === native.address },
-  };
   tokenCache = new Map();
 
-  let armed = false;
-  try { armed = Boolean((await api.getRiskStatus(chain)).execution_enabled); } catch { /* resta spento */ }
+  const [risk] = await Promise.all([
+    api.getRiskStatus(chain).catch(() => null),
+    loadHoldings(chain),
+  ]);
+  const armed = Boolean(risk?.execution_enabled);
 
-  if (state.balance?.chain !== chain) {
-    try { state.balance = await api.getBalance(chain); } catch { /* resta quello che c'e', o niente */ }
+  // Si vende quello che si ha di piu' (in dollari), non sempre il nativo.
+  leg.in = { ...native, priceUsd: state.balance?.native_price_usd ?? null, isNative: true };
+  if (holdings.length) {
+    try { leg.in = await holdingAsLeg(chain, holdings[0]); } catch { /* resta il nativo */ }
   }
-  leg.in.priceUsd = state.balance?.native_price_usd ?? null;
+  const usablePreset = presetToken && !sameAddress(presetToken.address, native.address)
+    && !sameAddress(presetToken.address, leg.in.address);
+  leg.out = usablePreset
+    ? { ...presetToken, priceUsd: presetToken.priceUsd ?? null, isNative: false }
+    : defaultOutFor(chain, leg.in);
 
   paintForm(armed);
-  const available = availableToSell(chain);
+  const available = availableFor(chain, leg.in);
   const amountInput = host().querySelector("#swap-amount");
   if (available != null && available > 0) { amountInput.value = available; scheduleQuote(armed); }
 }
 
+function availableLabel(chain) {
+  const available = availableFor(chain, leg.in);
+  if (available == null) return { text: `Nel wallet: 0 ${leg.in.symbol}`, empty: true };
+  return { text: `Disponibile ${fmtAmount(available)} ${leg.in.symbol}`, empty: available <= 0 };
+}
+
+// "Nel wallet": cosa c'e', sempre in vista sopra lo swap. Un tocco su una
+// voce la mette in vendita.
+function walletStrip() {
+  if (!holdings.length) return `<p class="swap-wallet-empty">Nessun saldo su questa rete</p>`;
+  return holdings.map((h) => `
+    <button type="button" class="wallet-chip${sameAddress(h.address, leg.in.address) ? " is-current" : ""}" data-hold="${h.address}">
+      <b>${fmtAmount(h.amount)} ${h.symbol}</b>${h.valueUsd != null ? `<small>${formatUsd(h.valueUsd)}</small>` : ""}
+    </button>`).join("");
+}
+
 function paintForm(armed) {
   const chain = state.chain;
-  const available = availableToSell(chain);
+  const available = availableFor(chain, leg.in);
+  const availableInfo = availableLabel(chain);
   // Campo alla Uniswap (mockup approvato da Lorenzo): importo grande e
   // pillola del token sulla stessa riga, didascalia e disponibile sotto,
   // dentro lo stesso riquadro. La pillola E' il selettore del token.
   host().innerHTML = `
+    <div class="swap-wallet" id="swap-wallet" aria-label="Nel wallet">${walletStrip()}</div>
     <form class="form swap-form" id="swap-form">
       <div class="swap-field">
         <div class="swap-field-top">
           <input id="swap-amount" name="amount" type="number" min="0" step="any" value="" placeholder="0" required />
-          <button type="button" class="swap-max" id="swap-max" ${leg.in.isNative ? "" : "hidden"}>Max</button>
+          <button type="button" class="swap-max" id="swap-max" ${available > 0 ? "" : "hidden"}>Max</button>
           <button type="button" class="token-pill" id="swap-pick-in"><span class="token-ic" aria-hidden="true"></span><span id="swap-in-symbol">${leg.in.symbol}</span> ▾</button>
         </div>
         <div class="swap-field-bottom">
           <label for="swap-amount">Vendi <span id="swap-in-usd"></span></label>
-          <span id="swap-available">${leg.in.isNative
-            ? (available != null ? `Disponibile ${available.toLocaleString("it-IT", { maximumFractionDigits: 6 })} ${leg.in.symbol}` : "Saldo n/d")
-            : "Size a mano"}</span>
+          <span id="swap-available" class="${availableInfo.empty ? "is-warn" : ""}">${availableInfo.text}</span>
         </div>
       </div>
 
-      <div class="swap-arrow" aria-hidden="true">↓</div>
+      <button type="button" class="swap-arrow" id="swap-flip" aria-label="Inverti vendi e ricevi">↓</button>
 
       <div class="swap-field is-readonly">
         <div class="swap-field-top">
@@ -155,7 +229,7 @@ function paintForm(armed) {
 
       <dl class="route-info">
         <div><dt>Impatto sul prezzo</dt><dd id="swap-detail">—</dd></div>
-        <div><dt>Percorso</dt><dd>${chain === "solana" ? "Jupiter" : "Uniswap v3"}</dd></div>
+        <div><dt>Percorso</dt><dd id="swap-route">${chain === "solana" ? "Jupiter" : "Uniswap v3"}</dd></div>
       </dl>
 
       <label class="swap-confirm">
@@ -179,12 +253,12 @@ function paintForm(armed) {
   amountInput.addEventListener("input", () => { confirmBox.checked = false; scheduleQuote(armed); });
   confirmBox.addEventListener("change", () => scheduleQuote(armed));
   maxButton.addEventListener("click", () => {
-    const max = availableToSell(chain);
+    const max = availableFor(chain, leg.in);
     if (max != null) { amountInput.value = max; confirmBox.checked = false; scheduleQuote(armed); }
   });
   if (pctSlider) {
     const applyPct = (pct) => {
-      const max = availableToSell(chain) ?? 0;
+      const max = availableFor(chain, leg.in) ?? 0;
       amountInput.value = Math.round(max * (pct / 100) * 1e8) / 1e8;
       confirmBox.checked = false;
       scheduleQuote(armed);
@@ -192,6 +266,16 @@ function paintForm(armed) {
     pctSlider.addEventListener("input", () => { pctVal.value = pctSlider.value; applyPct(Number(pctSlider.value)); });
     pctVal.addEventListener("input", () => { pctSlider.value = pctVal.value; applyPct(Number(pctVal.value)); });
   }
+  host().querySelector("#swap-wallet").addEventListener("click", async (event) => {
+    const chip = event.target.closest("[data-hold]");
+    const h = chip && holdings.find((x) => sameAddress(x.address, chip.dataset.hold));
+    if (!h || sameAddress(h.address, leg.in.address)) return;
+    try { await setLeg("in", await holdingAsLeg(chain, h), armed); } catch { /* resta com'era */ }
+  });
+  host().querySelector("#swap-flip").addEventListener("click", () => {
+    leg = { in: leg.out, out: leg.in };
+    repaintWithAmount(armed, availableFor(chain, leg.in));
+  });
   host().querySelector("#swap-pick-in").addEventListener("click", () => pickToken("in", armed));
   host().querySelector("#swap-pick-out").addEventListener("click", () => pickToken("out", armed));
   form.addEventListener("submit", (event) => {
@@ -215,14 +299,16 @@ function pickToken(side, armed) {
         // contratto puo' tornare None su Robinhood Chain (indirizzo di
         // routing, non garantito un ERC20 vero) — stesso bug gia' visto
         // sull'endpoint del prezzo live.
+        let picked;
         if (address.toLowerCase() === NATIVE[chain].address.toLowerCase()) {
-          leg[side] = { ...NATIVE[chain], priceUsd: state.balance?.native_price_usd ?? null, isNative: true };
+          picked = { ...NATIVE[chain], priceUsd: state.balance?.native_price_usd ?? null, isNative: true };
         } else {
           const resolved = await resolveToken(chain, address);
-          leg[side] = { ...resolved, isNative: false };
-          onTokenPickedCb?.(resolved);
+          picked = { ...resolved, isNative: false };
+          // Il grafico segue quello che si compra, non quello che si vende.
+          if (side === "out") onTokenPickedCb?.(resolved);
         }
-        paintForm(armed);
+        await setLeg(side, picked, armed);
       } catch (error) {
         if (submitButton) submitButton.textContent = "Riprova";
         const detailEl = host().querySelector("#swap-detail");
@@ -233,6 +319,24 @@ function pickToken(side, armed) {
       }
     },
   });
+}
+
+// Cambia una gamba. Se diventa uguale all'altra le due si scambiano, come
+// su un DEX. Scegliendo cosa vendere l'importo diventa quanto se ne ha.
+async function setLeg(side, picked, armed) {
+  const other = side === "in" ? "out" : "in";
+  if (sameAddress(picked.address, leg[other].address)) leg[other] = leg[side];
+  leg[side] = picked;
+  const amountInput = host().querySelector("#swap-amount");
+  const keep = amountInput ? amountInput.value : "";
+  repaintWithAmount(armed, side === "in" ? availableFor(state.chain, leg.in) : Number(keep) || null);
+}
+
+function repaintWithAmount(armed, amount) {
+  paintForm(armed);
+  const amountInput = host().querySelector("#swap-amount");
+  if (amount != null && amount > 0) amountInput.value = amount;
+  scheduleQuote(armed);
 }
 
 function scheduleQuote(armed) {
@@ -291,6 +395,8 @@ async function requestQuote(rawAmount, armed) {
     // LI.FI): si vede quanto si riceverebbe, la firma su quel percorso non
     // e' ancora collegata.
     const viaAggregator = quote.route === "aggregator";
+    const routeEl = host().querySelector("#swap-route");
+    if (routeEl && chain === "robinhood") routeEl.textContent = viaAggregator ? quote.source : "Uniswap v3";
     submitButton.disabled = !armed || viaAggregator || !confirmBox?.checked;
     submitButton.textContent = !armed ? "Esecuzione spenta sul server"
       : viaAggregator ? `Prezzo da ${quote.source}: swap in arrivo` : "Firma e invia";
@@ -351,7 +457,17 @@ async function confirmAndExecute(armed) {
     outcome.textContent = result.accepted
       ? `Inviato. Firma: ${result.tx_signature}`
       : result.reason;
-    if (result.accepted) onExecutedCb?.();
+    if (result.accepted) {
+      onExecutedCb?.();
+      // Il saldo cambia: la striscia "Nel wallet" e il disponibile si
+      // aggiornano senza rifare il modulo (l'esito resta a schermo).
+      loadHoldings(chain, true).then(() => {
+        const strip = host()?.querySelector("#swap-wallet");
+        if (strip) strip.innerHTML = walletStrip();
+        const availableEl = host()?.querySelector("#swap-available");
+        if (availableEl) availableEl.textContent = availableLabel(chain).text;
+      }).catch(() => {});
+    }
   } catch (error) {
     outcome.dataset.tone = "no";
     outcome.textContent = error instanceof ApiError ? error.message : "Errore inatteso.";
