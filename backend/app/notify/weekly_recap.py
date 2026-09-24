@@ -25,6 +25,7 @@ perche' una macchina ci ha provato.
 
 from __future__ import annotations
 
+import html
 import json
 from datetime import datetime, timezone
 from pathlib import Path
@@ -38,15 +39,6 @@ _TRAILER = "Aggiornamento:"
 _ATTRIBUTION = ("Co-Authored-By:", "Claude-Session:", "Signed-off-by:")
 _MONTHS_IT = ["gen", "feb", "mar", "apr", "mag", "giu",
               "lug", "ago", "set", "ott", "nov", "dic"]
-
-
-def _clip(text: str, limit: int) -> str:
-    """Taglia su uno spazio, non a meta' parola, e lo dichiara con i puntini."""
-    text = text.strip()
-    if len(text) <= limit:
-        return text
-    cut = text[:limit].rsplit(" ", 1)[0].rstrip(" ,;:-—")
-    return f"{cut}…"
 
 
 def _strip_attribution(text: str) -> str:
@@ -76,10 +68,10 @@ def italian_line(commit_message: str) -> str:
         if stripped.startswith(_TRAILER):
             text = _strip_attribution(stripped[len(_TRAILER):])
             if text:
-                return _clip(text, 160)
+                return text
     if not commit_message.strip():
         return "(senza descrizione)"
-    return _clip(commit_message.splitlines()[0], 160)
+    return commit_message.splitlines()[0].strip()
 
 
 def _fmt_day(d: datetime) -> str:
@@ -108,7 +100,7 @@ def _resolutions_since(since: int, path: Path | None = None) -> list[str]:
             continue
         # Solo la prima frase: un riepilogo e' un indice, non l'archivio.
         first = summary.split(". ")[0].rstrip(".")
-        out.append(f"• <b>{issue_id}</b> — {_clip(first, 170)}")
+        out.append(f"• <b>{html.escape(issue_id, quote=False)}</b> — {html.escape(first, quote=False)}")
     return out
 
 
@@ -144,16 +136,12 @@ def build_recap(
 
     if resolved:
         parts.append(f"<b>Segnalazioni risolte ({len(resolved)}):</b>")
-        parts.extend(resolved[:12])
-        if len(resolved) > 12:
-            parts.append(f"… e altre {len(resolved) - 12}")
+        parts.extend(resolved)
         parts.append("")
 
     if total_changes:
         parts.append(f"<b>Modifiche al codice: {total_changes}</b>")
-        parts.extend(f"• {c}" for c in described[:15])
-        if len(described) > 15:
-            parts.append(f"… e altre {len(described) - 15} descritte")
+        parts.extend(f"• {html.escape(c, quote=False)}" for c in described)
     else:
         parts.append("<i>Nessuna modifica al codice in questo periodo.</i>")
 
