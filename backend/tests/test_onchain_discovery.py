@@ -93,3 +93,33 @@ def test_github_of_another_project_is_fatal(monkeypatch):
                                            token={"chain": "solana", "token_address": "M", "symbol": "GRID",
                                                   "name": "Grid Protocol"}, website="https://grid.xyz"))
     assert out["fatal"] == "GitHub non appartiene al progetto"
+
+
+class _Resp:
+    def __init__(self, status, body):
+        self.status_code, self._body = status, body
+
+    def json(self):
+        return self._body
+
+
+class _Client:
+    def __init__(self, routes):
+        self.routes = routes
+
+    async def get(self, url, **kw):
+        return next((r for k, r in self.routes.items() if url.endswith(k)), _Resp(404, {}))
+
+
+def test_github_found_by_account_declaring_the_site():
+    c = _Client({"/users/gridarena": _Resp(200, {"blog": "gridarena.xyz"})})
+    assert asyncio.run(d.legit.github_find("https://www.gridarena.xyz/", c)) == "https://github.com/gridarena"
+
+
+def test_github_found_by_repo_homepage_only_on_exact_domain():
+    items = [{"html_url": "https://github.com/x/other", "homepage": "https://gridarena.xyz.evil.io"},
+             {"html_url": "https://github.com/y/arena", "homepage": "https://gridarena.xyz"}]
+    c = _Client({"/search/repositories": _Resp(200, {"items": items})})
+    assert asyncio.run(d.legit.github_find("https://gridarena.xyz", c)) == "https://github.com/y/arena"
+    c = _Client({"/search/repositories": _Resp(200, {"items": items[:1]})})
+    assert asyncio.run(d.legit.github_find("https://gridarena.xyz", c)) is None

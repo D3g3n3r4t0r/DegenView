@@ -595,6 +595,9 @@ async def analyze(item: dict, client: httpx.AsyncClient, *, skip: set[str] = fro
         if out["site"]["fatal"]:
             return out
     if "github" not in skip:
+        if not legit.github_targets([u for u in gh_links if u]):
+            found_gh = await legit.github_find(item.get("website"), client)
+            gh_links += [found_gh] if found_gh else []
         out["github"] = await analyze_github([u for u in gh_links if u], client, launched,
                                              token=item, website=item.get("website"))
         if out["github"]["fatal"]:
