@@ -1963,6 +1963,75 @@
   /* Lorenzo: "vedere le scritte delle cose scartate non mi interessa". */
   .radar-rejected { display: none !important; }
 }
+
+/* ============================================================
+   Da computer. Lorenzo: "sul desktop c'e' un po' di confusione
+   come layout, andrebbe rivisto completamente". Una griglia vera:
+   la barra sta nella testata; in Radar la classifica e' una
+   striscia compatta in cima, sotto a sinistra le liste del radar e
+   a destra il dettaglio del token, fermo mentre la lista scorre.
+   ============================================================ */
+@layer components {
+  @media (width >= 1100px) {
+    .topbar {
+      display: grid !important; grid-template-columns: 1fr auto 1fr; align-items: center;
+      position: sticky; inset-block-start: 0; z-index: 30; margin-block: -16px 0; padding-block: 12px;
+      background: color-mix(in oklch, var(--bg) 88%, transparent);
+      backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+      & .topbar-right { justify-self: end; }
+    }
+    .topbar .dock {
+      position: static; translate: none; inline-size: 440px; box-shadow: none; view-transition-name: none;
+      background: var(--panel); border-radius: 16px; padding: 4px;
+      & button { grid-auto-flow: column; justify-content: center; align-items: center; gap: 7px;
+        padding: 8px 10px; border-radius: 12px; font-size: 13px; }
+      & svg { inline-size: 17px; block-size: 17px; }
+    }
+    .topbar .dock .dock-thumb { inset-block: 4px; inset-inline-start: 4px; inline-size: calc((100% - 8px) / 4); border-radius: 12px; }
+    #app-shell:not([hidden]) { padding-block-end: 40px; }
+
+    /* --- Radar: classifica in alto, liste a sinistra, dettaglio a destra */
+    #app-shell[data-view="home"] {
+      display: grid; grid-template-columns: minmax(0, 400px) minmax(0, 1fr); column-gap: 28px; row-gap: 14px;
+      align-items: start;
+    }
+    #app-shell[data-view="home"] :is(#radar, .radar-grid) { display: contents; }
+    #app-shell[data-view="home"] #board { grid-column: 1 / -1; grid-row: 1; margin: 0 0 10px; }
+    #app-shell[data-view="home"] #radar > header { grid-column: 1; grid-row: 2; margin: 0; }
+    #app-shell[data-view="home"] .radar-col { grid-column: 1; grid-row: 3; }
+    #app-shell[data-view="home"] .radar-rejected { grid-column: 1; grid-row: 4; margin: 0; }
+    #app-shell[data-view="home"] .radar-stage {
+      grid-column: 2; grid-row: 2 / span 3; position: sticky; inset-block-start: 76px;
+      max-block-size: calc(100dvh - 96px); overflow-y: auto; scrollbar-width: thin;
+    }
+
+    /* Podio in riga, 1-2-3 da sinistra, stessa altezza: una striscia,
+       non tre card enormi. */
+    #board .board-podium { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; align-items: stretch; gap: 10px;
+      justify-content: stretch;
+      & li, & li[data-place="2"], & li[data-place="3"] { order: 0; }
+      & button, & li[data-place="1"] button {
+        block-size: 100%; display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; column-gap: 12px; row-gap: 6px;
+        align-items: center; justify-items: start; padding: 12px 16px; text-align: start;
+      }
+      & .bd-medal { grid-column: 1; grid-row: 1 / span 2; }
+      & .bd-sym { grid-column: 2; grid-row: 1; }
+      & small { grid-column: 2; grid-row: 2; }
+      & .bd-total, & li[data-place="1"] .bd-total { grid-column: 3; grid-row: 1 / span 2; justify-self: end; font-size: 28px; }
+      & .bd-bars { grid-column: 1 / -1; max-inline-size: none; }
+      & .bd-tags { grid-column: 1 / -1; }
+      & .bd-honor { grid-column: 1 / -1; margin: 0; text-align: start; }
+      & .bd-move { position: static; }
+    }
+
+    /* --- Portafoglio: saldo e monete a sinistra, azioni e tab a destra */
+    #app-shell[data-view="wallet"] {
+      display: grid; grid-template-columns: minmax(0, 380px) minmax(0, 1fr); column-gap: 28px; align-items: start;
+    }
+    #app-shell[data-view="wallet"] .status-strip { position: sticky; inset-block-start: 90px; }
+    #app-shell[data-view="wallet"] .holdings { flex-wrap: wrap; mask-image: none; overflow: visible; }
+  }
+}
 </style>
 <!--onchain-importmap-->
 </head>
