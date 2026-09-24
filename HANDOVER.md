@@ -33,6 +33,12 @@ riferimento scelta: cubo nero con fessura verde, griglia, candele.
   Lorenzo non vuole mettere soldi), nessuna commissione di swap. Kit del form (logo,
   banner, testi) in `/mnt/project-files/lancio/pumpfun/` e
   `docs/lancio-engn.md`. **Il token si crea solo col suo via.**
+- Sito dedicato: engn.xyz era gia' preso; proposto getengn.xyz (Lorenzo lo
+  compra, record A verso <server-ip>, nuvola grigia su Cloudflare). Il blocco
+  Caddy e' in `deploy/Caddyfile`: va unito solo quando il DNS punta al server,
+  altrimenti Caddy prova il certificato a vuoto. Kit X in
+  `/mnt/project-files/lancio/x/` (Lorenzo crea l'account, niente credenziali
+  in chat, niente post senza suo ok).
 - Prima di questo restava: modalita' di lancio (consigliato Raydium
   / Meteora con LP bruciato, non pump.fun), SOL di liquidita', verifica
   legale MiCA, registrare i social, spostare la pagina su `/` o dominio
