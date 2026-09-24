@@ -254,3 +254,51 @@ def test_newborn_pool_gets_candles_from_its_trades():
     rows = candles_from_trades(trades, 60)
     t0 = int(pd.Timestamp("2026-09-23T21:47:00Z").timestamp())
     assert rows == [[t0 + 60, 1.2, 1.2, 0.9, 0.9, 8.0], [t0, 1.0, 1.0, 1.0, 1.0, 2.0]]
+
+
+def test_exceptions_take_grown_projects_the_normal_filter_skips():
+    """DREGG: 88 giorni, $2.5M di cap, liquidita' 8% della cap."""
+    dregg = _pool("DREGG", liq=203_000, mcap=2_520_000, age_days=88)
+    normal = _pool("OK")
+    thin = _pool("THIN", liq=20_000, mcap=3_000_000, age_days=60)
+    ancient = _pool("OLD", liq=500_000, mcap=5_000_000, age_days=800)
+    huge = _pool("HUGE", liq=5_000_000, mcap=90_000_000, age_days=60)
+    taken = _pool("TAKEN", liq=300_000, mcap=3_000_000, age_days=60)
+    picked = radar.pick_exceptions([dregg, normal, thin, ancient, huge, taken], [_pool("TAKEN")])
+    assert [p.symbol for p in picked] == ["DREGG"] and picked[0].exception is True
+    assert radar.pick_candidates([dregg])[0] == []
+
+
+def test_pool_from_dexscreener():
+    p = radar.pool_from_dexscreener({
+        "chainId": "solana", "dexId": "pumpswap", "pairAddress": "Pair1",
+        "baseToken": {"address": "Mint1", "name": "dregg", "symbol": "DREGG"},
+        "liquidity": {"usd": 203_000}, "marketCap": 2_520_000, "pairCreatedAt": 1_750_000_000_000})
+    assert (p.symbol, p.token_address, p.pair_address, p.market_cap) == ("DREGG", "Mint1", "Pair1", 2_520_000)
+    assert p.pair_url == "https://dexscreener.com/solana/Pair1"
+
+
+def test_grown_pools_come_from_pumpfun_by_market_cap():
+    import httpx
+
+    def handler(req):
+        url = str(req.url)
+        if "pump.fun" in url:
+            if req.url.params["offset"] != "150":
+                return httpx.Response(200, json=[])
+            return httpx.Response(200, json=[{"mint": "Mint1", "usd_market_cap": 2_520_000},
+                                             {"mint": "Tiny", "usd_market_cap": 10_000},
+                                             {"mint": "Giant", "usd_market_cap": 900_000_000}])
+        if "dexscreener" in url:
+            assert url.endswith("/solana/Mint1")
+            return httpx.Response(200, json=[{"chainId": "solana", "pairAddress": "Pair1", "dexId": "pumpswap",
+                                              "baseToken": {"address": "Mint1", "symbol": "DREGG"},
+                                              "liquidity": {"usd": 203_000}, "marketCap": 2_520_000,
+                                              "pairCreatedAt": 1_750_000_000_000}])
+        return httpx.Response(404)
+
+    async def go():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as c:
+            return await radar._fetch_grown_pools(c)
+    pools = asyncio.run(go())
+    assert [p.symbol for p in pools] == ["DREGG"]

@@ -212,3 +212,35 @@ def test_gem_shortfall_names_what_is_missing():
     thin = [{"key": "contract", "label": "GoPlus contratto", "score": 80, "grade": "buono"},
             {"key": "github", "label": "GitHub", "score": 95, "grade": "eccellente"}]
     assert "GoPlus" in legit.gem_shortfall(thin, {"score": 90})
+
+
+def _gh(score=90, commits="100+", days=25, pushed_days_ago=2, now=1_800_000_000):
+    from datetime import datetime, timezone
+    pushed = datetime.fromtimestamp(now - pushed_days_ago * 86400, timezone.utc).isoformat()
+    return {"score": score, "facts": {"commits": commits, "active_days": days, "pushed_at": pushed}}
+
+
+def test_github_exception_needs_a_lot_of_recent_work():
+    """Lorenzo: "progetti in quel modo voglio che siano eccezione in quanto
+    tecnicamente incredibili su github"."""
+    now = 1_800_000_000
+    assert legit.github_shortfall(_gh(), now) == ""
+    assert "sotto 75" in legit.github_shortfall(_gh(score=60), now)
+    assert "12 commit" in legit.github_shortfall(_gh(commits="12"), now)
+    assert "5 giorni" in legit.github_shortfall(_gh(days=5), now)
+    assert "fermo da 40" in legit.github_shortfall(_gh(pushed_days_ago=40), now)
+    assert legit.github_shortfall({"score": 90, "facts": {"commits": "100+", "active_days": 30}}, now)
+
+
+def test_exception_token_fails_without_an_exceptional_github():
+    out = _assess({**TOKEN, "market_cap": 2_500_000, "exception": True})
+    gem = next(c for c in out["checks"] if c["key"] == "gem")
+    assert out["status"] == "fail" and gem["label"] == "Eccezione GitHub" and gem["ok"] is False
+
+
+def test_exception_token_passes_with_an_exceptional_report(monkeypatch):
+    monkeypatch.setattr(legit, "gem_shortfall", lambda checks, report: "")
+    monkeypatch.setattr(legit, "github_shortfall", lambda gh, now=None: "")
+    out = _assess({**TOKEN, "market_cap": 2_500_000, "exception": True})
+    gem = next(c for c in out["checks"] if c["key"] == "gem")
+    assert out["status"] == "ok" and gem["ok"] is True
