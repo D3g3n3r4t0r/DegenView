@@ -1852,7 +1852,6 @@
 @layer components {
   .board {
     --gold: #e9c46a; --silver: #c7ccd6; --bronze: #d08f5c;
-    margin-block-start: 22px;
     & header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin: 0 4px 10px; }
     & h3 { font-size: 13px; font-weight: 500; color: var(--ink-dim); }
     & header > span { font-size: 12px; color: var(--ink-faint); font-variant-numeric: tabular-nums; text-align: end; }
@@ -1942,6 +1941,48 @@
     .board-list button { grid-template-columns: 22px minmax(0, 1fr) 72px 32px; gap: 8px; }
   }
   @media (prefers-reduced-motion: reduce) { .board *, .board-podium button::before { animation: none !important; } }
+
+  /* Stile dell'immagine scelta da Lorenzo: nero pieno, griglia isometrica
+     appena visibile, una linea verde che si accende. */
+  .board { --glow: #3ee08f; margin-block: 6px 26px; position: relative; }
+  .board-hero { position: relative; display: flex; justify-content: space-between; align-items: end; gap: 12px;
+    margin: 0 0 14px !important; padding: 22px 18px 18px; border-radius: var(--radius); overflow: hidden;
+    background:
+      linear-gradient(180deg, transparent, color-mix(in oklch, var(--bg) 70%, transparent)),
+      repeating-linear-gradient(30deg, color-mix(in oklch, var(--glow) 7%, transparent) 0 1px, transparent 1px 26px),
+      repeating-linear-gradient(-30deg, color-mix(in oklch, var(--glow) 7%, transparent) 0 1px, transparent 1px 26px),
+      radial-gradient(120% 140% at 80% 0%, #24262b, #0c0d0f 60%);
+    border: 1px solid #1d1f23;
+    &::after { content: ""; position: absolute; inset: auto 0 0 0; block-size: 2px;
+      background: linear-gradient(90deg, transparent, var(--glow) 30%, color-mix(in oklch, var(--glow), white 40%) 50%, var(--glow) 70%, transparent);
+      box-shadow: 0 0 18px 2px color-mix(in oklch, var(--glow) 55%, transparent);
+      animation: board-seam 4s ease-in-out infinite; }
+    & h2 { margin: 2px 0 0; font-size: clamp(22px, 5vw, 30px); font-weight: 600; letter-spacing: -.03em; color: var(--ink); }
+    & > span { font-size: 12px; color: var(--ink-faint); font-variant-numeric: tabular-nums; text-align: end; max-inline-size: 45%; }
+  }
+  .board-kicker { margin: 0; font: 500 11px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--glow);
+    display: flex; align-items: center; gap: 8px;
+    &::before { content: ""; inline-size: 6px; block-size: 6px; border-radius: 50%; background: var(--glow);
+      box-shadow: 0 0 10px var(--glow); animation: board-blink 2s ease-in-out infinite; } }
+  @keyframes board-seam { 50% { opacity: .55; } }
+  @keyframes board-blink { 50% { opacity: .35; } }
+  .board-podium button { background: linear-gradient(160deg, #1a1b1f, #0d0e10 70%) !important; }
+  .board-podium li[data-place="1"] button {
+    background: linear-gradient(160deg, #202226, #0b0c0e 70%) !important;
+    box-shadow: inset 0 -2px 0 color-mix(in oklch, var(--glow) 80%, transparent),
+                0 14px 40px -18px color-mix(in oklch, var(--glow) 70%, transparent); }
+  .bd-honor { margin: 2px 4px 0; font-size: 11.5px; line-height: 1.35; color: var(--ink-dim); text-align: center; }
+  .bd-sim { font: 500 11px var(--mono); color: var(--glow); }
+  .bd-traits { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; padding: 0; list-style: none;
+    & li { font-size: 11.5px; padding: 3px 8px; border-radius: 99px; background: var(--raised); color: var(--ink-faint); }
+    & li[data-got="1"] { color: var(--glow); background: color-mix(in oklch, var(--glow) 12%, transparent); }
+    & li[data-got="half"] { color: var(--ink-dim); } }
+  /* Lorenzo: "vedere le scritte delle cose scartate non mi interessa". */
+  .radar-rejected { display: none !important; }
+  @media (max-width: 520px) {
+    .board-hero { padding: 16px 14px 14px; & h2 { font-size: 21px; } & > span { font-size: 11px; } }
+  }
+  @media (prefers-reduced-motion: reduce) { .board-hero::after, .board-kicker::before { animation: none; } }
 }
 </style>
 <!--onchain-importmap-->
@@ -2030,6 +2071,21 @@
         </section>
       </div>
 
+      <!-- La classifica, subito sotto il saldo. Lorenzo: "leaderboard che
+           come posizione deve essere piu' in risalto [...] e' l'unica cosa
+           che conta". DREGG sta primo come metro di paragone. La disegna
+           static/onchain/leaderboard.js. -->
+      <section class="board" id="board" hidden>
+        <header class="board-hero">
+          <div><p class="board-kicker">Classifica live</p><h2>I progetti migliori</h2></div>
+          <span data-board-meta></span>
+        </header>
+        <ol class="board-podium" data-board-podium></ol>
+        <div class="board-detail" data-board-detail hidden></div>
+        <ol class="board-list" data-board-list></ol>
+        <p class="board-empty" data-board-empty hidden></p>
+      </section>
+
       <!-- La prima pagina. Lorenzo: "vorrei che la prima pagina quando entro
            sia proprio questa qui: i pop-up che vanno in una lista e
            rimangono, e il grafico". A sinistra gli avvisi (ognuno con il suo
@@ -2063,18 +2119,6 @@
           <ul></ul>
           <button type="button" class="rj-more" data-rejected-more hidden></button>
         </div>
-      </section>
-      <!-- La classifica: i progetti migliori fra quelli visti dal radar, con
-           GitHub, sito e tokenomics analizzati a fondo. Lorenzo: "primo
-           posto, secondo posto, terzo posto [...] aggiornata in tempo reale".
-           La disegna static/onchain/leaderboard.js. -->
-      <section class="board" id="board" hidden>
-        <header><h3>Classifica · progetti migliori</h3><span data-board-meta></span></header>
-        <ol class="board-podium" data-board-podium></ol>
-        <div class="board-detail" data-board-detail hidden></div>
-        <ol class="board-list" data-board-list></ol>
-        <p class="board-empty" data-board-empty hidden></p>
-        <p class="board-foot" data-board-foot></p>
       </section>
       <!-- Il pilota: la vista di partenza. Lorenzo: "voglio sapere cosa sta
            monitorando, voglio vedere cosa sta scansionando [...] pochi
