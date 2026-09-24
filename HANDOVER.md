@@ -40,6 +40,39 @@ modo voglio che siano eccezione in quanto tecnicamente incredibili su github".
 
 ---
 
+## Classifica dei progetti — `seed-0104`, branch `claude/classifica-progetti-8ptvq0` — 2026-09-24
+
+Lorenzo: "una specie di leaderboard [...] primo posto, secondo posto, terzo
+posto [...] dinamica [...] aggiornata in tempo reale [...] rigoroso [...]
+GitHub [...] controllare i commit [...] la tokenomics non deve essere uno
+scam [...] analizzarne l'html [...] da quanto e' che sono usciti [...] Pump
+Fun". Poi su DREGG: "va bene anche se ha 21 gg e supera i 2 mln [...]
+eccezione in quanto tecnicamente incredibili su github".
+
+- `app/trading/onchain/depth.py`: tre pilastri 0-100 con `fatal` (esclude
+  per sempre) e `pending` (riprova). GitHub: 100 commit + `/stats/participation`,
+  contributori, linguaggi, cartella principale (test, CI). Sito: `anatomy()`
+  sull'HTML (serve `html` in `legit.fetch_site`, aggiunto), apre fino a 3
+  pagine interne (docs, app), RDAP per l'eta' del dominio. Tokenomics: report
+  completo RugCheck / GoPlus, esclusi pool, locker e curva pump.fun.
+  Soglie fatali: creatore > 15%, primo holder > 20%, primi 10 > 60%, mint o
+  freeze attivi, tassa > 5%. Pesi 40/30/30.
+- `app/trading/onchain/leaderboard.py`: legge solo i dati salvati del radar
+  (`listings.recent()`, proposte e testati di `radar.snapshot()`). Pump.fun
+  ed eccezioni li porta il radar (thread "Scanner token e strategie"): una
+  fonte e una regola sole. Eccezione = la regola del radar
+  (`legit.github_shortfall` + `gem_shortfall` sui controlli salvati) piu'
+  GitHub a fondo >= 85. Stato su `storage.data_file("onchain_leaderboard.json")`.
+- `GET /api/onchain/leaderboard`; frontend `static/onchain/leaderboard.js`,
+  sezione `#board` subito dopo `#radar`, poll ogni 10 s, righe che scivolano
+  (FLIP) quando cambia l'ordine.
+- In sandbox GitHub risponde solo per il repo del progetto: l'analisi GitHub
+  e' provata sul repo stesso e con test; sul server usa `GITHUB_API_TOKEN`.
+- Resta: vedere la classifica piena sul server; se troppo vuota, valutare con
+  Lorenzo le soglie fatali (sono volutamente severe).
+
+---
+
 ## Link ospite in sola lettura — `seed-0096`, branch `claude/link-ospite-asb5wj`
 
 Lorenzo (23/09/2026): "vorrei pubblicare un link per condividere questo sito

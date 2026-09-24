@@ -1376,5 +1376,16 @@
     "at": 1790231032,
     "summary": "I messaggi Telegram arrivano interi. L'avviso di deploy tagliava ogni modifica a 120 caratteri (e il riepilogo settimanale a 160-170, piu' al massimo 12-15 voci): ora ogni riga e' completa e ci sono tutte le modifiche. Un messaggio piu' lungo del limite di Telegram (4096 caratteri) arriva in piu' pezzi divisi a fine riga invece di essere rifiutato, e uno con un carattere che Telegram non sa leggere (un '<' in un errore o in un nome) viene rimandato come testo semplice invece di sparire.",
     "detail": "app/notify/telegram.py: chunks(), plain(), _deliver() usati da send_to e send_message; main.py _notify_deploy: niente [:120], per_page 100, html escape; weekly_recap.py: niente _clip ne' tetti 12/15, html escape. Test: tests/test_telegram_complete.py."
+  },
+  "seed-0104": {
+    "status": "risolto",
+    "at": 1790231271,
+    "summary": "Nella prima pagina, sotto il radar, c'e' la classifica dei progetti migliori fra quelli che il radar ha trovato (compresi i lanci pump.fun e le eccezioni tipo DREGG che ora porta il radar). Ogni progetto viene analizzato a fondo su tre pilastri, ognuno da 0 a 100: GitHub (ultimi 100 commit e 52 settimane di attivita', settimane attive, autori, quanto codice c'e', test e CI, quanti commit sono solo caricamenti dal browser, repository nato insieme al token), sito (l'HTML: pagine interne, documentazione e app aperte davvero, sezioni team/roadmap/tokenomics/audit, costruttori a modello, testo segnaposto, eta' del dominio) e tokenomics (primo portafoglio e primi 10 esclusi pool e locker, creatore, holder, insider, mint e freeze, liquidita' bloccata, tasse). Un pilastro bocciato (per esempio il creatore che tiene piu' del 15%, un solo portafoglio oltre il 20%, un sito vuoto o di esempio, un GitHub senza codice) esclude il progetto per sempre. Podio oro/argento/bronzo per i primi tre, freccia di quanti posti si sale o si scende, da quanto e' uscito ogni token, e un tocco apre tutti i numeri. Si aggiorna da sola ogni 10 secondi; tokenomics rifatta ogni 20 minuti, GitHub ogni 2 ore, sito ogni 12.",
+    "files": [
+      "backend/app/trading/onchain/depth.py",
+      "backend/app/trading/onchain/leaderboard.py",
+      "frontend/static/onchain/leaderboard.js",
+      "frontend/onchain-app.html"
+    ]
   }
 }
