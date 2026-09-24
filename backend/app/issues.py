@@ -164,9 +164,12 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
-    ("seed-0102", "Wallet on-chain: troppi menu e tasti, voglio un'esperienza da DEX",
+    ("seed-0103", "Wallet on-chain: troppi menu e tasti, voglio un'esperienza da DEX",
      "Lorenzo: 'voglio che l'esperienza su questo sito sia paragonabile a un DEX [...] devi rendere l'app migliore, esaminarla nel suo complesso, aggiungere funzioni, perche' e' molto carina adesso, pero' ci sono tanti menu, tanti tasti che potrebbero essere secondo me ridotti'.",
      "media"),
+    ("seed-0102", "Radar: DREGG escluso perche' ha piu' di 3 settimane e supera i $2M",
+     "Lorenzo: 'con questa regola dovresti trovare $DREGG, vediamo se sei bravo'. Poi: 'dregg va bene anche se ha 21 gg e supera i 2 mln, progetti in quel modo voglio che siano eccezione in quanto tecnicamente incredibili su github'.",
+     "alta"),
     ("seed-0101", "Wallet on-chain: nello swap non si capisce cosa ho, e scegliere un token fa scendere la pagina",
      "Lorenzo: 'dovrebbe automaticamente selezionarmi la valuta che ho nel wallet. Io ho fatto degli swap da Ethereum a USDG, ma non e' chiaro che moneta io abbia nel portafoglio. [...] Deve essere selezionata automaticamente la valuta detenuta, quella con maggior quantita'. Poi quando seleziono una valuta per fare lo swap la schermata mi va in basso e mi tocca tornare su'.",
      "alta"),

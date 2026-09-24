@@ -12,7 +12,7 @@ lavori pluri-sessione, decisioni prese, stato di piani approvati.
 
 ---
 
-## Wallet come un DEX: barra in basso, niente "⋯" — `seed-0102`, PR #91
+## Wallet come un DEX: barra in basso, niente "⋯" — `seed-0103`, PR #91
 
 Lorenzo: "voglio che l'esperienza su questo sito sia paragonabile a un DEX
 [...] ci sono tanti menu, tanti tasti che potrebbero essere ridotti".
@@ -34,6 +34,31 @@ Lorenzo: "voglio che l'esperienza su questo sito sia paragonabile a un DEX
   sua del markup senza dock: il cablaggio resta null-safe.
 
 Resta: il saldo grande in cima e' solo il nativo, non il totale del wallet.
+## Radar DEGEN on-chain — `seed-0099`, `seed-0100`, `seed-0102` — branch `claude/token-scanner-strategie-a97cto`
+
+Thread "Scanner token e strategie". Radar in `app/trading/onchain/radar.py`,
+filtro anti-rug in `legit.py`, frontend `frontend/static/onchain/radar.js`.
+
+- PR #86: gate GeckoTerminal condiviso (`gecko_get`, ~30 req/min) — un 429
+  non diventa mai "nessun dato".
+- PR #88: solo long spot (`strategies.spot_only`), marker sulla candela del
+  riempimento (apertura della barra dopo il segnale).
+- PR #90: tutto cio' che e' scansionato/scelto/scartato vive in `backend/data`
+  (volume) via `storage.data_file()`. Cap normale fino a $2M; sopra $100k
+  serve la pagella da gemma (`gem_shortfall`: complessivo >=85, nessun
+  controllo <70, anti-rug/contratto >=85).
+- Eccezione GitHub (seed-0102): oltre 3 settimane o oltre $2M (fino a 1 anno,
+  $20M, liq >= $100k e >= 3% della cap) entra solo con GitHub eccezionale
+  (`github_shortfall`: >=60 degli ultimi 100 commit, >=20 giorni attivi,
+  push entro 14 giorni, voto >=75) piu' la pagella da gemma. Fonte extra:
+  pump.fun per capitalizzazione -> DexScreener (`_fetch_grown_pools`), per
+  trovare DREGG. Il GitHub di DREGG (emberian/dregg) non e' raggiungibile
+  dalla sandbox: se sul server non entra, il motivo e' fra gli scartati.
+- Vincolo: il pilota (soldi veri) resta sotto $100k
+  (`_SNIPER_ONCHAIN_MAX_MCAP_USD` in main.py). Mai strategie short.
+
+Lorenzo: "dregg va bene anche se ha 21 gg e supera i 2 mln, progetti in quel
+modo voglio che siano eccezione in quanto tecnicamente incredibili su github".
 
 ---
 
