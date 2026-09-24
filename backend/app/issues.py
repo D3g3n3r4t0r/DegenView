@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0103", "Telegram: i messaggi arrivano tagliati, non sono mai completi",
+     "Lorenzo: 'Inoltre i messaggi su Telegram arrivano tagliati, non sono mai completi.'",
+     "alta"),
     ("seed-0102", "Radar: DREGG escluso perche' ha piu' di 3 settimane e supera i $2M",
      "Lorenzo: 'con questa regola dovresti trovare $DREGG, vediamo se sei bravo'. Poi: 'dregg va bene anche se ha 21 gg e supera i 2 mln, progetti in quel modo voglio che siano eccezione in quanto tecnicamente incredibili su github'.",
      "alta"),

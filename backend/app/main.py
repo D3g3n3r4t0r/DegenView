@@ -3,6 +3,7 @@ import base64
 import datetime as _dt
 import hashlib
 import io
+import html as _html
 import httpx
 import itertools
 import json
@@ -1029,7 +1030,7 @@ async def _notify_deploy() -> None:
                 f"https://api.github.com/repos/{_GITHUB_REPO}/commits",
                 headers={"Authorization": f"Bearer {settings.github_api_token}",
                          "Accept": "application/vnd.github+json"},
-                params={"per_page": 10},
+                params={"per_page": 100},
             )
             r.raise_for_status()
             commits = r.json()
@@ -1050,13 +1051,13 @@ async def _notify_deploy() -> None:
             idx = next(i for i, c in enumerate(commits) if c["sha"] == last_sha)
             new_commits = commits[:idx]
         except StopIteration:
-            new_commits = commits[:5]
+            pass  # piu' di 100 commit dall'ultimo avviso: si mandano tutti quelli letti
     lines = []
     for c in new_commits:
         # I messaggi di commit sono in inglese per convenzione (CLAUDE.md), ma
         # questa notifica la legge Lorenzo: `italian_line` prende il trailer
         # "Aggiornamento:" quando c'e' e ricade sul titolo quando manca.
-        msg = weekly_recap.italian_line(c["commit"]["message"])[:120]
+        msg = _html.escape(weekly_recap.italian_line(c["commit"]["message"]), quote=False)
         sha_short = c["sha"][:7]
         lines.append(f"• <code>{sha_short}</code> {msg}")
     changelog = "\n".join(lines) if lines else "• (nessun commit trovato)"
