@@ -12,7 +12,7 @@
  *   social, GitHub, sicurezza), spinti dal server via SSE. Ognuno arriva
  *   come avviso e resta in lista con il suo backtest, che il server rifa' da
  *   solo mentre il token cresce;
- * - "Proposte": token fino a 3 settimane che una strategia avrebbe tradato bene;
+ * - "Proposte": token fino a 3 settimane (oltre, solo con GitHub eccezionale) che una strategia avrebbe tradato bene;
  * - il palco: il grafico del token scelto (di default l'ultimo uscito) con
  *   gli ingressi e le uscite della strategia migliore, dal vivo.
  *
@@ -348,7 +348,7 @@ function paintRejected(arrived) {
 }
 
 function emptyText() {
-  if (!data.last_scan) return "Al primo giro cerco token fino a 3 settimane, li passo dal filtro anti-rug e li provo su tutte le strategie.";
+  if (!data.last_scan) return "Al primo giro cerco token fino a 3 settimane (oltre, solo con GitHub eccezionale), li passo dal filtro anti-rug e li provo su tutte le strategie.";
   const c = Object.values(data.chains ?? {});
   const sum = (k) => c.reduce((n, x) => n + (x[k] ?? 0), 0);
   const bits = [`${sum("passing")} con i numeri giusti`, `${sum("legit")} superano il filtro`, `${sum("tested")} provati`];
@@ -357,7 +357,7 @@ function emptyText() {
 }
 
 function row(p, isNew) {
-  const meta = `${CHAINS[p.chain] ?? p.chain} · ${age(p.age_hours)} · cap ${usd(p.market_cap)} · liq. ${usd(p.liquidity_usd)}`;
+  const meta = `${p.exception ? "eccezione GitHub · " : ""}${CHAINS[p.chain] ?? p.chain} · ${age(p.age_hours)} · cap ${usd(p.market_cap)} · liq. ${usd(p.liquidity_usd)}`;
   return `
     <li class="${isNew ? "is-new" : ""}">
       <button type="button" data-radar="${escapeHtml(key(p))}">
