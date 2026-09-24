@@ -29,8 +29,8 @@ riferimento scelta: cubo nero con fessura verde, griglia, candele.
 - Poi Lorenzo: "decidi tutto tu, voglio fare un progetto legit", e dopo:
   "noi utilizzeremo pump fun [...] non andremo a fare nessun tipo di
   attivita' di MiCA compliant" e "aspetta a lanciare i token ovviamente".
-  Quindi: lancio pump.fun, niente white paper, team <= 5% dalla curva e
-  bloccato 12 mesi, nessuna commissione di swap. Kit del form (logo,
+  Quindi: lancio pump.fun, niente white paper, team 0% (nessun dev buy:
+  Lorenzo non vuole mettere soldi), nessuna commissione di swap. Kit del form (logo,
   banner, testi) in `/mnt/project-files/lancio/pumpfun/` e
   `docs/lancio-engn.md`. **Il token si crea solo col suo via.**
 - Prima di questo restava: modalita' di lancio (consigliato Raydium
