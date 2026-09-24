@@ -1349,6 +1349,19 @@
   },
   "seed-0100": {
     "status": "risolto",
+    "at": 1790230303,
+    "summary": "Causa della sparizione: listing scelti, scartati, proposte del radar, scoperte del pilota e registro delle operazioni on-chain venivano salvati nella cartella del codice, che il server ricrea a ogni aggiornamento del sito. Ogni rilascio li cancellava. Ora stanno sul disco permanente del server (backend/data), come utenti e watchlist, e restano dopo refresh, riavvii e aggiornamenti; se ne tengono fino a 300 scelti e 500 scartati, con motivo e pagella di ciascuno. Il tetto di capitalizzazione sale a $2M: fino a $100k valgono i filtri di prima, sopra i $100k un token si mostra solo con pagella complessiva almeno 85 (eccellente), nessun controllo sotto 70 (buono) e anti-rug e contratto eccellenti anche loro. Il pilota automatico, che compra con soldi veri, resta limitato ai token sotto i $100k.",
+    "files": [
+      "backend/app/trading/onchain/storage.py",
+      "backend/app/trading/onchain/legit.py",
+      "backend/app/trading/onchain/listings.py",
+      "backend/app/trading/onchain/radar.py",
+      "backend/app/trading/onchain/pilot.py",
+      "backend/app/trading/onchain/ledger.py"
+    ]
+  },
+  "seed-0101": {
+    "status": "risolto",
     "at": 1790230297,
     "summary": "Sopra lo swap c'e' la striscia 'Nel wallet' con ogni token che hai, quantita' e valore in dollari; un tocco lo mette in vendita. Lo swap parte gia' dal token che vale di piu' (dopo ETH -> USDG parte da USDG, verso ETH), con l'importo pieno e il 'Disponibile' per qualsiasi token, non solo il nativo, e il tasto Max sempre. La freccia fra i due campi inverte vendi e ricevi, e scegliere lo stesso token dall'altra parte li scambia, come su un DEX. Chiuso il foglio di scelta del token la pagina torna dov'era: la tastiera di iOS la spostava in basso. Su Robinhood Chain i token del wallet hanno nome e prezzo (prima USDG compariva come '0x5fc5' senza valore).",
     "detail": "frontend/static/onchain/swap.js: loadHoldings (saldo + portfolio, cache 20s), availableFor, holdingAsLeg, setLeg, #swap-wallet, #swap-flip, #swap-route; sheets.js: scroll ripristinato alla chiusura del picker; main.py: _onchain_token_meta usa il pool DexScreener su entrambe le chain; onchain-app.html: stili .swap-wallet/.wallet-chip. Provato con Playwright su viewport iPhone 13 con API finte: default USDC ($120) su SOL ($75), tocco, inversione, scelta dal picker con scroll invariato."

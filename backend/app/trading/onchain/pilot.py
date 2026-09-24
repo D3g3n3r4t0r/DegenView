@@ -23,11 +23,10 @@ import json
 import threading
 import time
 from collections import deque
-from pathlib import Path
 
-_DATA_DIR = Path(__file__).resolve().parents[2] / "data"
-_DATA_DIR.mkdir(parents=True, exist_ok=True)
-_STORE_FILE = _DATA_DIR / "onchain_pilot_discoveries.json"
+from app.trading.onchain.storage import data_file
+
+_STORE_FILE = data_file("onchain_pilot_discoveries.json")
 
 _MAX_DISCOVERIES = 500
 _MAX_REJECTED = 20

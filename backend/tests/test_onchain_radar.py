@@ -30,7 +30,7 @@ def test_filter_keeps_young_liquid_low_cap_tokens_only():
         _pool("OK"),
         _pool("OLD", age_days=30, token="t2"),
         _pool("THIN", liq=5_000, token="t3"),
-        _pool("BIG", mcap=150_000, token="t4"),                    # oltre i $100k
+        _pool("BIG", mcap=2_500_000, liq=400_000, token="t4"),     # oltre i $2M
         _pool("SHALLOW", liq=9_000, mcap=95_000, token="t5"),     # 9% della cap
         _pool("SOL", token="t6"),
         _pool("NOCAP", mcap=None, token="t7"),

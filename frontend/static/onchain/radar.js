@@ -70,6 +70,7 @@ export function mountRadar({ toast: notify } = {}) {
     const listing = event.target.closest("[data-listing]");
     if (listing) { pinnedAt = Date.now(); showListing(listing.dataset.listing); return; }
     if (event.target.closest("[data-rejected-more]")) { rejectedAll = !rejectedAll; paintRejected(); return; }
+    if (event.target.closest("[data-listings-more]")) { listingsAll = !listingsAll; paintListings(false); return; }
     onStageClick(event);
   });
   listen();
@@ -171,7 +172,7 @@ function paint() {
   const st = data.listing_status ?? {};
   const parts = Object.entries(chains ?? {}).map(([c, info]) => `${CHAINS[c] ?? c} ${info.seen}`);
   const rejected = st.rejected ? ` · ${st.rejected} scartati dal filtro` : "";
-  const rules = `cap < ${usd(data.filters.mcap_max_usd)} · sito, social, GitHub, RugCheck e GoPlus obbligatori${st.ai_review ? " · controllo Claude" : ""}`;
+  const rules = `cap < ${usd(data.filters.mcap_max_usd)}, sopra $100k solo pagella eccellente · sito, social, GitHub, RugCheck e GoPlus obbligatori${st.ai_review ? " · controllo Claude" : ""}`;
   root.querySelector("[data-radar-foot]").textContent = data.last_scan
     ? `Visti: ${parts.join(" · ")}${rejected} · ${rules}`
     : `Solana e Robinhood · ${rules}`;
@@ -186,6 +187,7 @@ function paint() {
 }
 
 let shownListings = null;
+let listingsAll = false;
 
 const reducedMotion = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
@@ -204,7 +206,15 @@ function listingBadge(l) {
 function paintListings(animate) {
   const box = root.querySelector("[data-radar-new]");
   const list = box.querySelector("ul");
-  const items = (data.listings ?? []).slice(0, 8);
+  // Tutto quello che e' stato scelto resta, anche dopo un riavvio: i primi
+  // 8 in vista, gli altri a un tocco.
+  const all = data.listings ?? [];
+  const items = listingsAll ? all : all.slice(0, 8);
+  const more = box.querySelector("[data-listings-more]");
+  if (more) {
+    more.hidden = all.length <= 8;
+    more.textContent = listingsAll ? "Mostra meno" : `Mostra tutti (${all.length})`;
+  }
   const empty = box.querySelector("[data-radar-new-empty]");
   if (empty) empty.hidden = items.length > 0;
   const now = Date.now() / 1000;

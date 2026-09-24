@@ -71,7 +71,8 @@ def test_pumpfun_only_young_graduates():
 @pytest.mark.parametrize("kw, ok", [
     ({}, True),
     ({"liq": 5_000}, False),
-    ({"cap": 150_000}, False),                    # Lorenzo: non oltre i $100k
+    ({"cap": 150_000, "liq": 20_000}, True),      # sopra i $100k decide la pagella (legit)
+    ({"cap": 2_500_000, "liq": 400_000}, False),  # oltre i $2M mai
     ({"liq": 5_000, "cap": 60_000}, False),
     ({"liq": 9_000, "cap": 95_000}, False),       # 9% della cap
     ({"age_s": 8 * 3600}, False),
@@ -191,7 +192,7 @@ def test_listings_from_before_the_filter_are_dropped(tmp_path):
     import json
     checks = [{"key": "site", "ok": True}]
     L._STORE_FILE.write_text(json.dumps({"listings": [
-        {"symbol": "JEANCOIN", "market_cap": 532_000, "checks": checks},
+        {"symbol": "JEANCOIN", "market_cap": 2_532_000, "checks": checks},
         {"symbol": "OLD", "market_cap": 50_000},
         {"symbol": "GOOD", "market_cap": 80_000, "checks": checks},
     ], "rejected": [{"chain": "solana", "symbol": "RUG", "token_address": "R", "reason": "rug"}]}))
