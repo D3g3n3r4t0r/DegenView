@@ -19,7 +19,7 @@ Un giro ogni `SCAN_INTERVAL_S`, per Solana e Robinhood Chain:
 3b. prima del backtest, il filtro di legittimita' (legit.py): sito proprio,
    social, GitHub vero, niente rug o honeypot, nome non da meme, e con la
    chiave il parere di Claude sul sito. Lorenzo: "voglio token legittimi con
-   progetti seri", cap non oltre i $100k;
+   progetti seri", cap fino a $2M ma sopra i $100k solo con una pagella eccellente;
 4. si propone il token solo se la migliore supera soglie minime (trade,
    rendimento, profit factor, drawdown) su abbastanza candele.
 
@@ -43,7 +43,6 @@ import logging
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from pathlib import Path
 
 import httpx
 import pandas as pd
@@ -54,12 +53,11 @@ from app.providers.base import NoDataYet, ProviderError
 from app.providers.dexscreener import DexScreenerProvider, gecko_urgent, make_symbol
 from app.trading.onchain import legit
 from app.trading.onchain import listings as onchain_listings
+from app.trading.onchain.storage import data_file
 
 logger = logging.getLogger(__name__)
 
-_DATA_DIR = Path(__file__).resolve().parents[2] / "data"
-_DATA_DIR.mkdir(parents=True, exist_ok=True)
-_STORE_FILE = _DATA_DIR / "onchain_radar.json"
+_STORE_FILE = data_file("onchain_radar.json")
 
 GECKO_BASE = "https://api.geckoterminal.com/api/v2"
 CHAINS = {"solana": "solana", "robinhood": "robinhood"}
@@ -67,7 +65,7 @@ CHAINS = {"solana": "solana", "robinhood": "robinhood"}
 # Soglie iniziali: regolabili qui, non da un parametro di richiesta.
 AGE_MAX_DAYS = 21
 LIQ_MIN_USD = 8_000
-MCAP_MAX_USD = 100_000          # Lorenzo: "una market cap non oltre i 100.000 dollari"
+MCAP_MAX_USD = 2_000_000       # sopra legit.GEM_CAP_USD solo con una pagella eccellente
 LIQ_TO_MCAP_MIN = 0.10          # liquidita' almeno il 10% della capitalizzazione
 MAX_VETTED_PER_CHAIN = 25       # quanti passano dal filtro di legittimita' a giro
 MAX_TESTED_PER_CHAIN = 8        # le candele costano una richiesta a token

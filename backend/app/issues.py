@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0100", "Radar: cap fino a $2M per le gemme, e token scelti e scartati spariti dopo un aggiornamento",
+     "Lorenzo: 'alziamo un po' il limite di market cap anche perché il mio obiettivo è trovare delle gemme per cui anche uno o due milioni di market cap potrebbe andare bene però nel momento in cui dal punto di vista GitHub, sito, tokenomics tante cose devono essere perfette [...] adesso ho refreshato il sito e non ho più l'elenco [...] dei token scartati e il token che prima era stato scelto non lo vedo più fa in modo che ogni volta che viene scelto un token venga salvato in database così che io ad ogni accesso possa rivedere anche dopo un riavvio'.",
+     "alta"),
     ("seed-0099", "Radar: ingressi non nel punto preciso del grafico, e niente short",
      "Lorenzo: 'se seleziono una strategia non appare nel grafico gli ingressi in modo preciso'. E: 'non voglio short, solo acquisti spot e vendite'.",
      "alta"),
