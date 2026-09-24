@@ -22,6 +22,7 @@ import { mountPortfolio } from "@onchain/portfolio.js";
 import { openSend } from "@onchain/send.js";
 import { mountPilot, refreshPilot } from "@onchain/pilot.js";
 import { mountRadar } from "@onchain/radar.js";
+import { refreshHoldings } from "@onchain/holdings.js";
 import { mountLeaderboard } from "@onchain/leaderboard.js";
 
 // Sulla pagina a se' (onchain-app.html) la radice e' il documento intero.
@@ -64,6 +65,9 @@ const view = {
   pilot: $("#pilot"),
   moreSheet: $("#more"),
   empty: $("#onchain-empty-state"),
+  dock: $("#dock"),
+  holdings: $("#holdings"),
+  walletView: $("#wallet-view"),
   toast: $("#toast"),
 };
 
@@ -80,7 +84,7 @@ function paintChainStatic() {
   view.chainLabel.textContent = view.chainFlip ? label : `${label}${suffix}`;
   if (view.chainFlip) view.chainFlip.title = `${label}${suffix} · tocca per cambiare rete`;
   if (view.chainIcon) view.chainIcon.textContent = CHAIN_ICON[state.chain] ?? "";
-  for (const node of [view.actions, view.status, view.reveal, view.more, view.pilot, view.marketOrderRow, view.bottomPanel, view.sniperCard]) {
+  for (const node of [view.actions, view.status, view.reveal, view.more, view.pilot, view.marketOrderRow, view.bottomPanel, view.sniperCard, view.dock, view.walletView]) {
     if (node) node.hidden = !hasWallet;
   }
   view.empty.hidden = hasWallet;
@@ -90,6 +94,8 @@ function paintChainStatic() {
   if (!hasWallet) {
     view.empty.querySelector("[data-chain-name]").textContent = label;
     view.spark.hidden = true;
+    if (view.holdings) view.holdings.hidden = true;
+    if (view.shell.dataset.view !== "pilot") setView("pilot");
     return;
   }
 
@@ -191,6 +197,19 @@ function loadChainData() {
   mountChart(view.marketPanel);
   mountOrderTab(currentOrderTab);
   mountBottomTab(currentBottomTab);
+  paintHoldings(true);
+}
+
+function paintHoldings(force = false) {
+  refreshHoldings(view.holdings, {
+    force,
+    // Il tocco su una moneta apre lo scambio con quella in vendita.
+    onPick: (holding) => {
+      setView("manual");
+      if (currentOrderTab !== "swap") $('[data-order-tab="swap"]')?.click();
+      window.dispatchEvent(new CustomEvent("onchain:swap-from", { detail: holding }));
+    },
+  });
 }
 
 // Ponte sniper -> Lorenzo (2026-09-23): la card in alto dice quanti token
@@ -420,7 +439,6 @@ $$("#bottom-tabs .mo-side-tab").forEach((tab) => {
   tab.addEventListener("click", () => {
     const name = tab.dataset.bottomTab;
     mountBottomTab(name);
-    setNav(name === "strategies" || name === "history" ? name : "wallet");
   });
 });
 
@@ -453,16 +471,10 @@ view.address.addEventListener("click", async (event) => {
   toast("Indirizzo copiato", shortAddress(button.dataset.full ?? ""));
 });
 
-$("#topbar-address")?.addEventListener("click", async (event) => {
-  const button = event.currentTarget;
-  await navigator.clipboard?.writeText(button.dataset.full ?? "");
-  toast("Indirizzo copiato", shortAddress(button.dataset.full ?? ""));
-});
-
 const SHEETS = {
   receive: () => sheets.openReceive(),
   send: () => openSend({
-    onSent: () => { refreshBalance(); mountBottomTab(currentBottomTab); toast("Inviato", "verifica la firma nello storico"); },
+    onSent: () => { refreshBalance(); paintHoldings(true); mountBottomTab(currentBottomTab); toast("Inviato", "verifica la firma nello storico"); },
   }),
   risk: () => sheets.openRisk(() => { refreshStatus(); mountBottomTab(currentBottomTab); }),
   simulate: () => sheets.openSimulate({
@@ -472,46 +484,6 @@ const SHEETS = {
 $$("[data-sheet]").forEach((button) =>
   button.addEventListener("click", () => SHEETS[button.dataset.sheet]?.()));
 
-/* ------------------------------------------------------ navigazione in alto */
-// Strategie e Attivita' sono tab del pannello in basso, Impostazioni e' il
-// foglio dei limiti: la barra ci porta li' invece di restare decorativa.
-
-function setNav(target) {
-  $$("[data-nav]").forEach((pill) => {
-    const current = pill.dataset.nav === target;
-    pill.classList.toggle("is-current", current);
-    if (current) pill.setAttribute("aria-current", "true");
-    else pill.removeAttribute("aria-current");
-  });
-}
-
-const NAV = {
-  wallet: () => {
-    if (!view.bottomPanel.hidden) mountBottomTab("positions");
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  },
-  strategies: () => showBottomTab("strategies"),
-  history: () => showBottomTab("history"),
-  settings: () => SHEETS.risk(),
-};
-
-function showBottomTab(tab) {
-  if (view.bottomPanel.hidden) {
-    toast("Nessun wallet", "crea prima un wallet su questa chain");
-    return;
-  }
-  mountBottomTab(tab);
-  view.bottomPanel.scrollIntoView({ behavior: "smooth", block: "start" });
-}
-
-$$("[data-nav]").forEach((pill) =>
-  pill.addEventListener("click", () => {
-    if (view.shell.hidden) return;
-    const target = pill.dataset.nav;
-    if (target !== "settings") setNav(target);
-    NAV[target]?.();
-  }));
-
 view.reveal.addEventListener("click", () => sheets.openKey({ onStart: startReveal }));
 
 // Menu "⋯" (solo sulla pagina a se': la copia nella tab Trading non ce
@@ -519,28 +491,39 @@ view.reveal.addEventListener("click", () => sheets.openKey({ onStart: startRevea
 // foglio) o fuori dal pannello.
 view.more?.addEventListener("click", () => view.moreSheet.showModal());
 
-// Due viste: il pilota (di partenza) e grafico+swap a mano. Si passa
-// dall'una all'altra dal menu, mai con un tasto in piu' a schermo.
+// Tre viste, come un DEX: Radar (pilota + token nuovi), Scambia (grafico e
+// ordine), Portafoglio (saldi, ordini, storico). Le cambia la barra in basso.
+const VIEWS = ["pilot", "manual", "wallet"];
+
 function setView(name) {
-  view.shell.dataset.view = name;
+  if (!VIEWS.includes(name)) return;
+  const from = view.shell.dataset.view;
+  const paint = () => {
+    view.shell.dataset.view = name;
+    view.dock?.querySelectorAll("[data-go]").forEach((b) => {
+      if (b.dataset.go === name) b.setAttribute("aria-current", "page");
+      else b.removeAttribute("aria-current");
+    });
+    if (view.dock) view.dock.dataset.at = String(VIEWS.indexOf(name));
+    window.scrollTo({ top: 0 });
+  };
+  if (from !== name && document.startViewTransition && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    view.shell.dataset.dir = VIEWS.indexOf(name) > VIEWS.indexOf(from) ? "fwd" : "back";
+    document.startViewTransition(paint);
+  } else paint();
   if (name === "pilot") refreshPilot();
-  window.scrollTo({ top: 0 });
+  if (name === "wallet" && !view.bottomPanel.hidden) mountBottomTab(currentBottomTab);
+  paintHoldings();
 }
-$$("#more [data-view-switch]").forEach((item) =>
-  item.addEventListener("click", () => setView(item.dataset.viewSwitch)));
+view.dock?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-go]");
+  if (button) setView(button.dataset.go);
+});
 
 mountPilot({ toast, onChange: refreshSniperCard });
 mountRadar({ toast });
 mountLeaderboard();
 
-// Da telefono tab, rete e filtri non sono a schermo: le voci del menu
-// premono il controllo nascosto e portano la vista sul suo pannello.
-$$("#more [data-proxy]").forEach((item) => item.addEventListener("click", () => {
-  setView("manual");
-  const target = $(item.dataset.proxy);
-  target?.click();
-  target?.closest("section")?.scrollIntoView({ block: "start" });
-}));
 // La rete si cambia dal suo nome, accanto al saldo: un tocco, niente menu.
 view.chainFlip?.addEventListener("click", () => {
   view.chainFlip.classList.remove("is-flipping");
