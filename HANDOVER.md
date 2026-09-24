@@ -26,10 +26,13 @@ riferimento scelta: cubo nero con fessura verde, griglia, candele.
   di `radar.py`: niente numeri copiati a mano.
 - Piano completo (ticker, tokenomics, decisioni aperte, MiCA, social, chiavi)
   in `docs/lancio-engn.md`. Screenshot in `/mnt/project-files/lancio/`.
-- Poi Lorenzo: "decidi tutto tu, voglio fare un progetto legit". Decisioni
-  in `docs/lancio-engn.md` (Raydium + LP bruciato, 40 SOL, niente commissioni,
-  white paper MiCA in `docs/whitepaper-engn.md`). Blocca: societa' offerente,
-  legale, notifica CONSOB.
+- Poi Lorenzo: "decidi tutto tu, voglio fare un progetto legit", e dopo:
+  "noi utilizzeremo pump fun [...] non andremo a fare nessun tipo di
+  attivita' di MiCA compliant" e "aspetta a lanciare i token ovviamente".
+  Quindi: lancio pump.fun, niente white paper, team <= 5% dalla curva e
+  bloccato 12 mesi, nessuna commissione di swap. Kit del form (logo,
+  banner, testi) in `/mnt/project-files/lancio/pumpfun/` e
+  `docs/lancio-engn.md`. **Il token si crea solo col suo via.**
 - Prima di questo restava: modalita' di lancio (consigliato Raydium
   / Meteora con LP bruciato, non pump.fun), SOL di liquidita', verifica
   legale MiCA, registrare i social, spostare la pagina su `/` o dominio

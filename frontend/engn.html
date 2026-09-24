@@ -418,7 +418,7 @@ footer p { max-width: 900px; line-height: 1.7; }
     <div class="head rv">
       <p class="eyebrow">$ENGN</p>
       <h2>A token that passes <em>its own filters.</em></h2>
-      <p>1,000,000,000 fixed supply on Solana. Fair launch, liquidity burned, team locked. Built so our own radar would let it in.</p>
+      <p>1,000,000,000 fixed supply, fair-launched on pump.fun. No presale, no private round, no team allocation: the team buys from the same curve as everyone and locks it. Built so our own radar would let it in.</p>
     </div>
     <div class="token">
       <div class="donut rv" id="donut">
@@ -427,16 +427,17 @@ footer p { max-width: 900px; line-height: 1.7; }
       </div>
       <div class="rv">
         <table class="alloc">
-          <thead><tr><th>Allocation</th><th style="text-align:right;padding-right:18px">Share</th><th>Unlock</th></tr></thead>
+          <thead><tr><th>Allocation</th><th style="text-align:right;padding-right:18px">Share</th><th>How</th></tr></thead>
           <tbody id="allocBody"></tbody>
         </table>
+        <p class="sub" style="color:var(--dim);font-size:13.5px;margin-top:16px">Team: buys at most 5% from the curve at launch, at the public price, then locks it for 12 months in a public on-chain stream. Pump.fun creator fees fund development.</p>
       </div>
     </div>
 
     <div class="facts">
       <div class="fact rv"><span>Chain</span><b>Solana</b></div>
       <div class="fact rv"><span>Tax</span><b>0% / 0%</b></div>
-      <div class="fact rv"><span>Liquidity</span><b>LP burned</b></div>
+      <div class="fact rv"><span>Launch</span><b>pump.fun</b></div>
       <div class="fact rv"><span>Presale / VCs</span><b>None</b></div>
     </div>
 
@@ -447,10 +448,10 @@ footer p { max-width: 900px; line-height: 1.7; }
       <div class="checks">
         <div>Mint authority revoked</div>
         <div>Freeze authority revoked</div>
-        <div>Metadata immutable</div>
-        <div>Team 10%, 12-month cliff</div>
+        <div>Standard pump.fun contract</div>
+        <div>Team buy ≤ 5%, locked 12 months</div>
         <div>No wallet above 15% unlocked</div>
-        <div>Vesting streams public on-chain</div>
+        <div>LP burned at graduation</div>
       </div>
     </div>
 
@@ -474,7 +475,7 @@ footer p { max-width: 900px; line-height: 1.7; }
     </div>
     <div class="road rv">
       <div class="step done"><span class="q">LIVE</span><h4>The engine</h4><p>Wallet, swaps, radar, leaderboard, trend pilot with hard limits.</p></div>
-      <div class="step"><span class="q">PHASE 1</span><h4>Launch</h4><p>Fair launch on Solana, LP burned, vesting on-chain, contract published here only.</p></div>
+      <div class="step"><span class="q">PHASE 1</span><h4>Launch</h4><p>Fair launch on pump.fun, graduation to PumpSwap, team buy locked in a public stream. Contract published here only.</p></div>
       <div class="step"><span class="q">PHASE 2</span><h4>Holder tiers</h4><p>Wallet-based access, real-time alerts, fee discounts.</p></div>
       <div class="step"><span class="q">PHASE 3</span><h4>More engines</h4><p>New trend-following strategies, more chains, public track record.</p></div>
     </div>
@@ -498,7 +499,7 @@ footer p { max-width: 900px; line-height: 1.7; }
       <span class="brand">LIQUIDITY ENGINE <span class="ticker-chip">$ENGN</span></span>
       <div class="soc">Official channels will be listed here, and only here.</div>
     </div>
-    <p>$ENGN is a utility token that gives access to features of the Liquidity Engine app. It is not an investment, a share, or a claim on revenue, and no return is promised. Crypto assets are highly volatile and you can lose everything you put in. Backtests and past results do not predict future results. Automated strategies can lose money. Nothing on this site is financial advice. Not available where prohibited by law, including to US persons. The token will not be offered before a crypto-asset white paper under the EU MiCA Regulation has been published and notified to the competent authority. There is no swap fee in the app at launch; the pilot trades with hard limits and has no proven edge yet.</p>
+    <p>$ENGN is a utility token that gives access to features of the Liquidity Engine app. It is not an investment, a share, or a claim on revenue, and no return is promised. Crypto assets are highly volatile and you can lose everything you put in. Backtests and past results do not predict future results. Automated strategies can lose money. Nothing on this site is financial advice. Not available where prohibited by law, including to US persons. There is no swap fee in the app at launch; the pilot trades with hard limits and has no proven edge yet.</p>
   </div>
 </footer>
 
@@ -544,12 +545,8 @@ footer p { max-width: 900px; line-height: 1.7; }
 
   // Allocation.
   const alloc = [
-    ["Fair launch liquidity", 45, "#2de0a8", "100% at launch · LP burned"],
-    ["Community & early users", 15, "#1f9e78", "Airdrop to app users · 6-month linear"],
-    ["Ecosystem & strategy rewards", 15, "#8ae9c9", "36-month linear, on-chain stream"],
-    ["Treasury (multisig)", 10, "#5f6672", "6-month cliff · 24-month linear"],
-    ["Team", 10, "#9aa0ab", "12-month cliff · 24-month linear"],
-    ["Listings & market making", 5, "#2a2f38", "Locked until first listing"],
+    ["Public bonding curve", 79.3, "#2de0a8", "Same curve for everyone, no presale, no whitelist"],
+    ["Liquidity at graduation", 20.7, "#5f6672", "Moved to PumpSwap automatically, LP burned"],
   ];
   document.getElementById("allocBody").innerHTML = alloc.map(([n, p, c, u]) =>
     `<tr><td><span class="sw" style="background:${c}"></span>${n}</td><td class="p">${p}%</td><td>${u}</td></tr>`).join("");
