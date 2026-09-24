@@ -2633,29 +2633,22 @@ async def onchain_quote_robinhood(
 async def _onchain_token_meta(chain: str, address: str) -> dict:
     """Metadati minimi per un token qualsiasi: decimali mai indovinati
     (stesso principio di seed-0010, lookup on-chain reale), simbolo e
-    prezzo come bonus via DexScreener quando disponibile — oggi solo per
-    Solana, che DexScreener indicizza; su Robinhood Chain restano nulli.
+    prezzo come bonus via DexScreener quando disponibile.
     Condiviso da /token (per lo swap) e /portfolio (per elencare i saldi
     reali del wallet) — un solo posto che sa risolvere un indirizzo."""
     decimals = await onchain_token_metadata.get_token_decimals(chain, address)
 
+    # Simbolo e prezzo dal pool piu' liquido su DexScreener, su entrambe
+    # le chain e da qualunque lato del pool: prima su Robinhood Chain
+    # restavano nulli e nello swap USDG compariva come "0x5fc5".
     symbol, price_usd = None, None
-    if chain == "solana":
-        try:
-            import httpx as _httpx
-
-            async with _httpx.AsyncClient(timeout=8.0) as client:
-                r = await client.get(f"https://api.dexscreener.com/latest/dex/tokens/{address}")
-            if r.status_code == 200:
-                pairs = [p for p in (r.json().get("pairs") or []) if p.get("chainId") == "solana"]
-                pairs.sort(key=lambda p: float((p.get("liquidity") or {}).get("usd") or 0), reverse=True)
-                if pairs and (pairs[0].get("baseToken", {}).get("address") or "").lower() == address.lower():
-                    symbol = pairs[0]["baseToken"].get("symbol")
-                    raw_price = pairs[0].get("priceUsd")
-                    price_usd = float(raw_price) if raw_price else None
-        except Exception:  # noqa: BLE001 — il prezzo/simbolo sono un bonus, mai bloccanti
-            pass
-
+    try:
+        pairs = await _dexscreener_token_pairs(chain, address)
+    except HTTPException:  # il prezzo/simbolo sono un bonus, mai bloccanti
+        pairs = []
+    if pairs:
+        symbol = _pair_sides(pairs[0], address)[0].get("symbol")
+        price_usd = _pair_price_usd(pairs[0], address)
     return {"address": address, "decimals": decimals, "symbol": symbol, "price_usd": price_usd}
 
 

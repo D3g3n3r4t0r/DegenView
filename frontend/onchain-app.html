@@ -843,7 +843,24 @@
   .swap-form .swap-arrow {
     inline-size: 34px; block-size: 34px; margin: -6px auto; position: relative; z-index: 2;
     background: var(--raised); border: 3px solid var(--panel); border-radius: 50%; color: var(--ink-dim);
+    padding: 0; cursor: pointer; transition: rotate .25s ease;
+    &:active { rotate: 180deg; }
   }
+  /* "Nel wallet": cosa c'e', sempre sopra lo swap; un tocco la mette in vendita. */
+  .swap-wallet {
+    display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin-block-end: 10px;
+    &::-webkit-scrollbar { display: none; }
+  }
+  .wallet-chip {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 1px; flex-shrink: 0;
+    border: 1px solid transparent; background: var(--raised); border-radius: 12px;
+    padding: 7px 11px; color: var(--ink); cursor: pointer; text-align: start;
+    & b { font-size: 13px; font-weight: 700; white-space: nowrap; }
+    & small { font-size: 11px; color: var(--ink-faint); }
+    &.is-current { border-color: var(--mint); background: color-mix(in oklch, var(--mint) 10%, var(--raised)); }
+  }
+  .swap-wallet-empty { font-size: 12px; color: var(--ink-faint); margin: 0 0 10px; }
+  #swap-available.is-warn { color: var(--amber); }
   .route-info { margin: 14px 2px 0;
     & div { display: flex; justify-content: space-between; padding-block: 5px; font-size: 12px; }
     & dt { color: var(--ink-dim); } & dd { margin: 0; color: var(--ink-dim); }
