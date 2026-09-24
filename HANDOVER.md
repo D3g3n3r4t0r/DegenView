@@ -12,7 +12,7 @@ lavori pluri-sessione, decisioni prese, stato di piani approvati.
 
 ---
 
-## Presentazione del progetto e token $ENGN — `seed-0105`, branch `claude/project-thread-mn4odz` — 2026-09-24
+## Presentazione del progetto e token $ENGN — `seed-0107`, branch `claude/project-thread-mn4odz` — 2026-09-24
 
 Lorenzo: "fai una pagina web di presentazione del progetto con slogan
 accattivante in inglese; crea il ticker del token, ci serve lanciarlo [...]
@@ -26,13 +26,39 @@ riferimento scelta: cubo nero con fessura verde, griglia, candele.
   di `radar.py`: niente numeri copiati a mano.
 - Piano completo (ticker, tokenomics, decisioni aperte, MiCA, social, chiavi)
   in `docs/lancio-engn.md`. Screenshot in `/mnt/project-files/lancio/`.
-- Resta, tutto col si' di Lorenzo: modalita' di lancio (consigliato Raydium
+- Poi Lorenzo: "decidi tutto tu, voglio fare un progetto legit". Decisioni
+  in `docs/lancio-engn.md` (Raydium + LP bruciato, 40 SOL, niente commissioni,
+  white paper MiCA in `docs/whitepaper-engn.md`). Blocca: societa' offerente,
+  legale, notifica CONSOB.
+- Prima di questo restava: modalita' di lancio (consigliato Raydium
   / Meteora con LP bruciato, non pump.fun), SOL di liquidita', verifica
   legale MiCA, registrare i social, spostare la pagina su `/` o dominio
   proprio, costruire i livelli per chi detiene.
 
 ---
 
+## Wallet come un DEX: barra in basso, niente "⋯" — `seed-0105`, PR #91
+
+Lorenzo: "voglio che l'esperienza su questo sito sia paragonabile a un DEX
+[...] ci sono tanti menu, tanti tasti che potrebbero essere ridotti".
+
+- `#app-shell[data-view]` ha tre valori: `pilot` (Radar), `manual`
+  (Scambia), `wallet` (Portafoglio). Li cambia `#dock`, la barra fissa in
+  basso (`setView()` in `main.js`, con view transition direzionale).
+- Il menu `#more` si apre dall'indirizzo in alto (`#more-btn` e' ora il
+  chip dell'indirizzo): Ricevi, Invia, Limiti, Simula, chiave. Voci proxy,
+  pillole `nav-pills` e cambio vista dal menu: tolti.
+- `#bottom-panel` (Saldi/Ordini/Storico/Strategie) sta dentro
+  `#wallet-view`, non piu' sotto il grafico.
+- `#holdings` sotto il saldo: `holdings.js` legge `walletHoldings()` da
+  `swap.js` (stessi dati della riga sopra lo swap, PR #89, stessa classe
+  `.wallet-chip`). Tocco = Scambia + evento `onchain:swap-from`, che
+  `swap.js` ascolta e usa come moneta in vendita (`pendingFrom` se lo swap
+  non e' ancora montato).
+- Radar e flusso swap non toccati (altri thread). `index.html` ha una copia
+  sua del markup senza dock: il cablaggio resta null-safe.
+
+Resta: il saldo grande in cima e' solo il nativo, non il totale del wallet.
 ## Radar DEGEN on-chain — `seed-0099`, `seed-0100`, `seed-0102` — branch `claude/token-scanner-strategie-a97cto`
 
 Thread "Scanner token e strategie". Radar in `app/trading/onchain/radar.py`,
@@ -53,6 +79,14 @@ filtro anti-rug in `legit.py`, frontend `frontend/static/onchain/radar.js`.
   pump.fun per capitalizzazione -> DexScreener (`_fetch_grown_pools`), per
   trovare DREGG. Il GitHub di DREGG (emberian/dregg) non e' raggiungibile
   dalla sandbox: se sul server non entra, il motivo e' fra gli scartati.
+- seed-0106 (DREGG metro): `github_shortfall` ora chiede >=1000 commit totali
+  (`github_commit_total`, Link header), ultimi 100 su >=8 giorni, push entro
+  14 giorni, voto >=75; in `judge_github` una storia lunga vale un team.
+  Eccezioni: sito dichiarato + nome non da meme, `exception_queue` a
+  rotazione (12 per giro), sempre provate, in cima alle proposte anche senza
+  strategia valida (`strategy_ok`). Fonti extra: profili/boost DexScreener.
+  Prova reale DREGG: pagella 89, GitHub 89. Lorenzo lo vuole primo nella
+  classifica (thread "Classifica progetti").
 - Vincolo: il pilota (soldi veri) resta sotto $100k
   (`_SNIPER_ONCHAIN_MAX_MCAP_USD` in main.py). Mai strategie short.
 
@@ -89,6 +123,24 @@ eccezione in quanto tecnicamente incredibili su github".
   (FLIP) quando cambia l'ordine.
 - In sandbox GitHub risponde solo per il repo del progetto: l'analisi GitHub
   e' provata sul repo stesso e con test; sul server usa `GITHUB_API_TOKEN`.
+- Seguito, stesso giorno. Lorenzo: "mi devi mettere drag al primo posto in
+  assoluto con menzione d'onore [...] estrai punti chiave da questo progetto
+  e applica come regola per altri progetti simili dal punto di vista
+  tecnologico"; poi "leaderboard [...] piu' in risalto, non al fondo [...]
+  vedere le scritte delle cose scartate non mi interessa" e un'immagine di
+  riferimento (cubo nero, linea verde luminosa, griglia isometrica).
+  - `app/trading/onchain/benchmark.py`: DREGG (mint `XkeT...pump`, dregg.net,
+    github.com/emberian/dregg: kernel Lean 4, STARK Plonky3 ricorsive,
+    Blocklace DAG BFT, SDK/CLI, 10 203 commit, AGPL) in 8 tratti pesati;
+    `similarity()` 0-100 da linguaggi, cartelle, argomenti GitHub, commit
+    totali (somma dei contributi) e termini tecnici del sito
+    (`site_terms`, salvati in `facts.tech_terms`). Leggibile anche dal radar.
+  - Classifica: DREGG sempre primo (mai escluso, mai potato), gli altri per
+    0.7 qualita' + 0.3 somiglianza. Sezione `#board` spostata subito sotto il
+    saldo, prima del radar; scartati nascosti (`.radar-rejected`, sezione del
+    radar, nascosta via CSS su richiesta di Lorenzo).
+  - Perche' "era sparita": in fondo alla pagina e vuota (nessun progetto
+    passava ancora tutti e tre i pilastri); ora c'e' almeno il riferimento.
 - Resta: vedere la classifica piena sul server; se troppo vuota, valutare con
   Lorenzo le soglie fatali (sono volutamente severe).
 

@@ -164,9 +164,15 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
-    ("seed-0105", "Pagina di presentazione del progetto e del token da lanciare",
+    ("seed-0107", "Pagina di presentazione del progetto e del token da lanciare",
      "Lorenzo: 'fai una pagina web di presentazione del progetto con slogan accattivante in inglese; crea il ticker del token, ci serve lanciarlo e inventati anche una tokenomics [...] mi piace lo stile dell'app (che dovra' essere un tasto al centro dove \"ENTER THE APP\") [...] facciamo chiaramente capire che ci sono due sezioni; una per sniperare progetti nuovi con regole (facendole vedere) un'altra sezione per progetti (seri con fondamentali) ma sempre microcap [...] devi pensare a tutto anche a cose che non ti ho detto'.",
      "alta"),
+    ("seed-0106", "Radar: DREGG deve uscire davvero, e cercare progetti tecnici anche oltre i token freschi",
+     "Lorenzo: 'voglio che drag tu mi verifichi che esca con queste regole, perche' deve uscire [...] estrai punti chiave da questo progetto e applica come regola [...] per altri progetti che possono essere simili dal punto di vista tecnologico [...] devi ampliare le ricerche [...] scandagliare tutto compreso anche X [...] non ci limitiamo a token freschi [...] anche un anno puo' essere giusto'.",
+     "alta"),
+    ("seed-0105", "Wallet on-chain: troppi menu e tasti, voglio un'esperienza da DEX",
+     "Lorenzo: 'voglio che l'esperienza su questo sito sia paragonabile a un DEX [...] devi rendere l'app migliore, esaminarla nel suo complesso, aggiungere funzioni, perche' e' molto carina adesso, pero' ci sono tanti menu, tanti tasti che potrebbero essere secondo me ridotti'.",
+     "media"),
     ("seed-0104", "Classifica dei progetti migliori, con analisi profonda di GitHub, sito e tokenomics",
      "Lorenzo: 'devi fare una specie di leaderboard che è sostanzialmente una classifica [...] cose estetiche che facciano capire primo posto, secondo posto, terzo posto e deve essere una classifica dinamica [...] aggiornata in tempo reale [...] rigoroso [...] da GitHub E devi controllare i commit insomma deve essere profonda sta cosa la tokenomics non deve essere uno scam il sito deve essere fatto bene magari se riesci ad analizzarne l'html e vedere se è fatto bene o se è solo una pagina di presentazione ma dietro non c'è niente [...] segnalare anche da quanto è che sono usciti [...] e ampliamo anche la chain per i token lanciati su Pump Fun'.",
      "alta"),
