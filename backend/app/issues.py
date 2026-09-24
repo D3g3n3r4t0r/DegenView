@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0107", "Rug pull su VISE, token proposto: -93%",
+     "Lorenzo: 'abbiamo appena subito un rugpull su VISE che era stata proposta, il token ha fatto -93%, impara da questo errore. Cosa non avevamo visto?'",
+     "alta"),
     ("seed-0106", "Radar: DREGG deve uscire davvero, e cercare progetti tecnici anche oltre i token freschi",
      "Lorenzo: 'voglio che drag tu mi verifichi che esca con queste regole, perche' deve uscire [...] estrai punti chiave da questo progetto e applica come regola [...] per altri progetti che possono essere simili dal punto di vista tecnologico [...] devi ampliare le ricerche [...] scandagliare tutto compreso anche X [...] non ci limitiamo a token freschi [...] anche un anno puo' essere giusto'.",
      "alta"),
