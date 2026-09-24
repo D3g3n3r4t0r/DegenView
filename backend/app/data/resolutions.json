@@ -1418,5 +1418,10 @@
     "status": "in corso",
     "at": 1790249294,
     "summary": "Pagina pubblica /engn in inglese, stile cubo nero e luce verde: slogan 'Find them first. Ride them right.', tasto ENTER THE APP al centro che porta al wallet, due sezioni Sniper (lanci nuovi) e Microcaps (fondamentali) con le regole lette dal codice del radar, strategie solo trend following e solo long spot, livelli per chi detiene, roadmap e disclaimer. Token $ENGN su pump.fun come deciso da Lorenzo: 1 miliardo, nessuna prevendita, team a 0% (nessun acquisto iniziale, nessuna liquidita' da mettere), LP bruciato alla laurea. Logo, banner e testi per il form di pump.fun pronti (docs/lancio-engn.md). Il token non e' stato creato: aspetta il via di Lorenzo."
+  },
+  "seed-0110": {
+    "status": "in corso",
+    "at": 1790266233,
+    "summary": "Studiati i casi dal vivo. JIRACHI, il '+6877%', aveva 300 acquisti e zero vendite, con liquidita' uguale alla capitalizzazione: un prezzo che nessuno poteva incassare, non una salita persa. Adesso la memoria conta una salita solo se qualcuno ha venduto e al massimo c'era liquidita' per uscire (almeno $10k); le altre sono 'salite finte' e non finiscono piu' fra i token persi. Per ogni motivo di scarto la memoria misura quanti token sono esplosi davvero, quanti erano finti e quanti rug, e confronta com'erano al primo sguardo (acquisti, vendite, volume, liquidita', detentori) le salite vere e le altre. Da questi dati nasce la corsia meme: token scartati per nome, sito, social o GitHub, mai per sicurezza, ancora vivi, vendibili, con RugCheck o GoPlus puliti e nessun wallet sopra il 15%, ordinati per somiglianza alle salite vere (un modello che entra solo se lo prevede anche su token nuovi). La corsia dice chiaramente che e' gioco d'azzardo e il pilota con soldi veri non la compra."
   }
 }
