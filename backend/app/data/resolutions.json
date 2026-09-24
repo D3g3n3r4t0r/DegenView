@@ -1370,5 +1370,16 @@
     "status": "risolto",
     "at": 1790230882,
     "summary": "DREGG non entrava per tre motivi: 88 giorni di vita (limite 3 settimane), $2.5M di capitalizzazione (limite $2M) e liquidita' all'8% della cap (minimo 10%). In piu' non compariva in nessuna lista letta dal radar (pool nuovi, di tendenza, piu' scambiati). Ora il radar legge anche pump.fun ordinato per capitalizzazione, e ammette come eccezione progetti fino a un anno di vita e $20M di cap, con liquidita' almeno $100k e 3% della cap, ma solo con un GitHub eccezionale: almeno 60 degli ultimi 100 commit, lavoro in almeno 20 giorni diversi, ultimo aggiornamento entro 14 giorni, voto GitHub almeno 75, piu' la pagella da gemma (complessivo 85, nessun controllo sotto 70). Nella lista delle proposte sono segnati 'eccezione GitHub'. Il pilota con soldi veri resta sotto i $100k."
+  },
+  "seed-0103": {
+    "status": "risolto",
+    "at": 1790231271,
+    "summary": "Nella prima pagina, sotto il radar, c'e' la classifica dei progetti migliori fra quelli che il radar ha trovato (compresi i lanci pump.fun e le eccezioni tipo DREGG che ora porta il radar). Ogni progetto viene analizzato a fondo su tre pilastri, ognuno da 0 a 100: GitHub (ultimi 100 commit e 52 settimane di attivita', settimane attive, autori, quanto codice c'e', test e CI, quanti commit sono solo caricamenti dal browser, repository nato insieme al token), sito (l'HTML: pagine interne, documentazione e app aperte davvero, sezioni team/roadmap/tokenomics/audit, costruttori a modello, testo segnaposto, eta' del dominio) e tokenomics (primo portafoglio e primi 10 esclusi pool e locker, creatore, holder, insider, mint e freeze, liquidita' bloccata, tasse). Un pilastro bocciato (per esempio il creatore che tiene piu' del 15%, un solo portafoglio oltre il 20%, un sito vuoto o di esempio, un GitHub senza codice) esclude il progetto per sempre. Podio oro/argento/bronzo per i primi tre, freccia di quanti posti si sale o si scende, da quanto e' uscito ogni token, e un tocco apre tutti i numeri. Si aggiorna da sola ogni 10 secondi; tokenomics rifatta ogni 20 minuti, GitHub ogni 2 ore, sito ogni 12.",
+    "files": [
+      "backend/app/trading/onchain/depth.py",
+      "backend/app/trading/onchain/leaderboard.py",
+      "frontend/static/onchain/leaderboard.js",
+      "frontend/onchain-app.html"
+    ]
   }
 }
