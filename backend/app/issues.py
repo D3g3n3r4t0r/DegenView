@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0099", "Radar: ingressi non nel punto preciso del grafico, e niente short",
+     "Lorenzo: 'se seleziono una strategia non appare nel grafico gli ingressi in modo preciso'. E: 'non voglio short, solo acquisti spot e vendite'.",
+     "alta"),
     ("seed-0098", "Strategia Lorenzo ad alta frequenza per i token on-chain appena usciti",
      "Lorenzo: 'creare un algoritmo di trading adatto per l'alta frequenza per cavalcare queste [...] cripto [...] e non perdersi [...] i rialzi. Non voglio utilizzare strategie inverse perché credo che qui quando il prezzo sale sale [...] il trend follower è corretto però voglio che lo ottimizzi per questa particolare applicazione on chain [...] voglio comunque mantenere la logica di quella di Lorenzo però applicata ad un time frame [...] sui minuti, quindi con dei filtri diversi'.",
      "alta"),

@@ -49,7 +49,7 @@ import httpx
 import pandas as pd
 
 from app.analysis.backtest import run_backtest
-from app.analysis.strategies import STRATEGY_REGISTRY, confirmed_events
+from app.analysis.strategies import STRATEGY_REGISTRY, confirmed_events, spot_only
 from app.providers.base import NoDataYet, ProviderError
 from app.providers.dexscreener import DexScreenerProvider, gecko_urgent, make_symbol
 from app.trading.onchain import legit
@@ -234,6 +234,22 @@ def strategy_configs(entries: list[dict] | None = None) -> list[dict]:
     return configs
 
 
+def spot_signals(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
+    """Solo spot: si compra e si vende, mai short (Lorenzo: "non voglio
+    short, solo acquisti spot e vendite"). Un segnale short della strategia
+    diventa una vendita di quello che si ha, se lo si ha."""
+    return spot_only(STRATEGY_REGISTRY[cfg["strategy_name"]](df, cfg["params"]))
+
+
+def run_spot(df: pd.DataFrame, cfg: dict):
+    """Backtest ed eventi dagli stessi segnali spot: il grafico e i numeri
+    raccontano gli stessi acquisti e le stesse vendite."""
+    signals = spot_signals(df, cfg)
+    result = run_backtest(df, cfg["params"], BACKTEST_PARAMS, signals=signals, strategy_name=cfg["strategy_name"])
+    events, position = confirmed_events(df, cfg["params"], signals=signals, strategy_name=cfg["strategy_name"])
+    return result, events, position
+
+
 def _long_only(trades, commission_pct: float) -> dict:
     """Rendimento composto dei soli long, con i costi del DEX."""
     equity = peak = 1.0
@@ -275,9 +291,8 @@ def evaluate(df: pd.DataFrame, configs: list[dict]) -> dict:
     best: dict | None = None
     for cfg in configs:
         try:
-            result = run_backtest(df, cfg["params"], BACKTEST_PARAMS, strategy_name=cfg["strategy_name"])
+            result, _events, position = run_spot(df, cfg)
             m = _long_only(result.trades, BACKTEST_PARAMS["commission_pct"])
-            _events, position = confirmed_events(df, cfg["params"], strategy_name=cfg["strategy_name"])
         except Exception as exc:  # una strategia che non gira su questa serie non ferma le altre
             logger.debug("radar: %s fallita: %s", cfg["label"], exc)
             continue
@@ -530,20 +545,29 @@ async def radar_loop() -> None:
 CHART_TTL_S = 30
 _chart_cache: dict[tuple[str, str], tuple[float, pd.DataFrame]] = {}
 
-# On-chain spot si va solo long: un'inversione verso short e' un'uscita, una
-# verso long un ingresso. Lo short puro non si disegna.
-_LONG_VIEW = {"entry_long": "in", "flip_to_long": "in", "exit_long": "out", "flip_to_short": "out"}
+_SPOT_VIEW = {"entry_long": "in", "exit_long": "out"}
 
 
-def long_events(events) -> list[dict]:
+def long_events(events, df: pd.DataFrame | None = None) -> list[dict]:
+    """Acquisti e vendite dove avvengono davvero. Il segnale nasce alla
+    chiusura di una candela, ma il backtest (fill_at "next_open") compra e
+    vende all'apertura di quella dopo: la freccia va li', a quel prezzo, non
+    una candela prima (Lorenzo: "non appare nel grafico gli ingressi in modo
+    preciso")."""
+    fill: dict[int, tuple[int, float]] = {}
+    if df is not None and len(df) > 1:
+        times = [int(ts.timestamp()) for ts in df.index]
+        opens = df["open"].tolist()
+        fill = {times[i]: (times[i + 1], float(opens[i + 1])) for i in range(len(times) - 1)}
     out: list[dict] = []
     holding = False
     for e in events:
-        kind = _LONG_VIEW.get(e.type)
+        kind = _SPOT_VIEW.get(e.type)
         if kind is None or (kind == "in") == holding:
             continue
         holding = kind == "in"
-        out.append({"time": e.time, "kind": kind, "price": e.price})
+        at, price = fill.get(e.time, (e.time, e.price))
+        out.append({"time": at, "kind": kind, "price": price, "signal_time": e.time})
     return out
 
 
@@ -553,8 +577,7 @@ def chart_strategies(df: pd.DataFrame, configs: list[dict]) -> list[dict]:
     rows = []
     for cfg in configs:
         try:
-            events, position = confirmed_events(df, cfg["params"], strategy_name=cfg["strategy_name"])
-            result = run_backtest(df, cfg["params"], BACKTEST_PARAMS, strategy_name=cfg["strategy_name"])
+            result, events, position = run_spot(df, cfg)
             m = _long_only(result.trades, BACKTEST_PARAMS["commission_pct"])
         except Exception as exc:
             logger.debug("radar chart: %s fallita: %s", cfg["label"], exc)
@@ -562,7 +585,7 @@ def chart_strategies(df: pd.DataFrame, configs: list[dict]) -> list[dict]:
         rows.append({
             "label": cfg["label"], "strategy_name": cfg["strategy_name"], "params": cfg["params"],
             "source": cfg["source"], "excluded": UNRELIABLE.get(cfg["strategy_name"]),
-            "events": long_events(events), "in_position": position > 0,
+            "events": long_events(events, df), "in_position": position > 0,
             "return_pct": m["return_pct"], "trades": m["trades"], "win_rate": m["win_rate"],
             "max_dd": m["max_dd"], "qualifies": _qualifies(m),
         })
