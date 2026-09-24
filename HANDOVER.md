@@ -12,6 +12,33 @@ lavori pluri-sessione, decisioni prese, stato di piani approvati.
 
 ---
 
+## Presentazione del progetto e token $ENGN — `seed-0109`, branch `claude/project-thread-mn4odz` — 2026-09-24
+
+Lorenzo: "fai una pagina web di presentazione del progetto con slogan
+accattivante in inglese; crea il ticker del token, ci serve lanciarlo [...]
+tasto al centro dove ENTER THE APP [...] due sezioni; una per sniperare
+progetti nuovi con regole (facendole vedere) un'altra [...] seri con
+fondamentali ma sempre microcap [...] devi pensare a tutto". Immagine di
+riferimento scelta: cubo nero con fessura verde, griglia, candele.
+
+- `frontend/engn.html` servita su `/engn` (pubblica). Le soglie in pagina
+  sono segnaposto `{{...}}` riempiti da `_render_engn_page()` con le costanti
+  di `radar.py`: niente numeri copiati a mano.
+- Piano completo (ticker, tokenomics, decisioni aperte, MiCA, social, chiavi)
+  in `docs/lancio-engn.md`. Screenshot in `/mnt/project-files/lancio/`.
+- Poi Lorenzo: "decidi tutto tu, voglio fare un progetto legit", e dopo:
+  "noi utilizzeremo pump fun [...] non andremo a fare nessun tipo di
+  attivita' di MiCA compliant" e "aspetta a lanciare i token ovviamente".
+  Quindi: lancio pump.fun, niente white paper, team 0% (nessun dev buy:
+  Lorenzo non vuole mettere soldi), nessuna commissione di swap. Kit del form (logo,
+  banner, testi) in `/mnt/project-files/lancio/pumpfun/` e
+  `docs/lancio-engn.md`. **Il token si crea solo col suo via.**
+- Prima di questo restava: modalita' di lancio (consigliato Raydium
+  / Meteora con LP bruciato, non pump.fun), SOL di liquidita', verifica
+  legale MiCA, registrare i social, spostare la pagina su `/` o dominio
+  proprio, costruire i livelli per chi detiene.
+
+---
 ## Memoria del radar ("coscienza") — `seed-0108`, branch `claude/project-thread-40dout`
 
 Lorenzo, dopo il rug su VISE: "dobbiamo implentare una specie di coscienza,
