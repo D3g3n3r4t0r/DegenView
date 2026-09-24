@@ -344,3 +344,16 @@ def test_attention_pools_are_the_tokens_people_talk_about():
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as c:
             return await radar._fetch_attention_pools(c, "solana")
     assert [p.symbol for p in asyncio.run(go())] == ["TECH"]
+
+
+def test_rugs_already_suffered_vanish_from_the_radar_and_land_on_the_wall(client, monkeypatch):
+    """Lorenzo: "fammi sparire VISE che e' un RUGPULL, crea sezione ironica
+    dove ci andranno a finire tutte le inculate subite"."""
+    from app.trading.onchain import outcomes
+    vise = outcomes.SHAME_SEED[0]
+    monkeypatch.setattr(outcomes, "_journal", {})
+    radar._state["proposals"] = [{"chain": "solana", "symbol": "VISE", "token_address": vise["token_address"]},
+                                 {"chain": "solana", "symbol": "GOOD", "token_address": "Good"}]
+    body = client.get("/api/onchain/radar").json()
+    assert [p["symbol"] for p in body["proposals"]] == ["GOOD"]
+    assert [s["symbol"] for s in body["shame"]] == ["VISE"]

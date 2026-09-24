@@ -144,6 +144,7 @@ async function refresh() {
   } catch {
     // Il radar e' un di piu': se non risponde resta com'era, il pilota no.
   }
+  api.getRadarLessons().then(paintMemory, () => {});
   if (document.visibilityState === "visible") timer = setTimeout(refresh, POLL_MS);
 }
 
@@ -164,6 +165,7 @@ function paint() {
   paintListings(true);
   if (data.pulse) paintPulse(data.pulse);
   paintRejected();
+  paintShame();
   root.querySelector("[data-radar-list]").innerHTML = proposals.length
     ? proposals.map((p) => row(p, !isFirst && !known.has(key(p)))).join("")
     : `<li class="pilot-empty">${escapeHtml(emptyText())}</li>`;
@@ -349,6 +351,54 @@ function paintRejected(arrived) {
   const more = box.querySelector("[data-rejected-more]");
   more.hidden = all.length <= REJECTED_SHOWN;
   more.textContent = rejectedAll ? "Mostra meno" : `Mostra tutti (${all.length})`;
+}
+
+/* ------------------------------------------------- il muro delle inculate */
+
+const SHAME_QUIPS = ["ci ha salutati con la manina", "ha preso i soldi ed è scappato", "promosso, poi evaporato",
+  "tanti auguri a chi l'ha tenuto", "il GitHub era di qualcun altro"];
+
+function paintShame() {
+  const box = root?.querySelector("[data-radar-shame]");
+  if (!box) return;
+  const all = data.shame ?? [];
+  box.hidden = all.length === 0;
+  box.querySelector("[data-shame-count]").textContent = all.length ? `· ${all.length}` : "";
+  box.querySelector("ul").innerHTML = all.map((e, i) => {
+    const when = e.rug_at ? new Date(e.rug_at * 1000).toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit" }) : "";
+    const quip = e.fooled_by ? `ci ha fregati con ${e.fooled_by}` : SHAME_QUIPS[i % SHAME_QUIPS.length];
+    return `
+    <li>
+      <span class="tk" data-chain="${escapeHtml(e.chain)}" aria-hidden="true">${escapeHtml((e.symbol ?? "?").slice(0, 2))}</span>
+      <span class="tk-name"><b>${escapeHtml(e.symbol ?? "?")}</b><small>${escapeHtml(`${when ? `${when} · ` : ""}${quip}`)}</small></span>
+      <span class="rj-why">${escapeHtml(e.rug_why ?? "rug")}</span>
+    </li>`;
+  }).join("");
+}
+
+/* ------------------------------------------------------------ la memoria */
+
+// Lorenzo, dopo VISE: "imparare dai segnali, da cosa effettivamente succede".
+// Una riga di numeri e i casi che contano: i rug che il filtro ha lasciato
+// passare e i token scartati che poi sono saliti.
+function paintMemory(m) {
+  const box = root?.querySelector("[data-radar-memory]");
+  if (!box || !m) return;
+  box.hidden = !m.tracked;
+  box.querySelector("[data-memory-count]").textContent = m.tracked ? `· ${m.tracked} seguiti` : "";
+  const rate = (g) => (g?.rug_rate == null ? "—" : `${Math.round(g.rug_rate * 100)}% rug`);
+  const known = (m.passed?.decided ?? 0) + (m.rejected?.decided ?? 0);
+  box.querySelector("[data-memory-line]").textContent = known
+    ? `Passati ${rate(m.passed)} · scartati ${rate(m.rejected)}${m.notes?.[1] ? ` · ${m.notes[1]}` : ""}`
+    : "Raccolgo gli esiti: servono qualche ora di prezzi";
+  // I rug passati dal filtro stanno nel muro qui sotto; qui gli scartati poi saliti.
+  const rows = (m.missed ?? []).slice(0, 4).map((e) => ({ ...e, why: `${pct(e.max_ret * 100)} dopo lo scarto` }));
+  box.querySelector("ul").innerHTML = rows.map((e) => `
+    <li>
+      <span class="tk" data-chain="${escapeHtml(e.chain)}" aria-hidden="true">${escapeHtml((e.symbol ?? "?").slice(0, 2))}</span>
+      <span class="tk-name"><b>${escapeHtml(e.symbol ?? "?")}</b><small>${escapeHtml(e.decision === "rejected" ? e.reason : "passato dal filtro")} · ${ago(e.at)}</small></span>
+      <span class="rj-why">${escapeHtml(e.why)}</span>
+    </li>`).join("");
 }
 
 function emptyText() {
