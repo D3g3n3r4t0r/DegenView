@@ -107,6 +107,7 @@ from app.trading.onchain import pilot as onchain_pilot
 from app.trading.onchain import listings as onchain_listings
 from app.trading.onchain import leaderboard as onchain_leaderboard
 from app.trading.onchain import radar as onchain_radar
+from app import token_launch
 from app.trading.onchain import prices as onchain_prices
 from app.trading.onchain import token_search as onchain_tokens
 from app.trading.onchain import quotes as onchain_quotes
@@ -1213,6 +1214,7 @@ app = FastAPI(title="Liquidity Analysis Engine", lifespan=lifespan)
 _PUBLIC_PATHS = frozenset({
     "/",                    # la pagina, che poi chiede di accedere
     "/sniper",
+    "/engn",                # la presentazione del progetto e del token, per chi non ha un account
     # Le tre pagine del wallet on-chain: la shell HTML deve caricarsi sempre,
     # come "/" — sono le singole chiamate API al loro interno (protette da
     # auth.get_current_user) a decidere se mostrare dati o un errore. Senza
@@ -6461,6 +6463,46 @@ async def index(user: User | None = Depends(auth.get_current_user_optional)) -> 
 @app.get("/sniper")
 async def sniper_app() -> HTMLResponse:
     return HTMLResponse(_SNIPER_HTML, headers=_HTML_HEADERS)
+
+
+def _render_engn_page() -> str:
+    """La presentazione pubblica: le regole mostrate sono le costanti del
+    radar, non numeri copiati a mano — se una soglia cambia, cambia anche qui."""
+    r = onchain_radar
+    values = {
+        "SCAN_MIN": f"{r.SCAN_INTERVAL_S // 60}",
+        "AGE_MAX_DAYS": f"{r.AGE_MAX_DAYS}",
+        "LIQ_MIN": f"{r.LIQ_MIN_USD / 1000:g}k",
+        "LIQ_RATIO": f"{r.LIQ_TO_MCAP_MIN * 100:g}",
+        "MCAP_MAX": f"${r.MCAP_MAX_USD / 1e6:g}M",
+        "MIN_BARS": f"{r.MIN_BARS}",
+        "MIN_TRADES": f"{r.MIN_TRADES}",
+        "MIN_PF": f"{r.MIN_PROFIT_FACTOR:g}",
+        "MAX_DD": f"{r.MAX_DRAWDOWN_PCT:g}",
+        "EXC_MCAP": f"{r.EXC_MCAP_MAX_USD / 1e6:g}M",
+        "EXC_LIQ": f"{r.EXC_LIQ_MIN_USD / 1000:g}k",
+    }
+    html = (FRONTEND_DIR / "engn.html").read_text(encoding="utf-8")
+    for key, value in values.items():
+        html = html.replace("{{" + key + "}}", value)
+    return html
+
+
+_ENGN_HTML = _render_engn_page()
+
+
+def _engn_contract_box() -> str:
+    """L'indirizzo compare solo dopo il lancio vero (app/token_launch.py)."""
+    done = token_launch.launched()
+    if not done:
+        return '<span class="ca">CA <b>not launched yet</b> · only this page will publish it</span>'
+    mint = _html.escape(done["mint"], quote=True)
+    return (f'<a class="ca" href="https://pump.fun/coin/{mint}" rel="noopener">CA <b>{mint}</b></a>')
+
+
+@app.get("/engn")
+async def engn_page() -> HTMLResponse:
+    return HTMLResponse(_ENGN_HTML.replace("<!--engn-ca-->", _engn_contract_box()), headers=_HTML_HEADERS)
 
 
 @app.get("/onchain-approve.html")

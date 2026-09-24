@@ -1413,5 +1413,10 @@
     "status": "in corso",
     "at": 1790248250,
     "summary": "Il radar ora ha una memoria. Ogni token proposto, provato o scartato viene seguito per 7 giorni: prezzo e liquidita' ogni 10 minuti. Se la liquidita' scende sotto il 20% o il prezzo fa -80% e' un rug; se sale del 50% c'era un trend da prendere. Per ogni controllo (sicurezza, contratto, sito, GitHub, Claude, cap, liquidita') misura se prevedeva i rug e le salite. Da quegli esiti impara un punteggio di rischio che compare nella pagella come 'Memoria', ma solo quando prevede i rug anche su token che non ha mai visto, con almeno 40 esiti e 8 rug. Provato su VISE vero: il rug a -93% viene riconosciuto. Per ora la memoria osserva e non scarta niente, perche' lo stesso filtro decide anche per il pilota con soldi veri: serve il si' di Lorenzo. VISE e' sparito da proposte, listing, classifica e candidati del pilota, e sta nel 'Muro delle inculate' in fondo al radar: ogni rug che il filtro aveva lasciato passare ci finisce da solo."
+  },
+  "seed-0109": {
+    "status": "in corso",
+    "at": 1790249294,
+    "summary": "Pagina pubblica /engn in inglese, stile cubo nero e luce verde: slogan 'Find them first. Ride them right.', tasto ENTER THE APP al centro che porta al wallet, due sezioni Sniper (lanci nuovi) e Microcaps (fondamentali) con le regole lette dal codice del radar, strategie solo trend following e solo long spot, livelli per chi detiene, roadmap e disclaimer. Token $ENGN su pump.fun come deciso da Lorenzo: 1 miliardo, nessuna prevendita, team a 0% (nessun acquisto iniziale, nessuna liquidita' da mettere), LP bruciato alla laurea. Logo, banner e testi per il form di pump.fun pronti (docs/lancio-engn.md). Il token non e' stato creato: aspetta il via di Lorenzo."
   }
 }

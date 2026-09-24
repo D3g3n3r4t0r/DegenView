@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0109", "Pagina di presentazione del progetto e del token da lanciare",
+     "Lorenzo: 'fai una pagina web di presentazione del progetto con slogan accattivante in inglese; crea il ticker del token, ci serve lanciarlo e inventati anche una tokenomics [...] mi piace lo stile dell'app (che dovra' essere un tasto al centro dove \"ENTER THE APP\") [...] facciamo chiaramente capire che ci sono due sezioni; una per sniperare progetti nuovi con regole (facendole vedere) un'altra sezione per progetti (seri con fondamentali) ma sempre microcap [...] devi pensare a tutto anche a cose che non ti ho detto'.",
+     "alta"),
     ("seed-0108", "Il radar deve imparare da cosa succede davvero ai token che propone e scarta",
      "Lorenzo: 'dobbiamo implentare una specie di \"coscienza\", imparare dai segnali; da cosa effettivamente succede, e migliorare il sistema'.",
      "alta"),
