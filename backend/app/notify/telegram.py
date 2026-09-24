@@ -28,7 +28,9 @@ ricreare) il cui id va in `TELEGRAM_DEV_CHAT_IDS`. Per trovarlo:
 `.venv/bin/python -m tools.telegram_chat_ids`.
 """
 
+import html
 import logging
+import re
 
 import httpx
 
@@ -64,21 +66,68 @@ async def send_to(chat_id: str, text: str) -> bool:
     if not settings.telegram_bot_token or not chat_id:
         return False
     async with httpx.AsyncClient(timeout=15.0) as client:
-        try:
-            resp = await client.post(
-                f"{API_BASE}/bot{settings.telegram_bot_token}/sendMessage",
-                json={
-                    "chat_id": chat_id,
-                    "text": text,
-                    "parse_mode": "HTML",
-                    "disable_web_page_preview": True,
-                },
-            )
+        return await _deliver(client, chat_id, text)
+
+
+# Telegram rifiuta i messaggi oltre 4096 caratteri: si spezza prima, sulle
+# righe, cosi' un tag HTML non resta mai a meta' fra due pezzi.
+MAX_LEN = 4096
+
+
+def chunks(text: str, limit: int = MAX_LEN) -> list[str]:
+    """Il testo in pezzi da al massimo `limit` caratteri, tagliati a fine riga.
+
+    Lorenzo: "i messaggi su Telegram arrivano tagliati, non sono mai
+    completi". Un messaggio lungo va consegnato in piu' pezzi, non accorciato.
+    """
+    out: list[str] = []
+    cur = ""
+    for line in text.split("\n"):
+        while len(line) > limit:
+            if cur:
+                out.append(cur)
+                cur = ""
+            cut = line.rfind(" ", 0, limit)
+            cut = cut if cut > 0 else limit
+            out.append(line[:cut])
+            line = line[cut:].lstrip(" ")
+        candidate = f"{cur}\n{line}" if cur else line
+        if len(candidate) > limit:
+            out.append(cur)
+            cur = line
+        else:
+            cur = candidate
+    if cur.strip():
+        out.append(cur)
+    return out or [text]
+
+
+def plain(text: str) -> str:
+    """Il testo senza tag HTML, per rimandare un messaggio che Telegram non
+    ha saputo leggere (un "<" dentro un errore o un nome di token)."""
+    return html.unescape(re.sub(r"</?(?:b|i|u|s|code|pre|a)(?:\s[^>]*)?>", "", text))
+
+
+async def _post(client: httpx.AsyncClient, chat_id: str, text: str, parse_html: bool) -> httpx.Response:
+    body = {"chat_id": chat_id, "text": text, "disable_web_page_preview": True}
+    if parse_html:
+        body["parse_mode"] = "HTML"
+    return await client.post(f"{API_BASE}/bot{settings.telegram_bot_token}/sendMessage", json=body)
+
+
+async def _deliver(client: httpx.AsyncClient, chat_id: str, text: str) -> bool:
+    """Manda tutto il testo, in piu' messaggi se serve. Un pezzo con HTML non
+    valido viene rimandato come testo semplice invece di andare perso."""
+    try:
+        for part in chunks(text):
+            resp = await _post(client, chat_id, part, True)
+            if resp.status_code == 400:
+                resp = await _post(client, chat_id, plain(part), False)
             resp.raise_for_status()
-            return True
-        except httpx.HTTPError:
-            logger.warning("Invio Telegram fallito per chat_id=%s", chat_id, exc_info=True)
-            return False
+        return True
+    except httpx.HTTPError:
+        logger.warning("Invio Telegram fallito per chat_id=%s", chat_id, exc_info=True)
+        return False
 
 
 async def send_infra_alert(message: str) -> bool:
@@ -109,19 +158,6 @@ async def send_message(text: str) -> bool:
     sent_any = False
     async with httpx.AsyncClient(timeout=15.0) as client:
         for chat_id in _chat_ids():
-            try:
-                resp = await client.post(
-                    f"{API_BASE}/bot{settings.telegram_bot_token}/sendMessage",
-                    json={
-                        "chat_id": chat_id,
-                        "text": text,
-                        "parse_mode": "HTML",
-                        "disable_web_page_preview": True,
-                    },
-                )
-                resp.raise_for_status()
-                sent_any = True
-            except httpx.HTTPError:
-                logger.warning("Invio Telegram fallito per chat_id=%s", chat_id, exc_info=True)
-                continue
+            # Un destinatario che fallisce non ferma gli altri.
+            sent_any = await _deliver(client, chat_id, text) or sent_any
     return sent_any
