@@ -60,11 +60,10 @@ def test_the_attribution_trailers_do_not_leak_into_the_italian_line():
     assert italian_line(msg) == "ora si puo' chiudere la posizione dal sito"
 
 
-def test_a_long_line_is_cut_on_a_word_not_mid_syllable():
+def test_a_long_line_arrives_whole():
+    """Lorenzo: "i messaggi su Telegram arrivano tagliati, non sono mai completi"."""
     msg = "Aggiornamento: " + "parola " * 60
-    line = italian_line(msg)
-    assert line.endswith("…")
-    assert "parol…" not in line
+    assert italian_line(msg) == ("parola " * 60).strip()
 
 
 # ── il messaggio ─────────────────────────────────────────────────────────
