@@ -130,3 +130,36 @@ getengn.xyz, www.getengn.xyz {
 		redir https://{$SITE_DOMAIN}{uri}
 	}
 }
+
+# Il sito di $EGGD, finche' il progetto non ha un dominio suo. Solo file
+# statici: il workflow del repo EGGD (deploy-site.yml) compila il sito e lo
+# carica in /opt/eggd/site sul server, montato qui in sola lettura. Niente
+# app dietro, niente cookie.
+eggd.liquidityengine.app {
+	root * /srv/eggd
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+		# Next.js mette i dati della pagina in script inline, e il 3D usa blob:
+		# per texture e worker. Tutto il resto viene solo da qui.
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; media-src 'self' data: blob:; worker-src 'self' blob:; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'"
+		-Server
+	}
+
+	# I file in _next/static hanno l'hash nel nome: non cambiano mai.
+	@immutabili path /_next/static/*
+	header @immutabili Cache-Control "public, max-age=31536000, immutable"
+
+	try_files {path} {path}.html {path}/index.html
+	file_server
+
+	handle_errors 404 {
+		rewrite * /404.html
+		file_server
+	}
+}
