@@ -173,9 +173,13 @@ function paint() {
   const parts = Object.entries(chains ?? {}).map(([c, info]) => `${CHAINS[c] ?? c} ${info.seen}`);
   const rejected = st.rejected ? ` · ${st.rejected} scartati dal filtro` : "";
   const rules = `cap < ${usd(data.filters.mcap_max_usd)}, sopra $100k solo pagella eccellente · sito, social, GitHub, RugCheck e GoPlus obbligatori${st.ai_review ? " · controllo Claude" : ""}`;
-  root.querySelector("[data-radar-foot]").textContent = data.last_scan
+  // Lorenzo: "qui ci sono troppe scritte". Le regole restano a portata di
+  // dito (tenendo premuto / passandoci sopra), non a schermo.
+  const foot = root.querySelector("[data-radar-foot]");
+  foot.hidden = true;
+  foot.closest(".radar")?.querySelector("header h3")?.setAttribute("title", data.last_scan
     ? `Visti: ${parts.join(" · ")}${rejected} · ${rules}`
-    : `Solana e Robinhood · ${rules}`;
+    : `Solana e Robinhood · ${rules}`);
 
   if (!view) {
     const first = data.listings?.[0];
@@ -284,10 +288,10 @@ function paintPulse(p) {
   tween(box.querySelector("[data-pulse-arrivals]"), p.arrivals_10m ?? 0);
   tween(box.querySelector("[data-pulse-rejected]"), data?.rejected?.length ?? p.rejected ?? 0);
   const last = box.querySelector("[data-pulse-last]");
-  last.textContent = p.last_arrival ? `ultimo ${ageShort(Date.now() / 1000 - p.last_arrival)} fa` : "in ascolto";
+  last.textContent = p.last_arrival ? ` · ${ageShort(Date.now() / 1000 - p.last_arrival)} fa` : "";
   if (flashTimer) return;  // un avviso di scarto resta visibile il suo tempo
   const now = box.querySelector("[data-pulse-now]");
-  const text = p.checking?.length ? `Controllo ${p.checking.join(", ")}` : "In ascolto sui nuovi pool";
+  const text = p.checking?.length ? `Controllo ${p.checking.join(", ")}` : "In ascolto";
   if (now.textContent !== text) {
     now.textContent = text;
     now.animate?.([{ opacity: 0, translate: "0 6px" }, { opacity: 1, translate: "0 0" }],
@@ -348,12 +352,10 @@ function paintRejected(arrived) {
 }
 
 function emptyText() {
-  if (!data.last_scan) return "Al primo giro cerco token fino a 3 settimane (oltre, solo con GitHub eccezionale), li passo dal filtro anti-rug e li provo su tutte le strategie.";
+  if (!data.last_scan) return "Primo giro in corso";
   const c = Object.values(data.chains ?? {});
   const sum = (k) => c.reduce((n, x) => n + (x[k] ?? 0), 0);
-  const bits = [`${sum("passing")} con i numeri giusti`, `${sum("legit")} superano il filtro`, `${sum("tested")} provati`];
-  if (sum("too_young")) bits.push(`${sum("too_young")} troppo giovani per un backtest`);
-  return `${bits.join(" · ")}. Nessuno passa il test, per ora.`;
+  return `Nessuna per ora · ${sum("passing")} candidati, ${sum("tested")} provati`;
 }
 
 function row(p, isNew) {
@@ -408,7 +410,7 @@ function markOn() {
 }
 
 function paintIdleStage() {
-  stage.innerHTML = `<p class="radar-idle">Il primo token che supera il filtro compare qui, con il grafico e gli ingressi della strategia migliore.</p>`;
+  stage.innerHTML = `<p class="radar-idle">Qui il grafico del primo token che passa</p>`;
 }
 
 function links(p) {
