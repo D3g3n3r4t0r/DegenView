@@ -191,3 +191,24 @@ def test_report_card_says_how_well_each_filter_was_passed():
 
 def test_grades():
     assert [legit.grade(s) for s in (95, 75, 60, 20)] == ["eccellente", "buono", "sufficiente", "mediocre"]
+
+
+def test_above_100k_only_an_excellent_report_passes():
+    """Lorenzo: "uno o due milioni di market cap potrebbe andare bene però
+    [...] GitHub, sito, tokenomics tante cose devono essere perfette"."""
+    small = _assess({**TOKEN, "market_cap": 90_000})
+    assert small["status"] == "ok"
+    big = _assess({**TOKEN, "market_cap": 1_500_000})
+    gem = next(c for c in big["checks"] if c["key"] == "gem")
+    assert big["status"] == "fail" and gem["ok"] is False and "sotto 85" in big["reason"]
+
+
+def test_gem_shortfall_names_what_is_missing():
+    good = [{"key": "security", "label": "RugCheck", "score": 95, "grade": "eccellente"},
+            {"key": "github", "label": "GitHub", "score": 88, "grade": "eccellente"}]
+    assert legit.gem_shortfall(good, legit.report_card(good)) == ""
+    meh = good + [{"key": "site", "label": "Sito", "score": 60, "grade": "sufficiente"}]
+    assert "Sito" in legit.gem_shortfall(meh, {"score": 90})
+    thin = [{"key": "contract", "label": "GoPlus contratto", "score": 80, "grade": "buono"},
+            {"key": "github", "label": "GitHub", "score": 95, "grade": "eccellente"}]
+    assert "GoPlus" in legit.gem_shortfall(thin, {"score": 90})
