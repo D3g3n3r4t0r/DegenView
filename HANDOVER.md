@@ -12,7 +12,7 @@ lavori pluri-sessione, decisioni prese, stato di piani approvati.
 
 ---
 
-## Wallet come un DEX: barra in basso, niente "⋯" — `seed-0103`, PR #91
+## Wallet come un DEX: barra in basso, niente "⋯" — `seed-0105`, PR #91
 
 Lorenzo: "voglio che l'esperienza su questo sito sia paragonabile a un DEX
 [...] ci sono tanti menu, tanti tasti che potrebbero essere ridotti".
@@ -59,6 +59,39 @@ filtro anti-rug in `legit.py`, frontend `frontend/static/onchain/radar.js`.
 
 Lorenzo: "dregg va bene anche se ha 21 gg e supera i 2 mln, progetti in quel
 modo voglio che siano eccezione in quanto tecnicamente incredibili su github".
+
+---
+
+## Classifica dei progetti — `seed-0104`, branch `claude/classifica-progetti-8ptvq0` — 2026-09-24
+
+Lorenzo: "una specie di leaderboard [...] primo posto, secondo posto, terzo
+posto [...] dinamica [...] aggiornata in tempo reale [...] rigoroso [...]
+GitHub [...] controllare i commit [...] la tokenomics non deve essere uno
+scam [...] analizzarne l'html [...] da quanto e' che sono usciti [...] Pump
+Fun". Poi su DREGG: "va bene anche se ha 21 gg e supera i 2 mln [...]
+eccezione in quanto tecnicamente incredibili su github".
+
+- `app/trading/onchain/depth.py`: tre pilastri 0-100 con `fatal` (esclude
+  per sempre) e `pending` (riprova). GitHub: 100 commit + `/stats/participation`,
+  contributori, linguaggi, cartella principale (test, CI). Sito: `anatomy()`
+  sull'HTML (serve `html` in `legit.fetch_site`, aggiunto), apre fino a 3
+  pagine interne (docs, app), RDAP per l'eta' del dominio. Tokenomics: report
+  completo RugCheck / GoPlus, esclusi pool, locker e curva pump.fun.
+  Soglie fatali: creatore > 15%, primo holder > 20%, primi 10 > 60%, mint o
+  freeze attivi, tassa > 5%. Pesi 40/30/30.
+- `app/trading/onchain/leaderboard.py`: legge solo i dati salvati del radar
+  (`listings.recent()`, proposte e testati di `radar.snapshot()`). Pump.fun
+  ed eccezioni li porta il radar (thread "Scanner token e strategie"): una
+  fonte e una regola sole. Eccezione = la regola del radar
+  (`legit.github_shortfall` + `gem_shortfall` sui controlli salvati) piu'
+  GitHub a fondo >= 85. Stato su `storage.data_file("onchain_leaderboard.json")`.
+- `GET /api/onchain/leaderboard`; frontend `static/onchain/leaderboard.js`,
+  sezione `#board` subito dopo `#radar`, poll ogni 10 s, righe che scivolano
+  (FLIP) quando cambia l'ordine.
+- In sandbox GitHub risponde solo per il repo del progetto: l'analisi GitHub
+  e' provata sul repo stesso e con test; sul server usa `GITHUB_API_TOKEN`.
+- Resta: vedere la classifica piena sul server; se troppo vuota, valutare con
+  Lorenzo le soglie fatali (sono volutamente severe).
 
 ---
 
@@ -3042,3 +3075,13 @@ ora prende simbolo e prezzo da DexScreener anche su Robinhood.
 Limite noto: su Robinhood il portfolio vede solo i token che il sito
 conosce (USDG + quelli degli ordini limite), non tutto il wallet.
 Gli swap via aggregatore restano spenti: aspettano il si' di Lorenzo.
+
+## Telegram interi — `seed-0103` — 2026-09-24
+
+Lorenzo: "Inoltre i messaggi su Telegram arrivano tagliati, non sono mai
+completi". Causa: `_notify_deploy` tagliava ogni riga a 120 caratteri e
+`italian_line` a 160 (i trailer "Aggiornamento:" sono spesso 130-180); il
+riepilogo settimanale tagliava a 170 e mostrava al massimo 12/15 voci.
+Ora niente tagli: `telegram._deliver` spezza oltre 4096 caratteri a fine
+riga e, se Telegram rifiuta l'HTML (400), rimanda come testo semplice.
+Radar e pilota non toccati.

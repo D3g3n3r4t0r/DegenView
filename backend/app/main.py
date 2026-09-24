@@ -3,6 +3,7 @@ import base64
 import datetime as _dt
 import hashlib
 import io
+import html as _html
 import httpx
 import itertools
 import json
@@ -103,6 +104,7 @@ from app.trading.onchain import ledger as onchain_ledger
 from app.trading.onchain import passkey as onchain_passkey
 from app.trading.onchain import pilot as onchain_pilot
 from app.trading.onchain import listings as onchain_listings
+from app.trading.onchain import leaderboard as onchain_leaderboard
 from app.trading.onchain import radar as onchain_radar
 from app.trading.onchain import prices as onchain_prices
 from app.trading.onchain import token_search as onchain_tokens
@@ -1029,7 +1031,7 @@ async def _notify_deploy() -> None:
                 f"https://api.github.com/repos/{_GITHUB_REPO}/commits",
                 headers={"Authorization": f"Bearer {settings.github_api_token}",
                          "Accept": "application/vnd.github+json"},
-                params={"per_page": 10},
+                params={"per_page": 100},
             )
             r.raise_for_status()
             commits = r.json()
@@ -1050,13 +1052,13 @@ async def _notify_deploy() -> None:
             idx = next(i for i, c in enumerate(commits) if c["sha"] == last_sha)
             new_commits = commits[:idx]
         except StopIteration:
-            new_commits = commits[:5]
+            pass  # piu' di 100 commit dall'ultimo avviso: si mandano tutti quelli letti
     lines = []
     for c in new_commits:
         # I messaggi di commit sono in inglese per convenzione (CLAUDE.md), ma
         # questa notifica la legge Lorenzo: `italian_line` prende il trailer
         # "Aggiornamento:" quando c'e' e ricade sul titolo quando manca.
-        msg = weekly_recap.italian_line(c["commit"]["message"])[:120]
+        msg = _html.escape(weekly_recap.italian_line(c["commit"]["message"]), quote=False)
         sha_short = c["sha"][:7]
         lines.append(f"• <code>{sha_short}</code> {msg}")
     changelog = "\n".join(lines) if lines else "• (nessun commit trovato)"
@@ -1161,7 +1163,8 @@ async def lifespan(app: FastAPI):
     t5 = asyncio.create_task(_watchdog_loop())
     radar_tasks = [asyncio.create_task(onchain_radar.radar_loop()),
                    asyncio.create_task(onchain_listings.listings_loop()),
-                   asyncio.create_task(onchain_radar.listings_backtest_loop())] if settings.onchain_radar_enabled else []
+                   asyncio.create_task(onchain_radar.listings_backtest_loop()),
+                   asyncio.create_task(onchain_leaderboard.leaderboard_loop())] if settings.onchain_radar_enabled else []
     sniper_tasks: list[asyncio.Task] = []
     if settings.sniper_enabled:
         from app.sniper import cache as sniper_cache
@@ -3477,6 +3480,14 @@ async def onchain_radar_view(user: User = Depends(auth.get_current_user)) -> dic
     return {**onchain_radar.snapshot(), "listings": onchain_listings.recent(),
             "rejected": onchain_listings.rejected(), "pulse": onchain_listings.pulse(),
             "listing_status": onchain_listings.status()}
+
+
+@app.get("/api/onchain/leaderboard")
+async def onchain_leaderboard_view(user: User = Depends(auth.get_current_user)) -> dict:
+    """La classifica dei progetti migliori: GitHub, sito e tokenomics
+    analizzati a fondo. Vedi app/trading/onchain/leaderboard.py."""
+    _require_onchain_enabled()
+    return onchain_leaderboard.board()
 
 
 @app.get("/api/onchain/radar/stream")

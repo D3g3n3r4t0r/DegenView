@@ -23,6 +23,7 @@ import { openSend } from "@onchain/send.js";
 import { mountPilot, refreshPilot } from "@onchain/pilot.js";
 import { mountRadar } from "@onchain/radar.js";
 import { refreshHoldings } from "@onchain/holdings.js";
+import { mountLeaderboard } from "@onchain/leaderboard.js";
 
 // Sulla pagina a se' (onchain-app.html) la radice e' il documento intero.
 // Fusa dentro la tab Trading, invece, questo modulo viene importato dentro
@@ -521,6 +522,7 @@ view.dock?.addEventListener("click", (event) => {
 
 mountPilot({ toast, onChange: refreshSniperCard });
 mountRadar({ toast });
+mountLeaderboard();
 
 // La rete si cambia dal suo nome, accanto al saldo: un tocco, niente menu.
 view.chainFlip?.addEventListener("click", () => {
