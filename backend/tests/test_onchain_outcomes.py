@@ -43,6 +43,19 @@ def test_journal_keeps_the_strongest_decision_and_its_moment():
     assert outcomes.observe({**_item("x"), "pair_address": ""}, "listed") is None
 
 
+def test_holder_concentration_is_learned_in_the_right_direction():
+    for i in range(30):
+        rug = i % 3 == 0
+        it = _item(f"h{i}")
+        it["checks"][0]["facts"] = {"top_holder_pct": 12.0 if rug else 3.0, "top10_pct": 30.0 if rug else 15.0}
+        e = outcomes.observe(it, "listed", T0, now=T0)
+        assert e["features"]["top_holder_pct"] in (12.0, 3.0)
+        outcomes.apply_sample(e, 1.0, 20_000, T0)
+        outcomes.apply_sample(e, 0.05 if rug else 1.05, 20_000, T0 + outcomes.HORIZON_S)
+    sig = {s["key"]: s for s in outcomes.signals(T0 + outcomes.HORIZON_S)}
+    assert sig["top_holder_pct"]["rug_auc"] == 1.0 and sig["top_holder_pct"]["verdict"] == "prevede i rug"
+
+
 def test_liquidity_pulled_is_a_rug_even_if_price_holds():
     e = outcomes.observe(_item(), "listed", T0, now=T0)
     outcomes.apply_sample(e, 1.0, 20_000, T0)
