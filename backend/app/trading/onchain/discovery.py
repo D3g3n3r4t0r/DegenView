@@ -349,7 +349,7 @@ async def _gh_search(client: httpx.AsyncClient, now: float) -> None:
     q = GH_QUERIES[_state["gh_query"] % len(GH_QUERIES)]
     _state["gh_query"] += 1
     since = time.strftime("%Y-%m-%d", time.gmtime(now - GH_FRESH_DAYS * 86400))
-    r = await client.get(f"{legit.GITHUB_API}/search/repositories",
+    r = await legit.gh_get(client, f"{legit.GITHUB_API}/search/repositories",
                          params={"q": f"{q} fork:false pushed:>{since}", "sort": "updated", "per_page": 50},
                          headers=legit._gh_headers(), timeout=10.0)
     if r.status_code != 200:

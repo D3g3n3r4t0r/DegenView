@@ -199,3 +199,12 @@ def test_verified_readme_skips_ownership_check(monkeypatch):
                                            token={"chain": "solana", "token_address": "M", "symbol": "GRID",
                                                   "github_verified": True}, website="https://grid.xyz"))
     assert out["fatal"] != "GitHub does not belong to the project"
+
+
+def test_github_rate_limit_is_recorded():
+    d.legit.github_rate.clear()
+    r = _Resp(200, {})
+    r.headers = {"x-ratelimit-limit": "60", "x-ratelimit-remaining": "0", "x-ratelimit-reset": "1790000000",
+                 "x-ratelimit-resource": "core"}
+    asyncio.run(d.legit.gh_get(_Client({"/x": r}), "https://api.github.com/x"))
+    assert d.legit.github_rate["core"]["limit"] == 60 and d.legit.github_rate["core"]["remaining"] == 0
