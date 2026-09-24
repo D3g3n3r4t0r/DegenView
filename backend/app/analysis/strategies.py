@@ -682,6 +682,17 @@ def confirmed_events(
     return events, position
 
 
+def spot_only(signals: pd.DataFrame) -> pd.DataFrame:
+    """Solo acquisti e vendite, mai short: un segnale short diventa la
+    vendita di quello che si ha. Per il DEX, dove si compra e si vende il
+    token e basta (Lorenzo: "non voglio short, solo acquisti spot e vendite")."""
+    out = signals.copy()
+    out["exit_long"] = out["exit_long"].astype(bool) | out["entry_short"].astype(bool)
+    out["entry_short"] = False
+    out["exit_short"] = False
+    return out
+
+
 def build_strategy_state(
     name: str, df: pd.DataFrame, params: dict | None = None, signals: pd.DataFrame | None = None
 ) -> StrategyState:
