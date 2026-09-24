@@ -227,7 +227,7 @@ async def fetch_site(url: str, client: httpx.AsyncClient) -> dict:
         title, text = page_text(decoded)
         github = re.findall(r"https?://(?:www\.)?github\.com/[A-Za-z0-9._/-]+", decoded)
         return {"ok": True, "status": r.status_code, "title": title, "text": text, "final_url": current,
-                "github": github}
+                "github": github, "html": decoded}
     return {"ok": False, "error": "troppi redirect"}
 
 

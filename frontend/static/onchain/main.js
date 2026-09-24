@@ -22,6 +22,7 @@ import { mountPortfolio } from "@onchain/portfolio.js";
 import { openSend } from "@onchain/send.js";
 import { mountPilot, refreshPilot } from "@onchain/pilot.js";
 import { mountRadar } from "@onchain/radar.js";
+import { mountLeaderboard } from "@onchain/leaderboard.js";
 
 // Sulla pagina a se' (onchain-app.html) la radice e' il documento intero.
 // Fusa dentro la tab Trading, invece, questo modulo viene importato dentro
@@ -530,6 +531,7 @@ $$("#more [data-view-switch]").forEach((item) =>
 
 mountPilot({ toast, onChange: refreshSniperCard });
 mountRadar({ toast });
+mountLeaderboard();
 
 // Da telefono tab, rete e filtri non sono a schermo: le voci del menu
 // premono il controllo nascosto e portano la vista sul suo pannello.
