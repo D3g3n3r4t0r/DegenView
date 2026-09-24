@@ -59,10 +59,22 @@ Description:
 
 ## Sequenza di lancio (solo col via di Lorenzo)
 
-1. Creare X e Telegram del progetto, metterli nel footer di `/engn`.
-2. Wallet di deploy nuovo, con pochi centesimi di SOL per la creazione.
-3. Creare il token su pump.fun con il kit sopra, senza dev buy.
-4. Pubblicare l'indirizzo su `/engn` (riquadro "CA") e sui social.
+Il comando e' pronto in `backend/app/token_launch.py`, sul server dentro il
+container (le chiavi restano sul volume `backend/data`):
+
+```
+docker compose exec app python -m app.token_launch wallet   # crea il wallet di lancio, mostra indirizzo e saldo
+docker compose exec app python -m app.token_launch check    # costruisce, firma e simula: non manda niente
+docker compose exec -e ENGN_LAUNCH_ARMED=1 app python -m app.token_launch launch --confirm ENGN --twitter URL --telegram URL
+```
+
+1. Creare X e Telegram del progetto.
+2. `wallet`, poi mandare ~0,05 SOL all'indirizzo stampato (solo commissioni).
+3. `check` deve dire "simulation: OK". In sandbox (24/09) PumpPortal ha
+   costruito la transazione senza dev buy; la simulazione falliva solo per
+   il wallet vuoto.
+4. `launch`: carica logo e testi su pump.fun, simula, invia. L'indirizzo
+   compare da solo nel riquadro "CA" di `/engn`. Rifiuta di lanciare due volte.
 5. Dopo la laurea: profilo DexScreener (logo, banner, sito, social),
    RugCheck, domanda a CoinGecko.
 
