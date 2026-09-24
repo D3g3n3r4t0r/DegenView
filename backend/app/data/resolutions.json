@@ -1419,6 +1419,18 @@
     "at": 1790249294,
     "summary": "Pagina pubblica /engn in inglese, stile cubo nero e luce verde: slogan 'Find them first. Ride them right.', tasto ENTER THE APP al centro che porta al wallet, due sezioni Sniper (lanci nuovi) e Microcaps (fondamentali) con le regole lette dal codice del radar, strategie solo trend following e solo long spot, livelli per chi detiene, roadmap e disclaimer. Token $ENGN su pump.fun come deciso da Lorenzo: 1 miliardo, nessuna prevendita, team a 0% (nessun acquisto iniziale, nessuna liquidita' da mettere), LP bruciato alla laurea. Logo, banner e testi per il form di pump.fun pronti (docs/lancio-engn.md). Il token non e' stato creato: aspetta il via di Lorenzo."
   },
+  "seed-0115": {
+    "status": "risolto",
+    "at": 1790267000,
+    "summary": "All'ingresso del wallet ci sono due porte. 'Gem Finder' (logo: uovo di drago) mostra la classifica e lo scanner h24 dei progetti seri, DREGG compreso. 'Meme Sniper' (logo: rana irriverente, tutto in rosa) mostra solo meme: la corsia dei meme vivi e puliti studiata dalla memoria, il pilota e l'avviso 'Zona degen: e' gioco d'azzardo'. DREGG e i progetti seri non compaiono piu' nei meme. Barra: Gemme, Meme, Scambia, Portafoglio. Nessun nome personale a schermo: le strategie si chiamano Trend EMA, Trend HF, RSI+BB Reversal, RSI+BB Long/Short (cambia solo l'etichetta, non la logica ne' i dati salvati).",
+    "files": [
+      "frontend/onchain-app.html",
+      "frontend/static/onchain/main.js",
+      "frontend/static/onchain/format.js",
+      "frontend/static/app.js",
+      "frontend/static/onchain/memes.js"
+    ]
+  },
   "seed-0110": {
     "status": "in corso",
     "at": 1790266233,
