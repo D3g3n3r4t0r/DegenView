@@ -68,6 +68,24 @@ eccezione in quanto tecnicamente incredibili su github".
   (FLIP) quando cambia l'ordine.
 - In sandbox GitHub risponde solo per il repo del progetto: l'analisi GitHub
   e' provata sul repo stesso e con test; sul server usa `GITHUB_API_TOKEN`.
+- Seguito, stesso giorno. Lorenzo: "mi devi mettere drag al primo posto in
+  assoluto con menzione d'onore [...] estrai punti chiave da questo progetto
+  e applica come regola per altri progetti simili dal punto di vista
+  tecnologico"; poi "leaderboard [...] piu' in risalto, non al fondo [...]
+  vedere le scritte delle cose scartate non mi interessa" e un'immagine di
+  riferimento (cubo nero, linea verde luminosa, griglia isometrica).
+  - `app/trading/onchain/benchmark.py`: DREGG (mint `XkeT...pump`, dregg.net,
+    github.com/emberian/dregg: kernel Lean 4, STARK Plonky3 ricorsive,
+    Blocklace DAG BFT, SDK/CLI, 10 203 commit, AGPL) in 8 tratti pesati;
+    `similarity()` 0-100 da linguaggi, cartelle, argomenti GitHub, commit
+    totali (somma dei contributi) e termini tecnici del sito
+    (`site_terms`, salvati in `facts.tech_terms`). Leggibile anche dal radar.
+  - Classifica: DREGG sempre primo (mai escluso, mai potato), gli altri per
+    0.7 qualita' + 0.3 somiglianza. Sezione `#board` spostata subito sotto il
+    saldo, prima del radar; scartati nascosti (`.radar-rejected`, sezione del
+    radar, nascosta via CSS su richiesta di Lorenzo).
+  - Perche' "era sparita": in fondo alla pagina e vuota (nessun progetto
+    passava ancora tutti e tre i pilastri); ora c'e' almeno il riferimento.
 - Resta: vedere la classifica piena sul server; se troppo vuota, valutare con
   Lorenzo le soglie fatali (sono volutamente severe).
 
