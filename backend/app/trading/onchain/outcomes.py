@@ -567,6 +567,44 @@ def lessons(now: float | None = None) -> dict:
     }
 
 
+# -------------------------------------------------------- il muro della vergogna
+
+# Lorenzo: "fammi sparire VISE che e' un RUGPULL, crea sezione ironica dove ci
+# andranno a finire tutte le inculate subite". Un rug che il filtro aveva
+# lasciato passare sparisce da proposte e listing (e dai candidati del
+# pilota) e finisce qui. I rug che il filtro aveva scartato no: quelli li
+# abbiamo evitati.
+SHAME_SEED = [
+    {"chain": "solana", "symbol": "VISE", "name": "Vise",
+     "token_address": "4vXJMBFT6rcxNHohy2e4UPXGSv8eYpWRZmEQTqi6uRdg",
+     "pair_address": "5GUGd9GgUefptTKwe6aAythc6LJNCyBMSxwzFTysqZuc",
+     "pair_url": "https://dexscreener.com/solana/5gugd9gguefpttkwe6aaythc6ljncybmsxwzftysqzuc",
+     "rug_at": 1790247060, "rug_why": "-95% in 8 minuti, vendite coordinate",
+     "fooled_by": "un GitHub di pump.fun spacciato per il suo"},
+]
+
+
+def shame() -> list[dict]:
+    """Le fregature subite, la piu' recente prima."""
+    out = {f"{e['chain']}:{e['token_address']}": dict(e) for e in SHAME_SEED}
+    for key, e in _journal.items():
+        if e.get("rug") and e["decision"] in PASSED and key not in out:
+            out[key] = {k: e.get(k) for k in ("chain", "symbol", "name", "token_address", "pair_address",
+                                               "pair_url", "rug_at", "rug_why")}
+            out[key].update(decision=e["decision"], min_ret=e.get("min_ret"))
+    return sorted(out.values(), key=lambda e: -(e.get("rug_at") or 0))
+
+
+def shamed() -> set[str]:
+    """chain:token dei rug subiti, per toglierli dalle altre viste."""
+    return {f"{e['chain']}:{e['token_address']}" for e in shame()}
+
+
+def without_shamed(items: list[dict], gone: set[str] | None = None) -> list[dict]:
+    gone = shamed() if gone is None else gone
+    return [i for i in items if f"{i.get('chain')}:{i.get('token_address')}" not in gone]
+
+
 # --------------------------------------------------------------------- giro
 
 async def tick(now: float | None = None) -> dict:

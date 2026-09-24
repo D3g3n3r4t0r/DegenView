@@ -29,6 +29,10 @@ imparare dai segnali; da cosa effettivamente succede, e migliorare il sistema".
   soldi veri usa lo stesso filtro, serve il si' di Lorenzo. Eccezioni GitHub mai
   bloccate.
 - API `/api/onchain/radar/lessons`; sezione "Memoria" sotto gli scartati.
+- "Muro delle inculate" (Lorenzo: "fammi sparire VISE [...] sezione ironica
+  dove ci andranno a finire tutte le inculate subite"): `outcomes.shame()` =
+  `SHAME_SEED` (VISE) + rug passati dal filtro. Tolti da proposte, listing,
+  classifica e candidati del pilota (`without_shamed`, `_pilot_vet`).
 
 Resta: accendere il gate quando il modello e' attivo e Lorenzo dice si';
 eventuale ritaratura automatica delle soglie di legit (oggi solo misurate).
