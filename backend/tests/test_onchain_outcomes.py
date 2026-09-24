@@ -209,3 +209,13 @@ async def _value(v):
 
 def _const(v):
     return _value(v)
+
+
+def test_only_rugs_we_let_through_go_on_the_wall():
+    for token, decision in (("in", "proposed"), ("out", "rejected")):
+        e = outcomes.observe(_item(token), decision, T0, now=T0)
+        outcomes.apply_sample(e, 1.0, 20_000, T0)
+        outcomes.apply_sample(e, 0.05, 20_000, T0 + 600)
+    wall = [e["symbol"] for e in outcomes.shame()]
+    assert wall == ["VISE", "IN"]
+    assert outcomes.without_shamed([_item("in"), _item("ok")]) == [_item("ok")]
