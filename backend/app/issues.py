@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0100", "Wallet on-chain: nello swap non si capisce cosa ho, e scegliere un token fa scendere la pagina",
+     "Lorenzo: 'dovrebbe automaticamente selezionarmi la valuta che ho nel wallet. Io ho fatto degli swap da Ethereum a USDG, ma non e' chiaro che moneta io abbia nel portafoglio. [...] Deve essere selezionata automaticamente la valuta detenuta, quella con maggior quantita'. Poi quando seleziono una valuta per fare lo swap la schermata mi va in basso e mi tocca tornare su'.",
+     "alta"),
     ("seed-0099", "Radar: ingressi non nel punto preciso del grafico, e niente short",
      "Lorenzo: 'se seleziono una strategia non appare nel grafico gli ingressi in modo preciso'. E: 'non voglio short, solo acquisti spot e vendite'.",
      "alta"),

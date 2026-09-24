@@ -1346,5 +1346,11 @@
       "backend/app/analysis/strategies.py",
       "backend/app/main.py"
     ]
+  },
+  "seed-0100": {
+    "status": "risolto",
+    "at": 1790230297,
+    "summary": "Sopra lo swap c'e' la striscia 'Nel wallet' con ogni token che hai, quantita' e valore in dollari; un tocco lo mette in vendita. Lo swap parte gia' dal token che vale di piu' (dopo ETH -> USDG parte da USDG, verso ETH), con l'importo pieno e il 'Disponibile' per qualsiasi token, non solo il nativo, e il tasto Max sempre. La freccia fra i due campi inverte vendi e ricevi, e scegliere lo stesso token dall'altra parte li scambia, come su un DEX. Chiuso il foglio di scelta del token la pagina torna dov'era: la tastiera di iOS la spostava in basso. Su Robinhood Chain i token del wallet hanno nome e prezzo (prima USDG compariva come '0x5fc5' senza valore).",
+    "detail": "frontend/static/onchain/swap.js: loadHoldings (saldo + portfolio, cache 20s), availableFor, holdingAsLeg, setLeg, #swap-wallet, #swap-flip, #swap-route; sheets.js: scroll ripristinato alla chiusura del picker; main.py: _onchain_token_meta usa il pool DexScreener su entrambe le chain; onchain-app.html: stili .swap-wallet/.wallet-chip. Provato con Playwright su viewport iPhone 13 con API finte: default USDC ($120) su SOL ($75), tocco, inversione, scelta dal picker con scroll invariato."
   }
 }
