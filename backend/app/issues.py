@@ -164,8 +164,14 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
-    ("seed-0107", "Pagina di presentazione del progetto e del token da lanciare",
+    ("seed-0109", "Pagina di presentazione del progetto e del token da lanciare",
      "Lorenzo: 'fai una pagina web di presentazione del progetto con slogan accattivante in inglese; crea il ticker del token, ci serve lanciarlo e inventati anche una tokenomics [...] mi piace lo stile dell'app (che dovra' essere un tasto al centro dove \"ENTER THE APP\") [...] facciamo chiaramente capire che ci sono due sezioni; una per sniperare progetti nuovi con regole (facendole vedere) un'altra sezione per progetti (seri con fondamentali) ma sempre microcap [...] devi pensare a tutto anche a cose che non ti ho detto'.",
+     "alta"),
+    ("seed-0108", "Il radar deve imparare da cosa succede davvero ai token che propone e scarta",
+     "Lorenzo: 'dobbiamo implentare una specie di \"coscienza\", imparare dai segnali; da cosa effettivamente succede, e migliorare il sistema'.",
+     "alta"),
+    ("seed-0107", "Rug pull su VISE, token proposto: -93%",
+     "Lorenzo: 'abbiamo appena subito un rugpull su VISE che era stata proposta, il token ha fatto -93%, impara da questo errore. Cosa non avevamo visto?'",
      "alta"),
     ("seed-0106", "Radar: DREGG deve uscire davvero, e cercare progetti tecnici anche oltre i token freschi",
      "Lorenzo: 'voglio che drag tu mi verifichi che esca con queste regole, perche' deve uscire [...] estrai punti chiave da questo progetto e applica come regola [...] per altri progetti che possono essere simili dal punto di vista tecnologico [...] devi ampliare le ricerche [...] scandagliare tutto compreso anche X [...] non ci limitiamo a token freschi [...] anche un anno puo' essere giusto'.",
