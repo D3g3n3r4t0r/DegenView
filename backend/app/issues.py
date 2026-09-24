@@ -164,8 +164,11 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
-    ("seed-0103", "Classifica dei progetti migliori, con analisi profonda di GitHub, sito e tokenomics",
+    ("seed-0104", "Classifica dei progetti migliori, con analisi profonda di GitHub, sito e tokenomics",
      "Lorenzo: 'devi fare una specie di leaderboard che è sostanzialmente una classifica [...] cose estetiche che facciano capire primo posto, secondo posto, terzo posto e deve essere una classifica dinamica [...] aggiornata in tempo reale [...] rigoroso [...] da GitHub E devi controllare i commit insomma deve essere profonda sta cosa la tokenomics non deve essere uno scam il sito deve essere fatto bene magari se riesci ad analizzarne l'html e vedere se è fatto bene o se è solo una pagina di presentazione ma dietro non c'è niente [...] segnalare anche da quanto è che sono usciti [...] e ampliamo anche la chain per i token lanciati su Pump Fun'.",
+     "alta"),
+    ("seed-0103", "Telegram: i messaggi arrivano tagliati, non sono mai completi",
+     "Lorenzo: 'Inoltre i messaggi su Telegram arrivano tagliati, non sono mai completi.'",
      "alta"),
     ("seed-0102", "Radar: DREGG escluso perche' ha piu' di 3 settimane e supera i $2M",
      "Lorenzo: 'con questa regola dovresti trovare $DREGG, vediamo se sei bravo'. Poi: 'dregg va bene anche se ha 21 gg e supera i 2 mln, progetti in quel modo voglio che siano eccezione in quanto tecnicamente incredibili su github'.",
