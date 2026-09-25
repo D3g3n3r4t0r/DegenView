@@ -290,6 +290,15 @@ non oltre; uno, due, tre mesi non e' importante".
   assegna il piano a mano), POST `/api/onchain/research` {chain, token,
   deep}. `settings.payment_address` vuoto: pagamenti da definire. Manca la
   UI (Lorenzo non ha chiesto ancora dove metterla).
+- 25/09 Lorenzo: "continua a non trovare niente". Deploy confermato (07:38),
+  Solrouter in locale passa (site 78, tokenomics 64, qualifies ""). Causa
+  probabile: bocciature e pilastri Research salvati con le regole vecchie
+  (site ricalcolato solo ogni 12 h, `_gone` permanente). RULES_VERSION 4:
+  toglie le bocciature v3 e ricalcola subito i pilastri "site"; i
+  REFERENCES non vengono mai banditi. Board: `close` (i 6 piu' vicini e
+  perche' restano fuori) e `past_floor`; UI "Close to the board". Live
+  scanner/Just launched/Picks/Track record/Wall of rugs spostati da Gems a
+  Memes.
 
 ## Link ospite in sola lettura — `seed-0096`, branch `claude/link-ospite-asb5wj`
 

@@ -367,3 +367,32 @@ def test_old_bans_are_lifted_on_new_rules(tmp_path, monkeypatch):
     monkeypatch.setattr(lb, "_STORE_FILE", f)
     lb._load()
     assert "solana:X" not in lb._gone and not lb._excluded
+
+
+def test_rules_4_rereads_research_and_lifts_v3_bans(tmp_path, monkeypatch):
+    f = tmp_path / "lb.json"
+    e = {"chain": "solana", "token_address": "S", "symbol": "S", "source": "coingecko",
+         "pillars": {"site": {"score": 20}, "tokenomics": {"score": 70}}, "checked_at": {"site": 1, "tokenomics": 1}}
+    import json
+    f.write_text(json.dumps({"entries": {"solana:S": e}, "gone": {"solana:X": 1}, "rules": 3}))
+    monkeypatch.setattr(lb, "_STORE_FILE", f)
+    lb._load()
+    s = lb._entries["solana:S"]
+    assert "site" not in s["pillars"] and "tokenomics" in s["pillars"] and "solana:X" not in lb._gone
+
+
+def test_references_are_never_banned():
+    ref = dict(lb.REFERENCES[0])
+    k = lb._key(ref["chain"], ref["token_address"])
+    lb._gone[k] = 1.0
+    lb.collect_saved()
+    assert k in lb._entries
+    lb.apply_analysis(k, {"site": {"key": "site", "score": 0, "facts": {}, "flags": [], "fatal": "empty page"}})
+    assert k in lb._entries and lb.qualifies(lb._entries[k])
+
+
+def test_close_calls_show_what_keeps_projects_out():
+    _entry("NEAR", 80, 40, 80)
+    _entry("KID", 80, 90, 80, age_days=3)
+    close = lb.board()["close"]
+    assert [c["symbol"] for c in close] == ["NEAR"] and "site" in close[0]["why"]
