@@ -195,7 +195,6 @@ function pillarBlock(e, k, label) {
       + fact("Stars", f.stars);
   } else if (k === "site") {
     rows = fact(f.reader ? "Reading" : "Claude's read", f.ai_substance == null ? null : `${f.ai_substance}/10 · ${escapeHtml(f.verdict ?? "")}`)
-      + fact("Why", f.why?.length ? escapeHtml(f.why.join(" · ")) : null)
       + fact("Description", f.description_score == null ? null : `${f.description_score}/100 · ${f.description?.words ?? 0} words`)
       + fact("Sites read", f.sites_read) + fact("Holders", f.holders)
       + fact("Website", f.url ? `<a href="${escapeHtml(f.url)}" target="_blank" rel="noopener">${escapeHtml(new URL(f.url).hostname)}</a>` : null)
@@ -212,7 +211,8 @@ function pillarBlock(e, k, label) {
       + fact("Tax", f.tax_pct == null ? null : `${f.tax_pct}%`);
   }
   const flags = [...(p.flags ?? []), ...(f.red_flags ?? [])].map((x) => `<li>${escapeHtml(x)}</li>`).join("");
-  return `<section style="--v:${p.score ?? 0}"><h5>${label}<b>${score(p.score)}</b></h5><dl>${rows}</dl>
+  const why = k === "site" && f.why?.length ? `<p class="bd-why">${escapeHtml(f.why.join(" · "))}</p>` : "";
+  return `<section style="--v:${p.score ?? 0}"><h5>${label}<b>${score(p.score)}</b></h5><dl>${rows}</dl>${why}
     ${flags ? `<ul class="bd-flags">${flags}</ul>` : ""}</section>`;
 }
 
