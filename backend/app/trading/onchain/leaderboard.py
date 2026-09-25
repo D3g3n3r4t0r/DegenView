@@ -85,7 +85,8 @@ SERIOUS_MIN_GITHUB = 70
 # and it ranks below an equal project that shows its code.
 NO_GITHUB_MIN_PILLAR = {"site": 70, "tokenomics": 60}
 NO_GITHUB_PENALTY = 10.0
-RULES_VERSION = 3              # 2: "no GitHub" stopped being a ban; 3: radar launches out
+RULES_VERSION = 4              # 2: "no GitHub" stopped being a ban; 3: radar launches out;
+                               # 4: research read by reader.py, older bans and readings dropped
 CAP_MAX_USD = radar.MCAP_MAX_USD
 
 _entries: dict[str, dict] = {}     # chain:token
@@ -113,8 +114,14 @@ def _load() -> None:
     if isinstance(raw, dict):
         _entries.update({k: v for k, v in (raw.get("entries") or {}).items()
                          if isinstance(v, dict) and v.get("source") not in RADAR_SOURCES})
-        # Older rules banned projects for having no public GitHub: let them back.
-        if int(raw.get("rules") or 1) >= RULES_VERSION:
+        rules = int(raw.get("rules") or 1)
+        if rules < 4:
+            # Research pillars scored before the reader existed: read them again now.
+            for e in _entries.values():
+                (e.get("pillars") or {}).pop("site", None)
+                (e.get("checked_at") or {}).pop("site", None)
+        # Bans under older rules (no GitHub, the old site score) are lifted.
+        if rules >= RULES_VERSION:
             _excluded.extend(x for x in raw.get("excluded") or [] if isinstance(x, dict))
             _gone.update(raw.get("gone") or {})
         _state["examined"] = int(raw.get("examined") or 0)
@@ -148,7 +155,7 @@ def add(item: dict, source: str, now: float | None = None) -> bool:
     if not chain or not token:
         return False
     k = _key(chain, token)
-    if benchmark.is_benchmark(chain, token):
+    if benchmark.is_benchmark(chain, token) or source == "reference":
         _gone.pop(k, None)
     if k in _gone:
         return False
@@ -268,7 +275,8 @@ def apply_analysis(k: str, result: dict, now: float | None = None) -> None:
     site_keys = (e["pillars"].get("site") or {}).get("facts", {}).get("narratives") or []
     more = narratives.match(e.get("description"), e.get("categories"), gh.get("topics"), gh.get("description"))
     e["narratives"] = list(dict.fromkeys([*site_keys, *more]))
-    if e["overall"]["fatal"] and not benchmark.is_benchmark(e["chain"], e["token_address"]):
+    if e["overall"]["fatal"] and not benchmark.is_benchmark(e["chain"], e["token_address"]) \
+            and e.get("source") != "reference":     # Lorenzo's references stay, with their reason
         _exclude(k, e["overall"]["fatal"], now)
     _mark()
 
@@ -453,6 +461,25 @@ def _research_public(e: dict) -> dict:
     return {"summary": f.get("summary") or None, "stage": f.get("stage"), "verdict": f.get("verdict")}
 
 
+CLOSE_SIZE = 6
+
+
+def close_calls(now: float | None = None) -> list[dict]:
+    """The projects nearest the board and what keeps each out: past the
+    researcher's floor, ranked by their research score."""
+    out = []
+    for k, e in _entries.items():
+        if k in _state["board"] or research_floor(e, now):
+            continue
+        site = (e.get("pillars") or {}).get("site") or {}
+        out.append({"symbol": e.get("symbol"), "name": e.get("name"), "chain": e.get("chain"),
+                    "token_address": e.get("token_address"), "market_cap": e.get("market_cap"),
+                    "research": site.get("score"), "verdict": (site.get("facts") or {}).get("verdict"),
+                    "why": qualifies(e, now) or "ranking"})
+    out.sort(key=lambda x: -(x["research"] if x["research"] is not None else -1))
+    return out[:CLOSE_SIZE]
+
+
 def board() -> dict:
     entries = [_entries[k] for k in _state["board"] if k in _entries]
     waiting = sum(1 for k, e in _entries.items() if k not in _state["board"])
@@ -463,7 +490,8 @@ def board() -> dict:
         "excluded": _excluded[:20], "excluded_total": len(_gone),
         "sources": _state["sources"], "discovery": discovery.status(),
         "github_rate": legit.github_rate or None,
-        "research_ai": research.ai_status(),
+        "research_ai": research.ai_status(), "close": close_calls(),
+        "past_floor": sum(1 for e in _entries.values() if not research_floor(e)),
         "rules": {"weights": depth.WEIGHTS, "similarity_weight": SIMILARITY_WEIGHT, "benchmark": benchmark.NAME, "min_pillar": MIN_PILLAR, "gem_cap_usd": legit.GEM_CAP_USD,
                   "gem_min_score": legit.GEM_MIN_SCORE, "cap_max_usd": CAP_MAX_USD, "max_age_days": MAX_AGE_DAYS,
                   "exception_cap_usd": radar.EXC_MCAP_MAX_USD, "exception_age_days": radar.EXC_AGE_MAX_DAYS},

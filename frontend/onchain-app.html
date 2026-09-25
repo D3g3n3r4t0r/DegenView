@@ -1748,8 +1748,10 @@
      scansioni"; il saldo non in cima; l'automazione in una sezione sua.
      Ogni sezione vive in una vista sola. */
   #app-shell:not([data-view="entry"]) #entry,
-  #app-shell:not([data-view="gems"]) :is(#board, #radar),
-  #app-shell:not([data-view="meme"]) :is(#memes, #pilot),
+  /* Gems is research only; the live launch scanner lives with the Meme
+     Sniper (Lorenzo, 25/09: "la ricerca al minuto deve stare sullo sniper"). */
+  #app-shell:not([data-view="gems"]) #board,
+  #app-shell:not([data-view="meme"]) :is(#memes, #pilot, #radar),
   #app-shell:not([data-view="manual"]) #market-order-row,
   #app-shell:not([data-view="wallet"]) :is(.status-strip, #wallet-view) { display: none !important; }
 
@@ -1961,6 +1963,15 @@
     & li { font-size: 12px; color: var(--amber); &::before { content: "! "; font-weight: 600; } } }
   .bd-summary { margin: 0 0 12px; font-size: 13.5px; line-height: 1.45; color: var(--ink); text-wrap: pretty; }
   .board-empty, .board-foot { margin: 8px 4px 0; font-size: 12px; color: var(--ink-faint); }
+  .board-close { margin: 14px 4px 0;
+    & h4 { margin: 0 0 6px; font-size: 11.5px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-faint); }
+    & ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+    & li { display: grid; grid-template-columns: minmax(0, 7em) auto minmax(0, 1fr); gap: 10px; align-items: baseline;
+      padding: 5px 0; border-block-end: 1px solid color-mix(in oklab, var(--ink-faint) 18%, transparent); font-size: 12.5px; }
+    & b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    & span { color: var(--ink-dim); font-variant-numeric: tabular-nums; }
+    & small { color: var(--ink-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: end; }
+  }
   .board-foot:empty { display: none; }
   @keyframes board-shine { 0%, 70% { translate: -100% 0; } 100% { translate: 100% 0; } }
   @media (max-width: 520px) {
@@ -2007,24 +2018,19 @@
     .topbar .dock .dock-thumb { inset-block: 4px; inset-inline-start: 4px; inline-size: calc((100% - 8px) / 4); border-radius: 12px; }
     #app-shell:not([hidden]) { padding-block-end: 40px; }
 
-    /* --- Radar: classifica in alto, liste a sinistra, dettaglio a destra */
-    #app-shell[data-view="gems"] {
-      display: grid; grid-template-columns: minmax(0, 400px) minmax(0, 1fr); column-gap: 28px; row-gap: 14px;
-      align-items: start;
-    }
-    #app-shell[data-view="gems"] :is(#radar, .radar-grid) { display: contents; }
-    #app-shell[data-view="gems"] #board { grid-column: 1 / -1; grid-row: 1; margin: 0 0 10px; }
-    #app-shell[data-view="gems"] #radar > header { grid-column: 1; grid-row: 2; margin: 0; }
-    #app-shell[data-view="gems"] .radar-col { grid-column: 1; grid-row: 3; }
-    #app-shell[data-view="gems"] .radar-rejected { display: none; }
-    #app-shell[data-view="gems"] .radar-stage {
-      grid-column: 2; grid-row: 2 / span 2; position: sticky; inset-block-start: 76px;
-      max-block-size: calc(100dvh - 96px); overflow-y: auto; scrollbar-width: thin;
-    }
+    /* --- Gems: the leaderboard alone. Memes: bets and autopilot on top,
+       the live scanner (lists left, chart right) under them. */
+    #app-shell[data-view="gems"] #board { margin: 0 0 10px; }
     #app-shell[data-view="meme"] {
       display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 400px); column-gap: 28px; align-items: start;
     }
     #app-shell[data-view="meme"] #pilot { position: sticky; inset-block-start: 90px; margin: 0; }
+    #app-shell[data-view="meme"] #radar { grid-column: 1 / -1; }
+    #app-shell[data-view="meme"] .radar-rejected { display: none; }
+    #app-shell[data-view="meme"] .radar-stage {
+      position: sticky; inset-block-start: 76px;
+      max-block-size: calc(100dvh - 96px); overflow-y: auto; scrollbar-width: thin;
+    }
 
     /* Podio in riga, 1-2-3 da sinistra, stessa altezza: una striscia,
        non tre card enormi. */
@@ -2391,6 +2397,10 @@
         <div class="board-detail" data-board-detail hidden></div>
         <ol class="board-list" data-board-list></ol>
         <p class="board-empty" data-board-empty hidden></p>
+        <div class="board-close" data-board-close hidden>
+          <h4>Close to the board</h4>
+          <ul></ul>
+        </div>
       </section>
 
       <!-- La prima pagina. Richiesta: "vorrei che la prima pagina quando entro
