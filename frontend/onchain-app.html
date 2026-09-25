@@ -1954,9 +1954,11 @@
       border-image: linear-gradient(90deg, var(--live) calc(var(--v) * 1%), var(--line) 0) 1;
       & b { font: 500 13px var(--mono); color: var(--ink); } }
     & dl { margin: 0; display: grid; gap: 3px; }
-    & dl div { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; }
-    & dt { color: var(--ink-faint); } & dd { margin: 0; text-align: end; font-variant-numeric: tabular-nums;
+    & > section { min-inline-size: 0; }
+    & dl div { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; min-inline-size: 0; }
+    & dt { color: var(--ink-faint); flex: none; } & dd { margin: 0; min-inline-size: 0; text-align: end; font-variant-numeric: tabular-nums;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    & .bd-why { margin: 6px 0 0; font-size: 12px; line-height: 1.45; color: var(--ink-dim); overflow-wrap: anywhere; }
     & a { color: var(--ink); }
   }
   .bd-flags { margin: 8px 0 0; padding: 0; list-style: none; display: grid; gap: 3px;
