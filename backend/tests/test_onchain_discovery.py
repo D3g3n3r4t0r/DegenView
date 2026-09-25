@@ -209,3 +209,20 @@ def test_github_rate_limit_is_recorded():
                  "x-ratelimit-resource": "core"}
     asyncio.run(d.legit.gh_get(_Client({"/x": r}), "https://api.github.com/x"))
     assert d.legit.github_rate["core"]["limit"] == 60 and d.legit.github_rate["core"]["remaining"] == 0
+
+
+def test_jupiter_verified_list_keeps_real_projects_in_band():
+    import time as _t
+    from app.trading.onchain import discovery as dv
+    now = _t.time()
+    old = _t.strftime("%Y-%m-%dT%H:%M:%SZ", _t.gmtime(now - 60 * 86400))
+    base = {"mcap": 2_000_000, "liquidity": 120_000, "website": "https://solrouter.com", "tags": ["verified"],
+            "audit": {"mintAuthorityDisabled": True}, "firstPool": {"createdAt": old}}
+    rows = [{**base, "id": "R", "symbol": "ROUTER", "name": "Solrouter"},
+            {**base, "id": "M", "symbol": "PEPE2", "name": "Pepe", "tags": ["verified", "meme"]},
+            {**base, "id": "B", "symbol": "ZAMA", "name": "Zama", "audit": {}},          # bridged: mint kept
+            {**base, "id": "Y", "symbol": "NEW", "name": "New", "firstPool": {"createdAt": _t.strftime(
+                "%Y-%m-%dT%H:%M:%SZ", _t.gmtime(now - 86400))}},
+            {**base, "id": "C", "symbol": "BIG", "name": "Big", "mcap": 9_000_000}]
+    out = dv.jupiter_candidates(rows, now)
+    assert [x["token_address"] for x in out] == ["R"] and out[0]["website"] == "https://solrouter.com"
