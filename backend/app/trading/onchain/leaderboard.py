@@ -67,7 +67,7 @@ SIMILARITY_WEIGHT = 0.30
 MIN_PILLAR = 35                    # sotto, un pilastro e' troppo debole per stare in classifica
 # Progetti trovati dallo scan dedicato (discovery): l'eta' conta poco, la cap
 # si' ("sotto 2-3 milioni, non oltre"), e la qualita' deve essere vera.
-SERIOUS_SOURCES = ("coingecko", "dexscreener", "github", "reference")
+SERIOUS_SOURCES = ("coingecko", "dexscreener", "github", "reference", "jupiter")
 RADAR_SOURCES = ("radar", "listing")   # before 25/09: fresh launches, now the Meme Sniper's
 # Projects Lorenzo found himself: always examined, never pinned.
 REFERENCES = (
@@ -417,8 +417,12 @@ def final_score(e: dict) -> float:
     """Qualita' (i tre pilastri) e somiglianza tecnica a DREGG."""
     q = (e.get("overall") or {}).get("score") or 0
     sim = (e.get("similarity") or {}).get("score") or 0
-    base = (1 - SIMILARITY_WEIGHT) * q + SIMILARITY_WEIGHT * sim
-    base -= NO_GITHUB_PENALTY if no_github(e) else 0
+    # Likeness to DREGG lifts a project, never sinks it: its traits are read
+    # from code, so a project without public code scored 0 there and lost 30%
+    # on top of its penalty (Solrouter: research 78, tokenomics 64, ranked 47).
+    base = max(q, (1 - SIMILARITY_WEIGHT) * q + SIMILARITY_WEIGHT * sim)
+    if no_github(e):
+        base -= NO_GITHUB_PENALTY
     return round(max(0.0, min(100.0, base + narratives.bonus(e.get("narratives") or []))), 1)
 
 
