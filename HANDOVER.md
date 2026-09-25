@@ -247,6 +247,16 @@ non oltre; uno, due, tre mesi non e' importante".
   classifica: sito e tokenomics >= 70 (`NO_GITHUB_MIN_PILLAR`), -10 sul
   punteggio, badge "closed source". Fork/vuoto/banale restano fatali.
   `RULES_VERSION` 2 in store classifica e discovery: bandi e visti azzerati.
+- 25/09 `seed-0117`, ripensamento (Lorenzo: "approccio da ricercatore [...]
+  la ricerca al minuto deve stare sullo sniper, non qui"; riferimento
+  Solrouter, 6SjVTj1V...Ds5). Classifica senza radar/listing
+  (`RADAR_SOURCES` scartate al load, RULES_VERSION 3), `REFERENCES` sempre
+  esaminati, `research_floor`: nome, >= 14 gg, liquidita' >= $10k.
+  `research.py`: pilastro "site" = Research (miglior sito fra home/docs/app,
+  descrizione GeckoTerminal/CoinGecko pesata, dossier Claude se
+  ANTHROPIC_API_KEY, cache 7 gg in memoria). Senza GitHub: Research >= 70,
+  tokenomics >= 60. Solrouter: sito 20 -> Research 76. Resta da verificare
+  sul server se la chiave Anthropic c'e' (il flag `ai_review` dei listing).
 
 ## Link ospite in sola lettura — `seed-0096`, branch `claude/link-ospite-asb5wj`
 
