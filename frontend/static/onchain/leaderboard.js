@@ -257,6 +257,7 @@ function paintMeta() {
 // an empty board should still show the work.
 function paintClose() {
   const box = root.querySelector("[data-board-close]");
+  if (!box) return;           // a cached page from before this block existed
   const rows = (data?.close ?? []).filter((c) => c.research != null);
   box.hidden = !rows.length;
   box.querySelector("ul").innerHTML = rows.map((c) => `<li><b>${escapeHtml(c.symbol ?? "?")}</b>
