@@ -94,6 +94,7 @@ function paint(animate) {
   }
   root.querySelector("[data-board-empty]").hidden = entries.length > 0;
   root.querySelector("[data-board-empty]").textContent = emptyText();
+  paintClose();
   paintMeta();
   if (before) slide(before);
 }
@@ -249,7 +250,18 @@ function paintMeta() {
   const gh = d.github_rate?.core;
   const starved = !gh ? "" : !d.github_rate.token || gh.limit <= 60 ? " · GitHub limited: no token"
     : gh.remaining === 0 ? " · GitHub paused" : "";
-  meta.textContent = `${d.examined ?? 0} examined${d.analyzing ? ` · ${d.analyzing} under analysis` : ""}${starved}`;
+  meta.textContent = `${d.examined ?? 0} examined${d.past_floor ? ` · ${d.past_floor} under study` : ""}${d.analyzing ? ` · ${d.analyzing} under analysis` : ""}${starved}`;
+}
+
+// What the researcher is looking at right now and why each is not in yet:
+// an empty board should still show the work.
+function paintClose() {
+  const box = root.querySelector("[data-board-close]");
+  const rows = (data?.close ?? []).filter((c) => c.research != null);
+  box.hidden = !rows.length;
+  box.querySelector("ul").innerHTML = rows.map((c) => `<li><b>${escapeHtml(c.symbol ?? "?")}</b>
+    <span>${c.research}${c.verdict ? ` · ${escapeHtml(c.verdict)}` : ""}${c.market_cap ? ` · ${usd(c.market_cap)}` : ""}</span>
+    <small>${escapeHtml(c.why)}</small></li>`).join("");
 }
 
 function emptyText() {
