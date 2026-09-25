@@ -45,7 +45,7 @@ import time
 
 import httpx
 
-from app.trading.onchain import benchmark, depth, discovery, legit, narratives, radar, storage
+from app.trading.onchain import benchmark, depth, discovery, legit, narratives, radar, research, storage
 
 logger = logging.getLogger(__name__)
 
@@ -290,7 +290,9 @@ async def _analyze(k: str, skip: set[str], client: httpx.AsyncClient) -> None:
             e = _entries.get(k)
             if e is None:
                 return
-            item = {**e, "links": [s.get("url") for s in e.get("socials") or [] if s.get("url")]}
+            item = {**e, "links": [s.get("url") for s in e.get("socials") or [] if s.get("url")],
+                    # only projects past the researcher's floor are worth Claude's reading
+                    "finalist": not research_floor(e)}
             result = await depth.analyze(item, client, skip=skip)
         apply_analysis(k, result)
     except Exception:
@@ -461,6 +463,7 @@ def board() -> dict:
         "excluded": _excluded[:20], "excluded_total": len(_gone),
         "sources": _state["sources"], "discovery": discovery.status(),
         "github_rate": legit.github_rate or None,
+        "research_ai": research.ai_status(),
         "rules": {"weights": depth.WEIGHTS, "similarity_weight": SIMILARITY_WEIGHT, "benchmark": benchmark.NAME, "min_pillar": MIN_PILLAR, "gem_cap_usd": legit.GEM_CAP_USD,
                   "gem_min_score": legit.GEM_MIN_SCORE, "cap_max_usd": CAP_MAX_USD, "max_age_days": MAX_AGE_DAYS,
                   "exception_cap_usd": radar.EXC_MCAP_MAX_USD, "exception_age_days": radar.EXC_AGE_MAX_DAYS},
