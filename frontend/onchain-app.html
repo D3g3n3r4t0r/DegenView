@@ -2153,9 +2153,9 @@
      gems, a grinning frog with shades for memes. */
   .brand .logo { inline-size: 26px; block-size: 26px; flex-shrink: 0; display: none; }
   .brand .bn:not(.bn-def) { display: none; }
-  :root:has(#app-shell[data-section="gems"]) .brand {
+  :root[data-section="gems"] .brand {
     & .brand-dot, & .bn-def { display: none; } & .logo-gem { display: block; } & .bn-gem { display: inline; } }
-  :root:has(#app-shell[data-section="meme"]) .brand {
+  :root[data-section="meme"] .brand {
     & .brand-dot, & .bn-def { display: none; } & .logo-meme { display: block; animation: wobble 2.8s ease-in-out infinite; }
     & .bn-meme { display: inline; color: #ff8cc4; } }
   @keyframes wobble { 0%, 100% { rotate: 0deg; } 50% { rotate: -8deg; } }
