@@ -106,6 +106,7 @@ from app.trading.onchain import passkey as onchain_passkey
 from app.trading.onchain import pilot as onchain_pilot
 from app.trading.onchain import listings as onchain_listings
 from app.trading.onchain import leaderboard as onchain_leaderboard
+from app.trading.onchain import plans as onchain_plans
 from app.trading.onchain import radar as onchain_radar
 from app import token_launch
 from app.trading.onchain import prices as onchain_prices
@@ -3517,6 +3518,51 @@ async def onchain_leaderboard_view(user: User = Depends(auth.get_current_user)) 
     _require_onchain_enabled()
     board = onchain_leaderboard.board()
     return {**board, "entries": onchain_outcomes.without_shamed(board.get("entries") or [])}
+
+
+class ProjectReadRequest(BaseModel):
+    chain: str = "solana"
+    token: str
+    deep: bool = False
+
+
+class PlanAssign(BaseModel):
+    email: str
+    plan: str
+
+
+def _is_admin(user: User) -> bool:
+    allowed = {e.strip().lower() for e in settings.admin_emails.split(",") if e.strip()}
+    return not guest_links.is_guest(user) and user.email.lower() in allowed
+
+
+@app.get("/api/onchain/plan")
+async def onchain_plan(user: User = Depends(auth.get_current_user)) -> dict:
+    """Il piano dell'utente e quanto ne ha usato oggi. Vedi plans.py."""
+    return onchain_plans.status(user.email, _is_admin(user))
+
+
+@app.post("/api/onchain/research")
+async def onchain_research_read(req: ProjectReadRequest, user: User = Depends(auth.get_current_user)) -> dict:
+    """Legge un progetto su richiesta: gratis col lettore, profonda (Sonnet)
+    solo coi piani a pagamento."""
+    _require_onchain_enabled()
+    if req.chain not in ("solana", "robinhood") or not re.fullmatch(r"[0-9A-Za-z]{20,64}", req.token):
+        raise HTTPException(status_code=400, detail="Unknown chain or malformed address.")
+    return await onchain_plans.read_project(user.email, req.chain, req.token, deep=req.deep,
+                                            admin=_is_admin(user))
+
+
+@app.post("/api/onchain/plan")
+async def onchain_plan_assign(req: PlanAssign, user: User = Depends(auth.get_current_user)) -> dict:
+    """Finche' i pagamenti non ci sono, i piani li assegna un admin."""
+    if not _is_admin(user):
+        raise HTTPException(status_code=403, detail="Only an admin can assign plans.")
+    try:
+        onchain_plans.set_plan(req.email, req.plan)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return onchain_plans.status(req.email)
 
 
 @app.get("/api/onchain/radar/stream")

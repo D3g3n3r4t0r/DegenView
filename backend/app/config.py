@@ -58,6 +58,8 @@ class Settings(BaseSettings):
     # da' un parere prima dell'avviso (app/trading/onchain/legit.py). Vuota =
     # restano i controlli automatici, il passaggio IA risulta "non attivo".
     anthropic_api_key: str = ""
+    # Where plan payments will arrive (plans.py). Empty: payments not open yet.
+    payment_address: str = ""
     legit_ai_model: str = "claude-opus-5"
     # Non piu' usata: Token Sniffer e' stato sostituito da GoPlus, pubblico.
     # Resta perche' un .env che la contiene non blocchi l'avvio.
