@@ -299,6 +299,14 @@ non oltre; uno, due, tre mesi non e' importante".
   perche' restano fuori) e `past_floor`; UI "Close to the board". Live
   scanner/Just launched/Picks/Track record/Wall of rugs spostati da Gems a
   Memes.
+- 25/09 Lorenzo: "pagina praticamente morta". Sul server ROUTER 47: non un
+  bug di lettura (ricerca 78) ma il punteggio finale, 0.7*qualita' +
+  0.3*somiglianza a DREGG (letta dal codice: 0 senza GitHub) - 10. Ora la
+  somiglianza e' solo un bonus (max(q, mix)): Solrouter ~67. Bacino: nuova
+  fonte Jupiter verified (`discovery._poll_jupiter`, ogni 6 h, sorgente
+  "jupiter" seria): 3693 token, 213 in banda il 25/09 (cap 50k-3M,
+  liquidita' >= 10k, >= 14 gg, sito, mint revocato, niente tag
+  meme/stocks/rwa/lst).
 
 ## Link ospite in sola lettura — `seed-0096`, branch `claude/link-ospite-asb5wj`
 

@@ -33,6 +33,7 @@ import json
 import logging
 import re
 import time
+from datetime import datetime
 from typing import Callable
 
 import httpx
@@ -62,7 +63,7 @@ CG_DETAIL_TTL_S = 7 * 86400
 PROFILES_POLL_S = 120
 PROFILES_PER_POLL = 12
 
-_state = {"cg_queue": [], "cg_last_sweep": 0.0, "cg_next_at": 0.0, "profiles_at": 0.0,
+_state = {"cg_queue": [], "cg_last_sweep": 0.0, "cg_next_at": 0.0, "profiles_at": 0.0, "jup_at": 0.0, "jup_last": 0,
           "gh_queue": [], "gh_query": 0, "gh_search_at": 0.0, "gh_repo_at": 0.0,
           "found": 0, "skipped": 0, "running": False}
 _chain_ids: dict[str, set[str]] = {}   # CoinGecko ids with a contract on our chains
@@ -97,7 +98,7 @@ def reset_for_tests() -> None:
 
 def status() -> dict:
     return {"queue": len(_state["cg_queue"]) + len(_state["gh_queue"]), "found": _state["found"], "skipped": _state["skipped"],
-            "last_sweep": _state["cg_last_sweep"] or None, "seen": len(_seen)}
+            "last_sweep": _state["cg_last_sweep"] or None, "seen": len(_seen), "jupiter": _state["jup_last"]}
 
 
 def _note(key: str, ok: bool, why: str, now: float) -> None:
@@ -433,6 +434,66 @@ async def _gh_repo(client: httpx.AsyncClient, add: Callable[[dict, str], bool], 
 
 # -------------------------------------------------------------------- giro
 
+# ------------------------------------------------------------- Jupiter
+
+# Jupiter's verified list: ~3,700 Solana tokens a team has vouched for, with
+# cap, liquidity, age, website and mint authority in one response. The widest
+# net for existing projects: on 25/09 it held 213 in band against the ~370
+# the other sources had found in a day.
+JUP_VERIFIED = "https://lite-api.jup.ag/tokens/v2/tag?query=verified"
+JUP_POLL_S = 6 * 3600
+JUP_SKIP_TAGS = {"meme", "stocks", "prestocks", "rwa", "lst", "original-lst", "duplicate"}
+JUP_MIN_AGE_DAYS = 14
+JUP_MIN_LIQUIDITY = 10_000
+
+
+def _iso_ts(v) -> float | None:
+    try:
+        return datetime.fromisoformat(str(v).replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return None
+
+
+def jupiter_candidates(rows: list[dict], now: float) -> list[dict]:
+    """In band, old enough, tradeable, with a website, mint authority
+    renounced (bridged copies of big tokens keep it), no meme/stock tag."""
+    out = []
+    for t in rows or []:
+        cap = float(t.get("mcap") or 0)
+        born = _iso_ts((t.get("firstPool") or {}).get("createdAt")) if t.get("firstPool") else None
+        if not (CAP_MIN <= cap <= CAP_MAX) or float(t.get("liquidity") or 0) < JUP_MIN_LIQUIDITY:
+            continue
+        if not t.get("website") or JUP_SKIP_TAGS & set(t.get("tags") or []):
+            continue
+        if not (t.get("audit") or {}).get("mintAuthorityDisabled"):
+            continue
+        if born is None or now - born < JUP_MIN_AGE_DAYS * 86400:
+            continue
+        if _looks_like_meme(t.get("symbol") or "", t.get("name") or ""):
+            continue
+        out.append({"chain": "solana", "token_address": t.get("id"), "symbol": t.get("symbol") or "?",
+                    "name": t.get("name") or "", "website": t.get("website"), "market_cap": cap,
+                    "liquidity_usd": float(t.get("liquidity") or 0), "launched_at": born, "image": t.get("icon"),
+                    "socials": [{"type": k, "url": t[k]} for k in ("twitter", "telegram", "discord") if t.get(k)]})
+    return out
+
+
+async def _poll_jupiter(client: httpx.AsyncClient, add: Callable[[dict, str], bool], now: float) -> None:
+    if now - _state["jup_at"] < JUP_POLL_S:
+        return
+    _state["jup_at"] = now
+    r = await client.get(JUP_VERIFIED, timeout=30.0)
+    if r.status_code != 200:
+        raise RuntimeError(f"Jupiter {r.status_code}")
+    found = jupiter_candidates(r.json(), now)
+    _state["jup_last"] = len(found)
+    for item in found:
+        key = f"jup:{item['token_address']}"
+        if key in _seen:
+            continue
+        _note(key, add(item, "jupiter"), "verified list", now)
+
+
 async def tick(client: httpx.AsyncClient, add: Callable[[dict, str], bool], now: float | None = None) -> None:
     """Chiamato dal giro della classifica. Non solleva."""
     now = now or time.time()
@@ -440,7 +501,7 @@ async def tick(client: httpx.AsyncClient, add: Callable[[dict, str], bool], now:
         return
     _state["running"] = True
     try:
-        steps = (("coingecko", _cg_step), ("profili", _poll_profiles),
+        steps = (("jupiter", _poll_jupiter), ("coingecko", _cg_step), ("profili", _poll_profiles),
                  ("github", lambda c, a, n: _gh_search(c, n)), ("readme", _gh_repo))
         for name, step in steps:
             try:

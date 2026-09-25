@@ -396,3 +396,8 @@ def test_close_calls_show_what_keeps_projects_out():
     _entry("KID", 80, 90, 80, age_days=3)
     close = lb.board()["close"]
     assert [c["symbol"] for c in close] == ["NEAR"] and "site" in close[0]["why"]
+
+
+def test_closed_source_is_not_scored_on_code_similarity():
+    e = _closed("SR", 78, 64)
+    assert lb.final_score(e) >= 60
