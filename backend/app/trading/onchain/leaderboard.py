@@ -65,6 +65,11 @@ SERIOUS_CAP_MAX_USD = discovery.CAP_MAX
 SERIOUS_AGE_MAX_DAYS = 365
 SERIOUS_MIN_PILLAR = 60
 SERIOUS_MIN_GITHUB = 70
+# Without public code the site and the tokenomics must carry the project,
+# and it ranks below an equal project that shows its code.
+NO_GITHUB_MIN_PILLAR = 70
+NO_GITHUB_PENALTY = 10.0
+RULES_VERSION = 2              # 2: "no GitHub" stopped being a ban
 CAP_MAX_USD = radar.MCAP_MAX_USD
 
 _entries: dict[str, dict] = {}     # chain:token
@@ -91,8 +96,10 @@ def _load() -> None:
         return
     if isinstance(raw, dict):
         _entries.update({k: v for k, v in (raw.get("entries") or {}).items() if isinstance(v, dict)})
-        _excluded.extend(x for x in raw.get("excluded") or [] if isinstance(x, dict))
-        _gone.update(raw.get("gone") or {})
+        # Older rules banned projects for having no public GitHub: let them back.
+        if int(raw.get("rules") or 1) >= RULES_VERSION:
+            _excluded.extend(x for x in raw.get("excluded") or [] if isinstance(x, dict))
+            _gone.update(raw.get("gone") or {})
         _state["examined"] = int(raw.get("examined") or 0)
         _rank()
 
@@ -102,7 +109,7 @@ def _save() -> None:
     _dirty = False
     try:
         _STORE_FILE.write_text(json.dumps({"entries": _entries, "excluded": _excluded, "gone": _gone,
-                                           "examined": _state["examined"]}, ensure_ascii=False),
+                                           "examined": _state["examined"], "rules": RULES_VERSION}, ensure_ascii=False),
                                encoding="utf-8")
     except OSError:
         pass
@@ -312,14 +319,18 @@ def qualifies(e: dict, now: float | None = None) -> str:
         return o.get("fatal") or "to be examined"
     if o.get("pending"):
         return o["pending"]
-    if any((pillars.get(k) or {}).get("score") is None for k in depth.WEIGHTS):
+    closed = no_github(e)
+    need = [k for k in depth.WEIGHTS if not (closed and k == "github")]
+    if any((pillars.get(k) or {}).get("score") is None for k in need):
         return "incomplete analysis"
-    weak = [k for k in depth.WEIGHTS if pillars[k]["score"] < MIN_PILLAR]
+    weak = [k for k in need if pillars[k]["score"] < (NO_GITHUB_MIN_PILLAR if closed else MIN_PILLAR)]
     if weak:
         return f"{weak[0]} too weak ({pillars[weak[0]]['score']})"
     if e.get("source") in SERIOUS_SOURCES:
         return _serious_shortfall(e, pillars, now)
     if is_big(e, now):
+        if closed:
+            return "beyond the radar limits without public code"
         launched = e.get("launched_at")
         if (float(e.get("market_cap") or 0) > radar.EXC_MCAP_MAX_USD
                 or (launched and (now or time.time()) - launched > radar.EXC_AGE_MAX_DAYS * 86400)):
@@ -331,7 +342,7 @@ def qualifies(e: dict, now: float | None = None) -> str:
             return f"radar exception, but deep GitHub score only {pillars['github']['score']}"
         return ""
     cap = float(e.get("market_cap") or 0)
-    if cap > legit.GEM_CAP_USD and any(pillars[k]["score"] < legit.GEM_MIN_SCORE for k in depth.WEIGHTS):
+    if cap > legit.GEM_CAP_USD and any(pillars[k]["score"] < legit.GEM_MIN_SCORE for k in need):
         return "above $100k without excellent pillars"
     return ""
 
@@ -342,10 +353,16 @@ def _serious_shortfall(e: dict, pillars: dict, now: float | None) -> str:
         return f"over ${SERIOUS_CAP_MAX_USD / 1e6:.0f}M"
     if launched and (now or time.time()) - launched > SERIOUS_AGE_MAX_DAYS * 86400:
         return f"over {SERIOUS_AGE_MAX_DAYS} days"
+    if no_github(e):
+        return ""          # site and tokenomics already cleared NO_GITHUB_MIN_PILLAR
     if pillars["github"]["score"] < SERIOUS_MIN_GITHUB:
         return f"GitHub only {pillars['github']['score']}"
     weak = [k for k in depth.WEIGHTS if pillars[k]["score"] < SERIOUS_MIN_PILLAR]
     return f"{weak[0]} only {pillars[weak[0]]['score']}" if weak else ""
+
+
+def no_github(e: dict) -> bool:
+    return bool(((e.get("pillars") or {}).get("github") or {}).get("facts", {}).get("missing"))
 
 
 def final_score(e: dict) -> float:
@@ -353,7 +370,8 @@ def final_score(e: dict) -> float:
     q = (e.get("overall") or {}).get("score") or 0
     sim = (e.get("similarity") or {}).get("score") or 0
     base = (1 - SIMILARITY_WEIGHT) * q + SIMILARITY_WEIGHT * sim
-    return round(min(100.0, base + narratives.bonus(e.get("narratives") or [])), 1)
+    base -= NO_GITHUB_PENALTY if no_github(e) else 0
+    return round(max(0.0, min(100.0, base + narratives.bonus(e.get("narratives") or []))), 1)
 
 
 def _rank() -> None:
@@ -386,7 +404,7 @@ def _public(e: dict) -> dict:
     top = benchmark.is_benchmark(e["chain"], e["token_address"])
     return {**{k: e.get(k) for k in keep}, "exception": is_big(e) and not top, "score": final_score(e),
             "similarity": e.get("similarity"), "benchmark": top,
-            "narratives": narratives.labels(e.get("narratives") or []), "honor": benchmark.HONOR if top else None}
+            "narratives": narratives.labels(e.get("narratives") or []), "closed_source": no_github(e), "honor": benchmark.HONOR if top else None}
 
 
 def board() -> dict:

@@ -85,6 +85,15 @@ def _pillar(key: str, score: float | None, facts: dict, flags: list[str], fatal:
             "facts": facts, "flags": flags, "fatal": fatal}
 
 
+def missing_github(why: str, **facts) -> dict:
+    """No public code of the project's own. Not a defect: many serious
+    projects keep it private (Lorenzo, 25/09: "non tutti hanno il github
+    pubblico, e' importante ma non deve evitare di scegliere progetti che
+    sul resto sono comunque legit"). The pillar has no score, the others
+    carry the weight, and the leaderboard asks more of them."""
+    return {"key": "github", "score": None, "facts": {"missing": True, **facts}, "flags": [why], "fatal": ""}
+
+
 def _pending(key: str, why: str) -> dict:
     """Il dato non c'e' ancora (API giu', token troppo nuovo): si riprova."""
     return {"key": key, "score": None, "facts": {}, "flags": [], "fatal": "", "pending": why}
@@ -229,7 +238,7 @@ async def analyze_github(urls: list[str], client: httpx.AsyncClient, launched_at
                          token: dict | None = None, website: str | None = None) -> dict:
     targets = legit.github_targets(urls)
     if not targets:
-        return _pillar("github", 0, {}, [], "no GitHub")
+        return missing_github("no public GitHub")
     owner, name = next(((o, r) for o, r in targets if r), targets[0])
     try:
         repo = await legit.github_repo(owner, name, client)
@@ -244,7 +253,7 @@ async def analyze_github(urls: list[str], client: httpx.AsyncClient, launched_at
     if token and not token.get("github_verified") \
             and not benchmark.is_benchmark(token.get("chain"), token.get("token_address")) \
             and not legit.github_belongs(repo, token, website):
-        return _pillar("github", 0, {"repo": repo.get("full_name")}, [], "GitHub does not belong to the project")
+        return missing_github("linked GitHub is not the project's own", repo=repo.get("full_name"))
     return judge_github(await fetch_github(repo["full_name"], client), launched_at)
 
 
