@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0117", "Gem Finder da ricercatore, non caccia ai lanci: in classifica token di 15 minuti con $1 di liquidita'",
+     "Lorenzo: 'il calciatore di gemme non deve scansionare il mercato degli ultimi 15 minuti, devi andare a trovare progetti anche esistenti soprattutto, avere un approccio da ricercatore [...] vede il sito, vede di cosa parla il sito e restituisce un risultato [...] ci deve essere una specie di coscienza [...] la ricerca al minuto delle cose che escono deve stare sullo sniper, non qui [...] io avevo trovato tipo Sol Router, che e' interessantissimo, pero' tu non stai trovando niente di equiparabile'.",
+     "alta"),
     ("seed-0116", "Gem Finder: cercare anche per narrativa (privacy, ZK, AI agent, OS agentici, soldi gestiti da AI)",
      "Lorenzo: 'dobbiamo inserire nel cacciatore di gemme anche la parte di narrativa, quelle che vanno piu' forte ora, privacy, zero knowledge, ai agent, sistemi operativi agentici etc, usa un esperto e trova quanti piu' argomenti essenziali per il futuro delle cripto e dei soldi gestiti da AI, perche' non stanno ancora uscendo risultati, ho solo dregg e un altro'.",
      "alta"),

@@ -463,7 +463,9 @@ async def analyze_site(url: str | None, client: httpx.AsyncClient, token_address
             registered = _registration(r.json()) if r.status_code == 200 else None
         except (httpx.HTTPError, ValueError):
             registered = None
-    return judge_site(page, followed, registered, token_address, launched_at), page["github"]
+    pillar = judge_site(page, followed, registered, token_address, launched_at)
+    pillar.setdefault("facts", {})["excerpt"] = re.sub(r"\s+", " ", page.get("text") or "")[:1500]
+    return pillar, page["github"]
 
 
 # -------------------------------------------------------------- tokenomics
@@ -601,8 +603,8 @@ async def analyze(item: dict, client: httpx.AsyncClient, *, skip: set[str] = fro
     launched = item.get("launched_at")
     gh_links = [item.get("github") or ""] + list(item.get("links") or [])
     if "site" not in skip:
-        out["site"], found = await analyze_site(item.get("website"), client, item.get("token_address") or "",
-                                                launched)
+        from app.trading.onchain import research   # research builds on this module
+        out["site"], found = await research.analyze(item, client, launched)
         gh_links += found
         if out["site"]["fatal"]:
             return out

@@ -173,7 +173,7 @@ def test_overall_fatal_and_pending():
 
 # -------------------------------------------------------------- classifica
 
-def _entry(sym: str, gh: int, site: int, tok: int, cap: float = 50_000, age_days: float = 2, source: str = "radar",
+def _entry(sym: str, gh: int, site: int, tok: int, cap: float = 50_000, age_days: float = 30, source: str = "coingecko",
            **item) -> dict:
     item = {"chain": "solana", "token_address": sym + "mint", "pair_address": sym + "pool", "symbol": sym,
             "market_cap": cap, "created_at": time.time() - age_days * DAY, **item}
@@ -185,12 +185,12 @@ def _entry(sym: str, gh: int, site: int, tok: int, cap: float = 50_000, age_days
 
 
 def test_board_orders_by_score_and_tracks_movement():
-    _entry("AAA", 60, 60, 60)
-    _entry("BBB", 90, 80, 85)
+    _entry("AAA", 60, 60, 60, age_days=16, source="radar")
+    _entry("BBB", 90, 80, 85, age_days=16, source="radar")
     b = lb.board()
     assert [e["symbol"] for e in b["entries"]] == ["BBB", "AAA"]
     assert [e["rank"] for e in b["entries"]] == [1, 2]
-    _entry("CCC", 95, 95, 95)
+    _entry("CCC", 95, 95, 95, age_days=16, source="radar")
     b = lb.board()
     assert b["entries"][0]["symbol"] == "CCC" and b["entries"][1]["rank_before"] == 1
 
@@ -205,9 +205,9 @@ def test_fatal_pillar_excludes_for_good():
 
 
 def test_weak_pillar_and_gem_rule():
-    assert lb.qualifies(_entry("WEAK", 90, 20, 90)).startswith("site")
-    assert "100k" in lb.qualifies(_entry("MID", 84, 90, 90, cap=500_000))
-    assert lb.qualifies(_entry("GEM", 88, 90, 90, cap=500_000)) == ""
+    assert lb.qualifies(_entry("WEAK", 90, 20, 90, age_days=16, source="radar")).startswith("site")
+    assert "100k" in lb.qualifies(_entry("MID", 84, 90, 90, cap=500_000, age_days=16, source="radar"))
+    assert lb.qualifies(_entry("GEM", 88, 90, 90, cap=500_000, age_days=16, source="radar")) == ""
 
 
 def test_exception_uses_the_radar_rule():
@@ -220,11 +220,11 @@ def test_exception_uses_the_radar_rule():
     report = {"score": 92}
     weak = {**strong, "facts": {**strong["facts"], "active_days": 3}}
     assert "GitHub" in lb.qualifies(_entry("OLD", 85, 90, 90, cap=2_500_000, age_days=88,
-                                           checks=[weak, checks[1]], report=report))
+                                           checks=[weak, checks[1]], report=report, source="radar"))
     assert lb.qualifies(_entry("DREGG", 93, 75, 80, cap=2_500_000, age_days=88, checks=checks,
-                               report=report, exception=True)) == ""
+                               report=report, exception=True, source="radar")) == ""
     assert "limits" in lb.qualifies(_entry("HUGE", 99, 99, 99, cap=50_000_000, age_days=88, checks=checks,
-                                           report=report))
+                                           report=report, source="radar"))
     assert lb.board()["entries"][0]["exception"] is True
 
 
