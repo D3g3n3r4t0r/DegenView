@@ -17,7 +17,7 @@ import { escapeHtml } from "@onchain/format.js";
 const ROOT = document.getElementById("onchain-embed") ?? document;
 const POLL_MS = 10_000;
 const MOVE_SHOWN_S = 15 * 60;
-const PILLARS = [["github", "GitHub", "G"], ["site", "Website", "S"], ["tokenomics", "Tokenomics", "T"]];
+const PILLARS = [["github", "GitHub", "G"], ["site", "Research", "R"], ["tokenomics", "Tokenomics", "T"]];
 const CHAINS = { solana: "Solana", robinhood: "Robinhood" };
 const PLACES = ["First", "Second", "Third"];
 
@@ -193,7 +193,10 @@ function pillarBlock(e, k, label) {
       + fact("Test · CI", `${yes(f.tests)} · ${yes(f.ci)}`) + fact("Trivial commits", f.trivial_pct == null ? null : `${f.trivial_pct}%`)
       + fact("Stars", f.stars);
   } else if (k === "site") {
-    rows = fact("Website", f.url ? `<a href="${escapeHtml(f.url)}" target="_blank" rel="noopener">${escapeHtml(new URL(f.url).hostname)}</a>` : null)
+    rows = fact("Claude's read", f.ai_substance == null ? null : `${f.ai_substance}/10 · ${escapeHtml(f.verdict ?? "")}`)
+      + fact("Description", f.description_score == null ? null : `${f.description_score}/100 · ${f.description?.words ?? 0} words`)
+      + fact("Sites read", f.sites_read) + fact("Holders", f.holders)
+      + fact("Website", f.url ? `<a href="${escapeHtml(f.url)}" target="_blank" rel="noopener">${escapeHtml(new URL(f.url).hostname)}</a>` : null)
       + fact("Words", f.words) + fact("Internal pages", f.internal_pages == null ? null : `${f.internal_pages} · ${f.pages_ok ?? 0} load with content`)
       + fact("Docs", f.docs == null ? null : f.docs_ok ? "yes, reachable" : f.docs ? "linked, empty" : "no")
       + fact("App", f.app == null ? null : f.app_ok ? "yes, responds" : f.app ? "linked, not responding" : "no")
@@ -206,7 +209,7 @@ function pillarBlock(e, k, label) {
       + fact("Mint · freeze", f.mint == null ? null : `${f.mint ? "active" : "revoked"} · ${f.freeze ? "active" : "revoked"}`)
       + fact("Tax", f.tax_pct == null ? null : `${f.tax_pct}%`);
   }
-  const flags = (p.flags ?? []).map((x) => `<li>${escapeHtml(x)}</li>`).join("");
+  const flags = [...(p.flags ?? []), ...(f.red_flags ?? [])].map((x) => `<li>${escapeHtml(x)}</li>`).join("");
   return `<section style="--v:${p.score ?? 0}"><h5>${label}<b>${score(p.score)}</b></h5><dl>${rows}</dl>
     ${flags ? `<ul class="bd-flags">${flags}</ul>` : ""}</section>`;
 }
@@ -218,6 +221,7 @@ function details(e) {
       <small>${CHAINS[e.chain] ?? e.chain} · launched ${since(e.launched_at)} ago · liquidity ${usd(e.liquidity_usd)}${e.change_24h != null ? ` · 24h ${e.change_24h > 0 ? "+" : ""}${e.change_24h}%` : ""}</small>
       <span>${chart}${scan}</span></header>
     ${e.honor ? `<p class="bd-honor" style="text-align:start;margin:0 0 12px">${escapeHtml(e.honor)}</p>` : ""}
+    ${e.summary ? `<p class="bd-summary">${escapeHtml(e.summary)}${e.stage && e.stage !== "unclear" ? ` <em>${escapeHtml(e.stage)}</em>` : ""}</p>` : ""}
     ${traits(e)}
     <div class="bd-pillars">${PILLARS.map(([k, label]) => pillarBlock(e, k, label)).join("")}</div>`;
 }

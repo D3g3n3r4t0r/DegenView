@@ -1,4 +1,11 @@
-"""La classifica dei progetti migliori fra quelli che il radar ha visto.
+"""La classifica dei progetti migliori: il Gem Finder.
+
+Dal 25/09 non legge piu' il radar (Lorenzo: "il cacciatore di gemme non
+deve scansionare il mercato degli ultimi 15 minuti [...] la ricerca al
+minuto delle cose che escono deve stare sullo sniper, non qui"). Le fonti
+sono solo di ricerca (`discovery.py`: CoinGecko, GitHub, profili) piu' i
+riferimenti che Lorenzo ha indicato; il pilastro "site" e' la ricerca di
+`research.py`. Il testo sotto racconta la prima versione.
 
 Lorenzo: "una specie di leaderboard [...] primo posto, secondo posto, terzo
 posto [...] una classifica dinamica, non fissa, aggiornata in tempo reale
@@ -38,7 +45,7 @@ import time
 
 import httpx
 
-from app.trading.onchain import benchmark, depth, discovery, legit, listings, narratives, radar, storage
+from app.trading.onchain import benchmark, depth, discovery, legit, narratives, radar, storage
 
 logger = logging.getLogger(__name__)
 
@@ -60,16 +67,25 @@ SIMILARITY_WEIGHT = 0.30
 MIN_PILLAR = 35                    # sotto, un pilastro e' troppo debole per stare in classifica
 # Progetti trovati dallo scan dedicato (discovery): l'eta' conta poco, la cap
 # si' ("sotto 2-3 milioni, non oltre"), e la qualita' deve essere vera.
-SERIOUS_SOURCES = ("coingecko", "dexscreener", "github")
+SERIOUS_SOURCES = ("coingecko", "dexscreener", "github", "reference")
+RADAR_SOURCES = ("radar", "listing")   # before 25/09: fresh launches, now the Meme Sniper's
+# Projects Lorenzo found himself: always examined, never pinned.
+REFERENCES = (
+    {"chain": "solana", "token_address": "6SjVTj1VGwFSXn7wEjwFm77LvACeTqB7sQUebYKX8Ds5", "symbol": "ROUTER",
+     "name": "Solrouter", "website": "https://solrouter.com", "websites": ["https://docs.solrouter.com"]},
+)
+# A researcher's floor: an existing project, not a launch.
+MIN_AGE_DAYS = 14
+MIN_LIQUIDITY_USD = 10_000
 SERIOUS_CAP_MAX_USD = discovery.CAP_MAX
 SERIOUS_AGE_MAX_DAYS = 365
 SERIOUS_MIN_PILLAR = 60
 SERIOUS_MIN_GITHUB = 70
 # Without public code the site and the tokenomics must carry the project,
 # and it ranks below an equal project that shows its code.
-NO_GITHUB_MIN_PILLAR = 70
+NO_GITHUB_MIN_PILLAR = {"site": 70, "tokenomics": 60}
 NO_GITHUB_PENALTY = 10.0
-RULES_VERSION = 2              # 2: "no GitHub" stopped being a ban
+RULES_VERSION = 3              # 2: "no GitHub" stopped being a ban; 3: radar launches out
 CAP_MAX_USD = radar.MCAP_MAX_USD
 
 _entries: dict[str, dict] = {}     # chain:token
@@ -95,7 +111,8 @@ def _load() -> None:
     except (OSError, json.JSONDecodeError):
         return
     if isinstance(raw, dict):
-        _entries.update({k: v for k, v in (raw.get("entries") or {}).items() if isinstance(v, dict)})
+        _entries.update({k: v for k, v in (raw.get("entries") or {}).items()
+                         if isinstance(v, dict) and v.get("source") not in RADAR_SOURCES})
         # Older rules banned projects for having no public GitHub: let them back.
         if int(raw.get("rules") or 1) >= RULES_VERSION:
             _excluded.extend(x for x in raw.get("excluded") or [] if isinstance(x, dict))
@@ -138,7 +155,7 @@ def add(item: dict, source: str, now: float | None = None) -> bool:
     now = now or time.time()
     fresh = {f: item[f] for f in ("market_cap", "liquidity_usd", "website", "github", "socials", "pair_url",
                                   "report", "scan_url", "checks", "exception", "github_verified", "description",
-                                  "categories") if item.get(f)}
+                                  "categories", "websites") if item.get(f)}
     if k in _entries:
         _entries[k].update(fresh)
         return False
@@ -159,13 +176,11 @@ def add(item: dict, source: str, now: float | None = None) -> bool:
 
 
 def collect_saved() -> int:
-    """Quello che il radar ha gia' verificato e salvato, piu' il riferimento."""
-    snap = radar.snapshot()
+    """The benchmark and the references Lorenzo named. Nothing from the
+    radar: fresh launches are the Meme Sniper's."""
     n = add(benchmark.seed_item(), "riferimento")
-    for item in listings.recent():
-        n += add(item, "listing")
-    for item in (snap.get("proposals") or []) + (snap.get("tested") or []):
-        n += add(item, "radar")
+    for item in REFERENCES:
+        n += add(dict(item), "reference")
     return n
 
 
@@ -201,6 +216,12 @@ def apply_market(pairs: list[dict]) -> None:
                  dex=p.get("dexId"), bonding=(p.get("dexId") == "pumpfun"))
         if not e.get("pair_address") or e.get("bonding"):
             e["pair_address"] = p.get("pairAddress") or e.get("pair_address")
+        base = p.get("baseToken") or {}
+        if (e.get("symbol") or "?") == "?" and base.get("symbol"):
+            e.update(symbol=base["symbol"], name=base.get("name") or base["symbol"])
+        sites = legit.links_from_dexscreener(p)["websites"]
+        if sites:
+            e["websites"] = list(dict.fromkeys([*(e.get("websites") or []), *sites]))[:6]
     _mark()
 
 
@@ -313,6 +334,9 @@ def qualifies(e: dict, now: float | None = None) -> str:
     """"" se entra in classifica, altrimenti perche' no."""
     if benchmark.is_benchmark(e.get("chain"), e.get("token_address")):
         return ""   # il metro di paragone c'e' sempre, i suoi numeri si vedono comunque
+    floor = research_floor(e, now)
+    if floor:
+        return floor
     o = e.get("overall") or {}
     pillars = e.get("pillars") or {}
     if not o or o.get("fatal"):
@@ -323,7 +347,7 @@ def qualifies(e: dict, now: float | None = None) -> str:
     need = [k for k in depth.WEIGHTS if not (closed and k == "github")]
     if any((pillars.get(k) or {}).get("score") is None for k in need):
         return "incomplete analysis"
-    weak = [k for k in need if pillars[k]["score"] < (NO_GITHUB_MIN_PILLAR if closed else MIN_PILLAR)]
+    weak = [k for k in need if pillars[k]["score"] < (NO_GITHUB_MIN_PILLAR[k] if closed else MIN_PILLAR)]
     if weak:
         return f"{weak[0]} too weak ({pillars[weak[0]]['score']})"
     if e.get("source") in SERIOUS_SOURCES:
@@ -344,6 +368,20 @@ def qualifies(e: dict, now: float | None = None) -> str:
     cap = float(e.get("market_cap") or 0)
     if cap > legit.GEM_CAP_USD and any(pillars[k]["score"] < legit.GEM_MIN_SCORE for k in need):
         return "above $100k without excellent pillars"
+    return ""
+
+
+def research_floor(e: dict, now: float | None = None) -> str:
+    """What a researcher would not even open: no name, a launch of days
+    ago, a pool nobody can trade."""
+    if (e.get("symbol") or "?").strip() in ("", "?"):
+        return "no name"
+    launched = e.get("launched_at")
+    if launched and (now or time.time()) - launched < MIN_AGE_DAYS * 86400:
+        return f"younger than {MIN_AGE_DAYS} days"
+    liq = e.get("liquidity_usd")
+    if liq is not None and float(liq) < MIN_LIQUIDITY_USD:
+        return f"liquidity under ${MIN_LIQUIDITY_USD // 1000}k"
     return ""
 
 
@@ -404,7 +442,13 @@ def _public(e: dict) -> dict:
     top = benchmark.is_benchmark(e["chain"], e["token_address"])
     return {**{k: e.get(k) for k in keep}, "exception": is_big(e) and not top, "score": final_score(e),
             "similarity": e.get("similarity"), "benchmark": top,
-            "narratives": narratives.labels(e.get("narratives") or []), "closed_source": no_github(e), "honor": benchmark.HONOR if top else None}
+            "narratives": narratives.labels(e.get("narratives") or []), "closed_source": no_github(e),
+            **_research_public(e), "honor": benchmark.HONOR if top else None}
+
+
+def _research_public(e: dict) -> dict:
+    f = ((e.get("pillars") or {}).get("site") or {}).get("facts") or {}
+    return {"summary": f.get("summary") or None, "stage": f.get("stage"), "verdict": f.get("verdict")}
 
 
 def board() -> dict:
