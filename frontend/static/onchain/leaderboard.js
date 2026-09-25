@@ -193,7 +193,8 @@ function pillarBlock(e, k, label) {
       + fact("Test · CI", `${yes(f.tests)} · ${yes(f.ci)}`) + fact("Trivial commits", f.trivial_pct == null ? null : `${f.trivial_pct}%`)
       + fact("Stars", f.stars);
   } else if (k === "site") {
-    rows = fact("Claude's read", f.ai_substance == null ? null : `${f.ai_substance}/10 · ${escapeHtml(f.verdict ?? "")}`)
+    rows = fact(f.reader ? "Reading" : "Claude's read", f.ai_substance == null ? null : `${f.ai_substance}/10 · ${escapeHtml(f.verdict ?? "")}`)
+      + fact("Why", f.why?.length ? escapeHtml(f.why.join(" · ")) : null)
       + fact("Description", f.description_score == null ? null : `${f.description_score}/100 · ${f.description?.words ?? 0} words`)
       + fact("Sites read", f.sites_read) + fact("Holders", f.holders)
       + fact("Website", f.url ? `<a href="${escapeHtml(f.url)}" target="_blank" rel="noopener">${escapeHtml(new URL(f.url).hostname)}</a>` : null)
