@@ -257,6 +257,14 @@ non oltre; uno, due, tre mesi non e' importante".
   ANTHROPIC_API_KEY, cache 7 gg in memoria). Senza GitHub: Research >= 70,
   tokenomics >= 60. Solrouter: sito 20 -> Research 76. Resta da verificare
   sul server se la chiave Anthropic c'e' (il flag `ai_review` dei listing).
+- 25/09 dubbio di Lorenzo ("come replichi un ricercatore? Claude non e' sul
+  server, consumerebbe molti token"): imbuto in `research.py`. Euristiche su
+  tutti; Claude solo sui finalisti (`finalist` = passa `research_floor`,
+  ricerca euristica >= 45), cache 7 gg su disco (`onchain_research.json`),
+  tetto `AI_DAILY_MAX` 150/giorno. Opus 5 ~$0.05 a lettura: realistico
+  $1-4/giorno, massimo ~$7. `board()` espone `research_ai`. Serve da Lorenzo:
+  chiave su console.anthropic.com, `ANTHROPIC_API_KEY` nel .env del server,
+  limite di spesa mensile in console. X non leggibile senza API a pagamento.
 
 ## Link ospite in sola lettura — `seed-0096`, branch `claude/link-ospite-asb5wj`
 
