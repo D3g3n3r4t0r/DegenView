@@ -173,9 +173,14 @@ AI_SYSTEM = (
 )
 
 
-async def ai_dossier(item: dict, description: str, texts: list[str]) -> dict | None:
-    """Claude's reading of the project. None without a key or on failure."""
-    if not AI_ENABLED or not legit.settings.anthropic_api_key:
+BOOST_MODEL = "claude-sonnet-5"   # a paid boost reading: ~$0.02, half of Opus
+
+
+async def ai_dossier(item: dict, description: str, texts: list[str], *, boost: bool = False) -> dict | None:
+    """Claude's reading of the project. None without a key or on failure.
+    `boost`: a reading a user paid for (plans.py), allowed while the
+    background readings stay off."""
+    if not (AI_ENABLED or boost) or not legit.settings.anthropic_api_key:
         return None
     from anthropic import AsyncAnthropic
 
@@ -187,7 +192,7 @@ async def ai_dossier(item: dict, description: str, texts: list[str]) -> dict | N
     try:
         async with AsyncAnthropic(api_key=legit.settings.anthropic_api_key, timeout=60.0) as client:
             msg = await client.beta.messages.create(
-                model=legit.settings.legit_ai_model, max_tokens=700, system=AI_SYSTEM,
+                model=BOOST_MODEL if boost else legit.settings.legit_ai_model, max_tokens=700, system=AI_SYSTEM,
                 messages=[{"role": "user", "content": prompt}],
                 betas=["server-side-fallback-2026-07-01"], fallbacks="default",
                 output_config={"effort": "low", "format": {"type": "json_schema", "schema": AI_SCHEMA}},
@@ -253,6 +258,11 @@ async def analyze(item: dict, client: httpx.AsyncClient, launched: float | None)
     key = f"{item.get('chain')}:{item.get('token_address')}"
     hit = _cache.get(key)
     ai = hit["ai"] if hit and time.time() - hit["at"] < AI_TTL_S else None
+    if ai is None and item.get("boost") and (description or any(texts)):
+        ai = await ai_dossier(item, description, texts, boost=True)
+        if ai is not None:
+            _cache[key] = {"at": time.time(), "ai": ai}
+            _save()
     if ai is None and item.get("finalist") and (description or any(texts)):
         heuristic = judge_research(sites, description, None)
         today = time.strftime("%Y-%m-%d")

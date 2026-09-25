@@ -280,6 +280,16 @@ non oltre; uno, due, tre mesi non e' importante".
   token nell'URL (pagine di launchpad) scartati. Su dati reali: Solrouter 78
   gem, profili DexScreener del giorno quasi tutti thin. Pilastro = 0.35 sito
   + 0.65 lettura.
+- 25/09 Lorenzo: "con il tier free impostiamo un limite di utilizzo [...] il
+  sistema deve funzionare lo stesso, però per avere il boost [...] bisogna
+  che paghi, perché le chiamate costano [...] con Sonnet [...] da definire
+  per bene". `plans.py`: Free 5 letture/giorno, Boost 50 + 10 profonde,
+  Pro 300 + 60 (prezzi da decidere, `price_usd_month` None). Profonda =
+  Sonnet 5 (`research.BOOST_MODEL`), solo con chiave sul server, anche con
+  `AI_ENABLED` spento. API: GET/POST `/api/onchain/plan` (POST = admin
+  assegna il piano a mano), POST `/api/onchain/research` {chain, token,
+  deep}. `settings.payment_address` vuoto: pagamenti da definire. Manca la
+  UI (Lorenzo non ha chiesto ancora dove metterla).
 
 ## Link ospite in sola lettura — `seed-0096`, branch `claude/link-ospite-asb5wj`
 
