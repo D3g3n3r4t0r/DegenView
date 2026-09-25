@@ -129,8 +129,9 @@ function move(e) {
 
 function bars(e) {
   return `<span class="bd-bars">${PILLARS.map(([k, label, letter]) => {
-    const v = e.pillars?.[k]?.score ?? 0;
-    return `<span title="${label} ${v}" style="--v:${v}"><b>${letter}</b></span>`;
+    const v = e.pillars?.[k]?.score;
+    if (k === "github" && e.closed_source) return `<span title="${label}: no public code" style="--v:0;opacity:.45"><b>${letter}</b></span>`;
+    return `<span title="${label} ${v ?? 0}" style="--v:${v ?? 0}"><b>${letter}</b></span>`;
   }).join("")}</span>`;
 }
 
@@ -140,6 +141,7 @@ function badges(e) {
   else if (e.similarity?.score >= 25) out.push(`<em class="bd-sim">≈ DREGG ${e.similarity.score}%</em>`);
   if (e.exception) out.push(`<em data-tone="gold">exception</em>`);
   if (e.bonding) out.push(`<em>pump.fun</em>`);
+  if (e.closed_source) out.push(`<em>closed source</em>`);
   // hottest narrative first, at most two so the card stays clean
   for (const n of (e.narratives ?? []).slice().sort((a, b) => b.heat - a.heat).slice(0, 2)) {
     out.push(`<em class="bd-nar"${n.heat >= 3 ? ' data-tone="hot"' : ""}>${escapeHtml(n.label)}</em>`);

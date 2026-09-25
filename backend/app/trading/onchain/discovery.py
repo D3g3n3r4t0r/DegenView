@@ -74,14 +74,15 @@ def _load() -> None:
         raw = json.loads(_STORE_FILE.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return
-    if isinstance(raw, dict):
+    # rules 2: projects without public GitHub are no longer banned; look again
+    if isinstance(raw, dict) and int(raw.get("rules") or 1) >= 2:
         _seen.update({k: v for k, v in (raw.get("seen") or {}).items() if isinstance(v, dict)})
         _state["cg_last_sweep"] = float(raw.get("cg_last_sweep") or 0)
 
 
 def _save() -> None:
     try:
-        _STORE_FILE.write_text(json.dumps({"seen": _seen, "cg_last_sweep": _state["cg_last_sweep"]},
+        _STORE_FILE.write_text(json.dumps({"seen": _seen, "cg_last_sweep": _state["cg_last_sweep"], "rules": 2},
                                           ensure_ascii=False), encoding="utf-8")
     except OSError:
         pass

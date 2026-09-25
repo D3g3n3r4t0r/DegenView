@@ -239,6 +239,14 @@ non oltre; uno, due, tre mesi non e' importante".
   filtrate su Solana/Robinhood, poi gli ecosistemi. Voto: `bonus()` fino a +6
   sul punteggio finale; termini generici (`weak`) contano mezzo. Etichette
   `.bd-nar` sulle schede. `github_rate` in board() + avviso in testata.
+- 25/09, GitHub NON piu' obbligatorio (Lorenzo: "non tutti hanno il github
+  pubblico [...] non deve evitare di scegliere progetti che sul resto sono
+  legit"; supera la scelta "GitHub obbligatorio" fatta sulla card). Era il
+  blocco vero: "no GitHub" era fatale e bandiva per 30 giorni.
+  `depth.missing_github()`: pilastro senza voto, `facts.missing`. In
+  classifica: sito e tokenomics >= 70 (`NO_GITHUB_MIN_PILLAR`), -10 sul
+  punteggio, badge "closed source". Fork/vuoto/banale restano fatali.
+  `RULES_VERSION` 2 in store classifica e discovery: bandi e visti azzerati.
 
 ## Link ospite in sola lettura — `seed-0096`, branch `claude/link-ospite-asb5wj`
 
