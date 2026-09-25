@@ -265,6 +265,21 @@ non oltre; uno, due, tre mesi non e' importante".
   $1-4/giorno, massimo ~$7. `board()` espone `research_ai`. Serve da Lorenzo:
   chiave su console.anthropic.com, `ANTHROPIC_API_KEY` nel .env del server,
   limite di spesa mensile in console. X non leggibile senza API a pagamento.
+- 25/09 Lorenzo: "uno o tre dollari al giorno ma e' comunque un qualcosa che
+  gira H24 [...] ho l'abbonamento Claude Pro [...] per ora concentrati a
+  creare la base matematica e algoritmica". Claude spento
+  (`research.AI_ENABLED = False`, codice e imbuto restano). Nuovo
+  `reader.py`: stesso dossier di Claude (summary, stage, substance, verdict,
+  red_flags) piu' `points`, `why`, `parts`. Segnali: profondita' (concetti in
+  5 campi, saturazione e^-n/6), concretezza (numeri+unita', codice, install),
+  stadio (live/testnet/roadmap + app che risponde), ruolo del token entro 12
+  parole, penalita' buzzword/hype, cloni via MinHash bottom-k su 5-grammi
+  (>= 0.5 = copia; impronte in `onchain_research.json`), coerenza
+  descrizione/sito (< 0.1 o sito che non nomina il progetto = sito non
+  letto). Scam solo con promesse di rendimento. Siti con l'indirizzo del
+  token nell'URL (pagine di launchpad) scartati. Su dati reali: Solrouter 78
+  gem, profili DexScreener del giorno quasi tutti thin. Pilastro = 0.35 sito
+  + 0.65 lettura.
 
 ## Link ospite in sola lettura — `seed-0096`, branch `claude/link-ospite-asb5wj`
 
