@@ -29,7 +29,7 @@ from urllib.parse import urlparse
 
 import httpx
 
-from app.trading.onchain import depth, legit, narratives
+from app.trading.onchain import depth, legit, narratives, storage
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,42 @@ _MECHANISM = re.compile(
     r"routing|indexer|rpc|gpu|compute|settlement|custody|wallet|agents?|model|dataset|verif\w+)\b", re.I)
 _HYPE = re.compile(r"\b(100x|1000x|moon|lambo|pump|degen|gem|next (pepe|doge)|to the moon|ape in)\b", re.I)
 
-_cache: dict[str, dict] = {}     # token -> {"at", "ai"} so Claude reads a project once a week
+# The funnel: Claude reads only finalists (past the researcher's floor and
+# with a heuristic score worth a second look), each once a week, and never
+# more than AI_DAILY_MAX a day. ~4k tokens in, ~1k out on Opus 5: about
+# $0.05 a reading, so the cap bounds the bill at a few dollars a day.
+AI_MIN_HEURISTIC = 45
+AI_DAILY_MAX = 150
+_STORE = storage.data_file("onchain_research.json")
+_cache: dict[str, dict] = {}     # token -> {"at", "ai"}
+_calls: dict[str, int] = {}      # "YYYY-MM-DD" -> readings that day
+
+
+def _load() -> None:
+    try:
+        raw = json.loads(_STORE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return
+    if isinstance(raw, dict):
+        _cache.update({k: v for k, v in (raw.get("cache") or {}).items() if isinstance(v, dict)})
+        _calls.update(raw.get("calls") or {})
+
+
+def _save() -> None:
+    now = time.time()
+    for k in [k for k, v in _cache.items() if now - v.get("at", 0) > AI_TTL_S]:
+        del _cache[k]
+    try:
+        _STORE.write_text(json.dumps({"cache": _cache, "calls": dict(list(_calls.items())[-7:])}),
+                          encoding="utf-8")
+    except OSError:
+        pass
+
+
+def ai_status() -> dict:
+    return {"enabled": bool(legit.settings.anthropic_api_key),
+            "today": _calls.get(time.strftime("%Y-%m-%d"), 0), "daily_max": AI_DAILY_MAX,
+            "read": len(_cache)}
 
 
 def substance(text: str) -> tuple[int, dict]:
@@ -204,12 +239,20 @@ async def analyze(item: dict, client: httpx.AsyncClient, launched: float | None)
         sites.append(depth._pillar("site", 0, {}, [], "no own website"))
     key = f"{item.get('chain')}:{item.get('token_address')}"
     hit = _cache.get(key)
-    if hit and time.time() - hit["at"] < AI_TTL_S:
-        ai = hit["ai"]
-    else:
-        ai = await ai_dossier(item, description, texts) if (description or any(texts)) else None
-        if ai is not None:
-            _cache[key] = {"at": time.time(), "ai": ai}
+    ai = hit["ai"] if hit and time.time() - hit["at"] < AI_TTL_S else None
+    if ai is None and item.get("finalist") and (description or any(texts)):
+        heuristic = judge_research(sites, description, None)
+        today = time.strftime("%Y-%m-%d")
+        if (heuristic.get("score") or 0) >= AI_MIN_HEURISTIC and not heuristic.get("fatal") \
+                and _calls.get(today, 0) < AI_DAILY_MAX and legit.settings.anthropic_api_key:
+            _calls[today] = _calls.get(today, 0) + 1
+            ai = await ai_dossier(item, description, texts)
+            if ai is not None:
+                _cache[key] = {"at": time.time(), "ai": ai}
+            _save()
     pillar = judge_research(sites, description, ai)
     pillar.setdefault("facts", {}).update(holders=info.get("holders"), gt_score=info.get("gt_score"))
     return pillar, github
+
+
+_load()

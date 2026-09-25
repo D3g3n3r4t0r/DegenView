@@ -77,3 +77,56 @@ def test_radar_launches_leave_the_board_and_references_are_examined(tmp_path, mo
     assert "solana:R" not in lb._entries and "solana:C" in lb._entries
     lb.collect_saved()
     assert lb._key("solana", lb.REFERENCES[0]["token_address"]) in lb._entries
+
+
+def _funnel(monkeypatch, tmp_path, key="sk-test"):
+    """Stub the network: one decent docs site, Solrouter's description."""
+    calls = []
+
+    async def info(chain, token, client):
+        return {"description": SOLROUTER, "websites": []}
+
+    async def site(url, client, token, launched):
+        return _site(55, excerpt="docs"), []
+
+    async def dossier(item, description, texts):
+        calls.append(item["token_address"])
+        return {"summary": "x", "stage": "live", "substance": 8, "original": True,
+                "verdict": "promising", "red_flags": []}
+
+    monkeypatch.setattr(rs, "gecko_info", info)
+    monkeypatch.setattr(depth, "analyze_site", site)
+    monkeypatch.setattr(rs, "ai_dossier", dossier)
+    monkeypatch.setattr(rs, "_STORE", tmp_path / "research.json")
+    monkeypatch.setattr(rs.legit.settings, "anthropic_api_key", key)
+    rs._calls.clear()
+    return calls
+
+
+def _run(token, finalist=True):
+    import asyncio
+    item = {"chain": "solana", "token_address": token, "website": "https://docs.example.org",
+            "finalist": finalist}
+    return asyncio.run(rs.analyze(item, None, None))[0]
+
+
+def test_claude_reads_only_finalists_once(monkeypatch, tmp_path):
+    calls = _funnel(monkeypatch, tmp_path)
+    assert _run("A", finalist=False)["facts"].get("verdict") is None
+    assert _run("B")["facts"]["verdict"] == "promising"
+    _run("B")
+    assert calls == ["B"] and rs.ai_status()["today"] == 1
+
+
+def test_daily_cap_bounds_the_bill(monkeypatch, tmp_path):
+    calls = _funnel(monkeypatch, tmp_path)
+    monkeypatch.setattr(rs, "AI_DAILY_MAX", 2)
+    for t in "CDE":
+        _run(t)
+    assert calls == ["C", "D"]
+
+
+def test_no_key_no_call(monkeypatch, tmp_path):
+    calls = _funnel(monkeypatch, tmp_path, key="")
+    p = _run("F")
+    assert calls == [] and p["score"] is not None and not rs.ai_status()["enabled"]
