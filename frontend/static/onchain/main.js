@@ -85,7 +85,7 @@ function paintChainStatic() {
   view.chainLabel.textContent = view.chainFlip ? label : `${label}${suffix}`;
   if (view.chainFlip) view.chainFlip.title = `${label}${suffix} · tap to switch network`;
   if (view.chainIcon) view.chainIcon.textContent = CHAIN_ICON[state.chain] ?? "";
-  for (const node of [view.actions, view.status, view.reveal, view.more, view.pilot, view.marketOrderRow, view.bottomPanel, view.sniperCard, view.dock, view.walletView]) {
+  for (const node of [view.actions, view.status, view.reveal, view.more, view.pilot, view.marketOrderRow, view.bottomPanel, view.sniperCard, view.walletView]) {
     if (node) node.hidden = !hasWallet;
   }
   view.empty.hidden = hasWallet;
@@ -503,7 +503,7 @@ function setView(name) {
   const from = view.shell.dataset.view;
   const paint = () => {
     view.shell.dataset.view = name;
-    if (name === "gems" || name === "meme") view.shell.dataset.section = name;
+    if (name === "gems" || name === "meme") view.shell.dataset.section = document.documentElement.dataset.section = name;
     view.dock?.querySelectorAll("[data-go]").forEach((b) => {
       if (b.dataset.go === name) b.setAttribute("aria-current", "page");
       else b.removeAttribute("aria-current");
@@ -615,6 +615,7 @@ async function boot() {
 
   view.login.hidden = signedIn;
   view.shell.hidden = !signedIn;
+  if (view.dock) view.dock.hidden = !signedIn;
   if (!signedIn) return;
 
   try {

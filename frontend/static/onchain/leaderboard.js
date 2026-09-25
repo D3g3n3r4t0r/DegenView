@@ -65,7 +65,15 @@ async function refresh() {
       paint(true);
     }
   } catch {
-    // Come il radar: se non risponde resta com'era.
+    // Keep what is on screen; with nothing yet, say so instead of an endless skeleton.
+    if (!data) {
+      delete root.dataset.loading;
+      root.querySelector("[data-board-podium]").innerHTML = "";
+      const empty = root.querySelector("[data-board-empty]");
+      empty.textContent = "Leaderboard unavailable right now. Retrying…";
+      empty.hidden = false;
+      root.querySelector("[data-board-podium]").hidden = true;
+    }
   }
   if (document.visibilityState === "visible") timer = setTimeout(refresh, POLL_MS);
 }
@@ -73,6 +81,7 @@ async function refresh() {
 // ------------------------------------------------------------------ disegno
 
 function paint(animate) {
+  root.querySelector("[data-board-podium]").hidden = false;
   root.hidden = false;
   delete root.dataset.loading;
   const before = animate ? positions() : null;
