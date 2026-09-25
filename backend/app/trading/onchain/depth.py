@@ -449,12 +449,15 @@ async def analyze_site(url: str | None, client: httpx.AsyncClient, token_address
     page.update(url=site["final_url"], https=site["final_url"].startswith("https://"),
                 not_own=_not_own(site["final_url"]))
     followed: list[dict] = []
+    docs_text = ""
     todo = ([("docs", u) for u in page["docs"][:1]] + [("app", u) for u in page["app"][:1]]
             + [("page", u) for u in page["internal"] if u not in page["docs"][:1] + page["app"][:1]])
     for kind, u in todo[:SITE_FOLLOW]:
         sub = await legit.fetch_site(u, client)
         followed.append({"kind": kind, "ok": bool(sub.get("ok")),
                          "words": len((sub.get("text") or "").split())})
+        if kind == "docs" and sub.get("ok"):
+            docs_text = re.sub(r"\s+", " ", sub.get("text") or "")[:3000]
     registered = None
     host = (urlparse(site["final_url"]).hostname or "").removeprefix("www.")
     if host and not page["free_host"]:
@@ -465,6 +468,7 @@ async def analyze_site(url: str | None, client: httpx.AsyncClient, token_address
             registered = None
     pillar = judge_site(page, followed, registered, token_address, launched_at)
     pillar.setdefault("facts", {})["excerpt"] = re.sub(r"\s+", " ", page.get("text") or "")[:1500]
+    pillar["facts"]["docs_excerpt"] = docs_text
     return pillar, page["github"]
 
 

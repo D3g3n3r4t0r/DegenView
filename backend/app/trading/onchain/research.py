@@ -14,10 +14,12 @@ So the "site" pillar of the Gem Finder is now a research pillar:
 - the description the project wrote for CoinGecko / GeckoTerminal /
   DexScreener is weighed for substance: how much it explains, how many
   concrete mechanisms it names, which narratives it belongs to;
-- when an Anthropic key is configured, Claude reads all of it like an
-  analyst and says what the project does, at what stage, how substantive
-  and original it is, and which red flags it sees. Its verdict weighs
-  more than the heuristics; without the key the heuristics stand alone.
+- `reader.read` then reads all of it like an analyst, in arithmetic: what
+  the project does, at what stage, how substantive and original it is,
+  which red flags it shows (see reader.py for every weight).
+
+Claude reading the finalists is written but switched off (AI_ENABLED):
+Lorenzo (25/09) wants no paid calls running around the clock.
 """
 from __future__ import annotations
 
@@ -29,7 +31,7 @@ from urllib.parse import urlparse
 
 import httpx
 
-from app.trading.onchain import depth, legit, narratives, storage
+from app.trading.onchain import depth, legit, narratives, reader, storage
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +48,9 @@ _MECHANISM = re.compile(
     r"routing|indexer|rpc|gpu|compute|settlement|custody|wallet|agents?|model|dataset|verif\w+)\b", re.I)
 _HYPE = re.compile(r"\b(100x|1000x|moon|lambo|pump|degen|gem|next (pepe|doge)|to the moon|ape in)\b", re.I)
 
-# The funnel: Claude reads only finalists (past the researcher's floor and
+# Off by Lorenzo's decision (25/09): the deterministic reader is the analyst.
+AI_ENABLED = False
+# The funnel, when on: Claude reads only finalists (past the researcher's floor and
 # with a heuristic score worth a second look), each once a week, and never
 # more than AI_DAILY_MAX a day. ~4k tokens in, ~1k out on Opus 5: about
 # $0.05 a reading, so the cap bounds the bill at a few dollars a day.
@@ -55,6 +59,8 @@ AI_DAILY_MAX = 150
 _STORE = storage.data_file("onchain_research.json")
 _cache: dict[str, dict] = {}     # token -> {"at", "ai"}
 _calls: dict[str, int] = {}      # "YYYY-MM-DD" -> readings that day
+_prints: dict[str, list[int]] = {}   # token -> description sketch, for clone detection
+PRINTS_MAX = 5000
 
 
 def _load() -> None:
@@ -65,6 +71,7 @@ def _load() -> None:
     if isinstance(raw, dict):
         _cache.update({k: v for k, v in (raw.get("cache") or {}).items() if isinstance(v, dict)})
         _calls.update(raw.get("calls") or {})
+        _prints.update({k: v for k, v in (raw.get("prints") or {}).items() if isinstance(v, list)})
 
 
 def _save() -> None:
@@ -72,14 +79,15 @@ def _save() -> None:
     for k in [k for k, v in _cache.items() if now - v.get("at", 0) > AI_TTL_S]:
         del _cache[k]
     try:
-        _STORE.write_text(json.dumps({"cache": _cache, "calls": dict(list(_calls.items())[-7:])}),
+        _STORE.write_text(json.dumps({"cache": _cache, "calls": dict(list(_calls.items())[-7:]),
+                                      "prints": dict(list(_prints.items())[-PRINTS_MAX:])}),
                           encoding="utf-8")
     except OSError:
         pass
 
 
 def ai_status() -> dict:
-    return {"enabled": bool(legit.settings.anthropic_api_key),
+    return {"enabled": AI_ENABLED and bool(legit.settings.anthropic_api_key),
             "today": _calls.get(time.strftime("%Y-%m-%d"), 0), "daily_max": AI_DAILY_MAX,
             "read": len(_cache)}
 
@@ -121,6 +129,7 @@ async def gecko_info(chain: str, token: str, client: httpx.AsyncClient) -> dict:
 
 def site_urls(item: dict, extra: list[str]) -> list[str]:
     """Home first, then docs and app hosts; one per host, at most MAX_SITES."""
+    token = item.get("token_address") or ""
     urls = [item.get("website") or ""] + list(item.get("websites") or []) + list(extra or [])
     out, hosts = [], set()
     for u in urls:
@@ -130,6 +139,8 @@ def site_urls(item: dict, extra: list[str]) -> list[str]:
         host = (urlparse(u).hostname or "").lower().removeprefix("www.")
         if not host or host in hosts or not legit.pick_website([u]):
             continue
+        if token and token.lower() in u.lower():
+            continue        # a launchpad's page for the token, not the project's site
         hosts.add(host)
         out.append(u)
     return out[:MAX_SITES]
@@ -164,7 +175,7 @@ AI_SYSTEM = (
 
 async def ai_dossier(item: dict, description: str, texts: list[str]) -> dict | None:
     """Claude's reading of the project. None without a key or on failure."""
-    if not legit.settings.anthropic_api_key:
+    if not AI_ENABLED or not legit.settings.anthropic_api_key:
         return None
     from anthropic import AsyncAnthropic
 
@@ -196,7 +207,7 @@ async def ai_dossier(item: dict, description: str, texts: list[str]) -> dict | N
 
 def judge_research(sites: list[dict], description: str, ai: dict | None) -> dict:
     """One pillar (key "site") from every site read, the description and
-    Claude's dossier."""
+    the dossier (the reader's, or Claude's when switched on)."""
     scored = [s for s in sites if s.get("score") is not None and not s.get("fatal")]
     if not scored:
         fatal = next((s for s in sites if s.get("fatal")), None)
@@ -216,10 +227,11 @@ def judge_research(sites: list[dict], description: str, ai: dict | None) -> dict
     if ai:
         facts.update(summary=ai.get("summary") or facts["summary"], stage=ai.get("stage"),
                      ai_substance=ai["substance"], verdict=ai.get("verdict"), original=ai.get("original"),
-                     red_flags=(ai.get("red_flags") or [])[:5])
+                     red_flags=(ai.get("red_flags") or [])[:5], reader="points" in ai,
+                     why=ai.get("why"), parts=ai.get("parts"), evidence=ai.get("evidence"))
         if ai.get("verdict") == "scam":
             return depth._pillar("site", 0, facts, flags, "research: reads as a scam")
-        score = 0.35 * best["score"] + 0.65 * ai["substance"] * 10
+        score = 0.35 * best["score"] + 0.65 * float(ai.get("points", ai["substance"] * 10))
     else:
         score = 0.5 * best["score"] + 0.5 * desc_score
     return depth._pillar("site", score, facts, flags)
@@ -235,6 +247,7 @@ async def analyze(item: dict, client: httpx.AsyncClient, launched: float | None)
         sites.append(pillar)
         github += found
         texts.append((pillar.get("facts") or {}).get("excerpt") or "")
+        texts.append((pillar.get("facts") or {}).pop("docs_excerpt", "") or "")
     if not sites:
         sites.append(depth._pillar("site", 0, {}, [], "no own website"))
     key = f"{item.get('chain')}:{item.get('token_address')}"
@@ -244,11 +257,21 @@ async def analyze(item: dict, client: httpx.AsyncClient, launched: float | None)
         heuristic = judge_research(sites, description, None)
         today = time.strftime("%Y-%m-%d")
         if (heuristic.get("score") or 0) >= AI_MIN_HEURISTIC and not heuristic.get("fatal") \
-                and _calls.get(today, 0) < AI_DAILY_MAX and legit.settings.anthropic_api_key:
+                and _calls.get(today, 0) < AI_DAILY_MAX and AI_ENABLED \
+                and legit.settings.anthropic_api_key:
             _calls[today] = _calls.get(today, 0) + 1
             ai = await ai_dossier(item, description, texts)
             if ai is not None:
                 _cache[key] = {"at": time.time(), "ai": ai}
+            _save()
+    if ai is None and (description or any(texts)):
+        app_ok = any((s.get("facts") or {}).get("app_ok") for s in sites)
+        ai = reader.read(description, texts, name=item.get("name") or "",
+                         symbol=item.get("symbol") or "", app_ok=app_ok,
+                         corpus=_prints, key=key)
+        print_ = ai.pop("sketch", None)
+        if print_ and ai["original"] and _prints.get(key) != print_:
+            _prints[key] = print_
             _save()
     pillar = judge_research(sites, description, ai)
     pillar.setdefault("facts", {}).update(holders=info.get("holders"), gt_score=info.get("gt_score"))

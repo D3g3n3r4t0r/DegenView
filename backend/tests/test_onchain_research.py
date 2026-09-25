@@ -99,6 +99,8 @@ def _funnel(monkeypatch, tmp_path, key="sk-test"):
     monkeypatch.setattr(rs, "ai_dossier", dossier)
     monkeypatch.setattr(rs, "_STORE", tmp_path / "research.json")
     monkeypatch.setattr(rs.legit.settings, "anthropic_api_key", key)
+    monkeypatch.setattr(rs, "AI_ENABLED", True)
+    monkeypatch.setattr(rs, "_prints", {})
     rs._calls.clear()
     return calls
 
@@ -112,7 +114,7 @@ def _run(token, finalist=True):
 
 def test_claude_reads_only_finalists_once(monkeypatch, tmp_path):
     calls = _funnel(monkeypatch, tmp_path)
-    assert _run("A", finalist=False)["facts"].get("verdict") is None
+    assert _run("A", finalist=False)["facts"]["reader"]
     assert _run("B")["facts"]["verdict"] == "promising"
     _run("B")
     assert calls == ["B"] and rs.ai_status()["today"] == 1
@@ -130,3 +132,10 @@ def test_no_key_no_call(monkeypatch, tmp_path):
     calls = _funnel(monkeypatch, tmp_path, key="")
     p = _run("F")
     assert calls == [] and p["score"] is not None and not rs.ai_status()["enabled"]
+
+
+def test_claude_stays_off_by_default_even_with_a_key(monkeypatch, tmp_path):
+    calls = _funnel(monkeypatch, tmp_path)
+    monkeypatch.setattr(rs, "AI_ENABLED", False)
+    p = _run("G")
+    assert calls == [] and p["facts"]["reader"] and p["facts"]["why"]
