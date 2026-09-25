@@ -86,7 +86,7 @@ def test_step_queues_pages_then_details(monkeypatch):
     assert d.status()["found"] >= 1
 
 
-def test_github_of_another_project_is_fatal(monkeypatch):
+def test_github_of_another_project_counts_as_missing(monkeypatch):
     async def repo(owner, name, client):
         return {"full_name": "alice/rust-utils", "homepage": "", "description": "misc helpers"}
 
@@ -94,7 +94,7 @@ def test_github_of_another_project_is_fatal(monkeypatch):
     out = asyncio.run(depth.analyze_github(["https://github.com/alice/rust-utils"], None, None,
                                            token={"chain": "solana", "token_address": "M", "symbol": "GRID",
                                                   "name": "Grid Protocol"}, website="https://grid.xyz"))
-    assert out["fatal"] == "GitHub does not belong to the project"
+    assert out["fatal"] == "" and out["score"] is None and out["facts"]["missing"]
 
 
 class _Resp:

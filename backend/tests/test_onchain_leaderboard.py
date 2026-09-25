@@ -336,3 +336,34 @@ def test_data_that_never_arrives_does_not_ban_the_project():
     e["found_at"] = time.time() - lb.PENDING_GIVE_UP_S - 60
     lb._prune(time.time())
     assert k not in lb._entries and k not in lb._gone
+
+
+def _closed(sym, site, tok, **kw):
+    e = _entry(sym, 0, site, tok, **kw)
+    lb.apply_analysis(lb._key("solana", sym + "mint"), {"github": depth.missing_github("no public GitHub")})
+    return e
+
+
+def test_no_public_github_is_not_a_ban():
+    e = _closed("CLS", 80, 80, cap=900_000, source="coingecko")
+    assert not e["overall"]["fatal"] and lb.qualifies(e) == ""
+    assert lb._key("solana", "CLSmint") not in lb._gone
+
+
+def test_no_public_github_asks_more_of_the_rest_and_ranks_lower():
+    weak = _closed("WK", 65, 90, cap=900_000, source="coingecko")
+    assert "site" in lb.qualifies(weak)
+    closed = _closed("CL", 80, 80, cap=50_000)
+    open_ = _entry("OP", 80, 80, 80, cap=50_000)
+    assert lb.final_score(open_) > lb.final_score(closed)
+    b = lb.board()
+    assert [x["symbol"] for x in b["entries"]].index("OP") < [x["symbol"] for x in b["entries"]].index("CL")
+    assert next(x for x in b["entries"] if x["symbol"] == "CL")["closed_source"]
+
+
+def test_old_bans_are_lifted_on_new_rules(tmp_path, monkeypatch):
+    f = tmp_path / "lb.json"
+    f.write_text('{"entries": {}, "gone": {"solana:X": 1790000000}, "excluded": [{"symbol": "X"}]}')
+    monkeypatch.setattr(lb, "_STORE_FILE", f)
+    lb._load()
+    assert "solana:X" not in lb._gone and not lb._excluded
