@@ -38,6 +38,7 @@ import time
 import httpx
 import numpy as np
 
+from app.trading.onchain import meme_engine
 from app.trading.onchain.storage import data_file
 
 logger = logging.getLogger(__name__)
@@ -77,7 +78,8 @@ WIN_MIN_AUC = 0.60
 SOFT_FAILS = {"name", "site", "socials", "github", "ai", "gem", "memory"}
 MEME_LIQ_MIN = 8_000
 MEME_MAX_AGE_S = 2 * 86400
-MEME_SAFETY_PER_TICK = 8
+MEME_SAFETY_PER_TICK = 20
+MEME_SHOWN = 20                # the lane's length: what counts as "shown"
 MEME_TOP_HOLDER_MAX = 15.0
 
 # Quanto conta una decisione: un token proposto dopo essere stato solo
@@ -228,10 +230,14 @@ def market_of(pair: dict | None) -> dict | None:
     vol = pair.get("volume") or {}
     buys, sells = _num(tx.get("buys")) or 0.0, _num(tx.get("sells")) or 0.0
     day = (pair.get("txns") or {}).get("h24") or {}
-    return {"buys_h1": buys, "sells_h1": sells, "sells_h24": _num(day.get("sells")) or 0.0,
-            "buy_ratio": buys / (buys + sells) if buys + sells else None,
-            "vol_h1": _num(vol.get("h1")), "chg_h1": _num((pair.get("priceChange") or {}).get("h1")),
-            "mcap": _num(pair.get("marketCap") or pair.get("fdv"))}
+    change = pair.get("priceChange") or {}
+    out = {"buys_h1": buys, "sells_h1": sells, "sells_h24": _num(day.get("sells")) or 0.0,
+           "buy_ratio": buys / (buys + sells) if buys + sells else None,
+           "vol_h1": _num(vol.get("h1")), "chg_h1": _num(change.get("h1")), "chg_h6": _num(change.get("h6")),
+           "mcap": _num(pair.get("marketCap") or pair.get("fdv"))}
+    # Average ticket and turnover: what separates people from bots.
+    out.update(meme_engine.derived(out, _num((pair.get("liquidity") or {}).get("usd"))))
+    return out
 
 
 def apply_sample(e: dict, price: float | None, liq: float | None, now: float,
@@ -252,10 +258,15 @@ def apply_sample(e: dict, price: float | None, liq: float | None, now: float,
             e["misses"] += 1
             if e["misses"] >= MISSING_TICKS:
                 _mark_rug(e, now, "pool gone")
+                meme_engine.step_trade(e.get("trade"), None, None, now, can_sell=False, rug=True)
+                meme_engine.step_trade((e.get("shown") or {}).get("trade"), None, None, now, can_sell=False,
+                                       rug=True)
         return
     e["misses"] = 0
     if not e["entry"]:
         e["entry"] = {"price": price, "liq": liq, "at": now, "from": "live"}
+        # The trade we could have made: in at this price, paying fee and impact.
+        e["trade"] = meme_engine.open_trade(liq, now)
     base = e["entry"]["price"]
     ret = price / base - 1 if base else 0.0
     e["last"] = {"price": price, "liq": liq, "at": now, "ret": round(ret, 4)}
@@ -277,6 +288,13 @@ def apply_sample(e: dict, price: float | None, liq: float | None, now: float,
         e["closed"] = True
         if e["rug"] is None:
             e["rug"] = False
+    can_sell = bool(e.get("sells_seen")) and (liq is None or liq >= EXIT_LIQ_MIN)
+    meme_engine.step_trade(e.get("trade"), ret, liq, now, can_sell=can_sell, rug=bool(e["rug"]),
+                           final=e["closed"])
+    shown = e.get("shown") or {}
+    if shown.get("price"):
+        meme_engine.step_trade(shown.get("trade"), price / shown["price"] - 1, liq, now, can_sell=can_sell,
+                               rug=bool(e["rug"]), final=e["closed"])
 
 
 def _mark_rug(e: dict, now: float, why: str) -> None:
@@ -439,9 +457,9 @@ def _value(f: dict, key: str) -> float | None:
 
 MODEL_KEYS = ("mcap", "liq", "liq_mcap", "age_h", "report") + FACT_KEYS + CHECK_KEYS
 # Il mercato al primo sguardo: per le salite conta piu' della pagella.
-MARKET_KEYS = ("vol_h1", "buys_h1", "sells_h1", "buy_ratio", "chg_h1")
+MARKET_KEYS = ("vol_h1", "buys_h1", "sells_h1", "buy_ratio", "chg_h1", "chg_h6", "tx_h1", "avg_trade", "turnover")
 WIN_KEYS = ("mcap", "liq", "liq_mcap", "age_h") + FACT_KEYS + MARKET_KEYS + CHECK_KEYS
-LOG_KEYS = {"mcap", "liq", "age_h", "vol_h1", "buys_h1", "sells_h1"}
+LOG_KEYS = {"mcap", "liq", "age_h", "vol_h1", "buys_h1", "sells_h1", "tx_h1", "avg_trade", "turnover"}
 
 
 def _matrix(rows: list[dict], means: dict | None = None,
@@ -637,8 +655,14 @@ def lessons(now: float | None = None) -> dict:
 # ------------------------------------------------ le salite che abbiamo perso
 
 def win_labelled(now: float | None = None) -> list[tuple[dict, bool]]:
-    """Esplosa davvero (salita vendibile) o no, per le voci con un esito."""
+    """Did it pay? Once enough simulated trades have closed, the label is the
+    trade netting WIN_RET after costs (meme_engine); before that, the old
+    one: a sellable +50% at some point."""
     now = now or time.time()
+    trades = [(e, meme_engine.won(e.get("trade"))) for e in _journal.values()]
+    trades = [(e, y) for e, y in trades if y is not None]
+    if len(trades) >= WIN_MIN_N:
+        return trades
     out = []
     for e in _journal.values():
         o = outcome(e, now)
@@ -745,16 +769,22 @@ def _meme_candidates(now: float) -> list[dict]:
     return out
 
 
+def meme_read(e: dict, now: float | None = None) -> dict:
+    """The engine's reading of a meme right now (meme_engine.score)."""
+    now = now or time.time()
+    m = e.get("market") or {}
+    created = (e.get("features") or {}).get("age_h")
+    age = None if created is None else created + (now - e["at"]) / 3600
+    return meme_engine.score(m, (e.get("last") or {}).get("liq"), m.get("mcap"), e.get("safety"), age)
+
+
 def _meme_score(e: dict) -> float:
-    """Senza un modello affidabile: chi compra, quanto si scambia, rispetto
-    alla liquidita'. Con il modello: la probabilita' che esploda davvero."""
+    """The order of the lane: the memory's odds once it predicts out of
+    sample, the engine's score (0-1) until then."""
     p = win_chance(e["features"])
     if p is not None:
         return p
-    m = e.get("market") or {}
-    ratio = m.get("buy_ratio") or 0.5
-    turnover = (m.get("vol_h1") or 0) / max(e["last"].get("liq") or 1, 1)
-    return round(0.5 * ratio + 0.5 * min(turnover, 1.0), 4)
+    return round(meme_read(e)["score"] / 100, 4)
 
 
 def meme_board(now: float | None = None, limit: int = 20) -> dict:
@@ -769,19 +799,58 @@ def meme_board(now: float | None = None, limit: int = 20) -> dict:
     items = []
     for e in cands:
         m = e.get("market") or {}
+        read = meme_read(e, now)
         items.append({
             "chain": e["chain"], "symbol": e["symbol"], "name": e["name"], "token_address": e["token_address"],
             "pair_address": e["pair_address"], "pair_url": e["pair_url"], "seen_at": e["at"],
             "reason": e["reason"], "failed": failed_key(e),
             "ret_since_seen": e["last"].get("ret"), "max_ret": e["max_ret"], "liquidity_usd": e["last"].get("liq"),
             "market_cap": m.get("mcap"), "buys_h1": m.get("buys_h1"), "sells_h1": m.get("sells_h1"),
-            "vol_h1": m.get("vol_h1"), "score": _meme_score(e), "win_chance": win_chance(e["features"]),
-            "safety": e.get("safety"),
+            "vol_h1": m.get("vol_h1"), "score": read["score"], "win_chance": win_chance(e["features"]),
+            "reasons": read["reasons"], "risks": read["risks"], "parts": read["parts"],
+            "band": meme_engine.band(read["score"]), "safety": e.get("safety"),
         })
     return {"items": items, "model": {k: v for k, v in _wmodel.items() if k not in ("weights", "means")},
             "warning": "Pure gambling: meme coins with no project behind them. Only put in what you can afford to lose.",
+            "track": meme_track(now),
             "rules": {"liq_min_usd": MEME_LIQ_MIN, "max_age_h": MEME_MAX_AGE_S / 3600,
-                      "top_holder_max_pct": MEME_TOP_HOLDER_MAX, "exit_liq_min_usd": EXIT_LIQ_MIN}}
+                      "top_holder_max_pct": MEME_TOP_HOLDER_MAX, "exit_liq_min_usd": EXIT_LIQ_MIN,
+                      "parts": meme_engine.PARTS}}
+
+
+def mark_shown(now: float | None = None, limit: int = MEME_SHOWN) -> int:
+    """Remember what the lane showed, with which score, and open a trade at
+    that moment's price: the track record judges the lane on what it put in
+    front of people, from when it did."""
+    now = now or time.time()
+    marked = 0
+    for item in meme_board(now, limit)["items"]:
+        e = _journal.get(f"{item['chain']}:{item['token_address']}")
+        last = (e or {}).get("last") or {}
+        if e is not None and not e.get("shown") and last.get("price"):
+            e["shown"] = {"at": now, "score": item["score"], "band": item["band"], "price": last["price"],
+                          "trade": meme_engine.open_trade(last.get("liq"), now)}
+            marked += 1
+    return marked
+
+
+def meme_track(now: float | None = None) -> dict:
+    """How the lane's picks really went, as closed simulated trades, next to
+    every meme we watched (the baseline a ranking has to beat)."""
+    shown = [e["shown"] for e in _journal.values()
+             if meme_engine.won((e.get("shown") or {}).get("trade")) is not None]
+    base = [e for e in _journal.values() if e["decision"] == "rejected" and failed_key(e) in SOFT_FAILS
+            and meme_engine.won(e.get("trade")) is not None]
+    bands = []
+    for _floor, label in meme_engine.BANDS:
+        rets = [s["trade"]["ret"] for s in shown if s.get("band") == label]
+        bands.append({"band": label, **meme_engine.summarize(rets)})
+    exits: dict[str, int] = {}
+    for s in shown:
+        exits[s["trade"]["exit"]] = exits.get(s["trade"]["exit"], 0) + 1
+    return {"shown": meme_engine.summarize([s["trade"]["ret"] for s in shown]),
+            "baseline": meme_engine.summarize([e["trade"]["ret"] for e in base]),
+            "bands": bands, "exits": exits, "rules": meme_engine.rules()}
 
 
 async def _meme_safety(client: httpx.AsyncClient, now: float, limit: int = MEME_SAFETY_PER_TICK) -> int:
@@ -792,14 +861,17 @@ async def _meme_safety(client: httpx.AsyncClient, now: float, limit: int = MEME_
     todo = [e for e in sorted(_meme_candidates(now), key=lambda e: -_meme_score(e)) if not e.get("safety")]
     done = 0
     for e in todo[:limit]:
+        extra: dict = {}
         try:
             if e["chain"] == "solana":
                 report = await legit.rugcheck(e["token_address"], client)
                 check = legit.judge_rugcheck(report)
-                if report and check["ok"] is not False:
+                if report:
                     top, _top10 = legit.holder_concentration(report)
-                    if top > MEME_TOP_HOLDER_MAX:
-                        check = {"ok": False, "detail": f"one wallet holds {top:.0f}%"}
+                    extra = {"top_holder_pct": round(top, 2),
+                             "warnings": [r.get("name") for r in report.get("risks") or [] if r.get("name")][:8]}
+                if report and check["ok"] is not False and top > MEME_TOP_HOLDER_MAX:
+                    check = {"ok": False, "detail": f"one wallet holds {top:.0f}%"}
             elif e["chain"] in legit.GOPLUS_CHAIN:
                 check = legit.judge_goplus(await legit.goplus(e["chain"], e["token_address"], client))
             else:
@@ -809,7 +881,7 @@ async def _meme_safety(client: httpx.AsyncClient, now: float, limit: int = MEME_
             continue
         if check.get("ok") is None:
             continue  # report non ancora pronto: si riprova al giro dopo
-        e["safety"] = {"ok": bool(check["ok"]), "detail": check.get("detail") or "", "at": now}
+        e["safety"] = {"ok": bool(check["ok"]), "detail": check.get("detail") or "", "at": now, **extra}
         done += 1
     return done
 
@@ -864,6 +936,7 @@ async def tick(now: float | None = None) -> dict:
         await _backfill(now)
         train(now)
         train_winners(now)
+        mark_shown(now)
         _state["error"] = ""
     except Exception as exc:
         logger.exception("outcomes: giro fallito")
