@@ -104,9 +104,19 @@ def substance(text: str) -> tuple[int, dict]:
     return max(0, min(100, score)), {"words": words, "mechanisms": mech[:10], "hype": hype}
 
 
+_NAV_LEAD = re.compile(r"^\s*(skip to (main )?content|toggle navigation|menu|home)\b[\s:|>-]*", re.I)
+SUMMARY_MAX_BARE_WORDS = 20
+
+
 def summary_line(text: str) -> str:
-    """First sentence, trimmed: what the project says it is."""
-    s = re.split(r"(?<=[.!?])\s", (text or "").strip(), maxsplit=1)[0]
+    """First sentence, trimmed: what the project says it is. Menu text read
+    off a site ("Skip to content dregg proof-native semantic computer the
+    idea idea receipts ...") is not a sentence: a long run with no full stop
+    is dropped rather than shown as the project's description."""
+    t = _NAV_LEAD.sub("", (text or "").strip())
+    s = re.split(r"(?<=[.!?])\s", t, maxsplit=1)[0].strip()
+    if not re.search(r"[.!?]$", s) and len(s.split()) > SUMMARY_MAX_BARE_WORDS:
+        return ""
     return s[:180]
 
 
