@@ -151,9 +151,22 @@ eggd.liquidityengine.app {
 		-Server
 	}
 
-	# I file in _next/static hanno l'hash nel nome: non cambiano mai.
-	@immutabili path /_next/static/*
+	# I file in _astro (e in _next/static, se si torna a Next.js) hanno
+	# l'hash nel nome: non cambiano mai. I font hanno nomi stabili per peso:
+	# se un giorno cambiano, cambia anche il nome del file.
+	@immutabili path /_astro/* /_next/static/* /fonts/*
 	header @immutabili Cache-Control "public, max-age=31536000, immutable"
+
+	# Le immagini non hanno l'hash: un giorno di cache, poi il browser
+	# ricontrolla.
+	@immagini path /img/*
+	header @immagini Cache-Control "public, max-age=86400"
+
+	# Tutto il resto (le pagine HTML, _version.txt, favicon, manifest) va
+	# ricontrollato a ogni visita: con ETag costa un 304, e un deploy nuovo
+	# si vede subito.
+	@pagine not path /_astro/* /_next/static/* /fonts/* /img/*
+	header @pagine Cache-Control "no-cache"
 
 	try_files {path} {path}.html {path}/index.html
 	file_server
