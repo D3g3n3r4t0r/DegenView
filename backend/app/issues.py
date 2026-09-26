@@ -164,6 +164,15 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0120", "Rinfrescata di design dell'app on-chain",
+     "Lorenzo: 'procedi a fare tutto, e poi direi che anche una rinfrescata di design non faccia male, miglioralo'.",
+     "media"),
+    ("seed-0119", "Sniper di meme piu' professionale: un motore suo, non gli scarti del filtro dei progetti seri",
+     "Lorenzo: 'uguale per lo sniper di meme, dobbiamo rendere tutto piu' professionale'.",
+     "alta"),
+    ("seed-0118", "Gem Finder: algoritmo piu' profondo, ci sono progetti migliori che non trova",
+     "Lorenzo: 'io entrerei anche nella logica con cui sceglie le gemme, senz'altro ci sono progetti migliori ma non li trovo, dobbiamo fare un algoritmo piu' profondo'.",
+     "alta"),
     ("seed-0117", "Gem Finder da ricercatore, non caccia ai lanci: in classifica token di 15 minuti con $1 di liquidita'",
      "Lorenzo: 'il calciatore di gemme non deve scansionare il mercato degli ultimi 15 minuti, devi andare a trovare progetti anche esistenti soprattutto, avere un approccio da ricercatore [...] vede il sito, vede di cosa parla il sito e restituisce un risultato [...] ci deve essere una specie di coscienza [...] la ricerca al minuto delle cose che escono deve stare sullo sniper, non qui [...] io avevo trovato tipo Sol Router, che e' interessantissimo, pero' tu non stai trovando niente di equiparabile'.",
      "alta"),
