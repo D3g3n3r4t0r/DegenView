@@ -39,7 +39,7 @@ from typing import Callable
 import httpx
 
 from app.sniper.quality import _looks_like_meme
-from app.trading.onchain import legit, narratives, storage
+from app.trading.onchain import legit, narratives, storage, traction
 
 logger = logging.getLogger(__name__)
 
@@ -501,7 +501,7 @@ async def tick(client: httpx.AsyncClient, add: Callable[[dict, str], bool], now:
         return
     _state["running"] = True
     try:
-        steps = (("jupiter", _poll_jupiter), ("coingecko", _cg_step), ("profili", _poll_profiles),
+        steps = (("jupiter", _poll_jupiter), ("defillama", traction.poll), ("coingecko", _cg_step), ("profili", _poll_profiles),
                  ("github", lambda c, a, n: _gh_search(c, n)), ("readme", _gh_repo))
         for name, step in steps:
             try:

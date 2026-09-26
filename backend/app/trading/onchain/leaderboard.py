@@ -45,7 +45,8 @@ import time
 
 import httpx
 
-from app.trading.onchain import benchmark, depth, discovery, legit, narratives, radar, research, storage
+from app.trading.onchain import (benchmark, depth, discovery, gem_track, legit, narratives, radar, research,
+                                  storage, traction)
 
 logger = logging.getLogger(__name__)
 
@@ -64,10 +65,14 @@ KEEP_EXCLUDED = 60
 ANALYZE_CONCURRENCY = 3
 BOARD_SIZE = 50
 SIMILARITY_WEIGHT = 0.30
+# Use and price (traction.py, DefiLlama): a lift for the projects it lists,
+# never a penalty for the many microcaps it does not.
+TRACTION_WEIGHT = 0.10
+VALUE_WEIGHT = 0.05
 MIN_PILLAR = 35                    # sotto, un pilastro e' troppo debole per stare in classifica
 # Progetti trovati dallo scan dedicato (discovery): l'eta' conta poco, la cap
 # si' ("sotto 2-3 milioni, non oltre"), e la qualita' deve essere vera.
-SERIOUS_SOURCES = ("coingecko", "dexscreener", "github", "reference", "jupiter")
+SERIOUS_SOURCES = ("coingecko", "dexscreener", "github", "reference", "jupiter", "defillama")
 RADAR_SOURCES = ("radar", "listing")   # before 25/09: fresh launches, now the Meme Sniper's
 # Projects Lorenzo found himself: always examined, never pinned.
 REFERENCES = (
@@ -137,9 +142,12 @@ def _save() -> None:
                                encoding="utf-8")
     except OSError:
         pass
+    gem_track.save()
 
 
 def reset_for_tests() -> None:
+    gem_track.reset_for_tests()
+    traction.reset_for_tests()
     _entries.clear()
     _excluded.clear()
     _gone.clear()
@@ -217,7 +225,7 @@ def apply_market(pairs: list[dict]) -> None:
     for k, p in best.items():
         e = _entries[k]
         cap = p.get("marketCap") or p.get("fdv")
-        e.update(market_cap=float(cap) if cap else e.get("market_cap"),
+        e.update(market_cap=float(cap) if cap else e.get("market_cap"), price_usd=p.get("priceUsd"),
                  liquidity_usd=float((p.get("liquidity") or {}).get("usd") or 0),
                  change_24h=(p.get("priceChange") or {}).get("h24"), pair_url=p.get("url") or e.get("pair_url"),
                  dex=p.get("dexId"), bonding=(p.get("dexId") == "pumpfun"))
@@ -229,6 +237,7 @@ def apply_market(pairs: list[dict]) -> None:
         sites = legit.links_from_dexscreener(p)["websites"]
         if sites:
             e["websites"] = list(dict.fromkeys([*(e.get("websites") or []), *sites]))[:6]
+        gem_track.sample(e["chain"], e["token_address"], p.get("priceUsd"))
     _mark()
 
 
@@ -423,7 +432,16 @@ def final_score(e: dict) -> float:
     base = max(q, (1 - SIMILARITY_WEIGHT) * q + SIMILARITY_WEIGHT * sim)
     if no_github(e):
         base -= NO_GITHUB_PENALTY
+    use = traction_of(e)
+    if use:
+        base += TRACTION_WEIGHT * use["traction"] + VALUE_WEIGHT * (use["value"] or 0)
     return round(max(0.0, min(100.0, base + narratives.bonus(e.get("narratives") or []))), 1)
+
+
+def traction_of(e: dict) -> dict | None:
+    if not e.get("chain") or not e.get("token_address"):
+        return None
+    return traction.judge(traction.lookup(e["chain"], e["token_address"]), e.get("market_cap"))
 
 
 def _rank() -> None:
@@ -433,6 +451,7 @@ def _rank() -> None:
     order = [_key(e["chain"], e["token_address"]) for e in ranked]
     now = time.time()
     for i, e in enumerate(ranked, 1):
+        gem_track.enter(e, final_score(e), i, now)
         if e.get("rank") != i:
             e["rank_before"], e["rank"], e["moved_at"] = e.get("rank"), i, now
     for k, e in _entries.items():
@@ -457,7 +476,7 @@ def _public(e: dict) -> dict:
     return {**{k: e.get(k) for k in keep}, "exception": is_big(e) and not top, "score": final_score(e),
             "similarity": e.get("similarity"), "benchmark": top,
             "narratives": narratives.labels(e.get("narratives") or []), "closed_source": no_github(e),
-            **_research_public(e), "honor": benchmark.HONOR if top else None}
+            **_research_public(e), "honor": benchmark.HONOR if top else None, "traction": traction_of(e)}
 
 
 def _research_public(e: dict) -> dict:
@@ -495,8 +514,10 @@ def board() -> dict:
         "sources": _state["sources"], "discovery": discovery.status(),
         "github_rate": legit.github_rate or None,
         "research_ai": research.ai_status(), "close": close_calls(),
+        "track": gem_track.stats(), "defillama": traction.status(),
         "past_floor": sum(1 for e in _entries.values() if not research_floor(e)),
-        "rules": {"weights": depth.WEIGHTS, "similarity_weight": SIMILARITY_WEIGHT, "benchmark": benchmark.NAME, "min_pillar": MIN_PILLAR, "gem_cap_usd": legit.GEM_CAP_USD,
+        "rules": {"weights": depth.WEIGHTS, "similarity_weight": SIMILARITY_WEIGHT,
+                  "traction_weight": TRACTION_WEIGHT, "value_weight": VALUE_WEIGHT, "benchmark": benchmark.NAME, "min_pillar": MIN_PILLAR, "gem_cap_usd": legit.GEM_CAP_USD,
                   "gem_min_score": legit.GEM_MIN_SCORE, "cap_max_usd": CAP_MAX_USD, "max_age_days": MAX_AGE_DAYS,
                   "exception_cap_usd": radar.EXC_MCAP_MAX_USD, "exception_age_days": radar.EXC_AGE_MAX_DAYS},
     }
@@ -524,6 +545,7 @@ async def tick(client: httpx.AsyncClient, now: float | None = None) -> None:
     if now - _state["last_market"] >= MARKET_POLL_S and _entries:
         _state["last_market"] = now
         await _step("dexscreener", _poll_market, client)
+    await _step("storico", gem_track.poll, client, set(_entries), now)
     _prune(now)
     # I nuovi prima (nessun pilastro), poi i piu' vecchi da rinfrescare.
     todo = sorted(((k, due(e, now)) for k, e in _entries.items() if k not in _busy),
