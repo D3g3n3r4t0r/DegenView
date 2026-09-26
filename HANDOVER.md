@@ -12,6 +12,43 @@ lavori pluri-sessione, decisioni prese, stato di piani approvati.
 
 ---
 
+## Motori piu' profondi per Gemme e Meme + track record + design — `seed-0118`/`seed-0119`/`seed-0120`, branch `claude/gems-memes-engine` — 2026-09-26
+
+Lorenzo, sulla classifica: "io entrerei anche nella logica con cui sceglie le
+gemme, senz'altro ci sono progetti migliori ma non li trovo, dobbiamo fare un
+algoritmo piu' profondo". Poi: "uguale per lo sniper di meme, dobbiamo rendere
+tutto piu' professionale", e: "procedi a fare tutto, e poi direi che anche una
+rinfrescata di design non faccia male, miglioralo".
+
+Diagnosi (letta dal codice, 26/09):
+- Gemme: l'imbuto vede solo chi ha GitHub su CoinGecko, profili DexScreener a
+  pagamento, README con "CA:"/pump.fun, Jupiter verified. I tre pilastri
+  misurano la *forma* (commit, parole del sito, distribuzione): niente
+  trazione (utenti, TVL, fee) e niente valutazione (cap rispetto a cosa fa).
+  Nessuna verifica a posteriori di chi entra in classifica.
+- Meme: la corsia "Ready to pump" e' fatta degli *scarti* del filtro dei
+  progetti seri, ordinati per quota acquisti e giro d'affari (i numeri piu'
+  facili da gonfiare coi bot). "Buono" = +50% al picco in 7 giorni, che non
+  e' incassabile.
+
+Piano, in ordine (decisioni di default prese senza risposta esplicita:
+solo API gratuite; DREGG resta primo e il peso della somiglianza non cambia):
+1. Track record: trade simulato sui meme (ingresso con slippage da
+   liquidita', uscita TP/SL/tempo, netto) e ritorni a 7/30/90 giorni per chi
+   entra nella classifica gemme; statistiche per fascia di punteggio in API e
+   in pagina.
+2. Motore meme dedicato: punteggio con motivi leggibili da flusso (compratori
+   vs transazioni, vendite presenti, crescita), concentrazione, insider, dev;
+   il modello impara dal trade simulato, non dal picco.
+3. Motore gemme: fonte DefiLlama (protocolli con TVL/fee nella fascia di cap),
+   pilastro "Trazione" e punteggio "sottovalutato"; descrizione ripulita dal
+   testo di navigazione del sito.
+4. Rinfrescata di design di `onchain-app.html`, con screenshot 1440/390.
+
+Rete esterna chiusa nella sandbox: tutto provato con dati finti; le soglie
+vanno rilette sui dati veri dopo il deploy. Merge su `main` solo col via di Lorenzo.
+
+---
 ## Presentazione del progetto e token $ENGN — `seed-0109`, branch `claude/project-thread-mn4odz` — 2026-09-24
 
 Lorenzo: "fai una pagina web di presentazione del progetto con slogan
