@@ -48,6 +48,22 @@ solo API gratuite; DREGG resta primo e il peso della somiglianza non cambia):
 Rete esterna chiusa nella sandbox: tutto provato con dati finti; le soglie
 vanno rilette sui dati veri dopo il deploy. Merge su `main` solo col via di Lorenzo.
 
+Stato (26/09, fine sessione): tutti e quattro i passi fatti sul branch, non
+ancora su `main`.
+- `meme_engine.py` (punteggio + trade simulato), `outcomes.py` (trade per ogni
+  voce del diario, `mark_shown` apre un trade quando la corsia mostra un token,
+  `meme_track`, etichetta del modello = trade netto >= +20% dopo 40 trade chiusi).
+- `traction.py` (DefiLlama: fonte + trazione/valore, pesi 0.10/0.05 come
+  spinta), `gem_track.py` (ritorni a 7/30/90 giorni, top 10 contro resto).
+- Frontend: schede "track", anello di punteggio e motivi nei meme, blocco
+  Traction nei dettagli, meme prima del radar, grafico vuoto nascosto su
+  telefono. Bug +0% dei meme corretto (frazione vs percentuale).
+- Da fare dopo il deploy: leggere `/api/onchain/radar/memes` -> `track` e
+  `/api/onchain/leaderboard` -> `track`/`defillama` dopo qualche giorno;
+  se la fascia "60+" non batte "every meme watched", i pesi di `meme_engine.PARTS`
+  vanno ritarati. Non fatti: API a pagamento (Helius/Birdeye per bundle, dev,
+  smart money), soglia top10 <= 60% che boccia tesorerie, eta' massima 365 gg.
+
 ---
 ## Presentazione del progetto e token $ENGN — `seed-0109`, branch `claude/project-thread-mn4odz` — 2026-09-24
 

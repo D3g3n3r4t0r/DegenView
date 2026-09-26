@@ -1450,5 +1450,40 @@
     "status": "in corso",
     "at": 1790320482,
     "summary": "Il Gem Finder non legge piu' il radar: i lanci al minuto restano nel Meme Sniper, e quelli gia' in classifica sono stati tolti. Soglia da ricercatore: nome noto, almeno 14 giorni di vita, almeno $10k di liquidita'. Il pilastro 'sito' e' diventato 'Research': legge tutti i siti dichiarati (home, docs, app) e tiene il migliore, pesa la descrizione che il progetto ha scritto su CoinGecko/GeckoTerminal (quanto spiega, quali meccanismi nomina, che narrativa), e se sul server c'e' la chiave Anthropic Claude legge tutto come un analista: cosa fa il progetto, a che punto e', quanta sostanza ha, se e' originale, segnali d'allarme. La scheda mostra la frase 'cosa fa'. Solrouter, il riferimento di Lorenzo, prima valeva 20 sul sito (home in JavaScript); ora 76 in ricerca ed e' fra i progetti sempre esaminati. Sistemate anche le schede del podio tagliate sui telefoni. Niente Claude a pagamento (scelta di Lorenzo): i progetti li legge un lettore matematico, senza costi. Conta i concetti tecnici e in quanti campi, i dettagli concreti (numeri, codice, comandi), cosa esiste davvero (live, testnet, roadmap), a cosa serve il token, e toglie punti per parole vuote, hype e testi copiati da altri progetti; promesse di rendimento = scam. Un sito che non nomina il progetto o parla d'altro (pagina di un launchpad) non viene letto. Ogni verdetto mostra i suoi perche'. Su token reali: Solrouter esce gem, i lanci di giornata thin."
+  },
+  "seed-0118": {
+    "status": "risolto",
+    "at": 1790459385,
+    "summary": "Il Gem Finder ora cerca anche su DefiLlama (protocolli Solana e Robinhood Chain fra $50k e $3M, con il loro GitHub) e per ogni progetto che DefiLlama conosce misura la trazione (TVL, fee a 30 giorni, crescita del TVL) e il prezzo rispetto a quello che fa (cap diviso fee annue e diviso TVL): chi ha uso vero a prezzo basso sale in classifica, chi non e' su DefiLlama non viene penalizzato. Ogni progetto che entra in classifica viene seguito a 7, 30 e 90 giorni: in cima alla pagina si vede come sono andati i primi dieci rispetto agli altri. La descrizione non mostra piu' il testo dei menu del sito.",
+    "files": [
+      "backend/app/trading/onchain/traction.py",
+      "backend/app/trading/onchain/gem_track.py",
+      "backend/app/trading/onchain/leaderboard.py",
+      "backend/app/trading/onchain/discovery.py",
+      "backend/app/trading/onchain/research.py",
+      "frontend/static/onchain/leaderboard.js",
+      "frontend/onchain-app.html"
+    ]
+  },
+  "seed-0119": {
+    "status": "risolto",
+    "at": 1790459385,
+    "summary": "Lo sniper di meme ha un motore suo (meme_engine.py): punteggio 0-100 da flusso a due vie, taglia media dei trade (i bot muovono spiccioli), momentum con venditori veri, giro d'affari rispetto alla liquidita', profondita' del pool, concentrazione e avvisi RugCheck (insider, bundle, dev che ha gia' fatto rug). Ogni riga mostra i motivi e i rischi. L'esito non e' piu' il picco: ogni token viene seguito come un trade simulato da $100 (+50% obiettivo, -30% stop, 48 ore, commissioni e slippage pagati, invendibile = perso tutto), e la memoria impara da quello. In cima alla lista lo storico dei token mostrati contro tutti i meme osservati.",
+    "files": [
+      "backend/app/trading/onchain/meme_engine.py",
+      "backend/app/trading/onchain/outcomes.py",
+      "frontend/static/onchain/memes.js",
+      "frontend/onchain-app.html"
+    ]
+  },
+  "seed-0120": {
+    "status": "risolto",
+    "at": 1790459385,
+    "summary": "Rinfrescata dell'app: nella sezione meme la lista 'Ready to pump' viene per prima, con un anello di punteggio e i motivi a colpo d'occhio; sul telefono sparisce il riquadro vuoto del grafico quando non c'e' niente da mostrare; titoli di sezione piu' leggibili; lo storico e' una scheda sotto il titolo sia per gemme sia per meme; la trazione ha il suo colore. Corretto anche un errore: la variazione dei meme mostrava sempre +0% perche' il numero arrivava come frazione.",
+    "files": [
+      "frontend/onchain-app.html",
+      "frontend/static/onchain/memes.js",
+      "frontend/static/onchain/leaderboard.js"
+    ]
   }
 }

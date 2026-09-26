@@ -105,6 +105,7 @@ function paint(animate) {
   root.querySelector("[data-board-empty]").textContent = emptyText();
   paintClose();
   paintMeta();
+  paintTrack();
   if (before) slide(before);
 }
 
@@ -152,6 +153,10 @@ function badges(e) {
   if (e.exception) out.push(`<em data-tone="gold">exception</em>`);
   if (e.bonding) out.push(`<em>pump.fun</em>`);
   if (e.closed_source) out.push(`<em>closed source</em>`);
+  // Real use, from DefiLlama: the strongest signal a microcap can show.
+  const tr = e.traction;
+  if (tr?.facts?.mcap_to_fees != null && tr.facts.mcap_to_fees <= 20) out.push(`<em data-tone="use">${Math.round(tr.facts.mcap_to_fees)}× fees</em>`);
+  else if (tr?.facts?.tvl) out.push(`<em data-tone="use">TVL ${usd(tr.facts.tvl)}</em>`);
   // hottest narrative first, at most two so the card stays clean
   for (const n of (e.narratives ?? []).slice().sort((a, b) => b.heat - a.heat).slice(0, 2)) {
     out.push(`<em class="bd-nar"${n.heat >= 3 ? ' data-tone="hot"' : ""}>${escapeHtml(n.label)}</em>`);
@@ -234,7 +239,39 @@ function details(e) {
     ${e.honor ? `<p class="bd-honor" style="text-align:start;margin:0 0 12px">${escapeHtml(e.honor)}</p>` : ""}
     ${e.summary ? `<p class="bd-summary">${escapeHtml(e.summary)}${e.stage && e.stage !== "unclear" ? ` <em>${escapeHtml(e.stage)}</em>` : ""}</p>` : ""}
     ${traits(e)}
-    <div class="bd-pillars">${PILLARS.map(([k, label]) => pillarBlock(e, k, label)).join("")}</div>`;
+    <div class="bd-pillars">${PILLARS.map(([k, label]) => pillarBlock(e, k, label)).join("")}${tractionBlock(e)}</div>`;
+}
+
+/** Use and price, from DefiLlama. Absent for most microcaps: no block, no verdict. */
+function tractionBlock(e) {
+  const t = e.traction;
+  if (!t) return "";
+  const f = t.facts ?? {};
+  const rows = fact("TVL", f.tvl == null ? null : usd(f.tvl)) + fact("Fees, 30 days", f.fees_30d == null ? null : usd(f.fees_30d))
+    + fact("TVL, 7 days", f.tvl_change_7d == null ? null : `${f.tvl_change_7d > 0 ? "+" : ""}${Math.round(f.tvl_change_7d)}%`)
+    + fact("Cap ÷ yearly fees", f.mcap_to_fees == null ? null : `${f.mcap_to_fees}×`)
+    + fact("Cap ÷ TVL", f.mcap_to_tvl == null ? null : `${f.mcap_to_tvl}×`)
+    + fact("Value", t.value == null ? null : `${Math.round(t.value)}/100`);
+  return `<section class="bd-use" style="--v:${t.traction ?? 0}"><h5>Traction<b>${score(t.traction)}</b></h5><dl>${rows}</dl>
+    ${t.reasons?.length ? `<p class="bd-why">${escapeHtml(t.reasons.join(" · "))}</p>` : ""}</section>`;
+}
+
+const signed = (f) => (f == null ? "—" : `${f > 0 ? "+" : ""}${Math.round(f * 100)}%`);
+
+/** What happened to what the board ranked: 7, 30, 90 days after entry. */
+function paintTrack() {
+  const box = root.querySelector("[data-board-track]");
+  if (!box) return;
+  const h = (data?.track?.horizons ?? []).filter((x) => x.all?.n);
+  box.hidden = false;
+  if (!h.length) {
+    box.innerHTML = `<p class="track-note">Track record starts now: every project that enters the board is followed for 7, 30 and 90 days, top ten against the rest.</p>`;
+    return;
+  }
+  box.innerHTML = `<dl class="track-grid">${h.map((x) => `<div class="track-stat"><dt>After ${x.days} days</dt>
+      <dd><b data-sign="${(x.top.median ?? 0) >= 0 ? "up" : "down"}">${signed(x.top.median)}</b><small>top 10 median · ${x.top.n}</small></dd>
+      <p>rest ${signed(x.rest.median)} · ${Math.round((x.all.doubled ?? 0) * 100)}% doubled · ${x.all.n} tracked</p></div>`).join("")}</dl>
+    <p class="track-note">Price change since each project first entered the board. Research, not a promise.</p>`;
 }
 
 function traits(e) {
