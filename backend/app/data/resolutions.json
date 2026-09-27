@@ -1808,5 +1808,13 @@
       "frontend/static/onchain/app.css",
       "backend/tests/test_system.py"
     ]
+  },
+  "seed-0147": {
+    "status": "risolto",
+    "at": 1790527790,
+    "summary": "I deploy erano tutti riusciti: era il telefono a tenere in memoria la scheda aperta, e l'app on-chain, a differenza della pagina principale, non controllava mai se sul server c'era una versione nuova. Ora quando l'app torna sullo schermo (e ogni 5 minuti) chiede al server la versione che serve; se e' cambiata si ricarica da sola, una volta per versione. Per vedere subito la versione nuova basta ricaricare la pagina.",
+    "files": [
+      "frontend/static/onchain/main.js"
+    ]
   }
 }

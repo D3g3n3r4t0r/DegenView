@@ -703,3 +703,24 @@ async function boot() {
 }
 
 boot();
+
+// A tab left open on a phone keeps the version it was opened with: Lorenzo
+// sent a screenshot of the old app hours after the new one was live. When
+// the app comes back to the screen (and every 5 minutes) it asks the server
+// which version it serves; if it changed, one reload, once per version.
+const MY_VERSION = new URL(import.meta.url).searchParams.get("v") ?? "";
+async function checkVersion() {
+  if (!MY_VERSION) return;
+  try {
+    const r = await fetch("/api/version", { cache: "no-store" });
+    if (!r.ok) return;
+    const { asset_version: live } = await r.json();
+    if (!live || live === MY_VERSION) return;
+    const key = `lae.reloaded.${live}`;
+    try { if (sessionStorage.getItem(key)) return; sessionStorage.setItem(key, "1"); } catch { /* reload anyway */ }
+    location.reload();
+  } catch { /* offline: the page we have beats no page */ }
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkVersion(); });
+window.addEventListener("pageshow", (event) => { if (event.persisted) checkVersion(); });
+setInterval(() => { if (document.visibilityState === "visible") checkVersion(); }, 5 * 60_000);
