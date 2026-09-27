@@ -28,6 +28,7 @@ import os
 import re
 import subprocess
 import sys
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -190,9 +191,15 @@ def publish() -> int:
                 ["git", "push", "-f", f"https://x-access-token:{os.environ['GITHUB_TOKEN']}@github.com/{repo}.git", branch]):
         subprocess.run(cmd, check=True)
     body = f"{marker}\nDrafted by DeepSeek for #{number} ({res.get('attempts')} attempts, {u.get('in', 0)} tokens in, {u.get('out', 0)} out). Checks passed. **Claude reviews before merging.**"
-    pr = gh(f"/repos/{repo}/pulls", "POST", {"title": res["title"], "head": branch,
-                                               "base": event["repository"]["default_branch"], "body": body})
-    gh(f"/repos/{repo}/issues/{number}/comments", "POST", {"body": f"PR ready for Claude's review: {pr['html_url']}"})
+    try:
+        pr = gh(f"/repos/{repo}/pulls", "POST", {"title": res["title"], "head": branch,
+                                                   "base": event["repository"]["default_branch"], "body": body})
+        note = f"PR ready for Claude's review: {pr['html_url']}"
+    except urllib.error.HTTPError as exc:
+        # The repository does not let Actions open pull requests (Settings >
+        # Actions > General): the branch is pushed, Claude opens the PR.
+        note = f"Branch `{branch}` pushed ({exc.code} opening the PR): Claude opens it and reviews."
+    gh(f"/repos/{repo}/issues/{number}/comments", "POST", {"body": f"{marker}\n{note}"})
     return 0
 
 
