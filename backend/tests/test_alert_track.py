@@ -39,3 +39,11 @@ def test_board_items_have_systems_list():
     alert_track._alerts["a"] = _alert("solana", "AAA", at=now - 100)
     board = alert_track.board("meme", now=now)
     assert isinstance(board["items"][0]["systems"], list)
+
+
+def test_board_items_have_backtests_key():
+    alert_track.reset_for_tests()
+    now = time.time()
+    alert_track._alerts["a"] = _alert("solana", "AAA", at=now - 100)
+    board = alert_track.board("meme", now=now)
+    assert "backtests" in board["items"][0]
