@@ -1599,5 +1599,14 @@
       "backend/app/main.py",
       "backend/tests/test_alert_backfill.py"
     ]
+  },
+  "seed-0130": {
+    "status": "risolto",
+    "at": 1790507991,
+    "summary": "Tolte dalla home le due porte Meme Sniper / Gem Finder: ora c'e' un solo pulsante ENTER APP, perche' l'app e' una sola. Il testo sotto il titolo dice in una riga cosa fa (meme controllati, gemme con costruttori veri) e che scansiona Solana, Base e Robinhood Chain; Base aggiunta anche nella riga delle chain. Nel menu laterale 'Doors' diventa 'Start'.",
+    "files": [
+      "frontend/engn.html",
+      "backend/tests/test_engn_page.py"
+    ]
   }
 }

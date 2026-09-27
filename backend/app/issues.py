@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0130", "Home page: un solo pulsante Enter app al posto delle due porte",
+     "Lorenzo: 'la home page va migliorata non servono piu' i due tasti per le due sezioni, basta enter app'.",
+     "bassa"),
     ("seed-0129", "Riportare i dati storici della versione precedente nella classifica degli alert",
      "Lorenzo: 'riesci a riportare i dati storici che avevamo nell'altra versione ?'.",
      "media"),
