@@ -29,7 +29,7 @@ const capNow = (a) => (a.gone ? null : a.cap0 && a.now != null ? a.cap0 * (1 + a
 // ingresso e uscita automatica": the system first, then the raw signal.
 const SORTS = { system: "System", now: "Now", best: "Best" };
 const BT_LABELS = ["Trend EMA", "Trend HF", "RSI+BB", "RSI+BB L/S"];
-const state = { data: {}, board: null, kind: "meme", period: 7, sort: "system", bt: "Trend EMA" };
+const state = { data: {}, board: null, kind: "meme", period: 7, sort: "backtest", bt: "Trend EMA" };
 
 /** The alerts on one token, for its page. */
 export function alertsFor(chain, token) {
