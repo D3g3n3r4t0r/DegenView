@@ -115,7 +115,7 @@ def _parse_symbol(symbol: str) -> tuple[str, str, str]:
 # minuto con una riserva per chi sta guardando un grafico, e se GeckoTerminal
 # rifiuta comunque, l'ultima risposta buona invece di un errore.
 _GECKO_WINDOW_S = 60.0
-_GECKO_BACKGROUND_PER_MIN = 20
+_GECKO_BACKGROUND_PER_MIN = 14   # leaves ~15 a minute for someone opening a chart
 _GECKO_URGENT_PER_MIN = 28
 _GECKO_FRESH_S = 15.0
 _GECKO_STALE_S = 1800.0
@@ -167,7 +167,10 @@ async def gecko_get(url: str, params: dict | None = None) -> dict | None:
         if seen and time.monotonic() - seen[0] < _GECKO_FRESH_S:
             return seen[1]
         resp = None
-        for pause in (0.0, *_GECKO_BACKOFF_S):
+        # Someone is waiting on a chart: one short retry, then the last good
+        # answer. The background can afford the long pauses; a person can't.
+        pauses = (0.0, 1.0) if gecko_urgent.get() else (0.0, *_GECKO_BACKOFF_S)
+        for pause in pauses:
             if pause:
                 await asyncio.sleep(pause)
             await _gecko_slot()
