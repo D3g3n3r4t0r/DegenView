@@ -20,6 +20,9 @@ let root = null;
 let data = null;
 let range = "all";
 let tab = "open";
+let chainF = "all";
+let showHidden = false;
+const CHAIN_NAMES = { solana: "Solana", robinhood: "Robinhood", base: "Base", ethereum: "Ethereum", bsc: "BSC" };
 let go = () => {};
 
 const money = (v) => {
@@ -109,7 +112,7 @@ async function connect(kind) {
 function walletsBox(p) {
   const rows = (p.wallets ?? []).map((w) => `<li>
       <span class="pf-wchain" data-kind="${escapeHtml(w.kind)}" aria-hidden="true">${w.kind === "evm" ? "◆" : "◎"}</span>
-      <span class="pf-main"><b>${escapeHtml(shortAddr(w.address))}</b><small>${w.kind === "evm" ? "EVM · Robinhood Chain" : "Solana"} · connected</small></span>
+      <span class="pf-main"><b>${escapeHtml(shortAddr(w.address))}</b><small>${w.kind === "evm" ? "EVM · Robinhood, Base, Ethereum, BSC" : "Solana"} · connected</small></span>
       <button type="button" class="pf-x" data-unlink="${escapeHtml(w.kind)}:${escapeHtml(w.address)}" aria-label="Disconnect">✕</button>
     </li>`).join("");
   return `<section class="pf-wallets">
@@ -133,13 +136,19 @@ function positions(d) {
       <span class="pf-num"><b>${c.proceeds_usdg == null ? "—" : `$${c.proceeds_usdg.toFixed(2)}`}</b><em data-sign="${(c.ret ?? 0) >= 0 ? "up" : "down"}">${pct(c.ret)}</em></span>
     </li>`).join("")}</ul>`;
   }
-  const rows = d.positions ?? [];
-  if (!rows.length) return `<p class="pf-none">${d.missing?.length ? `Couldn't read ${d.missing.join(" and ")} right now.` : "Nothing held yet."}</p>`;
-  return `<ul class="pf-list">${rows.map((p) => `<li>
+  const all = (d.positions ?? []).filter((p) => chainF === "all" || p.chain === chainF);
+  const hidden = all.filter((p) => p.hidden);
+  const rows = showHidden ? all : all.filter((p) => !p.hidden);
+  const chips = Object.entries(d.by_chain ?? {}).sort((a, b) => b[1] - a[1]);
+  const chipBar = chips.length > 1 ? `<nav class="pf-chains" aria-label="Chain">${[["all", d.value], ...chips].map(([c, v]) =>
+    `<button type="button" data-chainf="${c}" aria-pressed="${c === chainF}">${c === "all" ? "All" : CHAIN_NAMES[c] ?? c}<small>$${Math.round(v ?? 0).toLocaleString("en-US")}</small></button>`).join("")}</nav>` : "";
+  const more = hidden.length ? `<button type="button" class="pf-hidden" data-hidden>${showHidden ? "Hide" : "Show"} hidden (${hidden.length})</button>` : "";
+  if (!all.length) return chipBar + `<p class="pf-none">${d.missing?.length ? `Couldn't read ${d.missing.join(" and ")} right now.` : "Nothing held yet."}</p>`;
+  return chipBar + `<ul class="pf-list">${rows.map((p) => `<li data-hidden-row="${Boolean(p.hidden)}">
     ${logo(p.symbol, p.image, p.chain, p.address)}
-    <span class="pf-main"><b>${escapeHtml(p.name || p.symbol)}</b><small>${qty(p.amount)} ${escapeHtml(p.symbol)}${p.source === "connected" ? " · your wallet" : ""}</small></span>
+    <span class="pf-main"><b>${escapeHtml(p.name || p.symbol)}</b><small>${qty(p.amount)} ${escapeHtml(p.symbol)} · ${CHAIN_NAMES[p.chain] ?? p.chain}${p.source === "connected" ? " · your wallet" : ""}</small></span>
     <span class="pf-num"><b>${p.value_usd == null ? "—" : `$${p.value_usd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</b>${p.price_usd ? `<small>$${p.price_usd < 0.01 ? p.price_usd.toPrecision(3) : p.price_usd.toFixed(2)}</small>` : ""}</span>
-  </li>`).join("")}</ul>`;
+  </li>`).join("")}</ul>` + more;
 }
 
 function paint() {
@@ -232,6 +241,9 @@ export function mountProfile({ go: goTo } = {}) {
   root.addEventListener("click", (event) => {
     const r = event.target.closest("[data-range]");
     if (r) { range = r.dataset.range; paint(); return; }
+    const cf = event.target.closest("[data-chainf]");
+    if (cf) { chainF = cf.dataset.chainf; paint(); return; }
+    if (event.target.closest("[data-hidden]")) { showHidden = !showHidden; paint(); return; }
     const t = event.target.closest("[data-tab]");
     if (t) { tab = t.dataset.tab; paint(); return; }
     const sh = event.target.closest("[data-sheet]");
