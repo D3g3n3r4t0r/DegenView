@@ -21,6 +21,8 @@ rivisto; le revisioni delle PR lo leggono insieme a CLAUDE.md.
 | lettura del sito delle gemme | `app/trading/onchain/legit.py` | in ombra (`LEGIT_AI_GATE` per farlo bloccare) |
 | voto delle gemme: meta' del pilastro ricerca sui finalisti | `app/trading/onchain/research.py` | attivo (80/giorno) |
 | lettura approfondita a pagamento | `research.ai_dossier`, `plans.py` | attiva |
+| database completo in chat (progetti, gemme, alert, sistema, scartati, memoria) | `main._deepseek_tools` | attivo, sola lettura |
+| segnalazioni di bug sulla bacheca (autore "DeepSeek (Telegram)") | `main._deepseek_report` | attivo, 10/giorno; Claude verifica |
 | memoria dei rug: casi simili nel giudizio, strumenti in chat | `app/trading/onchain/rug_memory.py` | attivo (legge il diario di `outcomes.py`) |
 
 Lavoro affidabile = conta i token che fa. Il riepilogo li confronta con quello
