@@ -28,7 +28,9 @@ const capNow = (a) => (a.gone ? null : a.cap0 && a.now != null ? a.cap0 * (1 + a
 // Leaderboard order. Lorenzo: "voglio le performance della strategia
 // ingresso e uscita automatica": the system first, then the raw signal.
 const SORTS = { system: "System", now: "Now", best: "Best" };
-const state = { data: {}, board: null, kind: "meme", period: 7, sort: "backtest" };
+const state = { data: {}, board: null, kind: "meme", period: 7, sort: "backtest", soonAll: false };
+// "About to fire": the first few, the rest on demand (Lorenzo, 28/09: "UI troppo affollata").
+const SOON_SHOWN = 3;
 
 /** The alerts on one token, for its page. */
 export function alertsFor(chain, token) {
@@ -88,15 +90,16 @@ function sysState(s) {
 }
 
 function systemLine(d) {
-  const sy = d.system;
-  const live = sy?.live;
+  const live = d?.system?.live;
   if (!live?.n) return "";
-  return `<p class="feed-head sys"><b>System</b> trend-following entries and exits after each alert, fees paid: median <b data-sign="${sign(live.median)}">${pct(live.median)}</b> · ${Math.round((live.positive ?? 0) * 100)}% in profit · ${live.n} alerts${live.holding ? ` · in ${live.holding} now` : ""}</p>`;
+  return `<p class="sys-strip"><b>System</b><span data-sign="${sign(live.median)}">median ${pct(live.median)}</span>`
+    + `<span>${Math.round((live.positive ?? 0) * 100)}% in profit</span><span>${live.n} alerts</span>`
+    + `${live.holding ? `<span>in ${live.holding} now</span>` : ""}</p>`;
 }
 
 const SCAN_FORM = `<form class="scan-form" data-scan-form role="search">
-  <input name="q" placeholder="Scan any token: ticker or address" autocomplete="off" spellcheck="false" aria-label="Ticker or address" />
-  <button type="submit">Scan</button></form>`;
+  <input name="q" placeholder="Scan a token: ticker or address" autocomplete="off" spellcheck="false" aria-label="Ticker or address" />
+  <button type="submit" aria-label="Scan"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg></button></form>`;
 
 function paintFeed() {
   const root = document.getElementById("meme-alerts");
@@ -110,6 +113,7 @@ function paintFeed() {
   // che sta ritornando in moda". One line per token; the numbers are on its
   // page. Rugs and alerts older than 48h leave this list (the Strategies
   // hall of fame keeps them).
+  const nSoon = (d?.upcoming ?? []).length;
   const soon = (d?.upcoming ?? []).map((u) => `<li class="soon" data-stage="${u.stage}">
       <span class="soon-dot" aria-hidden="true"></span>
       <span class="trow-main"><b>${escapeHtml(u.symbol)} <em class="soon-tag">${u.stage === "imminent" ? "IMMINENT" : "CHECKING"}</em></b>
@@ -129,7 +133,8 @@ function paintFeed() {
   const typing = body.querySelector("[data-scan-form] input");
   const kept = typing ? { v: typing.value, focus: document.activeElement === typing } : null;
   body.innerHTML = SCAN_FORM + systemLine(d)
-    + (soon ? `<h4 class="feed-sec">About to fire</h4><ol class="soon-list">${soon}</ol>` : "")
+    + (soon ? `<h4 class="feed-sec">About to fire</h4><ol class="soon-list" data-all="${state.soonAll}">${soon}</ol>`
+      + (nSoon > SOON_SHOWN ? `<button type="button" class="more-row" data-soon-more>${state.soonAll ? "Show less" : `+${nSoon - SOON_SHOWN} more`}</button>` : "") : "")
     + `<h4 class="feed-sec">Fired · last 48h</h4>`
     + (fired ? `<ol class="memes-list">${fired}</ol>` : `<p class="muted pad">No alert in the last 48 hours.</p>`)
     + (back ? `<h4 class="feed-sec">Coming back</h4><ol class="memes-list">${back}</ol>` : "")
@@ -351,6 +356,11 @@ export function mountAlerts() {
     if (!b) return;
     state.kind = b.dataset.tab === "gem" ? "gem" : "meme";
     paintTop();
+  });
+  document.getElementById("meme-alerts")?.addEventListener("click", (event) => {
+    if (!event.target.closest("[data-soon-more]")) return;
+    state.soonAll = !state.soonAll;
+    paintFeed();
   });
   document.getElementById("meme-alerts")?.addEventListener("submit", (event) => {
     const form = event.target.closest("[data-scan-form]");
