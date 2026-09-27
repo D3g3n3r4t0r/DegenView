@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0136", "Il grafico impiega almeno 10 secondi ad aprirsi",
+     "Lorenzo: 'il grafico impegna almeno 10 secondi ad aprirsi, inammissibile'.",
+     "alta"),
     ("seed-0135", "La scheda Scanner e' confusionaria e tiene il grafico di una crypto per tutto il giorno",
      "Lorenzo: 'la scheda scanner e' confusionaria, non voglio che rimanga il grafico di una crypto per tutto il giorno, devi ristudiarla per bene'.",
      "alta"),

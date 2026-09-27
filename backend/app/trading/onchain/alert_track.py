@@ -289,7 +289,7 @@ def board(kind: str, limit: int = 30, now: float | None = None) -> dict:
     rows = [a for a in _alerts.values() if a["kind"] == kind and a["entry"] is not None]
     rows.sort(key=lambda a: -((a.get("last") or {}).get("ret") if a.get("last") else -9))
     items = [{"symbol": a["symbol"], "name": a["name"], "chain": a["chain"], "token_address": a["token_address"],
-              "pair_url": a["pair_url"], "image": a.get("image"), "at": a["at"], "cap0": a["cap0"], "returns": a["returns"],
+              "pair_address": a["pair_address"], "pair_url": a["pair_url"], "image": a.get("image"), "at": a["at"], "cap0": a["cap0"], "returns": a["returns"],
               "now": (a.get("last") or {}).get("ret"), "max": a["max_ret"], "gone": a["gone"],
               "age_h": round((now - a["at"]) / 3600, 1), "strategy": a.get("strategy")} for a in rows[:limit]]
     summary = []

@@ -1665,5 +1665,17 @@
       "frontend/static/onchain/app.css",
       "frontend/static/onchain/detail.js"
     ]
+  },
+  "seed-0136": {
+    "status": "risolto",
+    "at": 1790514425,
+    "summary": "Le candele vengono solo da GeckoTerminal, che concede circa 30 richieste al minuto per server, e i lavori in background (radar, backtest, storico alert) le consumavano: chi apriva un grafico si prendeva un 'troppe richieste' e il server aspettava 2 + 4 secondi prima di riprovare. Ora: (1) il server scarica in anticipo, ogni due minuti e mezzo, i grafici dei token che sono sullo schermo (prime meme, ultimi alert, prime gemme), cosi' il tocco trova il grafico gia' pronto; (2) se ha una copia di meno di 30 minuti la manda subito e la aggiorna dietro; (3) il background ha un tetto piu' basso (14 al minuto) per lasciare spazio a chi guarda, e chi guarda aspetta al massimo un secondo prima di ricevere l'ultima copia buona. Sistemato anche un difetto: dalla scheda Alerts il grafico non si apriva proprio, perche' mancava l'indirizzo del pool.",
+    "files": [
+      "backend/app/trading/onchain/radar.py",
+      "backend/app/providers/dexscreener.py",
+      "backend/app/main.py",
+      "backend/app/trading/onchain/alert_track.py",
+      "backend/tests/test_token_chart.py"
+    ]
   }
 }
