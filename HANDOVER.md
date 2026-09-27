@@ -3594,3 +3594,9 @@ richiesta del 24/09 è superata), Database con punteggio barrato per chi non è
 12→20: da verificare sul server (rate limit GitHub/DexScreener, 2 vCPU).
 DeepSeek nel coding: dalla sandbox di Claude non si raggiunge; oggi aiuta solo
 con le revisioni delle PR su GitHub.
+
+**2026-09-27 — Lorenzo: "aumentiamo i poteri a deepseek, dai accesso completo al database [...] usalo come bug fixer [...] tieni a mente di guardare sempre quello che ha scritto quando parli con me".**
+Chat Telegram: strumenti in sola lettura su tutto (`cerca_progetti`,
+`classifica_gemme`, `alert_ora`, `sistema`, `scartati`, `memoria`, più i rug),
+5 giri per risposta, e `segnala_bug` → bacheca con autore "DeepSeek (Telegram)".
+CLAUDE.md dice di leggerle sempre e verificarle. DeepSeek non tocca il codice.
