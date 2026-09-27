@@ -89,6 +89,15 @@ REFERENCES = (
 # A researcher's floor: an existing project, not a launch.
 MIN_AGE_DAYS = 14
 MIN_LIQUIDITY_USD = 10_000
+# Early gems. Request: "quando la market cap e' sotto i 50k e fondamentali
+# ci sono, voglio che il sistema lo evidenzi che potrebbe valere la pena di
+# comprare un po'". Below EARLY_CAP_USD a pool is thinner, so the floor is
+# lower; the fundamentals are not: public code and every pillar solid.
+EARLY_CAP_USD = 50_000
+EARLY_MIN_LIQUIDITY_USD = 5_000
+EARLY_MIN_PILLAR = 60
+EARLY_MIN_SCORE = 65
+ALERTS_PER_TICK = 5
 SERIOUS_CAP_MAX_USD = discovery.CAP_MAX
 SERIOUS_AGE_MAX_DAYS = 365
 SERIOUS_MIN_PILLAR = 60
@@ -109,6 +118,10 @@ _tasks: set[asyncio.Task] = set()
 _slots = asyncio.Semaphore(ANALYZE_CONCURRENCY)
 _state = {"version": 0, "examined": 0, "last_tick": 0.0, "last_market": 0.0,
           "sources": {}, "board": []}
+_alerted: set[str] = set()          # "new:<key>" / "early:<key>": alerts already sent
+_outbox: list[tuple[str, str]] = []
+_alert_hooks: list = []
+_priming = False
 _dirty = False
 
 
@@ -137,7 +150,12 @@ def _load() -> None:
             _excluded.extend(x for x in raw.get("excluded") or [] if isinstance(x, dict))
             _gone.update(raw.get("gone") or {})
         _state["examined"] = int(raw.get("examined") or 0)
+        _alerted.update(raw.get("alerted") or [])
+        # First start with alerts: what is already on the board is not news.
+        global _priming
+        _priming = "alerted" not in raw
         _rank()
+        _priming = False
 
 
 def _save() -> None:
@@ -145,7 +163,8 @@ def _save() -> None:
     _dirty = False
     try:
         _STORE_FILE.write_text(json.dumps({"entries": _entries, "excluded": _excluded, "gone": _gone,
-                                           "examined": _state["examined"], "rules": RULES_VERSION}, ensure_ascii=False),
+                                           "examined": _state["examined"], "rules": RULES_VERSION,
+                                           "alerted": sorted(_alerted)}, ensure_ascii=False),
                                encoding="utf-8")
     except OSError:
         pass
@@ -153,6 +172,9 @@ def _save() -> None:
 
 
 def reset_for_tests() -> None:
+    _alerted.clear()
+    _outbox.clear()
+    _alert_hooks.clear()
     gem_track.reset_for_tests()
     traction.reset_for_tests()
     _entries.clear()
@@ -427,9 +449,24 @@ def research_floor(e: dict, now: float | None = None) -> str:
     if launched and (now or time.time()) - launched < MIN_AGE_DAYS * 86400:
         return f"younger than {MIN_AGE_DAYS} days"
     liq = e.get("liquidity_usd")
-    if liq is not None and float(liq) < MIN_LIQUIDITY_USD:
-        return f"liquidity under ${MIN_LIQUIDITY_USD // 1000}k"
+    small = float(e.get("market_cap") or 0) and float(e.get("market_cap") or 0) < EARLY_CAP_USD
+    floor = EARLY_MIN_LIQUIDITY_USD if small else MIN_LIQUIDITY_USD
+    if liq is not None and float(liq) < floor:
+        return f"liquidity under ${floor // 1000}k"
     return ""
+
+
+def is_early(e: dict, now: float | None = None) -> bool:
+    """Under $50k with the fundamentals of a board project: public code,
+    every pillar solid, a strong final score. Worth a small bag, flagged."""
+    cap = float(e.get("market_cap") or 0)
+    if not cap or cap >= EARLY_CAP_USD or no_github(e) or benchmark.is_benchmark(e["chain"], e["token_address"]):
+        return False
+    pillars = e.get("pillars") or {}
+    if any((pillars.get(k) or {}).get("score") is None or pillars[k]["score"] < EARLY_MIN_PILLAR
+           for k in depth.WEIGHTS):
+        return False
+    return final_score(e) >= EARLY_MIN_SCORE and not qualifies(e, now)
 
 
 def _serious_shortfall(e: dict, pillars: dict, now: float | None) -> str:
@@ -480,6 +517,15 @@ def _rank() -> None:
     now = time.time()
     for i, e in enumerate(ranked, 1):
         gem_track.enter(e, final_score(e), i, now)
+        k = _key(e["chain"], e["token_address"])
+        for kind in ("new", "early"):
+            if kind == "early" and not is_early(e, now):
+                continue
+            tag = f"{kind}:{k}"
+            if tag not in _alerted:
+                _alerted.add(tag)
+                if not _priming and not benchmark.is_benchmark(e["chain"], e["token_address"]):
+                    _outbox.append((kind, k))
         if e.get("rank") != i:
             e["rank_before"], e["rank"], e["moved_at"] = e.get("rank"), i, now
     for k, e in _entries.items():
@@ -502,7 +548,7 @@ def _public(e: dict) -> dict:
             "image", "bonding", "rank", "rank_before", "moved_at", "overall", "pillars", "checked_at")
     top = benchmark.is_benchmark(e["chain"], e["token_address"])
     return {**{k: e.get(k) for k in keep}, "exception": is_big(e) and not top, "score": final_score(e),
-            "similarity": e.get("similarity"), "benchmark": top,
+            "similarity": e.get("similarity"), "benchmark": top, "early": is_early(e), "price_usd": e.get("price_usd"),
             "narratives": narratives.labels(e.get("narratives") or []), "closed_source": no_github(e),
             **_research_public(e), "honor": benchmark.HONOR if top else None, "traction": traction_of(e)}
 
@@ -545,7 +591,8 @@ def board() -> dict:
         "track": gem_track.stats(), "defillama": traction.status(), "database": projects_db.stats(),
         "past_floor": sum(1 for e in _entries.values() if not research_floor(e)),
         "rules": {"weights": depth.WEIGHTS, "similarity_weight": SIMILARITY_WEIGHT,
-                  "traction_weight": TRACTION_WEIGHT, "value_weight": VALUE_WEIGHT, "benchmark": benchmark.NAME, "min_pillar": MIN_PILLAR, "gem_cap_usd": legit.GEM_CAP_USD,
+                  "traction_weight": TRACTION_WEIGHT, "value_weight": VALUE_WEIGHT,
+                  "early_cap_usd": EARLY_CAP_USD, "early_min_pillar": EARLY_MIN_PILLAR, "early_min_score": EARLY_MIN_SCORE, "benchmark": benchmark.NAME, "min_pillar": MIN_PILLAR, "gem_cap_usd": legit.GEM_CAP_USD,
                   "gem_min_score": legit.GEM_MIN_SCORE, "cap_max_usd": CAP_MAX_USD, "max_age_days": MAX_AGE_DAYS,
                   "exception_cap_usd": radar.EXC_MCAP_MAX_USD, "exception_age_days": radar.EXC_AGE_MAX_DAYS},
     }
@@ -560,6 +607,29 @@ async def _step(name: str, fn, *args) -> None:
     except Exception as exc:
         _state["sources"][name] = {"ok": False, "at": time.time(), "error": type(exc).__name__}
         logger.info("classifica: %s non riuscito: %s", name, exc)
+
+
+def on_alert(fn) -> None:
+    """fn(kind, public_entry) is awaited for a project new on the board
+    ("new") or flagged early ("early"). Telegram lives in main.py."""
+    _alert_hooks.append(fn)
+
+
+async def drain_alerts() -> int:
+    sent = 0
+    while _outbox and sent < ALERTS_PER_TICK:
+        kind, k = _outbox.pop(0)
+        e = _entries.get(k)
+        if e is None or (kind == "early" and not is_early(e)):
+            continue
+        item = _public(e)
+        for fn in list(_alert_hooks):
+            try:
+                await fn(kind, item)
+            except Exception:
+                logger.exception("classifica: avviso %s fallito", k)
+        sent += 1
+    return sent
 
 
 async def _db_market(client: httpx.AsyncClient, now: float) -> None:
@@ -614,6 +684,7 @@ async def tick(client: httpx.AsyncClient, now: float | None = None) -> None:
         await _step("dexscreener", _poll_market, client)
     await _step("storico", gem_track.poll, client, set(_entries), now)
     await _step("database", _from_database, client, now)
+    await drain_alerts()
     _prune(now)
     # I nuovi prima (nessun pilastro), poi i piu' vecchi da rinfrescare.
     todo = sorted(((k, due(e, now)) for k, e in _entries.items() if k not in _busy),

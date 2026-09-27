@@ -283,6 +283,7 @@ def evaluate_pair(pair: dict, now: float | None = None) -> dict | None:
         "dex": pair.get("dexId") or "",
         "liquidity_usd": liq,
         "market_cap": float(cap),
+        "price_usd": pair.get("priceUsd"),
         "created_at": created or None,
     }
 

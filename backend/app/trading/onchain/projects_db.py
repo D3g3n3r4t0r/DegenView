@@ -36,9 +36,9 @@ _lock = threading.Lock()
 _conn: sqlite3.Connection | None = None
 _conn_path: Path | None = None
 
-CAP_MIN = 50_000
+CAP_MIN = 10_000                 # early gems (leaderboard.EARLY_CAP_USD) start here
 CAP_MAX = 3_000_000
-LIQ_MIN = 10_000
+LIQ_MIN = 5_000
 MARKET_TTL_S = 6 * 3600          # cap and liquidity older than this get refreshed
 RECHECK_S = 14 * 86400           # a rejected project is looked at again after two weeks
 RECHECK_DATA_S = 2 * 86400       # ...sooner when it failed for missing data

@@ -16,7 +16,7 @@ def _clean():
 
 def test_market_candidates_keeps_cap_band_and_drops_meme_names():
     rows = [{"id": "big", "symbol": "big", "name": "Big", "market_cap": 9_000_000},
-            {"id": "tiny", "symbol": "tiny", "name": "Tiny", "market_cap": 10_000},
+            {"id": "tiny", "symbol": "tiny", "name": "Tiny", "market_cap": 5_000},   # under the early-gem floor
             {"id": "dog", "symbol": "doge2", "name": "Doge Inu", "market_cap": 500_000},
             {"id": "grid", "symbol": "grid", "name": "Grid Protocol", "market_cap": 900_000}]
     assert [c["id"] for c in d.market_candidates("robinhood", rows)] == ["grid"]

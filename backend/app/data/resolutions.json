@@ -1499,5 +1499,37 @@
       "frontend/static/onchain/projects.js",
       "frontend/onchain-app.html"
     ]
+  },
+  "seed-0122": {
+    "status": "risolto",
+    "at": 1790490144,
+    "summary": "Il Gem Finder ora guarda anche sotto i $50k (fascia del database da $10k, liquidita' minima $5k sotto i $50k). Un progetto sotto i $50k con codice pubblico, tutti e tre i pilastri almeno 60 e punteggio almeno 65 e' una 'gemma early': badge giallo 'early · small bag?' e riquadro in cima alla classifica. Su Telegram arriva un avviso in italiano quando una gemma entra in classifica e quando diventa early (al massimo 6 all'ora, una volta per progetto; al primo avvio quello che c'e' gia' non viene notificato).",
+    "files": [
+      "backend/app/trading/onchain/leaderboard.py",
+      "backend/app/main.py",
+      "frontend/static/onchain/leaderboard.js"
+    ]
+  },
+  "seed-0123": {
+    "status": "risolto",
+    "at": 1790490144,
+    "summary": "Ogni alert Telegram (meme e gemme) viene seguito dal primo prezzo del pool letto dopo l'invio del messaggio: rendimento a 1, 2, 3, 4, 5, 6, 8, 12, 24 e 48 ore, colonna 'ora' aggiornata ogni minuto per due giorni e poi ogni 15 minuti per due settimane, pool sparito = -100%. Accanto, il rendimento della miglior strategia backtestata sullo stesso token. Nella pagina Meme la 'Alert leaderboard' ordina gli alert per rendimento attuale, con in cima la mediana e la quota in profitto a ogni ora.",
+    "files": [
+      "backend/app/trading/onchain/alert_track.py",
+      "backend/app/main.py",
+      "frontend/static/onchain/alerts.js",
+      "frontend/onchain-app.html"
+    ]
+  },
+  "seed-0124": {
+    "status": "risolto",
+    "at": 1790490144,
+    "summary": "Un revisore giornaliero con Claude Sonnet 5 (ai_review.py): una volta al giorno legge i numeri gia' misurati (storico dei trade simulati sui meme, meme scartati che sono saliti, alert Telegram a ogni ora, storico delle gemme, motivi di bocciatura del database) e scrive in italiano fino a 6 lezioni con prova e proposta. Si vedono nella scheda 'Daily review' e arrivano sulla chat Telegram di sistema. Tetto rigido: 200 000 token al giorno (ai_review_daily_tokens), contati dall'uso reale dell'API. Le lezioni sono proposte: le regole cambiano solo quando una persona e' d'accordo. Serve la chiave ANTHROPIC_API_KEY sul server.",
+    "files": [
+      "backend/app/trading/onchain/ai_review.py",
+      "backend/app/config.py",
+      "backend/app/main.py",
+      "frontend/static/onchain/alerts.js"
+    ]
   }
 }

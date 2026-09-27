@@ -106,6 +106,7 @@ function paint(animate) {
   paintClose();
   paintMeta();
   paintTrack();
+  paintEarly(entries);
   if (before) slide(before);
 }
 
@@ -150,6 +151,7 @@ function badges(e) {
   const out = [];
   if (e.benchmark) out.push(`<em data-tone="gold">benchmark</em>`);
   else if (e.similarity?.score >= 25) out.push(`<em class="bd-sim">≈ DREGG ${e.similarity.score}%</em>`);
+  if (e.early) out.push(`<em data-tone="early" title="Under $50k with solid fundamentals: maybe worth a small bag. Research, not advice.">early · small bag?</em>`);
   if (e.exception) out.push(`<em data-tone="gold">exception</em>`);
   if (e.bonding) out.push(`<em>pump.fun</em>`);
   if (e.closed_source) out.push(`<em>closed source</em>`);
@@ -254,6 +256,16 @@ function tractionBlock(e) {
     + fact("Value", t.value == null ? null : `${Math.round(t.value)}/100`);
   return `<section class="bd-use" style="--v:${t.traction ?? 0}"><h5>Traction<b>${score(t.traction)}</b></h5><dl>${rows}</dl>
     ${t.reasons?.length ? `<p class="bd-why">${escapeHtml(t.reasons.join(" · "))}</p>` : ""}</section>`;
+}
+
+/** Early gems first: under $50k with the fundamentals of the board. */
+function paintEarly(entries) {
+  const box = root.querySelector("[data-board-early]");
+  if (!box) return;
+  const early = entries.filter((e) => e.early);
+  box.hidden = !early.length;
+  box.innerHTML = early.length ? `<b>Early gems · ${early.length}</b> Under $50k with public code and every pillar solid: maybe worth a small bag, sized to lose.
+    <span>${early.map((e) => `<button type="button" data-board="${escapeHtml(key(e))}">${escapeHtml(e.symbol)} · ${usd(e.market_cap)}</button>`).join("")}</span>` : "";
 }
 
 const signed = (f) => (f == null ? "—" : `${f > 0 ? "+" : ""}${Math.round(f * 100)}%`);

@@ -1750,7 +1750,9 @@
   #app-shell:not([data-view="entry"]) #entry,
   /* Gems is research only; the live launch scanner lives with the Meme
      Sniper (Lorenzo, 25/09: "la ricerca al minuto deve stare sullo sniper"). */
-  #app-shell:not([data-view="gems"]) :is(#board, #projects),
+  #app-shell:not([data-view="gems"]) :is(#board, #projects, #gem-alerts),
+  #app-shell:not([data-view="meme"]) #meme-alerts,
+  #app-shell:not(:is([data-view="meme"], [data-view="gems"])) #review,
   #app-shell:not([data-view="meme"]) :is(#memes, #pilot, #radar),
   #app-shell:not([data-view="manual"]) #market-order-row,
   #app-shell:not([data-view="wallet"]) :is(.status-strip, #wallet-view) { display: none !important; }
@@ -2390,9 +2392,56 @@
     background: linear-gradient(90deg, var(--panel) 30%, var(--raised) 50%, var(--panel) 70%) 0 0 / 250% 100%;
     animation: skel 1.4s linear infinite; }
 
+  /* --- early gems ------------------------------------------------ */
+  .bd-tags em[data-tone="early"] { color: #111; background: #ffd24a; border-color: #ffd24a; font-weight: 600; }
+  .early-note { margin: 0 0 var(--s4); padding: var(--s3) var(--s4); border-radius: 14px; font-size: 13px; line-height: 1.5;
+    color: var(--ink-dim); background: rgb(255 210 74 / .08); border: 1px solid rgb(255 210 74 / .35);
+    & b { color: #ffd24a; margin-inline-end: 6px; }
+    & span { display: flex; flex-wrap: wrap; gap: 6px; margin-block-start: 8px; }
+    & button { font: 600 12px var(--mono); padding: 4px 10px; border-radius: 999px; cursor: pointer;
+      color: #ffd24a; background: none; border: 1px solid rgb(255 210 74 / .5); } }
+
+  /* --- alert leaderboard: a table that scrolls inside itself -------- */
+  :is(.alerts, .review) > header { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s3);
+    margin: 0 0 var(--s2); padding-inline: var(--s1);
+    & h3 { display: flex; align-items: center; gap: var(--s2); margin: 0; font-size: 15px; font-weight: 650; letter-spacing: -.01em; }
+    & > span { font-size: 12px; color: var(--ink-faint); } }
+  #app-shell[data-view="meme"] #meme-alerts { grid-column: 1 / -1; }
+  .al-intro { margin: 0 0 var(--s2); padding-inline: var(--s1); }
+  .al-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; scrollbar-width: thin;
+    &:focus-visible { outline: 2px solid color-mix(in oklch, var(--live) 60%, transparent); } }
+  .al-table { border-collapse: collapse; inline-size: 100%; font-variant-numeric: tabular-nums; font-size: 12.5px;
+    & th, & td { padding: 8px 10px; text-align: end; white-space: nowrap; border-block-end: 1px solid var(--line); }
+    & thead th { font: 600 10.5px var(--sans); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-faint);
+      position: sticky; top: 0; background: var(--panel); }
+    & tbody th { text-align: start; font-weight: 500; position: sticky; inset-inline-start: 0; background: var(--bg);
+      min-inline-size: 118px; }
+    & thead th:first-child { text-align: start; position: sticky; inset-inline-start: 0; z-index: 1; }
+    & tbody th b a { color: var(--ink); text-decoration: none; }
+    & tbody th small, & td small { display: block; font-size: 10.5px; color: var(--ink-faint); font-weight: 400; }
+    & td { font-family: var(--mono); }
+    & [data-sign="up"] { color: var(--up); } & [data-sign="down"] { color: var(--down); }
+    & .al-now { font-weight: 700; background: color-mix(in oklch, var(--live) 7%, transparent); }
+    & .al-sum th, & .al-sum td { background: var(--raised); border-block-end: 1px solid color-mix(in oklch, var(--live) 30%, var(--line)); }
+    & tr[data-gone] { opacity: .6; }
+    & tbody tr:last-child :is(th, td) { border: 0; } }
+
+  /* --- daily review ------------------------------------------------ */
+  .rv-summary { margin: 0 0 var(--s3); padding-inline: var(--s1); font-size: 14px; line-height: 1.5; color: var(--ink); }
+  .rv-lessons { margin: 0; padding: 0; list-style: none; display: grid; gap: var(--s2);
+    & li { display: grid; gap: 3px; padding: var(--s3); border-radius: 12px; background: var(--panel); border: 1px solid var(--line); }
+    & li[data-conf="high"] { border-color: color-mix(in oklch, var(--live) 45%, var(--line)); }
+    & b { font-size: 13.5px; font-weight: 600; }
+    & span { font-size: 13px; color: var(--ink-dim); }
+    & small { font-size: 11.5px; color: var(--ink-faint); } }
+  #app-shell[data-view="meme"] #review { grid-column: 1 / -1; }
+
   /* --- meme view: the bets first, then the autopilot, then the scanner */
   #app-shell[data-view="meme"] #memes { order: -2; }
   #app-shell[data-view="meme"] #pilot { order: -1; }
+  #app-shell[data-view="meme"] #meme-alerts { order: 0; }
+  #app-shell[data-view="meme"] #review { order: 1; }
+  #app-shell[data-view="meme"] #radar { order: 2; }
   @media (width < 1100px) {
     /* An empty chart on a phone is a screen of nothing: hide it until there is a pick. */
     .radar-stage:has(> .radar-idle:only-child), #radar .radar-stage:empty { display: none; }
@@ -2502,6 +2551,7 @@
         <p class="gem-banner" role="note"><b>Research, not advice.</b> Code, site and tokenomics scored 24/7. DYOR before you buy.</p>
         <header><h3>Leaderboard</h3><span data-board-meta></span></header>
         <div class="track" data-board-track hidden></div>
+        <p class="early-note" data-board-early hidden></p>
         <ol class="board-podium" data-board-podium></ol>
         <div class="board-detail" data-board-detail hidden></div>
         <ol class="board-list" data-board-list></ol>
@@ -2510,6 +2560,12 @@
           <h4>Close to the board</h4>
           <ul></ul>
         </div>
+      </section>
+
+      <!-- Gli avvisi Telegram delle gemme e cosa avrebbero reso (alert_track.py). -->
+      <section class="alerts" id="gem-alerts" data-alerts-kind="gem" data-loading>
+        <header><h3>Telegram alerts: results</h3><span data-alerts-meta></span></header>
+        <div data-alerts-body></div>
       </section>
 
       <!-- Il database dei progetti (projects_db.py). Richiesta: "vedi sempre
@@ -2589,6 +2645,23 @@
         <div class="track" data-memes-track hidden></div>
         <ol class="memes-list" data-memes-list></ol>
         <p class="memes-empty" data-memes-empty hidden>Nothing worth a bet right now. The radar runs 24/7: check back soon.</p>
+      </section>
+
+      <!-- Richiesta: "risultati se avessimo seguito l'alert di telegram [...]
+           dopo 1,2,3,4,5,6,8,12,24,48h, e infine aggiornato in tempo reale,
+           oltre a questo anche il rendimento della miglior strategia
+           backtestata". Lo disegna static/onchain/alerts.js. -->
+      <section class="alerts" id="meme-alerts" data-alerts-kind="meme" data-loading>
+        <header><h3><span class="radar-dot" aria-hidden="true"></span>Alert leaderboard</h3><span data-alerts-meta></span></header>
+        <p class="track-note al-intro">If we had bought when each Telegram alert arrived: price change after each hour, now, and the best backtested strategy on the same token.</p>
+        <div data-alerts-body></div>
+      </section>
+
+      <!-- Il revisore giornaliero (ai_review.py): Claude legge cosa e' successo
+           davvero ai segnali e propone cosa cambiare. -->
+      <section class="review" id="review" data-loading>
+        <header><h3>Daily review</h3><span data-review-meta></span></header>
+        <div data-review-body></div>
       </section>
 
       <section class="pilot" id="pilot" data-tone="off">

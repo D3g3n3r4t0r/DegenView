@@ -36,7 +36,7 @@ function paintFunnel(st) {
   const by = st?.by_status ?? {};
   root.querySelector("[data-projects-meta]").textContent = st ? `${num(st.by_chain?.solana ?? 0)} Solana · ${num(st.by_chain?.robinhood ?? 0)} Robinhood` : "";
   root.querySelector("[data-projects-funnel]").innerHTML = st
-    ? `<b>${num(st.total)}</b> projects known · <b>${num(st.in_band)}</b> in the $50k–$3M band · <b>${num((by.studied ?? 0) + (by.ranked ?? 0))}</b> studied · <b>${num(by.rejected ?? 0)}</b> rejected${st.top_rejections?.[0] ? ` (most often: ${escapeHtml(st.top_rejections[0].why)})` : ""}`
+    ? `<b>${num(st.total)}</b> projects known · <b>${num(st.in_band)}</b> in the $10k–$3M band · <b>${num((by.studied ?? 0) + (by.ranked ?? 0))}</b> studied · <b>${num(by.rejected ?? 0)}</b> rejected${st.top_rejections?.[0] ? ` (most often: ${escapeHtml(st.top_rejections[0].why)})` : ""}`
     : "";
 }
 

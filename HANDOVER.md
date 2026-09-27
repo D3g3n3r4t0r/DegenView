@@ -12,6 +12,37 @@ lavori pluri-sessione, decisioni prese, stato di piani approvati.
 
 ---
 
+## Gemme early, avvisi Telegram gemme, classifica degli alert meme, revisore Claude — `seed-0122`/`0123`/`0124`, branch `claude/gem-database` — 2026-09-27
+
+Lorenzo: "per gemme quando la market cap e' sotto i 50k e fondamentali ci
+sono, voglio che il sistema lo evidenzi che potrebbe valere la pena di
+comprare un po, voglio poi gli avvisi su telegram anche per le gemme"; "il
+meme sniper deve avere una leaderboard anch'esso, con anche i risultati se
+avessimo seguito l'alert di telegram (non le strategie) [...] dopo
+1,2,3,4,5,6,8,12,24,48h, e infine aggiornato in tempo reale, oltre a questo
+anche il rendimento della miglior strategia backtestata"; "sto pensando di
+mettere un istanza di claude sonnet nel server [...] con un massimo di token
+al giorno, cosi' impariamo dagli errori".
+
+- Early: `leaderboard.is_early` (cap < $50k, GitHub pubblico, pilastri >= 60,
+  punteggio >= 65, qualifica ok). Fasce abbassate: discovery/projects_db da
+  $10k, liquidita' minima $5k sotto i $50k. Badge e riquadro in `leaderboard.js`.
+- Avvisi gemme: `leaderboard._outbox` + `on_alert` (una volta per "new:" e
+  "early:" per progetto, `_alerted` salvato; al primo avvio con il campo
+  mancante si fa "priming" senza avvisi). Testo italiano `_gem_telegram_text`
+  in main.py, 6/ora per utente, stessi destinatari dei listing.
+- `alert_track.py`: ogni alert (meme da `_notify_listing`, gemme da
+  `_notify_gem`) seguito dal primo prezzo dopo l'invio; checkpoint 1-48h,
+  "ora", strategia migliore copiata dal backtest del listing. Loop
+  `_onchain_signals_loop` (30 s). API `/api/onchain/alerts/{meme|gem}`.
+- `ai_review.py`: Sonnet 5 una volta al giorno (30 min dopo l'avvio), fatti
+  gia' misurati in JSON, lezioni strutturate in italiano, budget
+  `ai_review_daily_tokens` (200k) contato dall'usage reale. Lezioni NON
+  applicate da sole. API `/api/onchain/ai-review`, Telegram sulla chat di sistema.
+  Serve `ANTHROPIC_API_KEY` (la inserisce Lorenzo).
+
+---
+
 ## Database dei progetti del Gem Finder — `seed-0121`, branch `claude/gem-database` — 2026-09-27
 
 Lorenzo: "il gem hunter deve trovare progetti di qualita', ma vedi sempre i
