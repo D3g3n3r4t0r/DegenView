@@ -58,10 +58,10 @@ def test_chat_keeps_a_short_memory_and_a_daily_cap(monkeypatch):
     seen = []
 
     async def fake(messages, *, kind, **_):
-        seen.append(messages)
+        seen.append(list(messages))
         dd.record(kind, 100, 50)
-        return f"risposta {len(seen)}"
-    monkeypatch.setattr(dd, "ask", fake)
+        return {"content": f"risposta {len(seen)}"}
+    monkeypatch.setattr(dd, "ask_message", fake)
     assert asyncio.run(dd.answer("42", "prima", "ctx")) == "risposta 1"
     asyncio.run(dd.answer("42", "seconda", "ctx"))
     assert [m["content"] for m in seen[1][1:]] == ["prima", "risposta 1", "seconda"]
@@ -88,3 +88,20 @@ def test_pr_review_usage_reads_the_markers():
     finally:
         dd.settings.github_api_token = ""
     assert u == {"calls": 1, "in": 30000, "out": 2000}
+
+
+def test_chat_can_look_things_up_in_the_database(monkeypatch):
+    rounds = []
+
+    async def fake(messages, *, kind, tools=None, **_):
+        rounds.append(tools)
+        if len(rounds) == 1:
+            return {"content": "", "tool_calls": [{"id": "c1", "type": "function",
+                                                   "function": {"name": "cerca_token", "arguments": '{"query": "VISE"}'}}]}
+        tool_msg = messages[-1]
+        assert tool_msg["role"] == "tool" and tool_msg["tool_call_id"] == "c1" and "rug" in tool_msg["content"]
+        return {"content": "VISE e' stato un rug dopo 3 ore."}
+    monkeypatch.setattr(dd, "ask_message", fake)
+    tools = {"cerca_token": ({"name": "cerca_token", "parameters": {}}, lambda query: [{"symbol": query, "outcome": "rug"}])}
+    assert asyncio.run(dd.answer("7", "cos'e' successo a VISE?", "ctx", tools)) == "VISE e' stato un rug dopo 3 ore."
+    assert rounds[0][0]["function"]["name"] == "cerca_token"

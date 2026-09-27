@@ -42,7 +42,7 @@ def test_batches_of_ten_one_call_each_and_judged_once(monkeypatch):
     calls = []
 
     async def fake(messages, *, kind, max_tokens, json_mode):
-        lines = messages[1]["content"].splitlines()
+        lines = messages[1]["content"].split("Tokens:\n", 1)[1].splitlines()
         calls.append(len(lines))
         assert kind == "scanner" and json_mode and messages[0]["content"] == ai_scan.SYSTEM
         return json.dumps({"items": [{"i": j, "risk": 70, "flags": ["copycat"], "theme": "dog"} for j in range(len(lines))]})

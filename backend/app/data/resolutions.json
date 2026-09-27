@@ -1926,5 +1926,16 @@
       "backend/app/main.py",
       "backend/app/config.py"
     ]
+  },
+  "seed-0157": {
+    "status": "risolto",
+    "at": 1790532896,
+    "summary": "DeepSeek ora ha una memoria: il diario di tutti i token che il sito ha seguito (fino a 5000), con i numeri del momento in cui li abbiamo visti (cap, liquidita', eta', quanto tenevano i primi wallet, liquidita' bloccata, esito di ogni controllo) e cosa e' successo davvero (rug, dopo quante ore, come; massimo e minimo). Quando giudica una meme nuova riceve i 5 token passati piu' simili con il loro esito e il quadro di come i rug si sono distinti dagli altri. In chat su Telegram puo' interrogare il database da solo: cercare un token, trovare i casi simili, vedere le circostanze dei rug e gli ultimi rug.",
+    "files": [
+      "backend/app/trading/onchain/rug_memory.py",
+      "backend/app/trading/onchain/ai_scan.py",
+      "backend/app/notify/deepseek_desk.py",
+      "backend/app/main.py"
+    ]
   }
 }
