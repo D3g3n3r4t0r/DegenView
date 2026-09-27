@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0133", "Il logo DEGEN di caricamento non e' nello stile della home",
+     "Lorenzo: 'il logo DEGEN di caricamento non e' adeguato alla home page come stile ... studia qualcosa'.",
+     "bassa"),
     ("seed-0132", "I grafici nella pagina del token sono troppo lenti ad arrivare",
      "Lorenzo: 'i grafici caricati sono troppo lenti ad arrivare'.",
      "alta"),
