@@ -759,7 +759,7 @@
     & button { flex: none; min-inline-size: 36px; padding: 7px 6px; } }
   .pf-change { margin: 0; min-block-size: 1.3em; font: 600 14px var(--sans); color: #34d399;
     &[data-sign="down"] { color: #f87171; } & span { color: var(--k-text-3); font-weight: 500; } }
-  .pf-chart { position: relative; block-size: 120px; margin: 6px -16px 0; overflow: hidden; }
+  .pf-chart { position: relative; block-size: 104px; margin: 6px -16px 0; overflow: hidden; }
   .pf-line { inline-size: 100%; block-size: 100%; overflow: visible; color: #22c55e;
     &[data-sign="down"] { color: #ef4444; }
     & .ln { fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
@@ -769,7 +769,7 @@
     & .scrub-dot { fill: var(--k-text); } & [hidden] { display: none; }
     touch-action: pan-y; cursor: crosshair; }
   .pf-chart-empty { display: grid; place-items: center; block-size: 100%; padding: 0 24px; text-align: center; font-size: 13px; color: var(--k-text-3); }
-  .pf-cash { display: grid; grid-template-columns: auto 1fr auto auto; gap: 12px; align-items: center; margin-top: 10px;
+  .pf-cash { display: grid; grid-template-columns: auto 1fr auto auto auto; gap: 12px; align-items: center; margin-top: 10px;
     & p { display: grid; gap: 2px; margin: 0; } & small { font-size: 14px; color: var(--k-text-2); }
     & b { font: 700 20px var(--sans); color: var(--k-text); } }
   .pf-cash-ic { display: grid; place-items: center; inline-size: 40px; block-size: 40px; border-radius: 50%; background: #18181b;
