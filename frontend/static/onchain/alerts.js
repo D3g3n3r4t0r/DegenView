@@ -10,7 +10,7 @@
  */
 import { openScan } from "@onchain/sheets.js";
 import * as api from "@onchain/api.js";
-import { age, changePill, escapeHtml, logo, tile, tokenRow, usdShort } from "@onchain/format.js";
+import { age, changePill, escapeHtml, logo, strategyTrade, tile, tokenRow, usdShort } from "@onchain/format.js";
 import { register } from "@onchain/detail.js";
 import { renderPodium } from "@onchain/podium.js";
 
@@ -66,7 +66,8 @@ function callCard(a, kind) {
       <span><small>Best 48h</small><b data-sign="${sign(a.max)}">${pct(a.max)}</b></span>
       <span><small>System</small><b data-sign="${sign(s?.ret)}">${s?.ret == null ? "—" : pct(s.ret)}</b><em class="sys-state" data-state="${s?.state ?? "waiting"}">${sysState(s)}</em></span>
     </div>
-    <p class="hours-head">If held from the alert</p>
+    <div class="strats">${(a.systems ?? []).map((s) => strategyTrade(s, a.at, a.system?.label)).join("")}</div>
+    <p class="hours-head">Just holding, from the alert</p>
     <ol class="hours">${HOURS.map((h) => {
       const r = a.returns?.[String(h)];
       return `<li><small>${h}h</small><b data-sign="${sign(r)}">${pct(r)}</b></li>`;

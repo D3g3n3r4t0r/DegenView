@@ -210,8 +210,9 @@ function paintTabs() {
         <span><small>Best 48h</small><b data-sign="${sign(al.max)}">${pct(al.max)}</b></span>
         <span><small>System</small><b data-sign="${sign(al.system?.ret)}">${al.system?.ret == null ? "—" : pct(al.system.ret)}</b></span>
       </div>
-      ${systemTrades(al)}
-      <p class="hours-head">If held from the alert</p>
+      <div class="strats">${al.systems ? al.systems.map((s) => strategyTrade(s, al.at, al.system?.label)).join("") : systemTrades(al)}</div>
+      ${al.systems ? systemTrades(al) : ""}
+      <p class="hours-head">Just holding, from the alert</p>
       <ol class="hours">${[1, 2, 3, 4, 5, 6, 8, 12, 24, 48].map((h) => {
         const r = al.returns?.[String(h)];
         return `<li><small>${h}h</small><b data-sign="${sign(r)}">${pct(r)}</b></li>`;
