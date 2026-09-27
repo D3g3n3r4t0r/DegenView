@@ -1546,13 +1546,21 @@
   },
   "seed-0126": {
     "status": "risolto",
-    "at": 1790491223,
-    "summary": "L'app e' una sola, nello stile degli screenshot: in alto avatar e saldo in dollari a sinistra, 'Deposit' (apre la ricezione) e campanella degli alert a destra; sotto, schede sottolineate per ogni sezione (Meme: Trending, Alerts, Scanner; Gemme: Rankings, Database; Classifica: Best alerts, Daily review); in basso una barra flottante in vetro con quattro icone (meme, gemme, classifica, portafoglio) e il tasto rotondo di ricerca che apre lo scambio con la scelta del token. Le righe dei meme hanno il logo quadrato con la chain nell'angolo, il bollino HOT, market cap in grande e la variazione in una pillola verde o rossa, con lo sfondo tinto. Nuova vista 'Classifica': il primo alert in oro con la corona, il secondo in argento, coriandoli, periodo 1D/1W/1M, meme o gemme, lista con le corone ai primi tre. Su computer la stessa colonna centrata.",
+    "at": 1790492061,
+    "summary": "Rifatta l'app con tre revisori dedicati (grafica misurata sugli screenshot, disposizione, architettura del codice). Una colonna da telefono su ogni schermo; in alto una sola riga con avatar, saldo, Deposit e campanella, poi le schede sottolineate; righe alte 82 px con il logo vero del token (da DexScreener) e il simbolo della chain, nome con HOT/EARLY, ticker ed eta' con il germoglio, market cap in grande e la variazione in una pillola, sfondo sfumato verde o rosso. Tocca una riga e si apre la pagina del token: market cap, grafico con i punti degli alert, intervalli, schede Signal (cosa ha reso ogni alert ora per ora), Why (punteggio, motivi, rischi) e Info (contratto, link, il dossier delle gemme), e il pulsante Buy che apre lo scambio con quel token. La classifica ha il primo in oro con la corona, il secondo in argento, i coriandoli, 1D/1W/1M, la tua riga e la lista; la revisione del giorno e' l'ultima riga. Tolti dalle liste banner, riquadri, punteggi e spiegazioni: stanno nella pagina del token. Il tema vive in static/onchain/app.css, versionato.",
     "files": [
-      "frontend/onchain-app.html",
-      "frontend/static/onchain/main.js",
+      "frontend/static/onchain/app.css",
+      "frontend/static/onchain/detail.js",
+      "frontend/static/onchain/format.js",
       "frontend/static/onchain/alerts.js",
-      "frontend/static/onchain/memes.js"
+      "frontend/static/onchain/memes.js",
+      "frontend/static/onchain/leaderboard.js",
+      "frontend/static/onchain/main.js",
+      "frontend/onchain-app.html",
+      "backend/app/main.py",
+      "backend/app/trading/onchain/outcomes.py",
+      "backend/app/trading/onchain/listings.py",
+      "backend/app/trading/onchain/alert_track.py"
     ]
   }
 }

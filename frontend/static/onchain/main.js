@@ -565,6 +565,13 @@ dockSearch?.addEventListener("click", () => {
   requestAnimationFrame(() => document.getElementById("swap-pick-out")?.click());
 });
 document.getElementById("inbox-btn")?.addEventListener("click", () => openInbox());
+// Buy from a token page: the swap opens with that token as the one you get.
+document.addEventListener("lae:buy", (event) => {
+  const { address, symbol } = event.detail ?? {};
+  if (!address) return;
+  setView("manual");
+  setChartToken({ address, symbolHint: symbol });
+});
 
 for (const el of [view.dock, view.shell]) {
   el?.addEventListener("click", (event) => {

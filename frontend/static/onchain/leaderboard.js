@@ -12,7 +12,8 @@
  * scivolano al posto nuovo, con la freccia di quanto sono salite o scese.
  */
 import * as api from "@onchain/api.js";
-import { escapeHtml } from "@onchain/format.js";
+import { escapeHtml, tokenRow } from "@onchain/format.js";
+import { register } from "@onchain/detail.js";
 
 const ROOT = document.getElementById("onchain-embed") ?? document;
 const POLL_MS = 10_000;
@@ -109,10 +110,11 @@ function render(animate) {
   const entries = data.entries ?? [];
   const podium = root.querySelector("[data-board-podium]");
   const list = root.querySelector("[data-board-list]");
-  podium.innerHTML = entries.slice(0, 3).map(podiumCard).join("");
-  // Sul podio il secondo sta a sinistra del primo, come nelle gare.
-  podium.dataset.count = String(Math.min(entries.length, 3));
-  list.innerHTML = entries.slice(3).map(row).join("");
+  // One list, rows like the reference app; the podium moved to the trophy
+  // view and each project's dossier to its page (detail.js > Info).
+  podium.innerHTML = "";
+  podium.dataset.count = "0";
+  list.innerHTML = entries.map(gemRow).join("");
   const detail = root.querySelector("[data-board-detail]");
   const chosen = entries.find((e) => key(e) === open);
   detail.hidden = !chosen;
@@ -224,6 +226,36 @@ function row(e) {
       <span class="gb-total" style="--v:${total}"><b data-num="${total}">${total}</b><i aria-hidden="true"></i></span>
     </button>
   </li>`;
+}
+
+function gemWhy(e) {
+  const blocks = [...PILLARS, ["traction", "Traction"]].map(([k, label]) => {
+    const v = k === "traction" ? e.traction?.traction : e.pillars?.[k]?.score;
+    if (v == null) return "";
+    return `<li><span>${label}</span><i style="--v:${Math.round(v)}"></i><b>${Math.round(v)}</b></li>`;
+  }).join("");
+  const flags = Object.values(e.pillars ?? {}).flatMap((p) => p?.flags ?? []);
+  return `<div class="why-score"><span class="ring" style="--v:${Math.round(e.score ?? 0)}"><b>${Math.round(e.score ?? 0)}</b></span>
+      <p><b>${e.early ? "Early gem" : `Rank #${e.rank ?? "—"}`}</b><small>${e.early ? "Under $50k with public code and every pillar solid: maybe worth a small bag." : "Code, research and tokenomics, scored every day."}</small></p></div>
+    <ul class="bars">${blocks}</ul>
+    ${e.summary ? `<p class="dt-summary">${escapeHtml(e.summary)}</p>` : ""}
+    ${(e.traction?.reasons ?? []).length ? `<ul class="why-list">${e.traction.reasons.map((r) => `<li data-tone="good">${escapeHtml(r)}</li>`).join("")}</ul>` : ""}
+    ${flags.length ? `<ul class="why-list">${flags.map((f) => `<li data-tone="bad">${escapeHtml(f)}</li>`).join("")}</ul>` : ""}
+    <p class="muted">Research, not advice.</p>`;
+}
+
+function gemRow(e) {
+  const id = `gem:${e.chain}:${e.token_address}`;
+  register(id, {
+    kind: "gem", symbol: e.symbol, name: e.name, chain: e.chain, token: e.token_address, pair: e.pair_address,
+    pairUrl: e.pair_url, image: e.image, cap: e.market_cap, change: e.change_24h != null ? e.change_24h / 100 : null,
+    ageTs: e.launched_at, context: `Rank #${e.rank ?? "—"} · score ${Math.round(e.score ?? 0)} · liquidity ${usd(e.liquidity_usd)}`,
+    why: gemWhy(e), info: details(e),
+  });
+  const nar = (e.narratives ?? []).slice().sort((a, b) => b.heat - a.heat)[0];
+  return tokenRow({ id, symbol: e.symbol, name: e.name, chain: e.chain, token: e.token_address, image: e.image,
+    cap: e.market_cap, ageTs: e.launched_at, badge: e.early ? "early" : null, sign: "",
+    sub: nar ? escapeHtml(nar.label) : "", pill: `<em class="chg score">${Math.round(e.score ?? 0)}</em>` });
 }
 
 /** Scores count up from where they were (or from 0) instead of jumping. */

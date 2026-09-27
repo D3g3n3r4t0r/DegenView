@@ -15,19 +15,27 @@ lavori pluri-sessione, decisioni prese, stato di piani approvati.
 ## Un'app sola, layout da app di trading — `seed-0126`, branch `claude/gem-database` — 2026-09-27
 
 Lorenzo, con 4 screenshot di un'app meme da telefono: "l'app deve essere
-unica e gestita cosi' graficamente e come layout, ispirati".
+unica e gestita cosi' graficamente e come layout, ispirati"; poi "anche i
+simboli dei token li voglio [...] non e' minimamente paragonabile [...] usa
+un team ad hoc per esaminare disposizione, layout, tema e grafica".
 
-- Layer CSS `shell` (ultimo di `onchain-app.html`): intestazione con avatar
-  (`#more-btn`), saldo (`#balance` spostato in `[data-balance-slot]` da
-  main.js), "Deposit" (`data-sheet="receive"`), campanella (`#inbox-btn`,
-  `openInbox` in alerts.js). Colonna unica 760px anche su desktop.
-- Viste: `meme` (default), `gems`, `top` (nuova), `wallet`, `manual` (swap,
-  fuori dalla barra: ci si arriva dalla lente `#dock-search`, che apre
-  `#swap-pick-out`). Schede `.tabs[data-tabs]` + pannelli `data-pane="vista:scheda"`
-  (`setTab` in main.js, classe `.pane-off`).
-- `top`: classifica degli alert (alert_track) con podio oro/argento, corona,
-  coriandoli (CSS `mod()`), 1D/1W/1M, meme/gemme. `tile()` in alerts.js per i
-  loghi senza immagine.
+Fatto con tre revisori (grafica misurata sui pixel, informazione/navigazione,
+architettura CSS). Stato:
+- Tema in `frontend/static/onchain/app.css`, layer `skin` (ultimo), linkato
+  solo da onchain-app.html con `?v=` (main.py conta anche i .css nell'hash).
+  Tolti il layer `shell` e il blocco desktop a due colonne (>=1100px).
+  Palette zinc: bg #09090b, bande #0f0f12, superfici #18181b.
+- Viste: meme (Trending/Alerts/Scanner), gems (Rankings/Database), top
+  (Alerts/Gems), wallet; `manual` (swap) dalla lente o dal Buy.
+- Riga unica `tokenRow()` in `format.js` (+ `tile/logo/changePill/usdShort`).
+  Loghi: `image` da DexScreener (pair.info.imageUrl, salvato da outcomes,
+  listings, alert_track), altrimenti dd.dexscreener.com per indirizzo.
+- Pagina token `detail.js`: registro `register(id, entry)` (fusione fra
+  moduli), `data-open="<id>"` apre; grafico SVG del market cap da
+  /api/onchain/radar/chart con marcatori degli alert; Signal/Why/Info; Buy
+  -> evento `lae:buy` -> main.js setView("manual") + setChartToken.
+- Da fare se Lorenzo lo chiede: ricerca unificata (oggi la lente apre lo
+  scambio), barra che si nasconde scorrendo, "You" con il P&L vero.
 
 ---
 
