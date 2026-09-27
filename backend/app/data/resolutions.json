@@ -2002,5 +2002,15 @@
       "backend/app/trading/onchain/outcomes.py",
       "backend/app/main.py"
     ]
+  },
+  "seed-0163": {
+    "status": "risolto",
+    "at": 1790543598,
+    "summary": "Due cause. DREGG stava sempre primo per una richiesta del 24/09 anche con un punteggio piu' basso: ora la classifica e il podio vanno solo per punteggio, e DREGG tiene la menzione d'onore. E il Database mostrava col loro punteggio anche progetti fuori dalla classifica (troppo vecchi, troppo grandi, un pilastro debole): ora quel punteggio e' sbiadito e barrato, con sotto il motivo per cui non sono in classifica. Scansione del Gem Finder piu' veloce: 5 analisi in parallelo invece di 3, e dal database ne entrano 6 per giro invece di 4 (fino a 20 in coda invece di 12).",
+    "files": [
+      "backend/app/trading/onchain/leaderboard.py",
+      "frontend/static/onchain/projects.js",
+      "frontend/static/onchain/app.css"
+    ]
   }
 }

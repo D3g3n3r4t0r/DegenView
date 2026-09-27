@@ -3586,3 +3586,11 @@ gemme. `legit.holder_concentration` → (None, None) senza topHolders (prima 0%)
 Non fatto: pulizia/modifiche al repo da parte di DeepSeek approvate da Claude
 (bloccato dal classificatore, serve il permesso di Lorenzo); la pulizia degli
 alert vecchi e rug è deterministica, non serve IA.
+
+**2026-09-27 — Lorenzo: "nel podio delle gemme compaiono token con punteggi più bassi rispetto a quelli presenti in database" / "la scansione complessiva è lenta" / "usa deepseek per aiutarti nel coding".**
+`leaderboard._rank` per punteggio puro (DREGG non più primo d'ufficio: la
+richiesta del 24/09 è superata), Database con punteggio barrato per chi non è
+"ranked". ANALYZE_CONCURRENCY 3→5, DB_FEED_PER_TICK 4→6, DB_FEED_MAX_WAITING
+12→20: da verificare sul server (rate limit GitHub/DexScreener, 2 vCPU).
+DeepSeek nel coding: dalla sandbox di Claude non si raggiunge; oggi aiuta solo
+con le revisioni delle PR su GitHub.

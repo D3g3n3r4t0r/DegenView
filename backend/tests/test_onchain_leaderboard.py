@@ -276,7 +276,8 @@ def test_site_terms_are_small():
     assert terms["zk"] == ["plonky3", "stark"] and "consensus" in terms["protocol"] and terms["candor"]
 
 
-def test_dregg_is_pinned_first_even_with_lower_score():
+def test_the_board_is_by_score_and_dregg_keeps_only_its_honor():
+    # Lorenzo, 27/09: the podium must not show lower scores than the others.
     _entry("BEST", 99, 99, 99)
     lb.add(benchmark.seed_item(), "riferimento")
     k = lb._key(benchmark.CHAIN, benchmark.TOKEN)
@@ -284,8 +285,9 @@ def test_dregg_is_pinned_first_even_with_lower_score():
                           "tokenomics": {"key": "tokenomics", "score": None, "facts": {}, "flags": [], "fatal": "",
                                          "pending": "RugCheck"}})
     b = lb.board()
-    assert b["entries"][0]["symbol"] == "DREGG" and b["entries"][0]["benchmark"] and b["entries"][0]["honor"]
-    assert b["entries"][1]["symbol"] == "BEST"
+    assert b["entries"][0]["symbol"] == "BEST"
+    dregg = next(e for e in b["entries"] if e["symbol"] == "DREGG")
+    assert dregg["benchmark"] and dregg["honor"]
 
 
 def test_similarity_lifts_a_dregg_like_project():
