@@ -3577,3 +3577,12 @@ tutti gli alert di sempre.
 Restano: fasi 2-5 DeepSeek (DEEPSEEK.md), idee UI (Picks come filtro degli
 Alert, Database come link), il lavoratore DeepSeek che apre PR (serve il
 permesso di Lorenzo), la chiave DeepSeek da rigenerare e i segreti da ruotare.
+
+**2026-09-27 — Lorenzo: "la tab alert è confusionale [...] cosa sta per scattare [...] riesumare roba vecchia", "sostituirei Picks con top 15/25/50 [...] non voglio il meme coin", e l'analisi di DeepSeek su Telegram (lp_locked non discrimina, top_holder 0.0).**
+Alerts = tre blocchi compatti (`listings.upcoming`, `alert_track.feed` 48h
+senza rug, `alert_track.reviving`), serviti da `/api/onchain/alerts/meme`.
+Picks tolta (memes.js non montato), `top.js` = Top 15/25/50 dalla classifica
+gemme. `legit.holder_concentration` → (None, None) senza topHolders (prima 0%).
+Non fatto: pulizia/modifiche al repo da parte di DeepSeek approvate da Claude
+(bloccato dal classificatore, serve il permesso di Lorenzo); la pulizia degli
+alert vecchi e rug è deterministica, non serve IA.

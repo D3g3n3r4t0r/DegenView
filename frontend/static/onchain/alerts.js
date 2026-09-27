@@ -103,14 +103,32 @@ function paintFeed() {
   const d = state.data.meme;
   delete root.dataset.loading;
   const body = root.querySelector("[data-alerts-body]");
-  if (!d?.total) {
-    body.innerHTML = SCAN_FORM + `<p class="muted pad">No alert yet. Every Telegram alert shows up here with what it paid, hour by hour.</p>`;
-    return;
-  }
-  const items = [...(d.items ?? [])].sort((a, b) => b.at - a.at);
-  const med = (d.summary ?? []).find((s) => s.h === 48);
-  body.innerHTML = SCAN_FORM + systemLine(d) + `<p class="feed-head">If you had bought and held every alert: median now <b data-sign="${sign(d.now?.median)}">${pct(d.now?.median)}</b>${med?.n ? ` · after 48h <b data-sign="${sign(med.median)}">${pct(med.median)}</b>` : ""} · ${d.total} alerts</p>`
-    + items.map((a) => callCard(a, "meme")).join("")
+  // Lorenzo, 27/09: "la tab alert e' confusionale, troppe informazioni,
+  // troppe cripto [...] mi interessa vedere quali alert sono scattati in
+  // ordine cronologico, cosa sta per scattare [...] e riesumare roba vecchia
+  // che sta ritornando in moda". One line per token; the numbers are on its
+  // page. Rugs and alerts older than 48h leave this list (the Strategies
+  // hall of fame keeps them).
+  const soon = (d?.upcoming ?? []).map((u) => `<li class="soon" data-stage="${u.stage}">
+      <span class="soon-dot" aria-hidden="true"></span>
+      <span class="trow-main"><b>${escapeHtml(u.symbol)} <em class="soon-tag">${u.stage === "imminent" ? "IMMINENT" : "CHECKING"}</em></b>
+      <small>${escapeHtml(u.chain)} · ${escapeHtml(u.waiting_for)} · seen ${age(u.since)[0]} ago</small></span></li>`).join("");
+  const fired = (d?.feed ?? []).map((a) => {
+    const risk = a.ai?.risk;
+    const sys = a.system ? `${sysState(a.system)}${a.system.ret != null ? ` ${pct(a.system.ret)}` : ""}` : "";
+    return tokenRow({ id: registerAlert(a, "meme"), symbol: a.symbol, name: a.name || a.symbol, chain: a.chain,
+      token: a.token_address, image: a.image, cap: capNow(a), change: a.now, ageTs: a.at, badge: a.early ? "early" : null,
+      sub: [sys && `system ${escapeHtml(sys)}`, risk != null && `<span class="risk" data-r="${risk >= 60 ? "hi" : risk >= 30 ? "mid" : "lo"}">risk ${risk}</span>`].filter(Boolean).join(" · ") });
+  }).join("");
+  const back = (d?.reviving ?? []).map((r) => tokenRow({
+    id: registerAlert({ ...r, now: r.chg / 100, cap0: null, returns: {} }, "meme"), symbol: r.symbol, name: r.name || r.symbol,
+    chain: r.chain, token: r.token_address, image: r.image, cap: null, change: r.chg / 100, ageTs: r.at,
+    sub: `alerted ${age(r.at)[0]} ago · ${r.buys_h1 ?? 0} buys / ${r.sells_h1 ?? 0} sells 1h`, pill: `<em class="hot">BACK</em>` })).join("");
+  body.innerHTML = SCAN_FORM + systemLine(d)
+    + (soon ? `<h4 class="feed-sec">About to fire</h4><ol class="soon-list">${soon}</ol>` : "")
+    + `<h4 class="feed-sec">Fired · last 48h</h4>`
+    + (fired ? `<ol class="memes-list">${fired}</ol>` : `<p class="muted pad">No alert in the last 48 hours.</p>`)
+    + (back ? `<h4 class="feed-sec">Coming back</h4><ol class="memes-list">${back}</ol>` : "")
     + `<button type="button" class="review-row" data-open-scanner>Live scanner: what it is looking at now <span aria-hidden="true">›</span></button>`;
 }
 
