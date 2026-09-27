@@ -540,7 +540,29 @@ function placeDock() {
   if (dockSearch) document.body.append(dockSearch);
 }
 placeDock();
-document.querySelector("[data-balance-slot]")?.prepend(view.balance);
+// The header shows everything, every chain, every token (Lorenzo: "il
+// wallet deve essere multi-chain e devo visualizzare il saldo a
+// prescindere da quale token e in quale chain ho"). The per-chain native
+// balance stays in the wallet view, where the chain switch is.
+const totalEl = document.createElement("button");
+totalEl.type = "button";
+totalEl.className = "amount total-bal";
+totalEl.setAttribute("aria-label", "Total balance, all chains");
+totalEl.textContent = "—";
+document.querySelector("[data-balance-slot]")?.prepend(totalEl);
+totalEl.addEventListener("click", () => setView("profile"));
+async function refreshTotal() {
+  try {
+    const t = await api.getWalletsTotal();
+    if (t.total == null) { totalEl.textContent = "$0.00"; return; }
+    const [i, d] = t.total.toFixed(2).split(".");
+    totalEl.innerHTML = `$${Number(i).toLocaleString("en-US")}<span class="cents">.${d}</span>`;
+    totalEl.title = Object.entries(t.by_chain ?? {}).map(([c, v]) => `${c}: $${v.toFixed(2)}`).join(" · ")
+      + (t.missing?.length ? ` · not read: ${t.missing.join(", ")}` : "");
+  } catch { /* keep the last number */ }
+}
+refreshTotal();
+setInterval(() => { if (document.visibilityState === "visible") refreshTotal(); }, 60_000);
 
 /** Tabs inside a view: panels carry data-pane="<view>:<tab>". */
 function setTab(viewName, tab) {

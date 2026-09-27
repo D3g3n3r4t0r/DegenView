@@ -107,6 +107,7 @@ from app.trading.onchain import wealth as onchain_wealth
 from app import profiles
 from app import wallet_link
 from app.trading.onchain import user_swaps
+from app.trading.onchain import portfolio as onchain_multichain
 from app.trading.onchain import passkey as onchain_passkey
 from app.trading.onchain import pilot as onchain_pilot
 from app.trading.onchain import listings as onchain_listings
@@ -3762,64 +3763,46 @@ async def set_autotrader(body: AutotraderUpdate, user: User = Depends(auth.get_c
 # deve rimanere tutto nel database, uno deve poter scegliere anche
 # l'immagine profilo". See profiles.py and trading/onchain/wealth.py.
 
-_CASH_SYMBOLS = {"USDG", "USDC", "USDT", "PYUSD", "USD1"}
-_NATIVE_UNIT = {"solana": "SOL", "robinhood": "ETH"}
-
-
-async def _linked_holdings(chain: str, address: str) -> list[dict]:
-    """A connected wallet's tokens, priced (read-only: we hold no key)."""
-    known = [_ONCHAIN_QUOTE_TOKEN["robinhood"]] + ([onchain_autotrader._meta["usdc"]] if onchain_autotrader._meta["usdc"] else []) \
-        if chain == "robinhood" else []
-    raw = await onchain_balances.all_token_balances(chain, address, known)
-
-    async def _enrich(entry: dict) -> dict:
-        try:
-            meta = await _onchain_token_meta(chain, entry["address"])
-        except Exception:  # noqa: BLE001
-            meta = {"symbol": None, "price_usd": None, "decimals": entry.get("decimals")}
-        amount = entry["amount"] if "amount" in entry else entry["amount_raw"] / (10 ** (meta["decimals"] or 0))
-        return {"address": entry["address"], "symbol": meta["symbol"] or entry["address"][:6], "amount": amount,
-                "price_usd": meta["price_usd"],
-                "value_usd": amount * meta["price_usd"] if meta["price_usd"] is not None else None}
-    return list(await asyncio.gather(*(_enrich(e) for e in raw)))
+def _all_addresses(user: User) -> list[tuple[str, str, str]]:
+    """(kind, address, source) of every wallet of this account: the site's
+    and the ones the user connected. An EVM address is read on every EVM chain."""
+    out = []
+    for chain, w in user.onchain_wallets.items():
+        out.append(("solana" if chain == "solana" else "evm", w.address, "site"))
+    for w in profiles.wallets(user.id):
+        if not any(k == w["kind"] and a.lower() == w["address"].lower() for k, a, _s in out):
+            out.append((w["kind"], w["address"], "connected"))
+    return out
 
 
 async def _wallet_snapshot(user: User) -> dict:
-    """Everything the wallets hold, priced: cash (stablecoins), positions
-    (the rest, the chain's own coin included), total. The site's wallets and
-    the ones the user connected (wallet_link.py). A wallet whose RPC does
-    not answer is left out and named in `missing`, never counted as zero."""
-    positions, cash, missing = [], 0.0, []
-    sources = [(chain, w.address, "site") for chain, w in user.onchain_wallets.items()]
-    sources += [("robinhood" if w["kind"] == "evm" else "solana", w["address"], "connected")
-                for w in profiles.wallets(user.id)]
-    for chain, address, source in sources:
-        try:
-            native, price = await asyncio.gather(onchain_balances.native_balance(chain, address),
-                                                 onchain_prices.native_price_usd(chain))
-            holdings = await (_portfolio_holdings(user, chain) if source == "site" else _linked_holdings(chain, address))
-        except Exception:  # noqa: BLE001
-            missing.append(f"{chain} {address[:6]}…")
-            continue
-        if native:
-            positions.append({"chain": chain, "symbol": _NATIVE_UNIT[chain], "name": _NATIVE_UNIT[chain],
-                              "address": None, "amount": native, "price_usd": price, "source": source,
-                              "value_usd": native * price if price is not None else None, "native": True})
-        for h in holdings:
-            if (h.get("symbol") or "").upper() in _CASH_SYMBOLS:
-                cash += h.get("value_usd") or h.get("amount") or 0.0
-            elif h.get("amount"):
-                positions.append({"chain": chain, "source": source, **h})
-    positions.sort(key=lambda p: -(p.get("value_usd") or 0))
-    total = cash + sum(p.get("value_usd") or 0 for p in positions)
-    return {"total": round(total, 4), "cash": round(cash, 4), "positions": positions, "missing": missing}
+    """Everything every wallet holds on every chain, priced (portfolio.py):
+    cash (stablecoins), positions (the rest, native coins included), total."""
+    addrs = _all_addresses(user)
+    if not addrs:
+        return {"total": None, "cash": 0.0, "positions": [], "missing": [], "by_chain": {}}
+    res = await onchain_multichain.everything(addrs)
+    positions = [{"chain": h["chain"], "address": h["token"], "symbol": h["symbol"], "name": h["name"],
+                  "amount": h["amount"], "price_usd": h["price_usd"], "value_usd": h["value_usd"],
+                  "image": h["image"], "native": h["native"], "hidden": h["hidden"], "source": h["source"],
+                  "wallet": h["wallet"]}
+                 for h in res["holdings"] if (h["symbol"] or "").upper() not in onchain_multichain.STABLES or h["hidden"]]
+    return {"total": res["total"], "cash": res["cash"], "positions": positions,
+            "missing": [f"{m['chain']} {m['address'][:6]}…" for m in res["missing"]], "by_chain": res["by_chain"]}
+
+
+@app.get("/api/wallets/total")
+async def wallets_total(user: User = Depends(auth.get_current_user)) -> dict:
+    """The header's number: every token on every chain, in USD."""
+    snap = await _wallet_snapshot(user)
+    return {"total": snap["total"], "cash": snap["cash"], "by_chain": snap["by_chain"], "missing": snap["missing"]}
 
 
 async def _wealth_loop() -> None:
     await asyncio.sleep(60)
     while True:
         for user in auth.list_users():
-            if not user.onchain_wallets and not profiles.wallets(user.id):
+            if not _all_addresses(user):
                 continue
             try:
                 snap = await _wallet_snapshot(user)
@@ -3853,8 +3836,7 @@ def _closed_trades(user: User) -> list[dict]:
 @app.get("/api/profile")
 async def get_profile(user: User = Depends(auth.get_current_user)) -> dict:
     p = profiles.get(user.id, user.email, _joined_hint(user))
-    snap = await _wallet_snapshot(user) if user.onchain_wallets or profiles.wallets(user.id) \
-        else {"total": None, "cash": 0.0, "positions": [], "missing": []}
+    snap = await _wallet_snapshot(user)
     if snap["total"] is not None and not snap["missing"]:
         onchain_wealth.record(user.id, snap["total"])
     closed = _closed_trades(user)
@@ -3863,6 +3845,7 @@ async def get_profile(user: User = Depends(auth.get_current_user)) -> dict:
     return {
         "profile": profiles.public(user.id, p), "email": user.email,
         "value": snap["total"], "cash": snap["cash"], "positions": snap["positions"], "missing": snap["missing"],
+        "by_chain": snap["by_chain"],
         "closed": closed,
         "stats": {"trades": orders + sum(1 for t in onchain_autotrader.view(user.id)["trades"] if t.get("ok") and t.get("mode") == "sim"),
                   "avg_hold_s": sum(holds) / len(holds) if holds else None, "closed": len(closed)},
