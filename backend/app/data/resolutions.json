@@ -1758,7 +1758,7 @@
   "seed-0143": {
     "status": "in corso",
     "at": 1790525071,
-    "summary": "Primo passo fatto: nel profilo c'e' 'Wallets' con MetaMask/Rabby (Robinhood Chain) e Phantom (Solana). Il wallet firma un messaggio con un codice monouso (gratis, non e' una transazione, non puo' muovere fondi), il server verifica la firma (EIP-191 per EVM, ed25519 per Solana) e collega l'indirizzo all'account; un indirizzo puo' stare su un solo account, fino a sei per account, scollegabili. Quello che il wallet collegato detiene entra nel profilo e nel grafico del valore, in sola lettura: le sue chiavi non le vediamo mai. Da telefono senza estensione il sito si apre nel browser interno di MetaMask o Phantom. Restano: scambi firmati dal wallet dell'utente, poi la strategia automatica per chi collega il proprio wallet tramite un vault su Robinhood Chain (lui deposita, il bot puo' solo scambiare su router approvati e verso il vault stesso, lui ritira quando vuole), con audit del contratto e parere legale (MiCA) prima di aprirlo al pubblico.",
+    "summary": "Primo passo fatto: nel profilo c'e' 'Wallets' con MetaMask/Rabby (Robinhood Chain) e Phantom (Solana). Il wallet firma un messaggio con un codice monouso (gratis, non e' una transazione, non puo' muovere fondi), il server verifica la firma (EIP-191 per EVM, ed25519 per Solana) e collega l'indirizzo all'account; un indirizzo puo' stare su un solo account, fino a sei per account, scollegabili. Quello che il wallet collegato detiene entra nel profilo e nel grafico del valore, in sola lettura: le sue chiavi non le vediamo mai. Da telefono senza estensione il sito si apre nel browser interno di MetaMask o Phantom. Scambi firmati dal wallet dell'utente fatti (seed-0144). Resta: la strategia automatica per chi collega il proprio wallet tramite un vault su Robinhood Chain (lui deposita, il bot puo' solo scambiare su router approvati e verso il vault stesso, lui ritira quando vuole), con audit del contratto e parere legale (MiCA) prima di aprirlo al pubblico.",
     "files": [
       "backend/app/wallet_link.py",
       "backend/app/profiles.py",
@@ -1767,6 +1767,19 @@
       "frontend/static/onchain/api.js",
       "frontend/static/onchain/app.css",
       "backend/tests/test_wallet_link.py"
+    ]
+  },
+  "seed-0144": {
+    "status": "risolto",
+    "at": 1790525558,
+    "summary": "Nella pagina di un token Robinhood o Solana, chi ha collegato il proprio wallet vede 'My wallet' accanto a Buy. Si apre un foglio: Buy (importo e valuta: USDG o USDC su Robinhood, SOL o USDC su Solana) o Sell (25, 50, 100% di quello che il wallet detiene). 'Review' mostra quanto arriva circa, il minimo garantito (preventivo -3%), l'impatto sul prezzo e quante firme chiedera' il wallet; 'Confirm in wallet' le fa firmare e inviare al wallet dell'utente. Il server prepara solo le transazioni: su Robinhood l'eventuale autorizzazione e lo scambio Uniswap v3 con destinatario il wallet stesso (la chain viene aggiunta al wallet se non la conosce), su Solana la transazione Jupiter per quella chiave. Noi non firmiamo e non inviamo niente. Limiti: su Robinhood solo token con un pool Uniswap v3 diretto; su Solana i token del programma Token-2022 non compaiono ancora tra i saldi da vendere.",
+    "files": [
+      "backend/app/trading/onchain/user_swaps.py",
+      "backend/app/main.py",
+      "frontend/static/onchain/userswap.js",
+      "frontend/static/onchain/detail.js",
+      "frontend/static/onchain/app.css",
+      "backend/tests/test_user_swaps.py"
     ]
   }
 }

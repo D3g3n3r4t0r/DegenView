@@ -28,6 +28,7 @@ import { mountProjects } from "@onchain/projects.js";
 import { mountAlerts, openInbox } from "@onchain/alerts.js";
 import { mountAutotrade } from "@onchain/autotrade.js";
 import { mountProfile, refreshProfile } from "@onchain/profile.js";
+import { loadLinked } from "@onchain/userswap.js";
 import { mountMemes } from "@onchain/memes.js";
 
 // Sulla pagina a se' (onchain-app.html) la radice e' il documento intero.
@@ -594,6 +595,7 @@ mountProjects();
 mountAlerts();
 mountAutotrade();
 mountProfile({ go: (v) => setView(v) });
+loadLinked();
 mountMemes();
 
 // La rete si cambia dal suo nome, accanto al saldo: un tocco, niente menu.
