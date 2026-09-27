@@ -4264,7 +4264,11 @@ async def onchain_alerts_view(kind: Literal["meme", "gem"], user: User = Depends
     """Every Telegram alert and what entering on the message would pay: 1-48h
     checkpoints, live, and the best backtested strategy. See alert_track.py."""
     _require_onchain_enabled()
-    return onchain_alert_track.board(kind)
+    out = onchain_alert_track.board(kind)
+    if kind == "meme":
+        out.update(feed=onchain_alert_track.feed(kind), reviving=onchain_alert_track.reviving(kind),
+                   upcoming=onchain_listings.upcoming())
+    return out
 
 
 @app.get("/api/onchain/ai-review")

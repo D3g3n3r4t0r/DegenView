@@ -31,6 +31,7 @@ import { mountProfile, refreshProfile } from "@onchain/profile.js";
 import { loadLinked } from "@onchain/userswap.js";
 import { mountMemes } from "@onchain/memes.js";
 import { mountAgent } from "@onchain/agent.js";
+import { mountTop } from "@onchain/top.js";
 
 // Sulla pagina a se' (onchain-app.html) la radice e' il documento intero.
 // Fusa dentro la tab Trading, invece, questo modulo viene importato dentro
@@ -625,8 +626,9 @@ mountAlerts();
 mountAutotrade();
 mountProfile({ go: (v) => setView(v) });
 loadLinked();
-mountMemes();
+// Picks (memes.js) retired: Lorenzo wants no meme coins promoted; Top replaces it.
 mountAgent();
+mountTop();
 
 // La rete si cambia dal suo nome, accanto al saldo: un tocco, niente menu.
 view.chainFlip?.addEventListener("click", () => {

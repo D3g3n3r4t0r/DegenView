@@ -272,7 +272,12 @@ def judge_rugcheck(report: dict | None) -> dict:
     if danger:
         return _check("security", "RugCheck", False, ", ".join(danger[:3]))
     top, top10 = holder_concentration(report)
-    holders = {"top_holder_pct": round(top, 2), "top10_pct": round(top10, 2)}  # per outcomes.py
+    # The summary report often has no holder list: then the shares are
+    # unknown, not 0% (DeepSeek, 27/09, from our own data: "top_holder_pct
+    # e' 0,0 -> dato assente").
+    holders = {"top_holder_pct": round(top, 2) if top is not None else None,
+               "top10_pct": round(top10, 2) if top10 is not None else None}  # per outcomes.py
+    top, top10 = top or 0.0, top10 or 0.0
     if top > HOLDER_MAX_PCT:
         return _check("security", "RugCheck", False, f"a single wallet holds {top:.0f}% of supply",
                       facts=holders)
@@ -289,8 +294,11 @@ def judge_rugcheck(report: dict | None) -> dict:
                   facts={**holders, "lp_locked_pct": float(lp) if lp is not None else None})
 
 
-def holder_concentration(report: dict) -> tuple[float, float]:
-    """(% del primo wallet, % dei primi 10), senza pool, locker e conti noti."""
+def holder_concentration(report: dict) -> tuple[float | None, float | None]:
+    """(% del primo wallet, % dei primi 10), senza pool, locker e conti noti.
+    (None, None) quando il report non ha la lista dei holder."""
+    if not report.get("topHolders"):
+        return None, None
     skip = set((report.get("knownAccounts") or {}).keys())
     for m in report.get("markets") or []:
         skip |= {m.get("pubkey"), m.get("liquidityA"), m.get("liquidityB")}
