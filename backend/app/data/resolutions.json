@@ -2042,5 +2042,25 @@
       "frontend/static/onchain/main.js",
       "frontend/static/onchain/alerts.js"
     ]
+  },
+  "seed-0167": {
+    "status": "risolto",
+    "at": 1790545787,
+    "summary": "Il messaggio vuoto finiva nella colonna stretta del pallino colorato, per questo andava a capo a ogni lettera. E l'elenco delle attivita' viveva solo in memoria: a ogni aggiornamento del sito si svuotava mentre i conteggi restavano. Ora il messaggio occupa tutta la riga e l'elenco e' salvato insieme ai conteggi (issue #176, scritta da DeepSeek)."
+  },
+  "seed-0168": {
+    "status": "risolto",
+    "at": 1790545787,
+    "summary": "Aave vive su Ethereum; su Solana c'e' una sua copia bridged e il database ne leggeva il market cap solo su quel contratto, cioe' la piccola parte di token passata sul ponte. Ora sulla scheda CoinGecko si legge il market cap globale: se e' sopra la fascia delle gemme la moneta esce da Top e Database, e tutte le voci gia' presenti vengono ricontrollate una volta (issue #177). Sui simboli nessun errore sistematico trovato: serve un esempio."
+  },
+  "seed-0169": {
+    "status": "risolto",
+    "at": 1790545787,
+    "summary": "Le schede mostravano solo quello che la lista di partenza sapeva: dalla classifica tutto, da Top o Database quasi niente. Ora la pagina del token chiede lei il dossier completo al server (/api/onchain/token): Why con punteggi e motivo se non e' in classifica, Info con dossier, descrizione e link, Signal con gli alert o, se non ce ne sono, punteggio, stato, market cap, liquidita' ed eta' (issue #178)."
+  },
+  "seed-0170": {
+    "status": "risolto",
+    "at": 1790545787,
+    "summary": "Un token rug si etichetta in poche ore, uno sano solo dopo 3 giorni; la memoria tiene 5000 token e buttava i piu' vecchi, e con Solana, BSC e Robinhood 5000 token arrivano in meno di 3 giorni: i sani sparivano prima di maturare, quindi 3113 esiti su 3113 erano rug e il modello non aveva esempi negativi. Ora si buttano prima i token che non insegnano niente e poi la classe piu' numerosa, un token alla volta (issue #182). Il modello e gli AUC si riempiranno nei prossimi giorni. Gli altri punti del report (LP bloccato ma liquidita' a 0, Matrix +290% poi rug, conteggi diversi) non sono bug: vedi la chat."
   }
 }

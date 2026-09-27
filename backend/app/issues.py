@@ -164,6 +164,18 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0170", "Il modello dei rug non si attiva mai: tutti gli esiti sono rug",
+     "Report di DeepSeek letto da Lorenzo: memoria active:false con n 3113 e rugs 3113, tutti gli AUC vuoti ('no rugs or no non-rugs').",
+     "alta"),
+    ("seed-0169", "Signal, Why e Info devono essere sempre completi, per ogni token",
+     "Lorenzo (screenshot di Whales Market aperto da Top, solo 'No Telegram alert'): 'signal, why e info devono essere sempre completi di informazioni, per ogni token'.",
+     "media"),
+    ("seed-0168", "Aave in classifica con 531k di market cap",
+     "Lorenzo (screenshot della Top): 'AAVE non ha 531k di market cap, e' un progetto molto grosso, fai controllare tutti i valori di market cap e anche i simboli'.",
+     "alta"),
+    ("seed-0167", "Il pannello dell'agente scrive il messaggio una lettera per riga",
+     "Lorenzo (screenshot di 'The agent': 'Nothing yet since the last restart' in verticale, sotto 'Today: 28 chat'): 'comincia facendo risolvere questo bug'.",
+     "media"),
     ("seed-0166", "Ogni tanto la schermata flasha e appaiono sovrapposizioni",
      "Lorenzo (screenshot con scheda di scansione, autotrader e alert sovrapposti): 'ogni tanto flasha la schermata e appaiono sovrapposizioni'.",
      "alta"),
