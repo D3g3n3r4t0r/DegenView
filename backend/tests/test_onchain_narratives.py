@@ -43,7 +43,7 @@ def test_narrative_lifts_score_but_not_qualification():
 def test_chain_index_and_narrative_pages(monkeypatch):
     idx = d.chain_index([{"id": "a", "platforms": {"solana": "M"}}, {"id": "b", "platforms": {"ethereum": "0x"}},
                          {"id": "c", "platforms": {"robinhood": "0xc"}}])
-    assert idx == {"solana": {"a"}, "robinhood": {"c"}}
+    assert idx == {"solana": {"a"}, "robinhood": {"c"}, "base": set()}
     calls = []
 
     async def fake_get(client, path, params=None):

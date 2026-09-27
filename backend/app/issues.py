@@ -164,6 +164,12 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0128", "Estendere le ricerche anche alla chain Base",
+     "Lorenzo: 'procedi, estendiamo anche a chain BASE le ricerche'.",
+     "media"),
+    ("seed-0127", "Podio della classifica progettato con agenti specializzati, animato a 120fps, con i loghi veri",
+     "Lorenzo: 'progetta la leaderboard con agenti specializzati, voglio qualcosa che catturi attenzione animata con fluidita' 120fps [...] parlo del PODIO IO'. Poi: 'l'importante e' che poi al posto delle faccine ci sia il logo' e 'applica tutto, decidi te qual e' la piu' bellina'.",
+     "media"),
     ("seed-0126", "Un'app sola, con grafica e layout da app di trading per telefono, e i loghi dei token",
      "Lorenzo (con quattro screenshot di un'app di trading meme): 'l'app deve essere unica e gestita cosi' graficamente e come layout, ispirati'. Poi: 'anche i simboli dei token li voglio [...] non e' minimamente paragonabile a quelle screenshot che ti ho mandato, usa un team ad hoc per esaminare disposizione, layout, tema e grafica dell'app'.",
      "alta"),
