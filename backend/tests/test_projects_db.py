@@ -32,6 +32,16 @@ def test_upsert_merges_sources_and_never_erases_known_fields():
     assert p["sources"] == ["jupiter", "coingecko"] and p["first_seen"] == T0 and p["last_seen"] == T0 + 1
 
 
+def test_global_cap_keeps_a_bridged_copy_out_of_the_band():
+    db.upsert({"chain": "solana", "token_address": "AAVEmint", "symbol": "AAVE", "name": "Aave",
+               "cg_id": "aave", "market_cap": 531_000, "liquidity_usd": 900_000}, "coingecko-list", T0)
+    assert [p["symbol"] for p in db.search("", "", "score", 50, 0, True)["items"]] == ["AAVE"]
+    db.mark_detail("solana", "aave", T0, 2_000_000_000)
+    assert db.search("", "", "score", 50, 0, True)["items"] == []
+    db.reject_cg("solana", "aave", "global market cap $2,000,000,000", T0)
+    assert db.get("solana", "AAVEmint")["status"] == "rejected"
+
+
 def test_coingecko_list_fills_the_universe_and_market_puts_it_in_band():
     rows = [{"id": "alpha", "symbol": "alp", "name": "Alpha", "platforms": {"solana": "AlphaMint"}},
             {"id": "eth", "symbol": "e", "name": "E", "platforms": {"arbitrum": "0x1"}},
