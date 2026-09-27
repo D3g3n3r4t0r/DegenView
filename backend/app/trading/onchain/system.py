@@ -50,6 +50,19 @@ CANDIDATES = [
     {"strategy_name": "Lorenzo HF (minuti on-chain)", "params": None, "label": "Trend HF", "source": "predefinita"},
     {"strategy_name": "Lorenzo (trend-follower)", "params": None, "label": "Trend EMA", "source": "predefinita"},
 ]
+# Every strategy backtested on the alert's own chart, so each alert shows
+# what each one would have made on it (Lorenzo, 27/09: "non esiste che su
+# queste crypto non ci sia un backtest delle strategie [...] stessa cosa
+# dobbiamo poter fare qui"). Accumulo/Distribuzione is left out: it uses
+# future data (radar.UNRELIABLE, seed-0010). Shown labels carry no person's
+# name.
+BACKTESTS = [
+    ("Lorenzo (trend-follower)", "Trend EMA"),
+    ("Lorenzo HF (minuti on-chain)", "Trend HF"),
+    ("Gabriele (RSI+BB reversal)", "RSI+BB"),
+    ("Gabriele 2 (RSI+BB long/short)", "RSI+BB L/S"),
+]
+BACKTEST_MIN_BARS = 30
 # Shown labels carry no person's name (Lorenzo, 27/09: "elimina il nome
 # lorenzo dalla strategia"); strategy_name stays the internal key. Results
 # stored under the old labels are renamed on load (alert_track._load).
@@ -153,6 +166,32 @@ def follow(bars: list[list], cfg: dict, start: float, *, gone: bool = False, now
 def evaluate(bars: list[list], start: float, *, gone: bool = False, now: float | None = None) -> dict:
     """Every candidate on one alert: {label: follow(...)}."""
     return {c["label"]: follow(bars, c, start, gone=gone, now=now) for c in CANDIDATES}
+
+
+def backtest_all(bars: list[list]) -> dict:
+    """Every strategy backtested on the alert's whole chart, every entry and
+    exit, fees included (radar.evaluate, the same engine as the main site)."""
+    df = frame(bars)
+    if len(df) < BACKTEST_MIN_BARS:
+        return {"bars": len(df), "rows": [], "hold_pct": None}
+    res = radar.evaluate(df, [{"strategy_name": n, "params": None, "label": lab, "source": "predefinita"}
+                              for n, lab in BACKTESTS])
+    by_label = {r["label"]: r for r in res["tried"]}
+    rows = []
+    for _name, lab in BACKTESTS:
+        r = by_label.get(lab)
+        if not r:
+            continue
+        rows.append({"label": lab,
+                     "return_pct": round(r["return_pct"], 2) if r["return_pct"] is not None else None,
+                     "trades": r["trades"],
+                     "win_rate": round(r["win_rate"], 2) if r["win_rate"] is not None else None,
+                     "max_dd": round(r["max_dd"], 2) if r["max_dd"] is not None else None,
+                     "profit_factor": round(r["profit_factor"], 2) if r["profit_factor"] is not None else None,
+                     "in_position": r["in_position"]})
+    hold = res["hold_pct"]
+    return {"bars": len(df), "from": int(df.index[0].timestamp()), "to": int(df.index[-1].timestamp()),
+            "hold_pct": round(hold, 2) if hold is not None else None, "rows": rows}
 
 
 def _median(vals: list[float]) -> float | None:
