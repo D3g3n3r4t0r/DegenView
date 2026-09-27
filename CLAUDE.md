@@ -144,14 +144,19 @@ con la difficolta'. Regole che Lorenzo ha chiesto esplicitamente:
 
 ## DeepSeek scrive, Claude rivede
 
-Lorenzo, 27/09: "devi usare intensamente deepseek per aiutarti nel coding
-[...] voglio che deepseek riduca drasticamente il tuo consumo di token".
-Se l'ambiente ha `DEEPSEEK_API_KEY` e la rete permette `api.deepseek.com`,
-per ogni modifica non banale: scrivi il compito in poche righe, fai scrivere
-la bozza a DeepSeek (`python3 scripts/ds.py "compito" file[:a-b] ... --apply`),
-poi leggi solo il diff (`git diff`), fai girare le verifiche e correggi. Mai
-fidarsi senza test: DeepSeek sbaglia spesso i dettagli. Soldi, chiavi, firme
-ed esecuzione reale li scrive Claude.
+Lorenzo, 27/09: "devi usare deepseek assiduamente, voglio ridurre
+drasticamente il consumo di token con te [...] comunicarci tramite github".
+Per ogni modifica non banale che non tocchi soldi, chiavi, firme o
+esecuzione reale:
+
+1. apri una issue con etichetta `deepseek` (corpo: il compito in poche righe,
+   poi `Files:` con i file o `file:inizio-fine`, poi `Tests:`);
+2. l'Action `deepseek-task.yml` fa scrivere il codice a DeepSeek, fa girare
+   ruff e i test indicati e apre una PR `deepseek/issue-N`;
+3. leggi solo il diff della PR, correggi quello che non va, verifica, fai il
+   merge. Niente si mergia da solo; se DeepSeek fallisce, lo dice nella issue.
+
+`scripts/ds.py` fa lo stesso da locale, se l'ambiente ha la chiave e la rete.
 
 ## Lingua
 
