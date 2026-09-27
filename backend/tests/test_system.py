@@ -78,3 +78,19 @@ def test_bars_from_readings_and_refresh(monkeypatch, tmp_path):
     b = at.board("meme", now=T0 + 2 * B)
     assert b["system"]["chosen"] == system.DEFAULT and "live" in b["system"]
     at.reset_for_tests()
+
+
+def test_a_sell_after_a_one_candle_crash_says_so(monkeypatch):
+    # entry at bar 41, the price crashes 80% inside bar 44, the exit fills at bar 45's open
+    prices = [1.0] * 44 + [0.2, 0.2, 0.2]
+    monkeypatch.setattr(system.radar, "spot_signals", _signals({40}, {44}))
+    r = system.follow(_bars(prices), system.CANDIDATES[0], T0, now=T0 + 8 * B)
+    sell = [e for e in r["events"] if e["side"] == "sell"][0]
+    assert sell["why"] == "crash" and sell["drop"] <= system.CRASH and r["ret"] < -0.75
+
+
+def test_a_sell_on_a_normal_turn_is_a_signal(monkeypatch):
+    prices = [1.0] * 44 + [0.95, 0.94, 0.93]
+    monkeypatch.setattr(system.radar, "spot_signals", _signals({40}, {44}))
+    r = system.follow(_bars(prices), system.CANDIDATES[0], T0, now=T0 + 8 * B)
+    assert [e for e in r["events"] if e["side"] == "sell"][0]["why"] == "signal"
