@@ -22,10 +22,9 @@
 
 const CROWN = `<svg viewBox="0 0 48 32" aria-hidden="true"><defs><linearGradient id="pa-cg" x1="0" y1="0" x2="0" y2="1">
   <stop offset="0" stop-color="#fef9c3"/><stop offset=".45" stop-color="#facc15"/><stop offset="1" stop-color="#c07503"/></linearGradient></defs>
-  <path d="M4 10 L14 19 L24 4 L34 19 L44 10 L40 28 H8 Z" fill="url(#pa-cg)" stroke="#7c4a02" stroke-width="1.2" stroke-linejoin="round"/>
-  <rect x="8" y="24" width="32" height="4" fill="#92400e" opacity=".5"/>
-  <circle cx="24" cy="4" r="2.7" fill="#fef3c7"/><circle cx="4" cy="10" r="2.4" fill="#fef3c7"/><circle cx="44" cy="10" r="2.4" fill="#fef3c7"/>
-  <circle cx="24" cy="20" r="2.4" fill="#f87171"/><circle cx="15.5" cy="23" r="1.7" fill="#82e28d"/><circle cx="32.5" cy="23" r="1.7" fill="#82e28d"/></svg>`;
+  <path d="M16 3h16v8a8 8 0 0 1-16 0z" fill="url(#pa-cg)" stroke="#7c4a02" stroke-width="1.2" stroke-linejoin="round"/>
+  <path d="M16 6h-5a5 5 0 0 0 5 6M32 6h5a5 5 0 0 1-5 6" fill="none" stroke="#7c4a02" stroke-width="1.2" stroke-linejoin="round"/>
+  <path d="M24 19v5M18 28h12" fill="none" stroke="#7c4a02" stroke-width="1.2" stroke-linejoin="round"/></svg>`;
 const STAR = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 0C13 8 16 11 24 12C16 13 13 16 12 24C11 16 8 13 0 12C8 11 11 8 12 0Z" fill="#fef3c7"/></svg>`;
 const COLORS = ["#facc15", "#fde68a", "#c07503", "#e4e4e7", "#fdba74", "#82e28d", "#ffffff"];
 const COUNT_AT = 900;
