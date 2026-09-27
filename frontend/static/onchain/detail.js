@@ -306,12 +306,19 @@ function svgChart(candles, e) {
     const v = ys[Math.max(0, i)];
     return `<g class="mk" transform="translate(${x(a.at).toFixed(1)},${y(v).toFixed(1)})"><circle r="7"/><path d="M-2.6 1.6v-2a2.6 2.6 0 0 1 5.2 0v2l.9 1H-3.5z M-.9 3.4a.9.9 0 0 0 1.8 0"/></g>`;
   }).join("");
+  // The system's own trades on this token: green up for a buy, red down for a sell.
+  const trades = (e.alerts ?? []).flatMap((a) => a.system?.events ?? []).filter((v) => v.t >= t0 && v.t <= t1).map((v) => {
+    const i = candles.findIndex((c) => c.time >= v.t);
+    const yv = y(ys[Math.max(0, i)]);
+    const buy = v.side === "buy";
+    return `<path class="tr ${buy ? "buy" : "sell"}" transform="translate(${x(v.t).toFixed(1)},${(yv + (buy ? 12 : -12)).toFixed(1)})" d="${buy ? "M0-5 5 3H-5z" : "M0 5 5-3H-5z"}"><title>System ${buy ? "buy" : "sell"}</title></path>`;
+  }).join("");
   const up = ys[ys.length - 1] >= ys[0];
   return `<svg viewBox="0 0 ${W} ${H}" class="line-chart" data-sign="${up ? "up" : "down"}" role="img" aria-label="Market cap chart">
     ${ticks.map((v) => `<text x="${W - 4}" y="${y(v) + 4}" text-anchor="end">${usdShort(v)}</text>`).join("")}
     <line class="now" x1="0" x2="${W - R}" y1="${y(now)}" y2="${y(now)}"/>
     <path class="ln" d="${d}"/>
-    <circle class="dot" cx="${x(t1)}" cy="${y(now)}" r="4"/>
+    <circle class="dot" cx="${x(t1)}" cy="${y(now)}" r="4"/>${trades}
     ${marks}
     <g class="tag" transform="translate(${W - R + 4},${y(now) - 10})"><path d="M0 10 6 0h50v20H6z"/><text x="31" y="14" text-anchor="middle">${usdShort(now)}</text></g>
   </svg>`;

@@ -64,12 +64,24 @@ class Settings(BaseSettings):
     # The daily reviewer (app/trading/onchain/ai_review.py): once a day
     # Claude reads what really happened to the signals and writes lessons.
     # Request: "un'istanza di claude sonnet nel server [...] con un massimo di
-    # token al giorno, cosi' impariamo dagli errori". Needs anthropic_api_key.
+    # token al giorno, cosi' impariamo dagli errori". Needs anthropic_api_key or deepseek_api_key.
     # Cost: one review is ~15k tokens (~$0.06 on Sonnet 5), so ~$2 a month.
     # Two hard caps, counted from the API's own usage: per UTC day and per
     # calendar month. The key is a separate API key from the Console, billed
     # apart from any Claude subscription: it never uses the founder's chat quota.
     ai_review_enabled: bool = True
+    # DeepSeek as the reviewer instead of Claude (Lorenzo: "DeepSeek perche'
+    # e' un modello gratuito"): the open weights are free, running the full
+    # model is not (hundreds of GB of GPU memory), so it is used through
+    # DeepSeek's API, far cheaper per token than Claude. "auto" = DeepSeek
+    # when deepseek_api_key is set, else Claude.
+    ai_review_provider: str = "auto"      # "auto" | "deepseek" | "claude"
+    deepseek_api_key: str = ""
+    deepseek_model: str = "deepseek-chat"
+    deepseek_base_url: str = "https://api.deepseek.com"
+    # USDC contract on Robinhood Chain for the autotrader's cash; empty = found
+    # from the most liquid USDC/USDG pool (autotrader.find_usdc).
+    robinhood_usdc_address: str = ""
     ai_review_model: str = "claude-sonnet-5"
     ai_review_daily_tokens: int = 40_000
     ai_review_monthly_tokens: int = 600_000

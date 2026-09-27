@@ -1,0 +1,134 @@
+"""The account's public face: name, handle, bio, picture.
+
+Lorenzo, with a screenshot of a trading app's profile: "uno deve vedere cosa
+detiene, l'andamento del wallet nel tempo con un grafico, e ovviamente
+l'account con cui uno si e' loggato deve rimanere tutto nel database, uno
+deve poter scegliere anche l'immagine profilo".
+
+Kept beside the users file, not inside User: the login record stays what it
+is, and this can grow without touching it. The picture is re-encoded here
+(square, 256 px, WebP) whatever was uploaded, so what is served is always a
+small, plain image, never the original file.
+"""
+from __future__ import annotations
+
+import base64
+import io
+import json
+import re
+import threading
+import time
+
+from app.trading.onchain.storage import data_file
+
+_STORE_FILE = data_file("profiles.json")
+_AVATARS = data_file("avatars")
+MAX_UPLOAD_BYTES = 4 * 1024 * 1024
+AVATAR_PX = 256
+HANDLE_RE = re.compile(r"^[A-Za-z0-9_]{3,20}$")
+NAME_MAX = 40
+BIO_MAX = 160
+
+_lock = threading.Lock()
+_profiles: dict[str, dict] = {}
+
+
+def _load() -> None:
+    try:
+        raw = json.loads(_STORE_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return
+    if isinstance(raw, dict):
+        _profiles.update({k: v for k, v in raw.items() if isinstance(v, dict)})
+
+
+def _save() -> None:
+    try:
+        _STORE_FILE.write_text(json.dumps(_profiles, ensure_ascii=False), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def reset_for_tests() -> None:
+    _profiles.clear()
+
+
+def get(uid: str, email: str = "", joined_hint: float | None = None) -> dict:
+    """The profile, created on first sight with defaults from the email."""
+    with _lock:
+        p = _profiles.get(uid)
+        if p is None:
+            local = (email.split("@")[0] if email else "trader")
+            base = re.sub(r"[^A-Za-z0-9_]", "", local)[:16] or "trader"
+            handle = base if len(base) >= 3 else f"{base}_{uid[:4]}"
+            taken = {x.get("handle", "").lower() for x in _profiles.values()}
+            n = 2
+            while handle.lower() in taken:
+                handle = f"{base[:14]}{n}"
+                n += 1
+            p = {"display_name": local[:NAME_MAX] or "Trader", "handle": handle, "bio": "", "avatar_rev": 0,
+                 "created_at": min(t for t in (joined_hint, time.time()) if t)}
+            _profiles[uid] = p
+            _save()
+        return dict(p)
+
+
+def update(uid: str, *, display_name: str | None = None, handle: str | None = None, bio: str | None = None) -> dict:
+    with _lock:
+        p = _profiles.setdefault(uid, {"display_name": "Trader", "handle": f"trader_{uid[:4]}", "bio": "",
+                                       "avatar_rev": 0, "created_at": time.time()})
+        if display_name is not None:
+            name = " ".join(display_name.split())[:NAME_MAX]
+            if not name:
+                raise ValueError("The name can't be empty.")
+            p["display_name"] = name
+        if handle is not None:
+            h = handle.strip().lstrip("@")
+            if not HANDLE_RE.match(h):
+                raise ValueError("Handle: 3 to 20 letters, digits or _.")
+            if any(k != uid and v.get("handle", "").lower() == h.lower() for k, v in _profiles.items()):
+                raise ValueError("That handle is taken.")
+            p["handle"] = h
+        if bio is not None:
+            p["bio"] = " ".join(bio.split())[:BIO_MAX]
+        _save()
+        return dict(p)
+
+
+def avatar_path(uid: str):
+    return _AVATARS / f"{re.sub(r'[^A-Za-z0-9_-]', '', uid)}.webp"
+
+
+def set_avatar(uid: str, data_url: str) -> dict:
+    """A data: URL (what a file input gives the browser) -> 256 px WebP."""
+    from PIL import Image, ImageOps
+
+    m = re.match(r"^data:image/(png|jpe?g|webp|gif|heic|heif);base64,(.+)$", data_url or "", re.S)
+    if not m:
+        raise ValueError("Pick a PNG, JPEG or WebP image.")
+    raw = base64.b64decode(m.group(2), validate=False)
+    if len(raw) > MAX_UPLOAD_BYTES:
+        raise ValueError("The picture is over 4 MB.")
+    try:
+        img = Image.open(io.BytesIO(raw))
+        img = ImageOps.exif_transpose(img).convert("RGB")
+    except Exception as exc:
+        raise ValueError("That file is not an image we can read.") from exc
+    img = ImageOps.fit(img, (AVATAR_PX, AVATAR_PX), method=Image.Resampling.LANCZOS)
+    _AVATARS.mkdir(parents=True, exist_ok=True)
+    img.save(avatar_path(uid), "WEBP", quality=86)
+    with _lock:
+        p = _profiles.setdefault(uid, {"display_name": "Trader", "handle": f"trader_{uid[:4]}", "bio": "",
+                                       "created_at": time.time()})
+        p["avatar_rev"] = int(p.get("avatar_rev") or 0) + 1
+        _save()
+        return dict(p)
+
+
+def public(uid: str, p: dict) -> dict:
+    rev = p.get("avatar_rev") or 0
+    return {"display_name": p["display_name"], "handle": p["handle"], "bio": p.get("bio") or "",
+            "avatar_url": f"/api/profile/avatar/{uid}?v={rev}" if rev else None, "joined": p.get("created_at")}
+
+
+_load()

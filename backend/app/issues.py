@@ -164,6 +164,21 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0142", "Il cash e' USDC; per operare su Robinhood prima si converte in USDG",
+     "Lorenzo: 'fai in modo che l'applicazione utilizzi il solito sistema di cash, cioe' devono essere USDC, e ovviamente se operi su Robinhood prima di poterlo fare devi convertire in USDG'. Alle domande: USDC multichain; dopo ogni vendita si torna sempre in USDC.",
+     "alta"),
+    ("seed-0141", "DeepSeek sul server per analizzare i dati, dare insight e migliorare gli alert",
+     "Lorenzo: 'mi piacerebbe inserire nel server DeepSeek perche' e' un modello gratuito [...] utilizzarlo come intelligenza per la gestione di tutti questi dati e dare degli insights e migliorare gli alert. Ma e' possibile installarlo? Se si', fallo. E se hai bisogno delle API vediamo come fare'.",
+     "media"),
+    ("seed-0140", "Un profilo vero: immagine, nome, bio, cosa detieni, andamento del wallet nel tempo",
+     "Lorenzo, con lo screenshot del profilo di un'app di trading: 'uno deve vedere cosa detiene, l'andamento del wallet nel tempo con un grafico, e ovviamente l'account con cui uno si e' loggato deve rimanere tutto nel database, uno deve poter scegliere anche l'immagine profilo, queste cose qua, cosi' che uno abbia il suo profilo dove effettivamente avere un controllo maggiore su tutta la piattaforma. Fai un bello studio su questo e applica'.",
+     "media"),
+    ("seed-0139", "Con un tasto il sistema opera da solo sul wallet Robinhood, con la percentuale del saldo scelta",
+     "Lorenzo: 'voglio semplicemente che con un tasto io attivo la strategia e che faccio operazioni sul wallet disponibile, in questo caso io ho depositato una cifra sul wallet di Robinhood, quindi voglio che automaticamente la strategia faccia i suoi ingressi, le sue uscite e che utilizzi sempre la totalita' del saldo [...] uno seleziona il 100% del saldo, il 50, il 25 eccetera, devi considerare sempre le fee, in modo tale che le operazioni vadano sempre in porto'. Alle domande: saldo in USDG, un token alla volta, nessun limite oltre alla percentuale, prima simulato.",
+     "alta"),
+    ("seed-0138", "Rendere operativa la miglior strategia trend-following e usarne ingressi e uscite come risultati della classifica",
+     "Lorenzo: 'con tutti i backtest che abbiamo fatto finora trova la miglior strategia di quelle che avevamo a disposizione e rendiamola praticamente operativa [...] che i segnali di quella strategia siano entrare e uscire, ovviamente trend follower, e che sia utilizzato i risultati di questi ingressi e di queste uscite come risultati nella leaderboard [...] per evitare proprio i rug pull e per prendersi i movimenti rialzisti quando questi occorrono'.",
+     "alta"),
     ("seed-0137", "Grafici ancora troppo lenti, e su alcuni ticker il grafico non c'e' proprio",
      "Lorenzo: 'ancora troppo lenti a caricare i grafici, in alcuni ticker non c'e' grafico proprio'.",
      "alta"),

@@ -146,3 +146,32 @@ def test_review_needs_a_key(monkeypatch):
     monkeypatch.setattr(settings, "anthropic_api_key", "")
     assert not ai_review.enabled()
     assert asyncio.run(ai_review.review(T0)) is None
+
+
+def test_deepseek_reviewer_reads_like_claude(monkeypatch):
+    import asyncio
+
+    from app.config import settings
+    from app.trading.onchain import ai_review
+    monkeypatch.setattr(settings, "deepseek_api_key", "k")
+    monkeypatch.setattr(settings, "ai_review_provider", "auto")
+    assert ai_review.provider() == "deepseek"
+
+    class R:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"model": "deepseek-chat", "usage": {"prompt_tokens": 900, "completion_tokens": 100},
+                    "choices": [{"finish_reason": "stop", "message": {"content": '{"summary": "ok", "actions": ["a"]}'}}]}
+
+    class H:
+        async def post(self, url, json, headers):
+            assert url.endswith("/chat/completions") and json["response_format"]["type"] == "json_object"
+            assert headers["Authorization"] == "Bearer k"
+            return R()
+    reply = asyncio.run(ai_review._ask_deepseek("{}", http=H()))
+    assert reply.usage.input_tokens + reply.usage.output_tokens == 1000 and reply.content[0].text.startswith("{")
+    monkeypatch.setattr(settings, "deepseek_api_key", "")
+    monkeypatch.setattr(settings, "anthropic_api_key", "")
+    assert ai_review.provider() is None
