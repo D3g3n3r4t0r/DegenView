@@ -2097,5 +2097,25 @@
     "status": "risolto",
     "at": 1790547281,
     "summary": "Niente selettori: la classifica mostra per ogni alert il backtest migliore fra le strategie disponibili, con il nome della strategia e i trade. Il migliore e' scelto dopo aver visto il grafico: e' il massimo che quel grafico permetteva, e la nota della classifica lo dice (issue #204)."
+  },
+  "seed-0178": {
+    "status": "risolto",
+    "at": 1790548387,
+    "summary": "La sezione Strategies ha un'icona a grafico; la coppa sta sopra il primo del podio (issue #211)."
+  },
+  "seed-0179": {
+    "status": "risolto",
+    "at": 1790548387,
+    "summary": "Profilo compatto: foto piccola con nome e bio accanto, saldo e variazione sulla stessa riga, grafico piu' basso, prime 4 posizioni con 'Show all', wallet collegati in una tendina in fondo. Misurato in un browser a misura di iPhone 13: tutto sopra la barra in basso (issue #214)."
+  },
+  "seed-0180": {
+    "status": "risolto",
+    "at": 1790548387,
+    "summary": "Podio rifatto da Claude sullo stile del logo: ogni gradino e' il cubo isometrico scuro con la fessura al neon (menta, azzurro, viola), numeri in monospaziato, cornici tagliate, griglia di fondo; niente faretto, coriandoli o metallo, ~250px invece di 380. Righe dei token piu' compatte in tutta l'app (logo 44px)."
+  },
+  "seed-0181": {
+    "status": "risolto",
+    "at": 1790548387,
+    "summary": "Nessun nome di strategia nell'app: dove serve si legge 'System'. Il sistema mostra sempre il migliore fra le due versioni interne; la classifica e la pagina del token mostrano solo rendimento, trade, % vincente e drawdown del backtest migliore. Corretto anche un errore vecchio (#190) che rompeva la scheda Signal della pagina token (issue #216)."
   }
 }
