@@ -2062,5 +2062,25 @@
     "status": "risolto",
     "at": 1790545787,
     "summary": "Un token rug si etichetta in poche ore, uno sano solo dopo 3 giorni; la memoria tiene 5000 token e buttava i piu' vecchi, e con Solana, BSC e Robinhood 5000 token arrivano in meno di 3 giorni: i sani sparivano prima di maturare, quindi 3113 esiti su 3113 erano rug e il modello non aveva esempi negativi. Ora si buttano prima i token che non insegnano niente e poi la classe piu' numerosa, un token alla volta (issue #182). Il modello e gli AUC si riempiranno nei prossimi giorni. Gli altri punti del report (LP bloccato ma liquidita' a 0, Matrix +290% poi rug, conteggi diversi) non sono bug: vedi la chat."
+  },
+  "seed-0171": {
+    "status": "risolto",
+    "at": 1790546686,
+    "summary": "Su iPhone ogni casella con il testo sotto i 16px fa zoomare la pagina quando la tocchi e la lascia ingrandita e spostata: era il caso di 'Scan any token' (14px) e del menu dello scambio (15px). Ora, sul telefono, ogni casella viene portata a 16px prima di prendere il fuoco, anche quelle che verranno aggiunte; la pagina non puo' piu' scorrere di lato e il telefono non ingrandisce il testo da solo. Provato in un browser a misura di iPhone 13 (issue #188)."
+  },
+  "seed-0172": {
+    "status": "risolto",
+    "at": 1790546686,
+    "summary": "La strategia calcola la sua posizione anche sulle candele prima dell'alert; se il trend era gia' partito, il suo acquisto cadeva prima dell'alert, veniva scartato, e il sistema aspettava un nuovo incrocio che non arrivava: fermo per tutto il pump. Riprodotto: alert a pump iniziato, prezzo x5, sistema 'waiting'. Ora un trend gia' in corso all'alert si prende alla prima candela dopo; si scaricano piu' candele prima dell'alert e tutti gli alert vengono ricalcolati (issue #189). Cambia i risultati storici del sistema."
+  },
+  "seed-0173": {
+    "status": "risolto",
+    "at": 1790546686,
+    "summary": "Ogni alert, nella lista e nella pagina del token, mostra il trade di entrambe le strategie (Trend HF e Trend EMA): quando ha comprato, quando ha venduto e perche' (trend girato, crollo dentro una candela, fine delle 48 ore, pool sparito), il rendimento dopo le commissioni o 'ancora dentro'. 'Tenuto dall'alert' resta sotto, come confronto (issue #190)."
+  },
+  "seed-0174": {
+    "status": "risolto",
+    "at": 1790546686,
+    "summary": "Lo 0% era il sistema che non era mai entrato, mostrato come un risultato. Ora in cima ci sono solo gli alert tradati, per rendimento; gli altri mostrano '—' con 'nessun ingresso ancora' o 'non e' entrato' e quanto avrebbe fatto tenere dall'alert; il podio ha solo trade veri (issue #191). Con la correzione di seed-0172 molti di quegli alert ora hanno un trade vero."
   }
 }

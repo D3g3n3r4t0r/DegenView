@@ -164,6 +164,18 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0174", "Nella classifica del sistema tutti 0%: voglio vedere i backtest",
+     "Lorenzo (screenshot della hall of fame ordinata per System, CERT/GLANCE/Onhand... tutti '0% waiting'): 'qui voglio vedere i backtest!!! non voglio vedere 0%'.",
+     "alta"),
+    ("seed-0173", "Rendimenti delle strategie, non solo dal momento dell'alert, e la chiusura della posizione",
+     "Lorenzo: 'i rendimenti vorrei vederli delle strategie, non solo dal momento dell'alert. Anche la chiusura della posizione e' importante'.",
+     "alta"),
+    ("seed-0172", "Il sistema trend ha perso ONHAND +1304%",
+     "Lorenzo: 'fai analizzare perche' ha perso ONHAND, teoricamente il trend follower non puo' perdersi trend di mercato'.",
+     "alta"),
+    ("seed-0171", "L'app non e' centrata nel telefono, anche dopo aver scritto in una casella",
+     "Lorenzo: 'quando apro l'app non risulta centrata perfettamente nel telefono, non voglio mai avere questo problema neanche quando inserisco testo in caselle'.",
+     "media"),
     ("seed-0170", "Il modello dei rug non si attiva mai: tutti gli esiti sono rug",
      "Report di DeepSeek letto da Lorenzo: memoria active:false con n 3113 e rugs 3113, tutti gli AUC vuoti ('no rugs or no non-rugs').",
      "alta"),
