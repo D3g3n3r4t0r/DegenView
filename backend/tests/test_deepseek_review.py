@@ -32,6 +32,7 @@ def test_the_project_rules_go_along(monkeypatch):
     monkeypatch.chdir(ROOT)
     rules = dr.rules()
     assert "trend-following" in rules and "Consumo di token" not in rules
+    assert "Com'è andata" in rules
 
 
 def test_an_empty_answer_posts_nothing(monkeypatch):

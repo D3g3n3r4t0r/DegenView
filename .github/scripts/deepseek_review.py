@@ -14,11 +14,13 @@ from __future__ import annotations
 import json
 import os
 import sys
+import time
 import urllib.request
 
 API = "https://api.github.com"
 MARK = "<!-- deepseek-review -->"
 MAX_DIFF = 90_000          # characters; the model reads ~128k tokens, leave room
+USAGE: dict = {}          # the last call's tokens, for the daily recap (app/notify/deepseek_desk.py)
 SKIP = (".json", ".lock", ".png", ".jpg", ".webp", ".svg", ".min.js")
 
 
@@ -44,13 +46,20 @@ def trimmed_diff(diff: str) -> str:
 
 
 def rules() -> str:
+    """CLAUDE.md's project rules, then DEEPSEEK.md (the exchange file: what
+    it is asked to watch for, and how its past reviews went)."""
     try:
         text = open("CLAUDE.md", encoding="utf-8").read()
     except OSError:
-        return ""
+        text = ""
     start = text.find("## Il progetto")
     end = text.find("## Consumo di token")
-    return text[start:end] if start >= 0 and end > start else text[:6000]
+    out = text[start:end] if start >= 0 and end > start else text[:6000]
+    try:
+        out += "\n\n" + open("DEEPSEEK.md", encoding="utf-8").read()
+    except OSError:
+        pass
+    return out
 
 
 def ask(pr: dict, diff: str) -> str:
@@ -73,6 +82,8 @@ def ask(pr: dict, diff: str) -> str:
                                           "Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=300) as r:
         res = json.loads(r.read())
+    u = res.get("usage") or {}
+    USAGE.update(at=int(time.time()), **{"in": u.get("prompt_tokens", 0), "out": u.get("completion_tokens", 0)})
     choice = res["choices"][0]
     text = (choice["message"].get("content") or "").strip()
     if not text:
@@ -94,7 +105,8 @@ def main() -> int:
     except Exception as exc:          # a reviewer that is down must not fail the PR
         print(f"DeepSeek did not answer: {exc}")
         return 0
-    text = f"{MARK}\n### Revisione DeepSeek\n\n{review}\n\n<sub>Commit {pr['head']['sha'][:7]} · secondo parere automatico, non vincolante</sub>"
+    usage = f"<!-- deepseek-usage {json.dumps(USAGE)} -->" if USAGE else ""
+    text = f"{MARK}{usage}\n### Revisione DeepSeek\n\n{review}\n\n<sub>Commit {pr['head']['sha'][:7]} · secondo parere automatico, non vincolante</sub>"
     mine = [c for c in gh(f"/repos/{repo}/issues/{number}/comments?per_page=100") if MARK in (c.get("body") or "")]
     if mine:
         gh(f"/repos/{repo}/issues/comments/{mine[-1]['id']}", "PATCH", {"body": text})
