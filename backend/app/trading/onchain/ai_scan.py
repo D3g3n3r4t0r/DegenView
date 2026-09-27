@@ -156,3 +156,22 @@ def recap_line(now: float | None = None) -> str:
         return f"{label}: {g['n']} ({rug}{med})"
     return (f"Scanner in ombra, {s['n']} giudicati: " + " · ".join(
         (part("high", "rischio alto"), part("mid", "medio"), part("low", "basso"))))
+
+
+async def judge_one(item: dict, features: dict, pool: list[dict] | None = None) -> dict | None:
+    """DeepSeek's judgement on one token scanned by hand (manual_scan.py):
+    the same prompt as the batches, one line."""
+    if not settings.deepseek_api_key:
+        return None
+    a = {"symbol": item.get("symbol") or "?", "name": item.get("name") or "", "chain": item.get("chain"),
+         "token_address": item.get("token_address"), "cap0": item.get("market_cap"), "liq0": item.get("liquidity_usd"),
+         "facts": alert_track.facts_of(item)}
+    pool = rug_memory.cases() if pool is None else pool
+    user = rug_memory.circumstances_text() + "\n\nTokens:\n" + line(0, a, pool)
+    try:
+        text = await deepseek_desk.ask([{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}],
+                                       kind="scanner", max_tokens=120, json_mode=True)
+    except Exception as exc:
+        logger.info("ai_scan: manual judgement failed: %s", exc)
+        return None
+    return a["ai"] if parse(text, [a], time.time()) else None
