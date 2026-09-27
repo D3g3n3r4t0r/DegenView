@@ -82,10 +82,11 @@ export function age(ts) {
   return [`${Math.round(s / 86400)}d`, false];
 }
 
-const DS_CHAIN = { solana: "solana", robinhood: "robinhood" };
+const DS_CHAIN = { solana: "solana", robinhood: "robinhood", base: "base" };
 const CHAIN_MARK = {
   solana: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 16.5h12.5l2-2H7zM5 7.5h12.5l2 2H7zM5 12h12.5l2-2H7" /></svg>',
   robinhood: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 20 12 12 21 4 12z" /></svg>',
+  base: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="3.5" /></svg>',
 };
 
 /** The token's logo: DexScreener's image, else its public logo for the

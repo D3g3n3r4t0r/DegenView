@@ -12,6 +12,12 @@ lavori pluri-sessione, decisioni prese, stato di piani approvati.
 
 ---
 
+## Podio animato e chain Base — `seed-0127`/`seed-0128`, branch `claude/gem-database` — 2026-09-27
+
+- Podio: Lorenzo "progetta la leaderboard con agenti specializzati [...] 120fps", "al posto delle faccine ci sia il logo", "applica tutto, decidi te qual e' la piu' bellina". Tre prototipi da agenti diversi, scelto "Champions stage" (`static/onchain/podium.js`, `renderPodium(container, items, {still})`), CSS in `app.css` sezione podio. Regole 120fps: solo transform/opacity, entrate con fill backwards, niente will-change fisso, coriandoli via WAAPI. `#top` rinominato `#leaders` (l'hash faceva saltare la pagina).
+- Base: Lorenzo "estendiamo anche a chain BASE le ricerche". Solo ricerca, non trading: radar, Meme Sniper (GeckoTerminal new_pools), Gem Finder (CoinGecko platform/categoria, README), DefiLlama, GoPlus 8453. `legit.CHAIN_LABEL` e' il nome leggibile per i messaggi Telegram. Nel wallet Base non c'e': la pagina token mostra "Trade on DexScreener" (`TRADABLE` in `detail.js`). Se un giorno si vuole comprare su Base servono quote/execute EVM come per Robinhood.
+- Da osservare: Base ha molti piu' pool nuovi di Robinhood; se il Meme Sniper si intasa, limitare i pending per chain.
+
 ## Un'app sola, layout da app di trading — `seed-0126`, branch `claude/gem-database` — 2026-09-27
 
 Lorenzo, con 4 screenshot di un'app meme da telefono: "l'app deve essere

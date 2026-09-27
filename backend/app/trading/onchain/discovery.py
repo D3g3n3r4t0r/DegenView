@@ -12,7 +12,7 @@ e' fra i piu' scambiati dell'ora.
 
 Qui due fonti diverse, pensate per i progetti e non per i pool:
 
-- CoinGecko, categorie "solana-ecosystem" e "robinhood-ecosystem", la
+- CoinGecko, categorie "solana-ecosystem", "robinhood-ecosystem" e "base-ecosystem", la
   fascia di capitalizzazione fra CAP_MIN e CAP_MAX. Per ogni moneta la
   scheda dice indirizzo del contratto, sito, categorie e soprattutto il
   repository GitHub: senza GitHub non si va avanti. Le categorie "Meme" si
@@ -49,8 +49,9 @@ COINGECKO = "https://api.coingecko.com/api/v3"
 DEX_PROFILES = "https://api.dexscreener.com/token-profiles/latest/v1"
 # categoria CoinGecko e pagine da 250 (ordinate per cap decrescente) che
 # coprono la fascia CAP_MIN-CAP_MAX
-CG_CATEGORIES = {"solana": ("solana-ecosystem", range(3, 9)), "robinhood": ("robinhood-ecosystem", range(1, 5))}
-CG_PLATFORMS = {"solana": ("solana",), "robinhood": ("robinhood",)}
+CG_CATEGORIES = {"solana": ("solana-ecosystem", range(3, 9)), "robinhood": ("robinhood-ecosystem", range(1, 5)),
+                 "base": ("base-ecosystem", range(1, 7))}
+CG_PLATFORMS = {"solana": ("solana",), "robinhood": ("robinhood",), "base": ("base",)}
 # Lorenzo (24/09): "sotto uno barra due, tre milioni di market cap, non oltre"
 CAP_MIN = 10_000             # early gems start under $50k (leaderboard.EARLY_CAP_USD)
 NARRATIVE_PAGES = 8
@@ -348,7 +349,8 @@ def readme_addresses(text: str) -> dict[str, list[str]]:
     for m in _EVM_ADDR.findall(text or ""):
         if m not in _KNOWN and m.lower() not in {x.lower() for x in evm}:
             evm.append(m)
-    return {"solana": sol[:10], "robinhood": evm[:10]}
+    # EVM addresses look the same everywhere: DexScreener says which chain has the pool.
+    return {"solana": sol[:10], "robinhood": evm[:10], "base": evm[:10]}
 
 
 def search_candidates(items: list[dict], now: float) -> list[dict]:

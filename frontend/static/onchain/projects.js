@@ -8,7 +8,7 @@ import * as api from "@onchain/api.js";
 import { escapeHtml } from "@onchain/format.js";
 
 const PAGE = 30;
-const CHAINS = { solana: "Solana", robinhood: "Robinhood" };
+const CHAINS = { solana: "Solana", robinhood: "Robinhood", base: "Base" };
 const LABEL = { ranked: "Ranked", studied: "Studied", rejected: "Rejected", new: "Waiting", analyzing: "Analyzing" };
 
 let root = null;
@@ -34,7 +34,7 @@ function row(p) {
 
 function paintFunnel(st) {
   const by = st?.by_status ?? {};
-  root.querySelector("[data-projects-meta]").textContent = st ? `${num(st.by_chain?.solana ?? 0)} Solana · ${num(st.by_chain?.robinhood ?? 0)} Robinhood` : "";
+  root.querySelector("[data-projects-meta]").textContent = st ? `${num(st.by_chain?.solana ?? 0)} Solana · ${num(st.by_chain?.robinhood ?? 0)} Robinhood · ${num(st.by_chain?.base ?? 0)} Base` : "";
   root.querySelector("[data-projects-funnel]").innerHTML = st
     ? `<b>${num(st.total)}</b> projects known · <b>${num(st.in_band)}</b> in the $10k–$3M band · <b>${num((by.studied ?? 0) + (by.ranked ?? 0))}</b> studied · <b>${num(by.rejected ?? 0)}</b> rejected${st.top_rejections?.[0] ? ` (most often: ${escapeHtml(st.top_rejections[0].why)})` : ""}`
     : "";

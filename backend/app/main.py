@@ -3637,7 +3637,7 @@ def _gem_telegram_text(kind: str, e: dict) -> str:
     """Italian, like every message Lorenzo reads."""
     import html as _html
     esc = _html.escape
-    chain = "Solana" if e.get("chain") == "solana" else "Robinhood"
+    chain = onchain_legit.CHAIN_LABEL.get(e.get("chain"), e.get("chain") or "")
     cap = f"${float(e['market_cap']):,.0f}" if e.get("market_cap") else "—"
     head = ("💎 <b>Gemma early</b>: sotto i $50k con fondamentali solidi, potrebbe valere un piccolo ingresso"
             if kind == "early" else "💎 <b>Nuova gemma in classifica</b>")
