@@ -3629,3 +3629,15 @@ Regola resa assoluta in CLAUDE.md: ogni modifica al codice passa da una issue
 `deepseek`, Claude rivede la PR. La bacheca non era leggibile da questa sandbox
 (rete che blocca `liquidityengine.app`): va aggiunto il dominio alla rete
 dell'ambiente cloud.
+
+**2026-09-27 (notte) — prima sessione con DeepSeek che scrive tutto.** Lorenzo, con screenshot: pannello agente in verticale, "AAVE non ha 531k di market cap", "signal, why e info devono essere sempre completi", poi il report in 10 punti di DeepSeek da Telegram.
+Issue #176/#177/#178/#182 → PR unite (seed-0167..0170). Lavoratore corretto tre volte:
+`path=` davanti al percorso, "Tests:" dentro il compito, risposta vuota su
+`path/to/file`; l'Action non puo' aprire PR (403, impostazione di GitHub
+Actions): le apre Claude dal branch `deepseek/issue-N`. Rilanciare una issue =
+togliere e rimettere l'etichetta `deepseek`.
+Resta aperto: esempio di simbolo sbagliato (Lorenzo non l'ha ancora dato);
+sistema trend che entra 1 volta su 12 alert e non ha preso Onhand +1304% (da
+analizzare se Lorenzo vuole); mediani top holder a 0 in `circostanze_rug`
+(forse dato mancante letto come 0); dopo il deploy verificare che il modello dei
+rug trovi esiti "non rug" (`memoria`).
