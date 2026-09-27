@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0129", "Riportare i dati storici della versione precedente nella classifica degli alert",
+     "Lorenzo: 'riesci a riportare i dati storici che avevamo nell'altra versione ?'.",
+     "media"),
     ("seed-0128", "Estendere le ricerche anche alla chain Base",
      "Lorenzo: 'procedi, estendiamo anche a chain BASE le ricerche'.",
      "media"),
