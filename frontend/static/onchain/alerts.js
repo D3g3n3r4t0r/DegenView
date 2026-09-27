@@ -124,12 +124,20 @@ function paintFeed() {
     id: registerAlert({ ...r, now: r.chg / 100, cap0: null, returns: {} }, "meme"), symbol: r.symbol, name: r.name || r.symbol,
     chain: r.chain, token: r.token_address, image: r.image, cap: null, change: r.chg / 100, ageTs: r.at,
     sub: `alerted ${age(r.at)[0]} ago · ${r.buys_h1 ?? 0} buys / ${r.sells_h1 ?? 0} sells 1h`, pill: `<em class="hot">BACK</em>` })).join("");
+  // The feed repaints every poll: keep what is being typed in the scan box.
+  const typing = body.querySelector("[data-scan-form] input");
+  const kept = typing ? { v: typing.value, focus: document.activeElement === typing } : null;
   body.innerHTML = SCAN_FORM + systemLine(d)
     + (soon ? `<h4 class="feed-sec">About to fire</h4><ol class="soon-list">${soon}</ol>` : "")
     + `<h4 class="feed-sec">Fired · last 48h</h4>`
     + (fired ? `<ol class="memes-list">${fired}</ol>` : `<p class="muted pad">No alert in the last 48 hours.</p>`)
     + (back ? `<h4 class="feed-sec">Coming back</h4><ol class="memes-list">${back}</ol>` : "")
     + `<button type="button" class="review-row" data-open-scanner>Live scanner: what it is looking at now <span aria-hidden="true">›</span></button>`;
+  if (kept) {
+    const input = body.querySelector("[data-scan-form] input");
+    input.value = kept.v;
+    if (kept.focus) input.focus();
+  }
 }
 
 /* The strategies' leaderboard (Lorenzo, 27/09: "in pochi passi poter vedere

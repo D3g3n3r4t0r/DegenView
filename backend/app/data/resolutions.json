@@ -2032,5 +2032,15 @@
       "frontend/static/onchain/top.js",
       "frontend/static/onchain/api.js"
     ]
+  },
+  "seed-0166": {
+    "status": "risolto",
+    "at": 1790544135,
+    "summary": "La classifica delle gemme si aggiorna ogni 10 secondi e, quando l'ordine cambiava, faceva partire un'animazione di tutta la pagina (il browser fotografa la schermata e sfuma nella nuova) anche se eri su un'altra sezione o avevi un pannello aperto: da li' il flash e le schermate sovrapposte. Ora l'animazione parte solo se la classifica e' davvero sullo schermo e nessun pannello e' aperto; lo stesso vale per il cambio di sezione. In piu' l'aggiornamento automatico degli Alert non cancella piu' quello che stai scrivendo nel campo Scan.",
+    "files": [
+      "frontend/static/onchain/leaderboard.js",
+      "frontend/static/onchain/main.js",
+      "frontend/static/onchain/alerts.js"
+    ]
   }
 }
