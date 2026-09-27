@@ -27,7 +27,7 @@ const capNow = (a) => (a.gone ? null : a.cap0 && a.now != null ? a.cap0 * (1 + a
 // Leaderboard order. Lorenzo: "voglio le performance della strategia
 // ingresso e uscita automatica": the system first, then the raw signal.
 const SORTS = { system: "System", now: "Now", best: "Best" };
-const state = { data: {}, board: null, kind: "meme", period: 1, sort: "system" };
+const state = { data: {}, board: null, kind: "meme", period: 7, sort: "system" };
 
 /** The alerts on one token, for its page. */
 export function alertsFor(chain, token) {
@@ -105,7 +105,29 @@ function paintFeed() {
   const items = [...(d.items ?? [])].sort((a, b) => b.at - a.at);
   const med = (d.summary ?? []).find((s) => s.h === 48);
   body.innerHTML = systemLine(d) + `<p class="feed-head">If you had bought and held every alert: median now <b data-sign="${sign(d.now?.median)}">${pct(d.now?.median)}</b>${med?.n ? ` · after 48h <b data-sign="${sign(med.median)}">${pct(med.median)}</b>` : ""} · ${d.total} alerts</p>`
-    + items.map((a) => callCard(a, "meme")).join("");
+    + items.map((a) => callCard(a, "meme")).join("")
+    + `<button type="button" class="review-row" data-open-scanner>Live scanner: what it is looking at now <span aria-hidden="true">›</span></button>`;
+}
+
+/* The strategies' leaderboard (Lorenzo, 27/09: "in pochi passi poter vedere
+ * le strategie come hanno performato, quindi una leaderboard con le
+ * strategie ingresso e uscita"). No podium here: two rows, ranked by the
+ * median over alerts whose 48h window ended; the one in use is marked. */
+function strategyBoard(d) {
+  const sy = d?.system;
+  if (!sy?.candidates?.length) return `<p class="muted pad">No strategy results yet.</p>`;
+  const rows = [...sy.candidates].sort((a, b) => (b.median ?? -9) - (a.median ?? -9));
+  const live = sy.live ?? {};
+  return `<ol class="strat-board">${rows.map((c, i) => {
+    const inUse = c.label === sy.chosen;
+    return `<li data-chosen="${inUse}">
+      <span class="st-rank">${i + 1}</span>
+      <span class="st-main"><b>${escapeHtml(c.label)}${inUse ? ' <em class="st-live">IN USE</em>' : ""}</b>
+        <small>${c.n} alerts closed · ${c.traded} traded${inUse && live.n ? ` · live on ${live.n}: median ${pct(live.median)}${live.holding ? `, in ${live.holding} now` : ""}` : ""}</small></span>
+      <span class="st-num"><b data-sign="${sign(c.median)}">${pct(c.median)}</b><small>median · ${Math.round((c.positive ?? 0) * 100)}% win</small></span>
+    </li>`;
+  }).join("")}</ol>
+  <p class="st-note">${sy.window_h}h per alert, ${sy.bar} bars, ${sy.cost_pct}% fees and slippage per side. ${escapeHtml(sy.decided_by === "median" ? "The best median is the one in use." : `In use by default until ${sy.decided_by.replace("default until ", "")}.`)}</p>`;
 }
 
 /* ------------------------------------------------------------ trophy */
@@ -142,11 +164,15 @@ function paintTop() {
     ? (w ? `Top 10 median ${pct(w.top.median)} after 7 days on the board.` : "Scored on code, research and tokenomics. Research, not advice.")
     : state.sort === "system"
       ? `The system (${escapeHtml(state.data.meme?.system?.chosen ?? "trend-following")}): enters and exits on its own signals after each alert, fees paid.`
-      : "Returns if you had bought when each Telegram alert arrived.");
+      : "Returns if you had bought when each Telegram alert arrived.")
+    + (gem ? "" : " Below: each alert, as the strategy in use traded it.");
   const hero = root.querySelector("[data-top-hero]");
   const top3 = list.slice(0, 3).map((x) => ({ id: x.id, symbol: x.symbol, value: gem ? `${x.label} pts` : x.label,
     logoHtml: tile(x.symbol, x.image, x.chain, x.token) }));
-  if (!top3.length) {
+  if (!gem) {
+    hero.dataset.sig = "";
+    hero.innerHTML = strategyBoard(state.data.meme);
+  } else if (!top3.length) {
     hero.dataset.sig = "";
     hero.innerHTML = `<p class="muted pad">Nothing in this period yet.</p>`;
   } else {
@@ -158,7 +184,7 @@ function paintTop() {
   }
   root.querySelector(".seg").hidden = gem;
   const sortBtn = root.querySelector("[data-sort]");
-  sortBtn.hidden = gem;
+  sortBtn.hidden = true;   // one order here: the strategy's own result
   sortBtn.querySelector("span").textContent = SORTS[state.sort];
   root.querySelector("[data-top-you]").innerHTML = `<span class="avatar you" aria-hidden="true"></span>
     <span class="you-main"><b>You</b><small>${gem ? "Gems you hold" : "Trades on these alerts"}: none yet</small></span>
@@ -274,6 +300,11 @@ export function mountAlerts() {
     if (!b) return;
     state.kind = b.dataset.tab === "gem" ? "gem" : "meme";
     paintTop();
+  });
+  document.getElementById("meme-alerts")?.addEventListener("click", (event) => {
+    if (!event.target.closest("[data-open-scanner]")) return;
+    document.querySelector('.tabs[data-tabs="meme"] [data-tab="scanner"]')?.click();
+    window.scrollTo({ top: 0 });
   });
   mountReview();
   load();

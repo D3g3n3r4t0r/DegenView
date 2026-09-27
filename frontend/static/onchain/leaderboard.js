@@ -12,8 +12,9 @@
  * scivolano al posto nuovo, con la freccia di quanto sono salite o scese.
  */
 import * as api from "@onchain/api.js";
-import { escapeHtml, tokenRow } from "@onchain/format.js";
+import { escapeHtml, tile, tokenRow } from "@onchain/format.js";
 import { register } from "@onchain/detail.js";
+import { renderPodium } from "@onchain/podium.js";
 
 const ROOT = document.getElementById("onchain-embed") ?? document;
 const POLL_MS = 10_000;
@@ -110,10 +111,15 @@ function render(animate) {
   const entries = data.entries ?? [];
   const podium = root.querySelector("[data-board-podium]");
   const list = root.querySelector("[data-board-list]");
-  // One list, rows like the reference app; the podium moved to the trophy
-  // view and each project's dossier to its page (detail.js > Info).
-  podium.innerHTML = "";
-  podium.dataset.count = "0";
+  // The podium lives here (Lorenzo, 27/09: "il podio ha senso soltanto per
+  // le gemme"): the top three on it, every project below as a row.
+  const top3 = entries.slice(0, 3).map((e) => ({ id: `gem:${e.chain}:${e.token_address}`, symbol: e.symbol,
+    value: `${Math.round(e.score ?? 0)} pts`, logoHtml: tile(e.symbol, e.image, e.chain, e.token_address) }));
+  const sig = top3.map((x) => x.id).join("|");
+  if (top3.length) renderPodium(podium, top3, { still: podium.dataset.sig === sig });
+  else podium.innerHTML = "";
+  podium.dataset.sig = sig;
+  podium.dataset.count = String(top3.length);
   list.innerHTML = entries.map(gemRow).join("");
   const detail = root.querySelector("[data-board-detail]");
   const chosen = entries.find((e) => key(e) === open);

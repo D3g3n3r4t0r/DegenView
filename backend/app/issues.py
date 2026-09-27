@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0159", "L'app e' troppo complicata: troppe schermate",
+     "Lorenzo: 'mi sembra un po' troppo complicata l'applicazione, ci sono troppe schermate [...] il podio ha senso soltanto per le gemme [...] una leaderboard con le strategie ingresso e uscita [...] una leaderboard per le gemme [...] che sia semplice'.",
+     "alta"),
     ("seed-0158", "DeepSeek deve avere voce in capitolo sul voto finale delle gemme",
      "Lorenzo: 'ovviamente deepseek deve avere voce in capitolo sul voto finale delle gemme'.",
      "media"),
