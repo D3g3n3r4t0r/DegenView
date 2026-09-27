@@ -818,3 +818,26 @@
       background: #111114; color: var(--k-text); cursor: pointer; text-align: start; }
     & b { font: 600 15px var(--sans); } & small { font-size: 12.5px; color: var(--k-text-3); } }
 }
+
+/* --- swap from your own wallet (userswap.js) ----------------------------- */
+@layer skin {
+  .dt-cta[data-two="true"] { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .dt-cta .dt-mine { background: #18181b; color: var(--k-text); box-shadow: inset 0 0 0 1px rgb(255 255 255 / .14); }
+  .us-sheet { display: grid; gap: 12px;
+    &:not([open]) { display: none; }
+    & h3 { margin: 0; font: 600 19px var(--sans); color: var(--k-text); & small { display: block; margin-top: 2px; font: 400 13px var(--sans); color: var(--k-text-3); } } }
+  .us-side, .us-pct { display: grid; grid-auto-flow: column; gap: 4px; padding: 4px; border-radius: 12px; background: rgb(255 255 255 / .05);
+    & button { block-size: 38px; border: 0; border-radius: 9px; background: none; color: var(--k-text-2); font: 600 14px var(--sans); cursor: pointer; }
+    & button[aria-pressed="true"] { background: #27272a; color: var(--k-text); } }
+  .us-amt { display: grid; gap: 6px; font-size: 13px; color: var(--k-text-2);
+    & span { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+    & input { min-inline-size: 0; padding: 12px; border: 1px solid rgb(255 255 255 / .12); border-radius: 10px; background: #0b0b0d; color: var(--k-text); font: 600 20px var(--sans); }
+    & select { padding: 0 10px; border: 1px solid rgb(255 255 255 / .12); border-radius: 10px; background: #18181b; color: var(--k-text); font: 600 15px var(--sans); } }
+  .us-quote { display: grid; gap: 6px; margin: 0; padding: 12px; border-radius: 12px; background: rgb(255 255 255 / .04);
+    & div { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; }
+    & dt { color: var(--k-text-3); } & dd { margin: 0; color: var(--k-text); font-weight: 600; font-variant-numeric: tabular-nums; } }
+  .us-state { margin: 0; min-block-size: 1.2em; font-size: 13.5px; color: var(--k-text-2); & a { color: #6d7cff; } }
+  .us-actions { display: flex; justify-content: flex-end; gap: 8px;
+    & button { padding: 11px 16px; border: 0; border-radius: 10px; background: rgb(255 255 255 / .08); color: var(--k-text); font: 600 15px var(--sans); cursor: pointer; }
+    & .us-go { background: var(--k-mint, #34d399); color: #052e16; } }
+}

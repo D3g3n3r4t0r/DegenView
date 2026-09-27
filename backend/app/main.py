@@ -106,6 +106,7 @@ from app.trading.onchain import autotrader as onchain_autotrader
 from app.trading.onchain import wealth as onchain_wealth
 from app import profiles
 from app import wallet_link
+from app.trading.onchain import user_swaps
 from app.trading.onchain import passkey as onchain_passkey
 from app.trading.onchain import pilot as onchain_pilot
 from app.trading.onchain import listings as onchain_listings
@@ -3929,6 +3930,52 @@ async def wallet_link_confirm(body: WalletConfirm, user: User = Depends(auth.get
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"profile": profiles.public(user.id, p)}
+
+
+@app.get("/api/wallets/linked")
+async def wallets_linked(user: User = Depends(auth.get_current_user)) -> dict:
+    """The user's connected wallets, for the token page's "with my wallet"."""
+    return {"wallets": profiles.wallets(user.id), "usdc_robinhood": onchain_autotrader._meta["usdc"]}
+
+
+class UserSwapRequest(BaseModel):
+    kind: Literal["evm", "solana"]
+    owner: str
+    side: Literal["buy", "sell"]
+    token: str
+    amount: float | None = None
+    pct: int | None = None
+    pay: str | None = None
+    slippage_bps: int = user_swaps.DEFAULT_SLIPPAGE_BPS
+
+
+@app.post("/api/wallets/swap/build")
+async def wallets_swap_build(body: UserSwapRequest, user: User = Depends(auth.get_current_user)) -> dict:
+    """Unsigned transactions for a swap from the user's own wallet (user_swaps.py)."""
+    _require_onchain_enabled()
+    mine = {(w["kind"], w["address"].lower()) for w in profiles.wallets(user.id)}
+    if (body.kind, body.owner.lower()) not in mine:
+        raise HTTPException(status_code=403, detail="Connect this wallet in your profile first.")
+    if not wallet_link.valid_address(body.kind, body.token):
+        raise HTTPException(status_code=422, detail="Unknown token address.")
+    slip = max(10, min(user_swaps.MAX_SLIPPAGE_BPS, body.slippage_bps))
+    try:
+        if body.kind == "evm":
+            allowed = {user_swaps.USDG.lower(): user_swaps.USDG}
+            if onchain_autotrader._meta["usdc"]:
+                allowed[onchain_autotrader._meta["usdc"].lower()] = onchain_autotrader._meta["usdc"]
+            pay = allowed.get((body.pay or user_swaps.USDG).lower())
+            if body.side == "buy" and pay is None:
+                raise user_swaps.SwapError("Pay with USDG or USDC.")
+            return await user_swaps.build_evm(body.owner, body.side, body.token, body.amount, body.pct, pay, slip)
+        pay = body.pay or user_swaps.SOL_MINT
+        if body.side == "buy" and pay not in (user_swaps.SOL_MINT, user_swaps.USDC_SOLANA):
+            raise user_swaps.SwapError("Pay with SOL or USDC.")
+        return await user_swaps.build_solana(body.owner, body.side, body.token, body.amount, body.pct, pay, slip)
+    except user_swaps.SwapError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001 — RPC / Jupiter down: say so, don't 500
+        raise HTTPException(status_code=502, detail=f"Couldn't prepare the swap: {exc}"[:300]) from exc
 
 
 @app.delete("/api/wallets/link/{kind}/{address}")

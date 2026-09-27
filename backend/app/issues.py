@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0144", "Comprare e vendere dal proprio wallet collegato, firmando nel wallet",
+     "Secondo passo del piano per i wallet di chiunque (seed-0143), avviato con 'procedi' e poi 'auto approva tutto quello che proponi d'ora in poi'.",
+     "media"),
     ("seed-0143", "Chiunque deve poter collegare il proprio wallet al sito",
      "Lorenzo: 'dobbiamo dare la possibilita' di far collegare il wallet a qualsiasi persona al nostro sito per usufruire dei nostri servizi; l'unica cosa e' che non so bene se la strategia automatica in quel caso e' fattibile, deve firmare uno speciale smart contract cosi' che si attivi questa strategia automatica'. Poi: 'procedi'.",
      "alta"),
