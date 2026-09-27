@@ -506,7 +506,7 @@ document.addEventListener("lae:wallet-menu", () => view.moreSheet?.showModal());
 // (the sniper radar plus its autopilot). Then Scambia and Portafoglio.
 // The home page picks the section (#gems or #meme); that is the first view.
 const VIEWS = ["meme", "gems", "top", "profile", "wallet", "manual"];
-const DOCK = ["meme", "gems", "top", "profile"];
+const DOCK = ["meme", "gems", "top", "wallet", "profile"];
 
 function setView(name) {
   if (!VIEWS.includes(name)) return;

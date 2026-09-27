@@ -1816,5 +1816,16 @@
     "files": [
       "frontend/static/onchain/main.js"
     ]
+  },
+  "seed-0148": {
+    "status": "risolto",
+    "at": 1790528508,
+    "summary": "Due errori miei insieme: passando al profilo avevo tolto Wallet dalla barra (restava solo nel menu '…' del profilo), e la foto profilo che doveva prendere il suo posto era invisibile, perche' la barra nasconde di proposito i testi dei pulsanti e l'avatar era costruito come un testo. Ora la barra ha cinque voci: Memes, Gems, classifica, Wallet e la tua foto (o l'iniziale se non l'hai scelta), che apre il profilo.",
+    "files": [
+      "frontend/onchain-app.html",
+      "frontend/static/onchain/main.js",
+      "frontend/static/onchain/profile.js",
+      "frontend/static/onchain/app.css"
+    ]
   }
 }
