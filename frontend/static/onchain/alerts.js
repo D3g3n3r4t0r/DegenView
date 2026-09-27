@@ -8,6 +8,7 @@
  *  - the bell: the latest alerts.
  * Plus the daily review sheet (ai_review.py) and alertsFor() for the token page.
  */
+import { openScan } from "@onchain/sheets.js";
 import * as api from "@onchain/api.js";
 import { age, changePill, escapeHtml, logo, tile, tokenRow, usdShort } from "@onchain/format.js";
 import { register } from "@onchain/detail.js";
@@ -92,6 +93,10 @@ function systemLine(d) {
   return `<p class="feed-head sys"><b>System · ${escapeHtml(sy.chosen)}</b> trend-following entries and exits after each alert, fees paid: median <b data-sign="${sign(live.median)}">${pct(live.median)}</b> · ${Math.round((live.positive ?? 0) * 100)}% in profit · ${live.n} alerts${live.holding ? ` · in ${live.holding} now` : ""}</p>`;
 }
 
+const SCAN_FORM = `<form class="scan-form" data-scan-form role="search">
+  <input name="q" placeholder="Scan any token: ticker or address" autocomplete="off" spellcheck="false" aria-label="Ticker or address" />
+  <button type="submit">Scan</button></form>`;
+
 function paintFeed() {
   const root = document.getElementById("meme-alerts");
   if (!root) return;
@@ -99,12 +104,12 @@ function paintFeed() {
   delete root.dataset.loading;
   const body = root.querySelector("[data-alerts-body]");
   if (!d?.total) {
-    body.innerHTML = `<p class="muted pad">No alert yet. Every Telegram alert shows up here with what it paid, hour by hour.</p>`;
+    body.innerHTML = SCAN_FORM + `<p class="muted pad">No alert yet. Every Telegram alert shows up here with what it paid, hour by hour.</p>`;
     return;
   }
   const items = [...(d.items ?? [])].sort((a, b) => b.at - a.at);
   const med = (d.summary ?? []).find((s) => s.h === 48);
-  body.innerHTML = systemLine(d) + `<p class="feed-head">If you had bought and held every alert: median now <b data-sign="${sign(d.now?.median)}">${pct(d.now?.median)}</b>${med?.n ? ` · after 48h <b data-sign="${sign(med.median)}">${pct(med.median)}</b>` : ""} · ${d.total} alerts</p>`
+  body.innerHTML = SCAN_FORM + systemLine(d) + `<p class="feed-head">If you had bought and held every alert: median now <b data-sign="${sign(d.now?.median)}">${pct(d.now?.median)}</b>${med?.n ? ` · after 48h <b data-sign="${sign(med.median)}">${pct(med.median)}</b>` : ""} · ${d.total} alerts</p>`
     + items.map((a) => callCard(a, "meme")).join("")
     + `<button type="button" class="review-row" data-open-scanner>Live scanner: what it is looking at now <span aria-hidden="true">›</span></button>`;
 }
@@ -303,6 +308,13 @@ export function mountAlerts() {
     if (!b) return;
     state.kind = b.dataset.tab === "gem" ? "gem" : "meme";
     paintTop();
+  });
+  document.getElementById("meme-alerts")?.addEventListener("submit", (event) => {
+    const form = event.target.closest("[data-scan-form]");
+    if (!form) return;
+    event.preventDefault();
+    const q = form.q.value.trim();
+    if (q) openScan(q);
   });
   document.getElementById("meme-alerts")?.addEventListener("click", (event) => {
     if (!event.target.closest("[data-open-scanner]")) return;
