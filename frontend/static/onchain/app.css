@@ -869,3 +869,5 @@
     & li[data-why="crash"] span, & li[data-why="rug"] span { color: #fbbf24; } }
 }
 @layer skin { .pf-since { margin: 6px 0 0; font-size: 12px; color: var(--k-text-3); } }
+/* The autopilot's rows: the token's logo, not two letters. */
+@layer skin { .tk.tk-logo { padding: 0; overflow: hidden; background: none; font-size: 0; & .tile { inline-size: 100%; block-size: 100%; } } }

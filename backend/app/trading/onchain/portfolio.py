@@ -40,6 +40,17 @@ WRAPPED = {
     "ethereum": ("eth", "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"),
     "bsc": ("bsc", "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c"),
 }
+# The native coins' own logos: DexScreener's picture of the wrapped token
+# (ETH for every ETH chain). Without it SOL/ETH/BNB got a generated emblem,
+# which reads as the wrong icon (Lorenzo: "le icone non corrispondono a
+# quelle corrette del token").
+NATIVE_IMAGE = {
+    "solana": "https://dd.dexscreener.com/ds-data/tokens/solana/So11111111111111111111111111111111111111112.png",
+    "robinhood": "https://dd.dexscreener.com/ds-data/tokens/ethereum/0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2.png",
+    "base": "https://dd.dexscreener.com/ds-data/tokens/ethereum/0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2.png",
+    "ethereum": "https://dd.dexscreener.com/ds-data/tokens/ethereum/0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2.png",
+    "bsc": "https://dd.dexscreener.com/ds-data/tokens/bsc/0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c.png",
+}
 BLOCKSCOUT = {"base": "https://base.blockscout.com", "ethereum": "https://eth.blockscout.com"}
 RPC = {"robinhood": "https://rpc.mainnet.chain.robinhood.com", "bsc": "https://bsc-dataseed.binance.org"}
 SOL_RPC = "https://api.mainnet-beta.solana.com"
@@ -235,7 +246,7 @@ async def wallet(chain: str, address: str, client: httpx.AsyncClient | None = No
     out = []
     if native > 0:
         out.append({"chain": chain, "token": None, "symbol": NATIVE[chain], "name": NATIVE[chain], "amount": native,
-                    "price_usd": px, "value_usd": native * px if px is not None else None, "image": None,
+                    "price_usd": px, "value_usd": native * px if px is not None else None, "image": NATIVE_IMAGE.get(chain),
                     "native": True, "hidden": False})
     for r in rows:
         meta = info.get(norm(r["token"]), {})
