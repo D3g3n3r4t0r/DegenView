@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0152", "Depositi: crypto per rete, carta, exchange",
+     "Lorenzo (screenshot di un pannello 'Deposit with': Crypto / Debit / Exchanges and apps): 'aggiungiamo queste possibilita' per i depositi'.",
+     "media"),
     ("seed-0151", "Il saldo del wallet esce a $0.00",
      "Lorenzo (profilo alle 19:18, $0.00 in alto e nel valore): 'non becca il saldo'.",
      "alta"),

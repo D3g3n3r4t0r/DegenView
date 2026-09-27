@@ -82,6 +82,10 @@ class Settings(BaseSettings):
     # USDC contract on Robinhood Chain for the autotrader's cash; empty = found
     # from the most liquid USDC/USDG pool (autotrader.find_usdc).
     robinhood_usdc_address: str = ""
+    # Card deposits: an on-ramp's buy link (MoonPay, Transak, ...) with the
+    # operator's own key in it; "{address}" becomes the user's Solana wallet.
+    # Empty = the Debit option says it is not set up (deposit.py).
+    onramp_url: str = ""
     ai_review_model: str = "claude-sonnet-5"
     ai_review_daily_tokens: int = 40_000
     ai_review_monthly_tokens: int = 600_000

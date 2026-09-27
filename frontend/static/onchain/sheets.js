@@ -13,7 +13,7 @@
  */
 import * as api from "@onchain/api.js";
 import { escapeHtml, formatToken, formatUsd, shortAddress, tile } from "@onchain/format.js";
-import { chainInfo, readCache, state } from "@onchain/store.js";
+import { chainInfo, state } from "@onchain/store.js";
 
 // Stesso indirizzo nativo duplicato in swap.js/limitOrders.js: qui serve
 // solo per proporre il nativo come "token che hai" nel picker, non per
@@ -37,6 +37,7 @@ export function openSheet(title, description) {
   titleEl.textContent = title;
   descEl.textContent = description;
   bodyEl.replaceChildren();
+  dialog.classList.remove("dep-has-back");
   if (!dialog.open) dialog.showModal();
 }
 const open = openSheet;
@@ -54,24 +55,115 @@ export const setBody = (markup) => bodyEl.replaceChildren(html(markup));
 export const setMessage = (text, tone = "") =>
   setBody(`<p class="sheet-note ${tone}">${escapeHtml(text)}</p>`);
 
-/* ---------------------------------------------------------------- Ricevi */
+/* --------------------------------------------------------------- Deposit */
 
-export function openReceive() {
-  const { label, unit, suffix } = chainInfo();
-  const address = state.wallets[state.chain]?.address ?? readCache(state.chain)?.address ?? "";
-  open("Receive", `${label}${suffix} address. Only send assets on this chain: anything sent from another network is gone.`);
-  setBody(`
-    <p class="address-block">${escapeHtml(address)}</p>
+// Lorenzo, 27/09: "aggiungiamo queste possibilita' per i depositi" (a
+// "Deposit with" sheet: Crypto / Debit / Exchanges and apps). One sheet,
+// three steps, a back arrow between them; the data comes from
+// /api/wallets/deposit (deposit.py) when it opens.
+const CHAIN_ICON = (id) => `https://dd.dexscreener.com/ds-data/chains/${id === "bsc" ? "bsc" : id}.png`;
+const BRAND = {
+  coinbase: `<svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#0052ff"/><path d="M16 23.5a7.5 7.5 0 1 1 7.4-8.7h-4a3.7 3.7 0 1 0 0 2.4h4A7.5 7.5 0 0 1 16 23.5z" fill="#fff"/></svg>`,
+  binance: `<svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#1e2026"/><path d="M16 7l2.6 2.6L16 12.2l-2.6-2.6zm-5.4 5.4l2.6 2.6-2.6 2.6L8 15zm10.8 0L24 15l-2.6 2.6-2.6-2.6zM16 12.4l2.6 2.6-2.6 2.6-2.6-2.6zm0 5.4l2.6 2.6L16 23l-2.6-2.6z" fill="#f0b90b"/></svg>`,
+};
+const ICONS = {
+  qr: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 14h2v2h-2zM14 18h2v2h-2zM18 18h2v2h-2z"/></svg>`,
+  card: `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2.5"/><path d="M3 10h18M7 15h4"/></svg>`,
+};
+let deposit = null;
+
+const depRow = (attrs, title, sub, icon) => `
+  <button type="button" class="dep-row" ${attrs}>
+    <span><b>${title}</b>${sub ? `<small>${sub}</small>` : ""}</span>
+    <i class="dep-ico">${icon}</i>
+  </button>`;
+
+function depStep(title, desc, back, markup) {
+  open(title, desc);
+  setBody(`${back ? `<button type="button" class="dep-back" aria-label="Back">‹</button>` : ""}<div class="dep-list">${markup}</div>`);
+  dialog.classList.toggle("dep-has-back", !!back);
+  bodyEl.querySelector(".dep-back")?.addEventListener("click", back);
+}
+
+export async function openReceive() {
+  open("Deposit with", "");
+  setMessage("Loading…");
+  try {
+    deposit = await api.getDeposit();
+  } catch (err) {
+    setMessage(err.message ?? "Couldn't load deposit options.", "is-warn");
+    return;
+  }
+  depositHome();
+}
+
+function depositHome() {
+  const ex = deposit.exchanges;
+  depStep("Deposit with", "", null,
+    depRow("data-d=crypto", "Crypto", "Receive USDC from a crypto wallet", ICONS.qr)
+    + depRow("data-d=debit", "Debit", "Deposit cash with a debit card", ICONS.card)
+    + depRow("data-d=apps", "Exchanges and apps", ex.map((e) => e.label).join(", "),
+      `<span class="dep-brands">${ex.map((e) => BRAND[e.id] ?? "").join("")}</span>`));
+  bodyEl.querySelector("[data-d=crypto]").addEventListener("click", () => depositNetworks(null, depositHome));
+  bodyEl.querySelector("[data-d=debit]").addEventListener("click", depositDebit);
+  bodyEl.querySelector("[data-d=apps]").addEventListener("click", depositApps);
+}
+
+function depositNetworks(only, back, from = "") {
+  const nets = only ? only.map((id) => deposit.networks.find((n) => n.id === id)).filter(Boolean) : deposit.networks;
+  depStep(from ? `Deposit from ${from}` : "Deposit crypto",
+    from ? `Withdraw USDC from ${from} on one of these networks.` : "Choose a network to deposit from.", back,
+    nets.map((n, i) => depRow(`data-net="${n.id}"`, escapeHtml(n.label),
+      from && i === 0 ? "cheapest" : "",
+      `<img src="${CHAIN_ICON(n.id)}" alt="" width="26" height="26" onerror="this.replaceWith(Object.assign(document.createElement('b'),{textContent:'${escapeHtml(n.label[0])}'}))">`)).join(""));
+  bodyEl.querySelectorAll("[data-net]").forEach((b) => b.addEventListener("click", () =>
+    depositAddress(deposit.networks.find((n) => n.id === b.dataset.net), () => depositNetworks(only, back, from))));
+}
+
+function depositAddress(n, back) {
+  if (!n.address) {
+    depStep(`Deposit on ${n.label}`, "", back,
+      `<p class="sheet-note is-warn">No ${n.kind === "solana" ? "Solana" : "EVM"} wallet on this account yet. Create one in Wallet, or connect yours from the profile.</p>`);
+    return;
+  }
+  const use = n.use === "trades" ? "Counts in your balance and can be traded here."
+    : "Counts in your balance; trading here runs on Solana and Robinhood Chain.";
+  depStep(`Deposit on ${n.label}`, `Send USDC on ${n.label} only: anything sent from another network is gone.`, back, `
+    <div class="dep-qr"><img src="${n.qr}" alt="QR code of the address" width="180" height="180"></div>
+    <p class="address-block">${escapeHtml(n.address)}</p>
     <dl class="kv">
-      <div><dt>Chain</dt><dd>${escapeHtml(label)}${escapeHtml(suffix)}</dd></div>
-      <div><dt>Native asset</dt><dd>${escapeHtml(unit)}</dd></div>
+      <div><dt>Network</dt><dd>${escapeHtml(n.label)}</dd></div>
+      <div><dt>Token</dt><dd>USDC${n.usdc ? ` <small>${escapeHtml(shortAddress(n.usdc))}</small>` : ""}</dd></div>
+      <div><dt>Wallet</dt><dd>${n.source === "site" ? "this site's" : "your connected wallet"}</dd></div>
     </dl>
-    <button type="button" class="btn-quiet" data-copy>Copy address</button>
-  `);
+    <p class="sheet-note">${use}${n.id === "robinhood" && !n.usdc ? " USDC on Robinhood Chain isn't confirmed yet: send USDG or ETH." : ""}</p>
+    <button type="button" class="btn-quiet" data-copy>Copy address</button>`);
   bodyEl.querySelector("[data-copy]").addEventListener("click", async (event) => {
-    await navigator.clipboard?.writeText(address);
+    await navigator.clipboard?.writeText(n.address);
     event.currentTarget.textContent = "Copied";
   });
+}
+
+function depositApps() {
+  depStep("Deposit", "Choose an exchange or app to deposit from.", depositHome,
+    deposit.exchanges.map((e) => depRow(`data-ex="${e.id}"`, escapeHtml(e.label), "", BRAND[e.id] ?? "")).join(""));
+  bodyEl.querySelectorAll("[data-ex]").forEach((b) => b.addEventListener("click", () => {
+    const e = deposit.exchanges.find((x) => x.id === b.dataset.ex);
+    depositNetworks(e.networks, depositApps, e.label);
+    bodyEl.querySelector(".dep-list").insertAdjacentHTML("beforeend",
+      `<a class="btn-quiet dep-open" href="${escapeHtml(e.url)}" target="_blank" rel="noopener">Open ${escapeHtml(e.label)}</a>`);
+  }));
+}
+
+function depositDebit() {
+  if (deposit.onramp) {
+    window.open(deposit.onramp, "_blank", "noopener");
+    return;
+  }
+  depStep("Debit card", "", depositHome,
+    `<p class="sheet-note">Card deposits aren't switched on yet: they need an on-ramp account (MoonPay, Transak…) set up by the site. Meanwhile, buy USDC on an exchange and send it here.</p>`
+    + depRow("data-d=apps", "Exchanges and apps", deposit.exchanges.map((e) => e.label).join(", "), ""));
+  bodyEl.querySelector("[data-d=apps]").addEventListener("click", depositApps);
 }
 
 /* ---------------------------------------------------------------- Limiti */
