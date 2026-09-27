@@ -176,19 +176,78 @@ function infoFallback(e) {
   </dl>`;
 }
 
-// Charts already fetched, shown at once while a fresh copy loads; a tap on
-// a row starts the fetch before the page is even open.
-const charts = new Map();   // "chain:pair:interval" -> {at, promise | candles}
+// Charts. Lorenzo: "il grafico impiega almeno 10 secondi ad aprirsi" and
+// "in alcuni ticker non c'e' grafico proprio". GeckoTerminal is the only free
+// source of candles and allows ~30 calls a minute per IP: through our server
+// every viewer and every background job shared one quota. Now three sources
+// race and the first with a line wins:
+//   1. the server's copy, if it already has one (peek: never calls anyone);
+//   2. GeckoTerminal straight from the browser, on the viewer's own quota;
+//   3. the server fetching it, only if both above came back empty.
+// No pool known (some gems) -> DexScreener says which is the token's main
+// pool. Still no candles -> DexScreener's own chart, embedded.
+const charts = new Map();   // "chain:pair:interval" -> {at, promise, candles}
+const pools = new Map();    // "chain:token" -> pair address (or "" if none)
 const CHART_FRESH_MS = 30_000;
+const GECKO = "https://api.geckoterminal.com/api/v2";
+const GECKO_NET = { solana: "solana", robinhood: "robinhood", base: "base", bsc: "bsc", ethereum: "eth" };
+const GECKO_TF = { "1m": ["minute", 1], "5m": ["minute", 5], "15m": ["minute", 15], "1h": ["hour", 1], "4h": ["hour", 4] };
+const DS_EMBED = new Set(["solana", "base", "bsc", "ethereum"]);   // chains DexScreener charts
+
+async function fetchJson(url, ms) {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), ms);
+  try {
+    const r = await fetch(url, { signal: ctl.signal, headers: { Accept: "application/json" }, referrerPolicy: "no-referrer" });
+    if (!r.ok) throw new Error(String(r.status));
+    return await r.json();
+  } finally { clearTimeout(t); }
+}
+
+async function poolOf(e) {
+  if (e.pair) return e.pair;
+  const k = `${e.chain}:${e.token}`;
+  if (pools.has(k)) return pools.get(k);
+  let pair = "";
+  try {
+    const rows = await fetchJson(`https://api.dexscreener.com/tokens/v1/${e.chain}/${e.token}`, 4000);
+    const best = (Array.isArray(rows) ? rows : []).sort((x, y) => (y.liquidity?.usd ?? 0) - (x.liquidity?.usd ?? 0))[0];
+    pair = best?.pairAddress ?? "";
+  } catch { /* no pool found: the page says so */ }
+  pools.set(k, pair);
+  if (pair) e.pair = pair;
+  return pair;
+}
+
+async function geckoDirect(e, pair, iv) {
+  const net = GECKO_NET[e.chain];
+  const [tf, agg] = GECKO_TF[iv] ?? GECKO_TF["5m"];
+  if (!net) throw new Error("chain");
+  const q = new URLSearchParams({ aggregate: agg, limit: 300, currency: "usd", ...(e.token ? { token: e.token } : {}) });
+  const d = await fetchJson(`${GECKO}/networks/${net}/pools/${pair}/ohlcv/${tf}?${q}`, 6000);
+  const rows = d?.data?.attributes?.ohlcv_list ?? [];
+  return rows.map((r) => ({ time: r[0], close: Number(r[4]) })).filter((c) => Number.isFinite(c.close)).sort((a, b) => a.time - b.time);
+}
+
+const clean = (d) => (d?.candles ?? []).filter((c) => Number.isFinite(c.close));
+const enough = (c) => { if (c.length < 2) throw new Error("empty"); return c; };
 
 function chartFor(e, iv) {
-  const k = `${e.chain}:${e.pair}:${iv}`;
+  const k = `${e.chain}:${e.pair || e.token}:${iv}`;
   const hit = charts.get(k);
   if (hit && Date.now() - hit.at < CHART_FRESH_MS) return hit.promise;
-  const promise = api.getTokenChart(e.chain, e.pair, e.symbol, iv)
-    .then((d) => (d?.candles ?? []).filter((c) => Number.isFinite(c.close)))
-    .then((candles) => { charts.set(k, { at: Date.now(), promise: Promise.resolve(candles), candles }); return candles; },
-      (err) => { if (charts.get(k)?.promise === promise) charts.delete(k); throw err; });
+  const promise = (async () => {
+    const pair = await poolOf(e);
+    if (!pair) return [];
+    const peek = api.getTokenChart(e.chain, pair, e.symbol, iv, true).then(clean).then(enough);
+    const direct = geckoDirect(e, pair, iv).then(enough);
+    try {
+      return await Promise.any([peek, direct]);
+    } catch {
+      return clean(await api.getTokenChart(e.chain, pair, e.symbol, iv));
+    }
+  })().then((candles) => { charts.set(k, { at: Date.now(), promise: Promise.resolve(candles), candles }); return candles; },
+    (err) => { if (charts.get(k)?.promise === promise) charts.delete(k); throw err; });
   charts.set(k, { at: Date.now(), promise, candles: hit?.candles });
   if (charts.size > 60) charts.delete(charts.keys().next().value);
   return promise;
@@ -198,26 +257,30 @@ const defaultInterval = (e) => (e.kind === "gem" ? "1h" : "5m");
 
 export function prefetchChart(id) {
   const e = registry.get(id);
-  if (e?.pair) chartFor(e, defaultInterval(e)).catch(() => {});
+  if (e?.pair || e?.token) chartFor(e, defaultInterval(e)).catch(() => {});
+}
+
+function embed(e) {
+  if (!e.pair || !DS_EMBED.has(e.chain)) return `<div class="dt-chart-empty">No trades to chart yet.</div>`;
+  const iv = { "1m": "1", "5m": "5", "15m": "15", "1h": "60", "4h": "240" }[interval] ?? "5";
+  const src = `https://dexscreener.com/${e.chain}/${e.pair}?embed=1&loadChartSettings=0&trades=0&tabs=0&info=0&chartLeftToolbar=0&chartTheme=dark&theme=dark&chartStyle=2&chartType=marketCap&interval=${iv}`;
+  return `<iframe class="dt-embed" src="${escapeHtml(src)}" title="${escapeHtml(e.symbol)} chart on DexScreener" loading="lazy" referrerpolicy="no-referrer"></iframe>`;
 }
 
 async function paintChart() {
   const e = current.e;
   const box = dlg.querySelector("[data-chart]");
-  if (!e.pair) { box.innerHTML = `<div class="dt-chart-empty">No pool to chart.</div>`; return; }
+  if (!e.pair && !e.token) { box.innerHTML = `<div class="dt-chart-empty">No pool to chart.</div>`; return; }
   const want = `${current.id}:${interval}`;
   box.dataset.want = want;
-  const stale = charts.get(`${e.chain}:${e.pair}:${interval}`)?.candles;
+  const stale = charts.get(`${e.chain}:${e.pair || e.token}:${interval}`)?.candles;
   if (stale?.length >= 2) box.innerHTML = svgChart(stale, e);
-  let candles;
+  let candles = [];
   try {
     candles = await chartFor(e, interval);
-  } catch {
-    if (box.dataset.want === want && !stale) box.innerHTML = `<div class="dt-chart-empty">Chart unavailable right now.</div>`;
-    return;
-  }
+  } catch { /* falls through to the embedded chart */ }
   if (box.dataset.want !== want) return;
-  if (candles.length < 2) { box.innerHTML = `<div class="dt-chart-empty">Not enough trades to chart yet.</div>`; return; }
+  if (candles.length < 2) { if (!stale) box.innerHTML = embed(e); return; }
   box.innerHTML = svgChart(candles, e);
 }
 

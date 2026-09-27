@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0137", "Grafici ancora troppo lenti, e su alcuni ticker il grafico non c'e' proprio",
+     "Lorenzo: 'ancora troppo lenti a caricare i grafici, in alcuni ticker non c'e' grafico proprio'.",
+     "alta"),
     ("seed-0136", "Il grafico impiega almeno 10 secondi ad aprirsi",
      "Lorenzo: 'il grafico impegna almeno 10 secondi ad aprirsi, inammissibile'.",
      "alta"),

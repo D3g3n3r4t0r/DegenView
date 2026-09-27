@@ -46,3 +46,13 @@ def test_warm_fetches_what_is_on_screen_once(monkeypatch):
     assert asyncio.run(radar.warm_charts(targets, gap_s=0)) == 2
     assert asyncio.run(radar.warm_charts(targets, gap_s=0)) == 0     # fresh: not fetched again
     assert ("bsc", "P2", "1h") in radar._lite_cache
+
+
+def test_peek_never_calls_geckoterminal(monkeypatch):
+    calls = []
+    _setup(monkeypatch, calls)
+    radar._lite_cache.clear()
+    assert radar.chart_peek("solana", "P", "5m")["candles"] == []
+    radar._lite_cache[("solana", "P", "5m")] = (radar.time.time() - 60, [{"time": 1, "close": 2.0}])
+    assert radar.chart_peek("solana", "P", "5m")["candles"] == [{"time": 1, "close": 2.0}]
+    assert calls == []
