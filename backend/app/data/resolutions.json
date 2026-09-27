@@ -1852,5 +1852,17 @@
       "frontend/static/onchain/sheets.js",
       "frontend/static/onchain/app.css"
     ]
+  },
+  "seed-0151": {
+    "status": "risolto",
+    "at": 1790529741,
+    "summary": "Il saldo non era zero: non veniva letto, e una lettura mancata contava come zero. Il nodo pubblico di Solana rifiuta spesso la richiesta dei token (troppe richieste) e l'app non provava un altro nodo; se il prezzo di SOL/ETH non arrivava, la moneta valeva 0; un nodo che non accetta richieste a gruppi dava 0 a tutto. E il primo punto del grafico, dopo l'azzeramento, e' stato registrato a $0 proprio per questo. Ora Solana prova un secondo nodo, le richieste EVM ripiegano una alla volta, una moneta senza prezzo rende la catena 'non letta' invece che vuota, e se una catena non risponde si usa l'ultima lettura buona (fino a 6 ore). Se non c'e' nessuna lettura buona, in alto compare '$—' e nel profilo quali catene non sono state lette, non un falso $0; il grafico riparte pulito senza quel punto.",
+    "files": [
+      "backend/app/trading/onchain/portfolio.py",
+      "backend/app/trading/onchain/wealth.py",
+      "backend/app/main.py",
+      "frontend/static/onchain/main.js",
+      "frontend/static/onchain/profile.js"
+    ]
   }
 }

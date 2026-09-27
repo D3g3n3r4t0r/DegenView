@@ -3805,7 +3805,8 @@ def _record_wealth(user: User, snap: dict) -> None:
 async def wallets_total(user: User = Depends(auth.get_current_user)) -> dict:
     """The header's number: every token on every chain, in USD."""
     snap = await _wallet_snapshot(user)
-    return {"total": snap["total"], "cash": snap["cash"], "by_chain": snap["by_chain"], "missing": snap["missing"]}
+    return {"total": snap["total"], "cash": snap["cash"], "by_chain": snap["by_chain"], "missing": snap["missing"],
+            "complete": snap["complete"]}
 
 
 async def _wealth_loop() -> None:
@@ -3853,12 +3854,13 @@ async def get_profile(user: User = Depends(auth.get_current_user)) -> dict:
     return {
         "profile": profiles.public(user.id, p), "email": user.email,
         "value": snap["total"], "cash": snap["cash"], "positions": snap["positions"], "missing": snap["missing"],
+        "complete": snap["complete"],
         "by_chain": snap["by_chain"],
         "closed": closed,
         "stats": {"trades": orders + sum(1 for t in onchain_autotrader.view(user.id)["trades"] if t.get("ok") and t.get("mode") == "sim"),
                   "avg_hold_s": sum(holds) / len(holds) if holds else None, "closed": len(closed)},
         # the line ends where the header is: the value just read
-        "history": {k: onchain_wealth.series(user.id, k) + ([[_time.time(), snap["total"]]] if snap["total"] is not None else [])
+        "history": {k: onchain_wealth.series(user.id, k) + ([[_time.time(), snap["total"]]] if snap["complete"] else [])
                     for k in onchain_wealth.RANGES},
         "tracking_since": (onchain_wealth.series(user.id, "all") or [[None]])[0][0],
         "change": {k: onchain_wealth.change(user.id, k, snap["total"]) for k in onchain_wealth.RANGES},
