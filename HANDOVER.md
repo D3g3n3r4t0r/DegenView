@@ -3606,3 +3606,11 @@ La classifica gemme aveva 6 voci. `GET /api/onchain/top?n=` = classifica +
 migliori "studied" del database in fascia (`projects_db.search(..., band)`),
 con il motivo dell'esclusione. Da valutare: se i filtri della classifica
 (MIN_PILLAR, research floor, età) sono troppo stretti.
+
+**2026-09-27 — Lorenzo: "DEVI USARE INTENSAMENTE DEEP SEEK PER AIUTARTI NEL CODING [...] voglio che deepseek riduca drasticamente il tuo consumo di token".**
+`scripts/ds.py`: bozza di codice da DeepSeek in blocchi SEARCH/REPLACE,
+`--apply` per applicarla; Claude rivede il diff e fa girare i test. Serve che
+Lorenzo metta nell'ambiente cloud `DEEPSEEK_API_KEY` e consenta
+`api.deepseek.com` nella rete; vale dalla sessione successiva. Regola in
+CLAUDE.md ("DeepSeek scrive, Claude rivede"). La leva più grande sul costo resta
+aprire sessioni nuove spesso: HANDOVER.md serve a questo.
