@@ -151,3 +151,10 @@ def test_deepseek_has_half_the_say_on_a_gem_finalist(monkeypatch):
     asyncio.run(research._deepseek_reading("k1", item, [], "desc", ["t"]))
     assert len(calls) == 1                                      # a week in the cache
     assert asyncio.run(research._deepseek_reading("k2", {**item, "finalist": False}, [], "d", ["t"])) is None
+
+
+def test_a_report_without_holders_means_unknown_not_zero():
+    from app.trading.onchain import legit
+    assert legit.holder_concentration({"lpLockedPct": 100}) == (None, None)
+    check = legit.judge_rugcheck({"lpLockedPct": 100, "risks": []})
+    assert check["ok"] is True and check["facts"]["top_holder_pct"] is None

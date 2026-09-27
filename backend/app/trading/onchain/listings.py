@@ -188,6 +188,24 @@ def status() -> dict:
     }
 
 
+def upcoming(limit: int = 8, now: float | None = None) -> list[dict]:
+    """Tokens being vetted right now, closest to an alert first: passed every
+    check and only waiting for the chart ("imminent"), then the rest with
+    what they wait for. For the Alerts tab (Lorenzo: "mi interessa vedere
+    cosa sta per scattare")."""
+    now = now or time.time()
+    rows = []
+    for p in _pending.values():
+        if not p.symbol:
+            continue
+        imminent = bool(p.verdict and p.verdict.get("status") == "ok")
+        rows.append({"chain": p.chain, "pair_address": p.pair, "symbol": p.symbol, "since": p.detected_at,
+                     "stage": "imminent" if imminent else "checking",
+                     "waiting_for": p.waiting_for or ("checks running" if p.vetting else "queued")})
+    rows.sort(key=lambda r: (r["stage"] != "imminent", -r["since"]))
+    return rows[:limit]
+
+
 def subscribe() -> asyncio.Queue:
     q: asyncio.Queue = asyncio.Queue(maxsize=50)
     _subscribers.append(q)
