@@ -10,7 +10,7 @@
  */
 import { openScan } from "@onchain/sheets.js";
 import * as api from "@onchain/api.js";
-import { age, changePill, escapeHtml, logo, strategyTrade, tile, tokenRow, usdShort } from "@onchain/format.js";
+import { age, bestSystem, changePill, escapeHtml, logo, strategyTrade, tile, tokenRow, usdShort } from "@onchain/format.js";
 import { register } from "@onchain/detail.js";
 import { renderPodium } from "@onchain/podium.js";
 
@@ -53,7 +53,7 @@ function registerAlert(a, kind) {
 function callCard(a, kind) {
   const id = registerAlert(a, kind);
   const cap = capNow(a);
-  const s = a.system;
+  const s = bestSystem(a);
   return `<article class="call">
     <button type="button" class="call-head" data-open="${escapeHtml(id)}">
       ${logo(a.symbol, a.image, a.chain, a.token_address)}
@@ -66,7 +66,7 @@ function callCard(a, kind) {
       <span><small>Best 48h</small><b data-sign="${sign(a.max)}">${pct(a.max)}</b></span>
       <span><small>System</small><b data-sign="${sign(s?.ret)}">${s?.ret == null ? "—" : pct(s.ret)}</b><em class="sys-state" data-state="${s?.state ?? "waiting"}">${sysState(s)}</em></span>
     </div>
-    <div class="strats">${a.system ? strategyTrade({ ...a.system, label: "System" }, a.at) : ""}</div>
+    <div class="strats">${bestSystem(a) ? strategyTrade(bestSystem(a), a.at) : ""}</div>
     <p class="hours-head">Just holding, from the alert</p>
     <ol class="hours">${HOURS.map((h) => {
       const r = a.returns?.[String(h)];

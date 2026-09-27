@@ -178,3 +178,14 @@ export function strategyTrade(s, alertAt, chosen) {
     ${exit}
   </div>`;
 }
+
+/** The system's result on one alert, as shown: the better of its two
+ *  internal versions, never named (Lorenzo, 28/09: "l'importante è proporre
+ *  la migliore delle due, internamente, proponendo sempre il miglior
+ *  risultato"). An alert where neither traded shows the one in use. */
+export function bestSystem(a) {
+  const traded = (a.systems ?? []).filter((s) => s && ((s.trades ?? 0) > 0 || s.state === "in") && s.ret != null);
+  const best = traded.sort((x, y) => y.ret - x.ret)[0] ?? a.system;
+  return best ? { ...best, label: "System" } : null;
+}
+
