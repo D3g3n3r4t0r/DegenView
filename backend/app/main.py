@@ -1233,9 +1233,40 @@ async def _telegram_chat_loop() -> None:
                 await asyncio.sleep(10)
 
 
+def _deepseek_tools() -> dict:
+    """What the Telegram assistant can look up by itself in the database of
+    every token we watched (rug_memory over outcomes.py)."""
+    from app.trading.onchain import rug_memory
+    str_arg = lambda d: {"type": "string", "description": d}  # noqa: E731
+    return {
+        "cerca_token": ({"name": "cerca_token", "description": "Find a watched token by symbol or address: when we saw it, what we decided, what happened (rug, hours to rug, best/worst return), its numbers at the time.",
+                         "parameters": {"type": "object", "properties": {"query": str_arg("symbol like PEPE or address prefix")}, "required": ["query"]}},
+                        lambda query: rug_memory.lookup(query)),
+        "rug_simili": ({"name": "rug_simili", "description": "Past tokens most similar to a watched one (by its numbers and checks) and what happened to them.",
+                        "parameters": {"type": "object", "properties": {"query": str_arg("symbol or address of the token to compare")}, "required": ["query"]}},
+                       lambda query: _similar_to(query)),
+        "circostanze_rug": ({"name": "circostanze_rug", "description": "How rug pulls differed from the other tokens: rate, hours to rug, how they happened, numbers and checks of rugs vs others.",
+                             "parameters": {"type": "object", "properties": {"chain": str_arg("optional: solana, robinhood, bsc, base, ethereum")}}},
+                            lambda chain=None: rug_memory.circumstances(chain or None)),
+        "ultimi_rug": ({"name": "ultimi_rug", "description": "The most recent rug pulls in the database, newest first.",
+                        "parameters": {"type": "object", "properties": {"n": {"type": "integer", "description": "how many, max 20"}}}},
+                       lambda n=10: sorted((c for c in rug_memory.cases() if c["outcome"] == "rug"), key=lambda c: -c["at"])[:min(int(n or 10), 20)]),
+    }
+
+
+def _similar_to(query: str) -> dict:
+    from app.trading.onchain import outcomes as _oc, rug_memory
+    hits = rug_memory.lookup(query, limit=1)
+    if not hits:
+        return {"error": "token not in the database"}
+    e = _oc._journal.get(f"{hits[0]['chain']}:{hits[0]['token']}") or {}
+    pool = [c for c in rug_memory.cases() if c["token"] != hits[0]["token"]]
+    return {"token": hits[0], "similar": rug_memory.similar(e.get("features") or {}, hits[0]["chain"], k=8, pool=pool)}
+
+
 async def _telegram_reply(chat_id: str, text: str) -> None:
     try:
-        reply = await deepseek_desk.answer(chat_id, text, await _deepseek_context(chat_id))
+        reply = await deepseek_desk.answer(chat_id, text, await _deepseek_context(chat_id), tools=_deepseek_tools())
     except Exception as exc:
         logger.exception("deepseek chat")
         reply = f"DeepSeek non risponde ora ({type(exc).__name__})."
