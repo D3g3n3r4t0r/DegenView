@@ -35,6 +35,12 @@ WINDOW_S = 48 * 3600
 BAR_S = 300
 MIN_DECIDED = 20
 COST = (radar.BACKTEST_PARAMS["commission_pct"] + radar.BACKTEST_PARAMS["slippage_pct"]) / 100
+# A fall this deep inside one bar (or between a bar's close and the next
+# open) is a crash no bar-based exit can dodge: the first price to sell at
+# is already the crashed one. Lorenzo, 27/09: "ci sono percentuali di meno
+# 80%, pero' la strategia dovrebbe aver chiuso molto prima". Each sell says
+# which it was, so a -80% explains itself.
+CRASH = -0.35
 
 CANDIDATES = [
     {"strategy_name": "Lorenzo HF (minuti on-chain)", "params": None, "label": "Lorenzo HF", "source": "predefinita"},
@@ -89,14 +95,18 @@ def follow(bars: list[list], cfg: dict, start: float, *, gone: bool = False, now
             out["trades"] += 1
             out["wins"] += r > 1
             pos = False
-            events.append({"t": t_fill, "side": "sell", "price": float(opens[i + 1]), "ret": round(r - 1, 4)})
+            bar_move = closes[i] / closes[i - 1] - 1 if i else 0.0
+            gap = opens[i + 1] / closes[i] - 1
+            why = "crash" if min(bar_move, gap) <= CRASH else "signal"
+            events.append({"t": t_fill, "side": "sell", "price": float(opens[i + 1]), "ret": round(r - 1, 4),
+                           "why": why, "drop": round(min(bar_move, gap), 4)})
     now = now or ts[last_i]
     window_over = now >= end
     if pos:
         if gone:
             equity *= 0.0
             out["trades"] += 1
-            events.append({"t": int(now), "side": "rug", "price": 0.0, "ret": -1.0})
+            events.append({"t": int(now), "side": "rug", "price": 0.0, "ret": -1.0, "why": "rug"})
             pos = False
         else:
             j = max(k for k in range(len(ts)) if ts[k] <= end) if window_over else last_i
