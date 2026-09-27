@@ -150,6 +150,8 @@ Lorenzo: vedi HANDOVER.
 |---|---|---|
 | 27/09 | PR #155, prima revisione | 5 osservazioni, 0 valide: diceva che un test non isolava la chiave (la toglieva già) e che un altro chiamava `main()` (chiamava `ask()`). |
 
+| 27/09 | issue #173, primo lavoro di codice (righe del Database cliccabili) | corretto al primo colpo: 2 file, diff pulito, nessuna correzione di Claude |
+
 Regola per dargli più lavoro: tre revisioni di fila con almeno un'osservazione
 giusta e nessuna inventata → gli si affida anche la prima stesura dei testi in
 italiano (spiegazioni delle uscite, riepilogo settimanale).
