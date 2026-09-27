@@ -16,7 +16,7 @@ def _clean():
 
 def test_market_candidates_keeps_cap_band_and_drops_meme_names():
     rows = [{"id": "big", "symbol": "big", "name": "Big", "market_cap": 9_000_000},
-            {"id": "tiny", "symbol": "tiny", "name": "Tiny", "market_cap": 10_000},
+            {"id": "tiny", "symbol": "tiny", "name": "Tiny", "market_cap": 5_000},   # under the early-gem floor
             {"id": "dog", "symbol": "doge2", "name": "Doge Inu", "market_cap": 500_000},
             {"id": "grid", "symbol": "grid", "name": "Grid Protocol", "market_cap": 900_000}]
     assert [c["id"] for c in d.market_candidates("robinhood", rows)] == ["grid"]
@@ -53,7 +53,7 @@ def test_profiles_keep_own_site_on_our_chains():
     profiles = [
         {"chainId": "solana", "tokenAddress": "M1", "description": "ZK proving network",
          "links": [{"label": "Website", "url": "https://prover.io"}, {"type": "github", "url": "https://github.com/p/r"}]},
-        {"chainId": "base", "tokenAddress": "M2", "links": [{"label": "Website", "url": "https://x.io"}]},
+        {"chainId": "bsc", "tokenAddress": "M2", "links": [{"label": "Website", "url": "https://x.io"}]},
         {"chainId": "solana", "tokenAddress": "M3", "description": "the funniest meme on solana",
          "links": [{"label": "Website", "url": "https://lol.io"}]},
         {"chainId": "solana", "tokenAddress": "M4", "links": [{"type": "twitter", "url": "https://x.com/a"}]},
@@ -149,7 +149,7 @@ def test_readme_addresses_skips_words_and_known_programs():
             f"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA. Robinhood: {EVM}\n"
             "abcdefghijkmnopqrstuvwxyzabcdefghijk")
     out = d.readme_addresses(text)
-    assert out == {"solana": [MINT], "robinhood": [EVM]}
+    assert out == {"solana": [MINT], "robinhood": [EVM], "base": [EVM]}
 
 
 def test_search_candidates_keeps_fresh_own_repos():
@@ -226,3 +226,13 @@ def test_jupiter_verified_list_keeps_real_projects_in_band():
             {**base, "id": "C", "symbol": "BIG", "name": "Big", "mcap": 9_000_000}]
     out = dv.jupiter_candidates(rows, now)
     assert [x["token_address"] for x in out] == ["R"] and out[0]["website"] == "https://solrouter.com"
+
+
+def test_base_is_searched_like_the_other_chains():
+    profiles = [{"chainId": "base", "tokenAddress": "0xabc", "description": "Onchain order book",
+                 "links": [{"label": "Website", "url": "https://book.xyz"}]}]
+    assert [c["chain"] for c in d.profile_candidates(profiles)] == ["base"]
+    addrs = d.readme_addresses("CA: 0x1111111111111111111111111111111111111111")
+    assert addrs["base"] == addrs["robinhood"] == ["0x1111111111111111111111111111111111111111"]
+    rows = [{"id": "book", "platforms": {"base": "0xAbC"}}]
+    assert d.chain_index(rows)["base"] == {"book"}

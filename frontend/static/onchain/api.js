@@ -113,6 +113,9 @@ export const getSniperAutotrade = () => request("/api/onchain/sniper-autotrade")
 export const getPilot = (chain) => request(`/api/onchain/pilot/${chain}`);
 export const getRadar = () => request("/api/onchain/radar");
 export const getLeaderboard = () => request("/api/onchain/leaderboard");
+export const getAlerts = (kind) => request(`/api/onchain/alerts/${kind}`);
+export const getAiReview = () => request("/api/onchain/ai-review");
+export const getProjects = (params) => request(`/api/onchain/projects?${new URLSearchParams(params)}`);
 export const getRadarLessons = () => request("/api/onchain/radar/lessons");
 export const getRadarMemes = () => request("/api/onchain/radar/memes");
 export const getRadarChart = (chain, pool, symbol, interval) =>

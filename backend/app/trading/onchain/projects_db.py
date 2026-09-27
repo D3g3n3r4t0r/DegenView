@@ -1,0 +1,334 @@
+"""The Gem Finder's memory of every project it has ever met: a database.
+
+Request: "il gem hunter deve trovare progetti di qualita', ma vedi sempre i
+soliti... ma fatti un database no?". Why the board kept showing the same
+names: the finder had no memory of the market, only of its board.
+
+- A project was examined only when a source handed it over at the right
+  moment (a CoinGecko category page, a DexScreener profile, a README), and
+  CoinGecko was read only through the "solana-ecosystem" category, which
+  lists a fraction of the Solana coins CoinGecko knows.
+- The working set held 400 projects; older ones were dropped and forgotten.
+- One rejection was final for 30 days, whatever changed after.
+
+Here every project from every source is written once and kept: identity,
+links, which sources saw it, the market (cap, liquidity, volume), and the
+last analysis (pillars, score, verdict and why). The board's working set is
+fed from here by priority, a rejected project is looked at again after
+RECHECK_S (a repository gets commits, a site gets docs), and the whole
+database can be searched from the app: nothing examined is lost.
+
+SQLite on the volume, like the order ledger: one process, one writer,
+atomic upserts, and a file that survives deploys.
+"""
+from __future__ import annotations
+
+import json
+import sqlite3
+import threading
+import time
+from pathlib import Path
+
+from app.trading.onchain.storage import data_file
+
+_DB_FILE = data_file("onchain_projects.db")
+_lock = threading.Lock()
+_conn: sqlite3.Connection | None = None
+_conn_path: Path | None = None
+
+CAP_MIN = 10_000                 # early gems (leaderboard.EARLY_CAP_USD) start here
+CAP_MAX = 3_000_000
+LIQ_MIN = 5_000
+MARKET_TTL_S = 6 * 3600          # cap and liquidity older than this get refreshed
+RECHECK_S = 14 * 86400           # a rejected project is looked at again after two weeks
+RECHECK_DATA_S = 2 * 86400       # ...sooner when it failed for missing data
+DETAIL_TTL_S = 14 * 86400        # CoinGecko page (website, GitHub) re-read
+STATUSES = ("new", "analyzing", "studied", "ranked", "rejected")
+_JSON = ("sources", "categories", "socials", "pillars", "overall", "similarity", "narratives", "traction")
+_DATA_WORDS = ("not responding", "unreachable", "not available", "pending", "incomplete")
+
+_SCHEMA = """
+CREATE TABLE IF NOT EXISTS projects (
+    key TEXT PRIMARY KEY,
+    chain TEXT NOT NULL,
+    token TEXT NOT NULL,
+    symbol TEXT, name TEXT, website TEXT, github TEXT, image TEXT, description TEXT,
+    cg_id TEXT,
+    categories TEXT, socials TEXT, sources TEXT,
+    first_seen REAL NOT NULL, last_seen REAL NOT NULL,
+    mcap REAL, liq REAL, vol24 REAL, price REAL, launched_at REAL, market_at REAL,
+    detail_at REAL,
+    status TEXT NOT NULL DEFAULT 'new', why TEXT,
+    analyzed_at REAL, next_check REAL NOT NULL DEFAULT 0,
+    score REAL, pillars TEXT, overall TEXT, similarity TEXT, narratives TEXT, traction TEXT,
+    rank INTEGER
+);
+CREATE INDEX IF NOT EXISTS projects_status ON projects(status);
+CREATE INDEX IF NOT EXISTS projects_market ON projects(market_at);
+CREATE INDEX IF NOT EXISTS projects_score ON projects(score);
+"""
+
+
+def _db() -> sqlite3.Connection:
+    global _conn, _conn_path
+    if _conn is None or _conn_path != _DB_FILE:
+        _conn = sqlite3.connect(_DB_FILE, check_same_thread=False)
+        _conn.row_factory = sqlite3.Row
+        _conn.execute("PRAGMA journal_mode=WAL")
+        _conn.executescript(_SCHEMA)
+        _conn_path = _DB_FILE
+    return _conn
+
+
+def reset_for_tests() -> None:
+    with _lock:
+        _db().execute("DELETE FROM projects")
+        _db().commit()
+
+
+def key(chain: str, token: str) -> str:
+    return f"{chain}:{token}"
+
+
+def _row(r: sqlite3.Row | None) -> dict | None:
+    if r is None:
+        return None
+    d = dict(r)
+    for f in _JSON:
+        if d.get(f):
+            try:
+                d[f] = json.loads(d[f])
+            except ValueError:
+                d[f] = None
+    return d
+
+
+def get(chain: str, token: str) -> dict | None:
+    with _lock:
+        return _row(_db().execute("SELECT * FROM projects WHERE key = ?", (key(chain, token),)).fetchone())
+
+
+def _num(v) -> float | None:
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    return f if f == f else None
+
+
+# ------------------------------------------------------------------ writing
+
+def upsert(item: dict, source: str, now: float | None = None) -> bool:
+    """Write what a source knows about a project. True if it was new.
+    Known fields are never erased by a source that does not have them."""
+    with _lock:
+        new = _upsert(_db(), item, source, now)
+        _db().commit()
+    return new
+
+
+def upsert_many(items: list[dict], source: str, now: float | None = None) -> int:
+    """Thousands of rows (CoinGecko's full list) in one transaction."""
+    with _lock:
+        n = sum(_upsert(_db(), i, source, now) for i in items)
+        _db().commit()
+    return n
+
+
+def _upsert(db: sqlite3.Connection, item: dict, source: str, now: float | None) -> bool:
+    chain, token = item.get("chain"), item.get("token_address")
+    if not chain or not token:
+        return False
+    now = now or time.time()
+    k = key(chain, token)
+    fields = {
+        "symbol": item.get("symbol") if (item.get("symbol") or "?") != "?" else None,
+        "name": item.get("name") or None, "website": item.get("website") or None,
+        "github": item.get("github") or None, "image": item.get("image") or None,
+        "description": (item.get("description") or "")[:600] or None, "cg_id": item.get("cg_id") or None,
+        "categories": json.dumps(item["categories"][:8]) if item.get("categories") else None,
+        "socials": json.dumps(item["socials"][:6]) if item.get("socials") else None,
+        "mcap": _num(item.get("market_cap")), "liq": _num(item.get("liquidity_usd")),
+        "launched_at": _num(item.get("launched_at") or item.get("created_at")),
+    }
+    old = db.execute("SELECT sources FROM projects WHERE key = ?", (k,)).fetchone()
+    if old is None:
+        cols = {k2: v for k2, v in fields.items() if v is not None}
+        cols.update(key=k, chain=chain, token=token, first_seen=now, last_seen=now, sources=json.dumps([source]))
+        if cols.get("mcap") is not None:
+            cols["market_at"] = now
+        db.execute(f"INSERT INTO projects ({','.join(cols)}) VALUES ({','.join('?' * len(cols))})",
+                   tuple(cols.values()))
+        return True
+    sources = json.loads(old["sources"] or "[]")
+    if source not in sources:
+        sources.append(source)
+    sets = {k2: v for k2, v in fields.items() if v is not None}
+    sets.update(sources=json.dumps(sources), last_seen=now)
+    db.execute(f"UPDATE projects SET {','.join(f'{c} = ?' for c in sets)} WHERE key = ?", (*sets.values(), k))
+    return False
+
+
+def set_market(chain: str, token: str, *, mcap=None, liq=None, vol24=None, price=None, launched_at=None,
+               now: float | None = None) -> None:
+    now = now or time.time()
+    with _lock:
+        _db().execute(
+            "UPDATE projects SET mcap = COALESCE(?, mcap), liq = COALESCE(?, liq), vol24 = COALESCE(?, vol24),"
+            " price = COALESCE(?, price), launched_at = COALESCE(launched_at, ?), market_at = ? WHERE key = ?",
+            (_num(mcap), _num(liq), _num(vol24), _num(price), _num(launched_at), now, key(chain, token)))
+        _db().commit()
+
+
+def apply_pairs(chain: str, tokens: list[str], pairs: list[dict], now: float | None = None) -> int:
+    """DexScreener /tokens answer for a batch: the deepest pool per token.
+    Tokens without any pool are stamped too, so they wait MARKET_TTL_S."""
+    now = now or time.time()
+    best: dict[str, dict] = {}
+    for p in pairs or []:
+        t = (p.get("baseToken") or {}).get("address") or ""
+        liq = float((p.get("liquidity") or {}).get("usd") or 0)
+        if t not in best or liq > float((best[t].get("liquidity") or {}).get("usd") or 0):
+            best[t] = p
+    for t in tokens:
+        p = best.get(t)
+        if p is None:
+            set_market(chain, t, now=now)
+            continue
+        set_market(chain, t, mcap=p.get("marketCap") or p.get("fdv"), liq=(p.get("liquidity") or {}).get("usd"),
+                   vol24=(p.get("volume") or {}).get("h24"), price=p.get("priceUsd"),
+                   launched_at=(p.get("pairCreatedAt") or 0) / 1000 or None, now=now)
+    return len(best)
+
+
+def record(e: dict, status: str, why: str = "", score: float | None = None, traction: dict | None = None,
+           now: float | None = None) -> None:
+    """The verdict of an analysis, from a board entry."""
+    if status not in STATUSES:
+        raise ValueError(status)
+    now = now or time.time()
+    if status == "rejected":
+        soon = any(w in (why or "").lower() for w in _DATA_WORDS)
+        next_check = now + (RECHECK_DATA_S if soon else RECHECK_S)
+    elif status in ("studied", "ranked"):
+        next_check = now + RECHECK_S
+    else:
+        next_check = 0
+    dump = lambda v: json.dumps(v) if v is not None else None  # noqa: E731
+    with _lock:
+        _db().execute(
+            "UPDATE projects SET status = ?, why = ?, analyzed_at = ?, next_check = ?, score = COALESCE(?, score),"
+            " pillars = COALESCE(?, pillars), overall = COALESCE(?, overall), similarity = COALESCE(?, similarity),"
+            " narratives = COALESCE(?, narratives), traction = COALESCE(?, traction), rank = ?,"
+            " github = COALESCE(github, ?) WHERE key = ?",
+            (status, why or None, now, next_check, score, dump(e.get("pillars") or None), dump(e.get("overall")),
+             dump(e.get("similarity")), dump(e.get("narratives") or None), dump(traction), e.get("rank"),
+             e.get("github"), key(e["chain"], e["token_address"])))
+        _db().commit()
+
+
+# ------------------------------------------------------------------ reading
+
+def stale_market(limit: int, now: float | None = None) -> dict[str, list[str]]:
+    """Tokens whose market is unknown or old, oldest first, by chain."""
+    now = now or time.time()
+    with _lock:
+        rows = _db().execute(
+            "SELECT chain, token FROM projects WHERE market_at IS NULL OR market_at < ?"
+            " ORDER BY COALESCE(market_at, 0) LIMIT ?", (now - MARKET_TTL_S, limit)).fetchall()
+    out: dict[str, list[str]] = {}
+    for r in rows:
+        out.setdefault(r["chain"], []).append(r["token"])
+    return out
+
+
+def _band_sql() -> str:
+    return f"mcap BETWEEN {CAP_MIN} AND {CAP_MAX} AND COALESCE(liq, 0) >= {LIQ_MIN}"
+
+
+def need_detail(limit: int, now: float | None = None) -> list[dict]:
+    """In the band, known to CoinGecko, never (or long ago) read in detail:
+    CoinGecko's own page gives the website and the GitHub."""
+    now = now or time.time()
+    with _lock:
+        rows = _db().execute(
+            f"SELECT chain, cg_id, symbol, name, mcap, image FROM projects WHERE cg_id IS NOT NULL AND {_band_sql()}"
+            " AND (detail_at IS NULL OR detail_at < ?) ORDER BY liq DESC LIMIT ?",
+            (now - DETAIL_TTL_S, limit)).fetchall()
+    return [{"id": r["cg_id"], "chain": r["chain"], "symbol": (r["symbol"] or "").upper(), "name": r["name"] or "",
+             "market_cap": r["mcap"], "image": r["image"]} for r in rows]
+
+
+def mark_detail(chain: str, cg_id: str, now: float | None = None) -> None:
+    with _lock:
+        _db().execute("UPDATE projects SET detail_at = ? WHERE chain = ? AND cg_id = ?",
+                      (now or time.time(), chain, cg_id))
+        _db().commit()
+
+
+def due_for_analysis(limit: int, exclude: set[str] | None = None, now: float | None = None) -> list[dict]:
+    """What the board should look at next: in the band, with a website or
+    a GitHub to read, never analysed or due for a second look. Projects
+    with code first, then the deepest pools."""
+    now = now or time.time()
+    exclude = exclude or set()
+    with _lock:
+        rows = _db().execute(
+            f"SELECT * FROM projects WHERE {_band_sql()} AND (website IS NOT NULL OR github IS NOT NULL)"
+            " AND status != 'analyzing' AND next_check <= ?"
+            " ORDER BY (github IS NOT NULL) DESC, (analyzed_at IS NULL) DESC, liq DESC LIMIT ?",
+            (now, limit + len(exclude))).fetchall()
+    out = [_row(r) for r in rows if r["key"] not in exclude]
+    return out[:limit]
+
+
+def as_item(p: dict) -> dict:
+    """A database row in the shape the board's `add` takes."""
+    return {"chain": p["chain"], "token_address": p["token"], "symbol": p.get("symbol") or "?",
+            "name": p.get("name") or "", "website": p.get("website"), "github": p.get("github"),
+            "image": p.get("image"), "description": p.get("description"), "categories": p.get("categories") or [],
+            "socials": p.get("socials") or [], "market_cap": p.get("mcap"), "liquidity_usd": p.get("liq"),
+            "launched_at": p.get("launched_at")}
+
+
+SORTS = {"score": "COALESCE(score, -1) DESC", "cap": "COALESCE(mcap, 0) ASC", "liq": "COALESCE(liq, 0) DESC",
+         "recent": "first_seen DESC", "checked": "COALESCE(analyzed_at, 0) DESC"}
+
+
+def search(q: str = "", status: str = "", sort: str = "score", limit: int = 50, offset: int = 0,
+           in_band: bool = False) -> dict:
+    where, args = [], []
+    if q:
+        where.append("(symbol LIKE ? OR name LIKE ? OR token = ? OR website LIKE ?)")
+        like = f"%{q.strip()}%"
+        args += [like, like, q.strip(), like]
+    if status in STATUSES:
+        where.append("status = ?")
+        args.append(status)
+    if in_band:
+        where.append(_band_sql())
+    clause = f"WHERE {' AND '.join(where)}" if where else ""
+    order = SORTS.get(sort, SORTS["score"])
+    limit = max(1, min(int(limit), 200))
+    with _lock:
+        total = _db().execute(f"SELECT COUNT(*) FROM projects {clause}", args).fetchone()[0]
+        rows = _db().execute(
+            f"SELECT key, chain, token, symbol, name, website, github, image, mcap, liq, vol24, launched_at,"
+            f" first_seen, analyzed_at, status, why, score, rank, sources, narratives, traction, overall"
+            f" FROM projects {clause} ORDER BY {order} LIMIT ? OFFSET ?", (*args, limit, max(0, int(offset)))
+        ).fetchall()
+    return {"total": total, "items": [_row(r) for r in rows]}
+
+
+def stats() -> dict:
+    with _lock:
+        db = _db()
+        total = db.execute("SELECT COUNT(*) FROM projects").fetchone()[0]
+        by = dict(db.execute("SELECT status, COUNT(*) FROM projects GROUP BY status").fetchall())
+        band = db.execute(f"SELECT COUNT(*) FROM projects WHERE {_band_sql()}").fetchone()[0]
+        chains = dict(db.execute("SELECT chain, COUNT(*) FROM projects GROUP BY chain").fetchall())
+        reasons = db.execute(
+            "SELECT why, COUNT(*) n FROM projects WHERE status = 'rejected' AND why IS NOT NULL"
+            " GROUP BY why ORDER BY n DESC LIMIT 8").fetchall()
+    return {"total": total, "in_band": band, "by_status": by, "by_chain": chains,
+            "top_rejections": [{"why": r[0], "n": r[1]} for r in reasons]}

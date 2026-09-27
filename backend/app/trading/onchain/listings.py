@@ -283,6 +283,8 @@ def evaluate_pair(pair: dict, now: float | None = None) -> dict | None:
         "dex": pair.get("dexId") or "",
         "liquidity_usd": liq,
         "market_cap": float(cap),
+        "price_usd": pair.get("priceUsd"),
+        "image": (pair.get("info") or {}).get("imageUrl") or None,
         "created_at": created or None,
     }
 
@@ -462,7 +464,7 @@ def telegram_text(item: dict, now: float | None = None, app_url: str = "") -> st
     possibilita' con un link di cliccare e andare sul sito del token"."""
     now = now or time.time()
     esc = html.escape
-    chain = "Solana" if item["chain"] == "solana" else "Robinhood"
+    chain = legit.CHAIN_LABEL.get(item["chain"], item["chain"])
     age = int((now - item["created_at"]) // 60) if item.get("created_at") else None
     lines = [f"🆕 <b>{esc(item['symbol'])}</b> · {esc(item.get('name') or '')} su {chain}",
              f"liq. ${item['liquidity_usd']:,.0f} · cap ${item['market_cap']:,.0f}"
@@ -522,7 +524,7 @@ async def _poll_pumpfun(client: httpx.AsyncClient) -> None:
 
 
 async def _poll_gecko(client: httpx.AsyncClient) -> None:
-    for chain in ("solana", "robinhood"):
+    for chain in ("solana", "robinhood", "base"):
         r = await client.get(f"{GECKO_BASE}/networks/{chain}/new_pools", params={"page": 1},
                              headers={"Accept": "application/json"})
         if r.status_code == 200:

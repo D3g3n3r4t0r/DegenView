@@ -24,7 +24,7 @@ import { escapeHtml, strategyLabel } from "@onchain/format.js";
 
 const ROOT = document.getElementById("onchain-embed") ?? document;
 const POLL_MS = 60_000;
-const CHAINS = { solana: "Solana", robinhood: "Robinhood" };
+const CHAINS = { solana: "Solana", robinhood: "Robinhood", base: "Base" };
 const PIN_MS = 3 * 60_000;  // dopo un tocco su una riga il palco non cambia da solo per un po'
 
 let root = null;

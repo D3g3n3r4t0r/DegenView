@@ -12,13 +12,14 @@
  * scivolano al posto nuovo, con la freccia di quanto sono salite o scese.
  */
 import * as api from "@onchain/api.js";
-import { escapeHtml } from "@onchain/format.js";
+import { escapeHtml, tokenRow } from "@onchain/format.js";
+import { register } from "@onchain/detail.js";
 
 const ROOT = document.getElementById("onchain-embed") ?? document;
 const POLL_MS = 10_000;
 const MOVE_SHOWN_S = 15 * 60;
 const PILLARS = [["github", "GitHub", "G"], ["site", "Research", "R"], ["tokenomics", "Tokenomics", "T"]];
-const CHAINS = { solana: "Solana", robinhood: "Robinhood" };
+const CHAINS = { solana: "Solana", robinhood: "Robinhood", base: "Base" };
 const PLACES = ["First", "Second", "Third"];
 
 let root = null;
@@ -42,6 +43,10 @@ const yes = (v) => (v ? "yes" : "no");
 export function mountLeaderboard() {
   root = ROOT.querySelector("#board");
   if (!root) return;
+  if (matchMedia("(pointer: fine)").matches) {
+    root.addEventListener("pointermove", tilt);
+    root.addEventListener("pointerout", untilt);
+  }
   root.addEventListener("click", (event) => {
     const row = event.target.closest("[data-board]");
     if (!row || event.target.closest("a")) return;
@@ -81,6 +86,23 @@ async function refresh() {
 // ------------------------------------------------------------------ disegno
 
 function paint(animate) {
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const painted = root.querySelector("[data-board-podium]").childElementCount > 0;
+  // Rank changes morph with the View Transitions API; FLIP where it is missing.
+  if (animate && painted && document.startViewTransition && !reduced && document.visibilityState === "visible") {
+    document.startViewTransition(() => render(false));
+    return;
+  }
+  render(animate);
+}
+
+function render(animate) {
+  // First paint only: the entrance (pedestals rise, cards drop in 3-2-1).
+  if (!root.dataset.seen) {
+    root.dataset.seen = "1";
+    root.dataset.enter = "";
+    setTimeout(() => delete root.dataset.enter, 2000);
+  }
   root.querySelector("[data-board-podium]").hidden = false;
   root.hidden = false;
   delete root.dataset.loading;
@@ -88,10 +110,11 @@ function paint(animate) {
   const entries = data.entries ?? [];
   const podium = root.querySelector("[data-board-podium]");
   const list = root.querySelector("[data-board-list]");
-  podium.innerHTML = entries.slice(0, 3).map(podiumCard).join("");
-  // Sul podio il secondo sta a sinistra del primo, come nelle gare.
-  podium.dataset.count = String(Math.min(entries.length, 3));
-  list.innerHTML = entries.slice(3).map(row).join("");
+  // One list, rows like the reference app; the podium moved to the trophy
+  // view and each project's dossier to its page (detail.js > Info).
+  podium.innerHTML = "";
+  podium.dataset.count = "0";
+  list.innerHTML = entries.map(gemRow).join("");
   const detail = root.querySelector("[data-board-detail]");
   const chosen = entries.find((e) => key(e) === open);
   detail.hidden = !chosen;
@@ -106,6 +129,8 @@ function paint(animate) {
   paintClose();
   paintMeta();
   paintTrack();
+  paintEarly(entries);
+  countUp();
   if (before) slide(before);
 }
 
@@ -138,18 +163,11 @@ function move(e) {
   return `<i class="bd-move" data-dir="${d > 0 ? "up" : "down"}">${d > 0 ? "▲" : "▼"}${Math.abs(d)}</i>`;
 }
 
-function bars(e) {
-  return `<span class="bd-bars">${PILLARS.map(([k, label, letter]) => {
-    const v = e.pillars?.[k]?.score;
-    if (k === "github" && e.closed_source) return `<span title="${label}: no public code" style="--v:0;opacity:.45"><b>${letter}</b></span>`;
-    return `<span title="${label} ${v ?? 0}" style="--v:${v ?? 0}"><b>${letter}</b></span>`;
-  }).join("")}</span>`;
-}
-
 function badges(e) {
   const out = [];
   if (e.benchmark) out.push(`<em data-tone="gold">benchmark</em>`);
   else if (e.similarity?.score >= 25) out.push(`<em class="bd-sim">≈ DREGG ${e.similarity.score}%</em>`);
+  if (e.early) out.push(`<em data-tone="early" title="Under $50k with solid fundamentals: maybe worth a small bag. Research, not advice.">early · small bag?</em>`);
   if (e.exception) out.push(`<em data-tone="gold">exception</em>`);
   if (e.bonding) out.push(`<em>pump.fun</em>`);
   if (e.closed_source) out.push(`<em>closed source</em>`);
@@ -164,32 +182,119 @@ function badges(e) {
   return out.join("");
 }
 
+// Stable, CSS-safe name per project for the View Transitions API: a rank
+// change morphs each card from its old place to the new one.
+const vtName = (k) => `gb-${[...k].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7).toString(36)}`;
+
+/** Three rings, one per pillar: the arc is the score, drawn in on arrival. */
+function rings(e) {
+  return `<span class="gb-rings">${PILLARS.map(([k, label, letter]) => {
+    const closed = k === "github" && e.closed_source;
+    const v = closed ? 0 : Math.round(e.pillars?.[k]?.score ?? 0);
+    return `<i style="--v:${v}" title="${label} ${closed ? "no public code" : v}"${closed ? ' data-off="1"' : ""}><b>${letter}</b></i>`;
+  }).join("")}</span>`;
+}
+
 function podiumCard(e, i) {
   const k = key(e);
-  return `<li data-place="${i + 1}"${open === k ? ' aria-expanded="true"' : ""}>
-    <button type="button" data-board="${escapeHtml(k)}" aria-label="${PLACES[i]} place, ${escapeHtml(e.symbol)}">
+  const total = Math.round(e.score ?? 0);
+  return `<li data-place="${i + 1}"${open === k ? ' aria-expanded="true"' : ""} style="view-transition-name:${vtName(k)};--i:${i}">
+    <button type="button" data-board="${escapeHtml(k)}" aria-label="${PLACES[i]} place, ${escapeHtml(e.symbol)}, score ${total}">
+      <span class="gb-glow" aria-hidden="true"></span>
       <span class="bd-medal" aria-hidden="true">${i + 1}</span>
       <span class="bd-sym"><b>${escapeHtml(e.symbol)}</b>${move(e)}</span>
-      <span class="bd-total">${score(e.score)}</span>
-      ${bars(e)}
+      <span class="gb-score" style="--v:${total}"><b data-num="${total}">${total}</b></span>
+      ${rings(e)}
       <small><span data-age="${e.launched_at ?? ""}">${since(e.launched_at)}</span> · ${usd(e.market_cap)}</small>
       <span class="bd-tags">${badges(e)}</span>
       ${e.benchmark ? `<p class="bd-honor">Honorable mention</p>` : ""}
     </button>
+    <span class="gb-step" aria-hidden="true"></span>
   </li>`;
 }
 
 function row(e) {
   const k = key(e);
-  return `<li${open === k ? ' aria-expanded="true"' : ""}>
+  const total = Math.round(e.score ?? 0);
+  return `<li${open === k ? ' aria-expanded="true"' : ""}${e.early ? ' data-early="1"' : ""} style="view-transition-name:${vtName(k)}">
     <button type="button" data-board="${escapeHtml(k)}">
+      <span class="gb-glow" aria-hidden="true"></span>
       <span class="bd-rank">${e.rank}</span>
       <span class="tk-name"><b>${escapeHtml(e.symbol)} ${move(e)}</b>
         <small>launched <span data-age="${e.launched_at ?? ""}">${since(e.launched_at)}</span> ago · ${usd(e.market_cap)} · ${CHAINS[e.chain] ?? e.chain} ${badges(e)}</small></span>
-      ${bars(e)}
-      <span class="bd-total">${score(e.score)}</span>
+      ${rings(e)}
+      <span class="gb-total" style="--v:${total}"><b data-num="${total}">${total}</b><i aria-hidden="true"></i></span>
     </button>
   </li>`;
+}
+
+function gemWhy(e) {
+  const blocks = [...PILLARS, ["traction", "Traction"]].map(([k, label]) => {
+    const v = k === "traction" ? e.traction?.traction : e.pillars?.[k]?.score;
+    if (v == null) return "";
+    return `<li><span>${label}</span><i style="--v:${Math.round(v)}"></i><b>${Math.round(v)}</b></li>`;
+  }).join("");
+  const flags = Object.values(e.pillars ?? {}).flatMap((p) => p?.flags ?? []);
+  return `<div class="why-score"><span class="ring" style="--v:${Math.round(e.score ?? 0)}"><b>${Math.round(e.score ?? 0)}</b></span>
+      <p><b>${e.early ? "Early gem" : `Rank #${e.rank ?? "—"}`}</b><small>${e.early ? "Under $50k with public code and every pillar solid: maybe worth a small bag." : "Code, research and tokenomics, scored every day."}</small></p></div>
+    <ul class="bars">${blocks}</ul>
+    ${e.summary ? `<p class="dt-summary">${escapeHtml(e.summary)}</p>` : ""}
+    ${(e.traction?.reasons ?? []).length ? `<ul class="why-list">${e.traction.reasons.map((r) => `<li data-tone="good">${escapeHtml(r)}</li>`).join("")}</ul>` : ""}
+    ${flags.length ? `<ul class="why-list">${flags.map((f) => `<li data-tone="bad">${escapeHtml(f)}</li>`).join("")}</ul>` : ""}
+    <p class="muted">Research, not advice.</p>`;
+}
+
+function gemRow(e) {
+  const id = `gem:${e.chain}:${e.token_address}`;
+  register(id, {
+    kind: "gem", symbol: e.symbol, name: e.name, chain: e.chain, token: e.token_address, pair: e.pair_address,
+    pairUrl: e.pair_url, image: e.image, cap: e.market_cap, change: e.change_24h != null ? e.change_24h / 100 : null,
+    ageTs: e.launched_at, context: `Rank #${e.rank ?? "—"} · score ${Math.round(e.score ?? 0)} · liquidity ${usd(e.liquidity_usd)}`,
+    why: gemWhy(e), info: details(e),
+  });
+  const nar = (e.narratives ?? []).slice().sort((a, b) => b.heat - a.heat)[0];
+  return tokenRow({ id, symbol: e.symbol, name: e.name, chain: e.chain, token: e.token_address, image: e.image,
+    cap: e.market_cap, ageTs: e.launched_at, badge: e.early ? "early" : null, sign: "",
+    sub: nar ? escapeHtml(nar.label) : "", pill: `<em class="chg score">${Math.round(e.score ?? 0)}</em>` });
+}
+
+/** Scores count up from where they were (or from 0) instead of jumping. */
+const shown = new Map();
+function countUp() {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  root.querySelectorAll("[data-num]").forEach((el) => {
+    const id = el.closest("[data-board]")?.dataset.board ?? "";
+    const to = Number(el.dataset.num);
+    const from = shown.get(id) ?? 0;
+    shown.set(id, to);
+    if (from === to) return;
+    const t0 = performance.now();
+    const step = (t) => {
+      const p = Math.min(1, (t - t0) / 900);
+      el.textContent = String(Math.round(from + (to - from) * (1 - (1 - p) ** 3)));
+      if (p < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  });
+}
+
+/** Pointer-driven tilt and light, only where there is a real pointer. */
+function tilt(event) {
+  const card = event.target.closest?.(".board-podium button, .board-list button");
+  if (!card) return;
+  const r = card.getBoundingClientRect();
+  const x = (event.clientX - r.left) / r.width;
+  const y = (event.clientY - r.top) / r.height;
+  card.style.setProperty("--mx", `${x * 100}%`);
+  card.style.setProperty("--my", `${y * 100}%`);
+  if (card.closest(".board-podium")) {
+    card.style.setProperty("--ry", `${(x - 0.5) * 10}deg`);
+    card.style.setProperty("--rx", `${(0.5 - y) * 8}deg`);
+  }
+}
+function untilt(event) {
+  const card = event.target.closest?.(".board-podium button, .board-list button");
+  if (card && !card.contains(event.relatedTarget)) ["--rx", "--ry"].forEach((v) => card.style.removeProperty(v));
 }
 
 function fact(label, value) {
@@ -254,6 +359,16 @@ function tractionBlock(e) {
     + fact("Value", t.value == null ? null : `${Math.round(t.value)}/100`);
   return `<section class="bd-use" style="--v:${t.traction ?? 0}"><h5>Traction<b>${score(t.traction)}</b></h5><dl>${rows}</dl>
     ${t.reasons?.length ? `<p class="bd-why">${escapeHtml(t.reasons.join(" · "))}</p>` : ""}</section>`;
+}
+
+/** Early gems first: under $50k with the fundamentals of the board. */
+function paintEarly(entries) {
+  const box = root.querySelector("[data-board-early]");
+  if (!box) return;
+  const early = entries.filter((e) => e.early);
+  box.hidden = !early.length;
+  box.innerHTML = early.length ? `<b>Early gems · ${early.length}</b> Under $50k with public code and every pillar solid: maybe worth a small bag, sized to lose.
+    <span>${early.map((e) => `<button type="button" data-board="${escapeHtml(key(e))}">${escapeHtml(e.symbol)} · ${usd(e.market_cap)}</button>`).join("")}</span>` : "";
 }
 
 const signed = (f) => (f == null ? "—" : `${f > 0 ? "+" : ""}${Math.round(f * 100)}%`);

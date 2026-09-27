@@ -36,7 +36,7 @@ from app.trading.onchain import depth, legit, narratives, reader, storage
 logger = logging.getLogger(__name__)
 
 GECKO_INFO = "https://api.geckoterminal.com/api/v2/networks/{net}/tokens/{token}/info"
-GECKO_NET = {"solana": "solana", "robinhood": "robinhood"}
+GECKO_NET = {"solana": "solana", "robinhood": "robinhood", "base": "base"}
 MAX_SITES = 3
 AI_TTL_S = 7 * 86400
 

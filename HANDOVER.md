@@ -12,6 +12,111 @@ lavori pluri-sessione, decisioni prese, stato di piani approvati.
 
 ---
 
+## Podio animato e chain Base — `seed-0127`/`seed-0128`, branch `claude/gem-database` — 2026-09-27
+
+- Podio: Lorenzo "progetta la leaderboard con agenti specializzati [...] 120fps", "al posto delle faccine ci sia il logo", "applica tutto, decidi te qual e' la piu' bellina". Tre prototipi da agenti diversi, scelto "Champions stage" (`static/onchain/podium.js`, `renderPodium(container, items, {still})`), CSS in `app.css` sezione podio. Regole 120fps: solo transform/opacity, entrate con fill backwards, niente will-change fisso, coriandoli via WAAPI. `#top` rinominato `#leaders` (l'hash faceva saltare la pagina).
+- Base: Lorenzo "estendiamo anche a chain BASE le ricerche". Solo ricerca, non trading: radar, Meme Sniper (GeckoTerminal new_pools), Gem Finder (CoinGecko platform/categoria, README), DefiLlama, GoPlus 8453. `legit.CHAIN_LABEL` e' il nome leggibile per i messaggi Telegram. Nel wallet Base non c'e': la pagina token mostra "Trade on DexScreener" (`TRADABLE` in `detail.js`). Se un giorno si vuole comprare su Base servono quote/execute EVM come per Robinhood.
+- Da osservare: Base ha molti piu' pool nuovi di Robinhood; se il Meme Sniper si intasa, limitare i pending per chain.
+
+## Un'app sola, layout da app di trading — `seed-0126`, branch `claude/gem-database` — 2026-09-27
+
+Lorenzo, con 4 screenshot di un'app meme da telefono: "l'app deve essere
+unica e gestita cosi' graficamente e come layout, ispirati"; poi "anche i
+simboli dei token li voglio [...] non e' minimamente paragonabile [...] usa
+un team ad hoc per esaminare disposizione, layout, tema e grafica".
+
+Fatto con tre revisori (grafica misurata sui pixel, informazione/navigazione,
+architettura CSS). Stato:
+- Tema in `frontend/static/onchain/app.css`, layer `skin` (ultimo), linkato
+  solo da onchain-app.html con `?v=` (main.py conta anche i .css nell'hash).
+  Tolti il layer `shell` e il blocco desktop a due colonne (>=1100px).
+  Palette zinc: bg #09090b, bande #0f0f12, superfici #18181b.
+- Viste: meme (Trending/Alerts/Scanner), gems (Rankings/Database), top
+  (Alerts/Gems), wallet; `manual` (swap) dalla lente o dal Buy.
+- Riga unica `tokenRow()` in `format.js` (+ `tile/logo/changePill/usdShort`).
+  Loghi: `image` da DexScreener (pair.info.imageUrl, salvato da outcomes,
+  listings, alert_track), altrimenti dd.dexscreener.com per indirizzo.
+- Pagina token `detail.js`: registro `register(id, entry)` (fusione fra
+  moduli), `data-open="<id>"` apre; grafico SVG del market cap da
+  /api/onchain/radar/chart con marcatori degli alert; Signal/Why/Info; Buy
+  -> evento `lae:buy` -> main.js setView("manual") + setChartToken.
+- Da fare se Lorenzo lo chiede: ricerca unificata (oggi la lente apre lo
+  scambio), barra che si nasconde scorrendo, "You" con il P&L vero.
+
+---
+
+## Gemme early, avvisi Telegram gemme, classifica degli alert meme, revisore Claude — `seed-0122`/`0123`/`0124`, branch `claude/gem-database` — 2026-09-27
+
+Lorenzo: "per gemme quando la market cap e' sotto i 50k e fondamentali ci
+sono, voglio che il sistema lo evidenzi che potrebbe valere la pena di
+comprare un po, voglio poi gli avvisi su telegram anche per le gemme"; "il
+meme sniper deve avere una leaderboard anch'esso, con anche i risultati se
+avessimo seguito l'alert di telegram (non le strategie) [...] dopo
+1,2,3,4,5,6,8,12,24,48h, e infine aggiornato in tempo reale, oltre a questo
+anche il rendimento della miglior strategia backtestata"; "sto pensando di
+mettere un istanza di claude sonnet nel server [...] con un massimo di token
+al giorno, cosi' impariamo dagli errori".
+
+- Early: `leaderboard.is_early` (cap < $50k, GitHub pubblico, pilastri >= 60,
+  punteggio >= 65, qualifica ok). Fasce abbassate: discovery/projects_db da
+  $10k, liquidita' minima $5k sotto i $50k. Badge e riquadro in `leaderboard.js`.
+- Avvisi gemme: `leaderboard._outbox` + `on_alert` (una volta per "new:" e
+  "early:" per progetto, `_alerted` salvato; al primo avvio con il campo
+  mancante si fa "priming" senza avvisi). Testo italiano `_gem_telegram_text`
+  in main.py, 6/ora per utente, stessi destinatari dei listing.
+- `alert_track.py`: ogni alert (meme da `_notify_listing`, gemme da
+  `_notify_gem`) seguito dal primo prezzo dopo l'invio; checkpoint 1-48h,
+  "ora", strategia migliore copiata dal backtest del listing. Loop
+  `_onchain_signals_loop` (30 s). API `/api/onchain/alerts/{meme|gem}`.
+- `ai_review.py`: Sonnet 5 una volta al giorno (30 min dopo l'avvio), fatti
+  gia' misurati in JSON, lezioni strutturate in italiano, budget
+  `ai_review_daily_tokens` (200k) contato dall'usage reale. Lezioni NON
+  applicate da sole. API `/api/onchain/ai-review`, Telegram sulla chat di sistema.
+  Serve `ANTHROPIC_API_KEY` (la inserisce Lorenzo).
+- Poi Lorenzo: "non voglio che finisca i miei token", "non complicare il sito
+  con roba inutile", "la daily review deve essere semplice". Revisore: effort
+  low, output max 3000, risposta = `summary` + max 3 `actions`; tetti 40k/giorno
+  e 600k/mese (~$0.06 a revisione). Consigliato a Lorenzo: chiave API dedicata
+  con limite di spesa mensile in Console. Tolta la tabella alert delle gemme.
+- "rendi graficamente incredibile la leaderboard delle gemme, animala":
+  layer CSS `gemboard` in fondo a `onchain-app.html` (@property, @starting-style,
+  animation-timeline: view(), View Transitions in `leaderboard.js` con
+  `view-transition-name` per progetto, tilt/luce al puntatore, conteggio
+  punteggi). Entrata solo al primo disegno (`#board[data-enter]`). `seed-0125`.
+
+---
+
+## Database dei progetti del Gem Finder — `seed-0121`, branch `claude/gem-database` — 2026-09-27
+
+Lorenzo: "il gem hunter deve trovare progetti di qualita', ma vedi sempre i
+soliti.. ma fatti un database no?".
+
+Perche' sempre gli stessi: nessuna memoria del mercato. CoinGecko letto solo
+dalle pagine della categoria "solana-ecosystem" (una parte delle monete
+Solana), working set di 400 voci con le vecchie buttate, bocciatura
+definitiva per 30 giorni.
+
+- `app/trading/onchain/projects_db.py`: SQLite `onchain_projects.db` sul
+  volume. Una riga per progetto: identita', link, fonti, mercato, ultimo
+  verdetto (status new/studied/ranked/rejected + why), pilastri, punteggio.
+- Fonti nel database: `/coins/list` di CoinGecko intero (tutte le monete
+  sulle nostre chain, `discovery.universe`), lista verificata Jupiter intera,
+  tutti i protocolli DefiLlama, piu' tutto cio' che passa da `leaderboard.add`.
+- Ogni minuto 150 token con mercato vecchio (>6h) passano da DexScreener.
+  Chi e' in fascia ($50k-$3M, liq >= $10k) e ha un cg_id viene letto su
+  CoinGecko (sito/GitHub) fra un giro e l'altro delle categorie.
+- `leaderboard.feed_from_database`: 4 progetti per giro nel working set
+  quando la coda di analisi ha posto, prima chi ha GitHub. Verdetti scritti
+  da `apply_analysis` (`_remember`). Bocciati riesaminati dopo 14 giorni
+  (2 se il motivo era un dato mancante), anche se erano in `_gone`.
+- API `/api/onchain/projects?q=&status=&sort=&band=`; sezione "Project
+  database" nella vista Gemme (`static/onchain/projects.js`).
+- Da guardare dopo il deploy: `stats.in_band` e `top_rejections` dicono dove
+  muoiono i progetti. Se la regola che boccia di piu' e' sbagliata, va
+  ritoccata li'.
+
+---
+
 ## Motori piu' profondi per Gemme e Meme + track record + design — `seed-0118`/`seed-0119`/`seed-0120`, branch `claude/gems-memes-engine` — 2026-09-26
 
 Lorenzo, sulla classifica: "io entrerei anche nella logica con cui sceglie le
