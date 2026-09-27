@@ -746,28 +746,80 @@ def best_row(rows: list[dict]) -> dict | None:
 CANDLES_LITE = 300
 
 
+CHART_STALE_S = 30 * 60      # an older copy is still better than a wait
+WARM_EVERY_S = 150           # charts of the tokens on screen, kept this fresh
+_lite_cache: dict[tuple[str, str, str], tuple[float, list[dict]]] = {}
+_refreshing: set[tuple[str, str, str]] = set()
+
+
+async def _fetch_lite(chain: str, pool: str, symbol: str, interval: str, urgent: bool) -> list[dict]:
+    key = (chain, pool, interval)
+    gecko_urgent.set(urgent)
+    df = await DexScreenerProvider().fetch_ohlcv(make_symbol(symbol, chain, pool), interval, CANDLES_LITE)
+    candles = [{"time": int(ts.timestamp()), "close": float(r.close)} for ts, r in df.iterrows()]
+    _lite_cache[key] = (time.time(), candles)
+    if len(_lite_cache) > 400:
+        for k in sorted(_lite_cache, key=lambda k: _lite_cache[k][0])[:100]:
+            _lite_cache.pop(k, None)
+    return candles
+
+
+async def _refresh_later(chain: str, pool: str, symbol: str, interval: str) -> None:
+    key = (chain, pool, interval)
+    try:
+        await _fetch_lite(chain, pool, symbol, interval, urgent=True)
+    except Exception:
+        pass
+    finally:
+        _refreshing.discard(key)
+
+
 async def chart_candles(chain: str, pool: str, symbol: str, interval: str) -> dict:
-    """Only the candles, for the token page: a third of chart_payload's bars
-    and no strategy backtests, which were most of the wait ("i grafici
-    caricati sono troppo lenti ad arrivare"). Same 30 s cache; if
-    GeckoTerminal refuses, the last good chart stays."""
-    key = (chain, pool, f"lite:{interval}")
-    cached = _chart_cache.get(key)
-    if cached and time.time() - cached[0] < CHART_TTL_S:
-        df = cached[1]
+    """Only the closes, for the token page: no strategy backtests, a third of
+    the bars. Lorenzo: "il grafico impiega almeno 10 secondi ad aprirsi,
+    inammissibile". GeckoTerminal is the only free source of candles and the
+    background jobs share its ~30 calls a minute, so the page never waits on
+    it when it doesn't have to: any copy younger than CHART_STALE_S is served
+    at once (refreshed behind it when older than CHART_TTL_S), and the charts
+    of the tokens in the lists are fetched ahead by warm_charts()."""
+    key = (chain, pool, interval)
+    cached = _lite_cache.get(key)
+    age = time.time() - cached[0] if cached else None
+    if cached and age < CHART_STALE_S:
+        if age >= CHART_TTL_S and key not in _refreshing:
+            _refreshing.add(key)
+            asyncio.get_running_loop().create_task(_refresh_later(chain, pool, symbol, interval))
+        candles = cached[1]
     else:
-        gecko_urgent.set(True)
         try:
-            df = await DexScreenerProvider().fetch_ohlcv(make_symbol(symbol, chain, pool), interval, CANDLES_LITE)
+            candles = await _fetch_lite(chain, pool, symbol, interval, urgent=True)
         except Exception:
             if not cached:
                 raise
-            df = cached[1]
-        _chart_cache[key] = (time.time(), df)
-        if len(_chart_cache) > 64:
-            _chart_cache.pop(next(iter(_chart_cache)))
-    return {"chain": chain, "pool": pool, "interval": interval, "updated_at": time.time(),
-            "candles": [{"time": int(ts.timestamp()), "close": float(r.close)} for ts, r in df.iterrows()]}
+            candles = cached[1]
+    return {"chain": chain, "pool": pool, "interval": interval,
+            "updated_at": (_lite_cache.get(key) or (time.time(),))[0], "candles": candles}
+
+
+async def warm_charts(targets: list[tuple[str, str, str, str]], now: float | None = None,
+                      gap_s: float = 0.5) -> int:
+    """Fetch ahead, at background priority, the charts a tap is likely to
+    open: (chain, pool, symbol, interval) of the tokens on screen."""
+    now = now or time.time()
+    n = 0
+    for chain, pool, symbol, interval in targets:
+        if not chain or not pool:
+            continue
+        cached = _lite_cache.get((chain, pool, interval))
+        if cached and now - cached[0] < WARM_EVERY_S:
+            continue
+        try:
+            await _fetch_lite(chain, pool, symbol or "TOKEN", interval, urgent=False)
+            n += 1
+        except Exception:
+            continue
+        await asyncio.sleep(gap_s)
+    return n
 
 
 async def chart_payload(chain: str, pool: str, symbol: str, interval: str) -> dict:
