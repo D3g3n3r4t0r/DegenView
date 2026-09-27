@@ -16,6 +16,10 @@ rules apply to every alert, from the moment the message went out:
 - 5-minute bars; a signal on a closed bar fills at the next bar's open,
   paying commission and slippage both ways (radar.BACKTEST_PARAMS);
 - spot only: an entry buys, an exit sells, short signals just sell;
+- a trend already on at the alert is joined at the first bar after it: the
+  strategy's own entry may have landed before the alert, and waiting for a
+  fresh crossover would miss the whole move (ONHAND: +1304% after the alert,
+  system still "waiting");
 - WINDOW_S after the alert the position, if any, is closed at that bar;
 - the pool vanishing while in position counts as -100%.
 
@@ -84,12 +88,25 @@ def follow(bars: list[list], cfg: dict, start: float, *, gone: bool = False, now
     equity, pos, entry, in_at = 1.0, False, 0.0, None
     events: list[dict] = []
     last_i = len(df) - 1
+    strat_pos, joined = False, False
     for i in range(len(df) - 1):
         t_fill = ts[i + 1]
         if t_fill < start:
-            continue                    # before the alert: warm-up only
+            # before the alert: warm-up only, but track where the strategy
+            # already stands so a trend in progress can be joined.
+            if entry_sig[i]:
+                strat_pos = True
+            elif exit_sig[i]:
+                strat_pos = False
+            continue
         if t_fill > end:
             break
+        if not joined:
+            joined = True
+            if strat_pos and not pos and not exit_sig[i]:
+                pos, entry, in_at = True, opens[i + 1], t_fill
+                events.append({"t": t_fill, "side": "buy", "price": float(entry), "why": "trend"})
+                continue
         if not pos and entry_sig[i]:
             pos, entry, in_at = True, opens[i + 1], t_fill
             events.append({"t": t_fill, "side": "buy", "price": float(entry)})
