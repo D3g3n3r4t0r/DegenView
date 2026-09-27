@@ -555,8 +555,12 @@ async function refreshTotal() {
   try {
     const t = await api.getWalletsTotal();
     if (t.total == null) { totalEl.textContent = "$0.00"; return; }
-    const [i, d] = t.total.toFixed(2).split(".");
-    totalEl.innerHTML = `$${Number(i).toLocaleString("en-US")}<span class="cents">.${d}</span>`;
+    // a chain that did not answer is not an empty one: no false $0
+    if (!t.complete && t.missing?.length && !t.total) { totalEl.textContent = "$—"; }
+    else {
+      const [i, d] = t.total.toFixed(2).split(".");
+      totalEl.innerHTML = `$${Number(i).toLocaleString("en-US")}<span class="cents">.${d}</span>${t.complete === false ? "<span class=\"cents\">*</span>" : ""}`;
+    }
     totalEl.title = Object.entries(t.by_chain ?? {}).map(([c, v]) => `${c}: $${v.toFixed(2)}`).join(" · ")
       + (t.missing?.length ? ` · not read: ${t.missing.join(", ")}` : "");
   } catch { /* keep the last number */ }

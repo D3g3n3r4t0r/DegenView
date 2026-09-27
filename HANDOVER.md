@@ -3486,3 +3486,10 @@ Radar e pilota non toccati.
 Ingresso con due porte (Gemme / Meme), sezione meme dichiaratamente
 gambling, etichette strategie neutre, niente nomi nel sorgente pubblico.
 Vedi `seed-0115`.
+
+**2026-09-27 — Lorenzo (profilo a $0.00 alle 19:18): "non becca il saldo".**
+Letture fallite contate come zero (Solana 429 senza secondo nodo, prezzo
+nativo mancante, nodo EVM senza batch). Ora: secondo nodo Solana, batch che
+ripiega su chiamate singole, ultima lettura buona fino a 6 ore, `$—` e
+"Not read right now" invece di un falso $0; storico wealth v3 (via il punto
+a $0). Vedi `seed-0151`.

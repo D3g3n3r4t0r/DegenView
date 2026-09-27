@@ -62,8 +62,8 @@ def test_a_chain_that_does_not_answer_counts_at_its_last_value():
     assert wealth.combine("u1", {"solana": 110.0}, ["bsc"], now=now + 600) == 115.0
     # down for longer than CARRY_S: no point at all, rather than a fake dip
     assert wealth.combine("u1", {"solana": 110.0}, ["bsc"], now=now + wealth.CARRY_S + 700) is None
-    # a chain never seen with a value is not a loss
-    assert wealth.combine("u2", {"solana": 1.0}, ["base"], now=now) == 1.0
+    # never read: no point at all, not a partial total (it recorded $0)
+    assert wealth.combine("u2", {"solana": 1.0}, ["base"], now=now) is None
 
 
 def test_old_readings_are_dropped(tmp_path, monkeypatch):

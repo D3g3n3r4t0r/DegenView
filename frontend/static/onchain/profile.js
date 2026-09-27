@@ -154,7 +154,7 @@ function positions(d) {
 function paint() {
   const d = data;
   const p = d.profile;
-  const [whole, cents] = money(d.value);
+  const [whole, cents] = d.complete === false && d.missing?.length && !d.value ? ["$—", ""] : money(d.value);
   const ch = d.change?.[range];
   root.innerHTML = `
     <header class="pf-head">
@@ -178,6 +178,7 @@ function paint() {
         <p class="pf-total"><b>${whole}</b><span>${cents}</span></p>
         <nav class="pf-range" aria-label="Period">${RANGES.map(([k, l]) => `<button type="button" data-range="${k}" aria-pressed="${k === range}">${l}</button>`).join("")}</nav>
       </div>
+      ${d.complete === false && d.missing?.length ? `<p class="pf-since">Not read right now: ${escapeHtml(d.missing.join(", "))} — shown at the last reading, or left out.</p>` : ""}
       <p class="pf-change" data-sign="${(ch ?? 0) >= 0 ? "up" : "down"}">${ch == null ? "" : `${signed(ch)} <span>${RANGES.find(([k]) => k === range)[1]}</span>`}</p>
       <div class="pf-chart">${chart(d.history?.[range])}</div>
       ${d.tracking_since ? `<p class="pf-since">Every token on every chain, read every 10 minutes since ${new Date(d.tracking_since * 1000).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</p>` : ""}
