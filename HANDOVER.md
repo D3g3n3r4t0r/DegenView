@@ -12,11 +12,15 @@ lavori pluri-sessione, decisioni prese, stato di piani approvati.
 
 ---
 
+## Regola di lavoro nuova — 2026-09-27
+
+Lorenzo: "auto approva tutto quello che proponi d'ora in poi". Da qui i merge su `main` di quello che Claude propone non chiedono piu' conferma. Restano sempre sue: azioni sul server, DNS, chiavi e segreti, e l'accensione dell'esecuzione reale (`onchain_execution_enabled`).
+
 ## Wallet di chiunque sul sito — `seed-0143`, branch `claude/connect-wallet` — 2026-09-27 — **in corso**
 
 Lorenzo: "dobbiamo dare la possibilita' di far collegare il wallet a qualsiasi persona [...] deve firmare uno speciale smart contract cosi' che si attivi questa strategia automatica, e' fattibile?". Piano concordato ("procedi"):
 1. **Fatto**: collegamento per firma (`wallet_link.py`, `/api/wallets/link*`), saldi del wallet collegato nel profilo in sola lettura. Solo wallet del browser (MetaMask, Rabby, Phantom) + deep link al browser interno del wallet da telefono; niente WalletConnect (servirebbe un project id e una libreria esterna, CSP da allargare).
-2. **Da fare**: scambi firmati dall'utente (EVM: approve + exactInputSingle inviati con eth_sendTransaction; Solana: transazione Jupiter firmata da Phantom).
+2. **Fatto** (`seed-0144`): scambi firmati dall'utente, `user_swaps.py` + `/api/wallets/swap/build`, `userswap.js` (pulsante "My wallet" nella pagina token). EVM: approve + exactInputSingle via eth_sendTransaction (attende la ricevuta dell'approve); Solana: tx Jupiter firmata da Phantom, deserializzata con @solana/web3.js da unpkg. Mai provato con wallet veri dalla sandbox.
 3. **Da fare, dopo i numeri del sistema in simulato**: vault per utente su Robinhood Chain (deposita lui, il bot puo' solo swap su router in allowlist con destinatario il vault, prelievo sempre suo), audit esterno, parere legale MiCA, beta con tetto basso. Alternativa session key ERC-4337/EIP-7702 solo se Robinhood Chain li supporta (da verificare).
 
 ## Sistema trend-following, autotrader Robinhood, profilo — `seed-0138`/`0139`/`0140`, branch `claude/trend-strategy` — 2026-09-27
