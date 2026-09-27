@@ -218,7 +218,12 @@ def generate() -> int:
     issue = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text())["issue"]
     spec = parse_issue(issue.get("body") or "")
     rules = Path("CLAUDE.md").read_text(encoding="utf-8")[:8000] if Path("CLAUDE.md").exists() else ""
-    messages = [{"role": "system", "content": SYSTEM + rules},
+    # Its own past mistakes, kept by Claude after each review (Lorenzo, 28/09:
+    # "istruisci deepseek per migliorarlo nei suoi compiti ogni volta che
+    # sbaglia"). Under .github/, so the worker can read it but never edit it.
+    lessons = Path(".github/deepseek/LESSONS.md")
+    lessons = lessons.read_text(encoding="utf-8")[:6000] if lessons.exists() else ""
+    messages = [{"role": "system", "content": SYSTEM + lessons + "\n\n" + rules},
                 {"role": "user", "content": f"Task #{issue['number']}: {issue['title']}\n{spec['task']}\n\nFiles:\n{context(spec['files'])}"}]
     usage, result = {"in": 0, "out": 0}, {"ok": False, "title": issue["title"], "italian": "", "log": "", "attempts": 0}
     for attempt in range(2):
