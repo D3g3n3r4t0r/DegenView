@@ -1961,5 +1961,18 @@
       "frontend/static/onchain/profile.js",
       "frontend/static/onchain/app.css"
     ]
+  },
+  "seed-0160": {
+    "status": "risolto",
+    "at": 1790533974,
+    "summary": "In alto, accanto a Deposit, c'e' l'agente: una sfera che respira quando e' in attesa e fa girare i suoi anelli quando DeepSeek sta lavorando (attivita' negli ultimi 3 minuti), con una riga che cambia ogni 4 secondi e dice cosa ha appena fatto: 'Judged PEPE2: rug risk 72', 'Researching ZKAI', 'Watching 23 alerts'. Ogni riga e' un'azione vera del server. Toccandola si apre il registro con le ultime azioni e i conteggi del giorno. Sul telefono resta solo la sfera. La classifica delle strategie non ha piu' 1D/1W/1M: e' la hall of fame di tutti gli alert.",
+    "files": [
+      "frontend/static/onchain/agent.js",
+      "backend/app/notify/deepseek_desk.py",
+      "backend/app/main.py",
+      "frontend/static/onchain/alerts.js",
+      "frontend/onchain-app.html",
+      "frontend/static/onchain/app.css"
+    ]
   }
 }

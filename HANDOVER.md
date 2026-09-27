@@ -3563,3 +3563,9 @@ tab nascosta), Gems (podio + classifica | Database), Strategie (ex trofeo:
 `alerts.strategyBoard` dai `system.candidates`, poi gli alert col risultato del
 sistema; niente tab Alerts/Gems, niente podio, niente card "You"), Profilo
 (il Wallet ci vive: tasto Swap → vista wallet). Fasi 2-5 DeepSeek ancora da fare.
+
+**2026-09-27 — Lorenzo: "dare l'idea animata che tutto il sito sia gestito da DeepSeek [...] un agent che esamina le cose" e "il podio non deve avere timeframe, è la hall of fame".**
+`agent.js`: sfera nel topbar (respira / anelli che girano se `working`), riga
+che ruota sulle azioni vere da `GET /api/agent` (`deepseek_desk.note`, scritto
+da ai_scan, research, chat), tocco = registro. Strategie: niente 1D/1W/1M,
+tutti gli alert di sempre.

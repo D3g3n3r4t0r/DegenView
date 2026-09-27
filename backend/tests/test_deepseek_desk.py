@@ -105,3 +105,12 @@ def test_chat_can_look_things_up_in_the_database(monkeypatch):
     tools = {"cerca_token": ({"name": "cerca_token", "parameters": {}}, lambda query: [{"symbol": query, "outcome": "rug"}])}
     assert asyncio.run(dd.answer("7", "cos'e' successo a VISE?", "ctx", tools)) == "VISE e' stato un rug dopo 3 ore."
     assert rounds[0][0]["function"]["name"] == "cerca_token"
+
+
+def test_activity_log_is_short_and_says_when_it_is_working():
+    for i in range(dd.ACTIVITY_KEEP + 5):
+        dd.note("scan", f"Judged T{i}", now=1000.0 + i)
+    a = dd.activity(now=1000.0 + dd.ACTIVITY_KEEP + 60)
+    assert len(dd._activity) == dd.ACTIVITY_KEEP and a["items"][0]["text"] == f"Judged T{dd.ACTIVITY_KEEP + 4}"
+    assert a["working"] is True
+    assert dd.activity(now=5000.0)["working"] is False

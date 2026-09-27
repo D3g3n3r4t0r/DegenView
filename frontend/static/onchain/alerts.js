@@ -140,7 +140,9 @@ function rows() {
       image: e.image, label: `${Math.round(e.score ?? 0)}`, sub: `${usdShort(e.market_cap)} MC`, sign: "", early: e.early,
     }));
   }
-  const since = Date.now() / 1000 - state.period * 86400;
+  // Hall of fame (Lorenzo: "il podio non deve avere timeframe, e' la hall
+  // of fame"): every alert ever, ranked by what the system made on it.
+  const since = 0;
   const val = (a) => (state.sort === "system" ? a.system?.ret : state.sort === "best" ? a.max : a.now);
   const key = state.sort;
   return (state.data.meme?.items ?? []).filter((a) => a.at >= since && val(a) != null)
@@ -182,7 +184,8 @@ function paintTop() {
     hero.dataset.sig = sig;
     renderPodium(hero, top3, { still: same });
   }
-  root.querySelector(".seg").hidden = gem;
+  const seg = root.querySelector(".seg");
+  if (seg) seg.hidden = true;
   const sortBtn = root.querySelector("[data-sort]");
   sortBtn.hidden = true;   // one order here: the strategy's own result
   sortBtn.querySelector("span").textContent = SORTS[state.sort];
