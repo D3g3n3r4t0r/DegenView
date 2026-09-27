@@ -731,7 +731,7 @@
   .profile { display: grid; gap: 0; padding-block-end: 20px; }
   .pf-head { display: grid; justify-items: start; gap: 4px; padding: 18px 0 16px; border-bottom: 1px solid rgb(255 255 255 / .07); }
   .pf-pic { position: relative; inline-size: 92px; block-size: 92px; margin-bottom: 10px; cursor: pointer;
-    & .pf-img { inline-size: 100%; block-size: 100%; border-radius: 50%; object-fit: cover; display: grid; place-items: center;
+    & .pf-img { font-style: normal; inline-size: 100%; block-size: 100%; border-radius: 50%; object-fit: cover; display: grid; place-items: center;
       background: linear-gradient(135deg, #3f3f46, #18181b); box-shadow: 0 0 0 3px rgb(255 255 255 / .08); font: 700 34px var(--sans); color: var(--k-text); }
     & .pf-edit { position: absolute; inset: auto -2px -2px auto; display: grid; place-items: center; inline-size: 30px; block-size: 30px;
       border-radius: 50%; background: #18181b; box-shadow: 0 0 0 3px var(--k-bg);
@@ -801,7 +801,8 @@
   .pf-actions { display: flex; justify-content: flex-end; gap: 8px;
     & button { padding: 10px 16px; border: 0; border-radius: 10px; background: rgb(255 255 255 / .08); color: var(--k-text); font: 600 15px var(--sans); cursor: pointer; }
     & .pf-save { background: var(--k-text); color: #0a0a0b; } }
-  .dock-me { display: block; inline-size: 26px; block-size: 26px; border-radius: 50%; overflow: hidden; background: #3f3f46;
+  #dock button[aria-current] .dock-me { box-shadow: 0 0 0 2px var(--k-text); }
+  .dock-me { display: block; inline-size: 26px; block-size: 26px; border-radius: 50%; overflow: hidden; background: #3f3f46; font-style: normal;
     & img, & .me-empty { inline-size: 100%; block-size: 100%; object-fit: cover; display: grid; place-items: center; font: 700 12px var(--sans); color: #fff; } }
   #more-btn .avatar img { inline-size: 100%; block-size: 100%; border-radius: 50%; object-fit: cover; }
 }
