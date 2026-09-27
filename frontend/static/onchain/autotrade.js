@@ -9,6 +9,7 @@
  */
 import * as api from "@onchain/api.js";
 import { age, escapeHtml, logo, usdShort } from "@onchain/format.js";
+import { openSheet, sheetBody, setBody } from "@onchain/sheets.js";
 
 const POLL_MS = 30_000;
 const MODES = [["off", "Off"], ["sim", "Simulated"], ["real", "Real"]];
@@ -26,7 +27,7 @@ const cashLine = (d) => (d.usdc
 
 function line(d) {
   if (!d.has_wallet) return "Create the Robinhood Chain wallet to let the system trade it.";
-  if (d.mode === "off") return `Off. When on, the system (${escapeHtml(d.system)}) buys Robinhood alerts on its own entries and sells on its exits, one token at a time.`;
+  if (d.mode === "off") return `Off. When on, the system buys Robinhood alerts on its own entries and sells on its exits, one token at a time.`;
   if (d.mode === "sim") return "Simulated: real quotes, nothing sent. Your wallet is not touched.";
   return d.server_live ? "Real: trades your cash on its own. Gas is paid in ETH." : "Real is on, but live execution is switched off on the server: nothing is sent yet.";
 }
@@ -51,15 +52,22 @@ function trades(d) {
     </li>`).join("")}</ol>`;
 }
 
-function paint() {
-  const d = data;
+// Lorenzo, 28/09 (screenshot of Alerts): "UI troppo affollata, riprogettala".
+// On the page: one bar with the state. Everything else opens in a sheet.
+const CHIP = { off: "OFF", sim: "SIM", real: "REAL" };
+
+function summary(d) {
+  if (!d.has_wallet) return "Create the Robinhood wallet to start";
+  if (d.mode === "off") return "Off · tap to switch on";
+  if (d.position) return `In ${escapeHtml(d.position.symbol)} ${pct(d.position.ret)} · ${d.pct}% per trade`;
+  if (d.mode === "sim" && d.sim) return `${usdg(d.sim.equity)} ${pct(d.sim.ret)} · waiting for an entry`;
+  return `${d.pct}% per trade · waiting for an entry`;
+}
+
+function full(d) {
   const sim = d.sim && d.mode === "sim"
     ? `<p class="auto-sim">Simulated balance ${usdg(d.sim.equity)} <b data-sign="${sign(d.sim.ret)}">${pct(d.sim.ret)}</b> since start</p>` : "";
-  box.innerHTML = `
-    <header class="auto-head">
-      <b>Auto-trade the system</b>
-      <span class="auto-dot" data-mode="${d.mode}" aria-hidden="true"></span>
-    </header>
+  return `<div class="auto auto-full">
     <div class="auto-modes" role="radiogroup" aria-label="Auto-trade mode">${MODES.map(([m, label]) =>
       `<button type="button" role="radio" data-mode="${m}" aria-checked="${d.mode === m}" ${!d.has_wallet && m !== "off" ? "disabled" : ""}>${label}</button>`).join("")}</div>
     <div class="auto-pct" role="radiogroup" aria-label="Share of the cash per trade">
@@ -69,7 +77,23 @@ function paint() {
     <p class="auto-line">${line(d)}</p>
     ${d.mode !== "off" ? `<p class="auto-line">${cashLine(d)}</p>` : ""}
     ${sim}${position(d)}${trades(d)}
-    ${d.note ? `<p class="auto-note">${escapeHtml(d.note)}</p>` : ""}`;
+    ${d.note ? `<p class="auto-note">${escapeHtml(d.note)}</p>` : ""}</div>`;
+}
+
+function paint() {
+  const d = data;
+  box.innerHTML = `<button type="button" class="auto-bar" data-auto-open aria-label="Auto-trade settings">
+    <span class="auto-dot" data-mode="${d.mode}" aria-hidden="true"></span>
+    <span class="auto-bar-main"><b>Auto-trade</b><small>${summary(d)}</small></span>
+    <em class="auto-chip" data-mode="${d.mode}">${CHIP[d.mode] ?? ""}</em>
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>`;
+  // The sheet, if open on these controls, follows the same data.
+  if (sheetBody().querySelector(".auto-full")) setBody(full(d));
+}
+
+function openFull() {
+  openSheet("Auto-trade", "The system trades your Robinhood wallet on its own entries and exits.");
+  setBody(full(data));
 }
 
 async function refresh() {
@@ -86,7 +110,8 @@ async function update(body) {
     data = await api.setAutotrader(body);
     paint();
   } catch (err) {
-    box.querySelector(".auto-line").textContent = err?.message ?? "Could not change it right now.";
+    const el = sheetBody().querySelector(".auto-line");
+    if (el) el.textContent = err?.message ?? "Could not change it right now.";
   }
 }
 
@@ -97,7 +122,9 @@ export function mountAutotrade() {
   box.className = "auto";
   box.id = "autotrade";
   root.prepend(box);
-  box.addEventListener("click", (event) => {
+  box.addEventListener("click", (event) => { if (event.target.closest("[data-auto-open]") && data) openFull(); });
+  sheetBody().addEventListener("click", (event) => {
+    if (!event.target.closest(".auto-full")) return;
     const m = event.target.closest("[data-mode]");
     if (m && m.tagName === "BUTTON" && m.dataset.mode !== data?.mode) {
       if (m.dataset.mode === "real" && !confirm(
