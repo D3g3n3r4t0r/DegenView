@@ -165,13 +165,16 @@ export function strategyTrade(s, alertAt, chosen) {
   } else if (s.state === "in") {
     exit = `<small>Still in the trade</small>`;
   }
-  const ret = s.ret == null ? "—" : `${s.ret > 0 ? "+" : ""}${Math.round(s.ret * 100)}%`;
-  const sign = s.ret == null ? "" : s.ret >= 0 ? "up" : "down";
+  // No trade is no result: "—", never a green 0% (Lorenzo: "non voglio vedere 0%").
+  const traded = (s.trades ?? 0) > 0 || s.state === "in";
+  const ret = !traded || s.ret == null ? "—" : `${s.ret > 0 ? "+" : ""}${Math.round(s.ret * 100)}%`;
+  const sign = !traded || s.ret == null ? "" : s.ret >= 0 ? "up" : "down";
+  const many = (s.trades ?? 0) > 1 ? ` · ${s.trades} trades` : "";
   return `<div class="strat"${chosen && chosen === s.label ? " data-chosen" : ""}>
     <b>${escapeHtml(s.label)}</b>
     <b data-sign="${sign}">${ret}</b>
     <small>${escapeHtml(entry)}</small>
-    <small>${s.state === "in" ? "open" : "after fees"}</small>
+    <small>${!traded ? "" : s.state === "in" ? "open" : `after fees${many}`}</small>
     ${exit}
   </div>`;
 }
