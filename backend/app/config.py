@@ -61,6 +61,10 @@ class Settings(BaseSettings):
     # Where plan payments will arrive (plans.py). Empty: payments not open yet.
     payment_address: str = ""
     legit_ai_model: str = "claude-opus-5"
+    # Without anthropic_api_key, DeepSeek reads the gem's site instead
+    # (legit.ai_review); its verdict shows on the report card and blocks
+    # only with this on, once its record says it can be trusted.
+    legit_ai_gate: bool = False
     # The daily reviewer (app/trading/onchain/ai_review.py): once a day
     # Claude reads what really happened to the signals and writes lessons.
     # Request: "un'istanza di claude sonnet nel server [...] con un massimo di
