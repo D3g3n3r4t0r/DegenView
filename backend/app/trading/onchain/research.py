@@ -258,6 +258,9 @@ async def _deepseek_reading(key: str, item: dict, sites: list[dict], description
     if (heuristic.get("score") or 0) < AI_MIN_HEURISTIC or heuristic.get("fatal") or _calls.get(day, 0) >= DEEPSEEK_DAILY_MAX:
         return None
     _calls[day] = _calls.get(day, 0) + 1
+    from app.notify import deepseek_desk
+    deepseek_desk.note("research", f"Researching {item.get('symbol') or item.get('name')}: site, docs, description",
+                       symbol=item.get("symbol"), chain=item.get("chain"), token=item.get("token_address"))
     body = "\n\n".join(t[:2000] for t in texts if t)[:5000]
     ds = await _dossier_deepseek(
         f"Project: {item.get('name')} ({item.get('symbol')}) on {item.get('chain')}\n"
