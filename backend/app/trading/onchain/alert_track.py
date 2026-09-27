@@ -424,6 +424,26 @@ def _median(vals: list[float]) -> float | None:
     return s[m] if len(s) % 2 else (s[m - 1] + s[m]) / 2
 
 
+def _item(a: dict, now: float, chosen) -> dict:
+    return {"symbol": a["symbol"], "name": a["name"], "chain": a["chain"], "token_address": a["token_address"],
+            "pair_address": a["pair_address"], "pair_url": a["pair_url"], "image": a.get("image"), "at": a["at"], "cap0": a["cap0"], "returns": a["returns"],
+            "now": (a.get("last") or {}).get("ret"), "max": a["max_ret"], "gone": a["gone"],
+            "age_h": round((now - a["at"]) / 3600, 1), "strategy": a.get("strategy"),
+            "system": _system_view(a, chosen)}
+
+
+def for_token(chain: str, token: str, now: float | None = None) -> list[dict]:
+    """Every alert on one token, of both kinds, newest first, in the same
+    shape board() items have. The token page asks for this so Signal is
+    complete whichever list opened it (Lorenzo, 27/09)."""
+    now = now or time.time()
+    rows = [a for a in _alerts.values()
+            if a["chain"] == chain and a.get("token_address") == token and a["entry"] is not None]
+    rows.sort(key=lambda a: -a["at"])
+    chosen = {k: system_board(k)["chosen"] for k in {a["kind"] for a in rows}}
+    return [_item(a, now, chosen[a["kind"]]) for a in rows]
+
+
 def board(kind: str, limit: int = 30, now: float | None = None) -> dict:
     """The alerts ranked by what they are worth now, with every checkpoint,
     and per checkpoint the median and the share in profit."""
@@ -432,11 +452,7 @@ def board(kind: str, limit: int = 30, now: float | None = None) -> dict:
     chosen = sysb["chosen"]
     rows = [a for a in _alerts.values() if a["kind"] == kind and a["entry"] is not None]
     rows.sort(key=lambda a: -((a.get("last") or {}).get("ret") if a.get("last") else -9))
-    items = [{"symbol": a["symbol"], "name": a["name"], "chain": a["chain"], "token_address": a["token_address"],
-              "pair_address": a["pair_address"], "pair_url": a["pair_url"], "image": a.get("image"), "at": a["at"], "cap0": a["cap0"], "returns": a["returns"],
-              "now": (a.get("last") or {}).get("ret"), "max": a["max_ret"], "gone": a["gone"],
-              "age_h": round((now - a["at"]) / 3600, 1), "strategy": a.get("strategy"),
-              "system": _system_view(a, chosen)} for a in rows[:limit]]
+    items = [_item(a, now, chosen) for a in rows[:limit]]
     summary = []
     for h in CHECKPOINTS_H:
         vals = [a["returns"][str(h)] for a in rows if str(h) in a["returns"]]

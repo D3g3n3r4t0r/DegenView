@@ -14,6 +14,7 @@ import { openUserSwap, walletFor } from "@onchain/userswap.js";
 const registry = new Map();
 const INTERVALS = ["1m", "5m", "15m", "1h", "4h"];
 const WATCH_KEY = "watchlist-v1";
+const loading = new Set();
 let dlg = null;
 let current = null;
 let interval = "15m";
@@ -139,6 +140,35 @@ export function openDetail(id) {
     d.showModal();
     d.querySelector(".dt-scroll").scrollTop = 0;
   }
+  if (e.chain && e.token) enrich(id, e);
+}
+
+// The page fetches the full dossier itself: whichever list opened it (Top,
+// Database, radar, memes) Signal, Why and Info must be complete (Lorenzo,
+// 27/09). Only what is missing is filled, so a list that already knows more
+// (the gem board, the alerts) is not overwritten.
+async function enrich(id, e) {
+  loading.add(id);
+  const r = await api.getToken(e.chain, e.token).catch(() => null);
+  loading.delete(id);
+  if (!r) { if (current?.id === id) paintTabs(); return; }
+  if (r.alerts?.length && !(e.alerts?.length)) e.alerts = r.alerts;
+  if (r.entry) {
+    const lb = await import("@onchain/leaderboard.js");
+    e.why ||= lb.gemWhy(r.entry) + (r.entry.on_board ? "" : `<p class="muted">Not on the board${r.entry.why ? `: ${escapeHtml(r.entry.why)}` : ""}.</p>`);
+    e.info ||= lb.details(r.entry) + descriptionBlock(r.entry);
+    e.dossier = r.entry;
+  }
+  if (current?.id === id) paintTabs();
+}
+
+function descriptionBlock(p) {
+  const links = [["Website", p.website], ["GitHub", p.github],
+                 ...(p.socials ?? []).map((s) => [s.type, s.url])]
+    .filter(([, url]) => url)
+    .map(([label, url]) => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(label)}</a>`);
+  if (!p.description && !links.length) return "";
+  return `${p.description ? `<p class="bd-summary">${escapeHtml(p.description)}</p>` : ""}${links.length ? `<p class="dt-links">${links.join("")}</p>` : ""}`;
 }
 
 function paintChips() {
@@ -167,7 +197,8 @@ function paintTabs() {
   dlg.querySelectorAll("[data-dtab]").forEach((b) => b.toggleAttribute("aria-current", b.dataset.dtab === tab));
   const e = current.e;
   const body = dlg.querySelector("[data-pane-body]");
-  if (tab === "why") { body.innerHTML = e.why || `<p class="muted">Nothing to add yet.</p>`; return; }
+  const pending = loading.has(current.id);
+  if (tab === "why") { body.innerHTML = e.why || `<p class="muted">${pending ? "Loading…" : "Nothing to add yet."}</p>`; return; }
   if (tab === "info") { body.innerHTML = e.info || infoFallback(e); return; }
   const alerts = e.alerts ?? [];
   body.innerHTML = alerts.length ? alerts.map((al) => `
@@ -186,7 +217,14 @@ function paintTabs() {
         return `<li><small>${h}h</small><b data-sign="${sign(r)}">${pct(r)}</b></li>`;
       }).join("")}</ol>
     </article>`).join("")
-    : `<p class="muted">No Telegram alert on this token yet${e.kind === "gem" ? ": gems are alerted when they enter the board." : "."}</p>`;
+    : `<dl class="kv">
+        ${e.dossier ? `<div><dt>Score</dt><dd>${e.dossier.score != null ? Math.round(e.dossier.score) : "—"}</dd></div>
+        <div><dt>Board</dt><dd>${e.dossier.on_board ? "on the board" : `not ranked${e.dossier.why ? `: ${escapeHtml(e.dossier.why)}` : ""}`}</dd></div>` : ""}
+        <div><dt>Market cap</dt><dd>${usdShort(e.cap)}</dd></div>
+        ${e.dossier?.liquidity_usd != null ? `<div><dt>Liquidity</dt><dd>${usdShort(e.dossier.liquidity_usd)}</dd></div>` : ""}
+        ${e.ageTs ? `<div><dt>Age</dt><dd>${age(e.ageTs)[0]}</dd></div>` : ""}
+      </dl>
+      <p class="muted">${pending ? "Loading…" : `No Telegram alert on this token yet${e.kind === "gem" ? ": gems are alerted when they enter the board." : "."}`}</p>`;
 }
 
 function infoFallback(e) {
