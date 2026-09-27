@@ -309,13 +309,35 @@ async def backfill(client: httpx.AsyncClient, items: list[dict], kind: str = "me
 
 # ---------------------------------------------------------------- system
 
-SYSTEM_FETCHES_PER_TICK = 6
+SYSTEM_FETCHES_PER_TICK = 15
 # Bump when system.follow's output changes: finished alerts are fetched and
 # recomputed once more (v2: each sell says why, "crash" or "signal").
 SYSTEM_VERSION = 4   # 4: every strategy backtested on the alert's chart
 
 
-async def refresh_system(client, now: float | None = None, gap_s: float = BACKFILL_GAP_S) -> int:
+def backtest_status(kind: str = "meme", now: float | None = None) -> dict:
+    """How many of this kind's alerts already carry a current backtest."""
+    now = now or time.time()
+    total = ready = no_data = 0
+    oldest = None
+    for a in _alerts.values():
+        if a["kind"] != kind:
+            continue
+        total += 1
+        if a.get("nodata"):
+            no_data += 1
+            continue
+        if a.get("backtests") is not None and a.get("system_v") == SYSTEM_VERSION:
+            ready += 1
+            continue
+        if oldest is None or a["at"] < oldest:
+            oldest = a["at"]
+    pending = total - ready - no_data
+    return {"total": total, "ready": ready, "pending": pending, "no_data": no_data,
+            "oldest_pending_h": round((now - oldest) / 3600, 1) if oldest is not None else None}
+
+
+async def refresh_system(client, now: float | None = None, gap_s: float = 0.0) -> int:
     """Keep every meme alert's system result current (system.py).
 
     Bars an alert does not have yet come from GeckoTerminal once, at
@@ -327,7 +349,9 @@ async def refresh_system(client, now: float | None = None, gap_s: float = BACKFI
     from app.trading.onchain import system
     now = now or time.time()
     fetched = changed = 0
-    for a in sorted(_alerts.values(), key=lambda x: -x["at"]):
+    def _ready(a):
+        return a.get("backtests") is not None and a.get("system_v") == SYSTEM_VERSION
+    for a in sorted(_alerts.values(), key=lambda x: (_ready(x), -x["at"])):
         if a["kind"] != "meme" or a.get("nodata"):
             continue
         if a.get("system_done") and a.get("system_v") != SYSTEM_VERSION and fetched < SYSTEM_FETCHES_PER_TICK:
@@ -361,13 +385,17 @@ async def refresh_system(client, now: float | None = None, gap_s: float = BACKFI
     if changed or fetched:
         save()
         save_bars(now, force=True)
+    st = backtest_status("meme", now=now)
+    if st["pending"] == 0 and _state.get("bt_pending"):
+        logger.info("alert track: backtests complete, %d alerts", st["ready"])
+    _state["bt_pending"] = st["pending"]
     return changed
 
 
 def system_board(kind: str = "meme") -> dict:
     from app.trading.onchain import system
     results = [a["system"] for a in _alerts.values() if a["kind"] == kind and a.get("system")]
-    return system.scoreboard(results)
+    return {**system.scoreboard(results), "backtests": backtest_status(kind)}
 
 
 def _due(now: float) -> dict[str, list[dict]]:
