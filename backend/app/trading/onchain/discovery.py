@@ -52,7 +52,7 @@ DEX_PROFILES = "https://api.dexscreener.com/token-profiles/latest/v1"
 CG_CATEGORIES = {"solana": ("solana-ecosystem", range(3, 9)), "robinhood": ("robinhood-ecosystem", range(1, 5))}
 CG_PLATFORMS = {"solana": ("solana",), "robinhood": ("robinhood",)}
 # Lorenzo (24/09): "sotto uno barra due, tre milioni di market cap, non oltre"
-CAP_MIN = 50_000
+CAP_MIN = 10_000             # early gems start under $50k (leaderboard.EARLY_CAP_USD)
 NARRATIVE_PAGES = 8
 CAP_MAX = 3_000_000
 # azioni tokenizzate, stablecoin, token avvolti: non sono progetti
@@ -468,7 +468,7 @@ JUP_VERIFIED = "https://lite-api.jup.ag/tokens/v2/tag?query=verified"
 JUP_POLL_S = 6 * 3600
 JUP_SKIP_TAGS = {"meme", "stocks", "prestocks", "rwa", "lst", "original-lst", "duplicate"}
 JUP_MIN_AGE_DAYS = 14
-JUP_MIN_LIQUIDITY = 10_000
+JUP_MIN_LIQUIDITY = 5_000
 
 
 def _iso_ts(v) -> float | None:

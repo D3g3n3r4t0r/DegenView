@@ -164,6 +164,15 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0124", "Un'istanza di Claude Sonnet sul server che impara dagli errori, con un tetto di token al giorno",
+     "Lorenzo: 'sto pensando di mettere un istanza di claude sonnet nel server per farlo lavorare (con un massimo di token al giorno) cosi' impariamo dagli errori'.",
+     "media"),
+    ("seed-0123", "Meme Sniper: classifica degli alert Telegram con il rendimento da quando arriva il messaggio",
+     "Lorenzo: 'il meme sniper deve avere una leaderboard anch'esso, con anche i risultati se avessimo seguito l'alert di telegram (non le strategie), semplicemente se fossimo entrati quando arrivava il messaggio di telegram quanto guadagno ci sarebbe stato [...] voglio che si veda le performance del segnale dopo 1,2,3,4,5,6,8,12,24,48h, e infine aggiornato in tempo reale, oltre a questo anche il rendimento della miglior strategia backtestata'.",
+     "alta"),
+    ("seed-0122", "Gemme sotto i $50k con fondamentali da evidenziare, e avvisi Telegram anche per le gemme",
+     "Lorenzo: 'per gemme quando la market cap e' sotto i 50k e fondamentali ci sono, voglio che il sistema lo evidenzi che potrebbe valere la pena di comprare un po, voglio poi gli avvisi su telegram anche per le gemme'.",
+     "alta"),
     ("seed-0121", "Gem Finder: vede sempre i soliti progetti, serve un database",
      "Lorenzo: 'il gem hunter deve trovare progetti di qualita', ma vedi sempre i soliti.. ma fatti un database no?'.",
      "alta"),

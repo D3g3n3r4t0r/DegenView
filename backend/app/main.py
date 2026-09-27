@@ -107,6 +107,8 @@ from app.trading.onchain import pilot as onchain_pilot
 from app.trading.onchain import listings as onchain_listings
 from app.trading.onchain import leaderboard as onchain_leaderboard
 from app.trading.onchain import projects_db as onchain_projects_db
+from app.trading.onchain import ai_review as onchain_ai_review
+from app.trading.onchain import alert_track as onchain_alert_track
 from app.trading.onchain import plans as onchain_plans
 from app.trading.onchain import radar as onchain_radar
 from app import token_launch
@@ -1172,7 +1174,8 @@ async def lifespan(app: FastAPI):
                    asyncio.create_task(onchain_listings.listings_loop()),
                    asyncio.create_task(onchain_radar.listings_backtest_loop()),
                    asyncio.create_task(onchain_leaderboard.leaderboard_loop()),
-                   asyncio.create_task(onchain_outcomes.outcomes_loop())] if settings.onchain_radar_enabled else []
+                   asyncio.create_task(onchain_outcomes.outcomes_loop()),
+                   asyncio.create_task(_onchain_signals_loop())] if settings.onchain_radar_enabled else []
     sniper_tasks: list[asyncio.Task] = []
     if settings.sniper_enabled:
         from app.sniper import cache as sniper_cache
@@ -3612,6 +3615,8 @@ async def _notify_listing(item: dict) -> None:
     now = _time.time()
     link = f"{settings.public_base_url}/onchain-app.html#listing={item['chain']}:{item['pair_address']}"
     text = onchain_listings.telegram_text(item, now, link)
+    # The signal's own track record: what entering on this message would pay.
+    onchain_alert_track.record(item, "meme", now)
     for user in auth.list_users():
         if not user.telegram_chat_id or not user.onchain_wallets or not _telegram_allowed(user):
             continue
@@ -3623,6 +3628,101 @@ async def _notify_listing(item: dict) -> None:
 
 
 onchain_listings.on_listing(_notify_listing)
+
+_GEM_NOTIFY_PER_HOUR = 6
+_gem_notified: dict[str, list[float]] = {}
+
+
+def _gem_telegram_text(kind: str, e: dict) -> str:
+    """Italian, like every message Lorenzo reads."""
+    import html as _html
+    esc = _html.escape
+    chain = "Solana" if e.get("chain") == "solana" else "Robinhood"
+    cap = f"${float(e['market_cap']):,.0f}" if e.get("market_cap") else "—"
+    head = ("💎 <b>Gemma early</b>: sotto i $50k con fondamentali solidi, potrebbe valere un piccolo ingresso"
+            if kind == "early" else "💎 <b>Nuova gemma in classifica</b>")
+    pillars = e.get("pillars") or {}
+    scores = " · ".join(f"{n} {round(pillars[k]['score'])}" for k, n in (("github", "GitHub"), ("site", "Ricerca"),
+                        ("tokenomics", "Tokenomics")) if (pillars.get(k) or {}).get("score") is not None)
+    lines = [head, f"<b>{esc(e.get('symbol') or '?')}</b> · {esc(e.get('name') or '')} su {chain}",
+             f"cap {cap} · punteggio {round(e.get('score') or 0)} · posto {e.get('rank') or '—'}"]
+    if scores:
+        lines.append(scores)
+    tr = e.get("traction") or {}
+    if tr.get("reasons"):
+        lines.append("📈 " + esc(" · ".join(tr["reasons"][:3])))
+    if e.get("summary"):
+        lines.append(esc(e["summary"]))
+    links = []
+    for label, url in (("🌐 Sito", e.get("website")), ("GitHub", e.get("github")), ("Grafico", e.get("pair_url"))):
+        if url:
+            links.append(f'<a href="{esc(url, quote=True)}">{label}</a>')
+    links.append(f'<a href="{esc(settings.public_base_url, quote=True)}/onchain-app.html#gems">Apri Gem Finder</a>')
+    lines.append(" · ".join(links))
+    lines.append("<i>Ricerca, non un consiglio: entra solo con cio' che puoi perdere.</i>")
+    return "\n".join(lines)
+
+
+async def _notify_gem(kind: str, e: dict) -> None:
+    """Telegram for the Gem Finder too: a project new on the board, or one
+    flagged early (under $50k with the fundamentals). At most 6 an hour."""
+    from app.notify import telegram
+    now = _time.time()
+    if e.get("pair_address"):
+        onchain_alert_track.record({**e, "price_usd": e.get("price_usd")}, "gem", now)
+    text = _gem_telegram_text(kind, e)
+    for user in auth.list_users():
+        if not user.telegram_chat_id or not user.onchain_wallets or not _telegram_allowed(user):
+            continue
+        sent = [t for t in _gem_notified.get(user.id, []) if now - t < 3600]
+        if len(sent) >= _GEM_NOTIFY_PER_HOUR:
+            continue
+        _gem_notified[user.id] = sent + [now]
+        asyncio.create_task(telegram.send_to(user.telegram_chat_id, text))
+
+
+onchain_leaderboard.on_alert(_notify_gem)
+
+_SIGNALS_TICK_S = 30
+_signals_started = _time.time()
+
+
+async def _onchain_signals_loop() -> None:
+    """Prices for the alert track record, the listings' best strategy next
+    to each meme alert, and once a day the reviewer."""
+    from app.notify import telegram
+    while True:
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                await onchain_alert_track.sample(client)
+            for item in onchain_listings.recent():
+                onchain_alert_track.set_strategy("meme", item.get("chain"),
+                                                 item.get("token_address") or item.get("pair_address"),
+                                                 item.get("backtest"))
+            if (onchain_ai_review.enabled() and onchain_ai_review.due()
+                    and _time.time() - _signals_started >= onchain_ai_review.FIRST_DELAY_S):
+                entry = await onchain_ai_review.review()
+                if entry:
+                    await telegram.send_message(onchain_ai_review.telegram_text(entry))
+        except Exception:
+            logger.exception("segnali on-chain: giro fallito")
+        await asyncio.sleep(_SIGNALS_TICK_S)
+
+
+@app.get("/api/onchain/alerts/{kind}")
+async def onchain_alerts_view(kind: Literal["meme", "gem"], user: User = Depends(auth.get_current_user)) -> dict:
+    """Every Telegram alert and what entering on the message would pay: 1-48h
+    checkpoints, live, and the best backtested strategy. See alert_track.py."""
+    _require_onchain_enabled()
+    return onchain_alert_track.board(kind)
+
+
+@app.get("/api/onchain/ai-review")
+async def onchain_ai_review_view(user: User = Depends(auth.get_current_user)) -> dict:
+    """The daily reviewer's lessons (ai_review.py) and its token budget."""
+    _require_onchain_enabled()
+    reviews = onchain_ai_review._state["reviews"][:7]
+    return {"status": onchain_ai_review.status(), "latest": reviews[0] if reviews else None, "history": reviews[1:]}
 
 
 @app.get("/api/onchain/radar/chart")

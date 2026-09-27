@@ -61,6 +61,13 @@ class Settings(BaseSettings):
     # Where plan payments will arrive (plans.py). Empty: payments not open yet.
     payment_address: str = ""
     legit_ai_model: str = "claude-opus-5"
+    # The daily reviewer (app/trading/onchain/ai_review.py): once a day
+    # Claude reads what really happened to the signals and writes lessons.
+    # Request: "un'istanza di claude sonnet nel server [...] con un massimo di
+    # token al giorno, cosi' impariamo dagli errori". Needs anthropic_api_key.
+    ai_review_enabled: bool = True
+    ai_review_model: str = "claude-sonnet-5"
+    ai_review_daily_tokens: int = 200_000
     # Non piu' usata: Token Sniffer e' stato sostituito da GoPlus, pubblico.
     # Resta perche' un .env che la contiene non blocchi l'avvio.
     tokensniffer_api_key: str = ""
