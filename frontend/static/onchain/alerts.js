@@ -231,6 +231,7 @@ function paintTop() {
     ? (w ? `Top 10 median ${pct(w.top.median)} after 7 days on the board.` : "Scored on code, research and tokenomics. Research, not advice.")
     : state.sort === "backtest"
       ? `Best strategy backtested on each alert's 5-minute chart, every entry and exit, fees paid. Chosen after the fact: the most that chart allowed.`
+        + ((b) => b && b.pending > 0 ? ` Backtests ready: ${b.ready}/${b.total - b.no_data}.` : "")(state.data.meme?.system?.backtests)
       : state.sort === "system"
         ? `The system (${escapeHtml(state.data.meme?.system?.chosen ?? "trend-following")}): enters and exits on its own signals after each alert, fees paid.`
         : "Returns if you had bought when each Telegram alert arrived.")
