@@ -1974,5 +1974,19 @@
       "frontend/onchain-app.html",
       "frontend/static/onchain/app.css"
     ]
+  },
+  "seed-0161": {
+    "status": "risolto",
+    "at": 1790534253,
+    "summary": "In cima agli Alert c'e' un campo 'Scan any token': scrivi un ticker o un indirizzo e il sistema cerca su DexScreener il pool piu' liquido sulle catene che seguiamo, poi fa tutto il processo: i controlli dei listing (nome, sicurezza RugCheck/GoPlus sempre, contratto, social, sito, GitHub, pagella), la memoria dei rug (i 5 casi passati piu' simili e la storia di questo token se l'abbiamo gia' visto) e il voto di rischio di DeepSeek. Il riepilogo dice se passerebbe il filtro, il voto, i campanelli d'allarme e ogni controllo. Non diventa un alert. Le strategie si chiamano ora 'Trend HF' e 'Trend EMA'; i risultati gia' calcolati sono stati rinominati senza ricalcolare nulla.",
+    "files": [
+      "backend/app/trading/onchain/manual_scan.py",
+      "backend/app/trading/onchain/ai_scan.py",
+      "backend/app/trading/onchain/system.py",
+      "backend/app/trading/onchain/alert_track.py",
+      "backend/app/main.py",
+      "frontend/static/onchain/sheets.js",
+      "frontend/static/onchain/alerts.js"
+    ]
   }
 }

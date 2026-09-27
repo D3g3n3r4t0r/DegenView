@@ -8,7 +8,7 @@ from app.trading.onchain import alert_track as at
 from app.trading.onchain import autotrader as tr
 
 T0 = 1_790_000_000
-LABEL = "Lorenzo HF"
+LABEL = "Trend HF"
 
 
 @pytest.fixture(autouse=True)

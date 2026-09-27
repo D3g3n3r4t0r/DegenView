@@ -966,3 +966,27 @@
   .topbar .topbar-right { flex-wrap: nowrap; min-inline-size: 0; }
   .topbar .agent { flex: 0 1 auto; min-inline-size: 0; max-inline-size: 200px; }
 }
+/* Manual scan (sheets.js openScan, the form on top of Alerts). */
+@layer skin {
+  .scan-form { display: flex; gap: 8px; margin: 0 0 14px;
+    & input { flex: 1; min-inline-size: 0; padding: 12px 14px; border: 1px solid rgba(255, 255, 255, .08); border-radius: 12px;
+      background: var(--k-surface); color: var(--k-text); font: 500 14px var(--sans); }
+    & button { padding: 0 18px; border: 0; border-radius: 12px; background: #6366f1; color: #fff; font: 700 14px var(--sans); cursor: pointer; } }
+  .scan-wait { display: grid; place-items: center; gap: 14px; padding: 30px 0; color: var(--k-text-3);
+    & .agent-orb { inline-size: 40px; block-size: 40px; } & .agent-orb i { opacity: 1; animation: agent-spin 1.6s linear infinite; } }
+  .scan-head { display: flex; gap: 12px; align-items: center; margin-block-end: 10px;
+    & .tile { inline-size: 44px; block-size: 44px; } & b { display: block; } & small { color: var(--k-text-3); font-size: 13px; } }
+  .scan-status { margin: 0 0 10px; padding: 10px 12px; border-radius: 10px; font-weight: 600; font-size: 14px;
+    &[data-s="pass"] { background: rgba(34, 197, 94, .12); color: #4ade80; }
+    &[data-s="fail"] { background: rgba(239, 68, 68, .12); color: #f87171; }
+    &[data-s="wait"] { background: rgba(251, 191, 36, .12); color: #fbbf24; } }
+  .scan-ai { display: flex; gap: 12px; align-items: center; margin-block-end: 10px; padding: 12px; border-radius: 12px; background: var(--k-surface);
+    & > b { font: 800 26px var(--sans); min-inline-size: 44px; text-align: center; } & span b { display: block; }
+    & small { color: var(--k-text-3); font-size: 13px; }
+    &[data-risk="high"] > b { color: #f87171; } &[data-risk="mid"] > b { color: #fbbf24; } &[data-risk="low"] > b { color: #4ade80; } }
+  .scan-checks { list-style: none; margin: 8px 0 12px; padding: 0;
+    & li { display: grid; gap: 2px; padding: 9px 0 9px 22px; position: relative; border-block-end: 1px solid rgba(255, 255, 255, .05); font-size: 14px; }
+    & li::before { content: "?"; position: absolute; inset-inline-start: 0; color: #fbbf24; font-weight: 800; }
+    & li[data-ok="yes"]::before { content: "✓"; color: #4ade80; } & li[data-ok="no"]::before { content: "✕"; color: #f87171; }
+    & small { color: var(--k-text-3); font-size: 12.5px; } }
+}

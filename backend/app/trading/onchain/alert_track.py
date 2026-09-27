@@ -64,6 +64,13 @@ def _load() -> None:
         return
     if isinstance(raw, dict):
         _alerts.update({k: v for k, v in (raw.get("alerts") or {}).items() if isinstance(v, dict)})
+    from app.trading.onchain.system import LEGACY_LABELS
+    for a in _alerts.values():
+        sysr = a.get("system")
+        if isinstance(sysr, dict):
+            for old, new in LEGACY_LABELS.items():
+                if old in sysr and new not in sysr:
+                    sysr[new] = sysr.pop(old)
     try:
         bars = json.loads(_BARS_FILE.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
