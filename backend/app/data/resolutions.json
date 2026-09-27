@@ -1827,5 +1827,17 @@
       "frontend/static/onchain/profile.js",
       "frontend/static/onchain/app.css"
     ]
+  },
+  "seed-0149": {
+    "status": "risolto",
+    "at": 1790529060,
+    "summary": "Due cause. La storia era cominciata con il calcolo vecchio (solo i due wallet del sito) e continuava con quello nuovo (tutte le chain, tutti i token): sulla stessa linea c'erano due misure diverse. E con il calcolo nuovo un punto si salvava solo se tutte le chain rispondevano: bastava che BSC, Base o Ethereum non rispondessero per non registrare niente, e il grafico restava fermo sui punti vecchi. Ora la storia vecchia e' azzerata; se una chain non risponde conta il suo ultimo valore delle ultime 6 ore (oltre, il punto si salta invece di disegnare un crollo finto); il totale in alto, quello del profilo e il grafico usano lo stesso calcolo, e la linea finisce sempre sul valore di adesso. Sotto il grafico c'e' da quando viene registrata.",
+    "files": [
+      "backend/app/trading/onchain/wealth.py",
+      "backend/app/trading/onchain/portfolio.py",
+      "backend/app/main.py",
+      "frontend/static/onchain/profile.js",
+      "backend/tests/test_profile.py"
+    ]
   }
 }
