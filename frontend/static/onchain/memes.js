@@ -8,6 +8,7 @@
  */
 import * as api from "@onchain/api.js";
 import { escapeHtml } from "@onchain/format.js";
+import { tile } from "@onchain/alerts.js";
 
 const POLL_MS = 60_000;
 const CHAIN = { solana: "Solana", robinhood: "Robinhood", ethereum: "Ethereum", base: "Base" };
@@ -51,18 +52,24 @@ function track(t) {
   box.hidden = false;
 }
 
+const CHAIN_IC = { solana: "◎", robinhood: "◆" };
+const ago = (ts) => {
+  const sec = Date.now() / 1000 - ts;
+  return sec < 3600 ? `${Math.max(1, Math.round(sec / 60))}m` : sec < 86400 ? `${Math.round(sec / 3600)}h` : `${Math.round(sec / 86400)}d`;
+};
+
 function row(m) {
-  const flow = m.buys_h1 != null ? ` · ${m.buys_h1}↑ ${m.sells_h1 ?? 0}↓ 1h` : "";
-  const cap = m.market_cap != null ? ` · cap ${usd(m.market_cap)}` : "";
-  const chance = m.win_chance != null ? `${Math.round(m.win_chance * 100)}% odds` : "since seen";
-  const href = m.pair_url || "#";
+  const up = (m.ret_since_seen ?? 0) >= 0;
   const sc = Math.round(m.score ?? 0);
+  const hot = m.band === "60+";
+  const flow = m.buys_h1 != null ? ` · ${m.buys_h1}↑ ${m.sells_h1 ?? 0}↓` : "";
   return `
-    <li><a class="meme-row" href="${escapeHtml(href)}" target="_blank" rel="noopener" data-tone="${TONE[m.band] ?? ""}">
-      <span class="mm-score" style="--v:${sc}" title="Meme engine score ${sc}/100"><b>${sc}</b></span>
-      <span class="mm-name"><b>${escapeHtml(m.symbol)}</b><small>${escapeHtml(CHAIN[m.chain] ?? m.chain)} · liq ${usd(m.liquidity_usd)}${cap}${flow}</small></span>
-      <span class="mm-num"><b data-sign="${(m.ret_since_seen ?? 0) >= 0 ? "up" : "down"}">${pct(m.ret_since_seen)}</b><small>${escapeHtml(chance)}</small></span>
-      ${chips(m)}
+    <li><a class="meme-row" href="${escapeHtml(m.pair_url || "#")}" target="_blank" rel="noopener" data-tone="${TONE[m.band] ?? ""}" data-sign="${up ? "up" : "down"}">
+      <span class="tile-wrap">${tile(m.symbol, m.image, m.chain, m.token_address)}<i class="chain-badge" aria-hidden="true">${CHAIN_IC[m.chain] ?? ""}</i></span>
+      <span class="mm-name"><b>${escapeHtml(m.symbol)}${hot ? ' <em class="hot">HOT</em>' : ""}</b>
+        <small><span class="sprout" aria-hidden="true">❦</span> ${ago(m.seen_at)} · liq ${usd(m.liquidity_usd)}${flow}</small></span>
+      <span class="mm-num"><b>${usd(m.market_cap)}</b><em class="pill" data-sign="${up ? "up" : "down"}">${up ? "↑" : "↓"} ${pct(Math.abs(m.ret_since_seen ?? 0)).replace("+", "")}</em></span>
+      <span class="mm-foot"><span class="mm-score" style="--v:${sc}" title="Meme engine score ${sc}/100"><b>${sc}</b></span>${chips(m)}</span>
     </a></li>`;
 }
 

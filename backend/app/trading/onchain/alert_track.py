@@ -96,6 +96,7 @@ def record(item: dict, kind: str, now: float | None = None) -> dict | None:
         "liq0": _num(item.get("liquidity_usd")), "quoted": _num(item.get("price_usd")),
         "entry": None, "entry_at": None, "returns": {}, "last": None, "max_ret": None, "min_ret": None,
         "misses": 0, "gone": False, "closed": False, "strategy": None, "score": item.get("score"),
+        "image": item.get("image") or None,
     }
     save()
     return _alerts[k]
@@ -175,6 +176,8 @@ async def sample(client: httpx.AsyncClient, now: float | None = None) -> int:
             for a in batch:
                 p = by.get(a["pair_address"].lower())
                 apply_price(a, p.get("priceUsd") if p else None, now)
+                if p and not a.get("image"):
+                    a["image"] = (p.get("info") or {}).get("imageUrl") or None
                 n += 1
             await asyncio.sleep(0.3)
     save()
@@ -196,7 +199,7 @@ def board(kind: str, limit: int = 30, now: float | None = None) -> dict:
     rows = [a for a in _alerts.values() if a["kind"] == kind and a["entry"] is not None]
     rows.sort(key=lambda a: -((a.get("last") or {}).get("ret") if a.get("last") else -9))
     items = [{"symbol": a["symbol"], "name": a["name"], "chain": a["chain"], "token_address": a["token_address"],
-              "pair_url": a["pair_url"], "at": a["at"], "cap0": a["cap0"], "returns": a["returns"],
+              "pair_url": a["pair_url"], "image": a.get("image"), "at": a["at"], "cap0": a["cap0"], "returns": a["returns"],
               "now": (a.get("last") or {}).get("ret"), "max": a["max_ret"], "gone": a["gone"],
               "age_h": round((now - a["at"]) / 3600, 1), "strategy": a.get("strategy")} for a in rows[:limit]]
     summary = []

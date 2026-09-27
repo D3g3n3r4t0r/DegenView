@@ -12,6 +12,25 @@ lavori pluri-sessione, decisioni prese, stato di piani approvati.
 
 ---
 
+## Un'app sola, layout da app di trading — `seed-0126`, branch `claude/gem-database` — 2026-09-27
+
+Lorenzo, con 4 screenshot di un'app meme da telefono: "l'app deve essere
+unica e gestita cosi' graficamente e come layout, ispirati".
+
+- Layer CSS `shell` (ultimo di `onchain-app.html`): intestazione con avatar
+  (`#more-btn`), saldo (`#balance` spostato in `[data-balance-slot]` da
+  main.js), "Deposit" (`data-sheet="receive"`), campanella (`#inbox-btn`,
+  `openInbox` in alerts.js). Colonna unica 760px anche su desktop.
+- Viste: `meme` (default), `gems`, `top` (nuova), `wallet`, `manual` (swap,
+  fuori dalla barra: ci si arriva dalla lente `#dock-search`, che apre
+  `#swap-pick-out`). Schede `.tabs[data-tabs]` + pannelli `data-pane="vista:scheda"`
+  (`setTab` in main.js, classe `.pane-off`).
+- `top`: classifica degli alert (alert_track) con podio oro/argento, corona,
+  coriandoli (CSS `mod()`), 1D/1W/1M, meme/gemme. `tile()` in alerts.js per i
+  loghi senza immagine.
+
+---
+
 ## Gemme early, avvisi Telegram gemme, classifica degli alert meme, revisore Claude — `seed-0122`/`0123`/`0124`, branch `claude/gem-database` — 2026-09-27
 
 Lorenzo: "per gemme quando la market cap e' sotto i 50k e fondamentali ci

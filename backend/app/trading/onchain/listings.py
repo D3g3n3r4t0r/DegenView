@@ -284,6 +284,7 @@ def evaluate_pair(pair: dict, now: float | None = None) -> dict | None:
         "liquidity_usd": liq,
         "market_cap": float(cap),
         "price_usd": pair.get("priceUsd"),
+        "image": (pair.get("info") or {}).get("imageUrl") or None,
         "created_at": created or None,
     }
 

@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0126", "Un'app sola, con grafica e layout da app di trading per telefono",
+     "Lorenzo (con quattro screenshot di un'app di trading meme): 'l'app deve essere unica e gestita cosi' graficamente e come layout, ispirati'.",
+     "alta"),
     ("seed-0125", "Leaderboard delle gemme graficamente incredibile e animata; sito senza roba inutile, review semplice",
      "Lorenzo: 'come gestiamo il revisore claude ? non voglio che finisca i miei token; non complicare il sito con roba inutile; la daily review deve essere semplice; rendi graficamente incredibile la leaderboard delle gemme, animala e usa linguaggio di programmazione modernissimo per farlo'.",
      "media"),
