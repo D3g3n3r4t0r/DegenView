@@ -3675,6 +3675,30 @@
     }
   }
 
+  // Lorenzo: "puoi usare anche il grafico del sito principale volendo, era
+  // ideale per visualizzare ingressi". Il dettaglio di un token apre il
+  // grafico di qui con un link: pair, timeframe e strategia arrivano
+  // nell'URL, e i trade disegnati sono quelli di quella strategia.
+  function openDeepLink() {
+    const q = new URLSearchParams(location.search);
+    const dex = q.get("dex");
+    if (!dex) return false;
+    // Called where the boot would open the saved ticker: strategies are
+    // loaded, and nothing opens BTC over it afterwards. The area comes from
+    // ?area=analizza, which bindSidenav() already honours.
+    applyConfigToChart({
+      assetType: "dex",
+      symbol: dex,
+      displaySymbol: q.get("name") || dex,
+      interval: q.get("interval") || "5m",
+      strategyName: q.get("strategy") || undefined,
+      params: null,
+      backtestParams: null,
+    });
+    runAnalysis(dex);
+    return true;
+  }
+
   function applyArchiveEntry(entry) {
     // Le voci vecchie sono state salvate quando l'archivio ignorava ancora i
     // costi impostati dall'utente (backtest_params arrivava sempre vuoto):
@@ -10422,7 +10446,7 @@
         mainChart.priceScale("right").applyOptions({ mode: LightweightCharts.PriceScaleMode.Logarithmic });
       }
     }
-    runAnalysis(ticker);
+    if (!openDeepLink()) runAnalysis(ticker);
   }
 
   // ── Backtest Lab (independent from chart) ──────────────────────────────
