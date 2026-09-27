@@ -174,13 +174,23 @@ function rows() {
       .map((a) => {
         const x = best(a);
         const open = !x && (a.backtests?.rows ?? []).some((r) => r.in_position);
+        // Lorenzo, 28/09: "no signal on this chart non ha senso, se c'è un
+        // chart c'è il backtest automaticamente". While the 48h window is
+        // open the chart grows every minute and the backtest reruns: it says
+        // so, animated. A closed window with no entry is a result: the
+        // system stayed out, and what that avoided is the number.
+        const live = !a.backtests || (a.age_h ?? 0) < 48;
+        const label = x ? pct(x.return_pct / 100) : open ? '<span class="bt-tag" data-k="in">IN</span>'
+          : live ? '<span class="bt-live" role="img" aria-label="Analyzing"><i></i><i></i><i></i></span>'
+            : '<span class="bt-tag" data-k="out">OUT</span>';
         return { id: registerAlert(a, "meme"), symbol: a.symbol, name: a.name, chain: a.chain, token: a.token_address,
-          image: a.image, label: x ? pct(x.return_pct / 100) : "—",
+          image: a.image, label, ranked: Boolean(x),
           sub: `${age(a.at)[0]} ago · at ${usdShort(a.cap0)} · held ${pct(a.now)}`,
           sign: x ? sign(x.return_pct / 100) : "", best: null,
           sys: x ? `${x.trades} trade${x.trades === 1 ? "" : "s"} · win ${Math.round(x.win_rate ?? 0)}%`
-            : open ? "position open"
-              : a.backtests ? "no signal on this chart" : "backtest pending" };
+            : open ? "in the trade now"
+              : live ? "analyzing the chart"
+                : (a.now ?? 0) < 0 ? `stayed out · dodged a ${Math.round(-a.now * 100)}% drop` : `stayed out · held ${pct(a.now)}` };
       });
   }
   if (key === "system") {
@@ -224,7 +234,7 @@ function paintTop() {
   const hero = root.querySelector("[data-top-hero]");
   // The podium is a hall of fame of backtests: a row the system never traded
   // has nothing to show there.
-  const podium = state.sort === "system" || state.sort === "backtest" ? list.filter((x) => x.label !== "—") : list;
+  const podium = state.sort === "system" || state.sort === "backtest" ? list.filter((x) => x.ranked ?? x.label !== "—") : list;
   const top3 = podium.slice(0, 3).map((x) => ({ id: x.id, symbol: x.symbol, value: gem ? `${x.label} pts` : x.label,
     logoHtml: tile(x.symbol, x.image, x.chain, x.token) }));
   if (!top3.length) {
