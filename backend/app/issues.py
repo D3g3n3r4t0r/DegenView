@@ -164,6 +164,15 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0176", "Non voglio selezionare le strategie: mostrami i backtest migliori",
+     "Lorenzo: 'non voglio selezionare le strategie, il sistema deve essere gestito in modo invisibile, semplicemente mostrami i backtest migliori delle strategie disponibili'.",
+     "media"),
+    ("seed-0175", "Usare il grafico del sito principale per vedere gli ingressi",
+     "Lorenzo: 'puoi usare anche il grafico del sito principale volendo, era ideale per visualizzare ingressi'.",
+     "media"),
+    ("seed-0177", "Backtest delle strategie sul grafico di ogni crypto, come sul sito principale",
+     "Lorenzo (screenshot della classifica, tutte '— no entry yet'): 'non esiste che su queste crypto non ci sia un backtest delle strategie, come facciamo sul sito principale [...] stessa cosa dobbiamo poter fare qui'.",
+     "alta"),
     ("seed-0174", "Nella classifica del sistema tutti 0%: voglio vedere i backtest",
      "Lorenzo (screenshot della hall of fame ordinata per System, CERT/GLANCE/Onhand... tutti '0% waiting'): 'qui voglio vedere i backtest!!! non voglio vedere 0%'.",
      "alta"),

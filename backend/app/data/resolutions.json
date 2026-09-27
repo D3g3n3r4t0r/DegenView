@@ -2082,5 +2082,20 @@
     "status": "risolto",
     "at": 1790546686,
     "summary": "Lo 0% era il sistema che non era mai entrato, mostrato come un risultato. Ora in cima ci sono solo gli alert tradati, per rendimento; gli altri mostrano '—' con 'nessun ingresso ancora' o 'non e' entrato' e quanto avrebbe fatto tenere dall'alert; il podio ha solo trade veri (issue #191). Con la correzione di seed-0172 molti di quegli alert ora hanno un trade vero."
+  },
+  "seed-0177": {
+    "status": "risolto",
+    "at": 1790547281,
+    "summary": "Ogni alert ha ora il backtest di tutte le strategie (Trend EMA = Lorenzo, Trend HF, RSI+BB, RSI+BB L/S) sul suo grafico a 5 minuti, da ~6 ore prima a 48 ore dopo l'alert: ogni ingresso e uscita, commissioni pagate, stesso motore del sito principale. Accumulo/Distribuzione resta fuori perche' usa dati futuri. La pagina del token ha la tabella 'Backtest on this chart' con la riga 'Just holding'. Tutti gli alert vengono ricalcolati una volta (issue #200, #201)."
+  },
+  "seed-0175": {
+    "status": "risolto",
+    "at": 1790547281,
+    "summary": "Dalla pagina del token, 'Open on the analysis chart' apre il token sul grafico del sito principale a 5 minuti con la strategia dal backtest migliore e i suoi ingressi disegnati; il nome di ogni strategia nella tabella apre la stessa vista con quella strategia. Provato in un browser (issue #203)."
+  },
+  "seed-0176": {
+    "status": "risolto",
+    "at": 1790547281,
+    "summary": "Niente selettori: la classifica mostra per ogni alert il backtest migliore fra le strategie disponibili, con il nome della strategia e i trade. Il migliore e' scelto dopo aver visto il grafico: e' il massimo che quel grafico permetteva, e la nota della classifica lo dice (issue #204)."
   }
 }

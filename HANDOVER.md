@@ -3661,3 +3661,11 @@ Trend EMA = la sua Lorenzo originale, Trend HF = la variante on-chain a 5m con
 filtri (VWAP, efficienza, variance ratio, soglia sigma, trailing ATR); in uso HF
 di default finche' 20 alert non sono decisi. Da guardare dopo il ricalcolo: se i
 filtri di HF la tengono fuori dai meme piu' della Lorenzo originale.
+
+**2026-09-28 — Lorenzo: "non esiste che su queste crypto non ci sia un backtest delle strategie [...] stessa cosa dobbiamo poter fare qui", "puoi usare anche il grafico del sito principale", "non voglio selezionare le strategie [...] mostrami i backtest migliori".**
+`system.backtest_all` (radar.evaluate su 4 strategie, A/D esclusa) sulle barre 5m di
+ogni alert, SYSTEM_VERSION 4. Classifica: backtest migliore per alert (scelto a
+posteriori, detto nella nota). Pagina token: tabella per strategia + link al sito
+principale (`/?area=analizza&dex=SYM@chain:pool&interval=5m&strategy=...`,
+`openDeepLink()` in app.js al posto del ticker salvato). Il sistema trend (48h
+dopo l'alert) resta calcolato ma non e' piu' la vista predefinita.
