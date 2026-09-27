@@ -257,6 +257,9 @@ async def _ask_deepseek(prompt: str, http=None) -> _Reply:
     r.raise_for_status()
     data = r.json()
     choice = (data.get("choices") or [{}])[0]
+    from app.notify import deepseek_desk
+    u = data.get("usage") or {}
+    deepseek_desk.record("review", u.get("prompt_tokens", 0), u.get("completion_tokens", 0))
     return _Reply((choice.get("message") or {}).get("content") or "", data.get("model") or settings.deepseek_model,
                   data.get("usage") or {}, choice.get("finish_reason"))
 
