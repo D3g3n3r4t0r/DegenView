@@ -125,10 +125,47 @@ def _load() -> None:
         _state.update(raw.get("state") or {})
 
 
+def _prune(journal: dict, keep: int, now: float) -> None:
+    """Tiene il giornale sotto `keep` senza decapitare una classe.
+
+    Un token che fa rug e' etichettato in poche ore, uno che non lo fa solo
+    dopo RUG_FINAL_S: buttando i piu' vecchi si cancellano i "non rug" prima
+    che maturino e il modello resta senza esempi negativi.
+    """
+    if len(journal) <= keep:
+        return
+
+    def label(key: str) -> bool | None:
+        return rug_label(journal[key], now)
+
+    def drop(keys: list[str]) -> None:
+        for key in keys:
+            if len(journal) <= keep:
+                return
+            journal.pop(key, None)
+
+    # 1. mai prezzati, o chiusi senza esito: non insegnano niente.
+    drop(sorted((k for k in journal if label(k) is None and (not journal[k].get("entry") or journal[k].get("closed"))),
+                key=lambda k: journal[k]["at"]))
+    if len(journal) <= keep:
+        return
+
+    # 2. la classe piu' numerosa, dal piu' vecchio, finche' le due convergono.
+    while len(journal) > keep:
+        rugs = sorted((k for k in journal if label(k) is True), key=lambda k: journal[k]["at"])
+        non_rugs = sorted((k for k in journal if label(k) is False), key=lambda k: journal[k]["at"])
+        if not rugs and not non_rugs:
+            break
+        drop(rugs if len(rugs) >= len(non_rugs) else non_rugs)
+        if not rugs and not non_rugs:
+            break
+
+    # 3. solo adesso gli indecisi, dal piu' vecchio.
+    drop(sorted((k for k in journal if label(k) is None), key=lambda k: journal[k]["at"]))
+
+
 def _save() -> None:
-    if len(_journal) > KEEP:
-        for key in sorted(_journal, key=lambda k: _journal[k]["at"])[:len(_journal) - KEEP]:
-            del _journal[key]
+    _prune(_journal, KEEP, time.time())
     try:
         _STORE_FILE.write_text(json.dumps({"journal": _journal, "state": _state}, ensure_ascii=False),
                                encoding="utf-8")
