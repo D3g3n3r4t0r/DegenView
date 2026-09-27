@@ -31,3 +31,11 @@ def test_for_token_newest_first_and_same_shape_as_board():
     assert [r["at"] for r in rows] == [now - 10, now - 100]
     board = alert_track.board("meme", now=now)
     assert set(rows[0]) == set(board["items"][0])
+
+
+def test_board_items_have_systems_list():
+    alert_track.reset_for_tests()
+    now = time.time()
+    alert_track._alerts["a"] = _alert("solana", "AAA", at=now - 100)
+    board = alert_track.board("meme", now=now)
+    assert isinstance(board["items"][0]["systems"], list)

@@ -425,11 +425,13 @@ def _median(vals: list[float]) -> float | None:
 
 
 def _item(a: dict, now: float, chosen) -> dict:
+    from app.trading.onchain import system
+    systems = [_system_view(a, c["label"]) for c in system.CANDIDATES]
     return {"symbol": a["symbol"], "name": a["name"], "chain": a["chain"], "token_address": a["token_address"],
             "pair_address": a["pair_address"], "pair_url": a["pair_url"], "image": a.get("image"), "at": a["at"], "cap0": a["cap0"], "returns": a["returns"],
             "now": (a.get("last") or {}).get("ret"), "max": a["max_ret"], "gone": a["gone"],
             "age_h": round((now - a["at"]) / 3600, 1), "strategy": a.get("strategy"),
-            "system": _system_view(a, chosen)}
+            "system": _system_view(a, chosen), "systems": [v for v in systems if v]}
 
 
 def for_token(chain: str, token: str, now: float | None = None) -> list[dict]:
