@@ -801,6 +801,14 @@ async def chart_candles(chain: str, pool: str, symbol: str, interval: str) -> di
             "updated_at": (_lite_cache.get(key) or (time.time(),))[0], "candles": candles}
 
 
+def chart_peek(chain: str, pool: str, interval: str) -> dict:
+    """What the server already holds for this chart, without calling anyone."""
+    cached = _lite_cache.get((chain, pool, interval))
+    fresh = cached and time.time() - cached[0] < CHART_STALE_S
+    return {"chain": chain, "pool": pool, "interval": interval,
+            "updated_at": cached[0] if fresh else None, "candles": cached[1] if fresh else []}
+
+
 async def warm_charts(targets: list[tuple[str, str, str, str]], now: float | None = None,
                       gap_s: float = 0.5) -> int:
     """Fetch ahead, at background priority, the charts a tap is likely to

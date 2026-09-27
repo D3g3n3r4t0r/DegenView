@@ -1677,5 +1677,18 @@
       "backend/app/trading/onchain/alert_track.py",
       "backend/tests/test_token_chart.py"
     ]
+  },
+  "seed-0137": {
+    "status": "risolto",
+    "at": 1790516204,
+    "summary": "Il limite vero era uno: tutti i grafici passavano dal nostro server, che ha una sola quota GeckoTerminal (circa 30 richieste al minuto) da dividere con i lavori in background. Ora il browser prende le candele direttamente da GeckoTerminal, con la quota di chi guarda, e in parallelo chiede al server la copia che ha gia' pronta: vince la prima che arriva. Il server scarica da se' solo se entrambe tornano vuote. Per i token senza pool noto (alcune gemme) il pool principale lo dice DexScreener. Se le candele proprio non ci sono (pool appena nato, o GeckoTerminal non lo conosce), compare il grafico di DexScreener incorporato, cosi' nessun ticker resta senza grafico (tranne Robinhood, che DexScreener non indicizza). Per permetterlo le regole di sicurezza del sito (CSP nel Caddyfile) ora consentono al browser di leggere da api.geckoterminal.com e api.dexscreener.com e di incorporare dexscreener.com; tutto il resto resta chiuso.",
+    "files": [
+      "frontend/static/onchain/detail.js",
+      "frontend/static/onchain/api.js",
+      "frontend/static/onchain/app.css",
+      "backend/app/main.py",
+      "backend/app/trading/onchain/radar.py",
+      "deploy/Caddyfile"
+    ]
   }
 }

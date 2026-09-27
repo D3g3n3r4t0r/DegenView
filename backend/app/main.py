@@ -3768,12 +3768,17 @@ async def onchain_ai_review_view(user: User = Depends(auth.get_current_user)) ->
 @app.get("/api/onchain/chart")
 async def onchain_token_chart(
     chain: str, pool: str = Query(..., pattern=r"^[0-9A-Za-z]{20,66}$"), symbol: str = Query("", max_length=40),
-    interval: Literal["1m", "5m", "15m", "1h", "4h"] = "15m", user: User = Depends(auth.get_current_user),
+    interval: Literal["1m", "5m", "15m", "1h", "4h"] = "15m", peek: bool = False,
+    user: User = Depends(auth.get_current_user),
 ) -> dict:
-    """The token page's chart: candles only, any chain the hunts scan."""
+    """The token page's chart: candles only, any chain the hunts scan. With
+    peek, only a copy the server already has (instant, maybe empty): the
+    browser fetches GeckoTerminal itself in parallel."""
     _require_onchain_enabled()
     if chain not in onchain_legit.CHAIN_LABEL:
         raise HTTPException(status_code=422, detail="unknown chain")
+    if peek:
+        return onchain_radar.chart_peek(chain, pool, interval)
     try:
         return await onchain_radar.chart_candles(chain, pool, symbol or "TOKEN", interval)
     except ProviderError as exc:

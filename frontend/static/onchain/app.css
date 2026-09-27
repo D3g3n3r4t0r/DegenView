@@ -576,6 +576,7 @@
   .dt-chart { position: relative; block-size: 300px; margin: 14px -16px 0; padding: 0 0 0 16px;
     background: radial-gradient(circle, #1f1f23 1px, transparent 1.2px) 0 0 / 12px 12px; }
   .dt-chart-empty { display: grid; place-items: center; block-size: 100%; color: var(--k-text-3); font-size: 13px; }
+  .dt-embed { display: block; inline-size: calc(100% - 16px); block-size: 100%; border: 0; border-radius: 12px; background: #0b0b0d; }
   .line-chart { inline-size: 100%; block-size: 100%; overflow: visible;
     & .ln { fill: none; stroke: var(--k-mint); stroke-width: 1.6; stroke-linejoin: round; }
     &[data-sign="down"] .ln { stroke: var(--k-red); }
