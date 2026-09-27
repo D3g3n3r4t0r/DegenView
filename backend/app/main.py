@@ -3780,15 +3780,24 @@ async def _wallet_snapshot(user: User) -> dict:
     cash (stablecoins), positions (the rest, native coins included), total."""
     addrs = _all_addresses(user)
     if not addrs:
-        return {"total": None, "cash": 0.0, "positions": [], "missing": [], "by_chain": {}}
+        return {"total": None, "cash": 0.0, "positions": [], "missing": [], "by_chain": {}, "complete": False}
     res = await onchain_multichain.everything(addrs)
     positions = [{"chain": h["chain"], "address": h["token"], "symbol": h["symbol"], "name": h["name"],
                   "amount": h["amount"], "price_usd": h["price_usd"], "value_usd": h["value_usd"],
                   "image": h["image"], "native": h["native"], "hidden": h["hidden"], "source": h["source"],
                   "wallet": h["wallet"]}
                  for h in res["holdings"] if (h["symbol"] or "").upper() not in onchain_multichain.STABLES or h["hidden"]]
-    return {"total": res["total"], "cash": res["cash"], "positions": positions,
-            "missing": [f"{m['chain']} {m['address'][:6]}…" for m in res["missing"]], "by_chain": res["by_chain"]}
+    # One total everywhere (header, profile, chart): a chain that did not
+    # answer this time counts at its last value when that is recent.
+    carried = onchain_wealth.combine(user.id, res["read"], res["missing_chains"])
+    return {"total": round(carried, 4) if carried is not None else res["total"], "cash": res["cash"],
+            "positions": positions, "missing": [f"{m['chain']} {m['address'][:6]}…" for m in res["missing"]],
+            "by_chain": res["by_chain"], "complete": carried is not None}
+
+
+def _record_wealth(user: User, snap: dict) -> None:
+    if snap.get("total") is not None and snap.get("complete"):
+        onchain_wealth.record(user.id, snap["total"])
 
 
 @app.get("/api/wallets/total")
@@ -3806,8 +3815,7 @@ async def _wealth_loop() -> None:
                 continue
             try:
                 snap = await _wallet_snapshot(user)
-                if not snap["missing"]:
-                    onchain_wealth.record(user.id, snap["total"])
+                _record_wealth(user, snap)
             except Exception:
                 logger.exception("wealth snapshot %s", user.id)
         await asyncio.sleep(onchain_wealth.SNAPSHOT_S)
@@ -3837,8 +3845,7 @@ def _closed_trades(user: User) -> list[dict]:
 async def get_profile(user: User = Depends(auth.get_current_user)) -> dict:
     p = profiles.get(user.id, user.email, _joined_hint(user))
     snap = await _wallet_snapshot(user)
-    if snap["total"] is not None and not snap["missing"]:
-        onchain_wealth.record(user.id, snap["total"])
+    _record_wealth(user, snap)
     closed = _closed_trades(user)
     holds = [c["closed"] - c["opened"] for c in closed]
     orders = sum(len(onchain_ledger.list_orders(user.id, c, limit=500)) for c in user.onchain_wallets)
@@ -3849,7 +3856,10 @@ async def get_profile(user: User = Depends(auth.get_current_user)) -> dict:
         "closed": closed,
         "stats": {"trades": orders + sum(1 for t in onchain_autotrader.view(user.id)["trades"] if t.get("ok") and t.get("mode") == "sim"),
                   "avg_hold_s": sum(holds) / len(holds) if holds else None, "closed": len(closed)},
-        "history": {k: onchain_wealth.series(user.id, k) for k in onchain_wealth.RANGES},
+        # the line ends where the header is: the value just read
+        "history": {k: onchain_wealth.series(user.id, k) + ([[_time.time(), snap["total"]]] if snap["total"] is not None else [])
+                    for k in onchain_wealth.RANGES},
+        "tracking_since": (onchain_wealth.series(user.id, "all") or [[None]])[0][0],
         "change": {k: onchain_wealth.change(user.id, k, snap["total"]) for k in onchain_wealth.RANGES},
     }
 
