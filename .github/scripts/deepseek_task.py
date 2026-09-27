@@ -89,6 +89,8 @@ def apply(text: str) -> list[str]:
     errors, n = [], 0
     for path, search, replace in EDIT.findall(text):
         n += 1
+        # The model sometimes writes "path=x", "`x`" or "x:" instead of the bare path.
+        path = path.removeprefix("path=").strip("`'\":")
         p = Path(path)
         if path.startswith((".github/", "/")) or ".." in p.parts:
             errors.append(f"{path}: not allowed")
@@ -100,7 +102,10 @@ def apply(text: str) -> list[str]:
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_text(replace + "\n", encoding="utf-8")
             continue
-        src = p.read_text(encoding="utf-8") if p.exists() else ""
+        if not p.exists():
+            errors.append(f"{path}: no such file (write the bare path after SEARCH)")
+            continue
+        src = p.read_text(encoding="utf-8")
         if src.count(search) != 1:
             errors.append(f"{path}: SEARCH found {src.count(search)} times:\n{search[:300]}")
             continue
