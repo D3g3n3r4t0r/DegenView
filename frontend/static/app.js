@@ -3682,34 +3682,21 @@
   function openDeepLink() {
     const q = new URLSearchParams(location.search);
     const dex = q.get("dex");
-    if (!dex) return;
-    const strategyName = q.get("strategy") || undefined;
-    const apply = () => {
-      setArea("analizza");
-      applyConfigToChart({
-        assetType: "dex",
-        symbol: dex,
-        displaySymbol: q.get("name") || dex,
-        interval: q.get("interval") || "5m",
-        strategyName,
-        params: null,
-        backtestParams: null,
-      });
-      runAnalysis(dex);
-    };
-    // La select delle strategie si popola durante l'avvio: se la strategia
-    // chiesta non c'e' ancora, applyConfigToChart la ignorerebbe in silenzio.
-    const ready = () => {
-      if (!strategyName) return true;
-      const sel = el("active-strategy-select");
-      return !!sel && Array.from(sel.options).some((o) => o.value === strategyName);
-    };
-    if (ready()) { apply(); return; }
-    const started = Date.now();
-    const timer = setInterval(() => {
-      if (ready()) { clearInterval(timer); apply(); }
-      else if (Date.now() - started > 5000) clearInterval(timer);
-    }, 200);
+    if (!dex) return false;
+    // Called where the boot would open the saved ticker: strategies are
+    // loaded, and nothing opens BTC over it afterwards. The area comes from
+    // ?area=analizza, which bindSidenav() already honours.
+    applyConfigToChart({
+      assetType: "dex",
+      symbol: dex,
+      displaySymbol: q.get("name") || dex,
+      interval: q.get("interval") || "5m",
+      strategyName: q.get("strategy") || undefined,
+      params: null,
+      backtestParams: null,
+    });
+    runAnalysis(dex);
+    return true;
   }
 
   function applyArchiveEntry(entry) {
@@ -10459,7 +10446,7 @@
         mainChart.priceScale("right").applyOptions({ mode: LightweightCharts.PriceScaleMode.Logarithmic });
       }
     }
-    runAnalysis(ticker);
+    if (!openDeepLink()) runAnalysis(ticker);
   }
 
   // ── Backtest Lab (independent from chart) ──────────────────────────────
@@ -11580,7 +11567,6 @@
     bindTabs();
     groupLabResultColumn();
     bindSidenav();
-    openDeepLink();
     bindChartExpand();
     bindDrawRail();
     bindMobileDrawTools();
