@@ -1704,5 +1704,18 @@
       "frontend/static/onchain/app.css",
       "backend/tests/test_system.py"
     ]
+  },
+  "seed-0139": {
+    "status": "risolto",
+    "at": 1790523796,
+    "summary": "In cima alla scheda Alerts c'e' 'Auto-trade the system': Off / Simulated / Real e la quota del saldo USDG per ogni trade (10, 25, 50, 100%). Acceso, il sistema compra un alert Meme Sniper di Robinhood Chain quando la sua strategia entra (solo segnali di meno di 15 minuti, un token alla volta) e vende quando esce, dopo 48 ore o se il pool sparisce. Spento, non apre nuove posizioni ma chiude quella aperta alla sua uscita. L'importo e' la quota scelta meno un'unita', cosi' non chiede mai piu' di quello che c'e'; la fee del pool e' gia' dentro l'importo; il gas si paga in ETH, e se non basta per approve + swap l'ingresso si salta e lo dice; il minimo ricevuto e' il preventivo vivo meno il 5%. Simulato: preventivi veri, niente inviato, saldo virtuale che parte dal saldo USDG reale. Reale: passa da execute_order (registro, idempotenza, interruttore del server onchain_execution_enabled) senza i limiti di rischio, come scelto; la prima volta autorizza USDG sul router Uniswap (approve). Oggi si possono firmare solo i percorsi Uniswap v3: un token raggiungibile solo da un aggregatore in reale si salta, e la riga dice perche'. Ogni operazione arriva su Telegram in italiano.",
+    "files": [
+      "backend/app/trading/onchain/autotrader.py",
+      "backend/app/trading/onchain/execute.py",
+      "backend/app/main.py",
+      "frontend/static/onchain/autotrade.js",
+      "frontend/static/onchain/app.css",
+      "backend/tests/test_autotrader.py"
+    ]
   }
 }

@@ -114,6 +114,8 @@ export const getPilot = (chain) => request(`/api/onchain/pilot/${chain}`);
 export const getRadar = () => request("/api/onchain/radar");
 export const getLeaderboard = () => request("/api/onchain/leaderboard");
 export const getAlerts = (kind) => request(`/api/onchain/alerts/${kind}`);
+export const getAutotrader = () => request("/api/onchain/autotrader");
+export const setAutotrader = (body) => request("/api/onchain/autotrader", { method: "PATCH", body });
 export const getAiReview = () => request("/api/onchain/ai-review");
 export const getProjects = (params) => request(`/api/onchain/projects?${new URLSearchParams(params)}`);
 export const getRadarLessons = () => request("/api/onchain/radar/lessons");

@@ -26,6 +26,7 @@ import { refreshHoldings } from "@onchain/holdings.js";
 import { mountLeaderboard } from "@onchain/leaderboard.js";
 import { mountProjects } from "@onchain/projects.js";
 import { mountAlerts, openInbox } from "@onchain/alerts.js";
+import { mountAutotrade } from "@onchain/autotrade.js";
 import { mountMemes } from "@onchain/memes.js";
 
 // Sulla pagina a se' (onchain-app.html) la radice e' il documento intero.
@@ -585,6 +586,7 @@ mountRadar({ toast });
 mountLeaderboard();
 mountProjects();
 mountAlerts();
+mountAutotrade();
 mountMemes();
 
 // La rete si cambia dal suo nome, accanto al saldo: un tocco, niente menu.
