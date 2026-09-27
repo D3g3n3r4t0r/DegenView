@@ -1,0 +1,152 @@
+"""The system: one trend-following strategy, followed on every Telegram alert.
+
+Lorenzo: "con tutti i backtest che abbiamo fatto finora trova la miglior
+strategia di quelle che avevamo a disposizione e rendiamola praticamente
+operativa [...] che sia utilizzato i risultati di questi ingressi e di
+queste uscite come risultati nella leaderboard [...] per evitare proprio i
+rug pull e per prendersi i movimenti rialzisti quando questi occorrono".
+
+What the old leaderboard called "best strategy" was chosen after the fact,
+per token (the listing backtest keeps whichever of all strategies made the
+most on that very token): a number no one could have had. Here the same
+rules apply to every alert, from the moment the message went out:
+
+- candidates: the trend followers we have (Lorenzo, Lorenzo HF), with their
+  default parameters (CLAUDE.md: more parameters, worse results);
+- 5-minute bars; a signal on a closed bar fills at the next bar's open,
+  paying commission and slippage both ways (radar.BACKTEST_PARAMS);
+- spot only: an entry buys, an exit sells, short signals just sell;
+- WINDOW_S after the alert the position, if any, is closed at that bar;
+- the pool vanishing while in position counts as -100%.
+
+The candidate with the best median over alerts whose window has ended
+becomes the system; until MIN_DECIDED alerts are decided it is DEFAULT.
+Both candidates' numbers stay visible, so the choice can be checked.
+"""
+from __future__ import annotations
+
+import math
+
+import pandas as pd
+
+from app.trading.onchain import radar
+
+WINDOW_S = 48 * 3600
+BAR_S = 300
+MIN_DECIDED = 20
+COST = (radar.BACKTEST_PARAMS["commission_pct"] + radar.BACKTEST_PARAMS["slippage_pct"]) / 100
+
+CANDIDATES = [
+    {"strategy_name": "Lorenzo HF (minuti on-chain)", "params": None, "label": "Lorenzo HF", "source": "predefinita"},
+    {"strategy_name": "Lorenzo (trend-follower)", "params": None, "label": "Lorenzo", "source": "predefinita"},
+]
+DEFAULT = CANDIDATES[0]["label"]
+BY_LABEL = {c["label"]: c for c in CANDIDATES}
+
+
+def frame(bars: list[list]) -> pd.DataFrame:
+    """[[ts, open, high, low, close, volume], ...] -> the strategies' frame."""
+    rows = sorted({int(b[0]): b for b in bars if len(b) >= 6 and b[4] and b[4] > 0}.values(), key=lambda b: b[0])
+    df = pd.DataFrame(rows, columns=["t", "open", "high", "low", "close", "volume"])
+    df.index = pd.to_datetime(df["t"], unit="s", utc=True)
+    return df[["open", "high", "low", "close", "volume"]].astype(float)
+
+
+def follow(bars: list[list], cfg: dict, start: float, *, gone: bool = False, now: float | None = None) -> dict:
+    """The strategy's trades from `start` (the alert) to start + WINDOW_S.
+
+    Returns ret (compounded, after costs), trades, state ("in", "out",
+    "waiting" = no entry yet), in_at/entry price when in, and the events."""
+    end = start + WINDOW_S
+    df = frame(bars)
+    out = {"ret": None, "trades": 0, "wins": 0, "state": "waiting", "events": [], "entry": None, "in_at": None,
+           "done": False}
+    if len(df) < 3:
+        return out
+    try:
+        sig = radar.spot_signals(df, cfg)
+    except Exception:
+        return out
+    ts = [int(t.timestamp()) for t in df.index]
+    opens, closes = df["open"].to_numpy(), df["close"].to_numpy()
+    entry_sig = sig["entry_long"].fillna(False).astype(bool).to_numpy()
+    exit_sig = sig["exit_long"].fillna(False).astype(bool).to_numpy()
+    equity, pos, entry, in_at = 1.0, False, 0.0, None
+    events: list[dict] = []
+    last_i = len(df) - 1
+    for i in range(len(df) - 1):
+        t_fill = ts[i + 1]
+        if t_fill < start:
+            continue                    # before the alert: warm-up only
+        if t_fill > end:
+            break
+        if not pos and entry_sig[i]:
+            pos, entry, in_at = True, opens[i + 1], t_fill
+            events.append({"t": t_fill, "side": "buy", "price": float(entry)})
+        elif pos and exit_sig[i]:
+            r = (opens[i + 1] / entry) * (1 - COST) ** 2
+            equity *= r
+            out["trades"] += 1
+            out["wins"] += r > 1
+            pos = False
+            events.append({"t": t_fill, "side": "sell", "price": float(opens[i + 1]), "ret": round(r - 1, 4)})
+    now = now or ts[last_i]
+    window_over = now >= end
+    if pos:
+        if gone:
+            equity *= 0.0
+            out["trades"] += 1
+            events.append({"t": int(now), "side": "rug", "price": 0.0, "ret": -1.0})
+            pos = False
+        else:
+            j = max(k for k in range(len(ts)) if ts[k] <= end) if window_over else last_i
+            mark = closes[j] / entry * (1 - COST) ** 2
+            if window_over:
+                equity *= mark
+                out["trades"] += 1
+                out["wins"] += mark > 1
+                events.append({"t": ts[j], "side": "sell", "price": float(closes[j]), "ret": round(mark - 1, 4),
+                               "why": "48h"})
+                pos = False
+            else:
+                out.update(state="in", entry=float(entry), in_at=in_at)
+                equity *= mark
+    if not pos and out["trades"]:
+        out["state"] = "out"
+    out["ret"] = round(equity - 1, 4) if (out["trades"] or out["state"] == "in") else 0.0
+    out["events"] = events[-12:]
+    out["done"] = bool(window_over or gone)
+    return out
+
+
+def evaluate(bars: list[list], start: float, *, gone: bool = False, now: float | None = None) -> dict:
+    """Every candidate on one alert: {label: follow(...)}."""
+    return {c["label"]: follow(bars, c, start, gone=gone, now=now) for c in CANDIDATES}
+
+
+def _median(vals: list[float]) -> float | None:
+    s = sorted(v for v in vals if v is not None and not math.isnan(v))
+    if not s:
+        return None
+    m = len(s) // 2
+    return s[m] if len(s) % 2 else (s[m - 1] + s[m]) / 2
+
+
+def scoreboard(results: list[dict]) -> dict:
+    """results: each alert's evaluate() output. Per candidate over decided
+    alerts: n, median, mean, win share, total (sum of per-alert returns, as
+    if the same stake went into each), and which one is the system."""
+    rows = []
+    for c in CANDIDATES:
+        done = [r[c["label"]] for r in results if (r.get(c["label"]) or {}).get("done")]
+        rets = [d["ret"] for d in done if d.get("ret") is not None]
+        rows.append({"label": c["label"], "strategy_name": c["strategy_name"], "n": len(rets),
+                     "median": round(_median(rets), 4) if rets else None,
+                     "mean": round(sum(rets) / len(rets), 4) if rets else None,
+                     "positive": round(sum(r > 0 for r in rets) / len(rets), 3) if rets else None,
+                     "total": round(sum(rets), 4) if rets else None,
+                     "traded": sum(1 for d in done if d.get("trades"))})
+    ready = [r for r in rows if r["n"] >= MIN_DECIDED and r["median"] is not None]
+    chosen = max(ready, key=lambda r: (r["median"], r["mean"] or 0))["label"] if ready else DEFAULT
+    return {"chosen": chosen, "decided_by": "median" if ready else f"default until {MIN_DECIDED} alerts are decided",
+            "candidates": rows, "window_h": WINDOW_S // 3600, "bar": "5m", "cost_pct": round(COST * 100, 2)}

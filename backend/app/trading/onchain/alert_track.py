@@ -46,7 +46,15 @@ KEEP = 3000
 KINDS = ("meme", "gem")
 
 _alerts: dict[str, dict] = {}
-_state = {"sampled_at": 0.0, "slow_at": 0.0}
+_state = {"sampled_at": 0.0, "slow_at": 0.0, "bars_saved_at": 0.0}
+
+# 5-minute bars per alert, for the system (system.py): built from the same
+# readings as the returns, plus a warm-up fetched once. Kept only while the
+# alert's system window is open, in their own file (they are the bulky part).
+_BARS_FILE = storage.data_file("onchain_alert_bars.json")
+BAR_S = 300
+MAX_BARS = 720
+_bars: dict[str, list[list]] = {}
 
 
 def _load() -> None:
@@ -56,6 +64,12 @@ def _load() -> None:
         return
     if isinstance(raw, dict):
         _alerts.update({k: v for k, v in (raw.get("alerts") or {}).items() if isinstance(v, dict)})
+    try:
+        bars = json.loads(_BARS_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        bars = {}
+    if isinstance(bars, dict):
+        _bars.update({k: v for k, v in bars.items() if isinstance(v, list)})
 
 
 def save() -> None:
@@ -68,9 +82,52 @@ def save() -> None:
         pass
 
 
+def save_bars(now: float | None = None, force: bool = False) -> None:
+    now = now or time.time()
+    if not force and now - _state["bars_saved_at"] < 300:
+        return
+    _state["bars_saved_at"] = now
+    live = {k: v for k, v in _bars.items() if k in _alerts}
+    try:
+        _BARS_FILE.write_text(json.dumps(live, separators=(",", ":")), encoding="utf-8")
+    except OSError:
+        pass
+
+
 def reset_for_tests() -> None:
     _alerts.clear()
-    _state.update(sampled_at=0.0, slow_at=0.0)
+    _bars.clear()
+    _state.update(sampled_at=0.0, slow_at=0.0, bars_saved_at=0.0)
+
+
+def key_of(a: dict) -> str:
+    return f"{a['kind']}:{a['chain']}:{a.get('token_address') or a['pair_address']}"
+
+
+def add_bar(k: str, t: float, price: float, volume: float | None = None) -> None:
+    """One reading into its 5-minute bar (open/high/low/close; the pool's
+    rolling 5-minute volume, read at the bar's last reading)."""
+    b0 = int(t // BAR_S * BAR_S)
+    rows = _bars.setdefault(k, [])
+    if rows and rows[-1][0] == b0:
+        r = rows[-1]
+        r[2], r[3], r[4] = max(r[2], price), min(r[3], price), price
+        if volume is not None:
+            r[5] = volume
+    elif not rows or rows[-1][0] < b0:
+        rows.append([b0, price, price, price, price, volume or 0.0])
+        del rows[:-MAX_BARS]
+
+
+def merge_bars(k: str, candles: list) -> None:
+    """GeckoTerminal candles [[ts, o, h, l, c, v], ...] into the alert's bars
+    (theirs win where both have the same bar: they saw every trade)."""
+    have = {r[0]: r for r in _bars.get(k, [])}
+    for c in candles or []:
+        if len(c) >= 6 and _num(c[4]):
+            t = int(float(c[0]))
+            have[t] = [t, float(c[1]), float(c[2]), float(c[3]), float(c[4]), float(c[5] or 0)]
+    _bars[k] = sorted(have.values(), key=lambda r: r[0])[-MAX_BARS:]
 
 
 def _num(v) -> float | None:
@@ -158,7 +215,7 @@ def from_candles(a: dict, candles: list, now: float, tail: list | None = None) -
     """Fill an alert recorded after the fact. candles: [[ts, o, h, l, c, v], ...]
     from the message onwards (any order); tail: later candles for the "now"."""
     rows = sorted((float(c[0]), float(c[4])) for c in candles or [] if len(c) >= 5 and _num(c[4]))
-    rows = [(t, c) for t, c in rows if t >= a["at"] - 900]
+    rows = [(t, c) for t, c in rows if t >= a["at"] - 300]
     if not rows:
         a.update(closed=True, nodata=True)   # no trade on record: never priced "now" as if it were the entry
         return
@@ -213,8 +270,8 @@ async def backfill(client: httpx.AsyncClient, items: list[dict], kind: str = "me
         if a is None:
             continue
         token = item.get("token_address") or ""
-        first = await _candles(client, net, item["pair_address"], "minute", 15,
-                               at + (max(CHECKPOINTS_H) + 1) * 3600, 200, token)
+        first = await _candles(client, net, item["pair_address"], "minute", 5,
+                               at + (max(CHECKPOINTS_H) + 1) * 3600, 600, token)
         await asyncio.sleep(gap_s)
         tail = None
         if first is not None and now - at > (max(CHECKPOINTS_H) + 1) * 3600:
@@ -226,9 +283,67 @@ async def backfill(client: httpx.AsyncClient, items: list[dict], kind: str = "me
             _alerts.pop(f"{kind}:{item['chain']}:{item.get('token_address') or item['pair_address']}", None)
             continue
         from_candles(a, first, now, tail)
+        merge_bars(key_of(a), first)
+        a["bars_fetched"] = True
         n += 1
     save()
+    save_bars(force=True)
     return n
+
+
+# ---------------------------------------------------------------- system
+
+SYSTEM_FETCHES_PER_TICK = 6
+
+
+async def refresh_system(client, now: float | None = None, gap_s: float = BACKFILL_GAP_S) -> int:
+    """Keep every meme alert's system result current (system.py).
+
+    Bars an alert does not have yet come from GeckoTerminal once, at
+    background priority: the whole window for alerts already past it, the
+    hours before the message (warm-up) for live ones, whose later bars come
+    from the minute readings. Results are recomputed when the bars change;
+    once the window is over the result is frozen and the bars dropped."""
+    from app.sniper.scanner import GECKO_NETWORKS
+    from app.trading.onchain import system
+    now = now or time.time()
+    fetched = changed = 0
+    for a in sorted(_alerts.values(), key=lambda x: -x["at"]):
+        if a["kind"] != "meme" or a.get("system_done") or a.get("nodata"):
+            continue
+        k = key_of(a)
+        if not a.get("bars_fetched") and fetched < SYSTEM_FETCHES_PER_TICK:
+            net = GECKO_NETWORKS.get(a["chain"])
+            past = now >= a["at"] + system.WINDOW_S
+            before = a["at"] + system.WINDOW_S + 3600 if past else a["at"]
+            got = await _candles(client, net, a["pair_address"], "minute", 5, min(before, now), 600 if past else 72,
+                                 a.get("token_address") or "") if net else []
+            fetched += 1
+            if got is not None:
+                merge_bars(k, got)
+                a["bars_fetched"] = True
+            if gap_s:
+                await asyncio.sleep(gap_s)
+        bars = _bars.get(k) or []
+        sig = f"{len(bars)}:{bars[-1][0] if bars else 0}:{a['gone']}"
+        if not a.get("bars_fetched") or (sig == a.get("system_sig") and now < a["at"] + system.WINDOW_S):
+            continue
+        res = await asyncio.to_thread(system.evaluate, bars, a["at"], gone=a["gone"], now=now)
+        a["system"], a["system_sig"] = res, sig
+        changed += 1
+        if all(r.get("done") for r in res.values()):
+            a["system_done"] = True
+            _bars.pop(k, None)
+    if changed or fetched:
+        save()
+        save_bars(now, force=True)
+    return changed
+
+
+def system_board(kind: str = "meme") -> dict:
+    from app.trading.onchain import system
+    results = [a["system"] for a in _alerts.values() if a["kind"] == kind and a.get("system")]
+    return system.scoreboard(results)
 
 
 def _due(now: float) -> dict[str, list[dict]]:
@@ -266,11 +381,15 @@ async def sample(client: httpx.AsyncClient, now: float | None = None) -> int:
             for a in batch:
                 p = by.get(a["pair_address"].lower())
                 apply_price(a, p.get("priceUsd") if p else None, now)
+                price = _num(p.get("priceUsd")) if p else None
+                if price and not a.get("system_done"):
+                    add_bar(key_of(a), now, price, _num(((p.get("volume") or {}).get("m5"))))
                 if p and not a.get("image"):
                     a["image"] = (p.get("info") or {}).get("imageUrl") or None
                 n += 1
             await asyncio.sleep(0.3)
     save()
+    save_bars(now)
     return n
 
 
@@ -286,12 +405,15 @@ def board(kind: str, limit: int = 30, now: float | None = None) -> dict:
     """The alerts ranked by what they are worth now, with every checkpoint,
     and per checkpoint the median and the share in profit."""
     now = now or time.time()
+    sysb = system_board(kind)
+    chosen = sysb["chosen"]
     rows = [a for a in _alerts.values() if a["kind"] == kind and a["entry"] is not None]
     rows.sort(key=lambda a: -((a.get("last") or {}).get("ret") if a.get("last") else -9))
     items = [{"symbol": a["symbol"], "name": a["name"], "chain": a["chain"], "token_address": a["token_address"],
               "pair_address": a["pair_address"], "pair_url": a["pair_url"], "image": a.get("image"), "at": a["at"], "cap0": a["cap0"], "returns": a["returns"],
               "now": (a.get("last") or {}).get("ret"), "max": a["max_ret"], "gone": a["gone"],
-              "age_h": round((now - a["at"]) / 3600, 1), "strategy": a.get("strategy")} for a in rows[:limit]]
+              "age_h": round((now - a["at"]) / 3600, 1), "strategy": a.get("strategy"),
+              "system": _system_view(a, chosen)} for a in rows[:limit]]
     summary = []
     for h in CHECKPOINTS_H:
         vals = [a["returns"][str(h)] for a in rows if str(h) in a["returns"]]
@@ -303,7 +425,26 @@ def board(kind: str, limit: int = 30, now: float | None = None) -> dict:
     return {"items": items, "total": len(rows), "checkpoints": list(CHECKPOINTS_H), "summary": summary,
             "now": {"n": len(live), "median": round(_median(live), 4) if live else None,
                     "positive": round(sum(v > 0 for v in live) / len(live), 3) if live else None},
-            "strategy": {"n": len(strat), "median_pct": round(_median(strat), 2) if strat else None}}
+            "strategy": {"n": len(strat), "median_pct": round(_median(strat), 2) if strat else None},
+            "system": {**sysb, "live": _live(rows, chosen)}}
+
+
+def _system_view(a: dict, label: str) -> dict | None:
+    r = (a.get("system") or {}).get(label)
+    if not r:
+        return None
+    return {"label": label, "ret": r.get("ret"), "trades": r.get("trades"), "state": r.get("state"),
+            "entry": r.get("entry"), "in_at": r.get("in_at"), "done": r.get("done"), "events": r.get("events")}
+
+
+def _live(rows: list[dict], label: str) -> dict:
+    """The system on every alert so far, finished or not."""
+    vals = [((a.get("system") or {}).get(label) or {}).get("ret") for a in rows]
+    vals = [v for v in vals if v is not None]
+    holding = sum(1 for a in rows if ((a.get("system") or {}).get(label) or {}).get("state") == "in")
+    return {"n": len(vals), "median": round(_median(vals), 4) if vals else None,
+            "positive": round(sum(v > 0 for v in vals) / len(vals), 3) if vals else None,
+            "mean": round(sum(vals) / len(vals), 4) if vals else None, "holding": holding}
 
 
 def recent(kind: str, since_s: float, now: float | None = None) -> list[dict]:

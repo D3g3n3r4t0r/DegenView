@@ -3732,6 +3732,7 @@ async def _onchain_signals_loop() -> None:
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:
                 await onchain_alert_track.sample(client)
+                await onchain_alert_track.refresh_system(client)
             if _time.time() - warmed_at >= onchain_radar.WARM_EVERY_S:
                 warmed_at = _time.time()
                 asyncio.create_task(onchain_radar.warm_charts(_charts_on_screen()))

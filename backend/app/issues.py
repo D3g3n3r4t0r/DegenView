@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0138", "Rendere operativa la miglior strategia trend-following e usarne ingressi e uscite come risultati della classifica",
+     "Lorenzo: 'con tutti i backtest che abbiamo fatto finora trova la miglior strategia di quelle che avevamo a disposizione e rendiamola praticamente operativa [...] che i segnali di quella strategia siano entrare e uscire, ovviamente trend follower, e che sia utilizzato i risultati di questi ingressi e di queste uscite come risultati nella leaderboard [...] per evitare proprio i rug pull e per prendersi i movimenti rialzisti quando questi occorrono'.",
+     "alta"),
     ("seed-0137", "Grafici ancora troppo lenti, e su alcuni ticker il grafico non c'e' proprio",
      "Lorenzo: 'ancora troppo lenti a caricare i grafici, in alcuni ticker non c'e' grafico proprio'.",
      "alta"),

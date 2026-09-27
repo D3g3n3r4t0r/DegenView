@@ -683,3 +683,13 @@
     &[data-v="pass"] { color: #34d399; } &[data-v="rej"] { color: #f87171; } }
   @media (prefers-reduced-motion: reduce) { .scan-dot::after { animation: none; } }
 }
+
+/* --- the system: its result on each alert and its trades on the chart --- */
+@layer skin {
+  .call-card .sys-state { display: block; margin-top: 2px; font: 500 11.5px/1.2 var(--sans); font-style: normal; color: var(--k-text-3);
+    &[data-state="in"] { color: #34d399; } }
+  .feed-head.sys { padding: 10px 12px; border-radius: 12px; background: rgb(52 211 153 / .07); box-shadow: inset 0 0 0 1px rgb(52 211 153 / .16);
+    & > b:first-child { display: block; margin-bottom: 2px; color: var(--k-text); } }
+  .line-chart .tr { stroke: #0b0b0d; stroke-width: 1.2;
+    &.buy { fill: #34d399; } &.sell { fill: #f87171; } }
+}
