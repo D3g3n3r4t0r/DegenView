@@ -24,8 +24,9 @@ def _signals(entries, exits):
 
 def test_follow_trades_only_after_the_alert_with_costs(monkeypatch):
     prices = [1.0] * 40 + [1.0, 1.0, 2.0, 2.0, 3.0, 3.0]
-    # bar 10 (before the alert) and bar 41 entries, exit at bar 43
-    monkeypatch.setattr(system.radar, "spot_signals", _signals({10, 41}, {43}))
+    # a trade opened and closed before the alert (bars 10-20) does not count;
+    # then entry at bar 41, exit at bar 43
+    monkeypatch.setattr(system.radar, "spot_signals", _signals({10, 41}, {20, 43}))
     r = system.follow(_bars(prices), system.CANDIDATES[0], T0, now=T0 + 6 * B)
     assert r["trades"] == 1 and r["state"] == "out"
     # entry at open of bar 42 (2.0), exit at open of bar 44 (3.0), costs both ways
