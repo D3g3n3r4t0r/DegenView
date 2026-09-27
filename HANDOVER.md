@@ -3519,3 +3519,14 @@ Wallet simulato: `?wallet=sim` su `/api/profile` e `/api/wallets/total`
 Real/Simulated nel profilo salvato in localStorage `lae:wallet`, header con
 etichetta SIM (`seed-0154`). DeepSeek PR review: `deepseek-chat` di default
 (il reasoner consumava tutti i token e rispondeva vuoto).
+
+**2026-09-27 — Lorenzo: "da oggi considera deep seek un tuo aiutante costante [...] obbiettivo risparmiare token qui; e poi voglio un repilogo giornaliero [...] su telegram", "crea un ambiente di scambio per informazioni", "mettiamo possibilità di parlare con deepseek su telegram?".**
+Fatto: chat Telegram con DeepSeek (`deepseek_desk.py`, long polling in
+`main._telegram_chat_loop`, solo chat note, tetto 300k token/giorno),
+registro dei token per giorno/tipo e riepilogo alle 21 (con le revisioni PR
+lette dai marcatori `deepseek-usage` nei commenti GitHub), `DEEPSEEK.md` come
+file di scambio e storico delle sue revisioni. NON fatto: DeepSeek che scrive
+codice e apre PR da solo (issue con etichetta `deepseek` → Action → PR): il
+classificatore dei permessi di Claude l'ha bloccato come agente autonomo;
+decide Lorenzo. Il risparmio "qui" è indiretto: Claude non può chiamare
+DeepSeek dalla sua sandbox.

@@ -132,6 +132,7 @@ from app.notify import telegram
 from app.notify import alert_log
 from app.notify import alerts
 from app.notify import weekly_recap
+from app.notify import deepseek_desk
 from app.notify.alerts import find_new_signals, format_signal_message, record_alert_sent, get_all_stats_for_entry
 import app.price_alerts as price_alerts_store
 from app.models import PriceAlert, PriceAlertCondition, StrategySignal
@@ -1167,6 +1168,95 @@ async def _watchdog_loop() -> None:
             ))
 
 
+async def _deepseek_context(chat_id: str) -> str:
+    """What the Telegram assistant knows: the system, the latest alerts, and
+    (when the chat belongs to an account) that account's wallet and autotrader."""
+    parts = []
+    for kind in ("meme", "gem"):
+        b = onchain_alert_track.board(kind, limit=12)
+        sysb, live = b["system"], b["system"].get("live") or {}
+        parts.append(f"[{kind}] sistema scelto: {sysb['chosen']} ({sysb['decided_by']}); su {live.get('n', 0)} alert "
+                     f"mediana {live.get('median')}, in profitto {live.get('positive')}, posizioni aperte {live.get('holding')}")
+        for it in b["items"]:
+            sv = it.get("system") or {}
+            parts.append(f"  {it['symbol']} ({it['chain']}) {it['age_h']}h fa: ora {it['now']}, max {it['max']}, "
+                         f"sistema {sv.get('state')} ret {sv.get('ret')}{' RUG' if it['gone'] else ''}")
+    user = next((u for u in auth.list_users() if u.telegram_chat_id and u.telegram_chat_id == chat_id), None)
+    if user:
+        try:
+            snap = await asyncio.wait_for(_wallet_snapshot(user), 20)
+            parts.append(f"Wallet di chi scrive: totale ${snap['total']}, cassa ${snap['cash']}, per catena {snap['by_chain']}, "
+                         f"posizioni {[(p['symbol'], p['chain'], round(p['value_usd'] or 0, 2)) for p in snap['positions'] if not p['hidden']][:15]}")
+        except Exception:
+            parts.append("Wallet di chi scrive: non letto ora.")
+        v = onchain_autotrader.view(user.id)
+        parts.append(f"Autotrader: modo {v['mode']}, quota {v['pct']}%, posizione {v['position']}, simulato {v['sim']}, "
+                     f"ultimi trade {[(t.get('side'), t.get('symbol'), t.get('ret'), t.get('why')) for t in v['trades'][:8]]}")
+    parts.append("Valori 'ret'/'now'/'max' sono frazioni: 0.25 = +25%.")
+    return "\n".join(parts)
+
+
+def _deepseek_chats() -> set[str]:
+    allowed = {c.strip() for c in (settings.telegram_chat_ids + "," + settings.telegram_dev_chat_ids).split(",") if c.strip()}
+    return allowed | {u.telegram_chat_id for u in auth.list_users() if u.telegram_chat_id}
+
+
+async def _telegram_chat_loop() -> None:
+    """Lorenzo: "mettiamo possibilita' di parlare con deepseek su telegram?".
+    Long polling (the bot has no webhook); only chats the site knows."""
+    if not settings.telegram_bot_token or not settings.deepseek_api_key:
+        return
+    base = f"https://api.telegram.org/bot{settings.telegram_bot_token}"
+    offset, bot = None, ""
+    async with httpx.AsyncClient(timeout=70.0) as client:
+        while True:
+            try:
+                if not bot:
+                    bot = ((await client.get(f"{base}/getMe")).json().get("result") or {}).get("username") or ""
+                r = await client.get(f"{base}/getUpdates", params={"timeout": 50, "offset": offset,
+                                                                   "allowed_updates": '["message"]'})
+                data = r.json()
+                if not data.get("ok"):
+                    logger.warning("telegram getUpdates: %s", data.get("description"))
+                    await asyncio.sleep(60)
+                    continue
+                for up in data.get("result") or []:
+                    offset = up["update_id"] + 1
+                    msg = up.get("message") or {}
+                    chat_id = str((msg.get("chat") or {}).get("id") or "")
+                    text = deepseek_desk.wants_answer(msg, bot)
+                    if text and chat_id in _deepseek_chats():
+                        asyncio.create_task(_telegram_reply(chat_id, text))
+            except Exception:
+                logger.exception("telegram chat loop")
+                await asyncio.sleep(10)
+
+
+async def _telegram_reply(chat_id: str, text: str) -> None:
+    try:
+        reply = await deepseek_desk.answer(chat_id, text, await _deepseek_context(chat_id))
+    except Exception as exc:
+        logger.exception("deepseek chat")
+        reply = f"DeepSeek non risponde ora ({type(exc).__name__})."
+    await telegram.send_to(chat_id, _html.escape(reply, quote=False))
+
+
+async def _deepseek_recap_loop() -> None:
+    """Lorenzo: "voglio un riepilogo giornaliero di quanti token ci ha fatto
+    risparmiare, su telegram". Every evening at deepseek_desk.RECAP_HOUR."""
+    while True:
+        try:
+            day = deepseek_desk.recap_due(_time.time())
+            if day:
+                rows = dict(deepseek_desk._state["days"].get(day) or {})
+                rows["pr_review"] = await deepseek_desk.pr_review_usage(*deepseek_desk.day_bounds(day))
+                await telegram.send_message(deepseek_desk.recap_text(day, rows))
+                deepseek_desk.mark_sent(day)
+        except Exception:
+            logger.exception("deepseek recap")
+        await asyncio.sleep(600)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     asyncio.create_task(_notify_deploy())
@@ -1176,6 +1266,8 @@ async def lifespan(app: FastAPI):
     t6 = asyncio.create_task(limit_order_loop())
     t7 = asyncio.create_task(_sniper_onchain_bridge_loop())
     t4 = asyncio.create_task(_weekly_recap_loop())
+    asyncio.create_task(_telegram_chat_loop())
+    asyncio.create_task(_deepseek_recap_loop())
     t5 = asyncio.create_task(_watchdog_loop())
     radar_tasks = [asyncio.create_task(onchain_radar.radar_loop()),
                    asyncio.create_task(onchain_listings.listings_loop()),

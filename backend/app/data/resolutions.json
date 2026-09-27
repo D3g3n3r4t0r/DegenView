@@ -1901,5 +1901,17 @@
       "frontend/static/onchain/api.js",
       "frontend/static/onchain/app.css"
     ]
+  },
+  "seed-0155": {
+    "status": "risolto",
+    "at": 1790532070,
+    "summary": "Scrivendo al bot in privato (o nel gruppo con /ask, menzionandolo o rispondendogli) risponde DeepSeek, in italiano, con i dati del sito: sistema scelto e come sta andando, gli ultimi alert, e se la chat e' collegata a un account anche wallet e autotrader. Ricorda gli ultimi messaggi; /reset li cancella; tetto di 300.000 token al giorno. Rispondono solo le chat che il sito conosce. Ogni sera alle 21 arriva su Telegram il riepilogo: richieste e token per tipo di lavoro (chat, revisioni dei token, revisioni delle PR), quanto e' costato con DeepSeek e quanto sarebbe costato con Claude a prezzi di listino. DEEPSEEK.md nel repo e' lo scambio fra Claude e DeepSeek: cosa fa, come va, quando dargli piu' lavoro.",
+    "files": [
+      "backend/app/notify/deepseek_desk.py",
+      "backend/app/main.py",
+      "backend/app/trading/onchain/ai_review.py",
+      ".github/scripts/deepseek_review.py",
+      "DEEPSEEK.md"
+    ]
   }
 }
