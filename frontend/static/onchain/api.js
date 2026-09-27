@@ -115,14 +115,22 @@ export const getRadar = () => request("/api/onchain/radar");
 export const getLeaderboard = () => request("/api/onchain/leaderboard");
 export const getAlerts = (kind) => request(`/api/onchain/alerts/${kind}`);
 export const getAutotrader = () => request("/api/onchain/autotrader");
-export const getProfile = () => request("/api/profile", { timeoutMs: 25000 });
+/* Which wallet the profile and the header show: the real ones or the
+ * autotrader's simulated one. A per-device choice. */
+export const walletMode = () => { try { return localStorage.getItem("lae:wallet") === "sim" ? "sim" : "real"; } catch { return "real"; } };
+export const setWalletMode = (m) => {
+  try { localStorage.setItem("lae:wallet", m); } catch { /* private mode: this page only */ }
+  document.dispatchEvent(new CustomEvent("lae:wallet-mode", { detail: m }));
+};
+const walletQ = () => (walletMode() === "sim" ? "?wallet=sim" : "");
+export const getProfile = () => request(`/api/profile${walletQ()}`, { timeoutMs: 25000 });
 export const updateProfile = (body) => request("/api/profile", { method: "PATCH", body });
 export const uploadAvatar = (body) => request("/api/profile/avatar", { method: "POST", body, timeoutMs: 30000 });
 export const walletChallenge = (body) => request("/api/wallets/link/challenge", { method: "POST", body });
 export const walletLink = (body) => request("/api/wallets/link", { method: "POST", body });
 export const getLinkedWallets = () => request("/api/wallets/linked");
 export const getDeposit = () => request("/api/wallets/deposit");
-export const getWalletsTotal = () => request("/api/wallets/total", { timeoutMs: 30000 });
+export const getWalletsTotal = () => request(`/api/wallets/total${walletQ()}`, { timeoutMs: 30000 });
 export const buildUserSwap = (body) => request("/api/wallets/swap/build", { method: "POST", body, timeoutMs: 30000 });
 export const walletUnlink = (kind, address) => request(`/api/wallets/link/${kind}/${address}`, { method: "DELETE" });
 export const setAutotrader = (body) => request("/api/onchain/autotrader", { method: "PATCH", body });

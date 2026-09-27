@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0154", "Un 'wallet simulato' da selezionare per vedere il saldo simulato",
+     "Lorenzo: 'il fatto che sto simulando il denaro deve essere possibile selezionando \"wallet simulato\", cosi' visualizzo il saldo simulato e posso vedere realmente cosa succede'.",
+     "media"),
     ("seed-0153", "Il grafico del wallet: periodi 1h-8h e legato al valore reale",
      "Lorenzo: 'il wallet deve avere anche l'andamento 1h 2h 3h 4h 8h; e il grafico deve essere realizzato seguendo il valore del portafoglio, strettamente legato'.",
      "media"),
