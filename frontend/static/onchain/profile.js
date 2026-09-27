@@ -54,6 +54,21 @@ function paintMe(p) {
 
 let scrub = null;
 
+/* The simulated wallet: the autotrader's virtual USDC, trading on real
+ * quotes. Not started yet: one tap starts it. Started but the autotrader
+ * is not on Simulated: it says the balance is standing still. */
+function simNote(d) {
+  if (!d.sim) {
+    return `<div class="pf-simnote"><p>No simulated wallet yet. It starts with your Robinhood USDG (or $100), then the system trades it on every alert with real quotes: nothing is sent.</p>
+      <button type="button" class="pf-save" data-sim-start>Start simulated wallet</button></div>`;
+  }
+  const since = new Date((d.tracking_since ?? Date.now() / 1000) * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const ret = d.sim.ret == null ? "" : ` · ${d.sim.ret >= 0 ? "+" : ""}${(d.sim.ret * 100).toFixed(2)}% since start`;
+  return `<p class="pf-simnote">Started with $${d.sim.start.toFixed(2)}${ret}. ${d.sim.autotrader === "sim"
+    ? "The system is trading it now."
+    : `Autotrader is ${d.sim.autotrader === "off" ? "off" : "on real"}: this balance stands still. <button type="button" class="pf-link" data-sim-start>Resume simulation</button>`}</p>`;
+}
+
 /* Touching the line: the big number and the change become those of the
  * reading under the finger, with its time; letting go shows now again. */
 function bindScrub() {
@@ -217,6 +232,11 @@ function paint() {
       </ul>
     </header>
     <section class="pf-value">
+      <nav class="pf-wallet" aria-label="Wallet">
+        <button type="button" data-wallet="real" aria-pressed="${d.wallet !== "sim"}">Real wallet</button>
+        <button type="button" data-wallet="sim" aria-pressed="${d.wallet === "sim"}">Simulated wallet</button>
+      </nav>
+      ${d.wallet === "sim" ? simNote(d) : ""}
       <div class="pf-top">
         <p class="pf-total"><b>${whole}</b><span>${cents}</span></p>
       </div>
@@ -224,7 +244,7 @@ function paint() {
       <p class="pf-change" data-sign="${(ch ?? 0) >= 0 ? "up" : "down"}">${ch == null ? "" : `${signed(ch)} <span>${RANGES.find(([k]) => k === range)[1]}</span>`}</p>
       <div class="pf-chart">${chart(d.history?.[range])}</div>
       <nav class="pf-range" aria-label="Period">${RANGES.map(([k, l]) => `<button type="button" data-range="${k}" aria-pressed="${k === range}">${l}</button>`).join("")}</nav>
-      ${d.tracking_since ? `<p class="pf-since">Every token on every chain, read every minute while the app is open (every 5 otherwise) since ${new Date(d.tracking_since * 1000).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</p>` : ""}
+      ${d.tracking_since ? `<p class="pf-since">${d.wallet === "sim" ? "The simulated wallet at real prices, read every minute while the app is open and at every round of the system" : "Every token on every chain, read every minute while the app is open (every 5 otherwise)"} since ${new Date(d.tracking_since * 1000).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</p>` : ""}
     </section>
     <section class="pf-cash">
       <span class="pf-cash-ic" aria-hidden="true">$</span>
@@ -292,6 +312,12 @@ export function mountProfile({ go: goTo } = {}) {
     load();
   }, 60_000);
   root.addEventListener("click", (event) => {
+    const wb = event.target.closest("[data-wallet]");
+    if (wb) { api.setWalletMode(wb.dataset.wallet); load(); return; }
+    if (event.target.closest("[data-sim-start]")) {
+      api.setAutotrader({ mode: "sim" }).then(() => { api.setWalletMode("sim"); load(); }, (err) => alert(err.message));
+      return;
+    }
     const r = event.target.closest("[data-range]");
     if (r) { range = r.dataset.range; paint(); return; }
     const cf = event.target.closest("[data-chainf]");
