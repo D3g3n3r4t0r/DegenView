@@ -137,3 +137,41 @@ export function tokenRow({ id, symbol, name, chain, token, image, cap, change, p
     <span class="trow-num"><b>${usdShort(cap)}</b>${pill ?? changePill(change)}</span>
   </button></li>`;
 }
+
+/** One strategy's trade on one alert: entry, exit with the reason, and the
+ *  return after fees. Shared by the alert cards and the token page, so the
+ *  two cannot drift apart. */
+const WHY = { signal: "trend turned", crash: "crash inside one 5-min candle", "48h": "48h window over", rug: "pool vanished" };
+
+function afterAlert(t, alertAt) {
+  const m = Math.max(0, Math.round((t - alertAt) / 60));
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  const rest = m % 60;
+  return rest ? `${h}h ${rest}m` : `${h}h`;
+}
+
+export function strategyTrade(s, alertAt, chosen) {
+  const ev = s.events ?? [];
+  const buy = ev.find((v) => v.side === "buy");
+  const sell = ev.filter((v) => v.side === "sell" || v.side === "rug").slice(-1)[0];
+  const entry = buy
+    ? `Bought ${afterAlert(buy.t, alertAt)} after the alert`
+    : s.done ? "Did not enter" : "No entry yet";
+  let exit = "";
+  if (sell) {
+    const why = WHY[sell.why] ?? "sold";
+    exit = `<small>Sold ${afterAlert(sell.t, alertAt)} after · ${escapeHtml(why)}</small>`;
+  } else if (s.state === "in") {
+    exit = `<small>Still in the trade</small>`;
+  }
+  const ret = s.ret == null ? "—" : `${s.ret > 0 ? "+" : ""}${Math.round(s.ret * 100)}%`;
+  const sign = s.ret == null ? "" : s.ret >= 0 ? "up" : "down";
+  return `<div class="strat"${chosen && chosen === s.label ? " data-chosen" : ""}>
+    <b>${escapeHtml(s.label)}</b>
+    <b data-sign="${sign}">${ret}</b>
+    <small>${escapeHtml(entry)}</small>
+    <small>${s.state === "in" ? "open" : "after fees"}</small>
+    ${exit}
+  </div>`;
+}
