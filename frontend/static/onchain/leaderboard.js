@@ -90,7 +90,12 @@ function paint(animate) {
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const painted = root.querySelector("[data-board-podium]").childElementCount > 0;
   // Rank changes morph with the View Transitions API; FLIP where it is missing.
-  if (animate && painted && document.startViewTransition && !reduced && document.visibilityState === "visible") {
+  // A view transition snapshots the whole page: only when the board is on
+  // screen and no sheet is open, or every 10s poll flashed whatever view
+  // was showing, sheets included (Lorenzo, 27/09: "ogni tanto flasha la
+  // schermata e appaiono sovrapposizioni").
+  const onScreen = root.offsetParent !== null && !document.querySelector("dialog[open]");
+  if (animate && painted && onScreen && document.startViewTransition && !reduced && document.visibilityState === "visible") {
     document.startViewTransition(() => render(false));
     return;
   }
