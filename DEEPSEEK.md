@@ -151,6 +151,11 @@ Lorenzo: vedi HANDOVER.
 | 27/09 | PR #155, prima revisione | 5 osservazioni, 0 valide: diceva che un test non isolava la chiave (la toglieva già) e che un altro chiamava `main()` (chiamava `ask()`). |
 
 | 27/09 | issue #173, primo lavoro di codice (righe del Database cliccabili) | corretto al primo colpo: 2 file, diff pulito, nessuna correzione di Claude |
+| 27/09 | issue #176 (pannello agente) | fallita due volte per un difetto del lavoratore (`path=` davanti al percorso), poi corretta al primo colpo |
+| 27/09 | issue #177 (market cap globale) | prima fallita per un mio `Tests:` dentro il compito, poi una risposta vuota su `path/to/file` accettata dal lavoratore; al terzo giro corretta senza ritocchi |
+| 27/09 | issue #178 (pagina token completa) | buona: corretti a mano sistema dei meme usato per le gemme, righe 'not ranked' sui meme, file segnaposto |
+| 27/09 | issue #182 (memoria dei rug) | buona: corretto a mano il taglio a blocchi della classe maggiore, file segnaposto |
+| 27/09 | report bug dalla chat Telegram (10 punti) | 1 bug vero (punti 1-2, con causa letta male), 4 non-bug, 3 domande di strategia |
 
 Regola per dargli più lavoro: tre revisioni di fila con almeno un'osservazione
 giusta e nessuna inventata → gli si affida anche la prima stesura dei testi in
