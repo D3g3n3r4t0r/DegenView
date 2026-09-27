@@ -164,6 +164,18 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0181", "Niente nomi delle strategie: solo i rendimenti, sempre il migliore",
+     "Lorenzo: 'trend hf o trend ema non voglio vederli, il sistema e' proprietario nostro per cui non indichiamo cosa usiamo, semplicemente i rendimenti' / 'l'importante e' proporre la migliore delle due (internamente) proponendo sempre il miglior risultato'.",
+     "alta"),
+    ("seed-0180", "Podio cartoonesco e liste troppo grandi",
+     "Lorenzo (screenshot della classifica gemme): 'qui e' tutto grosso, fin troppo, e il podio mi fa schifo cartoonesco, rifallo in stile cyberpunk come il logo del nostro sito'.",
+     "media"),
+    ("seed-0179", "Profilo: tutto in una schermata senza scorrere",
+     "Lorenzo (screenshot del profilo): 'in questa schermata voglio vedere tutto senza dover scrollare giu''.",
+     "media"),
+    ("seed-0178", "La coppa nella barra delle strategie non ha senso, va sul podio",
+     "Lorenzo: 'l'icona della coppa dove ci sono le strategie non ha senso, piuttosto va nel podio'.",
+     "bassa"),
     ("seed-0176", "Non voglio selezionare le strategie: mostrami i backtest migliori",
      "Lorenzo: 'non voglio selezionare le strategie, il sistema deve essere gestito in modo invisibile, semplicemente mostrami i backtest migliori delle strategie disponibili'.",
      "media"),
