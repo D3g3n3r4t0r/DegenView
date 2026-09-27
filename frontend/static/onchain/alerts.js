@@ -28,7 +28,8 @@ const capNow = (a) => (a.gone ? null : a.cap0 && a.now != null ? a.cap0 * (1 + a
 // Leaderboard order. Lorenzo: "voglio le performance della strategia
 // ingresso e uscita automatica": the system first, then the raw signal.
 const SORTS = { system: "System", now: "Now", best: "Best" };
-const state = { data: {}, board: null, kind: "meme", period: 7, sort: "system" };
+const BT_LABELS = ["Trend EMA", "Trend HF", "RSI+BB", "RSI+BB L/S"];
+const state = { data: {}, board: null, kind: "meme", period: 7, sort: "backtest", bt: "Trend EMA" };
 
 /** The alerts on one token, for its page. */
 export function alertsFor(chain, token) {
@@ -178,6 +179,24 @@ function rows() {
   const key = state.sort;
   const val = (a) => (key === "system" ? a.system?.ret : key === "best" ? a.max : a.now);
   const items = (state.data.meme?.items ?? []).filter((a) => a.at >= since && val(a) != null);
+  if (key === "backtest") {
+    // Lorenzo: "non esiste che su queste crypto non ci sia un backtest delle
+    // strategie". Each alert carries the four strategies' results on its own
+    // 5-minute chart; the ones the chosen strategy actually traded come first.
+    const r = (a) => (a.backtests?.rows ?? []).find((x) => x.label === state.bt);
+    const tested = (a) => { const x = r(a); return x && (x.trades > 0 || x.in_position); };
+    return items.sort((a, b) => (tested(b) - tested(a)) || (tested(a) ? r(b).return_pct - r(a).return_pct : b.at - a.at))
+      .map((a) => {
+        const x = r(a);
+        const t = tested(a);
+        return { id: registerAlert(a, "meme"), symbol: a.symbol, name: a.name, chain: a.chain, token: a.token_address,
+          image: a.image, label: t ? pct(x.return_pct / 100) : "—",
+          sub: `${age(a.at)[0]} ago · at ${usdShort(a.cap0)} · held ${pct(a.now)}`,
+          sign: t ? sign(x.return_pct / 100) : "", best: null,
+          sys: t ? `${x.trades} trade${x.trades === 1 ? "" : "s"} · win ${Math.round(x.win_rate ?? 0)}%`
+            : a.backtests ? "no signal on this chart" : "backtest pending" };
+      });
+  }
   if (key === "system") {
     // Lorenzo: "qui voglio vedere i backtest!!! non voglio vedere 0%". A
     // system that never entered has ret 0, which is not a result: those rows
@@ -210,14 +229,16 @@ function paintTop() {
   const w = (state.board?.track?.horizons ?? []).find((h) => h.days === 7 && h.top?.n);
   root.querySelector("[data-top-info]").innerHTML = INFO_IC + (gem
     ? (w ? `Top 10 median ${pct(w.top.median)} after 7 days on the board.` : "Scored on code, research and tokenomics. Research, not advice.")
-    : state.sort === "system"
-      ? `The system (${escapeHtml(state.data.meme?.system?.chosen ?? "trend-following")}): enters and exits on its own signals after each alert, fees paid.`
-      : "Returns if you had bought when each Telegram alert arrived.")
+    : state.sort === "backtest"
+      ? `${state.bt} backtested on each alert's 5-minute chart, every entry and exit, fees paid.`
+      : state.sort === "system"
+        ? `The system (${escapeHtml(state.data.meme?.system?.chosen ?? "trend-following")}): enters and exits on its own signals after each alert, fees paid.`
+        : "Returns if you had bought when each Telegram alert arrived.")
     + (gem ? "" : " Below: each alert, as the strategy in use traded it.");
   const hero = root.querySelector("[data-top-hero]");
   // The podium is a hall of fame of backtests: a row the system never traded
   // has nothing to show there.
-  const podium = state.sort === "system" ? list.filter((x) => x.label !== "—") : list;
+  const podium = state.sort === "system" || state.sort === "backtest" ? list.filter((x) => x.label !== "—") : list;
   const top3 = podium.slice(0, 3).map((x) => ({ id: x.id, symbol: x.symbol, value: gem ? `${x.label} pts` : x.label,
     logoHtml: tile(x.symbol, x.image, x.chain, x.token) }));
   if (!gem) {
@@ -232,6 +253,21 @@ function paintTop() {
     const same = hero.dataset.sig === sig;
     hero.dataset.sig = sig;
     renderPodium(hero, top3, { still: same });
+  }
+  let chips = root.querySelector("[data-bt-chips]");
+  if (!gem) {
+    if (!chips) {
+      chips = document.createElement("div");
+      chips.className = "bt-chips";
+      chips.dataset.btChips = "";
+      chips.setAttribute("role", "group");
+      chips.setAttribute("aria-label", "Strategy");
+      root.querySelector("[data-top-list]").before(chips);
+    }
+    chips.hidden = false;
+    chips.innerHTML = [...BT_LABELS, "System"].map((l) => `<button type="button" data-bt="${escapeHtml(l)}" aria-pressed="${String(l === state.bt)}">${escapeHtml(l)}</button>`).join("");
+  } else if (chips) {
+    chips.hidden = true;
   }
   const seg = root.querySelector(".seg");
   if (seg) seg.hidden = true;
@@ -344,6 +380,12 @@ export function mountAlerts() {
     if (event.target.closest("[data-sort]")) {
       const order = Object.keys(SORTS);
       state.sort = order[(order.indexOf(state.sort) + 1) % order.length];
+      paintTop();
+    }
+    const bt = event.target.closest("[data-bt]");
+    if (bt) {
+      state.bt = bt.dataset.bt;
+      state.sort = state.bt === "System" ? "system" : "backtest";
       paintTop();
     }
   });

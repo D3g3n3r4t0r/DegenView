@@ -1030,3 +1030,12 @@
 /* Nothing may make the phone page pan sideways: clip, unlike hidden, keeps position: sticky working. */
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 html, body { overflow-x: clip; }
+@layer skin {
+  .bt-chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 0 0 10px; }
+  .bt-chips button { flex: none; padding: 6px 12px; border: 0; border-radius: 999px; background: rgb(255 255 255 / .06); color: var(--k-text-2); font: 600 13px var(--sans); }
+  .bt-chips button[aria-pressed="true"] { background: var(--k-text); color: #0b0b0d; }
+  .bt-table { inline-size: 100%; margin: 12px 0 0; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .bt-table caption { text-align: start; color: var(--k-text-3); padding: 0 0 6px; }
+  .bt-table th, .bt-table td { padding: 6px 4px; text-align: end; border-block-end: 1px solid rgb(255 255 255 / .05); }
+  .bt-table th:first-child, .bt-table td:first-child { text-align: start; }
+}
