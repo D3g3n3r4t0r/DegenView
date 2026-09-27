@@ -622,23 +622,56 @@ AI_SYSTEM = (
 )
 
 
-async def ai_review(token: dict, site: dict, links: dict) -> dict | None:
-    """Parere di Claude sul sito. None se la chiave non c'e'."""
-    if not settings.anthropic_api_key:
-        return None
-    from anthropic import AsyncAnthropic
+# DeepSeek reads less of the page: the top of a site says what it is, and
+# the rest mostly repeats it. ~1k tokens instead of ~3k.
+AI_SITE_CHARS_DEEPSEEK = 4000
+_ai_cache: dict[str, tuple[float, dict]] = {}
+AI_CACHE_S = 7 * 86400
 
+
+async def _ai_review_deepseek(token: dict, site: dict, prompt_head: str) -> dict:
+    """The same judgement on DeepSeek, cached per site text: copies of a
+    token behind the same page cost one read."""
+    import hashlib
+    from app.notify import deepseek_desk
+    text = (site.get("text") or "")[:AI_SITE_CHARS_DEEPSEEK]
+    key = hashlib.sha1(f"{site.get('final_url')}|{text}".encode()).hexdigest()
+    hit = _ai_cache.get(key)
+    if hit and time.time() - hit[0] < AI_CACHE_S:
+        return hit[1]
+    try:
+        raw = await deepseek_desk.ask(
+            [{"role": "system", "content": AI_SYSTEM + ' Answer with one JSON object only: {"legit": bool, "score": int, '
+                                                      '"reason": string, "red_flags": [string]}.'},
+             {"role": "user", "content": f"{prompt_head}\n\n<site_text>\n{text}\n</site_text>"}],
+            kind="scanner", max_tokens=200, json_mode=True)
+        out = json.loads(raw)
+        out["score"] = max(0, min(10, int(out.get("score") or 0)))
+    except Exception as exc:
+        logger.info("legit: DeepSeek non raggiungibile: %s", exc)
+        return {"error": "DeepSeek unreachable"}
+    out["by"] = "deepseek"
+    _ai_cache[key] = (time.time(), out)
+    return out
+
+
+async def ai_review(token: dict, site: dict, links: dict) -> dict | None:
+    """Parere sul sito: Claude con la sua chiave, altrimenti DeepSeek.
+    None se non c'e' nessuna delle due."""
     socials = ", ".join(f"{s['type']}: {s['url']}" for s in links.get("socials") or []) or "none"
     github = links.get("github_detail") or "none"
-    prompt = (
+    head = (
         f"Token: {token.get('name')} ({token.get('symbol')}) on {token.get('chain')}\n"
         f"Contract: {token.get('token_address')}\n"
         f"Market cap: ${token.get('market_cap') or 0:,.0f} · liquidity: ${token.get('liquidity_usd') or 0:,.0f}\n"
         f"Social: {socials}\n"
         f"GitHub: {github}\n"
-        f"Website: {site.get('final_url')}\nPage title: {site.get('title')}\n\n"
-        f"<site_text>\n{site.get('text')}\n</site_text>"
+        f"Website: {site.get('final_url')}\nPage title: {site.get('title')}"
     )
+    if not settings.anthropic_api_key:
+        return await _ai_review_deepseek(token, site, head) if settings.deepseek_api_key else None
+    from anthropic import AsyncAnthropic
+    prompt = f"{head}\n\n<site_text>\n{site.get('text')}\n</site_text>"
     try:
         async with AsyncAnthropic(api_key=settings.anthropic_api_key, timeout=45.0) as client:
             msg = await client.beta.messages.create(
@@ -665,13 +698,20 @@ async def ai_review(token: dict, site: dict, links: dict) -> dict | None:
 
 
 def judge_ai(review: dict | None) -> dict:
+    by = "DeepSeek" if (review or {}).get("by") == "deepseek" else "Claude"
+    label = f"{by} on the site"
     if review is None:
-        return _check("ai", "Claude on the site", None, "not active")
+        return _check("ai", label, None, "not active")
     if review.get("error"):
-        return _check("ai", "Claude on the site", None, review["error"])
+        return _check("ai", label, None, review["error"])
     ok = bool(review.get("legit")) and review["score"] >= AI_SCORE_MIN
-    return _check("ai", "Claude on the site", ok, f"{review['score']}/10 · {review.get('reason', '')}".strip(" ·"),
-                  review["score"] * 10, red_flags=review.get("red_flags") or [])
+    detail = f"{review['score']}/10 · {review.get('reason', '')}".strip(" ·")
+    if by == "DeepSeek" and not settings.legit_ai_gate:
+        # In the shadow until its record earns it the gate (DEEPSEEK.md).
+        # No score either: a shadow verdict must not move the report card.
+        return _check("ai", label, None, f"{detail} (not blocking yet)", None,
+                      red_flags=review.get("red_flags") or [], shadow_ok=ok)
+    return _check("ai", label, ok, detail, review["score"] * 10, red_flags=review.get("red_flags") or [])
 
 
 # ----------------------------------------------------------------- insieme
@@ -759,7 +799,7 @@ async def assess(token: dict, links: dict, client: httpx.AsyncClient) -> dict:
     ai = judge_ai(review)
     out["checks"].append(ai)
     if ai["ok"] is False:
-        return done("fail", f"Claude: {review.get('reason') or 'not convincing'}")
+        return done("fail", f"{ai['label'].split()[0]}: {review.get('reason') or 'not convincing'}")
     out["report"] = report_card(out["checks"])
     cap = float(token.get("market_cap") or 0)
     if token.get("exception"):

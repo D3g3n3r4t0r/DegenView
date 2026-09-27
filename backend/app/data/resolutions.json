@@ -1913,5 +1913,18 @@
       ".github/scripts/deepseek_review.py",
       "DEEPSEEK.md"
     ]
+  },
+  "seed-0156": {
+    "status": "risolto",
+    "at": 1790532572,
+    "summary": "Primo passo del piano. Ogni meme segnalata viene giudicata da DeepSeek: rischio rug da 0 a 100, fino a tre campanelli d'allarme, tema. Per spendere poco giudica solo i token gia' segnalati (non ogni pool nuovo), una riga di dati ciascuno e niente pagine web, dieci per richiesta con le stesse istruzioni (DeepSeek fa pagare un decimo la parte ripetuta), una volta sola, con un tetto giornaliero: pochi centesimi al mese. Per ora e' in ombra: non filtra niente, e il riepilogo delle 21 confronta il rischio con cosa e' successo davvero (quanti rug e che ritorno a 24h tra rischio alto, medio e basso). Diventera' un filtro solo se separa davvero i rug. Anche la lettura del sito delle gemme, prima fatta da Claude Opus e spenta senza chiave, ora la fa DeepSeek su un terzo del testo e con una memoria per pagina: il parere si vede nella pagella ma non blocca finche' non si dimostra affidabile.",
+    "files": [
+      "backend/app/trading/onchain/ai_scan.py",
+      "backend/app/trading/onchain/legit.py",
+      "backend/app/trading/onchain/alert_track.py",
+      "backend/app/notify/deepseek_desk.py",
+      "backend/app/main.py",
+      "backend/app/config.py"
+    ]
   }
 }

@@ -96,6 +96,7 @@ from app.models import (
 from app.trading.onchain import aggregator as onchain_aggregator
 from app.trading.onchain import balances as onchain_balances
 from app.trading.onchain import deposit as onchain_deposit
+from app.trading.onchain import ai_scan as onchain_ai_scan
 from app.trading.onchain import execute as onchain_execute
 from app.trading.onchain import send as onchain_send
 from app.trading.onchain import jito as onchain_jito
@@ -1241,6 +1242,17 @@ async def _telegram_reply(chat_id: str, text: str) -> None:
     await telegram.send_to(chat_id, _html.escape(reply, quote=False))
 
 
+async def _ai_scan_loop() -> None:
+    """DeepSeek's shadow judgement on each meme alert (ai_scan.py)."""
+    await asyncio.sleep(90)
+    while True:
+        try:
+            await onchain_ai_scan.run_once()
+        except Exception:
+            logger.exception("ai scan")
+        await asyncio.sleep(onchain_ai_scan.EVERY_S)
+
+
 async def _deepseek_recap_loop() -> None:
     """Lorenzo: "voglio un riepilogo giornaliero di quanti token ci ha fatto
     risparmiare, su telegram". Every evening at deepseek_desk.RECAP_HOUR."""
@@ -1250,7 +1262,7 @@ async def _deepseek_recap_loop() -> None:
             if day:
                 rows = dict(deepseek_desk._state["days"].get(day) or {})
                 rows["pr_review"] = await deepseek_desk.pr_review_usage(*deepseek_desk.day_bounds(day))
-                await telegram.send_message(deepseek_desk.recap_text(day, rows))
+                await telegram.send_message(deepseek_desk.recap_text(day, rows) + "\n\n" + onchain_ai_scan.recap_line())
                 deepseek_desk.mark_sent(day)
         except Exception:
             logger.exception("deepseek recap")
@@ -1268,6 +1280,7 @@ async def lifespan(app: FastAPI):
     t4 = asyncio.create_task(_weekly_recap_loop())
     asyncio.create_task(_telegram_chat_loop())
     asyncio.create_task(_deepseek_recap_loop())
+    asyncio.create_task(_ai_scan_loop())
     t5 = asyncio.create_task(_watchdog_loop())
     radar_tasks = [asyncio.create_task(onchain_radar.radar_loop()),
                    asyncio.create_task(onchain_listings.listings_loop()),
