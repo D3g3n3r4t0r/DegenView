@@ -1,3 +1,7 @@
+@layer skin {
+  .pj-open { all: unset; display: contents; cursor: pointer; }
+}
+
 /*
  * The app's skin (27/09). Request: "l'app deve essere unica e gestita cosi'
  * graficamente e come layout" with four screenshots of a phone trading app,
