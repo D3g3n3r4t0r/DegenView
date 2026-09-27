@@ -142,6 +142,17 @@ con la difficolta'. Regole che Lorenzo ha chiesto esplicitamente:
 - Risposte sintetiche: dire cosa e' cambiato e cosa resta, senza riepiloghi
   lunghi ne' ripetizioni di quanto gia' detto.
 
+## DeepSeek scrive, Claude rivede
+
+Lorenzo, 27/09: "devi usare intensamente deepseek per aiutarti nel coding
+[...] voglio che deepseek riduca drasticamente il tuo consumo di token".
+Se l'ambiente ha `DEEPSEEK_API_KEY` e la rete permette `api.deepseek.com`,
+per ogni modifica non banale: scrivi il compito in poche righe, fai scrivere
+la bozza a DeepSeek (`python3 scripts/ds.py "compito" file[:a-b] ... --apply`),
+poi leggi solo il diff (`git diff`), fai girare le verifiche e correggi. Mai
+fidarsi senza test: DeepSeek sbaglia spesso i dettagli. Soldi, chiavi, firme
+ed esecuzione reale li scrive Claude.
+
 ## Lingua
 
 Lorenzo scrive in italiano. Rispondi in italiano; commenti e messaggi di commit
