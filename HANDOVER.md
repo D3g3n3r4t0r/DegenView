@@ -3641,3 +3641,14 @@ sistema trend che entra 1 volta su 12 alert e non ha preso Onhand +1304% (da
 analizzare se Lorenzo vuole); mediani top holder a 0 in `circostanze_rug`
 (forse dato mancante letto come 0); dopo il deploy verificare che il modello dei
 rug trovi esiti "non rug" (`memoria`).
+
+**2026-09-28 (notte, stessa chat) — Lorenzo: "fai analizzare perche' ha perso ONHAND", "i rendimenti vorrei vederli delle strategie [...] anche la chiusura della posizione", "qui voglio vedere i backtest!!! non voglio vedere 0%", app non centrata sul telefono. "la chat rimane questa".**
+#188/#189/#190/#191 unite (seed-0171..0174). Causa ONHAND: `system.follow` scartava
+l'ingresso della strategia caduto prima dell'alert (trend gia' partito) e aspettava
+un nuovo incrocio: ora lo raggiunge alla prima candela dopo l'alert; SYSTEM_VERSION 3
+ricalcola tutto, alert passati con 720 candele. Lavoratore: aggiunti i blocchi
+`APPEND` (per il CSS in fondo ai file). Voto dato a Lorenzo: DeepSeek esecutore 7/10,
+analista 3/10, lavoratore 5/10. Da fare: il lavoratore lanci anche i test vicini ai
+file toccati (#189 ha rotto `test_system.py` senza vederlo) e controlli che gli
+import `@onchain/x.js` esistano (#188). Da verificare sul sito: classifica del sistema
+riempita dopo il ricalcolo; se il sistema ora entra troppo tardi o troppo presto sui meme.

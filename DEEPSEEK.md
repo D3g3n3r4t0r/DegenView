@@ -156,6 +156,10 @@ Lorenzo: vedi HANDOVER.
 | 27/09 | issue #178 (pagina token completa) | buona: corretti a mano sistema dei meme usato per le gemme, righe 'not ranked' sui meme, file segnaposto |
 | 27/09 | issue #182 (memoria dei rug) | buona: corretto a mano il taglio a blocchi della classe maggiore, file segnaposto |
 | 27/09 | report bug dalla chat Telegram (10 punti) | 1 bug vero (punti 1-2, con causa letta male), 4 non-bug, 3 domande di strategia |
+| 27/09 | issue #188 (app centrata, zoom caselle) | fallita sul CSS (nessun punto unico dove inserire), poi importava `nozoom.js` senza crearlo: l'app sarebbe rimasta bianca. Modulo scritto da Claude |
+| 27/09 | issue #189 (trend gia' in corso all'alert) | logica giusta al primo colpo; non ha lanciato il test vecchio che fissava il comportamento sbagliato, ne' ricalcolato gli alert |
+| 27/09 | issue #190 (trade delle due strategie) | fallita sul CSS, poi buona; ricompariva lo 0% per chi non ha tradato |
+| 27/09 | issue #191 (niente 0% in classifica) | giusta al primo colpo |
 
 Regola per dargli più lavoro: tre revisioni di fila con almeno un'osservazione
 giusta e nessuna inventata → gli si affida anche la prima stesura dei testi in
