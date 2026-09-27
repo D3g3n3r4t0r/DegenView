@@ -1543,5 +1543,16 @@
       "backend/app/trading/onchain/ai_review.py",
       "backend/app/config.py"
     ]
+  },
+  "seed-0126": {
+    "status": "risolto",
+    "at": 1790491223,
+    "summary": "L'app e' una sola, nello stile degli screenshot: in alto avatar e saldo in dollari a sinistra, 'Deposit' (apre la ricezione) e campanella degli alert a destra; sotto, schede sottolineate per ogni sezione (Meme: Trending, Alerts, Scanner; Gemme: Rankings, Database; Classifica: Best alerts, Daily review); in basso una barra flottante in vetro con quattro icone (meme, gemme, classifica, portafoglio) e il tasto rotondo di ricerca che apre lo scambio con la scelta del token. Le righe dei meme hanno il logo quadrato con la chain nell'angolo, il bollino HOT, market cap in grande e la variazione in una pillola verde o rossa, con lo sfondo tinto. Nuova vista 'Classifica': il primo alert in oro con la corona, il secondo in argento, coriandoli, periodo 1D/1W/1M, meme o gemme, lista con le corone ai primi tre. Su computer la stessa colonna centrata.",
+    "files": [
+      "frontend/onchain-app.html",
+      "frontend/static/onchain/main.js",
+      "frontend/static/onchain/alerts.js",
+      "frontend/static/onchain/memes.js"
+    ]
   }
 }

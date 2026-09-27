@@ -234,7 +234,8 @@ def market_of(pair: dict | None) -> dict | None:
     out = {"buys_h1": buys, "sells_h1": sells, "sells_h24": _num(day.get("sells")) or 0.0,
            "buy_ratio": buys / (buys + sells) if buys + sells else None,
            "vol_h1": _num(vol.get("h1")), "chg_h1": _num(change.get("h1")), "chg_h6": _num(change.get("h6")),
-           "mcap": _num(pair.get("marketCap") or pair.get("fdv"))}
+           "mcap": _num(pair.get("marketCap") or pair.get("fdv")),
+           "image": (pair.get("info") or {}).get("imageUrl") or None}
     # Average ticket and turnover: what separates people from bots.
     out.update(meme_engine.derived(out, _num((pair.get("liquidity") or {}).get("usd"))))
     return out
@@ -803,7 +804,7 @@ def meme_board(now: float | None = None, limit: int = 20) -> dict:
         items.append({
             "chain": e["chain"], "symbol": e["symbol"], "name": e["name"], "token_address": e["token_address"],
             "pair_address": e["pair_address"], "pair_url": e["pair_url"], "seen_at": e["at"],
-            "reason": e["reason"], "failed": failed_key(e),
+            "reason": e["reason"], "failed": failed_key(e), "image": m.get("image"),
             "ret_since_seen": e["last"].get("ret"), "max_ret": e["max_ret"], "liquidity_usd": e["last"].get("liq"),
             "market_cap": m.get("mcap"), "buys_h1": m.get("buys_h1"), "sells_h1": m.get("sells_h1"),
             "vol_h1": m.get("vol_h1"), "score": read["score"], "win_chance": win_chance(e["features"]),
