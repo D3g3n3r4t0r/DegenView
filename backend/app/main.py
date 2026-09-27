@@ -3687,10 +3687,28 @@ _SIGNALS_TICK_S = 30
 _signals_started = _time.time()
 
 
+def _past_meme_alerts() -> list[dict]:
+    """Listings the Meme Sniper published fresh enough to go out on Telegram
+    (the same test as listings._publish), with the moment they went out."""
+    return [{**x, "at": x["found_at"]} for x in onchain_listings.recent()
+            if x.get("found_at") and x.get("created_at")
+            and x["found_at"] - x["created_at"] <= onchain_listings.NOTIFY_MAX_AGE_S]
+
+
+async def _backfill_alert_track() -> None:
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            n = await onchain_alert_track.backfill(client, _past_meme_alerts(), "meme")
+        logger.info("alert track: %d past meme alerts rebuilt from candles", n)
+    except Exception:
+        logger.exception("alert track: backfill failed")
+
+
 async def _onchain_signals_loop() -> None:
     """Prices for the alert track record, the listings' best strategy next
     to each meme alert, and once a day the reviewer."""
     from app.notify import telegram
+    asyncio.create_task(_backfill_alert_track())
     while True:
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:

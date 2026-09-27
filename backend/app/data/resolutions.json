@@ -1589,5 +1589,15 @@
       "frontend/static/onchain/detail.js",
       "frontend/static/onchain/format.js"
     ]
+  },
+  "seed-0129": {
+    "status": "risolto",
+    "at": 1790507880,
+    "summary": "La classifica degli alert meme era nata vuota con la nuova versione, ma il Meme Sniper aveva conservato sul server tutti i token pubblicati (fino a 300) con l'ora in cui era partito il messaggio. All'avvio il server li rimette in classifica e ricostruisce i rendimenti dalle candele storiche di GeckoTerminal, con le stesse regole di un alert dal vivo: ingresso al primo prezzo dopo il messaggio, poi 1, 2, 3, 4, 5, 6, 8, 12, 24 e 48 ore, il massimo e il valore di adesso. Chi e' ancora nei 14 giorni continua a essere seguito dal vivo. Ci vogliono alcuni minuti (GeckoTerminal accetta circa 30 richieste al minuto); se non risponde, riprova al riavvio successivo. I token senza scambi registrati restano fuori, invece di inventare un prezzo.",
+    "files": [
+      "backend/app/trading/onchain/alert_track.py",
+      "backend/app/main.py",
+      "backend/tests/test_alert_backfill.py"
+    ]
   }
 }
