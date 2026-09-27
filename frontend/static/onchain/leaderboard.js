@@ -239,7 +239,7 @@ function row(e) {
   </li>`;
 }
 
-function gemWhy(e) {
+export function gemWhy(e) {
   const blocks = [...PILLARS, ["traction", "Traction"]].map(([k, label]) => {
     const v = k === "traction" ? e.traction?.traction : e.pillars?.[k]?.score;
     if (v == null) return "";
@@ -346,7 +346,7 @@ function pillarBlock(e, k, label) {
     ${flags ? `<ul class="bd-flags">${flags}</ul>` : ""}</section>`;
 }
 
-function details(e) {
+export function details(e) {
   const chart = e.pair_url ? `<a href="${escapeHtml(e.pair_url)}" target="_blank" rel="noopener">Chart</a>` : "";
   const scan = e.scan_url ? `<a href="${escapeHtml(e.scan_url)}" target="_blank" rel="noopener">Security report</a>` : "";
   return `<header><b>${escapeHtml(e.name ?? e.symbol)}</b>

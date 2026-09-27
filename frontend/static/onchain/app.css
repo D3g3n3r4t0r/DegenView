@@ -1016,3 +1016,6 @@
 }
 @layer skin { .pj-score.is-out { opacity: .45; text-decoration: line-through; text-decoration-thickness: 1px; } }
 @layer skin { .off-board { color: #fbbf24; } }
+@layer skin {
+  .dt-links { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 8px 0 0; }
+}
