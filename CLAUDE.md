@@ -173,6 +173,12 @@ Come scrivere e gestire le issue (imparato il 27-28/09):
   (il branch viene sovrascritto).
 - Se l'Action non puo' aprire la PR (403), il branch c'e' comunque: la apre
   Claude da `deepseek/issue-N`, corregge sul branch, poi merge.
+- **Ogni volta che correggi una PR di DeepSeek, aggiungi la lezione** in
+  `.github/deepseek/LESSONS.md` (una riga: l'errore, la regola, il numero
+  della issue), nello stesso commit della correzione. Il lavoratore la passa
+  a DeepSeek in ogni compito. Lorenzo, 28/09: "istruisci deepseek per
+  migliorarlo nei suoi compiti ogni volta che sbaglia". Se una lezione non
+  basta (lo stesso errore torna), il controllo va messo nel lavoratore.
 - Il lavoratore fa girare anche i test che importano i moduli toccati,
   controlla la sintassi JS e che gli import `@onchain/` esistano: se uno di
   questi fallisce, DeepSeek riprova una volta e poi lo scrive nella issue.

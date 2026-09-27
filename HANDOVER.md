@@ -3669,3 +3669,10 @@ posteriori, detto nella nota). Pagina token: tabella per strategia + link al sit
 principale (`/?area=analizza&dex=SYM@chain:pool&interval=5m&strategy=...`,
 `openDeepLink()` in app.js al posto del ticker salvato). Il sistema trend (48h
 dopo l'alert) resta calcolato ma non e' piu' la vista predefinita.
+
+**2026-09-28 — Lorenzo: "istruisci deepseek per migliorarlo nei suoi compiti ogni volta che sbaglia".**
+`.github/deepseek/LESSONS.md`: gli errori corretti in revisione, uno per riga, passati
+a DeepSeek in ogni compito (prima di CLAUDE.md nel prompt). Sotto `.github/`, quindi
+DeepSeek non puo' modificarlo. Regola in CLAUDE.md: a ogni correzione di una sua PR,
+una lezione nuova nello stesso commit; se lo stesso errore torna, un controllo nel
+lavoratore.
