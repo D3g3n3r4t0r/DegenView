@@ -1839,5 +1839,18 @@
       "frontend/static/onchain/profile.js",
       "backend/tests/test_profile.py"
     ]
+  },
+  "seed-0150": {
+    "status": "risolto",
+    "at": 1790529273,
+    "summary": "Le immagini salvate dal server erano giuste (sempre quella del token, non della moneta con cui e' accoppiato). Sbagliavano i ripieghi: SOL, ETH e BNB non avevano un'immagine e prendevano una forma generata a caso, che sembrava un'icona sbagliata: ora hanno i loro loghi. Il ripiego su DexScreener per i token EVM usava l'indirizzo con maiuscole, che DexScreener non riconosce: ora e' in minuscolo, quindi il logo vero arriva piu' spesso. E tre posti mostravano ancora lettere al posto del logo: le righe dell'autopilota nello Scanner, il selettore token dello swap e le posizioni del wallet; ora usano il logo del token come il resto dell'app.",
+    "files": [
+      "backend/app/trading/onchain/portfolio.py",
+      "backend/app/main.py",
+      "frontend/static/onchain/format.js",
+      "frontend/static/onchain/pilot.js",
+      "frontend/static/onchain/sheets.js",
+      "frontend/static/onchain/app.css"
+    ]
   }
 }

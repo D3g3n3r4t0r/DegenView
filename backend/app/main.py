@@ -3472,6 +3472,7 @@ def _pilot_token_view(user: User, entry: WatchlistEntry, chain: str, positions: 
     return {
         "symbol": base_symbol,
         "watch_symbol": entry.symbol,
+        "chain": chain,
         "name": (found or {}).get("name") or base_symbol,
         "token_address": entry.base_token_address,
         "interval": entry.strategy_intervals.get(_SNIPER_ONCHAIN_STRATEGY, entry.interval),

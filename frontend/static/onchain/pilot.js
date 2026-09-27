@@ -12,7 +12,7 @@
  */
 import * as api from "@onchain/api.js";
 import { ApiError } from "@onchain/api.js";
-import { escapeHtml, formatUsd, strategyLabel } from "@onchain/format.js";
+import { escapeHtml, formatUsd, strategyLabel, tile } from "@onchain/format.js";
 import { chainInfo, state } from "@onchain/store.js";
 
 const ROOT = document.getElementById("onchain-embed") ?? document;
@@ -168,7 +168,7 @@ function row(t, isNew) {
   return `
     <li class="${isNew ? "is-new" : ""}">
       <button type="button" data-token="${escapeHtml(t.watch_symbol)}">
-        <span class="tk" aria-hidden="true">${escapeHtml(t.symbol.slice(0, 2))}</span>
+        <span class="tk tk-logo" aria-hidden="true">${tile(t.symbol, t.image, t.chain, t.token_address)}</span>
         <span class="tk-name"><b>${escapeHtml(t.symbol)}</b><small>${escapeHtml(detail)}</small></span>
         <span class="tk-state"><span class="num">${price}</span><span class="chip" data-state="${t.state}">${escapeHtml(t.state_label)}</span></span>
       </button>
@@ -243,7 +243,7 @@ function openToken(symbol) {
   const since = t.added_at ? `Watching for ${ago(t.added_at).replace(" ago", "")}` : "On the watchlist";
   openSheet(`
     <header class="diag-head">
-      <span class="tk" aria-hidden="true">${escapeHtml(t.symbol.slice(0, 2))}</span>
+      <span class="tk tk-logo" aria-hidden="true">${tile(t.symbol, t.image, t.chain, t.token_address)}</span>
       <div><h2>${escapeHtml(t.symbol)}</h2><p>${escapeHtml(since)} · ${escapeHtml(t.interval)} candles</p></div>
     </header>
     <div class="verdict" data-state="${t.state}"><b>${escapeHtml(t.state_label)}</b>${escapeHtml(t.reason)}</div>

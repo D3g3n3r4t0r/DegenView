@@ -12,7 +12,7 @@
  * mostrerebbe lo stato di quando la pagina e' stata aperta.
  */
 import * as api from "@onchain/api.js";
-import { escapeHtml, formatToken, formatUsd, shortAddress } from "@onchain/format.js";
+import { escapeHtml, formatToken, formatUsd, shortAddress, tile } from "@onchain/format.js";
 import { chainInfo, readCache, state } from "@onchain/store.js";
 
 // Stesso indirizzo nativo duplicato in swap.js/limitOrders.js: qui serve
@@ -235,7 +235,7 @@ export function openKey({ onStart }) {
 export function positionRow(position) {
   return `
     <li class="asset">
-      <span class="asset-mark is-token">${escapeHtml(position.token.slice(0, 1).toUpperCase())}</span>
+      <span class="asset-mark is-token tk-logo">${tile(position.token, null, state.chain, position.token)}</span>
       <span class="asset-name"><b>${escapeHtml(position.token)}</b>
         <small>${formatToken(position.quantity)} ${escapeHtml(position.token)}</small></span>
       <span class="asset-value"><b>${formatUsd(position.cost_usd)}</b><small>cost</small></span>
@@ -273,8 +273,13 @@ const iconCache = new Map(); // indirizzo -> url, dalle ricerche gia' fatte
 
 const hueOf = (text) => [...text].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) % 360, 7);
 
+// The token's own picture: the search's icon, else DexScreener's image for
+// the address (the same source as every other list in the app).
+const DS = { solana: "solana", robinhood: "robinhood" };
 function avatar(token) {
-  const icon = token.icon || iconCache.get(token.address.toLowerCase());
+  const a = token.address.startsWith("0x") ? token.address.toLowerCase() : token.address;
+  const icon = token.icon || iconCache.get(token.address.toLowerCase())
+    || (DS[state.chain] ? `https://dd.dexscreener.com/ds-data/tokens/${DS[state.chain]}/${a}.png` : "");
   const letter = escapeHtml((token.symbol || "?").replace(/^\$/, "").slice(0, 1).toUpperCase());
   return `<span class="tok-av" style="--h:${hueOf(token.address)}" aria-hidden="true">${
     icon ? `<img src="${escapeHtml(icon)}" alt="" loading="lazy" referrerpolicy="no-referrer" />` : ""}<span>${letter}</span></span>`;
