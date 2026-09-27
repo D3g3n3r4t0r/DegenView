@@ -1635,5 +1635,13 @@
       "frontend/static/onchain/api.js",
       "backend/tests/test_token_chart.py"
     ]
+  },
+  "seed-0133": {
+    "status": "risolto",
+    "at": 1790512904,
+    "summary": "Al posto della scritta DEGEN e dell'uovo/rana, il caricamento usa il linguaggio della home: sfondo quasi nero con la griglia leggera e il bagliore verde, il cubo della home che sale, la fessura verde che si traccia da sinistra e si accende, il nome LIQUIDITY ENGINE in mono spaziato con ENGINE in verde, e una riga sottile di avanzamento. Dura poco piu' di un secondo e non blocca la pagina, che intanto carica; con 'riduci movimento' non compare.",
+    "files": [
+      "frontend/onchain-app.html"
+    ]
   }
 }
