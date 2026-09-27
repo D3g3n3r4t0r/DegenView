@@ -1937,5 +1937,16 @@
       "backend/app/notify/deepseek_desk.py",
       "backend/app/main.py"
     ]
+  },
+  "seed-0158": {
+    "status": "risolto",
+    "at": 1790533310,
+    "summary": "DeepSeek ora legge i finalisti del Gem Finder (descrizione, sito e documenti, al massimo 80 al giorno, ognuno una volta a settimana) e il suo giudizio pesa per meta' nel pilastro 'ricerca' del voto, accanto al lettore automatico: una voce, non il verdetto intero, finche' il registro delle gemme (top 10 contro il resto a 7/30/90 giorni) non dira' chi ci azzecca di piu'. Se dice 'scam' la sua meta' vale zero ma non azzera il progetto da sola. I suoi campanelli d'allarme compaiono nella scheda. Anche la lettura approfondita a pagamento, spenta finche' mancava la chiave di Claude, ora gira su DeepSeek; e il suo voto di rischio sulle meme entra tra i controlli che la memoria misura (quanto separa i rug), come tutti gli altri.",
+    "files": [
+      "backend/app/trading/onchain/research.py",
+      "backend/app/trading/onchain/plans.py",
+      "backend/app/trading/onchain/outcomes.py",
+      "backend/app/trading/onchain/ai_scan.py"
+    ]
   }
 }

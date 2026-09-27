@@ -90,11 +90,15 @@ CHECK_KEYS = ("name", "security", "contract", "socials", "site", "github", "ai")
 # Numeri dei controlli, non solo il voto. Dopo VISE: quanto tengono il primo
 # wallet e i primi 10 (legit.holder_concentration).
 FACT_KEYS = ("top_holder_pct", "top10_pct", "lp_locked_pct")
-RISK_UP = {"top_holder_pct", "top10_pct"}   # qui un numero alto dovrebbe voler dire piu' rug
+RISK_UP = {"top_holder_pct", "top10_pct", "ai_risk"}
+# Measured like every check, but not in the model: DeepSeek's risk arrives
+# minutes after the decision (ai_scan.py), so the model could never have it
+# when it judges a new token.
+SIGNAL_ONLY_KEYS = ("ai_risk",)   # qui un numero alto dovrebbe voler dire piu' rug
 CHECK_LABELS = {"top_holder_pct": "Top wallet %", "top10_pct": "Top 10 wallets %",
                 "vol_h1": "Volume 1h", "buys_h1": "Buys 1h", "sells_h1": "Sells 1h",
                 "buy_ratio": "Buy share", "chg_h1": "Change 1h", "gem": "Gem report card",
-                "memory": "Memory", "altro": "Other",
+                "memory": "Memory", "altro": "Other", "ai_risk": "DeepSeek rug risk",
                 "lp_locked_pct": "Liquidity locked %",
                 "name": "Name", "security": "Security (RugCheck/GoPlus)", "contract": "Contract (GoPlus)",
                 "socials": "Socials", "site": "Website", "github": "GitHub", "ai": "Claude on the site",
@@ -588,7 +592,7 @@ def signals(now: float | None = None) -> list[dict]:
     data = labelled(now)
     good = [(e, outcome(e, now) == "buono") for e in _journal.values() if outcome(e, now)]
     out = []
-    for key in MODEL_KEYS:
+    for key in MODEL_KEYS + SIGNAL_ONLY_KEYS:
         pairs = [(v, y) for e, y in data if (v := _value(e["features"], key)) is not None]
         gpairs = [(v, y) for e, y in good if (v := _value(e["features"], key)) is not None]
         if len(pairs) < SIGNAL_MIN_N:

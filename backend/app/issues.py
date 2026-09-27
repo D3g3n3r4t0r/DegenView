@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0158", "DeepSeek deve avere voce in capitolo sul voto finale delle gemme",
+     "Lorenzo: 'ovviamente deepseek deve avere voce in capitolo sul voto finale delle gemme'.",
+     "media"),
     ("seed-0157", "DeepSeek con memoria dei rug pull e accesso al database",
      "Lorenzo: 'deepseek deve poter avere memoria dei rugpull, le circostanze con cui sono avvenuti, per cui accedere al database con tutti i dati delle crypto monitorate risulta fondamentale'.",
      "media"),
