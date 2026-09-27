@@ -1948,5 +1948,18 @@
       "backend/app/trading/onchain/outcomes.py",
       "backend/app/trading/onchain/ai_scan.py"
     ]
+  },
+  "seed-0159": {
+    "status": "risolto",
+    "at": 1790533803,
+    "summary": "Da cinque sezioni a quattro, con al massimo due schede ciascuna. Meme: Alerts (prima) e Picks; lo Scanner non e' piu' una scheda ma un link in fondo agli Alerts. Gems: il podio dei primi tre e sotto la classifica, piu' la scheda Database. Il trofeo e' ora la classifica delle strategie: le strategie di ingresso e uscita una sopra l'altra (mediana, % di vincite, alert chiusi, quella in uso segnata), poi ogni alert come l'ha tradato la strategia in uso; niente podio e niente schede Alerts/Gems. Il Wallet non ha piu' un posto suo nel dock: vive nel profilo, con un tasto Swap accanto a Deposit.",
+    "files": [
+      "frontend/onchain-app.html",
+      "frontend/static/onchain/alerts.js",
+      "frontend/static/onchain/leaderboard.js",
+      "frontend/static/onchain/main.js",
+      "frontend/static/onchain/profile.js",
+      "frontend/static/onchain/app.css"
+    ]
   }
 }
