@@ -9,6 +9,7 @@
  */
 import * as api from "@onchain/api.js";
 import { age, changePill, escapeHtml, logo, usdShort } from "@onchain/format.js";
+import { openUserSwap, walletFor } from "@onchain/userswap.js";
 
 const registry = new Map();
 const INTERVALS = ["1m", "5m", "15m", "1h", "4h"];
@@ -80,6 +81,7 @@ function onClick(event) {
     return;
   }
   if (t.closest("[data-copy]")) { navigator.clipboard?.writeText(current.e.token ?? ""); return; }
+  if (t.closest("[data-user-swap]")) { openUserSwap(current.e); return; }
   if (t.closest("[data-buy]")) {
     const e = current.e;
     dlg.close();
@@ -124,7 +126,8 @@ export function openDetail(id) {
       </nav>
       <div class="dt-pane" data-pane-body></div>
     </div>
-    ${e.noTrade ? "" : `<div class="dt-cta">${TRADABLE.has(e.chain)
+    ${e.noTrade ? "" : `<div class="dt-cta" data-two="${Boolean(walletFor(e.chain) && TRADABLE.has(e.chain))}">${walletFor(e.chain) && TRADABLE.has(e.chain)
+      ? `<button type="button" class="dt-mine" data-user-swap><svg viewBox="0 0 24 24"><rect x="3.5" y="6" width="17" height="13" rx="3"/><path d="M3.5 10h17M16 14.5h1.5"/></svg>My wallet</button>` : ""}${TRADABLE.has(e.chain)
       ? `<button type="button" data-buy><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v8M8.5 12.5 12 16l3.5-3.5"/></svg>Buy</button>`
       : `<a class="buy-out" href="${escapeHtml(e.pairUrl || `https://dexscreener.com/${e.chain}/${e.token}`)}" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"/></svg>Trade on DexScreener</a>`}</div>`}`;
   paintChips();

@@ -13,6 +13,7 @@
  */
 import * as api from "@onchain/api.js";
 import { escapeHtml, logo, usdShort } from "@onchain/format.js";
+import { loadLinked } from "@onchain/userswap.js";
 
 const RANGES = [["24h", "24h"], ["7d", "7d"], ["30d", "30d"], ["all", "All"]];
 let root = null;
@@ -102,6 +103,7 @@ async function connect(kind) {
   data.profile = res.profile;
   paint();
   load();   // the new wallet's holdings
+  loadLinked();   // the token pages offer "My wallet" from now on
 }
 
 function walletsBox(p) {
@@ -248,7 +250,7 @@ export function mountProfile({ go: goTo } = {}) {
     const u = event.target.closest("[data-unlink]");
     if (u) {
       const [kind, ...rest] = u.dataset.unlink.split(":");
-      api.walletUnlink(kind, rest.join(":")).then((res) => { data.profile = res.profile; paint(); load(); }, () => {});
+      api.walletUnlink(kind, rest.join(":")).then((res) => { data.profile = res.profile; paint(); load(); loadLinked(); }, () => {});
     }
   });
   root.addEventListener("submit", async (event) => {
