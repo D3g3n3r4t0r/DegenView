@@ -237,14 +237,14 @@ function backtestTable(al) {
     <thead><tr><th>Strategy</th><th>Return</th><th>Trades</th><th>Win</th><th>Max DD</th></tr></thead>
     <tbody>${rows.map((r) => `<tr>
       <td>${escapeHtml(r.label)}</td>
-      <td data-sign="${sign(r.return_pct / 100)}">${pct(r.return_pct / 100)}</td>
+      <td data-sign="${r.return_pct == null ? "" : sign(r.return_pct / 100)}">${r.return_pct == null ? "—" : pct(r.return_pct / 100)}</td>
       <td>${r.trades ?? "—"}</td>
       <td>${r.win_rate == null ? "—" : `${Math.round(r.win_rate)}%`}</td>
       <td>${r.max_dd == null ? "—" : `${r.max_dd.toFixed(1)}%`}</td>
     </tr>`).join("")}
     <tr>
       <td>Just holding</td>
-      <td data-sign="${sign(al.backtests.hold_pct / 100)}">${pct(al.backtests.hold_pct / 100)}</td>
+      <td data-sign="${al.backtests.hold_pct == null ? "" : sign(al.backtests.hold_pct / 100)}">${al.backtests.hold_pct == null ? "—" : pct(al.backtests.hold_pct / 100)}</td>
       <td>—</td><td>—</td><td>—</td>
     </tr></tbody>
   </table>`;
