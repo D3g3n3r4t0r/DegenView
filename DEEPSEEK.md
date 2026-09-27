@@ -160,6 +160,10 @@ Lorenzo: vedi HANDOVER.
 | 27/09 | issue #189 (trend gia' in corso all'alert) | logica giusta al primo colpo; non ha lanciato il test vecchio che fissava il comportamento sbagliato, ne' ricalcolato gli alert |
 | 27/09 | issue #190 (trade delle due strategie) | fallita sul CSS, poi buona; ricompariva lo 0% per chi non ha tradato |
 | 27/09 | issue #191 (niente 0% in classifica) | giusta al primo colpo |
+| 28/09 | issue #200 (backtest per alert) | primo giro fermato dal lavoratore (test su candele piatte: le contromisure hanno funzionato); secondo giro giusto |
+| 28/09 | issue #201 (backtest nell'app) | buona; corretti ordine iniziale e 0% al posto di un dato mancante |
+| 28/09 | issue #203 (link al grafico principale) | non funzionava: `setArea` fuori portata e BTC caricato sopra al link; finestra bloccata su iOS. Corretto da Claude, provato in browser |
+| 28/09 | issue #204 (backtest migliore, niente selettori) | giusta al primo colpo |
 
 Regola per dargli più lavoro: tre revisioni di fila con almeno un'osservazione
 giusta e nessuna inventata → gli si affida anche la prima stesura dei testi in
