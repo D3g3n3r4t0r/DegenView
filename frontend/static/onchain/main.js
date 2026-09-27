@@ -7,6 +7,7 @@
  * (Ricevi, Limiti, Simula, Rivela chiave). Tutto il resto sta nei moduli
  * accanto — questo file monta e smonta, non disegna i form.
  */
+import "@onchain/nozoom.js";
 import * as api from "@onchain/api.js";
 import { ApiError } from "@onchain/api.js";
 import { freshness, formatToken, formatUsd, shortAddress, usdParts } from "@onchain/format.js";
