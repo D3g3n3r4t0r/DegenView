@@ -1039,3 +1039,7 @@ html, body { overflow-x: clip; }
   .bt-table th, .bt-table td { padding: 6px 4px; text-align: end; border-block-end: 1px solid rgb(255 255 255 / .05); }
   .bt-table th:first-child, .bt-table td:first-child { text-align: start; }
 }
+@layer skin {
+  .bt-open { all: unset; cursor: pointer; color: var(--k-text); text-decoration: underline; text-underline-offset: 3px; }
+  .dt-mainchart { margin: 10px 0 0; padding: 8px 12px; border: 1px solid rgb(255 255 255 / .12); border-radius: 10px; background: none; color: var(--k-text); font: 600 13px var(--sans); }
+}

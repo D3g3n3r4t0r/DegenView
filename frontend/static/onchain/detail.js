@@ -63,7 +63,26 @@ function ensureDialog() {
 
 window.addEventListener("popstate", () => { if (dlg?.open && !history.state?.detail) dlg.close(); });
 
-function onClick(event) {
+// Strategy names as the main site's select spells them.
+const NAMES = {
+  "Trend EMA": "Lorenzo (trend-follower)",
+  "Trend HF": "Lorenzo HF (minuti on-chain)",
+  "RSI+BB": "Gabriele (RSI+BB reversal)",
+  "RSI+BB L/S": "Gabriele 2 (RSI+BB long/short)",
+};
+
+// The main site charts DEX pools by "SYM@chain:pool" (DexScreenerProvider
+// .make_symbol). The pair may not be known yet: poolOf() finds it.
+async function mainChartUrl(e, strategyName) {
+  const pair = e.pair || await poolOf(e);
+  if (!pair) return "";
+  const dex = encodeURIComponent(`${e.symbol}@${e.chain}:${pair}`);
+  const name = encodeURIComponent(e.name || e.symbol);
+  return `/?area=analizza&dex=${dex}&interval=5m&name=${name}`
+    + (strategyName ? `&strategy=${encodeURIComponent(strategyName)}` : "");
+}
+
+async function onClick(event) {
   const t = event.target;
   if (t.closest("[data-back]")) { dlg.close(); return; }
   const iv = t.closest("[data-iv]");
@@ -82,6 +101,12 @@ function onClick(event) {
     return;
   }
   if (t.closest("[data-copy]")) { navigator.clipboard?.writeText(current.e.token ?? ""); return; }
+  if (t.closest("[data-main-chart]")) {
+    const label = t.closest("[data-main-chart]").dataset.mainChart;
+    const url = await mainChartUrl(current.e, NAMES[label]);
+    if (url) window.open(url, "_blank", "noopener");
+    return;
+  }
   if (t.closest("[data-user-swap]")) { openUserSwap(current.e); return; }
   if (t.closest("[data-buy]")) {
     const e = current.e;
@@ -120,6 +145,7 @@ export function openDetail(id) {
       ${e.context ? `<p class="dt-context">${e.context}</p>` : ""}
       <div class="dt-chart" data-chart><div class="dt-chart-empty">Loading chart…</div></div>
       <div class="dt-chips" data-chips></div>
+      <button type="button" class="dt-mainchart" data-main-chart="Trend EMA">Open on the analysis chart ↗</button>
       <nav class="dt-tabs">
         <button type="button" data-dtab="signal">Signal</button>
         <button type="button" data-dtab="why">Why</button>
@@ -236,7 +262,7 @@ function backtestTable(al) {
     <caption>Backtest on this chart</caption>
     <thead><tr><th>Strategy</th><th>Return</th><th>Trades</th><th>Win</th><th>Max DD</th></tr></thead>
     <tbody>${rows.map((r) => `<tr>
-      <td>${escapeHtml(r.label)}</td>
+      <td><button type="button" class="bt-open" data-main-chart="${escapeHtml(r.label)}">${escapeHtml(r.label)} ↗</button></td>
       <td data-sign="${r.return_pct == null ? "" : sign(r.return_pct / 100)}">${r.return_pct == null ? "—" : pct(r.return_pct / 100)}</td>
       <td>${r.trades ?? "—"}</td>
       <td>${r.win_rate == null ? "—" : `${Math.round(r.win_rate)}%`}</td>
