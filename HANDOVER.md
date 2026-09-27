@@ -3623,3 +3623,9 @@ test senza token GitHub). Istruzioni in CLAUDE.md ("DeepSeek scrive, Claude
 rivede"). Nella prossima chat: provarlo con un compito piccolo e aggiornare lo
 storico in DEEPSEEK.md. Serve l'etichetta `deepseek` nel repo (la crea la
 prima issue con quell'etichetta, o Lorenzo da GitHub → Issues → Labels).
+
+**2026-09-27 — chat nuova. Lorenzo: "nuova chat nuovo inizio come ci siamo detti, riprendiamo da qui" / "usa sempre deepseek e tu revisiona il suo lavoro da github".**
+Regola resa assoluta in CLAUDE.md: ogni modifica al codice passa da una issue
+`deepseek`, Claude rivede la PR. La bacheca non era leggibile da questa sandbox
+(rete che blocca `liquidityengine.app`): va aggiunto il dominio alla rete
+dell'ambiente cloud.
