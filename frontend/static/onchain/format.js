@@ -97,13 +97,15 @@ const CHAIN_MARK = {
 export function tile(symbol, image, chain, token) {
   const seed = String(token || symbol || "?");
   const h = [...seed].reduce((a, c) => (a * 33 + c.charCodeAt(0)) >>> 0, 5381);
-  const src = image || (token && DS_CHAIN[chain] ? `https://dd.dexscreener.com/ds-data/tokens/${DS_CHAIN[chain]}/${token}.png` : "");
+  // DexScreener's picture URLs use lowercase EVM addresses (Solana mints are case-sensitive).
+  const addr = token && String(token).startsWith("0x") ? String(token).toLowerCase() : token;
+  const src = image || (addr && DS_CHAIN[chain] ? `https://dd.dexscreener.com/ds-data/tokens/${DS_CHAIN[chain]}/${addr}.png` : "");
   return `<span class="tile" style="--h1:${h % 360};--h2:${(h >> 9) % 360};--rot:${(h >> 5) % 360}deg" data-shape="${(h >> 3) % 4}"><i class="emblem" aria-hidden="true"></i>${src
     ? `<img src="${escapeHtml(src)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" />` : ""}</span>`;
 }
 if (typeof document !== "undefined") {
   document.addEventListener("error", (event) => {
-    if (event.target instanceof HTMLImageElement && event.target.parentElement?.classList.contains("tile")) event.target.remove();
+    if (event.target instanceof HTMLImageElement && event.target.parentElement?.classList.contains("tile") || event.target.parentElement?.classList.contains("tok-av")) event.target.remove();
   }, true);
 }
 
