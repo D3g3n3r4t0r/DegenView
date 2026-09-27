@@ -1795,5 +1795,18 @@
       "frontend/static/onchain/app.css",
       "backend/tests/test_portfolio.py"
     ]
+  },
+  "seed-0146": {
+    "status": "risolto",
+    "at": 1790527689,
+    "summary": "Verificato su meme simulate. Quando il prezzo scende a gradini il sistema esce presto: fra il -6% e il -33% dal massimo, mai a -80%. Il -80% arriva solo quando il prezzo crolla dentro una sola candela da 5 minuti (rug o dump di un grosso wallet): il segnale d'uscita c'e', ma il primo prezzo a cui vendere e' gia' quello crollato, e sui DEX non esistono ordini stop che scattino a meta' candela. Se il pool sparisce mentre si e' dentro vale -100% per regola. In piu' nella pagina del token restava la vecchia 'Best strategy', il backtest scelto a posteriori token per token, che mostrava la 'migliore' anche quando valeva -80%: tolta. Ora ogni vendita del sistema dice perche': 'trend turned', 'crashed inside one 5-min candle' (con quanto e' sceso in quella candela), '48h window over' o 'pool vanished'. La pagina del token elenca acquisti e vendite del sistema con il motivo; 'Now' diventa 'Held now' e le ore sono 'If held from the alert', per non confondere il rendimento tenendo il token con quello del sistema. I risultati gia' calcolati vengono ricostruiti una volta per avere il motivo.",
+    "files": [
+      "backend/app/trading/onchain/system.py",
+      "backend/app/trading/onchain/alert_track.py",
+      "frontend/static/onchain/detail.js",
+      "frontend/static/onchain/alerts.js",
+      "frontend/static/onchain/app.css",
+      "backend/tests/test_system.py"
+    ]
   }
 }
