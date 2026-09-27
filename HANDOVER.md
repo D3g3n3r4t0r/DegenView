@@ -3676,3 +3676,12 @@ a DeepSeek in ogni compito (prima di CLAUDE.md nel prompt). Sotto `.github/`, qu
 DeepSeek non puo' modificarlo. Regola in CLAUDE.md: a ogni correzione di una sua PR,
 una lezione nuova nello stesso commit; se lo stesso errore torna, un controllo nel
 lavoratore.
+
+**2026-09-28 (notte) — Lorenzo: coppa sul podio, profilo in una schermata, "podio cartoonesco [...] cyberpunk come il logo" ("lavoro da designer, servi tu"), "non indichiamo cosa usiamo, semplicemente i rendimenti", "proporre sempre il miglior risultato".**
+#211, #214, #216 via DeepSeek (corretti in revisione, lezioni aggiunte); podio e righe
+compatte scritti da Claude (PR #217: `podium.js` nuovo, classi `.pod-cy`/`.pc-*`).
+`format.bestSystem(a)`: il migliore fra le due versioni del sistema, sempre "System".
+Resta da decidere: il pulsante "Open on the analysis chart" porta al sito principale
+dove il nome della strategia si vede nel menu (ok se il sito principale e' solo di
+Lorenzo). Il lavoratore non intercetta ancora gli identificatori non definiti in JS
+(#190 usava `strategyTrade` senza import): se ricapita, aggiungere un controllo (eslint no-undef).
