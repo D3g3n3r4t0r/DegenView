@@ -162,6 +162,21 @@ resolutions.json):
 
 `scripts/ds.py` fa lo stesso da locale, se l'ambiente ha la chiave e la rete.
 
+Come scrivere e gestire le issue (imparato il 27-28/09):
+
+- `Files:` e `Tests:` una sola volta, in fondo; righe `- percorso` o
+  `- percorso:inizio-fine`. Un file nuovo va elencato in `Files:` e detto
+  nel testo ("crea"); per aggiungere in fondo a un file (CSS) di' "APPEND".
+- Il compito deve nominare il comportamento da cambiare **e** cosa va
+  ricalcolato o migrato (versioni, dati gia' salvati): DeepSeek non lo vede.
+- Rilanciare una issue = togliere e rimettere l'etichetta `deepseek`
+  (il branch viene sovrascritto).
+- Se l'Action non puo' aprire la PR (403), il branch c'e' comunque: la apre
+  Claude da `deepseek/issue-N`, corregge sul branch, poi merge.
+- Il lavoratore fa girare anche i test che importano i moduli toccati,
+  controlla la sintassi JS e che gli import `@onchain/` esistano: se uno di
+  questi fallisce, DeepSeek riprova una volta e poi lo scrive nella issue.
+
 ## Lingua
 
 Lorenzo scrive in italiano. Rispondi in italiano; commenti e messaggi di commit

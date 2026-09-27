@@ -3652,3 +3652,12 @@ analista 3/10, lavoratore 5/10. Da fare: il lavoratore lanci anche i test vicini
 file toccati (#189 ha rotto `test_system.py` senza vederlo) e controlli che gli
 import `@onchain/x.js` esistano (#188). Da verificare sul sito: classifica del sistema
 riempita dopo il ricalcolo; se il sistema ora entra troppo tardi o troppo presto sui meme.
+
+**2026-09-28 — Lorenzo: "attua le contromisure necessarie per gestire deepseek" / "ma strategia trend follower era la mia vecchia LORENZO".**
+Lavoratore (PR #198): test correlati ai moduli toccati, controllo JS e import
+`@onchain/`, risposta vuota = fallimento; regole nel prompt. Istruzioni pratiche
+in CLAUDE.md ("Come scrivere e gestire le issue"). Sul trend follower: si',
+Trend EMA = la sua Lorenzo originale, Trend HF = la variante on-chain a 5m con
+filtri (VWAP, efficienza, variance ratio, soglia sigma, trailing ATR); in uso HF
+di default finche' 20 alert non sono decisi. Da guardare dopo il ricalcolo: se i
+filtri di HF la tengono fuori dai meme piu' della Lorenzo originale.
