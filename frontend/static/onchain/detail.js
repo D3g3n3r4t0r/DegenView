@@ -212,6 +212,7 @@ function paintTabs() {
       </div>
       <div class="strats">${al.systems ? al.systems.map((s) => strategyTrade(s, al.at, al.system?.label)).join("") : systemTrades(al)}</div>
       ${al.systems ? systemTrades(al) : ""}
+      ${backtestTable(al)}
       <p class="hours-head">Just holding, from the alert</p>
       <ol class="hours">${[1, 2, 3, 4, 5, 6, 8, 12, 24, 48].map((h) => {
         const r = al.returns?.[String(h)];
@@ -226,6 +227,27 @@ function paintTabs() {
         ${e.ageTs ? `<div><dt>Age</dt><dd>${age(e.ageTs)[0]}</dd></div>` : ""}
       </dl>
       <p class="muted">${pending ? "Loading…" : `No Telegram alert on this token yet${e.kind === "gem" ? ": gems are alerted when they enter the board." : "."}`}</p>`;
+}
+
+function backtestTable(al) {
+  const rows = al.backtests?.rows ?? [];
+  if (!rows.length) return "";
+  return `<table class="bt-table">
+    <caption>Backtest on this chart</caption>
+    <thead><tr><th>Strategy</th><th>Return</th><th>Trades</th><th>Win</th><th>Max DD</th></tr></thead>
+    <tbody>${rows.map((r) => `<tr>
+      <td>${escapeHtml(r.label)}</td>
+      <td data-sign="${sign(r.return_pct / 100)}">${pct(r.return_pct / 100)}</td>
+      <td>${r.trades ?? "—"}</td>
+      <td>${r.win_rate == null ? "—" : `${Math.round(r.win_rate)}%`}</td>
+      <td>${r.max_dd == null ? "—" : `${r.max_dd.toFixed(1)}%`}</td>
+    </tr>`).join("")}
+    <tr>
+      <td>Just holding</td>
+      <td data-sign="${sign(al.backtests.hold_pct / 100)}">${pct(al.backtests.hold_pct / 100)}</td>
+      <td>—</td><td>—</td><td>—</td>
+    </tr></tbody>
+  </table>`;
 }
 
 function infoFallback(e) {
