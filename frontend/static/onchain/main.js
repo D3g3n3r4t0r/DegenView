@@ -524,7 +524,8 @@ function setView(name) {
     document.querySelectorAll(".tabs[data-tabs]").forEach((nav) => { nav.hidden = nav.dataset.tabs !== name; });
     window.scrollTo({ top: 0 });
   };
-  if (from !== name && document.startViewTransition && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+  if (from !== name && document.startViewTransition && !document.querySelector("dialog[open]")
+      && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
     view.shell.dataset.dir = VIEWS.indexOf(name) > VIEWS.indexOf(from) ? "fwd" : "back";
     document.startViewTransition(paint);
   } else paint();

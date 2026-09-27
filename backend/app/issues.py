@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0166", "Ogni tanto la schermata flasha e appaiono sovrapposizioni",
+     "Lorenzo (screenshot con scheda di scansione, autotrader e alert sovrapposti): 'ogni tanto flasha la schermata e appaiono sovrapposizioni'.",
+     "alta"),
     ("seed-0165", "Top 15, 25 e 50 mostrano sempre gli stessi progetti",
      "Lorenzo (screenshot della scheda Top, 6 progetti): 'a prescindere se seleziono top 15 25 o 50 vedo sempre gli stessi progetti'.",
      "alta"),
