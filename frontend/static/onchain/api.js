@@ -118,6 +118,8 @@ export const getAiReview = () => request("/api/onchain/ai-review");
 export const getProjects = (params) => request(`/api/onchain/projects?${new URLSearchParams(params)}`);
 export const getRadarLessons = () => request("/api/onchain/radar/lessons");
 export const getRadarMemes = () => request("/api/onchain/radar/memes");
+export const getTokenChart = (chain, pool, symbol, interval) =>
+  request(`/api/onchain/chart?${new URLSearchParams({ chain, pool, symbol, interval })}`);
 export const getRadarChart = (chain, pool, symbol, interval) =>
   request(`/api/onchain/radar/chart?${new URLSearchParams({ chain, pool, symbol, interval })}`);
 export const followRadar = (body) => request("/api/onchain/radar/follow", { method: "POST", body });

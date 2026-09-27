@@ -61,7 +61,7 @@ logger = logging.getLogger(__name__)
 _STORE_FILE = data_file("onchain_radar.json")
 
 GECKO_BASE = "https://api.geckoterminal.com/api/v2"
-CHAINS = {"solana": "solana", "robinhood": "robinhood", "base": "base"}
+CHAINS = {c: c for c in legit.MEME_CHAINS}   # DexScreener and GeckoTerminal share these slugs
 
 # Soglie iniziali: regolabili qui, non da un parametro di richiesta.
 AGE_MAX_DAYS = 21
@@ -741,6 +741,33 @@ def best_row(rows: list[dict]) -> dict | None:
     usable = [r for r in rows if not r.get("excluded") and r.get("trades")]
     ranked = sorted(usable, key=lambda r: (bool(r.get("qualifies")), r["return_pct"]), reverse=True)
     return ranked[0] if ranked else None
+
+
+CANDLES_LITE = 300
+
+
+async def chart_candles(chain: str, pool: str, symbol: str, interval: str) -> dict:
+    """Only the candles, for the token page: a third of chart_payload's bars
+    and no strategy backtests, which were most of the wait ("i grafici
+    caricati sono troppo lenti ad arrivare"). Same 30 s cache; if
+    GeckoTerminal refuses, the last good chart stays."""
+    key = (chain, pool, f"lite:{interval}")
+    cached = _chart_cache.get(key)
+    if cached and time.time() - cached[0] < CHART_TTL_S:
+        df = cached[1]
+    else:
+        gecko_urgent.set(True)
+        try:
+            df = await DexScreenerProvider().fetch_ohlcv(make_symbol(symbol, chain, pool), interval, CANDLES_LITE)
+        except Exception:
+            if not cached:
+                raise
+            df = cached[1]
+        _chart_cache[key] = (time.time(), df)
+        if len(_chart_cache) > 64:
+            _chart_cache.pop(next(iter(_chart_cache)))
+    return {"chain": chain, "pool": pool, "interval": interval, "updated_at": time.time(),
+            "candles": [{"time": int(ts.timestamp()), "close": float(r.close)} for ts, r in df.iterrows()]}
 
 
 async def chart_payload(chain: str, pool: str, symbol: str, interval: str) -> dict:

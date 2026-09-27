@@ -3743,6 +3743,21 @@ async def onchain_ai_review_view(user: User = Depends(auth.get_current_user)) ->
     return {"status": onchain_ai_review.status(), "latest": reviews[0] if reviews else None, "history": reviews[1:]}
 
 
+@app.get("/api/onchain/chart")
+async def onchain_token_chart(
+    chain: str, pool: str = Query(..., pattern=r"^[0-9A-Za-z]{20,66}$"), symbol: str = Query("", max_length=40),
+    interval: Literal["1m", "5m", "15m", "1h", "4h"] = "15m", user: User = Depends(auth.get_current_user),
+) -> dict:
+    """The token page's chart: candles only, any chain the hunts scan."""
+    _require_onchain_enabled()
+    if chain not in onchain_legit.CHAIN_LABEL:
+        raise HTTPException(status_code=422, detail="unknown chain")
+    try:
+        return await onchain_radar.chart_candles(chain, pool, symbol or "TOKEN", interval)
+    except ProviderError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
 @app.get("/api/onchain/radar/chart")
 async def onchain_radar_chart(
     chain: Literal["solana", "robinhood"], pool: str, symbol: str,

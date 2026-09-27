@@ -18,7 +18,7 @@ let current = null;
 let interval = "15m";
 let tab = "signal";
 
-// Chains the wallet can swap on; the others (Base) are scanned, not traded here.
+// Chains the wallet can swap on; the others (BSC, Base, Ethereum) are scanned, not traded here.
 const TRADABLE = new Set(["solana", "robinhood"]);
 
 /** entry: {kind, symbol, name, chain, token, pair, pairUrl, image, cap,
@@ -92,7 +92,7 @@ export function openDetail(id) {
   if (!e) return;
   current = { id, e };
   tab = "signal";
-  interval = e.kind === "gem" ? "1h" : "5m";
+  interval = defaultInterval(e);
   const d = ensureDialog();
   const [a] = age(e.ageTs);
   d.innerHTML = `
@@ -176,21 +176,47 @@ function infoFallback(e) {
   </dl>`;
 }
 
+// Charts already fetched, shown at once while a fresh copy loads; a tap on
+// a row starts the fetch before the page is even open.
+const charts = new Map();   // "chain:pair:interval" -> {at, promise | candles}
+const CHART_FRESH_MS = 30_000;
+
+function chartFor(e, iv) {
+  const k = `${e.chain}:${e.pair}:${iv}`;
+  const hit = charts.get(k);
+  if (hit && Date.now() - hit.at < CHART_FRESH_MS) return hit.promise;
+  const promise = api.getTokenChart(e.chain, e.pair, e.symbol, iv)
+    .then((d) => (d?.candles ?? []).filter((c) => Number.isFinite(c.close)))
+    .then((candles) => { charts.set(k, { at: Date.now(), promise: Promise.resolve(candles), candles }); return candles; },
+      (err) => { if (charts.get(k)?.promise === promise) charts.delete(k); throw err; });
+  charts.set(k, { at: Date.now(), promise, candles: hit?.candles });
+  if (charts.size > 60) charts.delete(charts.keys().next().value);
+  return promise;
+}
+
+const defaultInterval = (e) => (e.kind === "gem" ? "1h" : "5m");
+
+export function prefetchChart(id) {
+  const e = registry.get(id);
+  if (e?.pair) chartFor(e, defaultInterval(e)).catch(() => {});
+}
+
 async function paintChart() {
   const e = current.e;
   const box = dlg.querySelector("[data-chart]");
   if (!e.pair) { box.innerHTML = `<div class="dt-chart-empty">No pool to chart.</div>`; return; }
   const want = `${current.id}:${interval}`;
   box.dataset.want = want;
-  let data;
+  const stale = charts.get(`${e.chain}:${e.pair}:${interval}`)?.candles;
+  if (stale?.length >= 2) box.innerHTML = svgChart(stale, e);
+  let candles;
   try {
-    data = await api.getRadarChart(e.chain, e.pair, e.symbol, interval);
+    candles = await chartFor(e, interval);
   } catch {
-    if (box.dataset.want === want) box.innerHTML = `<div class="dt-chart-empty">Chart unavailable right now.</div>`;
+    if (box.dataset.want === want && !stale) box.innerHTML = `<div class="dt-chart-empty">Chart unavailable right now.</div>`;
     return;
   }
   if (box.dataset.want !== want) return;
-  const candles = (data?.candles ?? []).filter((c) => Number.isFinite(c.close));
   if (candles.length < 2) { box.innerHTML = `<div class="dt-chart-empty">Not enough trades to chart yet.</div>`; return; }
   box.innerHTML = svgChart(candles, e);
 }
@@ -229,6 +255,11 @@ function svgChart(candles, e) {
 }
 
 // Any row anywhere with data-open="<id>" opens the page.
+// The finger is on the row: start the chart now, it lands while the page opens.
+document.addEventListener("pointerdown", (event) => {
+  const b = event.target.closest?.("[data-open]");
+  if (b && registry.has(b.dataset.open)) prefetchChart(b.dataset.open);
+}, { passive: true });
 document.addEventListener("click", (event) => {
   const b = event.target.closest("[data-open]");
   if (!b || !registry.has(b.dataset.open)) return;
