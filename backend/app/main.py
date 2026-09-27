@@ -21,7 +21,7 @@ from typing import Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -103,6 +103,8 @@ from app.trading.onchain import legit as onchain_legit
 from app.trading.onchain import ledger as onchain_ledger
 from app.trading.onchain import outcomes as onchain_outcomes
 from app.trading.onchain import autotrader as onchain_autotrader
+from app.trading.onchain import wealth as onchain_wealth
+from app import profiles
 from app.trading.onchain import passkey as onchain_passkey
 from app.trading.onchain import pilot as onchain_pilot
 from app.trading.onchain import listings as onchain_listings
@@ -1176,7 +1178,8 @@ async def lifespan(app: FastAPI):
                    asyncio.create_task(onchain_radar.listings_backtest_loop()),
                    asyncio.create_task(onchain_leaderboard.leaderboard_loop()),
                    asyncio.create_task(onchain_outcomes.outcomes_loop()),
-                   asyncio.create_task(_onchain_signals_loop())] if settings.onchain_radar_enabled else []
+                   asyncio.create_task(_onchain_signals_loop()),
+                   asyncio.create_task(_wealth_loop())] if settings.onchain_radar_enabled else []
     sniper_tasks: list[asyncio.Task] = []
     if settings.sniper_enabled:
         from app.sniper import cache as sniper_cache
@@ -2696,17 +2699,26 @@ async def onchain_portfolio(chain: str, user: User = Depends(auth.get_current_us
     wallet = user.onchain_wallets.get(chain)
     if wallet is None:
         raise HTTPException(status_code=400, detail=f"No {chain} wallet for this user.")
+    try:
+        holdings = await _portfolio_holdings(user, chain)
+    except Exception as exc:  # noqa: BLE001 — l'RPC che non risponde non deve essere un 500 muto
+        raise HTTPException(status_code=502, detail=f"RPC unreachable: {exc}") from exc
+    return {
+        "chain": chain, "holdings": holdings,
+        "partial": chain == "robinhood",  # vedi la docstring: qui non e' un elenco esaustivo
+    }
 
+
+async def _portfolio_holdings(user: User, chain: str) -> list[dict]:
+    """The tokens one wallet holds, priced (shared by /portfolio and the profile)."""
+    wallet = user.onchain_wallets[chain]
     known_evm_tokens = []
     if chain == "robinhood":
         known_evm_tokens.append(_ONCHAIN_QUOTE_TOKEN["robinhood"])
         for order in onchain_ledger.list_limit_orders(user.id, "robinhood"):
             known_evm_tokens += [order["token_in"], order["token_out"]]
 
-    try:
-        raw_balances = await onchain_balances.all_token_balances(chain, wallet.address, known_evm_tokens)
-    except Exception as exc:  # noqa: BLE001 — l'RPC che non risponde non deve essere un 500 muto
-        raise HTTPException(status_code=502, detail=f"RPC unreachable: {exc}") from exc
+    raw_balances = await onchain_balances.all_token_balances(chain, wallet.address, known_evm_tokens)
 
     async def _enrich(entry: dict) -> dict:
         try:
@@ -2720,11 +2732,7 @@ async def onchain_portfolio(chain: str, user: User = Depends(auth.get_current_us
             "value_usd": amount * meta["price_usd"] if meta["price_usd"] is not None else None,
         }
 
-    holdings = await asyncio.gather(*(_enrich(e) for e in raw_balances))
-    return {
-        "chain": chain, "holdings": holdings,
-        "partial": chain == "robinhood",  # vedi la docstring: qui non e' un elenco esaustivo
-    }
+    return list(await asyncio.gather(*(_enrich(e) for e in raw_balances)))
 
 
 @app.get("/api/onchain/price/{chain}/{address}")
@@ -3742,6 +3750,139 @@ async def set_autotrader(body: AutotraderUpdate, user: User = Depends(auth.get_c
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {**view, "has_wallet": True, "server_live": settings.onchain_execution_enabled}
+
+
+# ------------------------------------------------------------------ profile
+# Lorenzo, with a trading app's profile screenshot: "uno deve vedere cosa
+# detiene, l'andamento del wallet nel tempo con un grafico [...] l'account
+# deve rimanere tutto nel database, uno deve poter scegliere anche
+# l'immagine profilo". See profiles.py and trading/onchain/wealth.py.
+
+_CASH_SYMBOLS = {"USDG", "USDC", "USDT", "PYUSD", "USD1"}
+_NATIVE_UNIT = {"solana": "SOL", "robinhood": "ETH"}
+
+
+async def _wallet_snapshot(user: User) -> dict:
+    """Everything the wallets hold, priced: cash (stablecoins), positions
+    (the rest, the chain's own coin included), total. A chain whose RPC does
+    not answer is left out and named in `missing`, never counted as zero."""
+    positions, cash, missing = [], 0.0, []
+    for chain in user.onchain_wallets:
+        try:
+            native, price = await asyncio.gather(
+                onchain_balances.native_balance(chain, user.onchain_wallets[chain].address),
+                onchain_prices.native_price_usd(chain))
+            holdings = await _portfolio_holdings(user, chain)
+        except Exception:  # noqa: BLE001
+            missing.append(chain)
+            continue
+        if native:
+            positions.append({"chain": chain, "symbol": _NATIVE_UNIT[chain], "name": _NATIVE_UNIT[chain],
+                              "address": None, "amount": native, "price_usd": price,
+                              "value_usd": native * price if price is not None else None, "native": True})
+        for h in holdings:
+            if (h.get("symbol") or "").upper() in _CASH_SYMBOLS:
+                cash += h.get("value_usd") or h.get("amount") or 0.0
+            elif h.get("amount"):
+                positions.append({"chain": chain, **h})
+    positions.sort(key=lambda p: -(p.get("value_usd") or 0))
+    total = cash + sum(p.get("value_usd") or 0 for p in positions)
+    return {"total": round(total, 4), "cash": round(cash, 4), "positions": positions, "missing": missing}
+
+
+async def _wealth_loop() -> None:
+    await asyncio.sleep(60)
+    while True:
+        for user in auth.list_users():
+            if not user.onchain_wallets:
+                continue
+            try:
+                snap = await _wallet_snapshot(user)
+                if not snap["missing"]:
+                    onchain_wealth.record(user.id, snap["total"])
+            except Exception:
+                logger.exception("wealth snapshot %s", user.id)
+        await asyncio.sleep(onchain_wealth.SNAPSHOT_S)
+
+
+def _joined_hint(user: User) -> float | None:
+    times = [w.created_at for w in user.onchain_wallets.values() if w.created_at]
+    return min(times) if times else None
+
+
+def _closed_trades(user: User) -> list[dict]:
+    """The system's round trips on this account: buy -> sell pairs."""
+    rows = [t for t in onchain_autotrader.view(user.id)["trades"][::-1] if t.get("ok")]
+    out, open_buy = [], {}
+    for t in rows:
+        if t["side"] == "buy":
+            open_buy[t.get("token")] = t
+        elif t["side"] == "sell" and t.get("token") in open_buy:
+            b = open_buy.pop(t["token"])
+            out.append({"symbol": t["symbol"], "token": t.get("token"), "chain": "robinhood", "opened": b["t"],
+                        "closed": t["t"], "cost_usdg": b.get("usdg"), "proceeds_usdg": t.get("usdg"),
+                        "ret": t.get("ret"), "mode": t.get("mode"), "why": t.get("why")})
+    return out[::-1]
+
+
+@app.get("/api/profile")
+async def get_profile(user: User = Depends(auth.get_current_user)) -> dict:
+    p = profiles.get(user.id, user.email, _joined_hint(user))
+    snap = await _wallet_snapshot(user) if user.onchain_wallets else {"total": None, "cash": 0.0, "positions": [], "missing": []}
+    if snap["total"] is not None and not snap["missing"]:
+        onchain_wealth.record(user.id, snap["total"])
+    closed = _closed_trades(user)
+    holds = [c["closed"] - c["opened"] for c in closed]
+    orders = sum(len(onchain_ledger.list_orders(user.id, c, limit=500)) for c in user.onchain_wallets)
+    return {
+        "profile": profiles.public(user.id, p), "email": user.email,
+        "value": snap["total"], "cash": snap["cash"], "positions": snap["positions"], "missing": snap["missing"],
+        "closed": closed,
+        "stats": {"trades": orders + sum(1 for t in onchain_autotrader.view(user.id)["trades"] if t.get("ok") and t.get("mode") == "sim"),
+                  "avg_hold_s": sum(holds) / len(holds) if holds else None, "closed": len(closed)},
+        "history": {k: onchain_wealth.series(user.id, k) for k in onchain_wealth.RANGES},
+        "change": {k: onchain_wealth.change(user.id, k, snap["total"]) for k in onchain_wealth.RANGES},
+    }
+
+
+class ProfileUpdate(BaseModel):
+    display_name: str | None = None
+    handle: str | None = None
+    bio: str | None = None
+
+
+@app.patch("/api/profile")
+async def update_profile(body: ProfileUpdate, user: User = Depends(auth.get_current_user)) -> dict:
+    profiles.get(user.id, user.email, _joined_hint(user))
+    try:
+        p = profiles.update(user.id, display_name=body.display_name, handle=body.handle, bio=body.bio)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"profile": profiles.public(user.id, p)}
+
+
+class AvatarUpload(BaseModel):
+    data_url: str
+
+
+@app.post("/api/profile/avatar")
+async def upload_avatar(body: AvatarUpload, user: User = Depends(auth.get_current_user)) -> dict:
+    if len(body.data_url) > profiles.MAX_UPLOAD_BYTES * 4 // 3 + 200:
+        raise HTTPException(status_code=413, detail="The picture is over 4 MB.")
+    profiles.get(user.id, user.email, _joined_hint(user))
+    try:
+        p = await asyncio.to_thread(profiles.set_avatar, user.id, body.data_url)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"profile": profiles.public(user.id, p)}
+
+
+@app.get("/api/profile/avatar/{uid}")
+async def get_avatar(uid: str) -> FileResponse:
+    path = profiles.avatar_path(uid)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="No picture.")
+    return FileResponse(path, media_type="image/webp", headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
 
 def _charts_on_screen() -> list[tuple[str, str, str, str]]:
