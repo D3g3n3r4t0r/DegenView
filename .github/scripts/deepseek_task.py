@@ -51,6 +51,8 @@ new lines
 >>>>>>> END
 
 A SEARCH must match exactly one place: include a neighbouring line that is unique.
+Every file the task names as new must be created (empty SEARCH), and every module you import
+must exist. When a behaviour changes, update the old tests that asserted the old behaviour.
 
 First line of your answer: `TITLE: <English commit title, imperative>`. Second line:
 `ITALIAN: <one Italian sentence on what changes for the site's users>`. Then only the
@@ -150,12 +152,61 @@ def ask(messages: list[dict]) -> tuple[str, dict]:
     return res["choices"][0]["message"].get("content") or "", res.get("usage") or {}
 
 
+def changed() -> list[str]:
+    """Files the answer created or modified (the result file aside)."""
+    out = subprocess.run(["git", "status", "--porcelain", "--untracked-files=all"],
+                         capture_output=True, text=True).stdout
+    return [line[3:].strip() for line in out.splitlines() if line[3:].strip() != RESULT.name]
+
+
+IMPORT = re.compile(r"""(?:from\s+|import\s*\(?\s*)["']@onchain/([\w.-]+\.js)["']""")
+
+
+def related_tests(files: list[str]) -> list[str]:
+    """Tests that import a backend module the answer touched: a change can
+    break an old test nobody listed (#189 broke test_system.py)."""
+    stems = {Path(f).stem for f in files if f.startswith("backend/app/") and f.endswith(".py")}
+    stems.discard("__init__")
+    if not stems:
+        return []
+    pat = re.compile(r"^\s*(?:from|import)\s[^\n]*\b(" + "|".join(map(re.escape, stems)) + r")\b", re.M)
+    return sorted(str(t) for t in Path("backend/tests").glob("test_*.py") if pat.search(t.read_text(encoding="utf-8")))
+
+
+def js_problems(files: list[str]) -> list[str]:
+    """Syntax of every touched frontend module, and every @onchain import it
+    names must exist (#188 imported nozoom.js without writing it)."""
+    import shutil
+    import tempfile
+    errors = []
+    node = shutil.which("node")
+    for f in files:
+        if not (f.startswith("frontend/") and f.endswith(".js")) or not Path(f).exists():
+            continue
+        src = Path(f).read_text(encoding="utf-8")
+        for name in IMPORT.findall(src):
+            if not Path("frontend/static/onchain", name).exists():
+                errors.append(f"{f}: imports @onchain/{name}, which does not exist")
+        if node:
+            with tempfile.TemporaryDirectory() as d:
+                tmp = Path(d, Path(f).stem + ".mjs")
+                tmp.write_text(src, encoding="utf-8")
+                r = subprocess.run([node, "--check", str(tmp)], capture_output=True, text=True)
+                if r.returncode:
+                    errors.append(f"{f}: syntax error\n{r.stderr[-1500:]}")
+    return errors
+
+
 def checks(tests: list[str]) -> str:
     env = {k: v for k, v in os.environ.items() if k not in ("DEEPSEEK_API_KEY", "GITHUB_TOKEN")}
+    files = changed()
+    if not files:
+        return "no file changed: the answer did nothing"
+    log = js_problems(files)
+    tests = sorted({t.removeprefix("backend/") for t in [*tests, *related_tests(files)]})
     cmds = [(["ruff", "check", "backend/", "--select", "E,F,W", "--ignore", "E501"], ".")]
     if tests:
-        cmds.append(([sys.executable, "-m", "pytest", "-q", "-x", *[t.removeprefix("backend/") for t in tests]], "backend"))
-    log = []
+        cmds.append(([sys.executable, "-m", "pytest", "-q", "-x", *tests], "backend"))
     for cmd, cwd in cmds:
         r = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True, timeout=900)
         if r.returncode:
