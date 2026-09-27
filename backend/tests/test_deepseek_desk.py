@@ -1,0 +1,90 @@
+"""DeepSeek on Telegram and its daily ledger (app/notify/deepseek_desk.py)."""
+import asyncio
+from datetime import datetime
+
+import pytest
+
+from app.notify import deepseek_desk as dd
+
+
+@pytest.fixture(autouse=True)
+def _clean(tmp_path, monkeypatch):
+    monkeypatch.setattr(dd, "_STORE_FILE", tmp_path / "u.json")
+    dd.reset_for_tests()
+    yield
+    dd.reset_for_tests()
+
+
+def test_ledger_counts_per_day_and_kind():
+    now = datetime(2026, 9, 27, 12, tzinfo=dd.ROME).timestamp()
+    dd.record("chat", 1000, 200, now=now)
+    dd.record("chat", 500, 100, now=now)
+    dd.record("review", 2000, 300, now=now)
+    day = dd._state["days"]["2026-09-27"]
+    assert day["chat"] == {"calls": 2, "in": 1500, "out": 300}
+    assert dd.spent_today("chat", now=now) == 1800
+
+
+def test_recap_says_what_it_cost_and_what_claude_would_have():
+    text = dd.recap_text("2026-09-27", {"chat": {"calls": 3, "in": 1_000_000, "out": 100_000},
+                                        "pr_review": {"calls": 2, "in": 60_000, "out": 4_000}})
+    assert "chat Telegram: 3 richieste" in text and "revisioni PR: 2 richieste" in text
+    # DeepSeek 1.06M in * 0.28 + 0.104M out * 0.42 = $0.340; Claude 1.06*3 + 0.104*15 = $4.74
+    assert "3 richieste, 1.100.000 token" in text and "$0.340" in text and "~$4.74" in text and "Risparmio stimato" in text
+    assert "nessun lavoro" in dd.recap_text("2026-09-27", {})
+
+
+def test_recap_once_a_day_after_the_hour():
+    before = datetime(2026, 9, 27, dd.RECAP_HOUR - 1, 30, tzinfo=dd.ROME).timestamp()
+    after = datetime(2026, 9, 27, dd.RECAP_HOUR, 5, tzinfo=dd.ROME).timestamp()
+    assert dd.recap_due(before) is None
+    assert dd.recap_due(after) == "2026-09-27"
+    dd.mark_sent("2026-09-27")
+    assert dd.recap_due(after + 600) is None
+
+
+def test_group_messages_only_when_asked():
+    private = {"chat": {"type": "private"}, "text": "come va il sistema?"}
+    assert dd.wants_answer(private, "laebot") == "come va il sistema?"
+    group = {"chat": {"type": "group"}, "text": "ciao a tutti"}
+    assert dd.wants_answer(group, "laebot") is None
+    assert dd.wants_answer({**group, "text": "/ask quanti alert oggi?"}, "laebot") == "quanti alert oggi?"
+    assert dd.wants_answer({**group, "text": "@LaeBot quanti alert?"}, "laebot") == "quanti alert?"
+    reply = {**group, "reply_to_message": {"from": {"username": "laebot"}}}
+    assert dd.wants_answer(reply, "laebot") == "ciao a tutti"
+
+
+def test_chat_keeps_a_short_memory_and_a_daily_cap(monkeypatch):
+    seen = []
+
+    async def fake(messages, *, kind, **_):
+        seen.append(messages)
+        dd.record(kind, 100, 50)
+        return f"risposta {len(seen)}"
+    monkeypatch.setattr(dd, "ask", fake)
+    assert asyncio.run(dd.answer("42", "prima", "ctx")) == "risposta 1"
+    asyncio.run(dd.answer("42", "seconda", "ctx"))
+    assert [m["content"] for m in seen[1][1:]] == ["prima", "risposta 1", "seconda"]
+    assert "dimenticato" in asyncio.run(dd.answer("42", "/reset", "ctx")) and "42" not in dd._memory
+    monkeypatch.setattr(dd, "CHAT_DAILY_TOKENS", 1)
+    assert "budget" in asyncio.run(dd.answer("42", "terza", "ctx"))
+
+
+def test_pr_review_usage_reads_the_markers():
+    class R:
+        status_code = 200
+
+        def json(self):
+            return [{"body": '<!-- deepseek-review --><!-- deepseek-usage {"at": 150, "in": 30000, "out": 2000} -->\nx'},
+                    {"body": '<!-- deepseek-usage {"at": 5000, "in": 1, "out": 1} -->'},
+                    {"body": "a human comment"}]
+
+    class H:
+        async def get(self, *a, **k):
+            return R()
+    dd.settings.github_api_token = "t"
+    try:
+        u = asyncio.run(dd.pr_review_usage(100, 200, http=H()))
+    finally:
+        dd.settings.github_api_token = ""
+    assert u == {"calls": 1, "in": 30000, "out": 2000}
