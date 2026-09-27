@@ -1988,5 +1988,19 @@
       "frontend/static/onchain/sheets.js",
       "frontend/static/onchain/alerts.js"
     ]
+  },
+  "seed-0162": {
+    "status": "risolto",
+    "at": 1790543262,
+    "summary": "Alerts: una riga per token, i numeri solo toccandolo. In alto 'About to fire': i token in esame adesso, verde IMMINENT se hanno passato tutti i controlli e aspettano solo il grafico, giallo CHECKING con cosa manca. Poi 'Fired, last 48h' in ordine cronologico, con EARLY per quelli delle ultime 6 ore, lo stato del sistema e il voto di rischio di DeepSeek; i rug e quelli piu' vecchi di 48 ore spariscono dalla lista (restano nella hall of fame delle strategie). In fondo 'Coming back': alert vecchi ancora vivi che risalgono (+30% in 6 ore con piu' acquisti che vendite). Picks, che erano meme coin, e' stata tolta: al suo posto 'Top' con Top 15 / 25 / 50 dei progetti di qualita' a bassa capitalizzazione, aggiornata ogni 30 secondi. DeepSeek aveva ragione su un punto: il riassunto di RugCheck spesso non ha la lista dei holder e noi scrivevamo 0% invece di 'sconosciuto'; ora e' sconosciuto e la memoria non impara piu' da uno zero finto. Sulle authority di mint e freeze invece il controllo c'e' gia' (GoPlus, pilastro 'contract').",
+    "files": [
+      "frontend/static/onchain/top.js",
+      "frontend/static/onchain/alerts.js",
+      "backend/app/trading/onchain/alert_track.py",
+      "backend/app/trading/onchain/listings.py",
+      "backend/app/trading/onchain/legit.py",
+      "backend/app/trading/onchain/outcomes.py",
+      "backend/app/main.py"
+    ]
   }
 }

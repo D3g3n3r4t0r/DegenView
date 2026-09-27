@@ -873,9 +873,9 @@ async def _meme_safety(client: httpx.AsyncClient, now: float, limit: int = MEME_
                 check = legit.judge_rugcheck(report)
                 if report:
                     top, _top10 = legit.holder_concentration(report)
-                    extra = {"top_holder_pct": round(top, 2),
+                    extra = {"top_holder_pct": round(top, 2) if top is not None else None,
                              "warnings": [r.get("name") for r in report.get("risks") or [] if r.get("name")][:8]}
-                if report and check["ok"] is not False and top > MEME_TOP_HOLDER_MAX:
+                if report and check["ok"] is not False and top is not None and top > MEME_TOP_HOLDER_MAX:
                     check = {"ok": False, "detail": f"one wallet holds {top:.0f}%"}
             elif e["chain"] in legit.GOPLUS_CHAIN:
                 check = legit.judge_goplus(await legit.goplus(e["chain"], e["token_address"], client))

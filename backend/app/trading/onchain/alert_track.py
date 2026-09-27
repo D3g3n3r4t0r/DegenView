@@ -452,6 +452,49 @@ def board(kind: str, limit: int = 30, now: float | None = None) -> dict:
             "system": {**sysb, "live": _live(rows, chosen)}}
 
 
+FRESH_S = 48 * 3600       # an alert older than this leaves the feed (the hall of fame keeps it)
+EARLY_S = 6 * 3600
+
+
+def feed(kind: str = "meme", now: float | None = None, limit: int = 40) -> list[dict]:
+    """The Alerts tab: alerts of the last FRESH_S, newest first, without
+    rugs (Lorenzo: "non si riempia il sito di alert vecchi o scaduti che
+    poi si sono rivelati essere rug pull, questa roba deve sparire")."""
+    now = now or time.time()
+    chosen = system_board(kind)["chosen"]
+    rows = [a for a in _alerts.values() if a["kind"] == kind and now - a["at"] <= FRESH_S and not a.get("gone")
+            and not ((a.get("last") or {}).get("ret") or 0) <= -0.8]
+    rows.sort(key=lambda a: -a["at"])
+    return [{"symbol": a["symbol"], "name": a["name"], "chain": a["chain"], "token_address": a["token_address"],
+             "pair_address": a["pair_address"], "pair_url": a["pair_url"], "image": a.get("image"), "at": a["at"],
+             "cap0": a["cap0"], "now": (a.get("last") or {}).get("ret"), "max": a["max_ret"], "returns": a["returns"],
+             "early": now - a["at"] <= EARLY_S, "ai": a.get("ai"), "system": _system_view(a, chosen),
+             "gone": False, "strategy": a.get("strategy")} for a in rows[:limit]]
+
+
+def reviving(kind: str = "meme", now: float | None = None, limit: int = 6) -> list[dict]:
+    """Older alerts (past FRESH_S), still alive, moving again: the price
+    back well above its low and buyers ahead of sellers in the last hour
+    (outcomes' market reading). Lorenzo: "voglio anche poter riesumare
+    roba vecchia che sta ritornando in moda"."""
+    from app.trading.onchain import outcomes
+    now = now or time.time()
+    out = []
+    for a in _alerts.values():
+        if a["kind"] != kind or now - a["at"] <= FRESH_S or a.get("gone"):
+            continue
+        e = outcomes._journal.get(f"{a['chain']}:{a['token_address']}") or {}
+        m = e.get("market") or {}
+        chg = m.get("chg_h6") if m.get("chg_h6") is not None else m.get("chg_h1")
+        if chg is None or chg < 30 or (m.get("buys_h1") or 0) <= (m.get("sells_h1") or 0) or e.get("rug"):
+            continue
+        out.append({"symbol": a["symbol"], "name": a["name"], "chain": a["chain"], "token_address": a["token_address"],
+                    "pair_address": a["pair_address"], "pair_url": a["pair_url"], "image": a.get("image"),
+                    "at": a["at"], "chg": chg, "buys_h1": m.get("buys_h1"), "sells_h1": m.get("sells_h1")})
+    out.sort(key=lambda r: -r["chg"])
+    return out[:limit]
+
+
 def _system_view(a: dict, label: str) -> dict | None:
     r = (a.get("system") or {}).get(label)
     if not r:

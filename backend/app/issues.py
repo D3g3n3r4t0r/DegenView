@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0162", "Alerts troppo carichi; Picks sono meme coin; top 15/25/50; 'lp locked' non protegge",
+     "Lorenzo: 'la tab alert e' confusionale, troppe informazioni, troppe cripto [...] vedere quali alert sono scattati in ordine cronologico [...] cosa sta per scattare [...] riesumare roba vecchia che sta ritornando in moda', 'sostituirei la scheda Picks con la top 15, top 25, top 50 [...] non voglio assolutamente il meme coin', e l'analisi di DeepSeek su lp_locked_pct e top_holder_pct a 0.",
+     "alta"),
     ("seed-0161", "Scansione manuale di un ticker o indirizzo; togliere 'Lorenzo' dalla strategia",
      "Lorenzo: 'aggiungiamo anche l'opzione di aggiungere un indirizzo di un token o il suo ticker che poi va a cercare nel database di DexScreener [...] compresa anche la scansione di DeepSeek e tutto il processo' e 'elimina il nome lorenzo dalla strategia'.",
      "media"),

@@ -2635,7 +2635,7 @@
            data-pane="<vista>:<scheda>"; il resto lo fa main.js. -->
       <nav class="tabs" data-tabs="meme" aria-label="Memes">
         <button type="button" data-tab="alerts" aria-current="page">Alerts</button>
-        <button type="button" data-tab="trending">Picks</button>
+        <button type="button" data-tab="top">Top</button>
         <!-- Lorenzo, 27/09: "ci sono troppe schermate". The scanner is one
              link at the bottom of Alerts, not a tab. -->
         <button type="button" data-tab="scanner" hidden>Scanner</button>
@@ -2764,7 +2764,17 @@
            monitorando, voglio vedere cosa sta scansionando [...] pochi
            tasti". Un interruttore, una riga di stato, i token che segue.
            Il contenuto lo disegna static/onchain/pilot.js. -->
-      <section class="memes" id="memes" data-pane="meme:trending" data-loading>
+      <!-- Top (top.js): the quality low caps, 15 / 25 / 50. Replaced Picks,
+           the meme coins (Lorenzo: "non voglio assolutamente il meme coin"). -->
+      <section class="top-picks" id="top-picks" data-pane="meme:top" data-loading>
+        <div class="picks-head">
+          <span class="picks-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2 21 7v10l-9 5-9-5V7z"/><path d="M3 12l9 5 9-5"/></svg></span>
+          <p><b>Quality low caps, ranked</b><small>Code, research and tokenomics checked, DeepSeek's reading included. No meme coins. Updated live.</small></p>
+        </div>
+        <div class="seg top-size" role="group" aria-label="How many" data-top-size></div>
+        <ol class="memes-list" data-top-rows></ol>
+      </section>
+      <section class="memes" id="memes" data-pane="meme:trending" data-loading hidden>
         <span data-memes-meta hidden></span>
         <!-- Lorenzo: "non e' chiaro che siano state scelte, sembrano appunto
              trending, deve essere chiaro che sono uscite dalla logica". -->
