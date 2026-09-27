@@ -12,7 +12,7 @@ def test_page_is_public_and_leads_to_the_app():
     assert resp.status_code == 200
     assert "ENTER THE APP" in resp.text
     assert 'href="/onchain-app.html"' in resp.text
-    assert "ENTER MEME SNIPER" in resp.text and "ENTER GEM FINDER" in resp.text
+    assert "ENTER APP" in resp.text and "ENTER MEME SNIPER" not in resp.text  # one door: the app
     assert 'id="why"' in resp.text and 'href="#why"' in resp.text
 
 
