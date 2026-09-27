@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0145", "Wallet multi-chain: vedere il saldo di qualunque token su qualunque chain",
+     "Lorenzo: 'il wallet deve essere multi-chain e devo visualizzare il saldo a prescindere da quale token e in quale chain ho'.",
+     "alta"),
     ("seed-0144", "Comprare e vendere dal proprio wallet collegato, firmando nel wallet",
      "Secondo passo del piano per i wallet di chiunque (seed-0143), avviato con 'procedi' e poi 'auto approva tutto quello che proponi d'ora in poi'.",
      "media"),

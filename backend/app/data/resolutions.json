@@ -1781,5 +1781,19 @@
       "frontend/static/onchain/app.css",
       "backend/tests/test_user_swaps.py"
     ]
+  },
+  "seed-0145": {
+    "status": "risolto",
+    "at": 1790527239,
+    "summary": "In alto ora c'e' il totale di tutto: ogni wallet (quelli del sito e quelli collegati), ogni chain, ogni token, in dollari; tocchi e vai al profilo, e passandoci sopra vedi quanto per chain. Letture: Solana con tutti i token SPL e anche Token-2022 (i token pump.fun, che prima mancavano); Base ed Ethereum con tutti gli ERC-20 via Blockscout; Robinhood Chain con ETH e ogni token che il sito abbia mai visto passare (alert, operazioni del sistema, quote), letti in blocco; BSC con il BNB. Un indirizzo EVM e' lo stesso su tutte le chain EVM, quindi viene letto su tutte e quattro. Prezzi da DexScreener (stablecoin a 1 dollaro se non c'e' un pool). Nel profilo le posizioni hanno la chain accanto e dei filtri per chain con il loro valore; i token senza prezzo o sotto il centesimo (gli airdrop spam) non entrano nel totale e stanno sotto 'Show hidden'. Una chain che non risponde viene nominata, mai contata come zero.",
+    "files": [
+      "backend/app/trading/onchain/portfolio.py",
+      "backend/app/main.py",
+      "frontend/static/onchain/main.js",
+      "frontend/static/onchain/profile.js",
+      "frontend/static/onchain/api.js",
+      "frontend/static/onchain/app.css",
+      "backend/tests/test_portfolio.py"
+    ]
   }
 }
