@@ -35,6 +35,7 @@ from pathlib import Path
 RESULT = Path(".deepseek-result.json")
 MAX_CONTEXT = 120_000
 EDIT = re.compile(r"<<<<<<< SEARCH (\S+)\n(.*?)\n?=======\n(.*?)\n?>>>>>>> REPLACE", re.S)
+APPEND = re.compile(r"<<<<<<< APPEND (\S+)\n(.*?)\n?>>>>>>> END", re.S)
 SYSTEM = """You change this repository with SEARCH/REPLACE blocks:
 
 <<<<<<< SEARCH path/to/file
@@ -42,6 +43,14 @@ exact existing lines, enough to be unique
 =======
 new lines
 >>>>>>> REPLACE
+
+To add lines at the end of an existing file (CSS rules, new functions) use:
+
+<<<<<<< APPEND path/to/file
+new lines
+>>>>>>> END
+
+A SEARCH must match exactly one place: include a neighbouring line that is unique.
 
 First line of your answer: `TITLE: <English commit title, imperative>`. Second line:
 `ITALIAN: <one Italian sentence on what changes for the site's users>`. Then only the
@@ -118,6 +127,15 @@ def apply(text: str) -> list[str]:
             errors.append(f"{path}: SEARCH found {src.count(search)} times:\n{search[:300]}")
             continue
         p.write_text(src.replace(search, replace, 1), encoding="utf-8")
+    for path, text_ in APPEND.findall(text):
+        n += 1
+        path = path.removeprefix("path=").strip("`'\":")
+        p = Path(path)
+        if path == "path/to/file" or path.startswith((".github/", "/")) or ".." in p.parts or not p.exists():
+            errors.append(f"{path}: cannot append (missing file or path not allowed)")
+            continue
+        src = p.read_text(encoding="utf-8")
+        p.write_text(src + ("" if src.endswith("\n") else "\n") + text_ + "\n", encoding="utf-8")
     return errors if n else ["no SEARCH/REPLACE block"]
 
 
