@@ -76,7 +76,7 @@ const view = {
 
 /* ------------------------------------------------------------------ chain */
 
-const CHAIN_ICON = { solana: "◎", robinhood: "◆", base: "■" };
+const CHAIN_ICON = { solana: "◎", robinhood: "◆", base: "■", bsc: "◈", ethereum: "Ξ" };
 
 function paintChainStatic() {
   const { label, unit, suffix } = chainInfo();

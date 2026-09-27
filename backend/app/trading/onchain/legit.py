@@ -47,8 +47,12 @@ logger = logging.getLogger(__name__)
 
 RUGCHECK_SUMMARY = "https://api.rugcheck.xyz/v1/tokens/{mint}/report/summary"
 GOPLUS_TOKEN = "https://api.gopluslabs.io/api/v1/token_security/{chain_id}"
-GOPLUS_CHAIN = {"robinhood": "4663", "base": "8453"}
-CHAIN_LABEL = {"solana": "Solana", "robinhood": "Robinhood", "base": "Base"}
+GOPLUS_CHAIN = {"robinhood": "4663", "base": "8453", "bsc": "56", "ethereum": "1"}
+CHAIN_LABEL = {"solana": "Solana", "robinhood": "Robinhood", "base": "Base", "bsc": "BSC", "ethereum": "Ethereum"}
+# Which chains each hunt covers (Lorenzo: "BSC per le Meme insieme a Sol e
+# Robinhood. Poi Eth e Base solo per le Gemme"). Slugs are DexScreener's.
+MEME_CHAINS = ("solana", "robinhood", "bsc")
+GEM_CHAINS = ("solana", "robinhood", "base", "ethereum")
 
 LP_LOCKED_MIN_PCT = 80.0
 # Chi tiene troppa offerta puo' svuotare il pool da solo. Pool, locker e
