@@ -116,8 +116,7 @@ class _FakeClaude:
 
     async def create(self, **kw):
         self.calls.append(kw)
-        body = {"summary": "Poco da dire.", "lessons": [{"area": "meme", "finding": "f", "evidence": "e",
-                                                          "suggestion": "s", "confidence": "low"}], "watch": []}
+        body = {"summary": "Poco da dire.", "actions": ["Alzare la soglia X", "B", "C", "D"]}
         return SimpleNamespace(stop_reason="end_turn", model="claude-sonnet-5",
                                usage=SimpleNamespace(input_tokens=5_000, output_tokens=self.out_tokens),
                                content=[SimpleNamespace(type="text", text=json.dumps(body))])
@@ -125,9 +124,10 @@ class _FakeClaude:
 
 def test_review_counts_tokens_and_stops_at_the_daily_budget(monkeypatch):
     monkeypatch.setattr(settings, "ai_review_daily_tokens", 30_000)
+    monkeypatch.setattr(settings, "ai_review_monthly_tokens", 600_000)
     fake = _FakeClaude()
     e = asyncio.run(ai_review.review(T0, client=fake))
-    assert e["lessons"][0]["area"] == "meme" and e["tokens"] == 5_900
+    assert e["actions"] == ["Alzare la soglia X", "B", "C"] and e["tokens"] == 5_900
     kw = fake.calls[0]
     assert kw["model"] == settings.ai_review_model and kw["output_config"]["format"]["type"] == "json_schema"
     assert ai_review.used_today(T0) == 5_900
@@ -135,7 +135,11 @@ def test_review_counts_tokens_and_stops_at_the_daily_budget(monkeypatch):
     assert asyncio.run(ai_review.review(T0 + 60, client=fake)) is None
     assert ai_review.status(T0)["error"] is None or "budget" in ai_review._state["error"]
     assert len(fake.calls) == 1
-    assert "Revisione" in ai_review.telegram_text(e)
+    assert "Revisione" in ai_review.telegram_text(e) and "• B" in ai_review.telegram_text(e)
+    # The month cap binds too.
+    ai_review._state["usage"] = {ai_review._day(T0 - 86400): 599_000}
+    monkeypatch.setattr(settings, "ai_review_daily_tokens", 40_000)
+    assert ai_review.budget_left(T0) <= 1_000
 
 
 def test_review_needs_a_key(monkeypatch):

@@ -22,7 +22,7 @@
    light-dark() al posto di tre blocchi di token duplicati, oklch
    per i colori e color-mix per derivarne le varianti.
    ============================================================ */
-@layer tokens, base, layout, components, motion;
+@layer tokens, base, layout, components, motion, gemboard;
 
 @layer tokens {
   :root {
@@ -1750,7 +1750,7 @@
   #app-shell:not([data-view="entry"]) #entry,
   /* Gems is research only; the live launch scanner lives with the Meme
      Sniper (Lorenzo, 25/09: "la ricerca al minuto deve stare sullo sniper"). */
-  #app-shell:not([data-view="gems"]) :is(#board, #projects, #gem-alerts),
+  #app-shell:not([data-view="gems"]) :is(#board, #projects),
   #app-shell:not([data-view="meme"]) #meme-alerts,
   #app-shell:not(:is([data-view="meme"], [data-view="gems"])) #review,
   #app-shell:not([data-view="meme"]) :is(#memes, #pilot, #radar),
@@ -2428,12 +2428,11 @@
 
   /* --- daily review ------------------------------------------------ */
   .rv-summary { margin: 0 0 var(--s3); padding-inline: var(--s1); font-size: 14px; line-height: 1.5; color: var(--ink); }
-  .rv-lessons { margin: 0; padding: 0; list-style: none; display: grid; gap: var(--s2);
-    & li { display: grid; gap: 3px; padding: var(--s3); border-radius: 12px; background: var(--panel); border: 1px solid var(--line); }
-    & li[data-conf="high"] { border-color: color-mix(in oklch, var(--live) 45%, var(--line)); }
-    & b { font-size: 13.5px; font-weight: 600; }
-    & span { font-size: 13px; color: var(--ink-dim); }
-    & small { font-size: 11.5px; color: var(--ink-faint); } }
+  .review { padding: var(--s3) var(--s4); border-radius: 16px; background: var(--panel); border: 1px solid var(--line); }
+  .review > header { padding-inline: 0; }
+  .review .rv-summary { padding-inline: 0; margin-block-end: var(--s2); }
+  .rv-actions { margin: 0; padding: 0 0 0 1.1em; display: grid; gap: 4px; font-size: 13px; line-height: 1.45; color: var(--ink-dim);
+    & li::marker { color: var(--live); } }
   #app-shell[data-view="meme"] #review { grid-column: 1 / -1; }
 
   /* --- meme view: the bets first, then the autopilot, then the scanner */
@@ -2445,6 +2444,173 @@
   @media (width < 1100px) {
     /* An empty chart on a phone is a screen of nothing: hide it until there is a pick. */
     .radar-stage:has(> .radar-idle:only-child), #radar .radar-stage:empty { display: none; }
+  }
+}
+
+/* ============================================================
+   Gem board (27/09). Request: "rendi graficamente incredibile la
+   leaderboard delle gemme, animala e usa linguaggio di programmazione
+   modernissimo". Its own layer, last: it wins without !important.
+   Modern CSS only, no library: @property (animatable custom properties:
+   the spinning metal border, the rings that draw themselves),
+   @starting-style (entry values), scroll-driven animations
+   (animation-timeline: view()), View Transitions for rank changes (in
+   leaderboard.js), color-mix() in OKLCH, container-free 3D tilt driven by
+   pointer coordinates. Everything stops under prefers-reduced-motion.
+   ============================================================ */
+@property --gb-a { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+@property --gb-p { syntax: "<number>"; inherits: true; initial-value: 0; }
+
+@layer gemboard {
+  #board { position: relative; isolation: isolate; }
+  /* Aurora behind the podium: three soft lights drifting. */
+  #board::before {
+    content: ""; position: absolute; inset: 30px -8% auto; block-size: 440px; z-index: -1; pointer-events: none;
+    background:
+      radial-gradient(38% 48% at 28% 42%, color-mix(in oklch, var(--gold) 26%, transparent), transparent 70%),
+      radial-gradient(34% 44% at 72% 30%, color-mix(in oklch, var(--live) 20%, transparent), transparent 70%),
+      radial-gradient(30% 40% at 52% 76%, rgb(126 224 255 / .12), transparent 70%);
+    filter: blur(34px); opacity: .75; animation: gb-aurora 18s ease-in-out infinite alternate;
+  }
+  @keyframes gb-aurora { to { transform: translate3d(4%, 3%, 0) scale(1.08) rotate(3deg); } }
+
+  /* --- podium: 2 · 1 · 3 on pedestals ------------------------------ */
+  #board .board-podium { align-items: end; gap: 12px; perspective: 1000px; margin-block: 10px 6px; }
+  #board .board-podium li { order: 2; display: grid; align-content: end; }
+  #board .board-podium li[data-place="2"] { order: 1; }
+  #board .board-podium li[data-place="3"] { order: 3; }
+  #board .board-podium button, #board .board-podium li[data-place="1"] button {
+    position: relative; isolation: isolate; overflow: hidden; block-size: auto;
+    display: grid; grid-template-columns: minmax(0, 1fr); justify-items: center; text-align: center; gap: 8px;
+    padding: 18px 12px 14px; border-radius: 22px; border: 0;
+    background: linear-gradient(180deg, color-mix(in oklch, var(--metal) 12%, #121215), #0c0c0e 78%);
+    box-shadow: 0 28px 60px -34px color-mix(in oklch, var(--metal) 55%, transparent),
+                inset 0 1px 0 rgb(255 255 255 / .06);
+    transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)); transform-style: preserve-3d;
+    transition: transform .3s var(--ease-out), box-shadow .3s;
+    &:hover { box-shadow: 0 34px 70px -30px color-mix(in oklch, var(--metal) 75%, transparent), inset 0 1px 0 rgb(255 255 255 / .1); }
+  }
+  #board .board-podium button > * { grid-column: auto; grid-row: auto; justify-self: center; }
+  /* The metal border travels around the card. */
+  #board .board-podium button::after {
+    content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; padding: 1.5px; pointer-events: none;
+    background: conic-gradient(from var(--gb-a), color-mix(in oklch, var(--metal) 25%, transparent) 0 50%,
+      var(--metal) 68%, color-mix(in oklch, var(--metal), white 55%) 74%, var(--metal) 80%,
+      color-mix(in oklch, var(--metal) 25%, transparent) 96%);
+    mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+    animation: gb-spin 6s linear infinite;
+  }
+  #board .board-podium li[data-place="2"] button::after { animation-duration: 8s; }
+  #board .board-podium li[data-place="3"] button::after { animation-duration: 10s; animation-direction: reverse; }
+  @keyframes gb-spin { to { --gb-a: 360deg; } }
+
+  /* Light that follows the pointer (coordinates set by leaderboard.js). */
+  #board .gb-glow {
+    position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: 0; transition: opacity .3s;
+    background: radial-gradient(260px circle at var(--mx, 50%) var(--my, 0%),
+      color-mix(in oklch, var(--metal, var(--live)) 22%, transparent), transparent 62%);
+  }
+  #board button:hover .gb-glow { opacity: 1; }
+
+  #board .board-podium .bd-medal {
+    position: relative; overflow: hidden; inline-size: 38px; block-size: 38px; font-size: 16px; font-weight: 700;
+    &::after { content: ""; position: absolute; inset: 0; background: linear-gradient(115deg, transparent 35%, rgb(255 255 255 / .75) 50%, transparent 65%);
+      translate: -120% 0; animation: gb-medal 4.5s var(--ease-out) infinite 1.2s; }
+  }
+  @keyframes gb-medal { 0%, 72% { translate: -120% 0; } 100% { translate: 120% 0; } }
+  #board .board-podium .bd-sym b { font-size: 16px; letter-spacing: .02em; }
+  #board .board-podium small { color: var(--ink-dim); }
+
+  /* The score inside a ring that draws itself to the score. */
+  #board .gb-score {
+    --gb-p: var(--v); position: relative; display: grid; place-items: center; inline-size: 92px; aspect-ratio: 1;
+    transition: --gb-p 1.4s var(--ease-out);
+    &::before { content: ""; position: absolute; inset: 0; border-radius: 50%;
+      background: conic-gradient(from -90deg, var(--metal) calc(var(--gb-p) * 1%), rgb(255 255 255 / .07) 0);
+      mask: radial-gradient(farthest-side, transparent calc(100% - 6px), #000 calc(100% - 5px));
+      filter: drop-shadow(0 0 10px color-mix(in oklch, var(--metal) 45%, transparent)); }
+    & b { position: relative; font: 700 32px/1 var(--mono); letter-spacing: -.05em; font-variant-numeric: tabular-nums;
+      background: linear-gradient(180deg, #fff 30%, color-mix(in oklch, var(--metal), white 20%));
+      -webkit-background-clip: text; background-clip: text; color: transparent; }
+  }
+  #board .board-podium li[data-place="1"] .gb-score { inline-size: 112px; & b { font-size: 40px; } }
+
+  /* One small ring per pillar, tinted from red (weak) to lime (strong). */
+  #board .gb-rings { display: flex; gap: 8px; justify-content: center;
+    & i { --gb-p: var(--v); position: relative; display: grid; place-items: center; inline-size: 28px; aspect-ratio: 1;
+      font-style: normal; transition: --gb-p 1.2s var(--ease-out);
+      &::before { content: ""; position: absolute; inset: 0; border-radius: 50%;
+        background: conic-gradient(from -90deg,
+          color-mix(in srgb, var(--live), #ff6a5c calc((100 - var(--v)) * 1.6%)) calc(var(--gb-p) * 1%), rgb(255 255 255 / .08) 0);
+        mask: radial-gradient(farthest-side, transparent calc(100% - 3.5px), #000 calc(100% - 3px)); }
+      & b { position: relative; font: 700 9.5px var(--mono); color: var(--ink-dim); }
+      &[data-off] { opacity: .35; } }
+  }
+
+  /* Pedestals: the podium stands on something. */
+  #board .gb-step {
+    display: block; margin-inline: 8%; block-size: var(--h, 14px); border-radius: 0 0 14px 14px;
+    background: linear-gradient(180deg, color-mix(in oklch, var(--metal) 40%, #141416), #0b0b0c 90%);
+    box-shadow: inset 0 1px 0 color-mix(in oklch, var(--metal) 60%, transparent);
+    transform-origin: top;
+  }
+  #board .board-podium li[data-place="1"] { --h: 34px; }
+  #board .board-podium li[data-place="2"] { --h: 22px; }
+  #board .board-podium li[data-place="3"] { --h: 12px; }
+
+  /* --- the rest of the board -------------------------------------- */
+  #board .board-list { margin-block-start: 16px; display: grid; gap: 6px;
+    & li { border: 0; }
+    & button { position: relative; isolation: isolate; overflow: hidden;
+      grid-template-columns: 34px minmax(0, 1fr) auto 64px; gap: 14px; padding: 12px 14px; border-radius: 16px;
+      background: linear-gradient(90deg, rgb(255 255 255 / .03), rgb(255 255 255 / .01));
+      border: 1px solid var(--line); transition: transform .25s var(--ease-out), border-color .25s, background .25s;
+      &:hover { transform: translateX(4px); border-color: color-mix(in oklch, var(--live) 40%, var(--line));
+        background: linear-gradient(90deg, color-mix(in oklch, var(--live) 6%, transparent), rgb(255 255 255 / .01)); } }
+    & .bd-rank { font: 700 18px var(--mono); color: var(--ink-faint); }
+    & .gb-rings { gap: 6px; & i { inline-size: 24px; } }
+    & li[data-early] button { border-color: rgb(255 210 74 / .5);
+      box-shadow: 0 0 0 1px rgb(255 210 74 / .12), 0 14px 34px -22px #ffd24a; }
+    & li[aria-expanded="true"] button { border-color: color-mix(in oklch, var(--live) 60%, var(--line)); }
+  }
+  #board .gb-total { --gb-p: var(--v); display: grid; justify-items: end; gap: 6px; transition: --gb-p 1.2s var(--ease-out);
+    & b { font: 700 19px var(--mono); letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+    & i { inline-size: 100%; block-size: 4px; border-radius: 99px;
+      background: linear-gradient(90deg, var(--live) calc(var(--gb-p) * 1%), rgb(255 255 255 / .08) 0);
+      box-shadow: 0 0 12px -2px color-mix(in oklch, var(--live) 50%, transparent); } }
+
+  /* --- first arrival: pedestals rise, cards drop in 3 · 2 · 1 ------ */
+  @media (prefers-reduced-motion: no-preference) {
+    #board[data-enter] .board-podium li { animation: gb-pop .8s var(--ease-out) backwards; }
+    #board[data-enter] .board-podium li[data-place="3"] { animation-delay: .05s; }
+    #board[data-enter] .board-podium li[data-place="2"] { animation-delay: .2s; }
+    #board[data-enter] .board-podium li[data-place="1"] { animation-delay: .38s; }
+    #board[data-enter] .gb-step { animation: gb-rise .7s var(--ease-out) backwards .1s; }
+    @keyframes gb-pop { from { opacity: 0; transform: translateY(26px) scale(.94); } }
+    @keyframes gb-rise { from { transform: scaleY(0); } }
+    /* Rows appear as they scroll into view: no JavaScript involved. */
+    @supports (animation-timeline: view()) {
+      #board .board-list li { animation: gb-row linear both; animation-timeline: view(); animation-range: entry 0% entry 70%; }
+      @keyframes gb-row { from { opacity: 0; transform: translateY(20px) scale(.97); } }
+    }
+  }
+  @starting-style {
+    #board[data-enter] :is(.gb-score, .gb-rings i, .gb-total) { --gb-p: 0; }
+  }
+  ::view-transition-group(*) { animation-timing-function: cubic-bezier(.2, .8, .2, 1); }
+
+  @media (max-width: 520px) {
+    #board .board-podium { gap: 6px; }
+    #board .board-podium button, #board .board-podium li[data-place="1"] button { padding: 14px 6px 10px; gap: 6px; border-radius: 18px; }
+    #board .gb-score { inline-size: 66px; & b { font-size: 24px; } }
+    #board .board-podium li[data-place="1"] .gb-score { inline-size: 80px; & b { font-size: 29px; } }
+    #board .board-podium .gb-rings { gap: 4px; & i { inline-size: 22px; } }
+    #board .board-podium .bd-medal { inline-size: 30px; block-size: 30px; font-size: 13px; }
+    #board .board-list button { grid-template-columns: 26px minmax(0, 1fr) 52px; gap: 10px; padding: 10px 12px; }
+    #board .board-list .gb-rings { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #board *, #board *::before, #board *::after, #board::before { animation: none !important; transition: none !important; }
   }
 }
 </style>
@@ -2562,12 +2728,6 @@
         </div>
       </section>
 
-      <!-- Gli avvisi Telegram delle gemme e cosa avrebbero reso (alert_track.py). -->
-      <section class="alerts" id="gem-alerts" data-alerts-kind="gem" data-loading>
-        <header><h3>Telegram alerts: results</h3><span data-alerts-meta></span></header>
-        <div data-alerts-body></div>
-      </section>
-
       <!-- Il database dei progetti (projects_db.py). Richiesta: "vedi sempre
            i soliti... ma fatti un database no?". Tutto cio' che il Gem Finder
            ha visto, con il verdetto e il perche'. Lo disegna static/onchain/projects.js. -->
@@ -2659,7 +2819,7 @@
 
       <!-- Il revisore giornaliero (ai_review.py): Claude legge cosa e' successo
            davvero ai segnali e propone cosa cambiare. -->
-      <section class="review" id="review" data-loading>
+      <section class="review" id="review" hidden>
         <header><h3>Daily review</h3><span data-review-meta></span></header>
         <div data-review-body></div>
       </section>

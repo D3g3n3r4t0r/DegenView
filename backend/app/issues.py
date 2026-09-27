@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0125", "Leaderboard delle gemme graficamente incredibile e animata; sito senza roba inutile, review semplice",
+     "Lorenzo: 'come gestiamo il revisore claude ? non voglio che finisca i miei token; non complicare il sito con roba inutile; la daily review deve essere semplice; rendi graficamente incredibile la leaderboard delle gemme, animala e usa linguaggio di programmazione modernissimo per farlo'.",
+     "media"),
     ("seed-0124", "Un'istanza di Claude Sonnet sul server che impara dagli errori, con un tetto di token al giorno",
      "Lorenzo: 'sto pensando di mettere un istanza di claude sonnet nel server per farlo lavorare (con un massimo di token al giorno) cosi' impariamo dagli errori'.",
      "media"),

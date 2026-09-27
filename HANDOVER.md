@@ -40,6 +40,16 @@ al giorno, cosi' impariamo dagli errori".
   `ai_review_daily_tokens` (200k) contato dall'usage reale. Lezioni NON
   applicate da sole. API `/api/onchain/ai-review`, Telegram sulla chat di sistema.
   Serve `ANTHROPIC_API_KEY` (la inserisce Lorenzo).
+- Poi Lorenzo: "non voglio che finisca i miei token", "non complicare il sito
+  con roba inutile", "la daily review deve essere semplice". Revisore: effort
+  low, output max 3000, risposta = `summary` + max 3 `actions`; tetti 40k/giorno
+  e 600k/mese (~$0.06 a revisione). Consigliato a Lorenzo: chiave API dedicata
+  con limite di spesa mensile in Console. Tolta la tabella alert delle gemme.
+- "rendi graficamente incredibile la leaderboard delle gemme, animala":
+  layer CSS `gemboard` in fondo a `onchain-app.html` (@property, @starting-style,
+  animation-timeline: view(), View Transitions in `leaderboard.js` con
+  `view-transition-name` per progetto, tilt/luce al puntatore, conteggio
+  punteggi). Entrata solo al primo disegno (`#board[data-enter]`). `seed-0125`.
 
 ---
 
