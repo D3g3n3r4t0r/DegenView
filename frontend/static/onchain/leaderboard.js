@@ -42,6 +42,10 @@ const yes = (v) => (v ? "yes" : "no");
 export function mountLeaderboard() {
   root = ROOT.querySelector("#board");
   if (!root) return;
+  if (matchMedia("(pointer: fine)").matches) {
+    root.addEventListener("pointermove", tilt);
+    root.addEventListener("pointerout", untilt);
+  }
   root.addEventListener("click", (event) => {
     const row = event.target.closest("[data-board]");
     if (!row || event.target.closest("a")) return;
@@ -81,6 +85,23 @@ async function refresh() {
 // ------------------------------------------------------------------ disegno
 
 function paint(animate) {
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const painted = root.querySelector("[data-board-podium]").childElementCount > 0;
+  // Rank changes morph with the View Transitions API; FLIP where it is missing.
+  if (animate && painted && document.startViewTransition && !reduced && document.visibilityState === "visible") {
+    document.startViewTransition(() => render(false));
+    return;
+  }
+  render(animate);
+}
+
+function render(animate) {
+  // First paint only: the entrance (pedestals rise, cards drop in 3-2-1).
+  if (!root.dataset.seen) {
+    root.dataset.seen = "1";
+    root.dataset.enter = "";
+    setTimeout(() => delete root.dataset.enter, 2000);
+  }
   root.querySelector("[data-board-podium]").hidden = false;
   root.hidden = false;
   delete root.dataset.loading;
@@ -107,6 +128,7 @@ function paint(animate) {
   paintMeta();
   paintTrack();
   paintEarly(entries);
+  countUp();
   if (before) slide(before);
 }
 
@@ -139,14 +161,6 @@ function move(e) {
   return `<i class="bd-move" data-dir="${d > 0 ? "up" : "down"}">${d > 0 ? "▲" : "▼"}${Math.abs(d)}</i>`;
 }
 
-function bars(e) {
-  return `<span class="bd-bars">${PILLARS.map(([k, label, letter]) => {
-    const v = e.pillars?.[k]?.score;
-    if (k === "github" && e.closed_source) return `<span title="${label}: no public code" style="--v:0;opacity:.45"><b>${letter}</b></span>`;
-    return `<span title="${label} ${v ?? 0}" style="--v:${v ?? 0}"><b>${letter}</b></span>`;
-  }).join("")}</span>`;
-}
-
 function badges(e) {
   const out = [];
   if (e.benchmark) out.push(`<em data-tone="gold">benchmark</em>`);
@@ -166,32 +180,89 @@ function badges(e) {
   return out.join("");
 }
 
+// Stable, CSS-safe name per project for the View Transitions API: a rank
+// change morphs each card from its old place to the new one.
+const vtName = (k) => `gb-${[...k].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7).toString(36)}`;
+
+/** Three rings, one per pillar: the arc is the score, drawn in on arrival. */
+function rings(e) {
+  return `<span class="gb-rings">${PILLARS.map(([k, label, letter]) => {
+    const closed = k === "github" && e.closed_source;
+    const v = closed ? 0 : Math.round(e.pillars?.[k]?.score ?? 0);
+    return `<i style="--v:${v}" title="${label} ${closed ? "no public code" : v}"${closed ? ' data-off="1"' : ""}><b>${letter}</b></i>`;
+  }).join("")}</span>`;
+}
+
 function podiumCard(e, i) {
   const k = key(e);
-  return `<li data-place="${i + 1}"${open === k ? ' aria-expanded="true"' : ""}>
-    <button type="button" data-board="${escapeHtml(k)}" aria-label="${PLACES[i]} place, ${escapeHtml(e.symbol)}">
+  const total = Math.round(e.score ?? 0);
+  return `<li data-place="${i + 1}"${open === k ? ' aria-expanded="true"' : ""} style="view-transition-name:${vtName(k)};--i:${i}">
+    <button type="button" data-board="${escapeHtml(k)}" aria-label="${PLACES[i]} place, ${escapeHtml(e.symbol)}, score ${total}">
+      <span class="gb-glow" aria-hidden="true"></span>
       <span class="bd-medal" aria-hidden="true">${i + 1}</span>
       <span class="bd-sym"><b>${escapeHtml(e.symbol)}</b>${move(e)}</span>
-      <span class="bd-total">${score(e.score)}</span>
-      ${bars(e)}
+      <span class="gb-score" style="--v:${total}"><b data-num="${total}">${total}</b></span>
+      ${rings(e)}
       <small><span data-age="${e.launched_at ?? ""}">${since(e.launched_at)}</span> · ${usd(e.market_cap)}</small>
       <span class="bd-tags">${badges(e)}</span>
       ${e.benchmark ? `<p class="bd-honor">Honorable mention</p>` : ""}
     </button>
+    <span class="gb-step" aria-hidden="true"></span>
   </li>`;
 }
 
 function row(e) {
   const k = key(e);
-  return `<li${open === k ? ' aria-expanded="true"' : ""}>
+  const total = Math.round(e.score ?? 0);
+  return `<li${open === k ? ' aria-expanded="true"' : ""}${e.early ? ' data-early="1"' : ""} style="view-transition-name:${vtName(k)}">
     <button type="button" data-board="${escapeHtml(k)}">
+      <span class="gb-glow" aria-hidden="true"></span>
       <span class="bd-rank">${e.rank}</span>
       <span class="tk-name"><b>${escapeHtml(e.symbol)} ${move(e)}</b>
         <small>launched <span data-age="${e.launched_at ?? ""}">${since(e.launched_at)}</span> ago · ${usd(e.market_cap)} · ${CHAINS[e.chain] ?? e.chain} ${badges(e)}</small></span>
-      ${bars(e)}
-      <span class="bd-total">${score(e.score)}</span>
+      ${rings(e)}
+      <span class="gb-total" style="--v:${total}"><b data-num="${total}">${total}</b><i aria-hidden="true"></i></span>
     </button>
   </li>`;
+}
+
+/** Scores count up from where they were (or from 0) instead of jumping. */
+const shown = new Map();
+function countUp() {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  root.querySelectorAll("[data-num]").forEach((el) => {
+    const id = el.closest("[data-board]")?.dataset.board ?? "";
+    const to = Number(el.dataset.num);
+    const from = shown.get(id) ?? 0;
+    shown.set(id, to);
+    if (from === to) return;
+    const t0 = performance.now();
+    const step = (t) => {
+      const p = Math.min(1, (t - t0) / 900);
+      el.textContent = String(Math.round(from + (to - from) * (1 - (1 - p) ** 3)));
+      if (p < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  });
+}
+
+/** Pointer-driven tilt and light, only where there is a real pointer. */
+function tilt(event) {
+  const card = event.target.closest?.(".board-podium button, .board-list button");
+  if (!card) return;
+  const r = card.getBoundingClientRect();
+  const x = (event.clientX - r.left) / r.width;
+  const y = (event.clientY - r.top) / r.height;
+  card.style.setProperty("--mx", `${x * 100}%`);
+  card.style.setProperty("--my", `${y * 100}%`);
+  if (card.closest(".board-podium")) {
+    card.style.setProperty("--ry", `${(x - 0.5) * 10}deg`);
+    card.style.setProperty("--rx", `${(0.5 - y) * 8}deg`);
+  }
+}
+function untilt(event) {
+  const card = event.target.closest?.(".board-podium button, .board-list button");
+  if (card && !card.contains(event.relatedTarget)) ["--rx", "--ry"].forEach((v) => card.style.removeProperty(v));
 }
 
 function fact(label, value) {

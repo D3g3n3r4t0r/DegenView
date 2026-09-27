@@ -14,15 +14,17 @@ already measure, never raw web text:
 - the Gem Finder: 7/30/90-day returns of what it ranked, the project
   database funnel and its most common rejection reasons.
 
-It answers with structured lessons (finding, evidence, suggestion,
-confidence). They are shown in the app and sent to the system Telegram
-chat; they are NOT applied to the rules automatically: a threshold changes
+It answers with a two-sentence summary and at most three actions, in
+Italian (Lorenzo: "la daily review deve essere semplice"). They are shown in
+the app and sent to the system Telegram chat; they are NOT applied to the rules automatically: a threshold changes
 when a person reads the lesson and agrees, because a pattern over thirty
 tokens is exactly the kind of noise the memory already refuses to trust.
 
-The budget is hard: tokens used today (input + output, from the API's own
-usage) are counted per UTC day, and a review that could push the total past
-`ai_review_daily_tokens` is not sent. Without `anthropic_api_key` nothing
+The budget is hard (Lorenzo: "non voglio che finisca i miei token"): tokens
+used (input + output, from the API's own usage) are counted per UTC day and
+per month, and a review that could push either past `ai_review_daily_tokens`
+or `ai_review_monthly_tokens` is not sent. One review a day at low effort
+costs about $0.06. Without `anthropic_api_key` nothing
 runs.
 """
 from __future__ import annotations
@@ -40,34 +42,20 @@ logger = logging.getLogger(__name__)
 _STORE_FILE = storage.data_file("onchain_ai_review.json")
 REVIEW_EVERY_S = 24 * 3600
 FIRST_DELAY_S = 30 * 60           # after a deploy, let the loops collect first
-MAX_OUTPUT_TOKENS = 8_000
-MAX_INPUT_CHARS = 60_000          # ~15k tokens of facts at most
+MAX_OUTPUT_TOKENS = 3_000
+MAX_INPUT_CHARS = 36_000          # ~12k tokens of facts at most
 KEEP_REVIEWS = 30
 
 SCHEMA = {
     "type": "object",
     "properties": {
         "summary": {"type": "string"},
-        "lessons": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "area": {"type": "string", "enum": ["meme", "alerts", "gems", "data"]},
-                    "finding": {"type": "string"},
-                    "evidence": {"type": "string"},
-                    "suggestion": {"type": "string"},
-                    "confidence": {"type": "string", "enum": ["low", "medium", "high"]},
-                },
-                "required": ["area", "finding", "evidence", "suggestion", "confidence"],
-                "additionalProperties": False,
-            },
-        },
-        "watch": {"type": "array", "items": {"type": "string"}},
+        "actions": {"type": "array", "items": {"type": "string"}},
     },
-    "required": ["summary", "lessons", "watch"],
+    "required": ["summary", "actions"],
     "additionalProperties": False,
 }
+MAX_ACTIONS = 3
 
 SYSTEM = (
     "You review a crypto research app's own signals against what happened afterwards. Two products: a "
@@ -78,8 +66,9 @@ SYSTEM = (
     "better than lower ones, where the data is too thin to say anything. Be concrete and quantitative, "
     "cite the numbers you rely on, prefer 'not enough data yet' over a story. Suggestions name the rule "
     "and the direction of the change (for example: lower the top-holder cap from 15% to 10%), never a "
-    "trade. At most 6 lessons. summary: two plain sentences for the founder. watch: up to 3 short things "
-    "to check next time. Write summary, lessons and watch in Italian: the founder reads them in Italian."
+    "trade. summary: at most two short plain sentences: how the signals did and the one thing that matters. "
+    "actions: at most 3, one short sentence each, each naming a rule and a direction of change with the "
+    "number behind it; fewer or none when the data is too thin. Write in Italian: the founder reads Italian."
 )
 
 _state: dict = {"reviews": [], "usage": {}, "last_at": 0.0, "error": ""}
@@ -114,8 +103,14 @@ def used_today(now: float | None = None) -> int:
     return int(_state["usage"].get(_day(now or time.time()), 0))
 
 
+def used_this_month(now: float | None = None) -> int:
+    month = _day(now or time.time())[:7]
+    return sum(int(n) for d, n in _state["usage"].items() if d.startswith(month))
+
+
 def budget_left(now: float | None = None) -> int:
-    return max(0, settings.ai_review_daily_tokens - used_today(now))
+    return max(0, min(settings.ai_review_daily_tokens - used_today(now),
+                      settings.ai_review_monthly_tokens - used_this_month(now)))
 
 
 def enabled() -> bool:
@@ -125,7 +120,8 @@ def enabled() -> bool:
 def status(now: float | None = None) -> dict:
     now = now or time.time()
     return {"enabled": enabled(), "model": settings.ai_review_model, "daily_tokens": settings.ai_review_daily_tokens,
-            "used_today": used_today(now), "last_at": _state["last_at"] or None, "error": _state["error"] or None}
+            "monthly_tokens": settings.ai_review_monthly_tokens, "used_today": used_today(now),
+            "used_month": used_this_month(now), "last_at": _state["last_at"] or None, "error": _state["error"] or None}
 
 
 def latest() -> dict | None:
@@ -168,7 +164,7 @@ async def review(now: float | None = None, client=None) -> dict | None:
         return None
     prompt = json.dumps(facts(now), ensure_ascii=False, default=str)[:MAX_INPUT_CHARS]
     if _estimate(prompt) > budget_left(now):
-        _state["error"] = "daily token budget reached"
+        _state["error"] = "token budget reached"
         return None
     try:
         if client is None:
@@ -184,7 +180,7 @@ async def review(now: float | None = None, client=None) -> dict | None:
     usage = getattr(msg, "usage", None)
     spent = int(getattr(usage, "input_tokens", 0) or 0) + int(getattr(usage, "output_tokens", 0) or 0)
     day = _day(now)
-    _state["usage"] = {d: n for d, n in _state["usage"].items() if d >= _day(now - 14 * 86400)}
+    _state["usage"] = {d: n for d, n in _state["usage"].items() if d >= _day(now - 40 * 86400)}
     _state["usage"][day] = _state["usage"].get(day, 0) + spent
     _state["last_at"] = now
     if msg.stop_reason == "refusal":
@@ -197,7 +193,9 @@ async def review(now: float | None = None, client=None) -> dict | None:
         _state["error"] = "unreadable answer"
         _save()
         return None
-    entry = {"at": now, "model": getattr(msg, "model", settings.ai_review_model), "tokens": spent, **out}
+    entry = {"at": now, "model": getattr(msg, "model", settings.ai_review_model), "tokens": spent,
+             "summary": (out.get("summary") or "").strip(),
+             "actions": [a.strip() for a in out.get("actions") or [] if a and a.strip()][:MAX_ACTIONS]}
     _state["reviews"].insert(0, entry)
     del _state["reviews"][KEEP_REVIEWS:]
     _state["error"] = ""
@@ -209,7 +207,7 @@ async def _ask(client, prompt: str):
     return await client.messages.create(
         model=settings.ai_review_model, max_tokens=MAX_OUTPUT_TOKENS, system=SYSTEM,
         thinking={"type": "adaptive"},
-        output_config={"effort": "medium", "format": {"type": "json_schema", "schema": SCHEMA}},
+        output_config={"effort": "low", "format": {"type": "json_schema", "schema": SCHEMA}},
         messages=[{"role": "user", "content": f"<facts>\n{prompt}\n</facts>"}],
     )
 
@@ -222,10 +220,7 @@ def due(now: float | None = None) -> bool:
 def telegram_text(entry: dict) -> str:
     import html
     lines = ["🧠 <b>Revisione del giorno</b>", html.escape(entry.get("summary") or "")]
-    for x in (entry.get("lessons") or [])[:6]:
-        lines.append(f"• <b>{html.escape(x['area'])}</b> ({html.escape(x['confidence'])}): "
-                     f"{html.escape(x['finding'])} → {html.escape(x['suggestion'])}")
-    lines.append(f"<i>{entry.get('tokens', 0):,} token</i>")
+    lines += [f"• {html.escape(a)}" for a in entry.get("actions") or []]
     return "\n".join(lines)
 
 

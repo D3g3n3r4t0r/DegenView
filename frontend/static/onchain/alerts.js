@@ -62,25 +62,17 @@ function mountOne(root, kind) {
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refresh(); });
 }
 
+/** The daily review, kept simple: two sentences and at most three actions. */
 function mountReview(root) {
   api.getAiReview().then((data) => {
     const r = data.latest;
-    const st = data.status ?? {};
     delete root.dataset.loading;
-    const budget = `${(st.used_today ?? 0).toLocaleString("en-US")} / ${(st.daily_tokens ?? 0).toLocaleString("en-US")} tokens today`;
-    root.querySelector("[data-review-meta]").textContent = st.enabled ? budget : "off";
-    const body = root.querySelector("[data-review-body]");
-    if (!r) {
-      body.innerHTML = `<p class="track-note">${st.enabled
-        ? "The first review runs within a day of the deploy: Claude reads what really happened to the signals and writes what to change."
-        : "Off: needs the Anthropic API key on the server."}</p>`;
-      return;
-    }
-    body.innerHTML = `<p class="rv-summary">${escapeHtml(r.summary ?? "")}</p>
-      <ol class="rv-lessons">${(r.lessons ?? []).map((x) => `<li data-conf="${escapeHtml(x.confidence)}">
-        <b>${escapeHtml(x.finding)}</b><span>${escapeHtml(x.suggestion)}</span><small>${escapeHtml(x.area)} · ${escapeHtml(x.confidence)} · ${escapeHtml(x.evidence)}</small></li>`).join("")}</ol>
-      <p class="track-note">${new Date(r.at * 1000).toLocaleString()} · ${escapeHtml(r.model ?? "")} · lessons are proposals: rules change only when a person agrees.</p>`;
-  }).catch(() => { delete root.dataset.loading; });
+    if (!r) { root.hidden = true; return; }
+    root.hidden = false;
+    root.querySelector("[data-review-meta]").textContent = new Date(r.at * 1000).toLocaleDateString();
+    root.querySelector("[data-review-body]").innerHTML = `<p class="rv-summary">${escapeHtml(r.summary ?? "")}</p>
+      ${(r.actions ?? []).length ? `<ul class="rv-actions">${r.actions.map((a) => `<li>${escapeHtml(a)}</li>`).join("")}</ul>` : ""}`;
+  }).catch(() => { root.hidden = true; });
 }
 
 export function mountAlerts() {

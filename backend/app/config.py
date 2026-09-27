@@ -65,9 +65,14 @@ class Settings(BaseSettings):
     # Claude reads what really happened to the signals and writes lessons.
     # Request: "un'istanza di claude sonnet nel server [...] con un massimo di
     # token al giorno, cosi' impariamo dagli errori". Needs anthropic_api_key.
+    # Cost: one review is ~15k tokens (~$0.06 on Sonnet 5), so ~$2 a month.
+    # Two hard caps, counted from the API's own usage: per UTC day and per
+    # calendar month. The key is a separate API key from the Console, billed
+    # apart from any Claude subscription: it never uses the founder's chat quota.
     ai_review_enabled: bool = True
     ai_review_model: str = "claude-sonnet-5"
-    ai_review_daily_tokens: int = 200_000
+    ai_review_daily_tokens: int = 40_000
+    ai_review_monthly_tokens: int = 600_000
     # Non piu' usata: Token Sniffer e' stato sostituito da GoPlus, pubblico.
     # Resta perche' un .env che la contiene non blocchi l'avvio.
     tokensniffer_api_key: str = ""

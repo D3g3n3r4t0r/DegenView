@@ -1523,13 +1523,25 @@
   },
   "seed-0124": {
     "status": "risolto",
-    "at": 1790490144,
-    "summary": "Un revisore giornaliero con Claude Sonnet 5 (ai_review.py): una volta al giorno legge i numeri gia' misurati (storico dei trade simulati sui meme, meme scartati che sono saliti, alert Telegram a ogni ora, storico delle gemme, motivi di bocciatura del database) e scrive in italiano fino a 6 lezioni con prova e proposta. Si vedono nella scheda 'Daily review' e arrivano sulla chat Telegram di sistema. Tetto rigido: 200 000 token al giorno (ai_review_daily_tokens), contati dall'uso reale dell'API. Le lezioni sono proposte: le regole cambiano solo quando una persona e' d'accordo. Serve la chiave ANTHROPIC_API_KEY sul server.",
+    "at": 1790490612,
+    "summary": "Un revisore giornaliero con Claude Sonnet 5 (ai_review.py): una volta al giorno legge i numeri gia' misurati (storico dei trade simulati sui meme, meme scartati che sono saliti, alert Telegram a ogni ora, storico delle gemme, motivi di bocciatura del database) e risponde in italiano con due frasi e al massimo tre azioni, nella scheda 'Daily review' e sulla chat Telegram di sistema. Due tetti rigidi contati dall'uso reale dell'API: 40 000 token al giorno e 600 000 al mese; una revisione costa circa 6 centesimi, circa 2 dollari al mese. Usa una chiave API separata (Console Anthropic), non l'abbonamento a Claude. Le azioni sono proposte: le regole cambiano solo quando una persona e' d'accordo.",
     "files": [
       "backend/app/trading/onchain/ai_review.py",
       "backend/app/config.py",
       "backend/app/main.py",
       "frontend/static/onchain/alerts.js"
+    ]
+  },
+  "seed-0125": {
+    "status": "risolto",
+    "at": 1790490612,
+    "summary": "La classifica delle gemme e' rifatta: podio 2-1-3 su piedistalli che salgono all'apertura, bordo metallico che ruota intorno a ogni carta, punteggio dentro un anello che si disegna fino al valore e conta da zero, un anello per pilastro (GitHub, Ricerca, Tokenomics) dal rosso al lime, inclinazione 3D e luce che seguono il mouse, righe che compaiono scorrendo, e quando cambia la classifica le carte scivolano al nuovo posto (View Transitions). Solo CSS e JavaScript moderni del browser, niente librerie; tutto si ferma con 'riduci movimento'. Tolta la tabella dei risultati degli alert delle gemme (vuota e doppia rispetto allo storico) e la review e' ridotta a due frasi e tre azioni, e sparisce finche' non ce n'e' una.",
+    "files": [
+      "frontend/onchain-app.html",
+      "frontend/static/onchain/leaderboard.js",
+      "frontend/static/onchain/alerts.js",
+      "backend/app/trading/onchain/ai_review.py",
+      "backend/app/config.py"
     ]
   }
 }
