@@ -312,7 +312,7 @@ async def backfill(client: httpx.AsyncClient, items: list[dict], kind: str = "me
 SYSTEM_FETCHES_PER_TICK = 6
 # Bump when system.follow's output changes: finished alerts are fetched and
 # recomputed once more (v2: each sell says why, "crash" or "signal").
-SYSTEM_VERSION = 3   # 3: a trend already on at the alert is joined (ONHAND)
+SYSTEM_VERSION = 4   # 4: every strategy backtested on the alert's chart
 
 
 async def refresh_system(client, now: float | None = None, gap_s: float = BACKFILL_GAP_S) -> int:
@@ -352,6 +352,7 @@ async def refresh_system(client, now: float | None = None, gap_s: float = BACKFI
         if not a.get("bars_fetched") or (sig == a.get("system_sig") and now < a["at"] + system.WINDOW_S):
             continue
         res = await asyncio.to_thread(system.evaluate, bars, a["at"], gone=a["gone"], now=now)
+        a["backtests"] = await asyncio.to_thread(system.backtest_all, bars)
         a["system"], a["system_sig"], a["system_v"] = res, sig, SYSTEM_VERSION
         changed += 1
         if all(r.get("done") for r in res.values()):
@@ -431,7 +432,8 @@ def _item(a: dict, now: float, chosen) -> dict:
             "pair_address": a["pair_address"], "pair_url": a["pair_url"], "image": a.get("image"), "at": a["at"], "cap0": a["cap0"], "returns": a["returns"],
             "now": (a.get("last") or {}).get("ret"), "max": a["max_ret"], "gone": a["gone"],
             "age_h": round((now - a["at"]) / 3600, 1), "strategy": a.get("strategy"),
-            "system": _system_view(a, chosen), "systems": [v for v in systems if v]}
+            "system": _system_view(a, chosen), "systems": [v for v in systems if v],
+            "backtests": a.get("backtests")}
 
 
 def for_token(chain: str, token: str, now: float | None = None) -> list[dict]:
