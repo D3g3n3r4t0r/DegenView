@@ -149,7 +149,7 @@ def test_readme_addresses_skips_words_and_known_programs():
             f"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA. Robinhood: {EVM}\n"
             "abcdefghijkmnopqrstuvwxyzabcdefghijk")
     out = d.readme_addresses(text)
-    assert out == {"solana": [MINT], "robinhood": [EVM], "base": [EVM]}
+    assert out == {"solana": [MINT], "robinhood": [EVM], "base": [EVM], "ethereum": [EVM]}
 
 
 def test_search_candidates_keeps_fresh_own_repos():
@@ -236,3 +236,12 @@ def test_base_is_searched_like_the_other_chains():
     assert addrs["base"] == addrs["robinhood"] == ["0x1111111111111111111111111111111111111111"]
     rows = [{"id": "book", "platforms": {"base": "0xAbC"}}]
     assert d.chain_index(rows)["base"] == {"book"}
+
+
+def test_meme_and_gem_chains_are_split():
+    from app.trading.onchain import legit, radar, traction
+    # "BSC per le Meme insieme a Sol e Robinhood. Poi Eth e Base solo per le Gemme"
+    assert set(radar.CHAINS) == {"solana", "robinhood", "bsc"}
+    assert set(d.CG_CATEGORIES) == set(d.CG_PLATFORMS) == {"solana", "robinhood", "base", "ethereum"}
+    assert all(c in legit.GOPLUS_CHAIN for c in ("bsc", "base", "ethereum"))
+    assert traction._token("ethereum", "0xAbC") == "0xabc" and traction._token("base", "0xAbC") is None

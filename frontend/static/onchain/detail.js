@@ -18,7 +18,7 @@ let current = null;
 let interval = "15m";
 let tab = "signal";
 
-// Chains the wallet can swap on; the others (Base) are scanned, not traded here.
+// Chains the wallet can swap on; the others (BSC, Base, Ethereum) are scanned, not traded here.
 const TRADABLE = new Set(["solana", "robinhood"]);
 
 /** entry: {kind, symbol, name, chain, token, pair, pairUrl, image, cap,

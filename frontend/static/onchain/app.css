@@ -107,7 +107,9 @@
     & svg { inline-size: 13px; block-size: 13px; fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
     &[data-chain="solana"] svg { stroke: url(#sol-grad) #19fb9b; stroke: #14f195; }
     &[data-chain="robinhood"] svg { stroke: #c8f169; }
-    &[data-chain="base"] svg { stroke: none; fill: #3c8aff; } }
+    &[data-chain="base"] svg { stroke: none; fill: #3c8aff; }
+    &[data-chain="bsc"] svg { stroke: none; fill: #f0b90b; }
+    &[data-chain="ethereum"] svg { stroke: none; fill: #a5b4fc; } }
   .trow-main { display: grid; gap: 6px; min-inline-size: 0;
     & b { display: flex; align-items: center; gap: 8px; min-inline-size: 0; font: 600 17px/1.2 var(--sans); color: var(--k-text);
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

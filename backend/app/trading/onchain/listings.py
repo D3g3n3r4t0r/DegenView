@@ -524,7 +524,7 @@ async def _poll_pumpfun(client: httpx.AsyncClient) -> None:
 
 
 async def _poll_gecko(client: httpx.AsyncClient) -> None:
-    for chain in ("solana", "robinhood", "base"):
+    for chain in legit.MEME_CHAINS:
         r = await client.get(f"{GECKO_BASE}/networks/{chain}/new_pools", params={"page": 1},
                              headers={"Accept": "application/json"})
         if r.status_code == 200:
