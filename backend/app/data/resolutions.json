@@ -1623,5 +1623,17 @@
       "frontend/static/onchain/format.js",
       "frontend/engn.html"
     ]
+  },
+  "seed-0132": {
+    "status": "risolto",
+    "at": 1790512678,
+    "summary": "Il grafico della pagina del token passava dallo stesso endpoint del radar: 1000 candele e, a ogni apertura, il backtest di tutte le strategie, che la pagina non mostra. Ora ha un endpoint suo (/api/onchain/chart) con 300 candele e solo i prezzi di chiusura, tenute in cache 30 secondi e con la precedenza su GeckoTerminal rispetto ai giri in background. Nel browser il grafico parte appena il dito tocca la riga, prima che la pagina si apra, e cambiando intervallo o riaprendo un token si vede subito l'ultimo grafico mentre arriva quello nuovo. In piu' prima i token BSC, Base ed Ethereum non avevano proprio il grafico: l'endpoint del radar accettava solo Solana e Robinhood.",
+    "files": [
+      "backend/app/trading/onchain/radar.py",
+      "backend/app/main.py",
+      "frontend/static/onchain/detail.js",
+      "frontend/static/onchain/api.js",
+      "backend/tests/test_token_chart.py"
+    ]
   }
 }
