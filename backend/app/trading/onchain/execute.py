@@ -70,6 +70,7 @@ async def execute_order(
     notional_usd: float, price_impact_pct: float, price_usd: float,
     private_key_hex: str, quote: dict,
     pool_address: str | None = None,
+    guards: bool = True,
 ) -> dict:
     correlation_id = uuid.uuid4().hex
     logger.info(
@@ -96,11 +97,16 @@ async def execute_order(
             "reference_max_liquidity_usd": reference_max,
         }
 
-    notional_usd = risk.clamp_size_to_pool(notional_usd, pool_liquidity_usd)
-
-    ok, reason = risk.run_all_checks(
-        owner_id, chain, token, notional_usd, price_impact_pct, pool_info=pool_info, strategy_name=strategy_name,
-    )
+    # guards=False: the system's autotrader, whose only limit is the share of
+    # the balance Lorenzo picks ("solo la % scelta"): no per-trade cap, no
+    # pool clamp, no impact veto. Ledger, idempotency and the server switch stay.
+    if guards:
+        notional_usd = risk.clamp_size_to_pool(notional_usd, pool_liquidity_usd)
+        ok, reason = risk.run_all_checks(
+            owner_id, chain, token, notional_usd, price_impact_pct, pool_info=pool_info, strategy_name=strategy_name,
+        )
+    else:
+        ok, reason = True, ""
     if not ok:
         logger.warning("[%s] rifiutato dal risk guardrail: %s", correlation_id, reason,
                         extra={"correlation_id": correlation_id})

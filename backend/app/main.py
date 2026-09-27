@@ -102,6 +102,7 @@ from app.trading.onchain import keys as onchain_keys
 from app.trading.onchain import legit as onchain_legit
 from app.trading.onchain import ledger as onchain_ledger
 from app.trading.onchain import outcomes as onchain_outcomes
+from app.trading.onchain import autotrader as onchain_autotrader
 from app.trading.onchain import passkey as onchain_passkey
 from app.trading.onchain import pilot as onchain_pilot
 from app.trading.onchain import listings as onchain_listings
@@ -3695,6 +3696,54 @@ def _past_meme_alerts() -> list[dict]:
             and x["found_at"] - x["created_at"] <= onchain_listings.NOTIFY_MAX_AGE_S]
 
 
+async def _notify_autotrade(user: User, row: dict) -> None:
+    """Italian, like every message Lorenzo reads."""
+    from app.notify import telegram
+    if not user.telegram_chat_id or not _telegram_allowed(user):
+        return
+    tag = "🧪 SIMULATO" if row.get("mode") == "sim" else "💱 ESEGUITO"
+    if row["side"] == "buy":
+        text = f"{tag} · il sistema ha comprato <b>{row['symbol']}</b> con {row.get('usdg', 0):.2f} USDG"
+    else:
+        ret = row.get("ret")
+        text = (f"{tag} · il sistema ha venduto <b>{row['symbol']}</b> per {row.get('usdg', 0):.2f} USDG"
+                + (f" ({ret * 100:+.1f}%)" if ret is not None else "") + f" · {row.get('why', '')}")
+    await telegram.send_to(user.telegram_chat_id, text)
+
+
+class AutotraderUpdate(BaseModel):
+    mode: Literal["off", "sim", "real"] | None = None
+    pct: int | None = None
+
+
+@app.get("/api/onchain/autotrader")
+async def get_autotrader(user: User = Depends(auth.get_current_user)) -> dict:
+    """The system trading the Robinhood wallet: switch, share, position, trades."""
+    _require_onchain_enabled()
+    return {**onchain_autotrader.view(user.id), "has_wallet": "robinhood" in user.onchain_wallets,
+            "server_live": settings.onchain_execution_enabled}
+
+
+@app.patch("/api/onchain/autotrader")
+async def set_autotrader(body: AutotraderUpdate, user: User = Depends(auth.get_current_user)) -> dict:
+    _require_onchain_enabled()
+    if body.mode in ("sim", "real") and "robinhood" not in user.onchain_wallets:
+        raise HTTPException(status_code=400, detail="Create the Robinhood Chain wallet first.")
+    usdg_now = None
+    if body.mode == "sim":
+        try:
+            rows = await onchain_balances._robinhood_known_token_balances(
+                user.onchain_wallets["robinhood"].address, [onchain_autotrader.USDG])
+            usdg_now = rows[0]["amount_raw"] / 10 ** onchain_autotrader.USDG_DECIMALS if rows else 0.0
+        except Exception:
+            usdg_now = None
+    try:
+        view = onchain_autotrader.configure(user.id, body.mode, body.pct, usdg_now=usdg_now)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {**view, "has_wallet": True, "server_live": settings.onchain_execution_enabled}
+
+
 def _charts_on_screen() -> list[tuple[str, str, str, str]]:
     """The charts a tap is likely to open, at the interval the token page
     starts on: the top memes (5m), the newest alerts (5m), the top gems (1h)."""
@@ -3733,6 +3782,7 @@ async def _onchain_signals_loop() -> None:
             async with httpx.AsyncClient(timeout=15.0) as client:
                 await onchain_alert_track.sample(client)
                 await onchain_alert_track.refresh_system(client)
+            await onchain_autotrader.tick(auth.list_users(), notify=_notify_autotrade)
             if _time.time() - warmed_at >= onchain_radar.WARM_EVERY_S:
                 warmed_at = _time.time()
                 asyncio.create_task(onchain_radar.warm_charts(_charts_on_screen()))
