@@ -28,3 +28,4 @@ review. Read them before answering: the same mistake again is a failed task.
 - If the page's own boot later loads something over your change (the main site opens the saved ticker, BTC), hook your code into that boot step instead of running before it (#203).
 - `window.open` must run synchronously inside the tap. After an `await`, iOS blocks it: open the window first, set its URL afterwards (#203).
 - Phone inputs under 16px make iOS zoom the page; keep form fields at 16px or more (#188).
+- Icons must read on the dark background: thin dark-brown strokes vanish; use the gold fill or light strokes of at least 2px (#211).
