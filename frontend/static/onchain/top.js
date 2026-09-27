@@ -10,7 +10,7 @@
  */
 import * as api from "@onchain/api.js";
 import { register } from "@onchain/detail.js";
-import { tokenRow } from "@onchain/format.js";
+import { escapeHtml, tokenRow } from "@onchain/format.js";
 
 const POLL_MS = 30_000;
 const SIZES = [15, 25, 50];
@@ -35,14 +35,19 @@ function paint() {
       ageTs: e.launched_at, context: `Rank #${i + 1} · score ${Math.round(e.score ?? 0)}` });
     return tokenRow({ id, symbol: e.symbol, name: `${i + 1}. ${e.name || e.symbol}`, chain: e.chain, token: e.token_address,
       image: e.image, cap: e.market_cap, change: e.change_24h != null ? e.change_24h / 100 : null, ageTs: e.launched_at,
-      score: e.score, badge: e.early ? "early" : null });
+      score: e.score, badge: e.early ? "early" : null,
+      sub: e.on_board ? "" : `<span class="off-board">not ranked${e.why ? `: ${escapeHtml(e.why)}` : ""}</span>` });
   }).join("") : `<li class="muted pad">The board is filling up: projects appear as they pass the checks.</li>`;
+  const onBoard = entries.slice(0, size).filter((e) => e.on_board).length;
+  root.querySelector("[data-top-note]").textContent = rows.length > onBoard
+    ? `${onBoard} on the board, the rest from the database: studied, not ranked yet (reason under each).` : "";
 }
 
 async function load() {
   try {
-    const board = await api.getLeaderboard();
-    entries = [...(board?.entries ?? [])].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+    // The board first; the database fills the list to the size asked.
+    const top = await api.getTop(50);
+    entries = top?.entries ?? [];
     paint();
   } catch { /* keep the last list */ }
 }

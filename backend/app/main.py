@@ -3720,6 +3720,34 @@ async def onchain_leaderboard_view(user: User = Depends(auth.get_current_user)) 
     return {**board, "entries": onchain_outcomes.without_shamed(board.get("entries") or [])}
 
 
+@app.get("/api/onchain/top")
+async def onchain_top(n: int = 15, user: User = Depends(auth.get_current_user)) -> dict:
+    """Top 15/25/50 (top.js): the gem board first, by score; when it holds
+    fewer, the best studied projects of the database in the same cap band
+    fill the list, each with why it is not on the board (Lorenzo, 27/09: "a
+    prescindere se seleziono top 15, 25 o 50 vedo sempre gli stessi")."""
+    _require_onchain_enabled()
+    n = max(1, min(int(n), 50))
+    board = sorted(onchain_leaderboard.board().get("entries") or [], key=lambda e: -(e.get("score") or 0))
+    out = [{**{k: e.get(k) for k in ("chain", "token_address", "pair_address", "pair_url", "symbol", "name", "image",
+                                     "market_cap", "liquidity_usd", "change_24h", "launched_at", "score", "early")},
+            "on_board": True} for e in board[:n]]
+    seen = {(e["chain"], e["token_address"]) for e in out}
+    if len(out) < n:
+        for p in onchain_projects_db.search("", "studied", "score", 3 * n, 0, True)["items"]:
+            if len(out) >= n:
+                break
+            if p.get("score") is None or (p["chain"], p["token"]) in seen:
+                continue
+            seen.add((p["chain"], p["token"]))
+            out.append({"chain": p["chain"], "token_address": p["token"], "pair_address": None, "pair_url": None,
+                        "symbol": p.get("symbol"), "name": p.get("name"), "image": p.get("image"),
+                        "market_cap": p.get("mcap"), "liquidity_usd": p.get("liq"), "change_24h": None,
+                        "launched_at": p.get("launched_at"), "score": p.get("score"), "early": False,
+                        "on_board": False, "why": p.get("why")})
+    return {"entries": out, "on_board": sum(1 for e in out if e["on_board"])}
+
+
 @app.get("/api/onchain/projects")
 async def onchain_projects_view(q: str = "", status: str = "", sort: str = "score", limit: int = 50,
                                 offset: int = 0, band: bool = False,

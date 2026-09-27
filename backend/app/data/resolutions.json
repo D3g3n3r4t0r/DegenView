@@ -2022,5 +2022,15 @@
       "backend/app/notify/deepseek_desk.py",
       "CLAUDE.md"
     ]
+  },
+  "seed-0165": {
+    "status": "risolto",
+    "at": 1790543900,
+    "summary": "In classifica c'erano solo 6 progetti che passano tutti i filtri, quindi Top 15, 25 e 50 mostravano gli stessi 6. Ora i primi sono sempre quelli della classifica, per punteggio; il resto della lista si riempie coi migliori progetti gia' studiati del database, nella stessa fascia di capitalizzazione ($10k-$3M, liquidita' almeno $5k). Quelli presi dal database hanno sotto, in giallo, 'not ranked' e il motivo per cui non sono in classifica (per esempio troppo vecchi o un pilastro debole), e in alto una riga dice quanti sono in classifica e quanti vengono dal database.",
+    "files": [
+      "backend/app/main.py",
+      "frontend/static/onchain/top.js",
+      "frontend/static/onchain/api.js"
+    ]
   }
 }
