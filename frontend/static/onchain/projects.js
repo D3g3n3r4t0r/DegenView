@@ -5,6 +5,7 @@
  * projects are known, how many sit in the cap band and where they stand.
  */
 import * as api from "@onchain/api.js";
+import { register } from "@onchain/detail.js";
 import { escapeHtml } from "@onchain/format.js";
 
 const PAGE = 30;
@@ -26,12 +27,25 @@ function row(p) {
   const score = p.score == null ? "—" : Math.round(p.score);
   const out = p.status !== "ranked" && p.score != null;
   const site = p.website ? (() => { try { return new URL(p.website).hostname.replace(/^www\./, ""); } catch { return ""; } })() : "";
+  const id = `gem:${p.chain}:${p.token}`;
+  register(id, {
+    kind: "gem",
+    symbol: p.symbol,
+    name: p.name,
+    chain: p.chain,
+    token: p.token,
+    image: p.image,
+    cap: p.mcap,
+    context: `Database · score ${score} · ${p.status}${p.why ? ` · ${p.why}` : ""}`,
+  });
   return `<li data-status="${escapeHtml(p.status)}">
-    <span class="pj-score${out ? " is-out" : ""}" title="${out ? "Score, not on the board" : "Score"}">${score}</span>
-    <span class="pj-name"><b>${escapeHtml(p.symbol ?? "?")}</b> <span>${escapeHtml(p.name ?? "")}</span>
-      <small>${CHAINS[p.chain] ?? escapeHtml(p.chain)} · cap ${usd(p.mcap)} · liq ${usd(p.liq)}${site ? ` · ${escapeHtml(site)}` : ""}${p.github ? " · code" : ""}</small>
-      ${why}</span>
-    <em class="pj-status">${LABEL[p.status] ?? escapeHtml(p.status)}</em>
+    <button type="button" class="pj-open" data-open="${escapeHtml(id)}">
+      <span class="pj-score${out ? " is-out" : ""}" title="${out ? "Score, not on the board" : "Score"}">${score}</span>
+      <span class="pj-name"><b>${escapeHtml(p.symbol ?? "?")}</b> <span>${escapeHtml(p.name ?? "")}</span>
+        <small>${CHAINS[p.chain] ?? escapeHtml(p.chain)} · cap ${usd(p.mcap)} · liq ${usd(p.liq)}${site ? ` · ${escapeHtml(site)}` : ""}${p.github ? " · code" : ""}</small>
+        ${why}</span>
+      <em class="pj-status">${LABEL[p.status] ?? escapeHtml(p.status)}</em>
+    </button>
   </li>`;
 }
 
