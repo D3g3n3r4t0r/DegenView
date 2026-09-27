@@ -119,3 +119,46 @@ def test_bad_settings_are_refused():
         tr.configure("u1", pct=33)
     with pytest.raises(ValueError):
         tr.configure("u1", mode="yolo")
+
+
+USDC = "0x" + "c" * 40
+
+
+def _cash_market(usdc=60_000_000, usdg=0, swaps=None):
+    m = _market(usdg=usdg, swaps=swaps)
+
+    async def tok(owner, token):
+        return usdc if token == USDC else 5_000_000
+
+    async def quote(tin, tout, amount):
+        if {tin, tout} == {USDC, tr.USDG}:
+            return {"out": amount * 999 // 1000, "route": "uniswap-v3", "fee": 100, "impact": 0.01}
+        return {"out": 5_000_000 if tin == tr.USDG else amount * 2, "route": "uniswap-v3", "fee": 3000, "impact": 0.5}
+
+    async def find():
+        return USDC
+    m.token_balance, m.quote, m.find_usdc = tok, quote, find
+    return m
+
+
+def test_real_buy_converts_usdc_to_usdg_first_and_sells_back_to_usdc():
+    a = _alert()
+    swaps = []
+    tr.configure("u1", "real", 50)
+    rows = asyncio.run(tr.tick([USER], now=T0 + 60, market=_cash_market(usdc=60_000_000, usdg=0, swaps=swaps)))
+    assert rows[0]["ok"] and rows[0]["via"] == ["USDC→USDG"]
+    assert swaps[0]["token_in"] == USDC and swaps[0]["token_out"] == tr.USDG and swaps[0]["amount_in"] == 30_000_000 - 1
+    assert swaps[1]["token_in"] == tr.USDG and swaps[1]["amount_in"] == int((30_000_000 - 1) * 999 // 1000 * (1 - tr.CASH_SLIPPAGE))
+    a["system"][LABEL] = {"state": "out", "events": [{"side": "sell"}]}
+    rows = asyncio.run(tr.tick([USER], now=T0 + 120, market=_cash_market(swaps=swaps)))
+    assert rows[0]["ok"] and rows[0]["via"] == ["USDG→USDC"] and swaps[-1]["token_out"] == USDC
+
+
+def test_sim_cash_is_usdc_round_trip():
+    a = _alert()
+    tr.configure("u1", "sim", 100, usdg_now=10.0)
+    asyncio.run(tr.tick([USER], now=T0 + 60, market=_cash_market()))
+    assert tr.view("u1")["sim"]["usdg"] == pytest.approx(0.0, abs=1e-5)
+    a["system"][LABEL] = {"state": "out", "events": [{"side": "sell"}]}
+    rows = asyncio.run(tr.tick([USER], now=T0 + 120, market=_cash_market()))
+    assert rows[0]["via"] == ["USDG→USDC"] and tr.view("u1")["sim"]["usdg"] > 0

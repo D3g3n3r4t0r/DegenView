@@ -79,6 +79,9 @@ class Settings(BaseSettings):
     deepseek_api_key: str = ""
     deepseek_model: str = "deepseek-chat"
     deepseek_base_url: str = "https://api.deepseek.com"
+    # USDC contract on Robinhood Chain for the autotrader's cash; empty = found
+    # from the most liquid USDC/USDG pool (autotrader.find_usdc).
+    robinhood_usdc_address: str = ""
     ai_review_model: str = "claude-sonnet-5"
     ai_review_daily_tokens: int = 40_000
     ai_review_monthly_tokens: int = 600_000

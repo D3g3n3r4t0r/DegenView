@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0142", "Il cash e' USDC; per operare su Robinhood prima si converte in USDG",
+     "Lorenzo: 'fai in modo che l'applicazione utilizzi il solito sistema di cash, cioe' devono essere USDC, e ovviamente se operi su Robinhood prima di poterlo fare devi convertire in USDG'. Alle domande: USDC multichain; dopo ogni vendita si torna sempre in USDC.",
+     "alta"),
     ("seed-0141", "DeepSeek sul server per analizzare i dati, dare insight e migliorare gli alert",
      "Lorenzo: 'mi piacerebbe inserire nel server DeepSeek perche' e' un modello gratuito [...] utilizzarlo come intelligenza per la gestione di tutti questi dati e dare degli insights e migliorare gli alert. Ma e' possibile installarlo? Se si', fallo. E se hai bisogno delle API vediamo come fare'.",
      "media"),
