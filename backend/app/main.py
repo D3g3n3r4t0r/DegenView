@@ -1265,6 +1265,7 @@ def _similar_to(query: str) -> dict:
 
 
 async def _telegram_reply(chat_id: str, text: str) -> None:
+    deepseek_desk.note("chat", "Answering a question on Telegram")
     try:
         reply = await deepseek_desk.answer(chat_id, text, await _deepseek_context(chat_id), tools=_deepseek_tools())
     except Exception as exc:
@@ -4111,6 +4112,14 @@ async def wallet_link_confirm(body: WalletConfirm, user: User = Depends(auth.get
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"profile": profiles.public(user.id, p)}
+
+
+@app.get("/api/agent")
+def agent_activity(user: User = Depends(auth.get_current_user)) -> dict:
+    """The agent's live presence on the site: what DeepSeek did lately."""
+    out = deepseek_desk.activity()
+    out["watching"] = sum(1 for a in onchain_alert_track._alerts.values() if not a.get("closed") and not a.get("gone"))
+    return out
 
 
 @app.get("/api/wallets/deposit")

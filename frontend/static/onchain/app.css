@@ -931,3 +931,38 @@
   #leaders .top-hero:has(.strat-board) { min-block-size: 0; block-size: auto; aspect-ratio: auto; padding-block-end: 8px; }
   #leaders [data-top-you] { display: none; }   /* one list here, the strategy's */
 }
+/* The agent (agent.js): a living orb and what it is doing. */
+@layer skin {
+  .agent { display: inline-flex; align-items: center; gap: 8px; max-inline-size: min(42vw, 260px); padding: 6px 12px 6px 6px;
+    border: 0; border-radius: 999px; background: rgba(129, 140, 248, .10); color: var(--k-text-2); cursor: pointer;
+    font: 600 12.5px var(--sans); overflow: hidden; }
+  .agent-orb { position: relative; flex: none; inline-size: 24px; block-size: 24px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #c7d2fe, #6366f1 45%, #312e81 80%);
+    box-shadow: 0 0 12px rgba(99, 102, 241, .55); animation: agent-breathe 3.2s ease-in-out infinite;
+    & i { position: absolute; inset: -4px; border-radius: 50%; border: 1.5px solid transparent;
+      border-top-color: rgba(165, 180, 252, .9); opacity: 0; }
+    & i:nth-child(2) { inset: -7px; border-top-color: rgba(52, 211, 153, .8); }
+    & i:nth-child(3) { inset: -10px; border-top-color: rgba(244, 114, 182, .6); } }
+  .agent[data-state="working"] .agent-orb i { opacity: 1; animation: agent-spin 1.6s linear infinite; }
+  .agent[data-state="working"] .agent-orb i:nth-child(2) { animation-duration: 2.3s; animation-direction: reverse; }
+  .agent[data-state="working"] .agent-orb i:nth-child(3) { animation-duration: 3.1s; }
+  .agent[data-state="off"] .agent-orb { filter: grayscale(1); animation: none; box-shadow: none; }
+  .agent-say { white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    &.is-in { animation: agent-in .45s var(--ease-out, ease-out); } }
+  @keyframes agent-breathe { 0%, 100% { transform: scale(.92); box-shadow: 0 0 8px rgba(99, 102, 241, .4); }
+    50% { transform: scale(1.05); box-shadow: 0 0 18px rgba(99, 102, 241, .75); } }
+  @keyframes agent-spin { to { transform: rotate(360deg); } }
+  @keyframes agent-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  @media (max-width: 560px) { .agent-say { display: none; } .agent { padding: 6px; background: none; } }
+  @media (prefers-reduced-motion: reduce) { .agent-orb, .agent-orb i, .agent-say.is-in { animation: none !important; } }
+  .agent-log { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 2px;
+    & li { display: grid; grid-template-columns: 10px 1fr auto; gap: 10px; align-items: center; padding: 10px 2px;
+      border-block-end: 1px solid rgba(255, 255, 255, .05); font-size: 14px; color: var(--k-text); }
+    & small { color: var(--k-text-3); font-size: 12px; } }
+  .agent-dot { inline-size: 8px; block-size: 8px; border-radius: 50%; background: #818cf8; }
+  li[data-kind="research"] .agent-dot { background: #34d399; } li[data-kind="chat"] .agent-dot { background: #f472b6; }
+}
+@layer skin {
+  .topbar .topbar-right { flex-wrap: nowrap; min-inline-size: 0; }
+  .topbar .agent { flex: 0 1 auto; min-inline-size: 0; max-inline-size: 200px; }
+}
