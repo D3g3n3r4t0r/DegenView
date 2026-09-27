@@ -312,7 +312,7 @@ async def backfill(client: httpx.AsyncClient, items: list[dict], kind: str = "me
 SYSTEM_FETCHES_PER_TICK = 6
 # Bump when system.follow's output changes: finished alerts are fetched and
 # recomputed once more (v2: each sell says why, "crash" or "signal").
-SYSTEM_VERSION = 2
+SYSTEM_VERSION = 3   # 3: a trend already on at the alert is joined (ONHAND)
 
 
 async def refresh_system(client, now: float | None = None, gap_s: float = BACKFILL_GAP_S) -> int:
@@ -339,7 +339,7 @@ async def refresh_system(client, now: float | None = None, gap_s: float = BACKFI
             net = GECKO_NETWORKS.get(a["chain"])
             past = now >= a["at"] + system.WINDOW_S
             before = a["at"] + system.WINDOW_S + 3600 if past else a["at"]
-            got = await _candles(client, net, a["pair_address"], "minute", 5, min(before, now), 600 if past else 72,
+            got = await _candles(client, net, a["pair_address"], "minute", 5, min(before, now), MAX_BARS if past else 72,
                                  a.get("token_address") or "") if net else []
             fetched += 1
             if got is not None:
