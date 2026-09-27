@@ -131,6 +131,7 @@ export const walletLink = (body) => request("/api/wallets/link", { method: "POST
 export const getLinkedWallets = () => request("/api/wallets/linked");
 export const scanToken = (query) => request("/api/onchain/scan", { method: "POST", body: { query }, timeoutMs: 60000 });
 export const getTop = (n) => request(`/api/onchain/top?n=${n}`);
+export const getToken = (chain, token) => request(`/api/onchain/token?chain=${encodeURIComponent(chain)}&token=${encodeURIComponent(token)}`);
 export const getAgent = () => request("/api/agent");
 export const getDeposit = () => request("/api/wallets/deposit");
 export const getWalletsTotal = () => request(`/api/wallets/total${walletQ()}`, { timeoutMs: 30000 });

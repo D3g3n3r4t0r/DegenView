@@ -3748,6 +3748,28 @@ async def onchain_top(n: int = 15, user: User = Depends(auth.get_current_user)) 
     return {"entries": out, "on_board": sum(1 for e in out if e["on_board"])}
 
 
+@app.get("/api/onchain/token")
+async def onchain_token(chain: str, token: str, user: User = Depends(auth.get_current_user)) -> dict:
+    """The full dossier of one token: the gem board entry (or the database
+    row in board shape) and every alert on it. The token page fetches this
+    itself so Signal, Why and Info are complete whichever list opened it
+    (Lorenzo, 27/09: "signal, why e info devono essere sempre completi di
+    informazioni, per ogni token")."""
+    _require_onchain_enabled()
+    entry = next((e for e in onchain_leaderboard.board().get("entries") or []
+                  if e.get("chain") == chain and e.get("token_address") == token), None)
+    if entry is not None:
+        entry = {**entry, "on_board": True}
+    else:
+        p = onchain_projects_db.get(chain, token)
+        if p is not None:
+            entry = {**onchain_projects_db.as_item(p), "score": p.get("score"), "pillars": p.get("pillars") or {},
+                     "overall": p.get("overall"), "narratives": p.get("narratives") or [],
+                     "traction": p.get("traction"), "rank": p.get("rank"), "status": p.get("status"),
+                     "why": p.get("why"), "on_board": False}
+    return {"entry": entry, "alerts": onchain_alert_track.for_token(chain, token)}
+
+
 @app.get("/api/onchain/projects")
 async def onchain_projects_view(q: str = "", status: str = "", sort: str = "score", limit: int = 50,
                                 offset: int = 0, band: bool = False,
