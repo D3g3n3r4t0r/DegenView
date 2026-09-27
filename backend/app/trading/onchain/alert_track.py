@@ -138,6 +138,15 @@ def _num(v) -> float | None:
     return f if math.isfinite(f) and f > 0 else None
 
 
+def facts_of(item: dict) -> str:
+    """What the checks found, in one short line: what ai_scan.py reads."""
+    checks = "; ".join(f"{c.get('label')}: {'ok' if c.get('ok') else 'no' if c.get('ok') is False else '?'} "
+                       f"{(c.get('detail') or '')[:50]}" for c in item.get("checks") or [])
+    socials = ",".join(sorted({s.get("type", "") for s in item.get("socials") or []}))
+    site = (item.get("website") or "").split("//")[-1].split("/")[0]
+    return f"{checks} | social {socials or 'none'} | site {site or 'none'}"[:400]
+
+
 def record(item: dict, kind: str, now: float | None = None) -> dict | None:
     """An alert just went out. Once per token and kind."""
     if kind not in KINDS or not item.get("chain") or not item.get("pair_address"):
@@ -153,7 +162,7 @@ def record(item: dict, kind: str, now: float | None = None) -> dict | None:
         "liq0": _num(item.get("liquidity_usd")), "quoted": _num(item.get("price_usd")),
         "entry": None, "entry_at": None, "returns": {}, "last": None, "max_ret": None, "min_ret": None,
         "misses": 0, "gone": False, "closed": False, "strategy": None, "score": item.get("score"),
-        "image": item.get("image") or None,
+        "image": item.get("image") or None, "facts": facts_of(item),
     }
     save()
     return _alerts[k]

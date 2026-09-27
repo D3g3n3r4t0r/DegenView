@@ -41,7 +41,8 @@ RECAP_HOUR = 21                      # Rome time
 PRICE = {"deepseek": (0.28, 0.42), "claude": (3.0, 15.0)}
 CHAT_DAILY_TOKENS = 300_000
 MEMORY = 10                          # messages kept per chat
-KINDS = {"chat": "chat Telegram", "review": "revisioni token", "pr_review": "revisioni PR"}
+KINDS = {"chat": "chat Telegram", "scanner": "scanner (giudizio token)", "review": "revisioni token",
+         "pr_review": "revisioni PR"}
 
 _lock = threading.Lock()
 _state: dict = {"days": {}, "recap_sent": ""}
@@ -99,9 +100,14 @@ def cost(provider: str, tokens_in: int, tokens_out: int) -> float:
 
 # ------------------------------------------------------------------ DeepSeek
 
-async def ask(messages: list[dict], *, kind: str, max_tokens: int = 1200, http=None) -> str:
-    """One DeepSeek chat call, counted in the ledger under `kind`."""
-    body = {"model": settings.deepseek_model, "messages": messages, "max_tokens": max_tokens, "temperature": 0.4}
+async def ask(messages: list[dict], *, kind: str, max_tokens: int = 1200, http=None, json_mode: bool = False) -> str:
+    """One DeepSeek chat call, counted in the ledger under `kind`. Keep the
+    system message identical between calls: DeepSeek caches a repeated
+    prefix and bills it at a tenth."""
+    body = {"model": settings.deepseek_model, "messages": messages, "max_tokens": max_tokens,
+            "temperature": 0 if json_mode else 0.4}
+    if json_mode:
+        body["response_format"] = {"type": "json_object"}
     headers = {"Authorization": f"Bearer {settings.deepseek_api_key}", "Content-Type": "application/json"}
     url = settings.deepseek_base_url.rstrip("/") + "/chat/completions"
     if http is None:

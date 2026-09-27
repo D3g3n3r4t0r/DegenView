@@ -3530,3 +3530,13 @@ codice e apre PR da solo (issue con etichetta `deepseek` → Action → PR): il
 classificatore dei permessi di Claude l'ha bloccato come agente autonomo;
 decide Lorenzo. Il risparmio "qui" è indiretto: Claude non può chiamare
 DeepSeek dalla sua sandbox.
+
+**2026-09-27 — Lorenzo: "piano di integrazione di intelligence all'app [...] usando deep seek" / "ottimizziamo questa logica per spendere meno possibile".**
+Piano proposto (in ordine): 1) giudizio DeepSeek sui token + 2) misura in
+ombra contro gli esiti veri; 3) narrative; 4) spiegazioni in italiano di alert
+e uscite; 5) ricerca a parole nello Scanner; 6) brief del mattino. Fatti 1+2
+(`ai_scan.py`: meme segnalate a gruppi di 10, una riga di fatti ciascuna,
+`alert["ai"]`, `shadow_stats()` nel riepilogo delle 21) e la lettura del sito
+delle gemme su DeepSeek (`legit._ai_review_deepseek`, 4000 caratteri, cache
+per pagina, non blocca senza `LEGIT_AI_GATE`). Prossimo: quando `shadow_stats`
+ha qualche centinaio di giudizi, decidere se il rischio diventa filtro; poi 4.
