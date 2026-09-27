@@ -147,6 +147,22 @@ function paintChips() {
     + `<span class="sep"></span><span class="dt-legend"><i class="mk"></i>Alert</span>`;
 }
 
+// The system's own trades on one alert, each with why it sold. A sell
+// after a crash inside one candle says so: that loss was not a late exit.
+const WHY = { signal: "trend turned", crash: "crashed inside one 5-min candle: first price to sell at", "48h": "48h window over", rug: "pool vanished while in" };
+function systemTrades(al) {
+  const ev = al.system?.events ?? [];
+  if (!ev.length) return al.system ? `<p class="sys-none">System: ${al.system.state === "in" ? "in the trade" : "no entry yet"}${al.system.label ? ` · ${escapeHtml(al.system.label)}` : ""}</p>` : "";
+  const t0 = al.at;
+  return `<ol class="sys-trades">${ev.map((v) => {
+    const after = Math.max(0, Math.round((v.t - t0) / 60));
+    const when = after < 90 ? `${after} min` : `${Math.round(after / 60)}h`;
+    if (v.side === "buy") return `<li data-side="buy"><b>Bought</b><span>${when} after the alert</span></li>`;
+    const why = WHY[v.why] ?? "sold";
+    return `<li data-side="sell" data-why="${escapeHtml(v.why ?? "")}"><b data-sign="${sign(v.ret)}">Sold ${pct(v.ret)}</b><span>${when} after · ${why}${v.why === "crash" && v.drop != null ? ` (${pct(v.drop)} in one candle)` : ""}</span></li>`;
+  }).join("")}</ol>`;
+}
+
 function paintTabs() {
   dlg.querySelectorAll("[data-dtab]").forEach((b) => b.toggleAttribute("aria-current", b.dataset.dtab === tab));
   const e = current.e;
@@ -159,10 +175,12 @@ function paintTabs() {
       <p><b>Telegram alert</b><small>${age(al.at)[0]} ago</small></p>
       <div class="call-card">
         <span><small>At alert</small><b>${usdShort(al.cap0)} MC</b></span>
-        <span><small>Now</small>${changePill(al.now)}</span>
+        <span><small>Held now</small>${changePill(al.now)}</span>
         <span><small>Best 48h</small><b data-sign="${sign(al.max)}">${pct(al.max)}</b></span>
-        <span><small>Best strategy</small><b data-sign="${sign(al.strategy?.return_pct == null ? null : al.strategy.return_pct / 100)}">${al.strategy?.return_pct == null ? "—" : `${al.strategy.return_pct > 0 ? "+" : ""}${Math.round(al.strategy.return_pct)}%`}</b></span>
+        <span><small>System</small><b data-sign="${sign(al.system?.ret)}">${al.system?.ret == null ? "—" : pct(al.system.ret)}</b></span>
       </div>
+      ${systemTrades(al)}
+      <p class="hours-head">If held from the alert</p>
       <ol class="hours">${[1, 2, 3, 4, 5, 6, 8, 12, 24, 48].map((h) => {
         const r = al.returns?.[String(h)];
         return `<li><small>${h}h</small><b data-sign="${sign(r)}">${pct(r)}</b></li>`;

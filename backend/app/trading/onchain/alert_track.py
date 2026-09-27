@@ -294,6 +294,9 @@ async def backfill(client: httpx.AsyncClient, items: list[dict], kind: str = "me
 # ---------------------------------------------------------------- system
 
 SYSTEM_FETCHES_PER_TICK = 6
+# Bump when system.follow's output changes: finished alerts are fetched and
+# recomputed once more (v2: each sell says why, "crash" or "signal").
+SYSTEM_VERSION = 2
 
 
 async def refresh_system(client, now: float | None = None, gap_s: float = BACKFILL_GAP_S) -> int:
@@ -309,7 +312,11 @@ async def refresh_system(client, now: float | None = None, gap_s: float = BACKFI
     now = now or time.time()
     fetched = changed = 0
     for a in sorted(_alerts.values(), key=lambda x: -x["at"]):
-        if a["kind"] != "meme" or a.get("system_done") or a.get("nodata"):
+        if a["kind"] != "meme" or a.get("nodata"):
+            continue
+        if a.get("system_done") and a.get("system_v") != SYSTEM_VERSION and fetched < SYSTEM_FETCHES_PER_TICK:
+            a.update(system_done=False, bars_fetched=False)      # older result: rebuild it once
+        if a.get("system_done"):
             continue
         k = key_of(a)
         if not a.get("bars_fetched") and fetched < SYSTEM_FETCHES_PER_TICK:
@@ -329,7 +336,7 @@ async def refresh_system(client, now: float | None = None, gap_s: float = BACKFI
         if not a.get("bars_fetched") or (sig == a.get("system_sig") and now < a["at"] + system.WINDOW_S):
             continue
         res = await asyncio.to_thread(system.evaluate, bars, a["at"], gone=a["gone"], now=now)
-        a["system"], a["system_sig"] = res, sig
+        a["system"], a["system_sig"], a["system_v"] = res, sig, SYSTEM_VERSION
         changed += 1
         if all(r.get("done") for r in res.values()):
             a["system_done"] = True

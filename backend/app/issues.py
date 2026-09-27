@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0146", "Backtest a -80% quando la strategia avrebbe dovuto chiudere molto prima",
+     "Lorenzo: 'non capisco i backtest perche' ci sono delle percentuali di meno 80%, pero' la strategia dovrebbe aver chiuso molto prima. Verifica'.",
+     "alta"),
     ("seed-0145", "Wallet multi-chain: vedere il saldo di qualunque token su qualunque chain",
      "Lorenzo: 'il wallet deve essere multi-chain e devo visualizzare il saldo a prescindere da quale token e in quale chain ho'.",
      "alta"),

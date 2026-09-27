@@ -61,10 +61,11 @@ function callCard(a, kind) {
     </button>
     <div class="call-card">
       <span><small>At alert</small><b>${usdShort(a.cap0)}</b></span>
-      <span><small>Now</small><b data-sign="${sign(a.now)}">${pct(a.now)}</b></span>
+      <span><small>Held now</small><b data-sign="${sign(a.now)}">${pct(a.now)}</b></span>
       <span><small>Best 48h</small><b data-sign="${sign(a.max)}">${pct(a.max)}</b></span>
       <span><small>System</small><b data-sign="${sign(s?.ret)}">${s?.ret == null ? "—" : pct(s.ret)}</b><em class="sys-state" data-state="${s?.state ?? "waiting"}">${sysState(s)}</em></span>
     </div>
+    <p class="hours-head">If held from the alert</p>
     <ol class="hours">${HOURS.map((h) => {
       const r = a.returns?.[String(h)];
       return `<li><small>${h}h</small><b data-sign="${sign(r)}">${pct(r)}</b></li>`;
@@ -76,6 +77,9 @@ function callCard(a, kind) {
 function sysState(s) {
   if (!s) return "reading";
   if (s.state === "in") return "in trade";
+  const last = (s.events ?? []).filter((v) => v.side !== "buy").slice(-1)[0];
+  if (last?.why === "crash") return "sold after a crash";
+  if (last?.why === "rug") return "pool vanished";
   if (s.done) return `${s.trades ?? 0} trade${s.trades === 1 ? "" : "s"}`;
   if (s.state === "out") return "out";
   return "waiting";
