@@ -2629,7 +2629,7 @@
       <!-- Le schede di ogni sezione, sottolineate. Ogni pannello porta
            data-pane="<vista>:<scheda>"; il resto lo fa main.js. -->
       <nav class="tabs" data-tabs="meme" aria-label="Memes">
-        <button type="button" data-tab="trending" aria-current="page">Trending</button>
+        <button type="button" data-tab="trending" aria-current="page">Picks</button>
         <button type="button" data-tab="alerts">Alerts</button>
         <button type="button" data-tab="scanner">Scanner</button>
       </nav>
@@ -2780,6 +2780,12 @@
            Il contenuto lo disegna static/onchain/pilot.js. -->
       <section class="memes" id="memes" data-pane="meme:trending" data-loading>
         <span data-memes-meta hidden></span>
+        <!-- Lorenzo: "non e' chiaro che siano state scelte, sembrano appunto
+             trending, deve essere chiaro che sono uscite dalla logica". -->
+        <div class="picks-head">
+          <span class="picks-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2 21 7v10l-9 5-9-5V7z"/><path d="M3 12l9 5 9-5"/></svg></span>
+          <p><b>Picked by the engine</b><small data-picks-line>Every new launch on Solana, Robinhood and BSC goes through our checks. Only the ones that pass land here, ranked by score.</small></p>
+        </div>
         <ol class="memes-list" data-memes-list></ol>
         <p class="memes-empty" data-memes-empty hidden>Quiet right now. New tokens appear here within minutes.</p>
       </section>
