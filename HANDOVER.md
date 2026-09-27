@@ -3500,3 +3500,13 @@ Crypto per rete con QR, Coinbase/Binance, carta via `ONRAMP_URL` (vuoto =
 spenta; serve un account on-ramp scelto da Lorenzo). Vedi `seed-0152`.
 Chiave DeepSeek: Lorenzo la inserisce in `/opt/liquidity/deploy/.env`
 (`DEEPSEEK_API_KEY=...`); consigliato rigenerarla, era finita in chat.
+
+**2026-09-27 — Lorenzo: "come possiamo usare deep seek in modo smart? può aiutarti a scrivere codice?" / "facciamo leggere a deep seek la repository?".**
+DeepSeek attivo sul server (`DEEPSEEK_API_KEY` nel `.env`, `ai_review.provider()`
+= deepseek, verificato). Aggiunto `.github/workflows/deepseek-review.yml`: legge
+il diff di ogni PR con le regole di CLAUDE.md e lascia un commento in italiano
+(sostituito a ogni push). Serve il segreto di repo `DEEPSEEK_API_KEY`, che mette
+Lorenzo; senza, salta. Modello: `deepseek-reasoner`, cambiabile con la variabile
+di repo `DEEPSEEK_MODEL`. Chi apre una PR legge quel commento e risponde ai punti
+veri. Proposti anche, da fare: spiegazioni in italiano delle uscite del sistema
+e degli alert, riepilogo settimanale scritto.
