@@ -900,3 +900,15 @@
   .dep-open { text-align: center; text-decoration: none; }
   #sheet { position: relative; }
 }
+/* Real / simulated wallet (profile.js simNote, header data-wallet). */
+@layer skin {
+  .pf-wallet { display: inline-flex; gap: 2px; padding: 3px; margin: 0 0 14px; border-radius: 12px; background: var(--k-surface);
+    & button { padding: 8px 14px; border: 0; border-radius: 9px; background: none; color: var(--k-text-3); font: 600 13px var(--sans); cursor: pointer; }
+    & button[aria-pressed="true"] { background: var(--k-surface-2); color: var(--k-text); }
+    & button[data-wallet="sim"][aria-pressed="true"] { color: #fbbf24; } }
+  .pf-simnote { margin: -4px 0 14px; font-size: 13px; color: var(--k-text-3);
+    & p { margin: 0 0 10px; } }
+  .pf-link { padding: 0; border: 0; background: none; color: #818cf8; font: inherit; cursor: pointer; }
+  .total-bal[data-wallet="sim"]::before { content: "SIM"; margin-inline-end: 8px; padding: 3px 6px; border-radius: 6px;
+    vertical-align: middle; background: rgba(251, 191, 36, .15); color: #fbbf24; font: 700 11px/1 var(--sans); letter-spacing: .04em; }
+}

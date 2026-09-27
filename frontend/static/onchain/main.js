@@ -554,7 +554,8 @@ totalEl.addEventListener("click", () => setView("profile"));
 async function refreshTotal() {
   try {
     const t = await api.getWalletsTotal();
-    if (t.total == null) { totalEl.textContent = "$0.00"; return; }
+    totalEl.dataset.wallet = t.wallet === "sim" ? "sim" : "real";
+    if (t.total == null) { totalEl.textContent = t.wallet === "sim" ? "SIM —" : "$0.00"; return; }
     // a chain that did not answer is not an empty one: no false $0
     if (!t.complete && t.missing?.length && !t.total) { totalEl.textContent = "$—"; }
     else {
@@ -566,6 +567,7 @@ async function refreshTotal() {
   } catch { /* keep the last number */ }
 }
 refreshTotal();
+document.addEventListener("lae:wallet-mode", refreshTotal);
 setInterval(() => { if (document.visibilityState === "visible") refreshTotal(); }, 60_000);
 
 /** Tabs inside a view: panels carry data-pane="<view>:<tab>". */
