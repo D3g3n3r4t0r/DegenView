@@ -56,6 +56,30 @@ AI_ENABLED = False
 # $0.05 a reading, so the cap bounds the bill at a few dollars a day.
 AI_MIN_HEURISTIC = 45
 AI_DAILY_MAX = 150
+# Lorenzo, 27/09: "ovviamente deepseek deve avere voce in capitolo sul voto
+# finale delle gemme". Without an Anthropic key DeepSeek reads the same
+# finalists and its reading is blended half and half with the deterministic
+# reader's: a voice, not the whole verdict, until gem_track says whose
+# top ten does better. ~3k tokens a reading, a fraction of a cent.
+DEEPSEEK_DAILY_MAX = 80
+DEEPSEEK_WEIGHT = 0.5
+
+
+def deepseek_mode() -> bool:
+    return not legit.settings.anthropic_api_key and bool(legit.settings.deepseek_api_key)
+
+
+def blend(reader_ai: dict, ds: dict) -> dict:
+    """The reader's dossier with DeepSeek's voice in it: points half each,
+    DeepSeek's red flags added, a "scam" from DeepSeek worth 0 points (not
+    an automatic zero: one model's word does not end a project)."""
+    ds_points = 0 if ds.get("verdict") == "scam" else ds["substance"] * 10
+    mine = float(reader_ai.get("points", reader_ai.get("substance", 0) * 10))
+    out = {**reader_ai, "points": round((1 - DEEPSEEK_WEIGHT) * mine + DEEPSEEK_WEIGHT * ds_points, 1),
+           "deepseek": {k: ds.get(k) for k in ("summary", "stage", "substance", "verdict", "red_flags")},
+           "red_flags": list(dict.fromkeys((reader_ai.get("red_flags") or []) +
+                                           [f"DeepSeek: {f}" for f in (ds.get("red_flags") or [])[:3]]))}
+    return out
 _STORE = storage.data_file("onchain_research.json")
 _cache: dict[str, dict] = {}     # token -> {"at", "ai"}
 _calls: dict[str, int] = {}      # "YYYY-MM-DD" -> readings that day
@@ -190,15 +214,16 @@ async def ai_dossier(item: dict, description: str, texts: list[str], *, boost: b
     """Claude's reading of the project. None without a key or on failure.
     `boost`: a reading a user paid for (plans.py), allowed while the
     background readings stay off."""
-    if not (AI_ENABLED or boost) or not legit.settings.anthropic_api_key:
+    if not (AI_ENABLED or boost):
         return None
-    from anthropic import AsyncAnthropic
-
     body = "\n\n".join(t[:3000] for t in texts if t)[:8000]
     prompt = (f"Project: {item.get('name')} ({item.get('symbol')}) on {item.get('chain')}\n"
               f"Market cap: ${float(item.get('market_cap') or 0):,.0f}\n"
               f"<listing_description>\n{description[:3000]}\n</listing_description>\n"
               f"<site_text>\n{body}\n</site_text>")
+    if not legit.settings.anthropic_api_key:
+        return await _dossier_deepseek(prompt) if legit.settings.deepseek_api_key else None
+    from anthropic import AsyncAnthropic
     try:
         async with AsyncAnthropic(api_key=legit.settings.anthropic_api_key, timeout=60.0) as client:
             msg = await client.beta.messages.create(
@@ -217,6 +242,48 @@ async def ai_dossier(item: dict, description: str, texts: list[str], *, boost: b
     except ValueError:
         return None
     out["substance"] = max(0, min(10, int(out.get("substance") or 0)))
+    return out
+
+
+async def _deepseek_reading(key: str, item: dict, sites: list[dict], description: str, texts: list[str]) -> dict | None:
+    """DeepSeek's dossier on a finalist, once a week per project and at most
+    DEEPSEEK_DAILY_MAX a day. None when not in DeepSeek mode or not a finalist."""
+    if not deepseek_mode() or not item.get("finalist"):
+        return None
+    hit = _cache.get(key + "|ds")
+    if hit and time.time() - hit["at"] < AI_TTL_S:
+        return hit["ai"]
+    heuristic = judge_research(sites, description, None)
+    day = "ds:" + time.strftime("%Y-%m-%d")
+    if (heuristic.get("score") or 0) < AI_MIN_HEURISTIC or heuristic.get("fatal") or _calls.get(day, 0) >= DEEPSEEK_DAILY_MAX:
+        return None
+    _calls[day] = _calls.get(day, 0) + 1
+    body = "\n\n".join(t[:2000] for t in texts if t)[:5000]
+    ds = await _dossier_deepseek(
+        f"Project: {item.get('name')} ({item.get('symbol')}) on {item.get('chain')}\n"
+        f"Market cap: ${float(item.get('market_cap') or 0):,.0f}\n"
+        f"<listing_description>\n{description[:2000]}\n</listing_description>\n<site_text>\n{body}\n</site_text>")
+    if ds is not None:
+        _cache[key + "|ds"] = {"at": time.time(), "ai": ds}
+    _save()
+    return ds
+
+
+async def _dossier_deepseek(prompt: str) -> dict | None:
+    """The same dossier on DeepSeek, when there is no Anthropic key: the
+    paid deep reading (plans.py) becomes available at a fraction of a cent."""
+    from app.notify import deepseek_desk
+    keys = ", ".join(f'"{k}"' for k in AI_SCHEMA["properties"])
+    try:
+        raw = await deepseek_desk.ask(
+            [{"role": "system", "content": AI_SYSTEM + f" Answer with one JSON object only, with the keys {keys}."},
+             {"role": "user", "content": prompt}], kind="research", max_tokens=900, json_mode=True)
+        out = json.loads(raw)
+        out["substance"] = max(0, min(10, int(out.get("substance") or 0)))
+    except Exception as exc:
+        logger.info("research: DeepSeek unreachable: %s", exc)
+        return None
+    out["by"] = "deepseek"
     return out
 
 
@@ -293,6 +360,9 @@ async def analyze(item: dict, client: httpx.AsyncClient, launched: float | None)
         if print_ and ai["original"] and _prints.get(key) != print_:
             _prints[key] = print_
             _save()
+        ds = await _deepseek_reading(key, item, sites, description, texts)
+        if ds:
+            ai = blend(ai, ds)
     pillar = judge_research(sites, description, ai)
     pillar.setdefault("facts", {}).update(holders=info.get("holders"), gt_score=info.get("gt_score"))
     return pillar, github
