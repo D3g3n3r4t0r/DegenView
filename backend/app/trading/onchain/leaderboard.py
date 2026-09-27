@@ -63,11 +63,11 @@ PENDING_GIVE_UP_S = 6 * 3600       # un dato che non arriva in 6 ore non arriver
 MAX_AGE_DAYS = radar.AGE_MAX_DAYS  # oltre, non e' piu' un progetto nuovo, salvo eccezioni
 MAX_ENTRIES = 400
 KEEP_EXCLUDED = 60
-ANALYZE_CONCURRENCY = 3
+ANALYZE_CONCURRENCY = 5   # was 3: "la scansione complessiva e' lenta" (27/09)
 # The project database (projects_db): how much of it the board takes in and
 # refreshes per step.
-DB_FEED_PER_TICK = 4
-DB_FEED_MAX_WAITING = 12            # unanalysed entries in the working set before feeding more
+DB_FEED_PER_TICK = 6
+DB_FEED_MAX_WAITING = 20            # unanalysed entries in the working set before feeding more
 DB_MARKET_S = 60
 DB_MARKET_BATCH = 150               # 5 DexScreener requests a minute
 BOARD_SIZE = 50
@@ -510,9 +510,11 @@ def traction_of(e: dict) -> dict | None:
 
 
 def _rank() -> None:
+    # By score only (Lorenzo, 27/09: "nel podio compaiono token con punteggi
+    # piu' bassi rispetto a quelli presenti in database"): the benchmark keeps
+    # its honorable mention, no longer the first place by decree.
     ranked = sorted((e for e in _entries.values() if not qualifies(e)),
-                    key=lambda e: (not benchmark.is_benchmark(e["chain"], e["token_address"]),
-                                   -final_score(e), -(e.get("launched_at") or 0)))[:BOARD_SIZE]
+                    key=lambda e: (-final_score(e), -(e.get("launched_at") or 0)))[:BOARD_SIZE]
     order = [_key(e["chain"], e["token_address"]) for e in ranked]
     now = time.time()
     for i, e in enumerate(ranked, 1):

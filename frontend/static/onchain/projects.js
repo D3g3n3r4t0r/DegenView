@@ -21,10 +21,13 @@ const num = (n) => (n ?? 0).toLocaleString("en-US");
 
 function row(p) {
   const why = p.why ? `<small class="pj-why">${escapeHtml(p.why)}</small>` : "";
+  // Only a ranked project's score competes with the board; the others show
+  // theirs dimmed, with why they are out (the reason line below).
   const score = p.score == null ? "—" : Math.round(p.score);
+  const out = p.status !== "ranked" && p.score != null;
   const site = p.website ? (() => { try { return new URL(p.website).hostname.replace(/^www\./, ""); } catch { return ""; } })() : "";
   return `<li data-status="${escapeHtml(p.status)}">
-    <span class="pj-score" title="Score">${score}</span>
+    <span class="pj-score${out ? " is-out" : ""}" title="${out ? "Score, not on the board" : "Score"}">${score}</span>
     <span class="pj-name"><b>${escapeHtml(p.symbol ?? "?")}</b> <span>${escapeHtml(p.name ?? "")}</span>
       <small>${CHAINS[p.chain] ?? escapeHtml(p.chain)} · cap ${usd(p.mcap)} · liq ${usd(p.liq)}${site ? ` · ${escapeHtml(site)}` : ""}${p.github ? " · code" : ""}</small>
       ${why}</span>
