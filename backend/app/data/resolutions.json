@@ -1654,5 +1654,16 @@
       "frontend/static/onchain/format.js",
       "frontend/static/onchain/app.css"
     ]
+  },
+  "seed-0135": {
+    "status": "risolto",
+    "at": 1790513733,
+    "summary": "Lo Scanner aveva un 'palco' col grafico dell'ultimo token uscito: se per ore non ne usciva un altro, restava lo stesso grafico tutto il giorno. In piu' ripeteva la lista delle Picks e usava lettere al posto dei loghi. Ora risponde a tre domande. Sta lavorando? Una riga di stato (in ascolto / sta controllando X), le chain, l'ora dell'ultimo giro e tre numeri: pool nuovi negli ultimi 10 minuti, promossi e scartati nelle ultime 24 ore. Cosa ha deciso? Il flusso delle ultime decisioni, dalla piu' recente, con il logo vero, Passed o Rejected e il motivo; i nuovi entrano in cima dal vivo. Il grafico c'e' solo se tocchi un token, nella sua pagina, dove la scheda Why mostra la pagella controllo per controllo; sotto un token scartato non c'e' il pulsante per comprarlo. Ha ragione? Una riga con quanti rug fra i promossi e fra gli scartati, e il Wall of Rugs chiuso in fondo. L'autopilota viene dopo. Il link dei messaggi Telegram ora apre direttamente la pagina di quel token.",
+    "files": [
+      "frontend/static/onchain/radar.js",
+      "frontend/onchain-app.html",
+      "frontend/static/onchain/app.css",
+      "frontend/static/onchain/detail.js"
+    ]
   }
 }
