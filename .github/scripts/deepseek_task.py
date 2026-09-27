@@ -97,6 +97,9 @@ def apply(text: str) -> list[str]:
         # The model sometimes writes "path=x", "`x`" or "x:" instead of the bare path.
         path = path.removeprefix("path=").strip("`'\":")
         p = Path(path)
+        if path == "path/to/file":
+            errors.append(f"{path}: the example path from the instructions, not a file of the task")
+            continue
         if path.startswith((".github/", "/")) or ".." in p.parts:
             errors.append(f"{path}: not allowed")
             continue
