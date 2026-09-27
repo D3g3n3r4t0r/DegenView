@@ -1732,5 +1732,15 @@
       "frontend/static/onchain/app.css",
       "backend/tests/test_profile.py"
     ]
+  },
+  "seed-0141": {
+    "status": "risolto",
+    "at": 1790524576,
+    "summary": "Installarlo sul server non ha senso: il DeepSeek vero (V3/R1) ha 671 miliardi di parametri e chiede centinaia di GB di memoria video; il server ha 2 CPU e 4 GB di RAM, senza GPU. Ci starebbe solo una versione ridotta da 1,5 miliardi, lenta e troppo debole per dare insight utili, e ruberebbe memoria all'app. Il modello e' gratuito da scaricare, farlo girare no. La strada e' la sua API, che costa molto meno di Claude: il revisore giornaliero ora puo' usare DeepSeek. Basta mettere DEEPSEEK_API_KEY sul server (la inserisce Lorenzo); con la chiave presente il revisore usa DeepSeek, altrimenti Claude. Tetti di token giornaliero e mensile invariati.",
+    "files": [
+      "backend/app/trading/onchain/ai_review.py",
+      "backend/app/config.py",
+      "backend/tests/test_signals.py"
+    ]
   }
 }

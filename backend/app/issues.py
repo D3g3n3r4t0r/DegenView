@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0141", "DeepSeek sul server per analizzare i dati, dare insight e migliorare gli alert",
+     "Lorenzo: 'mi piacerebbe inserire nel server DeepSeek perche' e' un modello gratuito [...] utilizzarlo come intelligenza per la gestione di tutti questi dati e dare degli insights e migliorare gli alert. Ma e' possibile installarlo? Se si', fallo. E se hai bisogno delle API vediamo come fare'.",
+     "media"),
     ("seed-0140", "Un profilo vero: immagine, nome, bio, cosa detieni, andamento del wallet nel tempo",
      "Lorenzo, con lo screenshot del profilo di un'app di trading: 'uno deve vedere cosa detiene, l'andamento del wallet nel tempo con un grafico, e ovviamente l'account con cui uno si e' loggato deve rimanere tutto nel database, uno deve poter scegliere anche l'immagine profilo, queste cose qua, cosi' che uno abbia il suo profilo dove effettivamente avere un controllo maggiore su tutta la piattaforma. Fai un bello studio su questo e applica'.",
      "media"),
