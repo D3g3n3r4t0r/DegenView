@@ -38,6 +38,15 @@ def test_coin_detail_builds_item():
     assert item["website"] == "https://grid.xyz" and item["launched_at"]
 
 
+def test_coin_detail_rejects_a_large_coin_bridged_onto_our_chain():
+    big = _coin(market_data={"market_cap": {"usd": 2_000_000_000}})
+    item, why = d.from_coin_detail("robinhood", big, {"symbol": "AAVE", "market_cap": 531_000})
+    assert item is None and why.startswith("global market cap")
+    small = _coin(market_data={"market_cap": {"usd": 500_000}})
+    item, why = d.from_coin_detail("robinhood", small, {"symbol": "GRID", "market_cap": 900_000})
+    assert why == "" and item["market_cap"] == 500_000
+
+
 def test_coin_detail_rejects_meme_stock_and_missing_contract():
     assert d.from_coin_detail("robinhood", _coin(categories=["Robinhood Chain Meme"]))[1].startswith("category")
     assert d.from_coin_detail("robinhood", _coin(categories=["Tokenized Stocks"]))[1].startswith("category")

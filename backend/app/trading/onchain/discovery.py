@@ -157,6 +157,10 @@ def from_coin_detail(chain: str, coin: dict, base: dict | None = None) -> tuple[
     token = next((platforms[p] for p in CG_PLATFORMS[chain] if platforms.get(p)), None)
     if not token:
         return None, "no contract on this chain"
+    cap = global_cap(coin)
+    if cap and cap > CAP_MAX:
+        return None, (f"global market cap ${cap:,.0f}: a large coin, not a gem"
+                      " (this chain holds a bridged copy)")
     cats = [c for c in coin.get("categories") or [] if c]
     bad = next((c for c in cats if any(w in c.lower() for w in _NOT_PROJECT)), None)
     if bad:
@@ -175,10 +179,21 @@ def from_coin_detail(chain: str, coin: dict, base: dict | None = None) -> tuple[
     return {
         "chain": chain, "token_address": token, "symbol": b.get("symbol") or (coin.get("symbol") or "").upper(),
         "name": b.get("name") or coin.get("name") or "", "website": website, "github": repos[0] if repos else None,
-        "socials": socials, "market_cap": b.get("market_cap"), "image": b.get("image"),
+        "socials": socials, "market_cap": cap or b.get("market_cap"), "image": b.get("image"),
         "categories": cats[:6], "description": ((coin.get("description") or {}).get("en") or "")[:400],
         "launched_at": _genesis(coin.get("genesis_date")),
     }, ""
+
+
+def global_cap(coin: dict) -> float | None:
+    """CoinGecko's market cap for the coin as a whole, not for the one
+    contract on our chain: a bridged copy holds a fraction of the supply."""
+    cap = ((coin.get("market_data") or {}).get("market_cap") or {}).get("usd")
+    try:
+        cap = float(cap)
+    except (TypeError, ValueError):
+        return None
+    return cap if cap > 0 else None
 
 
 def _genesis(date: str | None) -> float | None:
@@ -253,10 +268,12 @@ async def _cg_step(client: httpx.AsyncClient, add: Callable[[dict, str], bool], 
         return
     _, chain, base = job
     coin = await _cg_get(client, f"/coins/{base['id']}", {"localization": "false", "tickers": "false",
-                                                         "market_data": "false", "community_data": "false",
+                                                         "market_data": "true", "community_data": "false",
                                                          "developer_data": "false"})
     item, why = from_coin_detail(chain, coin, base)
-    projects_db.mark_detail(chain, base["id"], now)
+    projects_db.mark_detail(chain, base["id"], now, global_cap(coin))
+    if item is None and why.startswith("global market cap"):
+        projects_db.reject_cg(chain, base["id"], why, now)
     _note(f"cg:{chain}:{base['id']}", item is not None, why, now)
     if item:
         add(item, "coingecko")
