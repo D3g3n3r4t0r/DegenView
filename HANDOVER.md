@@ -3600,3 +3600,9 @@ Chat Telegram: strumenti in sola lettura su tutto (`cerca_progetti`,
 `classifica_gemme`, `alert_ora`, `sistema`, `scartati`, `memoria`, più i rug),
 5 giri per risposta, e `segnala_bug` → bacheca con autore "DeepSeek (Telegram)".
 CLAUDE.md dice di leggerle sempre e verificarle. DeepSeek non tocca il codice.
+
+**2026-09-27 — Lorenzo: "a prescindere se seleziono top 15 25 o 50 vedo sempre gli stessi progetti".**
+La classifica gemme aveva 6 voci. `GET /api/onchain/top?n=` = classifica +
+migliori "studied" del database in fascia (`projects_db.search(..., band)`),
+con il motivo dell'esclusione. Da valutare: se i filtri della classifica
+(MIN_PILLAR, research floor, età) sono troppo stretti.
