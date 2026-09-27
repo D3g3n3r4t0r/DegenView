@@ -218,13 +218,13 @@ function paintTabs() {
       }).join("")}</ol>
     </article>`).join("")
     : `<dl class="kv">
-        <div><dt>Score</dt><dd>${e.dossier?.score != null ? Math.round(e.dossier.score) : "—"}</dd></div>
-        <div><dt>Board</dt><dd>${e.dossier?.on_board ? "on the board" : `not ranked${e.dossier?.why ? `: ${escapeHtml(e.dossier.why)}` : ""}`}</dd></div>
+        ${e.dossier ? `<div><dt>Score</dt><dd>${e.dossier.score != null ? Math.round(e.dossier.score) : "—"}</dd></div>
+        <div><dt>Board</dt><dd>${e.dossier.on_board ? "on the board" : `not ranked${e.dossier.why ? `: ${escapeHtml(e.dossier.why)}` : ""}`}</dd></div>` : ""}
         <div><dt>Market cap</dt><dd>${usdShort(e.cap)}</dd></div>
-        <div><dt>Liquidity</dt><dd>${usdShort(e.dossier?.liquidity_usd)}</dd></div>
+        ${e.dossier?.liquidity_usd != null ? `<div><dt>Liquidity</dt><dd>${usdShort(e.dossier.liquidity_usd)}</dd></div>` : ""}
         ${e.ageTs ? `<div><dt>Age</dt><dd>${age(e.ageTs)[0]}</dd></div>` : ""}
       </dl>
-      <p class="muted">No Telegram alert on this token yet${e.kind === "gem" ? ": gems are alerted when they enter the board." : "."}</p>`;
+      <p class="muted">${pending ? "Loading…" : `No Telegram alert on this token yet${e.kind === "gem" ? ": gems are alerted when they enter the board." : "."}`}</p>`;
 }
 
 function infoFallback(e) {

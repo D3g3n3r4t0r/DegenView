@@ -437,11 +437,11 @@ def for_token(chain: str, token: str, now: float | None = None) -> list[dict]:
     shape board() items have. The token page asks for this so Signal is
     complete whichever list opened it (Lorenzo, 27/09)."""
     now = now or time.time()
-    chosen = system_board("meme")["chosen"]
     rows = [a for a in _alerts.values()
             if a["chain"] == chain and a.get("token_address") == token and a["entry"] is not None]
     rows.sort(key=lambda a: -a["at"])
-    return [_item(a, now, chosen) for a in rows]
+    chosen = {k: system_board(k)["chosen"] for k in {a["kind"] for a in rows}}
+    return [_item(a, now, chosen[a["kind"]]) for a in rows]
 
 
 def board(kind: str, limit: int = 30, now: float | None = None) -> dict:
