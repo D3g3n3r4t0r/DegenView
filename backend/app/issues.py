@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0131", "BSC per le Meme insieme a Solana e Robinhood; Ethereum e Base solo per le Gemme",
+     "Lorenzo: 'secondo me andrebbe aggiunta BSC per le Meme insieme a Sol e Robinhood. Poi Eth e Base solo per le Gemme'.",
+     "media"),
     ("seed-0130", "Home page: un solo pulsante Enter app al posto delle due porte",
      "Lorenzo: 'la home page va migliorata non servono piu' i due tasti per le due sezioni, basta enter app'.",
      "bassa"),

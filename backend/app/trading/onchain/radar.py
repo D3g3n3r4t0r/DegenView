@@ -61,7 +61,7 @@ logger = logging.getLogger(__name__)
 _STORE_FILE = data_file("onchain_radar.json")
 
 GECKO_BASE = "https://api.geckoterminal.com/api/v2"
-CHAINS = {"solana": "solana", "robinhood": "robinhood", "base": "base"}
+CHAINS = {c: c for c in legit.MEME_CHAINS}   # DexScreener and GeckoTerminal share these slugs
 
 # Soglie iniziali: regolabili qui, non da un parametro di richiesta.
 AGE_MAX_DAYS = 21

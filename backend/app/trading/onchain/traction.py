@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 PROTOCOLS = "https://api.llama.fi/protocols"
 FEES = "https://api.llama.fi/overview/fees?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true"
 REFRESH_S = 6 * 3600
-CHAIN_NAMES = {"solana": ("Solana",), "robinhood": ("Robinhood", "Robinhood Chain"), "base": ("Base",)}
+CHAIN_NAMES = {"solana": ("Solana",), "robinhood": ("Robinhood", "Robinhood Chain"), "base": ("Base",), "ethereum": ("Ethereum",)}
 CAP_MIN = 50_000
 CAP_MAX = 3_000_000
 TVL_MIN_UNPRICED = 50_000        # no market cap on DefiLlama: enter only with real TVL
@@ -70,7 +70,9 @@ def _ramp(x: float, lo: float, hi: float) -> float:
 
 def _token(chain: str, address: str | None) -> str | None:
     """DefiLlama writes "solana:<mint>", "robinhood:0x..", or a bare 0x for
-    Ethereum (not ours)."""
+    Ethereum."""
+    if address and chain == "ethereum" and address.startswith("0x") and ":" not in address:
+        return address.lower()
     if not address or ":" not in address:
         return None
     prefix, token = address.split(":", 1)

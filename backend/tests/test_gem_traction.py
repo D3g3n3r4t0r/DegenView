@@ -19,7 +19,7 @@ PROTOCOLS = [
      "github": ["proto-labs"], "url": "https://proto.fi", "twitter": "protofi"},
     {"name": "Big", "symbol": "BIG", "slug": "big", "id": "2", "address": "solana:BigMint",
      "chains": ["Solana"], "category": "Dexs", "tvl": 9e8, "mcap": 5e8},
-    {"name": "Eth", "symbol": "E", "slug": "eth", "id": "3", "address": "0xabc", "chains": ["Ethereum"], "tvl": 1e6},
+    {"name": "Eth", "symbol": "E", "slug": "eth", "id": "3", "address": "arbitrum:0xabc", "chains": ["Arbitrum"], "tvl": 1e6},
     {"name": "Cex", "symbol": "C", "slug": "cex", "id": "4", "address": "solana:CexMint", "category": "CEX",
      "tvl": 1e6, "mcap": 1e6},
 ]

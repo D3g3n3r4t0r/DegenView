@@ -34,7 +34,7 @@ def test_upsert_merges_sources_and_never_erases_known_fields():
 
 def test_coingecko_list_fills_the_universe_and_market_puts_it_in_band():
     rows = [{"id": "alpha", "symbol": "alp", "name": "Alpha", "platforms": {"solana": "AlphaMint"}},
-            {"id": "eth", "symbol": "e", "name": "E", "platforms": {"ethereum": "0x1"}},
+            {"id": "eth", "symbol": "e", "name": "E", "platforms": {"arbitrum": "0x1"}},
             {"id": "rh", "symbol": "r", "name": "R", "platforms": {"robinhood": "0xabc"}}]
     assert db.upsert_many(discovery.universe(rows), "coingecko-list", T0) == 2
     assert db.stale_market(10, T0) == {"solana": ["AlphaMint"], "robinhood": ["0xabc"]}
