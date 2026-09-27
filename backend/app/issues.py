@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0163", "Nel podio delle gemme punteggi piu' bassi di quelli nel database; scansione lenta",
+     "Lorenzo: 'nel podio delle gemme compaiono token con punteggi piu' bassi rispetto a quelli presenti in database' e 'la scansione complessiva e' lenta, possiamo migliorarla?'.",
+     "alta"),
     ("seed-0162", "Alerts troppo carichi; Picks sono meme coin; top 15/25/50; 'lp locked' non protegge",
      "Lorenzo: 'la tab alert e' confusionale, troppe informazioni, troppe cripto [...] vedere quali alert sono scattati in ordine cronologico [...] cosa sta per scattare [...] riesumare roba vecchia che sta ritornando in moda', 'sostituirei la scheda Picks con la top 15, top 25, top 50 [...] non voglio assolutamente il meme coin', e l'analisi di DeepSeek su lp_locked_pct e top_holder_pct a 0.",
      "alta"),
