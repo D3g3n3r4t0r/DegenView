@@ -47,7 +47,10 @@ MODES = ("off", "sim", "real")
 PCTS = (10, 25, 50, 100)
 FRESH_S = 15 * 60          # a buy older than this is not chased
 SLIPPAGE = 0.05            # memes move: tight limits make orders fail
-GAS_UNITS = 300_000 + 80_000   # swap + a possible approve
+GAS_UNITS = 2 * (300_000 + 80_000)   # cash swap + trade swap, each with a possible approve
+CASH_SLIPPAGE = 0.005      # USDC <-> USDG: two dollars, a tight floor is enough
+MIN_CASH_POOL_USD = 20_000
+_meta: dict = {"usdc": None, "usdc_at": 0.0}
 KEEP_TRADES = 60
 SIM_START_USDG = 100.0     # virtual balance when the wallet holds no USDG
 
@@ -72,6 +75,7 @@ def _save() -> None:
 
 def reset_for_tests() -> None:
     _state.clear()
+    _meta.update(usdc=None, usdc_at=0.0)
 
 
 def _user(uid: str) -> dict:
@@ -134,7 +138,7 @@ def view(uid: str) -> dict:
             "sim": sim, "trades": u["trades"][-20:][::-1], "note": u["note"],
             "stats": {"closed": len(closed), "wins": sum(1 for t in closed if t["ret"] > 0),
                       "sum_ret": round(sum(t["ret"] for t in closed), 4) if closed else None},
-            "system": alert_track.system_board("meme")["chosen"]}
+            "system": alert_track.system_board("meme")["chosen"], "usdc": _meta["usdc"]}
 
 
 # --------------------------------------------------------------- decisions
@@ -193,6 +197,7 @@ class Market:
     decimals: Callable[[str], Awaitable[int | None]]
     quote: Callable[[str, str, int], Awaitable[dict]]
     swap: Callable[..., Awaitable[dict]]
+    find_usdc: Callable[[], Awaitable[str | None]] | None = None
 
 
 async def _default_market() -> Market:
@@ -228,7 +233,48 @@ async def _default_market() -> Market:
         return {"out": int(q["amount_out"]), "route": "aggregator", "fee": None,
                 "impact": float(q.get("price_impact_pct") or 0)}
 
-    return Market(usdg_balance, token_balance, eth_balance_wei, gas_price_wei, decimals, quote, real_swap)
+    async def find_usdc() -> str | None:
+        """Lorenzo: cash is USDC, converted to USDG to trade on Robinhood.
+        The USDC contract there is not hard-coded: it is the USDC side of
+        the most liquid USDC/USDG pool on DexScreener (the pool the
+        conversions go through anyway), checked on chain to be a 6-decimal
+        token called USDC. robinhood_usdc_address in the settings wins."""
+        from app.config import settings as app_settings
+        if app_settings.robinhood_usdc_address:
+            return app_settings.robinhood_usdc_address
+        import httpx
+        async with httpx.AsyncClient(timeout=10.0) as c:
+            r = await c.get("https://api.dexscreener.com/latest/dex/search", params={"q": "USDC USDG"})
+        best = None
+        for p in (r.json() or {}).get("pairs") or []:
+            if p.get("chainId") != CHAIN:
+                continue
+            sides = [p.get("baseToken") or {}, p.get("quoteToken") or {}]
+            usdc = next((t for t in sides if (t.get("symbol") or "").upper() == "USDC"), None)
+            usdg = next((t for t in sides if (t.get("address") or "").lower() == USDG.lower()), None)
+            liq = float((p.get("liquidity") or {}).get("usd") or 0)
+            if usdc and usdg and liq >= MIN_CASH_POOL_USD and (best is None or liq > best[1]):
+                best = (usdc["address"], liq)
+        if not best or await token_metadata.get_token_decimals(CHAIN, best[0]) != USDC_DECIMALS:
+            return None
+        return best[0]
+
+    return Market(usdg_balance, token_balance, eth_balance_wei, gas_price_wei, decimals, quote, real_swap, find_usdc)
+
+
+USDC_DECIMALS = 6
+
+
+async def usdc_address(market: Market, now: float | None = None) -> str | None:
+    now = now or time.time()
+    if _meta["usdc"] or market.find_usdc is None or now - _meta["usdc_at"] < 600:
+        return _meta["usdc"]
+    _meta["usdc_at"] = now
+    try:
+        _meta["usdc"] = await market.find_usdc()
+    except Exception:
+        _meta["usdc"] = None
+    return _meta["usdc"]
 
 
 async def _ensure_allowance(private_key_hex: str, owner: str, token: str, amount: int) -> str | None:
@@ -326,50 +372,87 @@ async def tick(users: list, now: float | None = None, market: Market | None = No
     return done
 
 
+async def _swap_or_sim(user, real: bool, *, token_in: str, token_out: str, amount_in: int, quote: dict,
+                       slippage: float, side: str, token: str, price_usd: float, notional: float) -> dict:
+    """One leg: simulated (the quote is the fill) or real (Uniswap v3 only)."""
+    if not real:
+        return {"ok": True, "out": quote["out"]}
+    if quote["route"] != "uniswap-v3":
+        return {"ok": False, "reason": "only reachable through an aggregator: not signable yet"}
+    res = await _MARKET.swap(user=user, token_in=token_in, token_out=token_out, amount_in=amount_in,
+                             min_out=int(quote["out"] * (1 - slippage)), fee=quote["fee"], notional_usd=notional,
+                             impact=quote["impact"], price_usd=price_usd, side=side, token=token)
+    return {**res, "out": int(quote["out"] * (1 - slippage))}
+
+
+_MARKET: Market | None = None
+
+
 async def _buy(user, u: dict, a: dict, now: float, market: Market) -> dict:
+    """Cash is USDC (Lorenzo): the USDC the share needs becomes USDG first,
+    then USDG buys the token. USDG already in the wallet counts as cash."""
+    global _MARKET
+    _MARKET = market
     owner = user.onchain_wallets[CHAIN].address
     mode = u["mode"]
     base = {"t": now, "side": "buy", "symbol": a["symbol"], "token": a["token_address"], "alert": alert_track.key_of(a),
             "mode": mode, "ok": False}
+    usdc = await usdc_address(market, now)
     if mode == "sim":
-        balance_raw = int((u["sim_usdg"] or 0) * 10 ** USDG_DECIMALS)
+        usdc_raw, usdg_raw = int((u["sim_usdg"] or 0) * 10 ** USDC_DECIMALS), 0
+        if not usdc:
+            usdc_raw, usdg_raw = 0, usdc_raw          # no USDC pool known: simulate straight from USDG
     else:
-        balance_raw = await market.usdg_balance(owner)
+        usdg_raw = await market.usdg_balance(owner)
+        usdc_raw = await market.token_balance(owner, usdc) if usdc else 0
         wei = await market.eth_balance_wei(owner)
         need = GAS_UNITS * await market.gas_price_wei() * 12 // 10
         if wei < need:
             return _log(u, {**base, "reason": f"not enough ETH for gas (need ~{need / 1e18:.6f} ETH)"})
-    amount = buy_amount(balance_raw, u["pct"])
+    amount = buy_amount(usdc_raw + usdg_raw, u["pct"])
     if amount <= 0:
-        return _log(u, {**base, "reason": "no USDG to spend"})
+        return _log(u, {**base, "reason": "no USDC or USDG to spend"})
     decimals = await market.decimals(a["token_address"])
     if decimals is None:
         return _log(u, {**base, "reason": "token decimals unavailable"})
-    q = await market.quote(USDG, a["token_address"], amount)
-    usdg = amount / 10 ** USDG_DECIMALS
-    base.update(usdg=round(usdg, 6), route=q["route"], impact=q["impact"])
+    spend_usdg = min(amount, usdg_raw)
+    convert = amount - spend_usdg
+    via = []
+    if convert > 0:
+        q1 = await market.quote(usdc, USDG, convert)
+        leg = await _swap_or_sim(user, mode == "real", token_in=usdc, token_out=USDG, amount_in=convert, quote=q1,
+                                 slippage=CASH_SLIPPAGE, side="buy", token=USDG, price_usd=1.0,
+                                 notional=convert / 10 ** USDC_DECIMALS)
+        if not leg["ok"]:
+            return _log(u, {**base, "reason": f"USDC to USDG: {leg['reason']}"})
+        spend_usdg += leg["out"]
+        via.append("USDC→USDG")
+    q = await market.quote(USDG, a["token_address"], spend_usdg)
+    usdg = spend_usdg / 10 ** USDG_DECIMALS
+    base.update(usdg=round(usdg, 6), route=q["route"], impact=q["impact"], via=via)
     if q["out"] <= 0:
         return _log(u, {**base, "reason": "no market for this token"})
+    leg = await _swap_or_sim(user, mode == "real", token_in=USDG, token_out=a["token_address"], amount_in=spend_usdg, quote=q,
+                             slippage=SLIPPAGE, side="buy", token=a["token_address"], price_usd=_price(a) or 0.0,
+                             notional=usdg)
+    if not leg["ok"]:
+        return _log(u, {**base, "reason": leg["reason"]})
     if mode == "real":
-        if q["route"] != "uniswap-v3":
-            return _log(u, {**base, "reason": "only reachable through an aggregator: not signable yet"})
-        res = await market.swap(user=user, token_in=USDG, token_out=a["token_address"], amount_in=amount,
-                                min_out=int(q["out"] * (1 - SLIPPAGE)), fee=q["fee"], notional_usd=usdg,
-                                impact=q["impact"], price_usd=_price(a) or 0.0, side="buy", token=a["token_address"])
-        if not res["ok"]:
-            return _log(u, {**base, "reason": res["reason"]})
-        base["tx"] = res.get("tx")
+        base["tx"] = leg.get("tx")
         qty_raw = await market.token_balance(owner, a["token_address"]) or q["out"]
     else:
-        u["sim_usdg"] = round((u["sim_usdg"] or 0) - usdg, 6)
+        u["sim_usdg"] = round((u["sim_usdg"] or 0) - amount / 10 ** USDC_DECIMALS, 6)
         qty_raw = q["out"]
     u["position"] = {"alert": base["alert"], "symbol": a["symbol"], "token": a["token_address"],
                      "pair": a["pair_address"], "qty_raw": int(qty_raw), "decimals": decimals,
-                     "cost_usdg": round(usdg, 6), "at": now, "mode": mode, "route": q["route"]}
+                     "cost_usdg": round(amount / 10 ** USDC_DECIMALS, 6), "at": now, "mode": mode, "route": q["route"]}
     return _log(u, {**base, "ok": True, "qty": qty_raw / 10 ** decimals})
 
 
 async def _sell(user, u: dict, why: str, now: float, market: Market) -> dict:
+    """Token -> USDG, then the USDG back to USDC: cash rests in USDC."""
+    global _MARKET
+    _MARKET = market
     pos = u["position"]
     owner = user.onchain_wallets[CHAIN].address
     base = {"t": now, "side": "sell", "symbol": pos["symbol"], "token": pos["token"], "alert": pos["alert"],
@@ -383,23 +466,42 @@ async def _sell(user, u: dict, why: str, now: float, market: Market) -> dict:
     except Exception as exc:
         q = {"out": 0, "route": None, "impact": None}
         base["reason"] = f"no quote: {exc}"[:160]
-    usdg = q["out"] / 10 ** USDG_DECIMALS
     base.update(route=q["route"], impact=q["impact"])
-    if pos["mode"] == "real":
-        if q["out"] <= 0 or q["route"] != "uniswap-v3":
-            return _log(u, {**base, "reason": base.get("reason") or "no signable route to sell right now"})
-        res = await market.swap(user=user, token_in=pos["token"], token_out=USDG, amount_in=qty_raw,
-                                min_out=int(q["out"] * (1 - SLIPPAGE)), fee=q["fee"], notional_usd=usdg,
-                                impact=q["impact"], price_usd=_price(alert_track._alerts.get(pos["alert"])) or 0.0,
-                                side="sell", token=pos["token"])
-        if not res["ok"]:
-            return _log(u, {**base, "reason": res["reason"]})
-        base["tx"] = res.get("tx")
-    else:
-        u["sim_usdg"] = round((u["sim_usdg"] or 0) + usdg, 6)
+    if pos["mode"] == "real" and (q["out"] <= 0 or q["route"] != "uniswap-v3"):
+        return _log(u, {**base, "reason": base.get("reason") or "no signable route to sell right now"})
+    got_usdg = 0
+    if q["out"] > 0:
+        leg = await _swap_or_sim(user, pos["mode"] == "real", token_in=pos["token"], token_out=USDG, amount_in=qty_raw, quote=q,
+                                 slippage=SLIPPAGE, side="sell", token=pos["token"],
+                                 price_usd=_price(alert_track._alerts.get(pos["alert"])) or 0.0,
+                                 notional=q["out"] / 10 ** USDG_DECIMALS)
+        if not leg["ok"]:
+            return _log(u, {**base, "reason": leg["reason"]})
+        base["tx"] = leg.get("tx")
+        got_usdg = q["out"] if pos["mode"] == "sim" else leg["out"]
+    cash_raw, via = got_usdg, []
+    usdc = await usdc_address(market, now)
+    if usdc and got_usdg > 0:
+        back = got_usdg
+        try:
+            q2 = await market.quote(USDG, usdc, back)
+            leg2 = await _swap_or_sim(user, pos["mode"] == "real", token_in=USDG, token_out=usdc, amount_in=back, quote=q2,
+                                      slippage=CASH_SLIPPAGE, side="sell", token=USDG, price_usd=1.0,
+                                      notional=back / 10 ** USDG_DECIMALS)
+            if leg2["ok"]:
+                cash_raw = q2["out"] if pos["mode"] == "sim" else leg2["out"]
+                via.append("USDG→USDC")
+            else:
+                u["note"] = f"USDG to USDC: {leg2['reason']}"[:200]
+        except Exception as exc:
+            u["note"] = f"USDG to USDC: {exc}"[:200]
+    cash = cash_raw / 10 ** USDC_DECIMALS
+    if pos["mode"] == "sim":
+        u["sim_usdg"] = round((u["sim_usdg"] or 0) + cash, 6)
     u["position"] = None
-    ret = usdg / pos["cost_usdg"] - 1 if pos["cost_usdg"] else None
-    return _log(u, {**base, "ok": True, "usdg": round(usdg, 6), "ret": round(ret, 4) if ret is not None else None})
+    ret = cash / pos["cost_usdg"] - 1 if pos["cost_usdg"] else None
+    return _log(u, {**base, "ok": True, "usdg": round(cash, 6), "via": via,
+                    "ret": round(ret, 4) if ret is not None else None})
 
 
 _load()

@@ -18,13 +18,17 @@ let timer = null;
 
 const pct = (v) => (v == null ? "—" : `${v > 0 ? "+" : ""}${(v * 100).toFixed(Math.abs(v) < 0.1 ? 1 : 0)}%`);
 const sign = (v) => (v == null ? "" : v >= 0 ? "up" : "down");
-const usdg = (v) => (v == null ? "—" : `${v.toLocaleString("en-US", { maximumFractionDigits: 2 })} USDG`);
+// Cash is USDC (Lorenzo): on Robinhood it becomes USDG only for the trade.
+const usdg = (v) => (v == null ? "—" : `${v.toLocaleString("en-US", { maximumFractionDigits: 2 })} USDC`);
+const cashLine = (d) => (d.usdc
+  ? `Cash in USDC (${d.usdc.slice(0, 6)}…${d.usdc.slice(-4)}), turned into USDG for each trade and back after the sale.`
+  : "USDC on Robinhood Chain not found yet: trading from USDG until it is.");
 
 function line(d) {
   if (!d.has_wallet) return "Create the Robinhood Chain wallet to let the system trade it.";
   if (d.mode === "off") return `Off. When on, the system (${escapeHtml(d.system)}) buys Robinhood alerts on its own entries and sells on its exits, one token at a time.`;
   if (d.mode === "sim") return "Simulated: real quotes, nothing sent. Your wallet is not touched.";
-  return d.server_live ? "Real: trades your USDG on its own. Gas is paid in ETH." : "Real is on, but live execution is switched off on the server: nothing is sent yet.";
+  return d.server_live ? "Real: trades your cash on its own. Gas is paid in ETH." : "Real is on, but live execution is switched off on the server: nothing is sent yet.";
 }
 
 function position(d) {
@@ -58,11 +62,12 @@ function paint() {
     </header>
     <div class="auto-modes" role="radiogroup" aria-label="Auto-trade mode">${MODES.map(([m, label]) =>
       `<button type="button" role="radio" data-mode="${m}" aria-checked="${d.mode === m}" ${!d.has_wallet && m !== "off" ? "disabled" : ""}>${label}</button>`).join("")}</div>
-    <div class="auto-pct" role="radiogroup" aria-label="Share of the USDG balance per trade">
+    <div class="auto-pct" role="radiogroup" aria-label="Share of the cash per trade">
       <small>Per trade</small>${(d.pcts ?? [10, 25, 50, 100]).map((p) =>
         `<button type="button" role="radio" data-pct="${p}" aria-checked="${d.pct === p}">${p}%</button>`).join("")}
     </div>
     <p class="auto-line">${line(d)}</p>
+    ${d.mode !== "off" ? `<p class="auto-line">${cashLine(d)}</p>` : ""}
     ${sim}${position(d)}${trades(d)}
     ${d.note ? `<p class="auto-note">${escapeHtml(d.note)}</p>` : ""}`;
 }
@@ -96,7 +101,7 @@ export function mountAutotrade() {
     const m = event.target.closest("[data-mode]");
     if (m && m.tagName === "BUTTON" && m.dataset.mode !== data?.mode) {
       if (m.dataset.mode === "real" && !confirm(
-        `Real money: the system will trade ${data?.pct ?? 100}% of your USDG on Robinhood Chain on its own, `
+        `Real money: the system will trade ${data?.pct ?? 100}% of your cash (USDC) on Robinhood Chain on its own, `
         + "with no limit other than that share. Memes can go to zero. Switch it on?")) return;
       update({ mode: m.dataset.mode });
       return;

@@ -1742,5 +1742,17 @@
       "backend/app/config.py",
       "backend/tests/test_signals.py"
     ]
+  },
+  "seed-0142": {
+    "status": "risolto",
+    "at": 1790524774,
+    "summary": "L'auto-trade ragiona in USDC: la quota scelta si calcola su USDC + USDG del wallet Robinhood; prima di comprare, l'USDC che serve diventa USDG (minimo ricevuto -0,5%, sono due dollari), poi l'USDG compra il token; dopo la vendita il token torna in USDG e l'USDG torna subito in USDC. Il contratto USDC di Robinhood Chain non e' scritto a mano: il server lo ricava dal pool USDC/USDG piu' liquido (almeno $20k), controlla che abbia 6 decimali e lo mostra nel riquadro; si puo' fissare con ROBINHOOD_USDC_ADDRESS. Se non lo trova, opera da USDG e lo dice. Il simulato fa gli stessi passaggi con preventivi veri. Il gas ora copre due scambi e due autorizzazioni. Gli USDC su altre chain (Solana) contano nel cash del profilo, ma per usarli su Robinhood serve un bridge, che non e' uno swap e non e' incluso.",
+    "files": [
+      "backend/app/trading/onchain/autotrader.py",
+      "backend/app/config.py",
+      "backend/app/main.py",
+      "frontend/static/onchain/autotrade.js",
+      "backend/tests/test_autotrader.py"
+    ]
   }
 }

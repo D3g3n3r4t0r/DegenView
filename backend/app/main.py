@@ -3740,9 +3740,11 @@ async def set_autotrader(body: AutotraderUpdate, user: User = Depends(auth.get_c
     usdg_now = None
     if body.mode == "sim":
         try:
+            # Cash = USDC + USDG (both 6 decimals): the simulation starts from what the wallet holds.
+            cash_tokens = [onchain_autotrader.USDG] + ([onchain_autotrader._meta["usdc"]] if onchain_autotrader._meta["usdc"] else [])
             rows = await onchain_balances._robinhood_known_token_balances(
-                user.onchain_wallets["robinhood"].address, [onchain_autotrader.USDG])
-            usdg_now = rows[0]["amount_raw"] / 10 ** onchain_autotrader.USDG_DECIMALS if rows else 0.0
+                user.onchain_wallets["robinhood"].address, cash_tokens)
+            usdg_now = sum(r["amount_raw"] for r in rows) / 10 ** onchain_autotrader.USDG_DECIMALS
         except Exception:
             usdg_now = None
     try:
