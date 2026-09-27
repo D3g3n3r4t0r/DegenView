@@ -114,3 +114,18 @@ def test_activity_log_is_short_and_says_when_it_is_working():
     assert len(dd._activity) == dd.ACTIVITY_KEEP and a["items"][0]["text"] == f"Judged T{dd.ACTIVITY_KEEP + 4}"
     assert a["working"] is True
     assert dd.activity(now=5000.0)["working"] is False
+
+
+def test_every_database_tool_answers_and_reports_land_on_the_board(tmp_path, monkeypatch):
+    from app import issues as issues_store, main
+    monkeypatch.setattr(issues_store, "_STORE_FILE", tmp_path / "issues.json")
+    tools = main._deepseek_tools()
+    for name in ("cerca_progetti", "classifica_gemme", "alert_ora", "sistema", "scartati", "memoria", "ultimi_rug",
+                 "circostanze_rug"):
+        spec, fn = tools[name]
+        assert spec["name"] == name
+        assert fn() is not None
+    before = len(issues_store.list_issues())
+    out = tools["segnala_bug"][1](titolo="Holder a 0%", dettaglio="top_holder_pct 0.0 su 40 token")
+    assert out["ok"] and len(issues_store.list_issues()) == before + 1
+    issues_store.delete_issue(out["id"])

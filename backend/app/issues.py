@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0164", "DeepSeek con accesso a tutto il database e segnalatore di bug",
+     "Lorenzo: 'aumentiamo i poteri a deepseek, dai accesso completo al database cosi' da telegram posso interrogarlo su tutto; usalo come bug fixer [...] tieni a mente di guardare sempre quello che ha scritto quando parli con me'.",
+     "media"),
     ("seed-0163", "Nel podio delle gemme punteggi piu' bassi di quelli nel database; scansione lenta",
      "Lorenzo: 'nel podio delle gemme compaiono token con punteggi piu' bassi rispetto a quelli presenti in database' e 'la scansione complessiva e' lenta, possiamo migliorarla?'.",
      "alta"),

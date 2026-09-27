@@ -1248,10 +1248,55 @@ def _deepseek_tools() -> dict:
         "circostanze_rug": ({"name": "circostanze_rug", "description": "How rug pulls differed from the other tokens: rate, hours to rug, how they happened, numbers and checks of rugs vs others.",
                              "parameters": {"type": "object", "properties": {"chain": str_arg("optional: solana, robinhood, bsc, base, ethereum")}}},
                             lambda chain=None: rug_memory.circumstances(chain or None)),
+        # Lorenzo, 27/09: "aumentiamo i poteri a deepseek, dai accesso completo
+        # al database cosi' da telegram posso interrogarlo su tutto". Read-only.
+        "cerca_progetti": ({"name": "cerca_progetti", "description": "Search the Gem Finder's project database (every project ever met): symbol, name, address or site; optional status new/analyzing/studied/ranked/rejected. Returns score, cap, liquidity, status and why.",
+                            "parameters": {"type": "object", "properties": {"query": str_arg("text to search, empty for all"), "status": str_arg("optional status"),
+                                                                            "limit": {"type": "integer", "description": "max 50"}}}},
+                           lambda query="", status="", limit=20: onchain_projects_db.search(query or "", status or "", "score", min(int(limit or 20), 50))),
+        "classifica_gemme": ({"name": "classifica_gemme", "description": "The live gem board (quality low caps) by score: rank, symbol, score, pillars, cap, verdict.",
+                              "parameters": {"type": "object", "properties": {"n": {"type": "integer", "description": "how many, max 50"}}}},
+                             lambda n=15: [{k: e.get(k) for k in ("rank", "symbol", "chain", "token_address", "score", "market_cap", "liquidity_usd", "change_24h", "verdict", "summary", "early")}
+                                           for e in (onchain_leaderboard.board().get("entries") or [])[:min(int(n or 15), 50)]]),
+        "alert_ora": ({"name": "alert_ora", "description": "Meme alerts now: fired in the last 48h (with the system's state and DeepSeek's risk), about to fire, and old ones coming back.",
+                       "parameters": {"type": "object", "properties": {}}},
+                      lambda: {"fired": onchain_alert_track.feed("meme")[:25], "about_to_fire": onchain_listings.upcoming(),
+                               "coming_back": onchain_alert_track.reviving("meme")}),
+        "sistema": ({"name": "sistema", "description": "The trading system: strategies compared (median, win share, closed alerts) and which one is in use.",
+                     "parameters": {"type": "object", "properties": {}}},
+                    lambda: onchain_alert_track.system_board("meme")),
+        "scartati": ({"name": "scartati", "description": "Tokens the listing filter rejected lately, with the reason.",
+                      "parameters": {"type": "object", "properties": {"n": {"type": "integer", "description": "max 40"}}}},
+                     lambda n=20: [{k: r.get(k) for k in ("symbol", "chain", "token_address", "reason", "at", "market_cap", "liquidity_usd")}
+                                   for r in onchain_listings.rejected()[:min(int(n or 20), 40)]]),
+        "memoria": ({"name": "memoria", "description": "What the memory learned: rug rate of passed vs rejected tokens, which checks predict rugs (AUC), whether the model is active, and notes.",
+                     "parameters": {"type": "object", "properties": {}}},
+                    lambda: {k: v for k, v in onchain_outcomes.lessons().items() if k in ("tracked", "passed", "rejected", "signals", "model", "notes")}),
+        "segnala_bug": ({"name": "segnala_bug", "description": "File a problem on the site's report board, for Claude (the developer) to verify and fix. Use it when the user asks, or when the data you read looks wrong or inconsistent. Say exactly what you saw: which data, which numbers, why it is wrong.",
+                         "parameters": {"type": "object", "properties": {"titolo": str_arg("short title, in Italian"), "dettaglio": str_arg("what you saw and why it looks wrong, with the numbers"),
+                                                                         "priorita": str_arg("bassa, media or alta")}, "required": ["titolo", "dettaglio"]}},
+                        _deepseek_report),
         "ultimi_rug": ({"name": "ultimi_rug", "description": "The most recent rug pulls in the database, newest first.",
                         "parameters": {"type": "object", "properties": {"n": {"type": "integer", "description": "how many, max 20"}}}},
                        lambda n=10: sorted((c for c in rug_memory.cases() if c["outcome"] == "rug"), key=lambda c: -c["at"])[:min(int(n or 10), 20)]),
     }
+
+
+_DEEPSEEK_REPORTS_PER_DAY = 10
+
+
+def _deepseek_report(titolo: str, dettaglio: str, priorita: str = "media") -> dict:
+    """DeepSeek writes on the report board; Claude reads it at the start of
+    every conversation (CLAUDE.md) and verifies it on the code before acting."""
+    today = _time.strftime("%Y-%m-%d")
+    mine = [i for i in issues_store.list_issues() if (i.get("author") or "").startswith("DeepSeek")
+            and _time.strftime("%Y-%m-%d", _time.localtime(i.get("created_at") or 0)) == today]
+    if len(mine) >= _DEEPSEEK_REPORTS_PER_DAY:
+        return {"error": "daily limit of reports reached"}
+    entry = issues_store.add_issue(titolo, dettaglio, priorita if priorita in ("bassa", "media", "alta") else "media",
+                                   author="DeepSeek (Telegram)")
+    deepseek_desk.note("report", f"Filed a report: {titolo[:80]}")
+    return {"ok": True, "id": entry["id"]}
 
 
 def _similar_to(query: str) -> dict:

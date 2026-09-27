@@ -13,7 +13,12 @@ Leggi la bacheca segnalazioni:
 curl -s https://liquidityengine.app/api/issues
 ```
 
-Sono i problemi che Lorenzo e chi lavora con lui hanno scritto dall'app. Se ce
+Sono i problemi che Lorenzo e chi lavora con lui hanno scritto dall'app.
+Quelli con autore **"DeepSeek (Telegram)"** li scrive DeepSeek dalla chat
+(Lorenzo, 27/09: "usalo come bug fixer [...] tieni a mente di guardare sempre
+quello che ha scritto quando parli con me"): leggili sempre, citali a Lorenzo,
+e verificali sul codice prima di agire — la sua prima revisione aveva 0
+osservazioni valide su 5, la seconda un bug vero (holder a 0%). Se ce
 ne sono di nuovi o di aperti, dillo subito e proponi da quale partire, senza
 aspettare che te lo chiedano.
 
