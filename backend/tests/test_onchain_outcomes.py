@@ -45,6 +45,42 @@ def test_journal_keeps_the_strongest_decision_and_its_moment():
     assert outcomes.observe({**_item("x"), "pair_address": ""}, "listed") is None
 
 
+def _entry(token, at, *, entry=True, rug=False, closed=False):
+    e = {"at": at, "rug": rug, "closed": closed}
+    if entry:
+        e["entry"] = {"at": at, "price": 1.0}
+    return e
+
+
+def test_prune_drops_never_priced_before_undecided():
+    now = T0 + 86400
+    journal = {}
+    for i in range(4):
+        journal[f"rug{i}"] = _entry(f"rug{i}", T0 - 10 * H + i, rug=True)
+    for i in range(2):
+        journal[f"und{i}"] = _entry(f"und{i}", now - 86400 + i)
+    for i in range(4):
+        journal[f"np{i}"] = _entry(f"np{i}", T0 - 20 * H + i, entry=False)
+    outcomes._prune(journal, 6, now)
+    assert len(journal) == 6
+    assert "und0" in journal and "und1" in journal
+    assert not any(k.startswith("np") for k in journal)
+
+
+def test_prune_keeps_the_minority_class_and_undecided():
+    now = T0 + 86400
+    journal = {}
+    for i in range(5):
+        journal[f"rug{i}"] = _entry(f"rug{i}", T0 - 10 * H + i, rug=True)
+    journal["non0"] = _entry("non0", T0 - 10 * H, closed=True)
+    for i in range(2):
+        journal[f"und{i}"] = _entry(f"und{i}", now - 86400 + i)
+    outcomes._prune(journal, 5, now)
+    assert len(journal) == 5
+    assert "non0" in journal and "und0" in journal and "und1" in journal
+    assert "rug0" not in journal and "rug1" not in journal
+
+
 def test_holder_concentration_is_learned_in_the_right_direction():
     for i in range(30):
         rug = i % 3 == 0
