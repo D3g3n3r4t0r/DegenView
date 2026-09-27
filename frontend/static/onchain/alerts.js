@@ -11,12 +11,12 @@
 import * as api from "@onchain/api.js";
 import { age, changePill, escapeHtml, logo, tile, tokenRow, usdShort } from "@onchain/format.js";
 import { register } from "@onchain/detail.js";
+import { renderPodium } from "@onchain/podium.js";
 
 export { tile };
 
 const POLL_MS = 60_000;
 const HOURS = [1, 2, 3, 4, 5, 6, 8, 12, 24, 48];
-const CONFETTI = 16;
 
 const pct = (f) => (f == null ? "—" : `${f > 0 ? "+" : ""}${Math.round(f * 100)}%`);
 const sign = (f) => (f == null ? "" : f >= 0 ? "up" : "down");
@@ -87,21 +87,6 @@ function paintFeed() {
 
 /* ------------------------------------------------------------ trophy */
 
-const CROWN = `<svg class="crown" viewBox="0 0 64 44" aria-hidden="true"><defs><linearGradient id="crown-g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff3b0"/><stop offset=".45" stop-color="#facc15"/><stop offset="1" stop-color="#b45309"/></linearGradient></defs><path d="M5 40 9 12l13 13L32 4l10 21 13-13 4 28z" fill="url(#crown-g)"/><circle cx="32" cy="4" r="3.5" fill="#fde68a"/><circle cx="9" cy="12" r="3.5" fill="#fde68a"/><circle cx="55" cy="12" r="3.5" fill="#fde68a"/><circle cx="21" cy="31" r="3" class="gem"/><circle cx="32" cy="31" r="3.4" class="gem"/><circle cx="43" cy="31" r="3" class="gem"/></svg>`;
-
-/** One place on the podium: a medal (the logo in a metal ring), the name,
- *  the number that ranks it, and the step it stands on. */
-function place(x, n, gem) {
-  if (!x) return `<span class="pd pd-empty" data-place="${n}"><span class="pd-step"><i>${n}</i></span></span>`;
-  return `<button type="button" class="pd" data-place="${n}" data-open="${escapeHtml(x.id)}" style="--n:${n}" aria-label="Number ${n}: ${escapeHtml(x.symbol)} ${escapeHtml(x.label)}">
-    ${n === 1 ? CROWN : ""}
-    <span class="medal"><span class="halo" aria-hidden="true"></span>${tile(x.symbol, x.image, x.chain, x.token)}<b class="pd-rank">${n}</b></span>
-    <span class="pd-sym">${escapeHtml(x.symbol)}</span>
-    <span class="pd-val" data-sign="${x.sign}">${gem ? `${x.label}<small> pts</small>` : x.label}</span>
-    <span class="pd-step" aria-hidden="true"><i>${n}</i></span>
-  </button>`;
-}
-
 /** Normalised rows for the current tab: alerts by return, gems by rank. */
 function rows() {
   if (state.kind === "gem") {
@@ -122,7 +107,7 @@ function rows() {
 const INFO_IC = `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>`;
 
 function paintTop() {
-  const root = document.getElementById("top");
+  const root = document.getElementById("leaders");
   if (!root) return;
   delete root.dataset.loading;
   const list = rows();
@@ -131,15 +116,19 @@ function paintTop() {
   root.querySelector("[data-top-info]").innerHTML = INFO_IC + (gem
     ? (w ? `Top 10 median ${pct(w.top.median)} after 7 days on the board.` : "Scored on code, research and tokenomics. Research, not advice.")
     : "Returns if you had bought when each Telegram alert arrived.");
-  const [first, second, third] = list;
   const hero = root.querySelector("[data-top-hero]");
-  hero.innerHTML = first ? `
-    <div class="rays" aria-hidden="true"></div>
-    <div class="confetti" aria-hidden="true">${Array.from({ length: CONFETTI }, (_, i) => `<i style="--i:${i}"></i>`).join("")}</div>
-    <div class="podium">${place(second, 2, gem)}${place(first, 1, gem)}${place(third, 3, gem)}</div>` : `<p class="muted pad">Nothing in this period yet.</p>`;
-  // The entrance plays when the podium changes, not on every refresh.
-  const sig = [first, second, third].map((x) => x?.id).join("|") + state.kind;
-  if (hero.dataset.sig !== sig) { hero.dataset.sig = sig; hero.classList.remove("enter"); void hero.offsetWidth; hero.classList.add("enter"); }
+  const top3 = list.slice(0, 3).map((x) => ({ id: x.id, symbol: x.symbol, value: gem ? `${x.label} pts` : x.label,
+    logoHtml: tile(x.symbol, x.image, x.chain, x.token) }));
+  if (!top3.length) {
+    hero.dataset.sig = "";
+    hero.innerHTML = `<p class="muted pad">Nothing in this period yet.</p>`;
+  } else {
+    // The entrance plays when the podium changes; a refresh of the numbers redraws it still.
+    const sig = `${state.kind}:${top3.map((x) => x.id).join("|")}`;
+    const same = hero.dataset.sig === sig;
+    hero.dataset.sig = sig;
+    renderPodium(hero, top3, { still: same });
+  }
   root.querySelector(".seg").hidden = gem;
   const sortBtn = root.querySelector("[data-sort]");
   sortBtn.hidden = gem;
@@ -239,7 +228,7 @@ export function openInbox() {
 /* ------------------------------------------------------------- mount */
 
 export function mountAlerts() {
-  const top = document.getElementById("top");
+  const top = document.getElementById("leaders");
   top?.addEventListener("click", (event) => {
     const p = event.target.closest("[data-period]");
     if (p) {
