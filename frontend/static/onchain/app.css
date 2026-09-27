@@ -963,6 +963,7 @@
     & li { display: grid; grid-template-columns: 10px 1fr auto; gap: 10px; align-items: center; padding: 10px 2px;
       border-block-end: 1px solid rgba(255, 255, 255, .05); font-size: 14px; color: var(--k-text); }
     & small { color: var(--k-text-3); font-size: 12px; } }
+  .agent-log li.agent-empty { display: block; color: var(--k-text-3); }
   .agent-dot { inline-size: 8px; block-size: 8px; border-radius: 50%; background: #818cf8; }
   li[data-kind="research"] .agent-dot { background: #34d399; } li[data-kind="chat"] .agent-dot { background: #f472b6; }
 }

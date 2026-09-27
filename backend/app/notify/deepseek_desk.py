@@ -48,7 +48,7 @@ KINDS = {"chat": "chat Telegram", "scanner": "scanner (giudizio token)", "resear
 _lock = threading.Lock()
 # What the agent did lately, for the site's live presence (Lorenzo, 27/09:
 # "deve dare l'idea di essere sempre presente [...] un agent che esamina le
-# cose"). In memory: a restart starts a fresh log, the ledger keeps the counts.
+# cose"). Saved with the ledger, so a restart does not empty the log.
 _activity: list[dict] = []
 ACTIVITY_KEEP = 60
 _state: dict = {"days": {}, "recap_sent": ""}
@@ -63,11 +63,12 @@ def _load() -> None:
     if isinstance(raw, dict):
         _state["days"] = raw.get("days") or {}
         _state["recap_sent"] = raw.get("recap_sent") or ""
+        _activity[:] = [a for a in raw.get("activity") or [] if isinstance(a, dict)][-ACTIVITY_KEEP:]
 
 
 def _save() -> None:
     try:
-        _STORE_FILE.write_text(json.dumps(_state, separators=(",", ":")), encoding="utf-8")
+        _STORE_FILE.write_text(json.dumps({**_state, "activity": _activity}, separators=(",", ":")), encoding="utf-8")
     except OSError:
         pass
 
@@ -82,6 +83,7 @@ def note(kind: str, text: str, now: float | None = None, **extra) -> None:
     """One line of what the agent is doing, for /api/agent."""
     _activity.append({"t": now or time.time(), "kind": kind, "text": text[:140], **extra})
     del _activity[:-ACTIVITY_KEEP]
+    _save()
 
 
 def activity(now: float | None = None) -> dict:

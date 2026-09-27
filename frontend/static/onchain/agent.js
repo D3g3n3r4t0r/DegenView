@@ -63,7 +63,7 @@ function openLog() {
   setBody(`${today ? `<p class="sheet-note">Today: ${today}</p>` : ""}
     <ul class="agent-log">${items.length ? items.map((a) => `<li data-kind="${escapeHtml(a.kind)}">
       <span class="agent-dot" aria-hidden="true"></span><span>${escapeHtml(a.text)}</span><small>${ago(a.t)}</small></li>`).join("")
-      : `<li><span>Nothing yet since the last restart: it reads new alerts every 10 minutes.</span></li>`}</ul>`);
+      : `<li class="agent-empty"><span>Nothing yet today: it reads new alerts every 10 minutes.</span></li>`}</ul>`);
 }
 
 export function mountAgent() {
