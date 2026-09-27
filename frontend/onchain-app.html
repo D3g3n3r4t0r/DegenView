@@ -2388,7 +2388,7 @@
 
   /* --- meme view: the bets first, then the autopilot, then the scanner */
   #app-shell[data-view="meme"] #memes { order: -2; }
-  #app-shell[data-view="meme"] #pilot { order: -1; }
+  #app-shell[data-view="meme"] #pilot { order: 3; }   /* after the scanner: first what it sees, then the switch */
   #app-shell[data-view="meme"] #meme-alerts { order: 0; }
   #app-shell[data-view="meme"] #review { order: 1; }
   #app-shell[data-view="meme"] #radar { order: 2; }
@@ -2734,45 +2734,28 @@
            con gli ingressi della strategia migliore. Lo disegna
            static/onchain/radar.js. Sopra c'e' solo il saldo ("il saldo va
            bene inserirlo in cima, il resto poi"). -->
-      <section class="radar" id="radar" data-pane="meme:scanner" data-loading>
-        <header><h3><span class="radar-dot" aria-hidden="true"></span>Live scanner</h3><span data-radar-clock></span></header>
-        <div class="radar-grid">
-          <div class="radar-col">
-            <div class="radar-new" data-radar-new>
-              <h4>Just launched</h4>
-              <div class="radar-pulse" data-radar-pulse hidden>
-                <span class="rp-scan" aria-hidden="true"></span>
-                <p><span data-pulse-now>Listening</span></p>
-                <p class="rp-stats"><b data-pulse-arrivals>0</b> new in 10 min<span data-pulse-last></span> · <b data-pulse-rejected>0</b> rejected</p>
-              </div>
-              <p class="radar-empty" data-radar-new-empty>Nothing passed the filter</p>
-              <ul></ul>
-              <button type="button" class="rj-more" data-listings-more hidden></button>
-            </div>
-            <h4 class="radar-sub">Picks</h4>
-            <ul data-radar-list></ul>
-            <p class="radar-foot" data-radar-foot></p>
-          </div>
-          <div class="radar-stage" data-radar-stage></div>
+      <!-- Lo scanner: cosa sta facendo il motore adesso (Lorenzo: "la scheda
+           scanner e' confusionaria, non voglio che rimanga il grafico di una
+           crypto per tutto il giorno"). Lo disegna static/onchain/radar.js. -->
+      <section class="scan" id="radar" data-pane="meme:scanner" data-loading>
+        <div class="scan-status">
+          <span class="scan-dot" aria-hidden="true"></span>
+          <p><b data-scan-now>Listening for new pools</b><small><span data-scan-chains>Solana · Robinhood · BSC</span> · <span data-radar-clock></span></small></p>
         </div>
-        <div class="radar-rejected" data-radar-rejected hidden>
-          <h4 class="radar-sub">Rejected by filter <span data-rejected-count></span></h4>
-          <ul></ul>
-          <button type="button" class="rj-more" data-rejected-more hidden></button>
-        </div>
-        <!-- La memoria: cosa e' successo davvero ai token visti (outcomes.py). -->
-        <div class="radar-log" data-radar-memory hidden>
-          <h4 class="radar-sub">Track record <span data-memory-count></span></h4>
-          <p class="radar-foot" data-memory-line></p>
-          <ul></ul>
-        </div>
-        <!-- Richiesta: "crea sezione ironica dove ci andranno a finire tutte le
-             inculate subite". I rug passati dal filtro (outcomes.shame). -->
-        <div class="radar-log radar-shame" data-radar-shame hidden>
-          <h4 class="radar-sub">Wall of Rugs <span data-shame-count></span></h4>
-          <p class="radar-foot">Passed with flying colors, then ran with the bag. They never leave this wall.</p>
-          <ul></ul>
-        </div>
+        <dl class="scan-stats">
+          <div><dt>New pools</dt><dd data-stat-new>0</dd><small>last 10 min</small></div>
+          <div data-v="pass"><dt>Passed</dt><dd data-stat-pass>0</dd><small>last 24h</small></div>
+          <div data-v="rej"><dt>Rejected</dt><dd data-stat-rej>0</dd><small>last 24h</small></div>
+        </dl>
+        <h4 class="scan-h">Latest decisions</h4>
+        <ol class="memes-list scan-feed" data-scan-feed></ol>
+        <p class="memes-empty" data-scan-empty hidden>No decisions yet. New pools show up here within minutes.</p>
+        <button type="button" class="scan-more" data-feed-more hidden></button>
+        <p class="list-foot" data-scan-learn></p>
+        <details class="scan-rugs" data-radar-shame hidden>
+          <summary>Wall of Rugs <span data-shame-count></span><small>Passed our checks, then ran with the bag.</small></summary>
+          <ol class="memes-list"></ol>
+        </details>
       </section>
       <!-- Il pilota: la vista di partenza. Richiesta: "voglio sapere cosa sta
            monitorando, voglio vedere cosa sta scansionando [...] pochi

@@ -1,139 +1,97 @@
 /**
- * Il radar: la prima cosa che si vede entrando in DEGEN.
+ * The scanner: what the engine is doing right now.
  *
- * Richiesta: "vorrei che la prima pagina quando entro sul sito sia proprio
- * questa qui [...] i pop-up che poi vanno comunque in una lista e rimangono
- * impressi. E poi il grafico [...] di tutti quelli rilevati quale strategia
- * performerebbe meglio facendo un backtest e voglio vedere in tempo reale
- * con gli ingressi".
+ * Lorenzo: "la scheda scanner e' confusionaria, non voglio che rimanga il
+ * grafico di una crypto per tutto il giorno, devi ristudiarla per bene".
+ * The old tab had a chart "stage" that followed the last listing, so with no
+ * new listing the same chart stayed up for hours; it also repeated the Picks
+ * list and used letter placeholders. Now it answers three questions:
  *
- * Tre pezzi:
- * - "Appena usciti": i listing che hanno passato il filtro anti-rug (sito,
- *   social, GitHub, sicurezza), spinti dal server via SSE. Ognuno arriva
- *   come avviso e resta in lista con il suo backtest, che il server rifa' da
- *   solo mentre il token cresce;
- * - "Proposte": token fino a 3 settimane (oltre, solo con GitHub eccezionale) che una strategia avrebbe tradato bene;
- * - il palco: il grafico del token scelto (di default l'ultimo uscito) con
- *   gli ingressi e le uscite della strategia migliore, dal vivo.
+ * - is it working? one status line (listening / checking X), the chains, the
+ *   time of the last scan, and three numbers: new pools in 10 minutes, passed
+ *   and rejected in 24 hours;
+ * - what did it decide? a feed of the latest decisions, newest first, each
+ *   token with its real logo, Passed or Rejected and the reason. A tap opens
+ *   the token page: chart on demand, the report card under "Why";
+ * - is it right? one line of what the outcomes taught (rug rate of passed vs
+ *   rejected) and, folded, the Wall of Rugs.
  *
- * Propone e basta: l'interruttore accende un alert, l'acquisto vero resta
- * del pilota.
+ * New decisions arrive by SSE and slide in at the top; nothing else moves.
  */
 import * as api from "@onchain/api.js";
-import { escapeHtml, strategyLabel } from "@onchain/format.js";
+import { escapeHtml, strategyLabel, tokenRow } from "@onchain/format.js";
+import { openDetail, register } from "@onchain/detail.js";
 
-const ROOT = document.getElementById("onchain-embed") ?? document;
 const POLL_MS = 60_000;
 const CHAINS = { solana: "Solana", robinhood: "Robinhood", base: "Base", bsc: "BSC", ethereum: "Ethereum" };
-const PIN_MS = 3 * 60_000;  // dopo un tocco su una riga il palco non cambia da solo per un po'
+const FEED_SHOWN = 25;
+const FEED_MAX = 80;
+const DAY_S = 86_400;
 
 let root = null;
-let stage = null;
 let data = null;
 let timer = null;
-let known = null;  // proposte gia' viste: le nuove entrano con l'animazione
-let pinnedAt = 0;
+let toast = null;
+let stream = null;
+let feedAll = false;
+let flashTimer = null;
+let lastPulse = null;
+let lessons = null;
 
-const pct = (v) => (v == null ? "—" : `${v >= 0 ? "+" : "−"}${Math.abs(v) >= 100 ? Math.round(Math.abs(v)) : Math.abs(v).toFixed(1)}%`);
 const usd = (v) => {
   if (v == null) return "—";
   if (v >= 1e6) return `$${(v / 1e6).toFixed(v >= 1e7 ? 0 : 1)}M`;
   if (v >= 1e3) return `$${Math.round(v / 1e3)}k`;
   return `$${Math.round(v)}`;
 };
-const age = (h) => (h < 1 ? ageShort(h * 3600) : h < 48 ? `${Math.round(h)}h` : `${Math.round(h / 24)}d`);
 const ago = (ts) => {
   const s = Math.max(0, Math.round(Date.now() / 1000 - ts));
   return s < 90 ? "just now" : s < 3600 ? `${Math.round(s / 60)} min ago` : s < 172_800 ? `${Math.round(s / 3600)}h ago`
     : `${Math.round(s / 86_400)}d ago`;
 };
-const key = (p) => `${p.chain}:${p.token_address}`;
 const lkey = (l) => `${l.chain}:${l.pair_address}`;
 const rkey = (r) => `${r.chain}:${r.token_address || r.pair_address}`;
-const ageShort = (s) => (s < 90 ? `${Math.max(1, Math.round(s))}s` : s < 5400 ? `${Math.round(s / 60)} min` : `${Math.round(s / 3600)}h`);
-// Il timeframe piu' largo che da' ancora 150 candele: come radar.auto_interval.
-const INTERVAL_S = [["4h", 14_400], ["1h", 3_600], ["15m", 900], ["5m", 300], ["1m", 60]];
-const autoInterval = (ageS) => (INTERVAL_S.find(([, s]) => ageS / s >= 150) ?? ["1m"])[0];
-const short = (label) => strategyLabel(label).split(" · ")[0].split(" (")[0];
-
-let toast = null;
-let stream = null;
 
 export function mountRadar({ toast: notify } = {}) {
   toast = notify ?? null;
-  root = ROOT.querySelector("#radar");
-  if (!root) return;  // la copia del wallet nella tab Trading non ha il radar
-  stage = root.querySelector("[data-radar-stage]");
+  root = document.getElementById("radar");
+  if (!root) return;
   root.addEventListener("click", (event) => {
-    const row = event.target.closest("[data-radar]");
-    if (row) { pinnedAt = Date.now(); showProposal(row.dataset.radar); return; }
-    const listing = event.target.closest("[data-listing]");
-    if (listing) { pinnedAt = Date.now(); showListing(listing.dataset.listing); return; }
-    if (event.target.closest("[data-rejected-more]")) { rejectedAll = !rejectedAll; paintRejected(); return; }
-    if (event.target.closest("[data-listings-more]")) { listingsAll = !listingsAll; paintListings(false); return; }
-    onStageClick(event);
+    if (event.target.closest("[data-feed-more]")) { feedAll = !feedAll; paintFeed(); }
   });
   listen();
-  setInterval(() => data && paintListings(false), 30_000);
+  setInterval(() => data && paintStats(), 30_000);
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") refresh();
   });
   refresh();
 }
 
-// I listing arrivano spinti dal server appena passano il filtro, e tornano
-// ("update") ogni volta che il loro backtest cambia.
 function listen() {
   if (!window.EventSource || stream) return;
   stream = new EventSource("/api/onchain/radar/stream");
-  stream.addEventListener("listing", (event) => {
+  const on = (name, fn) => stream.addEventListener(name, (event) => {
     let item;
     try { item = JSON.parse(event.data); } catch { return; }
-    arrivals.push(item);
-    if (!draining) drain();
+    if (data) fn(item);
   });
-  stream.addEventListener("pulse", (event) => {
-    try { paintPulse(JSON.parse(event.data)); } catch { /* battito perso: arriva il prossimo */ }
+  on("listing", (item) => {
+    data.listings = [item, ...(data.listings ?? []).filter((x) => lkey(x) !== lkey(item))];
+    paintFeed(`pass:${lkey(item)}`);
+    paintStats();
+    toast?.(`Passed: ${item.symbol}`, `${CHAINS[item.chain] ?? item.chain} · cap ${usd(item.market_cap)} · liq. ${usd(item.liquidity_usd)}`);
+    navigator.vibrate?.(25);
   });
-  stream.addEventListener("rejected", (event) => {
-    let item;
-    try { item = JSON.parse(event.data); } catch { return; }
-    if (!data) return;
+  on("rejected", (item) => {
     data.rejected = [item, ...(data.rejected ?? []).filter((x) => rkey(x) !== rkey(item))];
-    paintRejected(rkey(item));
-    flashPulse(`✕ ${item.symbol} binned · ${item.reason}`);
+    paintFeed(`rej:${rkey(item)}`);
+    paintStats();
+    flash(`${item.symbol} rejected · ${item.reason}`);
   });
-  stream.addEventListener("update", (event) => {
-    let item;
-    try { item = JSON.parse(event.data); } catch { return; }
-    if (!data?.listings) return;
-    data.listings = data.listings.map((x) => (lkey(x) === lkey(item) ? item : x));
-    paintListings(false);
-    if (view?.id === lkey(item)) {
-      view.p = { ...view.p, ...item, interval: view.p.interval };
-      paintStageHead();
-    }
+  on("update", (item) => {
+    data.listings = (data.listings ?? []).map((x) => (lkey(x) === lkey(item) ? item : x));
   });
-}
-
-// Piu' listing nello stesso istante entrano uno alla volta: ognuno ha il
-// suo momento, invece di un blocco che salta dentro tutto insieme.
-const ARRIVAL_GAP_MS = 480;
-const arrivals = [];
-let draining = false;
-
-function drain() {
-  const item = arrivals.shift();
-  if (!item || !data) { draining = false; return; }
-  draining = true;
-  data.listings = [item, ...(data.listings ?? []).filter((x) => lkey(x) !== lkey(item))];
-  paintListings(true);
-  const born = item.created_at ? ` · born ${ageShort(Date.now() / 1000 - item.created_at)} ago` : "";
-  toast?.(`New: ${item.symbol}`, `${CHAINS[item.chain] ?? item.chain} · cap ${usd(item.market_cap)} · liq. ${usd(item.liquidity_usd)}${born}`);
-  navigator.vibrate?.(25);
-  // Il palco segue l'ultimo uscito, a meno che non si stia guardando altro.
-  if (Date.now() - pinnedAt > PIN_MS) showListing(lkey(item));
-  setTimeout(drain, ARRIVAL_GAP_MS);
+  on("pulse", (p) => paintPulse(p));
 }
 
 async function refresh() {
@@ -142,327 +100,154 @@ async function refresh() {
     data = await api.getRadar();
     paint();
   } catch {
-    // Il radar e' un di piu': se non risponde resta com'era, il pilota no.
+    // The scanner is read-only: if the server does not answer, keep the screen.
   }
-  api.getRadarLessons().then(paintMemory, () => {});
+  api.getRadarLessons().then((m) => { lessons = m; paintLearned(); }, () => {});
   if (document.visibilityState === "visible") timer = setTimeout(refresh, POLL_MS);
 }
 
-function clock() {
-  if (data.running) return "scanning…";
-  if (!data.last_scan) return "first scan any moment";
-  return ago(data.last_scan);
-}
-
 function paint() {
-  const { proposals, chains } = data;
-  root.hidden = false;
   delete root.dataset.loading;
   root.dataset.running = String(Boolean(data.running));
-  root.querySelector("[data-radar-clock]").textContent = clock();
-
-  const isFirst = known === null;
-  const seen = new Set(proposals.map(key));
-  paintListings(true);
-  if (data.pulse) paintPulse(data.pulse);
-  paintRejected();
+  const chains = Object.keys(data.chains ?? {}).map((c) => CHAINS[c] ?? c);
+  root.querySelector("[data-scan-chains]").textContent = (chains.length ? chains : ["Solana", "Robinhood", "BSC"]).join(" · ");
+  paintPulse(data.pulse);
+  paintStats();
+  paintFeed();
   paintShame();
-  root.querySelector("[data-radar-list]").innerHTML = proposals.length
-    ? proposals.map((p) => row(p, !isFirst && !known.has(key(p)))).join("")
-    : `<li class="pilot-empty">${escapeHtml(emptyText())}</li>`;
-  known = seen;
-
-  const st = data.listing_status ?? {};
-  const parts = Object.entries(chains ?? {}).map(([c, info]) => `${CHAINS[c] ?? c} ${info.seen}`);
-  const rejected = st.rejected ? ` · ${st.rejected} binned by the filter` : "";
-  const rules = `cap < ${usd(data.filters.mcap_max_usd)}, above $100k only with an excellent grade · website, socials, GitHub, RugCheck and GoPlus required${st.ai_review ? " · Claude review" : ""}`;
-  // Richiesta: "qui ci sono troppe scritte". Le regole restano a portata di
-  // dito (tenendo premuto / passandoci sopra), non a schermo.
-  const foot = root.querySelector("[data-radar-foot]");
-  foot.hidden = true;
-  foot.closest(".radar")?.querySelector("header h3")?.setAttribute("title", data.last_scan
-    ? `Seen: ${parts.join(" · ")}${rejected} · ${rules}`
-    : `Solana and Robinhood · ${rules}`);
-
-  if (!view) {
-    const first = data.listings?.[0];
-    if (first) showListing(lkey(first));
-    else if (proposals[0]) showProposal(key(proposals[0]));
-    else paintIdleStage();
-  }
-  markOn();
+  paintLearned();
+  openFromLink();
 }
 
-let shownListings = null;
-let listingsAll = false;
-
-const reducedMotion = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-
-// Il backtest di un listing in una parola: quale strategia e quanto.
-function listingBadge(l) {
-  const bt = l.backtest;
-  if (!bt) return { num: "…", chip: "backtesting", state: "watch" };
-  if (bt.state === "young") return { num: `${bt.bars}/${bt.need}`, chip: "candles to test", state: "watch" };
-  if (bt.state === "none" || bt.return_pct == null) return { num: "—", chip: "no signal", state: "watch" };
-  return { num: pct(bt.return_pct), chip: short(bt.label), state: bt.in_position ? "in" : "watch",
-    up: bt.return_pct > 0 };
+// The Telegram alert links to #listing=<chain>:<pair>: open that token's page.
+let linkDone = false;
+function openFromLink() {
+  const m = !linkDone && location.hash.match(/listing=([^&]+)/);
+  if (!m) return;
+  linkDone = true;
+  const k = `pass:${decodeURIComponent(m[1])}`;
+  if (decisions().some((d) => d.k === k)) openDetail(`scan:${k}`);
 }
 
-// animate=false per il ticchettio delle eta' e per gli aggiornamenti del
-// backtest: ridisegna senza muovere niente.
-function paintListings(animate) {
-  const box = root.querySelector("[data-radar-new]");
-  const list = box.querySelector("ul");
-  // Tutto quello che e' stato scelto resta, anche dopo un riavvio: i primi
-  // 8 in vista, gli altri a un tocco.
-  const all = data.listings ?? [];
-  const items = listingsAll ? all : all.slice(0, 8);
-  const more = box.querySelector("[data-listings-more]");
-  if (more) {
-    more.hidden = all.length <= 8;
-    more.textContent = listingsAll ? "Show less" : `Show all (${all.length})`;
-  }
-  const empty = box.querySelector("[data-radar-new-empty]");
-  if (empty) empty.hidden = items.length > 0;
-  const now = Date.now() / 1000;
-  const before = shownListings;
-  const firstReveal = animate && before === null && items.length > 0;
-  // FLIP: dove stava ogni riga prima, per farla scivolare al posto nuovo
-  // invece di saltarci quando ne entra una sopra.
-  const tops = new Map([...list.querySelectorAll("[data-listing]")]
-    .map((el) => [el.dataset.listing, el.getBoundingClientRect().top]));
-  list.innerHTML = items.map((l, i) => {
-    const born = l.created_at ? now - l.created_at : null;
-    const meta = `${CHAINS[l.chain] ?? l.chain} · ${born == null ? "" : `${ageShort(born)} · `}cap ${usd(l.market_cap)} · liq. ${usd(l.liquidity_usd)}`;
-    const isNew = animate && before && !before.has(lkey(l));
-    const cls = [firstReveal ? "is-enter" : isNew ? "is-arrival" : "", view?.id === lkey(l) ? "is-on" : ""].join(" ");
-    const b = listingBadge(l);
-    return `
-      <li class="${cls}" style="--i:${i}">
-        <button type="button" data-listing="${escapeHtml(lkey(l))}">
-          <span class="tk" data-chain="${escapeHtml(l.chain)}" aria-hidden="true">${escapeHtml(l.symbol.slice(0, 2))}</span>
-          <span class="tk-name"><b>${escapeHtml(l.symbol)}</b><small>${escapeHtml(meta)}</small></span>
-          <span class="tk-state"><span class="num" ${b.up ? 'data-sign="up"' : ""}>${escapeHtml(b.num)}</span><span class="chip" data-state="${b.state}">${escapeHtml(b.chip)}</span></span>
-        </button>
-      </li>`;
-  }).join("");
-  if (!firstReveal) {
-    list.querySelectorAll("[data-listing]").forEach((el) => {
-      const was = tops.get(el.dataset.listing);
-      if (was == null || reducedMotion()) return;
-      const dy = was - el.getBoundingClientRect().top;
-      if (Math.abs(dy) > 1) {
-        el.animate([{ transform: `translateY(${dy}px)` }, { transform: "none" }],
-          { duration: 520, easing: "cubic-bezier(.2,.8,.2,1)" });
-      }
-    });
-  }
-  if (items.length) shownListings = new Set(items.map(lkey));
-}
-
-/* ------------------------------------------------------------ il battito */
-
-// Richiesta: "voglio capire che e' una cosa live [...] deve esserci un senso di
-// movimento". Il server manda ogni 5 s cosa sta guardando: i pool nuovi
-// comparsi, i token in controllo adesso. I numeri scorrono, i nomi cambiano.
-let lastPulse = null;
-let flashTimer = null;
-
-function tween(el, to) {
-  const from = Number(el.dataset.v ?? to);
-  el.dataset.v = String(to);
-  if (from === to || reducedMotion()) { el.textContent = String(to); return; }
-  const t0 = performance.now();
-  const step = (t) => {
-    const k = Math.min(1, (t - t0) / 700);
-    el.textContent = String(Math.round(from + (to - from) * (1 - (1 - k) ** 3)));
-    if (k < 1) requestAnimationFrame(step);
-  };
-  requestAnimationFrame(step);
-  el.animate?.([{ color: "var(--live)" }, { color: "inherit" }], { duration: 1200 });
-}
+/* ------------------------------------------------------------ status */
 
 function paintPulse(p) {
-  const box = root?.querySelector("[data-radar-pulse]");
-  if (!box || !p) return;
-  box.hidden = false;
-  lastPulse = p;
-  box.dataset.busy = String((p.checking ?? []).length > 0);
-  tween(box.querySelector("[data-pulse-arrivals]"), p.arrivals_10m ?? 0);
-  tween(box.querySelector("[data-pulse-rejected]"), data?.rejected?.length ?? p.rejected ?? 0);
-  const last = box.querySelector("[data-pulse-last]");
-  last.textContent = p.last_arrival ? ` · ${ageShort(Date.now() / 1000 - p.last_arrival)} ago` : "";
-  if (flashTimer) return;  // un avviso di scarto resta visibile il suo tempo
-  const now = box.querySelector("[data-pulse-now]");
-  const text = p.checking?.length ? `Checking ${p.checking.join(", ")}` : "Listening";
-  if (now.textContent !== text) {
-    now.textContent = text;
-    now.animate?.([{ opacity: 0, translate: "0 6px" }, { opacity: 1, translate: "0 0" }],
-      { duration: 380, easing: "cubic-bezier(.2,.8,.2,1)" });
-  }
+  if (p) lastPulse = p;
+  const now = root.querySelector("[data-scan-now]");
+  const clock = root.querySelector("[data-radar-clock]");
+  if (data) clock.textContent = data.running ? "scanning…" : data.last_scan ? `last scan ${ago(data.last_scan)}` : "first scan any moment";
+  if (!lastPulse) return;
+  root.dataset.busy = String((lastPulse.checking ?? []).length > 0);
+  root.querySelector("[data-stat-new]").textContent = String(lastPulse.arrivals_10m ?? 0);
+  if (flashTimer) return;   // a rejection stays readable for its few seconds
+  const text = lastPulse.checking?.length ? `Checking ${lastPulse.checking.slice(0, 3).join(", ")}` : "Listening for new pools";
+  if (now.textContent !== text) now.textContent = text;
 }
 
-function flashPulse(text) {
-  const now = root?.querySelector("[data-pulse-now]");
-  if (!now) return;
+function flash(text) {
+  const now = root.querySelector("[data-scan-now]");
   clearTimeout(flashTimer);
   now.textContent = text;
   now.dataset.tone = "no";
-  now.animate?.([{ opacity: 0, translate: "0 6px" }, { opacity: 1, translate: "0 0" }], { duration: 380 });
   flashTimer = setTimeout(() => {
     flashTimer = null;
     delete now.dataset.tone;
     now.textContent = "";
-    paintPulse(lastPulse);
+    paintPulse();
   }, 4_000);
 }
 
-/* ------------------------------------------------------------ gli scartati */
-
-// Richiesta: "scorrendo giu' voglio una sezione che mi faccia vedere tutti
-// quelli che sono stati scartati". Un tocco apre il perche', controllo per
-// controllo, senza grafico: non serve a nessuno quello di un token scartato.
-const REJECTED_SHOWN = 12;
-let rejectedAll = false;
-
-function paintRejected(arrived) {
-  const box = root.querySelector("[data-radar-rejected]");
-  if (!box) return;
-  const all = data.rejected ?? [];
-  box.hidden = all.length === 0;
-  box.querySelector("[data-rejected-count]").textContent = all.length ? `· ${all.length}` : "";
-  const open = new Set([...box.querySelectorAll("details[open]")].map((d) => d.dataset.key));
-  const items = rejectedAll ? all : all.slice(0, REJECTED_SHOWN);
-  box.querySelector("ul").innerHTML = items.map((r) => {
-    const born = r.created_at ? ` · lived ${ageShort(Math.max(0, r.at - r.created_at))}` : "";
-    const meta = `${CHAINS[r.chain] ?? r.chain}${r.market_cap ? ` · cap ${usd(r.market_cap)}` : ""}${born} · ${ago(r.at)}`;
-    return `
-      <li class="${rkey(r) === arrived ? "is-arrival" : ""}">
-        <details data-key="${escapeHtml(rkey(r))}" ${open.has(rkey(r)) ? "open" : ""}>
-          <summary>
-            <span class="tk" data-chain="${escapeHtml(r.chain)}" aria-hidden="true">${escapeHtml((r.symbol ?? "?").slice(0, 2))}</span>
-            <span class="tk-name"><b>${escapeHtml(r.symbol ?? "?")}</b><small>${escapeHtml(meta)}</small></span>
-            <span class="rj-why">${escapeHtml(r.reason ?? "")}</span>
-          </summary>
-          ${reportCard(r)}
-          <nav class="stage-links">${links(r)}</nav>
-        </details>
-      </li>`;
-  }).join("");
-  const more = box.querySelector("[data-rejected-more]");
-  more.hidden = all.length <= REJECTED_SHOWN;
-  more.textContent = rejectedAll ? "Show less" : `Show all (${all.length})`;
+function paintStats() {
+  const since = Date.now() / 1000 - DAY_S;
+  const passed = (data.listings ?? []).filter((l) => (l.found_at ?? 0) >= since).length;
+  const rejected = (data.rejected ?? []).filter((r) => (r.at ?? 0) >= since).length;
+  root.querySelector("[data-stat-pass]").textContent = String(passed);
+  root.querySelector("[data-stat-rej]").textContent = String(rejected);
 }
 
-/* ------------------------------------------------- il muro delle inculate */
+/* -------------------------------------------------------------- feed */
+
+function decisions() {
+  const pass = (data.listings ?? []).map((l) => ({ v: "pass", k: `pass:${lkey(l)}`, at: l.found_at ?? 0, t: l }));
+  const rej = (data.rejected ?? []).map((r) => ({ v: "rej", k: `rej:${rkey(r)}`, at: r.at ?? 0, t: r }));
+  return [...pass, ...rej].sort((a, b) => b.at - a.at).slice(0, FEED_MAX);
+}
+
+function why(d) {
+  const t = d.t;
+  const head = d.v === "pass"
+    ? `<p class="scan-why" data-v="pass">Passed every check: it went out as a Telegram alert.</p>`
+    : `<p class="scan-why" data-v="rej">Rejected: ${escapeHtml(t.reason ?? "")}</p>`;
+  const nav = links(t);
+  return `${head}${reportCard(t)}${nav ? `<nav class="stage-links">${nav}</nav>` : ""}`;
+}
+
+function feedRow(d) {
+  const t = d.t;
+  const id = `scan:${d.k}`;
+  register(id, {
+    kind: "scan", symbol: t.symbol, name: t.name, chain: t.chain, token: t.token_address, pair: t.pair_address,
+    pairUrl: t.pair_url, image: t.image, cap: t.market_cap, ageTs: t.created_at,
+    context: `${d.v === "pass" ? "Passed" : "Rejected"} ${ago(d.at)} · ${CHAINS[t.chain] ?? t.chain} · liq ${usd(t.liquidity_usd)}`,
+    why: why(d), noTrade: d.v === "rej",   // no buy button under a token the engine threw out
+  });
+  const verdict = d.v === "pass"
+    ? `<span class="verdict" data-v="pass">Passed</span>`
+    : `<span class="verdict" data-v="rej">Rejected</span>`;
+  return tokenRow({ id, symbol: t.symbol, name: t.name, chain: t.chain, token: t.token_address, image: t.image,
+    cap: t.market_cap, pill: verdict, sign: d.v === "pass" ? "up" : "", ageTs: t.created_at,
+    sub: `${escapeHtml(ago(d.at))} · ${d.v === "rej" ? escapeHtml(t.reason ?? "") : "alert sent"}` });
+}
+
+function paintFeed(arrived) {
+  const all = decisions();
+  const shown = feedAll ? all : all.slice(0, FEED_SHOWN);
+  const list = root.querySelector("[data-scan-feed]");
+  list.innerHTML = shown.map(feedRow).join("");
+  root.querySelector("[data-scan-empty]").hidden = all.length > 0;
+  const more = root.querySelector("[data-feed-more]");
+  more.hidden = all.length <= FEED_SHOWN;
+  more.textContent = feedAll ? "Show less" : `Show more (${all.length})`;
+  if (arrived && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    const i = shown.findIndex((d) => d.k === arrived);
+    list.children[i]?.animate([{ opacity: 0, transform: "translateY(-10px)" }, { opacity: 1, transform: "none" }],
+      { duration: 420, easing: "cubic-bezier(.2,.8,.2,1)" });
+  }
+}
+
+/* ----------------------------------------------------- is it right? */
+
+function paintLearned() {
+  const el = root?.querySelector("[data-scan-learn]");
+  if (!el) return;
+  const m = lessons;
+  const rate = (g) => (g?.rug_rate == null ? null : `${Math.round(g.rug_rate * 100)}%`);
+  const a = rate(m?.passed), b = rate(m?.rejected);
+  el.textContent = a && b ? `What the outcomes say: ${a} of what passed turned out a rug, against ${b} of what we rejected.` : "";
+}
 
 const SHAME_QUIPS = ["waved goodbye on the way out", "took the money and ran", "promoted, then evaporated",
   "thoughts and prayers to the holders", "the GitHub was someone else's"];
 
 function paintShame() {
-  const box = root?.querySelector("[data-radar-shame]");
-  if (!box) return;
+  const box = root.querySelector("[data-radar-shame]");
   const all = data.shame ?? [];
   box.hidden = all.length === 0;
-  box.querySelector("[data-shame-count]").textContent = all.length ? `· ${all.length}` : "";
-  box.querySelector("ul").innerHTML = all.map((e, i) => {
-    const when = e.rug_at ? new Date(e.rug_at * 1000).toLocaleDateString("en-US", { day: "2-digit", month: "2-digit" }) : "";
+  box.querySelector("[data-shame-count]").textContent = all.length ? String(all.length) : "";
+  box.querySelector("ol").innerHTML = all.map((e, i) => {
+    const when = e.rug_at ? new Date(e.rug_at * 1000).toLocaleDateString("en-US", { day: "2-digit", month: "short" }) : "";
     const quip = e.fooled_by ? `fooled us with ${e.fooled_by}` : SHAME_QUIPS[i % SHAME_QUIPS.length];
-    return `
-    <li>
-      <span class="tk" data-chain="${escapeHtml(e.chain)}" aria-hidden="true">${escapeHtml((e.symbol ?? "?").slice(0, 2))}</span>
-      <span class="tk-name"><b>${escapeHtml(e.symbol ?? "?")}</b><small>${escapeHtml(`${when ? `${when} · ` : ""}${quip}`)}</small></span>
-      <span class="rj-why">${escapeHtml(e.rug_why ?? "rug")}</span>
-    </li>`;
+    const id = `rug:${e.chain}:${e.token_address || e.symbol}`;
+    register(id, { kind: "scan", symbol: e.symbol, name: e.name, chain: e.chain, token: e.token_address,
+      pair: e.pair_address, image: e.image, noTrade: true, context: `${when ? `${when} · ` : ""}${quip}`,
+      why: `<p class="scan-why" data-v="rej">Passed our checks, then: ${escapeHtml(e.rug_why ?? "rug")}.</p>` });
+    return tokenRow({ id, symbol: e.symbol, name: e.name, chain: e.chain, token: e.token_address, image: e.image,
+      cap: e.market_cap, pill: `<span class="verdict" data-v="rug">${escapeHtml(e.rug_why ?? "rug")}</span>`, sign: "down",
+      sub: escapeHtml(`${when ? `${when} · ` : ""}${quip}`) });
   }).join("");
 }
 
-/* ------------------------------------------------------------ la memoria */
-
-// Richiesta, dopo VISE: "imparare dai segnali, da cosa effettivamente succede".
-// Una riga di numeri e i casi che contano: i rug che il filtro ha lasciato
-// passare e i token scartati che poi sono saliti.
-function paintMemory(m) {
-  const box = root?.querySelector("[data-radar-memory]");
-  if (!box || !m) return;
-  box.hidden = !m.tracked;
-  box.querySelector("[data-memory-count]").textContent = m.tracked ? `· ${m.tracked} tracked` : "";
-  const rate = (g) => (g?.rug_rate == null ? "—" : `${Math.round(g.rug_rate * 100)}% rug`);
-  const known = (m.passed?.decided ?? 0) + (m.rejected?.decided ?? 0);
-  box.querySelector("[data-memory-line]").textContent = known
-    ? `Passed ${rate(m.passed)} · binned ${rate(m.rejected)}${m.notes?.[1] ? ` · ${m.notes[1]}` : ""}`
-    : "Collecting outcomes: needs a few hours of prices";
-  // I rug passati dal filtro stanno nel muro qui sotto; qui gli scartati poi saliti.
-  const rows = (m.missed ?? []).slice(0, 4).map((e) => ({ ...e, why: `${pct(e.max_ret * 100)} after we binned it` }));
-  box.querySelector("ul").innerHTML = rows.map((e) => `
-    <li>
-      <span class="tk" data-chain="${escapeHtml(e.chain)}" aria-hidden="true">${escapeHtml((e.symbol ?? "?").slice(0, 2))}</span>
-      <span class="tk-name"><b>${escapeHtml(e.symbol ?? "?")}</b><small>${escapeHtml(e.decision === "rejected" ? e.reason : "passed the filter")} · ${ago(e.at)}</small></span>
-      <span class="rj-why">${escapeHtml(e.why)}</span>
-    </li>`).join("");
-}
-
-function emptyText() {
-  if (!data.last_scan) return "First scan running";
-  const c = Object.values(data.chains ?? {});
-  const sum = (k) => c.reduce((n, x) => n + (x[k] ?? 0), 0);
-  return `None yet · ${sum("passing")} candidates, ${sum("tested")} tested`;
-}
-
-function row(p, isNew) {
-  const meta = `${p.exception ? "GitHub exception · " : ""}${CHAINS[p.chain] ?? p.chain} · ${age(p.age_hours)} · cap ${usd(p.market_cap)} · liq. ${usd(p.liquidity_usd)}`;
-  return `
-    <li class="${isNew ? "is-new" : ""}">
-      <button type="button" data-radar="${escapeHtml(key(p))}">
-        <span class="tk" data-chain="${escapeHtml(p.chain)}" aria-hidden="true">${escapeHtml(p.symbol.slice(0, 2))}</span>
-        <span class="tk-name"><b>${escapeHtml(p.symbol)}</b><small>${escapeHtml(meta)}</small></span>
-        <span class="tk-state"><span class="num" data-sign="up">${pct(p.return_pct)}</span><span class="chip" data-state="${p.in_position ? "in" : "watch"}">${escapeHtml(short(p.strategy))}</span></span>
-      </button>
-    </li>`;
-}
-
-/* ---------------------------------------------------------------- il palco */
-
-// Lo stile del grafico del sito principale (static/app.js, initCharts):
-// candele vuote in salita, piene in discesa, mono, linea del prezzo
-// tratteggiata. IN sotto la candela, OUT sopra, come li' — ma un colore
-// per strategia, perche' qui se ne possono guardare piu' insieme.
-const BULL = "#00d68f";
-const BEAR = "#ff4560";
-const PALETTE = ["#00d68f", "#f0a500", "#6ea8ff", "#ff7ad9", "#c8f169", "#9b6bff"];
-const LIVE_MS = 30_000;
-const RETRY_MS = 4_000;
-
-// { kind, id, p, chart, series, strategies, best, shown:Set, active:Set, timer, fitted, seeded }
-let view = null;
-
-function chartLibrary() {
-  if (window.LightweightCharts) return Promise.resolve(window.LightweightCharts);
-  const tag = document.querySelector('script[src*="lightweight-charts"]');
-  if (!tag) return Promise.reject(new Error("chart library missing"));
-  return new Promise((resolve, reject) => {
-    tag.addEventListener("load", () => resolve(window.LightweightCharts), { once: true });
-    tag.addEventListener("error", () => reject(new Error("chart library failed to load")), { once: true });
-  });
-}
-
-function closeView() {
-  if (!view) return;
-  clearTimeout(view.timer);
-  view.chart?.remove();
-  view = null;
-}
-
-function markOn() {
-  root.querySelectorAll("li.is-on").forEach((li) => li.classList.remove("is-on"));
-  if (!view) return;
-  const sel = view.kind === "listing" ? `[data-listing="${CSS.escape(view.id)}"]` : `[data-radar="${CSS.escape(view.id)}"]`;
-  root.querySelector(sel)?.closest("li")?.classList.add("is-on");
-}
-
-function paintIdleStage() {
-  stage.innerHTML = `<p class="radar-idle">First token through the filter gets charted here</p>`;
-}
+/* ---------------------------------------------- the report card (Why) */
 
 function links(p) {
   const out = [];
@@ -537,202 +322,4 @@ function factsOf(c) {
   }
   if (!pairs.length) return "";
   return `<dl class="rc-facts">${pairs.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("")}</dl>`;
-}
-
-function showListing(id) {
-  const l = data?.listings?.find((x) => lkey(x) === id);
-  if (!l || !stage) return;
-  const ageS = l.created_at ? Date.now() / 1000 - l.created_at : 0;
-  openStage("listing", id, { ...l, interval: autoInterval(ageS), age_hours: ageS / 3600 });
-}
-
-function showProposal(id) {
-  const p = data?.proposals.find((x) => key(x) === id);
-  if (!p || !stage) return;
-  openStage("proposal", id, p);
-}
-
-function openStage(kind, id, p) {
-  if (view?.id === id) return;
-  closeView();
-  stage.innerHTML = `
-    <header class="stage-head">
-      <span class="tk" data-chain="${escapeHtml(p.chain)}" aria-hidden="true">${escapeHtml(p.symbol.slice(0, 2))}</span>
-      <div><h2>${escapeHtml(p.symbol)}${p.name && p.name !== p.symbol ? ` <small>${escapeHtml(p.name)}</small>` : ""}</h2>
-        <p data-stage-meta></p></div>
-      <span class="radar-live" data-radar-live>…</span>
-    </header>
-    <p class="stage-best" data-stage-best></p>
-    <div class="radar-chart" data-radar-chart></div>
-    <nav class="stage-links">${links(p)}</nav>
-    <ul class="radar-strats" data-radar-strats></ul>
-    ${reportCard(p)}
-    <p class="radar-note">Long-only backtest with DEX costs (${data?.costs?.commission_pct ?? 0.3}% + ${data?.costs?.slippage_pct ?? 0.5}% per side), on the same candles as the chart. The switch only turns on the alert: only the autopilot buys, and only if you turn it on.</p>`;
-  view = { kind, id, p, chart: null, series: null, strategies: [], best: null, shown: new Set(), active: new Set(),
-    timer: null, fitted: false, seeded: false };
-  paintStageHead();
-  markOn();
-  loadChart();
-}
-
-function paintStageHead() {
-  if (!view) return;
-  const { p } = view;
-  const meta = stage.querySelector("[data-stage-meta]");
-  if (meta) meta.textContent = `${CHAINS[p.chain] ?? p.chain} · ${age(p.age_hours ?? 0)} · cap ${usd(p.market_cap)} · liq. ${usd(p.liquidity_usd)} · ${p.interval} candles`;
-  const best = stage.querySelector("[data-stage-best]");
-  if (!best) return;
-  const s = view.strategies.find((x) => x.label === view.best);
-  const bt = p.backtest;
-  if (s) {
-    best.innerHTML = `Best so far: <b style="color:${colorOf(s.label)}">${escapeHtml(short(s.label))}</b> · <span data-sign="${s.return_pct > 0 ? "up" : "down"}">${pct(s.return_pct)}</span> · ${s.trades} trades · ${s.in_position ? "in now" : "out now"}${s.qualifies ? "" : " · test still weak"}`;
-  } else if (bt?.state === "young") {
-    best.textContent = `Backtest once there are ${bt.need} candles (now ${bt.bars}). Meanwhile, all strategies are shown.`;
-  } else {
-    best.textContent = view.strategies.length ? "No strategy has traded here yet." : "Backtesting every strategy…";
-  }
-}
-
-async function loadChart() {
-  if (!view) return;
-  const current = view;
-  const { p } = current;
-  try {
-    const [payload, LightweightCharts] = await Promise.all([
-      api.getRadarChart(p.chain, p.pair_address, p.symbol, p.interval),
-      chartLibrary(),
-    ]);
-    if (view !== current) return;
-    current.strategies = payload.strategies;
-    current.best = payload.best;
-    // Di default si vede la migliore; senza una migliore, tutte.
-    if (!current.seeded) {
-      if (payload.best) current.shown.add(payload.best);
-      else payload.strategies.filter((x) => !x.excluded).forEach((x) => current.shown.add(x.label));
-      current.seeded = true;
-    }
-    current.active = new Set(payload.active);
-    if (!current.chart) {
-      const box = stage.querySelector("[data-radar-chart]");
-      box.textContent = "";
-      current.chart = LightweightCharts.createChart(box, {
-        autoSize: true,
-        layout: { background: { color: "transparent" }, textColor: "#6e7681", fontSize: 11,
-          fontFamily: "'JetBrains Mono', monospace", attributionLogo: false },
-        grid: { vertLines: { color: "rgba(255,255,255,0.035)" }, horzLines: { color: "rgba(255,255,255,0.035)" } },
-        rightPriceScale: { borderVisible: false },
-        timeScale: { borderVisible: false, timeVisible: true, secondsVisible: false, rightOffset: 4 },
-        crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
-        // In prima pagina il dito in verticale scorre la pagina, non il grafico.
-        handleScroll: { vertTouchDrag: false },
-        localization: { priceFormatter: (v) => (v >= 1 ? v.toFixed(2) : Number(v.toPrecision(3)).toString()) },
-      });
-      current.series = current.chart.addCandlestickSeries({
-        upColor: "rgba(0,0,0,0)", downColor: BEAR, borderVisible: true,
-        borderUpColor: BULL, borderDownColor: BEAR, wickUpColor: BULL, wickDownColor: BEAR,
-        priceLineVisible: true, priceLineColor: "#f0a500", priceLineWidth: 1,
-        priceLineStyle: LightweightCharts.LineStyle.Dashed, lastValueVisible: true,
-        priceFormat: { type: "price", minMove: 1e-10, precision: 10 },
-      });
-    }
-    current.series.setData(payload.candles);
-    if (!current.fitted) {
-      // Le ultime ~150 candele: abbastanza per leggere gli ingressi, poi zoom.
-      const n = payload.candles.length;
-      current.chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, n - 150), to: n + 4 });
-      current.fitted = true;
-    }
-    paintMarkers();
-    paintStrategies();
-    paintStageHead();
-    stage.querySelector("[data-radar-live]").textContent = "live";
-  } catch {
-    if (view !== current) return;
-    const live = stage.querySelector("[data-radar-live]");
-    if (live) live.textContent = "stale";
-    // Il token e' su DexScreener: un rifiuto momentaneo della fonte delle
-    // candele si riprova in pochi secondi, senza mostrare errori grezzi.
-    if (!current.chart) {
-      stage.querySelector("[data-radar-chart]").textContent = "Loading candles…";
-      current.timer = setTimeout(loadChart, RETRY_MS);
-      return;
-    }
-  }
-  if (view === current) current.timer = setTimeout(loadChart, LIVE_MS);
-}
-
-function colorOf(label) {
-  const i = view.strategies.findIndex((s) => s.label === label);
-  return PALETTE[Math.max(0, i) % PALETTE.length];
-}
-
-function paintMarkers() {
-  const markers = [];
-  for (const s of view.strategies) {
-    if (!view.shown.has(s.label)) continue;
-    const color = colorOf(s.label);
-    for (const e of s.events) {
-      markers.push(e.kind === "in"
-        ? { time: e.time, position: "belowBar", color, shape: "arrowUp", text: "IN" }
-        : { time: e.time, position: "aboveBar", color, shape: "circle", text: "OUT" });
-    }
-  }
-  markers.sort((a, b) => a.time - b.time);
-  view.series.setMarkers(markers);
-}
-
-function paintStrategies() {
-  const ordered = [...view.strategies].sort((a, b) =>
-    Number(Boolean(a.excluded)) - Number(Boolean(b.excluded)) || (b.return_pct ?? -1e9) - (a.return_pct ?? -1e9));
-  stage.querySelector("[data-radar-strats]").innerHTML = ordered.map((s) => {
-    const shown = view.shown.has(s.label);
-    const on = view.active.has(s.strategy_name);
-    const sub = s.excluded
-      ? s.excluded
-      : `${pct(s.return_pct)} · ${s.trades} trades · ${s.events.length ? (s.in_position ? "in now" : "out now") : "no signal yet"}`;
-    return `
-      <li data-shown="${shown}">
-        <button type="button" class="rs-show" data-show="${escapeHtml(s.label)}" aria-pressed="${shown}">
-          <span class="rs-swatch" style="--c:${colorOf(s.label)}"></span>
-          <span class="tk-name"><b>${escapeHtml(strategyLabel(s.label))}${s.label === view.best ? " ★" : ""}</b><small>${escapeHtml(sub)}</small></span>
-        </button>
-        ${s.excluded ? "" : `<button type="button" class="rs-switch" role="switch" aria-checked="${on}"
-          aria-label="Alert ${escapeHtml(strategyLabel(s.label))}" data-follow="${escapeHtml(s.label)}"><span></span></button>`}
-      </li>`;
-  }).join("");
-}
-
-async function follow(label) {
-  const s = view?.strategies.find((x) => x.label === label);
-  if (!s) return;
-  const { p } = view;
-  const next = !view.active.has(s.strategy_name);
-  const el = stage.querySelector(`[data-follow="${CSS.escape(label)}"]`);
-  el?.setAttribute("aria-checked", String(next));
-  try {
-    const res = await api.followRadar({
-      chain: p.chain, pool: p.pair_address, symbol: p.symbol, token_address: p.token_address,
-      interval: p.interval, strategy_name: s.strategy_name, params: s.params, enabled: next,
-    });
-    if (!view) return;
-    view.active = new Set(res.active);
-  } catch {
-    el?.setAttribute("aria-checked", String(!next));
-    return;
-  }
-  paintStrategies();
-}
-
-function onStageClick(event) {
-  if (!view) return;
-  const show = event.target.closest("[data-show]");
-  if (show) {
-    const label = show.dataset.show;
-    view.shown.has(label) ? view.shown.delete(label) : view.shown.add(label);
-    paintMarkers();
-    paintStrategies();
-    return;
-  }
-  const sw = event.target.closest("[data-follow]");
-  if (sw) follow(sw.dataset.follow);
 }
