@@ -47,3 +47,23 @@ def test_board_items_have_backtests_key():
     alert_track._alerts["a"] = _alert("solana", "AAA", at=now - 100)
     board = alert_track.board("meme", now=now)
     assert "backtests" in board["items"][0]
+
+
+def test_backtest_status_counts():
+    alert_track.reset_for_tests()
+    now = time.time()
+    a = _alert("solana", "AAA", at=now - 100)
+    a["backtests"] = {"x": 1}
+    a["system_v"] = alert_track.SYSTEM_VERSION
+    alert_track._alerts["a"] = a
+    b = _alert("solana", "BBB", at=now - 50)
+    b["nodata"] = True
+    alert_track._alerts["b"] = b
+    alert_track._alerts["c"] = _alert("solana", "CCC", at=now - 10)
+    st = alert_track.backtest_status("meme", now=now)
+    assert st["total"] == 3
+    assert st["ready"] == 1
+    assert st["pending"] == 1
+    assert st["no_data"] == 1
+    assert st["oldest_pending_h"] == round(10 / 3600, 1)
+    assert alert_track.system_board("meme")["backtests"] == st
