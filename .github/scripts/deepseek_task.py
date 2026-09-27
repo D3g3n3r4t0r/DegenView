@@ -54,12 +54,17 @@ Project rules:
 
 def parse_issue(body: str) -> dict:
     task, files, tests, section = [], [], [], "task"
-    for line in (body or "").splitlines():
+    lines = (body or "").splitlines()
+    # Only the last "Files:" opens the lists: a "Tests:" inside the task text stays task text.
+    marks = [i for i, line in enumerate(lines) if line.strip().lower() == "files:"]
+    start = marks[-1] if marks else len(lines)
+    task, lines = lines[:start], lines[start:]
+    for line in lines:
         low = line.strip().lower()
         if low in ("files:", "tests:"):
             section = low[:-1]
             continue
-        item = line.strip()[2:].split()[0] if line.strip().startswith("- ") and len(line.strip()) > 2 else None
+        item = line.strip()[2:].split()[0].strip("`") if line.strip().startswith("- ") and len(line.strip()) > 2 else None
         if section == "files" and item:
             files.append(item)
         elif section == "tests" and item:
