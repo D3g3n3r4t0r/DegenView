@@ -827,3 +827,15 @@ html, body { overflow-x: clip; }
   .more-row { display: block; margin: 2px 0 0; padding: 6px 2px; border: 0; background: none; color: var(--k-text-2);
     font: 500 12.5px var(--sans); cursor: pointer; }
 }
+@layer skin {
+  /* A backtest still running on a growing chart: three dots breathing. */
+  .bt-live { display: inline-flex; gap: 4px; align-items: center; block-size: 1em; vertical-align: middle;
+    & i { inline-size: 6px; block-size: 6px; border-radius: 50%; background: #2de0a8; box-shadow: 0 0 6px rgb(45 224 168 / .8);
+      animation: bt-dot 1.2s ease-in-out infinite; }
+    & i:nth-child(2) { animation-delay: .15s; } & i:nth-child(3) { animation-delay: .3s; } }
+  @keyframes bt-dot { 0%, 100% { opacity: .25; transform: scale(.7); } 50% { opacity: 1; transform: scale(1); } }
+  .bt-tag { padding: 1px 6px; border-radius: 5px; font: 700 11px/1.4 var(--mono, ui-monospace); letter-spacing: .08em; font-style: normal;
+    &[data-k="in"] { color: #2de0a8; background: rgb(45 224 168 / .12); }
+    &[data-k="out"] { color: var(--k-text-3); background: rgb(255 255 255 / .06); } }
+  @media (prefers-reduced-motion: reduce) { .bt-live i { animation: none; opacity: .8; } }
+}
