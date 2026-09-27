@@ -3695,6 +3695,24 @@ def _past_meme_alerts() -> list[dict]:
             and x["found_at"] - x["created_at"] <= onchain_listings.NOTIFY_MAX_AGE_S]
 
 
+def _charts_on_screen() -> list[tuple[str, str, str, str]]:
+    """The charts a tap is likely to open, at the interval the token page
+    starts on: the top memes (5m), the newest alerts (5m), the top gems (1h)."""
+    out = []
+    for m in (onchain_outcomes.meme_board().get("items") or [])[:8]:
+        out.append((m.get("chain"), m.get("pair_address"), m.get("symbol"), "5m"))
+    for a in (onchain_alert_track.board("meme", limit=5).get("items") or []):
+        out.append((a.get("chain"), a.get("pair_address"), a.get("symbol"), "5m"))
+    for e in (onchain_leaderboard.board().get("entries") or [])[:6]:
+        out.append((e.get("chain"), e.get("pair_address"), e.get("symbol"), "1h"))
+    seen, uniq = set(), []
+    for t in out:
+        if t[0] and t[1] and (t[0], t[1], t[3]) not in seen:
+            seen.add((t[0], t[1], t[3]))
+            uniq.append(t)
+    return uniq
+
+
 async def _backfill_alert_track() -> None:
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
@@ -3709,10 +3727,14 @@ async def _onchain_signals_loop() -> None:
     to each meme alert, and once a day the reviewer."""
     from app.notify import telegram
     asyncio.create_task(_backfill_alert_track())
+    warmed_at = 0.0
     while True:
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:
                 await onchain_alert_track.sample(client)
+            if _time.time() - warmed_at >= onchain_radar.WARM_EVERY_S:
+                warmed_at = _time.time()
+                asyncio.create_task(onchain_radar.warm_charts(_charts_on_screen()))
             for item in onchain_listings.recent():
                 onchain_alert_track.set_strategy("meme", item.get("chain"),
                                                  item.get("token_address") or item.get("pair_address"),
