@@ -3675,6 +3675,43 @@
     }
   }
 
+  // Lorenzo: "puoi usare anche il grafico del sito principale volendo, era
+  // ideale per visualizzare ingressi". Il dettaglio di un token apre il
+  // grafico di qui con un link: pair, timeframe e strategia arrivano
+  // nell'URL, e i trade disegnati sono quelli di quella strategia.
+  function openDeepLink() {
+    const q = new URLSearchParams(location.search);
+    const dex = q.get("dex");
+    if (!dex) return;
+    const strategyName = q.get("strategy") || undefined;
+    const apply = () => {
+      setArea("analizza");
+      applyConfigToChart({
+        assetType: "dex",
+        symbol: dex,
+        displaySymbol: q.get("name") || dex,
+        interval: q.get("interval") || "5m",
+        strategyName,
+        params: null,
+        backtestParams: null,
+      });
+      runAnalysis(dex);
+    };
+    // La select delle strategie si popola durante l'avvio: se la strategia
+    // chiesta non c'e' ancora, applyConfigToChart la ignorerebbe in silenzio.
+    const ready = () => {
+      if (!strategyName) return true;
+      const sel = el("active-strategy-select");
+      return !!sel && Array.from(sel.options).some((o) => o.value === strategyName);
+    };
+    if (ready()) { apply(); return; }
+    const started = Date.now();
+    const timer = setInterval(() => {
+      if (ready()) { clearInterval(timer); apply(); }
+      else if (Date.now() - started > 5000) clearInterval(timer);
+    }, 200);
+  }
+
   function applyArchiveEntry(entry) {
     // Le voci vecchie sono state salvate quando l'archivio ignorava ancora i
     // costi impostati dall'utente (backtest_params arrivava sempre vuoto):
@@ -11543,6 +11580,7 @@
     bindTabs();
     groupLabResultColumn();
     bindSidenav();
+    openDeepLink();
     bindChartExpand();
     bindDrawRail();
     bindMobileDrawTools();
