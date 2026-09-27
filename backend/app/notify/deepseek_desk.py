@@ -100,6 +100,26 @@ def cost(provider: str, tokens_in: int, tokens_out: int) -> float:
 
 # ------------------------------------------------------------------ DeepSeek
 
+async def ask_message(messages: list[dict], *, kind: str, max_tokens: int = 1200, tools: list[dict] | None = None,
+                      http=None) -> dict:
+    """One call, returning DeepSeek's whole message (content and tool_calls)."""
+    body = {"model": settings.deepseek_model, "messages": messages, "max_tokens": max_tokens, "temperature": 0.4}
+    if tools:
+        body["tools"] = tools
+    headers = {"Authorization": f"Bearer {settings.deepseek_api_key}", "Content-Type": "application/json"}
+    url = settings.deepseek_base_url.rstrip("/") + "/chat/completions"
+    if http is None:
+        async with httpx.AsyncClient(timeout=120.0) as c:
+            r = await c.post(url, json=body, headers=headers)
+    else:
+        r = await http.post(url, json=body, headers=headers)
+    r.raise_for_status()
+    data = r.json()
+    usage = data.get("usage") or {}
+    record(kind, usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0))
+    return ((data.get("choices") or [{}])[0].get("message") or {})
+
+
 async def ask(messages: list[dict], *, kind: str, max_tokens: int = 1200, http=None, json_mode: bool = False) -> str:
     """One DeepSeek chat call, counted in the ledger under `kind`. Keep the
     system message identical between calls: DeepSeek caches a repeated
@@ -150,7 +170,12 @@ def wants_answer(message: dict, bot_username: str) -> str | None:
     return None
 
 
-async def answer(chat_id: str, text: str, context: str) -> str:
+TOOL_ROUNDS = 3
+
+
+async def answer(chat_id: str, text: str, context: str, tools: dict | None = None) -> str:
+    """tools: {name: (openai-style function schema, callable(**args) -> json-able)}.
+    DeepSeek may call them (up to TOOL_ROUNDS rounds) to read the database."""
     if text.strip().lower() in ("/reset", "reset"):
         _memory.pop(chat_id, None)
         return "Fatto: ho dimenticato la conversazione."
@@ -159,7 +184,25 @@ async def answer(chat_id: str, text: str, context: str) -> str:
     history = _memory.setdefault(chat_id, [])
     messages = [{"role": "system", "content": f"{CHAT_SYSTEM}\n\n<dati_del_sito>\n{context}\n</dati_del_sito>"},
                 *history, {"role": "user", "content": text}]
-    reply = await ask(messages, kind="chat") or "Non ho una risposta."
+    specs = [{"type": "function", "function": spec} for spec, _fn in (tools or {}).values()]
+    reply = ""
+    for _round in range(TOOL_ROUNDS + 1):
+        msg = await ask_message(messages, kind="chat", tools=specs if specs and _round < TOOL_ROUNDS else None)
+        calls = msg.get("tool_calls") or []
+        if not calls:
+            reply = (msg.get("content") or "").strip()
+            break
+        messages.append({"role": "assistant", "content": msg.get("content") or "", "tool_calls": calls})
+        for call in calls:
+            name = (call.get("function") or {}).get("name")
+            try:
+                args = json.loads((call.get("function") or {}).get("arguments") or "{}")
+                result = tools[name][1](**args)
+            except Exception as exc:
+                result = {"error": f"{type(exc).__name__}: {exc}"[:200]}
+            messages.append({"role": "tool", "tool_call_id": call.get("id"),
+                             "content": json.dumps(result, default=str)[:6000]})
+    reply = reply or "Non ho una risposta."
     history += [{"role": "user", "content": text}, {"role": "assistant", "content": reply}]
     del history[:-MEMORY]
     return reply
