@@ -41,7 +41,7 @@ const PENCIL = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 
 function avatar(p, cls = "") {
   return p?.avatar_url
     ? `<img class="${cls}" src="${escapeHtml(p.avatar_url)}" alt="" decoding="async" />`
-    : `<span class="${cls} me-empty" aria-hidden="true">${escapeHtml((p?.display_name ?? "?").trim().slice(0, 1).toUpperCase())}</span>`;
+    : `<i class="${cls} me-empty" aria-hidden="true">${escapeHtml((p?.display_name ?? "?").trim().slice(0, 1).toUpperCase())}</i>`;
 }
 
 /** Your picture everywhere it stands for you: header and dock. */
