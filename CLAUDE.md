@@ -146,8 +146,12 @@ con la difficolta'. Regole che Lorenzo ha chiesto esplicitamente:
 
 Lorenzo, 27/09: "devi usare deepseek assiduamente, voglio ridurre
 drasticamente il consumo di token con te [...] comunicarci tramite github".
-Per ogni modifica non banale che non tocchi soldi, chiavi, firme o
-esecuzione reale:
+Ribadito in apertura di chat nuova: "usa sempre deepseek e tu revisiona il
+suo lavoro da github". Quindi **sempre**, non solo per le modifiche grosse:
+ogni modifica al codice che non tocchi soldi, chiavi, firme o esecuzione
+reale passa da DeepSeek. Claude scrive a mano solo quelle, i ritocchi al
+diff di DeepSeek in revisione, e i file di memoria (CLAUDE.md, HANDOVER.md,
+resolutions.json):
 
 1. apri una issue con etichetta `deepseek` (corpo: il compito in poche righe,
    poi `Files:` con i file o `file:inizio-fine`, poi `Tests:`);
