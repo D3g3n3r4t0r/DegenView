@@ -74,14 +74,14 @@ def usage(email: str) -> dict:
 def status(email: str, admin: bool = False) -> dict:
     plan = plan_of(email, admin)
     return {"plan": plan, "limits": PLANS[plan], "used": usage(email), "plans": PLANS,
-            "deep_available": bool(legit.settings.anthropic_api_key),
+            "deep_available": bool(legit.settings.anthropic_api_key or legit.settings.deepseek_api_key),
             "payment_address": legit.settings.payment_address or None}
 
 
 def allow(email: str, kind: str, admin: bool = False) -> str:
     """"" if the user may, else why not."""
     plan = plan_of(email, admin)
-    if kind == "deep" and not legit.settings.anthropic_api_key:
+    if kind == "deep" and not (legit.settings.anthropic_api_key or legit.settings.deepseek_api_key):
         return "deep reading is not available yet"
     limit = PLANS[plan][kind]
     if usage(email).get(kind, 0) >= limit:

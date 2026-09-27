@@ -99,3 +99,55 @@ def test_gem_site_on_deepseek_is_cached_and_does_not_block(monkeypatch):
     assert check["label"] == "DeepSeek on the site" and check["ok"] is None and "not blocking" in check["detail"]
     monkeypatch.setattr(legit.settings, "legit_ai_gate", True)
     assert legit.judge_ai(r)["ok"] is False
+
+
+def test_the_risk_is_measured_by_the_memory_but_not_used_by_its_model():
+    from app.trading.onchain import outcomes
+    outcomes.reset_for_tests()
+    a = _alert(1, 1.0)
+    outcomes._journal[f"solana:{a['token_address']}"] = {"features": {"mcap": 1.0}}
+    ai_scan.parse(json.dumps({"items": [{"i": 0, "risk": 77}]}), [a], 1.0)
+    assert outcomes._journal["solana:T1"]["features"]["ai_risk"] == 77
+    assert "ai_risk" not in outcomes.MODEL_KEYS and "ai_risk" in outcomes.RISK_UP
+    outcomes.reset_for_tests()
+
+
+def test_paid_deep_reading_runs_on_deepseek_without_an_anthropic_key(monkeypatch):
+    from app.trading.onchain import legit, plans, research
+    monkeypatch.setattr(legit.settings, "anthropic_api_key", "")
+    monkeypatch.setattr(legit.settings, "deepseek_api_key", "k")
+
+    async def fake(messages, *, kind, max_tokens, json_mode):
+        assert kind == "research" and '"verdict"' in messages[0]["content"]
+        return json.dumps({"summary": "s", "stage": "live", "substance": 14, "original": True, "verdict": "promising",
+                           "red_flags": []})
+    monkeypatch.setattr(deepseek_desk, "ask", fake)
+    out = asyncio.run(research.ai_dossier({"name": "P"}, "desc", ["site"], boost=True))
+    assert out["substance"] == 10 and out["by"] == "deepseek"
+    assert asyncio.run(research.ai_dossier({"name": "P"}, "desc", ["site"])) is None    # background stays off
+    assert plans.status("a@b.c")["deep_available"] is True
+
+
+def test_deepseek_has_half_the_say_on_a_gem_finalist(monkeypatch):
+    from app.trading.onchain import legit, research
+    monkeypatch.setattr(legit.settings, "anthropic_api_key", "")
+    monkeypatch.setattr(legit.settings, "deepseek_api_key", "k")
+    reader = {"points": 80, "substance": 8, "red_flags": ["thin docs"], "original": True}
+    out = research.blend(reader, {"substance": 4, "verdict": "thin", "red_flags": ["no product"]})
+    assert out["points"] == 60 and out["red_flags"] == ["thin docs", "DeepSeek: no product"]
+    assert research.blend(reader, {"substance": 9, "verdict": "scam"})["points"] == 40   # a voice, not a veto
+    research._cache.clear()
+    research._calls.clear()
+    calls = []
+
+    async def fake(prompt):
+        calls.append(prompt)
+        return {"substance": 6, "verdict": "promising", "red_flags": []}
+    monkeypatch.setattr(research, "_dossier_deepseek", fake)
+    monkeypatch.setattr(research, "judge_research", lambda *a: {"score": 70})
+    monkeypatch.setattr(research, "_save", lambda: None)
+    item = {"finalist": True, "name": "P", "chain": "solana"}
+    assert asyncio.run(research._deepseek_reading("k1", item, [], "desc", ["t"]))["substance"] == 6
+    asyncio.run(research._deepseek_reading("k1", item, [], "desc", ["t"]))
+    assert len(calls) == 1                                      # a week in the cache
+    assert asyncio.run(research._deepseek_reading("k2", {**item, "finalist": False}, [], "d", ["t"])) is None

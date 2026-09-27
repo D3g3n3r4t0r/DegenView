@@ -3548,3 +3548,11 @@ cancello AUC fuori campione; batch/cache/tetti; modelli fissi dove bastano;
 l'app funziona senza), mappa per modulo e sei fasi. Prossima: Fase 1
 (outcomes legge `alert["ai"]`; `research.ai_dossier` e il piano "deep" su
 DeepSeek).
+
+**2026-09-27 — Lorenzo: "procediamo poi con tutto" e "ovviamente deepseek deve avere voce in capitolo sul voto finale delle gemme".**
+Fase 1 fatta: `ai_risk` scritto nel diario di outcomes e misurato in
+`signals()` (non nel modello: arriva dopo la decisione); `research` legge i
+finalisti con DeepSeek (80/giorno, cache 7 giorni) e fa `blend` 50/50 col
+lettore deterministico; piano "deep" disponibile con DeepSeek. Restano le fasi
+2-5. Lezione: tre merge di fila = tre riavvii, e Lorenzo ha visto un 503 sul
+Wallet (pagina di Caddy durante il deploy): raggruppare i merge.
