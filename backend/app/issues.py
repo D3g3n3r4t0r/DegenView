@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0153", "Il grafico del wallet: periodi 1h-8h e legato al valore reale",
+     "Lorenzo: 'il wallet deve avere anche l'andamento 1h 2h 3h 4h 8h; e il grafico deve essere realizzato seguendo il valore del portafoglio, strettamente legato'.",
+     "media"),
     ("seed-0152", "Depositi: crypto per rete, carta, exchange",
      "Lorenzo (screenshot di un pannello 'Deposit with': Crypto / Debit / Exchanges and apps): 'aggiungiamo queste possibilita' per i depositi'.",
      "media"),
