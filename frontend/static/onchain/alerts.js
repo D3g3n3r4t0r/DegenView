@@ -87,10 +87,18 @@ function paintFeed() {
 
 /* ------------------------------------------------------------ trophy */
 
-function heroCard(x, place) {
-  return `<button type="button" class="hero-card" data-place="${place}" data-open="${escapeHtml(x.id)}" aria-label="Number ${place}: ${escapeHtml(x.symbol)}">
-    ${place === 1 ? `<svg class="crown" viewBox="0 0 64 44" aria-hidden="true"><path d="M5 40 9 12l13 13L32 4l10 21 13-13 4 28z"/><circle cx="32" cy="4" r="3.5"/><circle cx="9" cy="12" r="3.5"/><circle cx="55" cy="12" r="3.5"/><circle cx="21" cy="31" r="3" class="gem"/><circle cx="32" cy="31" r="3" class="gem"/><circle cx="43" cy="31" r="3" class="gem"/></svg>` : `<b class="hero-num">${place}</b>`}
-    <span class="frame">${tile(x.symbol, x.image, x.chain, x.token)}</span>
+const CROWN = `<svg class="crown" viewBox="0 0 64 44" aria-hidden="true"><defs><linearGradient id="crown-g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff3b0"/><stop offset=".45" stop-color="#facc15"/><stop offset="1" stop-color="#b45309"/></linearGradient></defs><path d="M5 40 9 12l13 13L32 4l10 21 13-13 4 28z" fill="url(#crown-g)"/><circle cx="32" cy="4" r="3.5" fill="#fde68a"/><circle cx="9" cy="12" r="3.5" fill="#fde68a"/><circle cx="55" cy="12" r="3.5" fill="#fde68a"/><circle cx="21" cy="31" r="3" class="gem"/><circle cx="32" cy="31" r="3.4" class="gem"/><circle cx="43" cy="31" r="3" class="gem"/></svg>`;
+
+/** One place on the podium: a medal (the logo in a metal ring), the name,
+ *  the number that ranks it, and the step it stands on. */
+function place(x, n, gem) {
+  if (!x) return `<span class="pd pd-empty" data-place="${n}"><span class="pd-step"><i>${n}</i></span></span>`;
+  return `<button type="button" class="pd" data-place="${n}" data-open="${escapeHtml(x.id)}" style="--n:${n}" aria-label="Number ${n}: ${escapeHtml(x.symbol)} ${escapeHtml(x.label)}">
+    ${n === 1 ? CROWN : ""}
+    <span class="medal"><span class="halo" aria-hidden="true"></span>${tile(x.symbol, x.image, x.chain, x.token)}<b class="pd-rank">${n}</b></span>
+    <span class="pd-sym">${escapeHtml(x.symbol)}</span>
+    <span class="pd-val" data-sign="${x.sign}">${gem ? `${x.label}<small> pts</small>` : x.label}</span>
+    <span class="pd-step" aria-hidden="true"><i>${n}</i></span>
   </button>`;
 }
 
@@ -99,7 +107,7 @@ function rows() {
   if (state.kind === "gem") {
     return (state.board?.entries ?? []).map((e) => ({
       id: `gem:${e.chain}:${e.token_address}`, symbol: e.symbol, name: e.name, chain: e.chain, token: e.token_address,
-      image: e.image, label: `${Math.round(e.score ?? 0)}`, sub: `${usdShort(e.market_cap)} MC`, sign: "up", early: e.early,
+      image: e.image, label: `${Math.round(e.score ?? 0)}`, sub: `${usdShort(e.market_cap)} MC`, sign: "", early: e.early,
     }));
   }
   const since = Date.now() / 1000 - state.period * 86400;
@@ -123,11 +131,15 @@ function paintTop() {
   root.querySelector("[data-top-info]").innerHTML = INFO_IC + (gem
     ? (w ? `Top 10 median ${pct(w.top.median)} after 7 days on the board.` : "Scored on code, research and tokenomics. Research, not advice.")
     : "Returns if you had bought when each Telegram alert arrived.");
-  const [first, second] = list;
-  root.querySelector("[data-top-hero]").innerHTML = first ? `
+  const [first, second, third] = list;
+  const hero = root.querySelector("[data-top-hero]");
+  hero.innerHTML = first ? `
+    <div class="rays" aria-hidden="true"></div>
     <div class="confetti" aria-hidden="true">${Array.from({ length: CONFETTI }, (_, i) => `<i style="--i:${i}"></i>`).join("")}</div>
-    <div class="hero-text"><b class="hero-rank">1</b><span><strong>${escapeHtml(first.symbol)}</strong><em data-sign="${first.sign}">${gem ? `score ${first.label}` : first.label}</em></span></div>
-    ${second ? heroCard(second, 2) : ""}${heroCard(first, 1)}` : `<p class="muted pad">Nothing in this period yet.</p>`;
+    <div class="podium">${place(second, 2, gem)}${place(first, 1, gem)}${place(third, 3, gem)}</div>` : `<p class="muted pad">Nothing in this period yet.</p>`;
+  // The entrance plays when the podium changes, not on every refresh.
+  const sig = [first, second, third].map((x) => x?.id).join("|") + state.kind;
+  if (hero.dataset.sig !== sig) { hero.dataset.sig = sig; hero.classList.remove("enter"); void hero.offsetWidth; hero.classList.add("enter"); }
   root.querySelector(".seg").hidden = gem;
   const sortBtn = root.querySelector("[data-sort]");
   sortBtn.hidden = gem;
