@@ -843,7 +843,7 @@
   .us-amt { display: grid; gap: 6px; font-size: 13px; color: var(--k-text-2);
     & span { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
     & input { min-inline-size: 0; padding: 12px; border: 1px solid rgb(255 255 255 / .12); border-radius: 10px; background: #0b0b0d; color: var(--k-text); font: 600 20px var(--sans); }
-    & select { padding: 0 10px; border: 1px solid rgb(255 255 255 / .12); border-radius: 10px; background: #18181b; color: var(--k-text); font: 600 15px var(--sans); } }
+    & select { padding: 0 10px; border: 1px solid rgb(255 255 255 / .12); border-radius: 10px; background: #18181b; color: var(--k-text); font: 600 16px var(--sans); } }
   .us-quote { display: grid; gap: 6px; margin: 0; padding: 12px; border-radius: 12px; background: rgb(255 255 255 / .04);
     & div { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; }
     & dt { color: var(--k-text-3); } & dd { margin: 0; color: var(--k-text); font-weight: 600; font-variant-numeric: tabular-nums; } }
@@ -1020,3 +1020,7 @@
 @layer skin {
   .dt-links { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 8px 0 0; }
 }
+
+/* Nothing may make the phone page pan sideways: clip, unlike hidden, keeps position: sticky working. */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+html, body { overflow-x: clip; }
