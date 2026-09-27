@@ -82,6 +82,9 @@ def parse(text: str, batch: list[dict], now: float) -> int:
         a["ai"] = {"risk": risk, "flags": [str(f)[:40] for f in (it.get("flags") or [])][:3],
                    "theme": str(it.get("theme") or "")[:30], "why": str(it.get("why") or "")[:160], "at": now}
         # The memory measures it like any check (outcomes.signals: AUC on rugs).
+        deepseek_desk.note("scan", f"Judged {a['symbol']}: rug risk {risk}"
+                           + (f", {a['ai']['flags'][0]}" if a["ai"]["flags"] else ""), now,
+                           symbol=a["symbol"], chain=a["chain"], token=a.get("token_address"), risk=risk)
         e = outcomes._journal.get(f"{a['chain']}:{a.get('token_address')}")
         if e is not None:
             e["features"]["ai_risk"] = risk
@@ -104,6 +107,7 @@ async def run_once(now: float | None = None) -> int:
         if deepseek_desk.spent_today("scanner", now) >= DAILY_TOKENS:
             break
         batch = pending[i:i + BATCH]
+        deepseek_desk.note("scan", f"Reading {len(batch)} new alerts against {len(pool)} past cases", now)
         user = lessons + "\n\nTokens:\n" + "\n".join(line(j, a, pool) for j, a in enumerate(batch))
         try:
             text = await deepseek_desk.ask([{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}],

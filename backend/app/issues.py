@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0160", "Un agente animato sempre presente; la hall of fame senza timeframe",
+     "Lorenzo: 'dobbiamo dare l'idea animata che tutto il sito sia gestito da DeepSeek [...] ci deve essere qualcosa che si muove [...] un agent che esamina le cose' e 'il podio non deve avere timeframe, e' la hall of fame'.",
+     "media"),
     ("seed-0159", "L'app e' troppo complicata: troppe schermate",
      "Lorenzo: 'mi sembra un po' troppo complicata l'applicazione, ci sono troppe schermate [...] il podio ha senso soltanto per le gemme [...] una leaderboard con le strategie ingresso e uscita [...] una leaderboard per le gemme [...] che sia semplice'.",
      "alta"),

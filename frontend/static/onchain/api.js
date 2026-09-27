@@ -129,6 +129,7 @@ export const uploadAvatar = (body) => request("/api/profile/avatar", { method: "
 export const walletChallenge = (body) => request("/api/wallets/link/challenge", { method: "POST", body });
 export const walletLink = (body) => request("/api/wallets/link", { method: "POST", body });
 export const getLinkedWallets = () => request("/api/wallets/linked");
+export const getAgent = () => request("/api/agent");
 export const getDeposit = () => request("/api/wallets/deposit");
 export const getWalletsTotal = () => request(`/api/wallets/total${walletQ()}`, { timeoutMs: 30000 });
 export const buildUserSwap = (body) => request("/api/wallets/swap/build", { method: "POST", body, timeoutMs: 30000 });
