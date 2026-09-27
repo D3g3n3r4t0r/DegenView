@@ -1020,6 +1020,12 @@
 @layer skin {
   .dt-links { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 8px 0 0; }
 }
+@layer skin {
+  .strats { display: grid; gap: 8px; margin: 10px 0 0; }
+  .strat { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 10px 12px; border-radius: 12px; background: rgb(255 255 255 / .04); font-size: 13px; }
+  .strat[data-chosen] { outline: 1px solid rgb(255 255 255 / .18); }
+  .strat small { color: var(--k-text-3); }
+}
 
 /* Nothing may make the phone page pan sideways: clip, unlike hidden, keeps position: sticky working. */
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
