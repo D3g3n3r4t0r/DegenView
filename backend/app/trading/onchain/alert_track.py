@@ -141,6 +141,96 @@ def set_strategy(kind: str, chain: str, token: str, backtest: dict | None) -> No
                      "interval": backtest.get("interval"), "at": backtest.get("at")}
 
 
+# ------------------------------------------------------------- history
+
+# Alerts sent before this file existed ("riesci a riportare i dati storici
+# che avevamo nell'altra versione?"): the Meme Sniper kept every listing it
+# published, with the moment it went out. Their track is rebuilt from the
+# pool's own candles on GeckoTerminal, same rules as a live alert: entry is
+# the first close at or after the message, each checkpoint is the last close
+# at or before the hour mark. No candle after a time means no trade, not a
+# vanished pool, so the last price stands.
+GECKO_OHLCV = "https://api.geckoterminal.com/api/v2/networks/{net}/pools/{pool}/ohlcv/{tf}"
+BACKFILL_GAP_S = 2.1              # GeckoTerminal allows about 30 calls a minute
+
+
+def from_candles(a: dict, candles: list, now: float, tail: list | None = None) -> None:
+    """Fill an alert recorded after the fact. candles: [[ts, o, h, l, c, v], ...]
+    from the message onwards (any order); tail: later candles for the "now"."""
+    rows = sorted((float(c[0]), float(c[4])) for c in candles or [] if len(c) >= 5 and _num(c[4]))
+    rows = [(t, c) for t, c in rows if t >= a["at"] - 900]
+    if not rows:
+        a.update(closed=True, nodata=True)   # no trade on record: never priced "now" as if it were the entry
+        return
+    a["entry_at"], a["entry"] = rows[0]
+    rets = [(t, round(c / a["entry"] - 1, 4)) for t, c in rows]
+    for h in CHECKPOINTS_H:
+        mark = a["entry_at"] + h * 3600
+        if mark > now:
+            break
+        before = [r for t, r in rets if t <= mark]
+        if before:
+            a["returns"][str(h)] = before[-1]
+    later = sorted((float(c[0]), float(c[4])) for c in tail or [] if len(c) >= 5 and _num(c[4]))
+    last_t, last_c = max(rows[-1], later[-1]) if later else rows[-1]
+    all_rets = [r for _, r in rets] + [round(c / a["entry"] - 1, 4) for _, c in later]
+    a["last"] = {"ret": round(last_c / a["entry"] - 1, 4), "at": last_t, "price": last_c}
+    a["max_ret"], a["min_ret"] = max(all_rets), min(all_rets)
+    a["closed"] = now - a["entry_at"] >= KEEP_WATCHING_S
+    a["backfilled"] = True
+
+
+async def _candles(client, net: str, pool: str, tf: str, aggregate: int, before: float, limit: int,
+                   token: str = "") -> list | None:
+    """Candles through the shared GeckoTerminal limiter. [] = the pool is
+    unknown there; None = no answer now (try again on the next start)."""
+    from app.providers.dexscreener import gecko_get
+    params = {"aggregate": aggregate, "before_timestamp": int(before), "limit": limit, "currency": "usd"}
+    if token:
+        params["token"] = token     # the token's side of the pool, not always the base
+    try:
+        payload = await gecko_get(GECKO_OHLCV.format(net=net, pool=pool, tf=tf), params)
+    except Exception:
+        return None
+    if payload is None:
+        return []
+    return ((payload.get("data") or {}).get("attributes") or {}).get("ohlcv_list") or []
+
+
+async def backfill(client: httpx.AsyncClient, items: list[dict], kind: str = "meme",
+                   now: float | None = None, gap_s: float = BACKFILL_GAP_S) -> int:
+    """Record past alerts ({chain, pair_address, at, ...}) and rebuild their
+    track from candles. Already-known alerts are left alone."""
+    from app.sniper.scanner import GECKO_NETWORKS
+    now = now or time.time()
+    n = 0
+    for item in sorted(items, key=lambda x: x.get("at") or 0):
+        net = GECKO_NETWORKS.get(item.get("chain") or "")
+        at = _num(item.get("at"))
+        if not net or not at:
+            continue
+        a = record(item, kind, at)
+        if a is None:
+            continue
+        token = item.get("token_address") or ""
+        first = await _candles(client, net, item["pair_address"], "minute", 15,
+                               at + (max(CHECKPOINTS_H) + 1) * 3600, 200, token)
+        await asyncio.sleep(gap_s)
+        tail = None
+        if first is not None and now - at > (max(CHECKPOINTS_H) + 1) * 3600:
+            tail = await _candles(client, net, item["pair_address"], "hour", 4, min(now, at + KEEP_WATCHING_S), 100,
+                                  token)
+            await asyncio.sleep(gap_s)
+        if first is None:
+            # GeckoTerminal did not answer: forget it, the next start tries again.
+            _alerts.pop(f"{kind}:{item['chain']}:{item.get('token_address') or item['pair_address']}", None)
+            continue
+        from_candles(a, first, now, tail)
+        n += 1
+    save()
+    return n
+
+
 def _due(now: float) -> dict[str, list[dict]]:
     slow = now - _state["slow_at"] >= SAMPLE_SLOW_S
     out: dict[str, list[dict]] = {}
