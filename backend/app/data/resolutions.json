@@ -1864,5 +1864,18 @@
       "frontend/static/onchain/main.js",
       "frontend/static/onchain/profile.js"
     ]
+  },
+  "seed-0152": {
+    "status": "risolto",
+    "at": 1790530398,
+    "summary": "Il tasto Deposit apre ora 'Deposit with' con tre strade. Crypto: scegli la rete (Solana, Base, BNB Chain, Robinhood Chain, Ethereum) e vedi indirizzo, QR e contratto USDC di quella rete, con l'avviso di non mandare da un'altra rete. Exchanges and apps: Coinbase e Binance, con le reti da cui ritirare USDC (la piu' economica per prima) e il link all'app. Debit: la carta passa da un servizio di on-ramp (MoonPay, Transak...) che richiede un account del sito; finche' non c'e', il pannello lo dice e rimanda agli exchange. Cash App non c'e' perche' invia solo Bitcoin. Monad, Arc e Hyperliquid non ci sono perche' il saldo non le legge.",
+    "files": [
+      "backend/app/trading/onchain/deposit.py",
+      "backend/app/main.py",
+      "backend/app/config.py",
+      "frontend/static/onchain/sheets.js",
+      "frontend/static/onchain/api.js",
+      "frontend/static/onchain/app.css"
+    ]
   }
 }

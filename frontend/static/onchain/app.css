@@ -871,3 +871,28 @@
 @layer skin { .pf-since { margin: 6px 0 0; font-size: 12px; color: var(--k-text-3); } }
 /* The autopilot's rows: the token's logo, not two letters. */
 @layer skin { .tk.tk-logo { padding: 0; overflow: hidden; background: none; font-size: 0; & .tile { inline-size: 100%; block-size: 100%; } } }
+/* Deposit: one sheet, three steps (sheets.js depositHome/Networks/Address). */
+@layer skin {
+  .dep-list { display: grid; gap: 10px; margin-block: 4px 8px; }
+  #sheet.dep-has-back .sheet-title { padding-inline-start: 30px; }
+  .dep-back { position: absolute; inset-block-start: 20px; inset-inline-start: 12px; background: none; border: 0;
+    color: var(--k-text-3); font-size: 28px; line-height: 1; padding: 4px 10px; cursor: pointer; }
+  .dep-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; inline-size: 100%;
+    text-align: start; padding: 18px 18px; border: 0; border-radius: 16px; background: var(--k-surface);
+    color: var(--k-text); cursor: pointer; font: inherit;
+    & b { display: block; font-size: 17px; font-weight: 600; }
+    & small { display: block; margin-block-start: 3px; font-size: 13px; color: var(--k-text-3); }
+    &:hover { background: var(--k-surface-2); } }
+  .dep-ico { display: grid; place-items: center; flex: none; font-style: normal;
+    & svg { inline-size: 26px; block-size: 26px; fill: none; stroke: currentColor; stroke-width: 1.8; }
+    & svg[viewBox="0 0 32 32"] { stroke: none; inline-size: 30px; block-size: 30px; }
+    & img { border-radius: 50%; }
+    & > b { inline-size: 26px; block-size: 26px; border-radius: 50%; display: grid; place-items: center;
+      background: var(--k-surface-2); font-size: 13px; } }
+  .dep-ico svg:not([viewBox="0 0 32 32"]) path[d^="M4 4h6"] { fill: currentColor; stroke: none; }
+  .dep-brands { display: flex; gap: 6px; & svg { inline-size: 28px; block-size: 28px; } }
+  .dep-qr { display: grid; place-items: center; margin-block: 4px 12px;
+    & img { background: #fff; border-radius: 14px; padding: 6px; image-rendering: pixelated; } }
+  .dep-open { text-align: center; text-decoration: none; }
+  #sheet { position: relative; }
+}
