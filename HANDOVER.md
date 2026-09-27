@@ -3540,3 +3540,11 @@ e uscite; 5) ricerca a parole nello Scanner; 6) brief del mattino. Fatti 1+2
 delle gemme su DeepSeek (`legit._ai_review_deepseek`, 4000 caratteri, cache
 per pagina, non blocca senza `LEGIT_AI_GATE`). Prossimo: quando `shadow_stats`
 ha qualche centinaio di giudizi, decidere se il rischio diventa filtro; poi 4.
+
+**2026-09-27 — Lorenzo: "studia un bel piano per incastonare alla perfezione deep seek, esaminando tutto quello che abbiamo fatto".**
+Piano scritto in `DEEPSEEK.md` ("Il piano"): cinque regole (niente decisioni
+di prezzo; ogni giudizio diventa colonna di `outcomes.py` e passa il suo
+cancello AUC fuori campione; batch/cache/tetti; modelli fissi dove bastano;
+l'app funziona senza), mappa per modulo e sei fasi. Prossima: Fase 1
+(outcomes legge `alert["ai"]`; `research.ai_dossier` e il piano "deep" su
+DeepSeek).

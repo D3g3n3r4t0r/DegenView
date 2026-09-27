@@ -23,6 +23,106 @@ rivisto; le revisioni delle PR lo leggono insieme a CLAUDE.md.
 Lavoro affidabile = conta i token che fa. Il riepilogo li confronta con quello
 che sarebbero costati su Claude, a prezzi di listino.
 
+## Il piano (27/09)
+
+Lorenzo: "studia un bel piano per incastonare alla perfezione deep seek,
+esaminando tutto quello che abbiamo fatto".
+
+### Cinque regole, prese da quello che abbiamo già misurato
+
+1. **DeepSeek produce dati e testo, non decisioni di prezzo.** Su KASUSDT
+   daily nessuna strategia ha edge e la ricerca casuale è una lotteria
+   (CLAUDE.md): un modello che "sente" quando comprare sarebbe la stessa
+   lotteria. Ingressi, uscite, autotrader, importi, chiavi e firme restano
+   codice deterministico.
+2. **Ogni suo giudizio entra nella memoria che già c'è.** `outcomes.py`
+   misura per ogni controllo se separa i rug dagli altri (AUC) e lo fa
+   entrare nel filtro solo se regge *fuori campione*. Il voto di DeepSeek
+   diventa una colonna in più di quella memoria: niente soglie scelte a mano,
+   stesso cancello di tutto il resto.
+3. **Poco testo, a gruppi, una volta sola.** Fatti in una riga invece di
+   pagine; dieci token per richiesta sotto istruzioni identiche (DeepSeek fa
+   pagare un decimo la parte ripetuta); cache per token e per pagina; tetto
+   giornaliero per ogni tipo di lavoro. Tutto passa da
+   `deepseek_desk.ask`, che conta i token e alimenta il riepilogo delle 21.
+4. **Dove basta un modello di testo fisso, niente IA.** Le uscite del
+   sistema hanno già il motivo (segnale, crollo, 48h, rug) e il riepilogo
+   settimanale ha già la riga italiana nei commit: lì un modello di frase
+   costa zero ed è sempre giusto.
+5. **Se DeepSeek non risponde, l'app funziona uguale.** Ogni suo pezzo è un
+   di più: senza chiave, senza credito o col servizio giù si torna a oggi.
+
+### La mappa: dove entra e dove no
+
+| parte dell'app | oggi | con DeepSeek |
+|---|---|---|
+| Meme (listing → alert) | controlli automatici + memoria | voto di rischio per ogni alert (fatto, in ombra) → colonna della memoria |
+| Gem Finder: sito (`legit.py`) | Claude Opus, spento senza chiave | DeepSeek su 4000 caratteri, in cache (fatto, in ombra) |
+| Gem Finder: ricercatore (`research.ai_dossier`) | Claude, spento senza chiave | DeepSeek legge descrizione e documenti del progetto |
+| Piano "deep" a pagamento (`plans.py`) | disponibile solo con chiave Anthropic | disponibile con DeepSeek, a costo quasi zero |
+| Narrative (`narratives.json`) | mappa scritta a mano | ogni settimana DeepSeek propone temi nuovi dai temi raccolti; approva Lorenzo |
+| Revisore giornaliero (`ai_review.py`) | già su DeepSeek | uguale; in più legge le statistiche in ombra |
+| Alert su Telegram | numeri | una riga "perché", presa dallo stesso giudizio (nessuna chiamata in più) |
+| Scanner | filtri a pulsanti | ricerca a parole → filtri (una chiamata per frase, in cache) |
+| Telegram | avvisi | chat (fatto), brief del mattino |
+| Sviluppo | Claude | revisione di ogni PR (fatto); DeepSeek che scrive PR da issue: in attesa del permesso di Lorenzo |
+| Autotrader, swap, wallet, depositi | codice | **niente IA**: ci sono soldi veri |
+
+### Le fasi
+
+**Fase 1 — Allacciare alla memoria.** È il pezzo che rende tutto il resto
+misurabile.
+- `outcomes.features` legge `alert["ai"]["risk"]` e il voto del sito come
+  colonne; l'AUC fuori campione decide se entrano nel modello.
+- `research.ai_dossier` ripiega su DeepSeek quando manca la chiave
+  Anthropic, con il suo tetto giornaliero.
+- Il piano "deep" diventa disponibile con DeepSeek.
+- Costo: meno di 1 $ al mese.
+
+**Fase 2 — Spiegare.**
+- Il giudizio delle meme restituisce anche una frase "perché" (+15 token
+  per token), che finisce nell'alert Telegram e nella scheda del token.
+- Le uscite del sistema restano a modello fisso (regola 4).
+- Costo: centesimi.
+
+**Fase 3 — Narrative.**
+- I temi di ogni giudizio (`alert["ai"]["theme"]`, dossier delle gemme)
+  vengono contati: lo Scanner mostra "temi caldi" senza chiamare nessuno.
+- Una volta a settimana DeepSeek legge i conteggi e propone voci nuove per
+  `narratives.json`. Arrivano su Telegram, Lorenzo approva, Claude le mette.
+- Costo: centesimi.
+
+**Fase 4 — Scanner a parole.**
+- "Meme su Solana, liquidità sopra 50k, holder in crescita" → filtri JSON
+  dello Scanner.
+- Cache per frase, tetto per utente.
+- Costo: dipende dall'uso, ~0,0001 $ a ricerca.
+
+**Fase 5 — Brief del mattino.**
+- Una chiamata al giorno sui numeri che il sito ha già: sistema, alert
+  della notte, rug evitati, temi.
+- Costo: ~0,15 $ al mese.
+
+**Fase 6 — Aiutante di sviluppo.**
+- Le revisioni delle PR crescono di peso secondo il loro storico (tabella
+  sotto).
+- Il lavoratore che apre PR da issue parte solo se Lorenzo lo autorizza.
+
+### Quando un giudizio in ombra diventa un filtro
+
+- Almeno 300 alert giudicati con almeno 30 rug.
+- La memoria lo fa entrare (AUC fuori campione sopra la sua soglia).
+- Nel riepilogo, i rug fra "rischio alto" sono almeno il doppio che fra
+  "rischio basso".
+- Allora si accende il cancello (`LEGIT_AI_GATE` per i siti; per le meme il
+  modello della memoria), e si scrive qui sotto com'è andata.
+
+### Budget
+
+Fasi 1–5 insieme, all'uso di oggi: **2–4 $ al mese**, più la chat quanto la
+usate. Il tetto giornaliero per tipo di lavoro impedisce le sorprese; il
+riepilogo delle 21 dice ogni sera la spesa vera.
+
 ## Come Claude gli passa lavoro
 
 Per ora solo per le strade qui sopra: DeepSeek gira sul server e su GitHub,
