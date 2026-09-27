@@ -124,9 +124,9 @@ export function openDetail(id) {
       </nav>
       <div class="dt-pane" data-pane-body></div>
     </div>
-    <div class="dt-cta">${TRADABLE.has(e.chain)
+    ${e.noTrade ? "" : `<div class="dt-cta">${TRADABLE.has(e.chain)
       ? `<button type="button" data-buy><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v8M8.5 12.5 12 16l3.5-3.5"/></svg>Buy</button>`
-      : `<a class="buy-out" href="${escapeHtml(e.pairUrl || `https://dexscreener.com/${e.chain}/${e.token}`)}" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"/></svg>Trade on DexScreener</a>`}</div>`;
+      : `<a class="buy-out" href="${escapeHtml(e.pairUrl || `https://dexscreener.com/${e.chain}/${e.token}`)}" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"/></svg>Trade on DexScreener</a>`}</div>`}`;
   paintChips();
   paintTabs();
   paintChart();
