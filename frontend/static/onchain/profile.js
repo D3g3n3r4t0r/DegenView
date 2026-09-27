@@ -67,6 +67,60 @@ function chart(rows) {
   </svg>`;
 }
 
+/* ------------------------------------------------ connected wallets
+ * Lorenzo: "dobbiamo dare la possibilita' di far collegare il wallet a
+ * qualsiasi persona". The wallet signs a plain message (free, no
+ * transaction); the server checks the signature; its holdings join the
+ * profile, read-only. Browser wallets only (MetaMask, Rabby, Phantom):
+ * on a phone without one, the wallet's own browser opens this page. */
+const hexOf = (bytes) => Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+const shortAddr = (a) => `${a.slice(0, 5)}…${a.slice(-4)}`;
+const evmProvider = () => window.ethereum ?? null;
+const solProvider = () => window.phantom?.solana ?? (window.solana?.isPhantom ? window.solana : null);
+const here = () => `${location.host}${location.pathname}#profile`;
+
+async function connect(kind) {
+  let address, sign;
+  if (kind === "evm") {
+    const eth = evmProvider();
+    if (!eth) { location.href = `https://metamask.app.link/dapp/${here()}`; return; }
+    [address] = await eth.request({ method: "eth_requestAccounts" });
+    sign = (msg) => eth.request({ method: "personal_sign", params: [`0x${hexOf(new TextEncoder().encode(msg))}`, address] });
+  } else {
+    const sol = solProvider();
+    if (!sol) {
+      location.href = `https://phantom.app/ul/browse/${encodeURIComponent(location.href)}?ref=${encodeURIComponent(location.origin)}`;
+      return;
+    }
+    const res = await sol.connect();
+    address = (res?.publicKey ?? sol.publicKey).toString();
+    sign = async (msg) => hexOf((await sol.signMessage(new TextEncoder().encode(msg), "utf8")).signature);
+  }
+  const { message } = await api.walletChallenge({ kind, address });
+  const signature = await sign(message);
+  const res = await api.walletLink({ signature });
+  data.profile = res.profile;
+  paint();
+  load();   // the new wallet's holdings
+}
+
+function walletsBox(p) {
+  const rows = (p.wallets ?? []).map((w) => `<li>
+      <span class="pf-wchain" data-kind="${escapeHtml(w.kind)}" aria-hidden="true">${w.kind === "evm" ? "◆" : "◎"}</span>
+      <span class="pf-main"><b>${escapeHtml(shortAddr(w.address))}</b><small>${w.kind === "evm" ? "EVM · Robinhood Chain" : "Solana"} · connected</small></span>
+      <button type="button" class="pf-x" data-unlink="${escapeHtml(w.kind)}:${escapeHtml(w.address)}" aria-label="Disconnect">✕</button>
+    </li>`).join("");
+  return `<section class="pf-wallets">
+    <h3>Wallets</h3>
+    ${rows ? `<ul class="pf-wl">${rows}</ul>` : `<p class="pf-none">Connect your own wallet: you sign a message to prove it's yours (free, not a transaction). We never see its keys.</p>`}
+    <div class="pf-connect">
+      <button type="button" data-connect="evm"><b>MetaMask / Rabby</b><small>Robinhood Chain</small></button>
+      <button type="button" data-connect="solana"><b>Phantom</b><small>Solana</small></button>
+    </div>
+    <p class="pf-err" data-wallet-err></p>
+  </section>`;
+}
+
 function positions(d) {
   if (tab === "closed") {
     const rows = d.closed ?? [];
@@ -81,7 +135,7 @@ function positions(d) {
   if (!rows.length) return `<p class="pf-none">${d.missing?.length ? `Couldn't read ${d.missing.join(" and ")} right now.` : "Nothing held yet."}</p>`;
   return `<ul class="pf-list">${rows.map((p) => `<li>
     ${logo(p.symbol, p.image, p.chain, p.address)}
-    <span class="pf-main"><b>${escapeHtml(p.name || p.symbol)}</b><small>${qty(p.amount)} ${escapeHtml(p.symbol)}</small></span>
+    <span class="pf-main"><b>${escapeHtml(p.name || p.symbol)}</b><small>${qty(p.amount)} ${escapeHtml(p.symbol)}${p.source === "connected" ? " · your wallet" : ""}</small></span>
     <span class="pf-num"><b>${p.value_usd == null ? "—" : `$${p.value_usd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</b>${p.price_usd ? `<small>$${p.price_usd < 0.01 ? p.price_usd.toPrecision(3) : p.price_usd.toFixed(2)}</small>` : ""}</span>
   </li>`).join("")}</ul>`;
 }
@@ -122,6 +176,7 @@ function paint() {
       <button type="button" class="pf-sq" data-sheet="receive" aria-label="Deposit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
       <button type="button" class="pf-sq" data-wallet-menu aria-label="Wallet"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/></svg></button>
     </section>
+    ${walletsBox(p)}
     <section class="pf-pos">
       <div class="pf-pos-head">
         <h3>Positions <span>(${tab === "open" ? (d.positions ?? []).length : (d.closed ?? []).length})</span></h3>
@@ -182,6 +237,19 @@ export function mountProfile({ go: goTo } = {}) {
     if (event.target.closest("[data-wallet-menu]")) { document.dispatchEvent(new CustomEvent("lae:wallet-menu")); return; }
     if (event.target.closest("[data-edit]")) { root.querySelector("[data-edit-sheet]")?.showModal(); return; }
     if (event.target.closest("[data-cancel]")) root.querySelector("[data-edit-sheet]")?.close();
+    const c = event.target.closest("[data-connect]");
+    if (c) {
+      connect(c.dataset.connect).catch((e) => {
+        const el = root.querySelector("[data-wallet-err]");
+        if (el) el.textContent = e?.code === 4001 ? "You cancelled it in the wallet." : (e?.message ?? "Couldn't connect.");
+      });
+      return;
+    }
+    const u = event.target.closest("[data-unlink]");
+    if (u) {
+      const [kind, ...rest] = u.dataset.unlink.split(":");
+      api.walletUnlink(kind, rest.join(":")).then((res) => { data.profile = res.profile; paint(); load(); }, () => {});
+    }
   });
   root.addEventListener("submit", async (event) => {
     event.preventDefault();

@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0143", "Chiunque deve poter collegare il proprio wallet al sito",
+     "Lorenzo: 'dobbiamo dare la possibilita' di far collegare il wallet a qualsiasi persona al nostro sito per usufruire dei nostri servizi; l'unica cosa e' che non so bene se la strategia automatica in quel caso e' fattibile, deve firmare uno speciale smart contract cosi' che si attivi questa strategia automatica'. Poi: 'procedi'.",
+     "alta"),
     ("seed-0142", "Il cash e' USDC; per operare su Robinhood prima si converte in USDG",
      "Lorenzo: 'fai in modo che l'applicazione utilizzi il solito sistema di cash, cioe' devono essere USDC, e ovviamente se operi su Robinhood prima di poterlo fare devi convertire in USDG'. Alle domande: USDC multichain; dopo ogni vendita si torna sempre in USDC.",
      "alta"),
