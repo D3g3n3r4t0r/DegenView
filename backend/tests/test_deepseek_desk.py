@@ -116,6 +116,13 @@ def test_activity_log_is_short_and_says_when_it_is_working():
     assert dd.activity(now=5000.0)["working"] is False
 
 
+def test_activity_survives_a_restart():
+    dd.note("scanner", "x")
+    dd._activity.clear()
+    dd._load()
+    assert dd.activity()["items"][0]["text"] == "x"
+
+
 def test_every_database_tool_answers_and_reports_land_on_the_board(tmp_path, monkeypatch):
     from app import issues as issues_store, main
     monkeypatch.setattr(issues_store, "_STORE_FILE", tmp_path / "issues.json")
