@@ -73,6 +73,12 @@ const NAMES = {
 
 // The main site charts DEX pools by "SYM@chain:pool" (DexScreenerProvider
 // .make_symbol). The pair may not be known yet: poolOf() finds it.
+function bestLabel(e) {
+  const rows = (e.alerts ?? [])[0]?.backtests?.rows ?? [];
+  return rows.filter((r) => r.trades > 0 || r.in_position)
+    .sort((a, b) => (b.return_pct ?? -1e9) - (a.return_pct ?? -1e9))[0]?.label;
+}
+
 async function mainChartUrl(e, strategyName) {
   const pair = e.pair || await poolOf(e);
   if (!pair) return "";
@@ -102,9 +108,15 @@ async function onClick(event) {
   }
   if (t.closest("[data-copy]")) { navigator.clipboard?.writeText(current.e.token ?? ""); return; }
   if (t.closest("[data-main-chart]")) {
-    const label = t.closest("[data-main-chart]").dataset.mainChart;
+    let label = t.closest("[data-main-chart]").dataset.mainChart;
+    // "best": the strategy with the best backtest on this token's latest
+    // alert, chosen for the viewer (Lorenzo: "non voglio selezionare le
+    // strategie [...] mostrami i backtest migliori").
+    if (label === "best") label = bestLabel(current.e) ?? "Trend EMA";
+    // Opened now, inside the tap: iOS blocks a window opened after an await.
+    const win = window.open("", "_blank");
     const url = await mainChartUrl(current.e, NAMES[label]);
-    if (url) window.open(url, "_blank", "noopener");
+    if (win && url) { win.opener = null; win.location.href = url; } else win?.close();
     return;
   }
   if (t.closest("[data-user-swap]")) { openUserSwap(current.e); return; }
@@ -145,7 +157,7 @@ export function openDetail(id) {
       ${e.context ? `<p class="dt-context">${e.context}</p>` : ""}
       <div class="dt-chart" data-chart><div class="dt-chart-empty">Loading chart…</div></div>
       <div class="dt-chips" data-chips></div>
-      <button type="button" class="dt-mainchart" data-main-chart="Trend EMA">Open on the analysis chart ↗</button>
+      <button type="button" class="dt-mainchart" data-main-chart="best">Open on the analysis chart ↗</button>
       <nav class="dt-tabs">
         <button type="button" data-dtab="signal">Signal</button>
         <button type="button" data-dtab="why">Why</button>
