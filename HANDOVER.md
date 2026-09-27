@@ -3614,3 +3614,12 @@ Lorenzo metta nell'ambiente cloud `DEEPSEEK_API_KEY` e consenta
 `api.deepseek.com` nella rete; vale dalla sessione successiva. Regola in
 CLAUDE.md ("DeepSeek scrive, Claude rivede"). La leva più grande sul costo resta
 aprire sessioni nuove spesso: HANDOVER.md serve a questo.
+
+**2026-09-27 — Lorenzo: "non devi usarli nel tuo ambiente ma comunicarci tramite github [...] DEVI USARE DEEPSEEK ASSIDUAMENTE [...] ok apriamo nuova chat appena hai finito".**
+Lavoratore DeepSeek su GitHub, autorizzato esplicitamente da Lorenzo: issue con
+etichetta `deepseek` → `deepseek-task.yml` → PR `deepseek/issue-N` → Claude
+rivede, corregge, mergia (niente merge automatico; il codice generato gira nei
+test senza token GitHub). Istruzioni in CLAUDE.md ("DeepSeek scrive, Claude
+rivede"). Nella prossima chat: provarlo con un compito piccolo e aggiornare lo
+storico in DEEPSEEK.md. Serve l'etichetta `deepseek` nel repo (la crea la
+prima issue con quell'etichetta, o Lorenzo da GitHub → Issues → Labels).
