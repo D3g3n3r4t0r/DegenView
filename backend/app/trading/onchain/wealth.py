@@ -19,7 +19,8 @@ RANGES = {"24h": 86_400, "7d": 7 * 86_400, "30d": 30 * 86_400, "all": None}
 # were the site's two wallets only: a different quantity, dropped rather than
 # drawn on the same line (Lorenzo: "il grafico non rispetta l'andamento
 # reale del portafoglio").
-VERSION = 2
+# v3: v2's first readings could be a $0 recorded while Solana did not answer.
+VERSION = 3
 CARRY_S = 6 * 3600     # a chain that did not answer counts at its last value this long
 
 _lock = threading.Lock()
@@ -77,8 +78,6 @@ def combine(uid: str, read: dict[str, float], missing: list[str], now: float | N
     for chain in missing:
         prev = last.get(chain)
         if prev is None or now - prev[0] > CARRY_S:
-            if prev is None:
-                continue          # never seen with value: nothing to carry, nothing lost
             return None
         total += prev[1]
     return total

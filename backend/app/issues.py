@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0151", "Il saldo del wallet esce a $0.00",
+     "Lorenzo (profilo alle 19:18, $0.00 in alto e nel valore): 'non becca il saldo'.",
+     "alta"),
     ("seed-0150", "Le icone non corrispondono a quelle corrette del token",
      "Lorenzo: 'le icone non corrispondono a quelle corrette del token'.",
      "media"),

@@ -53,7 +53,9 @@ NATIVE_IMAGE = {
 }
 BLOCKSCOUT = {"base": "https://base.blockscout.com", "ethereum": "https://eth.blockscout.com"}
 RPC = {"robinhood": "https://rpc.mainnet.chain.robinhood.com", "bsc": "https://bsc-dataseed.binance.org"}
-SOL_RPC = "https://api.mainnet-beta.solana.com"
+# The public Solana node rate-limits getTokenAccountsByOwner hard (429 with
+# a JSON error body): each call tries these in turn.
+SOL_RPCS = ("https://api.mainnet-beta.solana.com", "https://rpc.ankr.com/solana")
 TOKEN_PROGRAMS = ("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 STABLES = {"USDG", "USDC", "USDT", "PYUSD", "USD1", "DAI", "USDS", "USDE", "FDUSD"}
 DEX_TOKENS = "https://api.dexscreener.com/tokens/v1/{chain}/{addrs}"
@@ -61,12 +63,18 @@ DUST_USD = 0.01
 TTL_S = 60
 MAX_RH_CANDIDATES = 200
 
+# A reading this old still stands in when the source fails now: a wallet
+# that did not answer is not empty (Lorenzo, 27/09: "non becca il saldo").
+STALE_S = 6 * 3600
+
 _cache: dict[tuple[str, str], tuple[float, list[dict]]] = {}
+_locks: dict[tuple[str, str], asyncio.Lock] = {}
 _native_px: dict[str, tuple[float, float]] = {}
 
 
 def reset_for_tests() -> None:
     _cache.clear()
+    _locks.clear()
     _native_px.clear()
 
 
@@ -120,11 +128,18 @@ async def dex_prices(chain: str, tokens: list[str], client: httpx.AsyncClient) -
 
 async def _solana(address: str, client: httpx.AsyncClient) -> tuple[float, list[dict]]:
     async def rpc(method, params):
-        r = await client.post(SOL_RPC, json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params})
-        body = r.json()
-        if "error" in body:
-            raise RuntimeError(body["error"])
-        return body["result"]
+        err: object = None
+        for url in SOL_RPCS:
+            try:
+                r = await client.post(url, json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params})
+                body = r.json()
+            except (httpx.HTTPError, ValueError) as exc:
+                err = exc
+                continue
+            if isinstance(body, dict) and "result" in body:
+                return body["result"]
+            err = body.get("error") if isinstance(body, dict) else body
+        raise RuntimeError(f"solana {method}: {err}")
     lamports = (await rpc("getBalance", [address]))["value"]
     rows = []
     for program in TOKEN_PROGRAMS:
@@ -163,14 +178,29 @@ async def _blockscout(chain: str, address: str, client: httpx.AsyncClient) -> tu
 
 
 async def _evm_rpc_batch(url: str, calls: list[tuple[str, list]], client: httpx.AsyncClient) -> list:
-    out = []
+    """Results in call order. A node that refuses batches gets the calls one
+    by one; a call with no answer raises, so the chain reads as not read
+    rather than as zero."""
+    out: list = []
     for i in range(0, len(calls), 50):
         chunk = calls[i:i + 50]
         body = [{"jsonrpc": "2.0", "id": j, "method": m, "params": p} for j, (m, p) in enumerate(chunk)]
-        r = await client.post(url, json=body)
-        res = r.json()
-        by_id = {x.get("id"): x.get("result") for x in res} if isinstance(res, list) else {}
-        out += [by_id.get(j) for j in range(len(chunk))]
+        try:
+            res = (await client.post(url, json=body)).json()
+        except (httpx.HTTPError, ValueError):
+            res = None
+        by_id = {x.get("id"): x for x in res if isinstance(x, dict)} if isinstance(res, list) else {}
+        for j, (m, p) in enumerate(chunk):
+            hit = by_id.get(j)
+            if hit is None or "result" not in hit:
+                r = await client.post(url, json={"jsonrpc": "2.0", "id": 1, "method": m, "params": p})
+                hit = r.json()
+            if "result" in hit:
+                out.append(hit["result"])
+            elif m == "eth_call":
+                out.append(None)       # a reverting balanceOf: not a token we can read
+            else:
+                raise RuntimeError(f"{m}: {hit.get('error')}")
     return out
 
 
@@ -216,7 +246,10 @@ async def _robinhood(address: str, client: httpx.AsyncClient) -> tuple[float, li
 
 async def _bsc(address: str, client: httpx.AsyncClient) -> tuple[float, list[dict]]:
     r = await client.post(RPC["bsc"], json={"jsonrpc": "2.0", "id": 1, "method": "eth_getBalance", "params": [address, "latest"]})
-    return int(r.json().get("result") or "0x0", 16) / 1e18, []
+    body = r.json()
+    if "result" not in body:
+        raise RuntimeError(f"bsc eth_getBalance: {body.get('error')}")
+    return int(body["result"] or "0x0", 16) / 1e18, []
 
 
 READERS = {"solana": _solana, "base": lambda a, c: _blockscout("base", a, c),
@@ -226,12 +259,29 @@ READERS = {"solana": _solana, "base": lambda a, c: _blockscout("base", a, c),
 # ------------------------------------------------------------------- wallet
 
 async def wallet(chain: str, address: str, client: httpx.AsyncClient | None = None, *, fresh: bool = False) -> list[dict]:
-    """Every holding of one address on one chain, priced. Raises if the
-    chain's source does not answer: a wallet we could not read is not empty."""
+    """Every holding of one address on one chain, priced. When the source
+    fails, the last reading younger than STALE_S stands in; with none, it
+    raises: a wallet we could not read is not empty."""
     key = (chain, address.lower() if chain != "solana" else address)
     hit = _cache.get(key)
     if hit and not fresh and time.time() - hit[0] < TTL_S:
         return hit[1]
+    # header, profile and the wealth loop ask at once: one read, not three
+    async with _locks.setdefault(key, asyncio.Lock()):
+        hit = _cache.get(key)
+        if hit and not fresh and time.time() - hit[0] < TTL_S:
+            return hit[1]
+        try:
+            return await _read(chain, address, key, client)
+        except Exception:
+            if hit and time.time() - hit[0] < STALE_S:
+                logger.info("portfolio: %s %s failed, using the reading of %ds ago", chain, address[:8],
+                            time.time() - hit[0])
+                return hit[1]
+            raise
+
+
+async def _read(chain: str, address: str, key: tuple[str, str], client: httpx.AsyncClient | None) -> list[dict]:
     own = client is None
     client = client or httpx.AsyncClient(timeout=15.0, headers={"accept": "application/json"})
     try:
@@ -242,6 +292,8 @@ async def wallet(chain: str, address: str, client: httpx.AsyncClient | None = No
     finally:
         if own:
             await client.aclose()
+    if native > 0 and px is None:
+        raise RuntimeError(f"{chain}: no price for {NATIVE[chain]}")    # unpriced is not worthless
     norm = (lambda a: a.lower()) if chain != "solana" else (lambda a: a)
     out = []
     if native > 0:
