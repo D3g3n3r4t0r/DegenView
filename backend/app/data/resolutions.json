@@ -1690,5 +1690,69 @@
       "backend/app/trading/onchain/radar.py",
       "deploy/Caddyfile"
     ]
+  },
+  "seed-0138": {
+    "status": "risolto",
+    "at": 1790523417,
+    "summary": "La 'miglior strategia' che si vedeva prima era scelta a posteriori, token per token: un numero che nessuno avrebbe potuto avere. Ora c'e' un sistema solo, con le stesse regole su ogni alert Telegram, dal momento del messaggio: le due strategie trend-following che avevamo (Lorenzo e Lorenzo HF, parametri predefiniti) seguite su candele da 5 minuti; un segnale su una candela chiusa si esegue all'apertura della successiva, pagando commissione e slippage in entrata e in uscita; solo acquisti e vendite; dopo 48 ore l'eventuale posizione si chiude; se il pool sparisce mentre si e' dentro, -100%. Vince quella con il risultato mediano migliore sugli alert gia' conclusi (servono almeno 20; prima si usa Lorenzo HF), e i numeri di entrambe restano visibili. Le candele arrivano dalle letture che il server fa gia' ogni minuto, piu' la storia prima del messaggio presa una volta; gli alert passati vengono ricostruiti. Nella scheda Alerts c'e' il riquadro del sistema (mediana, quota in profitto, in quanti trade e' dentro ora) e ogni alert mostra il rendimento del sistema e il suo stato (in trade, fuori, in attesa); la classifica si ordina per default sul sistema; nel grafico del token compaiono i suoi acquisti e le sue vendite.",
+    "files": [
+      "backend/app/trading/onchain/system.py",
+      "backend/app/trading/onchain/alert_track.py",
+      "backend/app/main.py",
+      "frontend/static/onchain/alerts.js",
+      "frontend/static/onchain/detail.js",
+      "frontend/static/onchain/app.css",
+      "backend/tests/test_system.py"
+    ]
+  },
+  "seed-0139": {
+    "status": "risolto",
+    "at": 1790523796,
+    "summary": "In cima alla scheda Alerts c'e' 'Auto-trade the system': Off / Simulated / Real e la quota del saldo USDG per ogni trade (10, 25, 50, 100%). Acceso, il sistema compra un alert Meme Sniper di Robinhood Chain quando la sua strategia entra (solo segnali di meno di 15 minuti, un token alla volta) e vende quando esce, dopo 48 ore o se il pool sparisce. Spento, non apre nuove posizioni ma chiude quella aperta alla sua uscita. L'importo e' la quota scelta meno un'unita', cosi' non chiede mai piu' di quello che c'e'; la fee del pool e' gia' dentro l'importo; il gas si paga in ETH, e se non basta per approve + swap l'ingresso si salta e lo dice; il minimo ricevuto e' il preventivo vivo meno il 5%. Simulato: preventivi veri, niente inviato, saldo virtuale che parte dal saldo USDG reale. Reale: passa da execute_order (registro, idempotenza, interruttore del server onchain_execution_enabled) senza i limiti di rischio, come scelto; la prima volta autorizza USDG sul router Uniswap (approve). Oggi si possono firmare solo i percorsi Uniswap v3: un token raggiungibile solo da un aggregatore in reale si salta, e la riga dice perche'. Ogni operazione arriva su Telegram in italiano.",
+    "files": [
+      "backend/app/trading/onchain/autotrader.py",
+      "backend/app/trading/onchain/execute.py",
+      "backend/app/main.py",
+      "frontend/static/onchain/autotrade.js",
+      "frontend/static/onchain/app.css",
+      "backend/tests/test_autotrader.py"
+    ]
+  },
+  "seed-0140": {
+    "status": "risolto",
+    "at": 1790524224,
+    "summary": "Nuova vista Profilo, come nello screenshot: si apre dalla foto in alto o dall'ultima voce della barra in basso (che mostra la tua foto). In cima foto (tocca per cambiarla: qualunque immagine viene ritagliata quadrata e salvata piccola), nome, @handle e bio, modificabili da 'Edit profile' (l'handle e' unico); sotto, tempo medio di tenuta, numero di operazioni e da quando sei iscritto. Poi il valore di tutti i wallet con i centesimi attenuati, quanto e' cambiato e la linea nel tempo su 24h, 7d, 30d e All: il server legge i wallet ogni 10 minuti e conserva la storia (ogni lettura per due giorni, una all'ora per un mese, una al giorno dopo). Poi il cash (stablecoin) con Deposit e il menu del wallet, e le posizioni: aperte (quello che i wallet detengono ora, moneta della chain compresa) o chiuse (i giri completi del sistema automatico). Profilo e storia stanno sul server, legati all'account. La vista wallet completa resta nel menu, alla voce 'Wallet & swap'.",
+    "files": [
+      "backend/app/profiles.py",
+      "backend/app/trading/onchain/wealth.py",
+      "backend/app/main.py",
+      "frontend/static/onchain/profile.js",
+      "frontend/static/onchain/main.js",
+      "frontend/onchain-app.html",
+      "frontend/static/onchain/app.css",
+      "backend/tests/test_profile.py"
+    ]
+  },
+  "seed-0141": {
+    "status": "risolto",
+    "at": 1790524576,
+    "summary": "Installarlo sul server non ha senso: il DeepSeek vero (V3/R1) ha 671 miliardi di parametri e chiede centinaia di GB di memoria video; il server ha 2 CPU e 4 GB di RAM, senza GPU. Ci starebbe solo una versione ridotta da 1,5 miliardi, lenta e troppo debole per dare insight utili, e ruberebbe memoria all'app. Il modello e' gratuito da scaricare, farlo girare no. La strada e' la sua API, che costa molto meno di Claude: il revisore giornaliero ora puo' usare DeepSeek. Basta mettere DEEPSEEK_API_KEY sul server (la inserisce Lorenzo); con la chiave presente il revisore usa DeepSeek, altrimenti Claude. Tetti di token giornaliero e mensile invariati.",
+    "files": [
+      "backend/app/trading/onchain/ai_review.py",
+      "backend/app/config.py",
+      "backend/tests/test_signals.py"
+    ]
+  },
+  "seed-0142": {
+    "status": "risolto",
+    "at": 1790524774,
+    "summary": "L'auto-trade ragiona in USDC: la quota scelta si calcola su USDC + USDG del wallet Robinhood; prima di comprare, l'USDC che serve diventa USDG (minimo ricevuto -0,5%, sono due dollari), poi l'USDG compra il token; dopo la vendita il token torna in USDG e l'USDG torna subito in USDC. Il contratto USDC di Robinhood Chain non e' scritto a mano: il server lo ricava dal pool USDC/USDG piu' liquido (almeno $20k), controlla che abbia 6 decimali e lo mostra nel riquadro; si puo' fissare con ROBINHOOD_USDC_ADDRESS. Se non lo trova, opera da USDG e lo dice. Il simulato fa gli stessi passaggi con preventivi veri. Il gas ora copre due scambi e due autorizzazioni. Gli USDC su altre chain (Solana) contano nel cash del profilo, ma per usarli su Robinhood serve un bridge, che non e' uno swap e non e' incluso.",
+    "files": [
+      "backend/app/trading/onchain/autotrader.py",
+      "backend/app/config.py",
+      "backend/app/main.py",
+      "frontend/static/onchain/autotrade.js",
+      "backend/tests/test_autotrader.py"
+    ]
   }
 }

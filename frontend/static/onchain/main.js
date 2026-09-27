@@ -26,6 +26,8 @@ import { refreshHoldings } from "@onchain/holdings.js";
 import { mountLeaderboard } from "@onchain/leaderboard.js";
 import { mountProjects } from "@onchain/projects.js";
 import { mountAlerts, openInbox } from "@onchain/alerts.js";
+import { mountAutotrade } from "@onchain/autotrade.js";
+import { mountProfile, refreshProfile } from "@onchain/profile.js";
 import { mountMemes } from "@onchain/memes.js";
 
 // Sulla pagina a se' (onchain-app.html) la radice e' il documento intero.
@@ -486,20 +488,24 @@ const SHEETS = {
 };
 $$("[data-sheet]").forEach((button) =>
   button.addEventListener("click", () => SHEETS[button.dataset.sheet]?.()));
+// Buttons drawn later (the profile's "+") ask for a sheet by event.
+document.addEventListener("lae:sheet", (event) => SHEETS[event.detail]?.());
 
 view.reveal.addEventListener("click", () => sheets.openKey({ onStart: startReveal }));
 
 // Menu "⋯" (solo sulla pagina a se': la copia nella tab Trading non ce
 // l'ha, da qui i ?.): si chiude da solo sul tocco di una voce (la voce apre il suo
 // foglio) o fuori dal pannello.
-view.more?.addEventListener("click", () => view.moreSheet.showModal());
+// Your picture in the header opens your profile; the wallet menu is its "…".
+view.more?.addEventListener("click", () => setView("profile"));
+document.addEventListener("lae:wallet-menu", () => view.moreSheet?.showModal());
 
 // Two sections chosen at the door, each with its own purpose: Progetti
 // (a round-the-clock scan of serious low/micro caps, ranked) and Meme
 // (the sniper radar plus its autopilot). Then Scambia and Portafoglio.
 // The home page picks the section (#gems or #meme); that is the first view.
-const VIEWS = ["meme", "gems", "top", "wallet", "manual"];
-const DOCK = ["meme", "gems", "top", "wallet"];
+const VIEWS = ["meme", "gems", "top", "profile", "wallet", "manual"];
+const DOCK = ["meme", "gems", "top", "profile"];
 
 function setView(name) {
   if (!VIEWS.includes(name)) return;
@@ -520,6 +526,7 @@ function setView(name) {
     document.startViewTransition(paint);
   } else paint();
   if (name === "meme") refreshPilot();
+  if (name === "profile") refreshProfile();
   if (name === "wallet" && !view.bottomPanel.hidden) mountBottomTab(currentBottomTab);
   paintHoldings();
 }
@@ -585,6 +592,8 @@ mountRadar({ toast });
 mountLeaderboard();
 mountProjects();
 mountAlerts();
+mountAutotrade();
+mountProfile({ go: (v) => setView(v) });
 mountMemes();
 
 // La rete si cambia dal suo nome, accanto al saldo: un tocco, niente menu.
@@ -595,6 +604,8 @@ view.chainFlip?.addEventListener("click", () => {
   $('#chain-switch button[aria-selected="false"]')?.click();
 });
 view.moreSheet?.addEventListener("click", (event) => {
+  const go = event.target.closest("[data-go]");
+  if (go) setView(go.dataset.go);
   if (event.target === view.moreSheet || event.target.closest("button")) view.moreSheet.close();
 });
 

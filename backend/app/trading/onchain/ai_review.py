@@ -24,7 +24,7 @@ The budget is hard (Lorenzo: "non voglio che finisca i miei token"): tokens
 used (input + output, from the API's own usage) are counted per UTC day and
 per month, and a review that could push either past `ai_review_daily_tokens`
 or `ai_review_monthly_tokens` is not sent. One review a day at low effort
-costs about $0.06. Without `anthropic_api_key` nothing
+costs about $0.06. Without `anthropic_api_key` or `deepseek_api_key` nothing
 runs.
 """
 from __future__ import annotations
@@ -113,8 +113,18 @@ def budget_left(now: float | None = None) -> int:
                       settings.ai_review_monthly_tokens - used_this_month(now)))
 
 
+def provider() -> str | None:
+    """Which model writes the review: DeepSeek or Claude, whichever has a key."""
+    want = settings.ai_review_provider
+    if want in ("auto", "deepseek") and settings.deepseek_api_key:
+        return "deepseek"
+    if want in ("auto", "claude") and settings.anthropic_api_key:
+        return "claude"
+    return None
+
+
 def enabled() -> bool:
-    return bool(settings.ai_review_enabled and settings.anthropic_api_key)
+    return bool(settings.ai_review_enabled and provider())
 
 
 def status(now: float | None = None) -> dict:
@@ -167,14 +177,16 @@ async def review(now: float | None = None, client=None) -> dict | None:
         _state["error"] = "token budget reached"
         return None
     try:
-        if client is None:
+        if client is None and provider() == "deepseek":
+            msg = await _ask_deepseek(prompt)
+        elif client is None:
             from anthropic import AsyncAnthropic
             async with AsyncAnthropic(api_key=settings.anthropic_api_key, timeout=120.0) as live:
                 msg = await _ask(live, prompt)
         else:
             msg = await _ask(client, prompt)
     except Exception as exc:
-        logger.info("ai_review: Claude unreachable: %s", exc)
+        logger.info("ai_review: model unreachable: %s", exc)
         _state["error"] = str(exc)[:200]
         return None
     usage = getattr(msg, "usage", None)
@@ -210,6 +222,43 @@ async def _ask(client, prompt: str):
         output_config={"effort": "low", "format": {"type": "json_schema", "schema": SCHEMA}},
         messages=[{"role": "user", "content": f"<facts>\n{prompt}\n</facts>"}],
     )
+
+
+class _Reply:
+    """DeepSeek's answer in the shape review() reads from Claude's."""
+
+    def __init__(self, text: str, model: str, usage: dict, finish: str | None):
+        self.content = [type("B", (), {"type": "text", "text": text})()]
+        self.model = model
+        self.usage = type("U", (), {"input_tokens": usage.get("prompt_tokens", 0),
+                                    "output_tokens": usage.get("completion_tokens", 0)})()
+        self.stop_reason = "refusal" if finish == "content_filter" else finish
+
+
+async def _ask_deepseek(prompt: str, http=None) -> _Reply:
+    """DeepSeek's chat API (OpenAI-shaped), JSON mode: the schema goes in the
+    prompt, since JSON mode checks only that the answer is JSON."""
+    import httpx
+    body = {
+        "model": settings.deepseek_model, "max_tokens": MAX_OUTPUT_TOKENS,
+        "response_format": {"type": "json_object"},
+        "messages": [
+            {"role": "system", "content": SYSTEM + ' Answer with one JSON object only: {"summary": string, "actions": [string, ...]}.'},
+            {"role": "user", "content": f"<facts>\n{prompt}\n</facts>"},
+        ],
+    }
+    headers = {"Authorization": f"Bearer {settings.deepseek_api_key}", "Content-Type": "application/json"}
+    url = settings.deepseek_base_url.rstrip("/") + "/chat/completions"
+    if http is None:
+        async with httpx.AsyncClient(timeout=120.0) as c:
+            r = await c.post(url, json=body, headers=headers)
+    else:
+        r = await http.post(url, json=body, headers=headers)
+    r.raise_for_status()
+    data = r.json()
+    choice = (data.get("choices") or [{}])[0]
+    return _Reply((choice.get("message") or {}).get("content") or "", data.get("model") or settings.deepseek_model,
+                  data.get("usage") or {}, choice.get("finish_reason"))
 
 
 def due(now: float | None = None) -> bool:
