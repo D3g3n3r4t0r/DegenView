@@ -1690,5 +1690,19 @@
       "backend/app/trading/onchain/radar.py",
       "deploy/Caddyfile"
     ]
+  },
+  "seed-0138": {
+    "status": "risolto",
+    "at": 1790523417,
+    "summary": "La 'miglior strategia' che si vedeva prima era scelta a posteriori, token per token: un numero che nessuno avrebbe potuto avere. Ora c'e' un sistema solo, con le stesse regole su ogni alert Telegram, dal momento del messaggio: le due strategie trend-following che avevamo (Lorenzo e Lorenzo HF, parametri predefiniti) seguite su candele da 5 minuti; un segnale su una candela chiusa si esegue all'apertura della successiva, pagando commissione e slippage in entrata e in uscita; solo acquisti e vendite; dopo 48 ore l'eventuale posizione si chiude; se il pool sparisce mentre si e' dentro, -100%. Vince quella con il risultato mediano migliore sugli alert gia' conclusi (servono almeno 20; prima si usa Lorenzo HF), e i numeri di entrambe restano visibili. Le candele arrivano dalle letture che il server fa gia' ogni minuto, piu' la storia prima del messaggio presa una volta; gli alert passati vengono ricostruiti. Nella scheda Alerts c'e' il riquadro del sistema (mediana, quota in profitto, in quanti trade e' dentro ora) e ogni alert mostra il rendimento del sistema e il suo stato (in trade, fuori, in attesa); la classifica si ordina per default sul sistema; nel grafico del token compaiono i suoi acquisti e le sue vendite.",
+    "files": [
+      "backend/app/trading/onchain/system.py",
+      "backend/app/trading/onchain/alert_track.py",
+      "backend/app/main.py",
+      "frontend/static/onchain/alerts.js",
+      "frontend/static/onchain/detail.js",
+      "frontend/static/onchain/app.css",
+      "backend/tests/test_system.py"
+    ]
   }
 }

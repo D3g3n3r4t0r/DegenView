@@ -24,7 +24,10 @@ const sign = (f) => (f == null ? "" : f >= 0 ? "up" : "down");
 // Market cap now, from the cap at the alert and the move since; none when the pool is gone.
 const capNow = (a) => (a.gone ? null : a.cap0 && a.now != null ? a.cap0 * (1 + a.now) : a.cap0);
 
-const state = { data: {}, board: null, kind: "meme", period: 1, sort: "now" };
+// Leaderboard order. Lorenzo: "voglio le performance della strategia
+// ingresso e uscita automatica": the system first, then the raw signal.
+const SORTS = { system: "System", now: "Now", best: "Best" };
+const state = { data: {}, board: null, kind: "meme", period: 1, sort: "system" };
 
 /** The alerts on one token, for its page. */
 export function alertsFor(chain, token) {
@@ -49,7 +52,7 @@ function registerAlert(a, kind) {
 function callCard(a, kind) {
   const id = registerAlert(a, kind);
   const cap = capNow(a);
-  const st = a.strategy?.return_pct;
+  const s = a.system;
   return `<article class="call">
     <button type="button" class="call-head" data-open="${escapeHtml(id)}">
       ${logo(a.symbol, a.image, a.chain, a.token_address)}
@@ -60,13 +63,29 @@ function callCard(a, kind) {
       <span><small>At alert</small><b>${usdShort(a.cap0)}</b></span>
       <span><small>Now</small><b data-sign="${sign(a.now)}">${pct(a.now)}</b></span>
       <span><small>Best 48h</small><b data-sign="${sign(a.max)}">${pct(a.max)}</b></span>
-      <span><small>Best strategy</small><b data-sign="${sign(st)}">${st == null ? "—" : `${st > 0 ? "+" : ""}${Math.round(st)}%`}</b></span>
+      <span><small>System</small><b data-sign="${sign(s?.ret)}">${s?.ret == null ? "—" : pct(s.ret)}</b><em class="sys-state" data-state="${s?.state ?? "waiting"}">${sysState(s)}</em></span>
     </div>
     <ol class="hours">${HOURS.map((h) => {
       const r = a.returns?.[String(h)];
       return `<li><small>${h}h</small><b data-sign="${sign(r)}">${pct(r)}</b></li>`;
     }).join("")}</ol>
   </article>`;
+}
+
+// The system's position on one alert, in two words.
+function sysState(s) {
+  if (!s) return "reading";
+  if (s.state === "in") return "in trade";
+  if (s.done) return `${s.trades ?? 0} trade${s.trades === 1 ? "" : "s"}`;
+  if (s.state === "out") return "out";
+  return "waiting";
+}
+
+function systemLine(d) {
+  const sy = d.system;
+  const live = sy?.live;
+  if (!live?.n) return "";
+  return `<p class="feed-head sys"><b>System · ${escapeHtml(sy.chosen)}</b> trend-following entries and exits after each alert, fees paid: median <b data-sign="${sign(live.median)}">${pct(live.median)}</b> · ${Math.round((live.positive ?? 0) * 100)}% in profit · ${live.n} alerts${live.holding ? ` · in ${live.holding} now` : ""}</p>`;
 }
 
 function paintFeed() {
@@ -81,7 +100,7 @@ function paintFeed() {
   }
   const items = [...(d.items ?? [])].sort((a, b) => b.at - a.at);
   const med = (d.summary ?? []).find((s) => s.h === 48);
-  body.innerHTML = `<p class="feed-head">If you had bought on every alert: median now <b data-sign="${sign(d.now?.median)}">${pct(d.now?.median)}</b>${med?.n ? ` · after 48h <b data-sign="${sign(med.median)}">${pct(med.median)}</b>` : ""} · ${d.total} alerts</p>`
+  body.innerHTML = systemLine(d) + `<p class="feed-head">If you had bought and held every alert: median now <b data-sign="${sign(d.now?.median)}">${pct(d.now?.median)}</b>${med?.n ? ` · after 48h <b data-sign="${sign(med.median)}">${pct(med.median)}</b>` : ""} · ${d.total} alerts</p>`
     + items.map((a) => callCard(a, "meme")).join("");
 }
 
@@ -96,12 +115,14 @@ function rows() {
     }));
   }
   const since = Date.now() / 1000 - state.period * 86400;
-  const key = state.sort === "best" ? "max" : "now";
-  return (state.data.meme?.items ?? []).filter((a) => a.at >= since && a[key] != null)
-    .sort((a, b) => b[key] - a[key])
+  const val = (a) => (state.sort === "system" ? a.system?.ret : state.sort === "best" ? a.max : a.now);
+  const key = state.sort;
+  return (state.data.meme?.items ?? []).filter((a) => a.at >= since && val(a) != null)
+    .sort((a, b) => val(b) - val(a))
     .map((a) => ({ id: registerAlert(a, "meme"), symbol: a.symbol, name: a.name, chain: a.chain, token: a.token_address,
-      image: a.image, label: pct(a[key]), sub: `${age(a.at)[0]} ago · at ${usdShort(a.cap0)}`,
-      sign: sign(a[key]), best: key === "now" ? a.max : null }));
+      image: a.image, label: pct(val(a)), sub: `${age(a.at)[0]} ago · at ${usdShort(a.cap0)}`,
+      sign: sign(val(a)), best: key === "now" ? a.max : null,
+      sys: key === "system" ? sysState(a.system) : null }));
 }
 
 const INFO_IC = `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>`;
@@ -115,7 +136,9 @@ function paintTop() {
   const w = (state.board?.track?.horizons ?? []).find((h) => h.days === 7 && h.top?.n);
   root.querySelector("[data-top-info]").innerHTML = INFO_IC + (gem
     ? (w ? `Top 10 median ${pct(w.top.median)} after 7 days on the board.` : "Scored on code, research and tokenomics. Research, not advice.")
-    : "Returns if you had bought when each Telegram alert arrived.");
+    : state.sort === "system"
+      ? `The system (${escapeHtml(state.data.meme?.system?.chosen ?? "trend-following")}): enters and exits on its own signals after each alert, fees paid.`
+      : "Returns if you had bought when each Telegram alert arrived.");
   const hero = root.querySelector("[data-top-hero]");
   const top3 = list.slice(0, 3).map((x) => ({ id: x.id, symbol: x.symbol, value: gem ? `${x.label} pts` : x.label,
     logoHtml: tile(x.symbol, x.image, x.chain, x.token) }));
@@ -132,7 +155,7 @@ function paintTop() {
   root.querySelector(".seg").hidden = gem;
   const sortBtn = root.querySelector("[data-sort]");
   sortBtn.hidden = gem;
-  sortBtn.querySelector("span").textContent = state.sort === "best" ? "Best" : "Now";
+  sortBtn.querySelector("span").textContent = SORTS[state.sort];
   root.querySelector("[data-top-you]").innerHTML = `<span class="avatar you" aria-hidden="true"></span>
     <span class="you-main"><b>You</b><small>${gem ? "Gems you hold" : "Trades on these alerts"}: none yet</small></span>
     <span class="you-num"><small>P&amp;L (USD)</small><b>—</b></span>`;
@@ -141,7 +164,7 @@ function paintTop() {
       <span class="top-rank">${i + 1}</span>
       ${logo(x.symbol, x.image, x.chain, x.token)}
       <span class="top-name"><b>${escapeHtml(x.symbol)}${i < 3 ? ` <svg class="mini-crown" viewBox="0 0 24 16" aria-hidden="true"><path d="M2 14 4 3l5 5 3-7 3 7 5-5 2 11z"/></svg>` : ""}${x.early ? ' <em class="hot early">EARLY</em>' : ""}</b><small>${x.sub}</small></span>
-      <span class="top-ret"><b data-sign="${x.sign}">${x.label}</b>${x.best != null ? `<small>best ${pct(x.best)}</small>` : gem ? "<small>score</small>" : ""}</span>
+      <span class="top-ret"><b data-sign="${x.sign}">${x.label}</b>${x.sys ? `<small>${escapeHtml(x.sys)}</small>` : x.best != null ? `<small>best ${pct(x.best)}</small>` : gem ? "<small>score</small>" : ""}</span>
     </button></li>`).join("");
 }
 
@@ -237,7 +260,8 @@ export function mountAlerts() {
       paintTop();
     }
     if (event.target.closest("[data-sort]")) {
-      state.sort = state.sort === "now" ? "best" : "now";
+      const order = Object.keys(SORTS);
+      state.sort = order[(order.indexOf(state.sort) + 1) % order.length];
       paintTop();
     }
   });
