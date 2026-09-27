@@ -1717,5 +1717,20 @@
       "frontend/static/onchain/app.css",
       "backend/tests/test_autotrader.py"
     ]
+  },
+  "seed-0140": {
+    "status": "risolto",
+    "at": 1790524224,
+    "summary": "Nuova vista Profilo, come nello screenshot: si apre dalla foto in alto o dall'ultima voce della barra in basso (che mostra la tua foto). In cima foto (tocca per cambiarla: qualunque immagine viene ritagliata quadrata e salvata piccola), nome, @handle e bio, modificabili da 'Edit profile' (l'handle e' unico); sotto, tempo medio di tenuta, numero di operazioni e da quando sei iscritto. Poi il valore di tutti i wallet con i centesimi attenuati, quanto e' cambiato e la linea nel tempo su 24h, 7d, 30d e All: il server legge i wallet ogni 10 minuti e conserva la storia (ogni lettura per due giorni, una all'ora per un mese, una al giorno dopo). Poi il cash (stablecoin) con Deposit e il menu del wallet, e le posizioni: aperte (quello che i wallet detengono ora, moneta della chain compresa) o chiuse (i giri completi del sistema automatico). Profilo e storia stanno sul server, legati all'account. La vista wallet completa resta nel menu, alla voce 'Wallet & swap'.",
+    "files": [
+      "backend/app/profiles.py",
+      "backend/app/trading/onchain/wealth.py",
+      "backend/app/main.py",
+      "frontend/static/onchain/profile.js",
+      "frontend/static/onchain/main.js",
+      "frontend/onchain-app.html",
+      "frontend/static/onchain/app.css",
+      "backend/tests/test_profile.py"
+    ]
   }
 }

@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0140", "Un profilo vero: immagine, nome, bio, cosa detieni, andamento del wallet nel tempo",
+     "Lorenzo, con lo screenshot del profilo di un'app di trading: 'uno deve vedere cosa detiene, l'andamento del wallet nel tempo con un grafico, e ovviamente l'account con cui uno si e' loggato deve rimanere tutto nel database, uno deve poter scegliere anche l'immagine profilo, queste cose qua, cosi' che uno abbia il suo profilo dove effettivamente avere un controllo maggiore su tutta la piattaforma. Fai un bello studio su questo e applica'.",
+     "media"),
     ("seed-0139", "Con un tasto il sistema opera da solo sul wallet Robinhood, con la percentuale del saldo scelta",
      "Lorenzo: 'voglio semplicemente che con un tasto io attivo la strategia e che faccio operazioni sul wallet disponibile, in questo caso io ho depositato una cifra sul wallet di Robinhood, quindi voglio che automaticamente la strategia faccia i suoi ingressi, le sue uscite e che utilizzi sempre la totalita' del saldo [...] uno seleziona il 100% del saldo, il 50, il 25 eccetera, devi considerare sempre le fee, in modo tale che le operazioni vadano sempre in porto'. Alle domande: saldo in USDG, un token alla volta, nessun limite oltre alla percentuale, prima simulato.",
      "alta"),
