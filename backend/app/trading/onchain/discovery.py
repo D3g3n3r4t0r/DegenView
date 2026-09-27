@@ -12,7 +12,7 @@ e' fra i piu' scambiati dell'ora.
 
 Qui due fonti diverse, pensate per i progetti e non per i pool:
 
-- CoinGecko, categorie "solana-ecosystem" e "robinhood-ecosystem", la
+- CoinGecko, categorie "solana-ecosystem", "robinhood-ecosystem" e "base-ecosystem", la
   fascia di capitalizzazione fra CAP_MIN e CAP_MAX. Per ogni moneta la
   scheda dice indirizzo del contratto, sito, categorie e soprattutto il
   repository GitHub: senza GitHub non si va avanti. Le categorie "Meme" si
@@ -39,7 +39,7 @@ from typing import Callable
 import httpx
 
 from app.sniper.quality import _looks_like_meme
-from app.trading.onchain import legit, narratives, storage, traction
+from app.trading.onchain import legit, narratives, projects_db, storage, traction
 
 logger = logging.getLogger(__name__)
 
@@ -49,10 +49,11 @@ COINGECKO = "https://api.coingecko.com/api/v3"
 DEX_PROFILES = "https://api.dexscreener.com/token-profiles/latest/v1"
 # categoria CoinGecko e pagine da 250 (ordinate per cap decrescente) che
 # coprono la fascia CAP_MIN-CAP_MAX
-CG_CATEGORIES = {"solana": ("solana-ecosystem", range(3, 9)), "robinhood": ("robinhood-ecosystem", range(1, 5))}
-CG_PLATFORMS = {"solana": ("solana",), "robinhood": ("robinhood",)}
+CG_CATEGORIES = {"solana": ("solana-ecosystem", range(3, 9)), "robinhood": ("robinhood-ecosystem", range(1, 5)),
+                 "base": ("base-ecosystem", range(1, 7))}
+CG_PLATFORMS = {"solana": ("solana",), "robinhood": ("robinhood",), "base": ("base",)}
 # Lorenzo (24/09): "sotto uno barra due, tre milioni di market cap, non oltre"
-CAP_MIN = 50_000
+CAP_MIN = 10_000             # early gems start under $50k (leaderboard.EARLY_CAP_USD)
 NARRATIVE_PAGES = 8
 CAP_MAX = 3_000_000
 # azioni tokenizzate, stablecoin, token avvolti: non sono progetti
@@ -60,6 +61,7 @@ _NOT_PROJECT = ("meme", "stock", "stablecoin", "wrapped", "bridged", "etf")
 CG_GAP_S = 12                # 5 richieste al minuto: sotto il limite gratuito
 CG_SWEEP_S = 6 * 3600        # un giro completo delle categorie
 CG_DETAIL_TTL_S = 7 * 86400
+CG_DB_DETAILS = 20           # CoinGecko pages taken from the database per empty queue
 PROFILES_POLL_S = 120
 PROFILES_PER_POLL = 12
 
@@ -116,6 +118,20 @@ def chain_index(rows: list[dict]) -> dict[str, set[str]]:
         for chain, keys in CG_PLATFORMS.items():
             if any(plats.get(k) for k in keys):
                 out[chain].add(r.get("id"))
+    return out
+
+
+def universe(rows: list[dict]) -> list[dict]:
+    """From /coins/list?include_platform=true: every coin with a contract on
+    one of our chains, as database rows (no market yet)."""
+    out = []
+    for r in rows or []:
+        plats = r.get("platforms") or {}
+        for chain, keys in CG_PLATFORMS.items():
+            token = next((plats[k] for k in keys if plats.get(k)), None)
+            if token and r.get("id"):
+                out.append({"chain": chain, "token_address": token, "cg_id": r["id"],
+                            "symbol": (r.get("symbol") or "").upper(), "name": r.get("name") or ""})
     return out
 
 
@@ -188,6 +204,11 @@ async def _cg_step(client: httpx.AsyncClient, add: Callable[[dict, str], bool], 
     _state["cg_next_at"] = now + CG_GAP_S
     q = _state["cg_queue"]
     if not q:
+        # Between sweeps: CoinGecko pages of coins the database has put in the
+        # band (any coin on our chains, not just the "ecosystem" categories).
+        q.extend(("coin", b["chain"], b) for b in projects_db.need_detail(CG_DB_DETAILS, now))
+        if q:
+            return
         if now - _state["cg_last_sweep"] < CG_SWEEP_S:
             return
         _state["cg_last_sweep"] = now
@@ -201,6 +222,9 @@ async def _cg_step(client: httpx.AsyncClient, add: Callable[[dict, str], bool], 
         rows = await _cg_get(client, "/coins/list", {"include_platform": "true"})
         _chain_ids.clear()
         _chain_ids.update(chain_index(rows if isinstance(rows, list) else []))
+        # Every coin CoinGecko knows on our chains goes into the database: the
+        # market refresh then tells which ones sit in the band.
+        projects_db.upsert_many(universe(rows if isinstance(rows, list) else []), "coingecko-list", now)
         return
     if job[0] == "npage":
         _, cat, page = job
@@ -232,6 +256,7 @@ async def _cg_step(client: httpx.AsyncClient, add: Callable[[dict, str], bool], 
                                                          "market_data": "false", "community_data": "false",
                                                          "developer_data": "false"})
     item, why = from_coin_detail(chain, coin, base)
+    projects_db.mark_detail(chain, base["id"], now)
     _note(f"cg:{chain}:{base['id']}", item is not None, why, now)
     if item:
         add(item, "coingecko")
@@ -324,7 +349,8 @@ def readme_addresses(text: str) -> dict[str, list[str]]:
     for m in _EVM_ADDR.findall(text or ""):
         if m not in _KNOWN and m.lower() not in {x.lower() for x in evm}:
             evm.append(m)
-    return {"solana": sol[:10], "robinhood": evm[:10]}
+    # EVM addresses look the same everywhere: DexScreener says which chain has the pool.
+    return {"solana": sol[:10], "robinhood": evm[:10], "base": evm[:10]}
 
 
 def search_candidates(items: list[dict], now: float) -> list[dict]:
@@ -444,7 +470,7 @@ JUP_VERIFIED = "https://lite-api.jup.ag/tokens/v2/tag?query=verified"
 JUP_POLL_S = 6 * 3600
 JUP_SKIP_TAGS = {"meme", "stocks", "prestocks", "rwa", "lst", "original-lst", "duplicate"}
 JUP_MIN_AGE_DAYS = 14
-JUP_MIN_LIQUIDITY = 10_000
+JUP_MIN_LIQUIDITY = 5_000
 
 
 def _iso_ts(v) -> float | None:
@@ -485,7 +511,14 @@ async def _poll_jupiter(client: httpx.AsyncClient, add: Callable[[dict, str], bo
     r = await client.get(JUP_VERIFIED, timeout=30.0)
     if r.status_code != 200:
         raise RuntimeError(f"Jupiter {r.status_code}")
-    found = jupiter_candidates(r.json(), now)
+    rows = r.json() if isinstance(r.json(), list) else []
+    # The whole verified list into the database, in band or not: the market
+    # moves, and the database will look again.
+    projects_db.upsert_many([{"chain": "solana", "token_address": t.get("id"), "symbol": t.get("symbol"),
+                              "name": t.get("name"), "website": t.get("website"), "image": t.get("icon"),
+                              "market_cap": t.get("mcap"), "liquidity_usd": t.get("liquidity")}
+                             for t in rows if t.get("id")], "jupiter", now)
+    found = jupiter_candidates(rows, now)
     _state["jup_last"] = len(found)
     for item in found:
         key = f"jup:{item['token_address']}"

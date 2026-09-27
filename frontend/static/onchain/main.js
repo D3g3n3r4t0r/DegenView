@@ -24,6 +24,8 @@ import { mountPilot, refreshPilot } from "@onchain/pilot.js";
 import { mountRadar } from "@onchain/radar.js";
 import { refreshHoldings } from "@onchain/holdings.js";
 import { mountLeaderboard } from "@onchain/leaderboard.js";
+import { mountProjects } from "@onchain/projects.js";
+import { mountAlerts, openInbox } from "@onchain/alerts.js";
 import { mountMemes } from "@onchain/memes.js";
 
 // Sulla pagina a se' (onchain-app.html) la radice e' il documento intero.
@@ -74,7 +76,7 @@ const view = {
 
 /* ------------------------------------------------------------------ chain */
 
-const CHAIN_ICON = { solana: "◎", robinhood: "◆" };
+const CHAIN_ICON = { solana: "◎", robinhood: "◆", base: "■" };
 
 function paintChainStatic() {
   const { label, unit, suffix } = chainInfo();
@@ -496,7 +498,8 @@ view.more?.addEventListener("click", () => view.moreSheet.showModal());
 // (a round-the-clock scan of serious low/micro caps, ranked) and Meme
 // (the sniper radar plus its autopilot). Then Scambia and Portafoglio.
 // The home page picks the section (#gems or #meme); that is the first view.
-const VIEWS = ["gems", "meme", "manual", "wallet"];
+const VIEWS = ["meme", "gems", "top", "wallet", "manual"];
+const DOCK = ["meme", "gems", "top", "wallet"];
 
 function setView(name) {
   if (!VIEWS.includes(name)) return;
@@ -508,7 +511,8 @@ function setView(name) {
       if (b.dataset.go === name) b.setAttribute("aria-current", "page");
       else b.removeAttribute("aria-current");
     });
-    if (view.dock) view.dock.dataset.at = String(VIEWS.indexOf(name));
+    if (view.dock) view.dock.dataset.at = String(DOCK.indexOf(name));
+    document.querySelectorAll(".tabs[data-tabs]").forEach((nav) => { nav.hidden = nav.dataset.tabs !== name; });
     window.scrollTo({ top: 0 });
   };
   if (from !== name && document.startViewTransition && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
@@ -519,22 +523,55 @@ function setView(name) {
   if (name === "wallet" && !view.bottomPanel.hidden) mountBottomTab(currentBottomTab);
   paintHoldings();
 }
-// Da computer la barra sta nella testata, al centro, come le tab di un DEX;
-// da telefono resta in basso, sotto il pollice.
-const wide = matchMedia("(width >= 1100px)");
+// One app: a floating bar at the bottom on every screen, the search button
+// beside it, the balance in the header next to your avatar.
+const dockSearch = document.getElementById("dock-search");
 function placeDock() {
-  const topbar = document.querySelector(".topbar");
-  if (!view.dock || !topbar) return;
-  if (wide.matches) topbar.querySelector(".topbar-right")?.before(view.dock);
-  else document.body.append(view.dock);
+  if (!view.dock) return;
+  document.body.append(view.dock);
+  if (dockSearch) document.body.append(dockSearch);
 }
 placeDock();
+document.querySelector("[data-balance-slot]")?.prepend(view.balance);
+
+/** Tabs inside a view: panels carry data-pane="<view>:<tab>". */
+function setTab(viewName, tab) {
+  const nav = document.querySelector(`.tabs[data-tabs="${viewName}"]`);
+  if (!nav) return;
+  nav.querySelectorAll("[data-tab]").forEach((b) => {
+    if (b.dataset.tab === tab) b.setAttribute("aria-current", "page");
+    else b.removeAttribute("aria-current");
+  });
+  document.querySelectorAll(`[data-pane^="${viewName}:"]`).forEach((pane) => {
+    pane.classList.toggle("pane-off", pane.dataset.pane !== `${viewName}:${tab}`);
+  });
+}
+document.querySelectorAll(".tabs[data-tabs]").forEach((nav) => {
+  setTab(nav.dataset.tabs, nav.querySelector("[aria-current]")?.dataset.tab ?? nav.querySelector("[data-tab]").dataset.tab);
+  nav.addEventListener("click", (event) => {
+    const b = event.target.closest("[data-tab]");
+    if (b) { setTab(nav.dataset.tabs, b.dataset.tab); window.scrollTo({ top: 0 }); }
+  });
+});
 {
-  const first = document.documentElement.dataset.section === "meme" ? "meme" : "gems";
+  const hash = location.hash.slice(1);
+  const first = VIEWS.includes(hash) ? hash : document.documentElement.dataset.section === "gems" && /gem/i.test(hash) ? "gems" : "meme";
   view.shell.dataset.view = first;  // same view on both sides: no transition on load
   setView(first);
 }
-wide.addEventListener("change", placeDock);
+// Search: straight to the swap with the token picker open.
+dockSearch?.addEventListener("click", () => {
+  setView("manual");
+  requestAnimationFrame(() => document.getElementById("swap-pick-out")?.click());
+});
+document.getElementById("inbox-btn")?.addEventListener("click", () => openInbox());
+// Buy from a token page: the swap opens with that token as the one you get.
+document.addEventListener("lae:buy", (event) => {
+  const { address, symbol } = event.detail ?? {};
+  if (!address) return;
+  setView("manual");
+  setChartToken({ address, symbolHint: symbol });
+});
 
 for (const el of [view.dock, view.shell]) {
   el?.addEventListener("click", (event) => {
@@ -546,6 +583,8 @@ for (const el of [view.dock, view.shell]) {
 mountPilot({ toast, onChange: refreshSniperCard });
 mountRadar({ toast });
 mountLeaderboard();
+mountProjects();
+mountAlerts();
 mountMemes();
 
 // La rete si cambia dal suo nome, accanto al saldo: un tocco, niente menu.
@@ -616,6 +655,7 @@ async function boot() {
   view.login.hidden = signedIn;
   view.shell.hidden = !signedIn;
   if (view.dock) view.dock.hidden = !signedIn;
+  if (dockSearch) dockSearch.hidden = !signedIn;
   if (!signedIn) return;
 
   try {

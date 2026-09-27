@@ -47,7 +47,8 @@ logger = logging.getLogger(__name__)
 
 RUGCHECK_SUMMARY = "https://api.rugcheck.xyz/v1/tokens/{mint}/report/summary"
 GOPLUS_TOKEN = "https://api.gopluslabs.io/api/v1/token_security/{chain_id}"
-GOPLUS_CHAIN = {"robinhood": "4663"}
+GOPLUS_CHAIN = {"robinhood": "4663", "base": "8453"}
+CHAIN_LABEL = {"solana": "Solana", "robinhood": "Robinhood", "base": "Base"}
 
 LP_LOCKED_MIN_PCT = 80.0
 # Chi tiene troppa offerta puo' svuotare il pool da solo. Pool, locker e

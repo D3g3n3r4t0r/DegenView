@@ -1485,5 +1485,109 @@
       "frontend/static/onchain/memes.js",
       "frontend/static/onchain/leaderboard.js"
     ]
+  },
+  "seed-0121": {
+    "status": "risolto",
+    "at": 1790489421,
+    "summary": "Il Gem Finder ha un database dei progetti (SQLite sul volume). Ci entrano tutte le monete che CoinGecko conosce su Solana e Robinhood Chain (non solo quelle della categoria 'ecosystem', che ne elenca una parte), tutta la lista verificata di Jupiter, tutti i protocolli DefiLlama e ogni progetto trovato dalle altre fonti. Un giro aggiorna cap e liquidita' di tutti, chi entra nella fascia $50k-$3M viene letto su CoinGecko (sito, GitHub) e passato all'analisi, prima chi ha codice. Ogni verdetto resta scritto con il perche', i bocciati vengono riesaminati dopo due settimane (due giorni se mancavano dati). Nella pagina Gemme c'e' la sezione 'Project database' con ricerca e filtri: quanti progetti conosciamo, quanti sono in fascia, studiati, bocciati e perche'.",
+    "files": [
+      "backend/app/trading/onchain/projects_db.py",
+      "backend/app/trading/onchain/leaderboard.py",
+      "backend/app/trading/onchain/discovery.py",
+      "backend/app/trading/onchain/traction.py",
+      "backend/app/main.py",
+      "frontend/static/onchain/projects.js",
+      "frontend/onchain-app.html"
+    ]
+  },
+  "seed-0122": {
+    "status": "risolto",
+    "at": 1790490144,
+    "summary": "Il Gem Finder ora guarda anche sotto i $50k (fascia del database da $10k, liquidita' minima $5k sotto i $50k). Un progetto sotto i $50k con codice pubblico, tutti e tre i pilastri almeno 60 e punteggio almeno 65 e' una 'gemma early': badge giallo 'early · small bag?' e riquadro in cima alla classifica. Su Telegram arriva un avviso in italiano quando una gemma entra in classifica e quando diventa early (al massimo 6 all'ora, una volta per progetto; al primo avvio quello che c'e' gia' non viene notificato).",
+    "files": [
+      "backend/app/trading/onchain/leaderboard.py",
+      "backend/app/main.py",
+      "frontend/static/onchain/leaderboard.js"
+    ]
+  },
+  "seed-0123": {
+    "status": "risolto",
+    "at": 1790490144,
+    "summary": "Ogni alert Telegram (meme e gemme) viene seguito dal primo prezzo del pool letto dopo l'invio del messaggio: rendimento a 1, 2, 3, 4, 5, 6, 8, 12, 24 e 48 ore, colonna 'ora' aggiornata ogni minuto per due giorni e poi ogni 15 minuti per due settimane, pool sparito = -100%. Accanto, il rendimento della miglior strategia backtestata sullo stesso token. Nella pagina Meme la 'Alert leaderboard' ordina gli alert per rendimento attuale, con in cima la mediana e la quota in profitto a ogni ora.",
+    "files": [
+      "backend/app/trading/onchain/alert_track.py",
+      "backend/app/main.py",
+      "frontend/static/onchain/alerts.js",
+      "frontend/onchain-app.html"
+    ]
+  },
+  "seed-0124": {
+    "status": "risolto",
+    "at": 1790490612,
+    "summary": "Un revisore giornaliero con Claude Sonnet 5 (ai_review.py): una volta al giorno legge i numeri gia' misurati (storico dei trade simulati sui meme, meme scartati che sono saliti, alert Telegram a ogni ora, storico delle gemme, motivi di bocciatura del database) e risponde in italiano con due frasi e al massimo tre azioni, nella scheda 'Daily review' e sulla chat Telegram di sistema. Due tetti rigidi contati dall'uso reale dell'API: 40 000 token al giorno e 600 000 al mese; una revisione costa circa 6 centesimi, circa 2 dollari al mese. Usa una chiave API separata (Console Anthropic), non l'abbonamento a Claude. Le azioni sono proposte: le regole cambiano solo quando una persona e' d'accordo.",
+    "files": [
+      "backend/app/trading/onchain/ai_review.py",
+      "backend/app/config.py",
+      "backend/app/main.py",
+      "frontend/static/onchain/alerts.js"
+    ]
+  },
+  "seed-0125": {
+    "status": "risolto",
+    "at": 1790490612,
+    "summary": "La classifica delle gemme e' rifatta: podio 2-1-3 su piedistalli che salgono all'apertura, bordo metallico che ruota intorno a ogni carta, punteggio dentro un anello che si disegna fino al valore e conta da zero, un anello per pilastro (GitHub, Ricerca, Tokenomics) dal rosso al lime, inclinazione 3D e luce che seguono il mouse, righe che compaiono scorrendo, e quando cambia la classifica le carte scivolano al nuovo posto (View Transitions). Solo CSS e JavaScript moderni del browser, niente librerie; tutto si ferma con 'riduci movimento'. Tolta la tabella dei risultati degli alert delle gemme (vuota e doppia rispetto allo storico) e la review e' ridotta a due frasi e tre azioni, e sparisce finche' non ce n'e' una.",
+    "files": [
+      "frontend/onchain-app.html",
+      "frontend/static/onchain/leaderboard.js",
+      "frontend/static/onchain/alerts.js",
+      "backend/app/trading/onchain/ai_review.py",
+      "backend/app/config.py"
+    ]
+  },
+  "seed-0126": {
+    "status": "risolto",
+    "at": 1790492061,
+    "summary": "Rifatta l'app con tre revisori dedicati (grafica misurata sugli screenshot, disposizione, architettura del codice). Una colonna da telefono su ogni schermo; in alto una sola riga con avatar, saldo, Deposit e campanella, poi le schede sottolineate; righe alte 82 px con il logo vero del token (da DexScreener) e il simbolo della chain, nome con HOT/EARLY, ticker ed eta' con il germoglio, market cap in grande e la variazione in una pillola, sfondo sfumato verde o rosso. Tocca una riga e si apre la pagina del token: market cap, grafico con i punti degli alert, intervalli, schede Signal (cosa ha reso ogni alert ora per ora), Why (punteggio, motivi, rischi) e Info (contratto, link, il dossier delle gemme), e il pulsante Buy che apre lo scambio con quel token. La classifica ha il primo in oro con la corona, il secondo in argento, i coriandoli, 1D/1W/1M, la tua riga e la lista; la revisione del giorno e' l'ultima riga. Tolti dalle liste banner, riquadri, punteggi e spiegazioni: stanno nella pagina del token. Il tema vive in static/onchain/app.css, versionato.",
+    "files": [
+      "frontend/static/onchain/app.css",
+      "frontend/static/onchain/detail.js",
+      "frontend/static/onchain/format.js",
+      "frontend/static/onchain/alerts.js",
+      "frontend/static/onchain/memes.js",
+      "frontend/static/onchain/leaderboard.js",
+      "frontend/static/onchain/main.js",
+      "frontend/onchain-app.html",
+      "backend/app/main.py",
+      "backend/app/trading/onchain/outcomes.py",
+      "backend/app/trading/onchain/listings.py",
+      "backend/app/trading/onchain/alert_track.py"
+    ]
+  },
+  "seed-0127": {
+    "status": "risolto",
+    "at": 1790507172,
+    "summary": "Tre designer separati hanno proposto tre podi; scelto 'Champions stage' e applicate tutte le correzioni dell'audit di prestazioni. I blocchi di metallo salgono 3-2-1, i loghi veri dei token cadono con una molla, un riflettore si ferma sul primo, arriva la corona, il valore conta fino al numero e partono i coriandoli; poi un'animazione tranquilla (alone che respira, riflessi sul metallo). Si muovono solo transform e opacity, i coriandoli girano sul compositore (Web Animations con fotogrammi precalcolati), il numero ha la larghezza riservata: niente scatti. Tocca un gradino e si apre la pagina del token.",
+    "files": [
+      "frontend/static/onchain/podium.js",
+      "frontend/static/onchain/app.css",
+      "frontend/static/onchain/alerts.js",
+      "frontend/onchain-app.html"
+    ]
+  },
+  "seed-0128": {
+    "status": "risolto",
+    "at": 1790507172,
+    "summary": "Base entra in tutte le ricerche: nuovi pool da GeckoTerminal per il Meme Sniper, radar dei token giovani, Gem Finder (monete CoinGecko con contratto su Base, categoria base-ecosystem, profili DexScreener, indirizzi nei README GitHub), trazione da DefiLlama e controlli di sicurezza GoPlus (chain 8453). Nelle liste i token Base hanno il loro simbolo blu. Il wallet invece non opera su Base: nella pagina di un token Base il pulsante e' 'Trade on DexScreener' al posto di Buy.",
+    "files": [
+      "backend/app/trading/onchain/legit.py",
+      "backend/app/trading/onchain/radar.py",
+      "backend/app/trading/onchain/listings.py",
+      "backend/app/trading/onchain/discovery.py",
+      "backend/app/trading/onchain/traction.py",
+      "backend/app/trading/onchain/research.py",
+      "backend/app/main.py",
+      "frontend/static/onchain/detail.js",
+      "frontend/static/onchain/format.js"
+    ]
   }
 }
