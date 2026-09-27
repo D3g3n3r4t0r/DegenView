@@ -12,6 +12,37 @@ lavori pluri-sessione, decisioni prese, stato di piani approvati.
 
 ---
 
+## Database dei progetti del Gem Finder — `seed-0121`, branch `claude/gem-database` — 2026-09-27
+
+Lorenzo: "il gem hunter deve trovare progetti di qualita', ma vedi sempre i
+soliti.. ma fatti un database no?".
+
+Perche' sempre gli stessi: nessuna memoria del mercato. CoinGecko letto solo
+dalle pagine della categoria "solana-ecosystem" (una parte delle monete
+Solana), working set di 400 voci con le vecchie buttate, bocciatura
+definitiva per 30 giorni.
+
+- `app/trading/onchain/projects_db.py`: SQLite `onchain_projects.db` sul
+  volume. Una riga per progetto: identita', link, fonti, mercato, ultimo
+  verdetto (status new/studied/ranked/rejected + why), pilastri, punteggio.
+- Fonti nel database: `/coins/list` di CoinGecko intero (tutte le monete
+  sulle nostre chain, `discovery.universe`), lista verificata Jupiter intera,
+  tutti i protocolli DefiLlama, piu' tutto cio' che passa da `leaderboard.add`.
+- Ogni minuto 150 token con mercato vecchio (>6h) passano da DexScreener.
+  Chi e' in fascia ($50k-$3M, liq >= $10k) e ha un cg_id viene letto su
+  CoinGecko (sito/GitHub) fra un giro e l'altro delle categorie.
+- `leaderboard.feed_from_database`: 4 progetti per giro nel working set
+  quando la coda di analisi ha posto, prima chi ha GitHub. Verdetti scritti
+  da `apply_analysis` (`_remember`). Bocciati riesaminati dopo 14 giorni
+  (2 se il motivo era un dato mancante), anche se erano in `_gone`.
+- API `/api/onchain/projects?q=&status=&sort=&band=`; sezione "Project
+  database" nella vista Gemme (`static/onchain/projects.js`).
+- Da guardare dopo il deploy: `stats.in_band` e `top_rejections` dicono dove
+  muoiono i progetti. Se la regola che boccia di piu' e' sbagliata, va
+  ritoccata li'.
+
+---
+
 ## Motori piu' profondi per Gemme e Meme + track record + design — `seed-0118`/`seed-0119`/`seed-0120`, branch `claude/gems-memes-engine` — 2026-09-26
 
 Lorenzo, sulla classifica: "io entrerei anche nella logica con cui sceglie le

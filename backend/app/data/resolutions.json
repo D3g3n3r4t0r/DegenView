@@ -1485,5 +1485,19 @@
       "frontend/static/onchain/memes.js",
       "frontend/static/onchain/leaderboard.js"
     ]
+  },
+  "seed-0121": {
+    "status": "risolto",
+    "at": 1790489421,
+    "summary": "Il Gem Finder ha un database dei progetti (SQLite sul volume). Ci entrano tutte le monete che CoinGecko conosce su Solana e Robinhood Chain (non solo quelle della categoria 'ecosystem', che ne elenca una parte), tutta la lista verificata di Jupiter, tutti i protocolli DefiLlama e ogni progetto trovato dalle altre fonti. Un giro aggiorna cap e liquidita' di tutti, chi entra nella fascia $50k-$3M viene letto su CoinGecko (sito, GitHub) e passato all'analisi, prima chi ha codice. Ogni verdetto resta scritto con il perche', i bocciati vengono riesaminati dopo due settimane (due giorni se mancavano dati). Nella pagina Gemme c'e' la sezione 'Project database' con ricerca e filtri: quanti progetti conosciamo, quanti sono in fascia, studiati, bocciati e perche'.",
+    "files": [
+      "backend/app/trading/onchain/projects_db.py",
+      "backend/app/trading/onchain/leaderboard.py",
+      "backend/app/trading/onchain/discovery.py",
+      "backend/app/trading/onchain/traction.py",
+      "backend/app/main.py",
+      "frontend/static/onchain/projects.js",
+      "frontend/onchain-app.html"
+    ]
   }
 }

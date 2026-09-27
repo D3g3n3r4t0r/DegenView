@@ -30,6 +30,8 @@ from typing import Callable
 
 import httpx
 
+from app.trading.onchain import projects_db
+
 logger = logging.getLogger(__name__)
 
 PROTOCOLS = "https://api.llama.fi/protocols"
@@ -143,15 +145,18 @@ def judge(p: dict | None, mcap: float | None) -> dict | None:
     return {"traction": round(pts, 1), "value": value, "facts": facts, "reasons": reasons[:4]}
 
 
-def candidates(index: dict[str, dict]) -> list[dict]:
+def candidates(index: dict[str, dict], band: bool = True) -> list[dict]:
     """Protocols worth a look: our chains, in band (or with real TVL when
-    DefiLlama has no market cap), not a CEX, bridge or chain."""
+    DefiLlama has no market cap), not a CEX, bridge or chain. With
+    band=False, every protocol on our chains (for the database)."""
     out = []
     for p in index.values():
         if p.get("category") in _SKIP_CATEGORIES:
             continue
         mcap, tvl = p.get("mcap"), p.get("tvl") or 0
-        if mcap:
+        if not band:
+            pass
+        elif mcap:
             if not (CAP_MIN <= mcap <= CAP_MAX):
                 continue
         elif tvl < TVL_MIN_UNPRICED:
@@ -185,6 +190,7 @@ async def poll(client: httpx.AsyncClient, add: Callable[[dict, str], bool], now:
     _index.clear()
     _index.update(build_index(protocols, fees))
     _state.update(protocols=len(protocols or []), listed=len(_index), error="")
+    projects_db.upsert_many(candidates(_index, band=False), "defillama", now)
     added = 0
     for item in candidates(_index):
         added += bool(add(item, "defillama"))

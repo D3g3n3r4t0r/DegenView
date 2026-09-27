@@ -45,8 +45,9 @@ import time
 
 import httpx
 
-from app.trading.onchain import (benchmark, depth, discovery, gem_track, legit, narratives, radar, research,
-                                  storage, traction)
+from app.sniper.quality import _looks_like_meme
+from app.trading.onchain import (benchmark, depth, discovery, gem_track, legit, narratives, projects_db, radar,
+                                  research, storage, traction)
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +64,12 @@ MAX_AGE_DAYS = radar.AGE_MAX_DAYS  # oltre, non e' piu' un progetto nuovo, salvo
 MAX_ENTRIES = 400
 KEEP_EXCLUDED = 60
 ANALYZE_CONCURRENCY = 3
+# The project database (projects_db): how much of it the board takes in and
+# refreshes per step.
+DB_FEED_PER_TICK = 4
+DB_FEED_MAX_WAITING = 12            # unanalysed entries in the working set before feeding more
+DB_MARKET_S = 60
+DB_MARKET_BATCH = 150               # 5 DexScreener requests a minute
 BOARD_SIZE = 50
 SIMILARITY_WEIGHT = 0.30
 # Use and price (traction.py, DefiLlama): a lift for the projects it lists,
@@ -163,11 +170,16 @@ def add(item: dict, source: str, now: float | None = None) -> bool:
     if not chain or not token:
         return False
     k = _key(chain, token)
-    if benchmark.is_benchmark(chain, token) or source == "reference":
+    now = now or time.time()
+    try:
+        projects_db.upsert(item, source, now)
+    except Exception:
+        logger.exception("classifica: database non scritto per %s", k)
+    # The database decides when a rejected project deserves a second look.
+    if benchmark.is_benchmark(chain, token) or source in ("reference", "database"):
         _gone.pop(k, None)
     if k in _gone:
         return False
-    now = now or time.time()
     fresh = {f: item[f] for f in ("market_cap", "liquidity_usd", "website", "github", "socials", "pair_url",
                                   "report", "scan_url", "checks", "exception", "github_verified", "description",
                                   "categories", "websites") if item.get(f)}
@@ -238,6 +250,8 @@ def apply_market(pairs: list[dict]) -> None:
         if sites:
             e["websites"] = list(dict.fromkeys([*(e.get("websites") or []), *sites]))[:6]
         gem_track.sample(e["chain"], e["token_address"], p.get("priceUsd"))
+        projects_db.set_market(e["chain"], e["token_address"], mcap=cap, liq=e["liquidity_usd"],
+                               vol24=(p.get("volume") or {}).get("h24"), price=p.get("priceUsd"))
     _mark()
 
 
@@ -287,7 +301,21 @@ def apply_analysis(k: str, result: dict, now: float | None = None) -> None:
     if e["overall"]["fatal"] and not benchmark.is_benchmark(e["chain"], e["token_address"]) \
             and e.get("source") != "reference":     # Lorenzo's references stay, with their reason
         _exclude(k, e["overall"]["fatal"], now)
+        _remember(e, "rejected", e["overall"]["fatal"], now)
+        _mark()
+        return
     _mark()
+    if not (e["overall"] or {}).get("pending"):
+        why = qualifies(e, now)
+        _remember(e, "ranked" if e.get("rank") else "studied", why, now)
+
+
+def _remember(e: dict, status: str, why: str, now: float) -> None:
+    """The verdict goes to the database, so it outlives the working set."""
+    try:
+        projects_db.record(e, status, why, final_score(e) if status != "rejected" else None, traction_of(e), now)
+    except Exception:
+        logger.exception("classifica: verdetto non salvato per %s", e.get("symbol"))
 
 
 def _exclude(k: str, reason: str, now: float) -> None:
@@ -514,7 +542,7 @@ def board() -> dict:
         "sources": _state["sources"], "discovery": discovery.status(),
         "github_rate": legit.github_rate or None,
         "research_ai": research.ai_status(), "close": close_calls(),
-        "track": gem_track.stats(), "defillama": traction.status(),
+        "track": gem_track.stats(), "defillama": traction.status(), "database": projects_db.stats(),
         "past_floor": sum(1 for e in _entries.values() if not research_floor(e)),
         "rules": {"weights": depth.WEIGHTS, "similarity_weight": SIMILARITY_WEIGHT,
                   "traction_weight": TRACTION_WEIGHT, "value_weight": VALUE_WEIGHT, "benchmark": benchmark.NAME, "min_pillar": MIN_PILLAR, "gem_cap_usd": legit.GEM_CAP_USD,
@@ -534,6 +562,45 @@ async def _step(name: str, fn, *args) -> None:
         logger.info("classifica: %s non riuscito: %s", name, exc)
 
 
+async def _db_market(client: httpx.AsyncClient, now: float) -> None:
+    """Cap and liquidity for the database, oldest first: this is what puts a
+    project known only by name into the band, or out of it."""
+    for chain, tokens in projects_db.stale_market(DB_MARKET_BATCH, now).items():
+        for i in range(0, len(tokens), 30):
+            batch = tokens[i:i + 30]
+            r = await client.get(DEX_TOKENS.format(chain=chain, addresses=",".join(batch)), timeout=10.0)
+            if r.status_code == 200 and isinstance(r.json(), list):
+                projects_db.apply_pairs(chain, batch, r.json(), now)
+            await asyncio.sleep(0.3)
+
+
+def feed_from_database(now: float | None = None) -> int:
+    """Move the next projects from the database into the working set, while
+    the analysis queue has room: never analysed first, then second looks."""
+    now = now or time.time()
+    waiting = sum(1 for e in _entries.values() if not e["pillars"])
+    if waiting >= DB_FEED_MAX_WAITING or len(_entries) >= MAX_ENTRIES:
+        return 0
+    fed = 0
+    for p in projects_db.due_for_analysis(DB_FEED_PER_TICK * 3, set(_entries), now):
+        item = projects_db.as_item(p)
+        if _looks_like_meme(item["symbol"], item["name"]):
+            projects_db.record(item, "rejected", "meme name", now=now)
+            continue
+        if add(item, "database", now):
+            fed += 1
+        if fed >= DB_FEED_PER_TICK:
+            break
+    return fed
+
+
+async def _from_database(client: httpx.AsyncClient, now: float) -> None:
+    if now - _state.get("db_market_at", 0.0) >= DB_MARKET_S:
+        _state["db_market_at"] = now
+        await _db_market(client, now)
+    feed_from_database(now)
+
+
 async def tick(client: httpx.AsyncClient, now: float | None = None) -> None:
     now = now or time.time()
     _state["last_tick"] = now
@@ -546,6 +613,7 @@ async def tick(client: httpx.AsyncClient, now: float | None = None) -> None:
         _state["last_market"] = now
         await _step("dexscreener", _poll_market, client)
     await _step("storico", gem_track.poll, client, set(_entries), now)
+    await _step("database", _from_database, client, now)
     _prune(now)
     # I nuovi prima (nessun pilastro), poi i piu' vecchi da rinfrescare.
     todo = sorted(((k, due(e, now)) for k, e in _entries.items() if k not in _busy),

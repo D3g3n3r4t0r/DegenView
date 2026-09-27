@@ -106,6 +106,7 @@ from app.trading.onchain import passkey as onchain_passkey
 from app.trading.onchain import pilot as onchain_pilot
 from app.trading.onchain import listings as onchain_listings
 from app.trading.onchain import leaderboard as onchain_leaderboard
+from app.trading.onchain import projects_db as onchain_projects_db
 from app.trading.onchain import plans as onchain_plans
 from app.trading.onchain import radar as onchain_radar
 from app import token_launch
@@ -3518,6 +3519,16 @@ async def onchain_leaderboard_view(user: User = Depends(auth.get_current_user)) 
     _require_onchain_enabled()
     board = onchain_leaderboard.board()
     return {**board, "entries": onchain_outcomes.without_shamed(board.get("entries") or [])}
+
+
+@app.get("/api/onchain/projects")
+async def onchain_projects_view(q: str = "", status: str = "", sort: str = "score", limit: int = 50,
+                                offset: int = 0, band: bool = False,
+                                user: User = Depends(auth.get_current_user)) -> dict:
+    """Il database dei progetti del Gem Finder: tutto quello che e' stato
+    visto, con il verdetto e il perche'. Vedi app/trading/onchain/projects_db.py."""
+    _require_onchain_enabled()
+    return {**onchain_projects_db.search(q, status, sort, limit, offset, band), "stats": onchain_projects_db.stats()}
 
 
 class ProjectReadRequest(BaseModel):

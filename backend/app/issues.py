@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0121", "Gem Finder: vede sempre i soliti progetti, serve un database",
+     "Lorenzo: 'il gem hunter deve trovare progetti di qualita', ma vedi sempre i soliti.. ma fatti un database no?'.",
+     "alta"),
     ("seed-0120", "Rinfrescata di design dell'app on-chain",
      "Lorenzo: 'procedi a fare tutto, e poi direi che anche una rinfrescata di design non faccia male, miglioralo'.",
      "media"),
