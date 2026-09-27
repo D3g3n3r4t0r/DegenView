@@ -63,7 +63,9 @@ def ask(pr: dict, diff: str) -> str:
         "Se non trovi niente di serio scrivi solo: 'Nessun problema serio trovato.'\n\n"
         "Regole del progetto:\n" + rules())
     user = f"Titolo: {pr['title']}\n\nDescrizione:\n{pr.get('body') or ''}\n\nDiff:\n{diff}"
-    body = {"model": os.environ.get("DEEPSEEK_MODEL") or "deepseek-reasoner",
+    # deepseek-chat answers in seconds; deepseek-reasoner thinks first
+    # (minutes) and can spend the whole max_tokens thinking, answering nothing.
+    body = {"model": os.environ.get("DEEPSEEK_MODEL") or "deepseek-chat",
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
             "max_tokens": 8000}
     req = urllib.request.Request("https://api.deepseek.com/chat/completions", data=json.dumps(body).encode(),
@@ -71,7 +73,11 @@ def ask(pr: dict, diff: str) -> str:
                                           "Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=300) as r:
         res = json.loads(r.read())
-    return res["choices"][0]["message"]["content"].strip()
+    choice = res["choices"][0]
+    text = (choice["message"].get("content") or "").strip()
+    if not text:
+        raise RuntimeError(f"empty answer (finish_reason={choice.get('finish_reason')})")
+    return text
 
 
 def main() -> int:
