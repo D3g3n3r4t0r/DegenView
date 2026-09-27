@@ -150,15 +150,18 @@ def _prune(journal: dict, keep: int, now: float) -> None:
     if len(journal) <= keep:
         return
 
-    # 2. la classe piu' numerosa, dal piu' vecchio, finche' le due convergono.
-    while len(journal) > keep:
-        rugs = sorted((k for k in journal if label(k) is True), key=lambda k: journal[k]["at"])
-        non_rugs = sorted((k for k in journal if label(k) is False), key=lambda k: journal[k]["at"])
-        if not rugs and not non_rugs:
-            break
-        drop(rugs if len(rugs) >= len(non_rugs) else non_rugs)
-        if not rugs and not non_rugs:
-            break
+    # 2. la classe piu' numerosa, dal piu' vecchio, una voce alla volta:
+    # le due convergono invece di svuotarne una.
+    rugs = sorted((k for k in journal if label(k) is True), key=lambda k: journal[k]["at"])
+    non_rugs = sorted((k for k in journal if label(k) is False), key=lambda k: journal[k]["at"])
+    i = j = 0
+    while len(journal) > keep and (i < len(rugs) or j < len(non_rugs)):
+        if j >= len(non_rugs) or (i < len(rugs) and len(rugs) - i >= len(non_rugs) - j):
+            journal.pop(rugs[i], None)
+            i += 1
+        else:
+            journal.pop(non_rugs[j], None)
+            j += 1
 
     # 3. solo adesso gli indecisi, dal piu' vecchio.
     drop(sorted((k for k in journal if label(k) is None), key=lambda k: journal[k]["at"]))
