@@ -1735,8 +1735,8 @@
   },
   "seed-0141": {
     "status": "risolto",
-    "at": 1790524576,
-    "summary": "Installarlo sul server non ha senso: il DeepSeek vero (V3/R1) ha 671 miliardi di parametri e chiede centinaia di GB di memoria video; il server ha 2 CPU e 4 GB di RAM, senza GPU. Ci starebbe solo una versione ridotta da 1,5 miliardi, lenta e troppo debole per dare insight utili, e ruberebbe memoria all'app. Il modello e' gratuito da scaricare, farlo girare no. La strada e' la sua API, che costa molto meno di Claude: il revisore giornaliero ora puo' usare DeepSeek. Basta mettere DEEPSEEK_API_KEY sul server (la inserisce Lorenzo); con la chiave presente il revisore usa DeepSeek, altrimenti Claude. Tetti di token giornaliero e mensile invariati.",
+    "at": 1790526162,
+    "summary": "Installarlo sul server non ha senso: il DeepSeek vero (V3/R1) ha 671 miliardi di parametri e chiede centinaia di GB di memoria video; il server ha 2 CPU e 4 GB di RAM, senza GPU. Ci starebbe solo una versione ridotta da 1,5 miliardi, lenta e troppo debole per dare insight utili, e ruberebbe memoria all'app. Il modello e' gratuito da scaricare, farlo girare no. La strada e' la sua API, che costa molto meno di Claude: il revisore giornaliero ora puo' usare DeepSeek. Basta mettere DEEPSEEK_API_KEY sul server (la inserisce Lorenzo); con la chiave presente il revisore usa DeepSeek, altrimenti Claude. Tetti di token giornaliero e mensile invariati. Il 27/09 Lorenzo ha voluto provarlo comunque sul server: abbiamo avviato Ollama in un container separato con un tetto di 1,8 GB e 1 CPU, per misurare la versione da 1,5 miliardi. Il consiglio resta l'API: stesso DeepSeek completo, chiamato dal server, pochi centesimi al giorno.",
     "files": [
       "backend/app/trading/onchain/ai_review.py",
       "backend/app/config.py",
