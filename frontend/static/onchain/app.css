@@ -753,7 +753,8 @@
   .pf-range { display: flex; gap: 2px;
     & button { padding: 7px 8px; border: 0; border-radius: 9px; background: none; color: var(--k-text-3); font: 600 13px var(--sans); cursor: pointer; }
     & button[aria-pressed="true"] { background: #1c1c20; color: var(--k-text); } }
-  .pf-top { flex-wrap: nowrap; & .pf-range { flex: none; } }
+  .pf-range { justify-content: space-between; margin: 6px 0 0; overflow-x: auto; scrollbar-width: none;
+    & button { flex: none; min-inline-size: 36px; padding: 7px 6px; } }
   .pf-change { margin: 8px 0 0; min-block-size: 1.3em; font: 600 17px var(--sans); color: #34d399;
     &[data-sign="down"] { color: #f87171; } & span { color: var(--k-text-3); font-weight: 500; } }
   .pf-chart { position: relative; block-size: 190px; margin: 10px -16px 0; overflow: hidden; }
@@ -761,7 +762,10 @@
     &[data-sign="down"] { color: #ef4444; }
     & .ln { fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
     & .area { fill: url(#pf-fill); stroke: none; }
-    & .dot { fill: currentColor; } & .halo { fill: currentColor; opacity: .18; } }
+    & .dot { fill: currentColor; } & .halo { fill: currentColor; opacity: .18; }
+    & .scrub-x { stroke: var(--k-text-3); stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
+    & .scrub-dot { fill: var(--k-text); } & [hidden] { display: none; }
+    touch-action: pan-y; cursor: crosshair; }
   .pf-chart-empty { display: grid; place-items: center; block-size: 100%; padding: 0 24px; text-align: center; font-size: 13px; color: var(--k-text-3); }
   .pf-cash { display: grid; grid-template-columns: auto 1fr auto auto; gap: 12px; align-items: center; margin-top: 18px;
     & p { display: grid; gap: 2px; margin: 0; } & small { font-size: 14px; color: var(--k-text-2); }

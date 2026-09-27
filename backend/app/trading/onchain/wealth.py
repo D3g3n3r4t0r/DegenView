@@ -2,7 +2,8 @@
 
 A reading every SNAPSHOT_S (main._wealth_loop) of everything the wallets
 hold, in USD. Stored thinned as it ages, so a year of history stays small:
-every reading for two days, one an hour for a month, one a day after that.
+every reading (at most one a minute) for two days, one an hour for a month,
+one a day after that.
 """
 from __future__ import annotations
 
@@ -13,8 +14,13 @@ import time
 from app.trading.onchain.storage import data_file
 
 _STORE_FILE = data_file("onchain_wealth.json")
-SNAPSHOT_S = 10 * 60
-RANGES = {"24h": 86_400, "7d": 7 * 86_400, "30d": 30 * 86_400, "all": None}
+SNAPSHOT_S = 5 * 60      # the background reading; the header adds one a minute while the app is open
+MIN_GAP_S = 60           # two readings closer than this: the later replaces the earlier
+# Lorenzo, 27/09: "il wallet deve avere anche l'andamento 1h 2h 3h 4h 8h; e
+# il grafico deve essere realizzato seguendo il valore del portafoglio,
+# strettamente legato".
+RANGES = {"1h": 3600, "2h": 2 * 3600, "3h": 3 * 3600, "4h": 4 * 3600, "8h": 8 * 3600,
+          "24h": 86_400, "7d": 7 * 86_400, "30d": 30 * 86_400, "all": None}
 # v2 (27/09): every chain, every token (portfolio.py). Readings from before
 # were the site's two wallets only: a different quantity, dropped rather than
 # drawn on the same line (Lorenzo: "il grafico non rispetta l'andamento
@@ -87,7 +93,7 @@ def record(uid: str, value_usd: float, now: float | None = None) -> None:
     now = now or time.time()
     with _lock:
         rows = _series.setdefault(uid, [])
-        if rows and now - rows[-1][0] < SNAPSHOT_S / 2:
+        if rows and now - rows[-1][0] < MIN_GAP_S:
             rows[-1] = [now, round(value_usd, 4)]
         else:
             rows.append([now, round(value_usd, 4)])

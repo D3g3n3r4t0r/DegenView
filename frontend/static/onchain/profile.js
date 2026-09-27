@@ -15,7 +15,8 @@ import * as api from "@onchain/api.js";
 import { escapeHtml, logo, usdShort } from "@onchain/format.js";
 import { loadLinked } from "@onchain/userswap.js";
 
-const RANGES = [["24h", "24h"], ["7d", "7d"], ["30d", "30d"], ["all", "All"]];
+const RANGES = [["1h", "1H"], ["2h", "2H"], ["3h", "3H"], ["4h", "4H"], ["8h", "8H"], ["24h", "1D"], ["7d", "1W"],
+  ["30d", "1M"], ["all", "All"]];
 let root = null;
 let data = null;
 let range = "all";
@@ -51,16 +52,56 @@ function paintMe(p) {
   if (head) head.innerHTML = p?.avatar_url ? `<img src="${escapeHtml(p.avatar_url)}" alt="" />` : "";
 }
 
+let scrub = null;
+
+/* Touching the line: the big number and the change become those of the
+ * reading under the finger, with its time; letting go shows now again. */
+function bindScrub() {
+  const svg = root.querySelector(".pf-line");
+  if (!svg || !scrub) return;
+  const totalEl = root.querySelector(".pf-total");
+  const changeEl = root.querySelector(".pf-change");
+  const idle = [totalEl.innerHTML, changeEl.innerHTML, changeEl.dataset.sign];
+  const vx = svg.querySelector(".scrub-x"), vd = svg.querySelector(".scrub-dot");
+  const at = (event) => {
+    const box = svg.getBoundingClientRect();
+    const px = ((event.clientX - box.left) / box.width) * scrub.W;
+    let best = scrub.rows[0];
+    for (const r of scrub.rows) if (Math.abs(scrub.x(r[0]) - px) < Math.abs(scrub.x(best[0]) - px)) best = r;
+    const [whole, cents] = money(best[1]);
+    totalEl.innerHTML = `<b>${whole}</b><span>${cents}</span>`;
+    const diff = best[1] - scrub.rows[0][1];
+    changeEl.dataset.sign = diff >= 0 ? "up" : "down";
+    changeEl.innerHTML = `${signed(diff)} <span>${new Date(best[0] * 1000).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>`;
+    const cx = scrub.x(best[0]).toFixed(1), cy = scrub.y(best[1]).toFixed(1);
+    vx.setAttribute("x1", cx); vx.setAttribute("x2", cx); vd.setAttribute("cx", cx); vd.setAttribute("cy", cy);
+    vx.removeAttribute("hidden"); vd.removeAttribute("hidden");
+  };
+  const leave = () => {
+    [totalEl.innerHTML, changeEl.innerHTML, changeEl.dataset.sign] = idle;
+    vx.setAttribute("hidden", ""); vd.setAttribute("hidden", "");
+  };
+  svg.addEventListener("pointerdown", at);
+  svg.addEventListener("pointermove", at);
+  svg.addEventListener("pointerleave", leave);
+  svg.addEventListener("pointerup", (e) => { if (e.pointerType !== "mouse") leave(); });
+}
+
 function chart(rows) {
   const W = 360, H = 170;
-  if (!rows || rows.length < 2) return `<div class="pf-chart-empty">The line starts with the next reading of your wallets (every 10 minutes).</div>`;
+  scrub = null;
+  if (!rows || rows.length < 2) return `<div class="pf-chart-empty">Not enough readings in this period yet: one a minute while the app is open, every 5 minutes otherwise.</div>`;
   const ys = rows.map((r) => r[1]);
   let lo = Math.min(...ys), hi = Math.max(...ys);
   if (hi - lo < 1e-9) { hi += 1; lo -= 1; }
   const t0 = rows[0][0], t1 = rows[rows.length - 1][0];
   const x = (t) => ((t - t0) / Math.max(1, t1 - t0)) * (W - 12);
   const y = (v) => 12 + (1 - (v - lo) / (hi - lo)) * (H - 24);
-  const d = rows.map((r, i) => `${i ? "L" : "M"}${x(r[0]).toFixed(1)},${y(r[1]).toFixed(1)}`).join("");
+  // Steps, not slopes: between two readings the value was the earlier one
+  // (it is only known at readings), so the line never shows a price the
+  // wallet did not have.
+  const d = rows.map((r, i) => i ? `H${x(r[0]).toFixed(1)}V${y(r[1]).toFixed(1)}` : `M${x(r[0]).toFixed(1)},${y(r[1]).toFixed(1)}`).join("");
+  scrub = { rows, x, y, W };
   const up = ys[ys.length - 1] >= ys[0];
   return `<svg class="pf-line" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" data-sign="${up ? "up" : "down"}" role="img" aria-label="Wallet value over time">
     <defs><linearGradient id="pf-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity=".22"/><stop offset="1" stop-color="currentColor" stop-opacity="0"/></linearGradient></defs>
@@ -68,6 +109,8 @@ function chart(rows) {
     <path class="ln" d="${d}"/>
     <circle class="halo" cx="${x(t1).toFixed(1)}" cy="${y(ys[ys.length - 1]).toFixed(1)}" r="11"/>
     <circle class="dot" cx="${x(t1).toFixed(1)}" cy="${y(ys[ys.length - 1]).toFixed(1)}" r="5"/>
+    <line class="scrub-x" x1="0" x2="0" y1="0" y2="${H}" hidden/>
+    <circle class="scrub-dot" r="5" hidden/>
   </svg>`;
 }
 
@@ -176,12 +219,12 @@ function paint() {
     <section class="pf-value">
       <div class="pf-top">
         <p class="pf-total"><b>${whole}</b><span>${cents}</span></p>
-        <nav class="pf-range" aria-label="Period">${RANGES.map(([k, l]) => `<button type="button" data-range="${k}" aria-pressed="${k === range}">${l}</button>`).join("")}</nav>
       </div>
       ${d.complete === false && d.missing?.length ? `<p class="pf-since">Not read right now: ${escapeHtml(d.missing.join(", "))} — shown at the last reading, or left out.</p>` : ""}
       <p class="pf-change" data-sign="${(ch ?? 0) >= 0 ? "up" : "down"}">${ch == null ? "" : `${signed(ch)} <span>${RANGES.find(([k]) => k === range)[1]}</span>`}</p>
       <div class="pf-chart">${chart(d.history?.[range])}</div>
-      ${d.tracking_since ? `<p class="pf-since">Every token on every chain, read every 10 minutes since ${new Date(d.tracking_since * 1000).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</p>` : ""}
+      <nav class="pf-range" aria-label="Period">${RANGES.map(([k, l]) => `<button type="button" data-range="${k}" aria-pressed="${k === range}">${l}</button>`).join("")}</nav>
+      ${d.tracking_since ? `<p class="pf-since">Every token on every chain, read every minute while the app is open (every 5 otherwise) since ${new Date(d.tracking_since * 1000).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</p>` : ""}
     </section>
     <section class="pf-cash">
       <span class="pf-cash-ic" aria-hidden="true">$</span>
@@ -212,6 +255,7 @@ function paint() {
     </dialog>`;
   delete root.dataset.loading;
   paintMe(p);
+  bindScrub();
 }
 
 async function load() {
@@ -240,6 +284,13 @@ export function mountProfile({ go: goTo } = {}) {
   root = document.getElementById("profile");
   if (!root) return;
   go = goTo ?? go;
+  // The value and its line stay live while the profile is on screen: a new
+  // reading a minute, as the header's. Not while editing or touching the line.
+  setInterval(() => {
+    if (document.visibilityState !== "visible" || !root.offsetParent || !data) return;
+    if (root.querySelector("dialog[open]") || root.querySelector(".scrub-x:not([hidden])")) return;
+    load();
+  }, 60_000);
   root.addEventListener("click", (event) => {
     const r = event.target.closest("[data-range]");
     if (r) { range = r.dataset.range; paint(); return; }
