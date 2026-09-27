@@ -55,6 +55,44 @@ export const setBody = (markup) => bodyEl.replaceChildren(html(markup));
 export const setMessage = (text, tone = "") =>
   setBody(`<p class="sheet-note ${tone}">${escapeHtml(text)}</p>`);
 
+/* ----------------------------------------------------------- Manual scan */
+
+// Lorenzo, 27/09: a ticker or an address through the whole process, by
+// hand: DexScreener, the checks, the rug memory, DeepSeek (manual_scan.py).
+const pctS = (f) => (f == null ? "—" : `${f > 0 ? "+" : ""}${Math.round(f * 100)}%`);
+const usdS = (n) => (n == null ? "—" : n >= 1e6 ? `$${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `$${Math.round(n / 1e3)}k` : `$${Math.round(n)}`);
+
+export async function openScan(query) {
+  open(`Scanning ${query}`, "DexScreener, security, site, rug memory and DeepSeek: the whole process on one token.");
+  setBody(`<div class="scan-wait"><span class="agent-orb" aria-hidden="true"><i></i><i></i><i></i></span><p>The agent is examining it…</p></div>`);
+  let d;
+  try {
+    d = await api.scanToken(query);
+  } catch (err) {
+    setMessage(err.message ?? "Scan failed.", "is-warn");
+    return;
+  }
+  if (d.error) { setMessage(d.error, "is-warn"); return; }
+  const t = d.token;
+  titleEl.textContent = `${t.symbol} · ${t.chain}`;
+  const status = { ok: ["pass", "Would pass the listing filter"], fail: ["fail", `Would be rejected: ${d.pipeline.reason}`],
+    wait: ["wait", `Waiting: ${d.pipeline.reason}`] }[d.pipeline.status] ?? ["wait", d.pipeline.reason];
+  const ai = d.ai;
+  const hist = (d.memory.history ?? []).map((h) => `${escapeHtml(h.decision ?? "seen")}${h.outcome ? ` → ${escapeHtml(h.outcome)}` : ""}`).join(", ");
+  setBody(`
+    <div class="scan-head">${tile(t.symbol, t.image, t.chain, t.token_address)}
+      <div><b>${escapeHtml(t.name || t.symbol)}</b><small>${usdS(t.market_cap)} cap · ${usdS(t.liquidity_usd)} liquidity · 24h ${t.change_24h == null ? "—" : `${t.change_24h > 0 ? "+" : ""}${t.change_24h}%`}</small></div></div>
+    <p class="scan-status" data-s="${status[0]}">${escapeHtml(status[1])}</p>
+    ${ai ? `<div class="scan-ai" data-risk="${ai.risk >= 60 ? "high" : ai.risk >= 30 ? "mid" : "low"}"><b>${ai.risk}</b>
+      <span><b>DeepSeek rug risk</b><small>${escapeHtml([ai.theme, ...(ai.flags ?? [])].filter(Boolean).join(" · ") || "no red flags")}</small></span></div>`
+      : `<p class="sheet-note">DeepSeek not available right now.</p>`}
+    <p class="sheet-note"><b>Memory:</b> ${escapeHtml(d.memory.summary)}${hist ? ` · this token before: ${hist}` : ""}</p>
+    ${d.alert ? `<p class="sheet-note">Alerted ${new Date(d.alert.at * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" })}, now ${pctS(d.alert.now)}.</p>` : ""}
+    <ul class="scan-checks">${(d.checks ?? []).map((c) => `<li data-ok="${c.ok === true ? "yes" : c.ok === false ? "no" : "unknown"}">
+      <span>${escapeHtml(c.label)}</span><small>${escapeHtml(c.detail ?? "")}</small></li>`).join("")}</ul>
+    ${t.pair_url ? `<a class="btn-quiet" href="${escapeHtml(t.pair_url)}" target="_blank" rel="noopener">Open on DexScreener</a>` : ""}`);
+}
+
 /* --------------------------------------------------------------- Deposit */
 
 // Lorenzo, 27/09: "aggiungiamo queste possibilita' per i depositi" (a

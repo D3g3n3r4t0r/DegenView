@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0161", "Scansione manuale di un ticker o indirizzo; togliere 'Lorenzo' dalla strategia",
+     "Lorenzo: 'aggiungiamo anche l'opzione di aggiungere un indirizzo di un token o il suo ticker che poi va a cercare nel database di DexScreener [...] compresa anche la scansione di DeepSeek e tutto il processo' e 'elimina il nome lorenzo dalla strategia'.",
+     "media"),
     ("seed-0160", "Un agente animato sempre presente; la hall of fame senza timeframe",
      "Lorenzo: 'dobbiamo dare l'idea animata che tutto il sito sia gestito da DeepSeek [...] ci deve essere qualcosa che si muove [...] un agent che esamina le cose' e 'il podio non deve avere timeframe, e' la hall of fame'.",
      "media"),

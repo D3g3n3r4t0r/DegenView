@@ -50,12 +50,12 @@ def test_open_position_is_closed_at_the_end_of_the_window(monkeypatch):
 
 def test_scoreboard_picks_the_best_median_only_with_enough_alerts():
     def res(a, b):
-        return {"Lorenzo HF": {"ret": a, "done": True, "trades": 1}, "Lorenzo": {"ret": b, "done": True, "trades": 1}}
+        return {"Trend HF": {"ret": a, "done": True, "trades": 1}, "Trend EMA": {"ret": b, "done": True, "trades": 1}}
     few = system.scoreboard([res(-0.1, 0.5)] * 3)
     assert few["chosen"] == system.DEFAULT
     many = system.scoreboard([res(-0.1, 0.5)] * system.MIN_DECIDED)
-    assert many["chosen"] == "Lorenzo"
-    assert {c["label"] for c in many["candidates"]} == {"Lorenzo", "Lorenzo HF"}
+    assert many["chosen"] == "Trend EMA"
+    assert {c["label"] for c in many["candidates"]} == {"Trend EMA", "Trend HF"}
 
 
 def test_bars_from_readings_and_refresh(monkeypatch, tmp_path):
@@ -74,7 +74,7 @@ def test_bars_from_readings_and_refresh(monkeypatch, tmp_path):
     monkeypatch.setattr(at, "_candles", fake_candles)
     monkeypatch.setattr(system.radar, "spot_signals", _signals(set(), set()))
     assert asyncio.run(at.refresh_system(None, now=T0 + 2 * B, gap_s=0)) == 1
-    assert a["bars_fetched"] and "Lorenzo HF" in a["system"]
+    assert a["bars_fetched"] and "Trend HF" in a["system"]
     b = at.board("meme", now=T0 + 2 * B)
     assert b["system"]["chosen"] == system.DEFAULT and "live" in b["system"]
     at.reset_for_tests()

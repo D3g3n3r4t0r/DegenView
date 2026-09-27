@@ -43,9 +43,13 @@ COST = (radar.BACKTEST_PARAMS["commission_pct"] + radar.BACKTEST_PARAMS["slippag
 CRASH = -0.35
 
 CANDIDATES = [
-    {"strategy_name": "Lorenzo HF (minuti on-chain)", "params": None, "label": "Lorenzo HF", "source": "predefinita"},
-    {"strategy_name": "Lorenzo (trend-follower)", "params": None, "label": "Lorenzo", "source": "predefinita"},
+    {"strategy_name": "Lorenzo HF (minuti on-chain)", "params": None, "label": "Trend HF", "source": "predefinita"},
+    {"strategy_name": "Lorenzo (trend-follower)", "params": None, "label": "Trend EMA", "source": "predefinita"},
 ]
+# Shown labels carry no person's name (Lorenzo, 27/09: "elimina il nome
+# lorenzo dalla strategia"); strategy_name stays the internal key. Results
+# stored under the old labels are renamed on load (alert_track._load).
+LEGACY_LABELS = {"Lorenzo HF": "Trend HF", "Lorenzo": "Trend EMA"}
 DEFAULT = CANDIDATES[0]["label"]
 BY_LABEL = {c["label"]: c for c in CANDIDATES}
 

@@ -4114,6 +4114,17 @@ async def wallet_link_confirm(body: WalletConfirm, user: User = Depends(auth.get
     return {"profile": profiles.public(user.id, p)}
 
 
+class ScanRequest(BaseModel):
+    query: str
+
+
+@app.post("/api/onchain/scan")
+async def onchain_manual_scan(req: ScanRequest, user: User = Depends(auth.get_current_user)) -> dict:
+    """A ticker or address through the whole system, on request (manual_scan.py)."""
+    from app.trading.onchain import manual_scan
+    return await manual_scan.scan(req.query[:80])
+
+
 @app.get("/api/agent")
 def agent_activity(user: User = Depends(auth.get_current_user)) -> dict:
     """The agent's live presence on the site: what DeepSeek did lately."""

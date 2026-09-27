@@ -3569,3 +3569,11 @@ sistema; niente tab Alerts/Gems, niente podio, niente card "You"), Profilo
 che ruota sulle azioni vere da `GET /api/agent` (`deepseek_desk.note`, scritto
 da ai_scan, research, chat), tocco = registro. Strategie: niente 1D/1W/1M,
 tutti gli alert di sempre.
+
+**2026-09-27 — Lorenzo: "aggiungiamo l'opzione di [...] un ticker a scelta" e "elimina il nome lorenzo dalla strategia" ("pusha che finiamo i token").**
+`manual_scan.py` + `POST /api/onchain/scan` + form in cima agli Alert
+(`sheets.openScan`). Etichette strategie: "Trend HF"/"Trend EMA"
+(`system.LEGACY_LABELS`, rinominate al caricamento in `alert_track._load`).
+Restano: fasi 2-5 DeepSeek (DEEPSEEK.md), idee UI (Picks come filtro degli
+Alert, Database come link), il lavoratore DeepSeek che apre PR (serve il
+permesso di Lorenzo), la chiave DeepSeek da rigenerare e i segreti da ruotare.
