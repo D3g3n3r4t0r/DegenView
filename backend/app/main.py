@@ -3802,9 +3802,46 @@ def _record_wealth(user: User, snap: dict) -> None:
         onchain_wealth.record(user.id, snap["total"])
 
 
+def _sim_snapshot(user: User) -> dict:
+    """The simulated wallet (autotrader "sim"), shaped as _wallet_snapshot:
+    Lorenzo, 27/09: "il fatto che sto simulando il denaro deve essere
+    possibile selezionando 'wallet simulato', cosi' visualizzo il saldo
+    simulato e posso vedere realmente cosa succede"."""
+    v = onchain_autotrader.view(user.id)
+    sim = v["sim"]
+    if not sim:
+        return {"total": None, "cash": 0.0, "positions": [], "missing": [], "by_chain": {}, "complete": False,
+                "sim": None}
+    pos = v["position"] if v["position"] and v["position"]["mode"] == "sim" else None
+    positions = [{"chain": "robinhood", "address": pos["token"], "symbol": pos["symbol"], "name": pos["symbol"],
+                  "amount": pos["qty"], "price_usd": pos["price"], "value_usd": pos["value_usdg"],
+                  "image": pos["image"], "native": False, "hidden": False, "source": "sim", "wallet": "sim",
+                  "ret": pos["ret"]}] if pos else []
+    return {"total": sim["equity"], "cash": sim["usdg"], "positions": positions, "missing": [],
+            "by_chain": {"robinhood": sim["equity"]}, "complete": True,
+            "sim": {**sim, "autotrader": v["mode"]}}
+
+
+def _sim_key(user: User) -> str:
+    return f"{user.id}:sim"
+
+
+def _record_sim(user: User, snap: dict | None = None) -> None:
+    snap = snap or _sim_snapshot(user)
+    if snap["total"] is not None:
+        onchain_wealth.record(_sim_key(user), snap["total"])
+
+
 @app.get("/api/wallets/total")
-async def wallets_total(user: User = Depends(auth.get_current_user)) -> dict:
-    """The header's number: every token on every chain, in USD."""
+async def wallets_total(wallet: Literal["real", "sim"] = "real",
+                        user: User = Depends(auth.get_current_user)) -> dict:
+    """The header's number: every token on every chain, in USD; or the
+    simulated wallet's, with ?wallet=sim."""
+    if wallet == "sim":
+        snap = _sim_snapshot(user)
+        _record_sim(user, snap)
+        return {"total": snap["total"], "cash": snap["cash"], "by_chain": snap["by_chain"], "missing": [],
+                "complete": snap["complete"], "wallet": "sim", "started": snap["sim"] is not None}
     snap = await _wallet_snapshot(user)
     _record_wealth(user, snap)     # the header asks every minute: the chart follows it
     return {"total": snap["total"], "cash": snap["cash"], "by_chain": snap["by_chain"], "missing": snap["missing"],
@@ -3846,26 +3883,36 @@ def _closed_trades(user: User) -> list[dict]:
 
 
 @app.get("/api/profile")
-async def get_profile(user: User = Depends(auth.get_current_user)) -> dict:
+async def get_profile(wallet: Literal["real", "sim"] = "real",
+                      user: User = Depends(auth.get_current_user)) -> dict:
+    """The profile, on the real wallets or (?wallet=sim) on the simulated one:
+    value, cash, positions, closed trades and the line all of that wallet."""
     p = profiles.get(user.id, user.email, _joined_hint(user))
-    snap = await _wallet_snapshot(user)
-    _record_wealth(user, snap)
-    closed = _closed_trades(user)
+    if wallet == "sim":
+        snap = _sim_snapshot(user)
+        _record_sim(user, snap)
+        key = _sim_key(user)
+        closed = [c for c in _closed_trades(user) if c.get("mode") == "sim"]
+        trades = sum(1 for t in onchain_autotrader.view(user.id)["trades"] if t.get("ok") and t.get("mode") == "sim")
+    else:
+        snap = await _wallet_snapshot(user)
+        _record_wealth(user, snap)
+        key = user.id
+        closed = [c for c in _closed_trades(user) if c.get("mode") != "sim"]
+        trades = sum(len(onchain_ledger.list_orders(user.id, c, limit=500)) for c in user.onchain_wallets)
     holds = [c["closed"] - c["opened"] for c in closed]
-    orders = sum(len(onchain_ledger.list_orders(user.id, c, limit=500)) for c in user.onchain_wallets)
     return {
-        "profile": profiles.public(user.id, p), "email": user.email,
+        "profile": profiles.public(user.id, p), "email": user.email, "wallet": wallet, "sim": snap.get("sim"),
         "value": snap["total"], "cash": snap["cash"], "positions": snap["positions"], "missing": snap["missing"],
         "complete": snap["complete"],
         "by_chain": snap["by_chain"],
         "closed": closed,
-        "stats": {"trades": orders + sum(1 for t in onchain_autotrader.view(user.id)["trades"] if t.get("ok") and t.get("mode") == "sim"),
-                  "avg_hold_s": sum(holds) / len(holds) if holds else None, "closed": len(closed)},
+        "stats": {"trades": trades, "avg_hold_s": sum(holds) / len(holds) if holds else None, "closed": len(closed)},
         # the line ends where the header is: the value just read
-        "history": {k: onchain_wealth.series(user.id, k) + ([[_time.time(), snap["total"]]] if snap["complete"] else [])
+        "history": {k: onchain_wealth.series(key, k) + ([[_time.time(), snap["total"]]] if snap["complete"] else [])
                     for k in onchain_wealth.RANGES},
-        "tracking_since": (onchain_wealth.series(user.id, "all") or [[None]])[0][0],
-        "change": {k: onchain_wealth.change(user.id, k, snap["total"]) for k in onchain_wealth.RANGES},
+        "tracking_since": (onchain_wealth.series(key, "all") or [[None]])[0][0],
+        "change": {k: onchain_wealth.change(key, k, snap["total"]) for k in onchain_wealth.RANGES},
     }
 
 
@@ -4034,6 +4081,11 @@ async def _onchain_signals_loop() -> None:
                 await onchain_alert_track.sample(client)
                 await onchain_alert_track.refresh_system(client)
             await onchain_autotrader.tick(auth.list_users(), notify=_notify_autotrade)
+            for u in auth.list_users():      # the simulated wallet's line, a point per round
+                try:
+                    _record_sim(u)
+                except Exception:
+                    logger.exception("sim wealth %s", u.id)
             if _time.time() - warmed_at >= onchain_radar.WARM_EVERY_S:
                 warmed_at = _time.time()
                 asyncio.create_task(onchain_radar.warm_charts(_charts_on_screen()))

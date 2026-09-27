@@ -1888,5 +1888,18 @@
       "frontend/static/onchain/profile.js",
       "frontend/static/onchain/app.css"
     ]
+  },
+  "seed-0154": {
+    "status": "risolto",
+    "at": 1790531581,
+    "summary": "Nel profilo c'e' ora la scelta 'Real wallet / Simulated wallet'. Col wallet simulato il numero grande, il grafico (con tutti i periodi, ora anche 1H-8H), la cassa, la posizione aperta e i trade chiusi sono quelli del saldo virtuale dell'autotrader, ai prezzi reali; l'header in alto mostra lo stesso saldo con l'etichetta SIM. Il saldo simulato ha il suo storico, separato da quello vero, con un punto a ogni giro del sistema. Se la simulazione non e' ancora partita, un tasto la avvia; se l'autotrader e' spento o su reale, lo dice e offre di riprenderla. La scelta resta salvata sul dispositivo.",
+    "files": [
+      "backend/app/main.py",
+      "backend/app/trading/onchain/autotrader.py",
+      "frontend/static/onchain/profile.js",
+      "frontend/static/onchain/main.js",
+      "frontend/static/onchain/api.js",
+      "frontend/static/onchain/app.css"
+    ]
   }
 }

@@ -126,6 +126,7 @@ def view(uid: str) -> dict:
         value = qty * price if price else None
         pos_view = {**{k: pos[k] for k in ("symbol", "token", "pair", "at", "cost_usdg", "mode", "route")},
                     "value_usdg": round(value, 4) if value is not None else None,
+                    "qty": qty, "price": price,
                     "ret": round(value / pos["cost_usdg"] - 1, 4) if value and pos["cost_usdg"] else None,
                     "image": (a or {}).get("image")}
     sim = None

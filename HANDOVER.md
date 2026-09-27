@@ -3510,3 +3510,12 @@ Lorenzo; senza, salta. Modello: `deepseek-reasoner`, cambiabile con la variabile
 di repo `DEEPSEEK_MODEL`. Chi apre una PR legge quel commento e risponde ai punti
 veri. Proposti anche, da fare: spiegazioni in italiano delle uscite del sistema
 e degli alert, riepilogo settimanale scritto.
+
+**2026-09-27 — Lorenzo: "il wallet deve avere anche l'andamento 1h 2h 3h 4h 8h [...] strettamente legato" e "selezionando 'wallet simulato' [...] posso vedere realmente cosa succede".**
+Grafico wallet: periodi 1H-8H, una lettura al minuto con l'app aperta (l'header
+la registra), linea a gradini, tocco = valore di quel momento (`seed-0153`).
+Wallet simulato: `?wallet=sim` su `/api/profile` e `/api/wallets/total`
+(`main._sim_snapshot`), storico separato `"<uid>:sim"` in wealth, selettore
+Real/Simulated nel profilo salvato in localStorage `lae:wallet`, header con
+etichetta SIM (`seed-0154`). DeepSeek PR review: `deepseek-chat` di default
+(il reasoner consumava tutti i token e rispondeva vuoto).
