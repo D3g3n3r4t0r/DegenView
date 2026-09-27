@@ -32,3 +32,24 @@ def test_the_project_rules_go_along(monkeypatch):
     monkeypatch.chdir(ROOT)
     rules = dr.rules()
     assert "trend-following" in rules and "Consumo di token" not in rules
+
+
+def test_an_empty_answer_posts_nothing(monkeypatch):
+    class R:
+        def __init__(self, body):
+            self.b = body
+
+        def read(self):
+            return __import__("json").dumps(self.b).encode()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "k")
+    monkeypatch.setattr(dr.urllib.request, "urlopen",
+                        lambda *a, **k: R({"choices": [{"message": {"content": ""}, "finish_reason": "length"}]}))
+    import pytest
+    with pytest.raises(RuntimeError, match="empty answer"):
+        dr.ask({"title": "t", "body": ""}, "diff")
