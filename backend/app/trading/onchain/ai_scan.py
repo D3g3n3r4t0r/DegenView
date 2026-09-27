@@ -80,7 +80,11 @@ def parse(text: str, batch: list[dict], now: float) -> int:
         except (KeyError, ValueError, TypeError, IndexError):
             continue
         a["ai"] = {"risk": risk, "flags": [str(f)[:40] for f in (it.get("flags") or [])][:3],
-                   "theme": str(it.get("theme") or "")[:30], "at": now}
+                   "theme": str(it.get("theme") or "")[:30], "why": str(it.get("why") or "")[:160], "at": now}
+        # The memory measures it like any check (outcomes.signals: AUC on rugs).
+        e = outcomes._journal.get(f"{a['chain']}:{a.get('token_address')}")
+        if e is not None:
+            e["features"]["ai_risk"] = risk
         n += 1
     return n
 

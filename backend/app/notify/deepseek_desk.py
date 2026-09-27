@@ -41,7 +41,8 @@ RECAP_HOUR = 21                      # Rome time
 PRICE = {"deepseek": (0.28, 0.42), "claude": (3.0, 15.0)}
 CHAT_DAILY_TOKENS = 300_000
 MEMORY = 10                          # messages kept per chat
-KINDS = {"chat": "chat Telegram", "scanner": "scanner (giudizio token)", "review": "revisioni token",
+KINDS = {"chat": "chat Telegram", "scanner": "scanner (giudizio token)", "research": "letture approfondite gemme",
+         "review": "revisioni token",
          "pr_review": "revisioni PR"}
 
 _lock = threading.Lock()
