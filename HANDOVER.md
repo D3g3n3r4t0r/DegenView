@@ -3556,3 +3556,10 @@ finalisti con DeepSeek (80/giorno, cache 7 giorni) e fa `blend` 50/50 col
 lettore deterministico; piano "deep" disponibile con DeepSeek. Restano le fasi
 2-5. Lezione: tre merge di fila = tre riavvii, e Lorenzo ha visto un 503 sul
 Wallet (pagina di Caddy durante il deploy): raggruppare i merge.
+
+**2026-09-27 — Lorenzo: "ci sono troppe schermate, dobbiamo fare un'opera di ingegnerizzazione importante [...] il podio ha senso soltanto per le gemme [...] una leaderboard con le strategie ingresso e uscita".**
+Dock da 5 a 4: Meme (Alerts | Picks; Scanner = link in fondo agli Alerts,
+tab nascosta), Gems (podio + classifica | Database), Strategie (ex trofeo:
+`alerts.strategyBoard` dai `system.candidates`, poi gli alert col risultato del
+sistema; niente tab Alerts/Gems, niente podio, niente card "You"), Profilo
+(il Wallet ci vive: tasto Swap → vista wallet). Fasi 2-5 DeepSeek ancora da fare.
