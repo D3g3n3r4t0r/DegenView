@@ -3806,6 +3806,7 @@ def _record_wealth(user: User, snap: dict) -> None:
 async def wallets_total(user: User = Depends(auth.get_current_user)) -> dict:
     """The header's number: every token on every chain, in USD."""
     snap = await _wallet_snapshot(user)
+    _record_wealth(user, snap)     # the header asks every minute: the chart follows it
     return {"total": snap["total"], "cash": snap["cash"], "by_chain": snap["by_chain"], "missing": snap["missing"],
             "complete": snap["complete"]}
 

@@ -1877,5 +1877,16 @@
       "frontend/static/onchain/api.js",
       "frontend/static/onchain/app.css"
     ]
+  },
+  "seed-0153": {
+    "status": "risolto",
+    "at": 1790531386,
+    "summary": "Nuovi periodi 1H, 2H, 3H, 4H, 8H accanto a 1D, 1W, 1M e All, sotto il grafico. Il valore ora si legge ogni minuto mentre l'app e' aperta (ogni 5 minuti altrimenti, prima era ogni 10), e ogni lettura e' un punto del grafico. La linea va a gradini: tra due letture resta al valore letto, senza inventare prezzi intermedi. Toccando o passando sul grafico il numero grande mostra il valore di quel momento, con l'ora e la differenza dall'inizio del periodo; lasciando torna al valore attuale. Il profilo si aggiorna da solo ogni minuto.",
+    "files": [
+      "backend/app/trading/onchain/wealth.py",
+      "backend/app/main.py",
+      "frontend/static/onchain/profile.js",
+      "frontend/static/onchain/app.css"
+    ]
   }
 }
