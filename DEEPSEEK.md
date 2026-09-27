@@ -17,6 +17,8 @@ rivisto; le revisioni delle PR lo leggono insieme a CLAUDE.md.
 | revisione dei token (sistema) | `app/trading/onchain/ai_review.py` | attivo |
 | chat su Telegram, con i dati del sito | `app/notify/deepseek_desk.py` | attivo |
 | riepilogo giornaliero dei token, alle 21 | `app/notify/deepseek_desk.py` | attivo |
+| rischio rug su ogni meme segnalata, a gruppi di 10 | `app/trading/onchain/ai_scan.py` | in ombra: si misura |
+| lettura del sito delle gemme | `app/trading/onchain/legit.py` | in ombra (`LEGIT_AI_GATE` per farlo bloccare) |
 
 Lavoro affidabile = conta i token che fa. Il riepilogo li confronta con quello
 che sarebbero costati su Claude, a prezzi di listino.
