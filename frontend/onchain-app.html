@@ -22,7 +22,7 @@
    light-dark() al posto di tre blocchi di token duplicati, oklch
    per i colori e color-mix per derivarne le varianti.
    ============================================================ */
-@layer tokens, base, layout, components, motion, gemboard, shell;
+@layer tokens, base, layout, components, motion, gemboard, skin;
 
 @layer tokens {
   :root {
@@ -2004,66 +2004,8 @@
    striscia compatta in cima, sotto a sinistra le liste del radar e
    a destra il dettaglio del token, fermo mentre la lista scorre.
    ============================================================ */
-@layer components {
-  @media (width >= 1100px) {
-    .topbar {
-      display: grid !important; grid-template-columns: 1fr auto 1fr; align-items: center;
-      position: sticky; inset-block-start: 0; z-index: 30; margin-block: -16px 0; padding-block: 12px;
-      background: color-mix(in oklch, var(--bg) 88%, transparent);
-      backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
-      & .topbar-right { justify-self: end; }
-    }
-    .topbar .dock {
-      position: static; translate: none; inline-size: 440px; box-shadow: none; view-transition-name: none;
-      background: var(--panel); border-radius: 16px; padding: 4px;
-      & button { grid-auto-flow: column; justify-content: center; align-items: center; gap: 7px;
-        padding: 8px 10px; border-radius: 12px; font-size: 13px; }
-      & svg { inline-size: 17px; block-size: 17px; }
-    }
-    .topbar .dock .dock-thumb { inset-block: 4px; inset-inline-start: 4px; inline-size: calc((100% - 8px) / 4); border-radius: 12px; }
-    #app-shell:not([hidden]) { padding-block-end: 40px; }
-
-    /* --- Gems: the leaderboard alone. Memes: bets and autopilot on top,
-       the live scanner (lists left, chart right) under them. */
-    #app-shell[data-view="gems"] #board { margin: 0 0 10px; }
-    #app-shell[data-view="meme"] {
-      display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 400px); column-gap: 28px; align-items: start;
-    }
-    #app-shell[data-view="meme"] #pilot { position: sticky; inset-block-start: 90px; margin: 0; }
-    #app-shell[data-view="meme"] #radar { grid-column: 1 / -1; }
-    #app-shell[data-view="meme"] .radar-rejected { display: none; }
-    #app-shell[data-view="meme"] .radar-stage {
-      position: sticky; inset-block-start: 76px;
-      max-block-size: calc(100dvh - 96px); overflow-y: auto; scrollbar-width: thin;
-    }
-
-    /* Podio in riga, 1-2-3 da sinistra, stessa altezza: una striscia,
-       non tre card enormi. */
-    #board .board-podium { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; align-items: stretch; gap: 10px;
-      justify-content: stretch;
-      & li, & li[data-place="2"], & li[data-place="3"] { order: 0; }
-      & button, & li[data-place="1"] button {
-        block-size: 100%; display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; column-gap: 12px; row-gap: 6px;
-        align-items: center; justify-items: start; padding: 12px 16px; text-align: start;
-      }
-      & .bd-medal { grid-column: 1; grid-row: 1 / span 2; }
-      & .bd-sym { grid-column: 2; grid-row: 1; }
-      & small { grid-column: 2; grid-row: 2; }
-      & .bd-total, & li[data-place="1"] .bd-total { grid-column: 3; grid-row: 1 / span 2; justify-self: end; font-size: 28px; }
-      & .bd-bars { grid-column: 1 / -1; max-inline-size: none; }
-      & .bd-tags { grid-column: 1 / -1; }
-      & .bd-honor { grid-column: 1 / -1; margin: 0; text-align: start; }
-      & .bd-move { position: static; }
-    }
-
-    /* --- Portafoglio: saldo e monete a sinistra, azioni e tab a destra */
-    #app-shell[data-view="wallet"] {
-      display: grid; grid-template-columns: minmax(0, 380px) minmax(0, 1fr); column-gap: 28px; align-items: start;
-    }
-    #app-shell[data-view="wallet"] .status-strip { position: sticky; inset-block-start: 90px; }
-    #app-shell[data-view="wallet"] .holdings { flex-wrap: wrap; mask-image: none; overflow: visible; }
-  }
-}
+/* The desktop two-column layout lived here: removed 27/09, the app is one
+   phone-width column on every screen (static/onchain/app.css). */
 
 /* La prima pagina non e' mai vuota. Richiesta: "sta pagina rimane vuota":
    classifica e radar restavano nascosti finche' i loro dati non
@@ -2615,189 +2557,8 @@
   }
 }
 
-/* ============================================================
-   One app (27/09). Request: "l'app deve essere unica e gestita cosi'
-   graficamente e come layout, ispirati" (reference: a phone trading app).
-   Avatar and balance top left, Deposit and the bell top right; underlined
-   tabs; rows with a square logo, a HOT pill, market cap and a coloured
-   change pill; a floating glass bar at the bottom with a round search
-   button beside it; a leaderboard with the winner in gold, a crown and
-   confetti. Last layer: it wins over everything above.
-   ============================================================ */
-@layer shell {
-  :root { --dock-w: min(440px, calc(100vw - 108px)); --gold-1: #ffd66b; --gold-2: #e8a531; }
-  body { background: #050506; }
-  /* One column, phone-like, on every screen: the same app everywhere. */
-  .page { max-inline-size: 760px; margin-inline: auto; }
-  #app-shell[data-view] { max-inline-size: none; }
-  #app-shell:not([hidden]) { padding-block-end: 120px; }
-  #app-shell[data-view] { display: flex; flex-direction: column; gap: var(--s4); }
-  #app-shell .pane-off { display: none !important; }
-  #app-shell > .tabs { order: -10; }
-  #memes { display: flex; flex-direction: column; }
-  #memes > [data-memes-track] { order: 5; margin-block: var(--s4) 0; }
-
-  /* --- header ------------------------------------------------------- */
-  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0 14px; }
-  .topbar .brand { display: none; }
-  .tb-me { display: flex; align-items: center; gap: 12px; min-inline-size: 0; }
-  .tb-me .addr-chip { padding: 0; border: 0; background: none; inline-size: 48px; block-size: 48px; border-radius: 50%;
-    & .avatar { inline-size: 48px; block-size: 48px; }
-    & #topbar-address-text { display: none; } }
-  .tb-bal { display: grid; gap: 2px; min-inline-size: 0; }
-  .tb-bal #balance { font: 800 26px/1.05 var(--sans); letter-spacing: -.02em; color: var(--ink); white-space: nowrap;
-    & .cents, & .unit-mark { font-size: .8em; } }
-  .tb-bal .chain-flip { justify-self: start; padding: 2px 8px; font-size: 11.5px; border-radius: 99px; }
-  .topbar-right { display: flex; align-items: center; gap: 10px; }
-  .tb-deposit { padding: 11px 18px; border-radius: 13px; border: 0; background: #fff; color: #0a0a0b;
-    font: 650 15px var(--sans); cursor: pointer; transition: scale .12s; &:active { scale: .96; } }
-  .tb-bell { position: relative; inline-size: 42px; block-size: 42px; display: grid; place-items: center; border: 0;
-    background: none; color: var(--ink); cursor: pointer;
-    & svg { inline-size: 26px; block-size: 26px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
-    & i { position: absolute; inset: 8px 8px auto auto; inline-size: 9px; block-size: 9px; border-radius: 50%;
-      background: #ff4d5e; box-shadow: 0 0 0 2px #050506; } }
-
-  /* --- tabs ----------------------------------------------------------- */
-  .tabs { display: flex; gap: 26px; border-block-end: 1px solid rgb(255 255 255 / .09); margin-block-end: 2px;
-    overflow-x: auto; scrollbar-width: none;
-    & button { position: relative; padding: 12px 0 14px; border: 0; background: none; color: var(--ink-faint);
-      font: 600 16px var(--sans); cursor: pointer; white-space: nowrap; transition: color .2s; }
-    & button[aria-current] { color: var(--ink); }
-    & button[aria-current]::after { content: ""; position: absolute; inset: auto 0 -1px; block-size: 3px; border-radius: 3px;
-      background: var(--ink); view-transition-name: tab-line; } }
-
-  /* --- floating bar + search --------------------------------------- */
-  #dock.dock { position: fixed; z-index: 40; inset: auto auto calc(16px + env(safe-area-inset-bottom)) calc(50% - (var(--dock-w) + 76px) / 2);
-    inline-size: var(--dock-w); block-size: 64px; display: flex; align-items: center; justify-content: space-around;
-    padding: 0 8px; border-radius: 32px; transform: none; translate: none; margin: 0;
-    background: rgb(34 34 38 / .72); border: 1px solid rgb(255 255 255 / .08);
-    backdrop-filter: blur(22px) saturate(1.6); -webkit-backdrop-filter: blur(22px) saturate(1.6);
-    box-shadow: 0 18px 40px -16px rgb(0 0 0 / .8);
-    &[hidden] { display: none; }
-    & .dock-thumb { display: none; }
-    & button { flex: 1; block-size: 52px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 26px;
-      background: none; color: rgb(255 255 255 / .55); cursor: pointer; transition: color .2s, background .2s; }
-    & button span { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
-    & button svg { inline-size: 28px; block-size: 28px; fill: none; stroke: currentColor; stroke-width: 1.9;
-      stroke-linecap: round; stroke-linejoin: round; }
-    & button[aria-current] { color: #fff; background: rgb(255 255 255 / .08); }
-    & button[aria-current] svg { fill: rgb(255 255 255 / .9); stroke: #fff; } }
-  .dock-search { position: fixed; z-index: 40; inline-size: 64px; block-size: 64px; border-radius: 50%;
-    inset: auto auto calc(16px + env(safe-area-inset-bottom)) calc(50% - (var(--dock-w) + 76px) / 2 + var(--dock-w) + 12px);
-    display: grid; place-items: center; border: 1px solid rgb(255 255 255 / .08); color: #fff; cursor: pointer;
-    background: rgb(34 34 38 / .72); backdrop-filter: blur(22px) saturate(1.6); -webkit-backdrop-filter: blur(22px) saturate(1.6);
-    box-shadow: 0 18px 40px -16px rgb(0 0 0 / .8);
-    &[hidden] { display: none; }
-    & svg { inline-size: 28px; block-size: 28px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; } }
-
-  /* --- logo tiles ----------------------------------------------------- */
-  .tile { --h: 150; position: relative; flex: none; display: grid; place-items: center; overflow: hidden;
-    inline-size: 64px; aspect-ratio: 1; border-radius: 16px;
-    background: linear-gradient(145deg, hsl(var(--h) 70% 58%), hsl(calc(var(--h) + 50) 65% 32%));
-    & b { font: 800 20px var(--sans); color: rgb(255 255 255 / .92); letter-spacing: -.02em; text-shadow: 0 2px 8px rgb(0 0 0 / .35); }
-    & img { inline-size: 100%; block-size: 100%; object-fit: cover; } }
-  .tile-wrap { position: relative; inline-size: 64px; }
-  .chain-badge { position: absolute; inset: auto -4px -4px auto; inline-size: 24px; block-size: 24px; border-radius: 50%;
-    display: grid; place-items: center; font: 700 12px var(--mono); font-style: normal; color: #b58cff;
-    background: #101013; box-shadow: 0 0 0 3px #050506; }
-
-  /* --- meme rows ------------------------------------------------------ */
-  .memes-list li { border-block-end: 1px solid rgb(255 255 255 / .07); }
-  .meme-row { grid-template-columns: 64px minmax(0, 1fr) auto; column-gap: 14px; row-gap: 8px; align-items: center;
-    padding: 16px 6px; border-radius: 0;
-    background: linear-gradient(90deg, transparent 35%, color-mix(in srgb, var(--up) 9%, transparent));
-    &[data-sign="down"] { background: linear-gradient(90deg, transparent 35%, color-mix(in srgb, var(--down) 11%, transparent)); }
-    &:hover { translate: 0 0; filter: brightness(1.12); }
-    & .mm-name b { display: flex; align-items: center; gap: 8px; font: 700 18px var(--sans); }
-    & .mm-name small { font-size: 13.5px; color: var(--ink-dim); }
-    & .sprout { color: var(--up); }
-    & .mm-num { display: grid; justify-items: end; gap: 6px; }
-    & .mm-num b { font: 800 21px var(--sans); letter-spacing: -.02em; color: var(--ink); }
-    & .mm-foot { grid-column: 2 / -1; display: flex; align-items: center; gap: 8px; min-inline-size: 0; }
-    & .mm-foot .mm-why { grid-column: auto; flex-wrap: nowrap; overflow: hidden; }
-    & .mm-score { inline-size: 26px; block-size: 26px; flex: none; & b { font-size: 10px; } &::before { inset: 2.5px; } } }
-  .hot { font: 700 11px var(--sans); font-style: normal; letter-spacing: .04em; padding: 1px 7px; border-radius: 8px;
-    color: #ff5a6a; border: 1.5px solid #ff5a6a; }
-  .pill { font: 700 13.5px var(--mono); font-style: normal; padding: 3px 8px; border-radius: 7px;
-    &[data-sign="up"] { color: #7ee8a2; background: rgb(46 204 113 / .16); }
-    &[data-sign="down"] { color: #ff6b6b; background: rgb(255 77 94 / .16); } }
-
-  /* --- leaderboard (trophy) ------------------------------------------ */
-  .top-hero { position: relative; block-size: 330px; overflow: hidden; margin-inline: -4px; }
-  .confetti i { position: absolute; inset-block-start: -20px; inset-inline-start: calc(mod(var(--i) * 37, 100) * 1%);
-    inline-size: 12px; aspect-ratio: 1; background: var(--gold-1); opacity: .9;
-    clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
-    animation: fall calc(5s + mod(var(--i), 5) * .8s) linear infinite; animation-delay: calc(var(--i) * -.45s); }
-  .confetti i:nth-child(3n) { background: #ff7a3d; inline-size: 14px; }
-  .confetti i:nth-child(4n) { background: #fff3c4; inline-size: 7px; clip-path: circle(50%); }
-  .confetti i:nth-child(5n) { background: #c9b8ff; inline-size: 9px; }
-  @keyframes fall { to { transform: translateY(380px) rotate(540deg); } }
-  .hero-text { position: absolute; z-index: 2; inset: 18px auto auto 8px; display: flex; gap: 12px; align-items: flex-start;
-    & .hero-rank { font: 900 104px/.8 var(--sans); background: linear-gradient(180deg, var(--gold-1), var(--gold-2));
-      -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 6px 18px rgb(232 165 49 / .45)); }
-    & span { display: grid; gap: 4px; padding-block-start: 10px; }
-    & strong { font: 800 28px var(--sans); letter-spacing: -.02em; }
-    & em { font: 700 22px var(--mono); font-style: normal; }
-    & small { color: var(--ink-faint); font-size: 12.5px; } }
-  [data-sign="up"] { --sign: #7ee8a2; } [data-sign="down"] { --sign: #ff6b6b; }
-  .hero-text em, .top-ret b, .inbox .top-ret b { color: var(--sign, var(--ink)); }
-  .hero-card { position: absolute; margin: 0; display: grid; place-items: center; border-radius: 24px; padding: 0;
-    & .tile { inline-size: 100%; block-size: 100%; aspect-ratio: auto; border-radius: 16px; & b { font-size: 64px; } } }
-  .hero-card[data-place="1"] { z-index: 1; inset: 96px 4% auto auto; inline-size: min(56%, 280px); aspect-ratio: 5 / 4;
-    border: 7px solid var(--gold-1); rotate: -6deg;
-    box-shadow: 0 0 60px -6px rgb(255 190 60 / .55), inset 0 0 0 2px var(--gold-2);
-    animation: hover-card 5s ease-in-out infinite; }
-  .hero-card[data-place="2"] { inset: auto auto 18px 4%; inline-size: min(36%, 220px); aspect-ratio: 5 / 4;
-    border: 5px solid #bfc4cc; rotate: 5deg; filter: saturate(.3) brightness(.85);
-    & .tile b { font-size: 40px; } }
-  .hero-num { position: absolute; z-index: 1; inset: 4px auto auto 10px; font: 900 34px var(--sans); color: #d6dae0; }
-  .crown { position: absolute; z-index: 2; inset: -34px auto auto 50%; translate: -50% 0; inline-size: 76px;
-    fill: var(--gold-1); stroke: var(--gold-2); stroke-width: 1.5; filter: drop-shadow(0 4px 10px rgb(232 165 49 / .6));
-    & .gem { fill: #e0283c; stroke: none; } }
-  @keyframes hover-card { 50% { translate: 0 -8px; rotate: -4deg; } }
-  .top-bar { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-block: 8px 12px; }
-  .seg { display: inline-flex; padding: 4px; gap: 2px; border-radius: 999px; background: #141417; border: 1px solid rgb(255 255 255 / .07);
-    & button { padding: 8px 18px; border: 0; border-radius: 999px; background: none; color: var(--ink-dim);
-      font: 650 14px var(--sans); cursor: pointer; }
-    & button[aria-pressed="true"] { background: #fff; color: #0a0a0b; } }
-  :is(.top-list, .inbox) { list-style: none; margin: 0; padding: 0; border-radius: 22px; background: #0d0d10;
-    border: 1px solid rgb(255 255 255 / .06);
-    & a { display: grid; grid-template-columns: 30px 52px minmax(0, 1fr) auto; gap: 14px; align-items: center;
-      padding: 14px 16px; color: inherit; text-decoration: none; }
-    & li + li { border-block-start: 1px solid rgb(255 255 255 / .05); }
-    & .tile { inline-size: 52px; border-radius: 50%; & b { font-size: 16px; } }
-    & .top-rank { font: 700 18px var(--sans); color: var(--ink-dim); text-align: center; }
-    & .top-rank[data-place="1"] { color: var(--gold-1); } & .top-rank[data-place="2"] { color: #d6dae0; }
-    & .top-rank[data-place="3"] { color: #e0a070; }
-    & .top-name { display: grid; gap: 3px; min-inline-size: 0;
-      & b { font: 650 17px var(--sans); display: flex; align-items: center; gap: 6px; }
-      & small { font-size: 12.5px; color: var(--ink-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } }
-    & li:first-child .top-name b { color: var(--gold-1); }
-    & .top-ret { display: grid; justify-items: end; gap: 2px;
-      & b { font: 750 18px var(--mono); } & small { font-size: 11.5px; color: var(--ink-faint); } } }
-  .inbox { margin-block-start: 12px; max-block-size: 70dvh; overflow-y: auto; & a { grid-template-columns: 52px minmax(0, 1fr) auto; } }
-  .mini-crown { inline-size: 18px; fill: none; stroke: var(--gold-1); stroke-width: 1.8; stroke-linejoin: round; }
-
-  /* The review lives under the trophy now. */
-  #review { padding: var(--s4); }
-
-  @media (max-width: 520px) {
-    .tb-bal #balance { font-size: 22px; }
-    .tb-deposit { padding: 9px 14px; font-size: 14px; }
-    .top-hero { block-size: 290px; }
-    .seg button { padding: 7px 12px; font-size: 13px; }
-    .top-bar { flex-wrap: nowrap; }
-    .hero-text .hero-rank { font-size: 88px; }
-    .hero-text strong { font-size: 22px; }
-    .hero-card[data-place="1"] { inset-block-start: 110px; inline-size: 58%; }
-    .meme-row { grid-template-columns: 56px minmax(0, 1fr) auto; column-gap: 12px;
-      & .tile, & .tile-wrap { inline-size: 56px; } & .mm-name b { font-size: 17px; } & .mm-num b { font-size: 19px; } }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .confetti { display: none; } .hero-card { animation: none !important; }
-  }
-}
 </style>
+<link rel="stylesheet" href="/static/onchain/app.css" />
 <!--onchain-importmap-->
 </head>
 <body>
@@ -2821,11 +2582,7 @@
         <button type="button" class="addr-chip" id="more-btn" aria-haspopup="dialog" aria-controls="more" aria-label="Your wallet" hidden>
           <span class="avatar" aria-hidden="true"></span><span id="topbar-address-text">—</span>
         </button>
-        <div class="tb-bal" data-balance-slot>
-          <button type="button" class="chain-flip" id="chain-flip" title="Tap to switch chain">
-            <span class="chain-ic" id="chain-ic" aria-hidden="true">◎</span><span id="chain-label">Solana</span><span class="flip-ic" aria-hidden="true">⇄</span>
-          </button>
-        </div>
+        <div class="tb-bal" data-balance-slot></div>
       </div>
       <div class="topbar-right">
         <div class="switcher" id="chain-switch" data-selected="solana" role="tablist" aria-label="Chain">
@@ -2865,12 +2622,16 @@
         <button type="button" data-tab="database">Database</button>
       </nav>
       <nav class="tabs" data-tabs="top" aria-label="Leaderboard">
-        <button type="button" data-tab="best" aria-current="page">Best alerts</button>
-        <button type="button" data-tab="review">Daily review</button>
+        <button type="button" data-tab="meme" aria-current="page">Alerts</button>
+        <button type="button" data-tab="gem">Gems</button>
       </nav>
       <div class="status-strip">
         <section class="status-card balance-card">
           <p class="label">Balance</p>
+            <button type="button" class="chain-flip" id="chain-flip" title="Tap to switch chain">
+            <span class="chain-ic" id="chain-ic" aria-hidden="true">◎</span><span id="chain-label">Solana</span><span class="flip-ic" aria-hidden="true">⇄</span>
+          </button>
+
           <div class="amount" id="balance">—</div>
           <div class="meta">
             <button type="button" class="addr" id="address" title="Copy address"></button>
@@ -3002,11 +2763,9 @@
            tasti". Un interruttore, una riga di stato, i token che segue.
            Il contenuto lo disegna static/onchain/pilot.js. -->
       <section class="memes" id="memes" data-pane="meme:trending" data-loading>
-        <p class="risk-banner" role="note"><b>Degen zone.</b> Minutes-old tokens, thin liquidity, frequent rugs. Only bet what you can burn.</p>
-        <header><h3><span class="radar-dot" aria-hidden="true"></span>Ready to pump</h3><span data-memes-meta></span></header>
-        <div class="track" data-memes-track hidden></div>
+        <span data-memes-meta hidden></span>
         <ol class="memes-list" data-memes-list></ol>
-        <p class="memes-empty" data-memes-empty hidden>Nothing worth a bet right now. The radar runs 24/7: check back soon.</p>
+        <p class="memes-empty" data-memes-empty hidden>Quiet right now. New tokens appear here within minutes.</p>
       </section>
 
       <!-- Richiesta: "risultati se avessimo seguito l'alert di telegram [...]
@@ -3014,16 +2773,17 @@
            oltre a questo anche il rendimento della miglior strategia
            backtestata". Lo disegna static/onchain/alerts.js. -->
       <section class="alerts" id="meme-alerts" data-pane="meme:alerts" data-alerts-kind="meme" data-loading>
-        <header><h3><span class="radar-dot" aria-hidden="true"></span>Alert leaderboard</h3><span data-alerts-meta></span></header>
-        <p class="track-note al-intro">If we had bought when each Telegram alert arrived: price change after each hour, now, and the best backtested strategy on the same token.</p>
+        <span data-alerts-meta hidden></span>
         <div data-alerts-body></div>
+        <p class="list-foot" data-memes-track></p>
       </section>
 
       <!-- Il revisore giornaliero (ai_review.py): Claude legge cosa e' successo
            davvero ai segnali e propone cosa cambiare. -->
       <!-- La classifica degli alert, come le classifiche dei trader: il primo
            in grande con la corona, poi la lista. Lo disegna alerts.js. -->
-      <section class="top" id="top" data-pane="top:best" data-loading>
+      <section class="top" id="top" data-loading>
+        <p class="top-info" data-top-info></p>
         <div class="top-hero" data-top-hero></div>
         <div class="top-bar">
           <div class="seg" role="group" aria-label="Period">
@@ -3031,19 +2791,20 @@
             <button type="button" data-period="7" aria-pressed="false">1W</button>
             <button type="button" data-period="30" aria-pressed="false">1M</button>
           </div>
-          <div class="seg" role="group" aria-label="Kind">
-            <button type="button" data-kind="meme" aria-pressed="true">Memes</button>
-            <button type="button" data-kind="gem" aria-pressed="false">Gems</button>
-          </div>
+          <button type="button" class="sort-btn" data-sort><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16M3.5 16.5 7 20l3.5-3.5M13 6h8M13 11h6M13 16h4"/></svg><span>Now</span></button>
         </div>
-        <ol class="top-list" data-top-list></ol>
-        <p class="track-note" data-top-note></p>
+        <div class="top-sheet">
+          <div class="you-card" data-top-you></div>
+          <ol class="top-list" data-top-list></ol>
+          <button type="button" class="review-row" data-open-review>Yesterday's review <span aria-hidden="true">›</span></button>
+        </div>
       </section>
 
-      <section class="review" id="review" data-pane="top:review">
+      <dialog class="sheet review" id="review" aria-label="Daily review">
+        <div class="grip" aria-hidden="true"></div>
         <header><h3>Daily review</h3><span data-review-meta></span></header>
         <div data-review-body></div>
-      </section>
+      </dialog>
 
       <section class="pilot" id="pilot" data-pane="meme:scanner" data-tone="off">
         <!-- One card: status, switch, today's numbers, the limits. It used

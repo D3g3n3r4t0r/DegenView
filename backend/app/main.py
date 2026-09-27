@@ -6504,6 +6504,8 @@ def _compute_asset_version() -> str:
             (FRONTEND_DIR / "static" / "onchain-embed.css").read_bytes(),
         ]
         parts += [m.read_bytes() for m in sorted((FRONTEND_DIR / "static" / "onchain").glob("*.js"))]
+        # The app's skin (static/onchain/app.css) too: a CSS-only deploy must change the ?v=.
+        parts += [m.read_bytes() for m in sorted((FRONTEND_DIR / "static" / "onchain").glob("*.css"))]
         return hashlib.sha256(b"".join(parts)).hexdigest()[:10]
     except OSError:
         return "0"
@@ -6583,6 +6585,7 @@ _ONCHAIN_APP_HTML = (
     .replace("<!--onchain-importmap-->", _onchain_importmap(_ASSET_VERSION))
     .replace("<!--onchain-modulepreload-->", _onchain_modulepreloads(_ASSET_VERSION))
     .replace('src="/static/onchain/main.js"', f'src="/static/onchain/main.js?v={_ASSET_VERSION}"')
+    .replace('href="/static/onchain/app.css"', f'href="/static/onchain/app.css?v={_ASSET_VERSION}"')
     # La libreria del grafico non cambia fra un deploy e l'altro: con il `?v=`
     # finisce in cache per sempre invece di rivalidarsi a ogni apertura.
     .replace(

@@ -1,76 +1,54 @@
 /**
- * The meme lane: tokens the serious scanner rejected for meme reasons
+ * Trending memes: tokens the serious scanner rejected for meme reasons
  * (name, website, GitHub) but that are alive, sellable and clean on
- * RugCheck/GoPlus, ranked by the meme engine (flow, ticket, momentum,
- * depth, holders) with its reasons and risks on each row, and under the
- * header the lane's own track record as simulated trades. Gambling, and the
- * section says so. Read-only: the autopilot never buys these.
+ * RugCheck/GoPlus, ranked by the meme engine. The list shows one fact per
+ * line, like the reference app; score, reasons, risks and the track record
+ * live on the token page (detail.js, "Why"). Gambling: the warning is there
+ * too. Read-only: the autopilot never buys these.
  */
 import * as api from "@onchain/api.js";
-import { escapeHtml } from "@onchain/format.js";
-import { tile } from "@onchain/alerts.js";
+import { escapeHtml, tokenRow } from "@onchain/format.js";
+import { register } from "@onchain/detail.js";
+import { alertsFor } from "@onchain/alerts.js";
 
 const POLL_MS = 60_000;
-const CHAIN = { solana: "Solana", robinhood: "Robinhood", ethereum: "Ethereum", base: "Base" };
 
 let root = null;
 let timer = null;
+let lastTrack = null;
 
-const usd = (n) => (n == null ? "—" : n >= 1e6 ? `$${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `$${Math.round(n / 1e3)}k` : `$${Math.round(n)}`);
-// The server sends returns as fractions (0.42 = +42%).
 const pct = (f) => (f == null ? "—" : `${f > 0 ? "+" : ""}${Math.round(f * 100)}%`);
-const TONE = { "60+": "hot", "40-59": "warm", "under 40": "cold" };
+const usd = (n) => (n == null ? "—" : n >= 1e6 ? `$${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `$${Math.round(n / 1e3)}k` : `$${Math.round(n)}`);
 
-function chips(m) {
-  const good = (m.reasons ?? []).slice(0, 2).map((r) => `<li data-tone="good">${escapeHtml(r)}</li>`);
-  const bad = (m.risks ?? []).slice(0, 2).map((r) => `<li data-tone="bad">${escapeHtml(r)}</li>`);
-  return good.length || bad.length ? `<ul class="mm-why">${[...bad, ...good].join("")}</ul>` : "";
+function why(m) {
+  const sc = Math.round(m.score ?? 0);
+  const band = (lastTrack?.bands ?? []).find((b) => b.band === m.band && b.n);
+  return `<div class="why-score"><span class="ring" style="--v:${sc}"><b>${sc}</b></span>
+      <p><b>Meme engine score</b><small>${band ? `Picks scoring ${escapeHtml(m.band)} returned a median ${pct(band.median)} as $100 trades (${band.n} trades).` : "Flow, ticket size, momentum, depth and holders."}</small></p></div>
+    <ul class="why-list">${(m.reasons ?? []).map((r) => `<li data-tone="good">${escapeHtml(r)}</li>`).join("")}
+      ${(m.risks ?? []).map((r) => `<li data-tone="bad">${escapeHtml(r)}</li>`).join("")}</ul>
+    <p class="muted">New token, thin liquidity. Only risk what you can lose.</p>`;
 }
-
-/** The lane judged on its own picks: simulated trades opened when a token
- *  was shown, next to every meme watched (the bar to beat). */
-function track(t) {
-  const box = root.querySelector("[data-memes-track]");
-  if (!box) return;
-  const r = t?.rules ?? {};
-  const shown = t?.shown ?? {};
-  if (!shown.n) {
-    box.innerHTML = `<p class="track-note">Track record starts now: every pick shown here is followed as a $${r.size_usd ?? 100}
-      trade (${pct(r.take_profit ?? 0.5)} target, ${pct(r.stop_loss ?? -0.3)} stop, ${r.max_hold_h ?? 48}h, fees and slippage paid).</p>`;
-    box.hidden = false;
-    return;
-  }
-  const base = t.baseline ?? {};
-  const stat = (label, s, hint) => `<div class="track-stat"><dt>${label}</dt>
-    <dd><b data-sign="${(s.median ?? 0) >= 0 ? "up" : "down"}">${pct(s.median)}</b><small>median · ${Math.round((s.win_rate ?? 0) * 100)}% hit ${pct(r.win_ret ?? 0.2)} · ${s.n} trades</small></dd>
-    ${hint ? `<p>${hint}</p>` : ""}</div>`;
-  const bands = (t.bands ?? []).filter((b) => b.n).map((b) =>
-    `<li data-tone="${TONE[b.band] ?? ""}"><span>score ${escapeHtml(b.band)}</span><b>${pct(b.median)}</b><small>${Math.round((b.win_rate ?? 0) * 100)}% · ${b.n}</small></li>`).join("");
-  box.innerHTML = `<dl class="track-grid">${stat("Picks shown here", shown)}${stat("Every meme watched", base)}</dl>
-    ${bands ? `<ul class="track-bands">${bands}</ul>` : ""}
-    <p class="track-note">Simulated $${r.size_usd} trades from the moment of the pick: ${pct(r.take_profit)} target, ${pct(r.stop_loss)} stop, ${r.max_hold_h}h max, DEX fee and price impact both ways. Not a promise.</p>`;
-  box.hidden = false;
-}
-
-const CHAIN_IC = { solana: "◎", robinhood: "◆" };
-const ago = (ts) => {
-  const sec = Date.now() / 1000 - ts;
-  return sec < 3600 ? `${Math.max(1, Math.round(sec / 60))}m` : sec < 86400 ? `${Math.round(sec / 3600)}h` : `${Math.round(sec / 86400)}d`;
-};
 
 function row(m) {
-  const up = (m.ret_since_seen ?? 0) >= 0;
-  const sc = Math.round(m.score ?? 0);
-  const hot = m.band === "60+";
-  const flow = m.buys_h1 != null ? ` · ${m.buys_h1}↑ ${m.sells_h1 ?? 0}↓` : "";
-  return `
-    <li><a class="meme-row" href="${escapeHtml(m.pair_url || "#")}" target="_blank" rel="noopener" data-tone="${TONE[m.band] ?? ""}" data-sign="${up ? "up" : "down"}">
-      <span class="tile-wrap">${tile(m.symbol, m.image, m.chain, m.token_address)}<i class="chain-badge" aria-hidden="true">${CHAIN_IC[m.chain] ?? ""}</i></span>
-      <span class="mm-name"><b>${escapeHtml(m.symbol)}${hot ? ' <em class="hot">HOT</em>' : ""}</b>
-        <small><span class="sprout" aria-hidden="true">❦</span> ${ago(m.seen_at)} · liq ${usd(m.liquidity_usd)}${flow}</small></span>
-      <span class="mm-num"><b>${usd(m.market_cap)}</b><em class="pill" data-sign="${up ? "up" : "down"}">${up ? "↑" : "↓"} ${pct(Math.abs(m.ret_since_seen ?? 0)).replace("+", "")}</em></span>
-      <span class="mm-foot"><span class="mm-score" style="--v:${sc}" title="Meme engine score ${sc}/100"><b>${sc}</b></span>${chips(m)}</span>
-    </a></li>`;
+  const id = `meme:${m.chain}:${m.token_address}`;
+  register(id, {
+    kind: "meme", symbol: m.symbol, name: m.name, chain: m.chain, token: m.token_address, pair: m.pair_address,
+    pairUrl: m.pair_url, image: m.image, cap: m.market_cap, change: m.ret_since_seen, ageTs: m.seen_at,
+    context: `liq ${usd(m.liquidity_usd)}${m.buys_h1 != null ? ` · ${m.buys_h1} buys / ${m.sells_h1 ?? 0} sells 1h` : ""}`,
+    why: why(m), alerts: alertsFor(m.chain, m.token_address),
+  });
+  return tokenRow({ id, symbol: m.symbol, name: m.name, chain: m.chain, token: m.token_address, image: m.image,
+    cap: m.market_cap, change: m.ret_since_seen, badge: m.band === "60+" ? "hot" : null, ageTs: m.seen_at });
+}
+
+function trackLine(t) {
+  const el = document.querySelector("[data-memes-track]");
+  if (!el) return;
+  const s = t?.shown;
+  el.textContent = s?.n
+    ? `Picks shown here, as $100 trades with fees: median ${pct(s.median)} · ${Math.round((s.win_rate ?? 0) * 100)}% made +20% · ${s.n} trades`
+    : "";
 }
 
 async function refresh() {
@@ -78,13 +56,13 @@ async function refresh() {
   try {
     const data = await api.getRadarMemes();
     const items = data.items ?? [];
+    lastTrack = data.track ?? null;
     delete root.dataset.loading;
     root.querySelector("[data-memes-list]").innerHTML = items.map(row).join("");
     root.querySelector("[data-memes-empty]").hidden = items.length > 0;
-    root.querySelector("[data-memes-meta]").textContent = items.length ? `${items.length} on the runway` : "";
-    track(data.track);
+    trackLine(data.track);
   } catch {
-    // Like the radar: if the server does not answer, keep what is on screen.
+    // If the server does not answer, keep what is on screen.
   }
   if (document.visibilityState === "visible") timer = setTimeout(refresh, POLL_MS);
 }

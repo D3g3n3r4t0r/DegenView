@@ -131,3 +131,9 @@ def test_page_response_is_not_shared_by_caches():
     assert response.status_code == 200
     assert response.headers["cache-control"] == "private, no-cache"
     assert _boot(response.text) == {"user": None}
+
+
+def test_app_skin_is_versioned_and_counted_in_the_asset_hash():
+    from app import main
+    assert f'href="/static/onchain/app.css?v={main._ASSET_VERSION}"' in main._ONCHAIN_APP_HTML
+    assert "app.css" not in main._INDEX_HTML            # the embed keeps its own stylesheet
