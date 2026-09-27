@@ -23,6 +23,7 @@ let range = "all";
 let tab = "open";
 let chainF = "all";
 let showHidden = false;
+let showAllPos = false;
 const CHAIN_NAMES = { solana: "Solana", robinhood: "Robinhood", base: "Base", ethereum: "Ethereum", bsc: "BSC" };
 let go = () => {};
 
@@ -188,11 +189,13 @@ function positions(d) {
   if (tab === "closed") {
     const rows = d.closed ?? [];
     if (!rows.length) return `<p class="pf-none">No closed positions yet. The system's trades land here when it sells.</p>`;
-    return `<ul class="pf-list">${rows.map((c) => `<li>
+    const shown = showAllPos ? rows : rows.slice(0, 4);
+    const morePos = rows.length > 4 ? `<button type="button" class="pf-more" data-more-pos>${showAllPos ? "Show less" : `Show all (${rows.length})`}</button>` : "";
+    return `<ul class="pf-list">${shown.map((c) => `<li>
       ${logo(c.symbol, null, c.chain, c.token)}
       <span class="pf-main"><b>${escapeHtml(c.symbol)}</b><small>${hold(c.closed - c.opened)} held${c.mode === "sim" ? " · simulated" : ""}${c.why ? ` · ${escapeHtml(c.why)}` : ""}</small></span>
       <span class="pf-num"><b>${c.proceeds_usdg == null ? "—" : `$${c.proceeds_usdg.toFixed(2)}`}</b><em data-sign="${(c.ret ?? 0) >= 0 ? "up" : "down"}">${pct(c.ret)}</em></span>
-    </li>`).join("")}</ul>`;
+    </li>`).join("")}</ul>` + morePos;
   }
   const all = (d.positions ?? []).filter((p) => chainF === "all" || p.chain === chainF);
   const hidden = all.filter((p) => p.hidden);
@@ -202,11 +205,13 @@ function positions(d) {
     `<button type="button" data-chainf="${c}" aria-pressed="${c === chainF}">${c === "all" ? "All" : CHAIN_NAMES[c] ?? c}<small>$${Math.round(v ?? 0).toLocaleString("en-US")}</small></button>`).join("")}</nav>` : "";
   const more = hidden.length ? `<button type="button" class="pf-hidden" data-hidden>${showHidden ? "Hide" : "Show"} hidden (${hidden.length})</button>` : "";
   if (!all.length) return chipBar + `<p class="pf-none">${d.missing?.length ? `Couldn't read ${d.missing.join(" and ")} right now.` : "Nothing held yet."}</p>`;
-  return chipBar + `<ul class="pf-list">${rows.map((p) => `<li data-hidden-row="${Boolean(p.hidden)}">
+  const shown = showAllPos ? rows : rows.slice(0, 4);
+  const morePos = rows.length > 4 ? `<button type="button" class="pf-more" data-more-pos>${showAllPos ? "Show less" : `Show all (${rows.length})`}</button>` : "";
+  return chipBar + `<ul class="pf-list">${shown.map((p) => `<li data-hidden-row="${Boolean(p.hidden)}">
     ${logo(p.symbol, p.image, p.chain, p.address)}
     <span class="pf-main"><b>${escapeHtml(p.name || p.symbol)}</b><small>${qty(p.amount)} ${escapeHtml(p.symbol)} · ${CHAIN_NAMES[p.chain] ?? p.chain}${p.source === "connected" ? " · your wallet" : ""}</small></span>
     <span class="pf-num"><b>${p.value_usd == null ? "—" : `$${p.value_usd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</b>${p.price_usd ? `<small>$${p.price_usd < 0.01 ? p.price_usd.toPrecision(3) : p.price_usd.toFixed(2)}</small>` : ""}</span>
-  </li>`).join("")}</ul>` + more;
+  </li>`).join("")}</ul>` + morePos + more;
 }
 
 function paint() {
@@ -218,13 +223,14 @@ function paint() {
     <header class="pf-head">
       <label class="pf-pic" title="Change picture">
         ${avatar(p, "pf-img")}
-        <span class="pf-edit" aria-hidden="true">${PENCIL}</span>
         <input type="file" accept="image/png,image/jpeg,image/webp" data-avatar hidden />
       </label>
-      <h2 class="pf-name">${escapeHtml(p.display_name)}</h2>
-      <p class="pf-handle">@${escapeHtml(p.handle)}</p>
-      ${p.bio ? `<p class="pf-bio">${escapeHtml(p.bio)}</p>` : ""}
-      <button type="button" class="pf-add" data-edit>${p.bio ? "Edit profile" : `<span aria-hidden="true">+</span> Add a bio`}</button>
+      <div class="pf-id">
+        <h2 class="pf-name">${escapeHtml(p.display_name)}</h2>
+        <p class="pf-handle">@${escapeHtml(p.handle)}</p>
+        ${p.bio ? `<p class="pf-bio">${escapeHtml(p.bio)}</p>` : `<button type="button" class="pf-add" data-edit>+ Add a bio</button>`}
+      </div>
+      <button type="button" class="pf-edit" data-edit aria-label="Edit profile">${PENCIL}</button>
       <ul class="pf-stats">
         <li><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>${hold(d.stats?.avg_hold_s)} avg. hold</li>
         <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 9h12l-3-3M19 15H7l3 3"/></svg>${d.stats?.trades ?? 0} trades</li>
@@ -239,12 +245,11 @@ function paint() {
       ${d.wallet === "sim" ? simNote(d) : ""}
       <div class="pf-top">
         <p class="pf-total"><b>${whole}</b><span>${cents}</span></p>
+        <p class="pf-change" data-sign="${(ch ?? 0) >= 0 ? "up" : "down"}">${ch == null ? "" : `${signed(ch)} <span>${RANGES.find(([k]) => k === range)[1]}</span>`}</p>
       </div>
       ${d.complete === false && d.missing?.length ? `<p class="pf-since">Not read right now: ${escapeHtml(d.missing.join(", "))} — shown at the last reading, or left out.</p>` : ""}
-      <p class="pf-change" data-sign="${(ch ?? 0) >= 0 ? "up" : "down"}">${ch == null ? "" : `${signed(ch)} <span>${RANGES.find(([k]) => k === range)[1]}</span>`}</p>
       <div class="pf-chart">${chart(d.history?.[range])}</div>
       <nav class="pf-range" aria-label="Period">${RANGES.map(([k, l]) => `<button type="button" data-range="${k}" aria-pressed="${k === range}">${l}</button>`).join("")}</nav>
-      ${d.tracking_since ? `<p class="pf-since">${d.wallet === "sim" ? "The simulated wallet at real prices, read every minute while the app is open and at every round of the system" : "Every token on every chain, read every minute while the app is open (every 5 otherwise)"} since ${new Date(d.tracking_since * 1000).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</p>` : ""}
     </section>
     <section class="pf-cash">
       <span class="pf-cash-ic" aria-hidden="true">$</span>
@@ -253,7 +258,6 @@ function paint() {
       <button type="button" class="pf-sq" data-go="wallet" aria-label="Swap"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 9h12l-3-3M19 15H7l3 3"/></svg></button>
       <button type="button" class="pf-sq" data-wallet-menu aria-label="Wallet"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/></svg></button>
     </section>
-    ${walletsBox(p)}
     <section class="pf-pos">
       <div class="pf-pos-head">
         <h3>Positions <span>(${tab === "open" ? (d.positions ?? []).length : (d.closed ?? []).length})</span></h3>
@@ -264,6 +268,10 @@ function paint() {
       </div>
       ${positions(d)}
     </section>
+    <details class="pf-wbox">
+      <summary>Connected wallets (${(p.wallets ?? []).length})</summary>
+      ${walletsBox(p)}
+    </details>
     <dialog class="sheet pf-sheet" data-edit-sheet aria-label="Edit profile">
       <form method="dialog" class="pf-form">
         <h3>Edit profile</h3>
@@ -324,8 +332,9 @@ export function mountProfile({ go: goTo } = {}) {
     const cf = event.target.closest("[data-chainf]");
     if (cf) { chainF = cf.dataset.chainf; paint(); return; }
     if (event.target.closest("[data-hidden]")) { showHidden = !showHidden; paint(); return; }
+    if (event.target.closest("[data-more-pos]")) { showAllPos = !showAllPos; paint(); return; }
     const t = event.target.closest("[data-tab]");
-    if (t) { tab = t.dataset.tab; paint(); return; }
+    if (t) { tab = t.dataset.tab; showAllPos = false; paint(); return; }
     const sh = event.target.closest("[data-sheet]");
     if (sh) { document.dispatchEvent(new CustomEvent("lae:sheet", { detail: sh.dataset.sheet })); return; }
     if (event.target.closest("[data-wallet-menu]")) { document.dispatchEvent(new CustomEvent("lae:wallet-menu")); return; }

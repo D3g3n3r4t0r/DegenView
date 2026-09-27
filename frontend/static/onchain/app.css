@@ -733,35 +733,33 @@
 /* --- profile (profile.js), after the reference trading app's ------------- */
 @layer skin {
   .profile { display: grid; gap: 0; padding-block-end: 20px; }
-  .pf-head { display: grid; justify-items: start; gap: 4px; padding: 18px 0 16px; border-bottom: 1px solid rgb(255 255 255 / .07); }
-  .pf-pic { position: relative; inline-size: 92px; block-size: 92px; margin-bottom: 10px; cursor: pointer;
+  .pf-head { display: grid; grid-template-columns: 56px 1fr auto; column-gap: 12px; row-gap: 2px; align-items: center; padding: 6px 0 10px; border-bottom: 1px solid rgb(255 255 255 / .07); }
+  .pf-pic { position: relative; inline-size: 56px; block-size: 56px; margin: 0; grid-row: span 3; cursor: pointer;
     & .pf-img { font-style: normal; inline-size: 100%; block-size: 100%; border-radius: 50%; object-fit: cover; display: grid; place-items: center;
       background: linear-gradient(135deg, #3f3f46, #18181b); box-shadow: 0 0 0 3px rgb(255 255 255 / .08); font: 700 34px var(--sans); color: var(--k-text); }
-    & .pf-edit { position: absolute; inset: auto -2px -2px auto; display: grid; place-items: center; inline-size: 30px; block-size: 30px;
-      border-radius: 50%; background: #18181b; box-shadow: 0 0 0 3px var(--k-bg);
-      & svg { inline-size: 15px; block-size: 15px; fill: none; stroke: var(--k-text); stroke-width: 2; stroke-linejoin: round; } }
     &[data-busy] .pf-img { opacity: .5; } }
-  .pf-name { margin: 0; font: 700 30px/1.1 var(--sans); letter-spacing: -.01em; color: var(--k-text); }
-  .pf-handle { margin: 0; font: 400 18px/1.3 var(--sans); color: var(--k-text-3); }
-  .pf-bio { margin: 6px 0 0; font-size: 15px; line-height: 1.4; color: var(--k-text-2); }
-  .pf-add { display: inline-flex; align-items: center; gap: 10px; margin: 12px 0 4px; padding: 0; border: 0; background: none;
-    font: 600 16px var(--sans); color: #6d7cff; cursor: pointer;
-    & span { display: grid; place-items: center; inline-size: 26px; block-size: 26px; border-radius: 50%; border: 1.5px dashed #4b52a8; font-size: 18px; } }
-  .pf-stats { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 10px 0 0; padding: 0; list-style: none; font-size: 14px; color: var(--k-text-2);
+  .pf-edit { display: grid; place-items: center; inline-size: 32px; block-size: 32px; padding: 0; border: 1px solid rgb(255 255 255 / .12);
+    border-radius: 10px; background: #111114; cursor: pointer;
+    & svg { inline-size: 16px; block-size: 16px; fill: none; stroke: var(--k-text); stroke-width: 2; stroke-linejoin: round; } }
+  .pf-name { margin: 0; font: 700 20px/1.15 var(--sans); letter-spacing: -.01em; color: var(--k-text); }
+  .pf-handle { margin: 0; font: 400 13px/1.3 var(--sans); color: var(--k-text-3); }
+  .pf-bio { margin: 0; font-size: 13px; line-height: 1.35; color: var(--k-text-2); }
+  .pf-add { margin: 0; padding: 0; border: 0; background: none; font: 600 13px var(--sans); color: #6d7cff; cursor: pointer; text-align: start; }
+  .pf-stats { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 6px 0 0; padding: 0; list-style: none; font-size: 12px; color: var(--k-text-2);
     & li { display: inline-flex; align-items: center; gap: 7px; }
     & svg { inline-size: 18px; block-size: 18px; fill: none; stroke: var(--k-text-3); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; } }
-  .pf-value { padding-top: 18px; }
-  .pf-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
-  .pf-total { margin: 0; white-space: nowrap; font: 700 clamp(28px, 8.4vw, 38px)/1 var(--sans); letter-spacing: -.02em; color: var(--k-text); font-variant-numeric: tabular-nums;
+  .pf-value { padding-top: 10px; }
+  .pf-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+  .pf-total { margin: 0; white-space: nowrap; font: 700 clamp(26px, 7.5vw, 32px)/1 var(--sans); letter-spacing: -.02em; color: var(--k-text); font-variant-numeric: tabular-nums;
     & span { color: var(--k-text-3); } }
   .pf-range { display: flex; gap: 2px;
     & button { padding: 7px 8px; border: 0; border-radius: 9px; background: none; color: var(--k-text-3); font: 600 13px var(--sans); cursor: pointer; }
     & button[aria-pressed="true"] { background: #1c1c20; color: var(--k-text); } }
   .pf-range { justify-content: space-between; margin: 6px 0 0; overflow-x: auto; scrollbar-width: none;
     & button { flex: none; min-inline-size: 36px; padding: 7px 6px; } }
-  .pf-change { margin: 8px 0 0; min-block-size: 1.3em; font: 600 17px var(--sans); color: #34d399;
+  .pf-change { margin: 0; min-block-size: 1.3em; font: 600 14px var(--sans); color: #34d399;
     &[data-sign="down"] { color: #f87171; } & span { color: var(--k-text-3); font-weight: 500; } }
-  .pf-chart { position: relative; block-size: 190px; margin: 10px -16px 0; overflow: hidden; }
+  .pf-chart { position: relative; block-size: 104px; margin: 6px -16px 0; overflow: hidden; }
   .pf-line { inline-size: 100%; block-size: 100%; overflow: visible; color: #22c55e;
     &[data-sign="down"] { color: #ef4444; }
     & .ln { fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
@@ -771,16 +769,16 @@
     & .scrub-dot { fill: var(--k-text); } & [hidden] { display: none; }
     touch-action: pan-y; cursor: crosshair; }
   .pf-chart-empty { display: grid; place-items: center; block-size: 100%; padding: 0 24px; text-align: center; font-size: 13px; color: var(--k-text-3); }
-  .pf-cash { display: grid; grid-template-columns: auto 1fr auto auto; gap: 12px; align-items: center; margin-top: 18px;
+  .pf-cash { display: grid; grid-template-columns: auto 1fr auto auto auto; gap: 12px; align-items: center; margin-top: 10px;
     & p { display: grid; gap: 2px; margin: 0; } & small { font-size: 14px; color: var(--k-text-2); }
     & b { font: 700 20px var(--sans); color: var(--k-text); } }
-  .pf-cash-ic { display: grid; place-items: center; inline-size: 52px; block-size: 52px; border-radius: 50%; background: #18181b;
-    font: 600 24px var(--sans); color: var(--k-text); }
-  .pf-sq { display: grid; place-items: center; inline-size: 48px; block-size: 48px; border: 1px solid rgb(255 255 255 / .1); border-radius: 12px;
+  .pf-cash-ic { display: grid; place-items: center; inline-size: 40px; block-size: 40px; border-radius: 50%; background: #18181b;
+    font: 600 20px var(--sans); color: var(--k-text); }
+  .pf-sq { display: grid; place-items: center; inline-size: 40px; block-size: 40px; border: 1px solid rgb(255 255 255 / .1); border-radius: 12px;
     background: #111114; cursor: pointer;
     & svg { inline-size: 22px; block-size: 22px; fill: none; stroke: var(--k-text); stroke-width: 2.2; stroke-linecap: round; }
     & circle { fill: var(--k-text); stroke: none; } }
-  .pf-pos { margin-top: 22px; }
+  .pf-pos { margin-top: 12px; }
   .pf-pos-head { display: flex; align-items: center; justify-content: space-between; gap: 8px;
     & h3 { margin: 0; font: 600 20px var(--sans); color: var(--k-text); } & h3 span { color: var(--k-text-2); font-weight: 500; } }
   .pf-seg { display: flex; padding: 3px; border-radius: 11px; box-shadow: inset 0 0 0 1px rgb(255 255 255 / .1);
@@ -1040,4 +1038,16 @@ html, body { overflow-x: clip; }
 @layer skin {
   .bt-open { all: unset; cursor: pointer; color: var(--k-text); text-decoration: underline; text-underline-offset: 3px; }
   .dt-mainchart { margin: 10px 0 0; padding: 8px 12px; border: 1px solid rgb(255 255 255 / .12); border-radius: 10px; background: none; color: var(--k-text); font: 600 13px var(--sans); }
+}
+@layer skin {
+  .pf-id { display: grid; gap: 1px; min-inline-size: 0;
+    & .pf-name, & .pf-handle, & .pf-bio { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } }
+  .pf-more { display: block; margin: 10px auto 0; padding: 6px 12px; border: 0; background: none; color: var(--k-text-2);
+    font: 600 13px var(--sans); cursor: pointer; }
+  .pf-wbox { margin-top: 14px;
+    & summary { padding: 10px 0; font: 600 14px var(--sans); color: var(--k-text-2); cursor: pointer; list-style: none; }
+    & summary::-webkit-details-marker { display: none; }
+    & summary::after { content: "▾"; margin-inline-start: 6px; color: var(--k-text-3); }
+    &[open] summary::after { content: "▴"; }
+    & .pf-wallets { margin-top: 4px; } }
 }
