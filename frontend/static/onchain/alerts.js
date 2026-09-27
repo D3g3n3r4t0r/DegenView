@@ -174,14 +174,28 @@ function rows() {
   // Hall of fame (Lorenzo: "il podio non deve avere timeframe, e' la hall
   // of fame"): every alert ever, ranked by what the system made on it.
   const since = 0;
-  const val = (a) => (state.sort === "system" ? a.system?.ret : state.sort === "best" ? a.max : a.now);
   const key = state.sort;
-  return (state.data.meme?.items ?? []).filter((a) => a.at >= since && val(a) != null)
-    .sort((a, b) => val(b) - val(a))
+  const val = (a) => (key === "system" ? a.system?.ret : key === "best" ? a.max : a.now);
+  const items = (state.data.meme?.items ?? []).filter((a) => a.at >= since && val(a) != null);
+  if (key === "system") {
+    // Lorenzo: "qui voglio vedere i backtest!!! non voglio vedere 0%". A
+    // system that never entered has ret 0, which is not a result: those rows
+    // go after the traded ones, newest first, and say so.
+    const traded = (s) => s && ((s.trades ?? 0) > 0 || s.state === "in");
+    return items.sort((a, b) => (traded(b.system) - traded(a.system)) || (traded(a.system) ? val(b) - val(a) : b.at - a.at))
+      .map((a) => {
+        const t = traded(a.system);
+        return { id: registerAlert(a, "meme"), symbol: a.symbol, name: a.name, chain: a.chain, token: a.token_address,
+          image: a.image, label: t ? pct(a.system.ret) : "—",
+          sub: `${age(a.at)[0]} ago · at ${usdShort(a.cap0)}${t ? "" : ` · held ${pct(a.now)}`}`,
+          sign: t ? sign(a.system.ret) : "", best: null,
+          sys: t ? sysState(a.system) : a.system?.done ? "did not enter" : "no entry yet" };
+      });
+  }
+  return items.sort((a, b) => val(b) - val(a))
     .map((a) => ({ id: registerAlert(a, "meme"), symbol: a.symbol, name: a.name, chain: a.chain, token: a.token_address,
       image: a.image, label: pct(val(a)), sub: `${age(a.at)[0]} ago · at ${usdShort(a.cap0)}`,
-      sign: sign(val(a)), best: key === "now" ? a.max : null,
-      sys: key === "system" ? sysState(a.system) : null }));
+      sign: sign(val(a)), best: key === "now" ? a.max : null, sys: null }));
 }
 
 const INFO_IC = `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>`;
@@ -200,7 +214,10 @@ function paintTop() {
       : "Returns if you had bought when each Telegram alert arrived.")
     + (gem ? "" : " Below: each alert, as the strategy in use traded it.");
   const hero = root.querySelector("[data-top-hero]");
-  const top3 = list.slice(0, 3).map((x) => ({ id: x.id, symbol: x.symbol, value: gem ? `${x.label} pts` : x.label,
+  // The podium is a hall of fame of backtests: a row the system never traded
+  // has nothing to show there.
+  const podium = state.sort === "system" ? list.filter((x) => x.label !== "—") : list;
+  const top3 = podium.slice(0, 3).map((x) => ({ id: x.id, symbol: x.symbol, value: gem ? `${x.label} pts` : x.label,
     logoHtml: tile(x.symbol, x.image, x.chain, x.token) }));
   if (!gem) {
     hero.dataset.sig = "";
