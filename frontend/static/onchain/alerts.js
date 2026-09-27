@@ -66,7 +66,7 @@ function callCard(a, kind) {
       <span><small>Best 48h</small><b data-sign="${sign(a.max)}">${pct(a.max)}</b></span>
       <span><small>System</small><b data-sign="${sign(s?.ret)}">${s?.ret == null ? "—" : pct(s.ret)}</b><em class="sys-state" data-state="${s?.state ?? "waiting"}">${sysState(s)}</em></span>
     </div>
-    <div class="strats">${(a.systems ?? []).map((s) => strategyTrade(s, a.at, a.system?.label)).join("")}</div>
+    <div class="strats">${a.system ? strategyTrade({ ...a.system, label: "System" }, a.at) : ""}</div>
     <p class="hours-head">Just holding, from the alert</p>
     <ol class="hours">${HOURS.map((h) => {
       const r = a.returns?.[String(h)];
@@ -91,7 +91,7 @@ function systemLine(d) {
   const sy = d.system;
   const live = sy?.live;
   if (!live?.n) return "";
-  return `<p class="feed-head sys"><b>System · ${escapeHtml(sy.chosen)}</b> trend-following entries and exits after each alert, fees paid: median <b data-sign="${sign(live.median)}">${pct(live.median)}</b> · ${Math.round((live.positive ?? 0) * 100)}% in profit · ${live.n} alerts${live.holding ? ` · in ${live.holding} now` : ""}</p>`;
+  return `<p class="feed-head sys"><b>System</b> trend-following entries and exits after each alert, fees paid: median <b data-sign="${sign(live.median)}">${pct(live.median)}</b> · ${Math.round((live.positive ?? 0) * 100)}% in profit · ${live.n} alerts${live.holding ? ` · in ${live.holding} now` : ""}</p>`;
 }
 
 const SCAN_FORM = `<form class="scan-form" data-scan-form role="search">
@@ -141,27 +141,6 @@ function paintFeed() {
   }
 }
 
-/* The strategies' leaderboard (Lorenzo, 27/09: "in pochi passi poter vedere
- * le strategie come hanno performato, quindi una leaderboard con le
- * strategie ingresso e uscita"). No podium here: two rows, ranked by the
- * median over alerts whose 48h window ended; the one in use is marked. */
-function strategyBoard(d) {
-  const sy = d?.system;
-  if (!sy?.candidates?.length) return `<p class="muted pad">No strategy results yet.</p>`;
-  const rows = [...sy.candidates].sort((a, b) => (b.median ?? -9) - (a.median ?? -9));
-  const live = sy.live ?? {};
-  return `<ol class="strat-board">${rows.map((c, i) => {
-    const inUse = c.label === sy.chosen;
-    return `<li data-chosen="${inUse}">
-      <span class="st-rank">${i + 1}</span>
-      <span class="st-main"><b>${escapeHtml(c.label)}${inUse ? ' <em class="st-live">IN USE</em>' : ""}</b>
-        <small>${c.n} alerts closed · ${c.traded} traded${inUse && live.n ? ` · live on ${live.n}: median ${pct(live.median)}${live.holding ? `, in ${live.holding} now` : ""}` : ""}</small></span>
-      <span class="st-num"><b data-sign="${sign(c.median)}">${pct(c.median)}</b><small>median · ${Math.round((c.positive ?? 0) * 100)}% win</small></span>
-    </li>`;
-  }).join("")}</ol>
-  <p class="st-note">${sy.window_h}h per alert, ${sy.bar} bars, ${sy.cost_pct}% fees and slippage per side. ${escapeHtml(sy.decided_by === "median" ? "The best median is the one in use." : `In use by default until ${sy.decided_by.replace("default until ", "")}.`)}</p>`;
-}
-
 /* ------------------------------------------------------------ trophy */
 
 /** Normalised rows for the current tab: alerts by return, gems by rank. */
@@ -183,18 +162,20 @@ function rows() {
     // gestito in modo invisibile, semplicemente mostrami i backtest migliori".
     // Each alert carries the four strategies' results on its own 5-minute
     // chart; the best of them is shown, chosen after the fact.
-    const best = (a) => (a.backtests?.rows ?? []).filter((x) => x.trades > 0 || x.in_position)
+    const best = (a) => (a.backtests?.rows ?? []).filter((x) => x.trades > 0)
       .sort((x, y) => (y.return_pct ?? -1e9) - (x.return_pct ?? -1e9))[0];
     const has = (a) => !!best(a);
     return items.sort((a, b) => (has(b) - has(a)) || (has(a) ? best(b).return_pct - best(a).return_pct : b.at - a.at))
       .map((a) => {
         const x = best(a);
+        const open = !x && (a.backtests?.rows ?? []).some((r) => r.in_position);
         return { id: registerAlert(a, "meme"), symbol: a.symbol, name: a.name, chain: a.chain, token: a.token_address,
           image: a.image, label: x ? pct(x.return_pct / 100) : "—",
           sub: `${age(a.at)[0]} ago · at ${usdShort(a.cap0)} · held ${pct(a.now)}`,
           sign: x ? sign(x.return_pct / 100) : "", best: null,
-          sys: x ? `${x.label} · ${x.trades} trade${x.trades === 1 ? "" : "s"}`
-            : a.backtests ? "no signal on this chart" : "backtest pending" };
+          sys: x ? `${x.trades} trade${x.trades === 1 ? "" : "s"} · win ${Math.round(x.win_rate ?? 0)}%`
+            : open ? "position open"
+              : a.backtests ? "no signal on this chart" : "backtest pending" };
       });
   }
   if (key === "system") {
@@ -230,22 +211,18 @@ function paintTop() {
   root.querySelector("[data-top-info]").innerHTML = INFO_IC + (gem
     ? (w ? `Top 10 median ${pct(w.top.median)} after 7 days on the board.` : "Scored on code, research and tokenomics. Research, not advice.")
     : state.sort === "backtest"
-      ? `Best strategy backtested on each alert's 5-minute chart, every entry and exit, fees paid. Chosen after the fact: the most that chart allowed.`
+      ? `Returns backtested on each alert's 5-minute chart: every entry and exit, fees paid.`
         + ((b) => b && b.pending > 0 ? ` Backtests ready: ${b.ready}/${b.total - b.no_data}.` : "")(state.data.meme?.system?.backtests)
       : state.sort === "system"
-        ? `The system (${escapeHtml(state.data.meme?.system?.chosen ?? "trend-following")}): enters and exits on its own signals after each alert, fees paid.`
-        : "Returns if you had bought when each Telegram alert arrived.")
-    + (gem ? "" : " Below: each alert, as the strategy in use traded it.");
+        ? `The system: enters and exits on its own signals after each alert, fees paid.`
+        : "Returns if you had bought when each Telegram alert arrived.");
   const hero = root.querySelector("[data-top-hero]");
   // The podium is a hall of fame of backtests: a row the system never traded
   // has nothing to show there.
   const podium = state.sort === "system" || state.sort === "backtest" ? list.filter((x) => x.label !== "—") : list;
   const top3 = podium.slice(0, 3).map((x) => ({ id: x.id, symbol: x.symbol, value: gem ? `${x.label} pts` : x.label,
     logoHtml: tile(x.symbol, x.image, x.chain, x.token) }));
-  if (!gem) {
-    hero.dataset.sig = "";
-    hero.innerHTML = strategyBoard(state.data.meme);
-  } else if (!top3.length) {
+  if (!top3.length) {
     hero.dataset.sig = "";
     hero.innerHTML = `<p class="muted pad">Nothing in this period yet.</p>`;
   } else {
