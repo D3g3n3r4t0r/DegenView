@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS projects (
     token TEXT NOT NULL,
     symbol TEXT, name TEXT, website TEXT, github TEXT, image TEXT, description TEXT,
     cg_id TEXT,
+    cg_mcap REAL,
     categories TEXT, socials TEXT, sources TEXT,
     first_seen REAL NOT NULL, last_seen REAL NOT NULL,
     mcap REAL, liq REAL, vol24 REAL, price REAL, launched_at REAL, market_at REAL,
@@ -76,6 +77,9 @@ def _db() -> sqlite3.Connection:
         _conn.row_factory = sqlite3.Row
         _conn.execute("PRAGMA journal_mode=WAL")
         _conn.executescript(_SCHEMA)
+        cols = {r[1] for r in _conn.execute("PRAGMA table_info(projects)")}
+        if "cg_mcap" not in cols:
+            _conn.execute("ALTER TABLE projects ADD COLUMN cg_mcap REAL")
         _conn_path = _DB_FILE
     return _conn
 
@@ -243,7 +247,8 @@ def stale_market(limit: int, now: float | None = None) -> dict[str, list[str]]:
 
 
 def _band_sql() -> str:
-    return f"mcap BETWEEN {CAP_MIN} AND {CAP_MAX} AND COALESCE(liq, 0) >= {LIQ_MIN}"
+    return (f"mcap BETWEEN {CAP_MIN} AND {CAP_MAX} AND COALESCE(liq, 0) >= {LIQ_MIN}"
+            f" AND COALESCE(cg_mcap, 0) <= {CAP_MAX}")
 
 
 def need_detail(limit: int, now: float | None = None) -> list[dict]:
@@ -253,16 +258,27 @@ def need_detail(limit: int, now: float | None = None) -> list[dict]:
     with _lock:
         rows = _db().execute(
             f"SELECT chain, cg_id, symbol, name, mcap, image FROM projects WHERE cg_id IS NOT NULL AND {_band_sql()}"
-            " AND (detail_at IS NULL OR detail_at < ?) ORDER BY liq DESC LIMIT ?",
+            " AND (detail_at IS NULL OR detail_at < ? OR cg_mcap IS NULL) ORDER BY liq DESC LIMIT ?",
             (now - DETAIL_TTL_S, limit)).fetchall()
     return [{"id": r["cg_id"], "chain": r["chain"], "symbol": (r["symbol"] or "").upper(), "name": r["name"] or "",
              "market_cap": r["mcap"], "image": r["image"]} for r in rows]
 
 
-def mark_detail(chain: str, cg_id: str, now: float | None = None) -> None:
+def mark_detail(chain: str, cg_id: str, now: float | None = None, cg_mcap: float | None = None) -> None:
     with _lock:
-        _db().execute("UPDATE projects SET detail_at = ? WHERE chain = ? AND cg_id = ?",
-                      (now or time.time(), chain, cg_id))
+        _db().execute("UPDATE projects SET detail_at = ?, cg_mcap = ? WHERE chain = ? AND cg_id = ?",
+                      (now or time.time(), float(cg_mcap) if cg_mcap else 0, chain, cg_id))
+        _db().commit()
+
+
+def reject_cg(chain: str, cg_id: str, why: str, now: float | None = None) -> None:
+    """A coin CoinGecko itself says is big: out of the band, looked at again
+    in two weeks (the cap can fall)."""
+    now = now or time.time()
+    with _lock:
+        _db().execute("UPDATE projects SET status = 'rejected', why = ?, analyzed_at = ?, next_check = ?,"
+                      " rank = NULL WHERE chain = ? AND cg_id = ?",
+                      (why, now, now + RECHECK_S, chain, cg_id))
         _db().commit()
 
 
