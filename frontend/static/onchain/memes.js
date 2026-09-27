@@ -39,7 +39,8 @@ function row(m) {
     why: why(m), alerts: alertsFor(m.chain, m.token_address),
   });
   return tokenRow({ id, symbol: m.symbol, name: m.name, chain: m.chain, token: m.token_address, image: m.image,
-    cap: m.market_cap, change: m.ret_since_seen, badge: m.band === "60+" ? "hot" : null, ageTs: m.seen_at });
+    cap: m.market_cap, change: m.ret_since_seen, badge: m.band === "60+" ? "hot" : null, ageTs: m.seen_at,
+    score: m.score });
 }
 
 function trackLine(t) {
@@ -60,6 +61,11 @@ async function refresh() {
     delete root.dataset.loading;
     root.querySelector("[data-memes-list]").innerHTML = items.map(row).join("");
     root.querySelector("[data-memes-empty]").hidden = items.length > 0;
+    const watched = data.track?.baseline?.n;
+    const line = root.querySelector("[data-picks-line]");
+    if (line && items.length) {
+      line.textContent = `${items.length} picked${watched ? ` out of ${watched.toLocaleString("en-US")} memes tracked` : " from every new launch"}: pool alive, sellable, safety checks passed. Ranked by score.`;
+    }
     trackLine(data.track);
   } catch {
     // If the server does not answer, keep what is on screen.

@@ -1643,5 +1643,16 @@
     "files": [
       "frontend/onchain-app.html"
     ]
+  },
+  "seed-0134": {
+    "status": "risolto",
+    "at": 1790513411,
+    "summary": "La scheda si chiama ora Picks. In cima un riquadro 'Picked by the engine' dice quante ne sono uscite e da quante meme seguite, e che sono passate dai controlli (pool vivo, rivendibili, sicurezza) e ordinate per punteggio. In ogni riga c'e' il punteggio del motore: verde da 60 in su, giallo fra 40 e 59, grigio sotto. Il perche' di ogni scelta resta nella pagina del token, scheda Why.",
+    "files": [
+      "frontend/onchain-app.html",
+      "frontend/static/onchain/memes.js",
+      "frontend/static/onchain/format.js",
+      "frontend/static/onchain/app.css"
+    ]
   }
 }
