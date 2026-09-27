@@ -8,7 +8,7 @@
  * Buy button that hands the token to the swap. The back gesture closes it.
  */
 import * as api from "@onchain/api.js";
-import { age, changePill, escapeHtml, logo, usdShort } from "@onchain/format.js";
+import { age, bestSystem, changePill, escapeHtml, logo, strategyTrade, usdShort } from "@onchain/format.js";
 import { openUserSwap, walletFor } from "@onchain/userswap.js";
 
 const registry = new Map();
@@ -63,7 +63,9 @@ function ensureDialog() {
 
 window.addEventListener("popstate", () => { if (dlg?.open && !history.state?.detail) dlg.close(); });
 
-// Strategy names as the main site's select spells them.
+// The main site charts DEX pools by "SYM@chain:pool" (DexScreenerProvider
+// .make_symbol). The pair may not be known yet: poolOf() finds it.
+// Internal only: the main site's strategy keys, never shown in the app.
 const NAMES = {
   "Trend EMA": "Lorenzo (trend-follower)",
   "Trend HF": "Lorenzo HF (minuti on-chain)",
@@ -71,11 +73,9 @@ const NAMES = {
   "RSI+BB L/S": "Gabriele 2 (RSI+BB long/short)",
 };
 
-// The main site charts DEX pools by "SYM@chain:pool" (DexScreenerProvider
-// .make_symbol). The pair may not be known yet: poolOf() finds it.
 function bestLabel(e) {
   const rows = (e.alerts ?? [])[0]?.backtests?.rows ?? [];
-  return rows.filter((r) => r.trades > 0 || r.in_position)
+  return rows.filter((r) => r.trades > 0)
     .sort((a, b) => (b.return_pct ?? -1e9) - (a.return_pct ?? -1e9))[0]?.label;
 }
 
@@ -219,8 +219,9 @@ function paintChips() {
 // after a crash inside one candle says so: that loss was not a late exit.
 const WHY = { signal: "trend turned", crash: "crashed inside one 5-min candle: first price to sell at", "48h": "48h window over", rug: "pool vanished while in" };
 function systemTrades(al) {
-  const ev = al.system?.events ?? [];
-  if (!ev.length) return al.system ? `<p class="sys-none">System: ${al.system.state === "in" ? "in the trade" : "no entry yet"}${al.system.label ? ` · ${escapeHtml(al.system.label)}` : ""}</p>` : "";
+  const sy = bestSystem(al);
+  const ev = sy?.events ?? [];
+  if (!ev.length) return sy ? `<p class="sys-none">System: ${sy.state === "in" ? "in the trade" : "no entry yet"}</p>` : "";
   const t0 = al.at;
   return `<ol class="sys-trades">${ev.map((v) => {
     const after = Math.max(0, Math.round((v.t - t0) / 60));
@@ -246,10 +247,10 @@ function paintTabs() {
         <span><small>At alert</small><b>${usdShort(al.cap0)} MC</b></span>
         <span><small>Held now</small>${changePill(al.now)}</span>
         <span><small>Best 48h</small><b data-sign="${sign(al.max)}">${pct(al.max)}</b></span>
-        <span><small>System</small><b data-sign="${sign(al.system?.ret)}">${al.system?.ret == null ? "—" : pct(al.system.ret)}</b></span>
+        <span><small>System</small><b data-sign="${sign(bestSystem(al)?.ret)}">${bestSystem(al)?.ret == null ? "—" : pct(bestSystem(al).ret)}</b></span>
       </div>
-      <div class="strats">${al.systems ? al.systems.map((s) => strategyTrade(s, al.at, al.system?.label)).join("") : systemTrades(al)}</div>
-      ${al.systems ? systemTrades(al) : ""}
+      <div class="strats">${bestSystem(al) ? strategyTrade(bestSystem(al), al.at) : ""}</div>
+      ${systemTrades(al)}
       ${backtestTable(al)}
       <p class="hours-head">Just holding, from the alert</p>
       <ol class="hours">${[1, 2, 3, 4, 5, 6, 8, 12, 24, 48].map((h) => {
@@ -270,19 +271,22 @@ function paintTabs() {
 function backtestTable(al) {
   const rows = al.backtests?.rows ?? [];
   if (!rows.length) return "";
+  const best = rows.filter((r) => r.trades > 0)
+    .sort((a, b) => (b.return_pct ?? -1e9) - (a.return_pct ?? -1e9))[0];
+  const hold = al.backtests.hold_pct;
   return `<table class="bt-table">
-    <caption>Backtest on this chart</caption>
-    <thead><tr><th>Strategy</th><th>Return</th><th>Trades</th><th>Win</th><th>Max DD</th></tr></thead>
-    <tbody>${rows.map((r) => `<tr>
-      <td><button type="button" class="bt-open" data-main-chart="${escapeHtml(r.label)}">${escapeHtml(r.label)} ↗</button></td>
-      <td data-sign="${r.return_pct == null ? "" : sign(r.return_pct / 100)}">${r.return_pct == null ? "—" : pct(r.return_pct / 100)}</td>
-      <td>${r.trades ?? "—"}</td>
-      <td>${r.win_rate == null ? "—" : `${Math.round(r.win_rate)}%`}</td>
-      <td>${r.max_dd == null ? "—" : `${r.max_dd.toFixed(1)}%`}</td>
-    </tr>`).join("")}
+    <caption>Best backtest on this chart</caption>
+    <thead><tr><th></th><th>Return</th><th>Trades</th><th>Win</th><th>Max DD</th></tr></thead>
+    <tbody>${best ? `<tr>
+      <td>Best</td>
+      <td data-sign="${best.return_pct == null ? "" : sign(best.return_pct / 100)}">${best.return_pct == null ? "—" : pct(best.return_pct / 100)}</td>
+      <td>${best.trades ?? "—"}</td>
+      <td>${best.win_rate == null ? "—" : `${Math.round(best.win_rate)}%`}</td>
+      <td>${best.max_dd == null ? "—" : `${best.max_dd.toFixed(1)}%`}</td>
+    </tr>` : `<tr><td colspan="5">No signal on this chart</td></tr>`}
     <tr>
       <td>Just holding</td>
-      <td data-sign="${al.backtests.hold_pct == null ? "" : sign(al.backtests.hold_pct / 100)}">${al.backtests.hold_pct == null ? "—" : pct(al.backtests.hold_pct / 100)}</td>
+      <td data-sign="${hold == null ? "" : sign(hold / 100)}">${hold == null ? "—" : pct(hold / 100)}</td>
       <td>—</td><td>—</td><td>—</td>
     </tr></tbody>
   </table>`;

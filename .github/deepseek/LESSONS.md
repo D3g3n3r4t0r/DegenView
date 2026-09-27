@@ -30,3 +30,6 @@ review. Read them before answering: the same mistake again is a failed task.
 - Phone inputs under 16px make iOS zoom the page; keep form fields at 16px or more (#188).
 - Icons must read on the dark background: thin dark-brown strokes vanish; use the gold fill or light strokes of at least 2px (#211).
 - A CSS grid needs one column per child: `.pf-cash` had 5 children in 4 columns and the last button wrapped onto its own row (#214).
+- Before deleting a constant or function, search the file for every use of it: #216 removed `NAMES` while `onClick` still read it.
+- Every function you call must be imported: #190 called `strategyTrade` in detail.js without importing it, so the token page broke.
+- "Never show X" means every place X can reach the screen, including labels passed through (`al.system.label` printed "Trend HF" in the event list, #216).
