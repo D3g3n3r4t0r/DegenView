@@ -260,8 +260,10 @@ async def everything(addresses: list[tuple[str, str, str]]) -> dict:
     jobs = [(chain, addr, source) for kind, addr, source in addresses for chain in CHAIN_OF_KIND[kind]]
     async with httpx.AsyncClient(timeout=15.0, headers={"accept": "application/json"}) as client:
         results = await asyncio.gather(*(wallet(c, a, client) for c, a, _s in jobs), return_exceptions=True)
-    holdings, missing, by_chain = [], [], {}
+    holdings, missing, by_chain, read = [], [], {}, set()
     for (chain, addr, source), res in zip(jobs, results):
+        if not isinstance(res, Exception):
+            read.add(chain)
         if isinstance(res, Exception):
             logger.info("portfolio: %s %s unreadable: %s", chain, addr[:8], res)
             missing.append({"chain": chain, "address": addr})
@@ -274,4 +276,6 @@ async def everything(addresses: list[tuple[str, str, str]]) -> dict:
     cash = sum(h["value_usd"] or 0 for h in holdings if not h["hidden"] and (h["symbol"] or "").upper() in STABLES)
     total = sum(by_chain.values())
     return {"total": round(total, 4), "cash": round(cash, 4), "by_chain": {k: round(v, 4) for k, v in by_chain.items()},
-            "holdings": holdings, "missing": missing}
+            "holdings": holdings, "missing": missing,
+            "read": {c: round(by_chain.get(c, 0.0), 4) for c in read},
+            "missing_chains": sorted({m["chain"] for m in missing} - read)}

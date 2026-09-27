@@ -15,9 +15,16 @@ from app.trading.onchain.storage import data_file
 _STORE_FILE = data_file("onchain_wealth.json")
 SNAPSHOT_S = 10 * 60
 RANGES = {"24h": 86_400, "7d": 7 * 86_400, "30d": 30 * 86_400, "all": None}
+# v2 (27/09): every chain, every token (portfolio.py). Readings from before
+# were the site's two wallets only: a different quantity, dropped rather than
+# drawn on the same line (Lorenzo: "il grafico non rispetta l'andamento
+# reale del portafoglio").
+VERSION = 2
+CARRY_S = 6 * 3600     # a chain that did not answer counts at its last value this long
 
 _lock = threading.Lock()
 _series: dict[str, list[list[float]]] = {}
+_chains: dict[str, dict[str, list[float]]] = {}     # uid -> chain -> [t, value]
 
 
 def _load() -> None:
@@ -25,19 +32,23 @@ def _load() -> None:
         raw = json.loads(_STORE_FILE.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return
-    if isinstance(raw, dict):
-        _series.update({k: v for k, v in raw.items() if isinstance(v, list)})
+    if not isinstance(raw, dict) or raw.get("version") != VERSION:
+        return                     # older readings measured something else
+    _series.update({k: v for k, v in (raw.get("series") or {}).items() if isinstance(v, list)})
+    _chains.update({k: v for k, v in (raw.get("chains") or {}).items() if isinstance(v, dict)})
 
 
 def _save() -> None:
     try:
-        _STORE_FILE.write_text(json.dumps(_series, separators=(",", ":")), encoding="utf-8")
+        _STORE_FILE.write_text(json.dumps({"version": VERSION, "series": _series, "chains": _chains},
+                                          separators=(",", ":")), encoding="utf-8")
     except OSError:
         pass
 
 
 def reset_for_tests() -> None:
     _series.clear()
+    _chains.clear()
 
 
 def _thin(rows: list[list[float]], now: float) -> list[list[float]]:
@@ -52,6 +63,25 @@ def _thin(rows: list[list[float]], now: float) -> list[list[float]]:
             out.append([t, v])
         last_bucket = bucket
     return out
+
+
+def combine(uid: str, read: dict[str, float], missing: list[str], now: float | None = None) -> float | None:
+    """The total to record: the chains read now, plus each chain that did
+    not answer at its last value if that is recent. None when a missing
+    chain has no recent value: better no point than a false dip."""
+    now = now or time.time()
+    last = _chains.setdefault(uid, {})
+    for chain, v in read.items():
+        last[chain] = [now, round(v, 4)]
+    total = sum(read.values())
+    for chain in missing:
+        prev = last.get(chain)
+        if prev is None or now - prev[0] > CARRY_S:
+            if prev is None:
+                continue          # never seen with value: nothing to carry, nothing lost
+            return None
+        total += prev[1]
+    return total
 
 
 def record(uid: str, value_usd: float, now: float | None = None) -> None:

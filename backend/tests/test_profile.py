@@ -53,3 +53,24 @@ def test_wealth_series_thins_with_age_and_ranges():
     assert len(rows) < 30 + 28 * 24 + 2 * 144 + 10
     assert len(wealth.series("u1", "24h", now=now)) >= 140
     assert wealth.change("u1", "7d", 200.0, now=now) == pytest.approx(200.0 - wealth.series("u1", "7d", now=now)[0][1])
+
+
+def test_a_chain_that_does_not_answer_counts_at_its_last_value():
+    now = 1_790_000_000
+    assert wealth.combine("u1", {"solana": 100.0, "bsc": 5.0}, [], now=now) == 105.0
+    # bsc down 10 minutes later: its last value stands in
+    assert wealth.combine("u1", {"solana": 110.0}, ["bsc"], now=now + 600) == 115.0
+    # down for longer than CARRY_S: no point at all, rather than a fake dip
+    assert wealth.combine("u1", {"solana": 110.0}, ["bsc"], now=now + wealth.CARRY_S + 700) is None
+    # a chain never seen with a value is not a loss
+    assert wealth.combine("u2", {"solana": 1.0}, ["base"], now=now) == 1.0
+
+
+def test_old_readings_are_dropped(tmp_path, monkeypatch):
+    import json
+    f = tmp_path / "old.json"
+    f.write_text(json.dumps({"u1": [[1, 2.0]]}))           # v1 file: a bare dict of series
+    monkeypatch.setattr(wealth, "_STORE_FILE", f)
+    wealth.reset_for_tests()
+    wealth._load()
+    assert wealth.series("u1", "all") == []

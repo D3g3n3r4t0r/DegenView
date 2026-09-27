@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0149", "Il grafico del profilo non rispetta l'andamento reale del portafoglio",
+     "Lorenzo: 'il grafico non rispetta l'andamento reale del portafoglio'.",
+     "alta"),
     ("seed-0148", "Non vedo il wallet nella barra in basso",
      "Lorenzo, con uno screenshot delle 19:00: 'non vedo wallet'. Nella barra c'erano solo tre icone.",
      "alta"),
