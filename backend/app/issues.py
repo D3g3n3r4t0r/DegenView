@@ -164,6 +164,12 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0135", "La scheda Scanner e' confusionaria e tiene il grafico di una crypto per tutto il giorno",
+     "Lorenzo: 'la scheda scanner e' confusionaria, non voglio che rimanga il grafico di una crypto per tutto il giorno, devi ristudiarla per bene'.",
+     "alta"),
+    ("seed-0134", "La scheda Trending sembra una lista di token di tendenza, non la scelta del motore",
+     "Lorenzo: 'ma la sezione trending cosa e'?' e poi 'non e' chiaro che siano state scelte, sembrano appunto trending, deve essere chiaro che sono uscite dalla logica'.",
+     "media"),
     ("seed-0133", "Il logo DEGEN di caricamento non e' nello stile della home",
      "Lorenzo: 'il logo DEGEN di caricamento non e' adeguato alla home page come stile ... studia qualcosa'.",
      "bassa"),
