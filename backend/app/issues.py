@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0148", "Non vedo il wallet nella barra in basso",
+     "Lorenzo, con uno screenshot delle 19:00: 'non vedo wallet'. Nella barra c'erano solo tre icone.",
+     "alta"),
     ("seed-0147", "Sul telefono si vedeva ancora la versione vecchia dell'app",
      "Lorenzo, con uno screenshot delle 18:40: in alto '0 SOL', in basso l'icona Wallet e la classifica su Now/best, cioe' la versione di prima, mentre la nuova era online da ore.",
      "alta"),
