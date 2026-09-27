@@ -105,6 +105,7 @@ from app.trading.onchain import outcomes as onchain_outcomes
 from app.trading.onchain import autotrader as onchain_autotrader
 from app.trading.onchain import wealth as onchain_wealth
 from app import profiles
+from app import wallet_link
 from app.trading.onchain import passkey as onchain_passkey
 from app.trading.onchain import pilot as onchain_pilot
 from app.trading.onchain import listings as onchain_listings
@@ -3764,29 +3765,50 @@ _CASH_SYMBOLS = {"USDG", "USDC", "USDT", "PYUSD", "USD1"}
 _NATIVE_UNIT = {"solana": "SOL", "robinhood": "ETH"}
 
 
+async def _linked_holdings(chain: str, address: str) -> list[dict]:
+    """A connected wallet's tokens, priced (read-only: we hold no key)."""
+    known = [_ONCHAIN_QUOTE_TOKEN["robinhood"]] + ([onchain_autotrader._meta["usdc"]] if onchain_autotrader._meta["usdc"] else []) \
+        if chain == "robinhood" else []
+    raw = await onchain_balances.all_token_balances(chain, address, known)
+
+    async def _enrich(entry: dict) -> dict:
+        try:
+            meta = await _onchain_token_meta(chain, entry["address"])
+        except Exception:  # noqa: BLE001
+            meta = {"symbol": None, "price_usd": None, "decimals": entry.get("decimals")}
+        amount = entry["amount"] if "amount" in entry else entry["amount_raw"] / (10 ** (meta["decimals"] or 0))
+        return {"address": entry["address"], "symbol": meta["symbol"] or entry["address"][:6], "amount": amount,
+                "price_usd": meta["price_usd"],
+                "value_usd": amount * meta["price_usd"] if meta["price_usd"] is not None else None}
+    return list(await asyncio.gather(*(_enrich(e) for e in raw)))
+
+
 async def _wallet_snapshot(user: User) -> dict:
     """Everything the wallets hold, priced: cash (stablecoins), positions
-    (the rest, the chain's own coin included), total. A chain whose RPC does
+    (the rest, the chain's own coin included), total. The site's wallets and
+    the ones the user connected (wallet_link.py). A wallet whose RPC does
     not answer is left out and named in `missing`, never counted as zero."""
     positions, cash, missing = [], 0.0, []
-    for chain in user.onchain_wallets:
+    sources = [(chain, w.address, "site") for chain, w in user.onchain_wallets.items()]
+    sources += [("robinhood" if w["kind"] == "evm" else "solana", w["address"], "connected")
+                for w in profiles.wallets(user.id)]
+    for chain, address, source in sources:
         try:
-            native, price = await asyncio.gather(
-                onchain_balances.native_balance(chain, user.onchain_wallets[chain].address),
-                onchain_prices.native_price_usd(chain))
-            holdings = await _portfolio_holdings(user, chain)
+            native, price = await asyncio.gather(onchain_balances.native_balance(chain, address),
+                                                 onchain_prices.native_price_usd(chain))
+            holdings = await (_portfolio_holdings(user, chain) if source == "site" else _linked_holdings(chain, address))
         except Exception:  # noqa: BLE001
-            missing.append(chain)
+            missing.append(f"{chain} {address[:6]}…")
             continue
         if native:
             positions.append({"chain": chain, "symbol": _NATIVE_UNIT[chain], "name": _NATIVE_UNIT[chain],
-                              "address": None, "amount": native, "price_usd": price,
+                              "address": None, "amount": native, "price_usd": price, "source": source,
                               "value_usd": native * price if price is not None else None, "native": True})
         for h in holdings:
             if (h.get("symbol") or "").upper() in _CASH_SYMBOLS:
                 cash += h.get("value_usd") or h.get("amount") or 0.0
             elif h.get("amount"):
-                positions.append({"chain": chain, **h})
+                positions.append({"chain": chain, "source": source, **h})
     positions.sort(key=lambda p: -(p.get("value_usd") or 0))
     total = cash + sum(p.get("value_usd") or 0 for p in positions)
     return {"total": round(total, 4), "cash": round(cash, 4), "positions": positions, "missing": missing}
@@ -3796,7 +3818,7 @@ async def _wealth_loop() -> None:
     await asyncio.sleep(60)
     while True:
         for user in auth.list_users():
-            if not user.onchain_wallets:
+            if not user.onchain_wallets and not profiles.wallets(user.id):
                 continue
             try:
                 snap = await _wallet_snapshot(user)
@@ -3830,7 +3852,8 @@ def _closed_trades(user: User) -> list[dict]:
 @app.get("/api/profile")
 async def get_profile(user: User = Depends(auth.get_current_user)) -> dict:
     p = profiles.get(user.id, user.email, _joined_hint(user))
-    snap = await _wallet_snapshot(user) if user.onchain_wallets else {"total": None, "cash": 0.0, "positions": [], "missing": []}
+    snap = await _wallet_snapshot(user) if user.onchain_wallets or profiles.wallets(user.id) \
+        else {"total": None, "cash": 0.0, "positions": [], "missing": []}
     if snap["total"] is not None and not snap["missing"]:
         onchain_wealth.record(user.id, snap["total"])
     closed = _closed_trades(user)
@@ -3877,6 +3900,40 @@ async def upload_avatar(body: AvatarUpload, user: User = Depends(auth.get_curren
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"profile": profiles.public(user.id, p)}
+
+
+class WalletChallenge(BaseModel):
+    kind: Literal["evm", "solana"]
+    address: str
+
+
+class WalletConfirm(BaseModel):
+    signature: str
+
+
+@app.post("/api/wallets/link/challenge")
+async def wallet_link_challenge(body: WalletChallenge, request: Request, user: User = Depends(auth.get_current_user)) -> dict:
+    """The message the wallet signs to prove it is the user's (free, no tx)."""
+    try:
+        return {"message": wallet_link.challenge(user.id, body.kind, body.address.strip(),
+                                                 host=request.headers.get("host") or "liquidityengine.app")}
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/api/wallets/link")
+async def wallet_link_confirm(body: WalletConfirm, user: User = Depends(auth.get_current_user)) -> dict:
+    profiles.get(user.id, user.email, _joined_hint(user))
+    try:
+        p = wallet_link.confirm(user.id, body.signature)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"profile": profiles.public(user.id, p)}
+
+
+@app.delete("/api/wallets/link/{kind}/{address}")
+async def wallet_unlink(kind: Literal["evm", "solana"], address: str, user: User = Depends(auth.get_current_user)) -> dict:
+    return {"profile": profiles.public(user.id, profiles.remove_wallet(user.id, kind, address))}
 
 
 @app.get("/api/profile/avatar/{uid}")

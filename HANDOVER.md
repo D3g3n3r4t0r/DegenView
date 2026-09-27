@@ -12,6 +12,13 @@ lavori pluri-sessione, decisioni prese, stato di piani approvati.
 
 ---
 
+## Wallet di chiunque sul sito — `seed-0143`, branch `claude/connect-wallet` — 2026-09-27 — **in corso**
+
+Lorenzo: "dobbiamo dare la possibilita' di far collegare il wallet a qualsiasi persona [...] deve firmare uno speciale smart contract cosi' che si attivi questa strategia automatica, e' fattibile?". Piano concordato ("procedi"):
+1. **Fatto**: collegamento per firma (`wallet_link.py`, `/api/wallets/link*`), saldi del wallet collegato nel profilo in sola lettura. Solo wallet del browser (MetaMask, Rabby, Phantom) + deep link al browser interno del wallet da telefono; niente WalletConnect (servirebbe un project id e una libreria esterna, CSP da allargare).
+2. **Da fare**: scambi firmati dall'utente (EVM: approve + exactInputSingle inviati con eth_sendTransaction; Solana: transazione Jupiter firmata da Phantom).
+3. **Da fare, dopo i numeri del sistema in simulato**: vault per utente su Robinhood Chain (deposita lui, il bot puo' solo swap su router in allowlist con destinatario il vault, prelievo sempre suo), audit esterno, parere legale MiCA, beta con tetto basso. Alternativa session key ERC-4337/EIP-7702 solo se Robinhood Chain li supporta (da verificare).
+
 ## Sistema trend-following, autotrader Robinhood, profilo — `seed-0138`/`0139`/`0140`, branch `claude/trend-strategy` — 2026-09-27
 
 - Sistema (`system.py`): Lorenzo "trova la miglior strategia [...] rendiamola praticamente operativa [...] i risultati di questi ingressi e uscite come risultati nella leaderboard". Candidate: Lorenzo e Lorenzo HF (default), candele 5m, fill all'apertura dopo il segnale, costi 0,3+0,5% per lato, finestra 48h, rug = -100%. Vince la mediana migliore su alert conclusi (>= 20, prima Lorenzo HF). Barre in `alert_track` (`_bars`, file `onchain_alert_bars.json`) dalle letture ogni minuto + un fetch GeckoTerminal per alert (`refresh_system`). La classifica ordina per "System" di default.
