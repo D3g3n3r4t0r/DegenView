@@ -2012,5 +2012,15 @@
       "frontend/static/onchain/projects.js",
       "frontend/static/onchain/app.css"
     ]
+  },
+  "seed-0164": {
+    "status": "risolto",
+    "at": 1790543814,
+    "summary": "Su Telegram DeepSeek ora legge da solo tutto il database del sito, in sola lettura: il database dei progetti (ogni progetto mai visto, con punteggio, stato e motivo), la classifica delle gemme, gli alert (scattati, in arrivo, che tornano su), il sistema e le sue strategie, i token scartati col motivo, cosa ha imparato la memoria e i rug. Puo' fare fino a 5 ricerche per risposta. E puo' segnalare bug: se glielo chiedi o se vede dati incoerenti, scrive una segnalazione sulla bacheca del sito con autore 'DeepSeek (Telegram)' (massimo 10 al giorno). Claude legge la bacheca all'inizio di ogni conversazione, ti cita le sue segnalazioni e le verifica sul codice prima di correggerle.",
+    "files": [
+      "backend/app/main.py",
+      "backend/app/notify/deepseek_desk.py",
+      "CLAUDE.md"
+    ]
   }
 }

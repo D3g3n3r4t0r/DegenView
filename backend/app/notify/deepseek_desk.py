@@ -169,7 +169,10 @@ CHAT_SYSTEM = (
     "on-chain (Solana, Robinhood Chain, BSC, Base, Ethereum) e le segue con un sistema trend-following "
     "(ingresso e uscita automatici, finestra 48h). Rispondi in italiano, breve e concreto, come in chat. "
     "Usa i dati del sito qui sotto quando servono e non inventare numeri che non ci sono: se un dato manca, "
-    "dillo. Non promettere guadagni: sono mercati molto rischiosi. Non chiedere mai chiavi private o seed.")
+    "dillo. Non promettere guadagni: sono mercati molto rischiosi. Non chiedere mai chiavi private o seed. "
+    "Hai strumenti per leggere tutto il database del sito (progetti, classifica gemme, alert, sistema, scartati, "
+    "memoria dei rug): usali invece di tirare a indovinare. Se ti chiedono di segnalare un problema, o vedi dati "
+    "incoerenti, usa segnala_bug: la segnalazione va sulla bacheca e Claude la verifica e la risolve.")
 
 
 def wants_answer(message: dict, bot_username: str) -> str | None:
@@ -192,7 +195,7 @@ def wants_answer(message: dict, bot_username: str) -> str | None:
     return None
 
 
-TOOL_ROUNDS = 3
+TOOL_ROUNDS = 5
 
 
 async def answer(chat_id: str, text: str, context: str, tools: dict | None = None) -> str:
