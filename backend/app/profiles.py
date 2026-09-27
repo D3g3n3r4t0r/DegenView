@@ -95,6 +95,40 @@ def update(uid: str, *, display_name: str | None = None, handle: str | None = No
         return dict(p)
 
 
+def add_wallet(uid: str, kind: str, address: str, now: float | None = None) -> dict:
+    """A wallet the user proved is theirs (wallet_link.py). One account per
+    address: a wallet linked elsewhere must be unlinked there first."""
+    key = address.lower() if kind == "evm" else address
+    with _lock:
+        for other, q in _profiles.items():
+            if other != uid and any((w["address"].lower() if w["kind"] == "evm" else w["address"]) == key
+                                    for w in q.get("wallets") or []):
+                raise ValueError("This wallet is linked to another account.")
+        p = _profiles.setdefault(uid, {"display_name": "Trader", "handle": f"trader_{uid[:4]}", "bio": "",
+                                       "avatar_rev": 0, "created_at": time.time()})
+        wallets = [w for w in p.get("wallets") or [] if not (w["kind"] == kind and
+                   (w["address"].lower() if kind == "evm" else w["address"]) == key)]
+        if len(wallets) >= 6:
+            raise ValueError("Six wallets at most.")
+        wallets.append({"kind": kind, "address": address, "linked_at": now or time.time()})
+        p["wallets"] = wallets
+        _save()
+        return dict(p)
+
+
+def remove_wallet(uid: str, kind: str, address: str) -> dict:
+    with _lock:
+        p = _profiles.get(uid) or {}
+        p["wallets"] = [w for w in p.get("wallets") or []
+                        if not (w["kind"] == kind and w["address"].lower() == address.lower())]
+        _save()
+        return dict(p)
+
+
+def wallets(uid: str) -> list[dict]:
+    return list((_profiles.get(uid) or {}).get("wallets") or [])
+
+
 def avatar_path(uid: str):
     return _AVATARS / f"{re.sub(r'[^A-Za-z0-9_-]', '', uid)}.webp"
 
@@ -128,7 +162,8 @@ def set_avatar(uid: str, data_url: str) -> dict:
 def public(uid: str, p: dict) -> dict:
     rev = p.get("avatar_rev") or 0
     return {"display_name": p["display_name"], "handle": p["handle"], "bio": p.get("bio") or "",
-            "avatar_url": f"/api/profile/avatar/{uid}?v={rev}" if rev else None, "joined": p.get("created_at")}
+            "avatar_url": f"/api/profile/avatar/{uid}?v={rev}" if rev else None, "joined": p.get("created_at"),
+            "wallets": p.get("wallets") or []}
 
 
 _load()
