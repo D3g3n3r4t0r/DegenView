@@ -12,3 +12,12 @@ def _fresh_gecko_gate():
     yield
     dexscreener._gecko_seen.clear()
     dexscreener._gecko_calls.clear()
+
+
+@pytest.fixture(autouse=True)
+def _private_projects_db(monkeypatch, tmp_path):
+    """The Gem Finder's project database is a file on the volume: every test
+    gets its own, empty."""
+    from app.trading.onchain import projects_db
+    monkeypatch.setattr(projects_db, "_DB_FILE", tmp_path / "projects.db")
+    yield

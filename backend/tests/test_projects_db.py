@@ -1,0 +1,101 @@
+"""The Gem Finder's project database. Request: "il gem hunter deve trovare
+progetti di qualita', ma vedi sempre i soliti... ma fatti un database no?"."""
+from __future__ import annotations
+
+import pytest
+
+from app.trading.onchain import discovery, projects_db as db
+from app.trading.onchain import leaderboard as lb
+
+T0 = 1_790_000_000.0
+D = 86400.0
+
+
+@pytest.fixture(autouse=True)
+def _clean():
+    lb.reset_for_tests()
+    yield
+    lb.reset_for_tests()
+
+
+def _pair(token, cap, liq, vol=5_000):
+    return {"baseToken": {"address": token}, "marketCap": cap, "liquidity": {"usd": liq},
+            "volume": {"h24": vol}, "priceUsd": "0.01", "pairCreatedAt": (T0 - 90 * D) * 1000}
+
+
+def test_upsert_merges_sources_and_never_erases_known_fields():
+    assert db.upsert({"chain": "solana", "token_address": "A", "symbol": "AAA", "website": "https://a.io"}, "jupiter", T0)
+    assert not db.upsert({"chain": "solana", "token_address": "A", "symbol": "?", "github": "https://github.com/a/a"},
+                         "coingecko", T0 + 1)
+    p = db.get("solana", "A")
+    assert p["symbol"] == "AAA" and p["website"] == "https://a.io" and p["github"] == "https://github.com/a/a"
+    assert p["sources"] == ["jupiter", "coingecko"] and p["first_seen"] == T0 and p["last_seen"] == T0 + 1
+
+
+def test_coingecko_list_fills_the_universe_and_market_puts_it_in_band():
+    rows = [{"id": "alpha", "symbol": "alp", "name": "Alpha", "platforms": {"solana": "AlphaMint"}},
+            {"id": "eth", "symbol": "e", "name": "E", "platforms": {"ethereum": "0x1"}},
+            {"id": "rh", "symbol": "r", "name": "R", "platforms": {"robinhood": "0xabc"}}]
+    assert db.upsert_many(discovery.universe(rows), "coingecko-list", T0) == 2
+    assert db.stale_market(10, T0) == {"solana": ["AlphaMint"], "robinhood": ["0xabc"]}
+    db.apply_pairs("solana", ["AlphaMint"], [_pair("AlphaMint", 800_000, 60_000)], T0)
+    db.apply_pairs("robinhood", ["0xabc"], [], T0)
+    assert db.stale_market(10, T0 + 60) == {}
+    assert db.get("solana", "AlphaMint")["mcap"] == 800_000
+    assert [b["id"] for b in db.need_detail(10, T0)] == ["alpha"]
+    db.mark_detail("solana", "alpha", T0)
+    assert db.need_detail(10, T0 + 60) == []
+
+
+def test_due_for_analysis_needs_band_and_something_to_read_code_first():
+    for tok, cap, liq, site, gh in [("A", 500_000, 50_000, "https://a.io", None),
+                                     ("B", 400_000, 20_000, "https://b.io", "https://github.com/b/b"),
+                                     ("C", 90_000_000, 5e6, "https://c.io", None),
+                                     ("D", 300_000, 30_000, None, None)]:
+        db.upsert({"chain": "solana", "token_address": tok, "symbol": tok, "website": site, "github": gh,
+                   "market_cap": cap, "liquidity_usd": liq}, "x", T0)
+    assert [p["token"] for p in db.due_for_analysis(10, now=T0)] == ["B", "A"]
+    assert [p["token"] for p in db.due_for_analysis(10, {"solana:B"}, T0)] == ["A"]
+
+
+def test_rejection_is_remembered_and_rechecked_later():
+    db.upsert({"chain": "solana", "token_address": "A", "symbol": "A", "website": "https://a.io",
+               "market_cap": 500_000, "liquidity_usd": 50_000}, "x", T0)
+    e = {"chain": "solana", "token_address": "A", "pillars": {"github": {"score": 0}}, "overall": {"fatal": "x"}}
+    db.record(e, "rejected", "github: A is a fork", now=T0)
+    assert db.due_for_analysis(10, now=T0 + D) == []
+    assert [p["token"] for p in db.due_for_analysis(10, now=T0 + db.RECHECK_S + 1)] == ["A"]
+    db.record(e, "rejected", "site: website unreachable", now=T0)
+    assert db.due_for_analysis(10, now=T0 + db.RECHECK_DATA_S + 1)
+    s = db.stats()
+    assert s["total"] == 1 and s["by_status"] == {"rejected": 1} and s["top_rejections"][0]["n"] == 1
+
+
+def test_board_takes_work_from_the_database_and_writes_verdicts_back():
+    db.upsert({"chain": "solana", "token_address": "Gem", "symbol": "GEM", "name": "Gem Labs",
+               "website": "https://gem.io", "market_cap": 900_000, "liquidity_usd": 80_000,
+               "launched_at": T0 - 100 * D}, "coingecko", T0)
+    db.upsert({"chain": "solana", "token_address": "Frog", "symbol": "PEPEFROG", "name": "Pepe Frog Inu",
+               "website": "https://frog.io", "market_cap": 900_000, "liquidity_usd": 80_000}, "coingecko", T0)
+    assert lb.feed_from_database(T0) == 1
+    assert "solana:Gem" in lb._entries and lb._entries["solana:Gem"]["source"] == "database"
+    assert db.get("solana", "Frog")["status"] == "rejected"
+    lb.apply_analysis("solana:Gem", {"github": {"key": "github", "score": 0, "facts": {}, "flags": [],
+                                                "fatal": "empty repository"}}, T0 + 60)
+    p = db.get("solana", "Gem")
+    assert p["status"] == "rejected" and "empty repository" in p["why"]
+    # A rejected project comes back when the database says it is time.
+    lb._entries.clear()
+    assert lb.add(db.as_item(p), "coingecko", T0 + 120) is False
+    assert lb.add(db.as_item(p), "database", T0 + db.RECHECK_S) is True
+
+
+def test_search_filters_and_sorts():
+    for tok, sc in [("A", 80.0), ("B", 60.0), ("C", None)]:
+        db.upsert({"chain": "solana", "token_address": tok, "symbol": f"S{tok}", "name": f"Name {tok}"}, "x", T0)
+        if sc is not None:
+            db.record({"chain": "solana", "token_address": tok}, "studied", "GitHub only 50", sc, now=T0)
+    r = db.search(sort="score")
+    assert [i["token"] for i in r["items"]] == ["A", "B", "C"] and r["total"] == 3
+    assert [i["token"] for i in db.search(q="Name B")["items"]] == ["B"]
+    assert db.search(status="studied")["total"] == 2

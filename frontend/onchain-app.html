@@ -1750,7 +1750,7 @@
   #app-shell:not([data-view="entry"]) #entry,
   /* Gems is research only; the live launch scanner lives with the Meme
      Sniper (Lorenzo, 25/09: "la ricerca al minuto deve stare sullo sniper"). */
-  #app-shell:not([data-view="gems"]) #board,
+  #app-shell:not([data-view="gems"]) :is(#board, #projects),
   #app-shell:not([data-view="meme"]) :is(#memes, #pilot, #radar),
   #app-shell:not([data-view="manual"]) #market-order-row,
   #app-shell:not([data-view="wallet"]) :is(.status-strip, #wallet-view) { display: none !important; }
@@ -2355,6 +2355,41 @@
   .bd-tags em[data-tone="use"] { color: #7ee0ff; background: rgb(126 224 255 / .10); border-color: rgb(126 224 255 / .35); }
   .bd-use { --live: #7ee0ff; }
 
+  /* --- project database: a search, five verdicts, a quiet list ------- */
+  .projects > header { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s3);
+    margin: 0 0 var(--s1); padding-inline: var(--s1);
+    & h3 { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: -.01em; }
+    & > span { font-size: 12px; color: var(--ink-faint); } }
+  .projects-funnel { margin: 0 0 var(--s3); padding-inline: var(--s1); font-size: 12.5px; line-height: 1.5; color: var(--ink-dim);
+    & b { color: var(--ink); font-variant-numeric: tabular-nums; } }
+  .projects-tools { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; margin: 0 0 var(--s2); }
+  .projects-tools input { flex: 1 1 240px; min-inline-size: 0; block-size: 38px; padding: 0 14px; border-radius: 12px;
+    border: 1px solid var(--line); background: var(--panel); color: var(--ink); font: inherit; font-size: 16px;
+    &:focus-visible { outline: 2px solid color-mix(in oklch, var(--live) 60%, transparent); outline-offset: 1px; } }
+  .projects-filter { display: flex; gap: 4px; flex-wrap: wrap;
+    & button { block-size: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: none;
+      color: var(--ink-dim); font: 500 12.5px var(--sans); cursor: pointer; }
+    & button[aria-pressed="true"] { color: var(--bg); background: var(--live); border-color: var(--live); } }
+  .projects-list { list-style: none; margin: 0; padding: 0;
+    & li { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: var(--s3); align-items: start;
+      padding: var(--s3) var(--s1); border-block-end: 1px solid var(--line); }
+    & li:last-child { border: 0; }
+    & .pj-score { font: 600 15px var(--mono); color: var(--ink); text-align: end; padding-block-start: 1px; }
+    & li[data-status="rejected"] .pj-score, & li[data-status="new"] .pj-score { color: var(--ink-faint); }
+    & .pj-name { display: grid; gap: 2px; min-inline-size: 0; font-size: 14px; }
+    & .pj-name > span { color: var(--ink-dim); font-size: 13px; }
+    & .pj-name small { font-size: 12px; color: var(--ink-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    & .pj-why { color: var(--ink-dim) !important; white-space: normal !important; }
+    & .pj-status { font: 500 11px var(--sans); font-style: normal; padding: 2px 8px; border-radius: 999px;
+      background: var(--raised); color: var(--ink-dim); white-space: nowrap; }
+    & li[data-status="ranked"] .pj-status { background: color-mix(in oklch, var(--live) 18%, transparent); color: var(--live); }
+    & li[data-status="rejected"] .pj-status { background: var(--down-soft); color: #ff8a8a; }
+    & .pj-empty { display: block; color: var(--ink-faint); font-size: 13px; }
+  }
+  .projects[data-loading] .projects-list:empty { min-block-size: 160px; border-radius: var(--radius);
+    background: linear-gradient(90deg, var(--panel) 30%, var(--raised) 50%, var(--panel) 70%) 0 0 / 250% 100%;
+    animation: skel 1.4s linear infinite; }
+
   /* --- meme view: the bets first, then the autopilot, then the scanner */
   #app-shell[data-view="meme"] #memes { order: -2; }
   #app-shell[data-view="meme"] #pilot { order: -1; }
@@ -2475,6 +2510,26 @@
           <h4>Close to the board</h4>
           <ul></ul>
         </div>
+      </section>
+
+      <!-- Il database dei progetti (projects_db.py). Richiesta: "vedi sempre
+           i soliti... ma fatti un database no?". Tutto cio' che il Gem Finder
+           ha visto, con il verdetto e il perche'. Lo disegna static/onchain/projects.js. -->
+      <section class="projects" id="projects" data-loading>
+        <header><h3>Project database</h3><span data-projects-meta></span></header>
+        <p class="projects-funnel" data-projects-funnel></p>
+        <div class="projects-tools">
+          <input type="search" data-projects-q placeholder="Search name, ticker, address or site" aria-label="Search the project database" autocomplete="off" />
+          <div class="projects-filter" role="group" aria-label="Filter by verdict">
+            <button type="button" data-status="" aria-pressed="true">All</button>
+            <button type="button" data-status="ranked" aria-pressed="false">Ranked</button>
+            <button type="button" data-status="studied" aria-pressed="false">Studied</button>
+            <button type="button" data-status="rejected" aria-pressed="false">Rejected</button>
+            <button type="button" data-status="new" aria-pressed="false">Waiting</button>
+          </div>
+        </div>
+        <ol class="projects-list" data-projects-list></ol>
+        <button type="button" class="rj-more" data-projects-more hidden>Show more</button>
       </section>
 
       <!-- La prima pagina. Richiesta: "vorrei che la prima pagina quando entro
