@@ -1754,5 +1754,19 @@
       "frontend/static/onchain/autotrade.js",
       "backend/tests/test_autotrader.py"
     ]
+  },
+  "seed-0143": {
+    "status": "in corso",
+    "at": 1790525071,
+    "summary": "Primo passo fatto: nel profilo c'e' 'Wallets' con MetaMask/Rabby (Robinhood Chain) e Phantom (Solana). Il wallet firma un messaggio con un codice monouso (gratis, non e' una transazione, non puo' muovere fondi), il server verifica la firma (EIP-191 per EVM, ed25519 per Solana) e collega l'indirizzo all'account; un indirizzo puo' stare su un solo account, fino a sei per account, scollegabili. Quello che il wallet collegato detiene entra nel profilo e nel grafico del valore, in sola lettura: le sue chiavi non le vediamo mai. Da telefono senza estensione il sito si apre nel browser interno di MetaMask o Phantom. Restano: scambi firmati dal wallet dell'utente, poi la strategia automatica per chi collega il proprio wallet tramite un vault su Robinhood Chain (lui deposita, il bot puo' solo scambiare su router approvati e verso il vault stesso, lui ritira quando vuole), con audit del contratto e parere legale (MiCA) prima di aprirlo al pubblico.",
+    "files": [
+      "backend/app/wallet_link.py",
+      "backend/app/profiles.py",
+      "backend/app/main.py",
+      "frontend/static/onchain/profile.js",
+      "frontend/static/onchain/api.js",
+      "frontend/static/onchain/app.css",
+      "backend/tests/test_wallet_link.py"
+    ]
   }
 }
