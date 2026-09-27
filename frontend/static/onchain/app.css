@@ -734,7 +734,7 @@
     & small { color: var(--k-text-3); font-size: 12.5px; } }
 }
 @layer skin {
-  #app-shell:not([data-view="meme"]) #top-picks { display: none !important; }
+  #app-shell:not([data-view="gems"]) #top-picks { display: none !important; }
   .top-size { display: inline-flex; gap: 2px; margin: 4px 0 12px; padding: 3px; border-radius: 12px; background: var(--k-surface);
     & button { padding: 8px 14px; border: 0; border-radius: 9px; background: none; color: var(--k-text-3); font: 600 13px var(--sans); cursor: pointer; }
     & button[aria-pressed="true"] { background: var(--k-surface-2); color: var(--k-text); } }
@@ -838,4 +838,13 @@ html, body { overflow-x: clip; }
     &[data-k="in"] { color: #2de0a8; background: rgb(45 224 168 / .12); }
     &[data-k="out"] { color: var(--k-text-3); background: rgb(255 255 255 / .06); } }
   @media (prefers-reduced-motion: reduce) { .bt-live i { animation: none; opacity: .8; } }
+}
+@layer skin {
+  /* Gems > Top: the podium, then the Top 15 / 25 / 50 (top.js) in place of
+     the board's own list, which would repeat the same names. */
+  #board [data-board-list] { display: none; }
+  #top-picks { padding-block-start: 4px; }
+  #top-picks .picks-head { display: none; }
+  .tabs .tab-ic { inline-size: 16px; block-size: 16px; margin-inline-end: 6px; vertical-align: -2px; fill: none; stroke: currentColor;
+    stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 }
