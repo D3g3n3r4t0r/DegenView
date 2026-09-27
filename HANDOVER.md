@@ -3493,3 +3493,10 @@ nativo mancante, nodo EVM senza batch). Ora: secondo nodo Solana, batch che
 ripiega su chiamate singole, ultima lettura buona fino a 6 ore, `$—` e
 "Not read right now" invece di un falso $0; storico wealth v3 (via il punto
 a $0). Vedi `seed-0151`.
+
+**2026-09-27 — Lorenzo (screenshot "Deposit with"): "aggiungiamo queste possibilita' per i depositi".**
+Pannello Deposit a tre passi (`deposit.py`, `/api/wallets/deposit`, `sheets.js`):
+Crypto per rete con QR, Coinbase/Binance, carta via `ONRAMP_URL` (vuoto =
+spenta; serve un account on-ramp scelto da Lorenzo). Vedi `seed-0152`.
+Chiave DeepSeek: Lorenzo la inserisce in `/opt/liquidity/deploy/.env`
+(`DEEPSEEK_API_KEY=...`); consigliato rigenerarla, era finita in chat.

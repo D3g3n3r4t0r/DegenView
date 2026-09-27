@@ -95,6 +95,7 @@ from app.models import (
 )
 from app.trading.onchain import aggregator as onchain_aggregator
 from app.trading.onchain import balances as onchain_balances
+from app.trading.onchain import deposit as onchain_deposit
 from app.trading.onchain import execute as onchain_execute
 from app.trading.onchain import send as onchain_send
 from app.trading.onchain import jito as onchain_jito
@@ -3926,6 +3927,12 @@ async def wallet_link_confirm(body: WalletConfirm, user: User = Depends(auth.get
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"profile": profiles.public(user.id, p)}
+
+
+@app.get("/api/wallets/deposit")
+def wallets_deposit(user: User = Depends(auth.get_current_user)) -> dict:
+    """The Deposit sheet: an address and QR per network, exchanges, card."""
+    return onchain_deposit.options(_all_addresses(user), onchain_autotrader._meta.get("usdc"))
 
 
 @app.get("/api/wallets/linked")
