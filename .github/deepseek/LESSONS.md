@@ -35,4 +35,5 @@ review. Read them before answering: the same mistake again is a failed task.
 - "Never show X" means every place X can reach the screen, including labels passed through (`al.system.label` printed "Trend HF" in the event list, #216).
 - `threading.Lock` is not re-entrant: never call a function that takes the same lock (e.g. `profiles.get`) while holding it — the tests hang forever (#226).
 - #226 repeated #190: `hideToken` used in detail.js without an import. Before finishing, list every function you call in each file you touched and check its import line.
+- A test file listed in `Files:` with "create" must be created: #245 changed main.py and skipped `test_dex_spot_chart.py`, so nothing proved the fix. No test = unfinished task.
 - Read what a function returns before using it: `radar.run_spot` returns `(result, events, position)` and `BacktestResult` has no `.events`; #242 failed twice on `result.events`. Check the `return` line of each function you call, not just its name.
