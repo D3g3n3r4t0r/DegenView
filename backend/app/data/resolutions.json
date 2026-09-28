@@ -2147,5 +2147,30 @@
     "status": "risolto",
     "at": 1790573266,
     "summary": "Nella pagina di ogni token c'e' l'occhio barrato: il token sparisce dalle tue liste (Top, podio, alert, classifica, database, meme, scanner), la riga si chiude animata, il successivo sale con un ingresso animato, e c'e' 'Undo' per 5 secondi. Salvato sul tuo account, vale solo per te (issue #226, #231). Provato in un browser."
+  },
+  "seed-0189": {
+    "status": "risolto",
+    "at": 1790575868,
+    "summary": "Il trend follower veloce ora e' pronto dopo 10 candele invece di aspettarne decine: su un pool appena nato entra col suo incrocio, senza ingressi forzati. Misurato su 20 serie: pump su pool nuovo da 0/20 a 20/20 ingressi (mediana +92%), pool vecchi invariati."
+  },
+  "seed-0190": {
+    "status": "risolto",
+    "at": 1790575868,
+    "summary": "La Top mostra solo i progetti in classifica, ordinati per voto: niente piu' voci NOT RANKED."
+  },
+  "seed-0191": {
+    "status": "risolto",
+    "at": 1790575868,
+    "summary": "Il voto finale e' per meta' le regole e per meta' il giudizio di DeepSeek, istruito a leggere i dati in chiave critica e a non farsi convincere dal marketing. Puo' ammettere un progetto sotto il limite dei $100k (voto >= 80) o bocciarne uno (scam/avoid con fiducia >= 0.7). Issue #238."
+  },
+  "seed-0192": {
+    "status": "risolto",
+    "at": 1790575868,
+    "summary": "Il grafico del token e' quello del sito principale, in modalita' incorporata e tema scuro, con ingressi e uscite della strategia. Se il pool non e' noto resta il grafico a candele interno; il grafico al minuto non apre piu' DexScreener."
+  },
+  "seed-0193": {
+    "status": "risolto",
+    "at": 1790575868,
+    "summary": "Ogni token salva ingressi e uscite del suo backtest migliore; sul grafico compaiono come frecce Buy/Sell con il rendimento di ogni uscita, oltre al punto giallo dell'alert. Il nome della strategia non si vede. Issue #242."
   }
 }
