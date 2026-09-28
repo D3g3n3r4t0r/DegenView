@@ -509,6 +509,14 @@ non oltre; uno, due, tre mesi non e' importante".
   "jupiter" seria): 3693 token, 213 in banda il 25/09 (cap 50k-3M,
   liquidita' >= 10k, >= 14 gg, sito, mint revocato, niente tag
   meme/stocks/rwa/lst).
+- 28/09 Lorenzo: "c'e' Aave che [...] capitalizza miliardi non puo' esistere
+  [...] per adesso massimo consideriamo 10 milioni di market cap". Tetto
+  duro `BOARD_CAP_MAX_USD` = $10M in `qualifies` (prima di tutto, anche
+  eccezioni e ammessi da DeepSeek; il benchmark DREGG resta). Il cap e'
+  `true_cap` = max(cap del pool, cap globale CoinGecko): la copia Solana di
+  AAVE segnava $585k, AAVE vale $2.2B. `_check_global_cap`: una richiesta
+  `/coins/{chain}/contract/{addr}` ogni 15 s, prima le voci in classifica,
+  cache 24 h, 429 = pausa 2 min. `discovery.CAP_MAX` 25M -> 10M.
 
 ## Link ospite in sola lettura — `seed-0096`, branch `claude/link-ospite-asb5wj`
 
