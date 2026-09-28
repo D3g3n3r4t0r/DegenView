@@ -368,6 +368,15 @@ async def refresh_system(client, now: float | None = None, gap_s: float = 0.0) -
     for a in sorted(_alerts.values(), key=lambda x: (_ready(x), -x["at"])):
         if a["kind"] != "meme" or a.get("nodata"):
             continue
+        # A finished alert that already carries a result is frozen: its window
+        # is over, the bars it was computed on are gone, and a rebuild would
+        # fetch a different (often shorter) series and overwrite it. Lorenzo,
+        # 28/09: "deve rimanere tutto salvato [...] non deve cambiare ogni
+        # volta risultato e perdere i precedenti". Marking it with the current
+        # SYSTEM_VERSION is enough for backtest_status() and _ready().
+        if now >= a["at"] + system.WINDOW_S and (a.get("backtests") or {}).get("rows"):
+            a["system_v"] = SYSTEM_VERSION
+            continue
         if a.get("system_done") and a.get("system_v") != SYSTEM_VERSION and fetched < SYSTEM_FETCHES_PER_TICK:
             a.update(system_done=False, bars_fetched=False)      # older result: rebuild it once
         if a.get("system_done"):
@@ -397,7 +406,7 @@ async def refresh_system(client, now: float | None = None, gap_s: float = 0.0) -
         j = outcomes._journal.get(f"{a['chain']}:{a.get('token_address')}")
         known = ({"at": j["rug_at"], "why": j.get("rug_why") or ""}
                  if j and j.get("rug") and j.get("rug_at") else None)
-        a["backtests"] = keep_richer(a.get("backtests"),
+        new = keep_richer(a.get("backtests"),
                                      await asyncio.to_thread(system.backtest_all, bars, known))
         if a["backtests"].get("kept") and a.get("system"):
             res = a["system"]            # the followed result goes with its bars

@@ -67,3 +67,57 @@ def test_backtest_status_counts():
     assert st["no_data"] == 1
     assert st["oldest_pending_h"] == round(10 / 3600, 1)
     assert alert_track.system_board("meme")["backtests"] == st
+def test_refresh_system_freezes_finished_alert(monkeypatch):
+    """A finished alert with a result keeps it: no fetch, no recompute."""
+    import asyncio
+
+    from app.trading.onchain import system
+
+    alert_track.reset_for_tests()
+    now = time.time()
+    a = _alert("solana", "AAA", at=now - system.WINDOW_S - 3600)
+    a["backtests"] = {"rows": [{"ret": 1.32}], "bars": 500}
+    a["system_v"] = alert_track.SYSTEM_VERSION - 1
+    a["system_done"] = True
+    a["bars_fetched"] = True
+    alert_track._alerts["a"] = a
+
+    async def _boom(*args, **kwargs):
+        raise AssertionError("_candles must not be called for a frozen alert")
+
+    monkeypatch.setattr(alert_track, "_candles", _boom)
+    asyncio.run(alert_track.refresh_system(None, now=now))
+
+    assert a["backtests"] == {"rows": [{"ret": 1.32}], "bars": 500}
+    assert a["system_v"] == alert_track.SYSTEM_VERSION
+    assert alert_track.backtest_status("meme", now=now)["ready"] == 1
+
+
+def test_refresh_system_keeps_old_backtest_when_new_has_no_rows(monkeypatch):
+    """A live alert's empty result does not overwrite the saved one."""
+    import asyncio
+
+    from app.trading.onchain import system
+
+    alert_track.reset_for_tests()
+    now = time.time()
+    a = _alert("solana", "AAA", at=now - 600)
+    a["backtests"] = {"rows": [{"ret": 0.5}], "bars": 100}
+    a["system_v"] = alert_track.SYSTEM_VERSION
+    a["system_done"] = True
+    a["bars_fetched"] = True
+    alert_track._alerts["a"] = a
+    alert_track._bars["solana:AAA"] = [(now - 600 + i * 60, 1.0, 1.1, 0.9, 1.05, 100.0)
+                                       for i in range(10)]
+
+    async def _empty(*args, **kwargs):
+        return []
+
+    async def _evaluate(bars, at, gone=False, now=None):
+        return {"rows": [], "bars": 0}
+
+    monkeypatch.setattr(alert_track, "_candles", _empty)
+    monkeypatch.setattr(system, "evaluate", _evaluate)
+    asyncio.run(alert_track.refresh_system(None, now=now))
+
+    assert a["backtests"] == {"rows": [{"ret": 0.5}], "bars": 100}
