@@ -467,14 +467,23 @@ def true_cap(e: dict) -> float:
     return max(float(e.get("market_cap") or 0), float(e.get("global_cap") or 0), big_coins.cap_of(e))
 
 
-def qualifies(e: dict, now: float | None = None) -> str:
-    """"" se entra in classifica, altrimenti perche' no."""
-    if benchmark.is_benchmark(e.get("chain"), e.get("token_address")):
-        return ""   # il metro di paragone c'e' sempre, i suoi numeri si vedono comunque
+def too_big(e: dict) -> str:
+    """Why a token is not a small cap at all: a port from another chain or
+    a cap over the ceiling (pool, CoinGecko, or the top coin it copies)."""
     if big_coins.bridged(e):
         return "bridged copy of a coin from another chain"
     if true_cap(e) > BOARD_CAP_MAX_USD:
         return f"over ${BOARD_CAP_MAX_USD / 1e6:.0f}M (${true_cap(e) / 1e6:,.0f}M)"
+    return ""
+
+
+def qualifies(e: dict, now: float | None = None) -> str:
+    """"" se entra in classifica, altrimenti perche' no."""
+    if benchmark.is_benchmark(e.get("chain"), e.get("token_address")):
+        return ""   # il metro di paragone c'e' sempre, i suoi numeri si vedono comunque
+    big = too_big(e)
+    if big:
+        return big
     r = e.get("review") or {}
     if r.get("keep") is False and (now or time.time()) - (r.get("at") or 0) < judge.REVIEW_TTL_S:
         return f"DeepSeek review: {r.get('reason') or 'dropped'}"

@@ -500,3 +500,17 @@ def test_ported_tokens_are_recognised_by_name_and_the_seed_works_offline(monkeyp
     monkeypatch.setattr(big_coins, "_STORE", big_coins._SEED.with_name("missing.json"))
     big_coins._state.update(coins=[])
     assert big_coins.match("AAVE", "Aave") and big_coins.match("aave", "Aave")["cap"] > 1e9
+
+
+def test_the_top_list_drops_database_rows_of_big_coins(monkeypatch):
+    import app.main as m
+    from app.trading.onchain import big_coins
+    big_coins.set_for_tests([{"symbol": "aave", "name": "Aave", "cap": 2.2e9}])
+    now = time.time()
+    rows = [{"chain": "solana", "token": "AAVEmint", "symbol": "AAVE", "name": "Aave", "mcap": 450_000,
+             "score": 99, "analyzed_at": now},
+            {"chain": "solana", "token": "OKmint", "symbol": "OKP", "name": "Ok Project", "mcap": 450_000,
+             "score": 70, "analyzed_at": now}]
+    monkeypatch.setattr(m.onchain_projects_db, "search", lambda **kw: {"items": rows})
+    monkeypatch.setattr(m.onchain_judge, "get", lambda *a: None)
+    assert [e["symbol"] for e in m._top_entries(10) if not e["on_board"]] == ["OKP"]
