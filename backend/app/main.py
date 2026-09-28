@@ -5525,7 +5525,13 @@ async def analyze(
         bias = determine_bias(levels)
         dealing_range = compute_dealing_range(df, swings)
         fib_zones = compute_fib_zones(df, tf_key, intervals[tf_key])
-        strategy = build_strategy_state(strategy_name, df, strategy_params_dict)
+        # Sul DEX si compra e si vende il token, niente short: gli stessi
+        # segnali spot-only che usa l'alert watcher, cosi' il grafico non
+        # mostra trade diversi dal backtest on-chain della classifica.
+        sig = None
+        if asset_type == "dex" and strategy_name in STRATEGY_REGISTRY:
+            sig = spot_only(STRATEGY_REGISTRY[strategy_name](df, strategy_params_dict))
+        strategy = build_strategy_state(strategy_name, df, strategy_params_dict, signals=sig)
         strategies[tf_key] = [strategy]
         # The frontend only ever charts the ltf timeframe (state.activeTimeframe
         # is a hardcoded "ltf", never reassigned) — htf/mtf backtests are never
@@ -5539,7 +5545,13 @@ async def analyze(
             # that swaps this out for a backtest over each exchange's full
             # history once that slower, paginated fetch resolves — without
             # that split, every timeframe change would block on it too.
-            result = run_backtest(df, strategy_params_dict, backtest_params_dict, strategy_name=strategy_name)
+            result = run_backtest(
+                df,
+                strategy_params_dict,
+                backtest_params_dict,
+                strategy_name=strategy_name,
+                signals=sig,
+            )
             backtests[tf_key] = result.model_copy(update={"interval": intervals[tf_key]})
         else:
             backtests[tf_key] = BacktestResult(
@@ -5678,7 +5690,17 @@ async def deep_backtest(
 
     df = _slice_to_period(df, symbol, start_date, end_date)
 
-    result = run_backtest(df, strategy_params.model_dump(), backtest_params.model_dump(), strategy_name=strategy_name)
+    # Sul DEX si compra e si vende il token, niente short (vedi /api/analyze).
+    sig = None
+    if asset_type == "dex" and strategy_name in STRATEGY_REGISTRY:
+        sig = spot_only(STRATEGY_REGISTRY[strategy_name](df, strategy_params.model_dump()))
+    result = run_backtest(
+        df,
+        strategy_params.model_dump(),
+        backtest_params.model_dump(),
+        strategy_name=strategy_name,
+        signals=sig,
+    )
     return result.model_copy(update={"interval": backtest_interval})
 
 
