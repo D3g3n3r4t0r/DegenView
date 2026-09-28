@@ -54,6 +54,11 @@ def _db() -> sqlite3.Connection:
     return _conn
 
 
+def done_count() -> int:
+    """Quanti token sono gia' stati analizzati con la versione corrente."""
+    return _db().execute("SELECT COUNT(*) FROM lab WHERE version = ?", (VERSION,)).fetchone()[0]
+
+
 def queue(now: float | None = None) -> list[tuple[str, dict]]:
     """(key, entry) dei token maturi, con rete nota e non ancora analizzati
     con questa versione. Prima gli alert, poi i piu' recenti."""

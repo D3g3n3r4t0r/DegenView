@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0218", "Barra di avanzamento per studi e ticker da scansionare",
+     "Lorenzo, 28/09: 'aggiungiamo una barra di progressione per gli studi effettuati e quanti ticker mancano da scansionare e studiare'",
+     "media"),
     ("seed-0217", "Token chiamati 'null' nella Top delle gemme",
      "Lorenzo, 28/09: 'ci sono ticker tra le top che si chiamano null'",
      "media"),
