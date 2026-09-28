@@ -44,3 +44,4 @@ review. Read them before answering: the same mistake again is a failed task.
 - Before using a stdlib module in a file, check the file's import lines: main.py has no `import time` (#252 failed on `time.monotonic()`). Add the import when it is missing.
 - Edit only files you were given: #250 sent a SEARCH block for tests/test_onchain_discovery.py, which was not in the task, and it matched nothing.
 - #252 repeated #245: the test file the task asked for was not created. The worker now fails the task when it is missing.
+- #256: `strategies.rug_bar` used in system.py without importing `strategies`, the main.py part of the task (three `spot_only(...)` calls) skipped, and `asyncio.run()` around a plain function. Do every numbered point of the task; check each call is to an async function before wrapping it.
