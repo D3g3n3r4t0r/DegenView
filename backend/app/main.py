@@ -4147,13 +4147,21 @@ def _sim_snapshot(user: User) -> dict:
     if not sim:
         return {"total": None, "cash": 0.0, "positions": [], "missing": [], "by_chain": {}, "complete": False,
                 "sim": None}
-    pos = v["position"] if v["position"] and v["position"]["mode"] == "sim" else None
-    positions = [{"chain": "robinhood", "address": pos["token"], "symbol": pos["symbol"], "name": pos["symbol"],
-                  "amount": pos["qty"], "price_usd": pos["price"], "value_usd": pos["value_usdg"],
-                  "image": pos["image"], "native": False, "hidden": False, "source": "sim", "wallet": "sim",
-                  "ret": pos["ret"]}] if pos else []
+    # every open simulated trade: the paper book's, plus a legacy quote-based one
+    pos_list = list(v.get("positions") or [])
+    legacy = v["position"] if v["position"] and v["position"]["mode"] == "sim" and v["position"].get("route") != "paper" else None
+    if legacy:
+        pos_list.append(legacy)
+    positions = [{"chain": p.get("chain") or "robinhood", "address": p["token"], "symbol": p["symbol"],
+                  "name": p["symbol"], "amount": p.get("qty"), "price_usd": p.get("price"),
+                  "value_usd": p["value_usdg"], "image": p.get("image"), "native": False, "hidden": False,
+                  "source": "sim", "wallet": "sim", "ret": p.get("ret")} for p in pos_list]
+    by_chain: dict[str, float] = {}
+    for p in positions:
+        by_chain[p["chain"]] = by_chain.get(p["chain"], 0.0) + (p["value_usd"] or 0.0)
+    by_chain["robinhood"] = by_chain.get("robinhood", 0.0) + (sim["usdg"] or 0.0)
     return {"total": sim["equity"], "cash": sim["usdg"], "positions": positions, "missing": [],
-            "by_chain": {"robinhood": sim["equity"]}, "complete": True,
+            "by_chain": by_chain, "complete": True,
             "sim": {**sim, "autotrader": v["mode"]}}
 
 
