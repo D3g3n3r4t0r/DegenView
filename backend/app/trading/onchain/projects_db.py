@@ -231,6 +231,18 @@ def record(e: dict, status: str, why: str = "", score: float | None = None, trac
         _db().commit()
 
 
+def set_standing(chain: str, token: str, status: str, score: float | None, rank: int | None, why: str = "") -> None:
+    """Score and place after a later change (DeepSeek's report, review or
+    code reading): the database follows the board without a new analysis."""
+    if status not in ("studied", "ranked"):
+        raise ValueError(status)
+    with _lock:
+        _db().execute("UPDATE projects SET status = ?, score = ?, rank = ?, why = ? WHERE key = ?"
+                      " AND status IN ('studied', 'ranked')",
+                      (status, score, rank, why or None, key(chain, token)))
+        _db().commit()
+
+
 # ------------------------------------------------------------------ reading
 
 def stale_market(limit: int, now: float | None = None) -> dict[str, list[str]]:
