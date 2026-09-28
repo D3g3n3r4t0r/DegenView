@@ -350,9 +350,19 @@ async function poolOf(e) {
     const rows = await fetchJson(`https://api.dexscreener.com/tokens/v1/${e.chain}/${e.token}`, 4000);
     const best = (Array.isArray(rows) ? rows : []).sort((x, y) => (y.liquidity?.usd ?? 0) - (x.liquidity?.usd ?? 0))[0];
     pair = best?.pairAddress ?? "";
-  } catch { /* no pool found: the page says so */ }
-  pools.set(k, pair);
-  if (pair) e.pair = pair;
+  } catch { /* try GeckoTerminal below */ }
+  // DexScreener does not index every chain: ask GeckoTerminal for the first
+  // pool of this token when it has nothing (or fails).
+  if (!pair) {
+    const net = GECKO_NET[e.chain];
+    if (net) {
+      try {
+        const d = await fetchJson(`${GECKO}/networks/${net}/tokens/${e.token}/pools?page=1`, 4000);
+        pair = d?.data?.[0]?.attributes?.address ?? "";
+      } catch { /* no pool found: the page says so */ }
+    }
+  }
+  if (pair) { pools.set(k, pair); e.pair = pair; }
   return pair;
 }
 
@@ -405,19 +415,6 @@ function embed(e) {
   return `<iframe class="dt-embed" src="${escapeHtml(src)}" title="${escapeHtml(e.symbol)} chart on DexScreener" loading="lazy" referrerpolicy="no-referrer"></iframe>`;
 }
 
-const mainFailed = new Set();
-
-window.addEventListener("message", (ev) => {
-  if (ev.origin !== location.origin) return;
-  if (ev.data?.type !== "embed-chart" || ev.data.ok !== false) return;
-  const frame = dlg?.querySelector("[data-chart] iframe.main-embed");
-  if (!frame || frame.contentWindow !== ev.source) return;
-  const box = dlg.querySelector("[data-chart]");
-  if (!box) return;
-  mainFailed.add(box.dataset.want);
-  paintChart();
-});
-
 async function paintChart() {
   const e = current.e;
   const box = dlg.querySelector("[data-chart]");
@@ -426,22 +423,6 @@ async function paintChart() {
   box.dataset.want = want;
   const stale = charts.get(`${e.chain}:${e.pair || e.token}:${interval}`)?.candles;
   if (stale?.length >= 2) await drawChart(box, stale, e);
-  // The main site's own chart, embedded (Lorenzo, 28/09: "il nostro grafico
-  // nel nostro sito principale aveva tutti i dati… USA QUELLO"): candles,
-  // levels, indicators and the best strategy's trades, on this token and
-  // this interval. The lighter chart below stays for tokens with no pool.
-  const src = mainFailed.has(want) ? null : await mainChartUrl(e, NAMES[bestLabel(e) ?? "Trend EMA"], interval);
-  if (box.dataset.want !== want) return;
-  if (src) {
-    disposeChart();
-    const url = `${src}&embed=1`;
-    const frame = box.querySelector("iframe.main-embed");
-    if (!frame) box.innerHTML = `<iframe class="main-embed" title="Chart" src="${escapeHtml(url)}"></iframe>`;
-    else if (frame.getAttribute("src") !== url) frame.setAttribute("src", url);
-    const note = box.parentElement?.querySelector("[data-chart-note]");
-    if (note) note.textContent = "";
-    return;
-  }
   let candles = [];
   let shown = interval;
   // An interval with no candles (1m on a quiet pool) steps up to the next

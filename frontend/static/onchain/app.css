@@ -896,12 +896,6 @@ html, body { overflow-x: clip; }
 @layer skin {
   .dt-chart-note { margin: 4px 0 0; min-block-size: 0; font-size: 12px; color: var(--k-text-3); &:empty { display: none; } }
 }
-@layer skin {
-  /* The main site's chart, embedded in the token page. */
-  .dt-chart:has(.main-embed) { block-size: 420px; padding: 0; }
-  .main-embed { display: block; inline-size: 100%; block-size: 100%; border: 0; background: var(--k-bg); color-scheme: dark; }
-}
-
 /* Phantom by deeplink: the second tap that signs (phantomlink.js). */
 @layer skin {
   .pf-phantom { margin: 0 0 14px; padding: 12px; border: 1px solid #ab9ff2; border-radius: 12px; background: rgb(171 159 242 / .08); }
