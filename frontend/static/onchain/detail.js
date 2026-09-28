@@ -13,7 +13,7 @@ import { openUserSwap, walletFor } from "@onchain/userswap.js";
 import { hideToken } from "@onchain/hidden.js";
 
 const registry = new Map();
-const INTERVALS = ["1m", "5m", "15m", "1h", "4h"];
+const INTERVALS = ["1m", "5m", "15m", "1h", "4h", "1d"];
 const WATCH_KEY = "watchlist-v1";
 const loading = new Set();
 let dlg = null;
@@ -65,31 +65,6 @@ function ensureDialog() {
 
 window.addEventListener("popstate", () => { if (dlg?.open && !history.state?.detail) dlg.close(); });
 
-// The main site charts DEX pools by "SYM@chain:pool" (DexScreenerProvider
-// .make_symbol). The pair may not be known yet: poolOf() finds it.
-// Internal only: the main site's strategy keys, never shown in the app.
-const NAMES = {
-  "Trend EMA": "Lorenzo (trend-follower)",
-  "Trend HF": "Lorenzo HF (minuti on-chain)",
-  "RSI+BB": "Gabriele (RSI+BB reversal)",
-  "RSI+BB L/S": "Gabriele 2 (RSI+BB long/short)",
-};
-
-function bestLabel(e) {
-  const rows = (e.alerts ?? [])[0]?.backtests?.rows ?? e.lab?.rows ?? [];
-  return rows.filter((r) => r.trades > 0)
-    .sort((a, b) => (b.return_pct ?? -1e9) - (a.return_pct ?? -1e9))[0]?.label;
-}
-
-async function mainChartUrl(e, strategyName, iv = "5m") {
-  const pair = e.pair || await poolOf(e);
-  if (!pair) return "";
-  const dex = encodeURIComponent(`${e.symbol}@${e.chain}:${pair}`);
-  const name = encodeURIComponent(e.name || e.symbol);
-  return `/?area=analizza&dex=${dex}&interval=${iv}&name=${name}`
-    + (strategyName ? `&strategy=${encodeURIComponent(strategyName)}` : "");
-}
-
 async function onClick(event) {
   const t = event.target;
   if (t.closest("[data-back]")) { dlg.close(); return; }
@@ -115,18 +90,6 @@ async function onClick(event) {
     return;
   }
   if (t.closest("[data-copy]")) { navigator.clipboard?.writeText(current.e.token ?? ""); return; }
-  if (t.closest("[data-main-chart]")) {
-    let label = t.closest("[data-main-chart]").dataset.mainChart;
-    // "best": the strategy with the best backtest on this token's latest
-    // alert, chosen for the viewer (Lorenzo: "non voglio selezionare le
-    // strategie [...] mostrami i backtest migliori").
-    if (label === "best") label = bestLabel(current.e) ?? "Trend EMA";
-    // Opened now, inside the tap: iOS blocks a window opened after an await.
-    const win = window.open("", "_blank");
-    const url = await mainChartUrl(current.e, NAMES[label]);
-    if (win && url) { win.opener = null; win.location.href = url; } else win?.close();
-    return;
-  }
   if (t.closest("[data-user-swap]")) { openUserSwap(current.e); return; }
   if (t.closest("[data-buy]")) {
     const e = current.e;
@@ -167,7 +130,6 @@ export function openDetail(id) {
       <div class="dt-chart" data-chart><div class="dt-chart-empty">Loading chart…</div></div>
       <p class="dt-chart-note" data-chart-note></p>
       <div class="dt-chips" data-chips></div>
-      <button type="button" class="dt-mainchart" data-main-chart="best">Open on the analysis chart ↗</button>
       <nav class="dt-tabs">
         <button type="button" data-dtab="signal">Signal</button>
         <button type="button" data-dtab="why">Why</button>
@@ -251,7 +213,12 @@ function paintTabs() {
   const pending = loading.has(current.id);
   if (tab === "why") { body.innerHTML = e.why || `<p class="muted">${pending ? "Loading…" : "Nothing to add yet."}</p>`; return; }
   if (tab === "info") { body.innerHTML = e.info || infoFallback(e); return; }
-  const alerts = e.alerts ?? [];
+  // Gems: only the daily trend follower, not the alerts' 5-minute tracks.
+  const gem = e.kind === "gem";
+  const lab = gem ? (e.lab?.daily?.rows?.length ? e.lab.daily : null) : e.lab;
+  const labNote = gem ? `Trend follower backtested on the ${lab?.interval === "8h" ? "8-hour" : "daily"} chart.`
+    : "Backtested on the latest 5-minute chart, every hour.";
+  const alerts = gem ? [] : (e.alerts ?? []);
   body.innerHTML = alerts.length ? alerts.map((al) => `
     <article class="call">
       <p><b>Telegram alert</b><small>${age(al.at)[0]} ago</small></p>
@@ -277,8 +244,8 @@ function paintTabs() {
         ${e.dossier?.liquidity_usd != null ? `<div><dt>Liquidity</dt><dd>${usdShort(e.dossier.liquidity_usd)}</dd></div>` : ""}
         ${e.ageTs ? `<div><dt>Age</dt><dd>${age(e.ageTs)[0]}</dd></div>` : ""}
       </dl>
-      ${e.lab ? `${backtestTable({ backtests: e.lab, age_h: 99 })}<p class="muted">Backtested on the latest 5-minute chart, every hour.</p>` : ""}
-      <p class="muted">${pending ? "Loading…" : `No Telegram alert on this token yet${e.kind === "gem" ? ": gems are alerted when they enter the board." : "."}`}</p>`;
+      ${lab ? `${backtestTable({ backtests: lab, age_h: 99 })}<p class="muted">${labNote}</p>` : ""}
+      ${gem && lab ? "" : `<p class="muted">${pending ? "Loading…" : gem ? "No daily backtest on this gem yet." : "No Telegram alert on this token yet."}</p>`}`;
 }
 
 function backtestTable(al) {
@@ -328,7 +295,8 @@ const pools = new Map();    // "chain:token" -> pair address (or "" if none)
 const CHART_FRESH_MS = 30_000;
 const GECKO = "https://api.geckoterminal.com/api/v2";
 const GECKO_NET = { solana: "solana", robinhood: "robinhood", base: "base", bsc: "bsc", ethereum: "eth" };
-const GECKO_TF = { "1m": ["minute", 1], "5m": ["minute", 5], "15m": ["minute", 15], "1h": ["hour", 1], "4h": ["hour", 4] };
+const GECKO_TF = { "1m": ["minute", 1], "5m": ["minute", 5], "15m": ["minute", 15], "1h": ["hour", 1], "4h": ["hour", 4],
+                   "1d": ["day", 1] };
 const DS_EMBED = new Set(["solana", "base", "bsc", "ethereum"]);   // chains DexScreener charts
 
 async function fetchJson(url, ms) {
@@ -401,7 +369,7 @@ function chartFor(e, iv) {
   return promise;
 }
 
-const defaultInterval = (e) => (e.kind === "gem" ? "1h" : "5m");
+const defaultInterval = (e) => (e.kind === "gem" ? "1d" : "5m");
 
 export function prefetchChart(id) {
   const e = registry.get(id);
@@ -527,6 +495,11 @@ async function drawChart(box, candles, e) {
  *  shows (Lorenzo, 28/09: "qui deve comparire la strategia [...] ingressi e
  *  uscite"); the 48h system's until the backtest is stored. */
 function withLab(e) {
+  // Gems: the site's trend follower on the daily chart, never the fast
+  // 5-minute strategies (Lorenzo, 28/09: "la strategia da applicare non e'
+  // quella sul minuto ma [...] il trend follower originario [...] sul
+  // giornaliero [...] al massimo 8 ore").
+  if (e.kind === "gem") return e.lab?.daily?.rows ? [{ backtests: e.lab.daily }] : [];
   return (e.alerts?.length || !e.lab) ? (e.alerts ?? []) : [{ backtests: e.lab }];
 }
 
