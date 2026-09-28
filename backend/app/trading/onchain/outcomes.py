@@ -847,6 +847,7 @@ def meme_board(now: float | None = None, limit: int = 20) -> dict:
     for e in sorted(_meme_candidates(now), key=lambda e: -(e["last"].get("liq") or 0)):
         best.setdefault(f"{e['chain']}:{e['symbol'].upper()}", e)
     cands = sorted(best.values(), key=lambda e: -_meme_score(e))[:limit]
+    from app.trading.onchain import narratives
     items = []
     for e in cands:
         m = e.get("market") or {}
@@ -860,6 +861,7 @@ def meme_board(now: float | None = None, limit: int = 20) -> dict:
             "vol_h1": m.get("vol_h1"), "score": read["score"], "win_chance": win_chance(e["features"]),
             "reasons": read["reasons"], "risks": read["risks"], "parts": read["parts"],
             "band": meme_engine.band(read["score"]), "safety": e.get("safety"),
+            "narratives": narratives.labels(narratives.match(e["name"], e["symbol"], kind="meme")),
         })
     return {"items": items, "model": {k: v for k, v in _wmodel.items() if k not in ("weights", "means")},
             "warning": "Pure gambling: meme coins with no project behind them. Only put in what you can afford to lose.",
