@@ -2272,5 +2272,10 @@
     "status": "risolto",
     "at": 1790629301,
     "summary": "Due token BSC senza nome arrivavano nella Top dal database studiati: il nome mancante veniva mostrato come 'null'. Ora un token senza nome leggibile (vuoto, '?', 'null') non entra nella Top ne' nella classifica, e se DexScreener conosce il nome lo prende da li'."
+  },
+  "seed-0218": {
+    "status": "risolto",
+    "at": 1790629354,
+    "summary": "Nella tab Agent, sotto DeepSeek, quattro righe: backtest sniper fatti su totale, backtest gemme della Top, token studiati dal laboratorio su quelli maturi, e quanti token sono in coda da scansionare. Le barre crescono animate e si aggiornano ogni 10 secondi."
   }
 }
