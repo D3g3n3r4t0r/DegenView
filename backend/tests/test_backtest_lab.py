@@ -105,6 +105,7 @@ def test_summary_counts_rows(monkeypatch, tmp_path):
     assert s["rows"] == 1
     assert "proposed" in s["by_decision"]
 
+
 def test_done_count_empty_and_after_write(monkeypatch, tmp_path):
     now = time.time()
     _setup(monkeypatch, tmp_path, now)
