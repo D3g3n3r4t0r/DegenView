@@ -312,7 +312,7 @@ async def backfill(client: httpx.AsyncClient, items: list[dict], kind: str = "me
 SYSTEM_FETCHES_PER_TICK = 15
 # Bump when system.follow's output changes: finished alerts are fetched and
 # recomputed once more (v2: each sell says why, "crash" or "signal").
-SYSTEM_VERSION = 4   # 4: every strategy backtested on the alert's chart
+SYSTEM_VERSION = 5   # 5: Lorenzo HF ready from 10 bars (fresh pools)
 
 
 def backtest_status(kind: str = "meme", now: float | None = None) -> dict:
