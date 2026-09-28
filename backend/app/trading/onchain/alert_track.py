@@ -378,8 +378,10 @@ async def refresh_system(client, now: float | None = None, gap_s: float = 0.0) -
         if a.get("system_done"):
             continue
         k = key_of(a)
-        if a.get("bars_fetched") and not a.get("system_done") and not _bars.get(k):
-            a["bars_fetched"] = False        # bars lost: fetch the candles again
+        if a.get("bars_fetched") and not _bars.get(k) and not a.get("bars_refetched"):
+            # Bars lost (a truncated file, a restart): fetch the candles once
+            # more. Once only: a dead pool answers [] every time.
+            a.update(bars_fetched=False, bars_refetched=True)
         if not a.get("bars_fetched") and fetched < SYSTEM_FETCHES_PER_TICK:
             net = GECKO_NETWORKS.get(a["chain"])
             past = now >= a["at"] + system.WINDOW_S
