@@ -2267,5 +2267,10 @@
     "status": "risolto",
     "at": 1790629051,
     "summary": "Il trade dello sniper compra all'alert, ma usciva solo su un nuovo incrocio al ribasso del trend follower. Se all'alert il trend era gia' in discesa l'incrocio era gia' passato e non arrivava piu': il trade restava aperto fino alle 48 ore (MESUB -95%). Ora esce alla prima candela con il trend in discesa. Tutti i backtest salvati vengono ricalcolati con questa regola."
+  },
+  "seed-0217": {
+    "status": "risolto",
+    "at": 1790629301,
+    "summary": "Due token BSC senza nome arrivavano nella Top dal database studiati: il nome mancante veniva mostrato come 'null'. Ora un token senza nome leggibile (vuoto, '?', 'null') non entra nella Top ne' nella classifica, e se DexScreener conosce il nome lo prende da li'."
   }
 }
