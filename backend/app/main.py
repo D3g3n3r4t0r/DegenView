@@ -4388,6 +4388,14 @@ def _agent_progress() -> list[dict]:
     except Exception:
         pass
     try:
+        p = onchain_leaderboard.pool_status()
+        rows.append({"key": "pool", "label": "Gem pool" + (" (scan paused)" if p["paused"] else ""),
+                     "done": min(p["pool"], p["target"]), "total": p["target"]})
+        rows.append({"key": "complete", "label": "Projects complete",
+                     "done": p["complete"], "total": p["complete"] + p["backlog"]})
+    except Exception:
+        pass
+    try:
         total = listings.status()["pending"] + discovery.status()["queue"]
         rows.append({"key": "scan", "label": "Queued to scan", "done": 0, "total": total})
     except Exception:
