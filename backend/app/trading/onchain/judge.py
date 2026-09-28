@@ -160,11 +160,13 @@ async def judge(e: dict, rules_why: str, now: float | None = None, ask=None) -> 
     from app.notify import deepseek_desk
     if ask is None:
         ask = deepseek_desk.ask
+    pillars = e.get("pillars") or {}
     deepseek_desk.note("research", f"Judging {e.get('symbol')}", steps=[
         f"Dossier: cap {_fmt_usd(e.get('market_cap'))}, liquidity {_fmt_usd(e.get('liquidity_usd'))}, "
-        f"age {_age_days(e.get('launched_at'))} days, holders top10 n/a%",
+        f"age {_age_days(e.get('launched_at'))} days",
+        "Pillars: " + ", ".join(f"{n} {(pillars.get(n) or {}).get('score', 'n/a')}" for n in ("github", "site", "tokenomics")),
         f"Rules said: {rules_why or 'passes the rules'}",
-    ])
+    ], symbol=e.get("symbol"), chain=e.get("chain"), token=e.get("token_address"))
     try:
         raw = await ask([{"role": "system", "content": SYSTEM},
                          {"role": "user", "content": dossier(e, rules_why)}],
