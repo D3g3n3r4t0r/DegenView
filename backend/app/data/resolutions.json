@@ -2197,5 +2197,10 @@
     "status": "risolto",
     "at": 1790609911,
     "summary": "Dopo la PR #272 l'app si fermava all'avvio: il giudice DeepSeek e la classifica si importavano a vicenda, e con un progetto bocciato dal giudice gia' salvato il caricamento della classifica cadeva. Il giudice ora carica la classifica solo quando serve; un test riproduce l'avvio con quel dato."
+  },
+  "seed-0203": {
+    "status": "risolto",
+    "at": 1790610465,
+    "summary": "Due cause lato filtro. 1) Il controllo 'Memoria', che impara dagli esiti passati, dava probabilita' di rug vicine al 100% a quasi tutti: un solo valore estremo (per esempio +5000% in un'ora) pesava piu' di tutto il resto e saturava il modello, quindi il token veniva scartato come 'simile ai rug passati'. Ora ogni valore ha un tetto e il modello non va piu' a 0 o 100% per un solo numero. 2) GitHub: ogni token in attesa si riprovava ogni due minuti e rifaceva ogni volta le stesse richieste, esaurendo la quota. Da li' in poi tutto restava 'GitHub non risponde'. Ora le risposte di GitHub si tengono qualche ora, e a quota finita non si richiama GitHub fino al reset. Le cifre sbagliate della coda (+0% e 100% chance) le aveva gia' corrette la nuova pagina Memes."
   }
 }

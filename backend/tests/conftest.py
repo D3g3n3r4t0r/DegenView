@@ -21,3 +21,14 @@ def _private_projects_db(monkeypatch, tmp_path):
     from app.trading.onchain import projects_db
     monkeypatch.setattr(projects_db, "_DB_FILE", tmp_path / "projects.db")
     yield
+
+
+@pytest.fixture(autouse=True)
+def _fresh_github_cache():
+    """Stessa cosa per la cache e la quota di GitHub."""
+    from app.trading.onchain import legit
+    legit._gh_cache.clear()
+    legit._gh_blocked.clear()
+    yield
+    legit._gh_cache.clear()
+    legit._gh_blocked.clear()

@@ -4,6 +4,7 @@ token legittimi con progetti seri", e poi "fai un controllo anche per github
 from __future__ import annotations
 
 import asyncio
+import time
 
 import httpx
 import pytest
@@ -307,3 +308,27 @@ def test_holder_concentration_ignores_pools_and_fails_whales():
     assert "22%" in legit.judge_rugcheck(whale)["detail"]
     spread = {**report, "topHolders": [{"owner": f"w{i}", "pct": 5} for i in range(10)]}
     assert "top 10" in legit.judge_rugcheck(spread)["detail"]
+
+
+def test_github_answers_are_cached_and_the_quota_is_respected():
+    """Senza chiave GitHub da' 60 richieste l'ora: ogni token in attesa le
+    rifaceva ogni due minuti e da li' tutto restava "GitHub non risponde"."""
+    calls = []
+
+    def handler(req):
+        calls.append(str(req.url))
+        if "/repos/acme/core" in str(req.url):
+            return httpx.Response(200, json={"full_name": "acme/core"})
+        return httpx.Response(403, headers={"x-ratelimit-limit": "60", "x-ratelimit-remaining": "0",
+                                            "x-ratelimit-reset": str(int(time.time()) + 600)})
+
+    async def go():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as c:
+            a = await legit.github_repo("acme", "core", c)
+            b = await legit.github_repo("acme", "core", c)
+            first = await legit.github_repo("other", "x", c)
+            second = await legit.github_repo("again", "y", c)
+            return a, b, first, second
+    a, b, first, second = asyncio.run(go())
+    assert a == b == {"full_name": "acme/core"} and first is None and second is None
+    assert len(calls) == 2   # repo in cache, e a quota finita GitHub non si richiama

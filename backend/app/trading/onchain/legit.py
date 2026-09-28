@@ -432,21 +432,49 @@ def judge_goplus_solana(info: dict | None) -> dict:
 # ----------------------------------------------------------------- GitHub
 
 github_rate: dict = {}   # last GitHub answer: limit 60 = no token on the server
+# Senza chiave GitHub da' 60 richieste l'ora. Ogni token in attesa si
+# riprova ogni due minuti e ogni volta rifaceva repo, commit e totale: la
+# quota finiva in pochi minuti e da li' in poi ogni token restava "GitHub
+# non risponde". Le risposte si tengono qualche ora, e a quota finita non
+# si chiama piu' GitHub fino al reset.
+GH_CACHE_TTL_S = 6 * 3600
+_gh_cache: dict[str, tuple[float, int, bytes, str]] = {}
+_gh_blocked: dict[str, float] = {}   # risorsa ("core", "search") -> fino a quando
+
+
+def _gh_resource(url: str) -> str:
+    return "search" if "/search/" in url else "core"
 
 
 async def gh_get(client: httpx.AsyncClient, url: str, **kw) -> httpx.Response:
-    """GitHub GET that remembers the rate limit, so the page can say when
-    the analysis is starved."""
+    """GitHub GET con cache e rispetto della quota. Ricorda anche il limite,
+    cosi' la pagina puo' dire quando l'analisi e' a secco."""
+    key = str(httpx.URL(url, params=kw.get("params")))
+    now = time.time()
+    hit = _gh_cache.get(key)
+    if hit and hit[0] > now:
+        return httpx.Response(hit[1], content=hit[2], headers={"link": hit[3]} if hit[3] else None)
+    resource = _gh_resource(url)
+    if _gh_blocked.get(resource, 0) > now:
+        return httpx.Response(429, json={"message": "rate limit (waiting for reset)"})
     r = await client.get(url, **kw)
     h = getattr(r, "headers", None) or {}
     try:
         if h.get("x-ratelimit-limit") is not None:
             github_rate[h.get("x-ratelimit-resource") or "core"] = {
                 "limit": int(h["x-ratelimit-limit"]), "remaining": int(h.get("x-ratelimit-remaining") or 0),
-                "reset": int(h.get("x-ratelimit-reset") or 0), "at": time.time()}
+                "reset": int(h.get("x-ratelimit-reset") or 0), "at": now}
             github_rate["token"] = bool(settings.github_api_token)
+        if r.status_code in (403, 429) and (r.status_code == 429 or h.get("x-ratelimit-remaining") == "0"):
+            reset = int(h.get("x-ratelimit-reset") or 0)
+            _gh_blocked[resource] = reset if reset > now else now + 60
     except (TypeError, ValueError):
         pass
+    if isinstance(r, httpx.Response) and r.status_code in (200, 404, 409):
+        _gh_cache[key] = (now + GH_CACHE_TTL_S, r.status_code, r.content, h.get("link") or "")
+        if len(_gh_cache) > 5000:
+            for k in [k for k, v in _gh_cache.items() if v[0] <= now][:2500] or list(_gh_cache)[:1000]:
+                _gh_cache.pop(k, None)
     return r
 
 
