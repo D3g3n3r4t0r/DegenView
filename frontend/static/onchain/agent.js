@@ -67,7 +67,6 @@ export function mountAgent() {
 /* --- the agent's own tab ------------------------------------------------ */
 
 const VIEW_POLL_MS = 10_000;
-const KIND_COLOR = { judge: "violet", scan: "mint", research: "cyan", chat: "grey", report: "grey" };
 
 let viewEl = null;
 let viewData = null;
@@ -151,6 +150,7 @@ async function refreshView() {
       viewItems = [...fresh, ...viewItems];
       const list = viewEl?.querySelector("[data-ag-list]");
       if (list) {
+        list.querySelector(".ag-empty")?.remove();
         list.insertAdjacentHTML("afterbegin", fresh.map(entryHtml).join(""));
         list.querySelectorAll(".ag-card").forEach((c, i) => { if (i < fresh.length) c.classList.add("is-new"); });
       }

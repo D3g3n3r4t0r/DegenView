@@ -853,7 +853,8 @@ html, body { overflow-x: clip; }
      because it registers the gem rows' details. */
   #board { display: none !important; }
   /* The active dock icon is filled; the Strategies chart is a line, and filled it read as an arrow. */
-  .dock button[data-go="top"][aria-current] svg { fill: none; stroke-width: 2.4; }
+  .dock button:is([data-go="top"], [data-go="agent"])[aria-current] svg { fill: none; stroke-width: 2.4; }
+  .dock button[data-go="agent"][aria-current] svg circle:last-child { fill: currentColor; }
 }
 @layer skin {
   .is-new { animation: row-in .42s cubic-bezier(.2, .8, .2, 1) backwards; }
