@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0208", "FLOOR era primo con +132% e dopo qualche secondo e' sparito",
+     "Lorenzo: 'inizialmente la foto riportava floor in vetta, dopo qualche secondo e' sparito... non deve accadere, deve rimanere tutto salvato in database per la parte di backtest. e memorizzato, non deve cambiare ogni volta risultato e perdere i precedenti'.",
+     "alta"),
     ("seed-0207", "Voglio vedere la capacita' di scansione: ticker che girano, non una lista ferma",
      "Lorenzo: 'qui voglio capire la capacita' di scansione del sistema voglio vedere i ticker girare, non cose ferme'.",
      "media"),

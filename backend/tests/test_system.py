@@ -102,6 +102,28 @@ def test_an_old_version_result_is_rebuilt_even_when_the_bars_do_not_move(monkeyp
     at.reset_for_tests()
 
 
+def test_a_rebuild_on_fewer_bars_keeps_the_saved_backtest(monkeypatch, tmp_path):
+    """Lorenzo, 28/09: FLOOR +132% "dopo qualche secondo e' sparito [...] non
+    deve cambiare ogni volta risultato e perdere i precedenti"."""
+    monkeypatch.setattr(at, "_STORE_FILE", tmp_path / "a.json")
+    monkeypatch.setattr(at, "_BARS_FILE", tmp_path / "b.json")
+    at.reset_for_tests()
+    a = at.record({"chain": "robinhood", "pair_address": "P", "token_address": "T", "symbol": "X"}, "meme", T0)
+    saved = {"bars": 600, "rows": [{"label": "Trend EMA", "trades": 1, "return_pct": 132.0}]}
+    a.update(backtests=saved, system_v=at.SYSTEM_VERSION - 1, system_done=True, bars_fetched=True)
+
+    async def dead_pool(*args, **kw):
+        return []                        # the pool is gone: no candles any more
+    monkeypatch.setattr(at, "_candles", dead_pool)
+    monkeypatch.setattr(system.radar, "spot_signals", _signals(set(), set()))
+    now = T0 + system.WINDOW_S + 7200
+    asyncio.run(at.refresh_system(None, now=now, gap_s=0))
+    assert a["system_v"] == at.SYSTEM_VERSION
+    assert a["backtests"]["rows"][0]["return_pct"] == 132.0 and a["backtests"]["bars"] == 600
+    assert at.keep_richer(saved, {"bars": 700, "rows": []})["bars"] == 700
+    at.reset_for_tests()
+
+
 def test_a_sell_after_a_one_candle_crash_says_so(monkeypatch):
     # entry at bar 41, the price crashes 80% inside bar 44, the exit fills at bar 45's open
     prices = [1.0] * 44 + [0.2, 0.2, 0.2]
