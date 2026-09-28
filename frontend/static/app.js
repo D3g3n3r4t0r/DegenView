@@ -1191,6 +1191,10 @@
   // and nothing the embed does may overwrite the user's saved session.
   const EMBED = new URLSearchParams(location.search).get("embed") === "1";
   if (EMBED) document.documentElement.classList.add("embed-chart");
+  function notifyParent(ok, why = "") {
+    if (EMBED && window.parent !== window) window.parent.postMessage({ type: "embed-chart", ok, why }, location.origin);
+  }
+  let embedRetried = false;
 
   function savePreferences() {
     if (EMBED) return;
@@ -8281,6 +8285,7 @@
       // sliver — and it doesn't shrink back down on its own afterward.
       loadDrawingsForSymbol();
       render();
+      notifyParent(true);
       renderFavorites();
       savePreferences();
       refreshDeepBacktest(symbol);
@@ -8300,6 +8305,12 @@
         }
       }
     }).catch((err) => {
+      if (EMBED && !embedRetried) {
+        embedRetried = true;
+        setTimeout(() => runAnalysis(symbol), 4000);
+        return;
+      }
+      notifyParent(false, err.message || "");
       showError(err.message || "Error while analyzing the ticker.");
       el("empty-state").classList.remove("hidden");
     }).finally(() => {
