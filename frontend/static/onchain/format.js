@@ -184,6 +184,9 @@ export function strategyTrade(s, alertAt, chosen) {
  *  la migliore delle due, internamente, proponendo sempre il miglior
  *  risultato"). An alert where neither traded shows the one in use. */
 export function bestSystem(a) {
+  // The sniper's rule (Lorenzo, 28/09): in at the alert, out once on the
+  // trend follower's exit. When that result exists it is the system.
+  if (a.on_alert) return { ...a.on_alert, label: "System" };
   const traded = (a.systems ?? []).filter((s) => s && ((s.trades ?? 0) > 0 || s.state === "in") && s.ret != null);
   const best = traded.sort((x, y) => y.ret - x.ret)[0] ?? a.system;
   return best ? { ...best, label: "System" } : null;
