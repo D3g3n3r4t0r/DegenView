@@ -564,6 +564,13 @@ non oltre; uno, due, tre mesi non e' importante".
   `code_review.py`: README + 4 file sorgente piu' grandi, DeepSeek da'
   complessita'/innovazione 0-100, fork_of, pro/contro; media pesa 20% nel
   finale; un progetto al minuto, 80/giorno, TTL 7 gg, retry dopo 6 h.
+- 28/09 Lorenzo: "ha senso scansionare cosi' tanto? [...] quando
+  raggiungiamo un bel bacino fermiamo la scansione e concentriamoci su
+  completare le informazioni". Regola: bacino = studied+ranked nel database;
+  da 300 in su la ricerca di progetti nuovi (`discovery.tick`) si ferma finche'
+  piu' di 10 progetti aspettano un pezzo (analisi, report DeepSeek, lettura
+  del codice); sotto i 10 riparte piano, un giro ogni 6 h. Lo sniper meme non
+  e' toccato. Nell'Agent: barre "Gem pool" e "Projects complete".
 - 28/09 Lorenzo: "DeepSeek [...] deve riesaminare i risultati che escono
   dalla top classifica e metterli in discussione [...] Clau Pump Tech ma
   che roba è, Leon AI sono nomi che non hanno senso". `judge.review_board`:
