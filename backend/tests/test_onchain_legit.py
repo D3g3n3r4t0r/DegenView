@@ -113,10 +113,10 @@ def public_dns(monkeypatch):
     monkeypatch.setattr(legit.settings, "anthropic_api_key", "")
 
 
-def _assess(token=TOKEN, links=LINKS, need_github=True, transport=None, **net):
+def _assess(token=TOKEN, links=LINKS, need_github=True, ai_gate=False, transport=None, **net):
     async def go():
         async with httpx.AsyncClient(transport=transport or _net(**net)) as c:
-            return await legit.assess(token, links, c, need_github=need_github)
+            return await legit.assess(token, links, c, need_github=need_github, ai_gate=ai_gate)
     return asyncio.run(go())
 
 
@@ -364,3 +364,38 @@ def test_missing_github_does_not_stall_the_meme_sniper():
 def test_exception_still_needs_github_with_need_github_false():
     out = _assess({**TOKEN, "exception": True}, transport=_net_no_github(), need_github=False)
     assert out["status"] == "fail" and "no GitHub" in out["reason"]
+
+
+def _deepseek_review(monkeypatch, payload):
+    monkeypatch.setattr(legit.settings, "anthropic_api_key", "k")
+    monkeypatch.setattr(legit.settings, "legit_ai_gate", False)
+
+    async def review(token, site, links):
+        return payload
+    monkeypatch.setattr(legit, "ai_review", review)
+
+
+def test_deepseek_verdict_is_shadow_by_default(monkeypatch):
+    _deepseek_review(monkeypatch, {"by": "deepseek", "legit": False, "score": 1, "reason": "meme coin"})
+    out = _assess()
+    assert out["status"] == "ok"
+    ai = next(c for c in out["checks"] if c["key"] == "ai")
+    assert ai["ok"] is None and "not blocking yet" in ai["detail"]
+
+
+def test_deepseek_verdict_blocks_with_ai_gate(monkeypatch):
+    _deepseek_review(monkeypatch, {"by": "deepseek", "legit": False, "score": 1, "reason": "meme coin"})
+    out = _assess(ai_gate=True)
+    assert out["status"] == "fail" and "meme coin" in out["reason"]
+
+
+def test_deepseek_good_score_passes_with_ai_gate(monkeypatch):
+    _deepseek_review(monkeypatch, {"by": "deepseek", "legit": True, "score": 7})
+    out = _assess(ai_gate=True)
+    assert out["status"] == "ok"
+
+
+def test_deepseek_unreachable_waits_with_ai_gate(monkeypatch):
+    _deepseek_review(monkeypatch, {"error": "DeepSeek unreachable", "by": "deepseek"})
+    out = _assess(ai_gate=True)
+    assert out["status"] == "wait" and out["reason"] == "AI review unavailable"

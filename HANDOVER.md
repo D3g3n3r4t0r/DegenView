@@ -12,6 +12,12 @@ lavori pluri-sessione, decisioni prese, stato di piani approvati.
 
 ---
 
+## Alert meme su Telegram fermi, poi spazzatura — `seed-0219`/`seed-0220` — 2026-09-28
+
+Lorenzo: "comunque non sta arrivando neanche un alert", "da giorni"; poi, visti SUPERTAKE/AGENTORY/WATCH con voto DeepSeek 1/10: "occhio a non far arrivare la merda però, non voglio meme coin".
+Causa: `legit.assess` restituiva "wait" su "no GitHub", i meme non ce l'hanno, scadevano dopo 2h (in locale 5591 pool, 0 alert in 7 min). #315: `need_github=False` dal percorso listings. #316: `ai_gate=True` dal percorso listings, il voto DeepSeek blocca (< `AI_SCORE_MIN`=6 o non legit); DeepSeek con errore = wait; senza chiave = non attivo. Gemme/radar invariati (`legit_ai_gate` resta spento li'). Da guardare: se ora non passa piu' niente, il collo di bottiglia e' il voto DeepSeek (vedi `scartati` nella chat Telegram).
+Lorenzo ha un messaggio fissato "Chiave on-chain rivelata (robinhood, 0x2B...)": e' l'avviso di `POST /api/onchain/wallets/{chain}/reveal` (export con approvazione QR); detto a lui di spostare i fondi se non e' stato lui.
+
 ## Stato al 28/09 sera — cosa e' su main e cosa e' in corso
 
 Su main: iframe del grafico del sito principale (CSP `frame-src 'self'` corretta nel Caddyfile: in produzione il browser lo bloccava), solo long sul grafico DEX (#247), fallback al nostro grafico se il sito principale non trova il token (#251), ingressi/uscite del backtest migliore (#246), Phantom da Safari con deeplink (#253, `phantomlink.js`, provato solo contro un finto Phantom), reale/simulato veloce (#254), laboratorio di backtest passo 1 (#255), narrative per account backend (#258).
