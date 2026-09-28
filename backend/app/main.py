@@ -4274,6 +4274,12 @@ async def wallet_link_confirm(body: WalletConfirm, user: User = Depends(auth.get
     return {"profile": profiles.public(user.id, p)}
 
 
+@app.get("/api/agent/log")
+async def agent_log(limit: int = 100, before: float | None = None,
+                    user: User = Depends(auth.get_current_user)) -> dict:
+    return {"items": deepseek_desk.log(limit=min(limit, 300), before=before)}
+
+
 class ScanRequest(BaseModel):
     query: str
 

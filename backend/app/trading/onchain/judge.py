@@ -79,6 +79,22 @@ def _cut(value, limit: int) -> str:
     return str(value or "")[:limit]
 
 
+def _fmt_usd(value) -> str:
+    try:
+        return f"${float(value or 0):,.0f}"
+    except (TypeError, ValueError):
+        return "n/a"
+
+
+def _age_days(launched) -> str:
+    if not launched:
+        return "n/a"
+    try:
+        return f"{(time.time() - launched) / 86400:.0f}"
+    except (TypeError, ValueError):
+        return "n/a"
+
+
 def dossier(e: dict, rules_why: str) -> str:
     """I fatti misurati, non le promesse: pilastri, trazione, eta', e il
     testo del progetto (non fidato) in fondo, dentro i suoi tag."""
@@ -144,7 +160,11 @@ async def judge(e: dict, rules_why: str, now: float | None = None, ask=None) -> 
     from app.notify import deepseek_desk
     if ask is None:
         ask = deepseek_desk.ask
-    deepseek_desk.note("research", f"Judging {e.get('symbol')}")
+    deepseek_desk.note("research", f"Judging {e.get('symbol')}", steps=[
+        f"Dossier: cap {_fmt_usd(e.get('market_cap'))}, liquidity {_fmt_usd(e.get('liquidity_usd'))}, "
+        f"age {_age_days(e.get('launched_at'))} days, holders top10 n/a%",
+        f"Rules said: {rules_why or 'passes the rules'}",
+    ])
     try:
         raw = await ask([{"role": "system", "content": SYSTEM},
                          {"role": "user", "content": dossier(e, rules_why)}],
@@ -159,6 +179,13 @@ async def judge(e: dict, rules_why: str, now: float | None = None, ask=None) -> 
     parsed["at"] = now
     _cache[key] = parsed
     _save()
+    verdict = parsed["verdict"]
+    deepseek_desk.note(
+        "judge",
+        f"{e.get('symbol')}: {verdict} · score {parsed['score']} · confidence {parsed['confidence']:.0%}",
+        steps=[*("✗ " + p for p in parsed["problems"][:4]), *("✓ " + s for s in parsed["strengths"][:4])],
+        outcome=parsed["admit_reason"] or ("vetoed" if verdict in ("avoid", "scam") and parsed["confidence"] >= 0.7 else "scored"),
+        symbol=e.get("symbol"), chain=e.get("chain"), token=e.get("token_address"))
     return parsed
 
 
