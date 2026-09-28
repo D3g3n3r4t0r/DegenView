@@ -375,9 +375,20 @@ async def refresh_system(client, now: float | None = None, gap_s: float = 0.0) -
     hours before the message (warm-up) for live ones, whose later bars come
     from the minute readings. Results are recomputed when the bars change;
     once the window is over the result is frozen and the bars dropped."""
+    from app.providers.dexscreener import gecko_urgent
+    now = now or time.time()
+    urgent = backtest_status("meme", now=now)["pending"] > 0
+    token = gecko_urgent.set(True) if urgent else None
+    try:
+        return await _refresh_system(client, now, gap_s)
+    finally:
+        if token is not None:
+            gecko_urgent.reset(token)
+
+
+async def _refresh_system(client, now: float, gap_s: float | None) -> int:
     from app.sniper.scanner import GECKO_NETWORKS
     from app.trading.onchain import outcomes, system
-    now = now or time.time()
     fetched = changed = 0
     def _ready(a):
         return a.get("backtests") is not None and a.get("system_v") == SYSTEM_VERSION

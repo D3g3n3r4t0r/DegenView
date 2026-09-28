@@ -110,11 +110,17 @@ def log(limit: int = 100, before: float | None = None) -> list[dict]:
 def activity(now: float | None = None) -> dict:
     now = now or time.time()
     today = _state["days"].get(day_of(now)) or {}
+    try:
+        from app.trading.onchain import priority
+        prio = priority.backtests_first()
+    except Exception:
+        prio = None
     return {"items": list(reversed(_activity[-30:])),
             "done": dict((_state.get("done") or {}).get(day_of(now)) or {}),
             "working": bool(_activity) and now - _activity[-1]["t"] < 180,
             "today": {k: v.get("calls", 0) for k, v in today.items()},
-            "active": bool(settings.deepseek_api_key)}
+            "active": bool(settings.deepseek_api_key),
+            "priority": prio}
 
 
 def day_of(ts: float) -> str:
