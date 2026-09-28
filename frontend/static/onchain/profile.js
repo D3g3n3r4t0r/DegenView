@@ -333,13 +333,38 @@ function paint() {
   bindScrub();
 }
 
+// The last profile of each wallet mode, so a switch paints at once instead of
+// waiting for the chain read. loadSeq drops answers that arrive after a newer
+// switch: real -> sim -> real must not end up showing the sim wallet.
+const byMode = { real: null, sim: null };
+let loadSeq = 0;
+
 async function load() {
+  const mode = api.walletMode();
+  const seq = ++loadSeq;
   try {
-    data = await api.getProfile();
+    const p = await api.getProfile();
+    if (seq !== loadSeq || mode !== api.walletMode()) return;
+    byMode[mode] = p;
+    data = p;
+    delete root.dataset.switching;
     paint();
   } catch (err) {
+    if (seq !== loadSeq || mode !== api.walletMode()) return;
     if (!data) root.innerHTML = `<p class="pf-none">Couldn't load your profile: ${escapeHtml(err?.message ?? "try again")}</p>`;
   }
+}
+
+/** The switch itself: the buttons flip now, the numbers follow. */
+function switchWallet(mode) {
+  api.setWalletMode(mode);
+  if (byMode[mode]) { data = byMode[mode]; paint(); }
+  else {
+    // Nothing cached yet: flip the buttons and dim the numbers until it lands.
+    root.querySelectorAll("[data-wallet]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.wallet === mode)));
+    root.dataset.switching = "";
+  }
+  load();
 }
 
 export function refreshProfile() {
@@ -369,9 +394,9 @@ export function mountProfile({ go: goTo } = {}) {
   }, 60_000);
   root.addEventListener("click", (event) => {
     const wb = event.target.closest("[data-wallet]");
-    if (wb) { api.setWalletMode(wb.dataset.wallet); load(); return; }
+    if (wb) { switchWallet(wb.dataset.wallet); return; }
     if (event.target.closest("[data-sim-start]")) {
-      api.setAutotrader({ mode: "sim" }).then(() => { api.setWalletMode("sim"); load(); }, (err) => alert(err.message));
+      api.setAutotrader({ mode: "sim" }).then(() => switchWallet("sim"), (err) => alert(err.message));
       return;
     }
     const r = event.target.closest("[data-range]");

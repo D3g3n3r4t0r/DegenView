@@ -877,3 +877,8 @@ html, body { overflow-x: clip; }
   .pf-phantom p { margin: 0 0 10px; font-size: 13px; color: var(--k-text); }
   .pf-phantom button { inline-size: 100%; block-size: 40px; border: 0; border-radius: 10px; background: #ab9ff2; color: #1c1c1c; font: 600 15px/1 var(--sans); cursor: pointer; }
 }
+
+/* Real/simulated switch with nothing cached: numbers dim until they land. */
+@layer skin {
+  #profile[data-switching] .pf-value > :not(.pf-wallet), #profile[data-switching] .pf-value ~ * { opacity: .45; transition: opacity .15s; }
+}
