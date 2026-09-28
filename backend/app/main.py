@@ -107,6 +107,7 @@ from app.trading.onchain import legit as onchain_legit
 from app.trading.onchain import ledger as onchain_ledger
 from app.trading.onchain import outcomes as onchain_outcomes
 from app.trading.onchain import narratives as onchain_narratives
+from app.trading.onchain import judge as onchain_judge
 from app.trading.onchain import backtest_lab as onchain_backtest_lab
 from app.trading.onchain import autotrader as onchain_autotrader
 from app.trading.onchain import wealth as onchain_wealth

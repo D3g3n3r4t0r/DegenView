@@ -110,17 +110,17 @@ def test_search_filters_and_sorts():
     assert [i["token"] for i in db.search(q="Name B")["items"]] == ["B"]
     assert db.search(status="studied")["total"] == 2
 def test_recheck_studied_requeues_old_limits(tmp_path, monkeypatch):
-    monkeypatch.setattr(projects_db, "_DB_FILE", tmp_path / "projects.db")
-    monkeypatch.setattr(projects_db, "_conn", None)
-    projects_db._db().execute(
-        "INSERT INTO projects (key, chain, token, symbol, status, why, next_check) VALUES"
-        " ('solana:A', 'solana', 'A', 'A', 'studied', 'market cap over $3M', 9999999999),"
-        " ('solana:B', 'solana', 'B', 'B', 'studied', 'launched over 400 days ago', 9999999999),"
-        " ('solana:C', 'solana', 'C', 'C', 'studied', 'no website', 9999999999),"
-        " ('solana:D', 'solana', 'D', 'D', 'rejected', 'market cap over $3M', 9999999999)")
-    projects_db._db().commit()
-    n = projects_db.recheck_studied(("over $%", "over % days%"))
+    monkeypatch.setattr(db, "_DB_FILE", tmp_path / "projects.db")
+    monkeypatch.setattr(db, "_conn", None)
+    db._db().execute(
+        "INSERT INTO projects (key, chain, token, symbol, status, why, next_check, first_seen, last_seen) VALUES"
+        " ('solana:A', 'solana', 'A', 'A', 'studied', 'market cap over $3M', 9999999999, 0, 0),"
+        " ('solana:B', 'solana', 'B', 'B', 'studied', 'launched over 400 days ago', 9999999999, 0, 0),"
+        " ('solana:C', 'solana', 'C', 'C', 'studied', 'no website', 9999999999, 0, 0),"
+        " ('solana:D', 'solana', 'D', 'D', 'rejected', 'market cap over $3M', 9999999999, 0, 0)")
+    db._db().commit()
+    n = db.recheck_studied(("over $%", "over % days%"))
     assert n == 2
-    rows = {r["token"]: r["next_check"] for r in projects_db._db().execute(
+    rows = {r["token"]: r["next_check"] for r in db._db().execute(
         "SELECT token, next_check FROM projects").fetchall()}
     assert rows["A"] == 0 and rows["B"] == 0 and rows["C"] != 0 and rows["D"] != 0
