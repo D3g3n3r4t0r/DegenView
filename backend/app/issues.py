@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0205", "La pagina Agent sembra ferma: DeepSeek deve vedersi lavorare",
+     "Lorenzo: 'la gente non sta lavorando e non sta scansionando niente. Questo per me e' fondamentale. Voglio avere la sensazione che la gente stia lavorando costantemente [...] Voglio che la gente, attraverso anche animazioni grafiche, mi faccia capire che sta lavorando. Ed e' fondamentale che questo sia visibile, percepibile.'",
+     "alta"),
     ("seed-0204", "Backtest H24 su tutti i token della schermata Strategie",
      "Lorenzo: 'voglio che quando il servizio del server e' online e siamo operativi, DeepSeek scansioni costantemente tutte le strategie e backtest [...] tutti quei token che sono finiti nella schermata delle strategie [...] nella tab a forma di grafico [...] vedo che non e' attivo su questo fronte, deve essere attivo costantemente H24'.",
      "alta"),

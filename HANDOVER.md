@@ -356,6 +356,7 @@ filtro anti-rug in `legit.py`, frontend `frontend/static/onchain/radar.js`.
   1000 candele 5m con `system.backtest_all`; risultati in `/api/onchain/top`
   (`backtests` per riga + stato) e `/api/onchain/token`; ogni backtest va in
   `deepseek_desk.note("backtest", ...)` per la pagina Agent.
+- Agent visibile (28/09, seed-0205): conteggi del giorno per tipo (`done` in `deepseek_desk.activity`), studi del leaderboard nel registro (`_note_study`), scheda live 'working now' in `agent.js`, letture DeepSeek 300/giorno. Lorenzo: "voglio che la gente, attraverso anche animazioni grafiche, mi faccia capire che sta lavorando".
 - Vincolo: il pilota (soldi veri) resta sotto $100k
   (`_SNIPER_ONCHAIN_MAX_MCAP_USD` in main.py). Mai strategie short.
 
