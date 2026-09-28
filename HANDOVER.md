@@ -539,6 +539,10 @@ non oltre; uno, due, tre mesi non e' importante".
   riordina subito la classifica). Nome che dice porting (Wormhole, (Portal),
   bridged, Allbridge, Sollet, Axelar, Wrapped, "(WH)"...) = fuori a
   prescindere dalla cap.
+- 28/09 Lorenzo: "CONTINUO A VEDERE AAVE AL PRIMO POSTO". Era la Top
+  (`/api/onchain/top`, `_top_entries`): unisce alla classifica le righe
+  studiate del database, che non passavano da `qualifies`. Ora anche quelle
+  passano da `leaderboard.too_big` (porting o cap oltre $10M).
 - 28/09 Lorenzo: "DeepSeek [...] deve riesaminare i risultati che escono
   dalla top classifica e metterli in discussione [...] Clau Pump Tech ma
   che roba è, Leon AI sono nomi che non hanno senso". `judge.review_board`:

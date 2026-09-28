@@ -3797,6 +3797,10 @@ def _top_entries(n: int = 50) -> list[dict]:
             continue
         if (row.get("overall") or {}).get("fatal"):
             continue
+        # The board's ceiling holds here too: bridged AAVE sat first (Lorenzo, 28/09).
+        if onchain_leaderboard.too_big({"symbol": row.get("symbol"), "name": row.get("name"),
+                                        "market_cap": row.get("mcap"), "global_cap": row.get("cg_mcap")}):
+            continue
         key = f"{row['chain']}:{row['token']}"
         if key in seen:
             continue
