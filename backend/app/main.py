@@ -1,4 +1,5 @@
 import asyncio
+import time
 import base64
 import datetime as _dt
 import hashlib
@@ -104,6 +105,7 @@ from app.trading.onchain import keys as onchain_keys
 from app.trading.onchain import legit as onchain_legit
 from app.trading.onchain import ledger as onchain_ledger
 from app.trading.onchain import outcomes as onchain_outcomes
+from app.trading.onchain import backtest_lab as onchain_backtest_lab
 from app.trading.onchain import autotrader as onchain_autotrader
 from app.trading.onchain import wealth as onchain_wealth
 from app import profiles
@@ -1364,6 +1366,7 @@ async def lifespan(app: FastAPI):
                    asyncio.create_task(onchain_radar.listings_backtest_loop()),
                    asyncio.create_task(onchain_leaderboard.leaderboard_loop()),
                    asyncio.create_task(onchain_outcomes.outcomes_loop()),
+                   asyncio.create_task(onchain_backtest_lab.lab_loop()),
                    asyncio.create_task(_onchain_signals_loop()),
                    asyncio.create_task(_wealth_loop())] if settings.onchain_radar_enabled else []
     sniper_tasks: list[asyncio.Task] = []
@@ -3702,6 +3705,14 @@ async def onchain_radar_lessons(user: User = Depends(auth.get_current_user)) -> 
     return {**onchain_outcomes.lessons(), "gate": settings.onchain_memory_gate}
 
 
+@app.get("/api/onchain/lab")
+async def onchain_lab(user: User = Depends(auth.get_current_user)) -> dict:
+    """Cosa dicono i backtest di tutti i token passati dal diario, anche
+    quelli scartati. Vedi app/trading/onchain/backtest_lab.py."""
+    _require_onchain_enabled()
+    return onchain_backtest_lab.summary()
+
+
 @app.get("/api/onchain/radar/memes")
 async def onchain_radar_memes(user: User = Depends(auth.get_current_user)) -> dict:
     """La corsia meme: token scartati per nome, sito o GitHub, non per
@@ -3997,7 +4008,37 @@ def _all_addresses(user: User) -> list[tuple[str, str, str]]:
     return out
 
 
+# A snapshot costs a chain read per wallet: /api/profile and
+# /api/wallets/total ask for it at the same moment, and a switch asks again.
+# 20 s of memory plus in-flight sharing turn those into one read.
+_snap_cache: dict[str, tuple[float, dict]] = {}
+_snap_inflight: dict[str, asyncio.Task] = {}
+_SNAP_TTL = 20.0
+_snap_clock = time.monotonic   # its own name, so tests move it without freezing asyncio
+
+
 async def _wallet_snapshot(user: User) -> dict:
+    """The cached snapshot: a fresh one is returned as is, a read already in
+    flight is awaited instead of started again. Failures are not cached."""
+    now = _snap_clock()
+    hit = _snap_cache.get(user.id)
+    if hit and now - hit[0] < _SNAP_TTL:
+        return hit[1]
+    task = _snap_inflight.get(user.id)
+    if task is None:
+        task = asyncio.create_task(_wallet_snapshot_uncached(user))
+        _snap_inflight[user.id] = task
+
+        def _done(t: asyncio.Task) -> None:
+            _snap_inflight.pop(user.id, None)
+            if not t.cancelled() and t.exception() is None:
+                _snap_cache[user.id] = (_snap_clock(), t.result())
+
+        task.add_done_callback(_done)
+    return await task
+
+
+async def _wallet_snapshot_uncached(user: User) -> dict:
     """Everything every wallet holds on every chain, priced (portfolio.py):
     cash (stablecoins), positions (the rest, native coins included), total."""
     addrs = _all_addresses(user)

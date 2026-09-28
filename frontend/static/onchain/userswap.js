@@ -9,6 +9,7 @@
  */
 import * as api from "@onchain/api.js";
 import { escapeHtml } from "@onchain/format.js";
+import * as phantom from "@onchain/phantomlink.js";
 
 const RH = {
   chainId: "0x1237", chainName: "Robinhood Chain", nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
@@ -77,6 +78,7 @@ export function openUserSwap(e) {
   const wallet = walletFor(e.chain);
   if (!wallet) return;
   ctx = { e, wallet, side: "buy", built: null, pct: 100, amount: "", pay: pays(wallet.kind)[0][0] };
+  if (wallet.kind === "solana" && phantom.needed()) phantom.preload().catch(() => {});
   sheet();
   paint();
   dlg.showModal();
@@ -152,7 +154,16 @@ async function sign() {
       paint(`Sent. <a href="${RH.blockExplorerUrls[0]}/tx/${escapeHtml(last)}" target="_blank" rel="noopener">See it on the explorer ↗</a>`);
     } else {
       const sol = window.phantom?.solana ?? window.solana;
-      if (!sol) throw new Error("Open this page in Phantom's browser.");
+      if (!sol) {
+        // Safari on a phone: Phantom by deeplink, back to this page after
+        // Face ID (phantomlink.js). Synchronous: iOS needs the tap.
+        const s = phantom.session();
+        if (!s) { phantom.connect({ op: "swap" }); return; }
+        if (s.publicKey !== ctx.wallet.address) throw new Error(`Phantom is on ${s.publicKey.slice(0, 4)}…${s.publicKey.slice(-4)}, not on the connected wallet.`);
+        paint("Confirm in Phantom…");
+        phantom.signAndSend(Uint8Array.from(atob(b.tx_base64), (c) => c.charCodeAt(0)), { op: "swap", symbol: ctx.e?.symbol ?? "" });
+        return;
+      }
       paint("Confirm in Phantom…");
       const web3 = await loadWeb3();
       const tx = web3.VersionedTransaction.deserialize(Uint8Array.from(atob(b.tx_base64), (c) => c.charCodeAt(0)));

@@ -115,6 +115,14 @@ def _parse_symbol(symbol: str) -> tuple[str, str, str]:
 # minuto con una riserva per chi sta guardando un grafico, e se GeckoTerminal
 # rifiuta comunque, l'ultima risposta buona invece di un errore.
 _GECKO_WINDOW_S = 60.0
+
+
+def gecko_load() -> int:
+    """Quante chiamate a GeckoTerminal sono state fatte nell'ultimo minuto."""
+    now = time.monotonic()
+    while _gecko_calls and now - _gecko_calls[0] > _GECKO_WINDOW_S:
+        _gecko_calls.popleft()
+    return len(_gecko_calls)
 _GECKO_BACKGROUND_PER_MIN = 14   # leaves ~15 a minute for someone opening a chart
 _GECKO_URGENT_PER_MIN = 28
 _GECKO_FRESH_S = 15.0
