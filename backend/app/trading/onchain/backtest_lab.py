@@ -27,7 +27,7 @@ _lock = threading.Lock()
 _conn: sqlite3.Connection | None = None
 _conn_path = None
 
-VERSION = 2
+VERSION = 3
 MATURE_S = 48 * 3600
 LIMIT = 1000
 PER_TICK = 3
@@ -97,13 +97,13 @@ def path(df) -> dict | None:
     }
 
 
-def analyze(bars: list, at: float) -> dict:
+def analyze(bars: list, at: float, known: dict | None = None) -> dict:
     """Backtest di tutte le strategie sulle barre dalla proposta in poi, piu'
-    il percorso del prezzo."""
+    il percorso del prezzo. `known` e' il rug gia' visto on-chain, se c'e'."""
     after = [b for b in bars if b[0] >= at]
     if len(after) < 2:
         return {"backtests": None, "path": None}
-    return {"backtests": system.backtest_all(after), "path": path(system.frame(after))}
+    return {"backtests": system.backtest_all(after, known), "path": path(system.frame(after))}
 
 
 def _store(key: str, entry: dict, bars: bytes, result: dict) -> None:
@@ -143,7 +143,10 @@ async def fill(now: float | None = None, per_tick: int = PER_TICK) -> int:
                 _store(key, entry, zlib.compress(b"[]"), {"gone": True})
                 stored += 1
                 continue
-            result = await asyncio.to_thread(analyze, got, entry.get("at") or 0)
+            j = outcomes._journal.get(f"{entry.get('chain')}:{entry.get('token_address')}")
+            known = ({"at": j["rug_at"], "why": j.get("rug_why") or ""}
+                     if j and j.get("rug") and j.get("rug_at") else None)
+            result = await asyncio.to_thread(analyze, got, entry.get("at") or 0, known)
             _store(key, entry, zlib.compress(json.dumps(got).encode()), result)
             stored += 1
     return stored

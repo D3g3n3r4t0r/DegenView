@@ -703,33 +703,93 @@ def spot_only(signals: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-# Un crollo rapido oltre questa frazione dal massimo recente e' un rug pull:
-# la strategia si spegne e non rientra (Lorenzo, 28/09: "quando il prezzo fa
-# un drawdown superiore al 60-70% in modo molto veloce [...] la strategia si
-# deve automaticamente disabilitare").
-RUG_DROP = 0.65
-RUG_WINDOW = "24h"
+# Un token non muore solo con un crollo rapido: la liquidita' puo' essere
+# ritirata in una candela, il prezzo puo' spegnersi lentamente, gli scambi
+# possono prosciugarsi dopo la caduta, o il rug puo' essere gia' stato visto
+# on-chain. Ognuno di questi casi spegne la strategia e non la fa rientrare
+# (Lorenzo, 28/09: "come regola e' un po' insufficiente; valuta tu un modo
+# piu' intelligente, che carpisca il senso di quello che intendevo").
+RUG_CRASH_WINDOW = "6h"
+RUG_DEAD_RATIO = 0.15
+RUG_ABANDONED_WINDOW = "24h"
+RUG_ABANDONED_RATIO = 0.40
+RUG_VOLUME_WINDOW = "24h"
+RUG_VOLUME_BARS = 12
+RUG_VOLUME_RATIO = 0.05
 
 
-def rug_bar(df: pd.DataFrame) -> int | None:
-    """La prima barra in cui il minimo scende sotto (1 - RUG_DROP) del
-    massimo delle ultime RUG_WINDOW ore. None se non succede mai."""
+def _pct(ratio: float) -> str:
+    return f"-{round((1 - ratio) * 100)}%"
+
+
+def rug_event(df: pd.DataFrame, known: dict | None = None) -> dict | None:
+    """La prima barra in cui il token mostra di essere morto, con il motivo.
+
+    Ogni barra e' giudicata solo sulle barre fino a lei (nessuna informazione
+    futura). Ritorna {"i": posizione, "why": testo} o None. L'ordine dei
+    controlli e' quello dei casi piu' netti prima: prima la liquidita'
+    ritirata in una candela, poi il crollo, poi il token morto, poi gli
+    scambi prosciugati, infine il rug gia' visto on-chain."""
     if df.empty:
         return None
-    peak = df["high"].rolling(RUG_WINDOW).max()
-    hit = df["low"] <= (1 - RUG_DROP) * peak
-    positions = [i for i, v in enumerate(hit.to_numpy()) if bool(v)]
-    return positions[0] if positions else None
+    close = df["close"]
+    high = df["high"]
+    open_ = df["open"]
+    volume = df["volume"]
+
+    # A - liquidita' ritirata: una sola candela che dimezza il prezzo.
+    one = close <= 0.5 * open_
+    hits = [i for i, v in enumerate(one.to_numpy()) if bool(v)]
+    if hits:
+        i = hits[0]
+        return {"i": i, "why": f"one candle {_pct(close.iloc[i] / open_.iloc[i])}: liquidity pulled"}
+
+    # B - crollo: sotto il 30% del massimo delle ultime 6 ore.
+    peak6 = high.rolling(RUG_CRASH_WINDOW).max()
+    crash = close <= 0.30 * peak6
+    hits = [i for i, v in enumerate(crash.to_numpy()) if bool(v)]
+    if hits:
+        i = hits[0]
+        return {"i": i, "why": f"crash {_pct(close.iloc[i] / peak6.iloc[i])} in under 6h"}
+
+    # C - token morto: sotto il 15% del massimo di sempre.
+    top = high.cummax()
+    dead = close <= RUG_DEAD_RATIO * top
+    hits = [i for i, v in enumerate(dead.to_numpy()) if bool(v)]
+    if hits:
+        i = hits[0]
+        return {"i": i, "why": f"{_pct(close.iloc[i] / top.iloc[i])} from its top: dead token"}
+
+    # D - scambi prosciugati: prezzo sotto il 40% del massimo delle ultime
+    # 24 ore e volume medio delle ultime 12 barre al 5% del massimo delle
+    # ultime 24 ore della media mobile a 12 barre.
+    peak24 = high.rolling(RUG_ABANDONED_WINDOW).max()
+    vol_mean = volume.rolling(RUG_VOLUME_BARS).mean()
+    vol_peak = vol_mean.rolling(RUG_VOLUME_WINDOW).max()
+    abandoned = (close <= RUG_ABANDONED_RATIO * peak24) & (vol_mean <= RUG_VOLUME_RATIO * vol_peak)
+    hits = [i for i, v in enumerate(abandoned.to_numpy()) if bool(v)]
+    if hits:
+        i = hits[0]
+        return {"i": i, "why": "trading dried up after the fall"}
+
+    # E - rug gia' visto on-chain: dalla prima barra al momento noto.
+    if known and known.get("at"):
+        at = known["at"]
+        for i, ts in enumerate(df.index):
+            if ts.timestamp() >= at:
+                return {"i": i, "why": known.get("why") or "rug seen on-chain"}
+    return None
 
 
-def rug_stop(df: pd.DataFrame, signals: pd.DataFrame) -> pd.DataFrame:
+def rug_stop(df: pd.DataFrame, signals: pd.DataFrame, known: dict | None = None) -> pd.DataFrame:
     """Dal rug in poi niente piu' ingressi e la posizione lunga si chiude
-    sulla barra del crollo: il token e' flaggato come rug pull e il backtest
+    sulla barra dell'evento: il token e' flaggato come morto e il backtest
     non prosegue (Lorenzo, 28/09)."""
     out = signals.copy()
-    i = rug_bar(df)
-    if i is None:
+    ev = rug_event(df, known)
+    if ev is None:
         return out
+    i = ev["i"]
     out.iloc[i:, out.columns.get_loc("entry_long")] = False
     out.iloc[i:, out.columns.get_loc("entry_short")] = False
     out.iloc[i, out.columns.get_loc("exit_long")] = True
