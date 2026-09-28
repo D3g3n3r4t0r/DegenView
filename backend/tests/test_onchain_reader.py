@@ -60,3 +60,24 @@ def test_token_role_is_read_near_the_token():
     assert reader.token_utility("$ROUTER is the token used to pay for inference and staked by nodes") == \
         ["fees", "staking"]
     assert reader.token_utility("The token. " + "filler " * 30 + "fees are low") == []
+
+RESEARCH = ("Dregg is a deep research project with a runnable decision engine and a public proof record. "
+            "The core is machine-checked and Lean-authored. Named limit: no independent external audit yet. "
+            "Some components remain outside the present scope and are active research.")
+
+
+def test_research_stage_code_reads_as_building():
+    r = _read("We publish a runnable prototype and a public proof record for the decision engine. "
+              "The reference implementation is machine-checked and open-source. " * 2)
+    assert r["stage"] == "building"
+
+
+def test_stated_limits_are_candor():
+    r = _read(RESEARCH)
+    assert r["parts"]["candor"] == 8
+    assert "states its own limits" in r["why"]
+
+
+def test_marketing_text_has_no_candor():
+    r = _read(HYPE)
+    assert r["parts"]["candor"] == 0
