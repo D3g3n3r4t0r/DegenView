@@ -546,3 +546,13 @@ def test_a_null_symbol_is_no_name():
         assert lb.no_name(s)
     assert not lb.no_name("NULLX") and not lb.no_name("DREGG")
     assert lb.research_floor({"symbol": "null", "chain": "bsc", "token_address": "0x1"}) == "no name"
+
+
+def test_discovery_pauses_on_a_full_pool_with_work_left(monkeypatch):
+    monkeypatch.setattr(lb.projects_db, "stats", lambda: {"by_status": {"studied": 280, "ranked": 20}})
+    for i in range(lb.BACKLOG_LOW + 1):
+        _entry(f"P{i}", 90, 90, 90, cap=500_000)      # analysed, no DeepSeek report yet
+    now = time.time()
+    assert lb.pool_status(now)["paused"] and not lb.discovery_open(now)
+    monkeypatch.setattr(lb.projects_db, "stats", lambda: {"by_status": {"studied": 50}})
+    assert lb.discovery_open(now)                       # small pool: keep scanning
