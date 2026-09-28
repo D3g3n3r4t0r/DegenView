@@ -362,17 +362,18 @@ def strategy_configs(entries: list[dict] | None = None) -> list[dict]:
     return configs
 
 
-def spot_signals(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
+def spot_signals(df: pd.DataFrame, cfg: dict, known: dict | None = None) -> pd.DataFrame:
     """Solo spot: si compra e si vende, mai short (Lorenzo: "non voglio
     short, solo acquisti spot e vendite"). Un segnale short della strategia
-    diventa una vendita di quello che si ha, se lo si ha."""
-    return rug_stop(df, spot_only(STRATEGY_REGISTRY[cfg["strategy_name"]](df, cfg["params"])))
+    diventa una vendita di quello che si ha, se lo si ha. `known` e' il rug
+    gia' visto on-chain, se c'e'."""
+    return rug_stop(df, spot_only(STRATEGY_REGISTRY[cfg["strategy_name"]](df, cfg["params"])), known)
 
 
-def run_spot(df: pd.DataFrame, cfg: dict):
+def run_spot(df: pd.DataFrame, cfg: dict, known: dict | None = None):
     """Backtest ed eventi dagli stessi segnali spot: il grafico e i numeri
     raccontano gli stessi acquisti e le stesse vendite."""
-    signals = spot_signals(df, cfg)
+    signals = spot_signals(df, cfg, known)
     result = run_backtest(df, cfg["params"], BACKTEST_PARAMS, signals=signals, strategy_name=cfg["strategy_name"])
     events, position = confirmed_events(df, cfg["params"], signals=signals, strategy_name=cfg["strategy_name"])
     return result, events, position
@@ -412,14 +413,15 @@ def _qualifies(m: dict) -> bool:
     return pf is None or pf >= MIN_PROFIT_FACTOR
 
 
-def evaluate(df: pd.DataFrame, configs: list[dict]) -> dict:
+def evaluate(df: pd.DataFrame, configs: list[dict], known: dict | None = None) -> dict:
     """Backtest di ogni configurazione su `df`. Ritorna la migliore che passa
-    le soglie (o None) e il risultato di tutte, per trasparenza."""
+    le soglie (o None) e il risultato di tutte, per trasparenza. `known` e'
+    il rug gia' visto on-chain, se c'e'."""
     tried: list[dict] = []
     best: dict | None = None
     for cfg in configs:
         try:
-            result, _events, position = run_spot(df, cfg)
+            result, _events, position = run_spot(df, cfg, known)
             m = _long_only(result.trades, BACKTEST_PARAMS["commission_pct"])
         except Exception as exc:  # una strategia che non gira su questa serie non ferma le altre
             logger.debug("radar: %s fallita: %s", cfg["label"], exc)

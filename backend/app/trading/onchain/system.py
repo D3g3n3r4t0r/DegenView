@@ -169,14 +169,15 @@ def evaluate(bars: list[list], start: float, *, gone: bool = False, now: float |
     return {c["label"]: follow(bars, c, start, gone=gone, now=now) for c in CANDIDATES}
 
 
-def backtest_all(bars: list[list]) -> dict:
+def backtest_all(bars: list[list], known: dict | None = None) -> dict:
     """Every strategy backtested on the alert's whole chart, every entry and
-    exit, fees included (radar.evaluate, the same engine as the main site)."""
+    exit, fees included (radar.evaluate, the same engine as the main site).
+    `known` is the rug already seen on-chain, if there is one."""
     df = frame(bars)
     if len(df) < BACKTEST_MIN_BARS:
         return {"bars": len(df), "rows": [], "hold_pct": None, "best": None, "rug": None}
     res = radar.evaluate(df, [{"strategy_name": n, "params": None, "label": lab, "source": "predefinita"}
-                              for n, lab in BACKTESTS])
+                              for n, lab in BACKTESTS], known)
     by_label = {r["label"]: r for r in res["tried"]}
     rows = []
     for _name, lab in BACKTESTS:
@@ -191,14 +192,14 @@ def backtest_all(bars: list[list]) -> dict:
                      "profit_factor": round(r["profit_factor"], 2) if r["profit_factor"] is not None else None,
                      "in_position": r["in_position"]})
     hold = res["hold_pct"]
-    i = strategies.rug_bar(df)
-    rug = {"at": int(df.index[i].timestamp()), "drop": strategies.RUG_DROP} if i is not None else None
+    ev = strategies.rug_event(df, known)
+    rug = {"at": int(df.index[ev["i"]].timestamp()), "why": ev["why"]} if ev is not None else None
     return {"bars": len(df), "from": int(df.index[0].timestamp()), "to": int(df.index[-1].timestamp()),
             "hold_pct": round(hold, 2) if hold is not None else None, "rows": rows,
-            "best": _best_trades(df, rows), "rug": rug}
+            "best": _best_trades(df, rows, known), "rug": rug}
 
 
-def _best_trades(df: pd.DataFrame, rows: list[dict]) -> dict | None:
+def _best_trades(df: pd.DataFrame, rows: list[dict], known: dict | None = None) -> dict | None:
     """The best backtest's buys and sells, for the chart. Lorenzo, 28/09:
     "visualizza un alert ma non sappiamo se e' un ingresso o altro.. qui deve
     comparire la strategia [...] ingressi e uscite". The ranking shows the
@@ -210,7 +211,7 @@ def _best_trades(df: pd.DataFrame, rows: list[dict]) -> dict | None:
     name = next(n for n, lab in BACKTESTS if lab == best["label"])
     try:
         result, signals, _pos = radar.run_spot(df, {"strategy_name": name, "params": None, "label": best["label"],
-                                                    "source": "predefinita"})
+                                                    "source": "predefinita"}, known)
     except Exception:
         return None
     fee = 2 * radar.BACKTEST_PARAMS["commission_pct"] / 100     # as radar._long_only

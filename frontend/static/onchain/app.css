@@ -853,7 +853,8 @@ html, body { overflow-x: clip; }
      because it registers the gem rows' details. */
   #board { display: none !important; }
   /* The active dock icon is filled; the Strategies chart is a line, and filled it read as an arrow. */
-  .dock button[data-go="top"][aria-current] svg { fill: none; stroke-width: 2.4; }
+  .dock button:is([data-go="top"], [data-go="agent"])[aria-current] svg { fill: none; stroke-width: 2.4; }
+  .dock button[data-go="agent"][aria-current] svg circle:last-child { fill: currentColor; }
 }
 @layer skin {
   .is-new { animation: row-in .42s cubic-bezier(.2, .8, .2, 1) backwards; }
@@ -881,4 +882,61 @@ html, body { overflow-x: clip; }
 /* Real/simulated switch with nothing cached: numbers dim until they land. */
 @layer skin {
   #profile[data-switching] .pf-value > :not(.pf-wallet), #profile[data-switching] .pf-value ~ * { opacity: .45; transition: opacity .15s; }
+}
+/* DeepSeek's own tab (agent.js): a living orb, today's counters, the log. */
+@layer skin {
+  .agent-view { display: grid; gap: 0; padding-block-end: 20px; }
+  .ag-hero { display: grid; justify-items: center; gap: 6px; padding: 24px 0 18px; text-align: center; }
+  .ag-orb { position: relative; inline-size: 96px; block-size: 96px; margin-block-end: 6px; }
+  .ag-orb span { position: absolute; inset: 30px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #c7d2fe, #6366f1 45%, #312e81 80%);
+    box-shadow: 0 0 24px rgba(99, 102, 241, .6); animation: ag-breathe 3.2s ease-in-out infinite; }
+  .ag-orb i { position: absolute; inset: 0; border-radius: 50%; border: 1.5px solid transparent;
+    border-top-color: rgba(165, 180, 252, .9); opacity: .35; animation: ag-spin 6s linear infinite; }
+  .ag-orb i:nth-child(2) { inset: 8px; border-top-color: rgba(45, 224, 168, .8); animation-duration: 4.2s; animation-direction: reverse; }
+  .ag-orb i:nth-child(3) { inset: 16px; border-top-color: rgba(244, 114, 182, .6); animation-duration: 3s; }
+  .ag-orb[data-state="working"] i { opacity: 1; animation-duration: 1.6s; }
+  .ag-orb[data-state="working"] i:nth-child(2) { animation-duration: 2.3s; }
+  .ag-orb[data-state="working"] i:nth-child(3) { animation-duration: 3.1s; }
+  .ag-orb[data-state="off"] span { filter: grayscale(1); animation: none; box-shadow: none; }
+  .ag-orb[data-state="off"] i { opacity: .15; animation: none; }
+  .ag-hero h2 { margin: 0; font: 700 22px/1.15 var(--sans); letter-spacing: -.01em; color: var(--k-text); }
+  .ag-status { margin: 0; font: 600 14px var(--sans); color: #2de0a8; }
+  .ag-orb[data-state="off"] ~ .ag-status { color: var(--k-text-3); }
+  .ag-today { margin: 0; font: 400 12.5px var(--mono, ui-monospace); color: var(--k-text-3); }
+  .ag-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .ag-card { display: grid; gap: 6px; padding: 12px 14px; border-radius: 14px; background: var(--k-card);
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / .05); }
+  .ag-card.is-new { animation: ag-in .5s cubic-bezier(.2, .8, .2, 1) backwards;
+    box-shadow: inset 0 0 0 1px rgb(45 224 168 / .35), 0 0 14px rgb(45 224 168 / .18); }
+  .ag-card header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .ag-card header small { font-size: 12px; color: var(--k-text-3); }
+  .ag-kind { padding: 2px 8px; border-radius: 6px; font: 700 10.5px/1.5 var(--mono, ui-monospace); letter-spacing: .06em;
+    text-transform: uppercase; color: #a78bfa; background: rgb(167 139 250 / .14); }
+  .ag-kind[data-kind="scan"] { color: #2de0a8; background: rgb(45 224 168 / .14); }
+  .ag-kind[data-kind="research"] { color: #67e8f9; background: rgb(103 232 249 / .14); }
+  .ag-kind[data-kind="chat"], .ag-kind[data-kind="report"] { color: var(--k-text-3); background: rgb(255 255 255 / .06); }
+  .ag-card p { margin: 0; font-size: 14px; line-height: 1.4; color: var(--k-text); }
+  .ag-out { font-weight: 700; color: var(--k-text); }
+  .ag-steps { margin: 2px 0 0; }
+  .ag-steps summary { cursor: pointer; list-style: none; font: 600 12.5px var(--sans); color: var(--k-text-2); }
+  .ag-steps summary::-webkit-details-marker { display: none; }
+  .ag-steps summary::after { content: " ▾"; color: var(--k-text-3); }
+  .ag-steps[open] summary::after { content: " ▴"; }
+  .ag-steps ol { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px;
+    font: 400 12.5px/1.45 var(--mono, ui-monospace); color: var(--k-text-2); }
+  .ag-steps li { animation: ag-step .3s ease-out backwards; animation-delay: calc(var(--i) * 90ms); }
+  .ag-steps li[data-tone="bad"] { color: #f87171; }
+  .ag-steps li[data-tone="good"] { color: #2de0a8; }
+  .ag-empty { padding: 24px 0; text-align: center; color: var(--k-text-3); font-size: 14px; }
+  .ag-more { justify-self: center; margin: 12px 0 0; padding: 9px 16px; border: 0; border-radius: 10px;
+    background: rgb(255 255 255 / .06); color: var(--k-text); font: 500 14px var(--sans); cursor: pointer; }
+  @keyframes ag-breathe { 0%, 100% { transform: scale(.92); box-shadow: 0 0 16px rgba(99, 102, 241, .4); }
+    50% { transform: scale(1.05); box-shadow: 0 0 30px rgba(99, 102, 241, .75); } }
+  @keyframes ag-spin { to { transform: rotate(360deg); } }
+  @keyframes ag-in { from { opacity: 0; transform: translateY(-14px); } }
+  @keyframes ag-step { from { opacity: 0; transform: translateX(-6px); } }
+  @media (prefers-reduced-motion: reduce) {
+    .ag-orb span, .ag-orb i, .ag-card.is-new, .ag-steps li { animation: none !important; }
+  }
 }
