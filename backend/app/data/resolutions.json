@@ -2172,5 +2172,25 @@
     "status": "risolto",
     "at": 1790575868,
     "summary": "Ogni token salva ingressi e uscite del suo backtest migliore; sul grafico compaiono come frecce Buy/Sell con il rendimento di ogni uscita, oltre al punto giallo dell'alert. Il nome della strategia non si vede. Issue #242."
+  },
+  "seed-0194": {
+    "status": "risolto",
+    "at": 1790587112,
+    "summary": "Da iPhone Phantom si collega con il suo protocollo ufficiale: si apre Phantom, confermi con Face ID e torni al sito con la risposta cifrata, senza il browser interno di Phantom. Collegare il wallet sono due tocchi (collega, poi firma), un trade uno. Provato in Chromium con un finto Phantom che cifra e firma davvero; non ancora su un iPhone vero. PR #253."
+  },
+  "seed-0195": {
+    "status": "risolto",
+    "at": 1790587112,
+    "summary": "Il pulsante cambia subito e mostra l'ultimo valore di quella modalita', poi aggiorna; le risposte arrivate tardi vengono scartate (niente piu' wallet sbagliato) e il server legge le catene una volta sola ogni 20 secondi invece di due volte a ogni cambio. PR #254."
+  },
+  "seed-0196": {
+    "status": "risolto",
+    "at": 1790587112,
+    "summary": "Primo passo attivo: il laboratorio fa il backtest di ogni token del diario (proposti, provati e scartati) con tutte le strategie, solo quando GeckoTerminal ha chiamate libere, e salva candele e percorso del prezzo. Poi: filtro aritmetico dei rug evidenti prima del backtest, e DeepSeek che impara dai casi (piano in HANDOVER). PR #255."
+  },
+  "seed-0197": {
+    "status": "risolto",
+    "at": 1790587112,
+    "summary": "Nel backend: 12 narrative per i meme accanto alle 24 dei progetti; ognuno salva le sue nel profilo e il cacciatore cerca per prime quelle piu' scelte. La schermata per sceglierle arriva con la prossima modifica. PR #258."
   }
 }

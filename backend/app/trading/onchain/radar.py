@@ -48,7 +48,7 @@ import httpx
 import pandas as pd
 
 from app.analysis.backtest import run_backtest
-from app.analysis.strategies import STRATEGY_REGISTRY, confirmed_events, spot_only
+from app.analysis.strategies import STRATEGY_REGISTRY, confirmed_events, rug_stop, spot_only
 from app.providers.base import NoDataYet, ProviderError
 from app.providers.dexscreener import DexScreenerProvider, gecko_urgent, make_symbol
 from app.sniper.quality import _looks_like_meme
@@ -366,7 +366,7 @@ def spot_signals(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     """Solo spot: si compra e si vende, mai short (Lorenzo: "non voglio
     short, solo acquisti spot e vendite"). Un segnale short della strategia
     diventa una vendita di quello che si ha, se lo si ha."""
-    return spot_only(STRATEGY_REGISTRY[cfg["strategy_name"]](df, cfg["params"]))
+    return rug_stop(df, spot_only(STRATEGY_REGISTRY[cfg["strategy_name"]](df, cfg["params"])))
 
 
 def run_spot(df: pd.DataFrame, cfg: dict):
