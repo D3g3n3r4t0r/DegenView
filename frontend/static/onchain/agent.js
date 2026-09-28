@@ -157,7 +157,25 @@ function paintHero() {
       prio.hidden = true;
     }
   }
+  paintProgress();
   paintNow();
+}
+
+function progressHtml(row) {
+  const total = row.total ?? 0;
+  const done = row.done ?? 0;
+  const right = row.key === "scan" ? `${total} left` : `${done}/${total}`;
+  const bar = row.key === "scan"
+    ? ""
+    : `<div class="ag-bar"><i style="transform:scaleX(${total > 0 ? Math.min(1, Math.max(0, done / total)) : 0})"></i></div>`;
+  return `<div class="ag-prog-row"><span>${escapeHtml(row.label)}</span><b>${escapeHtml(right)}</b></div>${bar}`;
+}
+
+function paintProgress() {
+  const box = viewEl?.querySelector("[data-ag-prog]");
+  if (!box) return;
+  const rows = viewData?.progress ?? [];
+  box.innerHTML = rows.map(progressHtml).join("");
 }
 
 async function loadView() {
@@ -226,6 +244,7 @@ export function mountAgentView() {
       <p class="ag-today" data-ag-today>Nothing yet today</p>
       <p class="ag-prio" data-ag-prio hidden></p>
     </div>
+    <div class="ag-prog" data-ag-prog></div>
     <div class="ag-now" data-ag-now hidden></div>
     <ul class="ag-list" data-ag-list></ul>
     <button type="button" class="ag-more" data-ag-more hidden>Load earlier</button>`;
