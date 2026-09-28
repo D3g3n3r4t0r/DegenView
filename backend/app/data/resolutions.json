@@ -2287,5 +2287,10 @@
     "status": "risolto",
     "at": 1790632287,
     "summary": "Per gli alert meme su Telegram il voto di DeepSeek sul sito ora decide: sotto 6/10 o giudicato non legittimo (meme senza utilita', pagina modello) l'alert non parte. Se DeepSeek non risponde il token aspetta e si riprova, non passa."
+  },
+  "seed-0221": {
+    "status": "risolto",
+    "at": 1790633702,
+    "summary": "Il simulato seguiva solo gli alert di Robinhood, uno alla volta, e solo se il backtest dell'alert era gia' pronto entro 15 minuti: in pratica quasi mai. Ora segue ogni alert su ogni chain, appena arriva, con lo stesso trade della tab Strategies (dentro all'alert, fuori all'uscita del trend follower). Ogni trade prende la quota scelta del saldo simulato: al 100% ne segue uno alla volta, al 10-25% ne segue diversi insieme. Il Reale resta com'e'."
   }
 }

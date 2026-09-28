@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0221", "Il wallet simulato non segue gli alert",
+     "Lorenzo, 28/09: 'il wallet simulato non sembra replicare gli ingressi [...] voglio che li segua'",
+     "alta"),
     ("seed-0220", "Alert meme spazzatura su Telegram",
      "Lorenzo, 28/09: 'occhio a non far arrivare la merda però, non voglio meme coin'",
      "alta"),
