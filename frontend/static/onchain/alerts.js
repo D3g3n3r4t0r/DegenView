@@ -101,6 +101,8 @@ const SCAN_FORM = `<form class="scan-form" data-scan-form role="search">
   <input name="q" placeholder="Scan a token: ticker or address" autocomplete="off" spellcheck="false" aria-label="Ticker or address" />
   <button type="submit" aria-label="Scan"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg></button></form>`;
 
+import { isHidden, onHiddenChange, withEntrance } from "@onchain/hidden.js";
+
 function paintFeed() {
   const root = document.getElementById("meme-alerts");
   if (!root) return;
@@ -113,32 +115,34 @@ function paintFeed() {
   // che sta ritornando in moda". One line per token; the numbers are on its
   // page. Rugs and alerts older than 48h leave this list (the Strategies
   // hall of fame keeps them).
-  const nSoon = (d?.upcoming ?? []).length;
-  const soon = (d?.upcoming ?? []).map((u) => `<li class="soon" data-stage="${u.stage}">
+  const nSoon = (d?.upcoming ?? []).filter((u) => !u.token_address || !isHidden(u.chain, u.token_address)).length;
+  const soon = (d?.upcoming ?? []).filter((u) => !u.token_address || !isHidden(u.chain, u.token_address)).map((u) => `<li class="soon" data-stage="${u.stage}">
       <span class="soon-dot" aria-hidden="true"></span>
       <span class="trow-main"><b>${escapeHtml(u.symbol)} <em class="soon-tag">${u.stage === "imminent" ? "IMMINENT" : "CHECKING"}</em></b>
       <small>${escapeHtml(u.chain)} · ${escapeHtml(u.waiting_for)} · seen ${age(u.since)[0]} ago</small></span></li>`).join("");
-  const fired = (d?.feed ?? []).map((a) => {
+  const fired = (d?.feed ?? []).filter((a) => !isHidden(a.chain, a.token_address)).map((a) => {
     const risk = a.ai?.risk;
     const sys = a.system ? `${sysState(a.system)}${a.system.ret != null ? ` ${pct(a.system.ret)}` : ""}` : "";
     return tokenRow({ id: registerAlert(a, "meme"), symbol: a.symbol, name: a.name || a.symbol, chain: a.chain,
       token: a.token_address, image: a.image, cap: capNow(a), change: a.now, ageTs: a.at, badge: a.early ? "early" : null,
       sub: [sys && `system ${escapeHtml(sys)}`, risk != null && `<span class="risk" data-r="${risk >= 60 ? "hi" : risk >= 30 ? "mid" : "lo"}">risk ${risk}</span>`].filter(Boolean).join(" · ") });
   }).join("");
-  const back = (d?.reviving ?? []).map((r) => tokenRow({
+  const back = (d?.reviving ?? []).filter((r) => !isHidden(r.chain, r.token_address)).map((r) => tokenRow({
     id: registerAlert({ ...r, now: r.chg / 100, cap0: null, returns: {} }, "meme"), symbol: r.symbol, name: r.name || r.symbol,
     chain: r.chain, token: r.token_address, image: r.image, cap: null, change: r.chg / 100, ageTs: r.at,
     sub: `alerted ${age(r.at)[0]} ago · ${r.buys_h1 ?? 0} buys / ${r.sells_h1 ?? 0} sells 1h`, pill: `<em class="hot">BACK</em>` })).join("");
   // The feed repaints every poll: keep what is being typed in the scan box.
   const typing = body.querySelector("[data-scan-form] input");
   const kept = typing ? { v: typing.value, focus: document.activeElement === typing } : null;
-  body.innerHTML = SCAN_FORM + systemLine(d)
-    + (soon ? `<h4 class="feed-sec">About to fire</h4><ol class="soon-list" data-all="${state.soonAll}">${soon}</ol>`
-      + (nSoon > SOON_SHOWN ? `<button type="button" class="more-row" data-soon-more>${state.soonAll ? "Show less" : `+${nSoon - SOON_SHOWN} more`}</button>` : "") : "")
-    + `<h4 class="feed-sec">Fired · last 48h</h4>`
-    + (fired ? `<ol class="memes-list">${fired}</ol>` : `<p class="muted pad">No alert in the last 48 hours.</p>`)
-    + (back ? `<h4 class="feed-sec">Coming back</h4><ol class="memes-list">${back}</ol>` : "")
-    + `<button type="button" class="review-row" data-open-scanner>Live scanner: what it is looking at now <span aria-hidden="true">›</span></button>`;
+  withEntrance(body, () => {
+    body.innerHTML = SCAN_FORM + systemLine(d)
+      + (soon ? `<h4 class="feed-sec">About to fire</h4><ol class="soon-list" data-all="${state.soonAll}">${soon}</ol>`
+        + (nSoon > SOON_SHOWN ? `<button type="button" class="more-row" data-soon-more>${state.soonAll ? "Show less" : `+${nSoon - SOON_SHOWN} more`}</button>` : "") : "")
+      + `<h4 class="feed-sec">Fired · last 48h</h4>`
+      + (fired ? `<ol class="memes-list">${fired}</ol>` : `<p class="muted pad">No alert in the last 48 hours.</p>`)
+      + (back ? `<h4 class="feed-sec">Coming back</h4><ol class="memes-list">${back}</ol>` : "")
+      + `<button type="button" class="review-row" data-open-scanner>Live scanner: what it is looking at now <span aria-hidden="true">›</span></button>`;
+  });
   if (kept) {
     const input = body.querySelector("[data-scan-form] input");
     input.value = kept.v;
@@ -151,7 +155,7 @@ function paintFeed() {
 /** Normalised rows for the current tab: alerts by return, gems by rank. */
 function rows() {
   if (state.kind === "gem") {
-    return (state.board?.entries ?? []).map((e) => ({
+    return (state.board?.entries ?? []).filter((e) => !isHidden(e.chain, e.token_address)).map((e) => ({
       id: `gem:${e.chain}:${e.token_address}`, symbol: e.symbol, name: e.name, chain: e.chain, token: e.token_address,
       image: e.image, label: `${Math.round(e.score ?? 0)}`, sub: `${usdShort(e.market_cap)} MC`, sign: "", early: e.early,
     }));
@@ -161,7 +165,7 @@ function rows() {
   const since = 0;
   const key = state.sort;
   const val = (a) => (key === "system" ? a.system?.ret : key === "best" ? a.max : a.now);
-  const items = (state.data.meme?.items ?? []).filter((a) => a.at >= since && val(a) != null);
+  const items = (state.data.meme?.items ?? []).filter((a) => a.at >= since && val(a) != null && !isHidden(a.chain, a.token_address));
   if (key === "backtest") {
     // Lorenzo: "non voglio selezionare le strategie, il sistema deve essere
     // gestito in modo invisibile, semplicemente mostrami i backtest migliori".
@@ -256,13 +260,15 @@ function paintTop() {
   root.querySelector("[data-top-you]").innerHTML = `<span class="avatar you" aria-hidden="true"></span>
     <span class="you-main"><b>You</b><small>${gem ? "Gems you hold" : "Trades on these alerts"}: none yet</small></span>
     <span class="you-num"><small>P&amp;L (USD)</small><b>—</b></span>`;
-  root.querySelector("[data-top-list]").innerHTML = list.slice(0, 50).map((x, i) => `
-    <li data-place="${i + 1}"><button type="button" data-open="${escapeHtml(x.id)}">
-      <span class="top-rank">${i + 1}</span>
-      ${logo(x.symbol, x.image, x.chain, x.token)}
-      <span class="top-name"><b>${escapeHtml(x.symbol)}${i < 3 ? ` <svg class="mini-crown" viewBox="0 0 24 16" aria-hidden="true"><path d="M2 14 4 3l5 5 3-7 3 7 5-5 2 11z"/></svg>` : ""}${x.early ? ' <em class="hot early">EARLY</em>' : ""}</b><small>${x.sub}</small></span>
-      <span class="top-ret"><b data-sign="${x.sign}">${x.label}</b>${x.sys ? `<small>${escapeHtml(x.sys)}</small>` : x.best != null ? `<small>best ${pct(x.best)}</small>` : gem ? "<small>score</small>" : ""}</span>
-    </button></li>`).join("");
+  withEntrance(root.querySelector("[data-top-list]"), () => {
+    root.querySelector("[data-top-list]").innerHTML = list.slice(0, 50).map((x, i) => `
+      <li data-place="${i + 1}"><button type="button" data-open="${escapeHtml(x.id)}">
+        <span class="top-rank">${i + 1}</span>
+        ${logo(x.symbol, x.image, x.chain, x.token)}
+        <span class="top-name"><b>${escapeHtml(x.symbol)}${i < 3 ? ` <svg class="mini-crown" viewBox="0 0 24 16" aria-hidden="true"><path d="M2 14 4 3l5 5 3-7 3 7 5-5 2 11z"/></svg>` : ""}${x.early ? ' <em class="hot early">EARLY</em>' : ""}</b><small>${x.sub}</small></span>
+        <span class="top-ret"><b data-sign="${x.sign}">${x.label}</b>${x.sys ? `<small>${escapeHtml(x.sys)}</small>` : x.best != null ? `<small>best ${pct(x.best)}</small>` : gem ? "<small>score</small>" : ""}</span>
+      </button></li>`).join("");
+  });
 }
 
 // Gems registered here too, so the trophy's gem rows open their page even
@@ -348,6 +354,7 @@ export function openInbox() {
 /* ------------------------------------------------------------- mount */
 
 export function mountAlerts() {
+  onHiddenChange(() => { paintFeed(); paintTop(); });
   const top = document.getElementById("leaders");
   top?.addEventListener("click", (event) => {
     const p = event.target.closest("[data-period]");
