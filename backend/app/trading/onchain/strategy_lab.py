@@ -36,6 +36,7 @@ TICK_S = 60
 FIRST_TICK_DELAY_S = 60
 REFRESH_S = 3600
 BARS = 1000                      # 5 minuti: circa tre giorni e mezzo
+DAILY_MIN_BARS = 60              # sotto questa soglia il daily non basta: si passa a 8h
 KEEP = 300
 
 _results: dict[str, dict] = {}   # chain:token -> {at, pair, symbol, backtests | error}
@@ -116,6 +117,42 @@ def _best(bt: dict) -> dict | None:
     return max(traded, key=lambda r: r["return_pct"]) if traded else None
 
 
+def _merge_8h(bars: list[list]) -> list[list]:
+    """Ogni due barre da 4 ore diventano una da 8: apertura della prima,
+    massimo, minimo, chiusura della seconda, volume sommato. Le barre sono
+    [ts, o, h, l, c, v] e si allineano sui bucket ts % 28800 == 0."""
+    out: dict[int, list] = {}
+    for b in sorted(bars):
+        bucket = int(b[0]) // 28800 * 28800
+        cur = out.get(bucket)
+        if cur is None:
+            out[bucket] = [bucket, b[1], b[2], b[3], b[4], b[5]]
+        else:
+            cur[2] = max(cur[2], b[2])
+            cur[3] = min(cur[3], b[3])
+            cur[4] = b[4]
+            cur[5] = cur[5] + b[5]
+    return [out[k] for k in sorted(out)]
+
+
+async def run_daily(client: httpx.AsyncClient, net: str, pair: str, token: str, now: float) -> dict | None:
+    """Il trend-follower del sito sul grafico giornaliero (o a 8 ore se il
+    daily ha meno di DAILY_MIN_BARS barre). None = GeckoTerminal non risponde."""
+    bars = await alert_track._candles(client, net, pair, "day", 1, now, 1000, token)
+    if bars is None:
+        return None
+    iv = "1d"
+    if len(bars) < DAILY_MIN_BARS:
+        h4 = await alert_track._candles(client, net, pair, "hour", 4, now, 1000, token)
+        if h4 is None:
+            return None
+        bars = _merge_8h(h4)
+        iv = "8h"
+    if len(bars) < system.BACKTEST_MIN_BARS:
+        return {"interval": iv, "bars": len(bars), "error": "too few candles"}
+    return {"interval": iv, **await asyncio.to_thread(system.backtest_one, sorted(bars))}
+
+
 async def run_one(client: httpx.AsyncClient, e: dict, now: float) -> dict | None:
     """Un backtest. None = GeckoTerminal non risponde ora: si riprova al giro dopo."""
     key = key_of(e["chain"], e["token_address"])
@@ -133,6 +170,14 @@ async def run_one(client: httpx.AsyncClient, e: dict, now: float) -> dict | None
         return _results[key]
     bt = await asyncio.to_thread(system.backtest_all, sorted(bars))
     _results[key] = {"at": now, "symbol": symbol, "pair": pair, "backtests": bt}
+    # Il daily e' un di piu': se fallisce il 5 minuti resta.
+    try:
+        daily = await run_daily(client, GECKO_NETWORKS[e["chain"]], pair, e["token_address"], now)
+    except Exception:
+        logger.exception("strategy lab: daily di %s fallito", symbol)
+        daily = None
+    if daily is not None:
+        _results[key]["daily"] = daily
     best = _best(bt)
     hold = bt.get("hold_pct")
     outcome = (f"best {best['label']} {best['return_pct']:+.0f}% in {best['trades']} trades"
