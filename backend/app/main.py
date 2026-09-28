@@ -105,6 +105,7 @@ from app.trading.onchain import keys as onchain_keys
 from app.trading.onchain import legit as onchain_legit
 from app.trading.onchain import ledger as onchain_ledger
 from app.trading.onchain import outcomes as onchain_outcomes
+from app.trading.onchain import backtest_lab as onchain_backtest_lab
 from app.trading.onchain import autotrader as onchain_autotrader
 from app.trading.onchain import wealth as onchain_wealth
 from app import profiles
@@ -1365,6 +1366,7 @@ async def lifespan(app: FastAPI):
                    asyncio.create_task(onchain_radar.listings_backtest_loop()),
                    asyncio.create_task(onchain_leaderboard.leaderboard_loop()),
                    asyncio.create_task(onchain_outcomes.outcomes_loop()),
+                   asyncio.create_task(onchain_backtest_lab.lab_loop()),
                    asyncio.create_task(_onchain_signals_loop()),
                    asyncio.create_task(_wealth_loop())] if settings.onchain_radar_enabled else []
     sniper_tasks: list[asyncio.Task] = []
@@ -3701,6 +3703,14 @@ async def onchain_radar_lessons(user: User = Depends(auth.get_current_user)) -> 
     controlli lo prevedevano. Vedi app/trading/onchain/outcomes.py."""
     _require_onchain_enabled()
     return {**onchain_outcomes.lessons(), "gate": settings.onchain_memory_gate}
+
+
+@app.get("/api/onchain/lab")
+async def onchain_lab(user: User = Depends(auth.get_current_user)) -> dict:
+    """Cosa dicono i backtest di tutti i token passati dal diario, anche
+    quelli scartati. Vedi app/trading/onchain/backtest_lab.py."""
+    _require_onchain_enabled()
+    return onchain_backtest_lab.summary()
 
 
 @app.get("/api/onchain/radar/memes")
