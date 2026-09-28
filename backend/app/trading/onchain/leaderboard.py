@@ -639,6 +639,30 @@ def _rank() -> None:
             e["rank_before"], e["rank"], e["moved_at"] = e["rank"], None, now
     if order != _state["board"]:
         _state["board"] = order
+    _sync_database(order)
+
+
+def _sync_database(order: list[str]) -> None:
+    """Keep the database's score and "Ranked" in step with the board: DeepSeek's
+    report, review and code reading move the score after the analysis was saved
+    (Lorenzo, 28/09: three at 93 in the database, off the podium)."""
+    board = set(order)
+    for k, e in _entries.items():
+        o = e.get("overall") or {}
+        if not o or o.get("fatal") or o.get("pending"):
+            continue
+        status = "ranked" if k in board else "studied"
+        score = final_score(e)
+        seen = (status, score, e.get("rank"))
+        if e.get("_db") == list(seen):
+            continue
+        try:
+            projects_db.set_standing(e["chain"], e["token_address"], status, score, e.get("rank"),
+                                     "" if status == "ranked" else qualifies(e))
+        except Exception:
+            logger.exception("classifica: posizione non salvata per %s", e.get("symbol"))
+            continue
+        e["_db"] = list(seen)
 
 
 def _mark() -> None:

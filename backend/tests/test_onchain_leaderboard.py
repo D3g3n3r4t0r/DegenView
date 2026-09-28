@@ -521,3 +521,19 @@ def test_code_review_lifts_the_final_score():
     coded["code"] = {"complexity": 90, "innovation": 90}
     assert lb.final_score(coded) > lb.final_score(plain)
     assert lb._public(coded)["code"]["complexity"] == 90
+
+
+def test_database_follows_later_score_changes(monkeypatch):
+    calls = []
+    monkeypatch.setattr(lb.projects_db, "set_standing", lambda *a: calls.append(a))
+    e = _entry("THR", 90, 90, 90, cap=500_000)
+    lb._rank()
+    first = [c for c in calls if c[1] == e["token_address"]][-1]
+    assert first[2] == "ranked"
+    e["judge"] = {"score": 10, "verdict": "avoid"}
+    lb._rank()
+    last = [c for c in calls if c[1] == e["token_address"]][-1]
+    assert last[3] < first[3]
+    n = len(calls)
+    lb._rank()
+    assert len(calls) == n          # nothing changed, nothing written
