@@ -337,6 +337,20 @@ def backtest_status(kind: str = "meme", now: float | None = None) -> dict:
             "oldest_pending_h": round((now - oldest) / 3600, 1) if oldest is not None else None}
 
 
+def keep_richer(old: dict | None, new: dict) -> dict:
+    """The saved backtest unless the new one saw at least as many bars.
+
+    Lorenzo, 28/09: FLOOR was first with +132% and a few seconds later it was
+    gone. "Deve rimanere tutto salvato [...] non deve cambiare ogni volta
+    risultato e perdere i precedenti". A rebuild after the bars were dropped
+    (a finished alert, a new SYSTEM_VERSION) fetches the pool again, and a
+    dead pool gives back fewer candles or none: that must not erase a result
+    computed on the full window."""
+    if old and (old.get("bars") or 0) > (new.get("bars") or 0):
+        return {**old, "kept": True}
+    return new
+
+
 async def refresh_system(client, now: float | None = None, gap_s: float = 0.0) -> int:
     """Keep every meme alert's system result current (system.py).
 
@@ -383,7 +397,10 @@ async def refresh_system(client, now: float | None = None, gap_s: float = 0.0) -
         j = outcomes._journal.get(f"{a['chain']}:{a.get('token_address')}")
         known = ({"at": j["rug_at"], "why": j.get("rug_why") or ""}
                  if j and j.get("rug") and j.get("rug_at") else None)
-        a["backtests"] = await asyncio.to_thread(system.backtest_all, bars, known)
+        a["backtests"] = keep_richer(a.get("backtests"),
+                                     await asyncio.to_thread(system.backtest_all, bars, known))
+        if a["backtests"].get("kept") and a.get("system"):
+            res = a["system"]            # the followed result goes with its bars
         a["system"], a["system_sig"], a["system_v"] = res, sig, SYSTEM_VERSION
         changed += 1
         if all(r.get("done") for r in res.values()):
