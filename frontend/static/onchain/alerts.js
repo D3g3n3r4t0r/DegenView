@@ -174,23 +174,24 @@ function rows() {
       .map((a) => {
         const x = best(a);
         const open = !x && (a.backtests?.rows ?? []).some((r) => r.in_position);
-        // Lorenzo, 28/09: "no signal on this chart non ha senso, se c'è un
-        // chart c'è il backtest automaticamente". While the 48h window is
-        // open the chart grows every minute and the backtest reruns: it says
-        // so, animated. A closed window with no entry is a result: the
-        // system stayed out, and what that avoided is the number.
-        const live = !a.backtests || (a.age_h ?? 0) < 48;
+        // Lorenzo, 28/09: "no signal on this chart non ha senso" and then
+        // "backtest in loop non arrivano". The dots mean one thing only: the
+        // backtest has not been computed yet. Once it has, zero trades is a
+        // result, shown as such, live or not: OUT, with what staying out
+        // was worth. While the 48h window is open it says "so far".
+        const live = (a.age_h ?? 0) < 48;
         const label = x ? pct(x.return_pct / 100) : open ? '<span class="bt-tag" data-k="in">IN</span>'
-          : live ? '<span class="bt-live" role="img" aria-label="Analyzing"><i></i><i></i><i></i></span>'
+          : !a.backtests ? '<span class="bt-live" role="img" aria-label="Analyzing"><i></i><i></i><i></i></span>'
             : '<span class="bt-tag" data-k="out">OUT</span>';
+        const outcome = (a.now ?? 0) < 0 ? `dodged a ${Math.round(-a.now * 100)}% drop` : `held ${pct(a.now)}`;
         return { id: registerAlert(a, "meme"), symbol: a.symbol, name: a.name, chain: a.chain, token: a.token_address,
           image: a.image, label, ranked: Boolean(x),
           sub: `${age(a.at)[0]} ago · at ${usdShort(a.cap0)} · held ${pct(a.now)}`,
           sign: x ? sign(x.return_pct / 100) : "", best: null,
           sys: x ? `${x.trades} trade${x.trades === 1 ? "" : "s"} · win ${Math.round(x.win_rate ?? 0)}%`
             : open ? "in the trade now"
-              : live ? "analyzing the chart"
-                : (a.now ?? 0) < 0 ? `stayed out · dodged a ${Math.round(-a.now * 100)}% drop` : `stayed out · held ${pct(a.now)}` };
+              : !a.backtests ? "backtest on its way"
+                : live ? `no entry so far · ${outcome}` : `stayed out · ${outcome}` };
       });
   }
   if (key === "system") {
