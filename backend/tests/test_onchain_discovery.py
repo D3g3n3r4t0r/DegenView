@@ -82,7 +82,7 @@ def test_step_queues_pages_then_details(monkeypatch):
 
     monkeypatch.setattr(d, "_cg_get", fake_get)
     monkeypatch.setattr(d, "_save", lambda: None)
-    monkeypatch.setattr(d.narratives, "coingecko_categories", lambda: [])
+    monkeypatch.setattr(d.narratives, "coingecko_categories", lambda **k: [])
     added = []
     add = lambda item, source: added.append((item["symbol"], source)) or True  # noqa: E731
     now = 1_790_000_000.0
