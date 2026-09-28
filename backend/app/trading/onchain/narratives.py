@@ -38,18 +38,20 @@ def catalog() -> tuple[dict, ...]:
             continue
         if n.get("key") and pats:
             weak = set(n.get("weak") or [])
-            out.append({**n, "heat": int(n.get("heat") or 1), "_re": pats,
+            out.append({**n, "kind": n.get("kind") or "gem", "heat": int(n.get("heat") or 1), "_re": pats,
                         "_weak": [p.pattern in weak for p in pats]})
     return tuple(out)
 
 
-def match(*texts) -> list[str]:
-    """Narrative keys found in the texts (strings or lists of strings)."""
+def match(*texts, kind: str = "gem") -> list[str]:
+    """Narrative keys of that kind found in the texts (strings or lists)."""
     blob = " ".join(" ".join(t) if isinstance(t, (list, tuple)) else str(t or "") for t in texts)
     if not blob.strip():
         return []
     out = []
     for n in catalog():
+        if n["kind"] != kind:
+            continue
         # a generic term ("price feeds", "tee") needs a second one to count
         hits = sum(0.5 if weak else 1.0 for p, weak in zip(n["_re"], n["_weak"]) if p.search(blob))
         if hits >= 1:
@@ -59,7 +61,8 @@ def match(*texts) -> list[str]:
 
 def labels(keys: list[str]) -> list[dict]:
     by = {n["key"]: n for n in catalog()}
-    return [{"key": k, "label": by[k].get("label") or k, "heat": by[k]["heat"]} for k in keys if k in by]
+    return [{"key": k, "label": by[k].get("label") or k, "kind": by[k]["kind"], "heat": by[k]["heat"]}
+            for k in keys if k in by]
 
 
 def bonus(keys: list[str]) -> float:
@@ -70,9 +73,13 @@ def bonus(keys: list[str]) -> float:
     return min(BONUS_MAX, 2.0 * heats[0] + (1.0 if len(heats) > 1 else 0.0))
 
 
-def coingecko_categories() -> list[str]:
+def coingecko_categories(first: list[str] | None = None) -> list[str]:
+    """Gem categories, hottest first. Keys in `first` come before the rest."""
+    gems = [n for n in catalog() if n["kind"] == "gem"]
+    order = {k: i for i, k in enumerate(first or [])}
+    gems.sort(key=lambda n: (order.get(n["key"], len(order)), -n["heat"]))
     seen, out = set(), []
-    for n in sorted(catalog(), key=lambda n: -n["heat"]):
+    for n in gems:
         for c in n.get("coingecko") or []:
             if c not in seen:
                 seen.add(c)
@@ -80,5 +87,8 @@ def coingecko_categories() -> list[str]:
     return out
 
 
-def github_queries() -> list[str]:
-    return [q for n in sorted(catalog(), key=lambda n: -n["heat"]) for q in n.get("github") or []]
+def github_queries(first: list[str] | None = None) -> list[str]:
+    gems = [n for n in catalog() if n["kind"] == "gem"]
+    order = {k: i for i, k in enumerate(first or [])}
+    gems.sort(key=lambda n: (order.get(n["key"], len(order)), -n["heat"]))
+    return [q for n in gems for q in n.get("github") or []]
