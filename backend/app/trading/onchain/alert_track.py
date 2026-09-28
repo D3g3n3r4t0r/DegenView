@@ -327,7 +327,8 @@ async def backfill(client: httpx.AsyncClient, items: list[dict], kind: str = "me
 SYSTEM_FETCHES_PER_TICK = 15
 # Bump when system.follow's output changes: finished alerts are fetched and
 # recomputed once more (v2: each sell says why, "crash" or "signal").
-SYSTEM_VERSION = 8   # 8: rug stop with a reason (liquidity pulled, crash, dead, abandoned, on-chain)
+SYSTEM_VERSION = 9   # 8: rug stop with a reason (liquidity pulled, crash, dead, abandoned, on-chain)
+# 9: alert_bt, the trend follower entered on the alert itself (every alert has a trade)
 
 
 def backtest_status(kind: str = "meme", now: float | None = None) -> dict:
@@ -418,8 +419,11 @@ async def refresh_system(client, now: float | None = None, gap_s: float = 0.0) -
                  if j and j.get("rug") and j.get("rug_at") else None)
         a["backtests"] = keep_richer(a.get("backtests"),
                                      await asyncio.to_thread(system.backtest_all, bars, known))
+        alert_bt = await asyncio.to_thread(system.evaluate, bars, a["at"], gone=a["gone"], now=now, on_alert=True)
         if a["backtests"].get("kept") and a.get("system"):
             res = a["system"]            # the followed result goes with its bars
+            alert_bt = a.get("alert_bt") or alert_bt
+        a["alert_bt"] = alert_bt
         a["system"], a["system_sig"], a["system_v"] = res, sig, SYSTEM_VERSION
         changed += 1
         if all(r.get("done") for r in res.values()):
@@ -505,7 +509,7 @@ def _item(a: dict, now: float, chosen) -> dict:
             "age_h": round((now - a["at"]) / 3600, 1), "strategy": a.get("strategy"),
             "system": _system_view(a, chosen), "systems": [v for v in systems if v],
             "narratives": narratives.labels(narratives.match(a.get("name"), a.get("symbol"), kind="meme")),
-            "backtests": a.get("backtests")}
+            "backtests": a.get("backtests"), "on_alert": _alert_bt_view(a)}
 
 
 def for_token(chain: str, token: str, now: float | None = None) -> list[dict]:
@@ -585,6 +589,18 @@ def reviving(kind: str = "meme", now: float | None = None, limit: int = 6) -> li
                     "at": a["at"], "chg": chg, "buys_h1": m.get("buys_h1"), "sells_h1": m.get("sells_h1")})
     out.sort(key=lambda r: -r["chg"])
     return out[:limit]
+
+
+def _alert_bt_view(a: dict) -> dict | None:
+    """The trend follower entered on the alert: the best of the candidates,
+    with trades and wins (Lorenzo, 28/09: every alerted token shows its
+    backtest, no "no entry")."""
+    rows = [{"label": k, "ret": v.get("ret"), "trades": v.get("trades") or 0, "wins": v.get("wins") or 0,
+             "state": v.get("state"), "done": v.get("done")}
+            for k, v in (a.get("alert_bt") or {}).items() if v and v.get("ret") is not None]
+    if not rows:
+        return None
+    return max(rows, key=lambda r: r["ret"])
 
 
 def _system_view(a: dict, label: str) -> dict | None:

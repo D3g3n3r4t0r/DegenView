@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0213", "Nella tab Strategie ogni token segnalato deve mostrare il suo backtest, non 'no entry yet'",
+     "Lorenzo, 28/09: 'non deve accadere che venga scritto backtest no entry yet perche' in realta' la strategia su questa roba sarebbe entrata perche' sono stati segnalati [...] deve essere presente su tutti i ticker in questa sezione [...] il dodge che mi segnali dopo [...] a me non interessa [...] voglio vedere le performance del backtest applicato a quei token che sono stati scelti'.",
+     "alta"),
     ("seed-0212", "Le gemme devono mostrare il trend follower sul giornaliero, non la strategia al minuto",
      "Lorenzo, 28/09: 'la strategia da applicare non e' quella sul minuto ma ovviamente il trend follower originario del sito nostro, quindi sul time frame giornaliero, solitamente quello, al massimo 8 ore [...] quella rapida e' esclusivamente per lo sniper'.",
      "alta"),
