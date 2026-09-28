@@ -27,7 +27,7 @@ _lock = threading.Lock()
 _conn: sqlite3.Connection | None = None
 _conn_path = None
 
-VERSION = 1
+VERSION = 2
 MATURE_S = 48 * 3600
 LIMIT = 1000
 PER_TICK = 3

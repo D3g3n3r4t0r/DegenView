@@ -366,7 +366,7 @@ def spot_signals(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     """Solo spot: si compra e si vende, mai short (Lorenzo: "non voglio
     short, solo acquisti spot e vendite"). Un segnale short della strategia
     diventa una vendita di quello che si ha, se lo si ha."""
-    return spot_only(STRATEGY_REGISTRY[cfg["strategy_name"]](df, cfg["params"]))
+    return rug_stop(df, spot_only(STRATEGY_REGISTRY[cfg["strategy_name"]](df, cfg["params"])))
 
 
 def run_spot(df: pd.DataFrame, cfg: dict):
