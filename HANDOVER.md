@@ -523,6 +523,13 @@ non oltre; uno, due, tre mesi non e' importante".
   AAVE segnava $585k, AAVE vale $2.2B. `_check_global_cap`: una richiesta
   `/coins/{chain}/contract/{addr}` ogni 15 s, prima le voci in classifica,
   cache 24 h, 429 = pausa 2 min. `discovery.CAP_MAX` 25M -> 10M.
+- 28/09 Lorenzo: "sempre un bug che mi porta Aave [...] 400-500 mila
+  dollari [...] non bisogna scambiare come base capitalizzazioni cripto
+  grosse". Il controllo per contratto non bastava: CoinGecko registra la
+  copia bridged come moneta a se' ("Aave Wormhole") con la sua cap piccola.
+  `big_coins.py`: le prime 500 cripto per cap (`/coins/markets`, una volta al
+  giorno); stesso ticker, o ticker che lo contiene con nome che inizia uguale
+  ("Aave (Wormhole)") = e' quella moneta. Entra in `true_cap`.
 - 28/09 Lorenzo: "DeepSeek [...] deve riesaminare i risultati che escono
   dalla top classifica e metterli in discussione [...] Clau Pump Tech ma
   che roba è, Leon AI sono nomi che non hanno senso". `judge.review_board`:
