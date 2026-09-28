@@ -1326,7 +1326,96 @@ def _deepseek_tools() -> dict:
         "ultimi_rug": ({"name": "ultimi_rug", "description": "The most recent rug pulls in the database, newest first.",
                         "parameters": {"type": "object", "properties": {"n": {"type": "integer", "description": "how many, max 20"}}}},
                        lambda n=10: sorted((c for c in rug_memory.cases() if c["outcome"] == "rug"), key=lambda c: -c["at"])[:min(int(n or 10), 20)]),
+        # Lorenzo, 27/09: "voglio potergli chiedere TUTTO, dagli completo
+        # accesso come risposte". Read-only tools over everything the site
+        # shows. Each helper imports its module locally (main.py does not
+        # import them at top level).
+        "strategie": ({"name": "strategie", "description": "The sniper Strategies tab: watched meme tokens with age, whether they are gone, and the alert backtest (label, return, trades, wins, state, done).",
+                       "parameters": {"type": "object", "properties": {"n": {"type": "integer", "description": "how many, max 30"}}}},
+                      lambda n=30: _deepseek_strategie(n)),
+        "backtest_gemme": ({"name": "backtest_gemme", "description": "Gem backtests: the lab status plus, for the top entries, symbol, chain, score and the best/hold summary of their backtest.",
+                            "parameters": {"type": "object", "properties": {"n": {"type": "integer", "description": "how many top entries, max 50"}}}},
+                           lambda n=15: _deepseek_backtest_gemme(n)),
+        "laboratorio": ({"name": "laboratorio", "description": "The backtest lab summary: what it is running and what it found.",
+                         "parameters": {"type": "object", "properties": {}}},
+                        lambda: _deepseek_laboratorio()),
+        "review_giornaliere": ({"name": "review_giornaliere", "description": "The last daily AI reviews: when, the summary and the actions.",
+                               "parameters": {"type": "object", "properties": {}}},
+                              lambda: _deepseek_review_giornaliere()),
+        "scanner": ({"name": "scanner", "description": "The live scanner feed snapshot (first 20 rows).",
+                     "parameters": {"type": "object", "properties": {}}},
+                    lambda: _deepseek_scanner()),
+        "diario_agente": ({"name": "diario_agente", "description": "The agent's diary: recent activity items, what is done, today's work and the priority.",
+                           "parameters": {"type": "object", "properties": {}}},
+                          lambda: _deepseek_diario_agente()),
+        "token": ({"name": "token", "description": "The alert(s) on a token by symbol or address prefix, plus what the rug memory knows about it.",
+                   "parameters": {"type": "object", "properties": {"query": str_arg("symbol like PEPE or address prefix")}, "required": ["query"]}},
+                  lambda query: _deepseek_token(query)),
     }
+
+
+def _deepseek_strategie(n: int = 30) -> list:
+    from app.trading.onchain import alert_track as onchain_alert_track
+    items = onchain_alert_track.board("meme", limit=30).get("items") or []
+    out = []
+    for it in items[:min(int(n or 30), 30)]:
+        bt = it.get("on_alert") or {}
+        out.append({"symbol": it.get("symbol"), "chain": it.get("chain"), "age_h": it.get("age_h"),
+                    "gone": it.get("gone"),
+                    "on_alert": {k: bt.get(k) for k in ("label", "ret", "trades", "wins", "state", "done")} if bt else None})
+    return out
+
+
+def _deepseek_backtest_gemme(n: int = 15) -> dict:
+    from app.trading.onchain import strategy_lab as onchain_strategy_lab
+    top = _top_entries(50)
+    out = []
+    for e in top[:min(int(n or 15), 50)]:
+        out.append({"symbol": e.get("symbol"), "chain": e.get("chain"), "score": e.get("score"),
+                    "summary": _lab_summary(onchain_strategy_lab.get(e["chain"], e["token_address"]))})
+    return {"status": onchain_strategy_lab.status(top), "entries": out}
+
+
+def _deepseek_laboratorio() -> dict:
+    from app.trading.onchain import backtest_lab
+    return backtest_lab.summary()
+
+
+def _deepseek_review_giornaliere() -> list:
+    from app.trading.onchain import ai_review as onchain_ai_review
+    reviews = (onchain_ai_review._state or {}).get("reviews") or []
+    return [{k: r.get(k) for k in ("at", "summary", "actions")} for r in reviews[:7]]
+
+
+def _deepseek_scanner() -> dict:
+    from app.trading.onchain import scan_feed
+    snap = scan_feed.snapshot()
+    if isinstance(snap, dict) and isinstance(snap.get("feed"), list):
+        snap = {**snap, "feed": snap["feed"][:20]}
+    return snap
+
+
+def _deepseek_diario_agente() -> dict:
+    from app.notify import deepseek_desk
+    act = deepseek_desk.activity()
+    if isinstance(act, dict):
+        act = {**act, "items": (act.get("items") or [])[:20]}
+    return act
+
+
+def _deepseek_token(query: str) -> dict:
+    from app.trading.onchain import alert_track as onchain_alert_track
+    from app.trading.onchain import rug_memory
+    q = (query or "").strip().lower()
+    alerts = []
+    for a in (onchain_alert_track._alerts or {}).values():
+        sym = (a.get("symbol") or "").lower()
+        addr = (a.get("token_address") or "").lower()
+        if sym == q or (q and addr.startswith(q)):
+            alerts.append({k: a.get(k) for k in ("symbol", "chain", "token_address", "at", "entry", "last", "gone", "alert_bt")})
+        if len(alerts) >= 5:
+            break
+    return {"alerts": alerts, "rug_memory": rug_memory.lookup(query)}
 
 
 _DEEPSEEK_REPORTS_PER_DAY = 10
