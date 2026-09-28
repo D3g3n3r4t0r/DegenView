@@ -2297,5 +2297,10 @@
     "status": "risolto",
     "at": 1790634145,
     "summary": "Il wallet simulato, da quando segue ogni alert, tiene i trade in un formato nuovo senza la quantita' di token: la pagina profilo e il totale del wallet la leggevano e andavano in errore. Ora mostrano tutti i trade simulati aperti, ognuno sulla sua chain."
+  },
+  "seed-0223": {
+    "status": "risolto",
+    "at": 1790634352,
+    "summary": "La chat Telegram con DeepSeek ora riceve la memoria del sistema: le note del diario dello scanner (cosa separa i rug dai token buoni, quelli sfuggiti e quelli persi), le ultime 7 review giornaliere con le azioni suggerite, e i risultati del laboratorio per decisione. Chiedigli su Telegram 'cosa hai imparato?' e risponde su questi dati."
   }
 }
