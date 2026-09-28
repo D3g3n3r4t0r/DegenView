@@ -1005,3 +1005,21 @@ html, body { overflow-x: clip; }
   .ag-bar { block-size: 6px; border-radius: 999px; background: rgb(255 255 255 / .08); overflow: hidden; }
   .ag-bar i { display: block; block-size: 100%; background: #6d7cff; transform-origin: left; transition: transform .6s ease; }
 }
+
+/* Top: what changed since the last visit (top.js). Transform and opacity only. */
+.pc-slot.pc-taken { position: relative; }
+.pc-slot.pc-taken .pc-head { animation: pc-land .8s .45s cubic-bezier(.2, .8, .2, 1) backwards; }
+.pc-prev { position: absolute; inset-inline: 0; top: 0; text-align: center; font-weight: 700; pointer-events: none;
+  animation: pc-leave .7s cubic-bezier(.4, 0, .2, 1) forwards; }
+@keyframes pc-land { from { opacity: 0; transform: translateY(36px) scale(.7); } }
+@keyframes pc-leave { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(-40px) scale(.8); } }
+.trow.rank-moved { animation: rank-glide .9s cubic-bezier(.2, .8, .2, 1) backwards; }
+.trow.rank-moved[data-move="up"] { animation-name: rank-glide, rank-flash; animation-duration: .9s, 1.6s; }
+@keyframes rank-glide { from { transform: translateY(calc(var(--d, 0) * 100%)); } }
+@keyframes rank-flash { 0%, 100% { opacity: 1; } 30% { opacity: .55; } }
+.trow.rank-new { animation: rank-new .7s .2s cubic-bezier(.2, .8, .2, 1) backwards; }
+@keyframes rank-new { from { opacity: 0; transform: translateX(28px); } }
+@media (prefers-reduced-motion: reduce) {
+  .pc-slot.pc-taken .pc-head, .pc-prev, .trow.rank-moved, .trow.rank-new { animation: none; }
+  .pc-prev { display: none; }
+}
