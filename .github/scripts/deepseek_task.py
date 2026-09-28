@@ -225,12 +225,19 @@ def undefined_names(files: list[str]) -> list[str]:
     return [f"$ eslint (no-undef) {' '.join(mods)}\n{(r.stdout + r.stderr)[-3000:]}"] if r.returncode else []
 
 
-def checks(tests: list[str]) -> str:
+def checks(tests: list[str], wanted: list[str] = ()) -> str:
     env = {k: v for k, v in os.environ.items() if k not in ("DEEPSEEK_API_KEY", "GITHUB_TOKEN")}
     files = changed()
     if not files:
         return "no file changed: the answer did nothing"
     log = js_problems(files) + undefined_names(files)
+    # A test the task lists under Files AND Tests is one to create: missing,
+    # it is an unfinished task, not a skipped check (#245, #252 and #260
+    # passed without the test they were asked for).
+    listed = {w.split(":")[0].removeprefix("backend/") for w in wanted}
+    log += [f"{t}: the task asks you to create this test file; it is missing"
+            for t in tests if t.removeprefix("backend/") in listed
+            and not Path("backend", t.removeprefix("backend/")).exists()]
     # A test file named in the issue but never created is not a failure of
     # the code (#235 listed a file that did not exist).
     tests = sorted({t.removeprefix("backend/") for t in [*tests, *related_tests(files)]
@@ -273,7 +280,7 @@ def generate() -> int:
         subprocess.run(["git", "checkout", "--", "."])
         subprocess.run(["git", "clean", "-fdq", "-e", RESULT.name])
         errors = apply(answer)
-        log = "\n".join(errors) if errors else checks(spec["tests"])
+        log = "\n".join(errors) if errors else checks(spec["tests"], spec["files"])
         result["log"] = log[-6000:]
         if not log:
             result["ok"] = True
