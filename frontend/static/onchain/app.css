@@ -855,3 +855,10 @@ html, body { overflow-x: clip; }
   /* The active dock icon is filled; the Strategies chart is a line, and filled it read as an arrow. */
   .dock button[data-go="top"][aria-current] svg { fill: none; stroke-width: 2.4; }
 }
+@layer skin {
+  .is-new { animation: row-in .42s cubic-bezier(.2, .8, .2, 1) backwards; }
+  @keyframes row-in { from { opacity: 0; transform: translateY(14px); } }
+  .hide-toast { position: fixed; z-index: 60; inset-inline: 16px; inset-block-end: calc(92px + env(safe-area-inset-bottom)); display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 12px; background: #18181b; box-shadow: 0 0 0 1px rgb(255 255 255 / .1); font-size: 14px; color: var(--k-text); animation: row-in .3s both; }
+  .hide-toast button { border: 0; background: none; color: #2de0a8; font: 700 14px var(--sans); cursor: pointer; }
+  @media (prefers-reduced-motion: reduce) { .is-new, .hide-toast { animation: none; } }
+}

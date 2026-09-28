@@ -28,6 +28,8 @@ AVATAR_PX = 256
 HANDLE_RE = re.compile(r"^[A-Za-z0-9_]{3,20}$")
 NAME_MAX = 40
 BIO_MAX = 160
+HIDDEN_MAX = 1000
+_HIDDEN_KEY = re.compile(r"^[a-z]{2,12}:[A-Za-z0-9]{8,64}$")
 
 _lock = threading.Lock()
 _profiles: dict[str, dict] = {}
@@ -127,6 +129,27 @@ def remove_wallet(uid: str, kind: str, address: str) -> dict:
 
 def wallets(uid: str) -> list[dict]:
     return list((_profiles.get(uid) or {}).get("wallets") or [])
+
+
+def hidden(uid: str) -> list[str]:
+    """The tokens this account asked not to see in its lists."""
+    with _lock:
+        return list((_profiles.get(uid) or {}).get("hidden") or [])
+
+
+def set_hidden(uid: str, chain: str, token: str, hide: bool = True) -> list[str]:
+    key = f"{chain}:{token}"
+    if not _HIDDEN_KEY.match(key):
+        raise ValueError("bad token")
+    get(uid)  # creates the profile if needed — get() takes _lock itself
+    with _lock:
+        p = _profiles[uid]
+        lst = [k for k in (p.get("hidden") or []) if k != key]
+        if hide:
+            lst.append(key)
+        p["hidden"] = lst[-HIDDEN_MAX:]
+        _save()
+        return list(p["hidden"])
 
 
 def avatar_path(uid: str):
