@@ -231,7 +231,10 @@ def checks(tests: list[str]) -> str:
     if not files:
         return "no file changed: the answer did nothing"
     log = js_problems(files) + undefined_names(files)
-    tests = sorted({t.removeprefix("backend/") for t in [*tests, *related_tests(files)]})
+    # A test file named in the issue but never created is not a failure of
+    # the code (#235 listed a file that did not exist).
+    tests = sorted({t.removeprefix("backend/") for t in [*tests, *related_tests(files)]
+                    if Path("backend", t.removeprefix("backend/")).exists()})
     cmds = [(["ruff", "check", "backend/", "--select", "E,F,W", "--ignore", "E501"], ".")]
     if tests:
         cmds.append(([sys.executable, "-m", "pytest", "-q", "-x", *tests], "backend"))
