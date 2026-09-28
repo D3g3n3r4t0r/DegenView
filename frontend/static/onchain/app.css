@@ -862,3 +862,6 @@ html, body { overflow-x: clip; }
   .hide-toast button { border: 0; background: none; color: #2de0a8; font: 700 14px var(--sans); cursor: pointer; }
   @media (prefers-reduced-motion: reduce) { .is-new, .hide-toast { animation: none; } }
 }
+@layer skin {
+  .dt-chart-note { margin: 4px 0 0; min-block-size: 0; font-size: 12px; color: var(--k-text-3); &:empty { display: none; } }
+}
