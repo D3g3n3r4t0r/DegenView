@@ -23,7 +23,7 @@ from app.trading.onchain import storage
 logger = logging.getLogger(__name__)
 
 TTL_S = 3 * 86400
-DAILY_MAX = 200
+DAILY_MAX = 600           # ~$0.001 a reading: every project past the filters gets its report
 ADMIT_MIN = 80
 VETO_MIN_CONF = 0.7
 _FILE = storage.data_file("onchain_judge.json")
@@ -45,6 +45,8 @@ SYSTEM = (
     "joke or meme names, names that parody or borrow a famous brand (e.g. 'Clau' for Claude, 'Gpt', 'Elon'), "
     "'pump'/'moon'/'inu' style names, generic 'X AI' tokens whose only product is a chatbot wrapper or a "
     "landing page, and anything whose name does not say what it builds when the facts show no real product. "
+    "(6) X activity, when given, counts posts, distinct authors and their followers over the last week: many "
+    "posts from few or tiny accounts is paid shilling, not traction; silence is not a flaw for a builder. "
     "Answer with one JSON object only: {\"score\": 0-100, \"verdict\": \"gem\"|\"watch\"|\"avoid\"|\"scam\", "
     "\"confidence\": 0-1, \"problems\": [up to 5 short strings], \"strengths\": [up to 5 short strings], "
     "\"admit_reason\": \"one sentence, only if a rule excluded it but it deserves the board, else empty\"}."
@@ -99,7 +101,7 @@ def _age_days(launched) -> str:
         return "n/a"
 
 
-def dossier(e: dict, rules_why: str) -> str:
+def dossier(e: dict, rules_why: str, x: dict | None = None) -> str:
     """I fatti misurati, non le promesse: pilastri, trazione, eta', e il
     testo del progetto (non fidato) in fondo, dentro i suoi tag."""
     now = time.time()
@@ -124,9 +126,16 @@ def dossier(e: dict, rules_why: str) -> str:
         lines.append(f"Traction: {json.dumps(use)[:600]}")
     if rules_why:
         lines.append(f"Rules verdict: {rules_why}")
+    if x:
+        lines.append(f"X, last 7 days: {x['posts_7d']} posts by {x['authors']} authors, "
+                     f"median followers {x['median_followers']}")
+    else:
+        lines.append("X: not read")
     text = ((e.get("pillars") or {}).get("site") or {}).get("facts", {}).get("summary") or e.get("description") or ""
     lines.append("<project_text>")
     lines.append(_cut(text, 1500))
+    for post in (x or {}).get("top_posts") or []:
+        lines.append(f"X post: {_cut(post, 220)}")
     lines.append("</project_text>")
     return "\n".join(lines)
 
@@ -172,9 +181,11 @@ async def judge(e: dict, rules_why: str, now: float | None = None, ask=None) -> 
         "Pillars: " + ", ".join(f"{n} {(pillars.get(n) or {}).get('score', 'n/a')}" for n in ("github", "site", "tokenomics")),
         f"Rules said: {rules_why or 'passes the rules'}",
     ], symbol=e.get("symbol"), chain=e.get("chain"), token=e.get("token_address"))
+    from app.trading.onchain import x_signal
+    x = await x_signal.lookup(e, now)
     try:
         raw = await ask([{"role": "system", "content": SYSTEM},
-                         {"role": "user", "content": dossier(e, rules_why)}],
+                         {"role": "user", "content": dossier(e, rules_why, x)}],
                         kind="research", max_tokens=700, json_mode=True)
         parsed = parse(raw)
     except Exception as exc:
@@ -184,6 +195,8 @@ async def judge(e: dict, rules_why: str, now: float | None = None, ask=None) -> 
         return None
     _calls[day] = _calls.get(day, 0) + 1
     parsed["at"] = now
+    if x:
+        parsed["x"] = {k: x[k] for k in ("posts_7d", "authors", "median_followers")}
     _cache[key] = parsed
     _save()
     verdict = parsed["verdict"]
@@ -232,7 +245,7 @@ def review_brief(entries: list[dict]) -> str:
             "cap": round(float(e.get("market_cap") or 0)), "age_days": _age_days(e.get("launched_at")),
             "pillars": {k: ((e.get("pillars") or {}).get(k) or {}).get("score") for k in ("github", "site", "tokenomics")},
             "public_code": not gh.get("missing"), "stage": f.get("stage"), "narratives": e.get("narratives"),
-            "judge": {k: (e.get("judge") or {}).get(k) for k in ("verdict", "score", "problems")},
+            "judge": {k: (e.get("judge") or {}).get(k) for k in ("verdict", "score", "problems", "x")},
             "project_text": _cut(f.get("summary") or e.get("description"), 300),
         }, ensure_ascii=False))
     return "Ranking to review, one project per line:\n" + "\n".join(rows)
