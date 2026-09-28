@@ -34,6 +34,7 @@ from pathlib import Path
 
 RESULT = Path(".deepseek-result.json")
 MAX_CONTEXT = 120_000
+RELATED_MAX = 10
 EDIT = re.compile(r"<<<<<<< SEARCH (\S+)\n(.*?)\n?=======\n(.*?)\n?>>>>>>> REPLACE", re.S)
 APPEND = re.compile(r"<<<<<<< APPEND (\S+)\n(.*?)\n?>>>>>>> END", re.S)
 SYSTEM = """You change this repository with SEARCH/REPLACE blocks:
@@ -166,11 +167,14 @@ def related_tests(files: list[str]) -> list[str]:
     """Tests that import a backend module the answer touched: a change can
     break an old test nobody listed (#189 broke test_system.py)."""
     stems = {Path(f).stem for f in files if f.startswith("backend/app/") and f.endswith(".py")}
-    stems.discard("__init__")
+    # main.py is imported by half the suite: its tests would run for more
+    # than the 15-minute budget (#226 timed out on 34 files).
+    stems -= {"__init__", "main"}
     if not stems:
         return []
     pat = re.compile(r"^\s*(?:from|import)\s[^\n]*\b(" + "|".join(map(re.escape, stems)) + r")\b", re.M)
-    return sorted(str(t) for t in Path("backend/tests").glob("test_*.py") if pat.search(t.read_text(encoding="utf-8")))
+    found = sorted(str(t) for t in Path("backend/tests").glob("test_*.py") if pat.search(t.read_text(encoding="utf-8")))
+    return found[:RELATED_MAX]
 
 
 def js_problems(files: list[str]) -> list[str]:
@@ -208,7 +212,11 @@ def checks(tests: list[str]) -> str:
     if tests:
         cmds.append(([sys.executable, "-m", "pytest", "-q", "-x", *tests], "backend"))
     for cmd, cwd in cmds:
-        r = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True, timeout=900)
+        try:
+            r = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True, timeout=600)
+        except subprocess.TimeoutExpired:
+            log.append(f"$ {' '.join(cmd)}\ntimed out after 10 minutes")
+            continue
         if r.returncode:
             log.append(f"$ {' '.join(cmd)}\n{(r.stdout + r.stderr)[-4000:]}")
     return "\n\n".join(log)
