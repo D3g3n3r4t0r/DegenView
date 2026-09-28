@@ -239,6 +239,20 @@ function row(e) {
   </li>`;
 }
 
+// DeepSeek's report on the project: its own verdict and, when it read the
+// whole board, the editor's call.
+function deepseekBlock(e) {
+  const j = e.judge, r = e.review;
+  if (!j && !r) return "";
+  const head = j ? `${escapeHtml(j.verdict ?? "")} · ${j.score ?? "—"}/100` : "";
+  const edit = r ? `<li data-tone="${r.keep ? "good" : "bad"}">${r.keep ? "Kept" : "Dropped"} on review: ${escapeHtml(r.reason ?? "")}</li>` : "";
+  const good = (j?.strengths ?? []).map((x) => `<li data-tone="good">${escapeHtml(x)}</li>`).join("");
+  const bad = (j?.problems ?? []).map((x) => `<li data-tone="bad">${escapeHtml(x)}</li>`).join("");
+  const admit = j?.admit_reason ? `<li data-tone="good">${escapeHtml(j.admit_reason)}</li>` : "";
+  return `<div class="ds-report"><h5>DeepSeek${head ? ` <b>${head}</b>` : ""}</h5>
+    <ul class="why-list">${edit}${admit}${good}${bad}</ul></div>`;
+}
+
 export function gemWhy(e) {
   const blocks = [...PILLARS, ["traction", "Traction"]].map(([k, label]) => {
     const v = k === "traction" ? e.traction?.traction : e.pillars?.[k]?.score;
@@ -250,6 +264,7 @@ export function gemWhy(e) {
       <p><b>${e.early ? "Early gem" : `Rank #${e.rank ?? "—"}`}</b><small>${e.early ? "Under $50k with public code and every pillar solid: maybe worth a small bag." : "Code, research and tokenomics, scored every day."}</small></p></div>
     <ul class="bars">${blocks}</ul>
     ${e.summary ? `<p class="dt-summary">${escapeHtml(e.summary)}</p>` : ""}
+    ${deepseekBlock(e)}
     ${(e.traction?.reasons ?? []).length ? `<ul class="why-list">${e.traction.reasons.map((r) => `<li data-tone="good">${escapeHtml(r)}</li>`).join("")}</ul>` : ""}
     ${flags.length ? `<ul class="why-list">${flags.map((f) => `<li data-tone="bad">${escapeHtml(f)}</li>`).join("")}</ul>` : ""}
     <p class="muted">Research, not advice.</p>`;
@@ -354,6 +369,7 @@ export function details(e) {
       <span>${chart}${scan}</span></header>
     ${e.honor ? `<p class="bd-honor" style="text-align:start;margin:0 0 12px">${escapeHtml(e.honor)}</p>` : ""}
     ${e.summary ? `<p class="bd-summary">${escapeHtml(e.summary)}${e.stage && e.stage !== "unclear" ? ` <em>${escapeHtml(e.stage)}</em>` : ""}</p>` : ""}
+    ${deepseekBlock(e)}
     ${traits(e)}
     <div class="bd-pillars">${PILLARS.map(([k, label]) => pillarBlock(e, k, label)).join("")}${tractionBlock(e)}</div>`;
 }
