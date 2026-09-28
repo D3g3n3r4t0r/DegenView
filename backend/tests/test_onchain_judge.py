@@ -49,3 +49,22 @@ def test_judge_caches_and_respects_daily_max(tmp_path, monkeypatch):
     monkeypatch.setattr(judge, "DAILY_MAX", 0)
     assert asyncio.run(judge.judge(e, "site too weak (20)", ask=ask)) is None
     assert len(calls) == 1
+
+
+def test_import_judge_first_with_a_vetoed_board_entry(tmp_path):
+    """main.py imports judge before leaderboard; leaderboard ranks its saved
+    entries at import time and reads judge.VETO_MIN_CONF (deploy of #272)."""
+    import subprocess
+    import sys
+    from pathlib import Path
+    e = _entry(source="coingecko", overall={"score": 70},
+               judge={"verdict": "avoid", "confidence": 0.9, "problems": ["x"]})
+    (tmp_path / "onchain_leaderboard.json").write_text(json.dumps(
+        {"entries": {"solana:ABCmint": e}, "rules": 99, "alerted": []}), encoding="utf-8")
+    code = ("from pathlib import Path; from app.trading.onchain import storage; "
+            f"storage.DATA_DIR = Path({str(tmp_path)!r}); "
+            "from app.trading.onchain import judge, leaderboard; "
+            "assert leaderboard.qualifies(leaderboard._entries['solana:ABCmint']).startswith('DeepSeek')")
+    out = subprocess.run([sys.executable, "-c", code], cwd=Path(__file__).resolve().parents[1],
+                         capture_output=True, text=True, timeout=120)
+    assert out.returncode == 0, out.stderr[-2000:]
