@@ -187,14 +187,14 @@ def summary() -> dict:
         if result.get("gone"):
             gone += 1
         bt = result.get("backtests") or {}
-        trades = bt.get("rows") or []
+        trades = [t for t in bt.get("rows") or [] if t.get("trades") and t.get("return_pct") is not None]
         if trades:
             with_trades += 1
         decision = row.get("decision") or "?"
         bucket = by_decision.setdefault(decision, {"n": 0, "best": [], "hold": [], "doubled": 0, "rugs": 0, "known": 0})
         bucket["n"] += 1
         if trades:
-            best = max((t.get("return_pct") or 0) for t in trades)
+            best = max(t["return_pct"] for t in trades)
             bucket["best"].append(best)
         if bt.get("hold_pct") is not None:
             bucket["hold"].append(bt["hold_pct"])
