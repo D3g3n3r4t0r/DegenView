@@ -80,16 +80,26 @@ def _load() -> None:
         _bars.update({k: v for k, v in bars.items() if isinstance(v, list)})
 
 
+def _plain(o):
+    """numpy scalars from the backtests (a numpy bool summed into an int64
+    `wins`) made json.dumps raise TypeError: save() failed on every call, the
+    file on disk stayed hours old, and each restart brought back alerts
+    without their backtests, rebuilt from fresh candles (FLOOR, CERT, 28/09)."""
+    if hasattr(o, "item"):
+        return o.item()
+    raise TypeError(f"{type(o).__name__} is not JSON serializable")
+
+
 def save() -> None:
     if len(_alerts) > KEEP:
         for k in sorted(_alerts, key=lambda k: _alerts[k]["at"])[:len(_alerts) - KEEP]:
             del _alerts[k]
     try:
         tmp = _STORE_FILE.with_suffix(_STORE_FILE.suffix + ".tmp")
-        tmp.write_text(json.dumps({"alerts": _alerts}, ensure_ascii=False), encoding="utf-8")
+        tmp.write_text(json.dumps({"alerts": _alerts}, ensure_ascii=False, default=_plain), encoding="utf-8")
         os.replace(tmp, _STORE_FILE)
-    except OSError:
-        pass
+    except (OSError, TypeError, ValueError):
+        logger.exception("alert track: save failed")
 
 
 def save_bars(now: float | None = None, force: bool = False) -> None:
@@ -100,10 +110,10 @@ def save_bars(now: float | None = None, force: bool = False) -> None:
     live = {k: v for k, v in _bars.items() if k in _alerts}
     try:
         tmp = _BARS_FILE.with_suffix(_BARS_FILE.suffix + ".tmp")
-        tmp.write_text(json.dumps(live, separators=(",", ":")), encoding="utf-8")
+        tmp.write_text(json.dumps(live, separators=(",", ":"), default=_plain), encoding="utf-8")
         os.replace(tmp, _BARS_FILE)
-    except OSError:
-        pass
+    except (OSError, TypeError, ValueError):
+        logger.exception("alert track: bars save failed")
 
 
 def reset_for_tests() -> None:
