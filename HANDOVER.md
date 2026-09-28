@@ -543,6 +543,16 @@ non oltre; uno, due, tre mesi non e' importante".
   (`/api/onchain/top`, `_top_entries`): unisce alla classifica le righe
   studiate del database, che non passavano da `qualifies`. Ora anche quelle
   passano da `leaderboard.too_big` (porting o cap oltre $10M).
+- 28/09 Lorenzo: "non e' possibile che $DREGG prenda 60 a research" ->
+  #289/#290 (DeepSeek): stadio "building" riconosce codice eseguibile
+  (runnable, proof record...), nuova parte `candor` (+8 a chi dichiara i
+  propri limiti), RULES_VERSION 5 rilegge tutto. DREGG 61 -> 70 sul sito
+  vero; il resto manca perche' il sito non dice a cosa serve il token.
+- 28/09 Lorenzo: "deepseek puo' esaminare github dei progetti e capirne la
+  complessita' e un punteggio per innovazione?" -> #291/#292
+  `code_review.py`: README + 4 file sorgente piu' grandi, DeepSeek da'
+  complessita'/innovazione 0-100, fork_of, pro/contro; media pesa 20% nel
+  finale; un progetto al minuto, 80/giorno, TTL 7 gg, retry dopo 6 h.
 - 28/09 Lorenzo: "DeepSeek [...] deve riesaminare i risultati che escono
   dalla top classifica e metterli in discussione [...] Clau Pump Tech ma
   che roba è, Leon AI sono nomi che non hanno senso". `judge.review_board`:
