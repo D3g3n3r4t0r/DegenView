@@ -46,8 +46,8 @@ import time
 import httpx
 
 from app.sniper.quality import _looks_like_meme
-from app.trading.onchain import (benchmark, big_coins, depth, discovery, gem_track, judge, legit, narratives, projects_db, radar,
-                                  research, storage, traction)
+from app.trading.onchain import (benchmark, big_coins, code_review, depth, discovery, gem_track, judge, legit, narratives,
+                                  projects_db, radar, research, storage, traction)
 
 logger = logging.getLogger(__name__)
 
@@ -120,6 +120,10 @@ GLOBAL_CAP_TTL_S = 24 * 3600
 REVIEW_EVERY_S = 2 * 3600
 REVIEW_MIN_GAP_S = 10 * 60
 REVIEW_WEIGHT = 0.3
+# DeepSeek reads the code of each project (code_review.py): complexity and
+# innovation weigh in the rank, one project at a time.
+CODE_WEIGHT = 0.2
+CODE_EVERY_S = 60
 SERIOUS_AGE_MAX_DAYS = 3 * 365
 SERIOUS_MIN_PILLAR = 60
 SERIOUS_MIN_GITHUB = 70
@@ -205,7 +209,7 @@ def reset_for_tests() -> None:
     _gone.clear()
     _busy.clear()
     _state.update(version=0, examined=0, last_tick=0.0, last_market=0.0, sources={}, board=[],
-                  reviewed_at=0.0, reviewed_board=[], reviewing=False)
+                  reviewed_at=0.0, reviewed_board=[], reviewing=False, code_reading=False, code_at=0.0)
 
 
 # ------------------------------------------------------------------- fonti
@@ -593,6 +597,9 @@ def final_score(e: dict) -> float:
     j = e.get("judge") or {}
     if j.get("score") is not None:
         rules = round(max(0.0, min(100.0, (1 - JUDGE_WEIGHT) * rules + JUDGE_WEIGHT * j["score"])), 1)
+    c = e.get("code") or {}
+    if c.get("complexity") is not None and c.get("innovation") is not None:
+        rules = round((1 - CODE_WEIGHT) * rules + CODE_WEIGHT * (c["complexity"] + c["innovation"]) / 2, 1)
     r = e.get("review") or {}
     if r.get("keep") and r.get("score") is not None:
         rules = round((1 - REVIEW_WEIGHT) * rules + REVIEW_WEIGHT * r["score"], 1)
@@ -652,7 +659,10 @@ def _public(e: dict) -> dict:
             **_research_public(e), "honor": benchmark.HONOR if top else None, "traction": traction_of(e),
             "review": {k: (e.get("review") or {}).get(k) for k in ("keep", "score", "reason")} if e.get("review") else None,
             "judge": {k: (e.get("judge") or {}).get(k)
-                      for k in ("score", "verdict", "problems", "strengths", "admit_reason")} if e.get("judge") else None}
+                      for k in ("score", "verdict", "problems", "strengths", "admit_reason")} if e.get("judge") else None,
+            "code": {k: (e.get("code") or {}).get(k)
+                     for k in ("complexity", "innovation", "fork_of", "summary", "strengths", "concerns")}
+            if e.get("code") else None}
 
 
 def _research_public(e: dict) -> dict:
@@ -793,6 +803,10 @@ async def tick(client: httpx.AsyncClient, now: float | None = None) -> None:
         task = asyncio.create_task(_step("revisione", _review_board, now))
         _tasks.add(task)
         task.add_done_callback(_tasks.discard)
+    if not _state.get("code_reading"):
+        task = asyncio.create_task(_step("codice", _read_code, client, now))
+        _tasks.add(task)
+        task.add_done_callback(_tasks.discard)
     await drain_alerts()
     _prune(now)
     # I nuovi prima (nessun pilastro), poi i piu' vecchi da rinfrescare.
@@ -857,6 +871,36 @@ async def _review_board(now: float) -> None:
         if k in _entries:
             _entries[k]["review"] = v
     if res:
+        _mark()
+
+
+async def _read_code(client: httpx.AsyncClient, now: float) -> None:
+    """DeepSeek legge il codice di un progetto per volta (Lorenzo, 28/09)."""
+    if _state.get("code_reading") or now - _state.get("code_at", 0.0) < CODE_EVERY_S:
+        return
+    _state["code_at"] = now
+    board = set(_state["board"])
+    todo = []
+    for k, e in _entries.items():
+        gh = (e.get("pillars") or {}).get("github") or {}
+        if not (gh.get("facts") or {}).get("repo"):
+            continue
+        c = e.get("code") or {}
+        if c and now - (c.get("at") or 0) < code_review.TTL_S:
+            continue
+        if k in board or not research_floor(e, now) or benchmark.is_benchmark(e["chain"], e["token_address"]):
+            todo.append(k)
+    if not todo:
+        return
+    k = min(todo, key=lambda k: (k not in board, -(float(_entries[k].get("market_cap") or 0))))
+    e = _entries[k]
+    _state["code_reading"] = True
+    try:
+        result = await code_review.review(e, client, now)
+    finally:
+        _state["code_reading"] = False
+    if result:
+        e["code"] = result
         _mark()
 
 
