@@ -1,5 +1,3 @@
-import asyncio
-
 import pandas as pd
 
 from app.analysis import strategies
@@ -60,7 +58,7 @@ def test_small_dip_is_not_a_rug():
 def test_backtest_all_reports_rug_and_no_events_after():
     df = _rug_frame()
     bars = _bars([(ts, r.open, r.high, r.low, r.close, r.volume) for ts, r in df.iterrows()])
-    out = asyncio.run(system.backtest_all(bars))
+    out = system.backtest_all(bars)
     assert out["rug"] is not None
     assert out["rug"]["drop"] == strategies.RUG_DROP
     at = out["rug"]["at"]

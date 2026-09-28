@@ -48,7 +48,7 @@ import httpx
 import pandas as pd
 
 from app.analysis.backtest import run_backtest
-from app.analysis.strategies import STRATEGY_REGISTRY, confirmed_events, spot_only
+from app.analysis.strategies import STRATEGY_REGISTRY, confirmed_events, rug_stop, spot_only
 from app.providers.base import NoDataYet, ProviderError
 from app.providers.dexscreener import DexScreenerProvider, gecko_urgent, make_symbol
 from app.sniper.quality import _looks_like_meme
