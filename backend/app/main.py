@@ -3755,18 +3755,40 @@ async def onchain_leaderboard_view(user: User = Depends(auth.get_current_user)) 
 
 @app.get("/api/onchain/top")
 async def onchain_top(n: int = 15, user: User = Depends(auth.get_current_user)) -> dict:
-    """Top 15/25/50 (top.js): the gem board only, by score. Lorenzo, 28/09:
-    "vedo in classifica roba NOT RANKED, non va bene" — the database no
-    longer fills the list with projects that failed the board's checks
-    (it did since 27/09, "a prescindere se seleziono top 15, 25 o 50 vedo
-    sempre gli stessi"). A short board shows short."""
+    """Top 15/25/50 (top.js): the best projects we know, by score. Lorenzo,
+    28/09: "la classifica top riporta roba di merda; ma com'e' possibile?
+    nel database c'e' roba meglio" — the board keeps only projects passing
+    every gate, so better-scoring projects analyzed but failing one gate
+    (many for the old $3M / one-year limits, raised by #259) sat unused in
+    the database. Now the board entries and the best studied rows are
+    merged by score; DeepSeek's veto still keeps junk out."""
     _require_onchain_enabled()
     n = max(1, min(int(n), 50))
     board = sorted(onchain_leaderboard.board().get("entries") or [], key=lambda e: -(e.get("score") or 0))
     out = [{**{k: e.get(k) for k in ("chain", "token_address", "pair_address", "pair_url", "symbol", "name", "image",
                                      "market_cap", "liquidity_usd", "change_24h", "launched_at", "score", "early")},
-            "on_board": True} for e in board[:n]]
-    return {"entries": out, "on_board": len(out)}
+            "on_board": True} for e in board]
+    seen = {f"{e['chain']}:{e['token_address']}" for e in out}
+    cutoff = time.time() - 30 * 86400
+    for row in onchain_projects_db.search(status="studied", sort="score", limit=200)["items"]:
+        if row.get("score") is None or (row.get("analyzed_at") or 0) < cutoff:
+            continue
+        if (row.get("overall") or {}).get("fatal"):
+            continue
+        key = f"{row['chain']}:{row['token']}"
+        if key in seen:
+            continue
+        j = onchain_judge.get(row["chain"], row["token"])
+        if j and j.get("verdict") in ("avoid", "scam") and (j.get("confidence") or 0) >= onchain_judge.VETO_MIN_CONF:
+            continue
+        seen.add(key)
+        out.append({"chain": row["chain"], "token_address": row["token"], "pair_address": None, "pair_url": None,
+                    "symbol": row.get("symbol"), "name": row.get("name"), "image": row.get("image"),
+                    "market_cap": row.get("mcap"), "liquidity_usd": row.get("liq"), "change_24h": None,
+                    "launched_at": row.get("launched_at"), "score": row.get("score"), "early": None, "on_board": False})
+    out.sort(key=lambda e: -(e.get("score") or 0))
+    out = out[:n]
+    return {"entries": out, "on_board": sum(1 for e in out if e["on_board"])}
 
 
 @app.get("/api/onchain/token")
