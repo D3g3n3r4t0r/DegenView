@@ -106,6 +106,7 @@ from app.trading.onchain import keys as onchain_keys
 from app.trading.onchain import legit as onchain_legit
 from app.trading.onchain import ledger as onchain_ledger
 from app.trading.onchain import outcomes as onchain_outcomes
+from app.trading.onchain import narratives as onchain_narratives
 from app.trading.onchain import backtest_lab as onchain_backtest_lab
 from app.trading.onchain import autotrader as onchain_autotrader
 from app.trading.onchain import wealth as onchain_wealth
@@ -3704,6 +3705,26 @@ async def onchain_radar_lessons(user: User = Depends(auth.get_current_user)) -> 
     controlli lo prevedevano. Vedi app/trading/onchain/outcomes.py."""
     _require_onchain_enabled()
     return {**onchain_outcomes.lessons(), "gate": settings.onchain_memory_gate}
+
+
+@app.get("/api/onchain/narratives/coverage")
+async def onchain_narratives_coverage(user: User = Depends(auth.get_current_user)) -> dict:
+    """Quanti progetti ha ogni narrativa gem: nel database e sulla bacheca.
+    Le narrative vuote vengono per prime, cosi' si vedono subito."""
+    _require_onchain_enabled()
+    counts = onchain_projects_db.narrative_counts()
+    board = onchain_leaderboard.board().get("entries") or []
+    on_board: dict[str, int] = {}
+    for e in board:
+        for n in e.get("narratives") or []:
+            k = n.get("key") if isinstance(n, dict) else n
+            if k:
+                on_board[k] = on_board.get(k, 0) + 1
+    items = [{"key": n["key"], "label": n.get("label") or n["key"],
+              "projects": counts.get(n["key"], 0), "on_board": on_board.get(n["key"], 0)}
+             for n in onchain_narratives.catalog() if n["kind"] == "gem"]
+    items.sort(key=lambda x: x["projects"])
+    return {"items": items}
 
 
 @app.get("/api/onchain/lab")

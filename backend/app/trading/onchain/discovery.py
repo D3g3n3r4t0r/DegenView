@@ -52,10 +52,11 @@ DEX_PROFILES = "https://api.dexscreener.com/token-profiles/latest/v1"
 CG_CATEGORIES = {"solana": ("solana-ecosystem", range(3, 9)), "robinhood": ("robinhood-ecosystem", range(1, 5)),
                  "base": ("base-ecosystem", range(1, 7)), "ethereum": ("ethereum-ecosystem", range(1, 9))}
 CG_PLATFORMS = {"solana": ("solana",), "robinhood": ("robinhood",), "base": ("base",), "ethereum": ("ethereum",)}
-# Lorenzo (24/09): "sotto uno barra due, tre milioni di market cap, non oltre"
+# Lorenzo (28/09): "magari dobbiamo alzare un po' i limiti di market cap [...]
+# anche i progetti un po' piu' datati ha senso metterceli"
 CAP_MIN = 10_000             # early gems start under $50k (leaderboard.EARLY_CAP_USD)
-NARRATIVE_PAGES = 8
-CAP_MAX = 3_000_000
+NARRATIVE_PAGES = 12
+CAP_MAX = 25_000_000
 # azioni tokenizzate, stablecoin, token avvolti: non sono progetti
 _NOT_PROJECT = ("meme", "stock", "stablecoin", "wrapped", "bridged", "etf")
 CG_GAP_S = 12                # 5 richieste al minuto: sotto il limite gratuito
@@ -230,7 +231,17 @@ async def _cg_step(client: httpx.AsyncClient, add: Callable[[dict, str], bool], 
         # Narratives first (hotter, smaller lists), then the chain ecosystems.
         from app import profiles
         q.append(("index",))
-        q.extend(("npage", cat, 1) for cat in narratives.coingecko_categories(first=profiles.wanted_narratives()))
+        # Thin narratives first: a category whose narrative has fewer than 10
+        # projects in the database is swept before the crowded ones.
+        # Order: narratives users chose, then thin ones, then the rest.
+        counts = projects_db.narrative_counts()
+        wanted = profiles.wanted_narratives()
+        cats = narratives.coingecko_categories(first=wanted)
+        chosen = {c for c in cats if set(narratives.keys_for_category(c)) & set(wanted)}
+        thin = {c for c in cats if any(n < 10 for n in
+                                       (counts.get(k, 0) for k in narratives.keys_for_category(c)))}
+        cats.sort(key=lambda c: 0 if c in chosen else 1 if c in thin else 2)
+        q.extend(("npage", cat, 1) for cat in cats)
         q.extend(("page", chain, cat, p) for chain, (cat, pages) in CG_CATEGORIES.items() for p in pages)
         return
     job = q.pop(0)
@@ -248,10 +259,12 @@ async def _cg_step(client: httpx.AsyncClient, add: Callable[[dict, str], bool], 
                                                        "order": "market_cap_desc", "per_page": 250,
                                                        "page": page})
         rows = rows if isinstance(rows, list) else []
+        hint = narratives.keys_for_category(cat)
         fresh = []
         for chain in CG_CATEGORIES:
             ids = _chain_ids.get(chain) or set()
-            fresh += [("coin", chain, c) for c in market_candidates(chain, [r for r in rows if r.get("id") in ids])
+            fresh += [("coin", chain, {**c, "narratives_hint": hint})
+                      for c in market_candidates(chain, [r for r in rows if r.get("id") in ids])
                       if now - (_seen.get(f"cg:{chain}:{c['id']}") or {}).get("at", 0) >= CG_DETAIL_TTL_S]
         q[0:0] = fresh
         # sorted by cap: another page only while the band is not yet below CAP_MIN
@@ -277,6 +290,7 @@ async def _cg_step(client: httpx.AsyncClient, add: Callable[[dict, str], bool], 
         projects_db.reject_cg(chain, base["id"], why, now)
     _note(f"cg:{chain}:{base['id']}", item is not None, why, now)
     if item:
+        item["narratives_hint"] = list(base.get("narratives_hint") or [])
         add(item, "coingecko")
     _save()
 
