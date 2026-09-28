@@ -517,6 +517,15 @@ non oltre; uno, due, tre mesi non e' importante".
   AAVE segnava $585k, AAVE vale $2.2B. `_check_global_cap`: una richiesta
   `/coins/{chain}/contract/{addr}` ogni 15 s, prima le voci in classifica,
   cache 24 h, 429 = pausa 2 min. `discovery.CAP_MAX` 25M -> 10M.
+- 28/09 Lorenzo: "DeepSeek [...] deve riesaminare i risultati che escono
+  dalla top classifica e metterli in discussione [...] Clau Pump Tech ma
+  che roba è, Leon AI sono nomi che non hanno senso". `judge.review_board`:
+  una chiamata legge TUTTA la classifica contro i filtri concordati (niente
+  meme, nomi parodia di brand, wrapper "X AI", narrative forti) e per
+  ciascuno da' keep/score/reason. Ogni 2 h o 10 min dopo un cambio della
+  classifica (`_review_board`, in background). keep=false esclude per 3 gg
+  ("DeepSeek review: ..."); lo score pesa 30% nel punteggio finale. Anche
+  il SYSTEM del giudice singolo ora boccia nomi parodia/meme.
 
 ## Link ospite in sola lettura — `seed-0096`, branch `claude/link-ospite-asb5wj`
 
