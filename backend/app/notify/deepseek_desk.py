@@ -50,7 +50,7 @@ _lock = threading.Lock()
 # "deve dare l'idea di essere sempre presente [...] un agent che esamina le
 # cose"). Saved with the ledger, so a restart does not empty the log.
 _activity: list[dict] = []
-ACTIVITY_KEEP = 60
+ACTIVITY_KEEP = 300
 _state: dict = {"days": {}, "recap_sent": ""}
 _memory: dict[str, list[dict]] = {}
 
@@ -79,11 +79,23 @@ def reset_for_tests() -> None:
     _activity.clear()
 
 
-def note(kind: str, text: str, now: float | None = None, **extra) -> None:
+def note(kind: str, text: str, now: float | None = None,
+         steps: list[str] | None = None, outcome: str = "", **extra) -> None:
     """One line of what the agent is doing, for /api/agent."""
-    _activity.append({"t": now or time.time(), "kind": kind, "text": text[:140], **extra})
+    entry = {"t": now or time.time(), "kind": kind, "text": text[:140], **extra}
+    if steps:
+        entry["steps"] = [str(s)[:200] for s in steps][:8]
+    if outcome:
+        entry["outcome"] = str(outcome)[:200]
+    _activity.append(entry)
     del _activity[:-ACTIVITY_KEEP]
     _save()
+
+
+def log(limit: int = 100, before: float | None = None) -> list[dict]:
+    """Newest first, entries older than `before` when given."""
+    items = [a for a in _activity if before is None or a.get("t", 0) < before]
+    return list(reversed(items[-limit:]))
 
 
 def activity(now: float | None = None) -> dict:
