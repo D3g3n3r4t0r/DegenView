@@ -12,7 +12,14 @@ lavori pluri-sessione, decisioni prese, stato di piani approvati.
 
 ---
 
-## Laboratorio di backtest, DeepSeek che impara, narrative per account — 2026-09-28 — **piano, da avviare**
+## Stato al 28/09 sera — cosa e' su main e cosa e' in corso
+
+Su main: iframe del grafico del sito principale (CSP `frame-src 'self'` corretta nel Caddyfile: in produzione il browser lo bloccava), solo long sul grafico DEX (#247), fallback al nostro grafico se il sito principale non trova il token (#251), ingressi/uscite del backtest migliore (#246), Phantom da Safari con deeplink (#253, `phantomlink.js`, provato solo contro un finto Phantom), reale/simulato veloce (#254), laboratorio di backtest passo 1 (#255), narrative per account backend (#258).
+In corso con DeepSeek: #256 stop anti-rug (-65% dal massimo delle 24h: chiude e non rientra piu'; SYSTEM_VERSION 7, lab VERSION 2), #257 grafico senza "Alert" (solo ingressi/uscite + marcatore "Rug · strategy off"), #259 scanner piu' profondo (cap fino a $25M, progetti fino a 3 anni, etichetta di narrativa dalla categoria CoinGecko, copertura per narrativa `/api/onchain/narratives/coverage`, narrative vuote cercate per prime), #260 diario di DeepSeek con i passaggi del ragionamento (`/api/agent/log`).
+Da fare dopo: scheda di DeepSeek animata (frontend su #260), schermata di scelta delle narrative (frontend su #258), filtro rug aritmetico prima del backtest (passo 2 del laboratorio), passo 3 (DeepSeek impara).
+Lavoratore DeepSeek: se fallisce spinge la bozza su `deepseek/issue-N-failed`; un test elencato in Files e Tests deve esistere.
+
+## Laboratorio di backtest, DeepSeek che impara, narrative per account — 2026-09-28 — **in corso**
 
 Lorenzo, 28/09: "tutti i backtest devono essere disponibili su tutti i token scansionati [...] anche di quelli che non rientrano nel nostro standard [...] nei momenti morti [...] fare un grande database di backtest [...] imparare a evitare rug pull e i movimenti di prezzo soprattutto nei token appena usciti [...] siamo nell'ordine delle decine di migliaia, trova tu una soluzione magari a piu' step". E: "diamo la possibilita' di scegliere la narrativa [...] almeno una quindicina". E sul grafico: "Il grafico nel sito principale e' fatto apposta per long e short. Tu di quello devi solo prendere l'apertura del long e la chiusura del long" (= #245, `spot_only`).
 
@@ -3708,3 +3715,6 @@ WAAPI + Undo, withEntrance per l'ingresso del successore), filtro in top/alerts/
 memes/radar. Lavoratore DeepSeek: niente test collegati per main.py, max 10, timeout
 riportato; ESLint no-undef sui moduli onchain toccati. Da verificare sul sito: Onhand senza
 trade nel backtest nonostante il pump (dati server).
+
+### 28/09 (sera) — grafico, Phantom, laboratorio, scanner
+Lorenzo: "Il grafico nel sito principale e' fatto apposta per long e short. Tu di quello devi solo prendere l'apertura del long e la chiusura del long." — "una connessione di un wallet esterno deve permettere di aprirlo senza cambiare finestra di Safari" — "non voglio che Pump Fun diventi il nostro bacino di token [...] tutto quello che e' facilmente identificabile come rug pull escludiamolo a priori" — "ogni narrativa deve avere dei token al suo interno" — "la strategia si deve automaticamente disabilitare [dopo un -60/70% veloce] [...] il backtest non deve proseguire" — "non voglio vedere schermate con scritto alert, voglio ingressi e uscite" — "diamo a DeepSeek una tab tutta sua [...] voglio vedere come ragiona". Fatto e in corso: vedi "Stato al 28/09 sera" in cima.
