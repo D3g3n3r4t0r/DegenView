@@ -537,3 +537,12 @@ def test_database_follows_later_score_changes(monkeypatch):
     n = len(calls)
     lb._rank()
     assert len(calls) == n          # nothing changed, nothing written
+
+
+def test_a_null_symbol_is_no_name():
+    """Lorenzo, 28/09: two BSC tokens sat in the Top as "null"."""
+    from app.trading.onchain import leaderboard as lb
+    for s in (None, "", "?", "null", "NULL", " none ", "undefined"):
+        assert lb.no_name(s)
+    assert not lb.no_name("NULLX") and not lb.no_name("DREGG")
+    assert lb.research_floor({"symbol": "null", "chain": "bsc", "token_address": "0x1"}) == "no name"
