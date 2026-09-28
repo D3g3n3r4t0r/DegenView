@@ -367,6 +367,9 @@
     & i { block-size: 6px; border-radius: 3px; background: linear-gradient(90deg, var(--k-mint) calc(var(--v) * 1%), var(--k-surface-2) 0); }
     & b { text-align: end; font-weight: 600; } }
   .dt-summary { font-size: 14px; line-height: 1.5; color: #d4d4d8; }
+  .ds-report { margin: 10px 0;
+    & h5 { display: flex; justify-content: space-between; margin: 0; font: 600 12px var(--sans); letter-spacing: .04em;
+      text-transform: uppercase; color: var(--k-text-2); & b { text-transform: none; color: var(--k-text-1, #e4e4e7); } } }
   .kv { margin: 12px 0; display: grid; gap: 10px;
     & div { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; }
     & dt { color: var(--k-text-2); } & dd { margin: 0; text-align: end; overflow-wrap: anywhere; }
