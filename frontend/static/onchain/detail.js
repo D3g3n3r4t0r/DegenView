@@ -213,14 +213,12 @@ function paintTabs() {
   const pending = loading.has(current.id);
   if (tab === "why") { body.innerHTML = e.why || `<p class="muted">${pending ? "Loading…" : "Nothing to add yet."}</p>`; return; }
   if (tab === "info") { body.innerHTML = e.info || infoFallback(e); return; }
-  if (e.kind === "gem") {
-    const daily = e.lab?.daily;
-    body.innerHTML = daily?.rows?.length
-      ? `${backtestTable({ backtests: daily, age_h: 99 })}<p class="muted">Trend follower backtested on the ${daily.interval === "8h" ? "8-hour" : "daily"} chart.</p>`
-      : `<p class="muted">${pending ? "Loading…" : "No daily backtest on this gem yet."}</p>`;
-    return;
-  }
-  const alerts = e.alerts ?? [];
+  // Gems: only the daily trend follower, not the alerts' 5-minute tracks.
+  const gem = e.kind === "gem";
+  const lab = gem ? (e.lab?.daily?.rows?.length ? e.lab.daily : null) : e.lab;
+  const labNote = gem ? `Trend follower backtested on the ${lab?.interval === "8h" ? "8-hour" : "daily"} chart.`
+    : "Backtested on the latest 5-minute chart, every hour.";
+  const alerts = gem ? [] : (e.alerts ?? []);
   body.innerHTML = alerts.length ? alerts.map((al) => `
     <article class="call">
       <p><b>Telegram alert</b><small>${age(al.at)[0]} ago</small></p>
@@ -246,8 +244,8 @@ function paintTabs() {
         ${e.dossier?.liquidity_usd != null ? `<div><dt>Liquidity</dt><dd>${usdShort(e.dossier.liquidity_usd)}</dd></div>` : ""}
         ${e.ageTs ? `<div><dt>Age</dt><dd>${age(e.ageTs)[0]}</dd></div>` : ""}
       </dl>
-      ${e.lab ? `${backtestTable({ backtests: e.lab, age_h: 99 })}<p class="muted">Backtested on the latest 5-minute chart, every hour.</p>` : ""}
-      <p class="muted">${pending ? "Loading…" : `No Telegram alert on this token yet${e.kind === "gem" ? ": gems are alerted when they enter the board." : "."}`}</p>`;
+      ${lab ? `${backtestTable({ backtests: lab, age_h: 99 })}<p class="muted">${labNote}</p>` : ""}
+      ${gem && lab ? "" : `<p class="muted">${pending ? "Loading…" : gem ? "No daily backtest on this gem yet." : "No Telegram alert on this token yet."}</p>`}`;
 }
 
 function backtestTable(al) {
@@ -498,8 +496,9 @@ async function drawChart(box, candles, e) {
  *  uscite"); the 48h system's until the backtest is stored. */
 function withLab(e) {
   // Gems: the site's trend follower on the daily chart, never the fast
-  // 5-minute strategies (Lorenzo, 30/09: "i gem devono mostrare il
-  // trend-follower sul giornaliero, le strategie veloci sono per lo sniper").
+  // 5-minute strategies (Lorenzo, 28/09: "la strategia da applicare non e'
+  // quella sul minuto ma [...] il trend follower originario [...] sul
+  // giornaliero [...] al massimo 8 ore").
   if (e.kind === "gem") return e.lab?.daily?.rows ? [{ backtests: e.lab.daily }] : [];
   return (e.alerts?.length || !e.lab) ? (e.alerts ?? []) : [{ backtests: e.lab }];
 }
