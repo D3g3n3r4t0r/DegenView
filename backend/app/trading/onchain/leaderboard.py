@@ -824,7 +824,7 @@ async def tick(client: httpx.AsyncClient, now: float | None = None) -> None:
     await _step("database", _from_database, client, now)
     await _step("grandi monete", _refresh_big_coins, client, now)
     await _step("cap globale", _check_global_cap, client, now)
-    if not _state.get("reviewing"):
+    if not _state.get("reviewing") and not priority.backtests_first():
         task = asyncio.create_task(_step("revisione", _review_board, now))
         _tasks.add(task)
         task.add_done_callback(_tasks.discard)

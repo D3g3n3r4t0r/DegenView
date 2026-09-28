@@ -193,6 +193,8 @@ async def run_one(client: httpx.AsyncClient, e: dict, now: float) -> dict | None
 async def tick(entries: list[dict], now: float | None = None) -> dict | None:
     now = now or time.time()
     _state["last_tick"] = now
+    if priority.backtests_first():
+        return None
     e = next_due(entries, now)
     if e is None:
         return None
