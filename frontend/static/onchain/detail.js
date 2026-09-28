@@ -402,6 +402,19 @@ function embed(e) {
   return `<iframe class="dt-embed" src="${escapeHtml(src)}" title="${escapeHtml(e.symbol)} chart on DexScreener" loading="lazy" referrerpolicy="no-referrer"></iframe>`;
 }
 
+const mainFailed = new Set();
+
+window.addEventListener("message", (ev) => {
+  if (ev.origin !== location.origin) return;
+  if (ev.data?.type !== "embed-chart" || ev.data.ok !== false) return;
+  const frame = dlg?.querySelector("[data-chart] iframe.main-embed");
+  if (!frame || frame.contentWindow !== ev.source) return;
+  const box = dlg.querySelector("[data-chart]");
+  if (!box) return;
+  mainFailed.add(box.dataset.want);
+  paintChart();
+});
+
 async function paintChart() {
   const e = current.e;
   const box = dlg.querySelector("[data-chart]");
@@ -414,7 +427,7 @@ async function paintChart() {
   // nel nostro sito principale aveva tutti i dati… USA QUELLO"): candles,
   // levels, indicators and the best strategy's trades, on this token and
   // this interval. The lighter chart below stays for tokens with no pool.
-  const src = await mainChartUrl(e, NAMES[bestLabel(e) ?? "Trend EMA"], interval);
+  const src = mainFailed.has(want) ? null : await mainChartUrl(e, NAMES[bestLabel(e) ?? "Trend EMA"], interval);
   if (box.dataset.want !== want) return;
   if (src) {
     disposeChart();
@@ -479,7 +492,7 @@ async function drawChart(box, candles, e) {
   });
   if (!lw || lw.box !== box || !box.contains(lw.chart.chartElement?.() ?? box.firstChild)) {
     disposeChart();
-    box.innerHTML = "";
+    box.innerHTML = "";          // also drops a failed main-site iframe
     const chart = LC.createChart(box, {
       autoSize: true,
       layout: { background: { color: "transparent" }, textColor: "#9aa0ab", fontSize: 11, attributionLogo: false },
