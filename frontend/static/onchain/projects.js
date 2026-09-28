@@ -7,6 +7,7 @@
 import * as api from "@onchain/api.js";
 import { register } from "@onchain/detail.js";
 import { escapeHtml } from "@onchain/format.js";
+import { isHidden, onHiddenChange, withEntrance } from "@onchain/hidden.js";
 
 const PAGE = 30;
 const CHAINS = { solana: "Solana", robinhood: "Robinhood", base: "Base", bsc: "BSC", ethereum: "Ethereum" };
@@ -57,14 +58,21 @@ function paintFunnel(st) {
     : "";
 }
 
+function paintList() {
+  const shown = items.filter((p) => !isHidden(p.chain, p.token));
+  withEntrance(root.querySelector("[data-projects-list]"), () => {
+    root.querySelector("[data-projects-list]").innerHTML = shown.length
+      ? shown.map(row).join("")
+      : `<li class="pj-empty">${query.q || query.status ? "Nothing matches." : "The database is filling up: sources are being read."}</li>`;
+  });
+}
+
 async function load(append = false) {
   try {
     const data = await api.getProjects({ q: query.q, status: query.status, sort: "score", limit: PAGE, offset: query.offset });
     items = append ? [...items, ...(data.items ?? [])] : (data.items ?? []);
     delete root.dataset.loading;
-    root.querySelector("[data-projects-list]").innerHTML = items.length
-      ? items.map(row).join("")
-      : `<li class="pj-empty">${query.q || query.status ? "Nothing matches." : "The database is filling up: sources are being read."}</li>`;
+    paintList();
     root.querySelector("[data-projects-more]").hidden = items.length >= (data.total ?? 0);
     paintFunnel(data.stats);
   } catch {
@@ -75,6 +83,7 @@ async function load(append = false) {
 export function mountProjects() {
   root = document.getElementById("projects");
   if (!root) return;
+  onHiddenChange(() => paintList());
   root.querySelector("[data-projects-q]").addEventListener("input", (event) => {
     clearTimeout(typing);
     typing = setTimeout(() => { query = { ...query, q: event.target.value.trim(), offset: 0 }; load(); }, 250);
