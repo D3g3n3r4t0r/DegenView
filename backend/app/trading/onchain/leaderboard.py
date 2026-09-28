@@ -105,6 +105,15 @@ EARLY_MIN_PILLAR = 60
 EARLY_MIN_SCORE = 65
 ALERTS_PER_TICK = 5
 SERIOUS_CAP_MAX_USD = discovery.CAP_MAX
+# Lorenzo (28/09): "per gemme solitamente si intende roba di capitalizzazione
+# bassa [...] massimo 10 milioni". A hard ceiling for every entry, checked on
+# the token's global cap too: AAVE's Solana copy showed $585k while AAVE
+# is worth $2.2B, and a local pool cap cannot tell the two apart.
+BOARD_CAP_MAX_USD = 10_000_000
+CG_CONTRACT = "https://api.coingecko.com/api/v3/coins/{platform}/contract/{address}"
+CG_PLATFORM = {"solana": "solana", "robinhood": "robinhood"}
+GLOBAL_CAP_EVERY_S = 15            # one CoinGecko lookup per gap, shared with discovery
+GLOBAL_CAP_TTL_S = 24 * 3600
 SERIOUS_AGE_MAX_DAYS = 3 * 365
 SERIOUS_MIN_PILLAR = 60
 SERIOUS_MIN_GITHUB = 70
@@ -419,10 +428,17 @@ def exceptional(e: dict) -> bool:
     return bool(gh) and not legit.github_shortfall(gh) and not legit.gem_shortfall(checks, e.get("report"))
 
 
+def true_cap(e: dict) -> float:
+    """The larger of the pool's cap and the token's global cap (CoinGecko)."""
+    return max(float(e.get("market_cap") or 0), float(e.get("global_cap") or 0))
+
+
 def qualifies(e: dict, now: float | None = None) -> str:
     """"" se entra in classifica, altrimenti perche' no."""
     if benchmark.is_benchmark(e.get("chain"), e.get("token_address")):
         return ""   # il metro di paragone c'e' sempre, i suoi numeri si vedono comunque
+    if true_cap(e) > BOARD_CAP_MAX_USD:
+        return f"over ${BOARD_CAP_MAX_USD / 1e6:.0f}M (${true_cap(e) / 1e6:,.0f}M)"
     floor = research_floor(e, now)
     if floor:
         return floor
@@ -577,7 +593,8 @@ def _public(e: dict) -> dict:
             "market_cap", "liquidity_usd", "change_24h", "website", "github", "socials", "pair_url", "scan_url",
             "image", "bonding", "rank", "rank_before", "moved_at", "overall", "pillars", "checked_at")
     top = benchmark.is_benchmark(e["chain"], e["token_address"])
-    return {**{k: e.get(k) for k in keep}, "exception": is_big(e) and not top, "score": final_score(e),
+    return {**{k: e.get(k) for k in keep}, "market_cap": true_cap(e) or e.get("market_cap"),
+            "exception": is_big(e) and not top, "score": final_score(e),
             "similarity": e.get("similarity"), "benchmark": top, "early": is_early(e), "price_usd": e.get("price_usd"),
             "narratives": narratives.labels(e.get("narratives") or []), "closed_source": no_github(e),
             **_research_public(e), "honor": benchmark.HONOR if top else None, "traction": traction_of(e),
@@ -625,7 +642,7 @@ def board() -> dict:
         "rules": {"weights": depth.WEIGHTS, "similarity_weight": SIMILARITY_WEIGHT,
                   "traction_weight": TRACTION_WEIGHT, "value_weight": VALUE_WEIGHT,
                   "early_cap_usd": EARLY_CAP_USD, "early_min_pillar": EARLY_MIN_PILLAR, "early_min_score": EARLY_MIN_SCORE, "benchmark": benchmark.NAME, "min_pillar": MIN_PILLAR, "gem_cap_usd": legit.GEM_CAP_USD,
-                  "gem_min_score": legit.GEM_MIN_SCORE, "cap_max_usd": CAP_MAX_USD, "max_age_days": MAX_AGE_DAYS,
+                  "gem_min_score": legit.GEM_MIN_SCORE, "cap_max_usd": CAP_MAX_USD, "board_cap_max_usd": BOARD_CAP_MAX_USD, "max_age_days": MAX_AGE_DAYS,
                   "big_min_score": BIG_MIN_SCORE, "judge_weight": JUDGE_WEIGHT,
                   "exception_cap_usd": radar.EXC_MCAP_MAX_USD, "exception_age_days": radar.EXC_AGE_MAX_DAYS},
     }
@@ -717,6 +734,7 @@ async def tick(client: httpx.AsyncClient, now: float | None = None) -> None:
         await _step("dexscreener", _poll_market, client)
     await _step("storico", gem_track.poll, client, set(_entries), now)
     await _step("database", _from_database, client, now)
+    await _step("cap globale", _check_global_cap, client, now)
     await drain_alerts()
     _prune(now)
     # I nuovi prima (nessun pilastro), poi i piu' vecchi da rinfrescare.
@@ -731,6 +749,31 @@ async def tick(client: httpx.AsyncClient, now: float | None = None) -> None:
         task.add_done_callback(_tasks.discard)
     if _dirty:
         _save()
+
+
+async def _check_global_cap(client: httpx.AsyncClient, now: float) -> None:
+    """One CoinGecko lookup: the board first, then the rest past the floor."""
+    if now < _state.get("cap_next_at", 0):
+        return
+    _state["cap_next_at"] = now + GLOBAL_CAP_EVERY_S
+    board = set(_state["board"])
+    todo = [k for k, e in _entries.items()
+            if now - (e.get("global_cap_at") or 0) > GLOBAL_CAP_TTL_S and not research_floor(e, now)
+            and CG_PLATFORM.get(e.get("chain")) and not benchmark.is_benchmark(e["chain"], e["token_address"])]
+    if not todo:
+        return
+    k = min(todo, key=lambda k: (k not in board, -(float(_entries[k].get("market_cap") or 0))))
+    e = _entries[k]
+    r = await client.get(CG_CONTRACT.format(platform=CG_PLATFORM[e["chain"]], address=e["token_address"]),
+                         timeout=15.0, headers={"Accept": "application/json"})
+    if r.status_code == 429:
+        _state["cap_next_at"] = now + 120
+        return
+    md = (r.json().get("market_data") or {}) if r.status_code == 200 else {}
+    e["global_cap"] = max(float((md.get("market_cap") or {}).get("usd") or 0),
+                          float((md.get("fully_diluted_valuation") or {}).get("usd") or 0)) or None
+    e["global_cap_at"] = now
+    _mark()
 
 
 START_DELAY_S = 20
