@@ -2222,5 +2222,10 @@
     "status": "risolto",
     "at": 1790612515,
     "summary": "Gli scanner giudicano decine di pool al minuto, ma la pagina mostrava solo i pochi ancora in attesa. Ora ogni pool guardato finisce in un registro dal vivo: sopra 'About to fire' c'e' un nastro di ticker che scorre (✓ passato, ✗ scartato col motivo, ◆ strategie provate, ★ alert) e una riga con i numeri dell'ultima ora: pool guardati, al minuto, controllati, passati, scartati. Si aggiorna ogni 8 secondi. Le righe 'CHECKING' hanno una luce che scorre mentre i controlli girano."
+  },
+  "seed-0208": {
+    "status": "risolto",
+    "at": 1790612744,
+    "summary": "I risultati sono salvati sul disco del server, ma quando il motore dei backtest cambia versione ogni alert viene ricalcolato riscaricando le candele. Per un token morto come FLOOR (-93%) GeckoTerminal restituisce meno candele o nessuna, e il ricalcolo su dati poveri sovrascriveva il risultato buono: +132% diventava 'nessun ingresso' e FLOOR scendeva in fondo. Ora un backtest salvato viene sostituito solo da uno calcolato su almeno altrettante candele; altrimenti resta quello di prima, e c'e' un test che lo verifica. Il +132% di FLOOR gia' sovrascritto non si puo' ricostruire se il pool non da' piu' le candele; da qui in avanti nessun risultato si perde cosi'."
   }
 }
