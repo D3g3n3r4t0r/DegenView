@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0217", "Token chiamati 'null' nella Top delle gemme",
+     "Lorenzo, 28/09: 'ci sono ticker tra le top che si chiamano null'",
+     "media"),
     ("seed-0216", "Sniper che non escono: MESUB -95%, GLANCE -61%, SUGAR -53%",
      "Lorenzo, 28/09: 'come mai su queste la strategia non e' uscita prima?'",
      "alta"),
