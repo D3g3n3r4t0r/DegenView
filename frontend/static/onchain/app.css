@@ -991,7 +991,7 @@ html, body { overflow-x: clip; }
     & h4 { margin: 0; font: 600 13px var(--sans); letter-spacing: .04em; text-transform: uppercase; color: var(--k-text-3); } }
   .pf-narr-chips { display: flex; flex-wrap: wrap; gap: 6px;
     & button { padding: 6px 12px; border: 1px solid rgb(255 255 255 / .12); border-radius: 999px; background: none;
-      color: var(--k-text-2); font: 500 13px var(--sans); cursor: pointer; transition: background .15s, color .15s, border-color .15s; }
+      color: var(--k-text-2); font: 500 13px var(--sans); cursor: pointer; }
     & button[aria-pressed="true"] { background: #6d7cff; border-color: #6d7cff; color: #fff; } }
-  .bd-nar.is-mine { border: 1px solid #6d7cff; color: #8b95ff; background: rgb(109 124 255 / .12); }
+  .bd-nar.is-mine { padding: 0 6px; border-radius: 999px; border: 1px solid #6d7cff; color: #8b95ff; background: rgb(109 124 255 / .12); }
 }
