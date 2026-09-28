@@ -1175,6 +1175,45 @@ async def _watchdog_loop() -> None:
             ))
 
 
+def _deepseek_memory() -> list[str]:
+    """Cosa il sistema ha imparato: diario dello scanner, revisioni AI, laboratorio.
+    Ogni pezzo in un try/except: se una parte fallisce la chat continua."""
+    out: list[str] = []
+
+    def _line(s: str) -> str:
+        return s[:300]
+
+    try:
+        les = onchain_outcomes.lessons()
+        out.append(_line(f"Memoria scanner: tracciati {les['tracked']}, aperti {les['open']}"))
+        for n in (les.get("notes") or [])[:8]:
+            out.append(_line(f"  - {n}"))
+        for e in (les.get("slipped") or [])[:5]:
+            out.append(_line(f"  scivolato: {e['symbol']} ({e['chain']}) max {e['max_ret']} min {e['min_ret']}"))
+        for e in (les.get("missed") or [])[:5]:
+            out.append(_line(f"  perso: {e['symbol']} ({e['chain']}) max {e['max_ret']} min {e['min_ret']}"))
+    except Exception:
+        pass
+
+    try:
+        for r in (onchain_ai_review._state.get("reviews") or [])[:7]:
+            acts = " | ".join(r.get("actions") or [])
+            out.append(_line(f"Revisione AI {r.get('at')}: {r.get('summary')} — {acts}"))
+    except Exception:
+        pass
+
+    try:
+        lab = backtest_lab.summary()
+        out.append(_line(f"Laboratorio: {lab['rows']} righe, {lab['gone']} sparite, {lab['with_trades']} con trade"))
+        for dec, b in (lab.get("by_decision") or {}).items():
+            out.append(_line(f"  {dec}: n {b['n']}, best {b['best_median']}, hold {b['hold_median']}, "
+                             f"raddoppiati {b['doubled']}, rug {b['rugs']}"))
+    except Exception:
+        pass
+
+    return out
+
+
 async def _deepseek_context(chat_id: str) -> str:
     """What the Telegram assistant knows: the system, the latest alerts, and
     (when the chat belongs to an account) that account's wallet and autotrader."""
@@ -1199,6 +1238,7 @@ async def _deepseek_context(chat_id: str) -> str:
         v = onchain_autotrader.view(user.id)
         parts.append(f"Autotrader: modo {v['mode']}, quota {v['pct']}%, posizione {v['position']}, simulato {v['sim']}, "
                      f"ultimi trade {[(t.get('side'), t.get('symbol'), t.get('ret'), t.get('why')) for t in v['trades'][:8]]}")
+    parts.extend(_deepseek_memory())
     parts.append("Valori 'ret'/'now'/'max' sono frazioni: 0.25 = +25%.")
     return "\n".join(parts)
 
