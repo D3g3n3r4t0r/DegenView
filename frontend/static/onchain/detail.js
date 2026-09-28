@@ -55,6 +55,7 @@ function ensureDialog() {
   dlg.setAttribute("aria-label", "Token");
   document.body.append(dlg);
   dlg.addEventListener("close", () => {
+    disposeChart();
     document.documentElement.classList.remove("detail-open");
     if (history.state?.detail) history.back();
   });
@@ -358,7 +359,8 @@ async function geckoDirect(e, pair, iv) {
   const q = new URLSearchParams({ aggregate: agg, limit: 300, currency: "usd", ...(e.token ? { token: e.token } : {}) });
   const d = await fetchJson(`${GECKO}/networks/${net}/pools/${pair}/ohlcv/${tf}?${q}`, 6000);
   const rows = d?.data?.attributes?.ohlcv_list ?? [];
-  return rows.map((r) => ({ time: r[0], close: Number(r[4]) })).filter((c) => Number.isFinite(c.close)).sort((a, b) => a.time - b.time);
+  return rows.map((r) => ({ time: r[0], open: Number(r[1]), high: Number(r[2]), low: Number(r[3]), close: Number(r[4]) }))
+    .filter((c) => Number.isFinite(c.close)).sort((a, b) => a.time - b.time);
 }
 
 const clean = (d) => (d?.candles ?? []).filter((c) => Number.isFinite(c.close));
@@ -406,14 +408,85 @@ async function paintChart() {
   const want = `${current.id}:${interval}`;
   box.dataset.want = want;
   const stale = charts.get(`${e.chain}:${e.pair || e.token}:${interval}`)?.candles;
-  if (stale?.length >= 2) box.innerHTML = svgChart(stale, e);
+  if (stale?.length >= 2) await drawChart(box, stale, e);
   let candles = [];
   try {
     candles = await chartFor(e, interval);
   } catch { /* falls through to the embedded chart */ }
   if (box.dataset.want !== want) return;
-  if (candles.length < 2) { if (!stale) box.innerHTML = embed(e); return; }
-  box.innerHTML = svgChart(candles, e);
+  if (candles.length < 2) { if (!stale) { disposeChart(); box.innerHTML = embed(e); } return; }
+  await drawChart(box, candles, e);
+}
+
+// The main site's engine (Lorenzo, 28/09: "sti ingressi e uscite nel grafico
+// a linea fanno schifo, dovevamo usare il motore del sito principale"):
+// TradingView Lightweight Charts, candles in market-cap terms, the alert and
+// the system's buys and sells as markers on the bars. Falls back to the old
+// line only if the library cannot load.
+let lw = null;   // { chart, series, box }
+
+function disposeChart() {
+  if (lw) { try { lw.chart.remove(); } catch { /* already gone */ } lw = null; }
+}
+
+function chartLib() {
+  if (window.LightweightCharts) return Promise.resolve(window.LightweightCharts);
+  const tag = document.querySelector('script[src*="lightweight-charts"]');
+  if (!tag) return Promise.reject(new Error("chart library missing"));
+  return new Promise((resolve, reject) => {
+    tag.addEventListener("load", () => resolve(window.LightweightCharts), { once: true });
+    tag.addEventListener("error", () => reject(new Error("chart library failed")), { once: true });
+  });
+}
+
+async function drawChart(box, candles, e) {
+  let LC;
+  try { LC = await chartLib(); } catch { disposeChart(); box.innerHTML = svgChart(candles, e); return; }
+  const last = candles[candles.length - 1].close;
+  const k = e.cap && last ? e.cap / last : 1;         // prices shown as market cap
+  const bars = candles.map((c) => {
+    const close = c.close * k;
+    const open = (Number.isFinite(c.open) ? c.open : c.close) * k;
+    return { time: c.time, open, close,
+      high: Math.max(open, close, (Number.isFinite(c.high) ? c.high : c.close) * k),
+      low: Math.min(open, close, (Number.isFinite(c.low) ? c.low : c.close) * k) };
+  });
+  if (!lw || lw.box !== box || !box.contains(lw.chart.chartElement?.() ?? box.firstChild)) {
+    disposeChart();
+    box.innerHTML = "";
+    const chart = LC.createChart(box, {
+      autoSize: true,
+      layout: { background: { color: "transparent" }, textColor: "#9aa0ab", fontSize: 11, attributionLogo: false },
+      grid: { vertLines: { color: "rgba(255,255,255,0.03)" }, horzLines: { color: "rgba(255,255,255,0.03)" } },
+      rightPriceScale: { borderVisible: false, scaleMargins: { top: 0.12, bottom: 0.08 } },
+      timeScale: { timeVisible: true, secondsVisible: false, borderVisible: false },
+      crosshair: { vertLine: { color: "#5f6672" }, horzLine: { color: "#5f6672" } },
+      handleScale: { axisPressedMouseMove: false },
+    });
+    const series = chart.addCandlestickSeries({
+      upColor: "#2de0a8", downColor: "#f87171", borderVisible: false,
+      wickUpColor: "#2de0a8", wickDownColor: "#f87171",
+      priceFormat: { type: "custom", minMove: 0.01, formatter: (v) => usdShort(v) },
+    });
+    lw = { chart, series, box };
+  }
+  lw.series.setData(bars);
+  // A marker sits on a bar: each event goes to the last bar at or before it.
+  const t0 = bars[0].time, t1 = bars[bars.length - 1].time;
+  const barAt = (t) => { let b = bars[0].time; for (const x of bars) { if (x.time <= t) b = x.time; else break; } return b; };
+  const marks = [];
+  for (const a of e.alerts ?? []) {
+    if (a.at >= t0 && a.at <= t1 + 3600) marks.push({ time: barAt(a.at), position: "belowBar", color: "#facc15", shape: "circle", text: "Alert" });
+    for (const v of bestSystem(a)?.events ?? []) {
+      if (v.t < t0 || v.t > t1 + 3600) continue;
+      const buy = v.side === "buy";
+      marks.push({ time: barAt(v.t), position: buy ? "belowBar" : "aboveBar", color: buy ? "#2de0a8" : "#f87171",
+        shape: buy ? "arrowUp" : "arrowDown", text: buy ? "Buy" : v.ret != null ? `Sell ${pct(v.ret)}` : "Sell" });
+    }
+  }
+  marks.sort((x, y) => x.time - y.time);
+  lw.series.setMarkers(marks);
+  lw.chart.timeScale().fitContent();
 }
 
 /** A line of the market cap (price scaled by the current cap), right axis,
