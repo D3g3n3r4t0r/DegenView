@@ -127,8 +127,9 @@ SERIOUS_MIN_GITHUB = 70
 # and it ranks below an equal project that shows its code.
 NO_GITHUB_MIN_PILLAR = {"site": 70, "tokenomics": 60}
 NO_GITHUB_PENALTY = 10.0
-RULES_VERSION = 4              # 2: "no GitHub" stopped being a ban; 3: radar launches out;
-                               # 4: research read by reader.py, older bans and readings dropped
+RULES_VERSION = 5              # 2: "no GitHub" stopped being a ban; 3: radar launches out;
+                               # 4: research read by reader.py, older bans and readings dropped;
+                               # 5: reader recognises research-stage code and stated limits
 CAP_MAX_USD = radar.MCAP_MAX_USD
 
 _entries: dict[str, dict] = {}     # chain:token
@@ -161,7 +162,7 @@ def _load() -> None:
         _entries.update({k: v for k, v in (raw.get("entries") or {}).items()
                          if isinstance(v, dict) and v.get("source") not in RADAR_SOURCES})
         rules = int(raw.get("rules") or 1)
-        if rules < 4:
+        if rules < 5:
             # Research pillars scored before the reader existed: read them again now.
             for e in _entries.values():
                 (e.get("pillars") or {}).pop("site", None)

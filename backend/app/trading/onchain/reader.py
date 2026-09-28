@@ -67,7 +67,12 @@ _LIVE = re.compile(r"\b(mainnet|now live|live on|live now|is live|launched|avail
                    r"launch app|try it|npm install|pip install)\b", re.I)
 _TESTNET = re.compile(r"\b(testnet|devnet|beta|alpha|early access|waitlist|pilot)\b", re.I)
 _BUILDING = re.compile(r"\b(roadmap|coming soon|in development|we are building|under development|"
-                       r"phase \d|q[1-4]\s?20\d\d|soon)\b", re.I)
+                       r"phase \d|q[1-4]\s?20\d\d|soon|runnable|prototype|proof of concept|"
+                       r"reference implementation|implemented|open[- ]source|source code|proof record|"
+                       r"machine-checked|formally verified|benchmarks?|development)\b", re.I)
+_CANDOR = re.compile(r"\b(named limits?|limitations?|not yet|not ready|no (?:independent )?(?:external )?audit|"
+                     r"known (?:issues|limits)|remains? (?:outside|beyond|open)|beyond the present|"
+                     r"out of scope|trade-?offs?|caveats?|active research)\b", re.I)
 
 _TOKEN = re.compile(r"(\$[A-Za-z]{2,10}\b|\btokens?\b)")
 _UTILITY = {
@@ -98,13 +103,14 @@ only over just like each other some many any very using used use based built mak
 
 # --------------------------------------------------------------- weights
 
-W_DEPTH, K_DEPTH = 30, 6          # 30 points, e-folding at 6 concepts
-W_CONCRETE, K_CONCRETE = 15, 4
+W_DEPTH, K_DEPTH = 30, 4          # 30 points, e-folding at 4 concepts
+W_CONCRETE, K_CONCRETE = 15, 3
 W_STAGE = {"live": 20, "testnet": 14, "building": 8, "idea": 2, "unclear": 0}
 W_UTILITY = 10                    # full at two roles
 W_INFO, K_INFO = 10, 60           # distinct content words
 W_COHERENT = 5
-MAX_POINTS = W_DEPTH + W_CONCRETE + max(W_STAGE.values()) + W_UTILITY + W_INFO + W_COHERENT
+W_CANDOR = 8                      # full at two distinct statements of limits
+MAX_POINTS = W_DEPTH + W_CONCRETE + max(W_STAGE.values()) + W_UTILITY + W_INFO + W_COHERENT + W_CANDOR
 BUZZ_PENALTY = 20                 # times the buzzword share
 HYPE_PENALTY, HYPE_CAP = 8, 30
 CLONE_PENALTY = 25
@@ -228,6 +234,7 @@ def read(description: str, site_texts: list[str], *, name: str = "", symbol: str
     concrete = concreteness(text)
     st, st_ev = stage(text, app_ok)
     roles = token_utility(text)
+    candor = len(set(m.lower() for m in _CANDOR.findall(text)))
     info = len(content_words(text))
     buzz = len(_BUZZ.findall(text))
     hype = len(_HYPE.findall(text))
@@ -244,6 +251,7 @@ def read(description: str, site_texts: list[str], *, name: str = "", symbol: str
         "utility": W_UTILITY * min(len(roles), 2) / 2,
         "info": W_INFO * _sat(info, K_INFO),
         "coherence": W_COHERENT if coherence is not None and coherence >= COHERENCE_MIN else 0,
+        "candor": W_CANDOR * min(candor, 2) / 2,
     }
     buzz_share = buzz / (buzz + n_concepts) if buzz + n_concepts else 0.0
     penalty = {"buzz": BUZZ_PENALTY * buzz_share, "hype": min(HYPE_CAP, HYPE_PENALTY * hype),
@@ -281,6 +289,8 @@ def read(description: str, site_texts: list[str], *, name: str = "", symbol: str
     why = [f"{n_concepts} concepts in {len(found)} fields ({', '.join(found)})" if found else "no technical concept",
            f"{len(concrete)} concrete details" if concrete else "no concrete detail",
            f"stage {st}", f"token: {', '.join(roles)}" if roles else "token has no stated role"]
+    if candor:
+        why.append("states its own limits")
     return {
         "summary": summary(description, site), "stage": st, "substance": round(points / 10),
         "original": not clone, "verdict": verdict, "red_flags": flags[:5],
