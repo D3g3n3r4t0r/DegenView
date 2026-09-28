@@ -703,33 +703,71 @@ def spot_only(signals: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-# Un crollo rapido oltre questa frazione dal massimo recente e' un rug pull:
-# la strategia si spegne e non rientra (Lorenzo, 28/09: "quando il prezzo fa
-# un drawdown superiore al 60-70% in modo molto veloce [...] la strategia si
-# deve automaticamente disabilitare").
-RUG_DROP = 0.65
-RUG_WINDOW = "24h"
+# Un token non muore solo con un crollo rapido: la liquidita' puo' essere
+# ritirata in una candela, il prezzo puo' spegnersi lentamente, gli scambi
+# possono prosciugarsi dopo la caduta, o il rug puo' essere gia' stato visto
+# on-chain. Ognuno di questi casi spegne la strategia e non la fa rientrare
+# (Lorenzo, 28/09: "come regola e' un po' insufficiente; valuta tu un modo
+# piu' intelligente, che carpisca il senso di quello che intendevo").
+RUG_CRASH_WINDOW = "6h"
+RUG_DEAD_RATIO = 0.15
+RUG_ABANDONED_WINDOW = "24h"
+RUG_ABANDONED_RATIO = 0.40
+RUG_VOLUME_WINDOW = "24h"
+RUG_VOLUME_BARS = 12
+RUG_VOLUME_RATIO = 0.05
 
 
-def rug_bar(df: pd.DataFrame) -> int | None:
-    """La prima barra in cui il minimo scende sotto (1 - RUG_DROP) del
-    massimo delle ultime RUG_WINDOW ore. None se non succede mai."""
+def _pct(ratio: float) -> str:
+    return f"-{round((1 - ratio) * 100)}%"
+
+
+def rug_event(df: pd.DataFrame, known: dict | None = None) -> dict | None:
+    """La prima barra in cui il token mostra di essere morto, con il motivo.
+
+    Ogni barra e' giudicata solo sulle barre fino a lei (nessuna informazione
+    futura). Ritorna {"i": posizione, "why": testo} o None. L'ordine dei
+    controlli e' quello dei casi piu' netti prima: prima la liquidita'
+    ritirata in una candela, poi il crollo, poi il token morto, poi gli
+    scambi prosciugati, infine il rug gia' visto on-chain."""
     if df.empty:
         return None
-    peak = df["high"].rolling(RUG_WINDOW).max()
-    hit = df["low"] <= (1 - RUG_DROP) * peak
-    positions = [i for i, v in enumerate(hit.to_numpy()) if bool(v)]
-    return positions[0] if positions else None
+    close, high, open_, volume = df["close"], df["high"], df["open"], df["volume"]
+    peak6 = high.rolling(RUG_CRASH_WINDOW).max()
+    top = high.cummax()
+    peak24 = high.rolling(RUG_ABANDONED_WINDOW).max()
+    vol_mean = volume.rolling(RUG_VOLUME_BARS).mean()
+    vol_peak = vol_mean.rolling(RUG_VOLUME_WINDOW).max()
+    # (condition, reason at bar i): the earliest bar wins; on the same bar,
+    # the order below (sharpest cases first).
+    checks = [
+        (close <= 0.5 * open_, lambda i: f"one candle {_pct(close.iloc[i] / open_.iloc[i])}: liquidity pulled"),
+        (close <= 0.30 * peak6, lambda i: f"crash {_pct(close.iloc[i] / peak6.iloc[i])} in under 6h"),
+        (close <= RUG_DEAD_RATIO * top, lambda i: f"{_pct(close.iloc[i] / top.iloc[i])} from its top: dead token"),
+        ((close <= RUG_ABANDONED_RATIO * peak24) & (vol_mean <= RUG_VOLUME_RATIO * vol_peak),
+         lambda i: "trading dried up after the fall"),
+    ]
+    best = None
+    for cond, why in checks:
+        hit = cond.fillna(False).to_numpy().nonzero()[0]
+        if len(hit) and (best is None or hit[0] < best[0]):
+            best = (int(hit[0]), why)
+    if known and known.get("at"):
+        stamps = [i for i, ts in enumerate(df.index) if ts.timestamp() >= known["at"]]
+        if stamps and (best is None or stamps[0] < best[0]):
+            return {"i": stamps[0], "why": known.get("why") or "rug seen on-chain"}
+    return {"i": best[0], "why": best[1](best[0])} if best else None
 
 
-def rug_stop(df: pd.DataFrame, signals: pd.DataFrame) -> pd.DataFrame:
+def rug_stop(df: pd.DataFrame, signals: pd.DataFrame, known: dict | None = None) -> pd.DataFrame:
     """Dal rug in poi niente piu' ingressi e la posizione lunga si chiude
-    sulla barra del crollo: il token e' flaggato come rug pull e il backtest
+    sulla barra dell'evento: il token e' flaggato come morto e il backtest
     non prosegue (Lorenzo, 28/09)."""
     out = signals.copy()
-    i = rug_bar(df)
-    if i is None:
+    ev = rug_event(df, known)
+    if ev is None:
         return out
+    i = ev["i"]
     out.iloc[i:, out.columns.get_loc("entry_long")] = False
     out.iloc[i:, out.columns.get_loc("entry_short")] = False
     out.iloc[i, out.columns.get_loc("exit_long")] = True
