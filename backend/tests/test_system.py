@@ -237,6 +237,10 @@ def test_on_alert_the_alert_is_the_entry(monkeypatch):
     assert r["trades"] == 1 and r["wins"] == 1 and r["state"] == "out"
     # exit signal on bar 43, filled at the open of bar 44 (1.3)
     assert abs(r["ret"] - (1.3 * (1 - system.COST) ** 2 - 1)) < 1e-4
+    # after the close, no re-entry: one trade per alert
+    monkeypatch.setattr(system.radar, "spot_signals", _signals({44}, {43}))
+    again = system.follow(_bars(prices), system.CANDIDATES[0], T0, now=T0 + 6 * B, on_alert=True)
+    assert again["trades"] == 1 and again["state"] == "out"
 
 
 def test_every_alert_gets_an_on_alert_result(monkeypatch, tmp_path):

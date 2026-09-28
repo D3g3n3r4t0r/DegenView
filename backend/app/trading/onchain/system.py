@@ -85,8 +85,10 @@ def follow(bars: list[list], cfg: dict, start: float, *, gone: bool = False, now
     """The strategy's trades from `start` (the alert) to start + WINDOW_S.
 
     on_alert: the alert itself is the entry (Lorenzo, 28/09: "la strategia
-    su questa roba sarebbe entrata perche' sono stati segnalati"): buy at the
-    first open after the alert, then the strategy's own exits and re-entries.
+    deve entrare nel momento in cui arriva l'alert [...] Poi deve gestire
+    esclusivamente la chiusura secondo la classica regola del trend
+    follower"): buy at the first open after the alert, sell on the
+    strategy's exit, and no re-entry after that.
 
     Returns ret (compounded, after costs), trades, state ("in", "out",
     "waiting" = no entry yet), in_at/entry price when in, and the events."""
@@ -130,7 +132,7 @@ def follow(bars: list[list], cfg: dict, start: float, *, gone: bool = False, now
                 pos, entry, in_at = True, opens[i + 1], t_fill
                 events.append({"t": t_fill, "side": "buy", "price": float(entry), "why": "trend"})
                 continue
-        if not pos and entry_sig[i]:
+        if not pos and entry_sig[i] and not on_alert:
             pos, entry, in_at = True, opens[i + 1], t_fill
             events.append({"t": t_fill, "side": "buy", "price": float(entry)})
         elif pos and exit_sig[i]:
