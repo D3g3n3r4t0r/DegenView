@@ -2192,5 +2192,10 @@
     "status": "risolto",
     "at": 1790587112,
     "summary": "Nel backend: 12 narrative per i meme accanto alle 24 dei progetti; ognuno salva le sue nel profilo e il cacciatore cerca per prime quelle piu' scelte. La schermata per sceglierle arriva con la prossima modifica. PR #258."
+  },
+  "seed-0202": {
+    "status": "risolto",
+    "at": 1790609911,
+    "summary": "Dopo la PR #272 l'app si fermava all'avvio: il giudice DeepSeek e la classifica si importavano a vicenda, e con un progetto bocciato dal giudice gia' salvato il caricamento della classifica cadeva. Il giudice ora carica la classifica solo quando serve; un test riproduce l'avvio con quel dato."
   }
 }

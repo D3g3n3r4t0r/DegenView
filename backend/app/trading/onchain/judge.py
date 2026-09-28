@@ -18,7 +18,7 @@ import json
 import logging
 import time
 
-from app.trading.onchain import leaderboard, storage
+from app.trading.onchain import storage
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +114,7 @@ def dossier(e: dict, rules_why: str) -> str:
             lines.append(f"  flags: {json.dumps(p['flags'])[:600]}")
         if p.get("facts"):
             lines.append(f"  facts: {json.dumps(p['facts'])[:600]}")
+    from app.trading.onchain import leaderboard  # lazy: leaderboard imports judge and ranks at import time
     use = leaderboard.traction_of(e)
     if use:
         lines.append(f"Traction: {json.dumps(use)[:600]}")
