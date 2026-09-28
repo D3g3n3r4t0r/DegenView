@@ -4365,11 +4365,42 @@ async def onchain_manual_scan(req: ScanRequest, user: User = Depends(auth.get_cu
     return await manual_scan.scan(req.query[:80])
 
 
+def _agent_progress() -> list[dict]:
+    """Quanto lavoro e' fatto e quanto ne resta: una riga per coda."""
+    from app.trading.onchain import backtest_lab, discovery, listings
+    rows: list[dict] = []
+    try:
+        st = onchain_alert_track.backtest_status("meme")
+        rows.append({"key": "sniper", "label": "Sniper backtests",
+                     "done": st["ready"], "total": st["total"] - st["no_data"]})
+    except Exception:
+        pass
+    try:
+        s = onchain_strategy_lab.status(_top_entries(50))
+        rows.append({"key": "gems", "label": "Gem backtests",
+                     "done": s["ready"], "total": s["total"]})
+    except Exception:
+        pass
+    try:
+        done = backtest_lab.done_count()
+        rows.append({"key": "studies", "label": "Tokens studied",
+                     "done": done, "total": done + len(backtest_lab.queue())})
+    except Exception:
+        pass
+    try:
+        total = listings.status()["pending"] + discovery.status()["queue"]
+        rows.append({"key": "scan", "label": "Queued to scan", "done": 0, "total": total})
+    except Exception:
+        pass
+    return rows
+
+
 @app.get("/api/agent")
 def agent_activity(user: User = Depends(auth.get_current_user)) -> dict:
     """The agent's live presence on the site: what DeepSeek did lately."""
     out = deepseek_desk.activity()
     out["watching"] = sum(1 for a in onchain_alert_track._alerts.values() if not a.get("closed") and not a.get("gone"))
+    out["progress"] = _agent_progress()
     return out
 
 

@@ -104,3 +104,18 @@ def test_summary_counts_rows(monkeypatch, tmp_path):
     s = backtest_lab.summary()
     assert s["rows"] == 1
     assert "proposed" in s["by_decision"]
+
+
+def test_done_count_empty_and_after_write(monkeypatch, tmp_path):
+    now = time.time()
+    _setup(monkeypatch, tmp_path, now)
+    assert backtest_lab.done_count() == 0
+
+    entry = outcomes._journal["solana:mature"]
+
+    async def fake_candles(client, net, pool, tf, aggregate, before, limit, token=""):
+        return _bars(entry["at"])
+
+    monkeypatch.setattr(alert_track, "_candles", fake_candles)
+    asyncio.run(backtest_lab.fill(now))
+    assert backtest_lab.done_count() == 1

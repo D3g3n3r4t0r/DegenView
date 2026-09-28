@@ -157,7 +157,42 @@ function paintHero() {
       prio.hidden = true;
     }
   }
+  paintProgress();
   paintNow();
+}
+
+function progressParts(row) {
+  const total = row.total ?? 0;
+  const done = row.done ?? 0;
+  const right = row.key === "scan" ? `${total} left` : `${done}/${total}`;
+  const r = total > 0 ? Math.min(1, Math.max(0, done / total)) : 0;
+  return { right, r };
+}
+
+function progressHtml(row) {
+  const { right } = progressParts(row);
+  const bar = row.key === "scan" ? "" : `<div class="ag-bar"><i style="transform:scaleX(0)"></i></div>`;
+  return `<div class="ag-prog-item" data-key="${escapeHtml(row.key)}"><div class="ag-prog-row"><span>${escapeHtml(row.label)}</span><b>${escapeHtml(right)}</b></div>${bar}</div>`;
+}
+
+function paintProgress() {
+  const box = viewEl?.querySelector("[data-ag-prog]");
+  if (!box) return;
+  const rows = viewData?.progress ?? [];
+  const keys = rows.map((row) => row.key).join();
+  if (box.dataset.keys !== keys) {
+    box.innerHTML = rows.map(progressHtml).join("");
+    box.dataset.keys = keys;
+  }
+  // bars start at 0 and grow to their value, then move in place on each poll
+  requestAnimationFrame(() => rows.forEach((row, i) => {
+    const item = box.children[i];
+    if (!item) return;
+    const { right, r } = progressParts(row);
+    item.querySelector("b").textContent = right;
+    const fill = item.querySelector(".ag-bar i");
+    if (fill) fill.style.transform = `scaleX(${r})`;
+  }));
 }
 
 async function loadView() {
@@ -226,6 +261,7 @@ export function mountAgentView() {
       <p class="ag-today" data-ag-today>Nothing yet today</p>
       <p class="ag-prio" data-ag-prio hidden></p>
     </div>
+    <div class="ag-prog" data-ag-prog></div>
     <div class="ag-now" data-ag-now hidden></div>
     <ul class="ag-list" data-ag-list></ul>
     <button type="button" class="ag-more" data-ag-more hidden>Load earlier</button>`;
