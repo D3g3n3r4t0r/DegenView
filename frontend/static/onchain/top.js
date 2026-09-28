@@ -25,6 +25,15 @@ let labStatus = null;
 function read() { try { return Number(localStorage.getItem("lae:top")) || 15; } catch { return 15; } }
 function write(n) { try { localStorage.setItem("lae:top", String(n)); } catch { /* private mode */ } }
 
+// The order seen on the last visit (Lorenzo, 28/09: "se rientro dopo un po' e
+// c'e' stato un capovolgimento [...] fai una bella animazione"): ids and symbols.
+const SEEN_KEY = "lae:top-seen";
+function readSeen() { try { return JSON.parse(localStorage.getItem(SEEN_KEY)) || null; } catch { return null; } }
+function writeSeen(list) { try { localStorage.setItem(SEEN_KEY, JSON.stringify(list)); } catch { /* private mode */ } }
+let seen = readSeen();      // what this visit started from; replaced once shown
+let shown = false;
+const idOf = (e) => `gem:${e.chain}:${e.token_address}`;
+
 function paint() {
   if (!root) return;
   delete root.dataset.loading;
@@ -46,6 +55,23 @@ function paint() {
   if (top3.length) renderPodium(podium, top3, { still: podium.dataset.sig === sig });
   else podium.innerHTML = "";
   podium.dataset.sig = sig;
+  const prev = !shown && seen ? seen : null;
+  const before = new Map((prev ?? []).map((x, i) => [x.id, i]));
+  if (prev) {
+    // A podium place taken since the last visit: the old token leaves, the new one lands.
+    top3.forEach((x, i) => {
+      const was = prev[i];
+      if (!was || was.id === x.id) return;
+      const slot = podium.querySelectorAll(".pc-slot")[i];
+      if (!slot) return;
+      slot.classList.add("pc-taken");
+      const out = document.createElement("span");
+      out.className = "pc-prev";
+      out.setAttribute("aria-hidden", "true");
+      out.textContent = was.symbol ?? "";
+      slot.append(out);
+    });
+  }
   withEntrance(root.querySelector("[data-top-rows]"), () => {
   root.querySelector("[data-top-rows]").innerHTML = rows.length ? rows.map((e, i) => {
     const id = `gem:${e.chain}:${e.token_address}`;
@@ -57,10 +83,29 @@ function paint() {
       score: e.score, badge: e.early ? "early" : null, sub: btSub(e.backtests) });
   }).join("") : `<li class="muted pad">The board is filling up: projects appear as they pass the checks.</li>`;
   });
+  if (prev) {
+    // Rows that moved since the last visit glide from their old place.
+    root.querySelectorAll("[data-top-rows] > li.trow").forEach((li, i) => {
+      const id = li.querySelector("[data-open]")?.dataset.open;
+      if (!id) return;
+      if (!before.has(id)) { li.classList.add("rank-new"); return; }
+      const d = before.get(id) - i;
+      if (!d) return;
+      li.style.setProperty("--d", String(Math.max(-6, Math.min(6, d))));
+      li.classList.add("rank-moved");
+      li.dataset.move = d > 0 ? "up" : "down";
+    });
+  }
+  const lead = prev && top3[0] && prev[0] && prev[0].id !== top3[0].id
+    ? `Since your last visit: ${top3[0].symbol} took #1 from ${prev[0].symbol}. ` : "";
+  if (rows.length) {
+    shown = true;
+    writeSeen(entries.slice(0, 50).map((e) => ({ id: idOf(e), symbol: e.symbol })));
+  }
   const bt = labStatus;
-  root.querySelector("[data-top-note]").textContent = bt?.total
+  root.querySelector("[data-top-note]").textContent = lead + (bt?.total
     ? `Every strategy backtested on each token's latest chart, every hour, around the clock · ${bt.ready}/${bt.total} ready`
-    : "";
+    : "");
 }
 
 // The H24 lab's best backtest (strategy_lab.py), in the row: what the
