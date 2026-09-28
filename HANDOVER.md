@@ -531,6 +531,12 @@ non oltre; uno, due, tre mesi non e' importante".
   `big_coins.py`: le prime 500 cripto per cap (`/coins/markets`, una volta al
   giorno); stesso ticker, o ticker che lo contiene con nome che inizia uguale
   ("Aave (Wormhole)") = e' quella moneta. Entra in `true_cap`.
+- 28/09 Lorenzo: "deve funzionare subito, devi capire quando sono porting
+  da altre chain". Lista top 500 anche nel codice (`big_coins_seed.json`,
+  vale dal primo avvio; la versione live la sostituisce al primo giro e
+  riordina subito la classifica). Nome che dice porting (Wormhole, (Portal),
+  bridged, Allbridge, Sollet, Axelar, Wrapped, "(WH)"...) = fuori a
+  prescindere dalla cap.
 - 28/09 Lorenzo: "DeepSeek [...] deve riesaminare i risultati che escono
   dalla top classifica e metterli in discussione [...] Clau Pump Tech ma
   che roba è, Leon AI sono nomi che non hanno senso". `judge.review_board`:
