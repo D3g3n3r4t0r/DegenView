@@ -56,3 +56,28 @@ def test_judge_writes_its_reasoning():
     assert verdict["steps"][:2] == ["✗ team anonymous", "✗ no audit"] and verdict["steps"][2] == "✓ real users"
     assert verdict["outcome"] == "vetoed"
     assert any(s.startswith("Pillars: github 40, site 55, tokenomics 70") for s in dossier["steps"])
+
+
+def test_done_counts_every_note_by_kind_for_today():
+    """Lorenzo, 28/09: "voglio avere la sensazione che la gente stia lavorando
+    costantemente". The Agent page counts all work, not only LLM calls."""
+    for _ in range(3):
+        deepseek_desk.note("backtest", "Backtested X", now=86_400 * 10 + 5)
+    deepseek_desk.note("study", "Studied Y", now=86_400 * 10 + 6)
+    deepseek_desk.note("backtest", "yesterday", now=86_400 * 9 + 5)
+    done = deepseek_desk.activity(now=86_400 * 10 + 7)["done"]
+    assert done == {"backtest": 3, "study": 1}
+
+
+def test_a_study_lands_in_the_agent_log_with_its_score():
+    from app.trading.onchain import leaderboard
+    e = {"symbol": "DREGG", "chain": "solana", "token_address": "T",
+         "pillars": {"github": {"score": 91.4}, "site": {"detail": "no site"}},
+         "overall": {"score": 77.6, "fatal": None, "pending": []}}
+    leaderboard._note_study(e, ["github", "site"])
+    item = deepseek_desk.log()[0]
+    assert item["kind"] == "study" and item["text"] == "Studied DREGG: GitHub, site"
+    assert item["steps"] == ["GitHub: 91", "site: no site"] and item["outcome"] == "score 78"
+    e["overall"] = {"score": 0, "fatal": "renounced? no"}
+    leaderboard._note_study(e, ["github"])
+    assert deepseek_desk.log()[0]["outcome"].startswith("rejected: ")

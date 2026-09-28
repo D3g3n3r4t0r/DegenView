@@ -50,7 +50,7 @@ _lock = threading.Lock()
 # "deve dare l'idea di essere sempre presente [...] un agent che esamina le
 # cose"). Saved with the ledger, so a restart does not empty the log.
 _activity: list[dict] = []
-ACTIVITY_KEEP = 300
+ACTIVITY_KEEP = 1000
 _state: dict = {"days": {}, "recap_sent": ""}
 _memory: dict[str, list[dict]] = {}
 
@@ -63,6 +63,7 @@ def _load() -> None:
     if isinstance(raw, dict):
         _state["days"] = raw.get("days") or {}
         _state["recap_sent"] = raw.get("recap_sent") or ""
+        _state["done"] = raw.get("done") or {}
         _activity[:] = [a for a in raw.get("activity") or [] if isinstance(a, dict)][-ACTIVITY_KEEP:]
 
 
@@ -74,7 +75,7 @@ def _save() -> None:
 
 
 def reset_for_tests() -> None:
-    _state.update(days={}, recap_sent="")
+    _state.update(days={}, recap_sent="", done={})
     _memory.clear()
     _activity.clear()
 
@@ -82,7 +83,15 @@ def reset_for_tests() -> None:
 def note(kind: str, text: str, now: float | None = None,
          steps: list[str] | None = None, outcome: str = "", **extra) -> None:
     """One line of what the agent is doing, for /api/agent."""
-    entry = {"t": now or time.time(), "kind": kind, "text": text[:140], **extra}
+    now = now or time.time()
+    entry = {"t": now, "kind": kind, "text": text[:140], **extra}
+    # What the agent did today, by kind: every job, not only the LLM calls
+    # (a backtest or a GitHub study costs no tokens but is real work).
+    done = _state.setdefault("done", {})
+    day = done.setdefault(day_of(now), {})
+    day[kind] = day.get(kind, 0) + 1
+    for old in sorted(done)[:-3]:
+        done.pop(old, None)
     if steps:
         entry["steps"] = [str(s)[:200] for s in steps][:8]
     if outcome:
@@ -102,6 +111,7 @@ def activity(now: float | None = None) -> dict:
     now = now or time.time()
     today = _state["days"].get(day_of(now)) or {}
     return {"items": list(reversed(_activity[-30:])),
+            "done": dict((_state.get("done") or {}).get(day_of(now)) or {}),
             "working": bool(_activity) and now - _activity[-1]["t"] < 180,
             "today": {k: v.get("calls", 0) for k, v in today.items()},
             "active": bool(settings.deepseek_api_key)}

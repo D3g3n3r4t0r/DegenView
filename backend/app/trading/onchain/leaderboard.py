@@ -390,6 +390,8 @@ async def _analyze(k: str, skip: set[str], client: httpx.AsyncClient) -> None:
             result = await depth.analyze(item, client, skip=skip)
         apply_analysis(k, result)
         e = _entries.get(k)
+        if e is not None and result:
+            _note_study(e, sorted(result))
         if e is not None:
             o = e.get("overall") or {}
             if not o.get("pending") and not o.get("fatal"):
@@ -402,6 +404,29 @@ async def _analyze(k: str, skip: set[str], client: httpx.AsyncClient) -> None:
         logger.exception("classifica: analisi fallita su %s", k)
     finally:
         _busy.discard(k)
+
+
+_PILLAR_NAMES = {"github": "GitHub", "site": "site", "tokenomics": "tokenomics"}
+
+
+def _note_study(e: dict, pillars: list[str]) -> None:
+    """Ogni studio di un progetto nel registro dell'agente (Lorenzo, 28/09:
+    "voglio avere la sensazione che stia lavorando costantemente [...]
+    andando nel database a approfondire"). Solo lavoro vero, niente LLM."""
+    from app.notify import deepseek_desk
+    names = [_PILLAR_NAMES.get(p, p) for p in pillars]
+    steps = []
+    for p in pillars:
+        pil = (e.get("pillars") or {}).get(p) or {}
+        if pil.get("score") is not None:
+            steps.append(f"{_PILLAR_NAMES.get(p, p)}: {round(pil['score'])}")
+        elif pil.get("detail"):
+            steps.append(f"{_PILLAR_NAMES.get(p, p)}: {str(pil['detail'])[:80]}")
+    o = e.get("overall") or {}
+    outcome = ("rejected: " + str(o.get("fatal"))[:80] if o.get("fatal")
+               else f"score {round(o['score'])}" if o.get("score") is not None else "")
+    deepseek_desk.note("study", f"Studied {e.get('symbol') or e.get('name')}: {', '.join(names)}",
+                       steps=steps, outcome=outcome, chain=e.get("chain"), token=e.get("token_address"))
 
 
 def _prune(now: float) -> None:
