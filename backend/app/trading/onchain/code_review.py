@@ -23,7 +23,9 @@ _FILE = storage.data_file("onchain_code_review.json")
 
 SOURCE_EXT = (".rs", ".go", ".ts", ".tsx", ".js", ".py", ".sol", ".move", ".lean", ".c", ".cpp", ".h",
               ".zig", ".cairo", ".circom", ".nr", ".hs", ".ml", ".kt", ".swift")
-SKIP_PARTS = ("test", "vendor", "node_modules", "dist", "build", "example", "mock", ".min.")
+SKIP_DIRS = {"test", "tests", "__tests__", "spec", "vendor", "node_modules", "dist", "build", "out", "target",
+             "example", "examples", "mock", "mocks", "fixtures", "third_party", "deps"}
+SKIP_NAME = (".test.", ".spec.", "_test.", ".min.", ".d.ts")
 MAX_FILES = 4
 MAX_TREE = 300
 README_CHARS = 4000
@@ -80,7 +82,9 @@ def _is_source(path: str) -> bool:
     low = path.lower()
     if not low.endswith(SOURCE_EXT):
         return False
-    return not any(part in low for part in SKIP_PARTS)
+    *dirs, name = low.split("/")
+    # Whole folder names, not substrings: "attestation.rs" and "builder.rs" are code.
+    return not (SKIP_DIRS & set(dirs)) and not name.startswith("test_") and not any(x in name for x in SKIP_NAME)
 
 
 def pick_files(tree: list[dict]) -> list[str]:
@@ -119,8 +123,10 @@ async def fetch_code(full_name: str, client) -> dict | None:
 
 
 def parse(raw: str) -> dict | None:
+    raw = raw or ""
+    a, b = raw.find("{"), raw.rfind("}")
     try:
-        out = json.loads(raw)
+        out = json.loads(raw[a:b + 1] if a >= 0 and b > a else raw)
     except Exception:
         return None
     if not isinstance(out, dict):

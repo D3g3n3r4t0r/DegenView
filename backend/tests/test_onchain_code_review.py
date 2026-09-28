@@ -72,3 +72,9 @@ def test_review_reads_the_code_and_caches(monkeypatch):
     assert out["complexity"] == 90 and out["innovation"] == 85
     again = asyncio.run(code_review.review(e, C(), ask=ask))
     assert again["complexity"] == 90 and calls["ask"] == 1
+
+
+def test_skip_rules_match_folders_not_substrings():
+    assert code_review._is_source("src/attestation.rs") and code_review._is_source("src/builder.go")
+    assert not code_review._is_source("src/tests/a.rs") and not code_review._is_source("src/a.test.ts")
+    assert code_review.parse('```json\n{"complexity": 70, "innovation": 60}\n```')["innovation"] == 60
