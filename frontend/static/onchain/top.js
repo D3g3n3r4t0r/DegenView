@@ -53,13 +53,10 @@ function paint() {
       ageTs: e.launched_at, context: `Rank #${i + 1} · score ${Math.round(e.score ?? 0)}` });
     return tokenRow({ id, symbol: e.symbol, name: `${i + 1}. ${e.name || e.symbol}`, chain: e.chain, token: e.token_address,
       image: e.image, cap: e.market_cap, change: e.change_24h != null ? e.change_24h / 100 : null, ageTs: e.launched_at,
-      score: e.score, badge: e.early ? "early" : null,
-      sub: e.on_board ? "" : `<span class="off-board">not ranked${e.why ? `: ${escapeHtml(e.why)}` : ""}</span>` });
+      score: e.score, badge: e.early ? "early" : null });
   }).join("") : `<li class="muted pad">The board is filling up: projects appear as they pass the checks.</li>`;
   });
-  const onBoard = rows.filter((e) => e.on_board).length;
-  root.querySelector("[data-top-note]").textContent = rows.length > onBoard
-    ? `${onBoard} on the board, the rest from the database: studied, not ranked yet (reason under each).` : "";
+  root.querySelector("[data-top-note]").textContent = "";
 }
 
 async function load() {

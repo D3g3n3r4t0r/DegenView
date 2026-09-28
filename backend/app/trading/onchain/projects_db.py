@@ -336,6 +336,21 @@ def search(q: str = "", status: str = "", sort: str = "score", limit: int = 50, 
     return {"total": total, "items": [_row(r) for r in rows]}
 
 
+def recheck_studied(patterns: tuple[str, ...]) -> int:
+    """Projects held back only by an old limit: put them back in the queue.
+    Lorenzo, 28/09: the $3M / one-year limits were raised to $25M / three
+    years (#259), so rows rejected with "over $3M" or "over N days" deserve
+    a fresh look. Returns how many rows were changed."""
+    if not patterns:
+        return 0
+    where = " OR ".join("why LIKE ?" for _ in patterns)
+    with _lock:
+        cur = _db().execute(f"UPDATE projects SET next_check = 0 WHERE status = 'studied' AND ({where})",
+                            tuple(f"%{p}%" for p in patterns))
+        _db().commit()
+        return cur.rowcount
+
+
 def narrative_counts() -> dict[str, int]:
     """How many projects each narrative key has, from the rows' JSON column."""
     out: dict[str, int] = {}
