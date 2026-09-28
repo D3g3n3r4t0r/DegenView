@@ -221,8 +221,7 @@ function descriptionBlock(p) {
 
 function paintChips() {
   dlg.querySelector("[data-chips]").innerHTML = INTERVALS.map((iv) =>
-    `<button type="button" data-iv="${iv}"${iv === interval ? ' aria-pressed="true"' : ""}>${iv}</button>`).join("")
-    + `<span class="sep"></span><span class="dt-legend"><i class="mk"></i>Alert</span>`;
+    `<button type="button" data-iv="${iv}"${iv === interval ? ' aria-pressed="true"' : ""}>${iv}</button>`).join("");
 }
 
 // The system's own trades on one alert, each with why it sold. A sell
@@ -452,9 +451,13 @@ async function paintChart() {
     if (candles.length >= 2) { shown = iv; break; }
   }
   if (candles.length < 2) { if (!stale) { disposeChart(); box.innerHTML = embed(e); } return; }
-  await drawChart(box, candles, e);
+  const drawn = await drawChart(box, candles, e);
   const note = box.parentElement?.querySelector("[data-chart-note]");
-  if (note) note.textContent = shown === interval ? "" : `No ${interval} candles for this token: showing ${shown}.`;
+  if (note) {
+    if (shown !== interval) note.textContent = `No ${interval} candles for this token: showing ${shown}.`;
+    else if (!drawn) note.textContent = "The strategy stayed out of this chart.";
+    else note.textContent = "";
+  }
 }
 
 // The main site's engine (Lorenzo, 28/09: "sti ingressi e uscite nel grafico
@@ -514,18 +517,24 @@ async function drawChart(box, candles, e) {
   const t0 = bars[0].time, t1 = bars[bars.length - 1].time;
   const barAt = (t) => { let b = bars[0].time; for (const x of bars) { if (x.time <= t) b = x.time; else break; } return b; };
   const marks = [];
+  let drawn = 0;
   for (const a of e.alerts ?? []) {
-    if (a.at >= t0 && a.at <= t1 + 3600) marks.push({ time: barAt(a.at), position: "belowBar", color: "#facc15", shape: "circle", text: "Alert" });
     for (const v of tradesOf(a)) {
       if (v.t < t0 || v.t > t1 + 3600) continue;
       const buy = v.side === "buy";
       marks.push({ time: barAt(v.t), position: buy ? "belowBar" : "aboveBar", color: buy ? "#2de0a8" : "#f87171",
         shape: buy ? "arrowUp" : "arrowDown", text: buy ? "Buy" : v.ret != null ? `Sell ${pct(v.ret)}` : "Sell" });
+      drawn++;
+    }
+    const rug = a.backtests?.rug?.at;
+    if (rug != null && rug >= t0 && rug <= t1 + 3600) {
+      marks.push({ time: barAt(rug), position: "aboveBar", color: "#f87171", shape: "square", text: "Rug · strategy off" });
     }
   }
   marks.sort((x, y) => x.time - y.time);
   lw.series.setMarkers(marks);
   lw.chart.timeScale().fitContent();
+  return drawn;
 }
 
 /** The trades drawn on the chart: the best backtest's, the one the ranking
@@ -553,11 +562,6 @@ function svgChart(candles, e) {
   const d = candles.map((c, i) => `${i ? "L" : "M"}${x(c.time).toFixed(1)},${y(ys[i]).toFixed(1)}`).join("");
   const ticks = Array.from({ length: 5 }, (_, i) => lo + ((hi - lo) * i) / 4);
   const now = ys[ys.length - 1];
-  const marks = (e.alerts ?? []).filter((a) => a.at >= t0 && a.at <= t1).map((a) => {
-    const i = candles.findIndex((c) => c.time >= a.at);
-    const v = ys[Math.max(0, i)];
-    return `<g class="mk" transform="translate(${x(a.at).toFixed(1)},${y(v).toFixed(1)})"><circle r="7"/><path d="M-2.6 1.6v-2a2.6 2.6 0 0 1 5.2 0v2l.9 1H-3.5z M-.9 3.4a.9.9 0 0 0 1.8 0"/></g>`;
-  }).join("");
   // The system's own trades on this token: green up for a buy, red down for a sell.
   const trades = (e.alerts ?? []).flatMap(tradesOf).filter((v) => v.t >= t0 && v.t <= t1).map((v) => {
     const i = candles.findIndex((c) => c.time >= v.t);
@@ -571,7 +575,6 @@ function svgChart(candles, e) {
     <line class="now" x1="0" x2="${W - R}" y1="${y(now)}" y2="${y(now)}"/>
     <path class="ln" d="${d}"/>
     <circle class="dot" cx="${x(t1)}" cy="${y(now)}" r="4"/>${trades}
-    ${marks}
     <g class="tag" transform="translate(${W - R + 4},${y(now) - 10})"><path d="M0 10 6 0h50v20H6z"/><text x="31" y="14" text-anchor="middle">${usdShort(now)}</text></g>
   </svg>`;
 }
