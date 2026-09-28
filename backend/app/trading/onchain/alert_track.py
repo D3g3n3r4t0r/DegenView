@@ -607,7 +607,8 @@ def _alert_bt_view(a: dict) -> dict | None:
     with trades and wins (Lorenzo, 28/09: every alerted token shows its
     backtest, no "no entry")."""
     rows = [{"label": k, "ret": v.get("ret"), "trades": v.get("trades") or 0, "wins": v.get("wins") or 0,
-             "state": v.get("state"), "done": v.get("done")}
+             "state": v.get("state"), "done": v.get("done"), "entry": v.get("entry"), "in_at": v.get("in_at"),
+             "events": v.get("events") or []}
             for k, v in (a.get("alert_bt") or {}).items() if v and v.get("ret") is not None]
     if not rows:
         return None

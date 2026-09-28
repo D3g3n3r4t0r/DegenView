@@ -256,4 +256,5 @@ def test_every_alert_gets_an_on_alert_result(monkeypatch, tmp_path):
     asyncio.run(at.refresh_system(None, now=T0 + 4 * B, gap_s=0))
     item = at.board("meme", now=T0 + 4 * B)["items"][0] if a["entry"] is not None else at._item(a, T0 + 4 * B, "Trend EMA")
     assert item["on_alert"] and item["on_alert"]["state"] == "in" and item["on_alert"]["ret"] > 0
+    assert [e["side"] for e in item["on_alert"]["events"]] == ["buy"]      # one entry, at the alert
     at.reset_for_tests()
