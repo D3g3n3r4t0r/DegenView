@@ -138,6 +138,8 @@ def test_a_sell_on_a_normal_turn_is_a_signal(monkeypatch):
     monkeypatch.setattr(system.radar, "spot_signals", _signals({40}, {44}))
     r = system.follow(_bars(prices), system.CANDIDATES[0], T0, now=T0 + 8 * B)
     assert [e for e in r["events"] if e["side"] == "sell"][0]["why"] == "signal"
+
+
 def test_save_and_load_round_trip_leaves_no_tmp(monkeypatch, tmp_path):
     monkeypatch.setattr(at, "_STORE_FILE", tmp_path / "a.json")
     monkeypatch.setattr(at, "_BARS_FILE", tmp_path / "b.json")
@@ -171,4 +173,23 @@ def test_missing_bars_are_fetched_again(monkeypatch, tmp_path):
     monkeypatch.setattr(system.radar, "spot_signals", _signals(set(), set()))
     asyncio.run(at.refresh_system(None, now=T0 + 2 * B, gap_s=0))
     assert calls and a["bars_fetched"] and at._bars.get(at.key_of(a))
+    at.reset_for_tests()
+
+
+def test_a_dead_pool_is_refetched_only_once(monkeypatch, tmp_path):
+    monkeypatch.setattr(at, "_STORE_FILE", tmp_path / "a.json")
+    monkeypatch.setattr(at, "_BARS_FILE", tmp_path / "b.json")
+    at.reset_for_tests()
+    a = at.record({"chain": "robinhood", "pair_address": "P", "token_address": "T", "symbol": "X"}, "meme", T0)
+    a.update(bars_fetched=True, system_done=False)
+    calls = []
+
+    async def dead_pool(*args, **kw):
+        calls.append(args)
+        return []
+    monkeypatch.setattr(at, "_candles", dead_pool)
+    monkeypatch.setattr(system.radar, "spot_signals", _signals(set(), set()))
+    for i in range(3):
+        asyncio.run(at.refresh_system(None, now=T0 + (2 + i) * B, gap_s=0))
+    assert len(calls) == 1
     at.reset_for_tests()
