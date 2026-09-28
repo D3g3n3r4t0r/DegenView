@@ -471,6 +471,8 @@ def qualifies(e: dict, now: float | None = None) -> str:
     """"" se entra in classifica, altrimenti perche' no."""
     if benchmark.is_benchmark(e.get("chain"), e.get("token_address")):
         return ""   # il metro di paragone c'e' sempre, i suoi numeri si vedono comunque
+    if big_coins.bridged(e):
+        return "bridged copy of a coin from another chain"
     if true_cap(e) > BOARD_CAP_MAX_USD:
         return f"over ${BOARD_CAP_MAX_USD / 1e6:.0f}M (${true_cap(e) / 1e6:,.0f}M)"
     r = e.get("review") or {}
@@ -775,7 +777,7 @@ async def tick(client: httpx.AsyncClient, now: float | None = None) -> None:
         await _step("dexscreener", _poll_market, client)
     await _step("storico", gem_track.poll, client, set(_entries), now)
     await _step("database", _from_database, client, now)
-    await _step("grandi monete", big_coins.refresh, client, now)
+    await _step("grandi monete", _refresh_big_coins, client, now)
     await _step("cap globale", _check_global_cap, client, now)
     if not _state.get("reviewing"):
         task = asyncio.create_task(_step("revisione", _review_board, now))
@@ -795,6 +797,11 @@ async def tick(client: httpx.AsyncClient, now: float | None = None) -> None:
         task.add_done_callback(_tasks.discard)
     if _dirty:
         _save()
+
+
+async def _refresh_big_coins(client: httpx.AsyncClient, now: float) -> None:
+    if await big_coins.refresh(client, now):
+        _mark()     # re-rank at once: a copy of a top coin leaves the board now
 
 
 async def _check_global_cap(client: httpx.AsyncClient, now: float) -> None:
