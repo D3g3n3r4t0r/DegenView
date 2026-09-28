@@ -868,5 +868,5 @@ html, body { overflow-x: clip; }
 @layer skin {
   /* The main site's chart, embedded in the token page. */
   .dt-chart:has(.main-embed) { block-size: 420px; padding: 0; }
-  .main-embed { display: block; inline-size: 100%; block-size: 100%; border: 0; background: var(--k-bg); }
+  .main-embed { display: block; inline-size: 100%; block-size: 100%; border: 0; background: var(--k-bg); color-scheme: dark; }
 }
