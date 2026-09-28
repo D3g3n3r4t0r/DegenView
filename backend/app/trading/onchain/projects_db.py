@@ -336,6 +336,21 @@ def search(q: str = "", status: str = "", sort: str = "score", limit: int = 50, 
     return {"total": total, "items": [_row(r) for r in rows]}
 
 
+def narrative_counts() -> dict[str, int]:
+    """How many projects each narrative key has, from the rows' JSON column."""
+    out: dict[str, int] = {}
+    with _lock:
+        rows = _db().execute("SELECT narratives FROM projects WHERE narratives IS NOT NULL").fetchall()
+    for (raw,) in rows:
+        try:
+            keys = json.loads(raw) if isinstance(raw, str) else raw
+        except (TypeError, ValueError):
+            continue
+        for k in keys or []:
+            out[k] = out.get(k, 0) + 1
+    return out
+
+
 def stats() -> dict:
     with _lock:
         db = _db()

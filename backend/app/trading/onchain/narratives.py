@@ -73,6 +73,11 @@ def bonus(keys: list[str]) -> float:
     return min(BONUS_MAX, 2.0 * heats[0] + (1.0 if len(heats) > 1 else 0.0))
 
 
+def keys_for_category(cat: str) -> list[str]:
+    """Gem narrative keys whose CoinGecko category list contains `cat`."""
+    return [n["key"] for n in catalog() if n["kind"] == "gem" and cat in (n.get("coingecko") or [])]
+
+
 def coingecko_categories(first: list[str] | None = None) -> list[str]:
     """Gem categories, hottest first. Keys in `first` come before the rest."""
     gems = [n for n in catalog() if n["kind"] == "gem"]

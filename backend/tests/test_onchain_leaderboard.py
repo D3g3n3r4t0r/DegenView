@@ -312,12 +312,14 @@ def test_benchmark_is_never_excluded():
     assert k in lb._entries
 
 
-def test_serious_project_enters_up_to_three_million_and_a_year():
-    e = _entry("SER", 80, 70, 65, cap=2_500_000, age_days=90, source="coingecko")
+def test_serious_project_enters_up_to_25_million_and_three_years():
+    # Lorenzo, 28/09: "alzare un po' i limiti di market cap [...] anche i
+    # progetti un po' piu' datati"
+    e = _entry("SER", 80, 70, 65, cap=20_000_000, age_days=400, source="coingecko")
     assert lb.qualifies(e) == ""
-    e["market_cap"] = 3_500_000
+    e["market_cap"] = 30_000_000
     assert "over" in lb.qualifies(e)
-    old = _entry("OLD", 80, 70, 65, cap=900_000, age_days=400, source="coingecko")
+    old = _entry("OLD", 80, 70, 65, cap=900_000, age_days=1200, source="coingecko")
     assert "days" in lb.qualifies(old)
 
 
