@@ -283,9 +283,7 @@ function backtestTable(al) {
       <td>${best.trades ?? "—"}</td>
       <td>${best.win_rate == null ? "—" : `${Math.round(best.win_rate)}%`}</td>
       <td>${best.max_dd == null ? "—" : `${best.max_dd.toFixed(1)}%`}</td>
-    </tr>` : ((al.age_h ?? 0) < 48
-      ? `<tr><td colspan="5"><span class="bt-live" aria-hidden="true"><i></i><i></i><i></i></span> Analyzing this chart: it grows every minute</td></tr>`
-      : `<tr><td colspan="5">Stayed out: no entry on this chart${al.now != null && al.now < 0 ? `, dodged a ${Math.round(-al.now * 100)}% drop` : ""}</td></tr>`)}
+    </tr>` : `<tr><td colspan="5">${(al.age_h ?? 0) < 48 ? "No entry so far" : "Stayed out: no entry on this chart"}${al.now != null && al.now < 0 ? `, dodged a ${Math.round(-al.now * 100)}% drop` : ""}</td></tr>`}
     <tr>
       <td>Just holding</td>
       <td data-sign="${hold == null ? "" : sign(hold / 100)}">${hold == null ? "—" : pct(hold / 100)}</td>
