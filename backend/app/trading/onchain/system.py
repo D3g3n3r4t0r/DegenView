@@ -128,7 +128,7 @@ def follow(bars: list[list], cfg: dict, start: float, *, gone: bool = False, now
             r = (opens[i + 1] / entry) * (1 - COST) ** 2
             equity *= r
             out["trades"] += 1
-            out["wins"] += r > 1
+            out["wins"] += int(r > 1)
             pos = False
             bar_move = closes[i] / closes[i - 1] - 1 if i else 0.0
             gap = opens[i + 1] / closes[i] - 1
@@ -149,7 +149,7 @@ def follow(bars: list[list], cfg: dict, start: float, *, gone: bool = False, now
             if window_over:
                 equity *= mark
                 out["trades"] += 1
-                out["wins"] += mark > 1
+                out["wins"] += int(mark > 1)
                 events.append({"t": ts[j], "side": "sell", "price": float(closes[j]), "ret": round(mark - 1, 4),
                                "why": "48h"})
                 pos = False
