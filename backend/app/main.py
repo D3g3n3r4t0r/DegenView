@@ -3779,8 +3779,12 @@ def _lab_summary(bt: dict | None) -> dict | None:
         return None
     traded = [r for r in bt.get("rows") or [] if r.get("trades") and r.get("return_pct") is not None]
     best = max(traded, key=lambda r: r["return_pct"]) if traded else None
+    daily = bt.get("daily")
+    drow = (daily.get("rows") or [None])[0] if daily and daily.get("rows") else None
     return {"best": {k: best[k] for k in ("label", "return_pct", "trades")} if best else None,
-            "hold_pct": bt.get("hold_pct"), "bars": bt.get("bars")}
+            "hold_pct": bt.get("hold_pct"), "bars": bt.get("bars"),
+            "daily": {"interval": daily.get("interval"), "return_pct": drow.get("return_pct"),
+                      "trades": drow.get("trades"), "hold_pct": daily.get("hold_pct")} if drow else None}
 
 
 def _top_entries(n: int = 50) -> list[dict]:
@@ -4526,7 +4530,7 @@ async def onchain_ai_review_view(user: User = Depends(auth.get_current_user)) ->
 @app.get("/api/onchain/chart")
 async def onchain_token_chart(
     chain: str, pool: str = Query(..., pattern=r"^[0-9A-Za-z]{20,66}$"), symbol: str = Query("", max_length=40),
-    interval: Literal["1m", "5m", "15m", "1h", "4h"] = "15m", peek: bool = False,
+    interval: Literal["1m", "5m", "15m", "1h", "4h", "1d"] = "15m", peek: bool = False,
     user: User = Depends(auth.get_current_user),
 ) -> dict:
     """The token page's chart: candles only, any chain the hunts scan. With

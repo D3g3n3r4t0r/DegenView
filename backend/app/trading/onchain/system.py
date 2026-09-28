@@ -169,18 +169,18 @@ def evaluate(bars: list[list], start: float, *, gone: bool = False, now: float |
     return {c["label"]: follow(bars, c, start, gone=gone, now=now) for c in CANDIDATES}
 
 
-def backtest_all(bars: list[list], known: dict | None = None) -> dict:
-    """Every strategy backtested on the alert's whole chart, every entry and
-    exit, fees included (radar.evaluate, the same engine as the main site).
-    `known` is the rug already seen on-chain, if there is one."""
+def _backtest(bars: list[list], strategies_wanted: list[tuple[str, str]], known: dict | None = None) -> dict:
+    """Shared engine: the given strategies backtested on the alert's whole
+    chart, every entry and exit, fees included (radar.evaluate, the same
+    engine as the main site). `known` is the rug already seen on-chain."""
     df = frame(bars)
     if len(df) < BACKTEST_MIN_BARS:
         return {"bars": len(df), "rows": [], "hold_pct": None, "best": None, "rug": None}
     res = radar.evaluate(df, [{"strategy_name": n, "params": None, "label": lab, "source": "predefinita"}
-                              for n, lab in BACKTESTS], known)
+                              for n, lab in strategies_wanted], known)
     by_label = {r["label"]: r for r in res["tried"]}
     rows = []
-    for _name, lab in BACKTESTS:
+    for _name, lab in strategies_wanted:
         r = by_label.get(lab)
         if not r:
             continue
@@ -197,6 +197,19 @@ def backtest_all(bars: list[list], known: dict | None = None) -> dict:
     return {"bars": len(df), "from": int(df.index[0].timestamp()), "to": int(df.index[-1].timestamp()),
             "hold_pct": round(hold, 2) if hold is not None else None, "rows": rows,
             "best": _best_trades(df, rows, known), "rug": rug}
+
+
+def backtest_all(bars: list[list], known: dict | None = None) -> dict:
+    """Every strategy backtested on the alert's whole chart."""
+    return _backtest(bars, BACKTESTS, known)
+
+
+def backtest_one(bars: list[list], name: str = "Lorenzo (trend-follower)", label: str = "Trend EMA",
+                 known: dict | None = None) -> dict:
+    """Only one strategy backtested, same engine and same output shape as
+    backtest_all. Gems show the site's trend follower on the daily chart
+    (Lorenzo, 30/09): the fast 5-minute strategies are for the sniper."""
+    return _backtest(bars, [(name, label)], known)
 
 
 def _best_trades(df: pd.DataFrame, rows: list[dict], known: dict | None = None) -> dict | None:
