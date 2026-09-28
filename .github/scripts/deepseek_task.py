@@ -294,6 +294,15 @@ def gh(path: str, method: str = "GET", body: dict | None = None):
         return json.loads(r.read() or b"null")
 
 
+def _push(repo: str, branch: str, message: str) -> None:
+    for cmd in (["git", "config", "user.name", "deepseek-worker"],
+                ["git", "config", "user.email", "deepseek-worker@users.noreply.github.com"],
+                ["git", "checkout", "-B", branch], ["git", "add", "-A"],
+                ["git", "commit", "-q", "-m", message],
+                ["git", "push", "-f", f"https://x-access-token:{os.environ['GITHUB_TOKEN']}@github.com/{repo}.git", branch]):
+        subprocess.run(cmd, check=True)
+
+
 def publish() -> int:
     event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text())
     repo, number = os.environ["GITHUB_REPOSITORY"], event["issue"]["number"]
@@ -302,16 +311,19 @@ def publish() -> int:
     u = res.get("usage") or {}
     marker = f"<!-- deepseek-usage {json.dumps({'in': u.get('in', 0), 'out': u.get('out', 0), 'task': number})} -->"
     if not res.get("ok"):
+        # The last attempt stays on disk: pushed to a -failed branch, a draft
+        # that is often one line from working (#249 failed on `.iloc` of a
+        # DatetimeIndex). Claude fixes that line instead of rewriting it all.
+        branch = f"deepseek/issue-{number}-failed"
+        drafted = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True).stdout.strip()
+        if drafted:
+            _push(repo, branch, f"{res.get('title') or 'Draft'} (failing checks)\n\nDrafted by DeepSeek for #{number}; its checks failed.")
+        where = f"\nThe last draft is on `{branch}` for Claude to fix." if drafted else ""
         gh(f"/repos/{repo}/issues/{number}/comments", "POST",
-           {"body": f"{marker}\nDeepSeek did not make it in {res.get('attempts')} attempts.\n\n```\n{res.get('log', '')[-3000:]}\n```"})
+           {"body": f"{marker}\nDeepSeek did not make it in {res.get('attempts')} attempts.{where}\n\n```\n{res.get('log', '')[-3000:]}\n```"})
         return 0
     branch = f"deepseek/issue-{number}"
-    for cmd in (["git", "config", "user.name", "deepseek-worker"],
-                ["git", "config", "user.email", "deepseek-worker@users.noreply.github.com"],
-                ["git", "checkout", "-B", branch], ["git", "add", "-A"],
-                ["git", "commit", "-q", "-m", f"{res['title']}\n\nDrafted by DeepSeek for #{number}.\n\nAggiornamento: {res.get('italian') or res['title']}"],
-                ["git", "push", "-f", f"https://x-access-token:{os.environ['GITHUB_TOKEN']}@github.com/{repo}.git", branch]):
-        subprocess.run(cmd, check=True)
+    _push(repo, branch, f"{res['title']}\n\nDrafted by DeepSeek for #{number}.\n\nAggiornamento: {res.get('italian') or res['title']}")
     body = f"{marker}\nDrafted by DeepSeek for #{number} ({res.get('attempts')} attempts, {u.get('in', 0)} tokens in, {u.get('out', 0)} out). Checks passed. **Claude reviews before merging.**"
     try:
         pr = gh(f"/repos/{repo}/pulls", "POST", {"title": res["title"], "head": branch,
