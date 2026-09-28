@@ -27,7 +27,7 @@ def _alert(state="in", in_at=T0, sym="FROG", events=None):
     a = at.record({"chain": "robinhood", "pair_address": f"P{sym}", "token_address": f"0x{sym}", "symbol": sym}, "meme", T0 - 600)
     a["entry"] = 1.0
     a["last"] = {"price": 1.0, "ret": 0, "at": T0}
-    a["system"] = {LABEL: {"state": state, "in_at": in_at, "events": events or [{"side": "buy", "t": in_at}], "ret": 0}}
+    a["alert_bt"] = {LABEL: {"state": state, "in_at": in_at, "events": events or [{"side": "buy", "t": in_at}], "ret": 0}}
     return a
 
 
@@ -70,7 +70,7 @@ def test_sim_buys_the_share_then_sells_when_the_system_leaves():
     assert v["position"]["symbol"] == "FROG" and v["sim"]["usdg"] == pytest.approx(40.0, abs=1e-5)
     # nothing new: no second entry, no exit
     assert asyncio.run(tr.tick([USER], now=T0 + 120, market=_market())) == []
-    a["system"][LABEL] = {"state": "out", "events": [{"side": "buy"}, {"side": "sell"}]}
+    a["alert_bt"][LABEL] = {"state": "out", "events": [{"side": "buy"}, {"side": "sell"}]}
     rows = asyncio.run(tr.tick([USER], now=T0 + 180, market=_market()))
     assert rows[0]["side"] == "sell" and rows[0]["why"] == "system sold" and tr.view("u1")["position"] is None
 
@@ -149,7 +149,7 @@ def test_real_buy_converts_usdc_to_usdg_first_and_sells_back_to_usdc():
     assert rows[0]["ok"] and rows[0]["via"] == ["USDC→USDG"]
     assert swaps[0]["token_in"] == USDC and swaps[0]["token_out"] == tr.USDG and swaps[0]["amount_in"] == 30_000_000 - 1
     assert swaps[1]["token_in"] == tr.USDG and swaps[1]["amount_in"] == int((30_000_000 - 1) * 999 // 1000 * (1 - tr.CASH_SLIPPAGE))
-    a["system"][LABEL] = {"state": "out", "events": [{"side": "sell"}]}
+    a["alert_bt"][LABEL] = {"state": "out", "events": [{"side": "sell"}]}
     rows = asyncio.run(tr.tick([USER], now=T0 + 120, market=_cash_market(swaps=swaps)))
     assert rows[0]["ok"] and rows[0]["via"] == ["USDG→USDC"] and swaps[-1]["token_out"] == USDC
 
@@ -159,6 +159,6 @@ def test_sim_cash_is_usdc_round_trip():
     tr.configure("u1", "sim", 100, usdg_now=10.0)
     asyncio.run(tr.tick([USER], now=T0 + 60, market=_cash_market()))
     assert tr.view("u1")["sim"]["usdg"] == pytest.approx(0.0, abs=1e-5)
-    a["system"][LABEL] = {"state": "out", "events": [{"side": "sell"}]}
+    a["alert_bt"][LABEL] = {"state": "out", "events": [{"side": "sell"}]}
     rows = asyncio.run(tr.tick([USER], now=T0 + 120, market=_cash_market()))
     assert rows[0]["via"] == ["USDG→USDC"] and tr.view("u1")["sim"]["usdg"] > 0
