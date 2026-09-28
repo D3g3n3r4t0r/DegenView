@@ -231,6 +231,19 @@ def record(e: dict, status: str, why: str = "", score: float | None = None, trac
         _db().commit()
 
 
+def demote_ranked(keep: set[str]) -> int:
+    """Rows still marked "ranked" that are no longer on the board become
+    "studied": a stale flag hid them from the Top (Lorenzo, 28/09)."""
+    with _lock:
+        rows = [r[0] for r in _db().execute("SELECT key FROM projects WHERE status = 'ranked'").fetchall()]
+        stale = [k for k in rows if k not in keep]
+        for k in stale:
+            _db().execute("UPDATE projects SET status = 'studied', rank = NULL WHERE key = ?", (k,))
+        if stale:
+            _db().commit()
+    return len(stale)
+
+
 def set_standing(chain: str, token: str, status: str, score: float | None, rank: int | None, why: str = "") -> None:
     """Score and place after a later change (DeepSeek's report, review or
     code reading): the database follows the board without a new analysis."""

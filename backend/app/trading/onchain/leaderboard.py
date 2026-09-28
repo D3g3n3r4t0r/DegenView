@@ -219,7 +219,7 @@ def reset_for_tests() -> None:
     _gone.clear()
     _busy.clear()
     _state.update(version=0, examined=0, last_tick=0.0, last_market=0.0, sources={}, board=[],
-                  reviewed_at=0.0, reviewed_board=[], reviewing=False, code_reading=False, code_at=0.0)
+                  reviewed_at=0.0, reviewed_board=[], reviewing=False, code_reading=False, code_at=0.0, db_board=[])
 
 
 # ------------------------------------------------------------------- fonti
@@ -663,6 +663,12 @@ def _sync_database(order: list[str]) -> None:
     report, review and code reading move the score after the analysis was saved
     (Lorenzo, 28/09: three at 93 in the database, off the podium)."""
     board = set(order)
+    if board != set(_state.get("db_board") or []):
+        try:
+            projects_db.demote_ranked(board)
+            _state["db_board"] = sorted(board)
+        except Exception:
+            logger.exception("classifica: stato ranked non riallineato")
     for k, e in _entries.items():
         o = e.get("overall") or {}
         if not o or o.get("fatal") or o.get("pending"):
