@@ -13,6 +13,7 @@
  */
 import * as api from "@onchain/api.js";
 import { escapeHtml, logo, usdShort } from "@onchain/format.js";
+import * as phantom from "@onchain/phantomlink.js";
 import { loadLinked } from "@onchain/userswap.js";
 
 const RANGES = [["1h", "1H"], ["2h", "2H"], ["3h", "3H"], ["4h", "4H"], ["8h", "8H"], ["24h", "1D"], ["7d", "1W"],
@@ -152,7 +153,11 @@ async function connect(kind) {
   } else {
     const sol = solProvider();
     if (!sol) {
-      location.href = `https://phantom.app/ul/browse/${encodeURIComponent(location.href)}?ref=${encodeURIComponent(location.origin)}`;
+      // Safari on a phone: Phantom's deeplinks, this page stays ours
+      // (phantomlink.js). Connect first; then one more tap signs.
+      const s = phantom.session();
+      if (!s) { phantom.connect({ op: "link" }); return; }
+      await phantomStep(s.publicKey);
       return;
     }
     const res = await sol.connect();
@@ -166,6 +171,45 @@ async function connect(kind) {
   paint();
   load();   // the new wallet's holdings
   loadLinked();   // the token pages offer "My wallet" from now on
+}
+
+/* Phantom by deeplink (phantomlink.js). iOS opens Phantom only from a tap,
+ * so the challenge is fetched first and a second tap sends it to sign. */
+let phantomSign = null;   // {message} waiting for the "Sign in Phantom" tap
+// The answer can land before the profile has loaded: load() paints it then.
+const repaint = () => { if (data && root) paint(); };
+
+async function phantomStep(address) {
+  const { message } = await api.walletChallenge({ kind: "solana", address });
+  phantomSign = { message };
+  go?.("profile");    // after the boot has picked its first view
+  repaint();
+  window.scrollTo({ top: 0 });
+}
+
+/** Phantom's answer on the way back (main.js): true when it was ours. */
+export async function phantomAnswer(ans) {
+  if (ans.pending?.op !== "link") return false;
+  go?.("profile");
+  const err = () => root?.querySelector("[data-wallet-err]");
+  try {
+    if (ans.error) throw new Error(ans.error);
+    if (ans.op === "connect") { await phantom.preload(); await phantomStep(ans.data.public_key); return true; }
+    if (ans.op === "signMessage") {
+      const res = await api.walletLink({ signature: hexOf(phantom.b58dec(ans.data.signature)) });
+      phantomSign = null;
+      if (data) data.profile = res.profile;
+      repaint();
+      load();
+      loadLinked();
+    }
+  } catch (e) {
+    phantomSign = null;
+    repaint();
+    const el = err();
+    if (el) el.textContent = e?.message ?? "Couldn't connect Phantom.";
+  }
+  return true;
 }
 
 function walletsBox(p) {
@@ -219,7 +263,9 @@ function paint() {
   const p = d.profile;
   const [whole, cents] = d.complete === false && d.missing?.length && !d.value ? ["$—", ""] : money(d.value);
   const ch = d.change?.[range];
-  root.innerHTML = `
+  const wboxOpen = root.querySelector(".pf-wbox")?.open;   // a repaint must not fold what the user opened
+  root.innerHTML = `${phantomSign ? `<div class="pf-phantom"><p>Phantom is connected. One more tap: a free signature proves the wallet is yours.</p>
+      <button type="button" data-phantom-sign>Sign in Phantom</button></div>` : ""}
     <header class="pf-head">
       <label class="pf-pic" title="Change picture">
         ${avatar(p, "pf-img")}
@@ -268,7 +314,7 @@ function paint() {
       </div>
       ${positions(d)}
     </section>
-    <details class="pf-wbox">
+    <details class="pf-wbox"${wboxOpen ? " open" : ""}>
       <summary>Connected wallets (${(p.wallets ?? []).length})</summary>
       ${walletsBox(p)}
     </details>
@@ -287,13 +333,38 @@ function paint() {
   bindScrub();
 }
 
+// The last profile of each wallet mode, so a switch paints at once instead of
+// waiting for the chain read. loadSeq drops answers that arrive after a newer
+// switch: real -> sim -> real must not end up showing the sim wallet.
+const byMode = { real: null, sim: null };
+let loadSeq = 0;
+
 async function load() {
+  const mode = api.walletMode();
+  const seq = ++loadSeq;
   try {
-    data = await api.getProfile();
+    const p = await api.getProfile();
+    if (seq !== loadSeq || mode !== api.walletMode()) return;
+    byMode[mode] = p;
+    data = p;
+    delete root.dataset.switching;
     paint();
   } catch (err) {
+    if (seq !== loadSeq || mode !== api.walletMode()) return;
     if (!data) root.innerHTML = `<p class="pf-none">Couldn't load your profile: ${escapeHtml(err?.message ?? "try again")}</p>`;
   }
+}
+
+/** The switch itself: the buttons flip now, the numbers follow. */
+function switchWallet(mode) {
+  api.setWalletMode(mode);
+  if (byMode[mode]) { data = byMode[mode]; paint(); }
+  else {
+    // Nothing cached yet: flip the buttons and dim the numbers until it lands.
+    root.querySelectorAll("[data-wallet]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.wallet === mode)));
+    root.dataset.switching = "";
+  }
+  load();
 }
 
 export function refreshProfile() {
@@ -312,6 +383,7 @@ function readFile(file) {
 export function mountProfile({ go: goTo } = {}) {
   root = document.getElementById("profile");
   if (!root) return;
+  if (phantom.needed()) phantom.preload().catch(() => {});   // taps must reach Phantom synchronously
   go = goTo ?? go;
   // The value and its line stay live while the profile is on screen: a new
   // reading a minute, as the header's. Not while editing or touching the line.
@@ -322,9 +394,9 @@ export function mountProfile({ go: goTo } = {}) {
   }, 60_000);
   root.addEventListener("click", (event) => {
     const wb = event.target.closest("[data-wallet]");
-    if (wb) { api.setWalletMode(wb.dataset.wallet); load(); return; }
+    if (wb) { switchWallet(wb.dataset.wallet); return; }
     if (event.target.closest("[data-sim-start]")) {
-      api.setAutotrader({ mode: "sim" }).then(() => { api.setWalletMode("sim"); load(); }, (err) => alert(err.message));
+      api.setAutotrader({ mode: "sim" }).then(() => switchWallet("sim"), (err) => alert(err.message));
       return;
     }
     const r = event.target.closest("[data-range]");
@@ -340,6 +412,13 @@ export function mountProfile({ go: goTo } = {}) {
     if (event.target.closest("[data-wallet-menu]")) { document.dispatchEvent(new CustomEvent("lae:wallet-menu")); return; }
     if (event.target.closest("[data-edit]")) { root.querySelector("[data-edit-sheet]")?.showModal(); return; }
     if (event.target.closest("[data-cancel]")) root.querySelector("[data-edit-sheet]")?.close();
+    if (event.target.closest("[data-phantom-sign]") && phantomSign) {
+      try { phantom.signMessage(phantomSign.message, { op: "link" }); } catch (e) {
+        const el = root.querySelector("[data-wallet-err]");
+        if (el) el.textContent = e?.message ?? "Couldn't open Phantom.";
+      }
+      return;
+    }
     const c = event.target.closest("[data-connect]");
     if (c) {
       connect(c.dataset.connect).catch((e) => {

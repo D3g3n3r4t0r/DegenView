@@ -28,7 +28,8 @@ import { mountLeaderboard } from "@onchain/leaderboard.js";
 import { mountProjects } from "@onchain/projects.js";
 import { mountAlerts, openInbox } from "@onchain/alerts.js";
 import { mountAutotrade } from "@onchain/autotrade.js";
-import { mountProfile, refreshProfile } from "@onchain/profile.js";
+import { mountProfile, phantomAnswer, refreshProfile } from "@onchain/profile.js";
+import * as phantom from "@onchain/phantomlink.js";
 import { loadLinked } from "@onchain/userswap.js";
 import { mountMemes } from "@onchain/memes.js";
 import { mountAgent } from "@onchain/agent.js";
@@ -555,23 +556,39 @@ totalEl.setAttribute("aria-label", "Total balance, all chains");
 totalEl.textContent = "—";
 document.querySelector("[data-balance-slot]")?.prepend(totalEl);
 totalEl.addEventListener("click", () => setView("profile"));
+function paintTotal(t) {
+  if (t.total == null) { totalEl.textContent = t.wallet === "sim" ? "SIM —" : "$0.00"; return; }
+  // a chain that did not answer is not an empty one: no false $0
+  if (!t.complete && t.missing?.length && !t.total) { totalEl.textContent = "$—"; }
+  else {
+    const [i, d] = t.total.toFixed(2).split(".");
+    totalEl.innerHTML = `$${Number(i).toLocaleString("en-US")}<span class="cents">.${d}</span>${t.complete === false ? "<span class=\"cents\">*</span>" : ""}`;
+  }
+  totalEl.title = Object.entries(t.by_chain ?? {}).map(([c, v]) => `${c}: $${v.toFixed(2)}`).join(" · ")
+    + (t.missing?.length ? ` · not read: ${t.missing.join(", ")}` : "");
+}
+
+// Same guard as the profile: an answer that arrives after a newer switch is
+// dropped, and the last total of each mode is shown at once on the switch.
+const totalByMode = { real: null, sim: null };
+let totalSeq = 0;
 async function refreshTotal() {
+  const mode = api.walletMode();
+  const seq = ++totalSeq;
   try {
     const t = await api.getWalletsTotal();
+    if (seq !== totalSeq || mode !== api.walletMode()) return;
+    totalByMode[mode] = t;
     totalEl.dataset.wallet = t.wallet === "sim" ? "sim" : "real";
-    if (t.total == null) { totalEl.textContent = t.wallet === "sim" ? "SIM —" : "$0.00"; return; }
-    // a chain that did not answer is not an empty one: no false $0
-    if (!t.complete && t.missing?.length && !t.total) { totalEl.textContent = "$—"; }
-    else {
-      const [i, d] = t.total.toFixed(2).split(".");
-      totalEl.innerHTML = `$${Number(i).toLocaleString("en-US")}<span class="cents">.${d}</span>${t.complete === false ? "<span class=\"cents\">*</span>" : ""}`;
-    }
-    totalEl.title = Object.entries(t.by_chain ?? {}).map(([c, v]) => `${c}: $${v.toFixed(2)}`).join(" · ")
-      + (t.missing?.length ? ` · not read: ${t.missing.join(", ")}` : "");
+    paintTotal(t);
   } catch { /* keep the last number */ }
 }
 refreshTotal();
-document.addEventListener("lae:wallet-mode", refreshTotal);
+document.addEventListener("lae:wallet-mode", () => {
+  const t = totalByMode[api.walletMode()];
+  if (t) { totalEl.dataset.wallet = t.wallet === "sim" ? "sim" : "real"; paintTotal(t); }
+  refreshTotal();
+});
 setInterval(() => { if (document.visibilityState === "visible") refreshTotal(); }, 60_000);
 
 /** Tabs inside a view: panels carry data-pane="<view>:<tab>". */
@@ -628,6 +645,16 @@ mountAlerts();
 mountAutotrade();
 mountProfile({ go: (v) => setView(v) });
 loadLinked();
+// Back from Phantom (phantomlink.js): its answer is in this page's URL.
+phantom.takeAnswer().then(async (ans) => {
+  if (!ans || await phantomAnswer(ans)) return;
+  if (ans.error) { toast("Phantom", ans.error); return; }
+  if (ans.op === "connect") { toast("Phantom connected", "tap Buy or Sell again to sign"); return; }
+  if (ans.op === "signAndSendTransaction") {
+    toast(`${ans.pending?.symbol || "Swap"} sent`, `signature ${ans.data.signature.slice(0, 8)}… on Solscan`);
+    refreshProfile();
+  }
+});
 // Picks (memes.js) retired: Lorenzo wants no meme coins promoted; Top replaces it.
 mountAgent();
 mountTop();

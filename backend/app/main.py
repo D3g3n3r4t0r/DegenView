@@ -1,4 +1,5 @@
 import asyncio
+import time
 import base64
 import datetime as _dt
 import hashlib
@@ -4007,7 +4008,37 @@ def _all_addresses(user: User) -> list[tuple[str, str, str]]:
     return out
 
 
+# A snapshot costs a chain read per wallet: /api/profile and
+# /api/wallets/total ask for it at the same moment, and a switch asks again.
+# 20 s of memory plus in-flight sharing turn those into one read.
+_snap_cache: dict[str, tuple[float, dict]] = {}
+_snap_inflight: dict[str, asyncio.Task] = {}
+_SNAP_TTL = 20.0
+_snap_clock = time.monotonic   # its own name, so tests move it without freezing asyncio
+
+
 async def _wallet_snapshot(user: User) -> dict:
+    """The cached snapshot: a fresh one is returned as is, a read already in
+    flight is awaited instead of started again. Failures are not cached."""
+    now = _snap_clock()
+    hit = _snap_cache.get(user.id)
+    if hit and now - hit[0] < _SNAP_TTL:
+        return hit[1]
+    task = _snap_inflight.get(user.id)
+    if task is None:
+        task = asyncio.create_task(_wallet_snapshot_uncached(user))
+        _snap_inflight[user.id] = task
+
+        def _done(t: asyncio.Task) -> None:
+            _snap_inflight.pop(user.id, None)
+            if not t.cancelled() and t.exception() is None:
+                _snap_cache[user.id] = (_snap_clock(), t.result())
+
+        task.add_done_callback(_done)
+    return await task
+
+
+async def _wallet_snapshot_uncached(user: User) -> dict:
     """Everything every wallet holds on every chain, priced (portfolio.py):
     cash (stablecoins), positions (the rest, native coins included), total."""
     addrs = _all_addresses(user)
