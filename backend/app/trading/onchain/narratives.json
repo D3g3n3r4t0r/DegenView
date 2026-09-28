@@ -673,5 +673,125 @@
    "infofi token in:readme"
   ],
   "weak": []
+ },
+ {
+  "key": "meme_dogs",
+  "kind": "meme",
+  "label": "Dog Memes",
+  "heat": 3,
+  "why": "Dog coins are the oldest and most liquid meme category, and every cycle produces a new one.",
+  "terms": [
+   "\\b(dog|doge|shib|inu|puppy|wif)\\b"
+  ]
+ },
+ {
+  "key": "meme_cats",
+  "kind": "meme",
+  "label": "Cat Memes",
+  "heat": 2,
+  "why": "Cat coins are the second pillar of meme culture and often lead the rotation after dogs.",
+  "terms": [
+   "\\b(cat|kitty|meow|popcat)\\b"
+  ]
+ },
+ {
+  "key": "meme_frogs",
+  "kind": "meme",
+  "label": "Frog Memes",
+  "heat": 3,
+  "why": "Pepe and its derivatives are the most recognisable meme brand in crypto.",
+  "terms": [
+   "\\b(pepe|frog|toad)\\b"
+  ]
+ },
+ {
+  "key": "meme_ai",
+  "kind": "meme",
+  "label": "AI Memes",
+  "heat": 3,
+  "why": "AI-themed meme coins ride the strongest narrative of the cycle with the loosest fundamentals.",
+  "terms": [
+   "\\b(ai|gpt|agent|bot)\\b"
+  ]
+ },
+ {
+  "key": "meme_political",
+  "kind": "meme",
+  "label": "Political Memes",
+  "heat": 2,
+  "why": "Election and politician coins spike on news and attract retail attention fast.",
+  "terms": [
+   "\\b(trump|maga|biden|president|vote)\\b"
+  ]
+ },
+ {
+  "key": "meme_celebrity",
+  "kind": "meme",
+  "label": "Celebrity Memes",
+  "heat": 2,
+  "why": "Celebrity coins launch with instant distribution and can move on a single post.",
+  "terms": [
+   "\\b(elon|kanye|drake|taylor|tate)\\b"
+  ]
+ },
+ {
+  "key": "meme_anime",
+  "kind": "meme",
+  "label": "Anime Memes",
+  "heat": 2,
+  "why": "Anime and waifu coins have a loyal, fast-moving community on Solana.",
+  "terms": [
+   "\\b(anime|waifu|chan|kun)\\b"
+  ]
+ },
+ {
+  "key": "meme_gaming",
+  "kind": "meme",
+  "label": "Gaming Memes",
+  "heat": 1,
+  "why": "Retro gaming and arcade themes recur in meme launches and pair well with play-to-earn.",
+  "terms": [
+   "\\b(game|gaming|pixel|arcade)\\b"
+  ]
+ },
+ {
+  "key": "meme_sports",
+  "kind": "meme",
+  "label": "Sports Memes",
+  "heat": 1,
+  "why": "Sports fan tokens and athlete coins spike around matches and events.",
+  "terms": [
+   "\\b(football|soccer|nba|ufc|f1)\\b"
+  ]
+ },
+ {
+  "key": "meme_food",
+  "kind": "meme",
+  "label": "Food Memes",
+  "heat": 1,
+  "why": "Food-themed coins are a recurring low-cap meme niche with strong visual branding.",
+  "terms": [
+   "\\b(burger|pizza|taco|sushi|bread)\\b"
+  ]
+ },
+ {
+  "key": "meme_space",
+  "kind": "meme",
+  "label": "Space Memes",
+  "heat": 2,
+  "why": "Moon, Mars and rocket coins are the purest expression of crypto's speculative language.",
+  "terms": [
+   "\\b(moon|mars|rocket|nasa|alien)\\b"
+  ]
+ },
+ {
+  "key": "meme_animals",
+  "kind": "meme",
+  "label": "Animal Memes",
+  "heat": 2,
+  "why": "Monkeys, apes and penguins are the broad animal category that catches everything else.",
+  "terms": [
+   "\\b(monkey|ape|bear|bull|penguin|hamster|goat)\\b"
+  ]
  }
 ]
