@@ -208,7 +208,7 @@ def backtest_one(bars: list[list], name: str = "Lorenzo (trend-follower)", label
                  known: dict | None = None) -> dict:
     """Only one strategy backtested, same engine and same output shape as
     backtest_all. Gems show the site's trend follower on the daily chart
-    (Lorenzo, 30/09): the fast 5-minute strategies are for the sniper."""
+    (Lorenzo, 28/09): the fast 5-minute strategies are for the sniper."""
     return _backtest(bars, [(name, label)], known)
 
 
