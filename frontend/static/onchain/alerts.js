@@ -44,7 +44,7 @@ function registerAlert(a, kind) {
   register(id, {
     kind, symbol: a.symbol, name: a.name, chain: a.chain, token: a.token_address, pair: a.pair_address,
     pairUrl: a.pair_url, image: a.image, cap: capNow(a),
-    change: a.now, ageTs: a.at, context: `Alert fired at ${usdShort(a.cap0)} MC · ${age(a.at)[0]} ago`,
+    change: a.now, ageTs: a.at, context: `Spotted at ${usdShort(a.cap0)} MC · ${age(a.at)[0]} ago`,
     alerts: mine.length ? mine : [a],
   });
   return id;

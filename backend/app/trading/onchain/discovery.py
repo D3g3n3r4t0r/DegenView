@@ -228,8 +228,9 @@ async def _cg_step(client: httpx.AsyncClient, add: Callable[[dict, str], bool], 
             return
         _state["cg_last_sweep"] = now
         # Narratives first (hotter, smaller lists), then the chain ecosystems.
+        from app import profiles
         q.append(("index",))
-        q.extend(("npage", cat, 1) for cat in narratives.coingecko_categories())
+        q.extend(("npage", cat, 1) for cat in narratives.coingecko_categories(first=profiles.wanted_narratives()))
         q.extend(("page", chain, cat, p) for chain, (cat, pages) in CG_CATEGORIES.items() for p in pages)
         return
     job = q.pop(0)
@@ -429,7 +430,8 @@ async def _gh_search(client: httpx.AsyncClient, now: float) -> None:
     _state["gh_search_at"] = now
     for k in [k for k, v in _seen.items() if now - v.get("at", now) > 30 * 86400]:
         del _seen[k]
-    queries = GH_QUERIES + tuple(narratives.github_queries())
+    from app import profiles
+    queries = GH_QUERIES + tuple(narratives.github_queries(first=profiles.wanted_narratives()))
     q = queries[_state["gh_query"] % len(queries)]
     _state["gh_query"] += 1
     since = time.strftime("%Y-%m-%d", time.gmtime(now - GH_FRESH_DAYS * 86400))

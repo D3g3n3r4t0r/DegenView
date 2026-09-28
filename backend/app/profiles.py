@@ -137,6 +137,42 @@ def hidden(uid: str) -> list[str]:
         return list((_profiles.get(uid) or {}).get("hidden") or [])
 
 
+NARRATIVES_MAX = 40
+
+
+def narratives(uid: str) -> list[str]:
+    """The narratives this account asked the Gem Finder to hunt first."""
+    with _lock:
+        return list((_profiles.get(uid) or {}).get("narratives") or [])
+
+
+def set_narratives(uid: str, keys: list[str]) -> list[str]:
+    from app.trading.onchain import narratives as _narr
+    known = {n["key"] for n in _narr.catalog()}
+    seen, out = set(), []
+    for k in keys or []:
+        if k in known and k not in seen:
+            seen.add(k)
+            out.append(k)
+    out = out[:NARRATIVES_MAX]
+    get(uid)  # creates the profile if needed — get() takes _lock itself
+    with _lock:
+        p = _profiles[uid]
+        p["narratives"] = out
+        _save()
+        return list(out)
+
+
+def wanted_narratives() -> list[str]:
+    """Union over all accounts, most-chosen first."""
+    counts: dict[str, int] = {}
+    with _lock:
+        for p in _profiles.values():
+            for k in p.get("narratives") or []:
+                counts[k] = counts.get(k, 0) + 1
+    return sorted(counts, key=lambda k: (-counts[k], k))
+
+
 def set_hidden(uid: str, chain: str, token: str, hide: bool = True) -> list[str]:
     key = f"{chain}:{token}"
     if not _HIDDEN_KEY.match(key):
