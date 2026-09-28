@@ -32,7 +32,7 @@ import { mountProfile, phantomAnswer, refreshProfile } from "@onchain/profile.js
 import * as phantom from "@onchain/phantomlink.js";
 import { loadLinked } from "@onchain/userswap.js";
 import { mountMemes } from "@onchain/memes.js";
-import { mountAgent } from "@onchain/agent.js";
+import { mountAgent, mountAgentView } from "@onchain/agent.js";
 import { mountTop } from "@onchain/top.js";
 
 // Sulla pagina a se' (onchain-app.html) la radice e' il documento intero.
@@ -509,8 +509,8 @@ document.addEventListener("lae:wallet-menu", () => view.moreSheet?.showModal());
 // (a round-the-clock scan of serious low/micro caps, ranked) and Meme
 // (the sniper radar plus its autopilot). Then Scambia and Portafoglio.
 // The home page picks the section (#gems or #meme); that is the first view.
-const VIEWS = ["meme", "gems", "top", "profile", "wallet", "manual"];
-const DOCK = ["meme", "gems", "top", "profile"];   // the wallet lives in the profile
+const VIEWS = ["meme", "gems", "top", "agent", "profile", "wallet", "manual"];
+const DOCK = ["meme", "gems", "top", "agent", "profile"];   // the wallet lives in the profile
 
 function setView(name) {
   if (!VIEWS.includes(name)) return;
@@ -637,7 +637,10 @@ for (const el of [view.dock, view.shell]) {
   });
 }
 
+document.addEventListener("lae:go", (event) => setView(event.detail));
+
 mountPilot({ toast, onChange: refreshSniperCard });
+mountAgentView();
 mountRadar({ toast });
 mountLeaderboard();
 mountProjects();
