@@ -37,3 +37,6 @@ review. Read them before answering: the same mistake again is a failed task.
 - #226 repeated #190: `hideToken` used in detail.js without an import. Before finishing, list every function you call in each file you touched and check its import line.
 - A test file listed in `Files:` with "create" must be created: #245 changed main.py and skipped `test_dex_spot_chart.py`, so nothing proved the fix. No test = unfinished task.
 - Read what a function returns before using it: `radar.run_spot` returns `(result, events, position)` and `BacktestResult` has no `.events`; #242 failed twice on `result.events`. Check the `return` line of each function you call, not just its name.
+- Use only names you can see in the code you are given: #249 imported `GECKO_NETWORKS` from alert_track (it lives in `app.sniper.scanner`) and #250 patched `profiles._PROFILES` (it is `_STORE_FILE`). When the task names an attribute or a module, use exactly that; never guess one.
+- `pytest.mark.asyncio` does not work here (no pytest-asyncio): test coroutines with `asyncio.run(...)` inside a plain test function (#249).
+- A new module-level name used in a file needs its import in that file: #250 called `profiles.wanted_narratives()` in discovery.py without importing `profiles` (ruff F821).
