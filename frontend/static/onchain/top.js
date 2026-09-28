@@ -10,7 +10,8 @@
  */
 import * as api from "@onchain/api.js";
 import { register } from "@onchain/detail.js";
-import { escapeHtml, tokenRow } from "@onchain/format.js";
+import { escapeHtml, tile, tokenRow } from "@onchain/format.js";
+import { renderPodium } from "@onchain/podium.js";
 
 const POLL_MS = 30_000;
 const SIZES = [15, 25, 50];
@@ -28,6 +29,21 @@ function paint() {
   root.querySelector("[data-top-size]").innerHTML = SIZES.map((n) =>
     `<button type="button" data-size="${n}" aria-pressed="${n === size}">Top ${n}</button>`).join("");
   const rows = entries.slice(0, size);
+  // The podium is the first three of the same ranking (Lorenzo, 27/09: "il
+  // podio ha senso soltanto per le gemme"): no separate board order.
+  let podium = root.querySelector("[data-top-podium]");
+  if (!podium) {
+    podium = document.createElement("div");
+    podium.className = "top-hero";
+    podium.dataset.topPodium = "";
+    root.insertBefore(podium, root.firstChild);
+  }
+  const top3 = rows.slice(0, 3).map((e) => ({ id: `gem:${e.chain}:${e.token_address}`, symbol: e.symbol,
+    value: `${Math.round(e.score ?? 0)} pts`, logoHtml: tile(e.symbol, e.image, e.chain, e.token_address) }));
+  const sig = top3.map((x) => x.id).join("|");
+  if (top3.length) renderPodium(podium, top3, { still: podium.dataset.sig === sig });
+  else podium.innerHTML = "";
+  podium.dataset.sig = sig;
   root.querySelector("[data-top-rows]").innerHTML = rows.length ? rows.map((e, i) => {
     const id = `gem:${e.chain}:${e.token_address}`;
     register(id, { kind: "gem", symbol: e.symbol, name: e.name, chain: e.chain, token: e.token_address, pair: e.pair_address,

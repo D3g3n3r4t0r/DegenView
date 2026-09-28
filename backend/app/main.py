@@ -3745,6 +3745,10 @@ async def onchain_top(n: int = 15, user: User = Depends(auth.get_current_user)) 
                         "market_cap": p.get("mcap"), "liquidity_usd": p.get("liq"), "change_24h": None,
                         "launched_at": p.get("launched_at"), "score": p.get("score"), "early": False,
                         "on_board": False, "why": p.get("why")})
+    # One ranking by score (Lorenzo, 27/09: "LOCK e XONA sono sempre nel podio
+    # anche se hanno voti piu' bassi di altri"): the board is no longer pinned
+    # above the database projects, the podium is simply the first three.
+    out.sort(key=lambda e: -(e.get("score") or 0))
     return {"entries": out, "on_board": sum(1 for e in out if e["on_board"])}
 
 
