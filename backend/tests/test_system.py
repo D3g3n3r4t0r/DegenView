@@ -222,3 +222,34 @@ def test_a_real_backtest_survives_a_save_and_a_restart(monkeypatch, tmp_path):
     b = at._alerts[at.key_of(a)]
     assert b["backtests"]["rows"] and b["system"]["Trend EMA"]["odd"] == 3
     at.reset_for_tests()
+
+
+def test_on_alert_the_alert_is_the_entry(monkeypatch):
+    """Lorenzo, 28/09: every alerted token shows a backtest, never "no entry":
+    with no entry signal at all, the trend follower still buys at the alert
+    and sells on its own exit."""
+    prices = [1.0] * 40 + [1.0, 1.2, 1.5, 1.4, 1.3, 1.3]
+    monkeypatch.setattr(system.radar, "spot_signals", _signals(set(), {43}))
+    plain = system.follow(_bars(prices), system.CANDIDATES[0], T0, now=T0 + 6 * B)
+    assert plain["trades"] == 0 and plain["state"] == "waiting"
+    r = system.follow(_bars(prices), system.CANDIDATES[0], T0, now=T0 + 6 * B, on_alert=True)
+    assert r["events"][0]["why"] == "alert" and r["events"][0]["t"] == T0
+    assert r["trades"] == 1 and r["wins"] == 1 and r["state"] == "out"
+    # exit signal on bar 43, filled at the open of bar 44 (1.3)
+    assert abs(r["ret"] - (1.3 * (1 - system.COST) ** 2 - 1)) < 1e-4
+
+
+def test_every_alert_gets_an_on_alert_result(monkeypatch, tmp_path):
+    monkeypatch.setattr(at, "_STORE_FILE", tmp_path / "a.json")
+    monkeypatch.setattr(at, "_BARS_FILE", tmp_path / "b.json")
+    at.reset_for_tests()
+    a = at.record({"chain": "robinhood", "pair_address": "P", "token_address": "T", "symbol": "X"}, "meme", T0)
+
+    async def fake_candles(*args, **kw):
+        return _bars([1.0] * 40 + [1.0, 1.1, 1.2, 1.3])
+    monkeypatch.setattr(at, "_candles", fake_candles)
+    monkeypatch.setattr(system.radar, "spot_signals", _signals(set(), set()))
+    asyncio.run(at.refresh_system(None, now=T0 + 4 * B, gap_s=0))
+    item = at.board("meme", now=T0 + 4 * B)["items"][0] if a["entry"] is not None else at._item(a, T0 + 4 * B, "Trend EMA")
+    assert item["on_alert"] and item["on_alert"]["state"] == "in" and item["on_alert"]["ret"] > 0
+    at.reset_for_tests()

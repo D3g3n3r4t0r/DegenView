@@ -362,6 +362,7 @@ filtro anti-rug in `legit.py`, frontend `frontend/static/onchain/radar.js`.
 - Nastro scanner (seed-0207, 28/09): `scan_feed.py` (memoria, niente disco) riceve ogni giudizio di radar e listings; `/api/onchain/scan-feed`; nastro + conteggi in `alerts.js` sopra 'About to fire'. Lorenzo: "voglio vedere i ticker girare, non cose ferme".
 - Backtest che si perdevano (seed-0208, 28/09): `alert_track.keep_richer` tiene il backtest salvato se il ricalcolo vede meno barre (pool morto). Lorenzo: "non deve cambiare ogni volta risultato e perdere i precedenti".
 - Backtest persi a ogni riavvio (seed-0210, 28/09): `system.follow` contava `wins` come numpy int64, `json.dumps` in `alert_track.save` alzava TypeError (preso solo OSError): il file degli alert non si aggiornava piu'. Ora `default=_plain` e log dell'errore. Lorenzo: "PRIORITA MASSIMA E ATTENZIONE MASSIMA".
+- Ingresso all'alert (seed-0213, 28/09): `system.follow(on_alert=True)` compra alla prima open dopo l'alert; `a['alert_bt']`, esposto come `on_alert` in board; la tab Strategie (`alerts.js`, sort backtest) mostra solo quello. SYSTEM_VERSION 9. L'autotrader non lo usa. Lorenzo: "sara' la decima volta che vi chiedo questa cosa".
 - Vincolo: il pilota (soldi veri) resta sotto $100k
   (`_SNIPER_ONCHAIN_MAX_MCAP_USD` in main.py). Mai strategie short.
 

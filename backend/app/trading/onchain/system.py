@@ -80,8 +80,13 @@ def frame(bars: list[list]) -> pd.DataFrame:
     return df[["open", "high", "low", "close", "volume"]].astype(float)
 
 
-def follow(bars: list[list], cfg: dict, start: float, *, gone: bool = False, now: float | None = None) -> dict:
+def follow(bars: list[list], cfg: dict, start: float, *, gone: bool = False, now: float | None = None,
+           on_alert: bool = False) -> dict:
     """The strategy's trades from `start` (the alert) to start + WINDOW_S.
+
+    on_alert: the alert itself is the entry (Lorenzo, 28/09: "la strategia
+    su questa roba sarebbe entrata perche' sono stati segnalati"): buy at the
+    first open after the alert, then the strategy's own exits and re-entries.
 
     Returns ret (compounded, after costs), trades, state ("in", "out",
     "waiting" = no entry yet), in_at/entry price when in, and the events."""
@@ -117,6 +122,10 @@ def follow(bars: list[list], cfg: dict, start: float, *, gone: bool = False, now
             break
         if not joined:
             joined = True
+            if on_alert:
+                pos, entry, in_at = True, opens[i + 1], t_fill
+                events.append({"t": t_fill, "side": "buy", "price": float(entry), "why": "alert"})
+                continue
             if strat_pos and not pos and not exit_sig[i]:
                 pos, entry, in_at = True, opens[i + 1], t_fill
                 events.append({"t": t_fill, "side": "buy", "price": float(entry), "why": "trend"})
@@ -164,9 +173,10 @@ def follow(bars: list[list], cfg: dict, start: float, *, gone: bool = False, now
     return out
 
 
-def evaluate(bars: list[list], start: float, *, gone: bool = False, now: float | None = None) -> dict:
+def evaluate(bars: list[list], start: float, *, gone: bool = False, now: float | None = None,
+             on_alert: bool = False) -> dict:
     """Every candidate on one alert: {label: follow(...)}."""
-    return {c["label"]: follow(bars, c, start, gone=gone, now=now) for c in CANDIDATES}
+    return {c["label"]: follow(bars, c, start, gone=gone, now=now, on_alert=on_alert) for c in CANDIDATES}
 
 
 def _backtest(bars: list[list], strategies_wanted: list[tuple[str, str]], known: dict | None = None) -> dict:
