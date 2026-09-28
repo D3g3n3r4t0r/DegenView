@@ -3722,34 +3722,18 @@ async def onchain_leaderboard_view(user: User = Depends(auth.get_current_user)) 
 
 @app.get("/api/onchain/top")
 async def onchain_top(n: int = 15, user: User = Depends(auth.get_current_user)) -> dict:
-    """Top 15/25/50 (top.js): the gem board first, by score; when it holds
-    fewer, the best studied projects of the database in the same cap band
-    fill the list, each with why it is not on the board (Lorenzo, 27/09: "a
-    prescindere se seleziono top 15, 25 o 50 vedo sempre gli stessi")."""
+    """Top 15/25/50 (top.js): the gem board only, by score. Lorenzo, 28/09:
+    "vedo in classifica roba NOT RANKED, non va bene" — the database no
+    longer fills the list with projects that failed the board's checks
+    (it did since 27/09, "a prescindere se seleziono top 15, 25 o 50 vedo
+    sempre gli stessi"). A short board shows short."""
     _require_onchain_enabled()
     n = max(1, min(int(n), 50))
     board = sorted(onchain_leaderboard.board().get("entries") or [], key=lambda e: -(e.get("score") or 0))
     out = [{**{k: e.get(k) for k in ("chain", "token_address", "pair_address", "pair_url", "symbol", "name", "image",
                                      "market_cap", "liquidity_usd", "change_24h", "launched_at", "score", "early")},
             "on_board": True} for e in board[:n]]
-    seen = {(e["chain"], e["token_address"]) for e in out}
-    if len(out) < n:
-        for p in onchain_projects_db.search("", "studied", "score", 3 * n, 0, True)["items"]:
-            if len(out) >= n:
-                break
-            if p.get("score") is None or (p["chain"], p["token"]) in seen:
-                continue
-            seen.add((p["chain"], p["token"]))
-            out.append({"chain": p["chain"], "token_address": p["token"], "pair_address": None, "pair_url": None,
-                        "symbol": p.get("symbol"), "name": p.get("name"), "image": p.get("image"),
-                        "market_cap": p.get("mcap"), "liquidity_usd": p.get("liq"), "change_24h": None,
-                        "launched_at": p.get("launched_at"), "score": p.get("score"), "early": False,
-                        "on_board": False, "why": p.get("why")})
-    # One ranking by score (Lorenzo, 27/09: "LOCK e XONA sono sempre nel podio
-    # anche se hanno voti piu' bassi di altri"): the board is no longer pinned
-    # above the database projects, the podium is simply the first three.
-    out.sort(key=lambda e: -(e.get("score") or 0))
-    return {"entries": out, "on_board": sum(1 for e in out if e["on_board"])}
+    return {"entries": out, "on_board": len(out)}
 
 
 @app.get("/api/onchain/token")
