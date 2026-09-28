@@ -2217,5 +2217,10 @@
     "status": "risolto",
     "at": 1790611504,
     "summary": "Perche' restavano a meta': stamattina e' cambiato il motore dei backtest (lo stop anti-rug) e ogni alert andava ricalcolato. Il ricalcolo pero' partiva solo quando arrivavano candele nuove: un alert gia' chiuso o sparito nelle sue 48 ore non ne riceve piu', quindi il suo backtest vecchio non veniva mai rifatto e la riga restava 'in arrivo'. Ora un risultato di una versione vecchia si rifa' comunque al giro successivo (ogni 30 secondi), e c'e' un test che lo verifica. Nelle righe senza ingresso ora si legge 'backtest: no entry yet' o 'backtest: stayed out', con quanto ha evitato: e' il risultato della strategia trend following su quel token, non un dato mancante."
+  },
+  "seed-0207": {
+    "status": "risolto",
+    "at": 1790612515,
+    "summary": "Gli scanner giudicano decine di pool al minuto, ma la pagina mostrava solo i pochi ancora in attesa. Ora ogni pool guardato finisce in un registro dal vivo: sopra 'About to fire' c'e' un nastro di ticker che scorre (✓ passato, ✗ scartato col motivo, ◆ strategie provate, ★ alert) e una riga con i numeri dell'ultima ora: pool guardati, al minuto, controllati, passati, scartati. Si aggiorna ogni 8 secondi. Le righe 'CHECKING' hanno una luce che scorre mentre i controlli girano."
   }
 }

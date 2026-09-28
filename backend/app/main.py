@@ -4491,6 +4491,14 @@ async def _onchain_signals_loop() -> None:
         await asyncio.sleep(_SIGNALS_TICK_S)
 
 
+@app.get("/api/onchain/scan-feed")
+async def onchain_scan_feed(user: User = Depends(auth.get_current_user)) -> dict:
+    """The scanners' live tape: every pool judged, with the hour's counts."""
+    _require_onchain_enabled()
+    from app.trading.onchain import scan_feed
+    return scan_feed.snapshot()
+
+
 @app.get("/api/onchain/alerts/{kind}")
 async def onchain_alerts_view(kind: Literal["meme", "gem"], user: User = Depends(auth.get_current_user)) -> dict:
     """Every Telegram alert and what entering on the message would pay: 1-48h
