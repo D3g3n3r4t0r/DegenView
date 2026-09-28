@@ -258,3 +258,17 @@ def test_every_alert_gets_an_on_alert_result(monkeypatch, tmp_path):
     assert item["on_alert"] and item["on_alert"]["state"] == "in" and item["on_alert"]["ret"] > 0
     assert [e["side"] for e in item["on_alert"]["events"]] == ["buy"]      # one entry, at the alert
     at.reset_for_tests()
+
+
+def test_on_alert_exits_when_the_trend_is_already_down(monkeypatch):
+    """Lorenzo, 28/09 (MESUB -95%): bought on the alert with the trend already
+    down, the strategy's cross had already fired and no exit ever came.
+    Now the trade closes on the first bar with the trend down."""
+    prices = [2.0 - 0.02 * i for i in range(40)] + [1.2 * 0.9 ** i for i in range(20)]
+    monkeypatch.setattr(system.radar, "spot_signals", _signals(set(), set()))
+    for c in system.CANDIDATES:
+        r = system.follow(_bars(prices), c, T0, now=T0 + 20 * B, on_alert=True)
+        assert r["trades"] == 1 and r["state"] == "out"
+        sell = r["events"][-1]
+        assert sell["side"] == "sell" and sell["t"] == T0 + B      # one bar after the alert
+        assert r["ret"] > -0.15
