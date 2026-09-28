@@ -10,7 +10,7 @@
  */
 import * as api from "@onchain/api.js";
 import { register } from "@onchain/detail.js";
-import { hideToken, isHidden, onHiddenChange, withEntrance } from "@onchain/hidden.js";
+import { isHidden, onHiddenChange, withEntrance } from "@onchain/hidden.js";
 import { escapeHtml, tile, tokenRow } from "@onchain/format.js";
 import { renderPodium } from "@onchain/podium.js";
 
