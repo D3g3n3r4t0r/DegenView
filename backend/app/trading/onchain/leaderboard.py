@@ -300,7 +300,7 @@ def apply_market(pairs: list[dict]) -> None:
         if not e.get("pair_address") or e.get("bonding"):
             e["pair_address"] = p.get("pairAddress") or e.get("pair_address")
         base = p.get("baseToken") or {}
-        if (e.get("symbol") or "?") == "?" and base.get("symbol"):
+        if no_name(e.get("symbol")) and not no_name(base.get("symbol")):
             e.update(symbol=base["symbol"], name=base.get("name") or base["symbol"])
         sites = legit.links_from_dexscreener(p)["websites"]
         if sites:
@@ -534,10 +534,17 @@ def qualifies(e: dict, now: float | None = None) -> str:
     return ""
 
 
+def no_name(symbol) -> bool:
+    """A symbol nobody can read: missing, "?", or a JSON null that became
+    the string "null" upstream (Lorenzo, 28/09: "ci sono ticker tra le top
+    che si chiamano null")."""
+    return str(symbol or "").strip().lower() in ("", "?", "null", "none", "undefined", "nan")
+
+
 def research_floor(e: dict, now: float | None = None) -> str:
     """What a researcher would not even open: no name, a launch of days
     ago, a pool nobody can trade."""
-    if (e.get("symbol") or "?").strip() in ("", "?"):
+    if no_name(e.get("symbol")):
         return "no name"
     launched = e.get("launched_at")
     if launched and (now or time.time()) - launched < MIN_AGE_DAYS * 86400:
@@ -715,7 +722,7 @@ def close_calls(now: float | None = None) -> list[dict]:
 
 
 def board() -> dict:
-    entries = [_entries[k] for k in _state["board"] if k in _entries]
+    entries = [_entries[k] for k in _state["board"] if k in _entries and not no_name(_entries[k].get("symbol"))]
     waiting = sum(1 for k, e in _entries.items() if k not in _state["board"])
     return {
         "version": _state["version"], "updated_at": _state["last_tick"] or None,
