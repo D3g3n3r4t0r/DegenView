@@ -28,6 +28,7 @@ let data = null;
 let version = -1;
 let open = null;
 let timer = null;
+let chosen = [];
 
 const key = (e) => `${e.chain}:${e.token_address}`;
 const usd = (v) => (v == null ? "—" : v >= 1e6 ? `$${(v / 1e6).toFixed(v >= 1e7 ? 0 : 1)}M`
@@ -58,6 +59,11 @@ export function mountLeaderboard() {
     if (document.visibilityState === "visible") refresh();
   });
   setInterval(() => data && paintAges(), 30_000);
+  api.getNarratives().then((d) => { chosen = d.selected ?? []; if (data) paint(false); }).catch(() => {});
+  document.addEventListener("lae:narratives", (e) => {
+    chosen = e.detail ?? [];
+    if (data) paint(false);
+  });
   refresh();
 }
 
@@ -116,6 +122,14 @@ function render(animate) {
   const entries = data.entries ?? [];
   const podium = root.querySelector("[data-board-podium]");
   const list = root.querySelector("[data-board-list]");
+  const chosenSet = new Set(chosen);
+  const rows = chosenSet.size
+    ? entries.slice().sort((a, b) => {
+        const am = (a.narratives ?? []).some((n) => chosenSet.has(n.key)) ? 0 : 1;
+        const bm = (b.narratives ?? []).some((n) => chosenSet.has(n.key)) ? 0 : 1;
+        return am - bm;
+      })
+    : entries;
   // The podium lives here (Lorenzo, 27/09: "il podio ha senso soltanto per
   // le gemme"): the top three on it, every project below as a row.
   const top3 = entries.slice(0, 3).map((e) => ({ id: `gem:${e.chain}:${e.token_address}`, symbol: e.symbol,
@@ -125,7 +139,7 @@ function render(animate) {
   else podium.innerHTML = "";
   podium.dataset.sig = sig;
   podium.dataset.count = String(top3.length);
-  list.innerHTML = entries.map(gemRow).join("");
+  list.innerHTML = rows.map(gemRow).join("");
   const detail = root.querySelector("[data-board-detail]");
   const chosen = entries.find((e) => key(e) === open);
   detail.hidden = !chosen;
@@ -283,9 +297,11 @@ function gemRow(e) {
     why: gemWhy(e), info: details(e),
   });
   const nar = (e.narratives ?? []).slice().sort((a, b) => b.heat - a.heat)[0];
+  const mine = nar && chosen.includes(nar.key);
   return tokenRow({ id, symbol: e.symbol, name: e.name, chain: e.chain, token: e.token_address, image: e.image,
     cap: e.market_cap, ageTs: e.launched_at, badge: e.early ? "early" : null, sign: "",
-    sub: nar ? escapeHtml(nar.label) : "", pill: `<em class="chg score">${Math.round(e.score ?? 0)}</em>` });
+    sub: nar ? `<span class="bd-nar${mine ? " is-mine" : ""}">${escapeHtml(nar.label)}</span>` : "",
+    pill: `<em class="chg score">${Math.round(e.score ?? 0)}</em>` });
 }
 
 /** Scores count up from where they were (or from 0) instead of jumping. */

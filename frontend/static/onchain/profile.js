@@ -25,6 +25,7 @@ let tab = "open";
 let chainF = "all";
 let showHidden = false;
 let showAllPos = false;
+let narratives = null;   // {catalog, selected} once loaded; null while loading or on error
 const CHAIN_NAMES = { solana: "Solana", robinhood: "Robinhood", base: "Base", ethereum: "Ethereum", bsc: "BSC" };
 let go = () => {};
 
@@ -212,6 +213,21 @@ export async function phantomAnswer(ans) {
   return true;
 }
 
+function narrativesBox() {
+  if (!narratives) return "";
+  const sel = new Set(narratives.selected ?? []);
+  const groups = { gem: [], meme: [] };
+  for (const c of narratives.catalog ?? []) (groups[c.kind] ?? groups.gem).push(c);
+  for (const k of ["gem", "meme"]) groups[k].sort((a, b) => (b.heat ?? 0) - (a.heat ?? 0));
+  const chip = (c) => `<button type="button" data-narr="${escapeHtml(c.key)}" aria-pressed="${sel.has(c.key)}" title="${escapeHtml(c.why ?? "")}">${escapeHtml(c.label)}</button>`;
+  const group = (label, list) => list.length ? `<div class="pf-narr-g"><h4>${label}</h4><div class="pf-narr-chips">${list.map(chip).join("")}</div></div>` : "";
+  return `<section class="pf-narr-body">
+    <p class="pf-none">Pick the narratives you follow: they come first in Gems and Memes.</p>
+    ${group("Gems", groups.gem)}
+    ${group("Memes", groups.meme)}
+  </section>`;
+}
+
 function walletsBox(p) {
   const rows = (p.wallets ?? []).map((w) => `<li>
       <span class="pf-wchain" data-kind="${escapeHtml(w.kind)}" aria-hidden="true">${w.kind === "evm" ? "◆" : "◎"}</span>
@@ -264,6 +280,7 @@ function paint() {
   const [whole, cents] = d.complete === false && d.missing?.length && !d.value ? ["$—", ""] : money(d.value);
   const ch = d.change?.[range];
   const wboxOpen = root.querySelector(".pf-wbox")?.open;   // a repaint must not fold what the user opened
+  const nboxOpen = root.querySelector(".pf-narr")?.open;
   root.innerHTML = `${phantomSign ? `<div class="pf-phantom"><p>Phantom is connected. One more tap: a free signature proves the wallet is yours.</p>
       <button type="button" data-phantom-sign>Sign in Phantom</button></div>` : ""}
     <header class="pf-head">
@@ -318,6 +335,10 @@ function paint() {
       <summary>Connected wallets (${(p.wallets ?? []).length})</summary>
       ${walletsBox(p)}
     </details>
+    ${narratives ? `<details class="pf-narr"${nboxOpen ? " open" : ""}>
+      <summary>Narratives (${(narratives.selected ?? []).length})</summary>
+      ${narrativesBox()}
+    </details>` : ""}
     <dialog class="sheet pf-sheet" data-edit-sheet aria-label="Edit profile">
       <form method="dialog" class="pf-form">
         <h3>Edit profile</h3>
@@ -432,6 +453,22 @@ export function mountProfile({ go: goTo } = {}) {
       const [kind, ...rest] = u.dataset.unlink.split(":");
       api.walletUnlink(kind, rest.join(":")).then((res) => { data.profile = res.profile; paint(); load(); loadLinked(); }, () => {});
     }
+    const n = event.target.closest("[data-narr]");
+    if (n && narratives) {
+      const key = n.dataset.narr;
+      const before = narratives.selected ?? [];
+      const next = before.includes(key) ? before.filter((k) => k !== key) : [...before, key];
+      narratives = { ...narratives, selected: next };
+      paint();
+      api.saveNarratives(next).then((res) => {
+        narratives = { ...narratives, selected: res.selected ?? next };
+        paint();
+        document.dispatchEvent(new CustomEvent("lae:narratives", { detail: narratives.selected }));
+      }, () => {
+        narratives = { ...narratives, selected: before };
+        paint();
+      });
+    }
   });
   root.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -460,4 +497,6 @@ export function mountProfile({ go: goTo } = {}) {
   });
   // Your picture in the header and the dock, before the profile is opened.
   api.getProfile().then((d) => { data = d; paint(); }, () => {});
+  // The narratives catalog: loaded once, does not block the profile paint.
+  api.getNarratives().then((d) => { narratives = d; if (data) paint(); }).catch(() => null);
 }
