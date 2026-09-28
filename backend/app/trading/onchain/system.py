@@ -173,7 +173,7 @@ def backtest_all(bars: list[list]) -> dict:
     exit, fees included (radar.evaluate, the same engine as the main site)."""
     df = frame(bars)
     if len(df) < BACKTEST_MIN_BARS:
-        return {"bars": len(df), "rows": [], "hold_pct": None}
+        return {"bars": len(df), "rows": [], "hold_pct": None, "best": None}
     res = radar.evaluate(df, [{"strategy_name": n, "params": None, "label": lab, "source": "predefinita"}
                               for n, lab in BACKTESTS])
     by_label = {r["label"]: r for r in res["tried"]}
@@ -191,7 +191,39 @@ def backtest_all(bars: list[list]) -> dict:
                      "in_position": r["in_position"]})
     hold = res["hold_pct"]
     return {"bars": len(df), "from": int(df.index[0].timestamp()), "to": int(df.index[-1].timestamp()),
-            "hold_pct": round(hold, 2) if hold is not None else None, "rows": rows}
+            "hold_pct": round(hold, 2) if hold is not None else None, "rows": rows, "best": _best_trades(df, rows)}
+
+
+def _best_trades(df: pd.DataFrame, rows: list[dict]) -> dict | None:
+    """The best backtest's buys and sells, for the chart. Lorenzo, 28/09:
+    "visualizza un alert ma non sappiamo se e' un ingresso o altro.. qui deve
+    comparire la strategia [...] ingressi e uscite". The ranking shows the
+    best backtest, so the chart shows the same one's trades."""
+    traded = [r for r in rows if r["trades"] and r["return_pct"] is not None]
+    if not traded:
+        return None
+    best = max(traded, key=lambda r: r["return_pct"])
+    name = next(n for n, lab in BACKTESTS if lab == best["label"])
+    try:
+        result, signals, _pos = radar.run_spot(df, {"strategy_name": name, "params": None, "label": best["label"],
+                                                    "source": "predefinita"})
+    except Exception:
+        return None
+    fee = 2 * radar.BACKTEST_PARAMS["commission_pct"] / 100     # as radar._long_only
+    events = []
+    for tr in result.trades:
+        if tr.direction != "long":
+            continue
+        events += [{"t": int(tr.entry_time), "side": "buy", "price": tr.entry_price},
+                   {"t": int(tr.exit_time), "side": "sell", "price": tr.exit_price,
+                    "ret": round(tr.pnl_pct / 100 - fee, 4)}]
+    if best["in_position"] and (not events or events[-1]["side"] != "buy"):
+        entry = next((e for e in reversed(signals) if e.type == "entry_long"), None)
+        if entry is not None:
+            t = entry.time
+            events.append({"t": int(t.timestamp()) if hasattr(t, "timestamp") else int(t), "side": "buy",
+                           "price": entry.price})
+    return {"label": best["label"], "events": events}
 
 
 def _median(vals: list[float]) -> float | None:
