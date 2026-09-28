@@ -46,7 +46,7 @@ import time
 import httpx
 
 from app.sniper.quality import _looks_like_meme
-from app.trading.onchain import (benchmark, depth, discovery, gem_track, judge, legit, narratives, projects_db, radar,
+from app.trading.onchain import (benchmark, big_coins, depth, discovery, gem_track, judge, legit, narratives, projects_db, radar,
                                   research, storage, traction)
 
 logger = logging.getLogger(__name__)
@@ -197,6 +197,7 @@ def reset_for_tests() -> None:
     _outbox.clear()
     _alert_hooks.clear()
     gem_track.reset_for_tests()
+    big_coins.reset_for_tests()
     traction.reset_for_tests()
     _entries.clear()
     _excluded.clear()
@@ -436,8 +437,9 @@ def exceptional(e: dict) -> bool:
 
 
 def true_cap(e: dict) -> float:
-    """The larger of the pool's cap and the token's global cap (CoinGecko)."""
-    return max(float(e.get("market_cap") or 0), float(e.get("global_cap") or 0))
+    """The larger of the pool's cap, the contract's global cap (CoinGecko) and
+    the cap of the top coin this token is a copy of (bridged AAVE)."""
+    return max(float(e.get("market_cap") or 0), float(e.get("global_cap") or 0), big_coins.cap_of(e))
 
 
 def qualifies(e: dict, now: float | None = None) -> str:
@@ -748,6 +750,7 @@ async def tick(client: httpx.AsyncClient, now: float | None = None) -> None:
         await _step("dexscreener", _poll_market, client)
     await _step("storico", gem_track.poll, client, set(_entries), now)
     await _step("database", _from_database, client, now)
+    await _step("grandi monete", big_coins.refresh, client, now)
     await _step("cap globale", _check_global_cap, client, now)
     if not _state.get("reviewing"):
         task = asyncio.create_task(_step("revisione", _review_board, now))
