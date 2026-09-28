@@ -79,8 +79,10 @@ def reset_for_tests() -> None:
 
 
 def _user(uid: str) -> dict:
-    return _state.setdefault(uid, {"mode": "off", "pct": 100, "position": None, "sim_usdg": None,
-                                   "sim_start": None, "trades": [], "note": ""})
+    u = _state.setdefault(uid, {"mode": "off", "pct": 100, "position": None, "sim_usdg": None,
+                                "sim_start": None, "trades": [], "note": ""})
+    u.setdefault("paper", [])
+    return u
 
 
 def settings(uid: str) -> dict:
@@ -101,7 +103,7 @@ def configure(uid: str, mode: str | None = None, pct: int | None = None, usdg_no
             raise ValueError(f"mode must be one of {MODES}")
         if mode == "sim" and u["mode"] != "sim":
             start = usdg_now if usdg_now and usdg_now > 0 else SIM_START_USDG
-            u.update(sim_usdg=round(start, 6), sim_start=round(start, 6))
+            u.update(sim_usdg=round(start, 6), sim_start=round(start, 6), paper=[])
             if u["position"] and u["position"].get("mode") == "sim":
                 u["position"] = None
         u["mode"] = mode
@@ -129,13 +131,16 @@ def view(uid: str) -> dict:
                     "qty": qty, "price": price,
                     "ret": round(value / pos["cost_usdg"] - 1, 4) if value and pos["cost_usdg"] else None,
                     "image": (a or {}).get("image")}
+    papers = [_paper_view(p) for p in u["paper"]][::-1]
     sim = None
     if u["sim_start"]:
         equity = (u["sim_usdg"] or 0) + ((pos_view or {}).get("value_usdg") or 0 if pos and pos["mode"] == "sim" else 0)
+        equity += sum(p["value_usdg"] for p in papers)
         sim = {"usdg": u["sim_usdg"], "start": u["sim_start"], "equity": round(equity, 4),
                "ret": round(equity / u["sim_start"] - 1, 4) if u["sim_start"] else None}
     closed = [t for t in u["trades"] if t.get("side") == "sell" and t.get("ok") and t.get("ret") is not None]
-    return {"mode": u["mode"], "pct": u["pct"], "pcts": list(PCTS), "chain": CHAIN, "position": pos_view,
+    return {"mode": u["mode"], "pct": u["pct"], "pcts": list(PCTS), "chain": CHAIN,
+            "position": pos_view or (papers[0] if papers else None), "positions": papers,
             "sim": sim, "trades": u["trades"][-20:][::-1], "note": u["note"],
             "stats": {"closed": len(closed), "wins": sum(1 for t in closed if t["ret"] > 0),
                       "sum_ret": round(sum(t["ret"] for t in closed), 4) if closed else None},
@@ -338,6 +343,77 @@ def _log(u: dict, row: dict) -> dict:
     return row
 
 
+# --------------------------------------------------------------- paper book
+#
+# Simulated follows every alert, on every chain, with the trade the
+# Strategies tab shows: bought at the alert, sold on the trend follower's
+# exit (Lorenzo, 28/09: "il wallet simulato non sembra replicare gli
+# ingressi [...] voglio che li segua"). Priced from alert_bt, so the
+# simulated wallet and the backtest are the same trades. Real stays on
+# Robinhood quotes, one token at a time.
+
+def _paper_ret(p: dict, a: dict | None, label: str) -> tuple[float, bool, str]:
+    """(return so far, closed, why) of one paper trade."""
+    if a is None:
+        return p.get("ret", 0.0), True, "alert no longer tracked"
+    s = _system_of(a, label) or {}
+    ret = s.get("ret")
+    ret = p.get("ret", 0.0) if ret is None else float(ret)
+    if s.get("state") == "out" or s.get("done"):
+        last = (s.get("events") or [{}])[-1]
+        return ret, True, {"rug": "pool gone", "48h": "48h window over"}.get(
+            last.get("why") or last.get("side"), "system sold")
+    if a.get("gone"):
+        return -1.0, True, "pool gone"
+    return ret, False, ""
+
+
+def _paper_view(p: dict) -> dict:
+    a = alert_track._alerts.get(p["alert"])
+    ret = p.get("ret", 0.0)
+    return {"symbol": p["symbol"], "token": p["token"], "chain": p["chain"], "at": p["at"], "mode": "sim",
+            "cost_usdg": p["stake"], "value_usdg": round(p["stake"] * (1 + ret), 4), "ret": round(ret, 4),
+            "image": (a or {}).get("image"), "route": "paper", "pair": (a or {}).get("pair_address")}
+
+
+def paper_tick(u: dict, label: str, now: float, open_new: bool = True) -> list[dict]:
+    """Close the paper trades the system left, then open one on every fresh
+    alert not followed yet, each with the share of the simulated equity.
+    Switched away from Simulated (open_new False): open trades still close
+    on the system's exit, nothing new opens."""
+    rows: list[dict] = []
+    for p in list(u["paper"]):
+        a = alert_track._alerts.get(p["alert"])
+        ret, closed, why = _paper_ret(p, a, label)
+        p["ret"] = ret
+        if closed:
+            cash = p["stake"] * (1 + ret)
+            u["sim_usdg"] = round((u["sim_usdg"] or 0) + cash, 6)
+            u["paper"].remove(p)
+            rows.append(_log(u, {"t": now, "side": "sell", "symbol": p["symbol"], "token": p["token"],
+                                 "alert": p["alert"], "chain": p["chain"], "mode": "sim", "why": why, "ok": True,
+                                 "usdg": round(cash, 6), "ret": round(ret, 4)}))
+    if not open_new:
+        return rows
+    followed = {t.get("alert") for t in u["trades"]} | {p["alert"] for p in u["paper"]}
+    fresh = sorted((a for a in alert_track._alerts.values()
+                    if a["kind"] == "meme" and not a.get("gone") and now - a["at"] <= FRESH_S
+                    and alert_track.key_of(a) not in followed), key=lambda a: a["at"])
+    for a in fresh:
+        equity = (u["sim_usdg"] or 0) + sum(p["stake"] * (1 + p.get("ret", 0.0)) for p in u["paper"])
+        stake = round(min(u["sim_usdg"] or 0, equity * u["pct"] / 100), 6)
+        base = {"t": now, "side": "buy", "symbol": a["symbol"], "token": a["token_address"],
+                "alert": alert_track.key_of(a), "chain": a["chain"], "mode": "sim", "why": "alert"}
+        if stake < 0.01:
+            rows.append(_log(u, {**base, "ok": False, "reason": "all cash already in open trades"}))
+            continue
+        u["sim_usdg"] = round((u["sim_usdg"] or 0) - stake, 6)
+        u["paper"].append({"alert": base["alert"], "symbol": a["symbol"], "token": a["token_address"],
+                           "chain": a["chain"], "at": now, "stake": stake, "ret": 0.0})
+        rows.append(_log(u, {**base, "ok": True, "usdg": stake}))
+    return rows
+
+
 async def tick(users: list, now: float | None = None, market: Market | None = None,
                notify: Callable[[object, str], Awaitable[None]] | None = None) -> list[dict]:
     """One pass for every user whose switch is not off (or who still holds
@@ -347,7 +423,17 @@ async def tick(users: list, now: float | None = None, market: Market | None = No
     done: list[dict] = []
     for user in users:
         u = _state.get(user.id)
-        if not u or (u["mode"] == "off" and not u["position"]):
+        if not u:
+            continue
+        u.setdefault("paper", [])
+        if u["mode"] == "sim" or u["paper"]:
+            if u["sim_start"] is None:
+                u.update(sim_usdg=SIM_START_USDG, sim_start=SIM_START_USDG)
+            for row in paper_tick(u, label, now, open_new=u["mode"] == "sim"):
+                done.append(row)
+                if notify and row.get("ok"):
+                    await notify(user, row)
+        if u["mode"] != "real" and not u["position"]:
             continue
         wallet = (getattr(user, "onchain_wallets", {}) or {}).get(CHAIN)
         if wallet is None:
@@ -362,7 +448,7 @@ async def tick(users: list, now: float | None = None, market: Market | None = No
                     done.append(row)
                     if notify and row.get("ok"):
                         await notify(user, row)
-            if not u["position"] and u["mode"] in ("sim", "real"):
+            if not u["position"] and u["mode"] == "real":
                 a = entry_candidate(label, now)
                 if a and not any(t.get("alert") == alert_track.key_of(a) for t in u["trades"]):
                     row = await _buy(user, u, a, now, market)
