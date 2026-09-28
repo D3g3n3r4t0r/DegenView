@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0216", "Sniper che non escono: MESUB -95%, GLANCE -61%, SUGAR -53%",
+     "Lorenzo, 28/09: 'come mai su queste la strategia non e' uscita prima?'",
+     "alta"),
     ("seed-0215", "Troppi ingressi sul grafico del token sniper (NYMA)",
      "Lorenzo, 28/09: 'troppi ingressi, ma sicuro che sia un trend follower decente?'",
      "alta"),

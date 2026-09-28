@@ -692,6 +692,24 @@ def confirmed_events(
     return events, position
 
 
+def trend_down(df: pd.DataFrame, strategy_name: str, params: dict | None = None) -> pd.Series:
+    """True on every bar where the trend follower's fast slope is below the
+    slow one: the trend is down, whatever the entry filters say.
+
+    The strategies only emit exit edges (the cross, or HF's own position
+    closing), so a position the strategy did not open itself (the sniper,
+    bought on the alert) never gets an exit if the trend was already down
+    when it was bought: MESUB rode -95% (Lorenzo, 28/09: "come mai su queste
+    la strategia non e' uscita prima?")."""
+    hf = strategy_name.startswith("Lorenzo HF")
+    p = {**(LORENZO_HF_DEFAULT_PARAMS if hf else DEFAULT_PARAMS), **(params or {})}
+    ma = _ma(df["close"], int(p["len"]), "EMA" if hf else p["average"])
+    slope = ma.diff() / ma
+    fast = slope.ewm(span=int(p["slopeFlen"]), adjust=False).mean()
+    slow = slope.ewm(span=int(p["slopeSlen"]), adjust=False).mean()
+    return (fast < slow).fillna(False)
+
+
 def spot_only(signals: pd.DataFrame) -> pd.DataFrame:
     """Solo acquisti e vendite, mai short: un segnale short diventa la
     vendita di quello che si ha. Per il DEX, dove si compra e si vende il
