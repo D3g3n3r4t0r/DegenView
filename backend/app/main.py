@@ -4202,6 +4202,23 @@ async def post_hidden(body: HiddenToken, user: User = Depends(auth.get_current_u
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+class NarrativeSelection(BaseModel):
+    keys: list[str] = []
+
+
+@app.get("/api/profile/narratives")
+async def get_narratives(user: User = Depends(auth.get_current_user)) -> dict:
+    from app.trading.onchain import narratives
+    catalog = [{"key": n["key"], "label": n.get("label") or n["key"], "kind": n["kind"],
+                "heat": n["heat"], "why": n.get("why") or ""} for n in narratives.catalog()]
+    return {"catalog": catalog, "selected": profiles.narratives(user.id)}
+
+
+@app.post("/api/profile/narratives")
+async def post_narratives(body: NarrativeSelection, user: User = Depends(auth.get_current_user)) -> dict:
+    return {"selected": profiles.set_narratives(user.id, body.keys)}
+
+
 @app.patch("/api/profile")
 async def update_profile(body: ProfileUpdate, user: User = Depends(auth.get_current_user)) -> dict:
     profiles.get(user.id, user.email, _joined_hint(user))
