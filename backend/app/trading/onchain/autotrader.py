@@ -145,7 +145,11 @@ def view(uid: str) -> dict:
 # --------------------------------------------------------------- decisions
 
 def _system_of(a: dict, label: str) -> dict | None:
-    return (a.get("system") or {}).get(label)
+    """The system entered on the alert itself and closed by the trend
+    follower's exit (Lorenzo, 28/09: "la strategia deve entrare nel momento
+    in cui arriva l'alert [...] Poi deve gestire esclusivamente la
+    chiusura"): alert_bt, system.follow(on_alert=True)."""
+    return (a.get("alert_bt") or {}).get(label)
 
 
 def entry_candidate(label: str, now: float) -> dict | None:
