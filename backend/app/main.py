@@ -1203,6 +1203,7 @@ def _deepseek_memory() -> list[str]:
         pass
 
     try:
+        from app.trading.onchain import backtest_lab
         lab = backtest_lab.summary()
         out.append(_line(f"Laboratorio: {lab['rows']} righe, {lab['gone']} sparite, {lab['with_trades']} con trade"))
         for dec, b in (lab.get("by_decision") or {}).items():
