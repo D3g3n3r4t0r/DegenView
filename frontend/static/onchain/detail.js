@@ -492,8 +492,7 @@ async function drawChart(box, candles, e) {
   });
   if (!lw || lw.box !== box || !box.contains(lw.chart.chartElement?.() ?? box.firstChild)) {
     disposeChart();
-    if (box.querySelector("iframe")) box.innerHTML = "";
-    else box.innerHTML = "";
+    box.innerHTML = "";          // also drops a failed main-site iframe
     const chart = LC.createChart(box, {
       autoSize: true,
       layout: { background: { color: "transparent" }, textColor: "#9aa0ab", fontSize: 11, attributionLogo: false },
