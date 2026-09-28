@@ -33,3 +33,4 @@ review. Read them before answering: the same mistake again is a failed task.
 - Before deleting a constant or function, search the file for every use of it: #216 removed `NAMES` while `onClick` still read it.
 - Every function you call must be imported: #190 called `strategyTrade` in detail.js without importing it, so the token page broke.
 - "Never show X" means every place X can reach the screen, including labels passed through (`al.system.label` printed "Trend HF" in the event list, #216).
+- `threading.Lock` is not re-entrant: never call a function that takes the same lock (e.g. `profiles.get`) while holding it — the tests hang forever (#226).
