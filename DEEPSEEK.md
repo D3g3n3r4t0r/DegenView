@@ -164,6 +164,13 @@ Lorenzo: vedi HANDOVER.
 | 28/09 | issue #201 (backtest nell'app) | buona; corretti ordine iniziale e 0% al posto di un dato mancante |
 | 28/09 | issue #203 (link al grafico principale) | non funzionava: `setArea` fuori portata e BTC caricato sopra al link; finestra bloccata su iOS. Corretto da Claude, provato in browser |
 | 28/09 | issue #204 (backtest migliore, niente selettori) | giusta al primo colpo |
+| 28/09 | #210 contatore backtest | giusta al primo colpo |
+| 28/09 | #211 icone barra/podio | coppa poco visibile, corretta |
+| 28/09 | #214 profilo compatto | griglia della riga cash sbagliata, corretta |
+| 28/09 | #216 niente nomi di strategie | tolto `NAMES` ancora usato, nome ancora stampato, import mancante dalla #190: corretti |
+| 28/09 | #223 podio per punteggio | giusta al primo colpo |
+| 28/09 | #226 nascondi token, parte 1 | primo giro: lavoratore in timeout (test di main); secondo: deadlock sul lock (compito mio ambiguo); terzo: import mancante di nuovo -> aggiunto ESLint no-undef al lavoratore |
+| 28/09 | #231 nascondi token, parte 2 | giusta al primo colpo |
 
 Regola per dargli più lavoro: tre revisioni di fila con almeno un'osservazione
 giusta e nessuna inventata → gli si affida anche la prima stesura dei testi in
