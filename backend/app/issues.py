@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0207", "Voglio vedere la capacita' di scansione: ticker che girano, non una lista ferma",
+     "Lorenzo: 'qui voglio capire la capacita' di scansione del sistema voglio vedere i ticker girare, non cose ferme'.",
+     "media"),
     ("seed-0206", "Nella tab Strategie i backtest restano a meta' (5 su 13)",
      "Lorenzo: 'io apro la tab con tutte le cripto scelte, i backtest non ci sono. Vedo solo alcuni risultati [...] su questi token deve essere applicata la strategia trend follower [...] io voglio vedere tutti i risultati, ma non li sto vedendo. Fai di questo una questione fondamentale per la riuscita del sito, deve funzionare stavolta.'",
      "alta"),

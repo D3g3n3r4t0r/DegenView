@@ -114,6 +114,7 @@ export const getPilot = (chain) => request(`/api/onchain/pilot/${chain}`);
 export const getRadar = () => request("/api/onchain/radar");
 export const getLeaderboard = () => request("/api/onchain/leaderboard");
 export const getAlerts = (kind) => request(`/api/onchain/alerts/${kind}`);
+export const getScanFeed = () => request("/api/onchain/scan-feed");
 export const getAutotrader = () => request("/api/onchain/autotrader");
 export const getAgentLog = (before) => request(`/api/agent/log?limit=60${before ? `&before=${before}` : ""}`);
 /* Which wallet the profile and the header show: the real ones or the

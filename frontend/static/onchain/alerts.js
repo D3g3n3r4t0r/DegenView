@@ -97,6 +97,53 @@ function systemLine(d) {
     + `${live.holding ? `<span>in ${live.holding} now</span>` : ""}</p>`;
 }
 
+// The scanners' live tape (Lorenzo, 28/09: "voglio vedere i ticker girare,
+// non cose ferme"): every pool judged in the last minutes, scrolling, with
+// the hour's counts. Polled on its own, faster than the list.
+const SCAN_POLL_MS = 8_000;
+const VERDICT = { seen: "·", check: "…", wait: "…", pass: "✓", tested: "◆", alert: "★", fail: "✗" };
+const nfmt = (n) => Number(n ?? 0).toLocaleString("en-US");
+
+function scanStats(f) {
+  return `<span class="scan-dot" aria-hidden="true"></span><b>Scanning</b>`
+    + `<span><em>${nfmt(f.seen_1h + f.checked_1h)}</em> pools/h</span><span><em>${f.per_min}</em>/min</span>`
+    + `<span><em>${nfmt(f.checked_1h)}</em> checked</span><span data-v="pass"><em>${nfmt(f.passed_1h)}</em> passed</span>`
+    + `<span data-v="fail"><em>${nfmt(f.rejected_1h)}</em> rejected</span>`;
+}
+
+function scanTape(f) {
+  const items = (f.feed ?? []).slice(0, 40).map((x) => `<span class="tape-item" data-v="${escapeHtml(x.v)}">`
+    + `<i>${VERDICT[x.v] ?? "·"}</i>${escapeHtml(x.symbol)}${x.why ? ` <small>${escapeHtml(x.why)}</small>` : ""}</span>`).join("");
+  if (!items) return "";
+  // Twice, so the loop has no seam; the speed follows the length.
+  return `<div class="scan-tape" aria-hidden="true"><div class="tape-track" style="--n:${Math.min(40, f.feed.length)}">${items}${items}</div></div>`;
+}
+
+function scanHtml(f) {
+  if (!f) return `<div class="scan-live" data-scan-live></div>`;
+  return `<div class="scan-live" data-scan-live data-head="${f.feed?.[0]?.t ?? 0}">`
+    + `<p class="scan-stats" data-scan-stats>${scanStats(f)}</p>${scanTape(f)}</div>`;
+}
+
+async function pollScan() {
+  if (document.visibilityState !== "visible") return;
+  let f;
+  try {
+    f = await api.getScanFeed();
+  } catch {
+    return;
+  }
+  state.scan = f;
+  const box = document.querySelector("#meme-alerts [data-scan-live]");
+  if (!box) return;
+  const head = String(f.feed?.[0]?.t ?? 0);
+  if (box.dataset.head === head && box.querySelector("[data-scan-stats]")) {
+    box.querySelector("[data-scan-stats]").innerHTML = scanStats(f);
+    return;
+  }
+  box.outerHTML = scanHtml(f);
+}
+
 const SCAN_FORM = `<form class="scan-form" data-scan-form role="search">
   <input name="q" placeholder="Scan a token: ticker or address" autocomplete="off" spellcheck="false" aria-label="Ticker or address" />
   <button type="submit" aria-label="Scan"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg></button></form>`;
@@ -135,7 +182,7 @@ function paintFeed() {
   const typing = body.querySelector("[data-scan-form] input");
   const kept = typing ? { v: typing.value, focus: document.activeElement === typing } : null;
   withEntrance(body, () => {
-    body.innerHTML = SCAN_FORM + systemLine(d)
+    body.innerHTML = SCAN_FORM + systemLine(d) + scanHtml(state.scan)
       + (soon ? `<h4 class="feed-sec">About to fire</h4><ol class="soon-list" data-all="${state.soonAll}">${soon}</ol>`
         + (nSoon > SOON_SHOWN ? `<button type="button" class="more-row" data-soon-more>${state.soonAll ? "Show less" : `+${nSoon - SOON_SHOWN} more`}</button>` : "") : "")
       + `<h4 class="feed-sec">Fired · last 48h</h4>`
@@ -395,4 +442,6 @@ export function mountAlerts() {
   mountReview();
   load();
   setInterval(() => document.visibilityState === "visible" && load(), POLL_MS);
+  pollScan();
+  setInterval(pollScan, SCAN_POLL_MS);
 }

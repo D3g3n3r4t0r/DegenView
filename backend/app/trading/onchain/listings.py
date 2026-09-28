@@ -41,7 +41,7 @@ import httpx
 
 from app.providers.base import ProviderError
 from app.providers.dexscreener import DexScreenerProvider, make_symbol
-from app.trading.onchain import legit
+from app.trading.onchain import legit, scan_feed
 from app.trading.onchain.storage import data_file
 
 logger = logging.getLogger(__name__)
@@ -406,6 +406,8 @@ async def _vet(k: str, pending: _Pending, item: dict, pair: dict) -> dict | None
     now = time.time()
     if _pending.get(k) is not pending:
         return None  # scaduto o sostituito nel frattempo
+    scan_feed.event(item["chain"], item["symbol"], verdict["status"] if verdict["status"] != "ok" else "pass",
+                    verdict.get("reason") or "", now)
     if verdict["status"] == "wait":
         pending.next_vet_at = now + VET_RETRY_S
         pending.waiting_for = verdict["reason"]
@@ -429,6 +431,7 @@ async def _vet(k: str, pending: _Pending, item: dict, pair: dict) -> dict | None
                 website=verdict["website"], socials=verdict["socials"], checks=verdict["checks"],
                 ai=verdict.get("ai"), github=verdict.get("github"), scan_url=verdict.get("scan_url"),
                 report=verdict.get("report"))
+    scan_feed.event(item["chain"], item["symbol"], "alert", "alert sent", now)
     await _publish(item)
     return item
 
@@ -453,6 +456,7 @@ async def accept_pairs(pairs: list[dict], now: float | None = None, *, wait: boo
             continue
         item = evaluate_pair(pair, now)
         if item is None:
+            scan_feed.event(chain, (pair.get("baseToken") or {}).get("symbol"), "seen", "below thresholds", now)
             continue
         if f"{chain}:{item['symbol'].upper()}" in _alerted_tickers:
             del _pending[k]
@@ -460,6 +464,7 @@ async def accept_pairs(pairs: list[dict], now: float | None = None, *, wait: boo
             continue
         pending.vetting = True
         pending.symbol = item["symbol"]
+        scan_feed.event(chain, item["symbol"], "check", "checks running", now)
         tasks.append(_spawn(_vet(k, pending, item, pair)))
     for k, p in list(_pending.items()):
         if _is_expired(p, now) and not p.vetting:
