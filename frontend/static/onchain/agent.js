@@ -11,7 +11,6 @@
  */
 import * as api from "@onchain/api.js";
 import { escapeHtml } from "@onchain/format.js";
-import { openSheet, setBody } from "@onchain/sheets.js";
 
 const POLL_MS = 15_000;
 const SAY_MS = 4_000;
@@ -56,21 +55,143 @@ async function poll() {
   el.dataset.state = !data.active ? "off" : data.working ? "working" : "idle";
 }
 
-function openLog() {
-  openSheet("The agent", "DeepSeek reads every alert and gem finalist, remembers past rugs and answers on Telegram. Its verdicts are measured before they filter anything.");
-  const items = data?.items ?? [];
-  const today = Object.entries(data?.today ?? {}).map(([k, n]) => `${n} ${escapeHtml(k)}`).join(" · ");
-  setBody(`${today ? `<p class="sheet-note">Today: ${today}</p>` : ""}
-    <ul class="agent-log">${items.length ? items.map((a) => `<li data-kind="${escapeHtml(a.kind)}">
-      <span class="agent-dot" aria-hidden="true"></span><span>${escapeHtml(a.text)}</span><small>${ago(a.t)}</small></li>`).join("")
-      : `<li class="agent-empty"><span>Nothing yet today: it reads new alerts every 10 minutes.</span></li>`}</ul>`);
-}
-
 export function mountAgent() {
   el = document.getElementById("agent");
   if (!el) return;
-  el.addEventListener("click", openLog);
+  el.addEventListener("click", () => document.dispatchEvent(new CustomEvent("lae:go", { detail: "agent" })));
   poll();
   setInterval(poll, POLL_MS);
   setInterval(say, SAY_MS);
+}
+
+/* --- the agent's own tab ------------------------------------------------ */
+
+const VIEW_POLL_MS = 10_000;
+
+let viewEl = null;
+let viewData = null;
+let viewItems = [];
+let viewTimer = null;
+let viewBusy = false;
+
+function statusLine() {
+  if (!viewData) return "Off";
+  if (viewData.working) return "Working now";
+  return viewData.active ? "Watching" : "Off";
+}
+
+function chips() {
+  const today = viewData?.today ?? {};
+  const parts = Object.entries(today).map(([k, n]) => `${n} ${escapeHtml(k)}`);
+  return parts.length ? parts.join(" · ") : "Nothing yet today";
+}
+
+function stepHtml(step, i) {
+  const tone = step.startsWith("✗") ? "bad" : step.startsWith("✓") ? "good" : "plain";
+  return `<li data-tone="${tone}" style="--i:${i}">${escapeHtml(step)}</li>`;
+}
+
+function entryHtml(a) {
+  const steps = Array.isArray(a.steps) && a.steps.length
+    ? `<details class="ag-steps"><summary>Reasoning</summary><ol>${a.steps.map(stepHtml).join("")}</ol></details>`
+    : "";
+  const outcome = a.outcome ? ` <b class="ag-out">${escapeHtml(a.outcome)}</b>` : "";
+  return `<li class="ag-card" data-kind="${escapeHtml(a.kind)}" data-t="${a.t}">
+    <header><span class="ag-kind" data-kind="${escapeHtml(a.kind)}">${escapeHtml(a.kind)}</span><small>${ago(a.t)}</small></header>
+    <p>${escapeHtml(a.text)}${outcome}</p>${steps}</li>`;
+}
+
+function paint() {
+  if (!viewEl) return;
+  const list = viewEl.querySelector("[data-ag-list]");
+  if (!list) return;
+  list.innerHTML = viewItems.length
+    ? viewItems.map(entryHtml).join("")
+    : `<li class="ag-empty">Nothing yet today: it reads new alerts every 10 minutes.</li>`;
+  const more = viewEl.querySelector("[data-ag-more]");
+  if (more) more.hidden = viewItems.length < 60;
+}
+
+function paintHero() {
+  if (!viewEl) return;
+  const orb = viewEl.querySelector(".ag-orb");
+  if (orb) orb.dataset.state = !viewData ? "off" : viewData.working ? "working" : viewData.active ? "idle" : "off";
+  const status = viewEl.querySelector("[data-ag-status]");
+  if (status) status.textContent = statusLine();
+  const today = viewEl.querySelector("[data-ag-today]");
+  if (today) today.textContent = chips();
+}
+
+async function loadView() {
+  if (viewBusy) return;
+  viewBusy = true;
+  try {
+    const [info, log] = await Promise.all([api.getAgent(), api.getAgentLog()]);
+    viewData = info;
+    viewItems = log.items ?? [];
+    paintHero();
+    paint();
+  } catch {
+    /* keep what is on screen */
+  } finally {
+    viewBusy = false;
+  }
+}
+
+async function refreshView() {
+  if (viewBusy || document.visibilityState !== "visible") return;
+  viewBusy = true;
+  try {
+    const [info, log] = await Promise.all([api.getAgent(), api.getAgentLog()]);
+    viewData = info;
+    paintHero();
+    const fresh = (log.items ?? []).filter((a) => !viewItems.some((b) => b.t === a.t));
+    if (fresh.length) {
+      viewItems = [...fresh, ...viewItems];
+      const list = viewEl?.querySelector("[data-ag-list]");
+      if (list) {
+        list.querySelector(".ag-empty")?.remove();
+        list.insertAdjacentHTML("afterbegin", fresh.map(entryHtml).join(""));
+        list.querySelectorAll(".ag-card").forEach((c, i) => { if (i < fresh.length) c.classList.add("is-new"); });
+      }
+    }
+  } catch {
+    /* keep what is on screen */
+  } finally {
+    viewBusy = false;
+  }
+}
+
+async function loadEarlier() {
+  if (!viewItems.length) return;
+  const before = viewItems[viewItems.length - 1].t;
+  try {
+    const log = await api.getAgentLog(before);
+    const older = (log.items ?? []).filter((a) => !viewItems.some((b) => b.t === a.t));
+    if (!older.length) return;
+    viewItems = [...viewItems, ...older];
+    const list = viewEl?.querySelector("[data-ag-list]");
+    if (list) list.insertAdjacentHTML("beforeend", older.map(entryHtml).join(""));
+  } catch {
+    /* keep what is on screen */
+  }
+}
+
+export function mountAgentView() {
+  viewEl = document.getElementById("agent-view");
+  if (!viewEl) return;
+  viewEl.innerHTML = `
+    <div class="ag-hero">
+      <div class="ag-orb" data-state="off" aria-hidden="true"><i></i><i></i><i></i><span></span></div>
+      <h2>DeepSeek</h2>
+      <p class="ag-status" data-ag-status>Off</p>
+      <p class="ag-today" data-ag-today>Nothing yet today</p>
+    </div>
+    <ul class="ag-list" data-ag-list></ul>
+    <button type="button" class="ag-more" data-ag-more hidden>Load earlier</button>`;
+  viewEl.querySelector("[data-ag-more]")?.addEventListener("click", loadEarlier);
+  loadView();
+  viewTimer = setInterval(() => {
+    if (viewEl && document.getElementById("agent-view") && viewEl.offsetParent !== null) refreshView();
+  }, VIEW_POLL_MS);
 }
