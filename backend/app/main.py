@@ -3796,7 +3796,11 @@ def _top_entries(n: int = 50) -> list[dict]:
             "on_board": True} for e in board if not onchain_leaderboard.no_name(e.get("symbol"))]
     seen = {f"{e['chain']}:{e['token_address']}" for e in out}
     cutoff = time.time() - 30 * 86400
-    for row in onchain_projects_db.search(status="studied", sort="score", limit=200)["items"]:
+    # "ranked" too: a row whose flag outlived its place on the board was
+    # skipped by both halves of the Top (Lorenzo, 28/09: high scores never on the podium).
+    rows = [r for st in ("studied", "ranked")
+            for r in onchain_projects_db.search(status=st, sort="score", limit=200)["items"]]
+    for row in sorted(rows, key=lambda r: -(r.get("score") or 0)):
         if row.get("score") is None or (row.get("analyzed_at") or 0) < cutoff:
             continue
         if (row.get("overall") or {}).get("fatal") or onchain_leaderboard.no_name(row.get("symbol")):
