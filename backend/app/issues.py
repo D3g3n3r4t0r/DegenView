@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0204", "Backtest H24 su tutti i token della schermata Strategie",
+     "Lorenzo: 'voglio che quando il servizio del server e' online e siamo operativi, DeepSeek scansioni costantemente tutte le strategie e backtest [...] tutti quei token che sono finiti nella schermata delle strategie [...] nella tab a forma di grafico [...] vedo che non e' attivo su questo fronte, deve essere attivo costantemente H24'.",
+     "alta"),
     ("seed-0203", "Coda Memes piena ma quasi nessun token passa i controlli",
      "Lorenzo: 'Ci sono un sacco di progetti in coda qui che non capisco perche' non vengono selezionati o scelti. Praticamente da stamattina soltanto un token ha passato i controlli. Bisogna un attimino che tu risistemi e eviti questi problemi.'",
      "alta"),

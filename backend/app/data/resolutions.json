@@ -2202,5 +2202,10 @@
     "status": "risolto",
     "at": 1790610465,
     "summary": "Due cause lato filtro. 1) Il controllo 'Memoria', che impara dagli esiti passati, dava probabilita' di rug vicine al 100% a quasi tutti: un solo valore estremo (per esempio +5000% in un'ora) pesava piu' di tutto il resto e saturava il modello, quindi il token veniva scartato come 'simile ai rug passati'. Ora ogni valore ha un tetto e il modello non va piu' a 0 o 100% per un solo numero. 2) GitHub: ogni token in attesa si riprovava ogni due minuti e rifaceva ogni volta le stesse richieste, esaurendo la quota. Da li' in poi tutto restava 'GitHub non risponde'. Ora le risposte di GitHub si tengono qualche ora, e a quota finita non si richiama GitHub fino al reset. Le cifre sbagliate della coda (+0% e 100% chance) le aveva gia' corrette la nuova pagina Memes."
+  },
+  "seed-0204": {
+    "status": "risolto",
+    "at": 1790610887,
+    "summary": "Perche' era fermo: il laboratorio dei backtest provava solo i token del diario vecchi di 48 ore, e solo quando GeckoTerminal era libero. I token della schermata Strategie non li vedeva mai, e una gemma senza alert Telegram non aveva nessun backtest. Ora c'e' un ciclo che gira sempre, dal momento in cui il server e' online: ogni minuto prende un token della Top 50, cominciando da quelli mai provati e poi dal backtest piu' vecchio. Scarica le ultime 1000 candele da 5 minuti (circa tre giorni e mezzo) e prova tutte le strategie, con commissioni, ingressi e uscite. Ogni token si rifa' ogni ora. Nella lista Strategie ogni riga mostra il miglior backtest (o i puntini finche' arriva), in fondo c'e' quanti sono pronti, e la pagina del token mostra la tabella e le operazioni sul grafico anche senza alert. Ogni backtest compare nel registro dell'agente con il risultato."
   }
 }

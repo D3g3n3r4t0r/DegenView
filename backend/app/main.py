@@ -109,6 +109,7 @@ from app.trading.onchain import outcomes as onchain_outcomes
 from app.trading.onchain import narratives as onchain_narratives
 from app.trading.onchain import judge as onchain_judge
 from app.trading.onchain import backtest_lab as onchain_backtest_lab
+from app.trading.onchain import strategy_lab as onchain_strategy_lab
 from app.trading.onchain import autotrader as onchain_autotrader
 from app.trading.onchain import wealth as onchain_wealth
 from app import profiles
@@ -1370,6 +1371,7 @@ async def lifespan(app: FastAPI):
                    asyncio.create_task(onchain_leaderboard.leaderboard_loop()),
                    asyncio.create_task(onchain_outcomes.outcomes_loop()),
                    asyncio.create_task(onchain_backtest_lab.lab_loop()),
+                   asyncio.create_task(onchain_strategy_lab.lab_loop(_top_entries)),
                    asyncio.create_task(_onchain_signals_loop()),
                    asyncio.create_task(_wealth_loop())] if settings.onchain_radar_enabled else []
     sniper_tasks: list[asyncio.Task] = []
@@ -3764,7 +3766,26 @@ async def onchain_top(n: int = 15, user: User = Depends(auth.get_current_user)) 
     the database. Now the board entries and the best studied rows are
     merged by score; DeepSeek's veto still keeps junk out."""
     _require_onchain_enabled()
-    n = max(1, min(int(n), 50))
+    out = _top_entries(max(1, min(int(n), 50)))
+    for e in out:
+        e["backtests"] = _lab_summary(onchain_strategy_lab.get(e["chain"], e["token_address"]))
+    return {"entries": out, "on_board": sum(1 for e in out if e["on_board"]),
+            "backtests": onchain_strategy_lab.status(_top_entries(50))}
+
+
+def _lab_summary(bt: dict | None) -> dict | None:
+    """Per la lista: il migliore e il buy-and-hold, senza le operazioni."""
+    if not bt:
+        return None
+    traded = [r for r in bt.get("rows") or [] if r.get("trades") and r.get("return_pct") is not None]
+    best = max(traded, key=lambda r: r["return_pct"]) if traded else None
+    return {"best": {k: best[k] for k in ("label", "return_pct", "trades")} if best else None,
+            "hold_pct": bt.get("hold_pct"), "bars": bt.get("bars")}
+
+
+def _top_entries(n: int = 50) -> list[dict]:
+    """La Top della schermata Strategie: la bacheca delle gemme piu' le
+    righe studiate migliori del database, per punteggio."""
     board = sorted(onchain_leaderboard.board().get("entries") or [], key=lambda e: -(e.get("score") or 0))
     out = [{**{k: e.get(k) for k in ("chain", "token_address", "pair_address", "pair_url", "symbol", "name", "image",
                                      "market_cap", "liquidity_usd", "change_24h", "launched_at", "score", "early")},
@@ -3788,8 +3809,7 @@ async def onchain_top(n: int = 15, user: User = Depends(auth.get_current_user)) 
                     "market_cap": row.get("mcap"), "liquidity_usd": row.get("liq"), "change_24h": None,
                     "launched_at": row.get("launched_at"), "score": row.get("score"), "early": None, "on_board": False})
     out.sort(key=lambda e: -(e.get("score") or 0))
-    out = out[:n]
-    return {"entries": out, "on_board": sum(1 for e in out if e["on_board"])}
+    return out[:n]
 
 
 @app.get("/api/onchain/token")
@@ -3811,7 +3831,8 @@ async def onchain_token(chain: str, token: str, user: User = Depends(auth.get_cu
                      "overall": p.get("overall"), "narratives": p.get("narratives") or [],
                      "traction": p.get("traction"), "rank": p.get("rank"), "status": p.get("status"),
                      "why": p.get("why"), "on_board": False}
-    return {"entry": entry, "alerts": onchain_alert_track.for_token(chain, token)}
+    return {"entry": entry, "alerts": onchain_alert_track.for_token(chain, token),
+            "backtests": onchain_strategy_lab.get(chain, token)}
 
 
 @app.get("/api/onchain/projects")

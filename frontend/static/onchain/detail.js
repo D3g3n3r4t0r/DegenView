@@ -76,7 +76,7 @@ const NAMES = {
 };
 
 function bestLabel(e) {
-  const rows = (e.alerts ?? [])[0]?.backtests?.rows ?? [];
+  const rows = (e.alerts ?? [])[0]?.backtests?.rows ?? e.lab?.rows ?? [];
   return rows.filter((r) => r.trades > 0)
     .sort((a, b) => (b.return_pct ?? -1e9) - (a.return_pct ?? -1e9))[0]?.label;
 }
@@ -201,6 +201,9 @@ async function enrich(id, e) {
   loading.delete(id);
   if (!r) { if (current?.id === id) paintTabs(); return; }
   if (r.alerts?.length && !(e.alerts?.length)) e.alerts = r.alerts;
+  // The H24 lab's backtest on the token's latest chart (strategy_lab.py):
+  // every token of the Strategies tab has one, alert or not.
+  if (r.backtests) e.lab = r.backtests;
   if (r.entry) {
     const lb = await import("@onchain/leaderboard.js");
     e.why ||= lb.gemWhy(r.entry) + (r.entry.on_board ? "" : `<p class="muted">Not on the board${r.entry.why ? `: ${escapeHtml(r.entry.why)}` : ""}.</p>`);
@@ -274,6 +277,7 @@ function paintTabs() {
         ${e.dossier?.liquidity_usd != null ? `<div><dt>Liquidity</dt><dd>${usdShort(e.dossier.liquidity_usd)}</dd></div>` : ""}
         ${e.ageTs ? `<div><dt>Age</dt><dd>${age(e.ageTs)[0]}</dd></div>` : ""}
       </dl>
+      ${e.lab ? `${backtestTable({ backtests: e.lab, age_h: 99 })}<p class="muted">Backtested on the latest 5-minute chart, every hour.</p>` : ""}
       <p class="muted">${pending ? "Loading…" : `No Telegram alert on this token yet${e.kind === "gem" ? ": gems are alerted when they enter the board." : "."}`}</p>`;
 }
 
@@ -518,7 +522,7 @@ async function drawChart(box, candles, e) {
   const barAt = (t) => { let b = bars[0].time; for (const x of bars) { if (x.time <= t) b = x.time; else break; } return b; };
   const marks = [];
   let drawn = 0;
-  for (const a of e.alerts ?? []) {
+  for (const a of withLab(e)) {
     for (const v of tradesOf(a)) {
       if (v.t < t0 || v.t > t1 + 3600) continue;
       const buy = v.side === "buy";
@@ -541,6 +545,10 @@ async function drawChart(box, candles, e) {
 /** The trades drawn on the chart: the best backtest's, the one the ranking
  *  shows (Lorenzo, 28/09: "qui deve comparire la strategia [...] ingressi e
  *  uscite"); the 48h system's until the backtest is stored. */
+function withLab(e) {
+  return (e.alerts?.length || !e.lab) ? (e.alerts ?? []) : [{ backtests: e.lab }];
+}
+
 function tradesOf(a) {
   const best = a.backtests?.best?.events;
   return best?.length ? best : bestSystem(a)?.events ?? [];
@@ -564,7 +572,7 @@ function svgChart(candles, e) {
   const ticks = Array.from({ length: 5 }, (_, i) => lo + ((hi - lo) * i) / 4);
   const now = ys[ys.length - 1];
   // The system's own trades on this token: green up for a buy, red down for a sell.
-  const trades = (e.alerts ?? []).flatMap(tradesOf).filter((v) => v.t >= t0 && v.t <= t1).map((v) => {
+  const trades = withLab(e).flatMap(tradesOf).filter((v) => v.t >= t0 && v.t <= t1).map((v) => {
     const i = candles.findIndex((c) => c.time >= v.t);
     const yv = y(ys[Math.max(0, i)]);
     const buy = v.side === "buy";
