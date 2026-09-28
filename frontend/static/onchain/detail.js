@@ -165,6 +165,7 @@ export function openDetail(id) {
       </section>
       ${e.context ? `<p class="dt-context">${e.context}</p>` : ""}
       <div class="dt-chart" data-chart><div class="dt-chart-empty">Loading chart…</div></div>
+      <p class="dt-chart-note" data-chart-note></p>
       <div class="dt-chips" data-chips></div>
       <button type="button" class="dt-mainchart" data-main-chart="best">Open on the analysis chart ↗</button>
       <nav class="dt-tabs">
@@ -410,12 +411,21 @@ async function paintChart() {
   const stale = charts.get(`${e.chain}:${e.pair || e.token}:${interval}`)?.candles;
   if (stale?.length >= 2) await drawChart(box, stale, e);
   let candles = [];
-  try {
-    candles = await chartFor(e, interval);
-  } catch { /* falls through to the embedded chart */ }
-  if (box.dataset.want !== want) return;
+  let shown = interval;
+  // An interval with no candles (1m on a quiet pool) steps up to the next
+  // one instead of DexScreener's embed, which knows nothing of our entries
+  // and exits (Lorenzo, 28/09: "sul grafico del minuto si apre dex
+  // screener, ma poi perdo i dati di ingresso e uscita"). The embed stays
+  // for tokens with no candles at all.
+  for (const iv of INTERVALS.slice(INTERVALS.indexOf(interval))) {
+    try { candles = await chartFor(e, iv); } catch { candles = []; }
+    if (box.dataset.want !== want) return;
+    if (candles.length >= 2) { shown = iv; break; }
+  }
   if (candles.length < 2) { if (!stale) { disposeChart(); box.innerHTML = embed(e); } return; }
   await drawChart(box, candles, e);
+  const note = box.parentElement?.querySelector("[data-chart-note]");
+  if (note) note.textContent = shown === interval ? "" : `No ${interval} candles for this token: showing ${shown}.`;
 }
 
 // The main site's engine (Lorenzo, 28/09: "sti ingressi e uscite nel grafico
