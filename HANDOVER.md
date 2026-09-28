@@ -526,6 +526,15 @@ non oltre; uno, due, tre mesi non e' importante".
   classifica (`_review_board`, in background). keep=false esclude per 3 gg
   ("DeepSeek review: ..."); lo score pesa 30% nel punteggio finale. Anche
   il SYSTEM del giudice singolo ora boccia nomi parodia/meme.
+- 28/09 Lorenzo: "ci deve essere un report di DeepSeek su ogni progetto [...]
+  potrebbe anche far entrare un progetto [...] colleghiamo X". Il giudice
+  gia' leggeva ogni progetto analizzato e non bocciato; `DAILY_MAX` 200 ->
+  600. Il report ora si vede: blocco "DeepSeek" (verdetto, punti forti,
+  problemi, motivo di ammissione, esito della revisione) nella scheda e nel
+  "why". X: `x_signal.py`, ricerca recente v2 (cashtag, nome, contratto)
+  solo per i progetti che il giudice legge, cache 24 h, max 150/giorno;
+  conteggi (post, autori, follower mediani) e 5 post migliori nel dossier.
+  Spento finche' Lorenzo non mette `X_BEARER_TOKEN` nel .env del server.
 
 ## Link ospite in sola lettura — `seed-0096`, branch `claude/link-ospite-asb5wj`
 

@@ -81,6 +81,9 @@ class Settings(BaseSettings):
     # when deepseek_api_key is set, else Claude.
     ai_review_provider: str = "auto"      # "auto" | "deepseek" | "claude"
     deepseek_api_key: str = ""
+    # X (Twitter) API v2 bearer token: recent posts about each project go into
+    # DeepSeek's dossier (app/trading/onchain/x_signal.py). Empty: X is not read.
+    x_bearer_token: str = ""
     deepseek_model: str = "deepseek-chat"
     deepseek_base_url: str = "https://api.deepseek.com"
     # USDC contract on Robinhood Chain for the autotrader's cash; empty = found
