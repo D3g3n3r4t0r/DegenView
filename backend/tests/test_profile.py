@@ -74,3 +74,19 @@ def test_old_readings_are_dropped(tmp_path, monkeypatch):
     wealth.reset_for_tests()
     wealth._load()
     assert wealth.series("u1", "all") == []
+
+def test_hidden_tokens_are_per_account():
+    assert profiles.set_hidden("u1", "solana", "So1anaMint1234", True) == ["solana:So1anaMint1234"]
+    assert profiles.hidden("u1") == ["solana:So1anaMint1234"]
+    # hiding twice keeps one entry
+    assert profiles.set_hidden("u1", "solana", "So1anaMint1234", True) == ["solana:So1anaMint1234"]
+    # another account sees nothing
+    assert profiles.hidden("u2") == []
+    # unhide removes it
+    assert profiles.set_hidden("u1", "solana", "So1anaMint1234", False) == []
+    assert profiles.hidden("u1") == []
+
+
+def test_hidden_rejects_bad_key():
+    with pytest.raises(ValueError):
+        profiles.set_hidden("u1", "solana", "bad key!")

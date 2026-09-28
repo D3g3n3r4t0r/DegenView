@@ -10,6 +10,7 @@
  */
 import * as api from "@onchain/api.js";
 import { register } from "@onchain/detail.js";
+import { isHidden, onHiddenChange, withEntrance } from "@onchain/hidden.js";
 import { escapeHtml, tile, tokenRow } from "@onchain/format.js";
 import { renderPodium } from "@onchain/podium.js";
 
@@ -28,7 +29,7 @@ function paint() {
   delete root.dataset.loading;
   root.querySelector("[data-top-size]").innerHTML = SIZES.map((n) =>
     `<button type="button" data-size="${n}" aria-pressed="${n === size}">Top ${n}</button>`).join("");
-  const rows = entries.slice(0, size);
+  const rows = entries.filter((e) => !isHidden(e.chain, e.token_address)).slice(0, size);
   // The podium is the first three of the same ranking (Lorenzo, 27/09: "il
   // podio ha senso soltanto per le gemme"): no separate board order.
   let podium = root.querySelector("[data-top-podium]");
@@ -44,6 +45,7 @@ function paint() {
   if (top3.length) renderPodium(podium, top3, { still: podium.dataset.sig === sig });
   else podium.innerHTML = "";
   podium.dataset.sig = sig;
+  withEntrance(root.querySelector("[data-top-rows]"), () => {
   root.querySelector("[data-top-rows]").innerHTML = rows.length ? rows.map((e, i) => {
     const id = `gem:${e.chain}:${e.token_address}`;
     register(id, { kind: "gem", symbol: e.symbol, name: e.name, chain: e.chain, token: e.token_address, pair: e.pair_address,
@@ -54,7 +56,8 @@ function paint() {
       score: e.score, badge: e.early ? "early" : null,
       sub: e.on_board ? "" : `<span class="off-board">not ranked${e.why ? `: ${escapeHtml(e.why)}` : ""}</span>` });
   }).join("") : `<li class="muted pad">The board is filling up: projects appear as they pass the checks.</li>`;
-  const onBoard = entries.slice(0, size).filter((e) => e.on_board).length;
+  });
+  const onBoard = rows.filter((e) => e.on_board).length;
   root.querySelector("[data-top-note]").textContent = rows.length > onBoard
     ? `${onBoard} on the board, the rest from the database: studied, not ranked yet (reason under each).` : "";
 }
@@ -79,6 +82,7 @@ export function mountTop() {
     write(size);
     paint();
   });
+  onHiddenChange(paint);
   load();
   setInterval(() => document.visibilityState === "visible" && load(), POLL_MS);
 }

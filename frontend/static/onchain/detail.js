@@ -10,6 +10,7 @@
 import * as api from "@onchain/api.js";
 import { age, bestSystem, changePill, escapeHtml, logo, strategyTrade, usdShort } from "@onchain/format.js";
 import { openUserSwap, walletFor } from "@onchain/userswap.js";
+import { hideToken } from "@onchain/hidden.js";
 
 const registry = new Map();
 const INTERVALS = ["1m", "5m", "15m", "1h", "4h"];
@@ -95,6 +96,12 @@ async function onClick(event) {
   if (iv) { interval = iv.dataset.iv; paintChart(); paintChips(); return; }
   const tb = t.closest("[data-dtab]");
   if (tb) { tab = tb.dataset.dtab; paintTabs(); return; }
+  if (t.closest("[data-hide]")) {
+    const e = current.e;
+    dlg.close();
+    hideToken(e.chain, e.token);
+    return;
+  }
   if (t.closest("[data-watch]")) {
     const on = toggleWatch(current.id);
     t.closest("[data-watch]").setAttribute("aria-pressed", String(on));
@@ -140,6 +147,7 @@ export function openDetail(id) {
       <button type="button" class="dt-back" data-back aria-label="Back"><svg viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></svg></button>
       <span class="dt-crumbs"><b>${escapeHtml(e.symbol)}</b>${e.ageTs ? `<i></i><span class="age"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 14V7M8 9c0-3 2-4.5 5-4.5 0 3-2 4.5-5 4.5ZM8 8C8 5.5 6.3 4 3.5 4c0 2.6 1.7 4 4.5 4Z"/></svg>${a}</span>` : ""}</span>
       <span class="dt-actions">
+        <button type="button" class="sq" data-hide aria-label="Hide from my lists"><svg viewBox="0 0 24 24"><path d="M3 3l18 18M10.6 6.1A9.8 9.8 0 0 1 12 6c5 0 8.5 4 9.5 6-.5 1-1.6 2.6-3.3 3.9M6.2 7.6C4.3 8.9 3 10.8 2.5 12c1 2 4.5 6 9.5 6 1.5 0 2.9-.4 4.1-1M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg></button>
         <button type="button" class="sq" data-watch aria-pressed="${watched().has(id)}" aria-label="Watch"><svg viewBox="0 0 24 24"><path d="m12 3.5 2.6 5.4 5.9.8-4.3 4.1 1 5.8L12 16.8 6.8 19.6l1-5.8L3.5 9.7l5.9-.8z"/></svg></button>
         <button type="button" class="sq" data-share aria-label="Share"><svg viewBox="0 0 24 24"><path d="M12 15V3.5M8 7.5l4-4 4 4M6 11H5v9.5h14V11h-1"/></svg></button>
       </span>
