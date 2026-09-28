@@ -2232,5 +2232,10 @@
     "status": "risolto",
     "at": 1790613527,
     "summary": "La pagina token caricava dentro un iframe l'intero sito principale, che faceva girare le sue strategie (da qui 'Analyzing...' bloccato). Ora il grafico e' solo il nostro: candele e ingressi/uscite del backtest dell'app, nessun dato dal sito principale. Se DexScreener non trova il pool del token, lo cerchiamo anche su GeckoTerminal (Solana, Robinhood, BSC, Base, Ethereum). PR #295."
+  },
+  "seed-0210": {
+    "status": "risolto",
+    "at": 1790626933,
+    "summary": "La causa vera: il salvataggio degli alert su disco falliva in silenzio. Il risultato del sistema conteneva un numero in un formato (numpy) che il file JSON non accetta, quindi ogni scrittura si interrompeva e il file restava fermo a ore prima. Il sito mostrava i dati in memoria; a ogni riavvio (ogni aggiornamento) tornavano gli alert vecchi senza backtest, ricalcolati da capo sulle candele del momento: per questo FLOOR spariva e tornava, CERT e' cambiato e Matrix e NYMA sono tornati 'in arrivo'. Ora i numeri sono convertiti prima di salvare, un errore di salvataggio finisce nel log invece di passare inosservato, e c'e' un test che salva e ricarica un backtest vero. I risultati cambiati oggi (CERT) restano quelli ricalcolati; da ora ogni risultato resta sul disco."
   }
 }

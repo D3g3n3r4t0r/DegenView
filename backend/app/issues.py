@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0210", "CERT passa da +64% a OUT, Matrix e NYMA tornano 'in arrivo'",
+     "Lorenzo, 28/09: 'deve rimanere tutto salvato in database per la parte di backtest. e memorizzato, non deve cambiare ogni volta risultato e perdere i precedenti' e 'PRIORITA MASSIMA E ATTENZIONE MASSIMA'.",
+     "alta"),
     ("seed-0209", "Il grafico della pagina token e' lentissimo e a volte resta su Analyzing",
      "Lorenzo: 'il motore che usiamo dal sito principale tiri dentro delle cose che non ci servono [...] Non voglio che venga applicato a questo grafico [...] nessun tipo di strategia dal vecchio sito, ma esclusivamente dal backtest di quest'app [...] in alcuni casi non carica proprio il grafico'.",
      "alta"),

@@ -193,3 +193,32 @@ def test_a_dead_pool_is_refetched_only_once(monkeypatch, tmp_path):
         asyncio.run(at.refresh_system(None, now=T0 + (2 + i) * B, gap_s=0))
     assert len(calls) == 1
     at.reset_for_tests()
+
+
+def test_a_real_backtest_survives_a_save_and_a_restart(monkeypatch, tmp_path):
+    """28/09: system.follow counted wins as numpy int64, json.dumps raised and
+    nothing reached the disk: every restart lost the backtests (FLOOR, CERT)."""
+    import json
+    import math
+    import random
+    monkeypatch.setattr(at, "_STORE_FILE", tmp_path / "a.json")
+    monkeypatch.setattr(at, "_BARS_FILE", tmp_path / "b.json")
+    at.reset_for_tests()
+    rnd = random.Random(1)
+    p, prices = 1.0, []
+    for i in range(600):
+        p *= math.exp(rnd.gauss(0.002 if i < 300 else -0.002, 0.03))
+        prices.append(p)
+    bars = _bars(prices, t0=T0 - 100 * B)
+    res = system.evaluate(bars, T0, gone=False, now=T0 + 500 * B)
+    assert any(r["trades"] for r in res.values())
+    json.dumps(res)                      # plain Python numbers only
+    a = at.record({"chain": "robinhood", "pair_address": "P", "token_address": "T", "symbol": "X"}, "meme", T0)
+    a.update(system=res, backtests=system.backtest_all(bars, None), system_v=at.SYSTEM_VERSION)
+    a["system"]["Trend EMA"]["odd"] = __import__("numpy").int64(3)   # any other stray numpy value
+    at.save()
+    at.reset_for_tests()
+    at._load()
+    b = at._alerts[at.key_of(a)]
+    assert b["backtests"]["rows"] and b["system"]["Trend EMA"]["odd"] == 3
+    at.reset_for_tests()
