@@ -2212,5 +2212,10 @@
     "status": "risolto",
     "at": 1790611226,
     "summary": "Perche' sembrava ferma: il registro dell'agente contava solo le chiamate a DeepSeek, e le letture erano limitate a 80 al giorno, con ogni progetto riletto al massimo una volta a settimana. Il lavoro vero senza LLM (backtest, studi dei progetti su GitHub, sito e tokenomics) non compariva. Ora ogni backtest della schermata Strategie (uno al minuto, H24) e ogni studio di un progetto finiscono nel registro con il loro risultato; in cima alla pagina ci sono i conteggi del giorno per tipo di lavoro, e quando sta lavorando appare una scheda luminosa con un fascio che scorre e l'ultima cosa che sta facendo. Il tetto delle letture DeepSeek passa da 80 a 300 al giorno."
+  },
+  "seed-0206": {
+    "status": "risolto",
+    "at": 1790611504,
+    "summary": "Perche' restavano a meta': stamattina e' cambiato il motore dei backtest (lo stop anti-rug) e ogni alert andava ricalcolato. Il ricalcolo pero' partiva solo quando arrivavano candele nuove: un alert gia' chiuso o sparito nelle sue 48 ore non ne riceve piu', quindi il suo backtest vecchio non veniva mai rifatto e la riga restava 'in arrivo'. Ora un risultato di una versione vecchia si rifa' comunque al giro successivo (ogni 30 secondi), e c'e' un test che lo verifica. Nelle righe senza ingresso ora si legge 'backtest: no entry yet' o 'backtest: stayed out', con quanto ha evitato: e' il risultato della strategia trend following su quel token, non un dato mancante."
   }
 }
