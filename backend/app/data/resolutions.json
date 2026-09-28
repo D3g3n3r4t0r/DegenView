@@ -2262,5 +2262,10 @@
     "status": "risolto",
     "at": 1790628112,
     "summary": "Il grafico della pagina del token disegnava le operazioni del backtest vecchio: il migliore di quattro strategie (anche quelle mean-reversion) su tutto il grafico, che entra ed esce di continuo. Ora per un token segnalato disegna solo il trade dello sniper: un Buy all'alert e un Sell quando il trend follower chiude (o lo stop anti-rug, o la fine delle 48 ore). Anche il valore 'System' nella scheda e' quello di questo trade."
+  },
+  "seed-0216": {
+    "status": "risolto",
+    "at": 1790629051,
+    "summary": "Il trade dello sniper compra all'alert, ma usciva solo su un nuovo incrocio al ribasso del trend follower. Se all'alert il trend era gia' in discesa l'incrocio era gia' passato e non arrivava piu': il trade restava aperto fino alle 48 ore (MESUB -95%). Ora esce alla prima candela con il trend in discesa. Tutti i backtest salvati vengono ricalcolati con questa regola."
   }
 }

@@ -327,8 +327,9 @@ async def backfill(client: httpx.AsyncClient, items: list[dict], kind: str = "me
 SYSTEM_FETCHES_PER_TICK = 15
 # Bump when system.follow's output changes: finished alerts are fetched and
 # recomputed once more (v2: each sell says why, "crash" or "signal").
-SYSTEM_VERSION = 9   # 8: rug stop with a reason (liquidity pulled, crash, dead, abandoned, on-chain)
+SYSTEM_VERSION = 10  # 8: rug stop with a reason (liquidity pulled, crash, dead, abandoned, on-chain)
 # 9: alert_bt, the trend follower entered on the alert itself (every alert has a trade)
+# 10: alert_bt closes on the first bar with the trend down (MESUB -95%)
 
 
 def backtest_status(kind: str = "meme", now: float | None = None) -> dict:
