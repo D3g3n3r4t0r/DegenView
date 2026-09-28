@@ -997,3 +997,11 @@ html, body { overflow-x: clip; }
 @layer skin {
   .ag-prio { margin: 0; font: 600 12.5px var(--sans); color: #fbbf24; }
 }
+@layer skin {
+  .ag-prog { display: grid; gap: 10px; margin: 14px 0; }
+  .ag-prog-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+    font: 500 12.5px var(--sans); color: var(--k-text-2); }
+  .ag-prog-row b { font-weight: 600; color: var(--k-text); font-variant-numeric: tabular-nums; }
+  .ag-bar { block-size: 6px; border-radius: 999px; background: rgb(255 255 255 / .08); overflow: hidden; }
+  .ag-bar i { display: block; block-size: 100%; background: #6d7cff; transform-origin: left; transition: transform .6s ease; }
+}
