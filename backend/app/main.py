@@ -3793,13 +3793,13 @@ def _top_entries(n: int = 50) -> list[dict]:
     board = sorted(onchain_leaderboard.board().get("entries") or [], key=lambda e: -(e.get("score") or 0))
     out = [{**{k: e.get(k) for k in ("chain", "token_address", "pair_address", "pair_url", "symbol", "name", "image",
                                      "market_cap", "liquidity_usd", "change_24h", "launched_at", "score", "early")},
-            "on_board": True} for e in board]
+            "on_board": True} for e in board if not onchain_leaderboard.no_name(e.get("symbol"))]
     seen = {f"{e['chain']}:{e['token_address']}" for e in out}
     cutoff = time.time() - 30 * 86400
     for row in onchain_projects_db.search(status="studied", sort="score", limit=200)["items"]:
         if row.get("score") is None or (row.get("analyzed_at") or 0) < cutoff:
             continue
-        if (row.get("overall") or {}).get("fatal"):
+        if (row.get("overall") or {}).get("fatal") or onchain_leaderboard.no_name(row.get("symbol")):
             continue
         # The board's ceiling holds here too: bridged AAVE sat first (Lorenzo, 28/09).
         if onchain_leaderboard.too_big({"symbol": row.get("symbol"), "name": row.get("name"),
