@@ -455,7 +455,7 @@ async function paintChart() {
   const note = box.parentElement?.querySelector("[data-chart-note]");
   if (note) {
     if (shown !== interval) note.textContent = `No ${interval} candles for this token: showing ${shown}.`;
-    else if (!drawn) note.textContent = "The strategy stayed out of this chart.";
+    else if (drawn === 0) note.textContent = "The strategy stayed out of this chart.";
     else note.textContent = "";
   }
 }
