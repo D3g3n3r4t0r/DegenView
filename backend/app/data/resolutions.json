@@ -2117,5 +2117,35 @@
     "status": "risolto",
     "at": 1790548387,
     "summary": "Nessun nome di strategia nell'app: dove serve si legge 'System'. Il sistema mostra sempre il migliore fra le due versioni interne; la classifica e la pagina del token mostrano solo rendimento, trade, % vincente e drawdown del backtest migliore. Corretto anche un errore vecchio (#190) che rompeva la scheda Signal della pagina token (issue #216)."
+  },
+  "seed-0182": {
+    "status": "risolto",
+    "at": 1790573266,
+    "summary": "Riprogettata da Claude: l'auto-trade e' una barra sola (stato, riepilogo, SIM/REAL) che apre i controlli in un pannello; lo scan e' una casella sottile con la lente; il sistema e' una riga di numeri; 'about to fire' mostra i primi 3 con '+N more'."
+  },
+  "seed-0183": {
+    "status": "risolto",
+    "at": 1790573266,
+    "summary": "Niente piu' 'no signal': i puntini animati compaiono solo mentre il backtest non e' ancora calcolato; un backtest senza trade e' un risultato e lo dice (OUT, con quanto ha evitato restando fuori)."
+  },
+  "seed-0184": {
+    "status": "risolto",
+    "at": 1790573266,
+    "summary": "La Top 15/25/50 e' la prima scheda delle gemme, 'Top' con la coppa; la scheda Top dei meme non c'e' piu'."
+  },
+  "seed-0185": {
+    "status": "risolto",
+    "at": 1790573266,
+    "summary": "Una sola classifica per punteggio: il podio sono i primi tre della lista Top, progetti in classifica e del database insieme; LOCK e XONA non restano piu' sopra chi ha voti piu' alti (issue #223)."
+  },
+  "seed-0186": {
+    "status": "risolto",
+    "at": 1790573266,
+    "summary": "I backtest erano gia' calcolati ma con zero trade, e i puntini restavano accesi per tutte le 48 ore. Ora i puntini indicano solo 'non ancora calcolato'; con zero trade si vede OUT, 'no entry so far' con quanto ha evitato. Sistemata anche l'icona Strategies che, attiva, sembrava una freccia."
+  },
+  "seed-0187": {
+    "status": "risolto",
+    "at": 1790573266,
+    "summary": "Nella pagina di ogni token c'e' l'occhio barrato: il token sparisce dalle tue liste (Top, podio, alert, classifica, database, meme, scanner), la riga si chiude animata, il successivo sale con un ingresso animato, e c'e' 'Undo' per 5 secondi. Salvato sul tuo account, vale solo per te (issue #226, #231). Provato in un browser."
   }
 }

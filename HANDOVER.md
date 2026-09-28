@@ -3685,3 +3685,14 @@ Resta da decidere: il pulsante "Open on the analysis chart" porta al sito princi
 dove il nome della strategia si vede nel menu (ok se il sito principale e' solo di
 Lorenzo). Il lavoratore non intercetta ancora gli identificatori non definiti in JS
 (#190 usava `strategyTrade` senza import): se ricapita, aggiungere un controllo (eslint no-undef).
+
+**2026-09-28 (mattina) — Lorenzo: "UI troppo affollata riprogettala", "no signal [...] dinamicamente animata", "la top 15-25 deve andare in questa tab (icona coppa)", "lock e xona sempre nel podio [...] RISOLVI", "backtest in loop non arrivano", "eliminare i token da ogni lista [...] ognuno nel proprio account [...] successore animato".**
+Alerts riprogettata da Claude (auto-trade a barra + pannello). Top 15/25/50 = prima scheda
+gemme ("Top" con coppa), `#board` nascosto (leaderboard.js gira ancora per i dettagli),
+podio dai primi 3 di `top.js`, `/api/onchain/top` ordinato per punteggio. Backtest: puntini
+solo se `backtests` manca, altrimenti OUT/IN/risultato. Nascondi token: `profiles.hidden`/
+`set_hidden`, `GET/POST /api/profile/hidden`, `hidden.js` (isHidden, hideToken con collasso
+WAAPI + Undo, withEntrance per l'ingresso del successore), filtro in top/alerts/projects/
+memes/radar. Lavoratore DeepSeek: niente test collegati per main.py, max 10, timeout
+riportato; ESLint no-undef sui moduli onchain toccati. Da verificare sul sito: Onhand senza
+trade nel backtest nonostante il pump (dati server).
