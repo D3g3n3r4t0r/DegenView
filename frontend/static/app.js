@@ -3701,12 +3701,25 @@
       params: null,
       backtestParams: null,
     });
+    // Lorenzo, 28/09: "usi il grafico del sito principale ma devi adattare la
+    // grafica dello stesso per visualizzarlo qui.. sfondo nero".
+    const EMBED_DARK = {
+      paperBg: "#09090b",
+      ink: "#e4e4e7",
+      inkDim: "#71717a",
+      gridMinor: "rgba(255, 255, 255, 0.035)",
+      gridMajor: "rgba(255, 255, 255, 0.08)",
+      bull: "#2de0a8",
+      bear: "#f87171",
+      accent: "#2de0a8",
+    };
     if (EMBED) {
       // Lorenzo, 28/09: "il nostro grafico nel nostro sito principale aveva
       // tutti i dati… USA QUELLO". The token page shows this chart in an
       // iframe: the chart area alone, full page.
       const area = document.querySelector(".chart-area");
       if (area) document.body.append(area);
+      Object.assign(COLORS_DARK, EMBED_DARK);
       applyTheme("dark", { persist: false });   // the app is dark; the user's own choice stays saved
       requestAnimationFrame(() => resizeAllCharts(true));
     }
