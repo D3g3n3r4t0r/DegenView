@@ -4158,6 +4158,25 @@ class ProfileUpdate(BaseModel):
     bio: str | None = None
 
 
+class HiddenToken(BaseModel):
+    chain: str
+    token: str
+    hide: bool = True
+
+
+@app.get("/api/profile/hidden")
+async def get_hidden(user: User = Depends(auth.get_current_user)) -> dict:
+    return {"hidden": profiles.hidden(user.id)}
+
+
+@app.post("/api/profile/hidden")
+async def post_hidden(body: HiddenToken, user: User = Depends(auth.get_current_user)) -> dict:
+    try:
+        return {"hidden": profiles.set_hidden(user.id, body.chain, body.token, body.hide)}
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @app.patch("/api/profile")
 async def update_profile(body: ProfileUpdate, user: User = Depends(auth.get_current_user)) -> dict:
     profiles.get(user.id, user.email, _joined_hint(user))
