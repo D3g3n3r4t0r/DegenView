@@ -55,6 +55,17 @@ def test_backtest_all_trend_and_hold():
 def test_backtest_all_too_few_bars():
     out = system.backtest_all(_real_bars()[:10])
     assert out["rows"] == []
+    assert out["best"] is None
+
+
+def test_backtest_all_best_trades():
+    out = system.backtest_all(_real_bars())
+    traded = [r for r in out["rows"] if r["trades"]]
+    assert out["best"]["label"] == max(traded, key=lambda r: r["return_pct"])["label"]
+    ev = out["best"]["events"]
+    assert ev and [e["side"] for e in ev] == ["buy", "sell"] * (len(ev) // 2) + ["buy"] * (len(ev) % 2)
+    assert all("ret" in e for e in ev if e["side"] == "sell")
+    assert all(isinstance(e["t"], int) and out["from"] <= e["t"] <= out["to"] for e in ev)
 
 
 def test_alert_after_the_trend_started_joins_it():

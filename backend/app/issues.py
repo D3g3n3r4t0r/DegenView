@@ -164,6 +164,21 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0193", "Sul grafico del token si vede l'alert ma non ingressi e uscite della strategia",
+     "Lorenzo (screenshot di FLOOR): 'visualizza un alert ma non sappiamo se e' un ingresso o altro.. qui deve comparire la strategia, come abbiamo detto. ingressi e uscite..'.",
+     "alta"),
+    ("seed-0192", "Il grafico del token deve essere quello del sito principale",
+     "Lorenzo: 'sti ingressi e uscite nel grafico a linea fanno schifo, dovevamo usare il motore del sito principale no?' e poi 'sul grafico del minuto si apre dex scanner, ma poi perdo i dati di ingresso e uscita [...] USA QUELLO'.",
+     "alta"),
+    ("seed-0191", "Il giudizio sui siti e i pilastri a 85 vanno migliorati: voto finale con DeepSeek",
+     "Lorenzo: 'site too weak, mi sembra un parametro non troppo significativo, MIGLIORA IL METODO DI GIUDIZIO' e 'potresti usare deepseek istruendolo a non farsi fregare, e soprattutto a leggere i dati raccolti in chiave critica [...] DREGG inizialmente neanche usciva dai parametri'.",
+     "alta"),
+    ("seed-0190", "Nella Top compaiono token NOT RANKED",
+     "Lorenzo (screenshot della Top): 'vedo in classifica roba NOT RANKED, non va bene'.",
+     "media"),
+    ("seed-0189", "La strategia deve essere operativa subito dopo l'alert, con i suoi criteri",
+     "Lorenzo: 'quando parte l'alert voglio che la strategia sia subito operativa con trend follower' e poi 'no, deve entrare con i criteri della strategia, sempre'.",
+     "alta"),
     ("seed-0187", "Eliminare a mano i token da ogni lista, per account, con il successore animato",
      "Lorenzo: 'aggiungi opzione manuale di eliminare i token da ogni lista o classifica (ognuno nel proprio account), dando spazio (animandolo) ad un suo successore che ne prende il posto'.",
      "media"),
