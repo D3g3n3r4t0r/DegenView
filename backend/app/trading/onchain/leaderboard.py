@@ -738,6 +738,12 @@ START_DELAY_S = 20
 
 async def leaderboard_loop() -> None:
     await asyncio.sleep(START_DELAY_S)
+    try:
+        n = projects_db.recheck_studied(("over $%", "over % days%"))
+        if n:
+            logger.info("classifica: %d progetti rimessi in coda (limiti vecchi)", n)
+    except Exception:
+        logger.exception("classifica: recheck_studied fallito")
     async with httpx.AsyncClient(timeout=10.0, headers={"User-Agent": "Mozilla/5.0 (LiquidityEngine)"}) as client:
         while True:
             try:
