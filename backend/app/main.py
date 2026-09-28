@@ -71,6 +71,7 @@ from app.analysis.strategies import (
     DEFAULT_STRATEGY,
     STRATEGY_REGISTRY,
     build_strategy_state,
+    rug_stop,
     spot_only,
 )
 from app.analysis.summary import build_summary, determine_bias
@@ -594,7 +595,7 @@ async def _watchlist_alert_loop() -> None:
                     params = entry.strategy_params.get(strategy_name) or None
                     # Sul DEX si compra e si vende il token, niente short: un
                     # segnale short e' la vendita di quello che si ha.
-                    spot_signals = (spot_only(STRATEGY_REGISTRY[strategy_name](strat_df, params))
+                    spot_signals = (rug_stop(strat_df, spot_only(STRATEGY_REGISTRY[strategy_name](strat_df, params)))
                                     if entry.asset_type == "dex" and strategy_name in STRATEGY_REGISTRY else None)
                     strategy = build_strategy_state(strategy_name, strat_df, params=params, signals=spot_signals)
                     frequency = entry.alert_frequency.get(strategy_name, "every")
@@ -4295,6 +4296,12 @@ async def wallet_link_confirm(body: WalletConfirm, user: User = Depends(auth.get
     return {"profile": profiles.public(user.id, p)}
 
 
+@app.get("/api/agent/log")
+async def agent_log(limit: int = 100, before: float | None = None,
+                    user: User = Depends(auth.get_current_user)) -> dict:
+    return {"items": deepseek_desk.log(limit=min(limit, 300), before=before)}
+
+
 class ScanRequest(BaseModel):
     query: str
 
@@ -5609,7 +5616,7 @@ async def analyze(
         # mostra trade diversi dal backtest on-chain della classifica.
         sig = None
         if asset_type == "dex" and strategy_name in STRATEGY_REGISTRY:
-            sig = spot_only(STRATEGY_REGISTRY[strategy_name](df, strategy_params_dict))
+            sig = rug_stop(df, spot_only(STRATEGY_REGISTRY[strategy_name](df, strategy_params_dict)))
         strategy = build_strategy_state(strategy_name, df, strategy_params_dict, signals=sig)
         strategies[tf_key] = [strategy]
         # The frontend only ever charts the ltf timeframe (state.activeTimeframe
@@ -5772,7 +5779,7 @@ async def deep_backtest(
     # Sul DEX si compra e si vende il token, niente short (vedi /api/analyze).
     sig = None
     if asset_type == "dex" and strategy_name in STRATEGY_REGISTRY:
-        sig = spot_only(STRATEGY_REGISTRY[strategy_name](df, strategy_params.model_dump()))
+        sig = rug_stop(df, spot_only(STRATEGY_REGISTRY[strategy_name](df, strategy_params.model_dump())))
     result = run_backtest(
         df,
         strategy_params.model_dump(),

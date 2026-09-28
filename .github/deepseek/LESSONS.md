@@ -45,3 +45,5 @@ review. Read them before answering: the same mistake again is a failed task.
 - Edit only files you were given: #250 sent a SEARCH block for tests/test_onchain_discovery.py, which was not in the task, and it matched nothing.
 - #252 repeated #245: the test file the task asked for was not created. The worker now fails the task when it is missing.
 - #259: `onchain_narratives` used in main.py without its import, and old tests that asserted the old $3M / one-year limits left unchanged. When a task changes a limit, search the tests for the old number and update them.
+- #256: `strategies.rug_bar` used in system.py without importing `strategies`, the main.py part of the task (three `spot_only(...)` calls) skipped, and `asyncio.run()` around a plain function. Do every numbered point of the task; check each call is to an async function before wrapping it.
+- #260 passed without its test (a worker bug, now fixed) and wrote a fixed "holders top10 n/a%" instead of real data. Never write a placeholder value into a log line: use a field you can see, or leave the part out.
