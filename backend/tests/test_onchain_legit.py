@@ -113,10 +113,10 @@ def public_dns(monkeypatch):
     monkeypatch.setattr(legit.settings, "anthropic_api_key", "")
 
 
-def _assess(token=TOKEN, links=LINKS, **net):
+def _assess(token=TOKEN, links=LINKS, need_github=True, transport=None, **net):
     async def go():
-        async with httpx.AsyncClient(transport=_net(**net)) as c:
-            return await legit.assess(token, links, c)
+        async with httpx.AsyncClient(transport=transport or _net(**net)) as c:
+            return await legit.assess(token, links, c, need_github=need_github)
     return asyncio.run(go())
 
 
@@ -332,3 +332,35 @@ def test_github_answers_are_cached_and_the_quota_is_respected():
     a, b, first, second = asyncio.run(go())
     assert a == b == {"full_name": "acme/core"} and first is None and second is None
     assert len(calls) == 2   # repo in cache, e a quota finita GitHub non si richiama
+
+
+def _net_no_github():
+    """Un sito senza alcun link a GitHub: il caso normale di un meme nuovo."""
+    def handler(req: httpx.Request) -> httpx.Response:
+        url = str(req.url)
+        if "gopluslabs.io/api/v1/solana" in url:
+            return httpx.Response(200, json={"code": 1, "result": {"Mint111": GOPLUS_CLEAN}})
+        if "rugcheck" in url:
+            return httpx.Response(200, json={"risks": [], "lpLockedPct": 100})
+        if url.startswith("https://acme.io"):
+            return httpx.Response(200, headers={"content-type": "text/html"},
+                                  text="<title>Acme</title> Mint111")
+        return httpx.Response(404)
+    return httpx.MockTransport(handler)
+
+
+def test_missing_github_waits_by_default():
+    out = _assess(transport=_net_no_github())
+    assert out["status"] == "wait" and out["reason"] == "no GitHub"
+
+
+def test_missing_github_does_not_stall_the_meme_sniper():
+    out = _assess(transport=_net_no_github(), need_github=False)
+    assert out["status"] == "ok"
+    gh = next(c for c in out["checks"] if c["key"] == "github")
+    assert gh["ok"] is None and gh["detail"] == "no GitHub"
+
+
+def test_exception_still_needs_github_with_need_github_false():
+    out = _assess({**TOKEN, "exception": True}, transport=_net_no_github(), need_github=False)
+    assert out["status"] == "fail" and "no GitHub" in out["reason"]

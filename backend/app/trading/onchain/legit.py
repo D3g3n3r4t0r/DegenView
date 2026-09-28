@@ -752,9 +752,15 @@ def judge_ai(review: dict | None) -> dict:
 
 # ----------------------------------------------------------------- insieme
 
-async def assess(token: dict, links: dict, client: httpx.AsyncClient) -> dict:
+async def assess(token: dict, links: dict, client: httpx.AsyncClient, *,
+                 need_github: bool = True) -> dict:
     """token: chain, symbol, name, token_address (+ market_cap, liquidity_usd
-    per il prompt). links: {websites, socials}."""
+    per il prompt). links: {websites, socials}.
+
+    need_github=False (meme sniper): un GitHub assente o che non risponde non
+    blocca piu' in "wait", si prosegue verso la revisione IA. Un GitHub
+    presente ma insufficiente (ok is False) fallisce comunque, e le eccezioni
+    GitHub continuano a richiederlo."""
     chain = token.get("chain")
     website = pick_website(links.get("websites") or [])
     socials = [s for s in links.get("socials") or [] if s.get("type") in _SOCIAL_TYPES]
@@ -823,7 +829,7 @@ async def assess(token: dict, links: dict, client: httpx.AsyncClient) -> dict:
         return done("fail", f"GitHub: {gh['detail']}")
     if token.get("exception") and not out["github"] and gh["detail"] == "no GitHub":
         return done("fail", "outside age or cap limits, only an exceptional GitHub gets in: no GitHub")
-    if gh["ok"] is None:
+    if gh["ok"] is None and need_github:
         return done("wait", gh["detail"])
     if token.get("exception") and (short := github_shortfall(gh)):
         # Prima di spendere una revisione IA su un token che non entrerebbe comunque.
