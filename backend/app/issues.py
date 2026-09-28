@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0214", "Sniper: entrare all'alert e chiudere solo con la regola del trend follower",
+     "Lorenzo, 28/09: 'sugli sniper dobbiamo far si' che la strategia entri nel momento in cui viene fatto l'avviso [...] arriva l'alert su Telegram, la strategia deve entrare in quel momento. Poi deve gestire esclusivamente la chiusura secondo la classica regola del trend follower.'",
+     "alta"),
     ("seed-0213", "Nella tab Strategie ogni token segnalato deve mostrare il suo backtest, non 'no entry yet'",
      "Lorenzo, 28/09: 'non deve accadere che venga scritto backtest no entry yet perche' in realta' la strategia su questa roba sarebbe entrata perche' sono stati segnalati [...] deve essere presente su tutti i ticker in questa sezione [...] il dodge che mi segnali dopo [...] a me non interessa [...] voglio vedere le performance del backtest applicato a quei token che sono stati scelti'.",
      "alta"),
