@@ -242,15 +242,19 @@ function row(e) {
 // DeepSeek's report on the project: its own verdict and, when it read the
 // whole board, the editor's call.
 function deepseekBlock(e) {
-  const j = e.judge, r = e.review;
-  if (!j && !r) return "";
+  const j = e.judge, r = e.review, c = e.code;
+  if (!j && !r && !c) return "";
   const head = j ? `${escapeHtml(j.verdict ?? "")} · ${j.score ?? "—"}/100` : "";
   const edit = r ? `<li data-tone="${r.keep ? "good" : "bad"}">${r.keep ? "Kept" : "Dropped"} on review: ${escapeHtml(r.reason ?? "")}</li>` : "";
+  const code = c ? `<li>Code: complexity ${c.complexity} · innovation ${c.innovation}${c.fork_of ? ` · fork of ${escapeHtml(c.fork_of)}` : ""}</li>` : "";
+  const codeSummary = c?.summary ? `<li>${escapeHtml(c.summary)}</li>` : "";
+  const codeGood = (c?.strengths ?? []).map((x) => `<li data-tone="good">${escapeHtml(x)}</li>`).join("");
+  const codeBad = (c?.concerns ?? []).map((x) => `<li data-tone="bad">${escapeHtml(x)}</li>`).join("");
   const good = (j?.strengths ?? []).map((x) => `<li data-tone="good">${escapeHtml(x)}</li>`).join("");
   const bad = (j?.problems ?? []).map((x) => `<li data-tone="bad">${escapeHtml(x)}</li>`).join("");
   const admit = j?.admit_reason ? `<li data-tone="good">${escapeHtml(j.admit_reason)}</li>` : "";
   return `<div class="ds-report"><h5>DeepSeek${head ? ` <b>${head}</b>` : ""}</h5>
-    <ul class="why-list">${edit}${admit}${good}${bad}</ul></div>`;
+    <ul class="why-list">${edit}${admit}${code}${codeSummary}${codeGood}${codeBad}${good}${bad}</ul></div>`;
 }
 
 export function gemWhy(e) {
