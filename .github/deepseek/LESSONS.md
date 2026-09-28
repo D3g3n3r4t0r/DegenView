@@ -40,3 +40,6 @@ review. Read them before answering: the same mistake again is a failed task.
 - Use only names you can see in the code you are given: #249 imported `GECKO_NETWORKS` from alert_track (it lives in `app.sniper.scanner`) and #250 patched `profiles._PROFILES` (it is `_STORE_FILE`). When the task names an attribute or a module, use exactly that; never guess one.
 - `pytest.mark.asyncio` does not work here (no pytest-asyncio): test coroutines with `asyncio.run(...)` inside a plain test function (#249).
 - A new module-level name used in a file needs its import in that file: #250 called `profiles.wanted_narratives()` in discovery.py without importing `profiles` (ruff F821).
+- A DataFrame index is not a Series: `df.index` has no `.iloc`; use `df.index[i]` (a Timestamp: `.timestamp()`), #249.
+- Before using a stdlib module in a file, check the file's import lines: main.py has no `import time` (#252 failed on `time.monotonic()`). Add the import when it is missing.
+- Edit only files you were given: #250 sent a SEARCH block for tests/test_onchain_discovery.py, which was not in the task, and it matched nothing.
