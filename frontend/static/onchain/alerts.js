@@ -195,7 +195,7 @@ function rows() {
           sys: x ? `${x.trades} trade${x.trades === 1 ? "" : "s"} · win ${Math.round(x.win_rate ?? 0)}%`
             : open ? "in the trade now"
               : !a.backtests ? "backtest on its way"
-                : live ? `no entry so far · ${outcome}` : `stayed out · ${outcome}` };
+                : live ? `backtest: no entry yet · ${outcome}` : `backtest: stayed out · ${outcome}` };
       });
   }
   if (key === "system") {
