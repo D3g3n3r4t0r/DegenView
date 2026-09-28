@@ -20,6 +20,7 @@ const SIZES = [15, 25, 50];
 let root = null;
 let size = 15;
 let entries = [];
+let labStatus = null;
 
 function read() { try { return Number(localStorage.getItem("lae:top")) || 15; } catch { return 15; } }
 function write(n) { try { localStorage.setItem("lae:top", String(n)); } catch { /* private mode */ } }
@@ -53,10 +54,22 @@ function paint() {
       ageTs: e.launched_at, context: `Rank #${i + 1} · score ${Math.round(e.score ?? 0)}` });
     return tokenRow({ id, symbol: e.symbol, name: `${i + 1}. ${e.name || e.symbol}`, chain: e.chain, token: e.token_address,
       image: e.image, cap: e.market_cap, change: e.change_24h != null ? e.change_24h / 100 : null, ageTs: e.launched_at,
-      score: e.score, badge: e.early ? "early" : null });
+      score: e.score, badge: e.early ? "early" : null, sub: btSub(e.backtests) });
   }).join("") : `<li class="muted pad">The board is filling up: projects appear as they pass the checks.</li>`;
   });
-  root.querySelector("[data-top-note]").textContent = "";
+  const bt = labStatus;
+  root.querySelector("[data-top-note]").textContent = bt?.total
+    ? `Every strategy backtested on each token's latest chart, every hour, around the clock · ${bt.ready}/${bt.total} ready`
+    : "";
+}
+
+// The H24 lab's best backtest (strategy_lab.py), in the row: what the
+// Strategies tab is for (Lorenzo, 28/09).
+function btSub(b) {
+  if (!b) return '<span class="bt-live" role="img" aria-label="Backtest on its way"><i></i><i></i><i></i></span>';
+  if (!b.best) return "bt: no entry";
+  const r = Math.round(b.best.return_pct);
+  return `bt ${r > 0 ? "+" : ""}${r}%`;
 }
 
 async function load() {
@@ -64,6 +77,7 @@ async function load() {
     // The board first; the database fills the list to the size asked.
     const top = await api.getTop(50);
     entries = top?.entries ?? [];
+    labStatus = top?.backtests ?? null;
     paint();
   } catch { /* keep the last list */ }
 }
