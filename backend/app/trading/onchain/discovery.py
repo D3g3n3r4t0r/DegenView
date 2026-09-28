@@ -56,7 +56,7 @@ CG_PLATFORMS = {"solana": ("solana",), "robinhood": ("robinhood",), "base": ("ba
 # anche i progetti un po' piu' datati ha senso metterceli"
 CAP_MIN = 10_000             # early gems start under $50k (leaderboard.EARLY_CAP_USD)
 NARRATIVE_PAGES = 12
-CAP_MAX = 25_000_000
+CAP_MAX = 10_000_000             # Lorenzo 28/09: gems are small caps, $10M at most
 # azioni tokenizzate, stablecoin, token avvolti: non sono progetti
 _NOT_PROJECT = ("meme", "stock", "stablecoin", "wrapped", "bridged", "etf")
 CG_GAP_S = 12                # 5 richieste al minuto: sotto il limite gratuito

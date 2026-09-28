@@ -229,7 +229,7 @@ def test_exception_uses_the_radar_rule():
                                            checks=[weak, checks[1]], report=report, source="radar"))
     assert lb.qualifies(_entry("DREGG", 93, 75, 80, cap=2_500_000, age_days=88, checks=checks,
                                report=report, exception=True, source="radar")) == ""
-    assert "limits" in lb.qualifies(_entry("HUGE", 99, 99, 99, cap=50_000_000, age_days=88, checks=checks,
+    assert "over $10M" in lb.qualifies(_entry("HUGE", 99, 99, 99, cap=50_000_000, age_days=88, checks=checks,
                                            report=report, source="radar"))
     assert lb.board()["entries"][0]["exception"] is True
 
@@ -312,13 +312,12 @@ def test_benchmark_is_never_excluded():
     assert k in lb._entries
 
 
-def test_serious_project_enters_up_to_25_million_and_three_years():
-    # Lorenzo, 28/09: "alzare un po' i limiti di market cap [...] anche i
-    # progetti un po' piu' datati"
-    e = _entry("SER", 80, 70, 65, cap=20_000_000, age_days=400, source="coingecko")
+def test_serious_project_enters_up_to_10_million_and_three_years():
+    # Lorenzo, 28/09: "massimo consideriamo 10 milioni di market cap"
+    e = _entry("SER", 80, 70, 65, cap=9_000_000, age_days=400, source="coingecko")
     assert lb.qualifies(e) == ""
-    e["market_cap"] = 30_000_000
-    assert "over" in lb.qualifies(e)
+    e["market_cap"] = 12_000_000
+    assert "over $10M" in lb.qualifies(e)
     old = _entry("OLD", 80, 70, 65, cap=900_000, age_days=1200, source="coingecko")
     assert "days" in lb.qualifies(old)
 
@@ -411,3 +410,32 @@ def test_close_calls_show_what_keeps_projects_out():
 def test_closed_source_is_not_scored_on_code_similarity():
     e = _closed("SR", 78, 64)
     assert lb.final_score(e) >= 60
+
+
+def test_board_has_a_hard_10m_ceiling_on_the_global_cap():
+    small = _entry("SML", 90, 90, 90, cap=500_000)
+    assert lb.qualifies(small) == ""
+    small["global_cap"] = 2_245_803_096          # AAVE's Solana copy: local $585k, global $2.2B
+    assert lb.qualifies(small).startswith("over $10M")
+    big = _entry("BIG", 90, 90, 90, cap=12_000_000)
+    assert lb.qualifies(big).startswith("over $10M")
+    assert "SML" not in [x["symbol"] for x in lb.board()["entries"]]
+
+
+def test_global_cap_is_read_from_coingecko(monkeypatch):
+    import asyncio
+    e = _entry("AAV", 90, 90, 90, cap=585_000)
+
+    class R:
+        status_code = 200
+
+        def json(self):
+            return {"market_data": {"market_cap": {"usd": 2.2e9}, "fully_diluted_valuation": {"usd": 2.3e9}}}
+
+    class C:
+        async def get(self, url, **kw):
+            assert "AAVmint" in url
+            return R()
+
+    asyncio.run(lb._check_global_cap(C(), time.time()))
+    assert e["global_cap"] == 2.3e9 and lb.qualifies(e).startswith("over $10M")
