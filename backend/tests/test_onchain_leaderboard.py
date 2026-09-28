@@ -483,7 +483,20 @@ def test_a_copy_of_a_top_coin_is_out_even_if_coingecko_lists_it_small():
     e["global_cap"] = 450_000                      # "Aave (Wormhole)", its own coin on CoinGecko
     assert lb.qualifies(e).startswith("over $10M")
     w = _entry("WAAVE", 90, 90, 90, cap=450_000)
-    w["name"] = "Aave (Wormhole)"
+    w["name"] = "Aave Token"
     assert lb.qualifies(w).startswith("over $10M")
     assert lb.qualifies(_entry("TINY", 90, 90, 90, cap=450_000)) == ""
     assert lb.qualifies(_entry("SAVE", 90, 90, 90, cap=450_000)) == ""
+
+
+def test_ported_tokens_are_recognised_by_name_and_the_seed_works_offline(monkeypatch):
+    from app.trading.onchain import big_coins
+    for name in ("Aave (Wormhole)", "Wrapped ETH (Portal)", "USDC (Allbridge from Ethereum)", "Chainlink (WH)"):
+        e = _entry("XYZ", 90, 90, 90, cap=450_000)
+        e["name"] = name
+        assert lb.qualifies(e).startswith("bridged"), name
+    assert not big_coins.bridged({"name": "Portalverse Labs", "symbol": "PVL"})
+    monkeypatch.setattr(big_coins, "_loaded", False)
+    monkeypatch.setattr(big_coins, "_STORE", big_coins._SEED.with_name("missing.json"))
+    big_coins._state.update(coins=[])
+    assert big_coins.match("AAVE", "Aave") and big_coins.match("aave", "Aave")["cap"] > 1e9

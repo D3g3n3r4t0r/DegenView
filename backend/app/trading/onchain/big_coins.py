@@ -13,6 +13,7 @@ import json
 import logging
 import re
 import time
+from pathlib import Path
 
 import httpx
 
@@ -27,6 +28,9 @@ RETRY_S = 15 * 60
 MIN_CAP_USD = 10_000_000
 
 _STORE = storage.data_file("onchain_big_coins.json")
+_SEED = Path(__file__).with_name("big_coins_seed.json")   # shipped snapshot: works from the first second
+BRIDGE_WORDS = re.compile(r"wormhole|\(portal\)|bridged|allbridge|sollet|axelar|celer|multichain|layerzero"
+                          r"|\((?:wh|pos|pow|eth|bsc|base|sol)\)|\bwrapped\b", re.I)
 _state: dict = {"at": 0.0, "next_at": 0.0, "coins": []}   # coins: [{"symbol", "name", "cap"}]
 _loaded = False
 
@@ -36,12 +40,15 @@ def _load() -> None:
     if _loaded:
         return
     _loaded = True
-    try:
-        raw = json.loads(_STORE.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return
-    if isinstance(raw, dict) and isinstance(raw.get("coins"), list):
-        _state.update(at=float(raw.get("at") or 0), coins=raw["coins"])
+    for f in (_STORE, _SEED):
+        try:
+            raw = json.loads(f.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if isinstance(raw, dict) and isinstance(raw.get("coins"), list) and raw["coins"]:
+            # The seed's date is not trusted: the live list is fetched on the first tick anyway.
+            _state.update(at=float(raw.get("at") or 0) if f is _STORE else 0.0, coins=raw["coins"])
+            return
 
 
 def _save() -> None:
@@ -89,17 +96,24 @@ def match(symbol: str | None, name: str | None) -> dict | None:
     return next((c for c in coins if c["s"] in sym and nm.startswith(c["n"])), None)
 
 
+def bridged(e: dict) -> bool:
+    """A name that says the token is a port from another chain ("Aave (Wormhole)",
+    "Wrapped ETH (Portal)"): not a native project, whatever its cap."""
+    return bool(BRIDGE_WORDS.search(f"{e.get('name') or ''} {e.get('symbol') or ''}"))
+
+
 def cap_of(e: dict) -> float:
     c = match(e.get("symbol"), e.get("name"))
     return float(c["cap"]) if c else 0.0
 
 
-async def refresh(client: httpx.AsyncClient, now: float | None = None) -> None:
-    """Once a day, the top coins by market cap (two CoinGecko requests)."""
+async def refresh(client: httpx.AsyncClient, now: float | None = None) -> bool:
+    """Once a day, the top coins by market cap (two CoinGecko requests).
+    True when the list changed."""
     _load()
     now = now or time.time()
     if now < _state["next_at"] or now - _state["at"] < REFRESH_S:
-        return
+        return False
     _state["next_at"] = now + RETRY_S
     coins = []
     for page in range(1, PAGES + 1):
@@ -108,12 +122,15 @@ async def refresh(client: httpx.AsyncClient, now: float | None = None) -> None:
                              timeout=20.0, headers={"Accept": "application/json"})
         if r.status_code != 200:
             logger.info("big_coins: CoinGecko %s on page %s", r.status_code, page)
-            return
+            return False
         coins += [{"symbol": c.get("symbol"), "name": c.get("name"), "cap": float(c.get("market_cap") or 0)}
                   for c in r.json() if isinstance(c, dict)]
     if coins:
         _state.update(at=now, coins=coins)
         _save()
+        logger.info("big_coins: %d top coins loaded", len(coins))
+        return True
+    return False
 
 
 def set_for_tests(coins: list[dict]) -> None:
