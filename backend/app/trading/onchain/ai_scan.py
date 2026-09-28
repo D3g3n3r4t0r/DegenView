@@ -84,6 +84,10 @@ def parse(text: str, batch: list[dict], now: float) -> int:
         # The memory measures it like any check (outcomes.signals: AUC on rugs).
         deepseek_desk.note("scan", f"Judged {a['symbol']}: rug risk {risk}"
                            + (f", {a['ai']['flags'][0]}" if a["ai"]["flags"] else ""), now,
+                           steps=[f"Flags: {', '.join(a['ai']['flags']) or 'none'}",
+                                  f"Theme: {a['ai']['theme'] or 'n/a'}",
+                                  f"Why: {a['ai']['why']}"],
+                           outcome=f"rug risk {risk}/100",
                            symbol=a["symbol"], chain=a["chain"], token=a.get("token_address"), risk=risk)
         e = outcomes._journal.get(f"{a['chain']}:{a.get('token_address')}")
         if e is not None:
