@@ -514,3 +514,10 @@ def test_the_top_list_drops_database_rows_of_big_coins(monkeypatch):
     monkeypatch.setattr(m.onchain_projects_db, "search", lambda **kw: {"items": rows})
     monkeypatch.setattr(m.onchain_judge, "get", lambda *a: None)
     assert [e["symbol"] for e in m._top_entries(10) if not e["on_board"]] == ["OKP"]
+
+def test_code_review_lifts_the_final_score():
+    plain = _entry("PLAIN", 80, 80, 80)
+    coded = _entry("CODED", 80, 80, 80)
+    coded["code"] = {"complexity": 90, "innovation": 90}
+    assert lb.final_score(coded) > lb.final_score(plain)
+    assert lb._public(coded)["code"]["complexity"] == 90
