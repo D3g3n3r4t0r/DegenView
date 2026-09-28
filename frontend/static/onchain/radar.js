@@ -19,6 +19,7 @@
  * New decisions arrive by SSE and slide in at the top; nothing else moves.
  */
 import * as api from "@onchain/api.js";
+import { isHidden, onHiddenChange } from "@onchain/hidden.js";
 import { escapeHtml, strategyLabel, tokenRow } from "@onchain/format.js";
 import { openDetail, register } from "@onchain/detail.js";
 
@@ -56,6 +57,7 @@ export function mountRadar({ toast: notify } = {}) {
   toast = notify ?? null;
   root = document.getElementById("radar");
   if (!root) return;
+  onHiddenChange(() => paintFeed());
   root.addEventListener("click", (event) => {
     if (event.target.closest("[data-feed-more]")) { feedAll = !feedAll; paintFeed(); }
   });
@@ -168,8 +170,10 @@ function paintStats() {
 /* -------------------------------------------------------------- feed */
 
 function decisions() {
-  const pass = (data.listings ?? []).map((l) => ({ v: "pass", k: `pass:${lkey(l)}`, at: l.found_at ?? 0, t: l }));
-  const rej = (data.rejected ?? []).map((r) => ({ v: "rej", k: `rej:${rkey(r)}`, at: r.at ?? 0, t: r }));
+  const pass = (data.listings ?? []).filter((l) => !l.token_address || !isHidden(l.chain, l.token_address))
+    .map((l) => ({ v: "pass", k: `pass:${lkey(l)}`, at: l.found_at ?? 0, t: l }));
+  const rej = (data.rejected ?? []).filter((r) => !r.token_address || !isHidden(r.chain, r.token_address))
+    .map((r) => ({ v: "rej", k: `rej:${rkey(r)}`, at: r.at ?? 0, t: r }));
   return [...pass, ...rej].sort((a, b) => b.at - a.at).slice(0, FEED_MAX);
 }
 
