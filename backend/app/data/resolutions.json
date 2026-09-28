@@ -2292,5 +2292,10 @@
     "status": "risolto",
     "at": 1790633702,
     "summary": "Il simulato seguiva solo gli alert di Robinhood, uno alla volta, e solo se il backtest dell'alert era gia' pronto entro 15 minuti: in pratica quasi mai. Ora segue ogni alert su ogni chain, appena arriva, con lo stesso trade della tab Strategies (dentro all'alert, fuori all'uscita del trend follower). Ogni trade prende la quota scelta del saldo simulato: al 100% ne segue uno alla volta, al 10-25% ne segue diversi insieme. Il Reale resta com'e'."
+  },
+  "seed-0222": {
+    "status": "risolto",
+    "at": 1790634145,
+    "summary": "Il wallet simulato, da quando segue ogni alert, tiene i trade in un formato nuovo senza la quantita' di token: la pagina profilo e il totale del wallet la leggevano e andavano in errore. Ora mostrano tutti i trade simulati aperti, ognuno sulla sua chain."
   }
 }

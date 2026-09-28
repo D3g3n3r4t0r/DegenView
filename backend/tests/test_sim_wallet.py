@@ -37,3 +37,16 @@ def test_started_shows_the_virtual_balance_and_records_its_own_line():
     main._record_sim(USER, snap)
     assert wealth.series("u1:sim")[-1][1] == pytest.approx(250.0)
     assert wealth.series("u1") == []          # the real line is untouched
+
+
+def test_paper_trades_show_in_the_simulated_wallet():
+    """Lorenzo, 28/09: /api/profile and /api/wallets/total answered 500
+    (KeyError 'qty') as soon as the simulated wallet followed an alert."""
+    a = tr.record({"chain": "solana", "pair_address": "P", "token_address": "T", "symbol": "SOLY"}, "meme", 1_790_000_000)
+    a["alert_bt"] = {"Trend EMA": {"state": "in", "ret": 0.1, "events": [{"side": "buy"}]}}
+    at.configure("u1", mode="sim", pct=50, usdg_now=100.0)
+    at.paper_tick(at._user("u1"), "Trend EMA", 1_790_000_060)
+    at.paper_tick(at._user("u1"), "Trend EMA", 1_790_000_090)      # marked on the next pass
+    snap = main._sim_snapshot(USER)
+    assert [(p["symbol"], p["chain"]) for p in snap["positions"]] == [("SOLY", "solana")]
+    assert snap["total"] == pytest.approx(50 + 55) and sum(snap["by_chain"].values()) == pytest.approx(snap["total"])
