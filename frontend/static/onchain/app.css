@@ -870,3 +870,6 @@ html, body { overflow-x: clip; }
   .dt-chart:has(.main-embed) { block-size: 420px; padding: 0; }
   .main-embed { display: block; inline-size: 100%; block-size: 100%; border: 0; background: var(--k-bg); }
 }
+@layer skin {
+  .main-embed { display: block; inline-size: 100%; border: 0; background: #09090b; color-scheme: dark; }
+}

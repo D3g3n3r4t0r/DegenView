@@ -5800,3 +5800,4 @@ html.embed-chart .chart-area { position: fixed; inset: 0; margin: 0; border: 0; 
 html.embed-chart .chart-area .draw-rail { display: none !important; }
 html.embed-chart .chart-area .chart-row, html.embed-chart .chart-area .chart-wrap { block-size: 100%; }
 html.embed-chart #chart-expand-btn, html.embed-chart #empty-state { display: none !important; }
+html.embed-chart, html.embed-chart body, html.embed-chart .chart-area { background: #09090b; }
