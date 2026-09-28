@@ -373,7 +373,11 @@ async def refresh_system(client, now: float | None = None, gap_s: float = 0.0) -
                 await asyncio.sleep(gap_s)
         bars = _bars.get(k) or []
         sig = f"{len(bars)}:{bars[-1][0] if bars else 0}:{a['gone']}"
-        if not a.get("bars_fetched") or (sig == a.get("system_sig") and now < a["at"] + system.WINDOW_S):
+        # Unchanged bars skip only a current result: a closed or vanished
+        # alert gets no new bars, and without _ready() one computed by an
+        # older SYSTEM_VERSION stayed pending until its 48h were over.
+        if not a.get("bars_fetched") or (_ready(a) and sig == a.get("system_sig")
+                                         and now < a["at"] + system.WINDOW_S):
             continue
         res = await asyncio.to_thread(system.evaluate, bars, a["at"], gone=a["gone"], now=now)
         j = outcomes._journal.get(f"{a['chain']}:{a.get('token_address')}")

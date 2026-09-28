@@ -81,6 +81,27 @@ def test_bars_from_readings_and_refresh(monkeypatch, tmp_path):
     at.reset_for_tests()
 
 
+def test_an_old_version_result_is_rebuilt_even_when_the_bars_do_not_move(monkeypatch, tmp_path):
+    """Lorenzo, 28/09: "Backtests ready: 5/13 [...] io voglio vedere tutti i
+    risultati". A closed alert inside its 48h gets no new bars: its result from
+    an older SYSTEM_VERSION must still be rebuilt, not wait out the window."""
+    monkeypatch.setattr(at, "_STORE_FILE", tmp_path / "a.json")
+    monkeypatch.setattr(at, "_BARS_FILE", tmp_path / "b.json")
+    at.reset_for_tests()
+    a = at.record({"chain": "robinhood", "pair_address": "P", "token_address": "T", "symbol": "X"}, "meme", T0)
+    k = at.key_of(a)
+    at.merge_bars(k, _bars([1.0] * 50))
+    bars = at._bars[k]
+    a.update(closed=True, bars_fetched=True, backtests={"rows": []}, system_v=at.SYSTEM_VERSION - 1,
+             system_sig=f"{len(bars)}:{bars[-1][0]}:{a['gone']}")
+    assert at.backtest_status("meme", now=T0 + 3600)["pending"] == 1
+    monkeypatch.setattr(system.radar, "spot_signals", _signals(set(), set()))
+    assert asyncio.run(at.refresh_system(None, now=T0 + 3600, gap_s=0)) == 1
+    assert a["system_v"] == at.SYSTEM_VERSION
+    assert at.backtest_status("meme", now=T0 + 3600)["pending"] == 0
+    at.reset_for_tests()
+
+
 def test_a_sell_after_a_one_candle_crash_says_so(monkeypatch):
     # entry at bar 41, the price crashes 80% inside bar 44, the exit fills at bar 45's open
     prices = [1.0] * 44 + [0.2, 0.2, 0.2]
