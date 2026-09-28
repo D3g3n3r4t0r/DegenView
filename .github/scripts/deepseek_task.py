@@ -201,12 +201,36 @@ def js_problems(files: list[str]) -> list[str]:
     return errors
 
 
+LINT_DIR = Path("/tmp/deepseek-lint")
+
+
+def undefined_names(files: list[str]) -> list[str]:
+    """ESLint's no-undef on the touched ES modules: #190 and #226 called a
+    function they never imported, and the lesson alone did not stop it."""
+    mods = [f for f in files if f.startswith("frontend/static/onchain/") and f.endswith(".js") and Path(f).exists()]
+    if not mods:
+        return []
+    eslint = LINT_DIR / "node_modules/.bin/eslint"
+    if not eslint.exists():
+        LINT_DIR.mkdir(parents=True, exist_ok=True)
+        r = subprocess.run(["npm", "i", "--prefix", str(LINT_DIR), "--no-audit", "--no-fund", "eslint@9", "globals@15"],
+                           capture_output=True, text=True, timeout=300)
+        if r.returncode or not eslint.exists():
+            return []                  # no linter today: the other checks still run
+    cfg = LINT_DIR / "eslint.config.mjs"
+    cfg.write_text(f'import globals from "{LINT_DIR}/node_modules/globals/index.js";\n'
+                   'export default [{ files: ["**/*.js"], languageOptions: { ecmaVersion: 2024, sourceType: "module", '
+                   'globals: { ...globals.browser } }, rules: { "no-undef": "error" } }];\n', encoding="utf-8")
+    r = subprocess.run([str(eslint), "--no-config-lookup", "-c", str(cfg), *mods], capture_output=True, text=True, timeout=300)
+    return [f"$ eslint (no-undef) {' '.join(mods)}\n{(r.stdout + r.stderr)[-3000:]}"] if r.returncode else []
+
+
 def checks(tests: list[str]) -> str:
     env = {k: v for k, v in os.environ.items() if k not in ("DEEPSEEK_API_KEY", "GITHUB_TOKEN")}
     files = changed()
     if not files:
         return "no file changed: the answer did nothing"
-    log = js_problems(files)
+    log = js_problems(files) + undefined_names(files)
     tests = sorted({t.removeprefix("backend/") for t in [*tests, *related_tests(files)]})
     cmds = [(["ruff", "check", "backend/", "--select", "E,F,W", "--ignore", "E501"], ".")]
     if tests:
