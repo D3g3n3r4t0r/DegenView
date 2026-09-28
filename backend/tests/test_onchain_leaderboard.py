@@ -473,3 +473,17 @@ def test_review_ignores_unknown_ids_and_bad_rows():
     from app.trading.onchain import judge
     raw = '{"projects": [{"id": "x", "keep": false, "score": 1}, {"id": "a", "keep": "no"}, {"id": "a", "keep": true, "score": 70}]}'
     assert judge.parse_review(raw, {"a"}) == {"a": {"keep": True, "score": 70, "reason": ""}}
+
+
+def test_a_copy_of_a_top_coin_is_out_even_if_coingecko_lists_it_small():
+    from app.trading.onchain import big_coins
+    big_coins.set_for_tests([{"symbol": "aave", "name": "Aave", "cap": 2.2e9},
+                             {"symbol": "tiny", "name": "Tiny", "cap": 5e6}])
+    e = _entry("AAVE", 90, 90, 90, cap=450_000)
+    e["global_cap"] = 450_000                      # "Aave (Wormhole)", its own coin on CoinGecko
+    assert lb.qualifies(e).startswith("over $10M")
+    w = _entry("WAAVE", 90, 90, 90, cap=450_000)
+    w["name"] = "Aave (Wormhole)"
+    assert lb.qualifies(w).startswith("over $10M")
+    assert lb.qualifies(_entry("TINY", 90, 90, 90, cap=450_000)) == ""
+    assert lb.qualifies(_entry("SAVE", 90, 90, 90, cap=450_000)) == ""
