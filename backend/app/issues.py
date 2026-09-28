@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0202", "Il sito e' bloccato su 'Aggiornamento in corso'",
+     "Lorenzo, 28/09: 'non va piu' il sito e' rimasto bloccato'.",
+     "alta"),
     ("seed-0201", "La scheda di DeepSeek: un agente che si vede lavorare, con il suo ragionamento",
      "Lorenzo: 'diamo a DeepSeek una tab tutta sua con animazioni molto fatte bene [...] voglio che si veda il log su quello su cui sta lavorando, un log preciso, non soltanto cose generiche, voglio vedere come ragiona'.",
      "media"),
