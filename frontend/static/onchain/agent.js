@@ -146,6 +146,17 @@ function paintHero() {
   if (status) status.textContent = statusLine();
   const today = viewEl.querySelector("[data-ag-today]");
   if (today) today.textContent = chips();
+  const prio = viewEl.querySelector("[data-ag-prio]");
+  if (prio) {
+    const p = viewData?.priority;
+    if (p) {
+      const total = (p.total ?? 0) - (p.no_data ?? 0);
+      prio.textContent = `Priority: Strategies backtests ${p.ready ?? 0}/${total}`;
+      prio.hidden = false;
+    } else {
+      prio.hidden = true;
+    }
+  }
   paintNow();
 }
 
@@ -213,6 +224,7 @@ export function mountAgentView() {
       <h2>DeepSeek</h2>
       <p class="ag-status" data-ag-status>Off</p>
       <p class="ag-today" data-ag-today>Nothing yet today</p>
+      <p class="ag-prio" data-ag-prio hidden></p>
     </div>
     <div class="ag-now" data-ag-now hidden></div>
     <ul class="ag-list" data-ag-list></ul>

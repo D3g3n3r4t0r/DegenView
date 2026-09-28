@@ -121,6 +121,8 @@ def _store(key: str, entry: dict, bars: bytes, result: dict) -> None:
 async def fill(now: float | None = None, per_tick: int = PER_TICK) -> int:
     """Analizza fino a per_tick token del diario, se restano chiamate libere
     a GeckoTerminal. Ritorna quante righe ha scritto."""
+    if priority.backtests_first():
+        return 0
     if dexscreener.gecko_load() >= SPARE_BELOW:
         return 0
     items = queue(now)
