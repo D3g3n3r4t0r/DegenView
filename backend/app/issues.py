@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0223", "Chiedere a DeepSeek cosa ha imparato dagli studi quotidiani",
+     "Lorenzo, 29/09: 'chiediamo a deepseek cosa ha imparato dopo aver scansionato tutti i giorni le nostre crypto'",
+     "media"),
     ("seed-0222", "Errore 500 su profilo e wallet (KeyError 'qty')",
      "Lorenzo, 29/09: 'che succede?' con gli avvisi di errore 500 su /api/profile e /api/wallets/total",
      "alta"),
