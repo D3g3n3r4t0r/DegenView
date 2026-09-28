@@ -852,4 +852,6 @@ html, body { overflow-x: clip; }
   /* The Top tab is top.js alone now: leaderboard.js keeps running hidden,
      because it registers the gem rows' details. */
   #board { display: none !important; }
+  /* The active dock icon is filled; the Strategies chart is a line, and filled it read as an arrow. */
+  .dock button[data-go="top"][aria-current] svg { fill: none; stroke-width: 2.4; }
 }
