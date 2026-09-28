@@ -871,15 +871,14 @@ html, body { overflow-x: clip; }
   .main-embed { display: block; inline-size: 100%; block-size: 100%; border: 0; background: var(--k-bg); color-scheme: dark; }
 }
 
-<<<<<<< Updated upstream
 /* Phantom by deeplink: the second tap that signs (phantomlink.js). */
 @layer skin {
   .pf-phantom { margin: 0 0 14px; padding: 12px; border: 1px solid #ab9ff2; border-radius: 12px; background: rgb(171 159 242 / .08); }
   .pf-phantom p { margin: 0 0 10px; font-size: 13px; color: var(--k-text); }
   .pf-phantom button { inline-size: 100%; block-size: 40px; border: 0; border-radius: 10px; background: #ab9ff2; color: #1c1c1c; font: 600 15px/1 var(--sans); cursor: pointer; }
-=======
+}
+
 /* Real/simulated switch with nothing cached: numbers dim until they land. */
 @layer skin {
   #profile[data-switching] .pf-value > :not(.pf-wallet), #profile[data-switching] .pf-value ~ * { opacity: .45; transition: opacity .15s; }
->>>>>>> Stashed changes
 }
