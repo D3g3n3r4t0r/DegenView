@@ -371,8 +371,11 @@ def _paper_ret(p: dict, a: dict | None, label: str) -> tuple[float, bool, str]:
 def _paper_view(p: dict) -> dict:
     a = alert_track._alerts.get(p["alert"])
     ret = p.get("ret", 0.0)
+    value = p["stake"] * (1 + ret)
+    price = _price(a)
     return {"symbol": p["symbol"], "token": p["token"], "chain": p["chain"], "at": p["at"], "mode": "sim",
-            "cost_usdg": p["stake"], "value_usdg": round(p["stake"] * (1 + ret), 4), "ret": round(ret, 4),
+            "cost_usdg": p["stake"], "value_usdg": round(value, 4), "ret": round(ret, 4),
+            "price": price, "qty": value / price if price else None,
             "image": (a or {}).get("image"), "route": "paper", "pair": (a or {}).get("pair_address")}
 
 
