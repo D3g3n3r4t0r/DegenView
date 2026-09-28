@@ -52,7 +52,7 @@ from app.analysis.strategies import STRATEGY_REGISTRY, confirmed_events, rug_sto
 from app.providers.base import NoDataYet, ProviderError
 from app.providers.dexscreener import DexScreenerProvider, gecko_urgent, make_symbol
 from app.sniper.quality import _looks_like_meme
-from app.trading.onchain import legit
+from app.trading.onchain import legit, scan_feed
 from app.trading.onchain import listings as onchain_listings
 from app.trading.onchain.storage import data_file
 
@@ -590,10 +590,13 @@ async def scan_once() -> dict:
                 picked += exception_queue(pick_exceptions(pools, picked))
                 info = {"seen": len({p.token_address for p in pools}), "passing": passing,
                         "legit": 0, "rejected": 0, "waiting": 0, "tested": 0, "too_young": 0}
+                scan_feed.seen(info["seen"])
                 links = await _dex_links(client, chain, picked)
                 cleared: list[tuple[Pool, dict]] = []
                 for pool in picked:
                     verdict = await vet(client, pool, links.get(pool.pair_address) or {})
+                    scan_feed.event(chain, pool.symbol, "pass" if verdict["status"] == "ok" else verdict["status"],
+                                    verdict.get("reason") or "")
                     if verdict["status"] == "ok":
                         info["legit"] += 1
                         cleared.append((pool, verdict))
@@ -619,6 +622,10 @@ async def scan_once() -> dict:
                         continue
                     info["tested"] += 1
                     outcome = await asyncio.to_thread(evaluate, df, configs)
+                    top = outcome["best"]
+                    scan_feed.event(chain, pool.symbol, "tested",
+                                    f"best {top['return_pct']:+.0f}%" if top and top.get("return_pct") is not None
+                                    else "no strategy fits")
                     base = {
                         "chain": chain, "symbol": pool.symbol, "name": pool.name,
                         "token_address": pool.token_address, "pair_address": pool.pair_address,

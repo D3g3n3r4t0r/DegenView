@@ -358,6 +358,7 @@ filtro anti-rug in `legit.py`, frontend `frontend/static/onchain/radar.js`.
   `deepseek_desk.note("backtest", ...)` per la pagina Agent.
 - Agent visibile (28/09, seed-0205): conteggi del giorno per tipo (`done` in `deepseek_desk.activity`), studi del leaderboard nel registro (`_note_study`), scheda live 'working now' in `agent.js`, letture DeepSeek 300/giorno. Lorenzo: "voglio che la gente, attraverso anche animazioni grafiche, mi faccia capire che sta lavorando".
 - Backtest alert bloccati (seed-0206, 28/09): `refresh_system` saltava gli alert con barre ferme anche se il risultato era di una SYSTEM_VERSION vecchia; ora salta solo se `_ready`. Lorenzo: "io voglio vedere tutti i risultati [...] deve funzionare stavolta".
+- Nastro scanner (seed-0207, 28/09): `scan_feed.py` (memoria, niente disco) riceve ogni giudizio di radar e listings; `/api/onchain/scan-feed`; nastro + conteggi in `alerts.js` sopra 'About to fire'. Lorenzo: "voglio vedere i ticker girare, non cose ferme".
 - Vincolo: il pilota (soldi veri) resta sotto $100k
   (`_SNIPER_ONCHAIN_MAX_MCAP_USD` in main.py). Mai strategie short.
 
