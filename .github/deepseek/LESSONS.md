@@ -44,3 +44,4 @@ review. Read them before answering: the same mistake again is a failed task.
 - Before using a stdlib module in a file, check the file's import lines: main.py has no `import time` (#252 failed on `time.monotonic()`). Add the import when it is missing.
 - Edit only files you were given: #250 sent a SEARCH block for tests/test_onchain_discovery.py, which was not in the task, and it matched nothing.
 - #252 repeated #245: the test file the task asked for was not created. The worker now fails the task when it is missing.
+- #259: `onchain_narratives` used in main.py without its import, and old tests that asserted the old $3M / one-year limits left unchanged. When a task changes a limit, search the tests for the old number and update them.

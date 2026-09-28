@@ -233,11 +233,14 @@ async def _cg_step(client: httpx.AsyncClient, add: Callable[[dict, str], bool], 
         q.append(("index",))
         # Thin narratives first: a category whose narrative has fewer than 10
         # projects in the database is swept before the crowded ones.
+        # Order: narratives users chose, then thin ones, then the rest.
         counts = projects_db.narrative_counts()
-        cats = narratives.coingecko_categories(first=profiles.wanted_narratives())
+        wanted = profiles.wanted_narratives()
+        cats = narratives.coingecko_categories(first=wanted)
+        chosen = {c for c in cats if set(narratives.keys_for_category(c)) & set(wanted)}
         thin = {c for c in cats if any(n < 10 for n in
                                        (counts.get(k, 0) for k in narratives.keys_for_category(c)))}
-        cats.sort(key=lambda c: 0 if c in thin else 1)
+        cats.sort(key=lambda c: 0 if c in chosen else 1 if c in thin else 2)
         q.extend(("npage", cat, 1) for cat in cats)
         q.extend(("page", chain, cat, p) for chain, (cat, pages) in CG_CATEGORIES.items() for p in pages)
         return

@@ -50,13 +50,12 @@ def test_coin_step_carries_hint_to_leaderboard(monkeypatch):
 
 
 def test_narrative_counts_from_db(tmp_path, monkeypatch):
-    monkeypatch.setattr(projects_db, "_STORE_FILE", tmp_path / "projects.json")
-    monkeypatch.setattr(projects_db, "_db_cache", None, raising=False)
+    monkeypatch.setattr(projects_db, "_DB_FILE", tmp_path / "projects.db")
     now = time.time()
-    projects_db.upsert({"chain": "solana", "token_address": "t1", "symbol": "A", "name": "A",
-                        "narratives": ["privacy", "ai"]}, "test", now)
-    projects_db.upsert({"chain": "solana", "token_address": "t2", "symbol": "B", "name": "B",
-                        "narratives": ["privacy"]}, "test", now)
+    for tok, keys in (("t1", ["privacy", "ai_agents"]), ("t2", ["privacy"])):
+        e = {"chain": "solana", "token_address": tok, "symbol": tok.upper(), "name": tok, "narratives": keys}
+        projects_db.upsert(e, "test", now)
+        projects_db.record(e, "ranked")
     counts = projects_db.narrative_counts()
     assert counts.get("privacy") == 2
-    assert counts.get("ai") == 1
+    assert counts.get("ai_agents") == 1

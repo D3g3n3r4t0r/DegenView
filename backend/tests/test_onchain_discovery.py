@@ -182,7 +182,7 @@ def test_token_from_pairs_picks_liquid_pool_in_band():
     item, why = d.token_from_pairs("solana", [_pair(MINT, 800_000, 5_000), _pair(MINT, 900_000, 50_000)], repo)
     assert why == "" and item["market_cap"] == 900_000 and item["github_verified"]
     assert item["website"] == "https://prover.io" and item["launched_at"] == 1_785_000_000
-    assert d.token_from_pairs("solana", [_pair(MINT, 9_000_000)], repo)[1].startswith("cap")
+    assert d.token_from_pairs("solana", [_pair(MINT, 30_000_000)], repo)[1].startswith("cap")
     assert d.token_from_pairs("solana", [_pair(MINT, 500_000, symbol="PEPE", name="Pepe Inu")], repo)[1] == "meme name"
 
 
@@ -233,7 +233,7 @@ def test_jupiter_verified_list_keeps_real_projects_in_band():
             {**base, "id": "B", "symbol": "ZAMA", "name": "Zama", "audit": {}},          # bridged: mint kept
             {**base, "id": "Y", "symbol": "NEW", "name": "New", "firstPool": {"createdAt": _t.strftime(
                 "%Y-%m-%dT%H:%M:%SZ", _t.gmtime(now - 86400))}},
-            {**base, "id": "C", "symbol": "BIG", "name": "Big", "mcap": 9_000_000}]
+            {**base, "id": "C", "symbol": "BIG", "name": "Big", "mcap": 30_000_000}]
     out = dv.jupiter_candidates(rows, now)
     assert [x["token_address"] for x in out] == ["R"] and out[0]["website"] == "https://solrouter.com"
 
