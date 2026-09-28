@@ -12,8 +12,9 @@ def _series(prices, volumes=None, start="2024-01-01", freq="5min"):
     idx = pd.date_range(start, periods=len(prices), freq=freq, tz="UTC")
     if volumes is None:
         volumes = [100.0 + i for i in range(len(prices))]
-    return pd.DataFrame({"open": prices, "high": [p * 1.01 for p in prices],
-                         "low": [p * 0.99 for p in prices], "close": prices,
+    opens = [prices[0], *prices[:-1]]          # each candle opens at the previous close
+    return pd.DataFrame({"open": opens, "high": [max(o, c) * 1.01 for o, c in zip(opens, prices)],
+                         "low": [min(o, c) * 0.99 for o, c in zip(opens, prices)], "close": prices,
                          "volume": volumes}, index=idx)
 
 
@@ -66,7 +67,7 @@ def test_one_candle_halving_is_liquidity_pulled():
 
 def test_slow_bleed_is_dead_token():
     """-88% over 3 days, no single candle halving and no 6h crash."""
-    prices = [100.0 * (0.999 ** i) for i in range(24 * 36)]
+    prices = [100.0 * (0.9975 ** i) for i in range(24 * 36)]   # 0.9975^864 = 0.115
     df = _series(prices)
     ev = strategies.rug_event(df)
     assert ev is not None
@@ -121,3 +122,12 @@ def test_backtest_all_reports_rug_and_no_events_after():
     best = out["best"]
     if best:
         assert all(e["t"] <= at for e in best["events"])
+
+
+def test_earliest_signal_wins_not_the_first_in_the_list():
+    """A crash at 10:00 and a liquidity-pull candle hours later: the rug is
+    the crash, or everything in between would still count."""
+    prices = [100.0] * 24 + [100.0 * 0.85 ** i for i in range(1, 13)] + [12.0] * 60 + [5.0] + [5.0] * 6
+    df = _series(prices)
+    ev = strategies.rug_event(df)
+    assert ev["why"].startswith("crash ") and ev["i"] < 24 + 12

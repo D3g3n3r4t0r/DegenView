@@ -732,53 +732,31 @@ def rug_event(df: pd.DataFrame, known: dict | None = None) -> dict | None:
     scambi prosciugati, infine il rug gia' visto on-chain."""
     if df.empty:
         return None
-    close = df["close"]
-    high = df["high"]
-    open_ = df["open"]
-    volume = df["volume"]
-
-    # A - liquidita' ritirata: una sola candela che dimezza il prezzo.
-    one = close <= 0.5 * open_
-    hits = [i for i, v in enumerate(one.to_numpy()) if bool(v)]
-    if hits:
-        i = hits[0]
-        return {"i": i, "why": f"one candle {_pct(close.iloc[i] / open_.iloc[i])}: liquidity pulled"}
-
-    # B - crollo: sotto il 30% del massimo delle ultime 6 ore.
+    close, high, open_, volume = df["close"], df["high"], df["open"], df["volume"]
     peak6 = high.rolling(RUG_CRASH_WINDOW).max()
-    crash = close <= 0.30 * peak6
-    hits = [i for i, v in enumerate(crash.to_numpy()) if bool(v)]
-    if hits:
-        i = hits[0]
-        return {"i": i, "why": f"crash {_pct(close.iloc[i] / peak6.iloc[i])} in under 6h"}
-
-    # C - token morto: sotto il 15% del massimo di sempre.
     top = high.cummax()
-    dead = close <= RUG_DEAD_RATIO * top
-    hits = [i for i, v in enumerate(dead.to_numpy()) if bool(v)]
-    if hits:
-        i = hits[0]
-        return {"i": i, "why": f"{_pct(close.iloc[i] / top.iloc[i])} from its top: dead token"}
-
-    # D - scambi prosciugati: prezzo sotto il 40% del massimo delle ultime
-    # 24 ore e volume medio delle ultime 12 barre al 5% del massimo delle
-    # ultime 24 ore della media mobile a 12 barre.
     peak24 = high.rolling(RUG_ABANDONED_WINDOW).max()
     vol_mean = volume.rolling(RUG_VOLUME_BARS).mean()
     vol_peak = vol_mean.rolling(RUG_VOLUME_WINDOW).max()
-    abandoned = (close <= RUG_ABANDONED_RATIO * peak24) & (vol_mean <= RUG_VOLUME_RATIO * vol_peak)
-    hits = [i for i, v in enumerate(abandoned.to_numpy()) if bool(v)]
-    if hits:
-        i = hits[0]
-        return {"i": i, "why": "trading dried up after the fall"}
-
-    # E - rug gia' visto on-chain: dalla prima barra al momento noto.
+    # (condition, reason at bar i): the earliest bar wins; on the same bar,
+    # the order below (sharpest cases first).
+    checks = [
+        (close <= 0.5 * open_, lambda i: f"one candle {_pct(close.iloc[i] / open_.iloc[i])}: liquidity pulled"),
+        (close <= 0.30 * peak6, lambda i: f"crash {_pct(close.iloc[i] / peak6.iloc[i])} in under 6h"),
+        (close <= RUG_DEAD_RATIO * top, lambda i: f"{_pct(close.iloc[i] / top.iloc[i])} from its top: dead token"),
+        ((close <= RUG_ABANDONED_RATIO * peak24) & (vol_mean <= RUG_VOLUME_RATIO * vol_peak),
+         lambda i: "trading dried up after the fall"),
+    ]
+    best = None
+    for cond, why in checks:
+        hit = cond.fillna(False).to_numpy().nonzero()[0]
+        if len(hit) and (best is None or hit[0] < best[0]):
+            best = (int(hit[0]), why)
     if known and known.get("at"):
-        at = known["at"]
-        for i, ts in enumerate(df.index):
-            if ts.timestamp() >= at:
-                return {"i": i, "why": known.get("why") or "rug seen on-chain"}
-    return None
+        stamps = [i for i, ts in enumerate(df.index) if ts.timestamp() >= known["at"]]
+        if stamps and (best is None or stamps[0] < best[0]):
+            return {"i": stamps[0], "why": known.get("why") or "rug seen on-chain"}
+    return {"i": best[0], "why": best[1](best[0])} if best else None
 
 
 def rug_stop(df: pd.DataFrame, signals: pd.DataFrame, known: dict | None = None) -> pd.DataFrame:
