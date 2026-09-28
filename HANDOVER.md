@@ -351,6 +351,11 @@ filtro anti-rug in `legit.py`, frontend `frontend/static/onchain/radar.js`.
   piattaforma, `github_belongs` chiede che il repo sia del progetto, e
   `holder_concentration` scarta un wallet >15% o top 10 >35%. RugCheck
   `graphInsidersDetected` NON e' usabile: DREGG ne ha 807.
+- seed-0204 (28/09): `strategy_lab.py` backtesta H24 la Top 50 della schermata
+  Strategie (`main._top_entries`), un token al minuto, ognuno ogni ora, su
+  1000 candele 5m con `system.backtest_all`; risultati in `/api/onchain/top`
+  (`backtests` per riga + stato) e `/api/onchain/token`; ogni backtest va in
+  `deepseek_desk.note("backtest", ...)` per la pagina Agent.
 - Vincolo: il pilota (soldi veri) resta sotto $100k
   (`_SNIPER_ONCHAIN_MAX_MCAP_USD` in main.py). Mai strategie short.
 
