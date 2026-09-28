@@ -10,6 +10,7 @@
 import * as api from "@onchain/api.js";
 import { age, bestSystem, changePill, escapeHtml, logo, strategyTrade, usdShort } from "@onchain/format.js";
 import { openUserSwap, walletFor } from "@onchain/userswap.js";
+import { hideToken } from "@onchain/hidden.js";
 
 const registry = new Map();
 const INTERVALS = ["1m", "5m", "15m", "1h", "4h"];
