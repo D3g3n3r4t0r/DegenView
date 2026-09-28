@@ -978,3 +978,20 @@ html, body { overflow-x: clip; }
     .ag-orb span, .ag-orb i, .ag-card.is-new, .ag-steps li, .ag-now::before, .ag-scan { animation: none !important; }
   }
 }
+/* --- narratives picker (profile.js) -------------------------------------- */
+@layer skin {
+  .pf-narr { margin-top: 22px;
+    & summary { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; cursor: pointer;
+      list-style: none; font: 600 20px var(--sans); color: var(--k-text); }
+    & summary::-webkit-details-marker { display: none; }
+    & summary::after { content: "▾"; font-size: 14px; color: var(--k-text-3); transition: transform .2s; }
+    &[open] summary::after { transform: rotate(180deg); } }
+  .pf-narr-body { display: grid; gap: 14px; padding: 4px 0 8px; }
+  .pf-narr-g { display: grid; gap: 8px;
+    & h4 { margin: 0; font: 600 13px var(--sans); letter-spacing: .04em; text-transform: uppercase; color: var(--k-text-3); } }
+  .pf-narr-chips { display: flex; flex-wrap: wrap; gap: 6px;
+    & button { padding: 6px 12px; border: 1px solid rgb(255 255 255 / .12); border-radius: 999px; background: none;
+      color: var(--k-text-2); font: 500 13px var(--sans); cursor: pointer; }
+    & button[aria-pressed="true"] { background: #6d7cff; border-color: #6d7cff; color: #fff; } }
+  .bd-nar.is-mine { padding: 0 6px; border-radius: 999px; border: 1px solid #6d7cff; color: #8b95ff; background: rgb(109 124 255 / .12); }
+}
