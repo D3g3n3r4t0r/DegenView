@@ -2242,5 +2242,10 @@
     "status": "risolto",
     "at": 1790627103,
     "summary": "Il backend c'era gia' (36 narrative: 24 gemme e 12 meme, scelta per account, scanner che cerca prima le scelte) ma nessuna schermata la usava. Ora nel Profilo c'e' la sezione Narratives con le narrative di Gems e Memes da toccare; quelle scelte vengono per prime nelle righe di Gems e in Memes, evidenziate. Anche i meme del Radar hanno ora la loro etichetta di narrativa. PR #301."
+  },
+  "seed-0212": {
+    "status": "risolto",
+    "at": 1790627192,
+    "summary": "Per ogni gemma il laboratorio calcola anche un backtest del solo trend follower su candele giornaliere (8 ore se il token ha meno di 60 giorni). La pagina token delle gemme si apre sul grafico 1d e mostra solo quegli ingressi/uscite e quella tabella; le strategie a 5 minuti restano per lo sniper. Tolto il tasto 'Open on the analysis chart'. I risultati giornalieri compaiono al prossimo giro del laboratorio (entro un'ora per token). PR #303."
   }
 }
