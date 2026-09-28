@@ -1762,6 +1762,7 @@
   #app-shell:not([data-view="meme"]) #meme-alerts,
   #app-shell:not([data-view="top"]) :is(#leaders, #review),
   #app-shell:not([data-view="profile"]) #profile,
+  #app-shell:not([data-view="agent"]) #agent-view,
   #app-shell .pane-off,
   #app-shell:not([data-view="meme"]) :is(#memes, #pilot, #radar),
   #app-shell:not([data-view="manual"]) #market-order-row,
@@ -2819,6 +2820,10 @@
            grafico [...] scegliere anche l'immagine profilo"). Lo disegna
            static/onchain/profile.js. -->
       <section class="profile" id="profile" data-loading></section>
+      <!-- DeepSeek's own tab (Lorenzo, 28/09: "diamo a DeepSeek una tab
+           tutta sua con animazioni molto fatte bene [...] voglio vedere come
+           ragiona"). Lo disegna static/onchain/agent.js. -->
+      <section class="agent-view" id="agent-view" aria-label="DeepSeek"></section>
       <dialog class="sheet review" id="review" aria-label="Daily review">
         <div class="grip" aria-hidden="true"></div>
         <header><h3>Daily review</h3><span data-review-meta></span></header>
@@ -2912,6 +2917,7 @@
     <button type="button" data-go="meme" aria-label="Memes"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="8.5" width="18" height="7" rx="3.5" transform="rotate(-40 12 12)"/><path d="m10 9.2 4.6 5.5" /></svg><span>Memes</span></button>
     <button type="button" data-go="gems" aria-label="Gems"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9.5" cy="10" r="6"/><path d="M15.2 8.4a6 6 0 1 1-6.8 8.3"/></svg><span>Gems</span></button>
     <button type="button" data-go="top" aria-label="Strategies"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4v16h16"/><path d="m7 15 4-5 3 3 5-7"/><circle cx="19" cy="6" r="1.2"/></svg><span>Strategies</span></button>
+    <button type="button" data-go="agent" aria-label="Agent"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg><span>Agent</span></button>
     <button type="button" data-go="profile" aria-label="Profile"><i class="dock-me" data-me-avatar aria-hidden="true"></i><span>Profile</span></button>
   </nav>
   <button type="button" class="dock-search" id="dock-search" aria-label="Search a token" hidden>
