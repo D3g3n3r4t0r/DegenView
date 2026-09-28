@@ -12,6 +12,7 @@
  * system's round trips).
  */
 import * as api from "@onchain/api.js";
+import * as narratives from "@onchain/narratives.js";
 import { escapeHtml, logo, usdShort } from "@onchain/format.js";
 import * as phantom from "@onchain/phantomlink.js";
 import { loadLinked } from "@onchain/userswap.js";
@@ -19,6 +20,7 @@ import { loadLinked } from "@onchain/userswap.js";
 const RANGES = [["1h", "1H"], ["2h", "2H"], ["3h", "3H"], ["4h", "4H"], ["8h", "8H"], ["24h", "1D"], ["7d", "1W"],
   ["30d", "1M"], ["all", "All"]];
 let root = null;
+let coverage = null;
 let data = null;
 let range = "all";
 let tab = "open";
@@ -258,12 +260,34 @@ function positions(d) {
   </li>`).join("")}</ul>` + morePos + more;
 }
 
+function narrativesBox() {
+  const chosen = narratives.chosen();
+  const cov = coverage ?? [];
+  const covByKey = new Map(cov.map((c) => [c.key, c]));
+  const groups = { gem: [], meme: [] };
+  for (const n of narratives.catalogList()) (groups[n.kind] ?? groups.gem).push(n);
+  const chip = (n) => {
+    const c = covByKey.get(n.key);
+    const count = n.kind === "gem" && c ? c.projects : null;
+    const dim = count === 0 ? ' data-empty="true"' : "";
+    return `<button type="button" class="pf-nchip" data-narr="${escapeHtml(n.key)}" aria-pressed="${chosen.has(n.key)}"${dim}>
+      <span>${escapeHtml(n.label)}</span>${count != null ? `<small>${count}</small>` : ""}</button>`;
+  };
+  const section = (title, list) => list.length ? `<div class="pf-ngroup"><h4>${title}</h4><div class="pf-nchips">${list.map(chip).join("")}</div></div>` : "";
+  return `<div class="pf-narr">
+    ${section("Projects", groups.gem)}
+    ${section("Memes", groups.meme)}
+    <p class="pf-note">The gem hunter searches your narratives first.</p>
+  </div>`;
+}
+
 function paint() {
   const d = data;
   const p = d.profile;
   const [whole, cents] = d.complete === false && d.missing?.length && !d.value ? ["$—", ""] : money(d.value);
   const ch = d.change?.[range];
   const wboxOpen = root.querySelector(".pf-wbox")?.open;   // a repaint must not fold what the user opened
+  const nboxOpen = root.querySelector(".pf-nbox")?.open;
   root.innerHTML = `${phantomSign ? `<div class="pf-phantom"><p>Phantom is connected. One more tap: a free signature proves the wallet is yours.</p>
       <button type="button" data-phantom-sign>Sign in Phantom</button></div>` : ""}
     <header class="pf-head">
@@ -317,6 +341,10 @@ function paint() {
     <details class="pf-wbox"${wboxOpen ? " open" : ""}>
       <summary>Connected wallets (${(p.wallets ?? []).length})</summary>
       ${walletsBox(p)}
+    </details>
+    <details class="pf-nbox"${nboxOpen ? " open" : ""}>
+      <summary>Narratives (${narratives.chosen().size} chosen)</summary>
+      ${narrativesBox()}
     </details>
     <dialog class="sheet pf-sheet" data-edit-sheet aria-label="Edit profile">
       <form method="dialog" class="pf-form">
@@ -383,6 +411,11 @@ function readFile(file) {
 export function mountProfile({ go: goTo } = {}) {
   root = document.getElementById("profile");
   if (!root) return;
+  narratives.loadNarratives().then(() => {
+    api.getNarrativeCoverage().then((d) => { coverage = d?.items ?? []; if (data) paint(); }, () => {});
+    if (data) paint();
+  }, () => {});
+  narratives.onNarrativesChange(() => { if (data) paint(); });
   if (phantom.needed()) phantom.preload().catch(() => {});   // taps must reach Phantom synchronously
   go = goTo ?? go;
   // The value and its line stay live while the profile is on screen: a new
@@ -403,6 +436,14 @@ export function mountProfile({ go: goTo } = {}) {
     if (r) { range = r.dataset.range; paint(); return; }
     const cf = event.target.closest("[data-chainf]");
     if (cf) { chainF = cf.dataset.chainf; paint(); return; }
+    const nb = event.target.closest("[data-narr]");
+    if (nb) {
+      const key = nb.dataset.narr;
+      const next = narratives.chosen();
+      if (next.has(key)) next.delete(key); else next.add(key);
+      narratives.saveNarratives([...next]).catch((err) => alert(err.message));
+      return;
+    }
     if (event.target.closest("[data-hidden]")) { showHidden = !showHidden; paint(); return; }
     if (event.target.closest("[data-more-pos]")) { showAllPos = !showAllPos; paint(); return; }
     const t = event.target.closest("[data-tab]");

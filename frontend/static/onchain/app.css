@@ -940,3 +940,29 @@ html, body { overflow-x: clip; }
     .ag-orb span, .ag-orb i, .ag-card.is-new, .ag-steps li { animation: none !important; }
   }
 }
+/* Narratives: pick them in the profile, filter Top and alerts (narratives.js). */
+@layer skin {
+  .pf-nbox { margin-top: 14px;
+    & summary { padding: 10px 0; font: 600 14px var(--sans); color: var(--k-text-2); cursor: pointer; list-style: none; }
+    & summary::-webkit-details-marker { display: none; }
+    & summary::after { content: "▾"; margin-inline-start: 6px; color: var(--k-text-3); }
+    &[open] summary::after { content: "▴"; } }
+  .pf-narr { display: grid; gap: 12px; margin-top: 4px; }
+  .pf-ngroup h4 { margin: 0 0 6px; font: 600 12px var(--sans); letter-spacing: .06em; text-transform: uppercase; color: var(--k-text-3); }
+  .pf-nchips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .pf-nchip { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border: 1px solid rgb(255 255 255 / .12);
+    border-radius: 999px; background: #111114; color: var(--k-text-2); font: 600 16px var(--sans); cursor: pointer;
+    & small { font: 600 12px var(--sans); color: var(--k-text-3); font-variant-numeric: tabular-nums; }
+    &[aria-pressed="true"] { background: #1e2140; color: #8b95ff; border-color: rgb(139 149 255 / .4); }
+    &[aria-pressed="true"] small { color: #8b95ff; }
+    &[data-empty="true"] small { opacity: .5; } }
+  .pf-note { margin: 0; font-size: 12.5px; color: var(--k-text-3); }
+  .top-mine { display: flex; margin: 4px 0 8px; }
+  .top-mine-chip { padding: 8px 14px; border: 1px solid rgb(255 255 255 / .12); border-radius: 999px; background: #111114;
+    color: var(--k-text-2); font: 600 16px var(--sans); cursor: pointer;
+    &[aria-pressed="true"] { background: #1e2140; color: #8b95ff; border-color: rgb(139 149 255 / .4); } }
+  .alerts-mine { display: flex; margin: 4px 0 8px; }
+  .alerts-mine-chip { padding: 8px 14px; border: 1px solid rgb(255 255 255 / .12); border-radius: 999px; background: #111114;
+    color: var(--k-text-2); font: 600 16px var(--sans); cursor: pointer;
+    &[aria-pressed="true"] { background: #1e2140; color: #8b95ff; border-color: rgb(139 149 255 / .4); } }
+}

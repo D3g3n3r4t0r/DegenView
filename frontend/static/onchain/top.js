@@ -11,6 +11,7 @@
 import * as api from "@onchain/api.js";
 import { register } from "@onchain/detail.js";
 import { isHidden, onHiddenChange, withEntrance } from "@onchain/hidden.js";
+import * as narratives from "@onchain/narratives.js";
 import { escapeHtml, tile, tokenRow } from "@onchain/format.js";
 import { renderPodium } from "@onchain/podium.js";
 
@@ -20,6 +21,7 @@ const SIZES = [15, 25, 50];
 let root = null;
 let size = 15;
 let entries = [];
+let mine = false;
 
 function read() { try { return Number(localStorage.getItem("lae:top")) || 15; } catch { return 15; } }
 function write(n) { try { localStorage.setItem("lae:top", String(n)); } catch { /* private mode */ } }
@@ -29,7 +31,16 @@ function paint() {
   delete root.dataset.loading;
   root.querySelector("[data-top-size]").innerHTML = SIZES.map((n) =>
     `<button type="button" data-size="${n}" aria-pressed="${n === size}">Top ${n}</button>`).join("");
-  const rows = entries.filter((e) => !isHidden(e.chain, e.token_address)).slice(0, size);
+  const chosen = narratives.chosen();
+  const showToggle = chosen.size > 0;
+  const toggle = root.querySelector("[data-top-mine]");
+  if (toggle) {
+    toggle.hidden = !showToggle;
+    toggle.setAttribute("aria-pressed", String(mine));
+  }
+  let pool = entries.filter((e) => !isHidden(e.chain, e.token_address));
+  if (mine && showToggle) pool = pool.filter((e) => narratives.matchesNarrative(e));
+  const rows = pool.slice(0, size);
   // The podium is the first three of the same ranking (Lorenzo, 27/09: "il
   // podio ha senso soltanto per le gemme"): no separate board order.
   let podium = root.querySelector("[data-top-podium]");
@@ -54,7 +65,7 @@ function paint() {
     return tokenRow({ id, symbol: e.symbol, name: `${i + 1}. ${e.name || e.symbol}`, chain: e.chain, token: e.token_address,
       image: e.image, cap: e.market_cap, change: e.change_24h != null ? e.change_24h / 100 : null, ageTs: e.launched_at,
       score: e.score, badge: e.early ? "early" : null });
-  }).join("") : `<li class="muted pad">The board is filling up: projects appear as they pass the checks.</li>`;
+  }).join("") : `<li class="muted pad">${mine && showToggle ? "No token in your narratives yet: the scanner is looking." : "The board is filling up: projects appear as they pass the checks."}</li>`;
   });
   root.querySelector("[data-top-note]").textContent = "";
 }
@@ -72,7 +83,18 @@ export function mountTop() {
   root = document.getElementById("top-picks");
   if (!root) return;
   size = SIZES.includes(read()) ? read() : 15;
+  mine = narratives.mineOnly();
+  const bar = document.createElement("div");
+  bar.className = "top-mine";
+  bar.innerHTML = `<button type="button" class="top-mine-chip" data-top-mine aria-pressed="false" hidden>My narratives</button>`;
+  root.insertBefore(bar, root.firstChild);
   root.addEventListener("click", (event) => {
+    if (event.target.closest("[data-top-mine]")) {
+      mine = !mine;
+      narratives.setMineOnly(mine);
+      paint();
+      return;
+    }
     const b = event.target.closest("[data-size]");
     if (!b) return;
     size = Number(b.dataset.size);
@@ -80,6 +102,8 @@ export function mountTop() {
     paint();
   });
   onHiddenChange(paint);
+  narratives.onNarrativesChange(() => { mine = narratives.mineOnly(); paint(); });
+  narratives.loadNarratives().then(() => paint(), () => {});
   load();
   setInterval(() => document.visibilityState === "visible" && load(), POLL_MS);
 }

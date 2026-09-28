@@ -102,6 +102,7 @@ const SCAN_FORM = `<form class="scan-form" data-scan-form role="search">
   <button type="submit" aria-label="Scan"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg></button></form>`;
 
 import { isHidden, onHiddenChange, withEntrance } from "@onchain/hidden.js";
+import * as narratives from "@onchain/narratives.js";
 
 function paintFeed() {
   const root = document.getElementById("meme-alerts");
@@ -115,8 +116,17 @@ function paintFeed() {
   // che sta ritornando in moda". One line per token; the numbers are on its
   // page. Rugs and alerts older than 48h leave this list (the Strategies
   // hall of fame keeps them).
-  const nSoon = (d?.upcoming ?? []).filter((u) => !u.token_address || !isHidden(u.chain, u.token_address)).length;
-  const soon = (d?.upcoming ?? []).filter((u) => !u.token_address || !isHidden(u.chain, u.token_address)).map((u) => `<li class="soon" data-stage="${u.stage}">
+  const chosen = narratives.chosen();
+  const showToggle = chosen.size > 0;
+  const mine = showToggle && narratives.mineOnly();
+  const toggle = root.querySelector("[data-alerts-mine]");
+  if (toggle) {
+    toggle.hidden = !showToggle;
+    toggle.setAttribute("aria-pressed", String(mine));
+  }
+  const keep = (u) => (!u.token_address || !isHidden(u.chain, u.token_address)) && (!mine || narratives.matchesNarrative(u));
+  const nSoon = (d?.upcoming ?? []).filter(keep).length;
+  const soon = (d?.upcoming ?? []).filter(keep).map((u) => `<li class="soon" data-stage="${u.stage}">
       <span class="soon-dot" aria-hidden="true"></span>
       <span class="trow-main"><b>${escapeHtml(u.symbol)} <em class="soon-tag">${u.stage === "imminent" ? "IMMINENT" : "CHECKING"}</em></b>
       <small>${escapeHtml(u.chain)} · ${escapeHtml(u.waiting_for)} · seen ${age(u.since)[0]} ago</small></span></li>`).join("");
