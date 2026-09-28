@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0219", "Nessun alert meme su Telegram da giorni",
+     "Lorenzo, 28/09: 'comunque non sta arrivando neanche un alert', 'da giorni'",
+     "alta"),
     ("seed-0218", "Barra di avanzamento per studi e ticker da scansionare",
      "Lorenzo, 28/09: 'aggiungiamo una barra di progressione per gli studi effettuati e quanti ticker mancano da scansionare e studiare'",
      "media"),

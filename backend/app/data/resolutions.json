@@ -2277,5 +2277,10 @@
     "status": "risolto",
     "at": 1790629354,
     "summary": "Nella tab Agent, sotto DeepSeek, quattro righe: backtest sniper fatti su totale, backtest gemme della Top, token studiati dal laboratorio su quelli maturi, e quanti token sono in coda da scansionare. Le barre crescono animate e si aggiornano ogni 10 secondi."
+  },
+  "seed-0219": {
+    "status": "risolto",
+    "at": 1790631011,
+    "summary": "Lo scanner vedeva migliaia di pool ma il filtro teneva fermo ogni token finche' non trovava un GitHub: i meme non ce l'hanno quasi mai, quindi scadevano dopo 2 ore senza alert. Per lo sniper meme il GitHub non e' piu' obbligatorio (resta nella pagella e resta richiesto per gemme ed eccezioni); sicurezza, sito, social e memoria dei rug restano uguali."
   }
 }
