@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0211", "Le narrative che avevo chiesto non si vedono nell'app",
+     "Lorenzo: 'Un'altra cosa importante che avevo fatto a fare a Claude in un'altra chat era quella delle narrative, che non vedo pero' svolta'.",
+     "media"),
     ("seed-0210", "CERT passa da +64% a OUT, Matrix e NYMA tornano 'in arrivo'",
      "Lorenzo, 28/09: 'deve rimanere tutto salvato in database per la parte di backtest. e memorizzato, non deve cambiare ogni volta risultato e perdere i precedenti' e 'PRIORITA MASSIMA E ATTENZIONE MASSIMA'.",
      "alta"),
