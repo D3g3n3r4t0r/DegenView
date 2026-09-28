@@ -347,6 +347,7 @@ async function load() {
     if (seq !== loadSeq || mode !== api.walletMode()) return;
     byMode[mode] = p;
     data = p;
+    delete root.dataset.switching;
     paint();
   } catch (err) {
     if (seq !== loadSeq || mode !== api.walletMode()) return;
@@ -358,7 +359,11 @@ async function load() {
 function switchWallet(mode) {
   api.setWalletMode(mode);
   if (byMode[mode]) { data = byMode[mode]; paint(); }
-  else { data = null; paint(); }
+  else {
+    // Nothing cached yet: flip the buttons and dim the numbers until it lands.
+    root.querySelectorAll("[data-wallet]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.wallet === mode)));
+    root.dataset.switching = "";
+  }
   load();
 }
 
