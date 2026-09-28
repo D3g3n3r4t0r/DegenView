@@ -75,11 +75,11 @@ def test_sim_buys_the_share_then_sells_when_the_system_leaves():
     assert rows[0]["side"] == "sell" and rows[0]["why"] == "system sold" and tr.view("u1")["position"] is None
 
 
-def test_old_buy_signal_is_not_chased_and_off_means_no_entries():
-    _alert(in_at=T0 - tr.FRESH_S - 60)
+def test_old_alert_is_not_chased_and_off_means_no_entries():
+    _alert()                                     # alerted at T0 - 600
     tr.configure("u1", "sim", 100, usdg_now=10.0)
-    assert asyncio.run(tr.tick([USER], now=T0, market=_market())) == []
-    _alert(sym="NEW", in_at=T0)
+    assert asyncio.run(tr.tick([USER], now=T0 + tr.FRESH_S, market=_market())) == []
+    _alert(sym="NEW")
     tr.configure("u1", "off")
     assert asyncio.run(tr.tick([USER], now=T0 + 10, market=_market())) == []
 
@@ -154,11 +154,30 @@ def test_real_buy_converts_usdc_to_usdg_first_and_sells_back_to_usdc():
     assert rows[0]["ok"] and rows[0]["via"] == ["USDG→USDC"] and swaps[-1]["token_out"] == USDC
 
 
-def test_sim_cash_is_usdc_round_trip():
-    a = _alert()
+def test_sim_follows_every_alert_on_every_chain_with_the_backtest_trade():
+    """Lorenzo, 28/09: "il wallet simulato non sembra replicare gli ingressi
+    [...] voglio che li segua". Each alert gets its share; the result is the
+    Strategies tab's trade on it."""
+    a = _alert(sym="FROG")
+    b = at.record({"chain": "solana", "pair_address": "PS", "token_address": "SOL1", "symbol": "SOLY"}, "meme", T0 - 300)
+    b["alert_bt"] = {LABEL: {"state": "in", "in_at": T0 - 300, "events": [{"side": "buy"}], "ret": 0}}
+    tr.configure("u1", "sim", 25, usdg_now=100.0)
+    rows = asyncio.run(tr.tick([USER], now=T0))
+    assert [(r["symbol"], r["usdg"]) for r in rows] == [("FROG", 25.0), ("SOLY", 25.0)]
+    assert len(tr.view("u1")["positions"]) == 2
+    b["alert_bt"][LABEL].update(ret=0.5)
+    a["alert_bt"][LABEL] = {"state": "out", "ret": -0.2, "events": [{"side": "buy"}, {"side": "sell", "why": "signal"}]}
+    rows = asyncio.run(tr.tick([USER], now=T0 + 60))
+    assert rows[0]["side"] == "sell" and rows[0]["usdg"] == pytest.approx(20.0) and rows[0]["why"] == "system sold"
+    v = tr.view("u1")
+    assert v["sim"]["equity"] == pytest.approx(50 + 20 + 37.5) and v["positions"][0]["symbol"] == "SOLY"
+    # no repeat entries, and at 100% one open trade takes all the cash
+    assert asyncio.run(tr.tick([USER], now=T0 + 120)) == []
+
+
+def test_all_cash_in_open_trades_is_said():
+    _alert(sym="ONE")
+    _alert(sym="TWO")
     tr.configure("u1", "sim", 100, usdg_now=10.0)
-    asyncio.run(tr.tick([USER], now=T0 + 60, market=_cash_market()))
-    assert tr.view("u1")["sim"]["usdg"] == pytest.approx(0.0, abs=1e-5)
-    a["alert_bt"][LABEL] = {"state": "out", "events": [{"side": "sell"}]}
-    rows = asyncio.run(tr.tick([USER], now=T0 + 120, market=_cash_market()))
-    assert rows[0]["via"] == ["USDG→USDC"] and tr.view("u1")["sim"]["usdg"] > 0
+    rows = asyncio.run(tr.tick([USER], now=T0))
+    assert rows[0]["ok"] and not rows[1]["ok"] and "all cash" in rows[1]["reason"]
