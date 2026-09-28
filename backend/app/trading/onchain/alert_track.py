@@ -376,8 +376,6 @@ async def refresh_system(client, now: float | None = None, gap_s: float = 0.0) -
     from the minute readings. Results are recomputed when the bars change;
     once the window is over the result is frozen and the bars dropped."""
     from app.providers.dexscreener import gecko_urgent
-    from app.sniper.scanner import GECKO_NETWORKS
-    from app.trading.onchain import outcomes, system
     now = now or time.time()
     urgent = backtest_status("meme", now=now)["pending"] > 0
     token = gecko_urgent.set(True) if urgent else None
