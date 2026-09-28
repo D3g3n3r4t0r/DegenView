@@ -2282,5 +2282,10 @@
     "status": "risolto",
     "at": 1790631011,
     "summary": "Lo scanner vedeva migliaia di pool ma il filtro teneva fermo ogni token finche' non trovava un GitHub: i meme non ce l'hanno quasi mai, quindi scadevano dopo 2 ore senza alert. Per lo sniper meme il GitHub non e' piu' obbligatorio (resta nella pagella e resta richiesto per gemme ed eccezioni); sicurezza, sito, social e memoria dei rug restano uguali."
+  },
+  "seed-0220": {
+    "status": "risolto",
+    "at": 1790632287,
+    "summary": "Per gli alert meme su Telegram il voto di DeepSeek sul sito ora decide: sotto 6/10 o giudicato non legittimo (meme senza utilita', pagina modello) l'alert non parte. Se DeepSeek non risponde il token aspetta e si riprova, non passa."
   }
 }
