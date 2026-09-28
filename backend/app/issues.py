@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0212", "Le gemme devono mostrare il trend follower sul giornaliero, non la strategia al minuto",
+     "Lorenzo, 28/09: 'la strategia da applicare non e' quella sul minuto ma ovviamente il trend follower originario del sito nostro, quindi sul time frame giornaliero, solitamente quello, al massimo 8 ore [...] quella rapida e' esclusivamente per lo sniper'.",
+     "alta"),
     ("seed-0211", "Le narrative che avevo chiesto non si vedono nell'app",
      "Lorenzo: 'Un'altra cosa importante che avevo fatto a fare a Claude in un'altra chat era quella delle narrative, che non vedo pero' svolta'.",
      "media"),
