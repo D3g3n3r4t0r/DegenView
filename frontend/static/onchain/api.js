@@ -115,6 +115,7 @@ export const getRadar = () => request("/api/onchain/radar");
 export const getLeaderboard = () => request("/api/onchain/leaderboard");
 export const getAlerts = (kind) => request(`/api/onchain/alerts/${kind}`);
 export const getAutotrader = () => request("/api/onchain/autotrader");
+export const getAgentLog = (before) => request(`/api/agent/log?limit=60${before ? `&before=${before}` : ""}`);
 /* Which wallet the profile and the header show: the real ones or the
  * autotrader's simulated one. A per-device choice. */
 export const walletMode = () => { try { return localStorage.getItem("lae:wallet") === "sim" ? "sim" : "real"; } catch { return "real"; } };
