@@ -26,6 +26,7 @@ import asyncio
 import json
 import logging
 import math
+import os
 import time
 
 import httpx
@@ -84,7 +85,9 @@ def save() -> None:
         for k in sorted(_alerts, key=lambda k: _alerts[k]["at"])[:len(_alerts) - KEEP]:
             del _alerts[k]
     try:
-        _STORE_FILE.write_text(json.dumps({"alerts": _alerts}, ensure_ascii=False), encoding="utf-8")
+        tmp = _STORE_FILE.with_suffix(_STORE_FILE.suffix + ".tmp")
+        tmp.write_text(json.dumps({"alerts": _alerts}, ensure_ascii=False), encoding="utf-8")
+        os.replace(tmp, _STORE_FILE)
     except OSError:
         pass
 
@@ -96,7 +99,9 @@ def save_bars(now: float | None = None, force: bool = False) -> None:
     _state["bars_saved_at"] = now
     live = {k: v for k, v in _bars.items() if k in _alerts}
     try:
-        _BARS_FILE.write_text(json.dumps(live, separators=(",", ":")), encoding="utf-8")
+        tmp = _BARS_FILE.with_suffix(_BARS_FILE.suffix + ".tmp")
+        tmp.write_text(json.dumps(live, separators=(",", ":")), encoding="utf-8")
+        os.replace(tmp, _BARS_FILE)
     except OSError:
         pass
 
@@ -373,6 +378,8 @@ async def refresh_system(client, now: float | None = None, gap_s: float = 0.0) -
         if a.get("system_done"):
             continue
         k = key_of(a)
+        if a.get("bars_fetched") and not a.get("system_done") and not _bars.get(k):
+            a["bars_fetched"] = False        # bars lost: fetch the candles again
         if not a.get("bars_fetched") and fetched < SYSTEM_FETCHES_PER_TICK:
             net = GECKO_NETWORKS.get(a["chain"])
             past = now >= a["at"] + system.WINDOW_S

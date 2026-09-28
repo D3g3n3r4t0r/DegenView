@@ -138,3 +138,37 @@ def test_a_sell_on_a_normal_turn_is_a_signal(monkeypatch):
     monkeypatch.setattr(system.radar, "spot_signals", _signals({40}, {44}))
     r = system.follow(_bars(prices), system.CANDIDATES[0], T0, now=T0 + 8 * B)
     assert [e for e in r["events"] if e["side"] == "sell"][0]["why"] == "signal"
+def test_save_and_load_round_trip_leaves_no_tmp(monkeypatch, tmp_path):
+    monkeypatch.setattr(at, "_STORE_FILE", tmp_path / "a.json")
+    monkeypatch.setattr(at, "_BARS_FILE", tmp_path / "b.json")
+    at.reset_for_tests()
+    a = at.record({"chain": "robinhood", "pair_address": "P", "token_address": "T", "symbol": "X"}, "meme", T0)
+    k = at.key_of(a)
+    at.merge_bars(k, _bars([1.0] * 50))
+    at.save()
+    at.save_bars(now=T0, force=True)
+    at.reset_for_tests()
+    at._load()
+    assert k in at._alerts and at._alerts[k]["symbol"] == "X"
+    assert len(at._bars[k]) == 50
+    assert not (tmp_path / "a.json.tmp").exists()
+    assert not (tmp_path / "b.json.tmp").exists()
+    at.reset_for_tests()
+
+
+def test_missing_bars_are_fetched_again(monkeypatch, tmp_path):
+    monkeypatch.setattr(at, "_STORE_FILE", tmp_path / "a.json")
+    monkeypatch.setattr(at, "_BARS_FILE", tmp_path / "b.json")
+    at.reset_for_tests()
+    a = at.record({"chain": "robinhood", "pair_address": "P", "token_address": "T", "symbol": "X"}, "meme", T0)
+    a.update(bars_fetched=True, system_done=False)
+    calls = []
+
+    async def fake_candles(*args, **kw):
+        calls.append(args)
+        return _bars([1.0] * 50)
+    monkeypatch.setattr(at, "_candles", fake_candles)
+    monkeypatch.setattr(system.radar, "spot_signals", _signals(set(), set()))
+    asyncio.run(at.refresh_system(None, now=T0 + 2 * B, gap_s=0))
+    assert calls and a["bars_fetched"] and at._bars.get(at.key_of(a))
+    at.reset_for_tests()
