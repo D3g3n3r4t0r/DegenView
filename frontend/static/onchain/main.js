@@ -28,7 +28,8 @@ import { mountLeaderboard } from "@onchain/leaderboard.js";
 import { mountProjects } from "@onchain/projects.js";
 import { mountAlerts, openInbox } from "@onchain/alerts.js";
 import { mountAutotrade } from "@onchain/autotrade.js";
-import { mountProfile, refreshProfile } from "@onchain/profile.js";
+import { mountProfile, phantomAnswer, refreshProfile } from "@onchain/profile.js";
+import * as phantom from "@onchain/phantomlink.js";
 import { loadLinked } from "@onchain/userswap.js";
 import { mountMemes } from "@onchain/memes.js";
 import { mountAgent } from "@onchain/agent.js";
@@ -644,6 +645,16 @@ mountAlerts();
 mountAutotrade();
 mountProfile({ go: (v) => setView(v) });
 loadLinked();
+// Back from Phantom (phantomlink.js): its answer is in this page's URL.
+phantom.takeAnswer().then(async (ans) => {
+  if (!ans || await phantomAnswer(ans)) return;
+  if (ans.error) { toast("Phantom", ans.error); return; }
+  if (ans.op === "connect") { toast("Phantom connected", "tap Buy or Sell again to sign"); return; }
+  if (ans.op === "signAndSendTransaction") {
+    toast(`${ans.pending?.symbol || "Swap"} sent`, `signature ${ans.data.signature.slice(0, 8)}… on Solscan`);
+    refreshProfile();
+  }
+});
 // Picks (memes.js) retired: Lorenzo wants no meme coins promoted; Top replaces it.
 mountAgent();
 mountTop();
