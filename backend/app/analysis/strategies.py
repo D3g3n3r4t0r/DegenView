@@ -396,6 +396,16 @@ LORENZO_HF_DEFAULT_PARAMS = {
 }
 
 
+# Lorenzo HF is meant for pools a few minutes old: its filters work on the
+# history there is, from HF_MIN_BARS candles on, instead of waiting for their
+# full windows (the variance ratio wanted 60 five-minute bars, 5 hours).
+# Lorenzo, 28/09: "quando parte l'alert voglio che la strategia sia subito
+# operativa [...] deve entrare con i criteri della strategia, sempre". On
+# fresh pools it was blind for hours: 0 entries out of 20 synthetic pumps
+# starting at the alert, against 20/20 on older pools.
+HF_MIN_BARS = 10
+
+
 def compute_lorenzo_hf_signals(df: pd.DataFrame, params: dict | None = None) -> pd.DataFrame:
     p = {**LORENZO_HF_DEFAULT_PARAMS, **(params or {})}
     close, high, low, volume = df["close"], df["high"], df["low"], df["volume"]
@@ -410,7 +420,7 @@ def compute_lorenzo_hf_signals(df: pd.DataFrame, params: dict | None = None) -> 
     ok = fast > slow
     k = float(p["slope_threshold_sigma"] or 0.0)
     if k > 0:
-        sigma = slope.rolling(int(p["slope_sigma_length"]), min_periods=int(p["slopeSlen"])).std(ddof=0)
+        sigma = slope.rolling(int(p["slope_sigma_length"]), min_periods=min(int(p["slopeSlen"]), HF_MIN_BARS)).std(ddof=0)
         ok &= fast > k * sigma
     if p["vwap_filter"]:
         typical = (high + low + close) / 3
@@ -429,8 +439,8 @@ def compute_lorenzo_hf_signals(df: pd.DataFrame, params: dict | None = None) -> 
     if p["vr_min"] and p["vr_min"] > 0:
         n, q = int(p["vr_len"]), 4
         log_c = np.log(close.where(close > 0))
-        var_1 = log_c.diff().rolling(n).var()
-        var_q = log_c.diff(q).rolling(n).var()
+        var_1 = log_c.diff().rolling(n, min_periods=min(n, HF_MIN_BARS)).var()
+        var_q = log_c.diff(q).rolling(n, min_periods=min(n, HF_MIN_BARS)).var()
         ok &= var_q / (q * var_1.where(var_1 > 0)) >= p["vr_min"]
 
     prev_close = close.shift(1)
@@ -444,7 +454,7 @@ def compute_lorenzo_hf_signals(df: pd.DataFrame, params: dict | None = None) -> 
     xo, xu = crossover.fillna(False).to_numpy(), crossunder.fillna(False).to_numpy()
     close_a, high_a = close.to_numpy(), high.to_numpy()
     trail = float(p["trail_atr"] or 0.0)
-    warmup = int(p["slopeSlen"])
+    warmup = min(int(p["slopeSlen"]), HF_MIN_BARS)
     n_bars = len(df)
     entry = np.zeros(n_bars, dtype=bool)
     exit_ = np.zeros(n_bars, dtype=bool)
