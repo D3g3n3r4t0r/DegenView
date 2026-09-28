@@ -733,7 +733,7 @@ async def ai_review(token: dict, site: dict, links: dict) -> dict | None:
     return out
 
 
-def judge_ai(review: dict | None) -> dict:
+def judge_ai(review: dict | None, gate: bool = False) -> dict:
     by = "DeepSeek" if (review or {}).get("by") == "deepseek" else "Claude"
     label = f"{by} on the site"
     if review is None:
@@ -742,7 +742,7 @@ def judge_ai(review: dict | None) -> dict:
         return _check("ai", label, None, review["error"])
     ok = bool(review.get("legit")) and review["score"] >= AI_SCORE_MIN
     detail = f"{review['score']}/10 · {review.get('reason', '')}".strip(" ·")
-    if by == "DeepSeek" and not settings.legit_ai_gate:
+    if by == "DeepSeek" and not (settings.legit_ai_gate or gate):
         # In the shadow until its record earns it the gate (DEEPSEEK.md).
         # No score either: a shadow verdict must not move the report card.
         return _check("ai", label, None, f"{detail} (not blocking yet)", None,
@@ -753,14 +753,18 @@ def judge_ai(review: dict | None) -> dict:
 # ----------------------------------------------------------------- insieme
 
 async def assess(token: dict, links: dict, client: httpx.AsyncClient, *,
-                 need_github: bool = True) -> dict:
+                 need_github: bool = True, ai_gate: bool = False) -> dict:
     """token: chain, symbol, name, token_address (+ market_cap, liquidity_usd
     per il prompt). links: {websites, socials}.
 
     need_github=False (meme sniper): un GitHub assente o che non risponde non
     blocca piu' in "wait", si prosegue verso la revisione IA. Un GitHub
     presente ma insufficiente (ok is False) fallisce comunque, e le eccezioni
-    GitHub continuano a richiederlo."""
+    GitHub continuano a richiederlo.
+
+    ai_gate=True (meme sniper): il verdetto DeepSeek decide, non e' piu' in
+    ombra. Un DeepSeek irraggiungibile (review con "error") ferma in "wait"
+    invece di proseguire; review None (nessuna chiave) resta non attiva."""
     chain = token.get("chain")
     website = pick_website(links.get("websites") or [])
     socials = [s for s in links.get("socials") or [] if s.get("type") in _SOCIAL_TYPES]
@@ -838,7 +842,9 @@ async def assess(token: dict, links: dict, client: httpx.AsyncClient, *,
 
     review = await ai_review(token, site, {"socials": socials, "github_detail": gh["detail"]})
     out["ai"] = review
-    ai = judge_ai(review)
+    if ai_gate and review is not None and review.get("error"):
+        return done("wait", "AI review unavailable")
+    ai = judge_ai(review, gate=ai_gate)
     out["checks"].append(ai)
     if ai["ok"] is False:
         return done("fail", f"{ai['label'].split()[0]}: {review.get('reason') or 'not convincing'}")

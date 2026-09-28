@@ -394,7 +394,7 @@ async def _vet(k: str, pending: _Pending, item: dict, pair: dict) -> dict | None
                 try:
                     verdict = await legit.assess(
                         item, legit.merge_links(pending.links, legit.links_from_dexscreener(pair)), client,
-                        need_github=False)
+                        need_github=False, ai_gate=True)
                 finally:
                     if client is not _http:
                         await client.aclose()
