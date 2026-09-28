@@ -206,8 +206,14 @@ def test_fatal_pillar_excludes_for_good():
 
 def test_weak_pillar_and_gem_rule():
     assert lb.qualifies(_entry("WEAK", 90, 20, 90, age_days=16, source="radar")).startswith("site")
-    assert "100k" in lb.qualifies(_entry("MID", 84, 90, 90, cap=500_000, age_days=16, source="radar"))
+    admitted = _entry("ADM", 90, 20, 90, age_days=16, source="radar")
+    admitted["judge"] = {"score": 85, "verdict": "gem", "confidence": 0.8}
+    assert lb.qualifies(admitted) == ""
+    assert "100k" in lb.qualifies(_entry("MID", 60, 60, 60, cap=500_000, age_days=16, source="radar"))
     assert lb.qualifies(_entry("GEM", 88, 90, 90, cap=500_000, age_days=16, source="radar")) == ""
+    vetoed = _entry("SCAM", 90, 90, 90, age_days=16, source="radar")
+    vetoed["judge"] = {"score": 20, "verdict": "scam", "confidence": 0.9, "problems": ["x"]}
+    assert lb.qualifies(vetoed).startswith("DeepSeek")
 
 
 def test_exception_uses_the_radar_rule():

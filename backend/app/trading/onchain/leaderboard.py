@@ -46,7 +46,7 @@ import time
 import httpx
 
 from app.sniper.quality import _looks_like_meme
-from app.trading.onchain import (benchmark, depth, discovery, gem_track, legit, narratives, projects_db, radar,
+from app.trading.onchain import (benchmark, depth, discovery, gem_track, judge, legit, narratives, projects_db, radar,
                                   research, storage, traction)
 
 logger = logging.getLogger(__name__)
@@ -77,6 +77,12 @@ SIMILARITY_WEIGHT = 0.30
 TRACTION_WEIGHT = 0.10
 VALUE_WEIGHT = 0.05
 MIN_PILLAR = 35                    # sotto, un pilastro e' troppo debole per stare in classifica
+# Sopra i $100k non servono piu' tutti i pilastri eccellenti: basta il
+# punteggio finale (Lorenzo, 28/09: "sta cosa dei pilastri a 85 va
+# migliorata"). Il giudice di DeepSeek puo' ammettere chi le regole
+# escludono, o bocciare chi passa.
+BIG_MIN_SCORE = 80
+JUDGE_WEIGHT = 0.5
 # Progetti trovati dallo scan dedicato (discovery): l'eta' conta poco, la cap
 # si' ("sotto 2-3 milioni, non oltre"), e la qualita' deve essere vera.
 SERIOUS_SOURCES = ("coingecko", "dexscreener", "github", "reference", "jupiter", "defillama")
@@ -362,6 +368,15 @@ async def _analyze(k: str, skip: set[str], client: httpx.AsyncClient) -> None:
                     "finalist": not research_floor(e)}
             result = await depth.analyze(item, client, skip=skip)
         apply_analysis(k, result)
+        e = _entries.get(k)
+        if e is not None:
+            o = e.get("overall") or {}
+            if not o.get("pending") and not o.get("fatal"):
+                j = await judge.judge(e, qualifies(e))
+                if j:
+                    e["judge"] = j
+                    _remember(e, "ranked" if e.get("rank") else "studied", qualifies(e), time.time())
+                    _mark()
     except Exception:
         logger.exception("classifica: analisi fallita su %s", k)
     finally:
@@ -416,8 +431,12 @@ def qualifies(e: dict, now: float | None = None) -> str:
     need = [k for k in depth.WEIGHTS if not (closed and k == "github")]
     if any((pillars.get(k) or {}).get("score") is None for k in need):
         return "incomplete analysis"
+    j = e.get("judge") or {}
+    if j.get("verdict") in ("avoid", "scam") and (j.get("confidence") or 0) >= judge.VETO_MIN_CONF:
+        return f"DeepSeek: {(j.get('problems') or [j['verdict']])[0]}"
+    admitted = j.get("verdict") in ("gem", "watch") and (j.get("score") or 0) >= judge.ADMIT_MIN
     weak = [k for k in need if pillars[k]["score"] < (NO_GITHUB_MIN_PILLAR[k] if closed else MIN_PILLAR)]
-    if weak:
+    if weak and not admitted:
         return f"{weak[0]} too weak ({pillars[weak[0]]['score']})"
     if e.get("source") in SERIOUS_SOURCES:
         return _serious_shortfall(e, pillars, now)
@@ -435,8 +454,8 @@ def qualifies(e: dict, now: float | None = None) -> str:
             return f"radar exception, but deep GitHub score only {pillars['github']['score']}"
         return ""
     cap = float(e.get("market_cap") or 0)
-    if cap > legit.GEM_CAP_USD and any(pillars[k]["score"] < legit.GEM_MIN_SCORE for k in need):
-        return "above $100k without excellent pillars"
+    if cap > legit.GEM_CAP_USD and final_score(e) < BIG_MIN_SCORE and not admitted:
+        return f"above $100k with score {round(final_score(e))} (needs {BIG_MIN_SCORE})"
     return ""
 
 
@@ -500,7 +519,11 @@ def final_score(e: dict) -> float:
     use = traction_of(e)
     if use:
         base += TRACTION_WEIGHT * use["traction"] + VALUE_WEIGHT * (use["value"] or 0)
-    return round(max(0.0, min(100.0, base + narratives.bonus(e.get("narratives") or []))), 1)
+    rules = round(max(0.0, min(100.0, base + narratives.bonus(e.get("narratives") or []))), 1)
+    j = e.get("judge") or {}
+    if j.get("score") is not None:
+        return round(max(0.0, min(100.0, (1 - JUDGE_WEIGHT) * rules + JUDGE_WEIGHT * j["score"])), 1)
+    return rules
 
 
 def traction_of(e: dict) -> dict | None:
@@ -552,7 +575,9 @@ def _public(e: dict) -> dict:
     return {**{k: e.get(k) for k in keep}, "exception": is_big(e) and not top, "score": final_score(e),
             "similarity": e.get("similarity"), "benchmark": top, "early": is_early(e), "price_usd": e.get("price_usd"),
             "narratives": narratives.labels(e.get("narratives") or []), "closed_source": no_github(e),
-            **_research_public(e), "honor": benchmark.HONOR if top else None, "traction": traction_of(e)}
+            **_research_public(e), "honor": benchmark.HONOR if top else None, "traction": traction_of(e),
+            "judge": {k: (e.get("judge") or {}).get(k)
+                      for k in ("score", "verdict", "problems", "strengths", "admit_reason")} if e.get("judge") else None}
 
 
 def _research_public(e: dict) -> dict:
@@ -596,6 +621,7 @@ def board() -> dict:
                   "traction_weight": TRACTION_WEIGHT, "value_weight": VALUE_WEIGHT,
                   "early_cap_usd": EARLY_CAP_USD, "early_min_pillar": EARLY_MIN_PILLAR, "early_min_score": EARLY_MIN_SCORE, "benchmark": benchmark.NAME, "min_pillar": MIN_PILLAR, "gem_cap_usd": legit.GEM_CAP_USD,
                   "gem_min_score": legit.GEM_MIN_SCORE, "cap_max_usd": CAP_MAX_USD, "max_age_days": MAX_AGE_DAYS,
+                  "big_min_score": BIG_MIN_SCORE, "judge_weight": JUDGE_WEIGHT,
                   "exception_cap_usd": radar.EXC_MCAP_MAX_USD, "exception_age_days": radar.EXC_AGE_MAX_DAYS},
     }
 
