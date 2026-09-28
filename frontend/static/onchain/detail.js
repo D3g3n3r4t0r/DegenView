@@ -504,6 +504,9 @@ function withLab(e) {
 }
 
 function tradesOf(a) {
+  // An alert: its one trade, in at the alert and out on the trend follower's
+  // exit (Lorenzo, 28/09: "troppi ingressi"), not the re-entering backtest.
+  if (a.on_alert?.events?.length) return a.on_alert.events;
   const best = a.backtests?.best?.events;
   return best?.length ? best : bestSystem(a)?.events ?? [];
 }

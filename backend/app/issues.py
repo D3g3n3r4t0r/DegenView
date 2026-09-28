@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0215", "Troppi ingressi sul grafico del token sniper (NYMA)",
+     "Lorenzo, 28/09: 'troppi ingressi, ma sicuro che sia un trend follower decente?'",
+     "alta"),
     ("seed-0214", "Sniper: entrare all'alert e chiudere solo con la regola del trend follower",
      "Lorenzo, 28/09: 'sugli sniper dobbiamo far si' che la strategia entri nel momento in cui viene fatto l'avviso [...] arriva l'alert su Telegram, la strategia deve entrare in quel momento. Poi deve gestire esclusivamente la chiusura secondo la classica regola del trend follower.'",
      "alta"),
