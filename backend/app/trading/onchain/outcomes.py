@@ -507,6 +507,9 @@ WIN_KEYS = ("mcap", "liq", "liq_mcap", "age_h") + FACT_KEYS + MARKET_KEYS + CHEC
 LOG_KEYS = {"mcap", "liq", "age_h", "vol_h1", "buys_h1", "sells_h1", "tx_h1", "avg_trade", "turnover"}
 
 
+Z_CLIP = 3.0
+
+
 def _matrix(rows: list[dict], means: dict | None = None,
             keys: tuple = MODEL_KEYS) -> tuple[np.ndarray, dict]:
     """Una riga per token. Un valore mancante prende la media e accende un
@@ -520,7 +523,10 @@ def _matrix(rows: list[dict], means: dict | None = None,
     out = []
     for k in keys:
         mu, sd = means[k]
-        out.append([((v if v is not None else mu) - mu) / sd for v in cols[k]])
+        # Un valore estremo (un +5000% in un'ora) non deve decidere da solo:
+        # senza tetto portava ogni probabilita' a 0 o 100%, e il controllo
+        # "Memoria" scartava come rug quasi tutto.
+        out.append([max(-Z_CLIP, min(Z_CLIP, ((v if v is not None else mu) - mu) / sd)) for v in cols[k]])
         out.append([float(v is None) for v in cols[k]])
     out.append([float(f.get("chain") == "solana") for f in rows])
     return np.array(out, dtype=float).T, means

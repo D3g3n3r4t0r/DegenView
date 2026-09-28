@@ -345,3 +345,11 @@ def test_winner_model_ranks_the_lane_once_it_predicts():
     hot = outcomes.win_chance({**_item("x"), **outcomes.features(_item("x")), "buys_h1": 200.0, "vol_h1": 90_000.0})
     cold = outcomes.win_chance({**outcomes.features(_item("y")), "buys_h1": 10.0, "vol_h1": 1_000.0})
     assert hot > cold
+
+
+def test_an_extreme_value_cannot_saturate_the_model():
+    """Lorenzo vedeva "100% chance" su tutta la corsia meme: un +5000% in
+    un'ora, senza tetto, pesava da solo quanto tutto il resto."""
+    rows = [{"chg_h1": v} for v in (1, 2, 3, 4, 5, 5000)]
+    x, _ = outcomes._matrix(rows, keys=("chg_h1",))
+    assert abs(x[:, 0]).max() <= outcomes.Z_CLIP

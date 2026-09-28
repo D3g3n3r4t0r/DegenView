@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0203", "Coda Memes piena ma quasi nessun token passa i controlli",
+     "Lorenzo: 'Ci sono un sacco di progetti in coda qui che non capisco perche' non vengono selezionati o scelti. Praticamente da stamattina soltanto un token ha passato i controlli. Bisogna un attimino che tu risistemi e eviti questi problemi.'",
+     "alta"),
     ("seed-0202", "Il sito e' bloccato su 'Aggiornamento in corso'",
      "Lorenzo, 28/09: 'non va piu' il sito e' rimasto bloccato'.",
      "alta"),
