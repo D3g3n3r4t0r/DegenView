@@ -10,12 +10,14 @@ import * as api from "@onchain/api.js";
 import { escapeHtml, tokenRow } from "@onchain/format.js";
 import { register } from "@onchain/detail.js";
 import { alertsFor } from "@onchain/alerts.js";
+import { isHidden, onHiddenChange, withEntrance } from "@onchain/hidden.js";
 
 const POLL_MS = 60_000;
 
 let root = null;
 let timer = null;
 let lastTrack = null;
+let items = [];
 
 const pct = (f) => (f == null ? "—" : `${f > 0 ? "+" : ""}${Math.round(f * 100)}%`);
 const usd = (n) => (n == null ? "—" : n >= 1e6 ? `$${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `$${Math.round(n / 1e3)}k` : `$${Math.round(n)}`);
@@ -52,15 +54,22 @@ function trackLine(t) {
     : "";
 }
 
+function paintList() {
+  const shown = items.filter((m) => !isHidden(m.chain, m.token_address));
+  withEntrance(root.querySelector("[data-memes-list]"), () => {
+    root.querySelector("[data-memes-list]").innerHTML = shown.map(row).join("");
+  });
+  root.querySelector("[data-memes-empty]").hidden = shown.length > 0;
+}
+
 async function refresh() {
   clearTimeout(timer);
   try {
     const data = await api.getRadarMemes();
-    const items = data.items ?? [];
+    items = data.items ?? [];
     lastTrack = data.track ?? null;
     delete root.dataset.loading;
-    root.querySelector("[data-memes-list]").innerHTML = items.map(row).join("");
-    root.querySelector("[data-memes-empty]").hidden = items.length > 0;
+    paintList();
     const watched = data.track?.baseline?.n;
     const line = root.querySelector("[data-picks-line]");
     if (line && items.length) {
@@ -76,6 +85,7 @@ async function refresh() {
 export function mountMemes() {
   root = document.getElementById("memes");
   if (!root) return;
+  onHiddenChange(() => paintList());
   refresh();
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") refresh();
