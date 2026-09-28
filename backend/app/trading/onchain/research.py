@@ -61,7 +61,9 @@ AI_DAILY_MAX = 150
 # finalists and its reading is blended half and half with the deterministic
 # reader's: a voice, not the whole verdict, until gem_track says whose
 # top ten does better. ~3k tokens a reading, a fraction of a cent.
-DEEPSEEK_DAILY_MAX = 80
+# 80 left DeepSeek idle by early afternoon (Lorenzo, 28/09: "deve essere
+# attivo costantemente"); 300 readings are still well under a dollar a day.
+DEEPSEEK_DAILY_MAX = 300
 DEEPSEEK_WEIGHT = 0.5
 
 

@@ -80,10 +80,36 @@ function statusLine() {
   return viewData.active ? "Watching" : "Off";
 }
 
+const PLURAL = { backtest: "backtests", study: "studies", research: "readings", scanner: "readings", chat: "chats", scan: "scans" };
+
 function chips() {
-  const today = viewData?.today ?? {};
-  const parts = Object.entries(today).map(([k, n]) => `${n} ${escapeHtml(k)}`);
+  // Work done today (every note, LLM or not); LLM calls fill the kinds not noted.
+  const counts = { ...(viewData?.today ?? {}), ...(viewData?.done ?? {}) };
+  const parts = Object.entries(counts)
+    .filter(([, n]) => n > 0)
+    .sort((a, b) => b[1] - a[1])
+    .map(([k, n]) => `${n} ${escapeHtml(PLURAL[k] ?? k)}`);
   return parts.length ? parts.join(" · ") : "Nothing yet today";
+}
+
+const LIVE_S = 180;
+
+function nowHtml() {
+  const a = viewItems[0];
+  if (!a || Date.now() / 1000 - a.t > LIVE_S) return "";
+  return `<span class="ag-kind" data-kind="${escapeHtml(a.kind)}">${escapeHtml(a.kind)}</span>
+    <p>${escapeHtml(a.text)}</p><i class="ag-scan" aria-hidden="true"></i>`;
+}
+
+function paintNow() {
+  const box = viewEl?.querySelector("[data-ag-now]");
+  if (!box) return;
+  const html = nowHtml();
+  box.hidden = !html;
+  if (html && box.dataset.t !== String(viewItems[0].t)) {
+    box.dataset.t = String(viewItems[0].t);
+    box.innerHTML = html;
+  }
 }
 
 function stepHtml(step, i) {
@@ -107,7 +133,7 @@ function paint() {
   if (!list) return;
   list.innerHTML = viewItems.length
     ? viewItems.map(entryHtml).join("")
-    : `<li class="ag-empty">Nothing yet today: it reads new alerts every 10 minutes.</li>`;
+    : `<li class="ag-empty">Nothing yet today: it backtests a token every minute.</li>`;
   const more = viewEl.querySelector("[data-ag-more]");
   if (more) more.hidden = viewItems.length < 60;
 }
@@ -120,6 +146,7 @@ function paintHero() {
   if (status) status.textContent = statusLine();
   const today = viewEl.querySelector("[data-ag-today]");
   if (today) today.textContent = chips();
+  paintNow();
 }
 
 async function loadView() {
@@ -129,8 +156,8 @@ async function loadView() {
     const [info, log] = await Promise.all([api.getAgent(), api.getAgentLog()]);
     viewData = info;
     viewItems = log.items ?? [];
-    paintHero();
     paint();
+    paintHero();
   } catch {
     /* keep what is on screen */
   } finally {
@@ -144,7 +171,6 @@ async function refreshView() {
   try {
     const [info, log] = await Promise.all([api.getAgent(), api.getAgentLog()]);
     viewData = info;
-    paintHero();
     const fresh = (log.items ?? []).filter((a) => !viewItems.some((b) => b.t === a.t));
     if (fresh.length) {
       viewItems = [...fresh, ...viewItems];
@@ -155,6 +181,7 @@ async function refreshView() {
         list.querySelectorAll(".ag-card").forEach((c, i) => { if (i < fresh.length) c.classList.add("is-new"); });
       }
     }
+    paintHero();
   } catch {
     /* keep what is on screen */
   } finally {
@@ -187,6 +214,7 @@ export function mountAgentView() {
       <p class="ag-status" data-ag-status>Off</p>
       <p class="ag-today" data-ag-today>Nothing yet today</p>
     </div>
+    <div class="ag-now" data-ag-now hidden></div>
     <ul class="ag-list" data-ag-list></ul>
     <button type="button" class="ag-more" data-ag-more hidden>Load earlier</button>`;
   viewEl.querySelector("[data-ag-more]")?.addEventListener("click", loadEarlier);
