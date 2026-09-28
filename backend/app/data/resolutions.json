@@ -2227,5 +2227,10 @@
     "status": "risolto",
     "at": 1790612744,
     "summary": "I risultati sono salvati sul disco del server, ma quando il motore dei backtest cambia versione ogni alert viene ricalcolato riscaricando le candele. Per un token morto come FLOOR (-93%) GeckoTerminal restituisce meno candele o nessuna, e il ricalcolo su dati poveri sovrascriveva il risultato buono: +132% diventava 'nessun ingresso' e FLOOR scendeva in fondo. Ora un backtest salvato viene sostituito solo da uno calcolato su almeno altrettante candele; altrimenti resta quello di prima, e c'e' un test che lo verifica. Il +132% di FLOOR gia' sovrascritto non si puo' ricostruire se il pool non da' piu' le candele; da qui in avanti nessun risultato si perde cosi'."
+  },
+  "seed-0209": {
+    "status": "risolto",
+    "at": 1790613527,
+    "summary": "La pagina token caricava dentro un iframe l'intero sito principale, che faceva girare le sue strategie (da qui 'Analyzing...' bloccato). Ora il grafico e' solo il nostro: candele e ingressi/uscite del backtest dell'app, nessun dato dal sito principale. Se DexScreener non trova il pool del token, lo cerchiamo anche su GeckoTerminal (Solana, Robinhood, BSC, Base, Ethereum). PR #295."
   }
 }
