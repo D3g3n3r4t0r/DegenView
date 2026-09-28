@@ -1187,7 +1187,13 @@
       return resp.ok ? await resp.json() : null;
     } catch { return null; }
   }
+  // Embedded in the on-chain app's token page (?embed=1): the chart only,
+  // and nothing the embed does may overwrite the user's saved session.
+  const EMBED = new URLSearchParams(location.search).get("embed") === "1";
+  if (EMBED) document.documentElement.classList.add("embed-chart");
+
   function savePreferences() {
+    if (EMBED) return;
     if (!state.user) return;
     clearTimeout(_prefSaveTimer);
     _prefSaveTimer = setTimeout(async () => {
@@ -3695,6 +3701,15 @@
       params: null,
       backtestParams: null,
     });
+    if (EMBED) {
+      // Lorenzo, 28/09: "il nostro grafico nel nostro sito principale aveva
+      // tutti i dati… USA QUELLO". The token page shows this chart in an
+      // iframe: the chart area alone, full page.
+      const area = document.querySelector(".chart-area");
+      if (area) document.body.append(area);
+      applyTheme("dark", { persist: false });   // the app is dark; the user's own choice stays saved
+      requestAnimationFrame(() => resizeAllCharts(true));
+    }
     runAnalysis(dex);
     return true;
   }

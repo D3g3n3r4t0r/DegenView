@@ -81,12 +81,12 @@ function bestLabel(e) {
     .sort((a, b) => (b.return_pct ?? -1e9) - (a.return_pct ?? -1e9))[0]?.label;
 }
 
-async function mainChartUrl(e, strategyName) {
+async function mainChartUrl(e, strategyName, iv = "5m") {
   const pair = e.pair || await poolOf(e);
   if (!pair) return "";
   const dex = encodeURIComponent(`${e.symbol}@${e.chain}:${pair}`);
   const name = encodeURIComponent(e.name || e.symbol);
-  return `/?area=analizza&dex=${dex}&interval=5m&name=${name}`
+  return `/?area=analizza&dex=${dex}&interval=${iv}&name=${name}`
     + (strategyName ? `&strategy=${encodeURIComponent(strategyName)}` : "");
 }
 
@@ -410,6 +410,22 @@ async function paintChart() {
   box.dataset.want = want;
   const stale = charts.get(`${e.chain}:${e.pair || e.token}:${interval}`)?.candles;
   if (stale?.length >= 2) await drawChart(box, stale, e);
+  // The main site's own chart, embedded (Lorenzo, 28/09: "il nostro grafico
+  // nel nostro sito principale aveva tutti i dati… USA QUELLO"): candles,
+  // levels, indicators and the best strategy's trades, on this token and
+  // this interval. The lighter chart below stays for tokens with no pool.
+  const src = await mainChartUrl(e, NAMES[bestLabel(e) ?? "Trend EMA"], interval);
+  if (box.dataset.want !== want) return;
+  if (src) {
+    disposeChart();
+    const url = `${src}&embed=1`;
+    const frame = box.querySelector("iframe.main-embed");
+    if (!frame) box.innerHTML = `<iframe class="main-embed" title="Chart" src="${escapeHtml(url)}"></iframe>`;
+    else if (frame.getAttribute("src") !== url) frame.setAttribute("src", url);
+    const note = box.parentElement?.querySelector("[data-chart-note]");
+    if (note) note.textContent = "";
+    return;
+  }
   let candles = [];
   let shown = interval;
   // An interval with no candles (1m on a quiet pool) steps up to the next
