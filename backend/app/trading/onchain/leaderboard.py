@@ -124,6 +124,7 @@ REVIEW_WEIGHT = 0.3
 # innovation weigh in the rank, one project at a time.
 CODE_WEIGHT = 0.2
 CODE_EVERY_S = 60
+CODE_RETRY_S = 6 * 3600        # a failed reading waits: GitHub allows few calls an hour
 SERIOUS_AGE_MAX_DAYS = 3 * 365
 SERIOUS_MIN_PILLAR = 60
 SERIOUS_MIN_GITHUB = 70
@@ -888,12 +889,15 @@ async def _read_code(client: httpx.AsyncClient, now: float) -> None:
         c = e.get("code") or {}
         if c and now - (c.get("at") or 0) < code_review.TTL_S:
             continue
+        if now - (e.get("code_tried_at") or 0) < CODE_RETRY_S:
+            continue
         if k in board or not research_floor(e, now) or benchmark.is_benchmark(e["chain"], e["token_address"]):
             todo.append(k)
     if not todo:
         return
     k = min(todo, key=lambda k: (k not in board, -(float(_entries[k].get("market_cap") or 0))))
     e = _entries[k]
+    e["code_tried_at"] = now
     _state["code_reading"] = True
     try:
         result = await code_review.review(e, client, now)
