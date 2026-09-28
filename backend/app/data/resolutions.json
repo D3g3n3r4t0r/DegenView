@@ -2237,5 +2237,10 @@
     "status": "risolto",
     "at": 1790626933,
     "summary": "La causa vera: il salvataggio degli alert su disco falliva in silenzio. Il risultato del sistema conteneva un numero in un formato (numpy) che il file JSON non accetta, quindi ogni scrittura si interrompeva e il file restava fermo a ore prima. Il sito mostrava i dati in memoria; a ogni riavvio (ogni aggiornamento) tornavano gli alert vecchi senza backtest, ricalcolati da capo sulle candele del momento: per questo FLOOR spariva e tornava, CERT e' cambiato e Matrix e NYMA sono tornati 'in arrivo'. Ora i numeri sono convertiti prima di salvare, un errore di salvataggio finisce nel log invece di passare inosservato, e c'e' un test che salva e ricarica un backtest vero. I risultati cambiati oggi (CERT) restano quelli ricalcolati; da ora ogni risultato resta sul disco."
+  },
+  "seed-0211": {
+    "status": "risolto",
+    "at": 1790627103,
+    "summary": "Il backend c'era gia' (36 narrative: 24 gemme e 12 meme, scelta per account, scanner che cerca prima le scelte) ma nessuna schermata la usava. Ora nel Profilo c'e' la sezione Narratives con le narrative di Gems e Memes da toccare; quelle scelte vengono per prime nelle righe di Gems e in Memes, evidenziate. Anche i meme del Radar hanno ora la loro etichetta di narrativa. PR #301."
   }
 }
