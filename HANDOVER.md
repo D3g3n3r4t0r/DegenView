@@ -364,6 +364,7 @@ filtro anti-rug in `legit.py`, frontend `frontend/static/onchain/radar.js`.
 - Backtest persi a ogni riavvio (seed-0210, 28/09): `system.follow` contava `wins` come numpy int64, `json.dumps` in `alert_track.save` alzava TypeError (preso solo OSError): il file degli alert non si aggiornava piu'. Ora `default=_plain` e log dell'errore. Lorenzo: "PRIORITA MASSIMA E ATTENZIONE MASSIMA".
 - Ingresso all'alert (seed-0213, 28/09): `system.follow(on_alert=True)` compra alla prima open dopo l'alert; `a['alert_bt']`, esposto come `on_alert` in board; la tab Strategie (`alerts.js`, sort backtest) mostra solo quello. SYSTEM_VERSION 9. L'autotrader non lo usa. Lorenzo: "sara' la decima volta che vi chiedo questa cosa".
 - Sniper un trade per alert (seed-0214, 28/09): `follow(on_alert=True)` non rientra dopo l'uscita; `autotrader._system_of` legge `alert_bt` (non piu' `system`). Lorenzo: "deve gestire esclusivamente la chiusura secondo la classica regola del trend follower".
+- 28/09 sera, "come mai su queste la strategia non e' uscita prima?" (MESUB -95%): il trade sull'alert usciva solo su un incrocio nuovo; ora `strategies.trend_down` chiude alla prima candela col trend giu'. SYSTEM_VERSION 10 (seed-0216).
 - Vincolo: il pilota (soldi veri) resta sotto $100k
   (`_SNIPER_ONCHAIN_MAX_MCAP_USD` in main.py). Mai strategie short.
 

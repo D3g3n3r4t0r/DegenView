@@ -106,6 +106,10 @@ def follow(bars: list[list], cfg: dict, start: float, *, gone: bool = False, now
     opens, closes = df["open"].to_numpy(), df["close"].to_numpy()
     entry_sig = sig["entry_long"].fillna(False).astype(bool).to_numpy()
     exit_sig = sig["exit_long"].fillna(False).astype(bool).to_numpy()
+    if on_alert:
+        # bought on the alert, not on the strategy's cross: close on the first
+        # bar with the trend down, not only on a fresh cross that may never come
+        exit_sig = exit_sig | strategies.trend_down(df, cfg["strategy_name"], cfg["params"]).to_numpy()
     equity, pos, entry, in_at = 1.0, False, 0.0, None
     events: list[dict] = []
     last_i = len(df) - 1
