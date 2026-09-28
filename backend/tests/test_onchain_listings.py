@@ -26,7 +26,7 @@ def clean(tmp_path, monkeypatch):
     monkeypatch.setattr(L, "_vet_slots", asyncio.Semaphore(4))
     VERDICTS.clear()
 
-    async def fake_assess(token, links, client):
+    async def fake_assess(token, links, client, **kw):
         return VERDICTS.get(token["symbol"], _verdict())
     monkeypatch.setattr(legit, "assess", fake_assess)
 
@@ -144,7 +144,7 @@ def test_legit_filter_rejects_waits_and_attaches_site():
 def test_pumpfun_links_reach_the_filter(monkeypatch):
     seen = {}
 
-    async def spy(token, links, client):
+    async def spy(token, links, client, **kw):
         seen.update(links)
         return _verdict()
     monkeypatch.setattr(legit, "assess", spy)
@@ -173,7 +173,7 @@ def test_telegram_message_links_the_project_site():
 def test_a_listing_without_a_chart_is_never_shown(monkeypatch):
     calls = []
 
-    async def assess(token, links, client):
+    async def assess(token, links, client, **kw):
         calls.append(token["symbol"])
         return _verdict()
     monkeypatch.setattr(legit, "assess", assess)

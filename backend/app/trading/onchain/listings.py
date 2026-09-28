@@ -393,7 +393,8 @@ async def _vet(k: str, pending: _Pending, item: dict, pair: dict) -> dict | None
                 client = _http or httpx.AsyncClient(timeout=10.0)
                 try:
                     verdict = await legit.assess(
-                        item, legit.merge_links(pending.links, legit.links_from_dexscreener(pair)), client)
+                        item, legit.merge_links(pending.links, legit.links_from_dexscreener(pair)), client,
+                        need_github=False)
                 finally:
                     if client is not _http:
                         await client.aclose()
