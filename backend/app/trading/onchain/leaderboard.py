@@ -47,7 +47,7 @@ import httpx
 
 from app.sniper.quality import _looks_like_meme
 from app.trading.onchain import (benchmark, big_coins, code_review, depth, discovery, gem_track, judge, legit, narratives,
-                                  projects_db, radar, research, storage, traction)
+                                  priority, projects_db, radar, research, storage, traction)
 
 logger = logging.getLogger(__name__)
 

@@ -25,7 +25,7 @@ import httpx
 
 from app.notify import deepseek_desk
 from app.sniper.scanner import GECKO_NETWORKS
-from app.trading.onchain import alert_track, system
+from app.trading.onchain import alert_track, priority, system
 from app.trading.onchain.storage import data_file
 
 logger = logging.getLogger(__name__)

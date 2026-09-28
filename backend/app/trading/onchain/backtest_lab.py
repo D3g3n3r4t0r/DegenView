@@ -17,7 +17,7 @@ import httpx
 
 from app.providers import dexscreener
 from app.sniper.scanner import GECKO_NETWORKS
-from app.trading.onchain import alert_track, outcomes, system
+from app.trading.onchain import alert_track, outcomes, priority, system
 from app.trading.onchain.storage import data_file
 
 logger = logging.getLogger(__name__)
