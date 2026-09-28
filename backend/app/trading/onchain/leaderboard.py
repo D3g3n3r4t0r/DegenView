@@ -105,7 +105,7 @@ EARLY_MIN_PILLAR = 60
 EARLY_MIN_SCORE = 65
 ALERTS_PER_TICK = 5
 SERIOUS_CAP_MAX_USD = discovery.CAP_MAX
-SERIOUS_AGE_MAX_DAYS = 365
+SERIOUS_AGE_MAX_DAYS = 3 * 365
 SERIOUS_MIN_PILLAR = 60
 SERIOUS_MIN_GITHUB = 70
 # Without public code the site and the tokenomics must carry the project,
@@ -192,6 +192,11 @@ def reset_for_tests() -> None:
 
 # ------------------------------------------------------------------- fonti
 
+def merge_narratives(hint: list[str] | None, site: list[str] | None, more: list[str] | None) -> list[str]:
+    """Hint keys first (the category the coin was found in), then the rest."""
+    return list(dict.fromkeys([*(hint or []), *(site or []), *(more or [])]))
+
+
 def add(item: dict, source: str, now: float | None = None) -> bool:
     """Un progetto da esaminare. False se c'e' gia' o e' gia' stato bocciato."""
     chain, token = item.get("chain"), item.get("token_address")
@@ -210,7 +215,7 @@ def add(item: dict, source: str, now: float | None = None) -> bool:
         return False
     fresh = {f: item[f] for f in ("market_cap", "liquidity_usd", "website", "github", "socials", "pair_url",
                                   "report", "scan_url", "checks", "exception", "github_verified", "description",
-                                  "categories", "websites") if item.get(f)}
+                                  "categories", "websites", "narratives_hint") if item.get(f)}
     if k in _entries:
         _entries[k].update(fresh)
         return False
@@ -325,7 +330,7 @@ def apply_analysis(k: str, result: dict, now: float | None = None) -> None:
     gh = (e["pillars"].get("github") or {}).get("facts") or {}
     site_keys = (e["pillars"].get("site") or {}).get("facts", {}).get("narratives") or []
     more = narratives.match(e.get("description"), e.get("categories"), gh.get("topics"), gh.get("description"))
-    e["narratives"] = list(dict.fromkeys([*site_keys, *more]))
+    e["narratives"] = merge_narratives(e.get("narratives_hint"), site_keys, more)
     if e["overall"]["fatal"] and not benchmark.is_benchmark(e["chain"], e["token_address"]) \
             and e.get("source") != "reference":     # Lorenzo's references stay, with their reason
         _exclude(k, e["overall"]["fatal"], now)
