@@ -4004,12 +4004,13 @@ def _all_addresses(user: User) -> list[tuple[str, str, str]]:
 _snap_cache: dict[str, tuple[float, dict]] = {}
 _snap_inflight: dict[str, asyncio.Task] = {}
 _SNAP_TTL = 20.0
+_snap_clock = time.monotonic   # its own name, so tests move it without freezing asyncio
 
 
 async def _wallet_snapshot(user: User) -> dict:
     """The cached snapshot: a fresh one is returned as is, a read already in
     flight is awaited instead of started again. Failures are not cached."""
-    now = time.monotonic()
+    now = _snap_clock()
     hit = _snap_cache.get(user.id)
     if hit and now - hit[0] < _SNAP_TTL:
         return hit[1]
@@ -4021,7 +4022,7 @@ async def _wallet_snapshot(user: User) -> dict:
         def _done(t: asyncio.Task) -> None:
             _snap_inflight.pop(user.id, None)
             if not t.cancelled() and t.exception() is None:
-                _snap_cache[user.id] = (time.monotonic(), t.result())
+                _snap_cache[user.id] = (_snap_clock(), t.result())
 
         task.add_done_callback(_done)
     return await task
