@@ -397,7 +397,7 @@ def paper_tick(u: dict, label: str, now: float, open_new: bool = True) -> list[d
         return rows
     followed = {t.get("alert") for t in u["trades"]} | {p["alert"] for p in u["paper"]}
     fresh = sorted((a for a in alert_track._alerts.values()
-                    if a["kind"] == "meme" and not a.get("gone") and now - a["at"] <= FRESH_S
+                    if a["kind"] == "meme" and not a.get("gone") and 0 <= now - a["at"] <= FRESH_S
                     and alert_track.key_of(a) not in followed), key=lambda a: a["at"])
     for a in fresh:
         equity = (u["sim_usdg"] or 0) + sum(p["stake"] * (1 + p.get("ret", 0.0)) for p in u["paper"])
