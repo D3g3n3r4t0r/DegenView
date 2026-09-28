@@ -33,6 +33,7 @@ import math
 
 import pandas as pd
 
+from app.analysis import strategies
 from app.trading.onchain import radar
 
 WINDOW_S = 48 * 3600
@@ -173,7 +174,7 @@ def backtest_all(bars: list[list]) -> dict:
     exit, fees included (radar.evaluate, the same engine as the main site)."""
     df = frame(bars)
     if len(df) < BACKTEST_MIN_BARS:
-        return {"bars": len(df), "rows": [], "hold_pct": None, "best": None}
+        return {"bars": len(df), "rows": [], "hold_pct": None, "best": None, "rug": None}
     res = radar.evaluate(df, [{"strategy_name": n, "params": None, "label": lab, "source": "predefinita"}
                               for n, lab in BACKTESTS])
     by_label = {r["label"]: r for r in res["tried"]}
@@ -190,8 +191,11 @@ def backtest_all(bars: list[list]) -> dict:
                      "profit_factor": round(r["profit_factor"], 2) if r["profit_factor"] is not None else None,
                      "in_position": r["in_position"]})
     hold = res["hold_pct"]
+    i = strategies.rug_bar(df)
+    rug = {"at": int(df.index[i].timestamp()), "drop": strategies.RUG_DROP} if i is not None else None
     return {"bars": len(df), "from": int(df.index[0].timestamp()), "to": int(df.index[-1].timestamp()),
-            "hold_pct": round(hold, 2) if hold is not None else None, "rows": rows, "best": _best_trades(df, rows)}
+            "hold_pct": round(hold, 2) if hold is not None else None, "rows": rows,
+            "best": _best_trades(df, rows), "rug": rug}
 
 
 def _best_trades(df: pd.DataFrame, rows: list[dict]) -> dict | None:

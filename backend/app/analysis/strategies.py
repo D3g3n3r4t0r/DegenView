@@ -703,6 +703,39 @@ def spot_only(signals: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+# Un crollo rapido oltre questa frazione dal massimo recente e' un rug pull:
+# la strategia si spegne e non rientra (Lorenzo, 28/09: "quando il prezzo fa
+# un drawdown superiore al 60-70% in modo molto veloce [...] la strategia si
+# deve automaticamente disabilitare").
+RUG_DROP = 0.65
+RUG_WINDOW = "24h"
+
+
+def rug_bar(df: pd.DataFrame) -> int | None:
+    """La prima barra in cui il minimo scende sotto (1 - RUG_DROP) del
+    massimo delle ultime RUG_WINDOW ore. None se non succede mai."""
+    if df.empty:
+        return None
+    peak = df["high"].rolling(RUG_WINDOW).max()
+    hit = df["low"] <= (1 - RUG_DROP) * peak
+    positions = [i for i, v in enumerate(hit.to_numpy()) if bool(v)]
+    return positions[0] if positions else None
+
+
+def rug_stop(df: pd.DataFrame, signals: pd.DataFrame) -> pd.DataFrame:
+    """Dal rug in poi niente piu' ingressi e la posizione lunga si chiude
+    sulla barra del crollo: il token e' flaggato come rug pull e il backtest
+    non prosegue (Lorenzo, 28/09)."""
+    out = signals.copy()
+    i = rug_bar(df)
+    if i is None:
+        return out
+    out.iloc[i:, out.columns.get_loc("entry_long")] = False
+    out.iloc[i:, out.columns.get_loc("entry_short")] = False
+    out.iloc[i, out.columns.get_loc("exit_long")] = True
+    return out
+
+
 def build_strategy_state(
     name: str, df: pd.DataFrame, params: dict | None = None, signals: pd.DataFrame | None = None
 ) -> StrategyState:
