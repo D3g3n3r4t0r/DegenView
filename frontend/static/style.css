@@ -5791,3 +5791,12 @@ details > summary:hover { color: var(--ink); }
 .opera-advanced > summary { font-size: 14px; }
 .opera-sub { border: 0; border-top: 1px solid var(--hair); border-radius: 0; background: transparent; }
 .opera-sub > summary { padding: 10px 0; }
+
+/* Embedded in the on-chain app's token page (?embed=1, app.js): the chart
+   area alone, full page, no toolbar, menus or drawing rail. */
+html.embed-chart body > :not(.chart-area) { display: none !important; }
+html.embed-chart body { margin: 0; overflow: hidden; }
+html.embed-chart .chart-area { position: fixed; inset: 0; margin: 0; border: 0; border-radius: 0; }
+html.embed-chart .chart-area .draw-rail { display: none !important; }
+html.embed-chart .chart-area .chart-row, html.embed-chart .chart-area .chart-wrap { block-size: 100%; }
+html.embed-chart #chart-expand-btn, html.embed-chart #empty-state { display: none !important; }
