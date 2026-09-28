@@ -33,6 +33,7 @@ import math
 
 import pandas as pd
 
+from app.analysis import strategies
 from app.trading.onchain import radar
 
 WINDOW_S = 48 * 3600
