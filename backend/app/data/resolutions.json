@@ -2247,5 +2247,10 @@
     "status": "risolto",
     "at": 1790627192,
     "summary": "Per ogni gemma il laboratorio calcola anche un backtest del solo trend follower su candele giornaliere (8 ore se il token ha meno di 60 giorni). La pagina token delle gemme si apre sul grafico 1d e mostra solo quegli ingressi/uscite e quella tabella; le strategie a 5 minuti restano per lo sniper. Tolto il tasto 'Open on the analysis chart'. I risultati giornalieri compaiono al prossimo giro del laboratorio (entro un'ora per token). PR #303."
+  },
+  "seed-0213": {
+    "status": "risolto",
+    "at": 1790627274,
+    "summary": "Prima il backtest aspettava il segnale d'ingresso della strategia anche dopo l'alert, e su molti token segnalati quel segnale non arrivava mai: da qui 'no entry yet' e 'dodged'. Ora l'alert e' l'ingresso: la strategia trend following compra alla prima candela dopo l'alert, poi esce e rientra con i suoi segnali (o lo stop anti-rug), commissioni incluse. Ogni riga della tab mostra rendimento, numero di trade e percentuale di vincite; se il trade e' ancora aperto lo dice. 'No entry yet', 'stayed out' e 'dodged' non compaiono piu'. Tutti gli alert vengono ricalcolati una volta con la nuova regola."
   }
 }

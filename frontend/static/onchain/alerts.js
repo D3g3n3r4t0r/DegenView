@@ -214,35 +214,29 @@ function rows() {
   const val = (a) => (key === "system" ? a.system?.ret : key === "best" ? a.max : a.now);
   const items = (state.data.meme?.items ?? []).filter((a) => a.at >= since && val(a) != null && !isHidden(a.chain, a.token_address));
   if (key === "backtest") {
-    // Lorenzo: "non voglio selezionare le strategie, il sistema deve essere
-    // gestito in modo invisibile, semplicemente mostrami i backtest migliori".
-    // Each alert carries the four strategies' results on its own 5-minute
-    // chart; the best of them is shown, chosen after the fact.
-    const best = (a) => (a.backtests?.rows ?? []).filter((x) => x.trades > 0)
-      .sort((x, y) => (y.return_pct ?? -1e9) - (x.return_pct ?? -1e9))[0];
-    const has = (a) => !!best(a);
-    return items.sort((a, b) => (has(b) - has(a)) || (has(a) ? best(b).return_pct - best(a).return_pct : b.at - a.at))
+    // Lorenzo, 28/09: "non deve accadere che venga scritto no entry yet
+    // perche' in realta' la strategia su questa roba sarebbe entrata perche'
+    // sono stati segnalati [...] voglio vedere le performance del backtest
+    // applicato a quei token". The alert is the entry: the trend follower
+    // buys at the alert and exits on its own signal (on_alert, system.py),
+    // so every alerted token has a result. The dots only mean "not computed
+    // yet".
+    const x = (a) => a.on_alert;
+    const has = (a) => !!x(a);
+    return items.sort((a, b) => (has(b) - has(a)) || (has(a) ? x(b).ret - x(a).ret : b.at - a.at))
       .map((a) => {
-        const x = best(a);
-        const open = !x && (a.backtests?.rows ?? []).some((r) => r.in_position);
-        // Lorenzo, 28/09: "no signal on this chart non ha senso" and then
-        // "backtest in loop non arrivano". The dots mean one thing only: the
-        // backtest has not been computed yet. Once it has, zero trades is a
-        // result, shown as such, live or not: OUT, with what staying out
-        // was worth. While the 48h window is open it says "so far".
-        const live = (a.age_h ?? 0) < 48;
-        const label = x ? pct(x.return_pct / 100) : open ? '<span class="bt-tag" data-k="in">IN</span>'
-          : !a.backtests ? '<span class="bt-live" role="img" aria-label="Analyzing"><i></i><i></i><i></i></span>'
-            : '<span class="bt-tag" data-k="out">OUT</span>';
-        const outcome = (a.now ?? 0) < 0 ? `dodged a ${Math.round(-a.now * 100)}% drop` : `held ${pct(a.now)}`;
+        const r = x(a);
+        const closed = r?.trades ?? 0;
+        const label = r ? pct(r.ret) : '<span class="bt-live" role="img" aria-label="Analyzing"><i></i><i></i><i></i></span>';
+        const trades = closed + (r?.state === "in" ? 1 : 0);
+        const sys = !r ? "backtest on its way"
+          : `${trades} trade${trades === 1 ? "" : "s"}`
+            + (closed ? ` · win ${Math.round((r.wins / closed) * 100)}%` : "")
+            + (r.state === "in" ? " · in the trade" : "");
         return { id: registerAlert(a, "meme"), symbol: a.symbol, name: a.name, chain: a.chain, token: a.token_address,
-          image: a.image, label, ranked: Boolean(x),
+          image: a.image, label, ranked: Boolean(r),
           sub: `${age(a.at)[0]} ago · at ${usdShort(a.cap0)} · held ${pct(a.now)}`,
-          sign: x ? sign(x.return_pct / 100) : "", best: null,
-          sys: x ? `${x.trades} trade${x.trades === 1 ? "" : "s"} · win ${Math.round(x.win_rate ?? 0)}%`
-            : open ? "in the trade now"
-              : !a.backtests ? "backtest on its way"
-                : live ? `backtest: no entry yet · ${outcome}` : `backtest: stayed out · ${outcome}` };
+          sign: r ? sign(r.ret) : "", best: null, sys };
       });
   }
   if (key === "system") {
