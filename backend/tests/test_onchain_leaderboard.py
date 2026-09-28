@@ -439,3 +439,37 @@ def test_global_cap_is_read_from_coingecko(monkeypatch):
 
     asyncio.run(lb._check_global_cap(C(), time.time()))
     assert e["global_cap"] == 2.3e9 and lb.qualifies(e).startswith("over $10M")
+
+
+def test_deepseek_review_can_drop_and_reorder_the_board(monkeypatch):
+    import asyncio
+    import json as _json
+    from app.trading.onchain import judge
+    judge.reset_for_tests()
+    monkeypatch.setattr(judge, "_save", lambda: None)
+    _entry("CLAUPUMP", 90, 90, 90)
+    _entry("REAL", 80, 80, 80)
+    b = lb.board()
+    assert [x["symbol"] for x in b["entries"]][:2] == ["CLAUPUMP", "REAL"]
+    seen = {}
+
+    async def ask(messages, **kw):
+        seen["brief"] = messages[1]["content"]
+        return _json.dumps({"projects": [
+            {"id": "solana:CLAUPUMPmint", "keep": False, "score": 10, "reason": "parody brand name, no product"},
+            {"id": "solana:REALmint", "keep": True, "score": 90, "reason": "live product"}]})
+
+    import app.notify.deepseek_desk as desk
+    monkeypatch.setattr(desk, "ask", ask)
+    monkeypatch.setattr(desk, "note", lambda *a, **k: None)
+    asyncio.run(lb._review_board(time.time()))
+    assert "CLAUPUMP" in seen["brief"]
+    syms = [x["symbol"] for x in lb.board()["entries"]]
+    assert "CLAUPUMP" not in syms and "REAL" in syms
+    assert lb.qualifies(lb._entries["solana:CLAUPUMPmint"]).startswith("DeepSeek review: parody")
+
+
+def test_review_ignores_unknown_ids_and_bad_rows():
+    from app.trading.onchain import judge
+    raw = '{"projects": [{"id": "x", "keep": false, "score": 1}, {"id": "a", "keep": "no"}, {"id": "a", "keep": true, "score": 70}]}'
+    assert judge.parse_review(raw, {"a"}) == {"a": {"keep": True, "score": 70, "reason": ""}}

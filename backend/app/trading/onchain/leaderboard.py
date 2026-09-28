@@ -114,6 +114,12 @@ CG_CONTRACT = "https://api.coingecko.com/api/v3/coins/{platform}/contract/{addre
 CG_PLATFORM = {"solana": "solana", "robinhood": "robinhood"}
 GLOBAL_CAP_EVERY_S = 15            # one CoinGecko lookup per gap, shared with discovery
 GLOBAL_CAP_TTL_S = 24 * 3600
+# DeepSeek re-reads the whole board (judge.review_board): every two hours,
+# or ten minutes after the board changes. Its score weighs in the rank; a
+# drop keeps the project off for judge.REVIEW_TTL_S.
+REVIEW_EVERY_S = 2 * 3600
+REVIEW_MIN_GAP_S = 10 * 60
+REVIEW_WEIGHT = 0.3
 SERIOUS_AGE_MAX_DAYS = 3 * 365
 SERIOUS_MIN_PILLAR = 60
 SERIOUS_MIN_GITHUB = 70
@@ -196,7 +202,8 @@ def reset_for_tests() -> None:
     _excluded.clear()
     _gone.clear()
     _busy.clear()
-    _state.update(version=0, examined=0, last_tick=0.0, last_market=0.0, sources={}, board=[])
+    _state.update(version=0, examined=0, last_tick=0.0, last_market=0.0, sources={}, board=[],
+                  reviewed_at=0.0, reviewed_board=[], reviewing=False)
 
 
 # ------------------------------------------------------------------- fonti
@@ -439,6 +446,9 @@ def qualifies(e: dict, now: float | None = None) -> str:
         return ""   # il metro di paragone c'e' sempre, i suoi numeri si vedono comunque
     if true_cap(e) > BOARD_CAP_MAX_USD:
         return f"over ${BOARD_CAP_MAX_USD / 1e6:.0f}M (${true_cap(e) / 1e6:,.0f}M)"
+    r = e.get("review") or {}
+    if r.get("keep") is False and (now or time.time()) - (r.get("at") or 0) < judge.REVIEW_TTL_S:
+        return f"DeepSeek review: {r.get('reason') or 'dropped'}"
     floor = research_floor(e, now)
     if floor:
         return floor
@@ -543,7 +553,10 @@ def final_score(e: dict) -> float:
     rules = round(max(0.0, min(100.0, base + narratives.bonus(e.get("narratives") or []))), 1)
     j = e.get("judge") or {}
     if j.get("score") is not None:
-        return round(max(0.0, min(100.0, (1 - JUDGE_WEIGHT) * rules + JUDGE_WEIGHT * j["score"])), 1)
+        rules = round(max(0.0, min(100.0, (1 - JUDGE_WEIGHT) * rules + JUDGE_WEIGHT * j["score"])), 1)
+    r = e.get("review") or {}
+    if r.get("keep") and r.get("score") is not None:
+        rules = round((1 - REVIEW_WEIGHT) * rules + REVIEW_WEIGHT * r["score"], 1)
     return rules
 
 
@@ -598,6 +611,7 @@ def _public(e: dict) -> dict:
             "similarity": e.get("similarity"), "benchmark": top, "early": is_early(e), "price_usd": e.get("price_usd"),
             "narratives": narratives.labels(e.get("narratives") or []), "closed_source": no_github(e),
             **_research_public(e), "honor": benchmark.HONOR if top else None, "traction": traction_of(e),
+            "review": {k: (e.get("review") or {}).get(k) for k in ("keep", "score", "reason")} if e.get("review") else None,
             "judge": {k: (e.get("judge") or {}).get(k)
                       for k in ("score", "verdict", "problems", "strengths", "admit_reason")} if e.get("judge") else None}
 
@@ -735,6 +749,10 @@ async def tick(client: httpx.AsyncClient, now: float | None = None) -> None:
     await _step("storico", gem_track.poll, client, set(_entries), now)
     await _step("database", _from_database, client, now)
     await _step("cap globale", _check_global_cap, client, now)
+    if not _state.get("reviewing"):
+        task = asyncio.create_task(_step("revisione", _review_board, now))
+        _tasks.add(task)
+        task.add_done_callback(_tasks.discard)
     await drain_alerts()
     _prune(now)
     # I nuovi prima (nessun pilastro), poi i piu' vecchi da rinfrescare.
@@ -774,6 +792,27 @@ async def _check_global_cap(client: httpx.AsyncClient, now: float) -> None:
                           float((md.get("fully_diluted_valuation") or {}).get("usd") or 0)) or None
     e["global_cap_at"] = now
     _mark()
+
+
+async def _review_board(now: float) -> None:
+    """DeepSeek challenges the board as a whole (Lorenzo, 28/09)."""
+    keys = [k for k in _state["board"] if k in _entries
+            and not benchmark.is_benchmark(_entries[k]["chain"], _entries[k]["token_address"])]
+    last = _state.get("reviewed_at", 0)
+    changed = set(keys) != set(_state.get("reviewed_board") or [])
+    if not keys or _state.get("reviewing") or now - last < (REVIEW_MIN_GAP_S if changed else REVIEW_EVERY_S):
+        return
+    _state["reviewing"] = True
+    try:
+        res = await judge.review_board([_entries[k] for k in keys], now)
+    finally:
+        _state["reviewing"] = False
+    _state["reviewed_at"], _state["reviewed_board"] = now, keys
+    for k, v in res.items():
+        if k in _entries:
+            _entries[k]["review"] = v
+    if res:
+        _mark()
 
 
 START_DELAY_S = 20
