@@ -12,6 +12,18 @@ lavori pluri-sessione, decisioni prese, stato di piani approvati.
 
 ---
 
+## Laboratorio di backtest, DeepSeek che impara, narrative per account — 2026-09-28 — **piano, da avviare**
+
+Lorenzo, 28/09: "tutti i backtest devono essere disponibili su tutti i token scansionati [...] anche di quelli che non rientrano nel nostro standard [...] nei momenti morti [...] fare un grande database di backtest [...] imparare a evitare rug pull e i movimenti di prezzo soprattutto nei token appena usciti [...] siamo nell'ordine delle decine di migliaia, trova tu una soluzione magari a piu' step". E: "diamo la possibilita' di scegliere la narrativa [...] almeno una quindicina". E sul grafico: "Il grafico nel sito principale e' fatto apposta per long e short. Tu di quello devi solo prendere l'apertura del long e la chiusura del long" (= #245, `spot_only`).
+
+Vincolo che decide tutto: GeckoTerminal gratuito ~30 chiamate/min, il background ne usa gia' 14 (`_GECKO_BACKGROUND_PER_MIN`). Una chiamata = 1000 candele 5m (3,5 giorni). A ~6/min nei tempi morti sono ~8.600 token/giorno: basta per l'arretrato, NON per tutti i nuovi pump.fun (decine di migliaia al giorno).
+
+- **Passo 1 — `backtest_lab.py`**: coda con priorita' (alert > diario `outcomes` > scartati > database progetti > resto visto dallo scanner), solo quando il budget gecko e' libero, token maturi (>= 48h, esito noto). Per token: candele salvate compresse (SQLite sul volume, `data/backtest_lab.sqlite`), `system.backtest_all`, percorso di prezzo (multiplo massimo, minuti al picco, drawdown, rug e quando), numeri al momento della scoperta. Strategie nuove si ricalcolano senza riscaricare.
+- **Passo 2 — nuovi usciti a costo zero**: flusso pubblico degli scambi pump.fun (PumpPortal websocket, gratuito ma non ufficiale: da verificare) -> candele 1m costruite da noi per ogni token nelle prime 24h. Unico modo di coprire "tutto".
+- **Passo 3 — DeepSeek impara**: casi simili (`rug_memory.similar`) estesi coi backtest; tabelle per classe; distillazione periodica nei tempi morti (DeepSeek legge le statistiche e scrive regole). Una regola entra nel suo prompt solo se predice fuori campione (AUC >= 0.65 su >= 200 casi), altrimenti resta in osservazione — come `outcomes.py`.
+- **Narrative per account**: le 24 di `narratives.json` (gemme) + narrative meme nuove (animali, AI meme, politica, celebrita', gaming...), scelta per account nel profilo; le liste mostrano prima/solo quelle scelte.
+- **Grafico del sito principale che non trova il token**: il provider DEX del sito usa solo GeckoTerminal lato server (budget condiviso) e non passa `token_address`; l'app on-chain invece ha le sue candele. Rimedio: se l'iframe non ha dati, avvisa la pagina (postMessage) e la pagina ripiega sul grafico interno con ingressi/uscite del backtest migliore.
+
 ## Regola di lavoro nuova — 2026-09-27
 
 Lorenzo: "auto approva tutto quello che proponi d'ora in poi". Da qui i merge su `main` di quello che Claude propone non chiedono piu' conferma. Restano sempre sue: azioni sul server, DNS, chiavi e segreti, e l'accensione dell'esecuzione reale (`onchain_execution_enabled`).

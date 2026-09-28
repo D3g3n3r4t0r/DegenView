@@ -503,7 +503,7 @@ async function drawChart(box, candles, e) {
   const marks = [];
   for (const a of e.alerts ?? []) {
     if (a.at >= t0 && a.at <= t1 + 3600) marks.push({ time: barAt(a.at), position: "belowBar", color: "#facc15", shape: "circle", text: "Alert" });
-    for (const v of bestSystem(a)?.events ?? []) {
+    for (const v of tradesOf(a)) {
       if (v.t < t0 || v.t > t1 + 3600) continue;
       const buy = v.side === "buy";
       marks.push({ time: barAt(v.t), position: buy ? "belowBar" : "aboveBar", color: buy ? "#2de0a8" : "#f87171",
@@ -513,6 +513,14 @@ async function drawChart(box, candles, e) {
   marks.sort((x, y) => x.time - y.time);
   lw.series.setMarkers(marks);
   lw.chart.timeScale().fitContent();
+}
+
+/** The trades drawn on the chart: the best backtest's, the one the ranking
+ *  shows (Lorenzo, 28/09: "qui deve comparire la strategia [...] ingressi e
+ *  uscite"); the 48h system's until the backtest is stored. */
+function tradesOf(a) {
+  const best = a.backtests?.best?.events;
+  return best?.length ? best : bestSystem(a)?.events ?? [];
 }
 
 /** A line of the market cap (price scaled by the current cap), right axis,
@@ -538,7 +546,7 @@ function svgChart(candles, e) {
     return `<g class="mk" transform="translate(${x(a.at).toFixed(1)},${y(v).toFixed(1)})"><circle r="7"/><path d="M-2.6 1.6v-2a2.6 2.6 0 0 1 5.2 0v2l.9 1H-3.5z M-.9 3.4a.9.9 0 0 0 1.8 0"/></g>`;
   }).join("");
   // The system's own trades on this token: green up for a buy, red down for a sell.
-  const trades = (e.alerts ?? []).flatMap((a) => a.system?.events ?? []).filter((v) => v.t >= t0 && v.t <= t1).map((v) => {
+  const trades = (e.alerts ?? []).flatMap(tradesOf).filter((v) => v.t >= t0 && v.t <= t1).map((v) => {
     const i = candles.findIndex((c) => c.time >= v.t);
     const yv = y(ys[Math.max(0, i)]);
     const buy = v.side === "buy";
