@@ -2252,5 +2252,10 @@
     "status": "risolto",
     "at": 1790627274,
     "summary": "Prima il backtest aspettava il segnale d'ingresso della strategia anche dopo l'alert, e su molti token segnalati quel segnale non arrivava mai: da qui 'no entry yet' e 'dodged'. Ora l'alert e' l'ingresso: la strategia trend following compra alla prima candela dopo l'alert, poi esce e rientra con i suoi segnali (o lo stop anti-rug), commissioni incluse. Ogni riga della tab mostra rendimento, numero di trade e percentuale di vincite; se il trade e' ancora aperto lo dice. 'No entry yet', 'stayed out' e 'dodged' non compaiono piu'. Tutti gli alert vengono ricalcolati una volta con la nuova regola."
+  },
+  "seed-0214": {
+    "status": "risolto",
+    "at": 1790627652,
+    "summary": "Ora lo sniper fa un solo trade per alert: compra alla prima candela dopo l'alert di Telegram e vende quando il trend follower da' il segnale d'uscita (o scatta lo stop anti-rug, o finiscono le 48 ore). Niente rientri dopo la chiusura. La tab Strategie mostra questo backtest, e l'autotrader (simulato o reale) segue la stessa regola: prima aspettava il segnale d'ingresso della strategia anche dopo l'alert."
   }
 }
