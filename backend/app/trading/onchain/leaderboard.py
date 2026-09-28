@@ -124,6 +124,15 @@ REVIEW_WEIGHT = 0.3
 # innovation weigh in the rank, one project at a time.
 CODE_WEIGHT = 0.2
 CODE_EVERY_S = 60
+# Scan less, complete more (Lorenzo, 28/09: "quando raggiungiamo un bel bacino
+# fermiamo la scansione e concentriamoci su completare le informazioni").
+# Past POOL_TARGET projects that passed the filters, discovery of new ones
+# pauses while more than BACKLOG_LOW of them still miss a piece (analysis,
+# DeepSeek's report, the code reading); once nearly complete, one slow
+# discovery round every DISCOVERY_SLOW_S keeps the pool fresh.
+POOL_TARGET = 300
+BACKLOG_LOW = 10
+DISCOVERY_SLOW_S = 6 * 3600
 CODE_RETRY_S = 6 * 3600        # a failed reading waits: GitHub allows few calls an hour
 SERIOUS_AGE_MAX_DAYS = 3 * 365
 SERIOUS_MIN_PILLAR = 60
@@ -823,7 +832,8 @@ async def tick(client: httpx.AsyncClient, now: float | None = None) -> None:
         collect_saved()
     except Exception:
         logger.exception("classifica: lettura del radar fallita")
-    await _step("progetti", discovery.tick, client, add, now)
+    if discovery_open(now):
+        await _step("progetti", discovery.tick, client, add, now)
     if now - _state["last_market"] >= MARKET_POLL_S and _entries:
         _state["last_market"] = now
         await _step("dexscreener", _poll_market, client)
@@ -904,6 +914,50 @@ async def _review_board(now: float) -> None:
             _entries[k]["review"] = v
     if res:
         _mark()
+
+
+def pool_status(now: float | None = None) -> dict:
+    """The pool (projects past the filters, in the database) and what is
+    still missing on the ones in the working set."""
+    now = now or time.time()
+    try:
+        by = projects_db.stats().get("by_status") or {}
+    except Exception:
+        by = {}
+    pool = int(by.get("studied", 0)) + int(by.get("ranked", 0))
+    waiting = reports = code = done = 0
+    for e in _entries.values():
+        o = e.get("overall") or {}
+        if not e.get("pillars") or o.get("pending"):
+            waiting += 1
+            continue
+        if o.get("fatal") or research_floor(e, now):
+            continue
+        miss_report = not e.get("judge")
+        has_repo = bool((((e.get("pillars") or {}).get("github") or {}).get("facts") or {}).get("repo"))
+        miss_code = has_repo and not e.get("code")
+        reports += miss_report
+        code += miss_code
+        done += not (miss_report or miss_code)
+    backlog = waiting + reports + code
+    return {"pool": pool, "target": POOL_TARGET, "waiting": waiting, "reports": reports, "code": code,
+            "complete": done, "backlog": backlog,
+            "paused": pool >= POOL_TARGET and backlog > BACKLOG_LOW}
+
+
+def discovery_open(now: float) -> bool:
+    """Scan for new projects only while the pool is small, or slowly once
+    what we have is nearly complete."""
+    st = pool_status(now)
+    _state["pool"] = st
+    if st["pool"] < POOL_TARGET:
+        return True
+    if st["paused"]:
+        return False
+    if now - _state.get("slow_scan_at", 0.0) < DISCOVERY_SLOW_S:
+        return False
+    _state["slow_scan_at"] = now
+    return True
 
 
 async def _read_code(client: httpx.AsyncClient, now: float) -> None:
