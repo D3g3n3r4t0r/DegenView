@@ -312,7 +312,7 @@ async def backfill(client: httpx.AsyncClient, items: list[dict], kind: str = "me
 SYSTEM_FETCHES_PER_TICK = 15
 # Bump when system.follow's output changes: finished alerts are fetched and
 # recomputed once more (v2: each sell says why, "crash" or "signal").
-SYSTEM_VERSION = 7   # 7: rug stop, no entries after a fast -65%
+SYSTEM_VERSION = 8   # 8: rug stop with a reason (liquidity pulled, crash, dead, abandoned, on-chain)
 
 
 def backtest_status(kind: str = "meme", now: float | None = None) -> dict:
@@ -346,7 +346,7 @@ async def refresh_system(client, now: float | None = None, gap_s: float = 0.0) -
     from the minute readings. Results are recomputed when the bars change;
     once the window is over the result is frozen and the bars dropped."""
     from app.sniper.scanner import GECKO_NETWORKS
-    from app.trading.onchain import system
+    from app.trading.onchain import outcomes, system
     now = now or time.time()
     fetched = changed = 0
     def _ready(a):
@@ -376,7 +376,10 @@ async def refresh_system(client, now: float | None = None, gap_s: float = 0.0) -
         if not a.get("bars_fetched") or (sig == a.get("system_sig") and now < a["at"] + system.WINDOW_S):
             continue
         res = await asyncio.to_thread(system.evaluate, bars, a["at"], gone=a["gone"], now=now)
-        a["backtests"] = await asyncio.to_thread(system.backtest_all, bars)
+        j = outcomes._journal.get(f"{a['chain']}:{a.get('token_address')}")
+        known = ({"at": j["rug_at"], "why": j.get("rug_why") or ""}
+                 if j and j.get("rug") and j.get("rug_at") else None)
+        a["backtests"] = await asyncio.to_thread(system.backtest_all, bars, known)
         a["system"], a["system_sig"], a["system_v"] = res, sig, SYSTEM_VERSION
         changed += 1
         if all(r.get("done") for r in res.values()):

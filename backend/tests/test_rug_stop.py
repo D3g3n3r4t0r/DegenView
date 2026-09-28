@@ -8,59 +8,115 @@ def _bars(rows):
     return [[int(ts.timestamp()), o, h, low, c, v] for ts, o, h, low, c, v in rows]
 
 
-def _series(prices, start="2024-01-01", freq="5min"):
+def _series(prices, volumes=None, start="2024-01-01", freq="5min"):
     idx = pd.date_range(start, periods=len(prices), freq=freq, tz="UTC")
+    if volumes is None:
+        volumes = [100.0 + i for i in range(len(prices))]
     return pd.DataFrame({"open": prices, "high": [p * 1.01 for p in prices],
                          "low": [p * 0.99 for p in prices], "close": prices,
-                         "volume": [100.0 + i for i in range(len(prices))]}, index=idx)
+                         "volume": volumes}, index=idx)
 
 
-def _rug_frame():
-    """Steady, a pump, then a fall to 10% of the peak within 3 hours, then a
-    slow recovery."""
+def _signals(df):
+    return pd.DataFrame({"entry_long": True, "exit_long": False,
+                         "entry_short": True, "exit_short": False}, index=df.index)
+
+
+def _floor_frame():
+    """A pump to 160, then a fall to 10% of the peak within 4 hours, then a
+    slow recovery: the FLOOR-like case."""
     prices = [100.0] * 24
     prices += [100.0 + 5 * i for i in range(1, 13)]          # pump to 160
-    prices += [160.0 * (0.9 ** i) for i in range(1, 37)]     # fall to ~3.6 in 3h
+    prices += [160.0 * (0.9 ** i) for i in range(1, 49)]     # fall to ~1.0 in 4h
     prices += [4.0 + 0.5 * i for i in range(1, 25)]          # slow recovery
     return _series(prices)
 
 
-def test_rug_bar_is_first_bar_below_35pct_of_peak():
-    df = _rug_frame()
-    i = strategies.rug_bar(df)
-    assert i is not None
-    peak = df["high"].rolling(strategies.RUG_WINDOW).max()
-    assert df["low"].iloc[i] <= (1 - strategies.RUG_DROP) * peak.iloc[i]
-    assert all(df["low"].iloc[j] > (1 - strategies.RUG_DROP) * peak.iloc[j] for j in range(i))
+def test_live_pullback_then_recovery_is_not_a_rug():
+    """A live token's -50% pullback over a day, then recovery: no event."""
+    prices = [100.0] * 24
+    prices += [100.0 - 2.0 * i for i in range(1, 26)]        # -50% over ~2h
+    prices += [50.0 + 2.0 * i for i in range(1, 26)]         # recovery
+    df = _series(prices)
+    assert strategies.rug_event(df) is None
+    signals = _signals(df)
+    assert strategies.rug_stop(df, signals).equals(signals)
+
+
+def test_crash_under_30pct_of_6h_high():
+    df = _floor_frame()
+    ev = strategies.rug_event(df)
+    assert ev is not None
+    assert ev["why"].startswith("crash ")
+    assert "in under 6h" in ev["why"]
+    i = ev["i"]
+    peak6 = df["high"].rolling(strategies.RUG_CRASH_WINDOW).max()
+    assert df["close"].iloc[i] <= 0.30 * peak6.iloc[i]
+    assert all(df["close"].iloc[j] > 0.30 * peak6.iloc[j] for j in range(i))
+
+
+def test_one_candle_halving_is_liquidity_pulled():
+    prices = [100.0] * 24 + [100.0, 40.0] + [40.0] * 12
+    df = _series(prices)
+    ev = strategies.rug_event(df)
+    assert ev is not None
+    assert ev["i"] == 25
+    assert ev["why"] == "one candle -60%: liquidity pulled"
+
+
+def test_slow_bleed_is_dead_token():
+    """-88% over 3 days, no single candle halving and no 6h crash."""
+    prices = [100.0 * (0.999 ** i) for i in range(24 * 36)]
+    df = _series(prices)
+    ev = strategies.rug_event(df)
+    assert ev is not None
+    assert ev["why"].endswith("from its top: dead token")
+    i = ev["i"]
+    top = df["high"].cummax()
+    assert df["close"].iloc[i] <= strategies.RUG_DEAD_RATIO * top.iloc[i]
+    assert all(df["close"].iloc[j] > strategies.RUG_DEAD_RATIO * top.iloc[j] for j in range(i))
+
+
+def test_volume_drying_up_is_abandoned():
+    """-65% then volume falling to 2% of its peak: trading dried up."""
+    prices = [100.0] * 24
+    prices += [100.0 - 2.0 * i for i in range(1, 34)]        # -65% over ~3h
+    prices += [35.0] * 24
+    volumes = [1000.0] * 24 + [1000.0] * 33 + [20.0] * 24
+    df = _series(prices, volumes)
+    ev = strategies.rug_event(df)
+    assert ev is not None
+    assert ev["why"] == "trading dried up after the fall"
+
+
+def test_known_onchain_rug_fires_at_first_bar_after():
+    prices = [100.0] * 48
+    df = _series(prices)
+    at = int(df.index[20].timestamp())
+    ev = strategies.rug_event(df, {"at": at, "why": "liquidity pulled on-chain"})
+    assert ev is not None
+    assert ev["i"] == 20
+    assert ev["why"] == "liquidity pulled on-chain"
+    ev2 = strategies.rug_event(df, {"at": at, "why": ""})
+    assert ev2 is not None and ev2["why"] == "rug seen on-chain"
 
 
 def test_rug_stop_blocks_entries_and_closes_long():
-    df = _rug_frame()
-    signals = pd.DataFrame({"entry_long": True, "exit_long": False,
-                            "entry_short": True, "exit_short": False}, index=df.index)
+    df = _floor_frame()
+    signals = _signals(df)
     out = strategies.rug_stop(df, signals)
-    i = strategies.rug_bar(df)
+    i = strategies.rug_event(df)["i"]
     assert not out["entry_long"].iloc[i:].any()
     assert not out["entry_short"].iloc[i:].any()
     assert bool(out["exit_long"].iloc[i])
 
 
-def test_small_dip_is_not_a_rug():
-    prices = [100.0] * 24 + [100.0 - 0.5 * i for i in range(1, 25)]   # -12%, well under 65%
-    df = _series(prices)
-    assert strategies.rug_bar(df) is None
-    signals = pd.DataFrame({"entry_long": True, "exit_long": False,
-                            "entry_short": False, "exit_short": False}, index=df.index)
-    out = strategies.rug_stop(df, signals)
-    assert out.equals(signals)
-
-
 def test_backtest_all_reports_rug_and_no_events_after():
-    df = _rug_frame()
+    df = _floor_frame()
     bars = _bars([(ts, r.open, r.high, r.low, r.close, r.volume) for ts, r in df.iterrows()])
     out = system.backtest_all(bars)
     assert out["rug"] is not None
-    assert out["rug"]["drop"] == strategies.RUG_DROP
+    assert out["rug"]["why"]
     at = out["rug"]["at"]
     best = out["best"]
     if best:

@@ -528,7 +528,8 @@ async function drawChart(box, candles, e) {
     }
     const rug = a.backtests?.rug?.at;
     if (rug != null && rug >= t0 && rug <= t1 + 3600) {
-      marks.push({ time: barAt(rug), position: "aboveBar", color: "#f87171", shape: "square", text: "Rug · strategy off" });
+      const why = a.backtests?.rug?.why ? `Rug · ${a.backtests.rug.why}`.slice(0, 40) : "Rug · strategy off";
+      marks.push({ time: barAt(rug), position: "aboveBar", color: "#f87171", shape: "square", text: why });
     }
   }
   marks.sort((x, y) => x.time - y.time);
