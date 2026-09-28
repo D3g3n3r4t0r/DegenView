@@ -28,7 +28,7 @@ let data = null;
 let version = -1;
 let open = null;
 let timer = null;
-let chosen = [];
+let myNarr = [];   // narratives this account picked in Profile
 
 const key = (e) => `${e.chain}:${e.token_address}`;
 const usd = (v) => (v == null ? "—" : v >= 1e6 ? `$${(v / 1e6).toFixed(v >= 1e7 ? 0 : 1)}M`
@@ -59,9 +59,9 @@ export function mountLeaderboard() {
     if (document.visibilityState === "visible") refresh();
   });
   setInterval(() => data && paintAges(), 30_000);
-  api.getNarratives().then((d) => { chosen = d.selected ?? []; if (data) paint(false); }).catch(() => {});
+  api.getNarratives().then((d) => { myNarr = d.selected ?? []; if (data) paint(false); }).catch(() => {});
   document.addEventListener("lae:narratives", (e) => {
-    chosen = e.detail ?? [];
+    myNarr = e.detail ?? [];
     if (data) paint(false);
   });
   refresh();
@@ -122,7 +122,7 @@ function render(animate) {
   const entries = data.entries ?? [];
   const podium = root.querySelector("[data-board-podium]");
   const list = root.querySelector("[data-board-list]");
-  const chosenSet = new Set(chosen);
+  const chosenSet = new Set(myNarr);
   const rows = chosenSet.size
     ? entries.slice().sort((a, b) => {
         const am = (a.narratives ?? []).some((n) => chosenSet.has(n.key)) ? 0 : 1;
@@ -297,7 +297,7 @@ function gemRow(e) {
     why: gemWhy(e), info: details(e),
   });
   const nar = (e.narratives ?? []).slice().sort((a, b) => b.heat - a.heat)[0];
-  const mine = nar && chosen.includes(nar.key);
+  const mine = nar && myNarr.includes(nar.key);
   return tokenRow({ id, symbol: e.symbol, name: e.name, chain: e.chain, token: e.token_address, image: e.image,
     cap: e.market_cap, ageTs: e.launched_at, badge: e.early ? "early" : null, sign: "",
     sub: nar ? `<span class="bd-nar${mine ? " is-mine" : ""}">${escapeHtml(nar.label)}</span>` : "",
