@@ -2320,9 +2320,18 @@ async def login(req: LoginRequest, request: Request, response: Response) -> dict
 
 
 @app.post("/api/auth/logout")
-async def logout(response: Response) -> dict:
+async def logout(request: Request, response: Response) -> dict:
+    auth.revoke_session(request.cookies.get(auth.SESSION_COOKIE) or "")
     response.delete_cookie(auth.SESSION_COOKIE)
     response.delete_cookie(guest_links.GUEST_COOKIE)
+    return {"ok": True}
+
+
+@app.post("/api/auth/logout-all")
+async def logout_all(response: Response, user: User = Depends(auth.get_current_user)) -> dict:
+    """Every session of this account, on every device, stops working."""
+    auth.revoke_all_sessions(user.id)
+    response.delete_cookie(auth.SESSION_COOKIE)
     return {"ok": True}
 
 
@@ -2629,11 +2638,41 @@ async def diagnostics_test_connection(
         return {"ok": False, "market": body.market, "exchange": body.exchange, "error": str(exc)}
 
 
+class ReauthRequest(BaseModel):
+    password: str = ""
+
+
+def _require_password(user: User, password: str, request: Request) -> None:
+    """A session alone must not enrol the factor that later approves a key
+    export (audit 29/09, S05): adding or removing a passkey asks for the
+    account password again, under the same lockout as the login."""
+    ip_key, user_key = f"ip:{_client_ip(request)}", f"reauth:{user.id}"
+    if rate_limit.is_locked(ip_key) or rate_limit.is_locked(user_key):
+        raise HTTPException(status_code=429, detail="Too many failed attempts. Try again in a few minutes.")
+    if not password or auth.verify_login(user.email, password) is None:
+        rate_limit.register_failure(ip_key)
+        rate_limit.register_failure(user_key)
+        raise HTTPException(status_code=401, detail="Wrong password")
+    rate_limit.register_success(user_key)
+
+
+def _notify_passkey_change(user: User, what: str) -> None:
+    text = f"Passkey {what} sull'account {user.email}. Se non sei stato tu, cambia password e sposta i fondi."
+    asyncio.create_task(telegram.send_infra_alert(text))
+    if user.telegram_chat_id and _telegram_allowed(user):
+        asyncio.create_task(telegram.send_to(user.telegram_chat_id, text))
+
+
 @app.post("/api/auth/passkey/register/options")
-async def passkey_register_options(user: User = Depends(auth.get_current_user)) -> dict:
+async def passkey_register_options(
+    request: Request, body: ReauthRequest | None = None, user: User = Depends(auth.get_current_user),
+) -> dict:
     """Chiamata da un browser gia' loggato — e' l'iscrizione, non il
     flusso di rivelazione: Face ID/Touch ID qui autorizza solo se stesso
-    a diventare un modo per approvare in futuro, non rivela niente."""
+    a diventare un modo per approvare in futuro, non rivela niente.
+    The password is asked again first: the state token is only handed out
+    after it, so /verify is bound to it."""
+    _require_password(user, body.password if body else "", request)
     options_json, state_token = onchain_passkey.start_registration(user)
     return {"options": options_json, "state_token": state_token}
 
@@ -2653,6 +2692,7 @@ async def passkey_register_verify(
     except Exception as exc:  # noqa: BLE001 — errore di verifica WebAuthn, mai un 500 muto
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     auth.add_passkey(user.id, passkey)
+    _notify_passkey_change(user, f"aggiunta ({passkey.label or 'senza nome'})")
     return {"ok": True, "label": passkey.label or "Passkey", "created_at": passkey.created_at}
 
 
@@ -2662,8 +2702,13 @@ async def list_passkeys(user: User = Depends(auth.get_current_user)) -> list[dic
 
 
 @app.delete("/api/auth/passkey/{credential_id}")
-async def remove_passkey(credential_id: str, user: User = Depends(auth.get_current_user)) -> dict:
+async def remove_passkey(
+    credential_id: str, request: Request, body: ReauthRequest | None = None,
+    user: User = Depends(auth.get_current_user),
+) -> dict:
+    _require_password(user, body.password if body else "", request)
     auth.delete_passkey(user.id, credential_id)
+    _notify_passkey_change(user, "rimossa")
     return {"ok": True}
 
 
@@ -2788,14 +2833,21 @@ class OnchainRevealApproveRequest(BaseModel):
 
 
 @app.post("/api/onchain/reveal/approve")
-async def approve_onchain_reveal(body: OnchainRevealApproveRequest) -> dict:
+async def approve_onchain_reveal(body: OnchainRevealApproveRequest, request: Request) -> dict:
     """Chiamata dalla pagina sul TELEFONO, apposta senza richiedere il
     cookie di sessione del browser (e' un altro dispositivo) — l'identita'
     la stabilisce la password, come al login. Un token che non appartiene
     a chi ha inserito quella password non si approva."""
+    # Same lockout as the login: this is a password check too (audit S05).
+    ip_key, email_key = f"ip:{_client_ip(request)}", f"email:{body.email.strip().lower()}"
+    if rate_limit.is_locked(ip_key) or rate_limit.is_locked(email_key):
+        raise HTTPException(status_code=429, detail="Too many failed attempts. Try again in a few minutes.")
     verified = auth.verify_login(body.email, body.password)
     if verified is None:
+        rate_limit.register_failure(ip_key)
+        rate_limit.register_failure(email_key)
         raise HTTPException(status_code=401, detail="Email o password errate")
+    rate_limit.register_success(email_key)
     if not onchain_reveal.approve(body.token, verified.id):
         raise HTTPException(status_code=400, detail="Request expired or invalid — try again from the browser")
     return {"ok": True}

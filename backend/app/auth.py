@@ -15,6 +15,7 @@ individually instead of a single shared broadcast list.
 import hashlib
 import hmac
 import json
+import logging
 import secrets
 import time
 from pathlib import Path
@@ -22,10 +23,12 @@ from pathlib import Path
 from fastapi import Cookie, HTTPException
 
 from app.models import OnchainChain, OnchainWallet, Passkey, User
-from app.trading.crypto import encrypt as _enc, decrypt as _dec
+from app.trading import crypto as _crypto
+from app.trading.crypto import decrypt as _legacy_dec
 
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 _DATA_DIR.mkdir(parents=True, exist_ok=True)
+logger = logging.getLogger(__name__)
 _USERS_FILE = _DATA_DIR / "users.json"
 _SECRET_FILE = _DATA_DIR / "session_secret.txt"
 
@@ -60,27 +63,103 @@ _SECRET = _get_secret()
 # una chiave che sposta fondi veri non deve dipendere dallo stesso materiale
 # di una che autentica un browser. HMAC come PRF con un'etichetta fissa —
 # stesso principio di HKDF, senza bisogno di una libreria in piu'.
-_ONCHAIN_SECRET = hmac.new(_SECRET, b"onchain-wallet-v1", hashlib.sha256).digest()
+_ONCHAIN_SECRET = hmac.new(_SECRET, b"onchain-wallet-v1", hashlib.sha256).digest()   # legacy records only
+
+
+def _wallet_keys() -> tuple[dict[str, bytes], str]:
+    """Keys that can open v2 wallet records, and the id of the one that seals
+    new ones (audit 29/09, S07). With WALLET_ENCRYPTION_KEY set, custody no
+    longer derives from SESSION_SECRET: whoever can sign cookies can't
+    decrypt keys. Without it, a key derived from SESSION_SECRET under its own
+    label ("s"). Records sealed with "s" move to "w" the first time they're
+    read after the variable is set."""
+    import os
+    keys = {"s": _crypto.derive_key(_SECRET, b"onchain-wallet-aead-v2")}
+    env = os.environ.get("WALLET_ENCRYPTION_KEY", "").strip()
+    if env:
+        keys["w"] = _crypto.derive_key(env.encode(), b"onchain-wallet-aead-v2")
+        return keys, "w"
+    return keys, "s"
+
+
+_WALLET_KEYS, _WALLET_KID = _wallet_keys()
+_CRED_KEYS = {"c": _crypto.derive_key(_SECRET, b"exchange-credential-aead-v2")}
+
+
+def _enc(plaintext: str, _secret: bytes = b"") -> str:
+    """Exchange credentials: sealed with AES-GCM (v2); _secret is ignored and
+    kept only so the call sites read as before."""
+    return _crypto.seal(plaintext, _CRED_KEYS["c"], "c", b"exchange-credential")
+
+
+def _dec(token: str, secret: bytes) -> str:
+    """v2 or legacy. A v2 record that fails to authenticate reads as empty,
+    like a missing credential, never as garbage."""
+    if _crypto.is_sealed(token):
+        try:
+            return _crypto.unseal(token, _CRED_KEYS, b"exchange-credential")
+        except _crypto.SealError:
+            logger.error("exchange credential failed authentication: ignored")
+            return ""
+    return _legacy_dec(token, secret)
+
+
+def _wallet_aad(user_id: str, chain: str) -> bytes:
+    return f"onchain-wallet|{user_id}|{chain}".encode()
+
+
+_load_failed = False
+
+
+def _read_users_file(path) -> list | None:
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        return None
+    return raw if isinstance(raw, list) else None
 
 
 def _load_users() -> None:
+    """users.json holds the wallet keys. If it can't be read, fall back to
+    the last good copy; if that fails too, refuse to write anything (audit
+    29/09): the old code started empty and the next save erased every
+    wallet for good."""
+    global _load_failed
     if not _USERS_FILE.exists():
         return
-    try:
-        raw = json.loads(_USERS_FILE.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return
+    raw = _read_users_file(_USERS_FILE)
+    if raw is None:
+        backup = _USERS_FILE.with_suffix(".json.bak")
+        raw = _read_users_file(backup) if backup.exists() else None
+        if raw is None:
+            _load_failed = True
+            logger.critical("users.json unreadable and no good backup: writes to it are blocked")
+            return
+        logger.critical("users.json unreadable: loaded %s instead", backup.name)
     for item in raw:
         try:
             user = User(**item)
             _users[user.id] = user
         except (TypeError, ValueError):
+            logger.error("users.json: skipped an unreadable user record")
             continue
 
 
 def _save_users() -> None:
-    payload = [u.model_dump() for u in _users.values()]
-    _USERS_FILE.write_text(json.dumps(payload), encoding="utf-8")
+    """Atomic: a crash mid-write leaves the old file whole, and the previous
+    version stays as users.json.bak."""
+    if _load_failed:
+        raise RuntimeError("users.json could not be read at startup: not overwriting it")
+    import os
+    payload = json.dumps([u.model_dump() for u in _users.values()])
+    tmp = _USERS_FILE.with_suffix(".json.tmp")
+    with tmp.open("w", encoding="utf-8") as fh:
+        fh.write(payload)
+        fh.flush()
+        os.fsync(fh.fileno())
+    if _USERS_FILE.exists() and _read_users_file(_USERS_FILE) is not None:
+        os.replace(_USERS_FILE, _USERS_FILE.with_suffix(".json.bak"))
+    os.replace(tmp, _USERS_FILE)
 
 
 _load_users()
@@ -329,7 +408,8 @@ def create_onchain_wallet(user_id: str, chain: OnchainChain) -> User | None:
     wallets = dict(user.onchain_wallets)
     wallets[chain] = OnchainWallet(
         address=key.address,
-        private_key_enc=_enc(key.private_key_hex, _ONCHAIN_SECRET),
+        private_key_enc=_crypto.seal(key.private_key_hex, _WALLET_KEYS[_WALLET_KID], _WALLET_KID,
+                                     _wallet_aad(user_id, chain)),
         enabled=False,
         created_at=time.time(),
     )
@@ -365,7 +445,17 @@ def get_decrypted_onchain_private_key(user: User, chain: OnchainChain) -> str:
     wallet = user.onchain_wallets.get(chain)
     if wallet is None:
         return ""
-    private_key_hex = _dec(wallet.private_key_enc, _ONCHAIN_SECRET)
+    token = wallet.private_key_enc
+    if _crypto.is_sealed(token):
+        try:
+            private_key_hex = _crypto.unseal(token, _WALLET_KEYS, _wallet_aad(user.id, chain))
+        except _crypto.SealError as exc:
+            raise OnchainKeyIntegrityError(
+                f"The saved key for {chain} does not authenticate ({exc}) — tampered, moved or wrong "
+                "server key; not used."
+            ) from exc
+    else:
+        private_key_hex = _legacy_dec(token, _ONCHAIN_SECRET)
     if not private_key_hex:
         return ""
     if address_from_private_key(chain, private_key_hex) != wallet.address:
@@ -373,7 +463,30 @@ def get_decrypted_onchain_private_key(user: User, chain: OnchainChain) -> str:
             f"The decrypted key for {chain} does not match the saved address "
             f"({wallet.address}) — corrupted data, not used."
         )
+    if _crypto.key_id_of(token) != _WALLET_KID:
+        _reseal_wallet(user.id, chain, token, private_key_hex)
     return private_key_hex
+
+
+def _reseal_wallet(user_id: str, chain: OnchainChain, old_token: str, private_key_hex: str) -> None:
+    """Migrate one record to the current v2 key, only after the address
+    check passed, and only if nobody changed it meanwhile. The old record
+    goes to a backup file first: a failed migration never loses a key."""
+    user = _users.get(user_id)
+    wallet = user.onchain_wallets.get(chain) if user else None
+    if wallet is None or wallet.private_key_enc != old_token:
+        return
+    new_token = _crypto.seal(private_key_hex, _WALLET_KEYS[_WALLET_KID], _WALLET_KID, _wallet_aad(user_id, chain))
+    if _crypto.unseal(new_token, _WALLET_KEYS, _wallet_aad(user_id, chain)) != private_key_hex:
+        return
+    backup = _USERS_FILE.with_name("wallet_keys_pre_v2.jsonl")
+    with backup.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps({"user_id": user_id, "chain": chain, "address": wallet.address,
+                             "private_key_enc": old_token, "at": time.time()}) + "\n")
+    wallets = dict(user.onchain_wallets)
+    wallets[chain] = wallet.model_copy(update={"private_key_enc": new_token})
+    _users[user_id] = user.model_copy(update={"onchain_wallets": wallets})
+    _save_users()
 
 
 def add_passkey(user_id: str, passkey: Passkey) -> User | None:
@@ -414,23 +527,84 @@ def update_passkey_sign_count(user_id: str, credential_id: str, new_sign_count: 
 
 
 def make_session_cookie(user_id: str) -> str:
+    """user_id:expires:sid-version:sig. The sid lets logout revoke this one
+    cookie on the server; the version lets "log out everywhere" revoke all
+    of them (audit 29/09, S06)."""
     expires = int(time.time()) + SESSION_MAX_AGE_SECONDS
-    payload = f"{user_id}:{expires}"
+    user = _users.get(user_id)
+    version = user.session_version if user else 0
+    payload = f"{user_id}:{expires}:{secrets.token_hex(8)}-{version}"
     sig = hmac.new(_SECRET, payload.encode("utf-8"), hashlib.sha256).hexdigest()
     return f"{payload}:{sig}"
 
 
-def _verify_session_cookie(cookie: str) -> str | None:
-    try:
-        user_id, expires_s, sig = cookie.split(":", 2)
-    except ValueError:
+def _parse_session_cookie(cookie: str) -> tuple[str, int, str | None, int] | None:
+    """(user_id, expires, sid, version) of a cookie with a valid signature,
+    or None. Cookies from before S06 have no sid and count as version 0."""
+    parts = cookie.split(":")
+    if len(parts) == 3:
+        user_id, expires_s, sig = parts
+        payload, sid, version = f"{user_id}:{expires_s}", None, 0
+    elif len(parts) == 4:
+        user_id, expires_s, sid_version, sig = parts
+        payload = f"{user_id}:{expires_s}:{sid_version}"
+        sid, _, version_s = sid_version.partition("-")
+        try:
+            version = int(version_s)
+        except ValueError:
+            return None
+    else:
         return None
-    expected = hmac.new(_SECRET, f"{user_id}:{expires_s}".encode("utf-8"), hashlib.sha256).hexdigest()
+    expected = hmac.new(_SECRET, payload.encode("utf-8"), hashlib.sha256).hexdigest()
     if not hmac.compare_digest(sig, expected):
         return None
-    if int(expires_s) < time.time():
+    try:
+        expires = int(expires_s)
+    except ValueError:
+        return None
+    return user_id, expires, sid, version
+
+
+def _verify_session_cookie(cookie: str) -> str | None:
+    parsed = _parse_session_cookie(cookie)
+    if parsed is None:
+        return None
+    user_id, expires, sid, version = parsed
+    if expires < time.time():
+        return None
+    user = _users.get(user_id)
+    if user is not None and (version != user.session_version or (sid and sid in user.revoked_sessions)):
         return None
     return user_id
+
+
+def revoke_session(cookie: str) -> None:
+    """Logout: this cookie stops working on the server too, not only in the
+    browser that deleted it. A pre-S06 cookie has no id of its own, so it
+    can only be revoked with every other session of the account."""
+    parsed = _parse_session_cookie(cookie or "")
+    if parsed is None:
+        return
+    user_id, expires, sid, _version = parsed
+    user = _users.get(user_id)
+    if user is None:
+        return
+    if sid is None:
+        revoke_all_sessions(user_id)
+        return
+    now = int(time.time())
+    revoked = {k: v for k, v in user.revoked_sessions.items() if v > now}
+    revoked[sid] = expires
+    _users[user_id] = user.model_copy(update={"revoked_sessions": revoked})
+    _save_users()
+
+
+def revoke_all_sessions(user_id: str) -> None:
+    user = _users.get(user_id)
+    if user is None:
+        return
+    _users[user_id] = user.model_copy(update={"session_version": user.session_version + 1, "revoked_sessions": {}})
+    _save_users()
 
 
 async def get_current_user_optional(

@@ -158,7 +158,7 @@ def test_kill_switch_blocks_every_onchain_endpoint(client, monkeypatch):
 
 def test_passkey_register_options_requires_session(client):
     # sessione presente in questo fixture (dependency_overrides) — verifica solo che risponda con opzioni valide
-    resp = client.post("/api/auth/passkey/register/options")
+    resp = client.post("/api/auth/passkey/register/options", json={"password": _PASSWORD})
     assert resp.status_code == 200
     body = resp.json()
     assert body["state_token"]
@@ -166,7 +166,7 @@ def test_passkey_register_options_requires_session(client):
 
 
 def test_passkey_register_verify_rejects_bad_credential(client):
-    opts = client.post("/api/auth/passkey/register/options").json()
+    opts = client.post("/api/auth/passkey/register/options", json={"password": _PASSWORD}).json()
     resp = client.post("/api/auth/passkey/register/verify", json={
         "state_token": opts["state_token"], "credential": {"id": "not-real"},
     })
