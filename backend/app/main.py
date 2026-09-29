@@ -4190,10 +4190,16 @@ def _is_admin(user: User) -> bool:
     return not guest_links.is_guest(user) and user.email.lower() in allowed
 
 
+def _full_access(user: User) -> bool:
+    """Top plan without the admin powers: admins plus full_access_emails."""
+    allowed = {e.strip().lower() for e in settings.full_access_emails.split(",") if e.strip()}
+    return _is_admin(user) or (not guest_links.is_guest(user) and user.email.lower() in allowed)
+
+
 @app.get("/api/onchain/plan")
 async def onchain_plan(user: User = Depends(auth.get_current_user)) -> dict:
     """Il piano dell'utente e quanto ne ha usato oggi. Vedi plans.py."""
-    return onchain_plans.status(user.email, _is_admin(user))
+    return onchain_plans.status(user.email, _full_access(user))
 
 
 @app.post("/api/onchain/research")
@@ -4204,7 +4210,7 @@ async def onchain_research_read(req: ProjectReadRequest, user: User = Depends(au
     if req.chain not in ("solana", "robinhood") or not re.fullmatch(r"[0-9A-Za-z]{20,64}", req.token):
         raise HTTPException(status_code=400, detail="Unknown chain or malformed address.")
     return await onchain_plans.read_project(user.email, req.chain, req.token, deep=req.deep,
-                                            admin=_is_admin(user))
+                                            admin=_full_access(user))
 
 
 @app.post("/api/onchain/plan")
