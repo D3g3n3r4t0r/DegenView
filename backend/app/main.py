@@ -4103,6 +4103,16 @@ async def onchain_radar_stream(user: User = Depends(auth.get_current_user)) -> S
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
+def _token_hash(item: dict) -> str:
+    """The alert's link opens the app on that token's page (detail.js
+    openFromHash): "&token=<chain>:<address>&sym=<ticker>" after the section."""
+    from urllib.parse import quote
+    token = item.get("token_address")
+    if not token or not item.get("chain"):
+        return ""
+    return f"&token={quote(item['chain'], safe='')}:{quote(token, safe='')}&sym={quote(item.get('symbol') or '', safe='')}"
+
+
 _LISTING_NOTIFY_PER_HOUR = 12
 _listing_notified: dict[str, list[float]] = {}
 
@@ -4112,7 +4122,7 @@ async def _notify_listing(item: dict) -> None:
     chiusa non deve voler dire saperlo tardi. Al massimo 12 all'ora."""
     from app.notify import telegram
     now = _time.time()
-    link = f"{settings.public_base_url}/onchain-app.html#listing={item['chain']}:{item['pair_address']}"
+    link = f"{settings.public_base_url}/onchain-app.html#listing={item['chain']}:{item['pair_address']}" + _token_hash(item)
     text = onchain_listings.telegram_text(item, now, link)
     # The signal's own track record: what entering on this message would pay.
     onchain_alert_track.record(item, "meme", now)
@@ -4156,7 +4166,8 @@ def _gem_telegram_text(kind: str, e: dict) -> str:
     for label, url in (("🌐 Sito", e.get("website")), ("GitHub", e.get("github")), ("Grafico", e.get("pair_url"))):
         if url:
             links.append(f'<a href="{esc(url, quote=True)}">{label}</a>')
-    links.append(f'<a href="{esc(settings.public_base_url, quote=True)}/onchain-app.html#gems">Apri Gem Finder</a>')
+    app_url = f"{settings.public_base_url}/onchain-app.html#gems" + _token_hash(e)
+    links.append(f'<a href="{esc(app_url, quote=True)}">Apri {esc(e.get("symbol") or "il token")} in DEGEN</a>')
     lines.append(" · ".join(links))
     lines.append("<i>Ricerca, non un consiglio: entra solo con cio' che puoi perdere.</i>")
     return "\n".join(lines)

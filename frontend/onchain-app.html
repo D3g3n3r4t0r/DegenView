@@ -2575,7 +2575,7 @@
   <script>
     /* A link with #gems or #meme opens that section first, before any
        module loads. */
-    document.documentElement.dataset.section = /gem/i.test(location.hash) ? "gems" : "meme";
+    document.documentElement.dataset.section = /gem/i.test(location.hash.split("&")[0]) ? "gems" : "meme";
   </script>
   <div class="splash" id="splash" aria-hidden="true">
     <span class="splash-halo"></span>

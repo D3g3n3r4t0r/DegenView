@@ -105,13 +105,70 @@ async function onClick(event) {
     else navigator.clipboard?.writeText(url);
     return;
   }
-  if (t.closest("[data-copy]")) { navigator.clipboard?.writeText(current.e.token ?? ""); return; }
+  if (t.closest("[data-copy]")) { copyAddress(); return; }
   if (t.closest("[data-user-swap]")) { openUserSwap(current.e); return; }
   if (t.closest("[data-buy]")) {
     const e = current.e;
     dlg.close();
     document.dispatchEvent(new CustomEvent("lae:buy", { detail: { chain: e.chain, address: e.token, symbol: e.symbol } }));
   }
+}
+
+// Tapping the ticker or the icon beside it copies the token's contract
+// address (Lorenzo: "ogni ticker ... se clicco qui ... copiare l'indirizzo
+// corretto on chain"). The ticker reads "Copied" for a moment, so the tap
+// shows it worked; in-app browsers without the clipboard API fall back to
+// a hidden textarea.
+async function copyAddress() {
+  const { symbol, token } = current.e;
+  if (!token) return;
+  let ok = false;
+  try { await navigator.clipboard.writeText(token); ok = true; } catch { ok = legacyCopy(token); }
+  const el = dlg.querySelector(".dt-sym");
+  if (!ok || !el) return;
+  el.textContent = "Copied";
+  setTimeout(() => { if (el.isConnected) el.textContent = symbol; }, 1200);
+}
+
+function legacyCopy(text) {
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.setAttribute("readonly", "");
+  ta.style.cssText = "position:fixed;opacity:0;inset:0 auto auto 0";
+  dlg.append(ta);
+  ta.select();
+  let ok = false;
+  try { ok = document.execCommand("copy"); } catch { /* nothing else to try */ }
+  ta.remove();
+  return ok;
+}
+
+/** Telegram alerts link to #token=<chain>:<address>&sym=<ticker>: the app
+ *  opens straight on that token's page. The lists register their rows as
+ *  they load, so this waits a few seconds for one of them to know the
+ *  token; if none does, it opens a bare page the server fills in (enrich). */
+export function openFromHash() {
+  const parts = location.hash.slice(1).split("&");
+  const ref = parts.find((p) => p.startsWith("token="))?.slice(6);
+  if (!ref) return;
+  const [chain, token] = decodeURIComponent(ref).split(":");
+  if (!chain || !token) return;
+  const sym = decodeURIComponent(parts.find((p) => p.startsWith("sym="))?.slice(4) ?? "");
+  // Opened once: a reload or the back gesture must not bring it up again.
+  const rest = parts.filter((p) => !/^(token|sym)=/.test(p)).join("&");
+  history.replaceState(history.state, "", rest ? `#${rest}` : location.pathname + location.search);
+  const same = (e) => e.chain === chain && (e.token ?? "").toLowerCase() === token.toLowerCase();
+  let tries = 0;
+  const go = () => {
+    const hit = [...registry].find(([, e]) => same(e));
+    if (!hit && ++tries < 16) { setTimeout(go, 500); return; }
+    if (hit) { openDetail(hit[0]); return; }
+    const id = `link:${chain}:${token}`;
+    register(id, { kind: document.documentElement.dataset.section === "gems" ? "gem" : "scan",
+                   symbol: sym || token.slice(0, 6), chain, token });
+    openDetail(id);
+  };
+  go();
 }
 
 export function openDetail(id) {
@@ -136,7 +193,7 @@ export function openDetail(id) {
       <section class="dt-id">
         ${logo(e.symbol, e.image, e.chain, e.token).replace('class="logo"', 'class="logo big"')}
         <span class="dt-name"><b>${escapeHtml(e.name || e.symbol)}</b>
-          <small>${escapeHtml(e.symbol)}
+          <small><span class="dt-sym" data-copy role="button" tabindex="0" title="Copy address">${escapeHtml(e.symbol)}</span>
             <button type="button" class="ic" data-copy aria-label="Copy address"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V5H5v11h3"/></svg></button>
             ${e.pairUrl ? `<a class="ic" href="${escapeHtml(e.pairUrl)}" target="_blank" rel="noopener" aria-label="Open chart"><svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"/></svg></a>` : ""}
           </small></span>
