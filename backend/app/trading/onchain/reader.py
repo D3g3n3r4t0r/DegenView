@@ -128,7 +128,7 @@ _PRIMITIVES: tuple[tuple[str, re.Pattern], ...] = tuple((label, re.compile(rx, f
     ("TEE", r"\bTEEs?\b", 0),
     ("FHE", r"\bFHE\b", 0),
     ("LayerZero", r"\blayer ?zero\b", _I),
-    ("Turnkey", r"\bTurnkey\b", 0),
+    ("Turnkey", r"\bTurnkey\b(?! (?:solutions?|platforms?|services?|products?|packages?)\b)", 0),
     ("Umbra", r"\bUmbra\b", 0),
     ("zkVM", r"\bzkvms?\b", _I),
     ("STARK", r"\b(?:zk-?)?STARKs?\b", 0),
