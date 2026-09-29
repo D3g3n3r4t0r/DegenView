@@ -28,6 +28,7 @@ import { mountLeaderboard } from "@onchain/leaderboard.js";
 import { mountProjects } from "@onchain/projects.js";
 import { mountAlerts, openInbox } from "@onchain/alerts.js";
 import { mountAutotrade } from "@onchain/autotrade.js";
+import { flash, liveDelta, liveKey, roll, watch } from "@onchain/live.js";
 import { mountProfile, phantomAnswer, refreshProfile } from "@onchain/profile.js";
 import * as phantom from "@onchain/phantomlink.js";
 import { loadLinked } from "@onchain/userswap.js";
@@ -558,13 +559,25 @@ totalEl.setAttribute("aria-label", "Total balance, all chains");
 totalEl.textContent = "—";
 document.querySelector("[data-balance-slot]")?.prepend(totalEl);
 totalEl.addEventListener("click", () => setView("profile"));
+// The live price moves it between readings (live.js), as in the profile.
+let shownTotal = null;
+let totalNow = null;
 function paintTotal(t) {
-  if (t.total == null) { totalEl.textContent = t.wallet === "sim" ? "SIM —" : "$0.00"; return; }
+  totalNow = t;
+  if (t.total == null) { totalEl.textContent = t.wallet === "sim" ? "SIM —" : "$0.00"; shownTotal = null; return; }
   // a chain that did not answer is not an empty one: no false $0
-  if (!t.complete && t.missing?.length && !t.total) { totalEl.textContent = "$—"; }
+  if (!t.complete && t.missing?.length && !t.total) { totalEl.textContent = "$—"; shownTotal = null; }
   else {
-    const [i, d] = t.total.toFixed(2).split(".");
-    totalEl.innerHTML = `$${Number(i).toLocaleString("en-US")}<span class="cents">.${d}</span>${t.complete === false ? "<span class=\"cents\">*</span>" : ""}`;
+    const total = t.total + liveDelta(t.live);
+    const [i, d] = total.toFixed(2).split(".");
+    if (!totalEl.querySelector("[data-tw]")) {
+      totalEl.innerHTML = `<span data-tw></span><span class="cents" data-tc></span><span class="cents" data-tp></span>`;
+    }
+    roll(totalEl.querySelector("[data-tw]"), `$${Number(i).toLocaleString("en-US")}`);
+    roll(totalEl.querySelector("[data-tc]"), `.${d}`);
+    totalEl.querySelector("[data-tp]").textContent = t.complete === false ? "*" : "";
+    if (shownTotal != null && Math.abs(total - shownTotal) >= 0.005) flash(totalEl, total > shownTotal ? "up" : "down");
+    shownTotal = total;
   }
   totalEl.title = Object.entries(t.by_chain ?? {}).map(([c, v]) => `${c}: $${v.toFixed(2)}`).join(" · ")
     + (t.missing?.length ? ` · not read: ${t.missing.join(", ")}` : "");
@@ -586,7 +599,13 @@ async function refreshTotal() {
   } catch { /* keep the last number */ }
 }
 refreshTotal();
+watch({
+  keys: () => (totalNow?.live ?? []).filter((p) => !p.hidden).map(liveKey).filter(Boolean),
+  active: () => Boolean(totalNow?.live?.length),
+  onPrices: () => { if (totalNow) paintTotal(totalNow); },
+});
 document.addEventListener("lae:wallet-mode", () => {
+  shownTotal = null;
   const t = totalByMode[api.walletMode()];
   if (t) { totalEl.dataset.wallet = t.wallet === "sim" ? "sim" : "real"; paintTotal(t); }
   refreshTotal();
