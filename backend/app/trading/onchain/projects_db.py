@@ -270,6 +270,16 @@ def set_standing(chain: str, token: str, status: str, score: float | None, rank:
         _db().commit()
 
 
+def lift_rejected(chain: str, token: str) -> bool:
+    """A row rejected under an old check whose working-set entry has since
+    passed: back to "studied", so set_standing (studied/ranked only) can move it."""
+    with _lock:
+        cur = _db().execute("UPDATE projects SET status = 'studied' WHERE key = ? AND status = 'rejected'",
+                            (key(chain, token),))
+        _db().commit()
+        return cur.rowcount > 0
+
+
 def sync_top(keys: list[str]) -> int:
     """The Top is the ranking (Lorenzo, 29/09: HATCHER "Studied" and first on
     the podium). Every analysed row in `keys` becomes "ranked" at its place,

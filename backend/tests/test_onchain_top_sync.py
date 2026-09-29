@@ -107,3 +107,18 @@ def test_requeue_puts_a_database_row_back_in_the_queue():
     assert db.get("solana", "again")["next_check"] > 0
     assert lb.requeue("solana", "again")
     assert db.get("solana", "again")["next_check"] == 0
+
+
+def test_a_rejected_row_is_lifted_when_its_entry_has_no_fatal_pillar():
+    """BV7X: rejected under an old check, its working-set entry was fine, and set_standing skips rejected rows."""
+    from app.trading.onchain import depth
+    _row("bv", 70, "tokenomics: a single wallet holds 41%", status="rejected")
+    pillars = {"github": {"score": None, "facts": {"missing": True}, "flags": [], "fatal": ""},
+               "site": {"score": 73, "facts": {}, "flags": [], "fatal": ""},
+               "tokenomics": {"score": 67, "facts": {}, "flags": [], "fatal": ""}}
+    lb._entries["solana:bv"] = {"chain": "solana", "token_address": "bv", "symbol": "BV", "name": "bv", "source": "x",
+                                "market_cap": 400_000, "liquidity_usd": 50_000, "found_at": time.time(),
+                                "pillars": pillars, "checked_at": {}, "rank": None,
+                                "overall": depth.overall(pillars)}
+    lb._sync_database([])
+    assert db.get("solana", "bv")["status"] == "studied"
