@@ -146,7 +146,24 @@ def summary_line(text: str) -> str:
     return s[:180]
 
 
+GECKO_TTL_S = 6 * 3600
+_gecko: dict[str, tuple[float, dict]] = {}
+
+
 async def gecko_info(chain: str, token: str, client: httpx.AsyncClient) -> dict:
+    """Cached for 6 hours: the site and tokenomics pillars both ask, and
+    GeckoTerminal answers 429 to the pool scan when we ask too often."""
+    key = f"{chain}:{token}".lower()
+    hit = _gecko.get(key)
+    if hit and time.time() - hit[0] < GECKO_TTL_S:
+        return hit[1]
+    out = await _gecko_info(chain, token, client)
+    if out:
+        _gecko[key] = (time.time(), out)
+    return out
+
+
+async def _gecko_info(chain: str, token: str, client: httpx.AsyncClient) -> dict:
     net = GECKO_NET.get(chain)
     if not net or not token:
         return {}

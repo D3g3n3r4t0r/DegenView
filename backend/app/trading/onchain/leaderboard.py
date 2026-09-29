@@ -139,11 +139,12 @@ DISCOVERY_SLOW_S = 6 * 3600
 CODE_RETRY_S = 6 * 3600        # a failed reading waits: GitHub allows few calls an hour
 # Without public code a project ranks below an equal one that shows it.
 NO_GITHUB_PENALTY = 10.0
-RULES_VERSION = 7              # 2: "no GitHub" stopped being a ban; 3: radar launches out;
+RULES_VERSION = 8              # 2: "no GitHub" stopped being a ban; 3: radar launches out;
                                # 4: research read by reader.py, older bans and readings dropped;
                                # 5: reader recognises research-stage code and stated limits
                                # 6: no age limits, strict band from $100k to $2M, one rule chain
                                # 7: private linked repos are missing code, GeckoTerminal tokenomics
+                               # 8: every cached fatal pillar is recomputed under today's checks
 
 _entries: dict[str, dict] = {}     # chain:token
 _excluded: list[dict] = []
@@ -158,6 +159,7 @@ _outbox: list[tuple[str, str]] = []
 _alert_hooks: list = []
 _priming = False
 _dirty = False
+_requeue_fatals = False   # set by _load when the stored rules predate version 8
 
 
 def _key(chain: str, token: str) -> str:
@@ -180,6 +182,16 @@ def _load() -> None:
             for e in _entries.values():
                 (e.get("pillars") or {}).pop("site", None)
                 (e.get("checked_at") or {}).pop("site", None)
+        global _requeue_fatals
+        if rules < 8:
+            # Fatal pillars scored by checks fixed since (contracts counted as
+            # one wallet, JS sites read as empty: BV7X, PFWA) are redone once.
+            _requeue_fatals = True
+            for e in _entries.values():
+                p = e.get("pillars") or {}
+                for name in [n for n, x in p.items() if (x or {}).get("fatal")]:
+                    p.pop(name, None)
+                    (e.get("checked_at") or {}).pop(name, None)
         if rules < 7:
             # "GitHub link without a repository" was private repos (BV7X), and a
             # tokenomics pending on GoPlus now falls back to GeckoTerminal.
@@ -1170,6 +1182,8 @@ async def leaderboard_loop() -> None:
         n = projects_db.recheck_studied(("over $%", "over % days%"))
         # Rules dropped on 29/09 (age limits, radar exceptions, the $100k band).
         n += projects_db.recheck_studied(DROPPED_RULES, ("studied", "rejected"))
+        if _requeue_fatals:
+            n += projects_db.recheck_studied(("github:", "site:", "tokenomics:"), ("rejected",))
         if n:
             logger.info("classifica: %d progetti rimessi in coda (limiti vecchi)", n)
     except Exception:
