@@ -270,6 +270,40 @@ def set_standing(chain: str, token: str, status: str, score: float | None, rank:
         _db().commit()
 
 
+def sync_top(keys: list[str]) -> int:
+    """The Top is the ranking (Lorenzo, 29/09: HATCHER "Studied" and first on
+    the podium). Every analysed row in `keys` becomes "ranked" at its place,
+    with no exclusion text left beside it; a "ranked" row out of the Top goes
+    back to "studied". Returns how many rows changed."""
+    place = {k: i for i, k in enumerate(keys, 1)}
+    changed = 0
+    with _lock:
+        rows = _db().execute("SELECT key, status, rank, why FROM projects WHERE status = 'ranked'"
+                             f" OR key IN ({','.join('?' for _ in place) or 'NULL'})", tuple(place)).fetchall()
+        for r in rows:
+            k = r["key"]
+            if k in place:
+                if r["status"] in ("studied", "ranked") and (r["status"], r["rank"], r["why"]) != ("ranked", place[k], None):
+                    _db().execute("UPDATE projects SET status = 'ranked', rank = ?, why = NULL WHERE key = ?",
+                                  (place[k], k))
+                    changed += 1
+            else:
+                _db().execute("UPDATE projects SET status = 'studied', rank = NULL WHERE key = ?", (k,))
+                changed += 1
+        if changed:
+            _db().commit()
+    return changed
+
+
+def recheck(chain: str, token: str) -> bool:
+    """Back in the analysis queue at once (the consistency audit's "recheck")."""
+    with _lock:
+        cur = _db().execute("UPDATE projects SET next_check = 0 WHERE key = ? AND status != 'analyzing'",
+                            (key(chain, token),))
+        _db().commit()
+        return cur.rowcount > 0
+
+
 # ------------------------------------------------------------------ reading
 
 def stale_market(limit: int, now: float | None = None) -> dict[str, list[str]]:

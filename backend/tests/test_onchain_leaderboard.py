@@ -556,3 +556,89 @@ def test_discovery_pauses_on_a_full_pool_with_work_left(monkeypatch):
     assert lb.pool_status(now)["paused"] and not lb.discovery_open(now)
     monkeypatch.setattr(lb.projects_db, "stats", lambda: {"by_status": {"studied": 50}})
     assert lb.discovery_open(now)                       # small pool: keep scanning
+
+
+# ------------------------------------------------------------ the Top first
+
+def _top_db_row(now: float) -> dict:
+    return {"chain": "solana", "token": "DBmint", "symbol": "DBR", "name": "Db Row", "mcap": 400_000,
+            "liq": 50_000, "launched_at": now - 60 * DAY, "score": 88, "analyzed_at": now, "status": "studied",
+            "why": "", "overall": {"score": 80},
+            "pillars": {"github": {"score": 70, "facts": {"repo": "acme/dbrow"}},
+                        "site": {"score": 70, "facts": {"summary": "an agent OS"}}, "tokenomics": {"score": 60}}}
+
+
+@pytest.fixture
+def _deepseek_off(tmp_path, monkeypatch):
+    """Fake DeepSeek, X and GitHub: nothing touches the network or real files."""
+    import json
+
+    from app.notify import deepseek_desk
+    from app.trading.onchain import code_review, judge, x_signal
+    monkeypatch.setattr(deepseek_desk, "_STORE_FILE", tmp_path / "desk.json")
+    monkeypatch.setattr(judge, "_FILE", tmp_path / "judge.json")
+    monkeypatch.setattr(judge, "_cache", {})
+    monkeypatch.setattr(judge, "_calls", {})
+    monkeypatch.setattr(code_review, "_FILE", tmp_path / "code.json")
+    monkeypatch.setattr(code_review, "_cache", {})
+    monkeypatch.setattr(code_review, "_calls", {})
+    calls = []
+
+    async def ask(messages, kind="", **_):
+        calls.append(kind)
+        if kind == "code":
+            return json.dumps({"complexity": 70, "innovation": 60, "fork_of": None, "summary": "real code",
+                               "strengths": ["tests"], "concerns": []})
+        return json.dumps({"score": 82, "verdict": "gem", "confidence": 0.8, "problems": [],
+                           "strengths": ["ships"], "admit_reason": "real product"})
+
+    async def no_x(*a, **k):
+        return None
+
+    async def fetch(repo, client):
+        return {"pushed_at": "2026-09-01T00:00:00Z", "files": []}
+
+    monkeypatch.setattr(deepseek_desk, "ask", ask)
+    monkeypatch.setattr(x_signal, "lookup", no_x)
+    monkeypatch.setattr(code_review, "fetch_code", fetch)
+    deepseek_desk.reset_for_tests()
+    yield calls
+    deepseek_desk.reset_for_tests()
+
+
+def test_top_fill_judges_a_database_row_even_with_the_daily_cap_spent(monkeypatch, _deepseek_off):
+    import asyncio
+
+    from app.trading.onchain import code_review, judge
+    now = time.time()
+    row = _top_db_row(now)
+    monkeypatch.setattr(lb.projects_db, "get", lambda c, t: row if (c, t) == ("solana", "DBmint") else None)
+    monkeypatch.setattr(judge, "DAILY_MAX", 0)
+    monkeypatch.setattr(code_review, "DAILY_MAX", 0)
+    lb.set_top_source(lambda n: [{"chain": "solana", "token_address": "DBmint", "on_board": False}])
+    assert asyncio.run(lb.top_fill(None, now)) == 2
+    assert sorted(_deepseek_off) == ["code", "research"]
+    assert judge.get("solana", "DBmint")["verdict"] == "gem"
+    assert code_review.get("acme/dbrow")["summary"] == "real code"
+    # Read once: the next turn has nothing left to do.
+    assert asyncio.run(lb.top_fill(None, now + 120)) == 0
+
+
+def test_the_token_endpoint_carries_the_report_of_a_database_row(monkeypatch, _deepseek_off):
+    import asyncio
+
+    import app.main as m
+    from app.trading.onchain import code_review, judge
+    now = time.time()
+    row = _top_db_row(now)
+    monkeypatch.setattr(m, "_require_onchain_enabled", lambda: None)
+    monkeypatch.setattr(m.onchain_projects_db, "get", lambda c, t: row)
+    monkeypatch.setattr(m.onchain_strategy_lab, "get", lambda c, t: None)
+    monkeypatch.setattr(m.onchain_alert_track, "for_token", lambda c, t: [])
+    judge._cache["solana:DBmint"] = {"score": 82, "verdict": "gem", "confidence": 0.8, "problems": [],
+                                     "strengths": ["ships"], "admit_reason": "real product", "at": now}
+    code_review._cache["acme/dbrow"] = {"at": now, "summary": "real code", "complexity": 70}
+    out = asyncio.run(m.onchain_token("solana", "DBmint", user=None))
+    assert out["entry"]["on_board"] is False
+    assert out["entry"]["judge"]["verdict"] == "gem" and out["entry"]["judge"]["strengths"] == ["ships"]
+    assert out["entry"]["code"]["summary"] == "real code"
