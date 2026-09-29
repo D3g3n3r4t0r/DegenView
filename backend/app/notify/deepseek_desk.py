@@ -93,15 +93,17 @@ def reset_for_tests() -> None:
 
 
 def note(kind: str, text: str, now: float | None = None,
-         steps: list[str] | None = None, outcome: str = "", **extra) -> None:
-    """One line of what the agent is doing, for /api/agent."""
+         steps: list[str] | None = None, outcome: str = "", tally: bool = True, **extra) -> None:
+    """One line of what the agent is doing, for /api/agent. `tally=False`:
+    a detail of work already counted (a finding of a check)."""
     now = now or time.time()
     entry = {"t": now, "kind": kind, "text": text[:140], **extra}
     # What the agent did today, by kind: every job, not only the LLM calls
     # (a backtest or a GitHub study costs no tokens but is real work).
     done = _state.setdefault("done", {})
     day = done.setdefault(day_of(now), {})
-    day[kind] = day.get(kind, 0) + 1
+    if tally:
+        day[kind] = day.get(kind, 0) + 1
     for old in sorted(done)[:-3]:
         done.pop(old, None)
     # Distinct tokens per kind: a project studied 30 times is one project.
@@ -217,53 +219,61 @@ def _release(need: float) -> None:
 
 # ------------------------------------------------------------------ DeepSeek
 
+async def _post(body: dict, *, kind: str, purpose: str | None, subject: str | None, http=None) -> dict:
+    """One call to the chat API: counted in the ledger and in the call
+    journal (deepseek_calls, issue #358 I00), failures included."""
+    from app.notify import deepseek_calls
+    headers = {"Authorization": f"Bearer {settings.deepseek_api_key}", "Content-Type": "application/json"}
+    url = settings.deepseek_base_url.rstrip("/") + "/chat/completions"
+    need = _reserve(kind, body["messages"], body["max_tokens"])
+    t0 = time.monotonic()
+    try:
+        if http is None:
+            async with httpx.AsyncClient(timeout=120.0) as c:
+                r = await c.post(url, json=body, headers=headers)
+        else:
+            r = await http.post(url, json=body, headers=headers)
+        r.raise_for_status()
+        data = r.json()
+    except Exception as exc:
+        deepseek_calls.log(kind=kind, purpose=purpose, subject=subject, body=body, content=None, usage=None,
+                           ms=(time.monotonic() - t0) * 1000, error=type(exc).__name__ + ": " + str(exc))
+        raise
+    else:
+        usage = data.get("usage") or {}
+        record(kind, usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0))
+    finally:
+        _release(need)
+    message = ((data.get("choices") or [{}])[0].get("message") or {})
+    content = message.get("content") or ""
+    if message.get("tool_calls"):
+        content += json.dumps(message["tool_calls"], sort_keys=True)
+    deepseek_calls.log(kind=kind, purpose=purpose, subject=subject, body=body, content=content, usage=usage,
+                       ms=(time.monotonic() - t0) * 1000)
+    return data
+
+
 async def ask_message(messages: list[dict], *, kind: str, max_tokens: int = 1200, tools: list[dict] | None = None,
-                      http=None) -> dict:
+                      http=None, purpose: str | None = None, subject: str | None = None) -> dict:
     """One call, returning DeepSeek's whole message (content and tool_calls)."""
     body = {"model": settings.deepseek_model, "messages": messages, "max_tokens": max_tokens, "temperature": 0.4}
     if tools:
         body["tools"] = tools
-    headers = {"Authorization": f"Bearer {settings.deepseek_api_key}", "Content-Type": "application/json"}
-    url = settings.deepseek_base_url.rstrip("/") + "/chat/completions"
-    need = _reserve(kind, messages, max_tokens)
-    try:
-        if http is None:
-            async with httpx.AsyncClient(timeout=120.0) as c:
-                r = await c.post(url, json=body, headers=headers)
-        else:
-            r = await http.post(url, json=body, headers=headers)
-        r.raise_for_status()
-        data = r.json()
-        usage = data.get("usage") or {}
-        record(kind, usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0))
-    finally:
-        _release(need)
+    data = await _post(body, kind=kind, purpose=purpose, subject=subject, http=http)
     return ((data.get("choices") or [{}])[0].get("message") or {})
 
 
-async def ask(messages: list[dict], *, kind: str, max_tokens: int = 1200, http=None, json_mode: bool = False) -> str:
-    """One DeepSeek chat call, counted in the ledger under `kind`. Keep the
-    system message identical between calls: DeepSeek caches a repeated
-    prefix and bills it at a tenth."""
+async def ask(messages: list[dict], *, kind: str, max_tokens: int = 1200, http=None, json_mode: bool = False,
+              purpose: str | None = None, subject: str | None = None) -> str:
+    """One DeepSeek chat call, counted in the ledger under `kind` and in the
+    call journal under `purpose`/`subject`. Keep the system message
+    identical between calls: DeepSeek caches a repeated prefix and bills it
+    at a tenth."""
     body = {"model": settings.deepseek_model, "messages": messages, "max_tokens": max_tokens,
             "temperature": 0 if json_mode else 0.4}
     if json_mode:
         body["response_format"] = {"type": "json_object"}
-    headers = {"Authorization": f"Bearer {settings.deepseek_api_key}", "Content-Type": "application/json"}
-    url = settings.deepseek_base_url.rstrip("/") + "/chat/completions"
-    need = _reserve(kind, messages, max_tokens)
-    try:
-        if http is None:
-            async with httpx.AsyncClient(timeout=120.0) as c:
-                r = await c.post(url, json=body, headers=headers)
-        else:
-            r = await http.post(url, json=body, headers=headers)
-        r.raise_for_status()
-        data = r.json()
-        usage = data.get("usage") or {}
-        record(kind, usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0))
-    finally:
-        _release(need)
+    data = await _post(body, kind=kind, purpose=purpose, subject=subject, http=http)
     return (((data.get("choices") or [{}])[0].get("message") or {}).get("content") or "").strip()
 
 
@@ -395,7 +405,8 @@ async def answer(chat_id: str, text: str, context: str, tools: dict | None = Non
     reply = ""
     for _round in range(TOOL_ROUNDS + 1):
         try:
-            msg = await ask_message(messages, kind="chat", tools=specs if specs and _round < TOOL_ROUNDS else None)
+            msg = await ask_message(messages, kind="chat", purpose="chat", subject=chat_id,
+                                      tools=specs if specs and _round < TOOL_ROUNDS else None)
         except BudgetExceeded:
             return "Per oggi DeepSeek ha finito il budget del server. Riprova domani."
         calls = msg.get("tool_calls") or []

@@ -12,6 +12,16 @@ lavori pluri-sessione, decisioni prese, stato di piani approvati.
 
 ---
 
+
+## Intelligenza e memoria di DeepSeek — issue #358 (+ #366, #365) — 2026-09-29 — **in corso**
+
+Lorenzo, 29/09 (piani ChatGPT): "continuare a osservare, ricordare cio' che sappiamo e approfondire quando c'e' una ragione concreta [...] un cambiamento nella liquidita' deve aggiornare il rischio; non richiede di rileggere tutto il sito". "Prima misuriamo dove DeepSeek sbaglia o ripete lavoro".
+Fatto (branch `claude/project-thread-sdhpv6`, scritto a mano: Actions DeepSeek ancora rotte in 3 s):
+- **I00 registro chiamate**: `notify/deepseek_calls.py`, una riga per chiamata in `data/deepseek_calls.jsonl` (motivo `purpose`, oggetto `subject`, hash della richiesta, token, token in cache, durata, errore, JSON non valido; niente testo del prompt). Stessa richiesta entro 14 giorni = ripetizione; `same_out` = anche la risposta uguale, cioe' lavoro buttato. Tutte le chiamate passano da `deepseek_desk._post` (anche la revisione giornaliera). Numeri: `GET /api/agent/calls?days=7` (`&recent=50` per le righe).
+- **I04 giudice guidato dai cambiamenti**: la lettura dipende da liquidita', cap, verdetto delle regole, voti dei pilastri (`judge.judged_facts`). Liquidita' -40%, cap x3 o /3, regole cambiate o pilastro +-15 la invalidano subito (al massimo una ogni 6h); fatti invariati la tengono fino a 5 giorni invece di richiederla ogni 3 (prima che `leaderboard._fresh` smetta di contarla a 6). Senza budget resta la vecchia con `stale`. Il motivo sta in `why` e nel registro (`judge/liquidity`, `judge/periodic`...). Sito, codice e ricerca non vengono riletti.
+- **#366 contatori**: "80 consistency" non erano chiamate: ogni controllo scriveva una nota per ogni incongruenza trovata (`consistency.py`). Chiamate e lavoro separati e progetti distinti li ha fatti l'altro thread (c27d02d); qui in piu' `note(tally=False)` per le note-dettaglio, e il giudice senza budget restituisce la lettura vecchia marcata `stale` invece di None.
+Mappa statica dei chiamanti (verificata sul codice): judge (TTL 3g, ora a fatti), board_review (3000 token), code (gia' guidato da `pushed_at` GitHub: modello da copiare), research_dossier (TTL 7g, senza hash), site_legit (chiave = hash del testo del sito: deduplica gia'), alert_batch/alert_manual, consistency (12/giorno), narratives, study, chat, daily_review.
+Resta: dopo il deploy leggere `/api/agent/calls` su 7 giorni e decidere dove intervenire con numeri (ripetizioni per motivo); research_dossier con hash degli input come code_review; #365 ricevute = estendere questo registro con prove e versioni, non una seconda memoria; I01-I03, I05-I07 dopo le misure.
 ## Piano struttura backend (issue #357, B00-B08) — 2026-09-29 — **in corso**
 
 Lorenzo, 29/09, ha condiviso i due piani di ChatGPT per Claude: #357 struttura backend, #358 intelligenza e memoria (altro thread). Registro vivo con mappa, evidenze e stato: `docs/backend/B00_REGISTRO.md` — aggiornarlo a ogni PR.
