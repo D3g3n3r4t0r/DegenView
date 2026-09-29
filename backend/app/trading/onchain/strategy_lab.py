@@ -27,6 +27,7 @@ from app.notify import deepseek_desk
 from app.sniper.scanner import GECKO_NETWORKS
 from app.trading.onchain import alert_track, priority, system
 from app.trading.onchain.storage import data_file
+from app.atomic_write import write_text_atomic
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +55,7 @@ def _load() -> None:
 
 def _save() -> None:
     try:
-        _STORE_FILE.write_text(json.dumps(_results, separators=(",", ":")), encoding="utf-8")
+        write_text_atomic(_STORE_FILE, json.dumps(_results, separators=(",", ":")), encoding="utf-8")
     except OSError:
         pass
 

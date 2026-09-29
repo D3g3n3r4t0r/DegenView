@@ -22,6 +22,7 @@ import time
 import httpx
 
 from app.trading.onchain import discovery, legit, research, storage
+from app.atomic_write import write_text_atomic
 
 PLANS: dict[str, dict] = {
     "free": {"label": "Free", "reads": 5, "deep": 0, "price_usd_month": 0},
@@ -47,7 +48,7 @@ def _load() -> None:
 def _save() -> None:
     _state["usage"] = dict(sorted(_state["usage"].items())[-7:])
     try:
-        _STORE.write_text(json.dumps(_state), encoding="utf-8")
+        write_text_atomic(_STORE, json.dumps(_state), encoding="utf-8")
     except OSError:
         pass
 

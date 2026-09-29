@@ -37,6 +37,7 @@ from solders.keypair import Keypair
 from solders.transaction import VersionedTransaction
 
 from app.trading.onchain.storage import data_file
+from app.atomic_write import write_text_atomic
 
 NAME = "Liquidity Engine"
 SYMBOL = "ENGN"
@@ -68,7 +69,7 @@ def launched() -> dict | None:
 
 
 def _write_private(path: Path, payload: dict) -> None:
-    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    write_text_atomic(path, json.dumps(payload, indent=2), encoding="utf-8")
     os.chmod(path, 0o600)
 
 
@@ -199,7 +200,7 @@ async def cmd_launch(confirm: str, twitter: str, telegram: str) -> int:
         ]))
     result = {"mint": str(mint.pubkey()), "signature": signature, "creator": str(creator.pubkey()),
               "metadata_uri": uri, "at": int(time.time())}
-    data_file(_RESULT_FILE).write_text(json.dumps(result, indent=2), encoding="utf-8")
+    write_text_atomic(data_file(_RESULT_FILE), json.dumps(result, indent=2), encoding="utf-8")
     print(f"launched: https://pump.fun/coin/{result['mint']}\ntx: https://solscan.io/tx/{signature}")
     return 0
 

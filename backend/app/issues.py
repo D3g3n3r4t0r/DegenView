@@ -24,6 +24,7 @@ import time
 import uuid
 from pathlib import Path
 from typing import Literal
+from app.atomic_write import write_text_atomic
 
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 _DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -69,7 +70,7 @@ def _load() -> None:
 
 def _save() -> None:
     try:
-        _STORE_FILE.write_text(json.dumps(_issues, ensure_ascii=False), encoding="utf-8")
+        write_text_atomic(_STORE_FILE, json.dumps(_issues, ensure_ascii=False), encoding="utf-8")
     except OSError:
         pass
 
@@ -88,7 +89,7 @@ def _load_replies() -> None:
 
 def _save_replies() -> None:
     try:
-        _REPLIES_FILE.write_text(json.dumps(_replies, ensure_ascii=False), encoding="utf-8")
+        write_text_atomic(_REPLIES_FILE, json.dumps(_replies, ensure_ascii=False), encoding="utf-8")
     except OSError:
         pass
 
@@ -144,7 +145,7 @@ def _load_seeded() -> None:
 
 def _save_seeded() -> None:
     try:
-        _SEEDED_FILE.write_text(json.dumps(sorted(_seeded_ids)), encoding="utf-8")
+        write_text_atomic(_SEEDED_FILE, json.dumps(sorted(_seeded_ids)), encoding="utf-8")
     except OSError:
         pass
 

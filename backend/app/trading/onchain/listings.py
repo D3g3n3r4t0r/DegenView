@@ -43,6 +43,7 @@ from app.providers.base import ProviderError
 from app.providers.dexscreener import DexScreenerProvider, make_symbol
 from app.trading.onchain import legit, scan_feed
 from app.trading.onchain.storage import data_file
+from app.atomic_write import write_text_atomic
 
 logger = logging.getLogger(__name__)
 
@@ -145,7 +146,7 @@ def _passes_today(item: dict) -> bool:
 
 def _save() -> None:
     try:
-        _STORE_FILE.write_text(json.dumps({"listings": _listings, "rejected": _rejected,
+        write_text_atomic(_STORE_FILE, json.dumps({"listings": _listings, "rejected": _rejected,
                                            "tickers": _alerted_tickers},
                                           ensure_ascii=False), encoding="utf-8")
     except OSError:

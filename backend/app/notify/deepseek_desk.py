@@ -30,6 +30,7 @@ import httpx
 
 from app.config import settings
 from app.trading.onchain.storage import data_file
+from app.atomic_write import write_text_atomic
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +73,7 @@ def _load() -> None:
 
 def _save() -> None:
     try:
-        _STORE_FILE.write_text(json.dumps({**_state, "activity": _activity}, separators=(",", ":")), encoding="utf-8")
+        write_text_atomic(_STORE_FILE, json.dumps({**_state, "activity": _activity}, separators=(",", ":")), encoding="utf-8")
     except OSError:
         pass
 

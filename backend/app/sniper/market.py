@@ -26,6 +26,7 @@ from .scanner import (
     fetch_market_chain,
     fetch_pumpfun_trending,
 )
+from app.atomic_write import write_text_atomic
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +85,7 @@ def _load() -> None:
 def _save() -> None:
     payload = [dataclasses.asdict(t) for t in _store.values()]
     try:
-        _MARKET_FILE.write_text(json.dumps(payload), encoding="utf-8")
+        write_text_atomic(_MARKET_FILE, json.dumps(payload), encoding="utf-8")
     except OSError as exc:
         logger.warning("Market screener: failed to persist store: %s", exc)
 
@@ -102,7 +103,7 @@ def _load_log() -> None:
 
 def _save_log() -> None:
     try:
-        _LOG_FILE.write_text(json.dumps(_log[-LOG_MAX_ENTRIES:]), encoding="utf-8")
+        write_text_atomic(_LOG_FILE, json.dumps(_log[-LOG_MAX_ENTRIES:]), encoding="utf-8")
     except OSError as exc:
         logger.warning("Market screener: failed to persist log: %s", exc)
 

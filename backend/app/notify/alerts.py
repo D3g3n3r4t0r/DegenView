@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from app.models import StrategySignal, StrategyState
+from app.atomic_write import write_text_atomic
 
 _DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 _DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -97,14 +98,14 @@ def _prune() -> None:
 
 def _save_seen() -> None:
     try:
-        _SEEN_FILE.write_text(json.dumps(_seen), encoding="utf-8")
+        write_text_atomic(_SEEN_FILE, json.dumps(_seen), encoding="utf-8")
     except OSError:
         pass
 
 
 def _save_armed() -> None:
     try:
-        _ARMED_FILE.write_text(json.dumps(_armed), encoding="utf-8")
+        write_text_atomic(_ARMED_FILE, json.dumps(_armed), encoding="utf-8")
     except OSError:
         pass
 
@@ -140,7 +141,7 @@ def disarm(entry_id: str, strategy_name: str = "") -> None:
 
 def _save_stats() -> None:
     try:
-        _STATS_FILE.write_text(json.dumps(_stats), encoding="utf-8")
+        write_text_atomic(_STATS_FILE, json.dumps(_stats), encoding="utf-8")
     except OSError:
         pass
 

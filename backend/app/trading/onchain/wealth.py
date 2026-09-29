@@ -12,6 +12,7 @@ import threading
 import time
 
 from app.trading.onchain.storage import data_file
+from app.atomic_write import write_text_atomic
 
 _STORE_FILE = data_file("onchain_wealth.json")
 SNAPSHOT_S = 5 * 60      # the background reading; the header adds one a minute while the app is open
@@ -47,7 +48,7 @@ def _load() -> None:
 
 def _save() -> None:
     try:
-        _STORE_FILE.write_text(json.dumps({"version": VERSION, "series": _series, "chains": _chains},
+        write_text_atomic(_STORE_FILE, json.dumps({"version": VERSION, "series": _series, "chains": _chains},
                                           separators=(",", ":")), encoding="utf-8")
     except OSError:
         pass
