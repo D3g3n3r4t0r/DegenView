@@ -48,6 +48,11 @@ KINDS = {"chat": "chat Telegram", "scanner": "scanner (giudizio token)", "resear
          "judge": "giudizi classifica", "code": "lettura codice GitHub", "narratives": "narrative",
          "meme": "giudizi meme", "retracement": "ritracciamenti", "extension": "estensioni"}
 
+# Kinds that may use the last RESERVE of the daily cap: the Telegram chat
+# and the meme alert safety vote. Everything else stops earlier.
+PRIORITY_KINDS = {"chat", "meme"}
+RESERVE = 0.2
+
 _lock = threading.Lock()
 # What the agent did lately, for the site's live presence (Lorenzo, 27/09:
 # "deve dare l'idea di essere sempre presente [...] un agent che esamina le
@@ -68,6 +73,7 @@ def _load() -> None:
         _state["recap_sent"] = raw.get("recap_sent") or ""
         _state["done"] = raw.get("done") or {}
         _state["seen"] = raw.get("seen") or {}
+        _state["blocked"] = raw.get("blocked") or {}
         _activity[:] = [a for a in raw.get("activity") or [] if isinstance(a, dict)][-ACTIVITY_KEEP:]
 
 
@@ -79,21 +85,25 @@ def _save() -> None:
 
 
 def reset_for_tests() -> None:
-    _state.update(days={}, recap_sent="", done={}, seen={})
+    global _reserved
+    _reserved = 0.0
+    _state.update(days={}, recap_sent="", done={}, seen={}, blocked={})
     _memory.clear()
     _activity.clear()
 
 
 def note(kind: str, text: str, now: float | None = None,
-         steps: list[str] | None = None, outcome: str = "", **extra) -> None:
-    """One line of what the agent is doing, for /api/agent."""
+         steps: list[str] | None = None, outcome: str = "", tally: bool = True, **extra) -> None:
+    """One line of what the agent is doing, for /api/agent. `tally=False`:
+    a detail of work already counted (a finding of a check)."""
     now = now or time.time()
     entry = {"t": now, "kind": kind, "text": text[:140], **extra}
     # What the agent did today, by kind: every job, not only the LLM calls
     # (a backtest or a GitHub study costs no tokens but is real work).
     done = _state.setdefault("done", {})
     day = done.setdefault(day_of(now), {})
-    day[kind] = day.get(kind, 0) + 1
+    if tally:
+        day[kind] = day.get(kind, 0) + 1
     for old in sorted(done)[:-3]:
         done.pop(old, None)
     # Distinct tokens per kind: a project studied 30 times is one project.
@@ -132,6 +142,8 @@ def activity(now: float | None = None) -> dict:
             "done": dict((_state.get("done") or {}).get(day_of(now)) or {}),
             "working": bool(_activity) and now - _activity[-1]["t"] < 180,
             "today": {k: v.get("calls", 0) for k, v in today.items()},
+            "spent_usd": round(spent_usd_today(now), 4),
+            "cap_usd": float(settings.deepseek_daily_usd or 0),
             "tokens": sum(int(v.get("in", 0)) + int(v.get("out", 0)) for v in today.values()),
             "distinct": {k: len(v) for k, v in ((_state.get("seen") or {}).get(day_of(now)) or {}).items()},
             "active": bool(settings.deepseek_api_key),
@@ -165,47 +177,103 @@ def cost(provider: str, tokens_in: int, tokens_out: int) -> float:
     return (tokens_in * p_in + tokens_out * p_out) / 1e6
 
 
+class BudgetExceeded(RuntimeError):
+    """The daily DeepSeek cap is spent: the call was not sent."""
+
+
+_reserved = 0.0   # $ of calls in flight, so parallel calls cannot overshoot
+
+
+def spent_usd_today(now: float | None = None) -> float:
+    rows = _state["days"].get(day_of(now or time.time())) or {}
+    return sum(cost("deepseek", int(v.get("in", 0)), int(v.get("out", 0))) for v in rows.values())
+
+
+def _reserve(kind: str, messages: list[dict], max_tokens: int, now: float | None = None) -> float:
+    """Book the worst case of one call against the daily cap, or refuse it."""
+    global _reserved
+    cap = float(settings.deepseek_daily_usd or 0)
+    tokens_in = len(json.dumps(messages, ensure_ascii=False)) // 3
+    need = cost("deepseek", tokens_in, max_tokens)
+    if cap <= 0:
+        return 0.0
+    limit = cap if kind in PRIORITY_KINDS else cap * (1 - RESERVE)
+    with _lock:
+        if spent_usd_today(now) + _reserved + need > limit:
+            blocked = _state.setdefault("blocked", {})
+            day = blocked.setdefault(day_of(now or time.time()), {})
+            day[kind] = day.get(kind, 0) + 1
+            for old in sorted(blocked)[:-3]:
+                blocked.pop(old, None)
+            _save()
+            raise BudgetExceeded(f"DeepSeek daily cap ${cap:.2f} reached ({kind})")
+        _reserved += need
+    return need
+
+
+def _release(need: float) -> None:
+    global _reserved
+    with _lock:
+        _reserved = max(0.0, _reserved - need)
+
+
 # ------------------------------------------------------------------ DeepSeek
 
+async def _post(body: dict, *, kind: str, purpose: str | None, subject: str | None, http=None) -> dict:
+    """One call to the chat API: counted in the ledger and in the call
+    journal (deepseek_calls, issue #358 I00), failures included."""
+    from app.notify import deepseek_calls
+    headers = {"Authorization": f"Bearer {settings.deepseek_api_key}", "Content-Type": "application/json"}
+    url = settings.deepseek_base_url.rstrip("/") + "/chat/completions"
+    need = _reserve(kind, body["messages"], body["max_tokens"])
+    t0 = time.monotonic()
+    try:
+        if http is None:
+            async with httpx.AsyncClient(timeout=120.0) as c:
+                r = await c.post(url, json=body, headers=headers)
+        else:
+            r = await http.post(url, json=body, headers=headers)
+        r.raise_for_status()
+        data = r.json()
+    except Exception as exc:
+        deepseek_calls.log(kind=kind, purpose=purpose, subject=subject, body=body, content=None, usage=None,
+                           ms=(time.monotonic() - t0) * 1000, error=type(exc).__name__ + ": " + str(exc))
+        raise
+    else:
+        usage = data.get("usage") or {}
+        record(kind, usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0))
+    finally:
+        _release(need)
+    message = ((data.get("choices") or [{}])[0].get("message") or {})
+    content = message.get("content") or ""
+    if message.get("tool_calls"):
+        content += json.dumps(message["tool_calls"], sort_keys=True)
+    deepseek_calls.log(kind=kind, purpose=purpose, subject=subject, body=body, content=content, usage=usage,
+                       ms=(time.monotonic() - t0) * 1000)
+    return data
+
+
 async def ask_message(messages: list[dict], *, kind: str, max_tokens: int = 1200, tools: list[dict] | None = None,
-                      http=None) -> dict:
+                      http=None, purpose: str | None = None, subject: str | None = None) -> dict:
     """One call, returning DeepSeek's whole message (content and tool_calls)."""
     body = {"model": settings.deepseek_model, "messages": messages, "max_tokens": max_tokens, "temperature": 0.4}
     if tools:
         body["tools"] = tools
-    headers = {"Authorization": f"Bearer {settings.deepseek_api_key}", "Content-Type": "application/json"}
-    url = settings.deepseek_base_url.rstrip("/") + "/chat/completions"
-    if http is None:
-        async with httpx.AsyncClient(timeout=120.0) as c:
-            r = await c.post(url, json=body, headers=headers)
-    else:
-        r = await http.post(url, json=body, headers=headers)
-    r.raise_for_status()
-    data = r.json()
-    usage = data.get("usage") or {}
-    record(kind, usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0))
+    data = await _post(body, kind=kind, purpose=purpose, subject=subject, http=http)
     return ((data.get("choices") or [{}])[0].get("message") or {})
 
 
-async def ask(messages: list[dict], *, kind: str, max_tokens: int = 1200, http=None, json_mode: bool = False) -> str:
-    """One DeepSeek chat call, counted in the ledger under `kind`. Keep the
-    system message identical between calls: DeepSeek caches a repeated
-    prefix and bills it at a tenth."""
+async def ask(messages: list[dict], *, kind: str, max_tokens: int = 1200, http=None, json_mode: bool = False,
+              purpose: str | None = None, subject: str | None = None) -> str:
+    """One DeepSeek chat call, counted in the ledger under `kind` and in the
+    call journal under `purpose`/`subject`. Keep the system message
+    identical between calls: DeepSeek caches a repeated prefix and bills it
+    at a tenth."""
     body = {"model": settings.deepseek_model, "messages": messages, "max_tokens": max_tokens,
             "temperature": 0 if json_mode else 0.4}
     if json_mode:
         body["response_format"] = {"type": "json_object"}
-    headers = {"Authorization": f"Bearer {settings.deepseek_api_key}", "Content-Type": "application/json"}
-    url = settings.deepseek_base_url.rstrip("/") + "/chat/completions"
-    if http is None:
-        async with httpx.AsyncClient(timeout=120.0) as c:
-            r = await c.post(url, json=body, headers=headers)
-    else:
-        r = await http.post(url, json=body, headers=headers)
-    r.raise_for_status()
-    data = r.json()
-    usage = data.get("usage") or {}
-    record(kind, usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0))
+    data = await _post(body, kind=kind, purpose=purpose, subject=subject, http=http)
     return (((data.get("choices") or [{}])[0].get("message") or {}).get("content") or "").strip()
 
 
@@ -336,7 +404,11 @@ async def answer(chat_id: str, text: str, context: str, tools: dict | None = Non
     specs = [{"type": "function", "function": spec} for spec, _fn in (tools or {}).values()]
     reply = ""
     for _round in range(TOOL_ROUNDS + 1):
-        msg = await ask_message(messages, kind="chat", tools=specs if specs and _round < TOOL_ROUNDS else None)
+        try:
+            msg = await ask_message(messages, kind="chat", purpose="chat", subject=chat_id,
+                                      tools=specs if specs and _round < TOOL_ROUNDS else None)
+        except BudgetExceeded:
+            return "Per oggi DeepSeek ha finito il budget del server. Riprova domani."
         calls = msg.get("tool_calls") or []
         if not calls:
             reply = (msg.get("content") or "").strip()
@@ -422,6 +494,10 @@ def recap_text(day: str, rows: dict) -> str:
               f"Token lavorati da DeepSeek: <b>{_n(tot_in + tot_out)}</b> ({_n(tot_in)} letti, {_n(tot_out)} scritti)",
               f"Costo DeepSeek: <b>${ds:.3f}</b> · con Claude sarebbero stati ~${cl:.2f}",
               f"Risparmio stimato: <b>${cl - ds:.2f}</b> (prezzi di listino)"]
+    blocked = (_state.get("blocked") or {}).get(day) or {}
+    if blocked:
+        lines.append(f"Fermate dal tetto di ${float(settings.deepseek_daily_usd or 0):.2f}: "
+                     + ", ".join(f"{KINDS.get(k, k)} {n}" for k, n in sorted(blocked.items())))
     return "\n".join(lines)
 
 

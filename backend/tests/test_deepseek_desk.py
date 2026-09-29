@@ -1,5 +1,6 @@
 """DeepSeek on Telegram and its daily ledger (app/notify/deepseek_desk.py)."""
 import asyncio
+import time
 from datetime import datetime
 
 import pytest
@@ -144,3 +145,55 @@ def test_recap_counts_every_recorded_kind():
                                         "brand_new": {"calls": 1, "in": 500, "out": 500}})
     assert "narrative: 2 richieste" in text and "brand_new: 1 richieste" in text
     assert "Token lavorati da DeepSeek: <b>2.000</b>" in text
+
+
+def _fake_http(calls: list):
+    class R:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"usage": {"prompt_tokens": 1_500_000, "completion_tokens": 0},
+                    "choices": [{"message": {"content": "ok"}}]}
+
+    class H:
+        async def post(self, *a, **k):
+            calls.append(1)
+            return R()
+    return H()
+
+
+def test_daily_cap_stops_calls_and_keeps_a_reserve_for_the_chat(monkeypatch):
+    """Lorenzo, 29/09: one cap of $0.50 a day for every DeepSeek call."""
+    import asyncio
+    monkeypatch.setattr(dd.settings, "deepseek_daily_usd", 0.50)
+    sent: list = []
+    http = _fake_http(sent)
+    msgs = [{"role": "user", "content": "x"}]
+    asyncio.run(dd.ask(msgs, kind="research", http=http))   # $0.42 spent
+    with pytest.raises(dd.BudgetExceeded):                  # over 80% of the cap
+        asyncio.run(dd.ask(msgs, kind="research", http=http))
+    assert len(sent) == 1
+    asyncio.run(dd.ask(msgs, kind="meme", http=http, max_tokens=10))  # priority uses the reserve
+    assert len(sent) == 2
+    with pytest.raises(dd.BudgetExceeded):
+        asyncio.run(dd.ask(msgs, kind="chat", http=http))
+    assert dd._reserved == 0
+    assert "Fermate dal tetto di $0.50" in dd.recap_text(dd.day_of(time.time()), dd._state["days"][dd.day_of(time.time())])
+
+
+def test_no_cap_when_zero(monkeypatch):
+    import asyncio
+    monkeypatch.setattr(dd.settings, "deepseek_daily_usd", 0)
+    sent: list = []
+    for _ in range(3):
+        asyncio.run(dd.ask([{"role": "user", "content": "x"}], kind="research", http=_fake_http(sent)))
+    assert len(sent) == 3
+
+
+def test_findings_of_a_check_are_not_counted_as_work():
+    """Issue #366: every consistency finding added a "consistency" to the Agent tab."""
+    now = datetime(2026, 9, 29, 12, tzinfo=dd.ROME).timestamp()
+    dd.note("consistency", "Checking 10 projects", now=now)
+    dd.note("consistency", "ABC: cap vs volume", now=now, tally=False, symbol="ABC")
+    assert dd.activity(now)["done"] == {"consistency": 1}
