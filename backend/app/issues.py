@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0231", "Rug pull nel trading simulato delle memecoin: wallet collegati e vendite coordinate",
+     "Lorenzo, 29/09: 'abbiamo preso dei bei rug pull nel trading simulato di memecoin [...] controlliamo magari se e' stata ritirata la liquidita' [...] o se sono state vendite coordinate [...] indagando su wallet collegati tra loro avremmo potuto evitare [...] quel token su cui fare l'ingresso'",
+     "alta"),
     ("seed-0230", "Wallet simulato: il saldo totale non torna con le posizioni aperte",
      "Lorenzo, 29/09: 'il saldo totale non corrisponde al saldo delle posizioni aperte'",
      "alta"),
