@@ -99,14 +99,10 @@ async function onClick(event) {
     t.closest("[data-watch]").setAttribute("aria-pressed", String(on));
     return;
   }
-  if (t.closest("[data-share]")) {
-    const url = current.e.pairUrl || location.href;
-    if (navigator.share) navigator.share({ title: current.e.symbol, url }).catch(() => {});
-    else navigator.clipboard?.writeText(url);
-    return;
-  }
+  const shareBtn = t.closest("[data-share]");
+  if (shareBtn) { shareToken(shareBtn, current.e); return; }
   const copyBtn = t.closest("[data-copy]");
-  if (copyBtn) { copyAddress(copyBtn, current.e.token); return; }
+  if (copyBtn) { copyAddress(dlg.querySelector(".dt-copy") ?? copyBtn, current.e.token); return; }
   if (t.closest("[data-user-swap]")) { openUserSwap(current.e); return; }
   if (t.closest("[data-buy]")) {
     const e = current.e;
@@ -118,7 +114,24 @@ async function onClick(event) {
 // The token's on-chain address, whole, with a visible "Copied": the
 // clipboard API is missing in some in-app browsers (Telegram), so a hidden
 // textarea is the fallback.
-async function copyAddress(btn, text) {
+// Share: the app's own link to this token, the same one the Telegram
+// alerts use. Whoever opens it signed in lands on this token (Lorenzo, 29/09).
+export function tokenLink(e) {
+  const view = e.kind === "gem" ? "gems" : "meme";
+  return `${location.origin}/onchain-app.html#${view}&token=${encodeURIComponent(e.chain)}:${encodeURIComponent(e.token)}`;
+}
+async function shareToken(btn, e) {
+  if (!e.token) return;
+  const url = tokenLink(e);
+  if (navigator.share) {
+    try { await navigator.share({ title: e.symbol, text: `${e.symbol} on DEGEN`, url }); return; } catch (err) {
+      if (err?.name === "AbortError") return;
+    }
+  }
+  copyAddress(btn, url, "Share");
+}
+
+async function copyAddress(btn, text, label = "Copy address") {
   if (!text) return;
   let ok = false;
   try { await navigator.clipboard.writeText(text); ok = true; } catch {
@@ -133,7 +146,7 @@ async function copyAddress(btn, text) {
   btn.dataset.copied = ok ? "yes" : "no";
   btn.setAttribute("aria-label", ok ? "Address copied" : "Copy failed");
   clearTimeout(btn._t);
-  btn._t = setTimeout(() => { delete btn.dataset.copied; btn.setAttribute("aria-label", "Copy address"); }, 1600);
+  btn._t = setTimeout(() => { delete btn.dataset.copied; btn.setAttribute("aria-label", label); }, 1600);
 }
 
 // Telegram alerts link to #<view>&token=<chain>:<address>: open that
@@ -182,7 +195,7 @@ export function openDetail(id) {
       <section class="dt-id">
         ${logo(e.symbol, e.image, e.chain, e.token).replace('class="logo"', 'class="logo big"')}
         <span class="dt-name"><b>${escapeHtml(e.name || e.symbol)}</b>
-          <small>${escapeHtml(e.symbol)}
+          <small><span class="dt-sym" data-copy role="button" tabindex="0" title="Copy address">${escapeHtml(e.symbol)}</span>
             <button type="button" class="ic dt-copy" data-copy aria-label="Copy address" title="${escapeHtml(e.token ?? "")}"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V5H5v11h3"/></svg><span>${e.token ? `${escapeHtml(e.token.slice(0, 4))}…${escapeHtml(e.token.slice(-4))}` : ""}</span></button>
             ${e.pairUrl ? `<a class="ic" href="${escapeHtml(e.pairUrl)}" target="_blank" rel="noopener" aria-label="Open chart"><svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"/></svg></a>` : ""}
           </small></span>
