@@ -658,3 +658,29 @@ def test_the_token_endpoint_carries_the_report_of_a_database_row(monkeypatch, _d
     assert out["entry"]["on_board"] is False
     assert out["entry"]["judge"]["verdict"] == "gem" and out["entry"]["judge"]["strengths"] == ["ships"]
     assert out["entry"]["code"]["summary"] == "real code"
+
+
+def test_tokenomics_falls_back_to_geckoterminal(monkeypatch):
+    """GoPlus has nothing (new Robinhood token): GeckoTerminal's holders give a
+    modest, informational pillar; its top 10 includes pools, so a high share
+    is not fatal. Nothing from either source: still pending."""
+    import asyncio
+
+    from app.trading.onchain import legit, research
+
+    async def no_goplus(chain, token, client):
+        return None
+    gecko = {"holders": 2149, "holders_split": {"top_10": "92.4", "11_30": "3", "31_50": "1", "rest": "3.6"}}
+
+    async def info(chain, token, client):
+        return gecko
+    monkeypatch.setattr(legit, "goplus", no_goplus)
+    monkeypatch.setattr(research, "gecko_info", info)
+    p = asyncio.run(depth.analyze_tokenomics("robinhood", "0xabc", None))
+    assert not p["fatal"] and not p.get("pending")
+    assert p["facts"] == {"holders": 2149, "source": "geckoterminal", "gecko_top10_pct": 92.4}
+    assert "pools included" in p["flags"][0]
+    assert depth.GECKO_TOKENOMICS_BASE < p["score"] <= depth.GECKO_TOKENOMICS_MAX
+    assert depth.judge_tokenomics_gecko({"holders": 10**6})["score"] == depth.GECKO_TOKENOMICS_MAX
+    gecko = {}
+    assert "GoPlus" in asyncio.run(depth.analyze_tokenomics("robinhood", "0xabc", None))["pending"]

@@ -160,7 +160,10 @@ async def gecko_info(chain: str, token: str, client: httpx.AsyncClient) -> dict:
         return {}
     return {"description": a.get("description") or "", "websites": a.get("websites") or [],
             "twitter": a.get("twitter_handle"), "holders": ((a.get("holders") or {}).get("count")),
-            "gt_score": a.get("gt_score")}
+            "gt_score": a.get("gt_score"),
+            # Percent strings as GeckoTerminal gives them ({"top_10": "48.6", ...});
+            # pools and contracts are counted as holders here.
+            "holders_split": ((a.get("holders") or {}).get("distribution_percentage") or {})}
 
 
 def site_urls(item: dict, extra: list[str]) -> list[str]:
