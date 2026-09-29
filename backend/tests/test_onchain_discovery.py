@@ -271,3 +271,18 @@ def test_github_tries_every_linked_repo(monkeypatch):
     out = asyncio.run(depth.analyze_github(["https://github.com/bob/old-repo", "https://github.com/bob/protocol"],
                                            None, None))
     assert out.get("pending") == "GitHub not responding" and not out["fatal"]
+
+
+def test_github_private_links_fall_back_to_the_account(monkeypatch):
+    """BV7X: both linked repos 404, the account has a public one; none at all is missing, not fatal."""
+    seen = []
+
+    async def repo(owner, name, client):
+        seen.append((owner, name))
+        return {}
+
+    monkeypatch.setattr(depth.legit, "github_repo", repo)
+    out = asyncio.run(depth.analyze_github(["https://github.com/bob/a", "https://github.com/bob/b/tree/main"],
+                                           None, None))
+    assert seen[-1] == ("bob", None)
+    assert out["fatal"] == "" and out["facts"]["missing"] and out["facts"]["linked"] == ["bob/a", "bob/b"]

@@ -258,8 +258,11 @@ async def analyze_github(urls: list[str], client: httpx.AsyncClient, launched_at
         return missing_github("no public GitHub")
     # Every linked repository is tried, named ones first: one dead or
     # private link (BV7X, 29/09) is not proof the project has no code.
+    # Then the linking accounts themselves: BV7X links two private repos,
+    # its account keeps a public one.
+    owners = [(o, None) for o in dict.fromkeys(o for o, r in targets if r) if (o, None) not in targets]
     repo: dict | None = {}
-    for owner, name in sorted(targets, key=lambda t: t[1] is None):
+    for owner, name in [*sorted(targets, key=lambda t: t[1] is None), *owners]:
         try:
             repo = await legit.github_repo(owner, name, client)
         except (httpx.HTTPError, ValueError, KeyError, TypeError):
@@ -269,7 +272,9 @@ async def analyze_github(urls: list[str], client: httpx.AsyncClient, launched_at
         if repo:
             break
     if not repo:
-        return judge_github({}, launched_at)
+        # Private or deleted repositories: code we cannot see, not a fake link.
+        return missing_github("linked GitHub repositories are private or deleted",
+                              linked=[f"{o}/{r}" if r else o for o, r in targets])
     # Un link a una libreria o a una piattaforma non e' il codice del progetto.
     # github_verified: the README names the token's address, proof enough.
     if token and not token.get("github_verified") \
