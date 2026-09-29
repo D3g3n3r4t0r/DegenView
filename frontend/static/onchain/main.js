@@ -34,7 +34,7 @@ import { loadLinked } from "@onchain/userswap.js";
 import { mountMemes } from "@onchain/memes.js";
 import { mountAgent, mountAgentView } from "@onchain/agent.js";
 import { mountTop } from "@onchain/top.js";
-import { deskView, openFirst } from "@onchain/detail.js";
+import { deskView, openFirst, openFromHash } from "@onchain/detail.js";
 
 // Sulla pagina a se' (onchain-app.html) la radice e' il documento intero.
 // Fusa dentro la tab Trading, invece, questo modulo viene importato dentro
@@ -613,10 +613,11 @@ document.querySelectorAll(".tabs[data-tabs]").forEach((nav) => {
   });
 });
 {
-  const hash = location.hash.slice(1);
+  const hash = location.hash.slice(1).split("&")[0];
   const first = VIEWS.includes(hash) ? hash : document.documentElement.dataset.section === "gems" && /gem/i.test(hash) ? "gems" : "meme";
   view.shell.dataset.view = first;  // same view on both sides: no transition on load
   setView(first);
+  openFromHash();
 }
 // Search: straight to the swap with the token picker open.
 dockSearch?.addEventListener("click", () => {

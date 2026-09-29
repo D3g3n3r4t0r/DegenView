@@ -2312,5 +2312,10 @@
     "status": "risolto",
     "at": 1790663396,
     "summary": "Nella sezione Memes, in alto, ora ci sono due tab: Alerts e Live scanner. La riga 'Live scanner: what it is looking at now' in fondo alla pagina Alerts non c'e' piu'."
+  },
+  "seed-0226": {
+    "status": "risolto",
+    "at": 1790682540,
+    "summary": "Negli alert Telegram (meme, gemme e operazioni del wallet simulato) il ticker e' un link: apre l'app nella sezione giusta direttamente sulla pagina di quel token (chain + indirizzo). Nella pagina del token, accanto al ticker, c'e' un tasto con l'inizio e la fine dell'indirizzo: toccandolo copia l'indirizzo completo e diventa verde con 'copied' (funziona anche nel browser di Telegram). Se il browser di Telegram chiede di nuovo il login, e' la questione ancora aperta dell'accesso da Telegram."
   }
 }

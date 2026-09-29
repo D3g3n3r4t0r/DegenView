@@ -105,13 +105,59 @@ async function onClick(event) {
     else navigator.clipboard?.writeText(url);
     return;
   }
-  if (t.closest("[data-copy]")) { navigator.clipboard?.writeText(current.e.token ?? ""); return; }
+  const copyBtn = t.closest("[data-copy]");
+  if (copyBtn) { copyAddress(copyBtn, current.e.token); return; }
   if (t.closest("[data-user-swap]")) { openUserSwap(current.e); return; }
   if (t.closest("[data-buy]")) {
     const e = current.e;
     dlg.close();
     document.dispatchEvent(new CustomEvent("lae:buy", { detail: { chain: e.chain, address: e.token, symbol: e.symbol } }));
   }
+}
+
+// The token's on-chain address, whole, with a visible "Copied": the
+// clipboard API is missing in some in-app browsers (Telegram), so a hidden
+// textarea is the fallback.
+async function copyAddress(btn, text) {
+  if (!text) return;
+  let ok = false;
+  try { await navigator.clipboard.writeText(text); ok = true; } catch {
+    const ta = Object.assign(document.createElement("textarea"), { value: text });
+    ta.setAttribute("readonly", "");
+    ta.style.cssText = "position:fixed;opacity:0";
+    document.body.append(ta);
+    ta.select();
+    try { ok = document.execCommand("copy"); } catch { ok = false; }
+    ta.remove();
+  }
+  btn.dataset.copied = ok ? "yes" : "no";
+  btn.setAttribute("aria-label", ok ? "Address copied" : "Copy failed");
+  clearTimeout(btn._t);
+  btn._t = setTimeout(() => { delete btn.dataset.copied; btn.setAttribute("aria-label", "Copy address"); }, 1600);
+}
+
+// Telegram alerts link to #<view>&token=<chain>:<address>: open that
+// token's page. The lists register their tokens as they load; one the
+// lists do not show is built from its dossier.
+export async function openFromHash() {
+  const m = location.hash.match(/&token=([^:&]+):([^&]+)/);
+  if (!m) return;
+  const chain = decodeURIComponent(m[1]), token = decodeURIComponent(m[2]);
+  history.replaceState(null, "", location.pathname + location.search + location.hash.split("&")[0]);
+  const find = () => [...registry].find(([, e]) => e.chain === chain && String(e.token ?? "").toLowerCase() === token.toLowerCase())?.[0];
+  const r = await api.getToken(chain, token).catch(() => null);
+  let id = find();
+  if (!id) {
+    const p = r?.entry, a = r?.alerts?.[0];
+    const kind = p ? "gem" : "meme";
+    id = `${kind === "gem" ? "gem" : `alert:${kind}`}:${chain}:${token}`;
+    register(id, {
+      kind, chain, token, symbol: p?.symbol ?? a?.symbol ?? token.slice(0, 6), name: p?.name ?? a?.name,
+      pair: p?.pair_address ?? a?.pair_address, pairUrl: p?.pair_url ?? a?.pair_url, image: p?.image ?? a?.image,
+      cap: p?.market_cap ?? a?.cap0, ageTs: a?.at, alerts: r?.alerts ?? [],
+    });
+  }
+  openDetail(id);
 }
 
 export function openDetail(id) {
@@ -137,7 +183,7 @@ export function openDetail(id) {
         ${logo(e.symbol, e.image, e.chain, e.token).replace('class="logo"', 'class="logo big"')}
         <span class="dt-name"><b>${escapeHtml(e.name || e.symbol)}</b>
           <small>${escapeHtml(e.symbol)}
-            <button type="button" class="ic" data-copy aria-label="Copy address"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V5H5v11h3"/></svg></button>
+            <button type="button" class="ic dt-copy" data-copy aria-label="Copy address" title="${escapeHtml(e.token ?? "")}"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V5H5v11h3"/></svg><span>${e.token ? `${escapeHtml(e.token.slice(0, 4))}…${escapeHtml(e.token.slice(-4))}` : ""}</span></button>
             ${e.pairUrl ? `<a class="ic" href="${escapeHtml(e.pairUrl)}" target="_blank" rel="noopener" aria-label="Open chart"><svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"/></svg></a>` : ""}
           </small></span>
         <span class="dt-mc"><small>MC</small><b>${usdShort(e.cap)}</b>${changePill(e.change)}</span>
