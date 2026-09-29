@@ -45,11 +45,35 @@ def test_backtest_view_keeps_the_best_fast_strategy_and_the_daily_trend():
     assert ms.backtest_view({"backtests": {"rows": []}}) is None
 
 
-def test_an_unknown_project_is_queued_for_the_gem_finder(tmp_path, monkeypatch):
+def test_an_unknown_project_is_not_queued_until_added(monkeypatch):
     from app.trading.onchain import leaderboard, projects_db
     monkeypatch.setattr(projects_db, "get", lambda c, t: None)
-    seen = []
-    monkeypatch.setattr(projects_db, "upsert", lambda item, src, now=None: seen.append((item["token_address"], src)))
     monkeypatch.setattr(leaderboard, "_entries", {})
-    v = ms.gem_view({"chain": "robinhood", "token_address": "0xabc", "symbol": "HYDX"})
-    assert v["status"] == "queued" and seen == [("0xabc", "manual")]
+    assert ms.gem_view({"chain": "robinhood", "token_address": "0xabc", "symbol": "HYDX"})["status"] == "unknown"
+
+
+def test_add_enters_the_scanned_project_and_lifts_a_rejection(monkeypatch):
+    from app.trading.onchain import leaderboard, projects_db
+    added, rechecked = [], []
+    monkeypatch.setattr(leaderboard, "add", lambda item, src, now=None: added.append((item["symbol"], src)) or True)
+    monkeypatch.setattr(leaderboard, "_gone", {"robinhood:0xabc": 1.0})
+    monkeypatch.setattr(leaderboard, "_entries", {})
+    monkeypatch.setattr(projects_db, "recheck", lambda c, t: rechecked.append(t))
+    monkeypatch.setattr(projects_db, "get", lambda c, t: None)
+    monkeypatch.setattr(ms, "_recent", {})
+    assert ms.add("robinhood", "0xabc")["error"].startswith("Scan")
+    ms._recent["robinhood:0xabc"] = {"chain": "robinhood", "token_address": "0xabc", "symbol": "HYDX", "name": "HyperDex"}
+    out = ms.add("robinhood", "0xabc")
+    assert out["added"] and added == [("HYDX", "manual")] and rechecked == ["0xabc"]
+    assert "robinhood:0xabc" not in leaderboard._gone
+    ms._recent["solana:M"] = {"chain": "solana", "token_address": "M", "symbol": "PEPE", "name": "Pepe Inu"}
+    assert "Meme" in ms.add("solana", "M")["error"]
+
+
+def test_about_reads_geckoterminal_and_keeps_only_https_links():
+    a = ms.about({"description": "HyperDex is a marketplace for real-world assets. More text here.",
+                  "holders": 1234, "holders_split": {"top_10": "48.6"}},
+                 [{"type": "twitter", "url": "https://x.com/h"}, {"type": "x", "url": "javascript:alert(1)"}])
+    assert a["summary"].startswith("HyperDex is a marketplace") and a["holders"] == 1234 and a["top10_pct"] == 48.6
+    assert a["socials"] == [{"type": "twitter", "url": "https://x.com/h"}]
+    assert ms.about(None, None)["summary"] is None

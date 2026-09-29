@@ -12,7 +12,7 @@
  * mostrerebbe lo stato di quando la pagina e' stata aperta.
  */
 import * as api from "@onchain/api.js";
-import { escapeHtml, formatToken, formatUsd, shortAddress, tile } from "@onchain/format.js";
+import { age, escapeHtml, formatToken, formatUsd, shortAddress, tile } from "@onchain/format.js";
 import { chainInfo, state } from "@onchain/store.js";
 
 // Stesso indirizzo nativo duplicato in swap.js/limitOrders.js: qui serve
@@ -77,14 +77,23 @@ export async function openScan(query) {
   titleEl.textContent = `${t.symbol} · ${t.chain}`;
   // A project is judged by the Gem Finder, a meme by the listing filter
   // (Lorenzo, 29/09: the scanner had not followed the updates).
-  const g = d.gem;
+  const g = d.gem, ab = d.about ?? {};
   const status = g ? gemStatus(g) : { ok: ["pass", "Would pass the listing filter"], fail: ["fail", `Would be rejected: ${d.pipeline.reason}`],
     wait: ["wait", `Waiting: ${d.pipeline.reason}`] }[d.pipeline.status] ?? ["wait", d.pipeline.reason];
   const ai = d.ai;
   const hist = (d.memory.history ?? []).map((h) => `${escapeHtml(h.decision ?? "seen")}${h.outcome ? ` → ${escapeHtml(h.outcome)}` : ""}`).join(", ");
   setBody(`
     <div class="scan-head">${tile(t.symbol, t.image, t.chain, t.token_address)}
-      <div><b>${escapeHtml(t.name || t.symbol)}</b><small>${usdS(t.market_cap)} cap · ${usdS(t.liquidity_usd)} liquidity · 24h ${t.change_24h == null ? "—" : `${t.change_24h > 0 ? "+" : ""}${t.change_24h}%`}</small></div></div>
+      <div><b>${escapeHtml(t.name || t.symbol)}</b><small>${escapeHtml(ab.summary || `${t.dex || ""} pool`)}</small></div></div>
+    <dl class="scan-facts">
+      <div><dt>Cap</dt><dd>${usdS(t.market_cap)}</dd></div>
+      <div><dt>Liquidity</dt><dd>${usdS(t.liquidity_usd)}</dd></div>
+      <div><dt>Volume 24h</dt><dd>${usdS(t.volume_24h)}</dd></div>
+      <div><dt>24h</dt><dd data-s="${(t.change_24h ?? 0) >= 0 ? "up" : "down"}">${t.change_24h == null ? "—" : `${t.change_24h > 0 ? "+" : ""}${t.change_24h}%`}</dd></div>
+      <div><dt>Age</dt><dd>${t.created_at ? age(t.created_at)[0] : "—"}</dd></div>
+      <div><dt>Holders</dt><dd>${ab.holders != null ? Number(ab.holders).toLocaleString("en-US") : "—"}${ab.top10_pct != null ? ` <small>top 10 ${Math.round(ab.top10_pct)}%</small>` : ""}</dd></div>
+    </dl>
+    ${ab.socials?.length || /^https:///.test(t.website ?? "") ? `<p class="scan-socials">${/^https:///.test(t.website ?? "") ? `<a href="${escapeHtml(t.website)}" target="_blank" rel="noopener">Website</a>` : ""}${(ab.socials ?? []).map((x) => `<a href="${escapeHtml(x.url)}" target="_blank" rel="noopener">${escapeHtml(x.type || "link")}</a>`).join("")}</p>` : ""}
     <p class="scan-status" data-s="${status[0]}">${escapeHtml(status[1])}</p>
     ${ai ? `<div class="scan-ai" data-risk="${ai.risk >= 60 ? "high" : ai.risk >= 30 ? "mid" : "low"}"><b>${ai.risk}</b>
       <span><b>Scout rug risk</b><small>${escapeHtml([ai.theme, ...(ai.flags ?? [])].filter(Boolean).join(" · ") || "no red flags")}</small></span></div>`
@@ -95,8 +104,24 @@ export async function openScan(query) {
     ${d.alert ? `<p class="sheet-note">Alerted ${new Date(d.alert.at * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" })}, now ${pctS(d.alert.now)}.</p>` : ""}
     <ul class="scan-checks">${(d.checks ?? []).map((c) => `<li data-ok="${c.ok === true ? "yes" : c.ok === false ? "no" : "unknown"}">
       <span>${escapeHtml(c.label)}</span><small>${escapeHtml(c.detail ?? "")}</small></li>`).join("")}</ul>
-    <div class="scan-links"><button type="button" class="btn-quiet" data-full>Full token page</button>
+    <div class="scan-links">${g && (g.status === "unknown" || g.status === "rejected" || g.status === "studied") ? `<button type="button" class="btn-quiet scan-add" data-add><svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/></svg><span>${g.status === "unknown" ? "Add to database" : "Study again"}</span></button>` : ""}
+    <button type="button" class="btn-quiet" data-full>Full token page</button>
     ${t.pair_url ? `<a class="btn-quiet" href="${escapeHtml(t.pair_url)}" target="_blank" rel="noopener">DexScreener</a>` : ""}</div>`);
+  bodyEl.querySelector("[data-add]")?.addEventListener("click", async (ev) => {
+    const btn = ev.currentTarget, label = btn.querySelector("span");
+    btn.disabled = true;
+    try {
+      const [r] = await Promise.all([api.addScanned(t.chain, t.token_address),
+        import("@onchain/particles.js").then((m) => m.absorb(bodyEl.querySelector(".scan-head"), btn))]);
+      label.textContent = r.error ?? "Registered";
+      btn.dataset.done = r.error ? "no" : "yes";
+      if (!r.error) bodyEl.querySelector(".scan-status").replaceWith(Object.assign(document.createElement("p"),
+        { className: "scan-status", textContent: "Gem Finder: queued for a full study", dataset: { s: "wait" } }));
+    } catch (err) {
+      label.textContent = err.message ?? "Couldn't add it";
+      btn.disabled = false;
+    }
+  });
   bodyEl.querySelector("[data-full]")?.addEventListener("click", async () => {
     dialog.close();
     location.hash = `${location.hash.split("&")[0].slice(1) || (g ? "gems" : "meme")}&token=${encodeURIComponent(t.chain)}:${encodeURIComponent(t.token_address)}`;
@@ -109,8 +134,8 @@ const pctN = (n) => (n == null ? "—" : `${n > 0 ? "+" : ""}${Math.round(n)}%`)
 
 function gemStatus(g) {
   if (g.status === "ranked") return ["pass", `Gem Finder: ranked #${g.rank} · score ${g.score}`];
-  if (g.status === "queued" || g.status === "new" || g.status === "analyzing")
-    return ["wait", "Gem Finder: queued for a full study"];
+  if (g.status === "unknown") return ["wait", "Gem Finder: not studied yet"];
+  if (g.status === "new" || g.status === "analyzing") return ["wait", "Gem Finder: queued for a full study"];
   if (g.status === "rejected") return ["fail", `Gem Finder: rejected · ${g.why || "rules"}`];
   return g.why ? ["wait", `Gem Finder: studied, not ranked · ${g.why}`] : ["pass", `Gem Finder: qualifies · score ${g.score}`];
 }
