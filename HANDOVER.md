@@ -388,6 +388,7 @@ filtro anti-rug in `legit.py`, frontend `frontend/static/onchain/radar.js`.
 - 28/09 notte, "il wallet simulato [...] voglio che li segua": Sim = libro di carta (`autotrader.paper_tick`) che segue ogni alert meme su ogni chain col trade di alert_bt; Real invariato (Robinhood, quote vere, un token). seed-0221.
 - seed-0226 (29/09): link `#<view>&token=<chain>:<address>` (`app_token_url()` in main.py, `openFromHash()` in detail.js) sul ticker di ogni alert Telegram; tasto copia indirizzo con feedback e fallback. Aperto: login dentro il browser di Telegram (Mini App o link con accesso), scelta di Lorenzo.
 - seed-0227 (29/09): tasto Share = `tokenLink()` in detail.js (stesso deep link degli alert); `openFromHash()` ora parte in `boot()` a login fatto, cosi' la destinazione sopravvive al login. Link con accesso da Telegram: bloccato dal controllo di sicurezza, in attesa del via scritto di Lorenzo.
+- seed-0228 (29/09): memecoin di nuovo negli alert (`settings.listings_allow_memes`, `legit.assess(memes=True)` -> `_assess_meme`): decidono solo i controlli anti-rug; alert con `meme=True` esclusi dall'autotrader reale (`entry_candidate`). Misura: 6/70 pool PumpSwap passano, tutti sopra il primo prezzo.
 - Vincolo: il pilota (soldi veri) resta sotto $100k
   (`_SNIPER_ONCHAIN_MAX_MCAP_USD` in main.py). Mai strategie short.
 
