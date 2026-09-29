@@ -91,6 +91,13 @@ RADAR_SOURCES = ("radar", "listing")   # before 25/09: fresh launches, now the M
 REFERENCES = (
     {"chain": "solana", "token_address": "6SjVTj1VGwFSXn7wEjwFm77LvACeTqB7sQUebYKX8Ds5", "symbol": "ROUTER",
      "name": "Solrouter", "website": "https://solrouter.com", "websites": ["https://docs.solrouter.com"]},
+    # Lorenzo, 29/09: "roba seria tipo AUERON, STEALF, pfwa, GRID dove cavolo sono".
+    {"chain": "solana", "token_address": "G5W6LwkLeoj6rZqBP1y3KT8k6Cz6rXGJmMNU3TArXtXw", "symbol": "STEALF",
+     "name": "Stealf", "website": "https://www.stealf.xyz/"},
+    {"chain": "robinhood", "token_address": "0xa934bA4F59070149d37A93F8A002Af79BAe35563", "symbol": "PFWA",
+     "name": "predict FWA", "website": "https://www.pfwa.fun/", "websites": ["https://www.pfwa.fun/docs"]},
+    {"chain": "robinhood", "token_address": "0x727701F88f09Fed71eb217Bcea88b3F314CF7079", "symbol": "GRID",
+     "name": "GRID by Virtuals", "website": "https://www.gridarena.xyz/"},
 )
 # A researcher's floor: an existing project, not a launch.
 MIN_AGE_DAYS = 14
