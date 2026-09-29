@@ -80,6 +80,8 @@ def test_thin_pool_order_is_sliced_and_persisted_before_first_fill(tmp_path, mon
     assert len(calls) == result["slices_total"]
     assert round(sum(calls), 2) == 20.0
     # posizione aggiornata coerente col totale delle fette confermate
+    for o in ledger.pending_unconfirmed():
+        ledger.confirm_from_chain(o["idempotency_key"])   # the reconciler, once the chain confirms
     pos = ledger.get_position("u1", "solana", "TOKEN")
     assert round(pos["cost_usd"], 2) == 20.0
 
@@ -149,6 +151,8 @@ def test_cancel_request_stops_before_the_next_unstarted_slice(tmp_path, monkeypa
     job = twap_jobs.get_job(result["job_id"])
     assert job["status"] == "cancelled"
     # la fetta gia' confermata resta confermata (mai annullata)
+    for o in ledger.pending_unconfirmed():
+        ledger.confirm_from_chain(o["idempotency_key"])   # the reconciler, once the chain confirms
     pos = ledger.get_position("u1", "solana", "TOKEN")
     assert pos["cost_usd"] > 0
 
@@ -223,6 +227,8 @@ def test_resume_running_twap_jobs_only_executes_the_remaining_slices(tmp_path, m
     # la posizione riflette solo le fette 3 e 4 eseguite ORA (le prime 2
     # confermate "prima del riavvio" non sono passate da execute_order in
     # questo test, quindi non contribuiscono al costo registrato qui)
+    for o in ledger.pending_unconfirmed():
+        ledger.confirm_from_chain(o["idempotency_key"])   # the reconciler, once the chain confirms
     pos = ledger.get_position("u1", "solana", "TOKEN")
     assert round(pos["cost_usd"], 2) == 10.0
 
