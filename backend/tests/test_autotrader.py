@@ -188,3 +188,30 @@ def test_real_money_never_enters_a_meme_let_through_on_rug_checks_alone():
     assert tr.entry_candidate(LABEL, T0 + 60) is a
     a["meme"] = True
     assert tr.entry_candidate(LABEL, T0 + 60) is None
+
+
+def test_sim_total_equals_cash_plus_rows_and_rows_carry_their_own_mark():
+    """Lorenzo, 29/09: "il saldo totale non corrisponde al saldo delle
+    posizioni aperte". Each open row is valued and priced from one reading
+    (the system's close), so a live re-mark (value x live / price) moves
+    rows and total together; the total is cash plus the rows."""
+    a = _alert(sym="FROG")
+    b = _alert(sym="TOAD")
+    tr.configure("u1", "sim", 25, usdg_now=100.0)
+    asyncio.run(tr.tick([USER], now=T0))
+    a["alert_bt"][LABEL].update(ret=0.4, mark=2.8)
+    b["alert_bt"][LABEL].update(ret=-0.1, mark=0.9)
+    a["last"]["price"] = 3.5          # the tracker's newer price is not the mark
+    v = tr.view("u1")                 # no tick in between: the view reads the system now
+    rows = {p["symbol"]: p for p in v["positions"]}
+    assert rows["FROG"]["value_usdg"] == pytest.approx(35.0) and rows["FROG"]["price"] == 2.8
+    assert rows["TOAD"]["value_usdg"] == pytest.approx(22.5) and rows["TOAD"]["price"] == 0.9
+    assert v["sim"]["equity"] == pytest.approx(v["sim"]["usdg"] + sum(p["value_usdg"] for p in v["positions"]))
+    # out but not closed yet: no price, so nothing re-marks it live
+    b["alert_bt"][LABEL].update(state="out")
+    assert {p["symbol"]: p for p in tr.view("u1")["positions"]}["TOAD"]["price"] is None
+
+    from app import main
+    snap = main._sim_snapshot(SimpleNamespace(id="u1"))
+    assert snap["total"] == pytest.approx(snap["cash"] + sum(p["value_usd"] for p in snap["positions"]), abs=1e-3)
+    assert sum(snap["by_chain"].values()) == pytest.approx(snap["total"], abs=1e-3)
