@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0228", "Memecoin di nuovo negli alert, con filtri anti-rug",
+     "Lorenzo, 29/09: 'a sto punto riattiviamo le memecoin per gli alert e la strategia che entra allo scoccare dell'alert, cercando di evitare i rugpull'",
+     "alta"),
     ("seed-0227", "Tasto condividi: il link apre quel token a chi e' loggato",
      "Lorenzo, 29/09: 'voglio l'opzione di poter condividere un ticker dall'app con il tasto condividi e chi ha accesso ovviamente all'app tramite Safari o qualsiasi altro browser loggato deve aprire automaticamente quel token esattamente che ho condiviso'",
      "media"),
