@@ -37,7 +37,7 @@ Stato: **confermato** (visto nel codice), **risolto** (PR su main con test), **i
 | B02-a | 39 scritture di archivi JSON non atomiche (pine esclusa); `users.json` illeggibile = tutti gli utenti persi al salvataggio successivo | alta | risolto | questa | backup/restore non provati |
 | B04-a | 7 task di `lifespan` senza riferimento (fra cui il riconciliatore degli ordini) e mai cancellati | media | risolto | questa | ~30 `create_task` "spara e dimentica" per Telegram in `main.py` |
 | B04-b | nessun lease sui loop: due processi = scheduler doppi | media | confermato | — | oggi un solo worker; documentato, non cambiare senza lease |
-| B08-a | ogni run delle Actions fallisce in ~4 s senza step (CI, deploy, DeepSeek) | alta | confermato | — | causa lato account GitHub (minuti/fatturazione?): la vede solo Lorenzo |
+| B08-a | ogni run delle Actions fallisce in ~4 s senza step (CI, deploy, DeepSeek) | alta | confermato | — | causa: limite mensile dei minuti Actions raggiunto (Lorenzo, 29/09), si azzera da solo; poi verificare che CI e deploy ripartano |
 | B06 | `main.py` monolitico, nessun router | bassa | confermato | — | estrarre per flusso, dopo B01-B05 |
 | B07 | prestazioni non misurate | — | non verificato | — | — |
 
