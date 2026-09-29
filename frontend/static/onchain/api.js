@@ -78,12 +78,15 @@ export const searchTokens = (chain, query) =>
   request(`/api/onchain/tokens/search?chain=${chain}&query=${encodeURIComponent(query)}`, { timeoutMs: 10000 });
 export const quoteRobinhood = (body) => request("/api/onchain/quote/robinhood", { method: "POST", body, timeoutMs: 15000 });
 
+// One id per click: a retry of the same request can't trade twice.
+const withOrderId = (body) => ({ client_order_id: crypto.randomUUID(), ...body });
 export const executeSolana = (body) =>
-  request("/api/onchain/execute/solana", { method: "POST", body, timeoutMs: 45000 });
+  request("/api/onchain/execute/solana", { method: "POST", body: withOrderId(body), timeoutMs: 45000 });
 export const executeRobinhood = (body) =>
-  request("/api/onchain/execute/robinhood", { method: "POST", body, timeoutMs: 45000 });
+  request("/api/onchain/execute/robinhood", { method: "POST", body: withOrderId(body), timeoutMs: 45000 });
 
-export const sendToken = (body) => request("/api/onchain/send", { method: "POST", body, timeoutMs: 45000 });
+export const sendToken = (body) =>
+  request("/api/onchain/send", { method: "POST", body: withOrderId(body), timeoutMs: 45000 });
 
 export const requestReveal = (chain) =>
   request(`/api/onchain/wallets/${chain}/reveal/request`, { method: "POST" });

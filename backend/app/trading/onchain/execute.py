@@ -27,6 +27,7 @@ livello di systemd/docker (es. `journalctl`, `docker logs` con
 `max-size`/`max-file`) se vuole i 30 giorni richiesti dal piano. Gap noto,
 non silenziato: costruire qui un secondo sistema di log parallelo solo per
 onchain sarebbe piu' rischio (due fonti di verita' sui log) che beneficio."""
+import hashlib
 import logging
 import uuid
 
@@ -65,14 +66,41 @@ async def _send_solana_with_jito_fallback(
         return await execution.send_signed_solana_tx(signed_tx_bytes)
 
 
+def intent_key(owner_id: str, chain: str, intent_id: str) -> str:
+    digest = hashlib.sha256(f"{owner_id}|{chain}|{intent_id}".encode()).hexdigest()[:32]
+    return f"intent-{digest}"
+
+
+def _replay(order: dict, token: str, side: str, correlation_id: str) -> dict:
+    """The same intent again: report what the first attempt did. The same id
+    with a different trade is a client bug, refused."""
+    if order["token"] != token or order["side"] != side:
+        return {"accepted": False, "reason": "this order id was already used for a different trade",
+                "idempotency_key": None, "tx_signature": None, "correlation_id": correlation_id}
+    accepted = order["status"] in ("signed", "submitted", "confirmed", "unknown")
+    reason = "" if accepted else ("order already in progress" if order["status"] == "pending"
+                                  else order.get("reason") or "already attempted")
+    return {"accepted": accepted, "reason": reason,
+            "idempotency_key": order["idempotency_key"], "tx_signature": order.get("tx_signature"),
+            "status": order["status"], "duplicate": True, "correlation_id": correlation_id}
+
+
 async def execute_order(
     owner_id: str, chain: str, token: str, strategy_name: str, side: str,
     notional_usd: float, price_impact_pct: float, price_usd: float,
     private_key_hex: str, quote: dict,
     pool_address: str | None = None,
     guards: bool = True,
+    intent_id: str | None = None,
 ) -> dict:
+    """intent_id: stable for one decision (a click, a signal). A retry with
+    the same one returns the order already made instead of a second trade
+    (audit 29/09, S03)."""
     correlation_id = uuid.uuid4().hex
+    idempotency_key = intent_key(owner_id, chain, intent_id) if intent_id else f"live-{uuid.uuid4().hex}"
+    existing = ledger.get_order(idempotency_key) if intent_id else None
+    if existing is not None:
+        return _replay(existing, token, side, correlation_id)
     logger.info(
         "[%s] execute_order owner=%s chain=%s token=%s side=%s notional_usd=%.2f",
         correlation_id, owner_id, chain, token, side, notional_usd,
@@ -125,7 +153,6 @@ async def execute_order(
         return {"accepted": False, "reason": f"unsupported chain: {chain}",
                 "idempotency_key": None, "tx_signature": None, "correlation_id": correlation_id}
 
-    idempotency_key = f"live-{uuid.uuid4().hex}"
     if not ledger.reserve(idempotency_key, owner_id, chain, token, strategy_name, side, "live", notional_usd):
         logger.warning("[%s] idempotency_key duplicata: %s", correlation_id, idempotency_key,
                         extra={"correlation_id": correlation_id})
@@ -161,6 +188,12 @@ async def execute_order(
         return {"accepted": False, "reason": reason, "idempotency_key": idempotency_key, "tx_signature": None,
                 "correlation_id": correlation_id}
 
+    expected = {"expected_qty": notional_usd / price_usd if price_usd > 0 else None,
+                "expected_price_usd": price_usd if price_usd > 0 else None,
+                "price_impact_pct": price_impact_pct}
+    tx_id = execution.tx_id(chain, signed)
+    if tx_id:
+        ledger.mark_signed(idempotency_key, tx_id, **expected)
     try:
         if chain == "solana":
             signature = await _send_solana_with_jito_fallback(correlation_id, private_key_hex, signed, notional_usd)
@@ -168,17 +201,21 @@ async def execute_order(
             signature = await execution.send_signed_evm_tx(signed)
     except Exception as exc:
         logger.error("[%s] invio fallito: %s", correlation_id, exc, extra={"correlation_id": correlation_id})
+        if tx_id and not isinstance(exc, RuntimeError):
+            # A timeout or a dropped connection does not prove the node never
+            # got it: the reconciler looks the signature up.
+            ledger.mark_unknown(idempotency_key, f"send outcome unknown: {exc}")
+            return {"accepted": False, "reason": f"send outcome unknown, checking the chain: {exc}",
+                    "idempotency_key": idempotency_key, "tx_signature": tx_id, "correlation_id": correlation_id}
         ledger.mark_failed(idempotency_key, f"send failed: {exc}")
         return {"accepted": False, "reason": f"send failed: {exc}",
                 "idempotency_key": idempotency_key, "tx_signature": None, "correlation_id": correlation_id}
 
-    ledger.mark_submitted(idempotency_key, signature)
-    ledger.mark_confirmed(
-        idempotency_key,
-        executed_qty=notional_usd / price_usd,
-        executed_price_usd=price_usd,
-        price_impact_pct=price_impact_pct,
-    )
-    logger.info("[%s] confermato tx=%s", correlation_id, signature, extra={"correlation_id": correlation_id})
+    # Accepted by the node is not confirmed (audit 29/09, S04): position and
+    # spend move when the reconciler sees the transaction confirmed.
+    if signature.startswith("jito:") and tx_id:
+        signature = tx_id       # a bundle id cannot be looked up; the tx signature can
+    ledger.mark_submitted(idempotency_key, signature, **expected)
+    logger.info("[%s] inviato tx=%s", correlation_id, signature, extra={"correlation_id": correlation_id})
     return {"accepted": True, "reason": "", "idempotency_key": idempotency_key, "tx_signature": signature,
-            "correlation_id": correlation_id}
+            "status": "submitted", "correlation_id": correlation_id}

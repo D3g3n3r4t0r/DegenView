@@ -16,7 +16,7 @@ import logging
 import uuid
 
 from app.config import settings
-from app.trading.onchain import execution, ledger, risk
+from app.trading.onchain import execute, execution, ledger, risk
 
 logger = logging.getLogger(__name__)
 
@@ -24,9 +24,14 @@ logger = logging.getLogger(__name__)
 async def send_token(
     owner_id: str, chain: str, token_label: str, to_address: str,
     amount: float, amount_raw: int, notional_usd: float, private_key_hex: str,
-    is_native: bool, token_address: str | None,
+    is_native: bool, token_address: str | None, intent_id: str | None = None,
 ) -> dict:
     correlation_id = uuid.uuid4().hex
+    idempotency_key = (execute.intent_key(owner_id, chain, intent_id) if intent_id
+                       else f"send-{uuid.uuid4().hex}")
+    existing = ledger.get_order(idempotency_key) if intent_id else None
+    if existing is not None:
+        return execute._replay(existing, token_label, "sell", correlation_id)
     logger.info(
         "[%s] send_token owner=%s chain=%s token=%s to=%s notional_usd=%.2f",
         correlation_id, owner_id, chain, token_label, to_address, notional_usd,
@@ -52,7 +57,6 @@ async def send_token(
         return {"accepted": False, "reason": f"unsupported chain: {chain}",
                 "idempotency_key": None, "tx_signature": None, "correlation_id": correlation_id}
 
-    idempotency_key = f"send-{uuid.uuid4().hex}"
     if not ledger.reserve(idempotency_key, owner_id, chain, token_label, "manuale", "sell", "live", notional_usd):
         logger.warning("[%s] idempotency_key duplicata: %s", correlation_id, idempotency_key,
                         extra={"correlation_id": correlation_id})
@@ -91,6 +95,11 @@ async def send_token(
         return {"accepted": False, "reason": reason, "idempotency_key": idempotency_key, "tx_signature": None,
                 "correlation_id": correlation_id}
 
+    expected = {"expected_qty": amount, "expected_price_usd": notional_usd / amount if amount else 0.0,
+                "price_impact_pct": 0.0}
+    tx_id = execution.tx_id(chain, signed)
+    if tx_id:
+        ledger.mark_signed(idempotency_key, tx_id, **expected)
     try:
         signature = (
             await execution.send_signed_solana_tx(signed) if chain == "solana"
@@ -98,16 +107,16 @@ async def send_token(
         )
     except Exception as exc:  # noqa: BLE001
         logger.error("[%s] invio fallito: %s", correlation_id, exc, extra={"correlation_id": correlation_id})
+        if tx_id and not isinstance(exc, RuntimeError):
+            ledger.mark_unknown(idempotency_key, f"send outcome unknown: {exc}")
+            return {"accepted": False, "reason": f"send outcome unknown, checking the chain: {exc}",
+                    "idempotency_key": idempotency_key, "tx_signature": tx_id, "correlation_id": correlation_id}
         ledger.mark_failed(idempotency_key, f"send failed: {exc}")
         return {"accepted": False, "reason": f"send failed: {exc}",
                 "idempotency_key": idempotency_key, "tx_signature": None, "correlation_id": correlation_id}
 
-    ledger.mark_submitted(idempotency_key, signature)
-    ledger.mark_confirmed(
-        idempotency_key, executed_qty=amount,
-        executed_price_usd=notional_usd / amount if amount else 0.0,
-        price_impact_pct=0.0,
-    )
-    logger.info("[%s] confermato tx=%s", correlation_id, signature, extra={"correlation_id": correlation_id})
+
+    ledger.mark_submitted(idempotency_key, signature, **expected)
+    logger.info("[%s] inviato tx=%s", correlation_id, signature, extra={"correlation_id": correlation_id})
     return {"accepted": True, "reason": "", "idempotency_key": idempotency_key, "tx_signature": signature,
-            "correlation_id": correlation_id}
+            "status": "submitted", "correlation_id": correlation_id}

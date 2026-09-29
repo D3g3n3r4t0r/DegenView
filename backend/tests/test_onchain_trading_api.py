@@ -130,7 +130,7 @@ def test_execute_robinhood_real_quote_signs_but_does_not_send(client, monkeypatc
     resp = client.post("/api/onchain/execute/robinhood", json={
         "token": "USDG", "strategy_name": "lorenzo", "side": "buy",
         "token_in": ROBINHOOD_WETH, "token_out": ROBINHOOD_USDG, "fee": 3000,
-        "amount_in": 10**16, "notional_usd": 15.0, "price_usd": 1.0,
+        "amount_in": 10**15,  # ~$3: the server values it now, not "notional_usd"
     })
     assert resp.status_code == 200
     body = resp.json()
