@@ -111,10 +111,14 @@ function paint() {
     writeSeen(entries.slice(0, 50).map((e) => ({ id: idOf(e), symbol: e.symbol })));
   }
   const bt = labStatus;
-  const narrLine = filtered ? `Narratives: ${narr.get().map((k) => labels[k] ?? k).join(", ")} · ` : "";
-  root.querySelector("[data-top-note]").textContent = narrLine + lead + (bt?.total
+  // A narrowed Top says so, with a way out right here (Lorenzo, 29/09: two
+  // tokens left and no sign of the filter chosen in the Database tab).
+  const narrLine = filtered
+    ? `<button type="button" class="top-narr-clear" data-top-narr-clear>${escapeHtml(narr.get().map((k) => labels[k] ?? k).join(", "))} ✕</button> `
+    : "";
+  root.querySelector("[data-top-note]").innerHTML = narrLine + escapeHtml(lead + (bt?.total
     ? `Every strategy backtested on each token's latest chart, every hour, around the clock · ${bt.ready}/${bt.total} ready`
-    : "");
+    : ""));
 }
 
 // The H24 lab's best backtest (strategy_lab.py), in the row: what the
@@ -143,6 +147,7 @@ export function mountTop() {
   if (!root) return;
   size = SIZES.includes(read()) ? read() : 15;
   root.addEventListener("click", (event) => {
+    if (event.target.closest("[data-top-narr-clear]")) { narr.set([]); return; }
     const b = event.target.closest("[data-size]");
     if (!b) return;
     size = Number(b.dataset.size);
