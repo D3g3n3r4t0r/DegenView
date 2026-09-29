@@ -180,6 +180,25 @@ from starlette.middleware.gzip import GZipMiddleware
 
 logger = logging.getLogger(__name__)
 
+
+# Audit B04, rest: a one-shot task (a Telegram message) nobody holds can be
+# garbage-collected before it runs, and its error is never seen. Hold it
+# until it ends and log what it raised.
+_fired: set[asyncio.Task] = set()
+
+
+def _fire(coro) -> asyncio.Task:
+    task = asyncio.create_task(coro)
+    _fired.add(task)
+    task.add_done_callback(_fired_done)
+    return task
+
+
+def _fired_done(task: asyncio.Task) -> None:
+    _fired.discard(task)
+    if not task.cancelled() and task.exception() is not None:
+        logger.error("background send failed", exc_info=task.exception())
+
 # Un manager di stream live per exchange, ciascuno col proprio protocollo
 # pubblico (protobuf su MEXC, JSON su Kraken) — vedi /ws/live sotto.
 _LIVE_STREAM_MANAGERS = {"mexc": mexc_stream_manager, "kraken": kraken_stream_manager}
@@ -493,7 +512,7 @@ async def _run_onchain_auto_trade(owner: User, entry: WatchlistEntry, strategy_n
             )
             if result.get("accepted") and not result.get("duplicate") and owner.telegram_chat_id \
                     and _telegram_allowed(owner):
-                asyncio.create_task(telegram.send_to(
+                _fire(telegram.send_to(
                     owner.telegram_chat_id,
                     f"💱 Ordine on-chain ESEGUITO <b>{entry.symbol}</b> [{signal.type}] su {chain} a {signal.price:g}",
                 ))
@@ -505,7 +524,7 @@ async def _run_onchain_auto_trade(owner: User, entry: WatchlistEntry, strategy_n
                 outcome="fallito", detail=str(exc), price=signal.price,
             )
             if owner.telegram_chat_id and _telegram_allowed(owner):
-                asyncio.create_task(telegram.send_to(
+                _fire(telegram.send_to(
                     owner.telegram_chat_id,
                     f"⚠️ Ordine on-chain FALLITO <b>{entry.symbol}</b> [{signal.type}]: {exc}",
                 ))
@@ -562,7 +581,7 @@ async def _watchlist_alert_loop() -> None:
                     elif entry.id not in _stale_notified:
                         _stale_notified.add(entry.id)
                         _old = f"{int(_age // 3600)} h" if _age >= 3600 else f"{int(_age // 60)} min"
-                        asyncio.create_task(telegram.send_to(
+                        _fire(telegram.send_to(
                             owner.telegram_chat_id,
                             f"⚠️ Dati fermi: <b>{entry.symbol}</b> [{entry.interval}] — ultima candela {_old} fa",
                         ))
@@ -578,7 +597,7 @@ async def _watchlist_alert_loop() -> None:
                             f"Prezzo attuale: {current_price:g}"
                             + (f"\n{pa.note}" if pa.note else "")
                         )
-                        asyncio.create_task(telegram.send_to(owner.telegram_chat_id, msg))
+                        _fire(telegram.send_to(owner.telegram_chat_id, msg))
                         alert_log.append_entry(
                             owner_id=owner.id,
                             symbol=pa.symbol,
@@ -673,7 +692,7 @@ async def _watchlist_alert_loop() -> None:
                                     )
                                     if owner.telegram_chat_id and _telegram_allowed(owner):
                                         cap_note = f" (tetto {cap:g} USDT)" if cap else ""
-                                        asyncio.create_task(telegram.send_to(
+                                        _fire(telegram.send_to(
                                             owner.telegram_chat_id,
                                             f"💱⚠️ Ordine FUTURES ESEGUITO <b>{entry.symbol}</b> [{signal.type}] "
                                             f"su {entry.exchange} a {signal.price:g}{cap_note}",
@@ -686,7 +705,7 @@ async def _watchlist_alert_loop() -> None:
                                         outcome="fallito", detail=str(exc), price=signal.price,
                                     )
                                     if owner.telegram_chat_id and _telegram_allowed(owner):
-                                        asyncio.create_task(telegram.send_to(
+                                        _fire(telegram.send_to(
                                             owner.telegram_chat_id,
                                             f"⚠️ Ordine FUTURES FALLITO <b>{entry.symbol}</b> [{signal.type}]: {exc}",
                                         ))
@@ -732,7 +751,7 @@ async def _watchlist_alert_loop() -> None:
                                         # fallito: era l'unico dei due casi che
                                         # restava muto.
                                         cap_note = f" (tetto {cap:g} USDT)" if cap else ""
-                                        asyncio.create_task(telegram.send_to(
+                                        _fire(telegram.send_to(
                                             owner.telegram_chat_id,
                                             f"💱 Ordine ESEGUITO <b>{entry.symbol}</b> [{signal.type}] "
                                             f"su {entry.exchange} a {signal.price:g}{cap_note}",
@@ -745,7 +764,7 @@ async def _watchlist_alert_loop() -> None:
                                         outcome="fallito", detail=str(exc), price=signal.price,
                                     )
                                     if owner.telegram_chat_id and _telegram_allowed(owner):
-                                        asyncio.create_task(telegram.send_to(
+                                        _fire(telegram.send_to(
                                             owner.telegram_chat_id,
                                             f"⚠️ Ordine FALLITO <b>{entry.symbol}</b> [{signal.type}]: {exc}",
                                         ))
@@ -758,7 +777,7 @@ async def _watchlist_alert_loop() -> None:
                 # un messaggio d'allarme.
                 streak = _pause_for_unreachable(entry.asset_type, entry.exchange)
                 if _notify_unreachable_once(entry.asset_type, entry.exchange, streak):
-                    asyncio.create_task(telegram.send_to(
+                    _fire(telegram.send_to(
                         owner.telegram_chat_id,
                         f"📡 <b>{entry.exchange}</b> non risponde da qualche minuto.\n"
                         f"Il monitoraggio riprende da solo appena torna raggiungibile.\n\n"
@@ -777,7 +796,7 @@ async def _watchlist_alert_loop() -> None:
                 # apparente al posto di un limite di piano.
                 _pause_for_quota(entry.asset_type, entry.exchange, exc)
                 if _notify_quota_once(owner.id, entry.asset_type, entry.exchange):
-                    asyncio.create_task(telegram.send_to(
+                    _fire(telegram.send_to(
                         owner.telegram_chat_id,
                         f"⏸️ <b>Crediti dati esauriti</b> ({entry.exchange if entry.asset_type == 'crypto' else 'Twelve Data'})\n"
                         f"Il monitoraggio dei titoli riprende automaticamente quando la quota si azzera. "
@@ -787,7 +806,7 @@ async def _watchlist_alert_loop() -> None:
             except Exception as exc:  # noqa: BLE001
                 logger.error("Alert loop error for %s: %s", entry.symbol, exc, exc_info=True)
                 if settings.telegram_bot_token and owner.telegram_chat_id and _telegram_allowed(owner):
-                    asyncio.create_task(
+                    _fire(
                         telegram.send_to(
                             owner.telegram_chat_id,
                             f"⚠️ Errore monitoraggio <b>{entry.symbol}</b> [{entry.interval}]: {exc}",
@@ -1178,7 +1197,7 @@ async def _watchdog_loop() -> None:
             if owner.id in notified:
                 continue
             notified.add(owner.id)
-            asyncio.create_task(telegram.send_to(
+            _fire(telegram.send_to(
                 owner.telegram_chat_id,
                 "⚠️ <b>Watchdog</b>: il loop degli alert è silenzioso da più di "
                 f"{int(_WATCHDOG_STALE_S // 60)} minuti. Verificare lo stato del server.",
@@ -1284,7 +1303,7 @@ async def _telegram_chat_loop() -> None:
                     chat_id = str((msg.get("chat") or {}).get("id") or "")
                     text = deepseek_desk.wants_answer(msg, bot)
                     if text and chat_id in _deepseek_chats():
-                        asyncio.create_task(_telegram_reply(chat_id, text))
+                        _fire(_telegram_reply(chat_id, text))
             except Exception:
                 logger.exception("telegram chat loop")
                 await asyncio.sleep(10)
@@ -1741,7 +1760,7 @@ async def _unhandled_error_handler(request: Request, exc: Exception):
         method=request.method, path=request.url.path, exc=exc, user_id=user_id,
     )
     if should_alert:
-        asyncio.create_task(telegram.send_message(
+        _fire(telegram.send_message(
             f"🔴 Errore 500 su {entry['method']} {entry['path']}\n"
             f"{entry['exc_type']}: {entry['message']}"
         ))
@@ -1991,7 +2010,7 @@ def _dispatch_telegram_alerts(
     for signal in fresh:
         message = format_signal_message(symbol, interval, strategy.name, signal,
                                         current_price=current_price, entry_id=entry_id or "")
-        asyncio.create_task(telegram.send_to(chat_id, message))
+        _fire(telegram.send_to(chat_id, message))
         if owner_id:
             alert_log.append_entry(
                 owner_id=owner_id,
@@ -2355,7 +2374,7 @@ async def update_telegram_chat_id(
         # Confirms the chat_id was actually saved and is reachable — sent
         # immediately on save, not the first real alert, so a typo'd id
         # shows up right away instead of silently going nowhere.
-        asyncio.create_task(
+        _fire(
             telegram.send_to(
                 updated.telegram_chat_id,
                 "✅ Chat ID collegato correttamente a Liquidity Analysis Engine.\n"
@@ -2664,9 +2683,9 @@ def _require_password(user: User, password: str, request: Request) -> None:
 
 def _notify_passkey_change(user: User, what: str) -> None:
     text = f"Passkey {what} sull'account {user.email}. Se non sei stato tu, cambia password e sposta i fondi."
-    asyncio.create_task(telegram.send_infra_alert(text))
+    _fire(telegram.send_infra_alert(text))
     if user.telegram_chat_id and _telegram_allowed(user):
-        asyncio.create_task(telegram.send_to(user.telegram_chat_id, text))
+        _fire(telegram.send_to(user.telegram_chat_id, text))
 
 
 @app.post("/api/auth/passkey/register/options")
@@ -2772,7 +2791,7 @@ async def set_onchain_wallet_enabled(
         raise HTTPException(status_code=404, detail="No wallet on this chain — create one first")
     if not body.enabled:
         # Kill switch attivato — alert immediato (piano SRE punto 5).
-        asyncio.create_task(telegram.send_infra_alert(
+        _fire(telegram.send_infra_alert(
             f"Kill switch ATTIVATO per il wallet {chain} dell'utente {user.email} — nessun nuovo ordine partira'."
         ))
     w = updated.onchain_wallets[chain]
@@ -2928,12 +2947,12 @@ async def reveal_onchain_wallet(
         # bug da correggere con calma, e' un wallet potenzialmente
         # irraggiungibile — chi possiede l'account deve saperlo subito.
         if user.telegram_chat_id and _telegram_allowed(user):
-            asyncio.create_task(telegram.send_to(
+            _fire(telegram.send_to(
                 user.telegram_chat_id, f"🚨 Wallet on-chain ({chain}): {exc}",
             ))
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     if user.telegram_chat_id and _telegram_allowed(user):
-        asyncio.create_task(telegram.send_to(
+        _fire(telegram.send_to(
             user.telegram_chat_id, f"🔓 Chiave on-chain rivelata ({chain}, {user.onchain_wallets[chain].address})",
         ))
     return {
@@ -3518,17 +3537,17 @@ def _maybe_alert_onchain_risk_event(owner_email: str, chain: str, result: dict, 
     `telegram.send_infra_alert()` usato qui sotto."""
     reason = (result.get("reason") or "")
     if "circuit breaker active" in reason:
-        asyncio.create_task(telegram.send_infra_alert(
+        _fire(telegram.send_infra_alert(
             f"Circuit breaker scattato su {chain} (utente {owner_email}): {reason}"
         ))
         return
     if "daily cap" in reason:
-        asyncio.create_task(telegram.send_infra_alert(
+        _fire(telegram.send_infra_alert(
             f"Tetto giornaliero raggiunto su {chain} (utente {owner_email}): {reason}"
         ))
         return
     if result.get("accepted") and notional_usd > 0.30 * settings.onchain_max_usd_per_trade:
-        asyncio.create_task(telegram.send_infra_alert(
+        _fire(telegram.send_infra_alert(
             f"Ordine on-chain da {notional_usd:.2f} USD su {chain} (utente {owner_email}) "
             f"sopra il 30% del tetto per operazione ({settings.onchain_max_usd_per_trade:.2f} USD)."
         ))
@@ -4171,10 +4190,16 @@ def _is_admin(user: User) -> bool:
     return not guest_links.is_guest(user) and user.email.lower() in allowed
 
 
+def _full_access(user: User) -> bool:
+    """Top plan without the admin powers: admins plus full_access_emails."""
+    allowed = {e.strip().lower() for e in settings.full_access_emails.split(",") if e.strip()}
+    return _is_admin(user) or (not guest_links.is_guest(user) and user.email.lower() in allowed)
+
+
 @app.get("/api/onchain/plan")
 async def onchain_plan(user: User = Depends(auth.get_current_user)) -> dict:
     """Il piano dell'utente e quanto ne ha usato oggi. Vedi plans.py."""
-    return onchain_plans.status(user.email, _is_admin(user))
+    return onchain_plans.status(user.email, _full_access(user))
 
 
 @app.post("/api/onchain/research")
@@ -4185,7 +4210,7 @@ async def onchain_research_read(req: ProjectReadRequest, user: User = Depends(au
     if req.chain not in ("solana", "robinhood") or not re.fullmatch(r"[0-9A-Za-z]{20,64}", req.token):
         raise HTTPException(status_code=400, detail="Unknown chain or malformed address.")
     return await onchain_plans.read_project(user.email, req.chain, req.token, deep=req.deep,
-                                            admin=_is_admin(user))
+                                            admin=_full_access(user))
 
 
 @app.post("/api/onchain/plan")
@@ -4252,7 +4277,7 @@ async def _notify_listing(item: dict) -> None:
         if len(sent) >= _LISTING_NOTIFY_PER_HOUR:
             continue
         _listing_notified[user.id] = sent + [now]
-        asyncio.create_task(telegram.send_to(user.telegram_chat_id, text))
+        _fire(telegram.send_to(user.telegram_chat_id, text))
 
 
 onchain_listings.on_listing(_notify_listing)
@@ -4311,7 +4336,7 @@ async def _notify_gem(kind: str, e: dict) -> None:
         if len(sent) >= _GEM_NOTIFY_PER_HOUR:
             continue
         _gem_notified[user.id] = sent + [now]
-        asyncio.create_task(telegram.send_to(user.telegram_chat_id, text))
+        _fire(telegram.send_to(user.telegram_chat_id, text))
 
 
 onchain_leaderboard.on_alert(_notify_gem)
@@ -4419,7 +4444,7 @@ async def _wallet_snapshot(user: User) -> dict:
         return hit[1]
     task = _snap_inflight.get(user.id)
     if task is None:
-        task = asyncio.create_task(_wallet_snapshot_uncached(user))
+        task = _fire(_wallet_snapshot_uncached(user))
         _snap_inflight[user.id] = task
 
         def _done(t: asyncio.Task) -> None:
@@ -4866,7 +4891,7 @@ async def _onchain_signals_loop() -> None:
     """Prices for the alert track record, the listings' best strategy next
     to each meme alert, and once a day the reviewer."""
     from app.notify import telegram
-    asyncio.create_task(_backfill_alert_track())
+    _fire(_backfill_alert_track())
     warmed_at = 0.0
     while True:
         try:
@@ -4881,7 +4906,7 @@ async def _onchain_signals_loop() -> None:
                     logger.exception("sim wealth %s", u.id)
             if _time.time() - warmed_at >= onchain_radar.WARM_EVERY_S:
                 warmed_at = _time.time()
-                asyncio.create_task(onchain_radar.warm_charts(_charts_on_screen()))
+                _fire(onchain_radar.warm_charts(_charts_on_screen()))
             for item in onchain_listings.recent():
                 onchain_alert_track.set_strategy("meme", item.get("chain"),
                                                  item.get("token_address") or item.get("pair_address"),
@@ -5696,7 +5721,7 @@ async def toggle_watchlist_strategy(
                 strategy_name=req.strategy_name, params=params,
                 backtest_params={}, source="alert", watchlist_entry_id=entry_id,
             )
-            asyncio.create_task(_run_archive_backtest(
+            _fire(_run_archive_backtest(
                 snapshot["id"], entry.symbol, entry.asset_type, entry.exchange,
                 snapshot["interval"], req.strategy_name, params, {},
             ))
@@ -5705,7 +5730,7 @@ async def toggle_watchlist_strategy(
         # Confirms the watch is actually active — sent immediately on
         # activation, before any real signal, so silence afterward reads as
         # "no condition yet" rather than "is this even running?".
-        asyncio.create_task(
+        _fire(
             telegram.send_to(
                 user.telegram_chat_id,
                 f"✅ <b>{entry.symbol}</b> — {req.strategy_name}\n"
@@ -6902,7 +6927,7 @@ async def start_optimize(
                         f"⚠️ <b>Ottimizzazione fallita</b> — {symbol.upper()} · {strategy_name}\n{exc}",
                     )
 
-    asyncio.create_task(_run())
+    _fire(_run())
     return {"job_id": job_id}
 
 
@@ -7039,7 +7064,7 @@ async def add_archive_entry(
         strategy_name=req.strategy_name, params=req.params,
         backtest_params=req.backtest_params, source="manuale", note=req.note,
     )
-    asyncio.create_task(_run_archive_backtest(
+    _fire(_run_archive_backtest(
         entry["id"], symbol, req.asset_type, req.exchange, req.ltf_interval,
         req.strategy_name, req.params, req.backtest_params,
     ))

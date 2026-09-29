@@ -42,7 +42,8 @@ Resta: dopo il deploy leggere `/api/agent/calls` su 7 giorni e decidere dove int
 
 Lorenzo, 29/09, ha condiviso i due piani di ChatGPT per Claude: #357 struttura backend, #358 intelligenza e memoria (altro thread). Registro vivo con mappa, evidenze e stato: `docs/backend/B00_REGISTRO.md` — aggiornarlo a ogni PR.
 S01-S07 li ha chiusi l'altro thread (#350, #354, #359). Qui: B02 scritture JSON atomiche (`app/atomic_write.py`, 39 punti: un crash a meta' scrittura lasciava file vuoti che gli store leggevano come "parti da zero"); B04 task di `lifespan` tracciati e cancellati (il riconciliatore degli ordini non aveva riferimento); B00 registro.
-Resta: M01/M02, lease sui loop prima di piu' worker, Telegram "spara e dimentica", backup/restore provati, B06 estrazione router, B07 misure, B08 Actions ferme (causa lato account GitHub, la vede solo Lorenzo).
+Fatto dopo (#381, thread "Riepilogo backend dopo audit ChatGPT", Lorenzo 29/09: "completa quello che puoi"): SSRF chiusa con `trading/onchain/egress.py` (controllo IP pubblico al momento della connessione, anche per le richieste di Chromium, che non si connette piu' da solo); i ~30 `create_task` Telegram passano da `main._fire` (riferimento tenuto, errore nel log); deploy ancorato a `github.sha`. A-ADMIN: Lorenzo, 29/09: "friend@example.com e' un utente che accede a tutti i servizi, non admin". `admin_emails` ora solo Lorenzo; `full_access_emails` (whitekobra) da' il piano pro senza poteri admin (piani, link ospite, /admin/status, istruzioni a DeepSeek).
+Resta: M01/M02, lease sui loop prima di piu' worker, backup/restore provati, B06 estrazione router, B07 misure, B08 Actions ferme (causa lato account GitHub, la vede solo Lorenzo).
 
 ## Consegne di ChatGPT/Codex del 29/09 — cosa sono e come trattarle
 

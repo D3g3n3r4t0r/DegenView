@@ -25,14 +25,11 @@ giovane.
 """
 from __future__ import annotations
 
-import asyncio
 import html
-import ipaddress
 import json
 import logging
 import math
 import re
-import socket
 import time
 from datetime import datetime
 from urllib.parse import urljoin, urlparse
@@ -41,7 +38,7 @@ import httpx
 
 from app.config import settings
 from app.sniper.quality import _looks_like_meme
-from app.trading.onchain import jstext, outcomes
+from app.trading.onchain import egress, jstext, outcomes
 
 logger = logging.getLogger(__name__)
 
@@ -192,16 +189,9 @@ def merge_links(*sources: dict | None) -> dict:
 
 async def _public_host(host: str) -> bool:
     """Il server non deve farsi usare per leggere indirizzi interni: il sito
-    arriva dai metadati del token, li scrive chiunque."""
-    try:
-        infos = await asyncio.get_running_loop().getaddrinfo(host, None, type=socket.SOCK_STREAM)
-    except OSError:
-        return False
-    for info in infos:
-        ip = ipaddress.ip_address(info[4][0])
-        if not ip.is_global:
-            return False
-    return bool(infos)
+    arriva dai metadati del token, li scrive chiunque. Fast answer for the
+    caller; the binding check is `egress`, at connect time."""
+    return await egress.public_ip(host) is not None
 
 
 def page_text(raw: str) -> tuple[str, str]:
@@ -234,7 +224,15 @@ def github_targets(urls: list[str]) -> list[tuple[str, str | None]]:
 
 async def fetch_site(url: str, client: httpx.AsyncClient) -> dict:
     """{ok, status, title, text, final_url, error}. Segue i redirect a mano
-    per ricontrollare ogni host."""
+    per ricontrollare ogni host. On the real network the page is read by a
+    client that can only connect to public IPs (DNS rebinding)."""
+    if egress.is_network(client):
+        async with egress.public_client() as guarded:
+            return await _fetch_site(url, guarded)
+    return await _fetch_site(url, client)
+
+
+async def _fetch_site(url: str, client: httpx.AsyncClient) -> dict:
     current = url
     for _ in range(_MAX_REDIRECTS + 1):
         parsed = urlparse(current)

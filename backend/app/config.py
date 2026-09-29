@@ -145,7 +145,11 @@ class Settings(BaseSettings):
     # un ruolo) — /admin/status usa questa allowlist dedicata, stesso
     # meccanismo di telegram_allowed_emails/registration_allowed_emails
     # sotto, con lo stesso default (chi gia' amministra il sito oggi).
-    admin_emails: str = "you@example.com,friend@example.com"
+    admin_emails: str = "you@example.com"
+    # Every service without admin powers (plans, guest links, /admin/status,
+    # teaching DeepSeek). Lorenzo, 29/09: "un utente che accede a tutti i
+    # servizi, non admin".
+    full_access_emails: str = "friend@example.com"
 
     telegram_bot_token: str = ""
     telegram_chat_ids: str = ""  # comma-separated
