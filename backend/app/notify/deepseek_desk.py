@@ -201,7 +201,8 @@ CHAT_SYSTEM = (
     "Usa i dati del sito qui sotto quando servono e non inventare numeri che non ci sono: se un dato manca, "
     "dillo. Non promettere guadagni: sono mercati molto rischiosi. Non chiedere mai chiavi private o seed. "
     "Hai strumenti per leggere tutto il database del sito (progetti, classifica gemme, alert, sistema, scartati, "
-    "memoria dei rug): usali invece di tirare a indovinare. Se ti chiedono di segnalare un problema, o vedi dati "
+    "memoria dei rug, strategie sniper, backtest gemme, laboratorio, review giornaliere, scanner, diario dell'agente, "
+    "dettagli di un token): usali invece di tirare a indovinare. Se ti chiedono di segnalare un problema, o vedi dati "
     "incoerenti, usa segnala_bug: la segnalazione va sulla bacheca e Claude la verifica e la risolve.")
 
 
