@@ -81,3 +81,30 @@ def test_stated_limits_are_candor():
 def test_marketing_text_has_no_candor():
     r = _read(HYPE)
     assert r["parts"]["candor"] == 0
+
+
+PFWA_DOCS = ("PFWA is a permissionless prediction market on Robinhood Chain. Anyone can open a market on a token's "
+             "price, market cap or volume, no approvals, live in under a minute. Every outcome is its own token on "
+             "a bonding curve, so the odds move with every trade. Trading closed for good. Winners claim at the "
+             "fixed payout per share, free. Disclaimer: PFWA is an independent, community-driven project and is "
+             "not affiliated with, endorsed by, or associated with Robinhood.")
+PROMISE = ("Zenith will be the future of decentralized prediction markets. Our protocol is coming soon: markets "
+           "will go live after launch. Roadmap: testnet design in Q1 2027, token sale later. Join the community "
+           "and stay tuned for more on our vision and the team behind it.")
+
+
+def test_live_product_is_read_from_evidence_not_phrases():
+    st, ev = reader.stage(PFWA_DOCS)
+    assert st == "live" and {"usage", "mechanics"} <= set(ev["proof"])
+    assert reader.stage(PROMISE)[0] in ("idea", "building", "testnet")
+    assert reader.stage(PROMISE)[1]["proof"] == []
+    # A deployed contract on an explorer is evidence; a promise alone never is.
+    assert "contract" in reader.stage(PROMISE, deployed=True)[1]["proof"]
+    addr = "The factory contract is deployed at 0x7B38e940Cd649bc0C701c42eE1A6ceff75584afa on Robinhood Chain. "
+    assert "contract" in reader.stage(addr * 3)[1]["proof"]
+
+
+def test_disclaimer_sentences_are_not_hype():
+    r = _read(PFWA_DOCS)
+    assert r["parts"]["-hype"] == 0 and not any("hype" in f for f in r["red_flags"])
+    assert _read(HYPE)["parts"]["-hype"] > 0          # hype outside a disclaimer still counts

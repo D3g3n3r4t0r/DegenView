@@ -235,7 +235,8 @@ def test_jupiter_verified_list_keeps_real_projects_in_band():
                 "%Y-%m-%dT%H:%M:%SZ", _t.gmtime(now - 86400))}},
             {**base, "id": "C", "symbol": "BIG", "name": "Big", "mcap": 30_000_000}]
     out = dv.jupiter_candidates(rows, now)
-    assert [x["token_address"] for x in out] == ["R"] and out[0]["website"] == "https://solrouter.com"
+    # A pool of one day is not a reason (29/09: "il limite di data non ha granche' senso").
+    assert [x["token_address"] for x in out] == ["R", "Y"] and out[0]["website"] == "https://solrouter.com"
 
 
 def test_base_is_searched_like_the_other_chains():
