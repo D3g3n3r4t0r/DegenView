@@ -803,12 +803,20 @@ def on_alert(fn) -> None:
 
 async def drain_alerts() -> int:
     sent = 0
+    # The place announced is the Top's, the list the app shows: the board's
+    # own rank ignores the database rows mixed into the Top (Lorenzo, 29/09:
+    # "PFWA posto 4" on Telegram, Covenant 4th in the app).
+    top = [_key(t["chain"], t["token_address"]) for t in _top_source(50)] if _top_source and _outbox else None
     while _outbox and sent < ALERTS_PER_TICK:
         kind, k = _outbox.pop(0)
         e = _entries.get(k)
         if e is None or (kind == "early" and not is_early(e)):
             continue
+        if top is not None and k not in top:
+            continue
         item = _public(e)
+        if top is not None:
+            item["rank"] = top.index(k) + 1
         for fn in list(_alert_hooks):
             try:
                 await fn(kind, item)

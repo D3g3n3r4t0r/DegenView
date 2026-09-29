@@ -1089,3 +1089,6 @@ html, body { overflow-x: clip; }
   @keyframes desk-in { from { opacity: 0; transform: translateY(6px); } }
   @media (prefers-reduced-motion: reduce) { dialog.detail[open] .dt-scroll { animation: none; } }
 }
+/* Top: a row that loses its place breaks into particles (particles.js). */
+.fx-burst { position: fixed; pointer-events: none; z-index: 60; }
+.trow.rank-new { animation-delay: .45s; }
