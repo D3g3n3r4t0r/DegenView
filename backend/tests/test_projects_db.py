@@ -157,3 +157,21 @@ def test_migration_adds_narr_at(monkeypatch, tmp_path):
     monkeypatch.setattr(db, "_DB_FILE", path)
     cols = {r[1] for r in db._db().execute("PRAGMA table_info(projects)")}
     assert {"narr_at", "cg_mcap"} <= cols
+
+
+def test_full_working_set_makes_room_for_a_waiting_project(monkeypatch):
+    """400 places went to whoever came first and the feed stopped for good (AUREON, 29/09)."""
+    monkeypatch.setattr(lb, "MAX_ENTRIES", 2)
+    for tok in ("Old1", "Old2"):
+        item = {"chain": "solana", "token_address": tok, "symbol": tok.upper(), "name": tok, "website": "https://x.io",
+                "market_cap": 900_000, "liquidity_usd": 80_000}
+        db.upsert(item, "x", T0)
+        lb.add(item, "x", T0)
+        lb._entries[f"solana:{tok}"]["pillars"] = {"site": {"score": 60 if tok == "Old1" else 80, "facts": {}}}
+        lb._entries[f"solana:{tok}"]["overall"] = {"score": 60}
+    db.upsert({"chain": "solana", "token_address": "New", "symbol": "NEWCO", "name": "Newco", "website": "https://n.io",
+               "market_cap": 900_000, "liquidity_usd": 80_000}, "coingecko", T0)
+    assert lb.feed_from_database(T0) == 1
+    assert "solana:New" in lb._entries and len(lb._entries) == 2
+    gone = "solana:Old1" if "solana:Old1" not in lb._entries else "solana:Old2"
+    assert db.get("solana", gone.split(":")[1])["status"] == "studied"
