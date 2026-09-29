@@ -140,7 +140,7 @@ DISCOVERY_SLOW_S = 6 * 3600
 CODE_RETRY_S = 6 * 3600        # a failed reading waits: GitHub allows few calls an hour
 # Without public code a project ranks below an equal one that shows it.
 NO_GITHUB_PENALTY = 10.0
-RULES_VERSION = 11             # 2: "no GitHub" stopped being a ban; 3: radar launches out;
+RULES_VERSION = 12             # 2: "no GitHub" stopped being a ban; 3: radar launches out;
                                # 4: research read by reader.py, older bans and readings dropped;
                                # 5: reader recognises research-stage code and stated limits
                                # 6: no age limits, strict band from $100k to $2M, one rule chain
@@ -150,6 +150,7 @@ RULES_VERSION = 11             # 2: "no GitHub" stopped being a ban; 3: radar la
                                #    are whales (audit 29/09, M01/M02)
                                # 10: EVM rows stamped "no pool" by an address-case bug ask DexScreener again
                                # 11: DexScreener's own links fill website/GitHub of rows without them
+                               # 12: rows rejected for "a single wallet" are looked at again (contracts left out)
 
 _entries: dict[str, dict] = {}     # chain:token
 _excluded: list[dict] = []
@@ -190,7 +191,7 @@ def _load() -> None:
                 (e.get("pillars") or {}).pop("site", None)
                 (e.get("checked_at") or {}).pop("site", None)
         global _requeue_fatals, _reset_market
-        if rules < 11:
+        if rules < 12:
             _reset_market = True
         if rules < 8:
             # Fatal pillars scored by checks fixed since (contracts counted as
@@ -859,15 +860,36 @@ async def _db_market(client: httpx.AsyncClient, now: float) -> None:
             await asyncio.sleep(0.3)
 
 
+def _make_room(n: int, now: float) -> int:
+    """Send the n weakest analysed entries outside the Top back to the database."""
+    idle = [k for k, e in _entries.items()
+            if e.get("pillars") and not (e.get("overall") or {}).get("pending") and k not in _busy
+            and k not in _top_rank and not e.get("rank")
+            and not benchmark.is_benchmark(e["chain"], e["token_address"])]
+    idle.sort(key=lambda k: (final_score(_entries[k]), max((_entries[k].get("checked_at") or {}).values(), default=0)))
+    for k in idle[:n]:
+        e = _entries.pop(k)
+        _remember(e, "studied", qualifies(e, now), now)
+    return min(n, len(idle))
+
+
 def feed_from_database(now: float | None = None) -> int:
     """Move the next projects from the database into the working set, while
     the analysis queue has room: never analysed first, then second looks."""
     now = now or time.time()
     waiting = sum(1 for e in _entries.values() if not e["pillars"])
-    if waiting >= DB_FEED_MAX_WAITING or len(_entries) >= MAX_ENTRIES:
+    if waiting >= DB_FEED_MAX_WAITING:
+        return 0
+    due = projects_db.due_for_analysis(DB_FEED_PER_TICK * 3, set(_entries), now)
+    if due and len(_entries) >= MAX_ENTRIES:
+        # A full set used to stop the feed for good: the 400 places went to
+        # whoever came first and AUREON, PFWA, GRID never got one (29/09).
+        # Analysed projects outside the Top step back into the database.
+        _make_room(min(len(due), DB_FEED_PER_TICK), now)
+    if len(_entries) >= MAX_ENTRIES:
         return 0
     fed = 0
-    for p in projects_db.due_for_analysis(DB_FEED_PER_TICK * 3, set(_entries), now):
+    for p in due:
         item = projects_db.as_item(p)
         if _looks_like_meme(item["symbol"], item["name"]):
             projects_db.record(item, "rejected", "meme name", now=now)
@@ -1238,6 +1260,9 @@ async def leaderboard_loop() -> None:
         if _reset_market:
             logger.info("classifica: %d righe EVM senza mercato rimesse in coda",
                         projects_db.reset_empty_market() + projects_db.reset_linkless_market())
+        if _reset_market:
+            # Wallet limits now leave contracts out (BV7X: 41% in a contract): look again.
+            n += projects_db.recheck_studied(("a single wallet holds", "single wallet"), ("rejected",))
         if _requeue_fatals:
             n += projects_db.recheck_studied(("github:", "site:", "tokenomics:"), ("rejected",))
         if n:
