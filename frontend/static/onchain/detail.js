@@ -102,7 +102,7 @@ async function onClick(event) {
   const shareBtn = t.closest("[data-share]");
   if (shareBtn) { shareToken(shareBtn, current.e); return; }
   const copyBtn = t.closest("[data-copy]");
-  if (copyBtn) { copyAddress(copyBtn, current.e.token); return; }
+  if (copyBtn) { copyAddress(dlg.querySelector(".dt-copy") ?? copyBtn, current.e.token); return; }
   if (t.closest("[data-user-swap]")) { openUserSwap(current.e); return; }
   if (t.closest("[data-buy]")) {
     const e = current.e;
@@ -195,7 +195,7 @@ export function openDetail(id) {
       <section class="dt-id">
         ${logo(e.symbol, e.image, e.chain, e.token).replace('class="logo"', 'class="logo big"')}
         <span class="dt-name"><b>${escapeHtml(e.name || e.symbol)}</b>
-          <small>${escapeHtml(e.symbol)}
+          <small><span class="dt-sym" data-copy role="button" tabindex="0" title="Copy address">${escapeHtml(e.symbol)}</span>
             <button type="button" class="ic dt-copy" data-copy aria-label="Copy address" title="${escapeHtml(e.token ?? "")}"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V5H5v11h3"/></svg><span>${e.token ? `${escapeHtml(e.token.slice(0, 4))}…${escapeHtml(e.token.slice(-4))}` : ""}</span></button>
             ${e.pairUrl ? `<a class="ic" href="${escapeHtml(e.pairUrl)}" target="_blank" rel="noopener" aria-label="Open chart"><svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"/></svg></a>` : ""}
           </small></span>
