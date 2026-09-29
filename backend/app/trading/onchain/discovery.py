@@ -502,7 +502,6 @@ async def _gh_repo(client: httpx.AsyncClient, add: Callable[[dict, str], bool], 
 JUP_VERIFIED = "https://lite-api.jup.ag/tokens/v2/tag?query=verified"
 JUP_POLL_S = 6 * 3600
 JUP_SKIP_TAGS = {"meme", "stocks", "prestocks", "rwa", "lst", "original-lst", "duplicate"}
-JUP_MIN_AGE_DAYS = 14
 JUP_MIN_LIQUIDITY = 5_000
 
 
@@ -514,8 +513,9 @@ def _iso_ts(v) -> float | None:
 
 
 def jupiter_candidates(rows: list[dict], now: float) -> list[dict]:
-    """In band, old enough, tradeable, with a website, mint authority
-    renounced (bridged copies of big tokens keep it), no meme/stock tag."""
+    """In band, tradeable, with a website, mint authority renounced (bridged
+    copies of big tokens keep it), no meme/stock tag. No age floor since
+    29/09 (Lorenzo: "il limite di data non ha granche' senso")."""
     out = []
     for t in rows or []:
         cap = float(t.get("mcap") or 0)
@@ -525,8 +525,6 @@ def jupiter_candidates(rows: list[dict], now: float) -> list[dict]:
         if not t.get("website") or JUP_SKIP_TAGS & set(t.get("tags") or []):
             continue
         if not (t.get("audit") or {}).get("mintAuthorityDisabled"):
-            continue
-        if born is None or now - born < JUP_MIN_AGE_DAYS * 86400:
             continue
         if _looks_like_meme(t.get("symbol") or "", t.get("name") or ""):
             continue

@@ -58,12 +58,12 @@ def test_site_urls_one_per_host_home_first():
         "https://solrouter.com", "https://docs.solrouter.com", "https://app.solrouter.com"]
 
 
-def test_research_floor_keeps_launches_out():
+def test_research_floor_is_name_and_liquidity_not_age():
     base = {"chain": "solana", "token_address": "T", "symbol": "ABC", "liquidity_usd": 50_000,
             "launched_at": time.time() - 60 * 86400}
     assert lb.research_floor(base) == ""
     assert lb.research_floor({**base, "symbol": "?"}) == "no name"
-    assert "younger" in lb.research_floor({**base, "launched_at": time.time() - 15 * 60})
+    assert lb.research_floor({**base, "launched_at": time.time() - 15 * 60}) == ""   # 29/09: age is no reason
     assert "liquidity" in lb.research_floor({**base, "liquidity_usd": 1})
 
 

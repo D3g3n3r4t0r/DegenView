@@ -65,6 +65,20 @@ _LIVE = re.compile(r"\b(mainnet|now live|live on|live now|is live|launched|avail
                    r"processed \d|served \d|integrated (?:with|into)|used by|partners? with|downloads?|"
                    r"use it (?:in|with|from|on)|get started|quickstart|sign (?:in|up)|log in|open (?:chat|app)|"
                    r"launch app|try it|npm install|pip install)\b", re.I)
+# A live product shows itself, not only in fixed phrases (29/09, PFWA: its
+# docs explain how to open a market "live in under a minute", the fee and the
+# payout; nowhere "now live on mainnet"). Each class is one piece of evidence;
+# promises ("will go live", "coming soon") match none of them.
+_LIVE_USE = re.compile(r"\b(markets? (?:are |is )?live|live markets?|live in under|in under a minute|"
+                       r"now trading|trading is open)\b", re.I)
+_LIVE_CONTRACT = re.compile(r"\b(?:contracts?|program|factory|deployed|address|token)\b[^.]{0,80}?"
+                            r"(?:\b0x[a-fA-F0-9]{40}\b|\b[1-9A-HJ-NP-Za-km-z]{32,44}\b)", re.I)
+_LIVE_APP_URL = re.compile(r"\bhttps?://(?:app|trade|dapp|swap|exchange|credence)\.[\w.-]+|"
+                           r"\bhttps?://[\w.-]+/(?:app|dapp|trade)\b", re.I)
+_LIVE_MECHANICS = re.compile(r"\b(?:\d+(?:\.\d+)?\s?%\s+(?:\w+\s){0,2}fees?|fees?\s+(?:of|is|are|:)\s+\d|"
+                             r"payouts? per share|winners? claim|claim (?:their|your) (?:winnings|payouts?))\b", re.I)
+_LEGAL = re.compile(r"\b(disclaimer|not affiliated|not endorsed|endorsed by|not financial advice|risks?|"
+                    r"terms(?: of (?:use|service))?|legal|liabilit\w*|no warranty)\b", re.I)
 _TESTNET = re.compile(r"\b(testnet|devnet|beta|alpha|early access|waitlist|pilot)\b", re.I)
 _BUILDING = re.compile(r"\b(roadmap|coming soon|in development|we are building|under development|"
                        r"phase \d|q[1-4]\s?20\d\d|soon|runnable|prototype|proof of concept|"
@@ -152,9 +166,21 @@ def concreteness(text: str) -> list[str]:
     return list(dict.fromkeys(found))
 
 
-def stage(text: str, app_ok: bool = False) -> tuple[str, dict]:
+def not_legal(text: str) -> str:
+    """The text without its disclaimer/legal sentences: "an independent,
+    community-driven project, not affiliated with..." is not hype."""
+    parts = re.split(r"(?<=[.!?])\s+", text or "")
+    return " ".join(p for p in parts if not _LEGAL.search(p))
+
+
+def stage(text: str, app_ok: bool = False, deployed: bool = False) -> tuple[str, dict]:
     live, test, build = (len(set(m.lower() for m in rx.findall(text or ""))) for rx in (_LIVE, _TESTNET, _BUILDING))
-    ev = {"live": live, "testnet": test, "building": build, "app_responds": app_ok}
+    proof = [k for k, rx in (("usage", _LIVE_USE), ("contract", _LIVE_CONTRACT), ("app_url", _LIVE_APP_URL),
+                             ("mechanics", _LIVE_MECHANICS)) if rx.search(text or "")]
+    if deployed and "contract" not in proof:
+        proof.append("contract")
+    live += len(proof)
+    ev = {"live": live, "testnet": test, "building": build, "app_responds": app_ok, "proof": proof}
     if len(words(text)) < 25:
         return "unclear", ev
     if live >= 2 or (live and app_ok):
@@ -217,7 +243,7 @@ def summary(description: str, site: str) -> str:
 
 
 def read(description: str, site_texts: list[str], *, name: str = "", symbol: str = "", app_ok: bool = False,
-         corpus: dict[str, list[int]] | None = None, key: str = "") -> dict:
+         deployed: bool = False, corpus: dict[str, list[int]] | None = None, key: str = "") -> dict:
     """The dossier: same keys as Claude's, plus `points` (0-100) and `why`."""
     site = "\n".join(t for t in site_texts if t)
     d_words, s_words = content_words(description), content_words(site)
@@ -232,12 +258,13 @@ def read(description: str, site_texts: list[str], *, name: str = "", symbol: str
     found = concepts(text)
     n_concepts = sum(len(v) for v in found.values())
     concrete = concreteness(text)
-    st, st_ev = stage(text, app_ok)
+    st, st_ev = stage(text, app_ok, deployed)
     roles = token_utility(text)
     candor = len(set(m.lower() for m in _CANDOR.findall(text)))
     info = len(content_words(text))
-    buzz = len(_BUZZ.findall(text))
-    hype = len(_HYPE.findall(text))
+    plain = not_legal(text)
+    buzz = len(_BUZZ.findall(plain))
+    hype = len(_HYPE.findall(plain))
     strong = sorted({m.lower() for m in _SCAM_STRONG.findall(text)})
     weak = sorted({m.lower() for m in _SCAM_WEAK.findall(text)})
     print_ = sketch(description or site)

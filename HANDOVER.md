@@ -604,6 +604,34 @@ non oltre; uno, due, tre mesi non e' importante".
   ogni 2 h legge Top + 30 migliori fuori e segnala contraddizioni (diario
   Agent, `GET /api/onchain/consistency`), rimanda a rianalisi max 5 a giro.
   Animazione "dall'ultima visita": parte solo quando la Top e' a schermo.
+- 29/09 Lorenzo: "roba seria tipo AUERON, STEALF, pfwa, GRID [...] dove
+  cavolo sono", poi "non devi raggiungere in modo fisso questi token, alziamo
+  il tetto sopra i 100k [...] il limite di data non ha granche' senso",
+  "se non passano le nostre regole sono da rivedere", "far esaminare a
+  DeepSeek le caratteristiche di quei progetti [...] i controlli devono
+  allinearsi a quel tipo di qualita'", "se il sito e' scritto in JavaScript
+  non lo devi bocciare". Fatto (niente riferimenti fissi):
+  - regole gemme: nessun limite di eta'; soglie pilastri uniche (GitHub 35
+    se c'e' codice, sito 50, tokenomics 60); fino a $2M basta, $2M-$10M
+    serve punteggio 80 (`GEM_STRICT_CAP_USD`); tetto $10M invariato;
+    Robinhood: i contratti (pool, vesting) non contano come wallet
+    concentrati. RULES_VERSION 6, i bocciati con le vecchie regole tornano
+    in coda.
+  - lettore siti: `jstext.py` legge il testo che Next.js/Nuxt/SvelteKit
+    mettono nell'HTML; fallback Chromium headless se Playwright c'e' sul
+    server (non installato: `pip install playwright && playwright install
+    --with-deps chromium`); un sito illeggibile vale 50 neutro, non
+    "debole". `reader.py`: i disclaimer non sono hype, "live" si deduce da
+    prove (contratti, app, meccaniche). PFWA 21 -> 57.
+  - Telegram pubblico (`telegram_public.py`, t.me/s/...) nel giudizio
+    DeepSeek, numeri X/Telegram visibili in Why. X non si legge gratis.
+  - Canale di studio con DeepSeek sul server: domande in
+    `.github/deepseek/studi/requests/`, il server le legge da main ogni 5
+    min, risposte su `GET /api/deepseek/studies/{id}` (pubblico). Primo
+    studio: `001-gem-models` (STEALF, PFWA, GRID, BV7X + DREGG). Lorenzo:
+    "stagli addosso a DeepSeek [...] estremamente critico": ogni risposta va
+    verificata sui dati prima di diventare regola, revisione salvata accanto.
+    AUERON: non trovato su DexScreener, serve indirizzo.
 - 28/09 Lorenzo: "DeepSeek [...] deve riesaminare i risultati che escono
   dalla top classifica e metterli in discussione [...] Clau Pump Tech ma
   che roba è, Leon AI sono nomi che non hanno senso". `judge.review_board`:

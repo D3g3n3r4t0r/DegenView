@@ -35,7 +35,7 @@ from urllib.parse import urljoin, urlparse
 
 import httpx
 
-from app.trading.onchain import benchmark, legit, narratives
+from app.trading.onchain import benchmark, jstext, legit, narratives
 
 WEIGHTS = {"github": 0.40, "site": 0.30, "tokenomics": 0.30}
 
@@ -53,6 +53,9 @@ _TEST_DIRS = {"test", "tests", "__tests__", "spec", "specs", "e2e"}
 # Sito
 SITE_FOLLOW = 3                    # pagine interne che si aprono davvero
 SITE_MIN_WORDS_PAGE = 120          # una pagina interna "piena"
+# The docs text the local reader weighs (it is popped, never stored; the AI
+# readers cut their own prompt). 3000 chars left most of a docs page unread.
+DOCS_EXCERPT_CHARS = 8000
 _BUILDERS = ("wix", "carrd", "framer", "webflow", "squarespace", "wordpress", "zyro", "hostinger",
              "tilda", "weebly", "godaddy", "site123", "durable", "mobirise")
 _FREE_HOSTS = ("carrd.co", "framer.website", "framer.ai", "webflow.io", "vercel.app", "netlify.app",
@@ -67,6 +70,8 @@ _SECTIONS = {
 }
 _DOCS_HINT = re.compile(r"(^|[/.])(docs?|documentation|whitepaper|litepaper|gitbook|wiki|developers?|build|"
                         r"learn|guides?|research|laboratory|lab|spec|specification)([/.]|$)", re.I)
+# A link to the project's contract on a block explorer: something is deployed.
+_EXPLORER = re.compile(r"//[\w.-]*(?:scan|blockscout|explorer)[\w.-]*/(?:address|token|account|program)/\w{20,}", re.I)
 _APP_HINT = re.compile(r"(^|[/.])(app|dapp|dashboard|launch|platform|beta)([/.]|$)", re.I)
 _APP_TEXT = re.compile(r"\b(launch app|open app|enter app|go to app|use app|try (it|now)|dashboard)\b", re.I)
 RDAP = "https://rdap.org/domain/{domain}"
@@ -97,6 +102,18 @@ def missing_github(why: str, **facts) -> dict:
 def _pending(key: str, why: str) -> dict:
     """Il dato non c'e' ancora (API giu', token troppo nuovo): si riprova."""
     return {"key": key, "score": None, "facts": {}, "flags": [], "fatal": "", "pending": why}
+
+
+UNREADABLE_JS = "site built in JavaScript, not readable"
+
+
+def _unreadable(key: str, why: str, facts: dict | None = None) -> dict:
+    """We could not read the page (a JavaScript shell nothing could open):
+    unknown, not weak. No score; the research pillar and the leaderboard
+    treat it like a pending pillar, never as a thin project (Lorenzo, 29/09:
+    "Se il sito e' scritto in JavaScript non lo devi bocciare")."""
+    return {"key": key, "score": None, "facts": {**(facts or {}), "unreadable": why}, "flags": [why],
+            "fatal": "", "unreadable": why}
 
 
 def _ts(iso: str | None) -> float | None:
@@ -321,7 +338,10 @@ def anatomy(html_text: str, base_url: str) -> dict:
         pass
     host = (urlparse(base_url).hostname or "").lower()
     root = _site_root(host.removeprefix("www."))
-    internal, docs, app, github = [], [], [], []
+    internal, docs, app, github, explorer = [], [], [], [], []
+    anchors = {h for h, _ in p.links}
+    # A JS-built page declares its links in the framework data, not in <a>.
+    p.links += [(h, "") for h in jstext.links(html_text) if h not in anchors]
     for href, text in p.links:
         url = urljoin(base_url, href.strip())
         u = urlparse(url)
@@ -331,6 +351,8 @@ def anatomy(html_text: str, base_url: str) -> dict:
         target = (h + u.path.rstrip("/")).lower()
         if "github.com" in h:
             github.append(url)
+        if _EXPLORER.search(url):
+            explorer.append(url)
         same = h == host or h.endswith("." + root) or h == root
         if _DOCS_HINT.search(target) and url not in docs:
             docs.append(url)
@@ -347,7 +369,7 @@ def anatomy(html_text: str, base_url: str) -> dict:
         "words": len(text.split()),
         "text": text,
         "internal": [u for _, u in internal],
-        "docs": docs, "app": app, "github": github,
+        "docs": docs, "app": app, "github": github, "explorer": explorer,
         "sections": sorted(k for k, rx in _SECTIONS.items() if rx.search(text)),
         "headings": p.headings, "scripts": p.scripts, "forms": p.forms, "nav": p.nav,
         "meta_description": bool(p.meta.get("description") or p.meta.get("og:description")),
@@ -395,6 +417,7 @@ def judge_site(page: dict | None, followed: list[dict], registered_at: float | N
         "url": page.get("url"), "words": page["words"], "internal_pages": len(page["internal"]),
         "pages_ok": pages_ok, "docs": bool(page["docs"]), "docs_ok": docs_ok,
         "app": bool(page["app"]), "app_ok": app_ok, "sections": page["sections"],
+        "contract_link": bool(page.get("explorer")),
         "builder": page["builder"], "free_host": page["free_host"], "spa": page["spa"],
         "domain_days": None if domain_days is None else round(domain_days),
         "cites_contract": cites, "https": bool(page.get("https")),
@@ -404,6 +427,8 @@ def judge_site(page: dict | None, followed: list[dict], registered_at: float | N
     flags: list[str] = []
     if page.get("not_own"):
         return _pillar("site", 0, facts, flags, f"not the project's website ({page['not_own']})")
+    if page.get("shell") and not pages_ok:
+        return _unreadable("site", UNREADABLE_JS, facts)
     if page["lorem"]:
         return _pillar("site", 0, facts, flags, "placeholder text (lorem ipsum / coming soon)")
     empty = page["words"] < 40 and not page["internal"] and not page["spa"]
@@ -447,7 +472,7 @@ async def analyze_site(url: str | None, client: httpx.AsyncClient, token_address
         return _pending("site", site.get("error") or "website unreachable"), []
     page = anatomy(site.get("html") or "", site["final_url"])
     page.update(url=site["final_url"], https=site["final_url"].startswith("https://"),
-                not_own=_not_own(site["final_url"]))
+                not_own=_not_own(site["final_url"]), shell=bool(site.get("shell")))
     followed: list[dict] = []
     docs_text = ""
     todo = ([("docs", u) for u in page["docs"][:1]] + [("app", u) for u in page["app"][:1]]
@@ -457,7 +482,7 @@ async def analyze_site(url: str | None, client: httpx.AsyncClient, token_address
         followed.append({"kind": kind, "ok": bool(sub.get("ok")),
                          "words": len((sub.get("text") or "").split())})
         if kind == "docs" and sub.get("ok"):
-            docs_text = re.sub(r"\s+", " ", sub.get("text") or "")[:3000]
+            docs_text = jstext.beyond(sub.get("text") or "", page.get("text") or "")[:DOCS_EXCERPT_CHARS]
     registered = None
     host = (urlparse(site["final_url"]).hostname or "").removeprefix("www.")
     if host and not page["free_host"]:
@@ -467,6 +492,7 @@ async def analyze_site(url: str | None, client: httpx.AsyncClient, token_address
         except (httpx.HTTPError, ValueError):
             registered = None
     pillar = judge_site(page, followed, registered, token_address, launched_at)
+    pillar["facts"]["rendered"] = bool(site.get("rendered"))
     pillar.setdefault("facts", {})["excerpt"] = re.sub(r"\s+", " ", page.get("text") or "")[:1500]
     pillar["facts"]["docs_excerpt"] = docs_text
     return pillar, page["github"]
@@ -525,17 +551,30 @@ def judge_tokenomics_evm(info: dict | None, pair_address: str = "") -> dict:
                if (h.get("address") or "").lower() not in _DEAD | {pair}
                and not str(h.get("is_locked")) == "1"
                and not re.search(r"pool|pair|lp|lock|burn", h.get("tag") or "", re.I)]
-    pcts = sorted((pct(h.get("percent")) for h in holders), reverse=True)
+    # A contract is not "a single wallet": GoPlus leaves Robinhood's pools
+    # (Uniswap v4 keeps every pool in one PoolManager), vesting and launchpad
+    # contracts untagged, and they failed serious projects (29/09: GRID 29%,
+    # BV7X 41%, both contracts). They leave the concentration limits, stay
+    # in the facts and cost points (Lorenzo: "se non passano le nostre regole
+    # sono da rivedere [...] risultano troppo severi").
+    contracts = [h for h in holders if str(h.get("is_contract")) == "1"]
+    in_contracts = sum(pct(h.get("percent")) for h in contracts)
+    pcts = sorted((pct(h.get("percent")) for h in holders if h not in contracts), reverse=True)
     lps = info.get("lp_holders") or []
     lp_locked = sum(pct(h.get("percent")) for h in lps
                     if str(h.get("is_locked")) == "1" or (h.get("address") or "").lower() in _DEAD) if lps else None
-    return _judge_tokenomics(
+    out = _judge_tokenomics(
         top1=pcts[0] if pcts else 0.0, top10=sum(pcts[:10]),
         creator=max(pct(info.get("creator_percent")), pct(info.get("owner_percent"))),
         holders=int(info.get("holder_count") or 0), insiders=0, lp_locked=lp_locked,
         mintable=str(info.get("is_mintable")) == "1", freezable=str(info.get("transfer_pausable")) == "1",
         tax=max(pct(info.get("buy_tax")), pct(info.get("sell_tax"))),
         rugged=str(info.get("is_honeypot")) == "1")
+    out["facts"]["contracts_pct"] = round(in_contracts, 1)
+    if in_contracts > TOP1_MAX_PCT and not out["fatal"]:
+        out["flags"].append(f"{in_contracts:.0f}% held by contracts (pools, vesting or treasury)")
+        out["score"] = max(0, out["score"] - round(min(in_contracts, 60) / 6))
+    return out
 
 
 def _judge_tokenomics(*, top1: float, top10: float, creator: float, holders: int, insiders: int,

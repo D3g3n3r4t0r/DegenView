@@ -142,6 +142,7 @@ from app.notify import alert_log
 from app.notify import alerts
 from app.notify import weekly_recap
 from app.notify import deepseek_desk
+from app.notify import deepseek_studies
 from app.notify.alerts import find_new_signals, format_signal_message, record_alert_sent, get_all_stats_for_entry
 import app.price_alerts as price_alerts_store
 from app.models import PriceAlert, PriceAlertCondition, StrategySignal
@@ -1502,6 +1503,7 @@ async def lifespan(app: FastAPI):
     t4 = asyncio.create_task(_weekly_recap_loop())
     asyncio.create_task(_telegram_chat_loop())
     asyncio.create_task(_deepseek_recap_loop())
+    asyncio.create_task(deepseek_studies.studies_loop())
     asyncio.create_task(_ai_scan_loop())
     t5 = asyncio.create_task(_watchdog_loop())
     onchain_leaderboard.set_top_source(_top_entries)
@@ -1583,9 +1585,10 @@ _PUBLIC_PATHS = frozenset({
                             # (un 401 che sembra "nessuna segnalazione nuova"). GET soltanto
                             # nei fatti: POST /api/issues resta protetto dalla sua stessa
                             # dependency (auth.get_current_user), non da questa lista.
+    "/api/deepseek/studies",  # Claude reads DeepSeek's answers without a login (deepseek_studies.py)
 })
 
-_PUBLIC_PREFIXES = ("/static/",)
+_PUBLIC_PREFIXES = ("/static/", "/api/deepseek/studies/")
 
 
 @app.middleware("http")
@@ -3976,7 +3979,7 @@ def _top_entries(n: int = 50, narrative: str = "") -> list[dict]:
         if j and j.get("verdict") in ("avoid", "scam") and (j.get("confidence") or 0) >= onchain_judge.VETO_MIN_CONF:
             continue
         # Only DeepSeek's own drop keeps a studied row out (review or veto). The
-        # board's band limits (age, $100k without excellent pillars...) are not
+        # board's band limits (the $2M score bar, weak pillars...) are not
         # a reason here: applied to the Top they emptied it (Lorenzo, 29/09: 2
         # tokens left). Rows that stay become "ranked" and lose that text
         # (projects_db.sync_top), so the Database no longer contradicts the Top.
@@ -4011,7 +4014,7 @@ async def onchain_token(chain: str, token: str, user: User = Depends(auth.get_cu
             entry = onchain_leaderboard.db_entry(p)
             j = onchain_judge.get(chain, token)
             c = onchain_code_review.get(onchain_code_review.repo_of(entry))
-            entry["judge"] = {k: j.get(k) for k in ("score", "verdict", "problems", "strengths", "admit_reason")} \
+            entry["judge"] = {k: j.get(k) for k in ("score", "verdict", "problems", "strengths", "admit_reason", "x", "tg")} \
                 if j else None
             entry["code"] = {k: c.get(k) for k in ("complexity", "innovation", "fork_of", "summary", "strengths",
                                                    "concerns")} if c else None
@@ -7063,6 +7066,21 @@ async def reply_to_issue(
                                       reopen=req.reopen)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/deepseek/studies")
+async def list_deepseek_studies() -> list[dict]:
+    """Deep studies Claude asked DeepSeek through the repo: read-only, public
+    so a session without a login can read the answers."""
+    return deepseek_studies.listing()
+
+
+@app.get("/api/deepseek/studies/{study_id}")
+async def get_deepseek_study(study_id: str) -> dict:
+    rec = deepseek_studies.get(study_id)
+    if rec is None:
+        raise HTTPException(status_code=404, detail="Study not found")
+    return rec
 
 
 @app.get("/api/issues")
