@@ -53,3 +53,11 @@ def test_admin_status_reports_orders_breaker_and_rpc(client, monkeypatch):
     assert "solana" in body["rpc_fallback"]
     assert body["rpc_fallback"]["solana"]["active_endpoint"]
     assert body["wallet_balances"] == {}
+
+
+def test_full_access_user_gets_the_top_plan_but_no_admin_powers(client, monkeypatch):
+    monkeypatch.setattr(config.settings, "admin_emails", "someone-else@example.com")
+    monkeypatch.setattr(config.settings, "full_access_emails", client.user_email)
+    assert client.get("/api/onchain/plan").json()["plan"] == "pro"
+    assert client.get("/admin/status").status_code == 403
+    assert client.post("/api/onchain/plan", json={"email": "x@example.com", "plan": "pro"}).status_code == 403
