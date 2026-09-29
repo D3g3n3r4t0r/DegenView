@@ -32,3 +32,12 @@ def _fresh_github_cache():
     yield
     legit._gh_cache.clear()
     legit._gh_blocked.clear()
+
+
+@pytest.fixture(autouse=True)
+def _onchain_wallets_on(monkeypatch):
+    """Execution tests use made-up owner ids with no user behind them: treat
+    their wallets as switched on. Tests of the switch itself re-patch this."""
+    from app.trading.onchain import risk
+    monkeypatch.setattr(risk, "_wallet_enabled", lambda owner_id, chain: True)
+    yield

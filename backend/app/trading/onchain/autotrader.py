@@ -311,9 +311,12 @@ async def real_swap(*, user, token_in: str, token_out: str, amount_in: int, min_
                     notional_usd: float, impact: float, price_usd: float, side: str, token: str) -> dict:
     from app import auth
     from app.config import settings as app_settings
-    from app.trading.onchain import execute
+    from app.trading.onchain import execute, risk
     if not app_settings.onchain_execution_enabled:
         return {"ok": False, "reason": "real execution is switched off on this server"}
+    ok, reason = risk.run_safety_checks(user.id, CHAIN, token)
+    if not ok:
+        return {"ok": False, "reason": reason}
     owner = user.onchain_wallets[CHAIN].address
     private_key_hex = auth.get_decrypted_onchain_private_key(user, CHAIN)
     try:
