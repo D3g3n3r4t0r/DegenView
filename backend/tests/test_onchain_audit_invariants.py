@@ -242,3 +242,126 @@ def test_ambiguous_send_error_leaves_the_order_to_the_reconciler(tmp_path, monke
     assert order["status"] == "unknown"
     assert order["tx_signature"] == "sig-known-before-send"
     assert ledger.pending_unconfirmed("u1")
+
+
+def _auth_client(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from app import auth, main, rate_limit
+    monkeypatch.setattr(auth, "_USERS_FILE", tmp_path / "users.json")
+    auth._users.clear()
+    rate_limit._attempts.clear()
+    rate_limit._locked_until.clear()
+    auth.create_user("owner@example.com", "correct-horse-battery-9")
+    return TestClient(main.app), auth
+
+
+def test_logout_revokes_a_copied_cookie(tmp_path, monkeypatch):
+    client, auth = _auth_client(tmp_path, monkeypatch)
+    with client:
+        assert client.post("/api/auth/login", json={"email": "owner@example.com",
+                                                    "password": "correct-horse-battery-9"}).status_code == 200
+        stolen = client.cookies.get(auth.SESSION_COOKIE)
+        assert auth._verify_session_cookie(stolen)
+        client.post("/api/auth/logout")
+    assert auth._verify_session_cookie(stolen) is None
+
+
+def test_logout_all_revokes_every_session(tmp_path, monkeypatch):
+    _client, auth = _auth_client(tmp_path, monkeypatch)
+    user = auth.find_by_email("owner@example.com")
+    a, b = auth.make_session_cookie(user.id), auth.make_session_cookie(user.id)
+    assert auth._verify_session_cookie(a) and auth._verify_session_cookie(b)
+    auth.revoke_all_sessions(user.id)
+    assert auth._verify_session_cookie(a) is None and auth._verify_session_cookie(b) is None
+
+
+def test_passkey_enrolment_needs_the_password(tmp_path, monkeypatch):
+    client, auth = _auth_client(tmp_path, monkeypatch)
+    with client:
+        client.post("/api/auth/login", json={"email": "owner@example.com", "password": "correct-horse-battery-9"})
+        assert client.post("/api/auth/passkey/register/options").status_code == 401
+        assert client.post("/api/auth/passkey/register/options", json={"password": "wrong"}).status_code == 401
+        ok = client.post("/api/auth/passkey/register/options", json={"password": "correct-horse-battery-9"})
+        assert ok.status_code == 200
+        assert client.request("DELETE", "/api/auth/passkey/x").status_code == 401
+
+
+def test_sealed_secret_rejects_tamper_wrong_owner_and_truncation():
+    import pytest
+
+    from app.trading import crypto
+    key = crypto.derive_key(b"k", b"label")
+    token = crypto.seal("AAA", key, "s", b"u1|solana")
+    assert crypto.unseal(token, {"s": key}, b"u1|solana") == "AAA"
+    raw = bytearray(__import__("base64").b64decode(token.split(":", 2)[2]))
+    raw[-1] ^= 1
+    tampered = "v2:s:" + __import__("base64").b64encode(bytes(raw)).decode()
+    for bad, aad, keys in ((tampered, b"u1|solana", {"s": key}), (token, b"u2|solana", {"s": key}),
+                           (token[:12], b"u1|solana", {"s": key}), (token, b"u1|solana", {"w": key})):
+        with pytest.raises(crypto.SealError):
+            crypto.unseal(bad, keys, aad)
+
+
+def test_legacy_wallet_key_migrates_to_v2_after_the_address_check(tmp_path, monkeypatch):
+    from app import auth
+    from app.trading.crypto import encrypt
+    monkeypatch.setattr(auth, "_USERS_FILE", tmp_path / "users.json")
+    auth._users.clear()
+    user = auth.create_user("owner@example.com", "correct-horse-battery-9")
+    auth.create_onchain_wallet(user.id, "robinhood")
+    user = auth.get_user(user.id)
+    assert user.onchain_wallets["robinhood"].private_key_enc.startswith("v2:")
+    pk = auth.get_decrypted_onchain_private_key(user, "robinhood")
+    # put it back in the old format, as wallets made before S07 are
+    wallets = dict(user.onchain_wallets)
+    wallets["robinhood"] = wallets["robinhood"].model_copy(
+        update={"private_key_enc": encrypt(pk, auth._ONCHAIN_SECRET)})
+    auth._users[user.id] = user.model_copy(update={"onchain_wallets": wallets})
+    assert auth.get_decrypted_onchain_private_key(auth.get_user(user.id), "robinhood") == pk
+    migrated = auth.get_user(user.id).onchain_wallets["robinhood"].private_key_enc
+    assert migrated.startswith("v2:")
+    assert (tmp_path / "wallet_keys_pre_v2.jsonl").exists()
+    # the same record under another user fails loudly instead of signing
+    other = auth.create_user("other@example.com", "correct-horse-battery-9")
+    moved = dict(other.onchain_wallets)
+    moved["robinhood"] = auth.get_user(user.id).onchain_wallets["robinhood"]
+    auth._users[other.id] = other.model_copy(update={"onchain_wallets": moved})
+    import pytest
+    with pytest.raises(auth.OnchainKeyIntegrityError):
+        auth.get_decrypted_onchain_private_key(auth.get_user(other.id), "robinhood")
+
+
+def test_unreadable_users_file_falls_back_and_never_gets_overwritten(tmp_path, monkeypatch):
+    import pytest
+
+    from app import auth
+    path = tmp_path / "users.json"
+    monkeypatch.setattr(auth, "_USERS_FILE", path)
+    monkeypatch.setattr(auth, "_load_failed", False)
+    auth._users.clear()
+    auth.create_user("a@example.com", "correct-horse-battery-9")
+    auth.create_user("b@example.com", "correct-horse-battery-9")   # the first save is now the .bak
+    path.write_text("{ half-written", encoding="utf-8")
+    auth._users.clear()
+    auth._load_users()
+    assert auth.find_by_email("a@example.com") is not None       # from users.json.bak
+    (tmp_path / "users.json.bak").write_text("also broken", encoding="utf-8")
+    auth._users.clear()
+    auth._load_users()
+    with pytest.raises(RuntimeError):
+        auth.create_user("c@example.com", "correct-horse-battery-9")
+    assert path.read_text(encoding="utf-8") == "{ half-written"
+
+
+def test_tokenomics_missing_data_and_big_contracts_are_not_a_pass():
+    from app.trading.onchain import depth
+    partial = depth.judge_tokenomics_evm({"holder_count": 5000})
+    assert partial["score"] <= 50
+    assert any("not verified" in f for f in partial["flags"])
+    whale = depth.judge_tokenomics_evm({
+        "holder_count": 5000, "is_mintable": "0", "transfer_pausable": "0", "buy_tax": "0", "sell_tax": "0",
+        "holders": [{"address": "0xabc", "percent": "0.9", "is_contract": 1},
+                    {"address": "0xdef", "percent": "0.01", "is_contract": 0}],
+    })
+    assert "unidentified contract holds 90%" in whale["fatal"]

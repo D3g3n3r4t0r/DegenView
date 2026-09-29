@@ -217,6 +217,10 @@ class User(BaseModel):
     sniper_autotrade_chains: list[OnchainChain] = []
     passkeys: list[Passkey] = []
     preferences: dict = {}  # last session state: ticker, interval, strategy, layers, etc.
+    # Server-side session revocation (audit 29/09, S06): bumping the version
+    # logs out every device; a revoked session id (-> its expiry) one device.
+    session_version: int = 0
+    revoked_sessions: dict[str, int] = {}
 
 
 class FavoriteEntry(BaseModel):

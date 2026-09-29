@@ -44,6 +44,7 @@
 
     <label for="label">Label (optional)</label>
     <input id="label" type="text" placeholder="e.g. my iPhone" />
+    <input id="password" type="password" placeholder="Account password" autocomplete="current-password" />
     <button id="register-btn" type="button">Register Face ID / Touch ID</button>
 
     <p id="msg" class="msg" hidden></p>
@@ -76,7 +77,12 @@
       const del = document.createElement("button");
       del.textContent = "Remove";
       del.addEventListener("click", async () => {
-        await fetch(`/api/auth/passkey/${encodeURIComponent(pk.credential_id)}`, { method: "DELETE" });
+        const password = document.getElementById("password").value;
+        if (!password) { say("Type your account password first.", "err"); return; }
+        const r = await fetch(`/api/auth/passkey/${encodeURIComponent(pk.credential_id)}`, {
+          method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password }),
+        });
+        if (!r.ok) { const b = await r.json().catch(() => ({})); say(b.detail || "Not removed.", "err"); return; }
         loadList();
       });
       li.appendChild(del);
@@ -90,7 +96,11 @@
     btn.disabled = true;
     say("Fetching options…");
     try {
-      const optResp = await fetch("/api/auth/passkey/register/options", { method: "POST" });
+      const password = document.getElementById("password").value;
+      if (!password) throw new Error("Type your account password first.");
+      const optResp = await fetch("/api/auth/passkey/register/options", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password }),
+      });
       const optBody = await optResp.json().catch(() => ({}));
       if (!optResp.ok) throw new Error(optBody.detail || "You must be logged in to the site in this browser.");
 
@@ -111,6 +121,7 @@
       if (!verResp.ok) throw new Error(verBody.detail || `Error ${verResp.status}`);
       say("Passkey registered.", "ok");
       document.getElementById("label").value = "";
+      document.getElementById("password").value = "";
       loadList();
     } catch (err) {
       say(err.message || "Registration failed.", "err");
