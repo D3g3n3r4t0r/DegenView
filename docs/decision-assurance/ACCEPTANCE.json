@@ -1,0 +1,181 @@
+{
+  "schema_version": 1,
+  "base_sha": "e8e0a97c688cf36461a1f43791b4e19610e0b33b",
+  "scope": "Future application acceptance; not a record of passing tests",
+  "cases": [
+    {
+      "id": "A01-T1",
+      "requirement": "tre fetch falliti -> source_unavailable e verified_exploit unknown.",
+      "status": "required_not_implemented",
+      "level": "application_acceptance"
+    },
+    {
+      "id": "A01-T2",
+      "requirement": "drawdown80 con trading regolare -> market_drawdown_80 positive; nessuna implicazione automatica su frode.",
+      "status": "required_not_implemented",
+      "level": "application_acceptance"
+    },
+    {
+      "id": "A01-T3",
+      "requirement": "tre giorni osservati su H=7d -> negative rifiutata.",
+      "status": "required_not_implemented",
+      "level": "application_acceptance"
+    },
+    {
+      "id": "A01-T4",
+      "requirement": "revisore vede solo snapshot point-in-time; evidence ricevuta dopo cutoff rifiutata.",
+      "status": "required_not_implemented",
+      "level": "application_acceptance"
+    },
+    {
+      "id": "A01-T5",
+      "requirement": "annotazioni discordanti -> disputed, esclusa dai target binari maturi.",
+      "status": "required_not_implemented",
+      "level": "application_acceptance"
+    },
+    {
+      "id": "A02-T1",
+      "requirement": "stable assignment dopo refresh/retry; duplicato submit stessa risposta idempotente, payload diverso 409.",
+      "status": "required_not_implemented",
+      "level": "application_acceptance"
+    },
+    {
+      "id": "A02-T2",
+      "requirement": "non mostra voto AI al reviewer della rubrica.",
+      "status": "required_not_implemented",
+      "level": "application_acceptance"
+    },
+    {
+      "id": "A02-T3",
+      "requirement": "output con N assegnati/completati/abbandonati per gruppo e intervalli d'incertezza; N insufficiente -> inconclusive, mai promoted.",
+      "status": "required_not_implemented",
+      "level": "application_acceptance"
+    },
+    {
+      "id": "A03-T1",
+      "requirement": "directory vuota non incrementa engineering_verified.",
+      "status": "required_not_implemented",
+      "level": "application_acceptance"
+    },
+    {
+      "id": "A03-T2",
+      "requirement": "5 copie comunicato -> independent_sources=1.",
+      "status": "required_not_implemented",
+      "level": "application_acceptance"
+    },
+    {
+      "id": "A03-T3",
+      "requirement": "stessa evidenza e lessico diverso -> hard_gate invariato.",
+      "status": "required_not_implemented",
+      "level": "application_acceptance"
+    },
+    {
+      "id": "A03-T4",
+      "requirement": "log changed_paths dimostra che non è stata alterata la fixture del target.",
+      "status": "required_not_implemented",
+      "level": "application_acceptance"
+    },
+    {
+      "id": "A04-T1",
+      "requirement": "cambio profilo non cambia evidence_hash, verified_label o hard_gate.",
+      "status": "required_not_implemented",
+      "level": "application_acceptance"
+    },
+    {
+      "id": "A04-T2",
+      "requirement": "matrix incompleta/negativa/NaN rifiutata.",
+      "status": "required_not_implemented",
+      "level": "application_acceptance"
+    },
+    {
+      "id": "A04-T3",
+      "requirement": "unresolved esclusi dal denominatore con numero esposto.",
+      "status": "required_not_implemented",
+      "level": "application_acceptance"
+    },
+    {
+      "id": "A04-T4",
+      "requirement": "execution_support non invoca execute/send in alcun test assurance.",
+      "status": "required_not_implemented",
+      "level": "application_acceptance"
+    },
+    {
+      "id": "A05-T1",
+      "requirement": "esportazione autorizzata e reimport in db vuoto preservano hash e risultati deterministici.",
+      "status": "required_not_implemented",
+      "level": "application_acceptance"
+    },
+    {
+      "id": "A05-T2",
+      "requirement": "label con fonte non utilizzabile esclusa dal benchmark esportabile.",
+      "status": "required_not_implemented",
+      "level": "application_acceptance"
+    },
+    {
+      "id": "A05-T3",
+      "requirement": "fonte eliminata -> artifact tombstone e lineage ancora spiegabile senza ripubblicare il payload rimosso.",
+      "status": "required_not_implemented",
+      "level": "application_acceptance"
+    },
+    {
+      "id": "A06-T1",
+      "requirement": "approvazione con hash mismatch rifiutata.",
+      "status": "required_not_implemented",
+      "level": "application_acceptance"
+    },
+    {
+      "id": "A06-T2",
+      "requirement": "due attivazioni concorrenti non producono due attivi.",
+      "status": "required_not_implemented",
+      "level": "application_acceptance"
+    },
+    {
+      "id": "A06-T3",
+      "requirement": "approvatore assente o ruolo AI -> denied.",
+      "status": "required_not_implemented",
+      "level": "application_acceptance"
+    },
+    {
+      "id": "A06-T4",
+      "requirement": "replay su vecchia versione non aggiorna active_slot.",
+      "status": "required_not_implemented",
+      "level": "application_acceptance"
+    },
+    {
+      "id": "A07-T1",
+      "requirement": "internal allowed + redistribute denied -> export denied.",
+      "status": "required_not_implemented",
+      "level": "application_acceptance"
+    },
+    {
+      "id": "A07-T2",
+      "requirement": "permission unknown/expired -> non trattato come allowed.",
+      "status": "required_not_implemented",
+      "level": "application_acceptance"
+    },
+    {
+      "id": "A07-T3",
+      "requirement": "token API, cookie e account credentials non serializzati nel registry.",
+      "status": "required_not_implemented",
+      "level": "application_acceptance"
+    },
+    {
+      "id": "A08-T1",
+      "requirement": "flag OFF non causa import error né effetti collaterali su altri flussi.",
+      "status": "required_not_implemented",
+      "level": "application_acceptance"
+    },
+    {
+      "id": "A08-T2",
+      "requirement": "rimozione suggerita con dipendente attivo -> blocked con lista consumer.",
+      "status": "required_not_implemented",
+      "level": "application_acceptance"
+    },
+    {
+      "id": "A08-T3",
+      "requirement": "nessuna cancellazione dati automatica legata a capability deprecated.",
+      "status": "required_not_implemented",
+      "level": "application_acceptance"
+    }
+  ]
+}

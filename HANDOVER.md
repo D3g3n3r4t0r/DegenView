@@ -3895,3 +3895,9 @@ trade nel backtest nonostante il pump (dati server).
 
 ### 28/09 (sera) — grafico, Phantom, laboratorio, scanner
 Lorenzo: "Il grafico nel sito principale e' fatto apposta per long e short. Tu di quello devi solo prendere l'apertura del long e la chiusura del long." — "una connessione di un wallet esterno deve permettere di aprirlo senza cambiare finestra di Safari" — "non voglio che Pump Fun diventi il nostro bacino di token [...] tutto quello che e' facilmente identificabile come rug pull escludiamolo a priori" — "ogni narrativa deve avere dei token al suo interno" — "la strategia si deve automaticamente disabilitare [dopo un -60/70% veloce] [...] il backtest non deve proseguire" — "non voglio vedere schermate con scritto alert, voglio ingressi e uscite" — "diamo a DeepSeek una tab tutta sua [...] voglio vedere come ragiona". Fatto e in corso: vedi "Stato al 28/09 sera" in cima.
+
+
+## Decision assurance — specifica tecnica A01–A08 — 2026-09-29
+
+Lorenzo: "devi essere tecnico [...] leggi la repository [...] poi l'attuazione sarà di claude".
+Codex ha letto main e8e0a97c688cf36461a1f43791b4e19610e0b33b e preparato docs/decision-assurance/: specifica, contratto SQLite isolato e catalogo di 29 criteri di accettazione. Copre ground truth, utilità umana, manipolabilità, costo degli errori, asset dati, governance, diritti fonti e perimetro prodotto. Non applica fix runtime e non dichiara concluse #347/#357/#358. Tredici test del solo prototipo passati; suite applicativa non eseguita. Claude implementa in sette PR secondo README, iniziando da snapshot shadow e label, coordinando i lavori esistenti. Attenzione: outcomes.apply_sample confonde attualmente prezzi mancanti/crollo/liquidità nella label legacy rug; il nuovo target verified_exploit non deve ereditarla automaticamente. Non eseguire contract.sql come migrazione di produzione. Nessuna automazione DeepSeek attivata da questa consegna.
