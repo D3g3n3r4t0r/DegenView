@@ -36,9 +36,9 @@ Stato: **confermato** (visto nel codice), **risolto** (PR su main con test), **i
 | M01/M02 | dato mancante trattato come controllo passato | media | risolto | #367 | — |
 | B02-a | 39 scritture di archivi JSON non atomiche (pine esclusa); `users.json` illeggibile = tutti gli utenti persi al salvataggio successivo | alta | risolto | questa | backup/restore non provati |
 | B04-a | 7 task di `lifespan` senza riferimento (fra cui il riconciliatore degli ordini) e mai cancellati | media | risolto | questa | ~30 `create_task` "spara e dimentica" per Telegram in `main.py` |
-| B04-c | ~30 `create_task` "spara e dimentica" (Telegram) in `main.py`: raccoglibili dal GC, errori mai visti | bassa | risolto | #379 | — |
-| A-SSRF | sito del token letto con controllo DNS prima e nuova risoluzione alla connessione (rebinding); Chromium risolveva da solo | media | risolto | #379 | Chromium non e' nell'immagine: oggi il render non gira |
-| A-DEPLOY | il deploy faceva `reset --hard origin/main`, non il commit verificato | bassa | risolto | #379 | Actions ferme (B08-a) |
+| B04-c | ~30 `create_task` "spara e dimentica" (Telegram) in `main.py`: raccoglibili dal GC, errori mai visti | bassa | risolto | #381 | — |
+| A-SSRF | sito del token letto con controllo DNS prima e nuova risoluzione alla connessione (rebinding); Chromium risolveva da solo | media | risolto | #381 | Chromium non e' nell'immagine: oggi il render non gira |
+| A-DEPLOY | il deploy faceva `reset --hard origin/main`, non il commit verificato | bassa | risolto | #381 | Actions ferme (B08-a) |
 | A-ADMIN | ruolo admin dato dall'email configurata, registrazione senza prova dell'email: chi registra per primo un admin non ancora iscritto lo diventa | media | confermato | — | decide Lorenzo (tenere solo la sua email in `admin_emails`, o `REGISTRATION_ALLOWED_EMAILS`) |
 | B04-b | nessun lease sui loop: due processi = scheduler doppi | media | confermato | — | oggi un solo worker; documentato, non cambiare senza lease |
 | B08-a | ogni run delle Actions fallisce in ~4 s senza step (CI, deploy, DeepSeek) | alta | confermato | — | causa lato account GitHub (minuti/fatturazione?): la vede solo Lorenzo |
