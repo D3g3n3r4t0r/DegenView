@@ -1123,7 +1123,17 @@ html, body { overflow-x: clip; }
 .pf-live { display: inline-block; inline-size: 7px; block-size: 7px; margin-inline-end: 8px; border-radius: 50%; background: #22c55e;
   vertical-align: middle; animation: live-dot 1.2s ease-in-out infinite; }
 @keyframes live-dot { 50% { opacity: .25; transform: scale(.7); } }
+.auto-pos { position: relative; }
+.auto-pos::after { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0; border-radius: inherit;
+  background: linear-gradient(90deg, transparent 30%, rgb(34 197 94 / .18)); }
+.auto-pos[data-tick^="down"]::after { background: linear-gradient(90deg, transparent 30%, rgb(239 68 68 / .18)); }
+.auto-pos[data-tick$="1"]::after { animation: tick-a .9s ease-out; }
+.auto-pos[data-tick$="2"]::after { animation: tick-b .9s ease-out; }
+.auto-pos[data-tick$="1"] [data-pnl], .total-bal[data-tick$="1"] { animation: pop-a .45s cubic-bezier(.2, .8, .2, 1); }
+.auto-pos[data-tick$="2"] [data-pnl], .total-bal[data-tick$="2"] { animation: pop-b .45s cubic-bezier(.2, .8, .2, 1); }
+.auto-pos [data-pnl] { transform-origin: right center; }
+.pf-line :is(.dot, .halo) { transition: transform .5s cubic-bezier(.2, .8, .2, 1); }
 @media (prefers-reduced-motion: reduce) {
-  .rd-s { transition: none; }
-  .pf-live, .pf-list li::after, .pf-top::after, .pf-total, .pf-num [data-pnl] { animation: none !important; }
+  .rd-s, .pf-line :is(.dot, .halo) { transition: none; }
+  .pf-live, .pf-list li::after, .pf-top::after, .pf-total, .pf-num [data-pnl], .auto-pos::after, .auto-pos [data-pnl], .total-bal { animation: none !important; }
 }
