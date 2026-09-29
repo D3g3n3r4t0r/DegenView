@@ -140,7 +140,7 @@ DISCOVERY_SLOW_S = 6 * 3600
 CODE_RETRY_S = 6 * 3600        # a failed reading waits: GitHub allows few calls an hour
 # Without public code a project ranks below an equal one that shows it.
 NO_GITHUB_PENALTY = 10.0
-RULES_VERSION = 9              # 2: "no GitHub" stopped being a ban; 3: radar launches out;
+RULES_VERSION = 10             # 2: "no GitHub" stopped being a ban; 3: radar launches out;
                                # 4: research read by reader.py, older bans and readings dropped;
                                # 5: reader recognises research-stage code and stated limits
                                # 6: no age limits, strict band from $100k to $2M, one rule chain
@@ -148,6 +148,7 @@ RULES_VERSION = 9              # 2: "no GitHub" stopped being a ban; 3: radar la
                                # 8: every cached fatal pillar is recomputed under today's checks
                                # 9: tokenomics redone: missing data is not a pass, big contracts
                                #    are whales (audit 29/09, M01/M02)
+                               # 10: EVM rows stamped "no pool" by an address-case bug ask DexScreener again
 
 _entries: dict[str, dict] = {}     # chain:token
 _excluded: list[dict] = []
@@ -163,6 +164,7 @@ _outbox: list[tuple[str, str]] = []
 _alert_hooks: list = []
 _priming = False
 _dirty = False
+_reset_market = False     # set by _load when the stored rules predate version 10
 _requeue_fatals = False   # set by _load when the stored rules predate version 8
 
 
@@ -186,7 +188,9 @@ def _load() -> None:
             for e in _entries.values():
                 (e.get("pillars") or {}).pop("site", None)
                 (e.get("checked_at") or {}).pop("site", None)
-        global _requeue_fatals
+        global _requeue_fatals, _reset_market
+        if rules < 10:
+            _reset_market = True
         if rules < 8:
             # Fatal pillars scored by checks fixed since (contracts counted as
             # one wallet, JS sites read as empty: BV7X, PFWA) are redone once.
@@ -320,10 +324,12 @@ def is_big(item: dict, now: float | None = None) -> bool:
 def apply_market(pairs: list[dict]) -> None:
     """Cap, liquidita', variazione e data del pool piu' liquido di ogni token."""
     best: dict[str, dict] = {}
+    # EVM keys may be stored in lower case while DexScreener answers in checksum case.
+    index = {k.lower(): k for k in _entries}
     for p in pairs:
         token = (p.get("baseToken") or {}).get("address")
-        k = _key(p.get("chainId") or "", token or "")
-        if k not in _entries:
+        k = index.get(_key(p.get("chainId") or "", token or "").lower())
+        if k is None:
             continue
         liq = float((p.get("liquidity") or {}).get("usd") or 0)
         if k not in best or liq > float((best[k].get("liquidity") or {}).get("usd") or 0):
@@ -1224,6 +1230,8 @@ async def leaderboard_loop() -> None:
         n = projects_db.recheck_studied(("over $%", "over % days%"))
         # Rules dropped on 29/09 (age limits, radar exceptions, the $100k band).
         n += projects_db.recheck_studied(DROPPED_RULES, ("studied", "rejected"))
+        if _reset_market:
+            logger.info("classifica: %d righe EVM senza mercato rimesse in coda", projects_db.reset_empty_market())
         if _requeue_fatals:
             n += projects_db.recheck_studied(("github:", "site:", "tokenomics:"), ("rejected",))
         if n:
