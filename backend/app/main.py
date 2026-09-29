@@ -4743,6 +4743,18 @@ async def onchain_manual_scan(req: ScanRequest, user: User = Depends(auth.get_cu
     return await manual_scan.scan(req.query[:80])
 
 
+class ScanAddRequest(BaseModel):
+    chain: str
+    token: str
+
+
+@app.post("/api/onchain/scan/add")
+async def onchain_manual_add(req: ScanAddRequest, user: User = Depends(auth.get_current_user)) -> dict:
+    """A scanned project into the Gem Finder's circle (manual_scan.add)."""
+    from app.trading.onchain import manual_scan
+    return manual_scan.add(req.chain[:20], req.token[:80])
+
+
 def _agent_progress() -> list[dict]:
     """Quanto lavoro e' fatto e quanto ne resta: una riga per coda."""
     from app.trading.onchain import backtest_lab, discovery, listings

@@ -16,7 +16,7 @@ Lorenzo, 29/09: "lo scanner manuale e' insufficiente e non si e' evoluto
 seguendo tutti gli aggiornamenti". A project (not a meme name) is judged by
 the Gem Finder, not by the meme listing filter: its board entry or database
 row (score, pillars, DeepSeek's verdict and code reading), or a place in the
-study queue when it was never met. The trend follower's backtest comes from
+study queue when it was never met, if the user adds it (`add`). The trend follower's backtest comes from
 the strategy lab, or is run now and kept there.
 """
 from __future__ import annotations
@@ -31,7 +31,7 @@ import httpx
 
 from app.notify import deepseek_desk
 from app.trading.onchain import (ai_scan, alert_track, code_review, judge, leaderboard, legit, outcomes,
-                                 projects_db, rug_memory, strategy_lab)
+                                 projects_db, research, rug_memory, strategy_lab)
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +78,9 @@ async def _security(item: dict, client: httpx.AsyncClient) -> dict:
 # outcomes.py labels its verdicts in Italian; the site is in English.
 OUTCOME_EN = {"buono": "fine", "crollo": "crashed", "piatto": "flat", "finto": "fake volume"}
 BACKTEST_TIMEOUT_S = 25
+RECENT_KEEP = 200
+# What each scan found, so "add" enters what the server read, never what a client sends.
+_recent: dict[str, dict] = {}
 
 
 def english(text: str) -> str:
@@ -91,6 +94,20 @@ def clean_flags(ai: dict | None) -> dict | None:
     if not ai:
         return ai
     return {**ai, "flags": [f for f in ai.get("flags") or [] if "similar" not in str(f).lower()]}
+
+
+def about(info: dict | None, socials: list[dict] | None) -> dict:
+    """What the project says it is, and who holds it (GeckoTerminal)."""
+    info = info or {}
+    split = info.get("holders_split") or {}
+    try:
+        top10 = float(split.get("top_10")) if split.get("top_10") is not None else None
+    except (TypeError, ValueError):
+        top10 = None
+    return {"summary": research.summary_line(info.get("description") or "") or None,
+            "holders": info.get("holders"), "top10_pct": top10,
+            "socials": [{"type": x.get("type"), "url": x.get("url")} for x in (socials or [])
+                        if str(x.get("url") or "").startswith("https://")][:4]}
 
 
 def _pillars(raw: dict | None) -> dict:
@@ -126,8 +143,28 @@ def gem_view(item: dict, now: float | None = None) -> dict:
                 "score": round(p["score"]) if p.get("score") is not None else None, "why": p.get("why") or "",
                 "pillars": _pillars(p.get("pillars")), "judge": _judge_view(judge.get(chain, token)),
                 "code": _code_view(code_review.get(code_review.repo_of({"pillars": p.get("pillars")})))}
-    projects_db.upsert(item, "manual", now)
-    return {"status": "queued", "rank": None, "score": None, "why": "", "pillars": {}, "judge": None, "code": None}
+    return {"status": "unknown", "rank": None, "score": None, "why": "", "pillars": {}, "judge": None, "code": None}
+
+
+def add(chain: str, token: str, now: float | None = None) -> dict:
+    """Lorenzo, 29/09: "voglio poter aggiungere manualmente un progetto che
+    poi entra eventualmente nel circolo di tutte le nostre logiche". The
+    scanned project joins the Gem Finder's working set: pillars, research,
+    DeepSeek's judge and code reading, then the board and the strategy lab
+    if it earns it. A manual add also lifts an earlier rejection: it gets a
+    fresh look, and the same rules decide."""
+    item = _recent.get(projects_db.key(chain, token))
+    if item is None:
+        return {"error": "Scan the token first."}
+    if legit._looks_like_meme(item.get("symbol") or "", item.get("name") or ""):
+        return {"error": "Meme names are followed by the Meme Sniper, not the Gem Finder."}
+    k = projects_db.key(chain, token)
+    leaderboard._gone.pop(k, None)
+    fresh = leaderboard.add(dict(item), "manual", now)
+    projects_db.recheck(chain, token)
+    deepseek_desk.note("manual", f"Added {item.get('symbol')} to the Gem Finder by hand",
+                       symbol=item.get("symbol"), chain=chain)
+    return {"added": True, "new": fresh, "gem": gem_view(item, now)}
 
 
 def backtest_view(r: dict | None) -> dict | None:
@@ -181,12 +218,21 @@ async def scan(query: str) -> dict:
         if not pair:
             return {"error": f"No pool for \"{query}\" on Solana, Robinhood, BSC, Base or Ethereum."}
         item = item_of(pair)
-        verdict = await legit.assess(item, legit.links_from_dexscreener(pair), client)
+        links = legit.links_from_dexscreener(pair)
+        verdict, info = await asyncio.gather(legit.assess(item, links, client),
+                                             research.gecko_info(item["chain"], item["token_address"], client))
         checks = list(verdict.get("checks") or [])
         if not any(c.get("key") == "security" for c in checks):
             checks.append(await _security(item, client))
     item.update(checks=checks, socials=verdict.get("socials"), website=verdict.get("website"),
                 report=verdict.get("report"))
+    socials = verdict.get("socials") or links["socials"]
+    _recent[projects_db.key(item["chain"], item["token_address"])] = {
+        **item, "websites": links["websites"], "socials": socials,
+        "website": verdict.get("website") or (links["websites"] or [None])[0],
+        "description": (info or {}).get("description") or ""}
+    while len(_recent) > RECENT_KEEP:
+        _recent.pop(next(iter(_recent)))
     meme = legit._looks_like_meme(item.get("symbol") or "", item.get("name") or "")
     gem = None if meme else gem_view(item)
     feats = outcomes.features(item)
@@ -202,6 +248,7 @@ async def scan(query: str) -> dict:
             "pipeline": {"status": verdict["status"], "reason": verdict.get("reason") or ""},
             "checks": [{k: c.get(k) for k in ("key", "label", "ok", "detail")} for c in checks],
             "report": verdict.get("report"),
+            "about": about(info, socials),
             "kind": "meme" if meme else "project", "gem": gem, "backtest": bt,
             "memory": {"summary": english(rug_memory.summary(feats, item["chain"], pool=pool)),
                        "similar": rug_memory.similar(feats, item["chain"], k=5, pool=pool),
