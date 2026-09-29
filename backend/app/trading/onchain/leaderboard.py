@@ -140,7 +140,7 @@ DISCOVERY_SLOW_S = 6 * 3600
 CODE_RETRY_S = 6 * 3600        # a failed reading waits: GitHub allows few calls an hour
 # Without public code a project ranks below an equal one that shows it.
 NO_GITHUB_PENALTY = 10.0
-RULES_VERSION = 11             # 2: "no GitHub" stopped being a ban; 3: radar launches out;
+RULES_VERSION = 12             # 2: "no GitHub" stopped being a ban; 3: radar launches out;
                                # 4: research read by reader.py, older bans and readings dropped;
                                # 5: reader recognises research-stage code and stated limits
                                # 6: no age limits, strict band from $100k to $2M, one rule chain
@@ -150,6 +150,7 @@ RULES_VERSION = 11             # 2: "no GitHub" stopped being a ban; 3: radar la
                                #    are whales (audit 29/09, M01/M02)
                                # 10: EVM rows stamped "no pool" by an address-case bug ask DexScreener again
                                # 11: DexScreener's own links fill website/GitHub of rows without them
+                               # 12: rows rejected for "a single wallet" are looked at again (contracts left out)
 
 _entries: dict[str, dict] = {}     # chain:token
 _excluded: list[dict] = []
@@ -190,7 +191,7 @@ def _load() -> None:
                 (e.get("pillars") or {}).pop("site", None)
                 (e.get("checked_at") or {}).pop("site", None)
         global _requeue_fatals, _reset_market
-        if rules < 11:
+        if rules < 12:
             _reset_market = True
         if rules < 8:
             # Fatal pillars scored by checks fixed since (contracts counted as
