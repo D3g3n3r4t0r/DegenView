@@ -278,7 +278,7 @@ function deepseekBlock(e) {
   const good = (j?.strengths ?? []).map((x) => `<li data-tone="good">${escapeHtml(x)}</li>`).join("");
   const bad = (j?.problems ?? []).map((x) => `<li data-tone="bad">${escapeHtml(x)}</li>`).join("");
   const admit = j?.admit_reason ? `<li data-tone="good">${escapeHtml(j.admit_reason)}</li>` : "";
-  return `<div class="ds-report"><h5>DeepSeek${head ? ` <b>${head}</b>` : ""}</h5>
+  return `<div class="ds-report"><h5>Scout${head ? ` <b>${head}</b>` : ""}</h5>
     <ul class="why-list">${edit}${admit}${code}${codeSummary}${codeGood}${codeBad}${good}${bad}${socialLines(j)}</ul></div>`;
 }
 

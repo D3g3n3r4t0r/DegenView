@@ -3994,3 +3994,14 @@ Stesso giorno, poco dopo. Lorenzo: "devi seguire cosa dice chat gpt che le ha fa
 - Landing `engn.html`: hero 3D del kit (3 s, GLB 2 MB) in un iframe `static/engn/motion/hero-3d.html?embed=1`; three.js 0.180 ospitato in locale (`static/engn/motion/three/`, MIT), niente CDN. Il cubo SVG resta finche' il 3D non manda `engn-hero:ready`, e resta per sempre se WebGL o il modello falliscono. Testi tradotti in inglese.
 - Non fatto: podio 3D WebGL (il kit lo vuole solo "in un contesto ampio", senza indicare dove; nella lista compatta consiglia l'SVG).
 Le vecchie regole CSS `.pod-cy`/`.pc-mod` in app.css sono ora inutilizzate.
+
+### 2026-09-30 — Desktop refinement (mobile frozen)
+Lorenzo: "il mobile non toccarlo per ora", then "fai rifiniture".
+Added desktop-only rules (min-width:1100px) to ui-refinements.css: compact 136px page introduction, 38px rank cubes, denser selected token rows, a larger chart, compact Scout status and activity ledger, quieter empty-wallet action, and a small desktop height variant. No mobile CSS or transaction logic changed in this refinement. Earlier uncommitted mobile redesign work still exists in the branch and must not be treated as newly approved for deployment.
+Preview uses local synthetic read-only fixtures. Checked desktop at 1440x1000 and 1280x800, with no observed horizontal overflow; no production financial actions tested. Final publication and full integration review remain pending. See docs/engn-ui/INTEGRATION.md for the user's requirement to preserve the supplied visuals exactly.
+
+### Delivery scope — 2026-09-30
+Lorenzo requested "pusha e fai applicare a claude". Deliver the desktop design faithfully using docs/engn-ui/INTEGRATION.md and its screenshot. New stylesheet links are desktop-gated at 1100px; mobile experimental styles must not be enabled. Main has advanced while this design was reviewed: reconcile latest functionality without redesigning the desktop, and preserve the current mobile implementation. Shared Scout copy remains intentional. No auto-merge or production transaction test was performed by Codex.
+
+### 2026-09-30 — PR #392 integrata in main (Claude)
+Lorenzo: "applica: Il desktop è stato pushato nella PR #392, con codice e istruzioni per Claude". Merge del branch `codex/engn-ui-redesign` com'e'. Conflitti: `podium.js` resta il re-export di `podium-adapter.js` di main (la modifica del branch toccava il vecchio renderer; le regole desktop del podio stanno in `ui.css`/`ui-refinements.css`); sulla landing desktop l'iframe `hero-3d` di main e' nascosto (`engn-landing.css`) perche' il riferimento mostra solo `<engn-motion>`. Verificato: 1440x1000 e 1280x800 senza overflow orizzontale; 390x844 uguale a main. Non verificato da sloggati: le viste interne dell'app (servono login e dati reali).

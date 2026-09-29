@@ -63,8 +63,8 @@ const pctS = (f) => (f == null ? "—" : `${f > 0 ? "+" : ""}${Math.round(f * 10
 const usdS = (n) => (n == null ? "—" : n >= 1e6 ? `$${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `$${Math.round(n / 1e3)}k` : `$${Math.round(n)}`);
 
 export async function openScan(query) {
-  open(`Scanning ${query}`, "DexScreener, security, site, rug memory and DeepSeek: the whole process on one token.");
-  setBody(`<div class="scan-wait"><span class="agent-orb" aria-hidden="true"><i></i><i></i><i></i></span><p>The agent is examining it…</p></div>`);
+  open(`Scanning ${query}`, "Scout checks market data, security, the project site and previous risk signals.");
+  setBody(`<div class="scan-wait"><span class="agent-orb" aria-hidden="true"><i></i><i></i><i></i></span><p>Scout is examining this token…</p></div>`);
   let d;
   try {
     d = await api.scanToken(query);
@@ -84,8 +84,8 @@ export async function openScan(query) {
       <div><b>${escapeHtml(t.name || t.symbol)}</b><small>${usdS(t.market_cap)} cap · ${usdS(t.liquidity_usd)} liquidity · 24h ${t.change_24h == null ? "—" : `${t.change_24h > 0 ? "+" : ""}${t.change_24h}%`}</small></div></div>
     <p class="scan-status" data-s="${status[0]}">${escapeHtml(status[1])}</p>
     ${ai ? `<div class="scan-ai" data-risk="${ai.risk >= 60 ? "high" : ai.risk >= 30 ? "mid" : "low"}"><b>${ai.risk}</b>
-      <span><b>DeepSeek rug risk</b><small>${escapeHtml([ai.theme, ...(ai.flags ?? [])].filter(Boolean).join(" · ") || "no red flags")}</small></span></div>`
-      : `<p class="sheet-note">DeepSeek not available right now.</p>`}
+      <span><b>Scout rug risk</b><small>${escapeHtml([ai.theme, ...(ai.flags ?? [])].filter(Boolean).join(" · ") || "no red flags")}</small></span></div>`
+      : `<p class="sheet-note">Scout's AI assessment is unavailable right now.</p>`}
     <p class="sheet-note"><b>Memory:</b> ${escapeHtml(d.memory.summary)}${hist ? ` · this token before: ${hist}` : ""}</p>
     ${d.alert ? `<p class="sheet-note">Alerted ${new Date(d.alert.at * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" })}, now ${pctS(d.alert.now)}.</p>` : ""}
     <ul class="scan-checks">${(d.checks ?? []).map((c) => `<li data-ok="${c.ok === true ? "yes" : c.ok === false ? "no" : "unknown"}">

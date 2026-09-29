@@ -7783,6 +7783,8 @@ def _compute_asset_version() -> str:
             (FRONTEND_DIR / "static" / "style.css").read_bytes(),
             (FRONTEND_DIR / "static" / "app.js").read_bytes(),
             (FRONTEND_DIR / "static" / "onchain-embed.css").read_bytes(),
+            (FRONTEND_DIR / "static" / "engn-system.css").read_bytes(),
+            (FRONTEND_DIR / "static" / "engn-landing.css").read_bytes(),
         ]
         parts += [m.read_bytes() for m in sorted((FRONTEND_DIR / "static" / "onchain").glob("*.js"))]
         # The app's skin (static/onchain/app.css) too: a CSS-only deploy must change the ?v=.
@@ -7867,6 +7869,9 @@ _ONCHAIN_APP_HTML = (
     .replace("<!--onchain-modulepreload-->", _onchain_modulepreloads(_ASSET_VERSION))
     .replace('src="/static/onchain/main.js"', f'src="/static/onchain/main.js?v={_ASSET_VERSION}"')
     .replace('href="/static/onchain/app.css"', f'href="/static/onchain/app.css?v={_ASSET_VERSION}"')
+    .replace('href="/static/engn-system.css"', f'href="/static/engn-system.css?v={_ASSET_VERSION}"')
+    .replace('href="/static/onchain/ui.css"', f'href="/static/onchain/ui.css?v={_ASSET_VERSION}"')
+    .replace('href="/static/onchain/ui-refinements.css"', f'href="/static/onchain/ui-refinements.css?v={_ASSET_VERSION}"')
     # La libreria del grafico non cambia fra un deploy e l'altro: con il `?v=`
     # finisce in cache per sempre invece di rivalidarsi a ogni apertura.
     .replace(
@@ -7935,6 +7940,8 @@ def _render_engn_page() -> str:
         "EXC_LIQ": f"{r.EXC_LIQ_MIN_USD / 1000:g}k",
     }
     html = (FRONTEND_DIR / "engn.html").read_text(encoding="utf-8")
+    for asset in ("engn-system.css", "engn-landing.css", "onchain/motion.js"):
+        html = html.replace(f'/static/{asset}"', f'/static/{asset}?v={_ASSET_VERSION}"')
     for key, value in values.items():
         html = html.replace("{{" + key + "}}", value)
     return html
