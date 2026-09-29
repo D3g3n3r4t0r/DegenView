@@ -500,14 +500,14 @@
   .pf-value { padding-top: 10px; }
   .pf-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
   .pf-total { margin: 0; white-space: nowrap; font: 700 clamp(26px, 7.5vw, 32px)/1 var(--sans); letter-spacing: -.02em; color: var(--k-text); font-variant-numeric: tabular-nums;
-    & span { color: var(--k-text-3); } }
+    & > span { color: var(--k-text-3); } }
   .pf-range { display: flex; gap: 2px;
     & button { padding: 7px 8px; border: 0; border-radius: 9px; background: none; color: var(--k-text-3); font: 600 13px var(--sans); cursor: pointer; }
     & button[aria-pressed="true"] { background: #1c1c20; color: var(--k-text); } }
   .pf-range { justify-content: space-between; margin: 6px 0 0; overflow-x: auto; scrollbar-width: none;
     & button { flex: none; min-inline-size: 36px; padding: 7px 6px; } }
   .pf-change { margin: 0; min-block-size: 1.3em; font: 600 14px var(--sans); color: #34d399;
-    &[data-sign="down"] { color: #f87171; } & span { color: var(--k-text-3); font-weight: 500; } }
+    &[data-sign="down"] { color: #f87171; } & > span { color: var(--k-text-3); font-weight: 500; } & > b { font-weight: inherit; } }
   .pf-chart { position: relative; block-size: 104px; margin: 6px -16px 0; overflow: hidden; }
   .pf-line { inline-size: 100%; block-size: 100%; overflow: visible; color: #22c55e;
     &[data-sign="down"] { color: #ef4444; }
@@ -1093,3 +1093,37 @@ html, body { overflow-x: clip; }
 .fx-burst { position: fixed; pointer-events: none; z-index: 60; }
 .trow.rank-new { animation-delay: .45s; }
 .trow.rank-wait { visibility: hidden; }
+
+/* Ticking balance (live.js): digits roll on a 0-9 strip, rows and the total
+   flash on each move, a dot pulses while prices are live. Transform and
+   opacity only. */
+[data-roll] { font-variant-numeric: tabular-nums; }
+.r-w { display: inline-flex; line-height: 1.15em; vertical-align: bottom; }
+.r-sr { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.rd { display: inline-block; block-size: 1.15em; overflow: hidden; }
+.rd-s { display: block; transition: transform .5s cubic-bezier(.2, .8, .2, 1); will-change: transform; }
+.rd-s i { display: block; block-size: 1.15em; font-style: normal; }
+.rc { display: inline-block; white-space: pre; }
+.pf-list li, .pf-top { position: relative; }
+.pf-list li::after, .pf-top::after { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0;
+  background: linear-gradient(90deg, transparent 30%, rgb(34 197 94 / .18)); }
+.pf-top::after { inset: -6px -16px; background: radial-gradient(60% 120% at 20% 50%, rgb(34 197 94 / .2), transparent 70%); }
+.pf-list li[data-tick^="down"]::after { background: linear-gradient(90deg, transparent 30%, rgb(239 68 68 / .18)); }
+.pf-top[data-tick^="down"]::after { background: radial-gradient(60% 120% at 20% 50%, rgb(239 68 68 / .2), transparent 70%); }
+:is(.pf-list li, .pf-top)[data-tick$="1"]::after { animation: tick-a .9s ease-out; }
+:is(.pf-list li, .pf-top)[data-tick$="2"]::after { animation: tick-b .9s ease-out; }
+.pf-list li[data-tick$="1"] [data-pnl], .pf-top[data-tick$="1"] .pf-total { animation: pop-a .45s cubic-bezier(.2, .8, .2, 1); }
+.pf-list li[data-tick$="2"] [data-pnl], .pf-top[data-tick$="2"] .pf-total { animation: pop-b .45s cubic-bezier(.2, .8, .2, 1); }
+.pf-total { transform-origin: left center; }
+.pf-num [data-pnl] { transform-origin: right center; }
+@keyframes tick-a { from { opacity: 1; } to { opacity: 0; } }
+@keyframes tick-b { from { opacity: 1; } to { opacity: 0; } }
+@keyframes pop-a { 40% { transform: scale(1.06); } }
+@keyframes pop-b { 40% { transform: scale(1.06); } }
+.pf-live { display: inline-block; inline-size: 7px; block-size: 7px; margin-inline-end: 8px; border-radius: 50%; background: #22c55e;
+  vertical-align: middle; animation: live-dot 1.2s ease-in-out infinite; }
+@keyframes live-dot { 50% { opacity: .25; transform: scale(.7); } }
+@media (prefers-reduced-motion: reduce) {
+  .rd-s { transition: none; }
+  .pf-live, .pf-list li::after, .pf-top::after, .pf-total, .pf-num [data-pnl] { animation: none !important; }
+}
