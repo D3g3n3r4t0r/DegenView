@@ -45,7 +45,10 @@ from app.trading.onchain import jstext, outcomes
 
 logger = logging.getLogger(__name__)
 
-RUGCHECK_SUMMARY = "https://api.rugcheck.xyz/v1/tokens/{mint}/report/summary"
+# The full report, not /summary: only it lists the holders and the wallet
+# networks. With /summary the holder checks never ran (29/09: 10 of the 10
+# simulated meme rugs, and 39 of the 41 survivors, had no holder data).
+RUGCHECK_REPORT = "https://api.rugcheck.xyz/v1/tokens/{mint}/report"
 GOPLUS_TOKEN = "https://api.gopluslabs.io/api/v1/token_security/{chain_id}"
 GOPLUS_CHAIN = {"robinhood": "4663", "base": "8453", "bsc": "56", "ethereum": "1"}
 CHAIN_LABEL = {"solana": "Solana", "robinhood": "Robinhood", "base": "Base", "bsc": "BSC", "ethereum": "Ethereum"}
@@ -61,6 +64,13 @@ HOLDER_MAX_PCT = 15.0
 TOP10_MAX_PCT = 35.0
 TAX_MAX_PCT = 10.0
 TOP_HOLDER_MAX_PCT = 30.0
+# Wallets RugCheck links by transfers or trades (funded by the same wallet,
+# sent tokens to each other): recorded, not blocking. Measured 29/09 on the
+# 51 Solana memes of the simulated book: linked wallets over 10% in 4 of 15
+# rugs and in 9 of 36 survivors (DREGG 39%) -- no separation. The rugs had
+# 100% LP locked: coordinated sells, not a liquidity pull.
+LINKED_MAX_PCT = 10.0
+MEME_RED_FLAGS = ("Creator history of rugged tokens", "High holder correlation")
 AI_SCORE_MIN = 6
 GOPLUS_SOLANA = "https://api.gopluslabs.io/api/v1/solana/token_security"
 # Le gemme: sopra i $100k di cap un token si mostra solo se e' quasi
@@ -268,7 +278,7 @@ async def fetch_site(url: str, client: httpx.AsyncClient) -> dict:
 
 async def rugcheck(mint: str, client: httpx.AsyncClient) -> dict | None:
     try:
-        r = await client.get(RUGCHECK_SUMMARY.format(mint=mint), timeout=8.0)
+        r = await client.get(RUGCHECK_REPORT.format(mint=mint), timeout=12.0)
         body = r.json() if r.status_code == 200 else None
     except (httpx.HTTPError, ValueError):
         return None
@@ -300,7 +310,9 @@ async def _assess_meme(token: dict, out: dict, sec: dict, website: str | None, s
     return done("ok", "")
 
 
-def judge_rugcheck(report: dict | None) -> dict:
+def judge_rugcheck(report: dict | None, meme: bool = False) -> dict:
+    """meme=True (meme path): a missing holder list waits instead of passing
+    unchecked. Linked wallets and MEME_RED_FLAGS are facts, not verdicts."""
     if report is None:
         return _check("security", "RugCheck", None, "report not available yet")
     if report.get("rugged"):
@@ -309,11 +321,17 @@ def judge_rugcheck(report: dict | None) -> dict:
     if danger:
         return _check("security", "RugCheck", False, ", ".join(danger[:3]))
     top, top10 = holder_concentration(report)
+    linked, networks = linked_share(report)
     # The summary report often has no holder list: then the shares are
     # unknown, not 0% (DeepSeek, 27/09, from our own data: "top_holder_pct
     # e' 0,0 -> dato assente").
     holders = {"top_holder_pct": round(top, 2) if top is not None else None,
-               "top10_pct": round(top10, 2) if top10 is not None else None}  # per outcomes.py
+               "top10_pct": round(top10, 2) if top10 is not None else None,  # per outcomes.py
+               "linked_pct": round(linked, 2) if linked is not None else None, "linked_networks": networks,
+               "holders": report.get("totalHolders")}
+    holders["rugcheck_flags"] = [r.get("name") for r in report.get("risks") or [] if r.get("name") in MEME_RED_FLAGS]
+    if meme and top is None:
+        return _check("security", "RugCheck", None, "holder list not available yet", facts=holders)
     top, top10 = top or 0.0, top10 or 0.0
     if top > HOLDER_MAX_PCT:
         return _check("security", "RugCheck", False, f"a single wallet holds {top:.0f}% of supply",
@@ -321,14 +339,36 @@ def judge_rugcheck(report: dict | None) -> dict:
     if top10 > TOP10_MAX_PCT:
         return _check("security", "RugCheck", False, f"top 10 wallets hold {top10:.0f}% of supply",
                       facts=holders)
-    lp = report.get("lpLockedPct")
-    if lp is not None and float(lp) < LP_LOCKED_MIN_PCT:
-        return _check("security", "RugCheck", False, f"only {float(lp):.0f}% of liquidity locked")
+    lp = lp_locked_pct(report)
+    if lp is not None and lp < LP_LOCKED_MIN_PCT:
+        return _check("security", "RugCheck", False, f"only {lp:.0f}% of liquidity locked")
     warn = len([r for r in report.get("risks") or [] if r.get("level") == "warn"])
-    detail = f"{float(lp):.0f}% liquidity locked" if lp is not None else "no serious risks"
-    score = (float(lp) if lp is not None else 85.0) - 8 * warn
+    detail = f"{lp:.0f}% liquidity locked" if lp is not None else "no serious risks"
+    if linked is not None and linked > LINKED_MAX_PCT:
+        detail += f" · linked wallets {min(linked, 100):.0f}%"
+    score = (lp if lp is not None else 85.0) - 8 * warn
     return _check("security", "RugCheck", True, detail + (f" · {warn} minor warnings" if warn else ""), score,
-                  facts={**holders, "lp_locked_pct": float(lp) if lp is not None else None})
+                  facts={**holders, "lp_locked_pct": lp})
+
+
+def lp_locked_pct(report: dict) -> float | None:
+    """The summary has lpLockedPct at the top; the full report per market."""
+    if report.get("lpLockedPct") is not None:
+        return float(report["lpLockedPct"])
+    locked = [float(m["lp"]["lpLockedPct"]) for m in report.get("markets") or []
+              if (m.get("lp") or {}).get("lpLockedPct") is not None]
+    return max(locked) if locked else None
+
+
+def linked_share(report: dict) -> tuple[float | None, int]:
+    """(% of supply still held by RugCheck's insider networks, how many
+    networks). (None, 0) when the report has no supply to divide by."""
+    supply = float((report.get("token") or {}).get("supply") or 0)
+    nets = report.get("insiderNetworks") or []
+    if supply <= 0:
+        return None, len(nets)
+    held = sum(float(n.get("currentHolding") or 0) for n in nets)
+    return held / supply * 100, len(nets)
 
 
 def holder_concentration(report: dict) -> tuple[float | None, float | None]:
@@ -827,7 +867,7 @@ async def assess(token: dict, links: dict, client: httpx.AsyncClient, *,
         return done("fail", "meme coin name")
 
     if chain == "solana":
-        sec = judge_rugcheck(await rugcheck(token.get("token_address") or "", client))
+        sec = judge_rugcheck(await rugcheck(token.get("token_address") or "", client), meme=memes)
     elif chain in GOPLUS_CHAIN:
         sec = judge_goplus(await goplus(chain, token.get("token_address") or "", client))
     else:
