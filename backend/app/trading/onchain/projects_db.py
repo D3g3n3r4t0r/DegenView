@@ -187,6 +187,29 @@ def set_market(chain: str, token: str, *, mcap=None, liq=None, vol24=None, price
         _db().commit()
 
 
+def _set_links(chain: str, token: str, info: dict) -> None:
+    """The website and GitHub DexScreener lists for the pair, for rows that
+    have none: a coin from the CoinGecko list waits hours for its own page
+    (5 requests a minute) and AUREON never got analysed meanwhile (29/09)."""
+    site = next((w["url"] for w in info.get("websites") or [] if w.get("url")), None)
+    git = next((x["url"] for x in info.get("socials") or [] if "github.com" in (x.get("url") or "")), None)
+    if not (site or git):
+        return
+    with _lock:
+        _db().execute("UPDATE projects SET website = COALESCE(website, ?), github = COALESCE(github, ?) WHERE key = ?",
+                      (site, git, key(chain, token)))
+        _db().commit()
+
+
+def reset_linkless_market() -> int:
+    """Rows with a cap but no website or GitHub: ask DexScreener again for its links."""
+    with _lock:
+        cur = _db().execute("UPDATE projects SET market_at = NULL WHERE mcap IS NOT NULL AND website IS NULL"
+                            " AND github IS NULL AND market_at IS NOT NULL")
+        _db().commit()
+        return cur.rowcount
+
+
 def apply_pairs(chain: str, tokens: list[str], pairs: list[dict], now: float | None = None) -> int:
     """DexScreener /tokens answer for a batch: the deepest pool per token.
     Tokens without any pool are stamped too, so they wait MARKET_TTL_S."""
@@ -208,6 +231,7 @@ def apply_pairs(chain: str, tokens: list[str], pairs: list[dict], now: float | N
         set_market(chain, t, mcap=p.get("marketCap") or p.get("fdv"), liq=(p.get("liquidity") or {}).get("usd"),
                    vol24=(p.get("volume") or {}).get("h24"), price=p.get("priceUsd"),
                    launched_at=(p.get("pairCreatedAt") or 0) / 1000 or None, now=now)
+        _set_links(chain, t, p.get("info") or {})
     return len(best)
 
 
