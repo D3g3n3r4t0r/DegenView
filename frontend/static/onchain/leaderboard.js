@@ -239,6 +239,31 @@ function row(e) {
   </li>`;
 }
 
+const compactNum = (v) => { const n = Number(v) || 0; return n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}k` : `${n}`; };
+
+// The social numbers the judge read: X search and the project's own Telegram.
+function socialLines(j) {
+  const out = [];
+  const x = j?.x;
+  if (x) out.push(`<li>X: ${Number(x.posts_7d) || 0} posts/7d · ${Number(x.authors) || 0} authors · median ${compactNum(x.median_followers ?? 0)} followers</li>`);
+  const tg = j?.tg;
+  if (tg) {
+    const at = `@${escapeHtml(tg.handle ?? "")}`;
+    let body;
+    if (tg.kind === "missing") body = `${at} not found`;
+    else if (tg.kind === "group") body = `${at} · group · ${compactNum(tg.subs ?? 0)} members`;
+    else if (tg.kind === "no_preview") body = `${at} · ${compactNum(tg.subs ?? 0)} subscribers · posts not public`;
+    else {
+      const parts = [`${compactNum(tg.subs ?? 0)} members`, `${Number(tg.posts_7d) || 0} posts/7d`];
+      if (tg.last_post_days != null) parts.push(`last ${Math.round(Number(tg.last_post_days))}d ago`);
+      if (tg.median_views != null) parts.push(`${compactNum(tg.median_views)} views`);
+      body = `${at} · ${parts.join(" · ")}`;
+    }
+    out.push(`<li>Telegram: ${body}</li>`);
+  }
+  return out.join("");
+}
+
 // DeepSeek's report on the project: its own verdict and, when it read the
 // whole board, the editor's call.
 function deepseekBlock(e) {
@@ -254,7 +279,7 @@ function deepseekBlock(e) {
   const bad = (j?.problems ?? []).map((x) => `<li data-tone="bad">${escapeHtml(x)}</li>`).join("");
   const admit = j?.admit_reason ? `<li data-tone="good">${escapeHtml(j.admit_reason)}</li>` : "";
   return `<div class="ds-report"><h5>DeepSeek${head ? ` <b>${head}</b>` : ""}</h5>
-    <ul class="why-list">${edit}${admit}${code}${codeSummary}${codeGood}${codeBad}${good}${bad}</ul></div>`;
+    <ul class="why-list">${edit}${admit}${code}${codeSummary}${codeGood}${codeBad}${good}${bad}${socialLines(j)}</ul></div>`;
 }
 
 export function gemWhy(e) {

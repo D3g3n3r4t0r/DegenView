@@ -41,7 +41,7 @@ import httpx
 
 from app.config import settings
 from app.sniper.quality import _looks_like_meme
-from app.trading.onchain import outcomes
+from app.trading.onchain import jstext, outcomes
 
 logger = logging.getLogger(__name__)
 
@@ -195,11 +195,16 @@ async def _public_host(host: str) -> bool:
 
 
 def page_text(raw: str) -> tuple[str, str]:
-    """(titolo, testo leggibile) di una pagina HTML, senza script e stili."""
+    """(titolo, testo leggibile) di una pagina HTML, senza script e stili.
+    Plus the text a JavaScript framework ships inside the HTML (Next.js,
+    Nuxt, JSON-LD...): a JS-built site is read as a visitor sees it."""
     title = re.search(r"<title[^>]*>(.*?)</title>", raw, re.S | re.I)
     body = re.sub(r"<(script|style|noscript|svg|title)[^>]*>.*?</\1>", " ", raw, flags=re.S | re.I)
+    # A page cut at SITE_MAX_BYTES can end inside a script: that is code too.
+    body = re.sub(r"<(script|style)\b[^>]*>.*$", " ", body, flags=re.S | re.I)
     body = re.sub(r"<[^>]+>", " ", body)
     text = re.sub(r"\s+", " ", html.unescape(body)).strip()
+    text = jstext.merge(text, jstext.extract(raw))
     return (html.unescape(title.group(1)).strip() if title else ""), text[:SITE_TEXT_CHARS]
 
 
@@ -246,9 +251,16 @@ async def fetch_site(url: str, client: httpx.AsyncClient) -> dict:
             return {"ok": False, "error": type(exc).__name__}
         decoded = raw.decode("utf-8", "replace")
         title, text = page_text(decoded)
+        shell, rendered = jstext.is_shell(decoded, len(text.split())), False
+        if shell:
+            # Still empty after the framework data: let a browser build it.
+            built = await jstext.render(current, _public_host)
+            if built:
+                decoded, rendered, shell = built, True, False
+                title, text = page_text(decoded)
         github = re.findall(r"https?://(?:www\.)?github\.com/[A-Za-z0-9._/-]+", decoded)
         return {"ok": True, "status": r.status_code, "title": title, "text": text, "final_url": current,
-                "github": github, "html": decoded}
+                "github": github, "html": decoded, "shell": shell, "rendered": rendered}
     return {"ok": False, "error": "too many redirects"}
 
 
