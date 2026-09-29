@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0225", "Il live scanner diventa una tab accanto ad Alerts",
+     "Lorenzo, 29/09: 'il live scanner in basso deve apparire come tab in alto di fianco ad alerts'",
+     "bassa"),
     ("seed-0224", "DeepSeek su Telegram: accesso a tutto e istruzioni permanenti",
      "Lorenzo, 29/09: 'voglio potergli chiedere TUTTO, dagli completo accesso come risposte' e 'voglio poterlo auto istruire'",
      "media"),
