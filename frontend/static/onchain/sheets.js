@@ -75,7 +75,10 @@ export async function openScan(query) {
   if (d.error) { setMessage(d.error, "is-warn"); return; }
   const t = d.token;
   titleEl.textContent = `${t.symbol} · ${t.chain}`;
-  const status = { ok: ["pass", "Would pass the listing filter"], fail: ["fail", `Would be rejected: ${d.pipeline.reason}`],
+  // A project is judged by the Gem Finder, a meme by the listing filter
+  // (Lorenzo, 29/09: the scanner had not followed the updates).
+  const g = d.gem;
+  const status = g ? gemStatus(g) : { ok: ["pass", "Would pass the listing filter"], fail: ["fail", `Would be rejected: ${d.pipeline.reason}`],
     wait: ["wait", `Waiting: ${d.pipeline.reason}`] }[d.pipeline.status] ?? ["wait", d.pipeline.reason];
   const ai = d.ai;
   const hist = (d.memory.history ?? []).map((h) => `${escapeHtml(h.decision ?? "seen")}${h.outcome ? ` → ${escapeHtml(h.outcome)}` : ""}`).join(", ");
@@ -86,11 +89,50 @@ export async function openScan(query) {
     ${ai ? `<div class="scan-ai" data-risk="${ai.risk >= 60 ? "high" : ai.risk >= 30 ? "mid" : "low"}"><b>${ai.risk}</b>
       <span><b>Scout rug risk</b><small>${escapeHtml([ai.theme, ...(ai.flags ?? [])].filter(Boolean).join(" · ") || "no red flags")}</small></span></div>`
       : `<p class="sheet-note">Scout's AI assessment is unavailable right now.</p>`}
+    ${g ? gemCard(g) : ""}
+    ${btCard(d.backtest)}
     <p class="sheet-note"><b>Memory:</b> ${escapeHtml(d.memory.summary)}${hist ? ` · this token before: ${hist}` : ""}</p>
     ${d.alert ? `<p class="sheet-note">Alerted ${new Date(d.alert.at * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" })}, now ${pctS(d.alert.now)}.</p>` : ""}
     <ul class="scan-checks">${(d.checks ?? []).map((c) => `<li data-ok="${c.ok === true ? "yes" : c.ok === false ? "no" : "unknown"}">
       <span>${escapeHtml(c.label)}</span><small>${escapeHtml(c.detail ?? "")}</small></li>`).join("")}</ul>
-    ${t.pair_url ? `<a class="btn-quiet" href="${escapeHtml(t.pair_url)}" target="_blank" rel="noopener">Open on DexScreener</a>` : ""}`);
+    <div class="scan-links"><button type="button" class="btn-quiet" data-full>Full token page</button>
+    ${t.pair_url ? `<a class="btn-quiet" href="${escapeHtml(t.pair_url)}" target="_blank" rel="noopener">DexScreener</a>` : ""}</div>`);
+  bodyEl.querySelector("[data-full]")?.addEventListener("click", async () => {
+    dialog.close();
+    location.hash = `${location.hash.split("&")[0].slice(1) || (g ? "gems" : "meme")}&token=${encodeURIComponent(t.chain)}:${encodeURIComponent(t.token_address)}`;
+    (await import("@onchain/detail.js")).openFromHash();
+  });
+}
+
+const VERDICT = { gem: "gem", watch: "watch", avoid: "avoid", scam: "scam" };
+const pctN = (n) => (n == null ? "—" : `${n > 0 ? "+" : ""}${Math.round(n)}%`);
+
+function gemStatus(g) {
+  if (g.status === "ranked") return ["pass", `Gem Finder: ranked #${g.rank} · score ${g.score}`];
+  if (g.status === "queued" || g.status === "new" || g.status === "analyzing")
+    return ["wait", "Gem Finder: queued for a full study"];
+  if (g.status === "rejected") return ["fail", `Gem Finder: rejected · ${g.why || "rules"}`];
+  return g.why ? ["wait", `Gem Finder: studied, not ranked · ${g.why}`] : ["pass", `Gem Finder: qualifies · score ${g.score}`];
+}
+
+function gemCard(g) {
+  const pil = Object.entries(g.pillars ?? {}).filter(([, v]) => v != null);
+  const j = g.judge, c = g.code;
+  if (!pil.length && !j && !c) return "";
+  return `<div class="scan-card">
+    ${g.score != null ? `<b class="scan-big">${g.score}</b>` : ""}
+    <div>${pil.map(([k, v]) => `<span class="scan-bar"><i style="--v:${v}%"></i><small>${escapeHtml(k)} ${v}</small></span>`).join("")}
+    ${j ? `<small>DeepSeek: <b data-v="${VERDICT[j.verdict] ?? ""}">${escapeHtml(j.verdict)}</b> ${j.score ?? ""}${j.problems?.length ? ` · ${escapeHtml(j.problems[0])}` : j.strengths?.length ? ` · ${escapeHtml(j.strengths[0])}` : ""}</small>` : ""}
+    ${c ? `<small>Code: complexity ${c.complexity} · innovation ${c.innovation}</small>` : ""}</div></div>`;
+}
+
+function btCard(b) {
+  if (!b) return "";
+  if (!b.fast && !b.daily) return `<p class="sheet-note">Backtest: ${escapeHtml(b.error || "no trade yet")}.</p>`;
+  const row = (r, what) => `<li><span>${what}</span><b data-s="${(r.return_pct ?? 0) >= 0 ? "up" : "down"}">${pctN(r.return_pct)}</b>
+    <small>${r.trades} trades${r.win_rate != null ? ` · ${Math.round(r.win_rate)}% win` : ""} · hold ${pctN(r.hold_pct)}</small></li>`;
+  return `<ul class="scan-bt">${b.daily ? row(b.daily, `Trend follower · ${b.daily.interval === "8h" ? "8h" : "daily"}`) : ""}
+    ${b.fast ? row(b.fast, `${escapeHtml(b.fast.label)} · 5m`) : ""}</ul>`;
 }
 
 /* --------------------------------------------------------------- Deposit */

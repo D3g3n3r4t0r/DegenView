@@ -163,7 +163,7 @@ def recap_line(now: float | None = None) -> str:
         (part("high", "rischio alto"), part("mid", "medio"), part("low", "basso"))))
 
 
-async def judge_one(item: dict, features: dict, pool: list[dict] | None = None) -> dict | None:
+async def judge_one(item: dict, features: dict, pool: list[dict] | None = None, project: bool = False) -> dict | None:
     """DeepSeek's judgement on one token scanned by hand (manual_scan.py):
     the same prompt as the batches, one line."""
     if not settings.deepseek_api_key:
@@ -173,6 +173,10 @@ async def judge_one(item: dict, features: dict, pool: list[dict] | None = None) 
          "facts": alert_track.facts_of(item)}
     pool = rug_memory.cases() if pool is None else pool
     user = rug_memory.circumstances_text() + "\n\nTokens:\n" + line(0, a, pool)
+    if project:
+        # A project name, not a meme: impersonation only if it copies a known brand.
+        user += ("\n\nThis token has a project name, not a meme name: flag impersonation only when the name "
+                 "copies a specific known brand. Quote memory counts exactly or not at all.")
     try:
         text = await deepseek_desk.ask([{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}],
                                        kind="scanner", max_tokens=120, json_mode=True,

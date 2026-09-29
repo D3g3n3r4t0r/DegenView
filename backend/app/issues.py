@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0232", "Lo scanner manuale non si e' evoluto con il resto del sistema",
+     "Lorenzo, 29/09 (screenshot HYDX su Robinhood): 'lo scanner manuale e' insufficiente e non si e' evoluto seguendo tutti gli aggiornamenti e migliorie che abbiamo fatto'",
+     "alta"),
     ("seed-0231", "Rug pull nel trading simulato delle memecoin: wallet collegati e vendite coordinate",
      "Lorenzo, 29/09: 'abbiamo preso dei bei rug pull nel trading simulato di memecoin [...] controlliamo magari se e' stata ritirata la liquidita' [...] o se sono state vendite coordinate [...] indagando su wallet collegati tra loro avremmo potuto evitare [...] quel token su cui fare l'ingresso'",
      "alta"),

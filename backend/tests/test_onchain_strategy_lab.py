@@ -142,3 +142,12 @@ def test_backtest_one_returns_only_the_trend_follower():
     bt = system.backtest_one(_bars(600))
     assert [r["label"] for r in bt["rows"]] == ["Trend EMA"]
     assert bt["bars"] == 600 and bt["best"] is not None
+
+
+def test_get_returns_the_daily_backtest_next_to_the_fast_one():
+    from app.trading.onchain import strategy_lab
+    strategy_lab.reset_for_tests()
+    strategy_lab._results["solana:T"] = {"at": 1, "backtests": {"rows": [], "hold_pct": 1.0},
+                                         "daily": {"interval": "1d", "rows": [{"label": "Trend EMA"}]}}
+    assert strategy_lab.get("solana", "T")["daily"]["interval"] == "1d"
+    strategy_lab.reset_for_tests()
