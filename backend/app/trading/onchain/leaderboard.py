@@ -98,6 +98,8 @@ REFERENCES = (
      "name": "predict FWA", "website": "https://www.pfwa.fun/", "websites": ["https://www.pfwa.fun/docs"]},
     {"chain": "robinhood", "token_address": "0x727701F88f09Fed71eb217Bcea88b3F314CF7079", "symbol": "GRID",
      "name": "GRID by Virtuals", "website": "https://www.gridarena.xyz/"},
+    {"chain": "robinhood", "token_address": "0x459476869aF797Eb9061B41fA04dE46A60FBeDBD", "symbol": "BV7X",
+     "name": "BV7X", "website": "https://bv7x.ai/", "websites": ["https://docs.bv7x.ai/"]},
 )
 # A researcher's floor: an existing project, not a launch.
 MIN_AGE_DAYS = 14
@@ -574,7 +576,9 @@ def research_floor(e: dict, now: float | None = None) -> str:
     if no_name(e.get("symbol")):
         return "no name"
     launched = e.get("launched_at")
-    if launched and (now or time.time()) - launched < MIN_AGE_DAYS * 86400:
+    # A project Lorenzo named is not a launch, even on a new chain (BV7X: 8
+    # months on Base, 12 days on Robinhood).
+    if launched and e.get("source") != "reference" and (now or time.time()) - launched < MIN_AGE_DAYS * 86400:
         return f"younger than {MIN_AGE_DAYS} days"
     liq = e.get("liquidity_usd")
     small = float(e.get("market_cap") or 0) and float(e.get("market_cap") or 0) < EARLY_CAP_USD
