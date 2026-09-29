@@ -107,3 +107,33 @@ def test_requeue_puts_a_database_row_back_in_the_queue():
     assert db.get("solana", "again")["next_check"] > 0
     assert lb.requeue("solana", "again")
     assert db.get("solana", "again")["next_check"] == 0
+
+
+def test_a_rejected_row_is_lifted_when_its_entry_has_no_fatal_pillar():
+    """BV7X: rejected under an old check, its working-set entry was fine, and set_standing skips rejected rows."""
+    from app.trading.onchain import depth
+    _row("bv", 70, "tokenomics: a single wallet holds 41%", status="rejected")
+    pillars = {"github": {"score": None, "facts": {"missing": True}, "flags": [], "fatal": ""},
+               "site": {"score": 73, "facts": {}, "flags": [], "fatal": ""},
+               "tokenomics": {"score": 67, "facts": {}, "flags": [], "fatal": ""}}
+    lb._entries["solana:bv"] = {"chain": "solana", "token_address": "bv", "symbol": "BV", "name": "bv", "source": "x",
+                                "market_cap": 400_000, "liquidity_usd": 50_000, "found_at": time.time(),
+                                "pillars": pillars, "checked_at": {}, "rank": None,
+                                "overall": depth.overall(pillars)}
+    lb._sync_database([])
+    assert db.get("solana", "bv")["status"] == "studied"
+
+
+def test_lower_case_evm_rows_get_their_market_from_checksum_answers():
+    """DexScreener answers 0xAbC..., the CoinGecko list stores 0xabc...: AUREON never got a cap."""
+    tok = "0xd293291060334d42e5dbea6fb854c231af527777"
+    db.upsert({"chain": "robinhood", "token_address": tok, "symbol": "AUREON", "name": "AUREON"}, "coingecko-list", 1.0)
+    pair = {"baseToken": {"address": "0xd293291060334D42E5DBEa6fb854C231AF527777"}, "marketCap": 92_424,
+            "liquidity": {"usd": 53_215}, "volume": {"h24": 10}, "priceUsd": "0.1", "pairCreatedAt": 1_700_000_000_000}
+    db.apply_pairs("robinhood", [tok], [pair], 2.0)
+    row = db.get("robinhood", tok)
+    assert row["mcap"] == 92_424 and row["liq"] == 53_215
+    # A row stamped empty before the fix is asked again.
+    db.upsert({"chain": "robinhood", "token_address": "0xabc", "symbol": "X", "name": "X"}, "coingecko-list", 1.0)
+    db.set_market("robinhood", "0xabc", now=3.0)
+    assert db.reset_empty_market() >= 1 and db.get("robinhood", "0xabc")["market_at"] is None

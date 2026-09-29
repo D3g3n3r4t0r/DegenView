@@ -192,13 +192,16 @@ def apply_pairs(chain: str, tokens: list[str], pairs: list[dict], now: float | N
     Tokens without any pool are stamped too, so they wait MARKET_TTL_S."""
     now = now or time.time()
     best: dict[str, dict] = {}
+    # DexScreener answers EVM addresses in checksum case, the CoinGecko list
+    # stores them in lower case: matched exactly, every such row was stamped
+    # "no pool" and never got a cap (AUREON, 29/09).
     for p in pairs or []:
-        t = (p.get("baseToken") or {}).get("address") or ""
+        t = ((p.get("baseToken") or {}).get("address") or "").lower()
         liq = float((p.get("liquidity") or {}).get("usd") or 0)
         if t not in best or liq > float((best[t].get("liquidity") or {}).get("usd") or 0):
             best[t] = p
     for t in tokens:
-        p = best.get(t)
+        p = best.get(t.lower())
         if p is None:
             set_market(chain, t, now=now)
             continue
@@ -270,6 +273,16 @@ def set_standing(chain: str, token: str, status: str, score: float | None, rank:
         _db().commit()
 
 
+def lift_rejected(chain: str, token: str) -> bool:
+    """A row rejected under an old check whose working-set entry has since
+    passed: back to "studied", so set_standing (studied/ranked only) can move it."""
+    with _lock:
+        cur = _db().execute("UPDATE projects SET status = 'studied' WHERE key = ? AND status = 'rejected'",
+                            (key(chain, token),))
+        _db().commit()
+        return cur.rowcount > 0
+
+
 def sync_top(keys: list[str]) -> int:
     """The Top is the ranking (Lorenzo, 29/09: HATCHER "Studied" and first on
     the podium). Every analysed row in `keys` becomes "ranked" at its place,
@@ -305,6 +318,15 @@ def recheck(chain: str, token: str) -> bool:
 
 
 # ------------------------------------------------------------------ reading
+
+def reset_empty_market() -> int:
+    """EVM rows stamped "no pool" by the case bug in apply_pairs: ask again."""
+    with _lock:
+        cur = _db().execute("UPDATE projects SET market_at = NULL WHERE mcap IS NULL AND token LIKE '0x%'"
+                            " AND market_at IS NOT NULL")
+        _db().commit()
+        return cur.rowcount
+
 
 def stale_market(limit: int, now: float | None = None) -> dict[str, list[str]]:
     """Tokens whose market is unknown or old, oldest first, by chain."""

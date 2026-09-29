@@ -30,7 +30,7 @@ function sayings() {
   const out = (data.items ?? []).slice(0, 6).map((a) => a.text);
   if (data.watching) out.push(`Watching ${data.watching} alerts`);
   const judged = data.today?.scanner ?? 0;
-  if (judged) out.push(`${judged} readings today`);
+  if (judged) out.push(`${judged} token checks today`);
   return out.length ? out : [data.active ? "Agent watching" : "Agent offline"];
 }
 
@@ -80,18 +80,24 @@ function statusLine() {
   return viewData.active ? "Watching" : "Off";
 }
 
-const PLURAL = { backtest: "backtests", study: "studies", research: "readings", scanner: "readings", chat: "chats", scan: "scans" };
+const PLURAL = { backtest: "backtests", study: "projects studied", research: "deep reads", scanner: "token checks",
+  judge: "board reviews", chat: "chats", scan: "scans" };
+
+const compact = (n) => n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}k` : String(n);
 
 function chips() {
-  // Work done today (distinct projects per kind, LLM or not), and the real
-  // DeepSeek calls apart: the two are different counts (issue #366).
+  // Two different things, never merged: AI calls (tokens spent) and work done
+  // (every note, LLM or not). A token studied 30 times counts as one project.
   const calls = Object.values(viewData?.today ?? {}).reduce((a, n) => a + n, 0);
-  const parts = Object.entries(viewData?.done ?? {})
+  const ai = calls ? `AI: ${calls} calls · ${compact(viewData?.tokens ?? 0)} tokens` : "";
+  const distinct = viewData?.distinct ?? {};
+  const work = Object.entries(viewData?.done ?? {})
+    .map(([k, n]) => [k, distinct[k] ?? n])
     .filter(([, n]) => n > 0)
     .sort((a, b) => b[1] - a[1])
-    .map(([k, n]) => `${n} ${escapeHtml(PLURAL[k] ?? k)}`);
-  if (calls) parts.push(`${calls} DeepSeek calls`);
-  return parts.length ? parts.join(" · ") : "Nothing yet today";
+    .map(([k, n]) => `${compact(n)} ${escapeHtml(PLURAL[k] ?? k)}`)
+    .join(" · ");
+  return [ai, work].filter(Boolean).join(" — ") || "Nothing yet today";
 }
 
 const LIVE_S = 180;

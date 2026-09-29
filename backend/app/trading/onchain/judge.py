@@ -27,9 +27,10 @@ TTL_S = 3 * 86400
 # Readings under an older prompt are redone (2, 29/09: contracts are not
 # whales, unlocked v4 liquidity is normal, named integrations count; GRID
 # was judged "avoid" on exactly those points). 3: closed code is never the
-# reason to avoid (STEALF, GRID, BV7X were vetoed on it after v2).
-PROMPT_VERSION = 3
-DAILY_MAX = 600           # ~$0.001 a reading: every project past the filters gets its report
+# reason to avoid (STEALF, GRID, BV7X were vetoed on it after v2). 4: a domain
+# registered with the token is normal (PFWA, 22).
+PROMPT_VERSION = 4
+DAILY_MAX = 1500          # ~$0.001 a reading: every project past the filters gets its report
 ADMIT_MIN = 80
 VETO_MIN_CONF = 0.7
 # The Top's own allowance (Lorenzo, 29/09: every token in the Top gets
@@ -67,6 +68,8 @@ SYSTEM = (
     "(10) No public GitHub is not a problem by itself: many serious projects keep their code closed. Never "
     "make it the main problem and never answer avoid because of it; it only lowers your confidence. Judge "
     "the product, the docs and the token instead. "
+    "(11) A website registered around the token's launch is normal for a new project, not a red flag; "
+    "domain age only matters when the site is younger than the token. "
     "Answer with one JSON object only: {\"score\": 0-100, \"verdict\": \"gem\"|\"watch\"|\"avoid\"|\"scam\", "
     "\"confidence\": 0-1, \"problems\": [up to 5 short strings], \"strengths\": [up to 5 short strings], "
     "\"admit_reason\": \"one sentence, only if a rule excluded it but it deserves the board, else empty\"}."
@@ -272,6 +275,9 @@ async def judge(e: dict, rules_why: str, now: float | None = None, ask=None,
     day = time.strftime("%Y-%m-%d", time.gmtime(now))
     count = f"{day}:top" if priority else day
     if _calls.get(count, 0) >= (PRIORITY_DAILY_MAX if priority else DAILY_MAX):
+        if _calls.get(f"{count}:full") is None:      # said once a day: it looked like "no judge activity"
+            _calls[f"{count}:full"] = 1
+            logger.warning("giudice: quota giornaliera finita (%s): le letture ferme restano quelle vecchie", count)
         # Out of budget: the last reading stands, marked as out of date.
         return {**hit, "stale": why} if hit and hit.get("v") == PROMPT_VERSION else None
     from app.notify import deepseek_desk

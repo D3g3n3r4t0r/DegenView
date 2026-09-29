@@ -101,7 +101,7 @@ def test_site_with_something_behind_beats_a_landing_page():
     bad = depth.judge_site(landing, [], NOW - 2 * DAY, launched_at=NOW - DAY, now=NOW)
     assert good["score"] >= 80 and bad["score"] <= 25
     assert "single page, nothing behind it" in bad["flags"]
-    assert "domain registered with the token" in bad["flags"]
+    assert "domain registered with the token" not in bad["flags"]
 
 
 def test_site_placeholder_and_empty_and_not_own():

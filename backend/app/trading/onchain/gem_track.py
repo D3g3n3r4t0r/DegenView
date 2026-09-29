@@ -19,6 +19,7 @@ import time
 import httpx
 
 from app.trading.onchain import storage
+from app.atomic_write import write_text_atomic
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +49,7 @@ def save() -> None:
         for k in sorted(_track, key=lambda k: _track[k]["at"])[:len(_track) - KEEP]:
             del _track[k]
     try:
-        _STORE_FILE.write_text(json.dumps({"track": _track}, ensure_ascii=False), encoding="utf-8")
+        write_text_atomic(_STORE_FILE, json.dumps({"track": _track}, ensure_ascii=False), encoding="utf-8")
     except OSError:
         pass
 

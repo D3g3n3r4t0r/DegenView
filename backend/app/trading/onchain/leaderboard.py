@@ -42,6 +42,7 @@ import httpx
 from app.sniper.quality import _looks_like_meme
 from app.trading.onchain import (benchmark, big_coins, code_review, consistency, depth, discovery, gem_track, judge, legit, narrative_map,
                                   narratives, priority, projects_db, research, storage, traction)
+from app.atomic_write import write_text_atomic
 
 logger = logging.getLogger(__name__)
 
@@ -139,7 +140,7 @@ DISCOVERY_SLOW_S = 6 * 3600
 CODE_RETRY_S = 6 * 3600        # a failed reading waits: GitHub allows few calls an hour
 # Without public code a project ranks below an equal one that shows it.
 NO_GITHUB_PENALTY = 10.0
-RULES_VERSION = 9              # 2: "no GitHub" stopped being a ban; 3: radar launches out;
+RULES_VERSION = 10             # 2: "no GitHub" stopped being a ban; 3: radar launches out;
                                # 4: research read by reader.py, older bans and readings dropped;
                                # 5: reader recognises research-stage code and stated limits
                                # 6: no age limits, strict band from $100k to $2M, one rule chain
@@ -147,6 +148,7 @@ RULES_VERSION = 9              # 2: "no GitHub" stopped being a ban; 3: radar la
                                # 8: every cached fatal pillar is recomputed under today's checks
                                # 9: tokenomics redone: missing data is not a pass, big contracts
                                #    are whales (audit 29/09, M01/M02)
+                               # 10: EVM rows stamped "no pool" by an address-case bug ask DexScreener again
 
 _entries: dict[str, dict] = {}     # chain:token
 _excluded: list[dict] = []
@@ -156,11 +158,13 @@ _tasks: set[asyncio.Task] = set()
 _slots = asyncio.Semaphore(ANALYZE_CONCURRENCY)
 _state = {"version": 0, "examined": 0, "last_tick": 0.0, "last_market": 0.0,
           "sources": {}, "board": []}
+_recorded: set[str] = set()         # working-set keys whose verdict was written to the database since start
 _alerted: set[str] = set()          # "new:<key>" / "early:<key>": alerts already sent
 _outbox: list[tuple[str, str]] = []
 _alert_hooks: list = []
 _priming = False
 _dirty = False
+_reset_market = False     # set by _load when the stored rules predate version 10
 _requeue_fatals = False   # set by _load when the stored rules predate version 8
 
 
@@ -184,7 +188,9 @@ def _load() -> None:
             for e in _entries.values():
                 (e.get("pillars") or {}).pop("site", None)
                 (e.get("checked_at") or {}).pop("site", None)
-        global _requeue_fatals
+        global _requeue_fatals, _reset_market
+        if rules < 10:
+            _reset_market = True
         if rules < 8:
             # Fatal pillars scored by checks fixed since (contracts counted as
             # one wallet, JS sites read as empty: BV7X, PFWA) are redone once.
@@ -227,7 +233,7 @@ def _save() -> None:
     global _dirty
     _dirty = False
     try:
-        _STORE_FILE.write_text(json.dumps({"entries": _entries, "excluded": _excluded, "gone": _gone,
+        write_text_atomic(_STORE_FILE, json.dumps({"entries": _entries, "excluded": _excluded, "gone": _gone,
                                            "examined": _state["examined"], "rules": RULES_VERSION,
                                            "alerted": sorted(_alerted)}, ensure_ascii=False),
                                encoding="utf-8")
@@ -238,6 +244,7 @@ def _save() -> None:
 
 def reset_for_tests() -> None:
     _alerted.clear()
+    _recorded.clear()
     _outbox.clear()
     _alert_hooks.clear()
     gem_track.reset_for_tests()
@@ -317,10 +324,12 @@ def is_big(item: dict, now: float | None = None) -> bool:
 def apply_market(pairs: list[dict]) -> None:
     """Cap, liquidita', variazione e data del pool piu' liquido di ogni token."""
     best: dict[str, dict] = {}
+    # EVM keys may be stored in lower case while DexScreener answers in checksum case.
+    index = {k.lower(): k for k in _entries}
     for p in pairs:
         token = (p.get("baseToken") or {}).get("address")
-        k = _key(p.get("chainId") or "", token or "")
-        if k not in _entries:
+        k = index.get(_key(p.get("chainId") or "", token or "").lower())
+        if k is None:
             continue
         liq = float((p.get("liquidity") or {}).get("usd") or 0)
         if k not in best or liq > float((best[k].get("liquidity") or {}).get("usd") or 0):
@@ -449,7 +458,9 @@ async def _analyze(k: str, skip: set[str], client: httpx.AsyncClient) -> None:
         if e is not None:
             o = e.get("overall") or {}
             if not o.get("pending") and not o.get("fatal"):
-                j = await judge.judge(e, qualifies(e))
+                # The Top has its own allowance: after a prompt change the whole set is
+                # re-read and must not starve the projects people are looking at.
+                j = await judge.judge(e, qualifies(e), priority=k in _top_rank)
                 if j:
                     e["judge"] = j
                     _remember(e, "ranked" if e.get("rank") else "studied", qualifies(e), time.time())
@@ -702,6 +713,15 @@ def _sync_database(order: list[str]) -> None:
             continue
         status, rank = _place(k, e.get("rank"))
         score = final_score(e)
+        if k not in _recorded:
+            # Once per start: a row still "rejected" under an old check (BV7X, "single
+            # wallet 41%") is not moved by set_standing, which only touches studied
+            # and ranked rows. A working-set entry with no fatal pillar is studied.
+            _recorded.add(k)
+            try:
+                projects_db.lift_rejected(e["chain"], e["token_address"])
+            except Exception:
+                logger.exception("classifica: riga rifiutata non riaperta per %s", e.get("symbol"))
         seen = (status, score, rank)
         if e.get("_db") == list(seen):
             continue
@@ -1210,6 +1230,8 @@ async def leaderboard_loop() -> None:
         n = projects_db.recheck_studied(("over $%", "over % days%"))
         # Rules dropped on 29/09 (age limits, radar exceptions, the $100k band).
         n += projects_db.recheck_studied(DROPPED_RULES, ("studied", "rejected"))
+        if _reset_market:
+            logger.info("classifica: %d righe EVM senza mercato rimesse in coda", projects_db.reset_empty_market())
         if _requeue_fatals:
             n += projects_db.recheck_studied(("github:", "site:", "tokenomics:"), ("rejected",))
         if n:

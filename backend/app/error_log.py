@@ -16,6 +16,7 @@ import time
 import traceback
 import uuid
 from pathlib import Path
+from app.atomic_write import write_text_atomic
 
 _DATA_DIR = Path(__file__).resolve().parent / "data"
 _DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -45,7 +46,7 @@ def _load() -> None:
 
 def _save() -> None:
     try:
-        _STORE_FILE.write_text(json.dumps(_errors[-_MAX_ENTRIES:], ensure_ascii=False), encoding="utf-8")
+        write_text_atomic(_STORE_FILE, json.dumps(_errors[-_MAX_ENTRIES:], ensure_ascii=False), encoding="utf-8")
     except OSError:
         pass
 

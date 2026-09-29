@@ -32,6 +32,7 @@ from urllib.parse import urlparse
 import httpx
 
 from app.trading.onchain import depth, legit, narratives, reader, storage
+from app.atomic_write import write_text_atomic
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +106,7 @@ def _save() -> None:
     for k in [k for k, v in _cache.items() if now - v.get("at", 0) > AI_TTL_S]:
         del _cache[k]
     try:
-        _STORE.write_text(json.dumps({"cache": _cache, "calls": dict(list(_calls.items())[-7:]),
+        write_text_atomic(_STORE, json.dumps({"cache": _cache, "calls": dict(list(_calls.items())[-7:]),
                                       "prints": dict(list(_prints.items())[-PRINTS_MAX:])}),
                           encoding="utf-8")
     except OSError:

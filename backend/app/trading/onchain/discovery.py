@@ -40,6 +40,7 @@ import httpx
 
 from app.sniper.quality import _looks_like_meme
 from app.trading.onchain import legit, narratives, projects_db, storage, traction
+from app.atomic_write import write_text_atomic
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +87,7 @@ def _load() -> None:
 
 def _save() -> None:
     try:
-        _STORE_FILE.write_text(json.dumps({"seen": _seen, "cg_last_sweep": _state["cg_last_sweep"], "rules": 2},
+        write_text_atomic(_STORE_FILE, json.dumps({"seen": _seen, "cg_last_sweep": _state["cg_last_sweep"], "rules": 2},
                                           ensure_ascii=False), encoding="utf-8")
     except OSError:
         pass
