@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0229", "Wallet: saldo e guadagno/perdita che si muovono col prezzo, come pump.fun",
+     "Lorenzo, 29/09: 'su l'app di pump fun il saldo delle crypto nel wallet si aggiorna in modo frenetico costantemente [...] nel simulato vedo che praticamente non si aggiorna mai il valore del token e vorrei vedere anche quanto sta perdendo o guadagnando con animazioni frenetiche'",
+     "media"),
     ("seed-0228", "Memecoin di nuovo negli alert, con filtri anti-rug",
      "Lorenzo, 29/09: 'a sto punto riattiviamo le memecoin per gli alert e la strategia che entra allo scoccare dell'alert, cercando di evitare i rugpull'",
      "alta"),

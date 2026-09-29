@@ -2328,5 +2328,11 @@
     "at": 1790683598,
     "summary": "Le memecoin tornano negli alert Meme. Non bloccano piu': nome da meme, sito mancante, voto basso di DeepSeek (restano visibili nella pagella). Bloccano ancora: RugCheck (rug segnalato, rischi gravi, un wallet oltre il 15%, top 10 troppo alti, meno dell'80% di liquidita' bloccata), GoPlus (mint o freeze attivi, tasse oltre il 10%, honeypot, transfer hook), la memoria dei rug passati, e le soglie di ingresso (liquidita' almeno $8k e 10% della cap, cap fino a $2M, pool fino a 6 ore). Il wallet simulato entra all'alert ed esce col trend follower, con lo stop -65% dal massimo; i soldi veri non entrano mai su questi alert.",
     "detail": "Misura del 29/09 su 70 pool PumpSwap di 3-48 ore, i piu' scambiati: 6 passano i controlli, 64 no. I 6 che passano sono finiti tutti sopra il primo prezzo; dei 63 scartati con un grafico, 37 sono finiti sotto -50% dal primo prezzo. Limite: i controlli sono letti oggi, non all'ora dell'alert, e 'Low Liquidity' (39 scarti) in parte e' la conseguenza del crollo."
+  },
+  "seed-0229": {
+    "status": "risolto",
+    "at": 1790700234,
+    "summary": "Nel profilo (wallet simulato e reale) ogni posizione viene rivalutata al prezzo DEX ogni 2 secondi mentre la schermata e' aperta: il totale, la variazione e il valore di ogni token cambiano con cifre che ruotano, le righe lampeggiano verde o rosso, e le posizioni simulate mostrano guadagno/perdita in dollari e in percentuale rispetto al costo.",
+    "detail": "Prima il valore simulato seguiva solo il backtest del sistema, aggiornato a candela chiusa. Fonte: DexScreener (/tokens/v1, 30 token per chiamata, gratuito, si muove a ogni scambio), GeckoTerminal se DexScreener non risponde; una sola cache sul server condivisa da tutti, l'ultimo prezzo resta fino a 3 minuti e poi il token torna al valore del server, mai un numero inventato. Il polling si ferma quando l'app non e' visibile."
   }
 }
