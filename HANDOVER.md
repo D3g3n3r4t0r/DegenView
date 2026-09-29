@@ -3987,3 +3987,10 @@ Lorenzo ha incollato il messaggio di ChatGPT (PR #383, mergiata come asset). Int
 - Podio (`podium.js`, `app.css`): stesso cubo cyberpunk approvato il 28/09, ma ora parte da 27 moduli che si assemblano 3-2-1 (l'"engine boot" del kit, ~1.5 s), poi fessura e testa. Contratto invariato (`still`, `.pc-slot` 1/2/3, `data-open`, `pc-taken`). Still/reduced motion: solo cubo pieno.
 - Top (`top.js`): prima della prima classifica il posto del podio mostra il cubo in stato loading, "Reconnecting…" se la richiesta fallisce senza dati.
 Scartato per ora: hero WebGL (three.js da CDN + GLB 2 MB, etichette in italiano) per la landing, podio 3D (il kit stesso consiglia SVG nella lista compatta), galleria Top con dati demo. Possibile prossimo passo: hero della landing con l'assemble SVG di motion.js invece del WebGL.
+
+Stesso giorno, poco dopo. Lorenzo: "devi seguire cosa dice chat gpt che le ha fatte meglio di te; poi pusha". Quindi il kit si applica alla lettera (`design/engn-motion-kit/CLAUDE.md`), il mio podio a 27 moduli e' sostituito:
+- `podium.js` ora re-esporta `podium-adapter.js` (l'adapter del kit, che importa `@onchain/motion.js` e carica `podium-adapter.css` con la stessa `?v=`). Contratto invariato per top.js, alerts.js e leaderboard.js.
+- Righe Top 15/25/50: barra del punteggio, hover e bordo menta sui primi tre (CSS, `--v` messo da top.js). Nessun dato demo.
+- Landing `engn.html`: hero 3D del kit (3 s, GLB 2 MB) in un iframe `static/engn/motion/hero-3d.html?embed=1`; three.js 0.180 ospitato in locale (`static/engn/motion/three/`, MIT), niente CDN. Il cubo SVG resta finche' il 3D non manda `engn-hero:ready`, e resta per sempre se WebGL o il modello falliscono. Testi tradotti in inglese.
+- Non fatto: podio 3D WebGL (il kit lo vuole solo "in un contesto ampio", senza indicare dove; nella lista compatta consiglia l'SVG).
+Le vecchie regole CSS `.pod-cy`/`.pc-mod` in app.css sono ora inutilizzate.
