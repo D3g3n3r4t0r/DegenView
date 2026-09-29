@@ -227,8 +227,84 @@ def wants_answer(message: dict, bot_username: str) -> str | None:
 
 TOOL_ROUNDS = 5
 
+# Standing instructions Lorenzo gives on Telegram (29/09: "voglio poterlo
+# auto istruire"). Only the owner's chats (telegram_chat_ids) can add or
+# remove them; every chat's answers follow them. They steer answers, never
+# grant anything: no keys, no money moves, no rule changes on the server.
+_INSTR_FILE = data_file("deepseek_instructions.json")
+MAX_INSTRUCTIONS = 30
+INSTRUCTION_CHARS = 400
+_instructions: list[dict] = []
 
-async def answer(chat_id: str, text: str, context: str, tools: dict | None = None) -> str:
+
+def _load_instructions() -> None:
+    try:
+        raw = json.loads(_INSTR_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return
+    if isinstance(raw, list):
+        _instructions[:] = [i for i in raw if isinstance(i, dict) and i.get("text")][:MAX_INSTRUCTIONS]
+
+
+def _save_instructions() -> None:
+    try:
+        tmp = _INSTR_FILE.with_suffix(".tmp")
+        tmp.write_text(json.dumps(_instructions, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(_INSTR_FILE)
+    except OSError:
+        logger.exception("deepseek: istruzioni non salvate")
+
+
+def instructions() -> list[dict]:
+    return [{"n": i + 1, "text": x["text"], "at": x.get("at")} for i, x in enumerate(_instructions)]
+
+
+def teach(text: str, now: float | None = None) -> dict:
+    text = " ".join((text or "").split())[:INSTRUCTION_CHARS]
+    if not text:
+        return {"error": "empty instruction"}
+    if len(_instructions) >= MAX_INSTRUCTIONS:
+        return {"error": f"already {MAX_INSTRUCTIONS} instructions: remove one first"}
+    _instructions.append({"text": text, "at": int(now or time.time())})
+    _save_instructions()
+    return {"saved": len(_instructions), "instructions": instructions()}
+
+
+def forget(n: int) -> dict:
+    try:
+        gone = _instructions.pop(int(n) - 1)
+    except (IndexError, ValueError, TypeError):
+        return {"error": f"no instruction number {n}"}
+    _save_instructions()
+    return {"removed": gone["text"], "instructions": instructions()}
+
+
+def _teach_tools() -> dict:
+    s = lambda d: {"type": "string", "description": d}  # noqa: E731
+    return {
+        "ricorda": ({"name": "ricorda", "description": "Save a standing instruction from the owner: how to answer, what to watch, what to prefer. Use it when he asks you to remember or to change how you work from now on.",
+                     "parameters": {"type": "object", "properties": {"istruzione": s("the instruction, in his words, in Italian")}, "required": ["istruzione"]}},
+                    lambda istruzione: teach(istruzione)),
+        "dimentica": ({"name": "dimentica", "description": "Remove a standing instruction by its number.",
+                       "parameters": {"type": "object", "properties": {"numero": {"type": "integer"}}, "required": ["numero"]}},
+                      lambda numero: forget(numero)),
+        "istruzioni": ({"name": "istruzioni", "description": "List the standing instructions with their numbers.",
+                        "parameters": {"type": "object", "properties": {}}},
+                       lambda: instructions()),
+    }
+
+
+def _system_prompt(context: str) -> str:
+    rules = ""
+    if _instructions:
+        rules = ("\n\n<istruzioni_del_proprietario>\nIstruzioni permanenti del proprietario del sito: seguile sempre, "
+                 "tranne se chiedono chiavi, seed o di muovere denaro.\n"
+                 + "\n".join(f"{i + 1}. {x['text']}" for i, x in enumerate(_instructions))
+                 + "\n</istruzioni_del_proprietario>")
+    return f"{CHAT_SYSTEM}{rules}\n\n<dati_del_sito>\n{context}\n</dati_del_sito>"
+
+
+async def answer(chat_id: str, text: str, context: str, tools: dict | None = None, can_teach: bool = False) -> str:
     """tools: {name: (openai-style function schema, callable(**args) -> json-able)}.
     DeepSeek may call them (up to TOOL_ROUNDS rounds) to read the database."""
     if text.strip().lower() in ("/reset", "reset"):
@@ -237,7 +313,9 @@ async def answer(chat_id: str, text: str, context: str, tools: dict | None = Non
     if spent_today("chat") >= CHAT_DAILY_TOKENS:
         return "Per oggi ho finito il budget di token della chat. Riprova domani."
     history = _memory.setdefault(chat_id, [])
-    messages = [{"role": "system", "content": f"{CHAT_SYSTEM}\n\n<dati_del_sito>\n{context}\n</dati_del_sito>"},
+    if can_teach:
+        tools = {**(tools or {}), **_teach_tools()}
+    messages = [{"role": "system", "content": _system_prompt(context)},
                 *history, {"role": "user", "content": text}]
     specs = [{"type": "function", "function": spec} for spec, _fn in (tools or {}).values()]
     reply = ""
@@ -347,3 +425,6 @@ def day_bounds(day: str) -> tuple[float, float]:
 
 
 _load()
+
+
+_load_instructions()
