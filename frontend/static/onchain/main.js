@@ -34,6 +34,7 @@ import { loadLinked } from "@onchain/userswap.js";
 import { mountMemes } from "@onchain/memes.js";
 import { mountAgent, mountAgentView } from "@onchain/agent.js";
 import { mountTop } from "@onchain/top.js";
+import { deskView, openFirst } from "@onchain/detail.js";
 
 // Sulla pagina a se' (onchain-app.html) la radice e' il documento intero.
 // Fusa dentro la tab Trading, invece, questo modulo viene importato dentro
@@ -535,6 +536,7 @@ function setView(name) {
   if (name === "profile") refreshProfile();
   if (name === "wallet" && !view.bottomPanel.hidden) mountBottomTab(currentBottomTab);
   paintHoldings();
+  deskView(name);
 }
 // One app: a floating bar at the bottom on every screen, the search button
 // beside it, the balance in the header next to your avatar.
@@ -661,6 +663,8 @@ phantom.takeAnswer().then(async (ans) => {
 // Picks (memes.js) retired: Lorenzo wants no meme coins promoted; Top replaces it.
 mountAgent();
 mountTop();
+// Desktop: the start view opens its first token once the lists are in.
+setTimeout(openFirst, 2500);
 
 // La rete si cambia dal suo nome, accanto al saldo: un tocco, niente menu.
 view.chainFlip?.addEventListener("click", () => {
