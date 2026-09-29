@@ -184,7 +184,7 @@ def record(item: dict, kind: str, now: float | None = None) -> dict | None:
         "liq0": _num(item.get("liquidity_usd")), "quoted": _num(item.get("price_usd")),
         "entry": None, "entry_at": None, "returns": {}, "last": None, "max_ret": None, "min_ret": None,
         "misses": 0, "gone": False, "closed": False, "strategy": None, "score": item.get("score"),
-        "image": item.get("image") or None, "facts": facts_of(item),
+        "image": item.get("image") or None, "facts": facts_of(item), "meme": bool(item.get("meme")),
     }
     save()
     return _alerts[k]

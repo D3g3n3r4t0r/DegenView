@@ -12,13 +12,41 @@ lavori pluri-sessione, decisioni prese, stato di piani approvati.
 
 ---
 
-## Audit di sicurezza di ChatGPT/Codex — 2026-09-29
+## Consegne di ChatGPT/Codex del 29/09 — cosa sono e come trattarle
 
-Lorenzo, 29/09: "ho fatto pubblicare a CHAT GPT degli audit su github". Sono in PR #348 (`docs/audits/2026-09-29/`: AUDIT_SICUREZZA, ANALISI_E_PESI, PIANO_CLAUDE, prove offline) e issue #347 (piano).
-Verificati sul codice: S01-S07 veri; M01/M02/M05/M07 veri; M03 (DREGG esente), M06 (Top piu' larga di Gems), M08 (somiglianza al benchmark) sono scelte di Lorenzo, non bug: decide lui.
-Corretto a mano (PR del branch `claude/project-thread-hs1t12`): interruttore del wallet, circuit breaker e discrepanze applicati a ogni invio compreso l'autotrader (`guards=False` salta solo i limiti economici) e ricontrollati subito prima del broadcast (`risk.run_safety_checks`); la riduzione al pool rifiuta invece di firmare l'importo pieno; doppia conferma non raddoppia la posizione; il tetto giornaliero conta gli ordini in volo; Solana `processed` non e' ancora confermata; README letto in Markdown (M07).
-Resta (in ordine): S04 vero (ack = submitted, fill letti dalla chain), S02 prezzo/quantita' dal server e non dal client, S03 chiave d'intento stabile, S05 passkey nuova solo con fattore gia' fidato, S06 revoca sessioni al logout, S07 AEAD con chiave separata (migrazione dei wallet: delicata), poi M01/M02 (dato mancante != controllo passato).
-Le Actions falliscono in 3 s senza avviare step (anche la DeepSeek review e il deploy): per questo scritto a mano e deploy dal PC di Lorenzo.
+Lorenzo, 29/09: "allineati su tutte le modifiche che nel mentre ho fatto fare a chat gpt e che ha postato su github".
+ChatGPT/Codex scrive col suo account GitHub (autore `lorenzocorazzi-wq`, branch `codex/*`), **solo documenti**: nessun commit di codice su main. Tutti i commit su main del 29/09 sono di Claude.
+
+| consegna | cosa | stato reale |
+|---|---|---|
+| PR #348 + issue #347 | audit sicurezza/scoring (`docs/audits/2026-09-29/`) | chiuso lato codice (S01-S07, M01-M05); restano M06/M08 (decide Lorenzo) e SSRF/CSP/CI, vedi sezione sotto |
+| issue #357, #358 | piani backend B00-B08 e memoria I00-I07 | li eseguono i thread "Piano struttura backend" e "Piano intelligenza e memoria" |
+| PR #362 + issue #363 | "decision assurance" A01-A08 (`docs/decision-assurance/`) | da decidere con Lorenzo, vedi sotto |
+| PR #364 + issue #365 | ricevute di analisi e riuso R1-R5, scheda/mappa J1-J4 (`docs/analysis-receipts/`) | dipende da #363 e #358 |
+| issue #366 (doc in PR #364) | audit consumi DeepSeek E0-E5 | il piu' concreto: da fare per primo |
+
+Letti in modo critico:
+- **#366 consumi**: verificato su main. `agent.js:87` fonde `today` (chiamate) e `done` (note) e le note sovrascrivono; "studies" conta note ripetute, non progetti (27849 contro 893 non sono chiamate per progetto); `consistency.py` ha `DAILY_MAX=12` ma Lorenzo ha visto 80 (da capire sul server); `KINDS` del recap non copre tutti i tipi. Risponde alla richiesta di Lorenzo di tagliare token: partire da E0 (inventario) + etichette separate nella tab, poi tetto unico.
+- **#363 decision assurance**: le prove di codice sono vere (E01: `outcomes._mark_rug` mette insieme prezzo mancante, crollo e liquidita' come "rug"; E02: `rug_label` da' negativo dopo 3 giorni su 7). Ma A02 (esperimenti con partecipanti), A06 (macchina a stati di promozione), A07 (registro dei diritti legali delle fonti) e A08 sono processi da azienda con revisori umani indipendenti: contro le regole del progetto (minimal, meno token, "piu' parametri = peggio") e senza persone per farli. Proposta: prendere solo A01 (etichette rug separate, niente negativo prima dell'orizzonte) e A03-T1 (cartella di test vuota non deve dare punti, vedi `depth.py`); il resto in attesa di un si' di Lorenzo.
+- **#365 ricevute**: l'idea utile e' la chiave di cache esatta per `code_review` (riuso senza chiamata, niente AI per log/hash). Rischio: un secondo store accanto alla memoria di #358; la spec stessa dice di non farlo. Va dentro il lavoro di #358, non in parallelo.
+- **Mappa a neuroni** (`neural-map.fragment.html`): prototipo con dati finti, non telemetria.
+- **Contrasti con CLAUDE.md**: le issue dicono "non usare l'etichetta deepseek" e "l'attuazione sara' di Claude"; la regola di Lorenzo resta che il codice senza soldi/chiavi/firme passa da DeepSeek. I due branch `codex/*` modificano HANDOVER.md (uno in cima, sopra l'introduzione): al merge vanno in conflitto fra loro e con main. Le PR sono documenti: si possono unire senza rischio per il sito, dopo aver risolto HANDOVER.
+
+## Audit di sicurezza di ChatGPT/Codex — 2026-09-29 — **chiuso lato codice**
+
+Lorenzo, 29/09: "ho fatto pubblicare a CHAT GPT degli audit su github", poi "risolvi tutti i problemi segnalati da chat gpt". Audit in PR #348 (`docs/audits/2026-09-29/`) e issue #347. Tutti i rilievi S01-S07 e M01-M07 verificati sul codice: veri; M03/M06/M08 sono anche scelte di Lorenzo, corretti solo dove toccavano la sicurezza.
+Corretto a mano (soldi/chiavi/firme), PR #350, #354, #359 e questa:
+- S01 `risk.run_safety_checks` (wallet acceso, breaker, discrepanze) su ogni swap/prelievo/autotrader (`guards=False` salta solo i limiti economici), ricontrollato prima del broadcast. Il tasto "kill switch" ora ferma davvero.
+- S02 valore deciso dal server (`valuation.py`, importi raw + decimali on-chain + prezzo del server); `notional_usd`/`price_usd` del client ignorati; il clamp al pool rifiuta invece di firmare l'importo pieno.
+- S03 `client_order_id` (api.js) e id stabile per segnale watchlist: un retry ripete il primo esito; tetto giornaliero conta gli ordini in volo; doppia conferma non raddoppia.
+- S04 stati `signed`/`submitted`/`unknown`: la posizione si registra solo quando `_onchain_reconcile_loop` (ogni 20 s, parte all'avvio) vede la tx confermata; Solana `processed` non basta.
+- S05 passkey aggiunta/rimossa solo con la password (+ avviso Telegram); `/reveal/approve` con lo stesso blocco del login.
+- S06 cookie con id e versione: logout revoca lato server, `POST /api/auth/logout-all` per tutti i dispositivi. I cookie vecchi (senza id) valgono finche' non si fa logout.
+- S07 chiavi wallet e credenziali exchange in AES-GCM legate a utente e chain; migrazione alla prima lettura dopo il controllo indirizzo, con copia in `data/wallet_keys_pre_v2.jsonl`. `WALLET_ENCRYPTION_KEY` (opzionale, `deploy/.env.example`) stacca la custodia da SESSION_SECRET: **se la metti, non toglierla mai piu'**. `users.json` scritto in modo atomico con `.bak`, mai sovrascritto se illeggibile.
+- M01/M02 tokenomics: dato mancante = non verificato (niente punti, tetto 50 se mint/freeze ignoti), un contratto con >50% e' fatale; M03 DREGG non salta piu' i fatal; M04 giudizi AI piu' vecchi del doppio del TTL non contano nel voto; M05 ammissione AI serve confidenza >= 0.7; M07 README letto come Markdown. `RULES_VERSION` 9: la tokenomics di tutti i progetti viene rifatta.
+Non toccato, decide Lorenzo: M06 (Top piu' larga di Gems, studiati saltano soglie), M08 (somiglianza al benchmark) e i pesi nuovi del PR H del piano.
+Ancora aperto, da fare fuori dal codice: SSRF/DNS rebinding, CSP `unsafe-inline`, CI (le Actions falliscono in 3 s senza step, causa non nota da qui), deploy fissato allo SHA verificato invece di `origin/main`, separare il job DeepSeek dal publisher. Dipendenze e scansione: nessuna fatta.
+Primo trade reale: seguirlo a mano; nessun invio on-chain e' mai stato provato dalla sandbox.
 
 ## Versione desktop dell'app on-chain — 2026-09-29
 
@@ -388,6 +416,7 @@ filtro anti-rug in `legit.py`, frontend `frontend/static/onchain/radar.js`.
 - 28/09 notte, "il wallet simulato [...] voglio che li segua": Sim = libro di carta (`autotrader.paper_tick`) che segue ogni alert meme su ogni chain col trade di alert_bt; Real invariato (Robinhood, quote vere, un token). seed-0221.
 - seed-0226 (29/09): link `#<view>&token=<chain>:<address>` (`app_token_url()` in main.py, `openFromHash()` in detail.js) sul ticker di ogni alert Telegram; tasto copia indirizzo con feedback e fallback. Aperto: login dentro il browser di Telegram (Mini App o link con accesso), scelta di Lorenzo.
 - seed-0227 (29/09): tasto Share = `tokenLink()` in detail.js (stesso deep link degli alert); `openFromHash()` ora parte in `boot()` a login fatto, cosi' la destinazione sopravvive al login. Link con accesso da Telegram: bloccato dal controllo di sicurezza, in attesa del via scritto di Lorenzo.
+- seed-0228 (29/09): memecoin di nuovo negli alert (`settings.listings_allow_memes`, `legit.assess(memes=True)` -> `_assess_meme`): decidono solo i controlli anti-rug; alert con `meme=True` esclusi dall'autotrader reale (`entry_candidate`). Misura: 6/70 pool PumpSwap passano, tutti sopra il primo prezzo.
 - Vincolo: il pilota (soldi veri) resta sotto $100k
   (`_SNIPER_ONCHAIN_MAX_MCAP_USD` in main.py). Mai strategie short.
 

@@ -542,7 +542,13 @@ def judge_tokenomics_solana(report: dict | None, exclude: set[str] | None = None
         top1=pcts[0] if pcts else 0.0, top10=sum(pcts[:10]), creator=creator_pct,
         holders=int(report.get("totalHolders") or 0), insiders=insiders, lp_locked=lp_locked,
         mintable=bool(report.get("mintAuthority")), freezable=bool(report.get("freezeAuthority")),
-        tax=fee, rugged=bool(report.get("rugged")))
+        tax=fee, rugged=bool(report.get("rugged")),
+        # null = revoked (a real answer); a missing key = RugCheck didn't say.
+        unknown=frozenset(k for k, present in (
+            ("split", bool(report.get("topHolders"))),
+            ("mint", "mintAuthority" in report),
+            ("freeze", "freezeAuthority" in report),
+        ) if not present))
 
 
 def judge_tokenomics_evm(info: dict | None, pair_address: str = "") -> dict:
@@ -569,6 +575,13 @@ def judge_tokenomics_evm(info: dict | None, pair_address: str = "") -> dict:
     # sono da rivedere [...] risultano troppo severi").
     contracts = [h for h in holders if str(h.get("is_contract")) == "1"]
     in_contracts = sum(pct(h.get("percent")) for h in contracts)
+    biggest_contract = max((pct(h.get("percent")) for h in contracts), default=0.0)
+    unknown = frozenset(k for k, present in (
+        ("split", bool(info.get("holders"))),
+        ("mint", "is_mintable" in info),
+        ("freeze", "transfer_pausable" in info),
+        ("tax", "buy_tax" in info or "sell_tax" in info),
+    ) if not present)
     pcts = sorted((pct(h.get("percent")) for h in holders if h not in contracts), reverse=True)
     lps = info.get("lp_holders") or []
     lp_locked = sum(pct(h.get("percent")) for h in lps
@@ -579,8 +592,15 @@ def judge_tokenomics_evm(info: dict | None, pair_address: str = "") -> dict:
         holders=int(info.get("holder_count") or 0), insiders=0, lp_locked=lp_locked,
         mintable=str(info.get("is_mintable")) == "1", freezable=str(info.get("transfer_pausable")) == "1",
         tax=max(pct(info.get("buy_tax")), pct(info.get("sell_tax"))),
-        rugged=str(info.get("is_honeypot")) == "1")
+        rugged=str(info.get("is_honeypot")) == "1", unknown=unknown)
     out["facts"]["contracts_pct"] = round(in_contracts, 1)
+    # A contract is not proof of a pool or a vesting: a multisig or a proxy
+    # the team controls is a whale too (audit 29/09, M01). Unidentified
+    # contracts stay out of the per-wallet limits (GRID, BV7X), but one
+    # holding a majority of the supply is not waved through.
+    if biggest_contract > CONTRACT_MAX_PCT and not out["fatal"]:
+        out["fatal"] = f"one unidentified contract holds {biggest_contract:.0f}%"
+        out["score"] = 0
     out["facts"]["top_holders"] = [
         {"pct": round(pct(h.get("percent")), 2), "contract": str(h.get("is_contract")) == "1",
          **({"tag": h["tag"]} if h.get("tag") else {})}
@@ -590,6 +610,8 @@ def judge_tokenomics_evm(info: dict | None, pair_address: str = "") -> dict:
         out["score"] = max(0, out["score"] - round(min(in_contracts, 60) / 6))
     return out
 
+
+CONTRACT_MAX_PCT = 50.0
 
 GECKO_TOKENOMICS_BASE = 50
 GECKO_TOKENOMICS_MAX = 65
@@ -624,7 +646,10 @@ def judge_tokenomics_gecko(info: dict | None) -> dict:
 
 def _judge_tokenomics(*, top1: float, top10: float, creator: float, holders: int, insiders: int,
                       lp_locked: float | None, mintable: bool, freezable: bool, tax: float,
-                      rugged: bool) -> dict:
+                      rugged: bool, unknown: frozenset[str] = frozenset()) -> dict:
+    """unknown: the checks the source did not answer ("split", "mint",
+    "freeze", "tax", "lp"). A missing answer is not a passed check (audit
+    29/09, M02): it earns no points and is listed in the flags."""
     facts = {"top1_pct": round(top1, 1), "top10_pct": round(top10, 1), "creator_pct": round(creator, 1),
              "holders": holders, "insiders": insiders,
              "lp_locked_pct": None if lp_locked is None else round(min(lp_locked, 100), 1),
@@ -644,14 +669,20 @@ def _judge_tokenomics(*, top1: float, top10: float, creator: float, holders: int
         flags.append(f"only {lp_locked:.0f}% of liquidity locked")
     if creator > 5:
         flags.append(f"creator at {creator:.0f}%")
+    if unknown:
+        flags.append("not verified: " + ", ".join(sorted(unknown)))
+        facts["unverified"] = sorted(unknown)
     if fatal:
         return _pillar("tokenomics", 0, facts, flags, fatal)
-    score = (max(0.0, min(1.0, (TOP10_MAX_PCT - top10) / (TOP10_MAX_PCT - 15))) * 40
+    score = ((0 if "split" in unknown else max(0.0, min(1.0, (TOP10_MAX_PCT - top10) / (TOP10_MAX_PCT - 15))) * 40)
              + (15 if creator <= 1 else 10 if creator <= 5 else 4)
              + min(max(math.log10(max(holders, 1)) - 1.7, 0) / 2, 1) * 15   # 50 holder -> 0, 5000 -> pieno
-             + (15 if lp_locked is None or lp_locked >= 90 else lp_locked / 90 * 15)
+             # Unknown lock: half, not the full 15 of a >=90% lock (v4 pools have no LP token to lock).
+             + (7.5 if lp_locked is None else 15 if lp_locked >= 90 else lp_locked / 90 * 15)
              + max(0, 10 - 4 * insiders)
-             + 5 * (tax == 0))
+             + 5 * (tax == 0 and "tax" not in unknown))
+    if unknown & {"mint", "freeze"}:
+        score = min(score, 50)     # the fatal checks themselves did not run
     return _pillar("tokenomics", score, facts, flags)
 
 
