@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-engn-ui="app">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -2569,7 +2569,11 @@
 
 </style>
 <link rel="stylesheet" href="/static/onchain/app.css" />
+<link rel="stylesheet" href="/static/engn-system.css" media="(min-width:1100px)" />
+<link rel="stylesheet" href="/static/onchain/ui.css" media="(min-width:1100px)" />
+<link rel="stylesheet" href="/static/onchain/ui-refinements.css" media="(min-width:1100px)" />
 <!--onchain-importmap-->
+<style>@media(max-width:1099px){.engn-side,.engn-intro,.engn-login-intro{display:none!important}}</style>
 </head>
 <body>
   <script>
@@ -2591,6 +2595,7 @@
     <p class="splash-name">LIQUIDITY <b>ENGINE</b></p>
     <span class="splash-bar"><i></i></span>
   </div>
+  <aside class="engn-side" aria-label="Brand"><a class="engn-brand" href="/engn" aria-label="Liquidity Engine home"><svg viewBox="0 0 30 34" aria-hidden="true"><path d="M15 2 28 9v16L15 32 2 25V9Z" fill="#13261a" stroke="#375441"/><path d="M2 9 15 16 28 9M15 16v16" fill="none" stroke="#375441"/><path d="m2 18 13 7 13-7" fill="none" stroke="#2de2b0" stroke-width="1.5"/></svg><span>LIQUIDITY<br>ENGINE</span></a><p class="engn-side-label">YOUR WORKSPACE</p><div class="engn-side-bottom"><a href="/engn">ABOUT THE ENGINE ↗</a><br>RESEARCH. DISCOVER. DECIDE.</div></aside>
   <div class="page">
     <!-- Un'app sola (richiesta: "l'app deve essere unica e gestita cosi'
          graficamente e come layout"): chi sei e quanto hai a sinistra,
@@ -2610,7 +2615,7 @@
         </div>
         <button type="button" class="agent" id="agent" aria-label="The agent: what it is doing" data-state="idle">
           <span class="agent-orb" aria-hidden="true"><i></i><i></i><i></i></span>
-          <span class="agent-say" data-agent-say>Agent watching</span>
+          <span class="agent-say" data-agent-say>Scout watching</span>
         </button>
         <button type="button" class="tb-deposit" data-sheet="receive">Deposit</button>
         <button type="button" class="tb-bell" id="inbox-btn" aria-label="Alerts">
@@ -2621,6 +2626,7 @@
     </header>
 
     <section id="login-screen" hidden>
+      <div class="engn-login-intro"><engn-motion state="assemble" decorative></engn-motion><span class="engn-eyebrow">WELCOME TO THE ENGINE</span><h1>A clearer view<br>of the market.</h1><p>Sign in to explore your workspace.</p></div>
       <form class="form" id="login-form">
         <label for="login-email">Email</label>
         <input id="login-email" name="email" type="email" autocomplete="username" required />
@@ -2631,6 +2637,7 @@
       </form>
     </section>
 
+    <header class="engn-intro" id="engn-intro" hidden><div><span class="engn-eyebrow" data-engn-kicker></span><h1 class="engn-title"><span data-engn-title></span><br><em data-engn-em></em></h1><p class="engn-copy" data-engn-copy></p></div><engn-motion state="idle" decorative></engn-motion></header>
     <div id="app-shell" class="stack" data-view="meme" hidden>
       <!-- Le schede di ogni sezione, sottolineate. Ogni pannello porta
            data-pane="<vista>:<scheda>"; il resto lo fa main.js. -->
@@ -2719,7 +2726,7 @@
       <section class="top-picks" id="top-picks" data-pane="gems:rankings" data-loading>
         <div class="picks-head">
           <span class="picks-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2 21 7v10l-9 5-9-5V7z"/><path d="M3 12l9 5 9-5"/></svg></span>
-          <p><b>Quality low caps, ranked</b><small>Code, research and tokenomics checked, DeepSeek's reading included. No meme coins. Updated live.</small></p>
+          <p><b>Quality low caps, ranked</b><small>Code, research and tokenomics checked, Scout’s reading included. No meme coins. Updated live.</small></p>
         </div>
         <div class="seg top-size" role="group" aria-label="How many" data-top-size></div>
         <p class="st-note" data-top-note></p>
@@ -2824,7 +2831,7 @@
       <!-- DeepSeek's own tab (Lorenzo, 28/09: "diamo a DeepSeek una tab
            tutta sua con animazioni molto fatte bene [...] voglio vedere come
            ragiona"). Lo disegna static/onchain/agent.js. -->
-      <section class="agent-view" id="agent-view" aria-label="DeepSeek"></section>
+      <section class="agent-view" id="agent-view" aria-label="Scout"></section>
       <dialog class="sheet review" id="review" aria-label="Daily review">
         <div class="grip" aria-hidden="true"></div>
         <header><h3>Daily review</h3><span data-review-meta></span></header>
@@ -2918,7 +2925,7 @@
     <button type="button" data-go="meme" aria-label="Memes"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="8.5" width="18" height="7" rx="3.5" transform="rotate(-40 12 12)"/><path d="m10 9.2 4.6 5.5" /></svg><span>Memes</span></button>
     <button type="button" data-go="gems" aria-label="Gems"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9.5" cy="10" r="6"/><path d="M15.2 8.4a6 6 0 1 1-6.8 8.3"/></svg><span>Gems</span></button>
     <button type="button" data-go="top" aria-label="Strategies"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4v16h16"/><path d="m7 15 4-5 3 3 5-7"/><circle cx="19" cy="6" r="1.2"/></svg><span>Strategies</span></button>
-    <button type="button" data-go="agent" aria-label="Agent"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg><span>Agent</span></button>
+    <button type="button" data-go="agent" aria-label="Scout"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg><span>Scout</span></button>
     <button type="button" data-go="profile" aria-label="Profile"><i class="dock-me" data-me-avatar aria-hidden="true"></i><span>Profile</span></button>
   </nav>
   <button type="button" class="dock-search" id="dock-search" aria-label="Search a token" hidden>
