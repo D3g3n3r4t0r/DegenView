@@ -26,6 +26,10 @@ import time
 from collections.abc import Awaitable, Callable
 from urllib.parse import urlparse
 
+import httpx
+
+from app.trading.onchain import egress
+
 logger = logging.getLogger(__name__)
 
 DEDUPE_WORDS = 4                  # shorter strings are fragments of a sentence, never dropped as repeats
@@ -33,6 +37,9 @@ SHELL_WORDS = 50                  # under this, a page with a JS app in it is a 
 RENDER_TIMEOUT_S = 20
 RENDER_DAILY_MAX = 200
 RENDER_ENV = "SITE_RENDER"        # "0" switches the headless browser off
+RENDER_MAX_BYTES = 5_000_000       # one script or page handed to the browser
+# httpx already decoded the body and sets its own length; the rest is per hop.
+_HOP_HEADERS = {"content-encoding", "content-length", "transfer-encoding", "connection", "host"}
 
 _NEXT_F = re.compile(r"self\.__next_f\.push\(\[1,(\"(?:[^\"\\]|\\.)*\")\]\)")
 _JSON_SCRIPT = re.compile(
@@ -297,13 +304,28 @@ async def render(url: str, allow_host: Callable[[str], Awaitable[bool]]) -> str 
             host = (urlparse(req.url).hostname or "").lower()
             if host not in hosts:
                 hosts[host] = bool(host) and await allow_host(host)
-            return await (r.continue_() if hosts[host] else r.abort())
+            if not hosts[host]:
+                return await r.abort()
+            # The browser never connects by itself (its proxy is a dead
+            # port): every request is fetched here, on a client that only
+            # opens sockets to public IPs, and handed back to the page.
+            try:
+                resp = await net.request(req.method, req.url, content=req.post_data_buffer,
+                                         headers={k: v for k, v in req.headers.items()
+                                                  if k.lower() not in _HOP_HEADERS})
+            except httpx.HTTPError:
+                return await r.abort()
+            return await r.fulfill(status=resp.status_code, body=resp.content[:RENDER_MAX_BYTES],
+                                   headers={k: v for k, v in resp.headers.items()
+                                            if k.lower() not in _HOP_HEADERS})
 
         try:
             async with asyncio.timeout(RENDER_TIMEOUT_S + 10):
-                async with async_playwright() as pw:
+                async with async_playwright() as pw, egress.public_client(timeout=8.0) as net:
                     try:
-                        browser = await pw.chromium.launch(headless=True)
+                        browser = await pw.chromium.launch(
+                            headless=True, proxy={"server": "http://127.0.0.1:9"},
+                            args=["--proxy-bypass-list=<-loopback>"])
                     except Exception as exc:  # no browser binary on this server
                         logger.info("headless render unavailable: %s", exc)
                         _unavailable = True
