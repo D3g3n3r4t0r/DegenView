@@ -36,6 +36,10 @@ function writeSeen(list) { try { localStorage.setItem(SEEN_KEY, JSON.stringify(l
 let seen = readSeen();      // what this visit started from; replaced once shown
 let shown = false;
 const idOf = (e) => `gem:${e.chain}:${e.token_address}`;
+// The Top sits in a tab: painted while another tab is open, the "since your
+// last visit" animation would play unseen and the new order be saved as seen
+// (Lorenzo, 29/09: HATCHER first, no animation). It waits until it shows.
+const onScreen = () => document.visibilityState === "visible" && root.getClientRects().length > 0;
 
 function paint() {
   if (!root) return;
@@ -59,7 +63,7 @@ function paint() {
   else podium.innerHTML = "";
   podium.dataset.sig = sig;
   // A narrowed list is not the ranking the last visit saw: no comparison.
-  const prev = !filtered && !shown && seen ? seen : null;
+  const prev = !filtered && !shown && seen && onScreen() ? seen : null;
   const before = new Map((prev ?? []).map((x, i) => [x.id, i]));
   if (prev) {
     // A podium place taken since the last visit: the old token leaves, the new one lands.
@@ -102,7 +106,7 @@ function paint() {
   }
   const lead = prev && top3[0] && prev[0] && prev[0].id !== top3[0].id
     ? `Since your last visit: ${top3[0].symbol} took #1 from ${prev[0].symbol}. ` : "";
-  if (rows.length && !filtered) {
+  if (rows.length && !filtered && onScreen()) {
     shown = true;
     writeSeen(entries.slice(0, 50).map((e) => ({ id: idOf(e), symbol: e.symbol })));
   }
@@ -146,6 +150,11 @@ export function mountTop() {
     paint();
   });
   onHiddenChange(paint);
+  // First time the Top is on screen in this visit: now the comparison can play.
+  new IntersectionObserver((seenNow) => {
+    if (seenNow.some((x) => x.isIntersecting) && !shown && entries.length) paint();
+  }).observe(root);
+  document.addEventListener("visibilitychange", () => { if (!shown && entries.length && onScreen()) paint(); });
   narr.onChange(() => load());
   narr.coverage().then((list) => {
     labels = Object.fromEntries(list.map((n) => [n.key, n.label ?? n.key]));
