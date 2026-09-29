@@ -141,3 +141,9 @@ def test_out_of_budget_keeps_the_old_reading_marked_stale(tmp_path, monkeypatch)
     monkeypatch.setattr(judge, "DAILY_MAX", 0)
     out = asyncio.run(judge.judge(_entry(liquidity_usd=1_000), "", t0 + judge.RECHECK_GAP_S, ask=ask))
     assert out["stale"] == "liquidity -95%" and out["score"] == 70 and len(calls) == 1
+
+
+def test_the_kept_reading_is_refreshed_before_the_board_stops_counting_it():
+    from app.trading.onchain import leaderboard
+    assert judge.TTL_S < judge.MAX_AGE_S
+    assert leaderboard._fresh({"at": 1}, judge.TTL_S, judge.MAX_AGE_S)

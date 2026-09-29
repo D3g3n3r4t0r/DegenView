@@ -136,3 +136,14 @@ def test_every_database_tool_answers_and_reports_land_on_the_board(tmp_path, mon
     out = tools["segnala_bug"][1](titolo="Holder a 0%", dettaglio="top_holder_pct 0.0 su 40 token")
     assert out["ok"] and len(issues_store.list_issues()) == before + 1
     issues_store.delete_issue(out["id"])
+
+
+def test_work_counts_each_project_once_a_day_and_findings_not_at_all():
+    """Issue #366: the Agent tab counted the same study on every cycle."""
+    now = datetime(2026, 9, 29, 12, tzinfo=dd.ROME).timestamp()
+    for i in range(5):
+        dd.note("study", "Studied ABC", now=now + i, token="ABCmint")
+    dd.note("study", "Studied XYZ", now=now, token="XYZmint")
+    dd.note("consistency", "Checking 10 projects", now=now)
+    dd.note("consistency", "ABC: cap vs volume", now=now, tally=False, symbol="ABC")
+    assert dd.activity(now)["done"] == {"study": 2, "consistency": 1}

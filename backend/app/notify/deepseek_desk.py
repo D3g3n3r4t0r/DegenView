@@ -64,6 +64,7 @@ def _load() -> None:
         _state["days"] = raw.get("days") or {}
         _state["recap_sent"] = raw.get("recap_sent") or ""
         _state["done"] = raw.get("done") or {}
+        _state["done_keys"] = raw.get("done_keys") or {}
         _activity[:] = [a for a in raw.get("activity") or [] if isinstance(a, dict)][-ACTIVITY_KEEP:]
 
 
@@ -75,23 +76,33 @@ def _save() -> None:
 
 
 def reset_for_tests() -> None:
-    _state.update(days={}, recap_sent="", done={})
+    _state.update(days={}, recap_sent="", done={}, done_keys={})
     _memory.clear()
     _activity.clear()
 
 
 def note(kind: str, text: str, now: float | None = None,
-         steps: list[str] | None = None, outcome: str = "", **extra) -> None:
-    """One line of what the agent is doing, for /api/agent."""
+         steps: list[str] | None = None, outcome: str = "", tally: bool = True, **extra) -> None:
+    """One line of what the agent is doing, for /api/agent. `tally=False`:
+    a detail of work already counted (a finding of a check)."""
     now = now or time.time()
     entry = {"t": now, "kind": kind, "text": text[:140], **extra}
     # What the agent did today, by kind: every job, not only the LLM calls
     # (a backtest or a GitHub study costs no tokens but is real work).
+    # A project counts once per kind a day: the same study noted on every
+    # cycle is not new work (issue #366: "27849 studies" were repeats).
     done = _state.setdefault("done", {})
+    seen = _state.setdefault("done_keys", {})
     day = done.setdefault(day_of(now), {})
-    day[kind] = day.get(kind, 0) + 1
-    for old in sorted(done)[:-3]:
-        done.pop(old, None)
+    subject = extra.get("token") or extra.get("symbol")
+    keys = seen.setdefault(day_of(now), {}).setdefault(kind, [])
+    if tally and not (subject and subject in keys):
+        day[kind] = day.get(kind, 0) + 1
+        if subject:
+            keys.append(subject)
+    for store in (done, seen):
+        for old in sorted(store)[:-3]:
+            store.pop(old, None)
     if steps:
         entry["steps"] = [str(s)[:200] for s in steps][:8]
     if outcome:

@@ -185,7 +185,7 @@ async def step(top: list[dict], now: float | None = None, ask=None, requeue=None
                     logger.exception("coerenza: rianalisi non messa in coda per %s", r.get("symbol"))
                 rechecked += it["requeued"]
             deepseek_desk.note("consistency", f"{r.get('symbol') or '?'}: {it['problem']}",
-                               outcome="re-analysis queued" if it["requeued"] else "reported")
+                               outcome="re-analysis queued" if it["requeued"] else "reported", tally=False)
         _state["run"] = {"at": now, "checked": len(rows), "issues": issues}
         _save()
         return issues

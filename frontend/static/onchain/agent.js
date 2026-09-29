@@ -83,12 +83,14 @@ function statusLine() {
 const PLURAL = { backtest: "backtests", study: "studies", research: "readings", scanner: "readings", chat: "chats", scan: "scans" };
 
 function chips() {
-  // Work done today (every note, LLM or not); LLM calls fill the kinds not noted.
-  const counts = { ...(viewData?.today ?? {}), ...(viewData?.done ?? {}) };
-  const parts = Object.entries(counts)
+  // Work done today (distinct projects per kind, LLM or not), and the real
+  // DeepSeek calls apart: the two are different counts (issue #366).
+  const calls = Object.values(viewData?.today ?? {}).reduce((a, n) => a + n, 0);
+  const parts = Object.entries(viewData?.done ?? {})
     .filter(([, n]) => n > 0)
     .sort((a, b) => b[1] - a[1])
     .map(([k, n]) => `${n} ${escapeHtml(PLURAL[k] ?? k)}`);
+  if (calls) parts.push(`${calls} DeepSeek calls`);
   return parts.length ? parts.join(" · ") : "Nothing yet today";
 }
 
