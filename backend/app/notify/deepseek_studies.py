@@ -186,8 +186,9 @@ def _rules(e: dict) -> list[str]:
 async def dossier(ref: str, client) -> str:
     """Everything the gem finder knows or can fetch about `chain:address`,
     without touching the board: its entry and database row (read, copied),
-    fresh DexScreener data, a fresh pillar analysis when the stored one is
-    missing, the judge's and the code reviewer's cached readings."""
+    fresh DexScreener data, a fresh analysis of every pillar (study 001 was
+    answered on pillars scored before the rules changed), the judge's and
+    the code reviewer's cached readings."""
     from app.trading.onchain import code_review, depth, judge, leaderboard, projects_db
     chain, _, token = ref.partition(":")
     k = f"{chain}:{token}"
@@ -222,20 +223,18 @@ async def dossier(ref: str, client) -> str:
         fresh.append("market")
     if not entry and not row and not market:
         return f"## {ref}\n\nToken could not be resolved: not in the gem finder's data and DexScreener has no pool for it."
+    # Always a full, fresh analysis: study 001 was answered on pillars scored
+    # before the rules it was meant to judge had changed.
     pillars = e.get("pillars") or {}
-    stale = {n for n in depth.WEIGHTS
-             if (pillars.get(n) or {}).get("score") is None and not (pillars.get(n) or {}).get("fatal")}
-    if stale:
-        item = {**e, "links": [s.get("url") for s in e.get("socials") or [] if s.get("url")]}
-        try:
-            got = await asyncio.wait_for(depth.analyze(item, client, skip=set(depth.WEIGHTS) - stale),
-                                         ANALYZE_TIMEOUT_S)
-            e["pillars"] = pillars = {**pillars, **got}
-            e["overall"] = depth.overall(pillars)
-            fresh += sorted(got)
-        except Exception as exc:
-            logger.info("studi DeepSeek: analisi di %s fallita: %s", ref, exc)
-            fresh.append(f"analysis failed ({type(exc).__name__})")
+    item = {**e, "links": [s.get("url") for s in e.get("socials") or [] if s.get("url")]}
+    try:
+        got = await asyncio.wait_for(depth.analyze(item, client), ANALYZE_TIMEOUT_S)
+        e["pillars"] = pillars = {**pillars, **got}
+        e["overall"] = depth.overall(pillars)
+        fresh += sorted(got)
+    except Exception as exc:
+        logger.info("studi DeepSeek: analisi di %s fallita: %s", ref, exc)
+        fresh.append(f"analysis failed ({type(exc).__name__})")
 
     now = time.time()
     launched = e.get("launched_at")

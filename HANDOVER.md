@@ -631,7 +631,19 @@ non oltre; uno, due, tre mesi non e' importante".
     studio: `001-gem-models` (STEALF, PFWA, GRID, BV7X + DREGG). Lorenzo:
     "stagli addosso a DeepSeek [...] estremamente critico": ogni risposta va
     verificata sui dati prima di diventare regola, revisione salvata accanto.
-    AUERON: non trovato su DexScreener, serve indirizzo.
+    AUREON aggiunto (Robinhood `0xd293...7777`). Risposta 001 revisionata
+    in `.github/deepseek/studi/001-gem-models.md`: **non usabile come
+    regole**, costruita su pilastri vecchi (pre-#337) e troncata a 8000
+    token. Tenuto: primitive nominate (Turnkey, Umbra, LayerZero,
+    ERC-8004, x402, EAS, Lean) come segnale e pista di ricerca; codice
+    mancante abbassa la fiducia, non esclude. Rifiutato: soglie arbitrarie
+    (holders >= 1500, LP >= 90%), "dominio piu' vecchio del token" come
+    red flag. Corretti dopo: il dossier rifa' tutti i pilastri, GitHub
+    prova ogni repo linkato (BV7X bocciato per un link morto), il ticker
+    senza `$` conta come menzione del token, top 10 holder con
+    contratto/wallet. Prossimo: deploy, poi studio 002 con
+    `follow_up: 001-gem-models`, verificarlo, e solo dopo tradurlo in
+    profilo di somiglianza + query di ricerca.
 - 28/09 Lorenzo: "DeepSeek [...] deve riesaminare i risultati che escono
   dalla top classifica e metterli in discussione [...] Clau Pump Tech ma
   che roba è, Leon AI sono nomi che non hanno senso". `judge.review_board`:

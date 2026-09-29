@@ -256,13 +256,18 @@ async def analyze_github(urls: list[str], client: httpx.AsyncClient, launched_at
     targets = legit.github_targets(urls)
     if not targets:
         return missing_github("no public GitHub")
-    owner, name = next(((o, r) for o, r in targets if r), targets[0])
-    try:
-        repo = await legit.github_repo(owner, name, client)
-    except (httpx.HTTPError, ValueError, KeyError, TypeError):
-        repo = None
-    if repo is None:
-        return _pending("github", "GitHub not responding")
+    # Every linked repository is tried, named ones first: one dead or
+    # private link (BV7X, 29/09) is not proof the project has no code.
+    repo: dict | None = {}
+    for owner, name in sorted(targets, key=lambda t: t[1] is None):
+        try:
+            repo = await legit.github_repo(owner, name, client)
+        except (httpx.HTTPError, ValueError, KeyError, TypeError):
+            repo = None
+        if repo is None:
+            return _pending("github", "GitHub not responding")
+        if repo:
+            break
     if not repo:
         return judge_github({}, launched_at)
     # Un link a una libreria o a una piattaforma non e' il codice del progetto.
@@ -571,6 +576,10 @@ def judge_tokenomics_evm(info: dict | None, pair_address: str = "") -> dict:
         tax=max(pct(info.get("buy_tax")), pct(info.get("sell_tax"))),
         rugged=str(info.get("is_honeypot")) == "1")
     out["facts"]["contracts_pct"] = round(in_contracts, 1)
+    out["facts"]["top_holders"] = [
+        {"pct": round(pct(h.get("percent")), 2), "contract": str(h.get("is_contract")) == "1",
+         **({"tag": h["tag"]} if h.get("tag") else {})}
+        for h in sorted(holders, key=lambda h: -pct(h.get("percent")))[:10]]
     if in_contracts > TOP1_MAX_PCT and not out["fatal"]:
         out["flags"].append(f"{in_contracts:.0f}% held by contracts (pools, vesting or treasury)")
         out["score"] = max(0, out["score"] - round(min(in_contracts, 60) / 6))
@@ -644,7 +653,7 @@ async def analyze(item: dict, client: httpx.AsyncClient, *, skip: set[str] = fro
     primo bocciato: le chiamate costano e il verdetto non cambierebbe."""
     out: dict[str, dict] = {}
     launched = item.get("launched_at")
-    gh_links = [item.get("github") or ""] + list(item.get("links") or [])
+    gh_links = [item.get("github") or ""] + list(item.get("links") or []) + list(item.get("websites") or [])
     if "site" not in skip:
         from app.trading.onchain import research   # research builds on this module
         out["site"], found = await research.analyze(item, client, launched)

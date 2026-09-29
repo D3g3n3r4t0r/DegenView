@@ -256,3 +256,18 @@ def test_meme_and_gem_chains_are_split():
     assert set(d.CG_CATEGORIES) == set(d.CG_PLATFORMS) == {"solana", "robinhood", "base", "ethereum"}
     assert all(c in legit.GOPLUS_CHAIN for c in ("bsc", "base", "ethereum"))
     assert traction._token("ethereum", "0xAbC") == "0xabc" and traction._token("base", "0xAbC") is None
+
+
+def test_github_tries_every_linked_repo(monkeypatch):
+    """A dead first link (404) is not "no repository" when another works (BV7X, 29/09)."""
+    async def repo(owner, name, client):
+        return {} if name == "old-repo" else {"full_name": f"{owner}/{name}"}
+
+    async def fetch(full_name, client):
+        return None
+
+    monkeypatch.setattr(depth.legit, "github_repo", repo)
+    monkeypatch.setattr(depth, "fetch_github", fetch)
+    out = asyncio.run(depth.analyze_github(["https://github.com/bob/old-repo", "https://github.com/bob/protocol"],
+                                           None, None))
+    assert out.get("pending") == "GitHub not responding" and not out["fatal"]
