@@ -275,6 +275,31 @@ async def rugcheck(mint: str, client: httpx.AsyncClient) -> dict | None:
     return body if isinstance(body, dict) else None
 
 
+async def _assess_meme(token: dict, out: dict, sec: dict, website: str | None, socials: list[dict],
+                       client: httpx.AsyncClient, done) -> dict:
+    """The meme path: past the rug checks (already passed here), wait only
+    for a security verdict; the site and the AI grade are information."""
+    if sec["ok"] is None:
+        return done("wait", sec["detail"])
+    out["meme"] = True
+    if website:
+        site = await fetch_site(website, client)
+        if site.get("ok"):
+            out["checks"].append(_check("site", "Website", True, (site.get("title") or _host(site["final_url"]))[:60]))
+            review = await ai_review(token, site, {"socials": socials, "github_detail": "not checked (meme)"})
+            if review is not None and not review.get("error"):
+                out["ai"] = review
+                out["checks"].append(judge_ai(review, gate=False) if review.get("by") == "deepseek"
+                                     else {**judge_ai(review), "ok": None})
+    out["report"] = report_card(out["checks"])
+    memory = outcomes.judge(token, out["checks"], out["report"])
+    if memory:
+        out["checks"].append(memory)
+        if memory["ok"] is False and settings.onchain_memory_gate:
+            return done("fail", f"Memory: {memory['detail']}")
+    return done("ok", "")
+
+
 def judge_rugcheck(report: dict | None) -> dict:
     if report is None:
         return _check("security", "RugCheck", None, "report not available yet")
@@ -765,7 +790,7 @@ def judge_ai(review: dict | None, gate: bool = False) -> dict:
 # ----------------------------------------------------------------- insieme
 
 async def assess(token: dict, links: dict, client: httpx.AsyncClient, *,
-                 need_github: bool = True, ai_gate: bool = False) -> dict:
+                 need_github: bool = True, ai_gate: bool = False, memes: bool = False) -> dict:
     """token: chain, symbol, name, token_address (+ market_cap, liquidity_usd
     per il prompt). links: {websites, socials}.
 
@@ -776,7 +801,12 @@ async def assess(token: dict, links: dict, client: httpx.AsyncClient, *,
 
     ai_gate=True (meme sniper): il verdetto DeepSeek decide, non e' piu' in
     ombra. Un DeepSeek irraggiungibile (review con "error") ferma in "wait"
-    invece di proseguire; review None (nessuna chiave) resta non attiva."""
+    invece di proseguire; review None (nessuna chiave) resta non attiva.
+
+    memes=True (meme sniper, settings.listings_allow_memes): only the rug
+    checks decide. A meme name, a missing site or socials and the AI grade
+    are shown, never blocking; the result carries meme=True, and the real
+    autotrader never enters on those (autotrader.entry_candidate)."""
     chain = token.get("chain")
     website = pick_website(links.get("websites") or [])
     socials = [s for s in links.get("socials") or [] if s.get("type") in _SOCIAL_TYPES]
@@ -789,9 +819,10 @@ async def assess(token: dict, links: dict, client: httpx.AsyncClient, *,
         return out
 
     meme = _looks_like_meme(token.get("symbol") or "", token.get("name") or "")
-    out["checks"].append(_check("name", "Name", not meme, "meme-coin name" if meme else "not a meme name"))
+    out["checks"].append(_check("name", "Name", None if memes and meme else not meme,
+                                "meme-coin name" if meme else "not a meme name"))
     out["report"] = None
-    if meme:
+    if meme and not memes:
         return done("fail", "meme coin name")
 
     if chain == "solana":
@@ -815,6 +846,8 @@ async def assess(token: dict, links: dict, client: httpx.AsyncClient, *,
     kinds = sorted({s["type"] for s in socials})
     out["checks"].append(_check("socials", "Social", bool(socials), ", ".join(kinds) or "none",
                                 (0, 60, 85, 100)[min(len(kinds), 3)] if socials else None))
+    if memes:
+        return await _assess_meme(token, out, sec, website, socials, client, done)
     if not website:
         out["checks"].append(_check("site", "Website", None, "no own website"))
         return done("wait", "project website missing")

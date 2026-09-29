@@ -14,6 +14,7 @@ import { isHidden, onHiddenChange, withEntrance } from "@onchain/hidden.js";
 import { escapeHtml, tile, tokenRow } from "@onchain/format.js";
 import { renderPodium } from "@onchain/podium.js";
 import * as narr from "@onchain/narrative_pick.js";
+import { disintegrate } from "@onchain/particles.js";
 
 const POLL_MS = 30_000;
 const SIZES = [15, 25, 50];
@@ -33,16 +34,61 @@ function write(n) { try { localStorage.setItem("lae:top", String(n)); } catch { 
 const SEEN_KEY = "lae:top-seen";
 function readSeen() { try { return JSON.parse(localStorage.getItem(SEEN_KEY)) || null; } catch { return null; } }
 function writeSeen(list) { try { localStorage.setItem(SEEN_KEY, JSON.stringify(list)); } catch { /* private mode */ } }
-let seen = readSeen();      // what this visit started from; replaced once shown
+let seen = readSeen();      // the order last shown on screen, this visit or the one before
 let shown = false;
+let stale = false;          // new data arrived while the Top was off screen
 const idOf = (e) => `gem:${e.chain}:${e.token_address}`;
 // The Top sits in a tab: painted while another tab is open, the "since your
 // last visit" animation would play unseen and the new order be saved as seen
 // (Lorenzo, 29/09: HATCHER first, no animation). It waits until it shows.
 const onScreen = () => document.visibilityState === "visible" && root.getClientRects().length > 0;
 
+let playing = false;
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** The displaced tickers turn to dust one after the other, each newcomer
+ *  landing where its predecessor stood. Only while the Top is on screen: if
+ *  the user leaves, the rest is shown at once and the order stays unseen, so
+ *  the sequence plays again next time. */
+async function sequence(gone, enters, rows, now50) {
+  playing = true;
+  const list = root.querySelector("[data-top-rows]");
+  const lis = () => [...list.querySelectorAll(":scope > li.trow")];
+  const ms = gone.length > 8 ? 500 : 1100;
+  let aborted = false;
+  for (let k = 0; k < Math.max(gone.length, enters.length); k++) {
+    const at = enters[k];
+    const li = at != null ? lis()[at] : null;
+    if (!aborted && !onScreen()) aborted = true;
+    const was = gone[k];
+    const spot = li ?? (was ? lis()[Math.min(was.pos ?? k, lis().length - 1)] : null);
+    if (!aborted && was && spot) {
+      const ghost = spot.cloneNode(true);
+      ghost.classList.remove("rank-new", "rank-moved", "rank-wait");
+      ghost.setAttribute("aria-hidden", "true");
+      const r = spot.getBoundingClientRect();
+      Object.assign(ghost.style, { position: "fixed", visibility: "hidden", top: `${r.top}px`, left: `${r.left}px`,
+        width: `${r.width}px`, margin: "0", animation: "none" });
+      const name = ghost.querySelector(".trow-main b");
+      if (name) name.textContent = `${(at ?? k) + 1}. ${was.symbol ?? ""}`;
+      ghost.querySelectorAll(".trow-main small, .trow-num b, img, svg").forEach((x) => x.remove());
+      document.body.append(ghost);
+      await disintegrate(ghost, ms);
+      ghost.remove();
+    }
+    if (li) { li.classList.remove("rank-wait"); if (!aborted) li.classList.add("rank-new"); }
+    if (!aborted) await wait(gone.length > 8 ? 120 : 350);
+  }
+  root.querySelectorAll("[data-top-rows] > li.rank-wait").forEach((li) => li.classList.remove("rank-wait"));
+  playing = false;
+  if (aborted) { stale = true; return; }
+  seen = now50;
+  writeSeen(seen);
+  paint();
+}
+
 function paint() {
-  if (!root) return;
+  if (!root || playing) return;
   delete root.dataset.loading;
   root.querySelector("[data-top-size]").innerHTML = SIZES.map((n) =>
     `<button type="button" data-size="${n}" aria-pressed="${n === size}">Top ${n}</button>`).join("");
@@ -63,8 +109,13 @@ function paint() {
   else podium.innerHTML = "";
   podium.dataset.sig = sig;
   // A narrowed list is not the ranking the last visit saw: no comparison.
-  const prev = !filtered && !shown && seen && onScreen() ? seen : null;
+  // Not only on return: a change while the Top is open plays too (Lorenzo,
+  // 29/09: the Telegram alert said PFWA 4th, the Top still showed Covenant).
+  const visible = onScreen();
+  if (!visible) stale = true;
+  const prev = !filtered && seen && visible ? seen : null;
   const before = new Map((prev ?? []).map((x, i) => [x.id, i]));
+  const nowIds = new Set(rows.map(idOf));
   if (prev) {
     // A podium place taken since the last visit: the old token leaves, the new one lands.
     top3.forEach((x, i) => {
@@ -104,11 +155,24 @@ function paint() {
       li.dataset.move = d > 0 ? "up" : "down";
     });
   }
+  // Every token replaced since the last order seen breaks up, one after the
+  // other, and its newcomer lands in its place (Lorenzo, 29/09: "applicata in
+  // sequenza a tutti quelli che sono stati sostituiti rispetto al mio ultimo
+  // ingresso"). The order counts as seen only when the sequence is over.
+  const gone = prev ? prev.slice(0, rows.length).map((x, pos) => ({ ...x, pos })).filter((x) => !nowIds.has(x.id)) : [];
+  const enters = prev ? rows.map((e, i) => (before.has(idOf(e)) ? -1 : i)).filter((i) => i >= 0) : [];
+  const play = gone.length > 0 && enters.length > 0;
+  if (play) root.querySelectorAll("[data-top-rows] > li.trow").forEach((li, i) => {
+    if (enters.includes(i)) { li.classList.remove("rank-new"); li.classList.add("rank-wait"); }
+  });
   const lead = prev && top3[0] && prev[0] && prev[0].id !== top3[0].id
-    ? `Since your last visit: ${top3[0].symbol} took #1 from ${prev[0].symbol}. ` : "";
-  if (rows.length && !filtered && onScreen()) {
+    ? `${shown ? "" : "Since your last visit: "}${top3[0].symbol} took #1 from ${prev[0].symbol}. ` : "";
+  if (rows.length && !filtered && visible) {
     shown = true;
-    writeSeen(entries.slice(0, 50).map((e) => ({ id: idOf(e), symbol: e.symbol })));
+    stale = false;
+    const now50 = entries.slice(0, 50).map((e) => ({ id: idOf(e), symbol: e.symbol }));
+    if (play) sequence(gone, enters, rows, now50);
+    else { seen = now50; writeSeen(seen); }
   }
   const bt = labStatus;
   // A narrowed Top says so, with a way out right here (Lorenzo, 29/09: two
@@ -157,9 +221,9 @@ export function mountTop() {
   onHiddenChange(paint);
   // First time the Top is on screen in this visit: now the comparison can play.
   new IntersectionObserver((seenNow) => {
-    if (seenNow.some((x) => x.isIntersecting) && !shown && entries.length) paint();
+    if (seenNow.some((x) => x.isIntersecting) && (!shown || stale) && entries.length) paint();
   }).observe(root);
-  document.addEventListener("visibilitychange", () => { if (!shown && entries.length && onScreen()) paint(); });
+  document.addEventListener("visibilitychange", () => { if ((!shown || stale) && entries.length && onScreen()) paint(); });
   narr.onChange(() => load());
   narr.coverage().then((list) => {
     labels = Object.fromEntries(list.map((n) => [n.key, n.label ?? n.key]));
