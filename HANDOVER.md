@@ -572,6 +572,24 @@ non oltre; uno, due, tre mesi non e' importante".
   piu' di 10 progetti aspettano un pezzo (analisi, report DeepSeek, lettura
   del codice); sotto i 10 riparte piano, un giro ogni 6 h. Lo sniper meme non
   e' toccato. Nell'Agent: barre "Gem pool" e "Projects complete".
+- 28/09 Lorenzo: "ci sono alcuni progetti nel database che hanno dei
+  punteggi altissimi pero' non compaiono nel podio" + animazione al rientro ->
+  PR #325: la Top legge righe studied E ranked, `demote_ranked` quando la
+  bacheca cambia; `top.js` ricorda l'ordine visto (`lae:top-seen`) e anima
+  sorpassi e nuovi ingressi.
+- 29/09 Lorenzo: "la tab narrativa cosi' come l'hai fatta non funziona [...]
+  voglio filtrare il database per tipologia di narrativa [...] anche i top
+  progetti devono essere di riflesso [...] prima il database completamente
+  mappato [...] questa task la deve fare DeepSeek". `narrative_map.py`:
+  DeepSeek classifica 12 righe ogni 90 s (max 400 chiamate/giorno) sul
+  catalogo, `narr_at` segna le righe fatte; una nuova analisi non cancella
+  le chiavi mappate (`record` unisce, `e["narr_ds"]`). Filtro a chip nel tab
+  Database (`narrative_pick.js`, `lae:narr`), la Top lo segue (niente
+  animazione "dall'ultima visita" mentre e' filtrata). Tolta la sezione
+  narrative dal Profilo e l'ordinamento "le mie narrative prima". Scritto a
+  mano (#327/#328 aperti per DeepSeek): le Actions fallivano tutte in 3 s dal
+  29/09 01:20 UTC, deploy compreso — probabile limite billing, da sistemare a
+  Lorenzo.
 - 28/09 Lorenzo: "DeepSeek [...] deve riesaminare i risultati che escono
   dalla top classifica e metterli in discussione [...] Clau Pump Tech ma
   che roba è, Leon AI sono nomi che non hanno senso". `judge.review_board`:

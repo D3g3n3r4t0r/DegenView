@@ -124,3 +124,33 @@ def test_recheck_studied_requeues_old_limits(tmp_path, monkeypatch):
     rows = {r["token"]: r["next_check"] for r in db._db().execute(
         "SELECT token, next_check FROM projects").fetchall()}
     assert rows["A"] == 0 and rows["B"] == 0 and rows["C"] != 0 and rows["D"] != 0
+
+
+def test_search_filters_by_narrative():
+    db.upsert({"chain": "solana", "token_address": "A", "symbol": "AAA"}, "t", T0)
+    db.upsert({"chain": "solana", "token_address": "B", "symbol": "BBB"}, "t", T0)
+    db.upsert({"chain": "solana", "token_address": "C", "symbol": "CCC"}, "t", T0)
+    db.set_narratives("solana", "A", ["rwa", "depin"], T0)
+    db.set_narratives("solana", "B", ["meme_dogs"], T0)
+    assert [p["symbol"] for p in db.search(narrative="rwa")["items"]] == ["AAA"]
+    assert sorted(p["symbol"] for p in db.search(narrative="meme_dogs,depin")["items"]) == ["AAA", "BBB"]
+    assert db.search(narrative="meme_cats")["total"] == 0
+
+
+def test_record_keeps_mapped_narratives():
+    db.upsert({"chain": "solana", "token_address": "A", "symbol": "AAA"}, "t", T0)
+    db.set_narratives("solana", "A", ["rwa"], T0)
+    db.record({"chain": "solana", "token_address": "A", "narratives": ["depin"]}, "studied", score=50, now=T0)
+    assert db.search(narrative="rwa")["total"] == 1 and db.search(narrative="depin")["total"] == 1
+
+
+def test_migration_adds_narr_at(monkeypatch, tmp_path):
+    import sqlite3
+    path = tmp_path / "old.db"
+    c = sqlite3.connect(path)
+    c.executescript(db._SCHEMA.replace(",\n    narr_at REAL", ""))  # the table as it was before
+    c.commit()
+    c.close()
+    monkeypatch.setattr(db, "_DB_FILE", path)
+    cols = {r[1] for r in db._db().execute("PRAGMA table_info(projects)")}
+    assert {"narr_at", "cg_mcap"} <= cols
