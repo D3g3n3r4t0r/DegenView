@@ -45,6 +45,10 @@ from app.atomic_write import write_text_atomic
 logger = logging.getLogger(__name__)
 
 _STORE_FILE = data_file("onchain_outcomes.json")
+# Every rug, forever: the journal keeps KEEP tokens and drops the oldest, the
+# archive keeps each rug once it is one (Lorenzo, 29/09: "dobbiamo
+# documentare tutti i rug [...] anche quelli morti sopratutto").
+_ARCHIVE_FILE = data_file("onchain_rug_archive.json")
 DEXSCREENER_PAIRS = "https://api.dexscreener.com/latest/dex/pairs"
 
 TICK_S = 10 * 60
@@ -107,6 +111,7 @@ CHECK_LABELS = {"top_holder_pct": "Top wallet %", "top10_pct": "Top 10 wallets %
                 "liq_mcap": "Liquidity / cap", "age_h": "Age"}
 
 _journal: dict[str, dict] = {}
+_archive: dict[str, dict] = {}
 _model: dict = {"active": False}
 _wmodel: dict = {"active": False}
 _state: dict = {"last_tick": 0.0, "error": ""}
@@ -124,6 +129,12 @@ def _load() -> None:
     if isinstance(raw, dict):
         _journal.update(raw.get("journal") or {})
         _state.update(raw.get("state") or {})
+    try:
+        arch = json.loads(_ARCHIVE_FILE.read_text(encoding="utf-8")) if _ARCHIVE_FILE.exists() else {}
+    except (json.JSONDecodeError, OSError):
+        arch = {}
+    if isinstance(arch, dict):
+        _archive.update(arch)
 
 
 def _prune(journal: dict, keep: int, now: float) -> None:
@@ -168,7 +179,27 @@ def _prune(journal: dict, keep: int, now: float) -> None:
     drop(sorted((k for k in journal if label(k) is None), key=lambda k: journal[k]["at"]))
 
 
+def _archive_rugs() -> bool:
+    """Copy the journal's rugs into the archive. True when it changed."""
+    changed = False
+    for key, e in _journal.items():
+        if e.get("rug") and _archive.get(key) is not e:
+            _archive[key] = e
+            changed = True
+    return changed
+
+
+def entries() -> dict[str, dict]:
+    """The journal plus the archived rugs it has already dropped."""
+    return {**_archive, **_journal}
+
+
 def _save() -> None:
+    if _archive_rugs():
+        try:
+            write_text_atomic(_ARCHIVE_FILE, json.dumps(_archive, ensure_ascii=False), encoding="utf-8")
+        except OSError:
+            pass
     _prune(_journal, KEEP, time.time())
     try:
         write_text_atomic(_STORE_FILE, json.dumps({"journal": _journal, "state": _state}, ensure_ascii=False),
@@ -179,6 +210,7 @@ def _save() -> None:
 
 def reset_for_tests() -> None:
     _journal.clear()
+    _archive.clear()
     _model.clear()
     _model["active"] = False
     _wmodel.clear()
