@@ -46,6 +46,14 @@ COST = (radar.BACKTEST_PARAMS["commission_pct"] + radar.BACKTEST_PARAMS["slippag
 # 80%, pero' la strategia dovrebbe aver chiuso molto prima". Each sell says
 # which it was, so a -80% explains itself.
 CRASH = -0.35
+# Memes bought on the alert: sell when a close falls TRAIL below the best
+# close since the entry. Lorenzo, 29/09, on the simulated rugs: "facciamo in
+# modo che non accada". Measured on the 38 simulated memes with bars (12
+# rugs): mean -41% -> -35%, rugs -48% -> -33%, survivors unchanged; 15-25%
+# change nothing more, 40% gives back the gain. Only alerts from TRAIL_FROM
+# on: the results already shown never change.
+TRAIL = 0.30
+TRAIL_FROM = 1790726400  # 2026-09-30 00:00 UTC
 
 CANDIDATES = [
     {"strategy_name": "Lorenzo HF (minuti on-chain)", "params": None, "label": "Trend HF", "source": "predefinita"},
@@ -111,6 +119,7 @@ def follow(bars: list[list], cfg: dict, start: float, *, gone: bool = False, now
         # bar with the trend down, not only on a fresh cross that may never come
         exit_sig = exit_sig | strategies.trend_down(df, cfg["strategy_name"], cfg["params"]).to_numpy()
     equity, pos, entry, in_at = 1.0, False, 0.0, None
+    trail, peak = on_alert and start >= TRAIL_FROM, 0.0
     events: list[dict] = []
     last_i = len(df) - 1
     strat_pos, joined = False, False
@@ -130,15 +139,26 @@ def follow(bars: list[list], cfg: dict, start: float, *, gone: bool = False, now
             joined = True
             if on_alert:
                 pos, entry, in_at = True, opens[i + 1], t_fill
+                peak = entry
                 events.append({"t": t_fill, "side": "buy", "price": float(entry), "why": "alert"})
                 continue
             if strat_pos and not pos and not exit_sig[i]:
                 pos, entry, in_at = True, opens[i + 1], t_fill
                 events.append({"t": t_fill, "side": "buy", "price": float(entry), "why": "trend"})
                 continue
+        if pos:
+            peak = max(peak, closes[i])
         if not pos and entry_sig[i] and not on_alert:
             pos, entry, in_at = True, opens[i + 1], t_fill
             events.append({"t": t_fill, "side": "buy", "price": float(entry)})
+        elif pos and trail and closes[i] <= peak * (1 - TRAIL):
+            r = (opens[i + 1] / entry) * (1 - COST) ** 2
+            equity *= r
+            out["trades"] += 1
+            out["wins"] += int(r > 1)
+            pos = False
+            events.append({"t": t_fill, "side": "sell", "price": float(opens[i + 1]), "ret": round(r - 1, 4),
+                           "why": "trail", "drop": round(closes[i] / peak - 1, 4)})
         elif pos and exit_sig[i]:
             r = (opens[i + 1] / entry) * (1 - COST) ** 2
             equity *= r
