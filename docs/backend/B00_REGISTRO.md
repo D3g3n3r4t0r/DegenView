@@ -33,9 +33,13 @@ Stato: **confermato** (visto nel codice), **risolto** (PR su main con test), **i
 | S05 | una sessione aggiunge la propria passkey e sblocca l'export | alta | risolto | #359 | — |
 | S06 | logout non revoca la copia del cookie | media | risolto | #359 | revoca di tutte le sessioni al cambio password |
 | S07 | cifratura senza autenticazione, chiave radice condivisa | media | risolto | #359 | `WALLET_ENCRYPTION_KEY` da impostare sul server (Lorenzo) |
-| M01/M02 | dato mancante trattato come controllo passato | media | confermato | — | — |
+| M01/M02 | dato mancante trattato come controllo passato | media | risolto | #367 | — |
 | B02-a | 39 scritture di archivi JSON non atomiche (pine esclusa); `users.json` illeggibile = tutti gli utenti persi al salvataggio successivo | alta | risolto | questa | backup/restore non provati |
 | B04-a | 7 task di `lifespan` senza riferimento (fra cui il riconciliatore degli ordini) e mai cancellati | media | risolto | questa | ~30 `create_task` "spara e dimentica" per Telegram in `main.py` |
+| B04-c | ~30 `create_task` "spara e dimentica" (Telegram) in `main.py`: raccoglibili dal GC, errori mai visti | bassa | risolto | #381 | — |
+| A-SSRF | sito del token letto con controllo DNS prima e nuova risoluzione alla connessione (rebinding); Chromium risolveva da solo | media | risolto | #381 | Chromium non e' nell'immagine: oggi il render non gira |
+| A-DEPLOY | il deploy faceva `reset --hard origin/main`, non il commit verificato | bassa | risolto | #381 | Actions ferme (B08-a) |
+| A-ADMIN | ruolo admin dato dall'email configurata; whitekobra era admin senza esserlo | media | risolto | questa | registrazione gia' limitata a `registration_allowed_emails`; se il `.env` del server ha `ADMIN_EMAILS` vince lui |
 | B04-b | nessun lease sui loop: due processi = scheduler doppi | media | confermato | — | oggi un solo worker; documentato, non cambiare senza lease |
 | B08-a | ogni run delle Actions fallisce in ~4 s senza step (CI, deploy, DeepSeek) | alta | confermato | — | causa lato account GitHub (minuti/fatturazione?): la vede solo Lorenzo |
 | B06 | `main.py` monolitico, nessun router | bassa | confermato | — | estrarre per flusso, dopo B01-B05 |

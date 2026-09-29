@@ -58,7 +58,10 @@ jobs:
             set -e
             cd /opt/liquidity
             git fetch --quiet origin main
-            git reset --hard origin/main
+            # Il commit che "verify" ha provato, non l'ultimo di main: con
+            # due push ravvicinati origin/main puo' essere gia' un altro
+            # (audit #347). Quello dopo arriva col suo deploy, in coda.
+            git reset --hard ${{ github.sha }}
             cd deploy
             docker compose up -d --build
             # Il Caddyfile e' montato come volume: compose non vede che e'
