@@ -15,6 +15,7 @@ import { escapeHtml, tile, tokenRow } from "@onchain/format.js";
 import { renderPodium } from "@onchain/podium.js";
 import * as narr from "@onchain/narrative_pick.js";
 import { disintegrate } from "@onchain/particles.js";
+import "@onchain/motion.js";
 
 const POLL_MS = 30_000;
 const SIZES = [15, 25, 50];
@@ -102,6 +103,8 @@ function paint() {
     podium.dataset.topPodium = "";
     root.insertBefore(podium, root.firstChild);
   }
+  podium.classList.remove("top-wait");
+  podium.removeAttribute("role");
   const top3 = rows.slice(0, 3).map((e) => ({ id: `gem:${e.chain}:${e.token_address}`, symbol: e.symbol,
     value: `${Math.round(e.score ?? 0)} pts`, logoHtml: tile(e.symbol, e.image, e.chain, e.token_address) }));
   const sig = top3.map((x) => x.id).join("|");
@@ -203,13 +206,32 @@ async function load() {
     entries = top?.entries ?? [];
     labStatus = top?.backtests ?? null;
     paint();
-  } catch { /* keep the last list */ }
+  } catch {
+    // Keep the last list; with none yet, the cube says the next poll retries.
+    const wait = root.querySelector(".top-wait");
+    if (!wait) return;
+    wait.querySelector("engn-motion").setAttribute("state", "reconnect");
+    wait.querySelector("p").textContent = "Reconnecting…";
+  }
+}
+
+/** Until the first ranking lands, the podium's place holds the ENGN cube
+ * working (the motion kit's loading state), not an empty gap. */
+function waiting() {
+  if (root.querySelector("[data-top-podium]")) return;
+  const el = document.createElement("div");
+  el.className = "top-hero top-wait";
+  el.dataset.topPodium = "";
+  el.setAttribute("role", "status");
+  el.innerHTML = '<engn-motion state="loading" decorative></engn-motion><p>Loading the ranking…</p>';
+  root.insertBefore(el, root.firstChild);
 }
 
 export function mountTop() {
   root = document.getElementById("top-picks");
   if (!root) return;
   size = SIZES.includes(read()) ? read() : 15;
+  waiting();
   root.addEventListener("click", (event) => {
     if (event.target.closest("[data-top-narr-clear]")) { narr.set([]); return; }
     const b = event.target.closest("[data-size]");
