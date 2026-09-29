@@ -262,6 +262,12 @@ def reason_to_judge(hit: dict | None, seen: dict, now: float) -> str:
     return "periodic refresh"
 
 
+def wants_reading(e: dict, rules_why: str, now: float | None = None) -> bool:
+    """A Top project whose reading is missing or out of date (new prompt, facts moved)."""
+    hit = _cache.get(f"{e['chain']}:{e['token_address']}")
+    return bool(reason_to_judge(hit, judged_facts(e, rules_why), now or time.time()))
+
+
 async def judge(e: dict, rules_why: str, now: float | None = None, ask=None,
                 priority: bool = False) -> dict | None:
     """`priority` (a Top entry) uses its own daily allowance instead of DAILY_MAX."""

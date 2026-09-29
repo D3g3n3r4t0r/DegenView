@@ -147,3 +147,13 @@ def test_the_kept_reading_is_refreshed_before_the_board_stops_counting_it():
     from app.trading.onchain import leaderboard
     assert judge.TTL_S < judge.MAX_AGE_S
     assert leaderboard._fresh({"at": 1}, judge.TTL_S, judge.MAX_AGE_S)
+
+
+def test_wants_reading_when_prompt_changed():
+    e = {"chain": "solana", "token_address": "OLD", "market_cap": 1e5, "liquidity_usd": 5e4, "pillars": {}}
+    assert judge.wants_reading(e, "")
+    judge._cache["solana:OLD"] = {"v": judge.PROMPT_VERSION - 1, "at": time.time(), "facts": judge.judged_facts(e, "")}
+    assert judge.wants_reading(e, "")
+    judge._cache["solana:OLD"]["v"] = judge.PROMPT_VERSION
+    assert not judge.wants_reading(e, "")
+    judge._cache.pop("solana:OLD")
