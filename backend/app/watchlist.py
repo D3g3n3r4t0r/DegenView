@@ -18,6 +18,7 @@ from pathlib import Path
 
 from app.models import AssetType, CryptoExchange, WatchlistEntry
 from app.timeframes import IntervalChoice
+from app.atomic_write import write_text_atomic
 
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 _DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -43,7 +44,7 @@ def _load() -> None:
 
 def _save() -> None:
     payload = [e.model_dump() for e in _entries.values()]
-    _STORE_FILE.write_text(json.dumps(payload), encoding="utf-8")
+    write_text_atomic(_STORE_FILE, json.dumps(payload), encoding="utf-8")
 
 
 _load()

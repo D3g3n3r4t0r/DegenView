@@ -16,6 +16,7 @@ import httpx
 
 from .scanner import RawToken, fetch_all_tokens
 from .scorer import TokenScore, score
+from app.atomic_write import write_text_atomic
 
 logger = logging.getLogger(__name__)
 
@@ -101,7 +102,7 @@ def _load_candidates() -> None:
 def _save_candidates() -> None:
     payload = [dataclasses.asdict(c) for c in _store.values()]
     try:
-        _CANDIDATES_FILE.write_text(json.dumps(payload), encoding="utf-8")
+        write_text_atomic(_CANDIDATES_FILE, json.dumps(payload), encoding="utf-8")
     except OSError as exc:
         logger.warning("Sniper: failed to persist candidates: %s", exc)
 
@@ -119,7 +120,7 @@ def _load_log() -> None:
 
 def _save_log() -> None:
     try:
-        _LOG_FILE.write_text(json.dumps(_log[-LOG_MAX_ENTRIES:]), encoding="utf-8")
+        write_text_atomic(_LOG_FILE, json.dumps(_log[-LOG_MAX_ENTRIES:]), encoding="utf-8")
     except OSError as exc:
         logger.warning("Sniper: failed to persist log: %s", exc)
 

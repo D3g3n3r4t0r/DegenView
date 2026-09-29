@@ -12,6 +12,12 @@ lavori pluri-sessione, decisioni prese, stato di piani approvati.
 
 ---
 
+## Piano struttura backend (issue #357, B00-B08) — 2026-09-29 — **in corso**
+
+Lorenzo, 29/09, ha condiviso i due piani di ChatGPT per Claude: #357 struttura backend, #358 intelligenza e memoria (altro thread). Registro vivo con mappa, evidenze e stato: `docs/backend/B00_REGISTRO.md` — aggiornarlo a ogni PR.
+S01-S07 li ha chiusi l'altro thread (#350, #354, #359). Qui: B02 scritture JSON atomiche (`app/atomic_write.py`, 39 punti: un crash a meta' scrittura lasciava file vuoti che gli store leggevano come "parti da zero"); B04 task di `lifespan` tracciati e cancellati (il riconciliatore degli ordini non aveva riferimento); B00 registro.
+Resta: M01/M02, lease sui loop prima di piu' worker, Telegram "spara e dimentica", backup/restore provati, B06 estrazione router, B07 misure, B08 Actions ferme (causa lato account GitHub, la vede solo Lorenzo).
+
 ## Consegne di ChatGPT/Codex del 29/09 — cosa sono e come trattarle
 
 Lorenzo, 29/09: "allineati su tutte le modifiche che nel mentre ho fatto fare a chat gpt e che ha postato su github".
