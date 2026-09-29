@@ -2340,5 +2340,11 @@
     "at": 1790701146,
     "summary": "Il totale ora e' sempre cassa + somma delle posizioni, e si muove insieme a loro. Le posizioni simulate erano valutate con il rendimento del sistema a candela chiusa ma col prezzo piu' recente del tracker: il ricalcolo live mescolava due letture e gonfiava il totale di qualche dollaro. Ora valore e prezzo vengono dalla stessa chiusura; una posizione da cui il sistema e' gia' uscito non si muove piu'; i chip per chain seguono lo stesso ricalcolo, con i centesimi.",
     "detail": "Screenshot del 29/09: totale $68.59, cassa $7.80, chip All $64 (valore del server). Test: test_sim_total_equals_cash_plus_rows_and_rows_carry_their_own_mark."
+  },
+  "seed-0231": {
+    "status": "risolto",
+    "at": 1790716838,
+    "summary": "Dei 51 meme Solana passati dal filtro, 15 sono finiti in rug, tutti con liquidita' bloccata al 100%: nessuno ha ritirato la liquidita', sono state vendite. Il controllo sui primi wallet non era mai partito: RugCheck veniva letto in versione riassunto, senza la lista dei holder. Ora si legge il report completo (primo wallet <=15%, primi 10 <=35% tornano attivi, e senza lista il meme aspetta). I wallet collegati si registrano ma non bloccano: provati a ritroso non separano i rug dai sopravvissuti.",
+    "detail": "Prova sui 51 (lista della sessione PC): wallet collegati >10% in 4 rug su 15 e in 9 sopravvissuti su 36 (DREGG 39%); 8 rug su 15 senza nessun gruppo collegato rilevato. Nessun rug aveva 'High holder correlation' o 'Creator history of rugged tokens'. Registrati in facts (linked_pct, linked_networks, rugcheck_flags, holders) per misurare. Resta da fare: uscita veloce quando partono le vendite (mediana 0,65h dall'ingresso al rug)."
   }
 }
