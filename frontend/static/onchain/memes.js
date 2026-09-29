@@ -18,7 +18,6 @@ let root = null;
 let timer = null;
 let lastTrack = null;
 let items = [];
-let chosen = [];
 
 const pct = (f) => (f == null ? "—" : `${f > 0 ? "+" : ""}${Math.round(f * 100)}%`);
 const usd = (n) => (n == null ? "—" : n >= 1e6 ? `$${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `$${Math.round(n / 1e3)}k` : `$${Math.round(n)}`);
@@ -42,10 +41,9 @@ function row(m) {
     why: why(m), alerts: alertsFor(m.chain, m.token_address),
   });
   const nar = (m.narratives ?? []).slice().sort((a, b) => b.heat - a.heat)[0];
-  const mine = nar && chosen.includes(nar.key);
   return tokenRow({ id, symbol: m.symbol, name: m.name, chain: m.chain, token: m.token_address, image: m.image,
     cap: m.market_cap, change: m.ret_since_seen, badge: m.band === "60+" ? "hot" : null, ageTs: m.seen_at,
-    sub: nar ? `<span class="bd-nar${mine ? " is-mine" : ""}">${escapeHtml(nar.label)}</span>` : "",
+    sub: nar ? `<span class="bd-nar">${escapeHtml(nar.label)}</span>` : "",
     score: m.score });
 }
 
@@ -60,16 +58,8 @@ function trackLine(t) {
 
 function paintList() {
   const shown = items.filter((m) => !isHidden(m.chain, m.token_address));
-  const chosenSet = new Set(chosen);
-  const ordered = chosenSet.size
-    ? shown.slice().sort((a, b) => {
-        const am = (a.narratives ?? []).some((n) => chosenSet.has(n.key)) ? 0 : 1;
-        const bm = (b.narratives ?? []).some((n) => chosenSet.has(n.key)) ? 0 : 1;
-        return am - bm;
-      })
-    : shown;
   withEntrance(root.querySelector("[data-memes-list]"), () => {
-    root.querySelector("[data-memes-list]").innerHTML = ordered.map(row).join("");
+    root.querySelector("[data-memes-list]").innerHTML = shown.map(row).join("");
   });
   root.querySelector("[data-memes-empty]").hidden = shown.length > 0;
 }
@@ -98,11 +88,6 @@ export function mountMemes() {
   root = document.getElementById("memes");
   if (!root) return;
   onHiddenChange(() => paintList());
-  api.getNarratives().then((d) => { chosen = d.selected ?? []; paintList(); }).catch(() => {});
-  document.addEventListener("lae:narratives", (e) => {
-    chosen = e.detail ?? [];
-    paintList();
-  });
   refresh();
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") refresh();

@@ -3894,7 +3894,7 @@ async def onchain_leaderboard_view(user: User = Depends(auth.get_current_user)) 
 
 
 @app.get("/api/onchain/top")
-async def onchain_top(n: int = 15, user: User = Depends(auth.get_current_user)) -> dict:
+async def onchain_top(n: int = 15, narrative: str = "", user: User = Depends(auth.get_current_user)) -> dict:
     """Top 15/25/50 (top.js): the best projects we know, by score. Lorenzo,
     28/09: "la classifica top riporta roba di merda; ma com'e' possibile?
     nel database c'e' roba meglio" — the board keeps only projects passing
@@ -3903,7 +3903,7 @@ async def onchain_top(n: int = 15, user: User = Depends(auth.get_current_user)) 
     the database. Now the board entries and the best studied rows are
     merged by score; DeepSeek's veto still keeps junk out."""
     _require_onchain_enabled()
-    out = _top_entries(max(1, min(int(n), 50)))
+    out = _top_entries(max(1, min(int(n), 50)), narrative)
     for e in out:
         e["backtests"] = _lab_summary(onchain_strategy_lab.get(e["chain"], e["token_address"]))
     return {"entries": out, "on_board": sum(1 for e in out if e["on_board"]),
@@ -3924,10 +3924,19 @@ def _lab_summary(bt: dict | None) -> dict | None:
                       "trades": drow.get("trades"), "hold_pct": daily.get("hold_pct")} if drow else None}
 
 
-def _top_entries(n: int = 50) -> list[dict]:
+def _narr_keys(raw) -> set[str]:
+    """Narrative keys from a list of keys or of {"key": ...} dicts."""
+    return {n.get("key") if isinstance(n, dict) else n for n in raw or []}
+
+
+def _top_entries(n: int = 50, narrative: str = "") -> list[dict]:
     """La Top della schermata Strategie: la bacheca delle gemme piu' le
-    righe studiate migliori del database, per punteggio."""
+    righe studiate migliori del database, per punteggio. `narrative`
+    (chiavi separate da virgole) tiene solo i progetti di quelle narrative."""
+    want = {k.strip() for k in (narrative or "").split(",") if k.strip()}
     board = sorted(onchain_leaderboard.board().get("entries") or [], key=lambda e: -(e.get("score") or 0))
+    if want:
+        board = [e for e in board if _narr_keys(e.get("narratives")) & want]
     out = [{**{k: e.get(k) for k in ("chain", "token_address", "pair_address", "pair_url", "symbol", "name", "image",
                                      "market_cap", "liquidity_usd", "change_24h", "launched_at", "score", "early")},
             "on_board": True} for e in board if not onchain_leaderboard.no_name(e.get("symbol"))]
@@ -3936,9 +3945,11 @@ def _top_entries(n: int = 50) -> list[dict]:
     # "ranked" too: a row whose flag outlived its place on the board was
     # skipped by both halves of the Top (Lorenzo, 28/09: high scores never on the podium).
     rows = [r for st in ("studied", "ranked")
-            for r in onchain_projects_db.search(status=st, sort="score", limit=200)["items"]]
+            for r in onchain_projects_db.search(status=st, sort="score", limit=200, narrative=narrative)["items"]]
     for row in sorted(rows, key=lambda r: -(r.get("score") or 0)):
         if row.get("score") is None or (row.get("analyzed_at") or 0) < cutoff:
+            continue
+        if want and not _narr_keys(row.get("narratives")) & want:
             continue
         if (row.get("overall") or {}).get("fatal") or onchain_leaderboard.no_name(row.get("symbol")):
             continue
@@ -3986,12 +3997,13 @@ async def onchain_token(chain: str, token: str, user: User = Depends(auth.get_cu
 
 @app.get("/api/onchain/projects")
 async def onchain_projects_view(q: str = "", status: str = "", sort: str = "score", limit: int = 50,
-                                offset: int = 0, band: bool = False,
+                                offset: int = 0, band: bool = False, narrative: str = "",
                                 user: User = Depends(auth.get_current_user)) -> dict:
     """Il database dei progetti del Gem Finder: tutto quello che e' stato
     visto, con il verdetto e il perche'. Vedi app/trading/onchain/projects_db.py."""
     _require_onchain_enabled()
-    return {**onchain_projects_db.search(q, status, sort, limit, offset, band), "stats": onchain_projects_db.stats()}
+    return {**onchain_projects_db.search(q, status, sort, limit, offset, band, narrative),
+            "stats": onchain_projects_db.stats()}
 
 
 class ProjectReadRequest(BaseModel):
@@ -4547,6 +4559,11 @@ def _agent_progress() -> list[dict]:
     try:
         total = listings.status()["pending"] + discovery.status()["queue"]
         rows.append({"key": "scan", "label": "Queued to scan", "done": 0, "total": total})
+    except Exception:
+        pass
+    try:
+        m = onchain_projects_db.narrative_progress()
+        rows.append({"key": "narratives", "label": "Narratives mapped", "done": m["mapped"], "total": m["total"]})
     except Exception:
         pass
     return rows

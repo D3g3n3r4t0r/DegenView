@@ -126,8 +126,6 @@ export const setWalletMode = (m) => {
 };
 const walletQ = () => (walletMode() === "sim" ? "?wallet=sim" : "");
 export const getProfile = () => request(`/api/profile${walletQ()}`, { timeoutMs: 25000 });
-export const getNarratives = () => request("/api/profile/narratives");
-export const saveNarratives = (keys) => request("/api/profile/narratives", { method: "POST", body: { keys } });
 export const getHidden = () => request("/api/profile/hidden");
 export const setHidden = (body) => request("/api/profile/hidden", { method: "POST", body });
 export const updateProfile = (body) => request("/api/profile", { method: "PATCH", body });
@@ -136,7 +134,9 @@ export const walletChallenge = (body) => request("/api/wallets/link/challenge", 
 export const walletLink = (body) => request("/api/wallets/link", { method: "POST", body });
 export const getLinkedWallets = () => request("/api/wallets/linked");
 export const scanToken = (query) => request("/api/onchain/scan", { method: "POST", body: { query }, timeoutMs: 60000 });
-export const getTop = (n) => request(`/api/onchain/top?n=${n}`);
+export const getTop = (n, keys = []) =>
+  request(`/api/onchain/top?n=${n}${keys?.length ? `&narrative=${encodeURIComponent(keys.join(","))}` : ""}`);
+export const getNarrativeCoverage = () => request("/api/onchain/narratives/coverage");
 export const getToken = (chain, token) => request(`/api/onchain/token?chain=${encodeURIComponent(chain)}&token=${encodeURIComponent(token)}`);
 export const getAgent = () => request("/api/agent");
 export const getDeposit = () => request("/api/wallets/deposit");
