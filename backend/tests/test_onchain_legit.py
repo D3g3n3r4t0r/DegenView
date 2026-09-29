@@ -399,3 +399,24 @@ def test_deepseek_unreachable_waits_with_ai_gate(monkeypatch):
     _deepseek_review(monkeypatch, {"error": "DeepSeek unreachable", "by": "deepseek"})
     out = _assess(ai_gate=True)
     assert out["status"] == "wait" and out["reason"] == "AI review unavailable"
+
+
+def _assess_meme(token, links, **net):
+    async def go():
+        async with httpx.AsyncClient(transport=_net(**net)) as c:
+            return await legit.assess(token, links, c, need_github=False, memes=True)
+    return asyncio.run(go())
+
+
+def test_meme_mode_lets_a_clean_meme_through_without_a_site(monkeypatch):
+    _deepseek_review(monkeypatch, {"by": "deepseek", "legit": False, "score": 1, "reason": "meme coin"})
+    out = _assess_meme({**TOKEN, "symbol": "PEPE2", "name": "Pepe Two"}, {"websites": [], "socials": []})
+    assert out["status"] == "ok" and out["meme"] is True
+    assert next(c for c in out["checks"] if c["key"] == "name")["ok"] is None
+
+
+def test_meme_mode_still_fails_the_rug_checks():
+    meme = {**TOKEN, "symbol": "PEPE2", "name": "Pepe Two"}
+    assert _assess_meme(meme, LINKS, lp=10)["status"] == "fail"
+    out = _assess_meme(meme, LINKS, goplus={**GOPLUS_CLEAN, "freezable": {"status": "1"}})
+    assert out["status"] == "fail" and "frozen" in out["reason"]

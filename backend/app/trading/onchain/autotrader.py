@@ -161,7 +161,9 @@ def entry_candidate(label: str, now: float) -> dict | None:
     """The freshest Robinhood alert where the system just bought."""
     best = None
     for a in alert_track._alerts.values():
-        if a["kind"] != "meme" or a["chain"] != CHAIN or a.get("gone"):
+        # A meme let through on the rug checks alone is for the simulated
+        # wallet only (Lorenzo, 29/09: memes back, real money stays out).
+        if a["kind"] != "meme" or a["chain"] != CHAIN or a.get("gone") or a.get("meme"):
             continue
         s = _system_of(a, label)
         if not s or s.get("state") != "in" or not s.get("in_at"):

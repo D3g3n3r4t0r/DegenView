@@ -181,3 +181,10 @@ def test_all_cash_in_open_trades_is_said():
     tr.configure("u1", "sim", 100, usdg_now=10.0)
     rows = asyncio.run(tr.tick([USER], now=T0))
     assert rows[0]["ok"] and not rows[1]["ok"] and "all cash" in rows[1]["reason"]
+
+
+def test_real_money_never_enters_a_meme_let_through_on_rug_checks_alone():
+    a = _alert()
+    assert tr.entry_candidate(LABEL, T0 + 60) is a
+    a["meme"] = True
+    assert tr.entry_candidate(LABEL, T0 + 60) is None
