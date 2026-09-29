@@ -140,7 +140,7 @@ DISCOVERY_SLOW_S = 6 * 3600
 CODE_RETRY_S = 6 * 3600        # a failed reading waits: GitHub allows few calls an hour
 # Without public code a project ranks below an equal one that shows it.
 NO_GITHUB_PENALTY = 10.0
-RULES_VERSION = 10             # 2: "no GitHub" stopped being a ban; 3: radar launches out;
+RULES_VERSION = 11             # 2: "no GitHub" stopped being a ban; 3: radar launches out;
                                # 4: research read by reader.py, older bans and readings dropped;
                                # 5: reader recognises research-stage code and stated limits
                                # 6: no age limits, strict band from $100k to $2M, one rule chain
@@ -149,6 +149,7 @@ RULES_VERSION = 10             # 2: "no GitHub" stopped being a ban; 3: radar la
                                # 9: tokenomics redone: missing data is not a pass, big contracts
                                #    are whales (audit 29/09, M01/M02)
                                # 10: EVM rows stamped "no pool" by an address-case bug ask DexScreener again
+                               # 11: DexScreener's own links fill website/GitHub of rows without them
 
 _entries: dict[str, dict] = {}     # chain:token
 _excluded: list[dict] = []
@@ -189,7 +190,7 @@ def _load() -> None:
                 (e.get("pillars") or {}).pop("site", None)
                 (e.get("checked_at") or {}).pop("site", None)
         global _requeue_fatals, _reset_market
-        if rules < 10:
+        if rules < 11:
             _reset_market = True
         if rules < 8:
             # Fatal pillars scored by checks fixed since (contracts counted as
@@ -1192,11 +1193,15 @@ async def top_fill(client: httpx.AsyncClient, now: float | None = None) -> int:
                     continue
                 e = db_entry(p)
             o = e.get("overall") or {}
-            has_judge = e.get("judge") if board else judge.get(e["chain"], e["token_address"])
-            if not has_judge and not o.get("pending") and now - _top_tried.get("judge:" + k, 0) >= TOP_RETRY_S:
+            rules_why = qualifies(e, now) if board else (e.get("why") or "")
+            # A reading from an older prompt is re-read too: the Top is where
+            # people look (STEALF 38, GRID 34 stayed as they were, 29/09).
+            needs_judge = judge.wants_reading(e, rules_why, now)
+            if needs_judge and not o.get("pending") and not o.get("fatal") \
+                    and now - _top_tried.get("judge:" + k, 0) >= TOP_RETRY_S:
                 _top_tried["judge:" + k] = now
                 tried += 1
-                j = await judge.judge(e, qualifies(e, now) if board else (e.get("why") or ""), now, priority=True)
+                j = await judge.judge(e, rules_why, now, priority=True)
                 if j and board and k in _entries:
                     _entries[k]["judge"] = j
                     _remember(e, "ranked" if e.get("rank") else "studied", qualifies(e), now)
@@ -1231,7 +1236,8 @@ async def leaderboard_loop() -> None:
         # Rules dropped on 29/09 (age limits, radar exceptions, the $100k band).
         n += projects_db.recheck_studied(DROPPED_RULES, ("studied", "rejected"))
         if _reset_market:
-            logger.info("classifica: %d righe EVM senza mercato rimesse in coda", projects_db.reset_empty_market())
+            logger.info("classifica: %d righe EVM senza mercato rimesse in coda",
+                        projects_db.reset_empty_market() + projects_db.reset_linkless_market())
         if _requeue_fatals:
             n += projects_db.recheck_studied(("github:", "site:", "tokenomics:"), ("rejected",))
         if n:

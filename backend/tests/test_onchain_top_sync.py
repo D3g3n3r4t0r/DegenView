@@ -137,3 +137,19 @@ def test_lower_case_evm_rows_get_their_market_from_checksum_answers():
     db.upsert({"chain": "robinhood", "token_address": "0xabc", "symbol": "X", "name": "X"}, "coingecko-list", 1.0)
     db.set_market("robinhood", "0xabc", now=3.0)
     assert db.reset_empty_market() >= 1 and db.get("robinhood", "0xabc")["market_at"] is None
+
+
+def test_dexscreener_links_fill_a_row_without_website_or_github():
+    """AUREON had a cap but no website: it waited for a CoinGecko page and was never analysed."""
+    tok = "0xaaaa000000000000000000000000000000000001"
+    db.upsert({"chain": "robinhood", "token_address": tok, "symbol": "LNK", "name": "LNK"}, "coingecko-list", 1.0)
+    pair = {"baseToken": {"address": tok}, "marketCap": 500_000, "liquidity": {"usd": 60_000},
+            "info": {"websites": [{"url": "https://lnk.xyz"}], "socials": [{"type": "github", "url": "https://github.com/lnk/core"}]}}
+    db.apply_pairs("robinhood", [tok], [pair], 2.0)
+    row = db.get("robinhood", tok)
+    assert row["website"] == "https://lnk.xyz" and row["github"] == "https://github.com/lnk/core"
+    assert [r["token"] for r in db.due_for_analysis(10)] == [tok]
+    # Rows that got a cap but no links are asked again once.
+    db.upsert({"chain": "robinhood", "token_address": "0xbbbb", "symbol": "N", "name": "N"}, "coingecko-list", 1.0)
+    db.set_market("robinhood", "0xbbbb", mcap=400_000, liq=50_000, now=3.0)
+    assert db.reset_linkless_market() >= 1 and db.get("robinhood", "0xbbbb")["market_at"] is None
