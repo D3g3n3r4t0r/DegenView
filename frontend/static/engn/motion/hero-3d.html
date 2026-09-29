@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ENGN · Engine boot</title>
+<script type="importmap">{"imports":{"three":"./three/build/three.module.js","three/addons/":"./three/examples/jsm/"}}</script>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#05070c;color:#e9faff;font-family:Arial,sans-serif}canvas{display:block;width:100%;height:100%}header{position:absolute;top:32px;left:32px;pointer-events:none}header small{font-size:10px;letter-spacing:.24em;color:#73919d}h1{font-size:20px;font-weight:400;margin:12px 0;letter-spacing:.03em}.controls{position:absolute;bottom:26px;left:50%;transform:translateX(-50%);width:min(480px,calc(100% - 40px));padding:17px 20px;border:1px solid #213039;background:#0a1119e8;border-radius:16px;backdrop-filter:blur(12px)}.row{display:flex;align-items:center;gap:12px}button{border:1px solid #30515c;background:#10242d;color:#bff6ff;border-radius:8px;padding:10px 13px;cursor:pointer;font:12px Arial}button:hover{background:#193641}button:disabled{opacity:.5;cursor:wait}output{font:11px monospace;color:#95b6c3;margin-left:auto}input{width:100%;accent-color:#7ce7f4;margin:16px 0 10px;height:3px}.stages{display:flex;justify-content:space-between;color:#677e8b;font:9px monospace;letter-spacing:.06em}#status{position:absolute;top:34px;right:28px;color:#7da5b3;font:10px monospace;max-width:45%;text-align:right}.embed header,.embed .controls,.embed #status{display:none}button:focus-visible,input:focus-visible{outline:2px solid #aafcff;outline-offset:4px}@media(max-width:540px){header{top:24px;left:22px}h1{font-size:17px}#status{top:25px;right:22px;max-width:39%}.controls{bottom:18px}}
+</style>
+</head>
+<body>
+<header><small>ENGN / ENGINE BOOT</small><h1>Engine boot</h1></header>
+<div id="status" role="status">Loading the model…</div>
+<div class="controls"><div class="row"><button id="play" disabled>Play 3 s</button><button id="reset" disabled>Reset</button><output id="time">0.00 / 3.00 s</output></div><input id="seek" type="range" min="0" max="3" step="0.01" value="0" aria-label="Animation time" disabled><div class="stages"><span>EXPLODED</span><span>ASSEMBLY</span><span>NEON</span><span>FINAL</span></div></div>
+<script type="module" src="./hero-3d.js"></script>
+</body></html>
+

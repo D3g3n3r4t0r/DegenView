@@ -144,6 +144,10 @@ function paint() {
       image: e.image, cap: e.market_cap, change: e.change_24h != null ? e.change_24h / 100 : null, ageTs: e.launched_at,
       score: e.score, badge: e.early ? "early" : null, sub: btSub(e.backtests) });
   }).join("") : `<li class="muted pad">The board is filling up: projects appear as they pass the checks.</li>`;
+  // The motion kit's score meter under each row (design/engn-motion-kit).
+  root.querySelectorAll("[data-top-rows] > li.trow").forEach((li, i) => {
+    li.style.setProperty("--v", `${Math.max(0, Math.min(100, Math.round(rows[i]?.score ?? 0)))}%`);
+  });
   });
   if (prev) {
     // Rows that moved since the last visit glide from their old place.
