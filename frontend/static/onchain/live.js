@@ -25,13 +25,14 @@ export const priceOf = (key) => last.get(key);
 export const liveKey = (p) => (p.address && !p.native && p.chain
   ? `${p.chain}:${p.address.startsWith("0x") ? p.address.toLowerCase() : p.address}` : null);
 
-/** A position ({chain, address, value_usd, price_usd, amount}) at the last
- * live price; its own value when there is none. */
+/** A position ({chain, address, value_usd, price_usd}) re-marked at the
+ * last live price: value x live / the price it was valued at. No such
+ * price (the server does not know it, or the trade is no longer held):
+ * its own value, never amount x price, which would mix two readings. */
 export function liveValue(p) {
   const k = liveKey(p), px = k && last.get(k);
-  if (!px) return p.value_usd;
-  if (p.value_usd != null && p.price_usd) return p.value_usd * (px / p.price_usd);
-  return p.amount != null ? p.amount * px : p.value_usd;
+  if (!px || p.value_usd == null || !p.price_usd) return p.value_usd;
+  return p.value_usd * (px / p.price_usd);
 }
 
 /** Sum of (live value - value) over positions: what to add to a total. */
