@@ -1,0 +1,142 @@
+{
+  "method": "offline AST characterization; not full integration",
+  "results": [
+    {
+      "test": "M01-contract-holder-excluded",
+      "status": "REPRODUCED",
+      "evidence": {
+        "score": 90,
+        "facts": {
+          "top1_pct": 0.0,
+          "top10_pct": 0,
+          "creator_pct": 0.0,
+          "holders": 5000,
+          "insiders": 0,
+          "lp_locked_pct": null,
+          "mint": false,
+          "freeze": false,
+          "tax_pct": 0.0,
+          "contracts_pct": 90.0,
+          "top_holders": [
+            {
+              "pct": 90.0,
+              "contract": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "test": "M02-missing-security-data-is-perfect",
+      "status": "REPRODUCED",
+      "evidence": {
+        "key": "tokenomics",
+        "score": 100,
+        "facts": {
+          "top1_pct": 0.0,
+          "top10_pct": 0,
+          "creator_pct": 0.0,
+          "holders": 5000,
+          "insiders": 0,
+          "lp_locked_pct": null,
+          "mint": false,
+          "freeze": false,
+          "tax_pct": 0.0,
+          "contracts_pct": 0,
+          "top_holders": []
+        },
+        "flags": [],
+        "fatal": ""
+      }
+    },
+    {
+      "test": "S07-unauthenticated-ciphertext",
+      "status": "REPRODUCED",
+      "evidence": "Modified ciphertext accepted as BAA without authentication error"
+    },
+    {
+      "test": "M03-benchmark-bypasses-fatal",
+      "status": "REPRODUCED",
+      "evidence": "Benchmark qualifies before fatal and cap checks"
+    },
+    {
+      "test": "M04-effective-ai-weights",
+      "status": "REPRODUCED",
+      "evidence": {
+        "final": 76.0,
+        "formula": "0.28*60 + 0.28*80 + 0.14*70 + 0.30*90 = 76"
+      }
+    },
+    {
+      "test": "M04-expired-positive-review",
+      "status": "REPRODUCED",
+      "evidence": "Ancient positive review still increases score 50 -> 65"
+    },
+    {
+      "test": "M05-zero-confidence-ai-admission",
+      "status": "REPRODUCED",
+      "evidence": "All pillars 10/100 admitted by score 80, confidence 0"
+    },
+    {
+      "test": "S06-logout-does-not-revoke",
+      "status": "REPRODUCED",
+      "evidence": "Copied session cookie remains valid after logout"
+    },
+    {
+      "test": "S01-wallet-switch-static",
+      "status": "REPRODUCED",
+      "evidence": "Three direct execution handlers do not inspect wallet.enabled; risk checks do not either (static evidence)"
+    },
+    {
+      "test": "M06-top-bypasses-liquidity-floor",
+      "status": "REPRODUCED",
+      "evidence": "Studied row rejected by liquidity floor enters Top with $1 liquidity"
+    },
+    {
+      "test": "M07-readme-is-not-decoded",
+      "status": "REPRODUCED",
+      "evidence": "GitHub JSON metadata/base64 is sent as README text"
+    },
+    {
+      "test": "S02-clamp-does-not-resize-transaction",
+      "status": "REPRODUCED",
+      "evidence": {
+        "quote_input": 1000,
+        "recorded_size_usd": 100.0
+      }
+    },
+    {
+      "test": "S04-confirmed-without-receipt",
+      "status": "REPRODUCED",
+      "evidence": "Broadcast-only fake adapter -> confirmed; not seen by pending reconciliation"
+    },
+    {
+      "test": "S03-identical-retry-submits-twice",
+      "status": "REPRODUCED",
+      "evidence": {
+        "first": "live-acf8954e37cc49c8971a0ce4563be5d5",
+        "second": "live-99e30546d9a144bc8bda0c74e6eb5a1e"
+      }
+    },
+    {
+      "test": "S03-ledger-confirmation-is-not-idempotent",
+      "status": "REPRODUCED",
+      "evidence": "Same order confirmed twice: quantity/spend 10 -> 20"
+    },
+    {
+      "test": "S04-reserved-crash-not-reconciled",
+      "status": "REPRODUCED",
+      "evidence": "pending row is excluded from pending_unconfirmed"
+    },
+    {
+      "test": "S03-concurrent-daily-limit-bypass",
+      "status": "REPRODUCED",
+      "evidence": "Two simultaneous $100 orders pass $150/day cap; $200 recorded"
+    },
+    {
+      "test": "S01-autotrader-bypasses-circuit-breaker",
+      "status": "REPRODUCED",
+      "evidence": "guards=False accepts order with breaker tripped"
+    }
+  ]
+}
