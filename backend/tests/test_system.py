@@ -243,6 +243,22 @@ def test_on_alert_the_alert_is_the_entry(monkeypatch):
     assert again["trades"] == 1 and again["state"] == "out"
 
 
+def test_on_alert_trail_sells_a_crash_from_the_peak(monkeypatch):
+    """29/09, the simulated meme rugs: a close 30% under the best close since
+    the alert sells at the next open. Alerts before TRAIL_FROM are untouched."""
+    prices = [1.0] * 40 + [1.0, 2.0, 1.3, 1.2, 1.2, 1.2]
+    monkeypatch.setattr(system.radar, "spot_signals", _signals(set(), set()))
+    monkeypatch.setattr(system.strategies, "trend_down",
+                        lambda df, *a: __import__("pandas").Series(False, index=df.index))
+    monkeypatch.setattr(system, "TRAIL_FROM", T0)
+    r = system.follow(_bars(prices), system.CANDIDATES[0], T0, now=T0 + 6 * B, on_alert=True)
+    assert r["events"][-1]["why"] == "trail" and r["state"] == "out"
+    assert abs(r["ret"] - (1.2 * (1 - system.COST) ** 2 - 1)) < 1e-4
+    monkeypatch.setattr(system, "TRAIL_FROM", T0 + 1)
+    old = system.follow(_bars(prices), system.CANDIDATES[0], T0, now=T0 + 6 * B, on_alert=True)
+    assert old["state"] == "in"
+
+
 def test_every_alert_gets_an_on_alert_result(monkeypatch, tmp_path):
     monkeypatch.setattr(at, "_STORE_FILE", tmp_path / "a.json")
     monkeypatch.setattr(at, "_BARS_FILE", tmp_path / "b.json")

@@ -141,7 +141,7 @@ export function tokenRow({ id, symbol, name, chain, token, image, cap, change, p
 /** One strategy's trade on one alert: entry, exit with the reason, and the
  *  return after fees. Shared by the alert cards and the token page, so the
  *  two cannot drift apart. */
-const WHY = { signal: "trend turned", crash: "crash inside one 5-min candle", "48h": "48h window over", rug: "pool vanished" };
+const WHY = { signal: "trend turned", trail: "30% off the peak", crash: "crash inside one 5-min candle", "48h": "48h window over", rug: "pool vanished" };
 
 function afterAlert(t, alertAt) {
   const m = Math.max(0, Math.round((t - alertAt) / 60));
