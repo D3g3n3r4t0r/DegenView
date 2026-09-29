@@ -13,6 +13,7 @@ import { register } from "@onchain/detail.js";
 import { isHidden, onHiddenChange, withEntrance } from "@onchain/hidden.js";
 import { escapeHtml, tile, tokenRow } from "@onchain/format.js";
 import { renderPodium } from "@onchain/podium.js";
+import * as narr from "@onchain/narrative_pick.js";
 
 const POLL_MS = 30_000;
 const SIZES = [15, 25, 50];
@@ -21,6 +22,8 @@ let root = null;
 let size = 15;
 let entries = [];
 let labStatus = null;
+let filtered = false;   // the last load was narrowed by narrative
+let labels = {};        // narrative key -> label, from the coverage
 
 function read() { try { return Number(localStorage.getItem("lae:top")) || 15; } catch { return 15; } }
 function write(n) { try { localStorage.setItem("lae:top", String(n)); } catch { /* private mode */ } }
@@ -55,7 +58,8 @@ function paint() {
   if (top3.length) renderPodium(podium, top3, { still: podium.dataset.sig === sig });
   else podium.innerHTML = "";
   podium.dataset.sig = sig;
-  const prev = !shown && seen ? seen : null;
+  // A narrowed list is not the ranking the last visit saw: no comparison.
+  const prev = !filtered && !shown && seen ? seen : null;
   const before = new Map((prev ?? []).map((x, i) => [x.id, i]));
   if (prev) {
     // A podium place taken since the last visit: the old token leaves, the new one lands.
@@ -98,12 +102,13 @@ function paint() {
   }
   const lead = prev && top3[0] && prev[0] && prev[0].id !== top3[0].id
     ? `Since your last visit: ${top3[0].symbol} took #1 from ${prev[0].symbol}. ` : "";
-  if (rows.length) {
+  if (rows.length && !filtered) {
     shown = true;
     writeSeen(entries.slice(0, 50).map((e) => ({ id: idOf(e), symbol: e.symbol })));
   }
   const bt = labStatus;
-  root.querySelector("[data-top-note]").textContent = lead + (bt?.total
+  const narrLine = filtered ? `Narratives: ${narr.get().map((k) => labels[k] ?? k).join(", ")} · ` : "";
+  root.querySelector("[data-top-note]").textContent = narrLine + lead + (bt?.total
     ? `Every strategy backtested on each token's latest chart, every hour, around the clock · ${bt.ready}/${bt.total} ready`
     : "");
 }
@@ -120,7 +125,9 @@ function btSub(b) {
 async function load() {
   try {
     // The board first; the database fills the list to the size asked.
-    const top = await api.getTop(50);
+    const keys = narr.get();
+    const top = await api.getTop(50, keys);
+    filtered = keys.length > 0;
     entries = top?.entries ?? [];
     labStatus = top?.backtests ?? null;
     paint();
@@ -139,6 +146,11 @@ export function mountTop() {
     paint();
   });
   onHiddenChange(paint);
+  narr.onChange(() => load());
+  narr.coverage().then((list) => {
+    labels = Object.fromEntries(list.map((n) => [n.key, n.label ?? n.key]));
+    if (filtered) paint();
+  });
   load();
   setInterval(() => document.visibilityState === "visible" && load(), POLL_MS);
 }

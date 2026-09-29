@@ -62,7 +62,8 @@ CREATE TABLE IF NOT EXISTS projects (
     status TEXT NOT NULL DEFAULT 'new', why TEXT,
     analyzed_at REAL, next_check REAL NOT NULL DEFAULT 0,
     score REAL, pillars TEXT, overall TEXT, similarity TEXT, narratives TEXT, traction TEXT,
-    rank INTEGER
+    rank INTEGER,
+    narr_at REAL
 );
 CREATE INDEX IF NOT EXISTS projects_status ON projects(status);
 CREATE INDEX IF NOT EXISTS projects_market ON projects(market_at);
@@ -80,6 +81,8 @@ def _db() -> sqlite3.Connection:
         cols = {r[1] for r in _conn.execute("PRAGMA table_info(projects)")}
         if "cg_mcap" not in cols:
             _conn.execute("ALTER TABLE projects ADD COLUMN cg_mcap REAL")
+        if "narr_at" not in cols:  # when DeepSeek mapped the row's narratives (narrative_map.py)
+            _conn.execute("ALTER TABLE projects ADD COLUMN narr_at REAL")
         _conn_path = _DB_FILE
     return _conn
 
@@ -219,14 +222,25 @@ def record(e: dict, status: str, why: str = "", score: float | None = None, trac
     else:
         next_check = 0
     dump = lambda v: json.dumps(v) if v is not None else None  # noqa: E731
+    narr = list(e.get("narratives") or [])
     with _lock:
+        # A new analysis must not wipe the keys DeepSeek mapped (narrative_map.py): once
+        # a row is mapped it is never mapped again, so the two lists are merged.
+        mapped = _db().execute("SELECT narratives FROM projects WHERE key = ? AND narr_at IS NOT NULL",
+                               (key(e["chain"], e["token_address"]),)).fetchone()
+        if mapped and mapped[0]:
+            try:
+                have = [n.get("key") if isinstance(n, dict) else n for n in json.loads(mapped[0]) or []]
+            except ValueError:
+                have = []
+            narr = list(dict.fromkeys([*narr, *(k for k in have if isinstance(k, str) and k)]))
         _db().execute(
             "UPDATE projects SET status = ?, why = ?, analyzed_at = ?, next_check = ?, score = COALESCE(?, score),"
             " pillars = COALESCE(?, pillars), overall = COALESCE(?, overall), similarity = COALESCE(?, similarity),"
             " narratives = COALESCE(?, narratives), traction = COALESCE(?, traction), rank = ?,"
             " github = COALESCE(github, ?) WHERE key = ?",
             (status, why or None, now, next_check, score, dump(e.get("pillars") or None), dump(e.get("overall")),
-             dump(e.get("similarity")), dump(e.get("narratives") or None), dump(traction), e.get("rank"),
+             dump(e.get("similarity")), dump(narr or None), dump(traction), e.get("rank"),
              e.get("github"), key(e["chain"], e["token_address"])))
         _db().commit()
 
@@ -337,8 +351,13 @@ SORTS = {"score": "COALESCE(score, -1) DESC", "cap": "COALESCE(mcap, 0) ASC", "l
 
 
 def search(q: str = "", status: str = "", sort: str = "score", limit: int = 50, offset: int = 0,
-           in_band: bool = False) -> dict:
+           in_band: bool = False, narrative: str = "") -> dict:
     where, args = [], []
+    keys = [k for k in (x.strip() for x in (narrative or "").split(",")) if k.replace("_", "").isalnum()]
+    if keys:
+        # '"key"' matches both a list of keys and a list of {"key": ...} dicts
+        where.append("(" + " OR ".join("narratives LIKE ? ESCAPE '\\'" for _ in keys) + ")")
+        args += ['%"' + k.replace("_", "\\_") + '"%' for k in keys]
     if q:
         where.append("(symbol LIKE ? OR name LIKE ? OR token = ? OR website LIKE ?)")
         like = f"%{q.strip()}%"
@@ -374,6 +393,33 @@ def recheck_studied(patterns: tuple[str, ...]) -> int:
                             tuple(f"%{p}%" for p in patterns))
         _db().commit()
         return cur.rowcount
+
+
+_NARR_ORDER = ("CASE status WHEN 'ranked' THEN 0 WHEN 'studied' THEN 1 WHEN 'new' THEN 2"
+               " WHEN 'analyzing' THEN 3 WHEN 'rejected' THEN 4 ELSE 5 END")
+
+
+def need_narratives(limit: int) -> list[dict]:
+    """Rows DeepSeek has not mapped to narratives yet, best first."""
+    with _lock:
+        rows = _db().execute(
+            "SELECT chain, token, symbol, name, website, description, categories, narratives FROM projects"
+            f" WHERE narr_at IS NULL ORDER BY {_NARR_ORDER}, COALESCE(score, -1) DESC LIMIT ?",
+            (max(1, int(limit)),)).fetchall()
+    return [_row(r) for r in rows]
+
+
+def set_narratives(chain: str, token: str, keys: list[str], now: float | None = None) -> None:
+    with _lock:
+        _db().execute("UPDATE projects SET narratives = ?, narr_at = ? WHERE key = ?",
+                      (json.dumps(list(keys)), now or time.time(), key(chain, token)))
+        _db().commit()
+
+
+def narrative_progress() -> dict:
+    with _lock:
+        mapped, total = _db().execute("SELECT COUNT(narr_at), COUNT(*) FROM projects").fetchone()
+    return {"mapped": mapped, "total": total}
 
 
 def narrative_counts() -> dict[str, int]:

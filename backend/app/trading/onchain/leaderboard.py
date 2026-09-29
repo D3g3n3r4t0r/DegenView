@@ -46,8 +46,8 @@ import time
 import httpx
 
 from app.sniper.quality import _looks_like_meme
-from app.trading.onchain import (benchmark, big_coins, code_review, depth, discovery, gem_track, judge, legit, narratives,
-                                  priority, projects_db, radar, research, storage, traction)
+from app.trading.onchain import (benchmark, big_coins, code_review, depth, discovery, gem_track, judge, legit, narrative_map,
+                                  narratives, priority, projects_db, radar, research, storage, traction)
 
 logger = logging.getLogger(__name__)
 
@@ -219,7 +219,8 @@ def reset_for_tests() -> None:
     _gone.clear()
     _busy.clear()
     _state.update(version=0, examined=0, last_tick=0.0, last_market=0.0, sources={}, board=[],
-                  reviewed_at=0.0, reviewed_board=[], reviewing=False, code_reading=False, code_at=0.0, db_board=[])
+                  reviewed_at=0.0, reviewed_board=[], reviewing=False, code_reading=False, code_at=0.0, db_board=[],
+                  narr_mapping=False)
 
 
 # ------------------------------------------------------------------- fonti
@@ -362,7 +363,7 @@ def apply_analysis(k: str, result: dict, now: float | None = None) -> None:
     gh = (e["pillars"].get("github") or {}).get("facts") or {}
     site_keys = (e["pillars"].get("site") or {}).get("facts", {}).get("narratives") or []
     more = narratives.match(e.get("description"), e.get("categories"), gh.get("topics"), gh.get("description"))
-    e["narratives"] = merge_narratives(e.get("narratives_hint"), site_keys, more)
+    e["narratives"] = merge_narratives(e.get("narratives_hint"), site_keys, [*more, *(e.get("narr_ds") or [])])
     if e["overall"]["fatal"] and not benchmark.is_benchmark(e["chain"], e["token_address"]) \
             and e.get("source") != "reference":     # Lorenzo's references stay, with their reason
         _exclude(k, e["overall"]["fatal"], now)
@@ -855,6 +856,10 @@ async def tick(client: httpx.AsyncClient, now: float | None = None) -> None:
         task = asyncio.create_task(_step("codice", _read_code, client, now))
         _tasks.add(task)
         task.add_done_callback(_tasks.discard)
+    if not _state.get("narr_mapping"):
+        task = asyncio.create_task(_step("narrative", _map_narratives, now))
+        _tasks.add(task)
+        task.add_done_callback(_tasks.discard)
     await drain_alerts()
     _prune(now)
     # I nuovi prima (nessun pilastro), poi i piu' vecchi da rinfrescare.
@@ -996,6 +1001,29 @@ async def _read_code(client: httpx.AsyncClient, now: float) -> None:
         _state["code_reading"] = False
     if result:
         e["code"] = result
+        _mark()
+
+
+async def _map_narratives(now: float) -> None:
+    """DeepSeek maps the database to narratives, a batch per turn
+    (narrative_map.py); keys it finds for a board entry join its own."""
+    _state["narr_mapping"] = True
+    try:
+        written = await narrative_map.step(now)
+    finally:
+        _state["narr_mapping"] = False
+    changed = False
+    for k, keys in written.items():
+        e = _entries.get(k)
+        if e is None:
+            continue
+        e["narr_ds"] = keys          # survives the next analysis, which rebuilds "narratives"
+        have = list(e.get("narratives") or [])
+        new = [x for x in keys if x not in have]
+        if new:
+            e["narratives"] = have + new
+            changed = True
+    if changed:
         _mark()
 
 

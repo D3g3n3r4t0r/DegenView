@@ -977,23 +977,6 @@ html, body { overflow-x: clip; }
     .ag-orb span, .ag-orb i, .ag-card.is-new, .ag-steps li, .ag-now::before, .ag-scan { animation: none !important; }
   }
 }
-/* --- narratives picker (profile.js) -------------------------------------- */
-@layer skin {
-  .pf-narr { margin-top: 22px;
-    & summary { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; cursor: pointer;
-      list-style: none; font: 600 20px var(--sans); color: var(--k-text); }
-    & summary::-webkit-details-marker { display: none; }
-    & summary::after { content: "▾"; font-size: 14px; color: var(--k-text-3); transition: transform .2s; }
-    &[open] summary::after { transform: rotate(180deg); } }
-  .pf-narr-body { display: grid; gap: 14px; padding: 4px 0 8px; }
-  .pf-narr-g { display: grid; gap: 8px;
-    & h4 { margin: 0; font: 600 13px var(--sans); letter-spacing: .04em; text-transform: uppercase; color: var(--k-text-3); } }
-  .pf-narr-chips { display: flex; flex-wrap: wrap; gap: 6px;
-    & button { padding: 6px 12px; border: 1px solid rgb(255 255 255 / .12); border-radius: 999px; background: none;
-      color: var(--k-text-2); font: 500 13px var(--sans); cursor: pointer; }
-    & button[aria-pressed="true"] { background: #6d7cff; border-color: #6d7cff; color: #fff; } }
-  .bd-nar.is-mine { padding: 0 6px; border-radius: 999px; border: 1px solid #6d7cff; color: #8b95ff; background: rgb(109 124 255 / .12); }
-}
 @layer skin {
   .ag-prio { margin: 0; font: 600 12.5px var(--sans); color: #fbbf24; }
 }
@@ -1022,4 +1005,17 @@ html, body { overflow-x: clip; }
 @media (prefers-reduced-motion: reduce) {
   .pc-slot.pc-taken .pc-head, .pc-prev, .trow.rank-moved, .trow.rank-new { animation: none; }
   .pc-prev { display: none; }
+}
+/* --- narrative filter (projects.js, top.js via narrative_pick.js) -------- */
+@layer skin {
+  .projects-narr { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; min-block-size: 32px;
+    margin: 0 0 var(--s2); overscroll-behavior-x: contain;
+    &::-webkit-scrollbar { display: none; }
+    & button { flex: none; display: inline-flex; align-items: center; gap: 6px; block-size: 32px; padding: 0 12px;
+      border-radius: 999px; border: 1px solid var(--line); background: none; color: var(--ink-dim);
+      font: 500 12.5px var(--sans); white-space: nowrap; cursor: pointer; transition: opacity .15s; }
+    & button:active { opacity: .7; }
+    & button small { font: 500 11px var(--mono); color: var(--ink-faint); }
+    & button[aria-pressed="true"] { color: var(--bg); background: var(--accent); border-color: var(--accent); }
+    & button[aria-pressed="true"] small { color: inherit; opacity: .75; } }
 }
