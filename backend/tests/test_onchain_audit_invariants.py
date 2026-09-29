@@ -352,3 +352,16 @@ def test_unreadable_users_file_falls_back_and_never_gets_overwritten(tmp_path, m
     with pytest.raises(RuntimeError):
         auth.create_user("c@example.com", "correct-horse-battery-9")
     assert path.read_text(encoding="utf-8") == "{ half-written"
+
+
+def test_tokenomics_missing_data_and_big_contracts_are_not_a_pass():
+    from app.trading.onchain import depth
+    partial = depth.judge_tokenomics_evm({"holder_count": 5000})
+    assert partial["score"] <= 50
+    assert any("not verified" in f for f in partial["flags"])
+    whale = depth.judge_tokenomics_evm({
+        "holder_count": 5000, "is_mintable": "0", "transfer_pausable": "0", "buy_tax": "0", "sell_tax": "0",
+        "holders": [{"address": "0xabc", "percent": "0.9", "is_contract": 1},
+                    {"address": "0xdef", "percent": "0.01", "is_contract": 0}],
+    })
+    assert "unidentified contract holds 90%" in whale["fatal"]
