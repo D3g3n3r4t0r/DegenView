@@ -25,8 +25,9 @@ logger = logging.getLogger(__name__)
 TTL_S = 3 * 86400
 # Readings under an older prompt are redone (2, 29/09: contracts are not
 # whales, unlocked v4 liquidity is normal, named integrations count; GRID
-# was judged "avoid" on exactly those points).
-PROMPT_VERSION = 2
+# was judged "avoid" on exactly those points). 3: closed code is never the
+# reason to avoid (STEALF, GRID, BV7X were vetoed on it after v2).
+PROMPT_VERSION = 3
 DAILY_MAX = 600           # ~$0.001 a reading: every project past the filters gets its report
 ADMIT_MIN = 80
 VETO_MIN_CONF = 0.7
@@ -62,6 +63,9 @@ SYSTEM = (
     "so unlocked liquidity there is not a problem by itself. "
     "(9) Named integrations with known protocols (e.g. Ondo for tokenized stocks, LayerZero, Chainlink) are a "
     "strength when the product text says what it uses them for; a bare logo wall is a weak claim. "
+    "(10) No public GitHub is not a problem by itself: many serious projects keep their code closed. Never "
+    "make it the main problem and never answer avoid because of it; it only lowers your confidence. Judge "
+    "the product, the docs and the token instead. "
     "Answer with one JSON object only: {\"score\": 0-100, \"verdict\": \"gem\"|\"watch\"|\"avoid\"|\"scam\", "
     "\"confidence\": 0-1, \"problems\": [up to 5 short strings], \"strengths\": [up to 5 short strings], "
     "\"admit_reason\": \"one sentence, only if a rule excluded it but it deserves the board, else empty\"}."
