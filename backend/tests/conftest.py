@@ -41,3 +41,12 @@ def _onchain_wallets_on(monkeypatch):
     from app.trading.onchain import risk
     monkeypatch.setattr(risk, "_wallet_enabled", lambda owner_id, chain: True)
     yield
+
+
+@pytest.fixture(autouse=True)
+def _private_deepseek_journal(monkeypatch, tmp_path):
+    """The DeepSeek call journal is a file on the volume: every test gets its own."""
+    from app.notify import deepseek_calls
+    monkeypatch.setattr(deepseek_calls, "_FILE", tmp_path / "deepseek_calls.jsonl")
+    deepseek_calls.reset_for_tests()
+    yield

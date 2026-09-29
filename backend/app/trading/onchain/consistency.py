@@ -170,7 +170,8 @@ async def step(top: list[dict], now: float | None = None, ask=None, requeue=None
         by_id = {f"r{i}": r for i, r in enumerate(rows, 1)}
         raw = await ask([{"role": "system", "content": SYSTEM},
                          {"role": "user", "content": brief(rows)}],
-                        kind="consistency", max_tokens=1500, json_mode=True)
+                        kind="consistency", max_tokens=1500, json_mode=True,
+                        purpose="consistency", subject=f"{len(rows)} projects")
         issues = parse(raw, set(by_id))
         rechecked = 0
         for it in issues:

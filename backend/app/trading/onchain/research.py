@@ -244,7 +244,7 @@ async def ai_dossier(item: dict, description: str, texts: list[str], *, boost: b
               f"<listing_description>\n{description[:3000]}\n</listing_description>\n"
               f"<site_text>\n{body}\n</site_text>")
     if not legit.settings.anthropic_api_key:
-        return await _dossier_deepseek(prompt) if legit.settings.deepseek_api_key else None
+        return await _dossier_deepseek(prompt, f"{item.get('chain')}:{item.get('token_address')}") if legit.settings.deepseek_api_key else None
     from anthropic import AsyncAnthropic
     try:
         async with AsyncAnthropic(api_key=legit.settings.anthropic_api_key, timeout=60.0) as client:
@@ -287,14 +287,14 @@ async def _deepseek_reading(key: str, item: dict, sites: list[dict], description
     ds = await _dossier_deepseek(
         f"Project: {item.get('name')} ({item.get('symbol')}) on {item.get('chain')}\n"
         f"Market cap: ${float(item.get('market_cap') or 0):,.0f}\n"
-        f"<listing_description>\n{description[:2000]}\n</listing_description>\n<site_text>\n{body}\n</site_text>")
+        f"<listing_description>\n{description[:2000]}\n</listing_description>\n<site_text>\n{body}\n</site_text>", subject=key)
     if ds is not None:
         _cache[key + "|ds"] = {"at": time.time(), "ai": ds}
     _save()
     return ds
 
 
-async def _dossier_deepseek(prompt: str) -> dict | None:
+async def _dossier_deepseek(prompt: str, subject: str | None = None) -> dict | None:
     """The same dossier on DeepSeek, when there is no Anthropic key: the
     paid deep reading (plans.py) becomes available at a fraction of a cent."""
     from app.notify import deepseek_desk
@@ -302,7 +302,8 @@ async def _dossier_deepseek(prompt: str) -> dict | None:
     try:
         raw = await deepseek_desk.ask(
             [{"role": "system", "content": AI_SYSTEM + f" Answer with one JSON object only, with the keys {keys}."},
-             {"role": "user", "content": prompt}], kind="research", max_tokens=900, json_mode=True)
+             {"role": "user", "content": prompt}], kind="research", max_tokens=900, json_mode=True,
+            purpose="research_dossier", subject=subject)
         out = json.loads(raw)
         out["substance"] = max(0, min(10, int(out.get("substance") or 0)))
     except Exception as exc:

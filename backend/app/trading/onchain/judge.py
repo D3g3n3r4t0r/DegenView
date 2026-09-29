@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 
 from app.trading.onchain import storage
@@ -202,18 +203,76 @@ def parse(raw: str) -> dict | None:
             "admit_reason": _cut(out.get("admit_reason"), 200)}
 
 
+# When to read a project again (issue #358, I04). A reading holds while
+# what it was based on holds: the same facts after TTL_S give the same
+# answer, so it is kept up to MAX_AGE_S (the periodic refresh stays as a
+# safety net); a fact that moved enough to change the risk invalidates it
+# at once, without waiting for TTL_S. Only this reading is redone: site,
+# code and research keep their own caches.
+MAX_AGE_S = 3 * TTL_S
+LIQ_DROP = 0.4            # liquidity down 40% since the reading
+CAP_FACTOR = 3.0          # market cap x3 or /3
+PILLAR_MOVE = 15          # a pillar score moved 15 points
+RECHECK_GAP_S = 6 * 3600  # at most one invalidation every 6h per project
+
+
+def judged_facts(e: dict, rules_why: str) -> dict:
+    """What a reading depends on, cheap to compare: no network."""
+    pillars = e.get("pillars") or {}
+    return {"liq": float(e.get("liquidity_usd") or 0), "cap": float(e.get("market_cap") or 0),
+            "rules": re.sub(r"[\d.,$%]+", "#", rules_why or ""),
+            "pillars": {n: (pillars.get(n) or {}).get("score") for n in ("github", "site", "tokenomics")}}
+
+
+def what_changed(old: dict | None, new: dict) -> str:
+    """The change that invalidates a reading, or ""."""
+    if not old:
+        return ""
+    if old.get("liq", 0) > 0 and new["liq"] < old["liq"] * (1 - LIQ_DROP):
+        return f"liquidity {new['liq'] / old['liq'] - 1:+.0%}"
+    if old.get("cap", 0) > 0 and new["cap"] > 0 and not 1 / CAP_FACTOR < new["cap"] / old["cap"] < CAP_FACTOR:
+        return f"market cap x{new['cap'] / old['cap']:.2f}"
+    if old.get("rules") != new["rules"]:
+        return "rules verdict changed"
+    for n, v in new["pillars"].items():
+        w = (old.get("pillars") or {}).get(n)
+        if isinstance(v, (int, float)) and isinstance(w, (int, float)) and abs(v - w) >= PILLAR_MOVE:
+            return f"{n} pillar {w:.0f}->{v:.0f}"
+    return ""
+
+
+def reason_to_judge(hit: dict | None, seen: dict, now: float) -> str:
+    """Why DeepSeek should read this project now, or "" to keep the reading."""
+    if not hit:
+        return "first reading"
+    if hit.get("v") != PROMPT_VERSION:
+        return "new prompt"
+    age = now - hit.get("at", 0)
+    changed = what_changed(hit.get("facts"), seen)
+    if changed and age >= RECHECK_GAP_S:
+        return changed
+    if age < TTL_S:
+        return ""
+    if hit.get("facts") and not changed and age < MAX_AGE_S:
+        return ""
+    return "periodic refresh"
+
+
 async def judge(e: dict, rules_why: str, now: float | None = None, ask=None,
                 priority: bool = False) -> dict | None:
     """`priority` (a Top entry) uses its own daily allowance instead of DAILY_MAX."""
     key = f"{e['chain']}:{e['token_address']}"
     now = now or time.time()
     hit = _cache.get(key)
-    if hit and now - hit.get("at", 0) < TTL_S and hit.get("v") == PROMPT_VERSION:
+    seen = judged_facts(e, rules_why)
+    why = reason_to_judge(hit, seen, now)
+    if not why:
         return hit
     day = time.strftime("%Y-%m-%d", time.gmtime(now))
     count = f"{day}:top" if priority else day
     if _calls.get(count, 0) >= (PRIORITY_DAILY_MAX if priority else DAILY_MAX):
-        return None
+        # Out of budget: the last reading stands, marked as out of date.
+        return {**hit, "stale": why} if hit and hit.get("v") == PROMPT_VERSION else None
     from app.notify import deepseek_desk
     if ask is None:
         ask = deepseek_desk.ask
@@ -223,6 +282,7 @@ async def judge(e: dict, rules_why: str, now: float | None = None, ask=None,
         f"age {_age_days(e.get('launched_at'))} days",
         "Pillars: " + ", ".join(f"{n} {(pillars.get(n) or {}).get('score', 'n/a')}" for n in ("github", "site", "tokenomics")),
         f"Rules said: {rules_why or 'passes the rules'}",
+        f"Why now: {why}",
     ], symbol=e.get("symbol"), chain=e.get("chain"), token=e.get("token_address"))
     from app.trading.onchain import telegram_public, x_signal
     x = await x_signal.lookup(e, now)
@@ -234,7 +294,7 @@ async def judge(e: dict, rules_why: str, now: float | None = None, ask=None,
     try:
         raw = await ask([{"role": "system", "content": SYSTEM},
                          {"role": "user", "content": dossier(e, rules_why, x, tg)}],
-                        kind="research", max_tokens=700, json_mode=True)
+                        kind="research", max_tokens=700, json_mode=True, purpose="judge/" + why.split()[0], subject=key)
         parsed = parse(raw)
     except Exception as exc:
         logger.info("giudice: DeepSeek non raggiungibile: %s", exc)
@@ -243,6 +303,7 @@ async def judge(e: dict, rules_why: str, now: float | None = None, ask=None,
         return None
     _calls[count] = _calls.get(count, 0) + 1
     parsed["at"], parsed["v"] = now, PROMPT_VERSION
+    parsed["facts"], parsed["why"] = seen, why
     if x:
         parsed["x"] = {k: x[k] for k in ("posts_7d", "authors", "median_followers")}
     if tg:
@@ -333,7 +394,8 @@ async def review_board(entries: list[dict], now: float | None = None, ask=None) 
     try:
         raw = await ask([{"role": "system", "content": REVIEW_SYSTEM},
                          {"role": "user", "content": review_brief(entries)}],
-                        kind="research", max_tokens=3000, json_mode=True)
+                        kind="research", max_tokens=3000, json_mode=True,
+                        purpose="board_review", subject=f"{len(entries)} entries")
     except Exception as exc:
         logger.info("giudice: revisione non riuscita: %s", exc)
         return {}

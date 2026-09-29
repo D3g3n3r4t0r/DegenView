@@ -409,7 +409,8 @@ async def tick(now: float | None = None, client=None, ask=None, dossier_fn=None)
             rec["calls_at"] = [*(rec.get("calls_at") or []), now]
             try:
                 async with httpx.AsyncClient(timeout=300.0) as ds_http:
-                    answer = await ask(messages_for(rec), kind="study", max_tokens=rec["max_tokens"], http=ds_http)
+                    answer = await ask(messages_for(rec), kind="study", max_tokens=rec["max_tokens"], http=ds_http,
+                                         purpose="study", subject=rec["id"])
             except Exception as exc:
                 rec["error"] = f"{type(exc).__name__}: {exc}"[:500]
                 _save()
