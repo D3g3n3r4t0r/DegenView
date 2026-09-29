@@ -4103,6 +4103,13 @@ async def onchain_radar_stream(user: User = Depends(auth.get_current_user)) -> S
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
+def app_token_url(view: str, chain: str, token: str) -> str:
+    """The app open on one token's page: what every ticker in a Telegram
+    alert links to (Lorenzo, 29/09). See openFromHash() in detail.js."""
+    from urllib.parse import quote
+    return f"{settings.public_base_url}/onchain-app.html#{view}&token={quote(chain, safe='')}:{quote(token, safe='')}"
+
+
 _LISTING_NOTIFY_PER_HOUR = 12
 _listing_notified: dict[str, list[float]] = {}
 
@@ -4112,7 +4119,7 @@ async def _notify_listing(item: dict) -> None:
     chiusa non deve voler dire saperlo tardi. Al massimo 12 all'ora."""
     from app.notify import telegram
     now = _time.time()
-    link = f"{settings.public_base_url}/onchain-app.html#listing={item['chain']}:{item['pair_address']}"
+    link = app_token_url("meme", item["chain"], item.get("token_address") or item["pair_address"])
     text = onchain_listings.telegram_text(item, now, link)
     # The signal's own track record: what entering on this message would pay.
     onchain_alert_track.record(item, "meme", now)
@@ -4143,7 +4150,10 @@ def _gem_telegram_text(kind: str, e: dict) -> str:
     pillars = e.get("pillars") or {}
     scores = " · ".join(f"{n} {round(pillars[k]['score'])}" for k, n in (("github", "GitHub"), ("site", "Ricerca"),
                         ("tokenomics", "Tokenomics")) if (pillars.get(k) or {}).get("score") is not None)
-    lines = [head, f"<b>{esc(e.get('symbol') or '?')}</b> · {esc(e.get('name') or '')} su {chain}",
+    sym = esc(e.get("symbol") or "?")
+    if e.get("token_address"):
+        sym = f'<a href="{esc(app_token_url("gems", e.get("chain") or "", e["token_address"]), quote=True)}">{sym}</a>'
+    lines = [head, f"<b>{sym}</b> · {esc(e.get('name') or '')} su {chain}",
              f"cap {cap} · punteggio {round(e.get('score') or 0)} · posto {e.get('rank') or '—'}"]
     if scores:
         lines.append(scores)
@@ -4156,7 +4166,9 @@ def _gem_telegram_text(kind: str, e: dict) -> str:
     for label, url in (("🌐 Sito", e.get("website")), ("GitHub", e.get("github")), ("Grafico", e.get("pair_url"))):
         if url:
             links.append(f'<a href="{esc(url, quote=True)}">{label}</a>')
-    links.append(f'<a href="{esc(settings.public_base_url, quote=True)}/onchain-app.html#gems">Apri Gem Finder</a>')
+    gem_url = app_token_url("gems", e.get("chain") or "", e["token_address"]) if e.get("token_address") \
+        else f"{settings.public_base_url}/onchain-app.html#gems"
+    links.append(f'<a href="{esc(gem_url, quote=True)}">Apri in DEGEN</a>')
     lines.append(" · ".join(links))
     lines.append("<i>Ricerca, non un consiglio: entra solo con cio' che puoi perdere.</i>")
     return "\n".join(lines)
@@ -4199,12 +4211,17 @@ async def _notify_autotrade(user: User, row: dict) -> None:
     from app.notify import telegram
     if not user.telegram_chat_id or not _telegram_allowed(user):
         return
+    import html as _html
     tag = "🧪 SIMULATO" if row.get("mode") == "sim" else "💱 ESEGUITO"
+    sym = _html.escape(str(row["symbol"]))
+    if row.get("token"):
+        url = app_token_url("meme", row.get("chain") or "robinhood", row["token"])
+        sym = f'<a href="{_html.escape(url, quote=True)}">{sym}</a>'
     if row["side"] == "buy":
-        text = f"{tag} · il sistema ha comprato <b>{row['symbol']}</b> con {row.get('usdg', 0):.2f} USDG"
+        text = f"{tag} · il sistema ha comprato <b>{sym}</b> con {row.get('usdg', 0):.2f} USDG"
     else:
         ret = row.get("ret")
-        text = (f"{tag} · il sistema ha venduto <b>{row['symbol']}</b> per {row.get('usdg', 0):.2f} USDG"
+        text = (f"{tag} · il sistema ha venduto <b>{sym}</b> per {row.get('usdg', 0):.2f} USDG"
                 + (f" ({ret * 100:+.1f}%)" if ret is not None else "") + f" · {row.get('why', '')}")
     await telegram.send_to(user.telegram_chat_id, text)
 

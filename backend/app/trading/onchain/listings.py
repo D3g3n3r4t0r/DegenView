@@ -490,7 +490,9 @@ def telegram_text(item: dict, now: float | None = None, app_url: str = "") -> st
     esc = html.escape
     chain = legit.CHAIN_LABEL.get(item["chain"], item["chain"])
     age = int((now - item["created_at"]) // 60) if item.get("created_at") else None
-    lines = [f"🆕 <b>{esc(item['symbol'])}</b> · {esc(item.get('name') or '')} su {chain}",
+    # The ticker itself opens the token's page in the app (Lorenzo, 29/09).
+    ticker = f'<a href="{esc(app_url, quote=True)}">{esc(item["symbol"])}</a>' if app_url else esc(item["symbol"])
+    lines = [f"🆕 <b>{ticker}</b> · {esc(item.get('name') or '')} su {chain}",
              f"liq. ${item['liquidity_usd']:,.0f} · cap ${item['market_cap']:,.0f}"
              + (f" · nato {age} min fa" if age is not None else "")]
     passed = [c for c in item.get("checks") or [] if c.get("ok")]
