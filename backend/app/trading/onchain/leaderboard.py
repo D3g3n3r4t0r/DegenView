@@ -156,6 +156,7 @@ _tasks: set[asyncio.Task] = set()
 _slots = asyncio.Semaphore(ANALYZE_CONCURRENCY)
 _state = {"version": 0, "examined": 0, "last_tick": 0.0, "last_market": 0.0,
           "sources": {}, "board": []}
+_recorded: set[str] = set()         # working-set keys whose verdict was written to the database since start
 _alerted: set[str] = set()          # "new:<key>" / "early:<key>": alerts already sent
 _outbox: list[tuple[str, str]] = []
 _alert_hooks: list = []
@@ -238,6 +239,7 @@ def _save() -> None:
 
 def reset_for_tests() -> None:
     _alerted.clear()
+    _recorded.clear()
     _outbox.clear()
     _alert_hooks.clear()
     gem_track.reset_for_tests()
@@ -449,7 +451,9 @@ async def _analyze(k: str, skip: set[str], client: httpx.AsyncClient) -> None:
         if e is not None:
             o = e.get("overall") or {}
             if not o.get("pending") and not o.get("fatal"):
-                j = await judge.judge(e, qualifies(e))
+                # The Top has its own allowance: after a prompt change the whole set is
+                # re-read and must not starve the projects people are looking at.
+                j = await judge.judge(e, qualifies(e), priority=k in _top_rank)
                 if j:
                     e["judge"] = j
                     _remember(e, "ranked" if e.get("rank") else "studied", qualifies(e), time.time())
@@ -702,6 +706,15 @@ def _sync_database(order: list[str]) -> None:
             continue
         status, rank = _place(k, e.get("rank"))
         score = final_score(e)
+        if k not in _recorded:
+            # Once per start: a row still "rejected" under an old check (BV7X, "single
+            # wallet 41%") is not moved by set_standing, which only touches studied
+            # and ranked rows. A working-set entry with no fatal pillar is studied.
+            _recorded.add(k)
+            try:
+                projects_db.lift_rejected(e["chain"], e["token_address"])
+            except Exception:
+                logger.exception("classifica: riga rifiutata non riaperta per %s", e.get("symbol"))
         seen = (status, score, rank)
         if e.get("_db") == list(seen):
             continue
