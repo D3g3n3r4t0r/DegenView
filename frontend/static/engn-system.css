@@ -1,0 +1,35 @@
+/* ENGN design system. Shared by the public landing and authenticated app.
+   Deliberately unlayered: this is the final presentation over the legacy skins. */
+@font-face{font-family:Geist;src:url('/static/fonts/geist-latin.woff2?v=1') format('woff2');font-weight:100 900;font-display:swap}
+@font-face{font-family:'Geist Mono';src:url('/static/fonts/geist-mono-latin.woff2?v=1') format('woff2');font-weight:100 900;font-display:swap}
+:root{
+  color-scheme:dark;
+  --engn-bg:#070c0a;--engn-surface:#0d1711;--engn-raised:#14231a;--engn-line:#233a2c;
+  --engn-text:#e8f1eb;--engn-muted:#9cb3a4;--engn-faint:#73917d;--engn-mint:#2de2b0;
+  --engn-cyan:#63d5e9;--engn-lilac:#b9a2f5;--engn-amber:#eabb69;--engn-red:#ef827f;
+  --sans:Geist,system-ui,sans-serif;--mono:'Geist Mono',ui-monospace,monospace;--serif:'Instrument Serif',Georgia,serif;
+  --bg:var(--engn-bg);--bg-2:var(--engn-surface);--panel:var(--engn-surface);--raised:var(--engn-raised);
+  --line:var(--engn-line);--line-2:#365342;--ink:var(--engn-text);--ink-dim:var(--engn-muted);--ink-faint:var(--engn-faint);
+  --dim:var(--engn-muted);--faint:var(--engn-faint);--accent:var(--engn-mint);--accent-2:#20b98d;--accent-ink:#051a11;
+  --mint:var(--engn-mint);--green:var(--engn-mint);--green-2:#20b98d;--up:var(--engn-mint);--down:var(--engn-red);--danger:var(--engn-red);--red:var(--engn-red);--amber:var(--engn-amber);
+  --k-bg:var(--engn-bg);--k-bar:#09110c;--k-card:var(--engn-surface);--k-surface:#122219;--k-surface-2:#233b2c;
+  --k-text:var(--engn-text);--k-text-2:var(--engn-muted);--k-text-3:var(--engn-faint);--k-text-4:#698775;
+  --k-green:var(--engn-mint);--k-mint:var(--engn-mint);--k-green-pill:#153c2a;--k-red:var(--engn-red);--k-red-pill:#39201e;--k-amber:var(--engn-amber);--k-hot:var(--engn-cyan);--k-line:var(--engn-line);
+  --k-tint-up:#10291b;--k-tint-down:#251918;--radius:18px;--r-sm:10px;
+}
+html,body{background:var(--engn-bg);color:var(--engn-text)}
+body{font-family:var(--sans);-webkit-font-smoothing:antialiased}
+::selection{background:#2de2b035;color:#d5ffef}
+:is(button,a,input,select,textarea,summary):focus-visible{outline:2px solid var(--engn-mint);outline-offset:4px}
+:is(input,select,textarea){accent-color:var(--engn-mint)}
+button{font-family:var(--sans)}
+:is(.btn-primary,.tb-deposit,.pf-save){background:var(--engn-mint);color:#051a11;border:1px solid transparent;border-radius:9px;box-shadow:none;font-weight:600}
+:is(.btn-primary,.tb-deposit,.pf-save):hover{background:#74f0c7}
+:is(.form,.sheet,.profile,.swap,.projects,.pilot,.dt-cta) :is(input:not([type=checkbox]):not([type=range]):not([type=radio]),select,textarea){background:#09130d;border:1px solid #2c4937;border-radius:9px;color:var(--engn-text);min-height:42px}
+.engn-eyebrow{font:500 10px/1.5 var(--mono);letter-spacing:.17em;text-transform:uppercase;color:var(--engn-mint)}
+.engn-title{font:400 clamp(38px,4vw,62px)/1.04 var(--serif);letter-spacing:-.03em;color:var(--engn-text);margin:12px 0 16px}
+.engn-title em{color:var(--engn-mint);font-weight:400}
+.engn-brand{display:flex;align-items:center;gap:11px;color:var(--engn-text);text-decoration:none;font:500 11px/1.6 var(--mono);letter-spacing:.1em}
+.engn-brand svg{width:30px;height:34px;flex:none}
+.engn-copy{color:var(--engn-muted);font-size:13px;line-height:1.8;max-width:520px}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{scroll-behavior:auto!important}}
