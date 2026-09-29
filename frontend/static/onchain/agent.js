@@ -89,7 +89,8 @@ function chips() {
   // Two different things, never merged: AI calls (tokens spent) and work done
   // (every note, LLM or not). A token studied 30 times counts as one project.
   const calls = Object.values(viewData?.today ?? {}).reduce((a, n) => a + n, 0);
-  const ai = calls ? `AI: ${calls} calls · ${compact(viewData?.tokens ?? 0)} tokens` : "";
+  const cap = viewData?.cap_usd ? ` · $${(viewData.spent_usd ?? 0).toFixed(2)} of $${viewData.cap_usd.toFixed(2)}` : "";
+  const ai = calls ? `AI: ${calls} calls · ${compact(viewData?.tokens ?? 0)} tokens${cap}` : "";
   const distinct = viewData?.distinct ?? {};
   const work = Object.entries(viewData?.done ?? {})
     .map(([k, n]) => [k, distinct[k] ?? n])
