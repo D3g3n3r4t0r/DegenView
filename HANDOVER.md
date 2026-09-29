@@ -1,5 +1,11 @@
 # Memoria di sessione
 
+## Scanner manuale al passo con la pipeline — `seed-0232` — 2026-09-29
+
+Lorenzo, con lo screenshot di HYDX: "lo scanner manuale e' insufficiente e non si e' evoluto seguendo tutti gli aggiornamenti e migliorie che abbiamo fatto".
+Fatto a mano (Actions DeepSeek ferme): `manual_scan.py` distingue progetto e meme; un progetto prende il verdetto del Gem Finder (`gem_view`: voce in classifica, riga del database o accodato con `projects_db.upsert(..., "manual")`) con punteggio, pilastri, giudice e codice; backtest dal laboratorio (`strategy_lab`, o eseguito e salvato: `backtest_view` = trend follower daily + migliore 5m contro hold). Memoria in inglese, flag di DeepSeek sui "similar" tolti. Scheda con tasto "Full token page" (`openFromHash`). Bug trovato: `strategy_lab.get` non restituiva `daily`, quindi ogni pagina gemma diceva "No daily backtest".
+Resta: il meme non passa ancora da `meme_engine.score` nello scanner.
+
 ## Scheda progetto, mappa e consumi DeepSeek — 2026-09-29
 
 Lorenzo: "produci su github ciò che serve, poi claude implementerà il tuo codice"; chiede inoltre mappa a neuroni, agent oltre le scansioni e un lavoro esclusivo sui consumi. In docs/analysis-receipts/JOURNEY_AND_AGENT.md: contratti, integrazioni J1-J4 e agent con domande/ipotesi/stop. journey_reference.py è specifica eseguibile, 12 test passati, non runtime. neural-map.fragment.html è prototipo concettuale con scenari sintetici, non telemetria live. DEEPSEEK_COST_AUDIT.md: filone E0-E5 separato. Diagnosi su e8e0a9: UI fonde done/eventi e today/chiamate, research e scanner entrambi readings; studies conta note ripetibili mentre Database studied conta righe studied+ranked. 27849/893 forniti dall'utente, non misure estratte dal server; 80 consistency resta da riconciliare col limite 12/die nello SHA letto. Nessuna inferenza sulla fattura. Prima accounting distinto e gateway budget globale, poi deduplica/scheduler/token packing. Integrare nello store #362/#364; nessuna seconda memoria. Suite backend non eseguita; nessun merge/deploy. Bacheca API non accessibile dal terminale di questa sessione.
