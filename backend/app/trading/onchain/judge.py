@@ -26,6 +26,9 @@ TTL_S = 3 * 86400
 DAILY_MAX = 600           # ~$0.001 a reading: every project past the filters gets its report
 ADMIT_MIN = 80
 VETO_MIN_CONF = 0.7
+# The Top's own allowance (Lorenzo, 29/09: every token in the Top gets
+# DeepSeek's investigation): a Top entry is judged even when DAILY_MAX is spent.
+PRIORITY_DAILY_MAX = 150
 _FILE = storage.data_file("onchain_judge.json")
 
 SYSTEM = (
@@ -162,14 +165,17 @@ def parse(raw: str) -> dict | None:
             "admit_reason": _cut(out.get("admit_reason"), 200)}
 
 
-async def judge(e: dict, rules_why: str, now: float | None = None, ask=None) -> dict | None:
+async def judge(e: dict, rules_why: str, now: float | None = None, ask=None,
+                priority: bool = False) -> dict | None:
+    """`priority` (a Top entry) uses its own daily allowance instead of DAILY_MAX."""
     key = f"{e['chain']}:{e['token_address']}"
     now = now or time.time()
     hit = _cache.get(key)
     if hit and now - hit.get("at", 0) < TTL_S:
         return hit
     day = time.strftime("%Y-%m-%d", time.gmtime(now))
-    if _calls.get(day, 0) >= DAILY_MAX:
+    count = f"{day}:top" if priority else day
+    if _calls.get(count, 0) >= (PRIORITY_DAILY_MAX if priority else DAILY_MAX):
         return None
     from app.notify import deepseek_desk
     if ask is None:
@@ -193,7 +199,7 @@ async def judge(e: dict, rules_why: str, now: float | None = None, ask=None) -> 
         return None
     if parsed is None:
         return None
-    _calls[day] = _calls.get(day, 0) + 1
+    _calls[count] = _calls.get(count, 0) + 1
     parsed["at"] = now
     if x:
         parsed["x"] = {k: x[k] for k in ("posts_7d", "authors", "median_followers")}

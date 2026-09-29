@@ -42,7 +42,7 @@ PRICE = {"deepseek": (0.28, 0.42), "claude": (3.0, 15.0)}
 CHAT_DAILY_TOKENS = 300_000
 MEMORY = 10                          # messages kept per chat
 KINDS = {"chat": "chat Telegram", "scanner": "scanner (giudizio token)", "research": "letture approfondite gemme",
-         "review": "revisioni token",
+         "review": "revisioni token", "consistency": "controllo incongruenze Top",
          "pr_review": "revisioni PR"}
 
 _lock = threading.Lock()

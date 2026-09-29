@@ -104,10 +104,12 @@ from app.trading.onchain import send as onchain_send
 from app.trading.onchain import jito as onchain_jito
 from app.trading.onchain import keys as onchain_keys
 from app.trading.onchain import legit as onchain_legit
+from app.trading.onchain import consistency as onchain_consistency_audit
 from app.trading.onchain import ledger as onchain_ledger
 from app.trading.onchain import outcomes as onchain_outcomes
 from app.trading.onchain import narratives as onchain_narratives
 from app.trading.onchain import judge as onchain_judge
+from app.trading.onchain import code_review as onchain_code_review
 from app.trading.onchain import backtest_lab as onchain_backtest_lab
 from app.trading.onchain import strategy_lab as onchain_strategy_lab
 from app.trading.onchain import autotrader as onchain_autotrader
@@ -1502,6 +1504,7 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(_deepseek_recap_loop())
     asyncio.create_task(_ai_scan_loop())
     t5 = asyncio.create_task(_watchdog_loop())
+    onchain_leaderboard.set_top_source(_top_entries)
     radar_tasks = [asyncio.create_task(onchain_radar.radar_loop()),
                    asyncio.create_task(onchain_listings.listings_loop()),
                    asyncio.create_task(onchain_radar.listings_backtest_loop()),
@@ -3893,6 +3896,15 @@ async def onchain_leaderboard_view(user: User = Depends(auth.get_current_user)) 
     return {**board, "entries": onchain_outcomes.without_shamed(board.get("entries") or [])}
 
 
+@app.get("/api/onchain/consistency")
+async def onchain_consistency(user: User = Depends(auth.get_current_user)) -> dict:
+    """DeepSeek's last audit of the Top against the database (consistency.py):
+    Lorenzo, 29/09, "dai a deep seek anche il compito di scansionare queste
+    incongruenze"."""
+    _require_onchain_enabled()
+    return onchain_consistency_audit.last_run()
+
+
 @app.get("/api/onchain/top")
 async def onchain_top(n: int = 15, narrative: str = "", user: User = Depends(auth.get_current_user)) -> dict:
     """Top 15/25/50 (top.js): the best projects we know, by score. Lorenzo,
@@ -3963,6 +3975,12 @@ def _top_entries(n: int = 50, narrative: str = "") -> list[dict]:
         j = onchain_judge.get(row["chain"], row["token"])
         if j and j.get("verdict") in ("avoid", "scam") and (j.get("confidence") or 0) >= onchain_judge.VETO_MIN_CONF:
             continue
+        # The Top is the ranking: a row the rules excluded stays out unless
+        # DeepSeek admitted it, as in leaderboard.qualifies (Lorenzo, 29/09:
+        # HATCHER "excluded, only studied" and first on the podium).
+        admitted = bool(j) and j.get("verdict") in ("gem", "watch") and (j.get("score") or 0) >= onchain_judge.ADMIT_MIN
+        if (row.get("why") or "").strip() and not admitted:
+            continue
         seen.add(key)
         out.append({"chain": row["chain"], "token_address": row["token"], "pair_address": None, "pair_url": None,
                     "symbol": row.get("symbol"), "name": row.get("name"), "image": row.get("image"),
@@ -3987,10 +4005,15 @@ async def onchain_token(chain: str, token: str, user: User = Depends(auth.get_cu
     else:
         p = onchain_projects_db.get(chain, token)
         if p is not None:
-            entry = {**onchain_projects_db.as_item(p), "score": p.get("score"), "pillars": p.get("pillars") or {},
-                     "overall": p.get("overall"), "narratives": p.get("narratives") or [],
-                     "traction": p.get("traction"), "rank": p.get("rank"), "status": p.get("status"),
-                     "why": p.get("why"), "on_board": False}
+            # DeepSeek's report and code reading, as on a board entry (Lorenzo,
+            # 29/09: every Top token gets DeepSeek's investigation in Why and Info).
+            entry = onchain_leaderboard.db_entry(p)
+            j = onchain_judge.get(chain, token)
+            c = onchain_code_review.get(onchain_code_review.repo_of(entry))
+            entry["judge"] = {k: j.get(k) for k in ("score", "verdict", "problems", "strengths", "admit_reason")} \
+                if j else None
+            entry["code"] = {k: c.get(k) for k in ("complexity", "innovation", "fork_of", "summary", "strengths",
+                                                   "concerns")} if c else None
     return {"entry": entry, "alerts": onchain_alert_track.for_token(chain, token),
             "backtests": onchain_strategy_lab.get(chain, token)}
 

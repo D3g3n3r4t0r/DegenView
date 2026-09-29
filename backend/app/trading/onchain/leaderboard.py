@@ -46,7 +46,7 @@ import time
 import httpx
 
 from app.sniper.quality import _looks_like_meme
-from app.trading.onchain import (benchmark, big_coins, code_review, depth, discovery, gem_track, judge, legit, narrative_map,
+from app.trading.onchain import (benchmark, big_coins, code_review, consistency, depth, discovery, gem_track, judge, legit, narrative_map,
                                   narratives, priority, projects_db, radar, research, storage, traction)
 
 logger = logging.getLogger(__name__)
@@ -220,7 +220,10 @@ def reset_for_tests() -> None:
     _busy.clear()
     _state.update(version=0, examined=0, last_tick=0.0, last_market=0.0, sources={}, board=[],
                   reviewed_at=0.0, reviewed_board=[], reviewing=False, code_reading=False, code_at=0.0, db_board=[],
-                  narr_mapping=False)
+                  narr_mapping=False, top_filling=False, top_fill_at=0.0, top_synced_at=0.0, auditing=False)
+    _top_tried.clear()
+    _top_rank.clear()
+    set_top_source(None)
 
 
 # ------------------------------------------------------------------- fonti
@@ -377,9 +380,16 @@ def apply_analysis(k: str, result: dict, now: float | None = None) -> None:
 
 
 def _remember(e: dict, status: str, why: str, now: float) -> None:
-    """The verdict goes to the database, so it outlives the working set."""
+    """The verdict goes to the database, so it outlives the working set.
+    "ranked" or "studied" is the Top's word, not the board's (see sync_top)."""
+    rank = e.get("rank")
+    if status in ("ranked", "studied"):
+        status, rank = _place(_key(e["chain"], e["token_address"]), rank)
+        if status == "ranked":
+            why = ""
     try:
-        projects_db.record(e, status, why, final_score(e) if status != "rejected" else None, traction_of(e), now)
+        projects_db.record({**e, "rank": rank}, status, why, final_score(e) if status != "rejected" else None,
+                           traction_of(e), now)
     except Exception:
         logger.exception("classifica: verdetto non salvato per %s", e.get("symbol"))
 
@@ -664,7 +674,9 @@ def _sync_database(order: list[str]) -> None:
     report, review and code reading move the score after the analysis was saved
     (Lorenzo, 28/09: three at 93 in the database, off the podium)."""
     board = set(order)
-    if board != set(_state.get("db_board") or []):
+    # Once the Top has been synced (sync_top), "ranked" means "in the Top":
+    # the board only moves scores, it no longer demotes what the Top holds.
+    if not _state.get("top_synced_at") and board != set(_state.get("db_board") or []):
         try:
             projects_db.demote_ranked(board)
             _state["db_board"] = sorted(board)
@@ -674,13 +686,13 @@ def _sync_database(order: list[str]) -> None:
         o = e.get("overall") or {}
         if not o or o.get("fatal") or o.get("pending"):
             continue
-        status = "ranked" if k in board else "studied"
+        status, rank = _place(k, e.get("rank"))
         score = final_score(e)
-        seen = (status, score, e.get("rank"))
+        seen = (status, score, rank)
         if e.get("_db") == list(seen):
             continue
         try:
-            projects_db.set_standing(e["chain"], e["token_address"], status, score, e.get("rank"),
+            projects_db.set_standing(e["chain"], e["token_address"], status, score, rank,
                                      "" if status == "ranked" else qualifies(e))
         except Exception:
             logger.exception("classifica: posizione non salvata per %s", e.get("symbol"))
@@ -856,6 +868,17 @@ async def tick(client: httpx.AsyncClient, now: float | None = None) -> None:
         task = asyncio.create_task(_step("codice", _read_code, client, now))
         _tasks.add(task)
         task.add_done_callback(_tasks.discard)
+    if not _state.get("top_filling") and _top_source is not None \
+            and now - _state.get("top_fill_at", 0.0) >= TOP_FILL_EVERY_S:
+        task = asyncio.create_task(_step("top", top_fill, client, now))
+        _tasks.add(task)
+        task.add_done_callback(_tasks.discard)
+    if _top_source is not None and now - _state.get("top_synced_at", 0.0) >= TOP_SYNC_EVERY_S:
+        await _step("top sync", _sync_top, now)
+    if not _state.get("auditing") and consistency.due(now):
+        task = asyncio.create_task(_step("coerenza", _audit, now))
+        _tasks.add(task)
+        task.add_done_callback(_tasks.discard)
     if not _state.get("narr_mapping"):
         task = asyncio.create_task(_step("narrative", _map_narratives, now))
         _tasks.add(task)
@@ -1025,6 +1048,133 @@ async def _map_narratives(now: float) -> None:
             changed = True
     if changed:
         _mark()
+
+
+# ------------------------------------------------------------ the Top first
+
+# Lorenzo, 29/09: "tutti i token che entrano in top dovranno avere l'indagine
+# di deepseek nella tab why e info, come fatto per dregg". The Top (main.py
+# _top_entries) mixes board entries with database rows the board never
+# judged, and a board entry may still wait for the daily cap: every minute a
+# few of them are read first, on their own allowance (priority=True).
+TOP_FILL_EVERY_S = 60
+TOP_FILL_PER_TURN = 3
+TOP_RETRY_S = 6 * 3600         # a reading that failed waits before the next try
+_top_source = None             # callable(n) -> the Top's entries (main._top_entries)
+_top_tried: dict[str, float] = {}
+TOP_SYNC_EVERY_S = 60
+_top_rank: dict[str, int] = {}  # "chain:token" -> place in the unfiltered Top, after sync_top
+
+
+def _place(k: str, board_rank: int | None) -> tuple[str, int | None]:
+    """("ranked", place) when the project is in the Top, else ("studied", None).
+    Before the first sync the board's own order stands in for the Top."""
+    if _state.get("top_synced_at"):
+        return ("ranked", _top_rank[k]) if k in _top_rank else ("studied", None)
+    return ("ranked", board_rank) if board_rank else ("studied", None)
+
+
+def sync_top(now: float | None = None) -> int:
+    """The database's "ranked" follows the Top (Lorenzo, 29/09: HATCHER
+    "Studied" in the Database and first on the podium). Only the unfiltered
+    Top counts: a narrative filter is a view, not the ranking."""
+    if _top_source is None:
+        return 0
+    keys = [_key(t["chain"], t["token_address"]) for t in _top_source(50)]
+    changed = projects_db.sync_top(keys)
+    _top_rank.clear()
+    _top_rank.update({k: i for i, k in enumerate(keys, 1)})
+    _state["top_synced_at"] = now or time.time()
+    for e in _entries.values():
+        e.pop("_db", None)      # the next _sync_database rewrites with the Top's places
+    return changed
+
+
+async def _sync_top(now: float) -> None:
+    sync_top(now)
+    _sync_database(_state["board"])
+
+
+async def _audit(now: float) -> None:
+    """DeepSeek looks for contradictions between the Top and the database."""
+    _state["auditing"] = True
+    try:
+        await consistency.step(_top_source(50) if _top_source else [], now, requeue=requeue)
+    finally:
+        _state["auditing"] = False
+
+
+def requeue(chain: str, token: str) -> bool:
+    """A fresh analysis: a board entry's pillars go stale at once, a
+    database row goes back in the queue."""
+    e = _entries.get(_key(chain, token))
+    if e is not None:
+        e["checked_at"] = {}
+        e.pop("_db", None)
+        return True
+    return projects_db.recheck(chain, token)
+
+
+def set_top_source(fn) -> None:
+    global _top_source
+    _top_source = fn
+
+
+def db_entry(p: dict) -> dict:
+    """A database row in board shape: what the token page and the judge read."""
+    return {**projects_db.as_item(p), "score": p.get("score"), "pillars": p.get("pillars") or {},
+            "overall": p.get("overall"), "narratives": p.get("narratives") or [],
+            "traction": p.get("traction"), "rank": p.get("rank"), "status": p.get("status"),
+            "why": p.get("why"), "on_board": False}
+
+
+async def top_fill(client: httpx.AsyncClient, now: float | None = None) -> int:
+    """DeepSeek's report and code reading for the Top's entries that lack
+    them, up to TOP_FILL_PER_TURN readings a turn. Returns the readings tried."""
+    now = now or time.time()
+    if _top_source is None or _state.get("top_filling"):
+        return 0
+    _state["top_fill_at"] = now
+    _state["top_filling"] = True
+    tried = 0
+    changed = False
+    try:
+        for t in _top_source(50):
+            if tried >= TOP_FILL_PER_TURN:
+                break
+            k = _key(t["chain"], t["token_address"])
+            e = _entries.get(k)
+            board = e is not None
+            if e is None:
+                p = projects_db.get(t["chain"], t["token_address"])
+                if p is None:
+                    continue
+                e = db_entry(p)
+            o = e.get("overall") or {}
+            has_judge = e.get("judge") if board else judge.get(e["chain"], e["token_address"])
+            if not has_judge and not o.get("pending") and now - _top_tried.get("judge:" + k, 0) >= TOP_RETRY_S:
+                _top_tried["judge:" + k] = now
+                tried += 1
+                j = await judge.judge(e, qualifies(e, now) if board else (e.get("why") or ""), now, priority=True)
+                if j and board and k in _entries:
+                    _entries[k]["judge"] = j
+                    _remember(e, "ranked" if e.get("rank") else "studied", qualifies(e), now)
+                    changed = True
+            repo = code_review.repo_of(e)
+            has_code = e.get("code") if board else code_review.get(repo)
+            if repo and not has_code and tried < TOP_FILL_PER_TURN \
+                    and now - _top_tried.get("code:" + k, 0) >= TOP_RETRY_S:
+                _top_tried["code:" + k] = now
+                tried += 1
+                c = await code_review.review(e, client, now, priority=True)
+                if c and board and k in _entries:
+                    _entries[k]["code"] = c
+                    changed = True
+    finally:
+        _state["top_filling"] = False
+    if changed:
+        _mark()
+    return tried
 
 
 START_DELAY_S = 20
