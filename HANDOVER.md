@@ -12,6 +12,12 @@ lavori pluri-sessione, decisioni prese, stato di piani approvati.
 
 ---
 
+## Versione desktop dell'app on-chain — 2026-09-29
+
+Lorenzo, 29/09: "comunque se hai html di fomo app procedi a fare la versione desktop" (zip della pagina token di FOMO, solo come ispirazione: lista a sinistra, pagina token al centro, compra a destra, sezioni nella testata).
+Fatto (issue #344 aperta per DeepSeek, ma le Actions fallivano ancora in 3 s: scritto a mano). Solo da finestra >= 1100px, telefono invariato: il dock diventa una barra con le etichette al centro della testata; Memes/Gems/Strategies restano in una colonna di 420px a sinistra e la pagina token (`dialog.detail`) si apre accanto, non modale (`show()`, niente `pushState`), col primo token della vista aperto da solo (`openFirst`); Agent/Profile/wallet/scambio prendono tutta la larghezza (max 960px) e chiudono la pagina token (`deskView`, `html[data-desk-list]`). Da 1360px il riquadro Buy va su una colonna a destra. CSS in fondo ad `app.css` ("desktop terminal").
+Da fare se Lorenzo lo chiede: nastro prezzi in basso e "Your positions" nella colonna destra come FOMO.
+
 ## Alert meme su Telegram fermi, poi spazzatura — `seed-0219`/`seed-0220` — 2026-09-28
 
 Lorenzo: "comunque non sta arrivando neanche un alert", "da giorni"; poi, visti SUPERTAKE/AGENTORY/WATCH con voto DeepSeek 1/10: "occhio a non far arrivare la merda però, non voglio meme coin".
