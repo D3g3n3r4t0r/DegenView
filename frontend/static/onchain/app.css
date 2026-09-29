@@ -313,7 +313,8 @@
   .dt-id { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; align-items: center; gap: 12px; margin: 16px 0 0; }
   .dt-name { display: grid; gap: 6px; min-inline-size: 0;
     & b { font: 700 17px var(--sans); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    & small { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--k-text-2); } }
+    & small { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--k-text-2); }
+    & .dt-sym { cursor: pointer; } }
   .ic { display: grid; place-items: center; inline-size: 20px; block-size: 20px; padding: 0; border: 0; background: none; color: var(--k-text-2);
     cursor: pointer; & svg { inline-size: 16px; block-size: 16px; } }
   .dt-copy { display: inline-flex; gap: 5px; inline-size: auto; padding: 3px 7px; border-radius: 999px; background: rgb(255 255 255 / .06);
