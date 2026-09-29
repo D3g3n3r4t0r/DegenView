@@ -4,6 +4,7 @@
 
 Lorenzo, con lo screenshot di HYDX: "lo scanner manuale e' insufficiente e non si e' evoluto seguendo tutti gli aggiornamenti e migliorie che abbiamo fatto".
 Fatto a mano (Actions DeepSeek ferme): `manual_scan.py` distingue progetto e meme; un progetto prende il verdetto del Gem Finder (`gem_view`: voce in classifica, riga del database o accodato con `projects_db.upsert(..., "manual")`) con punteggio, pilastri, giudice e codice; backtest dal laboratorio (`strategy_lab`, o eseguito e salvato: `backtest_view` = trend follower daily + migliore 5m contro hold). Memoria in inglese, flag di DeepSeek sui "similar" tolti. Scheda con tasto "Full token page" (`openFromHash`). Bug trovato: `strategy_lab.get` non restituiva `daily`, quindi ogni pagina gemma diceva "No daily backtest".
+Poi Lorenzo: "voglio poter aggiungere manualmente un progetto che poi entra eventualmente nel circolo di tutte le nostre logiche [...] un'anteprima un po' migliore". Lo scan non accoda piu' da solo: `manual_scan.add` (POST `/api/onchain/scan/add`) prende il token dalla cache `_recent` del server (mai dati del client), toglie un'eventuale bocciatura da `_gone` e lo mette in `leaderboard.add(..., "manual")`. Anteprima: `about()` da GeckoTerminal (descrizione, holder, top 10) + griglia cap/liq/volume/24h/eta'/holder.
 Resta: il meme non passa ancora da `meme_engine.score` nello scanner.
 
 ## Scheda progetto, mappa e consumi DeepSeek — 2026-09-29

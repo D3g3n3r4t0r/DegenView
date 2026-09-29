@@ -138,6 +138,7 @@ export const walletChallenge = (body) => request("/api/wallets/link/challenge", 
 export const walletLink = (body) => request("/api/wallets/link", { method: "POST", body });
 export const getLinkedWallets = () => request("/api/wallets/linked");
 export const scanToken = (query) => request("/api/onchain/scan", { method: "POST", body: { query }, timeoutMs: 60000 });
+export const addScanned = (chain, token) => request("/api/onchain/scan/add", { method: "POST", body: { chain, token } });
 export const getTop = (n, keys = []) =>
   request(`/api/onchain/top?n=${n}${keys?.length ? `&narrative=${encodeURIComponent(keys.join(","))}` : ""}`);
 export const getNarrativeCoverage = () => request("/api/onchain/narratives/coverage");
