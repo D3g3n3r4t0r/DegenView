@@ -2322,5 +2322,11 @@
     "status": "risolto",
     "at": 1790682736,
     "summary": "Il tasto condividi nella pagina del token manda il link dell'app a quel token (non piu' il grafico esterno), con il menu di condivisione del telefono; dove non c'e', copia il link e il tasto diventa verde. Chi lo apre loggato arriva dritto su quel token; chi non e' loggato fa il login e poi ci arriva lo stesso."
+  },
+  "seed-0228": {
+    "status": "risolto",
+    "at": 1790683598,
+    "summary": "Le memecoin tornano negli alert Meme. Non bloccano piu': nome da meme, sito mancante, voto basso di DeepSeek (restano visibili nella pagella). Bloccano ancora: RugCheck (rug segnalato, rischi gravi, un wallet oltre il 15%, top 10 troppo alti, meno dell'80% di liquidita' bloccata), GoPlus (mint o freeze attivi, tasse oltre il 10%, honeypot, transfer hook), la memoria dei rug passati, e le soglie di ingresso (liquidita' almeno $8k e 10% della cap, cap fino a $2M, pool fino a 6 ore). Il wallet simulato entra all'alert ed esce col trend follower, con lo stop -65% dal massimo; i soldi veri non entrano mai su questi alert.",
+    "detail": "Misura del 29/09 su 70 pool PumpSwap di 3-48 ore, i piu' scambiati: 6 passano i controlli, 64 no. I 6 che passano sono finiti tutti sopra il primo prezzo; dei 63 scartati con un grafico, 37 sono finiti sotto -50% dal primo prezzo. Limite: i controlli sono letti oggi, non all'ora dell'alert, e 'Low Liquidity' (39 scarti) in parte e' la conseguenza del crollo."
   }
 }
