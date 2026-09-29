@@ -28,6 +28,29 @@ def test_rugcheck(report, ok):
     assert legit.judge_rugcheck(report)["ok"] is ok
 
 
+_HOLDERS = [{"owner": f"w{i}", "address": f"a{i}", "pct": 2.0} for i in range(10)]
+_FULL = {"risks": [], "topHolders": _HOLDERS, "token": {"supply": 1000},
+         "markets": [{"pubkey": "p", "lp": {"lpLockedPct": 100}}]}
+
+
+@pytest.mark.parametrize("report, ok", [
+    ({"risks": [], "lpLockedPct": 100}, None),                                   # no holder list: wait
+    (_FULL, True),
+    ({**_FULL, "insiderNetworks": [{"currentHolding": 150}]}, True),               # recorded, not blocking
+    ({**_FULL, "markets": [{"pubkey": "p", "lp": {"lpLockedPct": 30}}]}, False),   # LP read per market
+])
+def test_rugcheck_meme_path(report, ok):
+    assert legit.judge_rugcheck(report, meme=True)["ok"] is ok
+
+
+def test_rugcheck_records_linked_wallets_and_red_flags():
+    report = {**_FULL, "insiderNetworks": [{"currentHolding": 150}],
+              "risks": [{"name": "High holder correlation", "level": "warn"}]}
+    check = legit.judge_rugcheck(report, meme=True)
+    assert check["ok"] is True and "linked wallets 15%" in check["detail"]
+    assert check["facts"]["linked_pct"] == 15.0 and check["facts"]["rugcheck_flags"] == ["High holder correlation"]
+
+
 @pytest.mark.parametrize("info, ok", [
     (None, None),
     ({"is_honeypot": "1"}, False),
@@ -93,7 +116,7 @@ def _net(repo_commits=12, lp=100, goplus=GOPLUS_CLEAN):
             assert req.url.params["contract_addresses"] == "Mint111"
             return httpx.Response(200, json={"code": 1, "result": {"Mint111": goplus} if goplus else None})
         if "rugcheck" in url:
-            return httpx.Response(200, json={"risks": [], "lpLockedPct": lp})
+            return httpx.Response(200, json={"risks": [], "lpLockedPct": lp, "topHolders": _HOLDERS})
         if url.startswith("https://acme.io"):
             return httpx.Response(200, headers={"content-type": "text/html"},
                                   text="<title>Acme</title><a href='https://github.com/acme/core'>code</a> Mint111")
