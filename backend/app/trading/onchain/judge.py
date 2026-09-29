@@ -206,10 +206,11 @@ def parse(raw: str) -> dict | None:
 # When to read a project again (issue #358, I04). A reading holds while
 # what it was based on holds: the same facts after TTL_S give the same
 # answer, so it is kept up to MAX_AGE_S (the periodic refresh stays as a
-# safety net); a fact that moved enough to change the risk invalidates it
+# safety net, and comes before leaderboard._fresh stops counting the
+# reading at 2 * TTL_S); a fact that moved enough to change the risk invalidates it
 # at once, without waiting for TTL_S. Only this reading is redone: site,
 # code and research keep their own caches.
-MAX_AGE_S = 3 * TTL_S
+MAX_AGE_S = 2 * TTL_S - 86400
 LIQ_DROP = 0.4            # liquidity down 40% since the reading
 CAP_FACTOR = 3.0          # market cap x3 or /3
 PILLAR_MOVE = 15          # a pillar score moved 15 points
