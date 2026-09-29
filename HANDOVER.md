@@ -12,6 +12,26 @@ lavori pluri-sessione, decisioni prese, stato di piani approvati.
 
 ---
 
+## Consegne di ChatGPT/Codex del 29/09 — cosa sono e come trattarle
+
+Lorenzo, 29/09: "allineati su tutte le modifiche che nel mentre ho fatto fare a chat gpt e che ha postato su github".
+ChatGPT/Codex scrive col suo account GitHub (autore `lorenzocorazzi-wq`, branch `codex/*`), **solo documenti**: nessun commit di codice su main. Tutti i commit su main del 29/09 sono di Claude.
+
+| consegna | cosa | stato reale |
+|---|---|---|
+| PR #348 + issue #347 | audit sicurezza/scoring (`docs/audits/2026-09-29/`) | chiuso lato codice (S01-S07, M01-M05); restano M06/M08 (decide Lorenzo) e SSRF/CSP/CI, vedi sezione sotto |
+| issue #357, #358 | piani backend B00-B08 e memoria I00-I07 | li eseguono i thread "Piano struttura backend" e "Piano intelligenza e memoria" |
+| PR #362 + issue #363 | "decision assurance" A01-A08 (`docs/decision-assurance/`) | da decidere con Lorenzo, vedi sotto |
+| PR #364 + issue #365 | ricevute di analisi e riuso R1-R5, scheda/mappa J1-J4 (`docs/analysis-receipts/`) | dipende da #363 e #358 |
+| issue #366 (doc in PR #364) | audit consumi DeepSeek E0-E5 | il piu' concreto: da fare per primo |
+
+Letti in modo critico:
+- **#366 consumi**: verificato su main. `agent.js:87` fonde `today` (chiamate) e `done` (note) e le note sovrascrivono; "studies" conta note ripetute, non progetti (27849 contro 893 non sono chiamate per progetto); `consistency.py` ha `DAILY_MAX=12` ma Lorenzo ha visto 80 (da capire sul server); `KINDS` del recap non copre tutti i tipi. Risponde alla richiesta di Lorenzo di tagliare token: partire da E0 (inventario) + etichette separate nella tab, poi tetto unico.
+- **#363 decision assurance**: le prove di codice sono vere (E01: `outcomes._mark_rug` mette insieme prezzo mancante, crollo e liquidita' come "rug"; E02: `rug_label` da' negativo dopo 3 giorni su 7). Ma A02 (esperimenti con partecipanti), A06 (macchina a stati di promozione), A07 (registro dei diritti legali delle fonti) e A08 sono processi da azienda con revisori umani indipendenti: contro le regole del progetto (minimal, meno token, "piu' parametri = peggio") e senza persone per farli. Proposta: prendere solo A01 (etichette rug separate, niente negativo prima dell'orizzonte) e A03-T1 (cartella di test vuota non deve dare punti, vedi `depth.py`); il resto in attesa di un si' di Lorenzo.
+- **#365 ricevute**: l'idea utile e' la chiave di cache esatta per `code_review` (riuso senza chiamata, niente AI per log/hash). Rischio: un secondo store accanto alla memoria di #358; la spec stessa dice di non farlo. Va dentro il lavoro di #358, non in parallelo.
+- **Mappa a neuroni** (`neural-map.fragment.html`): prototipo con dati finti, non telemetria.
+- **Contrasti con CLAUDE.md**: le issue dicono "non usare l'etichetta deepseek" e "l'attuazione sara' di Claude"; la regola di Lorenzo resta che il codice senza soldi/chiavi/firme passa da DeepSeek. I due branch `codex/*` modificano HANDOVER.md (uno in cima, sopra l'introduzione): al merge vanno in conflitto fra loro e con main. Le PR sono documenti: si possono unire senza rischio per il sito, dopo aver risolto HANDOVER.
+
 ## Audit di sicurezza di ChatGPT/Codex — 2026-09-29 — **chiuso lato codice**
 
 Lorenzo, 29/09: "ho fatto pubblicare a CHAT GPT degli audit su github", poi "risolvi tutti i problemi segnalati da chat gpt". Audit in PR #348 (`docs/audits/2026-09-29/`) e issue #347. Tutti i rilievi S01-S07 e M01-M07 verificati sul codice: veri; M03/M06/M08 sono anche scelte di Lorenzo, corretti solo dove toccavano la sicurezza.
