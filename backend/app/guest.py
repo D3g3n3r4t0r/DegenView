@@ -33,6 +33,7 @@ from pydantic import BaseModel
 
 from app import auth
 from app.models import User
+from app.atomic_write import write_text_atomic
 
 GUEST_COOKIE = "guest"
 DEFAULT_DAYS = 7
@@ -95,7 +96,7 @@ def _load() -> None:
 
 
 def _save() -> None:
-    _LINKS_FILE.write_text(json.dumps([lk.model_dump() for lk in _links.values()]), encoding="utf-8")
+    write_text_atomic(_LINKS_FILE, json.dumps([lk.model_dump() for lk in _links.values()]), encoding="utf-8")
 
 
 _load()

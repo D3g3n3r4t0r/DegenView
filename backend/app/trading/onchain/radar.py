@@ -55,6 +55,7 @@ from app.sniper.quality import _looks_like_meme
 from app.trading.onchain import legit, scan_feed
 from app.trading.onchain import listings as onchain_listings
 from app.trading.onchain.storage import data_file
+from app.atomic_write import write_text_atomic
 
 logger = logging.getLogger(__name__)
 
@@ -470,7 +471,7 @@ def _load() -> None:
 
 def _save() -> None:
     try:
-        _STORE_FILE.write_text(json.dumps({"state": _state, "first_seen": _first_seen}, ensure_ascii=False),
+        write_text_atomic(_STORE_FILE, json.dumps({"state": _state, "first_seen": _first_seen}, ensure_ascii=False),
                                encoding="utf-8")
     except OSError:
         pass

@@ -40,6 +40,7 @@ import numpy as np
 
 from app.trading.onchain import meme_engine
 from app.trading.onchain.storage import data_file
+from app.atomic_write import write_text_atomic
 
 logger = logging.getLogger(__name__)
 
@@ -170,7 +171,7 @@ def _prune(journal: dict, keep: int, now: float) -> None:
 def _save() -> None:
     _prune(_journal, KEEP, time.time())
     try:
-        _STORE_FILE.write_text(json.dumps({"journal": _journal, "state": _state}, ensure_ascii=False),
+        write_text_atomic(_STORE_FILE, json.dumps({"journal": _journal, "state": _state}, ensure_ascii=False),
                                encoding="utf-8")
     except OSError:
         pass

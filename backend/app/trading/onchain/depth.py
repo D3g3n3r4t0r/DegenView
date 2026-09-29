@@ -450,8 +450,10 @@ def judge_site(page: dict | None, followed: list[dict], registered_at: float | N
         flags.append(f"built with {page['builder']}")
     if page["free_host"]:
         flags.append(f"on a free domain ({page['free_host']})")
-    if before_launch is not None and before_launch < 7:
-        flags.append("domain registered with the token" if before_launch >= -1 else "domain younger than the token")
+    # "Registered with the token" is how most new projects start: not a flag
+    # (29/09, PFWA judged 22 on it). A site younger than its token still is.
+    if before_launch is not None and before_launch < -1:
+        flags.append("domain younger than the token")
     if page["spa"] and page["words"] < 80:
         flags.append("content rendered via JavaScript")
 

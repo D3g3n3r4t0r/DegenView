@@ -20,6 +20,7 @@ import threading
 import time
 
 from app.trading.onchain.storage import data_file
+from app.atomic_write import write_text_atomic
 
 _STORE_FILE = data_file("profiles.json")
 _AVATARS = data_file("avatars")
@@ -46,7 +47,7 @@ def _load() -> None:
 
 def _save() -> None:
     try:
-        _STORE_FILE.write_text(json.dumps(_profiles, ensure_ascii=False), encoding="utf-8")
+        write_text_atomic(_STORE_FILE, json.dumps(_profiles, ensure_ascii=False), encoding="utf-8")
     except OSError:
         pass
 

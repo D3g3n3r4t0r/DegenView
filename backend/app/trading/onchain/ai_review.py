@@ -36,6 +36,7 @@ from datetime import datetime, timezone
 
 from app.config import settings
 from app.trading.onchain import storage
+from app.atomic_write import write_text_atomic
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +86,7 @@ def _load() -> None:
 
 def _save() -> None:
     try:
-        _STORE_FILE.write_text(json.dumps({k: _state[k] for k in ("reviews", "usage", "last_at")},
+        write_text_atomic(_STORE_FILE, json.dumps({k: _state[k] for k in ("reviews", "usage", "last_at")},
                                           ensure_ascii=False), encoding="utf-8")
     except OSError:
         pass

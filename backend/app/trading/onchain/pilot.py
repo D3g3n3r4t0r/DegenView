@@ -25,6 +25,7 @@ import time
 from collections import deque
 
 from app.trading.onchain.storage import data_file
+from app.atomic_write import write_text_atomic
 
 _STORE_FILE = data_file("onchain_pilot_discoveries.json")
 
@@ -57,7 +58,7 @@ def _load() -> None:
 
 def _save() -> None:
     try:
-        _STORE_FILE.write_text(json.dumps(_discoveries, ensure_ascii=False), encoding="utf-8")
+        write_text_atomic(_STORE_FILE, json.dumps(_discoveries, ensure_ascii=False), encoding="utf-8")
     except OSError:
         pass
 

@@ -138,12 +138,17 @@ def test_every_database_tool_answers_and_reports_land_on_the_board(tmp_path, mon
     issues_store.delete_issue(out["id"])
 
 
-def test_work_counts_each_project_once_a_day_and_findings_not_at_all():
-    """Issue #366: the Agent tab counted the same study on every cycle."""
+def test_recap_counts_every_recorded_kind():
+    """#366: kinds missing from KINDS (code, narratives...) were left out of the total."""
+    text = dd.recap_text("2026-09-27", {"narratives": {"calls": 2, "in": 1000, "out": 0},
+                                        "brand_new": {"calls": 1, "in": 500, "out": 500}})
+    assert "narrative: 2 richieste" in text and "brand_new: 1 richieste" in text
+    assert "Token lavorati da DeepSeek: <b>2.000</b>" in text
+
+
+def test_findings_of_a_check_are_not_counted_as_work():
+    """Issue #366: every consistency finding added a "consistency" to the Agent tab."""
     now = datetime(2026, 9, 29, 12, tzinfo=dd.ROME).timestamp()
-    for i in range(5):
-        dd.note("study", "Studied ABC", now=now + i, token="ABCmint")
-    dd.note("study", "Studied XYZ", now=now, token="XYZmint")
     dd.note("consistency", "Checking 10 projects", now=now)
     dd.note("consistency", "ABC: cap vs volume", now=now, tally=False, symbol="ABC")
-    assert dd.activity(now)["done"] == {"study": 2, "consistency": 1}
+    assert dd.activity(now)["done"] == {"consistency": 1}
