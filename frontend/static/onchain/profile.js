@@ -248,7 +248,7 @@ function positions(d) {
   const rows = showHidden ? all : all.filter((p) => !p.hidden);
   const chips = Object.entries(d.by_chain ?? {}).sort((a, b) => b[1] - a[1]);
   const chipBar = chips.length > 1 ? `<nav class="pf-chains" aria-label="Chain">${[["all", d.value], ...chips].map(([c, v]) =>
-    `<button type="button" data-chainf="${c}" aria-pressed="${c === chainF}">${c === "all" ? "All" : CHAIN_NAMES[c] ?? c}<small>$${Math.round(v ?? 0).toLocaleString("en-US")}</small></button>`).join("")}</nav>` : "";
+    `<button type="button" data-chainf="${c}" aria-pressed="${c === chainF}">${c === "all" ? "All" : CHAIN_NAMES[c] ?? c}<small data-chipv="${c}">${usd2(v ?? 0)}</small></button>`).join("")}</nav>` : "";
   const more = hidden.length ? `<button type="button" class="pf-hidden" data-hidden>${showHidden ? "Hide" : "Show"} hidden (${hidden.length})</button>` : "";
   if (!all.length) return chipBar + `<p class="pf-none">${d.missing?.length ? `Couldn't read ${d.missing.join(" and ")} right now.` : "Nothing held yet."}</p>`;
   const shown = showAllPos ? rows : rows.slice(0, 4);
@@ -298,6 +298,13 @@ function applyLive() {
       roll(changeEl.querySelector("[data-rl]"), signed(ch + delta));
     }
   }
+  // chain chips: the same re-mark as the total, so All = the big number
+  root.querySelectorAll("[data-chipv]").forEach((el) => {
+    const c = el.dataset.chipv;
+    const base = c === "all" ? d.value : d.by_chain?.[c];
+    if (base == null) return;
+    roll(el, usd2(base + (c === "all" ? delta : liveDelta((d.positions ?? []).filter((p) => p.chain === c)))));
+  });
   const byKey = new Map((d.positions ?? []).map((p) => [liveKey(p), p]));
   root.querySelectorAll(".pf-list li[data-live]").forEach((li) => {
     const p = byKey.get(li.dataset.live);
