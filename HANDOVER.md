@@ -1,5 +1,10 @@
 # Memoria di sessione
 
+## Memoria verificabile e riuso senza token di tracciamento — 2026-09-29
+
+Lorenzo: "mi piace l'idea, applichiamola scrivi tutto e pubblica su github per poi darlo in pasto a claude". Specifica in docs/analysis-receipts/SPEC.md, 30 criteri in ACCEPTANCE.json e esempio sintetico EXAMPLE.json. Base letta e8e0a97c688cf36461a1f43791b4e19610e0b33b. Estende #358 e PR #362/issue #363: un unico store e contratti, nessun secondo registro. Primo flusso: code_review, riuso per input/versioni/prove identici, invalidazione e protezione da risposte tardive. Zero chiamate AI per logging/hash/verifica/replay deterministico; nuove analisi restano soggette a budget. Documenti soltanto, runtime da implementare con PR R1-R5; R6 opzionale. JSON e ID verificati, test applicativi ancora da creare. Non è una blockchain e non integra DREGG: checkpoint indipendenti rimandati finché esiste un bisogno dimostrato. Nessun merge/deploy o automazione avviati.
+
+
 **A cosa serve questo file**: se apri una chat nuova con Claude su questo
 repo, fagli leggere questo file (o linkalo — è il primo posto dove cercare
 "da dove eravamo rimasti"). Claude lo aggiorna dopo ogni lavoro non banale,
