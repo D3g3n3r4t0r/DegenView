@@ -136,3 +136,11 @@ def test_every_database_tool_answers_and_reports_land_on_the_board(tmp_path, mon
     out = tools["segnala_bug"][1](titolo="Holder a 0%", dettaglio="top_holder_pct 0.0 su 40 token")
     assert out["ok"] and len(issues_store.list_issues()) == before + 1
     issues_store.delete_issue(out["id"])
+
+
+def test_recap_counts_every_recorded_kind():
+    """#366: kinds missing from KINDS (code, narratives...) were left out of the total."""
+    text = dd.recap_text("2026-09-27", {"narratives": {"calls": 2, "in": 1000, "out": 0},
+                                        "brand_new": {"calls": 1, "in": 500, "out": 500}})
+    assert "narrative: 2 richieste" in text and "brand_new: 1 richieste" in text
+    assert "Token lavorati da DeepSeek: <b>2.000</b>" in text
