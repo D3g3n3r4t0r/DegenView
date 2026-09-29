@@ -1359,7 +1359,14 @@ def _similar_to(query: str) -> dict:
 async def _telegram_reply(chat_id: str, text: str) -> None:
     deepseek_desk.note("chat", "Answering a question on Telegram")
     try:
-        reply = await deepseek_desk.answer(chat_id, text, await _deepseek_context(chat_id), tools=_deepseek_tools())
+        # Who may give DeepSeek standing instructions: the site's own chats and
+        # the admins' personal ones, never other users.
+        admins = {e.strip().lower() for e in settings.admin_emails.split(",") if e.strip()}
+        owner_chats = {c.strip() for c in settings.telegram_chat_ids.split(",") if c.strip()} | {
+            u.telegram_chat_id for u in auth.list_users()
+            if u.telegram_chat_id and (getattr(u, "email", "") or "").lower() in admins}
+        reply = await deepseek_desk.answer(chat_id, text, await _deepseek_context(chat_id), tools=_deepseek_tools(),
+                                           can_teach=str(chat_id) in owner_chats)
     except Exception as exc:
         logger.exception("deepseek chat")
         reply = f"DeepSeek non risponde ora ({type(exc).__name__})."
