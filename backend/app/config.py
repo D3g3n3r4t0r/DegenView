@@ -93,8 +93,8 @@ class Settings(BaseSettings):
     deepseek_model: str = "deepseek-chat"
     deepseek_base_url: str = "https://api.deepseek.com"
     # One daily cap for every DeepSeek call on the server, at list price
-    # (Lorenzo, 29/09: $0.50). 0 = no cap.
-    deepseek_daily_usd: float = 0.50
+    # (Lorenzo, 29/09: $0.50, then $0.80). 0 = no cap.
+    deepseek_daily_usd: float = 0.80
     # USDC contract on Robinhood Chain for the autotrader's cash; empty = found
     # from the most liquid USDC/USDG pool (autotrader.find_usdc).
     robinhood_usdc_address: str = ""

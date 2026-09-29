@@ -6,9 +6,12 @@
  * cube, taller for #1, with its slit lit in the rank's colour. Mono type,
  * chamfered frames, a faint grid behind. No spotlight, confetti or metal.
  *
- * Motion: the cubes rise 3-2-1, the slits draw themselves (the splash's
- * stroke-dashoffset trick), then only the slits' glow breathes. Everything
- * else is transform and opacity; nothing runs in JS per frame.
+ * Motion (the ENGN motion kit's "engine boot", PR #383): each cube starts as
+ * 27 loose modules that fly together 3-2-1, the solid cube takes their place,
+ * the slits draw themselves (the splash's stroke-dashoffset trick), then only
+ * the slits' glow breathes. Everything else is transform and opacity; nothing
+ * runs in JS per frame. A still podium (same three as the last paint) or
+ * reduced motion gets the solid cube only, no modules.
  *
  * renderPodium(container, items, {still}) with items [{id, symbol, value,
  * logoHtml}] in rank order 1..3. Each place is a button with data-open=id:
@@ -27,17 +30,44 @@ function h(tag, cls, attrs) {
   return el;
 }
 
+const f = (n) => Math.round(n * 100) / 100;
+
+/** The cube cut in 3x3x3 modules, each pushed out from the centre (--dx/--dy)
+ * so the CSS can fly it home. Painted back to front: lower layers first,
+ * then from the far corner to the near one. */
+function modules(b) {
+  const u = [49 / 3, 17 / 3], v = [49 / 3, -17 / 3], h = b / 3;
+  const cells = [];
+  for (let k = 2; k >= 0; k--)
+    for (let i = 0; i < 3; i++)
+      for (let j = 0; j < 3; j++) cells.push([i, j, k]);
+  cells.sort((a, c) => (c[2] - a[2]) || ((a[0] - a[1]) - (c[0] - c[1])));
+  return cells.map(([i, j, k]) => {
+    const x = 1 + i * u[0] + j * v[0], y = 18 + i * u[1] + j * v[1] + k * h;
+    const p = (dx, dy) => `${f(x + dx)} ${f(y + dy)}`;
+    const dx = f(((i - 1) + (j - 1)) * 13), dy = f(((i - 1) - (j - 1)) * 5 + (k - 1) * (h + 8) - 10);
+    return `<g class="pc-mod" style="--dx:${dx}px;--dy:${dy}px;--i:${(i + 2 - j + 2 - k) * 0.02}s">`
+      + `<path class="pc-top" d="M${p(0, 0)} L${p(u[0], u[1])} L${p(u[0] + v[0], u[1] + v[1])} L${p(v[0], v[1])} Z"/>`
+      + `<path class="pc-left" d="M${p(0, 0)} L${p(u[0], u[1])} L${p(u[0], u[1] + h)} L${p(0, h)} Z"/>`
+      + `<path class="pc-right" d="M${p(u[0], u[1])} L${p(u[0] + v[0], u[1] + v[1])} L${p(u[0] + v[0], u[1] + v[1] + h)} L${p(u[0], u[1] + h)} Z"/>`
+      + `</g>`;
+  }).join("");
+}
+
 /** The logo's cube: top face, two side faces, the slit and its glow. */
-function cube(rank) {
+function cube(rank, assemble) {
   const b = BODY[rank];
   const s = Math.round(b * 0.42);
   const H = 36 + b + 1;
   const slit = `M1 ${18 + s} L50 ${36 + s} L99 ${18 + s}`;
   return `<svg class="pc-cube" viewBox="0 0 100 ${H}" preserveAspectRatio="xMidYMax meet" aria-hidden="true">
+    ${assemble ? `<g class="pc-mods">${modules(b)}</g>` : ""}
+    <g class="pc-solid">
     <path class="pc-top" d="M50 1 L99 18 L50 35 L1 18 Z"/>
     <path class="pc-left" d="M1 18 L50 35 L50 ${35 + b} L1 ${18 + b} Z"/>
     <path class="pc-right" d="M50 35 L99 18 L99 ${18 + b} L50 ${35 + b} Z"/>
     <path class="pc-edge" d="M50 35 L50 ${35 + b}"/>
+    </g>
     <path class="pc-glow" d="${slit}" pathLength="1"/>
     <path class="pc-slit" d="${slit}" pathLength="1"/>
     <text class="pc-rank" x="25" y="${27 + s + 14}" text-anchor="middle">0${rank}</text>
@@ -67,7 +97,11 @@ export function renderPodium(container, items, { still = false } = {}) {
     if (/^[-−]/.test(String(it.value).trim())) val.dataset.sign = "down";
     head.append(frame, sym, val);
     const base = h("div", "pc-base", { "aria-hidden": "true" });
-    base.innerHTML = cube(rank);
+    base.innerHTML = cube(rank, !quiet);
+    // The loose modules are spent once the solid cube shows: drop them.
+    base.querySelector(".pc-mods")?.addEventListener("animationend", (e) => {
+      if (e.target === e.currentTarget) e.currentTarget.remove();
+    });
     btn.append(head, base);
     li.append(btn);
     list.append(li);
