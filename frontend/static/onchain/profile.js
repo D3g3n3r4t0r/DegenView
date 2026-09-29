@@ -15,7 +15,7 @@ import * as api from "@onchain/api.js";
 import { escapeHtml, logo, usdShort } from "@onchain/format.js";
 import * as phantom from "@onchain/phantomlink.js";
 import { loadLinked } from "@onchain/userswap.js";
-import { flash, priceOf, roll, watch } from "@onchain/live.js";
+import { flash, liveDelta, liveKey, liveValue, priceOf, roll, watch } from "@onchain/live.js";
 
 const RANGES = [["1h", "1H"], ["2h", "2H"], ["3h", "3H"], ["4h", "4H"], ["8h", "8H"], ["24h", "1D"], ["7d", "1W"],
   ["30d", "1M"], ["all", "All"]];
@@ -270,24 +270,13 @@ function positions(d) {
 const usd2 = (v) => `$${v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const unitPrice = (v) => `$${v < 0.01 ? v.toPrecision(3) : v.toFixed(v < 1 ? 4 : 2)}`;
 const pnlText = (value, cost) => (value == null || !cost ? "" : `${signed(value - cost)} · ${value >= cost ? "+" : "−"}${Math.abs((value / cost - 1) * 100).toFixed(2)}%`);
-const liveKey = (p) => (p.address && !p.native && p.chain ? `${p.chain}:${p.address.startsWith("0x") ? p.address.toLowerCase() : p.address}` : null);
-const liveValue = (p) => {
-  const k = liveKey(p), px = k && priceOf(k);
-  if (!px) return p.value_usd;
-  if (p.value_usd != null && p.price_usd) return p.value_usd * (px / p.price_usd);
-  return p.amount != null ? p.amount * px : p.value_usd;
-};
 const shownPx = new Map();   // key -> price last painted, to flash only on a move
 let lastTotal = null;
 
 function applyLive() {
   const d = data;
   if (!d || !root || root.querySelector(".scrub-x:not([hidden])")) return;
-  let delta = 0;
-  for (const p of d.positions ?? []) {
-    if (p.hidden || p.value_usd == null) continue;
-    delta += liveValue(p) - p.value_usd;
-  }
+  const delta = liveDelta(d.positions);
   const top = root.querySelector(".pf-top");
   if (d.value != null && top) {
     const total = d.value + delta;
@@ -296,6 +285,12 @@ function applyLive() {
     roll(top.querySelector(".pf-total > span"), cents);
     if (lastTotal != null && Math.abs(total - lastTotal) >= 0.005) flash(top, total > lastTotal ? "up" : "down");
     lastTotal = total;
+    // the line's last point follows the live total (clamped to the chart)
+    if (scrub?.rows?.length) {
+      const base = scrub.rows[scrub.rows.length - 1][1];
+      const dy = Math.max(-scrub.y(base) + 6, Math.min(170 - 6 - scrub.y(base), scrub.y(total) - scrub.y(base)));
+      root.querySelectorAll(".pf-line .dot, .pf-line .halo").forEach((c) => { c.style.transform = `translateY(${dy.toFixed(1)}px)`; });
+    }
     const ch = d.change?.[range];
     const changeEl = top.querySelector(".pf-change");
     if (ch != null && changeEl) {

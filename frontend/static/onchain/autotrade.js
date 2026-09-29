@@ -10,6 +10,7 @@
 import * as api from "@onchain/api.js";
 import { age, escapeHtml, logo, usdShort } from "@onchain/format.js";
 import { openSheet, sheetBody, setBody } from "@onchain/sheets.js";
+import { flash, liveKey, liveValue, priceOf, roll, watch } from "@onchain/live.js";
 
 const POLL_MS = 30_000;
 const MODES = [["off", "Off"], ["sim", "Simulated"], ["real", "Real"]];
@@ -38,12 +39,36 @@ function position(d) {
   return list.map(posRow).join("");
 }
 
+// Live marking (live.js): the same shape the profile uses.
+const asPos = (p) => ({ chain: p.chain ?? "robinhood", address: p.token, value_usd: p.value_usdg, price_usd: p.price, amount: p.qty });
+const openList = (d) => (d?.positions?.length ? d.positions : d?.position ? [d.position] : []);
+
 function posRow(p) {
-  return `<div class="auto-pos">
+  const k = liveKey(asPos(p));
+  return `<div class="auto-pos"${k ? ` data-live="${escapeHtml(k)}"` : ""}>
     ${logo(p.symbol, p.image, p.chain ?? "robinhood", p.token)}
     <span class="trow-main"><b>${escapeHtml(p.symbol)}</b><small>in since ${age(p.at)[0]} · ${usdg(p.cost_usdg)}${p.mode === "sim" ? " · simulated" : ""}</small></span>
-    <span class="trow-num"><b>${usdg(p.value_usdg)}</b><em class="chg" data-sign="${sign(p.ret)}">${pct(p.ret)}</em></span>
+    <span class="trow-num"><b data-lv>${usdg(p.value_usdg)}</b><em class="chg" data-pnl data-sign="${sign(p.ret)}">${pct(p.ret)}</em></span>
   </div>`;
+}
+
+const shownPx = new Map();
+function applyLive() {
+  const body = sheetBody().querySelector(".auto-full");
+  if (!body || !data) return;
+  const byKey = new Map(openList(data).map((p) => [liveKey(asPos(p)), p]));
+  body.querySelectorAll(".auto-pos[data-live]").forEach((row) => {
+    const p = byKey.get(row.dataset.live), px = priceOf(row.dataset.live);
+    if (!p || !px) return;
+    const v = liveValue(asPos(p));
+    roll(row.querySelector("[data-lv]"), usdg(v));
+    const ret = p.cost_usdg ? v / p.cost_usdg - 1 : null;
+    const em = row.querySelector("[data-pnl]");
+    if (em && ret != null) { em.dataset.sign = sign(ret); roll(em, pct(ret)); }
+    const before = shownPx.get(row.dataset.live);
+    if (before != null && before !== px) flash(row, px > before ? "up" : "down");
+    shownPx.set(row.dataset.live, px);
+  });
 }
 
 function trades(d) {
@@ -93,12 +118,13 @@ function paint() {
     <em class="auto-chip" data-mode="${d.mode}">${CHIP[d.mode] ?? ""}</em>
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>`;
   // The sheet, if open on these controls, follows the same data.
-  if (sheetBody().querySelector(".auto-full")) setBody(full(d));
+  if (sheetBody().querySelector(".auto-full")) { setBody(full(d)); applyLive(); }
 }
 
 function openFull() {
   openSheet("Auto-trade", "The system trades your Robinhood wallet on its own entries and exits.");
   setBody(full(data));
+  applyLive();
 }
 
 async function refresh() {
@@ -142,5 +168,10 @@ export function mountAutotrade() {
     if (p) update({ pct: Number(p.dataset.pct) });
   });
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refresh(); });
+  watch({
+    keys: () => openList(data).map((p) => liveKey(asPos(p))).filter(Boolean),
+    active: () => Boolean(sheetBody().querySelector(".auto-full")),
+    onPrices: applyLive,
+  });
   refresh();
 }

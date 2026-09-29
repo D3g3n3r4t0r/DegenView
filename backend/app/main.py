@@ -4502,6 +4502,13 @@ async def live_prices(ids: str = "", user: User = Depends(auth.get_current_user)
     return {"prices": await onchain_live_prices.prices(onchain_live_prices.parse_ids(ids)), "ttl": onchain_live_prices.TTL_S}
 
 
+def _live_marks(snap: dict) -> list[dict]:
+    """What the header needs to move its total with the live price: each
+    priced position counted in it (live.js liveDelta)."""
+    return [{k: p.get(k) for k in ("chain", "address", "native", "amount", "price_usd", "value_usd")}
+            for p in snap["positions"] if not p.get("hidden") and p.get("value_usd") is not None][:60]
+
+
 @app.get("/api/wallets/total")
 async def wallets_total(wallet: Literal["real", "sim"] = "real",
                         user: User = Depends(auth.get_current_user)) -> dict:
@@ -4511,11 +4518,12 @@ async def wallets_total(wallet: Literal["real", "sim"] = "real",
         snap = _sim_snapshot(user)
         _record_sim(user, snap)
         return {"total": snap["total"], "cash": snap["cash"], "by_chain": snap["by_chain"], "missing": [],
-                "complete": snap["complete"], "wallet": "sim", "started": snap["sim"] is not None}
+                "complete": snap["complete"], "wallet": "sim", "started": snap["sim"] is not None,
+                "live": _live_marks(snap)}
     snap = await _wallet_snapshot(user)
     _record_wealth(user, snap)     # the header asks every minute: the chart follows it
     return {"total": snap["total"], "cash": snap["cash"], "by_chain": snap["by_chain"], "missing": snap["missing"],
-            "complete": snap["complete"]}
+            "complete": snap["complete"], "live": _live_marks(snap)}
 
 
 async def _wealth_loop() -> None:

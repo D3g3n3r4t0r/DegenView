@@ -21,6 +21,23 @@ const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 export const priceOf = (key) => last.get(key);
 
+/** "chain:address" as the server keys it; null for native coins. */
+export const liveKey = (p) => (p.address && !p.native && p.chain
+  ? `${p.chain}:${p.address.startsWith("0x") ? p.address.toLowerCase() : p.address}` : null);
+
+/** A position ({chain, address, value_usd, price_usd, amount}) at the last
+ * live price; its own value when there is none. */
+export function liveValue(p) {
+  const k = liveKey(p), px = k && last.get(k);
+  if (!px) return p.value_usd;
+  if (p.value_usd != null && p.price_usd) return p.value_usd * (px / p.price_usd);
+  return p.amount != null ? p.amount * px : p.value_usd;
+}
+
+/** Sum of (live value - value) over positions: what to add to a total. */
+export const liveDelta = (positions) => (positions ?? []).reduce((sum, p) =>
+  (p.hidden || p.value_usd == null ? sum : sum + (liveValue(p) - p.value_usd)), 0);
+
 /** watch({keys: () => [...], active: () => bool, onPrices: (map) => {}}) -> unwatch */
 export function watch(sub) {
   subs.add(sub);

@@ -17,7 +17,7 @@ lavori pluri-sessione, decisioni prese, stato di piani approvati.
 
 Lorenzo, col video dell'app pump.fun: "il saldo [...] si aggiorna in modo frenetico costantemente [...] vorrei vedere anche quanto sta perdendo o guadagnando con animazioni frenetiche".
 Fatto sul profilo (simulato e reale): `live_prices.py` + `GET /api/onchain/live-prices` (cache condivisa, DexScreener poi GeckoTerminal), `static/onchain/live.js` (un solo polling ogni 2 s, `roll()` cifre, `flash()`), `profile.js` `applyLive()`. Scritto a mano: Actions ferme per i minuti, DeepSeek non girava.
-Resta: stesso effetto nella scheda Auto-trade (`autotrade.js` `posRow`), nel chip saldo in alto e sull'ultimo punto del grafico.
+Poi (stesso giorno) esteso a scheda Auto-trade, saldo in alto (`/api/wallets/total` porta `live`, le posizioni da marcare) e ultimo punto del grafico del profilo.
 
 ## Intelligenza e memoria di DeepSeek — issue #358 (+ #366, #365) — 2026-09-29 — **in corso**
 
