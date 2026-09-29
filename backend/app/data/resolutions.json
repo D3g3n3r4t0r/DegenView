@@ -2343,8 +2343,8 @@
   },
   "seed-0231": {
     "status": "risolto",
-    "at": 1790716838,
+    "at": 1790717360,
     "summary": "Dei 51 meme Solana passati dal filtro, 15 sono finiti in rug, tutti con liquidita' bloccata al 100%: nessuno ha ritirato la liquidita', sono state vendite. Il controllo sui primi wallet non era mai partito: RugCheck veniva letto in versione riassunto, senza la lista dei holder. Ora si legge il report completo (primo wallet <=15%, primi 10 <=35% tornano attivi, e senza lista il meme aspetta). I wallet collegati si registrano ma non bloccano: provati a ritroso non separano i rug dai sopravvissuti.",
-    "detail": "Prova sui 51 (lista della sessione PC): wallet collegati >10% in 4 rug su 15 e in 9 sopravvissuti su 36 (DREGG 39%); 8 rug su 15 senza nessun gruppo collegato rilevato. Nessun rug aveva 'High holder correlation' o 'Creator history of rugged tokens'. Registrati in facts (linked_pct, linked_networks, rugcheck_flags, holders) per misurare. Resta da fare: uscita veloce quando partono le vendite (mediana 0,65h dall'ingresso al rug)."
+    "detail": "Prova sui 51 (lista della sessione PC): wallet collegati >10% in 4 rug su 15 e in 9 sopravvissuti su 36 (DREGG 39%); 8 rug su 15 senza nessun gruppo collegato rilevato. Nessun rug aveva 'High holder correlation' o 'Creator history of rugged tokens'. Registrati in facts (linked_pct, linked_networks, rugcheck_flags, holders) per misurare. Resta da fare: uscita veloce quando partono le vendite (mediana 0,65h dall'ingresso al rug). Poi, scelta di Lorenzo sulla card: uscita dei meme comprati all'alert quando una chiusura scende del 30% sotto la migliore dall'ingresso (system.TRAIL), solo per alert dal 30/09. Sui 38 meme con barre: media -41% -> -35%, rug -48% -> -33%, sopravvissuti invariati; il guadagno viene da 3 token su 12, campione piccolo."
   }
 }

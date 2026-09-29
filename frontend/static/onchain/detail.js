@@ -295,7 +295,7 @@ function paintChips() {
 
 // The system's own trades on one alert, each with why it sold. A sell
 // after a crash inside one candle says so: that loss was not a late exit.
-const WHY = { signal: "trend turned", crash: "crashed inside one 5-min candle: first price to sell at", "48h": "48h window over", rug: "pool vanished while in" };
+const WHY = { signal: "trend turned", trail: "fell 30% from its peak", crash: "crashed inside one 5-min candle: first price to sell at", "48h": "48h window over", rug: "pool vanished while in" };
 function systemTrades(al) {
   const sy = bestSystem(al);
   const ev = sy?.events ?? [];
