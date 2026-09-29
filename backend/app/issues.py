@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0226", "Ogni ticker degli alert apre la pagina del token; indirizzo copiabile",
+     "Lorenzo, 29/09: 'ogni ticker per chi ho l'allarme deve aprirmi l'app in quella sezione specifica per visualizzare il token specifico, inoltre ogni ticker nell'app deve permettere se clicco qui di copiare l'indirizzo corretto on chain del token'",
+     "media"),
     ("seed-0225", "Il live scanner diventa una tab accanto ad Alerts",
      "Lorenzo, 29/09: 'il live scanner in basso deve apparire come tab in alto di fianco ad alerts'",
      "bassa"),

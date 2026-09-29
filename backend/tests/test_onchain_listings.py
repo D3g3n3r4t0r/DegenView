@@ -221,3 +221,13 @@ def test_pulse_counts_arrivals_and_names_what_is_being_checked():
     L._pending["solana:P1"].symbol = "ACME"
     pulse = L.pulse()
     assert pulse["arrivals_10m"] == 2 and pulse["checking"] == ["ACME"] and pulse["pending"] == 2
+
+
+def test_the_ticker_opens_the_token_page_in_the_app():
+    from app.main import app_token_url
+    url = app_token_url("meme", "solana", "So1Ab")
+    assert url.endswith("/onchain-app.html#meme&token=solana:So1Ab")
+    item = {"chain": "solana", "symbol": "ACME", "name": "Acme", "liquidity_usd": 1, "market_cap": 1}
+    text = L.telegram_text(item, now=1.0, app_url=url)
+    assert f'<b><a href="{url.replace("&", "&amp;")}">ACME</a></b>' in text
+    assert "<b>ACME</b>" in L.telegram_text(item, now=1.0)

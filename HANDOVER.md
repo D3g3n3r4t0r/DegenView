@@ -386,6 +386,7 @@ filtro anti-rug in `legit.py`, frontend `frontend/static/onchain/radar.js`.
 - Sniper un trade per alert (seed-0214, 28/09): `follow(on_alert=True)` non rientra dopo l'uscita; `autotrader._system_of` legge `alert_bt` (non piu' `system`). Lorenzo: "deve gestire esclusivamente la chiusura secondo la classica regola del trend follower".
 - 28/09 sera, "come mai su queste la strategia non e' uscita prima?" (MESUB -95%): il trade sull'alert usciva solo su un incrocio nuovo; ora `strategies.trend_down` chiude alla prima candela col trend giu'. SYSTEM_VERSION 10 (seed-0216).
 - 28/09 notte, "il wallet simulato [...] voglio che li segua": Sim = libro di carta (`autotrader.paper_tick`) che segue ogni alert meme su ogni chain col trade di alert_bt; Real invariato (Robinhood, quote vere, un token). seed-0221.
+- seed-0226 (29/09): link `#<view>&token=<chain>:<address>` (`app_token_url()` in main.py, `openFromHash()` in detail.js) sul ticker di ogni alert Telegram; tasto copia indirizzo con feedback e fallback. Aperto: login dentro il browser di Telegram (Mini App o link con accesso), scelta di Lorenzo.
 - Vincolo: il pilota (soldi veri) resta sotto $100k
   (`_SNIPER_ONCHAIN_MAX_MCAP_USD` in main.py). Mai strategie short.
 
