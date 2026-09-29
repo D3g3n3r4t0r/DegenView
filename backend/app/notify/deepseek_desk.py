@@ -43,7 +43,9 @@ CHAT_DAILY_TOKENS = 300_000
 MEMORY = 10                          # messages kept per chat
 KINDS = {"chat": "chat Telegram", "scanner": "scanner (giudizio token)", "research": "letture approfondite gemme",
          "review": "revisioni token", "consistency": "controllo incongruenze Top",
-         "study": "studi approfonditi chiesti da Claude", "pr_review": "revisioni PR"}
+         "study": "studi approfonditi chiesti da Claude", "pr_review": "revisioni PR",
+         "judge": "giudizi classifica", "code": "lettura codice GitHub", "narratives": "narrative",
+         "meme": "giudizi meme", "retracement": "ritracciamenti", "extension": "estensioni"}
 
 _lock = threading.Lock()
 # What the agent did lately, for the site's live presence (Lorenzo, 27/09:
@@ -64,6 +66,7 @@ def _load() -> None:
         _state["days"] = raw.get("days") or {}
         _state["recap_sent"] = raw.get("recap_sent") or ""
         _state["done"] = raw.get("done") or {}
+        _state["seen"] = raw.get("seen") or {}
         _activity[:] = [a for a in raw.get("activity") or [] if isinstance(a, dict)][-ACTIVITY_KEEP:]
 
 
@@ -75,7 +78,7 @@ def _save() -> None:
 
 
 def reset_for_tests() -> None:
-    _state.update(days={}, recap_sent="", done={})
+    _state.update(days={}, recap_sent="", done={}, seen={})
     _memory.clear()
     _activity.clear()
 
@@ -92,6 +95,15 @@ def note(kind: str, text: str, now: float | None = None,
     day[kind] = day.get(kind, 0) + 1
     for old in sorted(done)[:-3]:
         done.pop(old, None)
+    # Distinct tokens per kind: a project studied 30 times is one project.
+    if extra.get("token"):
+        seen = _state.setdefault("seen", {})
+        keys = seen.setdefault(day_of(now), {}).setdefault(kind, [])
+        key = f"{extra.get('chain') or ''}:{extra['token']}"
+        if key not in keys:
+            keys.append(key)
+        for old in sorted(seen)[:-1]:
+            seen.pop(old, None)
     if steps:
         entry["steps"] = [str(s)[:200] for s in steps][:8]
     if outcome:
@@ -119,6 +131,8 @@ def activity(now: float | None = None) -> dict:
             "done": dict((_state.get("done") or {}).get(day_of(now)) or {}),
             "working": bool(_activity) and now - _activity[-1]["t"] < 180,
             "today": {k: v.get("calls", 0) for k, v in today.items()},
+            "tokens": sum(int(v.get("in", 0)) + int(v.get("out", 0)) for v in today.values()),
+            "distinct": {k: len(v) for k, v in ((_state.get("seen") or {}).get(day_of(now)) or {}).items()},
             "active": bool(settings.deepseek_api_key),
             "priority": prio}
 
@@ -388,7 +402,11 @@ def recap_text(day: str, rows: dict) -> str:
     """rows: {kind: {calls, in, out}}. Italian, for Lorenzo."""
     lines = [f"🤖 <b>DeepSeek — {datetime.strptime(day, '%Y-%m-%d').strftime('%d/%m')}</b>"]
     tot_in = tot_out = calls = 0
-    for kind, label in KINDS.items():
+    # Every kind recorded, not only the labelled ones: an unlabelled kind
+    # still costs tokens and must be in the total.
+    kinds = list(KINDS) + sorted(k for k in rows if k not in KINDS)
+    for kind in kinds:
+        label = KINDS.get(kind, kind)
         k = rows.get(kind) or {}
         if not k.get("calls"):
             continue

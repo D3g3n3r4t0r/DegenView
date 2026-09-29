@@ -81,3 +81,24 @@ def test_a_study_lands_in_the_agent_log_with_its_score():
     e["overall"] = {"score": 0, "fatal": "renounced? no"}
     leaderboard._note_study(e, ["github"])
     assert deepseek_desk.log()[0]["outcome"].startswith("rejected: ")
+
+
+def test_a_token_studied_many_times_is_one_project():
+    """#366: 27849 study notes against 893 projects were never comparable."""
+    now = 86_400 * 10 + 5
+    for _ in range(30):
+        deepseek_desk.note("study", "Studied X", now=now, chain="solana", token="A")
+    deepseek_desk.note("study", "Studied Y", now=now, chain="base", token="A")
+    deepseek_desk.note("backtest", "Backtested X", now=now)
+    act = deepseek_desk.activity(now=now + 1)
+    assert act["done"] == {"study": 31, "backtest": 1}
+    assert act["distinct"] == {"study": 2}
+
+
+def test_ai_calls_and_tokens_stay_apart_from_notes():
+    now = 86_400 * 10 + 5
+    deepseek_desk.record("research", 1000, 200, now=now)
+    deepseek_desk.note("research", "Judging X", now=now)
+    act = deepseek_desk.activity(now=now + 1)
+    assert act["today"] == {"research": 1} and act["tokens"] == 1200
+    assert act["done"] == {"research": 1}
