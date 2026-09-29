@@ -162,6 +162,14 @@ def test_tokenomics_evm_goplus():
     p = depth.judge_tokenomics_evm(info, "0xPAIR")
     assert p["facts"]["top1_pct"] == 4.0 and p["facts"]["lp_locked_pct"] == 95.0 and not p["fatal"]
     assert "tax" in depth.judge_tokenomics_evm({**info, "sell_tax": "0.2"}, "0xpair")["fatal"]
+    # Contracts (v4 PoolManager, vesting) are not "a single wallet": flagged, not fatal.
+    held = {**info, "holders": [{"address": "0xc1", "percent": "0.41", "is_contract": 1},
+                                {"address": "0xc2", "percent": "0.26", "is_contract": 1}, *info["holders"]]}
+    p = depth.judge_tokenomics_evm(held, "0xpair")
+    assert not p["fatal"] and p["facts"]["contracts_pct"] == 67.0 and "contracts" in p["flags"][-1]
+    assert p["score"] < depth.judge_tokenomics_evm(info, "0xpair")["score"]
+    assert "single wallet" in depth.judge_tokenomics_evm(
+        {**info, "holders": [{"address": "0xw", "percent": "0.41", "is_contract": 0}]}, "0xpair")["fatal"]
 
 
 def test_overall_fatal_and_pending():
@@ -185,7 +193,7 @@ def _entry(sym: str, gh: int, site: int, tok: int, cap: float = 50_000, age_days
 
 
 def test_board_orders_by_score_and_tracks_movement():
-    _entry("AAA", 60, 60, 60, age_days=16, source="radar")
+    _entry("AAA", 75, 60, 60, age_days=16, source="radar")
     _entry("BBB", 90, 80, 85, age_days=16, source="radar")
     b = lb.board()
     assert [e["symbol"] for e in b["entries"]] == ["BBB", "AAA"]
@@ -209,29 +217,33 @@ def test_weak_pillar_and_gem_rule():
     admitted = _entry("ADM", 90, 20, 90, age_days=16, source="radar")
     admitted["judge"] = {"score": 85, "verdict": "gem", "confidence": 0.8}
     assert lb.qualifies(admitted) == ""
-    assert "100k" in lb.qualifies(_entry("MID", 60, 60, 60, cap=500_000, age_days=16, source="radar"))
+    assert "site" in lb.qualifies(_entry("MID", 60, 45, 60, cap=500_000, age_days=16, source="radar"))
     assert lb.qualifies(_entry("GEM", 88, 90, 90, cap=500_000, age_days=16, source="radar")) == ""
     vetoed = _entry("SCAM", 90, 90, 90, age_days=16, source="radar")
     vetoed["judge"] = {"score": 20, "verdict": "scam", "confidence": 0.9, "problems": ["x"]}
     assert lb.qualifies(vetoed).startswith("DeepSeek")
 
 
-def test_exception_uses_the_radar_rule():
-    """Lorenzo: DREGG va bene oltre 21 giorni e $2M, se tecnicamente
-    incredibile su GitHub. La regola e' quella del radar."""
-    pushed = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - DAY))
-    strong = {"key": "github", "label": "GitHub", "score": 90, "grade": "eccellente",
-              "facts": {"commits": "100+", "total_commits": 5_000, "active_days": 40, "pushed_at": pushed}}
-    checks = [strong, {"key": "security", "label": "Sicurezza", "score": 95}]
-    report = {"score": 92}
-    weak = {**strong, "facts": {**strong["facts"], "active_days": 3}}
-    assert "GitHub" in lb.qualifies(_entry("OLD", 85, 90, 90, cap=2_500_000, age_days=88,
-                                           checks=[weak, checks[1]], report=report, source="radar"))
-    assert lb.qualifies(_entry("DREGG", 93, 75, 80, cap=2_500_000, age_days=88, checks=checks,
-                               report=report, exception=True, source="radar")) == ""
-    assert "over $10M" in lb.qualifies(_entry("HUGE", 99, 99, 99, cap=50_000_000, age_days=88, checks=checks,
-                                           report=report, source="radar"))
-    assert lb.board()["entries"][0]["exception"] is True
+def test_above_2m_needs_a_high_final_score():
+    """Lorenzo, 29/09: "alziamo semmai il tetto della market cap sopra i
+    100k, perche' tanto le gemme possono arrivare anche a 1 o 2 milioni".
+    From $2M to the $10M ceiling the final score must reach BIG_MIN_SCORE;
+    age is never a reason, and radar exceptions no longer exist."""
+    mid = _entry("MIDCAP", 75, 65, 62, cap=3_000_000, age_days=88, source="database")
+    assert lb.qualifies(mid).startswith("above $2M with score")
+    assert lb.qualifies(_entry("STRONG", 95, 95, 95, cap=3_000_000, age_days=900, source="database")) == ""
+    assert lb.qualifies(_entry("HUGE", 99, 99, 99, cap=12_000_000, age_days=88)).startswith("over $10M")
+    assert next(x for x in lb.board()["entries"] if x["symbol"] == "STRONG")["exception"] is True
+
+
+def test_young_small_caps_up_to_2m_enter_on_solid_pillars():
+    # STEALF (Solana, $617k, pool 14 days) and BV7X ($1.4M, 12 days on this
+    # chain, 8 months elsewhere): solid, not excellent, pillars.
+    stealf = _entry("STEALF", 75, 68, 65, cap=617_000, age_days=14, source="database", liquidity_usd=190_000)
+    assert lb.qualifies(stealf) == ""
+    bv7x = _entry("BV7X", 72, 70, 66, cap=1_400_000, age_days=12, source="database", liquidity_usd=150_000)
+    assert lb.qualifies(bv7x) == ""
+    assert lb.research_floor(_entry("NEWBORN", 80, 80, 80, age_days=1)) == ""
 
 
 def test_due_refreshes_by_pillar():
@@ -312,19 +324,23 @@ def test_benchmark_is_never_excluded():
     assert k in lb._entries
 
 
-def test_serious_project_enters_up_to_10_million_and_three_years():
+def test_serious_project_enters_up_to_10_million_at_any_age():
     # Lorenzo, 28/09: "massimo consideriamo 10 milioni di market cap"
-    e = _entry("SER", 80, 70, 65, cap=9_000_000, age_days=400, source="coingecko")
+    e = _entry("SER", 90, 90, 90, cap=9_000_000, age_days=400, source="coingecko")
     assert lb.qualifies(e) == ""
     e["market_cap"] = 12_000_000
     assert "over $10M" in lb.qualifies(e)
     old = _entry("OLD", 80, 70, 65, cap=900_000, age_days=1200, source="coingecko")
-    assert "days" in lb.qualifies(old)
+    assert lb.qualifies(old) == ""
 
 
-def test_serious_project_needs_real_code():
-    assert "GitHub" in lb.qualifies(_entry("THIN", 60, 90, 90, cap=500_000, source="dexscreener"))
-    assert "site" in lb.qualifies(_entry("WEAK", 85, 50, 90, cap=500_000, source="coingecko"))
+def test_one_floor_per_pillar_with_or_without_code():
+    # 29/09: weak public code never fares worse than no code at all.
+    assert lb.qualifies(_entry("THIN", 60, 55, 65, cap=500_000, source="dexscreener")) == ""
+    assert lb.qualifies(_closed("SHUT", 55, 65, cap=500_000, source="dexscreener")) == ""
+    assert "github" in lb.qualifies(_entry("SHELL", 30, 90, 90, cap=500_000, source="dexscreener"))
+    assert "site" in lb.qualifies(_entry("WEAK", 85, 45, 90, cap=500_000, source="coingecko"))
+    assert "tokenomics" in lb.qualifies(_closed("TOKW", 80, 55, cap=500_000))
 
 
 def test_serious_project_survives_prune_past_radar_age():
@@ -359,8 +375,8 @@ def test_no_public_github_is_not_a_ban():
     assert lb._key("solana", "CLSmint") not in lb._gone
 
 
-def test_no_public_github_asks_more_of_the_rest_and_ranks_lower():
-    weak = _closed("WK", 65, 90, cap=900_000, source="coingecko")
+def test_no_public_github_ranks_lower():
+    weak = _closed("WK", 45, 90, cap=900_000, source="coingecko")
     assert "site" in lb.qualifies(weak)
     closed = _closed("CL", 80, 80, cap=50_000)
     open_ = _entry("OP", 80, 80, 80, cap=50_000)
@@ -402,7 +418,7 @@ def test_references_are_never_banned():
 
 def test_close_calls_show_what_keeps_projects_out():
     _entry("NEAR", 80, 40, 80)
-    _entry("KID", 80, 90, 80, age_days=3)
+    _entry("KID", 80, 90, 80, liquidity_usd=1_000)
     close = lb.board()["close"]
     assert [c["symbol"] for c in close] == ["NEAR"] and "site" in close[0]["why"]
 

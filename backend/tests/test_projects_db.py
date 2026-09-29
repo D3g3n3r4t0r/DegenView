@@ -124,6 +124,9 @@ def test_recheck_studied_requeues_old_limits(tmp_path, monkeypatch):
     rows = {r["token"]: r["next_check"] for r in db._db().execute(
         "SELECT token, next_check FROM projects").fetchall()}
     assert rows["A"] == 0 and rows["B"] == 0 and rows["C"] != 0 and rows["D"] != 0
+    # Rules dropped outright (29/09) requeue rejected rows too.
+    assert db.recheck_studied(("over $3M",), ("studied", "rejected")) == 2
+    assert db._db().execute("SELECT next_check FROM projects WHERE token = 'D'").fetchone()[0] == 0
 
 
 def test_search_filters_by_narrative():

@@ -22,14 +22,8 @@ Ogni progetto passa da `depth.analyze` (GitHub, sito, tokenomics). Chi viene
 bocciato su un pilastro esce e non rientra; chi ha un dato in attesa resta
 fuori finche' non arriva. Il punteggio si rifa' da solo: tokenomics ogni
 20 minuti (i portafogli cambiano), GitHub ogni 2 ore, sito ogni 12. Cap e
-liquidita' ogni minuto da DexScreener. La regola della gemma e' quella del
-radar: sopra i $100k solo con tutti e tre i pilastri eccellenti.
-
-L'eccezione (Lorenzo, 24/09: "dregg va bene anche se ha 21 gg e supera i 2
-mln, progetti in quel modo voglio che siano eccezione in quanto tecnicamente
-incredibili su github"): oltre i 21 giorni o i $2M si entra solo se il radar
-l'ha ammesso come eccezione, con la sua stessa regola
-(`legit.github_shortfall` e `legit.gem_shortfall`): una regola sola.
+liquidita' ogni minuto da DexScreener. Le regole della gemma sono in
+`qualifies` (dal 29/09 ne' eta' ne' eccezioni del radar: vedi li').
 
 Il riferimento (Lorenzo, 24/09: "mi devi mettere drag al primo posto in
 assoluto con menzione d'onore"): DREGG sta sempre primo, e gli altri si
@@ -47,7 +41,7 @@ import httpx
 
 from app.sniper.quality import _looks_like_meme
 from app.trading.onchain import (benchmark, big_coins, code_review, consistency, depth, discovery, gem_track, judge, legit, narrative_map,
-                                  narratives, priority, projects_db, radar, research, storage, traction)
+                                  narratives, priority, projects_db, research, storage, traction)
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +54,6 @@ DEX_TOKENS = "https://api.dexscreener.com/tokens/v1/{chain}/{addresses}"
 STALE_S = {"tokenomics": 20 * 60, "github": 2 * 3600, "site": 12 * 3600}
 PENDING_RETRY_S = 3 * 60
 PENDING_GIVE_UP_S = 6 * 3600       # un dato che non arriva in 6 ore non arrivera'
-MAX_AGE_DAYS = radar.AGE_MAX_DAYS  # oltre, non e' piu' un progetto nuovo, salvo eccezioni
 MAX_ENTRIES = 400
 KEEP_EXCLUDED = 60
 ANALYZE_CONCURRENCY = 5   # was 3: "la scansione complessiva e' lenta" (27/09)
@@ -77,32 +70,34 @@ SIMILARITY_WEIGHT = 0.30
 TRACTION_WEIGHT = 0.10
 VALUE_WEIGHT = 0.05
 MIN_PILLAR = 35                    # sotto, un pilastro e' troppo debole per stare in classifica
-# Sopra i $100k non servono piu' tutti i pilastri eccellenti: basta il
-# punteggio finale (Lorenzo, 28/09: "sta cosa dei pilastri a 85 va
-# migliorata"). Il giudice di DeepSeek puo' ammettere chi le regole
-# escludono, o bocciare chi passa.
+# One floor per pillar, the same with or without public code (29/09). Before,
+# public code needed GitHub 70 and every pillar 60, no code needed site 70:
+# a project that showed weak code fared worse than one that hid it, and the
+# site bar left out STEALF (60) and GRID (52), read as "promising". Lorenzo:
+# "se non passano le nostre regole sono da rivedere [...] risultano troppo
+# severi". Code quality still weighs in the score and the rank.
+PILLAR_FLOOR = {"github": MIN_PILLAR, "site": 50, "tokenomics": 60}
+# Above GEM_STRICT_CAP_USD a gem needs a high final score, not excellent
+# pillars (Lorenzo, 28/09: "sta cosa dei pilastri a 85 va migliorata").
+# The band was $100k until 29/09 (Lorenzo: "alziamo semmai il tetto della
+# market cap sopra i 100k, perche' tanto le gemme possono arrivare anche a
+# 1 o 2 milioni [...] sono comunque capitalizzazioni basse"). DeepSeek's
+# judge can admit what the rules exclude, or veto what passes.
+GEM_STRICT_CAP_USD = 2_000_000
 BIG_MIN_SCORE = 80
 JUDGE_WEIGHT = 0.5
-# Progetti trovati dallo scan dedicato (discovery): l'eta' conta poco, la cap
-# si' ("sotto 2-3 milioni, non oltre"), e la qualita' deve essere vera.
+# Research sources (discovery). Since 29/09 every source follows the same
+# rules; the tuple only names them.
 SERIOUS_SOURCES = ("coingecko", "dexscreener", "github", "reference", "jupiter", "defillama")
 RADAR_SOURCES = ("radar", "listing")   # before 25/09: fresh launches, now the Meme Sniper's
 # Projects Lorenzo found himself: always examined, never pinned.
 REFERENCES = (
     {"chain": "solana", "token_address": "6SjVTj1VGwFSXn7wEjwFm77LvACeTqB7sQUebYKX8Ds5", "symbol": "ROUTER",
      "name": "Solrouter", "website": "https://solrouter.com", "websites": ["https://docs.solrouter.com"]},
-    # Lorenzo, 29/09: "roba seria tipo AUERON, STEALF, pfwa, GRID dove cavolo sono".
-    {"chain": "solana", "token_address": "G5W6LwkLeoj6rZqBP1y3KT8k6Cz6rXGJmMNU3TArXtXw", "symbol": "STEALF",
-     "name": "Stealf", "website": "https://www.stealf.xyz/"},
-    {"chain": "robinhood", "token_address": "0xa934bA4F59070149d37A93F8A002Af79BAe35563", "symbol": "PFWA",
-     "name": "predict FWA", "website": "https://www.pfwa.fun/", "websites": ["https://www.pfwa.fun/docs"]},
-    {"chain": "robinhood", "token_address": "0x727701F88f09Fed71eb217Bcea88b3F314CF7079", "symbol": "GRID",
-     "name": "GRID by Virtuals", "website": "https://www.gridarena.xyz/"},
-    {"chain": "robinhood", "token_address": "0x459476869aF797Eb9061B41fA04dE46A60FBeDBD", "symbol": "BV7X",
-     "name": "BV7X", "website": "https://bv7x.ai/", "websites": ["https://docs.bv7x.ai/"]},
 )
-# A researcher's floor: an existing project, not a launch.
-MIN_AGE_DAYS = 14
+# A researcher's floor: a pool someone can trade. No age floor since 29/09
+# (Lorenzo: "il limite di data non ha granche' senso"): a project new on a
+# chain can be old elsewhere (BV7X, 8 months on Base, 12 days on Robinhood).
 MIN_LIQUIDITY_USD = 10_000
 # Early gems. Request: "quando la market cap e' sotto i 50k e fondamentali
 # ci sono, voglio che il sistema lo evidenzi che potrebbe valere la pena di
@@ -113,7 +108,6 @@ EARLY_MIN_LIQUIDITY_USD = 5_000
 EARLY_MIN_PILLAR = 60
 EARLY_MIN_SCORE = 65
 ALERTS_PER_TICK = 5
-SERIOUS_CAP_MAX_USD = discovery.CAP_MAX
 # Lorenzo (28/09): "per gemme solitamente si intende roba di capitalizzazione
 # bassa [...] massimo 10 milioni". A hard ceiling for every entry, checked on
 # the token's global cap too: AAVE's Solana copy showed $585k while AAVE
@@ -143,17 +137,12 @@ POOL_TARGET = 300
 BACKLOG_LOW = 10
 DISCOVERY_SLOW_S = 6 * 3600
 CODE_RETRY_S = 6 * 3600        # a failed reading waits: GitHub allows few calls an hour
-SERIOUS_AGE_MAX_DAYS = 3 * 365
-SERIOUS_MIN_PILLAR = 60
-SERIOUS_MIN_GITHUB = 70
-# Without public code the site and the tokenomics must carry the project,
-# and it ranks below an equal project that shows its code.
-NO_GITHUB_MIN_PILLAR = {"site": 70, "tokenomics": 60}
+# Without public code a project ranks below an equal one that shows it.
 NO_GITHUB_PENALTY = 10.0
-RULES_VERSION = 5              # 2: "no GitHub" stopped being a ban; 3: radar launches out;
+RULES_VERSION = 6              # 2: "no GitHub" stopped being a ban; 3: radar launches out;
                                # 4: research read by reader.py, older bans and readings dropped;
                                # 5: reader recognises research-stage code and stated limits
-CAP_MAX_USD = radar.MCAP_MAX_USD
+                               # 6: no age limits, strict band from $100k to $2M, one rule chain
 
 _entries: dict[str, dict] = {}     # chain:token
 _excluded: list[dict] = []
@@ -290,11 +279,8 @@ def collect_saved() -> int:
 
 
 def is_big(item: dict, now: float | None = None) -> bool:
-    """Fuori dai limiti del radar: puo' entrare solo come eccezione."""
-    now = now or time.time()
-    launched = item.get("launched_at")
-    return (float(item.get("market_cap") or 0) > CAP_MAX_USD
-            or bool(launched and now - launched > MAX_AGE_DAYS * 86400))
+    """Above the strict band: on the board only with a high final score."""
+    return float(item.get("market_cap") or 0) > GEM_STRICT_CAP_USD
 
 
 def apply_market(pairs: list[dict]) -> None:
@@ -353,7 +339,8 @@ def due(e: dict, now: float) -> set[str]:
     for k, every in STALE_S.items():
         p = e["pillars"].get(k)
         at = e["checked_at"].get(k, 0)
-        if p is None or (p.get("pending") and now - at >= PENDING_RETRY_S) or now - at >= every:
+        retry = p is not None and (p.get("pending") or (p.get("facts") or {}).get("unreadable"))
+        if p is None or (retry and now - at >= PENDING_RETRY_S) or now - at >= every:
             out.add(k)
     return out
 
@@ -467,15 +454,11 @@ def _note_study(e: dict, pillars: list[str]) -> None:
 
 def _prune(now: float) -> None:
     for k, e in list(_entries.items()):
-        launched = e.get("launched_at")
         pending_since = e.get("found_at", now)
-        limit = (radar.EXC_AGE_MAX_DAYS if exceptional(e)
-                 else SERIOUS_AGE_MAX_DAYS if e.get("source") in SERIOUS_SOURCES else MAX_AGE_DAYS)
         if benchmark.is_benchmark(e["chain"], e["token_address"]):
             continue
-        if launched and now - launched > limit * 86400:
-            _entries.pop(k)
-        elif (e.get("overall") or {}).get("pending") and now - pending_since > PENDING_GIVE_UP_S:
+        # No age limit (29/09): only data that never arrives leaves the set.
+        if (e.get("overall") or {}).get("pending") and now - pending_since > PENDING_GIVE_UP_S:
             # A slow service (GitHub out of requests) is not the project's
             # fault: drop it from the queue, but let it come back.
             _entries.pop(k)
@@ -488,13 +471,6 @@ def _prune(now: float) -> None:
 
 
 # -------------------------------------------------------------- classifica
-
-def exceptional(e: dict) -> bool:
-    """La regola del radar per le eccezioni, sui controlli che ha salvato."""
-    checks = e.get("checks") or []
-    gh = next((c for c in checks if c.get("key") == "github"), None)
-    return bool(gh) and not legit.github_shortfall(gh) and not legit.gem_shortfall(checks, e.get("report"))
-
 
 def true_cap(e: dict) -> float:
     """The larger of the pool's cap, the contract's global cap (CoinGecko) and
@@ -512,6 +488,21 @@ def too_big(e: dict) -> str:
     return ""
 
 
+# The gem rule chain (29/09, Lorenzo: "stai facendo un po' di casino delle
+# scelte"): one chain for every source, no age anywhere. Hard safety first:
+# a bridged copy or a cap over BOARD_CAP_MAX_USD ($10M, pool, CoinGecko or
+# the top coin copied) is not a small cap; a DeepSeek board review that
+# dropped the project holds for its TTL; the researcher's floor wants a name
+# and a tradeable pool. Then the analysis: a fatal pillar (rug, fork, empty
+# site) is out, a missing pillar waits. DeepSeek's judge vetoes an
+# avoid/scam verdict it is sure of, and admits a gem/watch verdict with a
+# high score past the quality bars below. The quality bar: every pillar at
+# its PILLAR_FLOOR, the same with or without public code (no code costs
+# NO_GITHUB_PENALTY in the score instead). Up to GEM_STRICT_CAP_USD ($2M)
+# that is enough; from $2M to $10M the final score must also reach
+# BIG_MIN_SCORE. Early gems (under $50k, see is_early) are flagged
+# separately. Holders that are contracts (pools, vesting) are not "a single
+# wallet" in the tokenomics pillar (depth.judge_tokenomics_evm).
 def qualifies(e: dict, now: float | None = None) -> str:
     """"" se entra in classifica, altrimenti perche' no."""
     if benchmark.is_benchmark(e.get("chain"), e.get("token_address")):
@@ -538,28 +529,16 @@ def qualifies(e: dict, now: float | None = None) -> str:
     j = e.get("judge") or {}
     if j.get("verdict") in ("avoid", "scam") and (j.get("confidence") or 0) >= judge.VETO_MIN_CONF:
         return f"DeepSeek: {(j.get('problems') or [j['verdict']])[0]}"
-    admitted = j.get("verdict") in ("gem", "watch") and (j.get("score") or 0) >= judge.ADMIT_MIN
-    weak = [k for k in need if pillars[k]["score"] < (NO_GITHUB_MIN_PILLAR[k] if closed else MIN_PILLAR)]
-    if weak and not admitted:
-        return f"{weak[0]} too weak ({pillars[weak[0]]['score']})"
-    if e.get("source") in SERIOUS_SOURCES:
-        return _serious_shortfall(e, pillars, now)
-    if is_big(e, now):
-        if closed:
-            return "beyond the radar limits without public code"
-        launched = e.get("launched_at")
-        if (float(e.get("market_cap") or 0) > radar.EXC_MCAP_MAX_USD
-                or (launched and (now or time.time()) - launched > radar.EXC_AGE_MAX_DAYS * 86400)):
-            return "beyond the limits even for an exception"
-        if not exceptional(e):
-            return f"over {MAX_AGE_DAYS} days or ${CAP_MAX_USD / 1e6:.0f}M without an exceptional GitHub"
-        # Anche l'analisi profonda deve confermare che il codice e' eccezionale.
-        if pillars["github"]["score"] < legit.GEM_MIN_SCORE:
-            return f"radar exception, but deep GitHub score only {pillars['github']['score']}"
+    if j.get("verdict") in ("gem", "watch") and (j.get("score") or 0) >= judge.ADMIT_MIN:
         return ""
-    cap = float(e.get("market_cap") or 0)
-    if cap > legit.GEM_CAP_USD and final_score(e) < BIG_MIN_SCORE and not admitted:
-        return f"above $100k with score {round(final_score(e))} (needs {BIG_MIN_SCORE})"
+    # A site we could not read (JS shell, down) is unknown, not weak: no floor.
+    weak = [k for k in need if pillars[k]["score"] < PILLAR_FLOOR[k]
+            and not (pillars[k].get("facts") or {}).get("unreadable")]
+    if weak:
+        return f"{weak[0]} too weak ({pillars[weak[0]]['score']})"
+    if is_big(e, now) and final_score(e) < BIG_MIN_SCORE:
+        return (f"above ${GEM_STRICT_CAP_USD / 1e6:g}M with score {round(final_score(e))}"
+                f" (needs {BIG_MIN_SCORE})")
     return ""
 
 
@@ -571,15 +550,10 @@ def no_name(symbol) -> bool:
 
 
 def research_floor(e: dict, now: float | None = None) -> str:
-    """What a researcher would not even open: no name, a launch of days
-    ago, a pool nobody can trade."""
+    """What a researcher would not even open: no name, a pool nobody can
+    trade. Age is not a reason (29/09)."""
     if no_name(e.get("symbol")):
         return "no name"
-    launched = e.get("launched_at")
-    # A project Lorenzo named is not a launch, even on a new chain (BV7X: 8
-    # months on Base, 12 days on Robinhood).
-    if launched and e.get("source") != "reference" and (now or time.time()) - launched < MIN_AGE_DAYS * 86400:
-        return f"younger than {MIN_AGE_DAYS} days"
     liq = e.get("liquidity_usd")
     small = float(e.get("market_cap") or 0) and float(e.get("market_cap") or 0) < EARLY_CAP_USD
     floor = EARLY_MIN_LIQUIDITY_USD if small else MIN_LIQUIDITY_USD
@@ -599,20 +573,6 @@ def is_early(e: dict, now: float | None = None) -> bool:
            for k in depth.WEIGHTS):
         return False
     return final_score(e) >= EARLY_MIN_SCORE and not qualifies(e, now)
-
-
-def _serious_shortfall(e: dict, pillars: dict, now: float | None) -> str:
-    launched = e.get("launched_at")
-    if float(e.get("market_cap") or 0) > SERIOUS_CAP_MAX_USD:
-        return f"over ${SERIOUS_CAP_MAX_USD / 1e6:.0f}M"
-    if launched and (now or time.time()) - launched > SERIOUS_AGE_MAX_DAYS * 86400:
-        return f"over {SERIOUS_AGE_MAX_DAYS} days"
-    if no_github(e):
-        return ""          # site and tokenomics already cleared NO_GITHUB_MIN_PILLAR
-    if pillars["github"]["score"] < SERIOUS_MIN_GITHUB:
-        return f"GitHub only {pillars['github']['score']}"
-    weak = [k for k in depth.WEIGHTS if pillars[k]["score"] < SERIOUS_MIN_PILLAR]
-    return f"{weak[0]} only {pillars[weak[0]]['score']}" if weak else ""
 
 
 def no_github(e: dict) -> bool:
@@ -730,7 +690,7 @@ def _public(e: dict) -> dict:
             **_research_public(e), "honor": benchmark.HONOR if top else None, "traction": traction_of(e),
             "review": {k: (e.get("review") or {}).get(k) for k in ("keep", "score", "reason")} if e.get("review") else None,
             "judge": {k: (e.get("judge") or {}).get(k)
-                      for k in ("score", "verdict", "problems", "strengths", "admit_reason")} if e.get("judge") else None,
+                      for k in ("score", "verdict", "problems", "strengths", "admit_reason", "x", "tg")} if e.get("judge") else None,
             "code": {k: (e.get("code") or {}).get(k)
                      for k in ("complexity", "innovation", "fork_of", "summary", "strengths", "concerns")}
             if e.get("code") else None}
@@ -775,10 +735,9 @@ def board() -> dict:
         "past_floor": sum(1 for e in _entries.values() if not research_floor(e)),
         "rules": {"weights": depth.WEIGHTS, "similarity_weight": SIMILARITY_WEIGHT,
                   "traction_weight": TRACTION_WEIGHT, "value_weight": VALUE_WEIGHT,
-                  "early_cap_usd": EARLY_CAP_USD, "early_min_pillar": EARLY_MIN_PILLAR, "early_min_score": EARLY_MIN_SCORE, "benchmark": benchmark.NAME, "min_pillar": MIN_PILLAR, "gem_cap_usd": legit.GEM_CAP_USD,
-                  "gem_min_score": legit.GEM_MIN_SCORE, "cap_max_usd": CAP_MAX_USD, "board_cap_max_usd": BOARD_CAP_MAX_USD, "max_age_days": MAX_AGE_DAYS,
-                  "big_min_score": BIG_MIN_SCORE, "judge_weight": JUDGE_WEIGHT,
-                  "exception_cap_usd": radar.EXC_MCAP_MAX_USD, "exception_age_days": radar.EXC_AGE_MAX_DAYS},
+                  "early_cap_usd": EARLY_CAP_USD, "early_min_pillar": EARLY_MIN_PILLAR, "early_min_score": EARLY_MIN_SCORE, "benchmark": benchmark.NAME, "min_pillar": MIN_PILLAR, "gem_cap_usd": GEM_STRICT_CAP_USD,
+                  "board_cap_max_usd": BOARD_CAP_MAX_USD, "pillar_floor": PILLAR_FLOOR,
+                  "big_min_score": BIG_MIN_SCORE, "judge_weight": JUDGE_WEIGHT},
     }
 
 
@@ -1189,12 +1148,17 @@ async def top_fill(client: httpx.AsyncClient, now: float | None = None) -> int:
 
 
 START_DELAY_S = 20
+# Verdicts of rules that no longer exist: rows judged by them are looked at again.
+DROPPED_RULES = ("above $100k", "younger than", "over % days", "beyond the%limits", "radar exception",
+                 "without an exceptional GitHub")
 
 
 async def leaderboard_loop() -> None:
     await asyncio.sleep(START_DELAY_S)
     try:
         n = projects_db.recheck_studied(("over $%", "over % days%"))
+        # Rules dropped on 29/09 (age limits, radar exceptions, the $100k band).
+        n += projects_db.recheck_studied(DROPPED_RULES, ("studied", "rejected"))
         if n:
             logger.info("classifica: %d progetti rimessi in coda (limiti vecchi)", n)
     except Exception:

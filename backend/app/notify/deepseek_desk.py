@@ -43,7 +43,7 @@ CHAT_DAILY_TOKENS = 300_000
 MEMORY = 10                          # messages kept per chat
 KINDS = {"chat": "chat Telegram", "scanner": "scanner (giudizio token)", "research": "letture approfondite gemme",
          "review": "revisioni token", "consistency": "controllo incongruenze Top",
-         "pr_review": "revisioni PR"}
+         "study": "studi approfonditi chiesti da Claude", "pr_review": "revisioni PR"}
 
 _lock = threading.Lock()
 # What the agent did lately, for the site's live presence (Lorenzo, 27/09:

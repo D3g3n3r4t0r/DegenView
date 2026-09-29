@@ -292,17 +292,35 @@ async def _dossier_deepseek(prompt: str) -> dict | None:
     return out
 
 
+# A site we could not read is unknown, not weak (Lorenzo, 29/09, PFWA: "Se
+# il sito e' scritto in JavaScript non lo devi bocciare"). With no site read,
+# the pillar sits at UNREAD_SCORE (the site floor): it neither sinks the
+# project nor lifts it on the listing text alone; DeepSeek's judge decides.
+# A site that answers "not found" is gone, not unreadable: it still counts 0.
+UNREAD_SCORE = 50
+_GONE = re.compile(r"\bresponds (404|410)\b")
+
+
+def unread(site: dict) -> str:
+    """Why this site pillar could not be read, or "" if it was (or is gone)."""
+    if site.get("unreadable"):
+        return site["unreadable"]
+    why = site.get("pending") or ""
+    return f"website not readable ({why})" if why and not _GONE.search(why) else ""
+
+
 def judge_research(sites: list[dict], description: str, ai: dict | None) -> dict:
     """One pillar (key "site") from every site read, the description and
     the dossier (the reader's, or Claude's when switched on)."""
     scored = [s for s in sites if s.get("score") is not None and not s.get("fatal")]
+    not_read = next((w for w in map(unread, sites) if w), "")
     if not scored:
         fatal = next((s for s in sites if s.get("fatal")), None)
         if fatal and not description:
             return fatal
         pend = next((s for s in sites if s.get("pending")), None)
-        if pend and not description:
-            return pend
+        if pend and not description and not any(s.get("unreadable") for s in sites):
+            return pend     # down with nothing else to read: retry later
     best = max(scored, key=lambda s: s["score"]) if scored else {"score": 0, "facts": {}, "flags": []}
     desc_score, desc_facts = substance(description)
     site_nar = [n for s in scored for n in (s.get("facts") or {}).get("narratives") or []]
@@ -321,6 +339,10 @@ def judge_research(sites: list[dict], description: str, ai: dict | None) -> dict
         score = 0.35 * best["score"] + 0.65 * float(ai.get("points", ai["substance"] * 10))
     else:
         score = 0.5 * best["score"] + 0.5 * desc_score
+    if not scored and not_read:
+        facts.update(unreadable=not_read, site_score=None)
+        flags.append(not_read)
+        score = UNREAD_SCORE
     return depth._pillar("site", score, facts, flags)
 
 
@@ -358,8 +380,9 @@ async def analyze(item: dict, client: httpx.AsyncClient, launched: float | None)
             _save()
     if ai is None and (description or any(texts)):
         app_ok = any((s.get("facts") or {}).get("app_ok") for s in sites)
+        deployed = any((s.get("facts") or {}).get("contract_link") for s in sites)
         ai = reader.read(description, texts, name=item.get("name") or "",
-                         symbol=item.get("symbol") or "", app_ok=app_ok,
+                         symbol=item.get("symbol") or "", app_ok=app_ok, deployed=deployed,
                          corpus=_prints, key=key)
         print_ = ai.pop("sketch", None)
         if print_ and ai["original"] and _prints.get(key) != print_:
