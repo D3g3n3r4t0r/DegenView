@@ -58,7 +58,7 @@ def case(e: dict, now: float | None = None) -> dict | None:
 
 def cases(now: float | None = None) -> list[dict]:
     now = now or time.time()
-    return [c for c in (case(e, now) for e in outcomes._journal.values()) if c]
+    return [c for c in (case(e, now) for e in outcomes.entries().values()) if c]
 
 
 def _vec(f: dict) -> dict[str, float]:
@@ -180,7 +180,7 @@ def lookup(query: str, now: float | None = None, limit: int = 5) -> list[dict]:
     if not q:
         return []
     hits = []
-    for e in outcomes._journal.values():
+    for e in outcomes.entries().values():
         if (e.get("symbol") or "").lower() == q.lower() or (len(q) >= 6 and (e.get("token_address") or "").lower().startswith(q.lower())):
             c = case(e, now) or {"symbol": e.get("symbol"), "chain": e["chain"], "token": e.get("token_address"),
                                  "at": e["at"], "decision": e.get("decision"), "outcome": None}
