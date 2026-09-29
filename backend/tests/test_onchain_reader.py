@@ -60,6 +60,9 @@ def test_token_role_is_read_near_the_token():
     assert reader.token_utility("$ROUTER is the token used to pay for inference and staked by nodes") == \
         ["fees", "staking"]
     assert reader.token_utility("The token. " + "filler " * 30 + "fees are low") == []
+    # The ticker without "$" is a mention too (29/09: every project read "no stated role").
+    assert reader.token_utility("AUREON holders stake to run agents", "AUREON") == ["staking"]
+    assert reader.token_utility("AUREON holders stake to run agents") == []
 
 RESEARCH = ("Dregg is a deep research project with a runnable decision engine and a public proof record. "
             "The core is machine-checked and Lean-authored. Named limit: no independent external audit yet. "

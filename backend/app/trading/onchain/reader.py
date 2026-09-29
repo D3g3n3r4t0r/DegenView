@@ -90,10 +90,10 @@ _CANDOR = re.compile(r"\b(named limits?|limitations?|not yet|not ready|no (?:ind
 
 _TOKEN = re.compile(r"(\$[A-Za-z]{2,10}\b|\btokens?\b)")
 _UTILITY = {
-    "fees": re.compile(r"\b(pay|pays|paid|payment|fees?|gas|credits?)\b", re.I),
+    "fees": re.compile(r"\b(pay|pays|paid|payments?|fees?|gas|credits?|x402)\b", re.I),
     "staking": re.compile(r"\b(stak\w+|bond\w*|slash\w*|collateral)\b", re.I),
     "governance": re.compile(r"\b(govern\w*|vote|voting|dao)\b", re.I),
-    "value": re.compile(r"\b(burn\w*|buy-?backs?|revenue|rewards?|emissions?)\b", re.I),
+    "value": re.compile(r"\b(burn\w*|buy-?backs?|revenue|rewards?|emissions?|yield|dividends?|share of)\b", re.I),
     "access": re.compile(r"\b(access|unlock\w* (?:features|tiers?)|discounts?|priority)\b", re.I),
 }
 UTILITY_WINDOW = 12   # words either side of a token mention
@@ -192,11 +192,16 @@ def stage(text: str, app_ok: bool = False, deployed: bool = False) -> tuple[str,
     return "idea", ev
 
 
-def token_utility(text: str) -> list[str]:
+def token_utility(text: str, symbol: str = "") -> list[str]:
+    """Roles named near a mention of the token. Projects name their token by
+    its ticker without the dollar sign ("AUREON holders stake..."), so the
+    ticker counts as a mention too."""
     ws = (text or "").split()
+    own = re.compile(r"(?<![A-Za-z0-9])" + re.escape(symbol) + r"(?![A-Za-z0-9])", re.I) \
+        if len(symbol or "") >= 3 else None
     roles: set[str] = set()
     for i, w in enumerate(ws):
-        if not _TOKEN.search(w):
+        if not (_TOKEN.search(w) or (own and own.search(w))):
             continue
         window = " ".join(ws[max(0, i - UTILITY_WINDOW): i + UTILITY_WINDOW + 1])
         roles |= {role for role, rx in _UTILITY.items() if rx.search(window)}
@@ -259,7 +264,7 @@ def read(description: str, site_texts: list[str], *, name: str = "", symbol: str
     n_concepts = sum(len(v) for v in found.values())
     concrete = concreteness(text)
     st, st_ev = stage(text, app_ok, deployed)
-    roles = token_utility(text)
+    roles = token_utility(text, symbol)
     candor = len(set(m.lower() for m in _CANDOR.findall(text)))
     info = len(content_words(text))
     plain = not_legal(text)
