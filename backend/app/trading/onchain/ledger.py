@@ -120,9 +120,18 @@ def _init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_limit_orders_open
                 ON limit_orders (status, chain);
         """)
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(orders)").fetchall()}
+        for col in ("expected_qty", "expected_price_usd"):
+            if col not in cols:
+                conn.execute(f"ALTER TABLE orders ADD COLUMN {col} REAL")
 
 
 _init_db()
+
+# Statuses of a live order whose outcome on chain is not known yet:
+# 'pending' (reserved), 'signed' (tx id saved, about to be sent),
+# 'submitted' (node accepted it), 'unknown' (send errored ambiguously).
+IN_FLIGHT = ("pending", "signed", "submitted", "unknown")
 
 
 def _today_key() -> str:
@@ -166,12 +175,57 @@ def list_orders(owner_id: str, chain: str, limit: int = 100) -> list[dict]:
         return [dict(r) for r in rows]
 
 
-def mark_submitted(idempotency_key: str, tx_signature: str) -> None:
+def mark_signed(
+    idempotency_key: str, tx_signature: str, expected_qty: float | None = None,
+    expected_price_usd: float | None = None, price_impact_pct: float | None = None,
+) -> None:
+    """Saved BEFORE the broadcast: a crash or a timeout during the send
+    leaves a signature the reconciler can look up (audit 29/09, S04)."""
+    _set_in_flight(idempotency_key, "signed", tx_signature, expected_qty, expected_price_usd, price_impact_pct)
+
+
+def mark_submitted(
+    idempotency_key: str, tx_signature: str, expected_qty: float | None = None,
+    expected_price_usd: float | None = None, price_impact_pct: float | None = None,
+) -> None:
+    """The node accepted the transaction. Not a confirmation: positions and
+    spend move only when the reconciler sees it confirmed on chain."""
+    _set_in_flight(idempotency_key, "submitted", tx_signature, expected_qty, expected_price_usd, price_impact_pct)
+
+
+def mark_unknown(idempotency_key: str, reason: str) -> None:
+    """The send failed in a way that does not prove the node never got it:
+    the reconciler decides from the saved signature."""
     with _lock, _connect() as conn:
         conn.execute(
-            "UPDATE orders SET status = 'submitted', tx_signature = ?, updated_at = ? WHERE idempotency_key = ?",
-            (tx_signature, time.time(), idempotency_key),
+            "UPDATE orders SET status = 'unknown', reason = ?, updated_at = ? "
+            "WHERE idempotency_key = ? AND status IN ('pending', 'signed', 'submitted')",
+            (reason, time.time(), idempotency_key),
         )
+
+
+def _set_in_flight(key, status, tx_signature, expected_qty, expected_price_usd, price_impact_pct) -> None:
+    with _lock, _connect() as conn:
+        conn.execute(
+            "UPDATE orders SET status = ?, tx_signature = ?, "
+            "expected_qty = COALESCE(?, expected_qty), expected_price_usd = COALESCE(?, expected_price_usd), "
+            "price_impact_pct = COALESCE(?, price_impact_pct), updated_at = ? "
+            "WHERE idempotency_key = ? AND status IN ('pending', 'signed', 'submitted', 'unknown')",
+            (status, tx_signature, expected_qty, expected_price_usd, price_impact_pct, time.time(), key),
+        )
+
+
+def confirm_from_chain(idempotency_key: str) -> None:
+    """The reconciler saw the transaction confirmed: book the expected fill
+    saved at signing time, once. Rows without one (older code) only leave
+    the in-flight list."""
+    order = get_order(idempotency_key)
+    if order is None:
+        return
+    if order.get("expected_qty") is not None and order.get("expected_price_usd") is not None:
+        mark_confirmed(idempotency_key, order["expected_qty"], order["expected_price_usd"], order.get("price_impact_pct"))
+    else:
+        mark_confirmed_signature_only(idempotency_key)
 
 
 def mark_confirmed(
@@ -183,7 +237,7 @@ def mark_confirmed(
     executed_usd = executed_qty * executed_price_usd
     with _lock, _connect() as conn:
         order = conn.execute("SELECT * FROM orders WHERE idempotency_key = ?", (idempotency_key,)).fetchone()
-        if order is None or order["status"] not in ("pending", "submitted"):
+        if order is None or order["status"] not in IN_FLIGHT:
             return      # a second confirmation must not add the fill twice (audit 29/09, S03)
         conn.execute(
             "UPDATE orders SET status = 'confirmed', executed_qty = ?, executed_price_usd = ?, "
@@ -209,7 +263,8 @@ def mark_confirmed(
 def mark_failed(idempotency_key: str, reason: str) -> None:
     with _lock, _connect() as conn:
         conn.execute(
-            "UPDATE orders SET status = 'failed', reason = ?, updated_at = ? WHERE idempotency_key = ?",
+            "UPDATE orders SET status = 'failed', reason = ?, updated_at = ? "
+            "WHERE idempotency_key = ? AND status != 'confirmed'",
             (reason, time.time(), idempotency_key),
         )
 
@@ -226,7 +281,8 @@ def mark_confirmed_signature_only(idempotency_key: str) -> None:
     scritte l'ultima volta che *questo* processo ha visto la conferma."""
     with _lock, _connect() as conn:
         conn.execute(
-            "UPDATE orders SET status = 'confirmed', updated_at = ? WHERE idempotency_key = ?",
+            "UPDATE orders SET status = 'confirmed', updated_at = ? "
+            "WHERE idempotency_key = ? AND status IN ('pending', 'signed', 'submitted', 'unknown')",
             (time.time(), idempotency_key),
         )
 
@@ -266,18 +322,18 @@ def in_flight_usd(owner_id: str, chain: str) -> float:
     with _lock, _connect() as conn:
         row = conn.execute(
             "SELECT COALESCE(SUM(size_usd), 0) AS s FROM orders WHERE owner_id = ? AND chain = ? "
-            "AND mode = 'live' AND status IN ('pending', 'submitted') AND created_at >= ?",
+            "AND mode != 'simulated' AND status IN ('pending', 'signed', 'submitted', 'unknown') AND created_at >= ?",
             (owner_id, chain, start),
         ).fetchone()
         return float(row["s"] or 0.0)
 
 
 def pending_unconfirmed(owner_id: str | None = None) -> list[dict]:
-    """Ordini 'submitted' senza mai una conferma — quello che un riavvio a
-    meta' lascia indietro. Chi chiama deve interrogare la chain con la loro
-    tx_signature prima di considerare qualunque nuovo segnale."""
+    """Live orders whose outcome on chain is not known yet (every in-flight
+    status, not only 'submitted': audit 29/09, S04). Chi chiama deve
+    interrogare la chain con la loro tx_signature."""
     with _lock, _connect() as conn:
-        query = "SELECT * FROM orders WHERE status = 'submitted'"
+        query = "SELECT * FROM orders WHERE mode != 'simulated' AND status IN ('pending', 'signed', 'submitted', 'unknown')"
         params: tuple = ()
         if owner_id is not None:
             query += " AND owner_id = ?"

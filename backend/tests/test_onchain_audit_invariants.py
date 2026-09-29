@@ -146,3 +146,99 @@ def test_processed_solana_signature_stays_pending(monkeypatch):
 
     monkeypatch.setattr(reconciliation.httpx, "AsyncClient", _Client)
     assert _run(reconciliation._solana_signature_status("sig")) == "pending"
+
+
+def test_withdrawal_value_comes_from_the_server_not_the_request(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from app import auth, main
+    monkeypatch.setattr(auth, "_USERS_FILE", tmp_path / "users.json")
+    _fresh_db(tmp_path, monkeypatch)
+    auth._users.clear()
+    user = auth.create_user("trader@example.com", "correct-horse-battery-9")
+    auth.create_onchain_wallet(user.id, "solana")
+    main.app.dependency_overrides[auth.get_current_user] = lambda: auth.get_user(user.id)
+
+    async def _price(chain, address):
+        return 1000.0
+
+    monkeypatch.setattr(main.onchain_valuation, "token_price_usd", _price)
+    monkeypatch.setattr(risk.settings, "onchain_max_usd_per_trade", 100.0)
+    try:
+        with TestClient(main.app) as c:
+            resp = c.post("/api/onchain/send", json={
+                "chain": "solana", "to_address": "Dest1111111111111111111111111111111111111",
+                "amount": 1.0, "price_usd": 0.01,
+            })
+    finally:
+        main.app.dependency_overrides.clear()
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["accepted"] is False
+    assert "per-trade cap" in body["reason"]
+
+
+def test_swap_value_uses_decimals_and_server_price(monkeypatch):
+    from app.trading.onchain import valuation
+
+    async def _dec(chain, address):
+        return 6 if address == "USDC" else 9
+
+    async def _price(chain, address):
+        return 1.0 if address == "USDC" else None
+
+    monkeypatch.setattr(valuation, "token_decimals", _dec)
+    monkeypatch.setattr(valuation, "token_price_usd", _price)
+    v = _run(valuation.swap_value("solana", "USDC", 50_000_000, "MEME", 2_000 * 10**9, "buy"))
+    assert v == {"notional_usd": 50.0, "price_usd": 0.025, "qty": 2000.0}
+    assert _run(valuation.swap_value("solana", "MEME", 10**9, "OTHER", 10**9, "sell")) is None
+
+
+def test_same_intent_twice_trades_once(tmp_path, monkeypatch):
+    _fresh_db(tmp_path, monkeypatch)
+    calls = _spy_signing(monkeypatch)
+    args = ("u1", "solana", "TOKEN", "manuale", "buy", 10.0, 0.5, 2.0, "deadbeef", _quote())
+    first = _run(execute.execute_order(*args, intent_id="click-1"))
+    again = _run(execute.execute_order(*args, intent_id="click-1"))
+    assert first["accepted"] is True and again["accepted"] is True
+    assert again["duplicate"] is True
+    assert again["idempotency_key"] == first["idempotency_key"]
+    assert calls["sent"] == 1
+    other = _run(execute.execute_order("u1", "solana", "TOKEN", "manuale", "sell", 10.0, 0.5, 2.0,
+                                       "deadbeef", _quote(), intent_id="click-1"))
+    assert other["accepted"] is False
+    assert calls["sent"] == 1
+
+
+def test_ack_is_submitted_and_the_chain_confirms(tmp_path, monkeypatch):
+    _fresh_db(tmp_path, monkeypatch)
+    _spy_signing(monkeypatch)
+    result = _run(execute.execute_order(
+        "u1", "solana", "TOKEN", "manuale", "buy", 10.0, 0.5, 2.0, "deadbeef", _quote(),
+    ))
+    key = result["idempotency_key"]
+    assert ledger.get_order(key)["status"] == "submitted"
+    assert ledger.get_position("u1", "solana", "TOKEN")["quantity"] == 0.0
+    assert [o["idempotency_key"] for o in ledger.pending_unconfirmed("u1")] == [key]
+    ledger.confirm_from_chain(key)
+    ledger.confirm_from_chain(key)
+    assert ledger.get_position("u1", "solana", "TOKEN")["quantity"] == 5.0
+
+
+def test_ambiguous_send_error_leaves_the_order_to_the_reconciler(tmp_path, monkeypatch):
+    _fresh_db(tmp_path, monkeypatch)
+    _spy_signing(monkeypatch)
+    monkeypatch.setattr(execute.execution, "tx_id", lambda chain, signed: "sig-known-before-send")
+
+    async def _timeout(cid, pk, signed, notional):
+        raise TimeoutError("read timed out")
+
+    monkeypatch.setattr(execute, "_send_solana_with_jito_fallback", _timeout)
+    result = _run(execute.execute_order(
+        "u1", "solana", "TOKEN", "manuale", "buy", 10.0, 0.5, 2.0, "deadbeef", _quote(),
+    ))
+    assert result["accepted"] is False
+    order = ledger.get_order(result["idempotency_key"])
+    assert order["status"] == "unknown"
+    assert order["tx_signature"] == "sig-known-before-send"
+    assert ledger.pending_unconfirmed("u1")

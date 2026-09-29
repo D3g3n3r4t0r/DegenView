@@ -7,6 +7,7 @@ import io
 import html as _html
 import httpx
 import itertools
+import math
 import json
 import logging
 import re
@@ -24,7 +25,7 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, W
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 # smartmoneyconcepts prints a unicode banner on import; Windows consoles using
 # a non-UTF8 codepage would otherwise crash the app at startup. In a frozen
@@ -131,6 +132,7 @@ from app import token_launch
 from app.trading.onchain import prices as onchain_prices
 from app.trading.onchain import token_search as onchain_tokens
 from app.trading.onchain import quotes as onchain_quotes
+from app.trading.onchain import valuation as onchain_valuation
 from app.trading.onchain import reveal_requests as onchain_reveal
 from app.trading.onchain import rpc_client as onchain_rpc_client
 from app.trading.onchain import simulate as onchain_simulate
@@ -441,6 +443,8 @@ async def _run_onchain_auto_trade(owner: User, entry: WatchlistEntry, strategy_n
             sell_amount_in = int(quantity * (10 ** decimals))
             notional_usd = quantity * signal.price
 
+        # One signal, one trade, even if the loop sees it again (audit S03).
+        intent = f"watch-{entry.symbol}-{strategy_name}-{signal.type}-{signal.time}"
         try:
             private_key_hex = auth.get_decrypted_onchain_private_key(owner, chain)
             if chain == "solana":
@@ -453,7 +457,7 @@ async def _run_onchain_auto_trade(owner: User, entry: WatchlistEntry, strategy_n
                     )
                     result = await onchain_execute.execute_order(
                         owner.id, "solana", entry.base_token_address, strategy_name, "buy",
-                        cap, quote["price_impact_pct"], signal.price, private_key_hex, quote,
+                        cap, quote["price_impact_pct"], signal.price, private_key_hex, quote, intent_id=intent,
                     )
                 else:
                     quote = await onchain_quotes.jupiter_quote(
@@ -461,7 +465,7 @@ async def _run_onchain_auto_trade(owner: User, entry: WatchlistEntry, strategy_n
                     )
                     result = await onchain_execute.execute_order(
                         owner.id, "solana", entry.base_token_address, strategy_name, "sell",
-                        notional_usd, quote["price_impact_pct"], signal.price, private_key_hex, quote,
+                        notional_usd, quote["price_impact_pct"], signal.price, private_key_hex, quote, intent_id=intent,
                     )
             else:
                 token_in, token_out = (quote_token, entry.base_token_address) if is_buy \
@@ -478,6 +482,7 @@ async def _run_onchain_auto_trade(owner: User, entry: WatchlistEntry, strategy_n
                     cap if is_buy else notional_usd, v3_quote["price_impact_pct"], signal.price, private_key_hex,
                     {"token_in": token_in, "token_out": token_out, "fee": fee,
                      "amount_in": amount_in, "amount_out_minimum": amount_out_minimum},
+                    intent_id=intent,
                 )
             outcome = "eseguito" if result.get("accepted") else "saltato"
             trading_log.record(
@@ -485,7 +490,8 @@ async def _run_onchain_auto_trade(owner: User, entry: WatchlistEntry, strategy_n
                 strategy_name=strategy_name, signal_type=signal.type,
                 outcome=outcome, detail=str(result)[:400], price=signal.price,
             )
-            if result.get("accepted") and owner.telegram_chat_id and _telegram_allowed(owner):
+            if result.get("accepted") and not result.get("duplicate") and owner.telegram_chat_id \
+                    and _telegram_allowed(owner):
                 asyncio.create_task(telegram.send_to(
                     owner.telegram_chat_id,
                     f"💱 Ordine on-chain ESEGUITO <b>{entry.symbol}</b> [{signal.type}] su {chain} a {signal.price:g}",
@@ -1492,9 +1498,22 @@ async def _deepseek_recap_loop() -> None:
         await asyncio.sleep(600)
 
 
+async def _onchain_reconcile_loop() -> None:
+    """Live orders stay 'submitted' until the chain confirms them (audit
+    29/09, S04): this is what confirms them, at startup and every 20 s."""
+    from app.trading.onchain import reconciliation as onchain_reconciliation
+    while True:
+        try:
+            await onchain_reconciliation.reconcile_all()
+        except Exception:  # noqa: BLE001
+            logger.exception("onchain reconcile loop")
+        await asyncio.sleep(20)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     asyncio.create_task(_notify_deploy())
+    asyncio.create_task(_onchain_reconcile_loop())
     from app.trading.onchain import twap_jobs as onchain_twap_jobs_resume
     asyncio.create_task(onchain_twap_jobs_resume.resume_running_twap_jobs())
     t1 = asyncio.create_task(_watchlist_alert_loop())
@@ -3286,8 +3305,15 @@ async def create_limit_order(body: LimitOrderCreateRequest, user: User = Depends
             status_code=400,
             detail="A limit order needs the native token on one side: it's the only price we can verify.",
         )
-    if body.amount_in <= 0 or body.target_price_usd <= 0:
+    if not (math.isfinite(body.amount_in) and math.isfinite(body.target_price_usd)) \
+            or body.amount_in <= 0 or body.target_price_usd <= 0:
         raise HTTPException(status_code=400, detail="Size and target price must be positive.")
+    # Decimals turn amount_in into the raw amount that gets signed: read
+    # them from the chain, never from the request (audit 29/09, S02).
+    for address, claimed in ((body.token_in, body.token_in_decimals), (body.token_out, body.token_out_decimals)):
+        real = await onchain_valuation.token_decimals(body.chain, address)
+        if real is None or real != claimed:
+            raise HTTPException(status_code=400, detail="Token decimals don't match the chain: order not saved.")
     return onchain_ledger.create_limit_order(
         user.id, body.chain, body.token_in, body.token_out,
         body.token_in_symbol, body.token_out_symbol, body.token_in_decimals, body.token_out_decimals,
@@ -3483,11 +3509,21 @@ class OnchainExecuteSolanaRequest(BaseModel):
     side: Literal["buy", "sell"]
     input_mint: str
     output_mint: str
-    amount_lamports: int
-    notional_usd: float
-    price_usd: float
-    slippage_bps: int = 50
+    amount_lamports: int = Field(gt=0)
+    # Ignored: the server values the order itself (audit 29/09, S02). Kept so
+    # older pages that still send them are not rejected.
+    notional_usd: float | None = None
+    price_usd: float | None = None
+    slippage_bps: int = Field(default=50, ge=1, le=1000)
     pool_address: str | None = None  # opzionale: indirizzo del pool/pair per l'allowlist (DexScreener, vedi pool_safety.py)
+    client_order_id: str | None = Field(default=None, max_length=80)   # one per click: retries don't trade twice
+
+
+async def _server_value(chain: str, token_in: str, amount_in: int, token_out: str, amount_out: int, side: str) -> dict:
+    value = await onchain_valuation.swap_value(chain, token_in, amount_in, token_out, amount_out, side)
+    if value is None:
+        raise HTTPException(status_code=400, detail="Can't value this order on the server (no price or decimals): not sent.")
+    return value
 
 
 @app.post("/api/onchain/execute/solana")
@@ -3518,12 +3554,14 @@ async def onchain_execute_solana(
         private_key_hex = auth.get_decrypted_onchain_private_key(user, "solana")
     except auth.OnchainKeyIntegrityError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+    value = await _server_value("solana", body.input_mint, quote["in_amount"], body.output_mint,
+                                quote["out_amount"], body.side)
     result = await onchain_execute.execute_order(
         user.id, "solana", body.token, body.strategy_name, body.side,
-        body.notional_usd, quote["price_impact_pct"], body.price_usd,
-        private_key_hex, quote, pool_address=body.pool_address,
+        value["notional_usd"], quote["price_impact_pct"], value["price_usd"],
+        private_key_hex, quote, pool_address=body.pool_address, intent_id=body.client_order_id,
     )
-    _maybe_alert_onchain_risk_event(user.email, "solana", result, body.notional_usd)
+    _maybe_alert_onchain_risk_event(user.email, "solana", result, value["notional_usd"])
     return result
 
 
@@ -3534,10 +3572,11 @@ class OnchainExecuteRobinhoodRequest(BaseModel):
     token_in: str
     token_out: str
     fee: int | None = None  # None = trova da solo il fee tier giusto, come /quote/robinhood
-    amount_in: int
-    notional_usd: float
-    price_usd: float
-    max_slippage_pct: float = 1.0
+    amount_in: int = Field(gt=0)
+    notional_usd: float | None = None   # ignored, see OnchainExecuteSolanaRequest
+    price_usd: float | None = None
+    max_slippage_pct: float = Field(default=1.0, gt=0, le=10)
+    client_order_id: str | None = Field(default=None, max_length=80)
 
 
 @app.post("/api/onchain/execute/robinhood")
@@ -3575,14 +3614,17 @@ async def onchain_execute_robinhood(
     except auth.OnchainKeyIntegrityError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     amount_out_minimum = int(quote["amount_out"] * (1 - body.max_slippage_pct / 100))
+    value = await _server_value("robinhood", body.token_in, body.amount_in, body.token_out,
+                                quote["amount_out"], body.side)
     result = await onchain_execute.execute_order(
         user.id, "robinhood", body.token, body.strategy_name, body.side,
-        body.notional_usd, quote["price_impact_pct"], body.price_usd,
+        value["notional_usd"], quote["price_impact_pct"], value["price_usd"],
         private_key_hex,
         {"token_in": body.token_in, "token_out": body.token_out, "fee": fee,
          "amount_in": body.amount_in, "amount_out_minimum": amount_out_minimum},
+        intent_id=body.client_order_id,
     )
-    _maybe_alert_onchain_risk_event(user.email, "robinhood", result, body.notional_usd)
+    _maybe_alert_onchain_risk_event(user.email, "robinhood", result, value["notional_usd"])
     return result
 
 
@@ -3591,7 +3633,8 @@ class OnchainSendRequest(BaseModel):
     to_address: str
     token_address: str | None = None  # None = il nativo (SOL/ETH)
     amount: float  # unita' umane, non raw
-    price_usd: float  # per il tetto USD e per il ledger — mai fabbricato: chi chiama lo prende dal prezzo gia' mostrato in UI
+    price_usd: float | None = None  # ignored: the server prices the withdrawal itself (audit 29/09, S02)
+    client_order_id: str | None = Field(default=None, max_length=80)
 
 
 @app.post("/api/onchain/send")
@@ -3609,7 +3652,7 @@ async def onchain_send_token(body: OnchainSendRequest, user: User = Depends(auth
     _require_onchain_enabled()
     if body.chain not in user.onchain_wallets:
         raise HTTPException(status_code=400, detail=f"No {body.chain} wallet for this user.")
-    if body.amount <= 0:
+    if not (math.isfinite(body.amount) and body.amount > 0):
         raise HTTPException(status_code=400, detail="Size must be positive.")
 
     is_native = body.token_address is None or body.token_address.lower() == onchain_prices.NATIVE_TOKEN_ADDRESS[body.chain].lower()
@@ -3626,7 +3669,10 @@ async def onchain_send_token(body: OnchainSendRequest, user: User = Depends(auth
         token_label = body.token_address
 
     amount_raw = int(round(body.amount * 10 ** decimals))
-    notional_usd = body.amount * body.price_usd
+    price_usd = await onchain_valuation.token_price_usd(body.chain, None if is_native else body.token_address)
+    if price_usd is None:
+        raise HTTPException(status_code=400, detail="Can't price this token on the server: withdrawal not sent.")
+    notional_usd = body.amount * price_usd
 
     try:
         private_key_hex = auth.get_decrypted_onchain_private_key(user, body.chain)
@@ -3635,7 +3681,7 @@ async def onchain_send_token(body: OnchainSendRequest, user: User = Depends(auth
 
     result = await onchain_send.send_token(
         user.id, body.chain, token_label, body.to_address, body.amount, amount_raw,
-        notional_usd, private_key_hex, is_native, body.token_address,
+        notional_usd, private_key_hex, is_native, body.token_address, intent_id=body.client_order_id,
     )
     _maybe_alert_onchain_risk_event(user.email, body.chain, result, notional_usd)
     return result
@@ -3646,8 +3692,8 @@ class OnchainExecuteTwapRequest(BaseModel):
     token: str
     strategy_name: str
     side: Literal["buy", "sell"]
-    total_usd: float
-    price_usd: float
+    total_usd: float | None = None   # ignored: valued on the server (audit 29/09, S02)
+    price_usd: float | None = None
     pool_liquidity_usd: float
     # Solana: la fetta scala amount_lamports proporzionalmente a total_amount_lamports
     input_mint: str | None = None
@@ -3713,9 +3759,27 @@ async def onchain_execute_twap(
             "total_amount_in": body.total_amount_in, "max_slippage_pct": body.max_slippage_pct,
         }
 
+    # The total's value and price come from a quote of the whole amount, not
+    # from the request (audit 29/09, S02).
+    try:
+        if body.chain == "solana":
+            full = await onchain_quotes.jupiter_quote(
+                body.input_mint, body.output_mint, body.total_amount_lamports, body.slippage_bps)
+            value = await _server_value("solana", body.input_mint, full["in_amount"], body.output_mint,
+                                        full["out_amount"], body.side)
+        else:
+            full = await onchain_quotes.uniswap_v3_quote(body.token_in, body.token_out, body.fee, body.total_amount_in)
+            value = await _server_value("robinhood", body.token_in, body.total_amount_in, body.token_out,
+                                        full["amount_out"], body.side)
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"Quote unavailable: {exc}") from exc
+    total_usd = value["notional_usd"]
+    body = body.model_copy(update={"total_usd": total_usd})
     return await onchain_twap_jobs.execute_twap_job(
         user.id, body.chain, body.token, body.strategy_name, body.side,
-        body.total_usd, body.price_usd, private_key_hex, body.pool_liquidity_usd, quote_for_slice,
+        total_usd, value["price_usd"], private_key_hex, body.pool_liquidity_usd, quote_for_slice,
         quote_meta=quote_meta,
     )
 
