@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "synthetic": true,
+  "not_a_runtime_trace": true,
+  "scenario": "Same code, lower liquidity, then changed code",
+  "steps": [
+    {
+      "step": 1,
+      "input": {
+        "project_key": "solana:SYNTHETIC",
+        "code_commit": "commit-A",
+        "engineering_request_hash": "sha256:example-A",
+        "liquidity_usd": "20000"
+      },
+      "action": "analyze_engineering",
+      "model_calls_expected": 1,
+      "artifact": "eng-A",
+      "receipt_kind": "analyzed"
+    },
+    {
+      "step": 2,
+      "input": {
+        "project_key": "solana:SYNTHETIC",
+        "code_commit": "commit-A",
+        "engineering_request_hash": "sha256:example-A",
+        "liquidity_usd": "3000"
+      },
+      "preconditions": [
+        "engineering input excludes market data",
+        "eng-A fresh and validated",
+        "all dependency rights valid"
+      ],
+      "action": "reuse_engineering_and_recompute_market_policy",
+      "model_calls_expected": 0,
+      "artifact": "eng-A",
+      "receipt_kinds": [
+        "reused",
+        "recomputed"
+      ],
+      "explanation_template": "Analisi tecnica riutilizzata: prove invariate. Rischio ricalcolato: liquidità diminuita."
+    },
+    {
+      "step": 3,
+      "input": {
+        "project_key": "solana:SYNTHETIC",
+        "code_commit": "commit-B",
+        "engineering_request_hash": "sha256:example-B",
+        "liquidity_usd": "3000"
+      },
+      "action": "invalidate_engineering_and_enqueue_analysis_if_budget_available",
+      "model_calls_expected": "0 until scheduled; at most one ordinary successful owner attempt",
+      "receipt_kind": "invalidated",
+      "note": "No new AI call required to invalidate; safety eligibility remains independent of research queue."
+    }
+  ],
+  "caveats": [
+    "Hashes and commits are symbolic placeholders, not actual hashes.",
+    "No assertion about actual savings or project quality.",
+    "Model calls only for requested analysis, never for writing this trace."
+  ]
+}

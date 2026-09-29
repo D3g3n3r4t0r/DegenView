@@ -1,0 +1,217 @@
+{
+  "version": 1,
+  "base_sha": "e8e0a97c688cf36461a1f43791b4e19610e0b33b",
+  "scope": "Future runtime tests; documentation only",
+  "cases": [
+    {
+      "id": "R01",
+      "title": "Trace without AI",
+      "given": "Given a validated analysis response, capture its receipt, hash it and render the standard explanation.",
+      "expected": "Provider spy count remains zero for capture/hash/render; usage comes from the existing response.",
+      "status": "required_not_implemented"
+    },
+    {
+      "id": "R02",
+      "title": "Exact reuse",
+      "given": "Same public project, task, complete input, versions and fresh dependencies.",
+      "expected": "Same artifact returned; new reuse receipt; zero new model calls.",
+      "status": "required_not_implemented"
+    },
+    {
+      "id": "R03",
+      "title": "Model change",
+      "given": "Change model/config/prompt/parser independently while keeping facts identical.",
+      "expected": "Each incompatible change prevents reuse with explicit reason.",
+      "status": "required_not_implemented"
+    },
+    {
+      "id": "R04",
+      "title": "Expired analysis",
+      "given": "Set now equal to valid_until_ms.",
+      "expected": "Not reusable; historical display remains possible with stale marker.",
+      "status": "required_not_implemented"
+    },
+    {
+      "id": "R05",
+      "title": "Scoped privacy",
+      "given": "Same content requested in public scope and user-private scope.",
+      "expected": "Private artifact never satisfies a public lookup or another user's lookup.",
+      "status": "required_not_implemented"
+    },
+    {
+      "id": "R06",
+      "title": "Market-only change",
+      "given": "Engineering request excludes market facts by contract; liquidity changes.",
+      "expected": "Recalculate market eligibility locally, reuse fresh engineering artifact; zero new AI calls.",
+      "status": "required_not_implemented"
+    },
+    {
+      "id": "R07",
+      "title": "Hidden dependency",
+      "given": "Actual engineering prompt contains market cap and market cap changes.",
+      "expected": "Request hash changes and artifact cannot be reused; no false isolation.",
+      "status": "required_not_implemented"
+    },
+    {
+      "id": "R08",
+      "title": "Commit change",
+      "given": "A critical code dependency changes after request capture.",
+      "expected": "Invalidate dependent artifact; unaffected unrelated analysis can remain valid.",
+      "status": "required_not_implemented"
+    },
+    {
+      "id": "R09",
+      "title": "Late completion",
+      "given": "Generation 1 running; generation 2 input appears; generation 1 completes.",
+      "expected": "Store generation 1 historically but reject applying it to generation 2.",
+      "status": "required_not_implemented"
+    },
+    {
+      "id": "R10",
+      "title": "Concurrent duplicate",
+      "given": "Two workers request identical request_hash/scope/generation with valid lease.",
+      "expected": "One provider call in ordinary successful flow; second waits/reuses. Test with shared DB, not process-local lock only.",
+      "status": "required_not_implemented"
+    },
+    {
+      "id": "R11",
+      "title": "Lease takeover",
+      "given": "Old worker's lease expires; new owner receives higher fencing token.",
+      "expected": "Old worker cannot publish current projection even if it finishes later.",
+      "status": "required_not_implemented"
+    },
+    {
+      "id": "R12",
+      "title": "Ambiguous provider timeout",
+      "given": "Provider may have completed before transport timeout.",
+      "expected": "Persist ambiguous status; bounded retry policy; never claim exactly-once cost.",
+      "status": "required_not_implemented"
+    },
+    {
+      "id": "R13",
+      "title": "Atomic capture",
+      "given": "Fail receipt insert after artifact insert in one transaction.",
+      "expected": "No partially committed reusable artifact; retry storage does not invoke AI.",
+      "status": "required_not_implemented"
+    },
+    {
+      "id": "R14",
+      "title": "Invalid output",
+      "given": "Provider returns malformed or schema-invalid response.",
+      "expected": "Not reusable as validated; short failure cache does not mark project poor.",
+      "status": "required_not_implemented"
+    },
+    {
+      "id": "R15",
+      "title": "Changed policy replay",
+      "given": "New deterministic scoring policy, original required inputs available.",
+      "expected": "Offline recomputation yields new simulation receipt; active ranking untouched; zero model calls.",
+      "status": "required_not_implemented"
+    },
+    {
+      "id": "R16",
+      "title": "Missing replay data",
+      "given": "New policy requires evidence absent at original cutoff.",
+      "expected": "incomplete_replay; no present-day fetch or hidden AI call.",
+      "status": "required_not_implemented"
+    },
+    {
+      "id": "R17",
+      "title": "Integrity mismatch",
+      "given": "Stored payload bytes no longer match receipt hash.",
+      "expected": "Verifier reports integrity failure; does not repair with a model.",
+      "status": "required_not_implemented"
+    },
+    {
+      "id": "R18",
+      "title": "Threat boundary",
+      "given": "Database and all hashes replaced consistently by administrator.",
+      "expected": "Documentation makes no independent tamper-proof claim; local verifier alone cannot establish historical authenticity.",
+      "status": "required_not_implemented"
+    },
+    {
+      "id": "R19",
+      "title": "Revoked source",
+      "given": "Invalidate a source dependency while cached artifact remains within TTL.",
+      "expected": "Reuse denied despite TTL, with reason SOURCE_REVOKED or RIGHTS_UNKNOWN as applicable.",
+      "status": "required_not_implemented"
+    },
+    {
+      "id": "R20",
+      "title": "Canonicalization",
+      "given": "Reorder object keys; vary null vs absent vs zero; retain array order; include NaN.",
+      "expected": "Object-key reorder stable; meaningful variants differ; NaN rejected.",
+      "status": "required_not_implemented"
+    },
+    {
+      "id": "R21",
+      "title": "Identity preservation",
+      "given": "Use two distinct case-sensitive Solana identifiers and two canonical EVM representations.",
+      "expected": "No Solana case collapse; EVM handled only by validated chain normalizer.",
+      "status": "required_not_implemented"
+    },
+    {
+      "id": "R22",
+      "title": "Legacy import",
+      "given": "Legacy cache lacks reconstructible exact input and version provenance.",
+      "expected": "legacy_unverified; not silently promoted into reusable cache.",
+      "status": "required_not_implemented"
+    },
+    {
+      "id": "R23",
+      "title": "Payload deletion",
+      "given": "Remove retained payload using authorized retention/tombstone flow.",
+      "expected": "Receipt remains explainable as missing payload; replay_unavailable, not verified computation.",
+      "status": "required_not_implemented"
+    },
+    {
+      "id": "R24",
+      "title": "Budget exhaustion",
+      "given": "Task lacks fresh artifact and AI budget is exhausted.",
+      "expected": "queued_budget, no hidden call; critical deterministic safety checks still run.",
+      "status": "required_not_implemented"
+    },
+    {
+      "id": "R25",
+      "title": "Budget bound safety",
+      "given": "Ordinary criterion cannot change threshold under a proven bound; separate safety task pending.",
+      "expected": "May defer ordinary task only; safety task and exploration quota not suppressed.",
+      "status": "required_not_implemented"
+    },
+    {
+      "id": "R26",
+      "title": "Counterfactual explanation",
+      "given": "Two required gates fail; one threshold improves.",
+      "expected": "Explain remaining blocker; never promise admission from only one necessary condition.",
+      "status": "required_not_implemented"
+    },
+    {
+      "id": "R27",
+      "title": "Duplicate receipt",
+      "given": "Same event idempotency key submitted twice; then same key with different content.",
+      "expected": "Same-content retry idempotent; changed-content conflict; no duplicate decision.",
+      "status": "required_not_implemented"
+    },
+    {
+      "id": "R28",
+      "title": "Shadow mode",
+      "given": "Enable observation on existing pipeline.",
+      "expected": "No additional model calls; tracing storage failure exposed in metrics without triggering another AI call.",
+      "status": "required_not_implemented"
+    },
+    {
+      "id": "R29",
+      "title": "Clock rollback",
+      "given": "Persisted artifact expiry is reached, then wall clock moves backward.",
+      "expected": "No automatic un-expiry; time anomaly handled conservatively and recorded.",
+      "status": "required_not_implemented"
+    },
+    {
+      "id": "R30",
+      "title": "Real call accounting",
+      "given": "One decision uses nested AI task; provider usage missing in one response.",
+      "expected": "Do not display zero calls; separate known usage, unknown usage and estimated cost.",
+      "status": "required_not_implemented"
+    }
+  ]
+}
