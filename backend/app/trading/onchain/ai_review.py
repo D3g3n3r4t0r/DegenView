@@ -239,7 +239,6 @@ class _Reply:
 async def _ask_deepseek(prompt: str, http=None) -> _Reply:
     """DeepSeek's chat API (OpenAI-shaped), JSON mode: the schema goes in the
     prompt, since JSON mode checks only that the answer is JSON."""
-    import httpx
     body = {
         "model": settings.deepseek_model, "max_tokens": MAX_OUTPUT_TOKENS,
         "response_format": {"type": "json_object"},
@@ -248,19 +247,9 @@ async def _ask_deepseek(prompt: str, http=None) -> _Reply:
             {"role": "user", "content": f"<facts>\n{prompt}\n</facts>"},
         ],
     }
-    headers = {"Authorization": f"Bearer {settings.deepseek_api_key}", "Content-Type": "application/json"}
-    url = settings.deepseek_base_url.rstrip("/") + "/chat/completions"
-    if http is None:
-        async with httpx.AsyncClient(timeout=120.0) as c:
-            r = await c.post(url, json=body, headers=headers)
-    else:
-        r = await http.post(url, json=body, headers=headers)
-    r.raise_for_status()
-    data = r.json()
-    choice = (data.get("choices") or [{}])[0]
     from app.notify import deepseek_desk
-    u = data.get("usage") or {}
-    deepseek_desk.record("review", u.get("prompt_tokens", 0), u.get("completion_tokens", 0))
+    data = await deepseek_desk._post(body, kind="review", purpose="daily_review", subject=None, http=http)
+    choice = (data.get("choices") or [{}])[0]
     return _Reply((choice.get("message") or {}).get("content") or "", data.get("model") or settings.deepseek_model,
                   data.get("usage") or {}, choice.get("finish_reason"))
 

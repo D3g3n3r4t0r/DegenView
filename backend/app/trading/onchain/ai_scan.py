@@ -115,7 +115,8 @@ async def run_once(now: float | None = None) -> int:
         user = lessons + "\n\nTokens:\n" + "\n".join(line(j, a, pool) for j, a in enumerate(batch))
         try:
             text = await deepseek_desk.ask([{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}],
-                                           kind="scanner", max_tokens=60 * len(batch) + 40, json_mode=True)
+                                           kind="scanner", max_tokens=60 * len(batch) + 40, json_mode=True,
+                                           purpose="alert_batch", subject=f"{len(batch)} alerts")
         except Exception as exc:
             logger.info("ai_scan: DeepSeek failed: %s", exc)
             break
@@ -174,7 +175,8 @@ async def judge_one(item: dict, features: dict, pool: list[dict] | None = None) 
     user = rug_memory.circumstances_text() + "\n\nTokens:\n" + line(0, a, pool)
     try:
         text = await deepseek_desk.ask([{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}],
-                                       kind="scanner", max_tokens=120, json_mode=True)
+                                       kind="scanner", max_tokens=120, json_mode=True,
+                                       purpose="alert_manual", subject=f"{a['chain']}:{a['token_address']}")
     except Exception as exc:
         logger.info("ai_scan: manual judgement failed: %s", exc)
         return None

@@ -189,3 +189,11 @@ def test_no_cap_when_zero(monkeypatch):
     for _ in range(3):
         asyncio.run(dd.ask([{"role": "user", "content": "x"}], kind="research", http=_fake_http(sent)))
     assert len(sent) == 3
+
+
+def test_findings_of_a_check_are_not_counted_as_work():
+    """Issue #366: every consistency finding added a "consistency" to the Agent tab."""
+    now = datetime(2026, 9, 29, 12, tzinfo=dd.ROME).timestamp()
+    dd.note("consistency", "Checking 10 projects", now=now)
+    dd.note("consistency", "ABC: cap vs volume", now=now, tally=False, symbol="ABC")
+    assert dd.activity(now)["done"] == {"consistency": 1}

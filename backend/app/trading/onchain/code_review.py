@@ -194,7 +194,7 @@ async def review(e: dict, client, now: float | None = None, ask=None, priority: 
                        chain=e.get("chain"), token=e.get("token_address"))
     raw = await ask([{"role": "system", "content": SYSTEM},
                      {"role": "user", "content": _brief(repo, data)}],
-                    kind="code", max_tokens=700, json_mode=True)
+                    kind="code", max_tokens=700, json_mode=True, purpose="code", subject=repo)
     parsed = parse(raw)
     if parsed is None:
         return None
