@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0230", "Wallet simulato: il saldo totale non torna con le posizioni aperte",
+     "Lorenzo, 29/09: 'il saldo totale non corrisponde al saldo delle posizioni aperte'",
+     "alta"),
     ("seed-0229", "Wallet: saldo e guadagno/perdita che si muovono col prezzo, come pump.fun",
      "Lorenzo, 29/09: 'su l'app di pump fun il saldo delle crypto nel wallet si aggiorna in modo frenetico costantemente [...] nel simulato vedo che praticamente non si aggiorna mai il valore del token e vorrei vedere anche quanto sta perdendo o guadagnando con animazioni frenetiche'",
      "media"),

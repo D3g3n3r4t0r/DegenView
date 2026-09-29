@@ -169,7 +169,10 @@ def follow(bars: list[list], cfg: dict, start: float, *, gone: bool = False, now
                                "why": "48h"})
                 pos = False
             else:
-                out.update(state="in", entry=float(entry), in_at=in_at)
+                # mark: the close the open trade is valued at, so a live
+                # price can re-mark it (value * live / mark) without mixing
+                # a candle's return with another reading's price
+                out.update(state="in", entry=float(entry), in_at=in_at, mark=float(closes[j]))
                 equity *= mark
     if not pos and out["trades"]:
         out["state"] = "out"

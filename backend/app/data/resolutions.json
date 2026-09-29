@@ -2334,5 +2334,11 @@
     "at": 1790700234,
     "summary": "Nel profilo (wallet simulato e reale) ogni posizione viene rivalutata al prezzo DEX ogni 2 secondi mentre la schermata e' aperta: il totale, la variazione e il valore di ogni token cambiano con cifre che ruotano, le righe lampeggiano verde o rosso, e le posizioni simulate mostrano guadagno/perdita in dollari e in percentuale rispetto al costo.",
     "detail": "Prima il valore simulato seguiva solo il backtest del sistema, aggiornato a candela chiusa. Fonte: DexScreener (/tokens/v1, 30 token per chiamata, gratuito, si muove a ogni scambio), GeckoTerminal se DexScreener non risponde; una sola cache sul server condivisa da tutti, l'ultimo prezzo resta fino a 3 minuti e poi il token torna al valore del server, mai un numero inventato. Il polling si ferma quando l'app non e' visibile."
+  },
+  "seed-0230": {
+    "status": "risolto",
+    "at": 1790701146,
+    "summary": "Il totale ora e' sempre cassa + somma delle posizioni, e si muove insieme a loro. Le posizioni simulate erano valutate con il rendimento del sistema a candela chiusa ma col prezzo piu' recente del tracker: il ricalcolo live mescolava due letture e gonfiava il totale di qualche dollaro. Ora valore e prezzo vengono dalla stessa chiusura; una posizione da cui il sistema e' gia' uscito non si muove piu'; i chip per chain seguono lo stesso ricalcolo, con i centesimi.",
+    "detail": "Screenshot del 29/09: totale $68.59, cassa $7.80, chip All $64 (valore del server). Test: test_sim_total_equals_cash_plus_rows_and_rows_carry_their_own_mark."
   }
 }

@@ -132,7 +132,8 @@ def view(uid: str) -> dict:
                     "qty": qty, "price": price,
                     "ret": round(value / pos["cost_usdg"] - 1, 4) if value and pos["cost_usdg"] else None,
                     "image": (a or {}).get("image")}
-    papers = [_paper_view(p) for p in u["paper"]][::-1]
+    label = alert_track.system_board("meme")["chosen"] if u["paper"] else None
+    papers = [_paper_view(p, label) for p in u["paper"]][::-1]
     sim = None
     if u["sim_start"]:
         equity = (u["sim_usdg"] or 0) + ((pos_view or {}).get("value_usdg") or 0 if pos and pos["mode"] == "sim" else 0)
@@ -374,14 +375,24 @@ def _paper_ret(p: dict, a: dict | None, label: str) -> tuple[float, bool, str]:
     return ret, False, ""
 
 
-def _paper_view(p: dict) -> dict:
+def _paper_view(p: dict, label: str | None = None) -> dict:
     a = alert_track._alerts.get(p["alert"])
     ret = p.get("ret", 0.0)
+    if a is not None and label:
+        ret, _closed, _why = _paper_ret(p, a, label)   # same reading as the mark below
     value = p["stake"] * (1 + ret)
-    price = _price(a)
+    # The price the value was marked at: the system's own candle close while
+    # it holds (Lorenzo, 29/09: "il saldo totale non corrisponde al saldo
+    # delle posizioni aperte" -- valuing at the tracker's newer price made a
+    # live re-mark drift from the total). Out, or held without a stored mark
+    # yet: no price, so nothing re-marks a value the system is not holding
+    # at a known price. No backtest yet: the tracker's price.
+    s = _system_of(a, label) if a is not None and label else None
+    price = (s.get("mark") if s.get("state") == "in" else None) if s else _price(a)
+    shown = price or _price(a)
     return {"symbol": p["symbol"], "token": p["token"], "chain": p["chain"], "at": p["at"], "mode": "sim",
             "cost_usdg": p["stake"], "value_usdg": round(value, 4), "ret": round(ret, 4),
-            "price": price, "qty": value / price if price else None,
+            "price": price, "qty": value / shown if shown else None,
             "image": (a or {}).get("image"), "route": "paper", "pair": (a or {}).get("pair_address")}
 
 
