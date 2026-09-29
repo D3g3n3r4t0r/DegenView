@@ -1002,6 +1002,15 @@ html, body { overflow-x: clip; }
   .ag-bar i { display: block; block-size: 100%; background: #6d7cff; transform-origin: left; transition: transform .6s ease; }
 }
 
+/* Top rows in the motion kit's leaderboard style: score meter, mint accent
+   on hover and on the podium three. Static, the ranking animations stay top.js's. */
+#top-picks [data-top-rows] > li.trow {
+  & > button { transition: background .2s; }
+  & > button:hover { background: #16291e; }
+  &:nth-child(-n+3) > button { box-shadow: inset 2px 0 #2de2b0; }
+  & .trow-main::after { content: ""; display: block; inline-size: 64px; block-size: 3px; border-radius: 8px;
+    background: linear-gradient(90deg, #2de2b0 var(--v, 0%), #1d3527 0); } }
+
 /* Top before the first ranking: the ENGN cube working (motion.js). */
 .top-wait { display: grid; justify-items: center; gap: 4px; padding-block: 18px 10px;
   & engn-motion { inline-size: 96px; }
