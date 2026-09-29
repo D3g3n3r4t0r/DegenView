@@ -21,6 +21,21 @@ let current = null;
 let interval = "15m";
 let tab = "signal";
 
+// A window >= 1100px is a desktop terminal: the list stays on the left and
+// the token page is a pane beside it, not a full-screen page over it.
+const DESK = matchMedia("(width >= 1100px)");
+export function isDesk() { return DESK.matches; }
+const deskEmpty = document.createElement("div");
+deskEmpty.className = "desk-empty";
+deskEmpty.textContent = "Pick a token to see its chart and backtest";
+document.body.append(deskEmpty);
+DESK.addEventListener("change", () => { if (dlg?.open) dlg.close(); });
+
+function markRows(id) {
+  document.querySelectorAll("#app-shell [data-open][aria-current]").forEach((el) => el.removeAttribute("aria-current"));
+  if (id) document.querySelectorAll("#app-shell [data-open]").forEach((el) => { if (el.dataset.open === id) el.setAttribute("aria-current", "true"); });
+}
+
 // Chains the wallet can swap on; the others (BSC, Base, Ethereum) are scanned, not traded here.
 const TRADABLE = new Set(["solana", "robinhood"]);
 
@@ -57,6 +72,7 @@ function ensureDialog() {
   dlg.addEventListener("close", () => {
     disposeChart();
     document.documentElement.classList.remove("detail-open");
+    markRows(null);
     if (history.state?.detail) history.back();
   });
   dlg.addEventListener("click", onClick);
@@ -144,13 +160,42 @@ export function openDetail(id) {
   paintChips();
   paintTabs();
   paintChart();
+  markRows(id);
   if (!d.open) {
-    history.pushState({ detail: id }, "");
     document.documentElement.classList.add("detail-open");
-    d.showModal();
-    d.querySelector(".dt-scroll").scrollTop = 0;
+    if (isDesk()) {
+      // Non-modal: the list stays usable, and keeps the focus it had.
+      const was = document.activeElement;
+      d.show();
+      if (was && was !== document.body) was.focus({ preventScroll: true });
+      else d.querySelector(":focus")?.blur();
+    }
+    else {
+      history.pushState({ detail: id }, "");
+      d.showModal();
+    }
   }
+  d.querySelector(".dt-scroll").scrollTop = 0;
   if (e.chain && e.token) enrich(id, e);
+}
+
+// Desktop: the token lists (memes, gems, strategies) sit in a column with the
+// token page beside them; the other views (agent, profile, wallet, swap)
+// take the whole width, so the pane closes.
+const LIST_VIEWS = new Set(["meme", "gems", "top"]);
+export function deskView(name) {
+  document.documentElement.dataset.deskList = String(LIST_VIEWS.has(name));
+  if (!isDesk()) return;
+  if (!LIST_VIEWS.has(name)) { if (dlg?.open) dlg.close(); return; }
+  setTimeout(openFirst, 700);
+}
+
+// Desktop only: with nothing open, the first token of the view on screen.
+export function openFirst() {
+  if (document.documentElement.dataset.deskList === "false") return;
+  if (!isDesk() || dlg?.open) return;
+  const el = [...document.querySelectorAll("#app-shell [data-open]")].find((x) => x.offsetParent !== null);
+  if (el) openDetail(el.dataset.open);
 }
 
 // The page fetches the full dossier itself: whichever list opened it (Top,
