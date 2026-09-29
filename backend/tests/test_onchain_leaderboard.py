@@ -215,7 +215,7 @@ def test_fatal_pillar_excludes_for_good():
 def test_weak_pillar_and_gem_rule():
     assert lb.qualifies(_entry("WEAK", 90, 20, 90, age_days=16, source="radar")).startswith("site")
     admitted = _entry("ADM", 90, 20, 90, age_days=16, source="radar")
-    admitted["judge"] = {"score": 85, "verdict": "gem", "confidence": 0.8}
+    admitted["judge"] = {"score": 85, "verdict": "gem", "confidence": 0.8, "at": time.time()}
     assert lb.qualifies(admitted) == ""
     assert "site" in lb.qualifies(_entry("MID", 60, 45, 60, cap=500_000, age_days=16, source="radar"))
     assert lb.qualifies(_entry("GEM", 88, 90, 90, cap=500_000, age_days=16, source="radar")) == ""
@@ -403,7 +403,7 @@ def test_rules_4_rereads_research_and_lifts_v3_bans(tmp_path, monkeypatch):
     monkeypatch.setattr(lb, "_STORE_FILE", f)
     lb._load()
     s = lb._entries["solana:S"]
-    assert "site" not in s["pillars"] and "tokenomics" in s["pillars"] and "solana:X" not in lb._gone
+    assert "site" not in s["pillars"] and "solana:X" not in lb._gone   # tokenomics is redone too since rules 9
 
 
 def test_references_are_never_banned():
@@ -534,7 +534,7 @@ def test_the_top_list_drops_database_rows_of_big_coins(monkeypatch):
 def test_code_review_lifts_the_final_score():
     plain = _entry("PLAIN", 80, 80, 80)
     coded = _entry("CODED", 80, 80, 80)
-    coded["code"] = {"complexity": 90, "innovation": 90}
+    coded["code"] = {"complexity": 90, "innovation": 90, "at": time.time()}
     assert lb.final_score(coded) > lb.final_score(plain)
     assert lb._public(coded)["code"]["complexity"] == 90
 
@@ -546,7 +546,7 @@ def test_database_follows_later_score_changes(monkeypatch):
     lb._rank()
     first = [c for c in calls if c[1] == e["token_address"]][-1]
     assert first[2] == "ranked"
-    e["judge"] = {"score": 10, "verdict": "avoid"}
+    e["judge"] = {"score": 10, "verdict": "avoid", "at": time.time()}
     lb._rank()
     last = [c for c in calls if c[1] == e["token_address"]][-1]
     assert last[3] < first[3]
@@ -684,3 +684,18 @@ def test_tokenomics_falls_back_to_geckoterminal(monkeypatch):
     assert depth.judge_tokenomics_gecko({"holders": 10**6})["score"] == depth.GECKO_TOKENOMICS_MAX
     gecko = {}
     assert "GoPlus" in asyncio.run(depth.analyze_tokenomics("robinhood", "0xabc", None))["pending"]
+
+
+def test_audit_scoring_gates():
+    """29/09 audit: M03 benchmark keeps fatal findings, M05 admission needs
+    confidence, M04 stale AI readings stop counting."""
+    from app.trading.onchain import benchmark
+    bench = {"chain": benchmark.CHAIN, "token_address": benchmark.TOKEN, "overall": {"fatal": "tokenomics: rugged"}}
+    assert lb.qualifies(bench) == "tokenomics: rugged"
+    unsure = _entry("UNSURE", 90, 20, 90, age_days=16, source="radar")
+    unsure["judge"] = {"score": 85, "verdict": "gem", "confidence": 0.0, "at": time.time()}
+    assert lb.qualifies(unsure).startswith("site")
+    fresh, stale = _entry("FRESH", 50, 50, 50), _entry("STALE", 50, 50, 50)
+    fresh["review"] = {"keep": True, "score": 100, "at": time.time()}
+    stale["review"] = {"keep": True, "score": 100, "at": 1}
+    assert lb.final_score(fresh) > lb.final_score(stale)

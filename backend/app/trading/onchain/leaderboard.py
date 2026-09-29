@@ -140,12 +140,14 @@ DISCOVERY_SLOW_S = 6 * 3600
 CODE_RETRY_S = 6 * 3600        # a failed reading waits: GitHub allows few calls an hour
 # Without public code a project ranks below an equal one that shows it.
 NO_GITHUB_PENALTY = 10.0
-RULES_VERSION = 8              # 2: "no GitHub" stopped being a ban; 3: radar launches out;
+RULES_VERSION = 9              # 2: "no GitHub" stopped being a ban; 3: radar launches out;
                                # 4: research read by reader.py, older bans and readings dropped;
                                # 5: reader recognises research-stage code and stated limits
                                # 6: no age limits, strict band from $100k to $2M, one rule chain
                                # 7: private linked repos are missing code, GeckoTerminal tokenomics
                                # 8: every cached fatal pillar is recomputed under today's checks
+                               # 9: tokenomics redone: missing data is not a pass, big contracts
+                               #    are whales (audit 29/09, M01/M02)
 
 _entries: dict[str, dict] = {}     # chain:token
 _excluded: list[dict] = []
@@ -193,6 +195,12 @@ def _load() -> None:
                 for name in [n for n, x in p.items() if (x or {}).get("fatal")]:
                     p.pop(name, None)
                     (e.get("checked_at") or {}).pop(name, None)
+        if rules < 9:
+            # Tokenomics scored when a missing answer counted as a pass and
+            # any contract was left out of the limits: read again.
+            for e in _entries.values():
+                (e.get("pillars") or {}).pop("tokenomics", None)
+                (e.get("checked_at") or {}).pop("tokenomics", None)
         if rules < 7:
             # "GitHub link without a repository" was private repos (BV7X), and a
             # tokenomics pending on GoPlus now falls back to GeckoTerminal.
@@ -530,7 +538,9 @@ def too_big(e: dict) -> str:
 def qualifies(e: dict, now: float | None = None) -> str:
     """"" se entra in classifica, altrimenti perche' no."""
     if benchmark.is_benchmark(e.get("chain"), e.get("token_address")):
-        return ""   # il metro di paragone c'e' sempre, i suoi numeri si vedono comunque
+        # The yardstick skips caps and quality bars, never a fatal finding
+        # (rug, honeypot, mint...): audit 29/09, M03.
+        return (e.get("overall") or {}).get("fatal") or ""
     big = too_big(e)
     if big:
         return big
@@ -553,7 +563,10 @@ def qualifies(e: dict, now: float | None = None) -> str:
     j = e.get("judge") or {}
     if j.get("verdict") in ("avoid", "scam") and (j.get("confidence") or 0) >= judge.VETO_MIN_CONF:
         return f"DeepSeek: {(j.get('problems') or [j['verdict']])[0]}"
-    if j.get("verdict") in ("gem", "watch") and (j.get("score") or 0) >= judge.ADMIT_MIN:
+    # Admitting past the quality bars needs the same certainty as a veto
+    # (audit 29/09, M05); fatal and pending were already checked above.
+    if j.get("verdict") in ("gem", "watch") and (j.get("score") or 0) >= judge.ADMIT_MIN \
+            and (j.get("confidence") or 0) >= judge.VETO_MIN_CONF and _fresh(j, judge.TTL_S, now):
         return ""
     # A site we could not read (JS shell, down) is unknown, not weak: no floor.
     weak = [k for k in need if pillars[k]["score"] < PILLAR_FLOOR[k]
@@ -603,6 +616,13 @@ def no_github(e: dict) -> bool:
     return bool(((e.get("pillars") or {}).get("github") or {}).get("facts", {}).get("missing"))
 
 
+def _fresh(d: dict, ttl: float, now: float | None = None) -> bool:
+    """An AI reading counts while it's recent (twice its cache TTL, so a
+    late refresh doesn't make scores jump): audit 29/09, M04."""
+    at = d.get("at")
+    return bool(at) and (now or time.time()) - at < 2 * ttl
+
+
 def final_score(e: dict) -> float:
     """Qualita' (i tre pilastri) e somiglianza tecnica a DREGG."""
     q = (e.get("overall") or {}).get("score") or 0
@@ -618,13 +638,13 @@ def final_score(e: dict) -> float:
         base += TRACTION_WEIGHT * use["traction"] + VALUE_WEIGHT * (use["value"] or 0)
     rules = round(max(0.0, min(100.0, base + narratives.bonus(e.get("narratives") or []))), 1)
     j = e.get("judge") or {}
-    if j.get("score") is not None:
+    if j.get("score") is not None and _fresh(j, judge.TTL_S):
         rules = round(max(0.0, min(100.0, (1 - JUDGE_WEIGHT) * rules + JUDGE_WEIGHT * j["score"])), 1)
     c = e.get("code") or {}
-    if c.get("complexity") is not None and c.get("innovation") is not None:
+    if c.get("complexity") is not None and c.get("innovation") is not None and _fresh(c, code_review.TTL_S):
         rules = round((1 - CODE_WEIGHT) * rules + CODE_WEIGHT * (c["complexity"] + c["innovation"]) / 2, 1)
     r = e.get("review") or {}
-    if r.get("keep") and r.get("score") is not None:
+    if r.get("keep") and r.get("score") is not None and _fresh(r, judge.REVIEW_TTL_S):
         rules = round((1 - REVIEW_WEIGHT) * rules + REVIEW_WEIGHT * r["score"], 1)
     return rules
 
@@ -784,12 +804,20 @@ def on_alert(fn) -> None:
 
 async def drain_alerts() -> int:
     sent = 0
+    # The place announced is the Top's, the list the app shows: the board's
+    # own rank ignores the database rows mixed into the Top (Lorenzo, 29/09:
+    # "PFWA posto 4" on Telegram, Covenant 4th in the app).
+    top = [_key(t["chain"], t["token_address"]) for t in _top_source(50)] if _top_source and _outbox else None
     while _outbox and sent < ALERTS_PER_TICK:
         kind, k = _outbox.pop(0)
         e = _entries.get(k)
         if e is None or (kind == "early" and not is_early(e)):
             continue
+        if top is not None and k not in top:
+            continue
         item = _public(e)
+        if top is not None:
+            item["rank"] = top.index(k) + 1
         for fn in list(_alert_hooks):
             try:
                 await fn(kind, item)

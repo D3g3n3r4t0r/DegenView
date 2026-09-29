@@ -395,7 +395,8 @@ async def _vet(k: str, pending: _Pending, item: dict, pair: dict) -> dict | None
                 try:
                     verdict = await legit.assess(
                         item, legit.merge_links(pending.links, legit.links_from_dexscreener(pair)), client,
-                        need_github=False, ai_gate=True)
+                        need_github=False, ai_gate=not legit.settings.listings_allow_memes,
+                        memes=legit.settings.listings_allow_memes)
                 finally:
                     if client is not _http:
                         await client.aclose()
@@ -432,7 +433,7 @@ async def _vet(k: str, pending: _Pending, item: dict, pair: dict) -> dict | None
                 latency_s=round(now - item["created_at"]) if item["created_at"] else None,
                 website=verdict["website"], socials=verdict["socials"], checks=verdict["checks"],
                 ai=verdict.get("ai"), github=verdict.get("github"), scan_url=verdict.get("scan_url"),
-                report=verdict.get("report"))
+                report=verdict.get("report"), meme=bool(verdict.get("meme")))
     scan_feed.event(item["chain"], item["symbol"], "alert", "alert sent", now)
     await _publish(item)
     return item
