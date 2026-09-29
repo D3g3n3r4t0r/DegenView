@@ -114,6 +114,7 @@ from app.trading.onchain import code_review as onchain_code_review
 from app.trading.onchain import backtest_lab as onchain_backtest_lab
 from app.trading.onchain import strategy_lab as onchain_strategy_lab
 from app.trading.onchain import autotrader as onchain_autotrader
+from app.trading.onchain import live_prices as onchain_live_prices
 from app.trading.onchain import wealth as onchain_wealth
 from app import profiles
 from app import wallet_link
@@ -4473,7 +4474,8 @@ def _sim_snapshot(user: User) -> dict:
     positions = [{"chain": p.get("chain") or "robinhood", "address": p["token"], "symbol": p["symbol"],
                   "name": p["symbol"], "amount": p.get("qty"), "price_usd": p.get("price"),
                   "value_usd": p["value_usdg"], "image": p.get("image"), "native": False, "hidden": False,
-                  "source": "sim", "wallet": "sim", "ret": p.get("ret")} for p in pos_list]
+                  "source": "sim", "wallet": "sim", "ret": p.get("ret"), "cost_usd": p.get("cost_usdg")}
+                 for p in pos_list]
     by_chain: dict[str, float] = {}
     for p in positions:
         by_chain[p["chain"]] = by_chain.get(p["chain"], 0.0) + (p["value_usd"] or 0.0)
@@ -4491,6 +4493,13 @@ def _record_sim(user: User, snap: dict | None = None) -> None:
     snap = snap or _sim_snapshot(user)
     if snap["total"] is not None:
         onchain_wealth.record(_sim_key(user), snap["total"])
+
+
+@app.get("/api/onchain/live-prices")
+async def live_prices(ids: str = "", user: User = Depends(auth.get_current_user)) -> dict:
+    """The ticking balance's prices: ?ids=chain:address,... (at most 60).
+    One shared cache for every user, a couple of seconds old at most."""
+    return {"prices": await onchain_live_prices.prices(onchain_live_prices.parse_ids(ids)), "ttl": onchain_live_prices.TTL_S}
 
 
 @app.get("/api/wallets/total")

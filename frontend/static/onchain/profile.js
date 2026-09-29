@@ -15,6 +15,7 @@ import * as api from "@onchain/api.js";
 import { escapeHtml, logo, usdShort } from "@onchain/format.js";
 import * as phantom from "@onchain/phantomlink.js";
 import { loadLinked } from "@onchain/userswap.js";
+import { flash, priceOf, roll, watch } from "@onchain/live.js";
 
 const RANGES = [["1h", "1H"], ["2h", "2H"], ["3h", "3H"], ["4h", "4H"], ["8h", "8H"], ["24h", "1D"], ["7d", "1W"],
   ["30d", "1M"], ["all", "All"]];
@@ -97,6 +98,7 @@ function bindScrub() {
   const leave = () => {
     [totalEl.innerHTML, changeEl.innerHTML, changeEl.dataset.sign] = idle;
     vx.setAttribute("hidden", ""); vd.setAttribute("hidden", "");
+    applyLive();
   };
   svg.addEventListener("pointerdown", at);
   svg.addEventListener("pointermove", at);
@@ -251,11 +253,70 @@ function positions(d) {
   if (!all.length) return chipBar + `<p class="pf-none">${d.missing?.length ? `Couldn't read ${d.missing.join(" and ")} right now.` : "Nothing held yet."}</p>`;
   const shown = showAllPos ? rows : rows.slice(0, 4);
   const morePos = rows.length > 4 ? `<button type="button" class="pf-more" data-more-pos>${showAllPos ? "Show less" : `Show all (${rows.length})`}</button>` : "";
-  return chipBar + `<ul class="pf-list">${shown.map((p) => `<li data-hidden-row="${Boolean(p.hidden)}">
+  return chipBar + `<ul class="pf-list">${shown.map((p) => `<li data-hidden-row="${Boolean(p.hidden)}"${liveKey(p) ? ` data-live="${escapeHtml(liveKey(p))}"` : ""}>
     ${logo(p.symbol, p.image, p.chain, p.address)}
     <span class="pf-main"><b>${escapeHtml(p.name || p.symbol)}</b><small>${qty(p.amount)} ${escapeHtml(p.symbol)} · ${CHAIN_NAMES[p.chain] ?? p.chain}${p.source === "connected" ? " · your wallet" : ""}</small></span>
-    <span class="pf-num"><b>${p.value_usd == null ? "—" : `$${p.value_usd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</b>${p.price_usd ? `<small>$${p.price_usd < 0.01 ? p.price_usd.toPrecision(3) : p.price_usd.toFixed(2)}</small>` : ""}</span>
+    <span class="pf-num"><b data-lv>${p.value_usd == null ? "—" : usd2(p.value_usd)}</b>${p.cost_usd ? `<em data-pnl>${pnlText(p.value_usd, p.cost_usd)}</em>` : p.price_usd ? `<small data-lp>${unitPrice(p.price_usd)}</small>` : ""}</span>
   </li>`).join("")}</ul>` + morePos + more;
+}
+
+/* ------------------------------------------------ live value
+ * Lorenzo, 29/09, on pump.fun: "il saldo [...] si aggiorna in modo
+ * frenetico costantemente [...] vorrei vedere anche quanto sta perdendo o
+ * guadagnando". Every couple of seconds (live.js) each position is marked
+ * at the latest price, the total and the change follow, digits roll, rows
+ * flash green or red. The server's numbers stay the base: a position the
+ * price source does not know keeps its value. */
+const usd2 = (v) => `$${v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const unitPrice = (v) => `$${v < 0.01 ? v.toPrecision(3) : v.toFixed(v < 1 ? 4 : 2)}`;
+const pnlText = (value, cost) => (value == null || !cost ? "" : `${signed(value - cost)} · ${value >= cost ? "+" : "−"}${Math.abs((value / cost - 1) * 100).toFixed(2)}%`);
+const liveKey = (p) => (p.address && !p.native && p.chain ? `${p.chain}:${p.address.startsWith("0x") ? p.address.toLowerCase() : p.address}` : null);
+const liveValue = (p) => {
+  const k = liveKey(p), px = k && priceOf(k);
+  if (!px) return p.value_usd;
+  if (p.value_usd != null && p.price_usd) return p.value_usd * (px / p.price_usd);
+  return p.amount != null ? p.amount * px : p.value_usd;
+};
+const shownPx = new Map();   // key -> price last painted, to flash only on a move
+let lastTotal = null;
+
+function applyLive() {
+  const d = data;
+  if (!d || !root || root.querySelector(".scrub-x:not([hidden])")) return;
+  let delta = 0;
+  for (const p of d.positions ?? []) {
+    if (p.hidden || p.value_usd == null) continue;
+    delta += liveValue(p) - p.value_usd;
+  }
+  const top = root.querySelector(".pf-top");
+  if (d.value != null && top) {
+    const total = d.value + delta;
+    const [whole, cents] = money(total);
+    roll(top.querySelector(".pf-total b"), whole);
+    roll(top.querySelector(".pf-total > span"), cents);
+    if (lastTotal != null && Math.abs(total - lastTotal) >= 0.005) flash(top, total > lastTotal ? "up" : "down");
+    lastTotal = total;
+    const ch = d.change?.[range];
+    const changeEl = top.querySelector(".pf-change");
+    if (ch != null && changeEl) {
+      changeEl.dataset.sign = ch + delta >= 0 ? "up" : "down";
+      roll(changeEl.querySelector("[data-rl]"), signed(ch + delta));
+    }
+  }
+  const byKey = new Map((d.positions ?? []).map((p) => [liveKey(p), p]));
+  root.querySelectorAll(".pf-list li[data-live]").forEach((li) => {
+    const p = byKey.get(li.dataset.live);
+    const px = priceOf(li.dataset.live);
+    if (!p || !px) return;
+    const v = liveValue(p);
+    roll(li.querySelector("[data-lv]"), usd2(v));
+    const pnl = li.querySelector("[data-pnl]");
+    if (pnl) { pnl.dataset.sign = v >= p.cost_usd ? "up" : "down"; roll(pnl, pnlText(v, p.cost_usd)); }
+    roll(li.querySelector("[data-lp]"), unitPrice(px));
+    const before = shownPx.get(li.dataset.live);
+    if (before != null && before !== px) flash(li, px > before ? "up" : "down");
+    shownPx.set(li.dataset.live, px);
+  });
 }
 
 function paint() {
@@ -290,8 +351,8 @@ function paint() {
       </nav>
       ${d.wallet === "sim" ? simNote(d) : ""}
       <div class="pf-top">
-        <p class="pf-total"><b>${whole}</b><span>${cents}</span></p>
-        <p class="pf-change" data-sign="${(ch ?? 0) >= 0 ? "up" : "down"}">${ch == null ? "" : `${signed(ch)} <span>${RANGES.find(([k]) => k === range)[1]}</span>`}</p>
+        <p class="pf-total"><i class="pf-live" aria-hidden="true"></i><b>${whole}</b><span>${cents}</span></p>
+        <p class="pf-change" data-sign="${(ch ?? 0) >= 0 ? "up" : "down"}">${ch == null ? "" : `<b data-rl>${signed(ch)}</b> <span>${RANGES.find(([k]) => k === range)[1]}</span>`}</p>
       </div>
       ${d.complete === false && d.missing?.length ? `<p class="pf-since">Not read right now: ${escapeHtml(d.missing.join(", "))} — shown at the last reading, or left out.</p>` : ""}
       <div class="pf-chart">${chart(d.history?.[range])}</div>
@@ -331,6 +392,7 @@ function paint() {
   delete root.dataset.loading;
   paintMe(p);
   bindScrub();
+  applyLive();
 }
 
 // The last profile of each wallet mode, so a switch paints at once instead of
@@ -357,6 +419,7 @@ async function load() {
 
 /** The switch itself: the buttons flip now, the numbers follow. */
 function switchWallet(mode) {
+  lastTotal = null;
   api.setWalletMode(mode);
   if (byMode[mode]) { data = byMode[mode]; paint(); }
   else {
@@ -385,6 +448,11 @@ export function mountProfile({ go: goTo } = {}) {
   if (!root) return;
   if (phantom.needed()) phantom.preload().catch(() => {});   // taps must reach Phantom synchronously
   go = goTo ?? go;
+  watch({
+    keys: () => (data?.positions ?? []).filter((p) => !p.hidden).map(liveKey).filter(Boolean),
+    active: () => Boolean(data && root.offsetParent),
+    onPrices: applyLive,
+  });
   // The value and its line stay live while the profile is on screen: a new
   // reading a minute, as the header's. Not while editing or touching the line.
   setInterval(() => {
