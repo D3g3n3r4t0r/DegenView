@@ -58,3 +58,4 @@ review. Read them before answering: the same mistake again is a failed task.
 - #311: re-rendering animated bars with innerHTML on every poll kills the CSS transition (new nodes start at their final value). Build the DOM once, then update transform/text in place.
 - Changing a function's signature breaks the tests that monkeypatch it: grep `tests/` for fakes of that function (`def fake_...`, `monkeypatch.setattr(mod, "name"`) and update them too (#314).
 - #322: F821 again (used backtest_lab in main.py without importing it; same as #306). Before using a module name, grep the file's imports; if absent, import it locally inside the function. Ruff in the worker caught it, the retry did not fix it.
+- #324: a test looping over every tool called them with no args and crashed on tools with required params. When a test iterates a registry, build the call from each entry's own spec (required params), and skip the ones that write.
