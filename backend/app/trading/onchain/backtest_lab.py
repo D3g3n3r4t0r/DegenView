@@ -29,6 +29,7 @@ _conn_path = None
 
 VERSION = 3
 MATURE_S = 48 * 3600
+RUG_SETTLED_S = 3600
 LIMIT = 1000
 PER_TICK = 3
 TICK_S = 60
@@ -65,16 +66,21 @@ def queue(now: float | None = None) -> list[tuple[str, dict]]:
     now = time.time() if now is None else now
     done = {r[0] for r in _db().execute("SELECT key FROM lab WHERE version = ?", (VERSION,))}
     items: list[tuple[str, dict]] = []
-    for key, entry in outcomes._journal.items():
+    for key, entry in outcomes.entries().items():
         if key in done:
             continue
         at = entry.get("at")
-        if not at or now - at < MATURE_S:
+        # a rug's outcome is known: its candles are complete an hour after it
+        rug_at = entry.get("rug_at") if entry.get("rug") else None
+        if not at or (now - rug_at < RUG_SETTLED_S if rug_at else now - at < MATURE_S):
             continue
         if not GECKO_NETWORKS.get(entry.get("chain")):
             continue
         items.append((key, entry))
-    items.sort(key=lambda kv: ("alert" not in (kv[1].get("source") or ""), -kv[1].get("at", 0)))
+    # alerts, then rugs (Lorenzo, 29/09: "documentare tutti i rug [...] anche
+    # quelli morti"), then the most recent
+    items.sort(key=lambda kv: ("alert" not in (kv[1].get("source") or ""), not kv[1].get("rug"),
+                               -kv[1].get("at", 0)))
     return items
 
 
@@ -150,7 +156,7 @@ async def fill(now: float | None = None, per_tick: int = PER_TICK) -> int:
                 _store(key, entry, zlib.compress(b"[]"), {"gone": True})
                 stored += 1
                 continue
-            j = outcomes._journal.get(f"{entry.get('chain')}:{entry.get('token_address')}")
+            j = outcomes.entries().get(f"{entry.get('chain')}:{entry.get('token_address')}")
             known = ({"at": j["rug_at"], "why": j.get("rug_why") or ""}
                      if j and j.get("rug") and j.get("rug_at") else None)
             result = await asyncio.to_thread(analyze, got, entry.get("at") or 0, known)
@@ -186,6 +192,7 @@ def summary() -> dict:
     miglior backtest, il buy-and-hold mediano, quanti hanno raddoppiato e
     quanti si sono rivelati rug."""
     rows = [dict(r) for r in _db().execute("SELECT * FROM lab")]
+    known = outcomes.entries()
     gone = 0
     with_trades = 0
     by_decision: dict[str, dict] = {}
@@ -211,7 +218,7 @@ def summary() -> dict:
         p = result.get("path") or {}
         if p.get("max_mult") is not None and p["max_mult"] >= 2:
             bucket["doubled"] += 1
-        entry = outcomes._journal.get(row["key"])
+        entry = known.get(row["key"])
         if entry is not None:
             bucket["known"] += 1
             if outcomes.outcome(entry) == "rug":

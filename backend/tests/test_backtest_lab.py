@@ -46,6 +46,7 @@ def _setup(monkeypatch, tmp_path, now: float):
     monkeypatch.setattr(backtest_lab, "_conn", None)
     monkeypatch.setattr(backtest_lab, "_conn_path", None)
     monkeypatch.setattr(outcomes, "_journal", _journal(now))
+    monkeypatch.setattr(outcomes, "_archive", {})
     monkeypatch.setattr(dexscreener, "gecko_load", lambda: 0)
 
 
@@ -119,3 +120,26 @@ def test_done_count_empty_and_after_write(monkeypatch, tmp_path):
     monkeypatch.setattr(alert_track, "_candles", fake_candles)
     asyncio.run(backtest_lab.fill(now))
     assert backtest_lab.done_count() == 1
+
+
+def test_rugs_are_archived_and_backtested_even_after_the_journal_drops_them(monkeypatch, tmp_path):
+    """Lorenzo, 29/09: "dobbiamo documentare tutti i rug [...] anche quelli
+    morti sopratutto": a rug stays after the journal's prune, and goes to the
+    lab an hour after the rug, without waiting 48h, ahead of other tokens."""
+    now = time.time()
+    _setup(monkeypatch, tmp_path, now)
+    monkeypatch.setattr(outcomes, "_STORE_FILE", tmp_path / "outcomes.json")
+    monkeypatch.setattr(outcomes, "_ARCHIVE_FILE", tmp_path / "archive.json")
+    rug = {"chain": "solana", "symbol": "RUG", "token_address": "tok3", "pair_address": "pair3",
+           "decision": "rejected", "source": "listings", "at": now - 3 * 3600, "rug": True, "rug_at": now - 2 * 3600}
+    outcomes._journal["solana:tok3"] = rug
+    outcomes._save()
+    outcomes._journal.pop("solana:tok3")          # what the prune does to an old rug
+    outcomes._save()
+    outcomes._journal.clear()
+    outcomes._archive.clear()
+    outcomes._load()                              # after a restart
+    assert "solana:tok3" not in outcomes._journal
+    assert outcomes.entries()["solana:tok3"]["symbol"] == "RUG"
+    keys = [k for k, _e in backtest_lab.queue(now)]
+    assert keys[:2] == ["solana:mature", "solana:tok3"]
