@@ -175,3 +175,19 @@ def test_deepseek_reviewer_reads_like_claude(monkeypatch):
     monkeypatch.setattr(settings, "deepseek_api_key", "")
     monkeypatch.setattr(settings, "anthropic_api_key", "")
     assert ai_review.provider() is None
+
+
+def test_new_gem_alert_names_the_tops_place(monkeypatch):
+    """The Telegram place is the Top's, and a gem not in the Top is not announced (29/09: PFWA "4th")."""
+    monkeypatch.setattr("time.time", lambda: T0)
+    a, b = _gem(400_000, liq=60_000), _gem(500_000, liq=60_000)
+    lb._rank()
+    db_row = {"chain": "solana", "token_address": "DB", "on_board": False}
+    monkeypatch.setattr(lb, "_top_source", lambda n: [db_row, {"chain": "solana", "token_address": a["token_address"]}])
+    got = []
+
+    async def hook(kind, item):
+        got.append((kind, item["symbol"], item["rank"]))
+    lb.on_alert(hook)
+    asyncio.run(lb.drain_alerts())
+    assert ("new", a["symbol"], 2) in got and not any(s == b["symbol"] for _, s, _ in got)

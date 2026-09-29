@@ -19,7 +19,7 @@ ChatGPT/Codex scrive col suo account GitHub (autore `lorenzocorazzi-wq`, branch 
 
 | consegna | cosa | stato reale |
 |---|---|---|
-| PR #348 + issue #347 | audit sicurezza/scoring (`docs/audits/2026-09-29/`) | S01-S07 corretti su main (#350, #354, #359); restano M01/M02/M04/M05 |
+| PR #348 + issue #347 | audit sicurezza/scoring (`docs/audits/2026-09-29/`) | chiuso lato codice (S01-S07, M01-M05); restano M06/M08 (decide Lorenzo) e SSRF/CSP/CI, vedi sezione sotto |
 | issue #357, #358 | piani backend B00-B08 e memoria I00-I07 | li eseguono i thread "Piano struttura backend" e "Piano intelligenza e memoria" |
 | PR #362 + issue #363 | "decision assurance" A01-A08 (`docs/decision-assurance/`) | da decidere con Lorenzo, vedi sotto |
 | PR #364 + issue #365 | ricevute di analisi e riuso R1-R5, scheda/mappa J1-J4 (`docs/analysis-receipts/`) | dipende da #363 e #358 |
@@ -32,13 +32,21 @@ Letti in modo critico:
 - **Mappa a neuroni** (`neural-map.fragment.html`): prototipo con dati finti, non telemetria.
 - **Contrasti con CLAUDE.md**: le issue dicono "non usare l'etichetta deepseek" e "l'attuazione sara' di Claude"; la regola di Lorenzo resta che il codice senza soldi/chiavi/firme passa da DeepSeek. I due branch `codex/*` modificano HANDOVER.md (uno in cima, sopra l'introduzione): al merge vanno in conflitto fra loro e con main. Le PR sono documenti: si possono unire senza rischio per il sito, dopo aver risolto HANDOVER.
 
-## Audit di sicurezza di ChatGPT/Codex — 2026-09-29
+## Audit di sicurezza di ChatGPT/Codex — 2026-09-29 — **chiuso lato codice**
 
-Lorenzo, 29/09: "ho fatto pubblicare a CHAT GPT degli audit su github". Sono in PR #348 (`docs/audits/2026-09-29/`: AUDIT_SICUREZZA, ANALISI_E_PESI, PIANO_CLAUDE, prove offline) e issue #347 (piano).
-Verificati sul codice: S01-S07 veri; M01/M02/M05/M07 veri; M03 (DREGG esente), M06 (Top piu' larga di Gems), M08 (somiglianza al benchmark) sono scelte di Lorenzo, non bug: decide lui.
-Corretto a mano (PR del branch `claude/project-thread-hs1t12`): interruttore del wallet, circuit breaker e discrepanze applicati a ogni invio compreso l'autotrader (`guards=False` salta solo i limiti economici) e ricontrollati subito prima del broadcast (`risk.run_safety_checks`); la riduzione al pool rifiuta invece di firmare l'importo pieno; doppia conferma non raddoppia la posizione; il tetto giornaliero conta gli ordini in volo; Solana `processed` non e' ancora confermata; README letto in Markdown (M07).
-Poi fatto anche S02-S04 (#354: valore dal server, conteggio solo a conferma on-chain, `client_order_id`) e S05-S07 (#359: passkey con password, sessioni revocabili, chiavi AES-GCM con migrazione alla prima lettura). Resta: M01/M02 (dato mancante != controllo passato), M04/M05; M03/M06/M08 decide Lorenzo.
-Le Actions falliscono in 3 s senza avviare step (anche la DeepSeek review e il deploy): per questo scritto a mano e deploy dal PC di Lorenzo.
+Lorenzo, 29/09: "ho fatto pubblicare a CHAT GPT degli audit su github", poi "risolvi tutti i problemi segnalati da chat gpt". Audit in PR #348 (`docs/audits/2026-09-29/`) e issue #347. Tutti i rilievi S01-S07 e M01-M07 verificati sul codice: veri; M03/M06/M08 sono anche scelte di Lorenzo, corretti solo dove toccavano la sicurezza.
+Corretto a mano (soldi/chiavi/firme), PR #350, #354, #359 e questa:
+- S01 `risk.run_safety_checks` (wallet acceso, breaker, discrepanze) su ogni swap/prelievo/autotrader (`guards=False` salta solo i limiti economici), ricontrollato prima del broadcast. Il tasto "kill switch" ora ferma davvero.
+- S02 valore deciso dal server (`valuation.py`, importi raw + decimali on-chain + prezzo del server); `notional_usd`/`price_usd` del client ignorati; il clamp al pool rifiuta invece di firmare l'importo pieno.
+- S03 `client_order_id` (api.js) e id stabile per segnale watchlist: un retry ripete il primo esito; tetto giornaliero conta gli ordini in volo; doppia conferma non raddoppia.
+- S04 stati `signed`/`submitted`/`unknown`: la posizione si registra solo quando `_onchain_reconcile_loop` (ogni 20 s, parte all'avvio) vede la tx confermata; Solana `processed` non basta.
+- S05 passkey aggiunta/rimossa solo con la password (+ avviso Telegram); `/reveal/approve` con lo stesso blocco del login.
+- S06 cookie con id e versione: logout revoca lato server, `POST /api/auth/logout-all` per tutti i dispositivi. I cookie vecchi (senza id) valgono finche' non si fa logout.
+- S07 chiavi wallet e credenziali exchange in AES-GCM legate a utente e chain; migrazione alla prima lettura dopo il controllo indirizzo, con copia in `data/wallet_keys_pre_v2.jsonl`. `WALLET_ENCRYPTION_KEY` (opzionale, `deploy/.env.example`) stacca la custodia da SESSION_SECRET: **se la metti, non toglierla mai piu'**. `users.json` scritto in modo atomico con `.bak`, mai sovrascritto se illeggibile.
+- M01/M02 tokenomics: dato mancante = non verificato (niente punti, tetto 50 se mint/freeze ignoti), un contratto con >50% e' fatale; M03 DREGG non salta piu' i fatal; M04 giudizi AI piu' vecchi del doppio del TTL non contano nel voto; M05 ammissione AI serve confidenza >= 0.7; M07 README letto come Markdown. `RULES_VERSION` 9: la tokenomics di tutti i progetti viene rifatta.
+Non toccato, decide Lorenzo: M06 (Top piu' larga di Gems, studiati saltano soglie), M08 (somiglianza al benchmark) e i pesi nuovi del PR H del piano.
+Ancora aperto, da fare fuori dal codice: SSRF/DNS rebinding, CSP `unsafe-inline`, CI (le Actions falliscono in 3 s senza step, causa non nota da qui), deploy fissato allo SHA verificato invece di `origin/main`, separare il job DeepSeek dal publisher. Dipendenze e scansione: nessuna fatta.
+Primo trade reale: seguirlo a mano; nessun invio on-chain e' mai stato provato dalla sandbox.
 
 ## Versione desktop dell'app on-chain — 2026-09-29
 
