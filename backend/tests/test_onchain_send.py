@@ -24,6 +24,10 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(onchain_ledger, "_DB_FILE", tmp_path / "ledger.db")
     onchain_ledger._init_db()
     auth._users.clear()
+
+    async def _server_price(chain, address):
+        return 150.0 if address is None else 1.0   # the server's price, not the request's (audit S02)
+    monkeypatch.setattr(main.onchain_valuation, "token_price_usd", _server_price)
     user = auth.create_user("trader@example.com", "correct-horse-battery-9")
     main.app.dependency_overrides[auth.get_current_user] = lambda: auth.get_user(user.id)
     with TestClient(main.app) as c:
@@ -94,6 +98,8 @@ def test_send_native_enabled_sends_and_confirms(client, monkeypatch):
     body = resp.json()
     assert body["accepted"] is True
     assert body["tx_signature"] == "fake-signature-456"
+    assert onchain_ledger.get_order(body["idempotency_key"])["status"] == "submitted"
+    onchain_ledger.confirm_from_chain(body["idempotency_key"])
     order = onchain_ledger.get_order(body["idempotency_key"])
     assert order["status"] == "confirmed"
     assert order["side"] == "sell"

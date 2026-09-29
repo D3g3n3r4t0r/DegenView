@@ -7,15 +7,14 @@ blocca nuovi ordini [...] e apre una discrepanza per revisione."
 
 Questo modulo NON firma e NON invia mai nulla: solo lettura via RPC.
 
-LIMITE NOTO: reconcile_pending_orders() confirma qui SOLO che la
-transazione e' finita on-chain (successo o fallita) — non ricostruisce
-size/prezzo davvero eseguiti. Farlo richiederebbe leggere i log della
+LIMITE NOTO: reconcile_pending_orders() books the fill expected at signing
+time (quote out amount), once the chain confirms the transaction — non
+ricostruisce size/prezzo davvero eseguiti. Farlo richiederebbe leggere i log della
 transazione (per Solana le innerInstructions/variazioni di saldo token
 via getTransaction, per EVM i topic Transfer nella receipt): un parser
-per-token che questo repo non ha ancora. Per questo usa
-ledger.mark_confirmed_signature_only(), che sposta l'ordine fuori da
-pending_unconfirmed() senza toccare posizioni/spesa giornaliera — vedi
-il commento su quella funzione in ledger.py.
+per-token che questo repo non ha ancora. Rows saved without an expected
+fill (older code) only leave the in-flight list (see
+ledger.confirm_from_chain).
 """
 import time
 
@@ -85,10 +84,19 @@ async def reconcile_pending_orders(owner_id: str, chain: str) -> dict:
         key = order["idempotency_key"]
         signature = order["tx_signature"]
         if not signature:
-            # Non dovrebbe succedere (mark_submitted scrive sempre una
-            # firma), ma se capita non c'e' nulla da verificare via RPC.
-            ledger.mark_failed(key, "submitted senza tx_signature registrata")
-            failed.append(key)
+            # No signature is saved before signing ends, and the signature is
+            # saved before any send: an old row without one never left.
+            if time.time() - order["updated_at"] > STALE_SUBMITTED_S:
+                ledger.mark_failed(key, "never signed (no signature saved)")
+                failed.append(key)
+            else:
+                still_pending.append(key)
+            continue
+        if signature.startswith("jito:"):
+            # A bundle id from older rows, not a transaction signature:
+            # nothing to look up, it only leaves the in-flight list.
+            ledger.mark_confirmed_signature_only(key)
+            confirmed.append(key)
             continue
         try:
             status = await (
@@ -98,7 +106,7 @@ async def reconcile_pending_orders(owner_id: str, chain: str) -> dict:
             still_pending.append(key)
             continue
         if status == "confirmed":
-            ledger.mark_confirmed_signature_only(key)
+            ledger.confirm_from_chain(key)
             confirmed.append(key)
         elif status == "failed":
             ledger.mark_failed(key, "transaction failed on-chain (verified via RPC)")
@@ -111,6 +119,17 @@ async def reconcile_pending_orders(owner_id: str, chain: str) -> dict:
             else:
                 still_pending.append(key)
     return {"confirmed": confirmed, "failed": failed, "still_pending": still_pending}
+
+
+async def reconcile_all() -> dict:
+    """Every owner and chain with an order in flight — run by a loop in
+    main.py and at startup (audit 29/09, S04: nothing called the reconciler)."""
+    pairs = {(o["owner_id"], o["chain"]) for o in ledger.pending_unconfirmed()}
+    out = {}
+    for owner_id, chain in pairs:
+        if chain in ("solana", "robinhood"):
+            out[f"{owner_id}:{chain}"] = await reconcile_pending_orders(owner_id, chain)
+    return out
 
 
 def check_position_discrepancy(owner_id: str, chain: str, token: str, real_balance_usd: float) -> dict:

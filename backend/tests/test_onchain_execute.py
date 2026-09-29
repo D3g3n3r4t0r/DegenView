@@ -90,6 +90,8 @@ def test_robinhood_execution_enabled_sends_and_confirms(tmp_path, monkeypatch):
     ))
     assert result["accepted"] is True
     assert result["tx_signature"] == "0xfaketxhash"
+    assert ledger.get_order(result["idempotency_key"])["status"] == "submitted"
+    ledger.confirm_from_chain(result["idempotency_key"])   # what the reconciler does once the chain confirms
     order = ledger.get_order(result["idempotency_key"])
     assert order["status"] == "confirmed"
 
@@ -141,6 +143,8 @@ def test_execution_enabled_sends_and_confirms(tmp_path, monkeypatch):
     ))
     assert result["accepted"] is True
     assert result["tx_signature"] == "fake-signature-123"
+    assert ledger.get_order(result["idempotency_key"])["status"] == "submitted"
+    ledger.confirm_from_chain(result["idempotency_key"])   # what the reconciler does once the chain confirms
     order = ledger.get_order(result["idempotency_key"])
     assert order["status"] == "confirmed"
     pos = ledger.get_position("u1", "solana", "TOKEN")

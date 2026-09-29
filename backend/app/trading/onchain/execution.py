@@ -331,3 +331,19 @@ async def build_signed_robinhood_swap(
         "data": "0x" + calldata.hex(),
     }
     return sign_evm_transaction(private_key_hex, tx)
+
+
+def tx_id(chain: str, signed: bytes) -> str | None:
+    """The id the chain will know this transaction by, computed before it is
+    sent (audit 29/09, S04): Solana's first signature, an EVM tx's hash.
+    None if the bytes are not a transaction (test doubles)."""
+    try:
+        if chain == "solana":
+            from solders.signature import Signature
+            if len(signed) < 65 or signed[0] == 0 or signed[0] > 127:
+                return None
+            return str(Signature.from_bytes(signed[1:65]))
+        from eth_utils import keccak
+        return "0x" + keccak(signed).hex()
+    except Exception:  # noqa: BLE001
+        return None

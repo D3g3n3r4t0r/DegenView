@@ -92,7 +92,7 @@ def test_buy_signal_executes_real_order_when_address_and_wallet_present(monkeypa
     monkeypatch.setattr(auth, "get_decrypted_onchain_private_key", lambda owner, chain: "deadbeef")
 
     async def _fake_execute_order(owner_id, chain, token, strategy_name, side, notional_usd,
-                                   price_impact_pct, price_usd, private_key_hex, quote):
+                                   price_impact_pct, price_usd, private_key_hex, quote, intent_id=None):
         assert side == "buy"
         assert token == "TokenMintAddr222"
         return {"accepted": True, "reason": "", "idempotency_key": "k1", "tx_signature": "sig1"}
@@ -143,7 +143,7 @@ def test_sell_signal_executes_real_order_when_decimals_and_position_present(monk
     monkeypatch.setattr(auth, "get_decrypted_onchain_private_key", lambda owner, chain: "deadbeef")
 
     async def _fake_execute_order(owner_id, chain, token, strategy_name, side, notional_usd,
-                                   price_impact_pct, price_usd, private_key_hex, quote):
+                                   price_impact_pct, price_usd, private_key_hex, quote, intent_id=None):
         assert side == "sell"
         assert token == "TokenMintAddr222"
         return {"accepted": True, "reason": "", "idempotency_key": "k2", "tx_signature": "sig2"}
