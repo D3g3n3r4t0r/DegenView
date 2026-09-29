@@ -122,3 +122,18 @@ def test_a_rejected_row_is_lifted_when_its_entry_has_no_fatal_pillar():
                                 "overall": depth.overall(pillars)}
     lb._sync_database([])
     assert db.get("solana", "bv")["status"] == "studied"
+
+
+def test_lower_case_evm_rows_get_their_market_from_checksum_answers():
+    """DexScreener answers 0xAbC..., the CoinGecko list stores 0xabc...: AUREON never got a cap."""
+    tok = "0xd293291060334d42e5dbea6fb854c231af527777"
+    db.upsert({"chain": "robinhood", "token_address": tok, "symbol": "AUREON", "name": "AUREON"}, "coingecko-list", 1.0)
+    pair = {"baseToken": {"address": "0xd293291060334D42E5DBEa6fb854C231AF527777"}, "marketCap": 92_424,
+            "liquidity": {"usd": 53_215}, "volume": {"h24": 10}, "priceUsd": "0.1", "pairCreatedAt": 1_700_000_000_000}
+    db.apply_pairs("robinhood", [tok], [pair], 2.0)
+    row = db.get("robinhood", tok)
+    assert row["mcap"] == 92_424 and row["liq"] == 53_215
+    # A row stamped empty before the fix is asked again.
+    db.upsert({"chain": "robinhood", "token_address": "0xabc", "symbol": "X", "name": "X"}, "coingecko-list", 1.0)
+    db.set_market("robinhood", "0xabc", now=3.0)
+    assert db.reset_empty_market() >= 1 and db.get("robinhood", "0xabc")["market_at"] is None
