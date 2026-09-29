@@ -100,13 +100,21 @@ async def execute_order(
     # guards=False: the system's autotrader, whose only limit is the share of
     # the balance Lorenzo picks ("solo la % scelta"): no per-trade cap, no
     # pool clamp, no impact veto. Ledger, idempotency and the server switch stay.
-    if guards:
-        notional_usd = risk.clamp_size_to_pool(notional_usd, pool_liquidity_usd)
-        ok, reason = risk.run_all_checks(
-            owner_id, chain, token, notional_usd, price_impact_pct, pool_info=pool_info, strategy_name=strategy_name,
-        )
-    else:
-        ok, reason = True, ""
+    ok, reason = risk.run_safety_checks(owner_id, chain, token)
+    if ok and guards:
+        # The quote (and so the signed amount) is fixed by the caller: a
+        # smaller size here would shrink only the ledger row, not the swap
+        # (audit 29/09, S02). Refuse instead of pretending.
+        allowed_usd = risk.clamp_size_to_pool(notional_usd, pool_liquidity_usd)
+        if allowed_usd < notional_usd - 0.01:
+            ok, reason = False, (
+                f"size {notional_usd:.2f} USD above what this pool allows ({allowed_usd:.2f} USD): lower the amount"
+            )
+        else:
+            ok, reason = risk.run_all_checks(
+                owner_id, chain, token, notional_usd, price_impact_pct, pool_info=pool_info,
+                strategy_name=strategy_name,
+            )
     if not ok:
         logger.warning("[%s] rifiutato dal risk guardrail: %s", correlation_id, reason,
                         extra={"correlation_id": correlation_id})
@@ -144,6 +152,14 @@ async def execute_order(
         ledger.mark_failed(idempotency_key, "esecuzione reale disattivata (onchain_execution_enabled=False)")
         return {"accepted": False, "reason": "live execution disabled on this server",
                 "idempotency_key": idempotency_key, "tx_signature": None, "correlation_id": correlation_id}
+
+    # Signing and quoting take network round-trips: the wallet may have been
+    # switched off (or the breaker tripped) meanwhile.
+    ok, reason = risk.run_safety_checks(owner_id, chain, token)
+    if not ok:
+        ledger.mark_failed(idempotency_key, reason)
+        return {"accepted": False, "reason": reason, "idempotency_key": idempotency_key, "tx_signature": None,
+                "correlation_id": correlation_id}
 
     try:
         if chain == "solana":

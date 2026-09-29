@@ -183,8 +183,8 @@ def mark_confirmed(
     executed_usd = executed_qty * executed_price_usd
     with _lock, _connect() as conn:
         order = conn.execute("SELECT * FROM orders WHERE idempotency_key = ?", (idempotency_key,)).fetchone()
-        if order is None:
-            return
+        if order is None or order["status"] not in ("pending", "submitted"):
+            return      # a second confirmation must not add the fill twice (audit 29/09, S03)
         conn.execute(
             "UPDATE orders SET status = 'confirmed', executed_qty = ?, executed_price_usd = ?, "
             "price_impact_pct = ?, updated_at = ? WHERE idempotency_key = ?",
@@ -257,6 +257,19 @@ def get_daily_spent(owner_id: str, chain: str, day_key: str | None = None) -> fl
             (owner_id, chain, day_key),
         ).fetchone()
         return row["spent_usd"] if row else 0.0
+
+
+def in_flight_usd(owner_id: str, chain: str) -> float:
+    """Reserved or sent today but not confirmed yet: the daily cap counts
+    them, or two orders at once both fit under it (audit 29/09, S03)."""
+    start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
+    with _lock, _connect() as conn:
+        row = conn.execute(
+            "SELECT COALESCE(SUM(size_usd), 0) AS s FROM orders WHERE owner_id = ? AND chain = ? "
+            "AND mode = 'live' AND status IN ('pending', 'submitted') AND created_at >= ?",
+            (owner_id, chain, start),
+        ).fetchone()
+        return float(row["s"] or 0.0)
 
 
 def pending_unconfirmed(owner_id: str | None = None) -> list[dict]:
