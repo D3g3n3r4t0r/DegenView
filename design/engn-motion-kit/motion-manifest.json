@@ -1,0 +1,144 @@
+{
+  "version": "1.0.0",
+  "brand": "Liquidity Engine",
+  "source": "User-supplied Meshy cube and getengn.xyz visual language",
+  "palette": {
+    "background": "#070c0a",
+    "mint": "#2de2b0",
+    "secondary": "#63d5e9",
+    "third": "#b9a2f5",
+    "warning": "#eabb69",
+    "error": "#ef827f"
+  },
+  "motions": [
+    {
+      "id": "assemble",
+      "title": "Engine boot",
+      "category": "decorative",
+      "duration": 3000,
+      "use": "Ingresso hero e apertura prodotto",
+      "file": "svg/assemble.svg",
+      "loop": false
+    },
+    {
+      "id": "idle",
+      "title": "Engine alive",
+      "category": "decorative",
+      "duration": 4800,
+      "use": "Sfondo discreto e identità del brand",
+      "file": "svg/idle.svg",
+      "loop": true
+    },
+    {
+      "id": "scan",
+      "title": "Radar scan",
+      "category": "functional",
+      "duration": 2400,
+      "use": "Scansione realmente in corso",
+      "file": "svg/scan.svg",
+      "loop": true
+    },
+    {
+      "id": "loading",
+      "title": "Processing",
+      "category": "functional",
+      "duration": 1600,
+      "use": "Attesa a durata sconosciuta",
+      "file": "svg/loading.svg",
+      "loop": true
+    },
+    {
+      "id": "progress",
+      "title": "Measured progress",
+      "category": "functional",
+      "duration": 0,
+      "use": "Avanzamento numerico del processo",
+      "file": "svg/progress.svg",
+      "loop": false
+    },
+    {
+      "id": "success",
+      "title": "Completed",
+      "category": "functional",
+      "duration": 700,
+      "use": "Operazione completata e confermata",
+      "file": "svg/success.svg",
+      "loop": false
+    },
+    {
+      "id": "warning",
+      "title": "Needs attention",
+      "category": "functional",
+      "duration": 900,
+      "use": "Azione richiesta o dato da verificare",
+      "file": "svg/warning.svg",
+      "loop": false
+    },
+    {
+      "id": "error",
+      "title": "Could not complete",
+      "category": "functional",
+      "duration": 500,
+      "use": "Errore recuperabile e retry",
+      "file": "svg/error.svg",
+      "loop": false
+    },
+    {
+      "id": "empty",
+      "title": "No results",
+      "category": "functional",
+      "duration": 0,
+      "use": "Nessun risultato per i filtri correnti",
+      "file": "svg/empty.svg",
+      "loop": false
+    },
+    {
+      "id": "reconnect",
+      "title": "Reconnecting",
+      "category": "functional",
+      "duration": 2200,
+      "use": "Tentativo reale di riconnessione",
+      "file": "svg/reconnect.svg",
+      "loop": true
+    },
+    {
+      "id": "cta",
+      "title": "Activate engine",
+      "category": "decorative",
+      "duration": 850,
+      "use": "Hover o focus su un invito all’azione",
+      "file": "svg/cta.svg",
+      "loop": false
+    },
+    {
+      "id": "transition",
+      "title": "Module handoff",
+      "category": "decorative",
+      "duration": 900,
+      "use": "Cambio pannello o sezione",
+      "file": "svg/transition.svg",
+      "loop": false
+    }
+  ],
+  "scenes": [
+    {
+      "id": "engine-boot",
+      "file": "hero-3d.html",
+      "durationMs": 3000,
+      "asset": "neon-cube-assembly-3s.glb"
+    },
+    {
+      "id": "original-podium",
+      "file": "podium-3d.html",
+      "durationMs": 1400,
+      "asset": "neon-cube-assembly-3s.glb"
+    }
+  ],
+  "components": [
+    "engn-motion.mjs",
+    "engn-leaderboard.mjs",
+    "podium-adapter.mjs"
+  ],
+  "accessibility": "prefers-reduced-motion + decorative flag + semantic labels",
+  "repository": "lorenzocorazzi-wq/liquidity-analysis-engine"
+}

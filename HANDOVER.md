@@ -3970,3 +3970,12 @@ Lorenzo: "stagli addosso a DeepSeek [...] deve essere un lavoro perfetto" — "c
 Fatto: studi 001/002 rivisti (`.github/deepseek/studi/`), GitHub multi-repo (#341), avviso Telegram col posto reale della Top, animazione `particles.js`/`top.js` (solo a schermo, in sequenza, `lae:top-seen`), quota giudice 1500 + Top 150, `PROMPT_VERSION` 4, `lift_rejected`, match indirizzi EVM senza maiuscole (v10, AUREON), link DexScreener che riempiono sito/GitHub (v11), il Top rilegge letture da prompt vecchio (`judge.wants_reading`).
 Diagnostica server sola lettura: `backend/scripts/gem_diag.py` via stdin (non e' nell'immagine Docker).
 Da verificare dopo il deploy v11: AUREON entra e viene analizzato; PFWA ha cap; BV7X non piu' "single wallet 41%" (i contratti sono fuori dai limiti per wallet, solo >50% in un contratto e' fatale); STEALF/GRID/PFWA con letture nuove.
+
+
+## 2026-09-29 — ENGN motion kit: asset e handoff per Claude
+
+Lorenzo ha chiesto un pacchetto dal suo cubo Meshy: "da inserire in più contesti; funzionali e meno", aggiornare "i modelli della leaderboard top 15" con qualcosa di animato, e "sistema sia per desktop che per mobile, ma per desktop poi visualizzalo versione desktop". Ha indicato questa repository per passare modelli e istruzioni a Claude.
+
+Consegnato in `design/engn-motion-kit/`: galleria responsive, 12 SVG e web component di stato, hero 3D con assemblaggio di 3 secondi, podio 3D con lo stesso GLB, prototipo Top 15/25/50 e adattatore del contratto renderPodium. GLB ottimizzato a 1.999 MB; texture originali ridotte a 1024 px, taglio in 27 moduli e rimozione della pedana. `CLAUDE.md` nella cartella contiene la mappa di integrazione verificata su podium.js, top.js e app.css (desktop >=1100, rail >=1360, lista 420 px).
+
+Stato: pacchetto di design e prototipi, NON integrato nel frontend di produzione. Nessun import live, backend, ranking o flusso wallet modificato. Dati della galleria dichiarati illustrativi. Controllati desktop 1440x1000, mobile 390x844 senza overflow, Top 25/50, ricerca, evento di selezione, progress e error; limiti in QA.md. Prossimo passo per Claude: seguire il workflow della repository, integrare a piccoli passi preservando data-open, .pc-slot in ordine 1/2/3, still, tokenRow, filtri e logica seen/onScreen. Non sostituire il terminale desktop con la galleria a tutta larghezza.
