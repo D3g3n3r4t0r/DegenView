@@ -27,6 +27,7 @@ import time
 import uuid
 from pathlib import Path
 from typing import Literal
+from app.atomic_write import write_text_atomic
 
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 _DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -54,7 +55,7 @@ def _load() -> None:
 
 def _save() -> None:
     try:
-        _STORE_FILE.write_text(json.dumps(_entries, ensure_ascii=False), encoding="utf-8")
+        write_text_atomic(_STORE_FILE, json.dumps(_entries, ensure_ascii=False), encoding="utf-8")
     except OSError:
         pass
 

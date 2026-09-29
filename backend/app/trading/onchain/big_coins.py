@@ -18,6 +18,7 @@ from pathlib import Path
 import httpx
 
 from app.trading.onchain import storage
+from app.atomic_write import write_text_atomic
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +54,7 @@ def _load() -> None:
 
 def _save() -> None:
     try:
-        _STORE.write_text(json.dumps({"at": _state["at"], "coins": _state["coins"]}), encoding="utf-8")
+        write_text_atomic(_STORE, json.dumps({"at": _state["at"], "coins": _state["coins"]}), encoding="utf-8")
     except OSError:
         pass
 

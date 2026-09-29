@@ -42,6 +42,7 @@ import httpx
 from app.sniper.quality import _looks_like_meme
 from app.trading.onchain import (benchmark, big_coins, code_review, consistency, depth, discovery, gem_track, judge, legit, narrative_map,
                                   narratives, priority, projects_db, research, storage, traction)
+from app.atomic_write import write_text_atomic
 
 logger = logging.getLogger(__name__)
 
@@ -219,7 +220,7 @@ def _save() -> None:
     global _dirty
     _dirty = False
     try:
-        _STORE_FILE.write_text(json.dumps({"entries": _entries, "excluded": _excluded, "gone": _gone,
+        write_text_atomic(_STORE_FILE, json.dumps({"entries": _entries, "excluded": _excluded, "gone": _gone,
                                            "examined": _state["examined"], "rules": RULES_VERSION,
                                            "alerted": sorted(_alerted)}, ensure_ascii=False),
                                encoding="utf-8")
