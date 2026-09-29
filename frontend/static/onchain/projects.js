@@ -8,6 +8,7 @@ import * as api from "@onchain/api.js";
 import { register } from "@onchain/detail.js";
 import { escapeHtml } from "@onchain/format.js";
 import { isHidden, onHiddenChange, withEntrance } from "@onchain/hidden.js";
+import * as narr from "@onchain/narrative_pick.js";
 
 const PAGE = 30;
 const CHAINS = { solana: "Solana", robinhood: "Robinhood", base: "Base", bsc: "BSC", ethereum: "Ethereum" };
@@ -17,6 +18,7 @@ let root = null;
 let query = { q: "", status: "", offset: 0 };
 let items = [];
 let typing = null;
+let narratives = [];   // coverage items, most projects first
 
 const usd = (v) => (v == null ? "—" : v >= 1e6 ? `$${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `$${Math.round(v / 1e3)}k` : `$${Math.round(v)}`);
 const num = (n) => (n ?? 0).toLocaleString("en-US");
@@ -63,13 +65,25 @@ function paintList() {
   withEntrance(root.querySelector("[data-projects-list]"), () => {
     root.querySelector("[data-projects-list]").innerHTML = shown.length
       ? shown.map(row).join("")
-      : `<li class="pj-empty">${query.q || query.status ? "Nothing matches." : "The database is filling up: sources are being read."}</li>`;
+      : `<li class="pj-empty">${narr.get().length ? "No project in these narratives yet."
+        : query.q || query.status ? "Nothing matches." : "The database is filling up: sources are being read."}</li>`;
   });
+}
+
+function paintNarr() {
+  const box = root.querySelector("[data-projects-narr]");
+  if (!box || !narratives.length) return;
+  const sel = new Set(narr.get());
+  box.innerHTML = `<button type="button" data-narr="" aria-pressed="${!sel.size}">All</button>`
+    + narratives.map((n) => `<button type="button" data-narr="${escapeHtml(n.key)}" aria-pressed="${sel.has(n.key)}">${escapeHtml(n.label)} <small>${num(n.projects)}</small></button>`).join("");
 }
 
 async function load(append = false) {
   try {
-    const data = await api.getProjects({ q: query.q, status: query.status, sort: "score", limit: PAGE, offset: query.offset });
+    const params = { q: query.q, status: query.status, sort: "score", limit: PAGE, offset: query.offset };
+    const keys = narr.get();
+    if (keys.length) params.narrative = keys.join(",");
+    const data = await api.getProjects(params);
     items = append ? [...items, ...(data.items ?? [])] : (data.items ?? []);
     delete root.dataset.loading;
     paintList();
@@ -94,6 +108,22 @@ export function mountProjects() {
     root.querySelectorAll(".projects-filter [data-status]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
     query = { ...query, status: b.dataset.status, offset: 0 };
     load();
+  });
+  root.querySelector("[data-projects-narr]")?.addEventListener("click", (event) => {
+    const b = event.target.closest("[data-narr]");
+    if (!b) return;
+    const key = b.dataset.narr;
+    const keys = narr.get();
+    narr.set(!key ? [] : keys.includes(key) ? keys.filter((k) => k !== key) : [...keys, key]);
+  });
+  narr.onChange(() => {
+    query = { ...query, offset: 0 };
+    paintNarr();
+    load();
+  });
+  narr.coverage().then((list) => {
+    narratives = list.slice().sort((a, b) => (b.projects ?? 0) - (a.projects ?? 0));
+    paintNarr();
   });
   root.querySelector("[data-projects-more]").addEventListener("click", () => {
     query = { ...query, offset: items.length };
