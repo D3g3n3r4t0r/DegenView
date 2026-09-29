@@ -1512,18 +1512,21 @@ async def _onchain_reconcile_loop() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    asyncio.create_task(_notify_deploy())
-    asyncio.create_task(_onchain_reconcile_loop())
+    # Audit B04: the event loop keeps only weak references to tasks, so a
+    # create_task() nobody holds can be garbage-collected mid-run (the order
+    # reconciler was one) and nothing cancelled it at shutdown.
+    background = [asyncio.create_task(_notify_deploy()),
+                  asyncio.create_task(_onchain_reconcile_loop())]
     from app.trading.onchain import twap_jobs as onchain_twap_jobs_resume
-    asyncio.create_task(onchain_twap_jobs_resume.resume_running_twap_jobs())
+    background.append(asyncio.create_task(onchain_twap_jobs_resume.resume_running_twap_jobs()))
     t1 = asyncio.create_task(_watchlist_alert_loop())
     t6 = asyncio.create_task(limit_order_loop())
     t7 = asyncio.create_task(_sniper_onchain_bridge_loop())
     t4 = asyncio.create_task(_weekly_recap_loop())
-    asyncio.create_task(_telegram_chat_loop())
-    asyncio.create_task(_deepseek_recap_loop())
-    asyncio.create_task(deepseek_studies.studies_loop())
-    asyncio.create_task(_ai_scan_loop())
+    background.append(asyncio.create_task(_telegram_chat_loop()))
+    background.append(asyncio.create_task(_deepseek_recap_loop()))
+    background.append(asyncio.create_task(deepseek_studies.studies_loop()))
+    background.append(asyncio.create_task(_ai_scan_loop()))
     t5 = asyncio.create_task(_watchdog_loop())
     onchain_leaderboard.set_top_source(_top_entries)
     radar_tasks = [asyncio.create_task(onchain_radar.radar_loop()),
@@ -1552,6 +1555,8 @@ async def lifespan(app: FastAPI):
     for t in radar_tasks:
         t.cancel()
     for t in sniper_tasks:
+        t.cancel()
+    for t in background:
         t.cancel()
 
 
