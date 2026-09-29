@@ -7,7 +7,7 @@
 <meta name="description" content="An on-chain wallet that snipes new launches, ranks serious microcaps and trades them with trend-following. Long spot only." />
 <meta property="og:title" content="Liquidity Engine — Find them first. Ride them right." />
 <meta property="og:description" content="Sniper for new launches, fundamentals board for microcaps, trend-following automation. Long spot only." />
-<meta name="theme-color" content="#08090b" />
+<meta name="theme-color" content="#070c0a" />
 <meta property="og:image" content="https://liquidityengine.app/static/engn/logo.png" />
 <link rel="icon" href="/static/engn/logo.png" />
 <style>
@@ -306,6 +306,10 @@ section, header.hero { scroll-margin-top: 64px; }
   .chart .mk { opacity: 1; }
 }
 </style>
+<link rel="stylesheet" href="/static/engn-system.css" media="(min-width:1100px)">
+<link rel="stylesheet" href="/static/engn-landing.css" media="(min-width:1100px)">
+<script type="module" src="/static/onchain/motion.js"></script>
+<style>@media(max-width:1099px){.stage engn-motion{display:none}}</style>
 </head>
 <body>
 <script>document.documentElement.classList.add("js")</script>
@@ -349,7 +353,7 @@ section, header.hero { scroll-margin-top: 64px; }
 
 <header class="hero" id="top">
   <div class="wrap">
-    <div class="stage" aria-hidden="true">
+    <div class="stage" aria-hidden="true"><engn-motion state="scan" decorative></engn-motion>
       <svg viewBox="0 0 400 400">
         <g class="floor" mask="url(#floorMask)">
           <path d="M20 250 L200 340 L380 250 M50 235 L200 310 L350 235 M80 220 L200 280 L320 220 M110 205 L200 250 L290 205
@@ -395,16 +399,16 @@ section, header.hero { scroll-margin-top: 64px; }
       <p>Liquidity, mcap, holders: every screener gives you those for free. Your filter shows 200 clean tokens. We tell you which few have a real project behind them, test them before you touch them, and remember how every one we tracked ended.</p>
     </div>
     <div class="vs-wrap rv">
-      <table class="vs">
+      <table class="vs" aria-label="Liquidity Engine feature comparison">
         <thead><tr><th></th><th>Screeners<small>DexScreener, Birdeye</small></th><th>Terminals<small>Photon, Axiom, BullX</small></th><th class="us">Liquidity Engine</th></tr></thead>
         <tbody>
-        <tr><td>Swaps from the same wallet</td><td class="no"></td><td class="yes"></td><td class="us yes"></td></tr>
-        <tr><td>Rug-checked before you see it</td><td class="no"></td><td class="no"></td><td class="us yes"></td></tr>
-        <tr><td>Checks the project is real: GitHub, code, site</td><td class="no"></td><td class="no"></td><td class="us yes"></td></tr>
-        <tr><td>Backtests every token it proposes</td><td class="no"></td><td class="no"></td><td class="us yes"></td></tr>
-        <tr><td>Follows every pick for 7 days and learns from the rugs</td><td class="no"></td><td class="no"></td><td class="us yes"></td></tr>
-        <tr><td>Public track record against the market</td><td class="no"></td><td class="no"></td><td class="us soon">SOON</td></tr>
-        <tr><td>Pulls you out when the dev starts dumping</td><td class="no"></td><td class="no"></td><td class="us soon">SOON</td></tr>
+        <tr><td>Swaps from the same wallet</td><td class="no" aria-label="Not available"></td><td class="yes" aria-label="Available"></td><td class="us yes" aria-label="Available"></td></tr>
+        <tr><td>Rug-checked before you see it</td><td class="no" aria-label="Not available"></td><td class="no" aria-label="Not available"></td><td class="us yes" aria-label="Available"></td></tr>
+        <tr><td>Checks the project is real: GitHub, code, site</td><td class="no" aria-label="Not available"></td><td class="no" aria-label="Not available"></td><td class="us yes" aria-label="Available"></td></tr>
+        <tr><td>Backtests every token it proposes</td><td class="no" aria-label="Not available"></td><td class="no" aria-label="Not available"></td><td class="us yes" aria-label="Available"></td></tr>
+        <tr><td>Follows every pick for 7 days and learns from the rugs</td><td class="no" aria-label="Not available"></td><td class="no" aria-label="Not available"></td><td class="us yes" aria-label="Available"></td></tr>
+        <tr><td>Public track record against the market</td><td class="no" aria-label="Not available"></td><td class="no" aria-label="Not available"></td><td class="us soon">SOON</td></tr>
+        <tr><td>Pulls you out when the dev starts dumping</td><td class="no" aria-label="Not available"></td><td class="no" aria-label="Not available"></td><td class="us soon">SOON</td></tr>
         </tbody>
       </table>
     </div>
@@ -425,7 +429,7 @@ section, header.hero { scroll-margin-top: 64px; }
         <div class="c"><b>1B</b><span>FIXED SUPPLY<br />NO MINT · NO TAX</span></div>
       </div>
       <div class="rv">
-        <table class="alloc">
+        <table class="alloc" aria-label="Token allocation">
           <thead><tr><th>Allocation</th><th style="text-align:right;padding-right:18px">Share</th><th>How</th></tr></thead>
           <tbody id="allocBody"></tbody>
         </table>
