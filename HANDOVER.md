@@ -590,6 +590,20 @@ non oltre; uno, due, tre mesi non e' importante".
   mano (#327/#328 aperti per DeepSeek): le Actions fallivano tutte in 3 s dal
   29/09 01:20 UTC, deploy compreso — probabile limite billing, da sistemare a
   Lorenzo.
+- 29/09 Lorenzo: "tutti i token che entrano in top dovranno avere l'indagine
+  di deepseek nella tab why e info, come fatto per dregg" -> `top_fill`: ogni
+  minuto fino a 3 letture (giudice + codice) per i token della Top che non le
+  hanno, con quota giornaliera propria (`priority=True`); la pagina token
+  mostra giudice e codice anche per le righe del database.
+- 29/09 Lorenzo: "hatcher dice che sarebbe escluso e solo studied invece di
+  ranked, e poi me lo trovo nella top al primo posto. dai a deep seek anche il
+  compito di scansionare queste incongruenze". Regola: la Top E' la
+  classifica. Le righe del database con un motivo di esclusione restano fuori
+  (salvo ammissione del giudice); `projects_db.sync_top` segna "ranked" con la
+  posizione chi e' in Top e "studied" gli altri. `consistency.py`: DeepSeek
+  ogni 2 h legge Top + 30 migliori fuori e segnala contraddizioni (diario
+  Agent, `GET /api/onchain/consistency`), rimanda a rianalisi max 5 a giro.
+  Animazione "dall'ultima visita": parte solo quando la Top e' a schermo.
 - 28/09 Lorenzo: "DeepSeek [...] deve riesaminare i risultati che escono
   dalla top classifica e metterli in discussione [...] Clau Pump Tech ma
   che roba è, Leon AI sono nomi che non hanno senso". `judge.review_board`:
