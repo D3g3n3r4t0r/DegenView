@@ -72,7 +72,11 @@ def key_of(chain: str, token: str) -> str:
 def get(chain: str, token: str) -> dict | None:
     """I backtest di un token, nella forma di system.backtest_all."""
     r = _results.get(key_of(chain, token))
-    return r.get("backtests") if r else None
+    if not r or r.get("backtests") is None:
+        return None
+    # The daily trend follower sits next to the 5-minute results: without it
+    # every gem page said "No daily backtest on this gem yet".
+    return {**r["backtests"], "daily": r.get("daily")} if r.get("daily") else r["backtests"]
 
 
 def next_due(entries: list[dict], now: float) -> dict | None:
