@@ -1092,3 +1092,4 @@ html, body { overflow-x: clip; }
 /* Top: a row that loses its place breaks into particles (particles.js). */
 .fx-burst { position: fixed; pointer-events: none; z-index: 60; }
 .trow.rank-new { animation-delay: .45s; }
+.trow.rank-wait { visibility: hidden; }
