@@ -717,7 +717,8 @@ async def _ai_review_deepseek(token: dict, site: dict, prompt_head: str) -> dict
             [{"role": "system", "content": AI_SYSTEM + ' Answer with one JSON object only: {"legit": bool, "score": int, '
                                                       '"reason": string, "red_flags": [string]}.'},
              {"role": "user", "content": f"{prompt_head}\n\n<site_text>\n{text}\n</site_text>"}],
-            kind="scanner", max_tokens=200, json_mode=True)
+            kind="scanner", max_tokens=200, json_mode=True,
+            purpose="site_legit", subject=site.get("final_url"))
         out = json.loads(raw)
         out["score"] = max(0, min(10, int(out.get("score") or 0)))
     except Exception as exc:

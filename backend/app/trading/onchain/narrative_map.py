@@ -126,7 +126,7 @@ async def step(now: float | None = None, ask=None) -> dict[str, list[str]]:
         ids = [f"p{i}" for i in range(1, len(rows) + 1)]
         raw = await ask([{"role": "system", "content": SYSTEM},
                          {"role": "user", "content": brief(rows)}],
-                        kind="narratives", max_tokens=900, json_mode=True)
+                        kind="narratives", max_tokens=900, json_mode=True, purpose="narratives")
         valid = {n["key"] for n in narratives.catalog() if n["kind"] in ("gem", "meme")}
         found = parse(raw, ids, valid)
         written: dict[str, list[str]] = {}

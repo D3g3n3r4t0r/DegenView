@@ -170,7 +170,8 @@ async def step(top: list[dict], now: float | None = None, ask=None, requeue=None
         by_id = {f"r{i}": r for i, r in enumerate(rows, 1)}
         raw = await ask([{"role": "system", "content": SYSTEM},
                          {"role": "user", "content": brief(rows)}],
-                        kind="consistency", max_tokens=1500, json_mode=True)
+                        kind="consistency", max_tokens=1500, json_mode=True,
+                        purpose="consistency", subject=f"{len(rows)} projects")
         issues = parse(raw, set(by_id))
         rechecked = 0
         for it in issues:
@@ -184,7 +185,7 @@ async def step(top: list[dict], now: float | None = None, ask=None, requeue=None
                     logger.exception("coerenza: rianalisi non messa in coda per %s", r.get("symbol"))
                 rechecked += it["requeued"]
             deepseek_desk.note("consistency", f"{r.get('symbol') or '?'}: {it['problem']}",
-                               outcome="re-analysis queued" if it["requeued"] else "reported")
+                               outcome="re-analysis queued" if it["requeued"] else "reported", tally=False)
         _state["run"] = {"at": now, "checked": len(rows), "issues": issues}
         _save()
         return issues
