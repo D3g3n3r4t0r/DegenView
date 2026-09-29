@@ -2317,5 +2317,10 @@
     "status": "risolto",
     "at": 1790682540,
     "summary": "Negli alert Telegram (meme, gemme e operazioni del wallet simulato) il ticker e' un link: apre l'app nella sezione giusta direttamente sulla pagina di quel token (chain + indirizzo). Nella pagina del token, accanto al ticker, c'e' un tasto con l'inizio e la fine dell'indirizzo: toccandolo copia l'indirizzo completo e diventa verde con 'copied' (funziona anche nel browser di Telegram). Se il browser di Telegram chiede di nuovo il login, e' la questione ancora aperta dell'accesso da Telegram."
+  },
+  "seed-0227": {
+    "status": "risolto",
+    "at": 1790682736,
+    "summary": "Il tasto condividi nella pagina del token manda il link dell'app a quel token (non piu' il grafico esterno), con il menu di condivisione del telefono; dove non c'e', copia il link e il tasto diventa verde. Chi lo apre loggato arriva dritto su quel token; chi non e' loggato fa il login e poi ci arriva lo stesso."
   }
 }
