@@ -644,6 +644,13 @@ non oltre; uno, due, tre mesi non e' importante".
     contratto/wallet. Prossimo: deploy, poi studio 002 con
     `follow_up: 001-gem-models`, verificarlo, e solo dopo tradurlo in
     profilo di somiglianza + query di ricerca.
+    Studio 002 (`.github/deepseek/studi/002-gem-models-fresh.md`):
+    usabile in parte. Applicato: bonus "primitive nominate" nel reader
+    (fuori da MAX_POINTS, e' un bonus), tokenomics da GeckoTerminal quando
+    GoPlus non ha il token (holder + top10 informativo, max 65), 12 query
+    GitHub in discovery. Scartati: soglie holder>=400 e liq/cap>=0.09
+    (cucite sui 6 esempi), penalita' LP non bloccata, esclusione PFWA
+    come meme. BV7X: repo linkati privati -> GitHub "missing", non fatale.
 - 28/09 Lorenzo: "DeepSeek [...] deve riesaminare i risultati che escono
   dalla top classifica e metterli in discussione [...] Clau Pump Tech ma
   che roba è, Leon AI sono nomi che non hanno senso". `judge.review_board`:

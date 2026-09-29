@@ -111,6 +111,42 @@ _SCAM_WEAK = re.compile(r"\b(passive income|claim (?:your )?airdrop|presale (?:i
                         r"limited spots|act now|last chance|early investors will)\b", re.I)
 _CLONE_SELF = re.compile(r"\b(fork of|forked from|clone of|copy of)\b", re.I)
 
+# Named, checkable technical primitives (study 002): a project that names
+# them can be verified against the spec, one that says "AI-powered" cannot.
+# A bonus, not a must-have. Short acronyms match case-sensitively so "tee",
+# "mcp" or "fhe" inside ordinary words or lowercase prose do not count.
+# Wormhole is left out on purpose: it marks bridged copies elsewhere.
+_I = re.I
+_PRIMITIVES: tuple[tuple[str, re.Pattern], ...] = tuple((label, re.compile(rx, flags)) for label, rx, flags in (
+    ("x402", r"\bx402\b", _I),
+    ("ERC-8004", r"\berc[- ]?8004\b", _I),
+    ("ERC-4337", r"\berc[- ]?4337\b", _I),
+    ("EAS", r"\bEAS\b|(?i:\bethereum attestation service\b)", 0),
+    ("MCP", r"\bMCP\b|(?i:\bmodel context protocol\b)", 0),
+    ("A2A", r"\bA2A\b", 0),
+    ("MPC", r"\bMPC\b", 0),
+    ("TEE", r"\bTEEs?\b", 0),
+    ("FHE", r"\bFHE\b", 0),
+    ("LayerZero", r"\blayer ?zero\b", _I),
+    ("Turnkey", r"\bTurnkey\b(?! (?:solutions?|platforms?|services?|products?|packages?)\b)", 0),
+    ("Umbra", r"\bUmbra\b", 0),
+    ("zkVM", r"\bzkvms?\b", _I),
+    ("STARK", r"\b(?:zk-?)?STARKs?\b", 0),
+    ("SNARK", r"\b(?:zk-?)?SNARKs?\b", 0),
+    ("Lean 4", r"\bLean ?4\b", 0),
+    ("Polymarket", r"\bpolymarket\b", _I),
+    ("Chainlink", r"\bchainlink\b", _I),
+    ("EigenLayer", r"\beigen ?layer\b", _I),
+    ("Pyth", r"\bPyth\b", 0),
+    ("Hyperlane", r"\bhyperlane\b", _I),
+))
+
+
+def primitives(text: str) -> list[str]:
+    """Distinct named primitives in the text, in the table's order."""
+    return [label for label, rx in _PRIMITIVES if rx.search(text or "")]
+
+
 _STOP = set("""the and for with that this from your you our are was were will have has not but all can its
 into their they them than then there these those about which when where what while also more most such
 only over just like each other some many any very using used use based built make makes made one two""".split())
@@ -124,6 +160,11 @@ W_UTILITY = 10                    # full at two roles
 W_INFO, K_INFO = 10, 60           # distinct content words
 W_COHERENT = 5
 W_CANDOR = 8                      # full at two distinct statements of limits
+# Full at two distinct named primitives. A bonus on top, left out of
+# MAX_POINTS on purpose: in the denominator it would lower every project
+# that names none (study 002: not a must-have) and even one that names a
+# single primitive (Solrouter, TEE: 75.5 -> 73.6, gem -> promising).
+W_PRIMITIVES = 8
 MAX_POINTS = W_DEPTH + W_CONCRETE + max(W_STAGE.values()) + W_UTILITY + W_INFO + W_COHERENT + W_CANDOR
 BUZZ_PENALTY = 20                 # times the buzzword share
 HYPE_PENALTY, HYPE_CAP = 8, 30
@@ -266,6 +307,7 @@ def read(description: str, site_texts: list[str], *, name: str = "", symbol: str
     st, st_ev = stage(text, app_ok, deployed)
     roles = token_utility(text, symbol)
     candor = len(set(m.lower() for m in _CANDOR.findall(text)))
+    prims = primitives(text)
     info = len(content_words(text))
     plain = not_legal(text)
     buzz = len(_BUZZ.findall(plain))
@@ -284,6 +326,7 @@ def read(description: str, site_texts: list[str], *, name: str = "", symbol: str
         "info": W_INFO * _sat(info, K_INFO),
         "coherence": W_COHERENT if coherence is not None and coherence >= COHERENCE_MIN else 0,
         "candor": W_CANDOR * min(candor, 2) / 2,
+        "primitives": W_PRIMITIVES * min(len(prims), 2) / 2,
     }
     buzz_share = buzz / (buzz + n_concepts) if buzz + n_concepts else 0.0
     penalty = {"buzz": BUZZ_PENALTY * buzz_share, "hype": min(HYPE_CAP, HYPE_PENALTY * hype),
@@ -323,12 +366,15 @@ def read(description: str, site_texts: list[str], *, name: str = "", symbol: str
            f"stage {st}", f"token: {', '.join(roles)}" if roles else "token has no stated role"]
     if candor:
         why.append("states its own limits")
+    if prims:
+        why.append("named primitives: " + ", ".join(prims))
     return {
         "summary": summary(description, site), "stage": st, "substance": round(points / 10),
         "original": not clone, "verdict": verdict, "red_flags": flags[:5],
         "points": round(points, 1), "why": why,
         "parts": {k: round(v, 1) for k, v in {**parts, **{f"-{k}": v for k, v in penalty.items()}}.items()},
         "evidence": {"concepts": found, "concrete": concrete[:8], "stage": st_ev, "utility": roles,
+                     "primitives": prims,
                      "coherence": None if coherence is None else round(coherence, 3),
                      "twin": twin if twin_sim >= CLONE_SIMILARITY else None, "twin_similarity": round(twin_sim, 2)},
         "sketch": print_,
