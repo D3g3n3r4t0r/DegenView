@@ -138,6 +138,7 @@ _PRIMITIVES: tuple[tuple[str, re.Pattern], ...] = tuple((label, re.compile(rx, f
     ("Chainlink", r"\bchainlink\b", _I),
     ("EigenLayer", r"\beigen ?layer\b", _I),
     ("Pyth", r"\bPyth\b", 0),
+    ("Ondo", r"\bOndo\b", 0),
     ("Hyperlane", r"\bhyperlane\b", _I),
 ))
 

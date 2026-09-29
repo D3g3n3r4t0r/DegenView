@@ -23,6 +23,10 @@ from app.trading.onchain import storage
 logger = logging.getLogger(__name__)
 
 TTL_S = 3 * 86400
+# Readings under an older prompt are redone (2, 29/09: contracts are not
+# whales, unlocked v4 liquidity is normal, named integrations count; GRID
+# was judged "avoid" on exactly those points).
+PROMPT_VERSION = 2
 DAILY_MAX = 600           # ~$0.001 a reading: every project past the filters gets its report
 ADMIT_MIN = 80
 VETO_MIN_CONF = 0.7
@@ -53,6 +57,11 @@ SYSTEM = (
     "(7) Telegram, when given, is the project's own channel: steady posts with real updates from the team "
     "mean it is building; a big subscriber count with tiny views, or only hype and shill posts, means an "
     "inflated audience; silence by itself is not a flaw for a builder. "
+    "(8) Holder concentration counts wallets only: the share held by contracts is pools, vesting or "
+    "launchpads, not a whale. On Robinhood Chain and other Uniswap v4 pools liquidity is normally not locked, "
+    "so unlocked liquidity there is not a problem by itself. "
+    "(9) Named integrations with known protocols (e.g. Ondo for tokenized stocks, LayerZero, Chainlink) are a "
+    "strength when the product text says what it uses them for; a bare logo wall is a weak claim. "
     "Answer with one JSON object only: {\"score\": 0-100, \"verdict\": \"gem\"|\"watch\"|\"avoid\"|\"scam\", "
     "\"confidence\": 0-1, \"problems\": [up to 5 short strings], \"strengths\": [up to 5 short strings], "
     "\"admit_reason\": \"one sentence, only if a rule excluded it but it deserves the board, else empty\"}."
@@ -195,7 +204,7 @@ async def judge(e: dict, rules_why: str, now: float | None = None, ask=None,
     key = f"{e['chain']}:{e['token_address']}"
     now = now or time.time()
     hit = _cache.get(key)
-    if hit and now - hit.get("at", 0) < TTL_S:
+    if hit and now - hit.get("at", 0) < TTL_S and hit.get("v") == PROMPT_VERSION:
         return hit
     day = time.strftime("%Y-%m-%d", time.gmtime(now))
     count = f"{day}:top" if priority else day
@@ -229,7 +238,7 @@ async def judge(e: dict, rules_why: str, now: float | None = None, ask=None,
     if parsed is None:
         return None
     _calls[count] = _calls.get(count, 0) + 1
-    parsed["at"] = now
+    parsed["at"], parsed["v"] = now, PROMPT_VERSION
     if x:
         parsed["x"] = {k: x[k] for k in ("posts_7d", "authors", "median_followers")}
     if tg:
