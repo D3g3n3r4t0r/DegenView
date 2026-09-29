@@ -617,7 +617,6 @@ document.querySelectorAll(".tabs[data-tabs]").forEach((nav) => {
   const first = VIEWS.includes(hash) ? hash : document.documentElement.dataset.section === "gems" && /gem/i.test(hash) ? "gems" : "meme";
   view.shell.dataset.view = first;  // same view on both sides: no transition on load
   setView(first);
-  openFromHash();
 }
 // Search: straight to the swap with the token picker open.
 dockSearch?.addEventListener("click", () => {
@@ -747,6 +746,9 @@ async function boot() {
 
   paintChainStatic();
   loadChainData();
+  // A shared or Telegram link to a token opens it once signed in, so the
+  // destination survives the login screen.
+  openFromHash();
 }
 
 boot();
