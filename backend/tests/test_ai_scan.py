@@ -41,7 +41,7 @@ def test_batches_of_ten_one_call_each_and_judged_once(monkeypatch):
         _alert(i, now - 60)
     calls = []
 
-    async def fake(messages, *, kind, max_tokens, json_mode):
+    async def fake(messages, *, kind, max_tokens, json_mode, **_):
         lines = messages[1]["content"].split("Tokens:\n", 1)[1].splitlines()
         calls.append(len(lines))
         assert kind == "scanner" and json_mode and messages[0]["content"] == ai_scan.SYSTEM
@@ -87,7 +87,7 @@ def test_gem_site_on_deepseek_is_cached_and_does_not_block(monkeypatch):
     monkeypatch.setattr(legit.settings, "legit_ai_gate", False)
     sent = []
 
-    async def fake(messages, *, kind, max_tokens, json_mode):
+    async def fake(messages, *, kind, max_tokens, json_mode, **_):
         sent.append(messages[1]["content"])
         return json.dumps({"legit": False, "score": 2, "reason": "template page", "red_flags": ["no product"]})
     monkeypatch.setattr(deepseek_desk, "ask", fake)
@@ -117,7 +117,7 @@ def test_paid_deep_reading_runs_on_deepseek_without_an_anthropic_key(monkeypatch
     monkeypatch.setattr(legit.settings, "anthropic_api_key", "")
     monkeypatch.setattr(legit.settings, "deepseek_api_key", "k")
 
-    async def fake(messages, *, kind, max_tokens, json_mode):
+    async def fake(messages, *, kind, max_tokens, json_mode, **_):
         assert kind == "research" and '"verdict"' in messages[0]["content"]
         return json.dumps({"summary": "s", "stage": "live", "substance": 14, "original": True, "verdict": "promising",
                            "red_flags": []})
@@ -140,7 +140,7 @@ def test_deepseek_has_half_the_say_on_a_gem_finalist(monkeypatch):
     research._calls.clear()
     calls = []
 
-    async def fake(prompt):
+    async def fake(prompt, subject=None):
         calls.append(prompt)
         return {"substance": 6, "verdict": "promising", "red_flags": []}
     monkeypatch.setattr(research, "_dossier_deepseek", fake)

@@ -4623,6 +4623,16 @@ async def agent_log(limit: int = 100, before: float | None = None,
     return {"items": deepseek_desk.log(limit=min(limit, 300), before=before)}
 
 
+@app.get("/api/agent/calls")
+async def agent_calls(days: float = 7, recent: int = 0, user: User = Depends(auth.get_current_user)) -> dict:
+    """Every DeepSeek call by purpose: repeats, failures, cache (issue #358, I00)."""
+    from app.notify import deepseek_calls
+    out = deepseek_calls.stats(days=max(0.1, min(days, 60)))
+    if recent:
+        out["recent"] = deepseek_calls.recent(min(recent, 300))
+    return out
+
+
 class ScanRequest(BaseModel):
     query: str
 
