@@ -65,6 +65,12 @@ class Settings(BaseSettings):
     # (legit.ai_review); its verdict shows on the report card and blocks
     # only with this on, once its record says it can be trusted.
     legit_ai_gate: bool = False
+    # Meme coins back in the Meme alerts (Lorenzo, 29/09: "riattiviamo le
+    # memecoin per gli alert [...] cercando di evitare i rugpull"): a meme
+    # name, no website and a low DeepSeek grade no longer block; the rug
+    # checks (RugCheck, GoPlus, holders, locked liquidity) still do. False
+    # puts back the old gate (project site + DeepSeek pass).
+    listings_allow_memes: bool = True
     # The daily reviewer (app/trading/onchain/ai_review.py): once a day
     # Claude reads what really happened to the signals and writes lessons.
     # Request: "un'istanza di claude sonnet nel server [...] con un massimo di
