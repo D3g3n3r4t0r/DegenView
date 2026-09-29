@@ -3987,3 +3987,11 @@ Lorenzo ha incollato il messaggio di ChatGPT (PR #383, mergiata come asset). Int
 - Podio (`podium.js`, `app.css`): stesso cubo cyberpunk approvato il 28/09, ma ora parte da 27 moduli che si assemblano 3-2-1 (l'"engine boot" del kit, ~1.5 s), poi fessura e testa. Contratto invariato (`still`, `.pc-slot` 1/2/3, `data-open`, `pc-taken`). Still/reduced motion: solo cubo pieno.
 - Top (`top.js`): prima della prima classifica il posto del podio mostra il cubo in stato loading, "Reconnecting…" se la richiesta fallisce senza dati.
 Scartato per ora: hero WebGL (three.js da CDN + GLB 2 MB, etichette in italiano) per la landing, podio 3D (il kit stesso consiglia SVG nella lista compatta), galleria Top con dati demo. Possibile prossimo passo: hero della landing con l'assemble SVG di motion.js invece del WebGL.
+
+### 2026-09-30 — Desktop refinement (mobile frozen)
+Lorenzo: "il mobile non toccarlo per ora", then "fai rifiniture".
+Added desktop-only rules (min-width:1100px) to ui-refinements.css: compact 136px page introduction, 38px rank cubes, denser selected token rows, a larger chart, compact Scout status and activity ledger, quieter empty-wallet action, and a small desktop height variant. No mobile CSS or transaction logic changed in this refinement. Earlier uncommitted mobile redesign work still exists in the branch and must not be treated as newly approved for deployment.
+Preview uses local synthetic read-only fixtures. Checked desktop at 1440x1000 and 1280x800, with no observed horizontal overflow; no production financial actions tested. Final publication and full integration review remain pending. See docs/engn-ui/INTEGRATION.md for the user's requirement to preserve the supplied visuals exactly.
+
+### Delivery scope — 2026-09-30
+Lorenzo requested "pusha e fai applicare a claude". Deliver the desktop design faithfully using docs/engn-ui/INTEGRATION.md and its screenshot. New stylesheet links are desktop-gated at 1100px; mobile experimental styles must not be enabled. Main has advanced while this design was reviewed: reconcile latest functionality without redesigning the desktop, and preserve the current mobile implementation. Shared Scout copy remains intentional. No auto-merge or production transaction test was performed by Codex.

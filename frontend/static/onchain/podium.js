@@ -56,7 +56,7 @@ function modules(b) {
 
 /** The logo's cube: top face, two side faces, the slit and its glow. */
 function cube(rank, assemble) {
-  const b = BODY[rank];
+  const b = matchMedia("(min-width:1100px)").matches ? 48 : BODY[rank];
   const s = Math.round(b * 0.42);
   const H = 36 + b + 1;
   const slit = `M1 ${18 + s} L50 ${36 + s} L99 ${18 + s}`;

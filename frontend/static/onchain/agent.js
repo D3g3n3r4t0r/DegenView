@@ -26,12 +26,12 @@ const ago = (t) => {
 };
 
 function sayings() {
-  if (!data) return ["Agent starting"];
+  if (!data) return ["Scout connecting"];
   const out = (data.items ?? []).slice(0, 6).map((a) => a.text);
   if (data.watching) out.push(`Watching ${data.watching} alerts`);
   const judged = data.today?.scanner ?? 0;
   if (judged) out.push(`${judged} token checks today`);
-  return out.length ? out : [data.active ? "Agent watching" : "Agent offline"];
+  return out.length ? out : [data.active ? "Scout watching" : "Scout offline"];
 }
 
 function say() {
@@ -142,7 +142,7 @@ function paint() {
   if (!list) return;
   list.innerHTML = viewItems.length
     ? viewItems.map(entryHtml).join("")
-    : `<li class="ag-empty">Nothing yet today: it backtests a token every minute.</li>`;
+    : `<li class="ag-empty">No activity recorded yet today.</li>`;
   const more = viewEl.querySelector("[data-ag-more]");
   if (more) more.hidden = viewItems.length < 60;
 }
@@ -204,6 +204,13 @@ function paintProgress() {
   }));
 }
 
+function viewFeedback(message = "") {
+  const notice = viewEl?.querySelector("[data-ag-feedback]");
+  if (!notice) return;
+  notice.textContent = message;
+  notice.hidden = !message;
+}
+
 async function loadView() {
   if (viewBusy) return;
   viewBusy = true;
@@ -213,8 +220,13 @@ async function loadView() {
     viewItems = log.items ?? [];
     paint();
     paintHero();
+    viewFeedback();
   } catch {
-    /* keep what is on screen */
+    viewFeedback("Activity could not be loaded. Scout will retry automatically.");
+    const status = viewEl?.querySelector("[data-ag-status]");
+    if (status) status.textContent = "Connection unavailable";
+    const today = viewEl?.querySelector("[data-ag-today]");
+    if (today) today.textContent = "Today's activity is not available yet.";
   } finally {
     viewBusy = false;
   }
@@ -225,6 +237,7 @@ async function refreshView() {
   viewBusy = true;
   try {
     const [info, log] = await Promise.all([api.getAgent(), api.getAgentLog()]);
+    const firstResponse = !viewData;
     viewData = info;
     const fresh = (log.items ?? []).filter((a) => !viewItems.some((b) => b.t === a.t));
     if (fresh.length) {
@@ -236,9 +249,13 @@ async function refreshView() {
         list.querySelectorAll(".ag-card").forEach((c, i) => { if (i < fresh.length) c.classList.add("is-new"); });
       }
     }
+    if (firstResponse) paint();
     paintHero();
+    viewFeedback();
   } catch {
-    /* keep what is on screen */
+    viewFeedback(viewData
+      ? "Updates interrupted. Showing the last received activity; retrying automatically."
+      : "Activity could not be loaded. Scout will retry automatically.");
   } finally {
     viewBusy = false;
   }
@@ -265,14 +282,16 @@ export function mountAgentView() {
   viewEl.innerHTML = `
     <div class="ag-hero">
       <div class="ag-orb" data-state="off" aria-hidden="true"><i></i><i></i><i></i><span></span></div>
-      <h2>DeepSeek</h2>
-      <p class="ag-status" data-ag-status>Off</p>
-      <p class="ag-today" data-ag-today>Nothing yet today</p>
+      <h2>Scout</h2>
+      <p class="ag-status" data-ag-status>Connecting</p>
+      <p class="ag-today" data-ag-today>Loading activity…</p>
       <p class="ag-prio" data-ag-prio hidden></p>
     </div>
     <div class="ag-prog" data-ag-prog></div>
     <div class="ag-now" data-ag-now hidden></div>
-    <ul class="ag-list" data-ag-list></ul>
+    <h3 class="ag-list-title">Activity</h3>
+    <p class="ag-feedback" data-ag-feedback role="status" hidden></p>
+    <ul class="ag-list" data-ag-list aria-label="Scout activity"></ul>
     <button type="button" class="ag-more" data-ag-more hidden>Load earlier</button>`;
   viewEl.querySelector("[data-ag-more]")?.addEventListener("click", loadEarlier);
   loadView();
