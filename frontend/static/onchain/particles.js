@@ -24,12 +24,14 @@ function drawText(ctx, el, origin) {
   ctx.fillText(el.textContent.trim().replace(/\s+/g, " "), r.left - origin.left, r.top - origin.top + r.height / 2);
 }
 
-/** Snapshot `row` now (before it is replaced) and play the burst over its place. */
-export function disintegrate(row) {
-  if (!row || reduced()) return;
+/** Snapshot `row` now (before it is replaced) and play the burst over its
+ *  place. Resolves when the burst is over (at once when there is nothing to
+ *  play), so a sequence can wait for each one. */
+export function disintegrate(row, ms = DURATION_MS) {
+  if (!row || reduced()) return Promise.resolve();
   // A hidden ghost (top.js) is measured and drawn, never shown itself.
   const rect = row.getBoundingClientRect();
-  if (!rect.width || !rect.height || rect.bottom < 0 || rect.top > innerHeight) return;
+  if (!rect.width || !rect.height || rect.bottom < 0 || rect.top > innerHeight) return Promise.resolve();
   const pad = 48;
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const w = Math.ceil(rect.width + pad * 2);
@@ -66,7 +68,7 @@ export function disintegrate(row) {
     if (parts.length <= MAX_PARTICLES || step >= 6) break;
     step += 1;
   }
-  if (!parts.length) return;
+  if (!parts.length) return Promise.resolve();
   for (const p of parts) {
     // Left to right, like ash blown off the row.
     p.delay = (p.x / w) * 0.45 + Math.random() * 0.12;
@@ -85,8 +87,9 @@ export function disintegrate(row) {
   const ctx = cv.getContext("2d");
   ctx.scale(dpr, dpr);
   const t0 = performance.now();
+  return new Promise((done) => {
   const frame = (now) => {
-    const t = (now - t0) / DURATION_MS;
+    const t = (now - t0) / ms;
     ctx.clearRect(0, 0, w, h);
     for (const p of parts) {
       const k = Math.max(0, Math.min(1, (t - p.delay) / (1 - p.delay)));
@@ -97,7 +100,8 @@ export function disintegrate(row) {
       ctx.fillRect(p.x + p.vx * e, p.y + p.vy * e, p.s * (1 - k * 0.5), p.s * (1 - k * 0.5));
     }
     if (t < 1) requestAnimationFrame(frame);
-    else cv.remove();
+    else { cv.remove(); done(); }
   };
   requestAnimationFrame(frame);
+  });
 }
