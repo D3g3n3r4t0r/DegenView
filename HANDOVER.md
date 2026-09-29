@@ -3979,3 +3979,11 @@ Lorenzo ha chiesto un pacchetto dal suo cubo Meshy: "da inserire in più contest
 Consegnato in `design/engn-motion-kit/`: galleria responsive, 12 SVG e web component di stato, hero 3D con assemblaggio di 3 secondi, podio 3D con lo stesso GLB, prototipo Top 15/25/50 e adattatore del contratto renderPodium. GLB ottimizzato a 1.999 MB; texture originali ridotte a 1024 px, taglio in 27 moduli e rimozione della pedana. `CLAUDE.md` nella cartella contiene la mappa di integrazione verificata su podium.js, top.js e app.css (desktop >=1100, rail >=1360, lista 420 px).
 
 Stato: pacchetto di design e prototipi, NON integrato nel frontend di produzione. Nessun import live, backend, ranking o flusso wallet modificato. Dati della galleria dichiarati illustrativi. Controllati desktop 1440x1000, mobile 390x844 senza overflow, Top 25/50, ricerca, evento di selezione, progress e error; limiti in QA.md. Prossimo passo per Claude: seguire il workflow della repository, integrare a piccoli passi preservando data-open, .pc-slot in ordine 1/2/3, still, tokenRow, filtri e logica seen/onScreen. Non sostituire il terminale desktop con la galleria a tutta larghezza.
+
+### 2026-09-29 — Motion kit integrato (thread "Kit animazioni ChatGPT")
+
+Lorenzo ha incollato il messaggio di ChatGPT (PR #383, mergiata come asset). Integrato a mano (Actions ferme per minuti, niente chiave DeepSeek in locale):
+- `frontend/static/onchain/motion.js`: web component `<engn-motion>` dal kit, testi in inglese; corrette le due animazioni che non erano transform/opacity (`ignite` su stroke-width, `ripple` su r).
+- Podio (`podium.js`, `app.css`): stesso cubo cyberpunk approvato il 28/09, ma ora parte da 27 moduli che si assemblano 3-2-1 (l'"engine boot" del kit, ~1.5 s), poi fessura e testa. Contratto invariato (`still`, `.pc-slot` 1/2/3, `data-open`, `pc-taken`). Still/reduced motion: solo cubo pieno.
+- Top (`top.js`): prima della prima classifica il posto del podio mostra il cubo in stato loading, "Reconnecting…" se la richiesta fallisce senza dati.
+Scartato per ora: hero WebGL (three.js da CDN + GLB 2 MB, etichette in italiano) per la landing, podio 3D (il kit stesso consiglia SVG nella lista compatta), galleria Top con dati demo. Possibile prossimo passo: hero della landing con l'assemble SVG di motion.js invece del WebGL.
