@@ -1019,3 +1019,7 @@ html, body { overflow-x: clip; }
     & button[aria-pressed="true"] { color: var(--bg); background: var(--accent); border-color: var(--accent); }
     & button[aria-pressed="true"] small { color: inherit; opacity: .75; } }
 }
+
+/* Top narrowed by narrative: the chip that clears it */
+.top-narr-clear { font: inherit; font-size: 12px; padding: 2px 10px; margin-inline-end: 4px; border-radius: 999px;
+  border: 1px solid var(--accent); background: transparent; color: var(--accent); cursor: pointer; }
