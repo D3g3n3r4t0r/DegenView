@@ -19,7 +19,7 @@ def check_per_trade_cap(size_usd: float) -> tuple[bool, str]:
 
 
 def check_daily_cap(owner_id: str, chain: str, size_usd: float) -> tuple[bool, str]:
-    spent = ledger.get_daily_spent(owner_id, chain)
+    spent = ledger.get_daily_spent(owner_id, chain) + ledger.in_flight_usd(owner_id, chain)
     if spent + size_usd > settings.onchain_max_usd_per_day:
         return False, (
             f"would spend {spent + size_usd:.2f} USD today on {chain}, "
@@ -70,6 +70,37 @@ def check_discrepancy(owner_id: str, chain: str, token: str) -> tuple[bool, str]
             f"{token} on {chain} has an open, unreviewed balance discrepancy — "
             "new orders blocked until it is reviewed manually"
         )
+    return True, ""
+
+
+def _wallet_enabled(owner_id: str, chain: str) -> bool:
+    """Read fresh on every call: the switch can be flipped while a quote or
+    a signature is in flight."""
+    from app import auth
+    user = auth.get_user(owner_id)
+    wallet = user.onchain_wallets.get(chain) if user else None
+    return bool(wallet and wallet.enabled)
+
+
+def check_wallet_enabled(owner_id: str, chain: str) -> tuple[bool, str]:
+    if not _wallet_enabled(owner_id, chain):
+        return False, f"the {chain} wallet is switched off: no new orders until it is switched back on"
+    return True, ""
+
+
+def run_safety_checks(owner_id: str, chain: str, token: str) -> tuple[bool, str]:
+    """The checks no caller may skip, not even the autotrader's guards=False
+    (audit 29/09, S01): wallet switch, circuit breaker, open discrepancy.
+    guards=False drops the economic limits (caps, impact, concentration,
+    pool), never the emergency stops."""
+    for check, args in (
+        (check_wallet_enabled, (owner_id, chain)),
+        (check_circuit_breaker, (owner_id, chain)),
+        (check_discrepancy, (owner_id, chain, token)),
+    ):
+        ok, reason = check(*args)
+        if not ok:
+            return False, reason
     return True, ""
 
 

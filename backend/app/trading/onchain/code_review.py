@@ -106,7 +106,10 @@ async def fetch_code(full_name: str, client) -> dict | None:
     branch = repo.get("default_branch") or "main"
     pushed_at = repo.get("pushed_at")
     readme = ""
-    r = await legit.gh_get(client, f"{base}/repos/{full_name}/readme", headers=legit._gh_headers(), timeout=8.0)
+    # The raw media type returns the Markdown itself; the default JSON one is
+    # a base64 container (audit 29/09, M07).
+    r = await legit.gh_get(client, f"{base}/repos/{full_name}/readme",
+                           headers={**legit._gh_headers(), "Accept": "application/vnd.github.raw+json"}, timeout=8.0)
     if r is not None and r.status_code == 200:
         readme = _cut(r.text, README_CHARS)
     r = await legit.gh_get(client, f"{base}/repos/{full_name}/git/trees/{branch}?recursive=1",

@@ -53,7 +53,10 @@ async def _solana_signature_status(signature: str) -> str:
     result = values[0] if values else None
     if result is None:
         return "pending"
-    return "failed" if result.get("err") is not None else "confirmed"
+    if result.get("err") is not None:
+        return "failed"
+    # "processed" can still be dropped by a fork: only confirmed/finalized count.
+    return "confirmed" if result.get("confirmationStatus") in ("confirmed", "finalized") else "pending"
 
 
 async def _evm_receipt_status(tx_hash: str) -> str:

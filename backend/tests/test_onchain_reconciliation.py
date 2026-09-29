@@ -50,7 +50,7 @@ def test_confirmed_solana_signature_moves_order_out_of_pending(tmp_path, monkeyp
     ledger.mark_submitted("k1", "sig-ok")
 
     def _responder(url, payload):
-        return {"result": {"value": [{"err": None}]}}
+        return {"result": {"value": [{"err": None, "confirmationStatus": "confirmed"}]}}
 
     _patch_post(monkeypatch, reconciliation, _responder)
 
@@ -141,7 +141,7 @@ def test_reconciliation_never_calls_signing_or_send(tmp_path, monkeypatch):
     monkeypatch.setattr(execution, "build_signed_solana_swap", _spy)
 
     def _responder(url, payload):
-        return {"result": {"value": [{"err": None}]}}
+        return {"result": {"value": [{"err": None, "confirmationStatus": "confirmed"}]}}
 
     _patch_post(monkeypatch, reconciliation, _responder)
     _run(reconciliation.reconcile_pending_orders("u1", "solana"))

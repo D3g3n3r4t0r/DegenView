@@ -39,7 +39,9 @@ async def send_token(
     # guardrail automatico puo' validare, e' la responsabilita' di chi
     # firma: lo stesso principio per cui un wallet vero non "capisce" se
     # un indirizzo e' giusto).
-    ok, reason = risk.run_all_checks(owner_id, chain, token_label, notional_usd, 0.0, strategy_name="manuale")
+    ok, reason = risk.run_safety_checks(owner_id, chain, token_label)
+    if ok:
+        ok, reason = risk.run_all_checks(owner_id, chain, token_label, notional_usd, 0.0, strategy_name="manuale")
     if not ok:
         logger.warning("[%s] rifiutato dal risk guardrail: %s", correlation_id, reason,
                         extra={"correlation_id": correlation_id})
@@ -82,6 +84,12 @@ async def send_token(
         ledger.mark_failed(idempotency_key, "esecuzione reale disattivata (onchain_execution_enabled=False)")
         return {"accepted": False, "reason": "live execution disabled on this server",
                 "idempotency_key": idempotency_key, "tx_signature": None, "correlation_id": correlation_id}
+
+    ok, reason = risk.run_safety_checks(owner_id, chain, token_label)
+    if not ok:
+        ledger.mark_failed(idempotency_key, reason)
+        return {"accepted": False, "reason": reason, "idempotency_key": idempotency_key, "tx_signature": None,
+                "correlation_id": correlation_id}
 
     try:
         signature = (

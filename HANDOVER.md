@@ -12,6 +12,14 @@ lavori pluri-sessione, decisioni prese, stato di piani approvati.
 
 ---
 
+## Audit di sicurezza di ChatGPT/Codex — 2026-09-29
+
+Lorenzo, 29/09: "ho fatto pubblicare a CHAT GPT degli audit su github". Sono in PR #348 (`docs/audits/2026-09-29/`: AUDIT_SICUREZZA, ANALISI_E_PESI, PIANO_CLAUDE, prove offline) e issue #347 (piano).
+Verificati sul codice: S01-S07 veri; M01/M02/M05/M07 veri; M03 (DREGG esente), M06 (Top piu' larga di Gems), M08 (somiglianza al benchmark) sono scelte di Lorenzo, non bug: decide lui.
+Corretto a mano (PR del branch `claude/project-thread-hs1t12`): interruttore del wallet, circuit breaker e discrepanze applicati a ogni invio compreso l'autotrader (`guards=False` salta solo i limiti economici) e ricontrollati subito prima del broadcast (`risk.run_safety_checks`); la riduzione al pool rifiuta invece di firmare l'importo pieno; doppia conferma non raddoppia la posizione; il tetto giornaliero conta gli ordini in volo; Solana `processed` non e' ancora confermata; README letto in Markdown (M07).
+Resta (in ordine): S04 vero (ack = submitted, fill letti dalla chain), S02 prezzo/quantita' dal server e non dal client, S03 chiave d'intento stabile, S05 passkey nuova solo con fattore gia' fidato, S06 revoca sessioni al logout, S07 AEAD con chiave separata (migrazione dei wallet: delicata), poi M01/M02 (dato mancante != controllo passato).
+Le Actions falliscono in 3 s senza avviare step (anche la DeepSeek review e il deploy): per questo scritto a mano e deploy dal PC di Lorenzo.
+
 ## Versione desktop dell'app on-chain — 2026-09-29
 
 Lorenzo, 29/09: "comunque se hai html di fomo app procedi a fare la versione desktop" (zip della pagina token di FOMO, solo come ispirazione: lista a sinistra, pagina token al centro, compra a destra, sezioni nella testata).
