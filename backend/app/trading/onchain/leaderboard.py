@@ -139,10 +139,11 @@ DISCOVERY_SLOW_S = 6 * 3600
 CODE_RETRY_S = 6 * 3600        # a failed reading waits: GitHub allows few calls an hour
 # Without public code a project ranks below an equal one that shows it.
 NO_GITHUB_PENALTY = 10.0
-RULES_VERSION = 6              # 2: "no GitHub" stopped being a ban; 3: radar launches out;
+RULES_VERSION = 7              # 2: "no GitHub" stopped being a ban; 3: radar launches out;
                                # 4: research read by reader.py, older bans and readings dropped;
                                # 5: reader recognises research-stage code and stated limits
                                # 6: no age limits, strict band from $100k to $2M, one rule chain
+                               # 7: private linked repos are missing code, GeckoTerminal tokenomics
 
 _entries: dict[str, dict] = {}     # chain:token
 _excluded: list[dict] = []
@@ -179,6 +180,16 @@ def _load() -> None:
             for e in _entries.values():
                 (e.get("pillars") or {}).pop("site", None)
                 (e.get("checked_at") or {}).pop("site", None)
+        if rules < 7:
+            # "GitHub link without a repository" was private repos (BV7X), and a
+            # tokenomics pending on GoPlus now falls back to GeckoTerminal.
+            for e in _entries.values():
+                p = e.get("pillars") or {}
+                for name, stale in (("github", (p.get("github") or {}).get("fatal") == "GitHub link without a repository"),
+                                    ("tokenomics", bool((p.get("tokenomics") or {}).get("pending")))):
+                    if stale:
+                        p.pop(name, None)
+                        (e.get("checked_at") or {}).pop(name, None)
         # Bans under older rules (no GitHub, the old site score) are lifted.
         if rules >= RULES_VERSION:
             _excluded.extend(x for x in raw.get("excluded") or [] if isinstance(x, dict))
@@ -1150,7 +1161,7 @@ async def top_fill(client: httpx.AsyncClient, now: float | None = None) -> int:
 START_DELAY_S = 20
 # Verdicts of rules that no longer exist: rows judged by them are looked at again.
 DROPPED_RULES = ("above $100k", "younger than", "over % days", "beyond the%limits", "radar exception",
-                 "without an exceptional GitHub")
+                 "without an exceptional GitHub", "GitHub link without a repository", "GoPlus does not have")
 
 
 async def leaderboard_loop() -> None:
