@@ -3975,11 +3975,12 @@ def _top_entries(n: int = 50, narrative: str = "") -> list[dict]:
         j = onchain_judge.get(row["chain"], row["token"])
         if j and j.get("verdict") in ("avoid", "scam") and (j.get("confidence") or 0) >= onchain_judge.VETO_MIN_CONF:
             continue
-        # The Top is the ranking: a row the rules excluded stays out unless
-        # DeepSeek admitted it, as in leaderboard.qualifies (Lorenzo, 29/09:
-        # HATCHER "excluded, only studied" and first on the podium).
-        admitted = bool(j) and j.get("verdict") in ("gem", "watch") and (j.get("score") or 0) >= onchain_judge.ADMIT_MIN
-        if (row.get("why") or "").strip() and not admitted:
+        # Only DeepSeek's own drop keeps a studied row out (review or veto). The
+        # board's band limits (age, $100k without excellent pillars...) are not
+        # a reason here: applied to the Top they emptied it (Lorenzo, 29/09: 2
+        # tokens left). Rows that stay become "ranked" and lose that text
+        # (projects_db.sync_top), so the Database no longer contradicts the Top.
+        if (row.get("why") or "").startswith("DeepSeek"):
             continue
         seen.add(key)
         out.append({"chain": row["chain"], "token_address": row["token"], "pair_address": None, "pair_url": None,

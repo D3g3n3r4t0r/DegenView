@@ -38,12 +38,11 @@ def _db_top():
     return [e["symbol"] for e in m._top_entries(50) if not e["on_board"]]
 
 
-def test_the_top_skips_a_row_the_rules_excluded_unless_deepseek_admitted_it():
+def test_only_deepseek_keeps_a_studied_row_out_of_the_top():
+    # Band limits must not empty the Top (Lorenzo, 29/09: 2 tokens left).
     _row("hatch", 91, "above $100k without excellent pillars")
+    _row("drop", 85, "DeepSeek review: parody of a brand")
     _row("clean", 70)
-    assert _db_top() == ["CLEAN"]
-    judge._cache["solana:hatch"] = {"score": judge.ADMIT_MIN, "verdict": "gem", "confidence": 0.8,
-                                    "at": time.time()}
     assert _db_top() == ["HATCH", "CLEAN"]
 
 
@@ -52,7 +51,7 @@ def test_the_database_status_follows_the_top():
     _row("good", 80)
     _row("admit", 90, "tokenomics too weak (40)")
     _row("old", 60, "", status="ranked")       # ranked once, now out of the Top
-    _row("bad", 95, "above $100k without excellent pillars")
+    _row("bad", 95, "DeepSeek review: dropped")
     judge._cache["solana:admit"] = {"score": 85, "verdict": "watch", "confidence": 0.7, "at": time.time()}
     lb.set_top_source(lambda n: [e for e in m._top_entries(n) if e["symbol"] != "OLD"])
     lb.sync_top(time.time())
