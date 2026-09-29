@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 TTL_S = 7 * 86400
 DAILY_MAX = 80
+PRIORITY_DAILY_MAX = 50   # the Top's own allowance, apart from DAILY_MAX (see judge.PRIORITY_DAILY_MAX)
 _FILE = storage.data_file("onchain_code_review.json")
 
 SOURCE_EXT = (".rs", ".go", ".ts", ".tsx", ".js", ".py", ".sol", ".move", ".lean", ".c", ".cpp", ".h",
@@ -153,8 +154,18 @@ def _brief(full_name: str, data: dict) -> str:
     return "\n".join(lines)
 
 
-async def review(e: dict, client, now: float | None = None, ask=None) -> dict | None:
-    repo = ((e.get("pillars") or {}).get("github") or {}).get("facts", {}).get("repo")
+def repo_of(e: dict) -> str | None:
+    return (((e.get("pillars") or {}).get("github") or {}).get("facts") or {}).get("repo") or None
+
+
+def get(repo: str | None) -> dict | None:
+    """The cached reading of a repository, whatever its age."""
+    return _cache.get(repo) if repo else None
+
+
+async def review(e: dict, client, now: float | None = None, ask=None, priority: bool = False) -> dict | None:
+    """`priority` (a Top entry) uses its own daily allowance instead of DAILY_MAX."""
+    repo = repo_of(e)
     if not repo:
         return None
     now = now or time.time()
@@ -162,7 +173,8 @@ async def review(e: dict, client, now: float | None = None, ask=None) -> dict | 
     if hit and now - hit.get("at", 0) < TTL_S:
         return hit
     day = time.strftime("%Y-%m-%d", time.gmtime(now))
-    if _calls.get(day, 0) >= DAILY_MAX:
+    count = f"{day}:top" if priority else day
+    if _calls.get(count, 0) >= (PRIORITY_DAILY_MAX if priority else DAILY_MAX):
         return None
     data = await fetch_code(repo, client)
     if data is None:
@@ -174,7 +186,7 @@ async def review(e: dict, client, now: float | None = None, ask=None) -> dict | 
     from app.notify import deepseek_desk
     if ask is None:
         ask = deepseek_desk.ask
-    _calls[day] = _calls.get(day, 0) + 1
+    _calls[count] = _calls.get(count, 0) + 1
     deepseek_desk.note("code", f"Reading the code of {e.get('symbol') or repo}", symbol=e.get("symbol"),
                        chain=e.get("chain"), token=e.get("token_address"))
     raw = await ask([{"role": "system", "content": SYSTEM},
