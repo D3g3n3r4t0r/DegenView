@@ -320,6 +320,7 @@
     font: 500 12px var(--mono, ui-monospace, monospace); color: var(--k-text-2); transition: background .2s, color .2s;
     &[data-copied="yes"] { background: rgb(34 197 94 / .16); color: #4ade80; & span::after { content: " copied"; font-family: var(--sans); } }
     &[data-copied="no"] { background: rgb(239 68 68 / .16); color: #f87171; } }
+  .sq[data-share][data-copied="yes"] { color: #4ade80; }
   .dt-mc { display: grid; justify-items: end; gap: 6px;
     & small { font-size: 13px; color: var(--k-text-2); } & b { font: 600 17px var(--sans); font-variant-numeric: tabular-nums; } }
   .dt-context { margin: 18px 0 0; font-size: 13px; color: #d4d4d8; }

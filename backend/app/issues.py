@@ -164,6 +164,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0227", "Tasto condividi: il link apre quel token a chi e' loggato",
+     "Lorenzo, 29/09: 'voglio l'opzione di poter condividere un ticker dall'app con il tasto condividi e chi ha accesso ovviamente all'app tramite Safari o qualsiasi altro browser loggato deve aprire automaticamente quel token esattamente che ho condiviso'",
+     "media"),
     ("seed-0226", "Ogni ticker degli alert apre la pagina del token; indirizzo copiabile",
      "Lorenzo, 29/09: 'ogni ticker per chi ho l'allarme deve aprirmi l'app in quella sezione specifica per visualizzare il token specifico, inoltre ogni ticker nell'app deve permettere se clicco qui di copiare l'indirizzo corretto on chain del token'",
      "media"),
