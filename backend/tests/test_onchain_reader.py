@@ -111,3 +111,16 @@ def test_disclaimer_sentences_are_not_hype():
     r = _read(PFWA_DOCS)
     assert r["parts"]["-hype"] == 0 and not any("hype" in f for f in r["red_flags"])
     assert _read(HYPE)["parts"]["-hype"] > 0          # hype outside a disclaimer still counts
+
+
+def test_named_primitives_are_a_bonus():
+    text = ("Agents pay per call over x402 and register identity with ERC-8004; results are attested "
+            "through the Ethereum Attestation Service. The team will guarantee a steep climb.")
+    assert reader.primitives(text) == ["x402", "ERC-8004", "EAS"]
+    r = _read(text)
+    assert r["parts"]["primitives"] == reader.W_PRIMITIVES
+    assert r["evidence"]["primitives"] == ["x402", "ERC-8004", "EAS"]
+    assert "named primitives: x402, ERC-8004, EAS" in r["why"]
+    # Short acronyms only in capitals, as words: ordinary prose does not count.
+    assert reader.primitives("a guarantee to the mcp team, three eas, fhe-ish tees") == []
+    assert _read(BUZZ)["parts"]["primitives"] == 0

@@ -352,6 +352,14 @@ GH_QUERIES = (
     '"token" "solana" "mint address" in:readme',
     '"birdeye.so/token" in:readme',
     '"robinhood chain" in:readme,description',
+) + (
+    # Named primitives (study 002 §5): projects building on checkable
+    # standards. A repository still becomes a candidate only if its README
+    # carries a token address, so these widen the net without lowering it.
+    'x402 agent', '"ERC-8004"', '"MCP server" onchain', 'A2A agent protocol',
+    'EAS attestation', 'Turnkey wallet privacy', 'Umbra stealth',
+    'LayerZero prediction market', 'Polymarket vault', '"Lean 4" zkVM',
+    'STARK proof capability', 'treasury rebalancing agent',
 )
 GH_SEARCH_S = 60
 GH_REPO_S = 6

@@ -591,6 +591,37 @@ def judge_tokenomics_evm(info: dict | None, pair_address: str = "") -> dict:
     return out
 
 
+GECKO_TOKENOMICS_BASE = 50
+GECKO_TOKENOMICS_MAX = 65
+
+
+def judge_tokenomics_gecko(info: dict | None) -> dict:
+    """Fallback when GoPlus has no data (new Robinhood tokens, 29/09: AUREON,
+    PFWA, GRID): holder count and split from GeckoTerminal's token info.
+    Informational only. Its top 10 counts pools and contracts (PoolManager,
+    vesting, launchpad), so it must not drive the top1/top10 fatal limits,
+    and with no mint/freeze/tax/LP reading the score stays modest: a neutral
+    50 plus the same log-scale holder component as _judge_tokenomics, capped
+    at 65 so it never beats a real GoPlus reading of a sound token."""
+    info = info or {}
+    try:
+        holders = int(info.get("holders") or 0)
+    except (TypeError, ValueError):
+        holders = 0
+    split = info.get("holders_split") or {}
+    try:
+        top10 = float(split.get("top_10")) if split.get("top_10") not in (None, "") else None
+    except (TypeError, ValueError):
+        top10 = None
+    if not holders and top10 is None:
+        return _pending("tokenomics", "GoPlus does not have the token yet")
+    facts = {"holders": holders, "source": "geckoterminal",
+             **({"gecko_top10_pct": round(top10, 1)} if top10 is not None else {})}
+    score = GECKO_TOKENOMICS_BASE + min(max(math.log10(max(holders, 1)) - 1.7, 0) / 2, 1) * 15
+    return _pillar("tokenomics", min(score, GECKO_TOKENOMICS_MAX), facts,
+                   ["holder split from GeckoTerminal (pools included)"])
+
+
 def _judge_tokenomics(*, top1: float, top10: float, creator: float, holders: int, insiders: int,
                       lp_locked: float | None, mintable: bool, freezable: bool, tax: float,
                       rugged: bool) -> dict:
@@ -633,6 +664,9 @@ async def analyze_tokenomics(chain: str, token: str, client: httpx.AsyncClient, 
             info = await legit.goplus(chain, token, client)
         except (httpx.HTTPError, ValueError):
             info = None
+        if not info:
+            from app.trading.onchain import research   # research builds on this module
+            return judge_tokenomics_gecko(await research.gecko_info(chain, token, client))
         return judge_tokenomics_evm(info, pair_address)
     return _pillar("tokenomics", None, {}, [], "chain not covered")
 
