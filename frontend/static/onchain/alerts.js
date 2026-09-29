@@ -187,8 +187,7 @@ function paintFeed() {
         + (nSoon > SOON_SHOWN ? `<button type="button" class="more-row" data-soon-more>${state.soonAll ? "Show less" : `+${nSoon - SOON_SHOWN} more`}</button>` : "") : "")
       + `<h4 class="feed-sec">Fired · last 48h</h4>`
       + (fired ? `<ol class="memes-list">${fired}</ol>` : `<p class="muted pad">No alert in the last 48 hours.</p>`)
-      + (back ? `<h4 class="feed-sec">Coming back</h4><ol class="memes-list">${back}</ol>` : "")
-      + `<button type="button" class="review-row" data-open-scanner>Live scanner: what it is looking at now <span aria-hidden="true">›</span></button>`;
+      + (back ? `<h4 class="feed-sec">Coming back</h4><ol class="memes-list">${back}</ol>` : "");
   });
   if (kept) {
     const input = body.querySelector("[data-scan-form] input");
@@ -427,11 +426,6 @@ export function mountAlerts() {
     event.preventDefault();
     const q = form.q.value.trim();
     if (q) openScan(q);
-  });
-  document.getElementById("meme-alerts")?.addEventListener("click", (event) => {
-    if (!event.target.closest("[data-open-scanner]")) return;
-    document.querySelector('.tabs[data-tabs="meme"] [data-tab="scanner"]')?.click();
-    window.scrollTo({ top: 0 });
   });
   mountReview();
   load();

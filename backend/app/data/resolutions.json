@@ -2307,5 +2307,10 @@
     "status": "risolto",
     "at": 1790634615,
     "summary": "Su Telegram puoi dare a DeepSeek istruzioni permanenti: 'ricorda che...', 'quali istruzioni hai?', 'dimentica la 2'. Le salva sul server e le segue in ogni risposta; solo le chat del proprietario e degli admin possono darle, e non possono mai fargli chiedere chiavi o muovere denaro. Gli strumenti per leggere tutto il resto (tab Strategies, backtest gemme, laboratorio, review, scanner, diario, singolo token) sono nella issue #324."
+  },
+  "seed-0225": {
+    "status": "risolto",
+    "at": 1790663396,
+    "summary": "Nella sezione Memes, in alto, ora ci sono due tab: Alerts e Live scanner. La riga 'Live scanner: what it is looking at now' in fondo alla pagina Alerts non c'e' piu'."
   }
 }
