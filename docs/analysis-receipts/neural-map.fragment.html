@@ -1,0 +1,69 @@
+<div id="engine-neural-map">
+  <style>
+    #engine-neural-map .nm-head{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+    #engine-neural-map .nm-map{position:relative;margin:20px 0 12px}
+    #engine-neural-map .nm-links{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+    #engine-neural-map .nm-grid{position:relative;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:28px 12px;padding:18px 0}
+    #engine-neural-map .nm-neuron{display:flex;flex-direction:column;align-items:center;gap:7px;text-align:center;min-width:0}
+    #engine-neural-map .nm-dot{width:14px;height:14px;border-radius:50%;background:var(--viz-series-1);box-shadow:0 0 0 7px color-mix(in srgb,var(--viz-series-1) 9%,transparent)}
+    #engine-neural-map .nm-neuron[data-kind="new"] .nm-dot{border-radius:3px;background:var(--viz-series-2);box-shadow:0 0 0 7px color-mix(in srgb,var(--viz-series-2) 9%,transparent)}
+    #engine-neural-map .nm-neuron[data-block="true"] .nm-dot{background:var(--viz-series-3);box-shadow:0 0 0 9px color-mix(in srgb,var(--viz-series-3) 15%,transparent)}
+    #engine-neural-map .nm-neuron[data-dim="true"] .nm-dot{opacity:.48}
+    #engine-neural-map .nm-line{stroke:var(--border);stroke-width:1.1;fill:none}
+    #engine-neural-map .nm-line.active{stroke:var(--viz-series-1);stroke-width:2}
+    #engine-neural-map .nm-line.affected{stroke:var(--viz-series-3);stroke-width:2}
+    #engine-neural-map .nm-legend{display:flex;gap:18px;flex-wrap:wrap;margin:12px 0}
+    #engine-neural-map .nm-key{display:inline-block;width:9px;height:9px;background:var(--viz-series-1);border-radius:50%;margin-right:6px}
+    #engine-neural-map .nm-key.new{background:var(--viz-series-2);border-radius:2px}
+    #engine-neural-map .nm-key.change{background:var(--viz-series-3)}
+    #engine-neural-map .nm-detail{display:grid;grid-template-columns:1fr 1fr;gap:12px 24px;margin-top:14px}
+    #engine-neural-map .nm-detail p{margin:4px 0 10px}
+    #engine-neural-map .nm-wide{grid-column:1/-1}
+    @media(max-width:540px){#engine-neural-map .nm-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:24px 10px}#engine-neural-map .nm-detail{grid-template-columns:1fr}}
+  </style>
+  <div class="nm-head"><h2>Engine · mappa delle decisioni</h2><span class="viz-badge">Proposta · dati simulati</span></div>
+  <div class="viz-controls"><label class="form-label">Scenario<select class="form-select" id="nm-scenario"><option value="normal">ALFA · analisi disponibile</option><option value="liquidity">ALFA · liquidità in calo</option><option value="source">ALFA · fonte smentita</option></select></label></div>
+  <div class="nm-map"><svg class="nm-links" role="img" aria-label="Dipendenze fra fonti, memoria, ricerca, decisioni ed esiti"><defs><marker id="nm-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="context-stroke"></path></marker></defs><g></g></svg><div class="nm-grid"></div></div>
+  <div class="nm-legend text-small"><span><i class="nm-key"></i>Modulo esistente da collegare</span><span><i class="nm-key new"></i>Contratto proposto</span><span><i class="nm-key change"></i>Dipendenza coinvolta nello scenario</span></div>
+  <div class="card" aria-live="polite"><div class="nm-head"><h3 id="nm-title"></h3><span class="text-small" id="nm-status"></span></div><div class="nm-detail" id="nm-detail"></div></div>
+  <script>
+  (()=>{
+    const root=document.getElementById('engine-neural-map');
+    const nodes=[
+      ['chain','Blockchain / mercato','existing','Prezzi, liquidità e autorità del contratto.','Osservazioni con fonte e istante; un timeout resta dato mancante.','Provider e percorso on-chain'],
+      ['code','GitHub','existing','Codice e attività del repository.','Commit e file realmente letti, separati dalla popolarità.','code_review.py · depth.py'],
+      ['docs','Sito / tokenomics','existing','Dichiarazioni sul prodotto e sul token.','Fatti citati e affermazioni ancora da verificare.','research.py · depth.py'],
+      ['usage','Adozione','existing','Segnali di utilizzo e trazione.','Misure datate con copertura e provenienza.','traction.py'],
+      ['identity','Identità','new','Unisce prove della stessa entità.','Chain + indirizzo canonico; ticker mai sufficiente.','Contratto condiviso EvidenceSnapshot'],
+      ['evidence','Prove versionate','new','Conserva ciò che si sapeva in quel momento.','Snapshot immutabile, fonte, tempi, diritti e hash.','PR #362 + #364'],
+      ['gates','Controlli obbligatori','new','Distingue blocchi, controlli superati e informazioni mancanti.','Stato pass / fail / unknown; AI senza potere di deroga.','Policy proposta, adattatori da integrare'],
+      ['memory','Memoria riusabile','new','Riusa soltanto risultati compatibili e ancora validi.','Prove + input + versioni + scope + scadenza.','PR #364 · can_reuse'],
+      ['questions','Domande aperte','new','Trasforma le lacune in obiettivi di ricerca.','Ipotesi, prove contrarie e condizioni di chiusura.','ResearchTask proposto'],
+      ['agent','Agent / priorità','new','Sceglie quale dubbio vale la pena risolvere adesso.','Piano esplicito, motivazione, budget e condizione di arresto.','Controller proposto sopra i moduli esistenti'],
+      ['deepseek','DeepSeek','existing','Svolge un compito analitico circoscritto.','Proposta citata; non modifica da solo policy o permessi.','research.py · judge.py · deepseek_desk.py'],
+      ['validation','Validazione','new','Controlla struttura, citazioni, scope e generazione.','Accettato, rifiutato o storico; non certifica la verità della fonte.','Contratto AnalysisArtifact'],
+      ['policy','Policy / voto','existing','Combina criteri e produce una valutazione.','Formula e contributi versionati; pesi da valutare su dati.','leaderboard.py · policy versionata proposta'],
+      ['receipt','Ricevuta','new','Lega la decisione alle prove e alla regola applicata.','Chi, cosa, perché, versione e dipendenze; zero AI per il log.','DecisionReceipt · PR #364'],
+      ['dossier','Scheda crypto','new','Rende la selezione comprensibile.','Motivi, rischi, dubbi, cambiamenti e prossime verifiche.','Proiezione proposta, non ordine di acquisto'],
+      ['execution','Esecuzione separata','existing','Applica permessi e controlli dedicati alle operazioni.','La scheda di ricerca non autorizza fondi o firme.','Percorso wallet / risk; fuori dalla proposta'],
+      ['outcomes','Esiti osservati','existing','Confronta aspettative e ciò che succede dopo.','Mercato, fonte indisponibile e incidente sono categorie diverse.','outcomes.py · separazione proposta'],
+      ['replay','Replay / esperimenti','new','Ricalcola con dati disponibili al momento.','Confronto offline fra policy; incomplete se mancano prove.','PR #362 + #364'],
+      ['review','Revisione umana','new','Valuta regressioni e nuove regole.','Promozione motivata, test e possibilità di rollback.','Decision assurance · PR #362'],
+      ['monitor','Monitoraggio','existing','Continua a osservare senza rifare tutta l’analisi.','Cambiamenti materiali invalidano solo dipendenze pertinenti.','Scanner esistenti + invalidazione proposta']
+    ];
+    const edges=[['chain','identity'],['code','identity'],['docs','identity'],['usage','evidence'],['identity','evidence'],['chain','gates'],['evidence','gates'],['evidence','memory'],['evidence','questions'],['memory','agent'],['questions','agent'],['gates','agent'],['agent','deepseek'],['deepseek','validation'],['evidence','validation'],['validation','memory'],['validation','policy'],['gates','policy'],['memory','policy'],['policy','receipt'],['receipt','dossier'],['dossier','outcomes'],['outcomes','replay'],['receipt','replay'],['replay','review'],['review','policy'],['monitor','evidence'],['monitor','gates'],['dossier','monitor']];
+    const scenarios={normal:[],liquidity:['chain','evidence','gates','policy','receipt','dossier','monitor'],source:['docs','evidence','memory','questions','agent','validation','policy','receipt','dossier']};
+    let state={node:'agent',scenario:'normal'};
+    const saved=window.openai?.widgetState?.modelContent;if(saved&&nodes.some(n=>n[0]===saved.node)&&scenarios[saved.scenario])state={node:saved.node,scenario:saved.scenario};
+    const grid=root.querySelector('.nm-grid'), svg=root.querySelector('.nm-links'), group=svg.querySelector('g'), select=root.querySelector('select');
+    nodes.forEach(n=>{const el=document.createElement('div');el.className='nm-neuron';el.dataset.id=n[0];el.dataset.kind=n[2];const dot=document.createElement('span');dot.className='nm-dot';dot.setAttribute('aria-hidden','true');const b=document.createElement('button');b.type='button';b.className='btn btn-ghost';b.textContent=n[1];b.onclick=()=>{state.node=n[0];render();save()};el.append(dot,b);grid.append(el)});
+    function save(){window.openai?.setWidgetState({modelContent:state,privateContent:null})?.catch(()=>{})}
+    function draw(){const r=grid.getBoundingClientRect();svg.setAttribute('viewBox',`0 0 ${r.width} ${r.height}`);group.replaceChildren();const pos={};grid.querySelectorAll('.nm-neuron').forEach(el=>{const box=el.querySelector('.nm-dot').getBoundingClientRect();pos[el.dataset.id]={x:box.left-r.left+box.width/2,y:box.top-r.top+box.height/2}});edges.forEach(([a,b])=>{const p=pos[a],q=pos[b],path=document.createElementNS('http://www.w3.org/2000/svg','path');const bend=Math.max(20,Math.abs(q.y-p.y)*.38);path.setAttribute('d',`M${p.x},${p.y} C${p.x},${p.y+bend} ${q.x},${q.y-bend} ${q.x},${q.y}`);path.setAttribute('class','nm-line'+(scenarios[state.scenario].includes(a)&&scenarios[state.scenario].includes(b)?' affected':a===state.node||b===state.node?' active':''));path.setAttribute('marker-end','url(#nm-arrow)');group.append(path)})}
+    function field(label,value){const d=document.createElement('div'),l=document.createElement('span'),p=document.createElement('p');l.className='text-small text-muted';l.textContent=label;p.textContent=value;d.append(l,p);return d}
+    function render(){select.value=state.scenario;const n=nodes.find(n=>n[0]===state.node), related=new Set(edges.filter(e=>e.includes(n[0])).flat());related.add(n[0]);grid.querySelectorAll('.nm-neuron').forEach(el=>{el.dataset.dim=String(!related.has(el.dataset.id));el.dataset.block=String(scenarios[state.scenario].includes(el.dataset.id));el.querySelector('button').setAttribute('aria-pressed',String(el.dataset.id===state.node))});root.querySelector('#nm-title').textContent=n[1];root.querySelector('#nm-status').textContent=n[2]==='new'?'Da implementare':'Esistente · integrazione da evolvere';const detail=root.querySelector('#nm-detail');detail.replaceChildren(field('FUNZIONE',n[3]),field('PRODUCE',n[4]),field('RIFERIMENTO',n[5]),field('DIPENDENZE IN INGRESSO',edges.filter(e=>e[1]===n[0]).map(e=>nodes.find(n=>n[0]===e[0])[1]).join(' · ')||'Nessuna nella mappa'));
+      if(state.node==='agent'){detail.append(field('OBIETTIVO · ESEMPIO ALFA','Capire se il token è necessario al prodotto.'),field('DUBBIO E PROVA CONTRARIA','Il sito dichiara utilità; il percorso del prodotto potrebbe funzionare senza token.'),field('PROSSIMA AZIONE',state.scenario==='source'?'Fonte smentita: ritirare le conclusioni dipendenti e cercare conferma indipendente.':'Prima leggere le prove disponibili; interrogare DeepSeek solo se rimane una domanda precisa.'),field('QUANDO SI FERMA','Prove sufficienti, budget finito, fonte indisponibile o domanda non risolvibile. Nessuna auto-promozione delle regole.'))}
+      const effect=state.scenario==='liquidity'?'Liquidità sotto soglia: rivalutare i gate; analisi tecnica conservata solo se indipendente. Nessuna chiamata AI per registrare il cambio.':state.scenario==='source'?'Fonte smentita: invalidare le conclusioni dipendenti. L’agent decide se e come riaprire la ricerca.':'Scenario sintetico: prove valide possono essere riusate. La selezione per ricerca non autorizza acquisti.';const x=field('EFFETTO DELLO SCENARIO',effect);x.className='nm-wide';detail.append(x);requestAnimationFrame(draw)}
+    select.onchange=()=>{state.scenario=select.value;render();save()};new ResizeObserver(draw).observe(grid);window.addEventListener('openai:set_globals',e=>{const s=e.detail?.globals?.widgetState?.modelContent;if(s&&nodes.some(n=>n[0]===s.node)&&scenarios[s.scenario]){state={node:s.node,scenario:s.scenario};render()}});render();
+  })();
+  </script>
+</div>
