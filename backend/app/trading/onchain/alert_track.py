@@ -333,6 +333,8 @@ async def backfill(client: httpx.AsyncClient, items: list[dict], kind: str = "me
 # ---------------------------------------------------------------- system
 
 SYSTEM_FETCHES_PER_TICK = 15
+GEM_GAP_LOOKBACK_S = 24 * 3600      # sampled gem bars checked for holes this far back
+GEM_GAP_RETRY_S = 1800              # a hole GeckoTerminal cannot fill is asked again at most this often
 # Bump when system.follow's output changes: finished alerts are fetched and
 # recomputed once more (v2: each sell says why, "crash" or "signal").
 SYSTEM_VERSION = 10  # 8: rug stop with a reason (liquidity pulled, crash, dead, abandoned, on-chain)
@@ -395,6 +397,17 @@ async def refresh_system(client, now: float | None = None, gap_s: float = 0.0) -
             gecko_urgent.reset(token)
 
 
+def _bar_hole(rows: list, since: float, now: float) -> bool:
+    """A closed 5-minute bar missing between `since` and the last closed bar.
+    One hole makes a quant research window unusable."""
+    first = int(since // BAR_S * BAR_S)
+    last = int(now // BAR_S * BAR_S) - BAR_S
+    if last < first:
+        return False
+    have = {r[0] for r in rows if first <= r[0] <= last}
+    return len(have) < (last - first) // BAR_S + 1
+
+
 async def _refresh_system(client, now: float, gap_s: float | None) -> int:
     from app.sniper.scanner import GECKO_NETWORKS
     from app.trading.onchain import outcomes, system, quant_runtime, quant_memory
@@ -405,6 +418,22 @@ async def _refresh_system(client, now: float, gap_s: float | None) -> int:
     for a in sorted(_alerts.values(), key=lambda x: (_ready(x), -x["at"])):
         if a.get("nodata"):
             continue
+        first = a.get("quant_observed")
+        net = GECKO_NETWORKS.get(a["chain"])
+        if (a["kind"] != "meme" and first and net and not a.get("gone") and _quant_watching(a, now)
+                and fetched < SYSTEM_FETCHES_PER_TICK and now - a.get("gem_candles_at", 0) >= GEM_GAP_RETRY_S
+                and _bar_hole(_bars.get(key_of(a)) or [], max(first["start"], now - GEM_GAP_LOOKBACK_S), now)):
+            # Gem bars come from sampling only: a restart or a DexScreener
+            # outage leaves holes. GeckoTerminal saw every trade; its candles
+            # fill the holes (stored closed bars are never revised).
+            a["gem_candles_at"] = now
+            got = await _candles(client, net, a["pair_address"], "minute", 5, now,
+                                 GEM_GAP_LOOKBACK_S // BAR_S + 12, a.get("token_address") or "")
+            fetched += 1
+            if got:
+                merge_bars(key_of(a), got)
+            if gap_s:
+                await asyncio.sleep(gap_s)
         try:
             collected = await asyncio.to_thread(quant_memory.capture_case, a, list(_bars.get(key_of(a)) or []), now)
             if collected:

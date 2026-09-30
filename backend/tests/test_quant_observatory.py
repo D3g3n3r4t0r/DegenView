@@ -135,3 +135,37 @@ def test_consumed_real_attempt_is_persisted_before_order(monkeypatch, tmp_path):
     user = SimpleNamespace(id="u", onchain_wallets={"robinhood": object()})
     asyncio.run(trader.tick([user], now=110, market=object()))
     assert "uncertain" in u["note"] and not trader._unseen(u, a)
+
+
+def test_gem_bar_holes_are_filled_from_geckoterminal(monkeypatch):
+    now = 86400 * 3
+    start = now - 3600
+    a = {"kind": "gem", "chain": "solana", "pair_address": "P", "token_address": "T", "at": start,
+         "gone": False, "closed": False, "quant_observed": {"start": start}}
+    k = alert_track.key_of(a)
+    sampled = [candle(t) for t in range(start, now, 300) if t != start + 900]
+    monkeypatch.setitem(alert_track._alerts, k, a)
+    monkeypatch.setitem(alert_track._bars, k, [list(r) for r in sampled])
+    calls = []
+
+    async def fake_candles(client, net, pool, tf, agg, before, limit, token=""):
+        calls.append((pool, tf, agg, limit))
+        return [candle(start + 900, 11)]
+
+    seen = []
+    monkeypatch.setattr(alert_track, "_candles", fake_candles)
+    monkeypatch.setattr(memory, "capture_case", lambda a, bars, now: seen.append(len(bars)) or False)
+    monkeypatch.setattr(runtime, "approved", lambda: None)
+    asyncio.run(alert_track._refresh_system(None, now, None))
+    assert calls == [("P", "minute", 5, 300)]
+    assert not alert_track._bar_hole(alert_track._bars[k], start, now)
+    assert seen == [len(sampled) + 1]
+    asyncio.run(alert_track._refresh_system(None, now + 60, None))
+    assert len(calls) == 1
+
+
+def test_gem_without_holes_or_memes_fetch_nothing():
+    rows = [candle(t) for t in range(0, 3000, 300)]
+    assert not alert_track._bar_hole(rows, 0, 3000)
+    assert alert_track._bar_hole(rows[:3] + rows[4:], 0, 3000)
+    assert not alert_track._bar_hole([], 3000, 3000)
