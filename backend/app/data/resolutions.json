@@ -2464,8 +2464,13 @@
     "summary": "Profilo > Simulated wallet > Set cash: imposta la liquidita' simulata. Le posizioni aperte restano e il punto di partenza si sposta della stessa cifra, quindi il rendimento non si falsa. Solo simulazione (PR #420)."
   },
   "seed-timeframe-ladder-20260930": {
+    "status": "in corso",
+    "at": 1790786932,
+    "summary": "Regola pronta ma spenta finche' la prova sulle 50 gemme non dice pari o meglio (Lorenzo). Scala 1d, 12h, 8h, 6h, 4h, 2h, 1h, 30m, 15m, 5m: parte dal piu' largo con almeno 60 candele chiuse e scende fino al primo con un ingresso; se Trend EMA non entra mai, prova Trend HF. Un archivio scarica di continuo le candele della Top 50 (tutte le sorgenti) cosi' la prova e il laboratorio leggono da disco. Grafico 1w anche nel wallet."
+  },
+  "seed-0240": {
     "status": "risolto",
-    "at": 1790785858,
-    "summary": "Il trend follower delle gemme sceglie il time frame su una scala 1d, 12h, 8h, 6h, 4h, 2h, 1h, 30m, 15m, 5m: parte dal piu' largo con almeno 60 candele chiuse e scende finche' la strategia non ha almeno un ingresso. Nessun ingresso da nessuna parte = resta il piu' largo. La pagina token apre il grafico sul time frame della strategia; aggiunto 1w nella pagina token e nel grafico del wallet."
+    "at": 1790786061,
+    "summary": "Il portafoglio da $10.000 sulla Top 50 e' in Top e in Profilo > Simulated wallet (PR #424); le sue righe e le posizioni aperte/chiuse del profilo aprono il grafico con le frecce della strategia e i pallini gialli del wallet. Timeframe a scala: il grafico piu' largo con almeno 60 candele chiuse fra 1d, 8h, 4h, 1h, 15m, 5m. Grafico: aggiunti 8h e 1w. Frecce corrette: stavano sulla candela del segnale invece che su quella di esecuzione, sparivano se il backtest arrivava dopo le candele, e sul giornaliero le operazioni a 8h dopo l'1:00 venivano scartate."
   }
 }

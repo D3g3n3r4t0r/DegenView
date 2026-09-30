@@ -1311,3 +1311,11 @@ html, body { overflow-x: clip; }
 .quant-panel pre { max-height:360px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; }
 .quant-panel [data-q-detail] { overflow-wrap:anywhere; }
 .quant-panel details { margin:12px 0; }
+.pf-list li[data-open] { cursor: pointer; }
+/* Top 50 wallet (sim-backtest.js) */
+.sbt { display: grid; gap: 10px; }
+.sbt-total { margin: 0; display: flex; align-items: baseline; gap: 8px; & b { font-size: 28px; font-weight: 700; color: var(--k-text); } }
+.sbt-curve { inline-size: 100%; block-size: 90px; & path { fill: none; stroke: #34d399; stroke-width: 1.6; vector-effect: non-scaling-stroke; } }
+.sbt-curve[data-sign="down"] path { stroke: #f87171; }
+.sbt-list { display: grid; gap: 6px; }
+.sbt-row { inline-size: 100%; border: 0; color: inherit; font: inherit; text-align: start; cursor: pointer; }

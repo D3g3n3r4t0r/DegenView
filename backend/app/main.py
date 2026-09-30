@@ -114,6 +114,7 @@ from app.trading.onchain import judge as onchain_judge
 from app.trading.onchain import code_review as onchain_code_review
 from app.trading.onchain import backtest_lab as onchain_backtest_lab
 from app.trading.onchain import strategy_lab as onchain_strategy_lab
+from app.trading.onchain import candle_archive as onchain_candle_archive
 from app.trading.onchain import autotrader as onchain_autotrader
 from app.trading.onchain import live_prices as onchain_live_prices
 from app.trading.onchain import wealth as onchain_wealth
@@ -1557,6 +1558,7 @@ async def lifespan(app: FastAPI):
                    asyncio.create_task(onchain_outcomes.outcomes_loop()),
                    asyncio.create_task(onchain_backtest_lab.lab_loop()),
                    asyncio.create_task(onchain_strategy_lab.lab_loop(_top_entries)),
+                   asyncio.create_task(onchain_candle_archive.archive_loop(lambda: _top_entries(50))),
                    asyncio.create_task(_onchain_signals_loop()),
                    asyncio.create_task(_wealth_loop())] if settings.onchain_radar_enabled else []
     sniper_tasks: list[asyncio.Task] = []
@@ -4471,6 +4473,36 @@ async def get_autotrader(user: User = Depends(auth.get_current_user)) -> dict:
             "server_live": settings.onchain_execution_enabled}
 
 
+@app.get("/api/onchain/top/backtest")
+async def top_backtest(user: User = Depends(auth.get_current_user)) -> dict:
+    """A $10,000 wallet replayed on every trade of the Top 50's backtests
+    (Lorenzo, 30/09). The same for every account ("farlo visualizzare a tutti
+    gli utenti indipendentemente dall'account"); read only, the live
+    simulated positions stay as they are."""
+    _require_onchain_enabled()
+    from app.trading.onchain import sim_backtest
+    from app.trading.onchain import strategy_lab as onchain_strategy_lab
+    new = False
+    for e in _top_entries(50):
+        new |= sim_backtest.remember(e["chain"], e["token_address"], e.get("symbol"),
+                                     onchain_strategy_lab.get(e["chain"], e["token_address"]), save=False)
+    if new:
+        sim_backtest._save()
+    tokens = sim_backtest.ledger_tokens()
+    capital = sim_backtest.DEFAULT_CAPITAL
+    first = sim_backtest.replay(tokens, capital)
+    marks = {}
+    if first["open"]:
+        try:
+            keys = {onchain_live_prices._key(p["chain"], p["token"]): f"{p['chain']}:{p['token']}"
+                    for p in first["open"]}
+            got = await onchain_live_prices.prices(list(keys))
+            marks = {name: got[f"{k[0]}:{k[1]}"]["p"] for k, name in keys.items() if f"{k[0]}:{k[1]}" in got}
+        except Exception:
+            marks = {}
+    return sim_backtest.replay(tokens, capital, marks=marks, now=_time.time())
+
+
 @app.patch("/api/onchain/autotrader")
 async def set_autotrader(body: AutotraderUpdate, user: User = Depends(auth.get_current_user)) -> dict:
     _require_onchain_enabled()
@@ -4585,7 +4617,8 @@ def _sim_snapshot(user: User) -> dict:
     positions = [{"chain": p.get("chain") or "robinhood", "address": p["token"], "symbol": p["symbol"],
                   "name": p["symbol"], "amount": p.get("qty"), "price_usd": p.get("price"),
                   "value_usd": p["value_usdg"], "image": p.get("image"), "native": False, "hidden": False,
-                  "source": "sim", "wallet": "sim", "ret": p.get("ret"), "cost_usd": p.get("cost_usdg")}
+                  "source": "sim", "wallet": "sim", "ret": p.get("ret"), "cost_usd": p.get("cost_usdg"),
+                  "opened": p.get("at"), "pair": p.get("pair")}
                  for p in pos_list]
     by_chain: dict[str, float] = {}
     for p in positions:
@@ -4665,7 +4698,7 @@ def _closed_trades(user: User) -> list[dict]:
             open_buy[t.get("token")] = t
         elif t["side"] == "sell" and t.get("token") in open_buy:
             b = open_buy.pop(t["token"])
-            out.append({"symbol": t["symbol"], "token": t.get("token"), "chain": "robinhood", "opened": b["t"],
+            out.append({"symbol": t["symbol"], "token": t.get("token"), "chain": t.get("chain") or "robinhood", "opened": b["t"],
                         "closed": t["t"], "cost_usdg": b.get("usdg"), "proceeds_usdg": t.get("usdg"),
                         "ret": t.get("ret"), "mode": t.get("mode"), "why": t.get("why")})
     return out[::-1]

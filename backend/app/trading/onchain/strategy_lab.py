@@ -25,7 +25,7 @@ import httpx
 
 from app.notify import deepseek_desk
 from app.sniper.scanner import GECKO_NETWORKS
-from app.trading.onchain import alert_track, priority, system
+from app.trading.onchain import alert_track, candle_archive, priority, sim_backtest, system
 from app.trading.onchain.storage import data_file
 from app.atomic_write import write_text_atomic
 
@@ -60,6 +60,12 @@ LADDER = [("1d", "day", 1), ("12h", "hour", 12), ("8h", "hour", 4), ("6h", "hour
 STEP_S = {"1d": 86400, "12h": 43200, "8h": 28800, "6h": 21600, "4h": 14400, "2h": 7200, "1h": 3600,
           "30m": 1800, "15m": 900, "5m": 300}
 TREND_FOLLOWERS = [("Lorenzo (trend-follower)", "Trend EMA"), ("Lorenzo HF (minuti on-chain)", "Trend HF")]
+# Lorenzo, 30/09: "prima di applicare questa regola fai un po' di prove su
+# tutte le 50 cripto [...] dovrebbero essere paritarie o superiori". Until
+# scripts/ladder_compare.py says so, the rule in use stays the old one: 1d,
+# else 8h, first with TRIGGER_MIN_BARS closed candles, Trend EMA only.
+LADDER_RULE = False
+OLD_RUNGS = ("1d", "8h")
 KEEP = 300
 
 _results: dict[str, dict] = {}   # chain:token -> {at, pair, symbol, backtests | error}
@@ -200,7 +206,7 @@ async def run_daily(client: httpx.AsyncClient, net: str, pair: str, token: str, 
     got: dict[tuple[str, int], list[list]] = {}
     if fast:
         got[("minute", 5)] = fast
-    day = await alert_track._candles(client, net, pair, "day", 1, now, 1000, token)
+    day = await candle_archive.candles(client, net, pair, "day", 1, now, token)
     if day is None:
         return None
     got[("day", 1)] = day
@@ -213,10 +219,11 @@ async def run_daily(client: httpx.AsyncClient, net: str, pair: str, token: str, 
     # variant of the same trend follower (Trend HF: VWAP, efficiency, ATR
     # trail) down the same rungs. Still trend following, still long only.
     # Candles are fetched lazily, so the fallback costs no extra calls.
-    for name, label in TREND_FOLLOWERS:
-        for iv, tf, agg in LADDER[start:]:
+    ladder = LADDER[start:] if LADDER_RULE else [r for r in LADDER if r[0] in OLD_RUNGS]
+    for name, label in TREND_FOLLOWERS if LADDER_RULE else TREND_FOLLOWERS[:1]:
+        for iv, tf, agg in ladder:
             if (tf, agg) not in got:
-                raw = await alert_track._candles(client, net, pair, tf, agg, now, 1000, token)
+                raw = await candle_archive.candles(client, net, pair, tf, agg, now, token)
                 if raw is None:
                     return None
                 got[(tf, agg)] = raw
@@ -224,10 +231,10 @@ async def run_daily(client: httpx.AsyncClient, net: str, pair: str, token: str, 
             native = {"day": 86400, "hour": 3600, "minute": 60}[tf] * agg
             bars = _closed(sorted(raw) if native == STEP_S[iv] else _merge(raw, STEP_S[iv]), STEP_S[iv], now)
             if len(bars) < TRIGGER_MIN_BARS:
-                tried = tried or {"interval": iv, "bars": len(bars), "error": "too few candles"}
+                tried = {"interval": iv, "bars": len(bars), "error": "too few candles"}
                 continue
             res = {"interval": iv, **await asyncio.to_thread(system.backtest_one, bars, name, label)}
-            if _entered(res):
+            if _entered(res) or not LADDER_RULE:
                 return res
             first_ok = first_ok or res
     return first_ok or tried
@@ -243,7 +250,10 @@ def _signal(daily: dict, prev: dict | None) -> tuple[dict | None, bool]:
     last = ev[-1]
     sig = {k: last.get(k) for k in ("side", "t", "price", "ret") if last.get(k) is not None}
     old = (prev or {}).get("signal") or {}
-    fresh = (last["t"] >= daily["to"] - STEP_S.get(daily.get("interval"), 86400)
+    # Saved before the arrows moved to the fill candle (30/09): the same
+    # signal now carries a later time, and must not be announced twice.
+    legacy = bool(old) and not ((prev or {}).get("best") or {}).get("fills")
+    fresh = (not legacy and last["t"] >= daily["to"] - STEP_S.get(daily.get("interval"), 86400)
              and (old.get("t"), old.get("side")) != (sig["t"], sig["side"]))
     return sig, fresh
 
@@ -264,6 +274,11 @@ async def run_one(client: httpx.AsyncClient, e: dict, now: float) -> dict | None
     if not bars:
         _results[key] = {"at": now, "symbol": symbol, "pair": pair, "error": "no candles"}
         return _results[key]
+    try:     # the archive keeps them past the 1000-candle window
+        await asyncio.to_thread(candle_archive.put, candle_archive.key(GECKO_NETWORKS[e["chain"]], pair, "minute", 5,
+                                                                       e["token_address"]), bars, now)
+    except Exception:
+        logger.exception("strategy lab: archivio 5m di %s fallito", symbol)
     bt = await asyncio.to_thread(system.backtest_all, sorted(bars))
     _results[key] = {"at": now, "symbol": symbol, "pair": pair, "backtests": bt}
     # Il daily e' un di piu': se fallisce il 5 minuti resta.
@@ -283,6 +298,10 @@ async def run_one(client: httpx.AsyncClient, e: dict, now: float) -> dict | None
                              "interval": daily["interval"], **sig}, now)
     if daily is not None:
         _results[key]["daily"] = daily
+    try:    # the Top 50 wallet keeps every trade, even after the window slides past it
+        sim_backtest.remember(e["chain"], e["token_address"], symbol, get(e["chain"], e["token_address"]))
+    except Exception:
+        logger.exception("strategy lab: registro del portafoglio Top 50 fallito per %s", symbol)
     best = _best(bt)
     hold = bt.get("hold_pct")
     outcome = (f"best {best['label']} {best['return_pct']:+.0f}% in {best['trades']} trades"
