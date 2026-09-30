@@ -2366,5 +2366,81 @@
     "status": "risolto",
     "at": 1790751532,
     "summary": "Prima la lista della Top mostrava il risultato della migliore strategia a 5 minuti; il trend follower del sito girava gia' su 1d/8h ma si vedeva solo nella pagina del token, e nessun segnale partiva. Ora ogni progetto in classifica mostra per primo il trend follower: giornaliero se ha almeno 60 giorni di candele, altrimenti 8 ore se ha almeno 60 candele da 8 ore (circa 20 giorni). 60 non e' una scelta a occhio: i filtri della strategia (volatilita' su 16+44 barre) non permettono un ingresso prima della sessantesima candela. Si usano solo candele chiuse, cosi' un segnale non sparisce. Quando la strategia entra o esce sull'ultima candela chiusa arriva un avviso Telegram in italiano ('Trend follower 8 ore · entrata su ...') e una riga nel diario dell'agente; ogni segnale una volta sola. Un progetto ancora troppo giovane, o senza trade sul timeframe alto, tiene il risultato a 5 minuti, scritto '5m', finche' non ce l'ha."
+  },
+  "273b9967": {
+    "status": "risolto",
+    "at": 1790757900,
+    "summary": "Vero, ed era gia' stato corretto come seed-0172 (issue #189): la strategia calcolava la posizione anche prima dell'alert, e se il trend era gia' partito il suo acquisto cadeva prima dell'alert e veniva scartato, cosi' il sistema restava 'waiting' per tutto il pump (Onhand, GLANCE, CERT). Ora un trend gia' in corso si prende alla prima candela dopo l'alert, e dal 28/09 sera le meme entrano direttamente all'alert (#305); tutti gli alert sono stati ricalcolati."
+  },
+  "b1b1b25d": {
+    "status": "risolto",
+    "at": 1790757900,
+    "summary": "Due cose diverse. Gli 'waiting' senza ingresso erano il bug di seed-0172 (corretto, issue #189). I 5 alert valutati su 12 invece sono voluti: un alert conta nella scelta fra Trend HF e Trend EMA solo quando la sua finestra di 48 ore e' finita, e fino a 20 alert chiusi si usa Trend HF di default (system.MIN_DECIDED)."
+  },
+  "83d88f71": {
+    "status": "risolto",
+    "at": 1790757900,
+    "summary": "Non un bug di marcatura: rug vuol dire che la liquidita' e' sparita o il prezzo e' crollato dopo l'alert, anche se prima c'era stato un +290%. Il sistema restava 'waiting' per il bug di seed-0172 (trend gia' in corso all'alert, corretto con l'issue #189); dal 28/09 le meme entrano sull'alert (#305) e dal 30/09 escono se il prezzo scende del 30% sotto la miglior chiusura (system.TRAIL), quindi un caso cosi' oggi esce in profitto."
+  },
+  "2c5d06bd": {
+    "status": "risolto",
+    "at": 1790757900,
+    "summary": "Voluto: il sistema a 5 minuti su 48 ore (Trend HF / Trend EMA) gira solo sugli alert delle meme. Le gemme hanno il trend follower del sito su 1d/8h, con segnali, in classifica (seed-0235) e nel backtest delle gemme; su Telegram DeepSeek ora legge il sistema delle sole meme e lo strumento backtest_gemme per le gemme, quindi il blocco vuoto non compare piu'."
+  },
+  "a975d46c": {
+    "status": "risolto",
+    "at": 1790757900,
+    "summary": "Voluto: overall.score e' la qualita' (i tre pilastri), score e' il punteggio finale usato per il ranking (leaderboard.final_score): qualita' piu' somiglianza tecnica a DREGG, che puo' solo alzare, piu' la trazione. DREGG e' il modello di riferimento, quindi somiglia al 100% a se stesso e sale da 80.9 a 89."
+  },
+  "87de9bb8": {
+    "status": "risolto",
+    "at": 1790757900,
+    "summary": "Vero, era seed-0170 (issue #182): la memoria teneva 5000 token e buttava i piu' vecchi, i token sani (etichettati dopo 3 giorni) sparivano prima di maturare, quindi 3113 esiti su 3113 erano rug e al modello mancavano i negativi. Corretto il 28/09. In piu' il messaggio era fuorviante: la condizione chiede anche 8 non-rug, che il testo non diceva; ora lo dice e conta entrambi.",
+    "files": [
+      "backend/app/trading/onchain/outcomes.py"
+    ]
+  },
+  "2e79e113": {
+    "status": "risolto",
+    "at": 1790757900,
+    "summary": "Doppione di 87de9bb8, stessa causa (seed-0170, issue #182): mancavano i token sani, non il confronto. Il messaggio ora dice anche quanti non-rug servono e quanti ce ne sono.",
+    "files": [
+      "backend/app/trading/onchain/outcomes.py"
+    ]
+  },
+  "30b026b3": {
+    "status": "risolto",
+    "at": 1790757900,
+    "summary": "Stessa causa di 87de9bb8 (seed-0170): senza token sani nel campione l'AUC non si puo' calcolare, e 'no rugs or no non-rugs' era esatto (mancavano i non-rug). Corretto il 28/09 con l'issue #182: la memoria butta prima i token che non insegnano niente e poi la classe piu' numerosa."
+  },
+  "508dc969": {
+    "status": "risolto",
+    "at": 1790757900,
+    "summary": "Non un bug: le tre fonti contano insiemi diversi. rejected.decided sono solo gli scartati con un esito, circostanze_rug tutti i token seguiti (proposti e scartati), e gli esiti maturano mentre si legge, quindi due letture a minuti di distanza differiscono di qualche unita'."
+  },
+  "4f848dd5": {
+    "status": "risolto",
+    "at": 1790757900,
+    "summary": "Il dato e' giusto, ed e' il punto: sulle meme la LP e' quasi sempre bruciata o bloccata (pump.fun la brucia al 100%), e il rug avviene vendendo la supply sul pool, che porta la liquidita' a 0 senza toccare la LP. Per questo 'LP locked' non protegge (seed-0162). Su top_holder_pct e top10_pct a 0 DeepSeek aveva ragione: RugCheck riassunto non ha la lista dei holder; ora si legge il report completo (#384) e senza lista il campo resta vuoto, non 0."
+  },
+  "seed-0198": {
+    "status": "risolto",
+    "at": 1790757900,
+    "summary": "Il grafico mostra solo ingressi e uscite della strategia (solo long); dove la strategia si e' fermata su un rug compare 'Rug · strategy off' (issue #257, PR #262)."
+  },
+  "seed-0199": {
+    "status": "risolto",
+    "at": 1790757900,
+    "summary": "Dopo un crollo da rug la strategia si ferma e il backtest non rientra piu' (rug_stop in strategies.py, issue #256, PR #263), su grafico, sistema e laboratorio."
+  },
+  "seed-0200": {
+    "status": "risolto",
+    "at": 1790757900,
+    "summary": "Scanner piu' profondo: cap piu' alta, progetti fino a 3 anni, narrativa dalla categoria CoinGecko, copertura per narrativa (/api/onchain/narratives/coverage) con le narrative vuote cercate per prime (issue #259, PR #265); poi ogni progetto del database mappato alle sue narrative (#330)."
+  },
+  "seed-0201": {
+    "status": "risolto",
+    "at": 1790757900,
+    "summary": "La scheda Agent mostra il diario di DeepSeek animato con i passaggi del ragionamento (/api/agent/log, issue #260, PR #264), poi con barre di avanzamento e contatori reali (#313, #372, #373)."
   }
 }

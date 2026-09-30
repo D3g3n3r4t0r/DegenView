@@ -614,7 +614,8 @@ def train(now: float | None = None) -> dict:
     n, rugs = len(data), sum(y for _, y in data)
     model = {"active": False, "n": n, "rugs": rugs, "cv_auc": None, "why": ""}
     if n < MODEL_MIN_N or rugs < MODEL_MIN_RUGS or n - rugs < MODEL_MIN_RUGS:
-        model["why"] = f"needs {MODEL_MIN_N} outcomes with at least {MODEL_MIN_RUGS} rugs (now {n}, {rugs} rugs)"
+        model["why"] = (f"needs {MODEL_MIN_N} outcomes with at least {MODEL_MIN_RUGS} rugs and {MODEL_MIN_RUGS} non-rugs "
+                        f"(now {n}: {rugs} rugs, {n - rugs} non-rugs)")
         _model.clear()
         _model.update(model)
         return model
@@ -762,7 +763,8 @@ def train_winners(now: float | None = None) -> dict:
     n, wins = len(data), sum(y for _, y in data)
     model = {"active": False, "n": n, "winners": wins, "cv_auc": None, "why": ""}
     if n < WIN_MIN_N or wins < WIN_MIN_WINNERS or n - wins < WIN_MIN_WINNERS:
-        model["why"] = f"needs {WIN_MIN_N} outcomes with at least {WIN_MIN_WINNERS} real pumps (now {n}, {wins})"
+        model["why"] = (f"needs {WIN_MIN_N} outcomes with at least {WIN_MIN_WINNERS} real pumps and {WIN_MIN_WINNERS} "
+                        f"without (now {n}: {wins} pumps, {n - wins} without)")
     else:
         cv, w, means = _cv_fit([e["features"] for e, _ in data], [y for _, y in data], WIN_KEYS)
         model.update(cv_auc=round(cv, 3) if cv is not None else None, weights=w.tolist(), means=means)
