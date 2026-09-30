@@ -24,10 +24,10 @@ import { escapeHtml, strategyLabel, tokenRow } from "@onchain/format.js";
 import { openDetail, register } from "@onchain/detail.js";
 
 const POLL_MS = 60_000;
+const RETRY_MS = 5_000;
 const CHAINS = { solana: "Solana", robinhood: "Robinhood", base: "Base", bsc: "BSC", ethereum: "Ethereum" };
 const FEED_SHOWN = 25;
 const FEED_MAX = 80;
-const DAY_S = 86_400;
 
 let root = null;
 let data = null;
@@ -38,6 +38,7 @@ let feedAll = false;
 let flashTimer = null;
 let lastPulse = null;
 let lessons = null;
+let arrived = { pass: 0, rej: 0 };  // decisions pushed by SSE after the last counts
 
 const usd = (v) => {
   if (v == null) return "—";
@@ -62,7 +63,6 @@ export function mountRadar({ toast: notify } = {}) {
     if (event.target.closest("[data-feed-more]")) { feedAll = !feedAll; paintFeed(); }
   });
   listen();
-  setInterval(() => data && paintStats(), 30_000);
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") refresh();
   });
@@ -78,6 +78,7 @@ function listen() {
     if (data) fn(item);
   });
   on("listing", (item) => {
+    if (!(data.listings ?? []).some((x) => lkey(x) === lkey(item))) arrived.pass += 1;
     data.listings = [item, ...(data.listings ?? []).filter((x) => lkey(x) !== lkey(item))];
     paintFeed(`pass:${lkey(item)}`);
     paintStats();
@@ -85,6 +86,7 @@ function listen() {
     navigator.vibrate?.(25);
   });
   on("rejected", (item) => {
+    if (!(data.rejected ?? []).some((x) => rkey(x) === rkey(item))) arrived.rej += 1;
     data.rejected = [item, ...(data.rejected ?? []).filter((x) => rkey(x) !== rkey(item))];
     paintFeed(`rej:${rkey(item)}`);
     paintStats();
@@ -98,14 +100,18 @@ function listen() {
 
 async function refresh() {
   clearTimeout(timer);
+  api.getRadarLessons().then((m) => { lessons = m; paintLearned(); }, () => {});
+  let ok = true;
   try {
-    data = await api.getRadar();
+    data = await api.getRadarFeed();
+    arrived = { pass: 0, rej: 0 };
     paint();
   } catch {
-    // The scanner is read-only: if the server does not answer, keep the screen.
+    // The scanner is read-only: if the server does not answer, keep the screen
+    // and try again soon, not a full minute later on an empty tab.
+    ok = Boolean(data);
   }
-  api.getRadarLessons().then((m) => { lessons = m; paintLearned(); }, () => {});
-  if (document.visibilityState === "visible") timer = setTimeout(refresh, POLL_MS);
+  if (document.visibilityState === "visible") timer = setTimeout(refresh, ok ? POLL_MS : RETRY_MS);
 }
 
 function paint() {
@@ -160,9 +166,9 @@ function flash(text) {
 }
 
 function paintStats() {
-  const since = Date.now() / 1000 - DAY_S;
-  const passed = (data.listings ?? []).filter((l) => (l.found_at ?? 0) >= since).length;
-  const rejected = (data.rejected ?? []).filter((r) => (r.at ?? 0) >= since).length;
+  const c = data.counts ?? {};
+  const passed = (c.passed_24h ?? 0) + arrived.pass;
+  const rejected = (c.rejected_24h ?? 0) + arrived.rej;
   root.querySelector("[data-stat-pass]").textContent = String(passed);
   root.querySelector("[data-stat-rej]").textContent = String(rejected);
 }
