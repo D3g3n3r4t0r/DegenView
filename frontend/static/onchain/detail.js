@@ -652,7 +652,12 @@ async function drawChart(box, candles, e, iv = interval) {
     if (v.t == null || v.t < t0 || v.t >= t1) continue;
     const buy = v.side === "buy";
     marks.push({ time: barAt(v.t), position: buy ? "belowBar" : "aboveBar", color: "#f0b90b", shape: "circle",
-      text: buy ? "Wallet in" : v.ret != null ? `Wallet out ${pct(v.ret)}` : "Wallet out" });
+      // The simulated wallet's trades are the strategy's: they say so, with
+      // the timeframe that took them (Lorenzo, 30/09: "scritto ingresso
+      // strategia [...] con un time frame chiaro").
+      text: v.iv
+        ? `${buy ? "Strategy entry" : "Strategy exit"} · ${v.iv}${!buy && v.ret != null ? ` ${pct(v.ret)}` : ""}`
+        : buy ? "Wallet in" : v.ret != null ? `Wallet out ${pct(v.ret)}` : "Wallet out" });
     drawn++;
   }
   marks.sort((x, y) => x.time - y.time);

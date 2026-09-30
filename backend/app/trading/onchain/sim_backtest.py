@@ -44,10 +44,24 @@ def token_trades(bt: dict | None) -> tuple[str, list[dict]] | None:
     drow = (daily.get("rows") or [None])[0]
     if drow and drow.get("trades") and (daily.get("best") or {}).get("events"):
         return daily.get("interval") or "1d", daily["best"]["events"]
-    ev = (bt.get("best") or {}).get("events")
-    if ev:
-        return "5m", ev
+    # The 5-minute best can be a mean-reversion strategy (RSI+BB buys the
+    # dip): Lorenzo, 30/09, on ORDO bought after a -90% slide: "come puo'
+    # una strategia trend follower entrare dopo un drawdown del genere?".
+    # On-chain the wallet follows trend followers only.
+    best = bt.get("best") or {}
+    if best.get("events") and best.get("label") in TREND_LABELS:
+        return "5m", best["events"]
     return None
+
+
+TREND_LABELS = frozenset({"Trend EMA", "Trend HF"})
+
+
+def _label(bt: dict | None, interval: str) -> str | None:
+    daily = (bt or {}).get("daily") or {}
+    if daily.get("interval") == interval and (daily.get("best") or {}).get("events"):
+        return (daily.get("best") or {}).get("label") or "Trend EMA"
+    return ((bt or {}).get("best") or {}).get("label")
 
 
 def _load() -> None:
@@ -85,6 +99,7 @@ def remember(chain: str, token: str, symbol: str | None, bt: dict | None, save: 
     # under the signal's time is replaced, not kept twice.
     fills = any(e.get("fill") for e in events) or _fills(bt, interval)
     step = STEP_S.get(interval, 0)
+    label = _label(bt, interval)
     new = False
     for e in events:
         if e.get("side") not in ("buy", "sell", "rug") or not _ok(e.get("t")):
@@ -96,6 +111,7 @@ def remember(chain: str, token: str, symbol: str | None, bt: dict | None, save: 
                 if old and old.get("iv") == interval and not old.get("fill"):
                     del row["events"][f"{int(e['t']) - step}:{e['side']}"]
             row["events"][k] = {**{f: e[f] for f in ("t", "side", "price", "ret") if f in e}, "iv": interval,
+                                "lab": label,
                                 **({"fill": True} if fills else {})}
             new = True
     if new and save:
@@ -127,12 +143,19 @@ def ledger_tokens() -> list[dict]:
              "events": _one_timeframe(r)} for r in _ledger.values()]
 
 
+def _trend(e: dict) -> bool:
+    """A 5-minute trade saved before labels were kept may be RSI+BB's: out."""
+    if e.get("iv") != "5m":
+        return True
+    return e.get("lab") in TREND_LABELS
+
+
 def _one_timeframe(r: dict) -> list[dict]:
     """A token's trades on its current timeframe, and the older ones of an
     earlier timeframe only before those start. The timeframe climbs as the
     chart grows (strategy_lab.LADDER): two timeframes' trades interleaved
     would sell one's buy on the other's exit."""
-    ev = sorted(r["events"].values(), key=lambda e: e["t"])
+    ev = sorted((e for e in r["events"].values() if _trend(e)), key=lambda e: e["t"])
     cur = [e for e in ev if e.get("iv") == r.get("interval")]
     if not cur:
         return ev
@@ -177,7 +200,7 @@ def replay(tokens: list[dict], capital: float = DEFAULT_CAPITAL, share: float = 
                 continue
             cash -= stake
             held[key] = {"chain": tk["chain"], "token": tk["token"], "symbol": tk.get("symbol"),
-                         "interval": tk.get("interval"), "at": int(t), "entry_price": e.get("price"),
+                         "interval": e.get("iv") or tk.get("interval"), "at": int(t), "entry_price": e.get("price"),
                          "stake": round(stake, 2)}
         elif p:
             ret = -1.0 if e["side"] == "rug" else e.get("ret")
