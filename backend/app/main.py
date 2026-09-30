@@ -4404,6 +4404,25 @@ async def _notify_trend_signal(s: dict) -> None:
 
 onchain_strategy_lab.on_signal(_notify_trend_signal)
 
+
+async def _sim_trend_signal(s: dict) -> None:
+    """The simulated wallet follows the same signal, on gems only (Lorenzo,
+    30/09: "ingressi con strategia dinamica su gemme e non piu' su crypto
+    etichettate come meme"). Real does not: it waits for a reviewed quant policy."""
+    from app.trading.onchain import quant_runtime
+    now = _time.time()
+    gem_ok, why = quant_runtime.gem_verdict(
+        {"chain": s["chain"], "token_address": s["token"], "symbol": s.get("symbol") or "", "name": ""}, now)
+    if s.get("side") == "buy" and not gem_ok:
+        logger.info("sim trend: %s skipped (%s)", s.get("symbol"), why)
+    users = {u.id: u for u in auth.list_users()}
+    for uid, row in onchain_autotrader.trend_signal(list(users), s, now, gem_ok):
+        if row.get("ok"):
+            await _notify_autotrade(users[uid], row)
+
+
+onchain_strategy_lab.on_signal(_sim_trend_signal)
+
 _SIGNALS_TICK_S = 30
 _signals_started = _time.time()
 
@@ -4425,7 +4444,7 @@ async def _notify_autotrade(user: User, row: dict) -> None:
     tag = "🧪 SIMULATO" if row.get("mode") == "sim" else "💱 ESEGUITO"
     sym = _html.escape(str(row["symbol"]))
     if row.get("token"):
-        url = app_token_url("meme", row.get("chain") or "robinhood", row["token"])
+        url = app_token_url("gems" if str(row.get("why", "")).startswith("trend") else "meme", row.get("chain") or "robinhood", row["token"])
         sym = f'<a href="{_html.escape(url, quote=True)}">{sym}</a>'
     if row["side"] == "buy":
         text = f"{tag} · il sistema ha comprato <b>{sym}</b> con {row.get('usdg', 0):.2f} USDG"
@@ -5056,6 +5075,12 @@ async def _onchain_signals_loop() -> None:
                 await onchain_alert_track.sample(client)
                 await onchain_alert_track.refresh_system(client)
             await onchain_autotrader.tick(auth.list_users(), notify=_notify_autotrade)
+            if onchain_autotrader.trend_keys():
+                try:
+                    marks = await onchain_live_prices.prices(onchain_autotrader.trend_keys())
+                    onchain_autotrader.trend_marks({k: v["p"] for k, v in marks.items()})
+                except Exception:
+                    logger.exception("trend book marks")
             for u in auth.list_users():      # the simulated wallet's line, a point per round
                 try:
                     _record_sim(u)
