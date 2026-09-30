@@ -314,7 +314,7 @@ export function mountAgentView() {
     <ul class="ag-list" data-ag-list aria-label="Scout activity"></ul>
     <button type="button" class="ag-more" data-ag-more hidden>Load earlier</button>`;
   viewEl.querySelector("[data-ag-more]")?.addEventListener("click", loadEarlier);
-  agentMap = mountAgentMap(viewEl.querySelector("[data-agent-map]"));
+  agentMap = mountAgentMap(viewEl.querySelector("[data-agent-map]"), { loadJourney: api.getAgentJourney });
   quantPanel = mountQuantPanel(viewEl.querySelector("[data-quant-panel]"));
   loadView();
   viewTimer = setInterval(() => {

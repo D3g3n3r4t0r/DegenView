@@ -1251,6 +1251,30 @@ html, body { overflow-x: clip; }
   .agent-map .am-chip { position: absolute; top: 0; left: 0; max-width: 64px; padding: 2px 8px; border: 1px solid var(--k-mint); border-radius: 999px; background: var(--k-surface); color: var(--k-text); font: inherit; font-size: 11px; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; pointer-events: auto; transition: transform .52s cubic-bezier(.2,.8,.2,1), opacity .3s ease; will-change: transform, opacity; }
   .agent-map .am-chip[data-selected="true"] { background: var(--k-mint); color: var(--k-card); }
   @media (prefers-reduced-motion: reduce) { .agent-map .am-chip { transition: none; } }
+  .agent-map .aj { margin: 0 0 18px; }
+  .agent-map .aj-form { display: flex; gap: 8px; }
+  .agent-map .aj-form input { flex: 1; min-width: 0; padding: 12px; color: var(--k-text); background: var(--k-surface); border: 1px solid var(--k-surface-2); border-radius: 10px; font: inherit; font-size: 16px; }
+  .agent-map .aj-form button, .agent-map .aj-choices button, .agent-map .aj-replay { padding: 10px 14px; border: 1px solid var(--k-mint); border-radius: 10px; background: transparent; color: var(--k-text); font: inherit; font-size: 14px; cursor: pointer; }
+  .agent-map .aj-form button { background: var(--k-mint); color: var(--k-card); font-weight: 600; }
+  .agent-map .aj-status, .agent-map .aj-limits { font-size: 13px; color: var(--k-text-2); }
+  .agent-map .aj-choices { display: flex; flex-wrap: wrap; gap: 8px; }
+  .agent-map .aj-verify { font-size: 13px; margin: 0; }
+  .agent-map .aj-verify[data-ok="true"] { color: var(--k-mint); }
+  .agent-map .aj-verify[data-ok="false"] { color: var(--k-amber); }
+  .agent-map .aj-rail { position: relative; list-style: none; margin: 12px 0; padding: 0 0 0 22px; }
+  .agent-map .aj-rail::before { content: ""; position: absolute; left: 6px; top: 6px; bottom: 6px; width: 2px; background: var(--k-surface-2); }
+  .agent-map .aj-step { position: relative; margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--k-surface-2); border-radius: 12px; background: var(--k-card); transition: transform .45s cubic-bezier(.2,.8,.2,1), opacity .45s ease; }
+  .agent-map .aj-step::before { content: ""; position: absolute; left: -21px; top: 16px; width: 10px; height: 10px; border-radius: 50%; background: var(--k-text-3); }
+  .agent-map .aj-step.aj-in { transform: translateY(12px); opacity: 0; }
+  .agent-map .aj-step.aj-now { border-color: var(--k-mint); }
+  .agent-map .aj-step.aj-now::before { background: var(--k-mint); animation: am-breathe 1.6s ease-in-out infinite; }
+  .agent-map .aj-top { display: flex; justify-content: space-between; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .agent-map .aj-pill { padding: 2px 8px; border-radius: 999px; background: var(--k-tint-up); color: var(--k-mint); font-size: 12px; }
+  .agent-map .aj-src { margin: 6px 0 0; font-size: 12px; color: var(--k-text-2); }
+  .agent-map .aj-text { margin: 4px 0; font-size: 14px; }
+  .agent-map .aj-proof summary { font-size: 12px; color: var(--k-text-2); font-family: ui-monospace, monospace; cursor: pointer; }
+  .agent-map .aj-proof pre { margin: 6px 0 0; padding: 8px; max-height: 220px; overflow: auto; font-size: 11px; background: var(--k-surface); border-radius: 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  @media (prefers-reduced-motion: reduce) { .agent-map .aj-step { transition: none; } .agent-map .aj-step.aj-now::before { animation: none; } }
   .agent-map .am-ring { position: absolute; inset: 0; border: 2px solid var(--k-mint); border-radius: inherit; pointer-events: none; }
   .agent-map .am-sparks { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
   .agent-map .am-spark { position: absolute; top: -5px; left: -5px; width: 10px; height: 10px; border-radius: 50%; background: var(--k-mint); box-shadow: 0 0 12px var(--k-mint); opacity: 0; will-change: transform, opacity; }

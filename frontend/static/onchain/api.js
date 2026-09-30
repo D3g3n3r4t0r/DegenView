@@ -122,6 +122,8 @@ export const getScanFeed = () => request("/api/onchain/scan-feed");
 export const getLivePrices = (keys) => request(`/api/onchain/live-prices?ids=${encodeURIComponent(keys.join(","))}`, { timeoutMs: 5000 });
 export const getAutotrader = () => request("/api/onchain/autotrader");
 export const getAgentLog = (before) => request(`/api/agent/log?limit=60${before ? `&before=${before}` : ""}`);
+export const getAgentJourney = ({ q = "", chain = "", token = "" } = {}) =>
+  request(`/api/agent/journey?q=${encodeURIComponent(q)}&chain=${encodeURIComponent(chain)}&token=${encodeURIComponent(token)}`);
 /* Which wallet the profile and the header show: the real ones or the
  * autotrader's simulated one. A per-device choice. */
 export const walletMode = () => { try { return localStorage.getItem("lae:wallet") === "sim" ? "sim" : "real"; } catch { return "real"; } };

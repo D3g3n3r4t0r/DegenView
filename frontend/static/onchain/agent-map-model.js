@@ -105,3 +105,23 @@ export function projectPositions(items, limit = 8) {
   }
   return [...out.values()];
 }
+
+/** Recompute a journey's hash chain: id = sha256(record), link = sha256(prev + id).
+ * `sha` is an async string -> hex digest. Returns the first broken step, if any. */
+export async function verifyChain(journey, sha) {
+  let link = journey?.genesis;
+  const steps = Array.isArray(journey?.steps) ? journey.steps : [];
+  if (typeof link !== "string") return { ok: false, brokenAt: 0, count: steps.length };
+  for (let i = 0; i < steps.length; i++) {
+    const s = steps[i];
+    if (typeof s?.record !== "string" || await sha(s.record) !== s.id) return { ok: false, brokenAt: i, count: steps.length };
+    link = await sha(link + s.id);
+    if (link !== s.link) return { ok: false, brokenAt: i, count: steps.length };
+  }
+  return { ok: link === journey.head, brokenAt: link === journey.head ? null : steps.length, count: steps.length, head: link };
+}
+
+export async function sha256Hex(text) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
+}
