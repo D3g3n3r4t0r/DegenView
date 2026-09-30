@@ -346,3 +346,12 @@ def test_get_returns_the_daily_backtest_next_to_the_fast_one():
                                          "daily": {"interval": "1d", "rows": [{"label": "Trend EMA"}]}}
     assert strategy_lab.get("solana", "T")["daily"]["interval"] == "1d"
     strategy_lab.reset_for_tests()
+
+
+def test_a_token_with_history_never_descends_to_the_minutes():
+    names = [r[0] for r in lab.LADDER]
+    rungs = lambda start: names[names.index(start):lab.descent_end(names.index(start))]  # noqa: E731
+    assert rungs("1d") == ["1d", "12h", "8h", "6h"]
+    assert rungs("4h") == ["4h", "2h", "1h"]
+    assert rungs("1h") == ["1h"]
+    assert rungs("30m") == ["30m", "15m", "5m"]
