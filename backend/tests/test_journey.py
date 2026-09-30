@@ -37,3 +37,23 @@ def test_resolve_by_ticker_any_case_and_by_address(monkeypatch, tmp_path):
     assert [m["token"] for m in journey.resolve("$dreg")] == [TOKEN]
     assert journey.resolve(TOKEN)[0]["symbol"] == "DREG"
     assert journey.resolve("nope") == [] and journey.resolve("") == []
+
+
+def test_journey_reads_pillars_judge_code_and_outcomes(monkeypatch, tmp_path):
+    from app.trading.onchain import code_review, gem_track, judge, leaderboard
+    _setup(monkeypatch, tmp_path)
+    k = f"solana:{TOKEN}"
+    monkeypatch.setitem(leaderboard._entries, k, {"found_at": 105, "source": "jupiter", "github": "org/repo",
+                                                  "checked_at": {"github": 112, "tokenomics": 113},
+                                                  "pillars": {"github": {"score": 70, "facts": {"big": "x"}}}})
+    monkeypatch.setitem(judge._cache, k, {"at": 125, "verdict": "keep", "facts": {"big": "x"}})
+    monkeypatch.setitem(code_review._cache, "org/repo", {"at": 126, "verdict": "real code"})
+    monkeypatch.setitem(gem_track._track, k, {"at": 160, "price": 1.0, "rank": 3, "returns": {"1": 0.25, "7": -0.1}})
+    deepseek_calls.log(kind="code", purpose="code", subject="org/repo", body={"messages": [{"content": "q"}]},
+                       content="{}", usage={}, ms=5, now=127)
+    j = journey.journey("solana", TOKEN)
+    sources = [s["source"] for s in j["steps"]]
+    for src in ("leaderboard.found", "leaderboard.pillar", "judge", "code_review", "gem_track.entry", "gem_track.return"):
+        assert src in sources, src
+    assert sources.count("deepseek_call") == 2 and '"big"' not in str([s["record"] for s in j["steps"]])
+    assert j["steps"][-1]["text"] == "Price after 7 days: -10.0%"
