@@ -155,23 +155,39 @@ export async function streamScan(query, onEvent) {
   }
   if (!response.ok || !response.body) throw new ApiError(`scan failed (${response.status})`);
   const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
-  let buf = "", result = null;
-  for (;;) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buf += value;
-    let i;
-    while ((i = buf.indexOf("\n")) >= 0) {
-      const line = buf.slice(0, i).trim();
-      buf = buf.slice(i + 1);
-      if (!line) continue;
-      const ev = JSON.parse(line);
-      if ("result" in ev) result = ev.result;
-      else onEvent(ev);
+  let buf = "", result = null, id = null;
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += value;
+      let i;
+      while ((i = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, i).trim();
+        buf = buf.slice(i + 1);
+        if (!line) continue;
+        const ev = JSON.parse(line);
+        if ("result" in ev) result = ev.result;
+        else if ("id" in ev) id = ev.id;
+        else if (!("ping" in ev)) onEvent(ev);
+      }
     }
+  } catch (cause) {
+    // Safari says "Load failed" when a phone drops the stream: the scan goes on
+    // on the server, so collect its result instead of showing an error.
+    if (!id) throw new ApiError("connection lost, run the scan again", { cause });
   }
-  if (!result) throw new ApiError("scan interrupted");
-  return result;
+  if (result) return result;
+  if (!id) throw new ApiError("scan interrupted");
+  onEvent({ reconnecting: true });
+  for (let k = 0; k < 90; k++) {
+    await new Promise((r) => setTimeout(r, 2000));
+    let d;
+    try { d = await send(`/api/onchain/scan/result/${encodeURIComponent(id)}`, { timeoutMs: 10000 }); }
+    catch (err) { if (String(err.message).startsWith("scan not found")) throw new ApiError("the server restarted during the scan, run it again"); continue; }
+    if (d.done) return d.result;
+  }
+  throw new ApiError("scan is taking too long, try again");
 }
 export const addScanned = (chain, token) => request("/api/onchain/scan/add", { method: "POST", body: { chain, token } });
 export const getTop = (n, keys = []) =>

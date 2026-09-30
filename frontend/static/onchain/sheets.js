@@ -160,6 +160,11 @@ const STEP_LABEL = {
 };
 
 function scanStep(list, ev) {
+  if (ev.reconnecting) {
+    const note = document.createElement("li"); note.dataset.state = "wait";
+    note.textContent = "Connection dropped. Scout is still working, collecting the result…";
+    list.append(note); return;
+  }
   if (ev.plan) {
     list.innerHTML = ev.plan.map((k, i) => `<li data-k="${k}" data-state="wait" style="--i:${i}">
       <i class="step-dot" aria-hidden="true"><b></b><s></s></i><span>${STEP_LABEL[k] ?? escapeHtml(k)}</span><small></small></li>`).join("");
