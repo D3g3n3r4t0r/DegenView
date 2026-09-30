@@ -318,6 +318,18 @@ def parse(raw: str, points: list[dict]) -> list[dict] | None:
     return out
 
 
+def quick(entry: dict) -> dict | None:
+    """When the second search runs out of time: absences stay unverified,
+    never red (a timeout is not evidence)."""
+    points = red_points(entry)
+    if not points:
+        return None
+    judged = [minor(p) for p in heuristic(points, {"found": [], "pages": []})]
+    return {"confirmed": [p for p in judged if p["status"] == "confirmed"],
+            "unverified": [p for p in judged if p["status"] == "unverified"],
+            "refuted": [], "found": []}
+
+
 async def recheck(entry: dict, item: dict, client: httpx.AsyncClient, ask=None) -> dict | None:
     """{confirmed, unverified, refuted, found} or None when nothing is red.
     Updates entry["pillars"]["github"] when a GitHub turns up."""

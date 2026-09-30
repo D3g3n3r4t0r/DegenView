@@ -205,41 +205,41 @@ async def report(item: dict, gem: dict, client: httpx.AsyncClient, step: "Steps"
     then the judge and the code reading, on the Top's own allowance."""
     chain, token = item["chain"], item["token_address"]
     board = leaderboard._entries.get(projects_db.key(chain, token))
-    if board is not None and board.get("pillars"):
-        for k in ("pillars", "report", "code"):
-            step(k, "ok", "from the Gem Finder")
-        e = {**board, "pillars": dict(board["pillars"])}
-        rc = await _recheck(e, item, client, step)
-        out = leaderboard._public(e)
-        out["recheck"] = _recheck_public(rc)
-        return _slim(out)
     p = projects_db.get(chain, token)
-    e = leaderboard.db_entry(p) if p is not None and p.get("pillars") else None
-    if e is None:
-        step("pillars", "run")
-        base = {**item, "launched_at": item.get("created_at"), "websites": _recent.get(projects_db.key(chain, token), {}).get("websites")}
-        pillars = await _timed(depth.analyze(base, client), "pillars")
-        if not pillars:
-            step("pillars", "fail", "site, GitHub and tokenomics did not answer")
-            for k in ("report", "code"):
-                step(k, "skip")
-            return None
-        e = {**base, "pillars": pillars, "overall": depth.overall(pillars), "rank": None,
-             "github": ((pillars.get("github") or {}).get("facts") or {}).get("url")}
-        e["narratives"] = []
+    old = (board if board is not None and board.get("pillars")
+           else leaderboard.db_entry(p) if p is not None and p.get("pillars") else None)
+    # Always a fresh read: a stored one predates the latest fixes and the
+    # site as it is now (Lorenzo, 30/09, HYDX: "placeholder text" and "0%
+    # locked" still shown from an old reading). The stored one is the fallback.
+    step("pillars", "run")
+    base = {**item, "launched_at": item.get("created_at"),
+            "websites": _recent.get(projects_db.key(chain, token), {}).get("websites")}
+    pillars = await _timed(depth.analyze(base, client), "pillars")
+    if pillars:
+        e = {**(old or {}), **base, "pillars": pillars, "overall": depth.overall(pillars),
+             "rank": (old or {}).get("rank"),
+             "github": ((pillars.get("github") or {}).get("facts") or {}).get("url") or (old or {}).get("github")}
+        e.setdefault("narratives", [])
+        e["why"] = None
         step("pillars", "ok", " · ".join(f"{k} {v.get('score')}" for k, v in pillars.items() if v.get("score") is not None))
+    elif old is not None:
+        e = {**old, "pillars": dict(old["pillars"])}
+        step("pillars", "warn", "live read failed: stored reading")
     else:
-        step("pillars", "ok", "from the database")
+        step("pillars", "fail", "site, GitHub and tokenomics did not answer")
+        for k in ("report", "code"):
+            step(k, "skip")
+        return None
     rules_why = leaderboard.qualifies(e) if not e.get("why") else e["why"]
     fatal = (e.get("overall") or {}).get("fatal")
     j = judge.get(chain, token)
     if fatal:
         step("report", "skip", f"stopped: {fatal}")
-    elif j and not judge.wants_reading(e, rules_why):
+    elif j and not judge.wants_reading(e, rules_why, fresh=True):
         step("report", "ok", f"{j.get('verdict')} · {j.get('score')}/100")
     else:
         step("report", "run")
-        j = await _timed(judge.judge(e, rules_why, priority=True), "judge") or j
+        j = await _timed(judge.judge(e, rules_why, priority=True, fresh=True), "judge") or j
         step("report", "skip" if not j else "ok" if j.get("verdict") in ("gem", "watch") else "fail",
              f"{j.get('verdict')} · {j.get('score')}/100" if j else "DeepSeek unavailable")
     e["judge"] = j
@@ -258,8 +258,16 @@ async def report(item: dict, gem: dict, client: httpx.AsyncClient, step: "Steps"
     rc = await _recheck(e, item, client, step)
     j, c = e["judge"], e["code"]
     score = leaderboard.final_score(e)
-    gem.update(score=round(score), why=leaderboard.qualifies(e) or gem.get("why") or "",
+    # The reason is the fresh reading's, not the stored rejection's.
+    why = leaderboard.qualifies(e)
+    if not why and gem.get("status") == "rejected":
+        why = "passes on a fresh reading: study again to enter the board"
+    gem.update(score=round(score), why=why,
                pillars=_pillars(e.get("pillars")), judge=_judge_view(j), code=_code_view(c))
+    if board is not None:
+        out = leaderboard._public(e)
+        out["recheck"] = _recheck_public(rc)
+        return _slim(out)
     f = ((e.get("pillars") or {}).get("site") or {}).get("facts") or {}
     return _slim({"score": score, "rank": e.get("rank"), "early": False, "pillars": e.get("pillars") or {},
             "summary": f.get("summary") or None, "traction": leaderboard.traction_of(e),
@@ -275,6 +283,8 @@ async def _recheck(e: dict, item: dict, client: httpx.AsyncClient, step: "Steps"
     step("recheck", "run")
     full = {**item, **_recent.get(projects_db.key(item["chain"], item["token_address"]), {})}
     rc = await _timed(scout_recheck.recheck(e, full, client), "recheck")
+    if rc is None:
+        rc = scout_recheck.quick(e)
     if rc is None:
         step("recheck", "skip", "nothing red to check")
         return None
