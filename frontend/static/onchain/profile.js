@@ -16,7 +16,6 @@ import { escapeHtml, logo, usdShort } from "@onchain/format.js";
 import * as phantom from "@onchain/phantomlink.js";
 import { loadLinked } from "@onchain/userswap.js";
 import { register } from "@onchain/detail.js";
-import { bindReplay, replayBox } from "@onchain/replay.js";
 import { flash, liveDelta, liveKey, liveValue, priceOf, roll, watch } from "@onchain/live.js";
 
 const RANGES = [["1h", "1H"], ["2h", "2H"], ["3h", "3H"], ["4h", "4H"], ["8h", "8H"], ["24h", "1D"], ["7d", "1W"],
@@ -65,14 +64,16 @@ let scrub = null;
 function simNote(d) {
   if (!d.sim) {
     return `<div class="pf-simnote"><p>No simulated wallet yet. It starts with your Robinhood USDG (or $100), then the system trades it on every alert with real quotes: nothing is sent.</p>
-      <button type="button" class="pf-save" data-sim-start>Start simulated wallet</button></div>`;
+      <button type="button" class="pf-save" data-sim-start>Start simulated wallet</button>
+      <button type="button" class="pf-link" data-sim-top>Top 50 wallet ($10k)</button></div>`;
   }
   const since = new Date((d.tracking_since ?? Date.now() / 1000) * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" });
   const ret = d.sim.ret == null ? "" : ` · ${d.sim.ret >= 0 ? "+" : ""}${(d.sim.ret * 100).toFixed(2)}% since start`;
   return `<div class="pf-simnote"><p>Started with $${d.sim.start.toFixed(2)}${ret}. ${d.sim.autotrader === "sim"
     ? "The system is trading it now."
     : `Autotrader is ${d.sim.autotrader === "off" ? "off" : "on real"}: this balance stands still. <button type="button" class="pf-link" data-sim-start>Resume simulation</button>`}
-    <button type="button" class="pf-link" data-sim-cash>Set cash</button></p>
+    <button type="button" class="pf-link" data-sim-cash>Set cash</button>
+    <button type="button" class="pf-link" data-sim-top>Top 50 wallet ($10k)</button></p>
     <form class="pf-simcash" data-sim-form hidden>
       <label>$<input name="cash" type="number" inputmode="decimal" min="0" max="10000000" step="0.01" required value="${(d.cash ?? d.sim.usdg ?? 0).toFixed(2)}" aria-label="Simulated cash in USD" /></label>
       <button type="submit" class="pf-save">Save</button>
@@ -387,7 +388,6 @@ function paint() {
       <button type="button" class="pf-sq" data-go="wallet" aria-label="Swap"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 9h12l-3-3M19 15H7l3 3"/></svg></button>
       <button type="button" class="pf-sq" data-wallet-menu aria-label="Wallet"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/></svg></button>
     </section>
-    ${d.wallet === "sim" && d.sim ? replayBox(d.sim.start) : ""}
     <section class="pf-pos">
       <div class="pf-pos-head">
         <h3>Positions <span>(${tab === "open" ? (d.positions ?? []).length : (d.closed ?? []).length})</span></h3>
@@ -415,7 +415,6 @@ function paint() {
   delete root.dataset.loading;
   paintMe(p);
   bindScrub();
-  if (d.wallet === "sim" && d.sim) bindReplay(root, d.sim.start);
   applyLive();
 }
 
@@ -488,6 +487,7 @@ export function mountProfile({ go: goTo } = {}) {
   root.addEventListener("click", (event) => {
     const wb = event.target.closest("[data-wallet]");
     if (wb) { switchWallet(wb.dataset.wallet); return; }
+    if (event.target.closest("[data-sim-top]")) { import("@onchain/sim-backtest.js").then((m) => m.openSimBacktest()); return; }
     if (event.target.closest("[data-sim-cash]")) {
       const form = root.querySelector("[data-sim-form]");
       if (form) { form.hidden = !form.hidden; if (!form.hidden) form.cash.select(); }

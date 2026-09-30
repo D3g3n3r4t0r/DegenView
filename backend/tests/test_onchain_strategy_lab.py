@@ -9,12 +9,15 @@ import pytest
 
 from app.notify import deepseek_desk
 from app.trading.onchain import strategy_lab as lab
+from app.trading.onchain import sim_backtest
 
 
 @pytest.fixture(autouse=True)
 def fresh(monkeypatch, tmp_path):
     monkeypatch.setattr(lab, "_STORE_FILE", tmp_path / "lab.json")
     monkeypatch.setattr(deepseek_desk, "_STORE_FILE", tmp_path / "desk.json")
+    monkeypatch.setattr(sim_backtest, "_FILE", tmp_path / "ledger.json")
+    sim_backtest.reset_for_tests()
     lab.reset_for_tests()
     deepseek_desk.reset_for_tests()
     yield

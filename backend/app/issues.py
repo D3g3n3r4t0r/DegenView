@@ -177,7 +177,7 @@ _SEED = [
     ("seed-0239", "Wallet simulato: poter impostare il saldo a piacere",
      "Lorenzo, 30/09: 'la simulazione voglio poter modificare il saldo a mio piacimento'.",
      "media"),
-    ("seed-0240", "Portafoglio simulato: backtest della Top 50 su $10.000, ingressi sul grafico, timeframe graduale",
+    ("seed-0240", "Grafici: ingressi della strategia nel punto giusto, timeframe graduale, settimanale, posizioni cliccabili",
      "Lorenzo, 30/09: 'voglio che tu applichi a quel portafoglio tutti gli ingressi e tutti i rendimenti di tutte le GM in top 50 per vedere come avrebbe performato'; 'la differenziazione di time frame deve essere graduale con un algoritmo che tiene conto [...] di quanta storicita' ha il grafico'; 'voglio vedere anche il time frame settimanale'; 'le posizioni aperte e chiuse se ci clicco voglio vedere quali sono stati graficamente'; 'gli ingressi registrati secondo la strategia corretta non vengono visualizzati correttamente nel grafico'.",
      "alta"),
     ("seed-quant-engine-20260930", "Sniper solo gemme: ingresso su segnale e timeframe scelti dai backtest, senza DeepSeek",

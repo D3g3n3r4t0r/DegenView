@@ -121,6 +121,7 @@ export const getAlerts = (kind) => request(`/api/onchain/alerts/${kind}`);
 export const getScanFeed = () => request("/api/onchain/scan-feed");
 export const getLivePrices = (keys) => request(`/api/onchain/live-prices?ids=${encodeURIComponent(keys.join(","))}`, { timeoutMs: 5000 });
 export const getAutotrader = () => request("/api/onchain/autotrader");
+export const getTopBacktest = () => request("/api/onchain/top/backtest", { timeoutMs: 20000 });
 export const getAgentLog = (before) => request(`/api/agent/log?limit=60${before ? `&before=${before}` : ""}`);
 export const getAgentJourney = ({ q = "", chain = "", token = "" } = {}) =>
   request(`/api/agent/journey?q=${encodeURIComponent(q)}&chain=${encodeURIComponent(chain)}&token=${encodeURIComponent(token)}`);
@@ -223,5 +224,3 @@ export const setWatchlistAutoTrade = (id, strategyName, enabled) =>
 export const getQuant = () => request("/api/agent/quant");
 export const getQuantProject = (chain, token) => request(`/api/agent/quant/project?chain=${encodeURIComponent(chain)}&token=${encodeURIComponent(token)}`);
 export const getQuantReport = (id) => request(`/api/agent/quant/reports/${encodeURIComponent(id)}`);
-export const getPortfolioReplay = (cash, pct) =>
-  request(`/api/onchain/portfolio-replay?${new URLSearchParams({ cash, pct })}`);
