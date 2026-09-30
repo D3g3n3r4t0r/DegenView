@@ -93,6 +93,33 @@ def _load() -> None:
         return
     if isinstance(raw, dict):
         _results.update({k: v for k, v in raw.items() if isinstance(v, dict)})
+    # A saved result whose arrows are not its listed trades (5-minute events
+    # of RSI+BB from before #434, next to a trend-follower row) is redone
+    # first: the list hides it until then (main._lab_summary).
+    for r in _results.values():
+        bt = r.get("backtests") or {}
+        if bt.get("rows") and drawn_row(bt) is None and trend_row(bt) is not None:
+            r["at"] = 0
+
+
+def trend_row(part: dict) -> dict | None:
+    """The trend follower's best traded row of a backtest (system.TREND_LABELS)."""
+    rows = [r for r in part.get("rows") or [] if r.get("trades") and r.get("return_pct") is not None
+            and r.get("label") in system.TREND_LABELS]
+    return max(rows, key=lambda r: r["return_pct"]) if rows else None
+
+
+def drawn_row(part: dict | None) -> dict | None:
+    """The row the list may show for this backtest: the trend follower's
+    best, only when the saved chart events are that row's own trades (same
+    label, one sell per closed trade). Lorenzo, 30/09: a number in the Top
+    with no arrows on its chart must never happen."""
+    row = trend_row(part or {})
+    best = (part or {}).get("best") or {}
+    if row is None or best.get("label") != row["label"]:
+        return None
+    sells = sum(1 for e in best.get("events") or [] if e.get("side") == "sell")
+    return row if sells == row["trades"] else None
 
 
 def _save() -> None:
