@@ -1,5 +1,8 @@
 """Old timeframe rule against the new ladder, on the Top's saved tokens.
 
+Also RSI+BB: its 5-minute row of the saved backtest against the same
+ladder (rsi_5m / rsi_new).
+
 Old: 1d, else 8h, first with 60 closed candles, Trend EMA only.
 New (strategy_lab.LADDER_RULE): from the widest rung with 60 closed candles
 down to the first where Trend EMA enters, then the same with Trend HF.
@@ -69,17 +72,23 @@ async def main():
             for rule in (False, True):
                 lab.LADDER_RULE = rule
                 got[rule] = summary(await lab.run_daily(client, GECKO_NETWORKS[chain], v["pair"], token, now))
+            lab.LADDER_RULE = True
+            rsi_new = summary(await lab.run_daily(client, GECKO_NETWORKS[chain], v["pair"], token, now,
+                                                  strategies=lab.RSI_BB))
+            rsi_row = next((r for r in (v.get("backtests") or {}).get("rows") or [] if r.get("label") == "RSI+BB"), None)
+            rsi_5m = summary({"interval": "5m", "rows": [rsi_row]}) if rsi_row else None
             net = GECKO_NETWORKS[chain]
             series = {f"{tf}{agg}": len(await archived_rows(net, v["pair"], tf, agg, token))
                         for tf, agg in candle_archive.SOURCES}
             row = {"symbol": v.get("symbol"), "chain": chain, "saved": summary(v["daily"]),
-                   "old": got[False], "new": got[True], "archived": series}
+                   "old": got[False], "new": got[True], "rsi_5m": rsi_5m, "rsi_new": rsi_new, "archived": series}
             out.append(row)
             print(json.dumps(row), file=sys.stderr, flush=True)
     lab.LADDER_RULE = False
     ok = [r for r in out if r["old"] and r["new"]]
     tot = {}
-    for k in ("saved", "old", "new"):
+    # RSI+BB: today's 5-minute result against the same ladder.
+    for k in ("saved", "old", "new", "rsi_5m", "rsi_new"):
         rets = [r[k]["ret"] for r in ok if r[k] and r[k]["ret"] is not None]
         tot[k] = {"with_trades": sum(1 for r in ok if r[k] and r[k]["trades"]),
                   "mean_ret": round(statistics.mean(rets), 2) if rets else None,
