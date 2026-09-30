@@ -58,27 +58,15 @@ function paintMe(p) {
 
 let scrub = null;
 
-/* The simulated wallet: the autotrader's virtual USDC, trading on real
- * quotes. Not started yet: one tap starts it. Started but the autotrader
- * is not on Simulated: it says the balance is standing still. */
+/* The simulated wallet is the Top 50 wallet (main._top_wallet): $10,000,
+ * the same for every account, on every entry and exit of the strategy on
+ * the Top 50 tokens, and on the next ones (Lorenzo, 30/09). */
 function simNote(d) {
-  if (!d.sim) {
-    return `<div class="pf-simnote"><p>No simulated wallet yet. It starts with your Robinhood USDG (or $100), then the system trades it on every alert with real quotes: nothing is sent.</p>
-      <button type="button" class="pf-save" data-sim-start>Start simulated wallet</button>
-      <button type="button" class="pf-link" data-sim-top>Top 50 wallet ($10k)</button></div>`;
-  }
-  const since = new Date((d.tracking_since ?? Date.now() / 1000) * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  const ret = d.sim.ret == null ? "" : ` · ${d.sim.ret >= 0 ? "+" : ""}${(d.sim.ret * 100).toFixed(2)}% since start`;
-  return `<div class="pf-simnote"><p>Started with $${d.sim.start.toFixed(2)}${ret}. ${d.sim.autotrader === "sim"
-    ? "The system is trading it now."
-    : `Autotrader is ${d.sim.autotrader === "off" ? "off" : "on real"}: this balance stands still. <button type="button" class="pf-link" data-sim-start>Resume simulation</button>`}
-    <button type="button" class="pf-link" data-sim-cash>Set cash</button>
-    <button type="button" class="pf-link" data-sim-top>Top 50 wallet ($10k)</button></p>
-    <form class="pf-simcash" data-sim-form hidden>
-      <label>$<input name="cash" type="number" inputmode="decimal" min="0" max="10000000" step="0.01" required value="${(d.cash ?? d.sim.usdg ?? 0).toFixed(2)}" aria-label="Simulated cash in USD" /></label>
-      <button type="submit" class="pf-save">Save</button>
-      <small data-sim-err></small>
-    </form></div>`;
+  if (!d.sim) return `<div class="pf-simnote"><p>The Top 50 wallet is not ready yet.</p></div>`;
+  const from = d.sim.from ? new Date(d.sim.from * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
+  const ret = d.sim.ret == null ? "" : ` · ${d.sim.ret >= 0 ? "+" : ""}${(d.sim.ret * 100).toFixed(2)}%`;
+  return `<div class="pf-simnote"><p>$${d.sim.start.toLocaleString("en-US")}${from ? ` from ${from}` : ""}${ret}. Every strategy entry and exit on the Top 50 tokens, ${Math.round((d.sim.share ?? 0.1) * 100)}% per trade, same for every account. Nothing is sent.
+    <button type="button" class="pf-link" data-sim-top>Details</button></p></div>`;
 }
 
 /* Touching the line: the big number and the change become those of the
@@ -481,22 +469,12 @@ export function mountProfile({ go: goTo } = {}) {
   setInterval(() => {
     if (document.visibilityState !== "visible" || !root.offsetParent || !data) return;
     if (root.querySelector("dialog[open]") || root.querySelector(".scrub-x:not([hidden])")) return;
-    if (root.querySelector("[data-sim-form]:not([hidden])")) return;
     load();
   }, 60_000);
   root.addEventListener("click", (event) => {
     const wb = event.target.closest("[data-wallet]");
     if (wb) { switchWallet(wb.dataset.wallet); return; }
     if (event.target.closest("[data-sim-top]")) { import("@onchain/sim-backtest.js").then((m) => m.openSimBacktest()); return; }
-    if (event.target.closest("[data-sim-cash]")) {
-      const form = root.querySelector("[data-sim-form]");
-      if (form) { form.hidden = !form.hidden; if (!form.hidden) form.cash.select(); }
-      return;
-    }
-    if (event.target.closest("[data-sim-start]")) {
-      api.setAutotrader({ mode: "sim" }).then(() => switchWallet("sim"), (err) => alert(err.message));
-      return;
-    }
     const r = event.target.closest("[data-range]");
     if (r) { range = r.dataset.range; paint(); return; }
     const cf = event.target.closest("[data-chainf]");
@@ -533,15 +511,6 @@ export function mountProfile({ go: goTo } = {}) {
   });
   root.addEventListener("submit", async (event) => {
     event.preventDefault();
-    if (event.target.matches("[data-sim-form]")) {
-      const cash = Number(event.target.cash.value);
-      try {
-        await api.setAutotrader({ sim_cash: cash });
-        event.target.hidden = true;
-        load();
-      } catch (e) { event.target.querySelector("[data-sim-err]").textContent = e?.message ?? "Couldn't save."; }
-      return;
-    }
     const f = new FormData(event.target);
     const err = root.querySelector("[data-err]");
     try {

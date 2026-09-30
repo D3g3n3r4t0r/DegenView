@@ -54,7 +54,7 @@ CASH_SLIPPAGE = 0.005      # USDC <-> USDG: two dollars, a tight floor is enough
 MIN_CASH_POOL_USD = 20_000
 _meta: dict = {"usdc": None, "usdc_at": 0.0}
 KEEP_TRADES = 60
-SIM_START_USDG = 100.0     # virtual balance when the wallet holds no USDG
+SIM_START_USDG = 10_000.0  # virtual balance when the wallet holds no USDG (Lorenzo, 30/09: 10.000)
 SIM_CASH_MAX = 10_000_000.0  # a typo guard on the simulated balance, not a limit on real money
 
 _state: dict[str, dict] = {}
@@ -74,6 +74,21 @@ def _save() -> None:
         write_text_atomic(_STORE_FILE, json.dumps(_state, ensure_ascii=False), encoding="utf-8")
     except OSError:
         pass
+
+
+def reset_all_sim(start: float = SIM_START_USDG) -> int:
+    """Every account's simulated book back to `start` in cash, no open trade
+    and no simulated trade in the log (Lorenzo, 30/09: "reset completo di
+    tutti gli account e far si' che l'importo sia 10.000"). Real is untouched."""
+    n = 0
+    for u in _state.values():
+        u.update(sim_usdg=round(start, 6), sim_start=round(start, 6), paper=[], trend=[])
+        if u.get("position") and u["position"].get("mode") == "sim":
+            u["position"] = None
+        u["trades"] = [t for t in u.get("trades") or [] if t.get("mode") != "sim"]
+        n += 1
+    _save()
+    return n
 
 
 def reset_for_tests() -> None:

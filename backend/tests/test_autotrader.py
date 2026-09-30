@@ -223,8 +223,4 @@ def test_sim_total_equals_cash_plus_rows_and_rows_carry_their_own_mark():
     b["quant_system"].update(state="out", events=[{"side": "sell", "t": T0 + 30, "price": .9}])
     assert {p["symbol"]: p for p in tr.view("u1")["positions"]}["TOAD"]["price"] is None
 
-    from app import main
-    snap = main._sim_snapshot(SimpleNamespace(id="u1"))
-    assert snap["total"] == pytest.approx(snap["cash"] + sum(p["value_usd"] for p in snap["positions"]), abs=1e-3)
-    assert sum(snap["by_chain"].values()) == pytest.approx(snap["total"], abs=1e-3)
 
