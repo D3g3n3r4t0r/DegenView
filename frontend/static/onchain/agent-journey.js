@@ -1,0 +1,104 @@
+import { NODES, verifyChain, sha256Hex } from "@onchain/agent-map-model.js";
+
+const STEP_MS = 650;
+const LABEL = Object.fromEntries(NODES.map(n => [n.id, n.label]));
+LABEL.decision = "Decision";
+const SOURCE = {
+  "projects_db.first_seen": "Project database", "projects_db.verdict": "Project database",
+  agent_activity: "Agent activity", deepseek_call: "DeepSeek call journal", strategy_lab: "Strategy lab",
+};
+
+/** Replays one token's recorded evaluation path, step by step, and checks its hash chain in the browser.
+ * `load({q}|{chain,token})` returns the /api/agent/journey payload; `onStep(node)` lights the map. */
+export function mountJourney(root, { load, onStep }) {
+  const el = (tag, text, cls) => { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; };
+  const timers = new Set();
+  let run = 0;
+  const form = el("form", null, "aj-form");
+  const input = el("input"); input.type = "search"; input.placeholder = "Ticker or token address"; input.autocomplete = "off";
+  input.setAttribute("aria-label", "Ticker or token address");
+  const go = el("button", "Trace"); go.type = "submit";
+  form.append(input, go);
+  const status = el("p", "Type any ticker to replay how the engine evaluated it.", "aj-status");
+  const choices = el("div", null, "aj-choices");
+  const head = el("div", null, "aj-head");
+  const rail = el("ol", null, "aj-rail");
+  const replay = el("button", "Replay", "aj-replay"); replay.type = "button"; replay.hidden = true;
+  root.className = "aj";
+  root.replaceChildren(form, status, choices, head, rail, replay);
+  let current = null;
+
+  const clear = () => { timers.forEach(clearTimeout); timers.clear(); };
+  const later = (fn, ms) => { const id = setTimeout(() => { timers.delete(id); fn(); }, ms); timers.add(id); };
+  const still = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const short = h => `${h.slice(0, 8)}…${h.slice(-4)}`;
+  const when = t => new Date(t * 1000).toLocaleString();
+  const gap = s => s < 60 ? `+${Math.round(s)}s` : s < 3600 ? `+${Math.round(s / 60)}m` : s < 86400 ? `+${Math.round(s / 3600)}h` : `+${Math.round(s / 86400)}d`;
+
+  function card(step, i, prev) {
+    const li = el("li", null, "aj-step"); li.dataset.node = step.node;
+    const top = el("div", null, "aj-top");
+    top.append(el("span", LABEL[step.node] || "Other activity", "aj-pill"),
+      el("time", prev ? `${when(step.t)} · ${gap(step.t - prev.t)}` : when(step.t)));
+    const src = el("p", `${i + 1}. ${SOURCE[step.source] || step.source}`, "aj-src");
+    const body = el("p", step.text || "No description recorded", "aj-text");
+    const proof = el("details", null, "aj-proof");
+    proof.append(el("summary", `record ${short(step.id)} · link ${short(step.link)}`));
+    const pre = el("pre");
+    try { pre.textContent = JSON.stringify(JSON.parse(step.record), null, 2); } catch { pre.textContent = step.record; }
+    proof.append(pre);
+    li.append(top, src, body, proof);
+    return li;
+  }
+
+  async function show(j) {
+    clear(); const mine = ++run; current = j;
+    rail.replaceChildren(); head.replaceChildren(); replay.hidden = true;
+    const n = j.steps.length;
+    status.textContent = n ? `${j.symbol || j.token.slice(0, 8)} · ${j.chain} · ${n} recorded steps` : `No stored record for ${j.symbol || j.token}.`;
+    if (!n) return;
+    const check = el("p", "Verifying hash chain…", "aj-verify");
+    head.append(check, el("p", j.limits, "aj-limits"));
+    const v = await verifyChain(j, sha256Hex).catch(() => ({ ok: false, brokenAt: 0 }));
+    if (mine !== run) return;
+    check.dataset.ok = String(v.ok);
+    check.textContent = v.ok
+      ? `Chain verified in your browser · ${n} records · head ${short(j.head)}`
+      : `Chain does not match at step ${(v.brokenAt ?? 0) + 1}: do not trust this trace`;
+    const cards = j.steps.map((s, i) => card(s, i, j.steps[i - 1]));
+    if (still()) { rail.append(...cards); replay.hidden = false; return; }
+    cards.forEach((c, i) => later(() => {
+      if (mine !== run) return;
+      c.classList.add("aj-in"); rail.append(c);
+      rail.querySelectorAll(".aj-now").forEach(x => x.classList.remove("aj-now"));
+      c.classList.add("aj-now");
+      requestAnimationFrame(() => c.classList.remove("aj-in"));
+      onStep?.(j.steps[i].node, j.steps[i - 1]?.node);
+      if (i === cards.length - 1) replay.hidden = false;
+    }, i * STEP_MS));
+  }
+
+  async function trace(args) {
+    clear(); run++;
+    choices.replaceChildren(); rail.replaceChildren(); head.replaceChildren(); replay.hidden = true;
+    status.textContent = "Loading recorded steps…";
+    let data;
+    try { data = await load(args); } catch { status.textContent = "Trace unavailable. Try again."; return; }
+    if (data?.journey) { input.value = data.journey.symbol || input.value; return show(data.journey); }
+    const matches = data?.matches || [];
+    if (!matches.length) { status.textContent = `No stored project matches “${args.q}”.`; return; }
+    status.textContent = `${matches.length} tokens share this ticker. Pick one:`;
+    for (const m of matches) {
+      const b = el("button", `${m.symbol || "?"} · ${m.chain} · ${m.token.slice(0, 4)}…${m.token.slice(-4)}${m.status ? ` · ${m.status}` : ""}`);
+      b.type = "button"; b.addEventListener("click", () => trace({ chain: m.chain, token: m.token }));
+      choices.append(b);
+    }
+  }
+
+  form.addEventListener("submit", e => { e.preventDefault(); const q = input.value.trim(); if (q) trace({ q }); });
+  replay.addEventListener("click", () => { if (current) show(current); });
+  return {
+    trace,
+    dispose() { clear(); run++; root.replaceChildren(); },
+  };
+}

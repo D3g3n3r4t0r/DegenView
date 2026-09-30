@@ -4785,6 +4785,18 @@ async def agent_log(limit: int = 100, before: float | None = None,
     return {"items": deepseek_desk.log(limit=min(limit, 300), before=before)}
 
 
+@app.get("/api/agent/journey")
+async def agent_journey(q: str = "", chain: str = "", token: str = "",
+                        user: User = Depends(auth.get_current_user)) -> dict:
+    """Recorded evaluation path of one token as a hash chain (Lorenzo, 30/09)."""
+    from app.trading.onchain import journey
+    if chain and token:
+        return {"matches": [], "journey": journey.journey(chain, token)}
+    matches = journey.resolve(q)
+    one = journey.journey(matches[0]["chain"], matches[0]["token"]) if len(matches) == 1 else None
+    return {"matches": matches, "journey": one}
+
+
 @app.get("/api/agent/calls")
 async def agent_calls(days: float = 7, recent: int = 0, user: User = Depends(auth.get_current_user)) -> dict:
     """Every DeepSeek call by purpose: repeats, failures, cache (issue #358, I00)."""
