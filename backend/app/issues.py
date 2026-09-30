@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0241", "DREGG: '807 wallets linked to each other' preoccupa",
+     "Lorenzo, 30/09: 'mi preoccupano questi 800 account collegati tra loro... indaghiamo'. Il rapporto token contava i wallet dei gruppi collegati di RugCheck, non quanta supply tengono.",
+     "media"),
     ("seed-0236", "Memoria del server quasi piena: il file dello sniper cresce senza limite",
      "Controllo del server, 30/09: 1,8 GB usati su 3 GB; sniper_candidates.json a 430 MB fa salire l'app da 214 MB a 1,77 GB all'avvio. Lorenzo ha scelto di potare i file che gonfiano la memoria.",
      "alta"),
