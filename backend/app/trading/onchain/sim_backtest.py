@@ -142,11 +142,54 @@ def ledger_tokens() -> list[dict]:
              "events": _one_timeframe(r)} for r in _ledger.values()]
 
 
+def needs_relabel(chain: str, token: str) -> bool:
+    """Old 5-minute trades saved without their strategy (before 30/09 evening)."""
+    _load()
+    row = _ledger.get(f"{chain}:{token}")
+    return bool(row) and any(e.get("iv") == "5m" and "lab" not in e for e in row["events"].values())
+
+
+def relabel(chain: str, token: str, times: dict[str, set[tuple[int, str]]], window_from: int) -> int:
+    """Give an old unlabelled 5-minute trade its strategy when a trend
+    follower rerun on the same candles made that very trade (Lorenzo, 30/09:
+    138 trades hidden by the trend-only filter; only the proven ones come
+    back). Inside the candles and made by no trend follower: RSI+BB's, kept
+    in the ledger but marked. Older than the candles: left unknown."""
+    _load()
+    row = _ledger.get(f"{chain}:{token}")
+    if not row:
+        return 0
+    done = 0
+    for e in row["events"].values():
+        if e.get("iv") != "5m" or "lab" in e:
+            continue
+        t = int(e["t"])
+        lab = next((lab for lab, got in times.items()
+                    if any((t + d, e["side"]) in got for d in (0, -300, 300))), None)
+        if lab:
+            e["lab"] = lab
+            done += 1
+        elif t >= window_from:
+            e["lab"] = "not trend"
+            done += 1
+    if done:
+        _save()
+    return done
+
+
 def _trend(e: dict) -> bool:
-    """A 5-minute trade saved before labels were kept may be RSI+BB's: out."""
-    if e.get("iv") != "5m":
-        return True
-    return e.get("lab") in TREND_LABELS
+    """Every saved trade counts: Lorenzo, 30/09, after the trend-only filter
+    hid 135 of 138, chose "Rimetti tutto". New trades enter only from a trend
+    follower (token_trades); the old ones say which they were (`strategy`)."""
+    return True
+
+
+def strategy_of(e: dict) -> str:
+    """"trend": a trend follower's; "counter": proven not a trend follower's
+    (relabel); "unknown": a 5-minute trade saved before labels were kept."""
+    if e.get("iv") != "5m" or e.get("lab") in TREND_LABELS:
+        return "trend"
+    return "counter" if e.get("lab") == "not trend" else "unknown"
 
 
 def _one_timeframe(r: dict) -> list[dict]:
@@ -199,7 +242,8 @@ def replay(tokens: list[dict], capital: float = DEFAULT_CAPITAL, share: float = 
                 continue
             cash -= stake
             held[key] = {"chain": tk["chain"], "token": tk["token"], "symbol": tk.get("symbol"),
-                         "interval": e.get("iv") or tk.get("interval"), "at": int(t), "entry_price": e.get("price"),
+                         "interval": e.get("iv") or tk.get("interval"), "strategy": strategy_of(e),
+                         "at": int(t), "entry_price": e.get("price"),
                          "stake": round(stake, 2)}
         elif p:
             ret = -1.0 if e["side"] == "rug" else e.get("ret")

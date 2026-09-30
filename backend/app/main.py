@@ -4666,6 +4666,7 @@ async def _sim_snapshot(user: User) -> dict:
                           "amount": p["value"] / price if price else None, "image": None, "native": False,
                           "hidden": False, "source": "sim", "wallet": "sim", "ret": p.get("ret"),
                           "cost_usd": p["stake"], "opened": p["at"], "interval": p.get("interval"),
+                          "strategy": p.get("strategy"),
                           "pair": (onchain_strategy_lab._results.get(
                               onchain_strategy_lab.key_of(p["chain"], p["token"])) or {}).get("pair")})
     by_chain: dict[str, float] = {}
@@ -4679,9 +4680,13 @@ async def _sim_snapshot(user: User) -> dict:
             "closed": [{"symbol": c.get("symbol") or "?", "token": c["token"], "chain": c["chain"],
                         "opened": c["at"], "closed": c["exit_at"], "cost_usdg": c["stake"],
                         "proceeds_usdg": round(c["stake"] + c["pnl"], 2), "ret": c["ret"], "mode": "sim",
-                        "why": f"trend {c.get('interval') or ''}".strip(), "interval": c.get("interval")}
+                        "why": f"{_STRATEGY_WHY.get(c.get('strategy'), 'trend')} {c.get('interval') or ''}".strip(),
+                        "interval": c.get("interval"), "strategy": c.get("strategy")}
                        for c in w["closed"]],
             "curve": _top_curve(w)}
+
+
+_STRATEGY_WHY = {"trend": "trend", "counter": "not trend follower", "unknown": "strategy not recorded"}
 
 
 def _top_curve(w: dict) -> list[list[float]]:

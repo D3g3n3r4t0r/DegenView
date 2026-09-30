@@ -83,7 +83,10 @@ def test_mean_reversion_5m_trades_never_enter_the_wallet(monkeypatch):
     assert sb.remember("base", "T", "T", trend)
     sb._ledger["base:OLD"] = {"chain": "base", "token": "OLD", "interval": "5m",
                               "events": {"100:buy": {"t": 100, "side": "buy", "iv": "5m"}}}
-    assert {t["token"]: len(t["events"]) for t in sb.ledger_tokens()} == {"T": 1, "OLD": 0}
+    # Old unlabelled trades stay in (Lorenzo chose "Rimetti tutto"), marked
+    toks = {t["token"]: t for t in sb.ledger_tokens()}
+    assert len(toks["OLD"]["events"]) == 1 and sb.strategy_of(toks["OLD"]["events"][0]) == "unknown"
+    assert sb.replay([toks["OLD"]], 10_000)["open"][0]["strategy"] == "unknown"
 
 
 def test_the_top_row_best_is_a_trend_follower_never_rsi_bb():
@@ -115,3 +118,19 @@ def test_top_hides_rows_with_no_trend_follower_trade(monkeypatch):
     monkeypatch.setattr(strategy_lab, "status", lambda top: {})
     out = asyncio.run(main.onchain_top(n=15, user=SimpleNamespace(id="u")))
     assert [e["symbol"] for e in out["entries"]] == ["A", "C"]      # C: backtest still on its way
+
+
+def test_old_unlabelled_5m_trades_come_back_only_when_a_trend_follower_made_them(monkeypatch):
+    sb.reset_for_tests()
+    monkeypatch.setattr(sb, "_save", lambda: None)
+    sb._ledger["base:X"] = {"chain": "base", "token": "X", "interval": "5m", "events": {
+        "1000:buy": {"t": 1000, "side": "buy", "iv": "5m"},
+        "1600:sell": {"t": 1600, "side": "sell", "iv": "5m", "ret": 0.1},
+        "5000:buy": {"t": 5000, "side": "buy", "iv": "5m"},
+        "10:buy": {"t": 10, "side": "buy", "iv": "5m"}}}
+    assert sb.needs_relabel("base", "X")
+    n = sb.relabel("base", "X", {"Trend HF": {(1300, "buy"), (1600, "sell")}, "Trend EMA": set()}, window_from=500)
+    ev = sb._ledger["base:X"]["events"]
+    assert n == 3 and ev["1000:buy"]["lab"] == "Trend HF"
+    assert ev["1600:sell"]["lab"] == "Trend HF" and ev["5000:buy"]["lab"] == "not trend" and "lab" not in ev["10:buy"]
+    assert [sb.strategy_of(e) for e in sb.ledger_tokens()[0]["events"]] == ["unknown", "trend", "trend", "counter"]
