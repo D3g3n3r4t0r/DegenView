@@ -357,3 +357,24 @@ def test_rugs_already_suffered_vanish_from_the_radar_and_land_on_the_wall(client
     body = client.get("/api/onchain/radar").json()
     assert [p["symbol"] for p in body["proposals"]] == ["GOOD"]
     assert [s["symbol"] for s in body["shame"]] == ["VISE"]
+
+
+def test_radar_feed_is_small_and_counts_the_whole_day(client, monkeypatch):
+    """The scanner tab timed out on phones: /radar shipped every listing and
+    rejection with its checks. /radar/feed ships only what the feed shows."""
+    import time as _t
+    from app.trading.onchain import listings, outcomes
+    now = _t.time()
+    monkeypatch.setattr(outcomes, "_journal", {})
+    monkeypatch.setattr(listings, "_listings", [
+        {"chain": "solana", "symbol": f"P{i}", "token_address": f"p{i}", "pair_address": f"pp{i}",
+         "found_at": now - i * 60, "created_at": now - i * 60, "checks": [{"key": "site"}],
+         "market_cap": 100_000} for i in range(100)])
+    monkeypatch.setattr(listings, "_rejected", [
+        {"chain": "solana", "symbol": f"R{i}", "token_address": f"r{i}", "at": now - i * 300 - 30}
+        for i in range(500)])
+    body = client.get("/api/onchain/radar/feed").json()
+    assert len(body["listings"]) + len(body["rejected"]) == main._RADAR_FEED_MAX
+    assert body["listings"][0]["symbol"] == "P0" and body["rejected"][0]["symbol"] == "R0"
+    assert body["counts"]["rejected_24h"] == 288
+    assert "proposals" not in body and "tested" not in body
