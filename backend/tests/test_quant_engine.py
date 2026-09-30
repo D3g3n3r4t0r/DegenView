@@ -1,8 +1,6 @@
 import json
 import sqlite3
-import sys
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
@@ -161,7 +159,7 @@ def test_activation_requires_integrity_review_and_paper_run(tmp_path):
 
 def test_live_gate_requires_fresh_signal_and_current_gem_evidence(monkeypatch):
     monkeypatch.setattr(runtime, "approved", lambda: {"reviewed": True})
-    a = {"quant_system": {"eligible": True, "state": "in", "in_at": 100, "evaluated_at": 100}}
+    a = {"last": {"price": 10, "at": 100}, "quant_system": {"eligible": True, "state": "in", "in_at": 100, "evaluated_at": 100}}
     monkeypatch.setattr(runtime, "gem_verdict", lambda a, now: (True, "ok"))
     assert runtime.can_enter(a, 150)
     assert not runtime.can_enter(a, 99)
@@ -203,10 +201,10 @@ def test_memory_exports_migration_time_honestly(tmp_path):
 
 def test_prospective_collector_freezes_eligibility_before_export(tmp_path, monkeypatch):
     monkeypatch.setattr(runtime, "gem_verdict", lambda a, now: (True, "ok"))
-    prefix = "app.trading.onchain."
-    monkeypatch.setitem(sys.modules, prefix + "projects_db", SimpleNamespace(get=lambda *args: {"launched_at": 1}))
-    monkeypatch.setitem(sys.modules, prefix + "leaderboard", SimpleNamespace(db_entry=lambda p: p))
-    monkeypatch.setitem(sys.modules, prefix + "outcomes", SimpleNamespace(features=lambda e, now: {"liq": 10000}))
+    from app.trading.onchain import projects_db, leaderboard, outcomes
+    monkeypatch.setattr(projects_db, "get", lambda *args: {"launched_at": 1})
+    monkeypatch.setattr(leaderboard, "db_entry", lambda p: p)
+    monkeypatch.setattr(outcomes, "features", lambda e, now: {"liq": 10000})
     a = {"chain": "solana", "token_address": "A"}
     path = tmp_path / "observer.sqlite3"
     memory.capture_case(a, bars(100), 30000, path)

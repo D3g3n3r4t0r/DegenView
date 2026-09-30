@@ -29,6 +29,7 @@ other than the chosen share; simulated first.
 from __future__ import annotations
 
 import json
+import math
 import logging
 import time
 from dataclasses import dataclass
@@ -161,24 +162,43 @@ def _system_of(a: dict, label: str) -> dict | None:
     return (a.get("alert_bt") or {}).get(label)
 
 
-def entry_candidate(label: str, now: float) -> dict | None:
+def _signal_key(a: dict) -> str:
+    s = a.get("quant_system") or {}
+    return json.dumps([a["chain"], a["token_address"], s.get("report_hash"), s.get("policy_id")])
+
+
+def _unseen(u: dict, a: dict) -> bool:
+    signal = (a.get("quant_system") or {}).get("in_at", 0)
+    return signal > u.get("quant_seen", {}).get(_signal_key(a), -1)
+
+
+def _claim(u: dict, a: dict) -> None:
+    # Durable high-water marks outlive the truncated display log.
+    u.setdefault("quant_seen", {})[_signal_key(a)] = a["quant_system"]["in_at"]
+
+
+def entry_candidate(label: str, now: float, user_state: dict | None = None) -> dict | None:
     """An alert observes; only a reviewed, fresh trend signal can buy a gem."""
     rows = [a for a in alert_track._alerts.values()
-            if a["chain"] == CHAIN and quant_runtime.can_enter(a, now)]
+            if a["chain"] == CHAIN and quant_runtime.can_enter(a, now)
+            and (user_state is None or _unseen(user_state, a))]
     return max(rows, key=lambda a: a["quant_system"]["in_at"], default=None)
 
 
-def should_exit(pos: dict, label: str) -> str | None:
+def should_exit(pos: dict, label: str, now: float | None = None) -> str | None:
+    now = time.time() if now is None else now
     a = alert_track._alerts.get(pos["alert"])
     if a is None:
         return "alert no longer tracked"
     if a.get("gone"):
         return "pool gone"
     s = a.get("quant_system") if pos.get("quant_policy") else _system_of(a, label)
-    if pos.get("quant_policy") and (not s or not s.get("eligible") or time.time() - s.get("evaluated_at", 0) > 600):
+    if pos.get("quant_policy") and (not s or not s.get("eligible") or now - s.get("evaluated_at", 0) > 600):
         return "quant signal data unavailable"
     if not s:
         return None
+    if pos.get("quant_policy") and any(e.get("side") in ("sell", "loss") and e.get("t", 0) >= pos.get("at", float("inf")) for e in s.get("events", [])):
+        return "system sold"
     if s.get("state") != "in":
         last = (s.get("events") or [{}])[-1]
         return {"sell": "system sold", "rug": "pool gone"}.get(last.get("side"), "system out") \
@@ -419,14 +439,14 @@ def paper_tick(u: dict, label: str, now: float, open_new: bool = True) -> list[d
                                  "usdg": round(cash, 6), "ret": round(ret, 4)}))
     if not open_new:
         return rows
-    followed = {t.get("alert") for t in u["trades"]} | {p["alert"] for p in u["paper"]}
+    followed = {p["alert"] for p in u["paper"]}
     fresh = sorted((a for a in alert_track._alerts.values()
-                    if quant_runtime.can_enter(a, now)
+                    if quant_runtime.can_enter(a, now, mode="paper") and _unseen(u, a)
                     and alert_track.key_of(a) not in followed), key=lambda a: a["at"])
     for a in fresh:
         # A delayed poll cannot fill at an earlier backtest open.
         paper_entry = _price(a)
-        if not paper_entry or paper_entry <= 0:
+        if not paper_entry or not math.isfinite(paper_entry) or paper_entry <= 0:
             continue
         equity = (u["sim_usdg"] or 0) + sum(p["stake"] * (1 + p.get("ret", 0.0)) for p in u["paper"])
         stake = round(min(u["sim_usdg"] or 0, equity * u["pct"] / 100), 6)
@@ -435,6 +455,7 @@ def paper_tick(u: dict, label: str, now: float, open_new: bool = True) -> list[d
         if stake < 0.01:
             rows.append(_log(u, {**base, "ok": False, "reason": "all cash already in open trades"}))
             continue
+        _claim(u, a)
         u["sim_usdg"] = round((u["sim_usdg"] or 0) - stake, 6)
         u["paper"].append({"alert": base["alert"], "symbol": a["symbol"], "token": a["token_address"],
                            "chain": a["chain"], "at": now, "stake": stake, "ret": 0.0,
@@ -445,7 +466,7 @@ def paper_tick(u: dict, label: str, now: float, open_new: bool = True) -> list[d
     return rows
 
 
-async def tick(users: list, now: float | None = None, market: Market | None = None,
+async def _tick(users: list, now: float | None = None, market: Market | None = None,
                notify: Callable[[object, str], Awaitable[None]] | None = None) -> list[dict]:
     """One pass for every user whose switch is not off (or who still holds
     a position): exit first, then at most one entry."""
@@ -473,15 +494,18 @@ async def tick(users: list, now: float | None = None, market: Market | None = No
         market = market or await _default_market()
         try:
             if u["position"]:
-                why = should_exit(u["position"], label)
+                why = should_exit(u["position"], label, now)
                 if why:
                     row = await _sell(user, u, why, now, market)
                     done.append(row)
                     if notify and row.get("ok"):
                         await notify(user, row)
             if not u["position"] and u["mode"] == "real":
-                a = entry_candidate(label, now)
-                if a and not any(t.get("alert") == alert_track.key_of(a) for t in u["trades"]):
+                a = entry_candidate(label, now, u)
+                if a:
+                    _claim(u, a)
+                    # Persist BEFORE awaiting any order. An uncertain attempt is never retried automatically.
+                    write_text_atomic(_STORE_FILE, json.dumps(_state), encoding="utf-8")
                     row = await _buy(user, u, a, now, market)
                     done.append(row)
                     if notify and row.get("ok"):
@@ -492,6 +516,21 @@ async def tick(users: list, now: float | None = None, market: Market | None = No
     if done:
         _save()
     return done
+
+
+_tick_running = False
+
+
+async def tick(users: list, now: float | None = None, market: Market | None = None,
+               notify: Callable[[object, str], Awaitable[None]] | None = None) -> list[dict]:
+    global _tick_running
+    if _tick_running:
+        return []
+    _tick_running = True
+    try:
+        return await _tick(users, now, market, notify)
+    finally:
+        _tick_running = False
 
 
 async def _swap_or_sim(user, real: bool, *, token_in: str, token_out: str, amount_in: int, quote: dict,
@@ -628,3 +667,4 @@ async def _sell(user, u: dict, why: str, now: float, market: Market) -> dict:
 
 
 _load()
+

@@ -15,7 +15,7 @@ import statistics
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-VERSION = "quant-v1"
+VERSION = "quant-v2"
 BASE = 300
 ALLOWED = (300, 900, 3600, 14400, 28800, 86400)
 MAX_CANDIDATES = 32
@@ -71,8 +71,8 @@ def candidates(timeframes, transitions, strategy="Lorenzo HF (minuti on-chain)")
     return out
 
 
-def clean_bars(rows):
-    if len(rows) > MAX_BARS:
+def clean_bars(rows, limit=MAX_BARS):
+    if limit is not None and len(rows) > limit:
         raise ValueError("bar budget exceeded")
     result = []
     previous = -1
@@ -137,19 +137,22 @@ def signal_table(rows, tf, now, strategy, provider):
     return table
 
 
-def replay(case, policy, *, commission=0.003, slippage=0.01, provider=existing_signals, tables=None):
+def replay(case, policy, *, commission=0.003, slippage=0.01, provider=existing_signals, tables=None, bar_limit=MAX_BARS):
     """One token, one normalized unit of capital. No overlapping portfolio claim."""
-    rows = clean_bars(case["bars"])
+    rows = clean_bars(case["bars"], limit=bar_limit)
     start, end, born = case["start"], case["end"], case.get("born")
     if not (0 <= commission < 0.1 and 0 <= slippage < 0.5):
         raise ValueError("invalid costs")
     if not (isinstance(start, (int, float)) and isinstance(end, (int, float))
             and math.isfinite(start) and math.isfinite(end) and end > start):
         raise ValueError("invalid observation window")
-    if born is None or not isinstance(born, (int, float)) or not math.isfinite(born) or born > start:
+    if born is None or isinstance(born, bool) or not isinstance(born, (int, float)) or not math.isfinite(born) or born < 0 or born > start:
         return {"state": "unavailable", "reason": "verified token birth required", "eligible": False}
-    if case.get("gem_eligible") is not True or case.get("eligibility_at", end + 1) > start:
+    eligibility = case.get("eligibility_at")
+    if case.get("gem_eligible") is not True or type(eligibility) not in (int, float) or not math.isfinite(eligibility) or eligibility > start:
         return {"state": "unavailable", "reason": "point-in-time gem eligibility required", "eligible": False}
+    if case.get("complete") is False:
+        return {"state": "unavailable", "reason": "observation window is still collecting", "eligible": False}
     if case.get("risk_blocked") is True:
         return {"eligible": True, "state": "out", "ret": 0.0, "drawdown": 0.0, "entries": 0,
                 "events": [], "reason": "reviewed incident rule", "policy_id": policy.id}
@@ -170,7 +173,7 @@ def replay(case, policy, *, commission=0.003, slippage=0.01, provider=existing_s
     last_mark = None
     shock_at = case.get("untradeable_at")
     for t, o, h, low, c, vol in rows:
-        if t < start or t >= end:
+        if t < start or t + BASE > end:
             continue
         if shock_at is not None and t >= shock_at:
             if qty:

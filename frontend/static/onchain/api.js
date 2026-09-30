@@ -201,3 +201,7 @@ export const setWatchlistStrategy = (id, strategyName, enabled) =>
   request(`/api/watchlist/${id}/strategy`, { method: "PATCH", body: { strategy_name: strategyName, enabled } });
 export const setWatchlistAutoTrade = (id, strategyName, enabled) =>
   request(`/api/watchlist/${id}/auto_trade`, { method: "PATCH", body: { strategy_name: strategyName, enabled } });
+
+export const getQuant = () => request("/api/agent/quant");
+export const getQuantProject = (chain, token) => request(`/api/agent/quant/project?chain=${encodeURIComponent(chain)}&token=${encodeURIComponent(token)}`);
+export const getQuantReport = (id) => request(`/api/agent/quant/reports/${encodeURIComponent(id)}`);

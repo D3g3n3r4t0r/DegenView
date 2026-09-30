@@ -227,3 +227,4 @@ def test_sim_total_equals_cash_plus_rows_and_rows_carry_their_own_mark():
     snap = main._sim_snapshot(SimpleNamespace(id="u1"))
     assert snap["total"] == pytest.approx(snap["cash"] + sum(p["value_usd"] for p in snap["positions"]), abs=1e-3)
     assert sum(snap["by_chain"].values()) == pytest.approx(snap["total"], abs=1e-3)
+

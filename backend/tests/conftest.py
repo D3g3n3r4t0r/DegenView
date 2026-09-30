@@ -50,3 +50,10 @@ def _private_deepseek_journal(monkeypatch, tmp_path):
     monkeypatch.setattr(deepseek_calls, "_FILE", tmp_path / "deepseek_calls.jsonl")
     deepseek_calls.reset_for_tests()
     yield
+
+
+
+@pytest.fixture(autouse=True)
+def _private_quant_memory(monkeypatch, tmp_path):
+    from app.trading.onchain import quant_memory
+    monkeypatch.setattr(quant_memory, "_path", tmp_path / "quant.sqlite3")

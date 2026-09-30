@@ -195,18 +195,20 @@ def entries() -> dict[str, dict]:
 
 
 def _save() -> None:
-    # Preserve incident/non-incident evidence before the bounded journal prunes it.
+    archived = False
     try:
         from app.trading.onchain import quant_memory
         quant_memory.record(entries().values())
+        archived = True
     except Exception:
-        logger.exception("quant incident archive unavailable")
+        logger.exception("quant evidence archive unavailable")
     if _archive_rugs():
         try:
             write_text_atomic(_ARCHIVE_FILE, json.dumps(_archive, ensure_ascii=False), encoding="utf-8")
         except OSError:
             pass
-    _prune(_journal, KEEP, time.time())
+    if archived:
+        _prune(_journal, KEEP, time.time())
     try:
         write_text_atomic(_STORE_FILE, json.dumps({"journal": _journal, "state": _state}, ensure_ascii=False),
                                encoding="utf-8")
@@ -620,7 +622,8 @@ def train(now: float | None = None) -> dict:
     n, rugs = len(data), sum(y for _, y in data)
     model = {"active": False, "n": n, "rugs": rugs, "cv_auc": None, "why": ""}
     if n < MODEL_MIN_N or rugs < MODEL_MIN_RUGS or n - rugs < MODEL_MIN_RUGS:
-        model["why"] = f"needs {MODEL_MIN_N} outcomes with at least {MODEL_MIN_RUGS} rugs (now {n}, {rugs} rugs)"
+        model["why"] = (f"needs {MODEL_MIN_N} outcomes with at least {MODEL_MIN_RUGS} rugs and {MODEL_MIN_RUGS} non-rugs "
+                        f"(now {n}: {rugs} rugs, {n - rugs} non-rugs)")
         _model.clear()
         _model.update(model)
         return model
@@ -768,7 +771,8 @@ def train_winners(now: float | None = None) -> dict:
     n, wins = len(data), sum(y for _, y in data)
     model = {"active": False, "n": n, "winners": wins, "cv_auc": None, "why": ""}
     if n < WIN_MIN_N or wins < WIN_MIN_WINNERS or n - wins < WIN_MIN_WINNERS:
-        model["why"] = f"needs {WIN_MIN_N} outcomes with at least {WIN_MIN_WINNERS} real pumps (now {n}, {wins})"
+        model["why"] = (f"needs {WIN_MIN_N} outcomes with at least {WIN_MIN_WINNERS} real pumps and {WIN_MIN_WINNERS} "
+                        f"without (now {n}: {wins} pumps, {n - wins} without)")
     else:
         cv, w, means = _cv_fit([e["features"] for e, _ in data], [y for _, y in data], WIN_KEYS)
         model.update(cv_auc=round(cv, 3) if cv is not None else None, weights=w.tolist(), means=means)
@@ -1045,3 +1049,4 @@ async def outcomes_loop() -> None:
     while True:
         await tick()
         await asyncio.sleep(TICK_S)
+

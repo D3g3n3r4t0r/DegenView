@@ -14,6 +14,7 @@
 import * as api from "@onchain/api.js";
 import { age, escapeHtml, formatToken, formatUsd, shortAddress, tile } from "@onchain/format.js";
 import { chainInfo, state } from "@onchain/store.js";
+import { scoutCube } from "@onchain/scout-cube.js";
 
 // Stesso indirizzo nativo duplicato in swap.js/limitOrders.js: qui serve
 // solo per proporre il nativo come "token che hai" nel picker, non per
@@ -64,7 +65,7 @@ const usdS = (n) => (n == null ? "—" : n >= 1e6 ? `$${(n / 1e6).toFixed(2)}M` 
 
 export async function openScan(query) {
   open(`Scanning ${query}`, "Scout checks market data, security, the project site and previous risk signals.");
-  setBody(`<div class="scan-live"><div class="scan-live-head"><span class="agent-orb" aria-hidden="true"><i></i><i></i><i></i></span>
+  setBody(`<div class="scan-live"><div class="scan-live-head"><span class="agent-orb scout-cube" aria-hidden="true">${scoutCube}</span>
     <p>Scout is examining <b>${escapeHtml(query)}</b></p></div><ol class="scan-steps"></ol></div>`);
   const list = bodyEl.querySelector(".scan-steps");
   const t0 = performance.now();

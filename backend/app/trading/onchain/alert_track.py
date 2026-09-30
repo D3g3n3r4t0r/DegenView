@@ -193,6 +193,11 @@ def record(item: dict, kind: str, now: float | None = None) -> dict | None:
     return _alerts[k]
 
 
+def _quant_watching(a: dict, now: float) -> bool:
+    first = a.get("quant_observed")
+    return bool(a.get("quant_policy") or first and now < first["start"] + 30 * 86400)
+
+
 def apply_price(a: dict, price, now: float) -> None:
     """One reading of the pool. None = the pool did not answer."""
     if a["closed"]:
@@ -218,7 +223,7 @@ def apply_price(a: dict, price, now: float) -> None:
     for h in CHECKPOINTS_H:
         if str(h) not in a["returns"] and age >= h * 3600:
             a["returns"][str(h)] = ret
-    if age >= KEEP_WATCHING_S and not a.get("quant_policy"):
+    if age >= KEEP_WATCHING_S and not _quant_watching(a, now):
         a["closed"] = True
 
 
@@ -401,7 +406,11 @@ async def _refresh_system(client, now: float, gap_s: float | None) -> int:
         if a.get("nodata"):
             continue
         try:
-            await asyncio.to_thread(quant_memory.capture_case, a, _bars.get(key_of(a)) or [], now)
+            collected = await asyncio.to_thread(quant_memory.capture_case, a, list(_bars.get(key_of(a)) or []), now)
+            if collected:
+                changed += 1
+                if _quant_watching(a, now) and not a.get("gone"):
+                    a["closed"] = False
         except Exception:
             logger.exception("quant research collection unavailable")
         # Research-approved path is separate from the frozen legacy backtest.
@@ -457,7 +466,7 @@ async def _refresh_system(client, now: float, gap_s: float | None) -> int:
         changed += 1
         if all(r.get("done") for r in res.values()):
             a["system_done"] = True
-            if not a.get("quant_policy"):
+            if not _quant_watching(a, now):
                 _bars.pop(k, None)
     if changed or fetched:
         save()
@@ -481,7 +490,7 @@ def _due(now: float) -> dict[str, list[dict]]:
     for a in _alerts.values():
         if a["closed"]:
             continue
-        young = now - a["at"] < FAST_FOR_S or bool(a.get("quant_policy"))
+        young = now - a["at"] < FAST_FOR_S or _quant_watching(a, now)
         if young or slow:
             out.setdefault(a["chain"], []).append(a)
     if slow:
@@ -661,3 +670,4 @@ def recent(kind: str, since_s: float, now: float | None = None) -> list[dict]:
 
 
 _load()
+
