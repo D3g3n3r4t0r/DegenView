@@ -95,6 +95,7 @@ def test_daily_falls_back_to_8h_when_the_daily_is_short(monkeypatch):
 
 
 def test_the_ladder_steps_down_to_the_first_chart_with_60_candles(monkeypatch):
+    monkeypatch.setattr(lab, "LADDER", lab.FULL_LADDER)
     """Lorenzo, 30/09: 5 minutes at the listing, then up, gradually."""
     now = 1_800_000_000
     asked = []
@@ -112,7 +113,16 @@ def test_the_ladder_steps_down_to_the_first_chart_with_60_candles(monkeypatch):
     assert ("minute", 15) not in asked and asked.count(("hour", 4)) == 1
 
 
+def test_until_the_top_50_test_only_1d_and_8h_run(monkeypatch):
+    async def candles(client, net, pool, tf, agg, before, limit, token=""):
+        return _bars(40) if (tf, agg) == ("minute", 5) else _bars(10)
+    monkeypatch.setattr(lab.alert_track, "_candles", candles)
+    out = asyncio.run(lab.tick([_e("tok")], now=1_800_000_000))
+    assert out["daily"]["interval"] == "8h" and out["daily"]["error"] == "too few candles"
+
+
 def test_a_token_hours_old_trades_on_5_minutes(monkeypatch):
+    monkeypatch.setattr(lab, "LADDER", lab.FULL_LADDER)
     now = 1_800_000_000
 
     async def candles(client, net, pool, tf, agg, before, limit, token=""):
@@ -125,6 +135,7 @@ def test_a_token_hours_old_trades_on_5_minutes(monkeypatch):
 
 
 def test_daily_too_few_candles_is_an_error_and_does_not_drop_the_5m(monkeypatch):
+    monkeypatch.setattr(lab, "LADDER", lab.FULL_LADDER)
     async def candles(client, net, pool, tf, agg, before, limit, token=""):
         if (tf, agg) == ("minute", 5):
             return _bars(40)
