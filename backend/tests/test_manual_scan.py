@@ -147,4 +147,5 @@ def test_report_studies_an_unknown_project_like_the_top(monkeypatch):
     assert rep["pillars"]["site"] == {"score": 76, "flags": ["thin docs"]}
     assert gem["judge"]["score"] == 81 and gem["pillars"]["tokenomics"] == 82
     done = {e["step"]: e["state"] for e in events}
-    assert done == {"pillars": "ok", "report": "ok", "code": "ok"}
+    assert done == {"pillars": "ok", "report": "ok", "code": "ok", "recheck": "warn"}
+    assert rep["recheck"] == {"unverified": [], "refuted": [], "found": []}

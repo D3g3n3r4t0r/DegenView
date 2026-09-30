@@ -31,7 +31,7 @@ import httpx
 
 from app.notify import deepseek_desk
 from app.trading.onchain import (ai_scan, alert_track, code_review, depth, judge, leaderboard, legit, outcomes,
-                                 projects_db, research, rug_memory, strategy_lab)
+                                 projects_db, research, rug_memory, scout_recheck, strategy_lab)
 
 logger = logging.getLogger(__name__)
 
@@ -204,11 +204,15 @@ async def report(item: dict, gem: dict, client: httpx.AsyncClient, step: "Steps"
     Gem Finder has not studied gets the same work now: the three pillars,
     then the judge and the code reading, on the Top's own allowance."""
     chain, token = item["chain"], item["token_address"]
-    e = leaderboard._entries.get(projects_db.key(chain, token))
-    if e is not None and e.get("pillars"):
+    board = leaderboard._entries.get(projects_db.key(chain, token))
+    if board is not None and board.get("pillars"):
         for k in ("pillars", "report", "code"):
             step(k, "ok", "from the Gem Finder")
-        return _slim(leaderboard._public(e))
+        e = {**board, "pillars": dict(board["pillars"])}
+        rc = await _recheck(e, item, client, step)
+        out = leaderboard._public(e)
+        out["recheck"] = _recheck_public(rc)
+        return _slim(out)
     p = projects_db.get(chain, token)
     e = leaderboard.db_entry(p) if p is not None and p.get("pillars") else None
     if e is None:
@@ -251,6 +255,8 @@ async def report(item: dict, gem: dict, client: httpx.AsyncClient, step: "Steps"
         step("code", "ok" if c else "skip",
              f"complexity {c.get('complexity')} · innovation {c.get('innovation')}" if c else "not read")
     e["code"] = c
+    rc = await _recheck(e, item, client, step)
+    j, c = e["judge"], e["code"]
     score = leaderboard.final_score(e)
     gem.update(score=round(score), why=leaderboard.qualifies(e) or gem.get("why") or "",
                pillars=_pillars(e.get("pillars")), judge=_judge_view(j), code=_code_view(c))
@@ -258,7 +264,35 @@ async def report(item: dict, gem: dict, client: httpx.AsyncClient, step: "Steps"
     return _slim({"score": score, "rank": e.get("rank"), "early": False, "pillars": e.get("pillars") or {},
             "summary": f.get("summary") or None, "traction": leaderboard.traction_of(e),
             "judge": {k: j.get(k) for k in _PUBLIC_JUDGE} if j else None,
-            "code": {k: c.get(k) for k in _PUBLIC_CODE} if c else None, "review": None})
+            "code": {k: c.get(k) for k in _PUBLIC_CODE} if c else None, "review": None,
+            "recheck": _recheck_public(rc)})
+
+
+async def _recheck(e: dict, item: dict, client: httpx.AsyncClient, step: "Steps") -> dict | None:
+    """Lorenzo, 30/09: the red points of a project added by hand get a
+    second, critical look before they are shown (scout_recheck.py). Only
+    the confirmed ones stay in the judge's problems and the pillar flags."""
+    step("recheck", "run")
+    full = {**item, **_recent.get(projects_db.key(item["chain"], item["token_address"]), {})}
+    rc = await _timed(scout_recheck.recheck(e, full, client), "recheck")
+    if rc is None:
+        step("recheck", "skip", "nothing red to check")
+        return None
+    step("recheck", "ok" if not rc["confirmed"] else "warn",
+         f"{len(rc['confirmed'])} confirmed · {len(rc['unverified'])} not verified · {len(rc['refuted'])} cleared")
+    keep = {p["text"] for p in rc["confirmed"]}
+    if e.get("judge"):
+        e["judge"] = {**e["judge"], "problems": [p for p in e["judge"].get("problems") or [] if p in keep]}
+    e["pillars"] = {k: {**v, "flags": [f for f in (v or {}).get("flags") or [] if f in keep]}
+                    for k, v in (e.get("pillars") or {}).items()}
+    return rc
+
+
+def _recheck_public(rc: dict | None) -> dict | None:
+    if not rc:
+        return None
+    pick = lambda xs: [{"text": x["text"], "note": x.get("note") or ""} for x in xs]  # noqa: E731
+    return {"unverified": pick(rc["unverified"]), "refuted": pick(rc["refuted"]), "found": rc["found"]}
 
 
 def backtest_view(r: dict | None) -> dict | None:
@@ -301,7 +335,7 @@ async def backtest(item: dict, now: float | None = None) -> dict | None:
 # while it works (Lorenzo, 30/09: "tutti gli step che fa, tutte le cose che
 # guarda le voglio vedere scritte"). Only checks that really run: no X.
 LISTING_STEPS = ("name", "security", "contract", "socials", "site", "github", "ai")
-STEPS = ("pool", *LISTING_STEPS, "holders", "gem", "pillars", "report", "code", "memory", "risk", "backtest")
+STEPS = ("pool", *LISTING_STEPS, "holders", "gem", "pillars", "report", "code", "recheck", "memory", "risk", "backtest")
 DEEP_TIMEOUT_S = 75        # pillars, judge and code reading: each one, on a slow site or repo
 
 
