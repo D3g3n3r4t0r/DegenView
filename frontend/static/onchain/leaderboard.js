@@ -182,6 +182,8 @@ function badges(e) {
   if (e.exception) out.push(`<em data-tone="gold">exception</em>`);
   if (e.bonding) out.push(`<em>pump.fun</em>`);
   if (e.closed_source) out.push(`<em>closed source</em>`);
+  if (e.text_moved) out.push(`<em title="Score rose ${Math.round(e.text_moved.to - e.text_moved.from)} points on new site text alone: no new code, tokenomics or market">text-driven</em>`);
+  if (e.judge?.drift) out.push(`<em title="The AI judge changed its mind on the same facts (${e.judge.drift.from_score} → ${e.judge.drift.to_score})">judge unsure</em>`);
   // Real use, from DefiLlama: the strongest signal a microcap can show.
   const tr = e.traction;
   if (tr?.facts?.mcap_to_fees != null && tr.facts.mcap_to_fees <= 20) out.push(`<em data-tone="use">${Math.round(tr.facts.mcap_to_fees)}× fees</em>`);

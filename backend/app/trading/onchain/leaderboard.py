@@ -40,7 +40,7 @@ import time
 import httpx
 
 from app.sniper.quality import _looks_like_meme
-from app.trading.onchain import (benchmark, big_coins, code_review, consistency, depth, discovery, gem_track, judge, legit, narrative_map,
+from app.trading.onchain import (benchmark, big_coins, code_review, consistency, depth, discovery, gem_learn, gem_track, judge, legit, narrative_map,
                                   narratives, priority, projects_db, research, storage, traction)
 from app.atomic_write import write_text_atomic
 
@@ -392,6 +392,9 @@ def apply_analysis(k: str, result: dict, now: float | None = None) -> None:
     e = _entries.get(k)
     if e is None:
         return
+    ready = bool(e.get("overall")) and not e["overall"].get("pending")
+    before = final_score(e) if ready else None
+    old_pillars = {n: (e["pillars"].get(n) or {}).get("score") for n in depth.WEIGHTS}
     for name, pillar in result.items():
         e["pillars"][name] = pillar
         e["checked_at"][name] = now
@@ -405,6 +408,7 @@ def apply_analysis(k: str, result: dict, now: float | None = None) -> None:
     site_keys = (e["pillars"].get("site") or {}).get("facts", {}).get("narratives") or []
     more = narratives.match(e.get("description"), e.get("categories"), gh.get("topics"), gh.get("description"))
     e["narratives"] = merge_narratives(e.get("narratives_hint"), site_keys, [*more, *(e.get("narr_ds") or [])])
+    _text_moved(e, before, old_pillars, now)
     if e["overall"]["fatal"] and not benchmark.is_benchmark(e["chain"], e["token_address"]) \
             and e.get("source") != "reference":     # Lorenzo's references stay, with their reason
         _exclude(k, e["overall"]["fatal"], now)
@@ -415,6 +419,27 @@ def apply_analysis(k: str, result: dict, now: float | None = None) -> None:
     if not (e["overall"] or {}).get("pending"):
         why = qualifies(e, now)
         _remember(e, "ranked" if e.get("rank") else "studied", why, now)
+
+
+# Lorenzo, 30/09 ("applica tutto"): the cheapest way to climb the board is
+# to rewrite a website. A score that rose only because the site pillar did,
+# with code and tokenomics unchanged, is flagged (not changed): the flag goes
+# on the card, in the receipt and in the trace, and clears as soon as another
+# pillar moves.
+TEXT_MOVE = 8
+
+
+def _text_moved(e: dict, before: float | None, old_pillars: dict, now: float) -> None:
+    moved = [n for n in depth.WEIGHTS if (e["pillars"].get(n) or {}).get("score") != old_pillars.get(n)]
+    if any(n != "site" for n in moved):
+        e.pop("text_moved", None)
+        return
+    if before is None or moved != ["site"] or (e.get("overall") or {}).get("pending"):
+        return
+    after = final_score(e)
+    if after - before >= TEXT_MOVE:
+        e["text_moved"] = {"at": now, "from": before, "to": after, "site_from": old_pillars.get("site"),
+                           "site_to": (e["pillars"].get("site") or {}).get("score")}
 
 
 def _remember(e: dict, status: str, why: str, now: float) -> None:
@@ -430,6 +455,11 @@ def _remember(e: dict, status: str, why: str, now: float) -> None:
                            traction_of(e), now)
     except Exception:
         logger.exception("classifica: verdetto non salvato per %s", e.get("symbol"))
+    if status in ("studied", "rejected") and not benchmark.is_benchmark(e["chain"], e["token_address"]):
+        try:
+            gem_track.decide(e, status, why, final_score(e), score_parts(e, now), rules_version(), now)
+        except Exception:
+            logger.exception("classifica: ricevuta non salvata per %s", e.get("symbol"))
 
 
 def _exclude(k: str, reason: str, now: float) -> None:
@@ -658,7 +688,46 @@ def final_score(e: dict) -> float:
     r = e.get("review") or {}
     if r.get("keep") and r.get("score") is not None and _fresh(r, judge.REVIEW_TTL_S):
         rules = round((1 - REVIEW_WEIGHT) * rules + REVIEW_WEIGHT * r["score"], 1)
+    if gem_learn.approved():
+        p = gem_learn.chance(score_parts(e, early=False))
+        if p is not None:
+            rules = round((1 - gem_learn.LEARNED_WEIGHT) * rules + gem_learn.LEARNED_WEIGHT * 100 * p, 1)
     return rules
+
+
+def score_parts(e: dict, now: float | None = None, early: bool = True) -> dict:
+    """Every input of final_score as it stands, for the decision receipt
+    (gem_track) and for measuring which of them predicts (gem_learn)."""
+    now = now or time.time()
+    pillars = e.get("pillars") or {}
+    use = traction_of(e) or {}
+    j = e.get("judge") or {}
+    j = j if j.get("score") is not None and _fresh(j, judge.TTL_S, now) else {}
+    c = e.get("code") or {}
+    c = c if c.get("complexity") is not None and _fresh(c, code_review.TTL_S, now) else {}
+    r = e.get("review") or {}
+    r = r if r.get("keep") and r.get("score") is not None and _fresh(r, judge.REVIEW_TTL_S, now) else {}
+    launched = e.get("launched_at")
+    return {"quality": (e.get("overall") or {}).get("score"),
+            **{f"pillar_{n}": (pillars.get(n) or {}).get("score") for n in ("github", "site", "tokenomics")},
+            "similarity": (e.get("similarity") or {}).get("score"), "closed_source": int(no_github(e)),
+            "traction": use.get("traction"), "value": use.get("value"),
+            "narrative_bonus": narratives.bonus(e.get("narratives") or []),
+            "judge": j.get("score"), "judge_confidence": j.get("confidence"),
+            "code": (c["complexity"] + c["innovation"]) / 2 if c.get("innovation") is not None else None,
+            "review": r.get("score"),
+            "mcap": true_cap(e) or e.get("market_cap"), "liq": e.get("liquidity_usd"),
+            "age_d": round((now - launched) / 86400, 2) if launched else None,
+            "change_24h": e.get("change_24h"), "text_moved": int(bool(e.get("text_moved"))), "early": int(is_early(e, now)) if early else None,
+            "chain": e.get("chain")}
+
+
+def rules_version() -> str:
+    """The hand weights in force, as a short hash: a receipt says which rules chose."""
+    rules = {"weights": depth.WEIGHTS, "similarity": SIMILARITY_WEIGHT, "traction": TRACTION_WEIGHT,
+             "value": VALUE_WEIGHT, "judge": JUDGE_WEIGHT, "code": CODE_WEIGHT, "review": REVIEW_WEIGHT,
+             "no_github": NO_GITHUB_PENALTY, "floor": PILLAR_FLOOR, "learned": gem_learn.approved_hash()}
+    return gem_track.receipt_of({"parts": rules})[:16]
 
 
 def traction_of(e: dict) -> dict | None:
@@ -676,7 +745,7 @@ def _rank() -> None:
     order = [_key(e["chain"], e["token_address"]) for e in ranked]
     now = time.time()
     for i, e in enumerate(ranked, 1):
-        gem_track.enter(e, final_score(e), i, now)
+        gem_track.enter(e, final_score(e), i, now, score_parts(e, now), rules_version())
         k = _key(e["chain"], e["token_address"])
         for kind in ("new", "early"):
             if kind == "early" and not is_early(e, now):
@@ -752,10 +821,11 @@ def _public(e: dict) -> dict:
             "exception": is_big(e) and not top, "score": final_score(e),
             "similarity": e.get("similarity"), "benchmark": top, "early": is_early(e), "price_usd": e.get("price_usd"),
             "narratives": narratives.labels(e.get("narratives") or []), "closed_source": no_github(e),
+            "text_moved": e.get("text_moved"),
             **_research_public(e), "honor": benchmark.HONOR if top else None, "traction": traction_of(e),
             "review": {k: (e.get("review") or {}).get(k) for k in ("keep", "score", "reason")} if e.get("review") else None,
             "judge": {k: (e.get("judge") or {}).get(k)
-                      for k in ("score", "verdict", "problems", "strengths", "admit_reason", "x", "tg")} if e.get("judge") else None,
+                      for k in ("score", "verdict", "problems", "strengths", "admit_reason", "x", "tg", "drift")} if e.get("judge") else None,
             "code": {k: (e.get("code") or {}).get(k)
                      for k in ("complexity", "innovation", "fork_of", "summary", "strengths", "concerns")}
             if e.get("code") else None}
@@ -796,7 +866,7 @@ def board() -> dict:
         "sources": _state["sources"], "discovery": discovery.status(),
         "github_rate": legit.github_rate or None,
         "research_ai": research.ai_status(), "close": close_calls(),
-        "track": gem_track.stats(), "defillama": traction.status(), "database": projects_db.stats(),
+        "track": gem_track.stats(), "learning": gem_learn.status(), "defillama": traction.status(), "database": projects_db.stats(),
         "past_floor": sum(1 for e in _entries.values() if not research_floor(e)),
         "rules": {"weights": depth.WEIGHTS, "similarity_weight": SIMILARITY_WEIGHT,
                   "traction_weight": TRACTION_WEIGHT, "value_weight": VALUE_WEIGHT,
@@ -921,6 +991,7 @@ async def tick(client: httpx.AsyncClient, now: float | None = None) -> None:
         _state["last_market"] = now
         await _step("dexscreener", _poll_market, client)
     await _step("storico", gem_track.poll, client, set(_entries), now)
+    await _step("pagella", asyncio.to_thread, gem_learn.refresh, now)
     await _step("database", _from_database, client, now)
     await _step("grandi monete", _refresh_big_coins, client, now)
     await _step("cap globale", _check_global_cap, client, now)
