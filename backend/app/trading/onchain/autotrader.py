@@ -55,6 +55,7 @@ MIN_CASH_POOL_USD = 20_000
 _meta: dict = {"usdc": None, "usdc_at": 0.0}
 KEEP_TRADES = 60
 SIM_START_USDG = 100.0     # virtual balance when the wallet holds no USDG
+SIM_CASH_MAX = 10_000_000.0  # a typo guard on the simulated balance, not a limit on real money
 
 _state: dict[str, dict] = {}
 
@@ -92,9 +93,15 @@ def settings(uid: str) -> dict:
     return {"mode": u["mode"], "pct": u["pct"]}
 
 
-def configure(uid: str, mode: str | None = None, pct: int | None = None, usdg_now: float | None = None) -> dict:
+def configure(uid: str, mode: str | None = None, pct: int | None = None, usdg_now: float | None = None,
+              sim_cash: float | None = None) -> dict:
     """Switch mode or share. Entering "sim" starts the virtual balance from
-    the wallet's real USDG (or SIM_START_USDG if it has none)."""
+    the wallet's real USDG (or SIM_START_USDG if it has none).
+
+    sim_cash sets the simulated free cash (Lorenzo, 30/09: "voglio poter
+    modificare il saldo a mio piacimento"). Open paper trades stay; the
+    start moves by the same amount, like a deposit or a withdrawal, so the
+    return since start is not faked by the edit."""
     u = _user(uid)
     if pct is not None:
         if pct not in PCTS:
@@ -110,6 +117,17 @@ def configure(uid: str, mode: str | None = None, pct: int | None = None, usdg_no
                 u["position"] = None
         u["mode"] = mode
         u["note"] = ""
+    if sim_cash is not None:
+        if not math.isfinite(sim_cash) or not 0 <= sim_cash <= SIM_CASH_MAX:
+            raise ValueError(f"balance must be between 0 and {SIM_CASH_MAX:,.0f}")
+        cash = round(sim_cash, 6)
+        if u["sim_start"]:
+            start = u["sim_start"] + cash - (u["sim_usdg"] or 0)
+            open_value = sum(p["stake"] * (1 + p.get("ret", 0.0)) for p in u["paper"])
+            u["sim_start"] = round(start if start > 0 else cash + open_value, 6) or None
+        else:
+            u["sim_start"] = cash or None
+        u["sim_usdg"] = cash
     _save()
     return view(uid)
 
