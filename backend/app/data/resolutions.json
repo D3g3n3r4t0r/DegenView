@@ -2463,6 +2463,11 @@
     "at": 1790772357,
     "summary": "Profilo > Simulated wallet > Set cash: imposta la liquidita' simulata. Le posizioni aperte restano e il punto di partenza si sposta della stessa cifra, quindi il rendimento non si falsa. Solo simulazione (PR #420)."
   },
+  "seed-timeframe-ladder-20260930": {
+    "status": "in corso",
+    "at": 1790786932,
+    "summary": "Regola pronta ma spenta finche' la prova sulle 50 gemme non dice pari o meglio (Lorenzo). Scala 1d, 12h, 8h, 6h, 4h, 2h, 1h, 30m, 15m, 5m: parte dal piu' largo con almeno 60 candele chiuse e scende fino al primo con un ingresso; se Trend EMA non entra mai, prova Trend HF. Un archivio scarica di continuo le candele della Top 50 (tutte le sorgenti) cosi' la prova e il laboratorio leggono da disco. Grafico 1w anche nel wallet."
+  },
   "seed-0240": {
     "status": "risolto",
     "at": 1790786061,

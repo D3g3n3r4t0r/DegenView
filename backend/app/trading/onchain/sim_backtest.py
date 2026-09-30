@@ -103,7 +103,8 @@ def remember(chain: str, token: str, symbol: str | None, bt: dict | None, save: 
     return new
 
 
-STEP_S = {"1d": 86400, "8h": 28800, "4h": 14400, "1h": 3600, "15m": 900, "5m": 300}
+STEP_S = {"1d": 86400, "12h": 43200, "8h": 28800, "6h": 21600, "4h": 14400, "2h": 7200, "1h": 3600,
+          "30m": 1800, "15m": 900, "5m": 300}
 
 
 def _fills(bt: dict | None, interval: str) -> bool:

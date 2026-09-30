@@ -9,7 +9,7 @@ import pytest
 
 from app.notify import deepseek_desk
 from app.trading.onchain import strategy_lab as lab
-from app.trading.onchain import sim_backtest
+from app.trading.onchain import candle_archive, sim_backtest
 
 
 @pytest.fixture(autouse=True)
@@ -17,6 +17,8 @@ def fresh(monkeypatch, tmp_path):
     monkeypatch.setattr(lab, "_STORE_FILE", tmp_path / "lab.json")
     monkeypatch.setattr(deepseek_desk, "_STORE_FILE", tmp_path / "desk.json")
     monkeypatch.setattr(sim_backtest, "_FILE", tmp_path / "ledger.json")
+    monkeypatch.setattr(candle_archive, "_DB_FILE", tmp_path / "candles.sqlite")
+    monkeypatch.setattr(lab, "LADDER_RULE", True)
     sim_backtest.reset_for_tests()
     lab.reset_for_tests()
     deepseek_desk.reset_for_tests()
@@ -79,69 +81,160 @@ def test_daily_backtest_runs_only_the_trend_follower(monkeypatch):
     assert [r["label"] for r in daily["rows"]] == ["Trend EMA"]
 
 
+def _spaced(n, step, now=1_800_000_000):
+    rng = np.random.default_rng(3)
+    closes = np.cumprod(1 + rng.normal(0.003, 0.03, n))
+    return [[now - (n - i) * step, c, c * 1.02, c * 0.98, c, 1000.0] for i, c in enumerate(closes)]
+
+
 def test_daily_falls_back_to_8h_when_the_daily_is_short(monkeypatch):
-    now = 1_800_000_000
     async def candles(client, net, pool, tf, agg, before, limit, token=""):
         if (tf, agg) == ("day", 1):
-            return _daily_bars(30)
+            return _spaced(30, 86400)
         if (tf, agg) == ("hour", 4):
-            return [[now - 400 * 14400 + i * 14400, 1, 1, 1, 1, 1] for i in range(400)]
-        return _bars()
+            return _spaced(180, 14400)
+        return [] if (tf, agg) == ("hour", 12) else _bars()
     monkeypatch.setattr(lab.alert_track, "_candles", candles)
-    out = asyncio.run(lab.tick([_e("tok")], now=now))
+    _only_enters_on(monkeypatch, 28800)
+    out = asyncio.run(lab.tick([_e("tok")], now=1_800_000_000))
     daily = out["daily"]
     assert daily["interval"] == "8h"
     assert all(b[0] % 28800 == 0 for b in lab._merge_8h(_bars(400)))
 
 
-def test_the_ladder_steps_down_to_the_first_chart_with_60_candles(monkeypatch):
-    monkeypatch.setattr(lab, "LADDER", lab.FULL_LADDER)
-    """Lorenzo, 30/09: 5 minutes at the listing, then up, gradually."""
+def test_the_ladder_climbs_with_the_chart_history():
+    h, d = 3600, 86400
+    ages = (2 * h, 6 * h, 20 * h, 3 * d, 6 * d, 12 * d, 16 * d, 25 * d, 40 * d, 90 * d)
+    assert [lab.pick_interval(a) for a in ages] == ["5m", "5m", "15m", "1h", "2h", "4h", "6h", "8h", "12h", "1d"]
+
+
+def _only_enters_on(monkeypatch, step_s):
+    """backtest_one that enters only when the bars are `step_s` apart."""
+    def fake(bars, *a, **k):
+        entered = bars[1][0] - bars[0][0] == step_s
+        return {"bars": len(bars), "rows": [{"label": "Trend EMA", "trades": int(entered), "in_position": False}],
+                "best": {"events": [{"side": "buy", "t": bars[-1][0]}]} if entered else None}
+    monkeypatch.setattr(lab.system, "backtest_one", fake)
+
+
+def test_the_ladder_steps_down_to_the_first_timeframe_that_enters(monkeypatch):
+    now = 1_800_000_000
+    calls = []
+
+    async def candles(client, net, pool, tf, agg, before, limit, token=""):
+        calls.append((tf, agg))
+        step = {"day": 86400, "hour": 3600, "minute": 60}[tf] * agg
+        return _spaced(min(1000, 200 * 86400 // step), step, now)
+    monkeypatch.setattr(lab.alert_track, "_candles", candles)
+    _only_enters_on(monkeypatch, 43200)
+    daily = asyncio.run(lab.tick([_e("tok")], now=now))["daily"]
+    assert daily["interval"] == "12h"
+    assert calls == [("minute", 5), ("day", 1), ("hour", 12)]
+    _only_enters_on(monkeypatch, 21600)
+    assert asyncio.run(lab.tick([_e("tok2")], now=now))["daily"]["interval"] == "6h"
+
+
+def test_no_trend_ema_entry_anywhere_adapts_to_trend_hf(monkeypatch):
+    now = 1_800_000_000
+
+    async def candles(client, net, pool, tf, agg, before, limit, token=""):
+        step = {"day": 86400, "hour": 3600, "minute": 60}[tf] * agg
+        return _spaced(min(1000, 200 * 86400 // step), step, now)
+    monkeypatch.setattr(lab.alert_track, "_candles", candles)
+
+    def fake(bars, name="Lorenzo (trend-follower)", label="Trend EMA", known=None):
+        hf = label == "Trend HF" and bars[1][0] - bars[0][0] == 43200
+        return {"bars": len(bars), "rows": [{"label": label, "trades": int(hf), "in_position": False}]}
+    monkeypatch.setattr(lab.system, "backtest_one", fake)
+    daily = asyncio.run(lab.tick([_e("tok")], now=now))["daily"]
+    assert daily["interval"] == "12h" and daily["rows"][0]["label"] == "Trend HF"
+
+
+def test_until_the_top_50_test_the_old_rule_runs(monkeypatch):
+    monkeypatch.setattr(lab, "LADDER_RULE", False)
     now = 1_800_000_000
     asked = []
 
     async def candles(client, net, pool, tf, agg, before, limit, token=""):
         asked.append((tf, agg))
-        if (tf, agg) == ("hour", 1):
-            return [[now - 70 * 3600 + i * 3600, 1, 1, 1, 1, 1] for i in range(70)]
-        if (tf, agg) == ("minute", 5):
-            return _bars()
-        return [[now - 5 * 14400 + i * 14400, 1, 1, 1, 1, 1] for i in range(5)]
+        step = {"day": 86400, "hour": 3600, "minute": 60}[tf] * agg
+        return _spaced(30 if tf == "day" else 180, step, now)
     monkeypatch.setattr(lab.alert_track, "_candles", candles)
+    _only_enters_on(monkeypatch, 1)
     daily = asyncio.run(lab.tick([_e("tok")], now=now))["daily"]
-    assert daily["interval"] == "1h"
-    assert ("minute", 15) not in asked and asked.count(("hour", 4)) == 1
+    assert daily["interval"] == "8h" and daily["rows"][0]["label"] == "Trend EMA"
+    assert ("hour", 12) not in asked
 
 
-def test_until_the_top_50_test_only_1d_and_8h_run(monkeypatch):
+def test_the_archive_answers_the_second_run_without_gecko(monkeypatch):
+    now = 1_800_000_000
+    asked = []
+
     async def candles(client, net, pool, tf, agg, before, limit, token=""):
-        return _bars(40) if (tf, agg) == ("minute", 5) else _bars(10)
+        asked.append((tf, agg, limit))
+        step = {"day": 86400, "hour": 3600, "minute": 60}[tf] * agg
+        return _spaced(min(1000, 200 * 86400 // step), step, now)
     monkeypatch.setattr(lab.alert_track, "_candles", candles)
-    out = asyncio.run(lab.tick([_e("tok")], now=1_800_000_000))
-    assert out["daily"]["interval"] == "8h" and out["daily"]["error"] == "too few candles"
+    _only_enters_on(monkeypatch, 86400)
+    asyncio.run(lab.run_daily(httpx.AsyncClient(), "solana", "P", "T", now))
+    asyncio.run(lab.run_daily(httpx.AsyncClient(), "solana", "P", "T", now + 60))
+    assert asked == [("day", 1, 1000)]
+    asyncio.run(lab.run_daily(httpx.AsyncClient(), "solana", "P", "T", now + 4000))
+    assert asked[-1] == ("day", 1, 10)
+    assert len(candle_archive.get(candle_archive.key("solana", "P", "day", 1, "T"))) == 200
 
 
-def test_a_token_hours_old_trades_on_5_minutes(monkeypatch):
-    monkeypatch.setattr(lab, "LADDER", lab.FULL_LADDER)
+def test_no_entry_anywhere_keeps_the_widest_timeframe(monkeypatch):
     now = 1_800_000_000
 
     async def candles(client, net, pool, tf, agg, before, limit, token=""):
-        if (tf, agg) == ("minute", 5):
-            return [[now - 80 * 300 + i * 300, 1, 1, 1, 1, 1] for i in range(80)]
-        return [[now - 3 * 900, 1, 1, 1, 1, 1]]
+        step = {"day": 86400, "hour": 3600, "minute": 60}[tf] * agg
+        return _spaced(min(1000, 200 * 86400 // step), step, now)
+    monkeypatch.setattr(lab.alert_track, "_candles", candles)
+    _only_enters_on(monkeypatch, 1)
+    assert asyncio.run(lab.tick([_e("tok")], now=now))["daily"]["interval"] == "1d"
+
+
+def test_a_young_token_starts_on_the_rung_its_history_allows(monkeypatch):
+    now = 1_800_000_000
+    calls = []
+
+    async def candles(client, net, pool, tf, agg, before, limit, token=""):
+        calls.append((tf, agg))
+        if (tf, agg) == ("day", 1):
+            return _spaced(4, 86400, now)
+        return _spaced(90, 3600, now) if (tf, agg) == ("hour", 1) else _spaced(1000, 300, now)
+    monkeypatch.setattr(lab.alert_track, "_candles", candles)
+    _only_enters_on(monkeypatch, 3600)
+    daily = asyncio.run(lab.tick([_e("tok")], now=now))["daily"]
+    assert daily["interval"] == "1h" and daily["bars"] == 90
+    assert calls == [("minute", 5), ("day", 1), ("hour", 1)]
+
+
+def test_a_just_listed_token_uses_the_5m_it_already_has(monkeypatch):
+    now = 1_800_000_000
+    calls = []
+
+    async def candles(client, net, pool, tf, agg, before, limit, token=""):
+        calls.append((tf, agg))
+        if (tf, agg) == ("day", 1):
+            return _spaced(1, 86400, now + 80000)
+        return _spaced(100, 300, now)
     monkeypatch.setattr(lab.alert_track, "_candles", candles)
     daily = asyncio.run(lab.tick([_e("tok")], now=now))["daily"]
-    assert daily["interval"] == "5m" and daily["bars"] == 80
+    assert daily["interval"] == "5m" and daily["bars"] == 100
+    assert calls == [("minute", 5), ("day", 1)]
 
 
 def test_daily_too_few_candles_is_an_error_and_does_not_drop_the_5m(monkeypatch):
-    monkeypatch.setattr(lab, "LADDER", lab.FULL_LADDER)
+    now = 1_800_000_000
+
     async def candles(client, net, pool, tf, agg, before, limit, token=""):
-        if (tf, agg) == ("minute", 5):
-            return _bars(40)
-        return _bars(10)
+        if (tf, agg) == ("day", 1):
+            return _spaced(1, 86400, now + 80000)
+        return _spaced(40, 300, now)
     monkeypatch.setattr(lab.alert_track, "_candles", candles)
-    out = asyncio.run(lab.tick([_e("tok")], now=1_800_000_000))
+    out = asyncio.run(lab.tick([_e("tok")], now=now))
     assert out["daily"] == {"interval": "5m", "bars": 40, "error": "too few candles"}
     assert out["backtests"]["bars"] == 40
 
@@ -165,8 +258,9 @@ def test_the_trigger_needs_60_closed_candles_and_the_forming_one_is_dropped(monk
             return [[start + i * 86400, 1, 1, 1, 1, 1] for i in range(60)]
         if (tf, agg) == ("hour", 4):
             return [[now - 600 * 14400 + i * 14400, 1, 1, 1, 1, 1] for i in range(600)]
-        return _bars()
+        return [] if (tf, agg) == ("hour", 12) else _bars()
     monkeypatch.setattr(lab.alert_track, "_candles", candles)
+    _only_enters_on(monkeypatch, 28800)
     daily = asyncio.run(lab.tick([_e("tok")], now=now))["daily"]
     assert daily["interval"] == "8h" and daily["bars"] == 300 and "rows" in daily
 
@@ -196,7 +290,7 @@ def test_a_fresh_signal_reaches_the_listeners_and_a_busy_gecko_keeps_the_saved_d
         got.append(sig)
     monkeypatch.setattr(lab, "_signal_cbs", [listen])
 
-    async def daily_ok(client, net, pair, token, now, bars5=None):
+    async def daily_ok(client, net, pair, token, now, fast=None):
         return {"interval": "1d", "to": now - 86400, "rows": [{"label": "Trend EMA", "trades": 1}],
                 "best": {"events": [{"side": "buy", "t": now - 86400, "price": 1.5}]}}
 
