@@ -1256,7 +1256,10 @@ html, body { overflow-x: clip; }
   .agent-map .am-recent { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
   .agent-map .am-recent .am-chip { position: static; max-width: none; padding: 6px 12px; font-size: 13px; transition: none; }
   .agent-map .aj-tally { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
-  .agent-map .aj-controls { display: flex; gap: 8px; }
+  .agent-map .aj-controls { display: flex; flex-wrap: wrap; gap: 8px; }
+  .agent-map .aj-speed { padding: 10px; color: var(--k-text); background: var(--k-surface); border: 1px solid var(--k-surface-2); border-radius: 10px; font: inherit; font-size: 14px; }
+  .agent-map .aj-clock { position: fixed; left: 50%; bottom: calc(112px + env(safe-area-inset-bottom)); z-index: 30; transform: translateX(-50%); max-width: calc(100vw - 32px); margin: 0; padding: 8px 14px; border: 1px solid var(--k-mint); border-radius: 999px; background: var(--k-card); color: var(--k-text); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .agent-map .aj-clock:empty { display: none; }
   .agent-map .aj-form { display: flex; gap: 8px; }
   .agent-map .aj-form input { flex: 1; min-width: 0; padding: 12px; color: var(--k-text); background: var(--k-surface); border: 1px solid var(--k-surface-2); border-radius: 10px; font: inherit; font-size: 16px; }
   .agent-map .aj-form button, .agent-map .aj-choices button, .agent-map .aj-replay { padding: 10px 14px; border: 1px solid var(--k-mint); border-radius: 10px; background: transparent; color: var(--k-text); font: inherit; font-size: 14px; cursor: pointer; }
