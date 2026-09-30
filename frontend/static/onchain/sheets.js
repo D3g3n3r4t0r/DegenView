@@ -64,20 +64,27 @@ const usdS = (n) => (n == null ? "—" : n >= 1e6 ? `$${(n / 1e6).toFixed(2)}M` 
 
 export async function openScan(query) {
   open(`Scanning ${query}`, "Scout checks market data, security, the project site and previous risk signals.");
-  setBody(`<div class="scan-wait"><span class="agent-orb" aria-hidden="true"><i></i><i></i><i></i></span><p>Scout is examining this token…</p></div>`);
+  setBody(`<div class="scan-live"><div class="scan-live-head"><span class="agent-orb" aria-hidden="true"><i></i><i></i><i></i></span>
+    <p>Scout is examining <b>${escapeHtml(query)}</b></p></div><ol class="scan-steps"></ol></div>`);
+  const list = bodyEl.querySelector(".scan-steps");
+  const t0 = performance.now();
   let d;
   try {
-    d = await api.scanToken(query);
+    d = await api.streamScan(query, (ev) => scanStep(list, ev));
   } catch (err) {
     setMessage(err.message ?? "Scan failed.", "is-warn");
     return;
   }
+  const took = ((performance.now() - t0) / 1000).toFixed(1);
+  const ran = list.querySelectorAll('li:not([data-state="skip"]):not([data-state="wait"])').length;
+  const [{ gemWhy }] = await Promise.all([import("@onchain/leaderboard.js"), new Promise((r) => setTimeout(r, 450))]);
   if (d.error) { setMessage(d.error, "is-warn"); return; }
   const t = d.token;
   titleEl.textContent = `${t.symbol} · ${t.chain}`;
   // A project is judged by the Gem Finder, a meme by the listing filter
   // (Lorenzo, 29/09: the scanner had not followed the updates).
   const g = d.gem, ab = d.about ?? {};
+  const stepsDone = list.innerHTML;
   const status = g ? gemStatus(g) : { ok: ["pass", "Would pass the listing filter"], fail: ["fail", `Would be rejected: ${d.pipeline.reason}`],
     wait: ["wait", `Waiting: ${d.pipeline.reason}`] }[d.pipeline.status] ?? ["wait", d.pipeline.reason];
   const ai = d.ai;
@@ -98,15 +105,18 @@ export async function openScan(query) {
     ${ai ? `<div class="scan-ai" data-risk="${ai.risk >= 60 ? "high" : ai.risk >= 30 ? "mid" : "low"}"><b>${ai.risk}</b>
       <span><b>Scout rug risk</b><small>${escapeHtml([ai.theme, ...(ai.flags ?? [])].filter(Boolean).join(" · ") || "no red flags")}</small></span></div>`
       : `<p class="sheet-note">Scout's AI assessment is unavailable right now.</p>`}
-    ${g ? gemCard(g) : ""}
+    ${d.scout ? `<div class="scan-scout">${gemWhy(d.scout)}</div>` : g ? gemCard(g) : ""}
     ${btCard(d.backtest)}
     <p class="sheet-note"><b>Memory:</b> ${escapeHtml(d.memory.summary)}${hist ? ` · this token before: ${hist}` : ""}</p>
     ${d.alert ? `<p class="sheet-note">Alerted ${new Date(d.alert.at * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" })}, now ${pctS(d.alert.now)}.</p>` : ""}
     <ul class="scan-checks">${(d.checks ?? []).map((c) => `<li data-ok="${c.ok === true ? "yes" : c.ok === false ? "no" : "unknown"}">
       <span>${escapeHtml(c.label)}</span><small>${escapeHtml(c.detail ?? "")}</small></li>`).join("")}</ul>
+    <details class="scan-trail"><summary>Scout ran ${ran} checks in ${took}s</summary><ol class="scan-steps is-done">${stepsDone}</ol></details>
     <div class="scan-links">${g && (g.status === "unknown" || g.status === "rejected" || g.status === "studied") ? `<button type="button" class="btn-quiet scan-add" data-add><svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/></svg><span>${g.status === "unknown" ? "Add to database" : "Study again"}</span></button>` : ""}
     <button type="button" class="btn-quiet" data-full>Full token page</button>
     ${t.pair_url ? `<a class="btn-quiet" href="${escapeHtml(t.pair_url)}" target="_blank" rel="noopener">DexScreener</a>` : ""}</div>`);
+  bodyEl.animate?.([{ opacity: 0, transform: "translateY(8px)" }, { opacity: 1, transform: "none" }],
+    { duration: 380, easing: "cubic-bezier(.2, .8, .2, 1)" });
   bodyEl.querySelector("[data-add]")?.addEventListener("click", async (ev) => {
     const btn = ev.currentTarget, label = btn.querySelector("span");
     btn.disabled = true;
@@ -129,12 +139,36 @@ export async function openScan(query) {
   });
 }
 
+// Every step the scan really takes (manual_scan.STEPS), in the scout's words.
+const STEP_LABEL = {
+  pool: "Finding the pool on DexScreener", name: "Reading the name", security: "Security scan",
+  contract: "Contract permissions", socials: "Social accounts", site: "Reading the project website",
+  github: "Checking GitHub", ai: "DeepSeek reads the listing", holders: "Counting holders on GeckoTerminal",
+  memory: "Comparing with past rugs", risk: "DeepSeek rates the rug risk", gem: "Looking up the Gem Finder",
+  pillars: "Scoring research, GitHub and tokenomics", report: "Scout writes the report", code: "DeepSeek reads the code",
+  backtest: "Backtesting the trend follower",
+};
+
+function scanStep(list, ev) {
+  if (ev.plan) {
+    list.innerHTML = ev.plan.map((k, i) => `<li data-k="${k}" data-state="wait" style="--i:${i}">
+      <i class="step-dot" aria-hidden="true"><b></b><s></s></i><span>${STEP_LABEL[k] ?? escapeHtml(k)}</span><small></small></li>`).join("");
+    return;
+  }
+  const li = list.querySelector(`[data-k="${ev.step}"]`);
+  if (!li) return;
+  li.dataset.state = ev.state;
+  if (ev.detail) li.querySelector("small").textContent = ev.detail;
+  if (ev.state === "run") li.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+}
+
 const VERDICT = { gem: "gem", watch: "watch", avoid: "avoid", scam: "scam" };
 const pctN = (n) => (n == null ? "—" : `${n > 0 ? "+" : ""}${Math.round(n)}%`);
 
 function gemStatus(g) {
   if (g.status === "ranked") return ["pass", `Gem Finder: ranked #${g.rank} · score ${g.score}`];
-  if (g.status === "unknown") return ["wait", "Gem Finder: not studied yet"];
+  if (g.status === "unknown") return g.score == null ? ["wait", "Gem Finder: not studied yet"]
+    : g.why ? ["wait", `Scout: would not rank yet · ${g.why}`] : ["pass", `Scout: would qualify · score ${g.score}`];
   if (g.status === "new" || g.status === "analyzing") return ["wait", "Gem Finder: queued for a full study"];
   if (g.status === "rejected") return ["fail", `Gem Finder: rejected · ${g.why || "rules"}`];
   return g.why ? ["wait", `Gem Finder: studied, not ranked · ${g.why}`] : ["pass", `Gem Finder: qualifies · score ${g.score}`];
