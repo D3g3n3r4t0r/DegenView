@@ -85,6 +85,7 @@ def _user(uid: str) -> dict:
     u = _state.setdefault(uid, {"mode": "off", "pct": 100, "position": None, "sim_usdg": None,
                                 "sim_start": None, "trades": [], "note": ""})
     u.setdefault("paper", [])
+    u.setdefault("trend", [])
     return u
 
 
@@ -123,7 +124,7 @@ def configure(uid: str, mode: str | None = None, pct: int | None = None, usdg_no
         cash = round(sim_cash, 6)
         if u["sim_start"]:
             start = u["sim_start"] + cash - (u["sim_usdg"] or 0)
-            open_value = sum(p["stake"] * (1 + p.get("ret", 0.0)) for p in u["paper"])
+            open_value = sum(p["stake"] * (1 + p.get("ret", 0.0)) for p in u["paper"]) + _trend_open(u)
             u["sim_start"] = round(start if start > 0 else cash + open_value, 6) or None
         else:
             u["sim_start"] = cash or None
@@ -153,7 +154,7 @@ def view(uid: str) -> dict:
                     "ret": round(value / pos["cost_usdg"] - 1, 4) if value and pos["cost_usdg"] else None,
                     "image": (a or {}).get("image")}
     label = alert_track.system_board("meme")["chosen"] if u["paper"] else None
-    papers = [_paper_view(p, label) for p in u["paper"]][::-1]
+    papers = ([_paper_view(p, label) for p in u["paper"]] + [_trend_view(p) for p in u["trend"]])[::-1]
     sim = None
     if u["sim_start"]:
         equity = (u["sim_usdg"] or 0) + ((pos_view or {}).get("value_usdg") or 0 if pos and pos["mode"] == "sim" else 0)
@@ -466,7 +467,7 @@ def paper_tick(u: dict, label: str, now: float, open_new: bool = True) -> list[d
         paper_entry = _price(a)
         if not paper_entry or not math.isfinite(paper_entry) or paper_entry <= 0:
             continue
-        equity = (u["sim_usdg"] or 0) + sum(p["stake"] * (1 + p.get("ret", 0.0)) for p in u["paper"])
+        equity = (u["sim_usdg"] or 0) + sum(p["stake"] * (1 + p.get("ret", 0.0)) for p in u["paper"]) + _trend_open(u)
         stake = round(min(u["sim_usdg"] or 0, equity * u["pct"] / 100), 6)
         base = {"t": now, "side": "buy", "symbol": a["symbol"], "token": a["token_address"],
                 "alert": alert_track.key_of(a), "chain": a["chain"], "mode": "sim", "why": "validated trend signal"}
@@ -496,7 +497,7 @@ async def _tick(users: list, now: float | None = None, market: Market | None = N
         if not u:
             continue
         u.setdefault("paper", [])
-        if u["mode"] == "sim" or u["paper"]:
+        if u["mode"] == "sim" or u["paper"] or u.get("trend"):
             if u["sim_start"] is None:
                 u.update(sim_usdg=SIM_START_USDG, sim_start=SIM_START_USDG)
             for row in paper_tick(u, label, now, open_new=u["mode"] == "sim"):
@@ -534,6 +535,90 @@ async def _tick(users: list, now: float | None = None, market: Market | None = N
     if done:
         _save()
     return done
+
+
+# --------------------------------------------------------------- trend book
+#
+# Lorenzo, 30/09: "il sistema deve fare ingressi con strategia dinamica su
+# gemme e non piu' su crypto etichettate come meme o con caratteristiche da
+# evitare" -- and, on the card, "Si', solo Sim". Simulated follows the trend
+# follower 8h/1d of the ranking (strategy_lab's signals): in on its buy, out
+# on its sell, only on tokens that pass the gem rules (quant_runtime.gem_verdict:
+# no memes, ranked, fresh market facts, liquidity). Real is untouched: it
+# still waits for a reviewed quant policy.
+
+def _trend_ret(p: dict) -> float:
+    price, entry = p.get("price"), p.get("entry_price")
+    return price / entry - 1 if price and entry else 0.0
+
+
+def _trend_open(u: dict) -> float:
+    return sum(p["stake"] * (1 + _trend_ret(p)) for p in u.get("trend") or [])
+
+
+def _trend_view(p: dict) -> dict:
+    ret = _trend_ret(p)
+    value = p["stake"] * (1 + ret)
+    return {"symbol": p["symbol"], "token": p["token"], "chain": p["chain"], "at": p["at"], "mode": "sim",
+            "cost_usdg": p["stake"], "value_usdg": round(value, 4), "ret": round(ret, 4),
+            "price": p.get("price"), "qty": value / p["price"] if p.get("price") else None,
+            "image": None, "route": f"trend {p.get('interval') or ''}".strip(), "pair": p.get("pair")}
+
+
+def trend_signal(uids: list[str], sig: dict, now: float, gem_ok: bool) -> list[tuple[str, dict]]:
+    """One strategy_lab signal on every simulated book. A buy opens a trade
+    (only when gem_ok), a sell closes the one open on that token."""
+    price = sig.get("price")
+    if not isinstance(price, (int, float)) or not math.isfinite(price) or price <= 0:
+        return []
+    out: list[tuple[str, dict]] = []
+    for uid in uids:
+        u = _state.get(uid)
+        if not u:
+            continue
+        u.setdefault("trend", [])
+        held = next((p for p in u["trend"] if p["chain"] == sig["chain"] and p["token"] == sig["token"]), None)
+        base = {"t": now, "symbol": sig["symbol"], "token": sig["token"], "chain": sig["chain"], "mode": "sim"}
+        if sig["side"] == "sell" and held:
+            held["price"] = price
+            ret = _trend_ret(held)
+            cash = held["stake"] * (1 + ret)
+            u["sim_usdg"] = round((u["sim_usdg"] or 0) + cash, 6)
+            u["trend"].remove(held)
+            out.append((uid, _log(u, {**base, "side": "sell", "ok": True, "usdg": round(cash, 6),
+                                      "ret": round(ret, 4), "why": f"trend exit {sig.get('interval', '')}".strip()})))
+        elif sig["side"] == "buy" and not held and gem_ok and u["mode"] == "sim":
+            if u["sim_start"] is None:
+                u.update(sim_usdg=SIM_START_USDG, sim_start=SIM_START_USDG)
+            equity = ((u["sim_usdg"] or 0) + _trend_open(u)
+                      + sum(p["stake"] * (1 + p.get("ret", 0.0)) for p in u["paper"]))
+            stake = round(min(u["sim_usdg"] or 0, equity * u["pct"] / 100), 6)
+            why = f"trend entry {sig.get('interval', '')}".strip()
+            if stake < 0.01:
+                out.append((uid, _log(u, {**base, "side": "buy", "ok": False, "why": why,
+                                          "reason": "all cash already in open trades"})))
+                continue
+            u["sim_usdg"] = round((u["sim_usdg"] or 0) - stake, 6)
+            u["trend"].append({"symbol": sig["symbol"], "token": sig["token"], "chain": sig["chain"],
+                               "pair": sig.get("pair"), "interval": sig.get("interval"), "at": now,
+                               "signal_at": sig.get("t"), "stake": stake, "entry_price": price, "price": price})
+            out.append((uid, _log(u, {**base, "side": "buy", "ok": True, "usdg": stake, "why": why})))
+    if out:
+        _save()
+    return out
+
+
+def trend_marks(prices: dict[str, float]) -> None:
+    """Re-mark the open trend trades: {"chain:token": price}."""
+    for u in _state.values():
+        for p in u.get("trend") or []:
+            price = prices.get(f"{p['chain']}:{p['token']}")
+            if isinstance(price, (int, float)) and math.isfinite(price) and price > 0:
+                p["price"] = price
+
+
+def trend_keys() -> list[tuple[str, str]]:
+    return sorted({(p["chain"], p["token"]) for u in _state.values() for p in u.get("trend") or []})
 
 
 _tick_running = False
