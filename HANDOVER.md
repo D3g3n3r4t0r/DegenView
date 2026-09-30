@@ -6,6 +6,8 @@ Lorenzo: "se entro qui io veda cosa succede davvero quando una crypto entra in a
 
 **Mergiata da Claude il 30/09** (Lorenzo: "applica"). Rivista sul codice: suite completa su Linux 1461 passati / 1 saltato, ruff pulito, 8 test Node della mappa ok; la CI e' caduta in 3s senza log (minuti Actions finiti). Effetto visibile: senza `data/quant_approved.json` sul server il pilota (Sim e Real) **non apre nuove operazioni**; le posizioni aperte escono con la logica di prima. Approvazione paper/real resta di Lorenzo, dopo dati reali e report. Il loop di trading deve girare in un solo worker (guardia per processo). Code integrated. Includes #402 map, preserves latest main Scout cube. 47 focused Python tests + 8 Node tests passed; full-backend lint passed. Full suite has environment/external failures; no profitability claim. Claude continuation: **docs/CLAUDE_QUANT_HANDOFF.md**, with exact checks and remaining limitations. No production approval or orders activated.
 
+30/09, report sui dati reali (Lorenzo: "si", poi "procedi"): nessuna finestra completa, il collettore parte dal deploy del 30/09; report in project-files `quant/report-dati-reali-2026-09-30.md`. Rischio trovato: le barre delle gemme venivano solo dal campionamento, una barra da 5 minuti mancante rende il caso non disponibile e blocca la coorte. Ora `_refresh_system` riempie i buchi delle ultime 24h con le candele GeckoTerminal (`_bar_hole`, al massimo ogni 30 min per gemma, dentro `SYSTEM_FETCHES_PER_TICK`). Resta: leggere i conteggi reali dal pannello quant; fissare costi e confini prima di lanciare il CLI.
+
 # Memoria di sessione
 
 ## Trend follower 8h/1d sulla classifica, con segnali — `seed-0235` — 2026-09-30
