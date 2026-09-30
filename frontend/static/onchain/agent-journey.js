@@ -1,6 +1,6 @@
-import { NODES, verifyChain, sha256Hex } from "@onchain/agent-map-model.js";
+import { NODES, verifyChain, sha256Hex, replaySchedule, autoSpeed, SPEEDS } from "@onchain/agent-map-model.js";
 
-const STEP_MS = 650, MIN_STEP_MS = 90, REPLAY_MS = 20000;
+const CAP_MS = 3000, MIN_MS = 80, BUDGET_MS = 60000;
 const LABEL = Object.fromEntries(NODES.map(n => [n.id, n.label]));
 LABEL.decision = "Decision";
 const SOURCE = {
@@ -31,10 +31,20 @@ export function mountJourney(root, { load, onStep }) {
   const controls = el("div", null, "aj-controls");
   const replay = el("button", "Replay", "aj-replay"); replay.type = "button"; replay.hidden = true;
   const skip = el("button", "Show all", "aj-replay"); skip.type = "button"; skip.hidden = true;
-  controls.append(skip, replay);
+  const speedSel = el("select", null, "aj-speed"); speedSel.setAttribute("aria-label", "Replay speed");
+  SPEEDS.forEach(([v, name]) => speedSel.add(new Option(name, String(v))));
+  const follow = el("button", "Follow", "aj-replay"); follow.type = "button"; follow.hidden = true;
+  const clock = el("p", "", "aj-clock"); clock.setAttribute("aria-live", "off");
+  controls.append(speedSel, skip, follow, replay);
   root.className = "aj";
-  root.replaceChildren(form, status, choices, head, tally, controls, rail);
-  let current = null;
+  root.replaceChildren(form, status, choices, head, tally, controls, clock, rail);
+  let current = null, following = true;
+  const fmt = sec => sec < 60 ? `${Math.round(sec)}s` : sec < 3600 ? `${Math.round(sec / 60)}m` : sec < 86400 ? `${Math.round(sec / 3600)}h` : `${Math.round(sec / 86400)}d`;
+  // A finger or wheel on the page means the reader wants to look around: stop following until asked.
+  const unfollow = () => { if (timers.size && following) { following = false; follow.hidden = false; } };
+  addEventListener("wheel", unfollow, { passive: true });
+  addEventListener("touchmove", unfollow, { passive: true });
+  follow.addEventListener("click", () => { following = true; follow.hidden = true; rail.querySelector(".aj-now")?.scrollIntoView({ behavior: "smooth", block: "center" }); });
 
   const clear = () => { timers.forEach(clearTimeout); timers.clear(); };
   const later = (fn, ms) => { const id = setTimeout(() => { timers.delete(id); fn(); }, ms); timers.add(id); };
@@ -62,11 +72,12 @@ export function mountJourney(root, { load, onStep }) {
   async function show(j) {
     clear(); const mine = ++run; current = j;
     rail.replaceChildren(); head.replaceChildren(); tally.replaceChildren(); replay.hidden = true; skip.hidden = true;
+    follow.hidden = true; clock.textContent = "";
     const n = j.steps.length;
     status.textContent = n ? `${j.symbol || j.token.slice(0, 8)} · ${j.chain} · ${n} recorded steps` : `No stored record for ${j.symbol || j.token}.`;
     if (!n) return;
     const check = el("p", "Verifying hash chain…", "aj-verify");
-    head.append(check, el("p", j.limits, "aj-limits"));
+    head.append(check, el("p", `${j.limits} The replay keeps the real time between steps at the chosen speed; a pause longer than ${CAP_MS / 1000} s on screen is shortened and marked.`, "aj-limits"));
     const v = await verifyChain(j, sha256Hex).catch(() => ({ ok: false, brokenAt: 0 }));
     if (mine !== run) return;
     check.dataset.ok = String(v.ok);
@@ -86,22 +97,49 @@ export function mountJourney(root, { load, onStep }) {
     const all = () => {
       clear(); rail.replaceChildren(...cards); cards.forEach(c => c.classList.remove("aj-in", "aj-now"));
       counts.clear(); j.steps.forEach(s => { const c = (counts.get(s.node) || 0) + 1; counts.set(s.node, c); pills.get(s.node).textContent = `${LABEL[s.node] || "Other"} ${c}`; });
-      replay.hidden = false; skip.hidden = true;
+      replay.hidden = false; skip.hidden = true; follow.hidden = true; clock.textContent = "";
     };
     skip.onclick = all;
     if (still()) { all(); return; }
-    skip.hidden = false;
-    const stepMs = Math.max(MIN_STEP_MS, Math.min(STEP_MS, REPLAY_MS / n));
-    cards.forEach((c, i) => later(() => {
-      if (mine !== run) return;
+    speedSel.value = String(autoSpeed(j.steps, BUDGET_MS, { capMs: CAP_MS, minMs: MIN_MS }));
+    let shown = 0;
+    const reveal = i => {
+      const c = cards[i];
+      const gap = i ? j.steps[i].t - j.steps[i - 1].t : 0;
+      if (plan[i]?.capped) c.querySelector(".aj-src").append(` · pause of ${fmt(gap)} shortened`);
       c.classList.add("aj-in"); rail.append(c);
       rail.querySelectorAll(".aj-now").forEach(x => x.classList.remove("aj-now"));
       c.classList.add("aj-now");
       requestAnimationFrame(() => c.classList.remove("aj-in"));
       count(j.steps[i].node);
       onStep?.(j.steps[i].node, j.steps[i - 1]?.node);
-      if (i === cards.length - 1) { replay.hidden = false; skip.hidden = true; }
-    }, i * stepMs));
+      if (following) c.scrollIntoView({ behavior: "smooth", block: "center" });
+      shown = i + 1;
+      if (shown === n) { replay.hidden = false; skip.hidden = true; follow.hidden = true; clock.textContent = `Replay done · ${when(j.steps[n - 1].t)}`; }
+    };
+    let plan = [];
+    const playFrom = from => {
+      clear();
+      const speed = Number(speedSel.value) || 60;
+      plan = replaySchedule(j.steps, speed, { capMs: CAP_MS, minMs: MIN_MS });
+      const base = plan[from]?.at ?? 0, t0 = performance.now();
+      skip.hidden = false;
+      for (let i = from; i < n; i++) later(() => { if (mine === run) reveal(i); }, plan[i].at - base);
+      const tick = () => {
+        if (mine !== run || shown >= n) return;
+        const i = Math.max(0, shown - 1), next = plan[shown];
+        if (!timers.size) return;
+        const ms = performance.now() - t0 + base;
+        let real = j.steps[i].t;
+        if (next && !next.capped && shown > 0) real += Math.min(next.gapS, (ms - plan[i].at) / 1000 * speed);
+        clock.textContent = next?.capped && shown > 0 ? `Skipping a pause of ${fmt(next.gapS)} · next step ${when(j.steps[shown].t)}` : `${when(real)} · ${SPEEDS.find(x => x[0] === speed)?.[1] || ""}`;
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    };
+    speedSel.onchange = () => { if (shown < n) playFrom(shown); };
+    following = true;
+    playFrom(0);
   }
 
   async function trace(args) {
@@ -126,6 +164,6 @@ export function mountJourney(root, { load, onStep }) {
   replay.addEventListener("click", () => { if (current) show(current); });
   return {
     trace,
-    dispose() { clear(); run++; root.replaceChildren(); },
+    dispose() { clear(); run++; removeEventListener("wheel", unfollow); removeEventListener("touchmove", unfollow); root.replaceChildren(); },
   };
 }

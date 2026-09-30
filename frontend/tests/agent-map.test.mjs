@@ -75,3 +75,12 @@ test('journey hash chain verifies and detects an altered record', async () => {
   const bad = { ...j, steps: [steps[0], { ...steps[1], record: '{"b":3}' }] };
   assert.deepEqual([(await live.verifyChain(bad, live.sha256Hex)).ok, (await live.verifyChain(bad, live.sha256Hex)).brokenAt], [false, 1]);
 });
+test('replay keeps real gaps proportional, caps long pauses, picks a speed that fits', () => {
+  const steps = [{ t: 0 }, { t: 60 }, { t: 120 }, { t: 86400 * 3 }];
+  const plan = live.replaySchedule(steps, 60, { capMs: 3000, minMs: 80 });
+  assert.deepEqual(plan.map(p => p.at), [0, 1000, 2000, 5000]);
+  assert.deepEqual(plan.map(p => p.capped), [false, false, false, true]);
+  assert.equal(plan[3].gapS, 86400 * 3 - 120);
+  assert.equal(live.autoSpeed(steps, 60000), 60);
+  assert.equal(live.autoSpeed([{ t: 0 }, { t: 600 }, { t: 1200 }, { t: 1800 }], 10000), 600);
+});

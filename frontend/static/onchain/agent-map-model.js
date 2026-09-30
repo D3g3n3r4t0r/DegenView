@@ -125,3 +125,29 @@ export async function sha256Hex(text) {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
   return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
 }
+
+/** Replay times proportional to the real gaps between steps: `speed` real seconds per screen second.
+ * A pause longer than `capMs` on screen is shortened to `capMs` and marked. */
+export function replaySchedule(steps, speed, { capMs = 3000, minMs = 80 } = {}) {
+  let at = 0;
+  return (steps || []).map((s, i) => {
+    const gapS = i ? Math.max(0, s.t - steps[i - 1].t) : 0;
+    const want = i ? gapS / speed * 1000 : 0;
+    const capped = want > capMs;
+    at += i ? Math.max(minMs, capped ? capMs : want) : 0;
+    return { at, gapS, capped };
+  });
+}
+
+export const SPEEDS = [[1, "Real time"], [60, "1 s = 1 min"], [600, "1 s = 10 min"], [3600, "1 s = 1 h"], [86400, "1 s = 1 day"]];
+
+/** Slowest listed speed whose replay fits in `budgetMs` with at most a quarter of the pauses shortened. */
+export function autoSpeed(steps, budgetMs = 60000, opts) {
+  const gaps = Math.max(0, (steps || []).length - 1);
+  for (const [speed] of SPEEDS) {
+    const plan = replaySchedule(steps, speed, opts);
+    const capped = plan.filter(p => p.capped).length;
+    if (!plan.length || (plan.at(-1).at <= budgetMs && capped <= Math.ceil(gaps / 4))) return speed;
+  }
+  return SPEEDS.at(-1)[0];
+}
