@@ -44,7 +44,19 @@ BARS = 1000                      # 5 minuti: circa tre giorni e mezzo
 # di 60 candele chiuse Trend EMA non puo' entrare, qualunque sia il grafico.
 TRIGGER_MIN_BARS = 60
 DAILY_MIN_BARS = TRIGGER_MIN_BARS    # meno di 60 giorni = token giovane: 8 ore
-STEP_S = {"1d": 86400, "8h": 28800}
+# Lorenzo, 30/09: "un time frame piccolo nel momento del listing quindi 5
+# minuti [...] e poi 8 ore e poi giornaliero [...] graduale con un algoritmo
+# che tiene conto di quanta storicita' ha il grafico". The ladder, coarsest
+# first: the trend follower runs on the coarsest chart with at least
+# TRIGGER_MIN_BARS closed candles. A token a few hours old trades on 5
+# minutes, one of a few days on 1 hour, and so on up to the daily.
+STEP_S = {"1d": 86400, "8h": 28800, "4h": 14400, "1h": 3600, "15m": 900, "5m": 300}
+FULL_LADDER = ("1d", "8h", "4h", "1h", "15m", "5m")
+# Lorenzo, 30/09: "prima di applicare questa regola fai un po' di prove su
+# tutte le 50 cripto [...] dovrebbero essere paritarie o superiori". Until
+# that test says so, only the two rungs already in use run.
+LADDER = ("1d", "8h")
+_GECKO_TF = {"1d": ("day", 1), "4h": ("hour", 4), "1h": ("hour", 1), "15m": ("minute", 15)}
 KEEP = 300
 
 _results: dict[str, dict] = {}   # chain:token -> {at, pair, symbol, backtests | error}
@@ -158,22 +170,29 @@ def _closed(bars: list[list], step: int, now: float) -> list[list]:
     return [b for b in bars if b[0] + step <= now]
 
 
-async def run_daily(client: httpx.AsyncClient, net: str, pair: str, token: str, now: float) -> dict | None:
-    """Il trend-follower del sito sul grafico giornaliero, o a 8 ore se il
-    token e' giovane (meno di DAILY_MIN_BARS giorni chiusi). Sotto
-    TRIGGER_MIN_BARS candele non c'e' risultato. None = GeckoTerminal non
-    risponde."""
-    bars = await alert_track._candles(client, net, pair, "day", 1, now, 1000, token)
-    if bars is None:
-        return None
-    iv = "1d"
-    bars = _closed(bars, STEP_S[iv], now)
-    if len(bars) < DAILY_MIN_BARS:
-        h4 = await alert_track._candles(client, net, pair, "hour", 4, now, 1000, token)
-        if h4 is None:
-            return None
-        iv = "8h"
-        bars = _closed(_merge_8h(h4), STEP_S[iv], now)
+async def run_daily(client: httpx.AsyncClient, net: str, pair: str, token: str, now: float,
+                    bars5: list[list] | None = None) -> dict | None:
+    """Il trend-follower del sito sul grafico piu' largo che ha almeno
+    TRIGGER_MIN_BARS candele chiuse (LADDER: 1d, 8h, 4h, 1h, 15m, 5m).
+    `bars5` sono le candele da 5 minuti gia' scaricate. Sotto
+    TRIGGER_MIN_BARS anche a 5 minuti non c'e' risultato. None =
+    GeckoTerminal non risponde."""
+    got: dict[tuple[str, int], list] = {}
+    iv, bars = LADDER[0], []
+    for iv in LADDER:
+        if iv == "5m":
+            raw = bars5 or []
+        else:
+            key = _GECKO_TF["4h" if iv == "8h" else iv]
+            if key not in got:
+                fetched = await alert_track._candles(client, net, pair, key[0], key[1], now, 1000, token)
+                if fetched is None:
+                    return None
+                got[key] = fetched
+            raw = _merge_8h(got[key]) if iv == "8h" else got[key]
+        bars = _closed(raw, STEP_S[iv], now)
+        if len(bars) >= TRIGGER_MIN_BARS:
+            break
     if len(bars) < TRIGGER_MIN_BARS:
         return {"interval": iv, "bars": len(bars), "error": "too few candles"}
     return {"interval": iv, **await asyncio.to_thread(system.backtest_one, sorted(bars))}
@@ -189,7 +208,10 @@ def _signal(daily: dict, prev: dict | None) -> tuple[dict | None, bool]:
     last = ev[-1]
     sig = {k: last.get(k) for k in ("side", "t", "price", "ret") if last.get(k) is not None}
     old = (prev or {}).get("signal") or {}
-    fresh = (last["t"] >= daily["to"] - STEP_S.get(daily.get("interval"), 86400)
+    # Saved before the arrows moved to the fill candle (30/09): the same
+    # signal now carries a later time, and must not be announced twice.
+    legacy = bool(old) and not ((prev or {}).get("best") or {}).get("fills")
+    fresh = (not legacy and last["t"] >= daily["to"] - STEP_S.get(daily.get("interval"), 86400)
              and (old.get("t"), old.get("side")) != (sig["t"], sig["side"]))
     return sig, fresh
 
@@ -214,7 +236,7 @@ async def run_one(client: httpx.AsyncClient, e: dict, now: float) -> dict | None
     _results[key] = {"at": now, "symbol": symbol, "pair": pair, "backtests": bt}
     # Il daily e' un di piu': se fallisce il 5 minuti resta.
     try:
-        daily = await run_daily(client, GECKO_NETWORKS[e["chain"]], pair, e["token_address"], now)
+        daily = await run_daily(client, GECKO_NETWORKS[e["chain"]], pair, e["token_address"], now, sorted(bars))
     except Exception:
         logger.exception("strategy lab: daily di %s fallito", symbol)
         daily = None

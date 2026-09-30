@@ -234,6 +234,7 @@ def _backtest(bars: list[list], strategies_wanted: list[tuple[str, str]], known:
     ev = strategies.rug_event(df, known)
     rug = {"at": int(df.index[ev["i"]].timestamp()), "why": ev["why"], "kind": ev.get("kind", "rug")} if ev is not None else None
     return {"bars": len(df), "from": int(df.index[0].timestamp()), "to": int(df.index[-1].timestamp()),
+            "last": float(df["close"].iloc[-1]),
             "hold_pct": round(hold, 2) if hold is not None else None, "rows": rows,
             "best": _best_trades(df, rows, known), "rug": rug}
 
@@ -267,20 +268,33 @@ def _best_trades(df: pd.DataFrame, rows: list[dict], known: dict | None = None) 
     except Exception:
         return None
     fee = 2 * radar.BACKTEST_PARAMS["commission_pct"] / 100     # as radar._long_only
+    # A trade carries the time of the candle whose close gave the signal, but
+    # it fills at the next candle's open (fill_at "next_open"): the arrow goes
+    # on the fill candle, as radar.long_events does. Lorenzo, 30/09: "gli
+    # ingressi registrati [...] non vengono visualizzati correttamente nel
+    # grafico". A stop fills inside its own candle and keeps its time.
+    times = [int(ts.timestamp()) for ts in df.index]
+    step = times[-1] - times[-2] if len(times) > 1 else 0
+    nxt = {times[i]: times[i + 1] for i in range(len(times) - 1)}
+    fill_t = lambda t: nxt.get(int(t), int(t) + step)   # noqa: E731
+    signal_t = {int(e.time.timestamp()) if hasattr(e.time, "timestamp") else int(e.time) for e in signals}
     events = []
     for tr in result.trades:
         if tr.direction != "long":
             continue
-        events += [{"t": int(tr.entry_time), "side": "buy", "price": tr.entry_price},
-                   {"t": int(tr.exit_time), "side": "sell", "price": tr.exit_price,
+        out_t = int(tr.exit_time)
+        events += [{"t": fill_t(tr.entry_time), "side": "buy", "price": tr.entry_price},
+                   {"t": fill_t(out_t) if out_t in signal_t else out_t, "side": "sell", "price": tr.exit_price,
                     "ret": round(tr.pnl_pct / 100 - fee, 4)}]
     if best["in_position"] and (not events or events[-1]["side"] != "buy"):
         entry = next((e for e in reversed(signals) if e.type == "entry_long"), None)
         if entry is not None:
             t = entry.time
-            events.append({"t": int(t.timestamp()) if hasattr(t, "timestamp") else int(t), "side": "buy",
-                           "price": entry.price})
-    return {"label": best["label"], "events": events}
+            t = int(t.timestamp()) if hasattr(t, "timestamp") else int(t)
+            i = times.index(t) if t in nxt else None
+            price = float(df["open"].iloc[i + 1]) if i is not None else entry.price
+            events.append({"t": fill_t(t), "side": "buy", "price": price})
+    return {"label": best["label"], "events": events, "fills": "next_open"}
 
 
 def _median(vals: list[float]) -> float | None:

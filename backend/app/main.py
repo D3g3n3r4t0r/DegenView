@@ -4638,6 +4638,7 @@ async def _sim_snapshot(user: User) -> dict:
     every account: "reset completo di tutti gli account [...] 10.000 [...]
     nelle posizioni chiuse tutte quelle della top 50 [...] e le posizioni
     aperte, che sarebbero aperte ad oggi"."""
+    from app.trading.onchain import strategy_lab as onchain_strategy_lab
     w = await _top_wallet()
     positions = []
     for p in w["open"]:
@@ -4646,7 +4647,9 @@ async def _sim_snapshot(user: User) -> dict:
                           "name": p.get("symbol") or "?", "price_usd": price, "value_usd": p["value"],
                           "amount": p["value"] / price if price else None, "image": None, "native": False,
                           "hidden": False, "source": "sim", "wallet": "sim", "ret": p.get("ret"),
-                          "cost_usd": p["stake"], "opened": p["at"], "interval": p.get("interval")})
+                          "cost_usd": p["stake"], "opened": p["at"], "interval": p.get("interval"),
+                          "pair": (onchain_strategy_lab._results.get(
+                              onchain_strategy_lab.key_of(p["chain"], p["token"])) or {}).get("pair")})
     by_chain: dict[str, float] = {}
     for p in positions:
         by_chain[p["chain"]] = by_chain.get(p["chain"], 0.0) + (p["value_usd"] or 0.0)
@@ -4732,7 +4735,7 @@ def _closed_trades(user: User) -> list[dict]:
             open_buy[t.get("token")] = t
         elif t["side"] == "sell" and t.get("token") in open_buy:
             b = open_buy.pop(t["token"])
-            out.append({"symbol": t["symbol"], "token": t.get("token"), "chain": "robinhood", "opened": b["t"],
+            out.append({"symbol": t["symbol"], "token": t.get("token"), "chain": t.get("chain") or "robinhood", "opened": b["t"],
                         "closed": t["t"], "cost_usdg": b.get("usdg"), "proceeds_usdg": t.get("usdg"),
                         "ret": t.get("ret"), "mode": t.get("mode"), "why": t.get("why")})
     return out[::-1]
