@@ -29,13 +29,13 @@ const cashLine = (d) => (d.usdc
 function line(d) {
   if (!d.has_wallet) return "Create the Robinhood Chain wallet to let the system trade it.";
   if (d.mode === "off") return `Off. When on, the system buys Robinhood alerts on its own entries and sells on its exits, one token at a time.`;
-  if (d.mode === "sim") return "Simulated: follows every alert, on every chain, with the Strategies trade: in at the alert, out on the trend exit. Nothing is sent.";
+  if (d.mode === "sim") return "Simulated: follows the trend follower (8h or 1d) on the ranked gems, never memes: in on its entry, out on its exit. Nothing is sent.";
   return d.server_live ? "Real: trades your cash on its own. Gas is paid in ETH." : "Real is on, but live execution is switched off on the server: nothing is sent yet.";
 }
 
 function position(d) {
   const list = d.positions?.length ? d.positions : d.position ? [d.position] : [];
-  if (!list.length) return `<p class="auto-flat">${d.mode === "off" ? "" : "Waiting for the next alert."}</p>`;
+  if (!list.length) return `<p class="auto-flat">${d.mode === "off" ? "" : "Waiting for the next signal."}</p>`;
   return list.map(posRow).join("");
 }
 
