@@ -113,6 +113,7 @@ from app.trading.onchain import narratives as onchain_narratives
 from app.trading.onchain import judge as onchain_judge
 from app.trading.onchain import code_review as onchain_code_review
 from app.trading.onchain import backtest_lab as onchain_backtest_lab
+from app.trading.onchain import portfolio_replay as onchain_portfolio_replay_mod
 from app.trading.onchain import strategy_lab as onchain_strategy_lab
 from app.trading.onchain import autotrader as onchain_autotrader
 from app.trading.onchain import live_prices as onchain_live_prices
@@ -4094,6 +4095,24 @@ async def onchain_top(n: int = 15, narrative: str = "", user: User = Depends(aut
             "backtests": onchain_strategy_lab.status(_top_entries(50))}
 
 
+@app.get("/api/onchain/portfolio-replay")
+async def onchain_portfolio_replay(cash: float = 10_000.0, pct: float = 10.0,
+                                   user: User = Depends(auth.get_current_user)) -> dict:
+    """Every Top 50 gem's trend follower trades on one wallet of `cash`
+    (Lorenzo, 30/09): a read of the saved backtests, apart from the live
+    simulated wallet."""
+    _require_onchain_enabled()
+    items = []
+    for e in _top_entries(50):
+        daily = (onchain_strategy_lab.get(e["chain"], e["token_address"]) or {}).get("daily") or {}
+        ev = (daily.get("best") or {}).get("events")
+        if ev:
+            items.append({"chain": e["chain"], "token": e["token_address"], "symbol": e.get("symbol"),
+                          "pair": e.get("pair_address"), "interval": daily.get("interval"), "events": ev,
+                          "last": daily.get("last")})
+    return onchain_portfolio_replay_mod.replay(items, max(1.0, min(float(cash), 10_000_000.0)), pct)
+
+
 def _lab_summary(bt: dict | None) -> dict | None:
     """Per la lista: il migliore e il buy-and-hold, senza le operazioni."""
     if not bt:
@@ -4583,7 +4602,8 @@ def _sim_snapshot(user: User) -> dict:
     positions = [{"chain": p.get("chain") or "robinhood", "address": p["token"], "symbol": p["symbol"],
                   "name": p["symbol"], "amount": p.get("qty"), "price_usd": p.get("price"),
                   "value_usd": p["value_usdg"], "image": p.get("image"), "native": False, "hidden": False,
-                  "source": "sim", "wallet": "sim", "ret": p.get("ret"), "cost_usd": p.get("cost_usdg")}
+                  "source": "sim", "wallet": "sim", "ret": p.get("ret"), "cost_usd": p.get("cost_usdg"),
+                  "opened": p.get("at"), "pair": p.get("pair")}
                  for p in pos_list]
     by_chain: dict[str, float] = {}
     for p in positions:
@@ -4663,7 +4683,7 @@ def _closed_trades(user: User) -> list[dict]:
             open_buy[t.get("token")] = t
         elif t["side"] == "sell" and t.get("token") in open_buy:
             b = open_buy.pop(t["token"])
-            out.append({"symbol": t["symbol"], "token": t.get("token"), "chain": "robinhood", "opened": b["t"],
+            out.append({"symbol": t["symbol"], "token": t.get("token"), "chain": t.get("chain") or "robinhood", "opened": b["t"],
                         "closed": t["t"], "cost_usdg": b.get("usdg"), "proceeds_usdg": t.get("usdg"),
                         "ret": t.get("ret"), "mode": t.get("mode"), "why": t.get("why")})
     return out[::-1]

@@ -223,3 +223,5 @@ export const setWatchlistAutoTrade = (id, strategyName, enabled) =>
 export const getQuant = () => request("/api/agent/quant");
 export const getQuantProject = (chain, token) => request(`/api/agent/quant/project?chain=${encodeURIComponent(chain)}&token=${encodeURIComponent(token)}`);
 export const getQuantReport = (id) => request(`/api/agent/quant/reports/${encodeURIComponent(id)}`);
+export const getPortfolioReplay = (cash, pct) =>
+  request(`/api/onchain/portfolio-replay?${new URLSearchParams({ cash, pct })}`);

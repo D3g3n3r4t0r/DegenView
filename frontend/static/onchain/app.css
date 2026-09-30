@@ -1311,3 +1311,22 @@ html, body { overflow-x: clip; }
 .quant-panel pre { max-height:360px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; }
 .quant-panel [data-q-detail] { overflow-wrap:anywhere; }
 .quant-panel details { margin:12px 0; }
+/* Top 50 backtest on the simulated wallet (replay.js) */
+.pf-replay { margin-top: 14px; }
+.pf-replay summary { padding: 10px 0; font: 600 16px var(--sans); color: var(--k-text); cursor: pointer; list-style: none; }
+.pf-replay summary::-webkit-details-marker { display: none; }
+.pf-replay summary::after { content: "▾"; margin-inline-start: 6px; color: var(--k-text-3); }
+.pf-replay[open] summary::after { content: "▴"; }
+.pf-replay .rp-size { inline-size: max-content; margin: 8px 0; }
+.pf-replay .rp-head p { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 6px 0 0; }
+.pf-replay .rp-head small { inline-size: 100%; font-size: 13px; color: var(--k-text-3); }
+.pf-replay .rp-head b { font: 600 26px var(--sans); color: var(--k-text); font-variant-numeric: tabular-nums; }
+.pf-replay .rp-head em { font: 600 15px var(--sans); font-style: normal; color: #34d399; }
+.pf-replay [data-sign="down"] { color: #f87171; }
+.pf-replay .rp-facts { font-size: 13px; color: var(--k-text-3); }
+.pf-replay .rp-line { display: block; inline-size: 100%; block-size: 90px; margin-top: 10px; }
+.pf-replay .rp-line path { fill: none; stroke: #34d399; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.pf-replay .rp-line[data-sign="down"] path { stroke: #f87171; }
+.pf-replay .rp-line line { stroke: rgb(255 255 255 / .15); stroke-dasharray: 3 4; vector-effect: non-scaling-stroke; }
+.pf-list li[data-open] { cursor: pointer; }
+.pf-replay .pf-num b[data-sign="up"] { color: #34d399; }
