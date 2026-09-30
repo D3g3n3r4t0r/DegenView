@@ -94,3 +94,19 @@ def test_the_top_row_best_is_a_trend_follower_never_rsi_bb():
     assert strategy_lab._best({"rows": rows})["label"] == "Trend HF"
     assert main._lab_summary({"rows": rows})["best"]["label"] == "Trend HF"
     assert main._lab_summary({"rows": rows[:1]})["best"] is None
+
+
+def test_top_hides_rows_with_no_trend_follower_trade(monkeypatch):
+    import asyncio
+    from types import SimpleNamespace
+
+    from app import main
+    from app.trading.onchain import strategy_lab
+    ents = [{"chain": "base", "token_address": t, "symbol": t, "on_board": True} for t in ("A", "B", "C")]
+    labs = {"A": {"rows": [{"label": "Trend EMA", "return_pct": 4.0, "trades": 2, "win_rate": 50.0}]},
+            "B": {"rows": [{"label": "RSI+BB", "return_pct": 90.0, "trades": 3}]}, "C": None}
+    monkeypatch.setattr(main, "_top_entries", lambda n=50, narrative="": [dict(e) for e in ents][:n])
+    monkeypatch.setattr(strategy_lab, "get", lambda chain, token: labs[token])
+    monkeypatch.setattr(strategy_lab, "status", lambda top: {})
+    out = asyncio.run(main.onchain_top(n=15, user=SimpleNamespace(id="u")))
+    assert [e["symbol"] for e in out["entries"]] == ["A", "C"]      # C: backtest still on its way
