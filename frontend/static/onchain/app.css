@@ -1252,6 +1252,11 @@ html, body { overflow-x: clip; }
   .agent-map .am-chip[data-selected="true"] { background: var(--k-mint); color: var(--k-card); }
   @media (prefers-reduced-motion: reduce) { .agent-map .am-chip { transition: none; } }
   .agent-map .aj { margin: 0 0 18px; }
+  .agent-map button.am-live { width: 100%; text-align: left; background: transparent; font: inherit; cursor: pointer; }
+  .agent-map .am-recent { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
+  .agent-map .am-recent .am-chip { position: static; max-width: none; padding: 6px 12px; font-size: 13px; transition: none; }
+  .agent-map .aj-tally { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+  .agent-map .aj-controls { display: flex; gap: 8px; }
   .agent-map .aj-form { display: flex; gap: 8px; }
   .agent-map .aj-form input { flex: 1; min-width: 0; padding: 12px; color: var(--k-text); background: var(--k-surface); border: 1px solid var(--k-surface-2); border-radius: 10px; font: inherit; font-size: 16px; }
   .agent-map .aj-form button, .agent-map .aj-choices button, .agent-map .aj-replay { padding: 10px 14px; border: 1px solid var(--k-mint); border-radius: 10px; background: transparent; color: var(--k-text); font: inherit; font-size: 14px; cursor: pointer; }
