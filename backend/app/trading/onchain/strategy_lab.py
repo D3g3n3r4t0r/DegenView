@@ -59,6 +59,7 @@ LADDER = [("1d", "day", 1), ("12h", "hour", 12), ("8h", "hour", 4), ("6h", "hour
           ("5m", "minute", 5)]
 STEP_S = {"1d": 86400, "12h": 43200, "8h": 28800, "6h": 21600, "4h": 14400, "2h": 7200, "1h": 3600,
           "30m": 1800, "15m": 900, "5m": 300}
+TREND_FOLLOWERS = [("Lorenzo (trend-follower)", "Trend EMA"), ("Lorenzo HF (minuti on-chain)", "Trend HF")]
 KEEP = 300
 
 _results: dict[str, dict] = {}   # chain:token -> {at, pair, symbol, backtests | error}
@@ -205,24 +206,30 @@ async def run_daily(client: httpx.AsyncClient, net: str, pair: str, token: str, 
     got[("day", 1)] = day
     first = min((b[0] for bars in got.values() for b in bars), default=now)
     start = LADDER.index(next(r for r in LADDER if r[0] == pick_interval(now - first)))
-    first_ok: dict | None = None
     tried: dict | None = None
-    for iv, tf, agg in LADDER[start:]:
-        if (tf, agg) not in got:
-            raw = await alert_track._candles(client, net, pair, tf, agg, now, 1000, token)
-            if raw is None:
-                return None
-            got[(tf, agg)] = raw
-        raw = got[(tf, agg)]
-        native = {"day": 86400, "hour": 3600, "minute": 60}[tf] * agg
-        bars = _closed(sorted(raw) if native == STEP_S[iv] else _merge(raw, STEP_S[iv]), STEP_S[iv], now)
-        if len(bars) < TRIGGER_MIN_BARS:
-            tried = tried or {"interval": iv, "bars": len(bars), "error": "too few candles"}
-            continue
-        res = {"interval": iv, **await asyncio.to_thread(system.backtest_one, sorted(bars))}
-        if _entered(res):
-            return res
-        first_ok = first_ok or res
+    first_ok: dict | None = None
+    # Lorenzo, 30/09: "adegua la strategia se non ci sono ingressi". Trend
+    # EMA first down the whole ladder; only if it never enters, the on-chain
+    # variant of the same trend follower (Trend HF: VWAP, efficiency, ATR
+    # trail) down the same rungs. Still trend following, still long only.
+    # Candles are fetched lazily, so the fallback costs no extra calls.
+    for name, label in TREND_FOLLOWERS:
+        for iv, tf, agg in LADDER[start:]:
+            if (tf, agg) not in got:
+                raw = await alert_track._candles(client, net, pair, tf, agg, now, 1000, token)
+                if raw is None:
+                    return None
+                got[(tf, agg)] = raw
+            raw = got[(tf, agg)]
+            native = {"day": 86400, "hour": 3600, "minute": 60}[tf] * agg
+            bars = _closed(sorted(raw) if native == STEP_S[iv] else _merge(raw, STEP_S[iv]), STEP_S[iv], now)
+            if len(bars) < TRIGGER_MIN_BARS:
+                tried = tried or {"interval": iv, "bars": len(bars), "error": "too few candles"}
+                continue
+            res = {"interval": iv, **await asyncio.to_thread(system.backtest_one, bars, name, label)}
+            if _entered(res):
+                return res
+            first_ok = first_ok or res
     return first_ok or tried
 
 
