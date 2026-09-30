@@ -1,7 +1,7 @@
 # 2026-09-30 — MERRYMEN: numero in classifica senza frecce — `seed-0242` (Claude, a mano)
 
 Lorenzo: "su questa cripto non vedo gli ingressi nonostante ci sia scritto nella lista in classifica un rendimento di piu' 400% [...] queste cose non devono accadere". Causa: `top.js btSub` ripiegava sul migliore a 5 minuti quando il trend follower 8h/1d non aveva trade, `detail.js withLab` disegnava solo l'8h/1d (vuoto). Ora una regola sola in `frontend/static/onchain/lab-shown.js` (`shownSummary` per la lista, `shownTrades` per grafico e tabella), test Node `frontend/tests/lab-shown.test.mjs` (anche in quant-tests.yml) e Python `test_every_listed_trade_has_its_arrows` (vendite disegnate = trade in lista). `scripts/chart_audit.py` controlla tutte le righe salvate sul server (sola lettura). "Board: not ranked" su un Top #2 = riga presa dal database: ora dice "Top #N, from the database".
-Verificato coi dati veri (robinhood, pool 0x27f8...): il trend follower 1d/8h fa 0 trade su MERRYMEN. Il -69% del primo giorno viene letto come rug ("liquidity pulled") ma anche togliendo i primi giorni resta a 0: con 60-77 candele il filtro di volatilita' (pronto alla barra 59) lascia pochissime barre per entrare. Il +400% e' il 5 minuti.
+Verificato coi dati veri (robinhood, pool 0x27f8...): il trend follower 1d/8h fa 0 trade su MERRYMEN. Il -69% del primo giorno viene letto come rug ("liquidity pulled") ma anche togliendo i primi giorni resta a 0: con 60-77 candele il filtro di volatilita' (pronto alla barra 59) lascia pochissime barre per entrare. Il +400% era il 5 minuti (dal #434 la lista a 5 minuti conta solo i trend follower, e `lab-shown.js` fa lo stesso).
 
 # 2026-09-30 — Time frame graduale del trend follower, archivio candele Top 50 (Claude, a mano)
 

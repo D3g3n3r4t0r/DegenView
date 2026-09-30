@@ -13,7 +13,7 @@ import json
 import sys
 
 sys.path.insert(0, "/app")
-from app.trading.onchain import strategy_lab  # noqa: E402
+from app.trading.onchain import strategy_lab, system  # noqa: E402
 
 strategy_lab._load()
 
@@ -23,7 +23,8 @@ def shown(bt: dict) -> tuple[str, dict | None, list]:
     drow = (daily.get("rows") or [None])[0]
     if drow and drow.get("trades") and drow.get("return_pct") is not None:
         return daily.get("interval") or "1d", drow, (daily.get("best") or {}).get("events") or []
-    rows = [r for r in bt.get("rows") or [] if r.get("trades") and r.get("return_pct") is not None]
+    rows = [r for r in bt.get("rows") or [] if r.get("trades") and r.get("return_pct") is not None
+            and r.get("label") in system.TREND_LABELS]
     if rows:
         return "5m", max(rows, key=lambda r: r["return_pct"]), (bt.get("best") or {}).get("events") or []
     return "", None, []
