@@ -35,7 +35,7 @@ import time
 from dataclasses import dataclass
 from typing import Awaitable, Callable
 
-from app.trading.onchain import alert_track, quant_runtime
+from app.trading.onchain import alert_track, gem_track, quant_runtime
 from app.trading.onchain.storage import data_file
 from app.atomic_write import write_text_atomic
 
@@ -461,7 +461,7 @@ def paper_tick(u: dict, label: str, now: float, open_new: bool = True) -> list[d
                            "chain": a["chain"], "at": now, "stake": stake, "ret": 0.0,
                            "quant_policy": a["quant_system"]["policy_id"], "signal_at": now,
                            "source_signal_at": a["quant_system"]["in_at"],
-                           "entry_price": paper_entry, "costs": a["quant_policy"]["costs"]})
+                           "entry_price": paper_entry, "costs": a["quant_policy"]["costs"], **_why(a)})
         rows.append(_log(u, {**base, "ok": True, "usdg": stake}))
     return rows
 
@@ -607,8 +607,16 @@ async def _buy(user, u: dict, a: dict, now: float, market: Market) -> dict:
     u["position"] = {"alert": base["alert"], "symbol": a["symbol"], "token": a["token_address"],
                      "pair": a["pair_address"], "qty_raw": int(qty_raw), "decimals": decimals,
                      "cost_usdg": round(amount / 10 ** USDC_DECIMALS, 6), "at": now, "mode": mode, "route": q["route"],
-                     "quant_policy": (a.get("quant_system") or {}).get("policy_id")}
-    return _log(u, {**base, "ok": True, "qty": qty_raw / 10 ** decimals})
+                     "quant_policy": (a.get("quant_system") or {}).get("policy_id"), **_why(a)}
+    return _log(u, {**base, "ok": True, "qty": qty_raw / 10 ** decimals, **_why(a)})
+
+
+def _why(a: dict) -> dict:
+    """Lorenzo, 30/09 ("applica tutto"): every entry names the approved report
+    it ran under and the receipt of the gem decision behind it, so any trade
+    can be traced back to a rule someone approved."""
+    return {"report_hash": (a.get("quant_system") or {}).get("report_hash"),
+            "gem_receipt": gem_track.receipt_for(a.get("chain") or "", a.get("token_address") or "")}
 
 
 async def _sell(user, u: dict, why: str, now: float, market: Market) -> dict:

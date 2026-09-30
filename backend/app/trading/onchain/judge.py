@@ -281,6 +281,32 @@ def reason_to_judge(hit: dict | None, seen: dict, now: float, fresh: bool = Fals
     return "periodic refresh"
 
 
+# Lorenzo, 30/09 ("applica tutto"): a reading redone on the same facts,
+# same prompt, should say the same thing. When it does not, the judge is
+# unstable on this project and its score is noise: the new reading stands,
+# but it carries the jump so the board and the trace can show it.
+DRIFT_SCORE = 20
+_VERDICT_SIDE = {"gem": 1, "watch": 0, "avoid": -1, "scam": -1}
+
+
+def drifted(old: dict | None, new: dict, seen: dict) -> dict | None:
+    if not old or old.get("v") != PROMPT_VERSION or not old.get("facts") or what_changed(old["facts"], seen):
+        return None
+    a, b = old.get("score"), new.get("score")
+    side_a, side_b = _VERDICT_SIDE.get(old.get("verdict")), _VERDICT_SIDE.get(new.get("verdict"))
+    jump = isinstance(a, (int, float)) and isinstance(b, (int, float)) and abs(b - a) >= DRIFT_SCORE
+    flip = side_a is not None and side_b is not None and side_a * side_b < 0
+    if not (jump or flip):
+        return None
+    return {"from_score": a, "to_score": b, "from_verdict": old.get("verdict"), "to_verdict": new.get("verdict"),
+            "since": old.get("at")}
+
+
+def drift_count(days: int = 7, now: float | None = None) -> int:
+    now = now or time.time()
+    return sum(_calls.get(time.strftime("%Y-%m-%d", time.gmtime(now - i * 86400)) + ":drift", 0) for i in range(days))
+
+
 def wants_reading(e: dict, rules_why: str, now: float | None = None, fresh: bool = False) -> bool:
     """A Top project whose reading is missing or out of date (new prompt, facts moved)."""
     hit = _cache.get(f"{e['chain']}:{e['token_address']}")
@@ -336,6 +362,10 @@ async def judge(e: dict, rules_why: str, now: float | None = None, ask=None,
     _calls[count] = _calls.get(count, 0) + 1
     parsed["at"], parsed["v"] = now, PROMPT_VERSION
     parsed["facts"], parsed["why"] = seen, why
+    drift = drifted(hit, parsed, seen)
+    if drift:
+        parsed["drift"] = drift
+        _calls[f"{day}:drift"] = _calls.get(f"{day}:drift", 0) + 1
     if x:
         parsed["x"] = {k: x[k] for k in ("posts_7d", "authors", "median_followers")}
     if tg:
