@@ -46,3 +46,18 @@ test('projection is deterministic and does not mutate API objects', () => {
   const input = { items: [row('A')], now: 1000 }; const before = JSON.stringify(input);
   assert.deepEqual(projectGraph(input), projectGraph(input)); assert.equal(JSON.stringify(input), before);
 });
+const live = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64') + '#live');
+test('live project is the newest keyed event; trace follows recorded order', () => {
+  const items = [row('A', { t: 10, kind: 'scan' }), row('A', { t: 20, kind: 'study' }), row('A', { t: 21, kind: 'study' }),
+    row('A', { t: 30, kind: 'code' }), row('B', { t: 5, kind: 'judge' })];
+  const p = live.liveProject(items, 40_000);
+  assert.equal(p.key, JSON.stringify(['solana', 'A'])); assert.equal(p.node, 'code'); assert.equal(p.ageS, 10);
+  assert.deepEqual(live.cycleTrace(items, p.key).map(s => s.node), ['scan', 'study', 'code']);
+});
+test('fresh events are returned once, oldest first; unknown kinds go to other', () => {
+  const seen = new Set();
+  assert.equal(live.freshEvents(seen, [row('A', { t: 1 })]).length, 1);
+  const f = live.freshEvents(seen, [row('A', { t: 1 }), row('A', { t: 3, kind: 'x' }), row('A', { t: 2, kind: 'scan' })]);
+  assert.deepEqual(f.map(e => e.node), ['scan', 'other']);
+  assert.equal(live.liveProject([]), null);
+});
