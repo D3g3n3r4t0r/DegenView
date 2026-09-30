@@ -761,20 +761,22 @@ def rug_event(df: pd.DataFrame, known: dict | None = None) -> dict | None:
     checks = [
         (close <= 0.5 * open_, lambda i: f"one candle {_pct(close.iloc[i] / open_.iloc[i])}: liquidity pulled"),
         (close <= 0.30 * peak6, lambda i: f"crash {_pct(close.iloc[i] / peak6.iloc[i])} in under 6h"),
-        (close <= RUG_DEAD_RATIO * top, lambda i: f"{_pct(close.iloc[i] / top.iloc[i])} from its top: dead token"),
+        # Not a rug by itself: HYDX (30/09) was -86% from its top and alive, $311k
+        # a day on $58k locked. The strategy still stops (seed-0199), as a "fall".
+        (close <= RUG_DEAD_RATIO * top, lambda i: f"{_pct(close.iloc[i] / top.iloc[i])} from its top"),
         ((close <= RUG_ABANDONED_RATIO * peak24) & (vol_mean <= RUG_VOLUME_RATIO * vol_peak),
          lambda i: "trading dried up after the fall"),
     ]
     best = None
-    for cond, why in checks:
+    for n, (cond, why) in enumerate(checks):
         hit = cond.fillna(False).to_numpy().nonzero()[0]
         if len(hit) and (best is None or hit[0] < best[0]):
-            best = (int(hit[0]), why)
+            best = (int(hit[0]), why, "fall" if n == 2 else "rug")
     if known and known.get("at"):
         stamps = [i for i, ts in enumerate(df.index) if ts.timestamp() >= known["at"]]
         if stamps and (best is None or stamps[0] < best[0]):
-            return {"i": stamps[0], "why": known.get("why") or "rug seen on-chain"}
-    return {"i": best[0], "why": best[1](best[0])} if best else None
+            return {"i": stamps[0], "why": known.get("why") or "rug seen on-chain", "kind": "rug"}
+    return {"i": best[0], "why": best[1](best[0]), "kind": best[2]} if best else None
 
 
 def rug_stop(df: pd.DataFrame, signals: pd.DataFrame, known: dict | None = None) -> pd.DataFrame:

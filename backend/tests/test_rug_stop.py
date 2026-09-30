@@ -71,7 +71,7 @@ def test_slow_bleed_is_dead_token():
     df = _series(prices)
     ev = strategies.rug_event(df)
     assert ev is not None
-    assert ev["why"].endswith("from its top: dead token")
+    assert ev["why"].endswith("from its top") and ev["kind"] == "fall"
     i = ev["i"]
     top = df["high"].cummax()
     assert df["close"].iloc[i] <= strategies.RUG_DEAD_RATIO * top.iloc[i]

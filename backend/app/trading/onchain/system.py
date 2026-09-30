@@ -232,7 +232,7 @@ def _backtest(bars: list[list], strategies_wanted: list[tuple[str, str]], known:
                      "in_position": r["in_position"]})
     hold = res["hold_pct"]
     ev = strategies.rug_event(df, known)
-    rug = {"at": int(df.index[ev["i"]].timestamp()), "why": ev["why"]} if ev is not None else None
+    rug = {"at": int(df.index[ev["i"]].timestamp()), "why": ev["why"], "kind": ev.get("kind", "rug")} if ev is not None else None
     return {"bars": len(df), "from": int(df.index[0].timestamp()), "to": int(df.index[-1].timestamp()),
             "hold_pct": round(hold, 2) if hold is not None else None, "rows": rows,
             "best": _best_trades(df, rows, known), "rug": rug}

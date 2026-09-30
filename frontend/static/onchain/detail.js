@@ -565,10 +565,14 @@ async function drawChart(box, candles, e) {
     const series = chart.addCandlestickSeries({
       upColor: "#2de0a8", downColor: "#f87171", borderVisible: false,
       wickUpColor: "#2de0a8", wickDownColor: "#f87171",
-      priceFormat: { type: "custom", minMove: 0.01, formatter: (v) => usdShort(v) },
+      // Market cap when the cap is known; otherwise the raw price, which
+      // usdShort rounded to "$0" (HYDX at $0.00038, 30/09).
+      priceFormat: { type: "custom", minMove: 1e-10,
+        formatter: (v) => (lw?.k === 1 && Math.abs(v) < 1 ? `$${Number(v.toPrecision(3))}` : usdShort(v)) },
     });
     lw = { chart, series, box };
   }
+  lw.k = k;
   lw.series.setData(bars);
   // A marker sits on a bar: each event goes to the last bar at or before it.
   const t0 = bars[0].time, t1 = bars[bars.length - 1].time;
@@ -585,7 +589,9 @@ async function drawChart(box, candles, e) {
     }
     const rug = a.backtests?.rug?.at;
     if (rug != null && rug >= t0 && rug <= t1 + 3600) {
-      const why = a.backtests?.rug?.why ? `Rug · ${a.backtests.rug.why}`.slice(0, 40) : "Rug · strategy off";
+      // A fall of 85% stops the strategy but is not a rug (HYDX, 30/09).
+      const tag = a.backtests.rug.kind === "fall" || /from its top/.test(a.backtests.rug.why ?? "") ? "Stop" : "Rug";
+      const why = a.backtests?.rug?.why ? `${tag} · ${a.backtests.rug.why}`.slice(0, 40) : `${tag} · strategy off`;
       marks.push({ time: barAt(rug), position: "aboveBar", color: "#f87171", shape: "square", text: why });
     }
   }
