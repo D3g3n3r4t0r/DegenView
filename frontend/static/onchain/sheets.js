@@ -105,7 +105,7 @@ export async function openScan(query) {
     ${ai ? `<div class="scan-ai" data-risk="${ai.risk >= 60 ? "high" : ai.risk >= 30 ? "mid" : "low"}"><b>${ai.risk}</b>
       <span><b>Scout rug risk</b><small>${escapeHtml([ai.theme, ...(ai.flags ?? [])].filter(Boolean).join(" · ") || "no red flags")}</small></span></div>`
       : `<p class="sheet-note">Scout's AI assessment is unavailable right now.</p>`}
-    ${d.scout ? `<div class="scan-scout">${gemWhy(d.scout)}</div>` : g ? gemCard(g) : ""}
+    ${d.scout ? `<div class="scan-scout">${gemWhy(d.scout)}${recheckBlock(d.scout.recheck)}</div>` : g ? gemCard(g) : ""}
     ${btCard(d.backtest)}
     <p class="sheet-note"><b>Memory:</b> ${escapeHtml(d.memory.summary)}${hist ? ` · this token before: ${hist}` : ""}</p>
     ${d.alert ? `<p class="sheet-note">Alerted ${new Date(d.alert.at * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" })}, now ${pctS(d.alert.now)}.</p>` : ""}
@@ -154,6 +154,7 @@ const STEP_LABEL = {
   github: "Checking GitHub", ai: "DeepSeek reads the listing", holders: "Counting holders on GeckoTerminal",
   memory: "Comparing with past rugs", risk: "DeepSeek rates the rug risk", gem: "Looking up the Gem Finder",
   pillars: "Scoring research, GitHub and tokenomics", report: "Scout writes the report", code: "DeepSeek reads the code",
+  recheck: "Re-checking the red flags",
   backtest: "Backtesting the trend follower",
 };
 
@@ -172,6 +173,17 @@ function scanStep(list, ev) {
 
 const VERDICT = { gem: "gem", watch: "watch", avoid: "avoid", scam: "scam" };
 const pctN = (n) => (n == null ? "—" : `${n > 0 ? "+" : ""}${Math.round(n)}%`);
+
+// The red points the second look could not confirm (scout_recheck.py):
+// cleared ones and what it found, then the ones still unverified.
+function recheckBlock(r) {
+  if (!r || !(r.refuted?.length || r.unverified?.length || r.found?.length)) return "";
+  const li = (tone, head, x) => `<li data-tone="${tone}">${head}${escapeHtml(x.text)}${x.note ? `<small>${escapeHtml(x.note)}</small>` : ""}</li>`;
+  return `<div class="ds-report"><h5>Checked again</h5><ul class="why-list">
+    ${(r.found ?? []).map((f) => `<li data-tone="good">${escapeHtml(f)}</li>`).join("")}
+    ${(r.refuted ?? []).map((x) => li("good", "Cleared: ", x)).join("")}
+    ${(r.unverified ?? []).map((x) => li("warn", "Not verified: ", x)).join("")}</ul></div>`;
+}
 
 function gemStatus(g) {
   if (g.status === "ranked") return ["pass", `Gem Finder: ranked #${g.rank} · score ${g.score}`];
