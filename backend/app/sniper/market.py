@@ -36,6 +36,9 @@ _MARKET_FILE = _DATA_DIR / "sniper_market.json"
 _LOG_FILE = _DATA_DIR / "sniper_market_log.json"
 
 LOG_MAX_ENTRIES = 2000
+# A live screener, not an archive: tokens no source has returned for a week
+# are dropped (the next scan brings back any that are still trading).
+STORE_MAX_AGE_S = 7 * 86400
 
 
 @dataclass
@@ -82,7 +85,16 @@ def _load() -> None:
             continue
 
 
+def _prune(now: float | None = None) -> int:
+    now = now or time.time()
+    stale = [k for k, t in _store.items() if now - t.last_updated > STORE_MAX_AGE_S]
+    for k in stale:
+        del _store[k]
+    return len(stale)
+
+
 def _save() -> None:
+    _prune()
     payload = [dataclasses.asdict(t) for t in _store.values()]
     try:
         write_text_atomic(_MARKET_FILE, json.dumps(payload), encoding="utf-8")
@@ -113,6 +125,8 @@ def get_log(limit: int = 500) -> list[dict]:
 
 
 _load()
+if _prune():
+    _save()
 _load_log()
 
 

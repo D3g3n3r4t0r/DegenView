@@ -2,10 +2,11 @@
 
 Candidates and the scan log are persisted to disk (backend/data/sniper_*.json,
 same convention as favorites.py / watchlist.py) so a deploy or restart doesn't
-wipe the archive — every token that ever passed the score threshold, and the
-console log that shows it happening, both survive a reload of the site."""
+wipe them. Recent candidates stay in RAM; stale ones move to a gzipped
+archive on the same volume (see _prune_candidates)."""
 import asyncio
 import dataclasses
+import gzip
 import json
 import logging
 import time
@@ -28,10 +29,19 @@ UTILITY_MIN = 0
 
 LOG_MAX_ENTRIES = 5000
 
+# The live store keeps only what the site and the on-chain bridge can still
+# use (the bridge ignores tokens older than 72 h). Everything older goes to a
+# gzipped JSON-lines archive on the volume: nothing is lost, but it stays on
+# disk instead of in RAM. Unbounded, the store reached 430 MB on disk and
+# ~1.5 GB of Python objects at startup.
+CANDIDATES_MAX_AGE_S = 7 * 86400
+CANDIDATES_MAX = 3000
+
 _DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 _DATA_DIR.mkdir(parents=True, exist_ok=True)
 _CANDIDATES_FILE = _DATA_DIR / "sniper_candidates.json"
 _LOG_FILE = _DATA_DIR / "sniper_log.json"
+_ARCHIVE_FILE = _DATA_DIR / "sniper_candidates_archive.jsonl.gz"
 
 
 @dataclass
@@ -99,7 +109,31 @@ def _load_candidates() -> None:
             continue
 
 
+def _prune_candidates(now: float | None = None) -> int:
+    """Move stale candidates (and the oldest beyond CANDIDATES_MAX) to the
+    archive. Returns how many left the live store. If the archive can't be
+    written nothing is dropped."""
+    now = now or time.time()
+    newest = sorted(_store.values(), key=lambda c: c.last_updated, reverse=True)
+    kept = {c.token_address for c in newest[:CANDIDATES_MAX] if now - c.last_updated <= CANDIDATES_MAX_AGE_S}
+    dropped = [c for c in newest if c.token_address not in kept]
+    if not dropped:
+        return 0
+    try:
+        with gzip.open(_ARCHIVE_FILE, "at", encoding="utf-8") as fh:
+            for c in dropped:
+                fh.write(json.dumps(dataclasses.asdict(c)) + "\n")
+    except OSError as exc:
+        logger.warning("Sniper: failed to archive candidates: %s", exc)
+        return 0
+    for c in dropped:
+        _store.pop(c.token_address, None)
+    logger.info("Sniper: archived %d stale candidates, %d kept", len(dropped), len(_store))
+    return len(dropped)
+
+
 def _save_candidates() -> None:
+    _prune_candidates()
     payload = [dataclasses.asdict(c) for c in _store.values()]
     try:
         write_text_atomic(_CANDIDATES_FILE, json.dumps(payload), encoding="utf-8")
@@ -126,6 +160,8 @@ def _save_log() -> None:
 
 
 _load_candidates()
+if _prune_candidates():
+    _save_candidates()
 _load_log()
 
 
