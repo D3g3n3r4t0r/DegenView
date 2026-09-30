@@ -13,6 +13,7 @@ import { register } from "@onchain/detail.js";
 import { isHidden, onHiddenChange, withEntrance } from "@onchain/hidden.js";
 import { escapeHtml, tile, tokenRow } from "@onchain/format.js";
 import { renderPodium } from "@onchain/podium.js";
+import { shownSummary } from "@onchain/lab-shown.js";
 import * as narr from "@onchain/narrative_pick.js";
 import { disintegrate } from "@onchain/particles.js";
 import "@onchain/motion.js";
@@ -139,7 +140,7 @@ function paint() {
     const id = `gem:${e.chain}:${e.token_address}`;
     register(id, { kind: "gem", symbol: e.symbol, name: e.name, chain: e.chain, token: e.token_address, pair: e.pair_address,
       pairUrl: e.pair_url, image: e.image, cap: e.market_cap, change: e.change_24h != null ? e.change_24h / 100 : null,
-      ageTs: e.launched_at, context: `Rank #${i + 1} · score ${Math.round(e.score ?? 0)}` });
+      ageTs: e.launched_at, rank: i + 1, context: `Rank #${i + 1} · score ${Math.round(e.score ?? 0)}` });
     return tokenRow({ id, symbol: e.symbol, name: `${i + 1}. ${e.name || e.symbol}`, chain: e.chain, token: e.token_address,
       image: e.image, cap: e.market_cap, change: e.change_24h != null ? e.change_24h / 100 : null, ageTs: e.launched_at,
       score: e.score, badge: e.early ? "early" : null, sub: btSub(e.backtests) });
@@ -197,11 +198,12 @@ function paint() {
 function btSub(b) {
   if (!b) return '<span class="bt-live" role="img" aria-label="Backtest on its way"><i></i><i></i><i></i></span>';
   const pct = (v) => { const r = Math.round(v ?? 0); return `${r > 0 ? "+" : ""}${r}%`; };
-  // The site's trend follower on its ladder timeframe (5m to 1d) leads; the 5-minute best until it has traded.
-  const d = b.daily;
-  if (d) return `${d.interval} ${pct(d.return_pct)} · ${d.trades} trades${d.in_position ? " · long" : ""}`;
-  if (!b.best) return "bt: no entry";
-  return `5m ${pct(b.best.return_pct)}`;
+  // The same rule as the chart (lab-shown.js): the trend follower when it
+  // traded, else the 5-minute best. What the row says, the chart draws.
+  const s = shownSummary(b);
+  if (!s) return "bt: no entry";
+  return s.source === "daily" ? `${s.interval} ${pct(s.return_pct)} · ${s.trades} trades${s.in_position ? " · long" : ""}`
+    : `5m ${pct(s.return_pct)}`;
 }
 
 async function load() {
