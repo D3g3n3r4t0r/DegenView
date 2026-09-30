@@ -195,12 +195,20 @@ def entries() -> dict[str, dict]:
 
 
 def _save() -> None:
+    archived = False
+    try:
+        from app.trading.onchain import quant_memory
+        quant_memory.record(entries().values())
+        archived = True
+    except Exception:
+        logger.exception("quant evidence archive unavailable")
     if _archive_rugs():
         try:
             write_text_atomic(_ARCHIVE_FILE, json.dumps(_archive, ensure_ascii=False), encoding="utf-8")
         except OSError:
             pass
-    _prune(_journal, KEEP, time.time())
+    if archived:
+        _prune(_journal, KEEP, time.time())
     try:
         write_text_atomic(_STORE_FILE, json.dumps({"journal": _journal, "state": _state}, ensure_ascii=False),
                                encoding="utf-8")
@@ -1041,3 +1049,4 @@ async def outcomes_loop() -> None:
     while True:
         await tick()
         await asyncio.sleep(TICK_S)
+

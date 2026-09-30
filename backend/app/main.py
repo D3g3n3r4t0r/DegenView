@@ -39,6 +39,7 @@ except (AttributeError, ValueError):
     pass
 
 from app import auth
+from app.trading.onchain.quant_api import router as quant_router
 from app import guest as guest_links
 from app import issues as issues_store
 from app import rate_limit
@@ -1581,6 +1582,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Liquidity Analysis Engine", lifespan=lifespan)
+app.include_router(quant_router(auth.get_current_user))
 
 # ── Cancello di autenticazione ────────────────────────────────────────────
 #
@@ -8115,3 +8117,4 @@ async def onchain_app_page(user: User | None = Depends(auth.get_current_user_opt
         _render_onchain_app(user),
         headers={"Cache-Control": "private, no-cache", "Vary": "Cookie"},
     )
+
