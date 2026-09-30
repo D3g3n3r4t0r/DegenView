@@ -125,6 +125,11 @@ ruff check backend/ --select E,F,W --ignore E501   # identico alla CI
 node --check frontend/static/app.js
 ```
 
+`node --check` su un `.js` lo legge come CommonJS e lascia passare errori
+che il browser rifiuta: i moduli di `frontend/static/onchain/` li controlla
+`tests/test_frontend_syntax.py` (copia in `.mjs`). Un solo errore di
+sintassi in un modulo blocca tutta l'app (30/09: niente tocchi da telefono).
+
 LibreOffice in sandbox non ricalcola i file Excel: `recalc.py` fallisce
 all'avvio, non per colpa del file.
 
