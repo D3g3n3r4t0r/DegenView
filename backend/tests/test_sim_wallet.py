@@ -11,12 +11,15 @@ from app import main
 from app.trading.onchain import autotrader as at
 from app.trading.onchain import sim_backtest as sb
 from app.trading.onchain import storage
+from app.trading.onchain import wealth
 
 
 @pytest.fixture(autouse=True)
 def _clean(tmp_path, monkeypatch):
     monkeypatch.setattr(at, "_STORE_FILE", tmp_path / "a.json")
     monkeypatch.setattr(sb, "_FILE", tmp_path / "l.json")
+    monkeypatch.setattr(wealth, "_STORE_FILE", tmp_path / "w.json")
+    wealth.reset_for_tests()
     monkeypatch.setattr(storage, "DATA_DIR", tmp_path)
     monkeypatch.setattr(main, "_top_entries", lambda n=50: [])
     main._top_wallet_cache.update(at=0.0, data=None)
