@@ -374,7 +374,9 @@
     & li { position: relative; padding-inline-start: 24px; font-size: 14px; line-height: 1.4; }
     & li::before { position: absolute; inset-inline-start: 0; font-weight: 700; }
     & li[data-tone="good"]::before { content: "✓"; color: var(--k-green); }
-    & li[data-tone="bad"]::before { content: "•"; color: var(--k-red); font-size: 18px; line-height: 1; } }
+    & li[data-tone="bad"]::before { content: "•"; color: var(--k-red); font-size: 18px; line-height: 1; }
+    & li[data-tone="warn"]::before { content: "?"; color: #fbbf24; font-weight: 800; }
+    & li small { display: block; color: var(--k-text-3); font-size: 12.5px; margin-block-start: 2px; } }
   .bars { list-style: none; margin: 6px 0 12px; padding: 0; display: grid; gap: 10px;
     & li { display: grid; grid-template-columns: 90px 1fr 30px; align-items: center; gap: 10px; font-size: 14px; }
     & i { block-size: 6px; border-radius: 3px; background: linear-gradient(90deg, var(--k-mint) calc(var(--v) * 1%), var(--k-surface-2) 0); }
