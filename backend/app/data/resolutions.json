@@ -2442,5 +2442,10 @@
     "status": "risolto",
     "at": 1790757900,
     "summary": "La scheda Agent mostra il diario di DeepSeek animato con i passaggi del ragionamento (/api/agent/log, issue #260, PR #264), poi con barre di avanzamento e contatori reali (#313, #372, #373)."
+  },
+  "seed-0236": {
+    "status": "risolto",
+    "at": 1790768498,
+    "summary": "I candidati dello sniper restano in memoria solo se aggiornati negli ultimi 7 giorni (massimo 3000); gli altri passano in un archivio compresso sullo stesso volume (sniper_candidates_archive.jsonl.gz), quindi nessun dato perso. Il primo avvio dopo il deploy fa la potatura una volta e riscrive il file piccolo. Anche lo screener di mercato butta i token non visti da una settimana. Il diario dei token (onchain_outcomes.json) era gia' limitato a 5000 voci e l'archivio dei rug resta intatto perche' e' la memoria del modello."
   }
 }
