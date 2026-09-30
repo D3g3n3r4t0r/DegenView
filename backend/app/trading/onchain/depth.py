@@ -527,9 +527,11 @@ async def rugcheck_report(mint: str, client: httpx.AsyncClient) -> dict | None:
     return r.json() if r.status_code == 200 else None
 
 
-def judge_tokenomics_solana(report: dict | None, exclude: set[str] | None = None) -> dict:
+def judge_tokenomics_solana(report: dict | None, exclude: set[str] | None = None,
+                            verified: dict | None = None) -> dict:
     """Dal report completo di RugCheck. `exclude`: conti che non sono
-    persone (curva di pump.fun, pool) oltre a quelli che RugCheck conosce."""
+    persone (curva di pump.fun, pool) oltre a quelli che RugCheck conosce.
+    `verified`: linked.verify, the linked wallets read on-chain (Top 50)."""
     if not report or not report.get("topHolders") and not report.get("token"):
         return _pending("tokenomics", "RugCheck does not have the token yet")
     known = report.get("knownAccounts") or {}
@@ -547,12 +549,15 @@ def judge_tokenomics_solana(report: dict | None, exclude: set[str] | None = None
     # The wallet count alone misleads: one airdrop of dust makes hundreds of
     # "linked" wallets holding nothing (DREGG 30/09: 761 of 807 held 744 tokens each).
     linked_pct, _ = legit.linked_share(report) if report.get("insiderNetworks") else (None, 0)
+    if verified:
+        linked_pct, insiders = verified["pct"], verified["wallets"]
     lp_locked = max((float((m.get("lp") or {}).get("lpLockedPct") or 0) for m in report.get("markets") or []),
                     default=None)
     fee = float((report.get("transferFee") or {}).get("pct") or 0)
     return _judge_tokenomics(
         top1=pcts[0] if pcts else 0.0, top10=sum(pcts[:10]), creator=creator_pct,
-        holders=int(report.get("totalHolders") or 0), insiders=insiders, linked_pct=linked_pct, lp_locked=lp_locked,
+        holders=int(report.get("totalHolders") or 0), insiders=insiders, linked_pct=linked_pct,
+        linked_verified=verified, lp_locked=lp_locked,
         mintable=bool(report.get("mintAuthority")), freezable=bool(report.get("freezeAuthority")),
         tax=fee, rugged=bool(report.get("rugged")),
         # null = revoked (a real answer); a missing key = RugCheck didn't say.
@@ -683,13 +688,14 @@ def judge_tokenomics_gecko(info: dict | None) -> dict:
 def _judge_tokenomics(*, top1: float, top10: float, creator: float, holders: int, insiders: int,
                       lp_locked: float | None, mintable: bool, freezable: bool, tax: float,
                       rugged: bool, unknown: frozenset[str] = frozenset(),
-                      linked_pct: float | None = None) -> dict:
+                      linked_pct: float | None = None, linked_verified: dict | None = None) -> dict:
     """unknown: the checks the source did not answer ("split", "mint",
     "freeze", "tax", "lp"). A missing answer is not a passed check (audit
     29/09, M02): it earns no points and is listed in the flags."""
     facts = {"top1_pct": round(top1, 1), "top10_pct": round(top10, 1), "creator_pct": round(creator, 1),
              "holders": holders, "insiders": insiders,
              "linked_pct": None if linked_pct is None else round(linked_pct, 1),
+             "linked_verified": linked_verified,
              "lp_locked_pct": None if lp_locked is None else round(min(lp_locked, 100), 1),
              "mint": mintable, "freeze": freezable, "tax_pct": round(tax, 1)}
     fatal = ("already rugged or honeypot" if rugged
@@ -703,7 +709,8 @@ def _judge_tokenomics(*, top1: float, top10: float, creator: float, holders: int
     flags = []
     if linked_pct is not None:
         if linked_pct >= 1:
-            flags.append(f"linked wallets hold {linked_pct:.0f}% of supply ({insiders} wallets)")
+            flags.append(f"linked wallets hold {linked_pct:.0f}% of supply ({insiders} wallets"
+                         + (", balances checked on-chain, airdrop links ignored)" if linked_verified else ")"))
     elif insiders:
         flags.append(f"{insiders} wallets linked to each other")
     if lp_locked is not None and lp_locked < 80:
@@ -728,9 +735,19 @@ def _judge_tokenomics(*, top1: float, top10: float, creator: float, holders: int
 
 
 async def analyze_tokenomics(chain: str, token: str, client: httpx.AsyncClient, *, pair_address: str = "",
-                             exclude: set[str] | None = None, liquidity_usd: float = 0.0) -> dict:
+                             exclude: set[str] | None = None, liquidity_usd: float = 0.0,
+                             deep: bool = False) -> dict:
+    """deep (Top 50): RugCheck's linked wallets are rebuilt and read on-chain."""
     if chain == "solana":
-        return judge_tokenomics_solana(await rugcheck_report(token, client), exclude)
+        report = await rugcheck_report(token, client)
+        verified = None
+        if deep and report and (legit.linked_share(report)[0] or 0) >= 1:
+            from app.trading.onchain import linked
+            try:
+                verified = await linked.verify(token, report, client)
+            except Exception as exc:
+                logger.info("linked wallets of %s not verified: %s", token, exc)
+        return judge_tokenomics_solana(report, exclude, verified)
     if chain in legit.GOPLUS_CHAIN:
         try:
             info = await legit.goplus(chain, token, client)
@@ -801,5 +818,6 @@ async def analyze(item: dict, client: httpx.AsyncClient, *, skip: set[str] = fro
         out["tokenomics"] = await analyze_tokenomics(item["chain"], item["token_address"], client,
                                                      pair_address=item.get("pair_address") or "",
                                                      exclude=exclude,
-                                                     liquidity_usd=float(item.get("liquidity_usd") or 0))
+                                                     liquidity_usd=float(item.get("liquidity_usd") or 0),
+                                                     deep=bool(item.get("top")))
     return out
