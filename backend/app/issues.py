@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0233", "Scheda Alerts dello scanner lentissima: contatori a 0 e decisioni vuote",
+     "Lorenzo, 30/09 (screenshot dal telefono): 'lentissimo a caricare'",
+     "alta"),
     ("seed-0232", "Lo scanner manuale non si e' evoluto con il resto del sistema",
      "Lorenzo, 29/09 (screenshot HYDX su Robinhood): 'lo scanner manuale e' insufficiente e non si e' evoluto seguendo tutti gli aggiornamenti e migliorie che abbiamo fatto'",
      "alta"),

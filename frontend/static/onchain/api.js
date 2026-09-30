@@ -115,6 +115,7 @@ export const getLivePrice = (chain, address) => request(`/api/onchain/price/${ch
 export const getSniperAutotrade = () => request("/api/onchain/sniper-autotrade");
 export const getPilot = (chain) => request(`/api/onchain/pilot/${chain}`);
 export const getRadar = () => request("/api/onchain/radar");
+export const getRadarFeed = () => request("/api/onchain/radar/feed", { timeoutMs: 15000 });
 export const getLeaderboard = () => request("/api/onchain/leaderboard");
 export const getAlerts = (kind) => request(`/api/onchain/alerts/${kind}`);
 export const getScanFeed = () => request("/api/onchain/scan-feed");

@@ -2351,5 +2351,10 @@
     "status": "risolto",
     "at": 1790723373,
     "summary": "Lo scanner giudicava ogni token col filtro delle meme (per HYDX: 'Waiting: no GitHub'), senza Gem Finder, giudice DeepSeek ne' backtest. Ora un progetto mostra il verdetto del Gem Finder (in classifica #N, studiato e perche' no, scartato) con punteggio, pilastri, voto di DeepSeek e lettura del codice; se non l'ha mai visto entra nella coda di studio. Sotto, il backtest del trend follower sul daily e la migliore strategia a 5 minuti contro il buy-and-hold (dal laboratorio, o fatto al momento e salvato). La memoria e' in inglese e DeepSeek non riscrive piu' i suoi conti ('4/5 similar rugged' accanto a 1 rug su 5). Tasto per la pagina completa del token. Trovato e corretto anche un bug: la pagina di ogni gemma diceva 'No daily backtest' perche' il daily non veniva mai restituito. Poi, su richiesta di Lorenzo: tasto 'Add to Gem Finder' (o 'Study again' se era stato scartato) che mette il progetto nel giro completo (pilastri, ricerca, giudice, codice, classifica e laboratorio se lo merita); anteprima con descrizione del progetto, cap, liquidita', volume, eta', holder e quota dei primi 10, sito e social."
+  },
+  "seed-0233": {
+    "status": "risolto",
+    "at": 1790749050,
+    "summary": "La scheda scaricava tutto l'archivio dello scanner (300 token passati e 500 scartati, ognuno con tutti i controlli: diversi MB) e il telefono non faceva in tempo entro gli 8 secondi, quindi restava vuota fino al giro dopo, un minuto piu' tardi. Ora scarica solo le ultime 80 decisioni che la lista mostra e i conteggi delle 24 ore gia' fatti dal server (circa un decimo del peso), ha 15 secondi di margine e, se non risponde, riprova dopo 5 secondi invece di 60."
   }
 }
