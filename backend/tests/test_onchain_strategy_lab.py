@@ -58,7 +58,7 @@ def test_every_top_token_gets_every_strategy_and_the_agent_says_so(monkeypatch):
     assert line["kind"] == "backtest" and "TOK" in line["text"]
 
 
-def _daily_bars(n=200, t0=1_790_000_000):
+def _daily_bars(n=200, t0=1_780_000_000):
     rng = np.random.default_rng(2)
     closes = np.cumprod(1 + rng.normal(0.003, 0.03, n))
     return [[t0 + i * 86400, c, c * 1.02, c * 0.98, c, 5000.0 + i] for i, c in enumerate(closes)]
@@ -111,6 +111,62 @@ def test_daily_fetch_failure_keeps_the_5m_result(monkeypatch):
     monkeypatch.setattr(lab.alert_track, "_candles", candles)
     out = asyncio.run(lab.tick([_e("tok")], now=1_800_000_000))
     assert "daily" not in out and out["backtests"]["bars"] == 600
+
+
+def test_the_trigger_needs_60_closed_candles_and_the_forming_one_is_dropped(monkeypatch):
+    now = 1_800_000_000
+    start = now - 59 * 86400 - 3600          # 59 closed days and one still forming
+
+    async def candles(client, net, pool, tf, agg, before, limit, token=""):
+        if (tf, agg) == ("day", 1):
+            return [[start + i * 86400, 1, 1, 1, 1, 1] for i in range(60)]
+        if (tf, agg) == ("hour", 4):
+            return [[now - 600 * 14400 + i * 14400, 1, 1, 1, 1, 1] for i in range(600)]
+        return _bars()
+    monkeypatch.setattr(lab.alert_track, "_candles", candles)
+    daily = asyncio.run(lab.tick([_e("tok")], now=now))["daily"]
+    assert daily["interval"] == "8h" and daily["bars"] == 300 and "rows" in daily
+
+
+def _daily(events, to=1_000_000, iv="8h"):
+    return {"interval": iv, "to": to, "best": {"events": events}}
+
+
+def test_a_signal_is_news_once_and_only_on_the_last_closed_candle():
+    buy = {"side": "buy", "t": 1_000_000, "price": 2.0}
+    sig, fresh = lab._signal(_daily([buy]), None)
+    assert sig == buy and fresh
+    assert lab._signal(_daily([buy]), {"signal": sig}) == (sig, False)
+    old = {"side": "buy", "t": 1_000_000 - 2 * 28800, "price": 2.0}
+    assert lab._signal(_daily([old]), None)[1] is False
+    sell = {"side": "sell", "t": 1_000_000, "price": 3.0, "ret": 0.4}
+    assert lab._signal(_daily([buy, sell]), {"signal": buy}) == (sell, True)
+    assert lab._signal(_daily([]), None) == (None, False)
+
+
+def test_a_fresh_signal_reaches_the_listeners_and_a_busy_gecko_keeps_the_saved_daily(monkeypatch):
+    got = []
+
+    async def listen(sig):
+        got.append(sig)
+    monkeypatch.setattr(lab, "_signal_cbs", [listen])
+
+    async def daily_ok(client, net, pair, token, now):
+        return {"interval": "1d", "to": now - 86400, "rows": [{"label": "Trend EMA", "trades": 1}],
+                "best": {"events": [{"side": "buy", "t": now - 86400, "price": 1.5}]}}
+
+    async def candles(*a, **k):
+        return _bars()
+    monkeypatch.setattr(lab.alert_track, "_candles", candles)
+    monkeypatch.setattr(lab, "run_daily", daily_ok)
+    asyncio.run(lab.tick([_e("tok")], now=1_800_000_000))
+    assert [(s["symbol"], s["side"], s["interval"]) for s in got] == [("TOK", "buy", "1d")]
+
+    async def daily_busy(*a, **k):
+        return None
+    monkeypatch.setattr(lab, "run_daily", daily_busy)
+    out = asyncio.run(lab.run_one(httpx.AsyncClient(), _e("tok"), 1_800_010_000))
+    assert out["daily"]["signal"]["side"] == "buy" and len(got) == 1
 
 
 def test_gecko_busy_retries_next_tick_and_a_missing_pool_is_resolved(monkeypatch):

@@ -19,7 +19,7 @@ import asyncio
 import json
 import logging
 import time
-from typing import Callable
+from typing import Awaitable, Callable
 
 import httpx
 
@@ -37,11 +37,24 @@ TICK_S = 60
 FIRST_TICK_DELAY_S = 60
 REFRESH_S = 3600
 BARS = 1000                      # 5 minuti: circa tre giorni e mezzo
-DAILY_MIN_BARS = 60              # sotto questa soglia il daily non basta: si passa a 8h
+# Lorenzo, 30/09: sui progetti in classifica il trend follower del sito gira
+# su 8 ore se il token e' giovane, altrimenti sul giornaliero, e solo se ci
+# sono abbastanza candele per generare un trigger. Il filtro di volatilita'
+# (deviazione su 16 barre, media su 44) e' vuoto fino alla barra 59: prima
+# di 60 candele chiuse Trend EMA non puo' entrare, qualunque sia il grafico.
+TRIGGER_MIN_BARS = 60
+DAILY_MIN_BARS = TRIGGER_MIN_BARS    # meno di 60 giorni = token giovane: 8 ore
+STEP_S = {"1d": 86400, "8h": 28800}
 KEEP = 300
 
 _results: dict[str, dict] = {}   # chain:token -> {at, pair, symbol, backtests | error}
 _state = {"last_tick": 0.0, "last_key": "", "error": ""}
+_signal_cbs: list[Callable[[dict], Awaitable[None]]] = []
+
+
+def on_signal(cb: Callable[[dict], Awaitable[None]]) -> None:
+    """cb(signal) for every fresh entry or exit of the 8h/1d trend follower."""
+    _signal_cbs.append(cb)
 
 
 def _load() -> None:
@@ -140,28 +153,52 @@ def _merge_8h(bars: list[list]) -> list[list]:
     return [out[k] for k in sorted(out)]
 
 
+def _closed(bars: list[list], step: int, now: float) -> list[list]:
+    """Only closed candles: a signal on the one still forming can vanish."""
+    return [b for b in bars if b[0] + step <= now]
+
+
 async def run_daily(client: httpx.AsyncClient, net: str, pair: str, token: str, now: float) -> dict | None:
-    """Il trend-follower del sito sul grafico giornaliero (o a 8 ore se il
-    daily ha meno di DAILY_MIN_BARS barre). None = GeckoTerminal non risponde."""
+    """Il trend-follower del sito sul grafico giornaliero, o a 8 ore se il
+    token e' giovane (meno di DAILY_MIN_BARS giorni chiusi). Sotto
+    TRIGGER_MIN_BARS candele non c'e' risultato. None = GeckoTerminal non
+    risponde."""
     bars = await alert_track._candles(client, net, pair, "day", 1, now, 1000, token)
     if bars is None:
         return None
     iv = "1d"
+    bars = _closed(bars, STEP_S[iv], now)
     if len(bars) < DAILY_MIN_BARS:
         h4 = await alert_track._candles(client, net, pair, "hour", 4, now, 1000, token)
         if h4 is None:
             return None
-        bars = _merge_8h(h4)
         iv = "8h"
-    if len(bars) < system.BACKTEST_MIN_BARS:
+        bars = _closed(_merge_8h(h4), STEP_S[iv], now)
+    if len(bars) < TRIGGER_MIN_BARS:
         return {"interval": iv, "bars": len(bars), "error": "too few candles"}
     return {"interval": iv, **await asyncio.to_thread(system.backtest_one, sorted(bars))}
+
+
+def _signal(daily: dict, prev: dict | None) -> tuple[dict | None, bool]:
+    """The trend follower's last buy or sell, and whether it is fresh news:
+    on the last closed candle (a fill lands one bar after the signal) and not
+    already announced on the previous run."""
+    ev = ((daily.get("best") or {}).get("events") or [])
+    if not ev or not daily.get("to"):
+        return None, False
+    last = ev[-1]
+    sig = {k: last.get(k) for k in ("side", "t", "price", "ret") if last.get(k) is not None}
+    old = (prev or {}).get("signal") or {}
+    fresh = (last["t"] >= daily["to"] - STEP_S.get(daily.get("interval"), 86400)
+             and (old.get("t"), old.get("side")) != (sig["t"], sig["side"]))
+    return sig, fresh
 
 
 async def run_one(client: httpx.AsyncClient, e: dict, now: float) -> dict | None:
     """Un backtest. None = GeckoTerminal non risponde ora: si riprova al giro dopo."""
     key = key_of(e["chain"], e["token_address"])
     symbol = e.get("symbol") or "?"
+    prev_daily = (_results.get(key) or {}).get("daily")
     pair = await _pair_of(client, e)
     if not pair:
         _results[key] = {"at": now, "symbol": symbol, "pair": None, "error": "no pool"}
@@ -181,6 +218,15 @@ async def run_one(client: httpx.AsyncClient, e: dict, now: float) -> dict | None
     except Exception:
         logger.exception("strategy lab: daily di %s fallito", symbol)
         daily = None
+    if daily is None:
+        daily = prev_daily       # a busy GeckoTerminal must not wipe the saved result
+    else:
+        sig, fresh = _signal(daily, prev_daily)
+        if sig:
+            daily["signal"] = sig
+        if fresh:
+            await _announce({"chain": e["chain"], "token": e["token_address"], "symbol": symbol, "pair": pair,
+                             "interval": daily["interval"], **sig}, now)
     if daily is not None:
         _results[key]["daily"] = daily
     best = _best(bt)
@@ -193,6 +239,18 @@ async def run_one(client: httpx.AsyncClient, e: dict, now: float) -> dict | None
                        steps=[f"{len(bars)} 5-minute candles", f"{len(bt.get('rows') or [])} strategies"],
                        outcome=outcome, chain=e["chain"], token=e["token_address"])
     return _results[key]
+
+
+async def _announce(sig: dict, now: float) -> None:
+    buy = sig["side"] == "buy"
+    deepseek_desk.note("backtest", f"Trend follower {sig['interval']}: {'entry' if buy else 'exit'} on {sig['symbol']}",
+                       now=now, outcome=f"{'buy' if buy else 'sell'} at {sig.get('price')}", tally=False,
+                       chain=sig["chain"], token=sig["token"])
+    for cb in _signal_cbs:
+        try:
+            await cb(sig)
+        except Exception:
+            logger.exception("strategy lab: avviso segnale di %s fallito", sig.get("symbol"))
 
 
 async def tick(entries: list[dict], now: float | None = None) -> dict | None:
