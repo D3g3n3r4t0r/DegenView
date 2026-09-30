@@ -94,3 +94,14 @@ export function freshEvents(seen, items) {
   }
   return out.reverse();
 }
+
+/** Up to `limit` most recently active projects, each at the node of its latest recorded event. */
+export function projectPositions(items, limit = 8) {
+  const out = new Map();
+  for (const e of normalizeEvents(items)) {
+    if (!e.key || out.has(e.key)) continue;
+    out.set(e.key, { key: e.key, symbol: e.symbol || e.token.slice(0, 6), node: nodeFor(e.kind), t: e.t });
+    if (out.size >= limit) break;
+  }
+  return [...out.values()];
+}
