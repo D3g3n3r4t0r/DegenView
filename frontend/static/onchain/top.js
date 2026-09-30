@@ -199,9 +199,9 @@ function btSub(b) {
   const pct = (v) => { const r = Math.round(v ?? 0); return `${r > 0 ? "+" : ""}${r}%`; };
   // The site's trend follower on its ladder timeframe (5m to 1d) leads; the 5-minute best until it has traded.
   const d = b.daily;
-  if (d) return `${d.interval} ${pct(d.return_pct)} · ${d.trades} trades${d.in_position ? " · long" : ""}`;
+  if (d) return `${d.interval} ${pct(d.return_pct)} · ${d.trades} trades${d.win_rate != null ? ` · ${Math.round(d.win_rate)}% win` : ""}${d.in_position ? " · long" : ""}`;
   if (!b.best) return "bt: no entry";
-  return `5m ${pct(b.best.return_pct)}`;
+  return `5m ${pct(b.best.return_pct)} · ${b.best.trades} trades${b.best.win_rate != null ? ` · ${Math.round(b.best.win_rate)}% win` : ""}`;
 }
 
 async function load() {
