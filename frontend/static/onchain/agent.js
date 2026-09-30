@@ -11,6 +11,7 @@
  */
 import * as api from "@onchain/api.js";
 import { escapeHtml } from "@onchain/format.js";
+import { mountAgentMap } from "@onchain/agent-map.js";
 
 const POLL_MS = 15_000;
 const SAY_MS = 4_000;
@@ -73,6 +74,8 @@ let viewData = null;
 let viewItems = [];
 let viewTimer = null;
 let viewBusy = false;
+let agentMap = null;
+let mapReceivedAt = null;
 
 function statusLine() {
   if (!viewData) return "Off";
@@ -218,11 +221,14 @@ async function loadView() {
     const [info, log] = await Promise.all([api.getAgent(), api.getAgentLog()]);
     viewData = info;
     viewItems = log.items ?? [];
+    mapReceivedAt = Date.now();
+    agentMap?.update({ info, items: log.items ?? [], receivedAt: mapReceivedAt, failed: false });
     paint();
     paintHero();
     viewFeedback();
   } catch {
     viewFeedback("Activity could not be loaded. Scout will retry automatically.");
+    agentMap?.update({ failed: true });
     const status = viewEl?.querySelector("[data-ag-status]");
     if (status) status.textContent = "Connection unavailable";
     const today = viewEl?.querySelector("[data-ag-today]");
@@ -239,6 +245,8 @@ async function refreshView() {
     const [info, log] = await Promise.all([api.getAgent(), api.getAgentLog()]);
     const firstResponse = !viewData;
     viewData = info;
+    mapReceivedAt = Date.now();
+    agentMap?.update({ info, items: log.items ?? [], receivedAt: mapReceivedAt, failed: false });
     const fresh = (log.items ?? []).filter((a) => !viewItems.some((b) => b.t === a.t));
     if (fresh.length) {
       viewItems = [...fresh, ...viewItems];
@@ -253,6 +261,7 @@ async function refreshView() {
     paintHero();
     viewFeedback();
   } catch {
+    agentMap?.update({ failed: true });
     viewFeedback(viewData
       ? "Updates interrupted. Showing the last received activity; retrying automatically."
       : "Activity could not be loaded. Scout will retry automatically.");
@@ -277,6 +286,9 @@ async function loadEarlier() {
 }
 
 export function mountAgentView() {
+  clearInterval(viewTimer);
+  agentMap?.dispose();
+  agentMap = null;
   viewEl = document.getElementById("agent-view");
   if (!viewEl) return;
   viewEl.innerHTML = `
@@ -287,6 +299,7 @@ export function mountAgentView() {
       <p class="ag-today" data-ag-today>Loading activity…</p>
       <p class="ag-prio" data-ag-prio hidden></p>
     </div>
+    <div data-agent-map></div>
     <div class="ag-prog" data-ag-prog></div>
     <div class="ag-now" data-ag-now hidden></div>
     <h3 class="ag-list-title">Activity</h3>
@@ -294,6 +307,7 @@ export function mountAgentView() {
     <ul class="ag-list" data-ag-list aria-label="Scout activity"></ul>
     <button type="button" class="ag-more" data-ag-more hidden>Load earlier</button>`;
   viewEl.querySelector("[data-ag-more]")?.addEventListener("click", loadEarlier);
+  agentMap = mountAgentMap(viewEl.querySelector("[data-agent-map]"));
   loadView();
   viewTimer = setInterval(() => {
     if (viewEl && document.getElementById("agent-view") && viewEl.offsetParent !== null) refreshView();

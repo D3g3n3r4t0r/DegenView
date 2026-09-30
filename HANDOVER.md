@@ -1,5 +1,9 @@
 # Memoria di sessione
 
+## Agent map UI scaffold — 2026-09-30
+
+Lorenzo: "puoi imbastire il codice per questo? cosi poi claude verifica e implementa". Draft frontend: agent-map.js + pure projection model mounted from agent.js, styles in app.css. Reuses existing authenticated polling; exact chain/token filter, node details, global usage, stale/error states. No model calls or new endpoints. Eight model tests pass, three changed/new JS modules pass ESM syntax check. NOT the five complete observability features: causal receipts, score attribution, counterfactual conditions, per-decision costs and historical diff need backend contracts. See docs/analysis-receipts/AGENT_MAP_IMPLEMENTATION.md and #365/#366. Review/browser integration/full backend checks required before merge; no deployment performed.
+
 ## Trend follower 8h/1d sulla classifica, con segnali — `seed-0235` — 2026-09-30
 
 Lorenzo: "sui progetti in classifica io voglio che venga attivata la strategia [trend follower] con time frame piu' alti [...] se il token e' abbastanza giovane 8 ore se no un giorno se c'e' almeno abbastanza candele [...] segnali di piu' qualita'". Fatto a mano (Actions DeepSeek ferme, nessuna chiave in sandbox).
