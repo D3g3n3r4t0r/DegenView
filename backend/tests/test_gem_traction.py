@@ -96,11 +96,11 @@ def test_track_records_returns_at_checkpoints_and_splits_top_from_rest():
         gem_track.sample("solana", f"t{i}", 1.1, T0 + 3 * D)
         gem_track.sample("solana", f"t{i}", end, T0 + 8 * D)
     st = gem_track.stats()
-    week = st["horizons"][0]
+    week = next(h for h in st["horizons"] if h["days"] == 7)
     assert week["days"] == 7 and week["all"]["n"] == 4
     assert week["top"]["median"] == pytest.approx(1.75) and week["top"]["doubled"] == 1.0
     assert week["rest"]["median"] == pytest.approx(-0.35) and week["rest"]["positive"] == 0.0
-    assert st["horizons"][1]["all"]["n"] == 0
+    assert next(h for h in st["horizons"] if h["days"] == 30)["all"]["n"] == 0
     assert not gem_track.enter({"chain": "solana", "token_address": "np", "price_usd": None}, 1, 1, T0)
 
 
