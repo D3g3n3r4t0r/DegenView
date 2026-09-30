@@ -25,7 +25,7 @@ import httpx
 
 from app.notify import deepseek_desk
 from app.sniper.scanner import GECKO_NETWORKS
-from app.trading.onchain import alert_track, priority, sim_backtest, system
+from app.trading.onchain import alert_track, candle_archive, priority, sim_backtest, system
 from app.trading.onchain.storage import data_file
 from app.atomic_write import write_text_atomic
 
@@ -44,19 +44,28 @@ BARS = 1000                      # 5 minuti: circa tre giorni e mezzo
 # di 60 candele chiuse Trend EMA non puo' entrare, qualunque sia il grafico.
 TRIGGER_MIN_BARS = 60
 DAILY_MIN_BARS = TRIGGER_MIN_BARS    # meno di 60 giorni = token giovane: 8 ore
-# Lorenzo, 30/09: "un time frame piccolo nel momento del listing quindi 5
-# minuti [...] e poi 8 ore e poi giornaliero [...] graduale con un algoritmo
-# che tiene conto di quanta storicita' ha il grafico". The ladder, coarsest
-# first: the trend follower runs on the coarsest chart with at least
-# TRIGGER_MIN_BARS closed candles. A token a few hours old trades on 5
-# minutes, one of a few days on 1 hour, and so on up to the daily.
-STEP_S = {"1d": 86400, "8h": 28800, "4h": 14400, "1h": 3600, "15m": 900, "5m": 300}
-FULL_LADDER = ("1d", "8h", "4h", "1h", "15m", "5m")
+# Lorenzo, 30/09: "5 minuti al listing, poi 8 ore e poi giornaliero [...]
+# graduale con un algoritmo che tiene conto di quanta storicita' ha il
+# grafico", poi: "se nel backtest il segnale a un giorno scatta c'e'
+# abbastanza storicita'. Se non scatta vai a ritroso [...] se da un giorno
+# non c'e' pero' a 12 ore ce l'hai, allora prendi quello". La scala parte dal
+# gradino piu' largo con almeno TRIGGER_MIN_BARS candele chiuse e scende
+# finche' il trend follower non ha almeno un ingresso: vince il primo
+# gradino che entra. Nessun ingresso da nessuna parte = il gradino piu' largo.
+# (interval, GeckoTerminal timeframe, aggregate): i gradini senza candela
+# nativa si compongono da quella piu' fine che li divide.
+LADDER = [("1d", "day", 1), ("12h", "hour", 12), ("8h", "hour", 4), ("6h", "hour", 1), ("4h", "hour", 4),
+          ("2h", "hour", 1), ("1h", "hour", 1), ("30m", "minute", 15), ("15m", "minute", 15),
+          ("5m", "minute", 5)]
+STEP_S = {"1d": 86400, "12h": 43200, "8h": 28800, "6h": 21600, "4h": 14400, "2h": 7200, "1h": 3600,
+          "30m": 1800, "15m": 900, "5m": 300}
+TREND_FOLLOWERS = [("Lorenzo (trend-follower)", "Trend EMA"), ("Lorenzo HF (minuti on-chain)", "Trend HF")]
 # Lorenzo, 30/09: "prima di applicare questa regola fai un po' di prove su
 # tutte le 50 cripto [...] dovrebbero essere paritarie o superiori". Until
-# that test says so, only the two rungs already in use run.
-LADDER = ("1d", "8h")
-_GECKO_TF = {"1d": ("day", 1), "4h": ("hour", 4), "1h": ("hour", 1), "15m": ("minute", 15)}
+# scripts/ladder_compare.py says so, the rule in use stays the old one: 1d,
+# else 8h, first with TRIGGER_MIN_BARS closed candles, Trend EMA only.
+LADDER_RULE = False
+OLD_RUNGS = ("1d", "8h")
 KEEP = 300
 
 _results: dict[str, dict] = {}   # chain:token -> {at, pair, symbol, backtests | error}
@@ -65,7 +74,7 @@ _signal_cbs: list[Callable[[dict], Awaitable[None]]] = []
 
 
 def on_signal(cb: Callable[[dict], Awaitable[None]]) -> None:
-    """cb(signal) for every fresh entry or exit of the 8h/1d trend follower."""
+    """cb(signal) for every fresh entry or exit of the trend follower (any LADDER rung)."""
     _signal_cbs.append(cb)
 
 
@@ -147,13 +156,13 @@ def _best(bt: dict) -> dict | None:
     return max(traded, key=lambda r: r["return_pct"]) if traded else None
 
 
-def _merge_8h(bars: list[list]) -> list[list]:
-    """Ogni due barre da 4 ore diventano una da 8: apertura della prima,
-    massimo, minimo, chiusura della seconda, volume sommato. Le barre sono
-    [ts, o, h, l, c, v] e si allineano sui bucket ts % 28800 == 0."""
+def _merge(bars: list[list], step: int) -> list[list]:
+    """Barre fini in barre da `step` secondi, allineate su ts % step == 0:
+    apertura della prima, massimo, minimo, chiusura dell'ultima, volume
+    sommato. Le barre sono [ts, o, h, l, c, v]."""
     out: dict[int, list] = {}
     for b in sorted(bars):
-        bucket = int(b[0]) // 28800 * 28800
+        bucket = int(b[0]) // step * step
         cur = out.get(bucket)
         if cur is None:
             out[bucket] = [bucket, b[1], b[2], b[3], b[4], b[5]]
@@ -165,37 +174,70 @@ def _merge_8h(bars: list[list]) -> list[list]:
     return [out[k] for k in sorted(out)]
 
 
+def _merge_8h(bars: list[list]) -> list[list]:
+    return _merge(bars, 28800)
+
+
+def _entered(res: dict) -> bool:
+    rows = res.get("rows") or []
+    return bool(res.get("best")) or any(r.get("trades") or r.get("in_position") for r in rows)
+
+
 def _closed(bars: list[list], step: int, now: float) -> list[list]:
     """Only closed candles: a signal on the one still forming can vanish."""
     return [b for b in bars if b[0] + step <= now]
 
 
+def pick_interval(age_s: float) -> str:
+    """The widest rung whose step fits TRIGGER_MIN_BARS times in the
+    chart's history; below 5 hours, the 5 minutes anyway."""
+    for iv, _tf, _agg in LADDER:
+        if age_s >= TRIGGER_MIN_BARS * STEP_S[iv]:
+            return iv
+    return LADDER[-1][0]
+
+
 async def run_daily(client: httpx.AsyncClient, net: str, pair: str, token: str, now: float,
-                    bars5: list[list] | None = None) -> dict | None:
-    """Il trend-follower del sito sul grafico piu' largo che ha almeno
-    TRIGGER_MIN_BARS candele chiuse (LADDER: 1d, 8h, 4h, 1h, 15m, 5m).
-    `bars5` sono le candele da 5 minuti gia' scaricate. Sotto
-    TRIGGER_MIN_BARS anche a 5 minuti non c'e' risultato. None =
-    GeckoTerminal non risponde."""
-    got: dict[tuple[str, int], list] = {}
-    iv, bars = LADDER[0], []
-    for iv in LADDER:
-        if iv == "5m":
-            raw = bars5 or []
-        else:
-            key = _GECKO_TF["4h" if iv == "8h" else iv]
-            if key not in got:
-                fetched = await alert_track._candles(client, net, pair, key[0], key[1], now, 1000, token)
-                if fetched is None:
+                    fast: list[list] | None = None) -> dict | None:
+    """Il trend-follower del sito sul gradino di LADDER che la storia del
+    grafico regge: dal piu' largo con TRIGGER_MIN_BARS candele chiuse in
+    giu', il primo in cui la strategia entra almeno una volta. `fast` = le
+    candele da 5 minuti gia' scaricate. None = GeckoTerminal non risponde."""
+    got: dict[tuple[str, int], list[list]] = {}
+    if fast:
+        got[("minute", 5)] = fast
+    day = await candle_archive.candles(client, net, pair, "day", 1, now, token)
+    if day is None:
+        return None
+    got[("day", 1)] = day
+    first = min((b[0] for bars in got.values() for b in bars), default=now)
+    start = LADDER.index(next(r for r in LADDER if r[0] == pick_interval(now - first)))
+    tried: dict | None = None
+    first_ok: dict | None = None
+    # Lorenzo, 30/09: "adegua la strategia se non ci sono ingressi". Trend
+    # EMA first down the whole ladder; only if it never enters, the on-chain
+    # variant of the same trend follower (Trend HF: VWAP, efficiency, ATR
+    # trail) down the same rungs. Still trend following, still long only.
+    # Candles are fetched lazily, so the fallback costs no extra calls.
+    ladder = LADDER[start:] if LADDER_RULE else [r for r in LADDER if r[0] in OLD_RUNGS]
+    for name, label in TREND_FOLLOWERS if LADDER_RULE else TREND_FOLLOWERS[:1]:
+        for iv, tf, agg in ladder:
+            if (tf, agg) not in got:
+                raw = await candle_archive.candles(client, net, pair, tf, agg, now, token)
+                if raw is None:
                     return None
-                got[key] = fetched
-            raw = _merge_8h(got[key]) if iv == "8h" else got[key]
-        bars = _closed(raw, STEP_S[iv], now)
-        if len(bars) >= TRIGGER_MIN_BARS:
-            break
-    if len(bars) < TRIGGER_MIN_BARS:
-        return {"interval": iv, "bars": len(bars), "error": "too few candles"}
-    return {"interval": iv, **await asyncio.to_thread(system.backtest_one, sorted(bars))}
+                got[(tf, agg)] = raw
+            raw = got[(tf, agg)]
+            native = {"day": 86400, "hour": 3600, "minute": 60}[tf] * agg
+            bars = _closed(sorted(raw) if native == STEP_S[iv] else _merge(raw, STEP_S[iv]), STEP_S[iv], now)
+            if len(bars) < TRIGGER_MIN_BARS:
+                tried = {"interval": iv, "bars": len(bars), "error": "too few candles"}
+                continue
+            res = {"interval": iv, **await asyncio.to_thread(system.backtest_one, bars, name, label)}
+            if _entered(res) or not LADDER_RULE:
+                return res
+            first_ok = first_ok or res
+    return first_ok or tried
 
 
 def _signal(daily: dict, prev: dict | None) -> tuple[dict | None, bool]:
@@ -232,11 +274,16 @@ async def run_one(client: httpx.AsyncClient, e: dict, now: float) -> dict | None
     if not bars:
         _results[key] = {"at": now, "symbol": symbol, "pair": pair, "error": "no candles"}
         return _results[key]
+    try:     # the archive keeps them past the 1000-candle window
+        await asyncio.to_thread(candle_archive.put, candle_archive.key(GECKO_NETWORKS[e["chain"]], pair, "minute", 5,
+                                                                       e["token_address"]), bars, now)
+    except Exception:
+        logger.exception("strategy lab: archivio 5m di %s fallito", symbol)
     bt = await asyncio.to_thread(system.backtest_all, sorted(bars))
     _results[key] = {"at": now, "symbol": symbol, "pair": pair, "backtests": bt}
     # Il daily e' un di piu': se fallisce il 5 minuti resta.
     try:
-        daily = await run_daily(client, GECKO_NETWORKS[e["chain"]], pair, e["token_address"], now, sorted(bars))
+        daily = await run_daily(client, GECKO_NETWORKS[e["chain"]], pair, e["token_address"], now, bars)
     except Exception:
         logger.exception("strategy lab: daily di %s fallito", symbol)
         daily = None

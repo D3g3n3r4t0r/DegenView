@@ -339,7 +339,7 @@ function paintTabs() {
   // Gems: only the daily trend follower, not the alerts' 5-minute tracks.
   const gem = e.kind === "gem";
   const lab = gem ? (e.lab?.daily?.rows?.length ? e.lab.daily : null) : e.lab;
-  const labNote = gem ? `Trend follower backtested on the ${IV_NAME[lab?.interval] ?? "daily"} chart: the longest one with 60 closed candles.`
+  const labNote = gem ? `Trend follower backtested on the ${IV_NAME[lab?.interval] ?? "daily"} chart: from the longest one with 60 closed candles down to the first where it enters.`
     : "Backtested on the latest 5-minute chart, every hour.";
   const alerts = gem ? [] : (e.alerts ?? []);
   body.innerHTML = alerts.length ? alerts.map((al) => `
@@ -497,9 +497,15 @@ function chartFor(e, iv) {
 }
 
 // Gems open on the timeframe their trend follower ran on (strategy_lab's
-// ladder: 1d, 8h, 4h, 1h, 15m or 5m by how much history the chart has).
-const IV_NAME = { "5m": "5-minute", "15m": "15-minute", "1h": "1-hour", "4h": "4-hour", "8h": "8-hour", "1d": "daily" };
-const labInterval = (e) => (e.kind === "gem" ? e.lab?.daily?.interval ?? null : null);
+// ladder, 5m to 1d). The rungs with no chip open on the widest chip below
+// them: every trade still lands on the bar at or before it.
+const IV_NAME = { "5m": "5-minute", "15m": "15-minute", "30m": "30-minute", "1h": "1-hour", "2h": "2-hour",
+                  "4h": "4-hour", "6h": "6-hour", "8h": "8-hour", "12h": "12-hour", "1d": "daily" };
+const CHIP_OF = { "30m": "15m", "2h": "1h", "6h": "4h", "12h": "8h" };
+const labInterval = (e) => {
+  const iv = e.kind === "gem" ? e.lab?.daily?.interval : null;
+  return iv ? CHIP_OF[iv] ?? iv : null;
+};
 const defaultInterval = (e) => labInterval(e) ?? (e.kind === "gem" ? "1d" : "5m");
 
 function aggregate(candles, step, offset) {
