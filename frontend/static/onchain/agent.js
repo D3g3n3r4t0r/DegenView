@@ -1,16 +1,17 @@
 /**
- * The agent's presence: a living orb in the top bar and one line of what
+ * The agent's presence: the Scout's cube in the top bar and one line of what
  * DeepSeek is doing, always there (Lorenzo, 27/09: "dobbiamo dare l'idea
  * animata che tutto il sito sia gestito da DeepSeek [...] ci deve essere
  * qualcosa che si muove [...] un agent che esamina le cose").
  *
- * The orb breathes when idle and spins its rings while working (activity in
+ * The cube opens and closes slowly when idle, fast with a ring while working (activity in
  * the last three minutes). The line cycles through the latest actions from
  * /api/agent; a tap opens the log. Nothing here is decoration only: every
  * line is something the server really did.
  */
 import * as api from "@onchain/api.js";
 import { escapeHtml } from "@onchain/format.js";
+import { scoutCube } from "@onchain/scout-cube.js";
 
 const POLL_MS = 15_000;
 const SAY_MS = 4_000;
@@ -281,7 +282,7 @@ export function mountAgentView() {
   if (!viewEl) return;
   viewEl.innerHTML = `
     <div class="ag-hero">
-      <div class="ag-orb" data-state="off" aria-hidden="true"><i></i><i></i><i></i><span></span></div>
+      <div class="ag-orb scout-cube" data-state="off" aria-hidden="true">${scoutCube}</div>
       <h2>Scout</h2>
       <p class="ag-status" data-ag-status>Connecting</p>
       <p class="ag-today" data-ag-today>Loading activity…</p>
