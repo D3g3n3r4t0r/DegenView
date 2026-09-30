@@ -2475,7 +2475,7 @@
   },
   "seed-0241": {
     "status": "risolto",
-    "at": 1790787460,
-    "summary": "Gli 807 sono 3 gruppi di RugCheck: 794 wallet legati da un airdrop di 744 DREGG ciascuno (un wallet che riceve gli sblocchi Streamflow ogni due settimane), 9 e 4 wallet che on-chain oggi hanno 0 DREGG (il gruppo da 4 ha messo il 3% in lock Streamflow il 18/07). Il rapporto ora giudica la quota di supply dei gruppi, non il numero di wallet: sotto l'1% nessun avviso, e il punteggio scende con la quota."
+    "at": 1790788338,
+    "summary": "Gli 807 sono 3 gruppi di RugCheck: 794 wallet legati da un airdrop di 744 DREGG ciascuno (un wallet che riceve gli sblocchi Streamflow ogni due settimane), 9 e 4 wallet che on-chain oggi hanno 0 DREGG (il gruppo da 4 ha messo il 3% in lock Streamflow il 18/07). Il rapporto ora giudica la quota di supply dei gruppi, non il numero di wallet: sotto l'1% nessun avviso, e il punteggio scende con la quota. Poi, su richiesta di Lorenzo, la verifica profonda gira da sola su ogni token Solana della Top 50: toglie i collegamenti da airdrop, pool e locker e legge i saldi di oggi on-chain (DREGG: da 39% di 807 wallet a 4% di 51)."
   }
 }
