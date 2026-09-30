@@ -61,3 +61,8 @@ test('fresh events are returned once, oldest first; unknown kinds go to other', 
   assert.deepEqual(f.map(e => e.node), ['scan', 'other']);
   assert.equal(live.liveProject([]), null);
 });
+test('project chips: newest projects first, each at its latest node, capped', () => {
+  const items = [row('A', { t: 10, kind: 'scan' }), row('A', { t: 30, kind: 'code' }), row('B', { t: 20, kind: 'judge' }), row('C', { t: 5 })];
+  const pos = live.projectPositions(items, 2);
+  assert.deepEqual(pos.map(p => [p.symbol, p.node]), [['A', 'code'], ['B', 'research']]);
+});

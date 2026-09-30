@@ -1246,6 +1246,11 @@ html, body { overflow-x: clip; }
   .agent-map .am-live[data-on="true"] { color: var(--k-text); border-color: var(--k-mint); }
   .agent-map .am-live:not([data-on="true"]) .am-dot { background: var(--k-text-3); box-shadow: none; }
   .agent-map .am-grid button { position: relative; will-change: transform; }
+  .agent-map .am-grid button { padding-bottom: 36px; }
+  .agent-map .am-tokens { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+  .agent-map .am-chip { position: absolute; top: 0; left: 0; max-width: 64px; padding: 2px 8px; border: 1px solid var(--k-mint); border-radius: 999px; background: var(--k-surface); color: var(--k-text); font: inherit; font-size: 11px; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; pointer-events: auto; transition: transform .52s cubic-bezier(.2,.8,.2,1), opacity .3s ease; will-change: transform, opacity; }
+  .agent-map .am-chip[data-selected="true"] { background: var(--k-mint); color: var(--k-card); }
+  @media (prefers-reduced-motion: reduce) { .agent-map .am-chip { transition: none; } }
   .agent-map .am-ring { position: absolute; inset: 0; border: 2px solid var(--k-mint); border-radius: inherit; pointer-events: none; }
   .agent-map .am-sparks { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
   .agent-map .am-spark { position: absolute; top: -5px; left: -5px; width: 10px; height: 10px; border-radius: 50%; background: var(--k-mint); box-shadow: 0 0 12px var(--k-mint); opacity: 0; will-change: transform, opacity; }
