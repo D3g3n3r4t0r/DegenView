@@ -282,6 +282,12 @@ async def run_one(client: httpx.AsyncClient, e: dict, now: float) -> dict | None
         logger.exception("strategy lab: archivio 5m di %s fallito", symbol)
     bt = await asyncio.to_thread(system.backtest_all, sorted(bars))
     _results[key] = {"at": now, "symbol": symbol, "pair": pair, "backtests": bt}
+    if sim_backtest.needs_relabel(e["chain"], e["token_address"]):
+        try:    # old Top 50 wallet trades saved without their strategy: prove which were a trend follower's
+            times = await asyncio.to_thread(system.trend_trade_times, sorted(bars))
+            sim_backtest.relabel(e["chain"], e["token_address"], times, int(min(b[0] for b in bars)))
+        except Exception:
+            logger.exception("strategy lab: rietichettatura di %s fallita", symbol)
     # Il daily e' un di piu': se fallisce il 5 minuti resta.
     try:
         daily = await run_daily(client, GECKO_NETWORKS[e["chain"]], pair, e["token_address"], now, bars)
