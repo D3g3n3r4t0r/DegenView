@@ -574,7 +574,8 @@ async function paintChart() {
   const note = box.parentElement?.querySelector("[data-chart-note]");
   if (note) {
     if (shown !== interval) note.textContent = `No ${interval} candles for this token: showing ${shown}.`;
-    else if (drawn === 0) note.textContent = "The strategy stayed out of this chart.";
+    else if (lw?.before) note.textContent = `${lw.before} strategy ${lw.before === 1 ? "entry or exit is" : "entries and exits are"} older than this chart: pick a longer timeframe.`;
+    else if (drawn === 0) note.textContent = e.kind === "gem" && shownTrades(e.lab) ? "" : "The strategy stayed out of this chart.";
     else note.textContent = "";
   }
 }
@@ -620,7 +621,9 @@ async function drawChart(box, candles, e, iv = interval) {
       layout: { background: { color: "transparent" }, textColor: "#9aa0ab", fontSize: 11, attributionLogo: false },
       grid: { vertLines: { color: "rgba(255,255,255,0.03)" }, horzLines: { color: "rgba(255,255,255,0.03)" } },
       rightPriceScale: { borderVisible: false, scaleMargins: { top: 0.12, bottom: 0.08 } },
-      timeScale: { timeVisible: true, secondsVisible: false, borderVisible: false },
+      // Room on the right: the last marker's label ("Wallet out +16%") was
+      // cut at the edge (Lorenzo, 30/09, MERRYMEN 1d).
+      timeScale: { timeVisible: true, secondsVisible: false, borderVisible: false, rightOffset: 8 },
       crosshair: { vertLine: { color: "#5f6672" }, horzLine: { color: "#5f6672" } },
       handleScale: { axisPressedMouseMove: false },
     });
@@ -629,8 +632,15 @@ async function drawChart(box, candles, e, iv = interval) {
       wickUpColor: "#2de0a8", wickDownColor: "#f87171",
       // Market cap when the cap is known; otherwise the raw price, which
       // usdShort rounded to "$0" (HYDX at $0.00038, 30/09).
+      // A price is never below zero: the axis showed "$-100000" under a
+      // chart starting near zero.
       priceFormat: { type: "custom", minMove: 1e-10,
-        formatter: (v) => (lw?.k === 1 && Math.abs(v) < 1 ? `$${Number(v.toPrecision(3))}` : usdShort(v)) },
+        formatter: (v) => (v < 0 ? "" : lw?.k === 1 && Math.abs(v) < 1 ? `$${Number(v.toPrecision(3))}` : usdShort(v)) },
+      autoscaleInfoProvider: (original) => {
+        const r = original();
+        if (r?.priceRange) r.priceRange.minValue = Math.max(0, r.priceRange.minValue);
+        return r;
+      },
     });
     lw = { chart, series, box };
   }
@@ -644,12 +654,21 @@ async function drawChart(box, candles, e, iv = interval) {
   const barAt = (t) => { let b = bars[0].time; for (const x of bars) { if (x.time <= t) b = x.time; else break; } return b; };
   const marks = [];
   let drawn = 0;
+  // Gems say which strategy trade it is and on which timeframe it was
+  // taken, on every chip (Lorenzo, 30/09: "la strategia se e' in
+  // classifica top 50 deve essere applicata al grafico e la devo vedere").
+  const gemIv = e.kind === "gem" ? shownTrades(e.lab)?.interval : null;
+  let before = 0;
   for (const a of withLab(e)) {
     for (const v of tradesOf(a)) {
-      if (v.t < t0 || v.t >= t1) continue;
+      if (v.t < t0) { before++; continue; }
+      if (v.t >= t1) continue;
       const buy = v.side === "buy";
+      const text = gemIv
+        ? `${buy ? "Strategy entry" : "Strategy exit"} · ${gemIv}${!buy && v.ret != null ? ` ${pct(v.ret)}` : ""}`
+        : buy ? "Buy" : v.ret != null ? `Sell ${pct(v.ret)}` : "Sell";
       marks.push({ time: barAt(v.t), position: buy ? "belowBar" : "aboveBar", color: buy ? "#2de0a8" : "#f87171",
-        shape: buy ? "arrowUp" : "arrowDown", text: buy ? "Buy" : v.ret != null ? `Sell ${pct(v.ret)}` : "Sell" });
+        shape: buy ? "arrowUp" : "arrowDown", text });
       drawn++;
     }
     const rug = a.backtests?.rug?.at;
@@ -678,6 +697,7 @@ async function drawChart(box, candles, e, iv = interval) {
   marks.sort((x, y) => x.time - y.time);
   lw.series.setMarkers(marks);
   lw.chart.timeScale().fitContent();
+  lw.before = before;
   return drawn;
 }
 
