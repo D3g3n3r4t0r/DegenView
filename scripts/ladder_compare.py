@@ -6,13 +6,14 @@ down to the first where Trend EMA enters, then the same with Trend HF.
 
 Runs the lab's own run_daily both ways on the candles in
 data/candle_archive.sqlite (filled by candle_archive.archive_loop), so it
-needs the deployed code and few GeckoTerminal calls. It changes no result:
-only the candle archive may be topped up.
+needs the deployed code. Read-only: the archive is opened with mode=ro and
+GeckoTerminal is never called; a series not archived yet counts as empty.
 
     docker compose exec -T app python - < scripts/ladder_compare.py > ladder_compare.json
 """
 import asyncio
 import json
+import sqlite3
 import statistics
 import sys
 import time
@@ -20,6 +21,7 @@ import time
 import httpx
 
 from app.sniper.scanner import GECKO_NETWORKS
+from app.trading.onchain import candle_archive
 from app.trading.onchain import strategy_lab as lab
 
 LIMIT = 50
@@ -39,7 +41,18 @@ def book(rows, k, cash=10_000.0):
     return round(sum(each * (1 + ((r[k] or {}).get("ret") or 0) / 100) for r in rows), 2)
 
 
+_ro = sqlite3.connect(f"file:{candle_archive._DB_FILE}?mode=ro", uri=True)
+
+
+async def archived(client, net, pair, tf, agg, now, token=""):
+    """candle_archive.candles without the network and without writes."""
+    rows = _ro.execute("SELECT t, o, h, l, c, v FROM candles WHERE k = ? ORDER BY t",
+                       (candle_archive.key(net, pair, tf, agg, token),)).fetchall()
+    return [list(r) for r in rows]
+
+
 async def main():
+    candle_archive.candles = archived
     lab._load()
     items = sorted(((k, v) for k, v in lab._results.items() if v.get("pair") and (v.get("daily") or {}).get("rows")),
                    key=lambda kv: -(kv[1].get("at") or 0))[:LIMIT]
