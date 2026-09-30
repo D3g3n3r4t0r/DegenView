@@ -1532,7 +1532,28 @@ async def _onchain_reconcile_loop() -> None:
 
 
 @asynccontextmanager
+def _sim_reset_once() -> None:
+    """Lorenzo, 30/09: "devi fare un reset completo di tutti gli account e
+    far si' che l'importo sia 10.000". Once: the old simulated books are
+    copied aside first, then every account's goes back to $10,000."""
+    import shutil
+    from app.trading.onchain.storage import data_file
+    marker = data_file("sim_reset_2026-09-30.done")
+    if marker.exists():
+        return
+    src = onchain_autotrader._STORE_FILE
+    try:
+        if src.exists():
+            shutil.copy2(src, data_file("onchain_autotrader.before-sim-reset-2026-09-30.json"))
+        n = onchain_autotrader.reset_all_sim(10_000.0)
+        marker.write_text(f"{_time.time()} {n}\n", encoding="utf-8")
+        logger.info("sim reset: %d simulated books back to $10,000", n)
+    except OSError:
+        logger.exception("sim reset: backup failed, nothing reset")
+
+
 async def lifespan(app: FastAPI):
+    _sim_reset_once()
     # Audit B04: the event loop keeps only weak references to tasks, so a
     # create_task() nobody holds can be garbage-collected mid-run (the order
     # reconciler was one) and nothing cancelled it at shutdown.
@@ -4469,15 +4490,21 @@ async def get_autotrader(user: User = Depends(auth.get_current_user)) -> dict:
             "server_live": settings.onchain_execution_enabled}
 
 
-@app.get("/api/onchain/top/backtest")
-async def top_backtest(user: User = Depends(auth.get_current_user)) -> dict:
-    """A $10,000 wallet replayed on every trade of the Top 50's backtests
-    (Lorenzo, 30/09). The same for every account ("farlo visualizzare a tutti
-    gli utenti indipendentemente dall'account"); read only, the live
-    simulated positions stay as they are."""
-    _require_onchain_enabled()
+_top_wallet_cache: dict = {"at": 0.0, "data": None}
+_TOP_WALLET_TTL_S = 20
+
+
+async def _top_wallet() -> dict:
+    """A $10,000 wallet replayed on every trade of the Top 50's backtests,
+    the same for every account (Lorenzo, 30/09: "farlo visualizzare a tutti
+    gli utenti indipendentemente dall'account"). It is the Simulated wallet:
+    closed = every trade the Top 50 closed, open = what would be open today,
+    and it keeps going on the next entries (sim_backtest's ledger)."""
     from app.trading.onchain import sim_backtest
     from app.trading.onchain import strategy_lab as onchain_strategy_lab
+    now = _time.time()
+    if _top_wallet_cache["data"] is not None and now - _top_wallet_cache["at"] < _TOP_WALLET_TTL_S:
+        return _top_wallet_cache["data"]
     new = False
     for e in _top_entries(50):
         new |= sim_backtest.remember(e["chain"], e["token_address"], e.get("symbol"),
@@ -4496,7 +4523,16 @@ async def top_backtest(user: User = Depends(auth.get_current_user)) -> dict:
             marks = {name: got[f"{k[0]}:{k[1]}"]["p"] for k, name in keys.items() if f"{k[0]}:{k[1]}" in got}
         except Exception:
             marks = {}
-    return sim_backtest.replay(tokens, capital, marks=marks, now=_time.time())
+    data = sim_backtest.replay(tokens, capital, marks=marks, now=now)
+    _top_wallet_cache.update(at=now, data=data)
+    return data
+
+
+@app.get("/api/onchain/top/backtest")
+async def top_backtest(user: User = Depends(auth.get_current_user)) -> dict:
+    """The Top 50 wallet (_top_wallet). Read only."""
+    _require_onchain_enabled()
+    return await _top_wallet()
 
 
 @app.patch("/api/onchain/autotrader")
@@ -4595,43 +4631,47 @@ def _record_wealth(user: User, snap: dict) -> None:
         onchain_wealth.record(user.id, snap["total"])
 
 
-def _sim_snapshot(user: User) -> dict:
-    """The simulated wallet (autotrader "sim"), shaped as _wallet_snapshot:
-    Lorenzo, 27/09: "il fatto che sto simulando il denaro deve essere
-    possibile selezionando 'wallet simulato', cosi' visualizzo il saldo
-    simulato e posso vedere realmente cosa succede"."""
-    v = onchain_autotrader.view(user.id)
-    sim = v["sim"]
-    if not sim:
-        return {"total": None, "cash": 0.0, "positions": [], "missing": [], "by_chain": {}, "complete": False,
-                "sim": None}
-    # every open simulated trade: the paper book's, plus a legacy quote-based one
-    pos_list = list(v.get("positions") or [])
-    legacy = v["position"] if v["position"] and v["position"]["mode"] == "sim" and v["position"].get("route") != "paper" else None
-    if legacy:
-        pos_list.append(legacy)
-    positions = [{"chain": p.get("chain") or "robinhood", "address": p["token"], "symbol": p["symbol"],
-                  "name": p["symbol"], "amount": p.get("qty"), "price_usd": p.get("price"),
-                  "value_usd": p["value_usdg"], "image": p.get("image"), "native": False, "hidden": False,
-                  "source": "sim", "wallet": "sim", "ret": p.get("ret"), "cost_usd": p.get("cost_usdg")}
-                 for p in pos_list]
+async def _sim_snapshot(user: User) -> dict:
+    """The simulated wallet, shaped as _wallet_snapshot. Lorenzo, 27/09: "il
+    fatto che sto simulando il denaro deve essere possibile selezionando
+    'wallet simulato'". From 30/09 it is the Top 50 wallet, the same for
+    every account: "reset completo di tutti gli account [...] 10.000 [...]
+    nelle posizioni chiuse tutte quelle della top 50 [...] e le posizioni
+    aperte, che sarebbero aperte ad oggi"."""
+    w = await _top_wallet()
+    positions = []
+    for p in w["open"]:
+        price = p.get("price")
+        positions.append({"chain": p["chain"], "address": p["token"], "symbol": p.get("symbol") or "?",
+                          "name": p.get("symbol") or "?", "price_usd": price, "value_usd": p["value"],
+                          "amount": p["value"] / price if price else None, "image": None, "native": False,
+                          "hidden": False, "source": "sim", "wallet": "sim", "ret": p.get("ret"),
+                          "cost_usd": p["stake"], "opened": p["at"], "interval": p.get("interval")})
     by_chain: dict[str, float] = {}
     for p in positions:
         by_chain[p["chain"]] = by_chain.get(p["chain"], 0.0) + (p["value_usd"] or 0.0)
-    by_chain["robinhood"] = by_chain.get("robinhood", 0.0) + (sim["usdg"] or 0.0)
-    return {"total": sim["equity"], "cash": sim["usdg"], "positions": positions, "missing": [],
+    return {"total": w["equity"], "cash": w["cash"], "positions": positions, "missing": [],
             "by_chain": by_chain, "complete": True,
-            "sim": {**sim, "autotrader": v["mode"]}}
+            "sim": {"usdg": w["cash"], "start": w["capital"], "equity": w["equity"], "ret": w["ret"],
+                    "autotrader": "top50", "from": w["from"], "tokens": w["tokens"], "share": w["share"],
+                    "max_dd": w["max_dd"], "win_rate": w["win_rate"]},
+            "closed": [{"symbol": c.get("symbol") or "?", "token": c["token"], "chain": c["chain"],
+                        "opened": c["at"], "closed": c["exit_at"], "cost_usdg": c["stake"],
+                        "proceeds_usdg": round(c["stake"] + c["pnl"], 2), "ret": c["ret"], "mode": "sim",
+                        "why": f"trend {c.get('interval') or ''}".strip()} for c in w["closed"]],
+            "curve": w["curve"]}
 
 
-def _sim_key(user: User) -> str:
-    return f"{user.id}:sim"
-
-
-def _record_sim(user: User, snap: dict | None = None) -> None:
-    snap = snap or _sim_snapshot(user)
-    if snap["total"] is not None:
-        onchain_wealth.record(_sim_key(user), snap["total"])
+def _curve_series(curve: list[list[float]], rng: str, now: float) -> list[list[float]]:
+    """The Top 50 wallet's line over one range: the value when the range
+    opens, then every change inside it."""
+    span = onchain_wealth.RANGES.get(rng)
+    if span is None or not curve:
+        return [list(r) for r in curve]
+    start = now - span
+    before = [r for r in curve if r[0] < start]
+    inside = [list(r) for r in curve if r[0] >= start]
+    return ([[start, before[-1][1]]] if before else []) + inside
 
 
 @app.get("/api/onchain/live-prices")
@@ -4654,8 +4694,7 @@ async def wallets_total(wallet: Literal["real", "sim"] = "real",
     """The header's number: every token on every chain, in USD; or the
     simulated wallet's, with ?wallet=sim."""
     if wallet == "sim":
-        snap = _sim_snapshot(user)
-        _record_sim(user, snap)
+        snap = await _sim_snapshot(user)
         return {"total": snap["total"], "cash": snap["cash"], "by_chain": snap["by_chain"], "missing": [],
                 "complete": snap["complete"], "wallet": "sim", "started": snap["sim"] is not None,
                 "live": _live_marks(snap)}
@@ -4706,11 +4745,10 @@ async def get_profile(wallet: Literal["real", "sim"] = "real",
     value, cash, positions, closed trades and the line all of that wallet."""
     p = profiles.get(user.id, user.email, _joined_hint(user))
     if wallet == "sim":
-        snap = _sim_snapshot(user)
-        _record_sim(user, snap)
-        key = _sim_key(user)
-        closed = [c for c in _closed_trades(user) if c.get("mode") == "sim"]
-        trades = sum(1 for t in onchain_autotrader.view(user.id)["trades"] if t.get("ok") and t.get("mode") == "sim")
+        snap = await _sim_snapshot(user)
+        key = None
+        closed = snap["closed"]
+        trades = len(closed) + len(snap["positions"])
     else:
         snap = await _wallet_snapshot(user)
         _record_wealth(user, snap)
@@ -4726,11 +4764,19 @@ async def get_profile(wallet: Literal["real", "sim"] = "real",
         "closed": closed,
         "stats": {"trades": trades, "avg_hold_s": sum(holds) / len(holds) if holds else None, "closed": len(closed)},
         # the line ends where the header is: the value just read
-        "history": {k: onchain_wealth.series(key, k) + ([[_time.time(), snap["total"]]] if snap["complete"] else [])
-                    for k in onchain_wealth.RANGES},
-        "tracking_since": (onchain_wealth.series(key, "all") or [[None]])[0][0],
-        "change": {k: onchain_wealth.change(key, k, snap["total"]) for k in onchain_wealth.RANGES},
+        **(_sim_lines(snap) if key is None else {
+            "history": {k: onchain_wealth.series(key, k) + ([[_time.time(), snap["total"]]] if snap["complete"] else [])
+                        for k in onchain_wealth.RANGES},
+            "tracking_since": (onchain_wealth.series(key, "all") or [[None]])[0][0],
+            "change": {k: onchain_wealth.change(key, k, snap["total"]) for k in onchain_wealth.RANGES}}),
     }
+
+
+def _sim_lines(snap: dict) -> dict:
+    now = _time.time()
+    hist = {k: _curve_series(snap["curve"], k, now) for k in onchain_wealth.RANGES}
+    return {"history": hist, "tracking_since": snap["sim"]["from"],
+            "change": {k: round(snap["total"] - rows[0][1], 4) if rows else None for k, rows in hist.items()}}
 
 
 class ProfileUpdate(BaseModel):
@@ -5111,11 +5157,6 @@ async def _onchain_signals_loop() -> None:
                     onchain_autotrader.trend_marks({k: v["p"] for k, v in marks.items()})
                 except Exception:
                     logger.exception("trend book marks")
-            for u in auth.list_users():      # the simulated wallet's line, a point per round
-                try:
-                    _record_sim(u)
-                except Exception:
-                    logger.exception("sim wealth %s", u.id)
             if _time.time() - warmed_at >= onchain_radar.WARM_EVERY_S:
                 warmed_at = _time.time()
                 _fire(onchain_radar.warm_charts(_charts_on_screen()))
