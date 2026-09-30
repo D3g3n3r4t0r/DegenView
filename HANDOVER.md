@@ -1,6 +1,6 @@
 # 2026-09-30 — PR #408 quant + Agent integration (Codex)
 
-Code integrated, not deployed. Includes #402 map, preserves latest main Scout cube. 47 focused Python tests + 8 Node tests passed; full-backend lint passed. Full suite has environment/external failures; no profitability claim. Claude continuation: **docs/CLAUDE_QUANT_HANDOFF.md**, with exact checks and remaining limitations. No production approval or orders activated.
+**Mergiata da Claude il 30/09** (Lorenzo: "applica"). Rivista sul codice: suite completa su Linux 1461 passati / 1 saltato, ruff pulito, 8 test Node della mappa ok; la CI e' caduta in 3s senza log (minuti Actions finiti). Effetto visibile: senza `data/quant_approved.json` sul server il pilota (Sim e Real) **non apre nuove operazioni**; le posizioni aperte escono con la logica di prima. Approvazione paper/real resta di Lorenzo, dopo dati reali e report. Il loop di trading deve girare in un solo worker (guardia per processo). Code integrated. Includes #402 map, preserves latest main Scout cube. 47 focused Python tests + 8 Node tests passed; full-backend lint passed. Full suite has environment/external failures; no profitability claim. Claude continuation: **docs/CLAUDE_QUANT_HANDOFF.md**, with exact checks and remaining limitations. No production approval or orders activated.
 
 # Memoria di sessione
 
