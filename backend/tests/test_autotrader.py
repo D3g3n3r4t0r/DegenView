@@ -16,6 +16,9 @@ def _clean(tmp_path, monkeypatch):
     monkeypatch.setattr(at, "_STORE_FILE", tmp_path / "a.json")
     monkeypatch.setattr(at, "_BARS_FILE", tmp_path / "b.json")
     monkeypatch.setattr(tr, "_STORE_FILE", tmp_path / "t.json")
+    monkeypatch.setattr(at, "system_board", lambda kind: {"chosen": LABEL})
+    monkeypatch.setattr(tr.quant_runtime, "approved", lambda: {"reviewed": True})
+    monkeypatch.setattr(tr.quant_runtime, "gem_verdict", lambda a, now: (not a.get("meme"), "fixture"))
     at.reset_for_tests()
     tr.reset_for_tests()
     yield
@@ -28,7 +31,16 @@ def _alert(state="in", in_at=T0, sym="FROG", events=None):
     a["entry"] = 1.0
     a["last"] = {"price": 1.0, "ret": 0, "at": T0}
     a["alert_bt"] = {LABEL: {"state": state, "in_at": in_at, "events": events or [{"side": "buy", "t": in_at}], "ret": 0}}
+    _quant(a, state=state, in_at=in_at, events=events)
     return a
+
+
+def _quant(a, state="in", in_at=T0, events=None):
+    a["last"] = a.get("last") or {"price": 1.0, "at": T0}
+    a["quant_policy"] = {"costs": {"commission": 0, "slippage": 0}}
+    a["quant_system"] = {"state": state, "in_at": in_at, "entry": 1.0, "mark": 1.0,
+                         "eligible": True, "evaluated_at": T0, "policy_id": "test",
+                         "events": events or [{"side": "buy", "t": in_at, "price": 1.0}]}
 
 
 def _market(usdg=100_000_000, eth=10**18, route="uniswap-v3", out=5_000_000, swaps=None):
@@ -70,9 +82,9 @@ def test_sim_buys_the_share_then_sells_when_the_system_leaves():
     assert v["position"]["symbol"] == "FROG" and v["sim"]["usdg"] == pytest.approx(40.0, abs=1e-5)
     # nothing new: no second entry, no exit
     assert asyncio.run(tr.tick([USER], now=T0 + 120, market=_market())) == []
-    a["alert_bt"][LABEL] = {"state": "out", "events": [{"side": "buy"}, {"side": "sell"}]}
+    a["quant_system"].update(state="out", events=[{"side": "sell", "t": T0 + 150, "price": 1.0}])
     rows = asyncio.run(tr.tick([USER], now=T0 + 180, market=_market()))
-    assert rows[0]["side"] == "sell" and rows[0]["why"] == "system sold" and tr.view("u1")["position"] is None
+    assert rows[0]["side"] == "sell" and rows[0]["why"] == "trend exit" and tr.view("u1")["position"] is None
 
 
 def test_old_alert_is_not_chased_and_off_means_no_entries():
@@ -149,26 +161,26 @@ def test_real_buy_converts_usdc_to_usdg_first_and_sells_back_to_usdc():
     assert rows[0]["ok"] and rows[0]["via"] == ["USDC→USDG"]
     assert swaps[0]["token_in"] == USDC and swaps[0]["token_out"] == tr.USDG and swaps[0]["amount_in"] == 30_000_000 - 1
     assert swaps[1]["token_in"] == tr.USDG and swaps[1]["amount_in"] == int((30_000_000 - 1) * 999 // 1000 * (1 - tr.CASH_SLIPPAGE))
-    a["alert_bt"][LABEL] = {"state": "out", "events": [{"side": "sell"}]}
+    a["quant_system"].update(state="out", events=[{"side": "sell", "t": T0 + 100, "price": 1.0}])
     rows = asyncio.run(tr.tick([USER], now=T0 + 120, market=_cash_market(swaps=swaps)))
     assert rows[0]["ok"] and rows[0]["via"] == ["USDG→USDC"] and swaps[-1]["token_out"] == USDC
 
 
-def test_sim_follows_every_alert_on_every_chain_with_the_backtest_trade():
+def test_sim_follows_every_validated_signal_on_every_chain():
     """Lorenzo, 28/09: "il wallet simulato non sembra replicare gli ingressi
     [...] voglio che li segua". Each alert gets its share; the result is the
     Strategies tab's trade on it."""
     a = _alert(sym="FROG")
     b = at.record({"chain": "solana", "pair_address": "PS", "token_address": "SOL1", "symbol": "SOLY"}, "meme", T0 - 300)
-    b["alert_bt"] = {LABEL: {"state": "in", "in_at": T0 - 300, "events": [{"side": "buy"}], "ret": 0}}
+    _quant(b, in_at=T0 - 300)
     tr.configure("u1", "sim", 25, usdg_now=100.0)
     rows = asyncio.run(tr.tick([USER], now=T0))
     assert [(r["symbol"], r["usdg"]) for r in rows] == [("FROG", 25.0), ("SOLY", 25.0)]
     assert len(tr.view("u1")["positions"]) == 2
-    b["alert_bt"][LABEL].update(ret=0.5)
-    a["alert_bt"][LABEL] = {"state": "out", "ret": -0.2, "events": [{"side": "buy"}, {"side": "sell", "why": "signal"}]}
+    b["quant_system"].update(mark=1.5)
+    a["quant_system"].update(state="out", events=[{"side": "sell", "t": T0 + 30, "price": .8}])
     rows = asyncio.run(tr.tick([USER], now=T0 + 60))
-    assert rows[0]["side"] == "sell" and rows[0]["usdg"] == pytest.approx(20.0) and rows[0]["why"] == "system sold"
+    assert rows[0]["side"] == "sell" and rows[0]["usdg"] == pytest.approx(20.0) and rows[0]["why"] == "trend exit"
     v = tr.view("u1")
     assert v["sim"]["equity"] == pytest.approx(50 + 20 + 37.5) and v["positions"][0]["symbol"] == "SOLY"
     # no repeat entries, and at 100% one open trade takes all the cash
@@ -199,19 +211,20 @@ def test_sim_total_equals_cash_plus_rows_and_rows_carry_their_own_mark():
     b = _alert(sym="TOAD")
     tr.configure("u1", "sim", 25, usdg_now=100.0)
     asyncio.run(tr.tick([USER], now=T0))
-    a["alert_bt"][LABEL].update(ret=0.4, mark=2.8)
-    b["alert_bt"][LABEL].update(ret=-0.1, mark=0.9)
+    a["quant_system"].update(mark=1.4)
+    b["quant_system"].update(mark=.9)
     a["last"]["price"] = 3.5          # the tracker's newer price is not the mark
     v = tr.view("u1")                 # no tick in between: the view reads the system now
     rows = {p["symbol"]: p for p in v["positions"]}
-    assert rows["FROG"]["value_usdg"] == pytest.approx(35.0) and rows["FROG"]["price"] == 2.8
+    assert rows["FROG"]["value_usdg"] == pytest.approx(35.0) and rows["FROG"]["price"] == 1.4
     assert rows["TOAD"]["value_usdg"] == pytest.approx(22.5) and rows["TOAD"]["price"] == 0.9
     assert v["sim"]["equity"] == pytest.approx(v["sim"]["usdg"] + sum(p["value_usdg"] for p in v["positions"]))
     # out but not closed yet: no price, so nothing re-marks it live
-    b["alert_bt"][LABEL].update(state="out")
+    b["quant_system"].update(state="out", events=[{"side": "sell", "t": T0 + 30, "price": .9}])
     assert {p["symbol"]: p for p in tr.view("u1")["positions"]}["TOAD"]["price"] is None
 
     from app import main
     snap = main._sim_snapshot(SimpleNamespace(id="u1"))
     assert snap["total"] == pytest.approx(snap["cash"] + sum(p["value_usd"] for p in snap["positions"]), abs=1e-3)
     assert sum(snap["by_chain"].values()) == pytest.approx(snap["total"], abs=1e-3)
+

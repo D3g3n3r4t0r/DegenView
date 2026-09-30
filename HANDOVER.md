@@ -1,3 +1,7 @@
+# 2026-09-30 — PR #408 quant + Agent integration (Codex)
+
+Code integrated, not deployed. Includes #402 map, preserves latest main Scout cube. 47 focused Python tests + 8 Node tests passed; full-backend lint passed. Full suite has environment/external failures; no profitability claim. Claude continuation: **docs/CLAUDE_QUANT_HANDOFF.md**, with exact checks and remaining limitations. No production approval or orders activated.
+
 # Memoria di sessione
 
 ## Trend follower 8h/1d sulla classifica, con segnali — `seed-0235` — 2026-09-30
