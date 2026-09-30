@@ -4377,7 +4377,9 @@ onchain_leaderboard.on_alert(_notify_gem)
 def _trend_signal_text(s: dict) -> str:
     """Italian, like every message Lorenzo reads."""
     import html as esc
-    tf = "giornaliero" if s.get("interval") == "1d" else "8 ore"
+    iv = str(s.get("interval") or "?")
+    tf = ("giornaliero" if iv == "1d" else "1 ora" if iv == "1h"
+          else f"{iv[:-1]} ore" if iv.endswith("h") else f"{iv[:-1]} minuti" if iv.endswith("m") else iv)
     sym = esc.escape(str(s.get("symbol") or "?"))
     url = app_token_url("gems", s.get("chain") or "", s.get("token") or "")
     link = f'<a href="{esc.escape(url, quote=True)}">{sym}</a>'
@@ -5134,7 +5136,7 @@ async def onchain_ai_review_view(user: User = Depends(auth.get_current_user)) ->
 @app.get("/api/onchain/chart")
 async def onchain_token_chart(
     chain: str, pool: str = Query(..., pattern=r"^[0-9A-Za-z]{20,66}$"), symbol: str = Query("", max_length=40),
-    interval: Literal["1m", "5m", "15m", "1h", "4h", "1d"] = "15m", peek: bool = False,
+    interval: Literal["1m", "5m", "15m", "1h", "4h", "1d", "1w"] = "15m", peek: bool = False,
     user: User = Depends(auth.get_current_user),
 ) -> dict:
     """The token page's chart: candles only, any chain the hunts scan. With

@@ -225,7 +225,7 @@ function btCard(b) {
   if (!b.fast && !b.daily) return `<p class="sheet-note">Backtest: ${escapeHtml(b.error || "no trade yet")}.</p>`;
   const row = (r, what) => `<li><span>${what}</span><b data-s="${(r.return_pct ?? 0) >= 0 ? "up" : "down"}">${pctN(r.return_pct)}</b>
     <small>${r.trades} trades${r.win_rate != null ? ` · ${Math.round(r.win_rate)}% win` : ""} · hold ${pctN(r.hold_pct)}</small></li>`;
-  return `<ul class="scan-bt">${b.daily ? row(b.daily, `Trend follower · ${b.daily.interval === "8h" ? "8h" : "daily"}`) : ""}
+  return `<ul class="scan-bt">${b.daily ? row(b.daily, `Trend follower · ${b.daily.interval === "1d" ? "daily" : b.daily.interval}`) : ""}
     ${b.fast ? row(b.fast, `${escapeHtml(b.fast.label)} · 5m`) : ""}</ul>`;
 }
 
