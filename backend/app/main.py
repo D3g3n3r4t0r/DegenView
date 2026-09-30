@@ -4496,6 +4496,7 @@ async def get_autotrader(user: User = Depends(auth.get_current_user)) -> dict:
 
 _top_wallet_cache: dict = {"at": 0.0, "data": None}
 _TOP_WALLET_TTL_S = 20
+_TOP_WALLET_KEY = "top50:sim"
 
 
 async def _top_wallet() -> dict:
@@ -4528,6 +4529,10 @@ async def _top_wallet() -> dict:
         except Exception:
             marks = {}
     data = sim_backtest.replay(tokens, capital, marks=marks, now=now)
+    # The replay's line holds open trades at cost; the live value, read here,
+    # is what the short ranges must show (an 8% drop over 4h, not the whole
+    # unrealised gain landing in the last step).
+    onchain_wealth.record(_TOP_WALLET_KEY, data["equity"], now)
     _top_wallet_cache.update(at=now, data=data)
     return data
 
@@ -4666,7 +4671,15 @@ async def _sim_snapshot(user: User) -> dict:
                         "opened": c["at"], "closed": c["exit_at"], "cost_usdg": c["stake"],
                         "proceeds_usdg": round(c["stake"] + c["pnl"], 2), "ret": c["ret"], "mode": "sim",
                         "why": f"trend {c.get('interval') or ''}".strip()} for c in w["closed"]],
-            "curve": w["curve"]}
+            "curve": _top_curve(w)}
+
+
+def _top_curve(w: dict) -> list[list[float]]:
+    """The replay's line up to the first live reading, then the readings."""
+    rec = onchain_wealth.series(_TOP_WALLET_KEY, "all")
+    if not rec:
+        return w["curve"]
+    return [list(r) for r in w["curve"][:-1] if r[0] < rec[0][0]] + [list(r) for r in rec]
 
 
 def _curve_series(curve: list[list[float]], rng: str, now: float) -> list[list[float]]:

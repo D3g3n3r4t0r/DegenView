@@ -65,7 +65,7 @@ function simNote(d) {
   if (!d.sim) return `<div class="pf-simnote"><p>The Top 50 wallet is not ready yet.</p></div>`;
   const from = d.sim.from ? new Date(d.sim.from * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
   const ret = d.sim.ret == null ? "" : ` · ${d.sim.ret >= 0 ? "+" : ""}${(d.sim.ret * 100).toFixed(2)}%`;
-  return `<div class="pf-simnote"><p>$${d.sim.start.toLocaleString("en-US")}${from ? ` from ${from}` : ""}${ret}. Every strategy entry and exit on the Top 50 tokens, ${Math.round((d.sim.share ?? 0.1) * 100)}% per trade, same for every account. Nothing is sent.
+  return `<div class="pf-simnote"><p>$${d.sim.start.toLocaleString("en-US")}${from ? ` on ${from}` : ""}${ret ? `${ret} since then` : ""}. Every strategy entry and exit on the Top 50 tokens, ${Math.round((d.sim.share ?? 0.1) * 100)}% per trade, same for every account. Nothing is sent.
     <button type="button" class="pf-link" data-sim-top>Details</button></p></div>`;
 }
 
