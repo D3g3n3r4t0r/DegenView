@@ -144,6 +144,16 @@ def test_tokenomics_pools_and_curve_are_not_holders():
     assert p["facts"]["top1_pct"] == 3.0 and not p["fatal"]
 
 
+def test_tokenomics_linked_wallets_judged_by_supply_share():
+    dust = {**_rug(), "graphInsidersDetected": 800,
+            "insiderNetworks": [{"size": 800, "currentHolding": 5_000}]}
+    p = depth.judge_tokenomics_solana(dust)
+    assert p["facts"]["linked_pct"] == 0.5 and not any("linked" in f for f in p["flags"])
+    heavy = {**dust, "insiderNetworks": [{"size": 9, "currentHolding": 200_000}]}
+    p2 = depth.judge_tokenomics_solana(heavy)
+    assert "linked wallets hold 20% of supply (800 wallets)" in p2["flags"] and p2["score"] < p["score"]
+
+
 @pytest.mark.parametrize("kw,needle", [
     ({"creator": 790_000}, "creator"),
     ({"holders": [{"address": "w", "owner": "w", "pct": 35.0}]}, "a single wallet"),

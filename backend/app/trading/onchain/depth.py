@@ -544,12 +544,15 @@ def judge_tokenomics_solana(report: dict | None, exclude: set[str] | None = None
     supply = float((report.get("token") or {}).get("supply") or 0)
     creator_pct = float(report.get("creatorBalance") or 0) / supply * 100 if supply else 0.0
     insiders = sum(1 for h in holders if h.get("insider")) + int(report.get("graphInsidersDetected") or 0)
+    # The wallet count alone misleads: one airdrop of dust makes hundreds of
+    # "linked" wallets holding nothing (DREGG 30/09: 761 of 807 held 744 tokens each).
+    linked_pct, _ = legit.linked_share(report) if report.get("insiderNetworks") else (None, 0)
     lp_locked = max((float((m.get("lp") or {}).get("lpLockedPct") or 0) for m in report.get("markets") or []),
                     default=None)
     fee = float((report.get("transferFee") or {}).get("pct") or 0)
     return _judge_tokenomics(
         top1=pcts[0] if pcts else 0.0, top10=sum(pcts[:10]), creator=creator_pct,
-        holders=int(report.get("totalHolders") or 0), insiders=insiders, lp_locked=lp_locked,
+        holders=int(report.get("totalHolders") or 0), insiders=insiders, linked_pct=linked_pct, lp_locked=lp_locked,
         mintable=bool(report.get("mintAuthority")), freezable=bool(report.get("freezeAuthority")),
         tax=fee, rugged=bool(report.get("rugged")),
         # null = revoked (a real answer); a missing key = RugCheck didn't say.
@@ -679,12 +682,14 @@ def judge_tokenomics_gecko(info: dict | None) -> dict:
 
 def _judge_tokenomics(*, top1: float, top10: float, creator: float, holders: int, insiders: int,
                       lp_locked: float | None, mintable: bool, freezable: bool, tax: float,
-                      rugged: bool, unknown: frozenset[str] = frozenset()) -> dict:
+                      rugged: bool, unknown: frozenset[str] = frozenset(),
+                      linked_pct: float | None = None) -> dict:
     """unknown: the checks the source did not answer ("split", "mint",
     "freeze", "tax", "lp"). A missing answer is not a passed check (audit
     29/09, M02): it earns no points and is listed in the flags."""
     facts = {"top1_pct": round(top1, 1), "top10_pct": round(top10, 1), "creator_pct": round(creator, 1),
              "holders": holders, "insiders": insiders,
+             "linked_pct": None if linked_pct is None else round(linked_pct, 1),
              "lp_locked_pct": None if lp_locked is None else round(min(lp_locked, 100), 1),
              "mint": mintable, "freeze": freezable, "tax_pct": round(tax, 1)}
     fatal = ("already rugged or honeypot" if rugged
@@ -696,7 +701,10 @@ def _judge_tokenomics(*, top1: float, top10: float, creator: float, holders: int
              else f"{tax:.0f}% tax" if tax > TAX_MAX_PCT
              else "")
     flags = []
-    if insiders:
+    if linked_pct is not None:
+        if linked_pct >= 1:
+            flags.append(f"linked wallets hold {linked_pct:.0f}% of supply ({insiders} wallets)")
+    elif insiders:
         flags.append(f"{insiders} wallets linked to each other")
     if lp_locked is not None and lp_locked < 80:
         flags.append(f"only {lp_locked:.0f}% of liquidity locked")
@@ -712,7 +720,7 @@ def _judge_tokenomics(*, top1: float, top10: float, creator: float, holders: int
              + min(max(math.log10(max(holders, 1)) - 1.7, 0) / 2, 1) * 15   # 50 holder -> 0, 5000 -> pieno
              # Unknown lock: half, not the full 15 of a >=90% lock (v4 pools have no LP token to lock).
              + (7.5 if lp_locked is None else 15 if lp_locked >= 90 else lp_locked / 90 * 15)
-             + max(0, 10 - 4 * insiders)
+             + (max(0.0, 10 - linked_pct / 2) if linked_pct is not None else max(0, 10 - 4 * insiders))
              + 5 * (tax == 0 and "tax" not in unknown))
     if unknown & {"mint", "freeze"}:
         score = min(score, 50)     # the fatal checks themselves did not run
