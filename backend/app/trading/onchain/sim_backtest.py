@@ -1,0 +1,187 @@
+"""The simulated wallet replayed on the Top 50's backtests.
+
+Lorenzo, 30/09: "voglio che tu applichi a quel portafoglio [10.000 dollari]
+tutti gli ingressi e tutti i rendimenti di tutte le gemme in top 50 per
+vedere come avrebbe performato". Every token in the Top carries the trades
+of the backtest its row shows (strategy_lab: the 8h/1d trend follower, or
+the best 5-minute strategy when that one has not traded). Here all those
+trades share one wallet, in time order: a buy spends `share` of the equity
+at that moment (never more than the free cash), its sell returns the stake
+times the trade's return, fees included as in the backtest. Open trades are
+marked at the live price when there is one, at cost otherwise.
+
+Lorenzo, poi: "farlo visualizzare a tutti gli utenti indipendentemente
+dall'account" (one $10,000 wallet, the same for everyone) e "deve continuare
+ad aggiornarsi [...] sui prossimi ingressi e futuri, non soltanto sul
+backtest". So every trade seen is kept in a ledger that only grows
+(`remember`): a 5-minute window sliding past an old trade, or a token
+leaving the Top, does not erase it. The live simulated positions are not
+touched.
+"""
+from __future__ import annotations
+
+import json
+import math
+
+from app.atomic_write import write_text_atomic
+from app.trading.onchain.storage import data_file
+
+_FILE = data_file("top_backtest_ledger.json")
+_ledger: dict[str, dict] = {}     # chain:token -> {chain, token, symbol, interval, events: {t:side -> event}}
+_loaded = False
+
+DEFAULT_CAPITAL = 10_000.0
+DEFAULT_SHARE = 0.10
+MIN_STAKE = 1.0
+
+
+def token_trades(bt: dict | None) -> tuple[str, list[dict]] | None:
+    """(interval, events) of the backtest the Top row shows: the 8h/1d trend
+    follower when it has traded, otherwise the best 5-minute strategy."""
+    if not bt:
+        return None
+    daily = bt.get("daily") or {}
+    drow = (daily.get("rows") or [None])[0]
+    if drow and drow.get("trades") and (daily.get("best") or {}).get("events"):
+        return daily.get("interval") or "1d", daily["best"]["events"]
+    ev = (bt.get("best") or {}).get("events")
+    if ev:
+        return "5m", ev
+    return None
+
+
+def _load() -> None:
+    global _loaded
+    if _loaded:
+        return
+    _loaded = True
+    try:
+        raw = json.loads(_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return
+    if isinstance(raw, dict):
+        _ledger.update({k: v for k, v in raw.items() if isinstance(v, dict) and isinstance(v.get("events"), dict)})
+
+
+def reset_for_tests() -> None:
+    global _loaded
+    _ledger.clear()
+    _loaded = True
+
+
+def remember(chain: str, token: str, symbol: str | None, bt: dict | None, save: bool = True) -> bool:
+    """Add the trades the Top row shows now to the ledger. Old trades stay:
+    a later backtest only adds. True if something new came in."""
+    got = token_trades(bt)
+    if not got:
+        return False
+    _load()
+    interval, events = got
+    row = _ledger.setdefault(f"{chain}:{token}", {"chain": chain, "token": token, "events": {}})
+    row["symbol"] = symbol or row.get("symbol")
+    row["interval"] = interval
+    new = False
+    for e in events:
+        if e.get("side") not in ("buy", "sell", "rug") or not _ok(e.get("t")):
+            continue
+        k = f"{int(e['t'])}:{e['side']}"
+        if k not in row["events"]:
+            row["events"][k] = {**{f: e[f] for f in ("t", "side", "price", "ret") if f in e}, "iv": interval}
+            new = True
+    if new and save:
+        _save()
+    return new
+
+
+def _save() -> None:
+    try:
+        write_text_atomic(_FILE, json.dumps(_ledger, separators=(",", ":")), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def ledger_tokens() -> list[dict]:
+    _load()
+    return [{"chain": r["chain"], "token": r["token"], "symbol": r.get("symbol"), "interval": r.get("interval"),
+             "events": sorted(r["events"].values(), key=lambda e: e["t"])} for r in _ledger.values()]
+
+
+def _ok(v) -> bool:
+    return isinstance(v, (int, float)) and math.isfinite(v)
+
+
+def replay(tokens: list[dict], capital: float = DEFAULT_CAPITAL, share: float = DEFAULT_SHARE,
+           marks: dict[str, float] | None = None, now: float | None = None) -> dict:
+    """tokens: [{chain, token, symbol, interval, events}]; marks: {"chain:token": price}."""
+    marks = marks or {}
+    flow = []
+    for tk in tokens:
+        for e in tk.get("events") or []:
+            if e.get("side") in ("buy", "sell", "rug") and _ok(e.get("t")):
+                # Sells before buys on the same second: the cash is free again.
+                flow.append((e["t"], 0 if e["side"] == "buy" else -1, tk, e))
+    flow.sort(key=lambda x: (x[0], x[1]))
+    cash = float(capital)
+    held: dict[str, dict] = {}
+    closed: list[dict] = []
+    curve: list[list[float]] = []
+    skipped = 0
+    peak, max_dd = float(capital), 0.0
+
+    def equity() -> float:
+        return cash + sum(p["stake"] for p in held.values())
+
+    for t, _o, tk, e in flow:
+        key = f"{tk['chain']}:{tk['token']}"
+        p = held.get(key)
+        if e["side"] == "buy":
+            if p:
+                continue
+            stake = min(cash, equity() * share)
+            if stake < MIN_STAKE:
+                skipped += 1
+                continue
+            cash -= stake
+            held[key] = {"chain": tk["chain"], "token": tk["token"], "symbol": tk.get("symbol"),
+                         "interval": tk.get("interval"), "at": int(t), "entry_price": e.get("price"),
+                         "stake": round(stake, 2)}
+        elif p:
+            ret = -1.0 if e["side"] == "rug" else e.get("ret")
+            if not _ok(ret):
+                ep, xp = p.get("entry_price"), e.get("price")
+                ret = xp / ep - 1 if _ok(ep) and _ok(xp) and ep > 0 else 0.0
+            back = p["stake"] * (1 + ret)
+            cash += back
+            del held[key]
+            closed.append({**p, "exit_at": int(t), "exit_price": e.get("price"), "ret": round(ret, 4),
+                           "pnl": round(back - p["stake"], 2)})
+        else:
+            continue
+        eq = equity()
+        peak = max(peak, eq)
+        max_dd = max(max_dd, (peak - eq) / peak if peak > 0 else 0.0)
+        curve.append([int(t), round(eq, 2)])
+
+    open_rows = []
+    for key, p in held.items():
+        px, ep = marks.get(key), p.get("entry_price")
+        ret = px / ep - 1 if _ok(px) and _ok(ep) and ep > 0 and px > 0 else None
+        value = p["stake"] * (1 + (ret or 0.0))
+        open_rows.append({**p, "price": px if ret is not None else None,
+                          "ret": round(ret, 4) if ret is not None else None,
+                          "value": round(value, 2), "pnl": round(value - p["stake"], 2)})
+    final = cash + sum(r["value"] for r in open_rows)
+    if flow:
+        t_end = int(now) if now else curve[-1][0] if curve else int(flow[-1][0])
+        curve.append([max(t_end, curve[-1][0] if curve else t_end), round(final, 2)])
+        peak = max(peak, final)
+        max_dd = max(max_dd, (peak - final) / peak if peak > 0 else 0.0)
+    wins = sum(1 for c in closed if c["ret"] > 0)
+    closed.sort(key=lambda c: c["exit_at"], reverse=True)
+    open_rows.sort(key=lambda r: r["at"], reverse=True)
+    return {"capital": round(float(capital), 2), "share": share, "equity": round(final, 2),
+            "cash": round(cash, 2), "ret": round(final / capital - 1, 4) if capital else None,
+            "max_dd": round(max_dd, 4), "trades": len(closed), "wins": wins,
+            "win_rate": round(wins / len(closed), 4) if closed else None, "skipped": skipped,
+            "tokens": len(tokens), "from": int(flow[0][0]) if flow else None,
+            "open": open_rows, "closed": closed, "curve": curve}

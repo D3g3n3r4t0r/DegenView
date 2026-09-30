@@ -4469,6 +4469,36 @@ async def get_autotrader(user: User = Depends(auth.get_current_user)) -> dict:
             "server_live": settings.onchain_execution_enabled}
 
 
+@app.get("/api/onchain/top/backtest")
+async def top_backtest(user: User = Depends(auth.get_current_user)) -> dict:
+    """A $10,000 wallet replayed on every trade of the Top 50's backtests
+    (Lorenzo, 30/09). The same for every account ("farlo visualizzare a tutti
+    gli utenti indipendentemente dall'account"); read only, the live
+    simulated positions stay as they are."""
+    _require_onchain_enabled()
+    from app.trading.onchain import sim_backtest
+    from app.trading.onchain import strategy_lab as onchain_strategy_lab
+    new = False
+    for e in _top_entries(50):
+        new |= sim_backtest.remember(e["chain"], e["token_address"], e.get("symbol"),
+                                     onchain_strategy_lab.get(e["chain"], e["token_address"]), save=False)
+    if new:
+        sim_backtest._save()
+    tokens = sim_backtest.ledger_tokens()
+    capital = sim_backtest.DEFAULT_CAPITAL
+    first = sim_backtest.replay(tokens, capital)
+    marks = {}
+    if first["open"]:
+        try:
+            keys = {onchain_live_prices._key(p["chain"], p["token"]): f"{p['chain']}:{p['token']}"
+                    for p in first["open"]}
+            got = await onchain_live_prices.prices(list(keys))
+            marks = {name: got[f"{k[0]}:{k[1]}"]["p"] for k, name in keys.items() if f"{k[0]}:{k[1]}" in got}
+        except Exception:
+            marks = {}
+    return sim_backtest.replay(tokens, capital, marks=marks, now=_time.time())
+
+
 @app.patch("/api/onchain/autotrader")
 async def set_autotrader(body: AutotraderUpdate, user: User = Depends(auth.get_current_user)) -> dict:
     _require_onchain_enabled()
