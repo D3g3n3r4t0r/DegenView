@@ -51,3 +51,24 @@ def test_ledger_keeps_trades_the_window_slid_past(monkeypatch, tmp_path):
     assert [e["t"] for e in toks[0]["events"]] == [100, 200, 300]
     r = sb.replay(toks, 10_000, 0.10)
     assert r["trades"] == 1 and len(r["open"]) == 1
+
+
+def test_a_trade_moved_to_its_fill_candle_is_not_kept_twice(monkeypatch):
+    sb.reset_for_tests()
+    monkeypatch.setattr(sb, "_save", lambda: None)
+    old = {"daily": {"interval": "1d", "rows": [{"trades": 1}], "best": {"events": [
+        {"t": 86400, "side": "buy", "price": 1.0}]}}}
+    sb.remember("solana", "T", "T", old, save=False)
+    moved = {"daily": {"interval": "1d", "rows": [{"trades": 1}], "best": {"fills": "next_open", "events": [
+        {"t": 2 * 86400, "side": "buy", "price": 1.1}]}}}
+    sb.remember("solana", "T", "T", moved, save=False)
+    assert [e["t"] for e in sb.ledger_tokens()[0]["events"]] == [2 * 86400]
+
+
+def test_trades_of_an_earlier_timeframe_stop_where_the_new_one_starts():
+    sb.reset_for_tests()
+    row = {"chain": "solana", "token": "T", "interval": "1h", "events": {
+        "100:buy": {"t": 100, "side": "buy", "iv": "5m"}, "200:sell": {"t": 200, "side": "sell", "iv": "5m"},
+        "900:buy": {"t": 900, "side": "buy", "iv": "5m"},
+        "500:buy": {"t": 500, "side": "buy", "iv": "1h"}, "4000:sell": {"t": 4000, "side": "sell", "iv": "1h"}}}
+    assert [e["t"] for e in sb._one_timeframe(row)] == [100, 200, 500, 4000]

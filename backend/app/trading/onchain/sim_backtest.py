@@ -80,17 +80,37 @@ def remember(chain: str, token: str, symbol: str | None, bt: dict | None, save: 
     row = _ledger.setdefault(f"{chain}:{token}", {"chain": chain, "token": token, "events": {}})
     row["symbol"] = symbol or row.get("symbol")
     row["interval"] = interval
+    # Since 30/09 the arrows sit on the fill candle, one candle after the
+    # signal (system._best_trades, "fills"): the same trade saved before
+    # under the signal's time is replaced, not kept twice.
+    fills = any(e.get("fill") for e in events) or _fills(bt, interval)
+    step = STEP_S.get(interval, 0)
     new = False
     for e in events:
         if e.get("side") not in ("buy", "sell", "rug") or not _ok(e.get("t")):
             continue
         k = f"{int(e['t'])}:{e['side']}"
         if k not in row["events"]:
-            row["events"][k] = {**{f: e[f] for f in ("t", "side", "price", "ret") if f in e}, "iv": interval}
+            if fills and step:
+                old = row["events"].get(f"{int(e['t']) - step}:{e['side']}")
+                if old and old.get("iv") == interval and not old.get("fill"):
+                    del row["events"][f"{int(e['t']) - step}:{e['side']}"]
+            row["events"][k] = {**{f: e[f] for f in ("t", "side", "price", "ret") if f in e}, "iv": interval,
+                                **({"fill": True} if fills else {})}
             new = True
     if new and save:
         _save()
     return new
+
+
+STEP_S = {"1d": 86400, "8h": 28800, "4h": 14400, "1h": 3600, "15m": 900, "5m": 300}
+
+
+def _fills(bt: dict | None, interval: str) -> bool:
+    daily = (bt or {}).get("daily") or {}
+    best = (daily.get("best") if daily.get("interval") == interval and (daily.get("best") or {}).get("events")
+            else (bt or {}).get("best")) or {}
+    return best.get("fills") == "next_open"
 
 
 def _save() -> None:
@@ -103,7 +123,20 @@ def _save() -> None:
 def ledger_tokens() -> list[dict]:
     _load()
     return [{"chain": r["chain"], "token": r["token"], "symbol": r.get("symbol"), "interval": r.get("interval"),
-             "events": sorted(r["events"].values(), key=lambda e: e["t"])} for r in _ledger.values()]
+             "events": _one_timeframe(r)} for r in _ledger.values()]
+
+
+def _one_timeframe(r: dict) -> list[dict]:
+    """A token's trades on its current timeframe, and the older ones of an
+    earlier timeframe only before those start. The timeframe climbs as the
+    chart grows (strategy_lab.LADDER): two timeframes' trades interleaved
+    would sell one's buy on the other's exit."""
+    ev = sorted(r["events"].values(), key=lambda e: e["t"])
+    cur = [e for e in ev if e.get("iv") == r.get("interval")]
+    if not cur:
+        return ev
+    first = cur[0]["t"]
+    return [e for e in ev if e.get("iv") != r.get("interval") and e["t"] < first] + cur
 
 
 def _ok(v) -> bool:

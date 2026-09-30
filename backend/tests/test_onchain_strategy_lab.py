@@ -80,30 +80,59 @@ def test_daily_backtest_runs_only_the_trend_follower(monkeypatch):
 
 
 def test_daily_falls_back_to_8h_when_the_daily_is_short(monkeypatch):
+    now = 1_800_000_000
     async def candles(client, net, pool, tf, agg, before, limit, token=""):
         if (tf, agg) == ("day", 1):
             return _daily_bars(30)
         if (tf, agg) == ("hour", 4):
-            return _bars(400)
+            return [[now - 400 * 14400 + i * 14400, 1, 1, 1, 1, 1] for i in range(400)]
         return _bars()
     monkeypatch.setattr(lab.alert_track, "_candles", candles)
-    out = asyncio.run(lab.tick([_e("tok")], now=1_800_000_000))
+    out = asyncio.run(lab.tick([_e("tok")], now=now))
     daily = out["daily"]
     assert daily["interval"] == "8h"
     assert all(b[0] % 28800 == 0 for b in lab._merge_8h(_bars(400)))
 
 
+def test_the_ladder_steps_down_to_the_first_chart_with_60_candles(monkeypatch):
+    """Lorenzo, 30/09: 5 minutes at the listing, then up, gradually."""
+    now = 1_800_000_000
+    asked = []
+
+    async def candles(client, net, pool, tf, agg, before, limit, token=""):
+        asked.append((tf, agg))
+        if (tf, agg) == ("hour", 1):
+            return [[now - 70 * 3600 + i * 3600, 1, 1, 1, 1, 1] for i in range(70)]
+        if (tf, agg) == ("minute", 5):
+            return _bars()
+        return [[now - 5 * 14400 + i * 14400, 1, 1, 1, 1, 1] for i in range(5)]
+    monkeypatch.setattr(lab.alert_track, "_candles", candles)
+    daily = asyncio.run(lab.tick([_e("tok")], now=now))["daily"]
+    assert daily["interval"] == "1h"
+    assert ("minute", 15) not in asked and asked.count(("hour", 4)) == 1
+
+
+def test_a_token_hours_old_trades_on_5_minutes(monkeypatch):
+    now = 1_800_000_000
+
+    async def candles(client, net, pool, tf, agg, before, limit, token=""):
+        if (tf, agg) == ("minute", 5):
+            return [[now - 80 * 300 + i * 300, 1, 1, 1, 1, 1] for i in range(80)]
+        return [[now - 3 * 900, 1, 1, 1, 1, 1]]
+    monkeypatch.setattr(lab.alert_track, "_candles", candles)
+    daily = asyncio.run(lab.tick([_e("tok")], now=now))["daily"]
+    assert daily["interval"] == "5m" and daily["bars"] == 80
+
+
 def test_daily_too_few_candles_is_an_error_and_does_not_drop_the_5m(monkeypatch):
     async def candles(client, net, pool, tf, agg, before, limit, token=""):
-        if (tf, agg) == ("day", 1):
-            return _daily_bars(10)
-        if (tf, agg) == ("hour", 4):
-            return _bars(10)
-        return _bars()
+        if (tf, agg) == ("minute", 5):
+            return _bars(40)
+        return _bars(10)
     monkeypatch.setattr(lab.alert_track, "_candles", candles)
     out = asyncio.run(lab.tick([_e("tok")], now=1_800_000_000))
-    assert out["daily"] == {"interval": "8h", "bars": 1, "error": "too few candles"}
-    assert out["backtests"]["bars"] == 600
+    assert out["daily"] == {"interval": "5m", "bars": 40, "error": "too few candles"}
+    assert out["backtests"]["bars"] == 40
 
 
 def test_daily_fetch_failure_keeps_the_5m_result(monkeypatch):
@@ -143,7 +172,9 @@ def test_a_signal_is_news_once_and_only_on_the_last_closed_candle():
     old = {"side": "buy", "t": 1_000_000 - 2 * 28800, "price": 2.0}
     assert lab._signal(_daily([old]), None)[1] is False
     sell = {"side": "sell", "t": 1_000_000, "price": 3.0, "ret": 0.4}
-    assert lab._signal(_daily([buy, sell]), {"signal": buy}) == (sell, True)
+    assert lab._signal(_daily([buy, sell]), {"signal": buy, "best": {"fills": "next_open"}}) == (sell, True)
+    # saved before the arrows moved to the fill candle: never announced twice
+    assert lab._signal(_daily([buy, sell]), {"signal": buy}) == (sell, False)
     assert lab._signal(_daily([]), None) == (None, False)
 
 
@@ -154,7 +185,7 @@ def test_a_fresh_signal_reaches_the_listeners_and_a_busy_gecko_keeps_the_saved_d
         got.append(sig)
     monkeypatch.setattr(lab, "_signal_cbs", [listen])
 
-    async def daily_ok(client, net, pair, token, now):
+    async def daily_ok(client, net, pair, token, now, bars5=None):
         return {"interval": "1d", "to": now - 86400, "rows": [{"label": "Trend EMA", "trades": 1}],
                 "best": {"events": [{"side": "buy", "t": now - 86400, "price": 1.5}]}}
 

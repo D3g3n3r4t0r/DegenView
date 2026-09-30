@@ -14,6 +14,7 @@ const pct = (v) => (v == null ? "—" : `${v > 0 ? "+" : ""}${(v * 100).toFixed(
 const sign = (v) => (v == null ? "" : v >= 0 ? "up" : "down");
 const day = (t) => new Date(t * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" });
 let tab = "open";
+const own = new Map();   // "chain:token" -> this wallet's trade, drawn on the token's chart
 let data = null;
 
 function curve(rows) {
@@ -29,6 +30,8 @@ function row(p, open) {
   const when = open ? `in since ${day(p.at)} · ${escapeHtml(p.interval ?? "")}`
     : `${day(p.at)} → ${day(p.exit_at)} · ${escapeHtml(p.interval ?? "")}`;
   const val = open ? usd(p.value) : `${p.pnl >= 0 ? "+" : "−"}${usd(Math.abs(p.pnl))}`;
+  own.set(`${p.chain}:${p.token}`, { symbol: p.symbol ?? "?",
+    trades: [{ t: p.at, side: "buy" }, ...(open ? [] : [{ t: p.exit_at, side: "sell", ret: p.ret }])] });
   return `<button type="button" class="auto-pos sbt-row" data-sbt-token="${escapeHtml(`${p.chain}:${p.token}`)}">
     ${logo(p.symbol, null, p.chain, p.token)}
     <span class="trow-main"><b>${escapeHtml(p.symbol ?? "?")}</b><small>${when} · ${usd(p.stake)}</small></span>
@@ -42,7 +45,7 @@ function body(d) {
     <p class="sbt-total"><b>${usd(d.equity)}</b> <em class="chg" data-sign="${sign(d.ret)}">${pct(d.ret)}</em></p>
     <p class="auto-line">From ${usd(d.capital)}${d.from ? ` on ${day(d.from)}` : ""} · ${d.trades} closed trades, ${d.win_rate == null ? "—" : `${Math.round(d.win_rate * 100)}% won`} · max drawdown ${pct(-d.max_dd)} · ${d.tokens} tokens</p>
     ${curve(d.curve)}
-    <p class="auto-line">Every entry and exit of the backtest shown next to each Top 50 token (trend follower 8h/1d, or the best 5m), in time order on one wallet: ${Math.round(d.share * 100)}% of the equity per entry, fees included. Open trades at the live price. Nothing is traded.</p>
+    <p class="auto-line">Every entry and exit of the backtest shown next to each Top 50 token (trend follower on its timeframe, 5m to 1d, or the best 5m), in time order on one wallet: ${Math.round(d.share * 100)}% of the equity per entry, fees included. Open trades at the live price. Nothing is traded.</p>
     <nav class="pf-seg" aria-label="Positions">
       <button type="button" data-sbt-tab="open" aria-pressed="${tab === "open"}">Open ${d.open.length}</button>
       <button type="button" data-sbt-tab="closed" aria-pressed="${tab === "closed"}">Closed ${d.closed.length}</button>
@@ -55,7 +58,13 @@ async function openToken(key) {
   const [chain, ...rest] = key.split(":");
   closeSheet();
   history.replaceState(null, "", `${location.pathname}${location.search}#gems&token=${encodeURIComponent(chain)}:${encodeURIComponent(rest.join(":"))}`);
-  (await import("@onchain/detail.js")).openFromHash();
+  const detail = await import("@onchain/detail.js");
+  const mine = own.get(key);
+  if (mine) {
+    detail.register(`gem:${chain}:${rest.join(":")}`, { kind: "gem", chain, token: rest.join(":"), symbol: mine.symbol });
+    detail.setOwn(chain, rest.join(":"), mine.trades);
+  }
+  detail.openFromHash();
 }
 
 let bound = false;
