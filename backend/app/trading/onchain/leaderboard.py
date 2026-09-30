@@ -485,7 +485,9 @@ async def _analyze(k: str, skip: set[str], client: httpx.AsyncClient) -> None:
                 return
             item = {**e, "links": [s.get("url") for s in e.get("socials") or [] if s.get("url")],
                     # only projects past the researcher's floor are worth Claude's reading
-                    "finalist": not research_floor(e)}
+                    "finalist": not research_floor(e),
+                    # the Top 50 gets the on-chain check of linked wallets (DREGG, 30/09)
+                    "top": k in _top_rank or bool(e.get("rank"))}
             result = await depth.analyze(item, client, skip=skip)
         apply_analysis(k, result)
         e = _entries.get(k)
