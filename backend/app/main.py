@@ -4110,9 +4110,17 @@ async def onchain_top(n: int = 15, narrative: str = "", user: User = Depends(aut
     the database. Now the board entries and the best studied rows are
     merged by score; DeepSeek's veto still keeps junk out."""
     _require_onchain_enabled()
-    out = _top_entries(max(1, min(int(n), 50)), narrative)
-    for e in out:
+    out = []
+    for e in _top_entries(50, narrative):
         e["backtests"] = _lab_summary(onchain_strategy_lab.get(e["chain"], e["token_address"]))
+        # Every row shows a real trend-follower result (Lorenzo, 28/09, said
+        # many times: never "no entry"). A token whose backtest is done with
+        # no trend-follower trade on any timeframe waits off the list; the
+        # lab keeps testing it (it still runs on _top_entries).
+        if e["backtests"] and not e["backtests"]["daily"] and not e["backtests"]["best"]:
+            continue
+        out.append(e)
+    out = out[:max(1, min(int(n), 50))]
     return {"entries": out, "on_board": sum(1 for e in out if e["on_board"]),
             "backtests": onchain_strategy_lab.status(_top_entries(50))}
 
@@ -4129,7 +4137,7 @@ def _lab_summary(bt: dict | None) -> dict | None:
     # 5-minute best stays, so every row keeps a real result.
     daily = bt.get("daily")
     drow = (daily.get("rows") or [None])[0] if daily and daily.get("rows") else None
-    return {"best": {k: best[k] for k in ("label", "return_pct", "trades")} if best else None,
+    return {"best": {k: best.get(k) for k in ("label", "return_pct", "trades", "win_rate")} if best else None,
             "hold_pct": bt.get("hold_pct"), "bars": bt.get("bars"),
             "daily": {"interval": daily.get("interval"), "return_pct": drow.get("return_pct"),
                       "trades": drow.get("trades"), "win_rate": drow.get("win_rate"),
