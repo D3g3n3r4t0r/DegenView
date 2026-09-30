@@ -4818,34 +4818,72 @@ async def onchain_manual_scan(req: ScanRequest, user: User = Depends(auth.get_cu
     return await manual_scan.scan(req.query[:80])
 
 
+# Finished manual scans by id, so a phone that lost the stream (Safari: "Load
+# failed", often on a mobile network or a locked screen) can still collect the
+# result instead of seeing an error. Lorenzo, 30/09: "ricevo spesso errore".
+_SCAN_KEEP_S = 600
+_scan_results: dict[str, tuple[float, dict | None]] = {}
+_background_tasks: set[asyncio.Task] = set()   # keeps running scans referenced
+
+
+def _scan_forget(now: float) -> None:
+    for k in [k for k, (at, _) in _scan_results.items() if now - at > _SCAN_KEEP_S]:
+        _scan_results.pop(k, None)
+
+
 @app.post("/api/onchain/scan/stream")
 async def onchain_manual_scan_stream(req: ScanRequest, user: User = Depends(auth.get_current_user)) -> StreamingResponse:
     """The same scan, one JSON line per step as it happens, then the result
-    (Lorenzo, 30/09: he wants to watch the scout work)."""
+    (Lorenzo, 30/09: he wants to watch the scout work). A line every few
+    seconds of silence keeps idle mobile connections open; the scan keeps
+    running if the client goes away, and its result stays at /scan/result/{id}."""
+    import secrets
     from app.trading.onchain import manual_scan
     queue: asyncio.Queue = asyncio.Queue()
-    task = asyncio.create_task(manual_scan.scan(req.query[:80], emit=queue.put_nowait))
+    scan_id = secrets.token_urlsafe(12)
+    _scan_forget(time.time())
+    _scan_results[scan_id] = (time.time(), None)
+
+    async def run() -> dict:
+        try:
+            result = await manual_scan.scan(req.query[:80], emit=queue.put_nowait)
+        except Exception:
+            logger.exception("manual scan failed")
+            result = {"error": "Scan failed, try again."}
+        _scan_results[scan_id] = (time.time(), result)
+        return result
+
+    task = asyncio.create_task(run())
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
 
     async def lines():
-        try:
-            while not (task.done() and queue.empty()):
-                try:
-                    ev = await asyncio.wait_for(queue.get(), 0.25)
-                except asyncio.TimeoutError:
-                    continue
-                yield json.dumps(ev) + "\n"
+        yield json.dumps({"id": scan_id}) + "\n"
+        quiet = 0.0
+        while not (task.done() and queue.empty()):
             try:
-                result = task.result()
-            except Exception:
-                logger.exception("manual scan failed")
-                result = {"error": "Scan failed, try again."}
-            yield json.dumps({"result": result}) + "\n"
-        finally:
-            if not task.done():
-                task.cancel()
+                ev = await asyncio.wait_for(queue.get(), 0.25)
+            except asyncio.TimeoutError:
+                quiet += 0.25
+                if quiet >= 5:
+                    quiet = 0.0
+                    yield json.dumps({"ping": round(time.time())}) + "\n"
+                continue
+            quiet = 0.0
+            yield json.dumps(ev) + "\n"
+        yield json.dumps({"result": task.result()}) + "\n"
 
     return StreamingResponse(lines(), media_type="application/x-ndjson",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+@app.get("/api/onchain/scan/result/{scan_id}")
+async def onchain_manual_scan_result(scan_id: str, user: User = Depends(auth.get_current_user)) -> dict:
+    """{"done": false} while the scan runs, {"done": true, "result": ...} after."""
+    hit = _scan_results.get(scan_id[:40])
+    if hit is None:
+        raise HTTPException(status_code=404, detail="scan not found: the server may have restarted, run it again")
+    return {"done": hit[1] is not None, "result": hit[1]}
 
 
 class ScanAddRequest(BaseModel):

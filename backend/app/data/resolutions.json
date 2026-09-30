@@ -2447,5 +2447,10 @@
     "status": "risolto",
     "at": 1790768498,
     "summary": "I candidati dello sniper restano in memoria solo se aggiornati negli ultimi 7 giorni (massimo 3000); gli altri passano in un archivio compresso sullo stesso volume (sniper_candidates_archive.jsonl.gz), quindi nessun dato perso. Il primo avvio dopo il deploy fa la potatura una volta e riscrive il file piccolo. Anche lo screener di mercato butta i token non visti da una settimana. Il diario dei token (onchain_outcomes.json) era gia' limitato a 5000 voci e l'archivio dei rug resta intatto perche' e' la memoria del modello."
+  },
+  "seed-0237": {
+    "status": "risolto",
+    "at": 1790771464,
+    "summary": "'Load failed' e' l'errore di Safari quando il telefono perde la connessione in streaming (rete mobile, schermo bloccato, pause lunghe durante le chiamate DeepSeek). Ora il server manda un segnale ogni 5 secondi di silenzio, la scansione continua anche se il telefono si stacca e il risultato resta 10 minuti: l'app lo recupera da sola invece di mostrare l'errore. Se il server si riavvia a meta' (deploy), lo dice chiaramente."
   }
 }
