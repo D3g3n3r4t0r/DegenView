@@ -74,6 +74,7 @@ def _pick(d: dict, keys: tuple[str, ...]) -> dict:
 def _records(chain: str, token: str) -> list[tuple[float, str, str, dict]]:
     """(time, node, source, record) for every stored fact about this token.
     Each record is a fixed projection of the stored row (large blobs left out)."""
+    from app.trading.onchain import history
     from app.trading.onchain import alert_track, code_review, discovery, gem_track, judge, leaderboard, outcomes, research
     k = f"{chain}:{token}"
     out: list[tuple[float, str, str, dict]] = []
@@ -106,7 +107,7 @@ def _records(chain: str, token: str) -> list[tuple[float, str, str, dict]]:
         if r and r.get("at"):
             ai = r.get("ai") if isinstance(r.get("ai"), dict) else {}
             out.append((r["at"], "research", label, {"key": k, "at": r["at"], **_pick(ai, ("score", "verdict", "summary"))}))
-    repo = e.get("github") or p.get("github")
+    repo = code_review.repo_of(e) or e.get("github") or p.get("github")
     c = code_review._cache.get(repo) if repo else None
     if c and c.get("at"):
         out.append((c["at"], "code", "code_review", {"key": k, "repo": repo,
@@ -144,7 +145,24 @@ def _records(chain: str, token: str) -> list[tuple[float, str, str, dict]]:
         if ak.endswith(":" + k) and al.get("at"):
             out.append((al["at"], "scan", "alert_track", {"id": ak, **_pick(al, (
                 "at", "kind", "score", "cap0", "liq0", "entry", "entry_at", "returns", "max_ret", "min_ret", "closed"))}))
+    # The append-only history keeps every re-evaluation; a latest-value row that
+    # the history already holds is not shown twice.
+    logged = history.of(k)
+    seen = {(r["source"], round(r["t"])) for r in logged}
+    alias = {"projects_db.standing": "projects_db.verdict"}
+    out = [x for x in out if (alias.get(x[2], x[2]), round(x[0])) not in seen and (x[2], round(x[0])) not in seen]
+    for r in logged:
+        node = _HISTORY_NODE.get(r["source"], "other")
+        if r["source"] == "leaderboard.pillar":
+            node = _PILLAR_NODE.get((r.get("rec") or {}).get("pillar"), "study")
+        out.append((r["t"], node, r["source"], {"key": k, **(r.get("rec") or {})}))
     return out
+
+
+_HISTORY_NODE = {"projects_db.verdict": "decision", "projects_db.standing": "decision", "leaderboard.rank": "decision",
+                 "judge": "research", "research.reading": "research", "research.dossier": "research",
+                 "code_review": "code"}
+_PILLAR_NODE = {"github": "code", "code": "code", "site": "research", "research": "research"}
 
 
 def _text(source: str, r: dict) -> str:
@@ -169,6 +187,9 @@ def _text(source: str, r: dict) -> str:
     if source == "leaderboard.pillar":
         sc = f" · score {r['score']}" if r.get("score") is not None else ""
         return f"{r['pillar'].capitalize()} pillar checked{sc}" + (f" · fatal: {r['fatal']}" if r.get("fatal") else "")
+    if source == "projects_db.standing":
+        score = f" · score {r['score']:.0f}" if isinstance(r.get("score"), (int, float)) else ""
+        return f"Standing updated: {r.get('status')}{score}" + (f" · rank {r['rank']}" if r.get("rank") is not None else "")
     if source == "leaderboard.rank":
         return f"Rank moved {r.get('rank_before') or 'new'} → {r.get('rank') or 'out'}"
     if source == "judge":
@@ -205,6 +226,6 @@ def journey(chain: str, token: str) -> dict:
     p = projects_db.get(chain, token) or {}
     return {"chain": chain, "token": token, "symbol": p.get("symbol") or "", "genesis": GENESIS,
             "head": link, "steps": steps,
-            "limits": "Every stored record about this token. Stores that keep only the latest value (verdict, judge, "
-                      "pillar checks) show their latest; agent activity keeps the last 1000 events. A hash shows the record was not altered in "
+            "limits": "Every stored record about this token. Re-evaluations are kept in an append-only history from "
+                      "30/09/2026; before that date only the latest verdict, judge and pillar checks survive. Agent activity keeps the last 1000 events. A hash shows the record was not altered in "
                       "transit, not that its source was right."}

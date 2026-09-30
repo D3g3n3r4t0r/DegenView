@@ -270,6 +270,10 @@ def record(e: dict, status: str, why: str = "", score: float | None = None, trac
              dump(e.get("similarity")), dump(narr or None), dump(traction), e.get("rank"),
              e.get("github"), key(e["chain"], e["token_address"])))
         _db().commit()
+    from app.trading.onchain import history
+    history.append(key(e["chain"], e["token_address"]), "projects_db.verdict",
+                   {"analyzed_at": now, "status": status, "why": why or None, "score": score, "rank": e.get("rank"),
+                    "overall": e.get("overall")}, now)
 
 
 def demote_ranked(keep: set[str]) -> int:
@@ -295,6 +299,8 @@ def set_standing(chain: str, token: str, status: str, score: float | None, rank:
                       " AND status IN ('studied', 'ranked')",
                       (status, score, rank, why or None, key(chain, token)))
         _db().commit()
+    from app.trading.onchain import history
+    history.append(key(chain, token), "projects_db.standing", {"status": status, "score": score, "rank": rank, "why": why or None})
 
 
 def lift_rejected(chain: str, token: str) -> bool:

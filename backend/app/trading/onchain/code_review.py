@@ -200,6 +200,9 @@ async def review(e: dict, client, now: float | None = None, ask=None, priority: 
         return None
     out = {"at": now, "pushed_at": data.get("pushed_at"), **parsed}
     _cache[repo] = out
+    from app.trading.onchain import history
+    history.append(f"{e.get('chain')}:{e.get('token_address')}", "code_review", {"repo": repo, **{
+        f: out[f] for f in ("at", "pushed_at", "score", "verdict", "summary", "flags") if out.get(f) is not None}}, now)
     _save()
     return out
 
