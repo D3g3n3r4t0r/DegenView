@@ -154,7 +154,7 @@ const STEP_LABEL = {
   github: "Checking GitHub", ai: "DeepSeek reads the listing", holders: "Counting holders on GeckoTerminal",
   memory: "Comparing with past rugs", risk: "DeepSeek rates the rug risk", gem: "Looking up the Gem Finder",
   pillars: "Scoring research, GitHub and tokenomics", report: "Scout writes the report", code: "DeepSeek reads the code",
-  recheck: "Re-checking the red flags",
+  recheck: "Final review of the red flags",
   backtest: "Backtesting the trend follower",
 };
 

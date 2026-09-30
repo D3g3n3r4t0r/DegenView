@@ -127,7 +127,7 @@ def test_report_studies_an_unknown_project_like_the_top(monkeypatch):
     async def analyze(item, client, skip=frozenset()):
         return pil
 
-    async def jd(e, why, now=None, ask=None, priority=False):
+    async def jd(e, why, now=None, ask=None, priority=False, fresh=False):
         assert priority
         return {"verdict": "gem", "score": 81, "problems": [], "strengths": ["real product"], "confidence": 0.8}
 
@@ -149,3 +149,47 @@ def test_report_studies_an_unknown_project_like_the_top(monkeypatch):
     done = {e["step"]: e["state"] for e in events}
     assert done == {"pillars": "ok", "report": "ok", "code": "ok", "recheck": "warn"}
     assert rep["recheck"] == {"unverified": [], "refuted": [], "found": []}
+
+
+def test_report_reads_again_a_project_already_in_the_database(monkeypatch):
+    import asyncio
+    from app.trading.onchain import code_review, depth, judge, leaderboard, projects_db, scout_recheck
+    monkeypatch.setattr(leaderboard, "_entries", {})
+    stale = {"site": {"score": 0, "fatal": "placeholder text (lorem ipsum / coming soon)", "flags": [], "facts": {}},
+             "tokenomics": {"score": 76, "fatal": "", "flags": ["only 0% of liquidity locked"], "facts": {}}}
+    monkeypatch.setattr(projects_db, "get", lambda c, t: {"chain": c, "token": t, "pillars": stale,
+                                                          "status": "rejected", "why": "site: placeholder text"})
+    monkeypatch.setattr(leaderboard, "db_entry", lambda p: {"chain": p["chain"], "token_address": p["token"],
+                                                            "pillars": p["pillars"], "why": p["why"]})
+    fresh = {"site": {"score": 70, "fatal": "", "flags": [], "facts": {}},
+             "tokenomics": {"score": 83, "fatal": "", "flags": [], "facts": {}}}
+    calls = []
+
+    async def analyze(item, client, skip=frozenset()):
+        calls.append(item["token_address"])
+        return fresh
+
+    async def jd(e, why, now=None, ask=None, priority=False, fresh=False):
+        assert fresh
+        return {"verdict": "watch", "score": 60, "problems": [], "strengths": []}
+
+    async def rc(e, item, client, ask=None):
+        return None
+
+    monkeypatch.setattr(depth, "analyze", analyze)
+    monkeypatch.setattr(judge, "get", lambda c, t: None)
+    monkeypatch.setattr(judge, "judge", jd)
+    monkeypatch.setattr(code_review, "repo_of", lambda e: None)
+    monkeypatch.setattr(scout_recheck, "recheck", rc)
+    events = []
+    rep = asyncio.run(ms.report({"chain": "base", "token_address": "0xa", "market_cap": 3e5, "liquidity_usd": 6e4},
+                                {"status": "rejected", "why": "site: placeholder text"}, None, ms.Steps(events.append)))
+    assert calls == ["0xa"] and rep["pillars"]["site"]["score"] == 70
+    assert {"step": "pillars", "state": "ok", "detail": "site 70 · tokenomics 83"} in events
+
+
+def test_a_timed_out_recheck_never_leaves_absences_red():
+    from app.trading.onchain import scout_recheck
+    e = {"judge": {"problems": ["Anonymous team", "Mint enabled", "No docs found"]}}
+    q = scout_recheck.quick(e)
+    assert [p["text"] for p in q["confirmed"]] == ["Mint enabled"]
