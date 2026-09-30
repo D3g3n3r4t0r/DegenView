@@ -246,6 +246,9 @@ def market_lines(entry: dict, item: dict) -> list[str]:
             out.append("Top holders: " + "; ".join(
                 f"{h.get('pct')}% " + ("contract" if h.get("contract") else "wallet")
                 + (f" ({h['tag']})" if h.get("tag") else "") for h in tk["top_holders"]))
+        if tk.get("unlocks"):
+            out.append("Contract holders read on chain: " + "; ".join(
+                f"{u.get('pct')}% {u.get('kind')}: {u.get('note')}" for u in tk["unlocks"]))
     site = (pil.get("site") or {}).get("facts") or {}
     if site:
         out.append("Site read: " + json.dumps({k: site.get(k) for k in ("url", "words", "rendered", "docs_ok",
