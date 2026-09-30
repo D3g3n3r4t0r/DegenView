@@ -77,3 +77,66 @@ def test_about_reads_geckoterminal_and_keeps_only_https_links():
     assert a["summary"].startswith("HyperDex is a marketplace") and a["holders"] == 1234 and a["top10_pct"] == 48.6
     assert a["socials"] == [{"type": "twitter", "url": "https://x.com/h"}]
     assert ms.about(None, None)["summary"] is None
+
+
+def test_steps_follow_the_listing_checks_and_skip_what_did_not_run():
+    events = []
+    step = ms.Steps(events.append)
+    step("name", "run")
+    step.check({"key": "name", "ok": True, "detail": "not a meme name"})
+    step.check({"key": "security", "ok": None, "detail": "report not available yet"})
+    step.check({"key": "socials", "ok": False, "detail": "none"})
+    step.skip_listing()
+    states = {e["step"]: e["state"] for e in events}
+    assert states["name"] == "ok" and states["security"] == "warn" and states["socials"] == "fail"
+    assert states["site"] == states["github"] == states["ai"] == states["contract"] == "skip"
+    assert {"step": "security", "state": "run", "detail": ""} in events
+    step.check({"key": "gem", "ok": True})     # not a listing step: ignored
+    assert events[-1]["step"] == "ai"
+
+
+def test_assess_taps_each_check_as_it_lands():
+    from app.trading.onchain import legit
+    seen = []
+    t = legit._Tap(lambda c: seen.append(c["key"]))
+    t.append({"key": "name"})
+    t.append({"key": "security"})
+    assert list(t) == [{"key": "name"}, {"key": "security"}] and seen == ["name", "security"]
+    boom = legit._Tap(lambda c: 1 / 0)
+    boom.append({"key": "x"})
+    assert len(boom) == 1
+
+
+def test_report_studies_an_unknown_project_like_the_top(monkeypatch):
+    import asyncio
+    from app.trading.onchain import code_review, depth, judge, leaderboard, projects_db
+    monkeypatch.setattr(leaderboard, "_entries", {})
+    monkeypatch.setattr(projects_db, "get", lambda c, t: None)
+    pil = {"site": {"score": 76, "fatal": "", "flags": ["thin docs"], "facts": {"summary": "A proof computer.", "big": "x" * 999}},
+           "github": {"score": 70, "fatal": "", "facts": {"repo": "a/b", "url": "https://github.com/a/b"}},
+           "tokenomics": {"score": 82, "fatal": "", "facts": {}}}
+
+    async def analyze(item, client, skip=frozenset()):
+        return pil
+
+    async def jd(e, why, now=None, ask=None, priority=False):
+        assert priority
+        return {"verdict": "gem", "score": 81, "problems": [], "strengths": ["real product"], "confidence": 0.8}
+
+    async def rv(e, client, now=None, ask=None, priority=False):
+        return {"complexity": 70, "innovation": 60, "summary": "a zkVM"}
+
+    monkeypatch.setattr(depth, "analyze", analyze)
+    monkeypatch.setattr(judge, "get", lambda c, t: None)
+    monkeypatch.setattr(judge, "judge", jd)
+    monkeypatch.setattr(code_review, "get", lambda repo: None)
+    monkeypatch.setattr(code_review, "review", rv)
+    events = []
+    gem = {"status": "unknown", "why": ""}
+    rep = asyncio.run(ms.report({"chain": "solana", "token_address": "T", "symbol": "DREGG", "market_cap": 1e6,
+                                 "liquidity_usd": 2e5}, gem, None, ms.Steps(events.append)))
+    assert rep["summary"] == "A proof computer." and rep["judge"]["verdict"] == "gem" and rep["code"]["innovation"] == 60
+    assert rep["pillars"]["site"] == {"score": 76, "flags": ["thin docs"]}
+    assert gem["judge"]["score"] == 81 and gem["pillars"]["tokenomics"] == 82
+    done = {e["step"]: e["state"] for e in events}
+    assert done == {"pillars": "ok", "report": "ok", "code": "ok"}

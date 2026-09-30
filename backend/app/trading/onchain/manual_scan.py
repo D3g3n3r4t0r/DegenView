@@ -30,7 +30,7 @@ from urllib.parse import quote
 import httpx
 
 from app.notify import deepseek_desk
-from app.trading.onchain import (ai_scan, alert_track, code_review, judge, leaderboard, legit, outcomes,
+from app.trading.onchain import (ai_scan, alert_track, code_review, depth, judge, leaderboard, legit, outcomes,
                                  projects_db, research, rug_memory, strategy_lab)
 
 logger = logging.getLogger(__name__)
@@ -167,6 +167,89 @@ def add(chain: str, token: str, now: float | None = None) -> dict:
     return {"added": True, "new": fresh, "gem": gem_view(item, now)}
 
 
+_PUBLIC_JUDGE = ("score", "verdict", "problems", "strengths", "admit_reason", "x", "tg")
+_PUBLIC_CODE = ("complexity", "innovation", "fork_of", "summary", "strengths", "concerns")
+
+
+def _slim(entry: dict) -> dict:
+    """gemWhy reads a pillar's score and flags only: the facts stay home."""
+    return {**entry, "pillars": {k: {"score": (v or {}).get("score"), "flags": (v or {}).get("flags") or []}
+                                 for k, v in (entry.get("pillars") or {}).items()}}
+
+
+async def _timed(coro, what: str):
+    try:
+        return await asyncio.wait_for(coro, DEEP_TIMEOUT_S)
+    except Exception as exc:
+        logger.info("manual scan: %s failed: %s", what, exc)
+        return None
+
+
+async def report(item: dict, gem: dict, client: httpx.AsyncClient, step: "Steps") -> dict | None:
+    """The Scout's report, as the Top shows it (leaderboard.gemWhy): score,
+    pillars, research summary, DeepSeek's verdict, the code reading.
+    Lorenzo, 30/09: "nella scansione manuale manca tutta la descrizione che
+    solitamente lo scout fa nei progetti [...] della top". A project the
+    Gem Finder has not studied gets the same work now: the three pillars,
+    then the judge and the code reading, on the Top's own allowance."""
+    chain, token = item["chain"], item["token_address"]
+    e = leaderboard._entries.get(projects_db.key(chain, token))
+    if e is not None and e.get("pillars"):
+        for k in ("pillars", "report", "code"):
+            step(k, "ok", "from the Gem Finder")
+        return _slim(leaderboard._public(e))
+    p = projects_db.get(chain, token)
+    e = leaderboard.db_entry(p) if p is not None and p.get("pillars") else None
+    if e is None:
+        step("pillars", "run")
+        base = {**item, "launched_at": item.get("created_at"), "websites": _recent.get(projects_db.key(chain, token), {}).get("websites")}
+        pillars = await _timed(depth.analyze(base, client), "pillars")
+        if not pillars:
+            step("pillars", "fail", "site, GitHub and tokenomics did not answer")
+            for k in ("report", "code"):
+                step(k, "skip")
+            return None
+        e = {**base, "pillars": pillars, "overall": depth.overall(pillars), "rank": None,
+             "github": ((pillars.get("github") or {}).get("facts") or {}).get("url")}
+        e["narratives"] = []
+        step("pillars", "ok", " · ".join(f"{k} {v.get('score')}" for k, v in pillars.items() if v.get("score") is not None))
+    else:
+        step("pillars", "ok", "from the database")
+    rules_why = leaderboard.qualifies(e) if not e.get("why") else e["why"]
+    fatal = (e.get("overall") or {}).get("fatal")
+    j = judge.get(chain, token)
+    if fatal:
+        step("report", "skip", f"stopped: {fatal}")
+    elif j and not judge.wants_reading(e, rules_why):
+        step("report", "ok", f"{j.get('verdict')} · {j.get('score')}/100")
+    else:
+        step("report", "run")
+        j = await _timed(judge.judge(e, rules_why, priority=True), "judge") or j
+        step("report", "skip" if not j else "ok" if j.get("verdict") in ("gem", "watch") else "fail",
+             f"{j.get('verdict')} · {j.get('score')}/100" if j else "DeepSeek unavailable")
+    e["judge"] = j
+    repo = code_review.repo_of(e)
+    c = code_review.get(repo)
+    if not repo:
+        step("code", "skip", "no public code")
+    elif c:
+        step("code", "ok", f"complexity {c.get('complexity')} · innovation {c.get('innovation')}")
+    else:
+        step("code", "run")
+        c = await _timed(code_review.review(e, client, priority=True), "code review")
+        step("code", "ok" if c else "skip",
+             f"complexity {c.get('complexity')} · innovation {c.get('innovation')}" if c else "not read")
+    e["code"] = c
+    score = leaderboard.final_score(e)
+    gem.update(score=round(score), why=leaderboard.qualifies(e) or gem.get("why") or "",
+               pillars=_pillars(e.get("pillars")), judge=_judge_view(j), code=_code_view(c))
+    f = ((e.get("pillars") or {}).get("site") or {}).get("facts") or {}
+    return _slim({"score": score, "rank": e.get("rank"), "early": False, "pillars": e.get("pillars") or {},
+            "summary": f.get("summary") or None, "traction": leaderboard.traction_of(e),
+            "judge": {k: j.get(k) for k in _PUBLIC_JUDGE} if j else None,
+            "code": {k: c.get(k) for k in _PUBLIC_CODE} if c else None, "review": None})
+
+
 def backtest_view(r: dict | None) -> dict | None:
     """The strategy lab's result in two lines: the best 5-minute strategy
     and the trend follower on the daily chart, each against holding."""
@@ -203,27 +286,81 @@ async def backtest(item: dict, now: float | None = None) -> dict | None:
     return backtest_view(r)
 
 
-async def scan(query: str) -> dict:
+# The steps a scan goes through, in order, as the scanner sheet lists them
+# while it works (Lorenzo, 30/09: "tutti gli step che fa, tutte le cose che
+# guarda le voglio vedere scritte"). Only checks that really run: no X.
+LISTING_STEPS = ("name", "security", "contract", "socials", "site", "github", "ai")
+STEPS = ("pool", *LISTING_STEPS, "holders", "gem", "pillars", "report", "code", "memory", "risk", "backtest")
+DEEP_TIMEOUT_S = 75        # pillars, judge and code reading: each one, on a slow site or repo
+
+
+class Steps:
+    """Sends each step's state (run, ok, warn, fail, skip) to `emit`."""
+
+    def __init__(self, emit):
+        self.emit = emit or (lambda ev: None)
+        self.seen: set[str] = set()
+
+    def __call__(self, key: str, state: str, detail: str = "") -> None:
+        if state != "run":
+            self.seen.add(key)
+        self.emit({"step": key, "state": state, "detail": (detail or "")[:120]})
+
+    def check(self, c: dict) -> None:
+        """A listing check landed: mark it, start the next one."""
+        key = c.get("key")
+        if key not in LISTING_STEPS:
+            return
+        ok = c.get("ok")
+        self(key, "ok" if ok is True else "fail" if ok is False else "warn", c.get("detail") or "")
+        nxt = [k for k in LISTING_STEPS[LISTING_STEPS.index(key) + 1:] if k not in self.seen]
+        if nxt:
+            self(nxt[0], "run")
+
+    def skip_listing(self) -> None:
+        for k in LISTING_STEPS:
+            if k not in self.seen:
+                self(k, "skip")
+
+
+async def scan(query: str, emit=None) -> dict:
     query = (query or "").strip()
     if not query:
         return {"error": "Write a ticker or an address."}
+    step = Steps(emit)
+    step.emit({"plan": list(STEPS)})
     deepseek_desk.note("manual", f"Manual scan requested: {query[:40]}")
+    step("pool", "run")
     async with httpx.AsyncClient(timeout=15.0, headers={"accept": "application/json"}) as client:
         try:
             r = await client.get(SEARCH.format(q=quote(query)))
             pairs = (r.json() or {}).get("pairs") or [] if r.status_code == 200 else []
         except (httpx.HTTPError, ValueError):
+            step("pool", "fail", "DexScreener is not answering")
             return {"error": "DexScreener is not answering, try again."}
         pair = pick(pairs, query)
         if not pair:
+            step("pool", "fail", "no pool on our chains")
             return {"error": f"No pool for \"{query}\" on Solana, Robinhood, BSC, Base or Ethereum."}
         item = item_of(pair)
+        step("pool", "ok", f"{item['symbol']} on {item['chain']} · {item.get('dex') or 'dex'}")
         links = legit.links_from_dexscreener(pair)
-        verdict, info = await asyncio.gather(legit.assess(item, links, client),
-                                             research.gecko_info(item["chain"], item["token_address"], client))
+        step("name", "run")
+        step("holders", "run")
+
+        async def holders() -> dict:
+            info = await research.gecko_info(item["chain"], item["token_address"], client)
+            n = (info or {}).get("holders")
+            step("holders", "ok" if n else "warn", f"{n:,} holders" if n else "not listed")
+            return info
+
+        verdict, info = await asyncio.gather(legit.assess(item, links, client, tap=step.check), holders())
         checks = list(verdict.get("checks") or [])
         if not any(c.get("key") == "security" for c in checks):
-            checks.append(await _security(item, client))
+            sec = await _security(item, client)
+            checks.append(sec)
+            step.check(sec)
+        step.skip_listing()
     item.update(checks=checks, socials=verdict.get("socials"), website=verdict.get("website"),
                 report=verdict.get("report"))
     socials = verdict.get("socials") or links["socials"]
@@ -234,11 +371,40 @@ async def scan(query: str) -> dict:
     while len(_recent) > RECENT_KEEP:
         _recent.pop(next(iter(_recent)))
     meme = legit._looks_like_meme(item.get("symbol") or "", item.get("name") or "")
+    step("gem", "run")
     gem = None if meme else gem_view(item)
+    step("gem", "skip" if gem is None else "ok" if gem["status"] == "ranked" else "warn",
+         "meme name: Meme Sniper's turf" if gem is None else
+         f"ranked #{gem['rank']}" if gem["status"] == "ranked" else
+         "not studied yet: studying it now" if gem["status"] == "unknown" else gem["why"] or gem["status"])
+    rep = None
+    if gem is None:
+        for k in ("pillars", "report", "code"):
+            step(k, "skip")
+    else:
+        async with httpx.AsyncClient(timeout=15.0, headers={"User-Agent": "Mozilla/5.0 (LiquidityEngine)"}) as client:
+            rep = await report(item, gem, client, step)
+    step("memory", "run")
     feats = outcomes.features(item)
     pool = rug_memory.cases()
-    ai, bt = await asyncio.gather(ai_scan.judge_one(item, feats, pool, project=not meme), backtest(item))
-    ai = clean_flags(ai)
+    step("memory", "ok", english(rug_memory.summary(feats, item["chain"], pool=pool)))
+    step("risk", "run")
+    step("backtest", "run")
+
+    async def risk() -> dict | None:
+        out = clean_flags(await ai_scan.judge_one(item, feats, pool, project=not meme))
+        step("risk", "skip" if not out else "fail" if out["risk"] >= 60 else "warn" if out["risk"] >= 30 else "ok",
+             f"rug risk {out['risk']}" if out else "DeepSeek unavailable")
+        return out
+
+    async def bt_step() -> dict | None:
+        out = await backtest(item)
+        best = (out or {}).get("daily") or (out or {}).get("fast")
+        step("backtest", "skip" if not best else "ok" if (best.get("return_pct") or 0) >= 0 else "warn",
+             f"{best['return_pct']:+.0f}% in {best['trades']} trades" if best else (out or {}).get("error") or "no candles")
+        return out
+
+    ai, bt = await asyncio.gather(risk(), bt_step())
     deepseek_desk.note("manual", f"Scanned {item['symbol']}: pipeline {verdict['status']}"
                        + (f", rug risk {ai['risk']}" if ai else ""), symbol=item["symbol"], chain=item["chain"])
     tracked = alert_track._alerts.get(f"meme:{item['chain']}:{item['token_address']}")
@@ -249,7 +415,7 @@ async def scan(query: str) -> dict:
             "checks": [{k: c.get(k) for k in ("key", "label", "ok", "detail")} for c in checks],
             "report": verdict.get("report"),
             "about": about(info, socials),
-            "kind": "meme" if meme else "project", "gem": gem, "backtest": bt,
+            "kind": "meme" if meme else "project", "gem": gem, "backtest": bt, "scout": rep,
             "memory": {"summary": english(rug_memory.summary(feats, item["chain"], pool=pool)),
                        "similar": rug_memory.similar(feats, item["chain"], k=5, pool=pool),
                        "history": rug_memory.lookup(item["token_address"])},
