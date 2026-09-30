@@ -26,6 +26,7 @@ resto. Tutte le funzioni `judge_*` sono pure: si provano senza rete.
 """
 from __future__ import annotations
 
+import logging
 import math
 import re
 import time
@@ -36,6 +37,8 @@ from urllib.parse import urljoin, urlparse
 import httpx
 
 from app.trading.onchain import benchmark, jstext, legit, narratives
+
+logger = logging.getLogger(__name__)
 
 WEIGHTS = {"github": 0.40, "site": 0.30, "tokenomics": 0.30}
 
@@ -728,7 +731,23 @@ async def analyze_tokenomics(chain: str, token: str, client: httpx.AsyncClient, 
         if not info:
             from app.trading.onchain import research   # research builds on this module
             return judge_tokenomics_gecko(await research.gecko_info(chain, token, client))
-        return judge_tokenomics_evm(info, pair_address, liquidity_usd)
+        # What the contract holders are and when they unlock (Lorenzo, 30/09:
+        # "pool e vesting devi anche trovare lo sblocco che tempi ha").
+        from app.trading.onchain import unlocks
+        pools = {pair_address} | {str(d.get(k) or "") for d in info.get("dex") or [] for k in ("pair", "pool_manager")}
+        try:
+            unl = await unlocks.annotate(chain, token, info, client, skip=pools)
+        except Exception as exc:
+            logger.info("unlocks of %s not read: %s", token, exc)
+            unl = []
+        out = judge_tokenomics_evm(info, pair_address, liquidity_usd)
+        if unl:
+            out.setdefault("facts", {})["unlocks"] = unl
+            out.setdefault("flags", []).extend(unlocks.soon(unl))
+            lp = next((u for u in unl if u["kind"] == "locker" and "LP position" in u["note"]), None)
+            if lp:
+                out["facts"]["lp_note"] = f"LP position held by a locker contract ({lp['note']})"
+        return out
     return _pillar("tokenomics", None, {}, [], "chain not covered")
 
 

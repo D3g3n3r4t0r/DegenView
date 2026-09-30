@@ -183,8 +183,10 @@ _PUBLIC_CODE = ("complexity", "innovation", "fork_of", "summary", "strengths", "
 
 
 def _slim(entry: dict) -> dict:
-    """gemWhy reads a pillar's score and flags only: the facts stay home."""
-    return {**entry, "pillars": {k: {"score": (v or {}).get("score"), "flags": (v or {}).get("flags") or []}
+    """gemWhy reads a pillar's score and flags only: the facts stay home,
+    except what the contracts holding the supply are and when they unlock."""
+    unl = (((entry.get("pillars") or {}).get("tokenomics") or {}).get("facts") or {}).get("unlocks") or []
+    return {**entry, "unlocks": [u for u in unl if u.get("kind") != "wallet"] or None, "pillars": {k: {"score": (v or {}).get("score"), "flags": (v or {}).get("flags") or []}
                                  for k, v in (entry.get("pillars") or {}).items()}}
 
 
