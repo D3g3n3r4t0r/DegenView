@@ -13,7 +13,7 @@ import { openUserSwap, walletFor } from "@onchain/userswap.js";
 import { hideToken } from "@onchain/hidden.js";
 
 const registry = new Map();
-const INTERVALS = ["1m", "5m", "15m", "1h", "4h", "1d"];
+const INTERVALS = ["1m", "5m", "15m", "1h", "4h", "1d", "1w"];
 const WATCH_KEY = "watchlist-v1";
 const loading = new Set();
 let dlg = null;
@@ -320,7 +320,7 @@ function paintTabs() {
   // Gems: only the daily trend follower, not the alerts' 5-minute tracks.
   const gem = e.kind === "gem";
   const lab = gem ? (e.lab?.daily?.rows?.length ? e.lab.daily : null) : e.lab;
-  const labNote = gem ? `Trend follower backtested on the ${lab?.interval === "8h" ? "8-hour" : "daily"} chart.`
+  const labNote = gem ? `Trend follower backtested on the ${TF_NAME[lab?.interval] ?? "daily"} chart.`
     : "Backtested on the latest 5-minute chart, every hour.";
   const alerts = gem ? [] : (e.alerts ?? []);
   body.innerHTML = alerts.length ? alerts.map((al) => `
@@ -453,6 +453,7 @@ const clean = (d) => (d?.candles ?? []).filter((c) => Number.isFinite(c.close));
 const enough = (c) => { if (c.length < 2) throw new Error("empty"); return c; };
 
 function chartFor(e, iv) {
+  if (iv === "1w") return chartFor(e, "1d").then(weekly);
   const k = `${e.chain}:${e.pair || e.token}:${iv}`;
   const hit = charts.get(k);
   if (hit && Date.now() - hit.at < CHART_FRESH_MS) return hit.promise;
@@ -473,7 +474,33 @@ function chartFor(e, iv) {
   return promise;
 }
 
-const defaultInterval = (e) => (e.kind === "gem" ? "1d" : "5m");
+// A gem opens on the strategy's own timeframe (the lab picks it from the
+// chart's history, 5m at listing up to 1d). Rungs with no GeckoTerminal
+// candle open on the widest chip that divides them, so every entry still
+// lands on its bar.
+const TF_NAME = { "5m": "5-minute", "15m": "15-minute", "30m": "30-minute", "1h": "1-hour", "2h": "2-hour",
+                  "4h": "4-hour", "6h": "6-hour", "8h": "8-hour", "12h": "12-hour", "1d": "daily" };
+const CHIP_OF = { "30m": "15m", "2h": "1h", "6h": "1h", "8h": "4h", "12h": "4h" };
+const defaultInterval = (e) => {
+  if (e.kind !== "gem") return "5m";
+  const lab = e.lab?.daily?.interval;
+  const iv = CHIP_OF[lab] ?? lab;
+  return INTERVALS.includes(iv) ? iv : "1d";
+};
+
+// Weekly candles from the daily ones, Monday 00:00 UTC (epoch day 0 is a Thursday).
+const WEEK = 604800, MONDAY = 4 * 86400;
+function weekly(days) {
+  const out = [];
+  for (const c of days) {
+    const t = Math.floor((c.time - MONDAY) / WEEK) * WEEK + MONDAY;
+    const w = out[out.length - 1];
+    const hi = c.high ?? c.close, lo = c.low ?? c.close;
+    if (w?.time === t) { w.high = Math.max(w.high, hi); w.low = Math.min(w.low, lo); w.close = c.close; }
+    else out.push({ time: t, open: c.open ?? c.close, high: hi, low: lo, close: c.close });
+  }
+  return out;
+}
 
 export function prefetchChart(id) {
   const e = registry.get(id);

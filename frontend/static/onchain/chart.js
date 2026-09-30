@@ -29,7 +29,7 @@ import { state } from "@onchain/store.js";
 const CANDLE_REFRESH_MS = 8000; // storia: DexScreener/GeckoTerminal, non fatti per un polling piu' stretto
 const PRICE_REFRESH_MS = 2500;  // corrente: lo stesso quoter dello swap, pensato per un polling stretto
 
-const INTERVALS = ["15m", "1h", "4h", "1d"];
+const INTERVALS = ["15m", "1h", "4h", "1d", "1w"];
 
 // Senza un token scelto il grafico parte dal nativo della chain invece di
 // un riquadro vuoto: la prima cosa che si vede e' gia' un mercato.
