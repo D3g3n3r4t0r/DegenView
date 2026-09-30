@@ -395,9 +395,13 @@ def apply_analysis(k: str, result: dict, now: float | None = None) -> None:
     ready = bool(e.get("overall")) and not e["overall"].get("pending")
     before = final_score(e) if ready else None
     old_pillars = {n: (e["pillars"].get(n) or {}).get("score") for n in depth.WEIGHTS}
+    from app.trading.onchain import history
     for name, pillar in result.items():
         e["pillars"][name] = pillar
         e["checked_at"][name] = now
+        if isinstance(pillar, dict):
+            history.append(k, "leaderboard.pillar", {"pillar": name, "checked_at": now, **{
+                f: pillar[f] for f in ("score", "flags", "fatal") if pillar.get(f) is not None}}, now)
         if name == "github" and (pillar.get("facts") or {}).get("url"):
             e["github"] = pillar["facts"]["url"]
     e["overall"] = depth.overall(e["pillars"])
@@ -737,6 +741,7 @@ def traction_of(e: dict) -> dict | None:
 
 
 def _rank() -> None:
+    from app.trading.onchain import history
     # By score only (Lorenzo, 27/09: "nel podio compaiono token con punteggi
     # piu' bassi rispetto a quelli presenti in database"): the benchmark keeps
     # its honorable mention, no longer the first place by decree.
@@ -757,9 +762,11 @@ def _rank() -> None:
                     _outbox.append((kind, k))
         if e.get("rank") != i:
             e["rank_before"], e["rank"], e["moved_at"] = e.get("rank"), i, now
+            history.append(k, "leaderboard.rank", {"moved_at": now, "rank": i, "rank_before": e["rank_before"]}, now)
     for k, e in _entries.items():
         if k not in order and e.get("rank") is not None:
             e["rank_before"], e["rank"], e["moved_at"] = e["rank"], None, now
+            history.append(k, "leaderboard.rank", {"moved_at": now, "rank": None, "rank_before": e["rank_before"]}, now)
     if order != _state["board"]:
         _state["board"] = order
     _sync_database(order)

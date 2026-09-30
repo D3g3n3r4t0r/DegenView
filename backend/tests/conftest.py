@@ -57,3 +57,12 @@ def _private_deepseek_journal(monkeypatch, tmp_path):
 def _private_quant_memory(monkeypatch, tmp_path):
     from app.trading.onchain import quant_memory
     monkeypatch.setattr(quant_memory, "_path", tmp_path / "quant.sqlite3")
+
+
+@pytest.fixture(autouse=True)
+def _private_history(monkeypatch, tmp_path):
+    """The append-only evaluation history is a file on the volume: every test gets its own."""
+    from app.trading.onchain import history
+    monkeypatch.setattr(history, "_FILE", tmp_path / "onchain_history.jsonl")
+    yield
+

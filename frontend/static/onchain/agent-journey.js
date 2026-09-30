@@ -4,7 +4,7 @@ const CAP_MS = 3000, MIN_MS = 80, BUDGET_MS = 60000;
 const LABEL = Object.fromEntries(NODES.map(n => [n.id, n.label]));
 LABEL.decision = "Decision";
 const SOURCE = {
-  "projects_db.first_seen": "Project database", "projects_db.verdict": "Project database",
+  "projects_db.first_seen": "Project database", "projects_db.verdict": "Project database", "projects_db.standing": "Project database",
   agent_activity: "Agent activity", deepseek_call: "DeepSeek call journal", strategy_lab: "Strategy lab",
   discovery: "Discovery log", "leaderboard.found": "Research queue", "leaderboard.pillar": "Pillar check",
   "leaderboard.rank": "Ranking", judge: "Judge cache", "research.dossier": "Research cache", "research.reading": "Research cache",
