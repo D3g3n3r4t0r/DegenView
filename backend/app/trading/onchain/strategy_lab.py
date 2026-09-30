@@ -152,7 +152,8 @@ async def _pair_of(client: httpx.AsyncClient, e: dict) -> str | None:
 
 
 def _best(bt: dict) -> dict | None:
-    traded = [r for r in bt.get("rows") or [] if r.get("trades") and r.get("return_pct") is not None]
+    traded = [r for r in bt.get("rows") or [] if r.get("trades") and r.get("return_pct") is not None
+              and r.get("label") in system.TREND_LABELS]
     return max(traded, key=lambda r: r["return_pct"]) if traded else None
 
 

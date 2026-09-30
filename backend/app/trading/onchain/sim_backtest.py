@@ -25,6 +25,7 @@ import math
 
 from app.atomic_write import write_text_atomic
 from app.trading.onchain.storage import data_file
+from app.trading.onchain.system import TREND_LABELS
 
 _FILE = data_file("top_backtest_ledger.json")
 _ledger: dict[str, dict] = {}     # chain:token -> {chain, token, symbol, interval, events: {t:side -> event}}
@@ -53,8 +54,6 @@ def token_trades(bt: dict | None) -> tuple[str, list[dict]] | None:
         return "5m", best["events"]
     return None
 
-
-TREND_LABELS = frozenset({"Trend EMA", "Trend HF"})
 
 
 def _label(bt: dict | None, interval: str) -> str | None:

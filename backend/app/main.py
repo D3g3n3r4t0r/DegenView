@@ -4121,7 +4121,9 @@ def _lab_summary(bt: dict | None) -> dict | None:
     """Per la lista: il migliore e il buy-and-hold, senza le operazioni."""
     if not bt:
         return None
-    traded = [r for r in bt.get("rows") or [] if r.get("trades") and r.get("return_pct") is not None]
+    from app.trading.onchain import system as onchain_system
+    traded = [r for r in bt.get("rows") or [] if r.get("trades") and r.get("return_pct") is not None
+              and r.get("label") in onchain_system.TREND_LABELS]
     best = max(traded, key=lambda r: r["return_pct"]) if traded else None
     # The 8h/1d trend follower leads the list; with no trade yet there, the
     # 5-minute best stays, so every row keeps a real result.
