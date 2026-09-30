@@ -84,3 +84,13 @@ def test_mean_reversion_5m_trades_never_enter_the_wallet(monkeypatch):
     sb._ledger["base:OLD"] = {"chain": "base", "token": "OLD", "interval": "5m",
                               "events": {"100:buy": {"t": 100, "side": "buy", "iv": "5m"}}}
     assert {t["token"]: len(t["events"]) for t in sb.ledger_tokens()} == {"T": 1, "OLD": 0}
+
+
+def test_the_top_row_best_is_a_trend_follower_never_rsi_bb():
+    from app import main
+    from app.trading.onchain import strategy_lab
+    rows = [{"label": "RSI+BB", "return_pct": 80.0, "trades": 3},
+            {"label": "Trend HF", "return_pct": 5.0, "trades": 2}]
+    assert strategy_lab._best({"rows": rows})["label"] == "Trend HF"
+    assert main._lab_summary({"rows": rows})["best"]["label"] == "Trend HF"
+    assert main._lab_summary({"rows": rows[:1]})["best"] is None

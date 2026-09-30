@@ -72,6 +72,10 @@ BACKTESTS = [
     ("Gabriele 2 (RSI+BB long/short)", "RSI+BB L/S"),
 ]
 BACKTEST_MIN_BARS = 30
+# On-chain the wallet and the lists follow trend followers only: long,
+# never mean-reversion (Lorenzo, 30/09, ORDO bought by RSI+BB after -90%).
+# The RSI+BB rows stay in the table, but never make the "best".
+TREND_LABELS = frozenset({"Trend EMA", "Trend HF"})
 # Shown labels carry no person's name (Lorenzo, 27/09: "elimina il nome
 # lorenzo dalla strategia"); strategy_name stays the internal key. Results
 # stored under the old labels are renamed on load (alert_track._load).
@@ -257,7 +261,7 @@ def _best_trades(df: pd.DataFrame, rows: list[dict], known: dict | None = None) 
     "visualizza un alert ma non sappiamo se e' un ingresso o altro.. qui deve
     comparire la strategia [...] ingressi e uscite". The ranking shows the
     best backtest, so the chart shows the same one's trades."""
-    traded = [r for r in rows if r["trades"] and r["return_pct"] is not None]
+    traded = [r for r in rows if r["trades"] and r["return_pct"] is not None and r["label"] in TREND_LABELS]
     if not traded:
         return None
     best = max(traded, key=lambda r: r["return_pct"])
