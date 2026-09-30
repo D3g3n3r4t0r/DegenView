@@ -2477,5 +2477,10 @@
     "status": "risolto",
     "at": 1790788338,
     "summary": "Gli 807 sono 3 gruppi di RugCheck: 794 wallet legati da un airdrop di 744 DREGG ciascuno (un wallet che riceve gli sblocchi Streamflow ogni due settimane), 9 e 4 wallet che on-chain oggi hanno 0 DREGG (il gruppo da 4 ha messo il 3% in lock Streamflow il 18/07). Il rapporto ora giudica la quota di supply dei gruppi, non il numero di wallet: sotto l'1% nessun avviso, e il punteggio scende con la quota. Poi, su richiesta di Lorenzo, la verifica profonda gira da sola su ogni token Solana della Top 50: toglie i collegamenti da airdrop, pool e locker e legge i saldi di oggi on-chain (DREGG: da 39% di 807 wallet a 4% di 51)."
+  },
+  "seed-0242": {
+    "status": "risolto",
+    "at": 1790802209,
+    "summary": "Causa: quando il trend follower a 8h/1d non aveva operazioni, la riga della classifica mostrava il miglior backtest a 5 minuti (il +400%), ma il grafico disegnava solo quello a 8h/1d, vuoto. Ora lista e grafico usano la stessa regola (lab-shown.js): il grafico mostra sempre le operazioni del numero in classifica e si apre sul loro timeframe. Test automatico: il numero di vendite sul grafico = operazioni in lista. 'Board: not ranked' ora dice 'Top #N, from the database'. Su MERRYMEN il trend follower a 8h/1d non ha operazioni (verificato coi dati veri: il filtro di volatilita' e' pronto solo alla 60a candela), quindi il grafico mostra il backtest a 5 minuti del +400%."
   }
 }

@@ -27,4 +27,4 @@ jobs:
       - run: python -m pytest backend/tests/test_quant_engine.py backend/tests/test_quant_integration.py backend/tests/test_quant_observatory.py backend/tests/test_autotrader.py backend/tests/test_sim_wallet.py -q
         env:
           PYTHONPATH: backend
-      - run: node --test frontend/tests/agent-map.test.mjs
+      - run: node --test frontend/tests/agent-map.test.mjs frontend/tests/lab-shown.test.mjs

@@ -11,6 +11,7 @@ import * as api from "@onchain/api.js";
 import { age, bestSystem, changePill, escapeHtml, logo, strategyTrade, usdShort } from "@onchain/format.js";
 import { openUserSwap, walletFor } from "@onchain/userswap.js";
 import { hideToken } from "@onchain/hidden.js";
+import { shownTrades } from "@onchain/lab-shown.js";
 
 const registry = new Map();
 const INTERVALS = ["1m", "5m", "15m", "1h", "4h", "8h", "1d", "1w"];
@@ -338,9 +339,13 @@ function paintTabs() {
   if (tab === "info") { body.innerHTML = e.info || infoFallback(e); return; }
   // Gems: only the daily trend follower, not the alerts' 5-minute tracks.
   const gem = e.kind === "gem";
-  const lab = gem ? (e.lab?.daily?.rows?.length ? e.lab.daily : null) : e.lab;
-  const labNote = gem ? `Trend follower backtested on the ${IV_NAME[lab?.interval] ?? "daily"} chart: from the longest one with 60 closed candles down to the first where it enters.`
-    : "Backtested on the latest 5-minute chart, every hour.";
+  // The same backtest the Top list shows (lab-shown.js), so the table, the
+  // number in the list and the arrows on the chart are the same trades.
+  const shown = gem ? shownTrades(e.lab) : null;
+  const lab = gem ? (shown?.backtests ?? (e.lab?.daily?.rows?.length ? e.lab.daily : null)) : e.lab;
+  const labNote = !gem ? "Backtested on the latest 5-minute chart, every hour."
+    : shown?.source === "fast" ? "Best backtest on the latest 5-minute chart, as in the Top list: the trend follower has no trade on the longer charts yet."
+    : `Trend follower backtested on the ${IV_NAME[lab?.interval] ?? "daily"} chart: from the longest one with 60 closed candles down to the first where it enters.`;
   const alerts = gem ? [] : (e.alerts ?? []);
   body.innerHTML = alerts.length ? alerts.map((al) => `
     <article class="call">
@@ -362,7 +367,7 @@ function paintTabs() {
     </article>`).join("")
     : `<dl class="kv">
         ${e.dossier ? `<div><dt>Score</dt><dd>${e.dossier.score != null ? Math.round(e.dossier.score) : "—"}</dd></div>
-        <div><dt>Board</dt><dd>${e.dossier.on_board ? "on the board" : `not ranked${e.dossier.why ? `: ${escapeHtml(e.dossier.why)}` : ""}`}</dd></div>` : ""}
+        <div><dt>Board</dt><dd>${e.dossier.on_board ? "on the board" : e.rank ? `Top #${e.rank}, from the database` : `not ranked${e.dossier.why ? `: ${escapeHtml(e.dossier.why)}` : ""}`}</dd></div>` : ""}
         <div><dt>Market cap</dt><dd>${usdShort(e.cap)}</dd></div>
         ${e.dossier?.liquidity_usd != null ? `<div><dt>Liquidity</dt><dd>${usdShort(e.dossier.liquidity_usd)}</dd></div>` : ""}
         ${e.ageTs ? `<div><dt>Age</dt><dd>${age(e.ageTs)[0]}</dd></div>` : ""}
@@ -461,7 +466,7 @@ async function geckoDirect(e, pair, iv) {
   const net = GECKO_NET[e.chain];
   const [tf, agg] = GECKO_TF[iv] ?? GECKO_TF["5m"];
   if (!net) throw new Error("chain");
-  const q = new URLSearchParams({ aggregate: agg, limit: iv === "1d" ? 1000 : 300, currency: "usd", ...(e.token ? { token: e.token } : {}) });
+  const q = new URLSearchParams({ aggregate: agg, limit: 1000, currency: "usd", ...(e.token ? { token: e.token } : {}) });
   const d = await fetchJson(`${GECKO}/networks/${net}/pools/${pair}/ohlcv/${tf}?${q}`, 6000);
   const rows = d?.data?.attributes?.ohlcv_list ?? [];
   return rows.map((r) => ({ time: r[0], open: Number(r[1]), high: Number(r[2]), low: Number(r[3]), close: Number(r[4]) }))
@@ -503,7 +508,7 @@ const IV_NAME = { "5m": "5-minute", "15m": "15-minute", "30m": "30-minute", "1h"
                   "4h": "4-hour", "6h": "6-hour", "8h": "8-hour", "12h": "12-hour", "1d": "daily" };
 const CHIP_OF = { "30m": "15m", "2h": "1h", "6h": "4h", "12h": "8h" };
 const labInterval = (e) => {
-  const iv = e.kind === "gem" ? e.lab?.daily?.interval : null;
+  const iv = e.kind === "gem" ? shownTrades(e.lab)?.interval ?? e.lab?.daily?.interval : null;
   return iv ? CHIP_OF[iv] ?? iv : null;
 };
 const defaultInterval = (e) => labInterval(e) ?? (e.kind === "gem" ? "1d" : "5m");
@@ -556,6 +561,16 @@ async function paintChart() {
   }
   if (candles.length < 2) { if (!stale) { disposeChart(); box.innerHTML = embed(e); } return; }
   const drawn = await drawChart(box, candles, e, shown);
+  // A chart too short for the listed trades (300 candles of 5 minutes are
+  // one day, the backtest's are three and a half) steps up until every
+  // arrow fits, unless the viewer picked the timeframe.
+  const expected = e.kind === "gem" ? (shownTrades(e.lab)?.events ?? []).length : 0;
+  const next = INTERVALS[INTERVALS.indexOf(shown) + 1];
+  if (!current.picked && drawn < expected && next && candles[0].time > Math.min(...shownTrades(e.lab).events.map((v) => v.t))) {
+    interval = next;
+    paintChips();
+    return paintChart();
+  }
   const note = box.parentElement?.querySelector("[data-chart-note]");
   if (note) {
     if (shown !== interval) note.textContent = `No ${interval} candles for this token: showing ${shown}.`;
@@ -674,7 +689,14 @@ function withLab(e) {
   // 5-minute strategies (Lorenzo, 28/09: "la strategia da applicare non e'
   // quella sul minuto ma [...] il trend follower originario [...] sul
   // giornaliero [...] al massimo 8 ore").
-  if (e.kind === "gem") return e.lab?.daily?.rows ? [{ backtests: e.lab.daily }] : [];
+  // The trades behind the number the Top list shows (lab-shown.js): the
+  // trend follower's when it traded, else the 5-minute best's. Lorenzo,
+  // 30/09 (MERRYMEN): "+400% in classifica [...] ma non vedo niente".
+  if (e.kind === "gem") {
+    const shown = shownTrades(e.lab);
+    if (shown) return [{ backtests: { best: { events: shown.events }, rug: shown.rug } }];
+    return e.lab?.daily?.rows ? [{ backtests: e.lab.daily }] : [];
+  }
   return (e.alerts?.length || !e.lab) ? (e.alerts ?? []) : [{ backtests: e.lab }];
 }
 
