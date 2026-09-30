@@ -263,15 +263,16 @@ def what_changed(old: dict | None, new: dict) -> str:
     return ""
 
 
-def reason_to_judge(hit: dict | None, seen: dict, now: float) -> str:
-    """Why DeepSeek should read this project now, or "" to keep the reading."""
+def reason_to_judge(hit: dict | None, seen: dict, now: float, fresh: bool = False) -> str:
+    """Why DeepSeek should read this project now, or "" to keep the reading.
+    `fresh` (a scan asked by hand): changed facts are read again at once."""
     if not hit:
         return "first reading"
     if hit.get("v") != PROMPT_VERSION:
         return "new prompt"
     age = now - hit.get("at", 0)
     changed = what_changed(hit.get("facts"), seen)
-    if changed and age >= RECHECK_GAP_S:
+    if changed and (fresh or age >= RECHECK_GAP_S):
         return changed
     if age < TTL_S:
         return ""
@@ -280,20 +281,20 @@ def reason_to_judge(hit: dict | None, seen: dict, now: float) -> str:
     return "periodic refresh"
 
 
-def wants_reading(e: dict, rules_why: str, now: float | None = None) -> bool:
+def wants_reading(e: dict, rules_why: str, now: float | None = None, fresh: bool = False) -> bool:
     """A Top project whose reading is missing or out of date (new prompt, facts moved)."""
     hit = _cache.get(f"{e['chain']}:{e['token_address']}")
-    return bool(reason_to_judge(hit, judged_facts(e, rules_why), now or time.time()))
+    return bool(reason_to_judge(hit, judged_facts(e, rules_why), now or time.time(), fresh))
 
 
 async def judge(e: dict, rules_why: str, now: float | None = None, ask=None,
-                priority: bool = False) -> dict | None:
+                priority: bool = False, fresh: bool = False) -> dict | None:
     """`priority` (a Top entry) uses its own daily allowance instead of DAILY_MAX."""
     key = f"{e['chain']}:{e['token_address']}"
     now = now or time.time()
     hit = _cache.get(key)
     seen = judged_facts(e, rules_why)
-    why = reason_to_judge(hit, seen, now)
+    why = reason_to_judge(hit, seen, now, fresh)
     if not why:
         return hit
     day = time.strftime("%Y-%m-%d", time.gmtime(now))
