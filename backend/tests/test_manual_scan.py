@@ -193,3 +193,11 @@ def test_a_timed_out_recheck_never_leaves_absences_red():
     e = {"judge": {"problems": ["Anonymous team", "Mint enabled", "No docs found"]}}
     q = scout_recheck.quick(e)
     assert [p["text"] for p in q["confirmed"]] == ["Mint enabled"]
+
+
+def test_slim_keeps_the_supply_held_by_contracts_but_not_wallets():
+    e = {"pillars": {"tokenomics": {"score": 80, "flags": [], "facts": {"unlocks": [
+        {"pct": 8.3, "kind": "locker", "note": "locked"}, {"pct": 2.7, "kind": "wallet", "note": "7702"}]}}}}
+    out = ms._slim(e)
+    assert out["unlocks"] == [{"pct": 8.3, "kind": "locker", "note": "locked"}]
+    assert out["pillars"]["tokenomics"] == {"score": 80, "flags": []}

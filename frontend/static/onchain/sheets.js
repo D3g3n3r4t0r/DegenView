@@ -105,7 +105,7 @@ export async function openScan(query) {
     ${ai ? `<div class="scan-ai" data-risk="${ai.risk >= 60 ? "high" : ai.risk >= 30 ? "mid" : "low"}"><b>${ai.risk}</b>
       <span><b>Scout rug risk</b><small>${escapeHtml([ai.theme, ...(ai.flags ?? [])].filter(Boolean).join(" · ") || "no red flags")}</small></span></div>`
       : `<p class="sheet-note">Scout's AI assessment is unavailable right now.</p>`}
-    ${d.scout ? `<div class="scan-scout">${gemWhy(d.scout)}${recheckBlock(d.scout.recheck)}</div>` : g ? gemCard(g) : ""}
+    ${d.scout ? `<div class="scan-scout">${gemWhy(d.scout)}${unlockBlock(d.scout.unlocks)}${recheckBlock(d.scout.recheck)}</div>` : g ? gemCard(g) : ""}
     ${btCard(d.backtest)}
     <p class="sheet-note"><b>Memory:</b> ${escapeHtml(d.memory.summary)}${hist ? ` · this token before: ${hist}` : ""}</p>
     ${d.alert ? `<p class="sheet-note">Alerted ${new Date(d.alert.at * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" })}, now ${pctS(d.alert.now)}.</p>` : ""}
@@ -176,6 +176,15 @@ const pctN = (n) => (n == null ? "—" : `${n > 0 ? "+" : ""}${Math.round(n)}%`)
 
 // The red points the second look could not confirm (scout_recheck.py):
 // cleared ones and what it found, then the ones still unverified.
+// Contracts holding the supply, read on chain (unlocks.py): lockers,
+// vesting and their unlock dates.
+function unlockBlock(u) {
+  if (!u?.length) return "";
+  const when = (x) => { const at = x.unlock_at ?? x.end; return at ? ` · ${new Date(at * 1000).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}` : ""; };
+  return `<div class="ds-report"><h5>Supply in contracts</h5><ul class="why-list">
+    ${u.map((x) => `<li data-tone="${x.kind === "contract" || x.kind === "unknown" ? "warn" : "good"}">${Number(x.pct).toFixed(1)}% ${escapeHtml(x.kind)}${when(x)}<small>${escapeHtml(x.note ?? "")}</small></li>`).join("")}</ul></div>`;
+}
+
 function recheckBlock(r) {
   if (!r || !(r.refuted?.length || r.unverified?.length || r.found?.length)) return "";
   const li = (tone, head, x) => `<li data-tone="${tone}">${head}${escapeHtml(x.text)}${x.note ? `<small>${escapeHtml(x.note)}</small>` : ""}</li>`;
