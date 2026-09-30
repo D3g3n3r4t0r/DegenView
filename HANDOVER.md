@@ -1,5 +1,11 @@
 # Memoria di sessione
 
+## Trend follower 8h/1d sulla classifica, con segnali — `seed-0235` — 2026-09-30
+
+Lorenzo: "sui progetti in classifica io voglio che venga attivata la strategia [trend follower] con time frame piu' alti [...] se il token e' abbastanza giovane 8 ore se no un giorno se c'e' almeno abbastanza candele [...] segnali di piu' qualita'". Fatto a mano (Actions DeepSeek ferme, nessuna chiave in sandbox).
+Prima: `strategy_lab` calcolava gia' `daily` (1d, o 8h sotto 60 giorni) ma la lista Top mostrava solo il migliore a 5m e nessun segnale partiva; minimo 30 candele, sotto il riscaldamento dei filtri. Ora: `TRIGGER_MIN_BARS = 60` (filtro volatilita' 16+44: primo ingresso possibile alla barra 59, misurato), solo candele chiuse (`_closed`), `_signal` = ultimo buy/sell se sull'ultima candela chiusa e non gia' annunciato (`daily.signal`), `on_signal` -> `_notify_trend_signal` in main (Telegram in italiano, stessi utenti delle gemme, senza tetto orario). Se GeckoTerminal non risponde il `daily` salvato resta. `_lab_summary.daily` solo con trade; `top.js` scrive "8h +X% · N trades · long", altrimenti "5m +X%".
+Resta: l'autotrader non segue questi segnali (non chiesto); valutare con Lorenzo se vuole il pilota sulle gemme.
+
 ## Scanner manuale al passo con la pipeline — `seed-0232` — 2026-09-29
 
 Lorenzo, con lo screenshot di HYDX: "lo scanner manuale e' insufficiente e non si e' evoluto seguendo tutti gli aggiornamenti e migliorie che abbiamo fatto".

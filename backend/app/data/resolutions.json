@@ -2361,5 +2361,10 @@
     "status": "risolto",
     "at": 1790749189,
     "summary": "Un errore di sintassi nello scanner manuale (una espressione regolare scritta /^https:/// invece di /^https:\\/\\//) rompeva tutti i moduli JavaScript dell'app: la pagina si disegnava ma nessun tasto aveva effetto e niente si caricava. Corretto; aggiunto un test che legge ogni modulo come fa il browser, perche' il controllo usato prima lo lasciava passare."
+  },
+  "seed-0235": {
+    "status": "risolto",
+    "at": 1790751532,
+    "summary": "Prima la lista della Top mostrava il risultato della migliore strategia a 5 minuti; il trend follower del sito girava gia' su 1d/8h ma si vedeva solo nella pagina del token, e nessun segnale partiva. Ora ogni progetto in classifica mostra per primo il trend follower: giornaliero se ha almeno 60 giorni di candele, altrimenti 8 ore se ha almeno 60 candele da 8 ore (circa 20 giorni). 60 non e' una scelta a occhio: i filtri della strategia (volatilita' su 16+44 barre) non permettono un ingresso prima della sessantesima candela. Si usano solo candele chiuse, cosi' un segnale non sparisce. Quando la strategia entra o esce sull'ultima candela chiusa arriva un avviso Telegram in italiano ('Trend follower 8 ore · entrata su ...') e una riga nel diario dell'agente; ogni segnale una volta sola. Un progetto ancora troppo giovane, o senza trade sul timeframe alto, tiene il risultato a 5 minuti, scritto '5m', finche' non ce l'ha."
   }
 }

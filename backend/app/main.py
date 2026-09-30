@@ -4098,12 +4098,16 @@ def _lab_summary(bt: dict | None) -> dict | None:
         return None
     traded = [r for r in bt.get("rows") or [] if r.get("trades") and r.get("return_pct") is not None]
     best = max(traded, key=lambda r: r["return_pct"]) if traded else None
+    # The 8h/1d trend follower leads the list; with no trade yet there, the
+    # 5-minute best stays, so every row keeps a real result.
     daily = bt.get("daily")
     drow = (daily.get("rows") or [None])[0] if daily and daily.get("rows") else None
     return {"best": {k: best[k] for k in ("label", "return_pct", "trades")} if best else None,
             "hold_pct": bt.get("hold_pct"), "bars": bt.get("bars"),
             "daily": {"interval": daily.get("interval"), "return_pct": drow.get("return_pct"),
-                      "trades": drow.get("trades"), "hold_pct": daily.get("hold_pct")} if drow else None}
+                      "trades": drow.get("trades"), "win_rate": drow.get("win_rate"),
+                      "in_position": drow.get("in_position"), "hold_pct": daily.get("hold_pct"),
+                      "signal": daily.get("signal")} if drow and drow.get("trades") else None}
 
 
 def _narr_keys(raw) -> set[str]:
@@ -4366,6 +4370,37 @@ async def _notify_gem(kind: str, e: dict) -> None:
 
 
 onchain_leaderboard.on_alert(_notify_gem)
+
+
+def _trend_signal_text(s: dict) -> str:
+    """Italian, like every message Lorenzo reads."""
+    import html as esc
+    tf = "giornaliero" if s.get("interval") == "1d" else "8 ore"
+    sym = esc.escape(str(s.get("symbol") or "?"))
+    url = app_token_url("gems", s.get("chain") or "", s.get("token") or "")
+    link = f'<a href="{esc.escape(url, quote=True)}">{sym}</a>'
+    price = f"{s['price']:.6g}" if isinstance(s.get("price"), (int, float)) else "?"
+    if s.get("side") == "buy":
+        head = f"📈 <b>Trend follower {tf}</b> · entrata su {link} a ${price}"
+    else:
+        ret = s.get("ret")
+        head = (f"📉 <b>Trend follower {tf}</b> · uscita da {link} a ${price}"
+                + (f" ({ret * 100:+.1f}%)" if isinstance(ret, (int, float)) else ""))
+    return head + "\n<i>Ricerca, non un consiglio: entra solo con cio' che puoi perdere.</i>"
+
+
+async def _notify_trend_signal(s: dict) -> None:
+    """Lorenzo, 30/09: the site's trend follower on 8h (young tokens) or 1d
+    on the ranking's projects, "segnali di piu' qualita'". Fires on the
+    candle close, rare by construction, so no hourly cap."""
+    from app.notify import telegram
+    text = _trend_signal_text(s)
+    for user in auth.list_users():
+        if user.telegram_chat_id and user.onchain_wallets and _telegram_allowed(user):
+            _fire(telegram.send_to(user.telegram_chat_id, text))
+
+
+onchain_strategy_lab.on_signal(_notify_trend_signal)
 
 _SIGNALS_TICK_S = 30
 _signals_started = _time.time()
