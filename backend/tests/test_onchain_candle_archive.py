@@ -36,9 +36,20 @@ def test_the_loop_warms_the_stalest_series_of_the_top(monkeypatch):
         asked.append((pool, tf, agg))
         return [[now - 3600, 1, 1, 1, 1, 1]]
     monkeypatch.setattr(ca.alert_track, "_candles", candles)
+    from app.providers import dexscreener
+    monkeypatch.setattr(dexscreener, "gecko_load", lambda: 99)   # a busy background does not starve it
     strategy_lab._results["solana:T"] = {"pair": "P"}
     entries = [{"chain": "solana", "token_address": "T"}, {"chain": "solana", "token_address": "X"}]
     for _ in range(len(ca.SOURCES) + 1):
         asyncio.run(ca.tick(entries, now=now))
     assert sorted(asked) == sorted(("P", tf, agg) for tf, agg in ca.SOURCES)
     assert ca.status([("solana", "P", "T")], now=now)["fresh"] == len(ca.SOURCES)
+
+
+def test_a_restart_resumes_the_queue_where_it_was(monkeypatch):
+    now = 1_800_000_000
+    pairs = [("solana", "P", "T")]
+    for tf, agg in ca.SOURCES[:3]:
+        ca.put(ca.key("solana", "P", tf, agg, "T"), [[now - 3600, 1, 1, 1, 1, 1]], now)
+    ca._conn = None                          # a new process opens the file again
+    assert ca.next_due(pairs, now + 60)[3:] == ca.SOURCES[3]
