@@ -138,7 +138,8 @@ def add_bar(k: str, t: float, price: float, volume: float | None = None) -> None
             r[5] = volume
     elif not rows or rows[-1][0] < b0:
         rows.append([b0, price, price, price, price, volume or 0.0])
-        del rows[:-MAX_BARS]
+        limit = 30000 if (_alerts.get(k) or {}).get("quant_policy") else MAX_BARS
+        del rows[:-limit]
 
 
 def merge_bars(k: str, candles: list) -> None:
@@ -149,7 +150,8 @@ def merge_bars(k: str, candles: list) -> None:
         if len(c) >= 6 and _num(c[4]):
             t = int(float(c[0]))
             have[t] = [t, float(c[1]), float(c[2]), float(c[3]), float(c[4]), float(c[5] or 0)]
-    _bars[k] = sorted(have.values(), key=lambda r: r[0])[-MAX_BARS:]
+    limit = 30000 if (_alerts.get(k) or {}).get("quant_policy") else MAX_BARS
+    _bars[k] = sorted(have.values(), key=lambda r: r[0])[-limit:]
 
 
 def _num(v) -> float | None:
@@ -184,6 +186,7 @@ def record(item: dict, kind: str, now: float | None = None) -> dict | None:
         "liq0": _num(item.get("liquidity_usd")), "quoted": _num(item.get("price_usd")),
         "entry": None, "entry_at": None, "returns": {}, "last": None, "max_ret": None, "min_ret": None,
         "misses": 0, "gone": False, "closed": False, "strategy": None, "score": item.get("score"),
+        "launched_at": item.get("launched_at"),
         "image": item.get("image") or None, "facts": facts_of(item), "meme": bool(item.get("meme")),
     }
     save()
@@ -215,7 +218,7 @@ def apply_price(a: dict, price, now: float) -> None:
     for h in CHECKPOINTS_H:
         if str(h) not in a["returns"] and age >= h * 3600:
             a["returns"][str(h)] = ret
-    if age >= KEEP_WATCHING_S:
+    if age >= KEEP_WATCHING_S and not a.get("quant_policy"):
         a["closed"] = True
 
 
@@ -389,12 +392,26 @@ async def refresh_system(client, now: float | None = None, gap_s: float = 0.0) -
 
 async def _refresh_system(client, now: float, gap_s: float | None) -> int:
     from app.sniper.scanner import GECKO_NETWORKS
-    from app.trading.onchain import outcomes, system
+    from app.trading.onchain import outcomes, system, quant_runtime, quant_memory
+    reviewed = quant_runtime.approved()
     fetched = changed = 0
     def _ready(a):
         return a.get("backtests") is not None and a.get("system_v") == SYSTEM_VERSION
     for a in sorted(_alerts.values(), key=lambda x: (_ready(x), -x["at"])):
-        if a["kind"] != "meme" or a.get("nodata"):
+        if a.get("nodata"):
+            continue
+        try:
+            await asyncio.to_thread(quant_memory.capture_case, a, _bars.get(key_of(a)) or [], now)
+        except Exception:
+            logger.exception("quant research collection unavailable")
+        # Research-approved path is separate from the frozen legacy backtest.
+        if reviewed or a.get("quant_policy"):
+            try:
+                await asyncio.to_thread(quant_runtime.refresh, a, _bars.get(key_of(a)) or [], now, reviewed)
+                changed += 1
+            except Exception:
+                logger.exception("quant signal evaluation unavailable")
+        if a["kind"] != "meme":
             continue
         if a.get("system_done") and a.get("system_v") != SYSTEM_VERSION and fetched < SYSTEM_FETCHES_PER_TICK:
             a.update(system_done=False, bars_fetched=False)      # older result: rebuild it once
@@ -440,7 +457,8 @@ async def _refresh_system(client, now: float, gap_s: float | None) -> int:
         changed += 1
         if all(r.get("done") for r in res.values()):
             a["system_done"] = True
-            _bars.pop(k, None)
+            if not a.get("quant_policy"):
+                _bars.pop(k, None)
     if changed or fetched:
         save()
         save_bars(now, force=True)
@@ -463,7 +481,7 @@ def _due(now: float) -> dict[str, list[dict]]:
     for a in _alerts.values():
         if a["closed"]:
             continue
-        young = now - a["at"] < FAST_FOR_S
+        young = now - a["at"] < FAST_FOR_S or bool(a.get("quant_policy"))
         if young or slow:
             out.setdefault(a["chain"], []).append(a)
     if slow:
@@ -520,6 +538,9 @@ def _item(a: dict, now: float, chosen) -> dict:
             "now": (a.get("last") or {}).get("ret"), "max": a["max_ret"], "gone": a["gone"],
             "age_h": round((now - a["at"]) / 3600, 1), "strategy": a.get("strategy"),
             "system": _system_view(a, chosen), "systems": [v for v in systems if v],
+            "quant": {"status": a.get("quant_status", "not evaluated"),
+                      **{k: (a.get("quant_system") or {}).get(k) for k in
+                         ("state", "policy_id", "report_hash", "timeframe", "in_at", "evaluated_at", "reason")}},
             "narratives": narratives.labels(narratives.match(a.get("name"), a.get("symbol"), kind="meme")),
             "backtests": a.get("backtests"), "on_alert": _alert_bt_view(a)}
 

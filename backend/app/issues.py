@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-quant-engine-20260930", "Sniper solo gemme: ingresso su segnale e timeframe scelti dai backtest, senza DeepSeek",
+     "Lorenzo, 30/09: 'non voglio piu memecoin'; '5 min all'inizio e poi 1ora dopo 24h va decisa in base ai dati di backtest'; 'questo lavoro vorrei sgravarlo da deepseek'; 'devi costruirlo'. Motore quantitativo e memoria incidenti in revisione: non attivare politiche non validate, non dichiarare risolto prima del collaudo sui dati reali.",
+     "alta"),
     ("seed-0235", "Classifica: il trend follower del sito su 8 ore o giornaliero, con segnali",
      "Lorenzo, 30/09: 'sui progetti in classifica io voglio che venga attivata la strategia [trend follower] con time frame piu' alti quindi se il token e' abbastanza giovane il time frame 8 ore se no un giorno se c'e' almeno abbastanza candele sufficienti da generare un trigger [...] ho bisogno di segnali di piu' qualita''",
      "alta"),

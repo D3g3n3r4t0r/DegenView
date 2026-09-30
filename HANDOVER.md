@@ -1,5 +1,13 @@
 # Memoria di sessione
 
+## Motore quantitativo deterministico, gemme e incidenti — 2026-09-30 — in revisione
+
+Lorenzo: "non voglio piu memecoin"; "5 min all'inizio e poi 1ora dopo 24h va decisa in base ai dati di backtest"; "questo lavoro vorrei sgravarlo da deepseek"; "devi costruirlo". Codice in `quant_engine.py`, `quant_memory.py`, `quant_research.py`, `quant_runtime.py`; contratto e procedura in `docs/QUANT_ENGINE.md`. Zero chiamate AI per ricerca/archiviazione/valutazione. Confronto deterministico timeframe fissi/progressivi, partizioni cronologiche con finestre sovrapposte escluse, costi/stress, filtro incidenti con falsi positivi e validazione anteriore ai dati strategia. Archivio nello stesso observatory.sqlite3, distinzione incidenti euristici/truffe confermate, raccolta prospettica gemme (finestre iniziali 24h). Ingressi autotrader real/sim su segnale validato e gemma verificata; non piu' solo alert. Posizioni legacy mantengono le uscite precedenti.
+
+ATTENZIONE per Claude revisore: senza manifest locale approvato `quant_approved.json` gli ingressi nuovi si fermano dopo il deploy; la ricerca non lo crea. Non mergiare/attivare senza validazione sui dati reali e paper test. Non c'e' ancora un timeframe vincente misurato. Il replay runtime e' limitato a 30.000 barre; non e' uno stato strategia incrementale illimitato. I feed storici meme non sono cancellati. PR separata dalla mappa Agent #402, ancora aperta/non merged e tuttora incompleta come osservatorio completo.
+
+Bacheca letta: 16 aperti, 12 in corso, 2 riaperti; segnalazioni DeepSeek su conteggi memoria, gemme senza strategia, LP lock e altre non dichiarate risolte. Nuova voce `seed-quant-engine-20260930`, nessuna risoluzione prematura. Test quantitativi e regressioni autotrader locali con dipendenze isolate; suite completa e collaudo infrastruttura richiesti in CI/revisione. Nessun merge, deploy o ordine eseguito.
+
 ## Trend follower 8h/1d sulla classifica, con segnali — `seed-0235` — 2026-09-30
 
 Lorenzo: "sui progetti in classifica io voglio che venga attivata la strategia [trend follower] con time frame piu' alti [...] se il token e' abbastanza giovane 8 ore se no un giorno se c'e' almeno abbastanza candele [...] segnali di piu' qualita'". Fatto a mano (Actions DeepSeek ferme, nessuna chiave in sandbox).
