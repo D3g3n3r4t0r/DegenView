@@ -1,0 +1,74 @@
+from app.trading.onchain import sim_backtest as sb
+
+
+def _tok(sym, events, interval="1d"):
+    return {"chain": "solana", "token": sym, "symbol": sym, "interval": interval, "events": events}
+
+
+def test_trades_share_one_wallet_in_time_order():
+    a = _tok("A", [{"t": 100, "side": "buy", "price": 1.0}, {"t": 300, "side": "sell", "price": 2.0, "ret": 1.0}])
+    b = _tok("B", [{"t": 200, "side": "buy", "price": 1.0}, {"t": 400, "side": "sell", "price": 0.5, "ret": -0.5}])
+    r = sb.replay([a, b], 10_000, 0.10)
+    # A: 1000 -> 2000. B: 10% of 10000 (A at cost) = 1000 -> 500.
+    assert r["equity"] == 10_500 and r["ret"] == 0.05
+    assert r["trades"] == 2 and r["wins"] == 1 and not r["open"]
+    assert [c["symbol"] for c in r["closed"]] == ["B", "A"]
+
+
+def test_open_trade_marked_at_live_price_or_cost():
+    a = _tok("A", [{"t": 100, "side": "buy", "price": 2.0}])
+    r = sb.replay([a], 10_000, 0.10, marks={"solana:A": 3.0}, now=500)
+    assert r["open"][0]["ret"] == 0.5 and r["equity"] == 10_500 and r["curve"][-1] == [500, 10_500]
+    r = sb.replay([a], 10_000, 0.10)
+    assert r["open"][0]["ret"] is None and r["equity"] == 10_000
+
+
+def test_never_spends_more_than_free_cash():
+    toks = [_tok(str(i), [{"t": 100 + i, "side": "buy", "price": 1.0}]) for i in range(12)]
+    r = sb.replay(toks, 1000, 0.5)
+    assert r["cash"] >= 0 and r["skipped"] > 0
+
+
+def test_token_trades_follows_the_top_row():
+    daily = {"interval": "8h", "rows": [{"trades": 2}], "best": {"events": [{"t": 1, "side": "buy"}]}}
+    assert sb.token_trades({"daily": daily})[0] == "8h"
+    no_daily = {"daily": {"rows": [{"trades": 0}]}, "best": {"events": [{"t": 1, "side": "buy"}]}}
+    assert sb.token_trades(no_daily)[0] == "5m"
+    assert sb.token_trades(None) is None
+
+
+def test_ledger_keeps_trades_the_window_slid_past(monkeypatch, tmp_path):
+    monkeypatch.setattr(sb, "_FILE", tmp_path / "l.json")
+    sb.reset_for_tests()
+    first = {"best": {"events": [{"t": 100, "side": "buy", "price": 1.0},
+                                 {"t": 200, "side": "sell", "price": 2.0, "ret": 1.0}]}}
+    later = {"best": {"events": [{"t": 300, "side": "buy", "price": 2.0}]}}
+    assert sb.remember("solana", "A", "A", first) and sb.remember("solana", "A", "A", later)
+    assert not sb.remember("solana", "A", "A", later)
+    sb.reset_for_tests()
+    monkeypatch.setattr(sb, "_loaded", False)
+    toks = sb.ledger_tokens()
+    assert [e["t"] for e in toks[0]["events"]] == [100, 200, 300]
+    r = sb.replay(toks, 10_000, 0.10)
+    assert r["trades"] == 1 and len(r["open"]) == 1
+
+
+def test_a_trade_moved_to_its_fill_candle_is_not_kept_twice(monkeypatch):
+    sb.reset_for_tests()
+    monkeypatch.setattr(sb, "_save", lambda: None)
+    old = {"daily": {"interval": "1d", "rows": [{"trades": 1}], "best": {"events": [
+        {"t": 86400, "side": "buy", "price": 1.0}]}}}
+    sb.remember("solana", "T", "T", old, save=False)
+    moved = {"daily": {"interval": "1d", "rows": [{"trades": 1}], "best": {"fills": "next_open", "events": [
+        {"t": 2 * 86400, "side": "buy", "price": 1.1}]}}}
+    sb.remember("solana", "T", "T", moved, save=False)
+    assert [e["t"] for e in sb.ledger_tokens()[0]["events"]] == [2 * 86400]
+
+
+def test_trades_of_an_earlier_timeframe_stop_where_the_new_one_starts():
+    sb.reset_for_tests()
+    row = {"chain": "solana", "token": "T", "interval": "1h", "events": {
+        "100:buy": {"t": 100, "side": "buy", "iv": "5m"}, "200:sell": {"t": 200, "side": "sell", "iv": "5m"},
+        "900:buy": {"t": 900, "side": "buy", "iv": "5m"},
+        "500:buy": {"t": 500, "side": "buy", "iv": "1h"}, "4000:sell": {"t": 4000, "side": "sell", "iv": "1h"}}}
+    assert [e["t"] for e in sb._one_timeframe(row)] == [100, 200, 500, 4000]

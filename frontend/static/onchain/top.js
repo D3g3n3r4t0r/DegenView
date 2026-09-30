@@ -189,7 +189,7 @@ function paint() {
     : "";
   root.querySelector("[data-top-note]").innerHTML = narrLine + escapeHtml(lead + (bt?.total
     ? `Every strategy backtested on each token's latest chart, every hour, around the clock · ${bt.ready}/${bt.total} ready`
-    : ""));
+    : "")) + ' <button type="button" class="top-narr-clear" data-top-wallet>$10k wallet on these trades →</button>';
 }
 
 // The H24 lab's best backtest (strategy_lab.py), in the row: what the
@@ -241,6 +241,7 @@ export function mountTop() {
   waiting();
   root.addEventListener("click", (event) => {
     if (event.target.closest("[data-top-narr-clear]")) { narr.set([]); return; }
+    if (event.target.closest("[data-top-wallet]")) { import("@onchain/sim-backtest.js").then((m) => m.openSimBacktest()); return; }
     const b = event.target.closest("[data-size]");
     if (!b) return;
     size = Number(b.dataset.size);

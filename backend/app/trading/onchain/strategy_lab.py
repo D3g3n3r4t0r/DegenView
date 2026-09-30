@@ -25,7 +25,7 @@ import httpx
 
 from app.notify import deepseek_desk
 from app.sniper.scanner import GECKO_NETWORKS
-from app.trading.onchain import alert_track, priority, system
+from app.trading.onchain import alert_track, priority, sim_backtest, system
 from app.trading.onchain.storage import data_file
 from app.atomic_write import write_text_atomic
 
@@ -247,6 +247,10 @@ async def run_one(client: httpx.AsyncClient, e: dict, now: float) -> dict | None
                              "interval": daily["interval"], **sig}, now)
     if daily is not None:
         _results[key]["daily"] = daily
+    try:    # the Top 50 wallet keeps every trade, even after the window slides past it
+        sim_backtest.remember(e["chain"], e["token_address"], symbol, get(e["chain"], e["token_address"]))
+    except Exception:
+        logger.exception("strategy lab: registro del portafoglio Top 50 fallito per %s", symbol)
     best = _best(bt)
     hold = bt.get("hold_pct")
     outcome = (f"best {best['label']} {best['return_pct']:+.0f}% in {best['trades']} trades"

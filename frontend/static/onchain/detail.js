@@ -55,6 +55,13 @@ export function register(id, entry) {
   registry.set(id, merged);
 }
 
+/** The wallet's own trade on a token, drawn on its chart as dots: every
+ *  page registered for that token gets it. */
+export function setOwn(chain, token, own) {
+  const t = String(token ?? "").toLowerCase();
+  for (const e of registry.values()) if (e.chain === chain && String(e.token ?? "").toLowerCase() === t) e.own = own;
+}
+
 const pct = (f) => (f == null ? "—" : `${f > 0 ? "+" : ""}${Math.round(f * 100)}%`);
 const sign = (f) => (f == null ? "" : f >= 0 ? "up" : "down");
 
