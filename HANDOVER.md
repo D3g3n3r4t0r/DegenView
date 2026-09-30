@@ -16,6 +16,12 @@ Lorenzo: "se entro qui io veda cosa succede davvero quando una crypto entra in a
 
 # Memoria di sessione
 
+## Meme spente negli alert, saldo simulato a mano — `seed-0238`, `seed-0239` — 2026-09-30
+
+Lorenzo: "le meme e shitcoin sono state bloccate dal bot alert? inoltre la simulazione voglio poter modificare il saldo a mio piacimento", poi "non le voglio le meme [...] dobbiamo avere strategia e alert solo su roba buona".
+Gli alert meme non erano bloccati (server: 64 oggi, 72 ieri; scarti 24h: LP non bloccata 166, GoPlus codice non verificato 141, memoria rug 82). Era ferma la simulazione: dal gate quant #408 il pilota entra solo su gemme approvate (`quant_runtime.gem_verdict` scarta ogni meme) e senza `quant_approved.json` non entra affatto. Ora `listings_allow_memes=False` (config): torna il filtro con sito del progetto e voto DeepSeek, nome da meme = scartato. Se sul server il `.env` imposta `LISTINGS_ALLOW_MEMES=true`, vince quello.
+Saldo simulato: `sim_cash` su `PATCH /api/onchain/autotrader` + "Set cash" nel profilo (PR #420): cambia la liquidita', le posizioni restano, `sim_start` si sposta dello stesso delta.
+
 ## Potatura file che gonfiano la RAM — `seed-0236` — 2026-09-30
 
 Controllo server: 1,8 GB su 3 GB, `sniper_candidates.json` 430 MB (l'app passa da 214 MB a 1,77 GB all'avvio). Lorenzo ha scelto "potare i file". Fatto a mano (Actions DeepSeek ferme).
