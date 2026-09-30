@@ -135,7 +135,15 @@ export async function openScan(query) {
   bodyEl.querySelector("[data-full]")?.addEventListener("click", async () => {
     dialog.close();
     location.hash = `${location.hash.split("&")[0].slice(1) || (g ? "gems" : "meme")}&token=${encodeURIComponent(t.chain)}:${encodeURIComponent(t.token_address)}`;
-    (await import("@onchain/detail.js")).openFromHash();
+    // The page gets what the scan read (name, pool, cap): without it a token
+    // no list shows opened as "0xAA57" on a dead side pool (HYDX, 30/09).
+    const detail = await import("@onchain/detail.js");
+    detail.register(`${g ? "gem" : "alert:meme"}:${t.chain}:${t.token_address}`, {
+      kind: g ? "gem" : "meme", chain: t.chain, token: t.token_address, symbol: t.symbol, name: t.name,
+      pair: t.pair_address, pairUrl: t.pair_url, image: t.image, cap: t.market_cap,
+      change: t.change_24h != null ? t.change_24h / 100 : null, ageTs: t.created_at,
+    });
+    detail.openFromHash();
   });
 }
 
