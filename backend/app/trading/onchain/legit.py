@@ -828,8 +828,24 @@ def judge_ai(review: dict | None, gate: bool = False) -> dict:
 
 # ----------------------------------------------------------------- insieme
 
+class _Tap(list):
+    """A check list that reports each check as it lands (the manual
+    scanner shows the steps live)."""
+
+    def __init__(self, hook):
+        super().__init__()
+        self._hook = hook
+
+    def append(self, c) -> None:
+        super().append(c)
+        try:
+            self._hook(c)
+        except Exception:
+            pass
+
+
 async def assess(token: dict, links: dict, client: httpx.AsyncClient, *,
-                 need_github: bool = True, ai_gate: bool = False, memes: bool = False) -> dict:
+                 need_github: bool = True, ai_gate: bool = False, memes: bool = False, tap=None) -> dict:
     """token: chain, symbol, name, token_address (+ market_cap, liquidity_usd
     per il prompt). links: {websites, socials}.
 
@@ -849,7 +865,7 @@ async def assess(token: dict, links: dict, client: httpx.AsyncClient, *,
     chain = token.get("chain")
     website = pick_website(links.get("websites") or [])
     socials = [s for s in links.get("socials") or [] if s.get("type") in _SOCIAL_TYPES]
-    out = {"status": "wait", "reason": "", "checks": [], "website": website, "socials": socials,
+    out = {"status": "wait", "reason": "", "checks": _Tap(tap) if tap else [], "website": website, "socials": socials,
            "github": None, "ai": None,
            "scan_url": scan_url(chain or "", token.get("token_address") or "")}
 

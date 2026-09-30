@@ -139,6 +139,38 @@ export const walletChallenge = (body) => request("/api/wallets/link/challenge", 
 export const walletLink = (body) => request("/api/wallets/link", { method: "POST", body });
 export const getLinkedWallets = () => request("/api/wallets/linked");
 export const scanToken = (query) => request("/api/onchain/scan", { method: "POST", body: { query }, timeoutMs: 60000 });
+// The scan step by step (manual_scan.Steps): one JSON line per event, the
+// last one carries the result.
+export async function streamScan(query, onEvent) {
+  let response;
+  try {
+    response = await fetch("/api/onchain/scan/stream", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query }),
+      signal: AbortSignal.timeout(300000),
+    });
+  } catch (cause) {
+    throw new ApiError(cause.name === "TimeoutError" ? "network is slow" : "network unreachable", { cause });
+  }
+  if (!response.ok || !response.body) throw new ApiError(`scan failed (${response.status})`);
+  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buf = "", result = null;
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += value;
+    let i;
+    while ((i = buf.indexOf("\n")) >= 0) {
+      const line = buf.slice(0, i).trim();
+      buf = buf.slice(i + 1);
+      if (!line) continue;
+      const ev = JSON.parse(line);
+      if ("result" in ev) result = ev.result;
+      else onEvent(ev);
+    }
+  }
+  if (!result) throw new ApiError("scan interrupted");
+  return result;
+}
 export const addScanned = (chain, token) => request("/api/onchain/scan/add", { method: "POST", body: { chain, token } });
 export const getTop = (n, keys = []) =>
   request(`/api/onchain/top?n=${n}${keys?.length ? `&narrative=${encodeURIComponent(keys.join(","))}` : ""}`);
