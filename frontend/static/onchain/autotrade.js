@@ -29,7 +29,7 @@ const cashLine = (d) => (d.usdc
 function line(d) {
   if (!d.has_wallet) return "Create the Robinhood Chain wallet to let the system trade it.";
   if (d.mode === "off") return `Off. When on, the system buys Robinhood alerts on its own entries and sells on its exits, one token at a time.`;
-  if (d.mode === "sim") return "Simulated: follows the trend follower on the ranked gems (5m to 1d, by how much chart each has), never memes: in on its entry, out on its exit. Nothing is sent.";
+  if (d.mode === "sim") return "Simulated: follows the trend follower (8h or 1d) on the ranked gems, never memes: in on its entry, out on its exit. Nothing is sent.";
   return d.server_live ? "Real: trades your cash on its own. Gas is paid in ETH." : "Real is on, but live execution is switched off on the server: nothing is sent yet.";
 }
 

@@ -51,7 +51,11 @@ DAILY_MIN_BARS = TRIGGER_MIN_BARS    # meno di 60 giorni = token giovane: 8 ore
 # TRIGGER_MIN_BARS closed candles. A token a few hours old trades on 5
 # minutes, one of a few days on 1 hour, and so on up to the daily.
 STEP_S = {"1d": 86400, "8h": 28800, "4h": 14400, "1h": 3600, "15m": 900, "5m": 300}
-LADDER = ("1d", "8h", "4h", "1h", "15m", "5m")
+FULL_LADDER = ("1d", "8h", "4h", "1h", "15m", "5m")
+# Lorenzo, 30/09: "prima di applicare questa regola fai un po' di prove su
+# tutte le 50 cripto [...] dovrebbero essere paritarie o superiori". Until
+# that test says so, only the two rungs already in use run.
+LADDER = ("1d", "8h")
 _GECKO_TF = {"1d": ("day", 1), "4h": ("hour", 4), "1h": ("hour", 1), "15m": ("minute", 15)}
 KEEP = 300
 
