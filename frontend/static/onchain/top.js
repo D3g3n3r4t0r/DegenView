@@ -197,7 +197,7 @@ function paint() {
 function btSub(b) {
   if (!b) return '<span class="bt-live" role="img" aria-label="Backtest on its way"><i></i><i></i><i></i></span>';
   const pct = (v) => { const r = Math.round(v ?? 0); return `${r > 0 ? "+" : ""}${r}%`; };
-  // The site's trend follower on 8h/1d leads; the 5-minute best until it has traded.
+  // The site's trend follower on its ladder timeframe (5m to 1d) leads; the 5-minute best until it has traded.
   const d = b.daily;
   if (d) return `${d.interval} ${pct(d.return_pct)} · ${d.trades} trades${d.in_position ? " · long" : ""}`;
   if (!b.best) return "bt: no entry";
