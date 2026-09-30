@@ -66,3 +66,12 @@ test('project chips: newest projects first, each at its latest node, capped', ()
   const pos = live.projectPositions(items, 2);
   assert.deepEqual(pos.map(p => [p.symbol, p.node]), [['A', 'code'], ['B', 'research']]);
 });
+test('journey hash chain verifies and detects an altered record', async () => {
+  const g = '0'.repeat(64), recs = ['{"a":1}', '{"b":2}'];
+  let link = g; const steps = [];
+  for (const r of recs) { const id = await live.sha256Hex(r); link = await live.sha256Hex(link + id); steps.push({ record: r, id, link }); }
+  const j = { genesis: g, head: link, steps };
+  assert.equal((await live.verifyChain(j, live.sha256Hex)).ok, true);
+  const bad = { ...j, steps: [steps[0], { ...steps[1], record: '{"b":3}' }] };
+  assert.deepEqual([(await live.verifyChain(bad, live.sha256Hex)).ok, (await live.verifyChain(bad, live.sha256Hex)).brokenAt], [false, 1]);
+});

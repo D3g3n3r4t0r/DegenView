@@ -1,3 +1,4 @@
+import { mountJourney } from "@onchain/agent-journey.js";
 import { NODES, projectsIn, projectGraph, liveProject, cycleTrace, freshEvents, projectPositions } from "@onchain/agent-map-model.js";
 
 const LIVE = "__live";
@@ -5,7 +6,7 @@ const STEP_MS = 520;
 const MAX_PROJECTS = 8;
 
 /** Mount once; reuse the parent view's authenticated polling and dispose on remount. */
-export function mountAgentMap(root) {
+export function mountAgentMap(root, { loadJourney = null } = {}) {
   let selected = "study", key = LIVE, snapshot = {}, disposed = false, frame = 0, primed = false;
   const seen = new Set(), timers = new Set();
   const still = matchMedia("(prefers-reduced-motion: reduce)");
@@ -47,7 +48,12 @@ export function mountAgentMap(root) {
   stage.append(sparks, tokens);
   // Project chips: each sits on the node of its latest recorded event and hops on new events.
   const where = new Map(), chips = new Map(), pending = new Set();
-  root.replaceChildren(heading, subtitle, live, label, freshness, usage, stage, detail);
+  const journeyBox = element("section"); journeyBox.setAttribute("aria-label", "Token journey");
+  root.replaceChildren(heading, subtitle, live, journeyBox, label, freshness, usage, stage, detail);
+  const journey = loadJourney ? mountJourney(journeyBox, {
+    load: loadJourney,
+    onStep(node, prev) { if (prev && prev !== node) spark(prev, node); later(() => pulse(node), prev ? STEP_MS * .8 : 0); },
+  }) : null;
   const activeKey = () => key === LIVE ? liveProject(snapshot.items)?.key ?? null : key;
 
   function center(id, bounds = stage.getBoundingClientRect()) {
@@ -99,7 +105,10 @@ export function mountAgentMap(root) {
         chip = element("button", p.symbol, "am-chip"); chip.type = "button";
         chip.title = `${p.symbol}: latest recorded step`;
         chip.addEventListener("click", () => {
-          key = p.key; options(); select.value = key; render(); play(cycleTrace(snapshot.items, key));
+          key = p.key; options(); select.value = key; render();
+          const [chain, token] = JSON.parse(p.key);
+          if (journey) { journey.trace({ chain, token }); journeyBox.scrollIntoView({ behavior: "smooth", block: "start" }); }
+          else play(cycleTrace(snapshot.items, key));
         });
         chip.style.opacity = "0"; tokens.append(chip); chips.set(p.key, chip);
       }
@@ -236,6 +245,6 @@ export function mountAgentMap(root) {
       snapshot = { ...snapshot, ...data }; options(); render();
       if (data.items) requestAnimationFrame(animate);
     },
-    dispose() { disposed = true; timers.forEach(clearTimeout); timers.clear(); clearInterval(clock); cancelAnimationFrame(frame); observer.disconnect(); document.removeEventListener("visibilitychange", onVisibility); root.replaceChildren(); },
+    dispose() { disposed = true; journey?.dispose(); timers.forEach(clearTimeout); timers.clear(); clearInterval(clock); cancelAnimationFrame(frame); observer.disconnect(); document.removeEventListener("visibilitychange", onVisibility); root.replaceChildren(); },
   };
 }
