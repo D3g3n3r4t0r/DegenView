@@ -4769,6 +4769,36 @@ async def onchain_manual_scan(req: ScanRequest, user: User = Depends(auth.get_cu
     return await manual_scan.scan(req.query[:80])
 
 
+@app.post("/api/onchain/scan/stream")
+async def onchain_manual_scan_stream(req: ScanRequest, user: User = Depends(auth.get_current_user)) -> StreamingResponse:
+    """The same scan, one JSON line per step as it happens, then the result
+    (Lorenzo, 30/09: he wants to watch the scout work)."""
+    from app.trading.onchain import manual_scan
+    queue: asyncio.Queue = asyncio.Queue()
+    task = asyncio.create_task(manual_scan.scan(req.query[:80], emit=queue.put_nowait))
+
+    async def lines():
+        try:
+            while not (task.done() and queue.empty()):
+                try:
+                    ev = await asyncio.wait_for(queue.get(), 0.25)
+                except asyncio.TimeoutError:
+                    continue
+                yield json.dumps(ev) + "\n"
+            try:
+                result = task.result()
+            except Exception:
+                logger.exception("manual scan failed")
+                result = {"error": "Scan failed, try again."}
+            yield json.dumps({"result": result}) + "\n"
+        finally:
+            if not task.done():
+                task.cancel()
+
+    return StreamingResponse(lines(), media_type="application/x-ndjson",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
 class ScanAddRequest(BaseModel):
     chain: str
     token: str
