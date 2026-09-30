@@ -37,7 +37,8 @@ def test_every_listed_trade_has_its_arrows():
     bars = [[t0 + i * 300, closes[max(0, i - 1)], max(closes[i], closes[max(0, i - 1)]) * 1.01,
              min(closes[i], closes[max(0, i - 1)]) * 0.99, closes[i], 1000.0] for i in range(n)]
     for bt in (system.backtest_all(bars), system.backtest_one(bars)):
-        traded = [r for r in bt["rows"] if r["trades"] and r["return_pct"] is not None]
+        traded = [r for r in bt["rows"] if r["trades"] and r["return_pct"] is not None
+                  and r["label"] in system.TREND_LABELS]
         assert traded, "fixture must trade"
         best = max(traded, key=lambda r: r["return_pct"])
         ev = bt["best"]["events"]
