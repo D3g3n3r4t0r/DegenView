@@ -85,6 +85,14 @@ def blend(reader_ai: dict, ds: dict) -> dict:
     return out
 _STORE = storage.data_file("onchain_research.json")
 _cache: dict[str, dict] = {}     # token -> {"at", "ai"}
+
+
+def _log(key: str, source: str, ai) -> None:
+    """Every reading also goes to the append-only history (the cache keeps only the last)."""
+    from app.trading.onchain import history
+    ai = ai if isinstance(ai, dict) else {}
+    history.append(key, source, {"at": time.time(), **{f: ai[f] for f in ("score", "verdict", "summary")
+                                                        if ai.get(f) is not None}})
 _calls: dict[str, int] = {}      # "YYYY-MM-DD" -> readings that day
 _prints: dict[str, list[int]] = {}   # token -> description sketch, for clone detection
 PRINTS_MAX = 5000
@@ -292,6 +300,7 @@ async def _deepseek_reading(key: str, item: dict, sites: list[dict], description
         f"<listing_description>\n{description[:2000]}\n</listing_description>\n<site_text>\n{body}\n</site_text>", subject=key)
     if ds is not None:
         _cache[key + "|ds"] = {"at": time.time(), "ai": ds}
+        _log(key, "research.reading", ds)
     _save()
     return ds
 
@@ -409,6 +418,7 @@ async def analyze(item: dict, client: httpx.AsyncClient, launched: float | None)
         ai = await ai_dossier(item, description, texts, boost=True)
         if ai is not None:
             _cache[key] = {"at": time.time(), "ai": ai}
+            _log(key, "research.dossier", ai)
             _save()
     if ai is None and item.get("finalist") and (description or any(texts)):
         heuristic = judge_research(sites, description, None)
@@ -420,6 +430,7 @@ async def analyze(item: dict, client: httpx.AsyncClient, launched: float | None)
             ai = await ai_dossier(item, description, texts)
             if ai is not None:
                 _cache[key] = {"at": time.time(), "ai": ai}
+                _log(key, "research.dossier", ai)
             _save()
     if ai is None and (description or any(texts)):
         app_ok = any((s.get("facts") or {}).get("app_ok") for s in sites)

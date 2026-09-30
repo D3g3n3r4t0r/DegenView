@@ -371,6 +371,9 @@ async def judge(e: dict, rules_why: str, now: float | None = None, ask=None,
     if tg:
         parsed["tg"] = telegram_public.compact(tg)
     _cache[key] = parsed
+    from app.trading.onchain import history
+    history.append(key, "judge", {f: parsed[f] for f in ("at", "v", "verdict", "confidence", "reason", "why")
+                                  if parsed.get(f) is not None}, now)
     _save()
     verdict = parsed["verdict"]
     deepseek_desk.note(
