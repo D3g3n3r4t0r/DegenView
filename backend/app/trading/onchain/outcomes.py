@@ -195,6 +195,12 @@ def entries() -> dict[str, dict]:
 
 
 def _save() -> None:
+    # Preserve incident/non-incident evidence before the bounded journal prunes it.
+    try:
+        from app.trading.onchain import quant_memory
+        quant_memory.record(entries().values())
+    except Exception:
+        logger.exception("quant incident archive unavailable")
     if _archive_rugs():
         try:
             write_text_atomic(_ARCHIVE_FILE, json.dumps(_archive, ensure_ascii=False), encoding="utf-8")

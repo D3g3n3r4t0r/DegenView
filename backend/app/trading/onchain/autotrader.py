@@ -34,7 +34,7 @@ import time
 from dataclasses import dataclass
 from typing import Awaitable, Callable
 
-from app.trading.onchain import alert_track
+from app.trading.onchain import alert_track, quant_runtime
 from app.trading.onchain.storage import data_file
 from app.atomic_write import write_text_atomic
 
@@ -120,6 +120,7 @@ def _price(alert: dict | None) -> float | None:
 
 def view(uid: str) -> dict:
     u = _user(uid)
+    reviewed = quant_runtime.approved()
     pos = u["position"]
     pos_view = None
     if pos:
@@ -142,6 +143,7 @@ def view(uid: str) -> dict:
                "ret": round(equity / u["sim_start"] - 1, 4) if u["sim_start"] else None}
     closed = [t for t in u["trades"] if t.get("side") == "sell" and t.get("ok") and t.get("ret") is not None]
     return {"mode": u["mode"], "pct": u["pct"], "pcts": list(PCTS), "chain": CHAIN,
+            "entry_policy": "reviewed_gem_trend" if reviewed else "blocked_no_reviewed_policy",
             "position": pos_view or (papers[0] if papers else None), "positions": papers,
             "sim": sim, "trades": u["trades"][-20:][::-1], "note": u["note"],
             "stats": {"closed": len(closed), "wins": sum(1 for t in closed if t["ret"] > 0),
@@ -160,21 +162,10 @@ def _system_of(a: dict, label: str) -> dict | None:
 
 
 def entry_candidate(label: str, now: float) -> dict | None:
-    """The freshest Robinhood alert where the system just bought."""
-    best = None
-    for a in alert_track._alerts.values():
-        # A meme let through on the rug checks alone is for the simulated
-        # wallet only (Lorenzo, 29/09: memes back, real money stays out).
-        if a["kind"] != "meme" or a["chain"] != CHAIN or a.get("gone") or a.get("meme"):
-            continue
-        s = _system_of(a, label)
-        if not s or s.get("state") != "in" or not s.get("in_at"):
-            continue
-        if now - s["in_at"] > FRESH_S:
-            continue
-        if best is None or s["in_at"] > best[1]:
-            best = (a, s["in_at"])
-    return best[0] if best else None
+    """An alert observes; only a reviewed, fresh trend signal can buy a gem."""
+    rows = [a for a in alert_track._alerts.values()
+            if a["chain"] == CHAIN and quant_runtime.can_enter(a, now)]
+    return max(rows, key=lambda a: a["quant_system"]["in_at"], default=None)
 
 
 def should_exit(pos: dict, label: str) -> str | None:
@@ -183,7 +174,9 @@ def should_exit(pos: dict, label: str) -> str | None:
         return "alert no longer tracked"
     if a.get("gone"):
         return "pool gone"
-    s = _system_of(a, label)
+    s = a.get("quant_system") if pos.get("quant_policy") else _system_of(a, label)
+    if pos.get("quant_policy") and (not s or not s.get("eligible") or time.time() - s.get("evaluated_at", 0) > 600):
+        return "quant signal data unavailable"
     if not s:
         return None
     if s.get("state") != "in":
@@ -363,7 +356,18 @@ def _paper_ret(p: dict, a: dict | None, label: str) -> tuple[float, bool, str]:
     """(return so far, closed, why) of one paper trade."""
     if a is None:
         return p.get("ret", 0.0), True, "alert no longer tracked"
-    s = _system_of(a, label) or {}
+    s = (a.get("quant_system") if p.get("quant_policy") else _system_of(a, label)) or {}
+    if p.get("quant_policy"):
+        # The paper stake starts at this entry, not at the start of a multi-trade backtest.
+        price = s.get("mark") or p.get("entry_price")
+        exits = [ev for ev in s.get("events", []) if ev["t"] >= p["signal_at"] and ev["side"] in ("sell", "loss")]
+        if exits:
+            price = exits[0]["price"]
+        costs = p["costs"]
+        ret = price / p["entry_price"] * (1 - costs["commission"]) ** 2 * (1 - costs["slippage"]) / (1 + costs["slippage"]) - 1
+        if a.get("gone"):
+            return -1.0, True, "pool gone"
+        return ret, bool(exits), "trend exit" if exits else ""
     ret = s.get("ret")
     ret = p.get("ret", 0.0) if ret is None else float(ret)
     if s.get("state") == "out" or s.get("done"):
@@ -387,7 +391,7 @@ def _paper_view(p: dict, label: str | None = None) -> dict:
     # live re-mark drift from the total). Out, or held without a stored mark
     # yet: no price, so nothing re-marks a value the system is not holding
     # at a known price. No backtest yet: the tracker's price.
-    s = _system_of(a, label) if a is not None and label else None
+    s = (a.get("quant_system") if p.get("quant_policy") else _system_of(a, label)) if a is not None and label else None
     price = (s.get("mark") if s.get("state") == "in" else None) if s else _price(a)
     shown = price or _price(a)
     return {"symbol": p["symbol"], "token": p["token"], "chain": p["chain"], "at": p["at"], "mode": "sim",
@@ -417,19 +421,26 @@ def paper_tick(u: dict, label: str, now: float, open_new: bool = True) -> list[d
         return rows
     followed = {t.get("alert") for t in u["trades"]} | {p["alert"] for p in u["paper"]}
     fresh = sorted((a for a in alert_track._alerts.values()
-                    if a["kind"] == "meme" and not a.get("gone") and 0 <= now - a["at"] <= FRESH_S
+                    if quant_runtime.can_enter(a, now)
                     and alert_track.key_of(a) not in followed), key=lambda a: a["at"])
     for a in fresh:
+        # A delayed poll cannot fill at an earlier backtest open.
+        paper_entry = _price(a)
+        if not paper_entry or paper_entry <= 0:
+            continue
         equity = (u["sim_usdg"] or 0) + sum(p["stake"] * (1 + p.get("ret", 0.0)) for p in u["paper"])
         stake = round(min(u["sim_usdg"] or 0, equity * u["pct"] / 100), 6)
         base = {"t": now, "side": "buy", "symbol": a["symbol"], "token": a["token_address"],
-                "alert": alert_track.key_of(a), "chain": a["chain"], "mode": "sim", "why": "alert"}
+                "alert": alert_track.key_of(a), "chain": a["chain"], "mode": "sim", "why": "validated trend signal"}
         if stake < 0.01:
             rows.append(_log(u, {**base, "ok": False, "reason": "all cash already in open trades"}))
             continue
         u["sim_usdg"] = round((u["sim_usdg"] or 0) - stake, 6)
         u["paper"].append({"alert": base["alert"], "symbol": a["symbol"], "token": a["token_address"],
-                           "chain": a["chain"], "at": now, "stake": stake, "ret": 0.0})
+                           "chain": a["chain"], "at": now, "stake": stake, "ret": 0.0,
+                           "quant_policy": a["quant_system"]["policy_id"], "signal_at": now,
+                           "source_signal_at": a["quant_system"]["in_at"],
+                           "entry_price": paper_entry, "costs": a["quant_policy"]["costs"]})
         rows.append(_log(u, {**base, "ok": True, "usdg": stake}))
     return rows
 
@@ -556,7 +567,8 @@ async def _buy(user, u: dict, a: dict, now: float, market: Market) -> dict:
         qty_raw = q["out"]
     u["position"] = {"alert": base["alert"], "symbol": a["symbol"], "token": a["token_address"],
                      "pair": a["pair_address"], "qty_raw": int(qty_raw), "decimals": decimals,
-                     "cost_usdg": round(amount / 10 ** USDC_DECIMALS, 6), "at": now, "mode": mode, "route": q["route"]}
+                     "cost_usdg": round(amount / 10 ** USDC_DECIMALS, 6), "at": now, "mode": mode, "route": q["route"],
+                     "quant_policy": (a.get("quant_system") or {}).get("policy_id")}
     return _log(u, {**base, "ok": True, "qty": qty_raw / 10 ** decimals})
 
 
