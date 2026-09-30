@@ -30,19 +30,25 @@ export function shownSummary(s) {
   return null;
 }
 
+// The saved chart events must be this row's own trades: same strategy,
+// one sell per closed trade (strategy_lab.drawn_row does the same for the
+// list). Anything else would draw another strategy's arrows.
+function ownEvents(part, row) {
+  const best = part?.best;
+  if (!best || best.label !== row.label) return null;
+  const ev = best.events ?? [];
+  return ev.filter((e) => e.side === "sell").length === row.trades ? ev : null;
+}
+
 /** From the full lab result (/api/onchain/token backtests: strategy_lab.get). */
 export function shownTrades(lab) {
   if (!lab) return null;
   const d = lab.daily;
   const drow = d?.rows?.[0];
-  if (traded(drow)) {
-    return { source: "daily", interval: d.interval ?? "1d", label: drow.label, events: d.best?.events ?? [],
-      rug: d.rug ?? null, backtests: d };
-  }
+  const dev = traded(drow) && TREND.has(drow.label) ? ownEvents(d, drow) : null;
+  if (dev) return { source: "daily", interval: d.interval ?? "1d", label: drow.label, events: dev, rug: d.rug ?? null, backtests: d };
   const rows = (lab.rows ?? []).filter((r) => traded(r) && TREND.has(r.label)).sort((a, b) => b.return_pct - a.return_pct);
-  if (rows.length) {
-    return { source: "fast", interval: "5m", label: rows[0].label, events: lab.best?.events ?? [],
-      rug: lab.rug ?? null, backtests: lab };
-  }
+  const fev = rows.length ? ownEvents(lab, rows[0]) : null;
+  if (fev) return { source: "fast", interval: "5m", label: rows[0].label, events: fev, rug: lab.rug ?? null, backtests: lab };
   return null;
 }

@@ -65,6 +65,14 @@ TREND_FOLLOWERS = [("Lorenzo (trend-follower)", "Trend EMA"), ("Lorenzo HF (minu
 # scripts/ladder_compare.py says so, the rule in use stays the old one: 1d,
 # else 8h, first with TRIGGER_MIN_BARS closed candles, Trend EMA only.
 LADDER_RULE = False
+# First Top 50 test (30/09, 50 tokens): descending to the first entry took 34
+# tokens from 1d straight to 5m, where the trend follower overtrades in
+# loss (mean -15.9% against -4.6%). A token with history descends at most
+# MAX_DESCENT rungs and never below FLOOR; the narrow rungs are for the
+# young ones (Lorenzo: "sulle cripto appena uscite [...] time frame piu'
+# ristretti, questo e' normale").
+MAX_DESCENT = 3
+FLOOR = "1h"
 OLD_RUNGS = ("1d", "8h")
 KEEP = 300
 
@@ -85,6 +93,33 @@ def _load() -> None:
         return
     if isinstance(raw, dict):
         _results.update({k: v for k, v in raw.items() if isinstance(v, dict)})
+    # A saved result whose arrows are not its listed trades (5-minute events
+    # of RSI+BB from before #434, next to a trend-follower row) is redone
+    # first: the list hides it until then (main._lab_summary).
+    for r in _results.values():
+        bt = r.get("backtests") or {}
+        if bt.get("rows") and drawn_row(bt) is None and trend_row(bt) is not None:
+            r["at"] = 0
+
+
+def trend_row(part: dict) -> dict | None:
+    """The trend follower's best traded row of a backtest (system.TREND_LABELS)."""
+    rows = [r for r in part.get("rows") or [] if r.get("trades") and r.get("return_pct") is not None
+            and r.get("label") in system.TREND_LABELS]
+    return max(rows, key=lambda r: r["return_pct"]) if rows else None
+
+
+def drawn_row(part: dict | None) -> dict | None:
+    """The row the list may show for this backtest: the trend follower's
+    best, only when the saved chart events are that row's own trades (same
+    label, one sell per closed trade). Lorenzo, 30/09: a number in the Top
+    with no arrows on its chart must never happen."""
+    row = trend_row(part or {})
+    best = (part or {}).get("best") or {}
+    if row is None or best.get("label") != row["label"]:
+        return None
+    sells = sum(1 for e in best.get("events") or [] if e.get("side") == "sell")
+    return row if sells == row["trades"] else None
 
 
 def _save() -> None:
@@ -198,6 +233,13 @@ def pick_interval(age_s: float) -> str:
     return LADDER[-1][0]
 
 
+def descent_end(start: int) -> int:
+    """Index after the last rung a token starting on LADDER[start] may try."""
+    end = min(len(LADDER), start + MAX_DESCENT + 1)
+    floor = [r[0] for r in LADDER].index(FLOOR)
+    return min(end, floor + 1) if start <= floor else end
+
+
 async def run_daily(client: httpx.AsyncClient, net: str, pair: str, token: str, now: float,
                     fast: list[list] | None = None) -> dict | None:
     """Il trend-follower del sito sul gradino di LADDER che la storia del
@@ -220,7 +262,7 @@ async def run_daily(client: httpx.AsyncClient, net: str, pair: str, token: str, 
     # variant of the same trend follower (Trend HF: VWAP, efficiency, ATR
     # trail) down the same rungs. Still trend following, still long only.
     # Candles are fetched lazily, so the fallback costs no extra calls.
-    ladder = LADDER[start:] if LADDER_RULE else [r for r in LADDER if r[0] in OLD_RUNGS]
+    ladder = LADDER[start:descent_end(start)] if LADDER_RULE else [r for r in LADDER if r[0] in OLD_RUNGS]
     for name, label in TREND_FOLLOWERS if LADDER_RULE else TREND_FOLLOWERS[:1]:
         for iv, tf, agg in ladder:
             if (tf, agg) not in got:

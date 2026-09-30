@@ -346,3 +346,38 @@ def test_get_returns_the_daily_backtest_next_to_the_fast_one():
                                          "daily": {"interval": "1d", "rows": [{"label": "Trend EMA"}]}}
     assert strategy_lab.get("solana", "T")["daily"]["interval"] == "1d"
     strategy_lab.reset_for_tests()
+
+
+def test_a_token_with_history_never_descends_to_the_minutes():
+    names = [r[0] for r in lab.LADDER]
+    rungs = lambda start: names[names.index(start):lab.descent_end(names.index(start))]  # noqa: E731
+    assert rungs("1d") == ["1d", "12h", "8h", "6h"]
+    assert rungs("4h") == ["4h", "2h", "1h"]
+    assert rungs("1h") == ["1h"]
+    assert rungs("30m") == ["30m", "15m", "5m"]
+
+
+def _part(label, trades, sells, best_label=None):
+    ev = [{"t": i, "side": "sell"} for i in range(sells)]
+    return {"rows": [{"label": label, "trades": trades, "return_pct": 5.0}],
+            "best": {"label": best_label or label, "events": ev}}
+
+
+def test_a_row_is_listed_only_when_its_chart_draws_its_own_trades():
+    """Server audit 30/09: BEB1M listed 30 trades over 1 arrow pair, ETHICS
+    4 trades over 5 sells: 5-minute events saved before #434 (RSI+BB)."""
+    assert lab.drawn_row(_part("Trend HF", 3, 3))["label"] == "Trend HF"
+    assert lab.drawn_row(_part("Trend HF", 30, 1)) is None
+    assert lab.drawn_row(_part("Trend EMA", 4, 4, best_label="RSI+BB")) is None
+    assert lab.drawn_row({"rows": [{"label": "RSI+BB", "trades": 4, "return_pct": 9.0}]}) is None
+
+
+def test_stale_arrows_are_redone_first(monkeypatch, tmp_path):
+    import json as _json
+    f = tmp_path / "store.json"
+    f.write_text(_json.dumps({"solana:A": {"at": 123, "backtests": _part("Trend HF", 30, 1)},
+                              "solana:B": {"at": 456, "backtests": _part("Trend HF", 2, 2)}}))
+    monkeypatch.setattr(lab, "_STORE_FILE", f)
+    lab.reset_for_tests()
+    lab._load()
+    assert lab._results["solana:A"]["at"] == 0 and lab._results["solana:B"]["at"] == 456
