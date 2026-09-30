@@ -381,3 +381,19 @@ def test_stale_arrows_are_redone_first(monkeypatch, tmp_path):
     lab.reset_for_tests()
     lab._load()
     assert lab._results["solana:A"]["at"] == 0 and lab._results["solana:B"]["at"] == 456
+
+
+def test_rsi_bb_runs_down_the_same_ladder(monkeypatch):
+    now = 1_800_000_000
+
+    async def candles(client, net, pool, tf, agg, before, limit, token=""):
+        step = {"day": 86400, "hour": 3600, "minute": 60}[tf] * agg
+        return _spaced(min(1000, 200 * 86400 // step), step, now)
+    monkeypatch.setattr(lab.alert_track, "_candles", candles)
+
+    def fake(bars, name="Lorenzo (trend-follower)", label="Trend EMA", known=None):
+        hit = label == "RSI+BB" and bars[1][0] - bars[0][0] == 28800
+        return {"bars": len(bars), "rows": [{"label": label, "trades": int(hit), "in_position": False}]}
+    monkeypatch.setattr(lab.system, "backtest_one", fake)
+    d = asyncio.run(lab.run_daily(httpx.AsyncClient(), "solana", "P", "T", now, strategies=lab.RSI_BB))
+    assert d["interval"] == "8h" and d["rows"][0]["label"] == "RSI+BB"

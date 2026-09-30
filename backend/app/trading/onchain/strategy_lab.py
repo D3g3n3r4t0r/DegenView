@@ -60,6 +60,12 @@ LADDER = [("1d", "day", 1), ("12h", "hour", 12), ("8h", "hour", 4), ("6h", "hour
 STEP_S = {"1d": 86400, "12h": 43200, "8h": 28800, "6h": 21600, "4h": 14400, "2h": 7200, "1h": 3600,
           "30m": 1800, "15m": 900, "5m": 300}
 TREND_FOLLOWERS = [("Lorenzo (trend-follower)", "Trend EMA"), ("Lorenzo HF (minuti on-chain)", "Trend HF")]
+# Lorenzo, 30/09 sera: "per la strategia RSI piu' BB dobbiamo applicare la
+# stessa logica [...] time frame piu' alti per trade piu' duraturi [...] se
+# la cripto e' molto recente time frame piu' veloci". Same ladder via
+# run_daily(strategies=RSI_BB); today RSI+BB runs on 5m only (backtest_all),
+# and scripts/ladder_compare.py measures the ladder first.
+RSI_BB = [("Gabriele (RSI+BB reversal)", "RSI+BB")]
 # Lorenzo, 30/09: "prima di applicare questa regola fai un po' di prove su
 # tutte le 50 cripto [...] dovrebbero essere paritarie o superiori". Until
 # scripts/ladder_compare.py says so, the rule in use stays the old one: 1d,
@@ -241,7 +247,7 @@ def descent_end(start: int) -> int:
 
 
 async def run_daily(client: httpx.AsyncClient, net: str, pair: str, token: str, now: float,
-                    fast: list[list] | None = None) -> dict | None:
+                    fast: list[list] | None = None, strategies: list[tuple[str, str]] | None = None) -> dict | None:
     """Il trend-follower del sito sul gradino di LADDER che la storia del
     grafico regge: dal piu' largo con TRIGGER_MIN_BARS candele chiuse in
     giu', il primo in cui la strategia entra almeno una volta. `fast` = le
@@ -263,7 +269,7 @@ async def run_daily(client: httpx.AsyncClient, net: str, pair: str, token: str, 
     # trail) down the same rungs. Still trend following, still long only.
     # Candles are fetched lazily, so the fallback costs no extra calls.
     ladder = LADDER[start:descent_end(start)] if LADDER_RULE else [r for r in LADDER if r[0] in OLD_RUNGS]
-    for name, label in TREND_FOLLOWERS if LADDER_RULE else TREND_FOLLOWERS[:1]:
+    for name, label in strategies or (TREND_FOLLOWERS if LADDER_RULE else TREND_FOLLOWERS[:1]):
         for iv, tf, agg in ladder:
             if (tf, agg) not in got:
                 raw = await candle_archive.candles(client, net, pair, tf, agg, now, token)
