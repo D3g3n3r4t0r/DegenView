@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0234", "L'app da telefono non parte e i tocchi non fanno niente",
+     "Lorenzo, 30/09: 'da mobile l'app non parte rimane in questa schermata [...] e se clicco non funziona nulla'",
+     "alta"),
     ("seed-0233", "Scheda Alerts dello scanner lentissima: contatori a 0 e decisioni vuote",
      "Lorenzo, 30/09 (screenshot dal telefono): 'lentissimo a caricare'",
      "alta"),

@@ -2356,5 +2356,10 @@
     "status": "risolto",
     "at": 1790749050,
     "summary": "La scheda scaricava tutto l'archivio dello scanner (300 token passati e 500 scartati, ognuno con tutti i controlli: diversi MB) e il telefono non faceva in tempo entro gli 8 secondi, quindi restava vuota fino al giro dopo, un minuto piu' tardi. Ora scarica solo le ultime 80 decisioni che la lista mostra e i conteggi delle 24 ore gia' fatti dal server (circa un decimo del peso), ha 15 secondi di margine e, se non risponde, riprova dopo 5 secondi invece di 60."
+  },
+  "seed-0234": {
+    "status": "risolto",
+    "at": 1790749189,
+    "summary": "Un errore di sintassi nello scanner manuale (una espressione regolare scritta /^https:/// invece di /^https:\\/\\//) rompeva tutti i moduli JavaScript dell'app: la pagina si disegnava ma nessun tasto aveva effetto e niente si caricava. Corretto; aggiunto un test che legge ogni modulo come fa il browser, perche' il controllo usato prima lo lasciava passare."
   }
 }
