@@ -4439,6 +4439,7 @@ async def _notify_autotrade(user: User, row: dict) -> None:
 class AutotraderUpdate(BaseModel):
     mode: Literal["off", "sim", "real"] | None = None
     pct: int | None = None
+    sim_cash: float | None = None
 
 
 @app.get("/api/onchain/autotrader")
@@ -4465,7 +4466,8 @@ async def set_autotrader(body: AutotraderUpdate, user: User = Depends(auth.get_c
         except Exception:
             usdg_now = None
     try:
-        view = onchain_autotrader.configure(user.id, body.mode, body.pct, usdg_now=usdg_now)
+        view = onchain_autotrader.configure(user.id, body.mode, body.pct, usdg_now=usdg_now,
+                                            sim_cash=body.sim_cash)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {**view, "has_wallet": True, "server_live": settings.onchain_execution_enabled}

@@ -669,6 +669,13 @@
   .pf-simnote { margin: -4px 0 14px; font-size: 13px; color: var(--k-text-3);
     & p { margin: 0 0 10px; } }
   .pf-link { padding: 0; border: 0; background: none; color: #818cf8; font: inherit; cursor: pointer; }
+  .pf-simcash { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 10px;
+    & label { display: inline-flex; align-items: center; gap: 4px; color: var(--k-text-2); }
+    & input { width: 9em; padding: 7px 10px; border: 1px solid var(--k-surface-2); border-radius: 9px;
+      background: var(--k-surface); color: var(--k-text); font: 600 14px var(--sans); }
+    & .pf-save { padding: 7px 14px; }
+    & small { color: #f87171; }
+    &[hidden] { display: none; } }
   .total-bal[data-wallet="sim"]::before { content: "SIM"; margin-inline-end: 8px; padding: 3px 6px; border-radius: 6px;
     vertical-align: middle; background: rgba(251, 191, 36, .15); color: #fbbf24; font: 700 11px/1 var(--sans); letter-spacing: .04em; }
 }
