@@ -4670,7 +4670,8 @@ async def _sim_snapshot(user: User) -> dict:
             "closed": [{"symbol": c.get("symbol") or "?", "token": c["token"], "chain": c["chain"],
                         "opened": c["at"], "closed": c["exit_at"], "cost_usdg": c["stake"],
                         "proceeds_usdg": round(c["stake"] + c["pnl"], 2), "ret": c["ret"], "mode": "sim",
-                        "why": f"trend {c.get('interval') or ''}".strip()} for c in w["closed"]],
+                        "why": f"trend {c.get('interval') or ''}".strip(), "interval": c.get("interval")}
+                       for c in w["closed"]],
             "curve": _top_curve(w)}
 
 

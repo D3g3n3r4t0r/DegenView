@@ -32,7 +32,7 @@ def test_never_spends_more_than_free_cash():
 def test_token_trades_follows_the_top_row():
     daily = {"interval": "8h", "rows": [{"trades": 2}], "best": {"events": [{"t": 1, "side": "buy"}]}}
     assert sb.token_trades({"daily": daily})[0] == "8h"
-    no_daily = {"daily": {"rows": [{"trades": 0}]}, "best": {"events": [{"t": 1, "side": "buy"}]}}
+    no_daily = {"daily": {"rows": [{"trades": 0}]}, "best": {"label": "Trend EMA", "events": [{"t": 1, "side": "buy"}]}}
     assert sb.token_trades(no_daily)[0] == "5m"
     assert sb.token_trades(None) is None
 
@@ -40,9 +40,9 @@ def test_token_trades_follows_the_top_row():
 def test_ledger_keeps_trades_the_window_slid_past(monkeypatch, tmp_path):
     monkeypatch.setattr(sb, "_FILE", tmp_path / "l.json")
     sb.reset_for_tests()
-    first = {"best": {"events": [{"t": 100, "side": "buy", "price": 1.0},
+    first = {"best": {"label": "Trend EMA", "events": [{"t": 100, "side": "buy", "price": 1.0},
                                  {"t": 200, "side": "sell", "price": 2.0, "ret": 1.0}]}}
-    later = {"best": {"events": [{"t": 300, "side": "buy", "price": 2.0}]}}
+    later = {"best": {"label": "Trend EMA", "events": [{"t": 300, "side": "buy", "price": 2.0}]}}
     assert sb.remember("solana", "A", "A", first) and sb.remember("solana", "A", "A", later)
     assert not sb.remember("solana", "A", "A", later)
     sb.reset_for_tests()
@@ -68,7 +68,19 @@ def test_a_trade_moved_to_its_fill_candle_is_not_kept_twice(monkeypatch):
 def test_trades_of_an_earlier_timeframe_stop_where_the_new_one_starts():
     sb.reset_for_tests()
     row = {"chain": "solana", "token": "T", "interval": "1h", "events": {
-        "100:buy": {"t": 100, "side": "buy", "iv": "5m"}, "200:sell": {"t": 200, "side": "sell", "iv": "5m"},
-        "900:buy": {"t": 900, "side": "buy", "iv": "5m"},
+        "100:buy": {"t": 100, "side": "buy", "iv": "5m", "lab": "Trend HF"}, "200:sell": {"t": 200, "side": "sell", "iv": "5m", "lab": "Trend HF"},
+        "900:buy": {"t": 900, "side": "buy", "iv": "5m", "lab": "Trend HF"},
         "500:buy": {"t": 500, "side": "buy", "iv": "1h"}, "4000:sell": {"t": 4000, "side": "sell", "iv": "1h"}}}
     assert [e["t"] for e in sb._one_timeframe(row)] == [100, 200, 500, 4000]
+
+
+def test_mean_reversion_5m_trades_never_enter_the_wallet(monkeypatch):
+    sb.reset_for_tests()
+    monkeypatch.setattr(sb, "_save", lambda: None)
+    dip = {"best": {"label": "RSI+BB", "events": [{"t": 100, "side": "buy", "price": 0.1}]}}
+    assert sb.token_trades(dip) is None and not sb.remember("base", "ORDO", "ORDO", dip)
+    trend = {"best": {"label": "Trend HF", "events": [{"t": 100, "side": "buy", "price": 0.1}]}}
+    assert sb.remember("base", "T", "T", trend)
+    sb._ledger["base:OLD"] = {"chain": "base", "token": "OLD", "interval": "5m",
+                              "events": {"100:buy": {"t": 100, "side": "buy", "iv": "5m"}}}
+    assert {t["token"]: len(t["events"]) for t in sb.ledger_tokens()} == {"T": 1, "OLD": 0}
