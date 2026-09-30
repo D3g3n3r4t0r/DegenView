@@ -49,7 +49,18 @@ def pick(pairs: list[dict], query: str) -> dict | None:
         ok = [p for p in ok if (p.get("baseToken") or {}).get("address", "").lower() == q.lower()] or ok
     else:
         ok = [p for p in ok if (p.get("baseToken") or {}).get("symbol", "").upper() == q.upper()] or ok
-    return max(ok, key=lambda p: float((p.get("liquidity") or {}).get("usd") or 0), default=None)
+    if not ok:
+        return None
+    # The token people trade, then its deepest pool. Liquidity alone picked a
+    # copy (HYDX: an Ethereum "Hydrex" with $98M of liquidity and $0.01 of
+    # volume beat the real HyperDex on Robinhood, $311k a day).
+    liq = lambda p: float((p.get("liquidity") or {}).get("usd") or 0)  # noqa: E731
+    vol = lambda p: float((p.get("volume") or {}).get("h24") or 0)  # noqa: E731
+    tokens: dict[str, list[dict]] = {}
+    for p in ok:
+        tokens.setdefault(f"{p.get('chainId')}:{((p.get('baseToken') or {}).get('address') or '').lower()}", []).append(p)
+    best = max(tokens.values(), key=lambda ps: (sum(vol(p) for p in ps), max(liq(p) for p in ps)))
+    return max(best, key=liq)
 
 
 def item_of(pair: dict) -> dict:
