@@ -490,7 +490,7 @@
 
 /* --- profile (profile.js), after the reference trading app's ------------- */
 @layer skin {
-  .profile { display: grid; gap: 0; padding-block-end: 20px; }
+  .profile { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; padding-block-end: 20px; }
   .pf-head { display: grid; grid-template-columns: 56px 1fr auto; column-gap: 12px; row-gap: 2px; align-items: center; padding: 6px 0 10px; border-bottom: 1px solid rgb(255 255 255 / .07); }
   .pf-pic { position: relative; inline-size: 56px; block-size: 56px; margin: 0; grid-row: span 3; cursor: pointer;
     & .pf-img { font-style: normal; inline-size: 100%; block-size: 100%; border-radius: 50%; object-fit: cover; display: grid; place-items: center;
@@ -549,7 +549,7 @@
     & .logo { inline-size: 52px; block-size: 52px; } }
   .pf-main { display: grid; gap: 3px; min-inline-size: 0;
     & b { font: 600 18px var(--sans); color: var(--k-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    & small { font-size: 14px; color: var(--k-text-3); } }
+    & small { font-size: 14px; color: var(--k-text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } }
   .pf-num { display: grid; justify-items: end; gap: 3px;
     & b { font: 600 18px var(--sans); color: var(--k-text); font-variant-numeric: tabular-nums; }
     & small { font-size: 13px; color: var(--k-text-3); }
