@@ -301,6 +301,37 @@ def _best_trades(df: pd.DataFrame, rows: list[dict], known: dict | None = None) 
     return {"label": best["label"], "events": events, "fills": "next_open"}
 
 
+def trend_trade_times(bars: list[list], known: dict | None = None) -> dict[str, set[tuple[int, str]]]:
+    """Every buy and sell time of each trend follower on these candles, at
+    the signal candle and at the fill candle: what tells an old 5-minute
+    trade saved without its strategy apart (sim_backtest.relabel)."""
+    df = frame(bars)
+    out: dict[str, set[tuple[int, str]]] = {}
+    if len(df) < BACKTEST_MIN_BARS:
+        return out
+    times = [int(ts.timestamp()) for ts in df.index]
+    nxt = {times[i]: times[i + 1] for i in range(len(times) - 1)}
+    for name, label in BACKTESTS:
+        if label not in TREND_LABELS:
+            continue
+        try:
+            result, signals, _pos = radar.run_spot(df, {"strategy_name": name, "params": None, "label": label,
+                                                        "source": "predefinita"}, known)
+        except Exception:
+            continue
+        got: set[tuple[int, str]] = set()
+        for tr in result.trades:
+            if tr.direction == "long":
+                for t, side in ((int(tr.entry_time), "buy"), (int(tr.exit_time), "sell")):
+                    got |= {(t, side), (nxt.get(t, t), side)}
+        for e in signals:
+            if e.type == "entry_long":
+                t = int(e.time.timestamp()) if hasattr(e.time, "timestamp") else int(e.time)
+                got |= {(t, "buy"), (nxt.get(t, t), "buy")}
+        out[label] = got
+    return out
+
+
 def _median(vals: list[float]) -> float | None:
     s = sorted(v for v in vals if v is not None and not math.isnan(v))
     if not s:
