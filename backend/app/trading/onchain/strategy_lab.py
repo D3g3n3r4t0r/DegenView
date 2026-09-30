@@ -65,6 +65,14 @@ TREND_FOLLOWERS = [("Lorenzo (trend-follower)", "Trend EMA"), ("Lorenzo HF (minu
 # scripts/ladder_compare.py says so, the rule in use stays the old one: 1d,
 # else 8h, first with TRIGGER_MIN_BARS closed candles, Trend EMA only.
 LADDER_RULE = False
+# First Top 50 test (30/09, 50 tokens): descending to the first entry took 34
+# tokens from 1d straight to 5m, where the trend follower overtrades in
+# loss (mean -15.9% against -4.6%). A token with history descends at most
+# MAX_DESCENT rungs and never below FLOOR; the narrow rungs are for the
+# young ones (Lorenzo: "sulle cripto appena uscite [...] time frame piu'
+# ristretti, questo e' normale").
+MAX_DESCENT = 3
+FLOOR = "1h"
 OLD_RUNGS = ("1d", "8h")
 KEEP = 300
 
@@ -198,6 +206,13 @@ def pick_interval(age_s: float) -> str:
     return LADDER[-1][0]
 
 
+def descent_end(start: int) -> int:
+    """Index after the last rung a token starting on LADDER[start] may try."""
+    end = min(len(LADDER), start + MAX_DESCENT + 1)
+    floor = [r[0] for r in LADDER].index(FLOOR)
+    return min(end, floor + 1) if start <= floor else end
+
+
 async def run_daily(client: httpx.AsyncClient, net: str, pair: str, token: str, now: float,
                     fast: list[list] | None = None) -> dict | None:
     """Il trend-follower del sito sul gradino di LADDER che la storia del
@@ -220,7 +235,7 @@ async def run_daily(client: httpx.AsyncClient, net: str, pair: str, token: str, 
     # variant of the same trend follower (Trend HF: VWAP, efficiency, ATR
     # trail) down the same rungs. Still trend following, still long only.
     # Candles are fetched lazily, so the fallback costs no extra calls.
-    ladder = LADDER[start:] if LADDER_RULE else [r for r in LADDER if r[0] in OLD_RUNGS]
+    ladder = LADDER[start:descent_end(start)] if LADDER_RULE else [r for r in LADDER if r[0] in OLD_RUNGS]
     for name, label in TREND_FOLLOWERS if LADDER_RULE else TREND_FOLLOWERS[:1]:
         for iv, tf, agg in ladder:
             if (tf, agg) not in got:

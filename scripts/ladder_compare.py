@@ -44,11 +44,15 @@ def book(rows, k, cash=10_000.0):
 _ro = sqlite3.connect(f"file:{candle_archive._DB_FILE}?mode=ro", uri=True)
 
 
-async def archived(client, net, pair, tf, agg, now, token=""):
-    """candle_archive.candles without the network and without writes."""
+async def archived_rows(net, pair, tf, agg, token=""):
     rows = _ro.execute("SELECT t, o, h, l, c, v FROM candles WHERE k = ? ORDER BY t",
                        (candle_archive.key(net, pair, tf, agg, token),)).fetchall()
     return [list(r) for r in rows]
+
+
+async def archived(client, net, pair, tf, agg, now, token=""):
+    """candle_archive.candles without the network and without writes."""
+    return await archived_rows(net, pair, tf, agg, token)
 
 
 async def main():
@@ -65,8 +69,11 @@ async def main():
             for rule in (False, True):
                 lab.LADDER_RULE = rule
                 got[rule] = summary(await lab.run_daily(client, GECKO_NETWORKS[chain], v["pair"], token, now))
+            net = GECKO_NETWORKS[chain]
+            series = {f"{tf}{agg}": len(await archived_rows(net, v["pair"], tf, agg, token))
+                        for tf, agg in candle_archive.SOURCES}
             row = {"symbol": v.get("symbol"), "chain": chain, "saved": summary(v["daily"]),
-                   "old": got[False], "new": got[True]}
+                   "old": got[False], "new": got[True], "archived": series}
             out.append(row)
             print(json.dumps(row), file=sys.stderr, flush=True)
     lab.LADDER_RULE = False
@@ -78,7 +85,10 @@ async def main():
                   "mean_ret": round(statistics.mean(rets), 2) if rets else None,
                   "median_ret": round(statistics.median(rets), 2) if rets else None,
                   "book_10k": book(ok, k)}
-    print(json.dumps({"at": now, "tokens": len(ok), "totals": tot, "rows": out}, indent=1))
+    # A rung whose source is not archived yet counts as "too few candles":
+    # the comparison is only fair once every source is there.
+    cover = {f"{tf}{agg}": sum(1 for r in out if r["archived"][f"{tf}{agg}"]) for tf, agg in candle_archive.SOURCES}
+    print(json.dumps({"at": now, "tokens": len(ok), "archived_series": cover, "totals": tot, "rows": out}, indent=1))
 
 
 asyncio.run(main())
