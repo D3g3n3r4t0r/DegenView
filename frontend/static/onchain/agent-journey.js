@@ -1,11 +1,15 @@
 import { NODES, verifyChain, sha256Hex } from "@onchain/agent-map-model.js";
 
-const STEP_MS = 650;
+const STEP_MS = 650, MIN_STEP_MS = 90, REPLAY_MS = 20000;
 const LABEL = Object.fromEntries(NODES.map(n => [n.id, n.label]));
 LABEL.decision = "Decision";
 const SOURCE = {
   "projects_db.first_seen": "Project database", "projects_db.verdict": "Project database",
   agent_activity: "Agent activity", deepseek_call: "DeepSeek call journal", strategy_lab: "Strategy lab",
+  discovery: "Discovery log", "leaderboard.found": "Research queue", "leaderboard.pillar": "Pillar check",
+  "leaderboard.rank": "Ranking", judge: "Judge cache", "research.dossier": "Research cache", "research.reading": "Research cache",
+  code_review: "Code review cache", "gem_track.entry": "Top tracker", "gem_track.return": "Top tracker",
+  "outcomes.journal": "Outcome journal", "outcomes.archive": "Outcome archive", alert_track: "Alert tracker",
 };
 
 /** Replays one token's recorded evaluation path, step by step, and checks its hash chain in the browser.
@@ -23,9 +27,13 @@ export function mountJourney(root, { load, onStep }) {
   const choices = el("div", null, "aj-choices");
   const head = el("div", null, "aj-head");
   const rail = el("ol", null, "aj-rail");
+  const tally = el("div", null, "aj-tally"); tally.setAttribute("aria-live", "polite");
+  const controls = el("div", null, "aj-controls");
   const replay = el("button", "Replay", "aj-replay"); replay.type = "button"; replay.hidden = true;
+  const skip = el("button", "Show all", "aj-replay"); skip.type = "button"; skip.hidden = true;
+  controls.append(skip, replay);
   root.className = "aj";
-  root.replaceChildren(form, status, choices, head, rail, replay);
+  root.replaceChildren(form, status, choices, head, tally, controls, rail);
   let current = null;
 
   const clear = () => { timers.forEach(clearTimeout); timers.clear(); };
@@ -53,7 +61,7 @@ export function mountJourney(root, { load, onStep }) {
 
   async function show(j) {
     clear(); const mine = ++run; current = j;
-    rail.replaceChildren(); head.replaceChildren(); replay.hidden = true;
+    rail.replaceChildren(); head.replaceChildren(); tally.replaceChildren(); replay.hidden = true; skip.hidden = true;
     const n = j.steps.length;
     status.textContent = n ? `${j.symbol || j.token.slice(0, 8)} · ${j.chain} · ${n} recorded steps` : `No stored record for ${j.symbol || j.token}.`;
     if (!n) return;
@@ -66,24 +74,43 @@ export function mountJourney(root, { load, onStep }) {
       ? `Chain verified in your browser · ${n} records · head ${short(j.head)}`
       : `Chain does not match at step ${(v.brokenAt ?? 0) + 1}: do not trust this trace`;
     const cards = j.steps.map((s, i) => card(s, i, j.steps[i - 1]));
-    if (still()) { rail.append(...cards); replay.hidden = false; return; }
+    const counts = new Map(), pills = new Map();
+    for (const s of j.steps) if (!pills.has(s.node)) {
+      const pill = el("span", `${LABEL[s.node] || "Other"} 0`, "aj-pill"); pills.set(s.node, pill); tally.append(pill);
+    }
+    const count = node => {
+      const c = (counts.get(node) || 0) + 1; counts.set(node, c);
+      const pill = pills.get(node); pill.textContent = `${LABEL[node] || "Other"} ${c}`;
+      if (!still()) pill.animate([{ transform: "scale(1.15)" }, { transform: "scale(1)" }], { duration: 260 });
+    };
+    const all = () => {
+      clear(); rail.replaceChildren(...cards); cards.forEach(c => c.classList.remove("aj-in", "aj-now"));
+      counts.clear(); j.steps.forEach(s => { const c = (counts.get(s.node) || 0) + 1; counts.set(s.node, c); pills.get(s.node).textContent = `${LABEL[s.node] || "Other"} ${c}`; });
+      replay.hidden = false; skip.hidden = true;
+    };
+    skip.onclick = all;
+    if (still()) { all(); return; }
+    skip.hidden = false;
+    const stepMs = Math.max(MIN_STEP_MS, Math.min(STEP_MS, REPLAY_MS / n));
     cards.forEach((c, i) => later(() => {
       if (mine !== run) return;
       c.classList.add("aj-in"); rail.append(c);
       rail.querySelectorAll(".aj-now").forEach(x => x.classList.remove("aj-now"));
       c.classList.add("aj-now");
       requestAnimationFrame(() => c.classList.remove("aj-in"));
+      count(j.steps[i].node);
       onStep?.(j.steps[i].node, j.steps[i - 1]?.node);
-      if (i === cards.length - 1) replay.hidden = false;
-    }, i * STEP_MS));
+      if (i === cards.length - 1) { replay.hidden = false; skip.hidden = true; }
+    }, i * stepMs));
   }
 
   async function trace(args) {
     clear(); run++;
-    choices.replaceChildren(); rail.replaceChildren(); head.replaceChildren(); replay.hidden = true;
+    choices.replaceChildren(); rail.replaceChildren(); head.replaceChildren(); tally.replaceChildren(); replay.hidden = true; skip.hidden = true;
     status.textContent = "Loading recorded steps…";
     let data;
     try { data = await load(args); } catch { status.textContent = "Trace unavailable. Try again."; return; }
+    root.scrollIntoView?.({ behavior: "smooth", block: "start" });
     if (data?.journey) { input.value = data.journey.symbol || input.value; return show(data.journey); }
     const matches = data?.matches || [];
     if (!matches.length) { status.textContent = `No stored project matches “${args.q}”.`; return; }
