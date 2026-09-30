@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0235", "Classifica: il trend follower del sito su 8 ore o giornaliero, con segnali",
+     "Lorenzo, 30/09: 'sui progetti in classifica io voglio che venga attivata la strategia [trend follower] con time frame piu' alti quindi se il token e' abbastanza giovane il time frame 8 ore se no un giorno se c'e' almeno abbastanza candele sufficienti da generare un trigger [...] ho bisogno di segnali di piu' qualita''",
+     "alta"),
     ("seed-0234", "L'app da telefono non parte e i tocchi non fanno niente",
      "Lorenzo, 30/09: 'da mobile l'app non parte rimane in questa schermata [...] e se clicco non funziona nulla'",
      "alta"),
