@@ -70,7 +70,9 @@ class Settings(BaseSettings):
     # name, no website and a low DeepSeek grade no longer block; the rug
     # checks (RugCheck, GoPlus, holders, locked liquidity) still do. False
     # puts back the old gate (project site + DeepSeek pass).
-    listings_allow_memes: bool = True
+    # Off again 30/09 (Lorenzo: "non le voglio le meme [...] dobbiamo avere
+    # strategia e alert solo su roba buona").
+    listings_allow_memes: bool = False
     # The daily reviewer (app/trading/onchain/ai_review.py): once a day
     # Claude reads what really happened to the signals and writes lessons.
     # Request: "un'istanza di claude sonnet nel server [...] con un massimo di

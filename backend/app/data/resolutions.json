@@ -2452,5 +2452,15 @@
     "status": "risolto",
     "at": 1790771464,
     "summary": "'Load failed' e' l'errore di Safari quando il telefono perde la connessione in streaming (rete mobile, schermo bloccato, pause lunghe durante le chiamate DeepSeek). Ora il server manda un segnale ogni 5 secondi di silenzio, la scansione continua anche se il telefono si stacca e il risultato resta 10 minuti: l'app lo recupera da sola invece di mostrare l'errore. Se il server si riavvia a meta' (deploy), lo dice chiaramente."
+  },
+  "seed-0238": {
+    "status": "risolto",
+    "at": 1790772357,
+    "summary": "Gli alert meme non erano bloccati (server 30/09: 64 alert oggi, 72 ieri). Su richiesta di Lorenzo le meme sono di nuovo spente (listings_allow_memes=False): un nome da meme viene scartato e un listing passa solo con sito del progetto, social, controlli anti-rug e voto DeepSeek. Il pilota (Sim e Real) entrava gia' solo sulle gemme col gate quant di #408."
+  },
+  "seed-0239": {
+    "status": "risolto",
+    "at": 1790772357,
+    "summary": "Profilo > Simulated wallet > Set cash: imposta la liquidita' simulata. Le posizioni aperte restano e il punto di partenza si sposta della stessa cifra, quindi il rendimento non si falsa. Solo simulazione (PR #420)."
   }
 }
