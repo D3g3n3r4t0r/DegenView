@@ -34,6 +34,10 @@ Lorenzo: "se entro qui io veda cosa succede davvero quando una crypto entra in a
 
 # Memoria di sessione
 
+## Wallet collegati verificati on-chain per la Top 50 — `seed-0241` — 2026-09-30
+
+Lorenzo, sul rapporto di DREGG ("807 wallets linked to each other"): "mi preoccupano questi 800 account collegati", poi "fai che questa analisi venga fatta su tutte le cripto [...] della classifica [...] soltanto se vanno in top 50 [...] non voglio che si ripeta un allarme del genere". Trovato: 761 degli 807 erano destinatari di un airdrop da 744 token; i gruppi piccoli avevano 0 on-chain (il `currentHolding` di RugCheck e' vecchio). PR #429: il rapporto giudica la quota di supply, non il numero di wallet. Poi `onchain/linked.py`: per i token Solana in Top 50 (`item["top"]`) con quota RugCheck >=1% legge `insiders/graph`, toglie i collegamenti da airdrop (un mittente, >=20 destinatari, meta' con lo stesso importo), pool e locker, e somma i saldi di oggi via RPC (max 80 wallet, cache 6h). Se piu' del 20% delle letture fallisce resta il dato di RugCheck. DREGG: da 39% (807) a 4% (51). DeepSeek non usato: Actions ferme.
+
 ## Meme spente negli alert, saldo simulato a mano — `seed-0238`, `seed-0239` — 2026-09-30
 
 Lorenzo: "le meme e shitcoin sono state bloccate dal bot alert? inoltre la simulazione voglio poter modificare il saldo a mio piacimento", poi "non le voglio le meme [...] dobbiamo avere strategia e alert solo su roba buona".
