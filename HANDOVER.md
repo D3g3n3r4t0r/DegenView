@@ -10,6 +10,12 @@ Lorenzo: "se entro qui io veda cosa succede davvero quando una crypto entra in a
 
 # Memoria di sessione
 
+## Potatura file che gonfiano la RAM — `seed-0236` — 2026-09-30
+
+Controllo server: 1,8 GB su 3 GB, `sniper_candidates.json` 430 MB (l'app passa da 214 MB a 1,77 GB all'avvio). Lorenzo ha scelto "potare i file". Fatto a mano (Actions DeepSeek ferme).
+Ora `sniper/cache.py` tiene in RAM solo i candidati aggiornati negli ultimi 7 giorni, max 3000; il resto va in `data/sniper_candidates_archive.jsonl.gz` (append, niente perso; se l'archivio non si scrive non si butta niente). Potatura all'avvio e a ogni salvataggio. `sniper/market.py` scarta i token non visti da 7 giorni (e' uno screener). Il diario `onchain_outcomes.json` era gia' a 5000 voci; `onchain_rug_archive.json` non toccato (memoria del modello).
+Resta: misurare la RAM dopo il deploy; il primo avvio legge ancora il file grande una volta.
+
 ## Trend follower 8h/1d sulla classifica, con segnali — `seed-0235` — 2026-09-30
 
 Lorenzo: "sui progetti in classifica io voglio che venga attivata la strategia [trend follower] con time frame piu' alti [...] se il token e' abbastanza giovane 8 ore se no un giorno se c'e' almeno abbastanza candele [...] segnali di piu' qualita'". Fatto a mano (Actions DeepSeek ferme, nessuna chiave in sandbox).
