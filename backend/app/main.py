@@ -4126,23 +4126,22 @@ async def onchain_top(n: int = 15, narrative: str = "", user: User = Depends(aut
 
 
 def _lab_summary(bt: dict | None) -> dict | None:
-    """Per la lista: il migliore e il buy-and-hold, senza le operazioni."""
+    """Per la lista: il migliore e il buy-and-hold, senza le operazioni.
+    Only rows whose chart can draw their trades (strategy_lab.drawn_row):
+    a number without arrows is left out."""
     if not bt:
         return None
-    from app.trading.onchain import system as onchain_system
-    traded = [r for r in bt.get("rows") or [] if r.get("trades") and r.get("return_pct") is not None
-              and r.get("label") in onchain_system.TREND_LABELS]
-    best = max(traded, key=lambda r: r["return_pct"]) if traded else None
+    best = onchain_strategy_lab.drawn_row(bt)
     # The 8h/1d trend follower leads the list; with no trade yet there, the
     # 5-minute best stays, so every row keeps a real result.
     daily = bt.get("daily")
-    drow = (daily.get("rows") or [None])[0] if daily and daily.get("rows") else None
+    drow = onchain_strategy_lab.drawn_row(daily) if daily else None
     return {"best": {k: best.get(k) for k in ("label", "return_pct", "trades", "win_rate")} if best else None,
             "hold_pct": bt.get("hold_pct"), "bars": bt.get("bars"),
             "daily": {"interval": daily.get("interval"), "return_pct": drow.get("return_pct"),
                       "trades": drow.get("trades"), "win_rate": drow.get("win_rate"),
                       "in_position": drow.get("in_position"), "hold_pct": daily.get("hold_pct"),
-                      "signal": daily.get("signal")} if drow and drow.get("trades") else None}
+                      "signal": daily.get("signal")} if drow else None}
 
 
 def _narr_keys(raw) -> set[str]:

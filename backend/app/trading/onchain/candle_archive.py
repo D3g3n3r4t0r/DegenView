@@ -39,9 +39,13 @@ UNIT_S = {"day": 86400, "hour": 3600, "minute": 60}
 FRESH_MAX_S = 3600          # the lab reruns a token every hour: no series older than that
 MAX_BARS = 5000             # per series; the oldest go first
 LIMIT = 1000                # one GeckoTerminal call
+# One call every TICK_S, through the shared background limiter (14 a
+# minute): it waits its turn instead of skipping. The first version only
+# ran below 10 calls a minute, and the other background jobs keep the load
+# at the cap, so after 4 hours (30/09) the 12h, 1h and 15m series of the
+# Top 50 were still empty.
 TICK_S = 20
 WARM_S = 3 * 3600           # the loop keeps every series at most this old; the lab tops up the rest
-SPARE = 4                   # calls a minute left to the rest of the background
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS candles (
@@ -165,10 +169,10 @@ def _pairs(entries: list[dict]) -> list[tuple[str, str, str]]:
 
 
 async def tick(entries: list[dict], now: float | None = None) -> bool:
-    """One series refreshed if GeckoTerminal has room. True = fetched."""
-    from app.providers.dexscreener import _GECKO_BACKGROUND_PER_MIN, gecko_load
+    """One series refreshed, the stalest of the Top's. True = fetched. The
+    queue is the `fetched` table on disk: a restart resumes where it was."""
     now = now or time.time()
-    if priority.backtests_first() or gecko_load() > _GECKO_BACKGROUND_PER_MIN - SPARE:
+    if priority.backtests_first():
         return False
     due = await asyncio.to_thread(next_due, _pairs(entries), now)
     if due is None:
