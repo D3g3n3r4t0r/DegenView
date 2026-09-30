@@ -1242,6 +1242,17 @@ html, body { overflow-x: clip; }
   .agent-map .am-events li { margin-block: 14px; }
   .agent-map time { color: var(--k-text-2); font-size: 12px; }
   .agent-map[data-stale="true"] .am-freshness { color: var(--k-amber); }
+  .agent-map .am-live { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; padding: 10px 12px; border: 1px solid var(--k-surface-2); border-radius: 12px; font-size: 13px; color: var(--k-text-2); }
+  .agent-map .am-live[data-on="true"] { color: var(--k-text); border-color: var(--k-mint); }
+  .agent-map .am-live:not([data-on="true"]) .am-dot { background: var(--k-text-3); box-shadow: none; }
+  .agent-map .am-grid button { position: relative; will-change: transform; }
+  .agent-map .am-ring { position: absolute; inset: 0; border: 2px solid var(--k-mint); border-radius: inherit; pointer-events: none; }
+  .agent-map .am-sparks { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+  .agent-map .am-spark { position: absolute; top: -5px; left: -5px; width: 10px; height: 10px; border-radius: 50%; background: var(--k-mint); box-shadow: 0 0 12px var(--k-mint); opacity: 0; will-change: transform, opacity; }
+  .agent-map [data-live="true"] { border-color: var(--k-mint); }
+  .agent-map [data-live="true"] .am-dot, .agent-map .am-live[data-on="true"] .am-dot { animation: am-breathe 1.6s ease-in-out infinite; }
+  @keyframes am-breathe { 50% { transform: scale(1.35); opacity: .55; } }
+  @media (prefers-reduced-motion: reduce) { .agent-map .am-dot { animation: none !important; } }
   @media (max-width: 540px) {
     .agent-map { padding: 14px; }
     .agent-map .am-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

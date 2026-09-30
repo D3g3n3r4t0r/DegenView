@@ -61,3 +61,36 @@ export function projectGraph({ items, info, key = null, receivedAt = null, faile
     // Global daily numbers must never appear as selected-project expenditure.
     usage: key ? null : { calls, tokens: number(info?.tokens), estimatedUsd: number(info?.spent_usd) } };
 }
+
+const KIND_NODE = new Map(NODES.flatMap(n => (n.kinds || []).map(k => [k, n.id])));
+export const nodeFor = kind => KIND_NODE.get(kind) || "other";
+export const eventId = e => `${e.t}|${e.kind}|${e.key || ""}|${e.text}`;
+
+/** Most recent event that names a project: what the engine is looking at now. */
+export function liveProject(items, now = Date.now()) {
+  const e = normalizeEvents(items).find(x => x.key);
+  if (!e) return null;
+  return { key: e.key, symbol: e.symbol || e.token.slice(0, 12), chain: e.chain,
+    node: nodeFor(e.kind), t: e.t, ageS: Math.max(0, Math.round(now / 1000 - e.t)) };
+}
+
+/** Recorded order of one project's events (oldest first), repeats of one node collapsed. */
+export function cycleTrace(items, key, limit = 12) {
+  const steps = [];
+  for (const e of normalizeEvents(items).filter(x => x.key === key).reverse()) {
+    const node = nodeFor(e.kind);
+    if (steps.at(-1)?.node === node) steps[steps.length - 1] = { node, t: e.t, id: eventId(e) };
+    else steps.push({ node, t: e.t, id: eventId(e) });
+  }
+  return steps.slice(-limit);
+}
+
+/** Events not seen before, oldest first. Marks them seen. */
+export function freshEvents(seen, items) {
+  const out = [];
+  for (const e of normalizeEvents(items)) {
+    const id = eventId(e);
+    if (!seen.has(id)) { seen.add(id); out.push({ ...e, id, node: nodeFor(e.kind) }); }
+  }
+  return out.reverse();
+}
