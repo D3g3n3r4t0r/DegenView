@@ -57,3 +57,20 @@ def test_journey_reads_pillars_judge_code_and_outcomes(monkeypatch, tmp_path):
         assert src in sources, src
     assert sources.count("deepseek_call") == 2 and '"big"' not in str([s["record"] for s in j["steps"]])
     assert j["steps"][-1]["text"] == "Price after 7 days: -10.0%"
+
+
+def test_reevaluations_survive_in_the_append_only_history(monkeypatch, tmp_path):
+    from app.trading.onchain import history
+    _setup(monkeypatch, tmp_path)
+    projects_db.record({"chain": "solana", "token_address": TOKEN}, "studied", why="thin", score=55, now=170)
+    projects_db.record({"chain": "solana", "token_address": TOKEN}, "ranked", why="better", score=80, now=200)
+    verdicts = [s for s in journey.journey("solana", TOKEN)["steps"] if s["source"] == "projects_db.verdict"]
+    assert [s["t"] for s in verdicts] == [140, 170, 200]   # each once, none overwritten
+    assert len(history.of(f"solana:{TOKEN}")) == 3 and history.of("solana:other") == []
+
+
+def test_history_append_never_raises(monkeypatch, tmp_path):
+    from app.trading.onchain import history
+    monkeypatch.setattr(history, "_FILE", tmp_path / "missing-dir" / "h.jsonl")
+    history.append("solana:x", "judge", {"verdict": "keep"})
+    assert history.of("solana:x") == []
