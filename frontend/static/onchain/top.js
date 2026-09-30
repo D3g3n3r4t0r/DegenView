@@ -189,7 +189,7 @@ function paint() {
     : "";
   root.querySelector("[data-top-note]").innerHTML = narrLine + escapeHtml(lead + (bt?.total
     ? `Every strategy backtested on each token's latest chart, every hour, around the clock · ${bt.ready}/${bt.total} ready`
-    : ""));
+    : "")) + ' <button type="button" class="top-narr-clear" data-top-wallet>$10k wallet on these trades →</button>';
 }
 
 // The H24 lab's best backtest (strategy_lab.py), in the row: what the
@@ -197,7 +197,7 @@ function paint() {
 function btSub(b) {
   if (!b) return '<span class="bt-live" role="img" aria-label="Backtest on its way"><i></i><i></i><i></i></span>';
   const pct = (v) => { const r = Math.round(v ?? 0); return `${r > 0 ? "+" : ""}${r}%`; };
-  // The site's trend follower on 8h/1d leads; the 5-minute best until it has traded.
+  // The site's trend follower on its ladder timeframe (5m to 1d) leads; the 5-minute best until it has traded.
   const d = b.daily;
   if (d) return `${d.interval} ${pct(d.return_pct)} · ${d.trades} trades${d.in_position ? " · long" : ""}`;
   if (!b.best) return "bt: no entry";
@@ -241,6 +241,7 @@ export function mountTop() {
   waiting();
   root.addEventListener("click", (event) => {
     if (event.target.closest("[data-top-narr-clear]")) { narr.set([]); return; }
+    if (event.target.closest("[data-top-wallet]")) { import("@onchain/sim-backtest.js").then((m) => m.openSimBacktest()); return; }
     const b = event.target.closest("[data-size]");
     if (!b) return;
     size = Number(b.dataset.size);

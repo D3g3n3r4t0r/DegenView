@@ -9,12 +9,17 @@ import pytest
 
 from app.notify import deepseek_desk
 from app.trading.onchain import strategy_lab as lab
+from app.trading.onchain import candle_archive, sim_backtest
 
 
 @pytest.fixture(autouse=True)
 def fresh(monkeypatch, tmp_path):
     monkeypatch.setattr(lab, "_STORE_FILE", tmp_path / "lab.json")
     monkeypatch.setattr(deepseek_desk, "_STORE_FILE", tmp_path / "desk.json")
+    monkeypatch.setattr(sim_backtest, "_FILE", tmp_path / "ledger.json")
+    monkeypatch.setattr(candle_archive, "_DB_FILE", tmp_path / "candles.sqlite")
+    monkeypatch.setattr(lab, "LADDER_RULE", True)
+    sim_backtest.reset_for_tests()
     lab.reset_for_tests()
     deepseek_desk.reset_for_tests()
     yield
@@ -145,6 +150,40 @@ def test_no_trend_ema_entry_anywhere_adapts_to_trend_hf(monkeypatch):
     assert daily["interval"] == "12h" and daily["rows"][0]["label"] == "Trend HF"
 
 
+def test_until_the_top_50_test_the_old_rule_runs(monkeypatch):
+    monkeypatch.setattr(lab, "LADDER_RULE", False)
+    now = 1_800_000_000
+    asked = []
+
+    async def candles(client, net, pool, tf, agg, before, limit, token=""):
+        asked.append((tf, agg))
+        step = {"day": 86400, "hour": 3600, "minute": 60}[tf] * agg
+        return _spaced(30 if tf == "day" else 180, step, now)
+    monkeypatch.setattr(lab.alert_track, "_candles", candles)
+    _only_enters_on(monkeypatch, 1)
+    daily = asyncio.run(lab.tick([_e("tok")], now=now))["daily"]
+    assert daily["interval"] == "8h" and daily["rows"][0]["label"] == "Trend EMA"
+    assert ("hour", 12) not in asked
+
+
+def test_the_archive_answers_the_second_run_without_gecko(monkeypatch):
+    now = 1_800_000_000
+    asked = []
+
+    async def candles(client, net, pool, tf, agg, before, limit, token=""):
+        asked.append((tf, agg, limit))
+        step = {"day": 86400, "hour": 3600, "minute": 60}[tf] * agg
+        return _spaced(min(1000, 200 * 86400 // step), step, now)
+    monkeypatch.setattr(lab.alert_track, "_candles", candles)
+    _only_enters_on(monkeypatch, 86400)
+    asyncio.run(lab.run_daily(httpx.AsyncClient(), "solana", "P", "T", now))
+    asyncio.run(lab.run_daily(httpx.AsyncClient(), "solana", "P", "T", now + 60))
+    assert asked == [("day", 1, 1000)]
+    asyncio.run(lab.run_daily(httpx.AsyncClient(), "solana", "P", "T", now + 4000))
+    assert asked[-1] == ("day", 1, 10)
+    assert len(candle_archive.get(candle_archive.key("solana", "P", "day", 1, "T"))) == 200
+
+
 def test_no_entry_anywhere_keeps_the_widest_timeframe(monkeypatch):
     now = 1_800_000_000
 
@@ -238,7 +277,9 @@ def test_a_signal_is_news_once_and_only_on_the_last_closed_candle():
     old = {"side": "buy", "t": 1_000_000 - 2 * 28800, "price": 2.0}
     assert lab._signal(_daily([old]), None)[1] is False
     sell = {"side": "sell", "t": 1_000_000, "price": 3.0, "ret": 0.4}
-    assert lab._signal(_daily([buy, sell]), {"signal": buy}) == (sell, True)
+    assert lab._signal(_daily([buy, sell]), {"signal": buy, "best": {"fills": "next_open"}}) == (sell, True)
+    # saved before the arrows moved to the fill candle: never announced twice
+    assert lab._signal(_daily([buy, sell]), {"signal": buy}) == (sell, False)
     assert lab._signal(_daily([]), None) == (None, False)
 
 

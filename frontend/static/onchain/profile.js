@@ -15,6 +15,7 @@ import * as api from "@onchain/api.js";
 import { escapeHtml, logo, usdShort } from "@onchain/format.js";
 import * as phantom from "@onchain/phantomlink.js";
 import { loadLinked } from "@onchain/userswap.js";
+import { register } from "@onchain/detail.js";
 import { flash, liveDelta, liveKey, liveValue, priceOf, roll, watch } from "@onchain/live.js";
 
 const RANGES = [["1h", "1H"], ["2h", "2H"], ["3h", "3H"], ["4h", "4H"], ["8h", "8H"], ["24h", "1D"], ["7d", "1W"],
@@ -63,14 +64,16 @@ let scrub = null;
 function simNote(d) {
   if (!d.sim) {
     return `<div class="pf-simnote"><p>No simulated wallet yet. It starts with your Robinhood USDG (or $100), then the system trades it on every alert with real quotes: nothing is sent.</p>
-      <button type="button" class="pf-save" data-sim-start>Start simulated wallet</button></div>`;
+      <button type="button" class="pf-save" data-sim-start>Start simulated wallet</button>
+      <button type="button" class="pf-link" data-sim-top>Top 50 wallet ($10k)</button></div>`;
   }
   const since = new Date((d.tracking_since ?? Date.now() / 1000) * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" });
   const ret = d.sim.ret == null ? "" : ` · ${d.sim.ret >= 0 ? "+" : ""}${(d.sim.ret * 100).toFixed(2)}% since start`;
   return `<div class="pf-simnote"><p>Started with $${d.sim.start.toFixed(2)}${ret}. ${d.sim.autotrader === "sim"
     ? "The system is trading it now."
     : `Autotrader is ${d.sim.autotrader === "off" ? "off" : "on real"}: this balance stands still. <button type="button" class="pf-link" data-sim-start>Resume simulation</button>`}
-    <button type="button" class="pf-link" data-sim-cash>Set cash</button></p>
+    <button type="button" class="pf-link" data-sim-cash>Set cash</button>
+    <button type="button" class="pf-link" data-sim-top>Top 50 wallet ($10k)</button></p>
     <form class="pf-simcash" data-sim-form hidden>
       <label>$<input name="cash" type="number" inputmode="decimal" min="0" max="10000000" step="0.01" required value="${(d.cash ?? d.sim.usdg ?? 0).toFixed(2)}" aria-label="Simulated cash in USD" /></label>
       <button type="submit" class="pf-save">Save</button>
@@ -237,13 +240,25 @@ function walletsBox(p) {
   </section>`;
 }
 
+// A position opens its token page: the chart with the strategy's arrows and
+// the wallet's own entry (and exit, once closed). Lorenzo, 30/09: "le
+// posizioni aperte e chiuse se ci clicco voglio vedere quali sono stati
+// graficamente".
+function openAttr(chain, token, symbol, opened, closed, ret) {
+  if (!chain || !token) return "";
+  const id = `gem:${chain}:${token}`;
+  const own = [...(opened ? [{ t: opened, side: "buy" }] : []), ...(closed ? [{ t: closed, side: "sell", ret }] : [])];
+  register(id, { kind: "gem", chain, token, symbol, own });
+  return ` data-open="${escapeHtml(id)}" role="button" tabindex="0"`;
+}
+
 function positions(d) {
   if (tab === "closed") {
     const rows = d.closed ?? [];
     if (!rows.length) return `<p class="pf-none">No closed positions yet. The system's trades land here when it sells.</p>`;
     const shown = showAllPos ? rows : rows.slice(0, 4);
     const morePos = rows.length > 4 ? `<button type="button" class="pf-more" data-more-pos>${showAllPos ? "Show less" : `Show all (${rows.length})`}</button>` : "";
-    return `<ul class="pf-list">${shown.map((c) => `<li>
+    return `<ul class="pf-list">${shown.map((c) => `<li${openAttr(c.chain, c.token, c.symbol, c.opened, c.closed, c.ret)}>
       ${logo(c.symbol, null, c.chain, c.token)}
       <span class="pf-main"><b>${escapeHtml(c.symbol)}</b><small>${hold(c.closed - c.opened)} held${c.mode === "sim" ? " · simulated" : ""}${c.why ? ` · ${escapeHtml(c.why)}` : ""}</small></span>
       <span class="pf-num"><b>${c.proceeds_usdg == null ? "—" : `$${c.proceeds_usdg.toFixed(2)}`}</b><em data-sign="${(c.ret ?? 0) >= 0 ? "up" : "down"}">${pct(c.ret)}</em></span>
@@ -259,7 +274,7 @@ function positions(d) {
   if (!all.length) return chipBar + `<p class="pf-none">${d.missing?.length ? `Couldn't read ${d.missing.join(" and ")} right now.` : "Nothing held yet."}</p>`;
   const shown = showAllPos ? rows : rows.slice(0, 4);
   const morePos = rows.length > 4 ? `<button type="button" class="pf-more" data-more-pos>${showAllPos ? "Show less" : `Show all (${rows.length})`}</button>` : "";
-  return chipBar + `<ul class="pf-list">${shown.map((p) => `<li data-hidden-row="${Boolean(p.hidden)}"${liveKey(p) ? ` data-live="${escapeHtml(liveKey(p))}"` : ""}>
+  return chipBar + `<ul class="pf-list">${shown.map((p) => `<li${p.native ? "" : openAttr(p.chain, p.address, p.symbol, p.opened)} data-hidden-row="${Boolean(p.hidden)}"${liveKey(p) ? ` data-live="${escapeHtml(liveKey(p))}"` : ""}>
     ${logo(p.symbol, p.image, p.chain, p.address)}
     <span class="pf-main"><b>${escapeHtml(p.name || p.symbol)}</b><small>${qty(p.amount)} ${escapeHtml(p.symbol)} · ${CHAIN_NAMES[p.chain] ?? p.chain}${p.source === "connected" ? " · your wallet" : ""}</small></span>
     <span class="pf-num"><b data-lv>${p.value_usd == null ? "—" : usd2(p.value_usd)}</b>${p.cost_usd ? `<em data-pnl>${pnlText(p.value_usd, p.cost_usd)}</em>` : p.price_usd ? `<small data-lp>${unitPrice(p.price_usd)}</small>` : ""}</span>
@@ -472,6 +487,7 @@ export function mountProfile({ go: goTo } = {}) {
   root.addEventListener("click", (event) => {
     const wb = event.target.closest("[data-wallet]");
     if (wb) { switchWallet(wb.dataset.wallet); return; }
+    if (event.target.closest("[data-sim-top]")) { import("@onchain/sim-backtest.js").then((m) => m.openSimBacktest()); return; }
     if (event.target.closest("[data-sim-cash]")) {
       const form = root.querySelector("[data-sim-form]");
       if (form) { form.hidden = !form.hidden; if (!form.hidden) form.cash.select(); }

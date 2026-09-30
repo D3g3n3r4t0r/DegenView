@@ -13,7 +13,12 @@ import { openUserSwap, walletFor } from "@onchain/userswap.js";
 import { hideToken } from "@onchain/hidden.js";
 
 const registry = new Map();
-const INTERVALS = ["1m", "5m", "15m", "1h", "4h", "1d", "1w"];
+const INTERVALS = ["1m", "5m", "15m", "1h", "4h", "8h", "1d", "1w"];
+// GeckoTerminal has no 8-hour or weekly candles: they are built here from
+// the 4-hour and daily ones, like strategy_lab._merge_8h on the server.
+// Weeks start on Monday 00:00 UTC (the epoch was a Thursday).
+const DERIVED = { "8h": ["4h", 28800, 0], "1w": ["1d", 604800, 4 * 86400] };
+const STEP = { "1m": 60, "5m": 300, "15m": 900, "1h": 3600, "4h": 14400, "8h": 28800, "1d": 86400, "1w": 604800 };
 const WATCH_KEY = "watchlist-v1";
 const loading = new Set();
 let dlg = null;
@@ -48,6 +53,13 @@ export function register(id, entry) {
   const merged = { ...old };
   for (const [k, v] of Object.entries(entry)) if (v != null && !(Array.isArray(v) && !v.length && old[k]?.length)) merged[k] = v;
   registry.set(id, merged);
+}
+
+/** The wallet's own trade on a token, drawn on its chart as dots: every
+ *  page registered for that token gets it. */
+export function setOwn(chain, token, own) {
+  const t = String(token ?? "").toLowerCase();
+  for (const e of registry.values()) if (e.chain === chain && String(e.token ?? "").toLowerCase() === t) e.own = own;
 }
 
 const pct = (f) => (f == null ? "—" : `${f > 0 ? "+" : ""}${Math.round(f * 100)}%`);
@@ -85,7 +97,7 @@ async function onClick(event) {
   const t = event.target;
   if (t.closest("[data-back]")) { dlg.close(); return; }
   const iv = t.closest("[data-iv]");
-  if (iv) { interval = iv.dataset.iv; paintChart(); paintChips(); return; }
+  if (iv) { interval = iv.dataset.iv; current.picked = true; paintChart(); paintChips(); return; }
   const tb = t.closest("[data-dtab]");
   if (tb) { tab = tb.dataset.dtab; paintTabs(); return; }
   if (t.closest("[data-hide]")) {
@@ -270,6 +282,13 @@ async function enrich(id, e) {
   // The H24 lab's backtest on the token's latest chart (strategy_lab.py):
   // every token of the Strategies tab has one, alert or not.
   if (r.backtests) e.lab = r.backtests;
+  // The chart may have landed before the backtest: redraw it with the
+  // strategy's arrows, on the backtest's own timeframe if none was picked.
+  if (r.backtests && current?.id === id && dlg?.open) {
+    const iv = labInterval(e);
+    if (iv && !current.picked && iv !== interval) { interval = iv; paintChips(); }
+    paintChart();
+  }
   if (r.entry) {
     const lb = await import("@onchain/leaderboard.js");
     e.why ||= lb.gemWhy(r.entry) + (r.entry.on_board ? "" : `<p class="muted">Not on the board${r.entry.why ? `: ${escapeHtml(r.entry.why)}` : ""}.</p>`);
@@ -320,7 +339,7 @@ function paintTabs() {
   // Gems: only the daily trend follower, not the alerts' 5-minute tracks.
   const gem = e.kind === "gem";
   const lab = gem ? (e.lab?.daily?.rows?.length ? e.lab.daily : null) : e.lab;
-  const labNote = gem ? `Trend follower backtested on the ${TF_NAME[lab?.interval] ?? "daily"} chart.`
+  const labNote = gem ? `Trend follower backtested on the ${IV_NAME[lab?.interval] ?? "daily"} chart: from the longest one with 60 closed candles down to the first where it enters.`
     : "Backtested on the latest 5-minute chart, every hour.";
   const alerts = gem ? [] : (e.alerts ?? []);
   body.innerHTML = alerts.length ? alerts.map((al) => `
@@ -442,7 +461,7 @@ async function geckoDirect(e, pair, iv) {
   const net = GECKO_NET[e.chain];
   const [tf, agg] = GECKO_TF[iv] ?? GECKO_TF["5m"];
   if (!net) throw new Error("chain");
-  const q = new URLSearchParams({ aggregate: agg, limit: 300, currency: "usd", ...(e.token ? { token: e.token } : {}) });
+  const q = new URLSearchParams({ aggregate: agg, limit: iv === "1d" ? 1000 : 300, currency: "usd", ...(e.token ? { token: e.token } : {}) });
   const d = await fetchJson(`${GECKO}/networks/${net}/pools/${pair}/ohlcv/${tf}?${q}`, 6000);
   const rows = d?.data?.attributes?.ohlcv_list ?? [];
   return rows.map((r) => ({ time: r[0], open: Number(r[1]), high: Number(r[2]), low: Number(r[3]), close: Number(r[4]) }))
@@ -453,7 +472,10 @@ const clean = (d) => (d?.candles ?? []).filter((c) => Number.isFinite(c.close));
 const enough = (c) => { if (c.length < 2) throw new Error("empty"); return c; };
 
 function chartFor(e, iv) {
-  if (iv === "1w") return chartFor(e, "1d").then(weekly);
+  if (DERIVED[iv]) {
+    const [base, step, offset] = DERIVED[iv];
+    return chartFor(e, base).then((c) => aggregate(c, step, offset));
+  }
   const k = `${e.chain}:${e.pair || e.token}:${iv}`;
   const hit = charts.get(k);
   if (hit && Date.now() - hit.at < CHART_FRESH_MS) return hit.promise;
@@ -474,30 +496,26 @@ function chartFor(e, iv) {
   return promise;
 }
 
-// A gem opens on the strategy's own timeframe (the lab picks it from the
-// chart's history, 5m at listing up to 1d). Rungs with no GeckoTerminal
-// candle open on the widest chip that divides them, so every entry still
-// lands on its bar.
-const TF_NAME = { "5m": "5-minute", "15m": "15-minute", "30m": "30-minute", "1h": "1-hour", "2h": "2-hour",
+// Gems open on the timeframe their trend follower ran on (strategy_lab's
+// ladder, 5m to 1d). The rungs with no chip open on the widest chip below
+// them: every trade still lands on the bar at or before it.
+const IV_NAME = { "5m": "5-minute", "15m": "15-minute", "30m": "30-minute", "1h": "1-hour", "2h": "2-hour",
                   "4h": "4-hour", "6h": "6-hour", "8h": "8-hour", "12h": "12-hour", "1d": "daily" };
-const CHIP_OF = { "30m": "15m", "2h": "1h", "6h": "1h", "8h": "4h", "12h": "4h" };
-const defaultInterval = (e) => {
-  if (e.kind !== "gem") return "5m";
-  const lab = e.lab?.daily?.interval;
-  const iv = CHIP_OF[lab] ?? lab;
-  return INTERVALS.includes(iv) ? iv : "1d";
+const CHIP_OF = { "30m": "15m", "2h": "1h", "6h": "4h", "12h": "8h" };
+const labInterval = (e) => {
+  const iv = e.kind === "gem" ? e.lab?.daily?.interval : null;
+  return iv ? CHIP_OF[iv] ?? iv : null;
 };
+const defaultInterval = (e) => labInterval(e) ?? (e.kind === "gem" ? "1d" : "5m");
 
-// Weekly candles from the daily ones, Monday 00:00 UTC (epoch day 0 is a Thursday).
-const WEEK = 604800, MONDAY = 4 * 86400;
-function weekly(days) {
+function aggregate(candles, step, offset) {
   const out = [];
-  for (const c of days) {
-    const t = Math.floor((c.time - MONDAY) / WEEK) * WEEK + MONDAY;
-    const w = out[out.length - 1];
-    const hi = c.high ?? c.close, lo = c.low ?? c.close;
-    if (w?.time === t) { w.high = Math.max(w.high, hi); w.low = Math.min(w.low, lo); w.close = c.close; }
-    else out.push({ time: t, open: c.open ?? c.close, high: hi, low: lo, close: c.close });
+  for (const c of candles) {
+    const t = Math.floor((c.time - offset) / step) * step + offset;
+    const cur = out[out.length - 1];
+    if (cur && cur.time === t) {
+      cur.high = Math.max(cur.high, c.high); cur.low = Math.min(cur.low, c.low); cur.close = c.close;
+    } else out.push({ time: t, open: c.open, high: c.high, low: c.low, close: c.close });
   }
   return out;
 }
@@ -520,8 +538,10 @@ async function paintChart() {
   if (!e.pair && !e.token) { box.innerHTML = `<div class="dt-chart-empty">No pool to chart.</div>`; return; }
   const want = `${current.id}:${interval}`;
   box.dataset.want = want;
-  const stale = charts.get(`${e.chain}:${e.pair || e.token}:${interval}`)?.candles;
-  if (stale?.length >= 2) await drawChart(box, stale, e);
+  const [base, step, offset] = DERIVED[interval] ?? [interval];
+  let stale = charts.get(`${e.chain}:${e.pair || e.token}:${base}`)?.candles;
+  if (stale && step) stale = aggregate(stale, step, offset);
+  if (stale?.length >= 2) await drawChart(box, stale, e, interval);
   let candles = [];
   let shown = interval;
   // An interval with no candles (1m on a quiet pool) steps up to the next
@@ -535,7 +555,7 @@ async function paintChart() {
     if (candles.length >= 2) { shown = iv; break; }
   }
   if (candles.length < 2) { if (!stale) { disposeChart(); box.innerHTML = embed(e); } return; }
-  const drawn = await drawChart(box, candles, e);
+  const drawn = await drawChart(box, candles, e, shown);
   const note = box.parentElement?.querySelector("[data-chart-note]");
   if (note) {
     if (shown !== interval) note.textContent = `No ${interval} candles for this token: showing ${shown}.`;
@@ -565,7 +585,7 @@ function chartLib() {
   });
 }
 
-async function drawChart(box, candles, e) {
+async function drawChart(box, candles, e, iv = interval) {
   let LC;
   try { LC = await chartLib(); } catch { disposeChart(); box.innerHTML = svgChart(candles, e); return; }
   const last = candles[candles.length - 1].close;
@@ -602,25 +622,38 @@ async function drawChart(box, candles, e) {
   lw.k = k;
   lw.series.setData(bars);
   // A marker sits on a bar: each event goes to the last bar at or before it.
-  const t0 = bars[0].time, t1 = bars[bars.length - 1].time;
+  // The last bar's own span: a trade inside today's daily candle, or on a
+  // finer timeframe than the chart, still belongs on it (the old limit of
+  // one hour dropped every 8-hour trade after 1:00 on the daily chart).
+  const t0 = bars[0].time, t1 = bars[bars.length - 1].time + (STEP[iv] ?? 3600);
   const barAt = (t) => { let b = bars[0].time; for (const x of bars) { if (x.time <= t) b = x.time; else break; } return b; };
   const marks = [];
   let drawn = 0;
   for (const a of withLab(e)) {
     for (const v of tradesOf(a)) {
-      if (v.t < t0 || v.t > t1 + 3600) continue;
+      if (v.t < t0 || v.t >= t1) continue;
       const buy = v.side === "buy";
       marks.push({ time: barAt(v.t), position: buy ? "belowBar" : "aboveBar", color: buy ? "#2de0a8" : "#f87171",
         shape: buy ? "arrowUp" : "arrowDown", text: buy ? "Buy" : v.ret != null ? `Sell ${pct(v.ret)}` : "Sell" });
       drawn++;
     }
     const rug = a.backtests?.rug?.at;
-    if (rug != null && rug >= t0 && rug <= t1 + 3600) {
+    if (rug != null && rug >= t0 && rug < t1) {
       // A fall of 85% stops the strategy but is not a rug (HYDX, 30/09).
       const tag = a.backtests.rug.kind === "fall" || /from its top/.test(a.backtests.rug.why ?? "") ? "Stop" : "Rug";
       const why = a.backtests?.rug?.why ? `${tag} · ${a.backtests.rug.why}`.slice(0, 40) : `${tag} · strategy off`;
       marks.push({ time: barAt(rug), position: "aboveBar", color: "#f87171", shape: "square", text: why });
     }
+  }
+  // The wallet's own trade on this token (a position opened from the
+  // profile): Lorenzo, 30/09, "le posizioni aperte e chiuse se ci clicco
+  // voglio vedere quali sono stati graficamente".
+  for (const v of e.own ?? []) {
+    if (v.t == null || v.t < t0 || v.t >= t1) continue;
+    const buy = v.side === "buy";
+    marks.push({ time: barAt(v.t), position: buy ? "belowBar" : "aboveBar", color: "#f0b90b", shape: "circle",
+      text: buy ? "Wallet in" : v.ret != null ? `Wallet out ${pct(v.ret)}` : "Wallet out" });
+    drawn++;
   }
   marks.sort((x, y) => x.time - y.time);
   lw.series.setMarkers(marks);
