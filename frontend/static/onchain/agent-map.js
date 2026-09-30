@@ -1,7 +1,8 @@
-import { NODES, projectsIn, projectGraph, liveProject, cycleTrace, freshEvents } from "@onchain/agent-map-model.js";
+import { NODES, projectsIn, projectGraph, liveProject, cycleTrace, freshEvents, projectPositions } from "@onchain/agent-map-model.js";
 
 const LIVE = "__live";
 const STEP_MS = 520;
+const MAX_PROJECTS = 8;
 
 /** Mount once; reuse the parent view's authenticated polling and dispose on remount. */
 export function mountAgentMap(root) {
@@ -16,7 +17,7 @@ export function mountAgentMap(root) {
   };
   root.className = "agent-map";
   const heading = element("h3", "Inside Engine");
-  const subtitle = element("p", "Nodes light up when a real event is recorded. Sparks follow one project's recorded order; lines describe the architecture, not a verified decision trace.", "am-caption");
+  const subtitle = element("p", "Each chip is a project sitting on the step of its latest recorded event; it moves when a new event arrives. Nodes light up on real events; lines describe the architecture, not a verified decision trace.", "am-caption");
   const live = element("p", "", "am-live");
   const liveDot = element("span", "", "am-dot"); liveDot.setAttribute("aria-hidden", "true");
   const liveText = element("span");
@@ -42,7 +43,10 @@ export function mountAgentMap(root) {
     buttons.set(node.id, { button, status }); grid.append(button);
   }
   stage.append(svg, grid); const sparks = element("div", null, "am-sparks"); sparks.setAttribute("aria-hidden", "true");
-  stage.append(sparks);
+  const tokens = element("div", null, "am-tokens");
+  stage.append(sparks, tokens);
+  // Project chips: each sits on the node of its latest recorded event and hops on new events.
+  const where = new Map(), chips = new Map(), pending = new Set();
   root.replaceChildren(heading, subtitle, live, label, freshness, usage, stage, detail);
   const activeKey = () => key === LIVE ? liveProject(snapshot.items)?.key ?? null : key;
 
@@ -77,11 +81,57 @@ export function mountAgentMap(root) {
       if (!s.quiet) later(() => pulse(s.node), i > 0 ? STEP_MS * .8 : 0);
     }, i * STEP_MS));
   }
+  function layoutTokens() {
+    if (disposed || !stage.isConnected) return;
+    const bounds = stage.getBoundingClientRect();
+    if (!bounds.width) return;
+    const list = projectPositions(snapshot.items, MAX_PROJECTS);
+    const keep = new Set(list.map(p => p.key));
+    for (const [k, chip] of chips) if (!keep.has(k)) {
+      chips.delete(k); where.delete(k); chip.style.opacity = "0";
+      later(() => chip.remove(), 400);
+    }
+    const slots = new Map();
+    for (const p of list) {
+      if (!where.has(p.key)) { if (pending.has(p.key)) continue; where.set(p.key, p.node); }
+      let chip = chips.get(p.key);
+      if (!chip) {
+        chip = element("button", p.symbol, "am-chip"); chip.type = "button";
+        chip.title = `${p.symbol}: latest recorded step`;
+        chip.addEventListener("click", () => {
+          key = p.key; options(); select.value = key; render(); play(cycleTrace(snapshot.items, key));
+        });
+        chip.style.opacity = "0"; tokens.append(chip); chips.set(p.key, chip);
+      }
+      const node = where.get(p.key), slot = slots.get(node) || 0; slots.set(node, slot + 1);
+      const r = buttons.get(node).button.getBoundingClientRect();
+      const x = r.left - bounds.left + r.width / 2 + ((slot % 3) - 1) * Math.min(58, r.width / 3.2);
+      const y = r.bottom - bounds.top - 16 - Math.floor(slot / 3) * 22;
+      chip.style.transform = `translate(${x}px,${y}px) translate(-50%,-50%)`;
+      chip.dataset.selected = String(p.key === activeKey());
+      if (chip.style.opacity === "0") requestAnimationFrame(() => { chip.style.opacity = "1"; });
+    }
+  }
+  function hops(fresh) {
+    const top = new Set(projectPositions(snapshot.items, MAX_PROJECTS).map(p => p.key));
+    const byKey = new Map();
+    for (const e of fresh) if (e.key && top.has(e.key)) byKey.set(e.key, [...(byKey.get(e.key) || []), e.node]);
+    let lane = 0;
+    for (const [k, nodes] of byKey) {
+      const offset = lane++ * 140; pending.add(k);
+      nodes.slice(-6).forEach((node, j) => later(() => {
+        pending.delete(k); where.set(k, node); layoutTokens();
+        if (k !== activeKey()) pulse(node);
+      }, offset + j * STEP_MS));
+    }
+  }
   function animate() {
     const fresh = freshEvents(seen, snapshot.items);
     const k = activeKey();
-    if (!primed) { primed = true; if (k) play(cycleTrace(snapshot.items, k)); return; }
+    if (!primed) { primed = true; layoutTokens(); if (k) play(cycleTrace(snapshot.items, k)); return; }
     if (document.visibilityState !== "visible" || !fresh.length) return;
+    if (!still.matches) hops(fresh);
+    else { for (const p of projectPositions(snapshot.items, MAX_PROJECTS)) where.set(p.key, p.node); layoutTokens(); }
     const mine = fresh.filter(e => !k || e.key === k);
     if (!mine.length) return;
     const trace = k ? cycleTrace(snapshot.items, k) : [];
@@ -155,7 +205,7 @@ export function mountAgentMap(root) {
     }
     detail.replaceChildren(element("h3", node.label), content,
       node.events.length ? list : element("p", node.missing || "No event in the loaded window. This does not mean the module never ran."));
-    cancelAnimationFrame(frame); frame = requestAnimationFrame(() => draw(graph));
+    cancelAnimationFrame(frame); frame = requestAnimationFrame(() => { draw(graph); if (primed) layoutTokens(); });
   }
 
   function options() {
