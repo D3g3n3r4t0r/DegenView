@@ -17,6 +17,14 @@ def test_pick_prefers_the_exact_match_then_liquidity_on_our_chains():
     assert ms.pick([_pair("arbitrum", "X", "a", 1)], "X") is None
 
 
+def test_pick_prefers_the_traded_token_over_a_deep_empty_copy():
+    real = [{**_pair("robinhood", "HYDX", "0xAA57", 58_000), "volume": {"h24": 311_000}},
+            {**_pair("robinhood", "HYDX", "0xaa57", 1_200), "volume": {"h24": 4_700}}]
+    fake = {**_pair("ethereum", "HYDX", "0xD932", 98_000_000), "volume": {"h24": 0.01}}
+    got = ms.pick([fake, *real], "HYDX")
+    assert got["chainId"] == "robinhood" and got["liquidity"]["usd"] == 58_000
+
+
 def test_item_has_what_the_checks_need():
     it = ms.item_of({**_pair("solana", "CAT", "C1", 20_000), "url": "u", "pairCreatedAt": 1_700_000_000_000})
     assert it["chain"] == "solana" and it["token_address"] == "C1" and it["liquidity_usd"] == 20_000
