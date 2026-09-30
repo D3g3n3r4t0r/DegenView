@@ -101,17 +101,20 @@ async def new_rule(f):
     first = min([b[0] for b in fast + day] or [f.now])
     age = f.now - first
     start = next((i for i, (iv, _, _) in enumerate(LADDER) if age >= MIN_BARS * STEP[iv]), len(LADDER) - 1)
-    widest = None
+    rungs = []
     for iv, tf, agg in LADDER[start:]:
         bars = await f.rung(iv, tf, agg)
         if bars is None:
             return None
-        if len(bars) < MIN_BARS:
-            continue
-        s = summary(iv, system.backtest_one(bars))
-        if entered(s):
-            return s
-        widest = widest or s
+        if len(bars) >= MIN_BARS:
+            rungs.append((iv, bars))
+    widest = None
+    for name, label in (("Lorenzo (trend-follower)", "Trend EMA"), ("Lorenzo HF (minuti on-chain)", "Trend HF")):
+        for iv, bars in rungs:
+            s = {**summary(iv, system.backtest_one(bars, name, label)), "strategy": label}
+            if entered(s):
+                return s
+            widest = widest or s
     return widest or {"interval": "-", "ret": None, "trades": 0, "in_position": False}
 
 

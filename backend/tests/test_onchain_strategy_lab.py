@@ -129,6 +129,22 @@ def test_the_ladder_steps_down_to_the_first_timeframe_that_enters(monkeypatch):
     assert asyncio.run(lab.tick([_e("tok2")], now=now))["daily"]["interval"] == "6h"
 
 
+def test_no_trend_ema_entry_anywhere_adapts_to_trend_hf(monkeypatch):
+    now = 1_800_000_000
+
+    async def candles(client, net, pool, tf, agg, before, limit, token=""):
+        step = {"day": 86400, "hour": 3600, "minute": 60}[tf] * agg
+        return _spaced(min(1000, 200 * 86400 // step), step, now)
+    monkeypatch.setattr(lab.alert_track, "_candles", candles)
+
+    def fake(bars, name="Lorenzo (trend-follower)", label="Trend EMA", known=None):
+        hf = label == "Trend HF" and bars[1][0] - bars[0][0] == 43200
+        return {"bars": len(bars), "rows": [{"label": label, "trades": int(hf), "in_position": False}]}
+    monkeypatch.setattr(lab.system, "backtest_one", fake)
+    daily = asyncio.run(lab.tick([_e("tok")], now=now))["daily"]
+    assert daily["interval"] == "12h" and daily["rows"][0]["label"] == "Trend HF"
+
+
 def test_no_entry_anywhere_keeps_the_widest_timeframe(monkeypatch):
     now = 1_800_000_000
 
