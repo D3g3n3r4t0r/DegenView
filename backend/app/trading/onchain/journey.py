@@ -124,12 +124,17 @@ def _records(chain: str, token: str) -> list[tuple[float, str, str, dict]]:
         out.append((lab["at"], "backtest", "strategy_lab",
                     {"key": k, "at": lab["at"], "pair": lab.get("pair"), "error": lab.get("error"),
                      "has_backtests": lab.get("backtests") is not None, "has_daily": lab.get("daily") is not None}))
-    g = gem_track._track.get(k)
-    if g and g.get("at"):
-        out.append((g["at"], "decision", "gem_track.entry", {"key": k, **_pick(g, ("at", "price", "score", "rank", "market_cap"))}))
+    for decision in gem_track.DECISIONS:
+        ck = gem_track.case_key(chain, token, decision)
+        g = gem_track._track.get(ck)
+        if not g or not g.get("at"):
+            continue
+        out.append((g["at"], "decision", "gem_track.entry", {"key": k, **_pick(g, (
+            "at", "price", "score", "rank", "market_cap", "decision", "why", "parts", "rules_v", "receipt"))}))
         for days, ret in sorted((g.get("returns") or {}).items(), key=lambda x: float(x[0])):
             out.append((g["at"] + float(days) * 86400, "outcomes", "gem_track.return",
-                        {"key": k, "entered_at": g["at"], "days": days, "return": ret}))
+                        {"key": k, "entered_at": g["at"], "days": days, "return": ret,
+                         "decision": g.get("decision", "ranked"), "excess": gem_track.excess(g, days)}))
     for store, label in ((outcomes._journal, "outcomes.journal"), (outcomes._archive, "outcomes.archive")):
         o = store.get(k)
         if o and o.get("at"):
@@ -173,6 +178,8 @@ def _text(source: str, r: dict) -> str:
     if source == "code_review":
         return f"Code of {r.get('repo')} reviewed" + (f" · {r['verdict']}" if r.get("verdict") else "")
     if source == "gem_track.entry":
+        if r.get("decision") in ("studied", "rejected"):
+            return f"Decision receipt: {r['decision']}" + (f" · {r['why']}" if r.get("why") else "") + f" · price {r.get('price')}"
         return f"Entered the Top at rank {r.get('rank')} · price {r.get('price')}"
     if source == "gem_track.return":
         ret = r.get("return")
