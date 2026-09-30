@@ -67,9 +67,15 @@ function simNote(d) {
   }
   const since = new Date((d.tracking_since ?? Date.now() / 1000) * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" });
   const ret = d.sim.ret == null ? "" : ` · ${d.sim.ret >= 0 ? "+" : ""}${(d.sim.ret * 100).toFixed(2)}% since start`;
-  return `<p class="pf-simnote">Started with $${d.sim.start.toFixed(2)}${ret}. ${d.sim.autotrader === "sim"
+  return `<div class="pf-simnote"><p>Started with $${d.sim.start.toFixed(2)}${ret}. ${d.sim.autotrader === "sim"
     ? "The system is trading it now."
-    : `Autotrader is ${d.sim.autotrader === "off" ? "off" : "on real"}: this balance stands still. <button type="button" class="pf-link" data-sim-start>Resume simulation</button>`}</p>`;
+    : `Autotrader is ${d.sim.autotrader === "off" ? "off" : "on real"}: this balance stands still. <button type="button" class="pf-link" data-sim-start>Resume simulation</button>`}
+    <button type="button" class="pf-link" data-sim-cash>Set cash</button></p>
+    <form class="pf-simcash" data-sim-form hidden>
+      <label>$<input name="cash" type="number" inputmode="decimal" min="0" max="10000000" step="0.01" required value="${(d.cash ?? d.sim.usdg ?? 0).toFixed(2)}" aria-label="Simulated cash in USD" /></label>
+      <button type="submit" class="pf-save">Save</button>
+      <small data-sim-err></small>
+    </form></div>`;
 }
 
 /* Touching the line: the big number and the change become those of the
@@ -460,11 +466,17 @@ export function mountProfile({ go: goTo } = {}) {
   setInterval(() => {
     if (document.visibilityState !== "visible" || !root.offsetParent || !data) return;
     if (root.querySelector("dialog[open]") || root.querySelector(".scrub-x:not([hidden])")) return;
+    if (root.querySelector("[data-sim-form]:not([hidden])")) return;
     load();
   }, 60_000);
   root.addEventListener("click", (event) => {
     const wb = event.target.closest("[data-wallet]");
     if (wb) { switchWallet(wb.dataset.wallet); return; }
+    if (event.target.closest("[data-sim-cash]")) {
+      const form = root.querySelector("[data-sim-form]");
+      if (form) { form.hidden = !form.hidden; if (!form.hidden) form.cash.select(); }
+      return;
+    }
     if (event.target.closest("[data-sim-start]")) {
       api.setAutotrader({ mode: "sim" }).then(() => switchWallet("sim"), (err) => alert(err.message));
       return;
@@ -505,6 +517,15 @@ export function mountProfile({ go: goTo } = {}) {
   });
   root.addEventListener("submit", async (event) => {
     event.preventDefault();
+    if (event.target.matches("[data-sim-form]")) {
+      const cash = Number(event.target.cash.value);
+      try {
+        await api.setAutotrader({ sim_cash: cash });
+        event.target.hidden = true;
+        load();
+      } catch (e) { event.target.querySelector("[data-sim-err]").textContent = e?.message ?? "Couldn't save."; }
+      return;
+    }
     const f = new FormData(event.target);
     const err = root.querySelector("[data-err]");
     try {
