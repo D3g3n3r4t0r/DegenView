@@ -93,7 +93,7 @@ export async function openScan(query) {
       <div><dt>Age</dt><dd>${t.created_at ? age(t.created_at)[0] : "—"}</dd></div>
       <div><dt>Holders</dt><dd>${ab.holders != null ? Number(ab.holders).toLocaleString("en-US") : "—"}${ab.top10_pct != null ? ` <small>top 10 ${Math.round(ab.top10_pct)}%</small>` : ""}</dd></div>
     </dl>
-    ${ab.socials?.length || /^https:///.test(t.website ?? "") ? `<p class="scan-socials">${/^https:///.test(t.website ?? "") ? `<a href="${escapeHtml(t.website)}" target="_blank" rel="noopener">Website</a>` : ""}${(ab.socials ?? []).map((x) => `<a href="${escapeHtml(x.url)}" target="_blank" rel="noopener">${escapeHtml(x.type || "link")}</a>`).join("")}</p>` : ""}
+    ${ab.socials?.length || /^https:\/\//.test(t.website ?? "") ? `<p class="scan-socials">${/^https:\/\//.test(t.website ?? "") ? `<a href="${escapeHtml(t.website)}" target="_blank" rel="noopener">Website</a>` : ""}${(ab.socials ?? []).map((x) => `<a href="${escapeHtml(x.url)}" target="_blank" rel="noopener">${escapeHtml(x.type || "link")}</a>`).join("")}</p>` : ""}
     <p class="scan-status" data-s="${status[0]}">${escapeHtml(status[1])}</p>
     ${ai ? `<div class="scan-ai" data-risk="${ai.risk >= 60 ? "high" : ai.risk >= 30 ? "mid" : "low"}"><b>${ai.risk}</b>
       <span><b>Scout rug risk</b><small>${escapeHtml([ai.theme, ...(ai.flags ?? [])].filter(Boolean).join(" · ") || "no red flags")}</small></span></div>`

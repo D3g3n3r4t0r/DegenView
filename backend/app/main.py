@@ -3986,6 +3986,32 @@ async def onchain_radar_view(user: User = Depends(auth.get_current_user)) -> dic
             "listing_status": onchain_listings.status(), "shame": onchain_outcomes.shame()}
 
 
+_RADAR_FEED_MAX = 80
+
+
+@app.get("/api/onchain/radar/feed")
+async def onchain_radar_feed(user: User = Depends(auth.get_current_user)) -> dict:
+    """What the scanner tab draws, and nothing else. The full /radar carried
+    300 listings and 500 rejections with every check attached: megabytes the
+    phone had to fetch inside the 8 s client timeout, so the tab stayed empty.
+    Here: the newest decisions the feed can show, plus the 24h counts."""
+    _require_onchain_enabled()
+    snap, gone = onchain_radar.snapshot(), onchain_outcomes.shamed()
+    listings = onchain_outcomes.without_shamed(onchain_listings.recent(), gone)
+    rejected = onchain_listings.rejected()
+    since = time.time() - 86_400
+    newest = sorted([(x.get("found_at") or 0, 0, i) for i, x in enumerate(listings)]
+                    + [(x.get("at") or 0, 1, i) for i, x in enumerate(rejected)], reverse=True)[:_RADAR_FEED_MAX]
+    keep = {(k, i) for _, k, i in newest}
+    return {"running": snap.get("running"), "last_scan": snap.get("last_scan"), "chains": snap.get("chains") or {},
+            "pulse": onchain_listings.pulse(), "shame": onchain_outcomes.shame(),
+            "listings": [x for i, x in enumerate(listings) if (0, i) in keep],
+            "rejected": [x for i, x in enumerate(rejected) if (1, i) in keep],
+            "counts": {"at": time.time(),
+                       "passed_24h": sum((x.get("found_at") or 0) >= since for x in listings),
+                       "rejected_24h": sum((x.get("at") or 0) >= since for x in rejected)}}
+
+
 @app.get("/api/onchain/radar/lessons")
 async def onchain_radar_lessons(user: User = Depends(auth.get_current_user)) -> dict:
     """Cosa e' successo davvero ai token proposti e scartati, e quali
