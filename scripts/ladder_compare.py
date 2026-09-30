@@ -25,7 +25,8 @@ from app.trading.onchain.storage import data_file
 
 MIN_BARS = 60
 LIMIT = 50
-PACE_S = 2.5
+PACE_S = 4.0
+RETRIES = 6          # GeckoTerminal 429s: back off, never cache a missing answer
 LADDER = [("1d", "day", 1), ("12h", "hour", 12), ("8h", "hour", 4), ("6h", "hour", 1), ("4h", "hour", 4),
           ("2h", "hour", 1), ("1h", "hour", 1), ("30m", "minute", 15), ("15m", "minute", 15),
           ("5m", "minute", 5)]
@@ -66,11 +67,15 @@ class Fetch:
         self.got = {}
 
     async def get(self, tf, agg):
-        if (tf, agg) not in self.got:
-            await asyncio.sleep(PACE_S)
-            self.got[(tf, agg)] = await alert_track._candles(self.client, self.net, self.pair, tf, agg,
-                                                             self.now, 1000, self.token)
-        return self.got[(tf, agg)]
+        if self.got.get((tf, agg)) is None:
+            for i in range(RETRIES):
+                await asyncio.sleep(PACE_S * (2 ** i if i else 1))
+                raw = await alert_track._candles(self.client, self.net, self.pair, tf, agg,
+                                                 self.now, 1000, self.token)
+                if raw is not None:
+                    self.got[(tf, agg)] = raw
+                    break
+        return self.got.get((tf, agg))
 
     async def rung(self, iv, tf, agg):
         raw = await self.get(tf, agg)
