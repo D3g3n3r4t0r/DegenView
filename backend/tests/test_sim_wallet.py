@@ -39,11 +39,17 @@ def test_started_shows_the_virtual_balance_and_records_its_own_line():
     assert wealth.series("u1") == []          # the real line is untouched
 
 
-def test_paper_trades_show_in_the_simulated_wallet():
+def test_paper_trades_show_in_the_simulated_wallet(monkeypatch):
     """Lorenzo, 28/09: /api/profile and /api/wallets/total answered 500
     (KeyError 'qty') as soon as the simulated wallet followed an alert."""
     a = tr.record({"chain": "solana", "pair_address": "P", "token_address": "T", "symbol": "SOLY"}, "meme", 1_790_000_000)
     a["alert_bt"] = {"Trend EMA": {"state": "in", "ret": 0.1, "events": [{"side": "buy"}]}}
+    monkeypatch.setattr(at.quant_runtime, "approved", lambda: {"mode": "paper"})
+    monkeypatch.setattr(at.quant_runtime, "gem_verdict", lambda a, now: (True, "fixture"))
+    a["last"] = {"price": 1, "at": 1_790_000_000}
+    a["quant_policy"] = {"costs": {"commission": 0, "slippage": 0}}
+    a["quant_system"] = {"state": "in", "eligible": True, "in_at": 1_790_000_000,
+                         "evaluated_at": 1_790_000_000, "policy_id": "test", "mark": 1.1, "events": []}
     at.configure("u1", mode="sim", pct=50, usdg_now=100.0)
     at.paper_tick(at._user("u1"), "Trend EMA", 1_790_000_060)
     at.paper_tick(at._user("u1"), "Trend EMA", 1_790_000_090)      # marked on the next pass

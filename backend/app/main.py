@@ -39,6 +39,7 @@ except (AttributeError, ValueError):
     pass
 
 from app import auth
+from app.trading.onchain.quant_api import router as quant_router
 from app import guest as guest_links
 from app import issues as issues_store
 from app import rate_limit
@@ -1581,6 +1582,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Liquidity Analysis Engine", lifespan=lifespan)
+app.include_router(quant_router(auth.get_current_user))
 
 # ── Cancello di autenticazione ────────────────────────────────────────────
 #
@@ -7975,6 +7977,7 @@ _ONCHAIN_APP_HTML = (
     .replace('href="/static/engn-system.css"', f'href="/static/engn-system.css?v={_ASSET_VERSION}"')
     .replace('href="/static/onchain/ui.css"', f'href="/static/onchain/ui.css?v={_ASSET_VERSION}"')
     .replace('href="/static/onchain/ui-refinements.css"', f'href="/static/onchain/ui-refinements.css?v={_ASSET_VERSION}"')
+    .replace('href="/static/onchain/scout-cube.css"', f'href="/static/onchain/scout-cube.css?v={_ASSET_VERSION}"')
     # La libreria del grafico non cambia fra un deploy e l'altro: con il `?v=`
     # finisce in cache per sempre invece di rivalidarsi a ogni apertura.
     .replace(
@@ -8114,3 +8117,4 @@ async def onchain_app_page(user: User | None = Depends(auth.get_current_user_opt
         _render_onchain_app(user),
         headers={"Cache-Control": "private, no-cache", "Vary": "Cookie"},
     )
+

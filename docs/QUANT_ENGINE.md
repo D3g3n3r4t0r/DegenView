@@ -2,7 +2,7 @@
 
 This is executable code, not a DeepSeek task or prompt. Research, incident
 archiving, metrics, selection and signal evaluation make **zero model calls**.
-Base: `a58707731077e8d9dcee9827669e178d24f60095`. Separate from Agent-map PR #402.
+Integration base: `b0e83d5d053e379ab8c5c86dea8c2433440ac7f6`. Includes the Agent map from #402 and preserves the Scout cube from main.
 
 ## What changes
 
@@ -84,12 +84,7 @@ An optional `untradeable_at` is a known failure event; do not derive it from fut
 prices. It pessimistically wipes any position still held at that event.
 
 The collector runs from `alert_track._refresh_system`, independent of approval.
-It freezes the first observed gem eligibility and features, then records a
-24-hour research window at most twice per hour. This initial collection window
-is explicit and **cannot establish the merit of multi-day schedules**. Longer
-point-in-time datasets in the same contract are accepted by the engine. Cases
-are retained independently from alert-bar eviction; incidents have immutable
-versions. An exported dataset is reproducible via its content hash.
+It freezes first observed eligibility and features, then collects explicit 1/7/30-day research windows. These are observation horizons, NOT trading-timeframe defaults. Only complete windows are exported by the CLI; partial windows cannot validate a policy. Closed candles are stored separately with first-observed versions retained, surviving rolling buffers and restarts. An exported dataset is reproducible via its content hash.
 
 Do not backfill yesterday's gem eligibility from today's ranking. Legacy records
 without contemporaneous proof cannot become valid training cases. First imports
@@ -105,49 +100,33 @@ not a portfolio, gas model, confidence interval, or a guarantee against rugs.
 Label availability and source quality require review. Correlated deployers across
 different tokens are not yet grouped: project-level isolation alone is weaker.
 
-## Approval and review for Claude
+## Apply and review
 
-1. Run the full backend suite and inspect changes to both real and paper entry
-   paths. Local focused tests do not cover the complete wallet stack.
-2. Replay representative old positions and ensure their exits are unchanged.
-3. Verify live `projects_db` fields and `launched_at` provenance, prospective
-   collection, unknowns, token identity, and database growth on a staging volume.
-4. Obtain adequate point-in-time history including failures. Run preregistered
-   experiments; do not keep retuning after reading the holdout. A new search needs
-   fresh holdout data. Check venue costs and false rejection rates manually.
-5. Paper test and independently review the winning report. Install
-   `backend/data/quant_approved.json` (persistent volume) with:
-   `{"approved":true,"reviewer":"name","paper_run_id":"id","active_from":TIMESTAMP,"report":REPORT_OBJECT}`.
-   The CLI never writes this file. Local operator approval is a trust boundary,
-   not a cryptographic signature. Do not fabricate review or paper identifiers.
-6. Verify fresh trend entries, repeated polls, rejected memes, expiry, missing
-   market data, and exits before enabling real trading. Removing approval blocks
-   eligibility for unpinned alerts; existing pinned policies continue exits.
+The integration is already coded in PR #408. Start with [CLAUDE_QUANT_HANDOFF.md](CLAUDE_QUANT_HANDOFF.md). No production policy was activated.
 
-The bounded live replay keeps up to 30,000 base candles (~104 days). Once the
-original observation window rolls out it becomes unavailable rather than being
-silently reset. Longer-lived execution needs a checkpointed incremental strategy
-state; this PR does not pretend to provide unbounded lifetime replay. Fixed
-strategy implementation hashes pin approvals, while open-position behavior on a
-code upgrade must be checked operationally before deployment.
+Export a completed horizon using `python -m app.trading.onchain.quant_memory cases cases.json --horizon-days 7` (1, 7 or 30). Research automatically stores its immutable report in SQLite for the Agent UI, as well as the exclusive JSON output file.
 
-## Checks actually performed
+A reviewed manifest on the persistent volume uses:
+`{"approved":true,"reviewer":"actual reviewer","mode":"paper","active_from":TIMESTAMP,"report":REPORT_OBJECT}`.
+Paper mode cannot authorize real entries. Real mode additionally requires an actual `paper_run_id`. Research does not install this file. Operator approval is not a cryptographic signature. Removing or replacing approval blocks new entries under the old report while its pinned exit stream continues. Code/strategy mismatches fail closed.
 
-35 tests passed on Python 3.12.14; Ruff E/F/W (excluding E501) and compilation
-passed for changed Python files. One existing test importing the full FastAPI
-`app.main` snapshot path was deselected locally because this is a selective
-checkout; it remains in the repository test file for full CI. No tests were
-deleted to hide that limitation.
+Live replay uses durable history rather than the 30,000-bar rolling buffer. It caches evaluation within an unchanged closed candle. CPU and disk usage still grow with history: benchmark and add checkpointed incremental state before large-scale, long-lived operation. Research budgets remain unchanged.
 
-Focused tests cover true candle close/open timing, partial/gapped candles, costs,
-unknown eligibility, catastrophic events, timeframe pinning, deterministic search,
-holdout isolation, memory versioning, false rejections, approval integrity, and
-the two real strategy functions' prefix invariance. Integration tests execute the
-exact selected functions via AST to avoid launching network-backed app singletons.
-They are not a full backend/infrastructure test. No production dataset, real
-wallet transaction, merge, or deployment was executed during authoring.
+## Integration details
 
-Bacheca read 30 September: unresolved DeepSeek reports include `508dc969`
-(memory counts), `2c5d06bd` (gems without strategy results), `4f848dd5` (LP-lock
-quality), and others. None marked resolved here. New request recorded under
-`seed-quant-engine-20260930`; completion awaits review and operational validation.
+Authenticated read-only routes: `GET /api/agent/quant`, `/project?chain=...&token=...`, `/reports/{sha256}`. Queries never trigger a backtest, model call or order. The Agent tab distinguishes outcome projects from immutable versions, partial from completed windows, and research from approval. Report absence and interrupted updates are shown explicitly. Project selection shows the most recent 100 observations.
+
+The map from #402 displays recorded activity and schematic architecture links. It does NOT yet provide a complete receipt-backed score explanation, counterfactual or causal decision graph. Unconnected nodes remain explicitly marked.
+
+Autotrader consumes each policy/project signal once using persistent high-water marks, permits a later trend entry, and serializes overlapping ticks. Real attempts are persisted before awaiting an order; uncertain attempts require manual reconciliation rather than automatic resubmission. Existing legacy positions retain legacy exits. Approval can authorize paper-only evaluation before real review. Entry quotes and signals must be fresh.
+
+## Verification at handoff
+
+- Final focused Python suite: **47 passed** (quant engine, integration, observatory/API, autotrader and simulated wallet).
+- Map Node suite: **8 passed**.
+- Ruff over the complete backend: **passed**, E/F/W excluding E501.
+- Full backend attempt before the final small quote/pruning changes: **1438 passed, 23 failed, 1 skipped**. 21 failures are network-dependent chain/quote tests in the restricted environment; two are existing Windows timestamp and rules-text expectations. This is NOT a green full suite; rerun in Linux CI/staging.
+- Browser verified map rendering, quantitative panel and project selection with clearly labelled local test fixtures, not production data.
+- New GitHub workflow runs focused tests, map tests and backend lint without DeepSeek credentials.
+
+No live research dataset was evaluated, no winner or profitability established, and no wallet transaction, merge or deployment performed.

@@ -15,10 +15,13 @@ from contextlib import contextmanager
 from app.trading.onchain.quant_engine import fingerprint
 from app.trading.onchain.storage import data_file
 
+_path = None  # Tests inject one isolated database for every module.
+HORIZONS = (86400, 7 * 86400, 30 * 86400)
+
 
 @contextmanager
 def connect(path=None):
-    db = sqlite3.connect(path or data_file("observatory.sqlite3"), timeout=5)
+    db = sqlite3.connect(path or _path or data_file("observatory.sqlite3"), timeout=5)
     try:
         db.execute("PRAGMA journal_mode=WAL")
         db.execute("CREATE TABLE IF NOT EXISTS quant_incidents "
@@ -26,6 +29,13 @@ def connect(path=None):
         db.execute("CREATE INDEX IF NOT EXISTS quant_incidents_project ON quant_incidents(project,observed)")
         db.execute("CREATE TABLE IF NOT EXISTS quant_research_cases "
                    "(project TEXT PRIMARY KEY, captured REAL NOT NULL, payload TEXT NOT NULL)")
+        db.execute("CREATE TABLE IF NOT EXISTS quant_candles "
+                   "(project TEXT NOT NULL, t INTEGER NOT NULL, o REAL, h REAL, l REAL, c REAL, v REAL, observed REAL, PRIMARY KEY(project,t))")
+        db.execute("CREATE TABLE IF NOT EXISTS quant_observations (project TEXT PRIMARY KEY, payload TEXT NOT NULL)")
+        db.execute("CREATE TABLE IF NOT EXISTS quant_windows "
+                   "(project TEXT NOT NULL, horizon INTEGER NOT NULL, captured REAL NOT NULL, payload TEXT NOT NULL, PRIMARY KEY(project,horizon))")
+        db.execute("CREATE TABLE IF NOT EXISTS quant_reports "
+                   "(id TEXT PRIMARY KEY, at REAL NOT NULL, payload TEXT NOT NULL)")
         with db:
             yield db
     finally:
@@ -138,43 +148,118 @@ def export_latest(path=None):
              "observed_at": json.loads(payload).get("at")} for payload, observed in rows]
 
 
-def capture_case(a, bars, now, path=None):
-    """Prospective 24h dataset independent of approval; never relabel old gems.
+def _legacy_export_cases(path=None):
+    with connect(path) as db:
+        return [json.loads(row[0]) for row in db.execute("SELECT payload FROM quant_research_cases ORDER BY project")]
 
-    Latest window stays mutable while collecting, then freezes. Experiments
-    hash the complete exported dataset. Gaps remain gaps and fail validation.
+
+def project_key(a):
+    chain, token = a["chain"], a.get("token_address") or a.get("token")
+    if not isinstance(chain, str) or not isinstance(token, str) or not chain or not token:
+        raise ValueError("project identity required")
+    if chain in {"ethereum", "base", "bsc", "robinhood", "arbitrum", "polygon", "optimism", "avalanche"}:
+        token = token.lower()
+    return json.dumps([chain, token], separators=(",", ":"))
+
+
+def store_bars(a, bars, now, path=None):
+    """First observed CLOSED version wins. Live signals never revise past fills."""
+    from app.trading.onchain.quant_engine import BASE, clean_bars
+    rows = clean_bars(bars, limit=None)
+    key = project_key(a)
+    with connect(path) as db:
+        before = db.total_changes
+        db.executemany("INSERT OR IGNORE INTO quant_candles VALUES(?,?,?,?,?,?,?,?)",
+                       [(key, *r, now) for r in rows if r[0] + BASE <= now])
+        return db.total_changes - before
+
+
+def candles(a, before, path=None):
+    with connect(path) as db:
+        return [list(r) for r in db.execute("SELECT t,o,h,l,c,v FROM quant_candles WHERE project=? AND t<? ORDER BY t",
+                                           (project_key(a), before))]
+
+
+def capture_case(a, bars, now, path=None):
+    """Collect once-known eligibility and 1/7/30-day windows without an approval.
+
+    Candles survive the alert tracker's rolling buffer. Completed windows freeze;
+    partial windows are explicitly marked and cannot validate a policy.
     """
     from app.trading.onchain.quant_engine import BASE, FEED
     from app.trading.onchain import quant_runtime, projects_db, leaderboard, outcomes
-    if not a.get("quant_observed"):
+    key = project_key(a)
+    with connect(path) as db:
+        old = db.execute("SELECT payload FROM quant_observations WHERE project=?", (key,)).fetchone()
+    first = json.loads(old[0]) if old else None
+    if first is None:
         ok, _ = quant_runtime.gem_verdict(a, now)
-        if not ok:
-            return
+        if not ok or a.get("gone"):
+            return False
         p = projects_db.get(a["chain"], a["token_address"])
-        e = leaderboard.db_entry(p)
-        a["quant_observed"] = {"start": now, "born": p.get("launched_at"),
-                               "features": outcomes.features(e, now)}
-    first = a["quant_observed"]
-    key = json.dumps([a["chain"], a["token_address"]])
+        first = {"start": now, "born": p.get("launched_at"), "features": outcomes.features(leaderboard.db_entry(p), now),
+                 "chain": a["chain"], "token": a["token_address"], "symbol": a.get("symbol")}
+        with connect(path) as db:
+            db.execute("INSERT OR IGNORE INTO quant_observations VALUES(?,?)", (key, json.dumps(first, allow_nan=False)))
+            first = json.loads(db.execute("SELECT payload FROM quant_observations WHERE project=?", (key,)).fetchone()[0])
+    a["quant_observed"] = first
+    store_bars(a, bars, now, path)
+    cutoff = int(now) // BASE * BASE
+    if cutoff <= first["start"]:
+        return True
     with connect(path) as db:
-        old = db.execute("SELECT captured FROM quant_research_cases WHERE project=?", (key,)).fetchone()
-        end = (int(first["start"] + 86400) // BASE) * BASE
-        if old and (old[0] >= end or now - old[0] < 1800):
-            return
-        cutoff = min(end, int(now) // BASE * BASE)
-        if cutoff <= first["start"]:
-            return
-        row = {"chain": a["chain"], "token": a["token_address"], "feed": FEED,
-               "start": first["start"], "end": cutoff, "born": first["born"],
-               "features": first["features"], "eligibility_at": first["start"], "gem_eligible": True,
-               "bars": [b for b in bars if b[0] < cutoff],
-               "untradeable_at": (a.get("last") or {}).get("at") if a.get("gone") else None}
-        db.execute("INSERT OR REPLACE INTO quant_research_cases VALUES(?,?,?)", (key, cutoff, json.dumps(row, allow_nan=False)))
+        for horizon in HORIZONS:
+            end = int((first["start"] + horizon) // BASE) * BASE
+            old = db.execute("SELECT captured FROM quant_windows WHERE project=? AND horizon=?", (key, horizon)).fetchone()
+            if old and (old[0] >= end or cutoff - old[0] < 1800 and cutoff < end):
+                continue
+            row = {**first, "feed": FEED, "end": min(cutoff, end), "eligibility_at": first["start"],
+                   "gem_eligible": True, "complete": cutoff >= end, "horizon": horizon,
+                   "untradeable_at": (a.get("last") or {}).get("at") if a.get("gone") else None}
+            db.execute("INSERT OR REPLACE INTO quant_windows VALUES(?,?,?,?)",
+                       (key, horizon, row["end"], json.dumps(row, allow_nan=False)))
+    return True
 
 
-def export_cases(path=None):
+def export_cases(path=None, horizon=86400, complete_only=False):
     with connect(path) as db:
-        return [json.loads(row[0]) for row in db.execute("SELECT payload FROM quant_research_cases ORDER BY project")]
+        records = db.execute("SELECT payload FROM quant_windows WHERE horizon=? ORDER BY project", (horizon,)).fetchall()
+    rows = [json.loads(r[0]) for r in records]
+    if not rows:
+        return _legacy_export_cases(path) if horizon == 86400 and not complete_only else []
+    return [{**r, "bars": candles(r, r["end"], path)} for r in rows if not complete_only or r["complete"]]
+
+
+def save_report(report, path=None, now=None):
+    check = dict(report)
+    provided = check.pop("report_hash", None)
+    key = fingerprint(check)
+    if provided is not None and provided != key:
+        raise ValueError("report hash mismatch")
+    with connect(path) as db:
+        db.execute("INSERT OR IGNORE INTO quant_reports VALUES(?,?,?)",
+                   (key, time.time() if now is None else now, json.dumps({**check, "report_hash": key}, allow_nan=False)))
+    return key
+
+
+def report_by_id(key, path=None):
+    with connect(path) as db:
+        row = db.execute("SELECT payload FROM quant_reports WHERE id=?", (key,)).fetchone()
+    return json.loads(row[0]) if row else None
+
+
+def status(path=None):
+    with connect(path) as db:
+        incidents = db.execute("SELECT count(*),count(DISTINCT project) FROM quant_incidents").fetchone()
+        counts = {str(h): {"windows": n, "complete": done} for h, n, done in db.execute(
+            "SELECT horizon,count(*),sum(json_extract(payload,'$.complete')=1) FROM quant_windows GROUP BY horizon")}
+        reports = [{"id": key, "at": at, "status": json.loads(payload).get("status"),
+                    "selected": json.loads(payload).get("selected"), "reason": json.loads(payload).get("reason")}
+                   for key, at, payload in db.execute("SELECT id,at,payload FROM quant_reports ORDER BY at DESC LIMIT 20")]
+        projects = [json.loads(p[0]) for p in db.execute("SELECT payload FROM quant_observations ORDER BY rowid DESC LIMIT 100")]
+        n_candles = db.execute("SELECT count(*) FROM quant_candles").fetchone()[0]
+    return {"incident_versions": incidents[0], "incident_projects": incidents[1], "windows": counts,
+            "candles": n_candles, "reports": reports, "projects": projects, "llm_calls": 0}
 
 
 if __name__ == "__main__":
@@ -183,7 +268,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Export local quantitative evidence without any model call")
     parser.add_argument("kind", choices=("cases", "incidents"))
     parser.add_argument("output", type=Path)
+    parser.add_argument("--horizon-days", type=int, choices=(1, 7, 30), default=1)
     args = parser.parse_args()
-    rows = export_cases() if args.kind == "cases" else export_latest()
+    rows = export_cases(horizon=args.horizon_days * 86400, complete_only=True) if args.kind == "cases" else export_latest()
     with args.output.open("x", encoding="utf-8") as target:
         json.dump(rows, target, indent=2, allow_nan=False)

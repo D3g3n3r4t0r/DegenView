@@ -66,6 +66,8 @@ def main():
     # Reports never overwrite an earlier experiment or activate a strategy.
     with args.output.open("x", encoding="utf-8") as target:
         json.dump(report, target, indent=2, allow_nan=False)
+    from app.trading.onchain.quant_memory import save_report
+    save_report(report)
     print(json.dumps({"status": report["status"], "reason": report["reason"], "report": str(args.output), "llm_calls": 0}))
 
 

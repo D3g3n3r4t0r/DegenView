@@ -954,3 +954,4 @@ def delete_issue(issue_id: str) -> bool:
             _save()
             return True
     return False
+
