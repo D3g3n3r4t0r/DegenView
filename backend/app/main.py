@@ -4191,8 +4191,10 @@ def _top_entries(n: int = 50, narrative: str = "") -> list[dict]:
         if (row.get("overall") or {}).get("fatal") or onchain_leaderboard.no_name(row.get("symbol")):
             continue
         # The board's ceiling holds here too: bridged AAVE sat first (Lorenzo, 28/09).
-        if onchain_leaderboard.too_big({"symbol": row.get("symbol"), "name": row.get("name"),
-                                        "market_cap": row.get("mcap"), "global_cap": row.get("cg_mcap")}):
+        # Layer chains have their own band (LAYER_CAP_MIN-MAX), checked below.
+        if row["chain"] != onchain_layers.CHAIN and onchain_leaderboard.too_big(
+                {"symbol": row.get("symbol"), "name": row.get("name"),
+                 "market_cap": row.get("mcap"), "global_cap": row.get("cg_mcap")}):
             continue
         key = f"{row['chain']}:{row['token']}"
         if key in seen:
@@ -4207,12 +4209,20 @@ def _top_entries(n: int = 50, narrative: str = "") -> list[dict]:
         # (projects_db.sync_top), so the Database no longer contradicts the Top.
         if (row.get("why") or "").startswith("DeepSeek"):
             continue
-        # Layer chains (layers.py) wait for exchange candles before the Top:
-        # every row there must show a real backtest.
+        # Layer chains (layers.py) have no DEX pool: their pool is the
+        # exchange pair, and the gem ceiling does not apply to them.
+        pair_address = None
         if row["chain"] == onchain_layers.CHAIN:
-            continue
+            cex = (row.get("overall") or {}).get("cex")
+            if not cex or not cex.get("exchange") or not cex.get("pair"):
+                continue
+            pair_address = f"{cex['exchange']}:{cex['pair']}"
+            mcap = row.get("mcap")
+            if mcap is None or not (onchain_layers.LAYER_CAP_MIN <= mcap <= onchain_layers.LAYER_CAP_MAX):
+                continue
         seen.add(key)
-        out.append({"chain": row["chain"], "token_address": row["token"], "pair_address": None, "pair_url": None,
+        out.append({"chain": row["chain"], "token_address": row["token"], "pair_address": pair_address,
+                    "pair_url": None,
                     "symbol": row.get("symbol"), "name": row.get("name"), "image": row.get("image"),
                     "market_cap": row.get("mcap"), "liquidity_usd": row.get("liq"), "change_24h": None,
                     "launched_at": row.get("launched_at"), "score": row.get("score"), "early": None, "on_board": False})
@@ -5375,7 +5385,8 @@ async def onchain_ai_review_view(user: User = Depends(auth.get_current_user)) ->
 
 @app.get("/api/onchain/chart")
 async def onchain_token_chart(
-    chain: str, pool: str = Query(..., pattern=r"^[0-9A-Za-z]{20,66}$"), symbol: str = Query("", max_length=40),
+    chain: str, pool: str = Query(..., pattern=r"^([0-9A-Za-z]{20,66}|(mexc|binance):[A-Z0-9]{2,20}USDT)$"),
+    symbol: str = Query("", max_length=40),
     interval: Literal["1m", "5m", "15m", "1h", "4h", "1d", "1w"] = "15m", peek: bool = False,
     user: User = Depends(auth.get_current_user),
 ) -> dict:

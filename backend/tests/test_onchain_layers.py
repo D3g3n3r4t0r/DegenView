@@ -7,6 +7,7 @@ import asyncio
 import httpx
 import pytest
 
+from app.main import _top_entries
 from app.trading.onchain import depth, layers, projects_db, research
 from app.trading.onchain import leaderboard as lb
 
@@ -142,3 +143,19 @@ def test_run_records_a_layer_outside_the_gem_pipeline(monkeypatch):
     assert projects_db.due_for_analysis(50, now=T0 + 30 * 86400) == []
     snap = layers.snapshot()
     assert [x["id"] for x in snap["found"]] == ["kaspa"] and snap["last_run"] == T0
+
+
+def test_layer_row_with_cex_shows_in_top_entries(monkeypatch):
+    projects_db.upsert("layer", "kaspa", {"symbol": "KAS", "name": "Kaspa", "chain": "layer",
+                                          "overall": {"cex": {"exchange": "mexc", "pair": "KASUSDT"}}})
+    projects_db.record("layer", "kaspa", {"status": "studied", "score": 80, "mcap": 20_000_000,
+                                          "analyzed_at": T0, "overall": {"cex": {"exchange": "mexc",
+                                                                                 "pair": "KASUSDT"}}})
+    projects_db.upsert("layer", "noc", {"symbol": "NOC", "name": "NoCex", "chain": "layer", "overall": {}})
+    projects_db.record("layer", "noc", {"status": "studied", "score": 90, "mcap": 20_000_000,
+                                        "analyzed_at": T0, "overall": {}})
+    monkeypatch.setattr("app.main.time.time", lambda: T0 + 60)
+    out = _top_entries(50)
+    kas = [e for e in out if e["token_address"] == "kaspa"]
+    assert kas and kas[0]["pair_address"] == "mexc:KASUSDT"
+    assert not [e for e in out if e["token_address"] == "noc"]
