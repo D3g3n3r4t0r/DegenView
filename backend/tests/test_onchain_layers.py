@@ -7,6 +7,7 @@ import asyncio
 import httpx
 import pytest
 
+from app.main import _top_entries
 from app.trading.onchain import depth, layers, projects_db, research
 from app.trading.onchain import leaderboard as lb
 
@@ -142,3 +143,16 @@ def test_run_records_a_layer_outside_the_gem_pipeline(monkeypatch):
     assert projects_db.due_for_analysis(50, now=T0 + 30 * 86400) == []
     snap = layers.snapshot()
     assert [x["id"] for x in snap["found"]] == ["kaspa"] and snap["last_run"] == T0
+
+
+def test_layer_row_with_cex_shows_in_top_entries():
+    import time
+    now = time.time()
+    for gid, sym, cex in (("kaspa", "KAS", {"exchange": "mexc", "pair": "KASUSDT"}), ("noc", "NOC", None)):
+        item = {"chain": "layer", "token_address": gid, "symbol": sym, "name": sym, "market_cap": 20_000_000}
+        projects_db.upsert(item, "layers", now)
+        projects_db.record({**item, "pillars": [], "overall": {"score": 80, "cex": cex}}, "studied", score=80, now=now)
+    out = _top_entries(50)
+    kas = [e for e in out if e["token_address"] == "kaspa"]
+    assert kas and kas[0]["pair_address"] == "mexc:KASUSDT" and kas[0]["market_cap"] == 20_000_000
+    assert not [e for e in out if e["token_address"] == "noc"]
