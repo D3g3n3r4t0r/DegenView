@@ -18,8 +18,11 @@ from app.trading.onchain.judge import CHECK_RULES
 
 logger = logging.getLogger(__name__)
 
-COOLDOWN_S = 6 * 3600
+COOLDOWN_S = 6 * 3600     # guests only; account holders re-check whenever they want
 DAILY_MAX = 40
+WEEK_S = 7 * 86400         # Lorenzo, 01/10: the whole Top 50 re-checked once a week, from today
+SWEEP_GAP_S = 90           # one token at a time, spaced: the weekly sweep is never a burst
+TAP_GAP_S = 10             # everyone: a double tap must not pay DeepSeek twice
 
 SYSTEM = (
     "You are giving a dedicated second opinion on ONE small-cap crypto project (Solana or Robinhood Chain, "
@@ -55,10 +58,10 @@ def _load() -> dict:
     try:
         d = json.loads(_STORE.read_text(encoding="utf-8"))
         if isinstance(d, dict):
-            return {"results": d.get("results") or {}, "calls": d.get("calls") or {}}
+            return {"results": d.get("results") or {}, "calls": d.get("calls") or {}, "sweep": d.get("sweep") or {}}
     except Exception:
         pass
-    return {"results": {}, "calls": {}}
+    return {"results": {}, "calls": {}, "sweep": {}}
 
 
 _state = _load()
@@ -76,6 +79,7 @@ def _save() -> None:
 def reset_for_tests() -> None:
     _state["results"] = {}
     _state["calls"] = {}
+    _state["sweep"] = {}
 
 
 def _key(chain: str, token: str) -> str:
@@ -90,8 +94,11 @@ def _day(now: float) -> str:
     return time.strftime("%Y-%m-%d", time.gmtime(now))
 
 
-def wait_s(chain: str, token: str, now: float | None = None) -> int:
+def wait_s(chain: str, token: str, now: float | None = None, limited: bool = True) -> int:
     now = now or time.time()
+    if not limited:
+        res = _state["results"].get(_key(chain, token))
+        return max(0, int(res["at"] + TAP_GAP_S - now)) if res and res.get("at") else 0
     day = _day(now)
     if _state["calls"].get(day, 0) >= DAILY_MAX:
         midnight = (int(now // 86400) + 1) * 86400
@@ -181,22 +188,83 @@ def prompt(copy: dict, rc: dict) -> tuple[str, list[dict], str]:
     return user, claims, brief + "\n" + evidence
 
 
-async def run(chain: str, token: str, client, now: float | None = None, ask=None) -> dict:
+def next_in_sweep(board_keys: list[str], now: float) -> str | None:
+    """The next Top 50 token the weekly sweep still owes a re-check, starting
+    a new sweep (on the board as it is now) once a week has passed."""
+    sw = _state["sweep"]
+    if not sw.get("started") or (sw.get("finished") and now - sw["started"] >= WEEK_S):
+        sw.clear()
+        sw.update({"started": now, "keys": list(board_keys), "done": [], "finished": None})
+        _save()
+    if sw.get("finished"):
+        return None
+    left = [k for k in sw.get("keys") or [] if k not in sw.get("done", [])]
+    if not left:
+        sw["finished"] = now
+        _save()
+        return None
+    return left[0]
+
+
+def _sweep_done(key: str) -> None:
+    sw = _state["sweep"]
+    if key not in sw.setdefault("done", []):
+        sw["done"].append(key)
+    _save()
+
+
+async def sweep_loop(board_keys, start_delay_s: float = 300) -> None:
+    """Re-checks the whole Top 50 once a week, one token every SWEEP_GAP_S.
+    `board_keys()` gives the board's "chain:token" keys in rank order."""
+    import asyncio
+    import httpx
+    await asyncio.sleep(start_delay_s)
+    async with httpx.AsyncClient(timeout=15.0, headers={"User-Agent": "Mozilla/5.0 (LiquidityEngine)"}) as client:
+        while True:
+            pause = SWEEP_GAP_S
+            try:
+                key = next_in_sweep(board_keys(), time.time())
+                if key is None:
+                    pause = 3600
+                else:
+                    chain, token = key.split(":", 1)
+                    try:
+                        res = await run(chain, token, client, limited=False)
+                        res["auto"] = True
+                        _save()
+                        _sweep_done(key)
+                    except TooSoon:
+                        pass
+                    except LookupError:
+                        _sweep_done(key)      # left the board and the database
+                    except RuntimeError as exc:
+                        logger.info("weekly re-check: %s: %s", key, exc)
+                        pause = 1800 if "not configured" in str(exc) or "unavailable" in str(exc) else SWEEP_GAP_S
+                        if pause == SWEEP_GAP_S:
+                            _sweep_done(key)  # an unreadable answer: move on, the button can retry
+            except Exception:
+                logger.exception("weekly re-check failed")
+            await asyncio.sleep(pause)
+
+
+async def run(chain: str, token: str, client, now: float | None = None, ask=None, limited: bool = True) -> dict:
     key = _key(chain, token)
-    if key in _running or _state["calls"].get(_day(now or time.time()), 0) + len(_running) >= DAILY_MAX:
+    if key in _running:
+        raise TooSoon(TAP_GAP_S)
+    if limited and _state["calls"].get(_day(now or time.time()), 0) + len(_running) >= DAILY_MAX:
         raise TooSoon(max(60, wait_s(chain, token, now)))
     _running.add(key)
     try:
-        return await _run(chain, token, client, now, ask)
+        return await _run(chain, token, client, now, ask, limited)
     finally:
         _running.discard(key)
 
 
-async def _run(chain: str, token: str, client, now: float | None = None, ask=None) -> dict:
+async def _run(chain: str, token: str, client, now: float | None = None, ask=None, limited: bool = True) -> dict:
     from app.trading.onchain import leaderboard, judge, projects_db
 
     now = now or time.time()
-    left = wait_s(chain, token, now)
+    left = wait_s(chain, token, now, limited)
     if left > 0:
         raise TooSoon(left)
     if not settings.deepseek_api_key:
@@ -237,9 +305,10 @@ async def _run(chain: str, token: str, client, now: float | None = None, ask=Non
     except Exception as exc:
         logger.info("deep recheck: DeepSeek unavailable: %s", exc)
         raise RuntimeError("DeepSeek unavailable") from exc
-    day = _day(now)
-    _state["calls"][day] = _state["calls"].get(day, 0) + 1
-    _save()
+    if limited:   # the daily cap is a guard on guests: owners and the weekly sweep do not use it up
+        day = _day(now)
+        _state["calls"][day] = _state["calls"].get(day, 0) + 1
+        _save()
     parsed = _parse(raw, facts)
 
     old = copy.get("review")

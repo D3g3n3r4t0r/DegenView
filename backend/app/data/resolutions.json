@@ -1,4 +1,10 @@
 {
+  "seed-0248": {
+    "status": "risolto",
+    "at": 1790860192,
+    "summary": "Su ogni schermata c'e' un tasto microfono: si parla, il testo compare mentre parli (trascrizione nel browser, italiano o inglese), lo controlli e lo invii. Risponde lo stesso DeepSeek della chat Telegram, con gli stessi strumenti di sola lettura sul database (progetti, Top 50 e classifica, alert, strategie, backtest, laboratorio, review, scanner, diario, rug) piu' il portafoglio simulato Top 50 e il motore layer. Non puo' fare trade, cambiare impostazioni ne' leggere chiavi; massimo 30 domande l'ora per account, dentro il tetto giornaliero di DeepSeek.",
+    "detail": "POST /api/agent/ask in backend/app/main.py, frontend/static/onchain/ask.js, test tests/test_agent_ask.py."
+  },
   "_README": "Scritto da Claude, versionato in git, distribuito col deploy. Le chiavi sono gli id delle segnalazioni. Non modificare a mano dall'app: verrebbe sovrascritto al deploy successivo.",
   "ee624db5": {
     "status": "risolto",
@@ -2511,7 +2517,7 @@
     "summary": "Un motore a parte cerca ogni giorno le chain L0/L1/L2 col loro token (DefiLlama, categorie Layer di CoinGecko, L2BEAT; tutto gratuito), tiene quelle fra $500k e $100M di cap con FDV al massimo 5 volte la cap, e le valuta con gli stessi GitHub e sito delle gemme, la supply e un pilastro di uso (TVL, fee, stablecoin rispetto alla cap). Finiscono nel database e, se hanno una coppia USDT su MEXC o Binance, nella Top 50: grafico, backtest della strategia e prezzo del portafoglio arrivano dall'exchange.",
     "detail": "backend/app/trading/onchain/layers.py e cex_candles.py, GET /api/onchain/layers, issue #474 e #478 (bozze DeepSeek corrette da Claude). Design: /mnt/project-files/layer-engine/design.md. Test: tests/test_onchain_layers.py, tests/test_cex_candles.py."
   },
-  "seed-0248": {
+  "seed-0249": {
     "status": "risolto",
     "at": 1790859998,
     "summary": "Nel database c'e' un solo tasto 'Filters' accanto alla ricerca: apre un pannello con tre gruppi a capo (verdetto, tipo, narrative), ognuno col numero di progetti, e il tasto 'Show N' dice quanti ne restano. Quello scelto compare come etichetta sotto la ricerca e si toglie con un tocco. Nel gruppo 'Type' ci sono L0, L1, L2 e le chain; ogni progetto del motore layer ha il suo tag L0/L1/L2 accanto al ticker. Corretto anche un difetto dei pannelli dal basso: aperti con la pagina scorsa finivano fuori schermo.",
