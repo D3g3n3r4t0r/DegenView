@@ -32,14 +32,38 @@ TTL_S = 3 * 86400
 # the project's Telegram developments (tg_digest), so old readings are redone.
 # 6: community liveness is judged by online counts, not subscriber totals
 # (14 of 16 official channels were silent for 30+ days), so old readings are
-# redone.
-PROMPT_VERSION = 7
+# redone. 8: the rules for every chain (CHECK_RULES, PFWA 01/10): no "chain
+# without users", $0 volume needs a second aggregator, LP lock only with coverage.
+PROMPT_VERSION = 8
 DAILY_MAX = 1500          # ~$0.001 a reading: every project past the filters gets its report
 ADMIT_MIN = 80
 VETO_MIN_CONF = 0.7
 # The Top's own allowance (Lorenzo, 29/09: every token in the Top gets
 # DeepSeek's investigation): a Top entry is judged even when DAILY_MAX is spent.
 PRIORITY_DAILY_MAX = 150
+# Lockers each chain's projects use for their LP: GoPlus does not list them
+# all, so "0% locked" can be a lock we cannot see (PFWA, 01/10).
+LOCKERS = {
+    "solana": "Streamflow, Jupiter Lock, Meteora lock, or LP burned",
+    "ethereum": "UNCX (Unicrypt), Team Finance, PinkLock",
+    "base": "UNCX, Team Finance, PinkLock",
+    "bsc": "PinkLock, UNCX, Team Finance, Mudra",
+    "robinhood": "HoodLock, Team Finance, Titan, Genesis Locker",
+}
+
+# Lorenzo, 01/10, after a manual check of PFWA: "la logica vale per tutti i
+# progetti". Every review and re-check reads these.
+CHECK_RULES = (
+    "Rules for every project on every chain: never call a chain empty, dead or without users (chain activity "
+    "is not measured here and is not a project problem); a 24h volume of $0 or unknown is a missing field "
+    "unless a second aggregator (GeckoTerminal) agrees; an LP-lock figure counts only if the lock data covers "
+    "the token's main pool, and each chain has lockers that data can miss ("
+    + "; ".join(f"{c}: {v}" for c, v in LOCKERS.items())
+    + "), so '0% locked' without that coverage is unknown, not a red flag; a project with an official site, a "
+    "public GitHub and an active X profile is never 'no team', 'no socials' or 'thin docs'; a GitHub under "
+    "another account name is the project's when its README names the site or the token address. "
+)
+
 _FILE = storage.data_file("onchain_judge.json")
 
 SYSTEM = (
@@ -80,7 +104,8 @@ SYSTEM = (
     "the product, the docs and the token instead. "
     "(11) A website registered around the token's launch is normal for a new project, not a red flag; "
     "domain age only matters when the site is younger than the token. "
-    "Answer with one JSON object only: {\"score\": 0-100, \"verdict\": \"gem\"|\"watch\"|\"avoid\"|\"scam\", "
+    + CHECK_RULES
+    + "Answer with one JSON object only: {\"score\": 0-100, \"verdict\": \"gem\"|\"watch\"|\"avoid\"|\"scam\", "
     "\"confidence\": 0-1, \"problems\": [up to 5 short strings], \"strengths\": [up to 5 short strings], "
     "\"admit_reason\": \"one sentence, only if a rule excluded it but it deserves the board, else empty\"}."
 )
@@ -447,7 +472,7 @@ REVIEW_SYSTEM = (
     "weight unless a measured fact backs them. "
     "judge.tg is the project's own Telegram (subs, posts in 7/30 days, days since last post, median views); "
     "a dead channel (last post > 60 days) or a group with few members is weak community evidence, not proof "
-    "of a scam. judge.dc is the project's own Discord (members, online): a few online out of many members "
+    "of a scam. " + CHECK_RULES + "judge.dc is the project's own Discord (members, online): a few online out of many members "
     "means a quiet or inflated server, weak evidence too. Community liveness is judged by online counts "
     "(Telegram group online, Discord online) and the online/members ratio, not by subscriber or member "
     "totals: roughly 2-15% online is normal, under 1% with thousands of members suggests an inflated "
