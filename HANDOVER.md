@@ -1,3 +1,8 @@
+# 2026-10-01 — Signals e Record al posto di Memes e Strategies — `seed-0243` (Claude, a mano)
+
+Lorenzo: la tab delle performance dei backtest "non serve piu'" ("la visualizzo nel conto simulato") e "non mi serve piu' neanche la schermata dei fired last 48 ore [...] about to fire [...] e' tutta roba legata alle meme coin". Proposte tre idee (Signals, Track record, Risk watch); scelta "due tab".
+Ora la vista `meme` mostra `#signals` (`signals.js`, dati di `/api/onchain/top`: `daily.signal` e `in_position` del trend follower 8h/1d; segnali degli ultimi 7 giorni, in posizione, in attesa) con lo scanner manuale in cima; la vista `top` mostra `#track` (`track.js`, nuovo `/api/onchain/track` = `gem_track.record()`: stats per orizzonte, ultime scelte, "Missed" = studiate/scartate con picco >= +100%). I nomi delle viste restano `meme`/`top` (link della home, splash, desk). `#radar`, `#memes`, `#meme-alerts`, `#pilot`, `#leaders` restano nel DOM ma sempre nascosti; `mountRadar` e il poll dello scan-feed tolti.
+Resta: il "Risk watch" (wallet collegati, liquidita' tolta) proposto come sezione di Record non e' fatto; "armato" (vicino al segnale) non c'e', servirebbe un calcolo nuovo in `strategy_lab`; togliere del tutto il codice meme morto.
 # 2026-09-30 — RSI+BB nel laboratorio: regola della riga e vecchi trade verificati (Claude, a mano)
 
 Lorenzo: "sono riapparse le operazioni di prima [...] il portafoglio senza quelle non sarebbe mai arrivato a quella cifra [...] dobbiamo inserirle e mapparle, perche' l'RSI piu' BB funziona apparentemente bene". Sopra #443 (altro thread): 
