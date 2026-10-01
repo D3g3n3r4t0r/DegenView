@@ -23,6 +23,7 @@ Only confirmed points stay red; the others are shown as such.
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import hashlib
 import json
 import logging
@@ -415,6 +416,26 @@ async def lp_coverage(item: dict, client: httpx.AsyncClient) -> str:
     return ""
 
 
+# The step a re-check is on, for the live progress on screen (Lorenzo, 01/10:
+# "voglio vedere proprio i vari passaggi"). Set by deep_recheck; a no-op otherwise.
+PROGRESS: contextvars.ContextVar = contextvars.ContextVar("recheck_progress", default=None)
+
+
+def step(label: str, detail: str = "") -> None:
+    cb = PROGRESS.get()
+    if cb:
+        cb(label, detail)
+
+
+def step_detail(detail: str) -> None:
+    cb = PROGRESS.get()
+    if cb:
+        cb(None, detail)
+
+
+_PROBE_STEP = {"app_probe": "Reading the app's code and APIs", "x_profile": "Reading the X profile"}
+
+
 async def gather(entry: dict, item: dict, client: httpx.AsyncClient) -> dict:
     """Other ways to what the first pass did not find."""
     found: list[str] = []
@@ -422,19 +443,24 @@ async def gather(entry: dict, item: dict, client: httpx.AsyncClient) -> dict:
     checked: list[dict] = []
     snippets: list[str] = []
     for probe in (app_probe, x_profile):
+        step(_PROBE_STEP[probe.__name__])
         try:
             res = await probe(item, client)
         except Exception as exc:
             checked.append({"source": probe.__name__, "result": "unreadable", "detail": str(exc)[:120]})
+            step_detail("unreadable")
             continue
+        step_detail("; ".join((res.get("found") or [])[:2])[:120] or "nothing new")
         found += res.get("found") or []
         checked += res.get("checked") or []
         snippets += res.get("snippets") or []
     if any(LP_FLAG.search(p["text"]) for p in red_points(entry)):
+        step("Checking the LP lock coverage")
         try:
             note = await lp_coverage(item, client)
         except Exception:
             note = ""
+        step_detail("lock data misses the main pool" if note else "no gap found")
         if note:
             found.append(note)
     tw = twin_line(entry, item)
@@ -443,6 +469,7 @@ async def gather(entry: dict, item: dict, client: httpx.AsyncClient) -> dict:
     pillars = entry.get("pillars") or {}
     gh = pillars.get("github") or {}
     if gh.get("score") is None:
+        step("Looking for the project's GitHub")
         links = [s.get("url") or "" for s in item.get("socials") or []] + list(item.get("websites") or [])
         t = legit.github_targets([x for x in links if x])
         url = f"https://github.com/{t[0][0]}" + (f"/{t[0][1]}" if t[0][1] else "") if t else None
@@ -466,8 +493,13 @@ async def gather(entry: dict, item: dict, client: httpx.AsyncClient) -> dict:
                          + (f", scored {new['score']}" if new and new.get("score") is not None else ""))
             if new and new.get("score") is not None:
                 pillars["github"] = new
+    if gh.get("score") is None:
+        step_detail(next((f.split(": ", 1)[-1] for f in found if f.startswith("GitHub found")), "not found"))
     read = {str(((pillars.get("site") or {}).get("facts") or {}).get("url") or "").rstrip("/")}
-    for u in other_pages(item, read):
+    guesses = other_pages(item, read)
+    if guesses:
+        step("Reading docs and other pages", f"{len(guesses)} to try")
+    for u in guesses:
         try:
             page = await legit.fetch_site(u, client)
         except Exception as exc:
@@ -488,6 +520,9 @@ async def gather(entry: dict, item: dict, client: httpx.AsyncClient) -> dict:
         checked.append({"source": "GitHub", "result": "found" if hit else "not found",
                         "detail": hit or "no public repository found by socials, site name, token address or a "
                         "README naming the site (public code is a plus, not a requirement)"})
+    if guesses:
+        step_detail(f"{len(pages)} of {len(guesses)} read")
+    step("Cross-checking volume on GeckoTerminal")
     gecko = None
     try:
         gecko = await gecko_volume(item, client)
@@ -498,6 +533,7 @@ async def gather(entry: dict, item: dict, client: httpx.AsyncClient) -> dict:
                         "detail": f"24h volume ${gecko['volume_24h']:,.0f}, pools reserve ${gecko['reserve_usd']:,.0f}"})
     else:
         checked.append({"source": "GeckoTerminal", "result": "unreadable", "detail": "no token data"})
+    step_detail(f"24h volume ${gecko['volume_24h']:,.0f}" if gecko else "no data")
     return {"found": found, "pages": pages, "checked": checked, "snippets": snippets, "gecko": gecko}
 
 
@@ -767,7 +803,10 @@ async def recheck(entry: dict, item: dict, client: httpx.AsyncClient, ask=None) 
     hit = _cache.get(key)
     judged = hit[1]["items"] if hit and time.time() - hit[0] < TTL_S else None
     text = evidence_text(entry, item, ev)
+    if judged is not None:
+        step("Red points already judged on this evidence", f"{len(points)} points, from the last 24 h")
     if judged is None and settings.deepseek_api_key:
+        step("Asking DeepSeek about each red point", f"{len(points)} points")
         from app.notify import deepseek_desk
         if ask is None:
             ask = deepseek_desk.ask
@@ -785,6 +824,7 @@ async def recheck(entry: dict, item: dict, client: httpx.AsyncClient, ask=None) 
     else:
         _cache[key] = (time.time(), {"items": judged})
     judged = [minor(p) for p in facts_win(judged, ev, item)]
+    step_detail(" · ".join(f"{sum(p['status'] == k for p in judged)} {k}" for k in ("refuted", "unverified", "confirmed")))
     return {"confirmed": [p for p in judged if p["status"] == "confirmed"],
             "unverified": [p for p in judged if p["status"] == "unverified"],
             "refuted": [p for p in judged if p["status"] == "refuted"],

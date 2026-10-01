@@ -202,6 +202,9 @@ export const getToken = (chain, token) => request(`/api/onchain/token?chain=${en
 export const recheckToken = (chain, token) =>
   request(`/api/onchain/token/recheck?chain=${encodeURIComponent(chain)}&token=${encodeURIComponent(token)}`,
           { method: "POST", timeoutMs: 120000 });
+export const recheckProgress = (chain, token) =>
+  request(`/api/onchain/token/recheck/progress?chain=${encodeURIComponent(chain)}&token=${encodeURIComponent(token)}`,
+          { timeoutMs: 8000 });
 export const getSlippage = (chain, token) => request(`/api/onchain/slippage?chain=${encodeURIComponent(chain)}&token=${encodeURIComponent(token)}`, { timeoutMs: 12000 });
 export const getAgent = () => request("/api/agent");
 export const getDeposit = () => request("/api/wallets/deposit");

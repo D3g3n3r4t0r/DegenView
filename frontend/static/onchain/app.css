@@ -1339,6 +1339,19 @@ html, body { overflow-x: clip; }
     border-radius: 10px; background: none; color: var(--k-text); font: 600 14px var(--sans); cursor: pointer;
     &:active { scale: .98; }
     &:disabled { opacity: .5; cursor: not-allowed; } }
+  .ds-steps { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px;
+    & li { display: grid; grid-template-columns: 14px 1fr; column-gap: 8px; align-items: center; font: 500 13px var(--sans);
+      color: var(--k-text-2); }
+    & li[data-new] { animation: ds-step-in .28s cubic-bezier(.2,.7,.2,1) both; }
+    & li > i { inline-size: 10px; block-size: 10px; border-radius: 50%; border: 1.5px solid var(--k-text-3); justify-self: center; }
+    & li[data-state="run"] { color: var(--k-text); }
+    & li[data-state="run"] > i { border-color: #60a5fa; animation: ds-step-pulse 1s ease-in-out infinite; }
+    & li[data-state="done"] > i { border-color: #34d399; background: #34d399; }
+    & li[data-state="fail"] > i { border-color: #f87171; background: #f87171; }
+    & small { grid-column: 2; color: var(--k-text-3); font-size: 11.5px; overflow-wrap: anywhere; } }
+  @keyframes ds-step-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  @keyframes ds-step-pulse { 50% { transform: scale(.6); opacity: .5; } }
+  @media (prefers-reduced-motion: reduce) { .ds-steps li[data-new], .ds-steps li > i { animation: none !important; } }
 }
 @layer skin {
   [data-fx="strike"] { position: relative; }
