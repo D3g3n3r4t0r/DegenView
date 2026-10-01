@@ -290,6 +290,9 @@ async function enrich(id, e) {
     if (iv && !current.picked && iv !== interval) { interval = iv; paintChips(); }
     paintChart();
   }
+  if (e.kind === "gem" && !e.slip) {
+    api.getSlippage(e.chain, e.token).then((p) => { e.slip = p; if (current?.id === id) paintTabs(); }).catch(() => {});
+  }
   if (r.entry) {
     const lb = await import("@onchain/leaderboard.js");
     e.why ||= lb.gemWhy(r.entry) + (r.entry.on_board ? "" : `<p class="muted">Not on the board${r.entry.why ? `: ${escapeHtml(r.entry.why)}` : ""}.</p>`);
@@ -370,10 +373,20 @@ function paintTabs() {
         <div><dt>Board</dt><dd>${e.dossier.on_board ? "on the board" : e.rank ? `Top #${e.rank}, from the database` : `not ranked${e.dossier.why ? `: ${escapeHtml(e.dossier.why)}` : ""}`}</dd></div>` : ""}
         <div><dt>Market cap</dt><dd>${usdShort(e.cap)}</dd></div>
         ${e.dossier?.liquidity_usd != null ? `<div><dt>Liquidity</dt><dd>${usdShort(e.dossier.liquidity_usd)}</dd></div>` : ""}
+        ${slipRows(e.slip)}
         ${e.ageTs ? `<div><dt>Age</dt><dd>${age(e.ageTs)[0]}</dd></div>` : ""}
       </dl>
       ${lab ? `${backtestTable({ backtests: lab, age_h: 99 })}<p class="muted">${labNote}</p>` : ""}
       ${gem && lab ? "" : `<p class="muted">${pending ? "Loading…" : gem ? "No daily backtest on this gem yet." : "No Telegram alert on this token yet."}</p>`}`;
+}
+
+// Lorenzo, 30/09: before an entry, how much the pool would slip on the
+// wallet's next stake, and the largest stake under the limit.
+function slipRows(p) {
+  if (!p || p.max_usd == null) return "";
+  const src = p.source === "quote" ? "DEX quote" : "pool depth";
+  return `<div><dt>Slippage on ${usdShort(p.usd)}</dt><dd data-sign="${p.slip_pct > p.max_slippage_pct ? "down" : ""}">${p.slip_pct.toFixed(2)}% · ${src}</dd></div>
+        <div><dt>Max entry at ${p.max_slippage_pct}%</dt><dd>${usdShort(p.max_usd)}</dd></div>`;
 }
 
 function backtestTable(al) {
