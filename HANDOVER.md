@@ -3,6 +3,15 @@
 Lorenzo: la tab delle performance dei backtest "non serve piu'" ("la visualizzo nel conto simulato") e "non mi serve piu' neanche la schermata dei fired last 48 ore [...] about to fire [...] e' tutta roba legata alle meme coin". Proposte tre idee (Signals, Track record, Risk watch); scelta "due tab".
 Ora la vista `meme` mostra `#signals` (`signals.js`, dati di `/api/onchain/top`: `daily.signal` e `in_position` del trend follower 8h/1d; segnali degli ultimi 7 giorni, in posizione, in attesa) con lo scanner manuale in cima; la vista `top` mostra `#track` (`track.js`, nuovo `/api/onchain/track` = `gem_track.record()`: stats per orizzonte, ultime scelte, "Missed" = studiate/scartate con picco >= +100%). I nomi delle viste restano `meme`/`top` (link della home, splash, desk). `#radar`, `#memes`, `#meme-alerts`, `#pilot`, `#leaders` restano nel DOM ma sempre nascosti; `mountRadar` e il poll dello scan-feed tolti.
 Resta: il "Risk watch" (wallet collegati, liquidita' tolta) proposto come sezione di Record non e' fatto; "armato" (vicino al segnale) non c'e', servirebbe un calcolo nuovo in `strategy_lab`; togliere del tutto il codice meme morto.
+# 2026-09-30 — RSI+BB nel laboratorio: regola della riga e vecchi trade verificati (Claude, a mano)
+
+Lorenzo: "sono riapparse le operazioni di prima [...] il portafoglio senza quelle non sarebbe mai arrivato a quella cifra [...] dobbiamo inserirle e mapparle, perche' l'RSI piu' BB funziona apparentemente bene". Sopra #443 (altro thread): 
+- Regola della riga Top, una sola (`system.shown`, specchio in `lab-shown.js`): il rendimento piu' alto fra trend follower 8h/1d e migliore 5m fra `SPOT_LABELS` (Trend EMA, Trend HF, RSI+BB); pari = 8h/1d. Prima: 8h/1d sempre prima se aveva trade. Anche `sim_backtest.token_trades` (portafoglio) e `scripts/chart_audit.py` la usano; `_lab_summary` manda `shown: daily|fast`.
+- `system.drawn_row` elenca la riga a cui appartengono le frecce salvate (stessa etichetta, una vendita per trade); un risultato salvato prima di RSI+BB mostra il trend follower finche' il laboratorio non lo rifa' (`_load` lo mette in testa alla coda).
+- Ogni evento di `_best_trades` porta `lab`; il registro lo salva per trade.
+- Vecchi trade: `relabel` rifa' tutte e quattro le strategie (anche il lato long di RSI+BB L/S: prima di #434 il migliore 5m era scelto fra tutte) sulle 5m dell'archivio (#427, fino a 5000 barre) e non piu' solo sulle 1000 del giro. Ricontrolla anche i "not trend" (fino al controllo si mostrano come RSI+BB, come in #443). Nessuna strategia li rifa' = `none` ("strategy not recorded"); piu' vecchi dell'archivio restano non provati e `proof_from` evita di ritentarli a ogni giro. Tutti i trade salvati restano nel portafoglio.
+- Nomi delle strategie tolti dallo schermo (regola di Lorenzo): grafico "Strategy entry · 5m", portafoglio e profilo solo time frame; l'etichetta resta nei dati.
+Resta: `scripts/chart_audit.py` sul server dopo il deploy (mismatched = 0) e conteggio dei vecchi trade provati / `none` / non provati dal registro.
 
 # 2026-09-30 — MERRYMEN: numero in classifica senza frecce — `seed-0242` (Claude, a mano)
 
