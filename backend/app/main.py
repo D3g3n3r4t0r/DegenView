@@ -4791,9 +4791,10 @@ async def live_stream(request: Request, ids: str = "", user: User = Depends(auth
                 got = await onchain_live_prices.prices(keys)
             except Exception:
                 got = {}
-            moved = {k: v for k, v in got.items() if sent.get(k) != v["p"]}
+            # {"chain:addr": price}, plain numbers, as live.js keeps them
+            moved = {k: v["p"] for k, v in got.items() if sent.get(k) != v["p"]}
             if moved:
-                sent.update({k: v["p"] for k, v in moved.items()})
+                sent.update(moved)
                 quiet = 0.0
                 yield f"data: {json.dumps(moved)}\n\n"
             else:

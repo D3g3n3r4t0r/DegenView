@@ -38,12 +38,13 @@ export const liveKey = (p) => (p.address && !p.native && p.chain
 export function liveValue(p) {
   const k = liveKey(p), px = k && last.get(k);
   if (!px || p.value_usd == null || !p.price_usd) return p.value_usd;
-  return p.value_usd * (px / p.price_usd);
+  const v = p.value_usd * (px / p.price_usd);
+  return Number.isFinite(v) ? v : p.value_usd;
 }
 
 /** Sum of (live value - value) over positions: what to add to a total. */
 export const liveDelta = (positions) => (positions ?? []).reduce((sum, p) =>
-  (p.hidden || p.value_usd == null ? sum : sum + (liveValue(p) - p.value_usd)), 0);
+  (p.hidden || !Number.isFinite(p.value_usd) ? sum : sum + (liveValue(p) - p.value_usd)), 0);
 
 /** watch({keys: () => [...], active: () => bool, onPrices: (map) => {}}) -> unwatch */
 export function watch(sub) {
@@ -60,8 +61,17 @@ function schedule(ms) {
 const activeSubs = () => [...subs].filter((s) => s.active());
 const wanted = (live) => [...new Set(live.flatMap((s) => s.keys()))].filter(Boolean).sort().slice(0, 60);
 
+// A usable price: a finite number above zero ({p} from older servers too).
+const asPrice = (v) => {
+  const n = Number(v && typeof v === "object" ? v.p : v);
+  return Number.isFinite(n) && n > 0 ? n : null;
+};
+
 function deliver(prices) {
-  for (const [k, p] of Object.entries(prices)) last.set(k, p);
+  for (const [k, v] of Object.entries(prices ?? {})) {
+    const p = asPrice(v);
+    if (p != null) last.set(k, p);
+  }
   for (const s of activeSubs()) s.onPrices(last);
 }
 
@@ -91,7 +101,7 @@ async function poll(keys) {
   busy = true;
   try {
     const res = await api.getLivePrices(keys);
-    deliver(Object.fromEntries(Object.entries(res.prices ?? {}).map(([k, v]) => [k, v.p])));
+    deliver(res.prices);
   } catch { /* keep the last prices */ }
   busy = false;
 }
