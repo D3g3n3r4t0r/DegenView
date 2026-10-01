@@ -36,7 +36,7 @@ _cache: dict[tuple, tuple[float, dict]] = {}
 
 
 def max_pct() -> float:
-    return float(getattr(settings, "onchain_max_slippage_pct", 1.0) or 1.0)
+    return float(getattr(settings, "onchain_max_slippage_pct", 0.5) or 0.5)
 
 
 def _ok(v) -> bool:
