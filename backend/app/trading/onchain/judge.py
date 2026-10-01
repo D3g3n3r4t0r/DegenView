@@ -28,8 +28,9 @@ TTL_S = 3 * 86400
 # whales, unlocked v4 liquidity is normal, named integrations count; GRID
 # was judged "avoid" on exactly those points). 3: closed code is never the
 # reason to avoid (STEALF, GRID, BV7X were vetoed on it after v2). 4: a domain
-# registered with the token is normal (PFWA, 22).
-PROMPT_VERSION = 5
+# registered with the token is normal (PFWA, 22). 5: the dossier now carries
+# the project's Telegram developments (tg_digest), so old readings are redone.
+PROMPT_VERSION = 6
 DAILY_MAX = 1500          # ~$0.001 a reading: every project past the filters gets its report
 ADMIT_MIN = 80
 VETO_MIN_CONF = 0.7
@@ -184,6 +185,9 @@ def dossier(e: dict, rules_why: str, x: dict | None = None, tg: dict | None = No
         lines.append(f"X post: {_cut(post, 220)}")
     for post in (tg or {}).get("recent_posts", [])[:3]:
         lines.append(f"Telegram post: {_cut(post, 300)}")
+    from app.trading.onchain import tg_digest
+    for ev in tg_digest.recent((tg or {}).get("handle"), 10):
+        lines.append(f"Telegram developments: {ev.get('date')} {ev.get('type')}: {_cut(ev.get('text'), 200)}")
     lines.append("</project_text>")
     return "\n".join(lines)
 
@@ -369,6 +373,11 @@ async def judge(e: dict, rules_why: str, now: float | None = None, ask=None,
     except Exception as exc:  # the server is a nice-to-have, never a reason not to judge
         logger.info("giudice: Discord non letto: %s", exc)
     try:
+        from app.trading.onchain import tg_digest
+        await tg_digest.update(e, now)
+    except Exception as exc:  # the digest is a nice-to-have, never a reason not to judge
+        logger.info("giudice: digest Telegram non aggiornato: %s", exc)
+    try:
         raw = await ask([{"role": "system", "content": SYSTEM},
                          {"role": "user", "content": dossier(e, rules_why, x, tg, dc)}],
                         kind="research", max_tokens=700, json_mode=True, purpose="judge/" + why.split()[0], subject=key)
@@ -391,6 +400,10 @@ async def judge(e: dict, rules_why: str, now: float | None = None, ask=None,
         parsed["tg"] = telegram_public.compact(tg)
     if dc:
         parsed["dc"] = discord_public.compact(dc)
+    from app.trading.onchain import tg_digest
+    events = tg_digest.recent((tg or {}).get("handle"), 5)
+    if events:
+        parsed["tg_events"] = events
     _cache[key] = parsed
     from app.trading.onchain import history
     history.append(key, "judge", {f: parsed[f] for f in ("at", "v", "verdict", "confidence", "reason", "why")
@@ -447,6 +460,7 @@ def review_brief(entries: list[dict]) -> str:
             "pillars": {k: ((e.get("pillars") or {}).get(k) or {}).get("score") for k in ("github", "site", "tokenomics")},
             "public_code": not gh.get("missing"), "stage": f.get("stage"), "narratives": e.get("narratives"),
             "judge": {k: (e.get("judge") or {}).get(k) for k in ("verdict", "score", "problems", "x", "tg", "dc")},
+            "tg_events": (e.get("judge") or {}).get("tg_events") or [],
             "project_text": _cut(f.get("summary") or e.get("description"), 300),
         }, ensure_ascii=False))
     return "Ranking to review, one project per line:\n" + "\n".join(rows)
