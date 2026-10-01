@@ -100,7 +100,6 @@ function systemLine(d) {
 // The scanners' live tape (Lorenzo, 28/09: "voglio vedere i ticker girare,
 // non cose ferme"): every pool judged in the last minutes, scrolling, with
 // the hour's counts. Polled on its own, faster than the list.
-const SCAN_POLL_MS = 8_000;
 const VERDICT = { seen: "·", check: "…", wait: "…", pass: "✓", tested: "◆", alert: "★", fail: "✗" };
 const nfmt = (n) => Number(n ?? 0).toLocaleString("en-US");
 
@@ -123,25 +122,6 @@ function scanHtml(f) {
   if (!f) return `<div class="scan-live" data-scan-live></div>`;
   return `<div class="scan-live" data-scan-live data-head="${f.feed?.[0]?.t ?? 0}">`
     + `<p class="scan-stats" data-scan-stats>${scanStats(f)}</p>${scanTape(f)}</div>`;
-}
-
-async function pollScan() {
-  if (document.visibilityState !== "visible") return;
-  let f;
-  try {
-    f = await api.getScanFeed();
-  } catch {
-    return;
-  }
-  state.scan = f;
-  const box = document.querySelector("#meme-alerts [data-scan-live]");
-  if (!box) return;
-  const head = String(f.feed?.[0]?.t ?? 0);
-  if (box.dataset.head === head && box.querySelector("[data-scan-stats]")) {
-    box.querySelector("[data-scan-stats]").innerHTML = scanStats(f);
-    return;
-  }
-  box.outerHTML = scanHtml(f);
 }
 
 const SCAN_FORM = `<form class="scan-form" data-scan-form role="search">
@@ -430,6 +410,4 @@ export function mountAlerts() {
   mountReview();
   load();
   setInterval(() => document.visibilityState === "visible" && load(), POLL_MS);
-  pollScan();
-  setInterval(pollScan, SCAN_POLL_MS);
 }
