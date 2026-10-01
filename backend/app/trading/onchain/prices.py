@@ -38,6 +38,25 @@ async def native_price_usd(chain: OnchainChain) -> float | None:
         return cached[0]
 
     network, token_address = _NATIVE_TOKEN[chain]
+    price = await _gecko_price(network, token_address)
+    if price is None:
+        # GeckoTerminal answers 429 often (30 calls a minute, shared IPs):
+        # the live price sources (Jupiter, DexScreener) before giving up.
+        from app.trading.onchain import live_prices
+        key = live_prices._key(chain, token_address)
+        try:
+            hit = (await live_prices.prices([key])).get(f"{key[0]}:{key[1]}")
+        except Exception:
+            hit = None
+        price = hit["p"] if hit else None
+    if price is None:
+        return None
+
+    _cache[chain] = (price, time.time())
+    return price
+
+
+async def _gecko_price(network: str, token_address: str) -> float | None:
     url = f"{GECKOTERMINAL_BASE}/simple/networks/{network}/token_price/{token_address}"
     try:
         async with httpx.AsyncClient(timeout=8.0) as client:
@@ -46,11 +65,9 @@ async def native_price_usd(chain: OnchainChain) -> float | None:
             return None
         prices = resp.json()["data"]["attributes"]["token_prices"]
         price = float(next(iter(prices.values())))
-    except (httpx.HTTPError, KeyError, StopIteration, ValueError):
+    except (httpx.HTTPError, KeyError, StopIteration, ValueError, TypeError):
         return None
-
-    _cache[chain] = (price, time.time())
-    return price
+    return price if price > 0 else None
 
 
 KRAKEN_TICKER_URL = "https://api.kraken.com/0/public/Ticker"
