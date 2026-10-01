@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0245", "Il valore delle posizioni si aggiorna lento: serve il prezzo in tempo reale",
+     "Lorenzo, 30/09: 'il saldo delle posizioni si aggiorni piu' velocemente possibile [...] trovare un servizio che ci permetta di avere queste informazioni in modo rapido [...] vedere in tempo reale i cambiamenti di prezzo e non dover aspettare diversi secondi'.",
+     "alta"),
     ("seed-0241", "DREGG: '807 wallets linked to each other' preoccupa",
      "Lorenzo, 30/09: 'mi preoccupano questi 800 account collegati tra loro... indaghiamo'. Il rapporto token contava i wallet dei gruppi collegati di RugCheck, non quanta supply tengono.",
      "media"),
