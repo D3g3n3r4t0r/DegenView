@@ -6,7 +6,7 @@ const intro=document.getElementById('engn-intro');
 const login=document.getElementById('login-screen');
 const views={
   gems:['02 / GEM FINDER','Find the signal.','Leave the noise.','Projects, research and rankings. Explore the top picks or look deeper into the database.'],
-  meme:['01 / SIGNALS','Every signal,','as it fires.','The trend follower on the Top 50 gems: the latest buys and sells, what it holds, what waits for an entry.'],
+  meme:['01 / SIGNALS','Every signal,','as it fires.','The simulated Top 50 wallet: its latest buys and sells, what it holds, what waits for an entry.'],
   top:['03 / TRACK RECORD','Every pick,','checked.','Each gem is frozen with its receipt when picked, then measured against the market after 1, 3, 7, 30 and 90 days.'],
   agent:['04 / ENGINE ROOM','The engine,','at work.','Follow the research and analysis behind the app. Every update stays connected to its source.'],
   profile:['05 / YOUR PROFILE','Your activity.','One clear view.','Wallets, holdings and performance, with your account controls close at hand.'],
