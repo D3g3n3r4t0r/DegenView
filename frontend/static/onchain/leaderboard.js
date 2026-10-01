@@ -252,16 +252,23 @@ function socialLines(j) {
   if (tg) {
     const at = `@${escapeHtml(tg.handle ?? "")}`;
     let body;
+    let tone = "";
     if (tg.kind === "missing") body = `${at} not found`;
-    else if (tg.kind === "group") body = `${at} · group · ${compactNum(tg.subs ?? 0)} members`;
-    else if (tg.kind === "no_preview") body = `${at} · ${compactNum(tg.subs ?? 0)} subscribers · posts not public`;
+    else if (tg.kind === "group") {
+      body = `${at} · group · ${compactNum(tg.subs ?? 0)} members`;
+      if (tg.online != null) body += ` · ${compactNum(tg.online)} online`;
+    } else if (tg.kind === "no_preview") body = `${at} · ${compactNum(tg.subs ?? 0)} subscribers · posts not public`;
     else {
       const parts = [`${compactNum(tg.subs ?? 0)} members`, `${Number(tg.posts_7d) || 0} posts/7d`];
       if (tg.last_post_days != null) parts.push(`last ${Math.round(Number(tg.last_post_days))}d ago`);
       if (tg.median_views != null) parts.push(`${compactNum(tg.median_views)} views`);
       body = `${at} · ${parts.join(" · ")}`;
+      if (tg.last_post_days != null && Number(tg.last_post_days) > 180) {
+        tone = ' data-tone="bad"';
+        body += ` · silent ${Math.floor(Number(tg.last_post_days) / 30)} months`;
+      }
     }
-    out.push(`<li>Telegram: ${body}</li>`);
+    out.push(`<li${tone}>Telegram: ${body}</li>`);
     const events = Array.isArray(j?.tg_events) ? j.tg_events : [];
     for (const ev of events) {
       out.push(`<li>${escapeHtml(ev?.date ?? "")} · ${escapeHtml(ev?.type ?? "")} · ${escapeHtml(ev?.text ?? "")}</li>`);
@@ -270,9 +277,14 @@ function socialLines(j) {
   const dc = j?.dc;
   if (dc) {
     const name = escapeHtml(dc.name ?? dc.code ?? "");
-    out.push(dc.kind === "missing"
-      ? `<li>Discord: ${name} invite expired</li>`
-      : `<li>Discord: ${name} · ${compactNum(dc.members ?? 0)} members · ${compactNum(dc.online ?? 0)} online</li>`);
+    if (dc.kind === "missing") {
+      out.push(`<li>Discord: ${name} invite expired</li>`);
+    } else {
+      const members = Number(dc.members) || 0;
+      let body = `${name} · ${compactNum(members)} members · ${compactNum(dc.online ?? 0)} online`;
+      if (members > 0) body += ` · ${((Number(dc.online) || 0) / members * 100).toFixed(1)}% online`;
+      out.push(`<li>Discord: ${body}</li>`);
+    }
   }
   return out.join("");
 }
