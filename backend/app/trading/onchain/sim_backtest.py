@@ -24,8 +24,9 @@ import json
 import math
 
 from app.atomic_write import write_text_atomic
+from app.trading.onchain import slippage
 from app.trading.onchain.storage import data_file
-from app.trading.onchain.system import SPOT_LABELS, TREND_LABELS
+from app.trading.onchain.system import SPOT_LABELS, shown
 
 _FILE = data_file("top_backtest_ledger.json")
 _ledger: dict[str, dict] = {}     # chain:token -> {chain, token, symbol, interval, events: {t:side -> event}}
@@ -37,22 +38,14 @@ MIN_STAKE = 1.0
 
 
 def token_trades(bt: dict | None) -> tuple[str, list[dict]] | None:
-    """(interval, events) of the backtest the Top row shows: the 8h/1d trend
-    follower when it has traded, otherwise the best 5-minute strategy."""
-    if not bt:
+    """(interval, events) of the backtest the Top row shows (system.shown):
+    the higher return between the 8h/1d trend follower and the best
+    5-minute listed strategy, trend followers or RSI+BB."""
+    got = shown(bt)
+    if not got:
         return None
-    daily = bt.get("daily") or {}
-    drow = (daily.get("rows") or [None])[0]
-    if drow and drow.get("trades") and (daily.get("best") or {}).get("events"):
-        return daily.get("interval") or "1d", daily["best"]["events"]
-    # The 5-minute best: a trend follower or RSI+BB (system.SPOT_LABELS).
-    # Lorenzo, 30/09: trend-only first, then, seeing the wallet without the
-    # RSI+BB trades, "implementiamolo nelle strategie, nei backtest".
-    best = bt.get("best") or {}
-    if best.get("events") and best.get("label") in SPOT_LABELS:
-        return "5m", best["events"]
-    return None
-
+    interval, part, _row = got
+    return interval, part["best"]["events"]
 
 
 def _label(bt: dict | None, interval: str) -> str | None:
@@ -81,9 +74,11 @@ def reset_for_tests() -> None:
     _loaded = True
 
 
-def remember(chain: str, token: str, symbol: str | None, bt: dict | None, save: bool = True) -> bool:
+def remember(chain: str, token: str, symbol: str | None, bt: dict | None, save: bool = True,
+             liq: float | None = None) -> bool:
     """Add the trades the Top row shows now to the ledger. Old trades stay:
-    a later backtest only adds. True if something new came in."""
+    a later backtest only adds. True if something new came in. `liq` is the
+    pool's liquidity now: the replay caps each entry's size on it."""
     got = token_trades(bt)
     if not got:
         return False
@@ -91,6 +86,8 @@ def remember(chain: str, token: str, symbol: str | None, bt: dict | None, save: 
     interval, events = got
     row = _ledger.setdefault(f"{chain}:{token}", {"chain": chain, "token": token, "events": {}})
     row["symbol"] = symbol or row.get("symbol")
+    if _ok(liq) and liq > 0:
+        row["liq"] = float(liq)
     row["interval"] = interval
     # Since 30/09 the arrows sit on the fill candle, one candle after the
     # signal (system._best_trades, "fills"): the same trade saved before
@@ -109,7 +106,7 @@ def remember(chain: str, token: str, symbol: str | None, bt: dict | None, save: 
                 if old and old.get("iv") == interval and not old.get("fill"):
                     del row["events"][f"{int(e['t']) - step}:{e['side']}"]
             row["events"][k] = {**{f: e[f] for f in ("t", "side", "price", "ret") if f in e}, "iv": interval,
-                                "lab": label,
+                                "lab": e.get("lab") or label,
                                 **({"fill": True} if fills else {})}
             new = True
     if new and save:
@@ -138,30 +135,42 @@ def _save() -> None:
 def ledger_tokens() -> list[dict]:
     _load()
     return [{"chain": r["chain"], "token": r["token"], "symbol": r.get("symbol"), "interval": r.get("interval"),
-             "events": _one_timeframe(r)} for r in _ledger.values()]
+             "liq": r.get("liq"), "events": _one_timeframe(r)} for r in _ledger.values()]
+
+
+# Set by relabel: made by none of the listed strategies on the same candles.
+NONE_LABEL = "none"
+# Before RSI+BB was listed, relabel marked "not trend" what no trend follower
+# made: those are checked again, RSI+BB may have made them.
+_RECHECK = (None, "not trend")
 
 
 def needs_relabel(chain: str, token: str) -> bool:
-    """Old 5-minute trades saved without their strategy (before 30/09 evening),
-    or marked only "not trend" before RSI+BB was looked for."""
+    """Old 5-minute trades whose strategy is not proven yet."""
     _load()
     row = _ledger.get(f"{chain}:{token}")
-    return bool(row) and any(e.get("iv") == "5m" and e.get("lab", "not trend") == "not trend"
-                             for e in row["events"].values())
+    return bool(row) and any(_unproven(e, row) for e in row["events"].values())
+
+
+def _unproven(e: dict, row: dict) -> bool:
+    return e.get("iv") == "5m" and e.get("lab") in _RECHECK and e["t"] >= row.get("proof_from", 0)
 
 
 def relabel(chain: str, token: str, times: dict[str, set[tuple[int, str]]], window_from: int) -> int:
-    """Give an old unlabelled 5-minute trade the strategy that, rerun on the
-    same candles, made that very trade (Lorenzo, 30/09: every trade shows
-    which strategy took it). Inside the candles and made by none of them:
-    "not trend". Older than the candles: left unknown."""
+    """Give an old 5-minute trade saved without its strategy the listed
+    strategy that makes that very trade when rerun on the same candles
+    (the 5-minute archive, candle_archive). Lorenzo, 30/09: "sono riapparse
+    le operazioni di prima [...] dobbiamo inserirle e mapparle". Inside the
+    candles and made by none: NONE_LABEL, kept in the ledger, hidden. Older
+    than the candles: left unknown, and not tried again (`proof_from`).
+    `times` comes from system.trend_trade_times, spot strategies first."""
     _load()
     row = _ledger.get(f"{chain}:{token}")
     if not row:
         return 0
     done = 0
     for e in row["events"].values():
-        if e.get("iv") != "5m" or e.get("lab", "not trend") != "not trend":
+        if not _unproven(e, row):
             continue
         t = int(e["t"])
         lab = next((lab for lab, got in times.items()
@@ -169,11 +178,11 @@ def relabel(chain: str, token: str, times: dict[str, set[tuple[int, str]]], wind
         if lab:
             e["lab"] = lab
             done += 1
-        elif t >= window_from and "lab" not in e:
-            e["lab"] = "not trend"
+        elif t >= window_from:
+            e["lab"] = NONE_LABEL
             done += 1
-    if done:
-        _save()
+    row["proof_from"] = int(window_from)
+    _save()
     return done
 
 
@@ -185,17 +194,15 @@ def _trend(e: dict) -> bool:
 
 def strategy_of(e: dict) -> str:
     """The strategy that took the trade: its label ("Trend EMA", "Trend HF",
-    "RSI+BB"); "RSI+BB" too for an old 5-minute trade no trend follower made
-    (the 5-minute best was one of those); "unknown" when saved before
-    labels were kept and never proven."""
+    "RSI+BB", or "RSI+BB L/S" for an old 5-minute trade its long side made);
+    "RSI+BB" too for an old one marked "not trend" before RSI+BB was looked
+    for, until relabel checks it; "unknown" when never proven."""
     lab = e.get("lab")
     if e.get("iv") != "5m":
         return lab if lab in SPOT_LABELS else "Trend EMA"
-    if lab in SPOT_LABELS or lab in TREND_LABELS:
-        return lab
     if lab == "not trend":
         return "RSI+BB"
-    return lab or "unknown"
+    return "unknown" if not lab or lab == NONE_LABEL else lab
 
 
 def _one_timeframe(r: dict) -> list[dict]:
@@ -216,8 +223,15 @@ def _ok(v) -> bool:
 
 
 def replay(tokens: list[dict], capital: float = DEFAULT_CAPITAL, share: float = DEFAULT_SHARE,
-           marks: dict[str, float] | None = None, now: float | None = None) -> dict:
-    """tokens: [{chain, token, symbol, interval, events}]; marks: {"chain:token": price}."""
+           marks: dict[str, float] | None = None, now: float | None = None,
+           max_slip_pct: float | None = None) -> dict:
+    """tokens: [{chain, token, symbol, interval, events, liq}]; marks: {"chain:token": price}.
+
+    Lorenzo, 30/09: no entry may move an illiquid pool's price. A token with a
+    known liquidity (`liq`) buys at most what keeps the slippage under
+    `max_slip_pct` (slippage.max_usd), and both legs pay their estimated
+    slippage on top of the backtest's fees. The liquidity is today's, not the
+    one at the trade's time: a limit of the estimate."""
     marks = marks or {}
     flow = []
     for tk in tokens:
@@ -230,7 +244,8 @@ def replay(tokens: list[dict], capital: float = DEFAULT_CAPITAL, share: float = 
     held: dict[str, dict] = {}
     closed: list[dict] = []
     curve: list[list[float]] = []
-    skipped = 0
+    skipped = capped = 0
+    slip_cost = 0.0
     peak, max_dd = float(capital), 0.0
 
     def equity() -> float:
@@ -243,11 +258,14 @@ def replay(tokens: list[dict], capital: float = DEFAULT_CAPITAL, share: float = 
             if p:
                 continue
             stake = min(cash, equity() * share)
+            stake, est = slippage.cap(stake, tk.get("liq"), max_slip_pct)
             if stake < MIN_STAKE:
                 skipped += 1
                 continue
+            capped += bool(est.get("capped"))
             cash -= stake
-            held[key] = {"chain": tk["chain"], "token": tk["token"], "symbol": tk.get("symbol"),
+            held[key] = {**({"wanted": est["wanted"], "max_usd": est["max_usd"]} if est.get("capped") else {}),
+                         "slip_in": est.get("slip_pct"), "chain": tk["chain"], "token": tk["token"], "symbol": tk.get("symbol"),
                          "interval": e.get("iv") or tk.get("interval"), "strategy": strategy_of(e),
                          "at": int(t), "entry_price": e.get("price"),
                          "stake": round(stake, 2)}
@@ -256,7 +274,12 @@ def replay(tokens: list[dict], capital: float = DEFAULT_CAPITAL, share: float = 
             if not _ok(ret):
                 ep, xp = p.get("entry_price"), e.get("price")
                 ret = xp / ep - 1 if _ok(ep) and _ok(xp) and ep > 0 else 0.0
-            back = p["stake"] * (1 + ret)
+            depth = slippage.depth_of(tk.get("liq"))
+            gross = p["stake"] * (1 + ret)
+            # The buy filled worse by its slippage, the sell gets less by its own.
+            back = gross * (1 - (p.get("slip_in") or 0) / 100) * (1 - (slippage.impact_pct(gross, depth) or 0) / 100)
+            slip_cost += gross - back
+            ret = back / p["stake"] - 1
             cash += back
             del held[key]
             closed.append({**p, "exit_at": int(t), "exit_price": e.get("price"), "ret": round(ret, 4),
@@ -289,5 +312,7 @@ def replay(tokens: list[dict], capital: float = DEFAULT_CAPITAL, share: float = 
             "cash": round(cash, 2), "ret": round(final / capital - 1, 4) if capital else None,
             "max_dd": round(max_dd, 4), "trades": len(closed), "wins": wins,
             "win_rate": round(wins / len(closed), 4) if closed else None, "skipped": skipped,
+            "capped": capped, "slippage_usd": round(slip_cost, 2),
+            "max_slippage_pct": max_slip_pct if max_slip_pct is not None else slippage.max_pct(),
             "tokens": len(tokens), "from": int(flow[0][0]) if flow else None,
             "open": open_rows, "closed": closed, "curve": curve}

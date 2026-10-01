@@ -298,4 +298,33 @@ def stats() -> dict:
     return out
 
 
+def _latest(t: dict) -> dict:
+    """The last checkpoint reached: days, return, and the return over the
+    chain's own coin in the same window."""
+    done = [d for d in CHECKPOINTS_D if str(d) in (t.get("returns") or {})]
+    if not done:
+        return {"days": None, "ret": None, "excess": None}
+    d = done[-1]
+    return {"days": d, "ret": t["returns"][str(d)], "excess": excess(t, d)}
+
+
+def _row(t: dict) -> dict:
+    return {**{k: t.get(k) for k in ("chain", "token_address", "symbol", "at", "rank", "score", "decision",
+                                      "why", "hi", "lo", "first", "receipt")},
+            "now": (t.get("last") or {}).get("ret"), "checkpoint": _latest(t)}
+
+
+def record(limit: int = 30) -> dict:
+    """The Track record tab (Lorenzo, 30/09: the backtest tab "non serve
+    piu'", replaced by how the picks really went). The board's summary, its
+    latest picks, and the projects it studied or turned down that doubled
+    anyway: the misses are part of the record."""
+    cases = list(_track.values())
+    picks = sorted((t for t in cases if t.get("decision", "ranked") == "ranked"), key=lambda t: -(t.get("at") or 0))
+    missed = sorted((t for t in cases if t.get("decision") in ("studied", "rejected") and (t.get("hi") or 0) >= DOUBLED),
+                    key=lambda t: -(t.get("hi") or 0))
+    return {"stats": stats(), "picks": [_row(t) for t in picks[:limit]],
+            "missed": [_row(t) for t in missed[:10]], "polled_at": _state["polled_at"] or None}
+
+
 _load()

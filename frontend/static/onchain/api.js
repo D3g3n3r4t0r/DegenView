@@ -121,6 +121,7 @@ export const getAlerts = (kind) => request(`/api/onchain/alerts/${kind}`);
 export const getScanFeed = () => request("/api/onchain/scan-feed");
 export const getLivePrices = (keys) => request(`/api/onchain/live-prices?ids=${encodeURIComponent(keys.join(","))}`, { timeoutMs: 5000 });
 export const getAutotrader = () => request("/api/onchain/autotrader");
+export const getTrack = () => request("/api/onchain/track");
 export const getTopBacktest = () => request("/api/onchain/top/backtest", { timeoutMs: 20000 });
 export const getAgentLog = (before) => request(`/api/agent/log?limit=60${before ? `&before=${before}` : ""}`);
 export const getAgentJourney = ({ q = "", chain = "", token = "" } = {}) =>
@@ -195,6 +196,7 @@ export const getTop = (n, keys = []) =>
   request(`/api/onchain/top?n=${n}${keys?.length ? `&narrative=${encodeURIComponent(keys.join(","))}` : ""}`);
 export const getNarrativeCoverage = () => request("/api/onchain/narratives/coverage");
 export const getToken = (chain, token) => request(`/api/onchain/token?chain=${encodeURIComponent(chain)}&token=${encodeURIComponent(token)}`);
+export const getSlippage = (chain, token) => request(`/api/onchain/slippage?chain=${encodeURIComponent(chain)}&token=${encodeURIComponent(token)}`, { timeoutMs: 12000 });
 export const getAgent = () => request("/api/agent");
 export const getDeposit = () => request("/api/wallets/deposit");
 export const getWalletsTotal = () => request(`/api/wallets/total${walletQ()}`, { timeoutMs: 30000 });
