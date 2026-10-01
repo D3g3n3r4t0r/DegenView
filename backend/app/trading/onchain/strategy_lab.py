@@ -350,11 +350,12 @@ async def run_one(client: httpx.AsyncClient, e: dict, now: float) -> dict | None
             daily["signal"] = sig
         if fresh:
             await _announce({"chain": e["chain"], "token": e["token_address"], "symbol": symbol, "pair": pair,
-                             "interval": daily["interval"], **sig}, now)
+                             "interval": daily["interval"], "liq": e.get("liquidity_usd"), **sig}, now)
     if daily is not None:
         _results[key]["daily"] = daily
     try:    # the Top 50 wallet keeps every trade, even after the window slides past it
-        sim_backtest.remember(e["chain"], e["token_address"], symbol, get(e["chain"], e["token_address"]))
+        sim_backtest.remember(e["chain"], e["token_address"], symbol, get(e["chain"], e["token_address"]),
+                              liq=e.get("liquidity_usd"))
     except Exception:
         logger.exception("strategy lab: registro del portafoglio Top 50 fallito per %s", symbol)
     best = _best(bt)

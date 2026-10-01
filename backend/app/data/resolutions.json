@@ -2482,5 +2482,10 @@
     "status": "risolto",
     "at": 1790802209,
     "summary": "Causa: quando il trend follower a 8h/1d non aveva operazioni, la riga della classifica mostrava il miglior backtest a 5 minuti (il +400%), ma il grafico disegnava solo quello a 8h/1d, vuoto. Ora lista e grafico usano la stessa regola (lab-shown.js): il grafico mostra sempre le operazioni del numero in classifica e si apre sul loro timeframe. Test automatico: il numero di vendite sul grafico = operazioni in lista. 'Board: not ranked' ora dice 'Top #N, from the database'. Su MERRYMEN il trend follower a 8h/1d non ha operazioni (verificato coi dati veri: il filtro di volatilita' e' pronto solo alla 60a candela), quindi il grafico mostra il backtest a 5 minuti del +400%."
+  },
+  "seed-0243": {
+    "status": "risolto",
+    "at": 1790820498,
+    "summary": "Ogni ingresso ora ha un tetto: al massimo la size che sul pool fa l'1% di slippage (configurabile, onchain_max_slippage_pct). La stima viene dal quote del DEX dove c'e' (Jupiter su Solana, Uniswap v3 su Robinhood), altrimenti dalla profondita' del pool (BSC, Ethereum, Base). Esempio: pool con $100k di liquidita', ingresso massimo ~$505; i $3.000 avrebbero fatto ~5,7% di slippage. Il tetto vale nel portafoglio Top 50 da $10k (che ora paga anche lo slippage stimato in entrata e uscita), nel pilota Sim e nel Real (che resta bloccato come prima). Anteprima nella pagina del token (slippage sull'ingresso del portafoglio e size massima) e una riga nella notifica Telegram di ingresso. Limite: per il passato si usa la liquidita' di oggi."
   }
 }

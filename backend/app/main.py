@@ -4227,6 +4227,23 @@ async def onchain_token(chain: str, token: str, user: User = Depends(auth.get_cu
             "backtests": onchain_strategy_lab.get(chain, token)}
 
 
+@app.get("/api/onchain/slippage")
+async def onchain_slippage(chain: str, token: str, usd: float | None = None,
+                           user: User = Depends(auth.get_current_user)) -> dict:
+    """The slippage preview of an entry on this token (slippage.py): a DEX
+    quote where there is one, the pool depth otherwise, and the largest size
+    under the limit. `usd` defaults to the Top 50 wallet's next entry."""
+    from app.trading.onchain import slippage
+    _require_onchain_enabled()
+    entry = next((e for e in onchain_leaderboard.board().get("entries") or []
+                  if e.get("chain") == chain and e.get("token_address") == token), None)
+    if entry is None:
+        p = onchain_projects_db.get(chain, token)
+        entry = onchain_leaderboard.db_entry(p) if p is not None else {}
+    want = usd if usd is not None and 0 < usd <= 1e7 else _entry_usd()
+    return await slippage.preview(chain, token, want, entry.get("liquidity_usd"))
+
+
 @app.get("/api/onchain/projects")
 async def onchain_projects_view(q: str = "", status: str = "", sort: str = "score", limit: int = 50,
                                 offset: int = 0, band: bool = False, narrative: str = "",
@@ -4425,12 +4442,37 @@ def _trend_signal_text(s: dict) -> str:
     return head + "\n<i>Ricerca, non un consiglio: entra solo con cio' che puoi perdere.</i>"
 
 
+def _entry_usd() -> float:
+    """The Top 50 wallet's next entry: its share of today's equity."""
+    from app.trading.onchain import sim_backtest
+    eq = (_top_wallet_cache.get("data") or {}).get("equity") or sim_backtest.DEFAULT_CAPITAL
+    return eq * sim_backtest.DEFAULT_SHARE
+
+
+async def _entry_preview(s: dict) -> dict | None:
+    """Slippage of the next entry on this token and the largest size under
+    the limit (Lorenzo, 30/09: "un'anteprima di quanto sarebbe lo slippage").
+    The Telegram message and the simulated wallet read the same estimate."""
+    from app.trading.onchain import slippage
+    if s.get("side") != "buy" or not s.get("token"):
+        return None
+    try:
+        return await slippage.preview(s["chain"], s["token"], _entry_usd(), s.get("liq"))
+    except Exception:
+        logger.exception("slippage preview of %s failed", s.get("symbol"))
+        return None
+
+
 async def _notify_trend_signal(s: dict) -> None:
     """Lorenzo, 30/09: the site's trend follower on 8h (young tokens) or 1d
     on the ranking's projects, "segnali di piu' qualita'". Fires on the
     candle close, rare by construction, so no hourly cap."""
     from app.notify import telegram
+    from app.trading.onchain import slippage
     text = _trend_signal_text(s)
+    prev = await _entry_preview(s)
+    if prev is not None:
+        text += "\n" + slippage.text_it(prev)
     for user in auth.list_users():
         if user.telegram_chat_id and user.onchain_wallets and _telegram_allowed(user):
             _fire(telegram.send_to(user.telegram_chat_id, text))
@@ -4450,7 +4492,9 @@ async def _sim_trend_signal(s: dict) -> None:
     if s.get("side") == "buy" and not gem_ok:
         logger.info("sim trend: %s skipped (%s)", s.get("symbol"), why)
     users = {u.id: u for u in auth.list_users()}
-    for uid, row in onchain_autotrader.trend_signal(list(users), s, now, gem_ok):
+    prev = await _entry_preview(s) if gem_ok else None
+    max_usd = (prev or {}).get("max_usd")
+    for uid, row in onchain_autotrader.trend_signal(list(users), s, now, gem_ok, max_usd=max_usd):
         if row.get("ok"):
             await _notify_autotrade(users[uid], row)
 
@@ -4522,7 +4566,8 @@ async def _top_wallet() -> dict:
     new = False
     for e in _top_entries(50):
         new |= sim_backtest.remember(e["chain"], e["token_address"], e.get("symbol"),
-                                     onchain_strategy_lab.get(e["chain"], e["token_address"]), save=False)
+                                     onchain_strategy_lab.get(e["chain"], e["token_address"]), save=False,
+                                     liq=e.get("liquidity_usd"))
     if new:
         sim_backtest._save()
     tokens = sim_backtest.ledger_tokens()
