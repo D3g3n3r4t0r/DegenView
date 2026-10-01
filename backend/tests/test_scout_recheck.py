@@ -36,6 +36,7 @@ def test_parse_defaults_unknown_and_missing_statuses_to_unverified():
 def test_other_pages_guesses_docs_next_to_the_site():
     pages = sr.other_pages({"website": "https://www.hyperdex.io"}, {"https://hyperdex.io"})
     assert pages[0] == "https://docs.hyperdex.io" and "https://hyperdex.io/docs" in pages
+    assert "https://hyperdex.io/llms.txt" in pages
     assert sr.other_pages({}, set()) == []
 
 
@@ -210,3 +211,40 @@ def test_an_address_found_does_not_clear_an_audit_point():
     pts = [{"text": "No contract audit published", "from": "judge", "status": "confirmed", "note": ""}]
     out = sr.facts_win(pts, {"found": ["token contract address in the app code (a.js)"]})
     assert out[0]["status"] == "confirmed"
+
+
+def test_github_by_name_wants_the_readme_to_name_the_site():
+    routes = {
+        "https://api.github.com/search/repositories?q=pfwa&per_page=5": {"items": [
+            {"full_name": "a/pfwa", "html_url": "https://github.com/a/pfwa", "fork": False},
+            {"full_name": "b/pfwa", "html_url": "https://github.com/b/pfwa", "fork": False}]},
+        "https://api.github.com/repos/a/pfwa/readme": "nothing here",
+        "https://api.github.com/repos/b/pfwa/readme": "The contracts behind pfwa.fun",
+    }
+
+    async def go():
+        async with _client(routes) as c:
+            return await sr.github_by_name({"symbol": "PFWA", "website": "https://www.pfwa.fun"}, c)
+    out = asyncio.run(go())
+    assert out == ("https://github.com/b/pfwa", "repo whose README names the site")
+
+
+def test_github_by_name_returns_none_on_a_403():
+    routes = {"https://api.github.com/search/repositories?q=pfwa&per_page=5": None}
+
+    async def go():
+        async with _client(routes) as c:
+            return await sr.github_by_name({"symbol": "PFWA", "website": "https://www.pfwa.fun"}, c)
+    assert asyncio.run(go()) is None
+
+
+def test_facts_win_refutes_missing_github_and_zero_volume():
+    pts = [{"text": "No public GitHub", "from": "judge", "status": "confirmed", "note": ""},
+           {"text": "24h volume $0", "from": "judge", "status": "confirmed", "note": ""}]
+    ev = {"found": ["GitHub found (repo whose README names the site): https://github.com/a/b",
+                    "Cross-check (GeckoTerminal): 24h volume $30,000, pools reserve $50,000"],
+          "gecko": {"volume_24h": 30000.0, "reserve_usd": 50000.0}}
+    out = sr.facts_win(pts, ev)
+    assert [p["status"] for p in out] == ["refuted", "refuted"]
+    assert out[0]["evidence"].startswith("GitHub found")
+    assert out[1]["evidence"].startswith("Cross-check (GeckoTerminal)")
