@@ -66,6 +66,29 @@ def _load() -> dict:
 
 _state = _load()
 _running: set[str] = set()   # a double tap must not pay DeepSeek twice
+_progress: dict[str, dict] = {}   # live steps of a running or just-finished re-check, by key
+
+
+def progress(chain: str, token: str) -> dict | None:
+    """{running, started, steps: [{label, detail, state: done|run|fail}]}"""
+    return _progress.get(_key(chain, token))
+
+
+def _tracker(key: str, now: float):
+    pr = {"running": True, "started": now, "steps": []}
+    _progress[key] = pr
+
+    def note(label: str | None, detail: str = "") -> None:
+        steps = pr["steps"]
+        if label is None:
+            if steps:
+                steps[-1]["detail"] = detail[:140]
+            return
+        for st in steps:
+            if st["state"] == "run":
+                st["state"] = "done"
+        steps.append({"label": label, "detail": detail[:140], "state": "run", "at": time.time()})
+    return pr, note
 
 
 def _save() -> None:
@@ -80,6 +103,7 @@ def reset_for_tests() -> None:
     _state["results"] = {}
     _state["calls"] = {}
     _state["sweep"] = {}
+    _progress.clear()
 
 
 def _key(chain: str, token: str) -> str:
@@ -256,9 +280,22 @@ async def run(chain: str, token: str, client, now: float | None = None, ask=None
     if limited and _state["calls"].get(_day(now or time.time()), 0) + len(_running) >= DAILY_MAX:
         raise TooSoon(max(60, wait_s(chain, token, now)))
     _running.add(key)
+    pr, note = _tracker(key, now or time.time())
+    tok = scout_recheck.PROGRESS.set(note)
     try:
         return await _run(chain, token, client, now, ask, limited)
+    except Exception as exc:
+        if pr["steps"]:
+            pr["steps"][-1]["state"] = "fail"
+        pr["error"] = str(exc)[:140] if not isinstance(exc, TooSoon) else "too soon"
+        raise
     finally:
+        for st in pr["steps"]:
+            if st["state"] == "run":
+                st["state"] = "done"
+        pr["running"] = False
+        pr["ended"] = time.time()
+        scout_recheck.PROGRESS.reset(tok)
         _running.discard(key)
 
 
@@ -273,6 +310,7 @@ async def _run(chain: str, token: str, client, now: float | None = None, ask=Non
         raise RuntimeError("DeepSeek not configured")
 
     key = _key(chain, token)
+    scout_recheck.step("Loading the project and its last review")
     entry = leaderboard._entries.get(key)
     p = projects_db.get(chain, token)
     if entry is None and p is None:
@@ -286,6 +324,8 @@ async def _run(chain: str, token: str, client, now: float | None = None, ask=Non
             copy["judge"] = j
     item = projects_db.as_item(p) if p is not None else copy
 
+    if not scout_recheck.red_points(copy):
+        scout_recheck.step("No red points to search again")
     try:
         rc = await scout_recheck.recheck(copy, item, client)
     except Exception as exc:
@@ -301,6 +341,7 @@ async def _run(chain: str, token: str, client, now: float | None = None, ask=Non
         ask = deepseek_desk.ask
 
     user, claims, facts = prompt(copy, rc)
+    scout_recheck.step("Asking DeepSeek for the verdict", f"{len(facts):,} characters of evidence")
     try:
         raw = await ask([{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}],
                         kind="research", max_tokens=2000, json_mode=True, purpose="deep_recheck", subject=key)
@@ -312,6 +353,10 @@ async def _run(chain: str, token: str, client, now: float | None = None, ask=Non
         _state["calls"][day] = _state["calls"].get(day, 0) + 1
         _save()
     parsed = _parse(raw, facts)
+    scout_recheck.step("Checking every quote against the evidence",
+                       f"{len(parsed['strengths'])} strengths and {len(parsed['problems'])} problems kept")
+    scout_recheck.step("Verdict: " + ("unverified, nothing changes" if parsed["unsupported"]
+                                      else "kept" if parsed["keep"] else "dropped"), parsed["reason"])
 
     old = copy.get("review")
     result = {**parsed,
