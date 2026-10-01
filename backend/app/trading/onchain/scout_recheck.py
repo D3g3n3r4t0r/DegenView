@@ -367,4 +367,5 @@ async def recheck(entry: dict, item: dict, client: httpx.AsyncClient, ask=None) 
     return {"confirmed": [p for p in judged if p["status"] == "confirmed"],
             "unverified": [p for p in judged if p["status"] == "unverified"],
             "refuted": [p for p in judged if p["status"] == "refuted"],
-            "found": ev["found"]}
+            "found": ev["found"],
+            "evidence": evidence_text(entry, item, ev)[:6000]}

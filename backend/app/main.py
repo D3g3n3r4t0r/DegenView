@@ -118,6 +118,7 @@ from app.trading.onchain import strategy_lab as onchain_strategy_lab
 from app.trading.onchain import candle_archive as onchain_candle_archive
 from app.trading.onchain import ladder_watch as onchain_ladder_watch
 from app.trading.onchain import autotrader as onchain_autotrader
+from app.trading.onchain import deep_recheck as onchain_deep_recheck
 from app.trading.onchain import live_prices as onchain_live_prices
 from app.trading.onchain import wealth as onchain_wealth
 from app import profiles
@@ -4238,7 +4239,25 @@ async def onchain_token(chain: str, token: str, user: User = Depends(auth.get_cu
             entry["code"] = {k: c.get(k) for k in ("complexity", "innovation", "fork_of", "summary", "strengths",
                                                    "concerns")} if c else None
     return {"entry": entry, "alerts": onchain_alert_track.for_token(chain, token),
-            "backtests": onchain_strategy_lab.get(chain, token)}
+            "backtests": onchain_strategy_lab.get(chain, token),
+            "deep": onchain_deep_recheck.get(chain, token),
+            "deep_wait_s": onchain_deep_recheck.wait_s(chain, token)}
+
+
+@app.post("/api/onchain/token/recheck")
+async def onchain_token_recheck(chain: str, token: str, user: User = Depends(auth.get_current_user)) -> dict:
+    """A dedicated, in-depth DeepSeek re-check of one token (Lorenzo, 01/10)."""
+    _require_onchain_enabled()
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        try:
+            result = await onchain_deep_recheck.run(chain, token, client)
+        except onchain_deep_recheck.TooSoon as exc:
+            raise HTTPException(status_code=429, detail={"wait_s": exc.wait_s})
+        except LookupError:
+            raise HTTPException(status_code=404, detail="token not found")
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc))
+    return {"deep": result}
 
 
 @app.get("/api/onchain/slippage")
