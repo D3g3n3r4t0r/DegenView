@@ -23,7 +23,6 @@ import { mountStrategies } from "@onchain/strategies.js";
 import { mountPortfolio } from "@onchain/portfolio.js";
 import { openSend } from "@onchain/send.js";
 import { mountPilot, refreshPilot } from "@onchain/pilot.js";
-import { mountRadar } from "@onchain/radar.js";
 import { refreshHoldings } from "@onchain/holdings.js";
 import { mountLeaderboard } from "@onchain/leaderboard.js";
 import { mountProjects } from "@onchain/projects.js";
@@ -36,6 +35,8 @@ import { loadLinked } from "@onchain/userswap.js";
 import { mountMemes } from "@onchain/memes.js";
 import { mountAgent, mountAgentView } from "@onchain/agent.js";
 import { mountTop } from "@onchain/top.js";
+import { mountSignals } from "@onchain/signals.js";
+import { mountTrack } from "@onchain/track.js";
 import { deskView, openFirst, openFromHash } from "@onchain/detail.js";
 
 // Sulla pagina a se' (onchain-app.html) la radice e' il documento intero.
@@ -534,7 +535,6 @@ function setView(name) {
     view.shell.dataset.dir = VIEWS.indexOf(name) > VIEWS.indexOf(from) ? "fwd" : "back";
     document.startViewTransition(paint);
   } else paint();
-  if (name === "meme") refreshPilot();
   if (name === "profile") refreshProfile();
   if (name === "wallet" && !view.bottomPanel.hidden) mountBottomTab(currentBottomTab);
   paintHoldings();
@@ -663,7 +663,6 @@ document.addEventListener("lae:go", (event) => setView(event.detail));
 
 mountPilot({ toast, onChange: refreshSniperCard });
 mountAgentView();
-mountRadar({ toast });
 mountLeaderboard();
 mountProjects();
 mountAlerts();
@@ -683,6 +682,11 @@ phantom.takeAnswer().then(async (ans) => {
 // Picks (memes.js) retired: Lorenzo wants no meme coins promoted; Top replaces it.
 mountAgent();
 mountTop();
+// Lorenzo, 30/09: the meme screens and the backtest hall of fame are gone.
+// The "meme" view now holds Signals, the "top" view the Track record (the
+// view names stay: the home page links, the splash and the desk use them).
+mountSignals();
+mountTrack();
 // Desktop: the start view opens its first token once the lists are in.
 setTimeout(openFirst, 2500);
 

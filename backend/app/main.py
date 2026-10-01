@@ -107,6 +107,7 @@ from app.trading.onchain import jito as onchain_jito
 from app.trading.onchain import keys as onchain_keys
 from app.trading.onchain import legit as onchain_legit
 from app.trading.onchain import consistency as onchain_consistency_audit
+from app.trading.onchain import gem_track as onchain_gem_track
 from app.trading.onchain import ledger as onchain_ledger
 from app.trading.onchain import outcomes as onchain_outcomes
 from app.trading.onchain import narratives as onchain_narratives
@@ -4089,6 +4090,14 @@ async def onchain_leaderboard_view(user: User = Depends(auth.get_current_user)) 
     _require_onchain_enabled()
     board = onchain_leaderboard.board()
     return {**board, "entries": onchain_outcomes.without_shamed(board.get("entries") or [])}
+
+
+@app.get("/api/onchain/track")
+async def onchain_track(user: User = Depends(auth.get_current_user)) -> dict:
+    """Track record: how the Gem Finder's picks went after 1/3/7/30/90 days,
+    against the chain's own coin, and the misses. See gem_track.record()."""
+    _require_onchain_enabled()
+    return onchain_gem_track.record()
 
 
 @app.get("/api/onchain/consistency")
