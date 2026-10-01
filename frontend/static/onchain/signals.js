@@ -3,11 +3,10 @@
  *
  * Lorenzo, 30/09: the meme screens ("fired last 48h", "about to fire") are
  * gone, "non mi serve piu' [...] e' tutta roba legata alle meme coin". This
- * tab keeps the idea on the gems: the 8h/1d trend follower's latest buy or
- * sell on each Top 50 project, what it holds now, what waits for an entry.
- * How it went lives in the simulated account, not here. Same data as the
- * Top list (/api/onchain/top, strategy_lab's `daily`), so a row here and
- * the arrows on its chart are the same trades.
+ * tab keeps the idea on the gems: the simulated Top 50 wallet's latest buys
+ * and sells, what it holds now, and the Top 50 projects waiting for an
+ * entry. Same trades as the wallet (/api/onchain/top/backtest), so the two
+ * screens always agree; how it went lives in the wallet, not here.
  */
 import * as api from "@onchain/api.js";
 import { register } from "@onchain/detail.js";
@@ -22,58 +21,68 @@ const WAIT_SHOWN = 5;
 
 let root = null;
 let entries = [];
+let wallet = null;     // the simulated Top 50 wallet: its open and closed trades
 let loaded = false;
 let waitAll = false;
 
 const pct = (v) => { const r = Math.round(v ?? 0); return `${r > 0 ? "+" : ""}${r}%`; };
-const tf = (d) => (d?.interval ?? "1d").toUpperCase();
 
-function row(e, sub, pill, sign) {
-  const id = `gem:${e.chain}:${e.token_address}`;
-  register(id, { kind: "gem", symbol: e.symbol, name: e.name, chain: e.chain, token: e.token_address, pair: e.pair_address,
+// The Top row of a token, when it is still in the Top 50: logo, cap, score.
+const topOf = (chain, token) => entries.find((e) => e.chain === chain && e.token_address === token);
+
+function row(chain, token, symbol, sub, pill, sign) {
+  const e = topOf(chain, token) ?? { chain, token_address: token, symbol };
+  const id = `gem:${chain}:${token}`;
+  register(id, { kind: "gem", symbol: e.symbol ?? symbol, name: e.name, chain, token, pair: e.pair_address,
     pairUrl: e.pair_url, image: e.image, cap: e.market_cap, change: e.change_24h != null ? e.change_24h / 100 : null,
-    ageTs: e.launched_at, context: `Score ${Math.round(e.score ?? 0)} · trend follower ${tf(e.backtests?.daily)}` });
-  return tokenRow({ id, symbol: e.symbol, name: e.name || e.symbol, chain: e.chain, token: e.token_address, image: e.image,
+    ageTs: e.launched_at });
+  return tokenRow({ id, symbol: e.symbol ?? symbol, name: e.name || e.symbol || symbol, chain, token, image: e.image,
     cap: e.market_cap, change: e.change_24h != null ? e.change_24h / 100 : null, score: e.score, sub, pill, sign });
 }
+
+const iv = (p) => String(p.interval ?? "").toUpperCase();
 
 function paint() {
   if (!root) return;
   const now = Date.now() / 1000;
-  const live = entries.filter((e) => e.backtests?.daily && !isHidden(e.chain, e.token_address));
-  const sig = (e) => e.backtests.daily.signal;
-  const recent = live.filter((e) => sig(e)?.t && now - sig(e).t <= RECENT_S).sort((a, b) => sig(b).t - sig(a).t);
-  const shown = new Set(recent);
-  const holding = live.filter((e) => e.backtests.daily.in_position && !shown.has(e));
-  const waiting = live.filter((e) => !e.backtests.daily.in_position && !shown.has(e));
-  const nIn = live.filter((e) => e.backtests.daily.in_position).length;
-  const n48 = recent.filter((e) => now - sig(e).t <= FRESH_S).length;
+  const vis = (p) => !isHidden(p.chain, p.token);
+  // Lorenzo, 01/10: "abbiamo 14 posizioni aperte nel simulato ma qui e'
+  // indicato HOLD su due". The tab reads the simulated wallet's own trades
+  // (/api/onchain/top/backtest), so its positions are the wallet's: every
+  // timeframe and strategy, and positions kept after a token left the Top.
+  const open = (wallet?.open ?? []).filter(vis);
+  const closed = (wallet?.closed ?? []).filter(vis);
+  const events = [
+    ...open.map((p) => ({ p, side: "buy", t: p.at })),
+    ...closed.map((p) => ({ p, side: "buy", t: p.at })),
+    ...closed.map((p) => ({ p, side: "sell", t: p.exit_at })),
+  ].filter((x) => x.t && now - x.t <= RECENT_S).sort((x, y) => y.t - x.t);
+  const held = new Set(open.map((p) => `${p.chain}:${p.token}`));
+  const waiting = entries.filter((e) => !held.has(`${e.chain}:${e.token_address}`) && !isHidden(e.chain, e.token_address));
+  const n48 = events.filter((x) => now - x.t <= FRESH_S).length;
 
-  const recentRows = recent.map((e) => {
-    const s = sig(e);
-    const buy = s.side === "buy";
-    const [ago, fresh] = age(s.t);
+  const recentRows = events.map(({ p, side, t }) => {
+    const buy = side === "buy";
+    const [ago, fresh] = age(t);
     const pill = `<em class="sig-pill" data-side="${buy ? "buy" : "sell"}"${fresh ? " data-fresh" : ""}>${buy ? "BUY" : "SELL"}</em>`;
-    const sub = `${tf(e.backtests.daily)} · ${ago} ago${!buy && s.ret != null ? ` · trade ${pct(s.ret * 100)}` : ""}`;
-    return row(e, escapeHtml(sub), pill, buy ? "up" : "down");
+    return row(p.chain, p.token, p.symbol, escapeHtml(`${iv(p)} · ${ago} ago${!buy && p.ret != null ? ` · trade ${pct(p.ret * 100)}` : ""}`),
+      pill, buy ? "up" : "down");
   }).join("");
-  const holdRows = holding.map((e) => {
-    const s = sig(e);
-    return row(e, escapeHtml(`${tf(e.backtests.daily)}${s?.t ? ` · since ${age(s.t)[0]}` : ""}`),
-      `<em class="sig-pill" data-side="hold">HOLD</em>`);
-  }).join("");
+  const holdRows = [...open].sort((x, y) => (y.at ?? 0) - (x.at ?? 0)).map((p) => row(p.chain, p.token, p.symbol,
+    escapeHtml(`${iv(p)} · since ${age(p.at)[0]}${p.ret != null ? ` · ${pct(p.ret * 100)}` : ""}`),
+    `<em class="sig-pill" data-side="hold">HOLD</em>`, p.ret == null ? null : p.ret >= 0 ? "up" : "down")).join("");
   const waitList = waitAll ? waiting : waiting.slice(0, WAIT_SHOWN);
-  const waitRows = waitList.map((e) => row(e, escapeHtml(`${tf(e.backtests.daily)} · waiting for the trend`),
+  const waitRows = waitList.map((e) => row(e.chain, e.token_address, e.symbol, "waiting for an entry",
     `<em class="sig-pill" data-side="flat">FLAT</em>`)).join("");
 
   delete root.dataset.loading;
   withEntrance(root.querySelector("[data-signals-body]"), () => {
     root.querySelector("[data-signals-body]").innerHTML = !loaded ? ""
-      : !live.length ? `<p class="muted pad">Backtests are running on the Top 50: signals show up here as they come.</p>`
+      : !wallet ? `<p class="muted pad">Replaying the simulated wallet: signals show up here in a moment.</p>`
       : `<dl class="sig-stats">
           <div><dt>Signals</dt><dd>${n48}</dd><small>last 48h</small></div>
-          <div data-v="in"><dt>In position</dt><dd>${nIn}</dd><small>of ${live.length}</small></div>
-          <div><dt>Flat</dt><dd>${live.length - nIn}</dd><small>waiting</small></div>
+          <div data-v="in"><dt>In position</dt><dd>${open.length}</dd><small>in the wallet</small></div>
+          <div><dt>Flat</dt><dd>${waiting.length}</dd><small>in the Top 50</small></div>
         </dl>`
         + `<h4 class="feed-sec">Latest signals</h4>`
         + (recentRows ? `<ol class="memes-list">${recentRows}</ol>` : `<p class="muted pad">No buy or sell in the last 7 days.</p>`)
@@ -84,12 +93,11 @@ function paint() {
 }
 
 async function load() {
-  try {
-    const top = await api.getTop(50);
-    entries = top?.entries ?? [];
-    loaded = true;
-    paint();
-  } catch { /* keep what is on screen */ }
+  const [top, w] = await Promise.all([api.getTop(50).catch(() => null), api.getTopBacktest().catch(() => null)]);
+  if (top) entries = top.entries ?? [];
+  if (w) wallet = w;
+  loaded = true;
+  paint();
 }
 
 export function mountSignals() {

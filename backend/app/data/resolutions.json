@@ -2485,8 +2485,8 @@
   },
   "seed-0243": {
     "status": "risolto",
-    "at": 1790820027,
-    "summary": "La tab Memes ora e' Signals: per ogni gemma della Top 50 l'ultimo buy/sell del trend follower 8h/1d (in alto quelli degli ultimi 7 giorni), cosa tiene in posizione e cosa aspetta un ingresso; lo scanner manuale resta in cima. La tab Strategies ora e' Record: come sono andate davvero le gemme scelte dopo 1/3/7/30/90 giorni contro la moneta della chain, il confronto scelte/studiate/scartate e le 'mancate' (scartate che hanno raddoppiato). Tolti 'Fired last 48h', 'About to fire', live scanner meme, pilota meme e classifica dei backtest; i rendimenti restano nel conto simulato."
+    "at": 1790833341,
+    "summary": "La tab Memes ora e' Signals: per ogni gemma della Top 50 l'ultimo buy/sell del trend follower 8h/1d (in alto quelli degli ultimi 7 giorni), cosa tiene in posizione e cosa aspetta un ingresso; lo scanner manuale resta in cima. La tab Strategies ora e' Record: come sono andate davvero le gemme scelte dopo 1/3/7/30/90 giorni contro la moneta della chain, il confronto scelte/studiate/scartate e le 'mancate' (scartate che hanno raddoppiato). Tolti 'Fired last 48h', 'About to fire', live scanner meme, pilota meme e classifica dei backtest; i rendimenti restano nel conto simulato. 01/10, Lorenzo: 'abbiamo 14 posizioni aperte nel simulato ma qui e' indicato HOLD su due'. Signals contava solo il trend follower 8h/1d dei token ancora in Top; ora legge le operazioni del portafoglio simulato stesso: stesse posizioni aperte (ogni timeframe e strategia, anche token usciti dalla Top) e gli ultimi buy/sell sono i suoi."
   },
   "seed-0244": {
     "status": "risolto",
