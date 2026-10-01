@@ -15,6 +15,7 @@ prova di una regola nuova) legge da disco invece di aspettare.
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import logging
 import sqlite3
 import threading
@@ -29,6 +30,9 @@ from app.trading.onchain.storage import data_file
 logger = logging.getLogger(__name__)
 
 _DB_FILE = data_file("candle_archive.sqlite")
+# Set by the daily ladder check (ladder_watch): answer from disk only, no
+# GeckoTerminal call and no write, without touching the lab running beside it.
+offline: contextvars.ContextVar[bool] = contextvars.ContextVar("candle_archive_offline", default=False)
 _lock = threading.Lock()
 _conn: sqlite3.Connection | None = None
 _conn_path = None
@@ -110,6 +114,8 @@ async def candles(client: httpx.AsyncClient, net: str, pair: str, tf: str, agg: 
     than fresh_s. [] = the pool is unknown there; None = no answer and
     nothing archived (try again later)."""
     k = key(net, pair, tf, agg, token)
+    if offline.get():
+        return await asyncio.to_thread(get, k)
     at = await asyncio.to_thread(fetched_at, k)
     if at is not None and now - at < fresh_s(tf, agg):
         return await asyncio.to_thread(get, k)
