@@ -2318,10 +2318,46 @@
   .projects-tools input { flex: 1 1 240px; min-inline-size: 0; block-size: 38px; padding: 0 14px; border-radius: 12px;
     border: 1px solid var(--line); background: var(--panel); color: var(--ink); font: inherit; font-size: 16px;
     &:focus-visible { outline: 2px solid color-mix(in oklch, var(--live) 60%, transparent); outline-offset: 1px; } }
-  .projects-filter { display: flex; gap: 4px; flex-wrap: wrap;
-    & button { block-size: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: none;
-      color: var(--ink-dim); font: 500 12.5px var(--sans); cursor: pointer; }
-    & button[aria-pressed="true"] { color: var(--bg); background: var(--live); border-color: var(--live); } }
+  /* Filters: one button, the choices in a sheet (projects.js openFilters). */
+  .projects-tools input { flex-basis: 0; }
+  .pj-filter-btn { flex: none; display: inline-flex; align-items: center; gap: 7px; block-size: 38px; padding: 0 14px;
+    border-radius: 12px; border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+    font: 500 13px var(--sans); cursor: pointer; transition: opacity .15s;
+    & svg { inline-size: 14px; block-size: 14px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
+    &:active { opacity: .7; }
+    &.is-on { border-color: var(--live); }
+    & .pj-filter-n:empty { display: none; }
+    & .pj-filter-n { min-inline-size: 18px; block-size: 18px; padding: 0 5px; border-radius: 9px; background: var(--live);
+      color: var(--bg); font: 600 11px/18px var(--mono); text-align: center; } }
+  .pj-active { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 var(--s2);
+    & button { display: inline-flex; align-items: center; gap: 6px; block-size: 28px; padding: 0 10px; border-radius: 999px;
+      border: 1px solid color-mix(in oklch, var(--live) 50%, transparent); background: color-mix(in oklch, var(--live) 14%, transparent);
+      color: var(--ink); font: 500 12px var(--sans); cursor: pointer; animation: pj-in .18s ease-out both; }
+    & button span { color: var(--ink-faint); font-size: 10px; }
+    & .pj-clear-all { border-color: transparent; background: none; color: var(--ink-dim); } }
+  @keyframes pj-in { from { opacity: 0; transform: scale(.92); } }
+  .pj-tag { display: inline-block; margin-inline-start: 4px; padding: 0 5px; border-radius: 5px; vertical-align: 1px;
+    border: 1px solid color-mix(in oklch, var(--live) 55%, transparent); color: var(--live);
+    font: 600 10px/16px var(--mono); font-style: normal; letter-spacing: .02em; }
+  .pjf { display: grid; gap: 18px; padding-block-end: 4px;
+    & h4 { margin: 0 0 8px; font: 600 11px var(--sans); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-faint); }
+    & h4 small { font-weight: 400; text-transform: none; letter-spacing: 0; }
+    & .pjf-opts { display: flex; flex-wrap: wrap; gap: 6px; }
+    & .pjf-opts button { display: inline-flex; align-items: center; gap: 6px; min-block-size: 34px; padding: 0 12px;
+      border-radius: 999px; border: 1px solid var(--line); background: none; color: var(--ink-dim);
+      font: 500 13px var(--sans); cursor: pointer; transition: transform .12s, opacity .15s; }
+    & .pjf-opts button:active { transform: scale(.95); }
+    & .pjf-opts button small { font: 500 11px var(--mono); color: var(--ink-faint); }
+    & .pjf-opts button[aria-pressed="true"] { color: var(--bg); background: var(--live); border-color: var(--live); }
+    & .pjf-opts button[aria-pressed="true"] small { color: inherit; opacity: .75; }
+    & footer { position: sticky; inset-block-end: 0; display: flex; gap: 8px; padding-block: 12px 0;
+      background: var(--panel); }
+    /* covers the sheet's bottom padding, where the chips would scroll into view */
+    & footer::after { content: ""; position: absolute; inset: 100% 0 auto; block-size: 48px; background: var(--panel); }
+    & footer button { flex: 1; block-size: 44px; border-radius: 12px; font: 600 14px var(--sans); cursor: pointer; }
+    & .pjf-reset { border: 1px solid var(--line); background: none; color: var(--ink-dim); }
+    & .pjf-done { flex: 2; border: 0; background: var(--live); color: var(--bg); } }
+  @media (prefers-reduced-motion: reduce) { .pj-active button { animation: none; } .pjf .pjf-opts button { transition: none; } }
   .projects-list { list-style: none; margin: 0; padding: 0;
     & li { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: var(--s3); align-items: start;
       padding: var(--s3) var(--s1); border-block-end: 1px solid var(--line); }
@@ -2729,15 +2765,9 @@
         <p class="projects-funnel" data-projects-funnel></p>
         <div class="projects-tools">
           <input type="search" data-projects-q placeholder="Search name, ticker, address or site" aria-label="Search the project database" autocomplete="off" />
-          <div class="projects-filter" role="group" aria-label="Filter by verdict">
-            <button type="button" data-status="" aria-pressed="true">All</button>
-            <button type="button" data-status="ranked" aria-pressed="false">Ranked</button>
-            <button type="button" data-status="studied" aria-pressed="false">Studied</button>
-            <button type="button" data-status="rejected" aria-pressed="false">Rejected</button>
-            <button type="button" data-status="new" aria-pressed="false">Waiting</button>
-          </div>
+          <button type="button" class="pj-filter-btn" data-projects-filter aria-haspopup="dialog"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M4.5 8h7M7 12h2"/></svg>Filters<span class="pj-filter-n" data-projects-filter-n></span></button>
         </div>
-        <div class="projects-narr" data-projects-narr role="group" aria-label="Filter by narrative"></div>
+        <div class="pj-active" data-projects-active hidden></div>
         <ol class="projects-list" data-projects-list></ol>
         <button type="button" class="rj-more" data-projects-more hidden>Show more</button>
       </section>

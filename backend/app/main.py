@@ -4326,11 +4326,13 @@ async def onchain_slippage(chain: str, token: str, usd: float | None = None,
 @app.get("/api/onchain/projects")
 async def onchain_projects_view(q: str = "", status: str = "", sort: str = "score", limit: int = 50,
                                 offset: int = 0, band: bool = False, narrative: str = "",
+                                chain: str = "", layer: str = "",
                                 user: User = Depends(auth.get_current_user)) -> dict:
     """Il database dei progetti del Gem Finder: tutto quello che e' stato
     visto, con il verdetto e il perche'. Vedi app/trading/onchain/projects_db.py."""
     _require_onchain_enabled()
-    return {**onchain_projects_db.search(q, status, sort, limit, offset, band, narrative),
+    return {**onchain_projects_db.search(q, status, sort, limit, offset, band, narrative,
+                                                chain, layer),
             "stats": onchain_projects_db.stats()}
 
 
