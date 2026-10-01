@@ -130,7 +130,9 @@ class Settings(BaseSettings):
     onchain_max_usd_per_day: float = 100.0
     # Tetto della size per ingresso (Lorenzo, 30/09): nessun ingresso oltre
     # lo slippage stimato sul pool (slippage.py). Sim, portafoglio Top 50 e Real.
-    onchain_max_slippage_pct: float = 1.0
+    # 0.5 dal 01/10: negli scenari sul server (scripts/slippage_scenarios.py)
+    # stesso saldo dell'1% ($11.665) con drawdown 7.7% invece di 12.5%.
+    onchain_max_slippage_pct: float = 0.5
     onchain_max_token_concentration_pct: float = 15.0  # % del capitale gestito in un solo token
 
     # Piano MEV: instradare gli ordini Solana via Jito bundle invece
