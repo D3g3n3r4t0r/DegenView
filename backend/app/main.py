@@ -107,6 +107,7 @@ from app.trading.onchain import jito as onchain_jito
 from app.trading.onchain import keys as onchain_keys
 from app.trading.onchain import legit as onchain_legit
 from app.trading.onchain import consistency as onchain_consistency_audit
+from app.trading.onchain import gem_track as onchain_gem_track
 from app.trading.onchain import ledger as onchain_ledger
 from app.trading.onchain import outcomes as onchain_outcomes
 from app.trading.onchain import narratives as onchain_narratives
@@ -4091,6 +4092,14 @@ async def onchain_leaderboard_view(user: User = Depends(auth.get_current_user)) 
     return {**board, "entries": onchain_outcomes.without_shamed(board.get("entries") or [])}
 
 
+@app.get("/api/onchain/track")
+async def onchain_track(user: User = Depends(auth.get_current_user)) -> dict:
+    """Track record: how the Gem Finder's picks went after 1/3/7/30/90 days,
+    against the chain's own coin, and the misses. See gem_track.record()."""
+    _require_onchain_enabled()
+    return onchain_gem_track.record()
+
+
 @app.get("/api/onchain/consistency")
 async def onchain_consistency(user: User = Depends(auth.get_current_user)) -> dict:
     """DeepSeek's last audit of the Top against the database (consistency.py):
@@ -4132,11 +4141,14 @@ def _lab_summary(bt: dict | None) -> dict | None:
     if not bt:
         return None
     best = onchain_strategy_lab.drawn_row(bt)
-    # The 8h/1d trend follower leads the list; with no trade yet there, the
-    # 5-minute best stays, so every row keeps a real result.
+    # The row shows the higher return between the 8h/1d trend follower and
+    # the best 5-minute listed strategy (trend followers and RSI+BB):
+    # strategy_lab.shown, mirrored by lab-shown.js.
     daily = bt.get("daily")
     drow = onchain_strategy_lab.drawn_row(daily) if daily else None
-    return {"best": {k: best.get(k) for k in ("label", "return_pct", "trades", "win_rate")} if best else None,
+    got = onchain_strategy_lab.shown(bt)
+    return {"shown": ("fast" if got[0] == "5m" else "daily") if got else None,
+            "best": {k: best.get(k) for k in ("label", "return_pct", "trades", "win_rate")} if best else None,
             "hold_pct": bt.get("hold_pct"), "bars": bt.get("bars"),
             "daily": {"interval": daily.get("interval"), "return_pct": drow.get("return_pct"),
                       "trades": drow.get("trades"), "win_rate": drow.get("win_rate"),
@@ -4732,7 +4744,8 @@ async def _sim_snapshot(user: User) -> dict:
 
 
 def _strategy_why(s: str | None) -> str:
-    return "strategy not recorded" if not s or s == "unknown" else s
+    # No strategy names on screen (Lorenzo: only returns); the label stays in "strategy".
+    return "strategy not recorded" if not s or s == "unknown" else "strategy"
 
 
 def _top_curve(w: dict) -> list[list[float]]:

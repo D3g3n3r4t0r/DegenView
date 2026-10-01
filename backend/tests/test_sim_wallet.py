@@ -36,7 +36,8 @@ def _snap(uid):
 
 
 def test_every_account_sees_the_same_top50_wallet(monkeypatch):
-    sb.remember("solana", "A", "AAA", {"best": {"label": "Trend EMA", "events": [
+    sb.remember("solana", "A", "AAA", {"rows": [{"label": "Trend EMA", "trades": 1, "return_pct": 100.0}],
+                                       "best": {"label": "Trend EMA", "events": [
         {"t": 100, "side": "buy", "price": 1.0}, {"t": 200, "side": "sell", "price": 2.0, "ret": 1.0},
         {"t": 300, "side": "buy", "price": 2.0}]}})
 
