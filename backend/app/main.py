@@ -4286,7 +4286,8 @@ async def onchain_token(chain: str, token: str, user: User = Depends(auth.get_cu
     return {"entry": entry, "alerts": onchain_alert_track.for_token(chain, token),
             "backtests": onchain_strategy_lab.get(chain, token),
             "deep": onchain_deep_recheck.get(chain, token),
-            "deep_wait_s": onchain_deep_recheck.wait_s(chain, token, limited=guest_links.is_guest(user))}
+            "deep_wait_s": onchain_deep_recheck.wait_s(chain, token, limited=guest_links.is_guest(user)),
+            "deep_progress": onchain_deep_recheck.progress(chain, token)}
 
 
 @app.post("/api/onchain/token/recheck")
@@ -4304,6 +4305,13 @@ async def onchain_token_recheck(chain: str, token: str, user: User = Depends(aut
         except RuntimeError as exc:
             raise HTTPException(status_code=503, detail=str(exc))
     return {"deep": result}
+
+
+@app.get("/api/onchain/token/recheck/progress")
+async def onchain_token_recheck_progress(chain: str, token: str, user: User = Depends(auth.get_current_user)) -> dict:
+    """The live steps of a deep re-check (manual or weekly) on this token."""
+    _require_onchain_enabled()
+    return {"progress": onchain_deep_recheck.progress(chain, token)}
 
 
 @app.get("/api/onchain/slippage")

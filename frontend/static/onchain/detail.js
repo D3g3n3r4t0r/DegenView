@@ -298,6 +298,13 @@ async function enrich(id, e) {
   }
   if (r.deep) e.deep = r.deep;
   if (r.deep_wait_s != null) e.deepWait = r.deep_wait_s;
+  // A re-check still running (the weekly round, or one started before the
+  // panel was closed): show its steps and follow it to the end.
+  if (r.deep_progress?.running && !e.deepBusy) {
+    e.deepBusy = true;
+    e.deepSteps = r.deep_progress.steps;
+    followRecheck(e, current);
+  }
   if (r.entry) {
     const lb = await import("@onchain/leaderboard.js");
     if (e.deep) e.why = whyOf(lb, r.entry, e);
@@ -357,9 +364,64 @@ function deepBlock(e) {
     disabled = " disabled";
     label = wait >= 3600 ? `Re-check in ${Math.round(wait / 3600)}h` : `Re-check in ${Math.max(1, Math.round(wait / 60))}m`;
   }
+  const steps = e.deepBusy && e.deepSteps?.length ? `<ol class="ds-steps">${e.deepSteps.map((x) => stepLi(x)).join("")}</ol>` : "";
   return `<div class="ds-deep"><h5>Deep re-check${d ? ` <b>${escapeHtml(d.verdict ?? "")} · ${d.score ?? "—"}/100</b>` : ""}</h5>
-    ${body}
+    ${body}${steps}
     <button class="ds-recheck" type="button" data-deep-recheck${disabled}>${label}</button></div>`;
+}
+
+// One step of a re-check as it happens on the server (Lorenzo, 01/10: "voglio
+// vedere proprio i vari passaggi"): only steps the server really ran.
+function stepLi(x, fresh = false) {
+  const key = `${x.state}|${x.detail ?? ""}`;
+  return `<li data-state="${escapeHtml(x.state)}" data-key="${escapeHtml(key)}"${fresh ? " data-new" : ""}><i></i>`
+    + `<span>${escapeHtml(x.label)}</span>${x.detail ? `<small>${escapeHtml(x.detail)}</small>` : ""}</li>`;
+}
+
+function paintSteps(e, cur) {
+  if (current?.e !== e || !dlg?.open || tab !== "why") return;
+  const host = dlg.querySelector(".ds-deep");
+  if (!host) return;
+  let ol = host.querySelector(".ds-steps");
+  if (!ol) {
+    ol = document.createElement("ol");
+    ol.className = "ds-steps";
+    const btn = host.querySelector(".ds-recheck");
+    if (btn) btn.before(ol); else host.append(ol);
+  }
+  (e.deepSteps ?? []).forEach((x, i) => {
+    const li = ol.children[i];
+    if (!li) ol.insertAdjacentHTML("beforeend", stepLi(x, true));
+    else if (li.dataset.key !== `${x.state}|${x.detail ?? ""}`) li.outerHTML = stepLi(x);
+  });
+}
+
+const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Polls the server's steps while the re-check runs. Without our own request
+// in flight (panel reopened, weekly round) it also fetches the result.
+async function followRecheck(e, cur) {
+  if (e.deepFollow) return;
+  e.deepFollow = true;
+  try {
+    while (e.deepBusy) {
+      try {
+        const p = (await api.recheckProgress(e.chain, e.token)).progress;
+        if (p?.steps) { e.deepSteps = p.steps; paintSteps(e, cur); }
+        if (p && !p.running && !e.deepOwn) {
+          const r = await api.getToken(e.chain, e.token);
+          if (r.deep) e.deep = r.deep;
+          if (r.deep_wait_s != null) e.deepWait = r.deep_wait_s;
+          e.deepBusy = false;
+          await showRecheck(e, cur);
+          break;
+        }
+      } catch { /* the next poll tries again */ }
+      await pause(700);
+    }
+  } finally {
+    e.deepFollow = false;
+  }
 }
 
 async function deepRecheck(btn) {
@@ -367,12 +429,15 @@ async function deepRecheck(btn) {
   const e = cur?.e;
   if (!e?.dossier || btn.disabled) return;
   e.deepBusy = true;
+  e.deepOwn = true;
+  e.deepSteps = [];
   btn.disabled = true;
   btn.textContent = "Re-checking…";
+  followRecheck(e, cur);
   try {
     const r = await api.recheckToken(e.chain, e.token);
     e.deep = r.deep;
-    e.deepWait = 6 * 3600;
+    e.deepWait = 0;
   } catch (err) {
     if (err?.detail?.wait_s) e.deepWait = err.detail.wait_s;
     else {
@@ -381,11 +446,22 @@ async function deepRecheck(btn) {
       return;
     }
   } finally {
+    e.deepOwn = false;
     if (e.deep || e.deepWait) e.deepBusy = false;
   }
+  await showRecheck(e, cur);
+}
+
+async function showRecheck(e, cur) {
+  // Let the last step land on screen before the verdict replaces the list.
+  try {
+    const p = (await api.recheckProgress(e.chain, e.token)).progress;
+    if (p?.steps) { e.deepSteps = p.steps; paintSteps(e, cur); }
+  } catch { /* the result is what matters */ }
+  await pause(600);
   const lb = await import("@onchain/leaderboard.js");
   e.why = whyOf(lb, e.dossier, e);
-  if (current === cur) {
+  if (current?.e === e) {
     const body = dlg.querySelector("[data-pane-body]");
     if (dlg.open && tab === "why" && body) {
       await morph(body, whyHtml(e));

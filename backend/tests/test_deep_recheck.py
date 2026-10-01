@@ -196,3 +196,18 @@ def test_a_stalled_sweep_restarts_after_a_week():
     t0 = 1_800_000_000.0
     assert deep_recheck.next_in_sweep(["solana:a"], t0) == "solana:a"
     assert deep_recheck.next_in_sweep(["base:z"], t0 + deep_recheck.WEEK_S) == "base:z"
+
+
+def test_progress_shows_the_real_steps(monkeypatch):
+    _row("tok7")
+    monkeypatch.setattr(scout_recheck, "recheck", _fake_recheck(
+        {"confirmed": [], "unverified": [], "refuted": [], "found": [], "evidence": ""}))
+    ask = _fake_ask({"keep": True, "score": 60, "verdict": "watch", "reason": "fine",
+                     "strengths": [], "problems": []})
+    asyncio.run(deep_recheck.run("solana", "tok7", None, ask=ask, limited=False))
+    p = deep_recheck.progress("solana", "tok7")
+    labels = [s["label"] for s in p["steps"]]
+    assert p["running"] is False and all(s["state"] == "done" for s in p["steps"])
+    assert labels[0] == "Loading the project and its last review"
+    assert "Asking DeepSeek for the verdict" in labels and labels[-1] == "Verdict: kept"
+    assert scout_recheck.PROGRESS.get() is None
