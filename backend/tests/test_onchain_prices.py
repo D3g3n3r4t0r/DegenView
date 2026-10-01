@@ -7,7 +7,7 @@ import asyncio
 
 import httpx
 
-from app.trading.onchain import prices
+from app.trading.onchain import live_prices, prices
 
 _RealAsyncClient = httpx.AsyncClient
 
@@ -40,6 +40,7 @@ def test_native_price_usd_real_network_call_robinhood():
 
 def test_native_price_usd_returns_none_on_http_error(monkeypatch):
     prices._cache.clear()
+    live_prices.reset_for_tests()     # the fallback's cache: no price from an earlier test
 
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(500, text="boom")
@@ -48,8 +49,23 @@ def test_native_price_usd_returns_none_on_http_error(monkeypatch):
     assert _run(prices.native_price_usd("solana")) is None
 
 
+def test_native_price_usd_falls_back_to_live_prices_when_gecko_fails(monkeypatch):
+    prices._cache.clear()
+
+    async def gecko(network, addr):
+        return None
+
+    async def live(keys):
+        return {f"{keys[0][0]}:{keys[0][1]}": {"p": 150.0, "age": 0.0, "src": "jupiter"}}
+
+    monkeypatch.setattr(prices, "_gecko_price", gecko)
+    monkeypatch.setattr(live_prices, "prices", live)
+    assert _run(prices.native_price_usd("solana")) == 150.0
+
+
 def test_native_price_usd_returns_none_on_malformed_payload(monkeypatch):
     prices._cache.clear()
+    live_prices.reset_for_tests()
 
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json={"data": {"attributes": {}}})

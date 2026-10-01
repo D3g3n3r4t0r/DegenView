@@ -101,7 +101,7 @@ def _best_prices(pairs: list[dict], chain: str) -> dict[tuple[str, str], float]:
             k = _key(chain, p["baseToken"]["address"])
             price = float(p["priceUsd"])
             liq = float((p.get("liquidity") or {}).get("usd") or 0)
-        except (KeyError, TypeError, ValueError):
+        except (KeyError, TypeError, ValueError, AttributeError):
             continue
         if price > 0 and (k not in best or liq > best[k][1]):
             best[k] = (price, liq, p)
