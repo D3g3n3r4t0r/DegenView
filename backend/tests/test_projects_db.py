@@ -175,3 +175,17 @@ def test_full_working_set_makes_room_for_a_waiting_project(monkeypatch):
     assert "solana:New" in lb._entries and len(lb._entries) == 2
     gone = "solana:Old1" if "solana:Old1" not in lb._entries else "solana:Old2"
     assert db.get("solana", gone.split(":")[1])["status"] == "studied"
+
+
+def test_search_filters_by_chain_and_layer_type():
+    db.upsert({"chain": "solana", "token_address": "A", "symbol": "AAA"}, "t", T0)
+    for gid, sym, layer in (("kaspa", "KAS", "L1"), ("zeta", "ZETA", "L0"), ("mantle", "MNT", "L2")):
+        item = {"chain": "layer", "token_address": gid, "symbol": sym}
+        db.upsert(item, "layers", T0)
+        db.record({**item, "overall": {"score": 50, "layer": layer}}, "studied", score=50, now=T0)
+    assert [p["symbol"] for p in db.search(layer="L1")["items"]] == ["KAS"]
+    assert db.search(layer="L1")["items"][0]["overall"]["layer"] == "L1"
+    assert db.search(chain="layer")["total"] == 3
+    assert [p["symbol"] for p in db.search(chain="solana")["items"]] == ["AAA"]
+    assert db.search(layer="L9")["total"] == 4
+    assert db.stats()["by_layer"] == {"L0": 1, "L1": 1, "L2": 1}

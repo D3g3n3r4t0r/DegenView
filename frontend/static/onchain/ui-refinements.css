@@ -73,8 +73,7 @@
 /* Research database: score, identity, verdict; the whole row is a real button. */
 .projects>header h3{font:400 27px var(--serif)}
 .projects .projects-tools{gap:12px;margin:20px 0}.projects .projects-tools input{min-height:46px;border-radius:9px;background:#08140d;border-color:#31513c;font:14px var(--sans)}
-.projects .projects-filter{gap:6px}.projects .projects-filter button{min-height:40px;height:auto;block-size:auto;padding:8px 11px;font:11px var(--sans);color:var(--engn-muted)}
-.projects .projects-filter button[aria-pressed=true]{color:#c0f9d9;background:#21492f;border-color:#447657}
+.projects .projects-tools{flex-wrap:nowrap}.projects .projects-tools>input{width:auto}.projects .pj-filter-btn{min-height:46px;border-radius:9px;background:#08140d;border-color:#31513c;font:13px var(--sans)}.projects .pj-filter-btn.is-on{border-color:#447657}
 .projects .projects-list{display:grid;gap:0}
 .projects .projects-list>li{display:block;padding:0;border-bottom:1px solid #243f2c}
 .projects .pj-open{display:grid;grid-template-columns:38px minmax(0,1fr) auto;align-items:start;gap:14px;width:100%;box-sizing:border-box;padding:18px 5px;border-radius:6px;transition:background .16s}
@@ -113,7 +112,7 @@ dialog.sheet .sheet-close{min-height:44px;margin-top:22px}
  .agent-view .ag-hero{column-gap:16px;grid-template-columns:minmax(0,1fr) 44px}.agent-view .ag-hero h2{font-size:32px}
  .agent-view .ag-hero .ag-orb{scale:.8;transform-origin:right center;margin-left:-10px}.agent-view .ag-prog{grid-template-columns:1fr;gap:8px}.agent-view .ag-prog-item{padding:14px}
  .agent-view .ag-card p{font-size:12px}.agent-view .ag-now p{min-width:150px}.agent-view .ag-steps summary{min-height:44px}
- .projects .projects-tools input{font-size:16px}.projects .projects-filter button{min-height:44px;padding:8px 10px}
+ .projects .projects-tools input{font-size:16px}
  .projects .pj-open{grid-template-columns:32px minmax(0,1fr);gap:8px 12px;padding:17px 0}.projects .pj-score{width:30px;height:30px}.projects .pj-status{grid-column:2;width:fit-content;margin:0}
 }
 @media(prefers-reduced-motion:reduce){.agent-view :is(.ag-orb span,.ag-orb i,.ag-card,.ag-scan,.ag-steps li,.ag-now::before){animation:none!important}.projects .pj-open{transition:none}}

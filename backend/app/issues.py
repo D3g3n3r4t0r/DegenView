@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0249", "I filtri del database sono una riga orizzontale infinita; i layer non hanno il loro tag",
+     "Lorenzo, 01/10: 'i filtri nel database sono raffigurati orizzontalmente e non riesco a gestirli tutti perche' sono veramente tanti [...] devo scorrere a destra ma non finiscono mai [...] aggiornare anche L1, L0 [...] identificarli con il relativo tag'.",
+     "media"),
     ("seed-0248", "Tasto microfono nell'app: parlare e farsi rispondere da DeepSeek su qualsiasi cosa del sito",
      "Lorenzo, 01/10: 'possiamo aggiungere il tasto di registrare un audio per parlare o meglio trascrivere l'audio mentre lo [dico], lo invio e poi [il testo] arriva direttamente a DeepSeek che mi risponde [...] deve avere accesso a tutto [...] mi possa rispondere su qualsiasi cosa'.",
      "media"),
