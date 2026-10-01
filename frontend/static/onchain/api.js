@@ -46,7 +46,10 @@ async function send(path, { method = "GET", body, timeoutMs = DEFAULT_TIMEOUT_MS
   let payload = null;
   try { payload = await response.json(); } catch { /* 204, o una risposta non-JSON */ }
 
-  if (!response.ok) throw new ApiError(payload?.detail || `error ${response.status}`);
+  if (!response.ok) {
+    const d = payload?.detail;
+    throw Object.assign(new ApiError(typeof d === "string" ? d : `error ${response.status}`), { status: response.status, detail: d });
+  }
   return payload;
 }
 
@@ -196,6 +199,9 @@ export const getTop = (n, keys = []) =>
   request(`/api/onchain/top?n=${n}${keys?.length ? `&narrative=${encodeURIComponent(keys.join(","))}` : ""}`);
 export const getNarrativeCoverage = () => request("/api/onchain/narratives/coverage");
 export const getToken = (chain, token) => request(`/api/onchain/token?chain=${encodeURIComponent(chain)}&token=${encodeURIComponent(token)}`);
+export const recheckToken = (chain, token) =>
+  request(`/api/onchain/token/recheck?chain=${encodeURIComponent(chain)}&token=${encodeURIComponent(token)}`,
+          { method: "POST", timeoutMs: 120000 });
 export const getSlippage = (chain, token) => request(`/api/onchain/slippage?chain=${encodeURIComponent(chain)}&token=${encodeURIComponent(token)}`, { timeoutMs: 12000 });
 export const getAgent = () => request("/api/agent");
 export const getDeposit = () => request("/api/wallets/deposit");
