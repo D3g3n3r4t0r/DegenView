@@ -99,33 +99,24 @@ def _load() -> None:
         return
     if isinstance(raw, dict):
         _results.update({k: v for k, v in raw.items() if isinstance(v, dict)})
-    # A saved result whose arrows are not its listed trades (5-minute events
-    # of RSI+BB from before #434, next to a trend-follower row) is redone
-    # first: the list hides it until then (main._lab_summary).
+    # A saved result whose arrows are not its best listed row (events of
+    # RSI+BB from before #434, or trend-only events saved before RSI+BB was
+    # listed) is redone first; until then the list shows the row the saved
+    # arrows belong to, or nothing (main._lab_summary).
     for r in _results.values():
         bt = r.get("backtests") or {}
-        if bt.get("rows") and drawn_row(bt) is None and trend_row(bt) is not None:
+        row = trend_row(bt)
+        if row is not None and ((bt.get("best") or {}).get("label") != row["label"] or drawn_row(bt) is None):
             r["at"] = 0
 
 
 def trend_row(part: dict) -> dict | None:
-    """The best traded row of a backtest among the spot strategies (system.SPOT_LABELS)."""
-    rows = [r for r in part.get("rows") or [] if r.get("trades") and r.get("return_pct") is not None
-            and r.get("label") in system.SPOT_LABELS]
-    return max(rows, key=lambda r: r["return_pct"]) if rows else None
+    """The best traded listed row of a backtest (system.SPOT_LABELS)."""
+    return system.listed_row(part)
 
 
-def drawn_row(part: dict | None) -> dict | None:
-    """The row the list may show for this backtest: the trend follower's
-    best, only when the saved chart events are that row's own trades (same
-    label, one sell per closed trade). Lorenzo, 30/09: a number in the Top
-    with no arrows on its chart must never happen."""
-    row = trend_row(part or {})
-    best = (part or {}).get("best") or {}
-    if row is None or best.get("label") != row["label"]:
-        return None
-    sells = sum(1 for e in best.get("events") or [] if e.get("side") == "sell")
-    return row if sells == row["trades"] else None
+drawn_row = system.drawn_row
+shown = system.shown
 
 
 def _save() -> None:
@@ -193,9 +184,7 @@ async def _pair_of(client: httpx.AsyncClient, e: dict) -> str | None:
 
 
 def _best(bt: dict) -> dict | None:
-    traded = [r for r in bt.get("rows") or [] if r.get("trades") and r.get("return_pct") is not None
-              and r.get("label") in system.SPOT_LABELS]
-    return max(traded, key=lambda r: r["return_pct"]) if traded else None
+    return system.listed_row(bt)
 
 
 def _merge(bars: list[list], step: int) -> list[list]:
@@ -331,9 +320,12 @@ async def run_one(client: httpx.AsyncClient, e: dict, now: float) -> dict | None
     bt = await asyncio.to_thread(system.backtest_all, sorted(bars))
     _results[key] = {"at": now, "symbol": symbol, "pair": pair, "backtests": bt}
     if sim_backtest.needs_relabel(e["chain"], e["token_address"]):
-        try:    # old Top 50 wallet trades saved without their strategy: find which strategy made them
-            times = await asyncio.to_thread(system.trend_trade_times, sorted(bars))
-            sim_backtest.relabel(e["chain"], e["token_address"], times, int(min(b[0] for b in bars)))
+        try:    # old Top 50 wallet trades saved without their strategy: rerun each listed one on the same candles
+            old = await asyncio.to_thread(candle_archive.get, candle_archive.key(GECKO_NETWORKS[e["chain"]], pair,
+                                                                                 "minute", 5, e["token_address"]))
+            full = sorted({int(b[0]): b for b in [*(old or []), *bars]}.values())
+            times = await asyncio.to_thread(system.trend_trade_times, full)
+            sim_backtest.relabel(e["chain"], e["token_address"], times, int(full[0][0]))
         except Exception:
             logger.exception("strategy lab: rietichettatura di %s fallita", symbol)
     # Il daily e' un di piu': se fallisce il 5 minuti resta.
