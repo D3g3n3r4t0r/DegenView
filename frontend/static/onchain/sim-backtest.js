@@ -40,7 +40,8 @@ function row(p, open) {
 }
 
 function body(d) {
-  const list = tab === "open" ? d.open : d.closed;
+  // Best return first (Lorenzo, 01/10); no price yet goes last.
+  const list = [...(tab === "open" ? d.open : d.closed)].sort((a, b) => (b.ret ?? -1e9) - (a.ret ?? -1e9));
   return `<div class="auto sbt">
     <p class="sbt-total"><b>${usd(d.equity)}</b> <em class="chg" data-sign="${sign(d.ret)}">${pct(d.ret)}</em></p>
     <p class="auto-line">From ${usd(d.capital)}${d.from ? ` on ${day(d.from)}` : ""} · ${d.trades} closed trades, ${d.win_rate == null ? "—" : `${Math.round(d.win_rate * 100)}% won`} · max drawdown ${pct(-d.max_dd)} · ${d.tokens} tokens</p>

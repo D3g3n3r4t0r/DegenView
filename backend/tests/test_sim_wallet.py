@@ -64,3 +64,9 @@ def test_reset_puts_every_simulated_book_at_10k_and_keeps_a_backup(tmp_path):
     u["sim_usdg"] = 5.0
     main._sim_reset_once()                    # once only
     assert at._user("u1")["sim_usdg"] == 5.0
+
+
+def test_sim_rows_best_return_first():
+    from app import main
+    rows = [{"ret": -0.2}, {"ret": None}, {"ret": 0.5}, {"ret": 0.1}]
+    assert [r["ret"] for r in sorted(rows, key=main._best_first)] == [0.5, 0.1, -0.2, None]

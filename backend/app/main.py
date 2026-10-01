@@ -4728,6 +4728,9 @@ async def _sim_snapshot(user: User) -> dict:
                           "strategy": p.get("strategy"),
                           "pair": (onchain_strategy_lab._results.get(
                               onchain_strategy_lab.key_of(p["chain"], p["token"])) or {}).get("pair")})
+    # Best return first, open and closed alike (Lorenzo, 01/10: "ordina
+    # automaticamente per migliore posizione"); no price yet goes last.
+    positions.sort(key=_best_first)
     by_chain: dict[str, float] = {}
     for p in positions:
         by_chain[p["chain"]] = by_chain.get(p["chain"], 0.0) + (p["value_usd"] or 0.0)
@@ -4741,8 +4744,13 @@ async def _sim_snapshot(user: User) -> dict:
                         "proceeds_usdg": round(c["stake"] + c["pnl"], 2), "ret": c["ret"], "mode": "sim",
                         "why": f"{_strategy_why(c.get('strategy'))} {c.get('interval') or ''}".strip(),
                         "interval": c.get("interval"), "strategy": c.get("strategy")}
-                       for c in w["closed"]],
+                       for c in sorted(w["closed"], key=_best_first)],
             "curve": _top_curve(w)}
+
+
+def _best_first(r: dict) -> tuple:
+    ret = r.get("ret")
+    return (ret is None, -(ret or 0.0))
 
 
 def _strategy_why(s: str | None) -> str:
