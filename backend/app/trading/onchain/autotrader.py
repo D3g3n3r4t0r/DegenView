@@ -36,6 +36,7 @@ from dataclasses import dataclass
 from typing import Awaitable, Callable
 
 from app.trading.onchain import alert_track, gem_track, quant_runtime
+from app.trading.onchain import slippage as slip_est
 from app.trading.onchain.storage import data_file
 from app.atomic_write import write_text_atomic
 
@@ -580,9 +581,11 @@ def _trend_view(p: dict) -> dict:
             "image": None, "route": f"trend {p.get('interval') or ''}".strip(), "pair": p.get("pair")}
 
 
-def trend_signal(uids: list[str], sig: dict, now: float, gem_ok: bool) -> list[tuple[str, dict]]:
+def trend_signal(uids: list[str], sig: dict, now: float, gem_ok: bool,
+                 max_usd: float | None = None) -> list[tuple[str, dict]]:
     """One strategy_lab signal on every simulated book. A buy opens a trade
-    (only when gem_ok), a sell closes the one open on that token."""
+    (only when gem_ok), a sell closes the one open on that token. `max_usd`
+    is the largest entry the pool takes under the slippage limit (slippage.py)."""
     price = sig.get("price")
     if not isinstance(price, (int, float)) or not math.isfinite(price) or price <= 0:
         return []
@@ -607,11 +610,15 @@ def trend_signal(uids: list[str], sig: dict, now: float, gem_ok: bool) -> list[t
                 u.update(sim_usdg=SIM_START_USDG, sim_start=SIM_START_USDG)
             equity = ((u["sim_usdg"] or 0) + _trend_open(u)
                       + sum(p["stake"] * (1 + p.get("ret", 0.0)) for p in u["paper"]))
-            stake = round(min(u["sim_usdg"] or 0, equity * u["pct"] / 100), 6)
+            wanted = min(u["sim_usdg"] or 0, equity * u["pct"] / 100)
+            stake = round(min(wanted, max_usd) if isinstance(max_usd, (int, float)) and max_usd >= 0 else wanted, 6)
             why = f"trend entry {sig.get('interval', '')}".strip()
+            if stake < wanted:
+                why += f" · size capped by slippage (${wanted:,.0f} wanted)"
             if stake < 0.01:
                 out.append((uid, _log(u, {**base, "side": "buy", "ok": False, "why": why,
-                                          "reason": "all cash already in open trades"})))
+                                          "reason": "pool too thin for the slippage limit" if wanted >= 0.01
+                                          else "all cash already in open trades"})))
                 continue
             u["sim_usdg"] = round((u["sim_usdg"] or 0) - stake, 6)
             u["trend"].append({"symbol": sig["symbol"], "token": sig["token"], "chain": sig["chain"],
@@ -691,6 +698,16 @@ async def _buy(user, u: dict, a: dict, now: float, market: Market) -> dict:
     amount = buy_amount(usdc_raw + usdg_raw, u["pct"])
     if amount <= 0:
         return _log(u, {**base, "reason": "no USDC or USDG to spend"})
+    # Lorenzo, 30/09: never one entry so large it moves an illiquid pool.
+    # The quote's impact on the planned size gives the pool's depth, and the
+    # size shrinks to what stays under the slippage limit (slippage.py).
+    probe = await market.quote(USDG, a["token_address"], amount)
+    top = slip_est.max_usd(slip_est.depth_from_quote(amount / 10 ** USDG_DECIMALS, probe.get("impact")))
+    if top is not None and top * 10 ** USDG_DECIMALS < amount:
+        base["capped_from"] = round(amount / 10 ** USDG_DECIMALS, 2)
+        amount = int(top * 10 ** USDG_DECIMALS)
+        if amount <= 0:
+            return _log(u, {**base, "reason": "pool too thin for the slippage limit"})
     decimals = await market.decimals(a["token_address"])
     if decimals is None:
         return _log(u, {**base, "reason": "token decimals unavailable"})
