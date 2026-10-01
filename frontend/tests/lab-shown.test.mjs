@@ -7,10 +7,11 @@ const { shownSummary, shownTrades } = await import('data:text/javascript;base64,
 // main._lab_summary, the same fields the Top list receives
 // main._lab_summary with strategy_lab.drawn_row
 function drawnRow(part) {
-  const rows = (part?.rows ?? []).filter((r) => r.trades && r.return_pct != null && ['Trend EMA', 'Trend HF', 'RSI+BB'].includes(r.label));
-  const row = rows.sort((a, b) => b.return_pct - a.return_pct)[0];
-  if (!row || part.best?.label !== row.label) return null;
-  return (part.best.events ?? []).filter((e) => e.side === 'sell').length === row.trades ? row : null;
+  const best = part?.best;
+  const row = (part?.rows ?? []).find((r) => r.label === best?.label && r.trades && r.return_pct != null
+    && ['Trend EMA', 'Trend HF', 'RSI+BB'].includes(r.label));
+  if (!row) return null;
+  return (best.events ?? []).filter((e) => e.side === 'sell').length === row.trades ? row : null;
 }
 function summaryOf(lab) {
   const best = drawnRow(lab), drow = lab.daily ? drawnRow(lab.daily) : null;
@@ -27,12 +28,23 @@ test('a gem whose 8h trend follower stayed out shows the 5-minute trades it list
   assert.equal(s.return_pct, 400); assert.equal(s.interval, '5m');
   assert.equal(c.interval, s.interval); assert.equal(c.events.filter((e) => e.side === 'sell').length, s.trades);
 });
-test('the 8h/1d trend follower leads when it traded, on both sides', () => {
-  const lab = { ...fast, daily: { interval: '8h', rows: [{ label: 'Trend EMA', trades: 1, return_pct: 30 }],
-    best: { label: 'Trend EMA', events: [buy(10), sell(20, 0.3)] } } };
-  const s = shownSummary(summaryOf(lab)), c = shownTrades(lab);
-  assert.equal(s.interval, '8h'); assert.equal(c.interval, '8h'); assert.equal(c.events.length, 2);
-  assert.equal(c.events.filter((e) => e.side === 'sell').length, s.trades);
+test('the higher return leads, 8h/1d trend follower or 5m, the same on both sides (a tie: 8h/1d)', () => {
+  const daily = (ret) => ({ interval: '8h', rows: [{ label: 'Trend EMA', trades: 1, return_pct: ret }],
+    best: { label: 'Trend EMA', events: [buy(10), sell(20, ret / 100)] } });
+  for (const [ret, iv] of [[30, '5m'], [900, '8h'], [400, '8h']]) {
+    const lab = { ...fast, daily: daily(ret) };
+    const s = shownSummary(summaryOf(lab)), c = shownTrades(lab);
+    assert.equal(s.interval, iv); assert.equal(c.interval, iv);
+    assert.equal(c.events.filter((e) => e.side === 'sell').length, s.trades);
+  }
+});
+test('RSI+BB beats the trend follower on the 5m: listed and drawn with its own arrows', () => {
+  const lab = { rows: [{ label: 'Trend HF', trades: 2, return_pct: 40 }, { label: 'RSI+BB', trades: 1, return_pct: 90 }],
+    best: { label: 'RSI+BB', events: [buy(1), sell(2, 0.9)] }, daily: null };
+  assert.equal(shownSummary(summaryOf(lab)).return_pct, 90); assert.equal(shownTrades(lab).label, 'RSI+BB');
+  // saved before RSI+BB was listed: the trend follower's arrows, so the trend follower's number
+  const old = { ...lab, best: { label: 'Trend HF', events: [buy(1), sell(2, 0.2), buy(3), sell(4, 0.2)] } };
+  assert.equal(shownSummary(summaryOf(old)).return_pct, 40); assert.equal(shownTrades(old).label, 'Trend HF');
 });
 test('no trade anywhere: nothing in the list, nothing claimed on the chart', () => {
   const lab = { rows: [{ label: 'Trend EMA', trades: 0, return_pct: 0 }], daily: null };
