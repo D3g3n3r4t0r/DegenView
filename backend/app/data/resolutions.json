@@ -2482,5 +2482,10 @@
     "status": "risolto",
     "at": 1790802209,
     "summary": "Causa: quando il trend follower a 8h/1d non aveva operazioni, la riga della classifica mostrava il miglior backtest a 5 minuti (il +400%), ma il grafico disegnava solo quello a 8h/1d, vuoto. Ora lista e grafico usano la stessa regola (lab-shown.js): il grafico mostra sempre le operazioni del numero in classifica e si apre sul loro timeframe. Test automatico: il numero di vendite sul grafico = operazioni in lista. 'Board: not ranked' ora dice 'Top #N, from the database'. Su MERRYMEN il trend follower a 8h/1d non ha operazioni (verificato coi dati veri: il filtro di volatilita' e' pronto solo alla 60a candela), quindi il grafico mostra il backtest a 5 minuti del +400%."
+  },
+  "seed-0243": {
+    "status": "risolto",
+    "at": 1790820027,
+    "summary": "La tab Memes ora e' Signals: per ogni gemma della Top 50 l'ultimo buy/sell del trend follower 8h/1d (in alto quelli degli ultimi 7 giorni), cosa tiene in posizione e cosa aspetta un ingresso; lo scanner manuale resta in cima. La tab Strategies ora e' Record: come sono andate davvero le gemme scelte dopo 1/3/7/30/90 giorni contro la moneta della chain, il confronto scelte/studiate/scartate e le 'mancate' (scartate che hanno raddoppiato). Tolti 'Fired last 48h', 'About to fire', live scanner meme, pilota meme e classifica dei backtest; i rendimenti restano nel conto simulato."
   }
 }
