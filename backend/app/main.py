@@ -116,6 +116,7 @@ from app.trading.onchain import code_review as onchain_code_review
 from app.trading.onchain import backtest_lab as onchain_backtest_lab
 from app.trading.onchain import strategy_lab as onchain_strategy_lab
 from app.trading.onchain import candle_archive as onchain_candle_archive
+from app.trading.onchain import ladder_watch as onchain_ladder_watch
 from app.trading.onchain import autotrader as onchain_autotrader
 from app.trading.onchain import live_prices as onchain_live_prices
 from app.trading.onchain import wealth as onchain_wealth
@@ -1581,6 +1582,7 @@ async def lifespan(app: FastAPI):
                    asyncio.create_task(onchain_backtest_lab.lab_loop()),
                    asyncio.create_task(onchain_strategy_lab.lab_loop(_top_entries)),
                    asyncio.create_task(onchain_candle_archive.archive_loop(lambda: _top_entries(50))),
+                   asyncio.create_task(onchain_ladder_watch.watch_loop()),
                    asyncio.create_task(_onchain_signals_loop()),
                    asyncio.create_task(_wealth_loop())] if settings.onchain_radar_enabled else []
     sniper_tasks: list[asyncio.Task] = []
