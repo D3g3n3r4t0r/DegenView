@@ -196,6 +196,9 @@ export const getTop = (n, keys = []) =>
   request(`/api/onchain/top?n=${n}${keys?.length ? `&narrative=${encodeURIComponent(keys.join(","))}` : ""}`);
 export const getNarrativeCoverage = () => request("/api/onchain/narratives/coverage");
 export const getToken = (chain, token) => request(`/api/onchain/token?chain=${encodeURIComponent(chain)}&token=${encodeURIComponent(token)}`);
+export const recheckToken = (chain, token) =>
+  request(`/api/onchain/token/recheck?chain=${encodeURIComponent(chain)}&token=${encodeURIComponent(token)}`,
+          { method: "POST", timeoutMs: 120000 });
 export const getSlippage = (chain, token) => request(`/api/onchain/slippage?chain=${encodeURIComponent(chain)}&token=${encodeURIComponent(token)}`, { timeoutMs: 12000 });
 export const getAgent = () => request("/api/agent");
 export const getDeposit = () => request("/api/wallets/deposit");

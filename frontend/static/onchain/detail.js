@@ -293,6 +293,38 @@ async function enrich(id, e) {
   if (e.kind === "gem" && !e.slip) {
     api.getSlippage(e.chain, e.token).then((p) => { e.slip = p; if (current?.id === id) paintTabs(); }).catch(() => {});
   }
+  if (dlg && !dlg.dataset.deepWired) {
+    dlg.dataset.deepWired = "1";
+    dlg.addEventListener("click", async (ev) => {
+      const btn = ev.target.closest("[data-deep-recheck]");
+      if (!btn || btn.disabled) return;
+      const cur = current;
+      if (!cur) return;
+      btn.disabled = true;
+      btn.textContent = "Re-checking…";
+      try {
+        const r = await api.recheckToken(cur.chain, cur.token);
+        cur.deep = r.deep;
+        cur.deepWait = 6 * 3600;
+        const lb = await import("@onchain/leaderboard.js");
+        cur.why = lb.gemWhy(cur.dossier ?? cur);
+        paintTabs();
+      } catch (err) {
+        const wait = err?.detail?.wait_s ?? err?.wait_s;
+        if (wait) {
+          cur.deepWait = wait;
+          const lb = await import("@onchain/leaderboard.js");
+          cur.why = lb.gemWhy(cur.dossier ?? cur);
+          paintTabs();
+        } else {
+          btn.textContent = "Re-check failed";
+          setTimeout(() => { btn.textContent = "Re-check with DeepSeek"; btn.disabled = false; }, 4000);
+        }
+      }
+    });
+  }
+  if (r.deep) e.deep = r.deep;
+  if (r.deep_wait_s != null) e.deepWait = r.deep_wait_s;
   if (r.entry) {
     const lb = await import("@onchain/leaderboard.js");
     e.why ||= lb.gemWhy(r.entry) + (r.entry.on_board ? "" : `<p class="muted">Not on the board${r.entry.why ? `: ${escapeHtml(r.entry.why)}` : ""}.</p>`);

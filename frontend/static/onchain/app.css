@@ -1344,3 +1344,12 @@ html, body { overflow-x: clip; }
   & tbody th { text-align: start; font-weight: 600; color: var(--k-text-2); }
   & td[data-sign="up"] { color: #34d399; } & td[data-sign="down"] { color: #f87171; } }
 @media (prefers-reduced-motion: reduce) { .sig-pill[data-fresh] { animation: none; } }
+@layer skin {
+  .ds-deep { margin: 10px 0;
+    & h5 { display: flex; justify-content: space-between; margin: 0 0 6px; font: 600 12px var(--sans); letter-spacing: .04em;
+      text-transform: uppercase; color: var(--k-text-2); & b { text-transform: none; color: var(--k-text); } } }
+  .ds-recheck { display: block; inline-size: 100%; block-size: 40px; margin-block-start: 8px; border: 1px solid var(--k-surface-2);
+    border-radius: 10px; background: none; color: var(--k-text); font: 600 14px var(--sans); cursor: pointer;
+    &:active { scale: .98; }
+    &:disabled { opacity: .5; cursor: not-allowed; } }
+}
