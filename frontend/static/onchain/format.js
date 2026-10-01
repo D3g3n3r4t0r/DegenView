@@ -69,6 +69,12 @@ export function strategyLabel(name) {
 /* ------------------------------------------------------------ token rows */
 
 // Compact dollars for lists: $510k, $3.5M, $420M.
+// The strategy a Top 50 wallet trade names (sim_backtest.strategy_of): a
+// label ("Trend EMA", "RSI+BB") or a family ("trend", "reversal", "counter").
+// No strategy names on screen (Lorenzo: only returns): the label stays in
+// the data, the screen says only when it was never recorded.
+export const walletStrategy = (s) => (s === "unknown" ? "strategy not recorded" : "");
+
 export const usdShort = (v) => (v == null || !Number.isFinite(Number(v)) ? "—"
   : v >= 1e9 ? `$${(v / 1e9).toFixed(1)}B` : v >= 1e6 ? `$${(v / 1e6).toFixed(v >= 1e8 ? 0 : 1)}M`
     : v >= 1e3 ? `$${(v / 1e3).toFixed(v >= 1e5 ? 0 : 1)}k` : `$${Math.round(v)}`);
