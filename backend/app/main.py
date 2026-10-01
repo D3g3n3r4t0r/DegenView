@@ -4717,6 +4717,38 @@ async def live_prices(ids: str = "", user: User = Depends(auth.get_current_user)
     return {"prices": await onchain_live_prices.prices(onchain_live_prices.parse_ids(ids)), "ttl": onchain_live_prices.TTL_S}
 
 
+@app.get("/api/onchain/live-stream")
+async def live_stream(request: Request, ids: str = "", user: User = Depends(auth.get_current_user)) -> StreamingResponse:
+    """The same prices pushed (SSE): every PUSH_S the shared cache is read
+    and only the prices that moved are sent, so a new block or swap reaches
+    the screen without waiting for the browser's next question."""
+    keys = onchain_live_prices.parse_ids(ids)
+
+    async def event_gen():
+        sent: dict[str, float] = {}
+        quiet = 0.0
+        yield "retry: 2000\n\n"
+        while keys and not await request.is_disconnected():
+            try:
+                got = await onchain_live_prices.prices(keys)
+            except Exception:
+                got = {}
+            moved = {k: v for k, v in got.items() if sent.get(k) != v["p"]}
+            if moved:
+                sent.update({k: v["p"] for k, v in moved.items()})
+                quiet = 0.0
+                yield f"data: {json.dumps(moved)}\n\n"
+            else:
+                quiet += onchain_live_prices.PUSH_S
+                if quiet >= 15:
+                    quiet = 0.0
+                    yield ": beat\n\n"
+            await asyncio.sleep(onchain_live_prices.PUSH_S)
+
+    return StreamingResponse(event_gen(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
 def _live_marks(snap: dict) -> list[dict]:
     """What the header needs to move its total with the live price: each
     priced position counted in it (live.js liveDelta)."""
