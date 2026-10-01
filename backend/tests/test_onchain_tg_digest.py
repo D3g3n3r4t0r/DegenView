@@ -73,6 +73,7 @@ def _ask(events):
 
 def test_history_pages_back_and_stops_at_max_pages():
     tp.reset_for_tests()
+    tg_digest.reset_for_tests()
     client = _Client({"?before=29": PAGE2, "t.me/s/abcproto": PAGE1})
     posts = asyncio.run(tp.history("abcproto", NOW, client, max_pages=2))
     ids = [p["id"] for p in posts]
@@ -82,6 +83,7 @@ def test_history_pages_back_and_stops_at_max_pages():
 
 def test_history_stops_at_days():
     tp.reset_for_tests()
+    tg_digest.reset_for_tests()
     client = _Client({"?before=29": PAGE2, "?before=27": PAGE_OLD, "t.me/s/abcproto": PAGE1})
     posts = asyncio.run(tp.history("abcproto", NOW, client, max_pages=5, days=90))
     ids = [p["id"] for p in posts]
@@ -91,6 +93,7 @@ def test_history_stops_at_days():
 
 def test_history_stops_when_page_adds_nothing():
     tp.reset_for_tests()
+    tg_digest.reset_for_tests()
     client = _Client({"?before=29": PAGE1, "t.me/s/abcproto": PAGE1})
     posts = asyncio.run(tp.history("abcproto", NOW, client, max_pages=5))
     assert [p["id"] for p in posts] == [29, 30]
@@ -98,6 +101,7 @@ def test_history_stops_when_page_adds_nothing():
 
 def test_update_extracts_events_and_dedupes():
     tp.reset_for_tests()
+    tg_digest.reset_for_tests()
     client = _Client({"?before=29": PAGE2, "t.me/s/abcproto": PAGE1})
     ask = _ask([
         {"date": "2026-09-30", "type": "release", "text": "v1.0 released", "post_id": 30},
@@ -112,6 +116,7 @@ def test_update_extracts_events_and_dedupes():
 
 def test_update_second_time_only_sends_new_posts():
     tp.reset_for_tests()
+    tg_digest.reset_for_tests()
     client = _Client({"?before=29": PAGE2, "t.me/s/abcproto": PAGE1})
     ask = _ask([{"date": "2026-09-30", "type": "release", "text": "v1.0 released", "post_id": 30}])
     asyncio.run(tg_digest.update(_entry(), NOW, client=client, ask=ask))
@@ -121,12 +126,17 @@ def test_update_second_time_only_sends_new_posts():
         sent.append(messages[-1]["content"])
         return json.dumps({"events": []})
 
-    asyncio.run(tg_digest.update(_entry(), NOW + 25 * 3600, client=client, ask=ask2))
-    assert sent and "v1.0 released" not in sent[0]
+    later = _page([_post(31, "2026-10-02T09:00:00+00:00", "Mainnet live"),
+                   _post(30, "2026-09-30T09:00:00+00:00", "v1.0 released")])
+    client2 = _Client({"?before=30": PAGE1, "t.me/s/abcproto": later})
+    asyncio.run(tg_digest.update(_entry(), NOW + 25 * 3600, client=client2, ask=ask2))
+    assert sent and "Mainnet live" in sent[0] and "v1.0 released" not in sent[0]
+    assert len(client2.calls) == 1   # stops at the post already read
 
 
 def test_update_caps_events():
     tp.reset_for_tests()
+    tg_digest.reset_for_tests()
     client = _Client({"?before=29": PAGE2, "t.me/s/abcproto": PAGE1})
     many = [{"date": f"2026-09-{(i % 28) + 1:02d}", "type": "other", "text": f"event {i}", "post_id": 100 + i}
             for i in range(60)]

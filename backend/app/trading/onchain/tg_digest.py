@@ -124,17 +124,20 @@ async def update(e: dict, now: float | None = None, client=None, ask=None) -> di
     day = time.strftime("%Y-%m-%d", time.gmtime(now))
     if _calls.get(day, 0) >= DAILY_MAX:
         return hit
-    from app.notify import deepseek_desk
     if ask is None:
+        from app.config import settings
+        if not settings.deepseek_api_key:
+            return hit
+        from app.notify import deepseek_desk
         ask = deepseek_desk.ask
     last_id = hit.get("last_id") if hit else None
     try:
         if client is None:
             import httpx
             async with httpx.AsyncClient(timeout=telegram_public.TIMEOUT_S) as c:
-                posts = await telegram_public.history(name, now, c)
+                posts = await telegram_public.history(name, now, c, after_id=last_id)
         else:
-            posts = await telegram_public.history(name, now, client)
+            posts = await telegram_public.history(name, now, client, after_id=last_id)
     except Exception as exc:
         logger.info("tg_digest: Telegram non letto: %s", exc)
         return hit

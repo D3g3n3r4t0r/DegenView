@@ -279,10 +279,12 @@ HISTORY_CHARS = 1500
 
 
 async def history(name: str, now: float, client: httpx.AsyncClient,
-                  max_pages: int = HISTORY_PAGES, days: int = HISTORY_DAYS) -> list[dict]:
+                  max_pages: int = HISTORY_PAGES, days: int = HISTORY_DAYS,
+                  after_id: int | None = None) -> list[dict]:
     """Page back through a public channel's posts, up to `max_pages` pages,
-    stopping at posts older than `days` or when a page adds nothing new.
-    Each page counts in the same daily budget as `lookup`."""
+    stopping at posts older than `days`, at `after_id` (already read), or
+    when a page adds nothing new. Each page counts in the same daily budget
+    as `lookup`."""
     day = time.strftime("%Y-%m-%d", time.gmtime(now))
     cutoff = now - days * 86400
     seen: dict[int, dict] = {}
@@ -311,7 +313,7 @@ async def history(name: str, now: float, client: httpx.AsyncClient,
         if added == 0:
             break
         before = oldest
-        if page[0]["at"] < cutoff:
+        if page[0]["at"] < cutoff or (after_id is not None and oldest <= after_id):
             break
     out = [p for p in seen.values() if p["at"] >= cutoff]
     out.sort(key=lambda p: p["at"])
