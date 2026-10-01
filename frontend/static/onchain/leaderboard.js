@@ -243,7 +243,7 @@ function row(e) {
 
 const compactNum = (v) => { const n = Number(v) || 0; return n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}k` : `${n}`; };
 
-// The social numbers the judge read: X search and the project's own Telegram.
+// The social numbers the judge read: X search, the project's own Telegram and Discord.
 function socialLines(j) {
   const out = [];
   const x = j?.x;
@@ -262,6 +262,13 @@ function socialLines(j) {
       body = `${at} · ${parts.join(" · ")}`;
     }
     out.push(`<li>Telegram: ${body}</li>`);
+  }
+  const dc = j?.dc;
+  if (dc) {
+    const name = escapeHtml(dc.name ?? dc.code ?? "");
+    out.push(dc.kind === "missing"
+      ? `<li>Discord: ${name} invite expired</li>`
+      : `<li>Discord: ${name} · ${compactNum(dc.members ?? 0)} members · ${compactNum(dc.online ?? 0)} online</li>`);
   }
   return out.join("");
 }
