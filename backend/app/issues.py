@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0248", "I filtri del database sono una riga orizzontale infinita; i layer non hanno il loro tag",
+     "Lorenzo, 01/10: 'i filtri nel database sono raffigurati orizzontalmente e non riesco a gestirli tutti perche' sono veramente tanti [...] devo scorrere a destra ma non finiscono mai [...] aggiornare anche L1, L0 [...] identificarli con il relativo tag'.",
+     "media"),
     ("seed-0247", "Trovare layer 0, layer 1 e layer 2 con chain propria: lo scanner cerca solo contratti",
      "Lorenzo, 01/10: 'dobbiamo scovare i layer one e i layer zero [...] col sistema attuale non li possiamo trovare perche' cerchiamo i contratti [...] anche i layer 2 con blockchain propria [...] API gratuite [...] pochi al giorno e' sufficiente [...] i risultati vanno a finire [...] database, top 50'. Fascia: 'usiamo da 500k di market cap fino a 100mln'.",
      "alta"),

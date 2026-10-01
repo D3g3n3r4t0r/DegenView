@@ -433,13 +433,20 @@ def as_item(p: dict) -> dict:
             "launched_at": p.get("launched_at")}
 
 
+LAYERS = ("L0", "L1", "L2")  # layers.py writes the type in overall.layer
 SORTS = {"score": "COALESCE(score, -1) DESC", "cap": "COALESCE(mcap, 0) ASC", "liq": "COALESCE(liq, 0) DESC",
          "recent": "first_seen DESC", "checked": "COALESCE(analyzed_at, 0) DESC"}
 
 
 def search(q: str = "", status: str = "", sort: str = "score", limit: int = 50, offset: int = 0,
-           in_band: bool = False, narrative: str = "") -> dict:
+           in_band: bool = False, narrative: str = "", chain: str = "", layer: str = "") -> dict:
     where, args = [], []
+    if layer in LAYERS:
+        where.append("chain = 'layer' AND json_extract(overall, '$.layer') = ?")
+        args.append(layer)
+    elif chain.isalnum():
+        where.append("chain = ?")
+        args.append(chain)
     keys = [k for k in (x.strip() for x in (narrative or "").split(",")) if k.replace("_", "").isalnum()]
     if keys:
         # '"key"' matches both a list of keys and a list of {"key": ...} dicts
@@ -534,8 +541,11 @@ def stats() -> dict:
         by = dict(db.execute("SELECT status, COUNT(*) FROM projects GROUP BY status").fetchall())
         band = db.execute(f"SELECT COUNT(*) FROM projects WHERE {_band_sql()}").fetchone()[0]
         chains = dict(db.execute("SELECT chain, COUNT(*) FROM projects GROUP BY chain").fetchall())
+        layers = dict(db.execute("SELECT json_extract(overall, '$.layer') t, COUNT(*) FROM projects"
+                                 " WHERE chain = 'layer' GROUP BY t").fetchall())
         reasons = db.execute(
             "SELECT why, COUNT(*) n FROM projects WHERE status = 'rejected' AND why IS NOT NULL"
             " GROUP BY why ORDER BY n DESC LIMIT 8").fetchall()
     return {"total": total, "in_band": band, "by_status": by, "by_chain": chains,
+            "by_layer": {k: v for k, v in layers.items() if k in LAYERS},
             "top_rejections": [{"why": r[0], "n": r[1]} for r in reasons]}
