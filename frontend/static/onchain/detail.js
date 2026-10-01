@@ -12,6 +12,7 @@ import { age, bestSystem, changePill, escapeHtml, logo, strategyTrade, usdShort,
 import { openUserSwap, walletFor } from "@onchain/userswap.js";
 import { hideToken } from "@onchain/hidden.js";
 import { shownTrades } from "@onchain/lab-shown.js";
+import { morph } from "@onchain/morph-fx.js";
 
 const registry = new Map();
 const INTERVALS = ["1m", "5m", "15m", "1h", "4h", "8h", "1d", "1w"];
@@ -299,7 +300,8 @@ async function enrich(id, e) {
   if (r.deep_wait_s != null) e.deepWait = r.deep_wait_s;
   if (r.entry) {
     const lb = await import("@onchain/leaderboard.js");
-    e.why ||= whyOf(lb, r.entry, e);
+    if (e.deep) e.why = whyOf(lb, r.entry, e);
+    else e.why ||= whyOf(lb, r.entry, e);
     e.info ||= lb.details(r.entry) + descriptionBlock(r.entry);
     e.dossier = r.entry;
   }
@@ -309,8 +311,12 @@ async function enrich(id, e) {
 // The Why tab of a dossier, with DeepSeek's dedicated re-check (Lorenzo,
 // 01/10). A newer re-check replaces the board review's drop line.
 function whyOf(lb, entry, e) {
-  const why = e.deep && String(entry.why ?? "").startsWith("DeepSeek") ? "" : entry.why;
-  const off = entry.on_board || (e.deep?.keep && !why) ? "" : `<p class="muted">Not on the board${why ? `: ${escapeHtml(why)}` : ""}.</p>`;
+  if (e.deep) {
+    const clean = { ...entry, review: null, judge: entry.judge ? { ...entry.judge, strengths: [], problems: [], admit_reason: null } : entry.judge };
+    return lb.gemWhy(clean);
+  }
+  const why = entry.why;
+  const off = entry.on_board ? "" : `<p class="muted">Not on the board${why ? `: ${escapeHtml(why)}` : ""}.</p>`;
   return lb.gemWhy(entry) + off;
 }
 
@@ -369,8 +375,16 @@ async function deepRecheck(btn) {
   } finally {
     if (e.deep || e.deepWait) e.deepBusy = false;
   }
-  if (!e.dossier.on_board) e.why = whyOf(await import("@onchain/leaderboard.js"), e.dossier, e);
-  if (current === cur) paintTabs();
+  const lb = await import("@onchain/leaderboard.js");
+  e.why = whyOf(lb, e.dossier, e);
+  if (current === cur) {
+    const body = dlg.querySelector("[data-pane-body]");
+    if (dlg.open && tab === "why" && body) {
+      await morph(body, whyHtml(e));
+    } else {
+      paintTabs();
+    }
+  }
 }
 
 function descriptionBlock(p) {
@@ -404,12 +418,17 @@ function systemTrades(al) {
   }).join("")}</ol>`;
 }
 
+function whyHtml(e) {
+  const pending = loading.has(current.id);
+  return (e.why || `<p class="muted">${pending ? "Loading…" : "Nothing to add yet."}</p>`) + (e.dossier ? deepBlock(e) : "");
+}
+
 function paintTabs() {
   dlg.querySelectorAll("[data-dtab]").forEach((b) => b.toggleAttribute("aria-current", b.dataset.dtab === tab));
   const e = current.e;
   const body = dlg.querySelector("[data-pane-body]");
   const pending = loading.has(current.id);
-  if (tab === "why") { body.innerHTML = (e.why || `<p class="muted">${pending ? "Loading…" : "Nothing to add yet."}</p>`) + (e.dossier ? deepBlock(e) : ""); return; }
+  if (tab === "why") { body.innerHTML = whyHtml(e); return; }
   if (tab === "info") { body.innerHTML = e.info || infoFallback(e); return; }
   // Gems: only the daily trend follower, not the alerts' 5-minute tracks.
   const gem = e.kind === "gem";

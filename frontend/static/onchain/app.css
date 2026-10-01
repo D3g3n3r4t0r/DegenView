@@ -1353,3 +1353,9 @@ html, body { overflow-x: clip; }
     &:active { scale: .98; }
     &:disabled { opacity: .5; cursor: not-allowed; } }
 }
+@layer skin {
+  [data-fx="strike"] { position: relative; }
+  .fx-strike { position: absolute; block-size: 1.5px; margin-block-start: -.75px; background: currentColor;
+    transform-origin: left; transform: scaleX(0); pointer-events: none; }
+  .fx-canvas { position: fixed; inset: 0; inline-size: 100vw; block-size: 100vh; pointer-events: none; z-index: 2147483000; }
+}
