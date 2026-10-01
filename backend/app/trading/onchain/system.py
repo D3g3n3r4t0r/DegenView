@@ -77,7 +77,8 @@ TREND_LABELS = frozenset({"Trend EMA", "Trend HF"})
 # the trend followers and RSI+BB (Lorenzo, 30/09 evening, after seeing the
 # wallet without its RSI+BB trades: "l'RSI piu' BB funziona apparentemente
 # bene, e quindi implementiamolo nelle strategie, nei backtest"). RSI+BB L/S
-# stays out: on-chain there is no short.
+# stays out: on-chain there is no short. The 8h/1d rung and the Sim's
+# trend signals stay trend follower only.
 SPOT_LABELS = TREND_LABELS | {"RSI+BB"}
 # Shown labels carry no person's name (Lorenzo, 27/09: "elimina il nome
 # lorenzo dalla strategia"); strategy_name stays the internal key. Results
@@ -264,10 +265,9 @@ def _best_trades(df: pd.DataFrame, rows: list[dict], known: dict | None = None) 
     "visualizza un alert ma non sappiamo se e' un ingresso o altro.. qui deve
     comparire la strategia [...] ingressi e uscite". The ranking shows the
     best backtest, so the chart shows the same one's trades."""
-    traded = [r for r in rows if r["trades"] and r["return_pct"] is not None and r["label"] in SPOT_LABELS]
-    if not traded:
+    best = listed_row({"rows": rows})
+    if best is None:
         return None
-    best = max(traded, key=lambda r: r["return_pct"])
     name = next(n for n, lab in BACKTESTS if lab == best["label"])
     try:
         result, signals, _pos = radar.run_spot(df, {"strategy_name": name, "params": None, "label": best["label"],
@@ -290,9 +290,9 @@ def _best_trades(df: pd.DataFrame, rows: list[dict], known: dict | None = None) 
         if tr.direction != "long":
             continue
         out_t = int(tr.exit_time)
-        events += [{"t": fill_t(tr.entry_time), "side": "buy", "price": tr.entry_price},
+        events += [{"t": fill_t(tr.entry_time), "side": "buy", "price": tr.entry_price, "lab": best["label"]},
                    {"t": fill_t(out_t) if out_t in signal_t else out_t, "side": "sell", "price": tr.exit_price,
-                    "ret": round(tr.pnl_pct / 100 - fee, 4)}]
+                    "ret": round(tr.pnl_pct / 100 - fee, 4), "lab": best["label"]}]
     if best["in_position"] and (not events or events[-1]["side"] != "buy"):
         entry = next((e for e in reversed(signals) if e.type == "entry_long"), None)
         if entry is not None:
@@ -300,14 +300,50 @@ def _best_trades(df: pd.DataFrame, rows: list[dict], known: dict | None = None) 
             t = int(t.timestamp()) if hasattr(t, "timestamp") else int(t)
             i = times.index(t) if t in nxt else None
             price = float(df["open"].iloc[i + 1]) if i is not None else entry.price
-            events.append({"t": fill_t(t), "side": "buy", "price": price})
+            events.append({"t": fill_t(t), "side": "buy", "price": price, "lab": best["label"]})
     return {"label": best["label"], "events": events, "fills": "next_open"}
 
 
+def listed_row(part: dict | None) -> dict | None:
+    """The best traded row of a backtest among SPOT_LABELS."""
+    rows = [r for r in (part or {}).get("rows") or [] if r.get("trades") and r.get("return_pct") is not None
+            and r.get("label") in SPOT_LABELS]
+    return max(rows, key=lambda r: r["return_pct"]) if rows else None
+
+
+def drawn_row(part: dict | None) -> dict | None:
+    """The row the list may show for this backtest: the listed row whose
+    trades are the saved chart events (same label, one sell per closed
+    trade). Lorenzo, 30/09: a number in the Top with no arrows on its chart
+    must never happen."""
+    best = (part or {}).get("best") or {}
+    row = next((r for r in (part or {}).get("rows") or [] if r.get("label") == best.get("label")
+                and r.get("label") in SPOT_LABELS and r.get("trades") and r.get("return_pct") is not None), None)
+    if row is None:
+        return None
+    sells = sum(1 for e in best.get("events") or [] if e.get("side") == "sell")
+    return row if sells == row["trades"] else None
+
+
+def shown(bt: dict | None) -> tuple[str, dict, dict] | None:
+    """(interval, part, row) of the backtest a Top row shows: the higher
+    return between the 8h/1d trend follower and the best 5-minute listed
+    strategy (trend followers and RSI+BB), a tie to the 8h/1d. Only rows
+    whose arrows are saved (drawn_row). frontend lab-shown.js mirrors it."""
+    if not bt:
+        return None
+    daily = bt.get("daily") or {}
+    got = [(daily.get("interval") or "1d", daily, drawn_row(daily)), ("5m", bt, drawn_row(bt))]
+    got = [g for g in got if g[2] is not None]
+    return max(got, key=lambda g: g[2]["return_pct"]) if got else None
+
+
 def trend_trade_times(bars: list[list], known: dict | None = None) -> dict[str, set[tuple[int, str]]]:
-    """Every buy and sell time of each spot strategy (SPOT_LABELS) on these
-    candles, at the signal candle and at the fill candle: what tells which
-    strategy made an old 5-minute trade saved without it (sim_backtest.relabel)."""
+    """Every buy and sell time of each 5-minute strategy (trend followers
+    first, then RSI+BB, then the long side of RSI+BB L/S) on these candles,
+    at the signal candle and at the fill candle: what tells which strategy
+    made an old 5-minute trade saved without it (sim_backtest.relabel).
+    Before #434 the 5-minute best was chosen among all four."""
     df = frame(bars)
     out: dict[str, set[tuple[int, str]]] = {}
     if len(df) < BACKTEST_MIN_BARS:
@@ -315,8 +351,6 @@ def trend_trade_times(bars: list[list], known: dict | None = None) -> dict[str, 
     times = [int(ts.timestamp()) for ts in df.index]
     nxt = {times[i]: times[i + 1] for i in range(len(times) - 1)}
     for name, label in BACKTESTS:
-        if label not in SPOT_LABELS:
-            continue
         try:
             result, signals, _pos = radar.run_spot(df, {"strategy_name": name, "params": None, "label": label,
                                                         "source": "predefinita"}, known)
