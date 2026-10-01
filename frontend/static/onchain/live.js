@@ -1,21 +1,27 @@
 /**
- * The ticking balance (backend: live_prices.py, GET /api/onchain/live-prices).
+ * The ticking balance (backend: live_prices.py, GET /api/onchain/live-stream).
  *
  * Lorenzo, 29/09, on pump.fun's app: the wallet's value moves all the time
- * with the price, gains and losses included. One poll for every screen:
- * each screen says which tokens it shows and whether it is on screen; the
- * poll asks for the union every POLL_MS while the page is visible, and
- * stops when nobody is on screen. A missed answer keeps the last prices.
+ * with the price, gains and losses included. Then, 30/09: "vedere in tempo
+ * reale i cambiamenti di prezzo [...] non dover aspettare diversi secondi".
+ * One stream for every screen: each screen says which tokens it shows and
+ * whether it is on screen; the union is pushed by the server (SSE) as soon
+ * as a price moves (on-chain pools, Jupiter, DexScreener), and the stream
+ * closes when nobody is on screen or the page is hidden. Without
+ * EventSource, or when the stream keeps failing, the old poll every POLL_MS.
+ * A missed answer keeps the last prices.
  *
  * roll(): numbers whose digits spin to the new value, transform only.
  */
 import * as api from "@onchain/api.js";
 
 const POLL_MS = 2000;
+const CHECK_MS = 1000;    // how often the wanted key set is re-read (local only)
 const subs = new Set();
 const last = new Map();   // "chain:addr" -> price
 let timer = null;
 let busy = false;
+let stream = null, streamKeys = "", failures = 0;
 
 const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -51,27 +57,62 @@ function schedule(ms) {
   timer = setTimeout(tick, ms);
 }
 
+const activeSubs = () => [...subs].filter((s) => s.active());
+const wanted = (live) => [...new Set(live.flatMap((s) => s.keys()))].filter(Boolean).sort().slice(0, 60);
+
+function deliver(prices) {
+  for (const [k, p] of Object.entries(prices)) last.set(k, p);
+  for (const s of activeSubs()) s.onPrices(last);
+}
+
+function closeStream() {
+  if (stream) stream.close();
+  stream = null;
+  streamKeys = "";
+}
+
+function openStream(keys) {
+  closeStream();
+  streamKeys = keys.join(",");
+  const es = new EventSource(`/api/onchain/live-stream?ids=${encodeURIComponent(streamKeys)}`);
+  stream = es;
+  es.onopen = () => { failures = 0; };
+  es.onmessage = (ev) => {
+    try { deliver(JSON.parse(ev.data)); } catch { /* keep the last prices */ }
+  };
+  es.onerror = () => {
+    // EventSource retries by itself; after a few failures in a row, poll
+    if (++failures >= 3 && stream === es) closeStream();
+  };
+}
+
+async function poll(keys) {
+  if (busy) return;
+  busy = true;
+  try {
+    const res = await api.getLivePrices(keys);
+    deliver(Object.fromEntries(Object.entries(res.prices ?? {}).map(([k, v]) => [k, v.p])));
+  } catch { /* keep the last prices */ }
+  busy = false;
+}
+
 async function tick() {
   timer = null;
-  if (document.visibilityState !== "visible") return;   // visibilitychange restarts it
-  const live = [...subs].filter((s) => s.active());
-  const keys = [...new Set(live.flatMap((s) => s.keys()))].slice(0, 60);
-  if (!keys.length) { if (subs.size) schedule(POLL_MS * 2); return; }
-  if (!busy) {
-    busy = true;
-    try {
-      const res = await api.getLivePrices(keys);
-      for (const [k, v] of Object.entries(res.prices ?? {})) last.set(k, v.p);
-      for (const s of live) s.onPrices(last);
-    } catch { /* keep the last prices */ }
-    busy = false;
+  if (document.visibilityState !== "visible") { closeStream(); return; }   // visibilitychange restarts it
+  const keys = wanted(activeSubs());
+  if (!keys.length) { closeStream(); if (subs.size) schedule(POLL_MS * 2); return; }
+  if (window.EventSource && failures < 3) {
+    if (!stream || keys.join(",") !== streamKeys) openStream(keys);
+    schedule(CHECK_MS);
+    return;
   }
+  await poll(keys);
   schedule(POLL_MS);
 }
 
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible" && subs.size) schedule(0);
-  else { clearTimeout(timer); timer = null; }
+  if (document.visibilityState === "visible" && subs.size) { failures = 0; schedule(0); }
+  else { clearTimeout(timer); timer = null; closeStream(); }
 });
 
 /* ---------------------------------------------------------------- roll
