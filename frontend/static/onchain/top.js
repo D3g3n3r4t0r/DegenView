@@ -198,9 +198,9 @@ function paint() {
 function btSub(b) {
   if (!b) return '<span class="bt-live" role="img" aria-label="Backtest on its way"><i></i><i></i><i></i></span>';
   const pct = (v) => { const r = Math.round(v ?? 0); return `${r > 0 ? "+" : ""}${r}%`; };
-  // The same rule as the chart (lab-shown.js): the trend follower on its
-  // timeframe when it traded, else the best 5-minute trend follower. What
-  // the row says, the chart draws.
+  // The same rule as the chart (lab-shown.js): the higher return between
+  // the 8h/1d trend follower and the best 5-minute strategy. What the row
+  // says, the chart draws.
   const s = shownSummary(b);
   if (!s) return "bt: no entry";
   const win = s.win_rate != null ? ` · ${Math.round(s.win_rate)}% win` : "";
