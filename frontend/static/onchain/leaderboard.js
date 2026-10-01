@@ -262,6 +262,10 @@ function socialLines(j) {
       body = `${at} · ${parts.join(" · ")}`;
     }
     out.push(`<li>Telegram: ${body}</li>`);
+    const events = Array.isArray(j?.tg_events) ? j.tg_events : [];
+    for (const ev of events) {
+      out.push(`<li>${escapeHtml(ev?.date ?? "")} · ${escapeHtml(ev?.type ?? "")} · ${escapeHtml(ev?.text ?? "")}</li>`);
+    }
   }
   const dc = j?.dc;
   if (dc) {
