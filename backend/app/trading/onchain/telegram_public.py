@@ -267,7 +267,7 @@ def compact(tg: dict | None) -> dict | None:
     """What the judge stores and the page shows: numbers, no texts."""
     if not tg:
         return None
-    return {k: tg.get(k) for k in ("handle", "kind", "subs", "posts_7d", "posts_30d", "last_post_days", "median_views")
+    return {k: tg.get(k) for k in ("handle", "kind", "subs", "online", "posts_7d", "posts_30d", "last_post_days", "median_views")
             if tg.get(k) is not None}
 
 

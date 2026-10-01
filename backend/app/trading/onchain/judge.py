@@ -30,7 +30,10 @@ TTL_S = 3 * 86400
 # reason to avoid (STEALF, GRID, BV7X were vetoed on it after v2). 4: a domain
 # registered with the token is normal (PFWA, 22). 5: the dossier now carries
 # the project's Telegram developments (tg_digest), so old readings are redone.
-PROMPT_VERSION = 6
+# 6: community liveness is judged by online counts, not subscriber totals
+# (14 of 16 official channels were silent for 30+ days), so old readings are
+# redone.
+PROMPT_VERSION = 7
 DAILY_MAX = 1500          # ~$0.001 a reading: every project past the filters gets its report
 ADMIT_MIN = 80
 VETO_MIN_CONF = 0.7
@@ -60,9 +63,13 @@ SYSTEM = (
     "posts from few or tiny accounts is paid shilling, not traction; silence is not a flaw for a builder. "
     "(7) Telegram, when given, is the project's own channel: steady posts with real updates from the team "
     "mean it is building; a big subscriber count with tiny views, or only hype and shill posts, means an "
-    "inflated audience; silence by itself is not a flaw for a builder. Discord, when given, is only member "
-    "and online counts of the project's own server: a few online out of many members means a quiet or "
-    "inflated server, weak evidence, not proof of a scam. "
+    "inflated audience; silence by itself is not a flaw for a builder. Community liveness is judged by "
+    "online counts (Telegram group online, Discord online) and the online/members ratio, not by subscriber "
+    "or member totals: roughly 2-15% online is normal for a real community, under 1% with thousands of "
+    "members suggests an inflated audience, and an official channel silent for months is common and weak "
+    "evidence on its own. Discord, when given, is only member and online counts of the project's own "
+    "server: a few online out of many members means a quiet or inflated server, weak evidence, not proof "
+    "of a scam. "
     "(8) Holder concentration counts wallets only: the share held by contracts is pools, vesting or "
     "launchpads, not a whale. On Robinhood Chain and other Uniswap v4 pools liquidity is normally not locked, "
     "so unlocked liquidity there is not a problem by itself. "
@@ -441,7 +448,10 @@ REVIEW_SYSTEM = (
     "judge.tg is the project's own Telegram (subs, posts in 7/30 days, days since last post, median views); "
     "a dead channel (last post > 60 days) or a group with few members is weak community evidence, not proof "
     "of a scam. judge.dc is the project's own Discord (members, online): a few online out of many members "
-    "means a quiet or inflated server, weak evidence too. "
+    "means a quiet or inflated server, weak evidence too. Community liveness is judged by online counts "
+    "(Telegram group online, Discord online) and the online/members ratio, not by subscriber or member "
+    "totals: roughly 2-15% online is normal, under 1% with thousands of members suggests an inflated "
+    "audience, and an official channel silent for months is common and weak evidence on its own. "
     "For every project answer keep (true/false), score 0-100 (your view of its quality), and a reason of at "
     "most 15 words that names the concrete problem or strength. Drop anything you would be embarrassed to "
     "show a serious investor. Answer with one JSON object only: "
