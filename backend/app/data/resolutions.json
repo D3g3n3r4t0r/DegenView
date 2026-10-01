@@ -2522,5 +2522,11 @@
     "at": 1790859998,
     "summary": "Nel database c'e' un solo tasto 'Filters' accanto alla ricerca: apre un pannello con tre gruppi a capo (verdetto, tipo, narrative), ognuno col numero di progetti, e il tasto 'Show N' dice quanti ne restano. Quello scelto compare come etichetta sotto la ricerca e si toglie con un tocco. Nel gruppo 'Type' ci sono L0, L1, L2 e le chain; ogni progetto del motore layer ha il suo tag L0/L1/L2 accanto al ticker. Corretto anche un difetto dei pannelli dal basso: aperti con la pagina scorsa finivano fuori schermo.",
     "detail": "frontend/static/onchain/projects.js (openFilters), onchain-app.html, projects_db.search(chain=, layer=) e stats().by_layer. Test: tests/test_projects_db.py. Screenshot: /mnt/project-files/database-filtri/."
+  },
+  "seed-0250": {
+    "status": "risolto",
+    "at": 1790874387,
+    "summary": "Il ricontrollo DeepSeek, la scansione manuale e le domande all'agente ora girano sul server: se cambi finestra o chiudi l'app continuano, e alla fine arriva una notifica sul dispositivo da cui li hai lanciati. Toccandola l'app si riapre sullo stesso token e sulla stessa scheda (Why), sul pannello della scansione o sulla risposta dell'agente. Se l'app e' aperta e stai guardando, niente notifica. Se riapri l'app senza toccarla, ritrovi il risultato. Un aggiornamento del server durante un lavoro lo interrompe: arriva la notifica che va rilanciato. Su iPhone le notifiche arrivano solo dall'app aggiunta alla schermata Home (iOS 16.4+): l'app lo suggerisce la prima volta.",
+    "detail": "backend app/jobs.py (lavori persistenti in data/app_jobs.json, push a fine lavoro, watch/away), app/notify/web_push.py (chiavi VAPID generate in data/vapid_keys.json o da VAPID_PRIVATE_KEY/VAPID_PUBLIC_KEY, iscrizioni in data/push_subscriptions.json), /api/jobs, /api/push/*, /sw.js, /manifest.webmanifest. Frontend: onchain/bg.js, detail.js (recheck), ask.js, sheets.js (scan). Test: tests/test_app_jobs.py."
   }
 }

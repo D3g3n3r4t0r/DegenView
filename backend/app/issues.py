@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0250", "I task lunghi lanciati dall'app si perdono se cambio finestra o chiudo l'app; manca una notifica a fine lavoro",
+     "Lorenzo, 01/10: 'qualsiasi task, qualsiasi attivita' lanciata da mobile o da desktop deve continuare in background se io cambio finestra o butto giu' l'applicazione sul telefono e arrivarmi una notifica al completamento dell'attivita' che mi riporta esattamente al punto in cui l'ho lasciata se ci clicco sulla notifica'.",
+     "alta"),
     ("seed-0249", "I filtri del database sono una riga orizzontale infinita; i layer non hanno il loro tag",
      "Lorenzo, 01/10: 'i filtri nel database sono raffigurati orizzontalmente e non riesco a gestirli tutti perche' sono veramente tanti [...] devo scorrere a destra ma non finiscono mai [...] aggiornare anche L1, L0 [...] identificarli con il relativo tag'.",
      "media"),

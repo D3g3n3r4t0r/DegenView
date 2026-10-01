@@ -7,6 +7,7 @@
  */
 import * as api from "@onchain/api.js";
 import { escapeHtml } from "@onchain/format.js";
+import * as bg from "@onchain/bg.js";
 
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 const LANGS = ["it-IT", "en-US"];
@@ -119,29 +120,60 @@ export function mountAsk() {
     try { rec?.stop(); } catch { /* already stopped */ }
   }
 
+  // The question is a job on the server (bg.js): the answer arrives even if
+  // the app is closed meanwhile, as a push that reopens this panel.
+  const DOTS = `<span class="ask-dots" aria-label="Thinking"><i></i><i></i><i></i></span>`;
+  function slot(id, question) {
+    let wait = id ? log.querySelector(`[data-job="${CSS.escape(id)}"]`) : null;
+    if (!wait) {
+      if (question) add("me", escapeHtml(question));
+      wait = add("bot", DOTS);
+      if (id) wait.dataset.job = id;
+    }
+    return wait;
+  }
+  function answer(wait, job) {
+    if (job.state === "finito") {
+      wait.className = "ask-msg ask-bot";
+      wait.innerHTML = escapeHtml(job.result?.answer || "No answer.");
+    } else {
+      wait.className = "ask-msg ask-err";
+      wait.textContent = job.error || "The agent is not answering.";
+    }
+    if (sheet.hidden) fab.classList.add("has-new");
+    log.scrollTop = log.scrollHeight;
+  }
+
   async function ask(question, voice) {
     busy = true;
     sync();
-    add("me", escapeHtml(question));
-    const wait = add("bot", `<span class="ask-dots" aria-label="Thinking"><i></i><i></i><i></i></span>`);
+    const wait = slot(null, question);
+    const view = bg.here("&ask=1");
+    let job;
     try {
-      const res = await api.askAgent(question, voice);
-      wait.innerHTML = escapeHtml(res?.answer || "No answer.");
-      if (sheet.hidden) fab.classList.add("has-new");
+      job = await bg.run("ask", async () => {
+        const r = await api.askJob(question, voice, view);
+        if (r?.job) wait.dataset.job = r.job;
+        return r;
+      }, { view, label: question });
     } catch (err) {
-      wait.className = "ask-msg ask-err";
-      wait.textContent = err?.message || "The agent is not answering.";
-    } finally {
-      busy = false;
-      sync();
-      log.scrollTop = log.scrollHeight;
+      job = { state: "fallito", error: err?.message };
     }
+    answer(wait, job);
+    busy = false;
+    sync();
   }
 
-  function open() {
+  bg.handle("ask", {
+    show(job, meta) { if (sheet.hidden) open({ listen: false }); answer(slot(job.id, meta.label), job); },
+    pending(meta) { if (sheet.hidden) open({ listen: false }); slot(meta.id, meta.label); },
+  });
+
+  function open({ listen = true } = {}) {
     sheet.hidden = false;
     fab.setAttribute("aria-expanded", "true");
     fab.classList.remove("has-new");
+    if (!listen) return;
     if (SR && !text.value.trim()) startListening(); else text.focus();
   }
 
@@ -181,6 +213,7 @@ export function mountAsk() {
     text.value = "";
     spoken = false;
     sync();
+    bg.askPush();
     ask(q, voice);
   });
   // Non-blocking: the page stays usable, and a tap outside folds the panel
