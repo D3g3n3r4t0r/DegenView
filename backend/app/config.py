@@ -128,6 +128,9 @@ class Settings(BaseSettings):
     # parametro di richiesta, solo cambiando questo file/env.
     onchain_max_usd_per_trade: float = 20.0
     onchain_max_usd_per_day: float = 100.0
+    # Tetto della size per ingresso (Lorenzo, 30/09): nessun ingresso oltre
+    # lo slippage stimato sul pool (slippage.py). Sim, portafoglio Top 50 e Real.
+    onchain_max_slippage_pct: float = 1.0
     onchain_max_token_concentration_pct: float = 15.0  # % del capitale gestito in un solo token
 
     # Piano MEV: instradare gli ordini Solana via Jito bundle invece

@@ -24,6 +24,7 @@ import json
 import math
 
 from app.atomic_write import write_text_atomic
+from app.trading.onchain import slippage
 from app.trading.onchain.storage import data_file
 from app.trading.onchain.system import SPOT_LABELS, shown
 
@@ -73,9 +74,11 @@ def reset_for_tests() -> None:
     _loaded = True
 
 
-def remember(chain: str, token: str, symbol: str | None, bt: dict | None, save: bool = True) -> bool:
+def remember(chain: str, token: str, symbol: str | None, bt: dict | None, save: bool = True,
+             liq: float | None = None) -> bool:
     """Add the trades the Top row shows now to the ledger. Old trades stay:
-    a later backtest only adds. True if something new came in."""
+    a later backtest only adds. True if something new came in. `liq` is the
+    pool's liquidity now: the replay caps each entry's size on it."""
     got = token_trades(bt)
     if not got:
         return False
@@ -83,6 +86,8 @@ def remember(chain: str, token: str, symbol: str | None, bt: dict | None, save: 
     interval, events = got
     row = _ledger.setdefault(f"{chain}:{token}", {"chain": chain, "token": token, "events": {}})
     row["symbol"] = symbol or row.get("symbol")
+    if _ok(liq) and liq > 0:
+        row["liq"] = float(liq)
     row["interval"] = interval
     # Since 30/09 the arrows sit on the fill candle, one candle after the
     # signal (system._best_trades, "fills"): the same trade saved before
@@ -130,7 +135,7 @@ def _save() -> None:
 def ledger_tokens() -> list[dict]:
     _load()
     return [{"chain": r["chain"], "token": r["token"], "symbol": r.get("symbol"), "interval": r.get("interval"),
-             "events": _one_timeframe(r)} for r in _ledger.values()]
+             "liq": r.get("liq"), "events": _one_timeframe(r)} for r in _ledger.values()]
 
 
 # Set by relabel: made by none of the listed strategies on the same candles.
@@ -218,8 +223,15 @@ def _ok(v) -> bool:
 
 
 def replay(tokens: list[dict], capital: float = DEFAULT_CAPITAL, share: float = DEFAULT_SHARE,
-           marks: dict[str, float] | None = None, now: float | None = None) -> dict:
-    """tokens: [{chain, token, symbol, interval, events}]; marks: {"chain:token": price}."""
+           marks: dict[str, float] | None = None, now: float | None = None,
+           max_slip_pct: float | None = None) -> dict:
+    """tokens: [{chain, token, symbol, interval, events, liq}]; marks: {"chain:token": price}.
+
+    Lorenzo, 30/09: no entry may move an illiquid pool's price. A token with a
+    known liquidity (`liq`) buys at most what keeps the slippage under
+    `max_slip_pct` (slippage.max_usd), and both legs pay their estimated
+    slippage on top of the backtest's fees. The liquidity is today's, not the
+    one at the trade's time: a limit of the estimate."""
     marks = marks or {}
     flow = []
     for tk in tokens:
@@ -232,7 +244,8 @@ def replay(tokens: list[dict], capital: float = DEFAULT_CAPITAL, share: float = 
     held: dict[str, dict] = {}
     closed: list[dict] = []
     curve: list[list[float]] = []
-    skipped = 0
+    skipped = capped = 0
+    slip_cost = 0.0
     peak, max_dd = float(capital), 0.0
 
     def equity() -> float:
@@ -245,11 +258,14 @@ def replay(tokens: list[dict], capital: float = DEFAULT_CAPITAL, share: float = 
             if p:
                 continue
             stake = min(cash, equity() * share)
+            stake, est = slippage.cap(stake, tk.get("liq"), max_slip_pct)
             if stake < MIN_STAKE:
                 skipped += 1
                 continue
+            capped += bool(est.get("capped"))
             cash -= stake
-            held[key] = {"chain": tk["chain"], "token": tk["token"], "symbol": tk.get("symbol"),
+            held[key] = {**({"wanted": est["wanted"], "max_usd": est["max_usd"]} if est.get("capped") else {}),
+                         "slip_in": est.get("slip_pct"), "chain": tk["chain"], "token": tk["token"], "symbol": tk.get("symbol"),
                          "interval": e.get("iv") or tk.get("interval"), "strategy": strategy_of(e),
                          "at": int(t), "entry_price": e.get("price"),
                          "stake": round(stake, 2)}
@@ -258,7 +274,12 @@ def replay(tokens: list[dict], capital: float = DEFAULT_CAPITAL, share: float = 
             if not _ok(ret):
                 ep, xp = p.get("entry_price"), e.get("price")
                 ret = xp / ep - 1 if _ok(ep) and _ok(xp) and ep > 0 else 0.0
-            back = p["stake"] * (1 + ret)
+            depth = slippage.depth_of(tk.get("liq"))
+            gross = p["stake"] * (1 + ret)
+            # The buy filled worse by its slippage, the sell gets less by its own.
+            back = gross * (1 - (p.get("slip_in") or 0) / 100) * (1 - (slippage.impact_pct(gross, depth) or 0) / 100)
+            slip_cost += gross - back
+            ret = back / p["stake"] - 1
             cash += back
             del held[key]
             closed.append({**p, "exit_at": int(t), "exit_price": e.get("price"), "ret": round(ret, 4),
@@ -291,5 +312,7 @@ def replay(tokens: list[dict], capital: float = DEFAULT_CAPITAL, share: float = 
             "cash": round(cash, 2), "ret": round(final / capital - 1, 4) if capital else None,
             "max_dd": round(max_dd, 4), "trades": len(closed), "wins": wins,
             "win_rate": round(wins / len(closed), 4) if closed else None, "skipped": skipped,
+            "capped": capped, "slippage_usd": round(slip_cost, 2),
+            "max_slippage_pct": max_slip_pct if max_slip_pct is not None else slippage.max_pct(),
             "tokens": len(tokens), "from": int(flow[0][0]) if flow else None,
             "open": open_rows, "closed": closed, "curve": curve}

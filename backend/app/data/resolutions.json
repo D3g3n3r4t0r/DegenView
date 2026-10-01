@@ -2487,5 +2487,10 @@
     "status": "risolto",
     "at": 1790820027,
     "summary": "La tab Memes ora e' Signals: per ogni gemma della Top 50 l'ultimo buy/sell del trend follower 8h/1d (in alto quelli degli ultimi 7 giorni), cosa tiene in posizione e cosa aspetta un ingresso; lo scanner manuale resta in cima. La tab Strategies ora e' Record: come sono andate davvero le gemme scelte dopo 1/3/7/30/90 giorni contro la moneta della chain, il confronto scelte/studiate/scartate e le 'mancate' (scartate che hanno raddoppiato). Tolti 'Fired last 48h', 'About to fire', live scanner meme, pilota meme e classifica dei backtest; i rendimenti restano nel conto simulato."
+  },
+  "seed-0244": {
+    "status": "risolto",
+    "at": 1790820498,
+    "summary": "Ogni ingresso ora ha un tetto: al massimo la size che sul pool fa l'1% di slippage (configurabile, onchain_max_slippage_pct). La stima viene dal quote del DEX dove c'e' (Jupiter su Solana, Uniswap v3 su Robinhood), altrimenti dalla profondita' del pool (BSC, Ethereum, Base). Esempio: pool con $100k di liquidita', ingresso massimo ~$505; i $3.000 avrebbero fatto ~5,7% di slippage. Il tetto vale nel portafoglio Top 50 da $10k (che ora paga anche lo slippage stimato in entrata e uscita), nel pilota Sim e nel Real (che resta bloccato come prima). Anteprima nella pagina del token (slippage sull'ingresso del portafoglio e size massima) e una riga nella notifica Telegram di ingresso. Limite: per il passato si usa la liquidita' di oggi."
   }
 }
