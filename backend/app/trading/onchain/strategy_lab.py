@@ -236,7 +236,8 @@ def descent_end(start: int) -> int:
 
 
 async def run_daily(client: httpx.AsyncClient, net: str, pair: str, token: str, now: float,
-                    fast: list[list] | None = None, strategies: list[tuple[str, str]] | None = None) -> dict | None:
+                    fast: list[list] | None = None, strategies: list[tuple[str, str]] | None = None,
+                    rule: bool | None = None) -> dict | None:
     """Il trend-follower del sito sul gradino di LADDER che la storia del
     grafico regge: dal piu' largo con TRIGGER_MIN_BARS candele chiuse in
     giu', il primo in cui la strategia entra almeno una volta. `fast` = le
@@ -257,8 +258,9 @@ async def run_daily(client: httpx.AsyncClient, net: str, pair: str, token: str, 
     # variant of the same trend follower (Trend HF: VWAP, efficiency, ATR
     # trail) down the same rungs. Still trend following, still long only.
     # Candles are fetched lazily, so the fallback costs no extra calls.
-    ladder = LADDER[start:descent_end(start)] if LADDER_RULE else [r for r in LADDER if r[0] in OLD_RUNGS]
-    for name, label in strategies or (TREND_FOLLOWERS if LADDER_RULE else TREND_FOLLOWERS[:1]):
+    on = LADDER_RULE if rule is None else rule      # rule: the daily check runs both without the global
+    ladder = LADDER[start:descent_end(start)] if on else [r for r in LADDER if r[0] in OLD_RUNGS]
+    for name, label in strategies or (TREND_FOLLOWERS if on else TREND_FOLLOWERS[:1]):
         for iv, tf, agg in ladder:
             if (tf, agg) not in got:
                 raw = await candle_archive.candles(client, net, pair, tf, agg, now, token)
@@ -272,7 +274,7 @@ async def run_daily(client: httpx.AsyncClient, net: str, pair: str, token: str, 
                 tried = {"interval": iv, "bars": len(bars), "error": "too few candles"}
                 continue
             res = {"interval": iv, **await asyncio.to_thread(system.backtest_one, bars, name, label)}
-            if _entered(res) or not LADDER_RULE:
+            if _entered(res) or not on:
                 return res
             first_ok = first_ok or res
     return first_ok or tried
