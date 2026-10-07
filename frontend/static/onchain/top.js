@@ -208,11 +208,12 @@ function marketSub(e) {
   return line || (e.liquidity_usd != null ? `Liquidity ${usdShort(e.liquidity_usd)}` : "");
 }
 
+// Its own view in the dock (Lorenzo, 07/10: "la sezione EARLY non la trovo").
 function paintEarly(list) {
-  const box = root.querySelector("[data-top-early]");
+  const box = document.querySelector("[data-early-view]");
   if (!box) return;
-  box.hidden = !list.length || filtered;   // the early list is not narrowed by narrative
-  box.querySelector("ol").innerHTML = list.map((e) => {
+  box.querySelector("[data-early-empty]").hidden = list.length > 0;
+  box.querySelector("[data-early-rows]").innerHTML = list.map((e) => {
     const id = `gem:${e.chain}:${e.token_address}`;
     register(id, { kind: "gem", symbol: e.symbol, name: e.name, chain: e.chain, token: e.token_address, pair: e.pair_address,
       pairUrl: e.pair_url, image: e.image, cap: e.market_cap, change: e.change_24h != null ? e.change_24h / 100 : null,
@@ -246,7 +247,7 @@ async function load() {
     entries = top?.entries ?? [];
     labStatus = top?.backtests ?? null;
     paint();
-    paintEarly(top?.early ?? []);
+    paintEarly(top?.early ?? []);   // the board's own early list, never narrowed by narrative
   } catch {
     // Keep the last list; with none yet, the cube says the next poll retries.
     const wait = root.querySelector(".top-wait");

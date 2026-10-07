@@ -2555,5 +2555,11 @@
     "at": 1791381764,
     "summary": "La pagina dei token layer (L0/L1/L2) tornava errore 500: il motore layer salva i pilastri come lista, la pagina li leggeva come scheda. Ora vengono letti in tutte e due le forme, e la pagina mostra GitHub, ricerca e tokenomics del layer.",
     "detail": "backend/app/trading/onchain/leaderboard.py db_entry, manual_scan.py. Test: tests/test_onchain_layers.py::test_layer_token_page_reads_list_pillars."
+  },
+  "seed-0254": {
+    "status": "risolto",
+    "at": 1791388456,
+    "summary": "Early ha ora il suo posto nel dock, al posto di Record: i progetti sotto i $300k di cap che passano tutte le altre soglie della Top, con una riga che spiega cosa sono e un avviso quando la lista e' vuota. Lo storico delle scelte (Record) resta, piegato in fondo al Profilo sotto 'Track record'.",
+    "detail": "frontend/onchain-app.html (#early-view, dock, #track-fold), static/onchain/top.js paintEarly, app.css."
   }
 }
