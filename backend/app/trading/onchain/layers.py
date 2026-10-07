@@ -368,6 +368,12 @@ async def run(client: httpx.AsyncClient, now: float | None = None) -> int:
     for c in cands:
         c["tvl"] = tvl_by_name.get(c["name"].lower()) or 0
     found = _state.get("found") or {}
+    for c in cands:     # rows studied before the alias cleanup existed
+        if (found.get(c["id"]) or {}).get("type"):
+            try:
+                projects_db.drop_layer_alias(c["symbol"], c["id"])
+            except Exception:
+                logger.exception("layers: alias cleanup for %s failed", c["id"])
     todo = [c for c in cands if now - (found.get(c["id"], {}).get("at") or 0) >= DETAIL_TTL_S]
     # never seen first, then chains with DeFi usage, then by size
     todo.sort(key=lambda c: (c["id"] in found, -c["tvl"], -c["market_cap"]))
@@ -446,6 +452,7 @@ async def run(client: httpx.AsyncClient, now: float | None = None) -> int:
                                          "stables_usd": ex.get("stables_usd") or 0,
                                          "fees_30d": ex.get("fees_30d") or 0,
                                          "l2beat": l2beat.get(name.lower()) or {}}, now=now)
+            projects_db.drop_layer_alias(symbol, cid)
         except Exception:
             logger.exception("layers: database write for %s failed", cid)
             continue
