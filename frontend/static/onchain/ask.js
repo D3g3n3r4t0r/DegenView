@@ -21,7 +21,13 @@ const LANGS = ["it-IT", "en-US"];
 const LANG_KEY = "ask.lang";
 const TALK_KEY = "ask.talk";
 const TTS = window.speechSynthesis;
-const SILENCE_MS = 1700;        // a pause this long ends the spoken question
+// End of the spoken question (Lorenzo, 01/10: "deve tagliare prima [...]
+// quando mi fermo lo deve capire prima"): a short wait once the recognizer
+// has settled the words, a longer one while it is still guessing, and the
+// shortest when the phone itself ends the session at a pause.
+const SILENCE_FINAL_MS = 800;
+const SILENCE_INTERIM_MS = 1300;
+const SILENCE_END_MS = 450;
 const WATCHDOG_MS = 1500;       // talk mode: reopen the mic if it went quiet
 // A silent WAV: played on the opening tap so iOS lets later answers play.
 const SILENT_WAV = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
@@ -152,6 +158,7 @@ export function mountAsk() {
     if (!speaking) return;
     setSpeaking(false);
     player.pause();
+    stopPlayback?.();
     try { TTS.cancel(); } catch { /* nothing playing */ }
   }
 
@@ -162,6 +169,31 @@ export function mountAsk() {
     if (talk && !sheet.hidden) startListening();
   }
 
+  // Play the server's WAV. Resolves when it ends; rejects with started=false
+  // when nothing came out (blocked, unsupported), so the caller can fall
+  // back to the device voice instead of going silent.
+  let stopPlayback = null;
+  function playServer(blob) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(blob);
+      let started = false, settled = false;
+      const done = (ok) => {
+        if (settled) return;
+        settled = true;
+        stopPlayback = null;
+        player.onended = player.onerror = player.onplaying = null;
+        URL.revokeObjectURL(url);
+        if (ok) resolve(); else reject(Object.assign(new Error("playback"), { started }));
+      };
+      stopPlayback = () => done(true);
+      player.onplaying = () => { started = true; };
+      player.onended = () => done(true);
+      player.onerror = () => done(false);
+      player.src = url;
+      player.play().catch(() => done(false));
+    });
+  }
+
   async function say(answer) {
     const line = speakable(answer, lang);
     if (!talk || !line || sheet.hidden) return;
@@ -170,14 +202,13 @@ export function mountAsk() {
       try {
         const blob = await api.speakAgent(line, lang.slice(0, 2));
         if (!speaking) return;
-        const url = URL.createObjectURL(blob);
-        player.onended = player.onerror = () => { URL.revokeObjectURL(url); afterVoice(); };
-        player.src = url;
-        await player.play();
+        await playServer(blob);
+        afterVoice();
         return;
       } catch (err) {
         if (err?.status === 503) serverVoice = false;
         if (!speaking) return;
+        if (err?.started) { afterVoice(); return; }
       }
     }
     sayLocally(line);
@@ -219,11 +250,14 @@ export function mountAsk() {
         const r = event.results[i];
         if (r.isFinal) finals += r[0].transcript; else interim += r[0].transcript;
       }
+      const settled = !interim.trim();
       text.value = (base + finals + interim).replace(/\s+/g, " ").trimStart();
       spoken = true;
       sync();
       clearTimeout(silence);
-      if (talk && text.value.trim()) silence = setTimeout(() => { stopListening(); sendSpoken(); }, SILENCE_MS);
+      if (talk && text.value.trim()) {
+        silence = setTimeout(() => { stopListening(); sendSpoken(); }, settled ? SILENCE_FINAL_MS : SILENCE_INTERIM_MS);
+      }
     };
     rec.onerror = (event) => {
       if (event.error === "not-allowed" || event.error === "service-not-allowed") {
@@ -239,6 +273,12 @@ export function mountAsk() {
       if (!talk || sheet.hidden || busy || speaking || blocked) return;
       const now = Date.now();
       restarts = heard ? [] : [...restarts.filter((t) => now - t < 10000), now];
+      // The phone closed the session at a pause after hearing words: that is
+      // the end of the question, unless more speech lands in the next moment.
+      if (heard && text.value.trim()) {
+        clearTimeout(silence);
+        silence = setTimeout(sendSpoken, SILENCE_END_MS);
+      }
       if (restarts.length > 6) { blocked = true; hint(); return; }   // dying in a loop: wait for a tap
       setTimeout(startListening, 120);
     };
