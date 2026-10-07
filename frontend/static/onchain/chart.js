@@ -25,6 +25,7 @@ import { ApiError } from "@onchain/api.js";
 import { formatUsd } from "@onchain/format.js";
 import * as sheets from "@onchain/sheets.js";
 import { state } from "@onchain/store.js";
+import { chartOptions, chartTheme, seriesOptions, track } from "@onchain/chart-theme.js";
 
 const CANDLE_REFRESH_MS = 8000; // storia: DexScreener/GeckoTerminal, non fatti per un polling piu' stretto
 const PRICE_REFRESH_MS = 2500;  // corrente: lo stesso quoter dello swap, pensato per un polling stretto
@@ -41,6 +42,7 @@ const DEFAULT_TOKEN = {
 let root = null;
 let chart = null;
 let series = null;
+let untrack = null;
 let candleTimer = null;
 let priceTimer = null;
 let currentToken = null;
@@ -89,6 +91,7 @@ export function mountChart(container) {
 }
 
 function paintShell() {
+  untrack?.();
   chart = null;
   series = null;
   const name = currentToken ? currentToken.symbolHint || shortAddr(currentToken.address) : "Pick a token";
@@ -170,6 +173,7 @@ function setStatus(text) {
 export function resetForChainSwitch() {
   clearInterval(candleTimer);
   clearInterval(priceTimer);
+  untrack?.();
   chart = null;
   series = null;
   currentToken = null;
@@ -190,20 +194,12 @@ function loadAndRender() {
         chartLibrary(),
       ]);
       if (!chart) {
-        // Area menta, non candele: la linea del mockup approvato — il
-        // prezzo di chiusura di ogni candela, stessi dati di prima.
-        chart = LightweightCharts.createChart(container, {
-          layout: { background: { color: "transparent" }, textColor: "#9aa0ab", fontSize: 11, attributionLogo: false },
-          grid: { vertLines: { color: "rgba(255,255,255,0.03)" }, horzLines: { visible: false } },
-          rightPriceScale: { borderVisible: false },
-          timeScale: { timeVisible: true, borderVisible: false },
-          crosshair: { vertLine: { color: "#5f6672" }, horzLine: { color: "#5f6672" } },
-        });
-        series = chart.addAreaSeries({
-          lineColor: "#2de0a8", lineWidth: 2,
-          topColor: "rgba(45,224,168,0.28)", bottomColor: "rgba(45,224,168,0.02)",
-          priceLineVisible: false,
-        });
+        // Area, non candele: il prezzo di chiusura di ogni candela, nei
+        // colori e nel font dell'app (chart-theme.js).
+        const theme = chartOptions();
+        chart = LightweightCharts.createChart(container, { ...theme, timeScale: { ...theme.timeScale, timeVisible: true } });
+        series = chart.addAreaSeries({ ...seriesOptions("area"), lineWidth: 2, priceLineVisible: false });
+        untrack = track(chart, series, "area");
       }
       series.setData(data.candles.map((c) => ({ time: c.time, value: c.close })));
       if (data.stats) paintStats(data.stats);
@@ -245,12 +241,13 @@ async function paintMarkersAndLimits(chain, symbol) {
       api.listLimitOrders(chain),
     ]);
     const tokenSymbol = symbol.split("@")[0];
+    const c = chartTheme();
 
     const markers = history.orders
       .filter((o) => o.status === "confirmed" && o.token === tokenSymbol)
       .map((o) => ({
         time: o.updated_at, position: o.side === "buy" ? "belowBar" : "aboveBar",
-        color: o.side === "buy" ? "#2de0a8" : "#ff5c5c", shape: o.side === "buy" ? "arrowUp" : "arrowDown",
+        color: o.side === "buy" ? c.up : c.down, shape: o.side === "buy" ? "arrowUp" : "arrowDown",
         text: o.side === "buy" ? "Buy" : "Sell",
       }))
       .sort((a, b) => a.time - b.time);
@@ -260,7 +257,7 @@ async function paintMarkersAndLimits(chain, symbol) {
       .filter((o) => o.status === "open" && (o.pair.startsWith(`${tokenSymbol}→`) || o.pair.endsWith(`→${tokenSymbol}`)))
       .forEach((o) => {
         series.createPriceLine({
-          price: o.target_price_usd, color: "#f0b90b", lineWidth: 1, lineStyle: 2,
+          price: o.target_price_usd, color: c.amber, lineWidth: 1, lineStyle: 2,
           axisLabelVisible: true, title: o.direction === "buy_below" ? "limit buy" : "limit sell",
         });
       });

@@ -340,10 +340,11 @@
     & .ln { fill: none; stroke: var(--k-mint); stroke-width: 1.6; stroke-linejoin: round; }
     &[data-sign="down"] .ln { stroke: var(--k-red); }
     & text { fill: var(--k-text-4); font: 500 10px var(--mono); stroke: none; }
-    & .now { stroke: #4ade80; stroke-opacity: .45; stroke-dasharray: 4 4; stroke-width: 1; }
-    & .dot { fill: #4ade80; stroke: var(--k-bg); stroke-width: 2; }
-    & .tag path { fill: #4ade80; stroke: none; }
-    & .tag text { fill: #052e16; font: 700 11px var(--mono); }
+    & .now { stroke: var(--k-mint); stroke-opacity: .45; stroke-dasharray: 4 4; stroke-width: 1; }
+    & .dot { fill: var(--k-mint); stroke: var(--k-bg); stroke-width: 2; }
+    & .tag path { fill: var(--k-mint); stroke: none; }
+    & .tag text { fill: var(--k-bg); font: 700 11px var(--mono); }
+    &[data-sign="down"] :is(.dot, .tag path) { fill: var(--k-red); } &[data-sign="down"] .now { stroke: var(--k-red); }
     & .mk circle { fill: var(--k-bg); stroke: var(--k-amber); stroke-width: 1.6; }
     & .mk path { fill: var(--k-amber); stroke: none; } }
   .dt-chips { display: flex; align-items: center; gap: 4px; margin: 12px 0 0; overflow-x: auto; scrollbar-width: none;
@@ -454,8 +455,8 @@
     &[data-state="in"] { color: var(--c-up, #34d399); } }
   .feed-head.sys { padding: 10px 12px; border-radius: 12px; background: var(--c-up-soft, rgb(52 211 153 / .07)); box-shadow: inset 0 0 0 1px rgb(52 211 153 / .16);
     & > b:first-child { display: block; margin-bottom: 2px; color: var(--k-text); } }
-  .line-chart .tr { stroke: #0b0b0d; stroke-width: 1.2;
-    &.buy { fill: #34d399; } &.sell { fill: #f87171; } }
+  .line-chart .tr { stroke: var(--k-bg); stroke-width: 1.2;
+    &.buy { fill: var(--k-mint); } &.sell { fill: var(--k-red); } }
 }
 
 /* --- auto-trade card (autotrade.js) ------------------------------------- */
@@ -1302,8 +1303,8 @@ html, body { overflow-x: clip; }
 /* Top 50 wallet (sim-backtest.js) */
 .sbt { display: grid; gap: 10px; }
 .sbt-total { margin: 0; display: flex; align-items: baseline; gap: 8px; & b { font-size: 28px; font-weight: 700; color: var(--k-text); } }
-.sbt-curve { inline-size: 100%; block-size: 90px; & path { fill: none; stroke: #34d399; stroke-width: 1.6; vector-effect: non-scaling-stroke; } }
-.sbt-curve[data-sign="down"] path { stroke: #f87171; }
+.sbt-curve { inline-size: 100%; block-size: 90px; & path { fill: none; stroke: var(--k-mint); stroke-width: 1.6; vector-effect: non-scaling-stroke; } }
+.sbt-curve[data-sign="down"] path { stroke: var(--k-red); }
 .sbt-list { display: grid; gap: 6px; }
 .sbt-row { inline-size: 100%; border: 0; color: inherit; font: inherit; text-align: start; cursor: pointer; }
 
