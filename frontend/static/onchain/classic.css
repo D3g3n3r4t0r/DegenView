@@ -426,8 +426,9 @@ dialog.sheet :is(.rows, [tabindex="-1"]):focus { outline: none !important; }
 .dt-tabs button { flex: 1; block-size: 40px !important; border: 0 !important; border-radius: 2px !important; background: var(--c-pill) !important; color: var(--c-text-2) !important; }
 .dt-tabs button[aria-current] { background: var(--c-ink) !important; color: var(--c-on-ink) !important; }
 .dt-tabs button::after { display: none !important; }
-.dt-chips { margin-inline: -16px !important; padding-inline: 16px; scroll-padding-inline: 16px; gap: 8px !important; }
-.dt-chips button { block-size: 36px; padding: 0 14px !important; border-radius: 2px !important; background: var(--c-pill) !important; }
+/* Every timeframe in one row, none cut at the edge (1W was hidden, 07/10). */
+.dt-chips { display: grid !important; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); overflow: visible !important; gap: 4px !important; }
+.dt-chips button { block-size: 36px; padding: 0 !important; min-inline-size: 0; border-radius: 2px !important; background: var(--c-pill) !important; }
 .dt-chips button:is([aria-current], [aria-pressed="true"]) { background: var(--c-ink) !important; color: var(--c-on-ink) !important; }
 .why-score { padding: 14px !important; gap: 14px; }
 .ds-recheck { min-block-size: 48px; border: 0 !important; border-radius: 2px !important; background: var(--c-pill) !important; font: 500 15px var(--sans) !important; }

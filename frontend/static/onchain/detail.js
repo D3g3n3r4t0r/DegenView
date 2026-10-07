@@ -21,6 +21,7 @@ const INTERVALS = ["1m", "5m", "15m", "1h", "4h", "8h", "1d", "1w"];
 // the 4-hour and daily ones, like strategy_lab._merge_8h on the server.
 // Weeks start on Monday 00:00 UTC (the epoch was a Thursday).
 const DERIVED = { "8h": ["4h", 28800, 0], "1w": ["1d", 604800, 4 * 86400] };
+const MIN_BAR_PX = 7;   // narrowest candle the chart opens with
 const STEP = { "1m": 60, "5m": 300, "15m": 900, "1h": 3600, "4h": 14400, "8h": 28800, "1d": 86400, "1w": 604800 };
 const WATCH_KEY = "watchlist-v1";
 const loading = new Set();
@@ -888,7 +889,13 @@ async function drawChart(box, candles, e, iv = interval) {
   }
   marks.sort((x, y) => x.time - y.time);
   lw.series.setMarkers(marks);
-  lw.chart.timeScale().fitContent();
+  // A year of daily bars fitted into a phone is a row of dots (FLOW, 07/10:
+  // "la visualizzazione cosi' non va bene"): open on the latest bars at a
+  // readable width, older ones a swipe away; the price axis fits what shows.
+  const ts = lw.chart.timeScale();
+  const fit = Math.floor((box.clientWidth || 360) / MIN_BAR_PX);
+  if (bars.length <= fit) ts.fitContent();
+  else ts.setVisibleLogicalRange({ from: bars.length - fit, to: bars.length - 1 + 8 });
   lw.before = before;
   return drawn;
 }
