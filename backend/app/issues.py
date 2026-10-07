@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0254", "La lista Early non si trova; la schermata Record non si capisce a cosa serva",
+     "Lorenzo, 07/10: 'la sezione EARLY non la trovo pero', la metterei al posto di questa schermata che non capisco neanche a cosa serva'.",
+     "media"),
     ("seed-0253", "Errore 500 sulla pagina di un token layer (AttributeError: 'list' object has no attribute 'get')",
      "Avviso Telegram del 07/10: 'Errore 500 su GET /api/onchain/token, AttributeError: 'list' object has no attribute 'get''.",
      "alta"),
