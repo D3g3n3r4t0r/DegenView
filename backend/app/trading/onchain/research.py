@@ -37,7 +37,7 @@ from app.atomic_write import write_text_atomic
 logger = logging.getLogger(__name__)
 
 GECKO_INFO = "https://api.geckoterminal.com/api/v2/networks/{net}/tokens/{token}/info"
-GECKO_NET = {"solana": "solana", "robinhood": "robinhood", "base": "base", "ethereum": "eth", "bsc": "bsc"}
+GECKO_NET = {"solana": "solana", "robinhood": "robinhood", "base": "base", "ethereum": "eth", "bsc": "bsc", "arc": "arc"}
 MAX_SITES = 3
 AI_TTL_S = 7 * 86400
 

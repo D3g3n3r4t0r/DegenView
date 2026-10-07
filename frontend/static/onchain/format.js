@@ -88,13 +88,14 @@ export function age(ts) {
   return [`${Math.round(s / 86400)}d`, false];
 }
 
-const DS_CHAIN = { solana: "solana", robinhood: "robinhood", base: "base", bsc: "bsc", ethereum: "ethereum" };
+const DS_CHAIN = { solana: "solana", robinhood: "robinhood", base: "base", bsc: "bsc", ethereum: "ethereum", arc: "arc" };
 const CHAIN_MARK = {
   solana: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 16.5h12.5l2-2H7zM5 7.5h12.5l2 2H7zM5 12h12.5l2-2H7" /></svg>',
   robinhood: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 20 12 12 21 4 12z" /></svg>',
   base: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="3.5" /></svg>',
   bsc: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 15 6.5 12 9.5 9 6.5zM12 14.5l3 3-3 3-3-3zM6.5 9l3 3-3 3-3-3zM17.5 9l3 3-3 3-3-3zM12 9.5l2.5 2.5-2.5 2.5L9.5 12z" /></svg>',
   ethereum: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5 6 12.2 12 16l6-3.8zM6 13.6l6 8 6-8-6 3.8z" /></svg>',
+  arc: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19a8 8 0 0 1 16 0h-3.5a4.5 4.5 0 0 0-9 0z" /></svg>',
 };
 
 /** The token's logo: DexScreener's image, else its public logo for the

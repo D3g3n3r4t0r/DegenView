@@ -157,7 +157,7 @@ def project_key(a):
     chain, token = a["chain"], a.get("token_address") or a.get("token")
     if not isinstance(chain, str) or not isinstance(token, str) or not chain or not token:
         raise ValueError("project identity required")
-    if chain in {"ethereum", "base", "bsc", "robinhood", "arbitrum", "polygon", "optimism", "avalanche"}:
+    if chain in {"ethereum", "base", "bsc", "robinhood", "arbitrum", "polygon", "optimism", "avalanche", "arc"}:
         token = token.lower()
     return json.dumps([chain, token], separators=(",", ":"))
 

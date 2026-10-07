@@ -45,7 +45,7 @@ def test_narrative_is_a_label_not_points():
 def test_chain_index_and_narrative_pages(monkeypatch):
     idx = d.chain_index([{"id": "a", "platforms": {"solana": "M"}}, {"id": "b", "platforms": {"arbitrum": "0x"}},
                          {"id": "c", "platforms": {"robinhood": "0xc"}}])
-    assert idx == {"solana": {"a"}, "robinhood": {"c"}, "base": set(), "ethereum": set()}
+    assert idx == {"solana": {"a"}, "robinhood": {"c"}, "base": set(), "ethereum": set(), "arc": set()}
     calls = []
 
     async def fake_get(client, path, params=None):

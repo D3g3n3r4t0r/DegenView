@@ -37,7 +37,8 @@ logger = logging.getLogger(__name__)
 PROTOCOLS = "https://api.llama.fi/protocols"
 FEES = "https://api.llama.fi/overview/fees?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true"
 REFRESH_S = 6 * 3600
-CHAIN_NAMES = {"solana": ("Solana",), "robinhood": ("Robinhood", "Robinhood Chain"), "base": ("Base",), "ethereum": ("Ethereum",)}
+CHAIN_NAMES = {"solana": ("Solana",), "robinhood": ("Robinhood", "Robinhood Chain"), "base": ("Base",), "ethereum": ("Ethereum",),
+               "arc": ("Arc",)}
 CAP_MIN = 50_000
 CAP_MAX = 3_000_000
 TVL_MIN_UNPRICED = 50_000        # no market cap on DefiLlama: enter only with real TVL

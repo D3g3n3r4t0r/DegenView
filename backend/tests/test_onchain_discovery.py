@@ -159,7 +159,7 @@ def test_readme_addresses_skips_words_and_known_programs():
             f"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA. Robinhood: {EVM}\n"
             "abcdefghijkmnopqrstuvwxyzabcdefghijk")
     out = d.readme_addresses(text)
-    assert out == {"solana": [MINT], "robinhood": [EVM], "base": [EVM], "ethereum": [EVM]}
+    assert out == {"solana": [MINT], "robinhood": [EVM], "base": [EVM], "ethereum": [EVM], "arc": [EVM]}
 
 
 def test_search_candidates_keeps_fresh_own_repos():
@@ -249,11 +249,27 @@ def test_base_is_searched_like_the_other_chains():
     assert d.chain_index(rows)["base"] == {"book"}
 
 
+def test_arc_is_a_read_only_gem_chain():
+    """Arc (Circle's L1, chain id 5042): searched for gems, never traded (07/10)."""
+    from app.sniper import scanner
+    from app.trading.onchain import judge, legit, live_prices, radar, research, traction
+    assert "arc" in legit.GEM_CHAINS and "arc" not in legit.MEME_CHAINS and "arc" not in radar.CHAINS
+    assert legit.GOPLUS_CHAIN["arc"] == "5042" and legit.CHAIN_LABEL["arc"] == "Arc"
+    assert d.CG_CATEGORIES["arc"][0] == "arc-ecosystem" and d.CG_PLATFORMS["arc"] == ("arc",)
+    assert research.GECKO_NET["arc"] == live_prices.CHAINS["arc"] == scanner.GECKO_NETWORKS["arc"] == "arc"
+    assert "arc" in scanner.SUPPORTED_CHAINS and "arc" in judge.LOCKERS
+    assert traction._token("arc", "arc:0xAbC") == "0xabc" and traction._token("arc", "0xAbC") is None
+    profiles = [{"chainId": "arc", "tokenAddress": "0xabc", "description": "Stablecoin FX",
+                 "links": [{"label": "Website", "url": "https://fx.xyz"}]}]
+    assert [c["chain"] for c in d.profile_candidates(profiles)] == ["arc"]
+    assert d.chain_index([{"id": "fx", "platforms": {"arc": "0xAbC"}}])["arc"] == {"fx"}
+
+
 def test_meme_and_gem_chains_are_split():
     from app.trading.onchain import legit, radar, traction
     # "BSC per le Meme insieme a Sol e Robinhood. Poi Eth e Base solo per le Gemme"
     assert set(radar.CHAINS) == {"solana", "robinhood", "bsc"}
-    assert set(d.CG_CATEGORIES) == set(d.CG_PLATFORMS) == {"solana", "robinhood", "base", "ethereum"}
+    assert set(d.CG_CATEGORIES) == set(d.CG_PLATFORMS) == {"solana", "robinhood", "base", "ethereum", "arc"}
     assert all(c in legit.GOPLUS_CHAIN for c in ("bsc", "base", "ethereum"))
     assert traction._token("ethereum", "0xAbC") == "0xabc" and traction._token("base", "0xAbC") is None
 

@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 DEXSCREENER_BASE = "https://api.dexscreener.com"
 GECKOTERMINAL_BASE = "https://api.geckoterminal.com/api/v2"
-SUPPORTED_CHAINS = {"ethereum", "bsc", "base", "arbitrum", "avalanche", "solana", "polygon", "tron", "ton", "sui", "robinhood"}
+SUPPORTED_CHAINS = {"ethereum", "bsc", "base", "arbitrum", "avalanche", "solana", "polygon", "tron", "ton", "sui", "robinhood", "arc"}
 
 # Our chain_id -> GeckoTerminal network id
 GECKO_NETWORKS = {
@@ -31,6 +31,7 @@ GECKO_NETWORKS = {
     "ton": "ton",
     "sui": "sui-network",
     "robinhood": "robinhood",
+    "arc": "arc",
 }
 
 # Deliberately loose: real-world scans showed the excluded pool is bimodal
