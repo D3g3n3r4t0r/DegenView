@@ -243,7 +243,7 @@ export const askAgent = (text, voice = false, talk = false) =>
 export async function speakAgent(text, lang = "it") {
   const response = await fetch("/api/agent/speak", {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text, lang }), signal: AbortSignal.timeout(30000),
+    body: JSON.stringify({ text, lang }), signal: AbortSignal.timeout(12000),
   });
   if (!response.ok) throw Object.assign(new ApiError(`error ${response.status}`), { status: response.status });
   return response.blob();

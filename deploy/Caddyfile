@@ -26,10 +26,11 @@
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "SAMEORIGIN"
 		Referrer-Policy "strict-origin-when-cross-origin"
-		# Niente fotocamera, microfono, posizione o portafogli: questa pagina
-		# non ne ha bisogno, e dichiararlo impedisce a uno script iniettato di
-		# chiederli al posto nostro.
-		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+		# Niente fotocamera, posizione o portafogli: questa pagina non ne ha
+		# bisogno, e dichiararlo impedisce a uno script iniettato di chiederli
+		# al posto nostro. Il microfono solo per questa origine: la chat a voce
+		# con l'agente (ask.js), mai per un iframe di terzi.
+		Permissions-Policy "camera=(), microphone=(self), geolocation=(), payment=(), usb=()"
 		# Da dove puo' arrivare il codice che gira qui dentro. Un XSS che
 		# riuscisse a entrare non potrebbe comunque mandare i dati altrove:
 		# connect-src limita le chiamate all'origine stessa, e form-action
@@ -41,8 +42,10 @@
 		# le candele non ci sono. Nessuno dei due e' un posto dove un XSS
 		# possa raccogliere cio' che manda. frame-src 'self': la pagina del token
 		# incorpora il grafico del sito principale (?embed=1), che senza questo
-		# il browser bloccava in produzione.
-		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://api.geckoterminal.com https://api.dexscreener.com; frame-src 'self' https://dexscreener.com; frame-ancestors 'self'; form-action 'self'; base-uri 'self'; object-src 'none'"
+		# il browser bloccava in produzione. media-src blob: data:: la voce
+		# dell'agente arriva dal server come WAV e si suona da un blob (ask.js);
+		# senza, default-src la bloccava e la risposta restava muta.
+		Content-Security-Policy "default-src 'self'; media-src 'self' blob: data:; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://api.geckoterminal.com https://api.dexscreener.com; frame-src 'self' https://dexscreener.com; frame-ancestors 'self'; form-action 'self'; base-uri 'self'; object-src 'none'"
 		-Server
 	}
 
