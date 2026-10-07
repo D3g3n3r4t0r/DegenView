@@ -145,7 +145,7 @@ USAGE_WARM_MAX = 200                 # at start-up: ~3 GeckoTerminal calls each,
 # male"); tokenomics 15.
 SCORE_WEIGHTS = {"usage": 0.20, "participation": 0.10, "product": 0.30, "token": 0.15, "deepseek": 0.25}
 CG_CONTRACT = "https://api.coingecko.com/api/v3/coins/{platform}/contract/{address}"
-CG_PLATFORM = {"solana": "solana", "robinhood": "robinhood"}
+CG_PLATFORM = {"solana": "solana", "robinhood": "robinhood", "arc": "arc"}
 GLOBAL_CAP_EVERY_S = 15            # one CoinGecko lookup per gap, shared with discovery
 GLOBAL_CAP_TTL_S = 24 * 3600
 # DeepSeek re-reads the whole board (judge.review_board): every two hours,

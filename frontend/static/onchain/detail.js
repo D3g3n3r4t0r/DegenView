@@ -615,10 +615,10 @@ const charts = new Map();   // "chain:pair:interval" -> {at, promise, candles}
 const pools = new Map();    // "chain:token" -> pair address (or "" if none)
 const CHART_FRESH_MS = 30_000;
 const GECKO = "https://api.geckoterminal.com/api/v2";
-const GECKO_NET = { solana: "solana", robinhood: "robinhood", base: "base", bsc: "bsc", ethereum: "eth" };
+const GECKO_NET = { solana: "solana", robinhood: "robinhood", base: "base", bsc: "bsc", ethereum: "eth", arc: "arc" };
 const GECKO_TF = { "1m": ["minute", 1], "5m": ["minute", 5], "15m": ["minute", 15], "1h": ["hour", 1], "4h": ["hour", 4],
                    "1d": ["day", 1] };
-const DS_EMBED = new Set(["solana", "base", "bsc", "ethereum"]);   // chains DexScreener charts
+const DS_EMBED = new Set(["solana", "base", "bsc", "ethereum", "arc"]);   // chains DexScreener charts
 
 async function fetchJson(url, ms) {
   const ctl = new AbortController();

@@ -47,13 +47,14 @@ logger = logging.getLogger(__name__)
 # simulated meme rugs, and 39 of the 41 survivors, had no holder data).
 RUGCHECK_REPORT = "https://api.rugcheck.xyz/v1/tokens/{mint}/report"
 GOPLUS_TOKEN = "https://api.gopluslabs.io/api/v1/token_security/{chain_id}"
-GOPLUS_CHAIN = {"robinhood": "4663", "base": "8453", "bsc": "56", "ethereum": "1"}
+GOPLUS_CHAIN = {"robinhood": "4663", "base": "8453", "bsc": "56", "ethereum": "1", "arc": "5042"}
 CHAIN_LABEL = {"solana": "Solana", "robinhood": "Robinhood", "base": "Base", "bsc": "BSC", "ethereum": "Ethereum",
-               "layer": "Layer"}
+               "arc": "Arc", "layer": "Layer"}
 # Which chains each hunt covers (Lorenzo: "BSC per le Meme insieme a Sol e
 # Robinhood. Poi Eth e Base solo per le Gemme"). Slugs are DexScreener's.
 MEME_CHAINS = ("solana", "robinhood", "bsc")
-GEM_CHAINS = ("solana", "robinhood", "base", "ethereum")
+# Arc (Circle's L1, chain id 5042, gas in USDC): gems only, read-only (07/10).
+GEM_CHAINS = ("solana", "robinhood", "base", "ethereum", "arc")
 
 LP_LOCKED_MIN_PCT = 80.0
 # Chi tiene troppa offerta puo' svuotare il pool da solo. Pool, locker e

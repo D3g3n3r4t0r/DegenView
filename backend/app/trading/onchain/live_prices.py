@@ -48,7 +48,7 @@ JUP_BATCH = 50
 RPC_PER_MIN = {"robinhood": 30}
 RPC_PER_MIN_DEFAULT = 90
 
-CHAINS = {"solana": "solana", "robinhood": "robinhood", "base": "base", "ethereum": "eth", "bsc": "bsc"}
+CHAINS = {"solana": "solana", "robinhood": "robinhood", "base": "base", "ethereum": "eth", "bsc": "bsc", "arc": "arc"}
 
 _cache: dict[tuple[str, str], tuple[float, float, str]] = {}   # (chain, addr) -> (price, fetched_at, source)
 _calls: dict[str, deque] = {"ds": deque(), "gt": deque(), "jup": deque()}

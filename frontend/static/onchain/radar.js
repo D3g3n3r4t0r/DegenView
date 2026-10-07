@@ -25,7 +25,7 @@ import { openDetail, register } from "@onchain/detail.js";
 
 const POLL_MS = 60_000;
 const RETRY_MS = 5_000;
-const CHAINS = { solana: "Solana", robinhood: "Robinhood", base: "Base", bsc: "BSC", ethereum: "Ethereum" };
+const CHAINS = { solana: "Solana", robinhood: "Robinhood", base: "Base", bsc: "BSC", ethereum: "Ethereum", arc: "Arc" };
 const FEED_SHOWN = 25;
 const FEED_MAX = 80;
 

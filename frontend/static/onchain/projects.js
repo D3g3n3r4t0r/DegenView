@@ -14,13 +14,13 @@ import * as narr from "@onchain/narrative_pick.js";
 import { closeSheet, openSheet, setBody, sheetBody } from "@onchain/sheets.js";
 
 const PAGE = 30;
-const CHAINS = { solana: "Solana", robinhood: "Robinhood", base: "Base", bsc: "BSC", ethereum: "Ethereum", layer: "Layer" };
+const CHAINS = { solana: "Solana", robinhood: "Robinhood", base: "Base", bsc: "BSC", ethereum: "Ethereum", arc: "Arc", layer: "Layer" };
 const LABEL = { ranked: "Ranked", studied: "Studied", rejected: "Rejected", new: "Waiting", analyzing: "Analyzing" };
 // Layer projects (layers.py) carry their type in overall.layer: filtered by
 // type, tagged L0/L1/L2 in the row.
 const LAYERS = { L0: "Layer 0", L1: "Layer 1", L2: "Layer 2" };
 const VERDICTS = ["ranked", "studied", "rejected", "new"];
-const KINDS = ["L0", "L1", "L2", "solana", "bsc", "ethereum", "base", "robinhood"];
+const KINDS = ["L0", "L1", "L2", "solana", "bsc", "ethereum", "base", "robinhood", "arc"];
 const kindLabel = (k) => LAYERS[k] ?? CHAINS[k] ?? k;
 
 let root = null;
@@ -66,7 +66,7 @@ function row(p) {
 
 function paintFunnel(st) {
   const by = st?.by_status ?? {};
-  root.querySelector("[data-projects-meta]").textContent = st ? `${num(st.by_chain?.solana ?? 0)} Solana · ${num(st.by_chain?.robinhood ?? 0)} Robinhood · ${num(st.by_chain?.base ?? 0)} Base · ${num(st.by_chain?.ethereum ?? 0)} Ethereum${st.by_chain?.layer ? ` · ${num(st.by_chain.layer)} Layer` : ""}` : "";
+  root.querySelector("[data-projects-meta]").textContent = st ? `${num(st.by_chain?.solana ?? 0)} Solana · ${num(st.by_chain?.robinhood ?? 0)} Robinhood · ${num(st.by_chain?.base ?? 0)} Base · ${num(st.by_chain?.ethereum ?? 0)} Ethereum${st.by_chain?.arc ? ` · ${num(st.by_chain.arc)} Arc` : ""}${st.by_chain?.layer ? ` · ${num(st.by_chain.layer)} Layer` : ""}` : "";
   root.querySelector("[data-projects-funnel]").innerHTML = st
     ? `<b>${num(st.total)}</b> projects known · <b>${num(st.in_band)}</b> in the $10k–$3M band · <b>${num((by.studied ?? 0) + (by.ranked ?? 0))}</b> studied · <b>${num(by.rejected ?? 0)}</b> rejected${st.top_rejections?.[0] ? ` (most often: ${escapeHtml(st.top_rejections[0].why)})` : ""}`
     : "";
