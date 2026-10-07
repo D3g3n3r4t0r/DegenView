@@ -13,9 +13,10 @@ const live = new Set();   // { chart, series, kind }
 
 // Canvas gradients want a plain colour: "#7fd17f" at 22% -> rgba().
 function alpha(hex, a) {
-  const m = /^#([0-9a-f]{6})$/i.exec(hex);
+  let m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(hex)?.[1];
   if (!m) return hex;
-  const n = parseInt(m[1], 16);
+  if (m.length === 3) m = [...m].map((x) => x + x).join("");
+  const n = parseInt(m, 16);
   return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`;
 }
 
