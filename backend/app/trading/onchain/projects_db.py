@@ -289,6 +289,18 @@ def demote_ranked(keep: set[str]) -> int:
     return len(stale)
 
 
+def drop_layer_alias(symbol: str, keep_token: str) -> int:
+    """Remove the CoinGecko-era row of a layer once its CoinPaprika row exists:
+    rows written before 07/10 carry a cg_id, and the same chain showed twice
+    (FLOW as "flow" and "flow-flow")."""
+    with _lock:
+        cur = _db().execute("DELETE FROM projects WHERE chain = 'layer' AND cg_id IS NOT NULL"
+                            " AND UPPER(symbol) = ? AND token != ?", ((symbol or "").upper(), keep_token))
+        if cur.rowcount:
+            _db().commit()
+    return cur.rowcount
+
+
 def set_standing(chain: str, token: str, status: str, score: float | None, rank: int | None, why: str = "") -> None:
     """Score and place after a later change (DeepSeek's report, review or
     code reading): the database follows the board without a new analysis."""
