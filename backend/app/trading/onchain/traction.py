@@ -39,7 +39,7 @@ FEES = "https://api.llama.fi/overview/fees?excludeTotalDataChart=true&excludeTot
 REFRESH_S = 6 * 3600
 CHAIN_NAMES = {"solana": ("Solana",), "robinhood": ("Robinhood", "Robinhood Chain"), "base": ("Base",), "ethereum": ("Ethereum",)}
 CAP_MIN = 50_000
-CAP_MAX = 3_000_000
+CAP_MAX = 10_000_000             # leaderboard.BOARD_CAP_MAX_USD (was $3M until 07/10)
 TVL_MIN_UNPRICED = 50_000        # no market cap on DefiLlama: enter only with real TVL
 _SKIP_CATEGORIES = {"CEX", "Chain", "Bridge", "Liquid Staking", "Canonical Bridge"}
 

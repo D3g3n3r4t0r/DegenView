@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0256", "Il motore non studia tutti i progetti del database: ne mancano tanti",
+     "Lorenzo, 07/10: 'mi sembra che il motore del sito non stia studiando tutti quelli presenti nel database..ce ne mancano tanti ancora'. Schermata: 19.122 noti, 6.779 nella fascia $10k-$3M, 3.698 studiati, 2.514 scartati.",
+     "alta"),
     ("seed-0255", "La Top 50 come concetto e' limitante: serve una classifica meritocratica che tenga conto delle narrative",
      "Lorenzo, 07/10: 'secondo me la top50 come concetto e' limitante, serve un sistema meritocratico e innovativo per visualizzare i top [...] una classifica fatta in modo meno tradizionale data la complessita' dei progetti e le diverse narrative'. Tre proposte (Arene, Mappa, Scala), scelta: 'procedi come consigliato'.",
      "media"),
