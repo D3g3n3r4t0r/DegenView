@@ -2572,5 +2572,11 @@
     "at": 1791395679,
     "summary": "I grafici prendono colori e font direttamente dal tema dell'app: sul telefono verde e rosso del terminale, etichette in Geist Mono color sabbia, righe orizzontali tratteggiate come le liste, mirino tratteggiato, marcatori nei colori dell'app (ambra per il portafoglio). Sul desktop seguono la sua pelle verde. Passando da una larghezza all'altra il grafico cambia tema da solo.",
     "detail": "frontend/static/onchain/chart-theme.js (nuovo), detail.js, chart.js, app.css (grafico di riserva SVG e curva del backtest simulato)."
+  },
+  "seed-0257": {
+    "status": "risolto",
+    "at": 1791399359,
+    "summary": "Arc (la L1 di Circle, gas in USDC) e' una chain delle gemme in sola lettura: scoperta da CoinGecko (categoria Arc Ecosystem), DexScreener e DefiLlama, controlli GoPlus, prezzi dal pool on-chain, grafici GeckoTerminal, filtro e conteggio nel Database. Niente meme, niente trading.",
+    "detail": "legit.GEM_CHAINS/GOPLUS_CHAIN (5042)/CHAIN_LABEL, discovery CG_CATEGORIES/CG_PLATFORMS/readme_addresses, traction CHAIN_NAMES, judge.LOCKERS, unlocks e pool_prices RPC rpc.mainnet.arc.io, GECKO_NET, scanner GECKO_NETWORKS; frontend etichette, icona, filtro Database, embed DexScreener."
   }
 }

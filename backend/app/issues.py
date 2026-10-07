@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0257", "Aggiungere la rete Arc tra le chain delle gemme",
+     "Lorenzo, 07/10: 'aggiungi supporto a rete ARC'.",
+     "media"),
     ("seed-0256", "I grafici non hanno i colori e il font del tema dell'app",
      "Lorenzo, 07/10: 'il tema dei grafici deve essere allineato ai colori del sito e al tema utilizzato nell'app in ogni aspetto'.",
      "media"),

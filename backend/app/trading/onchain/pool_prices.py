@@ -25,6 +25,7 @@ RPC = {
     "bsc": "https://bsc-rpc.publicnode.com",
     "ethereum": "https://ethereum-rpc.publicnode.com",
     "robinhood": "https://rpc.mainnet.chain.robinhood.com",
+    "arc": "https://rpc.mainnet.arc.io",
 }
 GET_RESERVES = "0x0902f1ac"
 SLOT0 = "0x3850c7bd"

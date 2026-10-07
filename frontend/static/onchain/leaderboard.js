@@ -20,7 +20,7 @@ const ROOT = document.getElementById("onchain-embed") ?? document;
 const POLL_MS = 10_000;
 const MOVE_SHOWN_S = 15 * 60;
 const PILLARS = [["github", "GitHub", "G"], ["site", "Research", "R"], ["tokenomics", "Tokenomics", "T"]];
-const CHAINS = { solana: "Solana", robinhood: "Robinhood", base: "Base", bsc: "BSC", ethereum: "Ethereum" };
+const CHAINS = { solana: "Solana", robinhood: "Robinhood", base: "Base", bsc: "BSC", ethereum: "Ethereum", arc: "Arc" };
 const PLACES = ["First", "Second", "Third"];
 
 let root = null;

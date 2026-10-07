@@ -51,8 +51,10 @@ DEX_PROFILES = "https://api.dexscreener.com/token-profiles/latest/v1"
 # categoria CoinGecko e pagine da 250 (ordinate per cap decrescente) che
 # coprono la fascia CAP_MIN-CAP_MAX
 CG_CATEGORIES = {"solana": ("solana-ecosystem", range(3, 9)), "robinhood": ("robinhood-ecosystem", range(1, 5)),
-                 "base": ("base-ecosystem", range(1, 7)), "ethereum": ("ethereum-ecosystem", range(1, 9))}
-CG_PLATFORMS = {"solana": ("solana",), "robinhood": ("robinhood",), "base": ("base",), "ethereum": ("ethereum",)}
+                 "base": ("base-ecosystem", range(1, 7)), "ethereum": ("ethereum-ecosystem", range(1, 9)),
+                 "arc": ("arc-ecosystem", range(1, 2))}
+CG_PLATFORMS = {"solana": ("solana",), "robinhood": ("robinhood",), "base": ("base",), "ethereum": ("ethereum",),
+                "arc": ("arc",)}
 # Lorenzo (28/09): "magari dobbiamo alzare un po' i limiti di market cap [...]
 # anche i progetti un po' piu' datati ha senso metterceli"
 CAP_MIN = 10_000             # early gems start under $50k (leaderboard.EARLY_CAP_USD)
@@ -391,7 +393,7 @@ def readme_addresses(text: str) -> dict[str, list[str]]:
         if m not in _KNOWN and m.lower() not in {x.lower() for x in evm}:
             evm.append(m)
     # EVM addresses look the same everywhere: DexScreener says which chain has the pool.
-    return {"solana": sol[:10], "robinhood": evm[:10], "base": evm[:10], "ethereum": evm[:10]}
+    return {"solana": sol[:10], "robinhood": evm[:10], "base": evm[:10], "ethereum": evm[:10], "arc": evm[:10]}
 
 
 def search_candidates(items: list[dict], now: float) -> list[dict]:

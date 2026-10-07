@@ -54,6 +54,7 @@ LOCKERS = {
     "base": "UNCX, Team Finance, PinkLock",
     "bsc": "PinkLock, UNCX, Team Finance, Mudra",
     "robinhood": "HoodLock, Team Finance, Titan, Genesis Locker",
+    "arc": "UNCX, Team Finance, or LP burned",
 }
 
 # Lorenzo, 01/10, after a manual check of PFWA: "la logica vale per tutti i

@@ -30,7 +30,7 @@ from app.trading.onchain import rpc_client
 logger = logging.getLogger(__name__)
 
 RPC = {"base": "https://mainnet.base.org", "ethereum": "https://ethereum-rpc.publicnode.com",
-       "bsc": "https://bsc-dataseed.bnbchain.org"}
+       "bsc": "https://bsc-dataseed.bnbchain.org", "arc": "https://rpc.mainnet.arc.io"}
 MAX_PROBED = 6
 SOON_DAYS = 30
 TS_MIN, TS_MAX = 1_400_000_000, 4_200_000_000     # a plausible unix time
