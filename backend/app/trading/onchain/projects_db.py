@@ -47,7 +47,7 @@ DETAIL_TTL_S = 14 * 86400        # CoinGecko page (website, GitHub) re-read
 STATUSES = ("new", "analyzing", "studied", "ranked", "rejected")
 _JSON = ("sources", "categories", "socials", "pillars", "overall", "similarity", "narratives", "traction")
 NO_LINKS = "no website or GitHub to read"
-_DATA_WORDS = (NO_LINKS, "not responding", "unreachable", "not available", "pending", "incomplete")
+_DATA_WORDS = ("not responding", "unreachable", "not available", "pending", "incomplete")
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS projects (
