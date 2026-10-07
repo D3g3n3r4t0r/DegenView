@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0256", "I grafici non hanno i colori e il font del tema dell'app",
+     "Lorenzo, 07/10: 'il tema dei grafici deve essere allineato ai colori del sito e al tema utilizzato nell'app in ogni aspetto'.",
+     "media"),
     ("seed-0255", "La Top 50 come concetto e' limitante: serve una classifica meritocratica che tenga conto delle narrative",
      "Lorenzo, 07/10: 'secondo me la top50 come concetto e' limitante, serve un sistema meritocratico e innovativo per visualizzare i top [...] una classifica fatta in modo meno tradizionale data la complessita' dei progetti e le diverse narrative'. Tre proposte (Arene, Mappa, Scala), scelta: 'procedi come consigliato'.",
      "media"),

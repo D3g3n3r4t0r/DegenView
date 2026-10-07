@@ -2566,5 +2566,11 @@
     "status": "risolto",
     "at": 1791394638,
     "summary": "Al posto della Top 15/25/50 ci sono le Arene: una classifica per ogni narrativa (AI Agents, Privacy, RWA, DePIN...) piu' una per le chain L0/L1/L2, e ogni progetto si confronta solo con i suoi pari. Nessun numero fisso: in ogni arena e' 'dentro' chi sta sopra la mediana dei pari, gli altri sono in panchina. Un progetto con piu' narrative gareggia dove stacca di piu' i pari. Il podio e' 'pound for pound': i tre che dominano di piu' la propria arena. Da stanotte il giro delle 22:00 fa anche i duelli fra pari (rating Elo): dopo tre settimane l'ordine dentro le arene potra' passare al rating."
+  },
+  "seed-0256": {
+    "status": "risolto",
+    "at": 1791395679,
+    "summary": "I grafici prendono colori e font direttamente dal tema dell'app: sul telefono verde e rosso del terminale, etichette in Geist Mono color sabbia, righe orizzontali tratteggiate come le liste, mirino tratteggiato, marcatori nei colori dell'app (ambra per il portafoglio). Sul desktop seguono la sua pelle verde. Passando da una larghezza all'altra il grafico cambia tema da solo.",
+    "detail": "frontend/static/onchain/chart-theme.js (nuovo), detail.js, chart.js, app.css (grafico di riserva SVG e curva del backtest simulato)."
   }
 }
