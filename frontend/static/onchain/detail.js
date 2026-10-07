@@ -13,6 +13,7 @@ import { openUserSwap, walletFor } from "@onchain/userswap.js";
 import { hideToken } from "@onchain/hidden.js";
 import { shownTrades } from "@onchain/lab-shown.js";
 import { morph } from "@onchain/morph-fx.js";
+import { chartOptions, chartTheme, seriesOptions, track } from "@onchain/chart-theme.js";
 
 const registry = new Map();
 const INTERVALS = ["1m", "5m", "15m", "1h", "4h", "8h", "1d", "1w"];
@@ -20,6 +21,7 @@ const INTERVALS = ["1m", "5m", "15m", "1h", "4h", "8h", "1d", "1w"];
 // the 4-hour and daily ones, like strategy_lab._merge_8h on the server.
 // Weeks start on Monday 00:00 UTC (the epoch was a Thursday).
 const DERIVED = { "8h": ["4h", 28800, 0], "1w": ["1d", 604800, 4 * 86400] };
+const MIN_BAR_PX = 7;   // narrowest candle the chart opens with
 const STEP = { "1m": 60, "5m": 300, "15m": 900, "1h": 3600, "4h": 14400, "8h": 28800, "1d": 86400, "1w": 604800 };
 const WATCH_KEY = "watchlist-v1";
 const loading = new Set();
@@ -776,10 +778,10 @@ async function paintChart() {
 // TradingView Lightweight Charts, candles in market-cap terms, the alert and
 // the system's buys and sells as markers on the bars. Falls back to the old
 // line only if the library cannot load.
-let lw = null;   // { chart, series, box }
+let lw = null;   // { chart, series, box, untrack }
 
 function disposeChart() {
-  if (lw) { try { lw.chart.remove(); } catch { /* already gone */ } lw = null; }
+  if (lw) { lw.untrack?.(); try { lw.chart.remove(); } catch { /* already gone */ } lw = null; }
 }
 
 function chartLib() {
@@ -807,20 +809,19 @@ async function drawChart(box, candles, e, iv = interval) {
   if (!lw || lw.box !== box || !box.contains(lw.chart.chartElement?.() ?? box.firstChild)) {
     disposeChart();
     box.innerHTML = "";          // also drops a failed main-site iframe
+    // Colours, grid and font from the app's own tokens (chart-theme.js).
+    const theme = chartOptions();
     const chart = LC.createChart(box, {
+      ...theme,
       autoSize: true,
-      layout: { background: { color: "transparent" }, textColor: "#9aa0ab", fontSize: 11, attributionLogo: false },
-      grid: { vertLines: { color: "rgba(255,255,255,0.03)" }, horzLines: { color: "rgba(255,255,255,0.03)" } },
-      rightPriceScale: { borderVisible: false, scaleMargins: { top: 0.12, bottom: 0.08 } },
+      rightPriceScale: { ...theme.rightPriceScale, scaleMargins: { top: 0.12, bottom: 0.08 } },
       // Room on the right: the last marker's label ("Wallet out +16%") was
       // cut at the edge (Lorenzo, 30/09, MERRYMEN 1d).
       timeScale: { timeVisible: true, secondsVisible: false, borderVisible: false, rightOffset: 8 },
-      crosshair: { vertLine: { color: "#5f6672" }, horzLine: { color: "#5f6672" } },
       handleScale: { axisPressedMouseMove: false },
     });
     const series = chart.addCandlestickSeries({
-      upColor: "#2de0a8", downColor: "#f87171", borderVisible: false,
-      wickUpColor: "#2de0a8", wickDownColor: "#f87171",
+      ...seriesOptions("candles"),
       // Market cap when the cap is known; otherwise the raw price, which
       // usdShort rounded to "$0" (HYDX at $0.00038, 30/09).
       // A price is never below zero: the axis showed "$-100000" under a
@@ -833,7 +834,7 @@ async function drawChart(box, candles, e, iv = interval) {
         return r;
       },
     });
-    lw = { chart, series, box };
+    lw = { chart, series, box, untrack: track(chart, series, "candles") };
   }
   lw.k = k;
   lw.series.setData(bars);
@@ -844,6 +845,7 @@ async function drawChart(box, candles, e, iv = interval) {
   const t0 = bars[0].time, t1 = bars[bars.length - 1].time + (STEP[iv] ?? 3600);
   const barAt = (t) => { let b = bars[0].time; for (const x of bars) { if (x.time <= t) b = x.time; else break; } return b; };
   const marks = [];
+  const c = chartTheme();
   let drawn = 0;
   // Gems say which strategy trade it is and on which timeframe it was
   // taken, on every chip (Lorenzo, 30/09: "la strategia se e' in
@@ -858,7 +860,7 @@ async function drawChart(box, candles, e, iv = interval) {
       const text = gemIv
         ? `${buy ? "Strategy entry" : "Strategy exit"} · ${gemIv}${!buy && v.ret != null ? ` ${pct(v.ret)}` : ""}`
         : buy ? "Buy" : v.ret != null ? `Sell ${pct(v.ret)}` : "Sell";
-      marks.push({ time: barAt(v.t), position: buy ? "belowBar" : "aboveBar", color: buy ? "#2de0a8" : "#f87171",
+      marks.push({ time: barAt(v.t), position: buy ? "belowBar" : "aboveBar", color: buy ? c.up : c.down,
         shape: buy ? "arrowUp" : "arrowDown", text });
       drawn++;
     }
@@ -867,7 +869,7 @@ async function drawChart(box, candles, e, iv = interval) {
       // A fall of 85% stops the strategy but is not a rug (HYDX, 30/09).
       const tag = a.backtests.rug.kind === "fall" || /from its top/.test(a.backtests.rug.why ?? "") ? "Stop" : "Rug";
       const why = a.backtests?.rug?.why ? `${tag} · ${a.backtests.rug.why}`.slice(0, 40) : `${tag} · strategy off`;
-      marks.push({ time: barAt(rug), position: "aboveBar", color: "#f87171", shape: "square", text: why });
+      marks.push({ time: barAt(rug), position: "aboveBar", color: c.down, shape: "square", text: why });
     }
   }
   // The wallet's own trade on this token (a position opened from the
@@ -876,7 +878,7 @@ async function drawChart(box, candles, e, iv = interval) {
   for (const v of TRADING ? e.own ?? [] : []) {
     if (v.t == null || v.t < t0 || v.t >= t1) continue;
     const buy = v.side === "buy";
-    marks.push({ time: barAt(v.t), position: buy ? "belowBar" : "aboveBar", color: "#f0b90b", shape: "circle",
+    marks.push({ time: barAt(v.t), position: buy ? "belowBar" : "aboveBar", color: c.amber, shape: "circle",
       // The simulated wallet's trades are the strategy's: they say so, with
       // the timeframe that took them (Lorenzo, 30/09: "scritto ingresso
       // strategia [...] con un time frame chiaro").
@@ -887,7 +889,13 @@ async function drawChart(box, candles, e, iv = interval) {
   }
   marks.sort((x, y) => x.time - y.time);
   lw.series.setMarkers(marks);
-  lw.chart.timeScale().fitContent();
+  // A year of daily bars fitted into a phone is a row of dots (FLOW, 07/10:
+  // "la visualizzazione cosi' non va bene"): open on the latest bars at a
+  // readable width, older ones a swipe away; the price axis fits what shows.
+  const ts = lw.chart.timeScale();
+  const fit = Math.floor((box.clientWidth || 360) / MIN_BAR_PX);
+  if (bars.length <= fit) ts.fitContent();
+  else ts.setVisibleLogicalRange({ from: bars.length - fit, to: bars.length - 1 + 8 });
   lw.before = before;
   return drawn;
 }
