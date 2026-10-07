@@ -144,7 +144,11 @@ def test_run_records_a_layer_outside_the_gem_pipeline(monkeypatch):
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
             return await layers.run(client, T0)
 
+    # a CoinGecko-era row of the same chain goes once the new one is written
+    old = {"chain": "layer", "token_address": "kaspa", "symbol": "KAS", "name": "Kaspa", "cg_id": "kaspa"}
+    projects_db.upsert(old, "layers", T0)
     assert asyncio.run(go()) == 1
+    assert projects_db.get("layer", "kaspa") is None
     p = projects_db.get("layer", "kas-kaspa")
     assert p["status"] == "studied" and p["score"] and p["categories"][0] == "L1" and p["image"] == "https://x/kas.png"
     assert (p["overall"] or {}).get("cex") == {"exchange": "mexc", "pair": "KASUSDT"}
