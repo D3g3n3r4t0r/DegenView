@@ -133,6 +133,18 @@ def due_slot(now_ts: float, state: dict, hour: int | None = None) -> float | Non
     return slot
 
 
+def forced_due(state: dict) -> str | None:
+    """The `onchain_nightly_force` key not yet run, or None."""
+    key = (settings.onchain_nightly_force or "").strip()
+    return key if key and key not in (state.get("forced") or []) else None
+
+
+def _consume_force(key: str | None) -> None:
+    if key:
+        _state["forced"] = [*(_state.get("forced") or [])[-9:], key]
+        _save()
+
+
 def status(now: float | None = None) -> dict:
     """For the board's meta: `nightly: {last_run, next_run, summary}`."""
     if not _state:
@@ -377,11 +389,19 @@ async def nightly_loop(top: Callable[[], list[dict]], *, clock: Callable[[], flo
         try:
             now = clock()
             slot = due_slot(now, _state)
+            key = forced_due(_state)
+            if slot is None and key:
+                # Outside the clock: the run's slot is now, so the next
+                # scheduled run still sees itself as due.
+                _consume_force(key)
+                await run_night(now, top, steps_factory=steps_factory, clock=clock, sleep=sleep, send=send)
+                continue
             if slot is None:
                 await _gave_up(now, send)
                 # At most an hour at a time: a changed clock or setting is seen soon.
                 await sleep(min(max(next_run(now) - now, 1.0), 3600.0))
                 continue
+            _consume_force(key)    # a scheduled run due now already covers it
             await run_night(slot, top, steps_factory=steps_factory, clock=clock, sleep=sleep, send=send)
         except Exception:
             logger.exception("nightly: run failed")

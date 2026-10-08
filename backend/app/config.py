@@ -67,6 +67,10 @@ class Settings(BaseSettings):
     # Lorenzo, 08/10: "aggiungi un check oltre che alle 22, anche alle 11.35".
     onchain_nightly_extra_times: str = "11:35"
     onchain_nightly_max_hours: float = 2.0
+    # A new value runs one extra run as soon as the server starts (so after
+    # the deploy that sets it), once: the key is remembered in the nightly
+    # state. Lorenzo, 08/10: "forza il giro ora".
+    onchain_nightly_force: str = "2026-10-08-1"
     # La memoria degli esiti (app/trading/onchain/outcomes.py) scarta un token
     # che somiglia ai rug passati, solo quando il modello prevede i rug fuori
     # campione. Vale anche per il pilota con soldi veri, che usa lo stesso
