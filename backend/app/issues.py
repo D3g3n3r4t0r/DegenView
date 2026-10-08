@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0261", "Un progetto entrato tra i migliori di un'arena deve restarci almeno 2-3 giorni, anche se superato",
+     "Lorenzo, 08/10: 'se una crypto e' comparsa tra le migliori, anche se poi viene surclassata; deve rimanerci per almeno 2-3 gg prima di essere espulsa'.",
+     "media"),
     ("seed-0260", "Un secondo giro della ricerca delle gemme alle 11:35, oltre a quello delle 22:00",
      "Lorenzo, 08/10: 'aggiungi un check oltre che alle 22, anche alle 11.35'.",
      "media"),
