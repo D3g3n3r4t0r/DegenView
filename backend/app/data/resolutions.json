@@ -2602,5 +2602,11 @@
     "at": 1791452243,
     "summary": "Un progetto che entra tra i migliori della sua arena (sopra la mediana) ci resta almeno 3 giorni dall'ingresso, anche se nel frattempo altri lo superano. Se invece esce dai criteri (cancelli, scarto per fatti misurati, rug) esce subito. Il podio e l'ordine per punteggio non cambiano; backtest e portafoglio non sono toccati.",
     "detail": "arenas.TENURE_S = 3 giorni; build() legge e scrive data/onchain_arena_tenure.json (id -> ora di ingresso), solo nella vista senza filtro di narrativa; riga con held=true quando e' dentro per permanenza. Un id che lascia il pool perde la permanenza."
+  },
+  "seed-0262": {
+    "status": "risolto",
+    "at": 1791460115,
+    "summary": "Un giro di ricerca in piu' parte appena il server si riavvia dopo il deploy, una volta sola, con lo stesso limite di 2 ore e lo stesso messaggio Telegram. Non si sovrappone mai agli altri: se nel frattempo e' dovuto un giro programmato, parte quello e basta. Il giro delle 22:00 resta.",
+    "detail": "config.onchain_nightly_force: una chiave nuova = un giro extra all'avvio (nightly.forced_due, chiavi gia' fatte in data/onchain_nightly.json 'forced'). Slot del giro = ora di partenza, quindi done_slot non copre il giro delle 22. Per forzarne un altro: cambiare la chiave e fare deploy."
   }
 }
