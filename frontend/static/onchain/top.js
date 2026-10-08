@@ -103,7 +103,7 @@ function row(e, a) {
 function arenaHtml(a, open = false) {
   const rows = a.entries.filter((e) => !isHidden(e.chain, e.token_address));
   if (!rows.length) {
-    return open ? `<section class="arena" data-arena="${escapeHtml(a.key)}"><header class="ar-head"><h4>${escapeHtml(a.label)}</h4></header>
+    return open && !a.entries.length ? `<section class="arena" data-arena="${escapeHtml(a.key)}"><header class="ar-head"><h4>${escapeHtml(a.label)}</h4></header>
       <p class="muted pad">No ${escapeHtml(a.label)} project has passed the checks yet: they appear here as the research finds them.</p></section>` : "";
   }
   const inn = open ? rows : rows.filter((e) => e.in);

@@ -210,7 +210,7 @@
  },
  {
   "key": "decentralized_compute",
-  "label": "GPU & Compute",
+  "label": "DePIN Compute",
   "heat": 3,
   "why": "Demand for GPUs, rendering and inference is outpacing centralised clouds, and open compute markets (GPU rental, render farms, permissionless cloud) are the crypto-native answer.",
   "terms": [
