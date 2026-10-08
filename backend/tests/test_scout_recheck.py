@@ -13,14 +13,49 @@ def _entry():
 
 def test_red_points_take_problems_and_flags_once():
     pts = [p["text"] for p in sr.red_points(_entry())]
-    assert pts == ["no public GitHub found", "team is anonymous", "liquidity is tiny", "no public GitHub",
-                   "content rendered via JavaScript"]
+    assert pts == ["no public GitHub found", "team is anonymous", "liquidity is tiny", "content rendered via JavaScript"]
+
+
+def test_red_points_say_each_fact_once_in_any_words():
+    # AUREON, 08/10: the judge's problems and the pillar flags said the same facts twice.
+    e = {"judge": {"problems": ["Only 1 author on the SDK repo, so code is unverified", "No CI despite tests",
+                                "LP lock unknown: GoPlus covers only part of the liquidity",
+                                "Site is a JavaScript shell with zero readable description words"]},
+         "pillars": {"github": {"flags": ["single author", "no CI configured"]},
+                     "site": {"flags": ["site built in JavaScript, not readable"]},
+                     "market": {"flags": ["Main pool's LP lock is not covered by GoPlus data"]}}}
+    assert len(sr.red_points(e)) == 4
+
+
+def test_merge_keeps_one_point_per_fact_and_a_read_gap_is_never_red():
+    pts = [{"text": "site built in JavaScript, not readable", "status": "confirmed", "evidence": "x"},
+           {"text": "Site is a JavaScript shell with no mechanisms", "status": "refuted", "evidence": "app text"},
+           {"text": "single author", "status": "confirmed"},
+           {"text": "Only 1 author on the SDK repo", "status": "unverified"},
+           {"text": "LP lock unknown: the main pool is not in GoPlus", "status": "confirmed"}]
+    out = sr.merge_points([sr.read_gap(p) for p in pts])
+    assert [(p["text"][:12], p["status"]) for p in out] == [
+        ("Site is a Ja", "refuted"), ("single autho", "confirmed"), ("LP lock unkn", "unverified")]
+
+
+def test_trace_logs_host_and_path_only():
+    import httpx
+    seen = []
+    tok = sr.TRACE.set(lambda src, text: seen.append((src, text)) or {})
+    try:
+        req = httpx.Request("GET", "https://api.gopluslabs.io/api/v1/token_security/1?contract_addresses=0xabc")
+        asyncio.run(sr._on_request(req))
+    finally:
+        sr.TRACE.reset(tok)
+    assert seen == [("GoPlus", "api.gopluslabs.io/api/v1/token_security/1")]
+    asyncio.run(sr._on_request(httpx.Request("GET", "https://x.io/")))
+    assert len(seen) == 1
 
 
 def test_heuristic_keeps_absences_unverified_and_a_found_github_clears_them():
     pts = sr.red_points(_entry())
     out = {p["text"]: p["status"] for p in sr.heuristic(pts, {"found": [], "pages": []})}
-    assert out["no public GitHub"] == "unverified" and out["liquidity is tiny"] == "confirmed"
+    assert out["no public GitHub found"] == "unverified" and out["liquidity is tiny"] == "confirmed"
     out = {p["text"]: p["status"] for p in sr.heuristic(pts, {"found": ["GitHub found (x): https://github.com/a"], "pages": []})}
     assert out["no public GitHub found"] == "refuted"
 
@@ -60,13 +95,12 @@ def test_recheck_uses_deepseek_on_the_evidence(monkeypatch):
         seen["user"] = messages[1]["content"]
         return json.dumps({"items": [{"i": 0, "status": "unverified"}, {"i": 1, "status": "unverified"},
                                      {"i": 2, "status": "confirmed", "note": "$3k", "evidence": "cap $0, liquidity $0"},
-                                     {"i": 3, "status": "unverified"},
-                                     {"i": 4, "status": "refuted", "note": "docs read", "evidence": "page read: https://docs.x.io"}]})
+                                     {"i": 3, "status": "refuted", "note": "docs read", "evidence": "page read: https://docs.x.io"}]})
 
     e = _entry()
     rc = asyncio.run(sr.recheck(e, {"chain": "robinhood", "token_address": "0xA", "website": "https://x.io"}, None, ask=ask))
     assert [p["text"] for p in rc["confirmed"]] == ["liquidity is tiny"]
-    assert len(rc["unverified"]) == 3 and rc["refuted"][0]["text"] == "content rendered via JavaScript"
+    assert len(rc["unverified"]) == 2 and rc["refuted"][0]["text"] == "content rendered via JavaScript"
     assert "page read: https://docs.x.io" in rc["found"] and "docs docs" in seen["user"]
 
 
@@ -301,3 +335,33 @@ def test_gecko_volume_without_the_field_is_unknown(monkeypatch):
         return {"data": {"attributes": {"total_reserve_in_usd": "900"}}}
     monkeypatch.setattr(dx, "gecko_get", fake)
     assert asyncio.run(sr.gecko_volume({"chain": "solana", "token_address": "x"}, None)) is None
+
+
+def test_an_unreadable_site_is_opened_again_and_cleared_when_it_reads(monkeypatch):
+    # AUREON, 08/10: "site built in JavaScript, not readable" while a browser reads 979 words.
+    async def none(*a, **k):
+        return None
+
+    async def page(url, client):
+        if url == "https://aureon.example/":
+            return {"ok": True, "final_url": url, "text": "rebalance your portfolio " * 30, "rendered": True}
+        return {"ok": False}
+
+    async def app_probe(item, client):
+        return {}
+
+    async def x_profile(item, client):
+        return {}
+
+    monkeypatch.setattr(sr, "app_probe", app_probe)
+    monkeypatch.setattr(sr, "x_profile", x_profile)
+    monkeypatch.setattr(sr, "gecko_volume", none)
+    monkeypatch.setattr(legit, "fetch_site", page)
+    monkeypatch.setattr(sr, "_cache", {})
+    from app.config import settings
+    monkeypatch.setattr(settings, "deepseek_api_key", "")
+    e = {"pillars": {"github": {"score": 50}, "site": {"score": None, "flags": ["site built in JavaScript, not readable"],
+                                                       "facts": {"url": "https://aureon.example/"}}}}
+    rc = asyncio.run(sr.recheck(e, {"chain": "robinhood", "token_address": "0xA", "website": "https://aureon.example/"}, None))
+    assert [p["status"] for p in rc["refuted"]] == ["refuted"] and not rc["confirmed"] and not rc["unverified"]
+    assert rc["refuted"][0]["note"].startswith("Measured: site read in a browser: https://aureon.example/, 90 words")

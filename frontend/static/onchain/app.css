@@ -1340,19 +1340,26 @@ html, body { overflow-x: clip; }
     border-radius: 10px; background: none; color: var(--k-text); font: 600 14px var(--sans); cursor: pointer;
     &:active { scale: .98; }
     &:disabled { opacity: .5; cursor: not-allowed; } }
-  .ds-steps { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px;
-    & li { display: grid; grid-template-columns: 14px 1fr; column-gap: 8px; align-items: center; font: 500 13px var(--sans);
-      color: var(--k-text-2); }
-    & li[data-new] { animation: ds-step-in .28s cubic-bezier(.2,.7,.2,1) both; }
-    & li > i { inline-size: 10px; block-size: 10px; border-radius: 50%; border: 1.5px solid var(--k-text-3); justify-self: center; }
-    & li[data-state="run"] { color: var(--k-text); }
-    & li[data-state="run"] > i { border-color: #60a5fa; animation: ds-step-pulse 1s ease-in-out infinite; }
-    & li[data-state="done"] > i { border-color: var(--c-up, #34d399); background: var(--c-up, #34d399); }
-    & li[data-state="fail"] > i { border-color: var(--c-down, #f87171); background: var(--c-down, #f87171); }
-    & small { grid-column: 2; color: var(--k-text-3); font-size: 11.5px; overflow-wrap: anywhere; } }
-  @keyframes ds-step-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-  @keyframes ds-step-pulse { 50% { transform: scale(.6); opacity: .5; } }
-  @media (prefers-reduced-motion: reduce) { .ds-steps li[data-new], .ds-steps li > i { animation: none !important; } }
+  /* The live log on the re-check button (08/10): black, amber, monospace. */
+  .ds-recheck[data-busy] { block-size: auto; padding: 10px 12px; text-align: start; background: #000; color: var(--c-amber, #ffb000);
+    border-color: var(--c-amber, #ffb000); cursor: progress;
+    &:disabled { opacity: 1; cursor: progress; } }
+  .ds-term { display: grid; gap: 6px; font: 400 11.5px/1.35 var(--mono, ui-monospace, monospace); }
+  .ds-term-head { display: flex; justify-content: space-between; gap: 10px; align-items: baseline;
+    & b { font-weight: 600; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    & b::after { content: "_"; animation: ds-blink 1s steps(1, end) infinite; }
+    & em { flex: none; font-style: normal; opacity: .7; font-variant-numeric: tabular-nums; } }
+  .ds-term-log { display: grid; gap: 2px; min-block-size: calc(4 * 1.35em + 6px); align-content: end; }
+  .ds-ln { display: grid; grid-template-columns: 7.5ch minmax(0, 1fr) auto; gap: 8px; opacity: .78;
+    & i { font-style: normal; opacity: .65; text-transform: uppercase; }
+    & span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    & em { font-style: normal; font-variant-numeric: tabular-nums; }
+    &[data-ok="false"] em { color: var(--c-down, #f87171); }
+    &:last-child { opacity: 1; }
+    &[data-new] { animation: ds-ln-in .24s cubic-bezier(.2,.7,.2,1) both; } }
+  @keyframes ds-ln-in { from { opacity: 0; transform: translateY(5px); } }
+  @keyframes ds-blink { 50% { opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .ds-ln[data-new], .ds-term-head b::after { animation: none !important; } }
 }
 @layer skin {
   [data-fx="strike"] { position: relative; }

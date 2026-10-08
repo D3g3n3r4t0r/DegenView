@@ -159,7 +159,8 @@ def test_a_drop_on_gaps_alone_changes_nothing(monkeypatch):
             "problems": [{"text": "No public GitHub", "evidence": "GitHub: not found — no public repository found"},
                          {"text": "Docs not readable", "evidence": "https://x.io/docs: unreadable — no text"}]}
     res = asyncio.run(deep_recheck.run("solana", "tok10", None, ask=_fake_ask(gaps)))
-    assert res["unsupported"] is True and len(res["problems"]) == 2
+    # "Docs not readable" is our reader's gap: not even listed as a problem (08/10).
+    assert res["unsupported"] is True and len(res["problems"]) == 1
 
 
 def test_account_holders_recheck_whenever_they_want(monkeypatch):
@@ -211,3 +212,32 @@ def test_progress_shows_the_real_steps(monkeypatch):
     assert labels[0] == "Loading the project and its last review"
     assert "Asking DeepSeek for the verdict" in labels and labels[-1] == "Verdict: kept"
     assert scout_recheck.PROGRESS.get() is None
+
+
+def test_tidy_shows_each_fact_once_with_matching_counts():
+    res = {"problems": [{"text": "SDK repo has a single author", "evidence": "q"},
+                        {"text": "Marketing site is JavaScript-only and unreadable", "evidence": "q"},
+                        {"text": "Pool holds 2% of the cap", "evidence": "q"}],
+           "claims": [{"text": "Only 1 author on the SDK repo", "status": "confirmed"},
+                      {"text": "single author", "status": "confirmed"},
+                      {"text": "site built in JavaScript, not readable", "status": "confirmed"},
+                      {"text": "Site is a JavaScript shell with no mechanisms", "status": "refuted", "evidence": "e"}],
+           "cleared": 1, "unverified": 0, "confirmed": 3}
+    out = deep_recheck.tidy(res)
+    assert [p["text"] for p in out["problems"]] == ["Pool holds 2% of the cap"]
+    assert [c["status"] for c in out["claims"]] == ["confirmed", "refuted"]
+    assert (out["cleared"], out["unverified"], out["confirmed"]) == (1, 0, 1)
+
+
+def test_progress_carries_the_log_of_what_was_opened(monkeypatch):
+    _row("tok8")
+
+    async def rc(entry, item, client, ask=None):
+        scout_recheck.TRACE.get()("GitHub", "github.com/a/b")["code"] = 200
+        return {"confirmed": [], "unverified": [], "refuted": [], "found": [], "evidence": ""}
+    monkeypatch.setattr(scout_recheck, "recheck", rc)
+    ask = _fake_ask({"keep": True, "score": 60, "verdict": "watch", "reason": "fine", "strengths": [], "problems": []})
+    asyncio.run(deep_recheck.run("solana", "tok8", None, ask=ask, limited=False))
+    p = deep_recheck.progress("solana", "tok8")
+    assert p["log"] == [{"n": 0, "src": "GitHub", "text": "github.com/a/b", "code": 200}]
+    assert scout_recheck.TRACE.get() is None

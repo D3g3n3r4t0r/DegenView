@@ -1,3 +1,12 @@
+# 2026-10-08 — Ricontrollo DeepSeek: un fatto una volta, log sul tasto — `seed-0258` (Claude, a mano)
+
+Lorenzo, sugli screenshot di AUREON (tab Why): "sistema questi errori, e quando DeepSeek fa il rescan voglio vedere cosa fa attraverso un piccolo log direttamente sul tasto di rescan [...] cosa sta navigando, eccetera, giusto per vedere a che punto e'".
+
+- Causa dei doppioni: `red_points` univa problemi del giudice e flag dei pilastri solo a stringa identica, e il riquadro mostrava sia i problemi del verdetto sia i punti confermati. Ora `scout_recheck.same_fact` (argomenti: autore, CI, lock LP, sito JS, codice, volume, liquidita', team; altrimenti sovrapposizione di parole >= 0.6) e `deep_recheck.tidy` (anche sui risultati gia' salvati, in `get()`).
+- Regola #465 applicata anche qui: `READ_GAP` (illeggibile, JavaScript-only, lock sconosciuto, "not covered by") non e' mai confermato ne' un problema del verdetto.
+- Poi Lorenzo: "devi capire perche' da errore di JavaScript, cioe' sta cosa non deve succedere". Il sito (`aureonlabs.network`, Vite/React, 1178 byte) col renderer locale da' 979 parole: il guasto e' sul server. Log del server non visti (PC spento). Cause possibili corrette: `_unavailable` restava vero fino al riavvio dopo un avvio fallito (ora `_down_until`, 15 min), Chromium senza `--disable-dev-shm-usage` in Docker, quota 200/giorno (ora cache 6h e `URGENT` per il ricontrollo a mano). `render_error` nei fatti del sito dice il motivo: **guardarlo sul prossimo sito JS illeggibile**.
+- Log: `scout_recheck.TRACE` + event hook httpx sul client del ricontrollo; `progress()` porta `log` (ultime 8 righe, `n` progressivo). Il tasto mostra passo, secondi e 4 righe. Solo host e percorso: la query puo' contenere chiavi.
+
 # 2026-10-07 — Rete Arc tra le chain delle gemme — `seed-0257` (Claude, a mano)
 
 Lorenzo: "aggiungi supporto a rete ARC". Arc = L1 di Circle, mainnet chain id 5042, gas in USDC, RPC `rpc.mainnet.arc.io`. Verificato il 07/10: DexScreener e GeckoTerminal la indicizzano come `arc` (Uniswap v2/v3/v4 e altri DEX, pool da meta' settembre), CoinGecko ha piattaforma `arc` e categoria `arc-ecosystem` (81 monete, una pagina), GoPlus supporta 5042, DefiLlama scrive `arc:0x...` (57 protocolli, TVL ~$549M). Arc entra solo in `GEM_CHAINS` (come Base: niente meme/radar, niente wallet/swap/esecuzione). I locker LP di Arc in `judge.LOCKERS` sono un'ipotesi (UNCX, Team Finance, LP bruciata): da correggere se i progetti veri ne usano altri.
