@@ -102,7 +102,10 @@ function row(e, a) {
 
 function arenaHtml(a, open = false) {
   const rows = a.entries.filter((e) => !isHidden(e.chain, e.token_address));
-  if (!rows.length) return "";
+  if (!rows.length) {
+    return open && !a.entries.length ? `<section class="arena" data-arena="${escapeHtml(a.key)}"><header class="ar-head"><h4>${escapeHtml(a.label)}</h4></header>
+      <p class="muted pad">No ${escapeHtml(a.label)} project has passed the checks yet: they appear here as the research finds them.</p></section>` : "";
+  }
   const inn = open ? rows : rows.filter((e) => e.in);
   const bench = open ? [] : rows.filter((e) => !e.in);
   return `<section class="arena" data-arena="${escapeHtml(a.key)}">
@@ -144,7 +147,7 @@ function paint() {
   if (only && !arenas.some((a) => a.key === only)) setOnly(null);
   const chips = arenas.length > 1 ? `<div class="ar-chips" role="group" aria-label="Arena">${[{ key: "", label: "All", entries: arenas.flatMap((x) => x.entries) }, ...arenas]
     .map((a) => `<button type="button" class="ar-tile" data-arena-pick="${escapeHtml(a.key)}" aria-pressed="${(only ?? "") === a.key}">
-      <b>${escapeHtml(a.label)}</b><span class="ar-n">${shownCount(a)}</span><small>${a.key ? `♛ ${escapeHtml(a.entries[0]?.symbol ?? "")}` : `${arenas.length} arenas`}</small></button>`).join("")}</div>` : "";
+      <b>${escapeHtml(a.label)}</b><span class="ar-n">${shownCount(a)}</span><small>${a.key ? (a.entries[0] ? `♛ ${escapeHtml(a.entries[0].symbol ?? "")}` : "searching") : `${arenas.length} arenas`}</small></button>`).join("")}</div>` : "";
   withEntrance(box, () => {
     const html = chips + (only ? arenaHtml(arenas.find((a) => a.key === only), true) : arenas.map((a) => arenaHtml(a)).join(""));
     box.innerHTML = html || `<p class="muted pad">The arenas are filling up: projects appear as they pass the checks.</p>`;
