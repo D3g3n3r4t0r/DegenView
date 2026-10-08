@@ -24,6 +24,7 @@ def rome(t):
 def _fresh(monkeypatch, tmp_path):
     monkeypatch.setattr(nightly, "_FILE", tmp_path / "onchain_nightly.json")
     monkeypatch.setattr(settings, "onchain_nightly_hour", 22)
+    monkeypatch.setattr(settings, "onchain_nightly_extra_times", "")
     monkeypatch.setattr(settings, "onchain_nightly_max_hours", 2.0)
     nightly.reset_for_tests()
     yield
@@ -45,6 +46,20 @@ def test_next_run_across_dst(before, after):
     assert rome(nxt).hour == 22 and rome(nxt).date() == datetime(*after).date()
     # the day is 25 or 23 hours long: the local hour stays 22:00
     assert nxt - ts(*before, 22) in (25 * 3600, 23 * 3600)
+
+
+def test_second_run_at_11_35(monkeypatch):
+    monkeypatch.setattr(settings, "onchain_nightly_extra_times", "11:35, bad, 25:00")
+    assert nightly.run_times() == [(11, 35), (22, 0)]
+    assert nightly.next_run(ts(2026, 10, 7, 23)) == ts(2026, 10, 8, 11, 35)
+    assert nightly.next_run(ts(2026, 10, 8, 11, 35)) == ts(2026, 10, 8, 22)
+    assert nightly.latest_slot(ts(2026, 10, 8, 15)) == ts(2026, 10, 8, 11, 35)
+    morning = ts(2026, 10, 8, 11, 35)
+    # the evening done does not hide the morning; the morning done does not hide the evening
+    assert nightly.due_slot(ts(2026, 10, 8, 12), {"done_slot": ts(2026, 10, 7, 22)}) == morning
+    assert nightly.due_slot(ts(2026, 10, 8, 12), {"done_slot": morning}) is None
+    assert nightly.due_slot(ts(2026, 10, 8, 22, 5), {"done_slot": morning}) == ts(2026, 10, 8, 22)
+    assert nightly.due_slot(ts(2026, 10, 8, 11, 34), {"done_slot": ts(2026, 10, 7, 22)}) is None
 
 
 def test_boot_after_the_hour_runs_tonight_now():
@@ -171,7 +186,7 @@ def test_run_night_remembers_the_night_and_sends_one_message(monkeypatch):
     slot = nightly.due_slot(clock.t, nightly._state)
     s = asyncio.run(nightly.run_night(slot, lambda: [], steps_factory=lambda client: FakeSteps(clock, drained_after=1),
                                       clock=clock, sleep=clock.sleep, send=send))
-    assert len(sent) == 1 and sent[0].startswith("Ricerca serale finita")
+    assert len(sent) == 1 and sent[0].startswith("Ricerca delle 22:00 finita")
     assert nightly.due_slot(clock.t, nightly._state) is None
     # a restart reads the night back from the file
     nightly.reset_for_tests()

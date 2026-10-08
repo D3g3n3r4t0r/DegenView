@@ -2593,6 +2593,12 @@
   },
   "seed-0260": {
     "status": "risolto",
+    "at": 1791451976,
+    "summary": "La ricerca delle gemme gira due volte al giorno, alle 11:35 e alle 22:00 ora italiana, con la stessa logica e lo stesso limite di 2 ore. I due giri non si sovrappongono mai: uno parte solo quando l'altro e' finito. Ogni giro manda il suo messaggio Telegram ('Ricerca delle 11:35', 'Ricerca delle 22:00'). Se il server era spento alle 11:35, il giro del mattino si recupera entro 8 ore.",
+    "detail": "config.onchain_nightly_extra_times='11:35' (HH:MM separati da virgola). nightly.run_times/latest_slot/next_run su tutti gli orari; due_slot invariato (done_slot per giro). text_it e _gave_up dicono l'orario."
+  },
+  "seed-0261": {
+    "status": "risolto",
     "at": 1791452243,
     "summary": "Un progetto che entra tra i migliori della sua arena (sopra la mediana) ci resta almeno 3 giorni dall'ingresso, anche se nel frattempo altri lo superano. Se invece esce dai criteri (cancelli, scarto per fatti misurati, rug) esce subito. Il podio e l'ordine per punteggio non cambiano; backtest e portafoglio non sono toccati.",
     "detail": "arenas.TENURE_S = 3 giorni; build() legge e scrive data/onchain_arena_tenure.json (id -> ora di ingresso), solo nella vista senza filtro di narrativa; riga con held=true quando e' dentro per permanenza. Un id che lascia il pool perde la permanenza."

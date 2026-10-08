@@ -1,6 +1,13 @@
-# 2026-10-08 — Permanenza minima nelle arene — `seed-0260` (Claude, a mano)
+# 2026-10-08 — Permanenza minima nelle arene — `seed-0261` (Claude, a mano)
 
 Lorenzo: "se una crypto e' comparsa tra le migliori, anche se poi viene surclassata; deve rimanerci per almeno 2-3 gg prima di essere espulsa". Default scelto: 3 giorni dall'ingresso (`arenas.TENURE_S`). Un progetto che va sopra la mediana della sua arena ("in") viene segnato in `data/onchain_arena_tenure.json`; se poi scende sotto la mediana resta "in" (`held: true`) fino a 3 giorni dall'ingresso, contati dal primo ingresso e non rinnovati. Uscire dal pool (cancelli, scarto, rug) toglie subito la permanenza. Si scrive solo dalla vista senza filtro narrativa. Podio, ordine, Telegram "Entrati/Usciti" (che guarda il pool), backtest e portafoglio invariati. Il frontend non mostra ancora un segno per le righe `held`.
+
+# 2026-10-08 — Secondo giro della ricerca alle 11:35 — `seed-0260` (Claude, a mano)
+
+Lorenzo: "aggiungi un check oltre che alle 22, anche alle 11.35".
+
+- `onchain_nightly_extra_times = "11:35"` (Europe/Rome, come le 22:00): stesso giro, stesso tetto di 2 ore. Un solo loop, quindi i giri non si sovrappongono. Recupero dopo un riavvio: 8 ore anche per il mattino (fino alle 19:35, finisce prima delle 22).
+- Costo: le chiamate DeepSeek e API del giro possono raddoppiare; il ricontrollo settimanale e la coda non si ripetono (si fa solo cio' che manca). Da guardare nel messaggio Telegram "Chiamate DeepSeek" dei prossimi giorni.
 
 # 2026-10-08 — Narrativa Compute e gemme di calcolo — `seed-0259` (Claude, a mano)
 
