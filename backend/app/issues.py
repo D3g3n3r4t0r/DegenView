@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0260", "Un secondo giro della ricerca delle gemme alle 11:35, oltre a quello delle 22:00",
+     "Lorenzo, 08/10: 'aggiungi un check oltre che alle 22, anche alle 11.35'.",
+     "media"),
     ("seed-0259", "Narrativa Compute (GPU, render, cloud decentralizzato) e gemme in questa narrativa",
      "Lorenzo, 08/10: 'mi interessa molto compute power tipo render token, akash network, voglio anche questa narrativa e concentriamoci su scovare gemme anche su questo'.",
      "media"),

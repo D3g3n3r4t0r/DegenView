@@ -63,6 +63,9 @@ class Settings(BaseSettings):
     # after max_hours. False: the old loops, as before.
     onchain_nightly_enabled: bool = True
     onchain_nightly_hour: int = 22
+    # More daily runs, "HH:MM" comma-separated, same logic and window.
+    # Lorenzo, 08/10: "aggiungi un check oltre che alle 22, anche alle 11.35".
+    onchain_nightly_extra_times: str = "11:35"
     onchain_nightly_max_hours: float = 2.0
     # La memoria degli esiti (app/trading/onchain/outcomes.py) scarta un token
     # che somiglia ai rug passati, solo quando il modello prevede i rug fuori
