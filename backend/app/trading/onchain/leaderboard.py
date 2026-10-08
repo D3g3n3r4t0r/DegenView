@@ -89,6 +89,27 @@ REFERENCES = (
     {"chain": "solana", "token_address": "6SjVTj1VGwFSXn7wEjwFm77LvACeTqB7sQUebYKX8Ds5", "symbol": "ROUTER",
      "name": "Solrouter", "website": "https://solrouter.com", "websites": ["https://docs.solrouter.com"],
      "narratives_hint": ["privacy", "fhe_mpc_tee"]},
+    # Lorenzo, 08/10: "fagli fare un giro dentro al nostro sistema" (a list of
+    # Robinhood-ecosystem projects). Same rules as every other source.
+    {"chain": "robinhood", "token_address": "0xD0cA71118ca21D674f9018A53026a38A0AB54DbF", "symbol": "DUCAT", "name": "Ducat"},
+    {"chain": "robinhood", "token_address": "0xE0fB5d77C627BA9c7950Fc0D62d1D96603e7B7C6", "symbol": "Rialto", "name": "Rialto"},
+    {"chain": "robinhood", "token_address": "0x56910D4409F3a0C78C64DD8D0545FF0705389870", "symbol": "Index", "name": "The Index"},
+    {"chain": "robinhood", "token_address": "0x0C020Bef365D7001611EF1cEcd6084cdD6b73683", "symbol": "L4VA", "name": "L4VA"},
+    {"chain": "robinhood", "token_address": "0x39dBED3a2bd333467115dE45665cC57F813C4571", "symbol": "PONS", "name": "Pons"},
+    {"chain": "robinhood", "token_address": "0xf2AD0505968862195Ee3bFd3E8A2C430578C1aAd", "symbol": "HOPPR", "name": "Hoppr"},
+    {"chain": "robinhood", "token_address": "0x791229E3EbD6CFdC3D8157f48722684173C29aD9", "symbol": "SLVR", "name": "Slvr"},
+    {"chain": "robinhood", "token_address": "0xDc45b71d7203c2e8baafC43A19BcA0Eb993bB54E", "symbol": "DARK", "name": "Darkwoods"},
+    {"chain": "base", "token_address": "0x5aB3D4c385B400F3aBB49e80DE2fAF6a88A7B691", "symbol": "FLOCK", "name": "FLock.io"},
+    {"chain": "robinhood", "token_address": "0xc32Ab2e562adE6fBa6D3d1E3960d49b0957Ef645", "symbol": "LIEGE", "name": "Liege Agents"},
+    {"chain": "robinhood", "token_address": "0xeDBf91223639800BCd5756815CAf908Df3b890bE", "symbol": "PRIORS", "name": "Priors Agents"},
+    {"chain": "robinhood", "token_address": "0xF8BC08092C06dB6148114DCf82AF881F1085f92b", "symbol": "WOOD", "name": "Sherwood Protocol"},
+    {"chain": "robinhood", "token_address": "0xdc453b1405CfE25e2afBA8E7F4272b0a00437777", "symbol": "TasQ", "name": "TasQ Network"},
+    {"chain": "robinhood", "token_address": "0xC34cBBE7D2a71f5dfa4d3a5285AC21B6852E2c4f", "symbol": "CFPX", "name": "CrossFund Protocol"},
+    {"chain": "robinhood", "token_address": "0xA3b6AEe90017b72c0812dC1e013De70eB2917ba3", "symbol": "EARN", "name": "EARNONHOOD"},
+    {"chain": "robinhood", "token_address": "0x459476869aF797Eb9061B41fA04dE46A60FBeDBD", "symbol": "BV7X", "name": "BV7X"},
+    {"chain": "robinhood", "token_address": "0x4A72B9702f991b790788f8AFA9e7112541f4E8f8", "symbol": "ROUTE", "name": "Route"},
+    {"chain": "robinhood", "token_address": "0xc4f730335Fb9e439ca5552f7b52B8E638c4245B0", "symbol": "NOTE", "name": "Note Systems"},
+    {"chain": "robinhood", "token_address": "0x47569d49471bDBaBFaf5531c0F74d9f2dE82A11A", "symbol": "PROPHET", "name": "PROPHET"},
 )
 # A researcher's floor: a pool someone can trade. No age floor since 29/09
 # (Lorenzo: "il limite di data non ha granche' senso"): a project new on a
