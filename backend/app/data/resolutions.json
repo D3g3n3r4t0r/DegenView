@@ -2594,7 +2594,7 @@
   "seed-0260": {
     "status": "risolto",
     "at": 1791451976,
-    "summary": "La ricerca delle gemme gira due volte al giorno, alle 11:35 e alle 22:00 ora italiana, con la stessa logica e lo stesso limite di 2 ore. I due giri non si sovrappongono mai: uno parte solo quando l'altro e' finito. Ogni giro manda il suo messaggio Telegram ('Ricerca del mattino' o 'Ricerca serale'). Se il server era spento alle 11:35, il giro del mattino si recupera entro 8 ore.",
+    "summary": "La ricerca delle gemme gira due volte al giorno, alle 11:35 e alle 22:00 ora italiana, con la stessa logica e lo stesso limite di 2 ore. I due giri non si sovrappongono mai: uno parte solo quando l'altro e' finito. Ogni giro manda il suo messaggio Telegram ('Ricerca delle 11:35', 'Ricerca delle 22:00'). Se il server era spento alle 11:35, il giro del mattino si recupera entro 8 ore.",
     "detail": "config.onchain_nightly_extra_times='11:35' (HH:MM separati da virgola). nightly.run_times/latest_slot/next_run su tutti gli orari; due_slot invariato (done_slot per giro). text_it e _gave_up dicono l'orario."
   }
 }

@@ -284,9 +284,8 @@ def text_it(s: dict) -> str:
     """The Telegram message: what the night did, in Italian."""
     def names(xs: list[str]) -> str:
         return ", ".join(xs[:15]) + (f" e altri {len(xs) - 15}" if len(xs) > 15 else "") if xs else "nessuno"
-    start = datetime.fromtimestamp(s.get("started") or time.time(), ROME)
-    label = "serale" if start.hour >= 17 or start.hour < 6 else "del mattino"
-    lines = [f"Ricerca {label} finita in {s.get('minutes', 0):g} min.",
+    when = datetime.fromtimestamp(s.get("slot") or s.get("started") or time.time(), ROME)
+    lines = [f"Ricerca delle {when:%H:%M} finita in {s.get('minutes', 0):g} min.",
              f"Progetti visti dalla scoperta: {s.get('discovered', 0) + s.get('skipped', 0)} "
              f"(tenuti {s.get('discovered', 0)}), entrati in esame: {s.get('examined', 0)}, "
              f"analizzati: {s.get('analysed', 0)}.",
@@ -335,6 +334,7 @@ async def run_night(slot: float, top: Callable[[], list[dict]], *, steps_factory
     finally:
         _running = False
     summary["resumed"] = _state["first_start"] < now
+    summary["slot"] = slot
     _state.update(done_slot=slot, last_run=summary["ended"], summary=summary)
     _save()
     try:

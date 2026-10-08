@@ -186,7 +186,7 @@ def test_run_night_remembers_the_night_and_sends_one_message(monkeypatch):
     slot = nightly.due_slot(clock.t, nightly._state)
     s = asyncio.run(nightly.run_night(slot, lambda: [], steps_factory=lambda client: FakeSteps(clock, drained_after=1),
                                       clock=clock, sleep=clock.sleep, send=send))
-    assert len(sent) == 1 and sent[0].startswith("Ricerca serale finita")
+    assert len(sent) == 1 and sent[0].startswith("Ricerca delle 22:00 finita")
     assert nightly.due_slot(clock.t, nightly._state) is None
     # a restart reads the night back from the file
     nightly.reset_for_tests()
