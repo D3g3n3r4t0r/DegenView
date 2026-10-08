@@ -1,4 +1,7 @@
-"""The gem research in one run a night, at 22:00 Europe/Rome.
+"""The gem research in one run a night, at 22:00 Europe/Rome, plus a
+second run at 11:35 (Lorenzo, 08/10: "aggiungi un check oltre che alle 22,
+anche alle 11.35"). Both runs are the same; the times are
+`onchain_nightly_hour` plus `onchain_nightly_extra_times`.
 
 Lorenzo, 07/10: "non lasciare sempre in ascolto il bot che scansiona
 costantemente [...] tutto in una tranche a fine serata". Until then five
@@ -20,7 +23,8 @@ then one Telegram message in Italian with what changed.
 The run is remembered in `data/onchain_nightly.json`: a deploy at 22:30
 resumes the night (within its window, MAX_ATTEMPTS times at most), a
 server that boots at 23:00 with tonight not run runs it now, one that
-boots at 15:00 waits for 22:00 (CATCHUP_S).
+boots at 15:00 runs the 11:35 one if it was missed (CATCHUP_S); a run never
+overlaps the next, the loop runs one at a time.
 
 What stays immediate: the manual scan and the per-token re-check run their
 own steps; a project added by hand is analysed at once
@@ -81,24 +85,41 @@ def reset_for_tests() -> None:
 
 # --------------------------------------------------------------- the clock
 
-def _slot_on(day, hour: int) -> float:
-    return datetime(day.year, day.month, day.day, hour, tzinfo=ROME).timestamp()
+def run_times(hour: int | None = None) -> list[tuple[int, int]]:
+    """(hour, minute) of each daily run, Europe/Rome, sorted. A given
+    `hour` means that run only."""
+    if hour is not None:
+        return [(hour, 0)]
+    out = {(settings.onchain_nightly_hour, 0)}
+    for part in (settings.onchain_nightly_extra_times or "").split(","):
+        h, _, m = part.strip().partition(":")
+        try:
+            hh, mm = int(h), int(m or 0)
+        except ValueError:
+            continue
+        if 0 <= hh < 24 and 0 <= mm < 60:
+            out.add((hh, mm))
+    return sorted(out)
+
+
+def _slot_on(day, hour: int, minute: int = 0) -> float:
+    return datetime(day.year, day.month, day.day, hour, minute, tzinfo=ROME).timestamp()
+
+
+def _slots_around(now_ts: float, hour: int | None) -> list[float]:
+    today = datetime.fromtimestamp(now_ts, ROME).date()
+    return sorted(_slot_on(today + timedelta(days=d), h, m)
+                  for d in (-1, 0, 1) for h, m in run_times(hour))
 
 
 def latest_slot(now_ts: float, hour: int | None = None) -> float:
-    """The most recent hour:00 Europe/Rome at or before now."""
-    hour = settings.onchain_nightly_hour if hour is None else hour
-    today = datetime.fromtimestamp(now_ts, ROME).date()
-    slot = _slot_on(today, hour)
-    return slot if slot <= now_ts else _slot_on(today - timedelta(days=1), hour)
+    """The most recent run time (Europe/Rome) at or before now."""
+    return max(t for t in _slots_around(now_ts, hour) if t <= now_ts)
 
 
 def next_run(now_ts: float, hour: int | None = None) -> float:
-    """The next hour:00 Europe/Rome strictly after now (DST included)."""
-    hour = settings.onchain_nightly_hour if hour is None else hour
-    today = datetime.fromtimestamp(now_ts, ROME).date()
-    slot = _slot_on(today, hour)
-    return slot if slot > now_ts else _slot_on(today + timedelta(days=1), hour)
+    """The next run time (Europe/Rome) strictly after now (DST included)."""
+    return min(t for t in _slots_around(now_ts, hour) if t > now_ts)
 
 
 def due_slot(now_ts: float, state: dict, hour: int | None = None) -> float | None:
@@ -263,7 +284,9 @@ def text_it(s: dict) -> str:
     """The Telegram message: what the night did, in Italian."""
     def names(xs: list[str]) -> str:
         return ", ".join(xs[:15]) + (f" e altri {len(xs) - 15}" if len(xs) > 15 else "") if xs else "nessuno"
-    lines = [f"Ricerca serale finita in {s.get('minutes', 0):g} min.",
+    start = datetime.fromtimestamp(s.get("started") or time.time(), ROME)
+    label = "serale" if start.hour >= 17 or start.hour < 6 else "del mattino"
+    lines = [f"Ricerca {label} finita in {s.get('minutes', 0):g} min.",
              f"Progetti visti dalla scoperta: {s.get('discovered', 0) + s.get('skipped', 0)} "
              f"(tenuti {s.get('discovered', 0)}), entrati in esame: {s.get('examined', 0)}, "
              f"analizzati: {s.get('analysed', 0)}.",
@@ -330,8 +353,9 @@ async def _gave_up(now: float, send) -> None:
     _state["gave_up"] = slot
     _save()
     try:
-        await send(f"Ricerca serale interrotta: e' fallita {MAX_ATTEMPTS} volte stasera, riprova domani alle "
-                   f"{settings.onchain_nightly_hour}:00. Vedi i log del server.")
+        nxt = datetime.fromtimestamp(next_run(now), ROME)
+        await send(f"Ricerca delle {datetime.fromtimestamp(slot, ROME):%H:%M} interrotta: e' fallita "
+                   f"{MAX_ATTEMPTS} volte, riprova alle {nxt:%H:%M}. Vedi i log del server.")
     except Exception:
         logger.exception("nightly: give-up note not sent")
 

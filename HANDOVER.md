@@ -1,3 +1,10 @@
+# 2026-10-08 — Secondo giro della ricerca alle 11:35 — `seed-0260` (Claude, a mano)
+
+Lorenzo: "aggiungi un check oltre che alle 22, anche alle 11.35".
+
+- `onchain_nightly_extra_times = "11:35"` (Europe/Rome, come le 22:00): stesso giro, stesso tetto di 2 ore. Un solo loop, quindi i giri non si sovrappongono. Recupero dopo un riavvio: 8 ore anche per il mattino (fino alle 19:35, finisce prima delle 22).
+- Costo: le chiamate DeepSeek e API del giro possono raddoppiare; il ricontrollo settimanale e la coda non si ripetono (si fa solo cio' che manca). Da guardare nel messaggio Telegram "Chiamate DeepSeek" dei prossimi giorni.
+
 # 2026-10-08 — Narrativa Compute e gemme di calcolo — `seed-0259` (Claude, a mano)
 
 Lorenzo: "mi interessa molto compute power tipo render token, akash network, voglio anche questa narrativa e concentriamoci su scovare gemme anche su questo".
