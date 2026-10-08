@@ -26,6 +26,7 @@ def _fresh(monkeypatch, tmp_path):
     monkeypatch.setattr(settings, "onchain_nightly_hour", 22)
     monkeypatch.setattr(settings, "onchain_nightly_extra_times", "")
     monkeypatch.setattr(settings, "onchain_nightly_max_hours", 2.0)
+    monkeypatch.setattr(settings, "onchain_nightly_force", "")
     nightly.reset_for_tests()
     yield
     nightly.reset_for_tests()
@@ -234,3 +235,37 @@ def test_a_project_added_by_hand_is_analysed_at_once(monkeypatch):
         assert not lb.analyze_now("base", "0xabc")       # no running loop: nothing started
     finally:
         lb.reset_for_tests()
+
+
+class _Stop(BaseException):
+    pass
+
+
+def test_forced_run_starts_at_boot_once(monkeypatch):
+    from app.trading.onchain import leaderboard as lb
+    monkeypatch.setattr(lb, "startup_requeue", lambda: None)
+
+    async def warm():
+        return None
+    monkeypatch.setattr(lb, "warm_usage", warm)
+    monkeypatch.setattr(settings, "onchain_nightly_extra_times", "11:35")
+    monkeypatch.setattr(settings, "onchain_nightly_force", "k1")
+    clock = Clock(ts(2026, 10, 8, 13, 40))
+    nightly._state.update(done_slot=ts(2026, 10, 8, 11, 35))
+    nightly._save()
+    sent = []
+
+    async def send(text):
+        sent.append(text)
+
+    async def sleep(s):
+        if s >= 1000:
+            raise _Stop
+        clock.t += s
+    with pytest.raises(_Stop):
+        asyncio.run(nightly.nightly_loop(lambda: [], clock=clock, sleep=sleep, send=send,
+                                         steps_factory=lambda client: FakeSteps(clock, drained_after=1)))
+    assert len(sent) == 1 and nightly._state["forced"] == ["k1"]
+    assert nightly.forced_due(nightly._state) is None
+    # tonight's run is still due at 22:00
+    assert nightly.due_slot(ts(2026, 10, 8, 22, 1), nightly._state) == ts(2026, 10, 8, 22)
