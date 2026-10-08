@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0258", "Ricontrollo DeepSeek: punti ripetuti, sito JS rosso e cancellato insieme, nessuna vista di cosa sta facendo",
+     "Lorenzo, 08/10, scheda AUREON tab Why: 'sistema questi errori, e quando DeepSeek fa il rescan voglio vedere cosa fa attraverso un piccolo log direttamente sul tasto di rescan [...] cosa sta navigando, eccetera, giusto per vedere a che punto e''.",
+     "media"),
     ("seed-0257", "Aggiungere la rete Arc tra le chain delle gemme",
      "Lorenzo, 07/10: 'aggiungi supporto a rete ARC'.",
      "media"),

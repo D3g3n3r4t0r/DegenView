@@ -308,7 +308,7 @@ async function enrich(id, e) {
   // panel was closed): show its steps and follow it to the end.
   if (r.deep_progress?.running && !e.deepBusy) {
     e.deepBusy = true;
-    e.deepSteps = r.deep_progress.steps;
+    takeProgress(e, r.deep_progress);
     followRecheck(e, current);
   }
   if (r.entry) {
@@ -365,41 +365,62 @@ function deepBlock(e) {
   }
   let label = "Re-check with DeepSeek";
   let disabled = "";
-  if (e.deepBusy) { disabled = " disabled"; label = "Re-checking…"; }
+  if (e.deepBusy) { disabled = " disabled data-busy"; label = termHtml(e); }
   else if (wait > 0) {
     disabled = " disabled";
     label = wait >= 3600 ? `Re-check in ${Math.round(wait / 3600)}h` : `Re-check in ${Math.max(1, Math.round(wait / 60))}m`;
   }
-  const steps = e.deepBusy && e.deepSteps?.length ? `<ol class="ds-steps">${e.deepSteps.map((x) => stepLi(x)).join("")}</ol>` : "";
   return `<div class="ds-deep"><h5>Deep re-check${d ? ` <b>${escapeHtml(d.verdict ?? "")} · ${d.score ?? "—"}/100</b>` : ""}</h5>
-    ${body}${steps}
+    ${body}
     <button class="ds-recheck" type="button" data-deep-recheck${disabled}>${label}</button></div>`;
 }
 
-// One step of a re-check as it happens on the server (Lorenzo, 01/10: "voglio
-// vedere proprio i vari passaggi"): only steps the server really ran.
-function stepLi(x, fresh = false) {
-  const key = `${x.state}|${x.detail ?? ""}`;
-  return `<li data-state="${escapeHtml(x.state)}" data-key="${escapeHtml(key)}"${fresh ? " data-new" : ""}><i></i>`
-    + `<span>${escapeHtml(x.label)}</span>${x.detail ? `<small>${escapeHtml(x.detail)}</small>` : ""}</li>`;
+// The re-check's live log, on the button itself (Lorenzo, 08/10: "voglio
+// vedere cosa fa, cosa sta navigando [...] a che punto è"): the step the
+// server is on, and the last pages and APIs it really opened.
+const LOG_LINES = 4;
+
+function takeProgress(e, p) {
+  if (p?.steps) e.deepSteps = p.steps;
+  if (p?.log) e.deepLog = p.log;
+  if (p?.started) e.deepStarted = p.started;
+}
+
+function termHead(e) {
+  const steps = e.deepSteps ?? [];
+  const last = steps.at(-1);
+  const secs = e.deepStarted ? Math.max(0, Math.round(Date.now() / 1000 - e.deepStarted)) : 0;
+  const where = last ? `${last.label}${last.detail ? ` · ${last.detail}` : ""}` : "Starting";
+  return `<b>&gt; ${escapeHtml(where)}</b><em>${steps.length ? `step ${steps.length} · ` : ""}${secs}s</em>`;
+}
+
+function termLine(x, fresh = false) {
+  const ok = x.code == null ? "" : String(x.code < 400);
+  return `<span class="ds-ln" data-n="${x.n}" data-ok="${ok}"${fresh ? " data-new" : ""}>`
+    + `<i>${escapeHtml(x.src)}</i><span>${escapeHtml(x.text)}</span><em>${x.code == null ? "…" : escapeHtml(String(x.code))}</em></span>`;
+}
+
+function termHtml(e) {
+  const lines = (e.deepLog ?? []).slice(-LOG_LINES);
+  return `<span class="ds-term" aria-live="polite"><span class="ds-term-head">${termHead(e)}</span>`
+    + `<span class="ds-term-log">${lines.map((x) => termLine(x)).join("")}</span></span>`;
 }
 
 function paintSteps(e, cur) {
   if (current?.e !== e || !dlg?.open || tab !== "why") return;
-  const host = dlg.querySelector(".ds-deep");
-  if (!host) return;
-  let ol = host.querySelector(".ds-steps");
-  if (!ol) {
-    ol = document.createElement("ol");
-    ol.className = "ds-steps";
-    const btn = host.querySelector(".ds-recheck");
-    if (btn) btn.before(ol); else host.append(ol);
+  const btn = dlg.querySelector(".ds-deep .ds-recheck");
+  if (!btn) return;
+  const log = btn.querySelector(".ds-term-log");
+  if (!log) { btn.dataset.busy = ""; btn.innerHTML = termHtml(e); return; }
+  btn.querySelector(".ds-term-head").innerHTML = termHead(e);
+  const lines = (e.deepLog ?? []).slice(-LOG_LINES);
+  const keep = new Set(lines.map((x) => String(x.n)));
+  for (const el of [...log.children]) if (!keep.has(el.dataset.n)) el.remove();
+  for (const x of lines) {
+    const el = log.querySelector(`[data-n="${x.n}"]`);
+    if (!el) log.insertAdjacentHTML("beforeend", termLine(x, true));
+    else if (x.code != null && el.dataset.ok === "") el.outerHTML = termLine(x);
   }
-  (e.deepSteps ?? []).forEach((x, i) => {
-    const li = ol.children[i];
-    if (!li) ol.insertAdjacentHTML("beforeend", stepLi(x, true));
-    else if (li.dataset.key !== `${x.state}|${x.detail ?? ""}`) li.outerHTML = stepLi(x);
-  });
 }
 
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -413,7 +434,7 @@ async function followRecheck(e, cur) {
     while (e.deepBusy) {
       try {
         const p = (await api.recheckProgress(e.chain, e.token)).progress;
-        if (p?.steps) { e.deepSteps = p.steps; paintSteps(e, cur); }
+        if (p?.steps) { takeProgress(e, p); paintSteps(e, cur); }
         if (p && !p.running && !e.deepOwn) {
           const r = await api.getToken(e.chain, e.token);
           if (r.deep) e.deep = r.deep;
@@ -437,8 +458,11 @@ async function deepRecheck(btn) {
   e.deepBusy = true;
   e.deepOwn = true;
   e.deepSteps = [];
+  e.deepLog = [];
+  e.deepStarted = Date.now() / 1000;
   btn.disabled = true;
-  btn.textContent = "Re-checking…";
+  btn.dataset.busy = "";
+  btn.innerHTML = termHtml(e);
   followRecheck(e, cur);
   try {
     const r = await api.recheckToken(e.chain, e.token);
@@ -447,6 +471,7 @@ async function deepRecheck(btn) {
   } catch (err) {
     if (err?.detail?.wait_s) e.deepWait = err.detail.wait_s;
     else {
+      delete btn.dataset.busy;
       btn.textContent = "Re-check failed";
       setTimeout(() => { e.deepBusy = false; btn.textContent = "Re-check with DeepSeek"; btn.disabled = false; }, 4000);
       return;
@@ -462,7 +487,7 @@ async function showRecheck(e, cur) {
   // Let the last step land on screen before the verdict replaces the list.
   try {
     const p = (await api.recheckProgress(e.chain, e.token)).progress;
-    if (p?.steps) { e.deepSteps = p.steps; paintSteps(e, cur); }
+    if (p?.steps) { takeProgress(e, p); paintSteps(e, cur); }
   } catch { /* the result is what matters */ }
   await pause(600);
   const lb = await import("@onchain/leaderboard.js");

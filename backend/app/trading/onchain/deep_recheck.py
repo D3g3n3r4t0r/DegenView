@@ -69,14 +69,27 @@ _running: set[str] = set()   # a double tap must not pay DeepSeek twice
 _progress: dict[str, dict] = {}   # live steps of a running or just-finished re-check, by key
 
 
+LOG_SHOWN = 8
+
+
 def progress(chain: str, token: str) -> dict | None:
-    """{running, started, steps: [{label, detail, state: done|run|fail}]}"""
-    return _progress.get(_key(chain, token))
+    """{running, started, steps: [{label, detail, state: done|run|fail}],
+    log: the last lines of [{n, src, text, code}], what it is opening now}"""
+    pr = _progress.get(_key(chain, token))
+    if pr is None:
+        return None
+    return {**pr, "log": pr["log"][-LOG_SHOWN:]}
 
 
 def _tracker(key: str, now: float):
-    pr = {"running": True, "started": now, "steps": []}
+    pr = {"running": True, "started": now, "steps": [], "log": []}
     _progress[key] = pr
+
+    def log(src: str, text: str) -> dict:
+        entry = {"n": pr["log"][-1]["n"] + 1 if pr["log"] else 0, "src": src, "text": text, "code": None}
+        pr["log"].append(entry)
+        del pr["log"][:-60]   # n keeps counting: the client follows it, not the position
+        return entry
 
     def note(label: str | None, detail: str = "") -> None:
         steps = pr["steps"]
@@ -88,7 +101,7 @@ def _tracker(key: str, now: float):
             if st["state"] == "run":
                 st["state"] = "done"
         steps.append({"label": label, "detail": detail[:140], "state": "run", "at": time.time()})
-    return pr, note
+    return pr, note, log
 
 
 def _save() -> None:
@@ -111,7 +124,38 @@ def _key(chain: str, token: str) -> str:
 
 
 def get(chain: str, token: str) -> dict | None:
-    return _state["results"].get(_key(chain, token))
+    return tidy(_state["results"].get(_key(chain, token)))
+
+
+def _text(x) -> str:
+    return x if isinstance(x, str) else (x or {}).get("text") or ""
+
+
+def tidy(res: dict | None) -> dict | None:
+    """Each fact once, and the counts the list shows (AUREON, 08/10: the
+    verdict's problems repeated the red points in other words, and "site
+    built in JavaScript" was red next to a cleared "Site is a JavaScript
+    shell"). Also applied to results saved before this rule."""
+    if not res:
+        return res
+    claims = scout_recheck.merge_points([scout_recheck.read_gap(c) for c in res.get("claims") or [] if isinstance(c, dict)])
+    problems: list = []
+    for p in res.get("problems") or []:
+        t = _text(p)
+        # A problem the red points already carry is shown there, with its checked status.
+        if scout_recheck.READ_GAP.search(t) or any(scout_recheck.same_fact(t, _text(q)) for q in claims + problems):
+            continue
+        problems.append(p)
+    strengths: list = []
+    for p in res.get("strengths") or []:
+        if not any(scout_recheck.same_fact(_text(p), _text(q)) for q in strengths):
+            strengths.append(p)
+    out = {**res, "claims": claims, "problems": problems, "strengths": strengths}
+    if claims:
+        out.update({"cleared": sum(c.get("status") == "refuted" for c in claims),
+                    "unverified": sum(c.get("status") == "unverified" for c in claims),
+                    "confirmed": sum(c.get("status") == "confirmed" for c in claims)})
+    return out
 
 
 def _day(now: float) -> str:
@@ -180,7 +224,8 @@ def _parse(raw: str, evidence: str = "") -> dict:
         verdict = "watch"
     ev = scout_recheck._norm(evidence)
     strengths = _items(out.get("strengths"), ev)
-    problems = _items(out.get("problems"), ev)
+    # Our reader's gap is not the project's problem (#465), and it cannot carry a drop.
+    problems = [p for p in _items(out.get("problems"), ev) if not scout_recheck.READ_GAP.search(p["text"])]
     keep = out["keep"]
     reason = _cut(out.get("reason"), 160)
     unsupported = False
@@ -287,8 +332,10 @@ async def run(chain: str, token: str, client, now: float | None = None, ask=None
     if limited and _state["calls"].get(_day(now or time.time()), 0) + len(_running) >= DAILY_MAX:
         raise TooSoon(max(60, wait_s(chain, token, now)))
     _running.add(key)
-    pr, note = _tracker(key, now or time.time())
+    pr, note, log = _tracker(key, now or time.time())
     tok = scout_recheck.PROGRESS.set(note)
+    trace = scout_recheck.TRACE.set(log)
+    scout_recheck.watch(client)
     try:
         return await _run(chain, token, client, now, ask, limited)
     except Exception as exc:
@@ -303,6 +350,7 @@ async def run(chain: str, token: str, client, now: float | None = None, ask=None
         pr["running"] = False
         pr["ended"] = time.time()
         scout_recheck.PROGRESS.reset(tok)
+        scout_recheck.TRACE.reset(trace)
         _running.discard(key)
 
 
@@ -375,6 +423,7 @@ async def _run(chain: str, token: str, client, now: float | None = None, ask=Non
               "checked": (rc.get("checked") or [])[:12],
               "at": now,
               "before": {"keep": old.get("keep"), "reason": old.get("reason")} if old else None}
+    result = tidy(result)
     _state["results"][key] = result
     _save()
 

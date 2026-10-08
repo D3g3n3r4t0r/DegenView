@@ -2578,5 +2578,11 @@
     "at": 1791399359,
     "summary": "Arc (la L1 di Circle, gas in USDC) e' una chain delle gemme in sola lettura: scoperta da CoinGecko (categoria Arc Ecosystem), DexScreener e DefiLlama, controlli GoPlus, prezzi dal pool on-chain, grafici GeckoTerminal, filtro e conteggio nel Database. Niente meme, niente trading.",
     "detail": "legit.GEM_CHAINS/GOPLUS_CHAIN (5042)/CHAIN_LABEL, discovery CG_CATEGORIES/CG_PLATFORMS/readme_addresses, traction CHAIN_NAMES, judge.LOCKERS, unlocks e pool_prices RPC rpc.mainnet.arc.io, GECKO_NET, scanner GECKO_NETWORKS; frontend etichette, icona, filtro Database, embed DexScreener."
+  },
+  "seed-0258": {
+    "status": "risolto",
+    "at": 1791439232,
+    "summary": "Ogni fatto compare una volta sola: i problemi del giudice e i flag dei pilastri dicevano le stesse cose con parole diverse (autore unico, niente CI, lock LP, sito JavaScript) e venivano sommati. Un sito che non riusciamo a leggere o un lock mai letto non e' piu' un punto rosso ne' un problema (#465): resta 'non verificato', o 'cancellato' se il testo dell'app lo smentisce. I conteggi sotto la lista contano i punti mostrati. Durante il ricontrollo il tasto diventa un piccolo terminale nero e ambra: passo in corso, secondi, e le ultime pagine e API aperte (sito, GitHub, GoPlus, GeckoTerminal, X...) con il codice di risposta.",
+    "detail": "scout_recheck: TOPICS/same_fact/merge_points/read_gap, red_points una volta per fatto, TRACE + event hook httpx (solo host e percorso, mai la query). deep_recheck: tidy() anche sui risultati gia' salvati, problemi 'non letto' scartati in _parse, progress() con log. detail.js termHtml/paintSteps, app.css/classic.css .ds-term."
   }
 }

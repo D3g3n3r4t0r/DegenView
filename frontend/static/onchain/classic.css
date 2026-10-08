@@ -269,7 +269,6 @@ html:has(#app-shell[data-view="manual"]) .tb-me::before { content: "Swap"; }
 @keyframes pc-breathe {}
 @keyframes pop-a {}
 @keyframes pop-b {}
-@keyframes ds-step-pulse { 50% { opacity: .4; } }
 @keyframes agent-breathe { 50% { opacity: .4; } }
 @keyframes am-breathe { 50% { opacity: .4; } }
 @keyframes ask-pulse { 50% { opacity: .4; } }
@@ -432,6 +431,7 @@ dialog.sheet :is(.rows, [tabindex="-1"]):focus { outline: none !important; }
 .dt-chips button:is([aria-current], [aria-pressed="true"]) { background: var(--c-ink) !important; color: var(--c-on-ink) !important; }
 .why-score { padding: 14px !important; gap: 14px; }
 .ds-recheck { min-block-size: 48px; border: 0 !important; border-radius: 2px !important; background: var(--c-pill) !important; font: 500 15px var(--sans) !important; }
+.ds-recheck[data-busy] { background: #000 !important; border: 1px solid var(--c-amber) !important; color: var(--c-amber) !important; font: 400 12px/1.35 var(--sans) !important; }
 .dt-pane :is(.call, li, p, dl > div) { border: 0 !important; }
 .dt-pane .call { padding-block: 12px !important; }
 .dt-pane .bars i { block-size: 4px; border-radius: 2px; }

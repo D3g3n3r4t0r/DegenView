@@ -69,16 +69,17 @@ SYSTEM = (
 
 
 def red_points(entry: dict) -> list[dict]:
-    """The judge's problems and every pillar's flags, once each."""
-    out, seen = [], set()
+    """The judge's problems and every pillar's flags, one per fact: a flag
+    that says what a judge problem already says in other words is not a
+    second point (AUREON, 08/10: "single author" next to "Only 1 author on
+    the SDK repo", five red points for three facts)."""
+    out: list[dict] = []
     for p in ((entry.get("judge") or {}).get("problems") or []):
-        if p and p not in seen:
-            seen.add(p)
+        if p and not any(same_fact(p, q["text"]) for q in out):
             out.append({"text": p, "from": "judge"})
     for k, pil in (entry.get("pillars") or {}).items():
         for f in (pil or {}).get("flags") or []:
-            if f and f not in seen:
-                seen.add(f)
+            if f and not any(same_fact(f, q["text"]) for q in out):
                 out.append({"text": f, "from": k})
     return out
 
@@ -421,6 +422,46 @@ async def lp_coverage(item: dict, client: httpx.AsyncClient) -> str:
 PROGRESS: contextvars.ContextVar = contextvars.ContextVar("recheck_progress", default=None)
 
 
+# Every page and API a re-check opens, for the log on the button (Lorenzo,
+# 08/10: "voglio vedere cosa fa, cosa sta navigando"). Set by deep_recheck.
+TRACE: contextvars.ContextVar = contextvars.ContextVar("recheck_trace", default=None)
+
+_SOURCES = (("gopluslabs", "GoPlus"), ("geckoterminal", "Gecko"), ("dexscreener", "DexScr"), ("llama", "Llama"),
+            ("coingecko", "CoinGecko"), ("github", "GitHub"), ("t.me", "Telegram"), ("telegram", "Telegram"),
+            ("discord", "Discord"), ("twitter", "X"), ("x.com", "X"), ("solscan", "Solscan"), ("helius", "Helius"),
+            ("deepseek", "DeepSeek"))
+
+
+def source_of(host: str) -> str:
+    host = (host or "").lower()
+    return next((name for key, name in _SOURCES if key in host), "Web")
+
+
+async def _on_request(request) -> None:
+    cb = TRACE.get()
+    if cb:
+        host = request.url.host or ""
+        # Host and path only: a query string can carry an address or a key.
+        request.extensions["recheck_log"] = cb(source_of(host), (host.removeprefix("www.") + request.url.path)[:72])
+
+
+async def _on_response(response) -> None:
+    entry = response.request.extensions.get("recheck_log")
+    if isinstance(entry, dict):
+        entry["code"] = response.status_code
+
+
+def watch(client) -> None:
+    """Hooks the client once; the hooks do nothing outside a traced re-check."""
+    try:
+        hooks = client.event_hooks
+        if _on_request not in hooks.get("request", []):
+            client.event_hooks = {"request": [*hooks.get("request", []), _on_request],
+                                  "response": [*hooks.get("response", []), _on_response]}
+    except AttributeError:
+        pass
+
+
 def step(label: str, detail: str = "") -> None:
     cb = PROGRESS.get()
     if cb:
@@ -744,6 +785,75 @@ VOLUME_POINT = re.compile(r"(?i)\bvolume\b[^.]{0,25}(\$0\b|\bzero\b|\bnone\b)|\b
 THIN_POINT = re.compile(r"(?i)\b(thin|tiny|shallow|low|small)\b[^.]{0,25}\bliquidity\b|\bliquidity\b[^.]{0,40}\b(thin|tiny|shallow|low)\b")
 
 
+# One name per fact a red point can be about, so the same fact said in other
+# words is said once. First match wins; a text with none falls back to word overlap.
+TOPICS = (
+    ("author", re.compile(r"(?i)\bsingle[- ](author|contributor|developer|committer)|"
+                          r"\b(1|one|sole|only one)\s+(author|contributor|committer)\b")),
+    ("ci", re.compile(r"\bCI\b|(?i:continuous integration)")),
+    ("lp_lock", re.compile(r"(?i)\b(LP|liquidity)\b[^.]{0,30}\block|\block\b[^.]{0,40}\b(pool|LP)\b|\blocked\b")),
+    ("site_js", re.compile(r"(?i)\bjavascript\b|\bJS\b")),
+    ("code", CODE_POINT),
+    ("volume", VOLUME_POINT),
+    ("liquidity", THIN_POINT),
+    ("team", re.compile(r"(?i)\b(team|founders?|anonymous|doxx\w*)\b")),
+)
+# A point about what our reader could not read, not about the project (#465:
+# a datum never read is unknown, never red): never confirmed, never a problem.
+READ_GAP = re.compile(r"(?i)\b(unreadable|not readable|could not (be )?read|couldn't read|"
+                      r"javascript[- ](only|shell|app)|built (in|with) javascript|rendered (via|by|with) javascript|"
+                      r"not covered by|lock (is )?unknown|unknown lock)\b")
+
+
+def topic(text: str) -> str | None:
+    return next((name for name, rx in TOPICS if rx.search(text or "")), None)
+
+
+def _words(text: str) -> set[str]:
+    return set(re.findall(r"[a-z0-9$]{3,}", (text or "").lower()))
+
+
+def same_fact(a: str, b: str) -> bool:
+    ta, tb = topic(a), topic(b)
+    if ta or tb:
+        return ta == tb
+    wa, wb = _words(a), _words(b)
+    return bool(wa and wb) and len(wa & wb) / len(wa | wb) >= 0.6
+
+
+_SEVERITY = {"confirmed": 0, "unverified": 1, "refuted": 2}
+
+
+def merge_points(points: list[dict]) -> list[dict]:
+    """One point per fact. A group of absences one of which a quote refutes
+    is cleared (we found the thing); otherwise the most severe status
+    stands, so a real risk is never cleared by a weaker duplicate."""
+    groups: list[list[dict]] = []
+    for p in points:
+        g = next((g for g in groups if same_fact(g[0].get("text") or "", p.get("text") or "")), None)
+        if g is None:
+            groups.append([p])
+        else:
+            g.append(p)
+    out = []
+    for g in groups:
+        refuted = [p for p in g if p.get("status") == "refuted"]
+        if refuted and all(ABSENCE.search(p.get("text") or "") for p in g):
+            pick = refuted
+        else:
+            worst = min(_SEVERITY.get(p.get("status"), 1) for p in g)
+            pick = [p for p in g if _SEVERITY.get(p.get("status"), 1) == worst]
+        out.append(max(pick, key=lambda p: (bool(p.get("evidence")), len(p.get("text") or ""))))
+    return out
+
+
+def read_gap(p: dict) -> dict:
+    """A confirmed point that only says we could not read something is unverified."""
+    if p.get("status") == "confirmed" and READ_GAP.search(p.get("text") or ""):
+        return {**p, "status": "unverified", "note": "Unread, not measured: " + (p.get("note") or "a gap in what we could read")}
+    return p
+
+
 def facts_win(judged: list[dict], ev: dict, item: dict | None = None) -> list[dict]:
     """What we measured beats the model: a point that says the contract or the
     X account is missing is refuted when we read them (HYDX, 01/10: "no
@@ -823,7 +933,7 @@ async def recheck(entry: dict, item: dict, client: httpx.AsyncClient, ask=None) 
         judged = heuristic(points, ev)
     else:
         _cache[key] = (time.time(), {"items": judged})
-    judged = [minor(p) for p in facts_win(judged, ev, item)]
+    judged = merge_points([read_gap(minor(p)) for p in facts_win(judged, ev, item)])
     step_detail(" · ".join(f"{sum(p['status'] == k for p in judged)} {k}" for k in ("refuted", "unverified", "confirmed")))
     return {"confirmed": [p for p in judged if p["status"] == "confirmed"],
             "unverified": [p for p in judged if p["status"] == "unverified"],
