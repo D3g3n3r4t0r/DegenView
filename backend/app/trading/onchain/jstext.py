@@ -17,6 +17,7 @@ Three steps, cheapest first:
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import html
 import json
 import logging
@@ -267,7 +268,20 @@ def is_shell(raw: str, words: int) -> bool:
 
 _sem: asyncio.Semaphore | None = None
 _calls: dict[str, int] = {}
-_unavailable = False
+_unavailable = False          # no Playwright at all: nothing to retry
+_down_until = 0.0             # the browser would not start: try again after a pause, never "off until restart"
+DOWN_PAUSE_S = 900
+CACHE_TTL_S = 6 * 3600
+_cache: dict[str, tuple[float, str]] = {}
+last_failure: dict[str, str] = {}   # url -> why it is still a shell, shown as a fact (AUREON, 08/10)
+# A re-check someone asked for: it does not wait for tomorrow's quota.
+URGENT: contextvars.ContextVar = contextvars.ContextVar("render_urgent", default=False)
+
+
+def _failed(url: str, why: str) -> None:
+    last_failure[url] = why
+    while len(last_failure) > 500:
+        last_failure.pop(next(iter(last_failure)))
 
 
 def render_enabled() -> bool:
@@ -280,16 +294,28 @@ async def render(url: str, allow_host: Callable[[str], Awaitable[bool]]) -> str 
     the page does not load. One page at a time; every request the page makes
     goes through `allow_host`, so the browser cannot reach internal
     addresses either."""
-    global _sem, _unavailable
-    if _unavailable or not render_enabled():
+    global _sem, _unavailable, _down_until
+    if not render_enabled():
+        _failed(url, "headless browser switched off")
         return None
+    if _unavailable:
+        _failed(url, "no headless browser on this server")
+        return None
+    if time.time() < _down_until:
+        _failed(url, "headless browser did not start, retrying shortly")
+        return None
+    hit = _cache.get(url)
+    if hit and time.time() - hit[0] < CACHE_TTL_S:
+        return hit[1]
     try:
         from playwright.async_api import async_playwright
     except ImportError:
         _unavailable = True
+        _failed(url, "no headless browser on this server")
         return None
     today = time.strftime("%Y-%m-%d")
-    if _calls.get(today, 0) >= RENDER_DAILY_MAX:
+    if _calls.get(today, 0) >= RENDER_DAILY_MAX and not URGENT.get():
+        _failed(url, "daily browser quota used")
         return None
     _sem = _sem or asyncio.Semaphore(1)
     async with _sem:
@@ -328,12 +354,17 @@ async def render(url: str, allow_host: Callable[[str], Awaitable[bool]]) -> str 
             async with asyncio.timeout(RENDER_TIMEOUT_S + 10):
                 async with async_playwright() as pw, egress.public_client(timeout=8.0) as net:
                     try:
+                        # Docker gives /dev/shm 64 MB: Chromium's tabs crash on it
+                        # without --disable-dev-shm-usage.
                         browser = await pw.chromium.launch(
                             headless=True, executable_path=os.environ.get(CHROMIUM_ENV) or None, proxy={"server": "http://127.0.0.1:9"},
-                            args=["--proxy-bypass-list=<-loopback>"])
-                    except Exception as exc:  # no browser binary on this server
-                        logger.info("headless render unavailable: %s", exc)
-                        _unavailable = True
+                            args=["--proxy-bypass-list=<-loopback>", "--disable-dev-shm-usage", "--no-sandbox", "--disable-gpu"])
+                    except Exception as exc:
+                        # Was "unavailable until the next restart": one bad start
+                        # left every JS site unreadable for days.
+                        logger.warning("headless render: browser did not start: %s", exc)
+                        _down_until = time.time() + DOWN_PAUSE_S
+                        _failed(url, "headless browser did not start")
                         return None
                     try:
                         page = await browser.new_page(user_agent="Mozilla/5.0 (LiquidityEngine token check)")
@@ -343,9 +374,15 @@ async def render(url: str, allow_host: Callable[[str], Awaitable[bool]]) -> str 
                             await page.wait_for_load_state("networkidle", timeout=5000)
                         except Exception:
                             pass   # sockets that never go quiet: read what is there
-                        return await page.content()
+                        built = await page.content()
+                        _cache[url] = (time.time(), built)
+                        for k in [k for k, (at, _) in _cache.items() if time.time() - at > CACHE_TTL_S]:
+                            _cache.pop(k, None)
+                        last_failure.pop(url, None)
+                        return built
                     finally:
                         await browser.close()
         except Exception as exc:
-            logger.info("headless render of %s failed: %s", url, exc)
+            logger.warning("headless render of %s failed: %s", url, exc)
+            _failed(url, f"page did not load in the browser ({type(exc).__name__})")
             return None

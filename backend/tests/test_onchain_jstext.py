@@ -118,6 +118,7 @@ def test_fetch_site_renders_a_shell_when_a_browser_is_there(monkeypatch):
     monkeypatch.setattr(jstext, "_unavailable", True)          # no browser: stays a shell
     site = asyncio.run(run())
     assert site["ok"] and site["shell"] and not site["rendered"]
+    assert site["render_error"] == "no headless browser on this server"   # the reason travels with the page
     monkeypatch.setattr(jstext, "render", render)
     site = asyncio.run(run())
     assert site["rendered"] and not site["shell"] and "onchain strategy game" in site["text"]
@@ -127,6 +128,17 @@ def test_render_skips_silently_without_playwright(monkeypatch):
     monkeypatch.setattr(jstext, "_unavailable", False)
     monkeypatch.setenv(jstext.RENDER_ENV, "0")
     assert asyncio.run(jstext.render("https://x.example/", None)) is None
+
+
+def test_a_browser_that_did_not_start_is_retried_not_off_for_good(monkeypatch):
+    # AUREON, 08/10: one failed start used to leave every JS site unreadable until a restart.
+    monkeypatch.setattr(jstext, "_unavailable", False)
+    monkeypatch.setattr(jstext, "_down_until", jstext.time.time() + 60)
+    assert asyncio.run(jstext.render("https://a.example/", None)) is None
+    assert "retrying" in jstext.last_failure["https://a.example/"]
+    monkeypatch.setattr(jstext, "_down_until", 0.0)
+    monkeypatch.setitem(jstext._cache, "https://a.example/", (jstext.time.time(), "<html>built</html>"))
+    assert asyncio.run(jstext.render("https://a.example/", None)) == "<html>built</html>"
 
 
 @pytest.fixture
