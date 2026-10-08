@@ -112,3 +112,4 @@ def test_claimed_arenas_always_offered(monkeypatch):
     out = {a["key"]: a for a in arenas.build(es, ladder={})["arenas"]}
     assert out["decentralized_compute"]["size"] == 1      # one project is enough to keep the arena
     assert out["privacy"]["size"] == 0 and out["privacy"]["entries"] == []
+    assert [a["key"] for a in arenas.build(es, ladder={})["arenas"]][-1] == "privacy"   # empty tiles last

@@ -161,7 +161,7 @@ def build(entries: list[dict], ladder: dict | None = None, prefer: set[str] | No
         if key not in groups and key in cat and not prefer:
             arenas.append({"key": key, "label": cat[key].get("label") or key, "heat": _heat(key, cat),
                            "size": 0, "median": 0.0, "entries": []})
-    arenas.sort(key=lambda a: (a["key"] not in FIRST, a["key"] == OTHER, -a["heat"],
+    arenas.sort(key=lambda a: (not a["entries"], a["key"] not in FIRST, a["key"] == OTHER, -a["heat"],
                                -_score(a["entries"][0]) if a["entries"] else 0.0))
     p4p.sort(key=lambda e: -e["z"])
     return {"arenas": arenas, "p4p": p4p[:P4P_SIZE],
