@@ -13,7 +13,7 @@ import logging
 import time
 
 from app.config import settings
-from app.trading.onchain import scout_recheck, storage
+from app.trading.onchain import jstext, scout_recheck, storage
 from app.trading.onchain.judge import CHECK_RULES
 
 logger = logging.getLogger(__name__)
@@ -335,6 +335,7 @@ async def run(chain: str, token: str, client, now: float | None = None, ask=None
     pr, note, log = _tracker(key, now or time.time())
     tok = scout_recheck.PROGRESS.set(note)
     trace = scout_recheck.TRACE.set(log)
+    urgent = jstext.URGENT.set(True)
     scout_recheck.watch(client)
     try:
         return await _run(chain, token, client, now, ask, limited)
@@ -351,6 +352,7 @@ async def run(chain: str, token: str, client, now: float | None = None, ask=None
         pr["ended"] = time.time()
         scout_recheck.PROGRESS.reset(tok)
         scout_recheck.TRACE.reset(trace)
+        jstext.URGENT.reset(urgent)
         _running.discard(key)
 
 
@@ -426,6 +428,11 @@ async def _run(chain: str, token: str, client, now: float | None = None, ask=Non
     result = tidy(result)
     _state["results"][key] = result
     _save()
+
+    # The site read now that it was not before: the stored pillars are stale,
+    # so the board studies the project again (its Why tab drops the old flag).
+    if any(str(f).startswith(scout_recheck.SITE_READ) for f in rc.get("found") or []):
+        leaderboard.analyze_now(chain, token)
 
     # An answer whose drop no evidence backs changes nothing on the board.
     if parsed["unsupported"]:

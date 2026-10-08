@@ -512,6 +512,8 @@ async def analyze_site(url: str | None, client: httpx.AsyncClient, token_address
             registered = None
     pillar = judge_site(page, followed, registered, token_address, launched_at)
     pillar["facts"]["rendered"] = bool(site.get("rendered"))
+    if site.get("render_error"):
+        pillar["facts"]["render_error"] = site["render_error"]   # why it stayed a shell, not a guess
     pillar.setdefault("facts", {})["excerpt"] = re.sub(r"\s+", " ", page.get("text") or "")[:1500]
     pillar["facts"]["docs_excerpt"] = docs_text
     return pillar, page["github"]

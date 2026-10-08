@@ -474,6 +474,13 @@ def step_detail(detail: str) -> None:
         cb(None, detail)
 
 
+SITE_READ = "site read in a browser:"
+
+
+def pillars_of(entry: dict) -> dict:
+    return entry.get("pillars") or {}
+
+
 _PROBE_STEP = {"app_probe": "Reading the app's code and APIs", "x_profile": "Reading the X profile"}
 
 
@@ -504,6 +511,27 @@ async def gather(entry: dict, item: dict, client: httpx.AsyncClient) -> dict:
         step_detail("lock data misses the main pool" if note else "no gap found")
         if note:
             found.append(note)
+    # "Not readable" is a failure of our reader, and a reader can retry (Lorenzo,
+    # 08/10: "devi capire perche' da errore di JavaScript [...] non deve
+    # succedere"): open the site again, in the browser, before judging it.
+    site_url = item.get("website") or str(((pillars_of(entry).get("site") or {}).get("facts") or {}).get("url") or "")
+    if site_url and any(topic(p["text"]) == "site_js" or READ_GAP.search(p["text"]) for p in red_points(entry)):
+        step("Opening the site in a browser", site_url[:80])
+        try:
+            page = await legit.fetch_site(site_url, client)
+        except Exception as exc:
+            page = {"ok": False, "error": type(exc).__name__}
+        words = len((page.get("text") or "").split())
+        if page.get("ok") and not page.get("shell") and words >= 40:
+            found.append(f"{SITE_READ} {page.get('final_url') or site_url}, {words} words")
+            pages.append({"url": page.get("final_url") or site_url, "text": page["text"][:EXCERPT]})
+            checked.append({"source": site_url, "result": "found", "detail": f"{words} words"
+                            + (" after running its JavaScript" if page.get("rendered") else "")})
+            step_detail(f"{words} words read")
+        else:
+            why = page.get("render_error") or page.get("error") or "still empty"
+            checked.append({"source": site_url, "result": "unreadable", "detail": why})
+            step_detail(why)
     tw = twin_line(entry, item)
     if "the same website" in tw:
         found.append(tw.split(". Its description")[0])
@@ -862,13 +890,16 @@ def facts_win(judged: list[dict], ev: dict, item: dict | None = None) -> list[di
                                                                        "token address in the X bio"))), "")
     x = next((f for f in ev.get("found") or [] if f.startswith("X: ")), "")
     gh = next((f for f in ev.get("found") or [] if f.startswith("GitHub found")), "")
+    site = next((f for f in ev.get("found") or [] if f.startswith(SITE_READ)), "")
     gecko = (ev or {}).get("gecko") or {}
     cross = gecko_line(gecko) if gecko.get("volume_24h", 0) > 0 else ""
     liq, cap = (item or {}).get("liquidity_usd"), (item or {}).get("market_cap")
     ratio = float(liq) / float(cap) if liq is not None and cap else None
     out = []
     for p in judged:
-        if p["status"] != "refuted" and where and CONTRACT_POINT.search(p["text"]) and ABSENCE.search(p["text"]):
+        if p["status"] != "refuted" and site and topic(p["text"]) == "site_js" and ABSENCE.search(p["text"]):
+            p = {**p, "status": "refuted", "note": f"Measured: {site}", "evidence": site}
+        elif p["status"] != "refuted" and where and CONTRACT_POINT.search(p["text"]) and ABSENCE.search(p["text"]):
             p = {**p, "status": "refuted", "note": f"Measured: {where}", "evidence": where}
         elif p["status"] != "refuted" and x and (X_POINT.search(p["text"]) or SOCIAL_POINT.search(p["text"])):
             p = {**p, "status": "refuted", "note": f"Measured: {x}", "evidence": x}

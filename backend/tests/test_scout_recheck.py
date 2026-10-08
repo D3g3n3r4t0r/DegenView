@@ -335,3 +335,33 @@ def test_gecko_volume_without_the_field_is_unknown(monkeypatch):
         return {"data": {"attributes": {"total_reserve_in_usd": "900"}}}
     monkeypatch.setattr(dx, "gecko_get", fake)
     assert asyncio.run(sr.gecko_volume({"chain": "solana", "token_address": "x"}, None)) is None
+
+
+def test_an_unreadable_site_is_opened_again_and_cleared_when_it_reads(monkeypatch):
+    # AUREON, 08/10: "site built in JavaScript, not readable" while a browser reads 979 words.
+    async def none(*a, **k):
+        return None
+
+    async def page(url, client):
+        if url == "https://aureon.example/":
+            return {"ok": True, "final_url": url, "text": "rebalance your portfolio " * 30, "rendered": True}
+        return {"ok": False}
+
+    async def app_probe(item, client):
+        return {}
+
+    async def x_profile(item, client):
+        return {}
+
+    monkeypatch.setattr(sr, "app_probe", app_probe)
+    monkeypatch.setattr(sr, "x_profile", x_profile)
+    monkeypatch.setattr(sr, "gecko_volume", none)
+    monkeypatch.setattr(legit, "fetch_site", page)
+    monkeypatch.setattr(sr, "_cache", {})
+    from app.config import settings
+    monkeypatch.setattr(settings, "deepseek_api_key", "")
+    e = {"pillars": {"github": {"score": 50}, "site": {"score": None, "flags": ["site built in JavaScript, not readable"],
+                                                       "facts": {"url": "https://aureon.example/"}}}}
+    rc = asyncio.run(sr.recheck(e, {"chain": "robinhood", "token_address": "0xA", "website": "https://aureon.example/"}, None))
+    assert [p["status"] for p in rc["refuted"]] == ["refuted"] and not rc["confirmed"] and not rc["unverified"]
+    assert rc["refuted"][0]["note"].startswith("Measured: site read in a browser: https://aureon.example/, 90 words")

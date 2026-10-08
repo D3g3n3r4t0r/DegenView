@@ -270,7 +270,8 @@ async def _fetch_site(url: str, client: httpx.AsyncClient) -> dict:
                 title, text = page_text(decoded)
         github = re.findall(r"https?://(?:www\.)?github\.com/[A-Za-z0-9._/-]+", decoded)
         return {"ok": True, "status": r.status_code, "title": title, "text": text, "final_url": current,
-                "github": github, "html": decoded, "shell": shell, "rendered": rendered}
+                "github": github, "html": decoded, "shell": shell, "rendered": rendered,
+                "render_error": jstext.last_failure.get(current, "") if shell else ""}
     return {"ok": False, "error": "too many redirects"}
 
 
