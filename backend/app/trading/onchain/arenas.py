@@ -164,7 +164,7 @@ def build(entries: list[dict], ladder: dict | None = None, prefer: set[str] | No
             r = ratings.get(eid) or {}
             merit = _score(e) >= med
             since = tenure.get(eid)
-            held = not merit and since is not None and now - since < TENURE_S
+            held = not merit and since is not None and 0 <= now - since < TENURE_S
             if record:
                 if merit and since is None:
                     tenure[eid] = now
