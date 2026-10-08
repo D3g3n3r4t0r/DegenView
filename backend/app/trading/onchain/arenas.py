@@ -120,7 +120,7 @@ def assign(entries: list[dict], cat: dict[str, dict] | None = None, prefer: set[
         for k in out.values():
             size[k] = size.get(k, 0) + 1
         # The arena the user filtered on stays, even with one project.
-        small = {k for k, n in size.items() if n < MIN_SIZE and k != OTHER and k not in asked}
+        small = {k for k, n in size.items() if n < MIN_SIZE and k not in (OTHER, *CLAIM) and k not in asked}
         if not small:
             return out
         dropped |= small
@@ -156,7 +156,13 @@ def build(entries: list[dict], ladder: dict | None = None, prefer: set[str] | No
         lead = rows[0]
         if lead["z"] is not None and lead["z"] > 0 and key != OTHER:
             p4p.append({**lead, "arena": key, "arena_label": label})
-    arenas.sort(key=lambda a: (a["key"] not in FIRST, a["key"] == OTHER, -a["heat"], -_score(a["entries"][0])))
+    # The arenas Lorenzo follows are always there to pick, even before a project qualifies.
+    for key in CLAIM:
+        if key not in groups and key in cat and not prefer:
+            arenas.append({"key": key, "label": cat[key].get("label") or key, "heat": _heat(key, cat),
+                           "size": 0, "median": 0.0, "entries": []})
+    arenas.sort(key=lambda a: (a["key"] not in FIRST, a["key"] == OTHER, -a["heat"],
+                               -_score(a["entries"][0]) if a["entries"] else 0.0))
     p4p.sort(key=lambda e: -e["z"])
     return {"arenas": arenas, "p4p": p4p[:P4P_SIZE],
             "ladder": {"nights": ladder.get("nights") or 0, "ready": (ladder.get("nights") or 0) >= LADDER_READY_NIGHTS}}

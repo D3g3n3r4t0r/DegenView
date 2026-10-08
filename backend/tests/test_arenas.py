@@ -102,3 +102,13 @@ def test_compute_keeps_its_projects_privacy_first():
                                             "heat": 3}}
     assert arenas.candidates(_e("G", 50, ["ai_agents", "decentralized_compute"]), cat) == ["decentralized_compute"]
     assert arenas.candidates(_e("H", 50, ["decentralized_compute", "privacy"]), cat) == ["privacy"]
+
+
+def test_claimed_arenas_always_offered(monkeypatch):
+    cat = {**CAT, "decentralized_compute": {"key": "decentralized_compute", "label": "Compute", "kind": None,
+                                            "heat": 3}}
+    monkeypatch.setattr(arenas, "_catalog", lambda: cat)
+    es = [_e("A1", 90, ["ai_agents"]), _e("A2", 80, ["ai_agents"]), _e("G1", 70, ["decentralized_compute"])]
+    out = {a["key"]: a for a in arenas.build(es, ladder={})["arenas"]}
+    assert out["decentralized_compute"]["size"] == 1      # one project is enough to keep the arena
+    assert out["privacy"]["size"] == 0 and out["privacy"]["entries"] == []
