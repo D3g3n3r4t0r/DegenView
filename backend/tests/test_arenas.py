@@ -40,7 +40,7 @@ def test_build_marks_bench_and_pound_for_pound(monkeypatch):
     monkeypatch.setattr(arenas, "_catalog", lambda: CAT)
     es = [_e(f"A{i}", s, ["ai_agents"]) for i, s in enumerate([90, 70, 65, 60])] + \
          [_e(f"P{i}", s, ["privacy"]) for i, s in enumerate([62, 61, 60])]
-    out = arenas.build(es, ladder={})
+    out = arenas.build(es, ladder={}, tenure={})
     ai = next(a for a in out["arenas"] if a["key"] == "ai_agents")
     assert [e["symbol"] for e in ai["entries"]] == ["A0", "A1", "A2", "A3"]
     assert [e["in"] for e in ai["entries"]] == [True, True, False, False]
@@ -48,6 +48,35 @@ def test_build_marks_bench_and_pound_for_pound(monkeypatch):
     # Three near-equal scores: the spread floor keeps the lead small.
     assert next(e for e in out["p4p"] if e["symbol"] == "P0")["z"] <= 0.4
     assert out["ladder"] == {"nights": 0, "ready": False}
+
+
+def test_tenure_keeps_a_surpassed_project_in_for_three_days(monkeypatch):
+    monkeypatch.setattr(arenas, "_catalog", lambda: CAT)
+    tenure: dict = {}
+    first = [_e("A", 80, ["ai_agents"]), _e("B", 60, ["ai_agents"])]
+    arenas.build(first, ladder={}, tenure=tenure, now=0)
+    assert set(tenure) == {"solana:A"}
+    # Three newcomers push A below the median the next day: it stays in.
+    later = first + [_e(f"N{i}", 90 + i, ["ai_agents"]) for i in range(3)]
+    out = arenas.build(later, ladder={}, tenure=tenure, now=86400)
+    a = next(e for e in out["arenas"][0]["entries"] if e["symbol"] == "A")
+    assert a["in"] and a["held"]
+    assert tenure["solana:A"] == 0             # counted from its entry, not refreshed
+    out = arenas.build(later, ladder={}, tenure=tenure, now=arenas.TENURE_S + 1)
+    a = next(e for e in out["arenas"][0]["entries"] if e["symbol"] == "A")
+    assert not a["in"] and "solana:A" not in tenure
+
+
+def test_tenure_ends_at_once_when_a_project_leaves_the_pool(monkeypatch):
+    monkeypatch.setattr(arenas, "_catalog", lambda: CAT)
+    tenure = {"solana:GONE": 0.0}
+    arenas.build([_e("A", 80, ["ai_agents"]), _e("B", 60, ["ai_agents"])], ladder={}, tenure=tenure, now=10)
+    assert "solana:GONE" not in tenure
+    # A narrative filter reads the tenure but never writes it.
+    tenure = {}
+    arenas.build([_e("A", 80, ["ai_agents"]), _e("B", 60, ["ai_agents"])], ladder={}, prefer={"ai_agents"},
+                 tenure=tenure, now=10)
+    assert tenure == {}
 
 
 def test_duel_counts_blocks_both_measured():

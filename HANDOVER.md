@@ -1,3 +1,7 @@
+# 2026-10-08 — Permanenza minima nelle arene — `seed-0260` (Claude, a mano)
+
+Lorenzo: "se una crypto e' comparsa tra le migliori, anche se poi viene surclassata; deve rimanerci per almeno 2-3 gg prima di essere espulsa". Default scelto: 3 giorni dall'ingresso (`arenas.TENURE_S`). Un progetto che va sopra la mediana della sua arena ("in") viene segnato in `data/onchain_arena_tenure.json`; se poi scende sotto la mediana resta "in" (`held: true`) fino a 3 giorni dall'ingresso, contati dal primo ingresso e non rinnovati. Uscire dal pool (cancelli, scarto, rug) toglie subito la permanenza. Si scrive solo dalla vista senza filtro narrativa. Podio, ordine, Telegram "Entrati/Usciti" (che guarda il pool), backtest e portafoglio invariati. Il frontend non mostra ancora un segno per le righe `held`.
+
 # 2026-10-08 — Narrativa Compute e gemme di calcolo — `seed-0259` (Claude, a mano)
 
 Lorenzo: "mi interessa molto compute power tipo render token, akash network, voglio anche questa narrativa e concentriamoci su scovare gemme anche su questo".

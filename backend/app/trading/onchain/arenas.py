@@ -19,6 +19,11 @@ peers, in the arena of one of its narratives (layer chains have their own).
   product, token, DeepSeek), and an Elo rating keeps the result. Recorded
   from the first night, shown once it has settled (LADDER_READY_NIGHTS):
   a lucky night is worth a few points, not the top place.
+- Tenure: a project that made it "in" stays in for TENURE_S from its
+  entry, even when others push it below the median (Lorenzo, 08/10: "se
+  una crypto e' comparsa tra le migliori, anche se poi viene surclassata;
+  deve rimanerci per almeno 2-3 gg"). Leaving the pool (a gate, a measured
+  rejection, a rug) still takes it out at once.
 """
 from __future__ import annotations
 
@@ -57,8 +62,10 @@ DUELS_PER_NIGHT = 5
 HISTORY = 7                        # nights shown beside the name
 NIGHT_GAP_S = 20 * 3600            # one ladder night per evening, even across a resume
 LADDER_READY_NIGHTS = 21
+TENURE_S = 3 * 86400               # minimum stay "in" after entering, whatever the median does
 
 _FILE = storage.data_file("onchain_arena_ladder.json")
+_TENURE_FILE = storage.data_file("onchain_arena_tenure.json")
 
 
 def entry_id(e: dict) -> str:
@@ -127,10 +134,18 @@ def assign(entries: list[dict], cat: dict[str, dict] | None = None, prefer: set[
     return out
 
 
-def build(entries: list[dict], ladder: dict | None = None, prefer: set[str] | None = None) -> dict:
+def build(entries: list[dict], ladder: dict | None = None, prefer: set[str] | None = None,
+          tenure: dict | None = None, now: float | None = None) -> dict:
     """The arenas and the pound-for-pound podium for the Top's entries
-    (already gated and scored by _top_entries)."""
+    (already gated and scored by _top_entries). `tenure` (entry id -> time
+    it went "in") keeps a project in for TENURE_S; only the unfiltered view
+    records it, since a narrative filter reshapes the arenas."""
     cat = _catalog()
+    now = time.time() if now is None else now
+    persist = tenure is None and not prefer
+    tenure = load_tenure() if tenure is None else tenure
+    before = dict(tenure)
+    record = not prefer
     where = assign(entries, cat, prefer)
     ladder = load() if ladder is None else ladder
     ratings = ladder.get("ratings") or {}
@@ -145,8 +160,17 @@ def build(entries: list[dict], ladder: dict | None = None, prefer: set[str] | No
         spread = max(statistics.pstdev(scores), SPREAD_FLOOR) if len(scores) >= SPREAD_MIN else None
         rows = []
         for pos, e in enumerate(members):
-            r = ratings.get(entry_id(e)) or {}
-            rows.append({**e, "arena_rank": pos + 1, "in": _score(e) >= med,
+            eid = entry_id(e)
+            r = ratings.get(eid) or {}
+            merit = _score(e) >= med
+            since = tenure.get(eid)
+            held = not merit and since is not None and now - since < TENURE_S
+            if record:
+                if merit and since is None:
+                    tenure[eid] = now
+                elif not merit and not held:
+                    tenure.pop(eid, None)
+            rows.append({**e, "arena_rank": pos + 1, "in": merit or held, "held": held,
                          "z": round((_score(e) - med) / spread, 2) if spread else None,
                          "rating": round(r["r"]) if r.get("r") is not None else None,
                          "nights": r.get("nights") or []})
@@ -156,6 +180,12 @@ def build(entries: list[dict], ladder: dict | None = None, prefer: set[str] | No
         lead = rows[0]
         if lead["z"] is not None and lead["z"] > 0 and key != OTHER:
             p4p.append({**lead, "arena": key, "arena_label": label})
+    if record:
+        # Out of the pool (a gate, a rejection, a rug): out now, and a return starts afresh.
+        for eid in set(tenure) - {entry_id(e) for e in entries}:
+            tenure.pop(eid)
+    if persist and tenure != before:
+        _save_tenure(tenure)
     arenas.sort(key=lambda a: (a["key"] not in FIRST, a["key"] == OTHER, -a["heat"], -_score(a["entries"][0])))
     p4p.sort(key=lambda e: -e["z"])
     return {"arenas": arenas, "p4p": p4p[:P4P_SIZE],
@@ -176,6 +206,20 @@ def load() -> dict:
 
 def _save(state: dict) -> None:
     write_text_atomic(_FILE, json.dumps(state, separators=(",", ":")))
+
+
+def load_tenure() -> dict:
+    try:
+        return {k: float(v) for k, v in json.loads(_TENURE_FILE.read_text()).items()}
+    except FileNotFoundError:
+        return {}
+    except Exception:
+        logger.exception("arenas: tenure not readable")
+        return {}
+
+
+def _save_tenure(tenure: dict) -> None:
+    write_text_atomic(_TENURE_FILE, json.dumps(tenure, separators=(",", ":")))
 
 
 def duel(a: dict, b: dict) -> float | None:
