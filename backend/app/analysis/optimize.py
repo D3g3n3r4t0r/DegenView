@@ -133,9 +133,18 @@ def _volatility_thresholds(volatility_pct: float) -> tuple[float, int]:
     return max_dd, min_trades
 
 
-def _score(bt: BacktestResult, volatility_pct: float = 2.0) -> float:
+# Gabriele with RSI 14, Bollinger 20 and 2 held fixed (GABRIELE_FIXED) needs a
+# close under the 2-sigma band AND RSI oversold: on 1000 daily candles that is
+# 0-9 trades whatever the thresholds (BTC, KAS, SOL 4h, measured 09/10), so the
+# usual 6-12 floor rejected every candidate and the search returned nothing
+# (segnalazione 6453f4df, "non produce risultati").
+_MIN_TRADES_FLOOR = {"Gabriele (RSI+BB reversal)": 4, "Gabriele 2 (RSI+BB long/short)": 4}
+
+
+def _score(bt: BacktestResult, volatility_pct: float = 2.0, min_trades: int | None = None) -> float:
     """Composite score: Calmar × PF bonus × Sharpe bonus × trade confidence."""
-    max_dd_cap, min_trades = _volatility_thresholds(volatility_pct)
+    max_dd_cap, vol_min_trades = _volatility_thresholds(volatility_pct)
+    min_trades = vol_min_trades if min_trades is None else min_trades
 
     if bt.num_trades < min_trades:
         return float("-inf")
@@ -215,8 +224,8 @@ def _random_gabriele_params(rng: random.Random, base: dict | None = None) -> dic
     sempre GABRIELE_FIXED."""
     return {
         **GABRIELE_FIXED,
-        "rsi_oversold": rng.randint(15, 40),
-        "rsi_overbought": rng.randint(60, 85),
+        "rsi_oversold": rng.randint(15, 50),
+        "rsi_overbought": rng.randint(50, 85),
     }
 
 
@@ -228,9 +237,9 @@ _STRATEGY_SPACES: dict[str, tuple[dict, callable]] = {
 }
 
 _GRID_GABRIELE = {
-    "rsi_oversold":   [18, 22, 26, 30, 35],
-    "rsi_overbought": [65, 70, 75, 80, 85],
-}  # 5^2 = 25 combinations — lunghezza RSI/Bollinger e moltiplicatore sono
+    "rsi_oversold":   [20, 25, 30, 35, 40, 45, 50],
+    "rsi_overbought": [50, 55, 60, 65, 70, 75, 80, 85],
+}  # 7 x 8 = 56 combinations — lunghezza RSI/Bollinger e moltiplicatore sono
    # sempre GABRIELE_FIXED, non una dimensione della griglia
 
 _GRID_EXHAUSTION = {
@@ -384,7 +393,7 @@ def optimize_strategy(
         if not _passes(bt, constraints):
             rejected_by_constraints += 1
             return
-        score = _score(bt, ticker_volatility)
+        score = _score(bt, ticker_volatility, _MIN_TRADES_FLOOR.get(strategy_name))
         if score == float("-inf"):
             return
         fp = _fingerprint(bt)
