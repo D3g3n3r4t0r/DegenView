@@ -165,6 +165,12 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0264", "I task lunghi lanciati dall'app si perdono se cambio finestra o chiudo l'app; manca una notifica a fine lavoro",
+     "Lorenzo, 01/10: 'qualsiasi task, qualsiasi attivita' lanciata da mobile o da desktop deve continuare in background se io cambio finestra o butto giu' l'applicazione sul telefono e arrivarmi una notifica al completamento dell'attivita' che mi riporta esattamente al punto in cui l'ho lasciata se ci clicco sulla notifica'.",
+     "alta"),
+    ("seed-0263", "Il motore non studia tutti i progetti del database: ne mancano tanti",
+     "Lorenzo, 07/10: 'mi sembra che il motore del sito non stia studiando tutti quelli presenti nel database..ce ne mancano tanti ancora'. Schermata: 19.122 noti, 6.779 nella fascia $10k-$3M, 3.698 studiati, 2.514 scartati.",
+     "alta"),
     ("seed-0262", "Forzare subito un giro della ricerca delle gemme, senza aspettare le 11:35 o le 22:00",
      "Lorenzo, 08/10: 'forza il giro ora', per studiare i progetti appena inseriti (lista Robinhood e Compute).",
      "media"),
