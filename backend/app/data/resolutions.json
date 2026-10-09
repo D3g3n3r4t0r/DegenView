@@ -2622,9 +2622,9 @@
   },
   "6453f4df": {
     "status": "risolto",
-    "at": 1791571842,
-    "summary": "L'ottimizzazione delle due strategie Gabriele tiene sempre lunghezza RSI 14, lunghezza Bollinger 20 e moltiplicatore 2, e cerca solo RSI ipercomprato e ipervenduto, in tutte e tre le modalita' (casuale, griglia, ricerca stabile). Prima prendeva quei tre valori dai campi del Lab: dopo un'ottimizzazione applicata o un ticker con parametri salvati non erano piu' 14/20/2, e restavano diversi.",
-    "detail": "backend/app/analysis/optimize.py GABRIELE_FIXED (random, grid, default_params), priors._gabriele_space; test_optimize_gabriele_locked, test_priors."
+    "at": 1791580711,
+    "summary": "Ritestata: con RSI 14, Bollinger 20 e moltiplicatore 2 fissi l'ottimizzazione di RSI+BB tornava vuota perche' chiedeva almeno 9-10 trade, e con quei tre valori fissi 1000 candele daily ne danno 0-9. Ora per le due strategie RSI+BB bastano 4 trade, e ipervenduto/ipercomprato si cercano su 15-50 e 50-85. Provata su BTC 1d, KAS 1d, SOL 4h, ETH 1h: 5-10 risultati ciascuna, prima 0. 14/20/2 restano sempre invariati.",
+    "detail": "backend/app/analysis/optimize.py _MIN_TRADES_FLOOR, _random_gabriele_params, _GRID_GABRIELE; test_optimize_gabriele_locked.test_fixed_gabriele_still_returns_candidates"
   },
   "8bd7884c": {
     "status": "risolto",
@@ -2655,5 +2655,11 @@
     "at": 1791571842,
     "summary": "Nel menu degli exchange del Lab c'e' 'DEX': sceglie il pool on-chain piu' liquido dello stesso ticker (ricerca DexScreener) e ci fa backtest, ottimizzazione e alert, anche per token che non sono su MEXC, Binance, KuCoin o Kraken (es. DREGG su Solana). Anche cercando il token nel campo ticker compaiono i pool DEX. Corretto anche il motivo per cui l'alert non partiva: per un pool DEX il Lab mandava come exchange 'dexscreener', che il server rifiutava.",
     "detail": "app.js switchLabToDex, labExchange(), sync dal grafico con assetType; index.html opzione dexscreener."
+  },
+  "411e4c7c": {
+    "status": "risolto",
+    "at": 1791580711,
+    "summary": "Lab e Analizza ora mostrano la stessa cosa in entrambi i versi. Aprendo il Lab prende dal grafico pair, timeframe, strategia e parametri; tornando su Analizza dal Lab, il grafico prende pair, timeframe, strategia e parametri del Lab e ricalcola. Prima il Lab copiava solo il ticker e il grafico si aggiornava solo col tasto Apply.",
+    "detail": "frontend/static/app.js syncLabFromChart, syncChartFromLab, setArea"
   }
 }

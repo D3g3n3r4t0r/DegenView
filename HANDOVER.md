@@ -22,6 +22,11 @@ Lorenzo: "chiudi tutti i punti aperti nel sito degen view, ora lasciamo stare lo
 - Issue GitHub #347, #357, #358, #363, #365, #366 (piani del 29/09) chiuse come superate dal lavoro del 07/10.
 - Non toccati: `seed-0078` (Sniper, escluso da Lorenzo); le segnalazioni di whitekobra su Lab/Levels/Telegram sono del sito classico, non di DEGEN.
 
+Seguito (Lorenzo: "altri punti aperti da white kobra"):
+- `6453f4df` riaperta ("l'ottimizzazione personalizzata RSI+BB non produce risultati"): con 14/20/2 fissi il minimo di 9-10 trade svuotava la classifica. Minimo 4 per le due Gabriele, ipervenduto 15-50, ipercomprato 50-85 (`optimize._MIN_TRADES_FLOOR`).
+- `411e4c7c` Lab <-> Analizza: `syncLabFromChart` all'ingresso nel Lab, `syncChartFromLab` tornando su Analizza (pair, timeframe, strategia, parametri).
+- Restano in corso, non toccate: `seed-0054`, `seed-0051`, `seed-0028`.
+
 # 2026-10-08 — Permanenza minima nelle arene — `seed-0261` (Claude, a mano)
 
 Lorenzo: "se una crypto e' comparsa tra le migliori, anche se poi viene surclassata; deve rimanerci per almeno 2-3 gg prima di essere espulsa". Default scelto: 3 giorni dall'ingresso (`arenas.TENURE_S`). Un progetto che va sopra la mediana della sua arena ("in") viene segnato in `data/onchain_arena_tenure.json`; se poi scende sotto la mediana resta "in" (`held: true`) fino a 3 giorni dall'ingresso, contati dal primo ingresso e non rinnovati. Uscire dal pool (cancelli, scarto, rug) toglie subito la permanenza. Si scrive solo dalla vista senza filtro narrativa. Podio, ordine, Telegram "Entrati/Usciti" (che guarda il pool), backtest e portafoglio invariati. Il frontend non mostra ancora un segno per le righe `held`.
