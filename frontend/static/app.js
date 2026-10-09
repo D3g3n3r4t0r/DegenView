@@ -11515,6 +11515,68 @@
     bindLabUI();
     bindMobileNav();
 
+  function syncLabFromChart() {
+    if (!state.data || !state.data.symbol) return;
+    const sym = state.data.symbol;
+    if (labState.symbol !== sym) {
+      labState.symbol = sym;
+      labState.displaySymbol = sym.replace(/USDT$|USD$|BTC$|ETH$/, "") || sym;
+      const val = el("lab-ticker-val");
+      if (val) val.textContent = sym;
+      const exchSelect = el("lab-exchange-select");
+      labState.assetType = state.assetType === "dex" ? "dex" : "crypto";
+      if (exchSelect && labState.assetType === "dex") {
+        exchSelect.value = "dexscreener";
+      } else if (exchSelect && state.exchange && exchSelect.querySelector(`option[value="${state.exchange}"]`)) {
+        exchSelect.value = state.exchange;
+        labState.exchange = state.exchange;
+      }
+    }
+    const tf = el("interval-primary")?.value;
+    const tfBtn = tf && labEl("lab-tf-row")?.querySelector(`.lab-tf-btn[data-lab-tf="${tf}"]`);
+    if (tfBtn) {
+      labEl("lab-tf-row").querySelectorAll(".lab-tf-btn").forEach((b) => b.classList.toggle("active", b === tfBtn));
+      labState.tf = tf;
+    }
+    const strat = el("active-strategy-select")?.value;
+    const labSel = labEl("lab-strategy-select");
+    if (strat && labSel && labSel.querySelector(`option[value="${strat}"]`)) {
+      if (labState.strategy !== strat) {
+        labSel.value = strat;
+        labState.strategy = strat;
+        renderLabParamFields();
+      }
+      const params = collectStrategyParams(el("strategy-params-fields"), strat);
+      const box = labEl("lab-params-fields");
+      Object.entries(params).forEach(([key, value]) => {
+        const input = box && box.querySelector(`[name="${key}"]`);
+        if (!input) return;
+        if (input.type === "checkbox") input.checked = !!value;
+        else input.value = value;
+      });
+    }
+  }
+
+  function syncChartFromLab() {
+    if (!labState.symbol) return;
+    const params = collectStrategyParams(labEl("lab-params-fields"), labState.strategy);
+    const same = state.data && state.data.symbol === labState.symbol
+      && el("interval-primary")?.value === labState.tf
+      && el("active-strategy-select")?.value === labState.strategy
+      && JSON.stringify(collectStrategyParams(el("strategy-params-fields"), labState.strategy)) === JSON.stringify(params);
+    if (same) return;
+    applyConfigToChart({
+      assetType: labState.assetType,
+      exchange: labState.assetType === "dex" ? "mexc" : (el("lab-exchange-select")?.value || labState.exchange),
+      symbol: labState.symbol,
+      displaySymbol: labState.displaySymbol,
+      interval: labState.tf,
+      strategyName: labState.strategy,
+      params,
+    });
+    runAnalysis(labState.symbol);
+  }
+
   // ── Sidebar ───────────────────────────────────────────────────────────
   // Unica navigazione su desktop. Non duplica la logica delle tab: le
   // pilota, cosi' resta un solo posto che decide quale contenuto e' vivo.
@@ -11561,31 +11623,17 @@
       el(btnId).classList.remove("active");
     });
 
+    const prevArea = cockpit.dataset.area;
     cockpit.dataset.area = area;
     document.querySelectorAll(".sidenav-item").forEach((b) => b.classList.toggle("active", b === item));
 
     if (area === "trading") loadPositions();
 
-    // Quando l'utente apre il Lab, aggiorna il simbolo con quello attivo sul
-    // grafico — evita di trovare BTCUSDT quando si stava guardando INJUSDT.
-    if (area === "lab" && state.data && state.data.symbol) {
-      const sym = state.data.symbol;
-      if (labState.symbol !== sym) {
-        labState.symbol = sym;
-        labState.displaySymbol = sym.replace(/USDT$|USD$|BTC$|ETH$/, "") || sym;
-        const val = el("lab-ticker-val");
-        if (val) val.textContent = sym;
-        // Sync exchange if possible
-        const exchSelect = el("lab-exchange-select");
-        labState.assetType = state.assetType === "dex" ? "dex" : "crypto";
-        if (exchSelect && labState.assetType === "dex") {
-          exchSelect.value = "dexscreener";
-        } else if (exchSelect && state.exchange && exchSelect.querySelector(`option[value="${state.exchange}"]`)) {
-          exchSelect.value = state.exchange;
-          labState.exchange = state.exchange;
-        }
-      }
-    }
+    // Lab e Analizza mostrano la stessa cosa (segnalazione 411e4c7c): pair,
+    // timeframe, strategia e parametri passano dall'uno all'altro quando si
+    // cambia area, in entrambi i versi.
+    if (area === "lab") syncLabFromChart();
+    else if (prevArea === "lab" && area === "analizza") syncChartFromLab();
 
     // Senza questo, il tab-content marcato "active" nell'HTML statico
     // (Backtest) restava visibile per qualunque voce non ancora sincronizzata

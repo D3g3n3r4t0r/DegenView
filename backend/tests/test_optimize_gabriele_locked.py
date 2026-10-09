@@ -30,8 +30,8 @@ def test_random_search_only_touches_overbought_oversold():
         assert p["rsi_length"] == 14
         assert p["bb_length"] == 20
         assert p["bb_mult"] == 2.0
-        assert 15 <= p["rsi_oversold"] <= 40
-        assert 60 <= p["rsi_overbought"] <= 85
+        assert 15 <= p["rsi_oversold"] <= 50
+        assert 50 <= p["rsi_overbought"] <= 85
 
 
 def test_random_search_falls_back_to_defaults_without_base():
@@ -65,3 +65,19 @@ def test_optimize_keeps_14_20_2_whatever_the_fields_say():
             trials=30, base_params={"rsi_length": 9, "bb_length": 33, "bb_mult": 1.7})
         for p in [best] + [t["params"] for t in top]:
             assert (p["rsi_length"], p["bb_length"], p["bb_mult"]) == (14, 20, 2.0)
+
+
+def test_fixed_gabriele_still_returns_candidates():
+    """6453f4df "non produce risultati": with 14/20/2 fixed the strategy
+    trades rarely, and the general 6-12 trade floor emptied the board."""
+    import numpy as np
+    import pandas as pd
+
+    from app.analysis.optimize import optimize_strategy
+    n = 1000
+    c = 100 * np.exp(np.cumsum(np.random.default_rng(2).normal(0, 0.035, n)))
+    df = pd.DataFrame({"open": c, "high": c * 1.01, "low": c * 0.99, "close": c, "volume": 1e6},
+                      index=pd.date_range("2022-01-01", periods=n, freq="D"))
+    *_head, top = optimize_strategy("Gabriele (RSI+BB reversal)", df, {"initial_capital": 10000},
+                                    mode="grid", seed=1)
+    assert top
