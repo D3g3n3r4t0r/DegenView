@@ -8015,6 +8015,7 @@
     if (el("strategy-markers-toggle").checked) {
       fixed = fixed.concat(buildStrategyMarkers(_lastStrategySignals));
     }
+    renderStrategyMarkersNote(candles);
     const tradesToggle = el("backtest-trades-toggle");
     if (tradesToggle && tradesToggle.checked) {
       fixed = fixed.concat(buildBacktestTradeMarkers());
@@ -8037,6 +8038,36 @@
     const markers = fixed.concat(thinned);
     markers.sort((a, b) => a.time - b.time);
     candleSeries.setMarkers(markers);
+  }
+
+  // Segnalazione 6da2bba6: le frecce della strategia e il numero di trade del
+  // backtest non tornano per due motivi misurati, non per un errore di
+  // calcolo. Il backtest profondo legge fino a backtest_candles (5000) candele
+  // mentre il grafico ne ha ltf_candles (3000), quindi conta trade fuori
+  // dallo schermo (SOLUSDT 4h: 67 ingressi sul grafico, 105 trade); e una
+  // posizione ancora aperta ha la sua freccia ma non e' un trade chiuso.
+  // Lo si dice accanto all'interruttore invece di lasciare due numeri diversi.
+  function renderStrategyMarkersNote(candles) {
+    const note = el("strategy-markers-note");
+    if (!note) return;
+    const bt = state.data && state.data.backtests ? state.data.backtests[state.activeTimeframe] : null;
+    if (!el("strategy-markers-toggle").checked || !bt || !bt.trades || !candles.length) {
+      note.classList.add("hidden");
+      return;
+    }
+    const entries = _lastStrategySignals.filter((s) => s.type.startsWith("entry") || s.type.startsWith("flip")).length;
+    const t0 = candles[0].time;
+    const before = bt.trades.filter((t) => t.entry_time < t0).length;
+    const parts = [`${entries} entries on the chart`, `backtest ${bt.num_trades} trades`];
+    if (before) parts.push(`${before} of them before the chart's first candle`);
+    // Si guarda l'ultimo segnale, non `position`: un ingresso senza uscita
+    // successiva e' una posizione viva anche quando lo stato dice "flat".
+    const last = _lastStrategySignals[_lastStrategySignals.length - 1];
+    if (last && !last.type.startsWith("exit")) {
+      parts.push("the last entry is still open, so it has an arrow but is not a closed trade yet");
+    }
+    note.textContent = parts.join(" · ") + ".";
+    note.classList.remove("hidden");
   }
 
   // Le operazioni vere del backtest, non i segnali della strategia sul
