@@ -6896,7 +6896,7 @@ async def analyze(
 
         swings = compute_swings(df, tf_key)
         levels = compute_levels(df, swings)
-        indicators = compute_indicators(df)
+        indicators = compute_indicators(df, intervals[tf_key])
         if tf_key == "ltf":
             indicators += bull_market_support_band(df, weekly_df)
         bias = determine_bias(levels)

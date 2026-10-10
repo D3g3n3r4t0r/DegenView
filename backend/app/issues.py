@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0266", "Ricontrollo completo degli indicatori sui grafici: calcoli e qualita' visiva",
+     "Lorenzo, 10/10: 'rianalizza tutte le rappresentazioni grafiche che abbiamo fatto con i nostri indicatori e verifica che siano corrette, che siano affidabili e visualizzate in modo corretto su standard elevati [...] alcuni mi risultano un po' schifo'.",
+     "alta"),
     ("seed-0265", "Sito classico: il nome di un token DEX e' troppo lungo nella barra sotto il grafico",
      "Lorenzo, 10/10, da telefono con DREGG: 'ticker troppo lungo nella barra una volta caricato'. "
      "Sotto il grafico e nella ricerca compariva tutto 'DREGG@solana:2XHrhkx...', che usciva dallo schermo.",

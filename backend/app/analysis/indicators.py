@@ -30,7 +30,23 @@ def _as_dataframe(x: object, n: int) -> pd.DataFrame | None:
     return x if isinstance(x, pd.DataFrame) and len(x) == n else None
 
 
-def compute_indicators(df: pd.DataFrame) -> list[IndicatorSeries]:
+# VWAP resets at the start of each anchor period. A daily anchor on a daily
+# chart makes every bar its own period, so the "VWAP" was just (H+L+C)/3 of
+# each candle, and on 4h it reset every 6 bars into a sawtooth. One anchor
+# period spans many bars on every timeframe instead.
+VWAP_ANCHORS: dict[str, str] = {
+    "1m": "D", "5m": "D", "15m": "D", "30m": "D",
+    "1h": "W", "4h": "W",
+    "1d": "M", "2d": "M", "3d": "M", "5d": "M",
+    "1w": "Y", "1M": "Y",
+}
+
+
+def vwap_anchor(interval: str | None) -> str:
+    return VWAP_ANCHORS.get(interval or "", "D")
+
+
+def compute_indicators(df: pd.DataFrame, interval: str | None = None) -> list[IndicatorSeries]:
     out: list[IndicatorSeries] = []
     n = len(df)
 
@@ -38,8 +54,11 @@ def compute_indicators(df: pd.DataFrame) -> list[IndicatorSeries]:
     ema50 = _as_series(df.ta.ema(length=50), n)
     rsi14 = _as_series(df.ta.rsi(length=14), n)
     macd = _as_dataframe(df.ta.macd(), n)
-    bbands = _as_dataframe(df.ta.bbands(length=20), n)
-    vwap = _as_series(df.ta.vwap(), n)
+    # ddof=0: population deviation, as TradingView's stdev() and as the RSI+BB
+    # strategy computes its own bands (strategies.py). pandas-ta's default
+    # ddof=1 drew the bands ~2.6% wider than the ones the signals use.
+    bbands = _as_dataframe(df.ta.bbands(length=20, std=2.0, ddof=0), n)
+    vwap = _as_series(df.ta.vwap(anchor=vwap_anchor(interval)), n)
     stoch = _as_dataframe(df.ta.stoch(k=14, d=3, smooth_k=3), n)
 
     if ema20 is not None:
@@ -84,21 +103,39 @@ def compute_indicators(df: pd.DataFrame) -> list[IndicatorSeries]:
 
 def bull_market_support_band(df: pd.DataFrame, weekly: pd.DataFrame) -> list[IndicatorSeries]:
     """Bull Market Support Band (segnalazione 893ea67a): SMA 20 and EMA 21 of
-    the weekly close, drawn on any chart timeframe. Each chart candle takes the
-    value of the weekly bar it falls in, as TradingView does live; candles
-    before the 21st week get nothing."""
+    the weekly close, drawn on any chart timeframe.
+
+    Each chart candle sees the week it falls in as still forming, with its own
+    close as that week's close so far: what TradingView shows live, and what
+    the candle could actually know. Taking the weekly bar's final close
+    instead painted every past day with a value from days later. Candles
+    before 19 completed weeks get nothing."""
     if weekly is None or weekly.empty or df.empty:
         return []
-    close = weekly["close"].astype(float)
-    bands = {"BMSB_SMA20W": close.rolling(20).mean(), "BMSB_EMA21W": close.ewm(span=21, adjust=False).mean()}
-    bands["BMSB_EMA21W"].iloc[: min(20, len(close))] = float("nan")   # same warm-up as the SMA
-    out = []
-    for name, s in bands.items():
-        try:
-            mapped = s.reindex(df.index, method="ffill") if s.index.is_monotonic_increasing else None
-        except (TypeError, ValueError):   # an index the other can't be compared to: no band
-            mapped = None
-        if mapped is None or mapped.isna().all():
+    wclose = weekly["close"].astype(float)
+    if not (wclose.index.is_monotonic_increasing and df.index.is_monotonic_increasing):
+        return []
+    try:
+        # Position of the week each chart candle falls in.
+        pos = wclose.index.searchsorted(df.index, side="right") - 1
+    except (TypeError, ValueError):   # an index the other can't be compared to: no band
+        return []
+    alpha = 2 / 22
+    ema = wclose.ewm(span=21, adjust=False).mean().to_numpy()
+    sums = wclose.rolling(19).sum().to_numpy()          # 19 weeks before the current one
+    close = df["close"].astype(float).to_numpy()
+    sma_vals: list[float | None] = []
+    ema_vals: list[float | None] = []
+    for k, p in enumerate(pos):
+        if p < 19:   # fewer than 19 completed weeks before this one
+            sma_vals.append(None)
+            ema_vals.append(None)
             continue
-        out.append(IndicatorSeries(name=name, values=_series_to_values(mapped)))
+        c = close[k]
+        sma_vals.append(float((sums[p - 1] + c) / 20))
+        ema_vals.append(float(ema[p - 1] * (1 - alpha) + c * alpha))
+    out = []
+    for name, vals in (("BMSB_SMA20W", sma_vals), ("BMSB_EMA21W", ema_vals)):
+        if any(v is not None for v in vals):
+            out.append(IndicatorSeries(name=name, values=vals))
     return out
