@@ -34,6 +34,7 @@
   --c-up: #2f7a4a;
   --c-down: #b4472f;
   --c-amber: #8f6417;
+  --c-amber-soft: rgb(143 100 23 / .1);
   --c-up-soft: rgb(47 122 74 / .1);
   --c-down-soft: rgb(180 71 47 / .1);
   --c-float: #2f3a32;
@@ -405,7 +406,6 @@ dialog.sheet :is(.rows, [tabindex="-1"]):focus { outline: none !important; }
 .engn-pod { --engn-accent: var(--c-text-3) !important; }
 .engn-pod .pc-prev { font: 500 11px var(--sans) !important; color: var(--c-text-3) !important; }
 
-/* In dark mode a black shadow is invisible: the hairline does the work. */
 
 /* --- layout review ---------------------------------------------------- */
 /* Voice button: a round header button beside the bell, so it never sits
@@ -512,8 +512,9 @@ dialog.sheet { padding-inline: 16px !important; }
 .trow-main .score { background: var(--c-sage) !important; color: var(--c-on-sage) !important; }
 :is(.pj-row, .db-row, .projects li, .listing) { background: var(--c-card) !important; border-radius: 20px !important; margin-block-end: 8px; padding-inline: 14px !important; }
 #dock.dock { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
-#dock.dock button { color: rgb(201 212 192 / .8) !important; }
+#dock.dock button { color: color-mix(in srgb, var(--c-sage) 80%, transparent) !important; }
 #dock.dock button[aria-current] { background: var(--c-sage) !important; color: var(--c-on-sage) !important; }
-#dock.dock .dock-me { background: rgb(201 212 192 / .2) !important; color: var(--c-on-ink) !important; }
+#dock.dock .dock-me { background: color-mix(in srgb, var(--c-sage) 20%, transparent) !important; color: var(--c-on-ink) !important; }
 #dock.dock button[aria-current] .dock-me { background: var(--c-ink) !important; }
 .dock-search { color: var(--c-on-ink) !important; }
+.ar-tile[aria-pressed="true"] { border-color: var(--c-ink) !important; background: var(--c-sage) !important; color: var(--c-on-sage) !important; }
