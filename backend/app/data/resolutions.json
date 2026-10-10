@@ -2697,5 +2697,11 @@
     "at": 1791639460,
     "summary": "Ritestata in tutte e tre le modalita' su BTC 1d, SOL 4h e KAS 1h: casuale e griglia davano gia' 10 risultati, ma su una serie dove nessuna configurazione chiude in guadagno (o con almeno 4 trade e drawdown sotto il tetto) la classifica restava vuota e il Lab mostrava solo i parametri di default. Ora per RSI+BB in quel caso compaiono comunque le 10 migliori per rendimento, con la nota nel log 'esplorative, non un segnale'. Anche la ricerca stabile usa lo stesso minimo di 4 trade invece di 8. 14/20/2 restano sempre fissi.",
     "detail": "backend/app/analysis/optimize.py fallback in optimize_strategy; pipeline.py _MIN_TRADES_FLOOR; test_optimize_gabriele_locked.test_fixed_gabriele_board_never_empty_when_nothing_passes"
+  },
+  "seed-0266": {
+    "status": "risolto",
+    "at": 1791642052,
+    "summary": "Controllati i 18 indicatori del sito classico su BTC, PEPE, KAS e SOL (15m, 4h, 1d, 1w), confrontati con le formule di TradingView, in chiaro e scuro, desktop e telefono. Corretti: RSI, MACD e Stocastico sotto il grafico mostravano anni invece del periodo visibile; Bollinger con deviazione campionaria (bande 2.6% piu' larghe di quelle usate dalla strategia RSI+BB); VWAP che ripartiva ogni giorno anche sul giornaliero (era solo il prezzo medio della candela) e ora riparte per settimana/mese/anno secondo il timeframe, con la linea interrotta al riavvio; BMSB che sui giorni passati usava la chiusura futura della settimana; MACD a 0.00 sulle monete da frazioni di centesimo; nel tema chiaro EMA, Bollinger, VWAP, BMSB, RSI e MACD tutte grigie e indistinguibili, ora colorate e con il nome sull'asse; Inverted hammer segnato ribassista (ora rialzista dopo un calo, 'Star' ribassista dopo un rialzo); livelli Elliott gialli invisibili sul bianco e disegnati sopra l'asse dei prezzi; etichetta delle divergenze nera sul tema chiaro. EMA, RSI, MACD e Stocastico erano gia' identici a TradingView.",
+    "detail": "backend/app/analysis/indicators.py (VWAP_ANCHORS, bbands ddof=0, bull_market_support_band senza lookahead); frontend/static/app.js COLORS_LIGHT, syncPaneRange, oscPrecisionFor, vwapWithBreaks, pattern, renderElliott; tests/test_chart_indicators.py; immagini prima/dopo in project-files indicatori-grafici/"
   }
 }

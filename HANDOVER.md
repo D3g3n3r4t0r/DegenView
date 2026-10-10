@@ -1,3 +1,13 @@
+# 2026-10-10 — Ricontrollo degli indicatori sui grafici — `seed-0266` (Claude, a mano)
+
+Lorenzo: "rianalizza tutte le rappresentazioni grafiche che abbiamo fatto con i nostri indicatori e verifica che siano corrette [...] alcuni mi risultano un po' schifo". L'app on-chain disegna solo candele (cap): il lavoro e' sui 18 livelli del sito classico (Analizza).
+
+- Metodo: sito in locale (utente di prova con `REGISTRATION_ALLOWED_EMAILS`), candele MEXC vere di BTC/PEPE/KAS/SOL su 15m, 4h, 1d, 1w; valori confrontati con formule TradingView scritte da zero (EMA, RMA, MACD, BB, Stoch, VWAP); screenshot Playwright di ogni livello, chiaro/scuro, 1440 e 390 px. Immagini prima/dopo in project-files `indicatori-grafici/`.
+- Gia' giusti: EMA 20/50, RSI 14, MACD, Stocastico (scarti < 1e-4 dopo il riscaldamento).
+- Corretti: pannelli RSI/MACD/Stoch non allineati al grafico quando si accendono (`syncPaneRange`); Bollinger con `ddof=1` (ora 0, come la strategia RSI+BB); VWAP ancorato al giorno su ogni timeframe (ora `indicators.VWAP_ANCHORS`: D fino a 30m, W per 1h/4h, M per 1d-5d, Y per 1w/1M; linea interrotta al riavvio); BMSB che sui giorni passati leggeva la chiusura finale della settimana (ora valore "in formazione" con la chiusura della candela); MACD a 0.00 su prezzi piccoli (`oscPrecisionFor`); palette del tema chiaro tutta grigia (ora colori distinti e nome della linea sull'asse); Inverted hammer sempre ribassista; livelli Elliott invisibili sul bianco e sopra l'asse; riquadro nero dell'etichetta divergenze sul chiaro.
+- Guardati ma non verificati contro un riferimento esterno: order block, FVG, equal highs/lows, BOS/CHoCH, confluenze, Fibonacci automatico, pattern, segnali contestuali. Visivamente: i pattern su 1d sono tanti (Eng su quasi ogni inversione), il Fibonacci ha linee intermedie senza etichetta. Da decidere con Lorenzo se sfoltirli.
+- Visto per caso: due /api/analyze in volo (cambio timeframe + nuova ricerca) e la risposta piu' vecchia puo' arrivare dopo e vincere (il grafico mostra il ticker precedente). Non corretto.
+
 # 2026-10-10 — Terza chat Telegram solo per gli alert (Claude, a mano)
 
 Lorenzo: "c'e' da creare una terza chat Telegram solo per gli alert, ho gia' fatto il gruppo". Tre chat: principale (`telegram_chat_id`: DeepSeek, conferme, passkey), sistema (`TELEGRAM_DEV_CHAT_IDS`: deploy, errori), alert (`telegram_signal_chat_id`, campo "Alerts chat ID" nel pannello Alert del sito classico). Watchlist, listing, gemme e segnali trend passano da `main._signal_chat` (vuoto = principale); `_alert_chats` evita doppioni se due account puntano allo stesso gruppo. Niente variabile d'ambiente: l'id si incolla dal sito. `/chatid` scritto in un gruppo col bot risponde con l'id. Resta: Lorenzo incolla l'id del gruppo.

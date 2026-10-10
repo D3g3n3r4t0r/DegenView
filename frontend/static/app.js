@@ -60,17 +60,20 @@
     fvgBearBorder: "rgba(120, 128, 138, 0.50)",
     confluenceFill: "rgba(0, 0, 0, 0.03)",
     confluenceBorder: "rgba(0, 0, 0, 0.22)",
-    ema20: "#888888",
-    ema50: "#444444",
-    bbUpper: "rgba(0, 0, 0, 0.50)",
-    bbMid: "rgba(0, 0, 0, 0.25)",
-    bbLower: "rgba(0, 0, 0, 0.50)",
-    vwap: "#555555",
-    bmsbSma: "#333333",
-    bmsbEma: "#777777",
-    rsi: "#666666",
-    macd: "#555555",
-    macdSignal: "#aaaaaa",
+    // Candles stay monochrome, indicator lines do not: in shades of grey
+    // EMA 20 and 50, MACD and its signal, the two BMSB lines could not be
+    // told apart, and nothing said which was which.
+    ema20: "#2962ff",
+    ema50: "#e8710a",
+    bbUpper: "rgba(41, 98, 255, 0.60)",
+    bbMid: "rgba(41, 98, 255, 0.40)",
+    bbLower: "rgba(41, 98, 255, 0.60)",
+    vwap: "#8e24aa",
+    bmsbSma: "#d32f2f",
+    bmsbEma: "#00875a",
+    rsi: "#7e57c2",
+    macd: "#2962ff",
+    macdSignal: "#e8710a",
   };
 
   // Il contenuto viene sostituito quando si cambia tema, ma l'oggetto resta lo
@@ -78,6 +81,12 @@
   // momento della chiamata, quindi continuano a funzionare senza toccarli.
   // Riassegnare la variabile invece li lascerebbe legati alla vecchia palette.
   const COLORS = {};
+
+  // Same anchors as backend indicators.VWAP_ANCHORS: where the VWAP restarts.
+  const VWAP_ANCHOR_LABEL = {
+    "1m": "D", "5m": "D", "15m": "D", "30m": "D", "1h": "W", "4h": "W",
+    "1d": "M", "2d": "M", "3d": "M", "5d": "M", "1w": "Y", "1M": "Y",
+  };
 
   // Dichiarata qui e non piu' in basso: `applyTheme` gira subito, prima ancora
   // che il resto del file venga valutato, e con `const` in fondo cadeva nella
@@ -1002,9 +1011,31 @@
   function observeResize(container, chart) {
     const ro = new ResizeObserver((entries) => {
       const { width, height } = entries[0].contentRect;
-      if (width > 0 && height > 0) chart.resize(width, height);
+      if (width > 0 && height > 0) {
+        chart.resize(width, height);
+        // A pane switched on is laid out at width 0 and fits its whole
+        // history: RSI/MACD/Stoch showed years under a chart of weeks.
+        if (mainChart && chart !== mainChart) syncPaneRange(chart);
+      }
     });
     ro.observe(container);
+  }
+
+  function syncPaneRange(chart) {
+    const range = mainChart?.timeScale().getVisibleLogicalRange();
+    if (range) {
+      try { chart.timeScale().setVisibleLogicalRange(range); } catch { /* chart being removed */ }
+    }
+  }
+
+  // Price format for an oscillator in price units (MACD): two decimals
+  // turned every value of a $0.000004 coin into "0.00".
+  function oscPrecisionFor(values) {
+    let max = 0;
+    values.forEach((v) => { if (v != null && Number.isFinite(v)) max = Math.max(max, Math.abs(v)); });
+    if (!max || max >= 1) return { type: "price", precision: 2, minMove: 0.01 };
+    const precision = Math.min(12, Math.max(2, -Math.floor(Math.log10(max)) + 2));
+    return { type: "price", precision, minMove: 1 / 10 ** precision };
   }
 
   const SUB_CHART_MIN_H = 70;
@@ -4979,6 +5010,23 @@
   // corrispondere l'indice N a una candela diversa e il pannello scivola
   // rispetto al prezzo. Con un RSI a 14 periodi lo scarto è di 14 barre, e si
   // vede a occhio sull'asse dei tempi.
+  // The VWAP restarts every anchor period; a line joining the old period's
+  // last value to the new one's first drew a vertical wall at each reset.
+  // The segment into a period's first bar is drawn transparent (a whitespace
+  // point does not break a line series in this chart library), so the line
+  // breaks at the reset as on TradingView and every bar keeps its value.
+  function vwapWithBreaks(candles, values, anchor) {
+    const period = (t) => {
+      const d = new Date(t * 1000);
+      if (anchor === "Y") return d.getUTCFullYear();
+      if (anchor === "M") return d.getUTCFullYear() * 12 + d.getUTCMonth();
+      const day = Math.floor(t / 86400);
+      return anchor === "W" ? Math.floor((day + 3) / 7) : day;   // weeks start on Monday
+    };
+    return seriesFromIndicatorValues(candles, values).map((p, i) =>
+      (i > 0 && p.value != null && period(candles[i].time) !== period(candles[i - 1].time) ? { ...p, color: "rgba(0,0,0,0)" } : p));
+  }
+
   function seriesFromIndicatorValues(candles, values) {
     const out = [];
     for (let i = 0; i < candles.length; i++) {
@@ -5441,10 +5489,19 @@
         continue;
       }
 
-      // Inverted Hammer: upper wick ≥ 2× body, lower wick ≤ 0.3× body
-      if (upperWick >= 2 * body && lowerWick <= 0.3 * body && !isBull) {
-        markers.push({ time: c.time, position: "aboveBar", color: "#f87171", shape: "arrowDown", text: "Inv.Hammer" });
-        continue;
+      // Long upper wick, small lower one: after a fall it is an inverted
+      // hammer (bullish), after a rise a shooting star (bearish). It was
+      // always drawn as a bearish "Inv.Hammer", the opposite of its meaning
+      // at a bottom.
+      if (upperWick >= 2 * body && lowerWick <= 0.3 * body) {
+        if (prev.close < prev2.close) {
+          markers.push({ time: c.time, position: "belowBar", color: "#34d399", shape: "arrowUp", text: "Inv.Hammer" });
+          continue;
+        }
+        if (prev.close > prev2.close) {
+          markers.push({ time: c.time, position: "aboveBar", color: "#f87171", shape: "arrowDown", text: "Star" });
+          continue;
+        }
       }
 
       // Bullish engulfing
@@ -5667,19 +5724,23 @@
     if (fib) {
       const x1 = timeToXEdge(fib.time);
       if (x1 === null) return;
-      const x2 = drawCanvas ? drawCanvas.width : x1 + 200;
+      // The plot ends where the price axis starts: the lines and labels ran
+      // over the axis numbers.
+      const x2 = mainChart.timeScale().width();
+      if (x1 >= x2) return;
+      const light = COLORS.paperBg === "#ffffff";
       ctx.save();
       ctx.font = "10px 'JetBrains Mono', monospace";
       ctx.textAlign = "right";
       Object.entries(fib.levels).forEach(([ratio, price]) => {
         const y = priceToY(price);
         if (y === null) return;
-        ctx.strokeStyle = "rgba(255,193,7,0.45)";
+        ctx.strokeStyle = light ? "rgba(217,119,6,0.55)" : "rgba(255,193,7,0.45)";
         ctx.lineWidth = 1;
         ctx.setLineDash([3, 3]);
         ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2, y); ctx.stroke();
-        ctx.fillStyle = "rgba(255,193,7,0.85)";
-        ctx.fillText(`EW ${ratio}`, x2 - 70, y - 3);
+        ctx.fillStyle = light ? "rgba(180,83,9,0.95)" : "rgba(255,193,7,0.85)";
+        ctx.fillText(`EW ${ratio}`, x2 - 6, y - 3);
       });
       ctx.restore();
     }
@@ -5717,7 +5778,7 @@
         ctx.font = "9px 'JetBrains Mono', monospace";
         ctx.textAlign = "center";
         const tw = ctx.measureText(label).width;
-        ctx.fillStyle = "rgba(8,11,12,0.75)";
+        ctx.fillStyle = COLORS.paperBg === "#ffffff" ? "rgba(255,255,255,0.85)" : "rgba(8,11,12,0.75)";
         ctx.fillRect(mx - tw / 2 - 3, my - 8, tw + 6, 12);
         ctx.fillStyle = colorA + "0.85)";
         ctx.fillText(label, mx, my + 2);
@@ -7476,7 +7537,9 @@
         const alpha = 0.5 + norm * 0.5;
         color = isBull ? `rgba(0,214,143,${alpha.toFixed(2)})` : `rgba(255,69,96,${alpha.toFixed(2)})`;
       } else {
-        color = `rgba(140,150,165,${(0.30 + norm * 0.40).toFixed(2)})`;
+        color = COLORS.paperBg === "#ffffff"
+          ? `rgba(70,80,95,${(0.45 + norm * 0.40).toFixed(2)})`
+          : `rgba(140,150,165,${(0.30 + norm * 0.40).toFixed(2)})`;
       }
       const width = isLast ? 2 : 1;
       const prim = new LinePrimitive(
@@ -7520,26 +7583,26 @@
       const ema20 = findIndicator(analysis.indicators, "EMA20");
       const ema50 = findIndicator(analysis.indicators, "EMA50");
       if (ema20) {
-        const s = mainChart.addLineSeries({ color: COLORS.ema20, lineWidth: 1, priceLineVisible: false });
+        const s = mainChart.addLineSeries({ color: COLORS.ema20, lineWidth: 1.5, priceLineVisible: false, title: "EMA 20" });
         s.setData(seriesFromIndicatorValues(candles, ema20));
         addLineOverlay(mainChart, s, null, mainChart);
       }
       if (ema50) {
-        const s = mainChart.addLineSeries({ color: COLORS.ema50, lineWidth: 1, priceLineVisible: false });
+        const s = mainChart.addLineSeries({ color: COLORS.ema50, lineWidth: 1.5, priceLineVisible: false, title: "EMA 50" });
         s.setData(seriesFromIndicatorValues(candles, ema50));
         addLineOverlay(mainChart, s, null, mainChart);
       }
     }
     if (state.layers.bbands) {
       const bbBands = [
-        { name: "BB_upper", color: COLORS.bbUpper, lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Solid },
-        { name: "BB_mid", color: COLORS.bbMid, lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed },
-        { name: "BB_lower", color: COLORS.bbLower, lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Solid },
+        { name: "BB_upper", color: COLORS.bbUpper, lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Solid, title: "BB 20,2" },
+        { name: "BB_mid", color: COLORS.bbMid, lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, title: "" },
+        { name: "BB_lower", color: COLORS.bbLower, lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Solid, title: "" },
       ];
-      bbBands.forEach(({ name, color, lineWidth, lineStyle }) => {
+      bbBands.forEach(({ name, color, lineWidth, lineStyle, title }) => {
         const vals = findIndicator(analysis.indicators, name);
         if (!vals) return;
-        const s = mainChart.addLineSeries({ color, lineWidth, lineStyle, priceLineVisible: false });
+        const s = mainChart.addLineSeries({ color, lineWidth, lineStyle, priceLineVisible: false, title });
         s.setData(seriesFromIndicatorValues(candles, vals));
         addLineOverlay(mainChart, s, null, mainChart);
       });
@@ -7547,18 +7610,19 @@
     if (state.layers.vwap) {
       const vals = findIndicator(analysis.indicators, "VWAP");
       if (vals) {
-        const s = mainChart.addLineSeries({ color: COLORS.vwap, lineWidth: 1, priceLineVisible: false });
-        s.setData(seriesFromIndicatorValues(candles, vals));
+        const anchor = VWAP_ANCHOR_LABEL[el("interval-primary").value] || "D";
+        const s = mainChart.addLineSeries({ color: COLORS.vwap, lineWidth: 1.5, priceLineVisible: false, title: `VWAP ${anchor}` });
+        s.setData(vwapWithBreaks(candles, vals, anchor));
         addLineOverlay(mainChart, s, null, mainChart);
       }
     }
 
     // Bull Market Support Band: SMA 20 and EMA 21 of the weekly close.
     if (state.layers.bmsb) {
-      [["BMSB_SMA20W", COLORS.bmsbSma], ["BMSB_EMA21W", COLORS.bmsbEma]].forEach(([name, color]) => {
+      [["BMSB_SMA20W", COLORS.bmsbSma, "SMA 20W"], ["BMSB_EMA21W", COLORS.bmsbEma, "EMA 21W"]].forEach(([name, color, title]) => {
         const vals = findIndicator(analysis.indicators, name);
         if (!vals) return;
-        const s = mainChart.addLineSeries({ color, lineWidth: 2, priceLineVisible: false, lastValueVisible: false });
+        const s = mainChart.addLineSeries({ color, lineWidth: 2, priceLineVisible: false, title });
         s.setData(seriesFromIndicatorValues(candles, vals));
         addLineOverlay(mainChart, s, null, mainChart);
       });
@@ -7575,6 +7639,8 @@
       const macdVals = findIndicator(analysis.indicators, "MACD");
       const signalVals = findIndicator(analysis.indicators, "MACD_signal");
       const histVals = findIndicator(analysis.indicators, "MACD_hist");
+      const macdFormat = oscPrecisionFor([...(macdVals || []), ...(signalVals || [])]);
+      [macdLineSeries, macdSignalSeries, macdHistSeries].forEach((s) => s.applyOptions({ priceFormat: macdFormat }));
       macdLineSeries.setData(macdVals ? seriesFromIndicatorValues(candles, macdVals) : []);
       macdSignalSeries.setData(signalVals ? seriesFromIndicatorValues(candles, signalVals) : []);
       if (histVals) {
@@ -7603,6 +7669,7 @@
       stochKSeries.setData(kVals ? seriesFromIndicatorValues(candles, kVals) : []);
       stochDSeries.setData(dVals ? seriesFromIndicatorValues(candles, dVals) : []);
     }
+    [rsiChart, macdChart, stochChart].forEach(syncPaneRange);
 
     // --- structure / liquidity overlays ---
     analysis.levels.forEach((lvl) => {
