@@ -8063,7 +8063,8 @@
     // Si guarda l'ultimo segnale, non `position`: un ingresso senza uscita
     // successiva e' una posizione viva anche quando lo stato dice "flat".
     const last = _lastStrategySignals[_lastStrategySignals.length - 1];
-    if (last && !last.type.startsWith("exit")) {
+    // Con stop/target attivi il backtest puo' aver gia' chiuso quell'ingresso.
+    if (last && !last.type.startsWith("exit") && !bt.trades.some((t) => t.entry_time === last.time)) {
       parts.push("the last entry is still open, so it has an arrow but is not a closed trade yet");
     }
     note.textContent = parts.join(" · ") + ".";
