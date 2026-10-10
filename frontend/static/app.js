@@ -436,7 +436,8 @@
           main.className = "sug-main";
           const sym = document.createElement("span");
           sym.className = "sug-symbol";
-          sym.textContent = item.symbol;
+          sym.textContent = shortSymbol(item.symbol);
+          sym.title = item.symbol;
           const name = document.createElement("span");
           name.className = "sug-name";
           name.textContent = item.name || "";
@@ -960,6 +961,7 @@
       hints: false,
       divergences: false,
       angleLines: false,
+      elliott: false,
     },
   };
 
@@ -5147,6 +5149,17 @@
   function timeToX(time) {
     return mainChart ? mainChart.timeScale().timeToCoordinate(time) : null;
   }
+  // A DEX pair's symbol is "TICKER@chain:pool-address": shown whole it runs
+  // off the phone screen. Ticker plus a short address is enough to tell two
+  // pools apart; the full symbol stays in the tooltip.
+  function shortSymbol(symbol) {
+    const sym = String(symbol || "");
+    const at = sym.indexOf("@");
+    if (at < 0) return sym;
+    const addr = sym.slice(sym.indexOf(":", at) + 1);
+    return addr.length > 10 ? `${sym.slice(0, at)} · ${addr.slice(0, 4)}…${addr.slice(-4)}` : sym.slice(0, at);
+  }
+
   function priceToY(price) {
     return candleSeries ? candleSeries.priceToCoordinate(price) : null;
   }
@@ -5343,6 +5356,7 @@
 
     // Divergence lines (RSI divergences on price chart)
     renderDivergences(drawCtx, performance.now());
+    renderElliott(drawCtx);
 
     // Pattern zones (RSI divergence highlights)
     autoPatternZones.forEach((z) => {
@@ -5601,6 +5615,74 @@
     const analysis = state.data.timeframes[tf];
     if (!analysis) return;
     divergenceLines = detectDivergences(analysis.candles, analysis.indicators || []);
+  }
+
+  // ── Elliott Waves (segnalazione 7f9cd5ed) ─────────────────────────────────
+  // Detection lives in elliott.js; here it is only drawn on the canvas, like
+  // the divergences: motive 1-5 and corrective a-b-c on the zigzag, dashed
+  // while the last point can still move or once the correction breaks the
+  // motive's start, and the latest motive's Fibonacci retracements.
+  let elliottWaves = null;
+  const ELLIOTT_LEN = 10;
+
+  function applyElliott() {
+    elliottWaves = null;
+    if (!state.layers.elliott || !state.data || !window.ElliottWave) return;
+    const analysis = state.data.timeframes[state.activeTimeframe];
+    if (!analysis) return;
+    elliottWaves = window.ElliottWave.detect(analysis.candles, ELLIOTT_LEN);
+  }
+
+  function renderElliott(ctx) {
+    if (!state.layers.elliott || !elliottWaves) return;
+    const rgba = (dir, a) => (dir === "bull" ? `rgba(0,214,143,${a})` : `rgba(255,69,96,${a})`);
+    const drawLeg = (pts, labels, dir, dashed, alpha) => {
+      const xy = pts.map((p) => ({ x: timeToXEdge(p.time), y: priceToY(p.price), up: false }));
+      if (xy.some((q) => q.x === null || q.y === null)) return;
+      ctx.save();
+      ctx.strokeStyle = rgba(dir, alpha);
+      ctx.lineWidth = 1.4;
+      ctx.setLineDash(dashed ? [5, 4] : []);
+      ctx.beginPath();
+      xy.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)));
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.font = "bold 11px 'JetBrains Mono', monospace";
+      ctx.textAlign = "center";
+      ctx.fillStyle = rgba(dir, Math.min(1, alpha + 0.2));
+      xy.forEach((q, i) => {
+        if (!labels[i]) return;
+        // A label sits on the outside of its turn: above a peak, below a trough.
+        const prev = xy[i - 1] || xy[i + 1];
+        const peak = prev ? q.y < prev.y : true;
+        ctx.fillText(labels[i], q.x, peak ? q.y - 7 : q.y + 15);
+      });
+      ctx.restore();
+    };
+    elliottWaves.motives.forEach((m) =>
+      drawLeg(m.points, ["", "1", "2", "3", "4", "5"], m.dir, m.tentative, 0.75));
+    elliottWaves.corrections.forEach((c) =>
+      drawLeg(c.points, ["", "a", "b", "c"], c.dir, c.invalid || c.tentative, c.invalid ? 0.35 : 0.6));
+    const fib = elliottWaves.fib;
+    if (fib) {
+      const x1 = timeToXEdge(fib.time);
+      if (x1 === null) return;
+      const x2 = drawCanvas ? drawCanvas.width : x1 + 200;
+      ctx.save();
+      ctx.font = "10px 'JetBrains Mono', monospace";
+      ctx.textAlign = "right";
+      Object.entries(fib.levels).forEach(([ratio, price]) => {
+        const y = priceToY(price);
+        if (y === null) return;
+        ctx.strokeStyle = "rgba(255,193,7,0.45)";
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2, y); ctx.stroke();
+        ctx.fillStyle = "rgba(255,193,7,0.85)";
+        ctx.fillText(`EW ${ratio}`, x2 - 70, y - 3);
+      });
+      ctx.restore();
+    }
   }
 
   // ── Divergence rendering (chiamato dentro renderDrawCanvas) ───────────────
@@ -7346,7 +7428,8 @@
       tools.classList.add("hidden");
       return;
     }
-    el("mobile-chart-symbol").textContent = state.data.symbol;
+    el("mobile-chart-symbol").textContent = shortSymbol(state.data.symbol);
+    el("mobile-chart-symbol").title = state.data.symbol;
     // Keep the strategy pill updated with the currently-active strategy name.
     // Abbreviate long names so the pill stays compact on small screens.
     const pill = el("mobile-strategy-pill");
@@ -7626,6 +7709,7 @@
     applyAutoPatterns();
     applyContextualHints();
     applyDivergences();
+    applyElliott();
     if (state.layers.angleLines) renderAngleLines(candles, analysis.indicators || []);
 
     renderSummary();
@@ -8527,7 +8611,8 @@
       symRow.className = "wl-sym-row";
       const sym = document.createElement("span");
       sym.className = "wl-sym";
-      sym.textContent = entry.symbol;
+      sym.textContent = shortSymbol(entry.symbol);
+      sym.title = entry.symbol;
       symRow.appendChild(sym);
       const badge = document.createElement("span");
       badge.className = "wl-badge";
@@ -8753,7 +8838,8 @@
       main.className = "sug-main";
       const sym = document.createElement("span");
       sym.className = "sug-symbol";
-      sym.textContent = item.symbol;
+      sym.textContent = shortSymbol(item.symbol);
+      sym.title = item.symbol;
       const name = document.createElement("span");
       name.className = "sug-name";
       name.textContent = item.name || "";
@@ -8840,7 +8926,8 @@
       symRow.className = "mts-sym-row";
       const sym = document.createElement("span");
       sym.className = "mts-sym";
-      sym.textContent = item.symbol;
+      sym.textContent = shortSymbol(item.symbol);
+      sym.title = item.symbol;
       const badge = document.createElement("span");
       badge.className = "mts-badge";
       badge.textContent = item.asset_type === "crypto" ? "crypto" : item.asset_type === "dex" ? "dex" : "stocks";
@@ -9694,6 +9781,7 @@
   // still map onto the same mechanism without a 6th/7th tab.
   const RIGHT_PANEL_TITLES = { backtest: "Backtest", alert: "Alert", strategie: "Strategies", trading: "Trading", saldi: "Balances", analisi: "Analysis", watchlist: "Watchlist" };
 
+  let mobileScreen = "chart";
   function showMobileScreen(target) {
     if (!window.matchMedia("(max-width: 760px)").matches) return;
 
@@ -9703,6 +9791,13 @@
     el("issues-panel").classList.remove("mobile-open");
     document.querySelector(".right-panel").classList.remove("mobile-open");
     el("draw-rail").classList.remove("mobile-tools-open");
+
+    // On the phone the Lab is the "backtest" screen: same two-way sync as the
+    // desktop sidebar (segnalazione 87cc755b).
+    const prevScreen = mobileScreen;
+    mobileScreen = target;
+    if (target === "backtest" && prevScreen !== "backtest") syncLabFromChart();
+    else if (prevScreen === "backtest" && (target === "chart" || target === "levels")) syncChartFromLab();
 
     const NAV_TARGET_FOR = { script: "altro", saldi: "altro", analisi: "altro", watchlist: "altro", backtest: "altro", issues: "altro", strategie: "altro", trading: "altro" };
     const navTarget = NAV_TARGET_FOR[target] || target;
@@ -11114,6 +11209,28 @@
     el("lab-trades-drawer").classList.add("hidden");
   });
 
+  // Every run starts from an empty result column (segnalazione e67ae945):
+  // a previous backtest's numbers or a previous optimization's boxes left on
+  // screen read as part of the new result.
+  function clearLabResults() {
+    labState.lastBt = null;
+    ["lab-result-block", "lab-apply-strip", "lab-plateau-box", "lab-data-used",
+      "lab-regime-box", "lab-branch-box", "lab-signal-status"].forEach((id) => {
+      const node = labEl(id);
+      if (node) node.classList.add("hidden");
+    });
+    ["lab-result-meta", "lab-stat-chips", "lab-return-side"].forEach((id) => {
+      const node = labEl(id);
+      if (node) node.innerHTML = "";
+    });
+    const ret = labEl("lab-return-val");
+    if (ret) ret.textContent = "";
+    const canvas = labEl("lab-equity-canvas");
+    if (canvas && canvas.getContext) canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
+    const drawer = el("lab-trades-drawer");
+    if (drawer) drawer.classList.add("hidden");
+  }
+
   async function runLabBacktest() {
     if (!labState.symbol) {
       labEl("lab-status").textContent = "Enter a ticker first.";
@@ -11124,8 +11241,7 @@
     const runBtn = labEl("lab-run-btn");
     const optBtn = labEl("lab-optimize-btn");
     optBtn.disabled = true;
-    labEl("lab-result-block").classList.add("hidden");
-    labEl("lab-apply-strip").classList.add("hidden");
+    clearLabResults();
     labEl("lab-status").textContent = "Backtest running… (may take a few seconds)";
     labEl("lab-status").classList.remove("hidden");
     await withAsyncButton(runBtn, async () => {
@@ -11157,11 +11273,7 @@
       return;
     }
     const optMode = labOptMode();
-    labEl("lab-result-block").classList.add("hidden");
-    labEl("lab-apply-strip").classList.add("hidden");
-    labEl("lab-data-used").classList.add("hidden");
-    labEl("lab-regime-box").classList.add("hidden");
-    labEl("lab-branch-box").classList.add("hidden");
+    clearLabResults();
     labEl("lab-status").textContent = "Avvio…";
     labEl("lab-status").classList.remove("hidden");
 
@@ -11223,7 +11335,7 @@
     labState.exchange = item.provider || "mexc";
     labState.baseTokenAddress = item.base_token_address || null;
     labSuggest.resolved = item;
-    labEl("lab-ticker-val").textContent = item.symbol;
+    labEl("lab-ticker-val").textContent = shortSymbol(item.symbol);
     labEl("lab-ticker-input").value = "";
     labEl("lab-ticker-input").blur();
     labEl("lab-suggestions").classList.add("hidden");
@@ -11279,7 +11391,7 @@
         labState.baseTokenAddress = null;
         labState.symbol = base ? base + "USDT" : labState.symbol;
         labState.displaySymbol = base || labState.displaySymbol;
-        labEl("lab-ticker-val").textContent = labState.symbol || "—";
+        labEl("lab-ticker-val").textContent = shortSymbol(labState.symbol) || "—";
       }
       labState.exchange = sel.value;
     });
@@ -11376,7 +11488,7 @@
       // quelli di un'altra cosa.
       applyConfigToChart({
         assetType: labState.assetType,
-        exchange: labState.assetType === "dex" ? "mexc" : (el("lab-exchange-select")?.value || labState.exchange),
+        exchange: labExch,
         symbol: labState.symbol,
         displaySymbol: labState.displaySymbol,
         interval: labState.tf,
@@ -11522,15 +11634,19 @@
       labState.symbol = sym;
       labState.displaySymbol = sym.replace(/USDT$|USD$|BTC$|ETH$/, "") || sym;
       const val = el("lab-ticker-val");
-      if (val) val.textContent = sym;
-      const exchSelect = el("lab-exchange-select");
-      labState.assetType = state.assetType === "dex" ? "dex" : "crypto";
-      if (exchSelect && labState.assetType === "dex") {
-        exchSelect.value = "dexscreener";
-      } else if (exchSelect && state.exchange && exchSelect.querySelector(`option[value="${state.exchange}"]`)) {
-        exchSelect.value = state.exchange;
-        labState.exchange = state.exchange;
-      }
+      if (val) val.textContent = shortSymbol(sym);
+    }
+    // The chart's exchange lives in state.cryptoExchange (segnalazione
+    // 87cc755b): reading state.exchange, which is never set, left the Lab on
+    // its own exchange. Synced even when the pair is the same.
+    const exchSelect = el("lab-exchange-select");
+    const chartExchange = state.cryptoExchange;
+    labState.assetType = state.assetType === "dex" ? "dex" : "crypto";
+    if (exchSelect && labState.assetType === "dex") {
+      exchSelect.value = "dexscreener";
+    } else if (exchSelect && chartExchange && exchSelect.querySelector(`option[value="${chartExchange}"]`)) {
+      exchSelect.value = chartExchange;
+      labState.exchange = chartExchange;
     }
     const tf = el("interval-primary")?.value;
     const tfBtn = tf && labEl("lab-tf-row")?.querySelector(`.lab-tf-btn[data-lab-tf="${tf}"]`);
@@ -11560,14 +11676,17 @@
   function syncChartFromLab() {
     if (!labState.symbol) return;
     const params = collectStrategyParams(labEl("lab-params-fields"), labState.strategy);
+    const labExch = labState.assetType === "dex" ? "mexc" : (el("lab-exchange-select")?.value || labState.exchange);
     const same = state.data && state.data.symbol === labState.symbol
+      && state.assetType === labState.assetType
+      && (labState.assetType === "dex" || state.cryptoExchange === labExch)
       && el("interval-primary")?.value === labState.tf
       && el("active-strategy-select")?.value === labState.strategy
       && JSON.stringify(collectStrategyParams(el("strategy-params-fields"), labState.strategy)) === JSON.stringify(params);
     if (same) return;
     applyConfigToChart({
       assetType: labState.assetType,
-      exchange: labState.assetType === "dex" ? "mexc" : (el("lab-exchange-select")?.value || labState.exchange),
+      exchange: labExch,
       symbol: labState.symbol,
       displaySymbol: labState.displaySymbol,
       interval: labState.tf,
