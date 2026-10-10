@@ -228,7 +228,8 @@ function paint() {
     if (changes.length) sequence(changes, crowns);
     else { seen = crowns; writeSeen(seen); }
   }
-  const total = arenas.reduce((n, a) => n + a.size, 0);
+  // A project shows in each of its narratives (also: true) but counts once.
+  const total = new Set(arenas.flatMap((a) => a.entries.map(idOf))).size;
   const narrLine = filtered
     ? `<button type="button" class="top-narr-clear" data-top-narr-clear>${escapeHtml(narr.get().map((k) => labels[k] ?? k).join(", "))} ✕</button> `
     : "";
