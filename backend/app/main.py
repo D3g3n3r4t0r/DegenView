@@ -542,9 +542,20 @@ _stale_notified: set[str] = set()   # voci gia' avvisate per dati fermi, finche'
 
 
 def _signal_chat(owner: User) -> str:
-    """Where a strategy alert goes: the user's signals chat if set, else their
-    main chat (segnalazione a6b36231: gems, updates and signals in three chats)."""
+    """Where an alert goes: the user's alerts chat if set, else their main
+    chat (segnalazione a6b36231; Lorenzo 10/10: "una terza chat Telegram solo
+    per gli alert"). Watchlist, listings, gems and trend signals all use it."""
     return owner.telegram_signal_chat_id or owner.telegram_chat_id
+
+
+def _alert_chats(seen: set[str], user: User) -> str:
+    """The user's alerts chat for one broadcast, or "" when it already got
+    this message: two accounts pointing at the same group get it once."""
+    chat = _signal_chat(user)
+    if not chat or chat in seen:
+        return ""
+    seen.add(chat)
+    return chat
 
 
 async def _watchlist_alert_loop() -> None:
@@ -1293,6 +1304,13 @@ def _deepseek_chats() -> set[str]:
     return allowed | {u.telegram_chat_id for u in auth.list_users() if u.telegram_chat_id}
 
 
+def _is_chatid_command(text: str, bot: str) -> bool:
+    """/chatid (or /chatid@bot in a group) answers with the chat's own id,
+    so a new group is wired by pasting that id, no getUpdates by hand."""
+    cmd = (text.split() or [""])[0].lower()
+    return cmd == "/chatid" or (bool(bot) and cmd == f"/chatid@{bot.lower()}")
+
+
 async def _telegram_chat_loop() -> None:
     """Lorenzo: "mettiamo possibilita' di parlare con deepseek su telegram?".
     Long polling (the bot has no webhook); only chats the site knows."""
@@ -1316,6 +1334,9 @@ async def _telegram_chat_loop() -> None:
                     offset = up["update_id"] + 1
                     msg = up.get("message") or {}
                     chat_id = str((msg.get("chat") or {}).get("id") or "")
+                    if _is_chatid_command(msg.get("text") or "", bot):
+                        _fire(telegram.send_to(chat_id, f"Chat ID: <code>{chat_id}</code>"))
+                        continue
                     text = deepseek_desk.wants_answer(msg, bot)
                     if text and chat_id in _deepseek_chats():
                         _fire(_telegram_reply(chat_id, text))
@@ -2467,7 +2488,7 @@ async def update_telegram_chat_id(
             and _telegram_allowed(updated)):
         _fire(telegram.send_to(
             updated.telegram_signal_chat_id,
-            "✅ Chat dei segnali collegata: da qui in poi gli alert delle strategie arrivano qui.",
+            "✅ Chat degli alert collegata: da qui in poi gli alert (segnali, listing, gemme) arrivano qui.",
         ))
     if updated.telegram_chat_id and _telegram_allowed(updated):
         # Confirms the chat_id was actually saved and is reachable — sent
@@ -4589,14 +4610,16 @@ async def _notify_listing(item: dict) -> None:
     text = onchain_listings.telegram_text(item, now, link)
     # The signal's own track record: what entering on this message would pay.
     onchain_alert_track.record(item, "meme", now)
+    seen: set[str] = set()
     for user in auth.list_users():
-        if not user.telegram_chat_id or not user.onchain_wallets or not _telegram_allowed(user):
+        if not _signal_chat(user) or not user.onchain_wallets or not _telegram_allowed(user):
             continue
         sent = [t for t in _listing_notified.get(user.id, []) if now - t < 3600]
         if len(sent) >= _LISTING_NOTIFY_PER_HOUR:
             continue
         _listing_notified[user.id] = sent + [now]
-        _fire(telegram.send_to(user.telegram_chat_id, text))
+        if chat := _alert_chats(seen, user):
+            _fire(telegram.send_to(chat, text))
 
 
 onchain_listings.on_listing(_notify_listing)
@@ -4648,14 +4671,16 @@ async def _notify_gem(kind: str, e: dict) -> None:
     if e.get("pair_address"):
         onchain_alert_track.record({**e, "price_usd": e.get("price_usd")}, "gem", now)
     text = _gem_telegram_text(kind, e)
+    seen: set[str] = set()
     for user in auth.list_users():
-        if not user.telegram_chat_id or not user.onchain_wallets or not _telegram_allowed(user):
+        if not _signal_chat(user) or not user.onchain_wallets or not _telegram_allowed(user):
             continue
         sent = [t for t in _gem_notified.get(user.id, []) if now - t < 3600]
         if len(sent) >= _GEM_NOTIFY_PER_HOUR:
             continue
         _gem_notified[user.id] = sent + [now]
-        _fire(telegram.send_to(user.telegram_chat_id, text))
+        if chat := _alert_chats(seen, user):
+            _fire(telegram.send_to(chat, text))
 
 
 onchain_leaderboard.on_alert(_notify_gem)
@@ -4711,9 +4736,10 @@ async def _notify_trend_signal(s: dict) -> None:
     prev = await _entry_preview(s)
     if prev is not None:
         text += "\n" + slippage.text_it(prev)
+    seen: set[str] = set()
     for user in auth.list_users():
-        if user.telegram_chat_id and user.onchain_wallets and _telegram_allowed(user):
-            _fire(telegram.send_to(user.telegram_chat_id, text))
+        if user.onchain_wallets and _telegram_allowed(user) and (chat := _alert_chats(seen, user)):
+            _fire(telegram.send_to(chat, text))
 
 
 onchain_strategy_lab.on_signal(_notify_trend_signal)
