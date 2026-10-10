@@ -96,7 +96,7 @@ Punto (4) fatto (branch `nightly`, Claude a mano): Lorenzo, "non lasciare sempre
 
 Lorenzo, 10/10, con lo screenshot della bozza O: "lo stile lo voglio così dell'app", poi "tenendo conto della visualizzazione a mosaico che sta venendo fatta da altro agent". `classic.css` ripartito dalla versione chiara (angoli tondi) con token nuovi: avena #efeae0, schede #f8f5ef, verde scuro #2f3a32 (tasti e barra in basso), salvia #c9d4c0 per cio' che e' scelto (`--c-sage`), Geist. Solo chiaro. Righe della lista come schede morbide. Il Mosaico delle arene (thread "Classifica alternativa alla Top 50") deve usare i token `--c-*` con fallback, non toccare classic.css.
 
-# 2026-10-07 — Nuovo aspetto dell'app sul telefono: terminale nero e ambra — PR #500 (Claude, a mano)
+# 2026-10-07 — [superato il 10/10 dallo stile nordico] Nuovo aspetto dell'app sul telefono: terminale nero e ambra — PR #500 (Claude, a mano)
 
 Lorenzo: "mi piacerebbe un pochino più clean, un pochino più minimal [...] voglio un qualcosa di un pochino più classico", poi "ma é uguale" / "devi rivoluzionarlo", due screenshot di ElevenLabs ("mi piace questo stile"), "non fare il desktop per ora voglio solo mobile". Sfondo scelto da lui sulla scheda: chiaro di base, scuro automatico con la modalita' notte. Poi: "usa un team di revisori [...] dalle animazioni ai layout a tutto" — quattro revisori (layout, animazioni, colori/contrasto, tecnica), tutte le correzioni applicate.
 
