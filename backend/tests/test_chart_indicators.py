@@ -44,7 +44,7 @@ def test_bmsb_never_reads_a_close_after_the_candle():
     df = _daily()
     weekly = _weekly(df)
     full = {i.name: i.values for i in bull_market_support_band(df, weekly)}
-    k = 300
+    k = 303   # a Thursday: the week is still forming at the cut
     cut = df.iloc[: k + 1]
     part = {i.name: i.values for i in bull_market_support_band(cut, _weekly(cut))}
     for name in ("BMSB_SMA20W", "BMSB_EMA21W"):
