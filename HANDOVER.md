@@ -1,3 +1,7 @@
+# 2026-10-10 — Terza chat Telegram solo per gli alert (Claude, a mano)
+
+Lorenzo: "c'e' da creare una terza chat Telegram solo per gli alert, ho gia' fatto il gruppo". Tre chat: principale (`telegram_chat_id`: DeepSeek, conferme, passkey), sistema (`TELEGRAM_DEV_CHAT_IDS`: deploy, errori), alert (`telegram_signal_chat_id`, campo "Alerts chat ID" nel pannello Alert del sito classico). Watchlist, listing, gemme e segnali trend passano da `main._signal_chat` (vuoto = principale); `_alert_chats` evita doppioni se due account puntano allo stesso gruppo. Niente variabile d'ambiente: l'id si incolla dal sito. `/chatid` scritto in un gruppo col bot risponde con l'id. Resta: Lorenzo incolla l'id del gruppo.
+
 # 2026-10-09 — Segnalazioni aperte del sito classico (Claude, a mano)
 
 Lorenzo: "io volevo solo chiudere i punti aperti del sito classico.. vabbe' ora concentrati su quello". Le otto voci aperte o riaperte di whitekobra:
