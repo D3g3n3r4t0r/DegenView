@@ -75,7 +75,6 @@ from app.analysis.strategies import (
     DEFAULT_STRATEGY,
     STRATEGY_REGISTRY,
     build_strategy_state,
-    rug_stop,
     spot_only,
 )
 from app.analysis.summary import build_summary, determine_bias
@@ -169,7 +168,7 @@ from app.providers.base import (
 )
 from app.providers.binance import BinanceProvider
 from app.providers.binance import format_symbol as format_binance_symbol
-from app.providers.dexscreener import DexScreenerProvider, _parse_symbol as _parse_dex_symbol
+from app.providers.dexscreener import DexScreenerProvider, gecko_urgent, _parse_symbol as _parse_dex_symbol
 from app.providers.kraken import KrakenProvider
 from app.providers.kraken import format_symbol as format_kraken_symbol
 from app.providers.kucoin import KucoinProvider
@@ -652,7 +651,7 @@ async def _watchlist_alert_loop() -> None:
                     params = entry.strategy_params.get(strategy_name) or None
                     # Sul DEX si compra e si vende il token, niente short: un
                     # segnale short e' la vendita di quello che si ha.
-                    spot_signals = (rug_stop(strat_df, spot_only(STRATEGY_REGISTRY[strategy_name](strat_df, params)))
+                    spot_signals = (spot_only(STRATEGY_REGISTRY[strategy_name](strat_df, params))
                                     if entry.asset_type == "dex" and strategy_name in STRATEGY_REGISTRY else None)
                     strategy = build_strategy_state(strategy_name, strat_df, params=params, signals=spot_signals)
                     frequency = entry.alert_frequency.get(strategy_name, "every")
@@ -6843,6 +6842,14 @@ async def get_favorite_quotes(user: User = Depends(auth.get_current_user)) -> li
     return list(await asyncio.gather(*(quote_for(e) for e in entries)))
 
 
+def _classic_priority() -> None:
+    """The classic site's chart, backtests and optimisations go ahead of the
+    on-chain engine for GeckoTerminal (Lorenzo, 12/10: "il sito classico
+    deve avere sempre la priorita'"). Set per request; background tasks
+    started from it inherit it."""
+    gecko_urgent.set(True)
+
+
 def _intrabar_fn(asset_type: str, strategy_name: str):
     """Signal function for the in-candle replay of fill_at "on_condition"
     (board issue 316219de): the same signals the backtest uses, DEX wrappers
@@ -6851,7 +6858,7 @@ def _intrabar_fn(asset_type: str, strategy_name: str):
     if fn is None:
         return None
     if asset_type == "dex":
-        return lambda d, p: rug_stop(d, spot_only(fn(d, p)))
+        return lambda d, p: spot_only(fn(d, p))
     return fn
 
 
@@ -6870,6 +6877,7 @@ async def analyze(
     strategy_params: StrategyParamsQuery = Depends(),
     backtest_params: BacktestParamsQuery = Depends(),
 ) -> AnalysisResponse:
+    _classic_priority()
     symbol = symbol.strip()
     if not symbol:
         raise HTTPException(status_code=400, detail="Ticker missing")
@@ -6929,7 +6937,7 @@ async def analyze(
         # mostra trade diversi dal backtest on-chain della classifica.
         sig = None
         if asset_type == "dex" and strategy_name in STRATEGY_REGISTRY:
-            sig = rug_stop(df, spot_only(STRATEGY_REGISTRY[strategy_name](df, strategy_params_dict)))
+            sig = spot_only(STRATEGY_REGISTRY[strategy_name](df, strategy_params_dict))
         strategy = build_strategy_state(strategy_name, df, strategy_params_dict, signals=sig)
         strategies[tf_key] = [strategy]
         # The frontend only ever charts the ltf timeframe (state.activeTimeframe
@@ -7072,6 +7080,7 @@ async def deep_backtest(
     too. The frontend calls this right after /api/analyze already rendered
     the chart with the fast pass, and swaps the backtest panel over once
     this resolves."""
+    _classic_priority()
     symbol = symbol.strip()
     if not symbol:
         raise HTTPException(status_code=400, detail="Ticker missing")
@@ -7103,7 +7112,7 @@ async def deep_backtest(
     # Sul DEX si compra e si vende il token, niente short (vedi /api/analyze).
     sig = None
     if asset_type == "dex" and strategy_name in STRATEGY_REGISTRY:
-        sig = rug_stop(df, spot_only(STRATEGY_REGISTRY[strategy_name](df, strategy_params.model_dump())))
+        sig = spot_only(STRATEGY_REGISTRY[strategy_name](df, strategy_params.model_dump()))
     result = run_backtest(
         df,
         strategy_params.model_dump(),
@@ -7500,6 +7509,7 @@ async def optimize_strategy_endpoint(
     simulations, ~15-25s), so it runs off the event loop via a thread —
     otherwise it would stall every other request (including other users')
     for its whole duration."""
+    _classic_priority()
     _inizia_lavoro_pesante(user.id)
     try:
         return await _optimize_body(
@@ -7680,6 +7690,7 @@ async def start_optimize(
     end_date: str | None = Query(None, description="YYYY-MM-DD, inclusive — same period as the backtest"),
     user: User | None = Depends(auth.get_current_user_optional),
 ) -> dict:
+    _classic_priority()
     symbol = symbol.strip()
     if not symbol:
         raise HTTPException(status_code=400, detail="Ticker missing")
@@ -7943,7 +7954,7 @@ async def _run_archive_backtest(entry_id: str, symbol: str, asset_type: str,
         # the in-candle replay when the Lab result had it.
         sig = None
         if asset_type == "dex" and strategy_name in STRATEGY_REGISTRY:
-            sig = rug_stop(df, spot_only(STRATEGY_REGISTRY[strategy_name](df, params)))
+            sig = spot_only(STRATEGY_REGISTRY[strategy_name](df, params))
         bt = await asyncio.to_thread(
             partial(run_backtest, df, params, backtest_params, strategy_name=strategy_name,
                     signals=sig,
@@ -7981,6 +7992,7 @@ async def list_archive(user: User = Depends(auth.get_current_user)) -> dict:
 async def add_archive_entry(
     req: ArchiveIn, user: User = Depends(auth.get_current_user)
 ) -> dict:
+    _classic_priority()
     if req.strategy_name not in AVAILABLE_STRATEGIES:
         raise HTTPException(status_code=400, detail=f"Unknown strategy: {req.strategy_name}")
     symbol = req.symbol.strip()

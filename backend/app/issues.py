@@ -165,6 +165,10 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0267", "Sito classico: sui pair presenti solo sui DEX il backtest non da' risultati",
+     "Lorenzo, 12/10: 'sui pair presenti solo nei dex il backtest non fornisce risultati. C'e' un motivo specifico legato alle API dei Dex?' "
+     "Poi: 'sul sito classico l'anti-rug non e' necessario, serve solo per lo Sniper. Il sito classico deve avere sempre la priorita' di eseguire backtest sull'intero grafico disponibile'.",
+     "alta"),
     ("seed-0266", "Ricontrollo completo degli indicatori sui grafici: calcoli e qualita' visiva",
      "Lorenzo, 10/10: 'rianalizza tutte le rappresentazioni grafiche che abbiamo fatto con i nostri indicatori e verifica che siano corrette, che siano affidabili e visualizzate in modo corretto su standard elevati [...] alcuni mi risultano un po' schifo'.",
      "alta"),

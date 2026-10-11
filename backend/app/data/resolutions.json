@@ -2757,5 +2757,11 @@
     "at": 1791758179,
     "summary": "Nella barra in alto, fra il campo della coppia e il menu del timeframe, c'è una stella: un tocco aggiunge alla Watchlist la coppia sul grafico.",
     "detail": "La stella diventa piena e gialla quando la coppia è già in YOUR TICKERS; toccarla di nuovo la toglie. Usa lo stesso exchange del grafico. Senza accesso al sito compare l'avviso di fare login. Compare solo con un grafico caricato, ed è nella barra del computer: su telefono la barra in alto non c'è."
+  },
+  "seed-0267": {
+    "status": "risolto",
+    "at": 1791759363,
+    "summary": "Sul sito classico i pair DEX non hanno più il blocco anti-rug, il backtest legge tutta la storia disponibile e le richieste del sito classico passano prima del motore on-chain.",
+    "detail": "Causa: il blocco anti-rug dello Sniper era applicato anche al sito classico. Sui token DEX il massimo del giorno di lancio fa sembrare il token 'morto' (−85% dal massimo) già alla prima o seconda candela, e da lì la strategia non entrava più: 0 trade. Ora sul sito classico (grafico, Lab, archivio, alert della watchlist) resta solo la regola 'niente short sul DEX'; lo Sniper on-chain tiene l'anti-rug. Candele: GeckoTerminal ne dà al massimo 1000 per richiesta; ora si leggono a pagine all'indietro fino a dove arriva la storia del pool (fino a 6 pagine, 6000 candele). Priorità: grafico, backtest, ottimizzazione e archivio del sito classico usano la quota 'urgente' di GeckoTerminal (28 richieste al minuto invece di 14), davanti al motore di fondo."
   }
 }

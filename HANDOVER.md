@@ -1,3 +1,13 @@
+# 2026-10-12 — DEX sul sito classico: niente anti-rug, storia intera, priorita' — `seed-0267` (Claude, a mano)
+
+Lorenzo: "sui pair presenti solo nei dex il backtest non fornisce risultati [...] è risolvibile?", poi "Sul sito classico l'anti-rug non e' necessario, serve solo per lo Sniper. Il sito classico deve avere sempre la priorita' di eseguire backtest sull'intero grafico disponibile".
+
+- Diagnosi (da lettura del codice, non misurata: sito e GeckoTerminal non raggiungibili dal sandbox): `rug_stop` sul sito classico; il `top = high.cummax()` include lo spike del lancio, `close <= 0.15*top` scatta subito -> 0 trade.
+- `rug_stop` tolto da tutti i percorsi del sito classico in `main.py` (analyze, deep, archivio, `_intrabar_fn`, ciclo watchlist): resta `spot_only`. Radar/Sniper invariati.
+- `DexScreenerProvider.fetch_ohlcv` pagina con `before_timestamp` (`GECKO_PAGE` 1000, `GECKO_MAX_PAGES` 6): il chart (3000) fa 3 chiamate, il backtest (5000) 5.
+- `_classic_priority()` = `gecko_urgent.set(True)` in analyze, deep, optimize, optimize/start, POST archive.
+- Da sapere: GeckoTerminal gratuito puo' limitare quanto indietro arriva la storia; oltre, le pagine tornano vuote e ci si ferma.
+
 # 2026-10-12 — Stella "aggiungi alla watchlist" nella barra — `227a6142` (Claude, a mano)
 
 Lorenzo: "Risolvi la segnalazione aperta". Bottone `#watch-star-btn` fra ricerca e timeframe: aggiunge/toglie la coppia del grafico da YOUR TICKERS (`updateWatchStar`, chiamata da `render()` e `renderFavorites()`). Solo barra desktop (su mobile `.toolbar` e' nascosta). Nota: WebFetch della bacheca a volte restituisce una copia vecchia; un parametro nuovo nell'URL (`?fresh=...`) la aggira.

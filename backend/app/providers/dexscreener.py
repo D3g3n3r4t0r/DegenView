@@ -38,6 +38,8 @@ from app.sniper.scanner import GECKO_NETWORKS, SUPPORTED_CHAINS
 DEXSCREENER_SEARCH_URL = "https://api.dexscreener.com/latest/dex/search"
 GECKOTERMINAL_BASE = "https://api.geckoterminal.com/api/v2"
 _MAX_SUGGESTIONS = 25
+GECKO_PAGE = 1000
+GECKO_MAX_PAGES = 6
 _SEARCH_CACHE_TTL_S = 30  # il prezzo cambia in continuazione, la lista dei pool no
 
 _search_cache: TTLCache = TTLCache(maxsize=200, ttl=_SEARCH_CACHE_TTL_S)
@@ -227,24 +229,52 @@ class DexScreenerProvider(DataProvider):
             raise ProviderError(f"Chain \'{chain}\' not supported")
         timeframe, aggregate, fold = _INTERVAL_TO_GECKO.get(interval, ("day", 1, 1))
 
-        limit = min(max(outputsize * fold, fold), 1000) if since_ms is None else 1000
+        # GeckoTerminal gives at most 1000 candles per call: older ones come
+        # page by page with before_timestamp, until the pool's history ends.
+        # The classic site wants the whole chart for its backtests (Lorenzo,
+        # 12/10: "deve avere sempre la priorita' di eseguire backtest
+        # sull'intero grafico disponibile"); the pages are capped so one
+        # request cannot drain the per-minute budget.
+        want = max(outputsize * fold, fold) if since_ms is None else None
+        since_s = since_ms // 1000 if since_ms is not None else None
         url = f"{self._geckoterminal_base}/networks/{network}/pools/{pool}/ohlcv/{timeframe}"
-        params = {"aggregate": aggregate, "limit": limit, "currency": "usd"}
-        # Il prezzo di quale lato del pool: di default GeckoTerminal da' la
-        # base, ma un token puo' essere la quota (MYCE nel pool SHROOM/MYCE).
-        if token_address:
-            params["token"] = token_address
-        try:
-            payload = await gecko_get(url, params)
-        except httpx.HTTPError as exc:
-            raise ProviderUnreachable(f"GeckoTerminal unreachable for {symbol}: {exc}") from exc
-        if payload is None:
-            raise ProviderError(f"Pool not found on {chain}: {pool}")
-
-        rows = (
-            payload.get("data", {}).get("attributes", {}).get("ohlcv_list", [])
-            if isinstance(payload, dict) else []
-        )
+        rows: list = []
+        before: int | None = None
+        for _page in range(GECKO_MAX_PAGES):
+            limit = GECKO_PAGE if want is None else min(GECKO_PAGE, want - len(rows))
+            params = {"aggregate": aggregate, "limit": limit, "currency": "usd"}
+            if before is not None:
+                params["before_timestamp"] = before
+            # Il prezzo di quale lato del pool: di default GeckoTerminal da' la
+            # base, ma un token puo' essere la quota (MYCE nel pool SHROOM/MYCE).
+            if token_address:
+                params["token"] = token_address
+            try:
+                payload = await gecko_get(url, params)
+            except httpx.HTTPError as exc:
+                if rows:
+                    break  # keep the pages already read
+                raise ProviderUnreachable(f"GeckoTerminal unreachable for {symbol}: {exc}") from exc
+            except NoDataYet:
+                if rows:
+                    break
+                raise
+            if payload is None:
+                if rows:
+                    break
+                raise ProviderError(f"Pool not found on {chain}: {pool}")
+            page = (
+                payload.get("data", {}).get("attributes", {}).get("ohlcv_list", [])
+                if isinstance(payload, dict) else []
+            )
+            if not page:
+                break
+            rows.extend(page)
+            oldest = min(int(r[0]) for r in page)
+            if len(page) < limit or (want is not None and len(rows) >= want) \
+                    or (since_s is not None and oldest <= since_s) or (before is not None and oldest >= before):
+                break
+            before = oldest
         if not rows and timeframe == "minute":
             # Pool appena nato: GeckoTerminal ha gli scambi subito, le candele
             # qualche minuto dopo. DexScreener il grafico lo mostra da subito
