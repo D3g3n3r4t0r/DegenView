@@ -102,6 +102,9 @@ class BacktestResult(BaseModel):
     # rendimento senza sapere a che prezzo si e' entrati non e' confrontabile
     # con nessun altro.
     fill_at: str = "signal_close"
+    # fill_at "on_condition": how many signals filled inside the candle
+    # (the rest filled at the close). None when the replay did not run.
+    intrabar_fills: int | None = None
     # The interval the simulation actually ran on — deliberately coarser
     # than the chart's own timeframe when that's finer than daily, so this
     # can differ from whatever TimeframeAnalysis.interval says for "ltf".

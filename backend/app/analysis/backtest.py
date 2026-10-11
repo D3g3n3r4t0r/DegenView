@@ -1,4 +1,5 @@
 import math
+import time
 
 import pandas as pd
 
@@ -26,6 +27,18 @@ from app.models import BacktestResult, BacktestTrade, StrategySignal
 #       E' cio' che si puo' davvero ottenere: il segnale e' confermato solo a
 #       candela chiusa, e la prima occasione di eseguire e' la barra dopo.
 #
+#   "on_condition" — si riempie nel punto della candela in cui la condizione
+#       diventa vera (segnalazione 316219de: prima riempiva alla chiusura come
+#       "signal_close", quindi le due opzioni davano numeri identici). Il
+#       backtest non vede dentro la candela: ripercorre il cammino che il
+#       broker emulator di TradingView assume, apertura -> minimo -> massimo
+#       -> chiusura su una candela verde, apertura -> massimo -> minimo ->
+#       chiusura su una rossa, e a ogni passo ricalcola la strategia con la
+#       candela "in formazione" fino a quel prezzo. Il primo passo in cui il
+#       segnale c'e' e' il prezzo di riempimento. Solo per i segnali confermati
+#       a chiusura: quelli che compaiono e poi spariscono prima della chiusura
+#       (l'alert partirebbe comunque) non entrano nel backtest.
+#
 # Il default resta "signal_close" apposta: cambiarlo qui sposterebbe in
 # silenzio ogni risultato storico gia' archiviato. Chi vuole il numero
 # realizzabile lo chiede esplicitamente.
@@ -44,6 +57,78 @@ _EXIT_TYPES = {"exit_long", "exit_short"}
 _FLIP_TYPES = {"flip_to_long", "flip_to_short"}
 
 
+# Passi per tratto del cammino dentro la candela, e quante barre di storia
+# ricalcolare a ogni passo: il costo e' segnali x passi x ricalcolo.
+INTRABAR_STEPS_PER_LEG = 4
+INTRABAR_WINDOW = 300
+# Tetto di tempo per tutto il ricalcolo: oltre, i segnali rimanenti si
+# riempiono alla chiusura (e intrabar_fills lo dice). Il backtest del Lab
+# non deve restare appeso su una serie con centinaia di segnali.
+INTRABAR_BUDGET_S = 8.0
+
+# Colonna del frame dei segnali che deve accendersi sull'ultima riga perche'
+# l'evento confermato a chiusura sia gia' vero a meta' candela.
+_EVENT_COLUMN = {
+    "entry_long": "entry_long", "flip_to_long": "entry_long",
+    "entry_short": "entry_short", "flip_to_short": "entry_short",
+    "exit_long": "exit_long", "exit_short": "exit_short",
+}
+
+
+def intrabar_path(o: float, h: float, low: float, c: float,
+                  steps: int = INTRABAR_STEPS_PER_LEG) -> list[tuple[float, float, float]]:
+    """(price, running high, running low) along the assumed path inside one
+    candle. Green: open -> low -> high -> close; red: open -> high -> low ->
+    close. The last point is the real close, with the real high and low."""
+    legs = [o, low, h, c] if c >= o else [o, h, low, c]
+    out: list[tuple[float, float, float]] = []
+    hi = lo = o
+    for a, b in zip(legs, legs[1:]):
+        for k in range(1, steps + 1):
+            p = a + (b - a) * k / steps
+            hi, lo = max(hi, p), min(lo, p)
+            out.append((p, hi, lo))
+    return out
+
+
+def intrabar_prices(df: pd.DataFrame, events: list[StrategySignal], params: dict | None,
+                    compute_fn) -> dict[int, float]:
+    """Signal time -> first price inside the signal candle at which the
+    strategy already gives that signal. Events where the replay never finds
+    it (e.g. a warm-up difference on the shorter window) are left out and
+    fill at the close as before."""
+    if not events or compute_fn is None:
+        return {}
+    pos_by_ts = {int(ts.timestamp()): i for i, ts in enumerate(df.index)}
+    cols = {name: df.columns.get_loc(name) for name in ("high", "low", "close")}
+    out: dict[int, float] = {}
+    deadline = time.monotonic() + INTRABAR_BUDGET_S
+    for ev in events:
+        if time.monotonic() > deadline:
+            break
+        col = _EVENT_COLUMN.get(ev.type)
+        i = pos_by_ts.get(ev.time)
+        if col is None or i is None:
+            continue
+        window = df.iloc[max(0, i - INTRABAR_WINDOW + 1): i + 1].copy()
+        window[["high", "low", "close"]] = window[["high", "low", "close"]].astype(float)
+        bar = df.iloc[i]
+        for price, hi, lo in intrabar_path(float(bar["open"]), float(bar["high"]),
+                                           float(bar["low"]), float(bar["close"])):
+            window.iloc[-1, cols["high"]] = hi
+            window.iloc[-1, cols["low"]] = lo
+            window.iloc[-1, cols["close"]] = price
+            try:
+                sig = compute_fn(window.copy(), params)
+                hit = bool(sig[col].iloc[-1])
+            except Exception:  # noqa: BLE001 - a replay failure only loses the early fill
+                break
+            if hit:
+                out[ev.time] = price
+                break
+    return out
+
+
 def _fill_price(price: float, pct: float, side: str) -> float:
     # side "buy" fills worse (higher); "sell" fills worse (lower).
     return price * (1 + pct / 100) if side == "buy" else price * (1 - pct / 100)
@@ -55,10 +140,18 @@ def run_backtest(
     backtest_params: dict | None,
     signals: pd.DataFrame | None = None,
     strategy_name: str = DEFAULT_STRATEGY,
+    intrabar_fn=None,
 ) -> BacktestResult:
+    """`intrabar_fn(df, params) -> signals frame` turns on the in-candle
+    replay of fill_at "on_condition" (see intrabar_prices). Opt-in on
+    purpose: the optimisers run thousands of backtests and keep filling at
+    the close, so no stored or optimised number moves."""
     bp = {**DEFAULT_BACKTEST_PARAMS, **(backtest_params or {})}
     events, _final_position = confirmed_events(df, strategy_params, signals=signals, strategy_name=strategy_name)
     event_by_ts: dict[int, StrategySignal] = {s.time: s for s in events}
+    intrabar_by_ts: dict[int, float] = {}
+    if bp.get("fill_at") == "on_condition" and intrabar_fn is not None:
+        intrabar_by_ts = intrabar_prices(df, events, strategy_params, intrabar_fn)
 
     equity = bp["initial_capital"]
     peak_equity = equity
@@ -84,6 +177,8 @@ def run_backtest(
         Con "next_open" un segnale sull'ultima candela disponibile non ha
         una barra successiva su cui riempire: quel trade non e' eseguibile e
         va scartato, non riempito al prezzo di chiusura come ripiego."""
+        if bp.get("fill_at") == "on_condition":
+            return intrabar_by_ts.get(signal.time, signal.price)
         if bp.get("fill_at") != "next_open":
             return signal.price
         return next_open_by_ts.get(signal.time)
@@ -216,6 +311,7 @@ def run_backtest(
         # Dichiarato nel risultato: chi legge il rendimento deve poter sapere a
         # che prezzo si e' entrati senza risalire alla richiesta.
         fill_at=str(bp.get("fill_at", "signal_close")),
+        intrabar_fills=len(intrabar_by_ts) if intrabar_fn is not None and bp.get("fill_at") == "on_condition" else None,
         initial_capital=bp["initial_capital"],
         final_equity=equity,
         total_return_pct=(equity - bp["initial_capital"]) / bp["initial_capital"] * 100,

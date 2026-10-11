@@ -1,3 +1,14 @@
+# 2026-10-11 — Cinque segnalazioni di whitekobra del sito classico (Claude, a mano)
+
+Lorenzo: "risolvi le segnalazioni aperte" (prima aveva chiesto di farlo in automatico a ogni nuova segnalazione: c'e' gia' un'attivita' programmata sul suo account forelectric.it, non visibile da qui; non duplicata).
+
+- `c3262361` Lab: capitale iniziale predefinito 1000 (campo e valori di riserva nel frontend; il default del backend resta 10000).
+- `9c901532` Discover (menu laterale, linguetta, tasto mobile) -> `/onchain-app.html` in nuova scheda; prima puntava a `/sniper`, morto con il trading spento.
+- `229c5103` riga O/H/L/C + variazione sopra il grafico (`renderOhlc`, contenitore `.chart-top-left` che ora tiene anche la legenda indicatori).
+- `d46f02f7` YOUR TICKERS: rank per market cap da CoinPaprika `/v1/tickers` (`app/market_rank.py`, cache 6 h; CryptoRank vuole una chiave), campo `rank` in `/api/favorites/quotes`; ordinamento Saved / Day % / Rank nei due versi, salvato in localStorage.
+- `316219de` Signal Execution: `fill_at=on_condition` ora riempie dentro la candela del segnale (`backtest.intrabar_prices`): cammino stile TradingView (verde O-L-H-C, rossa O-H-L-C, 4 passi per tratto), strategia ricalcolata su 300 barre a ogni passo, tetto 8 s. **Solo con `intrabar_fn`** (Lab `/api/backtest/deep` e backtest del grafico): ottimizzatori e numeri storici invariati. Segnali che compaiono e spariscono dentro la candela non entrano. Il grafico ora riceve anche `fill_at` dall'override del Lab.
+- Non verificato in sandbox: PyPI irraggiungibile, test eseguiti con pandas_ta stubbato; la suite completa la fa girare `deploy-hetzner.yml` (verify prima del deploy). Velocita' del replay su strategie vere non misurata.
+
 # 2026-10-10 — Ricontrollo degli indicatori sui grafici — `seed-0266` (Claude, a mano)
 
 Lorenzo: "rianalizza tutte le rappresentazioni grafiche che abbiamo fatto con i nostri indicatori e verifica che siano corrette [...] alcuni mi risultano un po' schifo". L'app on-chain disegna solo candele (cap): il lavoro e' sui 18 livelli del sito classico (Analizza).
