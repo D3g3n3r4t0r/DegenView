@@ -25,6 +25,12 @@
       </div>
     </form>
 
+    <!-- Scorciatoia per la watchlist (segnalazione 227a6142): la coppia sul
+         grafico entra in YOUR TICKERS con un tocco; piena = gia' salvata. -->
+    <button type="button" id="watch-star-btn" class="watch-star-btn hidden" aria-pressed="false" title="Add this pair to the Watchlist">
+      <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg>
+    </button>
+
     <div id="chart-settings-group" class="chart-settings-group">
       <div class="toolbar-intervals">
         <select id="interval-primary" class="interval-select" title="Chart timeframe — higher timeframes for confluence are derived automatically"></select>

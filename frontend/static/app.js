@@ -7616,6 +7616,7 @@
 
   function render() {
     if (!state.data) return;
+    updateWatchStar();
     clearOverlays();
     updateMobileChartStrip();
 
@@ -8694,6 +8695,76 @@
     return FAV_AVATAR_COLORS[hash % FAV_AVATAR_COLORS.length];
   }
 
+  // Star next to the ticker field (board issue 227a6142): adds the pair on
+  // the chart to YOUR TICKERS, or removes it when it is already there.
+  function currentChartPair() {
+    if (!state.data || !state.data.symbol) return null;
+    return {
+      symbol: state.data.symbol,
+      asset_type: state.assetType,
+      exchange: state.assetType === "crypto" ? state.cryptoExchange : "mexc",
+    };
+  }
+
+  function favoriteForPair(pair) {
+    if (!pair) return null;
+    return (state.favorites || []).find((f) =>
+      f.symbol === pair.symbol && f.asset_type === pair.asset_type &&
+      (pair.asset_type !== "crypto" || f.exchange === pair.exchange)) || null;
+  }
+
+  function updateWatchStar() {
+    const btn = el("watch-star-btn");
+    if (!btn) return;
+    const pair = currentChartPair();
+    btn.classList.toggle("hidden", !pair);
+    if (!pair) return;
+    const saved = !!favoriteForPair(pair);
+    btn.classList.toggle("saved", saved);
+    btn.setAttribute("aria-pressed", saved ? "true" : "false");
+    btn.title = saved
+      ? `${shortSymbol(pair.symbol)} is in the Watchlist — click to remove it`
+      : `Add ${shortSymbol(pair.symbol)} to the Watchlist`;
+  }
+
+  // The error banner, without showError's "check the ticker" tail: here the
+  // ticker is fine.
+  function watchStarNotice(message) {
+    const banner = el("error-banner");
+    banner.textContent = message;
+    banner.classList.remove("hidden");
+  }
+
+  function bindWatchStar() {
+    const btn = el("watch-star-btn");
+    if (!btn) return;
+    btn.addEventListener("click", async () => {
+      const pair = currentChartPair();
+      if (!pair) return;
+      if (!state.user) {
+        watchStarNotice("Log in to save tickers to the Watchlist.");
+        return;
+      }
+      btn.disabled = true;
+      try {
+        const existing = favoriteForPair(pair);
+        const resp = existing
+          ? await fetch(`/api/favorites/${existing.id}`, { method: "DELETE" })
+          : await fetch("/api/favorites", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(pair),
+            });
+        if (!resp.ok) throw new Error(`Error ${resp.status}`);
+        await loadFavorites();
+      } catch (err) {
+        watchStarNotice(`Couldn't update the Watchlist: ${err.message || "network problem"}.`);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  }
+
   async function loadFavorites() {
     try {
       const resp = await fetch("/api/favorites");
@@ -8781,6 +8852,7 @@
   }
 
   function renderFavorites() {
+    updateWatchStar();
     const rows = el("favorite-rows");
     const empty = el("favorite-empty");
     const openIds = new Set(
@@ -8982,6 +9054,7 @@
 
   function bindFavorites() {
     bindFavoriteAutocomplete();
+    bindWatchStar();
 
     el("favorite-form").addEventListener("submit", async (e) => {
       e.preventDefault();
