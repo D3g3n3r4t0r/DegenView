@@ -1,3 +1,10 @@
+# 2026-10-12 — Altre due segnalazioni di whitekobra (Claude, a mano)
+
+Lorenzo: "risolvi le segnalazioni aperte". (Le cinque del 11/10 risultavano ancora aperte solo per una lettura in cache della bacheca: il deploy era andato.)
+
+- `3e8b3e78` domanda: la 1D crypto chiude a 00:00 UTC (02:00 italiane, 01:00 dal 25/10) su tutti e quattro gli exchange e i DEX; azioni alle 22:00. Risposta in `replies.json` + risoluzione.
+- `f3cdcc63` archivio manuale diverso dal Lab: il tasto Archive manda `data_start`/`data_end` del risultato a schermo e `intrabar`; `_run_archive_backtest` rifà sullo stesso intervallo (`_slice_to_window`), con i parametri passati da `StrategyParamsQuery` come fa `/api/backtest/deep`, segnali DEX solo-long e replay dentro la candela se il Lab lo aveva. Causa piu' probabile per le RSI+BB: dopo un'ottimizzazione il Lab mostra il backtest in campione (`pipeline.winner_bt` su `df_in`), l'archivio lo rifaceva su tutta la storia. Voci vecchie non ricalcolate.
+
 # 2026-10-11 — Cinque segnalazioni di whitekobra del sito classico (Claude, a mano)
 
 Lorenzo: "risolvi le segnalazioni aperte" (prima aveva chiesto di farlo in automatico a ogni nuova segnalazione: c'e' gia' un'attivita' programmata sul suo account forelectric.it, non visibile da qui; non duplicata).
