@@ -2739,5 +2739,17 @@
     "at": 1791739706,
     "summary": "Ora le due opzioni danno risultati diversi. Con 'As soon as the condition is met' il backtest ripercorre la candela del segnale ed entra o esce al primo prezzo in cui la condizione è vera, non alla chiusura.",
     "detail": "Causa: il backtest riempiva sempre alla chiusura della candela, con tutte e due le opzioni (decisione del 09/10, segnalazione 8bd7884c). Le candele storiche non hanno i tick interni, quindi il percorso è quello che assume TradingView: candela verde apertura→minimo→massimo→chiusura, rossa apertura→massimo→minimo→chiusura. A ogni passo la strategia viene ricalcolata con la candela in formazione. Limite dichiarato: i segnali che compaiono durante la candela e poi spariscono prima della chiusura (l'alert partirebbe comunque) non entrano nel backtest. L'etichetta 'on condition' accanto ai risultati dice quanti segnali sono stati riempiti dentro la candela. Vale per il backtest del Lab e per il grafico quando ci si applica quel backtest; l'ottimizzazione continua a riempire alla chiusura, per non cambiare i numeri già salvati."
+  },
+  "3e8b3e78": {
+    "status": "risolto",
+    "at": 1791756957,
+    "summary": "La candela 1D delle crypto chiude alle 02:00 ora italiana (01:00 con l'ora solare).",
+    "detail": "Sulle crypto la candela 1D chiude a mezzanotte UTC, cioè alle 02:00 ora italiana d'estate e all'01:00 d'inverno (dal 25 ottobre). Vale per tutti e quattro gli exchange del sito (MEXC, Binance, KuCoin, Kraken) e per i pool DEX. Sulle azioni la candela giornaliera è la seduta di borsa: chiude alle 16:00 di New York, cioè alle 22:00 italiane. Un alert impostato 'At candle close' su 1D parte quindi a quell'ora."
+  },
+  "f3cdcc63": {
+    "status": "risolto",
+    "at": 1791756957,
+    "summary": "Il salvataggio manuale in archivio ora rifà il backtest sulle stesse candele e con le stesse regole del risultato mostrato nel Lab, quindi i numeri coincidono.",
+    "detail": "Tre cause. 1) Dopo un'ottimizzazione il Lab mostra il backtest sulla parte di storia usata per la ricerca (in campione), mentre l'archivio lo ricalcolava su tutta la storia: con le RSI+BB, dove si arriva quasi sempre alla configurazione con una ricerca, è la causa più probabile. 2) Il periodo impostato nel Lab (date di inizio e fine) non arrivava all'archivio. 3) I parametri non inviati dalla pagina prendevano valori predefiniti diversi da quelli del Lab, e sui pool DEX mancava la regola solo-long. Ora il tasto Archive manda al server la finestra di candele del risultato a schermo, e il server la ripete con gli stessi parametri e la stessa esecuzione dei segnali. Le voci già salvate restano come sono: per allinearle vanno salvate di nuovo."
   }
 }

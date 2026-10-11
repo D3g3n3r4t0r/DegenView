@@ -3815,6 +3815,12 @@
         // salvata racconta un risultato che non e' quello che ha convinto a
         // salvarla.
         backtest_params: labBacktestParams(),
+        // The candles of the result on screen (board issue f3cdcc63): a period
+        // set in the Lab, or the in-sample slice an optimisation shows, was
+        // recomputed over the whole history and the archive disagreed.
+        data_start: labState.lastBt ? labState.lastBt.data_start : null,
+        data_end: labState.lastBt ? labState.lastBt.data_end : null,
+        intrabar: !labState.lastBt || labState.lastBt.intrabar_fills != null,
       }),
     });
     const status = labEl("lab-status");

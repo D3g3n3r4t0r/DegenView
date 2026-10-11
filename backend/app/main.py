@@ -7015,6 +7015,16 @@ async def analyze(
     )
 
 
+def _slice_to_window(df, start_ms: int | None, end_ms: int | None):
+    """Candles whose open time is within [start_ms, end_ms] (unix ms), the
+    data_start/data_end a backtest result reports."""
+    if df.empty:
+        return df
+    stamps = df.index.map(lambda ts: int(ts.timestamp() * 1000))
+    keep = [(start_ms is None or t >= start_ms) and (end_ms is None or t <= end_ms) for t in stamps]
+    return df[keep]
+
+
 def _slice_to_period(df, symbol: str, start_date: str | None, end_date: str | None):
     """Ritaglia la serie al periodo chiesto, PRIMA che venga usata.
 
@@ -7878,6 +7888,16 @@ class ArchiveIn(BaseModel):
     params: dict = {}
     backtest_params: dict = {}
     note: str = ""
+    # The window of the backtest the Lab was showing (unix ms, from its
+    # data_start/data_end). The server re-runs on exactly those candles:
+    # without it a period set in the Lab, or the in-sample slice an
+    # optimisation shows, was recomputed over the whole history and the
+    # archive told a different story (board issue f3cdcc63).
+    data_start: int | None = None
+    data_end: int | None = None
+    # Whether the shown result filled "on_condition" inside the candle
+    # (deep backtest) or at the close (optimizer output).
+    intrabar: bool = True
 
 
 class ArchiveNoteIn(BaseModel):
@@ -7887,7 +7907,8 @@ class ArchiveNoteIn(BaseModel):
 async def _run_archive_backtest(entry_id: str, symbol: str, asset_type: str,
                                 exchange: str, ltf_interval: str,
                                 strategy_name: str, params: dict,
-                                backtest_params: dict) -> None:
+                                backtest_params: dict, *, data_start: int | None = None,
+                                data_end: int | None = None, intrabar: bool = False) -> None:
     """Riempie la voce d'archivio con le metriche misurate dal server.
 
     I numeri non arrivano mai dal client: un archivio che accetta le metriche
@@ -7898,15 +7919,35 @@ async def _run_archive_backtest(entry_id: str, symbol: str, asset_type: str,
     try:
         provider = get_provider(asset_type, exchange)
         backtest_interval = backtest_interval_for(ltf_interval)
-        cache_key = (f"{asset_type}:{exchange}:{symbol.upper()}:backtest",
-                     backtest_interval, settings.backtest_candles)
-        df = await _fetch_cached(cache_key, provider, symbol, backtest_interval,
-                                 settings.backtest_candles)
+        if data_start:
+            # Same candles the Lab showed: fetched from its first one, then cut
+            # at its last one, so candles that arrived since do not count.
+            cache_key = (f"{asset_type}:{exchange}:{symbol.upper()}:backtest:since",
+                         backtest_interval, int(data_start))
+            df = await _fetch_cached_since(cache_key, provider, symbol, backtest_interval,
+                                           int(data_start))
+            df = _slice_to_window(df, data_start, data_end)
+        else:
+            cache_key = (f"{asset_type}:{exchange}:{symbol.upper()}:backtest",
+                         backtest_interval, settings.backtest_candles)
+            df = await _fetch_cached(cache_key, provider, symbol, backtest_interval,
+                                     settings.backtest_candles)
         if df.empty:
             archive_store.attach_error(entry_id, f"No data for {symbol}")
             return
+        # Same parameters as /api/backtest/deep, which reads them through
+        # StrategyParamsQuery and so fills every field the page did not send
+        # with that model's default, not the strategy's own.
+        params = {**StrategyParamsQuery().model_dump(), **(params or {})}
+        # Same signals too: long-only with the rug stop on a DEX pair, and
+        # the in-candle replay when the Lab result had it.
+        sig = None
+        if asset_type == "dex" and strategy_name in STRATEGY_REGISTRY:
+            sig = rug_stop(df, spot_only(STRATEGY_REGISTRY[strategy_name](df, params)))
         bt = await asyncio.to_thread(
-            partial(run_backtest, df, params, backtest_params, strategy_name=strategy_name)
+            partial(run_backtest, df, params, backtest_params, strategy_name=strategy_name,
+                    signals=sig,
+                    intrabar_fn=_intrabar_fn(asset_type, strategy_name) if intrabar else None)
         )
         archive_store.attach_result(entry_id, {
             "interval": backtest_interval,
@@ -7954,6 +7995,7 @@ async def add_archive_entry(
     _fire(_run_archive_backtest(
         entry["id"], symbol, req.asset_type, req.exchange, req.ltf_interval,
         req.strategy_name, req.params, req.backtest_params,
+        data_start=req.data_start, data_end=req.data_end, intrabar=req.intrabar,
     ))
     return entry
 

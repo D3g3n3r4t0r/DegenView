@@ -21,5 +21,11 @@
       "text": "Hai ragione, e grazie per lo screenshot — si vedeva benissimo cosa non andava: 'asse 0/5' fermo, log fermo a 0,2s, ma la ricerca (con Lorenzo, che e' la piu' pesante delle strategie) era davvero al lavoro sul primo asse. Il log scrive 'asse X: ...' solo a ricerca FINITA per quell'asse, e un asse con piu' bisezioni puo' metterci parecchi secondi prima di quella riga. Ora ogni dodici backtest arriva una riga in piu' nel log, e nel disegno compare un contorno tratteggiato che cresce nel frattempo — verificato dal vivo rifacendo girare la stessa identica combinazione (Lorenzo, ricerca stabile).",
       "created_at": 1788939042
     }
+  ],
+  "3e8b3e78": [
+    {
+      "text": "Sulle crypto la candela 1D chiude a mezzanotte UTC, cioè alle 02:00 ora italiana d'estate e all'01:00 d'inverno (dal 25 ottobre). Vale per tutti e quattro gli exchange del sito (MEXC, Binance, KuCoin, Kraken) e per i pool DEX. Sulle azioni la candela giornaliera è la seduta di borsa: chiude alle 16:00 di New York, cioè alle 22:00 italiane.",
+      "created_at": 1791756957
+    }
   ]
 }
