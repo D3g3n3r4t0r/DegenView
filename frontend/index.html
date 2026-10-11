@@ -105,7 +105,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 9l-5 5-4-4-4 4"/></svg>
           <span>Trading</span>
         </button>
-        <a class="sidenav-item" href="/sniper">
+        <a class="sidenav-item" href="/onchain-app.html" target="_blank" rel="noopener">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg>
           <span>Discover</span>
         </a>
@@ -380,7 +380,10 @@
         <div id="chart-wrap" class="chart-wrap hidden">
           <div id="main-chart" class="main-chart"><canvas id="draw-canvas"></canvas>
             <button type="button" id="overlay-remove-badge" class="overlay-remove-badge hidden" title="Remove this indicator">✕</button>
-            <div id="chart-indicator-legend" class="chart-indicator-legend"></div>
+            <div class="chart-top-left">
+              <div id="chart-ohlc" class="chart-ohlc hidden" aria-live="off"></div>
+              <div id="chart-indicator-legend" class="chart-indicator-legend"></div>
+            </div>
           </div>
           <div id="rsi-chart" class="sub-chart hidden"></div>
           <div id="macd-chart" class="sub-chart hidden"></div>
@@ -417,7 +420,7 @@
         <button type="button" class="tab" data-tab="alert">Alert</button>
         <button type="button" class="tab" data-tab="analisi">Analysis</button>
         <button type="button" class="tab hidden" id="balances-tab-btn" data-tab="saldi">Balances</button>
-        <a href="/sniper" class="tab tab-link" title="Opens Token Sniper in a separate app">Sniper ↗</a>
+        <a href="/onchain-app.html" target="_blank" rel="noopener" class="tab tab-link" title="Opens Discover (on-chain app) in a new tab">Discover ↗</a>
       </div>
 
       <!-- Strategia tab removed from UI but DOM elements kept for JS compatibility -->
@@ -510,7 +513,7 @@
           <details class="lab-bt-details">
             <summary>Capital &amp; fees</summary>
             <div class="lab-bt-params">
-              <label>Initial capital <input type="text" inputmode="decimal" id="lab-initial-capital" value="10000" /></label>
+              <label>Initial capital <input type="text" inputmode="decimal" id="lab-initial-capital" value="1000" /></label>
               <label>% equity/trade <input type="text" inputmode="decimal" id="lab-qty-pct" value="100" /></label>
               <label>Fee % <input type="text" inputmode="decimal" id="lab-commission" value="0" /></label>
               <label>Slippage % <input type="text" inputmode="decimal" id="lab-slippage" value="0" /></label>
@@ -630,6 +633,15 @@
             </div>
             <button type="submit" title="Add to watchlist">+</button>
           </form>
+
+          <!-- Ordinamento (segnalazione d46f02f7): variazione del giorno e
+               posizione per capitalizzazione, nei due versi. -->
+          <div class="wl-sort" id="favorite-sort" role="group" aria-label="Sort tickers">
+            <span class="wl-sort-label">Sort</span>
+            <button type="button" data-fav-sort="saved" class="wl-sort-btn active">Saved</button>
+            <button type="button" data-fav-sort="change" class="wl-sort-btn">Day %</button>
+            <button type="button" data-fav-sort="rank" class="wl-sort-btn" title="Global market-cap rank (CoinPaprika)">Rank</button>
+          </div>
 
           <!-- Le azioni sono spente (settings.stocks_enabled): un filtro fra
                due categorie quando ne esiste una sola non filtra niente. Gli
@@ -1415,10 +1427,10 @@
         <circle cx="5" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.6" fill="currentColor" stroke="none"/>
       </svg>More
     </button>
-    <a href="/sniper" class="mobile-nav-btn mobile-nav-link">
+    <a href="/onchain-app.html" target="_blank" rel="noopener" class="mobile-nav-btn mobile-nav-link">
       <svg class="mobile-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="3" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="21"/><line x1="3" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="21" y2="12"/>
-      </svg>Sniper
+      </svg>Discover
     </a>
   </nav>
   <div id="mobile-drawer-backdrop" class="mobile-drawer-backdrop hidden"></div>

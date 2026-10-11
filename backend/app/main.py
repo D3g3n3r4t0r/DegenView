@@ -52,6 +52,7 @@ from app import archive as archive_store
 from app import jobs as jobs_store
 from app import trading_log
 from app import favorites as favorites_store
+from app import market_rank
 from app import watchlist as watchlist_store
 from app.analysis.backtest import run_backtest
 from app.analysis.futures_math import DEFAULT_MAINTENANCE_MARGIN_RATE, liquidation_price
@@ -6803,6 +6804,8 @@ class FavoriteQuote(BaseModel):
     id: str
     price: float | None = None
     change_pct: float | None = None
+    # Global market-cap rank (CoinPaprika), crypto only: board issue d46f02f7.
+    rank: int | None = None
 
 
 @app.get("/api/favorites/quotes", response_model=list[FavoriteQuote])
@@ -6812,8 +6815,15 @@ async def get_favorite_quotes(user: User = Depends(auth.get_current_user)) -> li
     hiccup) comes back with null price/change rather than failing the
     whole batch — the frontend just shows a dash for that row."""
     entries = favorites_store.list_entries(owner_id=user.id)
+    ranks = await market_rank.ranks() if any(e.asset_type != "stock" for e in entries) else {}
 
     async def quote_for(entry: FavoriteEntry) -> FavoriteQuote:
+        rank = market_rank.rank_for(entry.symbol, ranks) if entry.asset_type != "stock" else None
+        quote = await _price_for(entry)
+        quote.rank = rank
+        return quote
+
+    async def _price_for(entry: FavoriteEntry) -> FavoriteQuote:
         provider = get_provider(entry.asset_type, entry.exchange)
 
         try:
@@ -6831,6 +6841,18 @@ async def get_favorite_quotes(user: User = Depends(auth.get_current_user)) -> li
         return FavoriteQuote(id=entry.id, price=price, change_pct=change_pct)
 
     return list(await asyncio.gather(*(quote_for(e) for e in entries)))
+
+
+def _intrabar_fn(asset_type: str, strategy_name: str):
+    """Signal function for the in-candle replay of fill_at "on_condition"
+    (board issue 316219de): the same signals the backtest uses, DEX wrappers
+    included. None for strategies outside the registry (Pine scripts)."""
+    fn = STRATEGY_REGISTRY.get(strategy_name)
+    if fn is None:
+        return None
+    if asset_type == "dex":
+        return lambda d, p: rug_stop(d, spot_only(fn(d, p)))
+    return fn
 
 
 @app.get("/api/analyze", response_model=AnalysisResponse)
@@ -6928,6 +6950,7 @@ async def analyze(
                 backtest_params_dict,
                 strategy_name=strategy_name,
                 signals=sig,
+                intrabar_fn=_intrabar_fn(asset_type, strategy_name),
             )
             backtests[tf_key] = result.model_copy(update={"interval": intervals[tf_key]})
         else:
@@ -7077,6 +7100,7 @@ async def deep_backtest(
         backtest_params.model_dump(),
         strategy_name=strategy_name,
         signals=sig,
+        intrabar_fn=_intrabar_fn(asset_type, strategy_name),
     )
     return result.model_copy(update={"interval": backtest_interval})
 

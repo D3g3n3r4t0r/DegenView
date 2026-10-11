@@ -2709,5 +2709,35 @@
     "at": 1791663722,
     "summary": "Due cause misurate, nessun errore di calcolo: il backtest legge più storia del grafico, e l'ultima posizione aperta ha la freccia ma non è ancora un trade. Ora sotto 'Strategy markers on chart' c'è una riga che riconcilia i due numeri.",
     "detail": "Test su MEXC: BTCUSDT 1d 55 frecce = 55 trade; SOLUSDT 4h 67 frecce, 105 trade (il backtest profondo usa 5000 candele, il grafico 3000: 70 trade cadono nel grafico, 35 prima); ETHUSDT 1h 69 contro 110. Sulle stesse candele frecce e trade coincidono sempre, tranne un ingresso finale ancora aperto (+1 freccia). Nuovo test tests/test_markers_vs_trades.py. La nota ora dice: 'N entries on the chart · backtest M trades · X of them before the chart's first candle · the last entry is still open'. Nessun risultato storico cambia."
+  },
+  "c3262361": {
+    "status": "risolto",
+    "at": 1791739706,
+    "summary": "Nel Lab il capitale iniziale predefinito ora è 1000 invece di 10000.",
+    "detail": "Cambiato il valore del campo Initial capital e i valori di riserva usati quando il campo è vuoto: backtest del Lab, ottimizzazione, backtest mostrato sul grafico e curva di equity."
+  },
+  "9c901532": {
+    "status": "risolto",
+    "at": 1791739706,
+    "summary": "Discover ora apre l'app on-chain (/onchain-app.html) in una nuova scheda del browser.",
+    "detail": "Prima puntava a /sniper, che con il trading spento non si apre più. Corretti il menu laterale, la linguetta in alto (ora 'Discover ↗') e il tasto in basso su telefono, che diceva ancora 'Sniper'."
+  },
+  "229c5103": {
+    "status": "risolto",
+    "at": 1791739706,
+    "summary": "Passando il cursore su una candela, in alto a sinistra nel grafico compaiono apertura, massimo, minimo e chiusura, con la variazione rispetto alla chiusura precedente.",
+    "detail": "Senza cursore sul grafico la riga mostra l'ultima candela e segue il prezzo dal vivo. I decimali seguono la scala del prezzo, così anche le monete da 0,00001 hanno valori leggibili. Colore verde o rosso secondo la candela."
+  },
+  "d46f02f7": {
+    "status": "risolto",
+    "at": 1791739706,
+    "summary": "In YOUR TICKERS ogni crypto mostra la sua posizione per capitalizzazione (#1, #2...), e si può ordinare per variazione del giorno e per posizione, nei due versi.",
+    "detail": "La posizione viene da CoinPaprika: classifica globale per market cap, come CryptoRank, la cui API richiede una chiave a pagamento che il server non ha. Viene aggiornata ogni 6 ore. Tasti Saved / Day % / Rank sopra la lista: il primo tocco mette in cima il migliore (rialzo maggiore, #1), il secondo inverte il verso. L'ordinamento scelto resta salvato nel browser. Le azioni non hanno posizione."
+  },
+  "316219de": {
+    "status": "risolto",
+    "at": 1791739706,
+    "summary": "Ora le due opzioni danno risultati diversi. Con 'As soon as the condition is met' il backtest ripercorre la candela del segnale ed entra o esce al primo prezzo in cui la condizione è vera, non alla chiusura.",
+    "detail": "Causa: il backtest riempiva sempre alla chiusura della candela, con tutte e due le opzioni (decisione del 09/10, segnalazione 8bd7884c). Le candele storiche non hanno i tick interni, quindi il percorso è quello che assume TradingView: candela verde apertura→minimo→massimo→chiusura, rossa apertura→massimo→minimo→chiusura. A ogni passo la strategia viene ricalcolata con la candela in formazione. Limite dichiarato: i segnali che compaiono durante la candela e poi spariscono prima della chiusura (l'alert partirebbe comunque) non entrano nel backtest. L'etichetta 'on condition' accanto ai risultati dice quanti segnali sono stati riempiti dentro la candela. Vale per il backtest del Lab e per il grafico quando ci si applica quel backtest; l'ottimizzazione continua a riempire alla chiusura, per non cambiare i numeri già salvati."
   }
 }

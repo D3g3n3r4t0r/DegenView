@@ -1179,7 +1179,7 @@
     await withAsyncButton(btn, async () => {
       const strategyName = el("active-strategy-select").value;
       const backtestParams = new URLSearchParams({
-        initial_capital: "10000", qty_pct_of_equity: "100",
+        initial_capital: "1000", qty_pct_of_equity: "100",
         commission_pct: "0", slippage_pct: "0",
         stop_loss_pct: "0", take_profit_pct: "0",
       });
@@ -4904,9 +4904,57 @@
   // this instead of recomputing its own coordinates.
   let lastCrosshairPoint = null;
 
+  // Candle values under the cursor (board issue 229c5103): O/H/L/C plus the
+  // change from the previous close, TradingView-style. With the cursor off
+  // the chart the row shows the last candle, so it is never empty.
+  let ohlcCandles = [];
+  let ohlcIndex = new Map();
+  let ohlcHoverTime = null;
+
+  function setOhlcCandles(candles) {
+    ohlcCandles = candles || [];
+    ohlcIndex = new Map(ohlcCandles.map((c, i) => [c.time, i]));
+    renderOhlc();
+  }
+
+  function noteOhlcCandle(candles) {
+    // The live feed replaces or appends the last candle of the same array.
+    if (candles !== ohlcCandles || !candles.length) return;
+    ohlcIndex.set(candles[candles.length - 1].time, candles.length - 1);
+    if (ohlcHoverTime === null) renderOhlc();
+  }
+
+  function renderOhlc() {
+    const box = el("chart-ohlc");
+    if (!box) return;
+    if (!ohlcCandles.length) {
+      box.classList.add("hidden");
+      return;
+    }
+    let i = ohlcHoverTime !== null ? ohlcIndex.get(ohlcHoverTime) : undefined;
+    if (i === undefined) i = ohlcCandles.length - 1;
+    const c = ohlcCandles[i];
+    const prev = i > 0 ? ohlcCandles[i - 1].close : c.open;
+    const precision = pricePrecisionFor(c.close).precision;
+    const f = (v) => Number(v).toFixed(precision);
+    const diff = c.close - prev;
+    const pct = prev ? (diff / prev) * 100 : 0;
+    const cls = c.close >= c.open ? "up" : "down";
+    const sign = diff >= 0 ? "+" : "";
+    box.innerHTML =
+      `<span>O <b class="${cls}">${f(c.open)}</b></span>` +
+      `<span>H <b class="${cls}">${f(c.high)}</b></span>` +
+      `<span>L <b class="${cls}">${f(c.low)}</b></span>` +
+      `<span>C <b class="${cls}">${f(c.close)}</b></span>` +
+      `<span class="${diff >= 0 ? "up" : "down"}">${sign}${f(diff)} (${sign}${pct.toFixed(2)}%)</span>`;
+    box.classList.remove("hidden");
+  }
+
   function handleCrosshairMove(param) {
     lastCrosshairPoint =
       param.point && param.time !== undefined ? { x: param.point.x, y: param.point.y, time: param.time } : null;
+    ohlcHoverTime = lastCrosshairPoint ? param.time : null;
+    renderOhlc();
     updateGhost();
     updateHandleDrag();
     updateDragPreview();
@@ -7576,6 +7624,7 @@
     // fixed 2-decimal price format rounds small prices straight to 0.00.
     candleSeries.applyOptions({ priceFormat: pricePrecisionFor(candles[candles.length - 1].close) });
     candleSeries.setData(candles.map((c) => ({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close })));
+    setOhlcCandles(candles);
     addSessionShading(candles, el("interval-primary").value);
 
     // --- price-scale indicator overlays ---
@@ -8260,10 +8309,13 @@
     // compresi — non una sua versione ripulita: e' la segnalazione
     // "i trade continuano a non essere correttamente applicati".
     const bp = state.chartBacktestOverride;
-    params.set("initial_capital", String(bp ? bp.initial_capital : 10000));
+    params.set("initial_capital", String(bp ? bp.initial_capital : 1000));
     params.set("qty_pct_of_equity", String(bp ? bp.qty_pct_of_equity : 100));
     params.set("commission_pct", String(bp ? bp.commission_pct : 0));
     params.set("slippage_pct", String(bp ? bp.slippage_pct : 0));
+    // Same fill rule as the Lab run it came from (316219de): without it the
+    // chart quietly fell back to the candle close.
+    if (bp && bp.fill_at) params.set("fill_at", bp.fill_at);
     params.set("stop_loss_pct", "0");
     params.set("take_profit_pct", "0");
     params.set("strategy_name", strategyName);
@@ -8374,6 +8426,7 @@
     } else {
       return; // out-of-order/stale tick
     }
+    noteOhlcCandle(candles);
     if (timeframe === state.activeTimeframe) {
       try {
         candleSeries.update(candle);
@@ -8663,6 +8716,64 @@
     renderFavorites();
   }
 
+  // YOUR TICKERS ordering (board issue d46f02f7): saved order, day % change
+  // or market-cap rank, each in both directions. A second tap on the active
+  // key flips the direction. Rows without a value always go last.
+  const FAV_SORT_KEY = "favoriteSort";
+  function loadFavoriteSort() {
+    try {
+      const v = JSON.parse(localStorage.getItem(FAV_SORT_KEY) || "null");
+      if (v && ["saved", "change", "rank"].includes(v.key) && (v.dir === 1 || v.dir === -1)) return v;
+    } catch { /* storage unavailable */ }
+    return { key: "saved", dir: 1 };
+  }
+  let favoriteSort = loadFavoriteSort();
+
+  function sortFavorites(items) {
+    const { key, dir } = favoriteSort;
+    if (key === "saved") return items;
+    const val = (f) => {
+      const q = state.favoriteQuotes[f.id];
+      const v = q ? (key === "rank" ? q.rank : q.change_pct) : null;
+      return v == null || !Number.isFinite(v) ? null : v;
+    };
+    return items
+      .map((f, i) => ({ f, i, v: val(f) }))
+      .sort((a, b) => {
+        if (a.v === null && b.v === null) return a.i - b.i;
+        if (a.v === null) return 1;
+        if (b.v === null) return -1;
+        return (a.v - b.v) * dir || a.i - b.i;
+      })
+      .map((x) => x.f);
+  }
+
+  function renderFavoriteSortButtons() {
+    document.querySelectorAll("[data-fav-sort]").forEach((btn) => {
+      const key = btn.dataset.favSort;
+      const on = key === favoriteSort.key;
+      btn.classList.toggle("active", on);
+      const label = key === "saved" ? "Saved" : key === "change" ? "Day %" : "Rank";
+      btn.textContent = on && key !== "saved" ? `${label} ${favoriteSort.dir === 1 ? "↑" : "↓"}` : label;
+    });
+  }
+
+  function bindFavoriteSort() {
+    document.querySelectorAll("[data-fav-sort]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const key = btn.dataset.favSort;
+        if (key === favoriteSort.key && key !== "saved") {
+          favoriteSort = { key, dir: -favoriteSort.dir };
+        } else {
+          // First tap: best first — biggest gain, rank #1.
+          favoriteSort = { key, dir: key === "change" ? -1 : 1 };
+        }
+        try { localStorage.setItem(FAV_SORT_KEY, JSON.stringify(favoriteSort)); } catch { /* ignore */ }
+        renderFavorites();
+      });
+    });
+  }
+
   function renderFavorites() {
     const rows = el("favorite-rows");
     const empty = el("favorite-empty");
@@ -8674,9 +8785,10 @@
     state.autoOpenFavoriteId = null; // un solo giro: non riaprirlo ad ogni refresh successivo
     rows.innerHTML = "";
 
-    const items = state.favorites.filter(
+    const items = sortFavorites(state.favorites.filter(
       (f) => state.favoriteFilter === "all" || f.asset_type === state.favoriteFilter
-    );
+    ));
+    renderFavoriteSortButtons();
 
     el("favorites-count").textContent = state.favorites.length
       ? `${state.favorites.length} saved`
@@ -8713,6 +8825,14 @@
       sym.textContent = shortSymbol(entry.symbol);
       sym.title = entry.symbol;
       symRow.appendChild(sym);
+      const rankQ = state.favoriteQuotes[entry.id];
+      if (rankQ && rankQ.rank != null) {
+        const rk = document.createElement("span");
+        rk.className = "wl-rank";
+        rk.title = "Global market-cap rank (CoinPaprika)";
+        rk.textContent = `#${rankQ.rank}`;
+        symRow.appendChild(rk);
+      }
       const badge = document.createElement("span");
       badge.className = "wl-badge";
       badge.textContent = entry.asset_type === "crypto" ? entry.exchange : "stocks";
@@ -8887,6 +9007,8 @@
       if (created?.id) state.autoOpenFavoriteId = created.id;
       loadFavorites();
     });
+
+    bindFavoriteSort();
 
     document.querySelectorAll("#favorite-filter [data-favorite-filter]").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -10721,7 +10843,7 @@
   // ripulita.
   function labBacktestParams() {
     return {
-      initial_capital: Number(inputNumber(labEl("lab-initial-capital"), 10000, { min: 1 })),
+      initial_capital: Number(inputNumber(labEl("lab-initial-capital"), 1000, { min: 1 })),
       qty_pct_of_equity: Number(inputNumber(labEl("lab-qty-pct"), 100, { min: 1, max: 100 })),
       commission_pct: Number(inputNumber(labEl("lab-commission"), 0, { min: 0 })),
       slippage_pct: Number(inputNumber(labEl("lab-slippage"), 0, { min: 0 })),
@@ -10743,7 +10865,7 @@
     params.set("exchange", exchange);
     params.set("ltf_interval", labState.tf);
     params.set("strategy_name", strategyName);
-    params.set("initial_capital", inputNumber(labEl("lab-initial-capital"), 10000, { min: 1 }));
+    params.set("initial_capital", inputNumber(labEl("lab-initial-capital"), 1000, { min: 1 }));
     params.set("qty_pct_of_equity", inputNumber(labEl("lab-qty-pct"), 100, { min: 1, max: 100 }));
     params.set("commission_pct", inputNumber(labEl("lab-commission"), 0, { min: 0 }));
     params.set("slippage_pct", inputNumber(labEl("lab-slippage"), 0, { min: 0 }));
@@ -11178,7 +11300,7 @@
     retEl.className = "lab-return-val" + (isPos ? "" : " neg");
 
     const finalEquity = bt.equity_curve.length ? bt.equity_curve[bt.equity_curve.length - 1][1] : 0;
-    const initCap = parseFloat(labEl("lab-initial-capital").value) || 10000;
+    const initCap = parseFloat(labEl("lab-initial-capital").value) || 1000;
     const sideEl = labEl("lab-return-side");
     sideEl.innerHTML = `final equity<br/><b class="${isPos ? "" : "neg"}">${Math.round(finalEquity).toLocaleString("en-US")} $</b><br/>from ${initCap.toLocaleString("en-US")} $`;
 
@@ -11201,7 +11323,7 @@
     const fillTag = fillAt === "next_open"
       ? ' · <span class="fill-tag fill-real" title="Entries and exits filled at the open of the candle after the signal: the price you can actually get.">next open</span>'
       : fillAt === "on_condition"
-      ? ' · <span class="fill-tag fill-real" title="Alert as soon as the condition is met. The backtest only sees whole candles, so it fills at the close of the signal candle.">on condition</span>'
+      ? ` · <span class="fill-tag fill-real" title="Filled where the condition first turns true inside the signal candle, replaying the candle along open → low → high → close (green) or open → high → low → close (red), as TradingView does.${bt.intrabar_fills != null ? ` ${bt.intrabar_fills} signals filled inside the candle, the rest at the close.` : ""}">on condition</span>`
       : ' · <span class="fill-tag fill-real" title="Entries and exits filled at the close of the signal candle: the same moment the live alert fires.">candle close</span>';
 
     labEl("lab-result-meta").innerHTML = `<button type="button" class="lab-trades-link">${bt.num_trades} trades</button> · ${bt.interval || labState.tf}${dateRange}${fillTag}`;
@@ -11569,12 +11691,12 @@
     });
 
     labEl("lab-run-btn").addEventListener("click", runLabBacktest);
-    // Two ways for the alert to fire (segnalazione 8bd7884c). The backtest
-    // only has whole candles, so it fills at the signal candle's close in both.
+    // Two ways for the alert to fire (segnalazione 8bd7884c), and since
+    // 316219de two different fills in the backtest too.
     labEl("lab-fill-at")?.addEventListener("change", (ev) => {
       const hint = labEl("lab-fill-hint");
       if (hint) hint.textContent = ev.target.value === "on_condition"
-        ? "The alert fires as soon as the condition is met on the forming candle, and can still vanish before the close; the backtest only sees whole candles and fills at the close."
+        ? "The alert fires as soon as the condition is met on the forming candle. The backtest replays each signal candle (open → low → high → close if green, open → high → low → close if red) and fills at the first price where the condition is true. Signals that appear and then vanish before the close are not in the backtest."
         : "The alert fires when the timeframe candle closes; the backtest fills at that close.";
     });
     labEl("lab-optimize-btn").addEventListener("click", runLabOptimize);
