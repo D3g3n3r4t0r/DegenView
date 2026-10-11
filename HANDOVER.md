@@ -1,3 +1,7 @@
+# 2026-10-12 — Stella "aggiungi alla watchlist" nella barra — `227a6142` (Claude, a mano)
+
+Lorenzo: "Risolvi la segnalazione aperta". Bottone `#watch-star-btn` fra ricerca e timeframe: aggiunge/toglie la coppia del grafico da YOUR TICKERS (`updateWatchStar`, chiamata da `render()` e `renderFavorites()`). Solo barra desktop (su mobile `.toolbar` e' nascosta). Nota: WebFetch della bacheca a volte restituisce una copia vecchia; un parametro nuovo nell'URL (`?fresh=...`) la aggira.
+
 # 2026-10-12 — Altre due segnalazioni di whitekobra (Claude, a mano)
 
 Lorenzo: "risolvi le segnalazioni aperte". (Le cinque del 11/10 risultavano ancora aperte solo per una lettura in cache della bacheca: il deploy era andato.)

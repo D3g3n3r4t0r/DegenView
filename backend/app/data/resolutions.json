@@ -2751,5 +2751,11 @@
     "at": 1791756957,
     "summary": "Il salvataggio manuale in archivio ora rifà il backtest sulle stesse candele e con le stesse regole del risultato mostrato nel Lab, quindi i numeri coincidono.",
     "detail": "Tre cause. 1) Dopo un'ottimizzazione il Lab mostra il backtest sulla parte di storia usata per la ricerca (in campione), mentre l'archivio lo ricalcolava su tutta la storia: con le RSI+BB, dove si arriva quasi sempre alla configurazione con una ricerca, è la causa più probabile. 2) Il periodo impostato nel Lab (date di inizio e fine) non arrivava all'archivio. 3) I parametri non inviati dalla pagina prendevano valori predefiniti diversi da quelli del Lab, e sui pool DEX mancava la regola solo-long. Ora il tasto Archive manda al server la finestra di candele del risultato a schermo, e il server la ripete con gli stessi parametri e la stessa esecuzione dei segnali. Le voci già salvate restano come sono: per allinearle vanno salvate di nuovo."
+  },
+  "227a6142": {
+    "status": "risolto",
+    "at": 1791758179,
+    "summary": "Nella barra in alto, fra il campo della coppia e il menu del timeframe, c'è una stella: un tocco aggiunge alla Watchlist la coppia sul grafico.",
+    "detail": "La stella diventa piena e gialla quando la coppia è già in YOUR TICKERS; toccarla di nuovo la toglie. Usa lo stesso exchange del grafico. Senza accesso al sito compare l'avviso di fare login. Compare solo con un grafico caricato, ed è nella barra del computer: su telefono la barra in alto non c'è."
   }
 }

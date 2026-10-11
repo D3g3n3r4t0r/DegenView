@@ -5840,3 +5840,19 @@ html.embed-chart, html.embed-chart body, html.embed-chart .chart-area { backgrou
   background: var(--bg-panel); color: var(--ink-dim);
 }
 .wl-sort-btn.active { color: var(--ink); border-color: var(--ink-dim); background: var(--bg-raised); }
+
+/* Watchlist star next to the ticker field (board issue 227a6142). */
+.watch-star-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0; width: var(--ctl-h, 34px); height: var(--ctl-h, 34px);
+  box-sizing: border-box; padding: 0; cursor: pointer;
+  border: 1px solid transparent; border-radius: 6px;
+  background: var(--bg-raised); color: var(--ink-dim);
+}
+.watch-star-btn:hover { border-color: var(--border); }
+.watch-star-btn svg { fill: none; }
+.watch-star-btn:hover { color: var(--ink); }
+.watch-star-btn.saved { color: #e0a800; }
+.watch-star-btn.saved svg { fill: currentColor; }
+.watch-star-btn:disabled { opacity: .5; cursor: wait; }
+.watch-star-btn.hidden { display: none; }
