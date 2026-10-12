@@ -5377,6 +5377,18 @@
     let price = candleSeries ? candleSeries.coordinateToPrice(y) : null;
     if (time === null || price === null) return null;
     let t = time;
+    // The measure reads the swing it is put on: the nearest high or low of
+    // the bars around the pointer, whatever the magnet says.
+    const measuring = drawState.tool === "range" || (handleDragState && handleDragState.drawing.type === "range");
+    if (measuring && ohlcCandles.length) {
+      const idx = timeMapper.nearestIndex(mainChart.timeScale().coordinateToLogical(x));
+      if (idx !== null && idx >= 0 && idx < ohlcCandles.length) {
+        const near = ohlcCandles.slice(Math.max(0, idx - 2), idx + 3);
+        const hit = DE.pickExtreme(near, y, priceToY, 40);
+        if (hit) return { time: hit.time, price: hit.price };
+      }
+      return { time, price };
+    }
     if (drawState.magnet && ohlcCandles.length) {
       const logical = mainChart.timeScale().coordinateToLogical(x);
       const idx = timeMapper.nearestIndex(logical);
@@ -5579,6 +5591,8 @@
         state: drawState,
         px: (time, price) => ({ x: timeToX(time), y: priceToY(price) }),
         logical: (time) => timeMapper.timeToLogical(time),
+        candleAt: (time) => ohlcCandles.find((c) => c.time === time) || null,
+        lastCandles: (n) => ohlcCandles.slice(-n),
         bars: () => timeMapper.size,
         pane: () => paneSize(),
         chart: () => mainChart,

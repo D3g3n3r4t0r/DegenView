@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0270", "Misura del prezzo: niente rettangolo, deve proiettare i punti che legge",
+     "Lorenzo, 12/10: 'la funzione di misurare prezzo non deve figurare un rettangolo ma proiettare i punti che legge in modo intelligente'.",
+     "media"),
     ("seed-0269", "Strumenti di disegno: spariscono o scattano",
      "Lorenzo, 12/10: 'i tool di disegno non funzionano bene spesso scompaiono o sono scattosi, devi analizzare nel dettaglio ogni funzione di disegno e creare un piano per renderli perfetti', poi 'voglio dei canvas moderni, colori etc' e 'procedi e falle tutte, e verifica ogni cosa'.",
      "alta"),
