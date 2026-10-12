@@ -67,6 +67,11 @@ class Settings(BaseSettings):
     # Lorenzo, 08/10: "aggiungi un check oltre che alle 22, anche alle 11.35".
     onchain_nightly_extra_times: str = "11:35"
     onchain_nightly_max_hours: float = 2.0
+    # Lorenzo, 12/10: "la nostra selezione non e' molto popolata, aggiungi
+    # controllo ogni ora". A run at every whole hour besides the ones above;
+    # those runs get onchain_hourly_max_minutes, the main one keeps max_hours.
+    onchain_nightly_hourly: bool = True
+    onchain_hourly_max_minutes: float = 45.0
     # A new value runs one extra run as soon as the server starts (so after
     # the deploy that sets it), once: the key is remembered in the nightly
     # state. Lorenzo, 08/10: "forza il giro ora".

@@ -27,6 +27,8 @@ def _fresh(monkeypatch, tmp_path):
     monkeypatch.setattr(settings, "onchain_nightly_extra_times", "")
     monkeypatch.setattr(settings, "onchain_nightly_max_hours", 2.0)
     monkeypatch.setattr(settings, "onchain_nightly_force", "")
+    monkeypatch.setattr(settings, "onchain_nightly_hourly", False)
+    monkeypatch.setattr(nightly, "_host", lambda: "c1")
     nightly.reset_for_tests()
     yield
     nightly.reset_for_tests()
@@ -269,3 +271,65 @@ def test_forced_run_starts_at_boot_once(monkeypatch):
     assert nightly.forced_due(nightly._state) is None
     # tonight's run is still due at 22:00
     assert nightly.due_slot(ts(2026, 10, 8, 22, 1), nightly._state) == ts(2026, 10, 8, 22)
+
+
+# Lorenzo, 12/10: "la nostra selezione non e' molto popolata, aggiungi
+# controllo ogni ora" — and the 22:00 run given up after three deploys.
+def test_hourly_runs_every_whole_hour(monkeypatch):
+    monkeypatch.setattr(settings, "onchain_nightly_hourly", True)
+    monkeypatch.setattr(settings, "onchain_nightly_extra_times", "11:35")
+    times = nightly.run_times()
+    assert {(h, 0) for h in range(24)} <= set(times) and (11, 35) in times
+    assert nightly.next_run(ts(2026, 10, 13, 9, 10)) == ts(2026, 10, 13, 10)
+    assert nightly.is_main_run(ts(2026, 10, 13, 22)) and nightly.is_main_run(ts(2026, 10, 13, 11, 35))
+    assert not nightly.is_main_run(ts(2026, 10, 13, 10))
+    monkeypatch.setattr(settings, "onchain_hourly_max_minutes", 45.0)
+    assert nightly.window_s(ts(2026, 10, 13, 10)) == 45 * 60
+    assert nightly.window_s(ts(2026, 10, 13, 22)) == 2 * 3600
+
+
+def test_a_deploy_does_not_count_as_a_failed_attempt():
+    slot = ts(2026, 10, 12, 22)
+    nightly._state.update(slot=slot, attempts=3, attempt_host="old-container", gave_up=slot)
+    assert nightly.forgive_redeploy("new-container")
+    assert nightly._state["attempts"] == 2 and "gave_up" not in nightly._state
+    assert nightly.due_slot(ts(2026, 10, 12, 23, 50), nightly._state) == slot
+
+
+def test_a_crash_in_the_same_container_still_counts():
+    slot = ts(2026, 10, 12, 22)
+    nightly._state.update(slot=slot, attempts=3, attempt_host="c1")
+    assert not nightly.forgive_redeploy("c1")
+    assert nightly.due_slot(ts(2026, 10, 12, 23, 50), nightly._state) is None
+
+
+def test_hourly_run_is_quiet_unless_the_top_changed(monkeypatch):
+    monkeypatch.setattr(settings, "onchain_nightly_hourly", True)
+    sent = []
+
+    async def send(text):
+        sent.append(text)
+
+    class Quiet:
+        def __init__(self, client): ...
+        async def tick(self): ...
+        def drained(self): return True
+        def backlog(self): return {}
+        async def settle(self, timeout): ...
+        def counters(self): return {"discovered": 0, "skipped": 0, "examined": 0, "analysed": 0}
+        async def layers(self): return 0
+        async def outcomes(self): ...
+        def next_recheck(self, keys): return None
+        async def recheck(self, key): return "done"
+        async def studies(self): return 0
+        def deepseek_calls(self, a, b): return 0
+
+    monkeypatch.setattr(nightly, "_duels", lambda top, now: asyncio.sleep(0, result=0))
+    clock = Clock(ts(2026, 10, 13, 10))
+    asyncio.run(nightly.run_night(ts(2026, 10, 13, 10), lambda: [], steps_factory=Quiet,
+                                  clock=clock, sleep=clock.sleep, send=send))
+    assert sent == []
+    clock2 = Clock(ts(2026, 10, 13, 22))
+    asyncio.run(nightly.run_night(ts(2026, 10, 13, 22), lambda: [], steps_factory=Quiet,
+                                  clock=clock2, sleep=clock2.sleep, send=send))
+    assert len(sent) == 1

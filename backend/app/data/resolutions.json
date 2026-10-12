@@ -2817,5 +2817,11 @@
     "at": 1791841624,
     "summary": "La chat degli alert riceve solo i segnali delle strategie (con alert di prezzo e ordini). Ottimizzazioni, nuove gemme, listing e avvisi del monitoraggio vanno nella chat principale, e mai in una chat impostata come chat degli alert.",
     "detail": "Prima la chat degli alert riceveva per scelta del 10/10 anche listing e gemme; l'ottimizzazione andava nella chat principale, quindi arrivava nel gruppo perche' la chat principale di un account era lo stesso gruppo. Ora: segnali di strategia, alert di prezzo e ordini -> chat degli alert; ottimizzazione conclusa o fallita, gemme in classifica, nuovi listing, 'dati fermi', 'exchange non risponde', 'crediti esauriti', 'errore monitoraggio' -> chat principale. Una chat che un qualsiasi account ha impostato come chat degli alert non riceve mai queste notifiche, anche se e' la chat principale di qualcuno: in quel caso semplicemente non partono. Per riceverle altrove basta mettere come chat principale la chat privata con il bot."
+  },
+  "seed-0274": {
+    "status": "risolto",
+    "at": 1791842377,
+    "summary": "La ricerca delle gemme gira ogni ora (45 minuti al massimo per giro; quella delle 22:00 resta di 2 ore), e un deploy non conta piu' come tentativo fallito.",
+    "detail": "La ricerca delle 22:00 non era fallita: fra le 22 e mezzanotte ci sono stati tre deploy, e ogni riavvio del server veniva contato come un tentativo fallito, perche' il container viene spento dopo 10 secondi e la parte di codice che doveva scalare il conteggio non faceva in tempo a girare. Al terzo deploy la ricerca si e' arresa. Ora ogni tentativo ricorda il container in cui e' partito: se al riavvio il container e' nuovo (un deploy) il tentativo non conta; se e' lo stesso (un crash riavviato da Docker) conta come prima. Giri orari: a ogni ora piena, stessi passi della sera, finestra di 45 minuti; mandano il riepilogo su Telegram solo se la Top e' cambiata (entrati o usciti), mentre quelli delle 22:00 e delle 11:35 lo mandano sempre. Costo: piu' chiamate a API e DeepSeek nell'arco della giornata."
   }
 }
