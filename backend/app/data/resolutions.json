@@ -2778,8 +2778,8 @@
   },
   "seed-0270": {
     "status": "risolto",
-    "at": 1791800334,
-    "summary": "La misura non disegna più un rettangolo: legge il minimo o il massimo della candela più vicina al clic, unisce i due punti con una freccia e proietta i due prezzi sulla scala, più l'obiettivo 1:1 del movimento.",
-    "detail": "Ogni punto si aggancia al massimo o al minimo più vicino fra le 5 candele attorno al puntatore (entro 40 px), anche con il magnete spento. Linee tratteggiate dai due punti alla scala dei prezzi con il prezzo in una pillola, freccia nella direzione del movimento, etichetta accanto al secondo punto con variazione, percentuale, durata e numero di candele, verde o rossa. In più, tenue, la proiezione 1:1: lo stesso movimento ripetuto dal secondo punto, con il suo prezzo. Si seleziona sulla linea o sui punti, non più su tutto il riquadro."
+    "at": 1791801079,
+    "summary": "La misura è un righello mai obliquo: un tratto orizzontale al prezzo del primo punto fino al tempo del secondo, poi un tratto verticale con la freccia fino al secondo prezzo. I punti si agganciano a minimi e massimi e i due prezzi sono proiettati sulla scala.",
+    "detail": "Lorenzo, 12/10, dopo la prima versione: 'non molto chiaro voglio che il righello sia sempre orizzontale o verticale mai obliquo'. Ogni punto si aggancia al massimo o al minimo più vicino fra le 5 candele attorno al puntatore (entro 40 px). Tratto orizzontale = la durata, tratto verticale con freccia = la variazione; etichetta accanto al tratto verticale con variazione, percentuale, durata e numero di candele. Linee tratteggiate dai due prezzi alla scala, con il prezzo in una pillola; tenue, l'obiettivo 1:1 sulla stessa verticale. Nessun riquadro e nessuna diagonale; si seleziona sui due tratti o sui punti."
   }
 }

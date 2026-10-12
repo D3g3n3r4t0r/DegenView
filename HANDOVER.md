@@ -1,6 +1,6 @@
 # 2026-10-12 — Misura senza rettangolo — `seed-0270` (Claude, a mano)
 
-Lorenzo: "la funzione di misurare prezzo non deve figurare un rettangolo ma proiettare i punti che legge in modo intelligente". `DrawEngine.pickExtreme` (high/low piu' vicino in pixel fra le 5 candele attorno, entro 40 px) usato da `pointerToPoint` per lo strumento `range` e per il trascinamento delle sue maniglie; `paintMeasure`: freccia fra i punti, proiezioni dei due prezzi sulla scala con pillole, obiettivo 1:1 tenue, etichetta accanto al secondo punto. Hit test sulla linea/punti. e2e: 34 controlli verdi.
+Lorenzo: "la funzione di misurare prezzo non deve figurare un rettangolo ma proiettare i punti che legge in modo intelligente". `DrawEngine.pickExtreme` (high/low piu' vicino in pixel fra le 5 candele attorno, entro 40 px) usato da `pointerToPoint` per lo strumento `range` e per il trascinamento delle sue maniglie; `paintMeasure`: freccia fra i punti, proiezioni dei due prezzi sulla scala con pillole, obiettivo 1:1 tenue, etichetta accanto al secondo punto. Hit test sulla linea/punti. e2e: 34 controlli verdi. Poi Lorenzo: "voglio che il righello sia sempre orizzontale o verticale mai obliquo": `paintMeasure` a L (orizzontale al prezzo del primo punto fino al tempo del secondo, verticale con freccia), niente banda ne' diagonale; hit test sui due tratti.
 
 # 2026-10-12 — Strumenti di disegno rifatti — `seed-0269` (Claude, a mano)
 
