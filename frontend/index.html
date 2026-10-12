@@ -337,7 +337,7 @@
       </div>
       <div class="chart-row">
         <nav class="draw-rail" id="draw-rail" title="Drawing tools">
-          <button type="button" class="draw-tool-btn selected" data-draw-tool="cursor" title="Cursor — click a drawing to delete it">
+          <button type="button" class="draw-tool-btn selected" data-draw-tool="cursor" title="Cursor — select, move and edit drawings">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3 L5 20 L10 15.5 L13.5 21.5 L16 20 L12.5 14 L19 13.5 Z"/></svg>
           </button>
           <div class="draw-rail-divider"></div>
@@ -378,6 +378,19 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20 L20 4 M20 4 H12 M20 4 V12"/></svg>
           </button>
           <div class="draw-rail-divider"></div>
+          <div class="draw-rail-divider"></div>
+          <button type="button" id="draw-magnet-btn" class="draw-tool-btn" title="Magnet: snap to open, high, low, close" aria-label="Magnet" aria-pressed="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v8a6 6 0 0 0 12 0V3"/><path d="M6 7h4M14 7h4"/></svg>
+          </button>
+          <button type="button" id="draw-hide-btn" class="draw-tool-btn" title="Hide all drawings" aria-label="Hide all drawings" aria-pressed="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+          <button type="button" id="draw-undo-btn" class="draw-tool-btn" title="Undo (Ctrl+Z)" aria-label="Undo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg>
+          </button>
+          <button type="button" id="draw-redo-btn" class="draw-tool-btn" title="Redo (Ctrl+Shift+Z)" aria-label="Redo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/></svg>
+          </button>
           <button type="button" id="draw-clear-btn" class="draw-tool-btn" title="Clear all drawings">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7 H20 M9 7 V4 H15 V7 M6 7 L7 20 H17 L18 7"/></svg>
           </button>
@@ -1467,6 +1480,7 @@
        vedi la guardia in DOMContentLoaded per la seconda meta' della stessa correzione. -->
   <script src="/static/lightweight-charts.standalone.production.js"></script>
   <script src="/static/elliott.js"></script>
+  <script src="/static/draw-engine.js"></script>
   <script src="/static/app.js"></script>
   <script src="/static/simple-mode.js" defer></script>
   <script src="/static/diagnostics.js" defer></script>

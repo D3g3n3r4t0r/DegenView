@@ -1,3 +1,14 @@
+# 2026-10-12 — Strumenti di disegno rifatti — `seed-0269` (Claude, a mano)
+
+Lorenzo: "procedi e falle tutte, e verifica ogni cosa" (piano del documento "Strumenti di disegno — analisi e piano" + "canvas moderni, colori").
+- `frontend/static/draw-engine.js` (globalThis.DrawEngine, test node in `frontend/tests/draw-engine.test.mjs`): `makeTimeMapper` (ora <-> indice logico frazionario, interpolazione, estrapolazione col passo mediano), hit test, `paint` per ogni strumento, pill, maniglie, palette.
+- `app.js`: `timeToX` via mapper + `logicalToX` (LWC 4.2 `logicalToCoordinate` restituisce 0 per indici frazionari: misurato, si interpola fra i due interi); input da pointer events con `setPointerCapture`, tap e press-drag-release; ridisegno su firma (range visibile, scala prezzi, dimensioni, `drawVersion`); DPR; clip al riquadro; hline = solo canvas + price line `lineVisible:false`; toolbar selezione; undo/redo; magnete; nascondi; sticky (doppio clic); testo in input sul grafico; frattali salvati con le candele copiate (`mountFractal`); chiave dei disegni da `state.data.asset_type`.
+- Server: `app/drawings.py` + `GET/PUT /api/drawings` (per utente, vince `updated_at` piu' recente), sync anche quando il login arriva dopo il grafico (`syncCurrentDrawings`).
+- Loop RAF protetto da try/catch: prima un'eccezione (es. `toLocaleString` con locale strano) fermava il loop per sempre e tutti i disegni sparivano.
+- Dock mobile: era piu' largo dello schermo e usciva a sinistra; ora scorre.
+- Verifica: `scripts/e2e/draw.e2e.mjs` (Playwright, API simulate, 32 controlli, 3 giri verdi); job `draw-e2e` in `deploy-hetzner.yml`, non blocca il deploy. `?drawdebug` espone `window.__drawDebug` per i test.
+- Restano: lente sotto il dito su telefono, misura ms/fotogramma con 50 disegni, raggruppamento icone della barra.
+
 # 2026-10-12 — Strumenti di disegno: analisi e piano (Claude, piano)
 
 Lorenzo: "i tool di disegno non funzionano bene spesso scompaiono o sono scattosi [...] STUDIA A FONDO". Documento "Strumenti di disegno — analisi e piano" (artifact 59b97368-7d37-4ada-97a4-af5e42e33ca3). Cause lette in `app.js` 5188-6630: punti legati all'ora esatta della candela (`timeToCoordinate` -> null su altro timeframe/fuori dati, `timeToXEdge` li butta a -4 / width+4); maniglie con `timeToX` senza bordo; input da `lastCrosshairPoint` (mirino) invece che dal puntatore, rotto su touch; RAF continuo 60 fps; canvas senza devicePixelRatio; niente punti nel futuro; solo localStorage; hline doppia (canvas + price line ricreata a ogni drag); frattale non salvato. Piano in 4 fasi: coordinate logiche (`logicalToCoordinate`, interpolazione/estrapolazione), input dal puntatore con pointer capture e touch, ridisegno su richiesta + DPR + clip al riquadro, strumenti completi (server, stile, undo, correzioni per strumento). Test Playwright come criteri.

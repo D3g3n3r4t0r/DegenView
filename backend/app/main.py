@@ -53,6 +53,7 @@ from app import jobs as jobs_store
 from app import trading_log
 from app import favorites as favorites_store
 from app import market_rank
+from app import drawings as drawings_store
 from app import perf
 from app import watchlist as watchlist_store
 from app.analysis.backtest import run_backtest
@@ -8766,6 +8767,7 @@ def _compute_asset_version() -> str:
             (FRONTEND_DIR / "static" / "style.css").read_bytes(),
             (FRONTEND_DIR / "static" / "app.js").read_bytes(),
             (FRONTEND_DIR / "static" / "elliott.js").read_bytes(),
+            (FRONTEND_DIR / "static" / "draw-engine.js").read_bytes(),
             (FRONTEND_DIR / "static" / "onchain-embed.css").read_bytes(),
             (FRONTEND_DIR / "static" / "engn-system.css").read_bytes(),
             (FRONTEND_DIR / "static" / "engn-landing.css").read_bytes(),
@@ -8820,6 +8822,7 @@ _INDEX_HTML = (
     .replace('href="/static/style.css"', f'href="/static/style.css?v={_ASSET_VERSION}"')
     .replace('src="/static/app.js"', f'src="/static/app.js?v={_ASSET_VERSION}"')
     .replace('src="/static/elliott.js"', f'src="/static/elliott.js?v={_ASSET_VERSION}"')
+    .replace('src="/static/draw-engine.js"', f'src="/static/draw-engine.js?v={_ASSET_VERSION}"')
     .replace(
         "</head>",
         f'<meta name="lae-asset-version" content="{_ASSET_VERSION}" />\n'
@@ -8874,6 +8877,29 @@ _ONCHAIN_APP_HTML = (
 # succedeva: il deploy era andato, la pagina no. Gli asset restano cacheabili
 # per sempre proprio perche' l'URL cambia con il contenuto.
 _HTML_HEADERS = {"Cache-Control": "no-cache"}
+
+
+class DrawingsIn(BaseModel):
+    key: str
+    drawings: list = []
+    updated_at: int | None = None
+
+
+@app.get("/api/drawings")
+async def get_drawings(key: str = Query(..., max_length=140),
+                       user: User = Depends(auth.get_current_user)) -> dict:
+    """The account's drawings for one chart (drawing tools plan, phase 4)."""
+    if not drawings_store.valid_key(key):
+        raise HTTPException(status_code=400, detail="Invalid key")
+    return drawings_store.get(user.id, key) or {"drawings": None, "updated_at": 0}
+
+
+@app.put("/api/drawings")
+async def put_drawings(body: DrawingsIn, user: User = Depends(auth.get_current_user)) -> dict:
+    try:
+        return drawings_store.put(user.id, body.key, body.drawings, body.updated_at)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.get("/api/perf")
