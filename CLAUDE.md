@@ -86,6 +86,14 @@ ingresso/uscita della strategia su ogni grafico" **non valgono piu'**: non
 ripristinarle. Il lavoro adesso e' la qualita' della Top (uso reale, volumi,
 partecipazione): vedi `HANDOVER.md`, voce del 07/10.
 
+## Catalogo di design (12/10)
+
+`design/opensourceui/CATALOG.md`: i 210 componenti di opensourceui.in (MIT,
+Bidyut Kundu) studiati e ridotti a token CSS esatti, 10 famiglie di stile,
+indice per componente e note di porting da Tailwind a CSS puro. Lorenzo:
+"studia tutti i design e li tieni in memoria". Leggi solo la sezione che
+serve (`grep -n "^### "`), non tutto il file.
+
 ## Cose misurate, da non riderivare
 
 - **L'obiettivo del backtest è una funzione a gradini.** 200 valori di un
