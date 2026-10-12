@@ -1,3 +1,7 @@
+# 2026-10-12 — Stili da opensourceui.in per l'app DEGEN (Claude, in corso)
+
+Lorenzo: "puoi prendere tutto il design qui? https://opensourceui.in/components", poi "studia tutti i design e li tieni in memoria fallo con un agent in parallelo". Scelte sue: app on-chain (DEGEN), prima "uno stile da scegliere". Catalogo in `design/opensourceui/CATALOG.md` (210 componenti, 10 famiglie). Tre bozze mobile 390x844 sul canvas "DEGEN · tre stili" (artifact claude.ai FnYFB2b8jk6WbRjrAnnWaU): A Carbon spotlight (smeraldo), B Tasti 3D (ambra, carbon luxe), C Vetro su mesh (teal). Resta: la scelta di Lorenzo, poi il porting in `frontend/static/onchain/app.css` (oggi pelle terminale nero/ambra del 07/10).
+
 # 2026-10-12 — DEX sul sito classico: niente anti-rug, storia intera, priorita' — `seed-0267` (Claude, a mano)
 
 Lorenzo: "sui pair presenti solo nei dex il backtest non fornisce risultati [...] è risolvibile?", poi "Sul sito classico l'anti-rug non e' necessario, serve solo per lo Sniper. Il sito classico deve avere sempre la priorita' di eseguire backtest sull'intero grafico disponibile".
