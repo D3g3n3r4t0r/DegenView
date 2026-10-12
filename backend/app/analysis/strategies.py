@@ -651,15 +651,18 @@ def confirmed_events(
     position = 0  # 0 flat, 1 long, -1 short
     events: list[StrategySignal] = []
 
-    for ts, row in signals.iterrows():
+    # Columns as plain lists instead of signals.iterrows() (overhaul plan,
+    # week 2): same values, same order, no Series per row.
+    cols = {c: signals[c].tolist() for c in ("entry_long", "entry_short", "exit_long", "exit_short")}
+    for i, ts in enumerate(signals.index):
         prev_position = position
-        if position == 1 and row["exit_long"]:
+        if position == 1 and cols["exit_long"][i]:
             position = 0
-        elif position == -1 and row["exit_short"]:
+        elif position == -1 and cols["exit_short"][i]:
             position = 0
-        if row["entry_long"]:
+        if cols["entry_long"][i]:
             position = 1
-        elif row["entry_short"]:
+        elif cols["entry_short"][i]:
             position = -1
 
         if position == prev_position:

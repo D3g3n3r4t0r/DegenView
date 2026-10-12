@@ -230,8 +230,14 @@ def run_backtest(
     target_pct = bp["take_profit_pct"]
     stop_loss_enabled = stop_pct > 0 or target_pct > 0
 
-    for ts, row in df.iterrows():
-        t = int(ts.timestamp())
+    # Plain arrays instead of df.iterrows(): the loop is the same, bar by bar,
+    # but without building a Series per row (overhaul plan, week 2; checked
+    # against the previous implementation by tests/test_engine_equivalence.py).
+    stamps = [int(ts.timestamp()) for ts in df.index]
+    lows = df["low"].to_numpy()
+    highs = df["high"].to_numpy()
+    for i, t in enumerate(stamps):
+        row = {"low": lows[i], "high": highs[i]}
 
         # Intrabar stop/target check happens before this bar's own signal —
         # a position can be stopped out on a bar between two strategy

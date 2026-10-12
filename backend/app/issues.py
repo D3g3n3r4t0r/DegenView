@@ -165,6 +165,10 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0268", "Sito classico lento: un backtest blocca il sito per tutti",
+     "Lorenzo, 12/10: 'crea un prompt e un piano di miglioramento di prestazioni per il sito classico [...] voglio un overhaul completo', poi 'attua tutto'. "
+     "Trovato leggendo il codice: grafico e backtest calcolati sul processo che risponde a tutti, motore riga per riga, refresh completo ogni 60 s, editor Pine caricato sempre.",
+     "alta"),
     ("seed-0267", "Sito classico: sui pair presenti solo sui DEX il backtest non da' risultati",
      "Lorenzo, 12/10: 'sui pair presenti solo nei dex il backtest non fornisce risultati. C'e' un motivo specifico legato alle API dei Dex?' "
      "Poi: 'sul sito classico l'anti-rug non e' necessario, serve solo per lo Sniper. Il sito classico deve avere sempre la priorita' di eseguire backtest sull'intero grafico disponibile'.",

@@ -1,3 +1,12 @@
+# 2026-10-12 — Overhaul sito classico, prima tranche — `seed-0268` (Claude, a mano)
+
+Lorenzo: "attua tutto" (il piano di 8 settimane). Fatto in questa tranche:
+- `_cpu()` in `main.py`: `/api/analyze` (tutto il calcolo) e `/api/backtest/deep` in `asyncio.to_thread`, semaforo da 2 per loop.
+- Motore: `run_backtest` e `confirmed_events` senza `iterrows`; copia congelata in `tests/reference/engine_v1.py`, `tests/test_engine_equivalence.py` confronta campo per campo. Locale: 5000 candele con SL/TP 233 -> 26 ms. `scripts/bench_backtest.py`.
+- `app/perf.py` + middleware `time_requests` + `GET /api/perf` (p50/p95 per rotta, lag del loop).
+- Frontend: `state.analyzeSeq` (vince l'ultima `/api/analyze`); refresh completo saltato se il feed live e' sano, una volta per candela max 5 min; CodeMirror caricato pigro (`upgradePineEditor`), `simple-mode.js` NON e' di CodeMirror (e' la Modalita' Semplice).
+- Restano: baseline Lighthouse e numeri di /api/perf dal vivo, indicatori in cache, coda lavori, app.js a moduli (decisione build), Ricerca Stabile, ridisegno, Playwright, CSP, pulizia; decisioni CX33/build/stile/codice spento ancora aperte.
+
 # 2026-10-12 — Piano di overhaul del sito classico, 8 settimane (Claude, piano)
 
 Lorenzo: "crea un prompt e un piano di miglioramento di prestazioni per il sito classico [...] voglio un overhaul completo sotto ogni punto di vista, fai un piano settimanale" e "analizza ogni aspetto del sito e cerca migliorie". Documento "Sito classico — overhaul completo" (claude.ai, artifact ed9f3432-3fce-4dad-8a64-913281ed1d83): prompt da incollare a ogni sessione, stato letto sul codice, obiettivi con traguardi, piano 12/10-6/12.

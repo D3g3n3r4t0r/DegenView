@@ -53,6 +53,7 @@ from app import jobs as jobs_store
 from app import trading_log
 from app import favorites as favorites_store
 from app import market_rank
+from app import perf
 from app import watchlist as watchlist_store
 from app.analysis.backtest import run_backtest
 from app.analysis.futures_math import DEFAULT_MAINTENANCE_MARGIN_RATE, liquidation_price
@@ -1638,6 +1639,7 @@ async def lifespan(app: FastAPI):
                        asyncio.create_task(_sniper_onchain_bridge_loop()),
                        asyncio.create_task(_ai_scan_loop())]
     t4 = asyncio.create_task(_weekly_recap_loop())
+    background.append(asyncio.create_task(perf.loop_lag_probe()))
     background.append(asyncio.create_task(_telegram_chat_loop()))
     background.append(asyncio.create_task(_deepseek_recap_loop()))
     t5 = asyncio.create_task(_watchdog_loop())
@@ -1744,6 +1746,18 @@ _PUBLIC_PATHS = frozenset({
 })
 
 _PUBLIC_PREFIXES = ("/static/", "/api/deepseek/studies/")
+
+
+@app.middleware("http")
+async def time_requests(request: Request, call_next):
+    """Per-route timings for /api/perf (overhaul plan, week 1)."""
+    t0 = time.perf_counter()
+    response = await call_next(request)
+    route = request.scope.get("route")
+    path = getattr(route, "path", None)
+    if path and path.startswith("/api/"):
+        perf.record(f"{request.method} {path}", time.perf_counter() - t0, response.status_code)
+    return response
 
 
 @app.middleware("http")
@@ -6842,6 +6856,24 @@ async def get_favorite_quotes(user: User = Depends(auth.get_current_user)) -> li
     return list(await asyncio.gather(*(quote_for(e) for e in entries)))
 
 
+# CPU work off the event loop, at most two at a time: a thread each keeps
+# the single uvicorn process answering while a chart or a backtest computes,
+# and the cap keeps memory inside the CX23's 4 GB (it was killed with exit
+# 137 once). Overhaul plan, week 1.
+_CPU_SLOTS: dict[int, asyncio.Semaphore] = {}
+
+
+async def _cpu(fn, *args, **kwargs):
+    # One semaphore per event loop: the tests start a new loop per client.
+    loop = id(asyncio.get_running_loop())
+    slots = _CPU_SLOTS.get(loop)
+    if slots is None:
+        _CPU_SLOTS.clear()
+        slots = _CPU_SLOTS[loop] = asyncio.Semaphore(2)
+    async with slots:
+        return await asyncio.to_thread(fn, *args, **kwargs)
+
+
 def _classic_priority() -> None:
     """The classic site's chart, backtests and optimisations go ahead of the
     on-chain engine for GeckoTerminal (Lorenzo, 12/10: "il sito classico
@@ -6917,110 +6949,116 @@ async def analyze(
         fetch_weekly(),
     )
 
-    timeframes: dict[str, TimeframeAnalysis] = {}
-    strategies: dict[str, list[StrategyState]] = {}
-    backtests: dict[str, object] = {}
-    for tf_key, df in fetched:
-        if df.empty:
-            raise HTTPException(status_code=502, detail=f"No data for {symbol} on timeframe {tf_key}")
+    # Indicators, levels, strategies and the backtest are pure CPU: run in a
+    # worker thread so one heavy chart does not freeze every other request
+    # on the single uvicorn process (overhaul plan, week 1).
+    def _compute() -> AnalysisResponse:
+        timeframes: dict[str, TimeframeAnalysis] = {}
+        strategies: dict[str, list[StrategyState]] = {}
+        backtests: dict[str, object] = {}
+        for tf_key, df in fetched:
+            if df.empty:
+                raise HTTPException(status_code=502, detail=f"No data for {symbol} on timeframe {tf_key}")
 
-        swings = compute_swings(df, tf_key)
-        levels = compute_levels(df, swings)
-        indicators = compute_indicators(df, intervals[tf_key])
-        if tf_key == "ltf":
-            indicators += bull_market_support_band(df, weekly_df)
-        bias = determine_bias(levels)
-        dealing_range = compute_dealing_range(df, swings)
-        fib_zones = compute_fib_zones(df, tf_key, intervals[tf_key])
-        # Sul DEX si compra e si vende il token, niente short: gli stessi
-        # segnali spot-only che usa l'alert watcher, cosi' il grafico non
-        # mostra trade diversi dal backtest on-chain della classifica.
-        sig = None
-        if asset_type == "dex" and strategy_name in STRATEGY_REGISTRY:
-            sig = spot_only(STRATEGY_REGISTRY[strategy_name](df, strategy_params_dict))
-        strategy = build_strategy_state(strategy_name, df, strategy_params_dict, signals=sig)
-        strategies[tf_key] = [strategy]
-        # The frontend only ever charts the ltf timeframe (state.activeTimeframe
-        # is a hardcoded "ltf", never reassigned) — htf/mtf backtests are never
-        # read (only strategies[htf|mtf] is, for cross-timeframe signal markers).
-        # Running the bar-by-bar backtest simulation twice for data nothing
-        # displays was pure wasted latency on every single analyze call.
-        if tf_key == "ltf":
-            # This is the fast pass, on whatever the chart already fetched —
-            # instant, but only as deep as ltf_candles. The frontend follows
-            # up with a separate /api/backtest/deep call (see that endpoint)
-            # that swaps this out for a backtest over each exchange's full
-            # history once that slower, paginated fetch resolves — without
-            # that split, every timeframe change would block on it too.
-            result = run_backtest(
-                df,
-                strategy_params_dict,
-                backtest_params_dict,
-                strategy_name=strategy_name,
-                signals=sig,
-                intrabar_fn=_intrabar_fn(asset_type, strategy_name),
-            )
-            backtests[tf_key] = result.model_copy(update={"interval": intervals[tf_key]})
-        else:
-            backtests[tf_key] = BacktestResult(
+            swings = compute_swings(df, tf_key)
+            levels = compute_levels(df, swings)
+            indicators = compute_indicators(df, intervals[tf_key])
+            if tf_key == "ltf":
+                indicators += bull_market_support_band(df, weekly_df)
+            bias = determine_bias(levels)
+            dealing_range = compute_dealing_range(df, swings)
+            fib_zones = compute_fib_zones(df, tf_key, intervals[tf_key])
+            # Sul DEX si compra e si vende il token, niente short: gli stessi
+            # segnali spot-only che usa l'alert watcher, cosi' il grafico non
+            # mostra trade diversi dal backtest on-chain della classifica.
+            sig = None
+            if asset_type == "dex" and strategy_name in STRATEGY_REGISTRY:
+                sig = spot_only(STRATEGY_REGISTRY[strategy_name](df, strategy_params_dict))
+            strategy = build_strategy_state(strategy_name, df, strategy_params_dict, signals=sig)
+            strategies[tf_key] = [strategy]
+            # The frontend only ever charts the ltf timeframe (state.activeTimeframe
+            # is a hardcoded "ltf", never reassigned) — htf/mtf backtests are never
+            # read (only strategies[htf|mtf] is, for cross-timeframe signal markers).
+            # Running the bar-by-bar backtest simulation twice for data nothing
+            # displays was pure wasted latency on every single analyze call.
+            if tf_key == "ltf":
+                # This is the fast pass, on whatever the chart already fetched —
+                # instant, but only as deep as ltf_candles. The frontend follows
+                # up with a separate /api/backtest/deep call (see that endpoint)
+                # that swaps this out for a backtest over each exchange's full
+                # history once that slower, paginated fetch resolves — without
+                # that split, every timeframe change would block on it too.
+                result = run_backtest(
+                    df,
+                    strategy_params_dict,
+                    backtest_params_dict,
+                    strategy_name=strategy_name,
+                    signals=sig,
+                    intrabar_fn=_intrabar_fn(asset_type, strategy_name),
+                )
+                backtests[tf_key] = result.model_copy(update={"interval": intervals[tf_key]})
+            else:
+                backtests[tf_key] = BacktestResult(
+                    interval=intervals[tf_key],
+                    initial_capital=backtest_params_dict.get("initial_capital", 10000.0),
+                    final_equity=backtest_params_dict.get("initial_capital", 10000.0),
+                    total_return_pct=0.0,
+                    num_trades=0,
+                    win_rate_pct=None,
+                    max_drawdown_pct=0.0,
+                    profit_factor=None,
+                    equity_curve=[],
+                    trades=[],
+                )
+            candles = [
+                Candle(
+                    time=int(ts.timestamp()),
+                    open=float(row.open),
+                    high=float(row.high),
+                    low=float(row.low),
+                    close=float(row.close),
+                    volume=float(row.volume),
+                )
+                for ts, row in zip(df.index, df.itertuples(index=False))
+            ]
+            # Same story for the raw candle/indicator time series: the chart only
+            # ever plots ltf, and build_summary's per-timeframe indicator readout
+            # (below) only reads each series' *last* value. htf/mtf keep full
+            # levels/dealing_range/fib_zones (compute_confluence and the summary
+            # both need those) but only their tail candle/indicator points, not
+            # the full 500-bar history — that history was ~2/3 of this endpoint's
+            # response size for two timeframes nothing ever renders.
+            if tf_key != "ltf":
+                # Keep enough bars for frontend MTF trend computation (needs ~10+)
+                # while still trimming the bulk of the history to save bandwidth.
+                candles = candles[-50:]
+                indicators = [ind.model_copy(update={"values": ind.values[-50:]}) for ind in indicators]
+            timeframes[tf_key] = TimeframeAnalysis(
                 interval=intervals[tf_key],
-                initial_capital=backtest_params_dict.get("initial_capital", 10000.0),
-                final_equity=backtest_params_dict.get("initial_capital", 10000.0),
-                total_return_pct=0.0,
-                num_trades=0,
-                win_rate_pct=None,
-                max_drawdown_pct=0.0,
-                profit_factor=None,
-                equity_curve=[],
-                trades=[],
+                candles=candles,
+                levels=levels,
+                indicators=indicators,
+                bias=bias,
+                dealing_range=dealing_range,
+                fib_zones=fib_zones,
             )
-        candles = [
-            Candle(
-                time=int(ts.timestamp()),
-                open=float(row.open),
-                high=float(row.high),
-                low=float(row.low),
-                close=float(row.close),
-                volume=float(row.volume),
-            )
-            for ts, row in df.iterrows()
-        ]
-        # Same story for the raw candle/indicator time series: the chart only
-        # ever plots ltf, and build_summary's per-timeframe indicator readout
-        # (below) only reads each series' *last* value. htf/mtf keep full
-        # levels/dealing_range/fib_zones (compute_confluence and the summary
-        # both need those) but only their tail candle/indicator points, not
-        # the full 500-bar history — that history was ~2/3 of this endpoint's
-        # response size for two timeframes nothing ever renders.
-        if tf_key != "ltf":
-            # Keep enough bars for frontend MTF trend computation (needs ~10+)
-            # while still trimming the bulk of the history to save bandwidth.
-            candles = candles[-50:]
-            indicators = [ind.model_copy(update={"values": ind.values[-50:]}) for ind in indicators]
-        timeframes[tf_key] = TimeframeAnalysis(
-            interval=intervals[tf_key],
-            candles=candles,
-            levels=levels,
-            indicators=indicators,
-            bias=bias,
-            dealing_range=dealing_range,
-            fib_zones=fib_zones,
+
+        confluence_zones = compute_confluence(timeframes)
+        current_price = timeframes["ltf"].candles[-1].close
+        summary = build_summary(current_price, timeframes, confluence_zones)
+
+        return AnalysisResponse(
+            symbol=canonical_symbol(symbol, asset_type, exchange),
+            asset_type=asset_type,
+            current_price=current_price,
+            timeframes=timeframes,
+            confluence_zones=confluence_zones,
+            summary=summary,
+            strategies=strategies,
+            backtests=backtests,
         )
 
-    confluence_zones = compute_confluence(timeframes)
-    current_price = timeframes["ltf"].candles[-1].close
-    summary = build_summary(current_price, timeframes, confluence_zones)
-
-    return AnalysisResponse(
-        symbol=canonical_symbol(symbol, asset_type, exchange),
-        asset_type=asset_type,
-        current_price=current_price,
-        timeframes=timeframes,
-        confluence_zones=confluence_zones,
-        summary=summary,
-        strategies=strategies,
-        backtests=backtests,
-    )
+    return await _cpu(_compute)
 
 
 def _slice_to_window(df, start_ms: int | None, end_ms: int | None):
@@ -7113,14 +7151,15 @@ async def deep_backtest(
     sig = None
     if asset_type == "dex" and strategy_name in STRATEGY_REGISTRY:
         sig = spot_only(STRATEGY_REGISTRY[strategy_name](df, strategy_params.model_dump()))
-    result = run_backtest(
+    result = await _cpu(partial(
+        run_backtest,
         df,
         strategy_params.model_dump(),
         backtest_params.model_dump(),
         strategy_name=strategy_name,
         signals=sig,
         intrabar_fn=_intrabar_fn(asset_type, strategy_name),
-    )
+    ))
     return result.model_copy(update={"interval": backtest_interval})
 
 
@@ -8835,6 +8874,12 @@ _ONCHAIN_APP_HTML = (
 # succedeva: il deploy era andato, la pagina no. Gli asset restano cacheabili
 # per sempre proprio perche' l'URL cambia con il contenuto.
 _HTML_HEADERS = {"Cache-Control": "no-cache"}
+
+
+@app.get("/api/perf")
+async def perf_snapshot(user: User = Depends(auth.get_current_user)) -> dict:
+    """Timings per route and event-loop lag since the last start."""
+    return perf.snapshot()
 
 
 @app.get("/api/version")
