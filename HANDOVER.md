@@ -1,3 +1,7 @@
+# 2026-10-12 — Strumenti di disegno: analisi e piano (Claude, piano)
+
+Lorenzo: "i tool di disegno non funzionano bene spesso scompaiono o sono scattosi [...] STUDIA A FONDO". Documento "Strumenti di disegno — analisi e piano" (artifact 59b97368-7d37-4ada-97a4-af5e42e33ca3). Cause lette in `app.js` 5188-6630: punti legati all'ora esatta della candela (`timeToCoordinate` -> null su altro timeframe/fuori dati, `timeToXEdge` li butta a -4 / width+4); maniglie con `timeToX` senza bordo; input da `lastCrosshairPoint` (mirino) invece che dal puntatore, rotto su touch; RAF continuo 60 fps; canvas senza devicePixelRatio; niente punti nel futuro; solo localStorage; hline doppia (canvas + price line ricreata a ogni drag); frattale non salvato. Piano in 4 fasi: coordinate logiche (`logicalToCoordinate`, interpolazione/estrapolazione), input dal puntatore con pointer capture e touch, ridisegno su richiesta + DPR + clip al riquadro, strumenti completi (server, stile, undo, correzioni per strumento). Test Playwright come criteri.
+
 # 2026-10-12 — Overhaul sito classico, prima tranche — `seed-0268` (Claude, a mano)
 
 Lorenzo: "attua tutto" (il piano di 8 settimane). Fatto in questa tranche:
