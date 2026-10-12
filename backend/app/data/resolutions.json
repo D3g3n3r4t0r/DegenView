@@ -2787,5 +2787,23 @@
     "at": 1791828553,
     "summary": "RSI, MACD, stocastico e gli oscillatori personalizzati hanno ora la scala dei prezzi larga quanto quella del grafico principale, così ogni candela cade esattamente sopra il suo valore dell'indicatore.",
     "detail": "I pannelli erano sincronizzati sull'indice delle candele ma non sui pixel: con prezzi a 6 decimali (0.001514, -0.000500) la scala del grafico principale è più larga di quella degli indicatori (80.00), l'area delle candele più stretta, e la stessa candela finiva più a destra nei pannelli sotto. Il minimo fisso di 72 px non bastava. Ora a ogni disegno e a ogni zoom tutte le scale prendono la larghezza della più larga; al cambio di simbolo o timeframe si riparte dalla base. Verificato nel browser con una moneta da 0.0015: prima 788 px di area per il prezzo contro 796 per RSI e stocastico, ora 788 per tutti."
+  },
+  "6a8fdae8": {
+    "status": "risolto",
+    "at": 1791839550,
+    "summary": "Il tempo è sincronizzato nei due sensi: se trascini o zoomi l'RSI (o MACD, stocastico, oscillatori personalizzati) si muove anche il grafico delle candele, e con lui tutti gli altri pannelli.",
+    "detail": "Prima solo il grafico principale comandava i pannelli. Ora ogni pannello visibile, quando cambia finestra, la passa al grafico principale, che la ridistribuisce agli altri; un blocco evita che i pannelli si rimandino all'infinito la stessa finestra. I pannelli nascosti o vuoti non trascinano il grafico. Verificato nel browser: trascinando l'RSI di 250 px il grafico si sposta della stessa quantità e resta fermo dopo il rilascio; la rotella sullo stocastico zooma anche le candele."
+  },
+  "58512aa5": {
+    "status": "risolto",
+    "at": 1791839550,
+    "summary": "Cliccando un pair della Watchlist ora cambia anche il nome nella casella in alto, non solo il grafico.",
+    "detail": "La Watchlist caricava il grafico ma lasciava nella casella di ricerca in alto il pair precedente. Ora il clic scrive subito il nuovo pair nella casella, e ogni grafico caricato (Watchlist, archivio, link) aggiorna la casella con il simbolo mostrato, salvo mentre ci stai scrivendo. Per i pair DEX resta il nome breve, non l'indirizzo del pool. Verificato nel browser: clic su ETHUSDT dalla Watchlist, la casella mostra ETHUSDT."
+  },
+  "5571a9f1": {
+    "status": "risolto",
+    "at": 1791839550,
+    "summary": "L'ottimizzazione e il Run ora mostrano lo stesso backtest: il risultato ottimizzato è calcolato su tutta la storia, come quando premi Run. E la modalità Grid di RSI+BB prova ogni valore intero (15–50 × 50–85), non più solo i multipli di 5.",
+    "detail": "Le cause erano due, entrambe nel codice. (1) Due misure diverse: la ricerca sceglie i parametri sulla prima parte della serie (70% in Quick e Grid, 60% in Stable) e tiene il resto per la verifica fuori campione; ma il rendimento mostrato era quello della sola prima parte, mentre Run fa il backtest su tutta la storia. Un valore provato a mano veniva quindi confrontato su più dati e con un'altra misura. Ora vincitore e classifica vengono ricalcolati esattamente come Run (tutta la serie, stesso riempimento dentro la candela, solo long su DEX); il rendimento della parte di selezione resta come 'in campione', accanto a quello fuori campione. (2) La Grid di RSI+BB andava a passi di 5 (20,25,…): 32/68 a mano era fuori griglia. Ora sono tutti i 1296 valori interi, con lo stesso intervallo della ricerca rapida. Cosa resta voluto: l'ottimizzazione non massimizza il solo rendimento ma rendimento/drawdown (con fattore di profitto, Sharpe e numero di trade), e sceglie senza guardare l'ultima parte della storia; la Stable inoltre cerca la zona che regge alle variazioni, non il picco. Quindi un valore scelto a mano guardando tutto il grafico può ancora battere il rendimento ottimizzato: è proprio il sovra-adattamento che la colonna fuori campione misura. Se preferite una modalità che massimizzi il rendimento su tutto il grafico, si può aggiungere come opzione dichiarata."
   }
 }
