@@ -8474,6 +8474,7 @@
     ws.addEventListener("message", (event) => {
       try {
         const msg = JSON.parse(event.data);
+        state.liveLastMsg = Date.now();
         applyLiveCandle(msg.timeframe, msg.candle);
       } catch (err) {
         /* ignore malformed frame */
@@ -8488,11 +8489,29 @@
     ws.addEventListener("error", () => ws.close());
   }
 
+  // The 60 s full /api/analyze (3000 candles, every indicator, the
+  // backtest) is the fallback for a missing or silent live feed. With the
+  // feed alive, candles already arrive tick by tick: the full pass only has
+  // to catch new strategy markers, so once per candle, at most every 5 min
+  // (overhaul plan, week 4).
+  const TF_SECONDS = { "1m": 60, "5m": 300, "15m": 900, "30m": 1800, "1h": 3600 };
+  function liveFeedHealthy() {
+    return !!state.liveSocket && state.liveSocket.readyState === 1
+      && Date.now() - (state.liveLastMsg || 0) < 90000;
+  }
+  function fullRefreshEveryMs() {
+    const sec = TF_SECONDS[getSelectedIntervals().ltf] || 300;
+    return Math.min(300, Math.max(60, sec)) * 1000;
+  }
+
   async function silentRefresh(symbol) {
     if (!state.data || state.data.symbol !== symbol) return;
+    const seq = state.analyzeSeq;
     try {
       const url = `/api/analyze?symbol=${encodeURIComponent(symbol)}&asset_type=${state.assetType}&exchange=${state.cryptoExchange}&${intervalQuery()}&${getStrategyAndBacktestQuery()}`;
       const resp = await fetch(url);
+      // A search started meanwhile owns the chart now.
+      if (seq !== state.analyzeSeq || !state.data || state.data.symbol !== symbol) return;
       if (!resp.ok) {
         showTabError("error-banner", `Auto-refresh failed (${resp.status}).`);
         return;
@@ -8510,6 +8529,7 @@
       if (deepBacktests) {
         state.data.backtests = { ...state.data.backtests, ...deepBacktests };
       }
+      state.lastFullRefresh = Date.now();
       render();
     } catch (err) {
       /* keep last known state; live ticks keep flowing independently */
@@ -8523,10 +8543,15 @@
     el("chart-wrap").classList.add("hidden");
     disconnectLiveFeed();
 
+    // Only the latest request may draw (overhaul plan, week 1): a timeframe
+    // change and a new search in flight together let the older answer land
+    // last and show the previous ticker.
+    const seq = (state.analyzeSeq = (state.analyzeSeq || 0) + 1);
     await withAsyncButton(el("search-btn"), async () => {
       const url = `/api/analyze?symbol=${encodeURIComponent(symbol)}&asset_type=${state.assetType}&exchange=${state.cryptoExchange}&${intervalQuery()}&${getStrategyAndBacktestQuery()}`;
       const resp = await fetch(url);
       const body = await resp.json();
+      if (seq !== state.analyzeSeq) return;
       if (!resp.ok) {
         const detail = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail);
         throw new Error(detail || `Error ${resp.status}`);
@@ -8558,7 +8583,11 @@
         connectLiveFeed(body.symbol);
       }
       if (state.assetType === "crypto") {
-        state.liveRefreshTimer = setInterval(() => silentRefresh(body.symbol), 60000);
+        state.lastFullRefresh = Date.now();
+        state.liveRefreshTimer = setInterval(() => {
+          if (liveFeedHealthy() && Date.now() - (state.lastFullRefresh || 0) < fullRefreshEveryMs()) return;
+          silentRefresh(body.symbol);
+        }, 60000);
         // No WebSocket wired up for Binance/KuCoin yet — say so plainly
         // instead of leaving the user guessing whether the chart updates.
         if (!LIVE_WS_EXCHANGES.has(state.cryptoExchange)) {
@@ -8566,6 +8595,7 @@
         }
       }
     }).catch((err) => {
+      if (seq !== state.analyzeSeq) return; // a newer search owns the screen
       if (EMBED && !embedRetried) {
         embedRetried = true;
         setTimeout(() => runAnalysis(symbol), 4000);
@@ -8575,7 +8605,7 @@
       showError(err.message || "Error while analyzing the ticker.");
       el("empty-state").classList.remove("hidden");
     }).finally(() => {
-      el("loading").classList.add("hidden");
+      if (seq === state.analyzeSeq) el("loading").classList.add("hidden");
     });
   }
 
@@ -9335,15 +9365,52 @@
 
   let pineCM = null;
 
-  function initPineEditor() {
-    pineCM = CodeMirror.fromTextArea(el("pine-source"), {
-      lineNumbers: true,
-      lineWrapping: false,
-      styleActiveLine: true,
-      indentUnit: 4,
-      tabSize: 4,
-      viewportMargin: Infinity,
+  // CodeMirror (~400 KB) is only for the Pine editor,
+  // which few open: it no longer blocks the first paint (overhaul plan,
+  // week 3). Until it arrives the textarea itself stands in, with the two
+  // methods the rest of the code calls; it is fetched when the browser is
+  // idle, or at once when someone touches the editor.
+  let pineEditorLoading = null;
+
+  function loadScript(src) {
+    return new Promise((resolve, reject) => {
+      const tag = document.createElement("script");
+      tag.src = src;
+      tag.onload = resolve;
+      tag.onerror = () => reject(new Error(`could not load ${src}`));
+      document.head.appendChild(tag);
     });
+  }
+
+  function upgradePineEditor() {
+    if (pineEditorLoading) return pineEditorLoading;
+    const v = document.querySelector('meta[name="lae-asset-version"]')?.content || "";
+    const q = v ? `?v=${v}` : "";
+    const css = document.createElement("link");
+    css.rel = "stylesheet";
+    css.href = `/static/codemirror.css${q}`;
+    document.head.appendChild(css);
+    pineEditorLoading = loadScript(`/static/codemirror.js${q}`)
+      .then(() => {
+        pineCM = CodeMirror.fromTextArea(el("pine-source"), {
+          lineNumbers: true,
+          lineWrapping: false,
+          styleActiveLine: true,
+          indentUnit: 4,
+          tabSize: 4,
+          viewportMargin: Infinity,
+        });
+      })
+      .catch((err) => console.error("Pine editor stays a plain textarea:", err));
+    return pineEditorLoading;
+  }
+
+  function initPineEditor() {
+    const ta = el("pine-source");
+    pineCM = { getValue: () => ta.value, setValue: (text) => { ta.value = text; } };
+    ta.addEventListener("focus", upgradePineEditor, { once: true });
+    const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 2500));
+    idle(() => upgradePineEditor(), { timeout: 8000 });
   }
 
   async function loadPineScripts() {
