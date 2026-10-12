@@ -103,10 +103,11 @@ test('measure reads the nearest high or low under the pointer', () => {
   assert.equal(E.pickExtreme(candles, 100, priceToY, 40), null);   // too far from any wick
 });
 
-test('measure is hit on its line and its points, not inside a box', () => {
+test('measure is a ruler: hit on its horizontal and vertical legs, never on a diagonal', () => {
   const env = { w: 800, h: 400 };
   const P = [{ x: 100, y: 300 }, { x: 300, y: 100 }];
-  assert.ok(E.hitTest({ type: 'range' }, P, 200, 200, env));
-  assert.ok(E.hitTest({ type: 'range' }, P, 300, 100, env));
-  assert.ok(!E.hitTest({ type: 'range' }, P, 280, 280, env), 'the empty corner of the old box');
+  assert.ok(E.hitTest({ type: 'range' }, P, 200, 302, env), 'horizontal leg at the first price');
+  assert.ok(E.hitTest({ type: 'range' }, P, 298, 200, env), 'vertical leg at the second time');
+  assert.ok(!E.hitTest({ type: 'range' }, P, 200, 200, env), 'no oblique line');
+  assert.ok(!E.hitTest({ type: 'range' }, P, 150, 150, env));
 });

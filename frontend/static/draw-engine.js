@@ -161,10 +161,10 @@
         return distanceToSegment(px, py, e.x1, e.y1, e.x2, e.y2) <= tol;
       }
       case "range":
-        return distanceToSegment(px, py, a.x, a.y, b.x, b.y) <= tol
-          || Math.hypot(px - a.x, py - a.y) <= tol + 4 || Math.hypot(px - b.x, py - b.y) <= tol + 4
-          || (Math.abs(py - a.y) <= tol && px >= Math.min(a.x, b.x) && px <= Math.max(a.x, b.x))
-          || (Math.abs(py - b.y) <= tol && px >= Math.min(a.x, b.x) && px <= Math.max(a.x, b.x));
+        // the two legs of the ruler: horizontal at the first price, vertical at the second time
+        return distanceToSegment(px, py, a.x, a.y, b.x, a.y) <= tol
+          || distanceToSegment(px, py, b.x, a.y, b.x, b.y) <= tol
+          || Math.hypot(px - a.x, py - a.y) <= tol + 4 || Math.hypot(px - b.x, py - b.y) <= tol + 4;
       case "rectangle":
       case "fractal": {
         const xa = Math.min(a.x, b.x) - tol, xb = Math.max(a.x, b.x) + tol;
@@ -267,48 +267,54 @@
     return { color, width, dash };
   }
 
-  // The measure: no box. The two points it read, a line between them with
-  // the direction, each price projected to the price scale, and the move
-  // projected once more from the second point (the 1:1 "measured move"
-  // target), faint. The label rides the line.
+  // The measure, as a ruler: never oblique. From the first point a
+  // horizontal leg along its price to the second point's time (how long),
+  // then a vertical leg with the arrow to the second point's price (how
+  // much). Both prices projected to the price scale; the same move repeated
+  // once more on the vertical (the 1:1 target), faint.
+  function measureCorner(a, b) {
+    return { x: b.x, y: a.y };
+  }
+
   function paintMeasure(ctx, d, a, b, env, look, st, fit) {
     const p1 = d.points[0], p2 = d.points[1];
     const up = p2.price >= p1.price;
     const tone = up ? look.bull : look.bear;
     const lw = st.selected ? 2 : 1.5;
+    const k = measureCorner(a, b);
+    const fmt = (v) => (env.formatPrice ? env.formatPrice(v) : v.toFixed(2));
     ctx.save();
     // projections of both prices to the price scale
     ctx.setLineDash([3, 4]);
     ctx.lineWidth = 1;
-    ctx.strokeStyle = rgba(tone, 0.55);
-    [a, b].forEach((p) => { ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(env.w, p.y); ctx.stroke(); });
-    // 1:1 projection of the move, from the second point onward
+    ctx.strokeStyle = rgba(tone, 0.5);
+    [a, b].forEach((p) => { ctx.beginPath(); ctx.moveTo(Math.max(a.x, b.x), p.y); ctx.lineTo(env.w, p.y); ctx.stroke(); });
+    // 1:1 target on the same vertical
     const target = p2.price + (p2.price - p1.price);
     const ty = env.priceToY ? env.priceToY(target) : null;
     if (ty != null && !st.ghost) {
-      const tx = b.x + (b.x - a.x);
       ctx.strokeStyle = rgba(tone, 0.35);
-      ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(tx, ty); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(env.w, ty); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(b.x, ty); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(b.x - 6, ty); ctx.lineTo(env.w, ty); ctx.stroke();
       ctx.setLineDash([]);
-      pill(ctx, `1:1  ${env.formatPrice ? env.formatPrice(target) : target.toFixed(2)}`, Math.min(env.w - 4, tx + 6), ty, look,
-        { fit, fg: tone, font: "600 10px -apple-system, system-ui, sans-serif" });
+      pill(ctx, `1:1  ${fmt(target)}`, b.x + 8, ty, look, { fit, fg: tone, font: "600 10px -apple-system, system-ui, sans-serif" });
     }
     ctx.setLineDash([]);
-    // the measured line, with its arrow
+    const legs = () => { ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(k.x, k.y); ctx.lineTo(b.x, b.y); };
     if (st.selected || st.hover) {
-      ctx.strokeStyle = rgba(tone, 0.25); ctx.lineWidth = lw + 6;
-      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      ctx.strokeStyle = rgba(tone, 0.25); ctx.lineWidth = lw + 6; legs(); ctx.stroke();
     }
-    ctx.strokeStyle = tone; ctx.lineWidth = lw;
-    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
-    const ang = Math.atan2(b.y - a.y, b.x - a.x), sz = 9;
-    ctx.fillStyle = tone;
-    ctx.beginPath();
-    ctx.moveTo(b.x, b.y);
-    ctx.lineTo(b.x - sz * Math.cos(ang - Math.PI / 7), b.y - sz * Math.sin(ang - Math.PI / 7));
-    ctx.lineTo(b.x - sz * Math.cos(ang + Math.PI / 7), b.y - sz * Math.sin(ang + Math.PI / 7));
-    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = tone; ctx.lineWidth = lw; legs(); ctx.stroke();
+    // arrow on the vertical leg, pointing where the price went
+    if (Math.abs(b.y - k.y) > 2) {
+      const dir = b.y < k.y ? -1 : 1, sz = 9;
+      ctx.fillStyle = tone;
+      ctx.beginPath();
+      ctx.moveTo(b.x, b.y);
+      ctx.lineTo(b.x - sz * 0.55, b.y - dir * sz);
+      ctx.lineTo(b.x + sz * 0.55, b.y - dir * sz);
+      ctx.closePath(); ctx.fill();
+    }
     // the two points it read
     [a, b].forEach((p) => {
       ctx.beginPath(); ctx.arc(p.x, p.y, 3.5, 0, Math.PI * 2);
@@ -316,16 +322,16 @@
       ctx.lineWidth = 1.5; ctx.strokeStyle = tone; ctx.stroke();
     });
     ctx.restore();
-    // prices of both points on the price scale, always (not only when selected)
-    {
-      [[a, p1.price], [b, p2.price]].forEach(([p, price]) => {
-        pill(ctx, env.formatPrice ? env.formatPrice(price) : price.toFixed(2), env.w - 2, p.y, look,
-          { align: "right", bg: rgba(tone, 0.92), fg: "#ffffff", fit, font: "600 10px -apple-system, system-ui, sans-serif" });
-      });
-    }
+    // both prices on the price scale, always
+    [[a, p1.price], [b, p2.price]].forEach(([p, price]) => {
+      pill(ctx, fmt(price), env.w - 2, p.y, look,
+        { align: "right", bg: rgba(tone, 0.92), fg: "#ffffff", fit, font: "600 10px -apple-system, system-ui, sans-serif" });
+    });
     if (d.text) {
-      // beside the end it measured to, on the side the move went: never on the line
-      pill(ctx, d.text, b.x, b.y + (up ? -20 : 20), look, { align: "center", fit, bg: rgba(tone, 0.94), fg: "#ffffff" });
+      // beside the vertical leg, halfway: it reads as the size of that leg
+      const right = b.x >= a.x;
+      pill(ctx, d.text, b.x + (right ? 10 : -10), (k.y + b.y) / 2, look,
+        { align: right ? "left" : "right", fit, bg: rgba(tone, 0.94), fg: "#ffffff" });
     }
   }
 
