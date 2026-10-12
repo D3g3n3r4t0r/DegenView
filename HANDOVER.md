@@ -1,3 +1,9 @@
+# 2026-10-12 — Piano di overhaul del sito classico, 8 settimane (Claude, piano)
+
+Lorenzo: "crea un prompt e un piano di miglioramento di prestazioni per il sito classico [...] voglio un overhaul completo sotto ogni punto di vista, fai un piano settimanale" e "analizza ogni aspetto del sito e cerca migliorie". Documento "Sito classico — overhaul completo" (claude.ai, artifact ed9f3432-3fce-4dad-8a64-913281ed1d83): prompt da incollare a ogni sessione, stato letto sul codice, obiettivi con traguardi, piano 12/10-6/12.
+- S1 misura (tempi, Lighthouse, benchmark, test di equivalenza) + `run_backtest`/replay in thread + corsa fra due /api/analyze. S2 motore numpy, cache indicatori, coda lavori; decisione CX33. S3 app.js a moduli + esbuild; decisione build. S4 grafico incrementale al posto del refresh 60 s. S5 Ricerca Stabile (`seed-0054`). S6 ridisegno (`seed-0028`) + accessibilita'; decisione stile. S7 Playwright, CSP, monitoraggio, `seed-0051`. S8 misura finale, pulizia trading spento (decisione), main.py in router.
+- Problema piu' grave trovato: backtest (e replay dentro la candela, fino a 8 s) sul processo principale, un solo worker: blocca tutti.
+
 # 2026-10-12 — Stili da opensourceui.in per l'app DEGEN (Claude, in corso)
 
 Lorenzo: "puoi prendere tutto il design qui? https://opensourceui.in/components", poi "studia tutti i design e li tieni in memoria fallo con un agent in parallelo". Scelte sue: app on-chain (DEGEN), prima "uno stile da scegliere". Catalogo in `design/opensourceui/CATALOG.md` (210 componenti, 10 famiglie). Tre bozze mobile 390x844 sul canvas "DEGEN · tre stili" (artifact claude.ai FnYFB2b8jk6WbRjrAnnWaU): A Carbon spotlight (smeraldo), B Tasti 3D (ambra, carbon luxe), C Vetro su mesh (teal). Resta: la scelta di Lorenzo, poi il porting in `frontend/static/onchain/app.css` (oggi pelle terminale nero/ambra del 07/10).
