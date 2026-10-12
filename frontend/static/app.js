@@ -1027,6 +1027,51 @@
     if (range) {
       try { chart.timeScale().setVisibleLogicalRange(range); } catch { /* chart being removed */ }
     }
+    scheduleScaleAlign();
+  }
+
+  // The panes share the logical range, not the pixels: a price scale wider
+  // than the oscillators' ("-0.000500" against "80.00") leaves the candles a
+  // narrower plot, and the same bar lands further right in the panes below
+  // (12/10, low of the price under the stochastic's dip 40 px later).
+  // `minimumWidth: 72` was not enough as soon as the prices had 6 decimals:
+  // every chart gets the widest scale's width.
+  const BASE_SCALE_WIDTH = 72;
+  let scaleAlignRaf = 0;
+  function syncedCharts() {
+    const list = [mainChart, rsiChart, macdChart, stochChart];
+    Object.values(customOscCharts || {}).forEach(({ chart }) => list.push(chart));
+    return list.filter(Boolean);
+  }
+  function scheduleScaleAlign() {
+    if (scaleAlignRaf || !mainChart) return;
+    scaleAlignRaf = requestAnimationFrame(() => {
+      scaleAlignRaf = 0;
+      // Two frames: the library lays the new labels out on its own frame.
+      requestAnimationFrame(alignPaneScales);
+    });
+  }
+  function alignPaneScales() {
+    const charts = syncedCharts();
+    let widest = BASE_SCALE_WIDTH;
+    charts.forEach((c) => {
+      try { widest = Math.max(widest, Math.ceil(c.priceScale("right").width())); } catch { /* removed */ }
+    });
+    charts.forEach((c) => {
+      try {
+        if (c.options().rightPriceScale.minimumWidth !== widest) {
+          c.applyOptions({ rightPriceScale: { minimumWidth: widest } });
+        }
+      } catch { /* removed */ }
+    });
+  }
+  // A new symbol starts from the base width again, or a scale that was once
+  // wide (a coin with many decimals) would keep every chart wide forever.
+  function resetPaneScales() {
+    syncedCharts().forEach((c) => {
+      try { c.applyOptions({ rightPriceScale: { minimumWidth: BASE_SCALE_WIDTH } }); } catch { /* removed */ }
+    });
+    scheduleScaleAlign();
   }
 
   // Price format for an oscillator in price units (MACD): two decimals
@@ -4887,6 +4932,8 @@
         try { chart.timeScale().setVisibleLogicalRange(range); } catch { /* in fase di rimozione */ }
       });
       repositionFractalLabels();
+      // Zooming changes the labels, and with them the scale width.
+      scheduleScaleAlign();
     });
 
     // Il valore dell'RSI va letto sul punto della curva, non dove capita il
@@ -8046,10 +8093,13 @@
     });
   }
 
+  let scaleKey = null;
   function render() {
     if (!state.data) return;
     updateWatchStar();
     clearOverlays();
+    const nextScaleKey = `${drawChartKey()}:${state.activeTimeframe}`;
+    if (nextScaleKey !== scaleKey) { scaleKey = nextScaleKey; resetPaneScales(); }
     updateMobileChartStrip();
 
     const tf = state.activeTimeframe;
@@ -11030,6 +11080,7 @@
         });
         const range = mainChart.timeScale().getVisibleLogicalRange();
         if (range) chart.timeScale().setVisibleLogicalRange(range);
+        scheduleScaleAlign();
         observeResize(container, chart);
         makeSubChartResizable(container, `custom:${ind.id}`);
         // Il riquadro appartiene a un solo indicatore: una "x" appare

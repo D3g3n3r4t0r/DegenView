@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0271", "Indicatori sotto il grafico sfalsati rispetto al prezzo",
+     "Lorenzo, 12/10, con screenshot: 'indicatori sotto sfalsati rispetto a prezzo'. Il minimo del prezzo cadeva circa 40 px prima del minimo dello stocastico.",
+     "alta"),
     ("seed-0270", "Misura del prezzo: niente rettangolo, deve proiettare i punti che legge",
      "Lorenzo, 12/10: 'la funzione di misurare prezzo non deve figurare un rettangolo ma proiettare i punti che legge in modo intelligente'.",
      "media"),
