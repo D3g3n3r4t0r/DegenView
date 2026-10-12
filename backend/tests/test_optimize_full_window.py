@@ -74,3 +74,20 @@ def test_gabriele_grid_covers_every_whole_value():
     assert _GRID_GABRIELE["rsi_oversold"] == list(range(15, 51))
     assert _GRID_GABRIELE["rsi_overbought"] == list(range(50, 86))
     assert grid_size(GAB) == 36 * 36
+
+
+def test_max_return_mode_matches_run_and_has_no_oos(client):
+    body = client.get("/api/optimize", params={**_BASE, "mode": "max_return"}).json()
+    assert body["mode"] == "max_return" and body["trials_evaluated"] == 31 * 31
+    assert 10 <= body["params"]["rsi_oversold"] <= 40
+    assert 60 <= body["params"]["rsi_overbought"] <= 90
+    assert body["out_of_sample_return_pct"] is None
+    assert abs(body["backtest"]["max_drawdown_pct"]) <= 60
+    run = client.get("/api/backtest/deep", params={**_BASE, **body["params"]}).json()
+    assert body["backtest"]["total_return_pct"] == pytest.approx(run["total_return_pct"])
+
+
+def test_max_return_is_refused_for_other_strategies(client):
+    resp = client.get("/api/optimize", params={**_BASE, "mode": "max_return",
+                                                "strategy_name": "Lorenzo (trend-follower)"})
+    assert resp.status_code == 400

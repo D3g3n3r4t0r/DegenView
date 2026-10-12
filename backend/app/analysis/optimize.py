@@ -526,3 +526,99 @@ def optimize_strategy(
     })
 
     return best_params, best_bt, evaluated, best_oos, best_overfitted, top_results
+
+
+# ── Max return on the whole chart ───────────────────────────────────────────
+# Lorenzo, 12/10: "add a mode that only looks for the maximum return on the
+# whole chart [...] oversold only from 10 to 40, overbought only from 60 to
+# 90 [...] every value crossed with the other, one by one [...] picking the
+# best performance with a maximum allowed drawdown of 60%".
+#
+# Declared for what it is: no out-of-sample slice, no composite score. It
+# answers "which pair of values made the most on this history", the question
+# a value tried by hand on the chart answers; it says nothing about the next
+# candles. The other modes stay for that.
+MAX_RETURN_OVERSOLD = range(10, 41)      # 10, 11, ..., 40
+MAX_RETURN_OVERBOUGHT = range(60, 91)    # 60, 61, ..., 90
+MAX_RETURN_DRAWDOWN_CAP = 60.0           # percent
+
+
+def max_return_size() -> int:
+    return len(MAX_RETURN_OVERSOLD) * len(MAX_RETURN_OVERBOUGHT)
+
+
+def max_return_search(
+    strategy_name: str,
+    backtest: Callable[[dict], BacktestResult],
+    constraints: Constraints | None = None,
+    progress: Callable[[str], None] | None = None,
+    should_stop: Callable[[], bool] | None = None,
+    top_n: int = _TOP_N,
+) -> tuple[dict, BacktestResult, int, list[dict]]:
+    """Every (oversold, overbought) pair, whole history, highest return wins.
+
+    `backtest(params)` is the caller's backtest on the whole series — the same
+    one Run computes — so the winner's figure is exactly what the chart will
+    show. RSI and Bollinger lengths and the multiplier stay GABRIELE_FIXED.
+    A configuration needs at least one trade and a drawdown within
+    MAX_RETURN_DRAWDOWN_CAP; the Lab's result filters, when set, apply too.
+
+    Returns (best_params, best_bt, evaluated, top_results), top_results
+    sorted by return, distinct by effect, rank starting at 1.
+    """
+    if strategy_name not in GABRIELE_STRATEGIES:
+        raise ValueError(f"max-return search is for RSI+BB only, not {strategy_name!r}")
+    constraints = constraints or _NO_CONSTRAINTS
+    say = progress or (lambda _m: None)
+    total = max_return_size()
+    say(f"whole chart, every pair: oversold {MAX_RETURN_OVERSOLD.start}-"
+        f"{MAX_RETURN_OVERSOLD.stop - 1} x overbought {MAX_RETURN_OVERBOUGHT.start}-"
+        f"{MAX_RETURN_OVERBOUGHT.stop - 1} = {total} backtests, "
+        f"max drawdown {MAX_RETURN_DRAWDOWN_CAP:.0f}%")
+
+    best: list[tuple[float, int, dict, BacktestResult]] = []   # min-heap on return
+    seen: set[tuple] = set()
+    evaluated = too_deep = no_trades = filtered = 0
+    step = max(1, total // 20)
+    for os_ in MAX_RETURN_OVERSOLD:
+        for ob in MAX_RETURN_OVERBOUGHT:
+            stop_if_asked(should_stop)
+            params = {**GABRIELE_FIXED, "rsi_oversold": os_, "rsi_overbought": ob}
+            bt = backtest(params)
+            evaluated += 1
+            if evaluated % step == 0:
+                lead = max(best, key=lambda e: e[0])[0] if best else None
+                say(f"{evaluated}/{total}" + (f" — best so far {lead:+.1f}%" if lead is not None else ""))
+            if bt.num_trades < 1:
+                no_trades += 1
+                continue
+            if abs(bt.max_drawdown_pct) > MAX_RETURN_DRAWDOWN_CAP:
+                too_deep += 1
+                continue
+            if not _passes(bt, constraints):
+                filtered += 1
+                continue
+            fp = (round(bt.total_return_pct, 4), bt.num_trades, round(bt.max_drawdown_pct, 4))
+            if fp in seen:
+                continue
+            seen.add(fp)
+            entry = (bt.total_return_pct, evaluated, params, bt)
+            if len(best) < top_n:
+                heapq.heappush(best, entry)
+            elif entry[0] > best[0][0]:
+                heapq.heapreplace(best, entry)
+
+    say(f"excluded: {too_deep} over {MAX_RETURN_DRAWDOWN_CAP:.0f}% drawdown, "
+        f"{no_trades} without trades" + (f", {filtered} by the filters" if filtered else ""))
+    if not best:
+        if constraints.active and filtered:
+            raise NoCandidateMeetsConstraints(constraints, evaluated, filtered)
+        raise ValueError(
+            f"no pair of values stays within {MAX_RETURN_DRAWDOWN_CAP:.0f}% drawdown "
+            f"with at least one trade on this chart ({evaluated} tried)")
+    ranked = sorted(best, key=lambda e: e[0], reverse=True)
+    top = [{"rank": i, "params": p, "backtest": b, "score": round(r, 4)}
+           for i, (r, _, p, b) in enumerate(ranked, start=1)]
+    say(f"best: oversold {top[0]['params']['rsi_oversold']}, overbought "
+        f"{top[0]['params']['rsi_overbought']} → {top[0]['backtest'].total_return_pct:+.2f}%")
+    return top[0]["params"], top[0]["backtest"], evaluated, top

@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0272", "Ottimizzazione RSI+BB: modalita' che cerca solo il rendimento massimo su tutto il grafico",
+     "Lorenzo, 12/10: 'aggiungi una modalita' che cerca solo il rendimento massimo su tutto il grafico [...] per l'ipervenduto solo da 10 a 40, per l'ipercomprato solo da 60 a 90 [...] andando di uno in uno [...] incrociando fra loro tutti i risultati possibili [...] selezionando la performance migliore con un drawdown massimo consentito del 60%'.",
+     "alta"),
     ("seed-0271", "Indicatori sotto il grafico sfalsati rispetto al prezzo",
      "Lorenzo, 12/10, con screenshot: 'indicatori sotto sfalsati rispetto a prezzo'. Il minimo del prezzo cadeva circa 40 px prima del minimo dello stocastico.",
      "alta"),
