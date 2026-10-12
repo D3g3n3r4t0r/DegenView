@@ -2823,5 +2823,11 @@
     "at": 1791842377,
     "summary": "La ricerca delle gemme gira ogni ora (45 minuti al massimo per giro; quella delle 22:00 resta di 2 ore), e un deploy non conta piu' come tentativo fallito.",
     "detail": "La ricerca delle 22:00 non era fallita: fra le 22 e mezzanotte ci sono stati tre deploy, e ogni riavvio del server veniva contato come un tentativo fallito, perche' il container viene spento dopo 10 secondi e la parte di codice che doveva scalare il conteggio non faceva in tempo a girare. Al terzo deploy la ricerca si e' arresa. Ora ogni tentativo ricorda il container in cui e' partito: se al riavvio il container e' nuovo (un deploy) il tentativo non conta; se e' lo stesso (un crash riavviato da Docker) conta come prima. Giri orari: a ogni ora piena, stessi passi della sera, finestra di 45 minuti; mandano il riepilogo su Telegram solo se la Top e' cambiata (entrati o usciti), mentre quelli delle 22:00 e delle 11:35 lo mandano sempre. Costo: piu' chiamate a API e DeepSeek nell'arco della giornata."
+  },
+  "seed-0275": {
+    "status": "risolto",
+    "at": 1791842795,
+    "summary": "Ogni x che cancella un alert (la x sulla riga del ticker, 'Remove ticker' e la x degli alert di prezzo) ora chiede conferma. Nelle strategie RSI+BB, accanto al nome compare 'OS 28 · OB 72' con i valori di ipervenduto e ipercomprato che l'alert usa.",
+    "detail": "Conferma con la finestra del telefono/browser: annullando non succede niente. I valori RSI mostrati sono quelli personalizzati di quel ticker (ingranaggio) se ci sono, altrimenti quelli predefiniti della strategia; compaiono solo per Gabriele e Gabriele 2 (RSI+BB)."
   }
 }

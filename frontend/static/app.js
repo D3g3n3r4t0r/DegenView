@@ -3107,6 +3107,8 @@
       // finché non espandi.
       head.querySelector(".wl-head-remove").addEventListener("click", async (e) => {
         e.stopPropagation();
+        // Lorenzo, 13/10: always ask first, a stray tap deleted active alerts.
+        if (!confirmAlertDelete(entry.symbol)) return;
         await fetch(`/api/watchlist/${entry.id}`, { method: "DELETE" });
         loadWatchlist();
       });
@@ -3189,6 +3191,8 @@
         label.className = "strat-name";
         label.textContent = strategyLabel(name);
         row.appendChild(label);
+        const levels = rsiLevelsChip(name, customParams);
+        if (levels) row.appendChild(levels);
 
         let paramsPanel = null;
         if (fields.length) {
@@ -3424,6 +3428,7 @@
       removeBtn.style.marginTop = "4px";
       removeBtn.addEventListener("click", async (e) => {
         e.stopPropagation();
+        if (!confirmAlertDelete(entry.symbol)) return;
         await fetch(`/api/watchlist/${entry.id}`, { method: "DELETE" });
         loadWatchlist();
       });
@@ -3433,6 +3438,29 @@
       card.appendChild(body);
       list.appendChild(card);
     });
+  }
+
+  function confirmAlertDelete(symbol) {
+    return window.confirm(`Delete ${symbol} from the alerts? Its active strategies stop sending signals.`);
+  }
+
+  // RSI+BB only (Lorenzo, 13/10): the two levels the alert fires on, visible
+  // next to the strategy name without opening the gear.
+  function rsiLevelsChip(name, customParams) {
+    if (!/RSI\+BB/.test(name)) return null;
+    const fields = STRATEGY_PARAM_FIELDS[name] || [];
+    const value = (key) => {
+      const v = customParams?.[key];
+      if (v !== undefined && v !== null && v !== "") return v;
+      return fields.find((f) => f.key === key)?.default;
+    };
+    const os = value("rsi_oversold"), ob = value("rsi_overbought");
+    if (os === undefined && ob === undefined) return null;
+    const chip = document.createElement("span");
+    chip.className = "strat-rsi-levels";
+    chip.title = "RSI oversold / overbought this alert uses";
+    chip.textContent = `OS ${os ?? "–"} · OB ${ob ?? "–"}`;
+    return chip;
   }
 
   // ── Archivio strategie ─────────────────────────────────────────────────────
@@ -4842,6 +4870,9 @@
 
     container.querySelectorAll(".pa-del-btn").forEach(btn => {
       btn.addEventListener("click", async () => {
+        const a = (alerts || []).find((x) => String(x.id) === btn.dataset.id);
+        const what = a ? `the price alert on ${a.symbol} at ${a.price}` : "this price alert";
+        if (!window.confirm(`Delete ${what}?`)) return;
         await fetch(`/api/price-alerts/${btn.dataset.id}`, { method: "DELETE" });
         loadPriceAlerts();
       });
