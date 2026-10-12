@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0273", "Chat Telegram degli alert: arrivano anche ottimizzazioni e gemme",
+     "Lorenzo, 12/10: 'Nella chat Telegram alert strategie (Chat ID: -5359869020) attualmente mi arrivano anche le notifiche dell'ottimizzazione conclusa e delle nuove gemme in classifica. Io in questa chat voglio ricevere solo segnali di trading quando si attivano le strategie.'",
+     "alta"),
     ("seed-0272", "Ottimizzazione RSI+BB: modalita' che cerca solo il rendimento massimo su tutto il grafico",
      "Lorenzo, 12/10: 'aggiungi una modalita' che cerca solo il rendimento massimo su tutto il grafico [...] per l'ipervenduto solo da 10 a 40, per l'ipercomprato solo da 60 a 90 [...] andando di uno in uno [...] incrociando fra loro tutti i risultati possibili [...] selezionando la performance migliore con un drawdown massimo consentito del 60%'.",
      "alta"),
