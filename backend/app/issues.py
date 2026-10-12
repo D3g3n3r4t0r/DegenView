@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0274", "Ricerca gemme: 'fallita 3 volte' e selezione poco popolata",
+     "Lorenzo, 12/10: 'Ricerca delle 22:00 interrotta: e' fallita 3 volte, riprova alle 11:35. Vedi i log del server., poi non e' molto popolata la nostra selezione, aggiungi controllo ogni ora'.",
+     "alta"),
     ("seed-0273", "Chat Telegram degli alert: arrivano anche ottimizzazioni e gemme",
      "Lorenzo, 12/10: 'Nella chat Telegram alert strategie (Chat ID: -5359869020) attualmente mi arrivano anche le notifiche dell'ottimizzazione conclusa e delle nuove gemme in classifica. Io in questa chat voglio ricevere solo segnali di trading quando si attivano le strategie.'",
      "alta"),

@@ -1,3 +1,7 @@
+# 2026-10-12 — Ricerca gemme ogni ora, deploy non contati come crash — `seed-0274` (Claude, a mano)
+
+Lorenzo: "Ricerca delle 22:00 interrotta: e' fallita 3 volte [...] non e' molto popolata la nostra selezione, aggiungi controllo ogni ora". Causa: tre deploy fra le 22 e mezzanotte; il ramo CancelledError di `run_night` non gira se Docker uccide il container dopo 10 s, quindi ogni deploy contava come crash. `nightly.forgive_redeploy()` (hostname = id del container) scala il tentativo se il container e' nuovo. `onchain_nightly_hourly=True`: giri a ogni ora piena, `onchain_hourly_max_minutes=45`, Telegram solo se la Top cambia; 22:00 e 11:35 restano giri principali (2 h, riepilogo sempre). Sostituisce "tutto in una tranche a fine serata" del 07/10 per volere di Lorenzo.
+
 # 2026-10-12 — Chat degli alert solo per i segnali — `seed-0273` (Claude, a mano)
 
 Lorenzo: "nella chat Telegram alert strategie (-5359869020) mi arrivano anche le notifiche dell'ottimizzazione conclusa e delle nuove gemme [...] voglio ricevere solo segnali di trading quando si attivano le strategie". `_info_chat`/`_info_chats` in main.py: ottimizzazione, gemme, listing e avvisi del monitoraggio vanno alla chat principale, mai a una chat che qualche account usa come chat degli alert (`_signal_only_chats`). Segnali, alert di prezzo e ordini restano su `_signal_chat`. Sostituisce la regola del 10/10 "listing e gemme nella chat degli alert".

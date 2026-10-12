@@ -1,5 +1,6 @@
 """The gem research in one run a night, at 22:00 Europe/Rome, plus a
-second run at 11:35 (Lorenzo, 08/10: "aggiungi un check oltre che alle 22,
+run at every whole hour (Lorenzo, 12/10: "aggiungi controllo ogni ora";
+shorter window, Telegram only when the Top changes) and one at 11:35 (Lorenzo, 08/10: "aggiungi un check oltre che alle 22,
 anche alle 11.35"). Both runs are the same; the times are
 `onchain_nightly_hour` plus `onchain_nightly_extra_times`.
 
@@ -35,6 +36,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import socket
 import time
 from datetime import datetime, timedelta
 from typing import Awaitable, Callable
@@ -77,6 +79,47 @@ def _save() -> None:
         logger.exception("nightly: state not saved")
 
 
+def _host() -> str:
+    """The container's id (Docker sets it as the hostname). A deploy builds a
+    new container; a crash restarted by Docker keeps the same one."""
+    return socket.gethostname()
+
+
+def forgive_redeploy(host: str | None = None) -> bool:
+    """An unfinished run whose attempt started in another container was cut
+    by a deploy, not by a crash: it does not count towards MAX_ATTEMPTS.
+
+    The CancelledError branch of run_night was meant to do this, but a
+    deploy gives the container ten seconds and then kills it: the branch
+    rarely ran. 12/10, three deploys between 22:00 and midnight turned into
+    "Ricerca delle 22:00 interrotta: e' fallita 3 volte" with nothing failed.
+    """
+    host = host or _host()
+    prev = _state.get("attempt_host")
+    if not prev or prev == host or (_state.get("done_slot") or 0) >= (_state.get("slot") or 0):
+        return False
+    _state["attempts"] = max(0, (_state.get("attempts") or 1) - 1)
+    _state["attempt_host"] = host
+    if _state.get("gave_up") == _state.get("slot") and _state["attempts"] < MAX_ATTEMPTS:
+        _state.pop("gave_up", None)
+    _save()
+    return True
+
+
+def is_main_run(slot: float) -> bool:
+    """The evening run (onchain_nightly_hour and the extra times): full
+    window and a Telegram summary always. Hourly runs are shorter and speak
+    only when the Top changed."""
+    when = datetime.fromtimestamp(slot, ROME)
+    return (when.hour, when.minute) in set(run_times(hourly=False))
+
+
+def window_s(slot: float) -> float:
+    if not settings.onchain_nightly_hourly or is_main_run(slot):
+        return settings.onchain_nightly_max_hours * 3600
+    return settings.onchain_hourly_max_minutes * 60
+
+
 def reset_for_tests() -> None:
     global _running
     _state.clear()
@@ -85,12 +128,14 @@ def reset_for_tests() -> None:
 
 # --------------------------------------------------------------- the clock
 
-def run_times(hour: int | None = None) -> list[tuple[int, int]]:
+def run_times(hour: int | None = None, hourly: bool | None = None) -> list[tuple[int, int]]:
     """(hour, minute) of each daily run, Europe/Rome, sorted. A given
     `hour` means that run only."""
     if hour is not None:
         return [(hour, 0)]
     out = {(settings.onchain_nightly_hour, 0)}
+    if settings.onchain_nightly_hourly if hourly is None else hourly:
+        out |= {(h, 0) for h in range(24)}
     for part in (settings.onchain_nightly_extra_times or "").split(","):
         h, _, m = part.strip().partition(":")
         try:
@@ -311,7 +356,8 @@ def text_it(s: dict) -> str:
                      "entrati e usciti tutta la sera.")
     if s.get("stopped") == "window":
         left = sum((s.get("backlog") or {}).values())
-        lines.append(f"Fermata al limite di {settings.onchain_nightly_max_hours:g} ore"
+        win = s.get("window_min") or settings.onchain_nightly_max_hours * 60
+        lines.append((f"Fermata al limite di {win / 60:g} ore" if win >= 60 else f"Fermata al limite di {win:g} minuti")
                      + (f": restano {left} lavori in coda per domani." if left else "."))
     return "\n".join(lines)
 
@@ -330,8 +376,9 @@ async def run_night(slot: float, top: Callable[[], list[dict]], *, steps_factory
     if _state.get("slot") != slot:
         _state.update(slot=slot, first_start=now, attempts=0, top_before=_top_map(top))
     _state["attempts"] = (_state.get("attempts") or 0) + 1
+    _state["attempt_host"] = _host()
     _save()
-    deadline = max(_state["first_start"] + settings.onchain_nightly_max_hours * 3600, now + RESUME_MIN_S)
+    deadline = max(_state["first_start"] + window_s(slot), now + RESUME_MIN_S)
     _running = True
     try:
         async with httpx.AsyncClient(timeout=10.0, headers={"User-Agent": "Mozilla/5.0 (LiquidityEngine)"}) as client:
@@ -349,10 +396,13 @@ async def run_night(slot: float, top: Callable[[], list[dict]], *, steps_factory
     summary["slot"] = slot
     _state.update(done_slot=slot, last_run=summary["ended"], summary=summary)
     _save()
-    try:
-        await send(text_it(summary))
-    except Exception:
-        logger.exception("nightly: Telegram summary not sent")
+    summary["window_min"] = round(window_s(slot) / 60)
+    # 24 runs a day: an hourly run writes only when the Top changed.
+    if not settings.onchain_nightly_hourly or is_main_run(slot) or summary.get("entered") or summary.get("left"):
+        try:
+            await send(text_it(summary))
+        except Exception:
+            logger.exception("nightly: Telegram summary not sent")
     return summary
 
 
@@ -378,6 +428,8 @@ async def nightly_loop(top: Callable[[], list[dict]], *, clock: Callable[[], flo
     the Top 50 entries (main._top_entries)."""
     from app.trading.onchain import leaderboard
     _load()
+    if forgive_redeploy():
+        logger.info("nightly: last attempt was cut by a deploy, not counted")
     await sleep(START_DELAY_S)
     leaderboard.startup_requeue()
     try:                            # a night due now measures usage itself
