@@ -3507,7 +3507,7 @@
       // e uno no — sembrerebbero la stessa cosa.
       const o = e.optimizer || {};
       const flags = [];
-      if (o.mode) flags.push(`${o.mode === "plateau" ? "stable" : o.mode === "grid" ? "grid" : "quick"} search`);
+      if (o.mode) flags.push(`${o.mode === "plateau" ? "stable" : o.mode === "grid" ? "grid" : o.mode === "max_return" ? "max return" : "quick"} search`);
       if (o.evaluations) flags.push(`${o.evaluations} backtest`);
       if (o.out_of_sample_return_pct != null) {
         flags.push(`out-of-sample ${o.out_of_sample_return_pct >= 0 ? "+" : ""}${o.out_of_sample_return_pct.toFixed(1)}%`);
@@ -11775,6 +11775,18 @@
     // Show grid-mode toggle only for strategies that support it.
     const gridWrap = labEl("lab-mode-grid-wrap");
     if (gridWrap) gridWrap.classList.toggle("hidden", !GRID_STRATEGIES.has(strategyName));
+    // Max return searches the two RSI levels: RSI+BB strategies only.
+    const maxWrap = labEl("lab-mode-maxret-wrap");
+    if (maxWrap) {
+      const ok = /RSI\+BB/.test(strategyName || "");
+      maxWrap.classList.toggle("hidden", !ok);
+      const radio = maxWrap.querySelector("input");
+      if (!ok && radio && radio.checked) {
+        radio.checked = false;
+        const quick = document.querySelector('input[name="lab-opt-mode"][value="random"]');
+        if (quick) quick.checked = true;
+      }
+    }
     fields.forEach((field) => {
       const label = document.createElement("label");
       if (field.type === "checkbox") {
@@ -12187,7 +12199,7 @@
         symbol,
         strategy: labState.strategy,
         mode: optMode,
-        title: optMode === "plateau" ? "Stable search running" : "Optimizing",
+        title: optMode === "plateau" ? "Stable search running" : optMode === "max_return" ? "Max return search running" : "Optimizing",
         sub: `${labState.displaySymbol || symbol} · ${strategyLabel(labState.strategy)}`,
         state: "in corso",
         elapsed: 0,

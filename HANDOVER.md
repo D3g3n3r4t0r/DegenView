@@ -1,3 +1,7 @@
+# 2026-10-12 — Modalita' Max return per RSI+BB — `seed-0272` (Claude, a mano)
+
+Lorenzo: "aggiungi una modalita' che cerca solo il rendimento massimo su tutto il grafico [...] ipervenduto solo da 10 a 40, ipercomprato solo da 60 a 90 [...] di uno in uno [...] drawdown massimo consentito del 60%". `optimize.max_return_search` (961 combinazioni, backtest passato dal chiamante = `_chart_backtest`, cioe' lo stesso di Run), `mode=max_return` in /api/optimize e /api/optimize/start, `_max_return_payload` in main.py, radio 'Max return' nel Lab visibile solo per RSI+BB. Nessun OOS, dichiarato nella nota.
+
 # 2026-10-12 — Segnalazioni whitekobra 6a8fdae8, 58512aa5, 5571a9f1 (Claude, a mano)
 
 Lorenzo: "Risolvi le segnalazioni aperte". 6a8fdae8: sincronia del tempo nei due sensi (`followPane` in app.js, il grafico principale fa da centro). 58512aa5: la casella in alto prende il pair cliccato in Watchlist e, a ogni analisi, il simbolo mostrato (non per DEX). 5571a9f1 (ottimizzazione RSI+BB battuta a mano): il backtest restituito era quello del solo tratto di selezione (70%, 60% in Stable) mentre Run usa tutta la serie; ora `_optimize_payload` ricalcola vincitore e classifica con `_chart_backtest` (stessa definizione di /api/backtest/deep) e tiene `in_sample_return_pct`. Grid Gabriele = tutti gli interi 15-50 x 50-85 (1296). **Cambia i numeri storici dell'ottimizzazione** (ora storia intera). Aperta per Lorenzo: modalita' 'massimo rendimento su tutto il grafico' dichiarata, se la vuole.

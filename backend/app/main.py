@@ -66,8 +66,10 @@ from app.analysis import indicator_catalog
 from app.analysis.fibonacci import compute_fib_zones
 from app.analysis.optimize import (
     Constraints,
+    GABRIELE_STRATEGIES,
     NoCandidateMeetsConstraints,
     is_optimizable,
+    max_return_search,
     optimize_strategy,
 )
 from app.analysis.pipeline import run_pipeline
@@ -7316,15 +7318,20 @@ async def _optimize_payload(
     same in-candle fills, spot only on DEX — and the slice figures stay as
     `in_sample_return_pct` next to the out-of-sample one.
     """
-    res = await _optimize_search(
-        strategy_name, df, backtest_params, mode, ltf_interval, backtest_interval,
-        constraints, say, should_stop, strategy_params,
-    )
     bp = backtest_params.model_dump()
 
     def full(params: dict) -> BacktestResult:
         return _chart_backtest(df, {**(strategy_params or {}), **params}, bp,
                                strategy_name, asset_type)
+
+    if mode == "max_return":
+        return await _max_return_payload(strategy_name, df, full, constraints, say,
+                                         should_stop, ltf_interval, backtest_interval)
+
+    res = await _optimize_search(
+        strategy_name, df, backtest_params, mode, ltf_interval, backtest_interval,
+        constraints, say, should_stop, strategy_params,
+    )
 
     def rerun() -> tuple[BacktestResult, list[BacktestResult]]:
         return full(res.params), [full(c.params) for c in res.top_candidates]
@@ -7353,6 +7360,51 @@ async def _optimize_payload(
             f"there) and kept the rest for the out-of-sample check."
         )
     return res
+
+
+async def _max_return_payload(strategy_name, df, full, constraints, say, should_stop,
+                              ltf_interval: str, backtest_interval: str) -> "OptimizeResult":
+    """Mode "max_return": every oversold 10-40 x overbought 60-90 pair on the
+    whole chart, backtested as Run does, highest return within 60% drawdown
+    (see optimize.max_return_search). No out-of-sample figure: none exists."""
+    if strategy_name not in GABRIELE_STRATEGIES:
+        raise HTTPException(status_code=400,
+                            detail="Max return searches the two RSI levels: RSI+BB strategies only.")
+    try:
+        params, bt, evaluated, top = await _cpu(partial(
+            max_return_search, strategy_name, full,
+            constraints=constraints, progress=say, should_stop=should_stop,
+        ))
+    except NoCandidateMeetsConstraints as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return OptimizeResult(
+        params=params,
+        backtest=bt.model_copy(update={"interval": backtest_interval, "oos_trades": []}),
+        trials_evaluated=evaluated,
+        out_of_sample_return_pct=None,
+        overfitted=False,
+        mode="max_return",
+        data_used=DataUsed(
+            interval=backtest_interval, candles=len(df), chart_interval=ltf_interval,
+            differs_from_chart=backtest_interval != ltf_interval,
+            note=(f"Every pair of RSI levels tried on all {len(df)} {backtest_interval} "
+                  f"candles, the same backtest as Run; the highest return within 60% "
+                  f"drawdown wins. Chosen on the whole chart: no out-of-sample check."),
+        ),
+        top_candidates=[
+            OptimizeCandidate(
+                rank=c["rank"], params=c["params"], score=c["score"],
+                total_return_pct=c["backtest"].total_return_pct,
+                max_drawdown_pct=c["backtest"].max_drawdown_pct,
+                num_trades=c["backtest"].num_trades,
+                win_rate_pct=c["backtest"].win_rate_pct,
+                profit_factor=c["backtest"].profit_factor,
+            )
+            for c in top
+        ],
+    )
 
 
 def _chart_backtest(df, strategy_params: dict, backtest_params: dict,
@@ -7615,7 +7667,7 @@ async def optimize_strategy_endpoint(
     strategy_name: str = Query(DEFAULT_STRATEGY),
     strategy_params: StrategyParamsQuery = Depends(),
     backtest_params: BacktestParamsQuery = Depends(),
-    mode: str = Query("random", pattern="^(random|grid|plateau)$"),
+    mode: str = Query("random", pattern="^(random|grid|plateau|max_return)$"),
     # Filtri opzionali sul risultato. `None` = nessun vincolo, ed e' distinto
     # da 0, che e' il vincolo piu' stringente ("nessun trade in perdita",
     # "drawdown nullo") e va potuto chiedere.
@@ -7758,8 +7810,8 @@ def _archive_optimizer_result(owner_id: str, symbol: str, asset_type: str,
     return entry
 
 
-_MODE_LABEL = {"random": "rapida", "grid": "griglia", "plateau": "stabile"}
-_MODE_LABEL_EN = {"random": "Quick", "grid": "Grid", "plateau": "Stable"}
+_MODE_LABEL = {"random": "rapida", "grid": "griglia", "plateau": "stabile", "max_return": "massimo rendimento"}
+_MODE_LABEL_EN = {"random": "Quick", "grid": "Grid", "plateau": "Stable", "max_return": "Max return"}
 
 
 def _optimizer_summary(symbol: str, strategy_name: str, mode: str,
@@ -7807,7 +7859,7 @@ async def start_optimize(
     strategy_name: str = Query(DEFAULT_STRATEGY),
     strategy_params: StrategyParamsQuery = Depends(),
     backtest_params: BacktestParamsQuery = Depends(),
-    mode: str = Query("random", pattern="^(random|grid|plateau)$"),
+    mode: str = Query("random", pattern="^(random|grid|plateau|max_return)$"),
     min_losing_trades: int | None = Query(None, ge=0, le=1000),
     max_losing_trades: int | None = Query(None, ge=0, le=1000),
     max_drawdown_pct: float | None = Query(None, ge=0.0, le=100.0),
