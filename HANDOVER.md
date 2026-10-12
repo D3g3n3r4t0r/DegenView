@@ -1,3 +1,7 @@
+# 2026-10-13 — Chat alert -5359869020 davvero solo segnali — `seed-0273` riaperto da Lorenzo
+
+Lorenzo: "La chat alert continua a ricevere anche ottimizzazioni e gemme, va risolto". Il gruppo e' la chat PRINCIPALE di un account (non la 'chat degli alert'), e i riepiloghi della ricerca/deploy passano da `telegram.send_message` (chat del server). `settings.telegram_signal_only_chats` (default "-5359869020") + chat degli alert di ogni account = `telegram.signal_only_chats()`, saltate da `send_message` e da `main._info_chat`.
+
 # 2026-10-12 — Ricerca gemme ogni ora, deploy non contati come crash — `seed-0274` (Claude, a mano)
 
 Lorenzo: "Ricerca delle 22:00 interrotta: e' fallita 3 volte [...] non e' molto popolata la nostra selezione, aggiungi controllo ogni ora". Causa: tre deploy fra le 22 e mezzanotte; il ramo CancelledError di `run_night` non gira se Docker uccide il container dopo 10 s, quindi ogni deploy contava come crash. `nightly.forgive_redeploy()` (hostname = id del container) scala il tentativo se il container e' nuovo. `onchain_nightly_hourly=True`: giri a ogni ora piena, `onchain_hourly_max_minutes=45`, Telegram solo se la Top cambia; 22:00 e 11:35 restano giri principali (2 h, riepilogo sempre). Sostituisce "tutto in una tranche a fine serata" del 07/10 per volere di Lorenzo.

@@ -2814,9 +2814,9 @@
   },
   "seed-0273": {
     "status": "risolto",
-    "at": 1791841624,
-    "summary": "La chat degli alert riceve solo i segnali delle strategie (con alert di prezzo e ordini). Ottimizzazioni, nuove gemme, listing e avvisi del monitoraggio vanno nella chat principale, e mai in una chat impostata come chat degli alert.",
-    "detail": "Prima la chat degli alert riceveva per scelta del 10/10 anche listing e gemme; l'ottimizzazione andava nella chat principale, quindi arrivava nel gruppo perche' la chat principale di un account era lo stesso gruppo. Ora: segnali di strategia, alert di prezzo e ordini -> chat degli alert; ottimizzazione conclusa o fallita, gemme in classifica, nuovi listing, 'dati fermi', 'exchange non risponde', 'crediti esauriti', 'errore monitoraggio' -> chat principale. Una chat che un qualsiasi account ha impostato come chat degli alert non riceve mai queste notifiche, anche se e' la chat principale di qualcuno: in quel caso semplicemente non partono. Per riceverle altrove basta mettere come chat principale la chat privata con il bot."
+    "at": 1791845031,
+    "summary": "La chat -5359869020 riceve solo i segnali delle strategie (con alert di prezzo e ordini). Ottimizzazioni, gemme, listing, riepiloghi della ricerca, avvisi di deploy ed errori non ci arrivano piu', da nessuna strada.",
+    "detail": "Primo fix (12/10) incompleto: escludeva solo le chat impostate come 'chat degli alert', ma il gruppo era impostato come chat PRINCIPALE di un account, e in piu' i messaggi di sistema (riepilogo della ricerca gemme con 'entrati nelle arene', deploy, errori) passano da un'altra strada, le chat del server. Lorenzo, 13/10: 'La chat alert continua a ricevere anche ottimizzazioni e gemme, va risolto'. Ora c'e' un elenco di chat riservate ai segnali (TELEGRAM_SIGNAL_ONLY_CHATS, gia' con -5359869020) piu' le chat degli alert di ogni account: ogni invio che non e' un segnale di strategia le salta, compresi i messaggi di sistema. I segnali continuano ad arrivare anche se il gruppo e' la chat principale. Per ricevere ottimizzazioni e gemme altrove: chat principale = la chat privata con il bot."
   },
   "seed-0274": {
     "status": "risolto",
