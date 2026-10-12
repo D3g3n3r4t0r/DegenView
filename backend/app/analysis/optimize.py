@@ -236,11 +236,17 @@ _STRATEGY_SPACES: dict[str, tuple[dict, callable]] = {
     "Gabriele 2 (RSI+BB long/short)": (LKI2_DEFAULT_PARAMS, _random_gabriele_params),
 }
 
+# Every whole value, not steps of 5: with only two dimensions the full grid
+# is 36 x 36 = 1 296 backtests, and a coarser one is beaten by hand by anyone
+# who tries 32/68 (5571a9f1: "changing the two values by hand I got better
+# results than the optimization in every mode"). Same range as the random
+# search, which used to reach 15-19 while the grid started at 20. RSI and
+# Bollinger lengths and the multiplier are always GABRIELE_FIXED, not a
+# dimension of the grid.
 _GRID_GABRIELE = {
-    "rsi_oversold":   [20, 25, 30, 35, 40, 45, 50],
-    "rsi_overbought": [50, 55, 60, 65, 70, 75, 80, 85],
-}  # 7 x 8 = 56 combinations — lunghezza RSI/Bollinger e moltiplicatore sono
-   # sempre GABRIELE_FIXED, non una dimensione della griglia
+    "rsi_oversold":   list(range(15, 51)),
+    "rsi_overbought": list(range(50, 86)),
+}
 
 _GRID_EXHAUSTION = {
     "swing_length":        [4, 8, 12],

@@ -1030,6 +1030,26 @@
     scheduleScaleAlign();
   }
 
+  // Two-way sync of the time axis. The price chart is the hub: a pane that
+  // moves sets the price chart's range, which hands it on to the others.
+  // `rangeSyncing` and the equality check stop the echo of our own calls.
+  let rangeSyncing = false;
+  function sameRange(a, b) {
+    return !!a && !!b && Math.abs(a.from - b.from) < 1e-3 && Math.abs(a.to - b.to) < 1e-3;
+  }
+  function followPane(chart, container) {
+    chart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
+      if (!range || rangeSyncing || !mainChart) return;
+      // A hidden or empty pane clamps its range on its own: never let it
+      // drag the price chart along.
+      if (container.classList.contains("hidden") || !container.offsetWidth) return;
+      if (sameRange(range, mainChart.timeScale().getVisibleLogicalRange())) return;
+      rangeSyncing = true;
+      try { mainChart.timeScale().setVisibleLogicalRange(range); } catch { /* chart being removed */ }
+      finally { rangeSyncing = false; }
+    });
+  }
+
   // The panes share the logical range, not the pixels: a price scale wider
   // than the oscillators' ("-0.000500" against "80.00") leaves the candles a
   // narrower plot, and the same bar lands further right in the panes below
@@ -4912,6 +4932,12 @@
     stochKSeries.createPriceLine({ price: 20, color: "rgba(0,214,143,0.45)", lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: "OS" });
     observeResize(stochContainer, stochChart);
 
+    // Dragging or zooming a pane moves the price chart too, and through it
+    // every other pane (6a8fdae8: "the RSI moves, the candles stay put").
+    followPane(rsiChart, rsiContainer);
+    followPane(macdChart, macdContainer);
+    followPane(stochChart, stochContainer);
+
     makeSubChartResizable(rsiContainer, "rsi-chart");
     makeSubChartResizable(macdContainer, "macd-chart");
     makeSubChartResizable(stochContainer, "stoch-chart");
@@ -4922,15 +4948,20 @@
 
     mainChart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
       if (!range) return;
-      rsiChart.timeScale().setVisibleLogicalRange(range);
-      macdChart.timeScale().setVisibleLogicalRange(range);
-      stochChart.timeScale().setVisibleLogicalRange(range);
+      rangeSyncing = true;
+      try {
+        rsiChart.timeScale().setVisibleLogicalRange(range);
+        macdChart.timeScale().setVisibleLogicalRange(range);
+        stochChart.timeScale().setVisibleLogicalRange(range);
+      } finally { rangeSyncing = false; }
       // customOscCharts si popola/svuota dinamicamente (vedi
       // refreshCustomIndicators) — questa callback e' registrata una sola
       // volta ma legge il contenuto corrente dell'oggetto ad ogni chiamata.
+      rangeSyncing = true;
       Object.values(customOscCharts).forEach(({ chart }) => {
         try { chart.timeScale().setVisibleLogicalRange(range); } catch { /* in fase di rimozione */ }
       });
+      rangeSyncing = false;
       repositionFractalLabels();
       // Zooming changes the labels, and with them the scale width.
       scheduleScaleAlign();
@@ -9041,6 +9072,13 @@
         throw new Error(detail || `Error ${resp.status}`);
       }
       state.data = body;
+      // Whatever opened the chart (watchlist, archive, a link), the box at
+      // the top names what is on it — unless the user is typing there.
+      const box = el("ticker-input");
+      if (box && document.activeElement !== box && body.symbol && body.asset_type !== "dex") {
+        box.value = body.symbol;
+        box.title = body.symbol;
+      }
       state.seenAlertKeys = new Set();
       state.alertsSeeded = false;
       if (state.pineActive) clearPineOverride();
@@ -9522,6 +9560,10 @@
       li.addEventListener("click", () => {
         state.assetType = entry.asset_type;
         if (entry.asset_type === "crypto") state.cryptoExchange = entry.exchange;
+        // The search box at the top is where the pair is named: it kept the
+        // previous one while the chart showed this (58512aa5).
+        el("ticker-input").value = entry.symbol;
+        el("ticker-input").title = entry.symbol;
         runAnalysis(entry.symbol);
       });
       wrap.appendChild(li);
@@ -11082,6 +11124,7 @@
         if (range) chart.timeScale().setVisibleLogicalRange(range);
         scheduleScaleAlign();
         observeResize(container, chart);
+        followPane(chart, container);
         makeSubChartResizable(container, `custom:${ind.id}`);
         // Il riquadro appartiene a un solo indicatore: una "x" appare
         // nell'angolo al passaggio del mouse (CSS, .sub-chart:hover), stesso

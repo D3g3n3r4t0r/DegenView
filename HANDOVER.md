@@ -1,3 +1,7 @@
+# 2026-10-12 — Segnalazioni whitekobra 6a8fdae8, 58512aa5, 5571a9f1 (Claude, a mano)
+
+Lorenzo: "Risolvi le segnalazioni aperte". 6a8fdae8: sincronia del tempo nei due sensi (`followPane` in app.js, il grafico principale fa da centro). 58512aa5: la casella in alto prende il pair cliccato in Watchlist e, a ogni analisi, il simbolo mostrato (non per DEX). 5571a9f1 (ottimizzazione RSI+BB battuta a mano): il backtest restituito era quello del solo tratto di selezione (70%, 60% in Stable) mentre Run usa tutta la serie; ora `_optimize_payload` ricalcola vincitore e classifica con `_chart_backtest` (stessa definizione di /api/backtest/deep) e tiene `in_sample_return_pct`. Grid Gabriele = tutti gli interi 15-50 x 50-85 (1296). **Cambia i numeri storici dell'ottimizzazione** (ora storia intera). Aperta per Lorenzo: modalita' 'massimo rendimento su tutto il grafico' dichiarata, se la vuole.
+
 # 2026-10-12 — Indicatori sfalsati rispetto al prezzo — `seed-0271` (Claude, a mano)
 
 Lorenzo, con screenshot: "indicatori sotto sfalsati rispetto a prezzo". Causa: scala dei prezzi del grafico principale piu' larga di quella dei pannelli (6 decimali contro "80.00"), stessa finestra logica su larghezze diverse. `alignPaneScales()` in app.js: tutte le scale (principale, RSI, MACD, stocastico, oscillatori custom) prendono la larghezza della piu' larga, a ogni render/zoom; `resetPaneScales()` al cambio simbolo/timeframe. Verificato in Chromium: 788/796/796 px prima, 788 ovunque dopo.

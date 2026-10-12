@@ -7182,6 +7182,9 @@ class OptimizeCandidate(BaseModel):
     profit_factor: float | None = None
     out_of_sample_return_pct: float | None = None
     overfitted: bool = False
+    # The return on the slice the search picked on; total_return_pct is the
+    # whole history, as Run shows it.
+    in_sample_return_pct: float | None = None
 
 
 class Overfitting(BaseModel):
@@ -7272,6 +7275,9 @@ class OptimizeResult(BaseModel):
     trials_evaluated: int
     data_used: DataUsed | None = None
     out_of_sample_return_pct: float | None = None
+    # Return on the slice the search picked on; `backtest` is the whole
+    # history, the same backtest Run computes.
+    in_sample_return_pct: float | None = None
     overfitted: bool = False
     mode: str = "random"
     top_candidates: list[OptimizeCandidate] = []
@@ -7286,6 +7292,84 @@ class OptimizeResult(BaseModel):
 
 
 async def _optimize_payload(
+    strategy_name: str,
+    df,
+    backtest_params: "BacktestParamsQuery",
+    mode: str,
+    ltf_interval: str,
+    backtest_interval: str,
+    constraints: "Constraints",
+    say=None,
+    should_stop=None,
+    strategy_params: dict | None = None,
+    asset_type: str = "crypto",
+) -> "OptimizeResult":
+    """The search, then its result told on the whole history.
+
+    The search picks on the first part of the series and keeps the rest to
+    check what it picked (70/30 for Quick and Grid, 60/20/20 for Stable). Its
+    backtest, though, was the one on the picking slice only, while Run and the
+    chart backtest the whole series: the same parameters read +40% after an
+    optimization and +90% after Run, and any value tried by hand on the whole
+    chart "beat the optimization in every mode" (5571a9f1). Now the winner and
+    the shortlist are backtested again exactly as Run does — whole series,
+    same in-candle fills, spot only on DEX — and the slice figures stay as
+    `in_sample_return_pct` next to the out-of-sample one.
+    """
+    res = await _optimize_search(
+        strategy_name, df, backtest_params, mode, ltf_interval, backtest_interval,
+        constraints, say, should_stop, strategy_params,
+    )
+    bp = backtest_params.model_dump()
+
+    def full(params: dict) -> BacktestResult:
+        return _chart_backtest(df, {**(strategy_params or {}), **params}, bp,
+                               strategy_name, asset_type)
+
+    def rerun() -> tuple[BacktestResult, list[BacktestResult]]:
+        return full(res.params), [full(c.params) for c in res.top_candidates]
+
+    winner, cands = await _cpu(rerun)
+    in_sample = res.backtest
+    res.in_sample_return_pct = in_sample.total_return_pct
+    res.backtest = winner.model_copy(update={
+        "interval": backtest_interval,
+        # The whole-history trades already include the out-of-sample ones:
+        # passing them again listed every late trade twice in the drawer.
+        "oos_trades": [],
+        "ticker_volatility_pct": in_sample.ticker_volatility_pct,
+    })
+    for c, bt in zip(res.top_candidates, cands):
+        c.in_sample_return_pct = c.total_return_pct
+        c.total_return_pct = bt.total_return_pct
+        c.max_drawdown_pct = bt.max_drawdown_pct
+        c.num_trades = bt.num_trades
+        c.win_rate_pct = bt.win_rate_pct
+        c.profit_factor = bt.profit_factor
+    if res.data_used is not None:
+        res.data_used.note += (
+            f" The result shown is the whole history, as Run computes it; the "
+            f"search picked on the first part only ({in_sample.total_return_pct:+.1f}% "
+            f"there) and kept the rest for the out-of-sample check."
+        )
+    return res
+
+
+def _chart_backtest(df, strategy_params: dict, backtest_params: dict,
+                    strategy_name: str, asset_type: str) -> BacktestResult:
+    """The backtest exactly as Run and the chart compute it (see
+    /api/backtest/deep): one definition, so an optimized figure and a manual
+    one can be compared."""
+    sig = None
+    if asset_type == "dex" and strategy_name in STRATEGY_REGISTRY:
+        sig = spot_only(STRATEGY_REGISTRY[strategy_name](df, strategy_params))
+    return run_backtest(
+        df, strategy_params, backtest_params, strategy_name=strategy_name,
+        signals=sig, intrabar_fn=_intrabar_fn(asset_type, strategy_name),
+    )
+
+
+async def _optimize_search(
     strategy_name: str,
     df,
     backtest_params: "BacktestParamsQuery",
@@ -7612,6 +7696,7 @@ async def _optimize_body(
     return await _optimize_payload(
         strategy_name, df, backtest_params, mode, ltf_interval,
         backtest_interval, constraints, strategy_params=strategy_params,
+        asset_type=asset_type,
     )
 
 
@@ -7782,6 +7867,7 @@ async def start_optimize(
                 backtest_interval, constraints, say,
                 should_stop=lambda: jobs_store.cancel_requested(job_id),
                 strategy_params=strategy_params.model_dump(),
+                asset_type=asset_type,
             )
             jobs_store.finish(job_id, body.model_dump(mode="json"))
 
