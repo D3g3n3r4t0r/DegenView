@@ -1,3 +1,7 @@
+# 2026-10-12 — Chat degli alert solo per i segnali — `seed-0273` (Claude, a mano)
+
+Lorenzo: "nella chat Telegram alert strategie (-5359869020) mi arrivano anche le notifiche dell'ottimizzazione conclusa e delle nuove gemme [...] voglio ricevere solo segnali di trading quando si attivano le strategie". `_info_chat`/`_info_chats` in main.py: ottimizzazione, gemme, listing e avvisi del monitoraggio vanno alla chat principale, mai a una chat che qualche account usa come chat degli alert (`_signal_only_chats`). Segnali, alert di prezzo e ordini restano su `_signal_chat`. Sostituisce la regola del 10/10 "listing e gemme nella chat degli alert".
+
 # 2026-10-12 — Modalita' Max return per RSI+BB — `seed-0272` (Claude, a mano)
 
 Lorenzo: "aggiungi una modalita' che cerca solo il rendimento massimo su tutto il grafico [...] ipervenduto solo da 10 a 40, ipercomprato solo da 60 a 90 [...] di uno in uno [...] drawdown massimo consentito del 60%". `optimize.max_return_search` (961 combinazioni, backtest passato dal chiamante = `_chart_backtest`, cioe' lo stesso di Run), `mode=max_return` in /api/optimize e /api/optimize/start, `_max_return_payload` in main.py, radio 'Max return' nel Lab visibile solo per RSI+BB. Nessun OOS, dichiarato nella nota.

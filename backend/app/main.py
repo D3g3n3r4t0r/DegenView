@@ -548,8 +548,40 @@ _stale_notified: set[str] = set()   # voci gia' avvisate per dati fermi, finche'
 def _signal_chat(owner: User) -> str:
     """Where an alert goes: the user's alerts chat if set, else their main
     chat (segnalazione a6b36231; Lorenzo 10/10: "una terza chat Telegram solo
-    per gli alert"). Watchlist, listings, gems and trend signals all use it."""
+    per gli alert"). Strategy signals, price alerts and orders use it; since
+    12/10 listings, gems, optimizations and monitoring notices do not (see
+    `_info_chat`)."""
     return owner.telegram_signal_chat_id or owner.telegram_chat_id
+
+
+def _signal_only_chats() -> set[str]:
+    """Every chat some account has set as its alerts chat.
+
+    Lorenzo, 12/10: "in the strategy alerts chat I also get the optimization
+    finished and the new gems in the leaderboard. In this chat I only want
+    trading signals when the strategies fire." A chat named as an alerts chat
+    gets strategy signals and nothing else — also when another account (or
+    the same one) has it as its main chat."""
+    return {u.telegram_signal_chat_id for u in auth.list_users() if u.telegram_signal_chat_id}
+
+
+def _info_chat(user: User) -> str:
+    """Where everything that is not a strategy signal goes: optimization
+    results, listings, gems, monitoring hiccups. The main chat, never an
+    alerts chat; "" when the main chat is one."""
+    chat = user.telegram_chat_id
+    if not chat or chat in _signal_only_chats():
+        return ""
+    return chat
+
+
+def _info_chats(seen: set[str], user: User) -> str:
+    """`_info_chat` for one broadcast, once per chat (see `_alert_chats`)."""
+    chat = _info_chat(user)
+    if not chat or chat in seen:
+        return ""
+    seen.add(chat)
+    return chat
 
 
 def _alert_chats(seen: set[str], user: User) -> str:
@@ -611,7 +643,7 @@ async def _watchlist_alert_loop() -> None:
                         _stale_notified.add(entry.id)
                         _old = f"{int(_age // 3600)} h" if _age >= 3600 else f"{int(_age // 60)} min"
                         _fire(telegram.send_to(
-                            _signal_chat(owner),
+                            _info_chat(owner),
                             f"⚠️ Dati fermi: <b>{entry.symbol}</b> [{entry.interval}] — ultima candela {_old} fa",
                         ))
                 # Price-level alerts (checked once per entry poll regardless of strategies)
@@ -807,7 +839,7 @@ async def _watchlist_alert_loop() -> None:
                 streak = _pause_for_unreachable(entry.asset_type, entry.exchange)
                 if _notify_unreachable_once(entry.asset_type, entry.exchange, streak):
                     _fire(telegram.send_to(
-                        _signal_chat(owner),
+                        _info_chat(owner),
                         f"📡 <b>{entry.exchange}</b> non risponde da qualche minuto.\n"
                         f"Il monitoraggio riprende da solo appena torna raggiungibile.\n\n"
                         f"<i>{exc}</i>",
@@ -826,7 +858,7 @@ async def _watchlist_alert_loop() -> None:
                 _pause_for_quota(entry.asset_type, entry.exchange, exc)
                 if _notify_quota_once(owner.id, entry.asset_type, entry.exchange):
                     _fire(telegram.send_to(
-                        _signal_chat(owner),
+                        _info_chat(owner),
                         f"⏸️ <b>Crediti dati esauriti</b> ({entry.exchange if entry.asset_type == 'crypto' else 'Twelve Data'})\n"
                         f"Il monitoraggio dei titoli riprende automaticamente quando la quota si azzera. "
                         f"Le crypto non sono toccate.\n\n<i>{exc}</i>",
@@ -834,10 +866,10 @@ async def _watchlist_alert_loop() -> None:
                 continue
             except Exception as exc:  # noqa: BLE001
                 logger.error("Alert loop error for %s: %s", entry.symbol, exc, exc_info=True)
-                if settings.telegram_bot_token and _signal_chat(owner) and _telegram_allowed(owner):
+                if settings.telegram_bot_token and _info_chat(owner) and _telegram_allowed(owner):
                     _fire(
                         telegram.send_to(
-                            _signal_chat(owner),
+                            _info_chat(owner),
                             f"⚠️ Errore monitoraggio <b>{entry.symbol}</b> [{entry.interval}]: {exc}",
                         )
                     )
@@ -2505,7 +2537,7 @@ async def update_telegram_chat_id(
             and _telegram_allowed(updated)):
         _fire(telegram.send_to(
             updated.telegram_signal_chat_id,
-            "✅ Chat degli alert collegata: da qui in poi gli alert (segnali, listing, gemme) arrivano qui.",
+            "✅ Chat degli alert collegata: da qui in poi qui arrivano solo i segnali delle strategie (e gli alert di prezzo).",
         ))
     if updated.telegram_chat_id and _telegram_allowed(updated):
         # Confirms the chat_id was actually saved and is reachable — sent
@@ -4635,13 +4667,14 @@ async def _notify_listing(item: dict) -> None:
     onchain_alert_track.record(item, "meme", now)
     seen: set[str] = set()
     for user in auth.list_users():
-        if not _signal_chat(user) or not user.onchain_wallets or not _telegram_allowed(user):
+        # Not a strategy signal: the main chat, never an alerts chat.
+        if not _info_chat(user) or not user.onchain_wallets or not _telegram_allowed(user):
             continue
         sent = [t for t in _listing_notified.get(user.id, []) if now - t < 3600]
         if len(sent) >= _LISTING_NOTIFY_PER_HOUR:
             continue
         _listing_notified[user.id] = sent + [now]
-        if chat := _alert_chats(seen, user):
+        if chat := _info_chats(seen, user):
             _fire(telegram.send_to(chat, text))
 
 
@@ -4696,13 +4729,14 @@ async def _notify_gem(kind: str, e: dict) -> None:
     text = _gem_telegram_text(kind, e)
     seen: set[str] = set()
     for user in auth.list_users():
-        if not _signal_chat(user) or not user.onchain_wallets or not _telegram_allowed(user):
+        # Not a strategy signal: the main chat, never an alerts chat.
+        if not _info_chat(user) or not user.onchain_wallets or not _telegram_allowed(user):
             continue
         sent = [t for t in _gem_notified.get(user.id, []) if now - t < 3600]
         if len(sent) >= _GEM_NOTIFY_PER_HOUR:
             continue
         _gem_notified[user.id] = sent + [now]
-        if chat := _alert_chats(seen, user):
+        if chat := _info_chats(seen, user):
             _fire(telegram.send_to(chat, text))
 
 
@@ -7933,8 +7967,8 @@ async def start_optimize(
                                                      mode, body)
                 jobs_store.log(job_id, f"saved to archive ({archived['id']})")
                 user_now = auth.get_user(owner_id)
-                if user_now and user_now.telegram_chat_id and _telegram_allowed(user_now):
-                    await telegram.send_to(user_now.telegram_chat_id,
+                if user_now and _info_chat(user_now) and _telegram_allowed(user_now):
+                    await telegram.send_to(_info_chat(user_now),
                                            _optimizer_summary(symbol, strategy_name, mode, body))
                     jobs_store.log(job_id, "summary sent to Telegram")
             jobs_store.log(job_id, "fatto")
@@ -7953,9 +7987,9 @@ async def start_optimize(
             jobs_store.fail(job_id, str(exc))
             if owner_id:
                 user_now = auth.get_user(owner_id)
-                if user_now and user_now.telegram_chat_id and _telegram_allowed(user_now):
+                if user_now and _info_chat(user_now) and _telegram_allowed(user_now):
                     await telegram.send_to(
-                        user_now.telegram_chat_id,
+                        _info_chat(user_now),
                         f"⚠️ <b>Ottimizzazione fallita</b> — {symbol.upper()} · {strategy_name}\n{exc}",
                     )
 
