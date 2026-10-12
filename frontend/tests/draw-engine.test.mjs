@@ -94,3 +94,19 @@ test('paint runs for every tool on a recording context', () => {
   }
   assert.ok(calls.includes('stroke') && calls.includes('fill'));
 });
+
+test('measure reads the nearest high or low under the pointer', () => {
+  const candles = [{ time: 1, high: 110, low: 100 }, { time: 2, high: 120, low: 105 }, { time: 3, high: 115, low: 98 }];
+  const priceToY = (p) => 500 - p * 2;          // 120 -> 260, 98 -> 304
+  assert.deepEqual(E.pickExtreme(candles, 262, priceToY, 40), { time: 2, price: 120, side: 'high' });
+  assert.deepEqual(E.pickExtreme(candles, 305, priceToY, 40), { time: 3, price: 98, side: 'low' });
+  assert.equal(E.pickExtreme(candles, 100, priceToY, 40), null);   // too far from any wick
+});
+
+test('measure is hit on its line and its points, not inside a box', () => {
+  const env = { w: 800, h: 400 };
+  const P = [{ x: 100, y: 300 }, { x: 300, y: 100 }];
+  assert.ok(E.hitTest({ type: 'range' }, P, 200, 200, env));
+  assert.ok(E.hitTest({ type: 'range' }, P, 300, 100, env));
+  assert.ok(!E.hitTest({ type: 'range' }, P, 280, 280, env), 'the empty corner of the old box');
+});

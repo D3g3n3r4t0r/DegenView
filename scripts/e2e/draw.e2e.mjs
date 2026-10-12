@@ -238,6 +238,32 @@ for (const tool of ['extended_line', 'hray', 'rectangle', 'range', 'fib', 'arrow
   check(`${tool} placed`, (await drawings(page)).length === n + 1);
 }
 
+// measure: the points it reads are candle highs or lows, no box
+{
+  const before = (await drawings(page)).length;
+  await page.click('[data-draw-tool="range"]');
+  b = await box(page); pn = await pane(page);
+  // aim a few pixels off a real low and a real high
+  const [c1, c2] = await page.evaluate(() => {
+    const D = window.__drawDebug, w = D.pane().w;
+    const vis = D.lastCandles(400).filter((c) => { const x = D.px(c.time, c.close).x; return x > 40 && x < w * 0.7; });
+    return [vis[Math.floor(vis.length * 0.2)], vis[Math.floor(vis.length * 0.7)]];
+  });
+  const a1 = await px(page, { time: c1.time, price: c1.low }), a2 = await px(page, { time: c2.time, price: c2.high });
+  await page.mouse.click(b.x + a1.x + 1, b.y + a1.y + 7);
+  await page.mouse.click(b.x + a2.x - 1, b.y + a2.y - 6);
+  const all = await drawings(page);
+  const m = all[all.length - 1];
+  const ok = all.length === before + 1 && m.type === 'range';
+  if (process.env.E2E_DEBUG) console.log('measure dbg', before, all.length, m.type, JSON.stringify({a1, a2, c1, c2, b, pn}));
+  const extremes = await page.evaluate((pts) => pts.map((pt) => {
+    const c = window.__drawDebug.candleAt(pt.time);
+    return c ? (Math.abs(c.high - pt.price) < 1e-9 || Math.abs(c.low - pt.price) < 1e-9) : 'no-candle';
+  }), m.points);
+  check('measure reads a high or low of a candle for each point', ok && extremes.every((x) => x === true), JSON.stringify(extremes));
+  check('measure label has price, percent and bars', /\(([+-])?\d+\.\d+%\).*bars/.test(m.text || ''), m.text);
+}
+
 // persistence: reload, and another device of the same account
 await page.waitForTimeout(1200);  // account sync debounce
 const total = (await drawings(page)).length;
