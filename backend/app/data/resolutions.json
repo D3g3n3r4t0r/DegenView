@@ -2781,5 +2781,11 @@
     "at": 1791801742,
     "summary": "La misura mostra solo le proiezioni tratteggiate dei due prezzi fino alla scala, un righello verticale fra di loro e la percentuale al centro: niente angolo, niente diagonale, niente riquadro. I punti si agganciano a minimi e massimi.",
     "detail": "Lorenzo, 12/10: prima 'non deve figurare un rettangolo', poi 'mai obliquo', infine 'non voglio visualizzare la proiezione ad angolo della misura ma solo una proiezione dei due punti con la percentuale nel mezzo'. Ogni punto si aggancia al massimo o minimo piu' vicino fra le 5 candele attorno al puntatore (entro 40 px). Due linee tratteggiate dai due prezzi alla scala con le pillole dei prezzi; righello verticale con freccia al tempo del secondo punto; percentuale in grassetto a meta' e, se c'e' spazio, variazione, durata e candele sotto. Tolti tratto orizzontale e obiettivo 1:1; si seleziona sulle proiezioni, sul righello o sui punti."
+  },
+  "seed-0271": {
+    "status": "risolto",
+    "at": 1791828553,
+    "summary": "RSI, MACD, stocastico e gli oscillatori personalizzati hanno ora la scala dei prezzi larga quanto quella del grafico principale, così ogni candela cade esattamente sopra il suo valore dell'indicatore.",
+    "detail": "I pannelli erano sincronizzati sull'indice delle candele ma non sui pixel: con prezzi a 6 decimali (0.001514, -0.000500) la scala del grafico principale è più larga di quella degli indicatori (80.00), l'area delle candele più stretta, e la stessa candela finiva più a destra nei pannelli sotto. Il minimo fisso di 72 px non bastava. Ora a ogni disegno e a ogni zoom tutte le scale prendono la larghezza della più larga; al cambio di simbolo o timeframe si riparte dalla base. Verificato nel browser con una moneta da 0.0015: prima 788 px di area per il prezzo contro 796 per RSI e stocastico, ora 788 per tutti."
   }
 }
