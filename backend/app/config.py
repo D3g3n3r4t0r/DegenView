@@ -192,6 +192,11 @@ class Settings(BaseSettings):
     # alert di trading che vanno alla chat personale di ogni utente. Vuota =
     # vanno in telegram_chat_ids, com'e' sempre stato.
     telegram_dev_chat_ids: str = ""  # comma-separated
+    # Chats that get strategy signals and nothing else, comma-separated, on
+    # top of every account's alerts chat. Lorenzo, 13/10: "La chat alert
+    # continua a ricevere anche ottimizzazioni e gemme": the group is set as
+    # an account's MAIN chat, so the alerts-chat setting alone did not catch it.
+    telegram_signal_only_chats: str = "-5359869020"
     github_api_token: str = ""   # PAT for fetching commit history on deploy notify
 
     # Registration is open to anyone, but actual Telegram delivery is

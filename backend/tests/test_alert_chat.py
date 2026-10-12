@@ -56,3 +56,30 @@ def test_info_broadcast_reaches_each_main_chat_once(monkeypatch):
     seen: set[str] = set()
     assert main._info_chats(seen, a) == "111"
     assert main._info_chats(seen, b) == ""
+
+
+def test_the_group_is_signal_only_even_as_a_main_chat(monkeypatch):
+    # 13/10: the group was an account's MAIN chat, not its alerts chat.
+    lorenzo = _user("-5359869020")
+    _users(monkeypatch, lorenzo)
+    assert main._signal_chat(lorenzo) == "-5359869020"   # signals still arrive
+    assert main._info_chat(lorenzo) == ""                # nothing else does
+
+
+def test_system_messages_skip_signal_only_chats(monkeypatch):
+    import asyncio
+
+    from app.config import settings
+    from app.notify import telegram
+    _users(monkeypatch)
+    monkeypatch.setattr(settings, "telegram_bot_token", "t")
+    monkeypatch.setattr(settings, "telegram_dev_chat_ids", "")
+    monkeypatch.setattr(settings, "telegram_chat_ids", "-5359869020,42")
+    got = []
+
+    async def deliver(client, chat_id, text):
+        got.append(chat_id)
+        return True
+    monkeypatch.setattr(telegram, "_deliver", deliver)
+    asyncio.run(telegram.send_message("deploy"))
+    assert got == ["42"]

@@ -55,6 +55,20 @@ def _chat_ids() -> list[str]:
     return _split(settings.telegram_dev_chat_ids) or _split(settings.telegram_chat_ids)
 
 
+def signal_only_chats() -> set[str]:
+    """Chats reserved to strategy signals: `TELEGRAM_SIGNAL_ONLY_CHATS` plus
+    every account's alerts chat. Nothing else is ever sent there — not the
+    system messages below, not optimizations, gems or listings (main.py
+    `_info_chat`)."""
+    out = set(_split(settings.telegram_signal_only_chats))
+    try:
+        from app import auth
+        out |= {u.telegram_signal_chat_id for u in auth.list_users() if u.telegram_signal_chat_id}
+    except Exception:  # noqa: BLE001 — never block a message on this lookup
+        logger.exception("telegram: accounts not readable for the signal-only chats")
+    return out
+
+
 def is_configured() -> bool:
     return bool(settings.telegram_bot_token) and bool(_chat_ids())
 
@@ -157,7 +171,10 @@ async def send_message(text: str) -> bool:
 
     sent_any = False
     async with httpx.AsyncClient(timeout=15.0) as client:
+        reserved = signal_only_chats()
         for chat_id in _chat_ids():
+            if chat_id in reserved:
+                continue    # a signals-only chat never gets system messages
             # Un destinatario che fallisce non ferma gli altri.
             sent_any = await _deliver(client, chat_id, text) or sent_any
     return sent_any

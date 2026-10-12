@@ -562,7 +562,7 @@ def _signal_only_chats() -> set[str]:
     trading signals when the strategies fire." A chat named as an alerts chat
     gets strategy signals and nothing else — also when another account (or
     the same one) has it as its main chat."""
-    return {u.telegram_signal_chat_id for u in auth.list_users() if u.telegram_signal_chat_id}
+    return telegram.signal_only_chats()
 
 
 def _info_chat(user: User) -> str:
