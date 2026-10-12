@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0269", "Strumenti di disegno: spariscono o scattano",
+     "Lorenzo, 12/10: 'i tool di disegno non funzionano bene spesso scompaiono o sono scattosi, devi analizzare nel dettaglio ogni funzione di disegno e creare un piano per renderli perfetti', poi 'voglio dei canvas moderni, colori etc' e 'procedi e falle tutte, e verifica ogni cosa'.",
+     "alta"),
     ("seed-0268", "Sito classico lento: un backtest blocca il sito per tutti",
      "Lorenzo, 12/10: 'crea un prompt e un piano di miglioramento di prestazioni per il sito classico [...] voglio un overhaul completo', poi 'attua tutto'. "
      "Trovato leggendo il codice: grafico e backtest calcolati sul processo che risponde a tutti, motore riga per riga, refresh completo ogni 60 s, editor Pine caricato sempre.",

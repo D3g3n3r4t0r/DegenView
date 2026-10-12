@@ -31,12 +31,29 @@ jobs:
           ruff check backend/ --select E,F,W --ignore E501
 
       - name: Frontend
-        run: node --check frontend/static/app.js
+        run: |
+          node --check frontend/static/app.js
+          node --check frontend/static/draw-engine.js
+          node --test frontend/tests/draw-engine.test.mjs
 
       - name: Test
         run: |
           pip install -r backend/requirements.txt pytest
           cd backend && PYTHONPATH=. python -m pytest tests/ -q
+
+  # Drawing tools in a real browser (scripts/e2e/draw.e2e.mjs): reported on
+  # every push, not a gate for the deploy, so a slow runner cannot block it.
+  draw-e2e:
+    name: Drawing tools (browser)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-save playwright@1.56.0 && npx playwright install --with-deps chromium
+      - run: node scripts/e2e/draw.e2e.mjs
 
   deploy:
     name: Deploy

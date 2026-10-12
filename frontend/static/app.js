@@ -132,6 +132,7 @@
 
   function applyTheme(mode, { persist = true, redraw = true } = {}) {
     document.documentElement.setAttribute("data-theme", mode);
+    try { bumpDraw(); } catch { /* drawing layer not set up yet */ }
     Object.keys(COLORS).forEach((k) => delete COLORS[k]);
     Object.assign(COLORS, mode === "dark" ? COLORS_DARK : COLORS_LIGHT);
     const btn = el("theme-toggle-btn");
@@ -1295,6 +1296,9 @@
       disarmSlowServerHint();
     }
     updateAuthUI();
+    // A chart opened before the login was known has not asked the account
+    // for its drawings yet.
+    if (state.user) { try { syncCurrentDrawings(); } catch { /* drawing layer not ready */ } }
   }
 
   function updateAuthUI() {
@@ -5184,15 +5188,20 @@
     return { type: "price", precision, minMove: 1 / 10 ** precision };
   }
 
-  // ---- Drawing tools (left rail next to the chart) ----
-  // Drawings are placed with a click-to-collect flow (1 or 2 points
-  // depending on the tool), rendered as chart primitives, and persisted in
-  // localStorage per (asset_type, symbol) — client-side only, same scope as
-  // TradingView's own free-tier drawings. A 2-point tool shows a live
-  // "ghost" preview between the first and second click; the Cursor tool
-  // hit-tests existing drawings and removes one on click. No drag-to-resize
-  // of an already-placed drawing yet — that's a later iteration.
-  const DRAW_TOOL_POINTS = { cursor: 0, trend_line: 2, hline: 1, hray: 1, extended_line: 2, rectangle: 2, range: 2, fib: 2, text: 1, arrow: 2, channel: 3, ellipse: 2, fractal: 2 };
+  // ---- Drawing tools (drawing tools plan, 12/10/2026) ----
+  // Geometry and painting live in draw-engine.js (DrawEngine, tested in
+  // node); this part wires them to the chart: where a point lands, what the
+  // pointer does, when the canvas repaints, where drawings are saved.
+  //
+  // A point stays {time, price}. Its x comes from a fractional bar index
+  // (DrawEngine.makeTimeMapper + logicalToCoordinate), so a point drawn on
+  // 4h still sits in the right place on 1D, before the first candle and in
+  // the empty area after the last one — before, any time that was not
+  // exactly a candle of the current timeframe was thrown to the canvas
+  // edge or not drawn. Input comes from the pointer event itself, not from
+  // the chart's crosshair, which on a phone does not follow the finger.
+  const DE = window.DrawEngine;
+  const DRAW_TOOL_POINTS = DE.POINTS;
   const DRAW_TOOL_LABELS = {
     trend_line: "Trend line",
     extended_line: "Extended line",
@@ -5205,52 +5214,118 @@
     arrow: "Arrow",
     channel: "Parallel channel",
     ellipse: "Ellipse",
+    fractal: "Fractal",
   };
+
+  function readDrawPref(key, fallback) {
+    try { const v = localStorage.getItem(key); return v === null ? fallback : JSON.parse(v); } catch { return fallback; }
+  }
+  function writeDrawPref(key, value) {
+    try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* per-device convenience only */ }
+  }
 
   const drawState = {
     tool: "cursor",
     pending: [],
     drawings: [],
-    attached: {}, // id -> { priceLine } — only used for hline type (axis label)
-    selected: null, // id of the selected drawing
+    attached: {},            // id -> { priceLine } — axis label of an hline
+    selected: null,          // id of the selected drawing
+    hover: null,             // id under the pointer
+    sticky: false,           // tool stays on after a drawing (double click on its button)
+    hidden: false,           // "hide all"
+    magnet: readDrawPref("drawMagnet", false),
+    style: readDrawPref("drawStyle", { color: null, width: 2, dash: "solid" }),
+    updatedAt: 0,
   };
+  const drawHistory = { undo: [], redo: [] };
+  let drawPointer = null;    // last pointer position over the chart, in pane pixels
+  let drawVersion = 0;       // bumped on every change the canvas must show
+  let dragState = null;      // { drawing, startLogical, startPrice, originalPoints }
+  let handleDragState = null; // { drawing, handleIndex, originalPoints }
+  const appearAt = {};       // id -> ms when it was placed (150 ms fade-in)
 
-  function drawStorageKey() {
+  function bumpDraw() { drawVersion++; }
+
+  // Keyed by what the chart shows (the answer's asset type), not by the
+  // asset type the search box last had: the two can differ for a moment.
+  function drawChartKey() {
     if (!state.data) return null;
-    return `draw:${state.assetType}:${state.data.symbol}`;
+    return `${state.data.asset_type || state.assetType}:${state.data.symbol}`;
+  }
+  function drawStorageKey() {
+    const k = drawChartKey();
+    return k ? `draw:${k}` : null;
+  }
+  function fractalStorageKey() {
+    const k = drawChartKey();
+    return k ? `fractal:${k}` : null;
   }
 
-  function setDrawTool(tool) {
+  function setDrawTool(tool, { sticky = false } = {}) {
     drawState.tool = tool;
+    drawState.sticky = tool !== "cursor" && sticky;
     drawState.pending = [];
-    clearGhost();
     dragState = null; // abandon any in-progress drag rather than leaving it half-applied
-    document.querySelectorAll(".draw-tool-btn").forEach((btn) => {
+    handleDragState = null;
+    document.querySelectorAll(".draw-tool-btn[data-draw-tool]").forEach((btn) => {
       btn.classList.toggle("selected", btn.dataset.drawTool === tool);
+      btn.classList.toggle("sticky", btn.dataset.drawTool === tool && drawState.sticky);
     });
     const container = el("main-chart");
-    if (container) container.style.cursor = tool === "cursor" ? "default" : "crosshair";
+    if (container) {
+      container.style.cursor = tool === "cursor" ? "default" : "crosshair";
+      // a finger drawing must not scroll the page
+      container.style.touchAction = tool === "cursor" ? "" : "none";
+    }
     if (mainChart) mainChart.applyOptions({ handleScroll: tool === "cursor", handleScale: tool === "cursor" });
+    bumpDraw();
   }
 
-  function formatRangeLabel(p1, p2) {
-    const dPrice = p2.price - p1.price;
-    const pct = p1.price !== 0 ? (dPrice / p1.price) * 100 : 0;
-    const dSeconds = Math.abs(p2.time - p1.time);
-    const dDays = dSeconds / 86400;
-    const timeLabel = dDays >= 1 ? `${dDays.toFixed(1)}d` : `${Math.round(dSeconds / 3600)}h`;
-    const sign = dPrice >= 0 ? "+" : "";
-    return `${sign}${dPrice.toFixed(2)} (${sign}${pct.toFixed(2)}%) · ${timeLabel}`;
-  }
-
-  // ---- Canvas2D drawing engine — replaces TW primitive-based user drawings ----
+  // ---- coordinates ----
   let drawCanvas = null;
   let drawCtx = null;
   let drawRafId = null;
+  let timeMapper = DE.makeTimeMapper([]);
+
+  function setDrawTimes(candles) {
+    timeMapper = DE.makeTimeMapper((candles || []).map((c) => c.time));
+    bumpDraw();
+  }
+
+  // logicalToCoordinate of Lightweight Charts 4.2 answers 0 for a
+  // fractional index (measured: 395 -> 682 px, 393.67 -> 0): interpolate
+  // between the two whole bars around it, which it places correctly.
+  function logicalToX(logical) {
+    const ts = mainChart.timeScale();
+    const i = Math.floor(logical);
+    const x0 = ts.logicalToCoordinate(i);
+    if (x0 === null) return null;
+    const frac = logical - i;
+    if (frac < 1e-9) return x0;
+    const x1 = ts.logicalToCoordinate(i + 1);
+    return x1 === null ? x0 : x0 + frac * (x1 - x0);
+  }
 
   function timeToX(time) {
-    return mainChart ? mainChart.timeScale().timeToCoordinate(time) : null;
+    if (!mainChart) return null;
+    const logical = timeMapper.timeToLogical(time);
+    if (logical === null) return mainChart.timeScale().timeToCoordinate(time);
+    return logicalToX(logical);
   }
+  // Kept for the divergence and Elliott layers that call it: with the
+  // mapper every time has a real x, so there is no edge to clamp to.
+  function timeToXEdge(time) {
+    return timeToX(time);
+  }
+  function xToTime(x) {
+    if (!mainChart) return null;
+    const logical = mainChart.timeScale().coordinateToLogical(x);
+    return logical === null ? null : timeMapper.logicalToTime(logical);
+  }
+  function priceToY(price) {
+    return candleSeries ? candleSeries.priceToCoordinate(price) : null;
+  }
+
   // A DEX pair's symbol is "TICKER@chain:pool-address": shown whole it runs
   // off the phone screen. Ticker plus a short address is enough to tell two
   // pools apart; the full symbol stays in the tooltip.
@@ -5262,190 +5337,125 @@
     return addr.length > 10 ? `${sym.slice(0, at)} · ${addr.slice(0, 4)}…${addr.slice(-4)}` : sym.slice(0, at);
   }
 
-  function priceToY(price) {
-    return candleSeries ? candleSeries.priceToCoordinate(price) : null;
-  }
-  // timeToX clampato: se il tempo e' fuori dal range dei dati caricati
-  // (timeToCoordinate restituisce null) lo proietta al bordo corretto del canvas
-  // invece di abbandonare il disegno — cosi' rettangoli e linee rimangono
-  // visibili anche dopo aver scrollato oltre il punto di origine.
-  function timeToXEdge(time) {
-    const x = timeToX(time);
-    if (x !== null) return x;
-    try {
-      const vr = mainChart.timeScale().getVisibleRange();
-      if (vr) return time <= vr.from ? -4 : (drawCanvas ? drawCanvas.width + 4 : 9999);
-    } catch {}
-    return null;
-  }
-  // Estende una linea definita da (x1,y1)→(x2,y2) fino ai bordi del canvas.
   function extendLineToBounds(x1, y1, x2, y2, w, h) {
-    if (x1 === x2) return { lx1: x1, ly1: 0, lx2: x1, ly2: h };
-    const slope = (y2 - y1) / (x2 - x1);
+    const e = DE.extendLine(x1, y1, x2, y2, w, h);
+    return { lx1: e.x1, ly1: e.y1, lx2: e.x2, ly2: e.y2 };
+  }
+
+  // The candle pane: the chart without its price scale and time axis.
+  function paneSize() {
+    const container = el("main-chart");
+    if (!container || !mainChart) return { w: 0, h: 0 };
+    let ps = 0, th = 0;
+    try { ps = mainChart.priceScale("right").width(); } catch { ps = 0; }
+    try { th = mainChart.timeScale().height(); } catch { th = 0; }
+    return { w: Math.max(0, container.clientWidth - ps), h: Math.max(0, container.clientHeight - th) };
+  }
+
+  function formatDrawPrice(p) {
+    const fmt = pricePrecisionFor(Math.abs(p) || 1);
+    return Number(p).toFixed(fmt.precision);
+  }
+
+  // Pixel points of a drawing (+ offsetY for a channel's parallel line).
+  function drawingPx(d) {
+    const P = d.points.map((p) => ({ x: timeToX(p.time), y: priceToY(p.price) }));
+    if (P.some((p) => p.x === null || p.y === null)) return null;
+    if (d.type === "channel" && d.points.length >= 3) {
+      const off = DE.channelOffset(d);
+      const [p1, p2] = d.points;
+      const ya = priceToY(p1.price + off), yb = priceToY(p2.price + off);
+      if (ya !== null && yb !== null) P.offsetY = { a: ya - P[0].y, b: yb - P[1].y };
+    }
+    return P;
+  }
+
+  // Where the pointer is, as a drawing point. With the magnet on, the price
+  // snaps to the nearest open/high/low/close of the candle under it.
+  function pointerToPoint(x, y) {
+    const time = xToTime(x);
+    let price = candleSeries ? candleSeries.coordinateToPrice(y) : null;
+    if (time === null || price === null) return null;
+    let t = time;
+    if (drawState.magnet && ohlcCandles.length) {
+      const logical = mainChart.timeScale().coordinateToLogical(x);
+      const idx = timeMapper.nearestIndex(logical);
+      const c = idx === null ? null : ohlcCandles[idx];
+      if (c) {
+        let best = null;
+        [c.open, c.high, c.low, c.close].forEach((v) => {
+          const vy = priceToY(v);
+          if (vy !== null && (best === null || Math.abs(vy - y) < best.d)) best = { v, d: Math.abs(vy - y) };
+        });
+        if (best && best.d <= 28) { price = best.v; t = c.time; }
+      }
+    }
+    return { time: t, price };
+  }
+
+  function drawLook() {
+    const dark = document.documentElement.dataset.theme !== "light";
     return {
-      lx1: 0, ly1: y1 + slope * (0 - x1),
-      lx2: w, ly2: y1 + slope * (w - x1),
+      panel: dark ? "rgba(22, 27, 34, 0.88)" : "rgba(255, 255, 255, 0.92)",
+      ink: COLORS.ink,
+      bull: COLORS.bull,
+      bear: COLORS.bear,
+      defaultColor: DE.PALETTE[0],
     };
   }
 
-  function renderOneDrawing(d, isSelected, isGhost) {
-    const ctx = drawCtx;
-    const baseColor = isSelected ? "#5b9cf6" : COLORS.accent;
-    const lineW = isSelected ? 2.5 : 1.5;
-    ctx.save();
-    ctx.globalAlpha = isGhost ? 0.55 : 1.0;
-    ctx.strokeStyle = baseColor;
-    ctx.lineWidth = lineW;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-
-    const W = drawCanvas ? drawCanvas.width : 0;
-    const H = drawCanvas ? drawCanvas.height : 0;
-
-    if (d.type === "hline") {
-      const y = priceToY(d.points[0].price);
-      if (y === null) { ctx.restore(); return; }
-      ctx.setLineDash([5, 3]);
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
-      if (d.text) {
-        ctx.setLineDash([]); ctx.fillStyle = baseColor;
-        ctx.font = "12px system-ui, sans-serif"; ctx.fillText(d.text, 6, y - 4);
-      }
-      ctx.restore(); return;
-    }
-
-    if (d.type === "hray") {
-      const y = priceToY(d.points[0].price);
-      const x0 = timeToXEdge(d.points[0].time);
-      if (y === null || x0 === null) { ctx.restore(); return; }
-      ctx.setLineDash([5, 3]);
-      ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(W, y); ctx.stroke();
-      ctx.setLineDash([]); ctx.fillStyle = baseColor;
-      ctx.font = "12px system-ui, sans-serif"; ctx.fillText(d.text || "", x0 + 4, y - 4);
-      ctx.restore(); return;
-    }
-
-    // Il frattale seleziona un INTERVALLO DI TEMPO, non un'area di prezzo: un
-    // rettangolo (come "range") suggerisce che anche l'altezza scelta conti,
-    // mentre l'unica cosa che conta e' quali candele cadono fra le due x. Due
-    // linee verticali tratteggiate, una per punto, lo dicono senza ambiguita'.
-    if (d.type === "fractal") {
-      const x1 = timeToXEdge(d.points[0].time);
-      const x2 = timeToXEdge(d.points[1].time);
-      if (x1 === null || x2 === null) { ctx.restore(); return; }
-      ctx.setLineDash([5, 3]);
-      [x1, x2].forEach((x) => {
-        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
-      });
-      ctx.setLineDash([]);
-      ctx.restore(); return;
-    }
-
-    const [p1, p2] = d.points;
-    // Usa coordinate clampate ai bordi: i punti fuori dal range dati
-    // vengono proiettati al bordo invece di restituire null e nascondere il disegno.
-    const x1 = timeToXEdge(p1.time), y1 = priceToY(p1.price);
-    if (x1 === null || y1 === null) { ctx.restore(); return; }
-
-    if (d.type === "text") {
-      ctx.setLineDash([]); ctx.fillStyle = baseColor;
-      ctx.font = "bold 13px system-ui, sans-serif";
-      ctx.fillText(d.text || "Text", x1 + 6, y1);
-      ctx.beginPath(); ctx.arc(x1, y1, 3, 0, Math.PI * 2); ctx.fill();
-      ctx.restore(); return;
-    }
-
-    const x2 = timeToXEdge(p2.time), y2 = priceToY(p2.price);
-    if (x2 === null || y2 === null) { ctx.restore(); return; }
-
-    ctx.setLineDash([]);
-    if (d.type === "trend_line" || d.type === "arrow") {
-      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
-      if (d.type === "arrow") {
-        const angle = Math.atan2(y2 - y1, x2 - x1);
-        const sz = 10;
-        ctx.beginPath();
-        ctx.moveTo(x2, y2);
-        ctx.lineTo(x2 - sz * Math.cos(angle - Math.PI / 6), y2 - sz * Math.sin(angle - Math.PI / 6));
-        ctx.moveTo(x2, y2);
-        ctx.lineTo(x2 - sz * Math.cos(angle + Math.PI / 6), y2 - sz * Math.sin(angle + Math.PI / 6));
-        ctx.stroke();
-      }
-    } else if (d.type === "extended_line") {
-      const { lx1, ly1, lx2, ly2 } = extendLineToBounds(x1, y1, x2, y2, W, H);
-      ctx.beginPath(); ctx.moveTo(lx1, ly1); ctx.lineTo(lx2, ly2); ctx.stroke();
-      // Piccolo marcatore ai due punti originali
-      ctx.globalAlpha *= 0.5;
-      ctx.beginPath(); ctx.arc(x1, y1, 3, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(x2, y2, 3, 0, Math.PI * 2); ctx.fill();
-      ctx.globalAlpha = isGhost ? 0.55 : 1;
-    } else if (d.type === "rectangle" || d.type === "range") {
-      const fx = Math.min(x1, x2), fy = Math.min(y1, y2), fw = Math.abs(x2 - x1), fh = Math.abs(y2 - y1);
-      ctx.fillStyle = d.type === "range" ? "rgba(192,122,30,0.12)" : "rgba(31,78,107,0.12)";
-      ctx.beginPath(); ctx.rect(fx, fy, fw, fh); ctx.fill(); ctx.stroke();
-      if (d.type === "range" && d.text) {
-        ctx.setLineDash([]); ctx.fillStyle = COLORS.stamp;
-        ctx.font = "11px system-ui, sans-serif"; ctx.fillText(d.text, fx + 4, fy - 4);
-      }
-    } else if (d.type === "ellipse") {
-      const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2;
-      const rx = Math.abs(x2 - x1) / 2, ry = Math.abs(y2 - y1) / 2;
-      ctx.fillStyle = "rgba(31,78,107,0.10)";
-      ctx.beginPath(); ctx.ellipse(cx, cy, Math.max(rx, 1), Math.max(ry, 1), 0, 0, Math.PI * 2);
-      ctx.fill(); ctx.stroke();
-    } else if (d.type === "fib") {
-      FIB_LEVELS.forEach((ratio) => {
-        const price = p1.price + ratio * (p2.price - p1.price);
-        const fy = priceToY(price);
-        if (fy === null) return;
-        ctx.globalAlpha = (isGhost ? 0.55 : 1) * (ratio === 0.618 ? 1 : 0.65);
-        ctx.setLineDash(ratio === 0 || ratio === 1 ? [] : [4, 3]);
-        ctx.beginPath(); ctx.moveTo(Math.min(x1, x2), fy); ctx.lineTo(Math.max(x1, x2), fy); ctx.stroke();
-        ctx.setLineDash([]); ctx.globalAlpha = isGhost ? 0.55 : 1;
-        ctx.fillStyle = baseColor; ctx.font = "10px system-ui, sans-serif";
-        ctx.fillText(ratio.toFixed(3), Math.max(x1, x2) + 4, fy + 3);
-      });
-    } else if (d.type === "channel") {
-      // Con 2 punti mostra solo la linea principale (ghost del primo segmento)
-      if (d.points.length < 3) {
-        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
-        ctx.restore(); return;
-      }
-      const p3 = d.points[2];
-      const x3 = timeToXEdge(p3.time), y3 = priceToY(p3.price);
-      if (x3 === null || y3 === null) { ctx.restore(); return; }
-      // Linea principale p1→p2
-      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
-      // Linea parallela traslata verticalmente di (y3-y1)
-      const dy = y3 - y1;
-      ctx.setLineDash([4, 3]);
-      ctx.beginPath(); ctx.moveTo(x1, y1 + dy); ctx.lineTo(x2, y2 + dy); ctx.stroke();
-      ctx.setLineDash([]);
-      // Fill canale
-      ctx.fillStyle = "rgba(31,78,107,0.07)";
-      ctx.beginPath();
-      ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
-      ctx.lineTo(x2, y2 + dy); ctx.lineTo(x1, y1 + dy);
-      ctx.closePath(); ctx.fill();
-    }
-    ctx.restore();
+  function formatRangeLabel(p1, p2) {
+    const l1 = timeMapper.timeToLogical(p1.time), l2 = timeMapper.timeToLogical(p2.time);
+    const bars = l1 === null || l2 === null ? null : l2 - l1;
+    return DE.formatRange(p1, p2, bars, formatDrawPrice);
   }
 
-  const HANDLE_RADIUS = 5;
-
-  function renderHandles(d) {
-    if (!drawCtx) return;
-    const pts = d.type === "hline" || d.type === "text" ? [d.points[0]] : d.points;
-    const ctx = drawCtx;
-    ctx.save();
-    pts.forEach((p) => {
-      const x = timeToX(p.time), y = priceToY(p.price);
-      if (x === null || y === null) return;
-      ctx.beginPath(); ctx.arc(x, y, HANDLE_RADIUS, 0, Math.PI * 2);
-      ctx.fillStyle = "#ffffff"; ctx.fill();
-      ctx.strokeStyle = COLORS.accent; ctx.lineWidth = 2; ctx.stroke();
+  // ---- painting ----
+  function paintDrawing(d, flags, size, look) {
+    const P = drawingPx(d);
+    if (!P) return;
+    const born = appearAt[d.id];
+    let appear = null;
+    if (born) {
+      appear = Math.min(1, (performance.now() - born) / 150);
+      if (appear >= 1) delete appearAt[d.id];
+    }
+    DE.paint(drawCtx, d, P, {
+      w: size.w, h: size.h, priceToY, formatPrice: formatDrawPrice, look,
+      state: { ...flags, appear, activeHandle: handleDragState && handleDragState.drawing === d ? handleDragState.handleIndex : null },
     });
-    ctx.restore();
+  }
+
+  // Price and time of the selected drawing on the axes, like the reference
+  // platforms: a pill on the price scale for each price, on the time axis
+  // for each time.
+  function paintAxisMarks(d, size, look) {
+    const color = d.color || look.defaultColor;
+    const fullW = drawCanvas.width / (drawCanvas._dpr || 1);
+    const fullH = drawCanvas.height / (drawCanvas._dpr || 1);
+    const pts = d.type === "hline" ? [] : d.points;
+    const prices = d.type === "fib" ? [] : pts.map((p) => p.price);
+    prices.forEach((price) => {
+      const y = priceToY(price);
+      if (y === null || y < 0 || y > size.h) return;
+      DE.pill(drawCtx, formatDrawPrice(price), size.w + 2, y, look, { bg: color, fg: "#ffffff", fit: { w: fullW, h: size.h } });
+    });
+    if (d.type === "hline" || d.type === "text") return;
+    pts.forEach((p) => {
+      const x = timeToX(p.time);
+      if (x === null || x < 0 || x > size.w) return;
+      const label = drawTimeLabel(p.time);
+      DE.pill(drawCtx, label, x, size.h + 12, look, { align: "center", bg: color, fg: "#ffffff", fit: { w: size.w, h: fullH } });
+    });
+  }
+
+  let drawTimeFmt = null;
+  function drawTimeLabel(time) {
+    if (!drawTimeFmt) {
+      const opts = { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" };
+      try { drawTimeFmt = new Intl.DateTimeFormat(undefined, opts); } catch { drawTimeFmt = new Intl.DateTimeFormat("en-GB", opts); }
+    }
+    try { return drawTimeFmt.format(new Date(time * 1000)); } catch { return new Date(time * 1000).toISOString().slice(0, 16).replace("T", " "); }
   }
 
   function renderDrawCanvas() {
@@ -5453,14 +5463,26 @@
     const container = el("main-chart");
     if (!container) return;
     const w = container.clientWidth, h = container.clientHeight;
-    if (drawCanvas.width !== w || drawCanvas.height !== h) { drawCanvas.width = w; drawCanvas.height = h; }
+    // Pixels of the screen, not CSS pixels: sharp lines on iPhone and Mac.
+    const dpr = Math.min(window.devicePixelRatio || 1, 3);
+    if (drawCanvas.width !== Math.round(w * dpr) || drawCanvas.height !== Math.round(h * dpr)) {
+      drawCanvas.width = Math.round(w * dpr);
+      drawCanvas.height = Math.round(h * dpr);
+      drawCanvas._dpr = dpr;
+    }
+    drawCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
     drawCtx.clearRect(0, 0, w, h);
+    window.__drawStats = window.__drawStats || { renders: 0 };
+    window.__drawStats.renders++;
 
-    // Divergence lines (RSI divergences on price chart)
+    const size = paneSize();
+    drawCtx.save();
+    // Everything stays on the candles: nothing over the price scale or the time axis.
+    drawCtx.beginPath(); drawCtx.rect(0, 0, size.w, size.h); drawCtx.clip();
+
     renderDivergences(drawCtx, performance.now());
     renderElliott(drawCtx);
 
-    // Pattern zones (RSI divergence highlights)
     autoPatternZones.forEach((z) => {
       const x1 = timeToX(z.time1), x2 = timeToX(z.time2);
       const y1 = priceToY(z.price1), y2 = priceToY(z.price2);
@@ -5477,26 +5499,70 @@
       drawCtx.restore();
     });
 
+    const look = drawLook();
+    let selected = null;
+    if (!drawState.hidden) {
+      drawState.drawings.forEach((d) => {
+        const isSelected = drawState.selected === d.id;
+        if (isSelected) selected = d;
+        paintDrawing(d, { selected: isSelected, hover: !isSelected && drawState.hover === d.id }, size, look);
+      });
+    }
 
-    drawState.drawings.forEach((d) => {
-      const isSelected = drawState.selected === d.id;
-      renderOneDrawing(d, isSelected, false);
-      if (isSelected) renderHandles(d);
-    });
-
-    // Ghost preview mentre si piazza il secondo (o terzo) punto
-    if (drawState.tool !== "cursor" && drawState.pending.length >= 1 && lastCrosshairPoint) {
-      const price2 = candleSeries.coordinateToPrice(lastCrosshairPoint.y);
-      if (price2 !== null) {
-        const ghostPts = [...drawState.pending, { time: lastCrosshairPoint.time, price: price2 }];
-        renderOneDrawing({ type: drawState.tool, points: ghostPts }, false, true);
+    // Preview while placing the next point
+    if (drawState.tool !== "cursor" && drawState.pending.length >= 1 && drawPointer) {
+      const next = pointerToPoint(drawPointer.x, drawPointer.y);
+      if (next) {
+        const ghost = { id: "ghost", type: drawState.tool, points: [...drawState.pending, next], v: 2, ...currentDrawStyle() };
+        if (ghost.type === "range") ghost.text = formatRangeLabel(ghost.points[0], ghost.points[ghost.points.length - 1]);
+        paintDrawing(ghost, { ghost: true }, size, look);
       }
     }
+    drawCtx.restore();
+
+    if (selected) paintAxisMarks(selected, size, look);
+    positionDrawToolbar(selected);
+  }
+
+  function currentDrawStyle() {
+    const s = drawState.style || {};
+    return { color: s.color || null, width: s.width || 2, dash: s.dash || "solid" };
+  }
+
+  // Repaint only when something visible changed: the visible bars, the
+  // price scale, the size, the drawings, the pointer while drawing. The
+  // check costs a few numbers a frame; the repaint used to run 60 times a
+  // second forever, chart still or not.
+  let lastDrawSig = "";
+  function drawSignature() {
+    const container = el("main-chart");
+    const ts = mainChart.timeScale();
+    const r = ts.getVisibleLogicalRange();
+    const ref = ohlcCandles.length ? ohlcCandles[ohlcCandles.length - 1].close : 1;
+    return [
+      container ? container.clientWidth : 0, container ? container.clientHeight : 0, window.devicePixelRatio,
+      r ? r.from.toFixed(4) : "", r ? r.to.toFixed(4) : "",
+      priceToY(ref), priceToY(ref * 1.1), drawVersion,
+    ].join("|");
+  }
+  function drawAnimating() {
+    return (state.layers.divergences && divergenceLines.length > 0) || Object.keys(appearAt).length > 0;
   }
 
   function startDrawRaf() {
     if (drawRafId) return;
-    function loop() { renderDrawCanvas(); drawRafId = requestAnimationFrame(loop); }
+    function loop() {
+      if (mainChart && candleSeries) {
+        const sig = drawSignature();
+        if (sig !== lastDrawSig || drawAnimating()) {
+          lastDrawSig = sig;
+          // One bad frame must not stop the loop: before, an exception here
+          // ended requestAnimationFrame for good and every drawing vanished.
+          try { renderDrawCanvas(); } catch (err) { console.warn("drawing layer:", err); }
+        }
+      }
+      drawRafId = requestAnimationFrame(loop);
+    }
     drawRafId = requestAnimationFrame(loop);
   }
 
@@ -5504,10 +5570,23 @@
     drawCanvas = el("draw-canvas");
     if (!drawCanvas) return;
     drawCtx = drawCanvas.getContext("2d");
+    buildDrawToolbar();
     startDrawRaf();
+    // Read-only window for the browser tests (scripts/e2e/draw.e2e.mjs),
+    // only when asked for: ?drawdebug in the address.
+    if (/[?&]drawdebug\b/.test(location.search)) {
+      window.__drawDebug = {
+        state: drawState,
+        px: (time, price) => ({ x: timeToX(time), y: priceToY(price) }),
+        logical: (time) => timeMapper.timeToLogical(time),
+        bars: () => timeMapper.size,
+        pane: () => paneSize(),
+        chart: () => mainChart,
+      };
+    }
   }
 
-  // Ghost/preview stubs — kept for call-site compat; RAF handles rendering
+  // Kept for call-site compatibility: the crosshair no longer drives drawing.
   function startGhost() {}
   function updateGhost() {}
 
@@ -5989,165 +6068,88 @@
 
   function clearGhost() {}
 
-  // ---- Cursor tool: hit-test existing drawings, click to delete ----
+  // ---- hit test ----
   const HIT_TOLERANCE_PX = 6;
 
-  function distanceToSegment(px, py, x1, y1, x2, y2) {
-    const dx = x2 - x1;
-    const dy = y2 - y1;
-    const lenSq = dx * dx + dy * dy;
-    let t = lenSq === 0 ? 0 : ((px - x1) * dx + (py - y1) * dy) / lenSq;
-    t = Math.max(0, Math.min(1, t));
-    return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+  function drawTextWidth(text) {
+    if (!drawCtx) return 60;
+    drawCtx.save();
+    drawCtx.font = "600 13px -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif";
+    const w = drawCtx.measureText(text).width;
+    drawCtx.restore();
+    return w;
   }
 
-  function hitTestDrawing(d, px, py) {
-    if (d.type === "hline") {
-      const y = candleSeries.priceToCoordinate(d.points[0].price);
-      return y !== null && Math.abs(py - y) <= HIT_TOLERANCE_PX;
-    }
-    if (d.type === "hray") {
-      const y = candleSeries.priceToCoordinate(d.points[0].price);
-      const x0 = timeToXEdge(d.points[0].time);
-      return y !== null && x0 !== null && px >= x0 - HIT_TOLERANCE_PX && Math.abs(py - y) <= HIT_TOLERANCE_PX;
-    }
-    const [p1, p2] = d.points;
-    const x1 = timeToXEdge(p1.time);
-    const y1 = candleSeries.priceToCoordinate(p1.price);
-    if (x1 === null || y1 === null) return false;
-    if (d.type === "text") {
-      return Math.hypot(px - x1, py - y1) <= 14;
-    }
-    if (!p2) return false;
-    const x2 = timeToXEdge(p2.time);
-    const y2 = candleSeries.priceToCoordinate(p2.price);
-    if (x2 === null || y2 === null) return false;
-    if (d.type === "trend_line" || d.type === "arrow") {
-      return distanceToSegment(px, py, x1, y1, x2, y2) <= HIT_TOLERANCE_PX;
-    }
-    if (d.type === "extended_line") {
-      const W = drawCanvas ? drawCanvas.width : 1000;
-      const H = drawCanvas ? drawCanvas.height : 600;
-      const { lx1, ly1, lx2, ly2 } = extendLineToBounds(x1, y1, x2, y2, W, H);
-      return distanceToSegment(px, py, lx1, ly1, lx2, ly2) <= HIT_TOLERANCE_PX;
-    }
-    if (d.type === "rectangle" || d.type === "range" || d.type === "ellipse") {
-      const xa = Math.min(x1, x2) - HIT_TOLERANCE_PX;
-      const xb = Math.max(x1, x2) + HIT_TOLERANCE_PX;
-      const ya = Math.min(y1, y2) - HIT_TOLERANCE_PX;
-      const yb = Math.max(y1, y2) + HIT_TOLERANCE_PX;
-      return px >= xa && px <= xb && py >= ya && py <= yb;
-    }
-    if (d.type === "channel") {
-      return distanceToSegment(px, py, x1, y1, x2, y2) <= HIT_TOLERANCE_PX;
-    }
-    if (d.type === "fib") {
-      const xa = Math.min(x1, x2) - HIT_TOLERANCE_PX;
-      const xb = Math.max(x1, x2) + HIT_TOLERANCE_PX;
-      if (px < xa || px > xb) return false;
-      return FIB_LEVELS.some((ratio) => {
-        const y = candleSeries.priceToCoordinate(p1.price + ratio * (p2.price - p1.price));
-        return y !== null && Math.abs(py - y) <= HIT_TOLERANCE_PX;
-      });
-    }
-    return false;
+  function hitTestDrawing(d, px, py, tol) {
+    const P = drawingPx(d);
+    if (!P) return false;
+    const size = paneSize();
+    return DE.hitTest(d, P, px, py, { w: size.w, h: size.h, priceToY, textWidth: drawTextWidth }, tol);
+  }
+
+  function isTouchPointer() {
+    return lastPointerType === "touch" || lastPointerType === "pen";
   }
 
   function findHitDrawing(px, py) {
+    if (drawState.hidden) return null;
+    const tol = isTouchPointer() ? 14 : HIT_TOLERANCE_PX;
     for (let i = drawState.drawings.length - 1; i >= 0; i--) {
-      if (hitTestDrawing(drawState.drawings[i], px, py)) return drawState.drawings[i];
+      if (hitTestDrawing(drawState.drawings[i], px, py, tol)) return drawState.drawings[i];
     }
     return null;
   }
 
+  // 44 px targets on touch, as the platform guidelines ask.
   function findHitHandle(px, py) {
-    if (!drawState.selected) return null;
-    const d = drawState.drawings.find((d) => d.id === drawState.selected);
-    if (!d || d.type === "hline") return null;
-    const pts = d.type === "text" ? [d.points[0]] : d.points;
-    for (let i = 0; i < pts.length; i++) {
-      const x = timeToX(pts[i].time), y = priceToY(pts[i].price);
-      if (x !== null && y !== null && Math.hypot(px - x, py - y) <= HANDLE_RADIUS + 4) {
-        return { drawing: d, handleIndex: i };
-      }
+    if (!drawState.selected || drawState.hidden) return null;
+    const d = drawState.drawings.find((x) => x.id === drawState.selected);
+    if (!d || d.type === "hline" || d.locked) return null;
+    const P = drawingPx(d);
+    if (!P) return null;
+    const radius = isTouchPointer() ? 22 : 10;
+    const n = Math.min(P.length, DRAW_TOOL_POINTS[d.type] || P.length);
+    for (let i = 0; i < n; i++) {
+      if (Math.hypot(px - P[i].x, py - P[i].y) <= radius) return { drawing: d, handleIndex: i };
     }
     return null;
   }
 
-  function updateCursorHover() {
-    const container = el("main-chart");
-    if (!container || drawState.tool !== "cursor" || !lastCrosshairPoint || dragState || handleDragState) return;
-    const handle = findHitHandle(lastCrosshairPoint.x, lastCrosshairPoint.y);
-    if (handle) { container.style.cursor = "crosshair"; return; }
-    const hit = findHitDrawing(lastCrosshairPoint.x, lastCrosshairPoint.y);
-    container.style.cursor = hit ? "pointer" : "default";
+  function setDrawHover(id) {
+    if (drawState.hover !== id) { drawState.hover = id; bumpDraw(); }
   }
 
-  // ---- Cursor tool: drag an existing drawing to move it (translate every
-  // point by the same time/price delta — no per-endpoint resize yet) ----
-  let dragState = null; // { drawing, startTime, startPrice, originalPoints }
+  function updateCursorHover() {} // pointer-driven now (bindDrawClickCapture)
+  function updateHandleDrag() {}
+  function updateDragPreview() {}
+
+  // ---- hline axis label ----
+  function attachDrawing(d) {
+    if (!candleSeries || d.type !== "hline") return;
+    // The canvas draws the line; the price line only gives the axis label,
+    // so it is never drawn twice and never recreated while dragging.
+    const line = candleSeries.createPriceLine({
+      price: d.points[0].price,
+      color: d.color || DE.PALETTE[0],
+      lineWidth: 1,
+      lineVisible: false,
+      axisLabelVisible: true,
+      title: d.text || "",
+    });
+    drawState.attached[d.id] = { priceLine: line };
+  }
 
   function repositionDrawingPrimitives(d) {
-    // Canvas2D reads d.points directly — only hline needs priceLine sync
-    if (d.type !== "hline") return;
     const ref = drawState.attached[d.id];
-    if (!ref?.priceLine) return;
-    candleSeries.removePriceLine(ref.priceLine);
-    ref.priceLine = candleSeries.createPriceLine({
-      price: d.points[0].price, color: COLORS.accent, lineWidth: 1,
-      lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: d.text || "",
-    });
-  }
-
-  // Handle drag: moves a single endpoint (resize)
-  let handleDragState = null; // { drawing, handleIndex, startTime, startPrice, originalPoints }
-
-  function updateHandleDrag() {
-    if (!handleDragState || !lastCrosshairPoint) return;
-    const price = candleSeries.coordinateToPrice(lastCrosshairPoint.y);
-    if (price === null) return;
-    const d = handleDragState.drawing;
-    d.points = handleDragState.originalPoints.map((p, i) =>
-      i === handleDragState.handleIndex ? { time: lastCrosshairPoint.time, price } : { ...p }
-    );
-    if (d.type === "range") d.text = formatRangeLabel(d.points[0], d.points[1]);
-    repositionDrawingPrimitives(d);
-  }
-
-  function updateDragPreview() {
-    if (!dragState || !lastCrosshairPoint) return;
-    const price = candleSeries.coordinateToPrice(lastCrosshairPoint.y);
-    if (price === null) return;
-    const dTime = lastCrosshairPoint.time - dragState.startTime;
-    const dPrice = price - dragState.startPrice;
-    const d = dragState.drawing;
-    d.points = dragState.originalPoints.map((p) => ({ time: p.time + dTime, price: p.price + dPrice }));
-    if (d.type === "range") d.text = formatRangeLabel(d.points[0], d.points[1]);
-    repositionDrawingPrimitives(d);
-  }
-
-  function attachDrawing(d) {
-    if (!candleSeries) return;
-    // hline: keep as a price-line so the axis label is shown
-    if (d.type === "hline") {
-      const line = candleSeries.createPriceLine({
-        price: d.points[0].price,
-        color: COLORS.accent,
-        lineWidth: 1,
-        lineStyle: LightweightCharts.LineStyle.Dashed,
-        axisLabelVisible: true,
-        title: d.text || "",
-      });
-      drawState.attached[d.id] = { priceLine: line };
-    }
-    // All other types rendered by Canvas2D — nothing to attach
+    if (!ref || !ref.priceLine) return;
+    ref.priceLine.applyOptions({ price: d.points[0].price, color: d.color || DE.PALETTE[0], title: d.text || "" });
   }
 
   function detachDrawing(id) {
     const ref = drawState.attached[id];
     if (!ref) return;
     if (ref.priceLine) {
-      try { candleSeries.removePriceLine(ref.priceLine); } catch {}
+      try { candleSeries.removePriceLine(ref.priceLine); } catch { /* already gone */ }
     }
     delete drawState.attached[id];
   }
@@ -6156,14 +6158,98 @@
     Object.keys(drawState.attached).forEach(detachDrawing);
   }
 
+  function reattachAll() {
+    clearAllDrawingPrimitives();
+    if (!drawState.hidden) drawState.drawings.forEach(attachDrawing);
+  }
+
+  // ---- history (undo / redo) ----
+  function pushDrawHistory() {
+    drawHistory.undo.push(JSON.stringify(drawState.drawings));
+    if (drawHistory.undo.length > 100) drawHistory.undo.shift();
+    drawHistory.redo = [];
+  }
+  function restoreDrawSnapshot(json) {
+    drawState.drawings = JSON.parse(json);
+    if (!drawState.drawings.some((d) => d.id === drawState.selected)) drawState.selected = null;
+    reattachAll();
+    saveDrawings();
+    renderDrawingsList();
+    bumpDraw();
+  }
+  function undoDrawing() {
+    if (!drawHistory.undo.length) return;
+    drawHistory.redo.push(JSON.stringify(drawState.drawings));
+    restoreDrawSnapshot(drawHistory.undo.pop());
+  }
+  function redoDrawing() {
+    if (!drawHistory.redo.length) return;
+    drawHistory.undo.push(JSON.stringify(drawState.drawings));
+    restoreDrawSnapshot(drawHistory.redo.pop());
+  }
+
+  // ---- saving: this browser at once, the account a moment later ----
+  let drawSyncTimer = null;
   function saveDrawings() {
     const key = drawStorageKey();
     if (!key) return;
+    drawState.updatedAt = Date.now();
     try {
-      localStorage.setItem(key, JSON.stringify(drawState.drawings));
+      localStorage.setItem(key, JSON.stringify({ drawings: drawState.drawings, updated_at: drawState.updatedAt }));
     } catch (e) {
-      /* storage unavailable/full — drawings just won't survive a reload */
+      /* storage unavailable/full — the account copy below still keeps them */
     }
+    scheduleDrawSync(key, drawState.drawings, drawState.updatedAt);
+  }
+
+  const pendingDrawSync = {};
+  function scheduleDrawSync(key, drawings, updatedAt) {
+    if (!state.user) return;
+    pendingDrawSync[key] = { drawings, updated_at: updatedAt };
+    clearTimeout(drawSyncTimer);
+    drawSyncTimer = setTimeout(flushDrawSync, 800);
+  }
+  function flushDrawSync() {
+    Object.entries(pendingDrawSync).forEach(([key, body]) => {
+      delete pendingDrawSync[key];
+      fetch("/api/drawings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key, drawings: body.drawings, updated_at: body.updated_at }),
+        keepalive: true,
+      }).catch(() => { /* offline: the local copy stays, next save retries */ });
+    });
+  }
+  window.addEventListener("pagehide", flushDrawSync);
+
+  function readLocalDrawings(key) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return { drawings: [], updated_at: 0 };
+      const parsed = JSON.parse(raw);
+      // Before 12/10 the value was the bare array.
+      if (Array.isArray(parsed)) return { drawings: parsed, updated_at: 0 };
+      return { drawings: Array.isArray(parsed.drawings) ? parsed.drawings : [], updated_at: parsed.updated_at || 0 };
+    } catch {
+      return { drawings: [], updated_at: 0 };
+    }
+  }
+
+  // The account's copy, when newer than this browser's, replaces it; when
+  // older (or missing) this browser's goes up.
+  async function syncDrawingsFromServer(key, local, apply) {
+    if (!state.user) return;
+    try {
+      const resp = await fetch(`/api/drawings?key=${encodeURIComponent(key)}`);
+      if (!resp.ok) return;
+      const remote = await resp.json();
+      if (remote.drawings && remote.updated_at > local.updated_at) {
+        try { localStorage.setItem(key, JSON.stringify(remote)); } catch { /* ignore */ }
+        apply(remote);
+      } else if (local.drawings.length && local.updated_at >= (remote.updated_at || 0)) {
+        scheduleDrawSync(key, local.drawings, local.updated_at || Date.now());
+      }
+    } catch { /* offline: keep the local copy */ }
   }
 
   function renderDrawingsList() {
@@ -6180,13 +6266,18 @@
     drawState.drawings.forEach((d) => {
       const li = document.createElement("li");
       li.className = "draw-list-item";
+      const dot = document.createElement("span");
+      dot.className = "draw-list-dot";
+      dot.style.background = d.color || DE.PALETTE[0];
       const label = document.createElement("span");
       label.textContent = DRAW_TOOL_LABELS[d.type] || d.type;
       const removeBtn = document.createElement("button");
       removeBtn.type = "button";
       removeBtn.className = "draw-list-remove";
       removeBtn.textContent = "✕";
+      removeBtn.setAttribute("aria-label", `Remove ${label.textContent}`);
       removeBtn.addEventListener("click", () => removeDrawing(d.id));
+      li.appendChild(dot);
       li.appendChild(label);
       li.appendChild(removeBtn);
       list.appendChild(li);
@@ -6194,18 +6285,131 @@
   }
 
   function removeDrawing(id) {
+    pushDrawHistory();
     detachDrawing(id);
     drawState.drawings = drawState.drawings.filter((d) => d.id !== id);
     if (drawState.selected === id) drawState.selected = null;
     saveDrawings();
     renderDrawingsList();
+    bumpDraw();
   }
 
   function clearAllDrawings() {
+    pushDrawHistory();
     clearAllDrawingPrimitives();
     drawState.drawings = [];
+    drawState.selected = null;
     saveDrawings();
     renderDrawingsList();
+    bumpDraw();
+  }
+
+  function updateDrawing(id, patch) {
+    const d = drawState.drawings.find((x) => x.id === id);
+    if (!d) return;
+    pushDrawHistory();
+    Object.assign(d, patch);
+    repositionDrawingPrimitives(d);
+    saveDrawings();
+    renderDrawingsList();
+    bumpDraw();
+  }
+
+  function duplicateDrawing(id) {
+    const d = drawState.drawings.find((x) => x.id === id);
+    if (!d) return;
+    pushDrawHistory();
+    const shift = Math.max(1, Math.round((timeMapper.stepLast || 60) * 3));
+    const copy = { ...JSON.parse(JSON.stringify(d)), id: newDrawingId(), locked: false };
+    copy.points = copy.points.map((p) => ({ time: p.time + shift, price: p.price }));
+    drawState.drawings.push(copy);
+    attachDrawing(copy);
+    drawState.selected = copy.id;
+    appearAt[copy.id] = performance.now();
+    saveDrawings();
+    renderDrawingsList();
+    bumpDraw();
+  }
+
+  function toggleHideDrawings() {
+    drawState.hidden = !drawState.hidden;
+    reattachAll();
+    const btn = el("draw-hide-btn");
+    if (btn) { btn.classList.toggle("selected", drawState.hidden); btn.setAttribute("aria-pressed", String(drawState.hidden)); }
+    bumpDraw();
+  }
+
+  function toggleMagnet() {
+    drawState.magnet = !drawState.magnet;
+    writeDrawPref("drawMagnet", drawState.magnet);
+    const btn = el("draw-magnet-btn");
+    if (btn) { btn.classList.toggle("selected", drawState.magnet); btn.setAttribute("aria-pressed", String(drawState.magnet)); }
+  }
+
+  // ---- toolbar of the selected drawing: colour, width, dash, lock, copy, delete ----
+  let drawToolbar = null;
+  function buildDrawToolbar() {
+    const container = el("main-chart");
+    if (!container || drawToolbar) return;
+    drawToolbar = document.createElement("div");
+    drawToolbar.className = "draw-toolbar hidden";
+    drawToolbar.setAttribute("role", "toolbar");
+    drawToolbar.setAttribute("aria-label", "Selected drawing");
+    const swatches = DE.PALETTE.map((c) => `<button type="button" class="draw-swatch" data-color="${c}" style="--sw:${c}" aria-label="Colour ${c}"></button>`).join("");
+    drawToolbar.innerHTML =
+      `<div class="draw-tb-group">${swatches}</div>` +
+      `<div class="draw-tb-sep"></div>` +
+      `<div class="draw-tb-group">${[1, 2, 3].map((w) => `<button type="button" class="draw-tb-btn" data-width="${w}" aria-label="Width ${w}"><span class="draw-tb-line" style="height:${w}px"></span></button>`).join("")}</div>` +
+      `<div class="draw-tb-group">` +
+      `<button type="button" class="draw-tb-btn" data-dash="solid" aria-label="Solid"><span class="draw-tb-line"></span></button>` +
+      `<button type="button" class="draw-tb-btn" data-dash="dashed" aria-label="Dashed"><span class="draw-tb-line dashed"></span></button>` +
+      `<button type="button" class="draw-tb-btn" data-dash="dotted" aria-label="Dotted"><span class="draw-tb-line dotted"></span></button>` +
+      `</div><div class="draw-tb-sep"></div>` +
+      `<button type="button" class="draw-tb-btn" data-act="lock" aria-label="Lock"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></button>` +
+      `<button type="button" class="draw-tb-btn" data-act="copy" aria-label="Duplicate"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/></svg></button>` +
+      `<button type="button" class="draw-tb-btn danger" data-act="delete" aria-label="Delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button>`;
+    drawToolbar.addEventListener("pointerdown", (e) => e.stopPropagation());
+    drawToolbar.addEventListener("click", (e) => {
+      const btn = e.target.closest("button");
+      const id = drawState.selected;
+      if (!btn || !id) return;
+      if (btn.dataset.color) { updateDrawing(id, { color: btn.dataset.color }); rememberStyle({ color: btn.dataset.color }); }
+      else if (btn.dataset.width) { updateDrawing(id, { width: Number(btn.dataset.width) }); rememberStyle({ width: Number(btn.dataset.width) }); }
+      else if (btn.dataset.dash) { updateDrawing(id, { dash: btn.dataset.dash }); rememberStyle({ dash: btn.dataset.dash }); }
+      else if (btn.dataset.act === "lock") {
+        const d = drawState.drawings.find((x) => x.id === id);
+        updateDrawing(id, { locked: !(d && d.locked) });
+      } else if (btn.dataset.act === "copy") duplicateDrawing(id);
+      else if (btn.dataset.act === "delete") removeDrawing(id);
+    });
+    container.appendChild(drawToolbar);
+  }
+
+  function rememberStyle(patch) {
+    drawState.style = { ...currentDrawStyle(), ...patch };
+    writeDrawPref("drawStyle", drawState.style);
+  }
+
+  function positionDrawToolbar(d) {
+    if (!drawToolbar) return;
+    if (!d || dragState || handleDragState || drawState.tool !== "cursor") { drawToolbar.classList.add("hidden"); return; }
+    const P = drawingPx(d);
+    if (!P) { drawToolbar.classList.add("hidden"); return; }
+    const size = paneSize();
+    const xs = P.map((p) => p.x), ys = P.map((p) => p.y);
+    const midX = Math.max(0, Math.min(size.w, (Math.min(...xs) + Math.max(...xs)) / 2));
+    const top = Math.min(...ys);
+    drawToolbar.classList.remove("hidden");
+    const tw = drawToolbar.offsetWidth || 300, th = drawToolbar.offsetHeight || 36;
+    const left = Math.max(4, Math.min(size.w - tw - 4, midX - tw / 2));
+    const y = top - th - 14 >= 4 ? top - th - 14 : Math.min(size.h - th - 4, Math.max(...ys) + 14);
+    drawToolbar.style.transform = `translate(${Math.round(left)}px, ${Math.round(y)}px)`;
+    drawToolbar.querySelectorAll("[data-color]").forEach((b) => b.classList.toggle("on", (d.color || DE.PALETTE[0]) === b.dataset.color));
+    drawToolbar.querySelectorAll("[data-width]").forEach((b) => b.classList.toggle("on", (d.width || 2) === Number(b.dataset.width)));
+    drawToolbar.querySelectorAll("[data-dash]").forEach((b) => b.classList.toggle("on", (d.dash || "solid") === b.dataset.dash));
+    const lock = drawToolbar.querySelector('[data-act="lock"]');
+    lock.classList.toggle("on", !!d.locked);
+    lock.setAttribute("aria-pressed", String(!!d.locked));
   }
 
   // Spegne ogni indicatore che vive sul prezzo (livelli strutturali, EMA,
@@ -6244,52 +6448,150 @@
     clearAllDrawingPrimitives();
     clearFractalReplays();
     drawState.drawings = [];
+    drawState.selected = null;
+    drawState.hover = null;
+    drawHistory.undo = [];
+    drawHistory.redo = [];
     const key = drawStorageKey();
     if (key) {
-      try {
-        const raw = localStorage.getItem(key);
-        if (raw) drawState.drawings = JSON.parse(raw);
-      } catch (e) {
-        drawState.drawings = [];
-      }
+      const local = readLocalDrawings(key);
+      drawState.drawings = local.drawings;
+      drawState.updatedAt = local.updated_at;
+      syncDrawingsFromServer(key, local, (remote) => {
+        if (drawStorageKey() !== key) return; // another chart by now
+        drawState.drawings = remote.drawings;
+        drawState.updatedAt = remote.updated_at;
+        reattachAll();
+        renderDrawingsList();
+        bumpDraw();
+      });
     }
-    drawState.drawings.forEach(attachDrawing);
+    reattachAll();
     renderDrawingsList();
+    // The fractals need the candles of the new chart: after it is drawn.
+    requestAnimationFrame(() => restoreFractals());
+    bumpDraw();
+  }
+
+  function syncCurrentDrawings() {
+    const key = drawStorageKey();
+    if (!key) return;
+    syncDrawingsFromServer(key, readLocalDrawings(key), (remote) => {
+      if (drawStorageKey() !== key) return;
+      drawState.drawings = remote.drawings;
+      drawState.updatedAt = remote.updated_at;
+      reattachAll();
+      renderDrawingsList();
+      bumpDraw();
+    });
+    restoreFractals();
+  }
+
+  function newDrawingId() {
+    return `d${Date.now()}${Math.random().toString(36).slice(2, 7)}`;
+  }
+
+  // Text written on the chart itself, not in window.prompt (which on a
+  // phone covers the chart): an input at the point, Enter to keep, Escape
+  // to drop. A double click on a text drawing opens it again.
+  function openDrawTextInput(point, initial, onDone) {
+    const container = el("main-chart");
+    if (!container) return;
+    const x = timeToX(point.time), y = priceToY(point.price);
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "draw-text-input";
+    input.value = initial || "";
+    input.placeholder = "Text";
+    input.setAttribute("aria-label", "Drawing text");
+    input.style.left = `${Math.max(4, (x || 0) + 6)}px`;
+    input.style.top = `${Math.max(4, (y || 0) - 26)}px`;
+    let done = false;
+    const finish = (keep) => {
+      if (done) return;
+      done = true;
+      const value = input.value.trim();
+      input.remove();
+      onDone(keep ? value : null);
+    };
+    input.addEventListener("keydown", (e) => {
+      e.stopPropagation();
+      if (e.key === "Enter") finish(true);
+      else if (e.key === "Escape") finish(false);
+    });
+    input.addEventListener("blur", () => finish(true));
+    input.addEventListener("pointerdown", (e) => e.stopPropagation());
+    container.appendChild(input);
+    setTimeout(() => input.focus(), 0);
+  }
+
+  function addDrawing(drawing) {
+    pushDrawHistory();
+    drawState.drawings.push(drawing);
+    attachDrawing(drawing);
+    if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) appearAt[drawing.id] = performance.now();
+    drawState.selected = drawing.id;
+    saveDrawings();
+    renderDrawingsList();
+    bumpDraw();
   }
 
   function finalizeDrawing() {
-    clearGhost();
     const type = drawState.tool;
     const points = drawState.pending;
     drawState.pending = [];
+    const keepTool = drawState.sticky;
+    const done = () => { if (!keepTool) setDrawTool("cursor"); else bumpDraw(); };
 
-    // Il frattale non e' un disegno come gli altri (linea, rettangolo...):
-    // non aggiunge una forma sul grafico, ricopia un pezzo di storia vero
-    // subito dopo l'ultima candela. Vive nella sua lista a parte
-    // (fractalReplays), non in drawState.drawings.
+    // The fractal is not a shape: it copies a real stretch of history right
+    // after the last candle. It lives in its own list (fractalReplays).
     if (type === "fractal") {
       createFractalReplay(points[0], points[1]);
-      setDrawTool("cursor");
+      done();
       return;
     }
-
-    let text;
+    const base = { id: newDrawingId(), type, points, v: 2, ...currentDrawStyle() };
     if (type === "text") {
-      text = window.prompt("Annotation text:");
-      if (!text) {
-        setDrawTool("cursor");
-        return;
-      }
-    } else if (type === "range") {
-      text = formatRangeLabel(points[0], points[1]);
+      done();
+      openDrawTextInput(points[0], "", (text) => { if (text) addDrawing({ ...base, text }); });
+      return;
     }
+    if (type === "range") base.text = formatRangeLabel(points[0], points[1]);
+    addDrawing(base);
+    done();
+  }
 
-    const drawing = { id: `d${Date.now()}${Math.random().toString(36).slice(2, 7)}`, type, points, text };
-    drawState.drawings.push(drawing);
-    attachDrawing(drawing);
-    saveDrawings();
-    renderDrawingsList();
-    setDrawTool("cursor"); // single-shot, like TradingView's default (unlocked) behavior
+  function editDrawingText(d) {
+    openDrawTextInput(d.points[0], d.text || "", (text) => {
+      if (text === null) return;
+      if (!text) removeDrawing(d.id);
+      else updateDrawing(d.id, { text });
+    });
+  }
+
+  // ---- fractals: saved like the drawings, with their copied candles ----
+  function saveFractals() {
+    const key = fractalStorageKey();
+    if (!key) return;
+    const list = fractalReplays.map((f) => ({ id: f.id, interval: f.interval, count: f.count, projected: f.projected }));
+    const body = { drawings: list, updated_at: Date.now() };
+    try { localStorage.setItem(key, JSON.stringify(body)); } catch { /* ignore */ }
+    scheduleDrawSync(key, list, body.updated_at);
+  }
+
+  function restoreFractals() {
+    const key = fractalStorageKey();
+    if (!key || !mainChart) return;
+    const mount = (list) => {
+      if (fractalStorageKey() !== key) return;
+      clearFractalReplays();
+      (list || []).forEach((f) => {
+        if (Array.isArray(f.projected) && f.projected.length) mountFractal(f.projected, f.interval, f.count || f.projected.length, f.id);
+      });
+    };
+    const local = readLocalDrawings(key);
+    mount(local.drawings);
+    syncDrawingsFromServer(key, local, (remote) => mount(remote.drawings));
   }
 
   // Lightweight Charts' own subscribeClick() disambiguates click-vs-drag
@@ -6300,8 +6602,6 @@
   // small-movement tolerance, sidesteps that entirely — and pan/zoom are
   // disabled for the duration so the chart doesn't drift under the cursor
   // while placing a point (see setDrawTool).
-  const DRAW_CLICK_TOLERANCE_PX = 6;
-
   function clearFractalReplays() {
     fractalReplays.forEach(({ series, label }) => {
       try { mainChart.removeSeries(series); } catch { /* gia' rimossa */ }
@@ -6319,6 +6619,7 @@
     entry.label.remove();
     fractalReplays = fractalReplays.filter((f) => f.id !== id);
     if (selectedFractalId === id) selectedFractalId = null;
+    saveFractals();
   }
 
   // Piazza la label ("Frattale ✕") sopra l'inizio della copia, e la
@@ -6377,7 +6678,13 @@
       };
     });
 
-    const id = `fr${Date.now()}${Math.random().toString(36).slice(2, 7)}`;
+    mountFractal(projected, interval, segment.length);
+    saveFractals();
+  }
+
+  // Puts a copy on the chart: from a new selection, or from what was saved.
+  function mountFractal(projected, interval, count, givenId) {
+    const id = givenId || `fr${Date.now()}${Math.random().toString(36).slice(2, 7)}`;
     const series = mainChart.addCandlestickSeries({
       upColor: "rgba(140,120,255,0.45)",
       downColor: "rgba(140,120,255,0.20)",
@@ -6394,7 +6701,7 @@
     const label = document.createElement("div");
     label.className = "fractal-label";
     label.title = "Drag here or directly on the candles to move the fractal";
-    label.innerHTML = `<span>🔮 Fractal — ${segment.length} candles copied</span>` +
+    label.innerHTML = `<span>Fractal — ${count} candles copied</span>` +
       `<button type="button" class="fractal-label-close" title="Remove">✕</button>`;
     label.querySelector(".fractal-label-close").addEventListener("click", (e) => {
       e.stopPropagation();
@@ -6413,7 +6720,7 @@
     });
     container.appendChild(label);
 
-    fractalReplays.push({ id, series, label, startTime: projected[0].time, interval, projected });
+    fractalReplays.push({ id, series, label, startTime: projected[0].time, interval, projected, count });
     repositionFractalLabels();
   }
 
@@ -6500,6 +6807,7 @@
   function finishFractalDrag() {
     if (!fractalDragState) return;
     if (!fractalDragState.moved) selectFractal(fractalDragState.id);
+    else saveFractals();
     fractalDragState = null;
     if (mainChart) mainChart.applyOptions({ handleScroll: drawState.tool === "cursor", handleScale: drawState.tool === "cursor" });
     // Niente riallineamento verticale della label da timeToCoordinate qui,
@@ -6507,121 +6815,219 @@
     // prossimo pan/zoom/resize la ricalcola comunque dal tempo vero.
   }
 
+  // Pointer events on the chart, read where the pointer really is (not the
+  // chart's crosshair, which a finger does not move). Placing a point: a
+  // click or a tap; a two-point tool also takes press-drag-release. Moving
+  // a drawing or one of its points keeps the pointer captured, so it
+  // follows over the scales and outside the chart too.
+  const DRAW_CLICK_TOLERANCE_PX = 6;
+  let lastPointerType = "mouse";
+
   function bindDrawClickCapture() {
     const container = el("main-chart");
-    let downPos = null;
-    document.addEventListener(
-      "pointerdown",
-      (e) => {
-        if (!container.contains(e.target)) return;
-        downPos = { x: e.clientX, y: e.clientY };
-        if (drawState.tool !== "cursor" || !lastCrosshairPoint) return;
+    let down = null; // { x, y, point, onPane, startedDrag }
 
-        // 1. Handle hit → resize drag
-        const handleHit = findHitHandle(lastCrosshairPoint.x, lastCrosshairPoint.y);
-        if (handleHit) {
-          handleDragState = {
-            drawing: handleHit.drawing,
-            handleIndex: handleHit.handleIndex,
-            originalPoints: handleHit.drawing.points.map((p) => ({ ...p })),
-          };
-          mainChart.applyOptions({ handleScroll: false, handleScale: false });
-          return;
-        }
+    const local = (e) => {
+      const rect = container.getBoundingClientRect();
+      return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    };
+    const onPane = (p) => {
+      const size = paneSize();
+      return p.x >= 0 && p.y >= 0 && p.x <= size.w && p.y <= size.h;
+    };
+    // Controls that sit over the chart (this toolbar, the text field, the
+    // fractal labels, the legend chips) handle their own pointer.
+    const OVER_CHART_UI = ".draw-toolbar, .draw-text-input, .fractal-label, .chart-top-left, .overlay-remove-badge, button, input, a";
+    const onUi = (e) => !!(e.target && e.target.closest && e.target.closest(OVER_CHART_UI));
+    const lockChart = () => mainChart.applyOptions({ handleScroll: false, handleScale: false });
+    const unlockChart = () => mainChart.applyOptions({ handleScroll: drawState.tool === "cursor", handleScale: drawState.tool === "cursor" });
 
-        // 2. Body hit → select + translate drag
-        const hit = findHitDrawing(lastCrosshairPoint.x, lastCrosshairPoint.y);
-        if (hit) {
-          drawState.selected = hit.id;
-          const startPrice = candleSeries.coordinateToPrice(lastCrosshairPoint.y);
-          if (startPrice !== null) {
-            dragState = {
-              drawing: hit,
-              startTime: lastCrosshairPoint.time,
-              startPrice,
-              originalPoints: hit.points.map((p) => ({ ...p })),
-            };
-            mainChart.applyOptions({ handleScroll: false, handleScale: false });
-          }
-          return;
-        }
-
-        // 3. Frattale colpito direttamente sulle sue candele → trascina
-        // liberamente (tempo e prezzo insieme), come chiesto: prima si
-        // spostava solo in orizzontale e solo afferrando la label.
-        const fractalHit = hitTestFractal(lastCrosshairPoint.time, lastCrosshairPoint.y);
-        if (fractalHit) startFractalDrag(fractalHit);
-      },
-      true
-    );
-    document.addEventListener(
-      "pointerup",
-      (e) => {
-        if (!downPos) {
-          dragState = null; handleDragState = null;
-          return;
-        }
-        const dx = e.clientX - downPos.x;
-        const dy = e.clientY - downPos.y;
-        const moved = Math.hypot(dx, dy) > DRAW_CLICK_TOLERANCE_PX;
-        downPos = null;
-
-        if (handleDragState) {
-          handleDragState = null;
-          mainChart.applyOptions({ handleScroll: true, handleScale: true });
-          if (moved) saveDrawings();
-          return;
-        }
-
-        if (dragState) {
-          dragState = null;
-          mainChart.applyOptions({ handleScroll: true, handleScale: true });
-          if (moved) saveDrawings();
-          // no-move click on a drawing: keep selected, don't delete
-          return;
-        }
-
-        if (fractalDragState) {
-          finishFractalDrag();
-          return;
-        }
-
-        if (!state.data || moved) return;
-        if (!lastCrosshairPoint) return;
-
-        if (drawState.tool === "cursor") {
-          // Click on empty space → deselect. Un click su un frattale non
-          // arriva qui: e' gia' stato gestito sopra da finishFractalDrag
-          // (ogni frattale colpito al pointerdown avvia un drag, anche se
-          // poi non si muove).
-          const hit = findHitDrawing(lastCrosshairPoint.x, lastCrosshairPoint.y);
-          if (!hit) drawState.selected = null;
-          deselectFractal();
-          return;
-        }
-
-        const price = candleSeries.coordinateToPrice(lastCrosshairPoint.y);
-        const time = lastCrosshairPoint.time;
-        if (price === null || time === undefined) return;
-
-        drawState.pending.push({ time, price });
-        const needed = DRAW_TOOL_POINTS[drawState.tool];
-        if (drawState.pending.length === 1 && needed >= 2) {
-          startGhost(drawState.tool, { time, price });
-        } else if (drawState.pending.length >= needed) {
-          finalizeDrawing();
-        }
-      },
-      true
-    );
-    document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") {
-        if (drawState.tool !== "cursor") setDrawTool("cursor");
-        else { drawState.selected = null; deselectFractal(); }
+    container.addEventListener("pointermove", (e) => {
+      lastPointerType = e.pointerType || "mouse";
+      const p = local(e);
+      drawPointer = p;
+      if (handleDragState) {
+        const pt = pointerToPoint(p.x, p.y);
+        if (!pt) return;
+        const d = handleDragState.drawing;
+        d.points = handleDragState.originalPoints.map((q, i) => (i === handleDragState.handleIndex ? pt : { ...q }));
+        if (d.type === "range") d.text = formatRangeLabel(d.points[0], d.points[1]);
+        repositionDrawingPrimitives(d);
+        handleDragState.moved = true;
+        bumpDraw();
         return;
       }
+      if (dragState) {
+        const logical = mainChart.timeScale().coordinateToLogical(p.x);
+        const price = candleSeries.coordinateToPrice(p.y);
+        if (logical === null || price === null) return;
+        const dl = logical - dragState.startLogical;
+        const dPrice = price - dragState.startPrice;
+        const d = dragState.drawing;
+        d.points = dragState.originalPoints.map((q) => {
+          const l0 = timeMapper.timeToLogical(q.time);
+          return { time: l0 === null ? q.time : timeMapper.logicalToTime(l0 + dl), price: q.price + dPrice };
+        });
+        if (d.type === "range") d.text = formatRangeLabel(d.points[0], d.points[1]);
+        repositionDrawingPrimitives(d);
+        dragState.moved = true;
+        bumpDraw();
+        return;
+      }
+      if (drawState.tool !== "cursor") { bumpDraw(); return; }
+      if (fractalDragState) return;
+      const handleHit = findHitHandle(p.x, p.y);
+      const hit = handleHit ? handleHit.drawing : findHitDrawing(p.x, p.y);
+      setDrawHover(hit ? hit.id : null);
+      container.style.cursor = handleHit ? "grab" : hit ? (hit.locked ? "default" : "move") : "default";
+    });
+
+    container.addEventListener("pointerleave", () => {
+      if (dragState || handleDragState) return;
+      drawPointer = null;
+      setDrawHover(null);
+      bumpDraw();
+    });
+
+    container.addEventListener("pointerdown", (e) => {
+      if (e.button !== undefined && e.button > 0) return;
+      if (onUi(e)) { down = null; return; }
+      lastPointerType = e.pointerType || "mouse";
+      const p = local(e);
+      drawPointer = p;
+      down = { x: p.x, y: p.y, onPane: onPane(p), point: onPane(p) ? pointerToPoint(p.x, p.y) : null };
+      if (!down.onPane || !state.data) return;
+
+      if (drawState.tool !== "cursor") {
+        // placing: the chart must not pan under the pointer
+        e.stopPropagation();
+        try { container.setPointerCapture(e.pointerId); } catch { /* old browser */ }
+        return;
+      }
+
+      // 1. Handle hit → move one point
+      const handleHit = findHitHandle(p.x, p.y);
+      if (handleHit) {
+        pushDrawHistory();
+        handleDragState = { drawing: handleHit.drawing, handleIndex: handleHit.handleIndex, originalPoints: handleHit.drawing.points.map((q) => ({ ...q })) };
+        lockChart();
+        e.stopPropagation();
+        try { container.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+        bumpDraw();
+        return;
+      }
+
+      // 2. Body hit → select, and move it unless it is locked
+      const hit = findHitDrawing(p.x, p.y);
+      if (hit) {
+        drawState.selected = hit.id;
+        deselectFractal();
+        bumpDraw();
+        if (hit.locked) { e.stopPropagation(); return; }
+        const logical = mainChart.timeScale().coordinateToLogical(p.x);
+        const startPrice = candleSeries.coordinateToPrice(p.y);
+        if (logical !== null && startPrice !== null) {
+          pushDrawHistory();
+          dragState = { drawing: hit, startLogical: logical, startPrice, originalPoints: hit.points.map((q) => ({ ...q })) };
+          lockChart();
+          e.stopPropagation();
+          try { container.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+        }
+        return;
+      }
+
+      // 3. A fractal hit directly on its candles → drag it (time and price)
+      if (lastCrosshairPoint) {
+        const fractalHit = hitTestFractal(xToTime(p.x), p.y);
+        if (fractalHit) startFractalDrag(fractalHit);
+      }
+    }, true);
+
+    const endPointer = (e) => {
+      if (!down && !dragState && !handleDragState && !fractalDragState && onUi(e)) return;
+      const p = local(e);
+      const start = down;
+      down = null;
+      const moved = start ? Math.hypot(p.x - start.x, p.y - start.y) > DRAW_CLICK_TOLERANCE_PX : false;
+      try { container.releasePointerCapture(e.pointerId); } catch { /* not captured */ }
+
+      if (handleDragState) {
+        const changed = handleDragState.moved;
+        handleDragState = null;
+        unlockChart();
+        if (changed) saveDrawings(); else drawHistory.undo.pop();
+        bumpDraw();
+        return;
+      }
+      if (dragState) {
+        const changed = dragState.moved;
+        dragState = null;
+        unlockChart();
+        if (changed) saveDrawings(); else drawHistory.undo.pop();
+        bumpDraw();
+        return;
+      }
+      if (fractalDragState) { finishFractalDrag(); return; }
+      if (!start || !start.onPane || !state.data) return;
+
+      if (drawState.tool === "cursor") {
+        if (moved) return; // a pan of the chart
+        if (!findHitDrawing(p.x, p.y)) { drawState.selected = null; bumpDraw(); }
+        deselectFractal();
+        return;
+      }
+
+      const end = pointerToPoint(p.x, p.y);
+      if (!end) return;
+      const needed = DRAW_TOOL_POINTS[drawState.tool];
+      if (moved && start.point && drawState.pending.length === 0 && needed === 2) {
+        // press-drag-release: both points in one gesture
+        drawState.pending = [start.point, end];
+      } else {
+        drawState.pending.push(end);
+      }
+      if (drawState.pending.length >= needed) finalizeDrawing();
+      bumpDraw();
+    };
+    container.addEventListener("pointerup", endPointer, true);
+    container.addEventListener("pointercancel", (e) => {
+      down = null;
+      try { container.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+      if (handleDragState || dragState) {
+        const st = handleDragState || dragState;
+        st.drawing.points = st.originalPoints;
+        repositionDrawingPrimitives(st.drawing);
+        handleDragState = null; dragState = null;
+        drawHistory.undo.pop();
+        unlockChart();
+        bumpDraw();
+      }
+    });
+
+    container.addEventListener("dblclick", (e) => {
+      if (drawState.tool !== "cursor") return;
+      const p = local(e);
+      const hit = findHitDrawing(p.x, p.y);
+      if (hit && hit.type === "text" && !hit.locked) { e.stopPropagation(); editDrawingText(hit); }
+    });
+
+    document.addEventListener("keydown", (e) => {
       const tag = document.activeElement?.tagName;
-      if ((e.key === "Delete" || e.key === "Backspace") && tag !== "INPUT" && tag !== "TEXTAREA" && tag !== "SELECT") {
+      const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || document.activeElement?.isContentEditable;
+      if (e.key === "Escape") {
+        if (drawState.tool !== "cursor") setDrawTool("cursor");
+        else { drawState.selected = null; deselectFractal(); bumpDraw(); }
+        return;
+      }
+      if (typing) return;
+      const mod = e.ctrlKey || e.metaKey;
+      if (mod && (e.key === "z" || e.key === "Z")) {
+        e.preventDefault();
+        if (e.shiftKey) redoDrawing(); else undoDrawing();
+        return;
+      }
+      if (mod && (e.key === "y" || e.key === "Y")) { e.preventDefault(); redoDrawing(); return; }
+      if (e.key === "Delete" || e.key === "Backspace") {
         if (drawState.selected) { removeDrawing(drawState.selected); drawState.selected = null; }
         if (selectedFractalId) removeFractalReplay(selectedFractalId);
       }
@@ -7421,9 +7827,21 @@
     document.querySelectorAll(".draw-tool-btn[data-draw-tool]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const tool = btn.dataset.drawTool;
-        setDrawTool(drawState.tool === tool ? "cursor" : tool);
+        setDrawTool(drawState.tool === tool && !drawState.sticky ? "cursor" : tool);
+      });
+      // Double click: the tool stays on for several drawings in a row.
+      btn.addEventListener("dblclick", () => {
+        const tool = btn.dataset.drawTool;
+        if (tool !== "cursor") setDrawTool(tool, { sticky: true });
       });
     });
+    const bind = (id, fn) => { const b = el(id); if (b) b.addEventListener("click", fn); };
+    bind("draw-magnet-btn", toggleMagnet);
+    bind("draw-hide-btn", toggleHideDrawings);
+    bind("draw-undo-btn", undoDrawing);
+    bind("draw-redo-btn", redoDrawing);
+    const mag = el("draw-magnet-btn");
+    if (mag) { mag.classList.toggle("selected", drawState.magnet); mag.setAttribute("aria-pressed", String(drawState.magnet)); }
     el("draw-clear-btn").addEventListener("click", () => {
       if (drawState.drawings.length && window.confirm("Delete all drawings on this chart?")) {
         clearAllDrawings();
@@ -7632,6 +8050,7 @@
     candleSeries.applyOptions({ priceFormat: pricePrecisionFor(candles[candles.length - 1].close) });
     candleSeries.setData(candles.map((c) => ({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close })));
     setOhlcCandles(candles);
+    setDrawTimes(candles);
     addSessionShading(candles, el("interval-primary").value);
 
     // --- price-scale indicator overlays ---
@@ -8430,6 +8849,7 @@
       candles[candles.length - 1] = candle;
     } else if (!last || candle.time > last.time) {
       candles.push(candle);
+      if (timeframe === state.activeTimeframe) setDrawTimes(candles);
     } else {
       return; // out-of-order/stale tick
     }
