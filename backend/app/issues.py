@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0275", "Alert: conferma prima di cancellare e livelli RSI visibili per RSI+BB",
+     "Lorenzo, 13/10: 'Nella sezione degli alert inserisci sempre la richiesta di conferma quando si preme sul tasto x per cancellare un alert attivo [...] Inoltre, solo per le strategie RSI+BB, tra i dati visibili di ogni strategia negli alert aggiungi anche la visualizzazione dei valori di riferimento per ipercomprato e ipervenduto'.",
+     "media"),
     ("seed-0274", "Ricerca gemme: 'fallita 3 volte' e selezione poco popolata",
      "Lorenzo, 12/10: 'Ricerca delle 22:00 interrotta: e' fallita 3 volte, riprova alle 11:35. Vedi i log del server., poi non e' molto popolata la nostra selezione, aggiungi controllo ogni ora'.",
      "alta"),

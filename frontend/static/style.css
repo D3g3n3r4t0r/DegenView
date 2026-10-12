@@ -5941,3 +5941,14 @@ html.embed-chart, html.embed-chart body, html.embed-chart .chart-area { backgrou
   }
   .draw-rail.mobile-tools-open .draw-tool-btn { flex: none; }
 }
+
+/* RSI+BB alert rows: the two RSI levels next to the strategy name (13/10). */
+.strat-rsi-levels {
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font: 600 11px/18px 'JetBrains Mono', 'IBM Plex Mono', monospace;
+  color: var(--ink-dim, #8a93a3);
+  background: rgba(127, 127, 127, 0.12);
+  white-space: nowrap;
+}
