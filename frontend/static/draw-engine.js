@@ -160,11 +160,13 @@
         const e = extendLine(a.x, a.y, b.x, b.y, env.w, env.h);
         return distanceToSegment(px, py, e.x1, e.y1, e.x2, e.y2) <= tol;
       }
-      case "range":
-        // the two legs of the ruler: horizontal at the first price, vertical at the second time
-        return distanceToSegment(px, py, a.x, a.y, b.x, a.y) <= tol
-          || distanceToSegment(px, py, b.x, a.y, b.x, b.y) <= tol
-          || Math.hypot(px - a.x, py - a.y) <= tol + 4 || Math.hypot(px - b.x, py - b.y) <= tol + 4;
+      case "range": {
+        // the vertical ruler, the two points, the two projections up to the ruler
+        const xl = Math.min(a.x, b.x), xr = Math.max(a.x, b.x);
+        return distanceToSegment(px, py, b.x, a.y, b.x, b.y) <= tol
+          || Math.hypot(px - a.x, py - a.y) <= tol + 4 || Math.hypot(px - b.x, py - b.y) <= tol + 4
+          || distanceToSegment(px, py, xl, a.y, xr, a.y) <= tol || distanceToSegment(px, py, xl, b.y, xr, b.y) <= tol;
+      }
       case "rectangle":
       case "fractal": {
         const xa = Math.min(a.x, b.x) - tol, xb = Math.max(a.x, b.x) + tol;
@@ -267,47 +269,32 @@
     return { color, width, dash };
   }
 
-  // The measure, as a ruler: never oblique. From the first point a
-  // horizontal leg along its price to the second point's time (how long),
-  // then a vertical leg with the arrow to the second point's price (how
-  // much). Both prices projected to the price scale; the same move repeated
-  // once more on the vertical (the 1:1 target), faint.
-  function measureCorner(a, b) {
-    return { x: b.x, y: a.y };
-  }
-
+  // The measure: the two prices it read, each projected as a horizontal
+  // dashed line, and between them one vertical ruler with the arrow and the
+  // percentage in the middle. No corner, no diagonal, no box (Lorenzo,
+  // 12/10: "solo una proiezione dei due punti con la percentuale nel mezzo").
   function paintMeasure(ctx, d, a, b, env, look, st, fit) {
     const p1 = d.points[0], p2 = d.points[1];
     const up = p2.price >= p1.price;
     const tone = up ? look.bull : look.bear;
     const lw = st.selected ? 2 : 1.5;
-    const k = measureCorner(a, b);
     const fmt = (v) => (env.formatPrice ? env.formatPrice(v) : v.toFixed(2));
+    const left = Math.min(a.x, b.x);
     ctx.save();
-    // projections of both prices to the price scale
-    ctx.setLineDash([3, 4]);
+    // projections of both prices, from the leftmost point to the price scale
+    ctx.setLineDash([4, 4]);
     ctx.lineWidth = 1;
-    ctx.strokeStyle = rgba(tone, 0.5);
-    [a, b].forEach((p) => { ctx.beginPath(); ctx.moveTo(Math.max(a.x, b.x), p.y); ctx.lineTo(env.w, p.y); ctx.stroke(); });
-    // 1:1 target on the same vertical
-    const target = p2.price + (p2.price - p1.price);
-    const ty = env.priceToY ? env.priceToY(target) : null;
-    if (ty != null && !st.ghost) {
-      ctx.strokeStyle = rgba(tone, 0.35);
-      ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(b.x, ty); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(b.x - 6, ty); ctx.lineTo(env.w, ty); ctx.stroke();
-      ctx.setLineDash([]);
-      pill(ctx, `1:1  ${fmt(target)}`, b.x + 8, ty, look, { fit, fg: tone, font: "600 10px -apple-system, system-ui, sans-serif" });
-    }
+    ctx.strokeStyle = rgba(tone, 0.7);
+    [a, b].forEach((p) => { ctx.beginPath(); ctx.moveTo(left, p.y); ctx.lineTo(env.w, p.y); ctx.stroke(); });
     ctx.setLineDash([]);
-    const legs = () => { ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(k.x, k.y); ctx.lineTo(b.x, b.y); };
-    if (st.selected || st.hover) {
-      ctx.strokeStyle = rgba(tone, 0.25); ctx.lineWidth = lw + 6; legs(); ctx.stroke();
-    }
-    ctx.strokeStyle = tone; ctx.lineWidth = lw; legs(); ctx.stroke();
-    // arrow on the vertical leg, pointing where the price went
-    if (Math.abs(b.y - k.y) > 2) {
-      const dir = b.y < k.y ? -1 : 1, sz = 9;
+    // the vertical ruler, at the second point
+    const vline = () => { ctx.beginPath(); ctx.moveTo(b.x, a.y); ctx.lineTo(b.x, b.y); };
+    if (st.selected || st.hover) { ctx.strokeStyle = rgba(tone, 0.25); ctx.lineWidth = lw + 6; vline(); ctx.stroke(); }
+    ctx.strokeStyle = tone; ctx.lineWidth = lw; vline(); ctx.stroke();
+    // a short tick at each end, and the arrow toward the second price
+    [a.y, b.y].forEach((y) => { ctx.beginPath(); ctx.moveTo(b.x - 6, y); ctx.lineTo(b.x + 6, y); ctx.stroke(); });
+    if (Math.abs(b.y - a.y) > 14) {
+      const dir = b.y < a.y ? -1 : 1, sz = 9;
       ctx.fillStyle = tone;
       ctx.beginPath();
       ctx.moveTo(b.x, b.y);
@@ -322,16 +309,21 @@
       ctx.lineWidth = 1.5; ctx.strokeStyle = tone; ctx.stroke();
     });
     ctx.restore();
-    // both prices on the price scale, always
+    // both prices on the price scale
     [[a, p1.price], [b, p2.price]].forEach(([p, price]) => {
       pill(ctx, fmt(price), env.w - 2, p.y, look,
         { align: "right", bg: rgba(tone, 0.92), fg: "#ffffff", fit, font: "600 10px -apple-system, system-ui, sans-serif" });
     });
-    if (d.text) {
-      // beside the vertical leg, halfway: it reads as the size of that leg
-      const right = b.x >= a.x;
-      pill(ctx, d.text, b.x + (right ? 10 : -10), (k.y + b.y) / 2, look,
-        { align: right ? "left" : "right", fit, bg: rgba(tone, 0.94), fg: "#ffffff" });
+    // the percentage in the middle of the ruler, the rest of the reading under it
+    const pct = p1.price !== 0 ? ((p2.price - p1.price) / p1.price) * 100 : 0;
+    const mid = (a.y + b.y) / 2;
+    pill(ctx, `${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%`, b.x, mid, look,
+      { align: "center", fit, bg: rgba(tone, 0.95), fg: "#ffffff", font: "700 12px -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif" });
+    if (d.text && Math.abs(b.y - a.y) > 44) {
+      const rest = d.text.replace(/^.*?%\)\s*·\s*/, "");
+      const delta = `${p2.price - p1.price >= 0 ? "+" : "-"}${fmt(Math.abs(p2.price - p1.price))}`;
+      pill(ctx, `${delta} · ${rest}`, b.x, mid + 20, look,
+        { align: "center", fit, fg: tone, font: "600 10px -apple-system, system-ui, sans-serif" });
     }
   }
 

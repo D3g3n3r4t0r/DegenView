@@ -103,11 +103,25 @@ test('measure reads the nearest high or low under the pointer', () => {
   assert.equal(E.pickExtreme(candles, 100, priceToY, 40), null);   // too far from any wick
 });
 
-test('measure is a ruler: hit on its horizontal and vertical legs, never on a diagonal', () => {
+test('measure: hit on the vertical ruler and the two projections, never on a diagonal', () => {
   const env = { w: 800, h: 400 };
   const P = [{ x: 100, y: 300 }, { x: 300, y: 100 }];
-  assert.ok(E.hitTest({ type: 'range' }, P, 200, 302, env), 'horizontal leg at the first price');
-  assert.ok(E.hitTest({ type: 'range' }, P, 298, 200, env), 'vertical leg at the second time');
+  assert.ok(E.hitTest({ type: 'range' }, P, 298, 200, env), 'vertical ruler');
+  assert.ok(E.hitTest({ type: 'range' }, P, 200, 302, env), 'projection of the first price');
+  assert.ok(E.hitTest({ type: 'range' }, P, 200, 102, env), 'projection of the second price');
   assert.ok(!E.hitTest({ type: 'range' }, P, 200, 200, env), 'no oblique line');
-  assert.ok(!E.hitTest({ type: 'range' }, P, 150, 150, env));
+});
+
+test('measure paints its percentage in the middle of the ruler', () => {
+  const texts = [];
+  const ctx = new Proxy({}, {
+    get: (o, k) => (k in o ? o[k] : k === 'measureText' ? (t) => ({ width: String(t).length * 6 }) : k === 'fillText' ? (t, x, y) => texts.push({ t, x, y }) : () => {}),
+    set: (o, k, v) => { o[k] = v; return true; },
+  });
+  const d = { type: 'range', points: [{ time: 0, price: 100 }, { time: 1, price: 150 }], text: '+50.00 (+50.00%) · 1d · 10 bars' };
+  const P = [{ x: 100, y: 300 }, { x: 300, y: 100 }];
+  E.paint(ctx, d, P, { w: 800, h: 400, priceToY: (p) => 400 - p * 2, look: { panel: '#fff', ink: '#000', bull: '#00b894', bear: '#eb5757' }, state: {} });
+  const pct = texts.find((x) => x.t === '+50.00%');
+  assert.ok(pct, 'percentage pill');
+  assert.ok(Math.abs(pct.y - 200) < 2, 'halfway between the two prices');
 });
