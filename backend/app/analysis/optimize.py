@@ -566,6 +566,13 @@ def years_without_trades(bt: BacktestResult, years: list[int]) -> list[int]:
     return [y for y in years if y not in traded]
 
 
+def trades_in_years(bt: BacktestResult, years: list[int]) -> int:
+    """Trades opened (UTC) inside the judged years only."""
+    from datetime import datetime, timezone
+    wanted = set(years)
+    return sum(1 for t in bt.trades if datetime.fromtimestamp(t.entry_time, timezone.utc).year in wanted)
+
+
 def max_return_size() -> int:
     return len(MAX_RETURN_OVERSOLD) * len(MAX_RETURN_OVERBOUGHT)
 
@@ -587,8 +594,8 @@ def max_return_search(
     A configuration needs at least one trade and a drawdown within
     MAX_RETURN_DRAWDOWN_CAP; the Lab's result filters, when set, apply too.
     With `years` (see calendar_years) it also needs at least one trade opened
-    in every one of those years — unless its total trades are at least as
-    many as those years: a peak bought with RSI levels so wide that whole
+    in every one of those years — unless the trades opened in those years are
+    at least as many as the years: a peak bought with RSI levels so wide that whole
     years go by without a trade is not a result with continuity.
 
     Returns (best_params, best_bt, evaluated, top_results), top_results
@@ -628,8 +635,10 @@ def max_return_search(
                 continue
             # Lorenzo, 13/10: "se il totale dei trade pareggia o supera il
             # numero degli anni presi in esame allora il risultato deve essere
-            # considerato valido" — a year without trades is forgiven then.
-            if years and bt.num_trades < len(years) and years_without_trades(bt, years):
+            # considerato valido" — a year without trades is forgiven then,
+            # counting only the trades opened in those years ("conta solo i
+            # trade fatti negli anni esaminati").
+            if years and trades_in_years(bt, years) < len(years) and years_without_trades(bt, years):
                 gaps += 1
                 continue
             if not _passes(bt, constraints):
