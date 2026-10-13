@@ -124,3 +124,20 @@ def test_enough_trades_in_total_forgive_an_empty_year(monkeypatch):
     # all in 2024, do not count when the judged years are 2025-2027
     with pytest.raises(ValueError):
         max_return_search(GAB, fake, years=[2025, 2026, 2027])
+
+
+def test_in_candle_fills_rerun_only_the_best_pairs():
+    # 14/10, "l'ottimizzazione sta procedendo molto lentamente": with fills
+    # inside the candle every one of the 961 backtests replayed the candles.
+    exact_calls = []
+
+    def exact(p):
+        exact_calls.append(p)
+        bt = _bt(p)
+        return bt.model_copy(update={"total_return_pct": bt.total_return_pct + 1.0})
+
+    params, bt, evaluated, top = max_return_search(GAB, exact, fast_backtest=_bt, refine=20)
+    assert evaluated == 31 * 31
+    assert 0 < len(exact_calls) <= 20
+    fast_best = max_return_search(GAB, _bt)[1]
+    assert bt.total_return_pct == pytest.approx(fast_best.total_return_pct + 1.0)
