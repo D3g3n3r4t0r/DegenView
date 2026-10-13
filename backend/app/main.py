@@ -7480,6 +7480,7 @@ async def _last_year_check(strategy_name, df, on, constraints, say, should_stop,
     search, choosing on the candles up to a year ago, then its picks run on
     the last year alone. It does not change the result shown: it says how
     much a choice made this way held up on candles it had not seen."""
+    say = say or (lambda _m: None)
     cut = df.index[-1] - pd.Timedelta(days=LAST_YEAR_DAYS)
     train, test = df[df.index < cut], df[df.index >= cut]
     if len(train) < 300 or (train.index[-1] - train.index[0]).days < LAST_YEAR_DAYS:
