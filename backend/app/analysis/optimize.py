@@ -543,6 +543,39 @@ MAX_RETURN_OVERBOUGHT = range(60, 91)    # 60, 61, ..., 90
 MAX_RETURN_DRAWDOWN_CAP = 60.0           # percent
 
 
+MAX_RETURN_TOP = 2                       # Lorenzo, 13/10: "i due migliori risultati"
+YEAR_MIN_COVERAGE_DAYS = 60              # an edge year with less data is not judged
+
+
+def calendar_years(index) -> list[int]:
+    """The calendar years a series covers well enough to demand a trade in.
+
+    Lorenzo, 13/10: "eliminare tutti i risultati che non ottengono almeno un
+    trade per anno solare testato [...] dal 2022 al 2026 deve aver ottenuto
+    almeno un trade in ognuno di questi anni". A first or last year with
+    under YEAR_MIN_COVERAGE_DAYS of candles (data starting on 20 December) is
+    left out: no strategy can be asked for a trade in eleven days."""
+    import pandas as pd
+    if len(index) == 0:
+        return []
+    idx = pd.DatetimeIndex(index)
+    first, last = idx[0], idx[-1]
+    out = []
+    for y in range(first.year, last.year + 1):
+        start = max(first, pd.Timestamp(year=y, month=1, day=1, tz=idx.tz))
+        end = min(last, pd.Timestamp(year=y, month=12, day=31, hour=23, minute=59, tz=idx.tz))
+        if (end - start).days >= YEAR_MIN_COVERAGE_DAYS:
+            out.append(y)
+    return out
+
+
+def years_without_trades(bt: BacktestResult, years: list[int]) -> list[int]:
+    """The required years in which no trade was opened (by entry time, UTC)."""
+    from datetime import datetime, timezone
+    traded = {datetime.fromtimestamp(t.entry_time, timezone.utc).year for t in bt.trades}
+    return [y for y in years if y not in traded]
+
+
 def max_return_size() -> int:
     return len(MAX_RETURN_OVERSOLD) * len(MAX_RETURN_OVERBOUGHT)
 
@@ -553,7 +586,8 @@ def max_return_search(
     constraints: Constraints | None = None,
     progress: Callable[[str], None] | None = None,
     should_stop: Callable[[], bool] | None = None,
-    top_n: int = _TOP_N,
+    top_n: int = MAX_RETURN_TOP,
+    years: list[int] | None = None,
 ) -> tuple[dict, BacktestResult, int, list[dict]]:
     """Every (oversold, overbought) pair, whole history, highest return wins.
 
@@ -562,6 +596,9 @@ def max_return_search(
     show. RSI and Bollinger lengths and the multiplier stay GABRIELE_FIXED.
     A configuration needs at least one trade and a drawdown within
     MAX_RETURN_DRAWDOWN_CAP; the Lab's result filters, when set, apply too.
+    With `years` (see calendar_years) it also needs at least one trade opened
+    in every one of those years: a peak bought with RSI levels so wide that
+    whole years go by without a trade is not a result with continuity.
 
     Returns (best_params, best_bt, evaluated, top_results), top_results
     sorted by return, distinct by effect, rank starting at 1.
@@ -578,7 +615,10 @@ def max_return_search(
 
     best: list[tuple[float, int, dict, BacktestResult]] = []   # min-heap on return
     seen: set[tuple] = set()
-    evaluated = too_deep = no_trades = filtered = 0
+    evaluated = too_deep = no_trades = filtered = gaps = 0
+    years = list(years or [])
+    if years:
+        say(f"at least one trade in every year: {', '.join(map(str, years))}")
     step = max(1, total // 20)
     for os_ in MAX_RETURN_OVERSOLD:
         for ob in MAX_RETURN_OVERBOUGHT:
@@ -595,6 +635,9 @@ def max_return_search(
             if abs(bt.max_drawdown_pct) > MAX_RETURN_DRAWDOWN_CAP:
                 too_deep += 1
                 continue
+            if years and years_without_trades(bt, years):
+                gaps += 1
+                continue
             if not _passes(bt, constraints):
                 filtered += 1
                 continue
@@ -609,13 +652,16 @@ def max_return_search(
                 heapq.heapreplace(best, entry)
 
     say(f"excluded: {too_deep} over {MAX_RETURN_DRAWDOWN_CAP:.0f}% drawdown, "
-        f"{no_trades} without trades" + (f", {filtered} by the filters" if filtered else ""))
+        f"{no_trades} without trades"
+        + (f", {gaps} with a year without trades" if years else "")
+        + (f", {filtered} by the filters" if filtered else ""))
     if not best:
         if constraints.active and filtered:
             raise NoCandidateMeetsConstraints(constraints, evaluated, filtered)
         raise ValueError(
             f"no pair of values stays within {MAX_RETURN_DRAWDOWN_CAP:.0f}% drawdown "
-            f"with at least one trade on this chart ({evaluated} tried)")
+            + (f"with a trade in every year {years[0]}-{years[-1]} " if years else "with at least one trade ")
+            + f"on this chart ({evaluated} tried)")
     ranked = sorted(best, key=lambda e: e[0], reverse=True)
     top = [{"rank": i, "params": p, "backtest": b, "score": round(r, 4)}
            for i, (r, _, p, b) in enumerate(ranked, start=1)]

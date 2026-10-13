@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0277", "Max return: almeno un trade in ogni anno solare e i due migliori risultati",
+     "Lorenzo, 13/10: 'inserire un filtro nella scansione che elimini tutti i risultati finali che non ottengono almeno un trade per anno solare testato [...] dal 2022 al 2026 deve aver ottenuto almeno un trade valido in ognuno di questi diversi anni [...] c'e' bisogno di ottenere un backtest con continuita' e affidabilita' temporale. Infine [...] avere come esito finale i due migliori risultati anziche' uno solo'.",
+     "alta"),
     ("seed-0276", "Ottimizzazioni salvate da sole nell'archivio strategie",
      "Lorenzo, 13/10: 'Annulla il salvataggio automatico delle strategie ottimizzate in archivio. Se interessano vengono salvate manualmente, altrimenti si affolla l'archivio strategie inutilmente'.",
      "media"),

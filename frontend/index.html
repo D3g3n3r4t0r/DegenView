@@ -566,7 +566,7 @@
             <label class="lab-mode-opt hidden" id="lab-mode-maxret-wrap">
               <input type="radio" name="lab-opt-mode" value="max_return" />
               <span class="lab-mode-name">Max return</span>
-              <span class="lab-mode-desc">Every oversold 10–40 × overbought 60–90 pair, one by one (961 backtests) on the whole chart. Highest return with drawdown ≤ 60%. No out-of-sample check.</span>
+              <span class="lab-mode-desc">Every oversold 10–40 × overbought 60–90 pair, one by one (961 backtests) on the whole chart. The two highest returns with drawdown ≤ 60% and at least one trade in every year. No out-of-sample check.</span>
             </label>
             <label class="lab-mode-opt lab-mode-recommended">
               <input type="radio" name="lab-opt-mode" value="plateau" />
@@ -602,6 +602,8 @@
           </details>
 
           <div id="lab-plateau-box" class="lab-plateau-box hidden"></div>
+          <!-- Max return: i due migliori risultati (Lorenzo, 13/10) -->
+          <div id="lab-best2-box" class="lab-best2-box hidden"></div>
           <div id="lab-data-used" class="lab-data-used hidden"></div>
           <div id="lab-regime-box" class="lab-regime-box hidden"></div>
           <div id="lab-branch-box" class="lab-branch-box hidden"></div>

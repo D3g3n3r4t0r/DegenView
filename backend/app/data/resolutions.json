@@ -2835,5 +2835,11 @@
     "at": 1791893165,
     "summary": "Un'ottimizzazione finita non entra piu' da sola nell'archivio: i parametri trovati vanno nel Laboratorio e, se ti interessano, li salvi con il tasto Archive.",
     "detail": "Il riepilogo su Telegram lo ricorda ('non salvata in automatico'). Se la ricerca finisce mentre il Laboratorio mostra un'altra coppia, compare 'Open it' che riporta il Laboratorio su quella coppia e strategia con i risultati, cosi' non si perde niente. Le voci gia' in archivio restano: si cancellano a mano."
+  },
+  "seed-0277": {
+    "status": "risolto",
+    "at": 1791894041,
+    "summary": "Max return scarta ogni combinazione RSI che in uno degli anni solari del grafico non apre nemmeno un trade, e alla fine mostra i due migliori risultati, ciascuno con il tasto 'Use' per applicarlo.",
+    "detail": "Gli anni richiesti sono quelli coperti dal grafico; un primo o ultimo anno con meno di 60 giorni di candele (es. dati che partono il 20 dicembre) non viene giudicato, perche' nessuna strategia puo' fare un trade in 11 giorni. Il trade conta nell'anno in cui e' aperto. Restano gli altri vincoli: drawdown massimo 60%, filtri del Laboratorio se impostati. Nel log della ricerca compare quante combinazioni sono state scartate per un anno senza trade. Il primo risultato va subito nei campi; 'Use' sul secondo lo mette nei campi e lancia il backtest."
   }
 }
