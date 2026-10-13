@@ -5983,3 +5983,6 @@ html.embed-chart, html.embed-chart body, html.embed-chart .chart-area { backgrou
 }
 .lab-best2-card.active .lab-best2-use { border-color: var(--accent); color: var(--accent); }
 .lab-best2-kind { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--accent); margin-bottom: 2px; }
+.lab-best2-verify { margin-top: 6px; padding: 6px 8px; border-radius: 8px; font-size: 12px; line-height: 1.4; background: var(--bg-raised); color: var(--ink-dim); }
+.lab-best2-verify.pos b { color: var(--bull); }
+.lab-best2-verify.neg b { color: var(--bear); }

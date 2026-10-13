@@ -91,3 +91,28 @@ def test_max_return_is_refused_for_other_strategies(client):
     resp = client.get("/api/optimize", params={**_BASE, "mode": "max_return",
                                                 "strategy_name": "Lorenzo (trend-follower)"})
     assert resp.status_code == 400
+
+
+def test_rsi_bb_4h_carries_a_last_year_check(client, monkeypatch):
+    # Lorenzo, 14/10: "scegliere sui dati fino all'anno scorso e vedere come
+    # va nell'ultimo anno [...] solo sulla strategia 4H"
+    from app.analysis import optimize as opt
+    monkeypatch.setattr(opt, "MAX_RETURN_MULTS", [2.4, 2.5])
+    n = 900
+    rng = np.random.default_rng(21)
+    close = 100 + np.cumsum(rng.normal(0, 2, n)) + 12 * np.sin(np.arange(n) / 6)
+    long_df = pd.DataFrame({"open": close, "high": close + 1.5, "low": close - 1.5,
+                            "close": close, "volume": np.full(n, 1000.0)},
+                           index=pd.date_range("2022-01-01", periods=n, freq="D", tz="UTC"))
+
+    class _Long:
+        async def fetch_ohlcv(self, symbol, interval, outputsize, since_ms=None):
+            return long_df
+    monkeypatch.setattr(main, "get_provider", lambda *a, **k: _Long())
+    body = client.get("/api/optimize", params={**_BASE, "symbol": "LONGUSDT", "mode": "max_return",
+                                                "strategy_name": "RSI+BB 4H"}).json()
+    assert body["top_candidates"], body
+    for c in body["top_candidates"]:
+        v = c["verification"]
+        assert v and "test_return_pct" in v and v["chosen_until"] < int(long_df.index[-1].timestamp())
+        assert v["params"]["bb_mult"] in (2.4, 2.5)

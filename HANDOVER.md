@@ -1,3 +1,7 @@
+# 2026-10-14 — Verifica sull'ultimo anno per Max return 4H — `seed-0286` (Claude, a mano)
+
+Lorenzo: "puoi implementarla da subito. Solo sulla strategia 4H". `main._last_year_check`: `max_return_search_3d` sui dati fino a 365 giorni fa, poi backtest delle scelte sull'ultimo anno; `OptimizeCandidate.verification`; Lab `verifyLine`. Se funziona, Lorenzo valuta l'estensione alle altre due RSI+BB.
+
 # 2026-10-14 — Max return 4H: moltiplicatore 2.0-2.8, piu' solido e piu' profittevole — `seed-0285` (Claude, a mano)
 
 Lorenzo: "il piu' solido in rapporto al profitto e il piu' profittevole anche con una minore solidita', ma non [...] completamente azzerata". `optimize.max_return_search_3d` (MAX_RETURN_MULTS 2.0..2.8, `solidity()` = mediana dei 6 vicini / rendimento, SOLIDITY_FLOOR 0.25, REFINE_PER_KIND 10), usata in `_max_return_payload` solo per RSI_BB_4H; OptimizeCandidate.kind/solidity/neighbours; Lab `renderBestTwo`.
