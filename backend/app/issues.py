@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0276", "Ottimizzazioni salvate da sole nell'archivio strategie",
+     "Lorenzo, 13/10: 'Annulla il salvataggio automatico delle strategie ottimizzate in archivio. Se interessano vengono salvate manualmente, altrimenti si affolla l'archivio strategie inutilmente'.",
+     "media"),
     ("seed-0275", "Alert: conferma prima di cancellare e livelli RSI visibili per RSI+BB",
      "Lorenzo, 13/10: 'Nella sezione degli alert inserisci sempre la richiesta di conferma quando si preme sul tasto x per cancellare un alert attivo [...] Inoltre, solo per le strategie RSI+BB, tra i dati visibili di ogni strategia negli alert aggiungi anche la visualizzazione dei valori di riferimento per ipercomprato e ipervenduto'.",
      "media"),

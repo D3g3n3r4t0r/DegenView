@@ -5952,3 +5952,15 @@ html.embed-chart, html.embed-chart body, html.embed-chart .chart-area { backgrou
   background: rgba(127, 127, 127, 0.12);
   white-space: nowrap;
 }
+
+.lab-status-link {
+  margin-left: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}

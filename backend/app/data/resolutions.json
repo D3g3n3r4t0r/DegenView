@@ -2829,5 +2829,11 @@
     "at": 1791842795,
     "summary": "Ogni x che cancella un alert (la x sulla riga del ticker, 'Remove ticker' e la x degli alert di prezzo) ora chiede conferma. Nelle strategie RSI+BB, accanto al nome compare 'OS 28 · OB 72' con i valori di ipervenduto e ipercomprato che l'alert usa.",
     "detail": "Conferma con la finestra del telefono/browser: annullando non succede niente. I valori RSI mostrati sono quelli personalizzati di quel ticker (ingranaggio) se ci sono, altrimenti quelli predefiniti della strategia; compaiono solo per Gabriele e Gabriele 2 (RSI+BB)."
+  },
+  "seed-0276": {
+    "status": "risolto",
+    "at": 1791893165,
+    "summary": "Un'ottimizzazione finita non entra piu' da sola nell'archivio: i parametri trovati vanno nel Laboratorio e, se ti interessano, li salvi con il tasto Archive.",
+    "detail": "Il riepilogo su Telegram lo ricorda ('non salvata in automatico'). Se la ricerca finisce mentre il Laboratorio mostra un'altra coppia, compare 'Open it' che riporta il Laboratorio su quella coppia e strategia con i risultati, cosi' non si perde niente. Le voci gia' in archivio restano: si cancellano a mano."
   }
 }

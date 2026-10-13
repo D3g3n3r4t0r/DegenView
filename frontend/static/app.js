@@ -4504,7 +4504,7 @@
     // telefono non la ferma. Va detto, altrimenti si resta a guardare.
     el("opt-progress-sub").textContent = job.sub
       + " — you can close this: it keeps running on the server, an indicator stays at the bottom, "
-      + "a summary arrives on Telegram and it ends up in the archive.";
+      + "a summary arrives on Telegram. To keep the result, save it with Archive.";
     const list = el("opt-progress-log");
     list.innerHTML = "";
     appendOptLog(job.log);
@@ -4645,9 +4645,28 @@
     const body = job.result;
     if (!body) return;
     if (labState.symbol !== job.symbol || labState.strategy !== job.strategy) {
-      labEl("lab-status").textContent =
-        `Search on ${job.symbol} finished: it's in the archive (the Lab is now showing something else).`;
-      labEl("lab-status").classList.remove("hidden");
+      // Nothing is archived on its own any more (13/10): the result lives in
+      // the job, so the Lab offers to bring it back instead of losing it.
+      const status = labEl("lab-status");
+      status.textContent = `Search on ${job.symbol} finished while the Lab showed something else. `;
+      const open = document.createElement("button");
+      open.type = "button";
+      open.className = "lab-status-link";
+      open.textContent = "Open it";
+      open.addEventListener("click", () => {
+        labState.symbol = job.symbol;
+        labState.displaySymbol = job.displaySymbol || job.symbol;
+        if (job.assetType) labState.assetType = job.assetType;
+        if (job.exchange) labState.exchange = job.exchange;
+        labEl("lab-ticker-val").textContent = shortSymbol(job.symbol);
+        const sel = labEl("lab-strategy-select");
+        if (sel && sel.querySelector(`option[value="${job.strategy}"]`)) sel.value = job.strategy;
+        labState.strategy = job.strategy;
+        renderLabParamFields();
+        onOptFinished(job);
+      });
+      status.appendChild(open);
+      status.classList.remove("hidden");
       return;
     }
     const container = labEl("lab-params-fields");
@@ -12228,6 +12247,9 @@
       optJobs.set(started.job_id, {
         id: started.job_id,
         symbol,
+        displaySymbol: labState.displaySymbol,
+        assetType: labState.assetType,
+        exchange: labState.exchange,
         strategy: labState.strategy,
         mode: optMode,
         title: optMode === "plateau" ? "Stable search running" : optMode === "max_return" ? "Max return search running" : "Optimizing",
