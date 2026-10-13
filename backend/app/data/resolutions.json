@@ -2871,5 +2871,11 @@
     "at": 1791928401,
     "summary": "I valori scritti a mano nel Laboratorio restano anche uscendo e rientrando, e Archive salva quelli. Prima, rientrando nel Laboratorio, i campi venivano ricopiati dal grafico, che aveva i valori predefiniti.",
     "detail": "Il Laboratorio si allinea al grafico ogni volta che ci si entra (segnalazione 411e4c7c). Scegliere la strategia nel Laboratorio cambia anche quella del grafico e ne rimette i campi ai predefiniti; quindi tornando nel Laboratorio da Alert, Archivio o dal menu del telefono, i valori scritti a mano venivano sostituiti con 28/72 senza che si vedesse, e Archive salvava quelli. Ora i valori scritti nel Laboratorio (o messi da un'ottimizzazione) hanno la precedenza finche' grafico e Laboratorio mostrano lo stesso pair e la stessa strategia; se cambi pair o strategia sul grafico, il Laboratorio si allinea come prima. Verificato nel browser: scrivo 31/69, vado in Alert e torno, premo Archive, viene salvato 31/69 (con il codice vecchio si salvava 28/72). Il controllo e' nel test automatico."
+  },
+  "seed-0283": {
+    "status": "risolto",
+    "at": 1791928956,
+    "summary": "All'apertura del sito la colonna accanto al grafico mostra la Watchlist. La lettura della struttura resta alla voce Structure del menu.",
+    "detail": "All'avvio il codice apriva di proposito la scheda Analysis (struttura) sopra quella dell'area Analizza; ora apre la Watchlist. Verificato nel browser: all'apertura l'unica scheda visibile a destra e' la Watchlist."
   }
 }
