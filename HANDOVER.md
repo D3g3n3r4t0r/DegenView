@@ -1,3 +1,7 @@
+# 2026-10-13 — Max return: un trade per anno solare, due migliori — `seed-0277` (Claude, a mano)
+
+Lorenzo: "un filtro [...] che elimini tutti i risultati finali che non ottengono almeno un trade per anno solare testato [...] avere come esito finale i due migliori risultati". `optimize.calendar_years` (anni coperti, bordi < 60 giorni esclusi), `years_without_trades` (per anno di apertura), `max_return_search(years=..., top_n=MAX_RETURN_TOP=2)`; Lab: `renderBestTwo` con 'Use'.
+
 # 2026-10-13 — Chat alert -5359869020 davvero solo segnali — `seed-0273` riaperto da Lorenzo
 
 Lorenzo: "La chat alert continua a ricevere anche ottimizzazioni e gemme, va risolto". Il gruppo e' la chat PRINCIPALE di un account (non la 'chat degli alert'), e i riepiloghi della ricerca/deploy passano da `telegram.send_message` (chat del server). `settings.telegram_signal_only_chats` (default "-5359869020") + chat degli alert di ogni account = `telegram.signal_only_chats()`, saltate da `send_message` e da `main._info_chat`.

@@ -4679,6 +4679,7 @@
     labEl("lab-status").classList.add("hidden");
     renderLabResults(body.backtest);
     renderPlateauMap(body);
+    renderBestTwo(body);
     renderDataUsed(body);
     renderRegimeBox(body);
     renderBranchBox(body);
@@ -11944,6 +11945,45 @@
   // parametri che variano di piu' sugli assi, il punteggio nel colore, il
   // vincitore marcato. Se il rombo sta in mezzo a celle chiare regge; se sta
   // da solo in mezzo al vuoto, quel risultato non si ripetera'.
+  // Max return gives the two best pairs (Lorenzo, 13/10: "avere come esito
+  // finale i due migliori risultati"). The first is already in the fields;
+  // "Use" puts the other one there and runs it, the same backtest as Run.
+  function renderBestTwo(body) {
+    const box = labEl("lab-best2-box");
+    if (!box) return;
+    const cands = (body && body.mode === "max_return" && body.top_candidates) || [];
+    if (!cands.length) { box.classList.add("hidden"); box.innerHTML = ""; return; }
+    const pct = (v) => (v == null ? "–" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`);
+    box.innerHTML = `<div class="lab-best2-title">Best ${cands.length === 1 ? "result" : "two results"} · whole chart, a trade in every year</div>`
+      + cands.map((c, i) => `
+      <div class="lab-best2-card${i === 0 ? " active" : ""}" data-i="${i}">
+        <div class="lab-best2-rank">#${c.rank}</div>
+        <div class="lab-best2-main">
+          <div class="lab-best2-levels">OS ${c.params.rsi_oversold} · OB ${c.params.rsi_overbought}</div>
+          <div class="lab-best2-meta">Return <b>${pct(c.total_return_pct)}</b> · DD ${pct(-Math.abs(c.max_drawdown_pct))} · ${c.num_trades} trades${c.win_rate_pct != null ? ` · win ${c.win_rate_pct.toFixed(0)}%` : ""}</div>
+        </div>
+        <button type="button" class="lab-best2-use">${i === 0 ? "In use" : "Use"}</button>
+      </div>`).join("");
+    box.classList.remove("hidden");
+    box.querySelectorAll(".lab-best2-card").forEach((card) => {
+      card.querySelector(".lab-best2-use").addEventListener("click", () => {
+        const c = cands[Number(card.dataset.i)];
+        const container = labEl("lab-params-fields");
+        Object.entries(c.params).forEach(([key, value]) => {
+          const input = container.querySelector(`[name="${key}"]`);
+          if (input) input.value = value;
+        });
+        box.querySelectorAll(".lab-best2-card").forEach((x) => {
+          const on = x === card;
+          x.classList.toggle("active", on);
+          x.querySelector(".lab-best2-use").textContent = on ? "In use" : "Use";
+        });
+        labState.keepBest2 = true;
+        runLabBacktest();
+      });
+    });
+  }
+
   function renderPlateauMap(body) {
     const box = labEl("lab-plateau-box");
     if (!box) return;
@@ -12171,6 +12211,9 @@
   // screen read as part of the new result.
   function clearLabResults() {
     labState.lastBt = null;
+    // The two best of a max-return search stay while one of them is being run.
+    if (!labState.keepBest2) labEl("lab-best2-box")?.classList.add("hidden");
+    labState.keepBest2 = false;
     ["lab-result-block", "lab-apply-strip", "lab-plateau-box", "lab-data-used",
       "lab-regime-box", "lab-branch-box", "lab-signal-status"].forEach((id) => {
       const node = labEl(id);

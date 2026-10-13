@@ -18,8 +18,10 @@ from app.analysis.optimize import (
     MAX_RETURN_DRAWDOWN_CAP,
     Constraints,
     NoCandidateMeetsConstraints,
+    calendar_years,
     max_return_search,
     max_return_size,
+    years_without_trades,
 )
 
 GAB = "Gabriele (RSI+BB reversal)"
@@ -69,3 +71,31 @@ def test_only_rsi_bb_strategies():
 def test_lab_filters_still_apply():
     with pytest.raises(NoCandidateMeetsConstraints):
         max_return_search(GAB, _bt, constraints=Constraints(min_losing_trades=10**6))
+
+
+# Lorenzo, 13/10: "almeno un trade per anno solare testato [...] dal 2022 al
+# 2026 deve aver ottenuto almeno un trade in ognuno di questi anni", and "i
+# due migliori risultati anziche' uno solo".
+def test_calendar_years_skip_a_thin_edge_year():
+    idx = pd.date_range("2022-12-20", "2026-10-13", freq="D", tz="UTC")
+    assert calendar_years(idx) == [2023, 2024, 2025, 2026]
+    idx2 = pd.date_range("2022-03-01", "2026-10-13", freq="D", tz="UTC")
+    assert calendar_years(idx2) == [2022, 2023, 2024, 2025, 2026]
+
+
+def test_a_year_without_trades_drops_the_result():
+    years = calendar_years(DF.index)
+    params, bt, _, top = max_return_search(GAB, _bt, years=years)
+    assert len(top) <= 2
+    for c in top:
+        assert years_without_trades(c["backtest"], years) == []
+    # the unfiltered winner, if it skips a year, must not survive the filter
+    _, free_bt, _, _ = max_return_search(GAB, _bt)
+    if years_without_trades(free_bt, years):
+        assert bt.total_return_pct <= free_bt.total_return_pct
+
+
+def test_two_best_results_are_returned():
+    _, _, _, top = max_return_search(GAB, _bt)
+    assert [c["rank"] for c in top] == [1, 2]
+    assert top[0]["backtest"].total_return_pct >= top[1]["backtest"].total_return_pct

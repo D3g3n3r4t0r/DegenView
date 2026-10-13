@@ -68,6 +68,7 @@ from app.analysis.optimize import (
     Constraints,
     GABRIELE_STRATEGIES,
     NoCandidateMeetsConstraints,
+    calendar_years,
     is_optimizable,
     max_return_search,
     optimize_strategy,
@@ -7404,10 +7405,12 @@ async def _max_return_payload(strategy_name, df, full, constraints, say, should_
     if strategy_name not in GABRIELE_STRATEGIES:
         raise HTTPException(status_code=400,
                             detail="Max return searches the two RSI levels: RSI+BB strategies only.")
+    years = calendar_years(df.index)
     try:
         params, bt, evaluated, top = await _cpu(partial(
             max_return_search, strategy_name, full,
             constraints=constraints, progress=say, should_stop=should_stop,
+            years=years,
         ))
     except NoCandidateMeetsConstraints as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -7425,7 +7428,9 @@ async def _max_return_payload(strategy_name, df, full, constraints, say, should_
             differs_from_chart=backtest_interval != ltf_interval,
             note=(f"Every pair of RSI levels tried on all {len(df)} {backtest_interval} "
                   f"candles, the same backtest as Run; the highest return within 60% "
-                  f"drawdown wins. Chosen on the whole chart: no out-of-sample check."),
+                  f"drawdown wins"
+                  + (f", with at least one trade in every year {years[0]}-{years[-1]}" if years else "")
+                  + ". The two best are shown. Chosen on the whole chart: no out-of-sample check."),
         ),
         top_candidates=[
             OptimizeCandidate(
