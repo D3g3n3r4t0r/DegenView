@@ -294,6 +294,19 @@ check('touch: the point is under the finger', Math.abs(t0px.x - mp.w * 0.3) < 4 
 const mdims = await mpage.evaluate(() => { const c = document.getElementById('draw-canvas'); return { w: c.width, cw: c.clientWidth }; });
 check('canvas at screen density (DPR 3)', mdims.w === mdims.cw * 3, JSON.stringify(mdims));
 
+// phone: the Lab (backtest screen) opens and runs — 13/10 it threw
+// "syncLabFromChart is not defined" and never opened on the phone.
+await mpage.tap('.mobile-nav-btn[data-mobile-target="altro"]');
+await mpage.tap('#altro-backtest-item');
+await mpage.waitForTimeout(400);
+const labOk = await mpage.evaluate(() => { const r = document.getElementById('lab-run-btn').getBoundingClientRect(); return r.width > 0 && r.height > 0; });
+check('phone: the backtest screen opens', labOk);
+let ran = false;
+mpage.on('request', (r) => { if (r.url().includes('/api/backtest/deep')) ran = true; });
+await mpage.tap('#lab-run-btn');
+await mpage.waitForTimeout(800);
+check('phone: Run starts the backtest', ran);
+
 check('no JavaScript errors', errors.length === 0, errors.slice(0, 3).join(' | '));
 await browser.close();
 server.close();

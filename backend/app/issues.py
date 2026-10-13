@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0278", "Sezione backtest non funziona da app, solo da browser",
+     "Lorenzo, 13/10: 'La sezione backtest non funziona da app, solo da browser. Bisogna capire perche' e risolvere'.",
+     "alta"),
     ("seed-0277", "Max return: almeno un trade in ogni anno solare e i due migliori risultati",
      "Lorenzo, 13/10: 'inserire un filtro nella scansione che elimini tutti i risultati finali che non ottengono almeno un trade per anno solare testato [...] dal 2022 al 2026 deve aver ottenuto almeno un trade valido in ognuno di questi diversi anni [...] c'e' bisogno di ottenere un backtest con continuita' e affidabilita' temporale. Infine [...] avere come esito finale i due migliori risultati anziche' uno solo'.",
      "alta"),

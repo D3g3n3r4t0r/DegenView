@@ -2841,5 +2841,11 @@
     "at": 1791894508,
     "summary": "Max return scarta ogni combinazione RSI che in uno degli anni solari del grafico non apre nemmeno un trade, e alla fine mostra i due migliori risultati, ciascuno con il tasto 'Use' per applicarlo.",
     "detail": "Anni giudicati: tutti quelli del grafico tranne il primo e l'ultimo, che sono sempre parziali (Lorenzo, 13/10: 'dal 2022 al 2026 [...] solamente gli anni 2023, 2024 e 2025'). Con un grafico dentro uno o due anni il filtro non scarta niente. Il trade conta nell'anno in cui e' aperto. Restano drawdown massimo 60% e filtri del Laboratorio. Nel log della ricerca compare quante combinazioni sono state scartate per un anno senza trade. Il primo risultato va subito nei campi; 'Use' sul secondo lo mette nei campi e lancia il backtest."
+  },
+  "seed-0278": {
+    "status": "risolto",
+    "at": 1791896989,
+    "summary": "Sul telefono la schermata Backtest (Laboratorio) di nuovo si apre e Run lancia il backtest. Era un errore di codice che bloccava l'apertura solo sotto i 760 px di larghezza.",
+    "detail": "Dal 10/10 (#531, sincronia Laboratorio <-> grafico, segnalazione 87cc755b) aprire il Laboratorio dal menu del telefono chiamava una funzione definita fuori portata: il browser si fermava con 'syncLabFromChart is not defined' prima di mostrare la schermata. Sul computer la stessa funzione e' chiamata da dentro la sua portata, per questo funzionava. Ora la navigazione del telefono la raggiunge da un riferimento comune. Verificato in Chromium con viewport iPhone, sia nel browser sia in modalita' app installata: la schermata si apre, Run manda la richiesta del backtest, nessun errore. Aggiunti due controlli nel test del browser che gira a ogni push."
   }
 }
