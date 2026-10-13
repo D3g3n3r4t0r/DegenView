@@ -2847,5 +2847,11 @@
     "at": 1791896989,
     "summary": "Sul telefono la schermata Backtest (Laboratorio) di nuovo si apre e Run lancia il backtest. Era un errore di codice che bloccava l'apertura solo sotto i 760 px di larghezza.",
     "detail": "Dal 10/10 (#531, sincronia Laboratorio <-> grafico, segnalazione 87cc755b) aprire il Laboratorio dal menu del telefono chiamava una funzione definita fuori portata: il browser si fermava con 'syncLabFromChart is not defined' prima di mostrare la schermata. Sul computer la stessa funzione e' chiamata da dentro la sua portata, per questo funzionava. Ora la navigazione del telefono la raggiunge da un riferimento comune. Verificato in Chromium con viewport iPhone, sia nel browser sia in modalita' app installata: la schermata si apre, Run manda la richiesta del backtest, nessun errore. Aggiunti due controlli nel test del browser che gira a ogni push."
+  },
+  "seed-0279": {
+    "status": "risolto",
+    "at": 1791910567,
+    "summary": "Accendere una strategia su un alert non crea piu' una voce nell'archivio. Le voci 'from alert' nascevano proprio li': ogni attivazione fotografava la configurazione e le faceva un backtest.",
+    "detail": "Era una seconda strada, separata dall'ottimizzazione chiusa il 13/10 (seed-0276): l'endpoint che accende/spegne la strategia di un ticker in Watchlist salvava una copia con source 'alert'. Tolta. Ora l'archivio si riempie solo con il tasto Archive del Laboratorio o con l'importazione da file. Le voci 'from alert' gia' presenti restano finche' non le cancelli (x sulla voce)."
   }
 }

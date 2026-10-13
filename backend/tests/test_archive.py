@@ -133,3 +133,14 @@ def test_the_cap_drops_the_oldest_of_that_owner_only(monkeypatch):
     assert len(archive.list_for("u1")) == 3
     assert archive.get(keeper["id"], "u2") is not None
     assert [x["params"]["i"] for x in archive.list_for("u1")] == [5, 4, 3]
+
+
+def test_switching_an_alert_on_does_not_write_the_archive():
+    # Lorenzo, 13/10: "nell'archivio strategie ne compaiono alcune con la
+    # dicitura 'from alert' [...] nessuna strategia venga salvata
+    # automaticamente in archivio". The toggle endpoint used to snapshot here.
+    import inspect
+
+    from app import main
+    src = inspect.getsource(main.toggle_watchlist_strategy)
+    assert "archive_store.create" not in src
