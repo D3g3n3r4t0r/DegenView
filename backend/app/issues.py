@@ -171,7 +171,7 @@ _SEED = [
     ("seed-0282", "Archivio: le strategie con valori scritti a mano vengono salvate con i default",
      "Lorenzo, 13/10: 'le strategie testate con valori scritti a mano non vengono esportate in archivio strategie con i valori giusti, ma vengono salvate con i valori di default. Bisogna correggere e ritestare'.",
      "alta"),
-    ("seed-0282", "Max return molto lento con il riempimento dentro la candela",
+    ("seed-0284", "Max return molto lento con il riempimento dentro la candela",
      "Lorenzo, 14/10 alle 00:20: 'L'ottimizzazione sta procedendo molto lentamente, che succede?'",
      "alta"),
     ("seed-0281", "Nuova strategia RSI+BB 4H (moltiplicatore Bollinger 2.5)",
