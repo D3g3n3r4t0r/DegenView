@@ -76,11 +76,11 @@ def test_lab_filters_still_apply():
 # Lorenzo, 13/10: "almeno un trade per anno solare testato [...] dal 2022 al
 # 2026 deve aver ottenuto almeno un trade in ognuno di questi anni", and "i
 # due migliori risultati anziche' uno solo".
-def test_calendar_years_skip_a_thin_edge_year():
-    idx = pd.date_range("2022-12-20", "2026-10-13", freq="D", tz="UTC")
-    assert calendar_years(idx) == [2023, 2024, 2025, 2026]
-    idx2 = pd.date_range("2022-03-01", "2026-10-13", freq="D", tz="UTC")
-    assert calendar_years(idx2) == [2022, 2023, 2024, 2025, 2026]
+def test_first_and_last_year_are_never_judged():
+    # Lorenzo, 13/10: "dal 2022 al 2026 [...] solamente gli anni 2023, 2024 e 2025"
+    idx = pd.date_range("2022-03-01", "2026-10-13", freq="D", tz="UTC")
+    assert calendar_years(idx) == [2023, 2024, 2025]
+    assert calendar_years(pd.date_range("2024-01-01", "2025-12-31", freq="D", tz="UTC")) == []
 
 
 def test_a_year_without_trades_drops_the_result():

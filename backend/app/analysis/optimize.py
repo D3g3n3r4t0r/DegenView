@@ -544,29 +544,19 @@ MAX_RETURN_DRAWDOWN_CAP = 60.0           # percent
 
 
 MAX_RETURN_TOP = 2                       # Lorenzo, 13/10: "i due migliori risultati"
-YEAR_MIN_COVERAGE_DAYS = 60              # an edge year with less data is not judged
-
-
 def calendar_years(index) -> list[int]:
-    """The calendar years a series covers well enough to demand a trade in.
+    """The calendar years in which a trade is required: every year of the
+    series except the first and the last, which are always partial.
 
     Lorenzo, 13/10: "eliminare tutti i risultati che non ottengono almeno un
-    trade per anno solare testato [...] dal 2022 al 2026 deve aver ottenuto
-    almeno un trade in ognuno di questi anni". A first or last year with
-    under YEAR_MIN_COVERAGE_DAYS of candles (data starting on 20 December) is
-    left out: no strategy can be asked for a trade in eleven days."""
+    trade per anno solare testato", then "il primo e l'ultimo anno vengono
+    ignorati completamente dal filtro [...] dal 2022 al 2026 [...] solamente
+    gli anni 2023, 2024 e 2025". A series inside one or two years has none."""
     import pandas as pd
     if len(index) == 0:
         return []
     idx = pd.DatetimeIndex(index)
-    first, last = idx[0], idx[-1]
-    out = []
-    for y in range(first.year, last.year + 1):
-        start = max(first, pd.Timestamp(year=y, month=1, day=1, tz=idx.tz))
-        end = min(last, pd.Timestamp(year=y, month=12, day=31, hour=23, minute=59, tz=idx.tz))
-        if (end - start).days >= YEAR_MIN_COVERAGE_DAYS:
-            out.append(y)
-    return out
+    return list(range(idx[0].year + 1, idx[-1].year))
 
 
 def years_without_trades(bt: BacktestResult, years: list[int]) -> list[int]:

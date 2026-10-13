@@ -11954,7 +11954,7 @@
     const cands = (body && body.mode === "max_return" && body.top_candidates) || [];
     if (!cands.length) { box.classList.add("hidden"); box.innerHTML = ""; return; }
     const pct = (v) => (v == null ? "–" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`);
-    box.innerHTML = `<div class="lab-best2-title">Best ${cands.length === 1 ? "result" : "two results"} · whole chart, a trade in every year</div>`
+    box.innerHTML = `<div class="lab-best2-title">Best ${cands.length === 1 ? "result" : "two results"} · whole chart, a trade in every year between the first and the last</div>`
       + cands.map((c, i) => `
       <div class="lab-best2-card${i === 0 ? " active" : ""}" data-i="${i}">
         <div class="lab-best2-rank">#${c.rank}</div>
