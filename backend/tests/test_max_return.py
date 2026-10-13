@@ -99,3 +99,24 @@ def test_two_best_results_are_returned():
     _, _, _, top = max_return_search(GAB, _bt)
     assert [c["rank"] for c in top] == [1, 2]
     assert top[0]["backtest"].total_return_pct >= top[1]["backtest"].total_return_pct
+
+
+def test_enough_trades_in_total_forgive_an_empty_year(monkeypatch):
+    # Lorenzo, 13/10: "se il totale dei trade pareggia o supera il numero
+    # degli anni presi in esame allora il risultato deve essere considerato valido"
+    from app.models import BacktestResult
+
+    def fake(params):
+        n = 3 if params["rsi_oversold"] == 20 else 2
+        trades = [{"direction": "long", "entry_time": 1704067200 + i * 86400, "exit_time": 1704067200 + i * 86400 + 3600,
+                   "entry_price": 1.0, "exit_price": 1.1, "pnl_pct": 10.0, "pnl_abs": 10.0, "equity_after": 1000.0}
+                  for i in range(n)]       # all in 2024
+        return BacktestResult.model_construct(
+            total_return_pct=50.0 + params["rsi_oversold"] / 100, num_trades=n, max_drawdown_pct=-5.0,
+            trades=[type("T", (), t)() for t in trades], win_rate_pct=100.0, profit_factor=None,
+            sharpe_ratio=None, equity_curve=[])
+
+    years = [2023, 2024, 2025]
+    params, _, _, top = max_return_search(GAB, fake, years=years)
+    assert params["rsi_oversold"] == 20          # 3 trades >= 3 years: valid despite 2023/2025
+    assert all(c["backtest"].num_trades >= 3 for c in top)
