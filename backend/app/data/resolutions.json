@@ -2838,8 +2838,8 @@
   },
   "seed-0277": {
     "status": "risolto",
-    "at": 1791894041,
+    "at": 1791894508,
     "summary": "Max return scarta ogni combinazione RSI che in uno degli anni solari del grafico non apre nemmeno un trade, e alla fine mostra i due migliori risultati, ciascuno con il tasto 'Use' per applicarlo.",
-    "detail": "Gli anni richiesti sono quelli coperti dal grafico; un primo o ultimo anno con meno di 60 giorni di candele (es. dati che partono il 20 dicembre) non viene giudicato, perche' nessuna strategia puo' fare un trade in 11 giorni. Il trade conta nell'anno in cui e' aperto. Restano gli altri vincoli: drawdown massimo 60%, filtri del Laboratorio se impostati. Nel log della ricerca compare quante combinazioni sono state scartate per un anno senza trade. Il primo risultato va subito nei campi; 'Use' sul secondo lo mette nei campi e lancia il backtest."
+    "detail": "Anni giudicati: tutti quelli del grafico tranne il primo e l'ultimo, che sono sempre parziali (Lorenzo, 13/10: 'dal 2022 al 2026 [...] solamente gli anni 2023, 2024 e 2025'). Con un grafico dentro uno o due anni il filtro non scarta niente. Il trade conta nell'anno in cui e' aperto. Restano drawdown massimo 60% e filtri del Laboratorio. Nel log della ricerca compare quante combinazioni sono state scartate per un anno senza trade. Il primo risultato va subito nei campi; 'Use' sul secondo lo mette nei campi e lancia il backtest."
   }
 }
