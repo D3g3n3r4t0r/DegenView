@@ -10,8 +10,8 @@ ottimizzato e diverso in tutto il resto.
 
 Due regole che questi test tengono ferme:
   * i parametri li legge il server dalla voce d'archivio, non dal client;
-  * si scrivono PRIMA di accendere, perche' accendere scatta la fotografia che
-    finisce in archivio: fatta prima, direbbe "default" mentre gira altro.
+  * accendere non scrive nell'archivio (dal 13/10): le voci "from alert" non
+    nascono piu'.
 """
 
 from __future__ import annotations
@@ -69,15 +69,15 @@ def test_the_alert_uses_the_archived_timeframe(client):
     assert watch.strategy_intervals.get(STRATEGY) == "4h"
 
 
-def test_the_snapshot_it_creates_is_not_the_default_configuration(client):
-    """Accendere fotografa la configurazione. Se i parametri si scrivessero
-    dopo l'interruttore, la fotografia direbbe 'default' mentre l'alert gira
-    con altro — e l'archivio racconterebbe una cosa diversa da quella vera."""
+def test_switching_on_from_the_archive_adds_no_archive_entry(client):
+    """Accendere non fotografa piu' nell'archivio (Lorenzo, 13/10: "nessuna
+    strategia venga salvata automaticamente in archivio"): niente voci
+    "from alert", e l'alert lavora con i parametri della voce applicata."""
     entry = _archived()
     client.post(f"/api/archive/{entry['id']}/apply-to-alert")
-    from_alert = [e for e in archive_store.list_for("u1") if e["source"] == "alert"]
-    assert from_alert, "l'attivazione va comunque registrata"
-    assert from_alert[0]["params"] == FOUND
+    assert [e for e in archive_store.list_for("u1") if e["source"] == "alert"] == []
+    watch = watchlist_store.list_entries("u1")[0]
+    assert watch.strategy_params.get(STRATEGY) == FOUND
 
 
 def test_applying_twice_does_not_duplicate_the_watchlist_entry(client):
