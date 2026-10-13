@@ -587,8 +587,9 @@ def max_return_search(
     A configuration needs at least one trade and a drawdown within
     MAX_RETURN_DRAWDOWN_CAP; the Lab's result filters, when set, apply too.
     With `years` (see calendar_years) it also needs at least one trade opened
-    in every one of those years: a peak bought with RSI levels so wide that
-    whole years go by without a trade is not a result with continuity.
+    in every one of those years — unless its total trades are at least as
+    many as those years: a peak bought with RSI levels so wide that whole
+    years go by without a trade is not a result with continuity.
 
     Returns (best_params, best_bt, evaluated, top_results), top_results
     sorted by return, distinct by effect, rank starting at 1.
@@ -625,7 +626,10 @@ def max_return_search(
             if abs(bt.max_drawdown_pct) > MAX_RETURN_DRAWDOWN_CAP:
                 too_deep += 1
                 continue
-            if years and years_without_trades(bt, years):
+            # Lorenzo, 13/10: "se il totale dei trade pareggia o supera il
+            # numero degli anni presi in esame allora il risultato deve essere
+            # considerato valido" — a year without trades is forgiven then.
+            if years and bt.num_trades < len(years) and years_without_trades(bt, years):
                 gaps += 1
                 continue
             if not _passes(bt, constraints):
