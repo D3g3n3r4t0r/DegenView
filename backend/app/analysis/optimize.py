@@ -557,6 +557,7 @@ MAX_RETURN_OVERBOUGHT = range(60, 91)    # 60, 61, ..., 90
 MAX_RETURN_DRAWDOWN_CAP = 60.0           # percent
 
 
+MAX_RETURN_REFINE = 20                   # pairs re-run with in-candle fills
 MAX_RETURN_TOP = 2                       # Lorenzo, 13/10: "i due migliori risultati"
 def calendar_years(index) -> list[int]:
     """The calendar years in which a trade is required: every year of the
@@ -599,6 +600,8 @@ def max_return_search(
     should_stop: Callable[[], bool] | None = None,
     top_n: int = MAX_RETURN_TOP,
     years: list[int] | None = None,
+    fast_backtest: Callable[[dict], BacktestResult] | None = None,
+    refine: int = MAX_RETURN_REFINE,
 ) -> tuple[dict, BacktestResult, int, list[dict]]:
     """Every (oversold, overbought) pair, whole history, highest return wins.
 
@@ -611,6 +614,11 @@ def max_return_search(
     in every one of those years — unless the trades opened in those years are
     at least as many as the years: a peak bought with RSI levels so wide that whole
     years go by without a trade is not a result with continuity.
+
+    `fast_backtest`, when given, scans the 961 pairs with fills at the close
+    and only the best `refine` survivors are backtested again with
+    `backtest` (the in-candle replay of fill_at "on_condition", up to 8 s
+    each): 14/10, 961 replays made the search crawl for an hour.
 
     Returns (best_params, best_bt, evaluated, top_results), top_results
     sorted by return, distinct by effect, rank starting at 1.
@@ -633,11 +641,13 @@ def max_return_search(
     if years:
         say(f"at least one trade in every year: {', '.join(map(str, years))}")
     step = max(1, total // 20)
+    scan = fast_backtest or backtest
+    keep = max(refine, top_n) if fast_backtest else top_n
     for os_ in MAX_RETURN_OVERSOLD:
         for ob in MAX_RETURN_OVERBOUGHT:
             stop_if_asked(should_stop)
             params = {**fixed, "rsi_oversold": os_, "rsi_overbought": ob}
-            bt = backtest(params)
+            bt = scan(params)
             evaluated += 1
             if evaluated % step == 0:
                 lead = max(best, key=lambda e: e[0])[0] if best else None
@@ -664,7 +674,7 @@ def max_return_search(
                 continue
             seen.add(fp)
             entry = (bt.total_return_pct, evaluated, params, bt)
-            if len(best) < top_n:
+            if len(best) < keep:
                 heapq.heappush(best, entry)
             elif entry[0] > best[0][0]:
                 heapq.heapreplace(best, entry)
@@ -681,6 +691,24 @@ def max_return_search(
             + (f"with a trade in every year {years[0]}-{years[-1]} " if years else "with at least one trade ")
             + f"on this chart ({evaluated} tried)")
     ranked = sorted(best, key=lambda e: e[0], reverse=True)
+    if fast_backtest:
+        say(f"fills inside the candle: re-checking the best {len(ranked)} exactly as Run does")
+        exact, seen_exact = [], set()
+        for _, n, params, _ in ranked:
+            stop_if_asked(should_stop)
+            bt = backtest(params)
+            if (bt.num_trades < 1 or abs(bt.max_drawdown_pct) > MAX_RETURN_DRAWDOWN_CAP
+                    or (years and trades_in_years(bt, years) < len(years) and years_without_trades(bt, years))
+                    or not _passes(bt, constraints)):
+                continue
+            fp = (round(bt.total_return_pct, 4), bt.num_trades, round(bt.max_drawdown_pct, 4))
+            if fp in seen_exact:
+                continue
+            seen_exact.add(fp)
+            exact.append((bt.total_return_pct, n, params, bt))
+        if not exact:
+            raise ValueError("none of the best pairs holds the limits once filled inside the candle")
+        ranked = sorted(exact, key=lambda e: e[0], reverse=True)[:top_n]
     top = [{"rank": i, "params": p, "backtest": b, "score": round(r, 4)}
            for i, (r, _, p, b) in enumerate(ranked, start=1)]
     say(f"best: oversold {top[0]['params']['rsi_oversold']}, overbought "

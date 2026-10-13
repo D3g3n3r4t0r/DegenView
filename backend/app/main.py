@@ -7341,13 +7341,14 @@ async def _optimize_payload(
     """
     bp = backtest_params.model_dump()
 
-    def full(params: dict) -> BacktestResult:
+    def full(params: dict, intrabar: bool = True) -> BacktestResult:
         return _chart_backtest(df, {**(strategy_params or {}), **params}, bp,
-                               strategy_name, asset_type)
+                               strategy_name, asset_type, intrabar=intrabar)
 
     if mode == "max_return":
         return await _max_return_payload(strategy_name, df, full, constraints, say,
-                                         should_stop, ltf_interval, backtest_interval)
+                                         should_stop, ltf_interval, backtest_interval,
+                                         in_candle=bp.get("fill_at") == "on_condition")
 
     res = await _optimize_search(
         strategy_name, df, backtest_params, mode, ltf_interval, backtest_interval,
@@ -7384,7 +7385,8 @@ async def _optimize_payload(
 
 
 async def _max_return_payload(strategy_name, df, full, constraints, say, should_stop,
-                              ltf_interval: str, backtest_interval: str) -> "OptimizeResult":
+                              ltf_interval: str, backtest_interval: str,
+                              in_candle: bool = False) -> "OptimizeResult":
     """Mode "max_return": every oversold 10-40 x overbought 60-90 pair on the
     whole chart, backtested as Run does, highest return within 60% drawdown
     (see optimize.max_return_search). No out-of-sample figure: none exists."""
@@ -7392,11 +7394,14 @@ async def _max_return_payload(strategy_name, df, full, constraints, say, should_
         raise HTTPException(status_code=400,
                             detail="Max return searches the two RSI levels: RSI+BB strategies only.")
     years = calendar_years(df.index)
+    # The in-candle replay (fill_at "on_condition") costs up to 8 s a backtest:
+    # the scan runs with fills at the close, the best pairs are re-run exactly.
+    fast = partial(full, intrabar=False) if in_candle else None
     try:
         params, bt, evaluated, top = await _cpu(partial(
             max_return_search, strategy_name, full,
             constraints=constraints, progress=say, should_stop=should_stop,
-            years=years,
+            years=years, fast_backtest=fast,
         ))
     except NoCandidateMeetsConstraints as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -7433,7 +7438,7 @@ async def _max_return_payload(strategy_name, df, full, constraints, say, should_
 
 
 def _chart_backtest(df, strategy_params: dict, backtest_params: dict,
-                    strategy_name: str, asset_type: str) -> BacktestResult:
+                    strategy_name: str, asset_type: str, intrabar: bool = True) -> BacktestResult:
     """The backtest exactly as Run and the chart compute it (see
     /api/backtest/deep): one definition, so an optimized figure and a manual
     one can be compared."""
@@ -7442,7 +7447,7 @@ def _chart_backtest(df, strategy_params: dict, backtest_params: dict,
         sig = spot_only(STRATEGY_REGISTRY[strategy_name](df, strategy_params))
     return run_backtest(
         df, strategy_params, backtest_params, strategy_name=strategy_name,
-        signals=sig, intrabar_fn=_intrabar_fn(asset_type, strategy_name),
+        signals=sig, intrabar_fn=_intrabar_fn(asset_type, strategy_name) if intrabar else None,
     )
 
 
