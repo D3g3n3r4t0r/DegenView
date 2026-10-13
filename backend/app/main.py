@@ -2010,9 +2010,10 @@ class StrategyParamsQuery(BaseModel):
     rsi_oversold: int = 28
     rsi_overbought: int = 72
 
-    # Gabriele (RSI+BB reversal)
+    # Gabriele (RSI+BB reversal) and RSI+BB 4H. bb_mult unset = the
+    # strategy's own default: 2.0, or 2.5 for RSI+BB 4H.
     bb_length: int = 20
-    bb_mult: float = 2.0
+    bb_mult: float | None = None
 
     # Lorenzo HF (minuti on-chain). Shares len/slopeFlen/slopeSlen/slope_* with
     # Lorenzo, whose defaults win here: the page always sends the whole field

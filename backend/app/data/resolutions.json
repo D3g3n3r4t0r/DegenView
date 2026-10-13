@@ -2859,5 +2859,11 @@
     "at": 1791922532,
     "summary": "Mentre gira un'ottimizzazione la ricerca gemme si ferma e riprende appena finisce, cosi' l'ottimizzazione ha il server tutto per se'.",
     "detail": "La ricerca (giro delle 22:00 fino a 2 ore e giri orari fino a 45 minuti) condivideva i due core e il processo con l'ottimizzazione. Ora prima di ogni passo controlla se c'e' un'ottimizzazione in corso: se si', aspetta e ricontrolla ogni 5 secondi; le letture gia' partite finiscono da sole. La finestra del giro si allunga quanto la pausa, quindi il lavoro della sera non si perde. Il riepilogo Telegram dice quanti minuti e' rimasta in pausa."
+  },
+  "seed-0281": {
+    "status": "risolto",
+    "at": 1791927515,
+    "summary": "C'e' la strategia RSI+BB 4H: stesse regole della RSI+BB solo long, con moltiplicatore di Bollinger 2.5. Si sceglie dal menu delle strategie su grafico, Laboratorio e alert, e si ottimizza in tutte le modalita', Max return compreso.",
+    "detail": "Nelle ottimizzazioni lunghezza RSI 14, lunghezza Bollinger 20 e moltiplicatore restano fissi come nelle altre RSI+BB, ma per questa il moltiplicatore fisso e' 2.5. Se un campo arriva vuoto al server, vale il predefinito della strategia (2.0 per le altre due, 2.5 per questa); un valore scritto a mano vince sempre. Non e' aggiunta all'app on-chain, dove le strategie automatiche sono spente."
   }
 }

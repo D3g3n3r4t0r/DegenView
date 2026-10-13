@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0281", "Nuova strategia RSI+BB 4H (moltiplicatore Bollinger 2.5)",
+     "Lorenzo, 13/10: 'Aggiungi una nuova strategia e chiamala RSI+BB 4H. Deve funzionare esattamente come le altre due RSI+BB, l'unica differenza deve essere il Bollinger Multiplier settato di default a 2.5 anziche' 2.0 in modo da essere piu' adatto al timeframe 4H.' Base scelta: la RSI+BB solo long.",
+     "media"),
     ("seed-0280", "Ottimizzazione lenta durante la ricerca gemme",
      "Lorenzo, 13/10 alle 22:12: 'L'ottimizzazione in questo momento sta andando molto lenta. Dipende da qualcosa?' — era in corso la ricerca gemme delle 22:00, sullo stesso server e processo. Soluzione scelta da Lorenzo: la ricerca si mette in pausa mentre gira un'ottimizzazione.",
      "alta"),

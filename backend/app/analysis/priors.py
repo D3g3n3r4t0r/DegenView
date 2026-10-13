@@ -349,7 +349,7 @@ def _lorenzo_space(stats: SeriesStats, trendfilter: bool, volatilityfilter: bool
     )
 
 
-def _gabriele_space(stats: SeriesStats, target_entries: int,
+def _gabriele_space(stats: SeriesStats, target_entries: int, strategy_name: str,
                     locked: dict | None = None) -> ConstrainedSpace:
     """Gabriele con lunghezza RSI 14, lunghezza Bollinger 20 e moltiplicatore
     2 sempre fissi: si cercano solo RSI ipercomprato e ipervenduto.
@@ -360,10 +360,11 @@ def _gabriele_space(stats: SeriesStats, target_entries: int,
     un'ottimizzazione applicata o un ticker salvato non erano piu' i default.
     `locked` resta nella firma per i chiamanti ma non cambia questi tre.
     """
-    from app.analysis.optimize import GABRIELE_FIXED
-    rsi_length = GABRIELE_FIXED["rsi_length"]
-    bb_length = GABRIELE_FIXED["bb_length"]
-    bb_mult = GABRIELE_FIXED["bb_mult"]
+    from app.analysis.optimize import gabriele_fixed
+    fixed = gabriele_fixed(strategy_name)
+    rsi_length = fixed["rsi_length"]
+    bb_length = fixed["bb_length"]
+    bb_mult = fixed["bb_mult"]
 
     # If the band already selects a 2-sigma event, an RSI threshold of 45 is
     # not a second filter: it fires on nearly everything the band caught.
@@ -461,8 +462,8 @@ def build_spaces(
     if strategy_name == "Lorenzo (trend-follower)":
         return [_lorenzo_space(stats, tf, vf)
                 for tf in (False, True) for vf in (False, True)]
-    if strategy_name in ("Gabriele (RSI+BB reversal)", "Gabriele 2 (RSI+BB long/short)"):
-        return [_gabriele_space(stats, target_entries, locked)]
+    if strategy_name in ("Gabriele (RSI+BB reversal)", "Gabriele 2 (RSI+BB long/short)", "RSI+BB 4H"):
+        return [_gabriele_space(stats, target_entries, strategy_name, locked)]
     if strategy_name == "Accumulo / Distribuzione (long-term)":
         return [_exhaustion_space(stats)]
     raise ValueError(f"No constrained space for {strategy_name!r}")
