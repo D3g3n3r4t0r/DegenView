@@ -274,6 +274,14 @@
       { key: "rsi_oversold", label: "RSI oversold", type: "number", min: 0, max: 100, default: 28 },
       { key: "rsi_overbought", label: "RSI overbought", type: "number", min: 0, max: 100, default: 72 },
     ],
+    // RSI+BB 4H (Lorenzo, 13/10): the long-only RSI+BB, multiplier 2.5.
+    "RSI+BB 4H": [
+      { key: "rsi_length", label: "RSI length", type: "number", min: 1, default: 14 },
+      { key: "bb_length", label: "Bollinger length", type: "number", min: 1, default: 20 },
+      { key: "bb_mult", label: "Bollinger multiplier", type: "number", min: 0, step: 0.1, default: 2.5 },
+      { key: "rsi_oversold", label: "RSI oversold", type: "number", min: 0, max: 100, default: 28 },
+      { key: "rsi_overbought", label: "RSI overbought", type: "number", min: 0, max: 100, default: 72 },
+    ],
   };
 
   // ── Leggere un campo numerico senza produrre un 422 ────────────────────────
@@ -1229,6 +1237,7 @@
     "Accumulo / Distribuzione (long-term)",
     "Gabriele (RSI+BB reversal)",
     "Gabriele 2 (RSI+BB long/short)",
+    "RSI+BB 4H",
   ]);
 
   function updateOptimizeButtonVisibility() {
@@ -11622,6 +11631,7 @@
   const GRID_STRATEGIES = new Set([
     "Gabriele (RSI+BB reversal)",
     "Gabriele 2 (RSI+BB long/short)",
+    "RSI+BB 4H",
     "Accumulo / Distribuzione (long-term)",
   ]);
 

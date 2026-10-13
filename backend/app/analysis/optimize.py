@@ -33,6 +33,8 @@ from app.analysis.strategies import (
     DEFAULT_PARAMS,
     EXHAUSTION_DEFAULT_PARAMS,
     LKI2_DEFAULT_PARAMS,
+    LKI4H_DEFAULT_PARAMS,
+    RSI_BB_4H,
     LKI_DEFAULT_PARAMS,
 )
 from app.models import BacktestResult
@@ -138,7 +140,7 @@ def _volatility_thresholds(volatility_pct: float) -> tuple[float, int]:
 # 0-9 trades whatever the thresholds (BTC, KAS, SOL 4h, measured 09/10), so the
 # usual 6-12 floor rejected every candidate and the search returned nothing
 # (segnalazione 6453f4df, "non produce risultati").
-_MIN_TRADES_FLOOR = {"Gabriele (RSI+BB reversal)": 4, "Gabriele 2 (RSI+BB long/short)": 4}
+_MIN_TRADES_FLOOR = {"Gabriele (RSI+BB reversal)": 4, "Gabriele 2 (RSI+BB long/short)": 4, RSI_BB_4H: 4}
 
 
 def _score(bt: BacktestResult, volatility_pct: float = 2.0, min_trades: int | None = None) -> float:
@@ -216,7 +218,15 @@ def _random_exhaustion_params(rng: random.Random, base: dict | None = None) -> d
 # moltiplicatore 2, qualunque valore ci sia nei campi del Lab, e cerca solo
 # RSI ipercomprato/ipervenduto.
 GABRIELE_FIXED = {"rsi_length": 14, "bb_length": 20, "bb_mult": 2.0}
-GABRIELE_STRATEGIES = ("Gabriele (RSI+BB reversal)", "Gabriele 2 (RSI+BB long/short)")
+GABRIELE_STRATEGIES = ("Gabriele (RSI+BB reversal)", "Gabriele 2 (RSI+BB long/short)", RSI_BB_4H)
+
+
+def gabriele_fixed(strategy_name: str) -> dict:
+    """The three values the RSI+BB searches never move: 14/20/2.0, and the
+    multiplier at 2.5 for RSI+BB 4H."""
+    if strategy_name == RSI_BB_4H:
+        return {**GABRIELE_FIXED, "bb_mult": LKI4H_DEFAULT_PARAMS["bb_mult"]}
+    return dict(GABRIELE_FIXED)
 
 
 def _random_gabriele_params(rng: random.Random, base: dict | None = None) -> dict:
@@ -234,6 +244,7 @@ _STRATEGY_SPACES: dict[str, tuple[dict, callable]] = {
     "Accumulo / Distribuzione (long-term)": (EXHAUSTION_DEFAULT_PARAMS, _random_exhaustion_params),
     "Gabriele (RSI+BB reversal)": (LKI_DEFAULT_PARAMS, _random_gabriele_params),
     "Gabriele 2 (RSI+BB long/short)": (LKI2_DEFAULT_PARAMS, _random_gabriele_params),
+    RSI_BB_4H: (LKI4H_DEFAULT_PARAMS, _random_gabriele_params),
 }
 
 # Every whole value, not steps of 5: with only two dimensions the full grid
@@ -262,6 +273,7 @@ _GRID_EXHAUSTION = {
 _GRID_SPACES: dict[str, dict] = {
     "Gabriele (RSI+BB reversal)": _GRID_GABRIELE,
     "Gabriele 2 (RSI+BB long/short)": _GRID_GABRIELE,
+    RSI_BB_4H: _GRID_GABRIELE,
     "Accumulo / Distribuzione (long-term)": _GRID_EXHAUSTION,
 }
 
@@ -357,7 +369,7 @@ def optimize_strategy(
     if base_params:
         default_params = {**default_params, **base_params}
     if strategy_name in GABRIELE_STRATEGIES:
-        default_params = {**default_params, **GABRIELE_FIXED}
+        default_params = {**default_params, **gabriele_fixed(strategy_name)}
 
     rng = random.Random(seed)
     constraints = constraints or _NO_CONSTRAINTS
@@ -458,6 +470,8 @@ def optimize_strategy(
         for _ in range(trials):
             stop_if_asked(should_stop)
             candidate = random_params_fn(rng, default_params)
+            if strategy_name in GABRIELE_STRATEGIES:   # 2.5 for RSI+BB 4H
+                candidate = {**candidate, **gabriele_fixed(strategy_name)}
             bt = run_backtest(df_in, candidate, backtest_params, strategy_name=strategy_name)
             evaluated += 1
             _consider(candidate, bt)
@@ -605,6 +619,7 @@ def max_return_search(
         raise ValueError(f"max-return search is for RSI+BB only, not {strategy_name!r}")
     constraints = constraints or _NO_CONSTRAINTS
     say = progress or (lambda _m: None)
+    fixed = gabriele_fixed(strategy_name)
     total = max_return_size()
     say(f"whole chart, every pair: oversold {MAX_RETURN_OVERSOLD.start}-"
         f"{MAX_RETURN_OVERSOLD.stop - 1} x overbought {MAX_RETURN_OVERBOUGHT.start}-"
@@ -621,7 +636,7 @@ def max_return_search(
     for os_ in MAX_RETURN_OVERSOLD:
         for ob in MAX_RETURN_OVERBOUGHT:
             stop_if_asked(should_stop)
-            params = {**GABRIELE_FIXED, "rsi_oversold": os_, "rsi_overbought": ob}
+            params = {**fixed, "rsi_oversold": os_, "rsi_overbought": ob}
             bt = backtest(params)
             evaluated += 1
             if evaluated % step == 0:

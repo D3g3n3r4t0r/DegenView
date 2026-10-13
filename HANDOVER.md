@@ -1,3 +1,7 @@
+# 2026-10-13 — Strategia RSI+BB 4H — `seed-0281` (Claude, a mano)
+
+Lorenzo: "Aggiungi una nuova strategia e chiamala RSI+BB 4H [...] l'unica differenza [...] Bollinger Multiplier [...] 2.5" (base: RSI+BB solo long, scelta sua). `strategies.RSI_BB_4H`/`compute_lki4h_signals`/`LKI4H_DEFAULT_PARAMS`; `optimize.gabriele_fixed(name)` sostituisce GABRIELE_FIXED nelle ricerche; `StrategyParamsQuery.bb_mult` ora `None` = predefinito della strategia; registrata in priors, sensitivity, regime, frontend (campi, OPTIMIZABLE, GRID). Non nell'app on-chain.
+
 # 2026-10-13 — Ricerca gemme in pausa durante le ottimizzazioni — `seed-0280` (Claude, a mano)
 
 Lorenzo, 22:12: "L'ottimizzazione in questo momento sta andando molto lenta"; scelta sua: pausa della ricerca. `jobs.any_running("optimize")`, `Steps.busy()`, `nightly._yield_to_optimizations` prima di ogni tick e ricontrollo; finestra allungata della pausa, `paused_min` nel riepilogo. Non copre la GET /api/optimize sincrona (il Lab usa /start).

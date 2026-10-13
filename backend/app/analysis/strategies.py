@@ -502,7 +502,9 @@ LKI_DEFAULT_PARAMS = {
 
 
 def compute_lki_signals(df: pd.DataFrame, params: dict | None = None) -> pd.DataFrame:
-    p = {**LKI_DEFAULT_PARAMS, **(params or {})}
+    # None = "not set": the strategy's own default stays (bb_mult is None in
+    # the shared query model, so RSI+BB 4H keeps its 2.5).
+    p = {**LKI_DEFAULT_PARAMS, **{k: v for k, v in (params or {}).items() if v is not None}}
     close = df["close"]
 
     # Matches Pine's rsi() exactly, including its edge-case ternary:
@@ -549,6 +551,17 @@ def compute_lki_signals(df: pd.DataFrame, params: dict | None = None) -> pd.Data
 # si porta sull'altra e le due si confrontano sugli stessi assi.
 LKI2_DEFAULT_PARAMS = dict(LKI_DEFAULT_PARAMS)
 
+# RSI+BB 4H (Lorenzo, 13/10): the long-only RSI+BB, same rules, with the
+# Bollinger multiplier at 2.5 by default — a 4h candle's 2-sigma band is
+# touched too often to mean an extreme.
+RSI_BB_4H = "RSI+BB 4H"
+LKI4H_DEFAULT_PARAMS = {**LKI_DEFAULT_PARAMS, "bb_mult": 2.5}
+
+
+def compute_lki4h_signals(df: pd.DataFrame, params: dict | None = None) -> pd.DataFrame:
+    return compute_lki_signals(df, {**LKI4H_DEFAULT_PARAMS,
+                                    **{k: v for k, v in (params or {}).items() if v is not None}})
+
 
 def compute_lki2_signals(df: pd.DataFrame, params: dict | None = None) -> pd.DataFrame:
     base = compute_lki_signals(df, params)
@@ -575,6 +588,7 @@ STRATEGY_REGISTRY = {
     "Accumulo / Distribuzione (long-term)": compute_exhaustion_signals,
     "Gabriele (RSI+BB reversal)": compute_lki_signals,
     "Gabriele 2 (RSI+BB long/short)": compute_lki2_signals,
+    RSI_BB_4H: compute_lki4h_signals,
     "Lorenzo HF (minuti on-chain)": compute_lorenzo_hf_signals,
 }
 AVAILABLE_STRATEGIES = list(STRATEGY_REGISTRY.keys())
