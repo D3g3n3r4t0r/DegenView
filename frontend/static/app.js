@@ -10726,6 +10726,12 @@
   const RIGHT_PANEL_TITLES = { backtest: "Backtest", alert: "Alert", strategie: "Strategies", trading: "Trading", saldi: "Balances", analisi: "Analysis", watchlist: "Watchlist" };
 
   let mobileScreen = "chart";
+  // The two Lab <-> chart syncs live inside the boot function, out of reach
+  // from here: on the phone, opening the Lab threw "syncLabFromChart is not
+  // defined" and the screen never opened (13/10: "la sezione backtest non
+  // funziona da app, solo da browser"). The boot fills these in.
+  let labSync = { fromChart: () => {}, toChart: () => {} };
+
   function showMobileScreen(target) {
     if (!window.matchMedia("(max-width: 760px)").matches) return;
 
@@ -10740,8 +10746,8 @@
     // desktop sidebar (segnalazione 87cc755b).
     const prevScreen = mobileScreen;
     mobileScreen = target;
-    if (target === "backtest" && prevScreen !== "backtest") syncLabFromChart();
-    else if (prevScreen === "backtest" && (target === "chart" || target === "levels")) syncChartFromLab();
+    if (target === "backtest" && prevScreen !== "backtest") labSync.fromChart();
+    else if (prevScreen === "backtest" && (target === "chart" || target === "levels")) labSync.toChart();
 
     const NAV_TARGET_FOR = { script: "altro", saldi: "altro", analisi: "altro", watchlist: "altro", backtest: "altro", issues: "altro", strategie: "altro", trading: "altro" };
     const navTarget = NAV_TARGET_FOR[target] || target;
@@ -12629,6 +12635,8 @@
     bindUI();
     bindLabUI();
     bindMobileNav();
+
+  labSync = { fromChart: () => syncLabFromChart(), toChart: () => syncChartFromLab() };
 
   function syncLabFromChart() {
     if (!state.data || !state.data.symbol) return;
