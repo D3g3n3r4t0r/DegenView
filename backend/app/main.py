@@ -7215,6 +7215,9 @@ class OptimizeCandidate(BaseModel):
     kind: str | None = None
     solidity: float | None = None
     neighbours: dict | None = None
+    # RSI+BB 4H: the same search run on the data up to a year ago, and what
+    # its pick of this kind did in the last year, which it never saw.
+    verification: dict | None = None
 
 
 class Overfitting(BaseModel):
@@ -7348,14 +7351,19 @@ async def _optimize_payload(
     """
     bp = backtest_params.model_dump()
 
-    def full(params: dict, intrabar: bool = True) -> BacktestResult:
-        return _chart_backtest(df, {**(strategy_params or {}), **params}, bp,
-                               strategy_name, asset_type, intrabar=intrabar)
+    def on(frame):
+        def run(params: dict, intrabar: bool = True) -> BacktestResult:
+            return _chart_backtest(frame, {**(strategy_params or {}), **params}, bp,
+                                   strategy_name, asset_type, intrabar=intrabar)
+        return run
+
+    full = on(df)
 
     if mode == "max_return":
         return await _max_return_payload(strategy_name, df, full, constraints, say,
                                          should_stop, ltf_interval, backtest_interval,
-                                         in_candle=bp.get("fill_at") == "on_condition")
+                                         in_candle=bp.get("fill_at") == "on_condition",
+                                         on=on)
 
     res = await _optimize_search(
         strategy_name, df, backtest_params, mode, ltf_interval, backtest_interval,
@@ -7393,7 +7401,7 @@ async def _optimize_payload(
 
 async def _max_return_payload(strategy_name, df, full, constraints, say, should_stop,
                               ltf_interval: str, backtest_interval: str,
-                              in_candle: bool = False) -> "OptimizeResult":
+                              in_candle: bool = False, on=None) -> "OptimizeResult":
     """Mode "max_return": every oversold 10-40 x overbought 60-90 pair on the
     whole chart, backtested as Run does, highest return within 60% drawdown
     (see optimize.max_return_search). No out-of-sample figure: none exists."""
@@ -7417,6 +7425,18 @@ async def _max_return_payload(strategy_name, df, full, constraints, say, should_
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    verification = None
+    if strategy_name == RSI_BB_4H and on is not None:
+        verification = await _last_year_check(strategy_name, df, on, constraints, say,
+                                              should_stop, in_candle)
+        picks = (verification or {}).get("picks") or {}
+        for c in top:
+            # The year-ago search may merge or split the two kinds differently.
+            mine = picks.get(c["kind"]) or picks.get("solid+profitable")
+            if mine is None and c["kind"] == "solid+profitable":
+                mine = picks.get("solid") or picks.get("profitable")
+            c["verification"] = mine or ({"skipped": verification["skipped"]}
+                                         if verification and verification.get("skipped") else None)
     return OptimizeResult(
         params=params,
         backtest=bt.model_copy(update={"interval": backtest_interval, "oos_trades": []}),
@@ -7444,11 +7464,54 @@ async def _max_return_payload(strategy_name, df, full, constraints, say, should_
                 win_rate_pct=c["backtest"].win_rate_pct,
                 profit_factor=c["backtest"].profit_factor,
                 kind=c.get("kind"), solidity=c.get("solidity"),
-                neighbours=c.get("neighbours"),
+                neighbours=c.get("neighbours"), verification=c.get("verification"),
             )
             for c in top
         ],
     )
+
+
+LAST_YEAR_DAYS = 365
+
+
+async def _last_year_check(strategy_name, df, on, constraints, say, should_stop,
+                           in_candle: bool) -> dict | None:
+    """"Verifica sull'ultimo anno" (Lorenzo, 14/10, RSI+BB 4H only): the same
+    search, choosing on the candles up to a year ago, then its picks run on
+    the last year alone. It does not change the result shown: it says how
+    much a choice made this way held up on candles it had not seen."""
+    cut = df.index[-1] - pd.Timedelta(days=LAST_YEAR_DAYS)
+    train, test = df[df.index < cut], df[df.index >= cut]
+    if len(train) < 300 or (train.index[-1] - train.index[0]).days < LAST_YEAR_DAYS:
+        return {"skipped": "less than two years of candles: nothing to verify on"}
+    say(f"last-year check: choosing on candles up to {cut:%d/%m/%Y}, then testing on the last year")
+    run_train, run_test = on(train), on(test)
+    try:
+        _, _, _, picks = await _cpu(partial(
+            max_return_search_3d, strategy_name, run_train,
+            constraints=constraints, progress=None, should_stop=should_stop,
+            years=calendar_years(train.index),
+            fast_backtest=partial(run_train, intrabar=False) if in_candle else None,
+        ))
+    except (ValueError, NoCandidateMeetsConstraints) as exc:
+        return {"skipped": f"no choice possible on the data up to {cut:%d/%m/%Y}: {exc}"}
+    hold = float(test["close"].iloc[-1] / test["close"].iloc[0] - 1) * 100
+    out = {}
+    for p in picks:
+        bt = await _cpu(partial(run_test, p["params"]))
+        out[p["kind"]] = {
+            "chosen_until": int(cut.timestamp()),
+            "params": p["params"],
+            "train_return_pct": round(p["backtest"].total_return_pct, 2),
+            "test_return_pct": round(bt.total_return_pct, 2),
+            "test_trades": bt.num_trades,
+            "test_max_drawdown_pct": round(bt.max_drawdown_pct, 2),
+            "buy_hold_pct": round(hold, 2),
+        }
+        say(f"last-year check, {p['kind']}: OS {p['params']['rsi_oversold']} OB {p['params']['rsi_overbought']} "
+            f"×{p['params']['bb_mult']} → last year {bt.total_return_pct:+.1f}% ({bt.num_trades} trades), "
+            f"buy & hold {hold:+.1f}%")
+    return {"picks": out}
 
 
 def _chart_backtest(df, strategy_params: dict, backtest_params: dict,

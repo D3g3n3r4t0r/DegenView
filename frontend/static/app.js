@@ -11962,6 +11962,20 @@
   // Max return gives the two best pairs (Lorenzo, 13/10: "avere come esito
   // finale i due migliori risultati"). The first is already in the fields;
   // "Use" puts the other one there and runs it, the same backtest as Run.
+  // "Verifica sull'ultimo anno" (14/10): the same search chosen on the data
+  // up to a year ago, run on the last year it never saw.
+  function verifyLine(v) {
+    if (!v) return "";
+    if (v.skipped) return `<div class="lab-best2-verify muted">Last-year check: ${escapeHtml(v.skipped)}</div>`;
+    const pct = (x) => (x == null ? "–" : `${x >= 0 ? "+" : ""}${x.toFixed(1)}%`);
+    const until = new Date(v.chosen_until * 1000).toLocaleDateString("it-IT");
+    const p = v.params || {};
+    const good = v.test_return_pct > 0;
+    return `<div class="lab-best2-verify ${good ? "pos" : "neg"}">Last-year check · chosen on data up to ${until}: `
+      + `OS ${p.rsi_oversold} · OB ${p.rsi_overbought} · ×${Number(p.bb_mult).toFixed(1)} → last year <b>${pct(v.test_return_pct)}</b> `
+      + `(${v.test_trades} trades, DD ${pct(-Math.abs(v.test_max_drawdown_pct))}; buy & hold ${pct(v.buy_hold_pct)})</div>`;
+  }
+
   function renderBestTwo(body) {
     const box = labEl("lab-best2-box");
     if (!box) return;
@@ -11981,6 +11995,7 @@
           <div class="lab-best2-levels">OS ${c.params.rsi_oversold} · OB ${c.params.rsi_overbought}${kinds ? ` · BB ×${Number(c.params.bb_mult).toFixed(1)}` : ""}</div>
           <div class="lab-best2-meta">Return <b>${pct(c.total_return_pct)}</b> · DD ${pct(-Math.abs(c.max_drawdown_pct))} · ${c.num_trades} trades${c.win_rate_pct != null ? ` · win ${c.win_rate_pct.toFixed(0)}%` : ""}</div>
           ${c.solidity != null ? `<div class="lab-best2-meta">Solidity <b>${Math.round(c.solidity * 100)}%</b>${c.neighbours ? ` · ×${(Number(c.params.bb_mult) - 0.1).toFixed(1)}: ${pct(c.neighbours.mult_down)} · ×${(Number(c.params.bb_mult) + 0.1).toFixed(1)}: ${pct(c.neighbours.mult_up)}` : ""}</div>` : ""}
+          ${verifyLine(c.verification)}
         </div>
         <button type="button" class="lab-best2-use">${i === 0 ? "In use" : "Use"}</button>
       </div>`).join("");
