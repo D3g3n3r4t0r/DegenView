@@ -2853,5 +2853,11 @@
     "at": 1791910567,
     "summary": "Accendere una strategia su un alert non crea piu' una voce nell'archivio. Le voci 'from alert' nascevano proprio li': ogni attivazione fotografava la configurazione e le faceva un backtest.",
     "detail": "Era una seconda strada, separata dall'ottimizzazione chiusa il 13/10 (seed-0276): l'endpoint che accende/spegne la strategia di un ticker in Watchlist salvava una copia con source 'alert'. Tolta. Ora l'archivio si riempie solo con il tasto Archive del Laboratorio o con l'importazione da file. Le voci 'from alert' gia' presenti restano finche' non le cancelli (x sulla voce)."
+  },
+  "seed-0280": {
+    "status": "risolto",
+    "at": 1791922532,
+    "summary": "Mentre gira un'ottimizzazione la ricerca gemme si ferma e riprende appena finisce, cosi' l'ottimizzazione ha il server tutto per se'.",
+    "detail": "La ricerca (giro delle 22:00 fino a 2 ore e giri orari fino a 45 minuti) condivideva i due core e il processo con l'ottimizzazione. Ora prima di ogni passo controlla se c'e' un'ottimizzazione in corso: se si', aspetta e ricontrolla ogni 5 secondi; le letture gia' partite finiscono da sole. La finestra del giro si allunga quanto la pausa, quindi il lavoro della sera non si perde. Il riepilogo Telegram dice quanti minuti e' rimasta in pausa."
   }
 }

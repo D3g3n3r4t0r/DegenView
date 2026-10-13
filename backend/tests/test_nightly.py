@@ -333,3 +333,34 @@ def test_hourly_run_is_quiet_unless_the_top_changed(monkeypatch):
     asyncio.run(nightly.run_night(ts(2026, 10, 13, 22), lambda: [], steps_factory=Quiet,
                                   clock=clock2, sleep=clock2.sleep, send=send))
     assert len(sent) == 1
+
+
+def test_the_research_waits_while_an_optimization_runs(monkeypatch):
+    # Lorenzo, 13/10: "la ricerca gemme si mette in pausa e riprende appena finisce"
+    clock = Clock(ts(2026, 10, 13, 22))
+    busy_until = clock() + 600
+    ticks_while_busy = []
+
+    class Steps:
+        def __init__(self, client=None): ...
+        def busy(self): return clock() < busy_until
+        async def tick(self): ticks_while_busy.append(self.busy())
+        def drained(self): return True
+        def backlog(self): return {}
+        async def settle(self, timeout): ...
+        def counters(self): return {"discovered": 0, "skipped": 0, "examined": 0, "analysed": 0}
+        async def layers(self): return 0
+        async def outcomes(self): ...
+        def next_recheck(self, keys): return None
+        async def recheck(self, key): return "done"
+        async def studies(self): return 0
+        def deepseek_calls(self, a, b): return 0
+
+    monkeypatch.setattr(nightly, "_duels", lambda top, now: asyncio.sleep(0, result=0))
+
+    async def go():
+        return await nightly.run_once(lambda: [], Steps(), clock() + 3600, clock=clock, sleep=clock.sleep)
+    s = asyncio.run(go())
+    assert ticks_while_busy and not any(ticks_while_busy)
+    assert s["paused_min"] >= 10
+    assert "In pausa" in nightly.text_it(s)
