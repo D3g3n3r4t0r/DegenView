@@ -307,6 +307,31 @@ await mpage.tap('#lab-run-btn');
 await mpage.waitForTimeout(800);
 check('phone: Run starts the backtest', ran);
 
+// Lab: values typed by hand are the ones archived, also after leaving the
+// Lab and coming back (13/10: they were saved with the defaults).
+{
+  const ctxL = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: 'en-US' });
+  const lp = await ctxL.newPage();
+  await route(lp);
+  const posted = [];
+  await lp.route('**/api/archive', (r) => r.request().method() === 'POST'
+    ? (posted.push(JSON.parse(r.request().postData())), r.fulfill({ status: 200, contentType: 'application/json', body: '{"id":"a1"}' }))
+    : r.fallback());
+  await lp.goto(BASE);
+  await lp.waitForTimeout(2500);
+  await lp.click('.sidenav-item[data-area="lab"]');
+  await lp.selectOption('#lab-strategy-select', 'Gabriele (RSI+BB reversal)');
+  await lp.fill('#lab-params-fields [name="rsi_oversold"]', '31');
+  await lp.fill('#lab-params-fields [name="rsi_overbought"]', '69');
+  await lp.click('#lab-run-btn'); await lp.waitForTimeout(1000);
+  await lp.click('.sidenav-item[data-area="alert"]'); await lp.waitForTimeout(400);
+  await lp.click('.sidenav-item[data-area="lab"]'); await lp.waitForTimeout(400);
+  await lp.click('#lab-archive-btn'); await lp.waitForTimeout(600);
+  const pp = posted.at(-1)?.params || {};
+  check('Lab: typed values are archived after leaving and coming back', pp.rsi_oversold === 31 && pp.rsi_overbought === 69, JSON.stringify(pp));
+  await ctxL.close();
+}
+
 check('no JavaScript errors', errors.length === 0, errors.slice(0, 3).join(' | '));
 await browser.close();
 server.close();

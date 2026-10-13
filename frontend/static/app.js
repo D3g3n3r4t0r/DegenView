@@ -4682,6 +4682,7 @@
       if (input.type === "checkbox") input.checked = !!value;
       else input.value = value;
     });
+    labState.paramsDirty = true;
     labEl("lab-status").classList.add("hidden");
     renderLabResults(body.backtest);
     renderPlateauMap(body);
@@ -11986,6 +11987,7 @@
           const input = container.querySelector(`[name="${key}"]`);
           if (input) input.value = value;
         });
+        labState.paramsDirty = true;
         box.querySelectorAll(".lab-best2-card").forEach((x) => {
           const on = x === card;
           x.classList.toggle("active", on);
@@ -12473,6 +12475,11 @@
       labEl("lab-date-end").value = "";
     });
 
+    // Values typed in the Lab are the Lab's own (see syncLabFromChart).
+    ["input", "change"].forEach((ev) => labEl("lab-params-fields")?.addEventListener(ev, () => {
+      labState.paramsDirty = true;
+    }));
+
     // Strategy select — keep toolbar in sync so chart markers match the lab
     labEl("lab-strategy-select").addEventListener("change", () => {
       labState.strategy = labEl("lab-strategy-select").value;
@@ -12645,8 +12652,19 @@
 
   labSync = { fromChart: () => syncLabFromChart(), toChart: () => syncChartFromLab() };
 
+  // The Lab's own values win over the chart's while the user is working in
+  // the Lab. Before, every return to the Lab (from Alert, the Archive, the
+  // phone's menu) copied the chart's parameters back over the ones typed in
+  // the Lab — and the chart had the defaults, because choosing the strategy
+  // in the Lab resets the chart's fields — so Archive saved the defaults
+  // (Lorenzo, 13/10: "le strategie testate con valori scritti a mano [...]
+  // vengono salvate con i valori di default"). `paramsDirty` = the Lab holds
+  // values the chart does not have: typed, or filled by an optimization.
   function syncLabFromChart() {
     if (!state.data || !state.data.symbol) return;
+    const chartStrat = el("active-strategy-select")?.value;
+    if (labState.paramsDirty && labState.symbol === state.data.symbol && labState.strategy === chartStrat) return;
+    labState.paramsDirty = false;
     const sym = state.data.symbol;
     if (labState.symbol !== sym) {
       labState.symbol = sym;
@@ -12712,6 +12730,7 @@
       params,
     });
     runAnalysis(labState.symbol);
+    labState.paramsDirty = false;      // the chart now has the Lab's values
   }
 
   // ── Sidebar ───────────────────────────────────────────────────────────
