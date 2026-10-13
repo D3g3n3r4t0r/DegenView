@@ -7880,7 +7880,7 @@ def _optimizer_summary(symbol: str, strategy_name: str, mode: str,
     if body.deterministic is False:
         lines.append("ℹ️ Parte della griglia è stata campionata: quel pezzo non è riproducibile.")
     lines.append("")
-    lines.append("Salvata nell'archivio strategie, scheda Watchlist.")
+    lines.append("Non salvata in automatico: se ti interessa, salvala nell'archivio con il tasto Archive del Laboratorio.")
     return "\n".join(lines)
 
 
@@ -7957,15 +7957,14 @@ async def start_optimize(
             )
             jobs_store.finish(job_id, body.model_dump(mode="json"))
 
-            # Il lavoro e' finito anche se nessuno stava guardando: la ricerca
-            # gira sul server, quindi chiudere Safari o perdere la linea non la
-            # ferma. Perche' quel risultato non si perda con la scheda, viene
-            # archiviato e annunciato.
+            # Il risultato resta nel lavoro (finestra della ricerca) e viene
+            # annunciato, ma non entra piu' da solo nell'archivio. Lorenzo,
+            # 13/10: "Annulla il salvataggio automatico delle strategie
+            # ottimizzate in archivio. Se interessano vengono salvate
+            # manualmente, altrimenti si affolla l'archivio" — tasto Archive
+            # del Laboratorio. `_archive_optimizer_result` resta per chi lo
+            # chiama a mano.
             if owner_id:
-                archived = _archive_optimizer_result(owner_id, symbol, asset_type,
-                                                     exchange, ltf_interval, strategy_name,
-                                                     mode, body)
-                jobs_store.log(job_id, f"saved to archive ({archived['id']})")
                 user_now = auth.get_user(owner_id)
                 if user_now and _info_chat(user_now) and _telegram_allowed(user_now):
                     await telegram.send_to(_info_chat(user_now),
