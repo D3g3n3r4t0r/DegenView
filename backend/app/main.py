@@ -71,6 +71,7 @@ from app.analysis.optimize import (
     calendar_years,
     is_optimizable,
     max_return_search,
+    max_return_search_3d,
     optimize_strategy,
 )
 from app.analysis.pipeline import run_pipeline
@@ -78,6 +79,7 @@ from app.analysis.smc_engine import compute_dealing_range, compute_levels, compu
 from app.analysis.strategies import (
     AVAILABLE_STRATEGIES,
     DEFAULT_STRATEGY,
+    RSI_BB_4H,
     STRATEGY_REGISTRY,
     build_strategy_state,
     spot_only,
@@ -7208,6 +7210,11 @@ class OptimizeCandidate(BaseModel):
     # The return on the slice the search picked on; total_return_pct is the
     # whole history, as Run shows it.
     in_sample_return_pct: float | None = None
+    # Max return on RSI+BB 4H: "solid" / "profitable" / "solid+profitable",
+    # the share of the return its neighbours keep, and their returns.
+    kind: str | None = None
+    solidity: float | None = None
+    neighbours: dict | None = None
 
 
 class Overfitting(BaseModel):
@@ -7397,9 +7404,12 @@ async def _max_return_payload(strategy_name, df, full, constraints, say, should_
     # The in-candle replay (fill_at "on_condition") costs up to 8 s a backtest:
     # the scan runs with fills at the close, the best pairs are re-run exactly.
     fast = partial(full, intrabar=False) if in_candle else None
+    # RSI+BB 4H also searches the multiplier and returns the most solid and
+    # the most profitable result (Lorenzo, 14/10).
+    search = max_return_search_3d if strategy_name == RSI_BB_4H else max_return_search
     try:
         params, bt, evaluated, top = await _cpu(partial(
-            max_return_search, strategy_name, full,
+            search, strategy_name, full,
             constraints=constraints, progress=say, should_stop=should_stop,
             years=years, fast_backtest=fast,
         ))
@@ -7421,7 +7431,9 @@ async def _max_return_payload(strategy_name, df, full, constraints, say, should_
                   f"candles, the same backtest as Run; the highest return within 60% "
                   f"drawdown wins"
                   + (f", with at least one trade in every year {years[0]}-{years[-1]}" if years else "")
-                  + ". The two best are shown. Chosen on the whole chart: no out-of-sample check."),
+                  + (". Multiplier searched 2.0-2.8: the most solid and the most profitable result are shown"
+                     if strategy_name == RSI_BB_4H else ". The two best are shown")
+                  + ". Chosen on the whole chart: no out-of-sample check."),
         ),
         top_candidates=[
             OptimizeCandidate(
@@ -7431,6 +7443,8 @@ async def _max_return_payload(strategy_name, df, full, constraints, say, should_
                 num_trades=c["backtest"].num_trades,
                 win_rate_pct=c["backtest"].win_rate_pct,
                 profit_factor=c["backtest"].profit_factor,
+                kind=c.get("kind"), solidity=c.get("solidity"),
+                neighbours=c.get("neighbours"),
             )
             for c in top
         ],

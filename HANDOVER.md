@@ -1,3 +1,7 @@
+# 2026-10-14 — Max return 4H: moltiplicatore 2.0-2.8, piu' solido e piu' profittevole — `seed-0285` (Claude, a mano)
+
+Lorenzo: "il piu' solido in rapporto al profitto e il piu' profittevole anche con una minore solidita', ma non [...] completamente azzerata". `optimize.max_return_search_3d` (MAX_RETURN_MULTS 2.0..2.8, `solidity()` = mediana dei 6 vicini / rendimento, SOLIDITY_FLOOR 0.25, REFINE_PER_KIND 10), usata in `_max_return_payload` solo per RSI_BB_4H; OptimizeCandidate.kind/solidity/neighbours; Lab `renderBestTwo`.
+
 # 2026-10-13 — Strategia RSI+BB 4H — `seed-0281` (Claude, a mano)
 
 Lorenzo: "Aggiungi una nuova strategia e chiamala RSI+BB 4H [...] l'unica differenza [...] Bollinger Multiplier [...] 2.5" (base: RSI+BB solo long, scelta sua). `strategies.RSI_BB_4H`/`compute_lki4h_signals`/`LKI4H_DEFAULT_PARAMS`; `optimize.gabriele_fixed(name)` sostituisce GABRIELE_FIXED nelle ricerche; `StrategyParamsQuery.bb_mult` ora `None` = predefinito della strategia; registrata in priors, sensitivity, regime, frontend (campi, OPTIMIZABLE, GRID). Non nell'app on-chain.

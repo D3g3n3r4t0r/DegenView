@@ -11968,13 +11968,19 @@
     const cands = (body && body.mode === "max_return" && body.top_candidates) || [];
     if (!cands.length) { box.classList.add("hidden"); box.innerHTML = ""; return; }
     const pct = (v) => (v == null ? "–" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`);
-    box.innerHTML = `<div class="lab-best2-title">Best ${cands.length === 1 ? "result" : "two results"} · whole chart, a trade in every year between the first and the last</div>`
+    // RSI+BB 4H (14/10): the most solid and the most profitable, with how
+    // much of the return the neighbouring settings keep.
+    const KIND = { solid: "Most solid", profitable: "Most profitable", "solid+profitable": "Most solid and most profitable" };
+    const kinds = cands.some((c) => c.kind);
+    box.innerHTML = `<div class="lab-best2-title">${kinds ? "Most solid · most profitable" : `Best ${cands.length === 1 ? "result" : "two results"}`} · whole chart, a trade in every year between the first and the last</div>`
       + cands.map((c, i) => `
       <div class="lab-best2-card${i === 0 ? " active" : ""}" data-i="${i}">
-        <div class="lab-best2-rank">#${c.rank}</div>
+        <div class="lab-best2-rank">${kinds ? (c.kind === "profitable" ? "↑" : "◆") : `#${c.rank}`}</div>
         <div class="lab-best2-main">
-          <div class="lab-best2-levels">OS ${c.params.rsi_oversold} · OB ${c.params.rsi_overbought}</div>
+          ${kinds ? `<div class="lab-best2-kind">${KIND[c.kind] || c.kind}</div>` : ""}
+          <div class="lab-best2-levels">OS ${c.params.rsi_oversold} · OB ${c.params.rsi_overbought}${kinds ? ` · BB ×${Number(c.params.bb_mult).toFixed(1)}` : ""}</div>
           <div class="lab-best2-meta">Return <b>${pct(c.total_return_pct)}</b> · DD ${pct(-Math.abs(c.max_drawdown_pct))} · ${c.num_trades} trades${c.win_rate_pct != null ? ` · win ${c.win_rate_pct.toFixed(0)}%` : ""}</div>
+          ${c.solidity != null ? `<div class="lab-best2-meta">Solidity <b>${Math.round(c.solidity * 100)}%</b>${c.neighbours ? ` · ×${(Number(c.params.bb_mult) - 0.1).toFixed(1)}: ${pct(c.neighbours.mult_down)} · ×${(Number(c.params.bb_mult) + 0.1).toFixed(1)}: ${pct(c.neighbours.mult_up)}` : ""}</div>` : ""}
         </div>
         <button type="button" class="lab-best2-use">${i === 0 ? "In use" : "Use"}</button>
       </div>`).join("");
