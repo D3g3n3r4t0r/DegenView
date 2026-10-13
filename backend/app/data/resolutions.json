@@ -2838,9 +2838,9 @@
   },
   "seed-0277": {
     "status": "risolto",
-    "at": 1791898380,
+    "at": 1791898511,
     "summary": "Max return scarta ogni combinazione RSI che in uno degli anni solari del grafico non apre nemmeno un trade, e alla fine mostra i due migliori risultati, ciascuno con il tasto 'Use' per applicarlo.",
-    "detail": "Anni giudicati: tutti quelli del grafico tranne il primo e l'ultimo, che sono sempre parziali (Lorenzo, 13/10: 'dal 2022 al 2026 [...] solamente gli anni 2023, 2024 e 2025'). Con un grafico dentro uno o due anni il filtro non scarta niente. Il trade conta nell'anno in cui e' aperto. Restano drawdown massimo 60% e filtri del Laboratorio. Nel log della ricerca compare quante combinazioni sono state scartate per un anno senza trade. Il primo risultato va subito nei campi; 'Use' sul secondo lo mette nei campi e lancia il backtest. Eccezione (Lorenzo, 13/10: 'se il totale dei trade pareggia o supera il numero degli anni presi in esame allora il risultato deve essere considerato valido'): con un grafico 2022-2026 gli anni giudicati sono 3, quindi un risultato con almeno 3 trade in totale resta valido anche se uno di quegli anni e' vuoto. Il totale e' quello di tutto il backtest."
+    "detail": "Anni giudicati: tutti quelli del grafico tranne il primo e l'ultimo, che sono sempre parziali (Lorenzo, 13/10: 'dal 2022 al 2026 [...] solamente gli anni 2023, 2024 e 2025'). Con un grafico dentro uno o due anni il filtro non scarta niente. Il trade conta nell'anno in cui e' aperto. Restano drawdown massimo 60% e filtri del Laboratorio. Nel log della ricerca compare quante combinazioni sono state scartate per un anno senza trade. Il primo risultato va subito nei campi; 'Use' sul secondo lo mette nei campi e lancia il backtest. Eccezione (Lorenzo, 13/10: 'se il totale dei trade pareggia o supera il numero degli anni presi in esame allora il risultato deve essere considerato valido'): con un grafico 2022-2026 gli anni giudicati sono 3, quindi un risultato con almeno 3 trade in totale resta valido anche se uno di quegli anni e' vuoto. Contano solo i trade aperti negli anni giudicati, non quelli del primo e dell'ultimo anno (Lorenzo, 13/10: 'conta solo i trade fatti negli anni esaminati')."
   },
   "seed-0278": {
     "status": "risolto",

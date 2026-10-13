@@ -120,3 +120,7 @@ def test_enough_trades_in_total_forgive_an_empty_year(monkeypatch):
     params, _, _, top = max_return_search(GAB, fake, years=years)
     assert params["rsi_oversold"] == 20          # 3 trades >= 3 years: valid despite 2023/2025
     assert all(c["backtest"].num_trades >= 3 for c in top)
+    # "conta solo i trade fatti negli anni esaminati": the same 3 trades,
+    # all in 2024, do not count when the judged years are 2025-2027
+    with pytest.raises(ValueError):
+        max_return_search(GAB, fake, years=[2025, 2026, 2027])
