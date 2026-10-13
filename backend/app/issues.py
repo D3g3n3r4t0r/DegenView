@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0283", "All'apertura a destra compare Structure invece della Watchlist",
+     "Lorenzo, 14/10: 'All'apertura del sito sulla colonna a destra accanto al grafico principale appare la sezione Structure. Invece deve apparire subito la Watchlist.'",
+     "media"),
     ("seed-0282", "Archivio: le strategie con valori scritti a mano vengono salvate con i default",
      "Lorenzo, 13/10: 'le strategie testate con valori scritti a mano non vengono esportate in archivio strategie con i valori giusti, ma vengono salvate con i valori di default. Bisogna correggere e ritestare'.",
      "alta"),

@@ -12859,12 +12859,13 @@
       setArea(wanted);
       return;
     }
-    // Analizza mostra la lettura della struttura nella colonna di destra:
-    // e' il commento al grafico, non una schermata a se'.
+    // All'apertura, accanto al grafico la Watchlist (Lorenzo, 14/10: "deve
+    // apparire subito la Watchlist"), non la lettura della struttura, che
+    // resta alla voce Structure.
     setArea("analizza");
-    document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === "analisi"));
+    document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === "watchlist"));
     document.querySelectorAll(".tab-content").forEach((c) => {
-      c.classList.toggle("active", c.dataset.tabContent === "analisi");
+      c.classList.toggle("active", c.dataset.tabContent === "watchlist");
     });
   }
 
