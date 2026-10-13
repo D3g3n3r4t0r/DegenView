@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0279", "Archivio strategie: compaiono voci 'from alert' salvate da sole",
+     "Lorenzo, 13/10: 'Nell'archivio strategie ne compaiono alcune con la dicitura from alert. Dobbiamo capire perche' succede e risolvere, visto che abbiamo deciso di impostare il sistema in modo che nessuna strategia venga salvata automaticamente in archivio con nessun tipo di backtest'.",
+     "media"),
     ("seed-0278", "Sezione backtest non funziona da app, solo da browser",
      "Lorenzo, 13/10: 'La sezione backtest non funziona da app, solo da browser. Bisogna capire perche' e risolvere'.",
      "alta"),

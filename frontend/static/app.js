@@ -3224,9 +3224,6 @@
             });
           } finally {
             loadWatchlist();
-            // Accendere una strategia crea una voce d'archivio: mostrarla
-            // subito, altrimenti sembra che il salvataggio non sia avvenuto.
-            if (nextOn) loadArchive();
           }
         });
         row.appendChild(toggle);

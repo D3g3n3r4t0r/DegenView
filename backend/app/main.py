@@ -6551,25 +6551,10 @@ async def toggle_watchlist_strategy(
         # deve ripartire da adesso, non dalla prima attivazione — altrimenti
         # tutto quello che e' successo nel frattempo arriverebbe in blocco.
         alerts.disarm(entry_id, req.strategy_name)
-    if req.enabled and not was_enabled:
-        # Fotografia della configurazione con cui l'alert parte. E' il momento
-        # in cui smette di essere un esperimento: da qui lavora per settimane,
-        # e il risultato dell'ottimizzazione che l'ha prodotta vive quanto la
-        # scheda del browser. Spegnere e riaccendere non duplica la voce; una
-        # riattivazione con parametri diversi si', perche' e' un'altra strategia.
-        params = entry.strategy_params.get(req.strategy_name, {}) or {}
-        if not archive_store.already_archived(user.id, entry_id, req.strategy_name, params):
-            snapshot = archive_store.create(
-                owner_id=user.id, symbol=entry.symbol, asset_type=entry.asset_type,
-                exchange=entry.exchange,
-                interval=entry.strategy_intervals.get(req.strategy_name, entry.interval),
-                strategy_name=req.strategy_name, params=params,
-                backtest_params={}, source="alert", watchlist_entry_id=entry_id,
-            )
-            _fire(_run_archive_backtest(
-                snapshot["id"], entry.symbol, entry.asset_type, entry.exchange,
-                snapshot["interval"], req.strategy_name, params, {},
-            ))
+    # Accendere un alert non scrive piu' nell'archivio (Lorenzo, 13/10:
+    # "nessuna strategia venga salvata automaticamente in archivio con nessun
+    # tipo di backtest"): le voci "from alert" nascevano qui. L'archivio si
+    # riempie solo con il tasto Archive o con un'importazione.
 
     if req.enabled and not was_enabled and user.telegram_chat_id and _telegram_allowed(user):
         # Confirms the watch is actually active — sent immediately on
