@@ -2883,5 +2883,11 @@
     "at": 1791928401,
     "summary": "I valori scritti a mano nel Laboratorio restano anche uscendo e rientrando, e Archive salva quelli. Prima, rientrando nel Laboratorio, i campi venivano ricopiati dal grafico, che aveva i valori predefiniti.",
     "detail": "Il Laboratorio si allinea al grafico ogni volta che ci si entra (segnalazione 411e4c7c). Scegliere la strategia nel Laboratorio cambia anche quella del grafico e ne rimette i campi ai predefiniti; quindi tornando nel Laboratorio da Alert, Archivio o dal menu del telefono, i valori scritti a mano venivano sostituiti con 28/72 senza che si vedesse, e Archive salvava quelli. Ora i valori scritti nel Laboratorio (o messi da un'ottimizzazione) hanno la precedenza finche' grafico e Laboratorio mostrano lo stesso pair e la stessa strategia; se cambi pair o strategia sul grafico, il Laboratorio si allinea come prima. Verificato nel browser: scrivo 31/69, vado in Alert e torno, premo Archive, viene salvato 31/69 (con il codice vecchio si salvava 28/72). Il controllo e' nel test automatico."
+  },
+  "seed-0285": {
+    "status": "risolto",
+    "at": 1791931780,
+    "summary": "Su RSI+BB 4H Max return prova anche il moltiplicatore di Bollinger da 2.0 a 2.8 (9 valori × 961 coppie RSI) e restituisce due risultati: il piu' solido e il piu' profittevole, ciascuno con la sua solidita'.",
+    "detail": "Solidita' = quanta parte del rendimento tengono le impostazioni vicine (ipervenduto ±1, ipercomprato ±1, moltiplicatore ±0.1): la mediana dei loro rendimenti divisa per quello della combinazione, da 0% a 100%. 'Piu' solido' = il rendimento piu' alto pesato per la solidita'. 'Piu' profittevole' = il rendimento piu' alto con solidita' almeno 25% (mai un picco isolato). Se vincono con la stessa combinazione compare una sola scheda. Restano drawdown max 60%, un trade per anno (esclusi primo e ultimo), filtri del Laboratorio; con l'ingresso dentro la candela la griglia si scorre alla chiusura e le migliori si rifanno esattamente come Run. Le altre due RSI+BB restano come prima (moltiplicatore 2.0 fisso, i due migliori)."
   }
 }
