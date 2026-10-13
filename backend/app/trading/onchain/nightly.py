@@ -212,6 +212,11 @@ class Steps:
         from app.trading.onchain import leaderboard
         await leaderboard.tick(self.client)
 
+    def busy(self) -> bool:
+        """An optimization is running: the research steps wait for it."""
+        from app import jobs
+        return jobs.any_running("optimize")
+
     def drained(self) -> bool:
         from app.trading.onchain import leaderboard
         return leaderboard.drained()
@@ -284,6 +289,27 @@ async def _guard(name: str, coro: Awaitable, default=None):
         return default
 
 
+PAUSE_POLL_S = 5                 # how often a paused run looks again
+
+
+async def _yield_to_optimizations(steps, clock, sleep) -> float:
+    """Waits while an optimization runs and returns the seconds waited.
+
+    Lorenzo, 13/10, the optimization slow at 22:12: the research shares the
+    server's two cores and the process with it. Now the research steps
+    stand aside — readings already in flight finish on their own — and the
+    window grows by the pause, so the night does not lose its work."""
+    if not getattr(steps, "busy", None) or not steps.busy():
+        return 0.0
+    t0 = clock()
+    logger.info("nightly: paused, an optimization is running")
+    while steps.busy():
+        await sleep(PAUSE_POLL_S)
+    waited = clock() - t0
+    logger.info("nightly: resumed after %.0f s", waited)
+    return waited
+
+
 async def run_once(top: Callable[[], list[dict]], steps: Steps, deadline: float, *,
                    clock: Callable[[], float] = time.time, sleep=asyncio.sleep,
                    top_before: dict[str, str] | None = None) -> dict:
@@ -295,8 +321,13 @@ async def run_once(top: Callable[[], list[dict]], steps: Steps, deadline: float,
     before = steps.counters()
     top_before = _top_map(top) if top_before is None else top_before
     research_end = t0 + (deadline - t0) * RESEARCH_SHARE
-    ticks, stopped = 0, "drained"
+    ticks, stopped, paused = 0, "drained", 0.0
     while True:
+        waited = await _yield_to_optimizations(steps, clock, sleep)
+        if waited:
+            paused += waited
+            research_end += waited
+            deadline += waited
         if clock() >= research_end:
             stopped = "window"
             break
@@ -312,6 +343,10 @@ async def run_once(top: Callable[[], list[dict]], steps: Steps, deadline: float,
     rechecked = 0
     keys = list(_top_map(top))
     while clock() < deadline:
+        waited = await _yield_to_optimizations(steps, clock, sleep)
+        if waited:
+            paused += waited
+            deadline += waited
         key = steps.next_recheck(keys)
         if key is None:
             break
@@ -334,6 +369,7 @@ async def run_once(top: Callable[[], list[dict]], steps: Steps, deadline: float,
         "top": len(top_after), "layers": n_layers or 0, "rechecked": rechecked, "studies": studies or 0,
         "duels": duels or 0,
         "deepseek_calls": steps.deepseek_calls(t0, t1), "backlog": left,
+        "paused_min": round(paused / 60, 1),
     }
 
 
@@ -351,6 +387,8 @@ def text_it(s: dict) -> str:
              f"Layer aggiornati: {s.get('layers', 0)}; ricontrolli DeepSeek: {s.get('rechecked', 0)}; "
              f"studi: {s.get('studies', 0)}; duelli della scala: {s.get('duels', 0)}.",
              f"Chiamate DeepSeek: {s.get('deepseek_calls', 0)}."]
+    if s.get("paused_min"):
+        lines.append(f"In pausa {s['paused_min']:g} min per lasciare il server alle ottimizzazioni.")
     if s.get("resumed"):
         lines.append("Ripresa dopo un riavvio del server: i conteggi coprono solo l'ultima parte, "
                      "entrati e usciti tutta la sera.")

@@ -1,3 +1,7 @@
+# 2026-10-13 — Ricerca gemme in pausa durante le ottimizzazioni — `seed-0280` (Claude, a mano)
+
+Lorenzo, 22:12: "L'ottimizzazione in questo momento sta andando molto lenta"; scelta sua: pausa della ricerca. `jobs.any_running("optimize")`, `Steps.busy()`, `nightly._yield_to_optimizations` prima di ogni tick e ricontrollo; finestra allungata della pausa, `paused_min` nel riepilogo. Non copre la GET /api/optimize sincrona (il Lab usa /start).
+
 # 2026-10-13 — Max return: un trade per anno solare, due migliori — `seed-0277` (Claude, a mano)
 
 Lorenzo: "un filtro [...] che elimini tutti i risultati finali che non ottengono almeno un trade per anno solare testato [...] avere come esito finale i due migliori risultati". `optimize.calendar_years` (anni del grafico tranne primo e ultimo, Lorenzo: "il primo e l'ultimo anno vengono ignorati completamente dal filtro"), `years_without_trades` (per anno di apertura), `max_return_search(years=..., top_n=MAX_RETURN_TOP=2)`; Lab: `renderBestTwo` con 'Use'.

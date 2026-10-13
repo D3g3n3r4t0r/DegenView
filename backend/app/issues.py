@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0280", "Ottimizzazione lenta durante la ricerca gemme",
+     "Lorenzo, 13/10 alle 22:12: 'L'ottimizzazione in questo momento sta andando molto lenta. Dipende da qualcosa?' — era in corso la ricerca gemme delle 22:00, sullo stesso server e processo. Soluzione scelta da Lorenzo: la ricerca si mette in pausa mentre gira un'ottimizzazione.",
+     "alta"),
     ("seed-0279", "Archivio strategie: compaiono voci 'from alert' salvate da sole",
      "Lorenzo, 13/10: 'Nell'archivio strategie ne compaiono alcune con la dicitura from alert. Dobbiamo capire perche' succede e risolvere, visto che abbiamo deciso di impostare il sistema in modo che nessuna strategia venga salvata automaticamente in archivio con nessun tipo di backtest'.",
      "media"),

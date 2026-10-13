@@ -123,6 +123,15 @@ def clean_view(view: str | None) -> str:
     return view if _VIEW_RE.match(view) else ""
 
 
+def any_running(kind: str) -> bool:
+    """Whether a job of `kind` is in progress — the gem research pauses while
+    an optimization runs (Lorenzo, 13/10: "la ricerca gemme si mette in pausa
+    e riprende appena finisce")."""
+    with _lock:
+        _ensure_loaded()
+        return any(j["kind"] == kind and j["state"] == "in corso" for j in _jobs.values())
+
+
 def create(owner_id: str, kind: str, title: str, device: str = "", view: str = "",
            page: str = "/onchain-app.html") -> str:
     with _lock:
