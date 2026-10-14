@@ -46,7 +46,7 @@ class MexcProvider(DataProvider):
     # satisfied or a page comes back short/empty, which means the listing
     # date has been reached and there's nothing earlier to fetch.
     _PAGE_LIMIT = 500
-    _MAX_PAGES = 20
+    _MAX_PAGES = 40   # 40 x 500 = 20000 = settings.backtest_candles
     _MAX_PAGES_SINCE = 10000
 
     def __init__(self, base_url: str | None = None):
