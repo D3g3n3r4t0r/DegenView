@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0294", "Archivio: provare una strategia salvata su un altro pair",
+     "Lorenzo, 15/10: 'applicare all'archivio strategie un pulsante in cui si puo' testare la strategia salvata su un altro asset [...] con gli stessi valori. A quel punto la strategia sarebbe testata su candele mai viste'.",
+     "media"),
     ("seed-0293", "Max return 4H: confronto storico / ultimi 12 mesi poco chiaro",
      "Lorenzo, 15/10: 'La discrepanza tra il risultato ottimizzato sugli anni escluso l'ultimo e il test sulle candele mai viste e' molto netta [...] vorrei conferma che correttamente viene applicata quella strategia con quei valori', poi 'inserisci anche piu' dettagli possibili nella schermata finale'.",
      "media"),

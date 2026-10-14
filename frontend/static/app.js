@@ -3568,10 +3568,20 @@
           <div class="arch-actions">
             <button type="button" class="arch-apply" data-id="${e.id}">Apply to chart</button>
             <button type="button" class="arch-alert" data-id="${e.id}">Enable alert</button>
+            <button type="button" class="arch-testpair" data-id="${e.id}" title="Same values on another pair: candles the search never saw">Test on another pair</button>
             <button type="button" class="arch-export" data-id="${e.id}">⤓ Excel</button>
             <button type="button" class="arch-share" data-id="${e.id}">⇪ Share</button>
             <button type="button" class="arch-del" data-id="${e.id}">Delete</button>
           </div>
+          <form class="arch-testpair-form hidden" data-form="${e.id}">
+            <input type="text" class="arch-testpair-symbol" placeholder="Pair, e.g. ETHUSDT" list="arch-pairs-${e.id}" autocomplete="off" required />
+            <datalist id="arch-pairs-${e.id}"></datalist>
+            <select class="arch-testpair-exch">
+              ${["mexc", "binance", "kucoin", "kraken"].map((x) => `<option value="${x}"${x === (e.exchange || "mexc") ? " selected" : ""}>${x.toUpperCase()}</option>`).join("")}
+            </select>
+            <button type="submit">Test</button>
+          </form>
+          <div class="arch-testpair-out" data-out="${e.id}"></div>
           <p class="arch-status hidden" data-status="${e.id}"></p>
         </li>`;
     };
@@ -3667,6 +3677,52 @@
         loadArchive();
       });
     });
+    // Test on another pair (Lorenzo, 15/10): same values, candles the search
+    // never saw — the whole history of the new pair and its last 12 months.
+    list.querySelectorAll(".arch-testpair").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const form = list.querySelector(`[data-form="${btn.dataset.id}"]`);
+        form.classList.toggle("hidden");
+        if (!form.classList.contains("hidden")) form.querySelector("input").focus();
+      });
+    });
+    list.querySelectorAll(".arch-testpair-form").forEach((form) => {
+      const id = form.dataset.form;
+      const input = form.querySelector("input");
+      const dl = form.querySelector("datalist");
+      let t = null;
+      input.addEventListener("input", () => {
+        clearTimeout(t);
+        t = setTimeout(async () => {
+          const q = input.value.trim();
+          if (q.length < 2) return;
+          try {
+            const items = await fetch(`/api/symbols?query=${encodeURIComponent(q)}`).then((r) => r.json());
+            dl.innerHTML = (items || []).filter((it) => it.asset_type === "crypto").slice(0, 12)
+              .map((it) => `<option value="${escapeHtml(it.symbol)}">${escapeHtml(it.provider || "")}</option>`).join("");
+          } catch { /* suggestions are optional */ }
+        }, 250);
+      });
+      form.addEventListener("submit", async (ev) => {
+        ev.preventDefault();
+        const out = list.querySelector(`[data-out="${id}"]`);
+        const symbol = input.value.trim().toUpperCase();
+        if (!symbol) return;
+        out.innerHTML = `<p class="panel-hint">Backtesting ${escapeHtml(symbol)} with the same values…</p>`;
+        try {
+          const resp = await fetch(`/api/archive/${id}/test-on-pair`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ symbol, asset_type: "crypto", exchange: form.querySelector("select").value }),
+          });
+          const body = await resp.json();
+          if (!resp.ok) throw new Error(typeof body.detail === "string" ? body.detail : `Error ${resp.status}`);
+          out.innerHTML = pairTestTable(body);
+        } catch (err) {
+          out.innerHTML = `<p class="arch-warn">⚠ ${escapeHtml(err.message || "Test failed")}</p>`;
+        }
+      });
+    });
+
     list.querySelectorAll(".arch-apply").forEach((btn) => {
       btn.addEventListener("click", () => {
         const entry = items.find((x) => x.id === btn.dataset.id);
@@ -11977,6 +12033,43 @@
 
   // RSI+BB 4H (15/10, "più dettagli possibili"): the history the search chose
   // on and the last 12 months it never saw, side by side, same rows.
+  function pairTestTable(r) {
+    const pct = (x) => (x == null ? "–" : `${x >= 0 ? "+" : ""}${Number(x).toFixed(1)}%`);
+    const num = (x, d = 0) => (x == null ? "–" : Number(x).toFixed(d));
+    const day = (t) => (t ? new Date(t * 1000).toLocaleDateString("it-IT") : "–");
+    const cls = (x) => (x == null ? "" : x >= 0 ? "pos" : "neg");
+    const h = r.history, y = r.last_year || {};
+    const has = !!r.last_year;
+    const row = (label, a, b) => `<tr><th>${label}</th><td>${a}</td><td>${has ? b : "–"}</td></tr>`;
+    let verdict = "";
+    if (has) {
+      verdict = y.return_pct <= 0
+        ? `On ${escapeHtml(r.symbol)} the same values lost money in the last 12 months.`
+        : h.annual_pct != null && y.return_pct >= h.annual_pct * 0.7
+          ? `On ${escapeHtml(r.symbol)} the same values held up: last 12 months in line with its average year.`
+          : `On ${escapeHtml(r.symbol)} positive, but below its average year.`;
+      verdict += ` Buy & hold in the same 12 months: ${pct(y.buy_hold_pct)} (${y.vs_buy_hold_pct >= 0 ? "strategy ahead by" : "strategy behind by"} ${pct(Math.abs(y.vs_buy_hold_pct)).replace("+", "")}).`;
+    }
+    return `
+      <div class="arch-testpair-title">${escapeHtml(r.symbol)} · ${escapeHtml(r.exchange.toUpperCase())} · ${escapeHtml(r.interval)} · ${r.candles} candles · same values</div>
+      <table class="lab-detail">
+        <thead><tr><th></th><th>Whole history</th><th>Last 12 months</th></tr></thead>
+        <tbody>
+          ${row("Period", `${day(h.from)} → ${day(h.to)}<br><small>${num(h.years, 1)} years</small>`, `${day(y.from)} → ${day(y.to)}`)}
+          ${row("Total return", `<b class="${cls(h.return_pct)}">${pct(h.return_pct)}</b>`, `<b class="${cls(y.return_pct)}">${pct(y.return_pct)}</b>`)}
+          ${row("Per year (average)", `<b class="${cls(h.annual_pct)}">${pct(h.annual_pct)}</b>`, `<b class="${cls(y.return_pct)}">${pct(y.return_pct)}</b>`)}
+          ${row("Trades", `${num(h.trades)} <small>(${num(h.trades_per_year, 1)}/year)</small>`, num(y.trades))}
+          ${row("Won / lost", `${num(h.wins)} / ${num(h.losses)}`, `${num(y.wins)} / ${num(y.losses)}`)}
+          ${row("Win rate", h.win_rate_pct == null ? "–" : `${num(h.win_rate_pct)}%`, y.win_rate_pct == null ? "–" : `${num(y.win_rate_pct)}%`)}
+          ${row("Profit factor", num(h.profit_factor, 2), num(y.profit_factor, 2))}
+          ${row("Max drawdown", pct(-Math.abs(h.max_drawdown_pct)), pct(-Math.abs(y.max_drawdown_pct)))}
+          ${row("Best / worst trade", `${pct(h.best_trade_pct)} / ${pct(h.worst_trade_pct)}`, `${pct(y.best_trade_pct)} / ${pct(y.worst_trade_pct)}`)}
+          ${row("Buy & hold", pct(h.buy_hold_pct), pct(y.buy_hold_pct))}
+        </tbody>
+      </table>
+      ${verdict ? `<div class="lab-best2-verify ${y.return_pct > 0 ? "pos" : "neg"}">${verdict}</div>` : ""}`;
+  }
+
   function detailTable(c) {
     const h = c.history, v = c.verification || {};
     const pct = (x) => (x == null ? "–" : `${x >= 0 ? "+" : ""}${Number(x).toFixed(1)}%`);

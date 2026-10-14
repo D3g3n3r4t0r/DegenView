@@ -5994,3 +5994,6 @@ html.embed-chart, html.embed-chart body, html.embed-chart .chart-area { backgrou
 .lab-detail td small { color: var(--ink-faint); }
 .lab-detail .pos { color: var(--bull); }
 .lab-detail .neg { color: var(--bear); }
+.arch-testpair-form { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.arch-testpair-form input { flex: 1; min-width: 140px; }
+.arch-testpair-title { margin-top: 8px; font-size: 12px; font-weight: 600; color: var(--ink); }
