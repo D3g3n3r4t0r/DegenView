@@ -11975,6 +11975,46 @@
       + `· buy & hold ${pct(v.buy_hold_pct)}</div>`;
   }
 
+  // RSI+BB 4H (15/10, "più dettagli possibili"): the history the search chose
+  // on and the last 12 months it never saw, side by side, same rows.
+  function detailTable(c) {
+    const h = c.history, v = c.verification || {};
+    const pct = (x) => (x == null ? "–" : `${x >= 0 ? "+" : ""}${Number(x).toFixed(1)}%`);
+    const num = (x, d = 0) => (x == null ? "–" : Number(x).toFixed(d));
+    const day = (t) => (t ? new Date(t * 1000).toLocaleDateString("it-IT") : "–");
+    const cls = (x) => (x == null ? "" : x >= 0 ? "pos" : "neg");
+    const t = v.unseen;
+    const row = (label, a, b, hint = "") => `<tr><th title="${hint}">${label}</th><td>${a}</td><td>${t ? b : "–"}</td></tr>`;
+    let verdict = "";
+    if (t && h.annual_pct != null && v.return_pct != null) {
+      const gap = v.return_pct - h.annual_pct;
+      verdict = v.return_pct <= 0
+        ? `Lost money on candles it never saw (${pct(v.return_pct)}): the history figure does not hold.`
+        : gap >= -h.annual_pct * 0.3
+          ? `Held up: the unseen year (${pct(v.return_pct)}) is in line with the average year of the history (${pct(h.annual_pct)}).`
+          : `Positive but well below the average year of the history (${pct(v.return_pct)} vs ${pct(h.annual_pct)}): part of the history figure was fitted to the past.`;
+      verdict += ` Buy & hold in the same 12 months: ${pct(v.buy_hold_pct)} (${v.vs_buy_hold_pct >= 0 ? "strategy ahead by" : "strategy behind by"} ${pct(Math.abs(v.vs_buy_hold_pct)).replace("+", "")}).`;
+    }
+    return `
+      <table class="lab-detail">
+        <thead><tr><th></th><th>History (chosen on)</th><th>Last 12 months · never seen</th></tr></thead>
+        <tbody>
+          ${row("Period", `${day(h.from)} → ${day(h.to)}<br><small>${num(h.years, 1)} years</small>`, `${day(v.from)} → ${day(v.to)}`)}
+          ${row("Total return", `<b class="${cls(h.return_pct)}">${pct(h.return_pct)}</b>`, `<b class="${cls(v.return_pct)}">${pct(v.return_pct)}</b>`)}
+          ${row("Per year (average)", `<b class="${cls(h.annual_pct)}">${pct(h.annual_pct)}</b>`, `<b class="${cls(v.return_pct)}">${pct(v.return_pct)}</b>`, "Compounded yearly return: the fair comparison between the two columns")}
+          ${row("Trades", `${num(h.trades)} <small>(${num(h.trades_per_year, 1)}/year)</small>`, num(v.trades))}
+          ${row("Won / lost", `${num(h.wins)} / ${num(h.losses)}`, `${num(v.wins)} / ${num(v.losses)}`)}
+          ${row("Win rate", h.win_rate_pct == null ? "–" : `${num(h.win_rate_pct)}%`, v.win_rate_pct == null ? "–" : `${num(v.win_rate_pct)}%`)}
+          ${row("Profit factor", num(h.profit_factor, 2), num(v.profit_factor, 2), "Gross gains / gross losses: above 1 the strategy earns")}
+          ${row("Max drawdown", pct(-Math.abs(h.max_drawdown_pct)), pct(-Math.abs(v.max_drawdown_pct)))}
+          ${row("Best / worst trade", `${pct(h.best_trade_pct)} / ${pct(h.worst_trade_pct)}`, `${pct(v.best_trade_pct)} / ${pct(v.worst_trade_pct)}`)}
+          ${t ? row("Buy & hold", "", pct(v.buy_hold_pct)) : ""}
+        </tbody>
+      </table>
+      ${verdict ? `<div class="lab-best2-verify ${v.return_pct > 0 ? "pos" : "neg"}">${verdict}</div>` : ""}
+      ${!t && v.skipped ? `<div class="lab-best2-verify muted">${escapeHtml(v.skipped)}</div>` : ""}`;
+  }
+
   function renderBestTwo(body) {
     const box = labEl("lab-best2-box");
     if (!box) return;
@@ -11985,7 +12025,9 @@
     // much of the return the neighbouring settings keep.
     const KIND = { solid: "Most solid", profitable: "Most profitable", "solid+profitable": "Most solid and most profitable" };
     const kinds = cands.some((c) => c.kind);
-    box.innerHTML = `<div class="lab-best2-title">${kinds ? "Most solid · most profitable" : `Best ${cands.length === 1 ? "result" : "two results"}`} · whole chart, a trade in every year between the first and the last</div>`
+    const held = cands.some((c) => c.verification && c.verification.unseen);
+    box.innerHTML = `<div class="lab-best2-title">${kinds ? "Most solid · most profitable" : `Best ${cands.length === 1 ? "result" : "two results"}`} · ${held ? "chosen without the last 12 months, then tested on them" : "whole chart, a trade in every year between the first and the last"}</div>`
+      + (kinds && body.data_used && body.data_used.note ? `<div class="lab-best2-note">${escapeHtml(body.data_used.note)} ${body.trials_evaluated ? `${body.trials_evaluated} combinations backtested.` : ""}</div>` : "")
       + cands.map((c, i) => `
       <div class="lab-best2-card${i === 0 ? " active" : ""}" data-i="${i}">
         <div class="lab-best2-rank">${kinds ? (c.kind === "profitable" ? "↑" : "◆") : `#${c.rank}`}</div>
@@ -11994,7 +12036,7 @@
           <div class="lab-best2-levels">OS ${c.params.rsi_oversold} · OB ${c.params.rsi_overbought}${kinds ? ` · BB ×${Number(c.params.bb_mult).toFixed(1)}` : ""}</div>
           <div class="lab-best2-meta">${c.verification && c.verification.unseen ? "History before the last 12 months" : "Return"} <b>${pct(c.total_return_pct)}</b> · DD ${pct(-Math.abs(c.max_drawdown_pct))} · ${c.num_trades} trades${c.win_rate_pct != null ? ` · win ${c.win_rate_pct.toFixed(0)}%` : ""}</div>
           ${c.solidity != null ? `<div class="lab-best2-meta">Solidity <b>${Math.round(c.solidity * 100)}%</b>${c.neighbours ? ` · ×${(Number(c.params.bb_mult) - 0.1).toFixed(1)}: ${pct(c.neighbours.mult_down)} · ×${(Number(c.params.bb_mult) + 0.1).toFixed(1)}: ${pct(c.neighbours.mult_up)}` : ""}</div>` : ""}
-          ${verifyLine(c.verification)}
+          ${c.history ? detailTable(c) : verifyLine(c.verification)}
         </div>
         <button type="button" class="lab-best2-use">${i === 0 ? "In use" : "Use"}</button>
       </div>`).join("");

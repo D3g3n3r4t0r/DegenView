@@ -7218,6 +7218,9 @@ class OptimizeCandidate(BaseModel):
     # RSI+BB 4H: the same search run on the data up to a year ago, and what
     # its pick of this kind did in the last year, which it never saw.
     verification: dict | None = None
+    # RSI+BB 4H: the history the search chose on (period, total and yearly
+    # return, trades a year, win rate, profit factor, drawdown, best/worst).
+    history: dict | None = None
 
 
 class Overfitting(BaseModel):
@@ -7351,10 +7354,11 @@ async def _optimize_payload(
     """
     bp = backtest_params.model_dump()
 
-    def on(frame):
+    def on(frame, trade_from=None):
         def run(params: dict, intrabar: bool = True) -> BacktestResult:
             return _chart_backtest(frame, {**(strategy_params or {}), **params}, bp,
-                                   strategy_name, asset_type, intrabar=intrabar)
+                                   strategy_name, asset_type, intrabar=intrabar,
+                                   trade_from=trade_from)
         return run
 
     full = on(df)
@@ -7439,6 +7443,8 @@ async def _max_return_payload(strategy_name, df, full, constraints, say, should_
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     if strategy_name == RSI_BB_4H and on is not None:
+        for c in top:
+            c["history"] = _bt_facts(c["backtest"], search_df.index[0], search_df.index[-1])
         verification = await _last_year_check(df, on, top, say, held_out)
         for c in top:
             c["verification"] = (verification.get("picks") or {}).get(c["kind"]) \
@@ -7474,6 +7480,7 @@ async def _max_return_payload(strategy_name, df, full, constraints, say, should_
                 profit_factor=c["backtest"].profit_factor,
                 kind=c.get("kind"), solidity=c.get("solidity"),
                 neighbours=c.get("neighbours"), verification=c.get("verification"),
+                history=c.get("history"),
             )
             for c in top
         ],
@@ -7483,27 +7490,62 @@ async def _max_return_payload(strategy_name, df, full, constraints, say, should_
 LAST_YEAR_DAYS = 365
 
 
+WARMUP_CANDLES = 300
+
+
+def _bt_facts(bt: BacktestResult, start, end) -> dict:
+    """The figures a result card shows for one period."""
+    days = max((end - start).total_seconds() / 86400, 1.0)
+    years = days / 365.25
+    ret = bt.total_return_pct
+    annual = ((1 + ret / 100) ** (1 / years) - 1) * 100 if ret > -100 and years > 0 else None
+    wins = [t for t in bt.trades if t.pnl_abs > 0]
+    return {
+        "from": int(start.timestamp()), "to": int(end.timestamp()),
+        "years": round(years, 2),
+        "return_pct": round(ret, 2),
+        "annual_pct": None if annual is None else round(annual, 2),
+        "trades": bt.num_trades,
+        "trades_per_year": round(bt.num_trades / years, 1),
+        "win_rate_pct": None if bt.win_rate_pct is None else round(bt.win_rate_pct, 1),
+        "wins": len(wins), "losses": bt.num_trades - len(wins),
+        "profit_factor": None if bt.profit_factor is None else round(bt.profit_factor, 2),
+        "max_drawdown_pct": round(bt.max_drawdown_pct, 2),
+        "best_trade_pct": round(max((t.pnl_pct for t in bt.trades), default=0.0), 2),
+        "worst_trade_pct": round(min((t.pnl_pct for t in bt.trades), default=0.0), 2),
+    }
+
+
 async def _last_year_check(df, on, top: list[dict], say, held_out=None) -> dict:
     """The values of each result shown (most solid, most profitable) run on
-    the last 12 months. Since 15/10 the search does not see those months
-    (`held_out`), so this is a test on candles it never saw — Lorenzo: "il
-    primo backtest dovrebbe essere fatto escludendo gli ultimi 12 mesi"."""
+    the last 12 months, which the search never saw (Lorenzo, 15/10: "il
+    primo backtest dovrebbe essere fatto escludendo gli ultimi 12 mesi").
+
+    The indicators are warmed up on the WARMUP_CANDLES before the cut (they
+    use only the past), and no trade opens before it: starting cold, the
+    first ~20 candles of the year could never signal."""
     say = say or (lambda _m: None)
     if held_out is None or len(held_out) < 30:
         return {"skipped": "less than two years of candles: the search used them all, nothing left to test on"}
-    run_test = on(held_out)
-    hold = float(held_out["close"].iloc[-1] / held_out["close"].iloc[0] - 1) * 100
+    cut = held_out.index[0]
+    start = max(0, df.index.searchsorted(cut) - WARMUP_CANDLES)
+    run_test = on(df.iloc[start:], trade_from=cut)
+    first, last = float(held_out["close"].iloc[0]), float(held_out["close"].iloc[-1])
+    hold = (last / first - 1) * 100
     out = {}
     for c in top:
         bt = await _cpu(partial(run_test, c["params"]))
+        facts = _bt_facts(bt, cut, held_out.index[-1])
         out[c["kind"]] = {
-            "from": int(held_out.index[0].timestamp()),
+            **facts,
             "unseen": True,
             "params": c["params"],
-            "test_return_pct": round(bt.total_return_pct, 2),
-            "test_trades": bt.num_trades,
-            "test_max_drawdown_pct": round(bt.max_drawdown_pct, 2),
+            # kept under the old names for the cards already rendered
+            "test_return_pct": facts["return_pct"],
+            "test_trades": facts["trades"],
+            "test_max_drawdown_pct": facts["max_drawdown_pct"],
             "buy_hold_pct": round(hold, 2),
+            "vs_buy_hold_pct": round(facts["return_pct"] - hold, 2),
         }
         say(f"last 12 months (never seen), {c['kind']}: {bt.total_return_pct:+.1f}% "
             f"({bt.num_trades} trades), buy & hold {hold:+.1f}%")
@@ -7511,13 +7553,22 @@ async def _last_year_check(df, on, top: list[dict], say, held_out=None) -> dict:
 
 
 def _chart_backtest(df, strategy_params: dict, backtest_params: dict,
-                    strategy_name: str, asset_type: str, intrabar: bool = True) -> BacktestResult:
+                    strategy_name: str, asset_type: str, intrabar: bool = True,
+                    trade_from=None) -> BacktestResult:
     """The backtest exactly as Run and the chart compute it (see
     /api/backtest/deep): one definition, so an optimized figure and a manual
-    one can be compared."""
+    one can be compared.
+
+    `trade_from`: the candles before it only warm the indicators up; no
+    trade opens before it (the held-out year of Max return 4H, 15/10)."""
     sig = None
-    if asset_type == "dex" and strategy_name in STRATEGY_REGISTRY:
-        sig = spot_only(STRATEGY_REGISTRY[strategy_name](df, strategy_params))
+    if (asset_type == "dex" or trade_from is not None) and strategy_name in STRATEGY_REGISTRY:
+        sig = STRATEGY_REGISTRY[strategy_name](df, strategy_params)
+        if asset_type == "dex":
+            sig = spot_only(sig)
+        if trade_from is not None:
+            sig = sig.copy()
+            sig.loc[sig.index < trade_from, :] = False
     return run_backtest(
         df, strategy_params, backtest_params, strategy_name=strategy_name,
         signals=sig, intrabar_fn=_intrabar_fn(asset_type, strategy_name) if intrabar else None,

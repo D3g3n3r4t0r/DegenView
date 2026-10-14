@@ -117,6 +117,10 @@ def test_rsi_bb_4h_carries_a_last_year_check(client, monkeypatch):
         # 15/10: the last-year line tests the very values shown on the card
         assert v and "test_return_pct" in v and v["params"] == c["params"] and v["unseen"]
         assert v["from"] < int(long_df.index[-1].timestamp())
+        # 15/10: warm indicators, but no trade before the cut; full details
+        assert v["trades"] == v["wins"] + v["losses"]
+        h = c["history"]
+        assert h["to"] < v["from"] and h["years"] > 0 and "annual_pct" in h and "profit_factor" in h
     # 15/10: the search never sees the last 12 months
     cut = long_df.index[-1] - pd.Timedelta(days=365)
     assert body["top_candidates"][0]["num_trades"] == main.run_backtest(

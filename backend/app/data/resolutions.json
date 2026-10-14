@@ -2931,5 +2931,11 @@
     "at": 1792018653,
     "summary": "Su RSI+BB 4H Max return cerca ipervenduto 20-40 e ipercomprato 65-85 (circa 2 volte piu' veloce) e accetta solo risultati con almeno 3 trade per anno in media e almeno un trade in ogni anno esaminato.",
     "detail": "Anni esaminati: quelli dello storico usato per scegliere, esclusi il primo e l'ultimo (gli ultimi 12 mesi restano fuori dalla ricerca). Esempio 2023-2025: servono almeno 9 trade in totale in quei tre anni e nessuno dei tre vuoto. Le altre due RSI+BB restano con 10-40 / 60-90 e un trade per anno."
+  },
+  "seed-0293": {
+    "status": "risolto",
+    "at": 1792020045,
+    "summary": "Confermato: sui 12 mesi esclusi gira la stessa strategia con gli stessi valori e le stesse impostazioni. Ora gli indicatori partono gia' 'caldi' all'inizio dei 12 mesi, e ogni scheda mostra una tabella storico / ultimi 12 mesi con rendimento totale e medio annuo, trade, vinti/persi, win rate, profit factor, drawdown, miglior/peggior trade, buy & hold e un giudizio.",
+    "detail": "Il confronto giusto e' tra il rendimento medio per anno dello storico e quello dell'ultimo anno: lo storico su piu' anni si accumula. Un calo sui mesi mai visti e' l'effetto normale della scelta fra migliaia di combinazioni (sovra-adattamento), ed e' quello che il test serve a misurare. Correzione tecnica: prima i 12 mesi partivano da zero e le prime ~20 candele non potevano dare segnali; ora gli indicatori usano le 300 candele precedenti e nessun trade si apre prima del taglio."
   }
 }

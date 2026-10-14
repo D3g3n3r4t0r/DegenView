@@ -5986,3 +5986,11 @@ html.embed-chart, html.embed-chart body, html.embed-chart .chart-area { backgrou
 .lab-best2-verify { margin-top: 6px; padding: 6px 8px; border-radius: 8px; font-size: 12px; line-height: 1.4; background: var(--bg-raised); color: var(--ink-dim); }
 .lab-best2-verify.pos b { color: var(--bull); }
 .lab-best2-verify.neg b { color: var(--bear); }
+.lab-best2-note { font-size: 12px; color: var(--ink-dim); line-height: 1.4; }
+.lab-detail { width: 100%; margin-top: 8px; border-collapse: collapse; font-size: 12px; }
+.lab-detail th, .lab-detail td { padding: 4px 6px; border-bottom: 1px solid var(--border); text-align: right; vertical-align: top; }
+.lab-detail th:first-child { text-align: left; color: var(--ink-dim); font-weight: 500; white-space: nowrap; }
+.lab-detail thead th { font-size: 10px; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-faint); text-align: right; }
+.lab-detail td small { color: var(--ink-faint); }
+.lab-detail .pos { color: var(--bull); }
+.lab-detail .neg { color: var(--bear); }
