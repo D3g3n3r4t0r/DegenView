@@ -114,5 +114,6 @@ def test_rsi_bb_4h_carries_a_last_year_check(client, monkeypatch):
     assert body["top_candidates"], body
     for c in body["top_candidates"]:
         v = c["verification"]
-        assert v and "test_return_pct" in v and v["chosen_until"] < int(long_df.index[-1].timestamp())
-        assert v["params"]["bb_mult"] in (2.4, 2.5)
+        # 15/10: the last-year line tests the very values shown on the card
+        assert v and "test_return_pct" in v and v["params"] == c["params"]
+        assert v["from"] < int(long_df.index[-1].timestamp())

@@ -668,7 +668,12 @@ def confirmed_events(
     # Columns as plain lists instead of signals.iterrows() (overhaul plan,
     # week 2): same values, same order, no Series per row.
     cols = {c: signals[c].tolist() for c in ("entry_long", "entry_short", "exit_long", "exit_short")}
-    for i, ts in enumerate(signals.index):
+    # Bars past the last closed one, by position: iterating the DatetimeIndex
+    # built a Timestamp per bar and was 40% of a backtest on 20 000 candles.
+    sig_index = signals.index
+    n_confirmed = (len(sig_index) if last_confirmed_ts is None
+                   else int(sig_index.searchsorted(last_confirmed_ts, side="right")))
+    for i in range(len(sig_index)):
         prev_position = position
         if position == 1 and cols["exit_long"][i]:
             position = 0
@@ -681,8 +686,9 @@ def confirmed_events(
 
         if position == prev_position:
             continue
-        if last_confirmed_ts is not None and ts > last_confirmed_ts:
+        if i >= n_confirmed:
             continue  # transition happened on the still-forming candle; not confirmed yet
+        ts = sig_index[i]
 
         if prev_position == 0 and position == 1:
             signal_type = "entry_long"

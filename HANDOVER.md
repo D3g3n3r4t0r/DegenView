@@ -1,3 +1,7 @@
+# 2026-10-15 — Max return 4H piu' veloce, verifica sui valori mostrati — `seed-0290` (Claude, a mano)
+
+Lorenzo: "deve farlo applicando i valori della strategia piu' solida". `_last_year_check(df, on, top, say)` prova i params delle schede sull'ultimo anno (non piu' ricerca ripetuta; e' in-sample, detto nella risoluzione). Velocita': `backtest.epoch_seconds` e `confirmed_events` per posizione (3,7x, identico); `max_return_search_3d(coarse=True)`: passi 2/0.2 poi ±3/±0.3 attorno a COARSE_SEEDS=6 per tipo (5x). Misura: 12 000 candele 4h, 23 s contro 115 s, stessi risultati.
+
 # 2026-10-14 — Ricerca gemme solo alle 03:00, giro lungo — `seed-0288` (Claude, a mano)
 
 Lorenzo (a voce): "La ricerca delle gemme falla solo di notte, un giro unico alle 3 di notte, bella grossa". config: `onchain_nightly_hour=3`, `extra_times=""`, `hourly=False`, `max_hours=6.0`. Sostituisce 22:00 + 11:35 + giri orari (12-13/10). Pausa durante le ottimizzazioni e deploy-non-crash restano.

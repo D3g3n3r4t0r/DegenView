@@ -11962,18 +11962,17 @@
   // Max return gives the two best pairs (Lorenzo, 13/10: "avere come esito
   // finale i due migliori risultati"). The first is already in the fields;
   // "Use" puts the other one there and runs it, the same backtest as Run.
-  // "Verifica sull'ultimo anno" (14/10): the same search chosen on the data
-  // up to a year ago, run on the last year it never saw.
+  // "Verifica sull'ultimo anno": the values of this very card on the last
+  // year of candles (15/10: "applicando i valori della strategia").
   function verifyLine(v) {
     if (!v) return "";
-    if (v.skipped) return `<div class="lab-best2-verify muted">Last-year check: ${escapeHtml(v.skipped)}</div>`;
+    if (v.skipped) return `<div class="lab-best2-verify muted">Last year: ${escapeHtml(v.skipped)}</div>`;
     const pct = (x) => (x == null ? "–" : `${x >= 0 ? "+" : ""}${x.toFixed(1)}%`);
-    const until = new Date(v.chosen_until * 1000).toLocaleDateString("it-IT");
-    const p = v.params || {};
+    const from = new Date(v.from * 1000).toLocaleDateString("it-IT");
     const good = v.test_return_pct > 0;
-    return `<div class="lab-best2-verify ${good ? "pos" : "neg"}">Last-year check · chosen on data up to ${until}: `
-      + `OS ${p.rsi_oversold} · OB ${p.rsi_overbought} · ×${Number(p.bb_mult).toFixed(1)} → last year <b>${pct(v.test_return_pct)}</b> `
-      + `(${v.test_trades} trades, DD ${pct(-Math.abs(v.test_max_drawdown_pct))}; buy & hold ${pct(v.buy_hold_pct)})</div>`;
+    return `<div class="lab-best2-verify ${good ? "pos" : "neg"}">Last year (from ${from}), these values: `
+      + `<b>${pct(v.test_return_pct)}</b> · ${v.test_trades} trades · DD ${pct(-Math.abs(v.test_max_drawdown_pct))} `
+      + `· buy & hold ${pct(v.buy_hold_pct)}</div>`;
   }
 
   function renderBestTwo(body) {

@@ -91,6 +91,14 @@ def intrabar_path(o: float, h: float, low: float, c: float,
     return out
 
 
+def epoch_seconds(index) -> list[int]:
+    """Unix seconds of a DatetimeIndex, vectorised and unit-safe (pandas may
+    store ns or us). Same values as [int(ts.timestamp()) for ts in index]."""
+    idx = pd.DatetimeIndex(index)
+    epoch = pd.Timestamp(0, tz=idx.tz) if idx.tz is not None else pd.Timestamp(0)
+    return ((idx - epoch) // pd.Timedelta(seconds=1)).tolist()
+
+
 def intrabar_prices(df: pd.DataFrame, events: list[StrategySignal], params: dict | None,
                     compute_fn) -> dict[int, float]:
     """Signal time -> first price inside the signal candle at which the
@@ -164,7 +172,7 @@ def run_backtest(
     # per ogni segnale.
     next_open_by_ts: dict[int, float] = {}
     if bp.get("fill_at") == "next_open":
-        timestamps = [int(ts.timestamp()) for ts in df.index]
+        timestamps = epoch_seconds(df.index)
         opens = df["open"].tolist()
         for idx in range(len(timestamps) - 1):
             next_open_by_ts[timestamps[idx]] = float(opens[idx + 1])
@@ -233,7 +241,7 @@ def run_backtest(
     # Plain arrays instead of df.iterrows(): the loop is the same, bar by bar,
     # but without building a Series per row (overhaul plan, week 2; checked
     # against the previous implementation by tests/test_engine_equivalence.py).
-    stamps = [int(ts.timestamp()) for ts in df.index]
+    stamps = epoch_seconds(df.index)
     lows = df["low"].to_numpy()
     highs = df["high"].to_numpy()
     for i, t in enumerate(stamps):
