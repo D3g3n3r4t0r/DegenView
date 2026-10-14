@@ -97,3 +97,28 @@ def test_an_unknown_strategy_is_refused(client):
     resp = client.post(f"/api/archive/{entry['id']}/apply-to-alert")
     assert resp.status_code == 400
     assert "Unknown" in resp.json()["detail"]
+
+
+def test_testing_an_entry_on_another_pair(client, monkeypatch):
+    # Lorenzo, 15/10: "testare la strategia salvata su un altro asset [...]
+    # con gli stessi valori"
+    import numpy as np
+    import pandas as pd
+    n = 3000
+    close = 100 + np.cumsum(np.random.default_rng(2).normal(0, 1, n)) + 10 * np.sin(np.arange(n) / 9)
+    df = pd.DataFrame({"open": close, "high": close + 1, "low": close - 1, "close": close,
+                       "volume": np.full(n, 1000.0)},
+                      index=pd.date_range("2023-01-01", periods=n, freq="4h", tz="UTC"))
+
+    class _P:
+        async def fetch_ohlcv(self, symbol, interval, outputsize, since_ms=None):
+            return df
+    monkeypatch.setattr(main, "get_provider", lambda *a, **k: _P())
+    entry = _archived()
+    resp = client.post(f"/api/archive/{entry['id']}/test-on-pair", json={"symbol": "ethusdt"})
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["symbol"] == "ETHUSDT" and body["params"] == FOUND
+    assert body["history"]["trades"] >= body["last_year"]["trades"]
+    assert body["last_year"]["from"] >= int((df.index[-1] - pd.Timedelta(days=366)).timestamp())
+    assert client.post("/api/archive/nope/test-on-pair", json={"symbol": "X"}).status_code == 404

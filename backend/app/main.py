@@ -8418,6 +8418,70 @@ class ApplyToAlertRequest(BaseModel):
     market: Literal["spot", "futures"] = "spot"
 
 
+class TestOnPairRequest(BaseModel):
+    symbol: str = Field(..., min_length=1, max_length=80)
+    asset_type: AssetType = "crypto"
+    exchange: CryptoExchange = "mexc"
+
+
+@app.post("/api/archive/{entry_id}/test-on-pair")
+async def test_archive_entry_on_pair(
+    entry_id: str, req: TestOnPairRequest, user: User = Depends(auth.get_current_user)
+) -> dict:
+    """The archived configuration, unchanged, on another pair (Lorenzo, 15/10:
+    "testare la strategia salvata su un altro asset [...] con gli stessi
+    valori"). Same strategy, parameters, timeframe and backtest settings; two
+    readings: the whole history of the new pair, and its last 12 months alone
+    (new pair and new period: the strictest test), next to buy & hold."""
+    _classic_priority()
+    entry = archive_store.get(entry_id, user.id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Archive entry not found")
+    strategy_name = entry.get("strategy_name", "")
+    if strategy_name not in AVAILABLE_STRATEGIES:
+        raise HTTPException(status_code=400, detail=f"Unknown strategy: {strategy_name}")
+    symbol = req.symbol.strip()
+    interval = entry.get("interval") or DEFAULT_INTERVALS["ltf"]
+    backtest_interval = backtest_interval_for(interval)
+    provider = get_provider(req.asset_type, req.exchange)
+    cache_key = (f"{req.asset_type}:{req.exchange}:{symbol.upper()}:backtest", backtest_interval,
+                 settings.backtest_candles)
+    try:
+        df = await _fetch_cached(cache_key, provider, symbol, backtest_interval, settings.backtest_candles)
+    except ProviderError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if df.empty:
+        raise HTTPException(status_code=502, detail=f"No data for {symbol}")
+    params = {**StrategyParamsQuery().model_dump(), **(entry.get("params") or {})}
+    bp = {**BacktestParamsQuery().model_dump(), **(entry.get("backtest_params") or {})}
+
+    def whole():
+        return _chart_backtest(df, params, bp, strategy_name, req.asset_type)
+    full_bt = await _cpu(whole)
+    out = {
+        "symbol": symbol.upper(), "asset_type": req.asset_type, "exchange": req.exchange,
+        "interval": backtest_interval, "strategy_name": strategy_name, "params": entry.get("params") or {},
+        "candles": len(df),
+        "history": {**_bt_facts(full_bt, df.index[0], df.index[-1]),
+                    "buy_hold_pct": round((float(df["close"].iloc[-1]) / float(df["close"].iloc[0]) - 1) * 100, 2)},
+        "last_year": None,
+    }
+    cut = df.index[-1] - pd.Timedelta(days=LAST_YEAR_DAYS)
+    if (df.index[-1] - df.index[0]).days >= LAST_YEAR_DAYS + 30:
+        start = max(0, df.index.searchsorted(cut) - WARMUP_CANDLES)
+        frame = df.iloc[start:]
+        first_i = df.index.searchsorted(cut)
+
+        def year():
+            return _chart_backtest(frame, params, bp, strategy_name, req.asset_type, trade_from=cut)
+        yb = await _cpu(year)
+        hold = (float(df["close"].iloc[-1]) / float(df["close"].iloc[first_i]) - 1) * 100
+        facts = _bt_facts(yb, df.index[first_i], df.index[-1])
+        out["last_year"] = {**facts, "buy_hold_pct": round(hold, 2),
+                            "vs_buy_hold_pct": round(facts["return_pct"] - hold, 2)}
+    return out
+
+
 @app.post("/api/archive/{entry_id}/apply-to-alert")
 async def apply_archive_entry_to_alert(
     entry_id: str, req: ApplyToAlertRequest = ApplyToAlertRequest(), user: User = Depends(auth.get_current_user)

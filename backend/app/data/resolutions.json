@@ -2937,5 +2937,11 @@
     "at": 1792020045,
     "summary": "Confermato: sui 12 mesi esclusi gira la stessa strategia con gli stessi valori e le stesse impostazioni. Ora gli indicatori partono gia' 'caldi' all'inizio dei 12 mesi, e ogni scheda mostra una tabella storico / ultimi 12 mesi con rendimento totale e medio annuo, trade, vinti/persi, win rate, profit factor, drawdown, miglior/peggior trade, buy & hold e un giudizio.",
     "detail": "Il confronto giusto e' tra il rendimento medio per anno dello storico e quello dell'ultimo anno: lo storico su piu' anni si accumula. Un calo sui mesi mai visti e' l'effetto normale della scelta fra migliaia di combinazioni (sovra-adattamento), ed e' quello che il test serve a misurare. Correzione tecnica: prima i 12 mesi partivano da zero e le prime ~20 candele non potevano dare segnali; ora gli indicatori usano le 300 candele precedenti e nessun trade si apre prima del taglio."
+  },
+  "seed-0294": {
+    "status": "risolto",
+    "at": 1792020767,
+    "summary": "Ogni voce dell'archivio ha il tasto 'Test on another pair': scegli coppia ed exchange e la strategia gira con gli stessi valori e impostazioni, su tutta la storia del nuovo pair e sui suoi ultimi 12 mesi, con buy & hold e giudizio.",
+    "detail": "Stessa strategia, parametri, timeframe, commissioni, dimensione e riempimento della voce. Due colonne: storia intera del nuovo pair e ultimi 12 mesi (nuovo asset e nuovo periodo: il test piu' severo); indicatori riscaldati sulle 300 candele prima dei 12 mesi. Nota: sullo stesso periodo le crypto si muovono insieme, quindi la colonna degli ultimi 12 mesi e' quella che conta di piu'. Vale per tutte le strategie dell'archivio."
   }
 }

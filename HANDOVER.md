@@ -1,3 +1,7 @@
+# 2026-10-15 — Archivio: test su un altro pair — `seed-0294` (Claude, a mano)
+
+Lorenzo: "un pulsante in cui si puo' testare la strategia salvata su un altro asset [...] con gli stessi valori". `POST /api/archive/{{id}}/test-on-pair` (storia intera + ultimi 12 mesi con warm-up, `_bt_facts`), Lab `pairTestTable`. Prima, stessa notte: Max return 4H con ultimi 12 mesi esclusi, 3 trade/anno (opzione B), range 20-40/65-85, tabella storico/mai visti.
+
 # 2026-10-15 — Max return 4H: ultimi 12 mesi esclusi dalla ricerca — `seed-0291` (Claude, a mano)
 
 Lorenzo: "lasciare sempre l'ultimo anno libero da backtest [...] candele mai viste". `_max_return_payload`: per RSI_BB_4H con >= 2 anni, `search_df` = prima di 365 giorni fa, `held_out` = ultimi 365; `_last_year_check(..., held_out)` con `unseen: True`. Nucleo veloce del backtest proposto e rimandato da Lorenzo ("per il momento fai solo l'esclusione").
