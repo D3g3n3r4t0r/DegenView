@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0290", "Max return 4H: lento, e la verifica sull'ultimo anno usa valori diversi da quelli mostrati",
+     "Lorenzo, 15/10: 'il test finale sull'anno scoperto lo fa con una strategia dai valori diversi [...] Cosi' non ha senso, deve farlo applicando i valori della strategia piu' solida'; e su velocita': 'Ok, procedi' (due passate + calcolo piu' leggero).",
+     "alta"),
     ("seed-0289", "Backtest e ottimizzazione a 4H vanno indietro solo ~2 anni",
      "Lorenzo, 14/10: 'Abbiamo un problema con la strategia RSI+BB 4H: non avevamo tenuto conto del limite che abbiamo con le candele. Non riusciamo ad andare indietro nel grafico a sufficienza'. Era il nostro tetto di 5000 candele, non le API; scelta sua: 20000.",
      "alta"),

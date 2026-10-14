@@ -38,7 +38,7 @@ def test_solidity_reads_the_neighbours():
 
 def test_two_kinds_and_the_profitable_one_is_never_hollow(monkeypatch):
     monkeypatch.setattr(optimize, "MAX_RETURN_MULTS", [2.4, 2.5, 2.6])
-    params, bt, n, out = optimize.max_return_search_3d(RSI_BB_4H, _bt)
+    params, bt, n, out = optimize.max_return_search_3d(RSI_BB_4H, _bt, coarse=False)
     assert n == 961 * 3
     kinds = [c["kind"] for c in out]
     assert kinds in (["solid", "profitable"], ["solid+profitable"])
@@ -49,3 +49,14 @@ def test_two_kinds_and_the_profitable_one_is_never_hollow(monkeypatch):
         solid, profit = out
         assert profit["backtest"].total_return_pct >= solid["backtest"].total_return_pct
         assert solid["score"] >= profit["score"]
+
+
+def test_coarse_pass_finds_what_the_full_grid_finds(monkeypatch):
+    # 15/10: first pass at step 2 / 0.2, then full resolution around the best.
+    monkeypatch.setattr(optimize, "MAX_RETURN_MULTS", [2.3, 2.4, 2.5, 2.6, 2.7])
+    full = optimize.max_return_search_3d(RSI_BB_4H, _bt, coarse=False)
+    fast = optimize.max_return_search_3d(RSI_BB_4H, _bt, coarse=True)
+    assert fast[2] < full[2]
+    best_full = full[3][0]["backtest"].total_return_pct * full[3][0]["solidity"]
+    best_fast = fast[3][0]["backtest"].total_return_pct * fast[3][0]["solidity"]
+    assert best_fast >= 0.9 * best_full

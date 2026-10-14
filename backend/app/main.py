@@ -7425,18 +7425,11 @@ async def _max_return_payload(strategy_name, df, full, constraints, say, should_
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    verification = None
     if strategy_name == RSI_BB_4H and on is not None:
-        verification = await _last_year_check(strategy_name, df, on, constraints, say,
-                                              should_stop, in_candle)
-        picks = (verification or {}).get("picks") or {}
+        verification = await _last_year_check(df, on, top, say)
         for c in top:
-            # The year-ago search may merge or split the two kinds differently.
-            mine = picks.get(c["kind"]) or picks.get("solid+profitable")
-            if mine is None and c["kind"] == "solid+profitable":
-                mine = picks.get("solid") or picks.get("profitable")
-            c["verification"] = mine or ({"skipped": verification["skipped"]}
-                                         if verification and verification.get("skipped") else None)
+            c["verification"] = (verification.get("picks") or {}).get(c["kind"]) \
+                or ({"skipped": verification["skipped"]} if verification.get("skipped") else None)
     return OptimizeResult(
         params=params,
         backtest=bt.model_copy(update={"interval": backtest_interval, "oos_trades": []}),
@@ -7474,43 +7467,35 @@ async def _max_return_payload(strategy_name, df, full, constraints, say, should_
 LAST_YEAR_DAYS = 365
 
 
-async def _last_year_check(strategy_name, df, on, constraints, say, should_stop,
-                           in_candle: bool) -> dict | None:
-    """"Verifica sull'ultimo anno" (Lorenzo, 14/10, RSI+BB 4H only): the same
-    search, choosing on the candles up to a year ago, then its picks run on
-    the last year alone. It does not change the result shown: it says how
-    much a choice made this way held up on candles it had not seen."""
+async def _last_year_check(df, on, top: list[dict], say) -> dict:
+    """"Verifica sull'ultimo anno" (RSI+BB 4H only): the values of each result
+    shown — most solid, most profitable — run on the last year of candles.
+
+    Lorenzo, 15/10: the first version re-ran the search on the data up to a
+    year ago and tested what THAT picked, so the line showed other values:
+    "cosi' non ha senso, deve farlo applicando i valori della strategia piu'
+    solida". It now tests exactly the values shown. Those were chosen on the
+    whole chart, last year included, so this is how they did lately, not a
+    test on unseen candles."""
     say = say or (lambda _m: None)
     cut = df.index[-1] - pd.Timedelta(days=LAST_YEAR_DAYS)
-    train, test = df[df.index < cut], df[df.index >= cut]
-    if len(train) < 300 or (train.index[-1] - train.index[0]).days < LAST_YEAR_DAYS:
+    test = df[df.index >= cut]
+    if (df.index[-1] - df.index[0]).days < 2 * LAST_YEAR_DAYS or len(test) < 30:
         return {"skipped": "less than two years of candles: nothing to verify on"}
-    say(f"last-year check: choosing on candles up to {cut:%d/%m/%Y}, then testing on the last year")
-    run_train, run_test = on(train), on(test)
-    try:
-        _, _, _, picks = await _cpu(partial(
-            max_return_search_3d, strategy_name, run_train,
-            constraints=constraints, progress=None, should_stop=should_stop,
-            years=calendar_years(train.index),
-            fast_backtest=partial(run_train, intrabar=False) if in_candle else None,
-        ))
-    except (ValueError, NoCandidateMeetsConstraints) as exc:
-        return {"skipped": f"no choice possible on the data up to {cut:%d/%m/%Y}: {exc}"}
+    run_test = on(test)
     hold = float(test["close"].iloc[-1] / test["close"].iloc[0] - 1) * 100
     out = {}
-    for p in picks:
-        bt = await _cpu(partial(run_test, p["params"]))
-        out[p["kind"]] = {
-            "chosen_until": int(cut.timestamp()),
-            "params": p["params"],
-            "train_return_pct": round(p["backtest"].total_return_pct, 2),
+    for c in top:
+        bt = await _cpu(partial(run_test, c["params"]))
+        out[c["kind"]] = {
+            "from": int(cut.timestamp()),
+            "params": c["params"],
             "test_return_pct": round(bt.total_return_pct, 2),
             "test_trades": bt.num_trades,
             "test_max_drawdown_pct": round(bt.max_drawdown_pct, 2),
             "buy_hold_pct": round(hold, 2),
         }
-        say(f"last-year check, {p['kind']}: OS {p['params']['rsi_oversold']} OB {p['params']['rsi_overbought']} "
-            f"×{p['params']['bb_mult']} → last year {bt.total_return_pct:+.1f}% ({bt.num_trades} trades), "
+        say(f"last year, {c['kind']}: {bt.total_return_pct:+.1f}% ({bt.num_trades} trades), "
             f"buy & hold {hold:+.1f}%")
     return {"picks": out}
 
