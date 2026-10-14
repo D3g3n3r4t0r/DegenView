@@ -62,15 +62,17 @@ class Settings(BaseSettings):
     # serata". Hour in Europe/Rome; the run stops when the queue is empty or
     # after max_hours. False: the old loops, as before.
     onchain_nightly_enabled: bool = True
-    onchain_nightly_hour: int = 22
+    # Lorenzo, 14/10: "La ricerca delle gemme falla solo di notte [...] alle
+    # tre va bene [...] farne una bella grossa": one run at 03:00, long.
+    onchain_nightly_hour: int = 3
     # More daily runs, "HH:MM" comma-separated, same logic and window.
     # Lorenzo, 08/10: "aggiungi un check oltre che alle 22, anche alle 11.35".
-    onchain_nightly_extra_times: str = "11:35"
-    onchain_nightly_max_hours: float = 2.0
+    onchain_nightly_extra_times: str = ""
+    onchain_nightly_max_hours: float = 6.0   # 03:00-09:00 at most
     # Lorenzo, 12/10: "la nostra selezione non e' molto popolata, aggiungi
     # controllo ogni ora". A run at every whole hour besides the ones above;
     # those runs get onchain_hourly_max_minutes, the main one keeps max_hours.
-    onchain_nightly_hourly: bool = True
+    onchain_nightly_hourly: bool = False
     onchain_hourly_max_minutes: float = 45.0
     # A new value runs one extra run as soon as the server starts (so after
     # the deploy that sets it), once: the key is remembered in the nightly
