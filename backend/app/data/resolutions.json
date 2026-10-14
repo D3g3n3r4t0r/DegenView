@@ -2895,5 +2895,11 @@
     "at": 1791932544,
     "summary": "Sotto i due risultati di Max return su RSI+BB 4H compare la 'verifica sull'ultimo anno': la stessa ricerca rifatta sui dati fino a un anno fa, e quanto avrebbero reso le sue scelte nell'ultimo anno, che non aveva visto, accanto al buy & hold dello stesso periodo.",
     "detail": "Non cambia i risultati mostrati (scelti su tutto lo storico): dice quanto fidarsi del metodo. Stessi filtri (drawdown 60%, un trade per anno escluso primo e ultimo, filtri del Laboratorio), stesso calcolo di solidita'; poi i parametri scelti girano solo sull'ultimo anno. Se il grafico ha meno di due anni la verifica viene saltata e lo dice. Raddoppia circa il tempo della ricerca."
+  },
+  "seed-0287": {
+    "status": "risolto",
+    "at": 1791943658,
+    "summary": "La ricerca gira gia' ogni ora (dal 12/10) e ora non usa piu' nessuna IA a pagamento: niente Claude e niente DeepSeek. Scoperta, pilastri (mercato, holder, liquidita', sito, codice), arene e classifica vanno avanti con API gratuite e regole. DeepSeek risponde solo alle domande scritte da te (Telegram e agente dell'app). Le letture DeepSeek gia' fatte restano finche' scadono, poi il punteggio torna alle sole regole. Per riaccendere: RESEARCH_AI_ENABLED=true nel .env del server.",
+    "detail": "backend/app/config.py (research_ai_enabled, chiave Anthropic ignorata); backend/app/notify/deepseek_desk.py (_post: solo kind 'chat' con l'IA spenta); tests/test_research_ai_off.py"
   }
 }
