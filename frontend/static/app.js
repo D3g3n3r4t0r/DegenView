@@ -110,6 +110,7 @@
     else if (/^Gabriele 2\b/.test(head)) label = "RSI+BB Long/Short";
     else if (/^Gabriele\b/.test(head)) label = "RSI+BB Reversal";
     else if (/^Accumulo\b/.test(head)) label = "Accumulation / Distribution";
+    else if (/^Claudio\b/.test(head)) label = head;
     return label + tail;
   }
   window.strategyLabel = strategyLabel;
@@ -273,6 +274,16 @@
       { key: "bb_mult", label: "Bollinger multiplier", type: "number", min: 0, step: 0.1, default: 2.0 },
       { key: "rsi_oversold", label: "RSI oversold", type: "number", min: 0, max: 100, default: 28 },
       { key: "rsi_overbought", label: "RSI overbought", type: "number", min: 0, max: 100, default: 72 },
+    ],
+    // Claudio 4H (15/10): rebound in ranging markets, confirmation candle,
+    // exits at the band's middle / ATR stop / time stop. Searched by Max return.
+    "Claudio 4H": [
+      { key: "cl_rsi_os", label: "RSI oversold (setup)", type: "number", min: 1, max: 99, default: 30 },
+      { key: "cl_bb_mult", label: "Bollinger multiplier", type: "number", min: 0.5, step: 0.1, default: 2.2 },
+      { key: "cl_atr_stop", label: "Stop (× ATR)", type: "number", min: 0.5, step: 0.25, default: 2.5 },
+      { key: "cl_er_max", label: "Ranging if efficiency ≤", type: "number", min: 0, max: 1, step: 0.05, default: 0.3 },
+      { key: "cl_ema_len", label: "Long average (candles)", type: "number", min: 10, default: 200 },
+      { key: "cl_time_stop", label: "Time stop (candles)", type: "number", min: 1, default: 30 },
     ],
     // RSI+BB 4H (Lorenzo, 13/10): the long-only RSI+BB, multiplier 2.5.
     "RSI+BB 4H": [
@@ -1238,6 +1249,7 @@
     "Gabriele (RSI+BB reversal)",
     "Gabriele 2 (RSI+BB long/short)",
     "RSI+BB 4H",
+    "Claudio 4H",
   ]);
 
   function updateOptimizeButtonVisibility() {
@@ -11897,9 +11909,15 @@
     const gridWrap = labEl("lab-mode-grid-wrap");
     if (gridWrap) gridWrap.classList.toggle("hidden", !GRID_STRATEGIES.has(strategyName));
     // Max return searches the two RSI levels: RSI+BB strategies only.
+    // Claudio 4H is searched by Max return only.
+    const claudio = strategyName === "Claudio 4H";
+    document.querySelectorAll('input[name="lab-opt-mode"]').forEach((r) => {
+      if (r.value !== "max_return") r.closest("label").classList.toggle("hidden", claudio || (r.value === "grid" && !GRID_STRATEGIES.has(strategyName)));
+    });
+    if (claudio) { const mr = document.querySelector('input[name="lab-opt-mode"][value="max_return"]'); if (mr) mr.checked = true; }
     const maxWrap = labEl("lab-mode-maxret-wrap");
     if (maxWrap) {
-      const ok = /RSI\+BB/.test(strategyName || "");
+      const ok = /RSI\+BB/.test(strategyName || "") || claudio;
       maxWrap.classList.toggle("hidden", !ok);
       const radio = maxWrap.querySelector("input");
       if (!ok && radio && radio.checked) {
@@ -12126,7 +12144,9 @@
         <div class="lab-best2-rank">${kinds ? (c.kind === "profitable" ? "↑" : "◆") : `#${c.rank}`}</div>
         <div class="lab-best2-main">
           ${kinds ? `<div class="lab-best2-kind">${KIND[c.kind] || c.kind}</div>` : ""}
-          <div class="lab-best2-levels">OS ${c.params.rsi_oversold} · OB ${c.params.rsi_overbought}${kinds ? ` · BB ×${Number(c.params.bb_mult).toFixed(1)}` : ""}</div>
+          <div class="lab-best2-levels">${c.params.cl_rsi_os != null
+            ? `RSI &lt; ${c.params.cl_rsi_os} · BB ×${Number(c.params.cl_bb_mult).toFixed(1)} · stop ${Number(c.params.cl_atr_stop).toFixed(2)}×ATR`
+            : `OS ${c.params.rsi_oversold} · OB ${c.params.rsi_overbought}${kinds ? ` · BB ×${Number(c.params.bb_mult).toFixed(1)}` : ""}`}</div>
           <div class="lab-best2-meta">${c.verification && c.verification.unseen ? "History before the last 12 months" : "Return"} <b>${pct(c.total_return_pct)}</b> · DD ${pct(-Math.abs(c.max_drawdown_pct))} · ${c.num_trades} trades${c.win_rate_pct != null ? ` · win ${c.win_rate_pct.toFixed(0)}%` : ""}</div>
           ${c.solidity != null ? `<div class="lab-best2-meta">Solidity <b>${Math.round(c.solidity * 100)}%</b>${c.neighbours ? ` · ×${(Number(c.params.bb_mult) - 0.1).toFixed(1)}: ${pct(c.neighbours.mult_down)} · ×${(Number(c.params.bb_mult) + 0.1).toFixed(1)}: ${pct(c.neighbours.mult_up)}` : ""}</div>` : ""}
           ${c.history ? detailTable(c) : verifyLine(c.verification)}
