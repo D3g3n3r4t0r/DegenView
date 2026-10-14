@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0289", "Backtest e ottimizzazione a 4H vanno indietro solo ~2 anni",
+     "Lorenzo, 14/10: 'Abbiamo un problema con la strategia RSI+BB 4H: non avevamo tenuto conto del limite che abbiamo con le candele. Non riusciamo ad andare indietro nel grafico a sufficienza'. Era il nostro tetto di 5000 candele, non le API; scelta sua: 20000.",
+     "alta"),
     ("seed-0288", "Ricerca gemme: un solo giro lungo alle 3 di notte",
      "Lorenzo, 14/10 (a voce): 'La ricerca delle gemme falla solo di notte', 'farne una bella bella grossa', 'si' alle tre va bene'.",
      "media"),

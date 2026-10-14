@@ -254,7 +254,9 @@ class Settings(BaseSettings):
     # symbol's real listing history, so providers that support pagination
     # (the crypto exchanges) will walk pages back to the actual listing date
     # and stop there; it's a ceiling, not a target.
-    backtest_candles: int = 5000
+    # Lorenzo, 14/10: 5000 four-hour candles were ~2 years, too few for RSI+BB 4H
+    # (a trade every year, last-year check). 20000 = ~9 years at 4h.
+    backtest_candles: int = 20000
 
     # Kill switch: mette in pausa tutta l'esecuzione automatica degli ordini
     # senza toccare alert, backtest o ottimizzatore. Si attiva via endpoint

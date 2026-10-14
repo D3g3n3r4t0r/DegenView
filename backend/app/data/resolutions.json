@@ -2907,5 +2907,11 @@
     "at": 1791960101,
     "summary": "La ricerca delle gemme gira una sola volta al giorno, alle 03:00, per al massimo 6 ore. Tolti i giri delle 22:00, delle 11:35 e quelli orari.",
     "detail": "Il giro si ferma prima se la coda e' vuota e il ricontrollo della Top e' finito. Restano: pausa automatica mentre gira un'ottimizzazione (la finestra si allunga della pausa), un deploy non conta come tentativo fallito, riepilogo Telegram a fine giro. Un server che riparte dopo le 03:00 recupera il giro fino alle 11:00."
+  },
+  "seed-0289": {
+    "status": "risolto",
+    "at": 1792014332,
+    "summary": "Backtest e ottimizzazione senza data di inizio usano ora fino a 20.000 candele invece di 5.000: a 4H circa 9 anni invece di 2 anni e 3 mesi, cioe' quasi sempre tutta la storia della coppia.",
+    "detail": "Il limite era nostro: le API danno 500 (MEXC) o 1000-1500 candele per richiesta, ma il server ne fa piu' di fila. Alzato anche il numero massimo di richieste su MEXC (40). Binance e KuCoin arrivano gia' a 20.000. Kraken resta a 720 candele: e' un limite vero della sua API. Con una data di inizio nel Laboratorio il tetto non vale, come prima. Costi: primo caricamento piu' lento e ottimizzazioni piu' lunghe."
   }
 }
