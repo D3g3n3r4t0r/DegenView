@@ -116,3 +116,11 @@ def _private_app_jobs(monkeypatch, tmp_path):
     monkeypatch.setattr(web_push, "_subs", None)
     monkeypatch.setattr(web_push, "_deliver", lambda sub, payload: 201)
     yield
+
+
+@pytest.fixture(autouse=True)
+def _research_ai_on(monkeypatch):
+    """The AI readings' own tests run with them on; the switch has its own
+    test (test_research_ai_off)."""
+    from app.config import settings
+    monkeypatch.setattr(settings, "research_ai_enabled", True)

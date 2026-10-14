@@ -1,3 +1,13 @@
+# 2026-10-14 — Ricerca senza IA a pagamento — `seed-0287` (Claude, a mano)
+
+Lorenzo, 10/10: "facciamo ripartire la ricerca bella costante ma basta che non si usi token o altro", poi "e neanche deepseek".
+
+- La cadenza c'era gia': giri ogni ora dal 12/10 (`seed-0274`). Il lavoro e' togliere l'IA.
+- `research_ai_enabled = False` (default): `deepseek_desk._post` rifiuta ogni chiamata che non sia `kind="chat"` con `BudgetExceeded` prima della rete (giudice, revisione board, codice, dossier, studi, narrative, consistency, ricontrolli, scanner). Restano le domande scritte da Lorenzo (Telegram, agente dell'app). La `ANTHROPIC_API_KEY` del server viene svuotata all'avvio.
+- Effetto: le letture DeepSeek gia' salvate valgono fino al loro TTL (judge 3 g, review board), poi il punteggio e' solo regole e pilastri. Il tasto "Re-check with DeepSeek" non produce piu' letture nuove.
+- Riaccendere: `RESEARCH_AI_ENABLED=true` nel `.env` del server.
+- Ancora a token Claude: la routine "Bacheca: sistema le segnalazioni nuove" (ogni ora, al minuto 16), decide Lorenzo.
+
 # 2026-10-14 — Verifica sull'ultimo anno per Max return 4H — `seed-0286` (Claude, a mano)
 
 Lorenzo: "puoi implementarla da subito. Solo sulla strategia 4H". `main._last_year_check`: `max_return_search_3d` sui dati fino a 365 giorni fa, poi backtest delle scelte sull'ultimo anno; `OptimizeCandidate.verification`; Lab `verifyLine`. Se funziona, Lorenzo valuta l'estensione alle altre due RSI+BB.
