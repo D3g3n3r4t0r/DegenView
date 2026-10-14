@@ -1,3 +1,7 @@
+# 2026-10-15 — Max return 4H: ultimi 12 mesi esclusi dalla ricerca — `seed-0291` (Claude, a mano)
+
+Lorenzo: "lasciare sempre l'ultimo anno libero da backtest [...] candele mai viste". `_max_return_payload`: per RSI_BB_4H con >= 2 anni, `search_df` = prima di 365 giorni fa, `held_out` = ultimi 365; `_last_year_check(..., held_out)` con `unseen: True`. Nucleo veloce del backtest proposto e rimandato da Lorenzo ("per il momento fai solo l'esclusione").
+
 # 2026-10-15 — Max return 4H piu' veloce, verifica sui valori mostrati — `seed-0290` (Claude, a mano)
 
 Lorenzo: "deve farlo applicando i valori della strategia piu' solida". `_last_year_check(df, on, top, say)` prova i params delle schede sull'ultimo anno (non piu' ricerca ripetuta; e' in-sample, detto nella risoluzione). Velocita': `backtest.epoch_seconds` e `confirmed_events` per posizione (3,7x, identico); `max_return_search_3d(coarse=True)`: passi 2/0.2 poi ±3/±0.3 attorno a COARSE_SEEDS=6 per tipo (5x). Misura: 12 000 candele 4h, 23 s contro 115 s, stessi risultati.

@@ -2919,5 +2919,11 @@
     "at": 1792016486,
     "summary": "La verifica sull'ultimo anno prova esattamente i valori di ciascuna scheda (piu' solido e piu' profittevole). E Max return 4H e' circa 15-20 volte piu' veloce, con gli stessi risultati.",
     "detail": "Verifica: prima rifaceva la ricerca sui dati fino a un anno fa e provava quello che sceglieva cosi', quindi mostrava altri valori. Ora prende i valori della scheda e li fa girare sull'ultimo anno, accanto al buy & hold. Nota: quei valori sono scelti su tutto lo storico, ultimo anno compreso, quindi dice come sono andati di recente, non e' una prova su dati mai visti. Velocita': (1) il motore del backtest non crea piu' un oggetto data per ogni candela: 3,7 volte piu' veloce, risultati identici su 30 configurazioni e 640 trade; (2) Max return 4H fa una prima passata a passi di 2 sull'RSI e 0.2 sul moltiplicatore, poi rifa' di uno in uno ±3 / ±0.3 attorno alle migliori: su 5,5 anni di 4H 1.745 backtest invece di 8.649, 23 s invece di 115 s, stessi due risultati. Il motore piu' veloce vale per tutti i backtest del sito."
+  },
+  "seed-0291": {
+    "status": "risolto",
+    "at": 1792017747,
+    "summary": "Su RSI+BB 4H Max return sceglie i due risultati sulle candele fino a 12 mesi fa; gli ultimi 12 mesi servono solo a provarli, e la scheda li mostra come 'mai visti dalla ricerca' accanto al buy & hold.",
+    "detail": "Filtro degli anni, solidita' e drawdown sono calcolati solo sulla parte prima dei 12 mesi. Ogni scheda mostra due numeri: il rendimento sullo storico usato per scegliere e quello sugli ultimi 12 mesi. Con meno di due anni di candele non si tiene fuori niente e la scheda lo dice. Run e 'Use' nel Laboratorio fanno il backtest su tutta la storia, quindi danno un terzo numero."
   }
 }
