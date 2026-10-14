@@ -7412,6 +7412,7 @@ async def _max_return_payload(strategy_name, df, full, constraints, say, should_
     # "lasciare sempre l'ultimo anno libero da backtest, in modo da poterci
     # testare la strategia su candele mai viste"): the choice is made on the
     # candles before, the last year only tests it.
+    say = say or (lambda _m: None)
     held_out = None
     search_df = df
     if strategy_name == RSI_BB_4H and on is not None:
