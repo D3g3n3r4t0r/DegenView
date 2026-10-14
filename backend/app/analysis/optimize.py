@@ -936,3 +936,156 @@ def max_return_search_3d(
         say(f"{c['kind']}: oversold {p['rsi_oversold']}, overbought {p['rsi_overbought']}, multiplier "
             f"{p['bb_mult']} → {c['backtest'].total_return_pct:+.2f}% (solidity {c['solidity']:.0%})")
     return out[0]["params"], out[0]["backtest"], n, out
+
+
+# ── Claudio 4H: the same search on its own three dimensions ─────────────────
+CLAUDIO_DIMS = (
+    ("cl_rsi_os", list(range(20, 41))),                                  # 21
+    ("cl_bb_mult", [round(1.8 + 0.1 * i, 1) for i in range(11)]),        # 1.8 … 2.8
+    ("cl_atr_stop", [round(1.5 + 0.25 * i, 2) for i in range(11)]),      # 1.5 … 4.0
+)
+
+
+def grid_size_nd(dims) -> int:
+    n = 1
+    for _, vals in dims:
+        n *= len(vals)
+    return n
+
+
+def max_return_search_nd(
+    strategy_name: str,
+    backtest: Callable[[dict], BacktestResult],
+    dims=CLAUDIO_DIMS,
+    fixed: dict | None = None,
+    constraints: Constraints | None = None,
+    progress: Callable[[str], None] | None = None,
+    should_stop: Callable[[], bool] | None = None,
+    years: list[int] | None = None,
+    fast_backtest: Callable[[dict], BacktestResult] | None = None,
+    coarse: bool = True,
+) -> tuple[dict, BacktestResult, int, list[dict]]:
+    """max_return_search_3d for any set of dimensions (Claudio 4H): coarse
+    pass on every other value, then full resolution ±3 steps around the best
+    COARSE_SEEDS of each kind; solidity = median return of the ±1-step
+    neighbours over the cell's own; most solid and most profitable (solidity
+    ≥ SOLIDITY_FLOOR); same limits (_admitted)."""
+    constraints = constraints or _NO_CONSTRAINTS
+    say = progress or (lambda _m: None)
+    fixed = dict(fixed or {})
+    years = list(years or [])
+    names = [d[0] for d in dims]
+    values = [list(d[1]) for d in dims]
+    say(f"{strategy_name}: " + " × ".join(f"{nm} {v[0]}-{v[-1]}" for nm, v in zip(names, values))
+        + f" ({grid_size_nd(dims)} combinations), max drawdown {MAX_RETURN_DRAWDOWN_CAP:.0f}%"
+        + (f", at least {MIN_TRADES_PER_YEAR_4H} trades a year on average and one in every year "
+           f"{', '.join(map(str, years))}" if years else ""))
+    scan = fast_backtest or backtest
+    returns: dict[tuple, float] = {}
+    ok: dict[tuple, BacktestResult] = {}
+    why: dict[str, int] = {}
+
+    def params_of(key):
+        return {**fixed, **{nm: values[d][i] for d, (nm, i) in enumerate(zip(names, key))}}
+
+    def evaluate(keys) -> None:
+        todo = [k for k in keys if k not in returns]
+        step = max(1, len(todo) // 10)
+        for j, key in enumerate(todo, 1):
+            stop_if_asked(should_stop)
+            bt = scan(params_of(key))
+            returns[key] = bt.total_return_pct
+            reason = _admitted(bt, years, constraints)
+            if reason:
+                why[reason] = why.get(reason, 0) + 1
+            else:
+                ok[key] = bt
+            if j % step == 0:
+                say(f"{len(returns)} tried — acceptable so far: {len(ok)}")
+
+    def ring(key, step=1):
+        out = []
+        for d in range(len(key)):
+            for s_ in (-step, step):
+                k = list(key)
+                k[d] += s_
+                if 0 <= k[d] < len(values[d]):
+                    out.append(tuple(k))
+        return out
+
+    def sol(key, step=1):
+        own = returns.get(key)
+        near = [returns[k] for k in ring(key, step) if k in returns]
+        if own is None or own <= 0 or not near:
+            return 0.0, near
+        near.sort()
+        mid = near[len(near) // 2] if len(near) % 2 else (near[len(near) // 2 - 1] + near[len(near) // 2]) / 2
+        return max(0.0, min(1.0, mid / own)), near
+
+    import itertools as _it
+    if coarse:
+        grid = list(_it.product(*[range(0, len(v), 2) for v in values]))
+        say(f"first pass, every other value: {len(grid)} combinations")
+        evaluate(grid)
+        cand = list(ok)
+        seeds = set(sorted(cand, key=lambda k: returns[k] * sol(k, 2)[0], reverse=True)[:COARSE_SEEDS])
+        seeds |= set(sorted((k for k in cand if sol(k, 2)[0] >= SOLIDITY_FLOOR / 2),
+                            key=lambda k: returns[k], reverse=True)[:COARSE_SEEDS])
+        fine = set()
+        for sd in seeds:
+            for k in _it.product(*[range(max(0, sd[d] - FINE_RADIUS), min(len(values[d]), sd[d] + FINE_RADIUS + 1))
+                                   for d in range(len(values))]):
+                fine.add(k)
+        say(f"second pass, one by one around the best {len(seeds)}: {len(fine - set(returns))} more")
+        evaluate(sorted(fine))
+        eligible = [k for k in ok if k in fine and all(x in returns for x in ring(k))] or list(ok)
+    else:
+        evaluate(list(_it.product(*[range(len(v)) for v in values])))
+        eligible = list(ok)
+    n = len(returns)
+    say("excluded: " + ", ".join(f"{v} {k.replace('_', ' ')}" for k, v in why.items()) if why else "nothing excluded")
+    if not ok:
+        if constraints.active and why.get("filtered"):
+            raise NoCandidateMeetsConstraints(constraints, n, why["filtered"])
+        raise ValueError(f"no combination holds the limits on this chart ({n} tried)")
+
+    sols = {k: sol(k) for k in eligible}
+    by_solid = sorted(eligible, key=lambda k: returns[k] * sols[k][0], reverse=True)
+    by_profit = sorted((k for k in eligible if sols[k][0] >= SOLIDITY_FLOOR), key=lambda k: returns[k], reverse=True)
+
+    def pick(order, kind):
+        if not fast_backtest:
+            return order[0] if order else None
+        best = None
+        for k in order[:REFINE_PER_KIND]:
+            bt = backtest(params_of(k))
+            if _admitted(bt, years, constraints):
+                continue
+            score = bt.total_return_pct * (sols[k][0] if kind == "solid" else 1.0)
+            if best is None or score > best[0]:
+                best = (score, k, bt)
+        if best:
+            ok[best[1]] = best[2]
+            return best[1]
+        return None
+
+    if fast_backtest:
+        say("fills inside the candle: re-checking the shortlist exactly as Run does")
+    out, seen = [], set()
+    for kind, k in (("solid", pick(by_solid, "solid")), ("profitable", pick(by_profit, "profitable"))):
+        if k is None:
+            continue
+        if k in seen:
+            out[0]["kind"] = "solid+profitable"
+            continue
+        seen.add(k)
+        s_, near = sols[k]
+        out.append({"rank": len(out) + 1, "kind": kind, "params": params_of(k), "backtest": ok[k],
+                    "score": round(returns[k] * s_, 4), "solidity": round(s_, 3), "neighbours": None})
+    if not out:
+        raise ValueError("none of the best combinations holds the limits once filled inside the candle")
+    say(f"{n} combinations backtested of {grid_size_nd(dims)}")
+    for c in out:
+        say(f"{c['kind']}: " + ", ".join(f"{nm} {c['params'][nm]}" for nm in names)
+            + f" → {c['backtest'].total_return_pct:+.2f}% (solidity {c['solidity']:.0%})")
+    return out[0]["params"], out[0]["backtest"], n, out

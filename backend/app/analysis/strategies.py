@@ -563,6 +563,85 @@ def compute_lki4h_signals(df: pd.DataFrame, params: dict | None = None) -> pd.Da
                                     **{k: v for k, v in (params or {}).items() if v is not None}})
 
 
+# ── Claudio 4H ──────────────────────────────────────────────────────────────
+# Lorenzo, 15/10: "sviluppare una strategia 'Claudio' tutta tua adatta al
+# timeframe 4H [...] massimo profitto e stabilita' da applicare anche su
+# candele mai viste". A controlled rebound, long only, built on what this
+# site measured:
+#   * RSI+BB buys falling knives in strong downtrends → regime filter: enter
+#     only while the market is ranging (Kaufman efficiency ratio low) or the
+#     price is above its long average;
+#   * it buys while the price is still falling → wait for the first candle
+#     that closes above the previous one's high after the oversold close
+#     under the lower band;
+#   * it exits only on overbought, which may never come → the first of:
+#     back to the band's middle (the rebound's natural target), a stop at a
+#     multiple of the ATR measured at entry, a time stop;
+#   * more free parameters did worse out of sample → three are searched
+#     (oversold level, band width, stop distance), the rest are fixed.
+# Everything uses closed candles only: no information from the future.
+CLAUDIO_4H = "Claudio 4H"
+CLAUDIO_DEFAULT_PARAMS = {
+    "cl_rsi_os": 30,          # searched: RSI under this on the setup candle
+    "cl_bb_mult": 2.2,        # searched: band width (20-candle Bollinger)
+    "cl_atr_stop": 2.5,       # searched: stop = entry close - this × ATR(14)
+    "cl_er_max": 0.30,        # fixed: efficiency ratio (20) at or below = ranging
+    "cl_ema_len": 200,        # fixed: long average (~33 days of 4h)
+    "cl_time_stop": 30,       # fixed: candles in a trade at most (~5 days)
+}
+_CL_RSI_LEN, _CL_BB_LEN, _CL_ATR_LEN, _CL_ER_LEN = 14, 20, 14, 20
+
+
+def compute_claudio_signals(df: pd.DataFrame, params: dict | None = None) -> pd.DataFrame:
+    p = {**CLAUDIO_DEFAULT_PARAMS, **{k: v for k, v in (params or {}).items()
+                                      if k in CLAUDIO_DEFAULT_PARAMS and v is not None}}
+    close = df["close"].astype(float)
+    high = df["high"].astype(float)
+    low = df["low"].astype(float)
+
+    delta = close.diff()
+    gain = _wilder_rma(delta.clip(lower=0), _CL_RSI_LEN)
+    loss = _wilder_rma(-delta.clip(upper=0), _CL_RSI_LEN)
+    rsi = 100 - 100 / (1 + gain / loss.replace(0, np.nan))
+    rsi = rsi.where(loss != 0, 100.0)
+
+    mid = close.rolling(_CL_BB_LEN).mean()
+    lower = mid - float(p["cl_bb_mult"]) * close.rolling(_CL_BB_LEN).std(ddof=0)
+
+    prev_close = close.shift(1)
+    tr = pd.concat([high - low, (high - prev_close).abs(), (low - prev_close).abs()], axis=1).max(axis=1)
+    atr = _wilder_rma(tr, _CL_ATR_LEN)
+
+    path = close.diff().abs().rolling(_CL_ER_LEN).sum()
+    er = (close - close.shift(_CL_ER_LEN)).abs() / path.where(path > 0)
+    ema = close.ewm(span=int(p["cl_ema_len"]), adjust=False, min_periods=int(p["cl_ema_len"])).mean()
+    regime_ok = (er <= float(p["cl_er_max"])) | (close > ema)
+
+    setup = (close < lower) & (rsi < float(p["cl_rsi_os"]))          # the oversold close
+    trigger = setup.shift(1, fill_value=False) & (close > high.shift(1)) & regime_ok.fillna(False)
+
+    c, m, a, trig = close.to_numpy(), mid.to_numpy(), atr.to_numpy(), trigger.to_numpy()
+    n = len(c)
+    entry = np.zeros(n, dtype=bool)
+    exit_ = np.zeros(n, dtype=bool)
+    in_pos, stop, since = False, 0.0, 0
+    k, limit = float(p["cl_atr_stop"]), int(p["cl_time_stop"])
+    for i in range(n):
+        if in_pos:
+            since += 1
+            if c[i] <= stop or (m[i] == m[i] and c[i] >= m[i]) or since >= limit:
+                exit_[i] = True
+                in_pos = False
+            continue
+        if trig[i] and a[i] == a[i]:
+            entry[i] = True
+            in_pos, stop, since = True, c[i] - k * a[i], 0
+
+    false = pd.Series(False, index=df.index)
+    return pd.DataFrame({"entry_long": entry, "entry_short": false.to_numpy(),
+                         "exit_long": exit_, "exit_short": false.to_numpy()}, index=df.index)
+
+
 def compute_lki2_signals(df: pd.DataFrame, params: dict | None = None) -> pd.DataFrame:
     base = compute_lki_signals(df, params)
     # L'uscita long dell'originale e' la condizione di ipercomprato: qui apre
@@ -589,9 +668,14 @@ STRATEGY_REGISTRY = {
     "Gabriele (RSI+BB reversal)": compute_lki_signals,
     "Gabriele 2 (RSI+BB long/short)": compute_lki2_signals,
     RSI_BB_4H: compute_lki4h_signals,
+    CLAUDIO_4H: compute_claudio_signals,
     "Lorenzo HF (minuti on-chain)": compute_lorenzo_hf_signals,
 }
-AVAILABLE_STRATEGIES = list(STRATEGY_REGISTRY.keys())
+# Registered (backtests and the comparison script can run them) but not
+# offered in the menus or alerts until Lorenzo has seen the real-data
+# comparison (15/10: "prima di renderla operativa").
+HIDDEN_STRATEGIES = {CLAUDIO_4H}
+AVAILABLE_STRATEGIES = [k for k in STRATEGY_REGISTRY if k not in HIDDEN_STRATEGIES]
 DEFAULT_STRATEGY = AVAILABLE_STRATEGIES[0]
 
 

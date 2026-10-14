@@ -1,3 +1,7 @@
+# 2026-10-15 — Strategia Claudio 4H (nascosta finche' Lorenzo non vede i numeri) (Claude, a mano)
+
+Lorenzo: "sviluppare una strategia 'Claudio' tutta tua adatta al timeframe 4H con ottimizzazione [...] Prima di renderla operativa riassumi", poi "Ok, perfetto". `strategies.compute_claudio_signals`: setup RSI(14)<cl_rsi_os e close<BB(20,cl_bb_mult) bassa; ingresso alla candela dopo se close > high precedente e regime (ER20<=0.30 o close>EMA200); uscita a meta' banda, stop cl_atr_stop×ATR14 all'ingresso, stop a tempo 30 candele. In STRATEGY_REGISTRY ma in `HIDDEN_STRATEGIES` (fuori da menu e alert). Ricerca `optimize.max_return_search_nd` con CLAUDIO_DIMS (OS 20-40, BB 1.8-2.8, stop 1.5-4.0), `FOUR_H_LAB` in main (ultimi 12 mesi esclusi). Confronto su dati reali: `scripts/compare_claudio.py` + workflow `claudio-compare.yml` (notice per pair). Prima prova su dati sintetici: Claudio troppo selettivo (1 trade nei 12 mesi), da rivedere sui dati reali.
+
 # 2026-10-15 — Archivio: test su un altro pair — `seed-0294` (Claude, a mano)
 
 Lorenzo: "un pulsante in cui si puo' testare la strategia salvata su un altro asset [...] con gli stessi valori". `POST /api/archive/{{id}}/test-on-pair` (storia intera + ultimi 12 mesi con warm-up, `_bt_facts`), Lab `pairTestTable`. Prima, stessa notte: Max return 4H con ultimi 12 mesi esclusi, 3 trade/anno (opzione B), range 20-40/65-85, tabella storico/mai visti.

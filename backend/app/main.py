@@ -71,7 +71,9 @@ from app.analysis.optimize import (
     calendar_years,
     is_optimizable,
     max_return_search,
+    CLAUDIO_DIMS,
     max_return_search_3d,
+    max_return_search_nd,
     optimize_strategy,
 )
 from app.analysis.pipeline import run_pipeline
@@ -79,6 +81,7 @@ from app.analysis.smc_engine import compute_dealing_range, compute_levels, compu
 from app.analysis.strategies import (
     AVAILABLE_STRATEGIES,
     DEFAULT_STRATEGY,
+    CLAUDIO_4H,
     RSI_BB_4H,
     STRATEGY_REGISTRY,
     build_strategy_state,
@@ -2016,6 +2019,14 @@ class StrategyParamsQuery(BaseModel):
     # strategy's own default: 2.0, or 2.5 for RSI+BB 4H.
     bb_length: int = 20
     bb_mult: float | None = None
+
+    # Claudio 4H (see strategies.CLAUDIO_DEFAULT_PARAMS)
+    cl_rsi_os: int = 30
+    cl_bb_mult: float = 2.2
+    cl_atr_stop: float = 2.5
+    cl_er_max: float = 0.30
+    cl_ema_len: int = 200
+    cl_time_stop: int = 30
 
     # Lorenzo HF (minuti on-chain). Shares len/slopeFlen/slopeSlen/slope_* with
     # Lorenzo, whose defaults win here: the page always sends the whole field
@@ -7409,9 +7420,9 @@ async def _max_return_payload(strategy_name, df, full, constraints, say, should_
     """Mode "max_return": every oversold 10-40 x overbought 60-90 pair on the
     whole chart, backtested as Run does, highest return within 60% drawdown
     (see optimize.max_return_search). No out-of-sample figure: none exists."""
-    if strategy_name not in GABRIELE_STRATEGIES:
+    if strategy_name not in GABRIELE_STRATEGIES and strategy_name != CLAUDIO_4H:
         raise HTTPException(status_code=400,
-                            detail="Max return searches the two RSI levels: RSI+BB strategies only.")
+                            detail="Max return is for the RSI+BB strategies and Claudio 4H only.")
     # RSI+BB 4H keeps the last 12 months out of the search (Lorenzo, 15/10:
     # "lasciare sempre l'ultimo anno libero da backtest, in modo da poterci
     # testare la strategia su candele mai viste"): the choice is made on the
@@ -7419,7 +7430,7 @@ async def _max_return_payload(strategy_name, df, full, constraints, say, should_
     say = say or (lambda _m: None)
     held_out = None
     search_df = df
-    if strategy_name == RSI_BB_4H and on is not None:
+    if strategy_name in FOUR_H_LAB and on is not None:
         cut = df.index[-1] - pd.Timedelta(days=LAST_YEAR_DAYS)
         if (df.index[-1] - df.index[0]).days >= 2 * LAST_YEAR_DAYS:
             search_df, held_out = df[df.index < cut], df[df.index >= cut]
@@ -7431,7 +7442,10 @@ async def _max_return_payload(strategy_name, df, full, constraints, say, should_
     fast = partial(full, intrabar=False) if in_candle else None
     # RSI+BB 4H also searches the multiplier and returns the most solid and
     # the most profitable result (Lorenzo, 14/10).
-    search = max_return_search_3d if strategy_name == RSI_BB_4H else max_return_search
+    if strategy_name == CLAUDIO_4H:
+        search = partial(max_return_search_nd, dims=CLAUDIO_DIMS)
+    else:
+        search = max_return_search_3d if strategy_name == RSI_BB_4H else max_return_search
     try:
         params, bt, evaluated, top = await _cpu(partial(
             search, strategy_name, full,
@@ -7442,7 +7456,7 @@ async def _max_return_payload(strategy_name, df, full, constraints, say, should_
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    if strategy_name == RSI_BB_4H and on is not None:
+    if strategy_name in FOUR_H_LAB and on is not None:
         for c in top:
             c["history"] = _bt_facts(c["backtest"], search_df.index[0], search_df.index[-1])
         verification = await _last_year_check(df, on, top, say, held_out)
@@ -7466,7 +7480,9 @@ async def _max_return_payload(strategy_name, df, full, constraints, say, should_
                   f"drawdown wins"
                   + (f", with at least one trade in every year {years[0]}-{years[-1]}" if years else "")
                   + (". Multiplier searched 2.0-2.8: the most solid and the most profitable result are shown"
-                     if strategy_name == RSI_BB_4H else ". The two best are shown")
+                     if strategy_name == RSI_BB_4H
+                     else ". Oversold, band width and ATR stop searched: the most solid and the most profitable result are shown"
+                     if strategy_name == CLAUDIO_4H else ". The two best are shown")
                   + (". The last 12 months are the out-of-sample check." if held_out is not None
                      else ". Chosen on the whole chart: no out-of-sample check.")),
         ),
@@ -7488,6 +7504,7 @@ async def _max_return_payload(strategy_name, df, full, constraints, say, should_
 
 
 LAST_YEAR_DAYS = 365
+FOUR_H_LAB = ("RSI+BB 4H", "Claudio 4H")   # last 12 months held out, two kinds of result
 
 
 WARMUP_CANDLES = 300
