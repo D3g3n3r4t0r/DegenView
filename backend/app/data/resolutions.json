@@ -2925,5 +2925,11 @@
     "at": 1792017747,
     "summary": "Su RSI+BB 4H Max return sceglie i due risultati sulle candele fino a 12 mesi fa; gli ultimi 12 mesi servono solo a provarli, e la scheda li mostra come 'mai visti dalla ricerca' accanto al buy & hold.",
     "detail": "Filtro degli anni, solidita' e drawdown sono calcolati solo sulla parte prima dei 12 mesi. Ogni scheda mostra due numeri: il rendimento sullo storico usato per scegliere e quello sugli ultimi 12 mesi. Con meno di due anni di candele non si tiene fuori niente e la scheda lo dice. Run e 'Use' nel Laboratorio fanno il backtest su tutta la storia, quindi danno un terzo numero."
+  },
+  "seed-0292": {
+    "status": "risolto",
+    "at": 1792018653,
+    "summary": "Su RSI+BB 4H Max return cerca ipervenduto 20-40 e ipercomprato 65-85 (circa 2 volte piu' veloce) e accetta solo risultati con almeno 3 trade per anno in media e almeno un trade in ogni anno esaminato.",
+    "detail": "Anni esaminati: quelli dello storico usato per scegliere, esclusi il primo e l'ultimo (gli ultimi 12 mesi restano fuori dalla ricerca). Esempio 2023-2025: servono almeno 9 trade in totale in quei tre anni e nessuno dei tre vuoto. Le altre due RSI+BB restano con 10-40 / 60-90 e un trade per anno."
   }
 }

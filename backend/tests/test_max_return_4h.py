@@ -24,7 +24,7 @@ def _bt(p):
 
 def test_the_multiplier_range_is_2_0_to_2_8_by_tenths():
     assert optimize.MAX_RETURN_MULTS == [2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8]
-    assert optimize.max_return_size_3d() == 961 * 9
+    assert optimize.max_return_size_3d() == 21 * 21 * 9
 
 
 def test_solidity_reads_the_neighbours():
@@ -39,7 +39,7 @@ def test_solidity_reads_the_neighbours():
 def test_two_kinds_and_the_profitable_one_is_never_hollow(monkeypatch):
     monkeypatch.setattr(optimize, "MAX_RETURN_MULTS", [2.4, 2.5, 2.6])
     params, bt, n, out = optimize.max_return_search_3d(RSI_BB_4H, _bt, coarse=False)
-    assert n == 961 * 3
+    assert n == 21 * 21 * 3
     kinds = [c["kind"] for c in out]
     assert kinds in (["solid", "profitable"], ["solid+profitable"])
     for c in out:
@@ -60,3 +60,24 @@ def test_coarse_pass_finds_what_the_full_grid_finds(monkeypatch):
     best_full = full[3][0]["backtest"].total_return_pct * full[3][0]["solidity"]
     best_fast = fast[3][0]["backtest"].total_return_pct * fast[3][0]["solidity"]
     assert best_fast >= 0.9 * best_full
+
+
+def test_4h_ranges_and_three_trades_a_year():
+    # Lorenzo, 15/10: RSI 20-40 / 65-85, "almeno tre [trade per anno]", option B
+    assert list(optimize.MAX_RETURN_4H_OVERSOLD) == list(range(20, 41))
+    assert list(optimize.MAX_RETURN_4H_OVERBOUGHT) == list(range(65, 86))
+
+    class T:
+        def __init__(self, y):
+            import datetime as dt
+            self.entry_time = int(dt.datetime(y, 6, 1, tzinfo=dt.timezone.utc).timestamp())
+
+    def bt(years):
+        return type("B", (), {"num_trades": len(years), "max_drawdown_pct": -5.0,
+                              "trades": [T(y) for y in years]})()
+    yrs = [2023, 2024, 2025]
+    ok = optimize.Constraints()
+    assert optimize._admitted(bt([2023] * 3 + [2024] * 3 + [2025] * 3), yrs, ok) is None
+    assert optimize._admitted(bt([2023] * 6 + [2024] * 2 + [2025]), yrs, ok) is None   # avg 3, none empty
+    assert optimize._admitted(bt([2023] * 3 + [2024] * 3 + [2025] * 2), yrs, ok) == "gaps"  # 8 < 9
+    assert optimize._admitted(bt([2023] * 9 + [2024] * 3), yrs, ok) == "gaps"           # 2025 empty
