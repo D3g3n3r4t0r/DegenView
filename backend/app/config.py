@@ -260,6 +260,11 @@ class Settings(BaseSettings):
     trading_halt: bool = False
 
 
-settings = Settings()
-if not settings.research_ai_enabled:
-    settings.anthropic_api_key = ""
+def without_paid_ai(s: Settings) -> Settings:
+    """research_ai_enabled off: the Anthropic key is never used."""
+    if not s.research_ai_enabled:
+        s.anthropic_api_key = ""
+    return s
+
+
+settings = without_paid_ai(Settings())

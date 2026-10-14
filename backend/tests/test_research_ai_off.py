@@ -43,3 +43,11 @@ def test_chat_still_answers(monkeypatch):
     http = _Http()
     assert asyncio.run(deepseek_desk.ask([{"role": "user", "content": "x"}], kind="chat", http=http)) == "ok"
     assert http.calls == 1
+
+
+def test_anthropic_key_is_ignored_when_off():
+    from app.config import without_paid_ai
+    off = without_paid_ai(Settings(_env_file=None, anthropic_api_key="sk-x"))
+    assert off.anthropic_api_key == ""
+    on = without_paid_ai(Settings(_env_file=None, anthropic_api_key="sk-x", research_ai_enabled=True))
+    assert on.anthropic_api_key == "sk-x"
