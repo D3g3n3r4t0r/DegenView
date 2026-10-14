@@ -732,8 +732,17 @@ SOLIDITY_FLOOR = 0.25            # the "most profitable" still needs this much
 REFINE_PER_KIND = 10
 
 
+# RSI+BB 4H (Lorenzo, 15/10): "ridurrei i range RSI: solo da 20 a 40 e da 65
+# a 85" and "un minimo piu' alto di trade per anno: almeno tre invece di uno"
+# — option B: at least 3 a year on average over the judged years, and no
+# judged year without a trade.
+MAX_RETURN_4H_OVERSOLD = range(20, 41)
+MAX_RETURN_4H_OVERBOUGHT = range(65, 86)
+MIN_TRADES_PER_YEAR_4H = 3
+
+
 def max_return_size_3d() -> int:
-    return max_return_size() * len(MAX_RETURN_MULTS)
+    return len(MAX_RETURN_4H_OVERSOLD) * len(MAX_RETURN_4H_OVERBOUGHT) * len(MAX_RETURN_MULTS)
 
 
 def _admitted(bt: BacktestResult, years: list[int], constraints: Constraints) -> str | None:
@@ -742,7 +751,8 @@ def _admitted(bt: BacktestResult, years: list[int], constraints: Constraints) ->
         return "no_trades"
     if abs(bt.max_drawdown_pct) > MAX_RETURN_DRAWDOWN_CAP:
         return "too_deep"
-    if years and trades_in_years(bt, years) < len(years) and years_without_trades(bt, years):
+    if years and (years_without_trades(bt, years)
+                  or trades_in_years(bt, years) < MIN_TRADES_PER_YEAR_4H * len(years)):
         return "gaps"
     if not _passes(bt, constraints):
         return "filtered"
@@ -801,10 +811,11 @@ def max_return_search_3d(
     say = progress or (lambda _m: None)
     fixed = gabriele_fixed(strategy_name)
     years = list(years or [])
-    os_all, ob_all, m_all = list(MAX_RETURN_OVERSOLD), list(MAX_RETURN_OVERBOUGHT), list(MAX_RETURN_MULTS)
-    say(f"whole chart: oversold 10-40 × overbought 60-90 × multiplier 2.0-2.8 "
+    os_all, ob_all, m_all = list(MAX_RETURN_4H_OVERSOLD), list(MAX_RETURN_4H_OVERBOUGHT), list(MAX_RETURN_MULTS)
+    say(f"oversold 20-40 × overbought 65-85 × multiplier 2.0-2.8 "
         f"({max_return_size_3d()} combinations), max drawdown {MAX_RETURN_DRAWDOWN_CAP:.0f}%"
-        + (f", a trade in every year {', '.join(map(str, years))}" if years else ""))
+        + (f", at least {MIN_TRADES_PER_YEAR_4H} trades a year on average and one in every year "
+           f"{', '.join(map(str, years))}" if years else ""))
     scan = fast_backtest or backtest
     returns: dict[tuple, float] = {}
     ok: dict[tuple, BacktestResult] = {}
@@ -862,7 +873,7 @@ def max_return_search_3d(
             os_, ob, m = k
             ring = [(os_ - 1, ob, m), (os_ + 1, ob, m), (os_, ob - 1, m), (os_, ob + 1, m),
                     (os_, ob, round(m - 0.1, 1)), (os_, ob, round(m + 0.1, 1))]
-            inside = [x for x in ring if x[0] in MAX_RETURN_OVERSOLD and x[1] in MAX_RETURN_OVERBOUGHT and x[2] in m_all]
+            inside = [x for x in ring if x[0] in MAX_RETURN_4H_OVERSOLD and x[1] in MAX_RETURN_4H_OVERBOUGHT and x[2] in m_all]
             return all(x in returns for x in inside)
         eligible = [k for k in ok if k in fine and full_ring(k)] or list(ok)
     else:

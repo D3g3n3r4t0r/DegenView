@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0292", "Max return 4H: range RSI piu' stretti e almeno 3 trade per anno",
+     "Lorenzo, 15/10: 'ridurrei i range RSI: solo da 20 a 40 e da 65 a 85 [...] un minimo piu' alto di trade per anno: almeno tre invece di uno', poi 'Procedi con B' (media di 3 per anno, nessun anno vuoto).",
+     "media"),
     ("seed-0291", "Max return 4H: lasciare libero l'ultimo anno per testare su candele mai viste",
      "Lorenzo, 15/10: 'vorrei lasciare sempre l'ultimo anno libero da backtest, in modo da poterci testare la strategia su candele mai viste. Quindi il primo backtest dovrebbe essere fatto escludendo gli ultimi 12 mesi [...] per ora alla sola strategia RSI+BB 4H'.",
      "alta"),
