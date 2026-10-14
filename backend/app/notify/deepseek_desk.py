@@ -51,6 +51,9 @@ KINDS = {"chat": "chat Telegram", "scanner": "scanner (giudizio token)", "resear
 # Kinds that may use the last RESERVE of the daily cap: the Telegram chat
 # and the meme alert safety vote. Everything else stops earlier.
 PRIORITY_KINDS = {"chat", "meme"}
+# What still reaches DeepSeek with settings.research_ai_enabled off: the
+# questions people type (Lorenzo, 10/10: research "neanche deepseek").
+AI_OFF_KINDS = {"chat"}
 RESERVE = 0.2
 
 _lock = threading.Lock()
@@ -223,6 +226,8 @@ async def _post(body: dict, *, kind: str, purpose: str | None, subject: str | No
     """One call to the chat API: counted in the ledger and in the call
     journal (deepseek_calls, issue #358 I00), failures included."""
     from app.notify import deepseek_calls
+    if not settings.research_ai_enabled and kind not in AI_OFF_KINDS:
+        raise BudgetExceeded(f"DeepSeek off for {kind} (research_ai_enabled)")
     headers = {"Authorization": f"Bearer {settings.deepseek_api_key}", "Content-Type": "application/json"}
     url = settings.deepseek_base_url.rstrip("/") + "/chat/completions"
     need = _reserve(kind, body["messages"], body["max_tokens"])

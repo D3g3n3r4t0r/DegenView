@@ -125,6 +125,12 @@ class Settings(BaseSettings):
     # One daily cap for every DeepSeek call on the server, at list price
     # (Lorenzo, 29/09: $0.50, then $0.80). 0 = no cap.
     deepseek_daily_usd: float = 0.80
+    # Lorenzo, 10/10: "facciamo ripartire la ricerca bella costante ma basta
+    # che non si usi token [...] e neanche deepseek". False: no paid AI on
+    # the server. DeepSeek answers only the chat (Telegram and the app's
+    # agent, kind "chat"); the research runs on free APIs and the rules.
+    # The Anthropic key is ignored as well (cleared below).
+    research_ai_enabled: bool = False
     # USDC contract on Robinhood Chain for the autotrader's cash; empty = found
     # from the most liquid USDC/USDG pool (autotrader.find_usdc).
     robinhood_usdc_address: str = ""
@@ -254,4 +260,11 @@ class Settings(BaseSettings):
     trading_halt: bool = False
 
 
-settings = Settings()
+def without_paid_ai(s: Settings) -> Settings:
+    """research_ai_enabled off: the Anthropic key is never used."""
+    if not s.research_ai_enabled:
+        s.anthropic_api_key = ""
+    return s
+
+
+settings = without_paid_ai(Settings())
