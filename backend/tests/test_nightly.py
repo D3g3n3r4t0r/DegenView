@@ -364,3 +364,14 @@ def test_the_research_waits_while_an_optimization_runs(monkeypatch):
     assert ticks_while_busy and not any(ticks_while_busy)
     assert s["paused_min"] >= 10
     assert "In pausa" in nightly.text_it(s)
+
+
+def test_shipped_schedule_is_one_long_run_at_3(monkeypatch):
+    # Lorenzo, 14/10: "La ricerca delle gemme falla solo di notte [...] alle tre"
+    from app.config import Settings
+    s = Settings()
+    assert (s.onchain_nightly_hour, s.onchain_nightly_extra_times, s.onchain_nightly_hourly) == (3, "", False)
+    assert s.onchain_nightly_max_hours >= 6
+    for k in ("onchain_nightly_hour", "onchain_nightly_extra_times", "onchain_nightly_hourly"):
+        monkeypatch.setattr(settings, k, getattr(s, k))
+    assert nightly.run_times() == [(3, 0)]

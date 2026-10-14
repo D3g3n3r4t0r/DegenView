@@ -2901,5 +2901,11 @@
     "at": 1791943658,
     "summary": "La ricerca gira gia' ogni ora (dal 12/10) e ora non usa piu' nessuna IA a pagamento: niente Claude e niente DeepSeek. Scoperta, pilastri (mercato, holder, liquidita', sito, codice), arene e classifica vanno avanti con API gratuite e regole. DeepSeek risponde solo alle domande scritte da te (Telegram e agente dell'app). Le letture DeepSeek gia' fatte restano finche' scadono, poi il punteggio torna alle sole regole. Per riaccendere: RESEARCH_AI_ENABLED=true nel .env del server.",
     "detail": "backend/app/config.py (research_ai_enabled, chiave Anthropic ignorata); backend/app/notify/deepseek_desk.py (_post: solo kind 'chat' con l'IA spenta); tests/test_research_ai_off.py"
+  },
+  "seed-0288": {
+    "status": "risolto",
+    "at": 1791960101,
+    "summary": "La ricerca delle gemme gira una sola volta al giorno, alle 03:00, per al massimo 6 ore. Tolti i giri delle 22:00, delle 11:35 e quelli orari.",
+    "detail": "Il giro si ferma prima se la coda e' vuota e il ricontrollo della Top e' finito. Restano: pausa automatica mentre gira un'ottimizzazione (la finestra si allunga della pausa), un deploy non conta come tentativo fallito, riepilogo Telegram a fine giro. Un server che riparte dopo le 03:00 recupera il giro fino alle 11:00."
   }
 }

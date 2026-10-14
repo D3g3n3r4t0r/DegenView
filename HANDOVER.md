@@ -1,3 +1,7 @@
+# 2026-10-14 — Ricerca gemme solo alle 03:00, giro lungo — `seed-0288` (Claude, a mano)
+
+Lorenzo (a voce): "La ricerca delle gemme falla solo di notte, un giro unico alle 3 di notte, bella grossa". config: `onchain_nightly_hour=3`, `extra_times=""`, `hourly=False`, `max_hours=6.0`. Sostituisce 22:00 + 11:35 + giri orari (12-13/10). Pausa durante le ottimizzazioni e deploy-non-crash restano.
+
 # 2026-10-14 — Ricerca senza IA a pagamento — `seed-0287` (Claude, a mano)
 
 Lorenzo, 10/10: "facciamo ripartire la ricerca bella costante ma basta che non si usi token o altro", poi "e neanche deepseek".

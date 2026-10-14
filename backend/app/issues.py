@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0288", "Ricerca gemme: un solo giro lungo alle 3 di notte",
+     "Lorenzo, 14/10 (a voce): 'La ricerca delle gemme falla solo di notte', 'farne una bella bella grossa', 'si' alle tre va bene'.",
+     "media"),
     ("seed-0283", "All'apertura a destra compare Structure invece della Watchlist",
      "Lorenzo, 14/10: 'All'apertura del sito sulla colonna a destra accanto al grafico principale appare la sezione Structure. Invece deve apparire subito la Watchlist.'",
      "media"),
