@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0291", "Max return 4H: lasciare libero l'ultimo anno per testare su candele mai viste",
+     "Lorenzo, 15/10: 'vorrei lasciare sempre l'ultimo anno libero da backtest, in modo da poterci testare la strategia su candele mai viste. Quindi il primo backtest dovrebbe essere fatto escludendo gli ultimi 12 mesi [...] per ora alla sola strategia RSI+BB 4H'.",
+     "alta"),
     ("seed-0290", "Max return 4H: lento, e la verifica sull'ultimo anno usa valori diversi da quelli mostrati",
      "Lorenzo, 15/10: 'il test finale sull'anno scoperto lo fa con una strategia dai valori diversi [...] Cosi' non ha senso, deve farlo applicando i valori della strategia piu' solida'; e su velocita': 'Ok, procedi' (due passate + calcolo piu' leggero).",
      "alta"),

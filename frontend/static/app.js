@@ -11970,7 +11970,7 @@
     const pct = (x) => (x == null ? "–" : `${x >= 0 ? "+" : ""}${x.toFixed(1)}%`);
     const from = new Date(v.from * 1000).toLocaleDateString("it-IT");
     const good = v.test_return_pct > 0;
-    return `<div class="lab-best2-verify ${good ? "pos" : "neg"}">Last year (from ${from}), these values: `
+    return `<div class="lab-best2-verify ${good ? "pos" : "neg"}">${v.unseen ? `Last 12 months, never seen by the search (from ${from})` : `Last year (from ${from}), these values`}: `
       + `<b>${pct(v.test_return_pct)}</b> · ${v.test_trades} trades · DD ${pct(-Math.abs(v.test_max_drawdown_pct))} `
       + `· buy & hold ${pct(v.buy_hold_pct)}</div>`;
   }
@@ -11992,7 +11992,7 @@
         <div class="lab-best2-main">
           ${kinds ? `<div class="lab-best2-kind">${KIND[c.kind] || c.kind}</div>` : ""}
           <div class="lab-best2-levels">OS ${c.params.rsi_oversold} · OB ${c.params.rsi_overbought}${kinds ? ` · BB ×${Number(c.params.bb_mult).toFixed(1)}` : ""}</div>
-          <div class="lab-best2-meta">Return <b>${pct(c.total_return_pct)}</b> · DD ${pct(-Math.abs(c.max_drawdown_pct))} · ${c.num_trades} trades${c.win_rate_pct != null ? ` · win ${c.win_rate_pct.toFixed(0)}%` : ""}</div>
+          <div class="lab-best2-meta">${c.verification && c.verification.unseen ? "History before the last 12 months" : "Return"} <b>${pct(c.total_return_pct)}</b> · DD ${pct(-Math.abs(c.max_drawdown_pct))} · ${c.num_trades} trades${c.win_rate_pct != null ? ` · win ${c.win_rate_pct.toFixed(0)}%` : ""}</div>
           ${c.solidity != null ? `<div class="lab-best2-meta">Solidity <b>${Math.round(c.solidity * 100)}%</b>${c.neighbours ? ` · ×${(Number(c.params.bb_mult) - 0.1).toFixed(1)}: ${pct(c.neighbours.mult_down)} · ×${(Number(c.params.bb_mult) + 0.1).toFixed(1)}: ${pct(c.neighbours.mult_up)}` : ""}</div>` : ""}
           ${verifyLine(c.verification)}
         </div>

@@ -7408,7 +7408,19 @@ async def _max_return_payload(strategy_name, df, full, constraints, say, should_
     if strategy_name not in GABRIELE_STRATEGIES:
         raise HTTPException(status_code=400,
                             detail="Max return searches the two RSI levels: RSI+BB strategies only.")
-    years = calendar_years(df.index)
+    # RSI+BB 4H keeps the last 12 months out of the search (Lorenzo, 15/10:
+    # "lasciare sempre l'ultimo anno libero da backtest, in modo da poterci
+    # testare la strategia su candele mai viste"): the choice is made on the
+    # candles before, the last year only tests it.
+    held_out = None
+    search_df = df
+    if strategy_name == RSI_BB_4H and on is not None:
+        cut = df.index[-1] - pd.Timedelta(days=LAST_YEAR_DAYS)
+        if (df.index[-1] - df.index[0]).days >= 2 * LAST_YEAR_DAYS:
+            search_df, held_out = df[df.index < cut], df[df.index >= cut]
+            full = on(search_df)
+            say(f"last 12 months kept out: choosing on candles up to {cut:%d/%m/%Y}")
+    years = calendar_years(search_df.index)
     # The in-candle replay (fill_at "on_condition") costs up to 8 s a backtest:
     # the scan runs with fills at the close, the best pairs are re-run exactly.
     fast = partial(full, intrabar=False) if in_candle else None
@@ -7426,7 +7438,7 @@ async def _max_return_payload(strategy_name, df, full, constraints, say, should_
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     if strategy_name == RSI_BB_4H and on is not None:
-        verification = await _last_year_check(df, on, top, say)
+        verification = await _last_year_check(df, on, top, say, held_out)
         for c in top:
             c["verification"] = (verification.get("picks") or {}).get(c["kind"]) \
                 or ({"skipped": verification["skipped"]} if verification.get("skipped") else None)
@@ -7440,13 +7452,16 @@ async def _max_return_payload(strategy_name, df, full, constraints, say, should_
         data_used=DataUsed(
             interval=backtest_interval, candles=len(df), chart_interval=ltf_interval,
             differs_from_chart=backtest_interval != ltf_interval,
-            note=(f"Every pair of RSI levels tried on all {len(df)} {backtest_interval} "
+            note=((f"Chosen on the {len(search_df)} {backtest_interval} candles before the last 12 months, "
+                   f"which only test the result. " if held_out is not None else "")
+                  + f"Every pair of RSI levels tried on {len(search_df)} {backtest_interval} "
                   f"candles, the same backtest as Run; the highest return within 60% "
                   f"drawdown wins"
                   + (f", with at least one trade in every year {years[0]}-{years[-1]}" if years else "")
                   + (". Multiplier searched 2.0-2.8: the most solid and the most profitable result are shown"
                      if strategy_name == RSI_BB_4H else ". The two best are shown")
-                  + ". Chosen on the whole chart: no out-of-sample check."),
+                  + (". The last 12 months are the out-of-sample check." if held_out is not None
+                     else ". Chosen on the whole chart: no out-of-sample check.")),
         ),
         top_candidates=[
             OptimizeCandidate(
@@ -7467,36 +7482,30 @@ async def _max_return_payload(strategy_name, df, full, constraints, say, should_
 LAST_YEAR_DAYS = 365
 
 
-async def _last_year_check(df, on, top: list[dict], say) -> dict:
-    """"Verifica sull'ultimo anno" (RSI+BB 4H only): the values of each result
-    shown — most solid, most profitable — run on the last year of candles.
-
-    Lorenzo, 15/10: the first version re-ran the search on the data up to a
-    year ago and tested what THAT picked, so the line showed other values:
-    "cosi' non ha senso, deve farlo applicando i valori della strategia piu'
-    solida". It now tests exactly the values shown. Those were chosen on the
-    whole chart, last year included, so this is how they did lately, not a
-    test on unseen candles."""
+async def _last_year_check(df, on, top: list[dict], say, held_out=None) -> dict:
+    """The values of each result shown (most solid, most profitable) run on
+    the last 12 months. Since 15/10 the search does not see those months
+    (`held_out`), so this is a test on candles it never saw — Lorenzo: "il
+    primo backtest dovrebbe essere fatto escludendo gli ultimi 12 mesi"."""
     say = say or (lambda _m: None)
-    cut = df.index[-1] - pd.Timedelta(days=LAST_YEAR_DAYS)
-    test = df[df.index >= cut]
-    if (df.index[-1] - df.index[0]).days < 2 * LAST_YEAR_DAYS or len(test) < 30:
-        return {"skipped": "less than two years of candles: nothing to verify on"}
-    run_test = on(test)
-    hold = float(test["close"].iloc[-1] / test["close"].iloc[0] - 1) * 100
+    if held_out is None or len(held_out) < 30:
+        return {"skipped": "less than two years of candles: the search used them all, nothing left to test on"}
+    run_test = on(held_out)
+    hold = float(held_out["close"].iloc[-1] / held_out["close"].iloc[0] - 1) * 100
     out = {}
     for c in top:
         bt = await _cpu(partial(run_test, c["params"]))
         out[c["kind"]] = {
-            "from": int(cut.timestamp()),
+            "from": int(held_out.index[0].timestamp()),
+            "unseen": True,
             "params": c["params"],
             "test_return_pct": round(bt.total_return_pct, 2),
             "test_trades": bt.num_trades,
             "test_max_drawdown_pct": round(bt.max_drawdown_pct, 2),
             "buy_hold_pct": round(hold, 2),
         }
-        say(f"last year, {c['kind']}: {bt.total_return_pct:+.1f}% ({bt.num_trades} trades), "
-            f"buy & hold {hold:+.1f}%")
+        say(f"last 12 months (never seen), {c['kind']}: {bt.total_return_pct:+.1f}% "
+            f"({bt.num_trades} trades), buy & hold {hold:+.1f}%")
     return {"picks": out}
 
 
