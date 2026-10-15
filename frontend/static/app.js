@@ -12095,7 +12095,9 @@
     const day = (t) => (t ? new Date(t * 1000).toLocaleDateString("it-IT") : "–");
     const cls = (x) => (x == null ? "" : x >= 0 ? "pos" : "neg");
     const t = v.unseen;
-    const row = (label, a, b, hint = "") => `<tr><th title="${hint}">${label}</th><td>${a}</td><td>${t ? b : "–"}</td></tr>`;
+    // 15/10: no unseen year on the site any more (tested in the test
+    // environment on 2021 and 2022), so one column unless a result has one
+    const row = (label, a, b, hint = "") => `<tr><th title="${hint}">${label}</th><td>${a}</td>${t ? `<td>${b}</td>` : ""}</tr>`;
     let verdict = "";
     if (t && h.annual_pct != null && v.return_pct != null) {
       const gap = v.return_pct - h.annual_pct;
@@ -12108,7 +12110,7 @@
     }
     return `
       <table class="lab-detail">
-        <thead><tr><th></th><th>History (chosen on)</th><th>Last 12 months · never seen</th></tr></thead>
+        <thead><tr><th></th>${t ? "<th>History (chosen on)</th><th>Last 12 months · never seen</th>" : "<th>Whole history</th>"}</tr></thead>
         <tbody>
           ${row("Period", `${day(h.from)} → ${day(h.to)}<br><small>${num(h.years, 1)} years</small>`, `${day(v.from)} → ${day(v.to)}`)}
           ${row("Total return", `<b class="${cls(h.return_pct)}">${pct(h.return_pct)}</b>`, `<b class="${cls(v.return_pct)}">${pct(v.return_pct)}</b>`)}
