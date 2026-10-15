@@ -37,3 +37,27 @@ def test_search_lists_usdt_pairs_first(monkeypatch):
         assert [o["symbol"] for o in asyncio.run(KucoinProvider().search_symbols("ETHUSDT"))] == ["ETH-USDT"]
     finally:
         kucoin._symbols_cache.clear()
+
+
+def test_monthly_candles_are_folded_from_the_daily_ones(monkeypatch):
+    # 15/10: "time frame 1 month not supported on KuCoin" with 1d selected —
+    # the analysis loads the 1M higher timeframe too
+    import numpy as np
+    import pandas as pd
+    idx = pd.date_range("2024-01-01", "2024-03-31", freq="D", tz="UTC")
+    daily = pd.DataFrame({"open": np.arange(len(idx)) + 1.0, "high": np.arange(len(idx)) + 2.0,
+                          "low": np.arange(len(idx)) + 0.5, "close": np.arange(len(idx)) + 1.5,
+                          "volume": 1.0}, index=idx)
+    seen = []
+
+    async def fake(self, symbol, interval, outputsize, since_ms=None, _orig=KucoinProvider.fetch_ohlcv):
+        if interval == "1M":
+            return await _orig(self, symbol, interval, outputsize, since_ms)
+        seen.append(interval)
+        return daily
+    monkeypatch.setattr(KucoinProvider, "fetch_ohlcv", fake)
+    m = asyncio.run(KucoinProvider().fetch_ohlcv("ETHUSDT", "1M", 12))
+    assert seen == ["1d"] and len(m) == 3
+    assert m["open"].iloc[1] == daily.loc["2024-02-01", "open"]
+    assert m["close"].iloc[1] == daily.loc["2024-02-29", "close"]
+    assert m["volume"].iloc[0] == 31

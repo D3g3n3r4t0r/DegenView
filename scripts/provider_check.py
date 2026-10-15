@@ -19,7 +19,7 @@ async def main(name: str, query: str, symbols: list[str]) -> int:
     except Exception as exc:  # noqa: BLE001
         print(f"::warning title={name} search::{type(exc).__name__}: {exc}")
     for sym in symbols:
-        for tf in ("4h", "1d"):
+        for tf in ("4h", "1d", "1w", "1M"):
             try:
                 df = await prov.fetch_ohlcv(sym, tf, 20000)
                 print(f"::notice title={name} {sym} {tf}::{format_symbol(sym)}: {len(df)} candles "

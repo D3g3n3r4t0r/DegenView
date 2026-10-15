@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0298", "KuCoin: 'timeframe 1M not supported' con 1d selezionato",
+     "Lorenzo, 15/10: 'quando lo seleziono mi dice time frame 1 month not supported on KuCoin. Pero' era selezionato 1d non 1M'.",
+     "alta"),
     ("seed-0297", "KuCoin: le coppie non compaiono fra quelle disponibili",
      "Lorenzo, 15/10: 'nei pair a disposizione sul sito, quelli relativi a KuCoin non compaiono. Dovresti verificare il motivo, se e' legato a delle API di KuCoin oppure se e' un problema nostro [...] in modo da avere a disposizione anche tutti i pair presenti su KuCoin'.",
      "alta"),
