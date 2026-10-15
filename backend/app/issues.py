@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0296", "Max return: range RSI ridotti anche su RSI+BB reversal e Gabriele 2",
+     "Lorenzo, 15/10: 'Imposta la riduzione del range delle RSI che abbiamo adottato nella strategia 4H anche alle altre due strategie sul sito'.",
+     "media"),
     ("seed-0295", "Archivio: l'esito del test su un altro pair non si puo' ne' salvare ne' togliere",
      "Lorenzo, 15/10: 'Una volta terminato il test su un altro pair dall'archivio strategie e' necessario inserire un tasto per decidere se salvare o eliminare l'esito del test. Al momento resta visibile ed e' impossibile da rimuovere'.",
      "media"),

@@ -2949,5 +2949,11 @@
     "at": 1792075508,
     "summary": "Sotto l'esito del test su un altro pair ci sono due tasti: 'Save to archive' lo salva come nuova voce dell'archivio (stessa strategia, stessi valori e impostazioni, sul nuovo pair, con la nota da quale voce viene), 'Discard' lo toglie dalla scheda.",
     "detail": "frontend/static/app.js, gestore del form .arch-testpair-form: dopo pairTestTable i tasti .arch-testpair-save (POST /api/archive con symbol/exchange/intervallo dell'esito e params/backtest_params della voce d'origine, poi loadArchive) e .arch-testpair-discard (svuota il riquadro)."
+  },
+  "seed-0296": {
+    "status": "risolto",
+    "at": 1792078049,
+    "summary": "Max return su RSI+BB reversal e Gabriele 2 ora prova ipervenduto 20-40 e ipercomprato 65-85, come la RSI+BB 4H: 441 backtest invece di 961, quindi anche piu' veloce. Il resto resta com'era: almeno un trade per anno, drawdown massimo 60%, i due migliori risultati.",
+    "detail": "optimize.MAX_RETURN_OVERSOLD = range(20, 41), MAX_RETURN_OVERBOUGHT = range(65, 86); testo della modalita' in index.html; test aggiornati (21 x 21)."
   }
 }

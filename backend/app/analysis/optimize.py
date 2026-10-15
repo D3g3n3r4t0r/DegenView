@@ -561,8 +561,13 @@ def optimize_strategy(
 # answers "which pair of values made the most on this history", the question
 # a value tried by hand on the chart answers; it says nothing about the next
 # candles. The other modes stay for that.
-MAX_RETURN_OVERSOLD = range(10, 41)      # 10, 11, ..., 40
-MAX_RETURN_OVERBOUGHT = range(60, 91)    # 60, 61, ..., 90
+#
+# Lorenzo, 15/10: "Imposta la riduzione del range delle RSI che abbiamo
+# adottato nella strategia 4H anche alle altre due strategie": the same
+# 20-40 x 65-85 as RSI+BB 4H (441 backtests instead of 961). Only the ranges:
+# the yearly-trade rule of these two stays at one a year.
+MAX_RETURN_OVERSOLD = range(20, 41)      # 20, 21, ..., 40
+MAX_RETURN_OVERBOUGHT = range(65, 86)    # 65, 66, ..., 85
 MAX_RETURN_DRAWDOWN_CAP = 60.0           # percent
 
 
