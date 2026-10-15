@@ -1,0 +1,26 @@
+name: Claudio 4H, every year as the unseen one
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - scripts/compare_claudio_folds.py
+      - .github/workflows/claudio-folds.yml
+  workflow_dispatch:
+
+jobs:
+  pair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        # 4 large caps + 6 smaller ones (rank printed by the job, CoinPaprika)
+        pair: [BTCUSDT, ETHUSDT, SOLUSDT, XRPUSDT, ROSEUSDT, ZILUSDT, ANKRUSDT, CELOUSDT, IOTXUSDT, KAVAUSDT]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r backend/requirements.txt
+      - run: cd backend && PAIR=${{ matrix.pair }} PYTHONPATH=. python ../scripts/compare_claudio_folds.py
