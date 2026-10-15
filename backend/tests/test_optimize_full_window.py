@@ -78,9 +78,9 @@ def test_gabriele_grid_covers_every_whole_value():
 
 def test_max_return_mode_matches_run_and_has_no_oos(client):
     body = client.get("/api/optimize", params={**_BASE, "mode": "max_return"}).json()
-    assert body["mode"] == "max_return" and body["trials_evaluated"] == 31 * 31
-    assert 10 <= body["params"]["rsi_oversold"] <= 40
-    assert 60 <= body["params"]["rsi_overbought"] <= 90
+    assert body["mode"] == "max_return" and body["trials_evaluated"] == 21 * 21
+    assert 20 <= body["params"]["rsi_oversold"] <= 40
+    assert 65 <= body["params"]["rsi_overbought"] <= 85
     assert body["out_of_sample_return_pct"] is None
     assert abs(body["backtest"]["max_drawdown_pct"]) <= 60
     run = client.get("/api/backtest/deep", params={**_BASE, **body["params"]}).json()

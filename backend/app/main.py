@@ -7455,7 +7455,7 @@ async def _max_return_payload(strategy_name, df, full, constraints, say, should_
                               ltf_interval: str, backtest_interval: str,
                               in_candle: bool = False, on=None,
                               strategy_params: dict | None = None) -> "OptimizeResult":
-    """Mode "max_return": every oversold 10-40 x overbought 60-90 pair on the
+    """Mode "max_return": every oversold 20-40 x overbought 65-85 pair on the
     whole chart, backtested as Run does, highest return within 60% drawdown
     (see optimize.max_return_search). No out-of-sample figure: none exists."""
     if strategy_name not in GABRIELE_STRATEGIES and strategy_name != CLAUDIO_4H:

@@ -36,7 +36,8 @@ def _bt(params):
     return run_backtest(DF, params, {}, strategy_name=GAB)
 
 
-def test_every_pair_from_10_40_by_60_90_is_tried():
+def test_every_pair_from_20_40_by_65_85_is_tried():
+    # 15/10: the 4H ranges on every RSI+BB strategy (was 10-40 x 60-90)
     tried = []
 
     def spy(p):
@@ -44,15 +45,15 @@ def test_every_pair_from_10_40_by_60_90_is_tried():
         return _bt(p)
 
     _, _, evaluated, _ = max_return_search(GAB, spy)
-    assert max_return_size() == 31 * 31 == evaluated
-    assert set(tried) == {(o, b) for o in range(10, 41) for b in range(60, 91)}
+    assert max_return_size() == 21 * 21 == evaluated
+    assert set(tried) == {(o, b) for o in range(20, 41) for b in range(65, 86)}
 
 
 def test_the_winner_is_the_highest_return_within_the_drawdown_cap():
     params, bt, _, top = max_return_search(GAB, _bt)
     brute = []
-    for o in range(10, 41):
-        for b in range(60, 91):
+    for o in range(20, 41):
+        for b in range(65, 86):
             r = _bt({**GABRIELE_FIXED, "rsi_oversold": o, "rsi_overbought": b})
             if r.num_trades >= 1 and abs(r.max_drawdown_pct) <= MAX_RETURN_DRAWDOWN_CAP:
                 brute.append(r.total_return_pct)
@@ -128,7 +129,7 @@ def test_enough_trades_in_total_forgive_an_empty_year(monkeypatch):
 
 def test_in_candle_fills_rerun_only_the_best_pairs():
     # 14/10, "l'ottimizzazione sta procedendo molto lentamente": with fills
-    # inside the candle every one of the 961 backtests replayed the candles.
+    # inside the candle every one of the then 961 backtests replayed the candles.
     exact_calls = []
 
     def exact(p):
@@ -137,7 +138,7 @@ def test_in_candle_fills_rerun_only_the_best_pairs():
         return bt.model_copy(update={"total_return_pct": bt.total_return_pct + 1.0})
 
     params, bt, evaluated, top = max_return_search(GAB, exact, fast_backtest=_bt, refine=20)
-    assert evaluated == 31 * 31
+    assert evaluated == 21 * 21
     assert 0 < len(exact_calls) <= 20
     fast_best = max_return_search(GAB, _bt)[1]
     assert bt.total_return_pct == pytest.approx(fast_best.total_return_pct + 1.0)
