@@ -459,7 +459,7 @@ def build_spaces(
     `locked` (Gabriele only) are the values currently set in the caller's own
     param fields, held fixed instead of searched or derived.
     """
-    if strategy_name == "Lorenzo (trend-follower)":
+    if strategy_name in ("Lorenzo (trend-follower)", "Lorenzo reversal (long only)"):
         return [_lorenzo_space(stats, tf, vf)
                 for tf in (False, True) for vf in (False, True)]
     if strategy_name in ("Gabriele (RSI+BB reversal)", "Gabriele 2 (RSI+BB long/short)", "RSI+BB 4H"):

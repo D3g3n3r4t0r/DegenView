@@ -2967,5 +2967,11 @@
     "at": 1792091914,
     "summary": "Il grafico 1D era giusto: la pagina carica anche il timeframe superiore (il mensile), e KuCoin non ha candele mensili nelle sue API, quindi quella richiesta falliva e bloccava tutto. Ora le candele mensili di KuCoin sono costruite dalle giornaliere, mese per mese.",
     "detail": "providers/kucoin.py fetch_ohlcv: interval 1M = candele 1d raggruppate per mese di calendario (resample 'MS': apertura del primo giorno, chiusura dell'ultimo, massimo/minimo, volume sommato). Test in test_kucoin_symbols.py; verifica dal vivo con provider-check.yml (ora anche 1w e 1M)."
+  },
+  "seed-0299": {
+    "status": "risolto",
+    "at": 1792092797,
+    "summary": "Nuova strategia 'Trend EMA Reversal': stessi valori e stessi ingressi long della Trend EMA, ma non va mai short — dove la Trend EMA aprirebbe lo short, chiude il long e resta fuori. Si usa come le altre: grafico, Run, alert, archivio, ottimizzazione e filtro BTC.",
+    "detail": "strategies.LORENZO_REVERSAL = 'Lorenzo reversal (long only)', compute_lorenzo_reversal_signals (compute_signals senza short); registrata in optimize/_STRATEGY_SPACES, priors (rami di Lorenzo), regime (trend), sensitivity; frontend: stessi campi della Trend EMA, etichetta 'Trend EMA Reversal'."
   }
 }

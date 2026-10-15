@@ -758,6 +758,23 @@ def compute_claudio_1d_signals(df: pd.DataFrame, params: dict | None = None) -> 
                          "exit_long": exit_, "exit_short": false}, index=df.index)
 
 
+LORENZO_REVERSAL = "Lorenzo reversal (long only)"
+
+
+def compute_lorenzo_reversal_signals(df: pd.DataFrame, params: dict | None = None) -> pd.DataFrame:
+    """Lorenzo, 15/10: "la versione reversal del trend EMA in modo che io la
+    possa confrontare con la RSI piu' BB reversal [...] uguale alla trend EMA
+    per quanto riguarda i valori, ma non andare short. Invece di aprire lo
+    short deve uscire dalla posizione e chiudere il long". Same values and
+    same long entries as Lorenzo (trend-follower); the slope cross-under that
+    opens its short only closes the long here (its exit_long already is that
+    cross), and nothing is ever shorted."""
+    sig = compute_signals(df, params)
+    none = pd.Series(False, index=sig.index)
+    return pd.DataFrame({"entry_long": sig["entry_long"], "entry_short": none,
+                         "exit_long": sig["exit_long"], "exit_short": none}, index=sig.index)
+
+
 def compute_lki2_signals(df: pd.DataFrame, params: dict | None = None) -> pd.DataFrame:
     base = compute_lki_signals(df, params)
     # L'uscita long dell'originale e' la condizione di ipercomprato: qui apre
@@ -780,6 +797,7 @@ def compute_lki2_signals(df: pd.DataFrame, params: dict | None = None) -> pd.Dat
 # whenever a caller passes a strategy name instead of pre-computed signals.
 STRATEGY_REGISTRY = {
     "Lorenzo (trend-follower)": compute_signals,
+    LORENZO_REVERSAL: compute_lorenzo_reversal_signals,
     "Accumulo / Distribuzione (long-term)": compute_exhaustion_signals,
     "Gabriele (RSI+BB reversal)": compute_lki_signals,
     "Gabriele 2 (RSI+BB long/short)": compute_lki2_signals,

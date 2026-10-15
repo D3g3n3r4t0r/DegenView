@@ -106,6 +106,7 @@
     const tail = i < 0 ? "" : s.slice(i);
     let label = head;
     if (/^Lorenzo HF\b/.test(head)) label = "Trend HF";
+    else if (/^Lorenzo reversal\b/.test(head)) label = "Trend EMA Reversal";
     else if (/^Lorenzo\b/.test(head)) label = "Trend EMA";
     else if (/^Gabriele 2\b/.test(head)) label = "RSI+BB Long/Short";
     else if (/^Gabriele\b/.test(head)) label = "RSI+BB Reversal";
@@ -294,6 +295,11 @@
       { key: "rsi_overbought", label: "RSI overbought", type: "number", min: 0, max: 100, default: 72 },
     ],
   };
+
+  // Trend EMA Reversal (15/10): the very same fields as Trend EMA — same
+  // values, only it never shorts (the short signal closes the long).
+  STRATEGY_PARAM_FIELDS["Lorenzo reversal (long only)"] =
+    STRATEGY_PARAM_FIELDS["Lorenzo (trend-follower)"].map((f) => ({ ...f }));
 
   // BTC filter (Lorenzo, 15/10: "il filtro Btc [...] da attivare/disattivare
   // su tutte le strategie"): no long entry while BTC's last closed week is
@@ -1261,6 +1267,7 @@
   // has to stay a subset of that. ----
   const OPTIMIZABLE_STRATEGIES = new Set([
     "Lorenzo (trend-follower)",
+    "Lorenzo reversal (long only)",
     "Accumulo / Distribuzione (long-term)",
     "Gabriele (RSI+BB reversal)",
     "Gabriele 2 (RSI+BB long/short)",
