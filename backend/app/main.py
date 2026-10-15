@@ -64,7 +64,9 @@ from app.analysis.confluence import compute_confluence
 from app.analysis.indicators import bull_market_support_band, compute_indicators
 from app.analysis import indicator_catalog
 from app.analysis.fibonacci import compute_fib_zones
+from app.analysis import btc_regime
 from app.analysis.optimize import (
+    STICKY_PARAMS,
     Constraints,
     GABRIELE_STRATEGIES,
     NoCandidateMeetsConstraints,
@@ -1241,6 +1243,20 @@ async def _maybe_send_recap() -> None:
         await telegram.send_message(text)
 
 
+async def _btc_regime_loop() -> None:
+    """BTC daily closes for the BTC filter (analysis/btc_regime): at start,
+    then every hour; a failed fetch keeps the last ones and retries in 2 min."""
+    while True:
+        try:
+            await btc_regime.refresh()
+            await asyncio.sleep(3600)
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001
+            logger.warning("BTC filter: BTC daily candles not refreshed", exc_info=True)
+            await asyncio.sleep(120)
+
+
 async def _watchdog_loop() -> None:
     """Sends a Telegram alert to all Telegram-enabled users if the watchlist
     loop goes silent for more than _WATCHDOG_STALE_S seconds."""
@@ -1681,6 +1697,7 @@ async def lifespan(app: FastAPI):
                        asyncio.create_task(_ai_scan_loop())]
     t4 = asyncio.create_task(_weekly_recap_loop())
     background.append(asyncio.create_task(perf.loop_lag_probe()))
+    background.append(asyncio.create_task(_btc_regime_loop()))
     background.append(asyncio.create_task(_telegram_chat_loop()))
     background.append(asyncio.create_task(_deepseek_recap_loop()))
     t5 = asyncio.create_task(_watchdog_loop())
@@ -1895,6 +1912,11 @@ async def _readable_validation_error(request: Request, exc: RequestValidationErr
     return JSONResponse(status_code=422, content={"detail": _validation_message(exc.errors())})
 
 
+@app.exception_handler(btc_regime.BtcRegimeUnavailable)
+async def _btc_regime_missing(request: Request, exc: Exception):
+    return JSONResponse(status_code=503, content={"detail": str(exc)})
+
+
 @app.exception_handler(Exception)
 async def _unhandled_error_handler(request: Request, exc: Exception):
     """Un 500 vero — quello che prima si vedeva solo nei log del container,
@@ -2019,6 +2041,10 @@ class StrategyParamsQuery(BaseModel):
     # strategy's own default: 2.0, or 2.5 for RSI+BB 4H.
     bb_length: int = 20
     bb_mult: float | None = None
+
+    # Every strategy (Lorenzo, 15/10): no long entry while BTC's previous
+    # daily close is under its EMA 200 (analysis/btc_regime). Off by default.
+    btc_filter: bool = False
 
     # Claudio 4H (see strategies.CLAUDIO_DEFAULT_PARAMS)
     cl_rsi_os: int = 30
@@ -7375,10 +7401,10 @@ async def _optimize_payload(
     full = on(df)
 
     if mode == "max_return":
-        return await _max_return_payload(strategy_name, df, full, constraints, say,
-                                         should_stop, ltf_interval, backtest_interval,
-                                         in_candle=bp.get("fill_at") == "on_condition",
-                                         on=on)
+        return _carry_sticky(await _max_return_payload(
+            strategy_name, df, full, constraints, say, should_stop, ltf_interval,
+            backtest_interval, in_candle=bp.get("fill_at") == "on_condition",
+            on=on, strategy_params=strategy_params), strategy_params)
 
     res = await _optimize_search(
         strategy_name, df, backtest_params, mode, ltf_interval, backtest_interval,
@@ -7411,12 +7437,24 @@ async def _optimize_payload(
             f"search picked on the first part only ({in_sample.total_return_pct:+.1f}% "
             f"there) and kept the rest for the out-of-sample check."
         )
+    return _carry_sticky(res, strategy_params)
+
+
+def _carry_sticky(res: "OptimizeResult", strategy_params: dict | None) -> "OptimizeResult":
+    """The switches the search ran with (BTC filter) go back with every
+    result, so what is archived or applied to an alert is what was tested."""
+    keep = {k: strategy_params[k] for k in STICKY_PARAMS if strategy_params and k in strategy_params}
+    if keep:
+        res.params = {**res.params, **keep}
+        for c in res.top_candidates or []:
+            c.params = {**c.params, **keep}
     return res
 
 
 async def _max_return_payload(strategy_name, df, full, constraints, say, should_stop,
                               ltf_interval: str, backtest_interval: str,
-                              in_candle: bool = False, on=None) -> "OptimizeResult":
+                              in_candle: bool = False, on=None,
+                              strategy_params: dict | None = None) -> "OptimizeResult":
     """Mode "max_return": every oversold 10-40 x overbought 60-90 pair on the
     whole chart, backtested as Run does, highest return within 60% drawdown
     (see optimize.max_return_search). No out-of-sample figure: none exists."""
@@ -7431,6 +7469,15 @@ async def _max_return_payload(strategy_name, df, full, constraints, say, should_
     say = say or (lambda _m: None)
     search_df = df
     years = calendar_years(search_df.index)
+    # BTC filter on (15/10): a year in which the filter kept the longs out
+    # for more than half the days is not "a year without trades" — staying
+    # out was the point (2022) — so it is not judged.
+    if btc_regime.enabled(strategy_params):
+        out = [y for y in years if btc_regime.down_share(y) > 0.5]
+        if out:
+            years = [y for y in years if y not in out]
+            say(f"BTC filter on: {', '.join(map(str, out))} not judged for trades "
+                f"(BTC under its EMA 200 for most of the year)")
     # The in-candle replay (fill_at "on_condition") costs up to 8 s a backtest:
     # the scan runs with fills at the close, the best pairs are re-run exactly.
     fast = partial(full, intrabar=False) if in_candle else None

@@ -5,6 +5,7 @@ import pandas as pd
 import pandas_ta  # noqa: F401  (registers the .ta accessor on DataFrame)
 from smartmoneyconcepts import smc
 
+from app.analysis import btc_regime
 from app.models import StrategySignal, StrategyState
 
 # Direct port of the user's Pine Script v4 "Lorenzo" trend-follower strategy:
@@ -788,6 +789,20 @@ STRATEGY_REGISTRY = {
     CLAUDIO_1D: compute_claudio_1d_signals,
     "Lorenzo HF (minuti on-chain)": compute_lorenzo_hf_signals,
 }
+
+
+def _with_btc_filter(fn):
+    """Every strategy honours the `btc_filter` switch (btc_regime): wrapping
+    the registry once means every caller — Run, chart, alerts, archive,
+    optimizations — sees the same filtered signals."""
+    def run(df: pd.DataFrame, params: dict | None = None) -> pd.DataFrame:
+        return btc_regime.apply(fn(df, params), params)
+    run.__name__ = getattr(fn, "__name__", "strategy")
+    run.__wrapped__ = fn
+    return run
+
+
+STRATEGY_REGISTRY = {name: _with_btc_filter(fn) for name, fn in STRATEGY_REGISTRY.items()}
 # Registered (backtests and the comparison script can run them) but not
 # offered in the menus or alerts until Lorenzo has seen the real-data
 # comparison (15/10: "prima di renderla operativa").
@@ -856,7 +871,7 @@ def confirmed_events(
     instead of dispatching to a registered strategy by name.
     """
     if signals is None:
-        compute_fn = STRATEGY_REGISTRY.get(strategy_name, compute_signals)
+        compute_fn = STRATEGY_REGISTRY.get(strategy_name, STRATEGY_REGISTRY["Lorenzo (trend-follower)"])
         signals = compute_fn(df, params)
     if last_bar_closed:
         last_confirmed_ts = df.index[-1] if len(df) else None

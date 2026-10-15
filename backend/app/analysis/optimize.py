@@ -239,6 +239,10 @@ def _random_gabriele_params(rng: random.Random, base: dict | None = None) -> dic
     }
 
 
+# Kept on every candidate the searches build (see optimize_strategy and
+# pipeline.run_pipeline): the user's switch, not a dimension of the search.
+STICKY_PARAMS = ("btc_filter",)
+
 _STRATEGY_SPACES: dict[str, tuple[dict, callable]] = {
     "Lorenzo (trend-follower)": (DEFAULT_PARAMS, _random_lorenzo_params),
     "Accumulo / Distribuzione (long-term)": (EXHAUSTION_DEFAULT_PARAMS, _random_exhaustion_params),
@@ -371,6 +375,10 @@ def optimize_strategy(
     if strategy_name in GABRIELE_STRATEGIES:
         default_params = {**default_params, **gabriele_fixed(strategy_name)}
 
+    # Switches the search never changes but every candidate must carry: the
+    # random draws build fresh dicts and would drop them (BTC filter, 15/10).
+    sticky = {k: base_params[k] for k in STICKY_PARAMS if base_params and k in base_params}
+
     rng = random.Random(seed)
     constraints = constraints or _NO_CONSTRAINTS
     # Le righe di avanzamento sono a scatti fissi e non a ogni tentativo: un
@@ -472,6 +480,7 @@ def optimize_strategy(
             candidate = random_params_fn(rng, default_params)
             if strategy_name in GABRIELE_STRATEGIES:   # 2.5 for RSI+BB 4H
                 candidate = {**candidate, **gabriele_fixed(strategy_name)}
+            candidate = {**candidate, **sticky}
             bt = run_backtest(df_in, candidate, backtest_params, strategy_name=strategy_name)
             evaluated += 1
             _consider(candidate, bt)

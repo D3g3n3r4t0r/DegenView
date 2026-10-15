@@ -295,6 +295,18 @@
     ],
   };
 
+  // BTC filter (Lorenzo, 15/10: "il filtro Btc [...] da attivare/disattivare
+  // su tutte le strategie"): no long entry while BTC's previous daily close is
+  // under its EMA 200. Off by default; Run, alerts, archive and the
+  // optimizations all honour it (backend analysis/btc_regime.py).
+  Object.keys(STRATEGY_PARAM_FIELDS).forEach((name) => {
+    if (name === "Lorenzo HF (minuti on-chain)") return;
+    STRATEGY_PARAM_FIELDS[name].push({
+      key: "btc_filter", label: "BTC filter (no long while BTC < EMA 200d)",
+      type: "checkbox", default: false,
+    });
+  });
+
   // ── Leggere un campo numerico senza produrre un 422 ────────────────────────
   //
   // Tre modi diversi di scrivere un numero finivano tutti nello stesso errore
