@@ -607,6 +607,15 @@ def max_return_size() -> int:
     return len(MAX_RETURN_OVERSOLD) * len(MAX_RETURN_OVERBOUGHT)
 
 
+def ranked_return(bt: BacktestResult) -> float:
+    """What Max return ranks by: the SIMPLE return (Lorenzo, 15/10: "Max
+    Return deve scegliere il migliore in base al rendimento semplice"), every
+    trade on the same stake, not the compounded one — on reversal strategies
+    the gains are not necessarily all put back into the next trade. The
+    drawdown cap stays on the compounded drawdown."""
+    return bt.simple_return_pct if bt.simple_return_pct is not None else bt.total_return_pct
+
+
 def max_return_search(
     strategy_name: str,
     backtest: Callable[[dict], BacktestResult],
@@ -688,7 +697,7 @@ def max_return_search(
             if fp in seen:
                 continue
             seen.add(fp)
-            entry = (bt.total_return_pct, evaluated, params, bt)
+            entry = (ranked_return(bt), evaluated, params, bt)
             if len(best) < keep:
                 heapq.heappush(best, entry)
             elif entry[0] > best[0][0]:
@@ -720,14 +729,14 @@ def max_return_search(
             if fp in seen_exact:
                 continue
             seen_exact.add(fp)
-            exact.append((bt.total_return_pct, n, params, bt))
+            exact.append((ranked_return(bt), n, params, bt))
         if not exact:
             raise ValueError("none of the best pairs holds the limits once filled inside the candle")
         ranked = sorted(exact, key=lambda e: e[0], reverse=True)[:top_n]
     top = [{"rank": i, "params": p, "backtest": b, "score": round(r, 4)}
            for i, (r, _, p, b) in enumerate(ranked, start=1)]
     say(f"best: oversold {top[0]['params']['rsi_oversold']}, overbought "
-        f"{top[0]['params']['rsi_overbought']} → {top[0]['backtest'].total_return_pct:+.2f}%")
+        f"{top[0]['params']['rsi_overbought']} → {ranked_return(top[0]['backtest']):+.2f}% simple")
     return top[0]["params"], top[0]["backtest"], evaluated, top
 
 
@@ -843,7 +852,7 @@ def max_return_search_3d(
             stop_if_asked(should_stop)
             os_, ob, m = key
             bt = scan({**fixed, "bb_mult": m, "rsi_oversold": os_, "rsi_overbought": ob})
-            returns[key] = bt.total_return_pct
+            returns[key] = ranked_return(bt)
             reason = _admitted(bt, years, constraints)
             if reason:
                 why[reason] = why.get(reason, 0) + 1
@@ -914,7 +923,7 @@ def max_return_search_3d(
             bt = backtest({**fixed, "bb_mult": m, "rsi_oversold": os_, "rsi_overbought": ob})
             if _admitted(bt, years, constraints):
                 continue
-            score = bt.total_return_pct * (sol[k][0] if kind == "solid" else 1.0)
+            score = ranked_return(bt) * (sol[k][0] if kind == "solid" else 1.0)
             if best is None or score > best[0]:
                 best = (score, k, bt)
         if best:
@@ -949,7 +958,7 @@ def max_return_search_3d(
     for c in out:
         p = c["params"]
         say(f"{c['kind']}: oversold {p['rsi_oversold']}, overbought {p['rsi_overbought']}, multiplier "
-            f"{p['bb_mult']} → {c['backtest'].total_return_pct:+.2f}% (solidity {c['solidity']:.0%})")
+            f"{p['bb_mult']} → {ranked_return(c['backtest']):+.2f}% simple (solidity {c['solidity']:.0%})")
     return out[0]["params"], out[0]["backtest"], n, out
 
 
@@ -1009,7 +1018,7 @@ def max_return_search_nd(
         for j, key in enumerate(todo, 1):
             stop_if_asked(should_stop)
             bt = scan(params_of(key))
-            returns[key] = bt.total_return_pct
+            returns[key] = ranked_return(bt)
             reason = _admitted(bt, years, constraints)
             if reason:
                 why[reason] = why.get(reason, 0) + 1
@@ -1076,7 +1085,7 @@ def max_return_search_nd(
             bt = backtest(params_of(k))
             if _admitted(bt, years, constraints):
                 continue
-            score = bt.total_return_pct * (sols[k][0] if kind == "solid" else 1.0)
+            score = ranked_return(bt) * (sols[k][0] if kind == "solid" else 1.0)
             if best is None or score > best[0]:
                 best = (score, k, bt)
         if best:
@@ -1102,5 +1111,5 @@ def max_return_search_nd(
     say(f"{n} combinations backtested of {grid_size_nd(dims)}")
     for c in out:
         say(f"{c['kind']}: " + ", ".join(f"{nm} {c['params'][nm]}" for nm in names)
-            + f" → {c['backtest'].total_return_pct:+.2f}% (solidity {c['solidity']:.0%})")
+            + f" → {ranked_return(c['backtest']):+.2f}% simple (solidity {c['solidity']:.0%})")
     return out[0]["params"], out[0]["backtest"], n, out

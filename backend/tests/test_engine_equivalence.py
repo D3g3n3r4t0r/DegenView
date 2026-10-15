@@ -38,6 +38,14 @@ BPS = [
     {"initial_capital": 1000, "qty_pct_of_equity": 100, "fill_at": "on_condition"},
 ]
 
+# 15/10: the simple figures are computed after the loop from the trades the
+# two engines already agree on (simple_stats); the reference engine predates them.
+_SIMPLE = {"simple_return_pct", "simple_max_drawdown_pct", "avg_trade_pct", "median_trade_pct"}
+
+
+def _core(bt):
+    return {k: v for k, v in bt.model_dump().items() if k not in _SIMPLE}
+
 
 @pytest.mark.parametrize("seed", range(6))
 def test_events_identical(seed):
@@ -57,7 +65,7 @@ def test_backtest_identical_on_given_signals(seed, bp):
     sig = _signals(df, seed)
     a = live_bt.run_backtest(df, None, bp, signals=sig)
     b = ref.run_backtest(df, None, bp, signals=sig)
-    assert a.model_dump() == b.model_dump()
+    assert _core(a) == _core(b)
 
 
 @pytest.mark.parametrize("name", ["Lorenzo (trend-follower)", "Gabriele (RSI+BB reversal)",
@@ -68,4 +76,4 @@ def test_backtest_identical_on_real_strategies(name, seed):
     for bp in BPS[:3]:
         a = live_bt.run_backtest(df, None, bp, strategy_name=name)
         b = ref.run_backtest(df, None, bp, strategy_name=name)
-        assert a.model_dump() == b.model_dump()
+        assert _core(a) == _core(b)

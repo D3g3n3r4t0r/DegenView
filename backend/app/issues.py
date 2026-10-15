@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0300", "Rendimento semplice accanto al composto, e Max return che sceglie sul semplice",
+     "Lorenzo, 15/10: 'il risultato percentuale puro di ogni trade [...] e poi sommate [...] nelle strategie reversal e' probabile che una volta uscito potrei anche non reinvestire tutto', poi 'Max Return deve scegliere il migliore in base al rendimento semplice e [...] metti in evidenza sia nel drawdown che nel profitto entrambi i risultati semplice e composto con la stessa visibilita''.",
+     "alta"),
     ("seed-0299", "Strategia Trend EMA in versione reversal (solo long)",
      "Lorenzo, 15/10: 'Aggiungi alle strategie anche la versione reversal del trend EMA in modo che io la possa confrontare con la RSI piu' BB reversal [...] uguale alla trend EMA per quanto riguarda i valori, ma non andare short. Invece di aprire lo short deve uscire dalla posizione e chiudere il long'.",
      "media"),

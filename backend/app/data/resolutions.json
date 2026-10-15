@@ -2973,5 +2973,11 @@
     "at": 1792092797,
     "summary": "Nuova strategia 'Trend EMA Reversal': stessi valori e stessi ingressi long della Trend EMA, ma non va mai short — dove la Trend EMA aprirebbe lo short, chiude il long e resta fuori. Si usa come le altre: grafico, Run, alert, archivio, ottimizzazione e filtro BTC.",
     "detail": "strategies.LORENZO_REVERSAL = 'Lorenzo reversal (long only)', compute_lorenzo_reversal_signals (compute_signals senza short); registrata in optimize/_STRATEGY_SPACES, priors (rami di Lorenzo), regime (trend), sensitivity; frontend: stessi campi della Trend EMA, etichetta 'Trend EMA Reversal'."
+  },
+  "seed-0300": {
+    "status": "risolto",
+    "at": 1792094240,
+    "summary": "Ogni backtest calcola anche il rendimento semplice (ogni trade sulla stessa puntata, senza reinvestire i guadagni) e il suo drawdown, piu' media e mediana per trade. Nel Lab, nei risultati di Max return, nell'archivio e sul grafico i quattro valori — profitto semplice, profitto composto, drawdown semplice, drawdown composto — sono mostrati alla stessa grandezza, ciascuno con la spiegazione sotto. Max return ora sceglie il migliore sul rendimento semplice; il tetto del 60% resta sul drawdown composto. Anche nell'export Excel.",
+    "detail": "backtest.simple_stats (puntata = capitale iniziale x dimensione posizione, al netto delle commissioni; drawdown in punti del capitale iniziale, sui trade chiusi), campi nuovi in BacktestResult/OptimizeCandidate/_bt_facts/metriche d'archivio; optimize.ranked_return usato da max_return_search, _3d, _nd; frontend fourFigures()."
   }
 }

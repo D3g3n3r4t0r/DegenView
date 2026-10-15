@@ -56,11 +56,12 @@ def test_the_winner_is_the_highest_return_within_the_drawdown_cap():
         for b in range(65, 86):
             r = _bt({**GABRIELE_FIXED, "rsi_oversold": o, "rsi_overbought": b})
             if r.num_trades >= 1 and abs(r.max_drawdown_pct) <= MAX_RETURN_DRAWDOWN_CAP:
-                brute.append(r.total_return_pct)
-    assert bt.total_return_pct == pytest.approx(max(brute))
+                brute.append(r.simple_return_pct)
+    # 15/10: ranked by the simple return ("in base al rendimento semplice")
+    assert bt.simple_return_pct == pytest.approx(max(brute))
     assert abs(bt.max_drawdown_pct) <= MAX_RETURN_DRAWDOWN_CAP
-    assert [c["backtest"].total_return_pct for c in top] == sorted(
-        (c["backtest"].total_return_pct for c in top), reverse=True)
+    assert [c["backtest"].simple_return_pct for c in top] == sorted(
+        (c["backtest"].simple_return_pct for c in top), reverse=True)
     assert params["rsi_length"] == 14 and params["bb_length"] == 20
 
 
@@ -93,13 +94,13 @@ def test_a_year_without_trades_drops_the_result():
     # the unfiltered winner, if it skips a year, must not survive the filter
     _, free_bt, _, _ = max_return_search(GAB, _bt)
     if years_without_trades(free_bt, years):
-        assert bt.total_return_pct <= free_bt.total_return_pct
+        assert bt.simple_return_pct <= free_bt.simple_return_pct
 
 
 def test_two_best_results_are_returned():
     _, _, _, top = max_return_search(GAB, _bt)
     assert [c["rank"] for c in top] == [1, 2]
-    assert top[0]["backtest"].total_return_pct >= top[1]["backtest"].total_return_pct
+    assert top[0]["backtest"].simple_return_pct >= top[1]["backtest"].simple_return_pct
 
 
 def test_enough_trades_in_total_forgive_an_empty_year(monkeypatch):
@@ -114,6 +115,7 @@ def test_enough_trades_in_total_forgive_an_empty_year(monkeypatch):
                   for i in range(n)]       # all in 2024
         return BacktestResult.model_construct(
             total_return_pct=50.0 + params["rsi_oversold"] / 100, num_trades=n, max_drawdown_pct=-5.0,
+            simple_return_pct=50.0 + params["rsi_oversold"] / 100,
             trades=[type("T", (), t)() for t in trades], win_rate_pct=100.0, profit_factor=None,
             sharpe_ratio=None, equity_curve=[])
 
@@ -135,10 +137,10 @@ def test_in_candle_fills_rerun_only_the_best_pairs():
     def exact(p):
         exact_calls.append(p)
         bt = _bt(p)
-        return bt.model_copy(update={"total_return_pct": bt.total_return_pct + 1.0})
+        return bt.model_copy(update={"simple_return_pct": bt.simple_return_pct + 1.0})
 
     params, bt, evaluated, top = max_return_search(GAB, exact, fast_backtest=_bt, refine=20)
     assert evaluated == 21 * 21
     assert 0 < len(exact_calls) <= 20
     fast_best = max_return_search(GAB, _bt)[1]
-    assert bt.total_return_pct == pytest.approx(fast_best.total_return_pct + 1.0)
+    assert bt.simple_return_pct == pytest.approx(fast_best.simple_return_pct + 1.0)

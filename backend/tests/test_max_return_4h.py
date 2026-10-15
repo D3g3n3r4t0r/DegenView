@@ -47,7 +47,7 @@ def test_two_kinds_and_the_profitable_one_is_never_hollow(monkeypatch):
         assert c["solidity"] >= (optimize.SOLIDITY_FLOOR if "profitable" in c["kind"] else 0)
     if len(out) == 2:
         solid, profit = out
-        assert profit["backtest"].total_return_pct >= solid["backtest"].total_return_pct
+        assert profit["backtest"].simple_return_pct >= solid["backtest"].simple_return_pct
         assert solid["score"] >= profit["score"]
 
 
@@ -57,8 +57,8 @@ def test_coarse_pass_finds_what_the_full_grid_finds(monkeypatch):
     full = optimize.max_return_search_3d(RSI_BB_4H, _bt, coarse=False)
     fast = optimize.max_return_search_3d(RSI_BB_4H, _bt, coarse=True)
     assert fast[2] < full[2]
-    best_full = full[3][0]["backtest"].total_return_pct * full[3][0]["solidity"]
-    best_fast = fast[3][0]["backtest"].total_return_pct * fast[3][0]["solidity"]
+    best_full = full[3][0]["backtest"].simple_return_pct * full[3][0]["solidity"]
+    best_fast = fast[3][0]["backtest"].simple_return_pct * fast[3][0]["solidity"]
     assert best_fast >= 0.9 * best_full
 
 
