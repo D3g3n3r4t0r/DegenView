@@ -4143,7 +4143,7 @@
       pill.className = "opt-pill " + kind;
       pill.innerHTML = `<span class="op-mark">${failed ? "✕" : stopped ? "◼" : "✓"}</span>`
         + `<span class="op-text">${failed ? "search failed"
-          : stopped ? "search stopped" : "saved to archive"}</span>`;
+          : stopped ? "search stopped" : "search done"}</span>`;
     }
     pill.classList.remove("hidden");
   }
@@ -4723,7 +4723,8 @@
       } else if (data.state === "finito") {
         job.state = "finito";
         job.result = data.result;
-        job.footText = "Done. Saved to archive.";
+        // 15/10: nothing is archived on its own (13/10), so no "saved" here
+        job.footText = "Done.";
         job.footKind = "ok";
         job.seenDone = optViewing === job.id;
         if (optViewing === job.id) optProgressFoot(job.footText, job.footKind);
