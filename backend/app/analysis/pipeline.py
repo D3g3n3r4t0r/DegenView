@@ -37,6 +37,7 @@ from app.analysis.backtest import run_backtest
 from app.analysis.plateau import PlateauCandidate, plateau_search
 from app.analysis.priors import ConstrainedSpace, build_spaces, estimate_series_stats
 from app.analysis.regime import GateDecision, regime_gate
+from app.analysis.sensitivity import ParamSpace
 from app.analysis.validation import (
     DSRResult,
     PBOResult,
@@ -141,7 +142,7 @@ def _three_way_split(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.D
 # Same floor as random/grid (optimize._MIN_TRADES_FLOOR): with RSI 14 / BB 20 /
 # 2 locked, RSI+BB rarely reaches 8 trades and the stable search reported
 # every candidate as unusable (segnalazione e0bffe25).
-from app.analysis.optimize import _MIN_TRADES_FLOOR  # noqa: E402
+from app.analysis.optimize import _MIN_TRADES_FLOOR, STICKY_PARAMS  # noqa: E402
 
 def run_pipeline(
     strategy_name: str,
@@ -199,6 +200,7 @@ def run_pipeline(
                      "where this strategy has no measurable edge")
 
     spaces: list[ConstrainedSpace] = build_spaces(strategy_name, stats, target_entries, locked_params)
+    sticky = {k: locked_params[k] for k in STICKY_PARAMS if locked_params and k in locked_params}
     spaces.sort(key=lambda s: s.d)   # simplest branch first
     say(f"{len(spaces)} variant{'' if len(spaces) == 1 else 's'} to explore: "
         f"{', '.join(cs.label for cs in spaces)}")
@@ -213,12 +215,15 @@ def run_pipeline(
 
     for cs in spaces:
         say(f"— variant {cs.label} ({cs.d} parameters)")
+        space = cs.as_param_space()
+        if sticky:   # the BTC filter switch rides on every point of the space
+            space = ParamSpace(space.dims, lambda u, f=space.to_params: {**f(u), **sticky})
         res = plateau_search(
             strategy_name, df_in, bp,
             base_points=1, coarse=coarse, tol=tol,
             max_grid_evals=max_evals_per_branch,
             min_trades=_MIN_TRADES_FLOOR.get(strategy_name, min_trades),
-            space=cs.as_param_space(), seed=seed,
+            space=space, seed=seed,
             # Le fasi della mappatura escono nello stesso log: "mappatura dei
             # pianori…" e poi silenzio per minuti non dice se sta lavorando ne'
             # che cosa sta facendo.
