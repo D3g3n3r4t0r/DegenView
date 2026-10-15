@@ -296,13 +296,17 @@
   };
 
   // BTC filter (Lorenzo, 15/10: "il filtro Btc [...] da attivare/disattivare
-  // su tutte le strategie"): no long entry while BTC's previous daily close is
-  // under its EMA 200. Off by default; Run, alerts, archive and the
+  // su tutte le strategie"): no long entry while BTC's last closed week is
+  // under its weekly EMA 21. Off by default; Run, alerts, archive and the
   // optimizations all honour it (backend analysis/btc_regime.py).
   Object.keys(STRATEGY_PARAM_FIELDS).forEach((name) => {
     if (name === "Lorenzo HF (minuti on-chain)") return;
     STRATEGY_PARAM_FIELDS[name].push({
-      key: "btc_filter", label: "BTC filter (no long while BTC < EMA 200d)",
+      key: "btc_filter", label: "BTC filter (no long while BTC < weekly EMA 21)",
+      type: "checkbox", default: false,
+    }, {
+      // 15/10: worth it on RSI+BB 4H (worst 2022 -61% -> -12%), costly on 1D
+      key: "btc_filter_exit", label: "BTC filter: also close longs when it turns off",
       type: "checkbox", default: false,
     });
   });

@@ -1,4 +1,4 @@
-"""BTC filter: no long entry while BTC is below its daily EMA 200.
+"""BTC filter: no long entry while BTC is below its weekly EMA 21.
 
 Lorenzo, 15/10: "Il filtro Btc può essere utile da attivare/disattivare su
 tutte le strategie del sito?", then "Ok, implementiamo così". Measured in the
@@ -12,9 +12,18 @@ STRATEGY_REGISTRY), so Run, the chart, the alerts, the archive and the
 optimizations all see the same filtered signals. Only long ENTRIES are
 blocked: exits and shorts are untouched.
 
-The regime of a candle is the PREVIOUS day's BTC close against its EMA 200:
-known before the candle opens, so no look-ahead. Before the BTC history
-starts (or before 200 days of it) the filter does not act.
+The regime of a candle is the last CLOSED weekly BTC candle against the EMA
+21 of the weekly closes (15/10, after the test environment: the same results
+as the daily EMA 200 the filter started with, but 5-6 changes a year instead
+of 15-17 — Lorenzo: "per avere un segnale di mercato piu' nitido il timeframe
+del filtro dovrebbe essere weekly", then "Ok, procedi"). A week closes on
+Sunday; its verdict applies from the Monday after, so no look-ahead. Before
+the BTC history starts (or before 21 weeks of it) the filter does not act.
+
+`btc_filter_exit` (second switch, only with the filter on): a long still open
+is also closed when the filter turns off. Measured: on RSI+BB 4H the worst
+2022 loss -61% -> -12% for +28 -> +25% a year in 2023-26; costly on RSI+BB
+1D (+33 -> +11% a year), no effect on Lorenzo.
 
 The daily closes are cached in memory and refreshed in the background
 (main._btc_regime_loop); the strategy code is synchronous and only reads the
@@ -29,10 +38,12 @@ import time
 import numpy as np
 import pandas as pd
 
-EMA_DAYS = 200
+EMA_WEEKS = 21
+MIN_DAYS = 200      # daily closes needed to load (and 21 weeks of them)
 
 _closes: pd.Series | None = None
-_up: pd.Series | None = None
+_up: pd.Series | None = None       # weekly, indexed on the Monday it applies from
+_up_daily: pd.Series | None = None
 _updated = 0.0
 _pinned = False
 
@@ -53,22 +64,28 @@ def enabled(params: dict | None) -> bool:
 def set_closes(closes: pd.Series, pin: bool = False) -> None:
     """Daily BTC closes (UTC-indexed). `pin` keeps them from the background
     refresh (tests)."""
-    global _closes, _up, _updated, _pinned
+    global _closes, _up, _up_daily, _updated, _pinned
     closes = closes.astype(float).sort_index()
     if closes.index.tz is None:
         closes.index = closes.index.tz_localize("UTC")
     day = closes.groupby(closes.index.normalize()).last()
-    ema = day.ewm(span=EMA_DAYS, adjust=False, min_periods=EMA_DAYS).mean()
+    # a week (Monday-Sunday) closes with Sunday's daily close; the week still
+    # running is left out: its Sunday has not come yet
+    week = day.resample("W-SUN").last().dropna()
+    if len(day) and day.index[-1].dayofweek != 6:
+        week = week.iloc[:-1]
+    ema = week.ewm(span=EMA_WEEKS, adjust=False, min_periods=EMA_WEEKS).mean()
     # True where the filter lets longs in; unknown (no history yet) counts as in
-    up = (day > ema).where(ema.notna(), True)
-    # the regime of day D is decided by the close of D-1
-    _up = up.shift(1, freq="D")
+    up = (week > ema).where(ema.notna(), True)
+    _up = up.shift(1, freq="D")                  # from the Monday after the close
+    _up_daily = _up.reindex(pd.date_range(_up.index[0], _up.index[-1] + pd.Timedelta(days=6),
+                                          freq="D", tz="UTC"), method="ffill") if len(_up) else _up
     _closes, _updated, _pinned = day, time.time(), pin
 
 
 def clear() -> None:
-    global _closes, _up, _updated, _pinned
-    _closes = _up = None
+    global _closes, _up, _up_daily, _updated, _pinned
+    _closes = _up = _up_daily = None
     _updated, _pinned = 0.0, False
 
 
@@ -93,17 +110,24 @@ def up_mask(index: pd.DatetimeIndex) -> np.ndarray:
 
 def down_share(year: int) -> float:
     """Share of the days of `year` with longs blocked (0 when unknown)."""
-    if _up is None:
+    if _up_daily is None:
         return 0.0
-    days = _up[(_up.index.year == year)]
+    days = _up_daily[(_up_daily.index.year == year)]
     return 0.0 if days.empty else float((~days.astype(bool)).mean())
+
+
+def exit_enabled(params: dict | None) -> bool:
+    return enabled(params) and enabled({"btc_filter": (params or {}).get("btc_filter_exit")})
 
 
 def apply(signals: pd.DataFrame, params: dict | None) -> pd.DataFrame:
     if not enabled(params) or "entry_long" not in signals:
         return signals
     out = signals.copy()
-    out["entry_long"] = out["entry_long"].to_numpy(dtype=bool) & up_mask(out.index)
+    up = up_mask(out.index)
+    out["entry_long"] = out["entry_long"].to_numpy(dtype=bool) & up
+    if exit_enabled(params) and "exit_long" in out:
+        out["exit_long"] = out["exit_long"].to_numpy(dtype=bool) | ~up
     return out
 
 
@@ -113,5 +137,5 @@ async def refresh() -> None:
         return
     from app.providers.mexc import MexcProvider
     df = await MexcProvider().fetch_ohlcv("BTCUSDT", "1d", 4000)
-    if df is not None and len(df) >= EMA_DAYS:
+    if df is not None and len(df) >= MIN_DAYS:
         set_closes(df["close"])

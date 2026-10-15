@@ -26,7 +26,7 @@ def _btc_down_in(year: int) -> pd.Series:
     idx = pd.date_range("2019-01-01", "2026-12-31", freq="D", tz="UTC")
     v = np.linspace(5_000, 50_000, len(idx))
     crash = (idx >= pd.Timestamp(f"{year - 1}-12-01", tz="UTC")) & (idx < pd.Timestamp(f"{year + 1}-01-01", tz="UTC"))
-    v[crash] = v[crash] * 0.3
+    v[crash] = np.linspace(v[crash][0] * 0.7, v[crash][0] * 0.2, crash.sum())   # falling all year
     return pd.Series(v, index=idx)
 
 
