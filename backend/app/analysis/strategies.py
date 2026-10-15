@@ -653,6 +653,61 @@ def compute_claudio_signals(df: pd.DataFrame, params: dict | None = None) -> pd.
                          "exit_long": exit_, "exit_short": false.to_numpy()}, index=df.index)
 
 
+CLAUDIO_TREND_4H = "Claudio Trend 4H"
+# Lorenzo, 15/10: "una strategia che e' efficace sia in un mercato fortemente
+# rialzista come il 2021, sia in un mercato fortemente ribassista come il
+# 2022 [...] senza grosse perdite". Long only, trend: buy strength only while
+# the daily chart is healthy, leave as soon as it is not.
+CLAUDIO_TREND_DEFAULT_PARAMS = {
+    "ct_len": 120,         # searched: breakout above the high of the last N 4h candles
+    "ct_atr": 4.0,         # searched: trailing stop k × ATR(14) under the closes
+    "ct_ema_days": 200,    # searched: daily EMA of the regime (100/150/200 days)
+}
+
+
+def daily_regime(df: pd.DataFrame, days: int) -> pd.Series:
+    """True on a 4h candle when the PREVIOUS day closed above its daily EMA:
+    known before the candle opens, no look-ahead."""
+    day = df["close"].astype(float).resample("1D").last().dropna()
+    ema = day.ewm(span=int(days), adjust=False, min_periods=min(int(days), 120)).mean()
+    up = (day > ema).shift(1)
+    return up.reindex(df.index, method="ffill").fillna(False).astype(bool)
+
+
+def compute_claudio_trend_signals(df: pd.DataFrame, params: dict | None = None) -> pd.DataFrame:
+    p = {**CLAUDIO_TREND_DEFAULT_PARAMS, **{k: v for k, v in (params or {}).items()
+                                            if k in CLAUDIO_TREND_DEFAULT_PARAMS and v is not None}}
+    close = df["close"].astype(float)
+    high = df["high"].astype(float)
+    low = df["low"].astype(float)
+    prev_close = close.shift(1)
+    tr = pd.concat([high - low, (high - prev_close).abs(), (low - prev_close).abs()], axis=1).max(axis=1)
+    atr = _wilder_rma(tr, 14)
+    top = high.rolling(int(p["ct_len"])).max().shift(1)       # the high of the N candles before
+    regime = daily_regime(df, int(p["ct_ema_days"])).to_numpy()
+
+    c, a, t = close.to_numpy(), atr.to_numpy(), top.to_numpy()
+    k = float(p["ct_atr"])
+    n = len(c)
+    entry = np.zeros(n, dtype=bool)
+    exit_ = np.zeros(n, dtype=bool)
+    in_pos, stop = False, 0.0
+    for i in range(n):
+        if in_pos:
+            stop = max(stop, c[i - 1] - k * a[i - 1])            # from the previous close
+            if c[i] <= stop or not regime[i]:
+                exit_[i] = True
+                in_pos = False
+            continue
+        if regime[i] and t[i] == t[i] and a[i] == a[i] and c[i] > t[i]:
+            entry[i] = True
+            in_pos, stop = True, c[i] - k * a[i]
+
+    false = np.zeros(n, dtype=bool)
+    return pd.DataFrame({"entry_long": entry, "entry_short": false,
+                         "exit_long": exit_, "exit_short": false}, index=df.index)
+
+
 def compute_lki2_signals(df: pd.DataFrame, params: dict | None = None) -> pd.DataFrame:
     base = compute_lki_signals(df, params)
     # L'uscita long dell'originale e' la condizione di ipercomprato: qui apre
@@ -680,12 +735,13 @@ STRATEGY_REGISTRY = {
     "Gabriele 2 (RSI+BB long/short)": compute_lki2_signals,
     RSI_BB_4H: compute_lki4h_signals,
     CLAUDIO_4H: compute_claudio_signals,
+    CLAUDIO_TREND_4H: compute_claudio_trend_signals,
     "Lorenzo HF (minuti on-chain)": compute_lorenzo_hf_signals,
 }
 # Registered (backtests and the comparison script can run them) but not
 # offered in the menus or alerts until Lorenzo has seen the real-data
 # comparison (15/10: "prima di renderla operativa").
-HIDDEN_STRATEGIES = {CLAUDIO_4H}
+HIDDEN_STRATEGIES = {CLAUDIO_4H, CLAUDIO_TREND_4H}
 AVAILABLE_STRATEGIES = [k for k in STRATEGY_REGISTRY if k not in HIDDEN_STRATEGIES]
 DEFAULT_STRATEGY = AVAILABLE_STRATEGIES[0]
 

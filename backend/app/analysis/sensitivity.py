@@ -130,6 +130,17 @@ def _claudio(u: np.ndarray) -> dict:
 _CLAUDIO_DIMS = ["cl_rsi_os", "cl_bb_mult", "cl_atr_stop"]
 
 
+def _claudio_trend(u: np.ndarray) -> dict:
+    return {
+        "ct_len": _i(u[0], 30, 240),
+        "ct_atr": _f(u[1], 2.0, 6.0),
+        "ct_ema_days": _i(u[2], 100, 200),
+    }
+
+
+_CLAUDIO_TREND_DIMS = ["ct_len", "ct_atr", "ct_ema_days"]
+
+
 def _exhaustion(u: np.ndarray) -> dict:
     return {
         "swing_length": _i(u[0], 3, 20),
@@ -180,6 +191,7 @@ PARAM_SPACES: dict[str, ParamSpace] = {
     "Gabriele 2 (RSI+BB long/short)": ParamSpace(tuple(_GABRIELE_DIMS), _gabriele),
     "RSI+BB 4H": ParamSpace(tuple(_GABRIELE_DIMS), _gabriele),
     "Claudio 4H": ParamSpace(tuple(_CLAUDIO_DIMS), _claudio),
+    "Claudio Trend 4H": ParamSpace(tuple(_CLAUDIO_TREND_DIMS), _claudio_trend),
     "Lorenzo HF (minuti on-chain)": ParamSpace(tuple(_LORENZO_HF_DIMS), _lorenzo_hf),
     "Accumulo / Distribuzione (long-term)": ParamSpace(tuple(_EXHAUSTION_DIMS), _exhaustion),
 }
