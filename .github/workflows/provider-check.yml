@@ -1,0 +1,25 @@
+name: Provider check (live)
+
+# On demand: search and candle depth of a crypto provider, read back from
+# the check-run annotations (the sandbox cannot reach the exchanges).
+on:
+  workflow_dispatch:
+    inputs:
+      provider:
+        default: 'kucoin'
+      query:
+        default: 'ETH'
+      symbols:
+        default: 'ETHUSDT SOLUSDT BTCUSDT ETHBTC'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r backend/requirements.txt
+      - run: cd backend && PYTHONPATH=. python ../scripts/provider_check.py ${{ inputs.provider }} ${{ inputs.query }} ${{ inputs.symbols }}
