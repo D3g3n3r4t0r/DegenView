@@ -30,8 +30,15 @@ import zipfile
 import pandas as pd
 
 from app.analysis.backtest import run_backtest
-from app.analysis.optimize import CLAUDIO_DIMS, max_return_search_3d, max_return_search_nd
-from app.analysis.strategies import CLAUDIO_4H, CLAUDIO_TREND_4H, DEFAULT_PARAMS, RSI_BB_4H, STRATEGY_REGISTRY
+from app.analysis.optimize import CLAUDIO_DIMS, max_return_search, max_return_search_3d, max_return_search_nd
+from app.analysis.strategies import (
+    CLAUDIO_1D,
+    CLAUDIO_4H,
+    CLAUDIO_TREND_4H,
+    DEFAULT_PARAMS,
+    RSI_BB_4H,
+    STRATEGY_REGISTRY,
+)
 
 # Lorenzo, 15/10: "lascerei in questo ambiente di test sempre 2021 e 2022 come
 # anni di candele mai viste [...] per qualsiasi tipo di strategia": a strong
@@ -41,7 +48,10 @@ TRAIN_FROM = pd.Timestamp(os.environ.get("TRAIN_FROM", "2023-01-01"), tz="UTC")
 
 BP = {"initial_capital": 1000.0, "qty_pct_of_equity": 100.0, "commission_pct": 0.06,
       "slippage_pct": 0.02, "fill_at": "signal_close"}
-WARMUP = 1500   # 250 days: the daily EMA 200 of Claudio Trend needs them
+# Lorenzo, 15/10: the same environment for the daily chart ("facciamo
+# ambiente di test per timeframe 1D"). TF=4h (default) or TF=1d.
+TF = os.environ.get("TF", "4h")
+WARMUP = 1500 if TF == "4h" else 300   # ~250 days either way: a daily EMA 200 needs them
 LORENZO = "Lorenzo (trend-follower)"
 LORENZO_DIMS = (
     ("len", list(range(40, 301, 20))),          # 14
@@ -75,10 +85,30 @@ VARIANTS = (
     # 200, short below it, Lorenzo's own values (nothing searched)
     ("Lorenzo default L/S regime", LORENZO, dict(DEFAULT_PARAMS), (), "ls"),
 )
+GABRIELE = "Gabriele (RSI+BB reversal)"
+CLAUDIO_1D_DIMS = (
+    ("c1_ema", [50, 75, 100, 125, 150, 200]),
+    ("c1_pb", [10, 15, 20, 25, 30]),
+    ("c1_atr", [round(2.0 + 0.5 * i, 1) for i in range(7)]),        # 2.0 … 5.0
+)
+if TF == "1d":
+    # dims "2d" = the site's Max return for RSI+BB (oversold 10-40 × overbought 60-90)
+    VARIANTS = (
+        # Lorenzo, 15/10: "i valori si scelgono sulle candele dal 2023 a oggi,
+        # poi si provano su 2021 e 2022" — no hand-set values for Claudio 1D
+        ("Claudio 1D", CLAUDIO_1D, {}, CLAUDIO_1D_DIMS, False),
+        ("Claudio 1D +BTC", CLAUDIO_1D, {}, CLAUDIO_1D_DIMS, "btc"),
+        ("RSI+BB reversal", GABRIELE, {}, "2d", False),
+        ("Lorenzo default", LORENZO, dict(DEFAULT_PARAMS), (), False),
+        ("Lorenzo searched", LORENZO, dict(DEFAULT_PARAMS), LORENZO_DIMS, False),
+    )
 LONG_ONLY = {LORENZO}
+BTC_UP: pd.Series | None = None   # BTC's previous daily close above its EMA 200
 SHORT = {"Claudio Trend 4H": "CT", "Claudio Trend default": "CTd", "RSI+BB 4H": "R", "Claudio 4H": "C", "Lorenzo default": "Ld", "Lorenzo searched": "Ls"}
 SHORT.update({f"{k} +EMA200d": f"{v}f" for k, v in list(SHORT.items())})
 SHORT["Lorenzo default L/S regime"] = "Lrs"
+SHORT.update({"Claudio 1D": "C1", "Claudio 1D +BTC": "C1b",
+              "RSI+BB reversal": "G"})
 TREND: pd.Series | None = None   # close above the daily EMA 200, set per pair
 
 
@@ -88,12 +118,12 @@ def daily_trend(df):
     day = df["close"].resample("1D").last().dropna()
     up = (day > day.ewm(span=200, adjust=False, min_periods=200).mean()).shift(1)
     return up.reindex(df.index, method="ffill").fillna(False).astype(bool)
-SHOWN = ("ct_len", "ct_atr", "ct_ema_days", "rsi_oversold", "rsi_overbought", "bb_mult", "cl_rsi_os", "cl_bb_mult", "cl_atr_stop",
+SHOWN = ("c1_ema", "c1_pb", "c1_atr", "ct_len", "ct_atr", "ct_ema_days", "rsi_oversold", "rsi_overbought", "bb_mult", "cl_rsi_os", "cl_bb_mult", "cl_atr_stop",
          "len", "slopeFlen", "slopeSlen")
 
 
 def _binance_month(symbol, y, m):
-    url = f"https://data.binance.vision/data/spot/monthly/klines/{symbol}/4h/{symbol}-4h-{y}-{m:02d}.zip"
+    url = f"https://data.binance.vision/data/spot/monthly/klines/{symbol}/{TF}/{symbol}-{TF}-{y}-{m:02d}.zip"
     try:
         raw = urllib.request.urlopen(url, timeout=30).read()
     except Exception:  # noqa: BLE001 — not listed yet that month
@@ -107,7 +137,7 @@ def _binance_month(symbol, y, m):
 def binance(symbol):
     now = pd.Timestamp.now(tz="UTC")
     rows = []
-    for y in range(2020, now.year + 1):
+    for y in range(2020 if TF == "4h" else 2018, now.year + 1):
         for m in range(1, 13):
             if (y, m) >= (now.year, now.month):
                 break
@@ -126,9 +156,9 @@ async def candles(symbol: str) -> tuple[str, pd.DataFrame]:
     from app.providers.kucoin import KucoinProvider
     from app.providers.mexc import MexcProvider
     old = await asyncio.to_thread(binance, symbol)
-    if old is not None and len(old) >= 3000:
+    if old is not None and len(old) >= (3000 if TF == "4h" else 900):
         try:
-            tail = await MexcProvider().fetch_ohlcv(symbol, "4h", 400)
+            tail = await MexcProvider().fetch_ohlcv(symbol, TF, 400)
             old = pd.concat([old, tail[tail.index > old.index[-1]][old.columns]])
         except Exception:  # noqa: BLE001 — the archive alone, up to last month
             pass
@@ -136,12 +166,12 @@ async def candles(symbol: str) -> tuple[str, pd.DataFrame]:
     best, last = None, None
     for name, prov in (("kucoin", KucoinProvider()), ("mexc", MexcProvider())):
         try:
-            df = await prov.fetch_ohlcv(symbol, "4h", 20000)
+            df = await prov.fetch_ohlcv(symbol, TF, 20000)
             if best is None or len(df) > len(best[1]):
                 best = (name, df)
         except Exception as exc:  # noqa: BLE001
             last = exc
-    if best is None or len(best[1]) < 3000:
+    if best is None or len(best[1]) < (3000 if TF == "4h" else 900):
         raise RuntimeError(f"{symbol}: not enough candles ({last})")
     return best
 
@@ -156,7 +186,8 @@ async def rank(symbol: str) -> int | None:
 
 def signals(df, strategy, params, filt=False):
     sig = STRATEGY_REGISTRY[strategy](df, params).copy()
-    up = TREND.reindex(sig.index).fillna(False).to_numpy() if filt else None
+    trend = BTC_UP if filt == "btc" else TREND
+    up = trend.reindex(sig.index, method="ffill").fillna(False).to_numpy().astype(bool) if filt else None
     if filt == "ls":              # both sides, each only on its side of the regime
         sig["entry_long"] = sig["entry_long"] & up
         sig["entry_short"] = sig["entry_short"] & ~up
@@ -205,6 +236,9 @@ def run_pair(symbol, df):
         try:
             if dims == ():
                 n, picks = 1, [{"kind": "default", "params": fixed, "backtest": bt(fixed), "solidity": None}]
+            elif dims == "2d":
+                _, _, n, picks = max_return_search(strat, bt, years=years)
+                picks = [{**c, "kind": f"top{c['rank']}", "solidity": None} for c in picks]
             elif dims is None:
                 _, _, n, picks = max_return_search_3d(strat, bt, years=years)
             else:
@@ -228,7 +262,7 @@ def run_pair(symbol, df):
 
 
 def solid(row):
-    return row.get("solid") or row.get("solid+profitable") or row.get("default")
+    return row.get("solid") or row.get("solid+profitable") or row.get("default") or row.get("top1")
 
 
 def line(res):
@@ -247,9 +281,12 @@ def line(res):
 
 
 async def main():
+    global BTC_UP
     sym = os.environ.get("PAIR", "BTCUSDT")
     try:
         src, df = await candles(sym)
+        btc = df if sym == "BTCUSDT" else (await candles("BTCUSDT"))[1]
+        BTC_UP = daily_trend(btc)
     except Exception as exc:  # noqa: BLE001
         print(f"::warning title={sym}::{exc}")
         return 0

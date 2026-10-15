@@ -1,17 +1,16 @@
 name: Claudio 4H, every year as the unseen one
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - scripts/compare_claudio_folds.py
-      - .github/workflows/claudio-folds.yml
   workflow_dispatch:
     inputs:
       pairs:
         description: 'JSON list of pairs (empty = the 15 of the basket)'
         required: false
         default: ''
+      tf:
+        description: '4h or 1d'
+        required: false
+        default: '4h'
 
 jobs:
   pair:
@@ -29,7 +28,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install -r backend/requirements.txt
-      - run: cd backend && PAIR=${{ matrix.pair }} PYTHONPATH=. python ../scripts/compare_claudio_folds.py
+      - run: cd backend && PAIR=${{ matrix.pair }} TF=${{ inputs.tf || '4h' }} PYTHONPATH=. python ../scripts/compare_claudio_folds.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -708,6 +708,55 @@ def compute_claudio_trend_signals(df: pd.DataFrame, params: dict | None = None) 
                          "exit_long": exit_, "exit_short": false}, index=df.index)
 
 
+CLAUDIO_1D = "Claudio 1D"
+# Lorenzo, 15/10: "metti a punto una tua strategia che reputi la migliore per
+# il time frame di un giorno". Long only: buy the end of a pullback inside an
+# uptrend, let the trend run on a trailing stop, leave when the trend breaks.
+CLAUDIO_1D_DEFAULT_PARAMS = {
+    "c1_ema": 100,      # searched: the trend — close above this EMA and the EMA rising
+    "c1_pb": 20,        # searched: the pullback — a close under this EMA in the last 5 days
+    "c1_atr": 3.5,      # searched: trailing stop k × ATR(14) under the closes
+}
+
+
+def compute_claudio_1d_signals(df: pd.DataFrame, params: dict | None = None) -> pd.DataFrame:
+    p = {**CLAUDIO_1D_DEFAULT_PARAMS, **{k: v for k, v in (params or {}).items()
+                                         if k in CLAUDIO_1D_DEFAULT_PARAMS and v is not None}}
+    close = df["close"].astype(float)
+    high = df["high"].astype(float)
+    low = df["low"].astype(float)
+    prev_close = close.shift(1)
+    tr = pd.concat([high - low, (high - prev_close).abs(), (low - prev_close).abs()], axis=1).max(axis=1)
+    atr = _wilder_rma(tr, 14)
+    n_long = int(p["c1_ema"])
+    ema_l = close.ewm(span=n_long, adjust=False, min_periods=n_long).mean()
+    ema_s = close.ewm(span=int(p["c1_pb"]), adjust=False, min_periods=int(p["c1_pb"])).mean()
+    trend = (close > ema_l) & (ema_l > ema_l.shift(10))
+    dipped = (close < ema_s).astype(float).rolling(5).max().shift(1) == 1   # under it in the 5 days before
+    trigger = (trend & dipped & (close > ema_s)).fillna(False).to_numpy()
+
+    c, a, el = close.to_numpy(), atr.to_numpy(), ema_l.to_numpy()
+    k = float(p["c1_atr"])
+    n = len(c)
+    entry = np.zeros(n, dtype=bool)
+    exit_ = np.zeros(n, dtype=bool)
+    in_pos, stop = False, 0.0
+    for i in range(n):
+        if in_pos:
+            stop = max(stop, c[i - 1] - k * a[i - 1])            # from the previous close
+            if c[i] <= stop or c[i] < el[i]:
+                exit_[i] = True
+                in_pos = False
+            continue
+        if trigger[i] and a[i] == a[i]:
+            entry[i] = True
+            in_pos, stop = True, c[i] - k * a[i]
+
+    false = np.zeros(n, dtype=bool)
+    return pd.DataFrame({"entry_long": entry, "entry_short": false,
+                         "exit_long": exit_, "exit_short": false}, index=df.index)
+
+
 def compute_lki2_signals(df: pd.DataFrame, params: dict | None = None) -> pd.DataFrame:
     base = compute_lki_signals(df, params)
     # L'uscita long dell'originale e' la condizione di ipercomprato: qui apre
@@ -736,12 +785,13 @@ STRATEGY_REGISTRY = {
     RSI_BB_4H: compute_lki4h_signals,
     CLAUDIO_4H: compute_claudio_signals,
     CLAUDIO_TREND_4H: compute_claudio_trend_signals,
+    CLAUDIO_1D: compute_claudio_1d_signals,
     "Lorenzo HF (minuti on-chain)": compute_lorenzo_hf_signals,
 }
 # Registered (backtests and the comparison script can run them) but not
 # offered in the menus or alerts until Lorenzo has seen the real-data
 # comparison (15/10: "prima di renderla operativa").
-HIDDEN_STRATEGIES = {CLAUDIO_4H, CLAUDIO_TREND_4H}
+HIDDEN_STRATEGIES = {CLAUDIO_4H, CLAUDIO_TREND_4H, CLAUDIO_1D}
 AVAILABLE_STRATEGIES = [k for k in STRATEGY_REGISTRY if k not in HIDDEN_STRATEGIES]
 DEFAULT_STRATEGY = AVAILABLE_STRATEGIES[0]
 

@@ -42,6 +42,7 @@ STRATEGY_FAMILY: dict[str, str] = {
     "RSI+BB 4H": FAMILY_REVERSION,
     "Claudio 4H": FAMILY_REVERSION,
     "Claudio Trend 4H": FAMILY_TREND,
+    "Claudio 1D": FAMILY_TREND,
     "Lorenzo HF (minuti on-chain)": FAMILY_TREND,
     "Accumulo / Distribuzione (long-term)": FAMILY_REVERSION,
 }
