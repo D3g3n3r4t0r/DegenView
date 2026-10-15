@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0295", "Archivio: l'esito del test su un altro pair non si puo' ne' salvare ne' togliere",
+     "Lorenzo, 15/10: 'Una volta terminato il test su un altro pair dall'archivio strategie e' necessario inserire un tasto per decidere se salvare o eliminare l'esito del test. Al momento resta visibile ed e' impossibile da rimuovere'.",
+     "media"),
     ("seed-0294", "Archivio: provare una strategia salvata su un altro pair",
      "Lorenzo, 15/10: 'applicare all'archivio strategie un pulsante in cui si puo' testare la strategia salvata su un altro asset [...] con gli stessi valori. A quel punto la strategia sarebbe testata su candele mai viste'.",
      "media"),

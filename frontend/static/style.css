@@ -5997,3 +5997,7 @@ html.embed-chart, html.embed-chart body, html.embed-chart .chart-area { backgrou
 .arch-testpair-form { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
 .arch-testpair-form input { flex: 1; min-width: 140px; }
 .arch-testpair-title { margin-top: 8px; font-size: 12px; font-weight: 600; color: var(--ink); }
+
+/* Test on another pair: keep or drop the result (15/10) */
+.arch-testpair-actions { display: flex; gap: 8px; margin-top: 8px; }
+.arch-testpair-actions button { font-size: 12px; }

@@ -3740,7 +3740,40 @@
           });
           const body = await resp.json();
           if (!resp.ok) throw new Error(typeof body.detail === "string" ? body.detail : `Error ${resp.status}`);
-          out.innerHTML = pairTestTable(body);
+          // 15/10 (Lorenzo): "un tasto per decidere se salvare o eliminare
+          // l'esito del test" — it stayed on the card with no way to remove it.
+          out.innerHTML = pairTestTable(body) + `
+            <div class="arch-testpair-actions">
+              <button type="button" class="arch-testpair-save">Save to archive</button>
+              <button type="button" class="arch-testpair-discard">Discard</button>
+            </div>`;
+          out.querySelector(".arch-testpair-discard").addEventListener("click", () => { out.innerHTML = ""; });
+          out.querySelector(".arch-testpair-save").addEventListener("click", async (ev2) => {
+            const btn = ev2.currentTarget;
+            const entry = items.find((x) => x.id === id) || {};
+            const bp = entry.backtest_params || {};
+            btn.disabled = true;
+            btn.textContent = "Saving…";
+            try {
+              const r2 = await fetch("/api/archive", {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  symbol: body.symbol, asset_type: body.asset_type, exchange: body.exchange,
+                  ltf_interval: body.interval, strategy_name: body.strategy_name,
+                  params: entry.params || body.params || {}, backtest_params: bp,
+                  intrabar: bp.fill_at === "on_condition",
+                  note: `Tested from the ${entry.symbol || "archived"} entry, same values`,
+                }),
+              });
+              const b2 = await r2.json();
+              if (!r2.ok) throw new Error(typeof b2.detail === "string" ? b2.detail : `Error ${r2.status}`);
+              loadArchive();
+            } catch (err2) {
+              btn.disabled = false;
+              btn.textContent = "Save to archive";
+              out.insertAdjacentHTML("beforeend", `<p class="arch-warn">⚠ ${escapeHtml(err2.message || "Save failed")}</p>`);
+            }
+          });
         } catch (err) {
           out.innerHTML = `<p class="arch-warn">⚠ ${escapeHtml(err.message || "Test failed")}</p>`;
         }
