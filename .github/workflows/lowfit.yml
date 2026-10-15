@@ -9,6 +9,10 @@ on:
         description: 'JSON list of pairs (empty = the 35 of the test environment)'
         required: false
         default: ''
+      mode:
+        description: 'empty = first run, v2 = narrow search + walk-forward judge + RSI+BB additions'
+        required: false
+        default: ''
 
 jobs:
   pair:
@@ -24,4 +28,4 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install -r backend/requirements.txt
-      - run: cd backend && PAIR=${{ matrix.pair }} TF=1d PYTHONPATH=. python ../scripts/lowfit_1d.py
+      - run: cd backend && PAIR=${{ matrix.pair }} TF=1d MODE=${{ inputs.mode }} PYTHONPATH=. python ../scripts/lowfit_1d.py

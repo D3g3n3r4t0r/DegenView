@@ -289,7 +289,7 @@ def signals(df, strategy, params, filt=False):
     return sig
 
 
-def test_on(df, strategy, params, t0, t1, filt=False):
+def test_on(df, strategy, params, t0, t1, filt=False, bp=None):
     start = max(0, df.index.searchsorted(t0) - WARMUP)
     frame = df[(df.index < t1)].iloc[start:]
     sig = signals(frame, strategy, params, filt)
@@ -301,7 +301,7 @@ def test_on(df, strategy, params, t0, t1, filt=False):
     # (confirmed_events) and never fills.
     sig.loc[sig.index[-2]:, ["entry_long", "entry_short"]] = False
     sig.loc[sig.index[-2], ["exit_long", "exit_short"]] = True
-    return run_backtest(frame, params, BP, signals=sig, strategy_name=strategy)
+    return run_backtest(frame, params, bp or BP, signals=sig, strategy_name=strategy)
 
 
 def annual(ret, days):
