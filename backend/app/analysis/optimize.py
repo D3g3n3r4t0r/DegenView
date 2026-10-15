@@ -245,6 +245,7 @@ STICKY_PARAMS = ("btc_filter", "btc_filter_exit")
 
 _STRATEGY_SPACES: dict[str, tuple[dict, callable]] = {
     "Lorenzo (trend-follower)": (DEFAULT_PARAMS, _random_lorenzo_params),
+    "Lorenzo reversal (long only)": (DEFAULT_PARAMS, _random_lorenzo_params),
     "Accumulo / Distribuzione (long-term)": (EXHAUSTION_DEFAULT_PARAMS, _random_exhaustion_params),
     "Gabriele (RSI+BB reversal)": (LKI_DEFAULT_PARAMS, _random_gabriele_params),
     "Gabriele 2 (RSI+BB long/short)": (LKI2_DEFAULT_PARAMS, _random_gabriele_params),

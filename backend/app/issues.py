@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0299", "Strategia Trend EMA in versione reversal (solo long)",
+     "Lorenzo, 15/10: 'Aggiungi alle strategie anche la versione reversal del trend EMA in modo che io la possa confrontare con la RSI piu' BB reversal [...] uguale alla trend EMA per quanto riguarda i valori, ma non andare short. Invece di aprire lo short deve uscire dalla posizione e chiudere il long'.",
+     "media"),
     ("seed-0298", "KuCoin: 'timeframe 1M not supported' con 1d selezionato",
      "Lorenzo, 15/10: 'quando lo seleziono mi dice time frame 1 month not supported on KuCoin. Pero' era selezionato 1d non 1M'.",
      "alta"),
