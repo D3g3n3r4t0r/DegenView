@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0297", "KuCoin: le coppie non compaiono fra quelle disponibili",
+     "Lorenzo, 15/10: 'nei pair a disposizione sul sito, quelli relativi a KuCoin non compaiono. Dovresti verificare il motivo, se e' legato a delle API di KuCoin oppure se e' un problema nostro [...] in modo da avere a disposizione anche tutti i pair presenti su KuCoin'.",
+     "alta"),
     ("seed-0296", "Max return: range RSI ridotti anche su RSI+BB reversal e Gabriele 2",
      "Lorenzo, 15/10: 'Imposta la riduzione del range delle RSI che abbiamo adottato nella strategia 4H anche alle altre due strategie sul sito'.",
      "media"),
