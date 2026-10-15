@@ -1,0 +1,27 @@
+name: Low overfitting test (1D)
+
+# On demand: scripts/lowfit_1d.py on every pair, results as check-run
+# annotations (the sandbox cannot reach the exchanges).
+on:
+  workflow_dispatch:
+    inputs:
+      pairs:
+        description: 'JSON list of pairs (empty = the 35 of the test environment)'
+        required: false
+        default: ''
+
+jobs:
+  pair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        pair: ${{ fromJSON(inputs.pairs || '["BTCUSDT","ETHUSDT","SOLUSDT","XRPUSDT","COMPUSDT","BATUSDT","1INCHUSDT","KSMUSDT","SNXUSDT","ROSEUSDT","ZILUSDT","ANKRUSDT","CELOUSDT","IOTXUSDT","KAVAUSDT","LTCUSDT","LINKUSDT","ADAUSDT","DOGEUSDT","ATOMUSDT","XLMUSDT","ALGOUSDT","VETUSDT","CHZUSDT","ENJUSDT","BNBUSDT","TRXUSDT","ETCUSDT","EOSUSDT","NEOUSDT","DASHUSDT","ZECUSDT","XTZUSDT","ONTUSDT","QTUMUSDT"]') }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r backend/requirements.txt
+      - run: cd backend && PAIR=${{ matrix.pair }} TF=1d PYTHONPATH=. python ../scripts/lowfit_1d.py
