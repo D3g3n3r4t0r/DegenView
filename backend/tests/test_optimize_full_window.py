@@ -93,9 +93,10 @@ def test_max_return_is_refused_for_other_strategies(client):
     assert resp.status_code == 400
 
 
-def test_rsi_bb_4h_carries_a_last_year_check(client, monkeypatch):
-    # Lorenzo, 14/10: "scegliere sui dati fino all'anno scorso e vedere come
-    # va nell'ultimo anno [...] solo sulla strategia 4H"
+def test_rsi_bb_4h_searches_the_whole_chart(client, monkeypatch):
+    # Lorenzo, 15/10: "nel sito non c'e' piu' la necessita' di testare
+    # sull'ultimo anno di candele non viste" — the unseen years (2021, 2022)
+    # are tested in the test environment, the site searches every candle.
     from app.analysis import optimize as opt
     monkeypatch.setattr(opt, "MAX_RETURN_MULTS", [2.4, 2.5])
     n = 900
@@ -113,15 +114,10 @@ def test_rsi_bb_4h_carries_a_last_year_check(client, monkeypatch):
                                                 "strategy_name": "RSI+BB 4H"}).json()
     assert body["top_candidates"], body
     for c in body["top_candidates"]:
-        v = c["verification"]
-        # 15/10: the last-year line tests the very values shown on the card
-        assert v and "test_return_pct" in v and v["params"] == c["params"] and v["unseen"]
-        assert v["from"] < int(long_df.index[-1].timestamp())
-        # 15/10: warm indicators, but no trade before the cut; full details
-        assert v["trades"] == v["wins"] + v["losses"]
+        assert c["verification"] is None
         h = c["history"]
-        assert h["to"] < v["from"] and h["years"] > 0 and "annual_pct" in h and "profit_factor" in h
-    # 15/10: the search never sees the last 12 months
-    cut = long_df.index[-1] - pd.Timedelta(days=365)
-    assert body["top_candidates"][0]["num_trades"] == main.run_backtest(
-        long_df[long_df.index < cut], body["params"], {}, strategy_name="RSI+BB 4H").num_trades
+        assert h["to"] == int(long_df.index[-1].timestamp())
+        assert h["trades"] == h["wins"] + h["losses"] and "profit_factor" in h
+    run = client.get("/api/backtest/deep", params={**_BASE, "symbol": "LONGUSDT", "strategy_name": "RSI+BB 4H",
+                                                    **body["params"]}).json()
+    assert body["backtest"]["total_return_pct"] == pytest.approx(run["total_return_pct"])
