@@ -7490,11 +7490,7 @@ async def _max_return_payload(strategy_name, df, full, constraints, say, should_
     )
 
 
-LAST_YEAR_DAYS = 365
 FOUR_H_LAB = ("RSI+BB 4H", "Claudio 4H")   # detailed history card, two kinds of result
-
-
-WARMUP_CANDLES = 300
 
 
 def _bt_facts(bt: BacktestResult, start, end) -> dict:
@@ -8432,21 +8428,9 @@ async def test_archive_entry_on_pair(
         "candles": len(df),
         "history": {**_bt_facts(full_bt, df.index[0], df.index[-1]),
                     "buy_hold_pct": round((float(df["close"].iloc[-1]) / float(df["close"].iloc[0]) - 1) * 100, 2)},
-        "last_year": None,
     }
-    cut = df.index[-1] - pd.Timedelta(days=LAST_YEAR_DAYS)
-    if (df.index[-1] - df.index[0]).days >= LAST_YEAR_DAYS + 30:
-        start = max(0, df.index.searchsorted(cut) - WARMUP_CANDLES)
-        frame = df.iloc[start:]
-        first_i = df.index.searchsorted(cut)
-
-        def year():
-            return _chart_backtest(frame, params, bp, strategy_name, req.asset_type, trade_from=cut)
-        yb = await _cpu(year)
-        hold = (float(df["close"].iloc[-1]) / float(df["close"].iloc[first_i]) - 1) * 100
-        facts = _bt_facts(yb, df.index[first_i], df.index[-1])
-        out["last_year"] = {**facts, "buy_hold_pct": round(hold, 2),
-                            "vs_buy_hold_pct": round(facts["return_pct"] - hold, 2)}
+    # 15/10: no last-12-months column any more ("ormai non servono piu'"):
+    # the unseen years are tested in the test environment (2021, 2022).
     return out
 
 

@@ -119,6 +119,5 @@ def test_testing_an_entry_on_another_pair(client, monkeypatch):
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["symbol"] == "ETHUSDT" and body["params"] == FOUND
-    assert body["history"]["trades"] >= body["last_year"]["trades"]
-    assert body["last_year"]["from"] >= int((df.index[-1] - pd.Timedelta(days=366)).timestamp())
+    assert "last_year" not in body and body["history"]["trades"] >= 0
     assert client.post("/api/archive/nope/test-on-pair", json={"symbol": "X"}).status_code == 404
