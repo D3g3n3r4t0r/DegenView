@@ -15,6 +15,10 @@ on:
         description: 'variant set (empty = default, btc = every strategy with and without the BTC filter)'
         required: false
         default: ''
+      filters:
+        description: 'SET=regimes only: comma-separated filter suffixes to run (e.g. " w21x")'
+        required: false
+        default: ''
 
 jobs:
   pair:
@@ -32,7 +36,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install -r backend/requirements.txt
-      - run: cd backend && PAIR=${{ matrix.pair }} TF=${{ inputs.tf || '4h' }} SET=${{ inputs.set }} PYTHONPATH=. python ../scripts/compare_claudio_folds.py
+      - run: cd backend && PAIR=${{ matrix.pair }} TF=${{ inputs.tf || '4h' }} SET=${{ inputs.set }} FILTERS="${{ inputs.filters }}" PYTHONPATH=. python ../scripts/compare_claudio_folds.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:

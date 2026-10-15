@@ -145,7 +145,11 @@ REGIMES: dict[str, pd.Series] = {}
 if os.environ.get("SET") == "regimes":
     _L = dict(DEFAULT_PARAMS)
     _F = (("", None), (" d200", {"r": "d200"}), (" w21", {"r": "w21"}), (" w50", {"r": "w50"}),
-          (" d200x", {"r": "d200", "exit": True}))
+          (" d200x", {"r": "d200", "exit": True}), (" w21x", {"r": "w21", "exit": True}))
+    # FILTERS=" w21x" (comma-separated suffixes, "-" = no filter) runs only those
+    if os.environ.get("FILTERS"):
+        want = [x.replace("-", "") for x in os.environ["FILTERS"].split(",")]
+        _F = tuple(f for f in _F if f[0] in want)
     if TF == "4h":
         _S = (("RSI+BB 4H", RSI_BB_4H, {}, None, False), ("Lorenzo", LORENZO, _L, (), False),
               ("Lorenzo L/S", LORENZO, _L, (), True))
