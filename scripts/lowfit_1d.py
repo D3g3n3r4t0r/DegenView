@@ -130,6 +130,153 @@ def judge(df, strat, p, tests, train):
     return row
 
 
+# ── v2 (15/10, after the first run): "Low overfitting" as it would be ──────
+# Lorenzo: "rifai il test con questi parametri". Narrow ranges around the
+# defaults, at least MIN_TRADES trades in every full year of the training,
+# walk-forward as the judge: the procedure (choose on the candles before a
+# fold, keep the best by simple return x solidity) has to beat the plain
+# defaults out of sample across the folds, otherwise the defaults stay.
+MIN_TRADES = 4
+NARROW = {
+    GAB: (("rsi_oversold", list(range(22, 35))), ("rsi_overbought", list(range(66, 79)))),
+    LREV: (("len", list(range(90, 171, 10))), ("slopeFlen", list(range(4, 11))),
+           ("slopeSlen", list(range(19, 36, 2)))),
+}
+
+
+def _net(bt):
+    q = BP["qty_pct_of_equity"] / 100
+    return [(t.entry_time, t.exit_time, t.pnl_abs / ((t.equity_after - t.pnl_abs) * q) * 100) for t in bt.trades]
+
+
+def _window(trades, a, b, by="exit"):
+    a, b = int(a.timestamp()), int(b.timestamp())
+    return [x for (en, ex, x) in trades if a <= (ex if by == "exit" else en) < b]
+
+
+def lowfit(strat, defaults, frame):
+    import itertools
+    dims = NARROW[strat]
+    names = [d[0] for d in dims]
+    vals = [d[1] for d in dims]
+    grid = list(itertools.product(*[range(len(v)) for v in vals]))
+    start, end = frame.index[0], frame.index[-1]
+    full_years = [y for y in range(start.year, end.year + 1)
+                  if pd.Timestamp(year=y, month=1, day=1, tz="UTC") >= start
+                  and pd.Timestamp(year=y, month=12, day=31, tz="UTC") <= end]
+    trades = {}
+    for key in grid:
+        p = {**defaults, **{nm: vals[d][i] for d, (nm, i) in enumerate(zip(names, key))}}
+        trades[key] = (p, _net(run_backtest(frame, p, BP, strategy_name=strat)))
+    dflt = _net(run_backtest(frame, defaults, BP, strategy_name=strat))
+
+    def choose(until):
+        yrs = [y for y in full_years if pd.Timestamp(year=y + 1, month=1, day=1, tz="UTC") <= until]
+        score = {}
+        for key, (_, tr) in trades.items():
+            if any(sum(1 for (en, _, _) in tr if pd.Timestamp(en, unit="s", tz="UTC").year == y) < MIN_TRADES for y in yrs):
+                continue
+            score[key] = sum(_window(tr, start, until))
+        best, best_v = None, None
+        for key, own in score.items():
+            near = []
+            for d in range(len(key)):
+                for st in (-1, 1):
+                    k = list(key)
+                    k[d] += st
+                    if tuple(k) in score:
+                        near.append(score[tuple(k)])
+            sol = 0.0 if own <= 0 or not near else max(0.0, min(1.0, float(np.median(near)) / own))
+            v = own * sol
+            if best_v is None or v > best_v:
+                best, best_v = key, v
+        return best
+    folds = [(end - pd.DateOffset(months=FOLD_MONTHS * k), end - pd.DateOffset(months=FOLD_MONTHS * (k - 1)))
+             for k in range(FOLDS, 0, -1)]
+    proc, base = [], []
+    for s_, e_ in folds:
+        k = choose(s_)
+        proc.append(sum(_window(trades[k][1], s_, e_, "entry")) if k else 0.0)
+        base.append(sum(_window(dflt, s_, e_, "entry")))
+    final = choose(end + pd.Timedelta(days=1))
+    beats = final is not None and float(np.median(proc)) > float(np.median(base))
+    return (trades[final][0] if beats else dict(defaults)), {
+        "kept": "searched" if beats else "default", "wf_proc": round(float(np.median(proc)), 1),
+        "wf_def": round(float(np.median(base)), 1), "cells": len(grid)}
+
+
+# RSI+BB additions to look at (defaults, nothing searched): a stop loss, the
+# BTC filter, and the BTC filter closing the long when it turns off.
+def _rsi_bb_exit(kind):
+    """RSI+BB reversal with another exit (test only): "mid" = close back
+    above the middle band, "or" = RSI over overbought OR close over the
+    upper band (the site's needs both, which a falling market never gives)."""
+    from app.analysis import btc_regime
+    from app.analysis.strategies import compute_lki_signals
+    from app.analysis.strategies import LKI_DEFAULT_PARAMS as D
+
+    def fn(df, params=None):
+        p = {**D, **{k: v for k, v in (params or {}).items() if v is not None and k in D}}
+        sig = compute_lki_signals(df, p).copy()
+        close = df["close"]
+        basis = close.rolling(p["bb_length"]).mean()
+        upper = basis + p["bb_mult"] * close.rolling(p["bb_length"]).std(ddof=0)
+        delta = close.diff()
+        from app.analysis.strategies import _wilder_rma
+        g = _wilder_rma(delta.clip(lower=0), p["rsi_length"])
+        lo = _wilder_rma(-delta.clip(upper=0), p["rsi_length"])
+        rsi = 100 - 100 / (1 + g / lo.replace(0, np.nan))
+        sig["exit_long"] = ((close > basis) if kind == "mid" else ((rsi > p["rsi_overbought"]) | (close > upper))).fillna(False)
+        return btc_regime.apply(sig, params)
+    return fn
+
+
+GAB_MID, GAB_OR = "RSI+BB exit mid (test)", "RSI+BB exit or (test)"
+env.STRATEGY_REGISTRY[GAB_MID] = _rsi_bb_exit("mid")
+env.STRATEGY_REGISTRY[GAB_OR] = _rsi_bb_exit("or")
+# (name, strategy, extra params, extra backtest settings)
+GAB_EXTRA = (("G_mid", GAB_MID, {}, {}), ("G_or", GAB_OR, {}, {}),
+             ("G_mid_btc", GAB_MID, {"btc_filter": True}, {}), ("G_or_btc", GAB_OR, {"btc_filter": True}, {}),
+             ("G_or_sl15", GAB_OR, {}, {"stop_loss_pct": 15.0}))
+
+GAB_VARIANTS = (("G_sl10", {}, {"stop_loss_pct": 10.0}), ("G_sl20", {}, {"stop_loss_pct": 20.0}),
+                ("G_btc", {"btc_filter": True}, {}), ("G_btcx", {"btc_filter": True, "btc_filter_exit": True}, {}),
+                ("G_btcx_sl15", {"btc_filter": True, "btc_filter_exit": True}, {"stop_loss_pct": 15.0}))
+
+
+def judge_bp(df, strat, p, tests, train, bp):
+    bt = run_backtest(train, p, bp, strategy_name=strat)
+    row = {"train_simple": round(bt.simple_return_pct, 1), "train_tr": bt.num_trades,
+           "p": {k: v for k, v in p.items() if k in SHOWN}, **mc(bt)}
+    for y, t0, t1 in tests:
+        tb = env.test_on(df, strat, p, t0, t1, bp=bp)
+        row[str(y)] = {"s": round(tb.simple_return_pct, 1), "c": round(tb.total_return_pct, 1),
+                       "dd": round(tb.max_drawdown_pct, 1), "tr": tb.num_trades}
+    return row
+
+
+def run_pair_v2(sym, df):
+    train = df[df.index >= TRAIN_FROM]
+    tests = tests_of(df)
+    res = {"symbol": sym, "since": f"{df.index[0]:%Y-%m}",
+           "hold": {str(y): round((df[(df.index >= t0) & (df.index < t1)]["close"].iloc[-1]
+                                   / df[(df.index >= t0) & (df.index < t1)]["close"].iloc[0] - 1) * 100, 1)
+                    for y, t0, t1 in tests}, "m": {}}
+    for strat, defaults in STRATS:
+        tag = "G" if strat == GAB else "LR"
+        res["m"][f"{tag}_default"] = judge(df, strat, defaults, tests, train)
+        t = time.time()
+        p, info = lowfit(strat, defaults, train)
+        res["m"][f"{tag}_lowfit"] = {**judge(df, strat, p, tests, train), **info, "sec": round(time.time() - t)}
+        if strat == GAB:
+            for name, extra, bp_extra in GAB_VARIANTS:
+                res["m"][name] = judge_bp(df, strat, {**defaults, **extra}, tests, train, {**BP, **bp_extra})
+            for name, st, extra, bp_extra in GAB_EXTRA:
+                res["m"][name] = judge_bp(df, st, {**defaults, **extra}, tests, train, {**BP, **bp_extra})
+        print(json.dumps({k: v for k, v in res["m"].items() if k.startswith(tag)}), flush=True)
+    return res
+
+
 def run_pair(sym, df):
     train = df[df.index >= TRAIN_FROM]
     tests = tests_of(df)
@@ -190,7 +337,7 @@ def line(res):
             bits.append(f"{k} none")
             continue
         cells = " ".join(f"{y} {r[y]['s']:+.0f}%/{r[y]['c']:+.0f}% dd{r[y]['dd']:.0f} ({r[y]['tr']}tr)" for y in res["hold"] if y in r)
-        extra = "".join(f" {x}={r[x]}" for x in ("sec", "full_sec", "wf_med", "wf_pos", "wfe", "mc_dd95", "mc_ploss") if r.get(x) is not None)
+        extra = "".join(f" {x}={r[x]}" for x in ("sec", "full_sec", "wf_med", "wf_pos", "wfe", "kept", "wf_proc", "wf_def", "mc_dd95", "mc_ploss") if r.get(x) is not None)
         bits.append(f"{k} [{','.join(str(v) for v in r['p'].values())}] train {r['train_simple']:+.0f}% · {cells}{extra}")
     return " | ".join(bits)
 
@@ -202,7 +349,10 @@ async def main():
     except Exception as exc:  # noqa: BLE001
         print(f"::warning title={sym}::{exc}")
         return 0
-    res = run_pair(sym, df)
+    from app.analysis import btc_regime
+    btc = df if sym == "BTCUSDT" else (await env.candles("BTCUSDT"))[1]
+    btc_regime.set_closes(btc["close"], pin=True)
+    res = run_pair_v2(sym, df) if os.environ.get("MODE") == "v2" else run_pair(sym, df)
     print(f"::notice title={sym}::{line(res)} [{src}]")
     with open(f"lowfit-{sym}.json", "w") as fh:
         json.dump(res, fh)
