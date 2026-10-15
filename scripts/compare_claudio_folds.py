@@ -205,6 +205,13 @@ def test_on(df, strategy, params, t0, t1, filt=False):
     frame = df[(df.index < t1)].iloc[start:]
     sig = signals(frame, strategy, params, filt)
     sig.loc[sig.index < t0, :] = False
+    # 15/10: a trade still open on the last candle of the year was not
+    # counted (the backtest only books closed trades), so a long bought in a
+    # 2022 dip and never sold read as 0%. Close everything on the
+    # second-last candle: a signal on the very last one is not confirmed yet
+    # (confirmed_events) and never fills.
+    sig.loc[sig.index[-2]:, ["entry_long", "entry_short"]] = False
+    sig.loc[sig.index[-2], ["exit_long", "exit_short"]] = True
     return run_backtest(frame, params, BP, signals=sig, strategy_name=strategy)
 
 
