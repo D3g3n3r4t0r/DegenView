@@ -6023,3 +6023,10 @@ html.embed-chart, html.embed-chart body, html.embed-chart .chart-area { backgrou
 .lab-trades-table tr:not(.th-groups) th:nth-child(3),
 .lab-trades-table tr:not(.th-groups) th:nth-child(4) { text-align: left; }
 
+/* Lab: simple and compounded final equity, same size (15/10) */
+.lab-return-side .lab-eq-row { display: flex; flex-direction: column; margin-bottom: 4px; }
+.lab-return-side .lab-eq-row span { font-size: 11px; opacity: .75; }
+.lab-return-side .lab-eq-row b { font-size: 16px; }
+.lab-return-side .lab-eq-from { font-size: 11px; opacity: .7; }
+.lab-rec-tag.hidden { display: none; }
+
