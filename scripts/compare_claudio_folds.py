@@ -60,6 +60,8 @@ CLAUDIO_TREND_DIMS = (
 )
 VARIANTS = (
     ("Claudio Trend 4H", CLAUDIO_TREND_4H, {}, CLAUDIO_TREND_DIMS, False),
+    # the values fixed before the first test (120 candles, 4 ATR, EMA 200d), nothing searched
+    ("Claudio Trend default", CLAUDIO_TREND_4H, {"ct_len": 120, "ct_atr": 4.0, "ct_ema_days": 200}, (), False),
     ("RSI+BB 4H", RSI_BB_4H, {}, None, False),
     ("Claudio 4H", CLAUDIO_4H, {}, CLAUDIO_DIMS, False),
     ("Lorenzo default", LORENZO, dict(DEFAULT_PARAMS), (), False),
@@ -71,7 +73,7 @@ VARIANTS = (
     ("Lorenzo searched +EMA200d", LORENZO, dict(DEFAULT_PARAMS), LORENZO_DIMS, True),
 )
 LONG_ONLY = {LORENZO}
-SHORT = {"Claudio Trend 4H": "CT", "RSI+BB 4H": "R", "Claudio 4H": "C", "Lorenzo default": "Ld", "Lorenzo searched": "Ls"}
+SHORT = {"Claudio Trend 4H": "CT", "Claudio Trend default": "CTd", "RSI+BB 4H": "R", "Claudio 4H": "C", "Lorenzo default": "Ld", "Lorenzo searched": "Ls"}
 SHORT.update({f"{k} +EMA200d": f"{v}f" for k, v in list(SHORT.items())})
 TREND: pd.Series | None = None   # close above the daily EMA 200, set per pair
 
