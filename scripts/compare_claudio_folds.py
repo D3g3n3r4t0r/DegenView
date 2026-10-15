@@ -134,6 +134,26 @@ if os.environ.get("SET") == "btc":
             ("Lorenzo L/S", LORENZO, _L, (), "ls_raw"),
             ("Lorenzo L/S +BTC", LORENZO, _L, (), "ls_btc"),
         )
+# Lorenzo, 15/10: "per avere un segnale di mercato piu' nitido il timeframe
+# del filtro dovrebbe essere weekly [...] Lancia il test". SET=regimes: each
+# site strategy with no filter and four BTC filters fixed beforehand —
+# d200 (the site's: previous daily close vs EMA 200 days), w21 / w50 (last
+# CLOSED weekly candle vs EMA 21 / 50 weeks), d200x (d200, and the long is
+# also closed when the filter turns off). BTC regimes from BTC's daily
+# archive since 2018 whatever TF, so 2021 is covered on 4H too.
+REGIMES: dict[str, pd.Series] = {}
+if os.environ.get("SET") == "regimes":
+    _L = dict(DEFAULT_PARAMS)
+    _F = (("", None), (" d200", {"r": "d200"}), (" w21", {"r": "w21"}), (" w50", {"r": "w50"}),
+          (" d200x", {"r": "d200", "exit": True}))
+    if TF == "4h":
+        _S = (("RSI+BB 4H", RSI_BB_4H, {}, None, False), ("Lorenzo", LORENZO, _L, (), False),
+              ("Lorenzo L/S", LORENZO, _L, (), True))
+    else:
+        _S = (("RSI+BB reversal", GABRIELE, {}, "2d", False), ("Gabriele 2 L/S", GABRIELE2, {}, "2d", True),
+              ("Lorenzo", LORENZO, _L, (), False), ("Lorenzo L/S", LORENZO, _L, (), True))
+    VARIANTS = tuple((label + suf, strat, fixed, dims, {**(f or {}), "ls": ls, "reg": True})
+                     for label, strat, fixed, dims, ls in _S for suf, f in _F)
 LONG_ONLY = {LORENZO}
 BTC_UP: pd.Series | None = None   # BTC's previous daily close above its EMA 200
 SHORT = {"Claudio Trend 4H": "CT", "Claudio Trend default": "CTd", "RSI+BB 4H": "R", "Claudio 4H": "C", "Lorenzo default": "Ld", "Lorenzo searched": "Ls"}
@@ -157,8 +177,9 @@ SHOWN = ("c1_ema", "c1_pb", "c1_atr", "ct_len", "ct_atr", "ct_ema_days", "rsi_ov
          "len", "slopeFlen", "slopeSlen")
 
 
-def _binance_month(symbol, y, m):
-    url = f"https://data.binance.vision/data/spot/monthly/klines/{symbol}/{TF}/{symbol}-{TF}-{y}-{m:02d}.zip"
+def _binance_month(symbol, y, m, tf=None):
+    tf = tf or TF
+    url = f"https://data.binance.vision/data/spot/monthly/klines/{symbol}/{tf}/{symbol}-{tf}-{y}-{m:02d}.zip"
     try:
         raw = urllib.request.urlopen(url, timeout=30).read()
     except Exception:  # noqa: BLE001 — not listed yet that month
@@ -169,14 +190,15 @@ def _binance_month(symbol, y, m):
     return rows
 
 
-def binance(symbol):
+def binance(symbol, tf=None):
+    tf = tf or TF
     now = pd.Timestamp.now(tz="UTC")
     rows = []
-    for y in range(2020 if TF == "4h" else 2018, now.year + 1):
+    for y in range(2020 if tf == "4h" else 2018, now.year + 1):
         for m in range(1, 13):
             if (y, m) >= (now.year, now.month):
                 break
-            rows += _binance_month(symbol, y, m) or []
+            rows += _binance_month(symbol, y, m, tf) or []
     if not rows:
         return None
     ts = pd.Series([int(r[0]) for r in rows])
@@ -219,8 +241,31 @@ async def rank(symbol: str) -> int | None:
         return None
 
 
+def regimes_from(btc_daily):
+    """Every BTC filter of SET=regimes, as a 'longs allowed' series known
+    before the candle it applies to opens."""
+    c = btc_daily["close"].astype(float)
+    day = c.resample("1D").last().dropna()
+    out = {"d200": (day > day.ewm(span=200, adjust=False, min_periods=200).mean()).shift(1, freq="D")}
+    wk = c.resample("W-SUN").last().dropna()          # labelled on the Sunday it closes
+    for n in (21, 50):
+        up = wk > wk.ewm(span=n, adjust=False, min_periods=n).mean()
+        out[f"w{n}"] = up.shift(1, freq="D")          # usable from the Monday after
+    return out
+
+
 def signals(df, strategy, params, filt=False):
     sig = STRATEGY_REGISTRY[strategy](df, params).copy()
+    if isinstance(filt, dict) and filt.get("reg"):
+        if filt.get("r"):
+            up = REGIMES[filt["r"]].reindex(sig.index, method="ffill").fillna(False).to_numpy(dtype=bool)
+            sig["entry_long"] = sig["entry_long"].to_numpy(dtype=bool) & up
+            if filt.get("exit"):
+                sig["exit_long"] = sig["exit_long"].to_numpy(dtype=bool) | ~up
+        if not filt.get("ls"):
+            sig["entry_short"] = False
+            sig["exit_short"] = False
+        return sig
     if filt in ("ls_raw", "ls_btc"):      # the site's long/short version
         if filt == "ls_btc":
             sig["entry_long"] = sig["entry_long"] & BTC_UP.reindex(
@@ -312,6 +357,13 @@ def solid(row):
     return row.get("solid") or row.get("solid+profitable") or row.get("default") or row.get("top1")
 
 
+def _short(name):
+    if name in SHORT:
+        return SHORT[name]
+    return name.replace("RSI+BB reversal", "G").replace("RSI+BB 4H", "R").replace("Gabriele 2 L/S", "G2") \
+        .replace("Lorenzo L/S", "LS").replace("Lorenzo", "L").replace(" ", "_")
+
+
 def line(res):
     hold = " ".join(f"{y} {h:+.0f}%" for y, h in res["hold"].items())
     bits = [f"{res['symbol']} #{res.get('rank') or '?'} since {res['since']} · B&H {hold}"]
@@ -319,11 +371,11 @@ def line(res):
         r = res["variants"].get(name, {})
         s = solid(r) if "error" not in r else None
         if not s:
-            bits.append(f"{SHORT[name]} none")
+            bits.append(f"{_short(name)} none")
             continue
         cells = " ".join(f"{y} {s[y]['ret']:+.0f}% ({s[y]['tr']}tr)" for y in res["hold"])
         p = ",".join(f"{v}" for v in s["p"].values())
-        bits.append(f"{SHORT[name]} [{p}] train {s['train_y']:+.0f}%/y · {cells}")
+        bits.append(f"{_short(name)} [{p}] train {s['train_y']:+.0f}%/y · {cells}")
     return " | ".join(bits)
 
 
@@ -334,6 +386,18 @@ async def main():
         src, df = await candles(sym)
         btc = df if sym == "BTCUSDT" else (await candles("BTCUSDT"))[1]
         BTC_UP = daily_trend(btc)
+        if os.environ.get("SET") == "regimes":
+            daily = await asyncio.to_thread(binance, "BTCUSDT", "1d")
+            REGIMES.update(regimes_from(daily))
+            if sym == "BTCUSDT":     # how often each filter changes its mind
+                bits = []
+                for k, r in REGIMES.items():
+                    r = r.dropna().astype(bool)
+                    flips = r.ne(r.shift()).iloc[1:]
+                    per = {y: int(flips[flips.index.year == y].sum()) for y in range(2019, 2027)}
+                    off = {y: round(100 * (~r[r.index.year == y]).mean()) for y in (2021, 2022)}
+                    bits.append(f"{k}: changes/yr {per} · off% 2021 {off[2021]} 2022 {off[2022]}")
+                print("::notice title=regimes::" + " | ".join(bits))
     except Exception as exc:  # noqa: BLE001
         print(f"::warning title={sym}::{exc}")
         return 0
