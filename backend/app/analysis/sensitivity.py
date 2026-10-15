@@ -119,6 +119,17 @@ def _gabriele(u: np.ndarray) -> dict:
 _GABRIELE_DIMS = ["rsi_length", "bb_length", "bb_mult", "rsi_oversold", "rsi_overbought"]
 
 
+def _claudio(u: np.ndarray) -> dict:
+    return {
+        "cl_rsi_os": _i(u[0], 20, 40),
+        "cl_bb_mult": _f(u[1], 1.8, 2.8),
+        "cl_atr_stop": _f(u[2], 1.5, 4.0),
+    }
+
+
+_CLAUDIO_DIMS = ["cl_rsi_os", "cl_bb_mult", "cl_atr_stop"]
+
+
 def _exhaustion(u: np.ndarray) -> dict:
     return {
         "swing_length": _i(u[0], 3, 20),
@@ -168,6 +179,7 @@ PARAM_SPACES: dict[str, ParamSpace] = {
     "Gabriele (RSI+BB reversal)": ParamSpace(tuple(_GABRIELE_DIMS), _gabriele),
     "Gabriele 2 (RSI+BB long/short)": ParamSpace(tuple(_GABRIELE_DIMS), _gabriele),
     "RSI+BB 4H": ParamSpace(tuple(_GABRIELE_DIMS), _gabriele),
+    "Claudio 4H": ParamSpace(tuple(_CLAUDIO_DIMS), _claudio),
     "Lorenzo HF (minuti on-chain)": ParamSpace(tuple(_LORENZO_HF_DIMS), _lorenzo_hf),
     "Accumulo / Distribuzione (long-term)": ParamSpace(tuple(_EXHAUSTION_DIMS), _exhaustion),
 }
