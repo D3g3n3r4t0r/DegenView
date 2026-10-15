@@ -2071,10 +2071,16 @@ class StrategyParamsQuery(BaseModel):
 
 
 class BacktestParamsQuery(BaseModel):
-    initial_capital: float = 10000.0
-    qty_pct_of_equity: float = 30.0
-    commission_pct: float = 0.06
-    slippage_pct: float = 0.02
+    # 15/10 (Lorenzo: "Tutte le strategie presenti sul sito hanno lo stesso
+    # tipo di posizione [...]?" — "Si" to aligning): the same as the Lab and
+    # the chart, 1 000 $, 100% of the equity a trade, no costs. It was
+    # 10 000 $ at 30% with 0.06% + 0.02%, used whenever a request carried no
+    # settings (archive entries saved without them, test on another pair),
+    # so those results were not comparable with the rest.
+    initial_capital: float = 1000.0
+    qty_pct_of_equity: float = 100.0
+    commission_pct: float = 0.0
+    slippage_pct: float = 0.0
     stop_loss_pct: float = 0.0
     take_profit_pct: float = 0.0
     # Quando si considera eseguito il segnale: alla chiusura della candela
@@ -8317,7 +8323,8 @@ async def _run_archive_backtest(entry_id: str, symbol: str, asset_type: str,
         if asset_type == "dex" and strategy_name in STRATEGY_REGISTRY:
             sig = spot_only(STRATEGY_REGISTRY[strategy_name](df, params))
         bt = await asyncio.to_thread(
-            partial(run_backtest, df, params, backtest_params, strategy_name=strategy_name,
+            partial(run_backtest, df, params, {**BacktestParamsQuery().model_dump(), **(backtest_params or {})},
+                    strategy_name=strategy_name,
                     signals=sig,
                     intrabar_fn=_intrabar_fn(asset_type, strategy_name) if intrabar else None)
         )
