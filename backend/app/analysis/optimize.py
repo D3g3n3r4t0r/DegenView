@@ -241,7 +241,7 @@ def _random_gabriele_params(rng: random.Random, base: dict | None = None) -> dic
 
 # Kept on every candidate the searches build (see optimize_strategy and
 # pipeline.run_pipeline): the user's switch, not a dimension of the search.
-STICKY_PARAMS = ("btc_filter",)
+STICKY_PARAMS = ("btc_filter", "btc_filter_exit")
 
 _STRATEGY_SPACES: dict[str, tuple[dict, callable]] = {
     "Lorenzo (trend-follower)": (DEFAULT_PARAMS, _random_lorenzo_params),

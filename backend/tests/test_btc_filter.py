@@ -37,17 +37,38 @@ def _clean():
     btc_regime.clear()
 
 
-def test_regime_is_the_previous_day_and_open_before_the_history():
+def test_regime_is_the_last_closed_week_and_open_before_the_history():
+    # 15/10: weekly EMA 21 of BTC's weekly closes (was the daily EMA 200)
     btc_regime.set_closes(_btc("2023-06-01"), pin=True)
     idx = pd.date_range("2019-06-01", "2025-06-01", freq="4h", tz="UTC")
     up = pd.Series(btc_regime.up_mask(idx), index=idx)
     assert up[: "2019-12-31"].all()                  # no BTC history yet: no filter
-    assert up["2020-01-01":"2020-07-01"].all()        # under 200 days of it: no filter
+    assert up["2020-01-01":"2020-05-15"].all()        # under 21 weeks of it: no filter
     assert up["2022-06-01":"2023-06-01"].all()        # rising: longs allowed
     assert not up["2024-01-01":"2025-06-01"].any()    # falling: blocked
-    # one value per day, from the day before
-    day = up["2023-09-10"]
-    assert day.nunique() == 1
+    # one verdict per week, Monday to Sunday, decided by the week before
+    for monday in pd.date_range("2023-06-05", "2023-09-25", freq="W-MON", tz="UTC"):
+        assert up[monday: monday + pd.Timedelta(days=7) - pd.Timedelta(hours=4)].nunique() == 1
+
+
+def test_the_running_week_never_decides():
+    closes = _btc("2023-06-01", end="2024-03-13")              # ends on a Wednesday
+    btc_regime.set_closes(closes, pin=True)
+    full = btc_regime.up_mask(pd.date_range("2024-03-11", periods=3, freq="D", tz="UTC"))
+    btc_regime.set_closes(closes.iloc[:-3], pin=True)          # same week, fewer days
+    assert (btc_regime.up_mask(pd.date_range("2024-03-11", periods=3, freq="D", tz="UTC")) == full).all()
+
+
+def test_exit_switch_closes_longs_when_the_filter_turns_off():
+    btc_regime.set_closes(_btc("2023-01-01"), pin=True)
+    fn = STRATEGY_REGISTRY[GAB]
+    on = fn(DF, {"btc_filter": True})
+    ex = fn(DF, {"btc_filter": True, "btc_filter_exit": True})
+    blocked = ~btc_regime.up_mask(DF.index)
+    assert ex["exit_long"][blocked].all() and not on["exit_long"][blocked].all()
+    assert ex["entry_long"].equals(on["entry_long"])
+    # without the filter the exit switch does nothing
+    assert fn(DF, {"btc_filter_exit": True}).equals(fn.__wrapped__(DF, {}))
 
 
 def test_switch_off_changes_nothing_and_on_only_blocks_long_entries():

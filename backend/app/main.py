@@ -2042,9 +2042,11 @@ class StrategyParamsQuery(BaseModel):
     bb_length: int = 20
     bb_mult: float | None = None
 
-    # Every strategy (Lorenzo, 15/10): no long entry while BTC's previous
-    # daily close is under its EMA 200 (analysis/btc_regime). Off by default.
+    # Every strategy (Lorenzo, 15/10): no long entry while BTC's last closed
+    # week is under its weekly EMA 21 (analysis/btc_regime). Off by default.
     btc_filter: bool = False
+    # ...and with it on, close an open long when it turns off
+    btc_filter_exit: bool = False
 
     # Claudio 4H (see strategies.CLAUDIO_DEFAULT_PARAMS)
     cl_rsi_os: int = 30
@@ -7477,7 +7479,7 @@ async def _max_return_payload(strategy_name, df, full, constraints, say, should_
         if out:
             years = [y for y in years if y not in out]
             say(f"BTC filter on: {', '.join(map(str, out))} not judged for trades "
-                f"(BTC under its EMA 200 for most of the year)")
+                f"(BTC under its weekly EMA 21 for most of the year)")
     # The in-candle replay (fill_at "on_condition") costs up to 8 s a backtest:
     # the scan runs with fills at the close, the best pairs are re-run exactly.
     fast = partial(full, intrabar=False) if in_candle else None
