@@ -3730,6 +3730,10 @@
 
     list.querySelectorAll(".arch-del").forEach((btn) => {
       btn.addEventListener("click", async () => {
+        // 15/10 (Lorenzo): ask first, as for the alerts
+        const e = items.find((x) => x.id === btn.dataset.id) || {};
+        const what = [strategyLabel(e.strategy_name), e.symbol, e.interval].filter(Boolean).join(" · ");
+        if (!window.confirm(`Delete ${what || "this strategy"} from the archive? This cannot be undone.`)) return;
         await fetch(`/api/archive/${btn.dataset.id}`, { method: "DELETE" });
         loadArchive();
       });
@@ -12003,10 +12007,21 @@
     if (maxWrap) {
       const ok = /RSI\+BB/.test(strategyName || "") || claudio;
       maxWrap.classList.toggle("hidden", !ok);
+      // 15/10 (Lorenzo): on the RSI+BB strategies Max return is the
+      // recommended search, Stable on the others — and it is preselected.
+      const stableWrap = labEl("lab-mode-stable-wrap");
+      maxWrap.classList.toggle("lab-mode-recommended", ok);
+      maxWrap.querySelector(".lab-rec-tag")?.classList.toggle("hidden", !ok);
+      if (stableWrap) {
+        stableWrap.classList.toggle("lab-mode-recommended", !ok);
+        stableWrap.querySelector(".lab-rec-tag")?.classList.toggle("hidden", ok);
+      }
       const radio = maxWrap.querySelector("input");
+      const stableRadio = document.querySelector('input[name="lab-opt-mode"][value="plateau"]');
+      if (ok && radio && stableRadio && stableRadio.checked) radio.checked = true;
       if (!ok && radio && radio.checked) {
         radio.checked = false;
-        const quick = document.querySelector('input[name="lab-opt-mode"][value="random"]');
+        const quick = stableRadio || document.querySelector('input[name="lab-opt-mode"][value="random"]');
         if (quick) quick.checked = true;
       }
     }
@@ -12350,7 +12365,13 @@
     const finalEquity = bt.equity_curve.length ? bt.equity_curve[bt.equity_curve.length - 1][1] : 0;
     const initCap = parseFloat(labEl("lab-initial-capital").value) || 1000;
     const sideEl = labEl("lab-return-side");
-    sideEl.innerHTML = `final equity<br/><b class="${isPos ? "" : "neg"}">${Math.round(finalEquity).toLocaleString("en-US")} $</b><br/>from ${initCap.toLocaleString("en-US")} $`;
+    // 15/10 (Lorenzo): the simple final equity too, as visible as the other
+    const cap0 = bt.initial_capital || initCap;
+    const simpleEq = bt.simple_return_pct != null ? cap0 * (1 + bt.simple_return_pct / 100) : null;
+    const money = (v) => `${Math.round(v).toLocaleString("en-US")} $`;
+    sideEl.innerHTML = `<div class="lab-eq-row"><span>final equity · simple</span><b class="${simpleEq != null && simpleEq < cap0 ? "neg" : ""}">${simpleEq != null ? money(simpleEq) : "–"}</b></div>`
+      + `<div class="lab-eq-row"><span>final equity · compounded</span><b class="${isPos ? "" : "neg"}">${money(finalEquity)}</b></div>`
+      + `<div class="lab-eq-from">from ${cap0.toLocaleString("en-US")} $</div>`;
 
     const pf = bt.profit_factor !== null ? bt.profit_factor.toFixed(2) : "∞";
     const wr = bt.win_rate_pct !== null ? bt.win_rate_pct.toFixed(0) + "%" : "—";

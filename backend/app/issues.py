@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0303", "Lab: final equity semplice, Max return raccomandata per le RSI+BB, conferma prima di cancellare dall'archivio",
+     "Lorenzo, 15/10: 'aggiungere un altro final equity [...] anche quello del rendimento semplice', 'per quanto riguarda solo le strategie RSI piu' BB, il max return come ricerca ottimizzata raccomandata', 'nella sezione dell'archivio strategie [...] chiedere sempre conferma alla richiesta di cancellazione'.",
+     "media"),
     ("seed-0302", "Lista dei trade: profitto e perdita di ogni trade anche col rendimento semplice",
      "Lorenzo, 15/10: 'In questa lista andrebbero aggiunti anche altri dettagli [...] quelli del profitto e della perdita di ogni trade con il rendimento semplice [...] date piu' brevi e mettendo massimo due decimali dopo la virgola dei prezzi di ingresso e di uscita'.",
      "media"),

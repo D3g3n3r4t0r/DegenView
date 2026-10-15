@@ -2991,5 +2991,11 @@
     "at": 1792095666,
     "summary": "La lista dei trade ha ora due gruppi di colonne, 'Simple' (P&L $ del trade sulla stessa puntata e capitale progressivo senza reinvestire) e 'Compounded' (P&L $ e equity come prima), piu' il 'Trade %' netto. Date brevi (gg/mm/aa, con l'ora sotto sui timeframe infra-giornalieri) e prezzi a due decimali; sotto 1 restano 4 cifre significative, perche' su monete come PEPE due decimali leggerebbero 0,00. Anche l'export Excel ha le tre colonne del semplice.",
     "detail": "frontend openLabTradesDrawer; BacktestResult.position_pct (la puntata); export._trades_sheet colonne L-N (Trade % netto, Simple P&L, Simple cumulative), grafico spostato in P2."
+  },
+  "seed-0303": {
+    "status": "risolto",
+    "at": 1792098768,
+    "summary": "Nel Lab accanto al risultato ci sono ora due final equity con la stessa grandezza, semplice e composto. Sulle strategie RSI+BB la modalita' raccomandata e' Max return, gia' selezionata; sulle altre resta Stable. Cancellare una strategia dall'archivio chiede sempre conferma, come per gli alert.",
+    "detail": "frontend: renderLabResults (lab-eq-row), renderLabParamFields (lab-rec-tag e lab-mode-recommended spostati su Max return per /RSI\\+BB/), handler .arch-del con window.confirm."
   }
 }

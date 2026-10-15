@@ -565,12 +565,12 @@
                  ipervenduto 20-40 x ipercomprato 65-85 uno a uno (15/10, prima 10-40 x 60-90), drawdown max 60%. -->
             <label class="lab-mode-opt hidden" id="lab-mode-maxret-wrap">
               <input type="radio" name="lab-opt-mode" value="max_return" />
-              <span class="lab-mode-name">Max return</span>
+              <span class="lab-mode-name">Max return <em class="lab-rec-tag hidden">recommended</em></span>
               <span class="lab-mode-desc">Every RSI oversold 20–40 × overbought 65–85 pair, one by one, on the whole chart (441 backtests). Drawdown at most 60%; the first and the last year are not judged. RSI+BB reversal and Gabriele 2: the two highest returns, with a trade in every other year (or at least as many trades as those years). RSI+BB 4H: also the Bollinger multiplier 2.0–2.8, at least 3 trades a year on average and none of those years empty; the most solid and the most profitable result. With the BTC filter on, a year it kept the longs out for most of the days is not judged. No out-of-sample check.</span>
             </label>
-            <label class="lab-mode-opt lab-mode-recommended">
+            <label class="lab-mode-opt lab-mode-recommended" id="lab-mode-stable-wrap">
               <input type="radio" name="lab-opt-mode" value="plateau" />
-              <span class="lab-mode-name">Stable <em>recommended</em></span>
+              <span class="lab-mode-name">Stable <em class="lab-rec-tag">recommended</em></span>
               <span class="lab-mode-desc">Finds the configuration that holds up under variation, not the lucky peak. Slower (1–5 min) but <strong>always gives the same result</strong>.</span>
             </label>
           </div>
