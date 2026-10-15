@@ -352,6 +352,7 @@ def run_backtest(
     simple = simple_stats(trades, bp["qty_pct_of_equity"])
     return BacktestResult(
         **simple,
+        position_pct=float(bp["qty_pct_of_equity"]),
         interval="",  # caller (app.main) fills in the interval the df it passed actually was
         # Dichiarato nel risultato: chi legge il rendimento deve poter sapere a
         # che prezzo si e' entrati senza risalire alla richiesta.

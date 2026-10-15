@@ -12414,10 +12414,26 @@
       ? `${isTrades.length} IS trades + ${oosTrades.length} OOS`
       : `${bt.num_trades} trades`;
 
-    const dateFmt = { day: "2-digit", month: "short", year: "2-digit" };
-    const fmtTs = (ms) => new Date(ms * 1000).toLocaleDateString("en-US", dateFmt);
-    const fmtPrice = (p) => p.toLocaleString("en-US", { maximumFractionDigits: 4 });
+    // 15/10 (Lorenzo): shorter dates, prices with at most two decimals, and
+    // the simple figures next to the compounded ones. Prices under 1 keep
+    // four significant digits (two decimals would read 0.00 on PEPE); the
+    // hour goes under the date on intraday timeframes.
+    const intraday = /^(\d+)(m|h)$/.test(String(bt.interval || ""));
+    const fmtTs = (s) => {
+      const d = new Date(s * 1000);
+      const day = d.toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "2-digit" });
+      return intraday
+        ? `${day}<br><small>${d.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}</small>`
+        : day;
+    };
+    const fmtPrice = (p) => (Math.abs(p) >= 1
+      ? p.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      : Number(p.toPrecision(4)).toString());
     const fmtMoney = (v) => v.toLocaleString("en-US", { maximumFractionDigits: 0 });
+    const sgn = (v) => (v >= 0 ? "+" : "");
+    const q = (bt.position_pct != null ? bt.position_pct : 100) / 100;
+    const stake = (bt.initial_capital || 0) * q;
+    let simpleCum = 0;
 
     const renderRow = (t, i, isOos) => {
       const isWin = t.pnl_abs > 0;
@@ -12426,6 +12442,11 @@
       const pnlClass = isWin ? "pos" : "neg";
       const rowClass = isOos ? ' class="oos-row"' : "";
       const numLabel = isOos ? `<span class="oos-badge">OOS</span>${i + 1}` : i + 1;
+      // net % of the trade on its position: the same for both columns
+      const before = t.equity_after - t.pnl_abs;
+      const net = before * q > 0 ? (t.pnl_abs / (before * q)) * 100 : t.pnl_pct;
+      const simple = stake * net / 100;
+      simpleCum += simple;
       return `<tr${rowClass}>
         <td class="td-num">${numLabel}</td>
         <td class="td-dir ${dirClass}">${dir}</td>
@@ -12433,24 +12454,29 @@
         <td class="td-date">${fmtTs(t.exit_time)}</td>
         <td class="td-price">${fmtPrice(t.entry_price)}</td>
         <td class="td-price">${fmtPrice(t.exit_price)}</td>
-        <td class="td-pnl ${pnlClass}">${t.pnl_pct >= 0 ? "+" : ""}${t.pnl_pct.toFixed(2)}%</td>
-        <td class="td-pnl ${pnlClass}">${t.pnl_abs >= 0 ? "+" : ""}${fmtMoney(t.pnl_abs)}</td>
+        <td class="td-pnl ${pnlClass}">${sgn(net)}${net.toFixed(2)}%</td>
+        <td class="td-pnl td-grp ${pnlClass}">${sgn(simple)}${fmtMoney(simple)}</td>
+        <td class="td-equity">${fmtMoney((bt.initial_capital || 0) + simpleCum)}</td>
+        <td class="td-pnl td-grp ${pnlClass}">${sgn(t.pnl_abs)}${fmtMoney(t.pnl_abs)}</td>
         <td class="td-equity">${fmtMoney(t.equity_after)}</td>
       </tr>`;
     };
 
     let html = `<table class="lab-trades-table">
-      <thead><tr>
-        <th>#</th><th>Dir</th><th>Entry date</th><th>Exit date</th>
-        <th>Entry</th><th>Exit</th><th>P&amp;L %</th><th>P&amp;L $</th><th>Equity</th>
+      <thead>
+      <tr class="th-groups"><th colspan="7"></th><th colspan="2" class="td-grp" title="Every trade on the same stake (${fmtMoney(stake)} $), gains not reinvested">Simple</th><th colspan="2" class="td-grp" title="Every trade reinvests all the equity so far">Compounded</th></tr>
+      <tr>
+        <th>#</th><th>Dir</th><th>Entry</th><th>Exit</th>
+        <th>Entry $</th><th>Exit $</th><th title="Net % of the trade on its position, fees included">Trade %</th>
+        <th class="td-grp">P&amp;L $</th><th>Capital</th><th class="td-grp">P&amp;L $</th><th>Equity</th>
       </tr></thead><tbody>`;
 
     if (!isTrades.length && !oosTrades.length) {
-      html += `<tr><td colspan="9" style="text-align:center;padding:16px;color:var(--ink-dim)">No trades</td></tr>`;
+      html += `<tr><td colspan="11" style="text-align:center;padding:16px;color:var(--ink-dim)">No trades</td></tr>`;
     } else {
       isTrades.forEach((t, i) => { html += renderRow(t, i, false); });
       if (oosTrades.length) {
-        html += `<tr class="oos-separator"><td colspan="9">— Out-of-sample (${oosTrades.length} trades) — data not used in optimization</td></tr>`;
+        html += `<tr class="oos-separator"><td colspan="11">— Out-of-sample (${oosTrades.length} trades) — data not used in optimization</td></tr>`;
         oosTrades.forEach((t, i) => { html += renderRow(t, i, true); });
       }
     }

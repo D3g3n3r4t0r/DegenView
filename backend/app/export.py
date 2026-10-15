@@ -73,7 +73,8 @@ def _widths(ws, widths: dict[int, int]) -> None:
         ws.column_dimensions[get_column_letter(col)].width = w
 
 
-def _trades_sheet(wb: Workbook, title: str, trades: list, initial_capital: float):
+def _trades_sheet(wb: Workbook, title: str, trades: list, initial_capital: float,
+                  position_pct: float | None = None):
     """Un foglio di operazioni, con il P&L cumulato calcolato dal foglio stesso.
 
     Il capitale dopo ogni trade lo porta gia' il backtest, ma la colonna
@@ -84,7 +85,11 @@ def _trades_sheet(wb: Workbook, title: str, trades: list, initial_capital: float
     ws = wb.create_sheet(title)
     _sheet_header(ws, 1, ["#", "Direction", "Entry", "Exit", "Days",
                           "Entry price", "Exit price", "P&L %", "P&L",
-                          "Equity after", "Cumulative P&L"])
+                          "Equity after", "Cumulative P&L",
+                          # 15/10: simple, every trade on the same stake
+                          "Trade % (net)", "Simple P&L", "Simple cumulative"])
+    q = (position_pct if position_pct is not None else 100.0) / 100.0
+    stake = initial_capital * q
     for i, t in enumerate(trades, start=1):
         r = i + 1
         entry, exit_ = _ts(t.entry_time), _ts(t.exit_time)
@@ -113,6 +118,17 @@ def _trades_sheet(wb: Workbook, title: str, trades: list, initial_capital: float
         c = ws.cell(row=r, column=11, value=f"=SUM($I$2:I{r})")
         c.font = _BODY
         c.number_format = _MONEY
+        before = float(t.equity_after) - float(t.pnl_abs)
+        net = float(t.pnl_abs) / (before * q) if before * q > 0 else 0.0
+        c = ws.cell(row=r, column=12, value=net)
+        c.font = _BODY
+        c.number_format = _PCT
+        c = ws.cell(row=r, column=13, value=f"=L{r}*{stake}")
+        c.font = _BODY
+        c.number_format = _MONEY
+        c = ws.cell(row=r, column=14, value=f"=SUM($M$2:M{r})")
+        c.font = _BODY
+        c.number_format = _MONEY
 
     last = len(trades) + 1
     if trades:
@@ -125,7 +141,8 @@ def _trades_sheet(wb: Workbook, title: str, trades: list, initial_capital: float
         c.font = _LABEL
         c.number_format = _PCT
 
-    _widths(ws, {1: 5, 2: 10, 3: 17, 4: 17, 5: 7, 6: 16, 7: 16, 8: 10, 9: 12, 10: 14, 11: 14})
+    _widths(ws, {1: 5, 2: 10, 3: 17, 4: 17, 5: 7, 6: 16, 7: 16, 8: 10, 9: 12, 10: 14, 11: 14,
+                 12: 12, 13: 12, 14: 15})
     return ws, last
 
 
@@ -230,13 +247,13 @@ def build_backtest_workbook(
     _widths(ws, {1: 30, 2: 26})
 
     # --- Trade -------------------------------------------------------------
-    ws_tr, last = _trades_sheet(wb, "Trade", bt.trades, bt.initial_capital)
-    _pnl_chart(ws_tr, last, "M2")
+    ws_tr, last = _trades_sheet(wb, "Trade", bt.trades, bt.initial_capital, bt.position_pct)
+    _pnl_chart(ws_tr, last, "P2")
 
     if bt.oos_trades:
         ws_oos, last_oos = _trades_sheet(wb, "Out-of-sample trades", bt.oos_trades,
-                                         bt.initial_capital)
-        _pnl_chart(ws_oos, last_oos, "M2")
+                                         bt.initial_capital, bt.position_pct)
+        _pnl_chart(ws_oos, last_oos, "P2")
 
     # --- Equity ------------------------------------------------------------
     ws_eq = wb.create_sheet("Equity")

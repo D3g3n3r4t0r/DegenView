@@ -135,6 +135,7 @@ class BacktestResult(BaseModel):
     # on closed trades like the compounded one. None where not computed.
     simple_return_pct: float | None = None
     simple_max_drawdown_pct: float | None = None
+    position_pct: float | None = None         # % of the equity a trade used (the stake)
     avg_trade_pct: float | None = None       # net % of one trade, mean
     median_trade_pct: float | None = None    # ... and median
 

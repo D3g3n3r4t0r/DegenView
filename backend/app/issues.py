@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0302", "Lista dei trade: profitto e perdita di ogni trade anche col rendimento semplice",
+     "Lorenzo, 15/10: 'In questa lista andrebbero aggiunti anche altri dettagli [...] quelli del profitto e della perdita di ogni trade con il rendimento semplice [...] date piu' brevi e mettendo massimo due decimali dopo la virgola dei prezzi di ingresso e di uscita'.",
+     "media"),
     ("seed-0301", "Stessa posizione per tutte le strategie, anche senza impostazioni salvate",
      "Lorenzo, 15/10: 'Tutte le strategie presenti sul sito hanno lo stesso tipo di posizione, cioe' aprono con lo stesso tipo di capitale iniziale e la stessa percentuale poi di equity trade', poi 'Si' all'allineamento dei valori di riserva.",
      "media"),

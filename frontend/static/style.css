@@ -6016,3 +6016,10 @@ html.embed-chart, html.embed-chart body, html.embed-chart .chart-area { backgrou
 .lab-return-four { flex: 1; min-width: 0; }
 .equity-stamp-pct small { font-size: 60%; font-weight: 500; opacity: .75; }
 
+/* Trades list (15/10): simple and compounded column groups */
+.lab-trades-table .th-groups th { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; opacity: .8; padding-bottom: 0; }
+.lab-trades-table .td-grp { border-left: 1px solid var(--line, rgba(127,127,127,.25)); }
+.lab-trades-table td.td-date small { opacity: .65; }
+.lab-trades-table tr:not(.th-groups) th:nth-child(3),
+.lab-trades-table tr:not(.th-groups) th:nth-child(4) { text-align: left; }
+
