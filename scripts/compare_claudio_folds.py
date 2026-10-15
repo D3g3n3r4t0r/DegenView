@@ -71,10 +71,14 @@ VARIANTS = (
     ("Claudio 4H +EMA200d", CLAUDIO_4H, {}, CLAUDIO_DIMS, True),
     ("Lorenzo default +EMA200d", LORENZO, dict(DEFAULT_PARAMS), (), True),
     ("Lorenzo searched +EMA200d", LORENZO, dict(DEFAULT_PARAMS), LORENZO_DIMS, True),
+    # 15/10 "efficace sia nel 2021 sia nel 2022": long above the daily EMA
+    # 200, short below it, Lorenzo's own values (nothing searched)
+    ("Lorenzo default L/S regime", LORENZO, dict(DEFAULT_PARAMS), (), "ls"),
 )
 LONG_ONLY = {LORENZO}
 SHORT = {"Claudio Trend 4H": "CT", "Claudio Trend default": "CTd", "RSI+BB 4H": "R", "Claudio 4H": "C", "Lorenzo default": "Ld", "Lorenzo searched": "Ls"}
 SHORT.update({f"{k} +EMA200d": f"{v}f" for k, v in list(SHORT.items())})
+SHORT["Lorenzo default L/S regime"] = "Lrs"
 TREND: pd.Series | None = None   # close above the daily EMA 200, set per pair
 
 
@@ -152,8 +156,13 @@ async def rank(symbol: str) -> int | None:
 
 def signals(df, strategy, params, filt=False):
     sig = STRATEGY_REGISTRY[strategy](df, params).copy()
+    up = TREND.reindex(sig.index).fillna(False).to_numpy() if filt else None
+    if filt == "ls":              # both sides, each only on its side of the regime
+        sig["entry_long"] = sig["entry_long"] & up
+        sig["entry_short"] = sig["entry_short"] & ~up
+        return sig
     if filt:
-        sig["entry_long"] = sig["entry_long"] & TREND.reindex(sig.index).fillna(False).to_numpy()
+        sig["entry_long"] = sig["entry_long"] & up
     if strategy in LONG_ONLY:
         sig["entry_short"] = False
         sig["exit_short"] = False
