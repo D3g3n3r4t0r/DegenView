@@ -277,6 +277,67 @@ def run_pair_v2(sym, df):
     return res
 
 
+# ── v3 (15/10): Stable + Max return for RSI+BB 1D ──────────────────────────
+# Lorenzo: "aggiungere alla versione stabile della RSI piu' BB le
+# caratteristiche [...] della max return, ovvero di andare a ottimizzare i
+# due valori di RSI nel miglior modo possibile, sempre nei range [...] della
+# 4 ore". Every pair 20-40 x 65-85; the most solid (simple return x the share
+# of it the +-1 neighbours keep) and the most profitable with solidity >= 25%;
+# 60% compounded drawdown cap, a trade in every judged year (or as many trades
+# as those years) — the 1D rule. With today's exit and with the middle band.
+OS_R, OB_R = list(range(20, 41)), list(range(65, 86))
+
+
+def solid_search(strat, frame):
+    from app.analysis.optimize import trades_in_years, years_without_trades
+    years = calendar_years(frame.index)
+    ret, ok = {}, set()
+    for i, o in enumerate(OS_R):
+        for j, b in enumerate(OB_R):
+            bt = run_backtest(frame, {**LKI_DEFAULT_PARAMS, "rsi_oversold": o, "rsi_overbought": b}, BP, strategy_name=strat)
+            ret[(i, j)] = bt.simple_return_pct
+            if bt.num_trades >= 1 and abs(bt.max_drawdown_pct) <= 60 and not (
+                    years and trades_in_years(bt, years) < len(years) and years_without_trades(bt, years)):
+                ok.add((i, j))
+    sol = {}
+    for k in ok:
+        near = [ret[(k[0] + a, k[1] + b)] for a, b in ((-1, 0), (1, 0), (0, -1), (0, 1)) if (k[0] + a, k[1] + b) in ret]
+        own = ret[k]
+        sol[k] = 0.0 if own <= 0 or not near else max(0.0, min(1.0, float(np.median(near)) / own))
+    if not ok:
+        return None, None, None
+    # a loss is never "solid": positive returns first, then by return x solidity
+    solid = max(ok, key=lambda k: (ret[k] > 0, ret[k] * sol[k] if ret[k] > 0 else ret[k]))
+    prof = [k for k in ok if sol[k] >= 0.25]
+    prof = max(prof, key=lambda k: ret[k]) if prof else None
+    best = max(ok, key=lambda k: ret[k])                     # = Max return
+    mk = lambda k: None if k is None else {**LKI_DEFAULT_PARAMS, "rsi_oversold": OS_R[k[0]], "rsi_overbought": OB_R[k[1]]}  # noqa: E731
+    return mk(solid), mk(prof), mk(best)
+
+
+def run_pair_v3(sym, df):
+    train = df[df.index >= TRAIN_FROM]
+    tests = tests_of(df)
+    res = {"symbol": sym, "since": f"{df.index[0]:%Y-%m}",
+           "hold": {str(y): round((df[(df.index >= t0) & (df.index < t1)]["close"].iloc[-1]
+                                   / df[(df.index >= t0) & (df.index < t1)]["close"].iloc[0] - 1) * 100, 1)
+                    for y, t0, t1 in tests}, "m": {}}
+    for strat, tag in ((GAB, "G"), (GAB_MID, "Gmid")):
+        res["m"][f"{tag}_default"] = judge(df, strat, dict(LKI_DEFAULT_PARAMS), tests, train)
+        if strat == GAB:
+            try:
+                res["m"][f"{tag}_stable"] = judge(df, strat, stable(strat, train), tests, train)
+            except Exception:  # noqa: BLE001
+                res["m"][f"{tag}_stable"] = {"error": "none"}
+        t = time.time()
+        solid, prof, best = solid_search(strat, train)
+        for kind, p in (("maxret", best), ("solid", solid), ("prof", prof)):
+            res["m"][f"{tag}_{kind}"] = ({**judge(df, strat, p, tests, train), "sec": round(time.time() - t)}
+                                         if p else {"error": "none"})
+        print(json.dumps({k: v for k, v in res["m"].items() if k.startswith(tag)}), flush=True)
+    return res
+
+
 def run_pair(sym, df):
     train = df[df.index >= TRAIN_FROM]
     tests = tests_of(df)
@@ -352,7 +413,8 @@ async def main():
     from app.analysis import btc_regime
     btc = df if sym == "BTCUSDT" else (await env.candles("BTCUSDT"))[1]
     btc_regime.set_closes(btc["close"], pin=True)
-    res = run_pair_v2(sym, df) if os.environ.get("MODE") == "v2" else run_pair(sym, df)
+    mode = os.environ.get("MODE")
+    res = run_pair_v2(sym, df) if mode == "v2" else run_pair_v3(sym, df) if mode == "v3" else run_pair(sym, df)
     print(f"::notice title={sym}::{line(res)} [{src}]")
     with open(f"lowfit-{sym}.json", "w") as fh:
         json.dump(res, fh)
