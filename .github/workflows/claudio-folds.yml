@@ -15,8 +15,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 4 large caps + 6 smaller ones (rank printed by the job, CoinPaprika)
-        pair: [BTCUSDT, ETHUSDT, SOLUSDT, XRPUSDT, ROSEUSDT, ZILUSDT, ANKRUSDT, CELOUSDT, IOTXUSDT, KAVAUSDT]
+        # 4 large caps, 5 around rank 150-250, 6 around 300-490 (rank printed
+        # by the job, CoinPaprika)
+        pair: [BTCUSDT, ETHUSDT, SOLUSDT, XRPUSDT,
+               COMPUSDT, BATUSDT, 1INCHUSDT, KSMUSDT, SNXUSDT,
+               ROSEUSDT, ZILUSDT, ANKRUSDT, CELOUSDT, IOTXUSDT, KAVAUSDT]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -24,3 +27,9 @@ jobs:
           python-version: '3.12'
       - run: pip install -r backend/requirements.txt
       - run: cd backend && PAIR=${{ matrix.pair }} PYTHONPATH=. python ../scripts/compare_claudio_folds.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: folds-${{ matrix.pair }}
+          path: backend/folds-*.json
+          if-no-files-found: ignore

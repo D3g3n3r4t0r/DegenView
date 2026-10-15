@@ -72,3 +72,15 @@ def test_coarse_search_is_cheaper(coarse):
     _, _, n, out = optimize.max_return_search_nd(
         CLAUDIO_4H, lambda p: run_backtest(DF, p, {}, strategy_name=CLAUDIO_4H), dims=dims, coarse=coarse)
     assert n < optimize.grid_size_nd(dims) and out
+
+
+def test_v2_exits_at_the_upper_band_with_a_trailing_stop():
+    # 15/10, after the fold test: the middle-band exit capped every winner
+    v1 = compute_claudio_signals(DF)
+    v2 = compute_claudio_signals(DF, {"cl_exit_upper": 1, "cl_trail": 1, "cl_time_stop": 10**6})
+    assert v2["entry_long"].any() and v2["exit_long"].any()
+    hold = lambda s: (s["exit_long"].to_numpy().nonzero()[0] - s["entry_long"].to_numpy().nonzero()[0][:s["exit_long"].sum()]).mean()  # noqa: E731
+    assert hold(v2) > hold(v1)
+    for cut in (900, 1700):
+        part = compute_claudio_signals(DF.iloc[:cut], {"cl_exit_upper": 1, "cl_trail": 1})
+        assert (part == compute_claudio_signals(DF, {"cl_exit_upper": 1, "cl_trail": 1}).iloc[:cut]).all().all()
