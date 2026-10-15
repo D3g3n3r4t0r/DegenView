@@ -72,6 +72,17 @@ class KucoinProvider(DataProvider):
         self._base_url = base_url or BASE_URL
 
     async def fetch_ohlcv(self, symbol: str, interval: str, outputsize: int, since_ms: int | None = None) -> pd.DataFrame:
+        # KuCoin has no monthly candles (its widest is 1week). 15/10, Lorenzo:
+        # "quando lo seleziono mi dice time frame 1 month not supported on
+        # KuCoin. Pero' era selezionato 1d": the analysis also loads the
+        # higher timeframe (1M by default), and that request failed the page.
+        # Calendar months folded from the daily candles.
+        if interval == "1M":
+            days = min(max(outputsize, 1) * 31, self._PAGE_LIMIT * self._MAX_PAGES)
+            daily = await self.fetch_ohlcv(symbol, "1d", days)
+            month = daily.resample("MS").agg({"open": "first", "high": "max", "low": "min",
+                                              "close": "last", "volume": "sum"}).dropna(subset=["close"])
+            return month.tail(outputsize)
         formatted_symbol = format_symbol(symbol)
         candle_type = _CANONICAL_TO_TYPE.get(interval)
         if candle_type is None:

@@ -2961,5 +2961,11 @@
     "at": 1792082151,
     "summary": "Era un limite nostro, non delle API di KuCoin: KuCoin era stato impostato per le sole coppie quotate in BTC, quindi la ricerca mostrava solo quelle e qualsiasi coppia come ETHUSDT diventava 'ETHUSDT-BTC', che non esiste. Ora ci sono tutte le coppie di KuCoin (USDT, BTC, USDC, EUR...), con le USDT per prime. Verificato dal vivo: ETH-USDT, BTC-USDT e ETH-BTC hanno storia dal 2017, sia in 4H sia in 1D.",
     "detail": "providers/kucoin.py: format_symbol tiene la quotazione (ETHUSDT -> ETH-USDT; una base nuda resta la coppia BTC, per i simboli gia' salvati), search_symbols su tutte le coppie negoziabili ordinate USDT, BTC, USDC; etichetta 'KuCoin (/BTC only)' tolta da index.html. Verifica dal vivo: workflow provider-check.yml."
+  },
+  "seed-0298": {
+    "status": "risolto",
+    "at": 1792091914,
+    "summary": "Il grafico 1D era giusto: la pagina carica anche il timeframe superiore (il mensile), e KuCoin non ha candele mensili nelle sue API, quindi quella richiesta falliva e bloccava tutto. Ora le candele mensili di KuCoin sono costruite dalle giornaliere, mese per mese.",
+    "detail": "providers/kucoin.py fetch_ohlcv: interval 1M = candele 1d raggruppate per mese di calendario (resample 'MS': apertura del primo giorno, chiusura dell'ultimo, massimo/minimo, volume sommato). Test in test_kucoin_symbols.py; verifica dal vivo con provider-check.yml (ora anche 1w e 1M)."
   }
 }
