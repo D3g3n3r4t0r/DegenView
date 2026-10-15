@@ -101,6 +101,8 @@ if TF == "1d":
         ("RSI+BB reversal", GABRIELE, {}, "2d", False),
         ("Lorenzo default", LORENZO, dict(DEFAULT_PARAMS), (), False),
         ("Lorenzo searched", LORENZO, dict(DEFAULT_PARAMS), LORENZO_DIMS, False),
+        # is it the strategy or the BTC filter? the same filter on Lorenzo
+        ("Lorenzo default +BTC", LORENZO, dict(DEFAULT_PARAMS), (), "btc"),
     )
 LONG_ONLY = {LORENZO}
 BTC_UP: pd.Series | None = None   # BTC's previous daily close above its EMA 200
@@ -108,7 +110,7 @@ SHORT = {"Claudio Trend 4H": "CT", "Claudio Trend default": "CTd", "RSI+BB 4H": 
 SHORT.update({f"{k} +EMA200d": f"{v}f" for k, v in list(SHORT.items())})
 SHORT["Lorenzo default L/S regime"] = "Lrs"
 SHORT.update({"Claudio 1D": "C1", "Claudio 1D +BTC": "C1b",
-              "RSI+BB reversal": "G"})
+              "RSI+BB reversal": "G", "Lorenzo default +BTC": "Ldb"})
 TREND: pd.Series | None = None   # close above the daily EMA 200, set per pair
 
 
