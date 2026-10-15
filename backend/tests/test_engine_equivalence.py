@@ -40,7 +40,7 @@ BPS = [
 
 # 15/10: the simple figures are computed after the loop from the trades the
 # two engines already agree on (simple_stats); the reference engine predates them.
-_SIMPLE = {"simple_return_pct", "simple_max_drawdown_pct", "avg_trade_pct", "median_trade_pct"}
+_SIMPLE = {"simple_return_pct", "simple_max_drawdown_pct", "avg_trade_pct", "median_trade_pct", "position_pct"}
 
 
 def _core(bt):
