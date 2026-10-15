@@ -11,6 +11,10 @@ on:
         description: '4h or 1d'
         required: false
         default: '4h'
+      set:
+        description: 'variant set (empty = default, btc = every strategy with and without the BTC filter)'
+        required: false
+        default: ''
 
 jobs:
   pair:
@@ -28,7 +32,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install -r backend/requirements.txt
-      - run: cd backend && PAIR=${{ matrix.pair }} TF=${{ inputs.tf || '4h' }} PYTHONPATH=. python ../scripts/compare_claudio_folds.py
+      - run: cd backend && PAIR=${{ matrix.pair }} TF=${{ inputs.tf || '4h' }} SET=${{ inputs.set }} PYTHONPATH=. python ../scripts/compare_claudio_folds.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -104,6 +104,36 @@ if TF == "1d":
         # is it the strategy or the BTC filter? the same filter on Lorenzo
         ("Lorenzo default +BTC", LORENZO, dict(DEFAULT_PARAMS), (), "btc"),
     )
+GABRIELE2 = "Gabriele 2 (RSI+BB long/short)"
+# Lorenzo, 15/10: "il filtro BTC [...] testalo su tutto". SET=btc: every site
+# strategy of the timeframe with and without it. "ls" filters = the site's
+# long/short version (no long-only stripping); "ls_btc" blocks only the longs.
+if os.environ.get("SET") == "btc":
+    _L = dict(DEFAULT_PARAMS)
+    if TF == "4h":
+        VARIANTS = (
+            ("RSI+BB 4H", RSI_BB_4H, {}, None, False),
+            ("RSI+BB 4H +BTC", RSI_BB_4H, {}, None, "btc"),
+            ("Lorenzo default", LORENZO, _L, (), False),
+            ("Lorenzo default +BTC", LORENZO, _L, (), "btc"),
+            ("Lorenzo searched", LORENZO, _L, LORENZO_DIMS, False),
+            ("Lorenzo searched +BTC", LORENZO, _L, LORENZO_DIMS, "btc"),
+            ("Lorenzo L/S", LORENZO, _L, (), "ls_raw"),
+            ("Lorenzo L/S +BTC", LORENZO, _L, (), "ls_btc"),
+        )
+    else:
+        VARIANTS = (
+            ("RSI+BB reversal", GABRIELE, {}, "2d", False),
+            ("RSI+BB reversal +BTC", GABRIELE, {}, "2d", "btc"),
+            ("Gabriele 2 L/S", GABRIELE2, {}, "2d", "ls_raw"),
+            ("Gabriele 2 L/S +BTC", GABRIELE2, {}, "2d", "ls_btc"),
+            ("Lorenzo default", LORENZO, _L, (), False),
+            ("Lorenzo default +BTC", LORENZO, _L, (), "btc"),
+            ("Lorenzo searched", LORENZO, _L, LORENZO_DIMS, False),
+            ("Lorenzo searched +BTC", LORENZO, _L, LORENZO_DIMS, "btc"),
+            ("Lorenzo L/S", LORENZO, _L, (), "ls_raw"),
+            ("Lorenzo L/S +BTC", LORENZO, _L, (), "ls_btc"),
+        )
 LONG_ONLY = {LORENZO}
 BTC_UP: pd.Series | None = None   # BTC's previous daily close above its EMA 200
 SHORT = {"Claudio Trend 4H": "CT", "Claudio Trend default": "CTd", "RSI+BB 4H": "R", "Claudio 4H": "C", "Lorenzo default": "Ld", "Lorenzo searched": "Ls"}
@@ -111,6 +141,9 @@ SHORT.update({f"{k} +EMA200d": f"{v}f" for k, v in list(SHORT.items())})
 SHORT["Lorenzo default L/S regime"] = "Lrs"
 SHORT.update({"Claudio 1D": "C1", "Claudio 1D +BTC": "C1b",
               "RSI+BB reversal": "G", "Lorenzo default +BTC": "Ldb"})
+SHORT.update({"RSI+BB 4H +BTC": "Rb", "Lorenzo searched +BTC": "Lsb", "Lorenzo L/S": "LS",
+              "Lorenzo L/S +BTC": "LSb", "RSI+BB reversal +BTC": "Gb", "Gabriele 2 L/S": "G2",
+              "Gabriele 2 L/S +BTC": "G2b"})
 TREND: pd.Series | None = None   # close above the daily EMA 200, set per pair
 
 
@@ -188,6 +221,11 @@ async def rank(symbol: str) -> int | None:
 
 def signals(df, strategy, params, filt=False):
     sig = STRATEGY_REGISTRY[strategy](df, params).copy()
+    if filt in ("ls_raw", "ls_btc"):      # the site's long/short version
+        if filt == "ls_btc":
+            sig["entry_long"] = sig["entry_long"] & BTC_UP.reindex(
+                sig.index, method="ffill").fillna(False).to_numpy().astype(bool)
+        return sig
     trend = BTC_UP if filt == "btc" else TREND
     up = trend.reindex(sig.index, method="ffill").fillna(False).to_numpy().astype(bool) if filt else None
     if filt == "ls":              # both sides, each only on its side of the regime
