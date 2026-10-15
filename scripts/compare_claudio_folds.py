@@ -8,9 +8,9 @@ TRAIN_FROM (2023-01-01) on — the same search as the site, most solid and
 most profitable pick — and both picks then run on each TEST_YEARS year
 (2021, a strong bull year, and 2022, a strong bear year), never seen by the
 search, indicators warmed up on the candles before. Every strategy is long
-only ("solo long e uscita senza short"): RSI+BB 4H, Claudio 4H, Claudio v2
-(no regime filter, exit at the upper band, trailing ATR stop), Lorenzo's
-trend follower with its own default values (nothing searched) and searched.
+only ("solo long e uscita senza short"): RSI+BB 4H, Claudio 4H, Lorenzo's
+trend follower with its own default values (nothing searched) and searched,
+each also with a daily EMA 200 filter (no entry under it).
 Candles from Binance's public archive (data.binance.vision, since 2020), the
 current month from MEXC. Runs in CI, one job per pair (claudio-folds.yml).
 
@@ -48,20 +48,34 @@ LORENZO_DIMS = (
     ("slopeFlen", list(range(3, 22, 2))),       # 10
     ("slopeSlen", list(range(15, 76, 5))),      # 13
 )
-CLAUDIO_V2 = {"cl_er_max": 1.0, "cl_exit_upper": 1, "cl_trail": 1, "cl_time_stop": 10**6}
-# (label, strategy, fixed values, dimensions searched: None = RSI+BB 3D, () = nothing)
+# (label, strategy, fixed values, dimensions searched: None = RSI+BB 3D,
+# () = nothing, trend filter). Claudio v2 dropped after the 2021/22 test.
+# Lorenzo, 15/10: "la devi utilizzare come reversal, cioe' solo long e uscita
+# senza short" — here only: the site's Lorenzo stays long/short. The short
+# signal only closes the long (its exit_long, the slope cross-under).
 VARIANTS = (
-    ("RSI+BB 4H", RSI_BB_4H, {}, None),
-    ("Claudio 4H", CLAUDIO_4H, {}, CLAUDIO_DIMS),
-    ("Claudio v2", CLAUDIO_4H, CLAUDIO_V2, CLAUDIO_DIMS),
-    # Lorenzo, 15/10: "la devi utilizzare come reversal, cioe' solo long e
-    # uscita senza short": long only like the other two, the short signal
-    # only closes the long (its exit_long, the slope cross-under, already does)
-    ("Lorenzo default", LORENZO, dict(DEFAULT_PARAMS), ()),
-    ("Lorenzo searched", LORENZO, dict(DEFAULT_PARAMS), LORENZO_DIMS),
+    ("RSI+BB 4H", RSI_BB_4H, {}, None, False),
+    ("Claudio 4H", CLAUDIO_4H, {}, CLAUDIO_DIMS, False),
+    ("Lorenzo default", LORENZO, dict(DEFAULT_PARAMS), (), False),
+    ("Lorenzo searched", LORENZO, dict(DEFAULT_PARAMS), LORENZO_DIMS, False),
+    # 15/10 "provalo": no entry while the price is under the daily EMA 200
+    ("RSI+BB 4H +EMA200d", RSI_BB_4H, {}, None, True),
+    ("Claudio 4H +EMA200d", CLAUDIO_4H, {}, CLAUDIO_DIMS, True),
+    ("Lorenzo default +EMA200d", LORENZO, dict(DEFAULT_PARAMS), (), True),
+    ("Lorenzo searched +EMA200d", LORENZO, dict(DEFAULT_PARAMS), LORENZO_DIMS, True),
 )
 LONG_ONLY = {LORENZO}
-SHORT = {"RSI+BB 4H": "R", "Claudio 4H": "C", "Claudio v2": "C2", "Lorenzo default": "Ld", "Lorenzo searched": "Ls"}
+SHORT = {"RSI+BB 4H": "R", "Claudio 4H": "C", "Lorenzo default": "Ld", "Lorenzo searched": "Ls"}
+SHORT.update({f"{k} +EMA200d": f"{v}f" for k, v in list(SHORT.items())})
+TREND: pd.Series | None = None   # close above the daily EMA 200, set per pair
+
+
+def daily_trend(df):
+    """True on a 4h candle when the PREVIOUS day closed above its EMA 200:
+    known before the candle opens, so no look-ahead."""
+    day = df["close"].resample("1D").last().dropna()
+    up = (day > day.ewm(span=200, adjust=False, min_periods=200).mean()).shift(1)
+    return up.reindex(df.index, method="ffill").fillna(False).astype(bool)
 SHOWN = ("rsi_oversold", "rsi_overbought", "bb_mult", "cl_rsi_os", "cl_bb_mult", "cl_atr_stop",
          "len", "slopeFlen", "slopeSlen")
 
@@ -128,18 +142,20 @@ async def rank(symbol: str) -> int | None:
         return None
 
 
-def signals(df, strategy, params):
+def signals(df, strategy, params, filt=False):
     sig = STRATEGY_REGISTRY[strategy](df, params).copy()
+    if filt:
+        sig["entry_long"] = sig["entry_long"] & TREND.reindex(sig.index).fillna(False).to_numpy()
     if strategy in LONG_ONLY:
         sig["entry_short"] = False
         sig["exit_short"] = False
     return sig
 
 
-def test_on(df, strategy, params, t0, t1):
+def test_on(df, strategy, params, t0, t1, filt=False):
     start = max(0, df.index.searchsorted(t0) - WARMUP)
     frame = df[(df.index < t1)].iloc[start:]
-    sig = signals(frame, strategy, params)
+    sig = signals(frame, strategy, params, filt)
     sig.loc[sig.index < t0, :] = False
     return run_backtest(frame, params, BP, signals=sig, strategy_name=strategy)
 
@@ -150,6 +166,8 @@ def annual(ret, days):
 
 
 def run_pair(symbol, df):
+    global TREND
+    TREND = daily_trend(df)
     tz = df.index.tz
     train = df[df.index >= TRAIN_FROM]
     years = list(range(train.index[0].year + 1, train.index[-1].year))   # first and last not judged
@@ -162,11 +180,11 @@ def run_pair(symbol, df):
     res = {"symbol": symbol, "since": f"{df.index[0]:%Y-%m}", "train_years": years,
            "hold": {str(y): h for y, _, _, h in tests}, "variants": {}}
     train_days = (train.index[-1] - train.index[0]).days
-    for name, strat, fixed, dims in VARIANTS:
+    for name, strat, fixed, dims, filt in VARIANTS:
         t = time.time()
 
-        def bt(p, strat=strat):
-            return run_backtest(train, p, BP, signals=signals(train, strat, p), strategy_name=strat)
+        def bt(p, strat=strat, filt=filt):
+            return run_backtest(train, p, BP, signals=signals(train, strat, p, filt), strategy_name=strat)
         try:
             if dims == ():
                 n, picks = 1, [{"kind": "default", "params": fixed, "backtest": bt(fixed), "solidity": None}]
@@ -183,7 +201,7 @@ def run_pair(symbol, df):
                     "train_tr": c["backtest"].num_trades, "sol": c["solidity"],
                     "p": {k: v for k, v in c["params"].items() if k in SHOWN}}
             for y, t0, t1, _ in tests:
-                tb = test_on(df, strat, c["params"], t0, t1)
+                tb = test_on(df, strat, c["params"], t0, t1, filt)
                 pick[str(y)] = {"ret": round(tb.total_return_pct, 1), "tr": tb.num_trades,
                                 "dd": round(tb.max_drawdown_pct, 1)}
             row[c["kind"]] = pick

@@ -3690,7 +3690,7 @@
       });
     });
     // Test on another pair (Lorenzo, 15/10): same values, candles the search
-    // never saw — the whole history of the new pair and its last 12 months.
+    // never saw — the whole history of the new pair.
     list.querySelectorAll(".arch-testpair").forEach((btn) => {
       btn.addEventListener("click", () => {
         const form = list.querySelector(`[data-form="${btn.dataset.id}"]`);
@@ -12049,43 +12049,31 @@
       + `· buy & hold ${pct(v.buy_hold_pct)}</div>`;
   }
 
-  // RSI+BB 4H (15/10, "più dettagli possibili"): the history the search chose
-  // on and the last 12 months it never saw, side by side, same rows.
+  // 15/10: whole history only ("gli ultimi 12 mesi [...] ormai non servono piu'")
   function pairTestTable(r) {
     const pct = (x) => (x == null ? "–" : `${x >= 0 ? "+" : ""}${Number(x).toFixed(1)}%`);
     const num = (x, d = 0) => (x == null ? "–" : Number(x).toFixed(d));
     const day = (t) => (t ? new Date(t * 1000).toLocaleDateString("it-IT") : "–");
     const cls = (x) => (x == null ? "" : x >= 0 ? "pos" : "neg");
-    const h = r.history, y = r.last_year || {};
-    const has = !!r.last_year;
-    const row = (label, a, b) => `<tr><th>${label}</th><td>${a}</td><td>${has ? b : "–"}</td></tr>`;
-    let verdict = "";
-    if (has) {
-      verdict = y.return_pct <= 0
-        ? `On ${escapeHtml(r.symbol)} the same values lost money in the last 12 months.`
-        : h.annual_pct != null && y.return_pct >= h.annual_pct * 0.7
-          ? `On ${escapeHtml(r.symbol)} the same values held up: last 12 months in line with its average year.`
-          : `On ${escapeHtml(r.symbol)} positive, but below its average year.`;
-      verdict += ` Buy & hold in the same 12 months: ${pct(y.buy_hold_pct)} (${y.vs_buy_hold_pct >= 0 ? "strategy ahead by" : "strategy behind by"} ${pct(Math.abs(y.vs_buy_hold_pct)).replace("+", "")}).`;
-    }
+    const h = r.history;
+    const row = (label, a) => `<tr><th>${label}</th><td>${a}</td></tr>`;
     return `
       <div class="arch-testpair-title">${escapeHtml(r.symbol)} · ${escapeHtml(r.exchange.toUpperCase())} · ${escapeHtml(r.interval)} · ${r.candles} candles · same values</div>
       <table class="lab-detail">
-        <thead><tr><th></th><th>Whole history</th><th>Last 12 months</th></tr></thead>
+        <thead><tr><th></th><th>Whole history</th></tr></thead>
         <tbody>
-          ${row("Period", `${day(h.from)} → ${day(h.to)}<br><small>${num(h.years, 1)} years</small>`, `${day(y.from)} → ${day(y.to)}`)}
-          ${row("Total return", `<b class="${cls(h.return_pct)}">${pct(h.return_pct)}</b>`, `<b class="${cls(y.return_pct)}">${pct(y.return_pct)}</b>`)}
-          ${row("Per year (average)", `<b class="${cls(h.annual_pct)}">${pct(h.annual_pct)}</b>`, `<b class="${cls(y.return_pct)}">${pct(y.return_pct)}</b>`)}
-          ${row("Trades", `${num(h.trades)} <small>(${num(h.trades_per_year, 1)}/year)</small>`, num(y.trades))}
-          ${row("Won / lost", `${num(h.wins)} / ${num(h.losses)}`, `${num(y.wins)} / ${num(y.losses)}`)}
-          ${row("Win rate", h.win_rate_pct == null ? "–" : `${num(h.win_rate_pct)}%`, y.win_rate_pct == null ? "–" : `${num(y.win_rate_pct)}%`)}
-          ${row("Profit factor", num(h.profit_factor, 2), num(y.profit_factor, 2))}
-          ${row("Max drawdown", pct(-Math.abs(h.max_drawdown_pct)), pct(-Math.abs(y.max_drawdown_pct)))}
-          ${row("Best / worst trade", `${pct(h.best_trade_pct)} / ${pct(h.worst_trade_pct)}`, `${pct(y.best_trade_pct)} / ${pct(y.worst_trade_pct)}`)}
-          ${row("Buy & hold", pct(h.buy_hold_pct), pct(y.buy_hold_pct))}
+          ${row("Period", `${day(h.from)} → ${day(h.to)}<br><small>${num(h.years, 1)} years</small>`)}
+          ${row("Total return", `<b class="${cls(h.return_pct)}">${pct(h.return_pct)}</b>`)}
+          ${row("Per year (average)", `<b class="${cls(h.annual_pct)}">${pct(h.annual_pct)}</b>`)}
+          ${row("Trades", `${num(h.trades)} <small>(${num(h.trades_per_year, 1)}/year)</small>`)}
+          ${row("Won / lost", `${num(h.wins)} / ${num(h.losses)}`)}
+          ${row("Win rate", h.win_rate_pct == null ? "–" : `${num(h.win_rate_pct)}%`)}
+          ${row("Profit factor", num(h.profit_factor, 2))}
+          ${row("Max drawdown", pct(-Math.abs(h.max_drawdown_pct)))}
+          ${row("Best / worst trade", `${pct(h.best_trade_pct)} / ${pct(h.worst_trade_pct)}`)}
+          ${row("Buy & hold", pct(h.buy_hold_pct))}
         </tbody>
-      </table>
-      ${verdict ? `<div class="lab-best2-verify ${y.return_pct > 0 ? "pos" : "neg"}">${verdict}</div>` : ""}`;
+      </table>`;
   }
 
   function detailTable(c) {
