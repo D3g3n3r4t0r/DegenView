@@ -142,6 +142,35 @@ def _fill_price(price: float, pct: float, side: str) -> float:
     return price * (1 + pct / 100) if side == "buy" else price * (1 - pct / 100)
 
 
+def simple_stats(trades, qty_pct_of_equity: float = 100.0) -> dict:
+    """Simple (not compounded) figures of a list of closed trades: each one
+    net of fees on the same stake, then added up (Lorenzo, 15/10: "il
+    risultato percentuale puro di ogni trade [...] fare la somma della
+    percentuale o comunque la media"). The stake is the initial capital x
+    the position size, so with 100% the simple return is the plain sum of
+    the trades' net %, and the drawdown is the worst drop of that running
+    sum from its high, in points of the initial capital."""
+    if not trades:
+        return {"simple_return_pct": 0.0, "simple_max_drawdown_pct": 0.0,
+                "avg_trade_pct": None, "median_trade_pct": None}
+    q = qty_pct_of_equity / 100.0
+    net = []
+    for t in trades:
+        before = t.equity_after - t.pnl_abs          # equity when the trade opened
+        stake = before * q
+        net.append(t.pnl_abs / stake * 100 if stake > 0 else 0.0)
+    run, peak, dd = 0.0, 0.0, 0.0
+    for x in net:
+        run += x * q
+        peak = max(peak, run)
+        dd = max(dd, peak - run)
+    srt = sorted(net)
+    mid = len(srt) // 2
+    median = srt[mid] if len(srt) % 2 else (srt[mid - 1] + srt[mid]) / 2
+    return {"simple_return_pct": run, "simple_max_drawdown_pct": dd,
+            "avg_trade_pct": sum(net) / len(net), "median_trade_pct": median}
+
+
 def run_backtest(
     df: pd.DataFrame,
     strategy_params: dict | None,
@@ -320,7 +349,9 @@ def run_backtest(
             else:
                 current = 0
 
+    simple = simple_stats(trades, bp["qty_pct_of_equity"])
     return BacktestResult(
+        **simple,
         interval="",  # caller (app.main) fills in the interval the df it passed actually was
         # Dichiarato nel risultato: chi legge il rendimento deve poter sapere a
         # che prezzo si e' entrati senza risalire alla richiesta.

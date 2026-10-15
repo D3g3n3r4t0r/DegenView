@@ -127,6 +127,16 @@ class BacktestResult(BaseModel):
     # Futures-only: quante posizioni si sono chiuse per liquidazione invece
     # che per segnale della strategia — 0 su ogni backtest spot.
     liquidated_count: int = 0
+    # Simple, not compounded (Lorenzo, 15/10: "il risultato percentuale puro
+    # di ogni trade [...] e poi sommate", for whoever does not reinvest
+    # everything): every trade on the same stake — the initial capital x
+    # the position size — net of fees. total_return_pct / max_drawdown_pct
+    # stay the compounded ones. Drawdown in points of the initial capital,
+    # on closed trades like the compounded one. None where not computed.
+    simple_return_pct: float | None = None
+    simple_max_drawdown_pct: float | None = None
+    avg_trade_pct: float | None = None       # net % of one trade, mean
+    median_trade_pct: float | None = None    # ... and median
 
 
 class ExchangeCredential(BaseModel):

@@ -190,11 +190,16 @@ def build_backtest_workbook(
     metrics = [
         ("Initial capital", bt.initial_capital, _MONEY, True),
         ("Final capital", f"=B{r}+Trade!I{n + 2}" if n else bt.final_equity, _MONEY, False),
-        ("Return", f"=IF(B{r}<>0,B{r + 1}/B{r}-1,\"\")", _PCT, False),
+        ("Return (compounded)", f"=IF(B{r}<>0,B{r + 1}/B{r}-1,\"\")", _PCT, False),
         ("Trades", f"=COUNT(Trade!A2:A{n + 1})" if n else 0, "0", False),
         ("Winners", f"=COUNTIF(Trade!I2:I{n + 1},\">0\")" if n else 0, "0", False),
         ("Win rate", f"=IF(B{r + 3}>0,B{r + 4}/B{r + 3},\"\")" if n else "", _PCT, False),
-        ("Max drawdown", float(bt.max_drawdown_pct) / 100.0, _PCT, False),
+        ("Max drawdown (compounded)", float(bt.max_drawdown_pct) / 100.0, _PCT, False),
+        # 15/10: every trade on the same stake, gains not reinvested
+        ("Return (simple)", None if bt.simple_return_pct is None else float(bt.simple_return_pct) / 100.0, _PCT, False),
+        ("Max drawdown (simple)", None if bt.simple_max_drawdown_pct is None else float(bt.simple_max_drawdown_pct) / 100.0, _PCT, False),
+        ("Average trade", None if bt.avg_trade_pct is None else float(bt.avg_trade_pct) / 100.0, _PCT, False),
+        ("Median trade", None if bt.median_trade_pct is None else float(bt.median_trade_pct) / 100.0, _PCT, False),
         ("Profit factor", bt.profit_factor, "0.00", False),
         ("Sharpe", bt.sharpe_ratio, "0.00", False),
     ]

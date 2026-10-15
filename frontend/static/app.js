@@ -116,6 +116,29 @@
   }
   window.strategyLabel = strategyLabel;
 
+  // The four figures that matter (Lorenzo, 15/10: "i quattro adesso valori
+  // fondamentali sono profitto semplice, profitto composto, drawdown
+  // semplice, drawdown composto [...] entrambi grandi visibili e con sotto
+  // spiegato bene di che tipo di rendimento si tratta"). Same size each,
+  // a line under each saying what it is; the rest stays small elsewhere.
+  function fourFigures(f, compact = false) {
+    const p = (x) => (x == null ? "–" : `${x >= 0 ? "+" : ""}${Number(x).toFixed(1)}%`);
+    const d = (x) => (x == null ? "–" : `-${Math.abs(Number(x)).toFixed(1)}%`);
+    const c = (x) => (x == null ? "" : x >= 0 ? "pos" : "neg");
+    const cell = (val, cls, label, hint) => `<div class="ff-cell"><div class="ff-val ${cls}">${val}</div>`
+      + `<div class="ff-lbl">${label}</div>${compact ? "" : `<div class="ff-hint">${hint}</div>`}</div>`;
+    return `<div class="four-fig${compact ? " compact" : ""}">`
+      + cell(p(f.simple), c(f.simple), "Simple profit", "every trade on the same stake, gains not reinvested")
+      + cell(p(f.compounded), c(f.compounded), "Compounded profit", "every trade reinvests all the equity so far")
+      + cell(d(f.simpleDd), "neg", "Simple drawdown", "worst drop, in % of the starting capital")
+      + cell(d(f.dd), "neg", "Compounded drawdown", "worst drop from the equity peak")
+      + `</div>`;
+  }
+  function perTrade(f) {
+    const p = (x) => (x == null ? "–" : `${x >= 0 ? "+" : ""}${Number(x).toFixed(2)}%`);
+    return `average trade ${p(f.avg)} · median trade ${p(f.median)}`;
+  }
+
   // `applyTheme` gira subito, prima che il resto del file sia valutato: senza
   // questa bandiera `repaintCharts` toccherebbe `mainChart`, dichiarato con
   // `let` settecento righe piu' sotto, e cadrebbe nella stessa temporal dead
@@ -2975,11 +2998,11 @@
         // non solo il rendimento, tutto cio' che serve per giudicare se
         // fidarsi: trade, drawdown, profit factor, sharpe, quante candele.
         card.innerHTML = `
-          <div class="wl-archive-head"><b>${escapeHtml(strategyLabel(it.strategy_name))}</b><span class="wl-archive-ret ${m.total_return_pct > 0 ? "up" : m.total_return_pct < 0 ? "down" : ""}">${fmtPct(m.total_return_pct)}</span></div>
+          <div class="wl-archive-head"><b>${escapeHtml(strategyLabel(it.strategy_name))}</b></div>
+          ${fourFigures({ simple: m.simple_return_pct, compounded: m.total_return_pct, simpleDd: m.simple_max_drawdown_pct, dd: m.max_drawdown_pct }, true)}
           <div class="wl-archive-stats">
             <span>${m.num_trades ?? "—"} trades</span>
             <span>win ${m.win_rate_pct != null ? m.win_rate_pct.toFixed(0) + "%" : "—"}</span>
-            <span>DD ${m.max_drawdown_pct != null ? m.max_drawdown_pct.toFixed(1) + "%" : "—"}</span>
             <span>PF ${m.profit_factor != null ? m.profit_factor.toFixed(2) : "—"}</span>
             <span>Sharpe ${m.sharpe_ratio != null ? m.sharpe_ratio.toFixed(2) : "—"}</span>
             <span>${m.interval || entry.interval || "—"} · ${m.candles ?? "—"} candles</span>
@@ -3559,10 +3582,9 @@
     const renderCard = (e, badge) => {
       const m = e.metrics;
       const body = e.state === "pronto" && m
-        ? `<div class="arch-metrics">
-             <span class="${m.total_return_pct >= 0 ? "bull" : "bear"}">${pct(m.total_return_pct)}</span>
+        ? `${fourFigures({ simple: m.simple_return_pct, compounded: m.total_return_pct, simpleDd: m.simple_max_drawdown_pct, dd: m.max_drawdown_pct }, true)}
+           <div class="arch-metrics">
              <span>${m.num_trades} trades</span>
-             <span>DD ${pct(m.max_drawdown_pct)}</span>
              <span>PF ${num(m.profit_factor)}</span>
              <span>${m.candles} candles · ${m.interval}</span>
            </div>`
@@ -8934,8 +8956,12 @@
 
     const pctEl = el("equity-stamp-pct");
     if (pctEl) {
-      pctEl.textContent = `${bt.total_return_pct >= 0 ? "+" : ""}${bt.total_return_pct.toFixed(1)}%`;
-      pctEl.className = "equity-stamp-pct " + (bt.total_return_pct >= 0 ? "positive" : "negative");
+      // 15/10: simple and compounded side by side, same size
+      const sp = bt.simple_return_pct;
+      const f = (x) => `${x >= 0 ? "+" : ""}${x.toFixed(1)}%`;
+      pctEl.innerHTML = (sp != null ? `<span class="${sp >= 0 ? "positive" : "negative"}" title="Simple: every trade on the same stake, gains not reinvested">${f(sp)}<small> simple</small></span> · ` : "")
+        + `<span class="${bt.total_return_pct >= 0 ? "positive" : "negative"}" title="Compounded: every trade reinvests all the equity so far">${f(bt.total_return_pct)}<small> compounded</small></span>`;
+      pctEl.className = "equity-stamp-pct";
     }
     const subEl = el("equity-stamp-sub");
     if (subEl) subEl.textContent = `equity ${bt.final_equity.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
@@ -8945,7 +8971,8 @@
       chipsEl.innerHTML = "";
       [
         ["Win rate", bt.win_rate_pct !== null ? `${bt.win_rate_pct.toFixed(0)}%` : "—", ""],
-        ["Max drawdown", `-${bt.max_drawdown_pct.toFixed(1)}%`, "negative"],
+        ["Simple drawdown", bt.simple_max_drawdown_pct != null ? `-${bt.simple_max_drawdown_pct.toFixed(1)}%` : "—", "negative"],
+        ["Compounded drawdown", `-${bt.max_drawdown_pct.toFixed(1)}%`, "negative"],
         ["Profit factor", bt.profit_factor !== null ? bt.profit_factor.toFixed(2) : "—", ""],
       ].forEach(([label, value, cls]) => {
         const div = document.createElement("div");
@@ -12120,13 +12147,16 @@
         <thead><tr><th></th><th>Whole history</th></tr></thead>
         <tbody>
           ${row("Period", `${day(h.from)} → ${day(h.to)}<br><small>${num(h.years, 1)} years</small>`)}
-          ${row("Total return", `<b class="${cls(h.return_pct)}">${pct(h.return_pct)}</b>`)}
+          ${row("Simple profit", `<b class="${cls(h.simple_return_pct)}">${pct(h.simple_return_pct)}</b><br><small>every trade on the same stake</small>`)}
+          ${row("Compounded profit", `<b class="${cls(h.return_pct)}">${pct(h.return_pct)}</b><br><small>reinvesting all the equity</small>`)}
           ${row("Per year (average)", `<b class="${cls(h.annual_pct)}">${pct(h.annual_pct)}</b>`)}
           ${row("Trades", `${num(h.trades)} <small>(${num(h.trades_per_year, 1)}/year)</small>`)}
           ${row("Won / lost", `${num(h.wins)} / ${num(h.losses)}`)}
           ${row("Win rate", h.win_rate_pct == null ? "–" : `${num(h.win_rate_pct)}%`)}
           ${row("Profit factor", num(h.profit_factor, 2))}
-          ${row("Max drawdown", pct(-Math.abs(h.max_drawdown_pct)))}
+          ${row("Simple drawdown", `<b>${pct(h.simple_max_drawdown_pct == null ? null : -Math.abs(h.simple_max_drawdown_pct))}</b><br><small>in % of the starting capital</small>`)}
+          ${row("Compounded drawdown", `<b>${pct(-Math.abs(h.max_drawdown_pct))}</b><br><small>from the equity peak</small>`)}
+          ${row("Average / median trade", `${pct(h.avg_trade_pct)} / ${pct(h.median_trade_pct)}`)}
           ${row("Best / worst trade", `${pct(h.best_trade_pct)} / ${pct(h.worst_trade_pct)}`)}
           ${row("Buy & hold", pct(h.buy_hold_pct))}
         </tbody>
@@ -12158,13 +12188,16 @@
         <thead><tr><th></th>${t ? "<th>History (chosen on)</th><th>Last 12 months · never seen</th>" : "<th>Whole history</th>"}</tr></thead>
         <tbody>
           ${row("Period", `${day(h.from)} → ${day(h.to)}<br><small>${num(h.years, 1)} years</small>`, `${day(v.from)} → ${day(v.to)}`)}
-          ${row("Total return", `<b class="${cls(h.return_pct)}">${pct(h.return_pct)}</b>`, `<b class="${cls(v.return_pct)}">${pct(v.return_pct)}</b>`)}
+          ${row("Simple profit", `<b class="${cls(h.simple_return_pct)}">${pct(h.simple_return_pct)}</b>`, `<b class="${cls(v.simple_return_pct)}">${pct(v.simple_return_pct)}</b>`, "Every trade on the same stake, gains not reinvested")}
+          ${row("Compounded profit", `<b class="${cls(h.return_pct)}">${pct(h.return_pct)}</b>`, `<b class="${cls(v.return_pct)}">${pct(v.return_pct)}</b>`, "Every trade reinvests all the equity so far")}
           ${row("Per year (average)", `<b class="${cls(h.annual_pct)}">${pct(h.annual_pct)}</b>`, `<b class="${cls(v.return_pct)}">${pct(v.return_pct)}</b>`, "Compounded yearly return: the fair comparison between the two columns")}
           ${row("Trades", `${num(h.trades)} <small>(${num(h.trades_per_year, 1)}/year)</small>`, num(v.trades))}
           ${row("Won / lost", `${num(h.wins)} / ${num(h.losses)}`, `${num(v.wins)} / ${num(v.losses)}`)}
           ${row("Win rate", h.win_rate_pct == null ? "–" : `${num(h.win_rate_pct)}%`, v.win_rate_pct == null ? "–" : `${num(v.win_rate_pct)}%`)}
           ${row("Profit factor", num(h.profit_factor, 2), num(v.profit_factor, 2), "Gross gains / gross losses: above 1 the strategy earns")}
-          ${row("Max drawdown", pct(-Math.abs(h.max_drawdown_pct)), pct(-Math.abs(v.max_drawdown_pct)))}
+          ${row("Simple drawdown", pct(h.simple_max_drawdown_pct == null ? null : -Math.abs(h.simple_max_drawdown_pct)), pct(v.simple_max_drawdown_pct == null ? null : -Math.abs(v.simple_max_drawdown_pct)), "Worst drop, in % of the starting capital")}
+          ${row("Compounded drawdown", pct(-Math.abs(h.max_drawdown_pct)), pct(-Math.abs(v.max_drawdown_pct)), "Worst drop from the equity peak")}
+          ${row("Average / median trade", `${pct(h.avg_trade_pct)} / ${pct(h.median_trade_pct)}`, `${pct(v.avg_trade_pct)} / ${pct(v.median_trade_pct)}`)}
           ${row("Best / worst trade", `${pct(h.best_trade_pct)} / ${pct(h.worst_trade_pct)}`, `${pct(v.best_trade_pct)} / ${pct(v.worst_trade_pct)}`)}
           ${t ? row("Buy & hold", "", pct(v.buy_hold_pct)) : ""}
         </tbody>
@@ -12184,7 +12217,7 @@
     const KIND = { solid: "Most solid", profitable: "Most profitable", "solid+profitable": "Most solid and most profitable" };
     const kinds = cands.some((c) => c.kind);
     const held = cands.some((c) => c.verification && c.verification.unseen);
-    box.innerHTML = `<div class="lab-best2-title">${kinds ? "Most solid · most profitable" : `Best ${cands.length === 1 ? "result" : "two results"}`} · ${held ? "chosen without the last 12 months, then tested on them" : "whole chart, a trade in every year between the first and the last"}</div>`
+    box.innerHTML = `<div class="lab-best2-title">${kinds ? "Most solid · most profitable" : `Best ${cands.length === 1 ? "result" : "two results"}`} · ${held ? "chosen without the last 12 months, then tested on them" : "whole chart, ranked by simple profit"}</div>`
       + (kinds && body.data_used && body.data_used.note ? `<div class="lab-best2-note">${escapeHtml(body.data_used.note)} ${body.trials_evaluated ? `${body.trials_evaluated} combinations backtested.` : ""}</div>` : "")
       + cands.map((c, i) => `
       <div class="lab-best2-card${i === 0 ? " active" : ""}" data-i="${i}">
@@ -12194,7 +12227,8 @@
           <div class="lab-best2-levels">${c.params.cl_rsi_os != null
             ? `RSI &lt; ${c.params.cl_rsi_os} · BB ×${Number(c.params.cl_bb_mult).toFixed(1)} · stop ${Number(c.params.cl_atr_stop).toFixed(2)}×ATR`
             : `OS ${c.params.rsi_oversold} · OB ${c.params.rsi_overbought}${kinds ? ` · BB ×${Number(c.params.bb_mult).toFixed(1)}` : ""}`}</div>
-          <div class="lab-best2-meta">${c.verification && c.verification.unseen ? "History before the last 12 months" : "Return"} <b>${pct(c.total_return_pct)}</b> · DD ${pct(-Math.abs(c.max_drawdown_pct))} · ${c.num_trades} trades${c.win_rate_pct != null ? ` · win ${c.win_rate_pct.toFixed(0)}%` : ""}</div>
+          ${fourFigures({ simple: c.simple_return_pct, compounded: c.total_return_pct, simpleDd: c.simple_max_drawdown_pct, dd: c.max_drawdown_pct })}
+          <div class="lab-best2-meta">${c.num_trades} trades${c.win_rate_pct != null ? ` · win ${c.win_rate_pct.toFixed(0)}%` : ""} · ${perTrade({ avg: c.avg_trade_pct, median: c.median_trade_pct })}</div>
           ${c.solidity != null ? `<div class="lab-best2-meta">Solidity <b>${Math.round(c.solidity * 100)}%</b>${c.neighbours ? ` · ×${(Number(c.params.bb_mult) - 0.1).toFixed(1)}: ${pct(c.neighbours.mult_down)} · ×${(Number(c.params.bb_mult) + 0.1).toFixed(1)}: ${pct(c.neighbours.mult_up)}` : ""}</div>` : ""}
           ${c.history ? detailTable(c) : verifyLine(c.verification)}
         </div>
@@ -12309,8 +12343,9 @@
     const pct = bt.total_return_pct;
     const isPos = pct >= 0;
     const retEl = labEl("lab-return-val");
-    retEl.textContent = (isPos ? "+" : "") + pct.toFixed(1) + "%";
-    retEl.className = "lab-return-val" + (isPos ? "" : " neg");
+    retEl.innerHTML = fourFigures({ simple: bt.simple_return_pct, compounded: pct,
+                                    simpleDd: bt.simple_max_drawdown_pct, dd: bt.max_drawdown_pct });
+    retEl.className = "lab-return-four";
 
     const finalEquity = bt.equity_curve.length ? bt.equity_curve[bt.equity_curve.length - 1][1] : 0;
     const initCap = parseFloat(labEl("lab-initial-capital").value) || 1000;
@@ -12344,10 +12379,10 @@
     // 3-chip base row + optional Sharpe chip
     let chipsHtml = `
       <div><div class="chip-lbl">Win rate</div><div class="chip-val ${bt.win_rate_pct >= 50 ? "pos" : "neg"}">${wr}</div></div>
-      <div><div class="chip-lbl">Drawdown</div><div class="chip-val neg">${dd}</div></div>
       <div><div class="chip-lbl">Prof. factor</div><div class="chip-val" title="How much the winning trades make compared to what the losing ones lose: above 1 means the system is profitable overall.">${pf}</div></div>`;
     if (sharpe !== null) chipsHtml += `<div><div class="chip-lbl">Sharpe</div><div class="chip-val ${parseFloat(sharpe) >= 1 ? "pos" : ""}" title="Return relative to the risk taken: above 1 is considered good, below 0 means losing while taking risk.">${sharpe}</div></div>`;
     if (consec !== null) chipsHtml += `<div><div class="chip-lbl">Max loss streak</div><div class="chip-val neg">${consec}</div></div>`;
+    if (bt.avg_trade_pct != null) chipsHtml += `<div><div class="chip-lbl">Avg / median trade</div><div class="chip-val" title="Net % of a single trade on its position: the mean, and the typical one. A mean far above the median means a few exceptional trades carry the result.">${bt.avg_trade_pct >= 0 ? "+" : ""}${bt.avg_trade_pct.toFixed(2)}% / ${bt.median_trade_pct >= 0 ? "+" : ""}${bt.median_trade_pct.toFixed(2)}%</div></div>`;
     labEl("lab-stat-chips").innerHTML = chipsHtml;
     labEl("lab-result-block").classList.remove("hidden");
     drawLabEquityCanvas(bt.equity_curve);

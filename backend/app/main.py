@@ -7242,6 +7242,11 @@ class OptimizeCandidate(BaseModel):
     total_return_pct: float
     max_drawdown_pct: float
     num_trades: int
+    # 15/10: the simple (not compounded) figures, same visibility as these
+    simple_return_pct: float | None = None
+    simple_max_drawdown_pct: float | None = None
+    avg_trade_pct: float | None = None
+    median_trade_pct: float | None = None
     win_rate_pct: float | None = None
     profit_factor: float | None = None
     out_of_sample_return_pct: float | None = None
@@ -7433,6 +7438,8 @@ async def _optimize_payload(
         c.num_trades = bt.num_trades
         c.win_rate_pct = bt.win_rate_pct
         c.profit_factor = bt.profit_factor
+        for k, v in _simple_of(bt).items():
+            setattr(c, k, v)
     if res.data_used is not None:
         res.data_used.note += (
             f" The result shown is the whole history, as Run computes it; the "
@@ -7528,6 +7535,7 @@ async def _max_return_payload(strategy_name, df, full, constraints, say, should_
                 total_return_pct=c["backtest"].total_return_pct,
                 max_drawdown_pct=c["backtest"].max_drawdown_pct,
                 num_trades=c["backtest"].num_trades,
+                **_simple_of(c["backtest"]),
                 win_rate_pct=c["backtest"].win_rate_pct,
                 profit_factor=c["backtest"].profit_factor,
                 kind=c.get("kind"), solidity=c.get("solidity"),
@@ -7540,6 +7548,12 @@ async def _max_return_payload(strategy_name, df, full, constraints, say, should_
 
 
 FOUR_H_LAB = ("RSI+BB 4H", "Claudio 4H")   # detailed history card, two kinds of result
+
+
+def _simple_of(bt: BacktestResult) -> dict:
+    """The simple (not compounded) figures of a backtest (15/10)."""
+    return {k: getattr(bt, k, None) for k in ("simple_return_pct", "simple_max_drawdown_pct",
+                                               "avg_trade_pct", "median_trade_pct")}
 
 
 def _bt_facts(bt: BacktestResult, start, end) -> dict:
@@ -7560,6 +7574,7 @@ def _bt_facts(bt: BacktestResult, start, end) -> dict:
         "wins": len(wins), "losses": bt.num_trades - len(wins),
         "profit_factor": None if bt.profit_factor is None else round(bt.profit_factor, 2),
         "max_drawdown_pct": round(bt.max_drawdown_pct, 2),
+        **{k: None if v is None else round(v, 2) for k, v in _simple_of(bt).items()},
         "best_trade_pct": round(max((t.pnl_pct for t in bt.trades), default=0.0), 2),
         "worst_trade_pct": round(min((t.pnl_pct for t in bt.trades), default=0.0), 2),
     }
@@ -7721,6 +7736,7 @@ async def _optimize_search(
                 total_return_pct=c["backtest"].total_return_pct,
                 max_drawdown_pct=c["backtest"].max_drawdown_pct,
                 num_trades=c["backtest"].num_trades,
+                **_simple_of(c["backtest"]),
                 win_rate_pct=c["backtest"].win_rate_pct,
                 profit_factor=c["backtest"].profit_factor,
                 out_of_sample_return_pct=c["out_of_sample_return_pct"],
@@ -7967,6 +7983,7 @@ def _archive_optimizer_result(owner_id: str, symbol: str, asset_type: str,
         "num_trades": bt.num_trades,
         "win_rate_pct": bt.win_rate_pct,
         "max_drawdown_pct": bt.max_drawdown_pct,
+        **_simple_of(bt),
         "profit_factor": bt.profit_factor,
         "sharpe_ratio": bt.sharpe_ratio,
         "initial_capital": bt.initial_capital,
@@ -8311,6 +8328,7 @@ async def _run_archive_backtest(entry_id: str, symbol: str, asset_type: str,
             "num_trades": bt.num_trades,
             "win_rate_pct": bt.win_rate_pct,
             "max_drawdown_pct": bt.max_drawdown_pct,
+            **_simple_of(bt),
             "profit_factor": bt.profit_factor,
             "sharpe_ratio": bt.sharpe_ratio,
             "initial_capital": bt.initial_capital,
