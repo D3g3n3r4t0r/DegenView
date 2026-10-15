@@ -31,7 +31,7 @@ import pandas as pd
 
 from app.analysis.backtest import run_backtest
 from app.analysis.optimize import CLAUDIO_DIMS, max_return_search_3d, max_return_search_nd
-from app.analysis.strategies import CLAUDIO_4H, DEFAULT_PARAMS, RSI_BB_4H, STRATEGY_REGISTRY
+from app.analysis.strategies import CLAUDIO_4H, CLAUDIO_TREND_4H, DEFAULT_PARAMS, RSI_BB_4H, STRATEGY_REGISTRY
 
 # Lorenzo, 15/10: "lascerei in questo ambiente di test sempre 2021 e 2022 come
 # anni di candele mai viste [...] per qualsiasi tipo di strategia": a strong
@@ -41,7 +41,7 @@ TRAIN_FROM = pd.Timestamp(os.environ.get("TRAIN_FROM", "2023-01-01"), tz="UTC")
 
 BP = {"initial_capital": 1000.0, "qty_pct_of_equity": 100.0, "commission_pct": 0.06,
       "slippage_pct": 0.02, "fill_at": "signal_close"}
-WARMUP = 300
+WARMUP = 1500   # 250 days: the daily EMA 200 of Claudio Trend needs them
 LORENZO = "Lorenzo (trend-follower)"
 LORENZO_DIMS = (
     ("len", list(range(40, 301, 20))),          # 14
@@ -53,7 +53,13 @@ LORENZO_DIMS = (
 # Lorenzo, 15/10: "la devi utilizzare come reversal, cioe' solo long e uscita
 # senza short" — here only: the site's Lorenzo stays long/short. The short
 # signal only closes the long (its exit_long, the slope cross-under).
+CLAUDIO_TREND_DIMS = (
+    ("ct_len", list(range(30, 241, 15))),                          # 15
+    ("ct_atr", [round(2.0 + 0.5 * i, 1) for i in range(9)]),       # 2.0 … 6.0
+    ("ct_ema_days", [100, 150, 200]),
+)
 VARIANTS = (
+    ("Claudio Trend 4H", CLAUDIO_TREND_4H, {}, CLAUDIO_TREND_DIMS, False),
     ("RSI+BB 4H", RSI_BB_4H, {}, None, False),
     ("Claudio 4H", CLAUDIO_4H, {}, CLAUDIO_DIMS, False),
     ("Lorenzo default", LORENZO, dict(DEFAULT_PARAMS), (), False),
@@ -65,7 +71,7 @@ VARIANTS = (
     ("Lorenzo searched +EMA200d", LORENZO, dict(DEFAULT_PARAMS), LORENZO_DIMS, True),
 )
 LONG_ONLY = {LORENZO}
-SHORT = {"RSI+BB 4H": "R", "Claudio 4H": "C", "Lorenzo default": "Ld", "Lorenzo searched": "Ls"}
+SHORT = {"Claudio Trend 4H": "CT", "RSI+BB 4H": "R", "Claudio 4H": "C", "Lorenzo default": "Ld", "Lorenzo searched": "Ls"}
 SHORT.update({f"{k} +EMA200d": f"{v}f" for k, v in list(SHORT.items())})
 TREND: pd.Series | None = None   # close above the daily EMA 200, set per pair
 
@@ -76,7 +82,7 @@ def daily_trend(df):
     day = df["close"].resample("1D").last().dropna()
     up = (day > day.ewm(span=200, adjust=False, min_periods=200).mean()).shift(1)
     return up.reindex(df.index, method="ffill").fillna(False).astype(bool)
-SHOWN = ("rsi_oversold", "rsi_overbought", "bb_mult", "cl_rsi_os", "cl_bb_mult", "cl_atr_stop",
+SHOWN = ("ct_len", "ct_atr", "ct_ema_days", "rsi_oversold", "rsi_overbought", "bb_mult", "cl_rsi_os", "cl_bb_mult", "cl_atr_stop",
          "len", "slopeFlen", "slopeSlen")
 
 

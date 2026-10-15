@@ -7,6 +7,11 @@ on:
       - scripts/compare_claudio_folds.py
       - .github/workflows/claudio-folds.yml
   workflow_dispatch:
+    inputs:
+      pairs:
+        description: 'JSON list of pairs (empty = the 15 of the basket)'
+        required: false
+        default: ''
 
 jobs:
   pair:
@@ -17,9 +22,7 @@ jobs:
       matrix:
         # 4 large caps, 5 around rank 150-250, 6 around 300-490 (rank printed
         # by the job, CoinPaprika)
-        pair: [BTCUSDT, ETHUSDT, SOLUSDT, XRPUSDT,
-               COMPUSDT, BATUSDT, 1INCHUSDT, KSMUSDT, SNXUSDT,
-               ROSEUSDT, ZILUSDT, ANKRUSDT, CELOUSDT, IOTXUSDT, KAVAUSDT]
+        pair: ${{ fromJSON(inputs.pairs || '["BTCUSDT","ETHUSDT","SOLUSDT","XRPUSDT","COMPUSDT","BATUSDT","1INCHUSDT","KSMUSDT","SNXUSDT","ROSEUSDT","ZILUSDT","ANKRUSDT","CELOUSDT","IOTXUSDT","KAVAUSDT"]') }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
