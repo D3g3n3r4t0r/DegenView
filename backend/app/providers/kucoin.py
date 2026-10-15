@@ -31,22 +31,36 @@ _MAX_SUGGESTIONS = 25
 
 _symbols_cache: TTLCache = TTLCache(maxsize=1, ttl=3600)
 
+# Every quote KuCoin lists, the commonest first: "ETHUSDT" is read as
+# ETH-USDT, "ETHBTC" as ETH-BTC. Longest first among those sharing a tail
+# (USDT before a hypothetical "DT").
+_QUOTES = ("USDT", "USDC", "BTC", "ETH", "KCS", "TUSD", "DAI", "EUR", "TRX", "USDD", "BRL", "TRY")
+# Search results: USDT pairs first, then BTC, then the rest.
+_QUOTE_ORDER = {q: i for i, q in enumerate(("USDT", "BTC", "USDC", "ETH", "KCS"))}
+
 
 def format_symbol(symbol: str) -> str:
-    """KuCoin is scoped exclusively to .../BTC pairs — whatever quote the
-    user typed (or none) is stripped and replaced with BTC."""
+    """KuCoin's BASE-QUOTE form, for any quote it lists.
+
+    15/10 (Lorenzo: "nei pair a disposizione sul sito, quelli relativi a
+    KuCoin non compaiono"): KuCoin used to be scoped to .../BTC pairs only —
+    any quote was replaced with BTC, so ETHUSDT became "ETHUSDT-BTC", which
+    does not exist, and the search listed BTC pairs alone. A bare base
+    ("ETH") still means the BTC pair, as before, so symbols already saved
+    (drawings, alerts) keep their chart."""
     symbol = symbol.strip().upper().replace("/", "-").replace("_", "-")
-    if symbol.endswith("-BTC"):
-        return symbol
-    base = symbol[:-3] if symbol.endswith("BTC") and len(symbol) > 3 else symbol
-    base = base.rstrip("-")
-    return f"{base}-BTC"
+    if "-" in symbol:
+        base, _, quote = symbol.partition("-")
+        return f"{base}-{quote}" if quote else f"{base}-BTC"
+    for quote in sorted(_QUOTES, key=len, reverse=True):
+        if symbol.endswith(quote) and len(symbol) > len(quote):
+            return f"{symbol[:-len(quote)]}-{quote}"
+    return f"{symbol}-BTC"
 
 
 class KucoinProvider(DataProvider):
-    """Crypto only, restricted to BTC-quoted pairs — a third crypto source
-    alongside MEXC/Binance specifically for coins traders track priced in
-    BTC rather than USDT, which the other two default to."""
+    """Crypto only, every spot pair KuCoin lists (USDT, BTC, USDC, ETH…).
+    Until 15/10 it was restricted to BTC-quoted pairs."""
 
     # KuCoin's candles endpoint caps a single request at 1500 rows regardless
     # of how wide a startAt/endAt window is requested — paged the same way as
@@ -122,16 +136,21 @@ class KucoinProvider(DataProvider):
                 resp = await client.get(f"{self._base_url}/api/v1/symbols")
             payload = resp.json()
             all_symbols = payload.get("data", []) if isinstance(payload, dict) else []
-            # BTC-quoted pairs only — the point of a third crypto provider
-            # is coins tracked in BTC terms, not another USDT source.
-            symbols = [s for s in all_symbols if s.get("quoteCurrency") == "BTC"]
-            _symbols_cache["all"] = symbols
+            # every quote (15/10): it used to keep the BTC pairs only
+            symbols = [s for s in all_symbols if s.get("enableTrading")]
+            if symbols:
+                _symbols_cache["all"] = symbols
 
-        q = query.upper().replace("/", "-")
-        matches = [s for s in symbols if s.get("baseCurrency", "").startswith(q) and s.get("enableTrading")]
-        matches.sort(key=lambda s: len(s.get("symbol", "")))
+        q = query.upper().replace("/", "").replace("-", "").replace("_", "")
+        matches = [s for s in symbols
+                   if s.get("baseCurrency", "").upper().startswith(q)
+                   or s.get("symbol", "").upper().replace("-", "").startswith(q)]
+        matches.sort(key=lambda s: (s.get("baseCurrency", "").upper() != q,
+                                    _QUOTE_ORDER.get(s.get("quoteCurrency", ""), 99),
+                                    len(s.get("symbol", ""))))
 
         out = []
         for s in matches[:_MAX_SUGGESTIONS]:
-            out.append({"symbol": s.get("symbol", ""), "name": s.get("baseCurrency", ""), "exchange": "KuCoin (BTC)"})
+            out.append({"symbol": s.get("symbol", ""), "name": s.get("baseCurrency", ""),
+                        "exchange": f"KuCoin ({s.get('quoteCurrency', '')})"})
         return out
