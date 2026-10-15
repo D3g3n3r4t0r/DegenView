@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0301", "Stessa posizione per tutte le strategie, anche senza impostazioni salvate",
+     "Lorenzo, 15/10: 'Tutte le strategie presenti sul sito hanno lo stesso tipo di posizione, cioe' aprono con lo stesso tipo di capitale iniziale e la stessa percentuale poi di equity trade', poi 'Si' all'allineamento dei valori di riserva.",
+     "media"),
     ("seed-0300", "Rendimento semplice accanto al composto, e Max return che sceglie sul semplice",
      "Lorenzo, 15/10: 'il risultato percentuale puro di ogni trade [...] e poi sommate [...] nelle strategie reversal e' probabile che una volta uscito potrei anche non reinvestire tutto', poi 'Max Return deve scegliere il migliore in base al rendimento semplice e [...] metti in evidenza sia nel drawdown che nel profitto entrambi i risultati semplice e composto con la stessa visibilita''.",
      "alta"),
