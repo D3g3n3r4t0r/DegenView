@@ -2943,5 +2943,11 @@
     "at": 1792020767,
     "summary": "Ogni voce dell'archivio ha il tasto 'Test on another pair': scegli coppia ed exchange e la strategia gira con gli stessi valori e impostazioni, su tutta la storia del nuovo pair e sui suoi ultimi 12 mesi, con buy & hold e giudizio.",
     "detail": "Stessa strategia, parametri, timeframe, commissioni, dimensione e riempimento della voce. Due colonne: storia intera del nuovo pair e ultimi 12 mesi (nuovo asset e nuovo periodo: il test piu' severo); indicatori riscaldati sulle 300 candele prima dei 12 mesi. Nota: sullo stesso periodo le crypto si muovono insieme, quindi la colonna degli ultimi 12 mesi e' quella che conta di piu'. Vale per tutte le strategie dell'archivio."
+  },
+  "seed-0295": {
+    "status": "risolto",
+    "at": 1792075508,
+    "summary": "Sotto l'esito del test su un altro pair ci sono due tasti: 'Save to archive' lo salva come nuova voce dell'archivio (stessa strategia, stessi valori e impostazioni, sul nuovo pair, con la nota da quale voce viene), 'Discard' lo toglie dalla scheda.",
+    "detail": "frontend/static/app.js, gestore del form .arch-testpair-form: dopo pairTestTable i tasti .arch-testpair-save (POST /api/archive con symbol/exchange/intervallo dell'esito e params/backtest_params della voce d'origine, poi loadArchive) e .arch-testpair-discard (svuota il riquadro)."
   }
 }
