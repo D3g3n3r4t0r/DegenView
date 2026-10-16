@@ -1,6 +1,7 @@
 # 2026-10-16 — Chat Telegram delle gemme — `seed-0315` (Claude, a mano)
 
 Lorenzo: la terza chat (gemme) non riceve niente; la sua chat principale e' quella degli alert. `_notify_gem` mandava solo a `_info_chat` (chat principale, mai una signals-only) e solo con `user.onchain_wallets`. Ora `User.telegram_gems_chat_id` (profilo: "Gems chat ID", `PATCH /api/auth/telegram` con `telegram_gems_chat_id`, conferma in chat al salvataggio), `main._gems_chat` = chat gemme o principale, mai signals-only; requisito del wallet tolto per le gemme (resta per i listing). Il riepilogo della notte (`nightly._send`) va alle chat di sistema (TELEGRAM_DEV_CHAT_IDS), non e' cambiato. Lorenzo deve incollare l'ID della chat gemme nel profilo.
+Poi: "la conferma mi e' arrivata sull'altra chat degli alert". Ogni Salva ora chiama `auth_routes._check_chats`: un messaggio per chat distinta con i suoi ruoli (`chat_roles`, stessa logica di main), esito di consegna nella risposta (`telegram_check`) e lista `#telegram-check` sotto il tasto.
 
 # 2026-10-16 — Liste di ricerca pair intere — `seed-0314` (Claude, a mano)
 

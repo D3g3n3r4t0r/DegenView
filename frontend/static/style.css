@@ -6095,3 +6095,9 @@ html.embed-chart, html.embed-chart body, html.embed-chart .chart-area { backgrou
 .suggestions .sug-symbol { word-break: break-all; }
 .suggestions .sug-name { overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
 .sug-exchange { white-space: normal; text-align: right; max-width: 50%; }
+
+/* Telegram: what each chat receives after Save (16/10) */
+.telegram-check { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; font-size: 12px; }
+.telegram-check li { padding: 6px 8px; border-radius: 6px; background: var(--bg-raised); line-height: 1.4; }
+.telegram-check li.ok { border-left: 3px solid var(--bull); }
+.telegram-check li.bad { border-left: 3px solid var(--bear); }

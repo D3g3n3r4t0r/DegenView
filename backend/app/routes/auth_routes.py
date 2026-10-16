@@ -2,6 +2,7 @@
 
 Moved out of app/main.py (overhaul plan, phase 5); same paths, same code.
 """
+import asyncio
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -197,34 +198,51 @@ async def me(user: User | None = Depends(auth.get_current_user_optional)) -> dic
 async def update_telegram_chat_id(
     req: TelegramChatIdRequest, user: User = Depends(auth.get_current_user)
 ) -> dict:
-    before = user.telegram_signal_chat_id
-    gems_before = user.telegram_gems_chat_id
     updated = auth.set_telegram_chat_id(user.id, req.telegram_chat_id, req.telegram_signal_chat_id,
                                         req.telegram_gems_chat_id)
-    if (updated.telegram_gems_chat_id and updated.telegram_gems_chat_id != gems_before
-            and _telegram_allowed(updated)):
-        _fire(telegram.send_to(
-            updated.telegram_gems_chat_id,
-            "💎 Chat delle gemme collegata: da qui in poi qui arrivano le nuove gemme trovate dalla ricerca.",
-        ))
-    if (updated.telegram_signal_chat_id and updated.telegram_signal_chat_id != before
-            and _telegram_allowed(updated)):
-        _fire(telegram.send_to(
-            updated.telegram_signal_chat_id,
-            "✅ Chat degli alert collegata: da qui in poi qui arrivano solo i segnali delle strategie (e gli alert di prezzo).",
-        ))
-    if updated.telegram_chat_id and _telegram_allowed(updated):
-        # Confirms the chat_id was actually saved and is reachable — sent
-        # immediately on save, not the first real alert, so a typo'd id
-        # shows up right away instead of silently going nowhere.
-        _fire(
-            telegram.send_to(
-                updated.telegram_chat_id,
-                "✅ Chat ID collegato correttamente a Liquidity Analysis Engine.\n"
-                "Da qui in poi riceverai qui gli avvisi delle strategie che attivi.",
-            )
-        )
-    return _user_out(updated)
+    out = _user_out(updated)
+    if _telegram_allowed(updated):
+        out["telegram_check"] = await _check_chats(updated)
+    return out
+
+
+GEMS_ROLE = "nuove gemme della ricerca"
+
+
+def chat_roles(user: User, signal_only: set[str]) -> dict[str, list[str]]:
+    """What each of the account's chats receives, as main.py routes it:
+    strategy signals to the alerts chat (else the main one); gems to the
+    gems chat (else the main one), never to a signals-only chat; everything
+    else to the main chat unless it is signals-only."""
+    roles: dict[str, list[str]] = {}
+    sig = user.telegram_signal_chat_id or user.telegram_chat_id
+    if sig:
+        roles.setdefault(sig, []).append("segnali delle strategie e alert di prezzo")
+    gems = user.telegram_gems_chat_id or user.telegram_chat_id
+    if gems and gems not in signal_only:
+        roles.setdefault(gems, []).append(GEMS_ROLE)
+    main = user.telegram_chat_id
+    if main and main not in signal_only:
+        roles.setdefault(main, []).append("ottimizzazioni, listing e avvisi del sito")
+    return roles
+
+
+async def _check_chats(user: User) -> list[dict]:
+    """On every save (Lorenzo, 16/10: the gems chat's confirmation went to
+    the alerts chat): one message per chat saying what it receives, and
+    whether Telegram delivered it — a wrong id or a bot not in the group
+    shows up here, not on the first real alert."""
+    roles = chat_roles(user, telegram.signal_only_chats())
+    chats = list(roles)
+    sent = await asyncio.gather(*(telegram.send_to(
+        c, "✅ Liquidity Engine: questa chat e' collegata e riceve: " + "; ".join(roles[c]) + ".") for c in chats))
+    fields = (("main", user.telegram_chat_id), ("alerts", user.telegram_signal_chat_id),
+              ("gems", user.telegram_gems_chat_id))
+    out = [{"chat": c, "fields": [k for k, v in fields if v == c], "roles": roles[c], "delivered": bool(ok)}
+           for c, ok in zip(chats, sent)]
+    if not any(GEMS_ROLE in r["roles"] for r in out):
+        out.append({"chat": "", "fields": ["gems"], "roles": [GEMS_ROLE], "delivered": False})
+    return out
 
 
 @router.get("/api/auth/trading", response_model=list[TradingCredentialOut])

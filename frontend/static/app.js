@@ -2778,9 +2778,30 @@
         body: JSON.stringify({ telegram_chat_id: chatId, telegram_signal_chat_id: signalChatId,
                                telegram_gems_chat_id: gemsChatId }),
       });
-      if (resp.ok) state.user = await resp.json();
+      if (resp.ok) {
+        const body = await resp.json();
+        state.user = body;
+        renderTelegramCheck(body.telegram_check);
+      }
       updateTelegramSetupUI();
     });
+
+    // One line per chat after Save (Lorenzo, 16/10: "la conferma mi e' arrivata
+    // sull'altra chat"): which field it is, what it receives, delivered or not.
+    function renderTelegramCheck(rows) {
+      const box = el("telegram-check");
+      if (!box) return;
+      if (!Array.isArray(rows) || !rows.length) { box.classList.add("hidden"); box.innerHTML = ""; return; }
+      const FIELD = { main: "Main chat", alerts: "Alerts chat", gems: "Gems chat" };
+      box.innerHTML = rows.map((r) => {
+        const who = (r.fields || []).map((f) => `<b>${escapeHtml(FIELD[f] || f)}</b>`).join(" = ");
+        const state = !r.chat ? "Nowhere: the main chat is the alerts chat. Fill in the gems chat ID."
+          : r.delivered ? "Test message delivered." : "Not delivered: wrong ID, or the bot is not in that chat.";
+        return `<li class="${r.chat && r.delivered ? "ok" : "bad"}">${who}${r.chat ? ` <code>${escapeHtml(r.chat)}</code>` : ""}`
+          + ` · <span>${escapeHtml(r.roles.join("; "))}</span> · <span>${state}</span></li>`;
+      }).join("");
+      box.classList.remove("hidden");
+    }
 
     el("telegram-edit-btn").addEventListener("click", () => updateTelegramSetupUI(true));
 
