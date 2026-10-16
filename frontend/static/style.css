@@ -6051,3 +6051,38 @@ html.embed-chart, html.embed-chart body, html.embed-chart .chart-area { backgrou
 .btc-badge-part.down { color: #dc2626; background: rgba(220, 38, 38, .12); }
 @media (max-width: 640px) { .btc-badge { display: none; } }
 
+
+/* Top bar compaction (16/10): same controls, less width. Search and strategy
+   shrink first; under 1200px "Indicators" keeps only its icon, under 1360px
+   the account email becomes its initial (full address in the tooltip). */
+.toolbar { gap: 6px; padding: 8px 12px; }
+.toolbar > * { flex-shrink: 0; }
+.toolbar > .search-form { flex: 0 1 230px; min-width: 120px; }
+.search-form .ticker-field { flex: 1 1 auto; min-width: 0; max-width: none; }
+.toolbar .ticker-field input { min-width: 0; }
+.toolbar > .chart-settings-group { gap: 6px; flex-shrink: 1; }
+.toolbar-strategy { flex: 1 1 190px; min-width: 110px; max-width: 190px; }
+.toolbar-spacer { min-width: 4px; }
+#search-btn { padding: 0 14px; }
+.btc-badge { gap: 4px; margin-right: 0; }
+.btc-badge-part { padding: 2px 5px; }
+.lang-select { margin-right: 0; height: var(--ctl-h); padding: 0 4px; }
+.auth-widget { gap: 2px; }
+.auth-user-email { max-width: 150px; }
+#auth-toggle-btn, #auth-logout-btn { white-space: nowrap; }
+@media (max-width: 1200px) {
+  .toolbar-indicators-btn .tb-label { display: none; }
+  .toolbar-indicators-btn { padding: 0 8px; }
+}
+@media (max-width: 1360px) {
+  .auth-user-email {
+    font-size: 0; width: 26px; height: 26px; max-width: none; border-radius: 50%;
+    display: grid; place-items: center; background: var(--bg-raised); cursor: default;
+  }
+  .auth-user-email::before { content: attr(data-initial); font-size: 12px; font-weight: 600; color: var(--ink-dim); }
+}
+/* tablets (760-1000px, below 760 the bar is hidden): two rows, not a scroll */
+@media (max-width: 1000px) {
+  .toolbar { flex-wrap: wrap; row-gap: 6px; overflow-x: visible; }
+  .btc-badge { margin-left: auto; }
+}

@@ -1,3 +1,7 @@
+# 2026-10-16 — Barra in alto meno affollata — `seed-0311` (Claude, a mano)
+
+Lorenzo: "La sezione superiore del sito e' troppo affollata. Ottimizza lo spazio senza togliere niente". Sito classico (`index.html` header.toolbar; sotto 760 px resta nascosta). Misurato con Playwright (auth, strategie e /api/btc-regime finti): prima sfondava sotto 1440 px (130 px a 1280, 386 a 1024). Blocco "Top bar compaction" in fondo a `style.css`: ricerca e menu strategia si stringono, lingua come sigla (`i18n.js`, nome nel title), email -> iniziale sotto 1360 px (`updateAuthUI` mette `title` e `data-initial`), "Indicators" solo icona sotto 1200 px (`.tb-label`), due righe fra 760 e 1000 px. Nessun controllo tolto. Fatto a mano, non via DeepSeek: e' lavoro di impaginazione da verificare a schermo.
+
 # 2026-10-16 — Repository pubblico: via dati personali, chiavi e IP (Claude, a mano)
 
 Lorenzo: "rimuovere completamente ogni riferimento alle nostre email o qualsiasi altro dato personale o qualsiasi chiave, API [...] ovviamente preservando il funzionamento di tutto". `seed-0310`.

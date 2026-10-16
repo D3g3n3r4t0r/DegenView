@@ -106,12 +106,15 @@
     const sel = document.createElement("select");
     sel.id = "lang-select";
     sel.className = "lang-select";
-    sel.title = "Language";
+    sel.title = `Language: ${LANGS[lang]}`;
+    sel.setAttribute("aria-label", "Language");
     sel.dataset.noI18n = "";
+    // short code in the bar, the full name in the tooltip
     for (const [code, name] of Object.entries(LANGS)) {
       const o = document.createElement("option");
       o.value = code;
-      o.textContent = name;
+      o.textContent = code.toUpperCase();
+      o.title = name;
       if (code === lang) o.selected = true;
       sel.appendChild(o);
     }

@@ -1538,7 +1538,12 @@
     el("auth-logout-btn").classList.toggle("hidden", !loggedIn);
     const emailEl = el("auth-user-email");
     emailEl.classList.toggle("hidden", !loggedIn);
-    if (loggedIn) emailEl.textContent = state.user.email;
+    if (loggedIn) {
+      emailEl.textContent = state.user.email;
+      // narrow bars show only the initial (style.css, top bar compaction)
+      emailEl.title = state.user.email;
+      emailEl.dataset.initial = (state.user.email || "?").charAt(0).toUpperCase();
+    }
     el("alert-login-prompt").classList.toggle("hidden", loggedIn);
     el("alert-authenticated").classList.toggle("hidden", !loggedIn);
     // Opera e' un'area separata da Alert ma con lo stesso cancello: le chiavi
