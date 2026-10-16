@@ -1,3 +1,7 @@
+# 2026-10-16 — Pearl eliminata, mosaico di nuovo nelle gemme — `seed-0323`, `seed-0324` (Claude, a mano)
+
+Lorenzo: "cosa e' la sezione pearl?", poi "eliminala"; poi "rivoglio il mosaico sulle gems". Pearl via da `onchain-app.html`, `top.js`, `main.js` VIEWS/DOCK, `detail.js`, `shell.css`, `classic.css`, `ui.js` (numerazione 01-06), dock a 5 voci (350 px, Search desktop a 506 px). `top.js`: tornano `mosaicHtml`/`hive`/`mosaicAll` di prima di `seed-0316` (tocco = classifica dell'arena sotto il mosaico); il podio resta in `.tb-top3`, la vista singola `only` resta tolta. Non riproporre Pearl.
+
 # 2026-10-16 — Pearl senza il minimo di 70 (Claude, a mano)
 
 Lorenzo: "togli il minimo di 70 per essere nelle gemme early perche' cosi' e' vuota la classifica". `top.js paintPearl` non filtra piu' `PEARL_MIN`: mostra tutte le gemme di `top.early` per punteggio (quindi oggi le stesse di Early, in ordine di punteggio); testi di Pearl in `onchain-app.html` e `ui.js` aggiornati. Se vuole di nuovo una soglia, e' una riga in `paintPearl`.

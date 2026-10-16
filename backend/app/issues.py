@@ -165,6 +165,12 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0324", "Gemme: torna il mosaico delle arene",
+     "Lorenzo, 16/10: 'rivoglio il mosaico sulle gems'.",
+     "media"),
+    ("seed-0323", "Sezione Pearl eliminata",
+     "Lorenzo, 16/10: 'togli il minimo di 70 per essere nelle gemme early perche' cosi' e' vuota la classifica', poi 'cosa e' la sezione pearl?' e 'eliminala'.",
+     "media"),
     ("seed-0322", "Revisione dell'app on-chain: correzioni e miglioramenti",
      "Lorenzo, 16/10: 'Ricontrolla tutta le sezioni dello Sniper e dimmi se c'e' qualcosa che non va. Se hai suggerimenti [...] dimmelo', poi 'Risolvi tutto e implementa i suggerimenti tranne Riepilogo della ricerca notturna'.",
      "media"),

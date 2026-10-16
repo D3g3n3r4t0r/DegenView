@@ -3088,5 +3088,15 @@
     "status": "risolto",
     "at": 1792191661,
     "summary": "Corretti: (1) Early aveva l'intestazione del vecchio Track record e la numerazione delle sezioni era sballata: ora 01 Gems, 02 Pearl, 03 Early, 04 Top 25, 05 Scout, 06 Profile; (2) la soglia Early scritta $50k nella pagina del token e nel messaggio Telegram: ora $300k, quella vera; (3) la pagina del token diceva 'Rank #N' con il posto della classifica interna (o 'Rank #—'): ora 'Top #N' come nella Top 25, o 'Not in the Top right now'; (4) il conteggio delle arene contava anche quelle vuote; (5) residui del trading spento: saldo in alto tolto, letture di saldo e portafoglio che fallivano ripetute ogni 5 secondi per sempre (ora niente col trading spento, e col trading acceso al massimo 6 tentativi distanziati), Profile senza grafico del wallet, liquidita', posizioni e wallet collegati, 'Watching 1 alert' al singolare. Suggerimenti fatti: Scout dice come gira la ricerca (senza IA, ultimo giro con progetti esaminati e nuovi, prossimo giro) invece del budget IA; su telefono ogni arena mostra 5 token con 'Show all'; con un filtro per narrativa il titolo diventa 'Top 25 · <narrativa>'; liste vuote senza riquadro vuoto. Il riepilogo notturno resta nella chat dei commit (Lorenzo)."
+  },
+  "seed-0323": {
+    "status": "risolto",
+    "at": 1792192900,
+    "summary": "Pearl tolta dal menu e dal codice (vista, testi, numerazione): il menu e' Gems, Early, Top 25, Scout, Profile. Prima era stato tolto il minimo di 70, che la lasciava vuota; senza soglia era una copia di Early, quindi via. Early non ha mai avuto un minimo di punteggio."
+  },
+  "seed-0324": {
+    "status": "risolto",
+    "at": 1792192900,
+    "summary": "Nelle gemme le arene tornano a mosaico: riquadri piu' grandi per le arene con piu' progetti, colore = variazione 24h, il tocco su un riquadro apre la sua classifica subito sotto, ritocco chiude. I primi tre restano fissi nella barra in alto."
   }
 }

@@ -1750,7 +1750,6 @@
   :root:not([data-trading="off"]) #gem-scan,
   #app-shell:not([data-view="meme"]) #signals,
   #app-shell:not([data-view="top"]) #early-view,
-  #app-shell:not([data-view="pearl"]) #pearl-view,
   #app-shell:not([data-view="rank"]) #rank-view,
   #app-shell:not([data-view="profile"]) #track-fold,
   #app-shell :is(#meme-alerts, #memes, #pilot, #radar, #leaders),
