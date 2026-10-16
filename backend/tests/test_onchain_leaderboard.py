@@ -737,3 +737,22 @@ def test_the_v4_pool_manager_is_a_pool_not_a_holder():
                         {"address": "0x1", "percent": "0.05", "is_contract": 0}]}
     p = depth.judge_tokenomics_evm(info)
     assert p["facts"]["contracts_pct"] == 0.0 and not any("contracts" in f for f in p["flags"])
+
+
+def test_the_token_page_shows_the_top_s_score(monkeypatch):
+    # Lorenzo, 16/10: VEIL 89 in its arena, 73 on its token page — the page
+    # read the score stored at the last analysis, the Top today's formula.
+    import asyncio
+    import app.main as m
+    from app.models import User
+    now = time.time()
+    row = {"chain": "solana", "token": "OKmint", "symbol": "OKP", "name": "Ok Project", "mcap": 450_000,
+           "score": 12, "analyzed_at": now}
+    monkeypatch.setattr(m.onchain_projects_db, "search", lambda **kw: {"items": [row]})
+    monkeypatch.setattr(m.onchain_projects_db, "get", lambda chain, token: row)
+    monkeypatch.setattr(m.onchain_judge, "get", lambda *a: None)
+    monkeypatch.setattr(m.onchain_leaderboard, "board", lambda: {"entries": []})
+    monkeypatch.setattr(m, "_require_onchain_enabled", lambda: None)
+    top = next(e for e in m._top_entries(10) if e["symbol"] == "OKP")
+    page = asyncio.run(m.onchain_token("solana", "OKmint", user=User.model_construct(id="u", email="x@y.z")))
+    assert page["entry"]["score"] == top["score"] != 12

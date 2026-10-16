@@ -1514,3 +1514,36 @@ html.detail-open .ask-fab, :root:has(#app-shell[data-view="entry"]) .ask-fab { d
   .mz.mz-open { border-color: var(--c-ink, currentColor); }
   .mz .mz-n { font-size: 26px; font-weight: 500; }
 }
+
+/* ── Gems, 16/10 (Lorenzo): the podium's three fixed in the top bar, every
+   arena listed open, the token's chart as its own page on a click. ── */
+.tb-top3 { display: flex; align-items: center; gap: 8px; flex: 1 1 auto; justify-content: center; min-inline-size: 0; }
+.tb-top3[hidden] { display: none; }
+.page:has(#app-shell[hidden]) .tb-top3 { display: none; }   /* not on the login screen */
+.tb-top3 .t3 { display: flex; align-items: center; gap: 8px; min-inline-size: 0; padding: 5px 12px 5px 6px; border-radius: 10px;
+  border: 1px solid var(--engn-line, rgb(255 255 255 / .12)); background: rgb(255 255 255 / .03); color: inherit; font: inherit; cursor: pointer; }
+.tb-top3 .t3:hover { background: rgb(45 226 176 / .08); border-color: rgb(45 226 176 / .35); }
+.tb-top3 .t3:first-child { order: 2; border-color: rgb(45 226 176 / .45); }
+.tb-top3 .t3:nth-child(2) { order: 1; } .tb-top3 .t3:nth-child(3) { order: 3; }
+.tb-top3 .t3-place { font: 600 11px var(--mono, monospace); font-style: normal; color: #2de2b0; }
+.tb-top3 .tile { inline-size: 26px; block-size: 26px; flex: none; border-radius: 7px; }
+.tb-top3 .t3-main { display: grid; min-inline-size: 0; text-align: start; line-height: 1.2; }
+.tb-top3 .t3-main b { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tb-top3 .t3-main small { font-size: 10px; opacity: .7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Phone and tablet: a row of its own under the header, the three side by side */
+@media (width < 1100px) {
+  .topbar:has(.tb-top3:not([hidden])) { flex-wrap: wrap; block-size: auto; height: auto; row-gap: 8px; }
+  .tb-top3 { order: 10; flex: 1 0 100%; gap: 6px; }
+  .tb-top3 .t3 { flex: 1 1 0; padding: 4px 6px 4px 4px; gap: 6px; }
+  .tb-top3 .tile { inline-size: 22px; block-size: 22px; }
+  .tb-top3 .t3-main b { font-size: 12px; }
+  .tb-top3 .t3-main small { font-size: 9px; }
+}
+.ar-grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); align-items: start; }
+.ar-grid .arena { padding: 12px; border: 1px solid var(--engn-line, rgb(255 255 255 / .1)); border-radius: 12px; background: rgb(255 255 255 / .02); }
+@media (width >= 1100px) {
+  html[data-desk-list="false"] dialog.detail { inset: 24px 28px; inline-size: auto; max-inline-size: 1100px; margin-inline: auto;
+    block-size: auto; border: 1px solid var(--engn-line, #223b2b); border-radius: 16px; }
+  html[data-desk-list="false"] dialog.detail::backdrop { background: rgb(3 8 5 / .72); backdrop-filter: blur(3px); }
+  html[data-desk-list="false"] dialog.detail .dt-back { display: grid; }   /* a page now, not a pane: a way back */
+}

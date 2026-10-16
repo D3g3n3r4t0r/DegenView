@@ -3838,6 +3838,11 @@ async def onchain_token(chain: str, token: str, user: User = Depends(auth.get_cu
             # 29/09: every Top token gets DeepSeek's investigation in Why and Info).
             entry = onchain_leaderboard.db_entry(p)
             j = onchain_judge.get(chain, token)
+            # The score the Top and the arenas show (_top_entries): today's
+            # formula, DeepSeek's reading included — not the one stored at the
+            # last analysis (Lorenzo, 16/10: VEIL 89 in its arena, 73 here).
+            if chain != onchain_layers.CHAIN:
+                entry["score"] = onchain_leaderboard.final_score({**entry, "global_cap": p.get("cg_mcap"), "judge": j})
             c = onchain_code_review.get(onchain_code_review.repo_of(entry))
             entry["judge"] = {k: j.get(k) for k in ("score", "verdict", "problems", "strengths", "admit_reason", "x", "tg")} \
                 if j else None
