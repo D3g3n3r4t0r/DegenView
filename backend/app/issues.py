@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0322", "Revisione dell'app on-chain: correzioni e miglioramenti",
+     "Lorenzo, 16/10: 'Ricontrolla tutta le sezioni dello Sniper e dimmi se c'e' qualcosa che non va. Se hai suggerimenti [...] dimmelo', poi 'Risolvi tutto e implementa i suggerimenti tranne Riepilogo della ricerca notturna'.",
+     "media"),
     ("seed-0320", "Grafici e MarketCap delle gemme sempre aggiornati con i dati DEX",
      "Lorenzo, 16/10: 'Assicurati inoltre che i grafici siano sempre aggiornati con i dati dex, cosi' come la MarketCap'.",
      "alta"),

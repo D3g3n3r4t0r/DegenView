@@ -108,6 +108,9 @@ function row(e, a) {
   return html.replace('<li class="trow"', `<li class="trow${rank === 1 ? " ar-champ" : ""}" style="--v:${Math.max(0, Math.min(100, Math.round(e.score ?? 0)))}%"`);
 }
 
+// On a phone every arena shows its first AR_FOLD tokens and a "Show all"
+// (16/10 review: thirty open arenas made the page endless); CSS folds them.
+const AR_FOLD = 5;
 function arenaHtml(a, open = false) {
   const rows = a.entries.filter((e) => !isHidden(e.chain, e.token_address));
   if (!rows.length) {
@@ -119,6 +122,7 @@ function arenaHtml(a, open = false) {
   return `<section class="arena" data-arena="${escapeHtml(a.key)}">
     <header class="ar-head"><h4>${escapeHtml(a.label)}</h4>${a.heat ? heatBar(a.heat) : ""}<span class="ar-count">${open ? `${rows.length} projects` : `${inn.length} in`} · median ${Math.round(a.median)}</span></header>
     <ol class="memes-list" data-top-rows>${inn.map((e) => row(e, a)).join("")}</ol>
+    ${inn.length > AR_FOLD ? `<button type="button" class="ar-more" data-ar-more>Show all ${inn.length}</button>` : ""}
     ${bench.length ? `<details class="ar-bench"><summary>${bench.length} below the arena median</summary>
       <ol class="memes-list" data-top-rows>${bench.map((e) => row(e, a)).join("")}</ol></details>` : ""}
   </section>`;
@@ -171,13 +175,14 @@ function paint() {
   }
   // A project shows in each of its narratives (also: true) but counts once.
   const total = new Set(arenas.flatMap((a) => a.entries.map(idOf))).size;
+  const shownArenas = arenas.filter((a) => shownCount(a)).length;   // empty arenas are not listed
   const narrLine = filtered
     ? `<button type="button" class="top-narr-clear" data-top-narr-clear>${escapeHtml(narr.get().map((k) => labels[k] ?? k).join(", "))} ✕</button> `
     : "";
   const head = lead.length ? `${firstPaint ? "Since your last visit: " : ""}${lead.slice(0, 3).join(", ")}. ` : "";
   const bt = labStatus;
   root.querySelector("[data-top-note]").innerHTML = narrLine + escapeHtml(head
-    + (total ? `${arenas.length} arenas · ${total} projects` : "")
+    + (total ? `${shownArenas} arenas · ${total} projects` : "")
     + (TRADING && bt?.total ? ` · backtests ${bt.ready}/${bt.total} ready` : ""))
     + (TRADING ? ' <button type="button" class="top-narr-clear" data-top-wallet>$10k wallet on these trades →</button>' : "");
 }
@@ -252,6 +257,9 @@ function paintRank(entries) {
   const best = entries.filter((e) => !isHidden(e.chain, e.token_address))
     .sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).slice(0, RANK_N);
   box.querySelector("[data-rank-empty]").hidden = best.length > 0;
+  // A narrative filter narrows the Top too: the title says so.
+  const head = box.querySelector("header h3");
+  if (head) head.textContent = filtered ? `Top 25 · ${narr.get().map((k) => labels[k] ?? k).join(", ")}` : "Top 25";
   box.querySelector("[data-rank-rows]").innerHTML = best.map((e, i) => {
     const id = idOf(e);
     register(id, { kind: "gem", symbol: e.symbol, name: e.name, chain: e.chain, token: e.token_address, pair: e.pair_address,
@@ -323,6 +331,8 @@ export function mountTop() {
   waiting();
   root.addEventListener("click", (event) => {
     if (event.target.closest("[data-top-narr-clear]")) { narr.set([]); return; }
+    const more = event.target.closest("[data-ar-more]");
+    if (more) { more.closest(".arena")?.classList.add("ar-all"); more.remove(); return; }
     if (event.target.closest("[data-top-wallet]")) { import("@onchain/sim-backtest.js").then((m) => m.openSimBacktest()); }
   });
   onHiddenChange(paint);
