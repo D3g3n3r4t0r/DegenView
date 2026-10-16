@@ -126,3 +126,36 @@ def test_a_gem_reaches_the_gems_chat_without_a_wallet(monkeypatch):
             await coro
     asyncio.run(run())
     assert sent == ["-200"]
+
+
+def test_chat_roles_for_lorenzos_setup():
+    from app.routes.auth_routes import GEMS_ROLE, chat_roles
+    # main chat = alerts chat (signals-only), a separate gems chat
+    roles = chat_roles(_gem_user("-100", "-100", "-200"), {"-100"})
+    assert list(roles) == ["-100", "-200"]
+    assert roles["-200"] == [GEMS_ROLE]
+    assert GEMS_ROLE not in roles["-100"]
+    # no gems chat: gems have nowhere to go
+    assert not any(GEMS_ROLE in r for r in chat_roles(_gem_user("-100", "-100"), {"-100"}).values())
+    # a plain main chat gets gems and the rest, the alerts chat only signals
+    roles = chat_roles(_gem_user("111", "-100"), {"-100"})
+    assert GEMS_ROLE in roles["111"] and GEMS_ROLE not in roles["-100"]
+
+
+def test_save_reports_each_chat(monkeypatch):
+    import asyncio
+    from app.routes import auth_routes
+    from app.notify import telegram
+    sent = []
+
+    async def fake_send(chat, text):
+        sent.append(chat)
+        return chat != "-300"
+    monkeypatch.setattr(telegram, "send_to", fake_send)
+    monkeypatch.setattr(telegram, "signal_only_chats", lambda: {"-100"})
+    rows = asyncio.run(auth_routes._check_chats(_gem_user("-100", "-100", "-300")))
+    assert sorted(sent) == ["-100", "-300"]
+    gems = next(r for r in rows if r["chat"] == "-300")
+    assert gems["fields"] == ["gems"] and gems["delivered"] is False
+    rows = asyncio.run(auth_routes._check_chats(_gem_user("-100", "-100")))
+    assert rows[-1] == {"chat": "", "fields": ["gems"], "roles": [auth_routes.GEMS_ROLE], "delivered": False}
