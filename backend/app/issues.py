@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0315", "Telegram: la chat delle gemme non riceve niente",
+     "Lorenzo, 16/10: 'questa terza, dedicata alle nuove gemme trovate dalla ricerca, non mi arrivano le notifiche [...] e' come se fosse ferma', poi 'non e' impostata come chat principale, in quanto la chat principale e' quella degli alert'.",
+     "media"),
     ("seed-0314", "Ricerca dei pair: risultati tagliati in alto e fuori schermo nel Lab",
      "Lorenzo, 16/10, con due screenshot: 'i pair scompaiono, cioe' non appaiono tutti nella loro interezza, ma vengono troncati [...] nella sezione Lab [...] appaiono tutti sulla destra e non sono visualizzabili [...] vanno visti tutti nella loro interezza'.",
      "media"),

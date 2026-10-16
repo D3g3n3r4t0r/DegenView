@@ -177,6 +177,8 @@
   "Edit": "Modifica",
   "Your Telegram chat ID": "Il tuo chat ID Telegram",
   "Alerts chat ID": "Chat ID per gli alert",
+  "Gems chat ID": "Chat ID per le gemme",
+  "(optional: a separate chat for the new gems found by the research; empty = the main chat. Write /chatid in it to get the id)": "(facoltativo: una chat a parte per le nuove gemme trovate dalla ricerca; vuoto = la chat principale. Scrivi /chatid nella chat per avere l'id)",
   "(optional: a separate chat that gets only strategy signals and price alerts — optimizations, listings and gems go to the main chat. Write /chatid in it to get the id)": "(facoltativo: una chat separata che riceve solo i segnali delle strategie e gli alert di prezzo — ottimizzazioni, listing e gemme vanno nella chat principale. Scrivi /chatid lì per avere l'id)",
   "Save": "Salva",
   "Send any message to the bot, then open": "Manda un messaggio qualsiasi al bot, poi apri",

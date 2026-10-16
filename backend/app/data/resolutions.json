@@ -3053,5 +3053,10 @@
     "status": "risolto",
     "at": 1792183309,
     "summary": "Due cause. In alto la lista era larga quanto il campo di ricerca (stretto dopo la compattazione della barra, seed-0311): il nome della borsa, es. 'DexScreener (solana · pumpswap)', si prendeva tutto lo spazio e il pair spariva. Nel Lab la lista era calcolata rispetto a un pannello animato invece che allo schermo, e finiva oltre il bordo destro. Ora ogni lista di ricerca pair (barra in alto, Lab, watchlist, preferiti, ordini) si posiziona allo stesso modo: larga almeno 560 px, sempre dentro lo schermo, si apre sopra il campo se sotto non c'e' spazio, e le righe vanno a capo invece di tagliare. Provato a 900, 1280 e 1600 px con 10 risultati DexScreener e MEXC: nessun testo tagliato. Il pool di un pair DEX resta abbreviato (Pool…6789) come prima: l'indirizzo completo e' nel tooltip."
+  },
+  "seed-0315": {
+    "status": "risolto",
+    "at": 1792184586,
+    "summary": "Le gemme andavano solo alla chat principale dell'account, e mai a una chat riservata ai segnali: con la chat principale uguale a quella degli alert venivano scartate tutte. In piu' partivano solo verso account con un wallet on-chain, un residuo del trading spento il 07/10. Ora nel profilo, sezione Telegram, c'e' un terzo campo 'Chat ID per le gemme': le nuove gemme vanno li' (se vuoto, alla chat principale come prima), con un messaggio di conferma al salvataggio; il wallet non serve piu'. Da fare: incollare l'ID della chat gemme in quel campo (si ottiene scrivendo /chatid nella chat). Le gemme arrivano quando un progetto nuovo entra in classifica, cioe' durante la ricerca delle 03:00."
   }
 }
