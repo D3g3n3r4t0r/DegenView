@@ -3083,10 +3083,5 @@
     "status": "risolto",
     "at": 1792188052,
     "summary": "Causa: da quando la ricerca gira solo alle 03:00, anche la lettura dei prezzi da DexScreener girava solo di notte; le righe della Top venute dal database avevano la cap dell'ultima analisi e nessuna variazione 24h. Il grafico della pagina token trasforma il prezzo in cap con quella cap, quindi anche la sua scala era vecchia. Ora: (1) sul server un giro ogni minuto, giorno e notte, legge da DexScreener cap, liquidita', variazione e pool di tutti i token della Top (bacheca e database) e le liste usano quei numeri; (2) la pagina del token all'apertura e poi ogni minuto rilegge da DexScreener cap, prezzo e variazione, aggiorna l'intestazione e ridisegna il grafico con candele nuove e la scala dalla supply vera (cap / prezzo). I controlli d'ingresso nelle arene restano sui dati dell'analisi: un minuto di mercato non rimescola le classifiche."
-  },
-  "seed-0321": {
-    "status": "risolto",
-    "at": 1792188555,
-    "summary": "Causa: due criteri diversi. Il podio era 'pound for pound': i tre che staccano di piu' la mediana della propria arena (il '+2.3σ' sotto il nome), quindi un 80 in un'arena debole poteva stare davanti a un 95. La Top 25 invece ordina per punteggio assoluto. Ora il podio e' i primi tre della Top 25, stesso elenco e stesso ordine (a pari punteggio, l'ordine del server per entrambi); sotto il nome il punteggio e l'arena che guida. Provato con dati costruiti apposta: podio e Top 25 coincidono."
   }
 }

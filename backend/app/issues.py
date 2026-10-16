@@ -165,9 +165,6 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
-    ("seed-0321", "Gemme: il podio in alto non segue l'ordine della Top 25",
-     "Lorenzo, 16/10: 'il podio in alto (top 3) dovrebbe rispecchiare anche l'ordine dei primi 3 posti nella Top25 ma non e' cosi'. Analizza e risolvi'.",
-     "media"),
     ("seed-0320", "Grafici e MarketCap delle gemme sempre aggiornati con i dati DEX",
      "Lorenzo, 16/10: 'Assicurati inoltre che i grafici siano sempre aggiornati con i dati dex, cosi' come la MarketCap'.",
      "alta"),
