@@ -805,6 +805,41 @@ def compute_combined_reversal_signals(df: pd.DataFrame, params: dict | None = No
                          "exit_long": exit_, "exit_short": false}, index=df.index)
 
 
+RSI_BB_BTC_BAND = "RSI+BB BTC band (long only)"
+RSI_BB_BAND_DEFAULT_PARAMS = {k: v for k, v in LKI_DEFAULT_PARAMS.items() if k != "rsi_overbought"}
+
+
+def compute_rsi_bb_band_signals(df: pd.DataFrame, params: dict | None = None) -> pd.DataFrame:
+    """Lorenzo, 16/10: the RSI+BB reversal makes too few trades; "basta solo
+    uno dei due parametri (RSI o BB)", then the Bull Market Band, then "Si,
+    aggiungila al sito". Long only. While BTC's last closed week is above its
+    Bull Market Support Band (weekly SMA 20 and EMA 21) either condition opens
+    a long — RSI under oversold OR close under the lower band; below it, both
+    are needed, as in the RSI+BB reversal. Out when the close is back above
+    the middle band. Test environment (scripts/lowfit_1d.py MODE=mid, 35
+    pairs, 1D, defaults): median simple return 2023-26 +36% (29/35 positive),
+    2021 +28% (26/32), 2022 +8% (23/35), ~3 trades a year — the only RSI+BB
+    variant positive in all three; RSI+BB reversal +35 / 0 / -44, 1 a year."""
+    p = {**RSI_BB_BAND_DEFAULT_PARAMS, **{k: v for k, v in (params or {}).items()
+                                          if v is not None and k in RSI_BB_BAND_DEFAULT_PARAMS}}
+    close = df["close"]
+    delta = close.diff()
+    avg_gain = _wilder_rma(delta.clip(lower=0), p["rsi_length"])
+    avg_loss = _wilder_rma(-delta.clip(upper=0), p["rsi_length"])
+    raw_rsi = 100 - (100 / (1 + avg_gain / avg_loss.replace(0, np.nan)))
+    rsi = pd.Series(np.where(avg_loss == 0, 100.0, np.where(avg_gain == 0, 0.0, raw_rsi)), index=df.index)
+    basis = close.rolling(p["bb_length"]).mean()
+    lower = basis - p["bb_mult"] * close.rolling(p["bb_length"]).std(ddof=0)
+    oversold = (rsi < p["rsi_oversold"]).to_numpy(dtype=bool)
+    under = (close < lower).to_numpy(dtype=bool)
+    up = btc_regime.band_mask(df.index)
+    entry = (up & (oversold | under)) | (~up & oversold & under)
+    false = np.zeros(len(df), dtype=bool)
+    return pd.DataFrame({"entry_long": entry, "entry_short": false,
+                         "exit_long": (close > basis).to_numpy(dtype=bool), "exit_short": false},
+                        index=df.index)
+
+
 def compute_lki2_signals(df: pd.DataFrame, params: dict | None = None) -> pd.DataFrame:
     base = compute_lki_signals(df, params)
     # L'uscita long dell'originale e' la condizione di ipercomprato: qui apre
@@ -833,6 +868,7 @@ STRATEGY_REGISTRY = {
     "Gabriele (RSI+BB reversal)": compute_lki_signals,
     "Gabriele 2 (RSI+BB long/short)": compute_lki2_signals,
     RSI_BB_4H: compute_lki4h_signals,
+    RSI_BB_BTC_BAND: compute_rsi_bb_band_signals,
     CLAUDIO_4H: compute_claudio_signals,
     CLAUDIO_TREND_4H: compute_claudio_trend_signals,
     CLAUDIO_1D: compute_claudio_1d_signals,

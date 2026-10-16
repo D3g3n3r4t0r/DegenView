@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0306", "Nuova strategia RSI+BB Reversal (BTC band): piu' trade, positiva anche nel 2021 e nel 2022",
+     "Lorenzo, 16/10: 'le strategie RSI piu' BB [...] riescono a fare troppi pochi trade [...] aggiungerei pero' dei parametri che possano permettere di aumentare il numero di trade', 'basta solo uno dei due parametri (RSI o BB)', poi la Bull Market Band e l'uscita alla banda centrale, infine 'Si, aggiungila al sito'.",
+     "media"),
     ("seed-0305", "Lingue del sito: inglese di base, italiano dalla tendina in alto",
      "Lorenzo, 16/10: 'Attualmente e' impostato tutto in inglese e va bene, deve essere la modalita' standard. Pero' ci deve essere anche la possibilita' di selezionare nella barra in alto sul sito una tendina che ti permette di cambiare lingua [...] solo l'italiano [...] con la possibilita' poi di aggiungere anche altre lingue successivamente'.",
      "media"),

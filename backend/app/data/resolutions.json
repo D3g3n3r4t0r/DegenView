@@ -3008,5 +3008,10 @@
     "status": "risolto",
     "at": 1792141646,
     "summary": "Tendina English / Italiano nella barra in alto, a sinistra di Log in; l'inglese resta la lingua di base e la scelta resta salvata nel browser. La traduzione avviene su quello che il sito mostra (testi, suggerimenti, finestre di conferma), con un dizionario per lingua in frontend/static/i18n/<codice>.json (circa 800 frasi per l'italiano, piu' gli schemi per le frasi con numeri). Una frase non nel dizionario resta in inglese: basta aggiungerla al file. Una lingua nuova = un file JSON + una riga in LANGS in i18n.js. L'app on-chain non e' inclusa."
+  },
+  "seed-0306": {
+    "status": "risolto",
+    "at": 1792156809,
+    "summary": "Nuova strategia 'RSI+BB Reversal (BTC band)', accanto alla RSI+BB reversal che resta com'era. Solo long. Con BTC sopra la sua Bull Market Support Band (SMA 20 e EMA 21 settimanali, settimana chiusa) basta una delle due condizioni per entrare, RSI in ipervenduto oppure chiusura sotto la banda inferiore; con BTC sotto ne servono entrambe. Esce quando la chiusura torna sopra la banda centrale (niente livello di ipercomprato). Nell'ambiente di test sul 1D (35 coppie, valori di default): mediana semplice 2023-26 +36% (29/35 positive), 2021 +28% (26/32), 2022 +8% (23/35), circa 3 trade l'anno; la RSI+BB reversal fa +35 / 0 / -44 con 1 trade l'anno. Non si ottimizza in automatico: Max return peggiorava il 2022."
   }
 }

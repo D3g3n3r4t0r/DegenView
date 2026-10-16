@@ -9,9 +9,19 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from app.analysis import btc_regime
 from app.analysis.backtest import run_backtest
 from app.analysis.strategies import AVAILABLE_STRATEGIES, build_strategy_state
 from app.config import settings
+
+
+@pytest.fixture(autouse=True)
+def _btc():
+    """RSI+BB BTC band reads BTC's weekly band: a BTC that rises and falls."""
+    idx = pd.date_range("2019-01-01", "2024-12-31", freq="D", tz="UTC")
+    btc_regime.set_closes(pd.Series(30_000 + 15_000 * np.sin(np.arange(len(idx)) / 120), index=idx), pin=True)
+    yield
+    btc_regime.clear()
 
 
 def _df(n: int, seed: int) -> pd.DataFrame:
