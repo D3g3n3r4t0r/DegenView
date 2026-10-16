@@ -58,6 +58,9 @@ segnalazione è una diagnosi che nessuno vedrà mai — c'è un test che lo veri
 FastAPI + frontend vanilla JS, deploy automatico da `main` su un server
 proprio (Hetzner CX23, ~2 minuti). Vedi `deploy/README.md`. Fly e' spento ma
 resta come via di ritorno.
+**Ogni lavoro finito va online senza chiedere** (Lorenzo, 16/10: "I deploy
+devono sempre andare online", poi "scrivi tu la regola in CLAUDE.md"): dopo
+le verifiche, PR dal branch della chat e merge in `main`.
 Il codice sta in `backend/app`, il frontend in `frontend/`.
 
 **Python 3.12 obbligatorio** — `pandas-ta` non si installa su 3.11. Se la shell
