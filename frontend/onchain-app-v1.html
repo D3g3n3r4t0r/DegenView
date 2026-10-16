@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en" data-engn-ui="app" data-trading="off">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>On-chain wallet (alpha) — Liquidity Engine</title>
+<link rel="manifest" href="/manifest.webmanifest" />
+<meta name="theme-color" content="#0d0e11" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="DEGEN" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<link rel="apple-touch-icon" href="/static/engn/icon-180.png" />
+<!-- Font serviti da qui, non da Google: niente due origini in piu' (DNS + TLS)
+     ne' un foglio di stile che blocca il primo disegno. Stessi file latin di
+     Google Fonts (OFL, vedi static/fonts/LICENSE.txt). Instrument Sans non
+     c'e': --sans usa i font di sistema, era scaricato e mai usato. Niente
+     preload: con font-display swap il testo esce subito, e su rete lenta
+     i font rubavano banda ai moduli che portano i dati. -->
+<!--onchain-modulepreload-->
+<link rel="stylesheet" href="/static/onchain-v1/shell.css" />
+<style>@layer components{.spark .spark-fill{fill:url(#spark-gradient)}}@layer motion{.splash-cube .face-top{fill:url(#splash-top)}}</style>
+<link rel="stylesheet" href="/static/onchain-v1/app.css" />
+<link rel="stylesheet" href="/static/engn-system.css" media="(min-width:1100px)" />
+<link rel="stylesheet" href="/static/onchain-v1/ui.css" media="(min-width:1100px)" />
+<link rel="stylesheet" href="/static/onchain-v1/ui-refinements.css" media="(min-width:1100px)" />
+<link rel="stylesheet" href="/static/onchain-v1/scout-cube.css" />
+<link rel="stylesheet" href="/static/onchain-v1/classic.css" media="(max-width:1099px)" />
+<!--onchain-importmap-->
+<style>@media(max-width:1099px){.engn-side,.engn-intro,.engn-login-intro{display:none!important}}</style>
+</head>
+<body>
+  <script>
+    /* A link with #gems or #meme opens that section first, before any
+       module loads. */
+    document.documentElement.dataset.section = /gem/i.test(location.hash.split("&")[0]) ? "gems" : "meme";
+  </script>
+  <div class="splash" id="splash" aria-hidden="true">
+    <span class="splash-halo"></span>
+    <svg class="splash-cube" viewBox="100 70 200 225" aria-hidden="true">
+      <defs><linearGradient id="splash-top" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#262a31"/><stop offset="1" stop-color="#16181c"/></linearGradient></defs>
+      <path class="face-l" d="M110 128 L200 173 L200 283 L110 238 Z" />
+      <path class="face-r" d="M200 173 L290 128 L290 238 L200 283 Z" />
+      <path class="face-top" d="M110 128 L200 83 L290 128 L200 173 Z" />
+      <path class="edge" d="M110 128 L200 173 L290 128 M200 173 V283" />
+      <path class="slit-glow" pathLength="1" d="M110 186 L200 231 L290 186" />
+      <path class="slit" pathLength="1" d="M110 186 L200 231 L290 186" />
+    </svg>
+    <p class="splash-name">LIQUIDITY <b>ENGINE</b></p>
+    <span class="splash-bar"><i></i></span>
+  </div>
+  <aside class="engn-side" aria-label="Brand"><a class="engn-brand" href="/engn" aria-label="Liquidity Engine home"><svg viewBox="0 0 30 34" aria-hidden="true"><path d="M15 2 28 9v16L15 32 2 25V9Z" fill="#13261a" stroke="#375441"/><path d="M2 9 15 16 28 9M15 16v16" fill="none" stroke="#375441"/><path d="m2 18 13 7 13-7" fill="none" stroke="#2de2b0" stroke-width="1.5"/></svg><span>LIQUIDITY<br>ENGINE</span></a><p class="engn-side-label">YOUR WORKSPACE</p><div class="engn-side-bottom"><a href="/engn">ABOUT THE ENGINE ↗</a><br>RESEARCH. DISCOVER. DECIDE.</div></aside>
+  <div class="page">
+    <!-- Un'app sola (richiesta: "l'app deve essere unica e gestita cosi'
+         graficamente e come layout"): chi sei e quanto hai a sinistra,
+         deposito e notifiche a destra, come le app di trading da telefono. -->
+    <header class="topbar">
+      <div class="tb-me">
+        <button type="button" class="addr-chip" id="more-btn" aria-haspopup="dialog" aria-controls="more" aria-label="Your wallet" hidden>
+          <span class="avatar" aria-hidden="true"></span><span id="topbar-address-text">—</span>
+        </button>
+        <div class="tb-bal" data-balance-slot></div>
+      </div>
+      <div class="topbar-right">
+        <div class="switcher" id="chain-switch" data-selected="solana" role="tablist" aria-label="Chain">
+          <span class="thumb" aria-hidden="true"></span>
+          <button type="button" role="tab" aria-selected="true" data-chain="solana"><span class="chain-ic" aria-hidden="true">◎</span> Solana</button>
+          <button type="button" role="tab" aria-selected="false" data-chain="robinhood"><span class="chain-ic" aria-hidden="true">◆</span> Robinhood</button>
+        </div>
+        <button type="button" class="agent" id="agent" aria-label="The agent: what it is doing" data-state="idle">
+          <span class="agent-orb scout-cube" aria-hidden="true"><svg class="sc-svg" viewBox="-30 -23 200 200" aria-hidden="true" focusable="false"><circle class="sc-ring" cx="70" cy="77" r="94" pathLength="100"/><circle class="sc-core" cx="70" cy="64" r="17"/><g class="sc-left"><path class="sc-face" d="M0 38 70 76 70 153 0 115Z"/><path class="sc-band" d="M3 81 70 117"/></g><g class="sc-right"><path class="sc-face" d="M70 76 140 38 140 115 70 153Z"/><path class="sc-band" d="M70 117 137 81"/></g><g class="sc-top"><path class="sc-face" d="M70 0 140 38 70 76 0 38Z"/></g></svg></span>
+          <span class="agent-say" data-agent-say>Scout watching</span>
+        </button>
+        <button type="button" class="tb-deposit" data-sheet="receive" data-trading-only>Deposit</button>
+        <button type="button" class="tb-bell" id="inbox-btn" aria-label="Alerts">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg>
+          <i data-inbox-dot hidden></i>
+        </button>
+      </div>
+    </header>
+
+    <section id="login-screen" hidden>
+      <div class="engn-login-intro"><engn-motion state="assemble" decorative></engn-motion><span class="engn-eyebrow">WELCOME TO THE ENGINE</span><h1>A clearer view<br>of the market.</h1><p>Sign in to explore your workspace.</p></div>
+      <form class="form" id="login-form">
+        <label for="login-email">Email</label>
+        <input id="login-email" name="email" type="email" autocomplete="username" required />
+        <label for="login-password">Password</label>
+        <input id="login-password" name="password" type="password" autocomplete="current-password" required />
+        <button type="submit" class="btn-primary">Log in</button>
+        <p class="sheet-note is-error" id="login-error" hidden></p>
+      </form>
+    </section>
+
+    <header class="engn-intro" id="engn-intro" hidden><div><span class="engn-eyebrow" data-engn-kicker></span><h1 class="engn-title"><span data-engn-title></span><br><em data-engn-em></em></h1><p class="engn-copy" data-engn-copy></p></div><engn-motion state="idle" decorative></engn-motion></header>
+    <div id="app-shell" class="stack" data-view="meme" hidden>
+      <!-- Le schede di ogni sezione, sottolineate. Ogni pannello porta
+           data-pane="<vista>:<scheda>"; il resto lo fa main.js. -->
+      <nav class="tabs" data-tabs="gems" aria-label="Gems">
+        <!-- Lorenzo, 28/09: "la top 15-25 etc deve andare in questa tab (icona coppa)". -->
+        <button type="button" data-tab="rankings" aria-current="page"><svg class="tab-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4M12 14v4M8.5 20h7"/></svg>Arenas</button>
+        <button type="button" data-tab="database">Database</button>
+      </nav>
+      <div class="status-strip">
+        <section class="status-card balance-card">
+          <p class="label">Balance</p>
+            <button type="button" class="chain-flip" id="chain-flip" title="Tap to switch chain">
+            <span class="chain-ic" id="chain-ic" aria-hidden="true">◎</span><span id="chain-label">Solana</span><span class="flip-ic" aria-hidden="true">⇄</span>
+          </button>
+
+          <div class="amount" id="balance">—</div>
+          <div class="meta">
+            <button type="button" class="addr" id="address" title="Copy address"></button>
+            <span class="live"><span class="dot" id="live-dot"></span><span id="fresh"></span></span>
+          </div>
+          <!-- Cosa hai, a colpo d'occhio: l'utente, "non e' chiaro che moneta
+               io abbia nel portafoglio". Una riga, mai a capo, per non
+               spingere giu' il radar. Tocco = apre lo scambio. -->
+          <div class="holdings" id="holdings" hidden></div>
+          <div class="spark" id="spark" hidden>
+            <svg viewBox="0 0 300 44" aria-hidden="true">
+              <defs>
+                <linearGradient id="spark-gradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="var(--accent)" stop-opacity=".22" />
+                  <stop offset="100%" stop-color="var(--accent)" stop-opacity="0" />
+                </linearGradient>
+              </defs>
+              <path class="spark-fill" d="" />
+              <path class="spark-line" d="" />
+              <circle class="spark-end" r="2.6" cx="0" cy="0" />
+            </svg>
+            <p class="scale"><span class="spark-lo"></span><span class="spark-span"></span><span class="spark-hi"></span></p>
+          </div>
+        </section>
+
+
+        <section class="status-card security-card" id="status" data-armed="false" hidden>
+          <p class="label">Security</p>
+          <p class="value" id="status-text">Live execution off</p>
+          <p class="sub" id="status-sub">Quotes only · no auto-signing</p>
+        </section>
+      </div>
+
+      <!-- La classifica, subito sotto il saldo. Richiesta: "leaderboard che
+           come posizione deve essere piu' in risalto [...] e' l'unica cosa
+           che conta". DREGG sta primo come metro di paragone. La disegna
+           static/onchain/leaderboard.js. -->
+      <!-- The scanner (manual_scan.py): a ticker or an address through every
+           check. It lived in Signals, gone with trading (Lorenzo, 07/10). -->
+      <form class="scan-form" id="gem-scan" data-scan-form role="search">
+        <input name="q" placeholder="Scan a token: ticker or address" autocomplete="off" spellcheck="false" aria-label="Ticker or address" readonly />
+        <button type="submit" aria-label="Scan"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg></button></form>
+      <section class="board" id="board" data-pane="gems:rankings" data-loading>
+        <p class="gem-banner" role="note"><b>Research, not advice.</b> Code, site and tokenomics scored 24/7. DYOR before you buy.</p>
+        <header><h3>Leaderboard</h3><span data-board-meta></span></header>
+        <div class="track" data-board-track hidden></div>
+        <p class="early-note" data-board-early hidden></p>
+        <div class="board-podium-a" data-board-podium></div>
+        <div class="board-detail" data-board-detail hidden></div>
+        <ol class="board-list" data-board-list></ol>
+        <p class="board-empty" data-board-empty hidden></p>
+        <div class="board-close" data-board-close hidden>
+          <h4>Close to the board</h4>
+          <ul></ul>
+        </div>
+      </section>
+
+      <!-- Il database dei progetti (projects_db.py). Richiesta: "vedi sempre
+           i soliti... ma fatti un database no?". Tutto cio' che il Gem Finder
+           ha visto, con il verdetto e il perche'. Lo disegna static/onchain/projects.js. -->
+      <!-- Arenas (top.js, arenas.py): the quality low caps by narrative, each
+           against its peers, with pound for pound on the podium. Replaced
+           the Top 15/25/50 (Lorenzo, 07/10: "la top50 come concetto e'
+           limitante"), which had replaced Picks, the meme coins. -->
+      <section class="top-picks" id="top-picks" data-pane="gems:rankings" data-loading>
+        <div class="picks-head">
+          <span class="picks-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2 21 7v10l-9 5-9-5V7z"/><path d="M3 12l9 5 9-5"/></svg></span>
+          <p><b>Quality low caps, by arena</b><small>Each project ranked against its own narrative. Code, research and tokenomics checked. No meme coins.</small></p>
+        </div>
+        <p class="st-note" data-top-note></p>
+        <div class="arenas" data-top-arenas></div>
+      </section>
+      <section class="projects" id="projects" data-pane="gems:database" data-loading>
+        <header><h3>Project database</h3><span data-projects-meta></span></header>
+        <p class="projects-funnel" data-projects-funnel></p>
+        <div class="projects-tools">
+          <input type="search" data-projects-q placeholder="Search name, ticker, address or site" aria-label="Search the project database" autocomplete="off" />
+          <button type="button" class="pj-filter-btn" data-projects-filter aria-haspopup="dialog"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M4.5 8h7M7 12h2"/></svg>Filters<span class="pj-filter-n" data-projects-filter-n></span></button>
+        </div>
+        <div class="pj-active" data-projects-active hidden></div>
+        <ol class="projects-list" data-projects-list></ol>
+        <button type="button" class="rj-more" data-projects-more hidden>Show more</button>
+      </section>
+
+      <!-- La prima pagina. Richiesta: "vorrei che la prima pagina quando entro
+           sia proprio questa qui: i pop-up che vanno in una lista e
+           rimangono, e il grafico". A sinistra gli avvisi (ognuno con il suo
+           backtest), a destra il palco: grafico dal vivo del token scelto
+           con gli ingressi della strategia migliore. Lo disegna
+           static/onchain/radar.js. Sopra c'e' solo il saldo ("il saldo va
+           bene inserirlo in cima, il resto poi"). -->
+      <!-- Lo scanner: cosa sta facendo il motore adesso (Lorenzo: "la scheda
+           scanner e' confusionaria, non voglio che rimanga il grafico di una
+           crypto per tutto il giorno"). Lo disegna static/onchain/radar.js. -->
+      <section class="scan" id="radar" data-pane="meme:scanner" data-loading>
+        <div class="scan-status">
+          <span class="scan-dot" aria-hidden="true"></span>
+          <p><b data-scan-now>Listening for new pools</b><small><span data-scan-chains>Solana · Robinhood · BSC</span> · <span data-radar-clock></span></small></p>
+        </div>
+        <dl class="scan-stats">
+          <div><dt>New pools</dt><dd data-stat-new>0</dd><small>last 10 min</small></div>
+          <div data-v="pass"><dt>Passed</dt><dd data-stat-pass>0</dd><small>last 24h</small></div>
+          <div data-v="rej"><dt>Rejected</dt><dd data-stat-rej>0</dd><small>last 24h</small></div>
+        </dl>
+        <h4 class="scan-h">Latest decisions</h4>
+        <ol class="memes-list scan-feed" data-scan-feed></ol>
+        <p class="memes-empty" data-scan-empty hidden>No decisions yet. New pools show up here within minutes.</p>
+        <button type="button" class="scan-more" data-feed-more hidden></button>
+        <p class="list-foot" data-scan-learn></p>
+        <details class="scan-rugs" data-radar-shame hidden>
+          <summary>Wall of Rugs <span data-shame-count></span><small>Passed our checks, then ran with the bag.</small></summary>
+          <ol class="memes-list"></ol>
+        </details>
+      </section>
+      <section class="memes" id="memes" data-pane="meme:trending" data-loading hidden>
+        <span data-memes-meta hidden></span>
+        <!-- Lorenzo: "non e' chiaro che siano state scelte, sembrano appunto
+             trending, deve essere chiaro che sono uscite dalla logica". -->
+        <div class="picks-head">
+          <span class="picks-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2 21 7v10l-9 5-9-5V7z"/><path d="M3 12l9 5 9-5"/></svg></span>
+          <p><b>Picked by the engine</b><small data-picks-line>Every new launch on Solana, Robinhood and BSC goes through our checks. Only the ones that pass land here, ranked by score.</small></p>
+        </div>
+        <ol class="memes-list" data-memes-list></ol>
+        <p class="memes-empty" data-memes-empty hidden>Quiet right now. New tokens appear here within minutes.</p>
+      </section>
+
+      <!-- Richiesta: "risultati se avessimo seguito l'alert di telegram [...]
+           dopo 1,2,3,4,5,6,8,12,24,48h, e infine aggiornato in tempo reale,
+           oltre a questo anche il rendimento della miglior strategia
+           backtestata". Lo disegna static/onchain/alerts.js. -->
+      <section class="alerts" id="meme-alerts" data-pane="meme:alerts" data-alerts-kind="meme" data-loading>
+        <span data-alerts-meta hidden></span>
+        <div data-alerts-body></div>
+        <p class="list-foot" data-memes-track></p>
+      </section>
+
+      <!-- Lorenzo, 30/09: "non mi serve piu' neanche la schermata dei fired
+           last 48 ore [...] e' tutta roba legata alle meme coin". Signals:
+           the trend follower on the Top 50 gems, drawn by signals.js. Track
+           record: how the picks went, drawn by track.js. -->
+      <section class="signals" id="signals" data-loading>
+        <form class="scan-form" data-scan-form role="search">
+          <input name="q" placeholder="Scan a token: ticker or address" autocomplete="off" spellcheck="false" aria-label="Ticker or address" readonly />
+          <button type="submit" aria-label="Scan"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg></button></form>
+        <div data-signals-body></div>
+      </section>
+      <!-- Under $300k and past every other bar (Lorenzo, 07/10): a list
+           apart, never on the podium, with its own place in the dock. -->
+      <section class="early-view" id="early-view" data-early-view>
+        <header><h3>Early</h3><span>under $300k cap</span></header>
+        <p class="early-lead">Small projects that pass every other bar of the Top: real usage, holders, code and research. Smaller and riskier. Research, not advice.</p>
+        <ol class="memes-list" data-early-rows></ol>
+        <p class="early-empty" data-early-empty hidden>No project under $300k passes the bars right now. The list is refreshed by the nightly scan.</p>
+      </section>
+
+      <!-- Il revisore giornaliero (ai_review.py): Claude legge cosa e' successo
+           davvero ai segnali e propone cosa cambiare. -->
+      <!-- La classifica degli alert, come le classifiche dei trader: il primo
+           in grande con la corona, poi la lista. Lo disegna alerts.js. -->
+      <section class="top" id="leaders" data-loading>
+        <p class="top-info" data-top-info></p>
+        <div class="top-hero" data-top-hero></div>
+        <div class="top-bar">
+          <button type="button" class="sort-btn" data-sort><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16M3.5 16.5 7 20l3.5-3.5M13 6h8M13 11h6M13 16h4"/></svg><span>Now</span></button>
+        </div>
+        <div class="top-sheet">
+          <div class="you-card" data-top-you></div>
+          <ol class="top-list" data-top-list></ol>
+          <button type="button" class="review-row" data-open-review>Yesterday's review <span aria-hidden="true">›</span></button>
+        </div>
+      </section>
+
+      <!-- Il profilo (Lorenzo, con lo screenshot di un'app di trading: "uno
+           deve vedere cosa detiene, l'andamento del wallet nel tempo con un
+           grafico [...] scegliere anche l'immagine profilo"). Lo disegna
+           static/onchain/profile.js. -->
+      <section class="profile" id="profile" data-loading></section>
+      <!-- How past picks went (gem_track), folded under the profile
+           (Lorenzo, 07/10: the Early list took its place in the dock). -->
+      <details class="top-early track-fold" id="track-fold">
+        <summary>Track record <small>how past picks did</small></summary>
+        <section class="track" id="track" data-loading>
+          <div data-track-body></div>
+        </section>
+      </details>
+      <!-- DeepSeek's own tab (Lorenzo, 28/09: "diamo a DeepSeek una tab
+           tutta sua con animazioni molto fatte bene [...] voglio vedere come
+           ragiona"). Lo disegna static/onchain/agent.js. -->
+      <section class="agent-view" id="agent-view" aria-label="Scout"></section>
+      <dialog class="sheet review" id="review" aria-label="Daily review">
+        <div class="grip" aria-hidden="true"></div>
+        <header><h3>Daily review</h3><span data-review-meta></span></header>
+        <div data-review-body></div>
+      </dialog>
+
+      <!-- Due card come nel mockup approvato: a sinistra mercato +
+           posizioni/ordini/storico/strategie, a destra ordine e
+           azioni rapide. -->
+      <div class="market-order-row" id="market-order-row" hidden>
+        <div class="market-card">
+          <section class="market-panel" id="market-panel"></section>
+        </div>
+
+        <section class="order-panel">
+          <div class="mo-side-tabs" id="order-tabs" role="tablist">
+            <button type="button" class="mo-side-tab mo-tab-active" data-order-tab="swap" role="tab" aria-selected="true">Swap</button>
+            <button type="button" class="mo-side-tab" data-order-tab="limit" role="tab" aria-selected="false">Limit</button>
+          </div>
+          <div id="order-panel-body"></div>
+        </section>
+      </div>
+
+      <!-- Portafoglio: la terza vista della barra in basso. Saldi,
+           ordini, storico e strategie in un posto solo, con ricevi e
+           invia a portata di pollice. -->
+      <section class="wallet-view" id="wallet-view">
+        <div class="wallet-actions">
+          <button type="button" data-sheet="receive"><span aria-hidden="true">↓</span>Receive</button>
+          <button type="button" data-sheet="send"><span aria-hidden="true">↑</span>Send</button>
+        </div>
+      <section class="bottom-panel" id="bottom-panel" hidden>
+        <div class="bottom-tabs" id="bottom-tabs" role="tablist">
+          <button type="button" class="mo-side-tab mo-tab-active" data-bottom-tab="positions" role="tab" aria-selected="true">Balances</button>
+          <button type="button" class="mo-side-tab" data-bottom-tab="orders" role="tab" aria-selected="false">Open orders</button>
+          <button type="button" class="mo-side-tab" data-bottom-tab="history" role="tab" aria-selected="false">History</button>
+          <button type="button" class="mo-side-tab" data-bottom-tab="strategies" role="tab" aria-selected="false">Strategies</button>
+        </div>
+        <div class="bottom-panel-body" id="bottom-panel-body"></div>
+      </section>
+      </section>
+
+      <section class="empty" id="onchain-empty-state" hidden>
+        No <span data-chain-name></span> wallet yet.
+        <button type="button" class="btn-primary" data-create>Create wallet</button>
+      </section>
+    </div>
+  </div>
+  <!-- Tre posti, come un DEX: cosa succede, scambia, cosa ho. Sostituisce
+       il menu "⋯" che passava da una vista all'altra. -->
+  <nav class="dock" id="dock" aria-label="Sections" hidden>
+    <span class="dock-thumb" aria-hidden="true"></span>
+    <button type="button" data-go="meme" aria-label="Signals" data-trading-only><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2.5-6 5 12 2.5-6h4"/></svg><span>Signals</span></button>
+    <button type="button" data-go="gems" aria-label="Gems"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9.5" cy="10" r="6"/><path d="M15.2 8.4a6 6 0 1 1-6.8 8.3"/></svg><span>Gems</span></button>
+    <button type="button" data-go="top" aria-label="Early"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20v-8"/><path d="M12 12c0-3.5-2.5-6-6.5-6 0 3.5 2.5 6 6.5 6Z"/><path d="M12 13.5c0-3 2.2-5.5 6.5-5.5 0 3-2.2 5.5-6.5 5.5Z"/></svg><span>Early</span></button>
+    <button type="button" data-go="agent" aria-label="Scout"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg><span>Scout</span></button>
+    <button type="button" data-go="profile" aria-label="Profile"><i class="dock-me" data-me-avatar aria-hidden="true"></i><span>Profile</span></button>
+  </nav>
+  <button type="button" class="dock-search" id="dock-search" aria-label="Search a token" hidden>
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
+  </button>
+  <div class="toast" id="toast" role="status" hidden>
+    <span class="toast-mark" aria-hidden="true">✓</span>
+    <span><span class="toast-title"></span><span class="toast-detail"></span></span>
+    <button type="button" class="toast-close" aria-label="Close">✕</button>
+  </div>
+
+  <dialog class="sheet" id="sheet">
+    <div class="grip" aria-hidden="true"></div>
+    <h2 class="sheet-title"></h2>
+    <p class="sheet-desc"></p>
+    <div class="sheet-body"></div>
+    <button type="button" class="btn-quiet sheet-close">Close</button>
+  </dialog>
+
+  <!-- Menu "⋯": le azioni che non servono a ogni visita (ricevi, invia,
+       limiti, simula, chiave) stanno qui invece che sempre a schermo.
+       Richiesta: "rendere l'app completamente minimal e mega moderna? troppi tasti". -->
+  <dialog class="sheet more-sheet" id="more" aria-label="More actions">
+    <div class="grip" aria-hidden="true"></div>
+    <div class="menu-list" id="actions" hidden>
+      <button type="button" class="menu-item" data-go="wallet" data-trading-only><span class="menu-ic" aria-hidden="true">▤</span><span><b>Wallet &amp; swap</b><small>Balances, swap, orders, history</small></span></button>
+      <button type="button" class="menu-item" data-sheet="receive"><span class="menu-ic" aria-hidden="true">↓</span><span><b>Receive</b><small>Wallet address and QR</small></span></button>
+      <button type="button" class="menu-item" data-sheet="send"><span class="menu-ic" aria-hidden="true">↑</span><span><b>Send</b><small>Send tokens to another address</small></span></button>
+      <button type="button" class="menu-item" data-sheet="risk" data-trading-only><span class="menu-ic" aria-hidden="true">◧</span><span><b>Limits &amp; security</b><small>Spend caps, circuit breaker</small></span></button>
+      <button type="button" class="menu-item" data-sheet="simulate" data-trading-only><span class="menu-ic" aria-hidden="true">▶</span><span><b>Simulate</b><small>Test an order without signing</small></span></button>
+    </div>
+    <button type="button" class="reveal-row" id="reveal-row" hidden>
+      <span class="t"><b>Reveal private key</b><small>Needs your phone, never this page alone</small></span>
+      <span class="chev">›</span>
+    </button>
+  </dialog>
+
+  <dialog class="modal" id="reveal">
+    <div class="reveal-body"></div>
+  </dialog>
+
+  <dialog class="sheet" id="picker">
+    <div class="grip" aria-hidden="true"></div>
+    <h2 class="sheet-title">Search token</h2>
+    <div class="sheet-body"></div>
+    <button type="button" class="btn-quiet sheet-close">Close</button>
+  </dialog>
+
+  <!--onchain-boot-->
+  <script async src="/static/lightweight-charts.standalone.production.js"></script>
+  <script type="module" src="/static/onchain-v1/main.js"></script>
+</body>
+</html>

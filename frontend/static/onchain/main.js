@@ -696,7 +696,9 @@ $("#login-form").addEventListener("submit", async (event) => {
   try {
     const fields = new FormData(form);
     await api.login(String(fields.get("email")).trim(), String(fields.get("password")));
-    await boot();
+    // The server picks the app version by account (onchain_v1_emails):
+    // reload so the page served is the one for who just signed in.
+    location.reload();
   } catch (error) {
     message.textContent = error.message;
     message.hidden = false;

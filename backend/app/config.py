@@ -56,6 +56,12 @@ class Settings(BaseSettings):
     # trading deve sparire". False stops their loops and hides them in the
     # app; saved data stays in backend/data. The gem research keeps running.
     onchain_trading_enabled: bool = False
+    # Accounts that keep the on-chain app as it was on 15/10 (frontend/
+    # onchain-app-v1.html + static/onchain-v1/): an email allowlist like
+    # admin_emails, the default is the admin account. Lorenzo,
+    # 16/10: his own account back to before that day's changes, everyone
+    # else on the current app.
+    onchain_v1_emails: str = "sha256:ec987139be8d4d3991504dbe9bd5c8f92ce102948dee4e4305db5e84e841eb0e"
     # Off on Hetzner (deploy/docker-compose.yml): Caddy compresses there.
     app_gzip: bool = True
     # The gem research (discovery, pillars, DeepSeek readings, layers,

@@ -7693,17 +7693,23 @@ _ONCHAIN_PASSKEY_SETUP_HTML = (FRONTEND_DIR / "onchain-passkey-setup.html").read
 _ONCHAIN_MODULE_DIR = FRONTEND_DIR / "static" / "onchain"
 
 
-def _onchain_modules() -> list[Path]:
+# The app as it was on 15/10, frozen for the accounts in
+# settings.onchain_v1_emails (Lorenzo, 16/10: "ripristina l'app come era
+# prima per il mio utente [...] per white kobra applica queste cose").
+_ONCHAIN_V1_DIR = "onchain-v1"
+
+
+def _onchain_modules(folder: str = "onchain") -> list[Path]:
     try:
-        return sorted(_ONCHAIN_MODULE_DIR.glob("*.js"))
+        return sorted((FRONTEND_DIR / "static" / folder).glob("*.js"))
     except OSError:
         return []
 
 
-def _onchain_importmap(version: str) -> str:
+def _onchain_importmap(version: str, folder: str = "onchain") -> str:
     imports = {
-        f"@onchain/{module.name}": f"/static/onchain/{module.name}?v={version}"
-        for module in _onchain_modules()
+        f"@onchain/{module.name}": f"/static/{folder}/{module.name}?v={version}"
+        for module in _onchain_modules(folder)
     }
     return (
         '<script type="importmap">'
@@ -7735,39 +7741,44 @@ _ONCHAIN_LAZY_MODULES = frozenset({
 })
 
 
-def _onchain_modulepreloads(version: str) -> str:
+def _onchain_modulepreloads(version: str, folder: str = "onchain") -> str:
     """Un <link rel="modulepreload"> per ogni modulo del wallet.
 
     Senza, il browser scopre gli import di main.js solo dopo averlo scaricato
     e letto: un secondo giro di rete in fila al primo (~0,8 s misurati dal
     vivo). Con questi li chiede tutti insieme all'HTML."""
     return "\n".join(
-        f'<link rel="modulepreload" href="/static/onchain/{module.name}?v={version}" />'
-        for module in _onchain_modules()
+        f'<link rel="modulepreload" href="/static/{folder}/{module.name}?v={version}" />'
+        for module in _onchain_modules(folder)
         if module.name not in _ONCHAIN_LAZY_MODULES
     )
 
 
-_ONCHAIN_APP_HTML = (
-    (FRONTEND_DIR / "onchain-app.html")
-    .read_text(encoding="utf-8")
-    .replace("<!--onchain-importmap-->", _onchain_importmap(_ASSET_VERSION))
-    .replace("<!--onchain-modulepreload-->", _onchain_modulepreloads(_ASSET_VERSION))
-    .replace('src="/static/onchain/main.js"', f'src="/static/onchain/main.js?v={_ASSET_VERSION}"')
-    .replace('href="/static/onchain/shell.css"', f'href="/static/onchain/shell.css?v={_ASSET_VERSION}"')
-    .replace('href="/static/onchain/app.css"', f'href="/static/onchain/app.css?v={_ASSET_VERSION}"')
-    .replace('href="/static/engn-system.css"', f'href="/static/engn-system.css?v={_ASSET_VERSION}"')
-    .replace('href="/static/onchain/ui.css"', f'href="/static/onchain/ui.css?v={_ASSET_VERSION}"')
-    .replace('href="/static/onchain/ui-refinements.css"', f'href="/static/onchain/ui-refinements.css?v={_ASSET_VERSION}"')
-    .replace('href="/static/onchain/scout-cube.css"', f'href="/static/onchain/scout-cube.css?v={_ASSET_VERSION}"')
-    .replace('href="/static/onchain/classic.css"', f'href="/static/onchain/classic.css?v={_ASSET_VERSION}"')
-    # La libreria del grafico non cambia fra un deploy e l'altro: con il `?v=`
-    # finisce in cache per sempre invece di rivalidarsi a ogni apertura.
-    .replace(
-        'src="/static/lightweight-charts.standalone.production.js"',
-        f'src="/static/lightweight-charts.standalone.production.js?v={_ASSET_VERSION}"',
+def _onchain_app_html(page: str, folder: str) -> str:
+    return (
+        (FRONTEND_DIR / page)
+        .read_text(encoding="utf-8")
+        .replace("<!--onchain-importmap-->", _onchain_importmap(_ASSET_VERSION, folder))
+        .replace("<!--onchain-modulepreload-->", _onchain_modulepreloads(_ASSET_VERSION, folder))
+        .replace(f'src="/static/{folder}/main.js"', f'src="/static/{folder}/main.js?v={_ASSET_VERSION}"')
+        .replace(f'href="/static/{folder}/shell.css"', f'href="/static/{folder}/shell.css?v={_ASSET_VERSION}"')
+        .replace(f'href="/static/{folder}/app.css"', f'href="/static/{folder}/app.css?v={_ASSET_VERSION}"')
+        .replace('href="/static/engn-system.css"', f'href="/static/engn-system.css?v={_ASSET_VERSION}"')
+        .replace(f'href="/static/{folder}/ui.css"', f'href="/static/{folder}/ui.css?v={_ASSET_VERSION}"')
+        .replace(f'href="/static/{folder}/ui-refinements.css"', f'href="/static/{folder}/ui-refinements.css?v={_ASSET_VERSION}"')
+        .replace(f'href="/static/{folder}/scout-cube.css"', f'href="/static/{folder}/scout-cube.css?v={_ASSET_VERSION}"')
+        .replace(f'href="/static/{folder}/classic.css"', f'href="/static/{folder}/classic.css?v={_ASSET_VERSION}"')
+        # La libreria del grafico non cambia fra un deploy e l'altro: con il `?v=`
+        # finisce in cache per sempre invece di rivalidarsi a ogni apertura.
+        .replace(
+            'src="/static/lightweight-charts.standalone.production.js"',
+            f'src="/static/lightweight-charts.standalone.production.js?v={_ASSET_VERSION}"',
+        )
     )
-)
+
+
+_ONCHAIN_APP_HTML = _onchain_app_html("onchain-app.html", "onchain")
+_ONCHAIN_APP_V1_HTML = _onchain_app_html("onchain-app-v1.html", _ONCHAIN_V1_DIR)
 
 
 # L'HTML non si mette in cache: e' l'unico posto dove vive il numero di
@@ -7870,7 +7881,7 @@ def _onchain_boot_payload(user: User | None) -> dict:
     endpoint: solo indirizzo e stato, mai una chiave."""
     if user is None:
         return {"user": None}
-    payload: dict = {"user": _user_out(user)}
+    payload: dict = {"user": _user_out(user), "app_variant": _onchain_variant(user)}
     if settings.onchain_enabled:
         payload["wallets"] = [
             {"chain": chain, "address": w.address, "enabled": w.enabled, "created_at": w.created_at}
@@ -7879,10 +7890,15 @@ def _onchain_boot_payload(user: User | None) -> dict:
     return payload
 
 
+def _onchain_variant(user: User | None) -> str:
+    return "v1" if user is not None and user.email in email_allowlist(settings.onchain_v1_emails) else "current"
+
+
 def _render_onchain_app(user: User | None) -> str:
     # `<` escapato: un valore con "</script>" non puo' chiudere il blocco.
     data = json.dumps(_onchain_boot_payload(user), separators=(",", ":")).replace("<", "\\u003c")
-    html = _ONCHAIN_APP_HTML.replace(
+    page = _ONCHAIN_APP_V1_HTML if _onchain_variant(user) == "v1" else _ONCHAIN_APP_HTML
+    html = page.replace(
         "<!--onchain-boot-->", f'<script type="application/json" id="onchain-boot">{data}</script>'
     )
     # La sezione giusta e' visibile dal primo disegno, non dopo che il JS ha

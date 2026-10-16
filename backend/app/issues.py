@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0325", "App on-chain: due versioni, quella di ieri per Lorenzo",
+     "Lorenzo, 16/10: 'ripristina l'app come era prima per il mio utente [...] mentre per white kobra applica queste cose' (scelta: prima di oggi).",
+     "media"),
     ("seed-0324", "Gemme: torna il mosaico delle arene",
      "Lorenzo, 16/10: 'rivoglio il mosaico sulle gems'.",
      "media"),

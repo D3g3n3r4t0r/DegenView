@@ -1,0 +1,34 @@
+/* The Scout's mark (scout-cube.js): the ENGN cube that opens and closes.
+   Loaded last, on every width, so it wins over the old orb in app.css,
+   ui.css and ui-refinements.css. Only transform and opacity animate. */
+:is(.agent-orb, .ag-orb).scout-cube { display: block; background: none; box-shadow: none; border-radius: 0;
+  animation: none; filter: none; scale: 1; }
+:is(.agent-orb, .ag-orb).scout-cube::before, :is(.agent-orb, .ag-orb).scout-cube::after { display: none; }
+.agent-orb.scout-cube { inline-size: 26px; block-size: 26px; }
+.sc-svg { display: block; inline-size: 100%; block-size: 100%; overflow: visible; }
+.sc-face { stroke: #2de2b0; stroke-opacity: .55; stroke-width: 4; stroke-linejoin: round; }
+.sc-top .sc-face { fill: #2c4d45; }
+.sc-left .sc-face { fill: #0f1f1c; }
+.sc-right .sc-face { fill: #16302b; }
+.sc-band { fill: none; stroke: #2de2b0; stroke-width: 9; stroke-linecap: round; }
+.sc-core { fill: #2de2b0; opacity: 0; transform-origin: 70px 64px; }
+.sc-ring { fill: none; stroke: #2de2b0; stroke-width: 7; stroke-linecap: round; stroke-dasharray: 24 76; opacity: 0;
+  transform-origin: 70px 77px; }
+.scout-cube :is(.sc-top, .sc-left, .sc-right, .sc-core) { animation: 4.8s cubic-bezier(.45, 0, .2, 1) infinite; }
+.scout-cube .sc-top { animation-name: sc-top; }
+.scout-cube .sc-left { animation-name: sc-left; }
+.scout-cube .sc-right { animation-name: sc-right; }
+.scout-cube .sc-core { animation-name: sc-core; }
+:is(.agent[data-state="working"] .scout-cube, .ag-orb.scout-cube[data-state="working"], .scan-live-head .scout-cube, .scan-wait .scout-cube)
+  :is(.sc-top, .sc-left, .sc-right, .sc-core) { animation-duration: 1.8s; }
+:is(.agent[data-state="working"] .scout-cube, .ag-orb.scout-cube[data-state="working"], .scan-live-head .scout-cube, .scan-wait .scout-cube)
+  .sc-ring { opacity: .9; animation: sc-spin 1.2s linear infinite; }
+:is(.agent[data-state="off"] .scout-cube, .ag-orb.scout-cube[data-state="off"]) { filter: grayscale(1); opacity: .5; }
+:is(.agent[data-state="off"] .scout-cube, .ag-orb.scout-cube[data-state="off"]) * { animation: none !important; }
+.topbar .agent { background: rgba(45, 226, 176, .08); }
+@keyframes sc-top { 0%, 30%, 85%, 100% { transform: none; } 48%, 68% { transform: translateY(-19px); } }
+@keyframes sc-left { 0%, 30%, 85%, 100% { transform: none; } 48%, 68% { transform: translate(-14px, 8px); } }
+@keyframes sc-right { 0%, 30%, 85%, 100% { transform: none; } 48%, 68% { transform: translate(14px, 8px); } }
+@keyframes sc-core { 0%, 30%, 85%, 100% { opacity: 0; transform: scale(.5); } 48%, 68% { opacity: 1; transform: scale(1); } }
+@keyframes sc-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .scout-cube * { animation: none !important; } }
