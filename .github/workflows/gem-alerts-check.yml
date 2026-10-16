@@ -41,11 +41,14 @@ jobs:
             users = json.load(open(base + "/users.json"))
             only |= {u.get("telegram_signal_chat_id") for u in users if u.get("telegram_signal_chat_id")}
             dev = set(setting("telegram_dev_chat_ids") or setting("telegram_chat_ids"))
+            # the account Lorenzo asked about, by its sha256 (no address in a public repo)
+            TARGET = "fdfcf4ae2f1823a2e1f24d0f48c3fcd8cf128541133709ad272f21f2e62f3f58"
             for i, u in enumerate(users, 1):
                 e = (u.get("email") or "").lower()
+                target = hashlib.sha256(e.encode()).hexdigest() == TARGET
                 ok = not allowed or e in allowed or "sha256:" + hashlib.sha256(e.encode()).hexdigest() in allowed
                 main, sig = u.get("telegram_chat_id") or "", u.get("telegram_signal_chat_id") or ""
-                print(f"user {i}: main chat set={bool(main)} | main chat is signals-only={main in only} | "
+                print(f"user {i}{' (the account asked about)' if target else ''}: main chat set={bool(main)} | main chat is signals-only={main in only} | "
                       f"main chat is the dev chat={main in dev} | signals chat set={bool(sig)} | "
                       f"wallets={len(u.get('onchain_wallets') or {})} | telegram allowed={ok}")
             try:
