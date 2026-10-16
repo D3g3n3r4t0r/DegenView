@@ -17,6 +17,7 @@ from app.analysis.optimize import (
 from app.analysis.backtest import run_backtest
 from app.analysis.strategies import (
     AVAILABLE_STRATEGIES,
+    HIDDEN_STRATEGIES,
     LKI4H_DEFAULT_PARAMS,
     RSI_BB_4H,
     compute_lki4h_signals,
@@ -30,7 +31,9 @@ DF = pd.DataFrame({"open": _C, "high": _C + 1.5, "low": _C - 1.5, "close": _C, "
 
 
 def test_registered_and_searchable():
-    assert RSI_BB_4H in AVAILABLE_STRATEGIES and RSI_BB_4H in GABRIELE_STRATEGIES
+    # a trial, out of the menus since 16/10, but still registered and searchable
+    assert RSI_BB_4H in HIDDEN_STRATEGIES and RSI_BB_4H not in AVAILABLE_STRATEGIES
+    assert RSI_BB_4H in GABRIELE_STRATEGIES
     assert is_optimizable(RSI_BB_4H) and grid_size(RSI_BB_4H) == 36 * 36
     assert LKI4H_DEFAULT_PARAMS["bb_mult"] == 2.5
 

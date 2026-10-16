@@ -890,8 +890,10 @@ def _with_btc_filter(fn):
 STRATEGY_REGISTRY = {name: _with_btc_filter(fn) for name, fn in STRATEGY_REGISTRY.items()}
 # Registered (backtests and the comparison script can run them) but not
 # offered in the menus or alerts until Lorenzo has seen the real-data
-# comparison (15/10: "prima di renderla operativa").
-HIDDEN_STRATEGIES = {CLAUDIO_4H, CLAUDIO_TREND_4H, CLAUDIO_1D}
+# comparison (15/10: "prima di renderla operativa"). RSI+BB 4H and RSI+BB BTC
+# band were trials (Lorenzo, 16/10: "non le utilizziamo [...] erano delle
+# prove"): out of the menus, still registered so saved alerts keep running.
+HIDDEN_STRATEGIES = {CLAUDIO_4H, CLAUDIO_TREND_4H, CLAUDIO_1D, RSI_BB_4H, RSI_BB_BTC_BAND}
 AVAILABLE_STRATEGIES = [k for k in STRATEGY_REGISTRY if k not in HIDDEN_STRATEGIES]
 DEFAULT_STRATEGY = AVAILABLE_STRATEGIES[0]
 

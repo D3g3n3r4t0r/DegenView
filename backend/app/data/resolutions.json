@@ -3038,5 +3038,10 @@
     "status": "risolto",
     "at": 1792181113,
     "summary": "Stessi comandi, meno spazio. Prima la barra non ci stava sotto i 1440 px: il tasto Analizza veniva schiacciato, a 1280 px email ed Esci finivano fuori schermo, a 1024 px mancavano quasi 390 px. Ora: ricerca e menu strategia si stringono quando serve; la lingua e' una sigla (EN/IT, il nome per esteso passando il mouse); sotto 1360 px l'email diventa la sua iniziale in un cerchio (indirizzo completo passando il mouse); sotto 1200 px 'Indicatori' resta come lente con il nome nel tooltip; fra 760 e 1000 px la barra va su due righe invece di scorrere. Provato a 780, 900, 1024, 1100, 1201, 1280, 1361, 1440 e 1920 px, in inglese e in italiano: nessuno sfondamento. Sotto 760 px la barra resta nascosta come prima (sul telefono c'e' il menu)."
+  },
+  "seed-0312": {
+    "status": "risolto",
+    "at": 1792182444,
+    "summary": "RSI+BB 4H e RSI+BB Reversal (BTC band) non compaiono piu' nei menu (barra in alto e Lab) ne' fra le strategie per alert e archivio; restano nel motore, cosi' un alert gia' salvato su una delle due continua a funzionare invece di rompersi. Con la BTC band se ne va anche il pezzo 'Band' del badge BTC in alto (serviva solo a lei); resta EMA21, cioe' il filtro BTC. I menu delle strategie ora sono divisi in gruppi: 'Reversal · solo long' (Trend EMA Reversal, RSI+BB Reversal, Combined Reversal), 'Long / short' (Trend EMA, RSI+BB Long/Short), 'Altre' (Accumulo/Distribuzione, Trend HF). Tolta la stella accanto a Trend EMA Reversal; il pulsante delle impostazioni consigliate resta dentro la strategia."
   }
 }

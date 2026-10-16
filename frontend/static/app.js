@@ -354,31 +354,22 @@
     });
   });
 
-  // ── Strategy menu: order, recommended marks, one-line descriptions and
-  // the recommended settings (Lorenzo, 16/10: "procedi con tutti e 5 i
-  // punti"). Order = most reliable in the 1D test environment first
-  // (scripts/lowfit_1d.py, 35 pairs, values chosen on 2023+, tested on
-  // 2021 and 2022); anything new the backend adds goes at the end.
-  const STRATEGY_ORDER = [
-    "Lorenzo reversal (long only)",
-    "RSI+BB BTC band (long only)",
-    "Lorenzo (trend-follower)",
-    "Gabriele (RSI+BB reversal)",
-    "Combined reversal (long only)",
-    "Gabriele 2 (RSI+BB long/short)",
-    "RSI+BB 4H",
-    "Accumulo / Distribuzione (long-term)",
-    "Lorenzo HF (minuti on-chain)",
+  // ── Strategy menu: grouped by kind, then one-line descriptions and the
+  // recommended settings. Lorenzo, 16/10: Trend EMA Reversal together with
+  // RSI+BB Reversal, Trend EMA (long/short) together with RSI+BB long/short,
+  // no star. Anything new the backend adds goes under "Other".
+  const STRATEGY_GROUPS = [
+    ["Reversal · long only", ["Lorenzo reversal (long only)", "Gabriele (RSI+BB reversal)", "Combined reversal (long only)"]],
+    ["Long / short", ["Lorenzo (trend-follower)", "Gabriele 2 (RSI+BB long/short)"]],
+    ["Other", ["Accumulo / Distribuzione (long-term)", "Lorenzo HF (minuti on-chain)"]],
   ];
-  const RECOMMENDED_STRATEGIES = new Set(["Lorenzo reversal (long only)", "RSI+BB BTC band (long only)"]);
+  const STRATEGY_ORDER = STRATEGY_GROUPS.flatMap(([, names]) => names);
   const STRATEGY_DESCRIPTIONS = {
     "Lorenzo reversal (long only)": "Trend follower, long only: buys when the slope of the average turns up, sells when it turns down. Best result in the 1D test with the BTC filter on (median of 35 pairs: 2021 +136%, 2022 0%, 2023–26 +67%).",
-    "RSI+BB BTC band (long only)": "Buys dips, long only. With BTC above its Bull Market Band either RSI oversold or a close under the lower band is enough; below it both are needed. Sells back at the middle band. 1D test, median of 35 pairs: 2021 +28%, 2022 +8%, 2023–26 +36%, about 3 trades a year.",
     "Lorenzo (trend-follower)": "Trend follower, long and short: the slope of the average turning up opens a long, turning down flips to a short.",
     "Gabriele (RSI+BB reversal)": "Buys extremes, long only: RSI oversold and a close under the lower band on the same candle; sells when RSI is overbought and the close is over the upper band. Few trades on 1D (about 1 a year).",
     "Combined reversal (long only)": "Trend EMA Reversal and RSI+BB Reversal in one position: in on either entry, out at the first exit. About 3× the trades of Trend EMA Reversal, with a higher drawdown.",
     "Gabriele 2 (RSI+BB long/short)": "RSI+BB both ways: the overbought signal opens a short instead of only closing the long.",
-    "RSI+BB 4H": "RSI+BB Reversal for 4-hour candles, Bollinger multiplier 2.5. Experimental.",
     "Accumulo / Distribuzione (long-term)": "Counter-trend: RSI divergences at swing lows and highs, range breakouts and bounces off the range support. Holds until the opposite signal.",
     "Lorenzo HF (minuti on-chain)": "Trend follower for minute candles of on-chain tokens.",
   };
@@ -387,7 +378,6 @@
   const RECOMMENDED_SETTINGS = {
     "Lorenzo reversal (long only)": { btc_filter: true },
     "Combined reversal (long only)": { btc_filter: true },
-    "RSI+BB 4H": { btc_filter: true, btc_filter_exit: true },
   };
 
   function orderStrategies(list) {
@@ -396,7 +386,17 @@
   }
 
   function strategyOptionLabel(name) {
-    return strategyLabel(name) + (RECOMMENDED_STRATEGIES.has(name) ? " ★" : "");
+    return strategyLabel(name);
+  }
+
+  // <option>s for a strategy <select>, under one <optgroup> per kind.
+  function strategyOptionsHtml(list) {
+    const opt = (s) => `<option value="${escapeHtml(s)}">${escapeHtml(strategyOptionLabel(s))}</option>`;
+    const known = new Set(STRATEGY_ORDER);
+    const groups = STRATEGY_GROUPS.map(([label, names]) => [label, names.filter((n) => list.includes(n))]);
+    groups[groups.length - 1][1].push(...list.filter((n) => !known.has(n)));
+    return groups.filter(([, names]) => names.length)
+      .map(([label, names]) => `<optgroup label="${escapeHtml(label)}">${names.map(opt).join("")}</optgroup>`).join("");
   }
 
   // Description + "Use recommended settings" on top of a strategy's fields.
@@ -1370,13 +1370,7 @@
     strategies = orderStrategies(strategies);
     state.availableStrategies = strategies;
     const select = el("active-strategy-select");
-    select.innerHTML = "";
-    strategies.forEach((name) => {
-      const opt = document.createElement("option");
-      opt.value = name;
-      opt.textContent = strategyOptionLabel(name);
-      select.appendChild(opt);
-    });
+    select.innerHTML = strategyOptionsHtml(strategies);
     if (state.defaultStrategy) select.value = state.defaultStrategy;
     renderStrategyParamsFields();
     updateOptimizeButtonVisibility();
@@ -13037,8 +13031,8 @@
   }
 
   // ── BTC badge in the top bar (Lorenzo, 16/10): BTC against its weekly
-  // EMA 21 (BTC filter) and its Bull Market Band (RSI+BB BTC band), closed
-  // weeks only, with the Monday each verdict took effect. Hourly refresh.
+  // EMA 21 (BTC filter), closed weeks only (the Bull Market Band part went
+  // with the RSI+BB BTC band strategy), with the Monday each verdict took effect. Hourly refresh.
   async function renderBtcBadge() {
     const badge = el("btc-badge");
     if (!badge) return;
@@ -13055,8 +13049,7 @@
       return `<span class="btc-badge-part ${cls}" title="${escapeHtml(title)}">${escapeHtml(name === "weekly EMA 21" ? "EMA21" : "Band")} ${s.up ? "▲" : "▼"}</span>`;
     };
     badge.innerHTML = `<span class="btc-badge-label">BTC</span>` +
-      part(st.ema21, "weekly EMA 21", "the BTC filter lets longs in.", "the BTC filter blocks new longs.") +
-      part(st.band, "Bull Market Band", "RSI+BB BTC band enters on either condition.", "RSI+BB BTC band needs both conditions.");
+      part(st.ema21, "weekly EMA 21", "the BTC filter lets longs in.", "the BTC filter blocks new longs.");
     badge.classList.remove("hidden");
   }
 
@@ -13064,7 +13057,7 @@
     // Pick the first available strategy
     labState.strategy = strategies[0] || "";
     const sel = labEl("lab-strategy-select");
-    sel.innerHTML = strategies.map((s) => `<option value="${escapeHtml(s)}">${escapeHtml(strategyOptionLabel(s))}</option>`).join("");
+    sel.innerHTML = strategyOptionsHtml(strategies);
     if (state.defaultStrategy && strategies.includes(state.defaultStrategy)) sel.value = state.defaultStrategy;
     labState.strategy = sel.value;
     renderLabParamFields();
