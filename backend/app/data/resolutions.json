@@ -3003,5 +3003,6 @@
     "at": 1792139857,
     "summary": "Nuova strategia 'Combined Reversal (Trend EMA + RSI+BB)': una posizione alla volta, entra con l'ingresso della Trend EMA Reversal o della RSI+BB reversal ed esce alla prima uscita delle due; solo long, ognuna con i suoi valori (i campi di entrambe nella stessa scheda), filtro BTC compreso. Non si ottimizza in automatico. Nel test sul 1D (35 coppie, filtro BTC settimanale): 2021 +102%, 2022 0%, 2023-26 +73% di mediana, circa 27 trade l'anno.",
     "detail": "strategies.COMBINED_REVERSAL = 'Combined reversal (long only)', compute_combined_reversal_signals (versione B di scripts/lowfit_1d.py MODE=combo); regime trend, sensitivity come Lorenzo; frontend campi Lorenzo + Gabriele, etichetta 'Combined Reversal (Trend EMA + RSI+BB)', non in OPTIMIZABLE_STRATEGIES."
-  }
+  },
+  "seed-0305": "Tendina English / Italiano nella barra in alto, a sinistra di Log in; l'inglese resta la lingua di base e la scelta resta salvata nel browser. La traduzione avviene su quello che il sito mostra (testi, suggerimenti, finestre di conferma), con un dizionario per lingua in frontend/static/i18n/<codice>.json (circa 800 frasi per l'italiano, piu' gli schemi per le frasi con numeri). Una frase non nel dizionario resta in inglese: basta aggiungerla al file. Una lingua nuova = un file JSON + una riga in LANGS in i18n.js. L'app on-chain non e' inclusa."
 }

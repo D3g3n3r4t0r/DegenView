@@ -6030,3 +6030,8 @@ html.embed-chart, html.embed-chart body, html.embed-chart .chart-area { backgrou
 .lab-return-side .lab-eq-from { font-size: 11px; opacity: .7; }
 .lab-rec-tag.hidden { display: none; }
 
+/* Language switch in the top bar (16/10) */
+.lang-select { font: inherit; font-size: 12px; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--border, rgba(127,127,127,.3));
+  background: transparent; color: inherit; margin-right: 8px; cursor: pointer; }
+@media (max-width: 640px) { .lang-select { font-size: 11px; padding: 3px 4px; margin-right: 4px; } }
+
