@@ -338,6 +338,64 @@ def run_pair_v3(sym, df):
     return res
 
 
+# ── logic (16/10): RSI and band, both or either ────────────────────────────
+# Lorenzo: "impostare che sia per entrare che per uscire basta solo uno dei
+# due parametri (RSI o BB)", then "Ok, proviamo". Entry and exit each need
+# both conditions on the same candle (the site's rule), either of them, or
+# (entry only) both within the last 3 candles. Defaults, and Max return
+# (20-40 x 65-85) chosen on 2023+.
+def _rsi_bb_logic(entry, exit_):
+    from app.analysis import btc_regime
+    from app.analysis.strategies import LKI_DEFAULT_PARAMS as D
+    from app.analysis.strategies import _wilder_rma
+
+    def fn(df, params=None):
+        p = {**D, **{k: v for k, v in (params or {}).items() if v is not None and k in D}}
+        close = df["close"]
+        delta = close.diff()
+        g = _wilder_rma(delta.clip(lower=0), p["rsi_length"])
+        lo = _wilder_rma(-delta.clip(upper=0), p["rsi_length"])
+        rsi = pd.Series(np.where(lo == 0, 100.0, np.where(g == 0, 0.0, 100 - 100 / (1 + g / lo.replace(0, np.nan)))), index=df.index)
+        basis = close.rolling(p["bb_length"]).mean()
+        dev = p["bb_mult"] * close.rolling(p["bb_length"]).std(ddof=0)
+        r_lo, b_lo = rsi < p["rsi_oversold"], close < basis - dev
+        r_hi, b_hi = rsi > p["rsi_overbought"], close > basis + dev
+        if entry == "and":
+            en = r_lo & b_lo
+        elif entry == "or":
+            en = r_lo | b_lo
+        else:   # both within the last 3 candles, the second one today
+            w = lambda x: x.astype(float).rolling(3, min_periods=1).max().astype(bool)  # noqa: E731
+            en = w(r_lo) & w(b_lo) & (r_lo | b_lo)
+        ex = (r_hi & b_hi) if exit_ == "and" else (r_hi | b_hi)
+        f = pd.Series(False, index=df.index)
+        sig = pd.DataFrame({"entry_long": en.fillna(False), "entry_short": f,
+                            "exit_long": ex.fillna(False), "exit_short": f}, index=df.index)
+        return btc_regime.apply(sig, params)
+    return fn
+
+
+LOGIC = (("AND_AND", "and", "and"), ("AND_OR", "and", "or"), ("OR_AND", "or", "and"),
+         ("OR_OR", "or", "or"), ("W3_OR", "w3", "or"))
+for _tag, _en, _ex in LOGIC:
+    env.STRATEGY_REGISTRY[f"RSI+BB {_tag} (test)"] = _rsi_bb_logic(_en, _ex)
+
+
+def run_pair_logic(sym, df):
+    train = df[df.index >= TRAIN_FROM]
+    tests = tests_of(df)
+    res = {"symbol": sym, "since": f"{df.index[0]:%Y-%m}",
+           "hold": {str(y): round((df[(df.index >= t0) & (df.index < t1)]["close"].iloc[-1]
+                                   / df[(df.index >= t0) & (df.index < t1)]["close"].iloc[0] - 1) * 100, 1)
+                    for y, t0, t1 in tests}, "m": {}}
+    for tag, _en, _ex in LOGIC:
+        strat = f"RSI+BB {tag} (test)"
+        res["m"][f"{tag}_def"] = judge(df, strat, dict(LKI_DEFAULT_PARAMS), tests, train)
+        _solid, _prof, best = solid_search(strat, train)
+        res["m"][f"{tag}_max"] = judge(df, strat, best, tests, train) if best else {"error": "none"}
+    return res
+
+
 # ── combo (16/10): Trend EMA Reversal + RSI+BB reversal as ONE strategy ────
 # Lorenzo: "inglobare i segnali di entrambe le strategie in un'unica
 # strategia [...] una strategia sola, che pero' ha piu' segnali di ingresso e
@@ -503,6 +561,10 @@ async def main():
     btc = df if sym == "BTCUSDT" else (await env.candles("BTCUSDT"))[1]
     btc_regime.set_closes(btc["close"], pin=True)
     mode = os.environ.get("MODE")
+    if mode == "logic":
+        res = run_pair_logic(sym, df)
+        print(f"::notice title={sym}::{line(res)} [{src}]")
+        return 0
     if mode == "combo":
         res = run_pair_combo(sym, df)
         print(f"::notice title={sym}::{line_combo(res)} [{src}]")
