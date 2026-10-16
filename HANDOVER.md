@@ -1,3 +1,7 @@
+# 2026-10-16 — Podio = primi tre della Top 25 — `seed-0321` (Claude, a mano)
+
+Lorenzo: "il podio in alto (top 3) dovrebbe rispecchiare anche l'ordine dei primi 3 posti nella Top25". Il podio usava `p4p` (arenas.py, distacco dalla mediana dell'arena in sigma); ora `top.js` usa `bestByScore(entries)` sia per `paintTop3` sia per `paintRank`. `p4p` resta nella risposta del server ma il frontend non lo usa piu'.
+
 # 2026-10-16 — Menu gemme riordinato, sezione Top 25, mercato DEX in tempo reale — `seed-0319`, `seed-0320` (Claude, a mano)
 
 Lorenzo: "Pearl spostala subito dopo Gems [...] una sezione Top (prima di Scout) [...] le migliori 25 gemme per punteggio [...] grafici sempre aggiornati con i dati dex, cosi' come la MarketCap". Ordine `VIEWS`/`DOCK`: gems, pearl, top (= Early), rank (= Top 25), agent, profile. Vista `rank` (`#rank-view`, `top.js paintRank`, `top.entries` per punteggio, 25). Mercato: `leaderboard.live_market_loop` (ogni 60 s, avviato in lifespan con il radar acceso, anche in modalita' notturna) -> `poll_live` legge DexScreener per bacheca + `_top_source(500)`, `apply_market` per la bacheca e `_live` per tutti; `_top_entries` usa `live()` per cap/variazione/pool delle righe database (i gate restano sui dati salvati). `detail.js`: `liveQuote`/`refreshLive` all'apertura e ogni minuto, `e.supply` = cap/prezzo per la scala del grafico. Test `test_live_market_reaches_the_top_s_database_rows`.
