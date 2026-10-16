@@ -283,7 +283,7 @@ export function openDetail(id, startTab) {
 // Desktop: the token lists (memes, gems, strategies) sit in a column with the
 // token page beside them; the other views (agent, profile, wallet, swap)
 // take the whole width, so the pane closes.
-const LIST_VIEWS = new Set(["meme", "top", "pearl", "rank"]);
+const LIST_VIEWS = new Set(["meme", "top", "rank"]);
 export function deskView(name) {
   document.documentElement.dataset.deskList = String(LIST_VIEWS.has(name));
   if (!isDesk()) return;
