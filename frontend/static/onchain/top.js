@@ -222,20 +222,33 @@ function marketSub(e) {
   return line || (e.liquidity_usd != null ? `Liquidity ${usdShort(e.liquidity_usd)}` : "");
 }
 
+// Pearl (Lorenzo, 16/10): "le gemme selezionate su Early che pero' hanno
+// ottenuto un punteggio pari o superiore a 70".
+const PEARL_MIN = 70;
+function earlyRow(e, context) {
+  const id = `gem:${e.chain}:${e.token_address}`;
+  register(id, { kind: "gem", symbol: e.symbol, name: e.name, chain: e.chain, token: e.token_address, pair: e.pair_address,
+    pairUrl: e.pair_url, image: e.image, cap: e.market_cap, change: e.change_24h != null ? e.change_24h / 100 : null,
+    ageTs: e.launched_at, context: `${context} · score ${Math.round(e.score ?? 0)}` });
+  return tokenRow({ id, symbol: e.symbol, name: e.name || e.symbol, chain: e.chain, token: e.token_address,
+    image: e.image, cap: e.market_cap, change: e.change_24h != null ? e.change_24h / 100 : null, ageTs: e.launched_at,
+    score: e.score, badge: "early", sub: marketSub(e) });
+}
+function paintPearl(list) {
+  const box = document.querySelector("[data-pearl-view]");
+  if (!box) return;
+  // the score as shown (rounded): a "70" on screen is always a pearl
+  const pearls = list.filter((e) => Math.round(e.score ?? 0) >= PEARL_MIN).sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+  box.querySelector("[data-pearl-empty]").hidden = pearls.length > 0;
+  box.querySelector("[data-pearl-rows]").innerHTML = pearls.map((e) => earlyRow(e, "Pearl")).join("");
+}
+
 // Its own view in the dock (Lorenzo, 07/10: "la sezione EARLY non la trovo").
 function paintEarly(list) {
   const box = document.querySelector("[data-early-view]");
   if (!box) return;
   box.querySelector("[data-early-empty]").hidden = list.length > 0;
-  box.querySelector("[data-early-rows]").innerHTML = list.map((e) => {
-    const id = `gem:${e.chain}:${e.token_address}`;
-    register(id, { kind: "gem", symbol: e.symbol, name: e.name, chain: e.chain, token: e.token_address, pair: e.pair_address,
-      pairUrl: e.pair_url, image: e.image, cap: e.market_cap, change: e.change_24h != null ? e.change_24h / 100 : null,
-      ageTs: e.launched_at, context: `Early · score ${Math.round(e.score ?? 0)}` });
-    return tokenRow({ id, symbol: e.symbol, name: e.name || e.symbol, chain: e.chain, token: e.token_address,
-      image: e.image, cap: e.market_cap, change: e.change_24h != null ? e.change_24h / 100 : null, ageTs: e.launched_at,
-      score: e.score, badge: "early", sub: marketSub(e) });
-  }).join("");
+  box.querySelector("[data-early-rows]").innerHTML = list.map((e) => earlyRow(e, "Early")).join("");
 }
 
 // The H24 lab's best backtest (strategy_lab.py), in the row: what the
@@ -261,6 +274,7 @@ async function load() {
     labStatus = top?.backtests ?? null;
     paint();
     paintEarly(top?.early ?? []);   // the board's own early list, never narrowed by narrative
+    paintPearl(top?.early ?? []);
   } catch {
     // Keep the last view; with none yet, the cube says the next poll retries.
     const w = root.querySelector(".top-wait");

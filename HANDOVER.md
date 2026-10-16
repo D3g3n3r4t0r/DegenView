@@ -1,3 +1,7 @@
+# 2026-10-16 — Sezione Pearl — `seed-0318` (Claude, a mano)
+
+Lorenzo: "una nuova sezione Pearl [...] le gemme selezionate su Early che pero' hanno ottenuto un punteggio pari o superiore a 70". Vista `pearl` (main.js `VIEWS`/`DOCK`, dock in onchain-app.html dopo Early, `#pearl-view`, shell.css la nasconde fuori vista, ui.js intro, classic.css titolo, detail.js `LIST_VIEWS`), `top.js paintPearl()` sulla stessa `top.early` con `PEARL_MIN = 70` sul punteggio arrotondato; `earlyRow()` condiviso con Early. `--dock-w` piu' largo per la quinta voce. Attenzione in locale: `ss` non c'e' in questa sandbox, il server va fermato con `kill <pid>` da `ps` — l'HTML on-chain e' letto all'avvio.
+
 # 2026-10-16 — Gemme: primi tre in alto, arene aperte, grafico al clic, punteggio allineato — `seed-0316`, `seed-0317` (Claude, a mano)
 
 Lorenzo, con screenshot della sezione gemme. `top.js`: `paintTop3()` mette i tre di `p4p` in `.tb-top3` nella `.topbar` (dopo `.tb-me`; nascosto sul login; sotto 1100 px riga propria), il podio grande `renderPodium` non si usa piu' li'; `listHtml()` elenca tutte le arene aperte in `.ar-grid` (via mosaico, `hive`, vista singola `only`). `detail.js`: `LIST_VIEWS` senza "gems" e `paneMode()` = desk e `data-desk-list` != false, quindi nelle gemme il token si apre come pagina modale (CSS in fondo ad `app.css`, `.dt-back` visibile). Punteggio: `/api/onchain/token` per le righe del database calcola `final_score` come `_top_entries` (VEIL 89 in arena, 73 in pagina: era il punteggio salvato). Test `test_the_token_page_shows_the_top_s_score`.

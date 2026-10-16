@@ -87,6 +87,7 @@ body :is(button, input, select, textarea) { font-family: var(--sans); }
 html:has(#app-shell[data-view="gems"]) .tb-me::before { content: "Gems"; }
 html:has(#app-shell[data-view="meme"]) .tb-me::before { content: "Signals"; }
 html:has(#app-shell[data-view="top"]) .tb-me::before { content: "Record"; }
+html:has(#app-shell[data-view="pearl"]) .tb-me::before { content: "Pearl"; }
 html:has(#app-shell[data-view="agent"]) .tb-me::before { content: "Scout"; }
 html:has(#app-shell[data-view="profile"]) .tb-me::before { content: "Profile"; }
 html:has(#app-shell[data-view="wallet"]) .tb-me::before { content: "Wallet"; }
