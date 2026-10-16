@@ -3048,5 +3048,10 @@
     "status": "risolto",
     "at": 1792183033,
     "summary": "Le due strategie non esistono piu' nemmeno nel codice: segnali, ricerca Max return a tre dimensioni del 4H (moltiplicatore 2.0-2.8), banda BTC settimanale, campi del Lab, confronto Claudio 4H contro RSI+BB 4H (script e workflow) e i loro test. Un alert gia' salvato su una delle due viene saltato in silenzio: prima sarebbe ricaduto sui segnali di Trend EMA con il nome sbagliato. Resta tutto il resto: Max return per RSI+BB Reversal e Long/Short, il filtro BTC, il livello 'Bull Market Support Band' sul grafico, l'ambiente di test 1D."
+  },
+  "seed-0314": {
+    "status": "risolto",
+    "at": 1792183309,
+    "summary": "Due cause. In alto la lista era larga quanto il campo di ricerca (stretto dopo la compattazione della barra, seed-0311): il nome della borsa, es. 'DexScreener (solana · pumpswap)', si prendeva tutto lo spazio e il pair spariva. Nel Lab la lista era calcolata rispetto a un pannello animato invece che allo schermo, e finiva oltre il bordo destro. Ora ogni lista di ricerca pair (barra in alto, Lab, watchlist, preferiti, ordini) si posiziona allo stesso modo: larga almeno 560 px, sempre dentro lo schermo, si apre sopra il campo se sotto non c'e' spazio, e le righe vanno a capo invece di tagliare. Provato a 900, 1280 e 1600 px con 10 risultati DexScreener e MEXC: nessun testo tagliato. Il pool di un pair DEX resta abbreviato (Pool…6789) come prima: l'indirizzo completo e' nel tooltip."
   }
 }

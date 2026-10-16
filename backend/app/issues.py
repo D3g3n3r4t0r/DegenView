@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0314", "Ricerca dei pair: risultati tagliati in alto e fuori schermo nel Lab",
+     "Lorenzo, 16/10, con due screenshot: 'i pair scompaiono, cioe' non appaiono tutti nella loro interezza, ma vengono troncati [...] nella sezione Lab [...] appaiono tutti sulla destra e non sono visualizzabili [...] vanno visti tutti nella loro interezza'.",
+     "media"),
     ("seed-0313", "Togliere dal codice le due strategie di prova (RSI+BB 4H, RSI+BB BTC band)",
      "Lorenzo, 16/10, dopo averle tolte dal Lab: 'Alleggerisci'.",
      "bassa"),
