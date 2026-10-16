@@ -377,15 +377,16 @@ env.STRATEGY_REGISTRY[COMBO_A] = lambda df, params=None: combo_events(df, "A", p
 env.STRATEGY_REGISTRY[COMBO_B] = lambda df, params=None: combo_events(df, "B", params)[0]
 
 
-def judge_combo(df, strat, tests, train):
-    bt = run_backtest(train, {}, BP, strategy_name=strat)
+def judge_combo(df, strat, tests, train, params=None):
+    params = params or {}
+    bt = run_backtest(train, params, BP, strategy_name=strat)
     row = {"train_simple": round(bt.simple_return_pct, 1), "train_comp": round(bt.total_return_pct, 1),
            "train_sdd": round(bt.simple_max_drawdown_pct or 0, 1), "train_dd": round(bt.max_drawdown_pct, 1),
            "train_tr": bt.num_trades, "p": {}, **mc(bt)}
     if strat in (COMBO_A, COMBO_B):
-        _, owners = combo_events(df, "A" if strat == COMBO_A else "B")
+        _, owners = combo_events(df, "A" if strat == COMBO_A else "B", params)
     for y, t0, t1 in tests:
-        tb = env.test_on(df, strat, {}, t0, t1)
+        tb = env.test_on(df, strat, params, t0, t1)
         cell = {"s": round(tb.simple_return_pct, 1), "c": round(tb.total_return_pct, 1),
                 "sdd": round(tb.simple_max_drawdown_pct or 0, 1), "dd": round(tb.max_drawdown_pct, 1),
                 "tr": tb.num_trades}
@@ -403,8 +404,14 @@ def run_pair_combo(sym, df):
            "hold": {str(y): round((df[(df.index >= t0) & (df.index < t1)]["close"].iloc[-1]
                                    / df[(df.index >= t0) & (df.index < t1)]["close"].iloc[0] - 1) * 100, 1)
                     for y, t0, t1 in tests}, "m": {}}
-    for tag, strat in (("LR", LREV), ("G", GAB), ("CA", COMBO_A), ("CB", COMBO_B)):
-        res["m"][tag] = judge_combo(df, strat, tests, train)
+    # 16/10, "Si" to the BTC filter on the combined ones: weekly EMA 21 (the
+    # site's), with and without closing the long when it turns off
+    BTC, BTCX = {"btc_filter": True}, {"btc_filter": True, "btc_filter_exit": True}
+    for tag, strat, prm in (("LR", LREV, {}), ("G", GAB, {}), ("CA", COMBO_A, {}), ("CB", COMBO_B, {}),
+                            ("LR_btc", LREV, BTC), ("G_btc", GAB, BTC),
+                            ("CA_btc", COMBO_A, BTC), ("CA_btcx", COMBO_A, BTCX),
+                            ("CB_btc", COMBO_B, BTC), ("CB_btcx", COMBO_B, BTCX)):
+        res["m"][tag] = judge_combo(df, strat, tests, train, prm)
     print(json.dumps(res["m"]), flush=True)
     return res
 
