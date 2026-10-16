@@ -503,8 +503,7 @@ LKI_DEFAULT_PARAMS = {
 
 
 def compute_lki_signals(df: pd.DataFrame, params: dict | None = None) -> pd.DataFrame:
-    # None = "not set": the strategy's own default stays (bb_mult is None in
-    # the shared query model, so RSI+BB 4H keeps its 2.5).
+    # None = "not set": the strategy's own default stays.
     p = {**LKI_DEFAULT_PARAMS, **{k: v for k, v in (params or {}).items() if v is not None}}
     close = df["close"]
 
@@ -551,18 +550,6 @@ def compute_lki_signals(df: pd.DataFrame, params: dict | None = None) -> pd.Data
 # Qui i parametri sono gli stessi, quindi una configurazione trovata per l'una
 # si porta sull'altra e le due si confrontano sugli stessi assi.
 LKI2_DEFAULT_PARAMS = dict(LKI_DEFAULT_PARAMS)
-
-# RSI+BB 4H (Lorenzo, 13/10): the long-only RSI+BB, same rules, with the
-# Bollinger multiplier at 2.5 by default — a 4h candle's 2-sigma band is
-# touched too often to mean an extreme.
-RSI_BB_4H = "RSI+BB 4H"
-LKI4H_DEFAULT_PARAMS = {**LKI_DEFAULT_PARAMS, "bb_mult": 2.5}
-
-
-def compute_lki4h_signals(df: pd.DataFrame, params: dict | None = None) -> pd.DataFrame:
-    return compute_lki_signals(df, {**LKI4H_DEFAULT_PARAMS,
-                                    **{k: v for k, v in (params or {}).items() if v is not None}})
-
 
 # ── Claudio 4H ──────────────────────────────────────────────────────────────
 # Lorenzo, 15/10: "sviluppare una strategia 'Claudio' tutta tua adatta al
@@ -805,41 +792,6 @@ def compute_combined_reversal_signals(df: pd.DataFrame, params: dict | None = No
                          "exit_long": exit_, "exit_short": false}, index=df.index)
 
 
-RSI_BB_BTC_BAND = "RSI+BB BTC band (long only)"
-RSI_BB_BAND_DEFAULT_PARAMS = {k: v for k, v in LKI_DEFAULT_PARAMS.items() if k != "rsi_overbought"}
-
-
-def compute_rsi_bb_band_signals(df: pd.DataFrame, params: dict | None = None) -> pd.DataFrame:
-    """Lorenzo, 16/10: the RSI+BB reversal makes too few trades; "basta solo
-    uno dei due parametri (RSI o BB)", then the Bull Market Band, then "Si,
-    aggiungila al sito". Long only. While BTC's last closed week is above its
-    Bull Market Support Band (weekly SMA 20 and EMA 21) either condition opens
-    a long — RSI under oversold OR close under the lower band; below it, both
-    are needed, as in the RSI+BB reversal. Out when the close is back above
-    the middle band. Test environment (scripts/lowfit_1d.py MODE=mid, 35
-    pairs, 1D, defaults): median simple return 2023-26 +36% (29/35 positive),
-    2021 +28% (26/32), 2022 +8% (23/35), ~3 trades a year — the only RSI+BB
-    variant positive in all three; RSI+BB reversal +35 / 0 / -44, 1 a year."""
-    p = {**RSI_BB_BAND_DEFAULT_PARAMS, **{k: v for k, v in (params or {}).items()
-                                          if v is not None and k in RSI_BB_BAND_DEFAULT_PARAMS}}
-    close = df["close"]
-    delta = close.diff()
-    avg_gain = _wilder_rma(delta.clip(lower=0), p["rsi_length"])
-    avg_loss = _wilder_rma(-delta.clip(upper=0), p["rsi_length"])
-    raw_rsi = 100 - (100 / (1 + avg_gain / avg_loss.replace(0, np.nan)))
-    rsi = pd.Series(np.where(avg_loss == 0, 100.0, np.where(avg_gain == 0, 0.0, raw_rsi)), index=df.index)
-    basis = close.rolling(p["bb_length"]).mean()
-    lower = basis - p["bb_mult"] * close.rolling(p["bb_length"]).std(ddof=0)
-    oversold = (rsi < p["rsi_oversold"]).to_numpy(dtype=bool)
-    under = (close < lower).to_numpy(dtype=bool)
-    up = btc_regime.band_mask(df.index)
-    entry = (up & (oversold | under)) | (~up & oversold & under)
-    false = np.zeros(len(df), dtype=bool)
-    return pd.DataFrame({"entry_long": entry, "entry_short": false,
-                         "exit_long": (close > basis).to_numpy(dtype=bool), "exit_short": false},
-                        index=df.index)
-
-
 def compute_lki2_signals(df: pd.DataFrame, params: dict | None = None) -> pd.DataFrame:
     base = compute_lki_signals(df, params)
     # L'uscita long dell'originale e' la condizione di ipercomprato: qui apre
@@ -867,8 +819,6 @@ STRATEGY_REGISTRY = {
     "Accumulo / Distribuzione (long-term)": compute_exhaustion_signals,
     "Gabriele (RSI+BB reversal)": compute_lki_signals,
     "Gabriele 2 (RSI+BB long/short)": compute_lki2_signals,
-    RSI_BB_4H: compute_lki4h_signals,
-    RSI_BB_BTC_BAND: compute_rsi_bb_band_signals,
     CLAUDIO_4H: compute_claudio_signals,
     CLAUDIO_TREND_4H: compute_claudio_trend_signals,
     CLAUDIO_1D: compute_claudio_1d_signals,
@@ -891,9 +841,8 @@ STRATEGY_REGISTRY = {name: _with_btc_filter(fn) for name, fn in STRATEGY_REGISTR
 # Registered (backtests and the comparison script can run them) but not
 # offered in the menus or alerts until Lorenzo has seen the real-data
 # comparison (15/10: "prima di renderla operativa"). RSI+BB 4H and RSI+BB BTC
-# band were trials (Lorenzo, 16/10: "non le utilizziamo [...] erano delle
-# prove"): out of the menus, still registered so saved alerts keep running.
-HIDDEN_STRATEGIES = {CLAUDIO_4H, CLAUDIO_TREND_4H, CLAUDIO_1D, RSI_BB_4H, RSI_BB_BTC_BAND}
+# band were trials and are gone (Lorenzo, 16/10: "erano delle prove").
+HIDDEN_STRATEGIES = {CLAUDIO_4H, CLAUDIO_TREND_4H, CLAUDIO_1D}
 AVAILABLE_STRATEGIES = [k for k in STRATEGY_REGISTRY if k not in HIDDEN_STRATEGIES]
 DEFAULT_STRATEGY = AVAILABLE_STRATEGIES[0]
 

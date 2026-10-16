@@ -17,7 +17,7 @@ from app.config import settings
 
 @pytest.fixture(autouse=True)
 def _btc():
-    """RSI+BB BTC band reads BTC's weekly band: a BTC that rises and falls."""
+    """BTC for the BTC filter: a BTC that rises and falls."""
     idx = pd.date_range("2019-01-01", "2024-12-31", freq="D", tz="UTC")
     btc_regime.set_closes(pd.Series(30_000 + 15_000 * np.sin(np.arange(len(idx)) / 120), index=idx), pin=True)
     yield

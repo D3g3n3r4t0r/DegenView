@@ -462,7 +462,7 @@ def build_spaces(
     if strategy_name in ("Lorenzo (trend-follower)", "Lorenzo reversal (long only)"):
         return [_lorenzo_space(stats, tf, vf)
                 for tf in (False, True) for vf in (False, True)]
-    if strategy_name in ("Gabriele (RSI+BB reversal)", "Gabriele 2 (RSI+BB long/short)", "RSI+BB 4H"):
+    if strategy_name in ("Gabriele (RSI+BB reversal)", "Gabriele 2 (RSI+BB long/short)"):
         return [_gabriele_space(stats, target_entries, strategy_name, locked)]
     if strategy_name == "Accumulo / Distribuzione (long-term)":
         return [_exhaustion_space(stats)]

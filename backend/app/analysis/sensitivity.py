@@ -202,8 +202,6 @@ PARAM_SPACES: dict[str, ParamSpace] = {
     "Combined reversal (long only)": ParamSpace(tuple(_LORENZO_DIMS), _lorenzo),
     "Gabriele (RSI+BB reversal)": ParamSpace(tuple(_GABRIELE_DIMS), _gabriele),
     "Gabriele 2 (RSI+BB long/short)": ParamSpace(tuple(_GABRIELE_DIMS), _gabriele),
-    "RSI+BB 4H": ParamSpace(tuple(_GABRIELE_DIMS), _gabriele),
-    "RSI+BB BTC band (long only)": ParamSpace(tuple(_GABRIELE_DIMS), _gabriele),
     "Claudio 4H": ParamSpace(tuple(_CLAUDIO_DIMS), _claudio),
     "Claudio Trend 4H": ParamSpace(tuple(_CLAUDIO_TREND_DIMS), _claudio_trend),
     "Claudio 1D": ParamSpace(tuple(_CLAUDIO_1D_DIMS), _claudio_1d),

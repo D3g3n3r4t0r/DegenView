@@ -187,7 +187,7 @@ def test_chart_returns_candles_and_long_events_per_strategy(client, monkeypatch)
         return _series()
     monkeypatch.setattr(radar.DexScreenerProvider, "fetch_ohlcv", fake_ohlcv)
     radar._chart_cache.clear()
-    # RSI+BB BTC band reads BTC's weekly band (16/10)
+    # BTC for the BTC filter, whatever the strategy
     days = pd.date_range("2018-01-01", periods=3000, freq="D", tz="UTC")
     btc_regime.set_closes(pd.Series(np.linspace(5_000, 60_000, len(days)), index=days), pin=True)
     body = client.get("/api/onchain/radar/chart",
