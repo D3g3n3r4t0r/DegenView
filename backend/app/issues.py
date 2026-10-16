@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0305", "Lingue del sito: inglese di base, italiano dalla tendina in alto",
+     "Lorenzo, 16/10: 'Attualmente e' impostato tutto in inglese e va bene, deve essere la modalita' standard. Pero' ci deve essere anche la possibilita' di selezionare nella barra in alto sul sito una tendina che ti permette di cambiare lingua [...] solo l'italiano [...] con la possibilita' poi di aggiungere anche altre lingue successivamente'.",
+     "media"),
     ("seed-0304", "Strategia combinata Trend EMA Reversal + RSI+BB reversal",
      "Lorenzo, 16/10: 'inglobare i segnali di entrambe le strategie in un'unica strategia [...] una strategia sola, che pero' ha piu' segnali di ingresso e piu' segnali di uscita', poi 'aggiungi anche la combinata, potrebbe essere utile comunque per fare anche ulteriori confronti'.",
      "media"),
