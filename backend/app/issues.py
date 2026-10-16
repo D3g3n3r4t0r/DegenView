@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0318", "Nuova sezione Pearl: le gemme di Early con punteggio da 70 in su",
+     "Lorenzo, 16/10: 'Crea una nuova sezione Pearl in cui inserire le gemme selezionate su Early che pero' hanno ottenuto un punteggio pari o superiore a 70'.",
+     "media"),
     ("seed-0317", "Gemme: punteggio diverso fra arena e pagina del token (VEIL 89 / 73)",
      "Lorenzo, 16/10: 'Veil, che ha un punteggio di 89 nella classifica della narrativa della privacy, ma [...] cliccando sul token [...] il rank e' diverso, da un punteggio di 73. Bisogna capire come mai c'e' questa discrepanza e modificarla'.",
      "alta"),

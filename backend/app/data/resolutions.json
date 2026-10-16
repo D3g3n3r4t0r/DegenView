@@ -3068,5 +3068,10 @@
     "status": "risolto",
     "at": 1792185953,
     "summary": "Causa: VEIL non e' sulla bacheca, entra nella Top dal database. Per la Top e le arene il punteggio di queste righe viene ricalcolato con la formula di oggi (uso, partecipazione, prodotto, token, lettura di DeepSeek): 89. La pagina del token invece mostrava il punteggio salvato all'ultima analisi, con la formula di allora: 73. Ora la pagina usa lo stesso calcolo della Top, quindi i due numeri coincidono (test che lo verifica). Per i token della bacheca coincidevano gia'."
+  },
+  "seed-0318": {
+    "status": "risolto",
+    "at": 1792186756,
+    "summary": "Nuova voce Pearl nel menu (dopo Early, icona a perla): la lista Early filtrata alle gemme con punteggio di almeno 70, dalla piu' alta. Il punteggio confrontato e' quello mostrato (arrotondato), quindi un '70' sullo schermo e' sempre in Pearl. Stessa fonte e stesso aggiornamento di Early (la lista del board, ricerca notturna); su desktop il token si apre nel pannello a lato come in Early. Se nessuna gemma Early arriva a 70 la sezione lo dice. Raggiungibile anche con il link #pearl."
   }
 }
