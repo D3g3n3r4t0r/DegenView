@@ -107,6 +107,7 @@
     let label = head;
     if (/^Lorenzo HF\b/.test(head)) label = "Trend HF";
     else if (/^Lorenzo reversal\b/.test(head)) label = "Trend EMA Reversal";
+    else if (/^Combined reversal\b/.test(head)) label = "Combined Reversal (Trend EMA + RSI+BB)";
     else if (/^Lorenzo\b/.test(head)) label = "Trend EMA";
     else if (/^Gabriele 2\b/.test(head)) label = "RSI+BB Long/Short";
     else if (/^Gabriele\b/.test(head)) label = "RSI+BB Reversal";
@@ -323,6 +324,12 @@
   // values, only it never shorts (the short signal closes the long).
   STRATEGY_PARAM_FIELDS["Lorenzo reversal (long only)"] =
     STRATEGY_PARAM_FIELDS["Lorenzo (trend-follower)"].map((f) => ({ ...f }));
+  // Combined Reversal (16/10): both strategies' own fields, which never share
+  // a name; one position, in on either entry, out at the first exit.
+  STRATEGY_PARAM_FIELDS["Combined reversal (long only)"] = [
+    ...STRATEGY_PARAM_FIELDS["Lorenzo (trend-follower)"],
+    ...STRATEGY_PARAM_FIELDS["Gabriele (RSI+BB reversal)"],
+  ].map((f) => ({ ...f }));
 
   // BTC filter (Lorenzo, 15/10: "il filtro Btc [...] da attivare/disattivare
   // su tutte le strategie"): no long entry while BTC's last closed week is

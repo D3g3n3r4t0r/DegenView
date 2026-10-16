@@ -775,6 +775,36 @@ def compute_lorenzo_reversal_signals(df: pd.DataFrame, params: dict | None = Non
                          "exit_long": sig["exit_long"], "exit_short": none}, index=sig.index)
 
 
+COMBINED_REVERSAL = "Combined reversal (long only)"
+
+
+def compute_combined_reversal_signals(df: pd.DataFrame, params: dict | None = None) -> pd.DataFrame:
+    """Lorenzo, 16/10: "inglobare i segnali di entrambe le strategie in
+    un'unica strategia [...] che pero' ha piu' segnali di ingresso e piu'
+    segnali di uscita", then "aggiungi anche la combinata". Trend EMA Reversal
+    and RSI+BB reversal, each with its own values: one position at a time,
+    in on the entry of either, out at the first exit of either (version B of
+    the test environment — scripts/lowfit_1d.py, MODE=combo: ~3x the trades
+    of Trend EMA Reversal, more uniform across pairs, higher drawdown). Long
+    only. Their params do not overlap, so one dict carries both."""
+    lo = compute_lorenzo_reversal_signals(df, params)
+    ga = compute_lki_signals(df, params)
+    le, lx = lo["entry_long"].to_numpy(dtype=bool), lo["exit_long"].to_numpy(dtype=bool)
+    ge, gx = ga["entry_long"].to_numpy(dtype=bool), ga["exit_long"].to_numpy(dtype=bool)
+    n = len(df)
+    entry, exit_ = np.zeros(n, dtype=bool), np.zeros(n, dtype=bool)
+    in_pos = False
+    for i in range(n):
+        if not in_pos:
+            if le[i] or ge[i]:
+                entry[i], in_pos = True, True
+        elif lx[i] or gx[i]:
+            exit_[i], in_pos = True, False
+    false = np.zeros(n, dtype=bool)
+    return pd.DataFrame({"entry_long": entry, "entry_short": false,
+                         "exit_long": exit_, "exit_short": false}, index=df.index)
+
+
 def compute_lki2_signals(df: pd.DataFrame, params: dict | None = None) -> pd.DataFrame:
     base = compute_lki_signals(df, params)
     # L'uscita long dell'originale e' la condizione di ipercomprato: qui apre
@@ -798,6 +828,7 @@ def compute_lki2_signals(df: pd.DataFrame, params: dict | None = None) -> pd.Dat
 STRATEGY_REGISTRY = {
     "Lorenzo (trend-follower)": compute_signals,
     LORENZO_REVERSAL: compute_lorenzo_reversal_signals,
+    COMBINED_REVERSAL: compute_combined_reversal_signals,
     "Accumulo / Distribuzione (long-term)": compute_exhaustion_signals,
     "Gabriele (RSI+BB reversal)": compute_lki_signals,
     "Gabriele 2 (RSI+BB long/short)": compute_lki2_signals,
