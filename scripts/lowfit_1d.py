@@ -385,7 +385,7 @@ def _rsi_bb_logic(entry, exit_):
         else:   # both within the last 3 candles, the second one today
             w = lambda x: x.astype(float).rolling(3, min_periods=1).max().astype(bool)  # noqa: E731
             en = w(r_lo) & w(b_lo) & (r_lo | b_lo)
-        ex = (r_hi & b_hi) if exit_ == "and" else (r_hi | b_hi)
+        ex = (r_hi & b_hi) if exit_ == "and" else (close > basis) if exit_ == "mid" else (r_hi | b_hi)
         f = pd.Series(False, index=df.index)
         sig = pd.DataFrame({"entry_long": en.fillna(False), "entry_short": f,
                             "exit_long": ex.fillna(False), "exit_short": f}, index=df.index)
@@ -400,7 +400,12 @@ LOGIC = (("AND_AND", "and", "and"), ("AND_OR", "and", "or"), ("OR_AND", "or", "a
 LOGIC_BAND = (("AND_AND", "and", "and"), ("AND_OR", "and", "or"), ("OR_OR", "or", "or"),
               ("BAND_PAIR", "band_pair", "or"), ("BAND_BTC", "band_btc", "or"),
               ("BAND_PAIR_OFF", "band_pair_off", "or"))
-for _tag, _en, _ex in LOGIC + LOGIC_BAND:
+# 16/10, third run (Lorenzo: "Si, prova"): the same entries, exit when the
+# close is back above the middle band.
+LOGIC_MID = (("AND_AND", "and", "and"), ("AND_OR", "and", "or"), ("BAND_BTC", "band_btc", "or"),
+             ("AND_MID", "and", "mid"), ("OR_MID", "or", "mid"),
+             ("BAND_PAIR_MID", "band_pair", "mid"), ("BAND_BTC_MID", "band_btc", "mid"))
+for _tag, _en, _ex in LOGIC + LOGIC_BAND + LOGIC_MID:
     env.STRATEGY_REGISTRY[f"RSI+BB {_tag} (test)"] = _rsi_bb_logic(_en, _ex)
 
 
@@ -411,7 +416,7 @@ def run_pair_logic(sym, df):
            "hold": {str(y): round((df[(df.index >= t0) & (df.index < t1)]["close"].iloc[-1]
                                    / df[(df.index >= t0) & (df.index < t1)]["close"].iloc[0] - 1) * 100, 1)
                     for y, t0, t1 in tests}, "m": {}}
-    for tag, _en, _ex in (LOGIC_BAND if os.environ.get("MODE") == "band" else LOGIC):
+    for tag, _en, _ex in ({"band": LOGIC_BAND, "mid": LOGIC_MID}.get(os.environ.get("MODE"), LOGIC)):
         strat = f"RSI+BB {tag} (test)"
         res["m"][f"{tag}_def"] = judge(df, strat, dict(LKI_DEFAULT_PARAMS), tests, train)
         _solid, _prof, best = solid_search(strat, train)
@@ -586,7 +591,7 @@ async def main():
     mode = os.environ.get("MODE")
     global BTC_CLOSE
     BTC_CLOSE = btc["close"]
-    if mode in ("logic", "band"):
+    if mode in ("logic", "band", "mid"):
         res = run_pair_logic(sym, df)
         print(f"::notice title={sym}::{line(res)} [{src}]")
         return 0
