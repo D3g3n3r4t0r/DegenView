@@ -96,12 +96,12 @@ serve (`grep -n "^### "`), non tutto il file.
 
 ## Minuti GitHub Actions (16/10)
 
-Il piano ha 3.000 minuti al mese, finiti il 16/10: dal 27/09 ~1.870 min
-sono andati all'ambiente di test (`claudio-folds.yml`, `lowfit.yml`, chiesto
-da whitekobra, non da Lorenzo), ~1.370 al deploy. Ogni job si paga
-arrotondato al minuto. Prima di lanciare un workflow a richiesta dell'ambiente
-di test, di' quanti minuti costa (~15-25 per run dopo #533) e non lanciarne
-piu' di uno per domanda; mai job per singola coppia.
+Il 16/10 i 3.000 minuti del piano privato sono finiti (ambiente di test
+chiesto da whitekobra ~1.870 min, deploy ~1.370) e GitHub ha fermato anche
+il deploy. Lorenzo ha reso il repo **pubblico**: le Actions ora sono gratis.
+Quindi niente segreti nel repo, mai (chiavi solo nei Secrets di GitHub o nel
+`.env` del server). I tagli di #533/#534 restano: job raggruppati, niente
+job per singola coppia.
 
 ## Cose misurate, da non riderivare
 
