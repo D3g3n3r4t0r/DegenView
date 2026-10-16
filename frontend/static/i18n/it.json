@@ -796,7 +796,18 @@
   "No": "No",
   "Entry $": "Ingresso $",
   "Exit $": "Uscita $",
-  "P&L $": "P&L $"
+  "P&L $": "P&L $",
+  "Trend follower, long only: buys when the slope of the average turns up, sells when it turns down. Best result in the 1D test with the BTC filter on (median of 35 pairs: 2021 +136%, 2022 0%, 2023–26 +67%).": "Trend follower, solo long: compra quando la pendenza della media gira verso l'alto, vende quando gira verso il basso. Miglior risultato nel test 1D con il filtro BTC acceso (mediana di 35 coppie: 2021 +136%, 2022 0%, 2023–26 +67%).",
+  "Buys dips, long only. With BTC above its Bull Market Band either RSI oversold or a close under the lower band is enough; below it both are needed. Sells back at the middle band. 1D test, median of 35 pairs: 2021 +28%, 2022 +8%, 2023–26 +36%, about 3 trades a year.": "Compra i cali, solo long. Con BTC sopra la sua Bull Market Band basta RSI in ipervenduto oppure una chiusura sotto la banda inferiore; sotto la banda servono entrambi. Rivende alla banda centrale. Test 1D, mediana di 35 coppie: 2021 +28%, 2022 +8%, 2023–26 +36%, circa 3 trade l'anno.",
+  "Trend follower, long and short: the slope of the average turning up opens a long, turning down flips to a short.": "Trend follower, long e short: la pendenza della media che gira verso l'alto apre un long, verso il basso lo ribalta in short.",
+  "Buys extremes, long only: RSI oversold and a close under the lower band on the same candle; sells when RSI is overbought and the close is over the upper band. Few trades on 1D (about 1 a year).": "Compra gli estremi, solo long: RSI in ipervenduto e chiusura sotto la banda inferiore nella stessa candela; vende con RSI in ipercomprato e chiusura sopra la banda superiore. Pochi trade sul 1D (circa 1 l'anno).",
+  "Trend EMA Reversal and RSI+BB Reversal in one position: in on either entry, out at the first exit. About 3× the trades of Trend EMA Reversal, with a higher drawdown.": "Trend EMA Reversal e RSI+BB Reversal in una sola posizione: entra con l'ingresso di una delle due, esce alla prima uscita. Circa il triplo dei trade della Trend EMA Reversal, con drawdown più alto.",
+  "RSI+BB both ways: the overbought signal opens a short instead of only closing the long.": "RSI+BB nei due sensi: il segnale di ipercomprato apre uno short invece di chiudere soltanto il long.",
+  "RSI+BB Reversal for 4-hour candles, Bollinger multiplier 2.5. Experimental.": "RSI+BB Reversal per candele a 4 ore, moltiplicatore di Bollinger 2,5. Sperimentale.",
+  "Counter-trend: RSI divergences at swing lows and highs, range breakouts and bounces off the range support. Holds until the opposite signal.": "Contro-trend: divergenze RSI su minimi e massimi, rotture di range e rimbalzi sul supporto del range. Tiene la posizione fino al segnale opposto.",
+  "Trend follower for minute candles of on-chain tokens.": "Trend follower per le candele al minuto dei token on-chain.",
+  "★ Use recommended settings": "★ Usa le impostazioni consigliate",
+  "✓ Recommended settings applied": "✓ Impostazioni consigliate applicate"
  },
  "patterns": [
   [
@@ -858,6 +869,22 @@
   [
    "^(.+) · (.+) · (.+) · (\\d+) candles · same values$",
    "$1 · $2 · $3 · $4 candele · stessi valori"
+  ],
+  [
+   "^BTC above its weekly EMA 21 since (\\S+): the BTC filter lets longs in\\.$",
+   "BTC sopra la sua EMA 21 settimanale dal $1: il filtro BTC lascia entrare i long."
+  ],
+  [
+   "^BTC below its weekly EMA 21 since (\\S+): the BTC filter blocks new longs\\.$",
+   "BTC sotto la sua EMA 21 settimanale dal $1: il filtro BTC blocca i nuovi long."
+  ],
+  [
+   "^BTC above its Bull Market Band since (\\S+): RSI\\+BB BTC band enters on either condition\\.$",
+   "BTC sopra la sua Bull Market Band dal $1: la RSI+BB BTC band entra con una delle due condizioni."
+  ],
+  [
+   "^BTC below its Bull Market Band since (\\S+): RSI\\+BB BTC band needs both conditions\\.$",
+   "BTC sotto la sua Bull Market Band dal $1: la RSI+BB BTC band chiede entrambe le condizioni."
   ]
  ]
 }
