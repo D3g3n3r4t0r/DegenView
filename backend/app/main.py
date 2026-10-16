@@ -1530,6 +1530,10 @@ async def lifespan(app: FastAPI):
     }
     radar_tasks = [asyncio.create_task(research[name]()) for name in
                    onchain_nightly.loop_plan(settings.onchain_radar_enabled, settings.onchain_nightly_enabled)]
+    # The Top's market from DexScreener every minute, also when the research
+    # sleeps until the night (Lorenzo, 16/10).
+    if settings.onchain_radar_enabled:
+        radar_tasks.append(asyncio.create_task(onchain_leaderboard.live_market_loop()))
     yield
     await http_client.aclose()
     t1.cancel()
@@ -3808,10 +3812,13 @@ def _top_entries(n: int = 50, narrative: str = "") -> list[dict]:
             if mcap is None or not (onchain_layers.LAYER_CAP_MIN <= mcap <= onchain_layers.LAYER_CAP_MAX):
                 continue
         seen.add(key)
-        out.append({"chain": row["chain"], "token_address": row["token"], "pair_address": pair_address,
-                    "pair_url": None,
+        # The market of the last minute (live_market_loop), the analysis' one otherwise.
+        lv = onchain_leaderboard.live(row["chain"], row["token"]) or {}
+        out.append({"chain": row["chain"], "token_address": row["token"],
+                    "pair_address": pair_address or lv.get("pair_address"), "pair_url": lv.get("pair_url"),
                     "symbol": row.get("symbol"), "name": row.get("name"), "image": row.get("image"),
-                    "market_cap": row.get("mcap"), "liquidity_usd": row.get("liq"), "change_24h": None,
+                    "market_cap": lv.get("market_cap") or row.get("mcap"),
+                    "liquidity_usd": lv.get("liquidity_usd") or row.get("liq"), "change_24h": lv.get("change_24h"),
                     "launched_at": row.get("launched_at"), "score": score, "early": None, "on_board": False,
                     "hidden": hidden, "usage": onchain_leaderboard.usage.latest(row["chain"], row["token"]),
                     "blocks": blocks, "narratives": sorted(_narr_now(row))})

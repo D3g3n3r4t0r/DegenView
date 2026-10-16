@@ -1690,3 +1690,72 @@ async def leaderboard_loop() -> None:
 
 
 _load()
+
+
+# ── Live market of the Top (Lorenzo, 16/10: "i grafici sempre aggiornati
+# con i dati dex, cosi' come la MarketCap") ───────────────────────────────
+# Since the research runs only at night (nightly.py) the board's own market
+# poll (tick -> _poll_market) ran only then too, and the database rows of the
+# Top kept the cap of their last analysis. This loop runs around the clock,
+# research or not: once a minute every token of the Top (board and database
+# rows) is read from DexScreener; board entries get it through apply_market,
+# everything is kept in _live for _top_entries. Display only: the gates still
+# judge the stored figures, so a minute's move never reshuffles the arenas.
+LIVE_MARKET_S = 60
+LIVE_TOP_N = 500
+_live: dict[str, dict] = {}
+
+
+def live(chain: str, token: str, max_age_s: float = 15 * 60) -> dict | None:
+    """The token's DexScreener market of the last minutes, or None."""
+    x = _live.get(_key(chain, token).lower())
+    return x if x and time.time() - x["at"] <= max_age_s else None
+
+
+def apply_live(pairs: list[dict], now: float | None = None) -> int:
+    """The deepest pool of each token in a DexScreener /tokens answer."""
+    now = now or time.time()
+    best: dict[str, dict] = {}
+    for p in pairs or []:
+        k = _key(p.get("chainId") or "", (p.get("baseToken") or {}).get("address") or "").lower()
+        if k not in best or float((p.get("liquidity") or {}).get("usd") or 0) > \
+                float((best[k].get("liquidity") or {}).get("usd") or 0):
+            best[k] = p
+    for k, p in best.items():
+        cap = p.get("marketCap") or p.get("fdv")
+        _live[k] = {"market_cap": float(cap) if cap else None, "price_usd": p.get("priceUsd"),
+                    "liquidity_usd": float((p.get("liquidity") or {}).get("usd") or 0),
+                    "change_24h": (p.get("priceChange") or {}).get("h24"), "pair_url": p.get("url"),
+                    "pair_address": p.get("pairAddress"), "at": now}
+    return len(best)
+
+
+async def poll_live(client: httpx.AsyncClient, now: float | None = None) -> int:
+    from app.trading.onchain import layers
+    keys = {(e["chain"], e["token_address"]) for e in _entries.values()}
+    if _top_source is not None:
+        keys |= {(t["chain"], t["token_address"]) for t in _top_source(LIVE_TOP_N)}
+    by_chain: dict[str, list[str]] = {}
+    for chain, token in keys:
+        if chain and token and chain != layers.CHAIN:
+            by_chain.setdefault(chain, []).append(token)
+    n = 0
+    for chain, tokens in by_chain.items():
+        for i in range(0, len(tokens), 30):
+            r = await client.get(DEX_TOKENS.format(chain=chain, addresses=",".join(tokens[i:i + 30])), timeout=10.0)
+            if r.status_code == 200 and isinstance(r.json(), list):
+                apply_market(r.json())
+                n += apply_live(r.json(), now)
+            await asyncio.sleep(0.25)
+    return n
+
+
+async def live_market_loop() -> None:
+    await asyncio.sleep(START_DELAY_S)
+    async with httpx.AsyncClient(timeout=10.0, headers={"User-Agent": "Mozilla/5.0 (LiquidityEngine)"}) as client:
+        while True:
+            try:
+                await poll_live(client)
+            except Exception:
+                logger.exception("classifica: mercato in tempo reale non letto")
+            await asyncio.sleep(LIVE_MARKET_S)

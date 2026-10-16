@@ -243,6 +243,26 @@ function paintPearl(list) {
   box.querySelector("[data-pearl-rows]").innerHTML = pearls.map((e) => earlyRow(e, "Pearl")).join("");
 }
 
+// Top (Lorenzo, 16/10): "classificare le migliori 25 gemme per punteggio
+// rank" — the Top's entries (board and database rows, gated), by score.
+const RANK_N = 25;
+function paintRank(entries) {
+  const box = document.querySelector("[data-rank-view]");
+  if (!box) return;
+  const best = entries.filter((e) => !isHidden(e.chain, e.token_address))
+    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).slice(0, RANK_N);
+  box.querySelector("[data-rank-empty]").hidden = best.length > 0;
+  box.querySelector("[data-rank-rows]").innerHTML = best.map((e, i) => {
+    const id = idOf(e);
+    register(id, { kind: "gem", symbol: e.symbol, name: e.name, chain: e.chain, token: e.token_address, pair: e.pair_address,
+      pairUrl: e.pair_url, image: e.image, cap: e.market_cap, change: e.change_24h != null ? e.change_24h / 100 : null,
+      ageTs: e.launched_at, rank: i + 1, context: `Top 25 · #${i + 1} · score ${Math.round(e.score ?? 0)}` });
+    return tokenRow({ id, symbol: e.symbol, name: `${i + 1}. ${e.name || e.symbol}`, chain: e.chain, token: e.token_address,
+      image: e.image, cap: e.market_cap, change: e.change_24h != null ? e.change_24h / 100 : null, ageTs: e.launched_at,
+      score: e.score, badge: e.early ? "early" : e.hidden ? "hidden" : null, sub: marketSub(e) });
+  }).join("");
+}
+
 // Its own view in the dock (Lorenzo, 07/10: "la sezione EARLY non la trovo").
 function paintEarly(list) {
   const box = document.querySelector("[data-early-view]");
@@ -275,6 +295,7 @@ async function load() {
     paint();
     paintEarly(top?.early ?? []);   // the board's own early list, never narrowed by narrative
     paintPearl(top?.early ?? []);
+    paintRank(top?.entries ?? []);
   } catch {
     // Keep the last view; with none yet, the cube says the next poll retries.
     const w = root.querySelector(".top-wait");

@@ -756,3 +756,39 @@ def test_the_token_page_shows_the_top_s_score(monkeypatch):
     top = next(e for e in m._top_entries(10) if e["symbol"] == "OKP")
     page = asyncio.run(m.onchain_token("solana", "OKmint", user=User.model_construct(id="u", email="x@y.z")))
     assert page["entry"]["score"] == top["score"] != 12
+
+
+def test_live_market_reaches_the_top_s_database_rows(monkeypatch):
+    # Lorenzo, 16/10: "la MarketCap" always up to date — the research runs
+    # at night only, so the Top's market is read every minute on its own.
+    import asyncio
+    import app.main as m
+    now = time.time()
+    row = {"chain": "solana", "token": "OKmint", "symbol": "OKP", "name": "Ok Project", "mcap": 450_000,
+           "score": 70, "analyzed_at": now}
+    monkeypatch.setattr(m.onchain_projects_db, "search", lambda **kw: {"items": [row]})
+    monkeypatch.setattr(m.onchain_judge, "get", lambda *a: None)
+    monkeypatch.setattr(lb, "_top_source", m._top_entries)
+    asked = []
+
+    class _Resp:
+        status_code = 200
+        def json(self):
+            return [{"chainId": "solana", "baseToken": {"address": "OKmint"}, "marketCap": 612_000,
+                     "priceUsd": "0.0061", "liquidity": {"usd": 90_000}, "priceChange": {"h24": 12.5},
+                     "url": "https://dexscreener.com/solana/okpool", "pairAddress": "okpool"}]
+
+    class _Client:
+        async def get(self, url, timeout=None):
+            asked.append(url)
+            return _Resp()
+    real_sleep = asyncio.sleep
+
+    async def no_wait(_s):
+        await real_sleep(0)
+    monkeypatch.setattr(lb.asyncio, "sleep", no_wait)
+    assert asyncio.run(lb.poll_live(_Client(), now)) == 1
+    assert any("OKmint" in u for u in asked)
+    top = next(e for e in m._top_entries(10) if e["symbol"] == "OKP")
+    assert top["market_cap"] == 612_000 and top["change_24h"] == 12.5 and top["pair_address"] == "okpool"
+    lb._live.clear()
