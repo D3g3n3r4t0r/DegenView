@@ -44,6 +44,7 @@ MIN_DAYS = 200      # daily closes needed to load (and 21 weeks of them)
 _closes: pd.Series | None = None
 _up: pd.Series | None = None       # weekly, indexed on the Monday it applies from
 _up_daily: pd.Series | None = None
+_band: pd.Series | None = None     # weekly, Monday it applies from: above the Bull Market Support Band
 _updated = 0.0
 _pinned = False
 
@@ -64,7 +65,7 @@ def enabled(params: dict | None) -> bool:
 def set_closes(closes: pd.Series, pin: bool = False) -> None:
     """Daily BTC closes (UTC-indexed). `pin` keeps them from the background
     refresh (tests)."""
-    global _closes, _up, _up_daily, _updated, _pinned
+    global _closes, _up, _up_daily, _band, _updated, _pinned
     closes = closes.astype(float).sort_index()
     if closes.index.tz is None:
         closes.index = closes.index.tz_localize("UTC")
@@ -80,12 +81,16 @@ def set_closes(closes: pd.Series, pin: bool = False) -> None:
     _up = up.shift(1, freq="D")                  # from the Monday after the close
     _up_daily = _up.reindex(pd.date_range(_up.index[0], _up.index[-1] + pd.Timedelta(days=6),
                                           freq="D", tz="UTC"), method="ffill") if len(_up) else _up
+    # Bull Market Support Band (weekly SMA 20 and EMA 21): above = over both;
+    # before 20 weeks of history it counts as not above
+    top = np.maximum(week.rolling(20).mean(), week.ewm(span=21, adjust=False).mean())
+    _band = ((week > top) & top.notna()).shift(1, freq="D")
     _closes, _updated, _pinned = day, time.time(), pin
 
 
 def clear() -> None:
-    global _closes, _up, _up_daily, _updated, _pinned
-    _closes = _up = _up_daily = None
+    global _closes, _up, _up_daily, _band, _updated, _pinned
+    _closes = _up = _up_daily = _band = None
     _updated, _pinned = 0.0, False
 
 
@@ -106,6 +111,16 @@ def up_mask(index: pd.DatetimeIndex) -> np.ndarray:
     out = _up.reindex(idx, method="ffill")
     out = out.where(~((idx < first) | out.isna()), True)        # before the BTC history: no filter
     return out.to_numpy(dtype=bool)
+
+
+def band_mask(index: pd.DatetimeIndex) -> np.ndarray:
+    """True where BTC's last closed week is above its Bull Market Support
+    Band (RSI+BB BTC band). Before the BTC history: False."""
+    if _band is None:
+        raise BtcRegimeUnavailable("RSI+BB BTC band: BTC daily candles not loaded yet, retry in a minute")
+    idx = index if index.tz is not None else index.tz_localize("UTC")
+    out = _band.reindex(idx, method="ffill")
+    return out.where(out.notna(), False).to_numpy(dtype=bool)
 
 
 def down_share(year: int) -> float:

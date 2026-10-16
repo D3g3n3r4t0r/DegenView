@@ -108,6 +108,7 @@
     if (/^Lorenzo HF\b/.test(head)) label = "Trend HF";
     else if (/^Lorenzo reversal\b/.test(head)) label = "Trend EMA Reversal";
     else if (/^Combined reversal\b/.test(head)) label = "Combined Reversal (Trend EMA + RSI+BB)";
+    else if (/^RSI\+BB BTC band\b/.test(head)) label = "RSI+BB Reversal (BTC band)";
     else if (/^Lorenzo\b/.test(head)) label = "Trend EMA";
     else if (/^Gabriele 2\b/.test(head)) label = "RSI+BB Long/Short";
     else if (/^Gabriele\b/.test(head)) label = "RSI+BB Reversal";
@@ -330,6 +331,12 @@
     ...STRATEGY_PARAM_FIELDS["Lorenzo (trend-follower)"],
     ...STRATEGY_PARAM_FIELDS["Gabriele (RSI+BB reversal)"],
   ].map((f) => ({ ...f }));
+
+  // RSI+BB BTC band (16/10): with BTC above its Bull Market Support Band
+  // either RSI oversold or a close under the lower band opens the long
+  // (both below it); out back above the middle band — no overbought level.
+  STRATEGY_PARAM_FIELDS["RSI+BB BTC band (long only)"] =
+    STRATEGY_PARAM_FIELDS["Gabriele (RSI+BB reversal)"].filter((f) => f.key !== "rsi_overbought").map((f) => ({ ...f }));
 
   // BTC filter (Lorenzo, 15/10: "il filtro Btc [...] da attivare/disattivare
   // su tutte le strategie"): no long entry while BTC's last closed week is
@@ -12012,7 +12019,8 @@
     if (claudio) { const mr = document.querySelector('input[name="lab-opt-mode"][value="max_return"]'); if (mr) mr.checked = true; }
     const maxWrap = labEl("lab-mode-maxret-wrap");
     if (maxWrap) {
-      const ok = /RSI\+BB/.test(strategyName || "") || claudio;
+      // (not RSI+BB BTC band: not searched, its values are the tested ones)
+      const ok = (/RSI\+BB/.test(strategyName || "") && !/BTC band/.test(strategyName || "")) || claudio;
       maxWrap.classList.toggle("hidden", !ok);
       // 15/10 (Lorenzo): on the RSI+BB strategies Max return is the
       // recommended search, Stable on the others — and it is preselected.
