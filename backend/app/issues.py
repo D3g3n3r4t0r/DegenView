@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0304", "Strategia combinata Trend EMA Reversal + RSI+BB reversal",
+     "Lorenzo, 16/10: 'inglobare i segnali di entrambe le strategie in un'unica strategia [...] una strategia sola, che pero' ha piu' segnali di ingresso e piu' segnali di uscita', poi 'aggiungi anche la combinata, potrebbe essere utile comunque per fare anche ulteriori confronti'.",
+     "media"),
     ("seed-0303", "Lab: final equity semplice, Max return raccomandata per le RSI+BB, conferma prima di cancellare dall'archivio",
      "Lorenzo, 15/10: 'aggiungere un altro final equity [...] anche quello del rendimento semplice', 'per quanto riguarda solo le strategie RSI piu' BB, il max return come ricerca ottimizzata raccomandata', 'nella sezione dell'archivio strategie [...] chiedere sempre conferma alla richiesta di cancellazione'.",
      "media"),
