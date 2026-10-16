@@ -12,6 +12,7 @@ import itertools
 import math
 import random
 import json
+import importlib
 import logging
 import re
 import sys
@@ -55,7 +56,6 @@ from app import jobs as jobs_store
 from app import trading_log
 from app import favorites as favorites_store
 from app import market_rank
-from app import drawings as drawings_store
 from app import perf
 from app import watchlist as watchlist_store
 from app.analysis.backtest import run_backtest
@@ -168,7 +168,7 @@ from app.notify import deepseek_desk
 from app.notify import deepseek_studies
 from app.notify.alerts import find_new_signals, format_signal_message, record_alert_sent, get_all_stats_for_entry
 import app.price_alerts as price_alerts_store
-from app.models import PriceAlert, PriceAlertCondition, StrategySignal
+from app.models import PriceAlertCondition, StrategySignal
 from app.pine import PineError, PineInterpreter, is_strategy_style, parse_program, scan_inputs
 from app.pine import storage as pine_storage
 from app.providers.base import (
@@ -200,24 +200,19 @@ from starlette.middleware.gzip import GZipMiddleware
 
 logger = logging.getLogger(__name__)
 
+from app.web_common import (  # noqa: E402  (shared with app/routes/)
+    SUPPORTED_FUTURES_EXCHANGES_ORDERED,
+    WatchlistStrategyToggleRequest,
+    _client_ip,
+    _device,
+    _fire,
+    _is_admin,
+    _is_https,
+    _require_admin,
+    _telegram_allowed,
+    _user_out,
+)
 
-# Audit B04, rest: a one-shot task (a Telegram message) nobody holds can be
-# garbage-collected before it runs, and its error is never seen. Hold it
-# until it ends and log what it raised.
-_fired: set[asyncio.Task] = set()
-
-
-def _fire(coro) -> asyncio.Task:
-    task = asyncio.create_task(coro)
-    _fired.add(task)
-    task.add_done_callback(_fired_done)
-    return task
-
-
-def _fired_done(task: asyncio.Task) -> None:
-    _fired.discard(task)
-    if not task.cancelled() and task.exception() is not None:
-        logger.error("background send failed", exc_info=task.exception())
 
 # Un manager di stream live per exchange, ciascuno col proprio protocollo
 # pubblico (protobuf su MEXC, JSON su Kraken) — vedi /ws/live sotto.
@@ -230,11 +225,6 @@ WATCHLIST_POLL_SECONDS = 60
 _WATCHDOG_FILE = Path(__file__).resolve().parent / "data" / "watchdog.json"
 _WATCHDOG_STALE_S = WATCHLIST_POLL_SECONDS * 5  # alert if loop silent for 5 cycles
 
-# L'elenco degli exchange futures vive nel registro degli adattatori: qui
-# c'e' solo il nome vecchio, perche' non ci sia una seconda lista che possa
-# essere in disaccordo con la prima. Il perimetro (leva accessibile
-# dall'Europa) e' spiegato in app/trading/futures/registry.py.
-SUPPORTED_FUTURES_EXCHANGES_ORDERED = futures_registry.SUPPORTED_FUTURES_EXCHANGES
 
 twelvedata_provider = TwelveDataProvider()
 mexc_provider = MexcProvider()
@@ -242,11 +232,6 @@ binance_provider = BinanceProvider()
 kucoin_provider = KucoinProvider()
 kraken_provider = KrakenProvider()
 dexscreener_provider = DexScreenerProvider()
-
-
-def _telegram_allowed(user: User) -> bool:
-    allowed = {e.strip().lower() for e in settings.telegram_allowed_emails.split(",") if e.strip()}
-    return not allowed or user.email.lower() in allowed
 
 
 def _balance_visible(user: User) -> bool:
@@ -1545,6 +1530,9 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Liquidity Analysis Engine", lifespan=lifespan)
 app.include_router(quant_router(auth.get_current_user))
+# Route groups split out of this file (app/routes/), same paths as before.
+for _name in ("issues", "price_alerts", "drawings", "jobs", "push", "guest_links", "auth_routes"):
+    app.include_router(importlib.import_module(f"app.routes.{_name}").router)
 
 # ── Cancello di autenticazione ────────────────────────────────────────────
 #
@@ -1887,57 +1875,6 @@ class BacktestParamsQuery(BaseModel):
     fill_at: Literal["signal_close", "next_open", "on_condition"] = "signal_close"
 
 
-class TradingCredentialRequest(BaseModel):
-    exchange: str
-    api_key: str = ""        # empty = keep existing
-    api_secret: str = ""     # empty = keep existing
-    passphrase: str = ""     # empty = keep existing
-    enabled: bool = False
-    size_mode: Literal["fixed_usdt", "pct_balance"] = "fixed_usdt"
-    size_value: float = 50.0
-
-
-class TradingCredentialOut(BaseModel):
-    exchange: str
-    api_key_set: bool        # True if an encrypted key exists
-    api_secret_set: bool
-    passphrase_set: bool
-    enabled: bool
-    size_mode: str
-    size_value: float
-    created_at: float = 0.0  # epoch seconds; 0 = mai configurata
-
-
-class FuturesCredentialRequest(BaseModel):
-    exchange: str
-    api_key: str = ""     # empty = keep existing
-    api_secret: str = ""  # empty = keep existing
-    passphrase: str = ""  # empty = keep existing — serve su OKX e Bitget
-    enabled: bool = False  # kill switch — spegnibile senza toccare le chiavi
-    size_mode: Literal["fixed_usdt", "pct_balance"] = "fixed_usdt"
-    size_value: float = 50.0
-    leverage: int = 1
-
-
-class FuturesCredentialOut(BaseModel):
-    exchange: str
-    name: str
-    api_key_set: bool
-    api_secret_set: bool
-    passphrase_set: bool
-    needs_passphrase: bool
-    # Il tetto e' del singolo exchange, non piu' uno solo per tutti: la
-    # schermata deve poter fermare il cursore dove lo ferma il server.
-    max_leverage: int
-    isolated_margin: bool
-    key_hint: str
-    enabled: bool
-    size_mode: str
-    size_value: float
-    leverage: int
-    created_at: float = 0.0  # epoch seconds; 0 = mai configurata
-
-
 _SEARCH_PROVIDER_TIMEOUT_S = 5.0
 
 
@@ -2247,198 +2184,6 @@ async def compute_indicator_route(req: IndicatorComputeRequest) -> dict:
     }
 
 
-class RegisterRequest(BaseModel):
-    email: str
-    password: str
-
-
-class LoginRequest(BaseModel):
-    email: str
-    password: str
-
-
-class TelegramChatIdRequest(BaseModel):
-    telegram_chat_id: str
-    telegram_signal_chat_id: str | None = None  # None = leave as is
-
-
-def _user_out(user: User) -> dict:
-    return {
-        "id": user.id,
-        "email": user.email,
-        "telegram_chat_id": user.telegram_chat_id,
-        "telegram_signal_chat_id": getattr(user, "telegram_signal_chat_id", ""),
-        "guest": guest_links.is_guest(user),
-    }
-
-
-def _client_ip(request: Request) -> str:
-    # Fly's edge proxy sets this; request.client.host would otherwise be
-    # the internal proxy address, not the real caller.
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
-
-
-def _is_https(request: Request) -> bool:
-    # Read the header directly rather than trusting uvicorn's own
-    # proxy-header handling (which needs explicit --forwarded-allow-ips
-    # config to kick in) — Fly's proxy always sets this correctly.
-    forwarded_proto = request.headers.get("x-forwarded-proto", "").lower()
-    return forwarded_proto == "https" if forwarded_proto else request.url.scheme == "https"
-
-
-def _set_session_cookie(response: Response, user_id: str, request: Request) -> None:
-    response.set_cookie(
-        auth.SESSION_COOKIE,
-        auth.make_session_cookie(user_id),
-        max_age=auth.SESSION_MAX_AGE_SECONDS,
-        httponly=True,
-        samesite="lax",
-        secure=_is_https(request),
-    )
-
-
-@app.post("/api/auth/register")
-async def register(req: RegisterRequest, request: Request, response: Response) -> dict:
-    ip_key = f"register:{_client_ip(request)}"
-    if rate_limit.is_locked(ip_key):
-        raise HTTPException(status_code=429, detail="Too many attempts. Try again in a few minutes.")
-
-    email = req.email.strip().lower()
-    if "@" not in email or len(email) < 5:
-        rate_limit.register_failure(ip_key)
-        raise HTTPException(status_code=400, detail="Invalid email")
-
-    consentite = {e.strip().lower() for e in settings.registration_allowed_emails.split(",") if e.strip()}
-    if consentite and email not in consentite:
-        rate_limit.register_failure(ip_key)
-        # Stesso messaggio che si da' a un'email gia' presente: due risposte
-        # diverse direbbero a un estraneo quali indirizzi esistono.
-        raise HTTPException(status_code=403, detail="Registration not allowed for this address")
-    if not auth.is_strong_password(req.password):
-        rate_limit.register_failure(ip_key)
-        raise HTTPException(
-            status_code=400,
-            detail="Password must be at least 8 characters, with letters and numbers, and not too common",
-        )
-    if auth.find_by_email(email):
-        rate_limit.register_failure(ip_key)
-        raise HTTPException(status_code=400, detail="Email already registered")
-
-    user = auth.create_user(email, req.password)
-    rate_limit.register_success(ip_key)
-    _set_session_cookie(response, user.id, request)
-    return _user_out(user)
-
-
-@app.post("/api/auth/login")
-async def login(req: LoginRequest, request: Request, response: Response) -> dict:
-    email = req.email.strip().lower()
-    ip_key = f"ip:{_client_ip(request)}"
-    email_key = f"email:{email}"
-    if rate_limit.is_locked(ip_key) or rate_limit.is_locked(email_key):
-        raise HTTPException(status_code=429, detail="Too many failed attempts. Try again in a few minutes.")
-
-    user = auth.verify_login(email, req.password)
-    if user is None:
-        rate_limit.register_failure(ip_key)
-        rate_limit.register_failure(email_key)
-        raise HTTPException(status_code=401, detail="Email o password errati")
-
-    rate_limit.register_success(ip_key)
-    rate_limit.register_success(email_key)
-    _set_session_cookie(response, user.id, request)
-    return _user_out(user)
-
-
-@app.post("/api/auth/logout")
-async def logout(request: Request, response: Response) -> dict:
-    auth.revoke_session(request.cookies.get(auth.SESSION_COOKIE) or "")
-    response.delete_cookie(auth.SESSION_COOKIE)
-    response.delete_cookie(guest_links.GUEST_COOKIE)
-    return {"ok": True}
-
-
-@app.post("/api/auth/logout-all")
-async def logout_all(response: Response, user: User = Depends(auth.get_current_user)) -> dict:
-    """Every session of this account, on every device, stops working."""
-    auth.revoke_all_sessions(user.id)
-    response.delete_cookie(auth.SESSION_COOKIE)
-    return {"ok": True}
-
-
-@app.get("/api/auth/me")
-async def me(user: User | None = Depends(auth.get_current_user_optional)) -> dict:
-    return {"user": _user_out(user) if user else None}
-
-
-@app.patch("/api/auth/telegram")
-async def update_telegram_chat_id(
-    req: TelegramChatIdRequest, user: User = Depends(auth.get_current_user)
-) -> dict:
-    before = user.telegram_signal_chat_id
-    updated = auth.set_telegram_chat_id(user.id, req.telegram_chat_id, req.telegram_signal_chat_id)
-    if (updated.telegram_signal_chat_id and updated.telegram_signal_chat_id != before
-            and _telegram_allowed(updated)):
-        _fire(telegram.send_to(
-            updated.telegram_signal_chat_id,
-            "✅ Chat degli alert collegata: da qui in poi qui arrivano solo i segnali delle strategie (e gli alert di prezzo).",
-        ))
-    if updated.telegram_chat_id and _telegram_allowed(updated):
-        # Confirms the chat_id was actually saved and is reachable — sent
-        # immediately on save, not the first real alert, so a typo'd id
-        # shows up right away instead of silently going nowhere.
-        _fire(
-            telegram.send_to(
-                updated.telegram_chat_id,
-                "✅ Chat ID collegato correttamente a Liquidity Analysis Engine.\n"
-                "Da qui in poi riceverai qui gli avvisi delle strategie che attivi.",
-            )
-        )
-    return _user_out(updated)
-
-
-@app.get("/api/auth/trading", response_model=list[TradingCredentialOut])
-async def get_trading_credentials(user: User = Depends(auth.get_current_user)) -> list[TradingCredentialOut]:
-    out = []
-    for exchange in ("binance", "mexc", "kucoin", "kraken", "coinbase", "bitstamp"):
-        cred = user.trading_credentials.get(exchange)
-        if cred is None:
-            out.append(TradingCredentialOut(exchange=exchange, api_key_set=False, api_secret_set=False, passphrase_set=False, enabled=False, size_mode="fixed_usdt", size_value=50.0))
-        else:
-            out.append(TradingCredentialOut(
-                exchange=exchange,
-                api_key_set=bool(cred.api_key_enc),
-                api_secret_set=bool(cred.api_secret_enc),
-                passphrase_set=bool(cred.passphrase_enc),
-                enabled=cred.enabled,
-                size_mode=cred.size_mode,
-                size_value=cred.size_value,
-                created_at=cred.created_at,
-            ))
-    return out
-
-
-@app.patch("/api/auth/trading")
-async def set_trading_credential(body: TradingCredentialRequest, user: User = Depends(auth.get_current_user)):
-    supported = {"binance", "mexc", "kucoin", "kraken", "coinbase", "bitstamp"}
-    if body.exchange not in supported:
-        raise HTTPException(status_code=400, detail=f"Unsupported exchange: {body.exchange}")
-    auth.set_trading_credential(
-        user.id, body.exchange, body.api_key, body.api_secret, body.passphrase,
-        body.enabled, body.size_mode, body.size_value,
-    )
-    return {"ok": True}
-
-
-@app.delete("/api/auth/trading/{exchange}")
-async def delete_trading_credential(exchange: str, user: User = Depends(auth.get_current_user)):
-    auth.delete_trading_credential(user.id, exchange)
-    return {"ok": True}
-
-
 class ManualOrderRequest(BaseModel):
     exchange: str
     symbol: str
@@ -2575,70 +2320,6 @@ async def close_manual_spot_position(body: ClosePositionRequest, user: User = De
     return {"ok": True, "closed": True, "result": result, "symbol": symbol}
 
 
-@app.get("/api/auth/futures", response_model=list[FuturesCredentialOut])
-async def get_futures_credentials(user: User = Depends(auth.get_current_user)) -> list[FuturesCredentialOut]:
-    out = []
-    for exchange in SUPPORTED_FUTURES_EXCHANGES_ORDERED:
-        adapter = futures_registry.get(exchange)
-        cred = user.futures_credentials.get(exchange)
-        common = dict(
-            exchange=exchange, name=adapter.name, needs_passphrase=adapter.needs_passphrase,
-            # Il tetto vero e' il piu' basso fra i due: il frontend non deve
-            # mai mostrare uno slider che arriva piu' in alto di quanto il
-            # server accetterebbe davvero (vedi i controlli su MAX_FUTURES_LEVERAGE
-            # in questo stesso file e in auth.set_futures_credential).
-            max_leverage=min(MAX_FUTURES_LEVERAGE, adapter.max_leverage),
-            isolated_margin=adapter.isolated_margin,
-            key_hint=adapter.key_hint,
-        )
-        if cred is None:
-            out.append(FuturesCredentialOut(
-                **common, api_key_set=False, api_secret_set=False, passphrase_set=False,
-                enabled=False, size_mode="fixed_usdt", size_value=50.0, leverage=1,
-            ))
-        else:
-            out.append(FuturesCredentialOut(
-                **common, api_key_set=bool(cred.api_key_enc), api_secret_set=bool(cred.api_secret_enc),
-                passphrase_set=bool(cred.passphrase_enc),
-                enabled=cred.enabled, size_mode=cred.size_mode, size_value=cred.size_value, leverage=cred.leverage,
-                created_at=cred.created_at,
-            ))
-    return out
-
-
-@app.patch("/api/auth/futures")
-async def set_futures_credential_endpoint(body: FuturesCredentialRequest, user: User = Depends(auth.get_current_user)):
-    if body.exchange not in SUPPORTED_FUTURES_EXCHANGES_ORDERED:
-        raise HTTPException(status_code=400, detail=f"Futures not supported yet for this exchange: {body.exchange}")
-    adapter = futures_registry.get(body.exchange)
-    existing_cred = user.futures_credentials.get(body.exchange)
-    has_passphrase = bool(body.passphrase) or bool(existing_cred and existing_cred.passphrase_enc)
-    if adapter.needs_passphrase and not has_passphrase:
-        raise HTTPException(status_code=400, detail=f"{adapter.name} requires a passphrase in addition to key and secret")
-    # Il tetto e' quello di questo exchange, non il massimo globale: un
-    # cursore che arriva a 10x su un adattatore che ne sopporta solo 5 deve
-    # fermarsi prima di raggiungere il server, ma il server e' l'ultima
-    # parola in ogni caso.
-    max_lev = min(MAX_FUTURES_LEVERAGE, adapter.max_leverage)
-    if not (1 <= body.leverage <= max_lev):
-        raise HTTPException(status_code=400, detail=f"Leverage {body.leverage}x outside {adapter.name}'s limit (1-{max_lev}x)")
-    try:
-        auth.set_futures_credential(
-            user.id, body.exchange, body.api_key, body.api_secret,
-            body.enabled, body.size_mode, body.size_value, body.leverage,
-            passphrase=body.passphrase,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return {"ok": True}
-
-
-@app.delete("/api/auth/futures/{exchange}")
-async def delete_futures_credential(exchange: str, user: User = Depends(auth.get_current_user)):
-    auth.delete_futures_credential(user.id, exchange)
-    return {"ok": True}
-
-
 class DiagnosticsTestRequest(BaseModel):
     exchange: str
     market: Literal["spot", "futures"] = "spot"
@@ -2677,80 +2358,6 @@ async def diagnostics_test_connection(
         return {"ok": True, "market": "spot", "exchange": body.exchange, "balances": balances}
     except diagnostics.DiagnosticsError as exc:
         return {"ok": False, "market": body.market, "exchange": body.exchange, "error": str(exc)}
-
-
-class ReauthRequest(BaseModel):
-    password: str = ""
-
-
-def _require_password(user: User, password: str, request: Request) -> None:
-    """A session alone must not enrol the factor that later approves a key
-    export (audit 29/09, S05): adding or removing a passkey asks for the
-    account password again, under the same lockout as the login."""
-    ip_key, user_key = f"ip:{_client_ip(request)}", f"reauth:{user.id}"
-    if rate_limit.is_locked(ip_key) or rate_limit.is_locked(user_key):
-        raise HTTPException(status_code=429, detail="Too many failed attempts. Try again in a few minutes.")
-    if not password or auth.verify_login(user.email, password) is None:
-        rate_limit.register_failure(ip_key)
-        rate_limit.register_failure(user_key)
-        raise HTTPException(status_code=401, detail="Wrong password")
-    rate_limit.register_success(user_key)
-
-
-def _notify_passkey_change(user: User, what: str) -> None:
-    text = f"Passkey {what} sull'account {user.email}. Se non sei stato tu, cambia password e sposta i fondi."
-    _fire(telegram.send_infra_alert(text))
-    if user.telegram_chat_id and _telegram_allowed(user):
-        _fire(telegram.send_to(user.telegram_chat_id, text))
-
-
-@app.post("/api/auth/passkey/register/options")
-async def passkey_register_options(
-    request: Request, body: ReauthRequest | None = None, user: User = Depends(auth.get_current_user),
-) -> dict:
-    """Chiamata da un browser gia' loggato — e' l'iscrizione, non il
-    flusso di rivelazione: Face ID/Touch ID qui autorizza solo se stesso
-    a diventare un modo per approvare in futuro, non rivela niente.
-    The password is asked again first: the state token is only handed out
-    after it, so /verify is bound to it."""
-    _require_password(user, body.password if body else "", request)
-    options_json, state_token = onchain_passkey.start_registration(user)
-    return {"options": options_json, "state_token": state_token}
-
-
-class PasskeyRegisterVerifyRequest(BaseModel):
-    state_token: str
-    credential: dict
-    label: str = ""
-
-
-@app.post("/api/auth/passkey/register/verify")
-async def passkey_register_verify(
-    body: PasskeyRegisterVerifyRequest, user: User = Depends(auth.get_current_user)
-) -> dict:
-    try:
-        passkey = onchain_passkey.finish_registration(user, body.state_token, body.credential, body.label)
-    except Exception as exc:  # noqa: BLE001 — errore di verifica WebAuthn, mai un 500 muto
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    auth.add_passkey(user.id, passkey)
-    _notify_passkey_change(user, f"aggiunta ({passkey.label or 'senza nome'})")
-    return {"ok": True, "label": passkey.label or "Passkey", "created_at": passkey.created_at}
-
-
-@app.get("/api/auth/passkey")
-async def list_passkeys(user: User = Depends(auth.get_current_user)) -> list[dict]:
-    return [{"credential_id": pk.credential_id, "label": pk.label, "created_at": pk.created_at} for pk in user.passkeys]
-
-
-@app.delete("/api/auth/passkey/{credential_id}")
-async def remove_passkey(
-    credential_id: str, request: Request, body: ReauthRequest | None = None,
-    user: User = Depends(auth.get_current_user),
-) -> dict:
-    _require_password(user, body.password if body else "", request)
-    auth.delete_passkey(user.id, credential_id)
-    _notify_passkey_change(user, "rimossa")
-    return {"ok": True}
 
 
 def _require_onchain_enabled() -> None:
@@ -4230,14 +3837,6 @@ class BackgroundOpts(BaseModel):
     label: str = Field("", max_length=40)
 
 
-def _device(request: Request) -> str:
-    """The browser that launched a job (X-Device, a random id the app keeps):
-    the one its push notification goes to."""
-    from app.notify import web_push
-    d = request.headers.get("x-device", "")
-    return d if web_push.valid_device(d) else ""
-
-
 def _recheck_note(job: dict) -> tuple[str, str]:
     name = job["title"]
     if job["state"] != "finito":
@@ -4341,11 +3940,6 @@ class ProjectReadRequest(BaseModel):
 class PlanAssign(BaseModel):
     email: str
     plan: str
-
-
-def _is_admin(user: User) -> bool:
-    allowed = {e.strip().lower() for e in settings.admin_emails.split(",") if e.strip()}
-    return not guest_links.is_guest(user) and user.email.lower() in allowed
 
 
 def _full_access(user: User) -> bool:
@@ -5516,51 +5110,6 @@ def _require_onchain_admin(user: User) -> None:
 
 # ---------------------------------------------------------------- link ospite
 
-class GuestLinkRequest(BaseModel):
-    label: str = ""
-    days: int = guest_links.DEFAULT_DAYS
-
-
-def _require_admin(user: User) -> None:
-    allowed = {e.strip().lower() for e in settings.admin_emails.split(",") if e.strip()}
-    if guest_links.is_guest(user) or user.email.lower() not in allowed:
-        raise HTTPException(status_code=403, detail="Only an admin can manage guest links.")
-
-
-def _guest_link_out(link: guest_links.GuestLink, request: Request) -> dict:
-    base = f"{'https' if _is_https(request) else 'http'}://{request.headers.get('host', request.url.netloc)}"
-    return {
-        "id": link.id,
-        "label": link.label,
-        "created_at": link.created_at,
-        "expires_at": link.expires_at,
-        "active": link.active(),
-        "url": f"{base}/ospite?t={link.token}" if link.active() else None,
-    }
-
-
-@app.get("/api/guest-links")
-async def guest_links_list(request: Request, user: User = Depends(auth.get_current_user)) -> list[dict]:
-    _require_admin(user)
-    return [_guest_link_out(link, request) for link in guest_links.list_links()]
-
-
-@app.post("/api/guest-links")
-async def guest_links_create(
-    req: GuestLinkRequest, request: Request, user: User = Depends(auth.get_current_user)
-) -> dict:
-    _require_admin(user)
-    return _guest_link_out(guest_links.create_link(user.email, req.label, req.days), request)
-
-
-@app.delete("/api/guest-links/{link_id}")
-async def guest_links_revoke(link_id: str, request: Request, user: User = Depends(auth.get_current_user)) -> dict:
-    _require_admin(user)
-    link = guest_links.revoke_link(link_id)
-    if link is None:
-        raise HTTPException(status_code=404, detail="Link not found")
-    return _guest_link_out(link, request)
-
 
 @app.get("/ospite")
 async def guest_enter(request: Request, t: str = "") -> Response:
@@ -6107,11 +5656,6 @@ async def delete_watchlist_entry(entry_id: str, user: User = Depends(auth.get_cu
     return {"ok": True}
 
 
-class WatchlistStrategyToggleRequest(BaseModel):
-    strategy_name: str
-    enabled: bool
-
-
 @app.patch("/api/watchlist/{entry_id}/strategy", response_model=WatchlistEntry)
 async def toggle_watchlist_strategy(
     entry_id: str, req: WatchlistStrategyToggleRequest, user: User = Depends(auth.get_current_user)
@@ -6313,56 +5857,6 @@ async def clear_alert_log(user: User = Depends(auth.get_current_user)) -> dict:
 
 
 # ── Price alerts ───────────────────────────────────────────────────────────────
-
-class PriceAlertCreateRequest(BaseModel):
-    symbol: str
-    asset_type: AssetType
-    exchange: CryptoExchange = "mexc"
-    condition: PriceAlertCondition
-    price: float
-    note: str = ""
-    once_only: bool = True
-
-
-@app.get("/api/price-alerts", response_model=list[PriceAlert])
-async def list_price_alerts(user: User = Depends(auth.get_current_user)) -> list[PriceAlert]:
-    return price_alerts_store.list_alerts(user.id)
-
-
-@app.post("/api/price-alerts", response_model=PriceAlert)
-async def create_price_alert(
-    req: PriceAlertCreateRequest, user: User = Depends(auth.get_current_user)
-) -> PriceAlert:
-    symbol = req.symbol.strip().upper()
-    if not symbol:
-        raise HTTPException(status_code=400, detail="Ticker missing")
-    return price_alerts_store.add_alert(
-        user.id, symbol, req.asset_type, req.exchange,
-        req.condition, req.price, req.note, req.once_only,
-    )
-
-
-@app.delete("/api/price-alerts/{alert_id}")
-async def delete_price_alert(alert_id: str, user: User = Depends(auth.get_current_user)) -> dict:
-    a = price_alerts_store.get_alert(alert_id)
-    if a is None or a.owner_id != user.id:
-        raise HTTPException(status_code=404, detail="Alert not found")
-    price_alerts_store.remove_alert(alert_id)
-    return {"ok": True}
-
-
-class PriceAlertActiveRequest(BaseModel):
-    active: bool
-
-
-@app.patch("/api/price-alerts/{alert_id}/active", response_model=PriceAlert)
-async def set_price_alert_active(
-    alert_id: str, req: PriceAlertActiveRequest, user: User = Depends(auth.get_current_user)
-) -> PriceAlert:
-    a = price_alerts_store.get_alert(alert_id)
-    if a is None or a.owner_id != user.id:
-        raise HTTPException(status_code=404, detail="Alert not found")
-    return price_alerts_store.set_active(alert_id, req.active)
 
 
 def _owned_favorite_or_404(entry_id: str, user: User) -> FavoriteEntry:
@@ -7678,86 +7172,6 @@ async def start_optimize(
     return {"job_id": job_id}
 
 
-@app.post("/api/jobs/{job_id}/cancel")
-async def cancel_job(
-    job_id: str, user: User | None = Depends(auth.get_current_user_optional)
-) -> dict:
-    """Ferma una ricerca in corso.
-
-    Segna soltanto la richiesta: il lavoro se ne accorge al backtest successivo,
-    quindi si ferma entro una frazione di secondo invece che a fase finita.
-    """
-    if not jobs_store.request_cancel(job_id, owner_id=user.id if user else None):
-        raise HTTPException(status_code=404, detail="Job not found or expired")
-    return {"ok": True}
-
-
-@app.get("/api/jobs/{job_id}")
-async def job_status(
-    job_id: str,
-    since: int = Query(0, ge=0),
-    visible: bool = False,
-    user: User | None = Depends(auth.get_current_user_optional),
-) -> dict:
-    """`visible=1`: the page asking is on screen, so no push for this job if it
-    ends in the next seconds (jobs.watch)."""
-    job = jobs_store.get(job_id, owner_id=user.id if user else None, since=since)
-    if job is None:
-        raise HTTPException(status_code=404, detail="Job not found or expired")
-    if visible:
-        jobs_store.watch(job_id)
-    return job
-
-
-@app.post("/api/jobs/{job_id}/away")
-async def job_away(job_id: str, user: User | None = Depends(auth.get_current_user_optional)) -> dict:
-    """The page left the screen (sendBeacon on pagehide/visibilitychange):
-    the job's end goes out as a push even if it was polled a second ago."""
-    if jobs_store.get(job_id, owner_id=user.id if user else None) is not None:
-        jobs_store.away(job_id)
-    return {"ok": True}
-
-
-@app.get("/api/jobs")
-async def jobs_of_device(request: Request, user: User | None = Depends(auth.get_current_user_optional)) -> dict:
-    """This browser's jobs of the last day (X-Device): what the app resumes
-    when it is reopened without tapping the notification."""
-    device = _device(request)
-    return {"jobs": jobs_store.recent(device, owner_id=user.id if user else None) if device else []}
-
-
-class PushSubscribeRequest(BaseModel):
-    subscription: dict
-
-
-@app.get("/api/push/key")
-async def push_key() -> dict:
-    """The VAPID public key the service worker subscribes with (web_push.py)."""
-    from app.notify import web_push
-    return {"key": web_push.public_key()}
-
-
-@app.post("/api/push/subscribe")
-async def push_subscribe(body: PushSubscribeRequest, request: Request,
-                         user: User | None = Depends(auth.get_current_user_optional)) -> dict:
-    from app.notify import web_push
-    device = _device(request)
-    try:
-        web_push.subscribe(device, body.subscription, user.id if user else "")
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-    return {"ok": True}
-
-
-@app.post("/api/push/unsubscribe")
-async def push_unsubscribe(request: Request) -> dict:
-    from app.notify import web_push
-    device = _device(request)
-    if device:
-        web_push.unsubscribe(device)
-    return {"ok": True}
-
-
 # --- Diario degli ordini automatici ------------------------------------------
 
 
@@ -8114,38 +7528,6 @@ async def delete_archive_entry(
 # di qui puo' riempirle.
 
 
-class IssueIn(BaseModel):
-    title: str
-    detail: str = ""
-    priority: str = "media"
-
-
-class IssueReplyIn(BaseModel):
-    text: str
-    # "risolto" lo decide chi ha scritto la segnalazione, non chi ha scritto la
-    # correzione: se il problema si vede ancora, la voce torna aperta.
-    reopen: bool = False
-
-
-class IssuePatch(BaseModel):
-    status: str | None = None
-    priority: str | None = None
-    detail: str | None = None
-
-
-@app.post("/api/issues/{issue_id}/replies")
-async def reply_to_issue(
-    issue_id: str, req: IssueReplyIn, user: User = Depends(auth.get_current_user)
-) -> dict:
-    if not any(i["id"] == issue_id for i in issues_store.list_issues()):
-        raise HTTPException(status_code=404, detail="Report not found")
-    try:
-        return issues_store.add_reply(issue_id, req.text, author=user.email,
-                                      reopen=req.reopen)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
 @app.get("/api/deepseek/studies")
 async def list_deepseek_studies() -> list[dict]:
     """Deep studies Claude asked DeepSeek through the repo: read-only, public
@@ -8159,52 +7541,6 @@ async def get_deepseek_study(study_id: str) -> dict:
     if rec is None:
         raise HTTPException(status_code=404, detail="Study not found")
     return rec
-
-
-@app.get("/api/issues")
-async def list_issues() -> dict:
-    items = issues_store.list_issues()
-    return {
-        "items": items,
-        "counts": {
-            "aperto": sum(1 for i in items if i.get("status") == "aperto"),
-            "in corso": sum(1 for i in items if i.get("status") == "in corso"),
-            "risolto": sum(1 for i in items if i.get("status") == "risolto"),
-            "riaperto": sum(1 for i in items if i.get("status") == "riaperto"),
-        },
-    }
-
-
-@app.post("/api/issues")
-async def create_issue(body: IssueIn, user: User = Depends(auth.get_current_user)) -> dict:
-    try:
-        return issues_store.add_issue(
-            title=body.title, detail=body.detail,
-            priority=body.priority, author=user.email,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@app.patch("/api/issues/{issue_id}")
-async def patch_issue(issue_id: str, body: IssuePatch,
-                      user: User = Depends(auth.get_current_user)) -> dict:
-    try:
-        updated = issues_store.update_issue(
-            issue_id, status=body.status, priority=body.priority, detail=body.detail
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    if updated is None:
-        raise HTTPException(status_code=404, detail="Report not found")
-    return updated
-
-
-@app.delete("/api/issues/{issue_id}")
-async def remove_issue(issue_id: str, user: User = Depends(auth.get_current_user)) -> dict:
-    if not issues_store.delete_issue(issue_id):
-        raise HTTPException(status_code=404, detail="Report not found")
-    return {"deleted": issue_id}
 
 
 @app.websocket("/ws/live")
@@ -8395,29 +7731,6 @@ _ONCHAIN_APP_HTML = (
 # succedeva: il deploy era andato, la pagina no. Gli asset restano cacheabili
 # per sempre proprio perche' l'URL cambia con il contenuto.
 _HTML_HEADERS = {"Cache-Control": "no-cache"}
-
-
-class DrawingsIn(BaseModel):
-    key: str
-    drawings: list = []
-    updated_at: int | None = None
-
-
-@app.get("/api/drawings")
-async def get_drawings(key: str = Query(..., max_length=140),
-                       user: User = Depends(auth.get_current_user)) -> dict:
-    """The account's drawings for one chart (drawing tools plan, phase 4)."""
-    if not drawings_store.valid_key(key):
-        raise HTTPException(status_code=400, detail="Invalid key")
-    return drawings_store.get(user.id, key) or {"drawings": None, "updated_at": 0}
-
-
-@app.put("/api/drawings")
-async def put_drawings(body: DrawingsIn, user: User = Depends(auth.get_current_user)) -> dict:
-    try:
-        return drawings_store.put(user.id, body.key, body.drawings, body.updated_at)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.get("/api/perf")
