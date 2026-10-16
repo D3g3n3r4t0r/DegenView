@@ -338,6 +338,88 @@ def run_pair_v3(sym, df):
     return res
 
 
+# ── combo (16/10): Trend EMA Reversal + RSI+BB reversal as ONE strategy ────
+# Lorenzo: "inglobare i segnali di entrambe le strategie in un'unica
+# strategia [...] una strategia sola, che pero' ha piu' segnali di ingresso e
+# piu' segnali di uscita", then "provala in entrambe le modalita'". One
+# position at a time, all the capital: flat -> in on either entry (Trend EMA
+# first if both fire on the same candle); in -> new entries ignored. Exit:
+#   A  the exit of the strategy that opened the trade
+#   B  the first exit signal of either
+def combo_events(df, mode, params=None):
+    from app.analysis.strategies import STRATEGY_REGISTRY as REG
+    lo = REG[LREV](df, {**DEFAULT_PARAMS, **(params or {})})
+    ga = REG[GAB](df, {**LKI_DEFAULT_PARAMS, **(params or {})})
+    le, lx = lo["entry_long"].to_numpy(bool), lo["exit_long"].to_numpy(bool)
+    ge, gx = ga["entry_long"].to_numpy(bool), ga["exit_long"].to_numpy(bool)
+    n = len(df)
+    entry, exit_ = np.zeros(n, bool), np.zeros(n, bool)
+    owner, owners = None, []
+    for i in range(n):
+        if owner is None:
+            if le[i] or ge[i]:
+                owner = "L" if le[i] else "G"
+                entry[i] = True
+                owners.append((df.index[i], owner))
+            continue
+        out = (lx[i] if owner == "L" else gx[i]) if mode == "A" else (lx[i] or gx[i])
+        if out:
+            exit_[i] = True
+            owner = None
+    false = np.zeros(n, bool)
+    sig = pd.DataFrame({"entry_long": entry, "entry_short": false, "exit_long": exit_, "exit_short": false},
+                       index=df.index)
+    return sig, owners
+
+
+COMBO_A, COMBO_B = "Combo A (test)", "Combo B (test)"
+env.STRATEGY_REGISTRY[COMBO_A] = lambda df, params=None: combo_events(df, "A", params)[0]
+env.STRATEGY_REGISTRY[COMBO_B] = lambda df, params=None: combo_events(df, "B", params)[0]
+
+
+def judge_combo(df, strat, tests, train):
+    bt = run_backtest(train, {}, BP, strategy_name=strat)
+    row = {"train_simple": round(bt.simple_return_pct, 1), "train_comp": round(bt.total_return_pct, 1),
+           "train_sdd": round(bt.simple_max_drawdown_pct or 0, 1), "train_dd": round(bt.max_drawdown_pct, 1),
+           "train_tr": bt.num_trades, "p": {}, **mc(bt)}
+    if strat in (COMBO_A, COMBO_B):
+        _, owners = combo_events(df, "A" if strat == COMBO_A else "B")
+    for y, t0, t1 in tests:
+        tb = env.test_on(df, strat, {}, t0, t1)
+        cell = {"s": round(tb.simple_return_pct, 1), "c": round(tb.total_return_pct, 1),
+                "sdd": round(tb.simple_max_drawdown_pct or 0, 1), "dd": round(tb.max_drawdown_pct, 1),
+                "tr": tb.num_trades}
+        if strat in (COMBO_A, COMBO_B):
+            own = [o for t, o in owners if t0 <= t < t1]
+            cell["fromL"], cell["fromG"] = own.count("L"), own.count("G")
+        row[str(y)] = cell
+    return row
+
+
+def run_pair_combo(sym, df):
+    train = df[df.index >= TRAIN_FROM]
+    tests = tests_of(df)
+    res = {"symbol": sym, "since": f"{df.index[0]:%Y-%m}",
+           "hold": {str(y): round((df[(df.index >= t0) & (df.index < t1)]["close"].iloc[-1]
+                                   / df[(df.index >= t0) & (df.index < t1)]["close"].iloc[0] - 1) * 100, 1)
+                    for y, t0, t1 in tests}, "m": {}}
+    for tag, strat in (("LR", LREV), ("G", GAB), ("CA", COMBO_A), ("CB", COMBO_B)):
+        res["m"][tag] = judge_combo(df, strat, tests, train)
+    print(json.dumps(res["m"]), flush=True)
+    return res
+
+
+def line_combo(res):
+    hold = " ".join(f"{y} {h:+.0f}%" for y, h in res["hold"].items())
+    bits = [f"{res['symbol']} since {res['since']} · B&H {hold}"]
+    for k, r in res["m"].items():
+        cells = " ".join(f"{y} {r[y]['s']:+.0f}%/{r[y]['c']:+.0f}% sdd{r[y]['sdd']:.0f}/dd{r[y]['dd']:.0f} ({r[y]['tr']}tr"
+                         + (f" L{r[y]['fromL']}G{r[y]['fromG']}" if "fromL" in r[y] else "") + ")"
+                         for y in res["hold"] if y in r)
+        bits.append(f"{k} train {r['train_simple']:+.0f}%/{r['train_comp']:+.0f}% sdd{r['train_sdd']:.0f}/dd{r['train_dd']:.0f} ({r['train_tr']}tr) · {cells}")
+    return " | ".join(bits)
+
+
 def run_pair(sym, df):
     train = df[df.index >= TRAIN_FROM]
     tests = tests_of(df)
@@ -414,6 +496,10 @@ async def main():
     btc = df if sym == "BTCUSDT" else (await env.candles("BTCUSDT"))[1]
     btc_regime.set_closes(btc["close"], pin=True)
     mode = os.environ.get("MODE")
+    if mode == "combo":
+        res = run_pair_combo(sym, df)
+        print(f"::notice title={sym}::{line_combo(res)} [{src}]")
+        return 0
     res = run_pair_v2(sym, df) if mode == "v2" else run_pair_v3(sym, df) if mode == "v3" else run_pair(sym, df)
     print(f"::notice title={sym}::{line(res)} [{src}]")
     with open(f"lowfit-{sym}.json", "w") as fh:
