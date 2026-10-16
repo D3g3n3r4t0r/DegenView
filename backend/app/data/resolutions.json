@@ -3018,5 +3018,10 @@
     "status": "risolto",
     "at": 1792159864,
     "summary": "Nel Lab, per le strategie senza ottimizzazione automatica (Combined Reversal, RSI+BB Reversal BTC band, Trend HF) spariscono il tasto Optimize, la scelta della modalita' di ricerca e i filtri sul risultato: resta solo Run. Nel pannello della strategia il tasto era gia' nascosto."
+  },
+  "seed-0308": {
+    "status": "risolto",
+    "at": 1792163909,
+    "summary": "Menu delle strategie (barra in alto e Lab) ordinato dalla piu' affidabile nei test 1D: Trend EMA Reversal e RSI+BB Reversal (BTC band) in cima con una stella. Sotto il menu, nei parametri, una frase spiega cosa fa la strategia scelta (con i risultati del test dove ci sono). Pulsante 'Usa le impostazioni consigliate' dove abbiamo misurato una configurazione migliore: filtro BTC acceso per Trend EMA Reversal e Combined, filtro BTC con chiusura dei long per RSI+BB 4H; i valori di default non cambiano, quindi i risultati gia' salvati restano uguali. Nella barra in alto: BTC rispetto alla EMA 21 settimanale (filtro BTC) e alla Bull Market Band (RSI+BB BTC band), verde o rosso, con la data del cambio passando il mouse. La strategia selezionata all'avvio resta Trend EMA. I punti 1 e 2 proposti (look-ahead di Accumulo, feed dell'ottimizzazione) erano gia' risolti: seed-0010 e seed-0007."
   }
 }
