@@ -165,6 +165,12 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0317", "Gemme: punteggio diverso fra arena e pagina del token (VEIL 89 / 73)",
+     "Lorenzo, 16/10: 'Veil, che ha un punteggio di 89 nella classifica della narrativa della privacy, ma [...] cliccando sul token [...] il rank e' diverso, da un punteggio di 73. Bisogna capire come mai c'e' questa discrepanza e modificarla'.",
+     "alta"),
+    ("seed-0316", "Gemme: primi tre fissi in alto, arene elencate aperte, grafico solo al clic",
+     "Lorenzo, 16/10, con screenshot: 'lo spazio dove andare a inserire gli attuali primi tre posti delle gemme, sempre in alto, in cima, fissi [...] in Arenas le sezioni [...] non siano chiuse ma elencate [...] a centro pagina togliendo il grafico. Il grafico si attivera' solo se l'utente clicca su una delle gemme'.",
+     "media"),
     ("seed-0315", "Telegram: la chat delle gemme non riceve niente",
      "Lorenzo, 16/10: 'questa terza, dedicata alle nuove gemme trovate dalla ricerca, non mi arrivano le notifiche [...] e' come se fosse ferma', poi 'non e' impostata come chat principale, in quanto la chat principale e' quella degli alert'.",
      "media"),

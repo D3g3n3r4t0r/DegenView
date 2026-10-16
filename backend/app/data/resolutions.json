@@ -3058,5 +3058,15 @@
     "status": "risolto",
     "at": 1792185289,
     "summary": "Le gemme andavano solo alla chat principale dell'account, e mai a una chat riservata ai segnali: con la chat principale uguale a quella degli alert venivano scartate tutte. In piu' partivano solo verso account con un wallet on-chain, un residuo del trading spento il 07/10. Ora nel profilo, sezione Telegram, c'e' un terzo campo 'Chat ID per le gemme': le nuove gemme vanno li' (se vuoto, alla chat principale come prima), con un messaggio di conferma al salvataggio; il wallet non serve piu'. Da fare: incollare l'ID della chat gemme in quel campo (si ottiene scrivendo /chatid nella chat). Le gemme arrivano quando un progetto nuovo entra in classifica, cioe' durante la ricerca delle 03:00. Seconda parte (16/10 sera, Lorenzo: 'la conferma mi e' arrivata sull'altra chat degli alert'): ogni Salva mandava la conferma alla chat principale, che per Lorenzo e' quella degli alert, mentre la chat gemme riceveva la sua solo al primo cambio dell'ID. Ora ogni Salva manda a ciascuna chat configurata un messaggio che dice cosa riceve, e sotto il tasto compare una riga per chat: quale campo e', cosa riceve, se il messaggio e' stato consegnato (se no: ID sbagliato o bot non nella chat). Se le gemme non hanno una chat lo dice."
+  },
+  "seed-0316": {
+    "status": "risolto",
+    "at": 1792185953,
+    "summary": "I primi tre del podio (chi guida la propria arena col distacco maggiore) stanno fissi nella barra in alto, in ogni vista, al posto del podio grande nella colonna: tocco = pagina del token; su telefono una riga sotto l'intestazione. Arenas: niente piu' tessere chiuse, tutte le narrative elencate aperte al centro della pagina (la piu' grande prima), ogni token con posto, punteggio, cap e variazione. Su desktop la sezione gemme non ha piu' il pannello del grafico fisso a destra: il grafico si apre solo cliccando un token, come pagina a se', con il tasto indietro (anche Esc). Meme e Track record tengono il pannello a lato come prima."
+  },
+  "seed-0317": {
+    "status": "risolto",
+    "at": 1792185953,
+    "summary": "Causa: VEIL non e' sulla bacheca, entra nella Top dal database. Per la Top e le arene il punteggio di queste righe viene ricalcolato con la formula di oggi (uso, partecipazione, prodotto, token, lettura di DeepSeek): 89. La pagina del token invece mostrava il punteggio salvato all'ultima analisi, con la formula di allora: 73. Ora la pagina usa lo stesso calcolo della Top, quindi i due numeri coincidono (test che lo verifica). Per i token della bacheca coincidevano gia'."
   }
 }

@@ -38,6 +38,10 @@ let tab = FIRST_TAB;
 // the token page is a pane beside it, not a full-screen page over it.
 const DESK = matchMedia("(width >= 1100px)");
 export function isDesk() { return DESK.matches; }
+// The pane beside the list only where a view keeps one (deskView): the gems
+// open the token as its own page (Lorenzo, 16/10: "il grafico si attivera'
+// solo se l'utente clicca su una delle gemme").
+const paneMode = () => isDesk() && document.documentElement.dataset.deskList !== "false";
 const deskEmpty = document.createElement("div");
 deskEmpty.className = "desk-empty";
 deskEmpty.textContent = "Pick a token to see its chart and research";
@@ -259,7 +263,7 @@ export function openDetail(id, startTab) {
   markRows(id);
   if (!d.open) {
     document.documentElement.classList.add("detail-open");
-    if (isDesk()) {
+    if (paneMode()) {
       // Non-modal: the list stays usable, and keeps the focus it had.
       const was = document.activeElement;
       d.show();
@@ -278,7 +282,7 @@ export function openDetail(id, startTab) {
 // Desktop: the token lists (memes, gems, strategies) sit in a column with the
 // token page beside them; the other views (agent, profile, wallet, swap)
 // take the whole width, so the pane closes.
-const LIST_VIEWS = new Set(["meme", "gems", "top"]);
+const LIST_VIEWS = new Set(["meme", "top"]);
 export function deskView(name) {
   document.documentElement.dataset.deskList = String(LIST_VIEWS.has(name));
   if (!isDesk()) return;
