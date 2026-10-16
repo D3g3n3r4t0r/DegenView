@@ -1,6 +1,6 @@
-# 2026-10-16 — Podio = primi tre della Top 25 — `seed-0321` (Claude, a mano)
+# 2026-10-16 — Podio in alto: lasciato "pound for pound" (Claude)
 
-Lorenzo: "il podio in alto (top 3) dovrebbe rispecchiare anche l'ordine dei primi 3 posti nella Top25". Il podio usava `p4p` (arenas.py, distacco dalla mediana dell'arena in sigma); ora `top.js` usa `bestByScore(entries)` sia per `paintTop3` sia per `paintRank`. `p4p` resta nella risposta del server ma il frontend non lo usa piu'.
+Lorenzo aveva chiesto che il podio rispecchiasse i primi tre della Top 25 (#552, podio per punteggio); appena andato online: "No aspetta / No, annulla". Revertito: il podio resta `p4p` (distacco dalla mediana della propria arena), la Top 25 per punteggio assoluto, quindi possono differire. Non riproporlo senza che lo chieda lui.
 
 # 2026-10-16 — Menu gemme riordinato, sezione Top 25, mercato DEX in tempo reale — `seed-0319`, `seed-0320` (Claude, a mano)
 
