@@ -132,8 +132,6 @@ from app.trading.onchain import judge as onchain_judge
 from app.trading.onchain import code_review as onchain_code_review
 from app.trading.onchain import backtest_lab as onchain_backtest_lab
 from app.trading.onchain import strategy_lab as onchain_strategy_lab
-from app.trading.onchain import candle_archive as onchain_candle_archive
-from app.trading.onchain import ladder_watch as onchain_ladder_watch
 from app.trading.onchain import autotrader as onchain_autotrader
 from app.trading.onchain import deep_recheck as onchain_deep_recheck
 from app.trading.onchain import live_prices as onchain_live_prices
@@ -347,7 +345,6 @@ async def _fetch_cached_since(key: tuple, provider: DataProvider, symbol: str, i
     async def _do():
         return await fetch_ohlcv_canonical(provider, symbol, interval, 0, since_ms=since_ms)
     return await get_or_fetch(key, _do)
-
 
 
 # Token di quotazione usati per l'auto-trade on-chain dalla watchlist: uno
@@ -885,181 +882,7 @@ async def _watchlist_alert_loop() -> None:
                     )
 
 
-_SNIPER_ONCHAIN_STRATEGY = "Lorenzo (trend-follower)"
-_SNIPER_ONCHAIN_MIN_LIQUIDITY_USD = 3000.0
-# "Nuovi arrivi", non token stagionati: lo sniper archivia tutto cio' che ha
-# mai incontrato, questo ponte guarda solo l'arco in cui "nuovo" ha ancora
-# senso — un token con 3 mesi di storia non e' piu' un arrivo da inseguire.
-_SNIPER_ONCHAIN_MAX_AGE_HOURS = 72.0
-_SNIPER_ONCHAIN_POLL_SECONDS = 180
-# Lorenzo: "voglio evitare rug pull [...] token legittimi con progetti seri
-# [...] market cap non oltre i 100.000 dollari". Vale anche per il pilota,
-# che compra davvero: un candidato dello sniper passa dallo stesso filtro
-# degli avvisi, e i listing gia' verificati entrano direttamente.
-_SNIPER_ONCHAIN_MAX_MCAP_USD = 100_000.0
-_PILOT_VERDICT_TTL_S = 6 * 3600
 _pilot_verdicts: dict[str, tuple[float, dict]] = {}
-
-
-async def _pilot_vet(candidate) -> dict:
-    """Esito del filtro di legittimita' per un candidato dello sniper, tenuto
-    qualche ora (un "wait" no: si riprova al giro dopo)."""
-    key = f"{candidate.chain_id}:{candidate.token_address}"
-    if key in onchain_outcomes.shamed():
-        return {"status": "fail", "reason": "already rugged on us", "checks": []}
-    cached = _pilot_verdicts.get(key)
-    if cached and _time.time() - cached[0] < _PILOT_VERDICT_TTL_S:
-        return cached[1]
-    links = onchain_legit.merge_links({
-        "websites": [candidate.website] if candidate.website else [],
-        "socials": [s for s in candidate.socials if isinstance(s, dict)],
-    })
-    token = {"chain": candidate.chain_id, "symbol": candidate.symbol, "name": candidate.name,
-             "token_address": candidate.token_address, "market_cap": candidate.market_cap,
-             "liquidity_usd": candidate.liquidity_usd}
-    async with http_client.pooled(timeout=10.0) as client:
-        verdict = await onchain_legit.assess(token, links, client)
-    if verdict["status"] != "wait":
-        _pilot_verdicts[key] = (_time.time(), verdict)
-    return verdict
-
-
-def _vetted_listing_candidates() -> list:
-    """I listing gia' passati dal filtro, nella forma dei candidati dello
-    sniper: arrivano prima e sono gia' verificati."""
-    from app.sniper.cache import Candidate
-    now = _time.time()
-    out = []
-    # Un rug gia' subito (outcomes.shame) non si ricompra: Lorenzo, "fammi sparire VISE".
-    for item in onchain_outcomes.without_shamed(onchain_listings.recent()):
-        born = item.get("created_at") or item.get("found_at") or now
-        out.append(Candidate(
-            chain_id=item["chain"], token_address=item.get("token_address") or "",
-            pair_address=item.get("pair_address") or "", symbol=item["symbol"], name=item.get("name") or "",
-            dex_id=item.get("dex") or "", pair_url=item.get("pair_url") or "", price_usd=0.0,
-            market_cap=item.get("market_cap"), liquidity_usd=float(item.get("liquidity_usd") or 0),
-            volume_h24=0.0, volume_h1=0.0, age_hours=(now - born) / 3600, buy_sell_ratio=0.0,
-            website=item.get("website"), socials=item.get("socials") or [],
-        ))
-    return out
-
-
-async def _sniper_onchain_bridge_loop() -> None:
-    """Ponte fra lo sniper (scanner di nuovi arrivi DEX, gia' in piedi per
-    tutte le chain che copre) e il wallet on-chain — Lorenzo: "la strategia
-    trend follower [...] inglobata sul wallet, così da usarla
-    automaticamente su dei ticker on chain sfruttando la logica dello
-    sniper che già scansionava anche i nuovi arrivi".
-
-    Non un secondo motore di segnali: questo ponte fa SOLO una cosa,
-    aggiungere alla watchlist (upsert, mai un duplicato) i candidati dello
-    sniper su Solana/Robinhood che passano i filtri minimi, con la
-    strategia di Lorenzo attiva — poi e' _watchlist_alert_loop, sopra, a
-    valutare il segnale ed eseguire, con gli STESSI guardrail di ogni
-    altro ordine automatico. Per-utente e opt-in
-    (User.sniper_autotrade_chains, spento di default): nessun utente vede
-    la propria watchlist popolarsi senza averlo acceso lui stesso.
-
-    Richiede telegram_chat_id configurato, come ogni altra entry — non e'
-    un requisito nuovo di questo ponte, e' lo stesso di
-    _watchlist_alert_loop sopra, che salta un'intera entry (alert
-    incluso l'auto-trade) se l'owner non ha il chat_id impostato."""
-    while True:
-        await asyncio.sleep(_SNIPER_ONCHAIN_POLL_SECONDS)
-        try:
-            await _sniper_onchain_bridge_tick()
-        except Exception:  # noqa: BLE001 — il ciclo non deve fermarsi del tutto
-            logger.exception("sniper_onchain_bridge_loop: giro fallito")
-
-
-async def _sniper_onchain_bridge_tick() -> None:
-    """Un giro solo — separato dal `while True` sopra per essere testabile
-    senza dover far girare un loop infinito, stesso schema di
-    _check_limit_order/limit_order_loop."""
-    users_by_chain: dict[str, list[User]] = {}
-    for user in auth.list_users():
-        for chain in user.sniper_autotrade_chains:
-            users_by_chain.setdefault(chain, []).append(user)
-    if not users_by_chain or not settings.sniper_enabled:
-        return  # nessuno l'ha acceso, o lo sniper stesso e' spento: niente da leggere
-
-    from app.sniper import cache as sniper_cache
-
-    seen: dict[str, list[str]] = {chain: [] for chain in users_by_chain}
-    accepted: dict[str, int] = dict.fromkeys(users_by_chain, 0)
-    vetted = _vetted_listing_candidates()
-    vetted_keys = {(c.chain_id, c.token_address) for c in vetted}
-    for candidate in vetted + [c for c in sniper_cache.get_candidates()
-                               if (c.chain_id, c.token_address) not in vetted_keys]:
-        interested = users_by_chain.get(candidate.chain_id)
-        if not interested:
-            continue
-        if (candidate.token_address or candidate.symbol) in seen[candidate.chain_id]:
-            continue
-        seen[candidate.chain_id].append(candidate.token_address or candidate.symbol)
-        reason = None
-        if candidate.liquidity_usd < _SNIPER_ONCHAIN_MIN_LIQUIDITY_USD:
-            reason = f"liquidity ${candidate.liquidity_usd:,.0f} below ${_SNIPER_ONCHAIN_MIN_LIQUIDITY_USD:,.0f}"
-        elif candidate.age_hours > _SNIPER_ONCHAIN_MAX_AGE_HOURS:
-            reason = f"too old ({candidate.age_hours:.0f} h, max {_SNIPER_ONCHAIN_MAX_AGE_HOURS:.0f})"
-        elif not candidate.token_address or not candidate.pair_address:
-            reason = "token or pool address missing"
-        elif not candidate.market_cap or candidate.market_cap > _SNIPER_ONCHAIN_MAX_MCAP_USD:
-            reason = f"cap {'unknown' if not candidate.market_cap else f'${candidate.market_cap:,.0f}'} above ${_SNIPER_ONCHAIN_MAX_MCAP_USD:,.0f}"
-        elif (candidate.chain_id, candidate.token_address) not in vetted_keys:
-            try:
-                verdict = await _pilot_vet(candidate)
-            except Exception:  # noqa: BLE001 — un filtro che non risponde non fa passare niente
-                logger.exception("sniper_onchain_bridge: filtro fallito su %s", candidate.symbol)
-                verdict = {"status": "wait", "reason": "check failed"}
-            if verdict["status"] != "ok":
-                reason = verdict["reason"] or "does not pass the filter"
-        if reason:
-            onchain_pilot.record_rejection(
-                candidate.chain_id, symbol=candidate.symbol, reason=reason,
-                liquidity_usd=candidate.liquidity_usd, age_hours=candidate.age_hours,
-            )
-            continue
-        symbol = f"{candidate.symbol}@{candidate.chain_id}:{candidate.pair_address}"
-        for user in interested:
-            if user.onchain_wallets.get(candidate.chain_id) is None:
-                continue
-            try:
-                existing = next(
-                    (e for e in watchlist_store.list_entries(user.id) if e.symbol == symbol), None,
-                )
-                if existing is not None:
-                    continue  # gia' seguito da questo utente, niente da rifare
-                # Il timeframe segue la storia del token (Lorenzo: "auto
-                # aggiusta le candele col time frame corretto"): a 1d un token
-                # di poche ore non avrebbe mai una candela chiusa.
-                interval = onchain_radar.auto_interval(candidate.age_hours * 3600)
-                probe = await dexscreener_provider.fetch_ohlcv(symbol, interval, 2)
-                if probe.empty:
-                    continue
-                entry = watchlist_store.add_entry(
-                    user.id, symbol, "dex", interval=interval, on_close=True,
-                    base_token_address=candidate.token_address,
-                )
-                watchlist_store.set_strategy_enabled(entry.id, _SNIPER_ONCHAIN_STRATEGY, True)
-                watchlist_store.set_auto_trade(entry.id, _SNIPER_ONCHAIN_STRATEGY, True)
-                accepted[candidate.chain_id] += 1
-                onchain_pilot.record_discovery(
-                    user.id, symbol, name=candidate.name, token_address=candidate.token_address,
-                    liquidity_usd=candidate.liquidity_usd, age_hours=candidate.age_hours,
-                    score=f"{candidate.score_total}/{candidate.score_max}",
-                )
-                logger.info(
-                    "sniper_onchain_bridge: %s aggiunto alla watchlist di %s (Lorenzo trend-follower)",
-                    symbol, user.email,
-                )
-            except Exception:  # noqa: BLE001 — un candidato/utente che fallisce non deve bloccare gli altri
-                logger.exception("sniper_onchain_bridge: errore su %s per %s", symbol, user.email)
-
-    for chain, tokens in seen.items():
-        onchain_pilot.record_scan(
-            chain, seen=tokens, accepted=accepted[chain], interval_s=_SNIPER_ONCHAIN_POLL_SECONDS,
-        )
 
 
 # --- pausa per quota esaurita ------------------------------------------------
@@ -1621,17 +1444,6 @@ async def _telegram_reply(chat_id: str, text: str) -> None:
     await telegram.send_to(chat_id, _html.escape(reply, quote=False))
 
 
-async def _ai_scan_loop() -> None:
-    """DeepSeek's shadow judgement on each meme alert (ai_scan.py)."""
-    await asyncio.sleep(90)
-    while True:
-        try:
-            await onchain_ai_scan.run_once()
-        except Exception:
-            logger.exception("ai scan")
-        await asyncio.sleep(onchain_ai_scan.EVERY_S)
-
-
 async def _deepseek_recap_loop() -> None:
     """Lorenzo: "voglio un riepilogo giornaliero di quanti token ci ha fatto
     risparmiare, su telegram". Every evening at deepseek_desk.RECAP_HOUR."""
@@ -1694,9 +1506,7 @@ async def lifespan(app: FastAPI):
         background.append(asyncio.create_task(onchain_twap_jobs_resume.resume_running_twap_jobs()))
     t1 = asyncio.create_task(_watchlist_alert_loop())
     if trading:
-        background += [asyncio.create_task(limit_order_loop()),
-                       asyncio.create_task(_sniper_onchain_bridge_loop()),
-                       asyncio.create_task(_ai_scan_loop())]
+        background.append(asyncio.create_task(limit_order_loop()))
     t4 = asyncio.create_task(_weekly_recap_loop())
     background.append(asyncio.create_task(perf.loop_lag_probe()))
     from app.trading.onchain.storage import data_file as _perf_data_file
@@ -1709,7 +1519,7 @@ async def lifespan(app: FastAPI):
     # Gem research (leaderboard, outcomes, layers, weekly re-check, studies):
     # one run at 22:00 with onchain_nightly_enabled (Lorenzo, 07/10: "tutto in
     # una tranche a fine serata"), the old loops otherwise. Trading,
-    # strategies and the Meme Sniper only with onchain_trading_enabled (off).
+    # The automatic strategies and the Meme Sniper were removed on 16/10.
     from app.trading.onchain import nightly as onchain_nightly
     research = {
         "nightly": lambda: onchain_nightly.nightly_loop(lambda: _top_entries(ARENA_POOL)),
@@ -1722,32 +1532,12 @@ async def lifespan(app: FastAPI):
     }
     radar_tasks = [asyncio.create_task(research[name]()) for name in
                    onchain_nightly.loop_plan(settings.onchain_radar_enabled, settings.onchain_nightly_enabled)]
-    if settings.onchain_radar_enabled and trading:
-        radar_tasks += [asyncio.create_task(onchain_radar.radar_loop()),
-                        asyncio.create_task(onchain_listings.listings_loop()),
-                        asyncio.create_task(onchain_radar.listings_backtest_loop()),
-                        asyncio.create_task(onchain_backtest_lab.lab_loop()),
-                        asyncio.create_task(onchain_strategy_lab.lab_loop(_top_entries)),
-                        asyncio.create_task(onchain_candle_archive.archive_loop(lambda: _top_entries(50))),
-                        asyncio.create_task(onchain_ladder_watch.watch_loop()),
-                        asyncio.create_task(_onchain_signals_loop()),
-                        asyncio.create_task(_wealth_loop())]
-    sniper_tasks: list[asyncio.Task] = []
-    if settings.sniper_enabled and trading:
-        from app.sniper import cache as sniper_cache
-        from app.sniper import agents as sniper_agents
-        from app.sniper.cex_check import enrichment_loop
-        sniper_tasks.append(asyncio.create_task(sniper_cache.polling_loop()))
-        sniper_tasks.append(asyncio.create_task(enrichment_loop()))
-        sniper_tasks.extend(await sniper_agents.start_all())
     yield
     await http_client.aclose()
     t1.cancel()
     t4.cancel()
     t5.cancel()
     for t in radar_tasks:
-        t.cancel()
-    for t in sniper_tasks:
         t.cancel()
     for t in background:
         t.cancel()
@@ -4126,89 +3916,6 @@ async def onchain_risk_status(chain: OnchainChain, user: User = Depends(auth.get
     }
 
 
-class SniperAutotradeRequest(BaseModel):
-    enabled: bool
-
-
-@app.get("/api/onchain/sniper-autotrade")
-async def get_sniper_autotrade(user: User = Depends(auth.get_current_user)) -> dict:
-    _require_trading()
-    return {"chains": user.sniper_autotrade_chains}
-
-
-@app.patch("/api/onchain/sniper-autotrade/{chain}")
-async def set_sniper_autotrade(
-    chain: OnchainChain, body: SniperAutotradeRequest, user: User = Depends(auth.get_current_user),
-) -> dict:
-    """Opt-in per lo sniper che aggiunge da solo nuovi arrivi on-chain alla
-    watchlist con la strategia di Lorenzo attiva — vedi
-    _sniper_onchain_bridge_loop. Spento di default per ogni utente,
-    acceso solo qui, mai da un default globale."""
-    _require_trading()
-    if chain not in user.onchain_wallets:
-        raise HTTPException(status_code=400, detail=f"No {chain} wallet for this user — create it first.")
-    updated = auth.set_sniper_autotrade_chain(user.id, chain, body.enabled)
-    return {"chains": updated.sniper_autotrade_chains}
-
-
-def _pilot_token_view(user: User, entry: WatchlistEntry, chain: str, positions: dict, journal: list[dict]) -> dict:
-    """Un token sotto il pilota, detto in parole: in che stato e' e perche'."""
-    base_symbol = entry.symbol.split("@", 1)[0]
-    found = onchain_pilot.discovery(user.id, entry.symbol)
-    evaluation = onchain_pilot.last_evaluation(entry.id)
-    mine = [j for j in journal if j.get("symbol") == entry.symbol]
-    position = positions.get((entry.base_token_address or "").lower())
-
-    events = [
-        {"ts": j["ts"], "text": f"{_PILOT_SIGNAL_WORDS.get(j['signal_type'], j['signal_type'])} signal: "
-                                f"{_PILOT_OUTCOME_WORDS.get(j['outcome'], j['outcome'])}" + (f" — {j['detail']}" if j.get("detail") else "")}
-        for j in mine[:6]
-    ]
-    if found:
-        events.append({"ts": found["added_at"], "text": "Added to watch (found by the sniper)"})
-
-    if position:
-        state, label = "in", "In position"
-        reason = f"{position['quantity']:g} tokens, cost ${position['cost_usd']:,.2f}"
-    elif mine and mine[0]["outcome"] != "eseguito":
-        state, label = "blocked", "Signal not executed"
-        reason = mine[0].get("detail") or _PILOT_OUTCOME_WORDS.get(mine[0]["outcome"], mine[0]["outcome"])
-    elif mine:
-        state, label = "watch", "Exited, watching"
-        reason = f"last order: {_PILOT_SIGNAL_WORDS.get(mine[0]['signal_type'], mine[0]['signal_type'])}"
-    else:
-        state, label = "watch", "Watching the trend"
-        reason = "no strategy signal so far"
-
-    return {
-        "symbol": base_symbol,
-        "watch_symbol": entry.symbol,
-        "chain": chain,
-        "name": (found or {}).get("name") or base_symbol,
-        "token_address": entry.base_token_address,
-        "interval": entry.strategy_intervals.get(_SNIPER_ONCHAIN_STRATEGY, entry.interval),
-        "added_at": (found or {}).get("added_at"),
-        "liquidity_at_add": (found or {}).get("liquidity_usd"),
-        "age_at_add": (found or {}).get("age_hours"),
-        "score": (found or {}).get("score"),
-        "last_eval_at": (evaluation or {}).get("ts"),
-        "last_price": (evaluation or {}).get("price"),
-        "position": position,
-        "state": state,
-        "state_label": label,
-        "reason": reason,
-        "events": sorted(events, key=lambda e: e["ts"], reverse=True),
-    }
-
-
-_PILOT_SIGNAL_WORDS = {
-    "entry_long": "buy", "flip_to_long": "buy",
-    "exit_long": "sell", "flip_to_short": "sell",
-    "entry_short": "short", "exit_short": "close short",
-}
-_PILOT_OUTCOME_WORDS = {"eseguito": "executed", "saltato": "skipped", "fallito": "failed"}
-
-
 @app.get("/api/onchain/radar")
 async def onchain_radar_view(user: User = Depends(auth.get_current_user)) -> dict:
     """Token giovani su Solana e Robinhood che una strategia dell'archivio
@@ -4879,17 +4586,6 @@ async def _sim_trend_signal(s: dict) -> None:
 
 onchain_strategy_lab.on_signal(_sim_trend_signal)
 
-_SIGNALS_TICK_S = 30
-_signals_started = _time.time()
-
-
-def _past_meme_alerts() -> list[dict]:
-    """Listings the Meme Sniper published fresh enough to go out on Telegram
-    (the same test as listings._publish), with the moment they went out."""
-    return [{**x, "at": x["found_at"]} for x in onchain_listings.recent()
-            if x.get("found_at") and x.get("created_at")
-            and x["found_at"] - x["created_at"] <= onchain_listings.NOTIFY_MAX_AGE_S]
-
 
 async def _notify_autotrade(user: User, row: dict) -> None:
     """Italian, like every message Lorenzo reads."""
@@ -4909,21 +4605,6 @@ async def _notify_autotrade(user: User, row: dict) -> None:
         text = (f"{tag} · il sistema ha venduto <b>{sym}</b> per {row.get('usdg', 0):.2f} USDG"
                 + (f" ({ret * 100:+.1f}%)" if ret is not None else "") + f" · {row.get('why', '')}")
     await telegram.send_to(user.telegram_chat_id, text)
-
-
-class AutotraderUpdate(BaseModel):
-    mode: Literal["off", "sim", "real"] | None = None
-    pct: int | None = None
-    sim_cash: float | None = None
-
-
-@app.get("/api/onchain/autotrader")
-async def get_autotrader(user: User = Depends(auth.get_current_user)) -> dict:
-    """The system trading the Robinhood wallet: switch, share, position, trades."""
-    _require_trading()
-    _require_onchain_enabled()
-    return {**onchain_autotrader.view(user.id), "has_wallet": "robinhood" in user.onchain_wallets,
-            "server_live": settings.onchain_execution_enabled}
 
 
 _top_wallet_cache: dict = {"at": 0.0, "data": None}
@@ -4976,30 +4657,6 @@ async def top_backtest(user: User = Depends(auth.get_current_user)) -> dict:
     _require_trading()
     _require_onchain_enabled()
     return await _top_wallet()
-
-
-@app.patch("/api/onchain/autotrader")
-async def set_autotrader(body: AutotraderUpdate, user: User = Depends(auth.get_current_user)) -> dict:
-    _require_trading()
-    _require_onchain_enabled()
-    if body.mode in ("sim", "real") and "robinhood" not in user.onchain_wallets:
-        raise HTTPException(status_code=400, detail="Create the Robinhood Chain wallet first.")
-    usdg_now = None
-    if body.mode == "sim":
-        try:
-            # Cash = USDC + USDG (both 6 decimals): the simulation starts from what the wallet holds.
-            cash_tokens = [onchain_autotrader.USDG] + ([onchain_autotrader._meta["usdc"]] if onchain_autotrader._meta["usdc"] else [])
-            rows = await onchain_balances._robinhood_known_token_balances(
-                user.onchain_wallets["robinhood"].address, cash_tokens)
-            usdg_now = sum(r["amount_raw"] for r in rows) / 10 ** onchain_autotrader.USDG_DECIMALS
-        except Exception:
-            usdg_now = None
-    try:
-        view = onchain_autotrader.configure(user.id, body.mode, body.pct, usdg_now=usdg_now,
-                                            sim_cash=body.sim_cash)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return {**view, "has_wallet": True, "server_live": settings.onchain_execution_enabled}
 
 
 # ------------------------------------------------------------------ profile
@@ -5206,20 +4863,6 @@ async def wallets_total(wallet: Literal["real", "sim"] = "real",
     _record_wealth(user, snap)     # the header asks every minute: the chart follows it
     return {"total": snap["total"], "cash": snap["cash"], "by_chain": snap["by_chain"], "missing": snap["missing"],
             "complete": snap["complete"], "live": _live_marks(snap)}
-
-
-async def _wealth_loop() -> None:
-    await asyncio.sleep(60)
-    while True:
-        for user in auth.list_users():
-            if not _all_addresses(user):
-                continue
-            try:
-                snap = await _wallet_snapshot(user)
-                _record_wealth(user, snap)
-            except Exception:
-                logger.exception("wealth snapshot %s", user.id)
-        await asyncio.sleep(onchain_wealth.SNAPSHOT_S)
 
 
 def _joined_hint(user: User) -> float | None:
@@ -5754,68 +5397,6 @@ async def get_avatar(uid: str) -> FileResponse:
     return FileResponse(path, media_type="image/webp", headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
 
-def _charts_on_screen() -> list[tuple[str, str, str, str]]:
-    """The charts a tap is likely to open, at the interval the token page
-    starts on: the top memes (5m), the newest alerts (5m), the top gems (1h)."""
-    out = []
-    for m in (onchain_outcomes.meme_board().get("items") or [])[:8]:
-        out.append((m.get("chain"), m.get("pair_address"), m.get("symbol"), "5m"))
-    for a in (onchain_alert_track.board("meme", limit=5).get("items") or []):
-        out.append((a.get("chain"), a.get("pair_address"), a.get("symbol"), "5m"))
-    for e in (onchain_leaderboard.board().get("entries") or [])[:6]:
-        out.append((e.get("chain"), e.get("pair_address"), e.get("symbol"), "1h"))
-    seen, uniq = set(), []
-    for t in out:
-        if t[0] and t[1] and (t[0], t[1], t[3]) not in seen:
-            seen.add((t[0], t[1], t[3]))
-            uniq.append(t)
-    return uniq
-
-
-async def _backfill_alert_track() -> None:
-    try:
-        async with http_client.pooled(timeout=15.0) as client:
-            n = await onchain_alert_track.backfill(client, _past_meme_alerts(), "meme")
-        logger.info("alert track: %d past meme alerts rebuilt from candles", n)
-    except Exception:
-        logger.exception("alert track: backfill failed")
-
-
-async def _onchain_signals_loop() -> None:
-    """Prices for the alert track record, the listings' best strategy next
-    to each meme alert, and once a day the reviewer."""
-    from app.notify import telegram
-    _fire(_backfill_alert_track())
-    warmed_at = 0.0
-    while True:
-        try:
-            async with http_client.pooled(timeout=15.0) as client:
-                await onchain_alert_track.sample(client)
-                await onchain_alert_track.refresh_system(client)
-            await onchain_autotrader.tick(auth.list_users(), notify=_notify_autotrade)
-            if onchain_autotrader.trend_keys():
-                try:
-                    marks = await onchain_live_prices.prices(onchain_autotrader.trend_keys())
-                    onchain_autotrader.trend_marks({k: v["p"] for k, v in marks.items()})
-                except Exception:
-                    logger.exception("trend book marks")
-            if _time.time() - warmed_at >= onchain_radar.WARM_EVERY_S:
-                warmed_at = _time.time()
-                _fire(onchain_radar.warm_charts(_charts_on_screen()))
-            for item in onchain_listings.recent():
-                onchain_alert_track.set_strategy("meme", item.get("chain"),
-                                                 item.get("token_address") or item.get("pair_address"),
-                                                 item.get("backtest"))
-            if (onchain_ai_review.enabled() and onchain_ai_review.due()
-                    and _time.time() - _signals_started >= onchain_ai_review.FIRST_DELAY_S):
-                entry = await onchain_ai_review.review()
-                if entry:
-                    await telegram.send_message(onchain_ai_review.telegram_text(entry))
-        except Exception:
-            logger.exception("segnali on-chain: giro fallito")
-        await asyncio.sleep(_SIGNALS_TICK_S)
-
-
 @app.get("/api/onchain/scan-feed")
 async def onchain_scan_feed(user: User = Depends(auth.get_current_user)) -> dict:
     """The scanners' live tape: every pool judged, with the hour's counts."""
@@ -5916,68 +5497,6 @@ async def onchain_radar_follow(req: RadarFollowRequest, user: User = Depends(aut
         if req.enabled:
             watchlist_store.set_strategy_params(entry.id, req.strategy_name, req.params)
     return {"active": _radar_watch_strategies(user.id, symbol)}
-
-
-@app.get("/api/onchain/pilot/{chain}")
-async def onchain_pilot_status(chain: OnchainChain, user: User = Depends(auth.get_current_user)) -> dict:
-    """Tutto quello che il pilota fa da solo su una chain, in una risposta:
-    se e' acceso, quando ha guardato l'ultima volta, cosa ha esaminato e
-    scartato, i token che segue e perche', e — prima di tutto — cosa gli
-    impedirebbe di lavorare. Lorenzo: "voglio avere il completo controllo
-    di quello che sta succedendo"."""
-    _require_trading()
-    _require_onchain_enabled()
-    enabled = chain in user.sniper_autotrade_chains
-    breaker = onchain_ledger.breaker_status(user.id, chain)
-    spent_today = onchain_ledger.get_daily_spent(user.id, chain)
-
-    # Cosa lo ferma, in ordine di gravita'. Ogni voce e' una condizione che
-    # il codice controlla davvero (bridge e giro dei segnali), non un'ipotesi.
-    health = [
-        {"key": "wallet", "ok": chain in user.onchain_wallets, "label": "Wallet on this network",
-         "detail": "created" if chain in user.onchain_wallets else "missing: create it first"},
-        {"key": "scanner", "ok": settings.sniper_enabled, "label": "New-token scanner",
-         "detail": "on" if settings.sniper_enabled else "off on the server: no new tokens coming in"},
-        {"key": "signals", "ok": bool(settings.telegram_bot_token and user.telegram_chat_id and _telegram_allowed(user)),
-         "label": "Signal check",
-         "detail": "on" if settings.telegram_bot_token and user.telegram_chat_id and _telegram_allowed(user)
-         else "stopped: needs Telegram linked, without it the strategy is not evaluated"},
-        {"key": "execution", "ok": settings.onchain_execution_enabled, "label": "Live orders",
-         "detail": "enabled" if settings.onchain_execution_enabled else "off on the server: signals are only logged"},
-        {"key": "breaker", "ok": not breaker.get("tripped"), "label": "Emergency brake",
-         "detail": "armed, not tripped" if not breaker.get("tripped") else "tripped: re-arm it from Limits"},
-    ]
-
-    positions = {p["token"].lower(): p for p in onchain_ledger.get_all_positions(user.id, chain)}
-    journal = trading_log.list_for(user.id, limit=200)
-    tokens = []
-    for entry in watchlist_store.list_entries(user.id):
-        if entry.asset_type != "dex" or not entry.auto_trade.get(_SNIPER_ONCHAIN_STRATEGY):
-            continue
-        # "BASE@chain:pool", lo stesso formato che scrive il ponte.
-        if entry.symbol.partition("@")[2].partition(":")[0] != chain:
-            continue
-        tokens.append(_pilot_token_view(user, entry, chain, positions, journal))
-    order = {"in": 0, "blocked": 1, "watch": 2}
-    tokens.sort(key=lambda t: (order.get(t["state"], 3), -(t["added_at"] or 0)))
-
-    return {
-        "chain": chain,
-        "enabled": enabled,
-        "strategy": _SNIPER_ONCHAIN_STRATEGY,
-        "filters": {"min_liquidity_usd": _SNIPER_ONCHAIN_MIN_LIQUIDITY_USD, "max_age_hours": _SNIPER_ONCHAIN_MAX_AGE_HOURS},
-        "limits": {
-            "per_trade_usd": settings.onchain_max_usd_per_trade,
-            "daily_usd": settings.onchain_max_usd_per_day,
-            "spent_today_usd": spent_today,
-        },
-        "scan": onchain_pilot.scan_state(chain),
-        "signals_every_s": WATCHLIST_POLL_SECONDS,
-        "health": health,
-        "working": enabled and all(h["ok"] for h in health),
-        "tokens": tokens,
-        "rejected": onchain_pilot.rejected(chain)[:8],
-    }
 
 
 @app.post("/api/onchain/risk/circuit-breaker/{chain}/reset")
@@ -7814,7 +7333,6 @@ async def export_backtest(
     )
 
 
-
 # ── Un lavoro pesante per volta, per utente ───────────────────────────────
 #
 # Una ricerca stabile su Lorenzo vale circa 5000 backtest e tiene occupato un
@@ -8689,400 +8207,6 @@ async def remove_issue(issue_id: str, user: User = Depends(auth.get_current_user
     return {"deleted": issue_id}
 
 
-@app.get("/api/sniper/candidates")
-async def sniper_candidates(
-    chain: str = Query("", description="Filter by chain_id"),
-    min_score: int = Query(0, ge=0, description="Minimum score_total"),
-    min_liq: float = Query(0.0, ge=0, description="Minimum liquidity_usd"),
-    max_mc: float = Query(0.0, ge=0, description="Maximum market_cap (0 = no limit)"),
-    exclude_cex: bool = Query(False, description="Exclude CEX-listed tokens"),
-    serious_only: bool = Query(True, description="Serious projects only: excludes meme coins"),
-    limit: int = Query(0, ge=0, description="Max results (0 = all)"),
-) -> dict:
-    from app.sniper import cache as sniper_cache
-    from app.sniper.quality import is_serious
-    candidates = sniper_cache.get_candidates()
-    quality: dict[str, str] = {}
-    if serious_only:
-        kept = []
-        for c in candidates:
-            ok, why = is_serious(
-                symbol=c.symbol,
-                name=c.name,
-                liquidity_usd=c.liquidity_usd,
-                market_cap=c.market_cap,
-                volume_h24=c.volume_h24,
-                age_hours=c.age_hours,
-                website=c.website,
-                cex_listed=c.cex_listed,
-            )
-            if ok:
-                quality[c.token_address] = why
-                kept.append(c)
-        candidates = kept
-    if chain:
-        candidates = [c for c in candidates if c.chain_id == chain]
-    if min_score:
-        candidates = [c for c in candidates if c.score_total >= min_score]
-    if min_liq:
-        candidates = [c for c in candidates if c.liquidity_usd >= min_liq]
-    if max_mc:
-        candidates = [c for c in candidates if c.market_cap is None or c.market_cap <= max_mc]
-    if exclude_cex:
-        candidates = [c for c in candidates if c.cex_listed is not True]
-    if limit:
-        candidates = candidates[:limit]
-    return {
-        "candidates": [
-            {
-                "chain_id": c.chain_id,
-                "token_address": c.token_address,
-                "pair_address": c.pair_address,
-                "symbol": c.symbol,
-                "name": c.name,
-                "dex_id": c.dex_id,
-                "pair_url": c.pair_url,
-                "price_usd": c.price_usd,
-                "market_cap": c.market_cap,
-                "liquidity_usd": c.liquidity_usd,
-                "volume_h24": c.volume_h24,
-                "volume_h1": c.volume_h1,
-                "age_hours": round(c.age_hours, 1),
-                "buy_sell_ratio": round(c.buy_sell_ratio, 2),
-                "website": c.website,
-                "socials": c.socials,
-                "score_total": c.score_total,
-                "score_max": c.score_max,
-                "score_items": c.score_items,
-                "first_seen": c.first_seen,
-                "last_updated": c.last_updated,
-                "cex_listed": c.cex_listed,
-                "quality_reason": quality.get(c.token_address),
-            }
-            for c in candidates
-        ],
-        "last_scan": sniper_cache.last_scan_ts(),
-        "count": len(candidates),
-        "serious_only": serious_only,
-    }
-
-
-@app.post("/api/sniper/scan")
-async def sniper_trigger_scan() -> dict:
-    _require_trading()
-    if not settings.sniper_enabled:
-        raise HTTPException(status_code=503, detail="Sniper spento")
-    from app.sniper import cache as sniper_cache
-    added = await sniper_cache.run_scan()
-    return {"ok": True, "added": added, "total": len(sniper_cache.get_candidates())}
-
-
-@app.get("/api/sniper/log")
-async def sniper_log(limit: int = Query(500, ge=1, le=5000)) -> dict:
-    """Persisted scan-log history — survives a page reload / redeploy, so the
-    console can show what happened before this browser session connected."""
-    from app.sniper import cache as sniper_cache
-    return {"events": sniper_cache.get_log(limit)}
-
-
-@app.get("/api/sniper/scan-stream")
-async def sniper_scan_stream() -> StreamingResponse:
-    """SSE feed of scan log events. Scanning itself runs continuously in the
-    background (polling_loop, every 5 min) regardless of whether anyone is
-    watching — this just relays whatever scan is happening, automatic or
-    manually triggered, to any open browser tab for as long as it stays
-    connected.
-
-    Since two scans can be up to 5 minutes apart, the connection can sit
-    with nothing to send for a while — long enough for an intermediate
-    proxy to decide it's dead and silently drop it, which left the page
-    stuck showing "Connessione…" and reconnecting in a loop. A periodic
-    SSE comment (ignored by EventSource, invisible to the console) keeps
-    bytes flowing so the connection — and the browser's "open" state —
-    survives the quiet stretches."""
-    from app.sniper import cache as sniper_cache
-
-    async def event_gen():
-        q = sniper_cache.subscribe()
-        try:
-            yield f"data: {json.dumps({'type': 'connected', 'ts': _time.time()})}\n\n"
-            while True:
-                try:
-                    event = await asyncio.wait_for(q.get(), timeout=15.0)
-                    yield f"data: {json.dumps(event)}\n\n"
-                except asyncio.TimeoutError:
-                    yield ": heartbeat\n\n"
-        finally:
-            sniper_cache.unsubscribe(q)
-
-    return StreamingResponse(
-        event_gen(),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-    )
-
-
-@app.get("/api/sniper/market")
-async def sniper_market(
-    chain: str = Query("all"),
-    q: str = Query(""),
-    sort: str = Query("liquidity"),
-    limit: int = Query(100, ge=1, le=500),
-    offset: int = Query(0, ge=0),
-) -> dict:
-    """Browse the market screener's store — every pool GeckoTerminal handed
-    us on the last market scan, not just new ones. No score here (see
-    sniper/market.py docstring for why); this is filter/sort/browse only."""
-    from app.sniper import market as sniper_market_mod
-
-    items, total = sniper_market_mod.get_tokens(
-        chain=chain or None, query=q or None, sort=sort, limit=limit, offset=offset
-    )
-    return {
-        "tokens": [
-            {
-                "chain_id": t.chain_id,
-                "token_address": t.token_address,
-                "pair_address": t.pair_address,
-                "symbol": t.symbol,
-                "name": t.name,
-                "dex_id": t.dex_id,
-                "pair_url": t.pair_url,
-                "price_usd": t.price_usd,
-                "market_cap": t.market_cap,
-                "liquidity_usd": t.liquidity_usd,
-                "volume_h24": t.volume_h24,
-                "age_hours": round(t.age_hours, 1),
-                "buy_sell_ratio": round(t.buy_sell_ratio, 2),
-                "last_updated": t.last_updated,
-            }
-            for t in items
-        ],
-        "total": total,
-        "last_scan": sniper_market_mod.last_scan_ts(),
-    }
-
-
-@app.post("/api/sniper/market-scan")
-async def sniper_market_trigger_scan() -> dict:
-    _require_trading()
-    if not settings.sniper_enabled:
-        raise HTTPException(status_code=503, detail="Sniper spento")
-    from app.sniper import market as sniper_market_mod
-
-    added = await sniper_market_mod.run_market_scan()
-    return {"ok": True, "added": added}
-
-
-@app.post("/api/sniper/market-import")
-async def sniper_market_import() -> dict:
-    """Apply the sniper's primary filter + on-chain scoring to every token
-    currently in the market store and add qualifying ones to the sniper
-    candidate archive. Progress is streamed via /api/sniper/market-stream."""
-    _require_trading()
-    if not settings.sniper_enabled:
-        raise HTTPException(status_code=503, detail="Sniper spento")
-    from app.sniper import market as sniper_market_mod
-
-    if sniper_market_mod.import_in_progress():
-        return {"ok": False, "error": "Import already in progress"}
-    added = await sniper_market_mod.run_import()
-    return {"ok": True, "added": added}
-
-
-@app.get("/api/sniper/market-log")
-async def sniper_market_log(limit: int = 500) -> dict:
-    from app.sniper import market as sniper_market_mod
-    return {"events": sniper_market_mod.get_log(limit=limit)}
-
-
-@app.get("/api/sniper/agents")
-async def sniper_agents_status() -> dict:
-    from app.sniper import agents as sniper_agents
-    return {"agents": sniper_agents.get_status()}
-
-
-@app.get("/api/sniper/research/auto/{token_address}")
-async def sniper_research_auto(token_address: str) -> dict:
-    """Auto-detect chain via DexScreener, then run research."""
-    chain_id = None
-    async with http_client.pooled(timeout=12.0) as client:
-        try:
-            r = await client.get(
-                f"https://api.dexscreener.com/latest/dex/tokens/{token_address}"
-            )
-            if r.status_code == 200:
-                data = r.json()
-                pairs = data.get("pairs") or []
-                if pairs:
-                    chain_id = pairs[0].get("chainId")
-        except Exception:
-            pass
-
-    if not chain_id:
-        return {
-            "chain_id": None,
-            "token_address": token_address,
-            "research_score": 0,
-            "description": "Token not found on DexScreener — check the address.",
-            "checks": [{"label": "Not found on DexScreener", "passed": False}],
-            "links": [],
-        }
-
-    return await sniper_research(chain_id, token_address)
-
-
-@app.get("/api/sniper/research/{chain_id}/{token_address}")
-async def sniper_research(chain_id: str, token_address: str) -> dict:
-    """Query CoinGecko + DexScreener for a token and return a research report."""
-    from app.sniper.cex_check import _CHAIN_TO_PLATFORM, _CEX_IDS
-
-    checks = []
-    links = []
-    description = None
-    research_score = 0
-
-    platform = _CHAIN_TO_PLATFORM.get(chain_id)
-
-    async with http_client.pooled(timeout=12.0) as client:
-        # ── CoinGecko contract lookup ──
-        cg_data = None
-        if platform:
-            try:
-                r = await client.get(
-                    f"https://api.coingecko.com/api/v3/coins/{platform}/contract/{token_address}"
-                )
-                if r.status_code == 200:
-                    cg_data = r.json()
-            except Exception:
-                pass
-
-        if cg_data:
-            research_score += 2
-            checks.append({"label": "Found on CoinGecko", "passed": True, "note": cg_data.get("name", "")})
-
-            description = (cg_data.get("description") or {}).get("en", "")
-            if description and len(description) > 400:
-                description = description[:400] + "…"
-
-            # market data quality
-            md = cg_data.get("market_data") or {}
-            mc = (md.get("market_cap") or {}).get("usd")
-            if mc and mc > 0:
-                research_score += 1
-                checks.append({"label": "On-chain market cap verified", "passed": True, "note": f"${mc:,.0f}"})
-
-            # community / social
-            comm = cg_data.get("community_data") or {}
-            tw = comm.get("twitter_followers", 0) or 0
-            tg = comm.get("telegram_channel_user_count", 0) or 0
-            if tw > 1000:
-                research_score += 1
-                checks.append({"label": "Active Twitter", "passed": True, "note": f"{tw:,} followers"})
-            elif tw > 0:
-                checks.append({"label": "Twitter present", "warning": True, "note": f"{tw:,} followers"})
-            if tg > 500:
-                research_score += 1
-                checks.append({"label": "Active Telegram", "passed": True, "note": f"{tg:,} members"})
-            elif tg > 0:
-                checks.append({"label": "Telegram present", "warning": True, "note": f"{tg:,} members"})
-
-            # dev activity
-            dev = cg_data.get("developer_data") or {}
-            commits = (dev.get("commit_count_4_weeks") or 0)
-            if commits > 5:
-                research_score += 1
-                checks.append({"label": "Recent GitHub activity", "passed": True, "note": f"{commits} commit/4wk"})
-            elif commits > 0:
-                checks.append({"label": "GitHub repository", "warning": True, "note": f"{commits} commit/4wk"})
-
-            # links
-            lnks = cg_data.get("links") or {}
-            if lnks.get("homepage"):
-                for h in (lnks["homepage"] or []):
-                    if h:
-                        links.append({"label": "Official website", "url": h})
-                        break
-            if lnks.get("twitter_screen_name"):
-                links.append({"label": "Twitter", "url": f"https://twitter.com/{lnks['twitter_screen_name']}"})
-            if lnks.get("telegram_channel_identifier"):
-                links.append({"label": "Telegram", "url": f"https://t.me/{lnks['telegram_channel_identifier']}"})
-
-            # CEX tickers check
-            tickers = cg_data.get("tickers") or []
-            cex_names = [t["market"]["name"] for t in tickers if t.get("market", {}).get("identifier", "") in _CEX_IDS]
-            if cex_names:
-                checks.append({"label": f"Listed on {cex_names[0]}", "warning": True, "note": "already on a CEX"})
-            else:
-                research_score += 1
-                checks.append({"label": "Not on a CEX yet", "passed": True, "note": "early opportunity"})
-        else:
-            checks.append({"label": "Not found on CoinGecko", "passed": False, "note": "token not indexed"})
-
-        # ── DexScreener pair check ──
-        try:
-            r2 = await client.get(
-                f"https://api.dexscreener.com/latest/dex/tokens/{token_address}"
-            )
-            if r2.status_code == 200:
-                pairs = (r2.json().get("pairs") or [])
-                if pairs:
-                    best = max(pairs, key=lambda p: float(p.get("liquidity", {}).get("usd", 0) or 0))
-                    liq = float((best.get("liquidity") or {}).get("usd", 0) or 0)
-                    vol = float((best.get("volume") or {}).get("h24", 0) or 0)
-                    if liq >= 10_000:
-                        research_score += 1
-                        checks.append({"label": "Solid DEX liquidity", "passed": True, "note": f"${liq:,.0f}"})
-                    elif liq >= 1_000:
-                        checks.append({"label": "Low DEX liquidity", "warning": True, "note": f"${liq:,.0f}"})
-                    else:
-                        checks.append({"label": "Very low liquidity", "passed": False, "note": f"${liq:,.0f}"})
-                    if liq > 0 and vol / liq > 0.05:
-                        research_score += 1
-                        checks.append({"label": "Real volume (>5% liq)", "passed": True, "note": f"${vol:,.0f}/24h"})
-                    if best.get("pairUrl"):
-                        links.append({"label": "DexScreener", "url": best["pairUrl"]})
-        except Exception:
-            pass
-
-    research_score = min(research_score, 10)
-    return {
-        "chain_id": chain_id,
-        "token_address": token_address,
-        "research_score": research_score,
-        "description": description,
-        "checks": checks,
-        "links": links,
-    }
-
-
-@app.get("/api/sniper/market-stream")
-async def sniper_market_stream() -> StreamingResponse:
-    """SSE feed of market-scan progress (per-chain, since this is a heavier
-    on-demand pull — up to 10 pages per chain — not the every-5-minutes
-    sniper scan)."""
-    from app.sniper import market as sniper_market_mod
-
-    async def event_gen():
-        q = sniper_market_mod.subscribe()
-        try:
-            yield f"data: {json.dumps({'type': 'connected', 'ts': _time.time()})}\n\n"
-            while True:
-                try:
-                    event = await asyncio.wait_for(q.get(), timeout=15.0)
-                    yield f"data: {json.dumps(event)}\n\n"
-                except asyncio.TimeoutError:
-                    yield ": heartbeat\n\n"
-        finally:
-            sniper_market_mod.unsubscribe(q)
-
-    return StreamingResponse(
-        event_gen(),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-    )
-
-
 @app.websocket("/ws/live")
 async def live_feed(websocket: WebSocket) -> None:
     params = websocket.query_params
@@ -9223,16 +8347,10 @@ _INDEX_HTML = (
 )
 
 
-_SNIPER_HTML = (
-    (FRONTEND_DIR / "sniper.html")
-    .read_text(encoding="utf-8")
-    .replace('href="/static/style.css"', f'href="/static/style.css?v={_ASSET_VERSION}"')
-)
-
 # Imported on demand by main.js only when trading is on: preloading them
 # would download ~45 KB that the app never runs.
 _ONCHAIN_LAZY_MODULES = frozenset({
-    "autotrade.js", "pilot.js", "portfolio.js", "send.js", "signals.js", "strategies.js",
+    "portfolio.js", "send.js", "signals.js", "strategies.js",
 })
 
 
@@ -9334,12 +8452,6 @@ async def index(user: User | None = Depends(auth.get_current_user_optional)) -> 
             headers={"Cache-Control": "private, no-cache", "Vary": "Cookie"},
         )
     return HTMLResponse(_INDEX_HTML, headers=_HTML_HEADERS)
-
-
-@app.get("/sniper")
-async def sniper_app() -> HTMLResponse:
-    _require_trading()
-    return HTMLResponse(_SNIPER_HTML, headers=_HTML_HEADERS)
 
 
 def _render_engn_page() -> str:
