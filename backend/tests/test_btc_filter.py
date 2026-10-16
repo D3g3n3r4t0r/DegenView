@@ -120,3 +120,18 @@ def test_years_mostly_blocked_are_measured():
     btc_regime.set_closes(_btc("2023-01-01"), pin=True)
     assert btc_regime.down_share(2022) == 0.0
     assert btc_regime.down_share(2024) > 0.9
+
+
+def test_status_for_the_top_bar_badge():
+    assert btc_regime.status() == {"loaded": False}
+    btc_regime.set_closes(_btc("2022-01-01"), pin=True)
+    st = btc_regime.status()
+    assert st["loaded"] and st["ema21"]["up"] is False and "band" not in st
+    # it turned down in early 2022, on a Monday
+    since = pd.Timestamp(st["ema21"]["since"])
+    assert since.dayofweek == 0 and pd.Timestamp("2022-01-01") <= since < pd.Timestamp("2022-04-01")
+
+
+def test_removed_strategies_are_gone():
+    # Lorenzo, 16/10: RSI+BB 4H and RSI+BB BTC band "erano delle prove"
+    assert "RSI+BB 4H" not in STRATEGY_REGISTRY and "RSI+BB BTC band (long only)" not in STRATEGY_REGISTRY

@@ -41,8 +41,6 @@ STRATEGY_FAMILY: dict[str, str] = {
     "Combined reversal (long only)": FAMILY_TREND,  # trend entries are most of its trades
     "Gabriele (RSI+BB reversal)": FAMILY_REVERSION,
     "Gabriele 2 (RSI+BB long/short)": FAMILY_REVERSION,
-    "RSI+BB 4H": FAMILY_REVERSION,
-    "RSI+BB BTC band (long only)": FAMILY_REVERSION,
     "Claudio 4H": FAMILY_REVERSION,
     "Claudio Trend 4H": FAMILY_TREND,
     "Claudio 1D": FAMILY_TREND,

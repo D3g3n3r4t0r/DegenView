@@ -33,8 +33,6 @@ from app.analysis.strategies import (
     DEFAULT_PARAMS,
     EXHAUSTION_DEFAULT_PARAMS,
     LKI2_DEFAULT_PARAMS,
-    LKI4H_DEFAULT_PARAMS,
-    RSI_BB_4H,
     LKI_DEFAULT_PARAMS,
 )
 from app.models import BacktestResult
@@ -140,7 +138,7 @@ def _volatility_thresholds(volatility_pct: float) -> tuple[float, int]:
 # 0-9 trades whatever the thresholds (BTC, KAS, SOL 4h, measured 09/10), so the
 # usual 6-12 floor rejected every candidate and the search returned nothing
 # (segnalazione 6453f4df, "non produce risultati").
-_MIN_TRADES_FLOOR = {"Gabriele (RSI+BB reversal)": 4, "Gabriele 2 (RSI+BB long/short)": 4, RSI_BB_4H: 4}
+_MIN_TRADES_FLOOR = {"Gabriele (RSI+BB reversal)": 4, "Gabriele 2 (RSI+BB long/short)": 4}
 
 
 def _score(bt: BacktestResult, volatility_pct: float = 2.0, min_trades: int | None = None) -> float:
@@ -218,14 +216,11 @@ def _random_exhaustion_params(rng: random.Random, base: dict | None = None) -> d
 # moltiplicatore 2, qualunque valore ci sia nei campi del Lab, e cerca solo
 # RSI ipercomprato/ipervenduto.
 GABRIELE_FIXED = {"rsi_length": 14, "bb_length": 20, "bb_mult": 2.0}
-GABRIELE_STRATEGIES = ("Gabriele (RSI+BB reversal)", "Gabriele 2 (RSI+BB long/short)", RSI_BB_4H)
+GABRIELE_STRATEGIES = ("Gabriele (RSI+BB reversal)", "Gabriele 2 (RSI+BB long/short)")
 
 
 def gabriele_fixed(strategy_name: str) -> dict:
-    """The three values the RSI+BB searches never move: 14/20/2.0, and the
-    multiplier at 2.5 for RSI+BB 4H."""
-    if strategy_name == RSI_BB_4H:
-        return {**GABRIELE_FIXED, "bb_mult": LKI4H_DEFAULT_PARAMS["bb_mult"]}
+    """The three values the RSI+BB searches never move: 14/20/2.0."""
     return dict(GABRIELE_FIXED)
 
 
@@ -249,7 +244,6 @@ _STRATEGY_SPACES: dict[str, tuple[dict, callable]] = {
     "Accumulo / Distribuzione (long-term)": (EXHAUSTION_DEFAULT_PARAMS, _random_exhaustion_params),
     "Gabriele (RSI+BB reversal)": (LKI_DEFAULT_PARAMS, _random_gabriele_params),
     "Gabriele 2 (RSI+BB long/short)": (LKI2_DEFAULT_PARAMS, _random_gabriele_params),
-    RSI_BB_4H: (LKI4H_DEFAULT_PARAMS, _random_gabriele_params),
 }
 
 # Every whole value, not steps of 5: with only two dimensions the full grid
@@ -278,7 +272,6 @@ _GRID_EXHAUSTION = {
 _GRID_SPACES: dict[str, dict] = {
     "Gabriele (RSI+BB reversal)": _GRID_GABRIELE,
     "Gabriele 2 (RSI+BB long/short)": _GRID_GABRIELE,
-    RSI_BB_4H: _GRID_GABRIELE,
     "Accumulo / Distribuzione (long-term)": _GRID_EXHAUSTION,
 }
 
@@ -479,7 +472,7 @@ def optimize_strategy(
         for _ in range(trials):
             stop_if_asked(should_stop)
             candidate = random_params_fn(rng, default_params)
-            if strategy_name in GABRIELE_STRATEGIES:   # 2.5 for RSI+BB 4H
+            if strategy_name in GABRIELE_STRATEGIES:
                 candidate = {**candidate, **gabriele_fixed(strategy_name)}
             candidate = {**candidate, **sticky}
             bt = run_backtest(df_in, candidate, backtest_params, strategy_name=strategy_name)
@@ -565,7 +558,7 @@ def optimize_strategy(
 #
 # Lorenzo, 15/10: "Imposta la riduzione del range delle RSI che abbiamo
 # adottato nella strategia 4H anche alle altre due strategie": the same
-# 20-40 x 65-85 as RSI+BB 4H (441 backtests instead of 961). Only the ranges:
+# 20-40 x 65-85 as the (since removed) RSI+BB 4H, 441 backtests instead of 961. Only the ranges:
 # the yearly-trade rule of these two stays at one a year.
 MAX_RETURN_OVERSOLD = range(20, 41)      # 20, 21, ..., 40
 MAX_RETURN_OVERBOUGHT = range(65, 86)    # 65, 66, ..., 85
@@ -740,33 +733,17 @@ def max_return_search(
     return top[0]["params"], top[0]["backtest"], evaluated, top
 
 
-# ── RSI+BB 4H: the multiplier joins the search, two kinds of winner ──────────
-# Lorenzo, 14/10: "rendere ottimizzabile anche il Bollinger Multiplier con un
-# range da 2.0 a 2.8 [...] 2.0, 2.1, 2.2 [...] e combinarli con i range di
-# ipercomprato e ipervenduto", then "due tipi di risultati: il piu' solido in
-# rapporto al profitto e il piu' profittevole anche con una minore solidita',
-# ma non deve essere una solidita' completamente azzerata".
-#
-# Solidity of a cell = how much of its return its neighbours keep: the median
-# return of the cells one step away (oversold ±1, overbought ±1, multiplier
-# ±0.1) over its own return, between 0 and 1. A lone spike surrounded by
-# little scores near 0; a shelf scores near 1.
-MAX_RETURN_MULTS = [round(2.0 + 0.1 * i, 1) for i in range(9)]   # 2.0 … 2.8
+# ── Most solid / most profitable search (Claudio 4H, max_return_search_nd) ──
+# Born for RSI+BB 4H (Lorenzo, 14/10: "il piu' solido in rapporto al profitto
+# e il piu' profittevole anche con una minore solidita'"), which is gone
+# (16/10). Solidity of a cell = the median return of its ±1-step neighbours
+# over its own, between 0 and 1: a lone spike scores near 0, a shelf near 1.
 SOLIDITY_FLOOR = 0.25            # the "most profitable" still needs this much
 REFINE_PER_KIND = 10
-
-
-# RSI+BB 4H (Lorenzo, 15/10): "ridurrei i range RSI: solo da 20 a 40 e da 65
-# a 85" and "un minimo piu' alto di trade per anno: almeno tre invece di uno"
-# — option B: at least 3 a year on average over the judged years, and no
+# Lorenzo, 15/10: "un minimo piu' alto di trade per anno: almeno tre invece
+# di uno" — at least 3 a year on average over the judged years, and no
 # judged year without a trade.
-MAX_RETURN_4H_OVERSOLD = range(20, 41)
-MAX_RETURN_4H_OVERBOUGHT = range(65, 86)
 MIN_TRADES_PER_YEAR_4H = 3
-
-
-def max_return_size_3d() -> int:
-    return len(MAX_RETURN_4H_OVERSOLD) * len(MAX_RETURN_4H_OVERBOUGHT) * len(MAX_RETURN_MULTS)
 
 
 def _admitted(bt: BacktestResult, years: list[int], constraints: Constraints) -> str | None:
@@ -783,183 +760,8 @@ def _admitted(bt: BacktestResult, years: list[int], constraints: Constraints) ->
     return None
 
 
-def solidity(key: tuple, returns: dict[tuple, float]) -> tuple[float, list[float]]:
-    """(solidity 0..1, neighbour returns) of `key` = (oversold, overbought, mult)."""
-    os_, ob, m = key
-    own = returns.get(key)
-    near = []
-    for k in ((os_ - 1, ob, m), (os_ + 1, ob, m), (os_, ob - 1, m), (os_, ob + 1, m),
-              (os_, ob, round(m - 0.1, 1)), (os_, ob, round(m + 0.1, 1))):
-        if k in returns:
-            near.append(returns[k])
-    if own is None or own <= 0 or not near:
-        return 0.0, near
-    med = sorted(near)[len(near) // 2] if len(near) % 2 else sum(sorted(near)[len(near) // 2 - 1: len(near) // 2 + 1]) / 2
-    return max(0.0, min(1.0, med / own)), near
-
-
 COARSE_SEEDS = 6               # best cells per kind refined at full resolution
-FINE_RADIUS = 3                # ±3 RSI points, ±0.3 multiplier around each seed
-
-
-def max_return_search_3d(
-    strategy_name: str,
-    backtest: Callable[[dict], BacktestResult],
-    constraints: Constraints | None = None,
-    progress: Callable[[str], None] | None = None,
-    should_stop: Callable[[], bool] | None = None,
-    years: list[int] | None = None,
-    fast_backtest: Callable[[dict], BacktestResult] | None = None,
-    coarse: bool = True,
-) -> tuple[dict, BacktestResult, int, list[dict]]:
-    """Oversold 10-40 × overbought 60-90 × multiplier 2.0-2.8, whole chart.
-
-    Returns two results (or one, when the same cell wins both):
-      * "solid": the highest return its neighbourhood keeps (return ×
-        solidity) — the configuration that holds up under small changes;
-      * "profitable": the highest return with solidity ≥ SOLIDITY_FLOOR.
-    Same limits as max_return_search (60% drawdown, a trade every year,
-    Lab filters). With `fast_backtest` the grid is scanned with fills at the
-    close and only the shortlisted cells are re-run with `backtest`.
-
-    `coarse` (Lorenzo, 15/10, speed): a first pass at RSI step 2 and
-    multiplier step 0.2 over the whole range, then every cell within ±3 /
-    ±0.3 of the best COARSE_SEEDS of each kind at full resolution, so the
-    winners and their solidity are measured exactly like the full grid.
-    A peak too narrow to show at step 2 is lost — and would have had a
-    solidity near zero anyway.
-    """
-    if strategy_name not in GABRIELE_STRATEGIES:
-        raise ValueError(f"max-return search is for RSI+BB only, not {strategy_name!r}")
-    constraints = constraints or _NO_CONSTRAINTS
-    say = progress or (lambda _m: None)
-    fixed = gabriele_fixed(strategy_name)
-    years = list(years or [])
-    os_all, ob_all, m_all = list(MAX_RETURN_4H_OVERSOLD), list(MAX_RETURN_4H_OVERBOUGHT), list(MAX_RETURN_MULTS)
-    say(f"oversold 20-40 × overbought 65-85 × multiplier 2.0-2.8 "
-        f"({max_return_size_3d()} combinations), max drawdown {MAX_RETURN_DRAWDOWN_CAP:.0f}%"
-        + (f", at least {MIN_TRADES_PER_YEAR_4H} trades a year on average and one in every year "
-           f"{', '.join(map(str, years))}" if years else ""))
-    scan = fast_backtest or backtest
-    returns: dict[tuple, float] = {}
-    ok: dict[tuple, BacktestResult] = {}
-    why: dict[str, int] = {}
-
-    def evaluate(keys) -> None:
-        todo = [k for k in keys if k not in returns]
-        step = max(1, len(todo) // 10)
-        for i, key in enumerate(todo, 1):
-            stop_if_asked(should_stop)
-            os_, ob, m = key
-            bt = scan({**fixed, "bb_mult": m, "rsi_oversold": os_, "rsi_overbought": ob})
-            returns[key] = ranked_return(bt)
-            reason = _admitted(bt, years, constraints)
-            if reason:
-                why[reason] = why.get(reason, 0) + 1
-            else:
-                ok[key] = bt
-            if i % step == 0:
-                say(f"{len(returns)} tried — acceptable so far: {len(ok)}")
-
-    if coarse:
-        grid = [(o, b, m) for m in m_all[::2] for o in os_all[::2] for b in ob_all[::2]]
-        say(f"first pass, RSI every 2 and multiplier every 0.2: {len(grid)} combinations")
-        evaluate(grid)
-
-        def coarse_sol(k):
-            os_, ob, m = k
-            near = [returns[x] for x in ((os_ - 2, ob, m), (os_ + 2, ob, m), (os_, ob - 2, m), (os_, ob + 2, m),
-                                         (os_, ob, round(m - 0.2, 1)), (os_, ob, round(m + 0.2, 1))) if x in returns]
-            own = returns[k]
-            if own <= 0 or not near:
-                return 0.0
-            near.sort()
-            return max(0.0, min(1.0, near[len(near) // 2] / own))
-        cand = list(ok)
-        seeds = set(sorted(cand, key=lambda k: returns[k] * coarse_sol(k), reverse=True)[:COARSE_SEEDS])
-        seeds |= set(sorted((k for k in cand if coarse_sol(k) >= SOLIDITY_FLOOR / 2),
-                            key=lambda k: returns[k], reverse=True)[:COARSE_SEEDS])
-        fine = set()
-        for os_, ob, m in seeds:
-            for o in os_all:
-                if abs(o - os_) > FINE_RADIUS:
-                    continue
-                for b in ob_all:
-                    if abs(b - ob) > FINE_RADIUS:
-                        continue
-                    for mm in m_all:
-                        if abs(mm - m) <= FINE_RADIUS / 10 + 1e-9:
-                            fine.add((o, b, mm))
-        say(f"second pass, one by one around the best {len(seeds)}: {len(fine - set(returns))} more")
-        evaluate(sorted(fine))
-        # Only cells whose six neighbours were all measured compete.
-        def full_ring(k):
-            os_, ob, m = k
-            ring = [(os_ - 1, ob, m), (os_ + 1, ob, m), (os_, ob - 1, m), (os_, ob + 1, m),
-                    (os_, ob, round(m - 0.1, 1)), (os_, ob, round(m + 0.1, 1))]
-            inside = [x for x in ring if x[0] in MAX_RETURN_4H_OVERSOLD and x[1] in MAX_RETURN_4H_OVERBOUGHT and x[2] in m_all]
-            return all(x in returns for x in inside)
-        eligible = [k for k in ok if k in fine and full_ring(k)] or list(ok)
-    else:
-        evaluate([(o, b, m) for m in m_all for o in os_all for b in ob_all])
-        eligible = list(ok)
-    n = len(returns)
-    say("excluded: " + ", ".join(f"{v} {k.replace('_', ' ')}" for k, v in why.items()) if why else "nothing excluded")
-    if not ok:
-        if constraints.active and why.get("filtered"):
-            raise NoCandidateMeetsConstraints(constraints, n, why["filtered"])
-        raise ValueError(f"no combination holds the limits on this chart ({n} tried)")
-
-    sol = {k: solidity(k, returns) for k in eligible}
-    by_solid = sorted(eligible, key=lambda k: returns[k] * sol[k][0], reverse=True)
-    by_profit = sorted((k for k in eligible if sol[k][0] >= SOLIDITY_FLOOR), key=lambda k: returns[k], reverse=True)
-
-    def pick(order: list[tuple], kind: str) -> tuple | None:
-        if not fast_backtest:
-            return order[0] if order else None
-        best = None
-        for k in order[:REFINE_PER_KIND]:
-            os_, ob, m = k
-            bt = backtest({**fixed, "bb_mult": m, "rsi_oversold": os_, "rsi_overbought": ob})
-            if _admitted(bt, years, constraints):
-                continue
-            score = ranked_return(bt) * (sol[k][0] if kind == "solid" else 1.0)
-            if best is None or score > best[0]:
-                best = (score, k, bt)
-        if best:
-            ok[best[1]] = best[2]
-            return best[1]
-        return None
-
-    if fast_backtest:
-        say("fills inside the candle: re-checking the shortlist exactly as Run does")
-    solid_k = pick(by_solid, "solid")
-    profit_k = pick(by_profit, "profitable")
-    out, seen = [], set()
-    for kind, k in (("solid", solid_k), ("profitable", profit_k)):
-        if k is None:
-            continue
-        if k in seen:
-            out[0]["kind"] = "solid+profitable"
-            continue
-        seen.add(k)
-        s_, near = sol[k]
-        os_, ob, m = k
-        out.append({"rank": len(out) + 1, "kind": kind,
-                    "params": {**fixed, "bb_mult": m, "rsi_oversold": os_, "rsi_overbought": ob},
-                    "backtest": ok[k], "score": round(returns[k] * s_, 4),
-                    "solidity": round(s_, 3),
-                    "neighbours": {"mult_down": returns.get((os_, ob, round(m - 0.1, 1))),
-                                   "mult_up": returns.get((os_, ob, round(m + 0.1, 1))),
-                                   "median": round(sorted(near)[len(near) // 2], 2) if near else None}})
-    if not out:
-        raise ValueError("none of the best combinations holds the limits once filled inside the candle")
-    say(f"{n} combinations backtested of {max_return_size_3d()}")
-    for c in out:
-        p = c["params"]
-        say(f"{c['kind']}: oversold {p['rsi_oversold']}, overbought {p['rsi_overbought']}, multiplier "
-            f"{p['bb_mult']} → {ranked_return(c['backtest']):+.2f}% simple (solidity {c['solidity']:.0%})")
-    return out[0]["params"], out[0]["backtest"], n, out
+FINE_RADIUS = 3                # ±3 steps around each seed
 
 
 # ── Claudio 4H: the same search on its own three dimensions ─────────────────
@@ -989,7 +791,7 @@ def max_return_search_nd(
     fast_backtest: Callable[[dict], BacktestResult] | None = None,
     coarse: bool = True,
 ) -> tuple[dict, BacktestResult, int, list[dict]]:
-    """max_return_search_3d for any set of dimensions (Claudio 4H): coarse
+    """Most solid / most profitable search on any set of dimensions (Claudio 4H): coarse
     pass on every other value, then full resolution ±3 steps around the best
     COARSE_SEEDS of each kind; solidity = median return of the ±1-step
     neighbours over the cell's own; most solid and most profitable (solidity

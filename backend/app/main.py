@@ -76,7 +76,6 @@ from app.analysis.optimize import (
     is_optimizable,
     max_return_search,
     CLAUDIO_DIMS,
-    max_return_search_3d,
     max_return_search_nd,
     optimize_strategy,
 )
@@ -86,7 +85,6 @@ from app.analysis.strategies import (
     AVAILABLE_STRATEGIES,
     DEFAULT_STRATEGY,
     CLAUDIO_4H,
-    RSI_BB_4H,
     STRATEGY_REGISTRY,
     build_strategy_state,
     spot_only,
@@ -663,6 +661,11 @@ async def _watchlist_alert_loop() -> None:
                         )
 
                 for strategy_name in entry.strategies:
+                    # A strategy removed from the site (16/10: RSI+BB 4H, RSI+BB BTC
+                    # band) may still be saved on an entry: skip it, or
+                    # confirmed_events would fall back to Lorenzo's signals under its name.
+                    if strategy_name not in STRATEGY_REGISTRY:
+                        continue
                     strategy_interval = entry.strategy_intervals.get(strategy_name, entry.interval)
                     # Refetch if the strategy uses a different interval than the entry default
                     if strategy_interval != entry.interval:
@@ -1823,8 +1826,8 @@ class StrategyParamsQuery(BaseModel):
     rsi_oversold: int = 28
     rsi_overbought: int = 72
 
-    # Gabriele (RSI+BB reversal) and RSI+BB 4H. bb_mult unset = the
-    # strategy's own default: 2.0, or 2.5 for RSI+BB 4H.
+    # Gabriele (RSI+BB reversal). bb_mult unset = the strategy's own
+    # default (2.0).
     bb_length: int = 20
     bb_mult: float | None = None
 
@@ -1973,9 +1976,9 @@ def _dispatch_telegram_alerts(
 
 @app.get("/api/btc-regime")
 async def btc_regime_status() -> dict:
-    """Top-bar badge (16/10): BTC against its weekly EMA 21 (BTC filter)
-    and its Bull Market Support Band (RSI+BB BTC band), with the Monday
-    each verdict took effect. Closed weeks only, like the strategies."""
+    """Top-bar badge (16/10): BTC against its weekly EMA 21 (BTC filter),
+    with the Monday the verdict took effect. Closed weeks only, like the
+    strategies."""
     return btc_regime.status()
 
 
@@ -6289,15 +6292,14 @@ class OptimizeCandidate(BaseModel):
     # The return on the slice the search picked on; total_return_pct is the
     # whole history, as Run shows it.
     in_sample_return_pct: float | None = None
-    # Max return on RSI+BB 4H: "solid" / "profitable" / "solid+profitable",
+    # Max return on Claudio 4H: "solid" / "profitable" / "solid+profitable",
     # the share of the return its neighbours keep, and their returns.
     kind: str | None = None
     solidity: float | None = None
     neighbours: dict | None = None
-    # RSI+BB 4H: the same search run on the data up to a year ago, and what
-    # its pick of this kind did in the last year, which it never saw.
+    # Kept for old clients: always None since the last-year check went (15/10).
     verification: dict | None = None
-    # RSI+BB 4H: the history the search chose on (period, total and yearly
+    # Claudio 4H: the history the search chose on (period, total and yearly
     # return, trades a year, win rate, profit factor, drawdown, best/worst).
     history: dict | None = None
 
@@ -6525,12 +6527,11 @@ async def _max_return_payload(strategy_name, df, full, constraints, say, should_
     # The in-candle replay (fill_at "on_condition") costs up to 8 s a backtest:
     # the scan runs with fills at the close, the best pairs are re-run exactly.
     fast = partial(full, intrabar=False) if in_candle else None
-    # RSI+BB 4H also searches the multiplier and returns the most solid and
-    # the most profitable result (Lorenzo, 14/10).
+    # Claudio 4H returns the most solid and the most profitable result.
     if strategy_name == CLAUDIO_4H:
         search = partial(max_return_search_nd, dims=CLAUDIO_DIMS)
     else:
-        search = max_return_search_3d if strategy_name == RSI_BB_4H else max_return_search
+        search = max_return_search
     try:
         params, bt, evaluated, top = await _cpu(partial(
             search, strategy_name, full,
@@ -6558,9 +6559,7 @@ async def _max_return_payload(strategy_name, df, full, constraints, say, should_
                   f"candles, the same backtest as Run; the highest return within 60% "
                   f"drawdown wins"
                   + (f", with at least one trade in every year {years[0]}-{years[-1]}" if years else "")
-                  + (". Multiplier searched 2.0-2.8: the most solid and the most profitable result are shown"
-                     if strategy_name == RSI_BB_4H
-                     else ". Oversold, band width and ATR stop searched: the most solid and the most profitable result are shown"
+                  + (". Oversold, band width and ATR stop searched: the most solid and the most profitable result are shown"
                      if strategy_name == CLAUDIO_4H else ". The two best are shown")
                   + ". Chosen on the whole chart: no out-of-sample check."),
         ),
@@ -6582,7 +6581,7 @@ async def _max_return_payload(strategy_name, df, full, constraints, say, should_
     )
 
 
-FOUR_H_LAB = ("RSI+BB 4H", "Claudio 4H")   # detailed history card, two kinds of result
+FOUR_H_LAB = ("Claudio 4H",)   # detailed history card, two kinds of result
 
 
 def _simple_of(bt: BacktestResult) -> dict:

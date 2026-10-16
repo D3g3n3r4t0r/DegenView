@@ -3043,5 +3043,10 @@
     "status": "risolto",
     "at": 1792182444,
     "summary": "RSI+BB 4H e RSI+BB Reversal (BTC band) non compaiono piu' nei menu (barra in alto e Lab) ne' fra le strategie per alert e archivio; restano nel motore, cosi' un alert gia' salvato su una delle due continua a funzionare invece di rompersi. Con la BTC band se ne va anche il pezzo 'Band' del badge BTC in alto (serviva solo a lei); resta EMA21, cioe' il filtro BTC. I menu delle strategie ora sono divisi in gruppi: 'Reversal · solo long' (Trend EMA Reversal, RSI+BB Reversal, Combined Reversal), 'Long / short' (Trend EMA, RSI+BB Long/Short), 'Altre' (Accumulo/Distribuzione, Trend HF). Tolta la stella accanto a Trend EMA Reversal; il pulsante delle impostazioni consigliate resta dentro la strategia."
+  },
+  "seed-0313": {
+    "status": "risolto",
+    "at": 1792183033,
+    "summary": "Le due strategie non esistono piu' nemmeno nel codice: segnali, ricerca Max return a tre dimensioni del 4H (moltiplicatore 2.0-2.8), banda BTC settimanale, campi del Lab, confronto Claudio 4H contro RSI+BB 4H (script e workflow) e i loro test. Un alert gia' salvato su una delle due viene saltato in silenzio: prima sarebbe ricaduto sui segnali di Trend EMA con il nome sbagliato. Resta tutto il resto: Max return per RSI+BB Reversal e Long/Short, il filtro BTC, il livello 'Bull Market Support Band' sul grafico, l'ambiente di test 1D."
   }
 }

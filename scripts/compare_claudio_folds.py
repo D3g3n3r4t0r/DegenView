@@ -8,7 +8,7 @@ TRAIN_FROM (2023-01-01) on — the same search as the site, most solid and
 most profitable pick — and both picks then run on each TEST_YEARS year
 (2021, a strong bull year, and 2022, a strong bear year), never seen by the
 search, indicators warmed up on the candles before. Every strategy is long
-only ("solo long e uscita senza short"): RSI+BB 4H, Claudio 4H, Lorenzo's
+only ("solo long e uscita senza short"): Claudio 4H, Lorenzo's
 trend follower with its own default values (nothing searched) and searched,
 each also with a daily EMA 200 filter (no entry under it).
 Candles from Binance's public archive (data.binance.vision, since 2020), the
@@ -30,13 +30,12 @@ import zipfile
 import pandas as pd
 
 from app.analysis.backtest import run_backtest
-from app.analysis.optimize import CLAUDIO_DIMS, max_return_search, max_return_search_3d, max_return_search_nd
+from app.analysis.optimize import CLAUDIO_DIMS, max_return_search, max_return_search_nd
 from app.analysis.strategies import (
     CLAUDIO_1D,
     CLAUDIO_4H,
     CLAUDIO_TREND_4H,
     DEFAULT_PARAMS,
-    RSI_BB_4H,
     STRATEGY_REGISTRY,
 )
 
@@ -58,7 +57,7 @@ LORENZO_DIMS = (
     ("slopeFlen", list(range(3, 22, 2))),       # 10
     ("slopeSlen", list(range(15, 76, 5))),      # 13
 )
-# (label, strategy, fixed values, dimensions searched: None = RSI+BB 3D,
+# (label, strategy, fixed values, dimensions searched: "2d" = RSI+BB levels,
 # () = nothing, trend filter). Claudio v2 dropped after the 2021/22 test.
 # Lorenzo, 15/10: "la devi utilizzare come reversal, cioe' solo long e uscita
 # senza short" — here only: the site's Lorenzo stays long/short. The short
@@ -72,12 +71,10 @@ VARIANTS = (
     ("Claudio Trend 4H", CLAUDIO_TREND_4H, {}, CLAUDIO_TREND_DIMS, False),
     # the values fixed before the first test (120 candles, 4 ATR, EMA 200d), nothing searched
     ("Claudio Trend default", CLAUDIO_TREND_4H, {"ct_len": 120, "ct_atr": 4.0, "ct_ema_days": 200}, (), False),
-    ("RSI+BB 4H", RSI_BB_4H, {}, None, False),
     ("Claudio 4H", CLAUDIO_4H, {}, CLAUDIO_DIMS, False),
     ("Lorenzo default", LORENZO, dict(DEFAULT_PARAMS), (), False),
     ("Lorenzo searched", LORENZO, dict(DEFAULT_PARAMS), LORENZO_DIMS, False),
     # 15/10 "provalo": no entry while the price is under the daily EMA 200
-    ("RSI+BB 4H +EMA200d", RSI_BB_4H, {}, None, True),
     ("Claudio 4H +EMA200d", CLAUDIO_4H, {}, CLAUDIO_DIMS, True),
     ("Lorenzo default +EMA200d", LORENZO, dict(DEFAULT_PARAMS), (), True),
     ("Lorenzo searched +EMA200d", LORENZO, dict(DEFAULT_PARAMS), LORENZO_DIMS, True),
@@ -112,8 +109,6 @@ if os.environ.get("SET") == "btc":
     _L = dict(DEFAULT_PARAMS)
     if TF == "4h":
         VARIANTS = (
-            ("RSI+BB 4H", RSI_BB_4H, {}, None, False),
-            ("RSI+BB 4H +BTC", RSI_BB_4H, {}, None, "btc"),
             ("Lorenzo default", LORENZO, _L, (), False),
             ("Lorenzo default +BTC", LORENZO, _L, (), "btc"),
             ("Lorenzo searched", LORENZO, _L, LORENZO_DIMS, False),
@@ -151,7 +146,7 @@ if os.environ.get("SET") == "regimes":
         want = [x.replace("-", "") for x in os.environ["FILTERS"].split(",")]
         _F = tuple(f for f in _F if f[0] in want)
     if TF == "4h":
-        _S = (("RSI+BB 4H", RSI_BB_4H, {}, None, False), ("Lorenzo", LORENZO, _L, (), False),
+        _S = (("Lorenzo", LORENZO, _L, (), False),
               ("Lorenzo L/S", LORENZO, _L, (), True))
     else:
         _S = (("RSI+BB reversal", GABRIELE, {}, "2d", False), ("Gabriele 2 L/S", GABRIELE2, {}, "2d", True),
@@ -335,8 +330,6 @@ def run_pair(symbol, df):
             elif dims == "2d":
                 _, _, n, picks = max_return_search(strat, bt, years=years)
                 picks = [{**c, "kind": f"top{c['rank']}", "solidity": None} for c in picks]
-            elif dims is None:
-                _, _, n, picks = max_return_search_3d(strat, bt, years=years)
             else:
                 _, _, n, picks = max_return_search_nd(strat, bt, dims=dims, fixed=fixed, years=years)
         except ValueError as exc:

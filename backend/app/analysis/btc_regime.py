@@ -21,9 +21,9 @@ Sunday; its verdict applies from the Monday after, so no look-ahead. Before
 the BTC history starts (or before 21 weeks of it) the filter does not act.
 
 `btc_filter_exit` (second switch, only with the filter on): a long still open
-is also closed when the filter turns off. Measured: on RSI+BB 4H the worst
-2022 loss -61% -> -12% for +28 -> +25% a year in 2023-26; costly on RSI+BB
-1D (+33 -> +11% a year), no effect on Lorenzo.
+is also closed when the filter turns off. Measured: on the (since removed)
+RSI+BB 4H the worst 2022 loss -61% -> -12% for +28 -> +25% a year in
+2023-26; costly on RSI+BB 1D (+33 -> +11% a year), no effect on Lorenzo.
 
 The daily closes are cached in memory and refreshed in the background
 (main._btc_regime_loop); the strategy code is synchronous and only reads the
@@ -44,7 +44,6 @@ MIN_DAYS = 200      # daily closes needed to load (and 21 weeks of them)
 _closes: pd.Series | None = None
 _up: pd.Series | None = None       # weekly, indexed on the Monday it applies from
 _up_daily: pd.Series | None = None
-_band: pd.Series | None = None     # weekly, Monday it applies from: above the Bull Market Support Band
 _updated = 0.0
 _pinned = False
 
@@ -65,7 +64,7 @@ def enabled(params: dict | None) -> bool:
 def set_closes(closes: pd.Series, pin: bool = False) -> None:
     """Daily BTC closes (UTC-indexed). `pin` keeps them from the background
     refresh (tests)."""
-    global _closes, _up, _up_daily, _band, _updated, _pinned
+    global _closes, _up, _up_daily, _updated, _pinned
     closes = closes.astype(float).sort_index()
     if closes.index.tz is None:
         closes.index = closes.index.tz_localize("UTC")
@@ -81,16 +80,12 @@ def set_closes(closes: pd.Series, pin: bool = False) -> None:
     _up = up.shift(1, freq="D")                  # from the Monday after the close
     _up_daily = _up.reindex(pd.date_range(_up.index[0], _up.index[-1] + pd.Timedelta(days=6),
                                           freq="D", tz="UTC"), method="ffill") if len(_up) else _up
-    # Bull Market Support Band (weekly SMA 20 and EMA 21): above = over both;
-    # before 20 weeks of history it counts as not above
-    top = np.maximum(week.rolling(20).mean(), week.ewm(span=21, adjust=False).mean())
-    _band = ((week > top) & top.notna()).shift(1, freq="D")
     _closes, _updated, _pinned = day, time.time(), pin
 
 
 def clear() -> None:
-    global _closes, _up, _up_daily, _band, _updated, _pinned
-    _closes = _up = _up_daily = _band = None
+    global _closes, _up, _up_daily, _updated, _pinned
+    _closes = _up = _up_daily = None
     _updated, _pinned = 0.0, False
 
 
@@ -113,16 +108,6 @@ def up_mask(index: pd.DatetimeIndex) -> np.ndarray:
     return out.to_numpy(dtype=bool)
 
 
-def band_mask(index: pd.DatetimeIndex) -> np.ndarray:
-    """True where BTC's last closed week is above its Bull Market Support
-    Band (RSI+BB BTC band). Before the BTC history: False."""
-    if _band is None:
-        raise BtcRegimeUnavailable("RSI+BB BTC band: BTC daily candles not loaded yet, retry in a minute")
-    idx = index if index.tz is not None else index.tz_localize("UTC")
-    out = _band.reindex(idx, method="ffill")
-    return out.where(out.notna(), False).to_numpy(dtype=bool)
-
-
 def _state(weekly: pd.Series | None) -> dict | None:
     """Current verdict of a weekly series and the Monday it took effect."""
     if weekly is None or not len(weekly):
@@ -135,11 +120,11 @@ def _state(weekly: pd.Series | None) -> dict | None:
 
 
 def status() -> dict:
-    """BTC as the filter and the band strategy see it now (top-bar badge)."""
+    """BTC as the filter sees it now (top-bar badge)."""
     if _closes is None:
         return {"loaded": False}
     return {"loaded": True, "close": round(float(_closes.iloc[-1]), 2), "as_of": f"{_closes.index[-1]:%Y-%m-%d}",
-            "ema21": _state(_up), "band": _state(_band)}
+            "ema21": _state(_up)}
 
 
 def down_share(year: int) -> float:

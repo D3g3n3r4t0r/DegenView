@@ -311,14 +311,6 @@
       { key: "cl_ema_len", label: "Long average (candles)", type: "number", min: 10, default: 200 },
       { key: "cl_time_stop", label: "Time stop (candles)", type: "number", min: 1, default: 30 },
     ],
-    // RSI+BB 4H (Lorenzo, 13/10): the long-only RSI+BB, multiplier 2.5.
-    "RSI+BB 4H": [
-      { key: "rsi_length", label: "RSI length", type: "number", min: 1, default: 14 },
-      { key: "bb_length", label: "Bollinger length", type: "number", min: 1, default: 20 },
-      { key: "bb_mult", label: "Bollinger multiplier", type: "number", min: 0, step: 0.1, default: 2.5 },
-      { key: "rsi_oversold", label: "RSI oversold", type: "number", min: 0, max: 100, default: 28 },
-      { key: "rsi_overbought", label: "RSI overbought", type: "number", min: 0, max: 100, default: 72 },
-    ],
   };
 
   // Trend EMA Reversal (15/10): the very same fields as Trend EMA — same
@@ -332,12 +324,6 @@
     ...STRATEGY_PARAM_FIELDS["Gabriele (RSI+BB reversal)"],
   ].map((f) => ({ ...f }));
 
-  // RSI+BB BTC band (16/10): with BTC above its Bull Market Support Band
-  // either RSI oversold or a close under the lower band opens the long
-  // (both below it); out back above the middle band — no overbought level.
-  STRATEGY_PARAM_FIELDS["RSI+BB BTC band (long only)"] =
-    STRATEGY_PARAM_FIELDS["Gabriele (RSI+BB reversal)"].filter((f) => f.key !== "rsi_overbought").map((f) => ({ ...f }));
-
   // BTC filter (Lorenzo, 15/10: "il filtro Btc [...] da attivare/disattivare
   // su tutte le strategie"): no long entry while BTC's last closed week is
   // under its weekly EMA 21. Off by default; Run, alerts, archive and the
@@ -348,7 +334,7 @@
       key: "btc_filter", label: "BTC filter (no long while BTC < weekly EMA 21)",
       type: "checkbox", default: false,
     }, {
-      // 15/10: worth it on RSI+BB 4H (worst 2022 -61% -> -12%), costly on 1D
+      // 15/10: worth it on the old RSI+BB 4H (worst 2022 -61% -> -12%), costly on 1D
       key: "btc_filter_exit", label: "BTC filter: also close longs when it turns off",
       type: "checkbox", default: false,
     });
@@ -1387,7 +1373,6 @@
     "Accumulo / Distribuzione (long-term)",
     "Gabriele (RSI+BB reversal)",
     "Gabriele 2 (RSI+BB long/short)",
-    "RSI+BB 4H",
     "Claudio 4H",
   ]);
 
@@ -11889,7 +11874,6 @@
   const GRID_STRATEGIES = new Set([
     "Gabriele (RSI+BB reversal)",
     "Gabriele 2 (RSI+BB long/short)",
-    "RSI+BB 4H",
     "Accumulo / Distribuzione (long-term)",
   ]);
 
@@ -12112,8 +12096,7 @@
     if (claudio) { const mr = document.querySelector('input[name="lab-opt-mode"][value="max_return"]'); if (mr) mr.checked = true; }
     const maxWrap = labEl("lab-mode-maxret-wrap");
     if (maxWrap) {
-      // (not RSI+BB BTC band: not searched, its values are the tested ones)
-      const ok = (/RSI\+BB/.test(strategyName || "") && !/BTC band/.test(strategyName || "")) || claudio;
+      const ok = /RSI\+BB/.test(strategyName || "") || claudio;
       maxWrap.classList.toggle("hidden", !ok);
       // 15/10 (Lorenzo): on the RSI+BB strategies Max return is the
       // recommended search, Stable on the others — and it is preselected.
@@ -12336,7 +12319,7 @@
     const cands = (body && body.mode === "max_return" && body.top_candidates) || [];
     if (!cands.length) { box.classList.add("hidden"); box.innerHTML = ""; return; }
     const pct = (v) => (v == null ? "–" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`);
-    // RSI+BB 4H (14/10): the most solid and the most profitable, with how
+    // Claudio 4H: the most solid and the most profitable, with how
     // much of the return the neighbouring settings keep.
     const KIND = { solid: "Most solid", profitable: "Most profitable", "solid+profitable": "Most solid and most profitable" };
     const kinds = cands.some((c) => c.kind);
