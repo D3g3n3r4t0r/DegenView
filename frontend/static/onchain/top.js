@@ -227,9 +227,9 @@ function marketSub(e) {
   return line || (e.liquidity_usd != null ? `Liquidity ${usdShort(e.liquidity_usd)}` : "");
 }
 
-// Pearl (Lorenzo, 16/10): "le gemme selezionate su Early che pero' hanno
-// ottenuto un punteggio pari o superiore a 70".
-const PEARL_MIN = 70;
+// Pearl (Lorenzo, 16/10): "le gemme selezionate su Early", best score
+// first. The 70 floor is gone (same day: "togli il minimo di 70 [...] cosi'
+// e' vuota la classifica").
 function earlyRow(e, context) {
   const id = `gem:${e.chain}:${e.token_address}`;
   register(id, { kind: "gem", symbol: e.symbol, name: e.name, chain: e.chain, token: e.token_address, pair: e.pair_address,
@@ -242,8 +242,7 @@ function earlyRow(e, context) {
 function paintPearl(list) {
   const box = document.querySelector("[data-pearl-view]");
   if (!box) return;
-  // the score as shown (rounded): a "70" on screen is always a pearl
-  const pearls = list.filter((e) => Math.round(e.score ?? 0) >= PEARL_MIN).sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+  const pearls = [...list].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
   box.querySelector("[data-pearl-empty]").hidden = pearls.length > 0;
   box.querySelector("[data-pearl-rows]").innerHTML = pearls.map((e) => earlyRow(e, "Pearl")).join("");
 }
