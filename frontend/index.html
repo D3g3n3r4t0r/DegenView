@@ -712,6 +712,9 @@
               <label>Alerts chat ID <small>(optional: a separate chat that gets only strategy signals and price alerts — optimizations, listings and gems go to the main chat. Write /chatid in it to get the id)</small>
                 <input type="text" id="telegram-signal-chat-id-input" placeholder="es. -1001234567890" autocomplete="off" />
               </label>
+              <label>Gems chat ID <small>(optional: a separate chat for the new gems found by the research; empty = the main chat. Write /chatid in it to get the id)</small>
+                <input type="text" id="telegram-gems-chat-id-input" placeholder="es. -1001234567890" autocomplete="off" />
+              </label>
               <button type="button" id="telegram-chat-id-save">Save</button>
               <p class="panel-hint">Send any message to the bot, then open <code>https://api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</code> to find your chat ID — ask for the bot link if you don't have it.</p>
             </div>

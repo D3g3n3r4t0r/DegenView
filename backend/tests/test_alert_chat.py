@@ -83,3 +83,46 @@ def test_system_messages_skip_signal_only_chats(monkeypatch):
     monkeypatch.setattr(telegram, "_deliver", deliver)
     asyncio.run(telegram.send_message("deploy"))
     assert got == ["42"]
+
+
+# Lorenzo, 16/10: the gems chat got nothing — his main chat is the alerts one,
+# and gems went to the main chat only, and only to accounts with a wallet.
+def _gem_user(main_chat: str, alerts_chat: str = "", gems_chat: str = "") -> User:
+    return User.model_construct(id="u", email="x@y.z", telegram_chat_id=main_chat,
+                                telegram_signal_chat_id=alerts_chat, telegram_gems_chat_id=gems_chat)
+
+
+def test_gems_go_to_the_gems_chat_else_the_main_chat(monkeypatch):
+    me = _gem_user("111", "-100", "-200")
+    _users(monkeypatch, me)
+    assert main._gems_chat(set(), me) == "-200"
+    assert main._gems_chat(set(), _gem_user("111", "-100")) == "111"
+
+
+def test_gems_never_go_to_an_alerts_chat(monkeypatch):
+    me = _gem_user("-100", "-100")          # main chat = alerts chat, no gems chat
+    _users(monkeypatch, me)
+    assert main._gems_chat(set(), me) == ""
+
+
+def test_a_gem_reaches_the_gems_chat_without_a_wallet(monkeypatch):
+    import asyncio
+    me = _gem_user("-100", "-100", "-200")  # Lorenzo's setup, no on-chain wallet
+    _users(monkeypatch, me)
+    monkeypatch.setattr(main, "_telegram_allowed", lambda u: True)
+    monkeypatch.setattr(main, "_gem_notified", {})
+    sent = []
+
+    async def fake_send(chat, text):
+        sent.append(chat)
+    from app.notify import telegram
+    monkeypatch.setattr(telegram, "send_to", fake_send)
+    fired = []
+    monkeypatch.setattr(main, "_fire", fired.append)
+
+    async def run():
+        await main._notify_gem("new", {"symbol": "GEM", "name": "Gem", "chain": "solana", "score": 80, "rank": 3})
+        for coro in fired:
+            await coro
+    asyncio.run(run())
+    assert sent == ["-200"]

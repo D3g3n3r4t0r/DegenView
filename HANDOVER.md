@@ -1,3 +1,7 @@
+# 2026-10-16 — Chat Telegram delle gemme — `seed-0315` (Claude, a mano)
+
+Lorenzo: la terza chat (gemme) non riceve niente; la sua chat principale e' quella degli alert. `_notify_gem` mandava solo a `_info_chat` (chat principale, mai una signals-only) e solo con `user.onchain_wallets`. Ora `User.telegram_gems_chat_id` (profilo: "Gems chat ID", `PATCH /api/auth/telegram` con `telegram_gems_chat_id`, conferma in chat al salvataggio), `main._gems_chat` = chat gemme o principale, mai signals-only; requisito del wallet tolto per le gemme (resta per i listing). Il riepilogo della notte (`nightly._send`) va alle chat di sistema (TELEGRAM_DEV_CHAT_IDS), non e' cambiato. Lorenzo deve incollare l'ID della chat gemme nel profilo.
+
 # 2026-10-16 — Liste di ricerca pair intere — `seed-0314` (Claude, a mano)
 
 Lorenzo, con screenshot: pair tagliati nella ricerca in alto e fuori schermo nel Lab. `app.js placeSuggestionList(list, anchor)` usata da `positionSuggestions` e da `makeSuggestController.render`: sposta la lista in `<body>` (un `.panel` animato fa da containing block ai `position:fixed`, vedi la nota su `@keyframes lae-sali`), larghezza >= 560 px dentro lo schermo, apertura sopra se sotto manca spazio; CSS in fondo a `style.css`: righe che vanno a capo. `shortSymbol` (Pool…6789) invariato.

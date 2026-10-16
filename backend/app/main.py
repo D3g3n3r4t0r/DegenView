@@ -565,6 +565,16 @@ def _info_chat(user: User) -> str:
     return chat
 
 
+def _gems_chat(seen: set[str], user: User) -> str:
+    """Where a gem goes, once per chat: the account's gems chat when set
+    (Lorenzo, 16/10), else its main chat; never a signals-only chat."""
+    chat = user.telegram_gems_chat_id or _info_chat(user)
+    if not chat or chat in seen or chat in _signal_only_chats():
+        return ""
+    seen.add(chat)
+    return chat
+
+
 def _info_chats(seen: set[str], user: User) -> str:
     """`_info_chat` for one broadcast, once per chat (see `_alert_chats`)."""
     chat = _info_chat(user)
@@ -4098,14 +4108,15 @@ async def _notify_gem(kind: str, e: dict) -> None:
     text = _gem_telegram_text(kind, e)
     seen: set[str] = set()
     for user in auth.list_users():
-        # Not a strategy signal: the main chat, never an alerts chat.
-        if not _info_chat(user) or not user.onchain_wallets or not _telegram_allowed(user):
+        # The gems chat, else the main chat; never an alerts chat. No wallet
+        # needed any more: that dated from the on-chain trading, off since 07/10.
+        if not (user.telegram_gems_chat_id or _info_chat(user)) or not _telegram_allowed(user):
             continue
         sent = [t for t in _gem_notified.get(user.id, []) if now - t < 3600]
         if len(sent) >= _GEM_NOTIFY_PER_HOUR:
             continue
         _gem_notified[user.id] = sent + [now]
-        if chat := _info_chats(seen, user):
+        if chat := _gems_chat(seen, user):
             _fire(telegram.send_to(chat, text))
 
 

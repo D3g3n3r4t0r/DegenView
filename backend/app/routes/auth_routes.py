@@ -93,6 +93,7 @@ class LoginRequest(BaseModel):
 class TelegramChatIdRequest(BaseModel):
     telegram_chat_id: str
     telegram_signal_chat_id: str | None = None  # None = leave as is
+    telegram_gems_chat_id: str | None = None    # None = leave as is
 
 
 def _set_session_cookie(response: Response, user_id: str, request: Request) -> None:
@@ -197,7 +198,15 @@ async def update_telegram_chat_id(
     req: TelegramChatIdRequest, user: User = Depends(auth.get_current_user)
 ) -> dict:
     before = user.telegram_signal_chat_id
-    updated = auth.set_telegram_chat_id(user.id, req.telegram_chat_id, req.telegram_signal_chat_id)
+    gems_before = user.telegram_gems_chat_id
+    updated = auth.set_telegram_chat_id(user.id, req.telegram_chat_id, req.telegram_signal_chat_id,
+                                        req.telegram_gems_chat_id)
+    if (updated.telegram_gems_chat_id and updated.telegram_gems_chat_id != gems_before
+            and _telegram_allowed(updated)):
+        _fire(telegram.send_to(
+            updated.telegram_gems_chat_id,
+            "💎 Chat delle gemme collegata: da qui in poi qui arrivano le nuove gemme trovate dalla ricerca.",
+        ))
     if (updated.telegram_signal_chat_id and updated.telegram_signal_chat_id != before
             and _telegram_allowed(updated)):
         _fire(telegram.send_to(

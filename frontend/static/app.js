@@ -1548,6 +1548,7 @@
     if (loggedIn) {
       el("telegram-chat-id-input").value = state.user.telegram_chat_id || "";
       el("telegram-signal-chat-id-input").value = state.user.telegram_signal_chat_id || "";
+      el("telegram-gems-chat-id-input").value = state.user.telegram_gems_chat_id || "";
       updateTelegramSetupUI();
       loadWatchlist();
       loadArchive();
@@ -2770,10 +2771,12 @@
     el("telegram-chat-id-save").addEventListener("click", async () => {
       const chatId = el("telegram-chat-id-input").value.trim();
       const signalChatId = el("telegram-signal-chat-id-input").value.trim();
+      const gemsChatId = el("telegram-gems-chat-id-input").value.trim();
       const resp = await fetch("/api/auth/telegram", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ telegram_chat_id: chatId, telegram_signal_chat_id: signalChatId }),
+        body: JSON.stringify({ telegram_chat_id: chatId, telegram_signal_chat_id: signalChatId,
+                               telegram_gems_chat_id: gemsChatId }),
       });
       if (resp.ok) state.user = await resp.json();
       updateTelegramSetupUI();

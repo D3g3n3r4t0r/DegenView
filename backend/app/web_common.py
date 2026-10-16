@@ -54,6 +54,7 @@ def _user_out(user: User) -> dict:
         "email": user.email,
         "telegram_chat_id": user.telegram_chat_id,
         "telegram_signal_chat_id": getattr(user, "telegram_signal_chat_id", ""),
+        "telegram_gems_chat_id": getattr(user, "telegram_gems_chat_id", ""),
         "guest": guest_links.is_guest(user),
     }
 
