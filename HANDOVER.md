@@ -536,7 +536,7 @@ Resta: M01/M02, lease sui loop prima di piu' worker, backup/restore provati, B06
 ## Consegne di ChatGPT/Codex del 29/09 — cosa sono e come trattarle
 
 Lorenzo, 29/09: "allineati su tutte le modifiche che nel mentre ho fatto fare a chat gpt e che ha postato su github".
-ChatGPT/Codex scrive col suo account GitHub (autore `lorenzocorazzi-wq`, branch `codex/*`), **solo documenti**: nessun commit di codice su main. Tutti i commit su main del 29/09 sono di Claude.
+ChatGPT/Codex scrive col suo account GitHub (autore `Smowcomingsoon`, branch `codex/*`), **solo documenti**: nessun commit di codice su main. Tutti i commit su main del 29/09 sono di Claude.
 
 | consegna | cosa | stato reale |
 |---|---|---|
@@ -1333,7 +1333,7 @@ questa modifica.
 
 ## Stato del repo
 
-- **Repo**: `lorenzocorazzi-wq/liquidity-analysis-engine`
+- **Repo**: `Smowcomingsoon/liquidity-analysis-engine`
 - **Dove gira**: server proprio Hetzner CX23 a Norimberga (2 core, 4 GB,
   6,70 EUR/mese), dominio **liquidityengine.app**. Deploy automatico a ogni
   push su `main`: lint + **test** + deploy (vedi `deploy/README.md`).

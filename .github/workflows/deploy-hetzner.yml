@@ -79,6 +79,9 @@ jobs:
           script: |
             set -e
             cd /opt/liquidity
+            # Owner renamed on 16/10: follow the repo's current name, not a
+            # redirect an old username could take over.
+            git remote set-url origin https://github.com/${{ github.repository }}.git
             git fetch --quiet origin main
             # Il commit che "verify" ha provato, non l'ultimo di main: con
             # due push ravvicinati origin/main puo' essere gia' un altro

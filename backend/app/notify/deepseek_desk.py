@@ -443,7 +443,7 @@ MARK_RE = re.compile(r"<!-- deepseek-usage (\{.*?\}) -->")
 
 async def pr_review_usage(since: float, until: float, http=None) -> dict:
     """The PR reviews' usage, from the markers in their GitHub comments."""
-    repo = "lorenzocorazzi-wq/liquidity-analysis-engine"
+    repo = settings.github_repo
     out = {"calls": 0, "in": 0, "out": 0}
     if not settings.github_api_token:
         return out

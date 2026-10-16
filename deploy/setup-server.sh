@@ -4,7 +4,7 @@
 # Da eseguire UNA VOLTA SOLA, come root, sul server nuovo:
 #
 #     ssh root@<IP>
-#     bash <(curl -fsSL https://raw.githubusercontent.com/lorenzocorazzi-wq/liquidity-analysis-engine/main/deploy/setup-server.sh)
+#     bash <(curl -fsSL https://raw.githubusercontent.com/Smowcomingsoon/liquidity-analysis-engine/main/deploy/setup-server.sh)
 #
 # Cosa fa, e perche':
 #
@@ -103,7 +103,7 @@ fi
 log "Cartella del progetto"
 mkdir -p /opt/liquidity
 if [ ! -d /opt/liquidity/.git ]; then
-	git clone --depth 1 https://github.com/lorenzocorazzi-wq/liquidity-analysis-engine.git /opt/liquidity
+	git clone --depth 1 https://github.com/Smowcomingsoon/liquidity-analysis-engine.git /opt/liquidity
 fi
 
 cat <<'FINE'

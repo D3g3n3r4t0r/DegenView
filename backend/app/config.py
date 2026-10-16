@@ -212,6 +212,7 @@ class Settings(BaseSettings):
     # an account's MAIN chat, so the alerts-chat setting alone did not catch it.
     telegram_signal_only_chats: str = "-5359869020"
     github_api_token: str = ""   # PAT for fetching commit history on deploy notify
+    github_repo: str = "Smowcomingsoon/liquidity-analysis-engine"  # owner/name, GITHUB_REPO in .env
 
     # Registration is open to anyone, but actual Telegram delivery is
     # deliberately locked to specific account emails (comma-separated) —

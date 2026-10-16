@@ -89,4 +89,4 @@ Il componente demo ordina i dati per score e non riproduce tutte le metriche del
 
 ## Provenienza
 
-Riferimenti: [sito ENGN](https://getengn.xyz/), [GLTFLoader](https://threejs.org/docs/pages/GLTFLoader.html), [UnrealBloomPass](https://threejs.org/docs/pages/UnrealBloomPass.html). Repository analizzata: `lorenzocorazzi-wq/liquidity-analysis-engine`, `main`, al momento della preparazione. Nessuna credenziale inclusa.
+Riferimenti: [sito ENGN](https://getengn.xyz/), [GLTFLoader](https://threejs.org/docs/pages/GLTFLoader.html), [UnrealBloomPass](https://threejs.org/docs/pages/UnrealBloomPass.html). Repository analizzata: `Smowcomingsoon/liquidity-analysis-engine`, `main`, al momento della preparazione. Nessuna credenziale inclusa.

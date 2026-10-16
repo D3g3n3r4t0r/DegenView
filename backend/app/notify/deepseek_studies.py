@@ -39,7 +39,7 @@ from app.atomic_write import write_text_atomic
 
 logger = logging.getLogger(__name__)
 
-REPO = "lorenzocorazzi-wq/liquidity-analysis-engine"
+REPO = settings.github_repo
 REQUESTS_DIR = ".github/deepseek/studi/requests"
 LIST_URL = f"https://api.github.com/repos/{REPO}/contents/{REQUESTS_DIR}?ref=main"
 DEX_TOKENS = "https://api.dexscreener.com/tokens/v1/{chain}/{token}"

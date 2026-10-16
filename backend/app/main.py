@@ -943,7 +943,7 @@ def _notify_quota_once(owner_id: str, asset_type: str, exchange: str) -> bool:
 
 
 _LAST_SHA_FILE = Path(__file__).resolve().parent.parent / "data" / "last_deploy_sha.txt"
-_GITHUB_REPO = "lorenzocorazzi-wq/liquidity-analysis-engine"
+_GITHUB_REPO = settings.github_repo
 
 
 async def _notify_deploy() -> None:
