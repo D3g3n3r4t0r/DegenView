@@ -94,6 +94,15 @@ indice per componente e note di porting da Tailwind a CSS puro. Lorenzo:
 "studia tutti i design e li tieni in memoria". Leggi solo la sezione che
 serve (`grep -n "^### "`), non tutto il file.
 
+## Minuti GitHub Actions (16/10)
+
+Il piano ha 3.000 minuti al mese, finiti il 16/10: dal 27/09 ~1.870 min
+sono andati all'ambiente di test (`claudio-folds.yml`, `lowfit.yml`, chiesto
+da whitekobra, non da Lorenzo), ~1.370 al deploy. Ogni job si paga
+arrotondato al minuto. Prima di lanciare un workflow a richiesta dell'ambiente
+di test, di' quanti minuti costa (~15-25 per run dopo #533) e non lanciarne
+piu' di uno per domanda; mai job per singola coppia.
+
 ## Cose misurate, da non riderivare
 
 - **L'obiettivo del backtest è una funzione a gradini.** 200 valori di un
