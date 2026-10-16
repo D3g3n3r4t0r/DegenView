@@ -3098,5 +3098,10 @@
     "status": "risolto",
     "at": 1792192900,
     "summary": "Nelle gemme le arene tornano a mosaico: riquadri piu' grandi per le arene con piu' progetti, colore = variazione 24h, il tocco su un riquadro apre la sua classifica subito sotto, ritocco chiude. I primi tre restano fissi nella barra in alto."
+  },
+  "seed-0325": {
+    "status": "risolto",
+    "at": 1792193903,
+    "summary": "Il server sceglie la pagina in base all'account: il tuo account vede l'app com'era il 15/10 sera (mosaico, podio grande, menu Gems, Early, Scout, Profile, niente Pearl ne' Top 25); tutti gli altri, White Kobra compreso, vedono quella attuale. Dopo il login la pagina si ricarica da sola per prendere la versione giusta. La lista degli account sta in ONCHAIN_V1_EMAILS. I dati sono gli stessi per tutti: cambia solo l'aspetto."
   }
 }
