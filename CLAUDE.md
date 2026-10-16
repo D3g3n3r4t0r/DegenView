@@ -137,13 +137,12 @@ job per singola coppia.
 
 ## Cose che scottano
 
-- `/api/optimize` gira su un feed diverso dal grafico (`backtest_interval_for()`
-  forza il minimo a `1d`) e non lo dichiara: stessi parametri, 27 trade contro
-  186. È la segnalazione `seed-0007`.
-- `_find_confirmation()` in `strategies.py` parte da `swing_pos + 1`, ma uno
-  swing è identificabile solo dopo `swing_length` barre: il 97% degli ingressi
-  di Accumulo/Distribuzione usa informazione futura. È `seed-0010`, e il fix
-  abbassa tutti i risultati storici — non applicarlo senza dirlo.
+Le due voci che stavano qui (`seed-0007` feed dell'ottimizzazione, `seed-0010`
+look-ahead di Accumulo) sono **risolte**: `backtest_interval_for()` ora
+restituisce il time frame del grafico, `_find_confirmation()` parte da
+`swing_pos + swing_length`. Il 16/10 le ho riproposte a Lorenzo come aperte
+leggendo solo questa nota: prima di dire che un bug c'e', guarda il codice e
+`resolutions.json`.
 
 ## Verifiche prima di committare
 

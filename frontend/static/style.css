@@ -6035,3 +6035,19 @@ html.embed-chart, html.embed-chart body, html.embed-chart .chart-area { backgrou
   background: transparent; color: inherit; margin-right: 8px; cursor: pointer; }
 @media (max-width: 640px) { .lang-select { font-size: 11px; padding: 3px 4px; margin-right: 4px; } }
 
+/* Strategy description + recommended settings (16/10) */
+.strat-extras { display: flex; flex-direction: column; gap: 6px; margin: 0 0 8px; grid-column: 1 / -1; }
+.strat-desc { margin: 0; font-size: 12px; line-height: 1.4; opacity: .75; }
+.strat-rec-btn { align-self: flex-start; font: inherit; font-size: 12px; padding: 4px 10px; border-radius: 6px; cursor: pointer;
+  border: 1px solid rgba(240, 185, 11, .5); background: rgba(240, 185, 11, .1); color: inherit; }
+.strat-rec-btn:hover { background: rgba(240, 185, 11, .2); }
+
+/* BTC badge in the top bar (16/10) */
+.btc-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; margin-right: 8px; white-space: nowrap; }
+.btc-badge.hidden { display: none; }
+.btc-badge-label { font-weight: 600; opacity: .8; }
+.btc-badge-part { padding: 2px 6px; border-radius: 5px; cursor: help; }
+.btc-badge-part.up { color: #16a34a; background: rgba(22, 163, 74, .12); }
+.btc-badge-part.down { color: #dc2626; background: rgba(220, 38, 38, .12); }
+@media (max-width: 640px) { .btc-badge { display: none; } }
+

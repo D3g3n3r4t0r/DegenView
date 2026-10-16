@@ -2244,6 +2244,14 @@ def _dispatch_telegram_alerts(
     return fresh
 
 
+@app.get("/api/btc-regime")
+async def btc_regime_status() -> dict:
+    """Top-bar badge (16/10): BTC against its weekly EMA 21 (BTC filter)
+    and its Bull Market Support Band (RSI+BB BTC band), with the Monday
+    each verdict took effect. Closed weeks only, like the strategies."""
+    return btc_regime.status()
+
+
 @app.get("/api/strategies", response_model=list[str])
 async def list_strategies() -> list[str]:
     return AVAILABLE_STRATEGIES

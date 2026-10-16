@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0308", "Menu strategie ordinato, con descrizione, consigliate e impostazioni consigliate; stato di BTC nella barra in alto",
+     "Lorenzo, 16/10: 'Secondo la tua analisi cos'altro possiamo fare per migliorare il sito?', poi 'procedi con tutti e 5 i punti'.",
+     "media"),
     ("seed-0307", "Lab: niente tasto Optimize sulle strategie che non si ottimizzano",
      "Lorenzo, 16/10: 'per quanto riguarda le strategie sul sito, solo quelle dove non si puo' utilizzare l'ottimizzazione, forse sarebbe necessario eliminare direttamente il pulsante'.",
      "bassa"),

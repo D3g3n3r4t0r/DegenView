@@ -123,6 +123,25 @@ def band_mask(index: pd.DatetimeIndex) -> np.ndarray:
     return out.where(out.notna(), False).to_numpy(dtype=bool)
 
 
+def _state(weekly: pd.Series | None) -> dict | None:
+    """Current verdict of a weekly series and the Monday it took effect."""
+    if weekly is None or not len(weekly):
+        return None
+    v = weekly.astype(bool)
+    now = bool(v.iloc[-1])
+    changed = v.ne(v.shift()).to_numpy()
+    since = v.index[changed.nonzero()[0][-1]] if changed.any() else v.index[0]
+    return {"up": now, "since": f"{since:%Y-%m-%d}"}
+
+
+def status() -> dict:
+    """BTC as the filter and the band strategy see it now (top-bar badge)."""
+    if _closes is None:
+        return {"loaded": False}
+    return {"loaded": True, "close": round(float(_closes.iloc[-1]), 2), "as_of": f"{_closes.index[-1]:%Y-%m-%d}",
+            "ema21": _state(_up), "band": _state(_band)}
+
+
 def down_share(year: int) -> float:
     """Share of the days of `year` with longs blocked (0 when unknown)."""
     if _up_daily is None:
