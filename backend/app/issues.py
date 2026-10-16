@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0311", "Barra in alto del sito troppo affollata",
+     "Lorenzo, 16/10: 'La sezione superiore del sito e' troppo affollata. Ottimizza lo spazio senza togliere niente'.",
+     "media"),
     ("seed-0310", "Repository pubblico: nessun dato personale, chiave o IP nei file",
      "Lorenzo, 16/10: 'rimuovere completamente ogni riferimento alle nostre email o qualsiasi altro dato personale o qualsiasi chiave, API [...] ovviamente preservando il funzionamento di tutto'.",
      "alta"),

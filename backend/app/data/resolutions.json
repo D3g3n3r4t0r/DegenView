@@ -3033,5 +3033,10 @@
     "status": "in corso",
     "at": 1792168313,
     "summary": "Scansione completa (gitleaks, 1.563 commit): nessuna chiave o token, mai. Tolti dai file l'IP del server, il percorso della chiave SSH, il nickname del tester e un'email di terzi; la bacheca /api/issues, che e' pubblica, mostrava le email degli autori a chiunque: ora chi non e' collegato vede solo le prime due lettere. Aggiunti gitleaks in CI (workflow 'Secret scan', separato dal deploy), regole per email e IP pubblici in .gitleaks.toml, hook pre-commit e .gitignore per .env e chiavi. Resta la storia: email e IP stanno ancora nei commit vecchi, serve la riscrittura con il si' di Lorenzo."
+  },
+  "seed-0311": {
+    "status": "risolto",
+    "at": 1792181113,
+    "summary": "Stessi comandi, meno spazio. Prima la barra non ci stava sotto i 1440 px: il tasto Analizza veniva schiacciato, a 1280 px email ed Esci finivano fuori schermo, a 1024 px mancavano quasi 390 px. Ora: ricerca e menu strategia si stringono quando serve; la lingua e' una sigla (EN/IT, il nome per esteso passando il mouse); sotto 1360 px l'email diventa la sua iniziale in un cerchio (indirizzo completo passando il mouse); sotto 1200 px 'Indicatori' resta come lente con il nome nel tooltip; fra 760 e 1000 px la barra va su due righe invece di scorrere. Provato a 780, 900, 1024, 1100, 1201, 1280, 1361, 1440 e 1920 px, in inglese e in italiano: nessuno sfondamento. Sotto 760 px la barra resta nascosta come prima (sul telefono c'e' il menu)."
   }
 }

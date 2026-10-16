@@ -1,3 +1,7 @@
+# 2026-10-16 — Barra in alto meno affollata — `seed-0311` (Claude, a mano)
+
+Lorenzo: "La sezione superiore del sito e' troppo affollata. Ottimizza lo spazio senza togliere niente". Sito classico (`index.html` header.toolbar; sotto 760 px resta nascosta). Misurato con Playwright (auth, strategie e /api/btc-regime finti): prima sfondava sotto 1440 px (130 px a 1280, 386 a 1024). Blocco "Top bar compaction" in fondo a `style.css`: ricerca e menu strategia si stringono, lingua come sigla (`i18n.js`, nome nel title), email -> iniziale sotto 1360 px (`updateAuthUI` mette `title` e `data-initial`), "Indicators" solo icona sotto 1200 px (`.tb-label`), due righe fra 760 e 1000 px. Nessun controllo tolto. Fatto a mano, non via DeepSeek: e' lavoro di impaginazione da verificare a schermo.
+
 # 2026-10-16 — Repository pubblico: via dati personali, chiavi e IP (Claude, a mano)
 
 Lorenzo: "rimuovere completamente ogni riferimento alle nostre email o qualsiasi altro dato personale o qualsiasi chiave, API [...] ovviamente preservando il funzionamento di tutto". `seed-0310`.
@@ -5,6 +9,7 @@ Lorenzo: "rimuovere completamente ogni riferimento alle nostre email o qualsiasi
 - Fatto: `/api/issues` anonimo maschera le email (`routes/issues._mask_emails`, prime due lettere); IP, percorso chiave SSH e nickname del tester tolti dai file; `.gitleaks.toml` (regole default + email + IPv4 pubblici, allowlist indirizzi on-chain), workflow `secret-scan.yml` separato dal deploy, `scripts/hooks/pre-commit` (`git config core.hooksPath scripts/hooks`), `.gitignore` per `.env`/chiavi.
 - Restano nomi di battesimo come chiavi di strategia (Lorenzo, Gabriele): cambiarli migra i dati salvati, non fatto. Lo slug del repo contiene lo username GitHub: inevitabile.
 - **Storia di main riscritta il 16/10** (Lorenzo: "Si', riscrivi"): git filter-repo con `--replace-text`, `--replace-message` e `--mailmap` verso l'indirizzo noreply di GitHub; albero finale identico (stesso hash di tree), gitleaks 0 risultati. **Ogni clone o branch di prima va riallineato**: `git fetch origin && git reset --hard origin/main`, mai un merge del vecchio main (riporterebbe dentro i commit vecchi). Restano con la storia vecchia gli altri ~215 branch e i `refs/pull/*` delle PR (solo il supporto GitHub li pulisce).
+- **Branch vecchi, 16/10 sera: lasciati.** Contati 215 (oltre a main): 204 interamente dentro PR unite, 11 con 1-2 commit abbandonati (PR chiuse, DeepSeek falliti, esecutori Coinbase/Kraken del 31/08). Da una chat cloud non si cancellano: il proxy git accetta push solo sul branch della chat (403), e un workflow che li cancella dal branch della chat viene bloccato come aggiramento. Lorenzo: "Lascia stare". Non riproporlo; se lo chiede, il comando da un suo computer e' `git for-each-ref ... refs/heads | grep -vx main | xargs -n 40 git push origin --delete` su un clone `--bare`.
 
 # 2026-10-16 — Overhaul prestazioni di tutto il sito, piano (Claude, solo piano)
 
