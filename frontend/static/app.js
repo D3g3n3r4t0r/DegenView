@@ -537,6 +537,33 @@
     }
   }
 
+  // Every pair-suggestion list is placed here (Lorenzo, 16/10: "vanno visti
+  // tutti nella loro interezza"). The list moves to <body>, so position:fixed
+  // is measured on the screen and not on an animated or transformed panel
+  // (in the Lab that pushed it off the right edge); it is at least 560px
+  // wide whatever the field, never wider than the screen, and opens above
+  // the field when there is more room there.
+  function placeSuggestionList(list, anchorEl) {
+    if (!list || !anchorEl) return;
+    if (list.parentElement !== document.body) document.body.appendChild(list);
+    const rect = anchorEl.getBoundingClientRect();
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const width = Math.min(Math.max(rect.width, 560), vw - 16);
+    const left = Math.min(Math.max(rect.left, 8), vw - width - 8);
+    const below = vh - rect.bottom - 12, above = rect.top - 12;
+    list.style.left = `${left}px`;
+    list.style.width = `${width}px`;
+    if (below >= 220 || below >= above) {
+      list.style.top = `${rect.bottom + 4}px`;
+      list.style.bottom = "";
+      list.style.maxHeight = `${Math.max(160, Math.min(420, below))}px`;
+    } else {
+      list.style.top = "";
+      list.style.bottom = `${vh - rect.top + 4}px`;
+      list.style.maxHeight = `${Math.max(160, Math.min(420, above))}px`;
+    }
+  }
+
   // makeSuggestController: unified autocomplete factory for symbol search inputs.
   // Each controller returned is a plain object with { suggestions, activeIndex, resolved }
   // plus methods { fetch(query), render(anchorEl?), clear(), handleKey(e) }.
@@ -572,18 +599,7 @@
         const list = _el(listId);
         list.innerHTML = "";
         if (!ctrl.suggestions.length) { list.classList.add("hidden"); return; }
-        if (_anchorEl) {
-          const rect = _anchorEl.getBoundingClientRect();
-          // Un anchor piu' largo dello schermo (es. l'hero del ticker in Lab
-          // su viewport stretti) spingeva il riquadro fuori dal bordo destro,
-          // dove restava invisibile invece di sparire in modo ovvio — clampare
-          // qui vale per ogni suggerimento futuro, non solo per quello di oggi.
-          const width = Math.min(rect.width, window.innerWidth - 16);
-          const left = Math.min(Math.max(rect.left, 8), window.innerWidth - width - 8);
-          list.style.left = `${left}px`;
-          list.style.top = `${rect.bottom + 4}px`;
-          list.style.width = `${width}px`;
-        }
+        placeSuggestionList(list, _anchorEl);
         ctrl.suggestions.forEach((item, i) => {
           const li = document.createElement("li");
           li.className = i === ctrl.activeIndex ? "active" : "";
@@ -9969,11 +9985,7 @@
   }
 
   function positionSuggestions() {
-    const list = el("ticker-suggestions");
-    const rect = el("ticker-input").getBoundingClientRect();
-    list.style.left = `${rect.left}px`;
-    list.style.top = `${rect.bottom + 4}px`;
-    list.style.width = `${rect.width}px`;
+    placeSuggestionList(el("ticker-suggestions"), el("ticker-input"));
   }
 
   function renderSuggestions() {

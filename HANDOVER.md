@@ -1,3 +1,7 @@
+# 2026-10-16 — Liste di ricerca pair intere — `seed-0314` (Claude, a mano)
+
+Lorenzo, con screenshot: pair tagliati nella ricerca in alto e fuori schermo nel Lab. `app.js placeSuggestionList(list, anchor)` usata da `positionSuggestions` e da `makeSuggestController.render`: sposta la lista in `<body>` (un `.panel` animato fa da containing block ai `position:fixed`, vedi la nota su `@keyframes lae-sali`), larghezza >= 560 px dentro lo schermo, apertura sopra se sotto manca spazio; CSS in fondo a `style.css`: righe che vanno a capo. `shortSymbol` (Pool…6789) invariato.
+
 # 2026-10-16 — RSI+BB 4H e RSI+BB BTC band tolte dal codice — `seed-0313` (Claude, a mano)
 
 Lorenzo: "Alleggerisci". Via: `compute_lki4h_signals`/`LKI4H_DEFAULT_PARAMS`, `compute_rsi_bb_band_signals`, `btc_regime.band_mask` e `status()["band"]`, `optimize.max_return_search_3d`/`MAX_RETURN_MULTS`/`solidity`/range 4H (restano `_admitted`, `SOLIDITY_FLOOR`, `COARSE_SEEDS`, `FINE_RADIUS`, `MIN_TRADES_PER_YEAR_4H` per `max_return_search_nd` di Claudio 4H), voci in priors/regime/sensitivity, `scripts/compare_claudio.py` + `claudio-compare.yml`, varianti RSI+BB 4H in `compare_claudio_folds.py`, tre file di test. Nel loop degli alert una strategia non piu' nel registro si salta (`confirmed_events` ricadrebbe su Lorenzo). `strategyLabel` tiene la riga per "RSI+BB BTC band" per i vecchi alert nel registro. Il livello del grafico Bull Market Support Band (`indicators.bull_market_support_band`) resta: e' un'altra cosa.

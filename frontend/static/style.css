@@ -6086,3 +6086,12 @@ html.embed-chart, html.embed-chart body, html.embed-chart .chart-area { backgrou
   .toolbar { flex-wrap: wrap; row-gap: 6px; overflow-x: visible; }
   .btc-badge { margin-left: auto; }
 }
+
+/* Pair suggestions shown whole (16/10): the row wraps instead of cutting
+   the symbol, the name and the exchange; placement in app.js
+   placeSuggestionList (at least 560px wide, inside the screen). */
+.suggestions li { white-space: normal; align-items: center; overflow: visible; }
+.sug-main { flex-wrap: wrap; row-gap: 2px; overflow: visible; }
+.suggestions .sug-symbol { word-break: break-all; }
+.suggestions .sug-name { overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+.sug-exchange { white-space: normal; text-align: right; max-width: 50%; }
