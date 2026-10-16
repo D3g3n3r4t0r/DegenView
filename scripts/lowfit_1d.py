@@ -344,6 +344,19 @@ def run_pair_v3(sym, df):
 # both conditions on the same candle (the site's rule), either of them, or
 # (entry only) both within the last 3 candles. Defaults, and Max return
 # (20-40 x 65-85) chosen on 2023+.
+BTC_CLOSE = None   # set in main(): BTC daily closes, for the BTC band
+
+
+def bull_band(close):
+    """True while the last closed week's close is above the Bull Market
+    Support Band (weekly SMA 20 and EMA 21, both): from the Monday after."""
+    wk = close.resample("W-SUN").last().dropna()
+    top = np.maximum(wk.rolling(20).mean(), wk.ewm(span=21, adjust=False).mean())
+    up = (wk > top) & top.notna()
+    up.index = up.index + pd.Timedelta(days=1)
+    return up.reindex(close.index.union(up.index)).ffill().reindex(close.index).fillna(False).astype(bool)
+
+
 def _rsi_bb_logic(entry, exit_):
     from app.analysis import btc_regime
     from app.analysis.strategies import LKI_DEFAULT_PARAMS as D
@@ -364,6 +377,11 @@ def _rsi_bb_logic(entry, exit_):
             en = r_lo & b_lo
         elif entry == "or":
             en = r_lo | b_lo
+        elif entry in ("band_pair", "band_btc", "band_pair_off"):
+            src = close if entry != "band_btc" or BTC_CLOSE is None else BTC_CLOSE.reindex(close.index).ffill()
+            up = bull_band(src)
+            below = pd.Series(False, index=df.index) if entry == "band_pair_off" else (r_lo & b_lo)
+            en = (up & (r_lo | b_lo)) | (~up & below)
         else:   # both within the last 3 candles, the second one today
             w = lambda x: x.astype(float).rolling(3, min_periods=1).max().astype(bool)  # noqa: E731
             en = w(r_lo) & w(b_lo) & (r_lo | b_lo)
@@ -377,7 +395,12 @@ def _rsi_bb_logic(entry, exit_):
 
 LOGIC = (("AND_AND", "and", "and"), ("AND_OR", "and", "or"), ("OR_AND", "or", "and"),
          ("OR_OR", "or", "or"), ("W3_OR", "w3", "or"))
-for _tag, _en, _ex in LOGIC:
+# 16/10, second run (Lorenzo: "Provalo cosi'"): either condition above the
+# Bull Market Support Band, both below (or none: _off), exit either.
+LOGIC_BAND = (("AND_AND", "and", "and"), ("AND_OR", "and", "or"), ("OR_OR", "or", "or"),
+              ("BAND_PAIR", "band_pair", "or"), ("BAND_BTC", "band_btc", "or"),
+              ("BAND_PAIR_OFF", "band_pair_off", "or"))
+for _tag, _en, _ex in LOGIC + LOGIC_BAND:
     env.STRATEGY_REGISTRY[f"RSI+BB {_tag} (test)"] = _rsi_bb_logic(_en, _ex)
 
 
@@ -388,7 +411,7 @@ def run_pair_logic(sym, df):
            "hold": {str(y): round((df[(df.index >= t0) & (df.index < t1)]["close"].iloc[-1]
                                    / df[(df.index >= t0) & (df.index < t1)]["close"].iloc[0] - 1) * 100, 1)
                     for y, t0, t1 in tests}, "m": {}}
-    for tag, _en, _ex in LOGIC:
+    for tag, _en, _ex in (LOGIC_BAND if os.environ.get("MODE") == "band" else LOGIC):
         strat = f"RSI+BB {tag} (test)"
         res["m"][f"{tag}_def"] = judge(df, strat, dict(LKI_DEFAULT_PARAMS), tests, train)
         _solid, _prof, best = solid_search(strat, train)
@@ -561,7 +584,9 @@ async def main():
     btc = df if sym == "BTCUSDT" else (await env.candles("BTCUSDT"))[1]
     btc_regime.set_closes(btc["close"], pin=True)
     mode = os.environ.get("MODE")
-    if mode == "logic":
+    global BTC_CLOSE
+    BTC_CLOSE = btc["close"]
+    if mode in ("logic", "band"):
         res = run_pair_logic(sym, df)
         print(f"::notice title={sym}::{line(res)} [{src}]")
         return 0
