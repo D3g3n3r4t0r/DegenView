@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0312", "Lab: via RSI+BB 4H e RSI+BB BTC band, strategie raggruppate per tipo, niente stella",
+     "Lorenzo, 16/10: 'Rimuovi la RSI piu' BB Reversal BTC Band e la RSI piu' BB 4 ore, perche' sono strategie che non utilizziamo [...] erano delle prove [...] la trend EMA Reversal deve andare incolonnata insieme alla RSI piu' BB Reversal, mentre la trend EMA che e' long short deve andare insieme alla RSI piu' BB long short [...] e rimuovi la stellina accanto a trend ema reversal'.",
+     "media"),
     ("seed-0311", "Barra in alto del sito troppo affollata",
      "Lorenzo, 16/10: 'La sezione superiore del sito e' troppo affollata. Ottimizza lo spazio senza togliere niente'.",
      "media"),

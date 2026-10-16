@@ -48,8 +48,9 @@ def _parts(df):
     return (rsi < 28).to_numpy(), (close < lower).to_numpy(), (close > basis).to_numpy()
 
 
-def test_offered():
-    assert RSI_BB_BTC_BAND in AVAILABLE_STRATEGIES
+def test_hidden_but_registered():
+    # a trial, out of the menus since 16/10 (saved alerts keep running)
+    assert RSI_BB_BTC_BAND not in AVAILABLE_STRATEGIES and RSI_BB_BTC_BAND in STRATEGY_REGISTRY
 
 
 def test_either_above_the_band_both_below_exit_at_the_middle():

@@ -53,7 +53,7 @@
          raggiungibile per intero, non deve esistere ne' essere visibile —
          resta solo l'ingresso dal menu "Altro" mobile, piu' in basso. -->
     <button type="submit" form="search-form" id="search-btn">Analyze</button>
-    <!-- 16/10: BTC as the BTC filter and the RSI+BB BTC band see it (app.js renderBtcBadge) -->
+    <!-- 16/10: BTC as the BTC filter sees it (app.js renderBtcBadge) -->
     <span id="btc-badge" class="btc-badge hidden"></span>
     <div class="auth-widget">
       <span id="auth-user-email" class="auth-user-email hidden"></span>
@@ -568,7 +568,7 @@
             <label class="lab-mode-opt hidden" id="lab-mode-maxret-wrap">
               <input type="radio" name="lab-opt-mode" value="max_return" />
               <span class="lab-mode-name">Max return <em class="lab-rec-tag hidden">recommended</em></span>
-              <span class="lab-mode-desc">Every RSI oversold 20–40 × overbought 65–85 pair, one by one, on the whole chart (441 backtests). Drawdown at most 60%; the first and the last year are not judged. RSI+BB reversal and Gabriele 2: the two highest returns, with a trade in every other year (or at least as many trades as those years). RSI+BB 4H: also the Bollinger multiplier 2.0–2.8, at least 3 trades a year on average and none of those years empty; the most solid and the most profitable result. With the BTC filter on, a year it kept the longs out for most of the days is not judged. No out-of-sample check.</span>
+              <span class="lab-mode-desc">Every RSI oversold 20–40 × overbought 65–85 pair, one by one, on the whole chart (441 backtests). Drawdown at most 60%; the first and the last year are not judged. RSI+BB reversal and Gabriele 2: the two highest returns, with a trade in every other year (or at least as many trades as those years). With the BTC filter on, a year it kept the longs out for most of the days is not judged. No out-of-sample check.</span>
             </label>
             <label class="lab-mode-opt lab-mode-recommended" id="lab-mode-stable-wrap">
               <input type="radio" name="lab-opt-mode" value="plateau" />

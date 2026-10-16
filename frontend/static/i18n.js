@@ -9,7 +9,7 @@
  *     "patterns": [ ["<regex on the English text>", "<translation with $1…>"], ... ] }
  * and one entry in LANGS below. Nothing else changes: the page and what the
  * app writes into it at runtime are translated where they are shown — text
- * nodes, title / placeholder / aria-label — so the app code keeps its
+ * nodes, title / placeholder / aria-label / label — so the app code keeps its
  * English strings. Text not in the dictionary stays in English. confirm()
  * and alert() messages go through the same dictionary.
  */
@@ -24,7 +24,7 @@
 
   let dict = null;          // Map English -> translation
   let patterns = [];        // [RegExp, replacement]
-  const ATTRS = ["title", "placeholder", "aria-label"];
+  const ATTRS = ["title", "placeholder", "aria-label", "label"];   // label: <optgroup>
   const SKIP = new Set(["SCRIPT", "STYLE", "TEXTAREA", "CODE", "PRE", "CANVAS", "SVG"]);
 
   function norm(s) { return s.replace(/\s+/g, " ").trim(); }
