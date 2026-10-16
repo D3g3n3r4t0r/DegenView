@@ -3073,5 +3073,15 @@
     "status": "risolto",
     "at": 1792186756,
     "summary": "Nuova voce Pearl nel menu (dopo Early, icona a perla): la lista Early filtrata alle gemme con punteggio di almeno 70, dalla piu' alta. Il punteggio confrontato e' quello mostrato (arrotondato), quindi un '70' sullo schermo e' sempre in Pearl. Stessa fonte e stesso aggiornamento di Early (la lista del board, ricerca notturna); su desktop il token si apre nel pannello a lato come in Early. Se nessuna gemma Early arriva a 70 la sezione lo dice. Raggiungibile anche con il link #pearl."
+  },
+  "seed-0319": {
+    "status": "risolto",
+    "at": 1792188052,
+    "summary": "Menu: Gems, Pearl, Early, Top, Scout, Profile. Top e' nuova: le 25 gemme con il punteggio piu' alto fra tutte quelle che hanno passato i controlli (bacheca e database, qualunque arena), numerate, con punteggio, cap e variazione 24h; un tocco apre la pagina del token (su desktop nel pannello a lato, come Early e Pearl). Sulla barra laterale del desktop il tasto Search scende sotto le sei voci."
+  },
+  "seed-0320": {
+    "status": "risolto",
+    "at": 1792188052,
+    "summary": "Causa: da quando la ricerca gira solo alle 03:00, anche la lettura dei prezzi da DexScreener girava solo di notte; le righe della Top venute dal database avevano la cap dell'ultima analisi e nessuna variazione 24h. Il grafico della pagina token trasforma il prezzo in cap con quella cap, quindi anche la sua scala era vecchia. Ora: (1) sul server un giro ogni minuto, giorno e notte, legge da DexScreener cap, liquidita', variazione e pool di tutti i token della Top (bacheca e database) e le liste usano quei numeri; (2) la pagina del token all'apertura e poi ogni minuto rilegge da DexScreener cap, prezzo e variazione, aggiorna l'intestazione e ridisegna il grafico con candele nuove e la scala dalla supply vera (cap / prezzo). I controlli d'ingresso nelle arene restano sui dati dell'analisi: un minuto di mercato non rimescola le classifiche."
   }
 }

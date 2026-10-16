@@ -165,6 +165,12 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0320", "Grafici e MarketCap delle gemme sempre aggiornati con i dati DEX",
+     "Lorenzo, 16/10: 'Assicurati inoltre che i grafici siano sempre aggiornati con i dati dex, cosi' come la MarketCap'.",
+     "alta"),
+    ("seed-0319", "Sezione Top: le 25 gemme migliori per punteggio; Pearl subito dopo Gems",
+     "Lorenzo, 16/10: 'La sezione Pearl spostala subito dopo Gems, prima di Early. Poi crea anche una sezione Top (da inserire prima di Scout) dove classificare le migliori 25 gemme per punteggio rank'.",
+     "media"),
     ("seed-0318", "Nuova sezione Pearl: le gemme di Early con punteggio da 70 in su",
      "Lorenzo, 16/10: 'Crea una nuova sezione Pearl in cui inserire le gemme selezionate su Early che pero' hanno ottenuto un punteggio pari o superiore a 70'.",
      "media"),

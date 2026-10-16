@@ -106,7 +106,7 @@ function paintChainStatic() {
     view.empty.querySelector("[data-chain-name]").textContent = label;
     view.spark.hidden = true;
     if (view.holdings) view.holdings.hidden = true;
-    if (!(TRADING ? ["gems", "meme"] : ["gems", "top", "pearl", "agent", "profile"]).includes(view.shell.dataset.view)) setView("gems");
+    if (!(TRADING ? ["gems", "meme"] : ["gems", "pearl", "top", "rank", "agent", "profile"]).includes(view.shell.dataset.view)) setView("gems");
     return;
   }
 
@@ -435,8 +435,9 @@ document.addEventListener("lae:wallet-menu", () => {
 // parte di trading deve sparire". Signals, the pilot, swaps and
 // limit orders leave the app; <html data-trading="on"> brings them back,
 // together with onchain_trading_enabled on the server.
-const VIEWS = TRADING ? ["meme", "gems", "top", "pearl", "agent", "profile", "wallet", "manual"] : ["gems", "top", "pearl", "agent", "profile", "wallet"];
-const DOCK = TRADING ? ["meme", "gems", "top", "pearl", "agent", "profile"] : ["gems", "top", "pearl", "agent", "profile"];   // the wallet lives in the profile
+// Lorenzo, 16/10: Pearl right after Gems, Top (the 25 best by score) before Scout.
+const VIEWS = TRADING ? ["meme", "gems", "pearl", "top", "rank", "agent", "profile", "wallet", "manual"] : ["gems", "pearl", "top", "rank", "agent", "profile", "wallet"];
+const DOCK = TRADING ? ["meme", "gems", "pearl", "top", "rank", "agent", "profile"] : ["gems", "pearl", "top", "rank", "agent", "profile"];   // the wallet lives in the profile
 
 // Resolves once the new view is painted (after the transition's update).
 // `instant` skips the transition: a field focused right after must be on

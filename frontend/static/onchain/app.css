@@ -1547,5 +1547,7 @@ html.detail-open .ask-fab, :root:has(#app-shell[data-view="entry"]) .ask-fab { d
   html[data-desk-list="false"] dialog.detail::backdrop { background: rgb(3 8 5 / .72); backdrop-filter: blur(3px); }
   html[data-desk-list="false"] dialog.detail .dt-back { display: grid; }   /* a page now, not a pane: a way back */
 }
-/* Pearl (16/10): a fifth place in the dock */
-:root[data-trading="off"] { --dock-w: min(350px, calc(100vw - 96px)); }
+/* Top (16/10): six places in the dock */
+:root[data-trading="off"] { --dock-w: min(400px, calc(100vw - 92px)); }
+/* desktop sidebar: six places now, the search button moves down (it sat at 472px for four) */
+@media (width >= 1100px) { html body #dock-search.dock-search { inset-block-start: 540px; } }
