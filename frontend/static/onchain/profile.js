@@ -350,12 +350,12 @@ function paint() {
       </div>
       <button type="button" class="pf-edit" data-edit aria-label="Edit profile">${PENCIL}</button>
       <ul class="pf-stats">
-        <li><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>${hold(d.stats?.avg_hold_s)} avg. hold</li>
+        <li data-trading-only><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>${hold(d.stats?.avg_hold_s)} avg. hold</li>
         <li data-trading-only><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 9h12l-3-3M19 15H7l3 3"/></svg>${d.stats?.trades ?? 0} trades</li>
         <li><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5.5" width="16" height="14" rx="2.5"/><path d="M4 10h16M9 3.5v4M15 3.5v4"/></svg>Joined ${since(p.joined)}</li>
       </ul>
     </header>
-    <section class="pf-value">
+    <section class="pf-value" data-trading-only>
       <nav class="pf-wallet" aria-label="Wallet" data-trading-only>
         <button type="button" data-wallet="real" aria-pressed="${d.wallet !== "sim"}">Real wallet</button>
         <button type="button" data-wallet="sim" aria-pressed="${d.wallet === "sim"}">Simulated wallet</button>
@@ -369,14 +369,14 @@ function paint() {
       <div class="pf-chart">${chart(d.history?.[range])}</div>
       <nav class="pf-range" aria-label="Period">${RANGES.map(([k, l]) => `<button type="button" data-range="${k}" aria-pressed="${k === range}">${l}</button>`).join("")}</nav>
     </section>
-    <section class="pf-cash">
+    <section class="pf-cash" data-trading-only>
       <span class="pf-cash-ic" aria-hidden="true">$</span>
       <p><small>Total cash</small><b>${d.cash == null ? "—" : `$${d.cash.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</b></p>
       <button type="button" class="pf-sq" data-sheet="receive" aria-label="Deposit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
       <button type="button" class="pf-sq" data-go="wallet" aria-label="Swap" data-trading-only><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 9h12l-3-3M19 15H7l3 3"/></svg></button>
       <button type="button" class="pf-sq" data-wallet-menu aria-label="Wallet"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/></svg></button>
     </section>
-    <section class="pf-pos">
+    <section class="pf-pos" data-trading-only>
       <div class="pf-pos-head">
         <h3>Positions <span>(${tab === "open" ? (d.positions ?? []).length : (d.closed ?? []).length})</span></h3>
         <nav class="pf-seg" aria-label="Positions">
@@ -386,7 +386,7 @@ function paint() {
       </div>
       ${positions(d)}
     </section>
-    <details class="pf-wbox"${wboxOpen ? " open" : ""}>
+    <details class="pf-wbox" data-trading-only${wboxOpen ? " open" : ""}>
       <summary>Connected wallets (${(p.wallets ?? []).length})</summary>
       ${walletsBox(p)}
     </details>

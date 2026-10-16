@@ -1551,3 +1551,12 @@ html.detail-open .ask-fab, :root:has(#app-shell[data-view="entry"]) .ask-fab { d
 :root[data-trading="off"] { --dock-w: min(400px, calc(100vw - 92px)); }
 /* desktop sidebar: six places now, the search button moves down (it sat at 472px for four) */
 @media (width >= 1100px) { html body #dock-search.dock-search { inset-block-start: 540px; } }
+/* 16/10 review: an empty list draws no empty card (Early, Pearl, Top 25) */
+.memes-list:empty { display: none; }
+/* Arenas on phones: the first five tokens of each, then "Show all" */
+.ar-more { display: none; }
+@media (width < 1100px) {
+  .ar-grid .arena:not(.ar-all) [data-top-rows] > li:nth-child(n + 6) { display: none; }
+  .ar-more { display: block; inline-size: 100%; margin-block-start: 6px; padding: 9px; border-radius: 10px; font: inherit; font-size: 13px;
+    border: 1px solid var(--c-line, rgb(127 127 127 / .25)); background: none; color: inherit; cursor: pointer; }
+}

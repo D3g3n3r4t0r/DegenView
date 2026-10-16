@@ -315,7 +315,7 @@ export function gemWhy(e) {
   }).join("");
   const flags = Object.values(e.pillars ?? {}).flatMap((p) => p?.flags ?? []);
   return `<div class="why-score"><span class="ring" style="--v:${Math.round(e.score ?? 0)}"><b>${Math.round(e.score ?? 0)}</b></span>
-      <p><b>${e.early ? "Early gem" : `Rank #${e.rank ?? "—"}`}</b><small>${e.early ? "Under $50k with public code and every pillar solid: maybe worth a small bag." : "Code, research and tokenomics, scored every day."}</small></p></div>
+      <p><b>${e.top_rank ? `Top #${e.top_rank}` : e.early ? "Early gem" : e.top_rank === null ? "Not in the Top right now" : `Rank #${e.rank ?? "—"}`}</b><small>${e.early ? "Under $300k and past every other bar of the Top: smaller and riskier." : "Usage, holders, code, research and tokenomics, scored every day."}</small></p></div>
     <ul class="bars">${blocks}</ul>
     ${e.summary ? `<p class="dt-summary">${escapeHtml(e.summary)}</p>` : ""}
     ${deepseekBlock(e)}

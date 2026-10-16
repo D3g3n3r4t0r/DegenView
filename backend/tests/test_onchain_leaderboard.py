@@ -756,6 +756,8 @@ def test_the_token_page_shows_the_top_s_score(monkeypatch):
     top = next(e for e in m._top_entries(10) if e["symbol"] == "OKP")
     page = asyncio.run(m.onchain_token("solana", "OKmint", user=User.model_construct(id="u", email="x@y.z")))
     assert page["entry"]["score"] == top["score"] != 12
+    # and its place is the Top's (16/10 review: "Rank #—" for database rows)
+    assert page["entry"]["top_rank"] == 1
 
 
 def test_live_market_reaches_the_top_s_database_rows(monkeypatch):
@@ -792,3 +794,13 @@ def test_live_market_reaches_the_top_s_database_rows(monkeypatch):
     top = next(e for e in m._top_entries(10) if e["symbol"] == "OKP")
     assert top["market_cap"] == 612_000 and top["change_24h"] == 12.5 and top["pair_address"] == "okpool"
     lb._live.clear()
+
+
+def test_scout_reports_the_research_without_ai(monkeypatch):
+    import app.main as m
+    from app.models import User
+    monkeypatch.setattr(m.settings, "research_ai_enabled", False)
+    out = m.agent_activity(user=User.model_construct(id="u", email="x@y.z"))
+    r = out["research"]
+    assert r["ai"] is False and r["next_run"] > time.time()
+    assert set(r) >= {"last_run", "examined", "entered", "running", "nightly"}

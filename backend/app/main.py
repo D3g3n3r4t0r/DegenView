@@ -3855,6 +3855,12 @@ async def onchain_token(chain: str, token: str, user: User = Depends(auth.get_cu
                 if j else None
             entry["code"] = {k: c.get(k) for k in ("complexity", "innovation", "fork_of", "summary", "strengths",
                                                    "concerns")} if c else None
+    if entry is not None:
+        # Its place in the Top as the Top 25 shows it (score order), not the
+        # board's own rank: the page said "Rank #—" for database rows and a
+        # board-only number for the others (16/10 review).
+        entry["top_rank"] = next((i for i, t in enumerate(_top_entries(ARENA_POOL), 1)
+                                  if t["chain"] == chain and t["token_address"] == token), None)
     trading = settings.onchain_trading_enabled
     return {"entry": entry, "alerts": onchain_alert_track.for_token(chain, token) if trading else [],
             "backtests": onchain_strategy_lab.get(chain, token) if trading else None,
@@ -4081,7 +4087,8 @@ def _gem_telegram_text(kind: str, e: dict) -> str:
     esc = _html.escape
     chain = onchain_legit.CHAIN_LABEL.get(e.get("chain"), e.get("chain") or "")
     cap = f"${float(e['market_cap']):,.0f}" if e.get("market_cap") else "—"
-    head = ("💎 <b>Gemma early</b>: sotto i $50k con fondamentali solidi, potrebbe valere un piccolo ingresso"
+    head = (f"💎 <b>Gemma early</b>: sotto i ${onchain_leaderboard.TOP_CAP_MIN_USD // 1000}k e oltre tutti gli altri "
+            "controlli della Top: piccola e piu' rischiosa"
             if kind == "early" else "💎 <b>Nuova gemma in classifica</b>")
     pillars = e.get("pillars") or {}
     scores = " · ".join(f"{n} {round(pillars[k]['score'])}" for k, n in (("github", "GitHub"), ("site", "Ricerca"),
@@ -4956,6 +4963,14 @@ def agent_activity(user: User = Depends(auth.get_current_user)) -> dict:
     out = deepseek_desk.activity()
     out["watching"] = sum(1 for a in onchain_alert_track._alerts.values() if not a.get("closed") and not a.get("gone"))
     out["progress"] = _agent_progress()
+    # The research as it runs now: with or without AI, its last and next run
+    # (Scout showed the AI budget long after the AI was turned off, 14/10).
+    from app.trading.onchain import nightly as onchain_nightly
+    st = onchain_nightly.status()
+    last = st.get("summary") or {}
+    out["research"] = {"ai": settings.research_ai_enabled, "nightly": st["enabled"], "running": st["running"],
+                       "last_run": st.get("last_run"), "next_run": st.get("next_run"),
+                       "examined": last.get("examined"), "entered": len(last.get("entered") or [])}
     return out
 
 
