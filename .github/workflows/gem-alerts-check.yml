@@ -1,0 +1,79 @@
+name: Gem alerts check
+
+# Read-only look at why the gem alerts do not reach Telegram (Lorenzo, 16/10:
+# "questa terza, dedicata alle nuove gemme [...] non mi arrivano le
+# notifiche"). The repo is public: only yes/no and counts are printed — no
+# email, chat id or wallet address. Nothing is written. Run by hand.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  read:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Gem alert conditions
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: ${{ secrets.HETZNER_USER }}
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          script: |
+            # Standard library only: importing the app in a second process
+            # is killed for memory (exit 137).
+            docker exec -i deploy-app-1 python - <<'PY'
+            import glob, hashlib, json, os, re, time
+            base = next(d for d in ("/srv/backend/data", "/app/backend/data", "backend/data", "data")
+                        if glob.glob(d + "/users.json"))
+            cfg = next((open(p).read() for p in ("/srv/backend/app/config.py", "/app/backend/app/config.py",
+                                                 "backend/app/config.py", "app/config.py") if os.path.exists(p)), "")
+            def setting(name):
+                v = os.environ.get(name.upper())
+                if v is None:
+                    m = re.search(rf'^\s*{name}: str = "([^"]*)"', cfg, re.M)
+                    v = m.group(1) if m else ""
+                return [x.strip() for x in v.split(",") if x.strip()]
+            fmt = lambda t: time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(t)) if t else "never"
+            print("bot token set:", bool(os.environ.get("TELEGRAM_BOT_TOKEN")))
+            print("dev chats set:", len(setting("telegram_dev_chat_ids")), "| main chats set:", len(setting("telegram_chat_ids")))
+            allowed = setting("telegram_allowed_emails")
+            only = set(setting("telegram_signal_only_chats"))
+            users = json.load(open(base + "/users.json"))
+            only |= {u.get("telegram_signal_chat_id") for u in users if u.get("telegram_signal_chat_id")}
+            dev = set(setting("telegram_dev_chat_ids") or setting("telegram_chat_ids"))
+            for i, u in enumerate(users, 1):
+                e = (u.get("email") or "").lower()
+                ok = not allowed or e in allowed or "sha256:" + hashlib.sha256(e.encode()).hexdigest() in allowed
+                main, sig = u.get("telegram_chat_id") or "", u.get("telegram_signal_chat_id") or ""
+                print(f"user {i}: main chat set={bool(main)} | main chat is signals-only={main in only} | "
+                      f"main chat is the dev chat={main in dev} | signals chat set={bool(sig)} | "
+                      f"wallets={len(u.get('onchain_wallets') or {})} | telegram allowed={ok}")
+            try:
+                n = json.load(open(base + "/onchain_nightly.json"))
+                print("nightly keys:", sorted(n))
+                for k in ("last_slot", "slot", "done", "last_done", "started", "ended", "attempts"):
+                    if k in n:
+                        print("nightly", k, fmt(n[k]) if isinstance(n[k], (int, float)) and n[k] > 1e9 else n[k])
+                last = n.get("last") or n.get("summary") or {}
+                if isinstance(last, dict):
+                    print("last night: ended", fmt(last.get("ended")), "| entered", len(last.get("entered") or []),
+                          "| left", len(last.get("left") or []), "| top", last.get("top"), "| stopped", last.get("stopped"))
+            except (OSError, ValueError) as exc:
+                print("nightly state not readable:", type(exc).__name__)
+            try:
+                lb = json.load(open(base + "/onchain_leaderboard.json"))
+                print("board entries", len(lb.get("entries") or {}), "| alerted", len(lb.get("alerted") or []),
+                      "| new", sum(1 for a in lb.get("alerted") or [] if a.startswith("new:")),
+                      "| early", sum(1 for a in lb.get("alerted") or [] if a.startswith("early:")))
+                ranked = [e for e in (lb.get("entries") or {}).values() if e.get("rank")]
+                print("ranked now", len(ranked), "| last rank move", fmt(max((e.get("moved_at") or 0) for e in ranked) if ranked else 0))
+            except (OSError, ValueError) as exc:
+                print("board not readable:", type(exc).__name__)
+            PY
+            # Server log, last 72 h: research and Telegram lines, numbers and
+            # emails masked.
+            docker logs deploy-app-1 --since 72h 2>&1 \
+              | grep -iE "nightly|notte|ricerca|classifica|telegram|gemm|gem " \
+              | grep -v "^  File\|^    " \
+              | sed -E 's/-?[0-9]{6,}/<n>/g; s/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+/<email>/g' \
+              | tail -60
