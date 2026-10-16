@@ -12,6 +12,7 @@
  *
  * Lorenzo, 16/10: the podium's three sit fixed in the top bar, and every
  * arena is listed open (tokens and scores) instead of the mosaic of tiles.
+ * The podium is now the Top 25's first three, by score, not pound for pound.
  */
 import * as api from "@onchain/api.js";
 import { register } from "@onchain/detail.js";
@@ -28,7 +29,7 @@ const TRADING = document.documentElement.dataset.trading === "on";
 
 let root = null;
 let arenas = [];
-let p4p = [];
+let entries = [];   // the Top by score: Top 25 and the podium
 let labStatus = null;
 let filtered = false;   // the last load was narrowed by narrative
 let labels = {};        // narrative key -> label, from the coverage
@@ -94,7 +95,6 @@ function listHtml() {
   const list = arenas.filter((a) => shownCount(a)).sort((a, b) => shownCount(b) - shownCount(a));
   return list.length ? `<div class="ar-grid">${list.map((a) => arenaHtml(a, true)).join("")}</div>` : "";
 }
-const sigma = (z) => `${z >= 0 ? "+" : "−"}${Math.abs(z).toFixed(1)}σ`;
 
 function row(e, a) {
   const id = idOf(e);
@@ -129,14 +129,15 @@ function paint() {
   delete root.dataset.loading;
   const firstPaint = !shown;
   root.querySelector(".top-wait")?.remove();
-  // The podium is pound for pound: the projects leading their own arena by
-  // the most. Fixed in the top bar (Lorenzo, 16/10).
-  const top3 = p4p.filter((e) => !isHidden(e.chain, e.token_address)).slice(0, 3).map((e) => {
+  // The podium in the top bar is the Top 25's first three, same order
+  // (Lorenzo, 16/10: it was pound for pound — the lead over the arena's
+  // median — and disagreed with the Top 25, which ranks by score).
+  const top3 = bestByScore(entries).slice(0, 3).map((e, i) => {
     register(idOf(e), { kind: "gem", symbol: e.symbol, name: e.name, chain: e.chain, token: e.token_address,
       pair: e.pair_address, pairUrl: e.pair_url, image: e.image, cap: e.market_cap,
-      change: e.change_24h != null ? e.change_24h / 100 : null, ageTs: e.launched_at,
-      context: `Pound for pound · leads ${e.arena_label} by ${sigma(e.z)}` });
-    return e;
+      change: e.change_24h != null ? e.change_24h / 100 : null, ageTs: e.launched_at, rank: i + 1,
+      context: `Top 25 · #${i + 1} · score ${Math.round(e.score ?? 0)}` });
+    return { ...e, arena_label: arenaOf(e) };
   });
   paintTop3(top3);
 
@@ -196,9 +197,9 @@ function paintTop3(list) {
   }
   el.hidden = !list.length;
   el.innerHTML = list.map((e, i) => `<button type="button" class="t3" data-open="${escapeHtml(idOf(e))}"
-      title="${escapeHtml(`${e.name || e.symbol} · leads ${e.arena_label} by ${sigma(e.z)}`)}">
+      title="${escapeHtml(`${e.name || e.symbol} · #${i + 1} of the Top 25 · score ${Math.round(e.score ?? 0)}${e.arena_label ? ` · ${e.arena_label}` : ""}`)}">
       <i class="t3-place">${i + 1}</i>${tile(e.symbol, e.image, e.chain, e.token_address)}
-      <span class="t3-main"><b>${escapeHtml(e.symbol ?? "")}</b><small>${escapeHtml(sigma(e.z))} ${escapeHtml(SHORT[e.arena_label] || e.arena_label || "")}</small></span>
+      <span class="t3-main"><b>${escapeHtml(e.symbol ?? "")}</b><small>score ${Math.round(e.score ?? 0)}${e.arena_label ? ` · ${escapeHtml(SHORT[e.arena_label] || e.arena_label)}` : ""}</small></span>
     </button>`).join("");
 }
 const SHORT = {
@@ -246,11 +247,19 @@ function paintPearl(list) {
 // Top (Lorenzo, 16/10): "classificare le migliori 25 gemme per punteggio
 // rank" — the Top's entries (board and database rows, gated), by score.
 const RANK_N = 25;
-function paintRank(entries) {
+// One order for the Top 25 and the podium: score, then the server's order.
+const bestByScore = (list) => list.filter((e) => !isHidden(e.chain, e.token_address))
+  .map((e, i) => [e, i]).sort(([a, i], [b, j]) => (b.score ?? 0) - (a.score ?? 0) || i - j).map(([e]) => e);
+// The arena a token leads in, else the first that lists it (the podium's label).
+function arenaOf(e) {
+  const id = idOf(e);
+  const has = arenas.filter((a) => a.entries.some((x) => idOf(x) === id));
+  return (has.find((a) => idOf(a.entries[0]) === id) ?? has[0])?.label ?? "";
+}
+function paintRank(list) {
   const box = document.querySelector("[data-rank-view]");
   if (!box) return;
-  const best = entries.filter((e) => !isHidden(e.chain, e.token_address))
-    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).slice(0, RANK_N);
+  const best = bestByScore(list).slice(0, RANK_N);
   box.querySelector("[data-rank-empty]").hidden = best.length > 0;
   box.querySelector("[data-rank-rows]").innerHTML = best.map((e, i) => {
     const id = idOf(e);
@@ -290,12 +299,12 @@ async function load() {
     // A page served before the arenas: one arena holding the old list.
     arenas = top?.arenas ?? [{ key: "all", label: "All projects", heat: 0, size: (top?.entries ?? []).length, median: 0,
       entries: (top?.entries ?? []).map((e, i) => ({ ...e, arena_rank: i + 1, in: true })) }];
-    p4p = top?.p4p ?? [];
+    entries = top?.entries ?? [];
     labStatus = top?.backtests ?? null;
     paint();
     paintEarly(top?.early ?? []);   // the board's own early list, never narrowed by narrative
     paintPearl(top?.early ?? []);
-    paintRank(top?.entries ?? []);
+    paintRank(entries);
   } catch {
     // Keep the last view; with none yet, the cube says the next poll retries.
     const w = root.querySelector(".top-wait");
