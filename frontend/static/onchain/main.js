@@ -8,6 +8,7 @@
  * accanto — questo file monta e smonta, non disegna i form.
  */
 import "@onchain/nozoom.js";
+import "@onchain/theme.js";
 import "@onchain/ui.js";
 import * as api from "@onchain/api.js";
 import { ApiError } from "@onchain/api.js";

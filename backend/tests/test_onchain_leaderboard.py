@@ -760,6 +760,40 @@ def test_the_token_page_shows_the_top_s_score(monkeypatch):
     assert page["entry"]["top_rank"] == 1
 
 
+def test_the_arenas_score_a_database_row_with_its_pillars(monkeypatch):
+    # Lorenzo, 17/10: still one score in the narrative arenas, another under
+    # the chart. The Top read its rows through projects_db.search, which left
+    # out pillars and cg_mcap: no tokenomics, no product pillars, no
+    # closed-code penalty. The page read the whole row. Real database here,
+    # not a mocked search/get pair that hands both sides the same dict.
+    import asyncio
+    import app.main as m
+    from app.models import User
+    from app.trading.onchain import projects_db
+    item = {"chain": "solana", "token_address": "PILmint", "symbol": "PIL", "name": "Pillar Project",
+            "market_cap": 450_000, "liquidity_usd": 60_000}
+    projects_db.upsert(item, "test")
+    pillars = {"tokenomics": {"score": 95}, "site": {"score": 90},
+               "github": {"score": 10, "facts": {"missing": True}}}
+    projects_db.record({**item, "pillars": pillars}, "studied", score=50)
+    monkeypatch.setattr(m.onchain_judge, "get", lambda *a: None)
+    monkeypatch.setattr(m.onchain_leaderboard, "board", lambda: {"entries": []})
+    monkeypatch.setattr(m, "_require_onchain_enabled", lambda: None)
+    # Only the listed accounts for now (Lorenzo, 17/10: "solo per whitekobra").
+    monkeypatch.setattr(m.settings, "onchain_full_score_emails", "Kobra@Example.com")
+    monkeypatch.setattr(m.settings, "onchain_trading_enabled", False)
+    kobra = User.model_construct(id="k", email="kobra@example.com")
+    other = User.model_construct(id="o", email="other@example.com")
+
+    def arena_score(user):
+        top = asyncio.run(m.onchain_top(n=10, narrative="", user=user))
+        return next(e for a in top["arenas"] for e in a["entries"] if e["symbol"] == "PIL")["score"]
+    page = asyncio.run(m.onchain_token("solana", "PILmint", user=kobra))
+    full = m.onchain_leaderboard.final_score(m.onchain_leaderboard.db_entry(projects_db.get("solana", "PILmint")))
+    assert arena_score(kobra) == page["entry"]["score"] == full
+    assert arena_score(other) != full  # everyone else: the Top as it was
+
+
 def test_live_market_reaches_the_top_s_database_rows(monkeypatch):
     # Lorenzo, 16/10: "la MarketCap" always up to date — the research runs
     # at night only, so the Top's market is read every minute on its own.

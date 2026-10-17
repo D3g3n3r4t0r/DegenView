@@ -466,12 +466,20 @@ def as_item(p: dict) -> dict:
 
 
 LAYERS = ("L0", "L1", "L2")  # layers.py writes the type in overall.layer
+_LIST_COLUMNS = ("key, chain, token, symbol, name, website, github, image, mcap, liq, vol24, launched_at,"
+                 " first_seen, analyzed_at, status, why, score, rank, sources, narratives, traction, overall,"
+                 " description, categories")
 SORTS = {"score": "COALESCE(score, -1) DESC", "cap": "COALESCE(mcap, 0) ASC", "liq": "COALESCE(liq, 0) DESC",
          "recent": "first_seen DESC", "checked": "COALESCE(analyzed_at, 0) DESC"}
 
 
 def search(q: str = "", status: str = "", sort: str = "score", limit: int = 50, offset: int = 0,
-           in_band: bool = False, narrative: str = "", chain: str = "", layer: str = "") -> dict:
+           in_band: bool = False, narrative: str = "", chain: str = "", layer: str = "",
+           full: bool = False) -> dict:
+    """`full` returns whole rows, as get() does: what final_score reads
+    (pillars, cg_mcap...). The lighter default is for lists that only show
+    the row (Lorenzo, 17/10: the arenas scored without pillars, the token
+    page with them)."""
     where, args = [], []
     if layer in LAYERS:
         where.append("chain = 'layer' AND json_extract(overall, '$.layer') = ?")
@@ -499,9 +507,8 @@ def search(q: str = "", status: str = "", sort: str = "score", limit: int = 50, 
     with _lock:
         total = _db().execute(f"SELECT COUNT(*) FROM projects {clause}", args).fetchone()[0]
         rows = _db().execute(
-            f"SELECT key, chain, token, symbol, name, website, github, image, mcap, liq, vol24, launched_at,"
-            f" first_seen, analyzed_at, status, why, score, rank, sources, narratives, traction, overall,"
-            f" description, categories FROM projects {clause} ORDER BY {order} LIMIT ? OFFSET ?", (*args, limit, max(0, int(offset)))
+            f"SELECT {'*' if full else _LIST_COLUMNS} FROM projects {clause} ORDER BY {order} LIMIT ? OFFSET ?",
+            (*args, limit, max(0, int(offset)))
         ).fetchall()
     return {"total": total, "items": [_row(r) for r in rows]}
 

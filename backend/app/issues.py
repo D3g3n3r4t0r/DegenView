@@ -165,6 +165,12 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0334", "App on-chain: modalita' dark",
+     "Lorenzo, 17/10: 'visto che ci sei aggiungi anche modalita' dark'.",
+     "media"),
+    ("seed-0333", "Punteggi diversi fra arene e pagina del token",
+     "Lorenzo, 17/10: 'I punteggi delle gemme continuano a risultare diversi tra le classifiche per narrative e il rank sotto il grafico una volta cliccato sulla gemma. Perche'?'. Poi: 'Per ora falla solo per whitekobra'.",
+     "alta"),
     ("seed-0332", "App on-chain: pagina bianca ricaricando",
      "Trovato da Claude il 16/10 e chiuso il 17/10 su richiesta di Lorenzo ('Risolvi il punto 2'): ricaricando l'app on-chain compariva 'Failed to resolve module specifier @onchain/nozoom.js' e l'app non partiva.",
      "alta"),

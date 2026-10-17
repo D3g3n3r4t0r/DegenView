@@ -3678,12 +3678,17 @@ async def onchain_top(n: int = 15, narrative: str = "", user: User = Depends(aut
         # alone, with no backtest beside it and none required to enter.
         # The arenas (arenas.py, Lorenzo 07/10) take every project that
         # passed the gates, not a fixed 50; `entries` stays for older pages.
-        pool = _top_entries(ARENA_POOL, narrative)
+        full = _full_score(user)
+        pool = _top_entries(ARENA_POOL, narrative, full=full)
         for e in pool:
             e["backtests"] = None
         out = pool[:max(1, min(int(n), 50))]
+        # The whole-row view reads the shared tenure but never writes it: the
+        # other accounts' arenas are still built on the lighter rows.
+        tenure = onchain_arenas.load_tenure() if full else None
         return {"entries": out, "on_board": sum(1 for e in out if e["on_board"]), "backtests": None,
-                "early": onchain_leaderboard.board().get("early") or [], **onchain_arenas.build(pool, prefer={k.strip() for k in narrative.split(",") if k.strip()})}
+                "early": onchain_leaderboard.board().get("early") or [],
+                **onchain_arenas.build(pool, prefer={k.strip() for k in narrative.split(",") if k.strip()}, tenure=tenure)}
     out = []
     for e in _top_entries(50, narrative):
         e["backtests"] = _lab_summary(onchain_strategy_lab.get(e["chain"], e["token_address"]))
@@ -3741,10 +3746,16 @@ def _require_trading() -> None:
 ARENA_POOL = 500   # every gated project; the arenas set no fixed size
 
 
-def _top_entries(n: int = 50, narrative: str = "") -> list[dict]:
+def _full_score(user: User | None) -> bool:
+    return getattr(user, "email", None) in email_allowlist(settings.onchain_full_score_emails)
+
+
+def _top_entries(n: int = 50, narrative: str = "", full: bool = False) -> list[dict]:
     """La Top della schermata Strategie: la bacheca delle gemme piu' le
     righe studiate migliori del database, per punteggio. `narrative`
-    (chiavi separate da virgole) tiene solo i progetti di quelle narrative."""
+    (chiavi separate da virgole) tiene solo i progetti di quelle narrative.
+    `full` legge le righe intere (pilastri, cap globale), come la pagina del
+    token: solo per gli account in settings.onchain_full_score_emails."""
     want = {k.strip() for k in (narrative or "").split(",") if k.strip()}
     board = sorted(onchain_leaderboard.board().get("entries") or [], key=lambda e: -(e.get("score") or 0))
     if want:
@@ -3758,7 +3769,7 @@ def _top_entries(n: int = 50, narrative: str = "") -> list[dict]:
     # "ranked" too: a row whose flag outlived its place on the board was
     # skipped by both halves of the Top (Lorenzo, 28/09: high scores never on the podium).
     rows = [r for st in ("studied", "ranked")
-            for r in onchain_projects_db.search(status=st, sort="score", limit=200, narrative=narrative)["items"]]
+            for r in onchain_projects_db.search(status=st, sort="score", limit=200, narrative=narrative, full=full)["items"]]
     for row in sorted(rows, key=lambda r: -(r.get("score") or 0)):
         if row.get("score") is None or (row.get("analyzed_at") or 0) < cutoff:
             continue
@@ -3859,7 +3870,7 @@ async def onchain_token(chain: str, token: str, user: User = Depends(auth.get_cu
         # Its place in the Top as the Top 25 shows it (score order), not the
         # board's own rank: the page said "Rank #—" for database rows and a
         # board-only number for the others (16/10 review).
-        entry["top_rank"] = next((i for i, t in enumerate(_top_entries(ARENA_POOL), 1)
+        entry["top_rank"] = next((i for i, t in enumerate(_top_entries(ARENA_POOL, full=_full_score(user)), 1)
                                   if t["chain"] == chain and t["token_address"] == token), None)
     trading = settings.onchain_trading_enabled
     return {"entry": entry, "alerts": onchain_alert_track.for_token(chain, token) if trading else [],

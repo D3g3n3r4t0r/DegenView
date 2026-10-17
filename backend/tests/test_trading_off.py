@@ -23,7 +23,7 @@ def test_default_is_off():
 def test_top_keeps_rows_without_a_strategy_trade(off, monkeypatch):
     from app.trading.onchain import strategy_lab
     ents = [{"chain": "base", "token_address": t, "symbol": t, "on_board": True} for t in ("A", "B", "C")]
-    monkeypatch.setattr(main, "_top_entries", lambda n=50, narrative="": [dict(e) for e in ents][:n])
+    monkeypatch.setattr(main, "_top_entries", lambda n=50, narrative="", full=False: [dict(e) for e in ents][:n])
 
     def no_lab(*_):
         raise AssertionError("the lab is not read with trading off")

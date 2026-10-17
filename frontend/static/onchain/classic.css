@@ -520,3 +520,38 @@ dialog.sheet { padding-inline: 16px !important; }
 #dock.dock button[aria-current] .dock-me { background: var(--c-ink) !important; }
 .dock-search { color: var(--c-on-ink) !important; }
 .ar-tile[aria-pressed="true"] { border-color: var(--c-ink) !important; background: var(--c-sage) !important; color: var(--c-on-sage) !important; }
+
+/* Dark mode (Lorenzo, 17/10: "aggiungi anche modalità dark"), picked in
+ * Profile (theme.js): the same Nordic skin at night. Every colour above
+ * reads these tokens, so only the palette changes: green-black paper,
+ * raised cards, warm white ink; the deep green stays for what is pressed
+ * and for the tab bar, the sage chips stay light so the choice still shows. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --c-bg: #111513;
+  --c-card: #1a1f1c;
+  --c-pill: #252b27;
+  --c-press: #2f3631;
+  --c-line: #29302b;
+  --c-text: #e8ebe4;
+  --c-text-2: #bcc3b8;
+  --c-text-3: #8f998c;
+  --c-text-4: #59625a;
+  --c-ink: #46604e;
+  --c-on-ink: #f1f4ee;
+  --c-sage: #c9d4c0;
+  --c-on-sage: #1d2620;
+  --c-up: #63c48b;
+  --c-down: #ec8468;
+  --c-amber: #d9a94f;
+  --c-amber-soft: rgb(217 169 79 / .14);
+  --c-up-soft: rgb(99 196 139 / .14);
+  --c-down-soft: rgb(236 132 104 / .14);
+  --c-float: #1f2a23;
+  --c-float-line: #2d3a31;
+  --c-float-shadow: 0 8px 24px rgb(0 0 0 / .45);
+}
+:root[data-theme="dark"] .bd-tags em[data-tone="early"] { background: var(--c-amber-soft) !important; }
+
+.pf-theme { display: grid; gap: 10px; margin-block: 4px 12px; }
+.pf-theme h3 { margin: 0; font: 500 15px var(--sans); color: var(--c-text); }
