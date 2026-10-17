@@ -57,6 +57,20 @@ def has_italian_line(commit_message: str) -> bool:
     )
 
 
+_ACCOUNT_TRAILER = "Solo-account:"
+
+
+def private_account(commit_message: str) -> str:
+    """The account a commit is for, from its "Solo-account:" trailer ("" for
+    everyone). Lorenzo, 17/10: a change made only for whitekobra is
+    announced only in whitekobra's chat, not in the repository's."""
+    for line in commit_message.splitlines():
+        stripped = line.strip()
+        if stripped.lower().startswith(_ACCOUNT_TRAILER.lower()):
+            return stripped[len(_ACCOUNT_TRAILER):].strip().lower()
+    return ""
+
+
 def italian_line(commit_message: str) -> str:
     """La riga italiana di un commit: il trailer se c'e', altrimenti il titolo.
 
@@ -126,6 +140,8 @@ def build_recap(
     # messaggio che non mantiene la promessa. Quelle senza trailer restano
     # nel conteggio, perche' sono avvenute e vanno dichiarate — semplicemente
     # non hanno una frase da leggere.
+    # "Solo-account:" changes are announced to that account only, here too.
+    commit_messages = [m for m in commit_messages if not private_account(m)]
     described = [italian_line(m) for m in commit_messages if has_italian_line(m)]
     total_changes = len(commit_messages)
 
