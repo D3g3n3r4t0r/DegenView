@@ -3119,5 +3119,15 @@
     "status": "risolto",
     "at": 1792227690,
     "summary": "L'avviso 'nuova gemma' partiva quando un progetto entrava nella classifica interna della ricerca, e solo se in quel momento era gia' nella Top 50: le righe del database (la maggior parte della Top) non lo facevano mai, e quelle saltate venivano segnate come gia' inviate. Le gemme Early (sotto i $300k, quindi mai nella Top) venivano scartate dallo stesso controllo. Ora 'nuova gemma' = progetto che entra nella Top (lo stesso elenco del riepilogo notturno 'Entrati nelle arene'), con il posto della Top; Early partono di nuovo. Al primo avvio dopo il deploy la Top attuale viene solo registrata, senza messaggi. Restano il limite di 6 all'ora per account e la chat gemme (o la principale se non impostata, mai quella dei soli segnali)."
+  },
+  "seed-0329": {
+    "status": "risolto",
+    "at": 1792228709,
+    "summary": "Quando una gemma entra in Pearl (Early con punteggio da 70 in su, arrotondato come nell'app) parte un messaggio '🦪 Nuova Pearl' nella chat delle gemme, una volta per gemma, con il link alla sezione Pearl. Va solo agli account con l'app nuova (whitekobra): l'altro account non ha la sezione Pearl. Al primo avvio le Pearl gia' presenti vengono solo registrate."
+  },
+  "seed-0330": {
+    "status": "risolto",
+    "at": 1792228709,
+    "summary": "La ricerca delle gemme gira due volte al giorno, alle 03:00 e alle 18:00 (ora italiana), con la stessa durata massima (6 ore) e il riepilogo Telegram a fine giro. Vale per tutti: la ricerca e' una sola per il server."
   }
 }

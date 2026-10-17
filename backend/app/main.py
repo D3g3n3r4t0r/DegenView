@@ -4087,15 +4087,17 @@ def _gem_telegram_text(kind: str, e: dict) -> str:
     esc = _html.escape
     chain = onchain_legit.CHAIN_LABEL.get(e.get("chain"), e.get("chain") or "")
     cap = f"${float(e['market_cap']):,.0f}" if e.get("market_cap") else "—"
-    head = (f"💎 <b>Gemma early</b>: sotto i ${onchain_leaderboard.TOP_CAP_MIN_USD // 1000}k e oltre tutti gli altri "
-            "controlli della Top: piccola e piu' rischiosa"
-            if kind == "early" else "💎 <b>Nuova gemma in classifica</b>")
+    head = {"early": f"💎 <b>Gemma early</b>: sotto i ${onchain_leaderboard.TOP_CAP_MIN_USD // 1000}k e oltre tutti gli "
+                     "altri controlli della Top: piccola e piu' rischiosa",
+            "pearl": f"🦪 <b>Nuova Pearl</b>: gemma early con punteggio da {onchain_leaderboard.PEARL_MIN} in su",
+            }.get(kind, "💎 <b>Nuova gemma in classifica</b>")
+    view = "pearl" if kind == "pearl" else "gems"
     pillars = e.get("pillars") or {}
     scores = " · ".join(f"{n} {round(pillars[k]['score'])}" for k, n in (("github", "GitHub"), ("site", "Ricerca"),
                         ("tokenomics", "Tokenomics")) if (pillars.get(k) or {}).get("score") is not None)
     sym = esc(e.get("symbol") or "?")
     if e.get("token_address"):
-        sym = f'<a href="{esc(app_token_url("gems", e.get("chain") or "", e["token_address"]), quote=True)}">{sym}</a>'
+        sym = f'<a href="{esc(app_token_url(view, e.get("chain") or "", e["token_address"]), quote=True)}">{sym}</a>'
     lines = [head, f"<b>{sym}</b> · {esc(e.get('name') or '')} su {chain}",
              f"cap {cap} · punteggio {round(e.get('score') or 0)} · posto {e.get('rank') or '—'}"]
     if scores:
@@ -4109,7 +4111,7 @@ def _gem_telegram_text(kind: str, e: dict) -> str:
     for label, url in (("🌐 Sito", e.get("website")), ("GitHub", e.get("github")), ("Grafico", e.get("pair_url"))):
         if url:
             links.append(f'<a href="{esc(url, quote=True)}">{label}</a>')
-    gem_url = app_token_url("gems", e.get("chain") or "", e["token_address"]) if e.get("token_address") \
+    gem_url = app_token_url(view, e.get("chain") or "", e["token_address"]) if e.get("token_address") \
         else f"{settings.public_base_url}/onchain-app.html#gems"
     links.append(f'<a href="{esc(gem_url, quote=True)}">Apri in DEGEN</a>')
     lines.append(" · ".join(links))
@@ -4130,6 +4132,10 @@ async def _notify_gem(kind: str, e: dict) -> None:
         # The gems chat, else the main chat; never an alerts chat. No wallet
         # needed any more: that dated from the on-chain trading, off since 07/10.
         if not (user.telegram_gems_chat_id or _info_chat(user)) or not _telegram_allowed(user):
+            continue
+        # Pearl is a section of the current app only (CLAUDE.md, 17/10): the
+        # frozen v1 copy has none.
+        if kind == "pearl" and _onchain_variant(user) != "current":
             continue
         sent = [t for t in _gem_notified.get(user.id, []) if now - t < 3600]
         if len(sent) >= _GEM_NOTIFY_PER_HOUR:

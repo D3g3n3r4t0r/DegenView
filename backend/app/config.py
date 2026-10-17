@@ -76,7 +76,9 @@ class Settings(BaseSettings):
     onchain_nightly_hour: int = 3
     # More daily runs, "HH:MM" comma-separated, same logic and window.
     # Lorenzo, 08/10: "aggiungi un check oltre che alle 22, anche alle 11.35".
-    onchain_nightly_extra_times: str = ""
+    # Lorenzo, 17/10: "aggiungi per tutti gli account una nuova ricerca alle
+    # ore 18 [...] Due ricerche al giorno": 03:00 and 18:00.
+    onchain_nightly_extra_times: str = "18:00"
     onchain_nightly_max_hours: float = 6.0   # 03:00-09:00 at most
     # Lorenzo, 12/10: "la nostra selezione non e' molto popolata, aggiungi
     # controllo ogni ora". A run at every whole hour besides the ones above;

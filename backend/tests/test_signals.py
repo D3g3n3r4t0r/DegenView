@@ -233,3 +233,42 @@ def test_early_alerts_are_not_held_to_the_top(monkeypatch):
     lb.on_alert(hook)
     asyncio.run(lb.drain_alerts())
     assert got == [("early", "G30000")]
+
+
+def test_a_gem_entering_pearl_is_announced_once(monkeypatch):
+    """Lorenzo, 17/10: the gems chat hears about Pearl too (early, score 70 and up)."""
+    monkeypatch.setattr("time.time", lambda: T0)
+    assert lb.queue_pearl_news() == 0                    # first look: note only
+    gem = _gem(30_000)
+    weak = _gem(32_000)
+    monkeypatch.setattr(lb, "final_score", lambda e: 80 if e is gem or e.get("symbol") == gem["symbol"] else 60)
+    assert lb.is_pearl(gem) and not lb.is_pearl(weak)
+    assert lb.queue_pearl_news() == 1
+    got = []
+
+    async def hook(kind, item):
+        got.append((kind, item["symbol"]))
+    lb.on_alert(hook)
+    lb._outbox[:] = [x for x in lb._outbox if x[0] == "pearl"]
+    asyncio.run(lb.drain_alerts())
+    assert got == [("pearl", gem["symbol"])]
+    assert lb.queue_pearl_news() == 0                    # once
+
+
+def test_pearl_alert_goes_to_the_current_app_only(monkeypatch):
+    from app import main
+    users = [SimpleNamespace(id="a", email="new@x", telegram_gems_chat_id="111", telegram_chat_id="", telegram_signal_chat_id=""),
+             SimpleNamespace(id="b", email="old@x", telegram_gems_chat_id="222", telegram_chat_id="", telegram_signal_chat_id="")]
+    monkeypatch.setattr(main.auth, "list_users", lambda: users)
+    monkeypatch.setattr(main, "_telegram_allowed", lambda u: True)
+    monkeypatch.setattr(main, "_onchain_variant", lambda u: "v1" if u.id == "b" else "current")
+    sent = []
+    monkeypatch.setattr(main, "_fire", lambda coro: (sent.append(coro.cr_frame.f_locals.get("chat_id")), coro.close()))
+    main._gem_notified.clear()
+    item = {"chain": "solana", "token_address": "T", "symbol": "PRL", "score": 74}
+    asyncio.run(main._notify_gem("pearl", item))
+    assert sent == ["111"]
+    assert "Nuova Pearl" in main._gem_telegram_text("pearl", item) and "#pearl&amp;token=" in main._gem_telegram_text("pearl", item)
+    sent.clear()
+    asyncio.run(main._notify_gem("new", {**item, "token_address": "U"}))
+    assert sorted(sent) == ["111", "222"]

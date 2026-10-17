@@ -165,6 +165,12 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0330", "Seconda ricerca delle gemme alle 18",
+     "Lorenzo, 17/10: 'aggiungi per tutti gli account una nuova ricerca alle ore 18. Quindi non ci sara' piu' solo la ricerca delle 3 la notte, ma anche quella delle ore 18. Due ricerche al giorno'.",
+     "media"),
+    ("seed-0329", "Telegram: alert anche per le gemme che entrano in Pearl",
+     "Lorenzo, 17/10: 'aggiungi l'alert nella chat delle gemme anche per quelle che eventualmente entrano nella sezione Pearl'.",
+     "media"),
     ("seed-0328", "Telegram: nessun messaggio nella chat delle gemme",
      "Lorenzo, 17/10: 'continuano a non arrivare i messaggi delle nuove gemme. Anche stanotte, dopo la ricerca delle tre, non sono arrivati messaggi su nuove gemme nella chat dedicata'.",
      "alta"),
