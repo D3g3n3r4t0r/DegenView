@@ -3780,15 +3780,13 @@ def _gem_view(entries: list[dict], now: float | None = None) -> list[dict]:
     ok = [e for e in entries
           if round(e.get("score") or 0) >= GEM_MIN_SCORE
           and not (e.get("launched_at") and now - e["launched_at"] > GEM_MAX_AGE_DAYS * 86400)]
-    best: dict[str, dict] = {}
-    for e in ok:
+    rank = lambda e: ((e.get("liquidity_usd") or 0), (e.get("score") or 0))  # noqa: E731
+    best: dict[str, int] = {}               # project -> index in `ok` of the row kept
+    for i, e in enumerate(ok):
         k = _project_key(e) or f"{e.get('chain')}:{e.get('token_address')}"
-        cur = best.get(k)
-        if cur is None or ((e.get("liquidity_usd") or 0), (e.get("score") or 0)) > \
-                ((cur.get("liquidity_usd") or 0), (cur.get("score") or 0)):
-            best[k] = e
-    keep = {id(e) for e in best.values()}
-    return [e for e in ok if id(e) in keep]
+        if k not in best or rank(e) > rank(ok[best[k]]):
+            best[k] = i
+    return [ok[i] for i in sorted(best.values())]
 
 
 def _top_entries(n: int = 50, narrative: str = "", full: bool = False) -> list[dict]:
