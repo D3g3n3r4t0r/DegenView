@@ -73,10 +73,6 @@ class Settings(BaseSettings):
     # "Solo per account whitekobra: Rimuovi tutti i limiti per tutte le chat
     # Telegram").
     telegram_unlimited_emails: str = "sha256:fdfcf4ae2f1823a2e1f24d0f48c3fcd8cf128541133709ad272f21f2e62f3f58"
-    # The account a "Solo-account: whitekobra" commit is announced to: its
-    # deploy line goes to this account's chat only, not to the repository's
-    # (Lorenzo, 17/10).
-    whitekobra_emails: str = "sha256:fdfcf4ae2f1823a2e1f24d0f48c3fcd8cf128541133709ad272f21f2e62f3f58"
     # Off on Hetzner (deploy/docker-compose.yml): Caddy compresses there.
     app_gzip: bool = True
     # The gem research (discovery, pillars, DeepSeek readings, layers,
