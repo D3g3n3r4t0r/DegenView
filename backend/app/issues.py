@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0337", "Avviso di deploy: le modifiche solo per whitekobra solo nella sua chat",
+     "Lorenzo, 17/10: 'Quando effettui modifiche solo per l'account whitekobra invia la notifica del repository solamente alla chat dell'account whitekobra'.",
+     "media"),
     ("seed-0336", "Whitekobra: niente limiti sugli avvisi Telegram, gemme solo se nuove",
      "Lorenzo, 17/10: 'Solo per account whitekobra: Rimuovi tutti i limiti per tutte le chat Telegram e utilizza lo stratagemma di qualche secondo di pausa per l'invio [...] solo quando una gemma non presente nelle classifiche, qualsiasi sia, allora scatta la notifica'.",
      "media"),
