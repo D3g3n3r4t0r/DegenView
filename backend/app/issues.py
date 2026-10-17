@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0342", "Poche gemme su Ethereum e Base: fonte di token nuovi",
+     "Lorenzo, 17/10: 'tra le gemme vedo pochissime gemme della chain Ethereum e pochissime gemme della chain base', poi 'aggiungi la fonte di token nuovi per Ethereum e Base su tutti gli account'.",
+     "media"),
     ("seed-0341", "Whitekobra: nuovi pesi del voto delle gemme",
      "Lorenzo, 17/10: togliere la partecipazione, prodotto 35%, uso 25% con dentro la crescita degli holder, token 20%, DeepSeek 20%, penalita' GitHub 5 punti: 'Procedi con la crescita nell'uso e quindi poi ridisegna completamente tutti i nuovi parametri delle gemme solo per l'account whitekobra'.",
      "alta"),
