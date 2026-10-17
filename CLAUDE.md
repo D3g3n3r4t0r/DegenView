@@ -61,6 +61,11 @@ resta come via di ritorno.
 **Ogni lavoro finito va online senza chiedere** (Lorenzo, 16/10: "I deploy
 devono sempre andare online", poi "scrivi tu la regola in CLAUDE.md"): dopo
 le verifiche, PR dal branch della chat e merge in `main`.
+**Sezione gemme: chiedere sempre per quale account** (Lorenzo, 17/10): per
+ogni modifica alla sezione gemme (app on-chain) chiedi prima se va applicata
+solo all'account whitekobra@icloud.com o a tutti. Regola generale dal 17/10:
+le modifiche grafiche fatte per lui restano solo sul suo account, quelle di
+funzionamento valgono per tutti.
 Il codice sta in `backend/app`, il frontend in `frontend/`.
 
 **Python 3.12 obbligatorio** — `pandas-ta` non si installa su 3.11. Se la shell
