@@ -1025,6 +1025,9 @@ async def _notify_deploy() -> None:
                     and chat not in seen:
                 seen.add(chat)
                 await telegram.send_to(chat, text)
+        if not seen:
+            # Never to the repository chat instead: these lines are private.
+            logger.warning("Notifica deploy privata saltata: nessuna chat per whitekobra_emails (%d righe)", len(private))
 
 
 _LAST_RECAP_FILE = Path(__file__).resolve().parent.parent / "data" / "last_weekly_recap.txt"

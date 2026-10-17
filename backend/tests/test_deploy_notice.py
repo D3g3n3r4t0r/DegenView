@@ -14,7 +14,7 @@ _KOBRA = "Fix the gems page\n\nAggiornamento: pagina gemme sistemata\nSolo-accou
 _ALL = "Fix the chart\n\nAggiornamento: grafico sistemato\n"
 
 
-def _run(monkeypatch, tmp_path, messages):
+def _run(monkeypatch, tmp_path, messages, signal_only=()):
     commits = [{"sha": f"{i:07d}abc", "commit": {"message": m}} for i, m in enumerate(messages)]
     commits.append({"sha": "old0000", "commit": {"message": "old"}})
 
@@ -34,7 +34,7 @@ def _run(monkeypatch, tmp_path, messages):
     users = [SimpleNamespace(email="kobra@x.it", telegram_chat_id="111", telegram_gems_chat_id="333"),
              SimpleNamespace(email="other@x.it", telegram_chat_id="222", telegram_gems_chat_id="")]
     monkeypatch.setattr(main.auth, "list_users", lambda: users)
-    monkeypatch.setattr(main, "_signal_only_chats", lambda: set())
+    monkeypatch.setattr(main, "_signal_only_chats", lambda: set(signal_only))
     repo, private = [], []
 
     async def send_message(text):
@@ -62,3 +62,13 @@ def test_a_deploy_of_private_changes_only_stays_out_of_the_repository_chat(monke
 
 def test_the_weekly_recap_leaves_private_changes_out():
     assert weekly_recap.private_account(_KOBRA) == "whitekobra" and weekly_recap.private_account(_ALL) == ""
+
+
+def test_a_signals_only_main_chat_sends_the_private_lines_to_the_gems_chat(monkeypatch, tmp_path):
+    repo, private = _run(monkeypatch, tmp_path, [_KOBRA], signal_only={"111"})
+    assert [c for c, _ in private] == ["333"]
+
+
+def test_the_weekly_count_leaves_private_changes_out():
+    text = weekly_recap.build_recap([_KOBRA, _ALL], now=1_790_000_000, resolutions_path=None)
+    assert "Modifiche al codice: 1" in text and "pagina gemme" not in text

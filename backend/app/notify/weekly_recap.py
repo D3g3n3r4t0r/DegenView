@@ -140,7 +140,9 @@ def build_recap(
     # messaggio che non mantiene la promessa. Quelle senza trailer restano
     # nel conteggio, perche' sono avvenute e vanno dichiarate — semplicemente
     # non hanno una frase da leggere.
-    described = [italian_line(m) for m in commit_messages if has_italian_line(m) and not private_account(m)]
+    # "Solo-account:" changes are announced to that account only, here too.
+    commit_messages = [m for m in commit_messages if not private_account(m)]
+    described = [italian_line(m) for m in commit_messages if has_italian_line(m)]
     total_changes = len(commit_messages)
 
     if not resolved and not total_changes:
