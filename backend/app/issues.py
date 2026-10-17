@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0341", "Whitekobra: nuovi pesi del voto delle gemme",
+     "Lorenzo, 17/10: togliere la partecipazione, prodotto 35%, uso 25% con dentro la crescita degli holder, token 20%, DeepSeek 20%, penalita' GitHub 5 punti: 'Procedi con la crescita nell'uso e quindi poi ridisegna completamente tutti i nuovi parametri delle gemme solo per l'account whitekobra'.",
+     "alta"),
     ("seed-0340", "Whitekobra: data di listing per le gemme senza data di creazione",
      "Lorenzo, 17/10: 'vorrei capire se e' possibile utilizzare come data di creazione delle gemme che attualmente non hanno data la data di listing sull'exchange in cui viene analizzata', poi 'Si [...] mettile online'.",
      "media"),

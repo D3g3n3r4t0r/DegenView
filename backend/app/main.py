@@ -3686,7 +3686,7 @@ async def onchain_top(n: int = 15, narrative: str = "", user: User = Depends(aut
         # passed the gates, not a fixed 50; `entries` stays for older pages.
         full = _full_score(user)
         pool = _top_entries(ARENA_POOL, narrative, full=full)
-        early = onchain_leaderboard.board().get("early") or []
+        early = _kobra_early() if full else onchain_leaderboard.board().get("early") or []
         if full:
             pool, early = _gem_view(pool), _gem_view(early)
         for e in pool:
@@ -3773,6 +3773,23 @@ def _project_key(e: dict) -> str:
     return re.sub(r"[^a-z0-9]", "", (e.get("name") or e.get("symbol") or "").lower())
 
 
+def _kobra_score(e: dict) -> dict:
+    """A board entry's score with whitekobra's weights, from the board's full
+    entry (the public one lacks nothing for the score, but this is the one
+    the board itself scores)."""
+    full = onchain_leaderboard._entries.get(onchain_leaderboard._key(e.get("chain") or "", e.get("token_address") or ""))
+    if full is not None:
+        e["score"] = onchain_leaderboard.final_score(full, kobra=True)
+    return e
+
+
+def _kobra_early() -> list[dict]:
+    """Early as whitekobra sees it: rescored with his weights, best first."""
+    early = [_kobra_score(dict(e)) for e in onchain_leaderboard.board().get("early") or []]
+    early.sort(key=lambda e: -(e.get("score") or 0))
+    return early
+
+
 def _with_listing_dates(entries: list[dict]) -> list[dict]:
     """A gem the sources gave no creation date takes its listing date
     (listing_dates.py), flagged so the page can say so (Lorenzo, 17/10)."""
@@ -3816,6 +3833,10 @@ def _top_entries(n: int = 50, narrative: str = "", full: bool = False) -> list[d
                                      "market_cap", "liquidity_usd", "change_24h", "launched_at", "score", "early", "usage", "hidden",
                                      "blocks")},
             "narratives": sorted(_narr_now(e)), "on_board": True} for e in board if not onchain_leaderboard.no_name(e.get("symbol"))]
+    if full:
+        # Whitekobra's weights (leaderboard.KOBRA_SCORE_WEIGHTS), on the board's own entries.
+        for e in out:
+            _kobra_score(e)
     seen = {f"{e['chain']}:{e['token_address']}" for e in out}
     cutoff = time.time() - 30 * 86400
     # "ranked" too: a row whose flag outlived its place on the board was
@@ -3860,7 +3881,7 @@ def _top_entries(n: int = 50, narrative: str = "", full: bool = False) -> list[d
             entry = {**onchain_leaderboard.db_entry(row), "global_cap": row.get("cg_mcap"), "judge": j}
             if onchain_leaderboard.usage_gate(entry):
                 continue
-            score = onchain_leaderboard.final_score(entry)
+            score = onchain_leaderboard.final_score(entry, kobra=full)
             hidden = onchain_leaderboard.hidden_gem(entry)
             blocks = onchain_leaderboard.score_blocks(entry)
         # Layer chains (layers.py) have no DEX pool: their pool is the
@@ -3900,8 +3921,11 @@ async def onchain_token(chain: str, token: str, user: User = Depends(auth.get_cu
     _require_onchain_enabled()
     entry = next((e for e in onchain_leaderboard.board().get("entries") or []
                   if e.get("chain") == chain and e.get("token_address") == token), None)
+    kobra = _full_score(user)
     if entry is not None:
         entry = {**entry, "on_board": True}
+        if kobra:
+            _kobra_score(entry)
     else:
         p = onchain_projects_db.get(chain, token)
         if p is not None:
@@ -3913,7 +3937,8 @@ async def onchain_token(chain: str, token: str, user: User = Depends(auth.get_cu
             # formula, DeepSeek's reading included — not the one stored at the
             # last analysis (Lorenzo, 16/10: VEIL 89 in its arena, 73 here).
             if chain != onchain_layers.CHAIN:
-                entry["score"] = onchain_leaderboard.final_score({**entry, "global_cap": p.get("cg_mcap"), "judge": j})
+                entry["score"] = onchain_leaderboard.final_score({**entry, "global_cap": p.get("cg_mcap"), "judge": j},
+                                                                 kobra=kobra)
             c = onchain_code_review.get(onchain_code_review.repo_of(entry))
             entry["judge"] = {k: j.get(k) for k in ("score", "verdict", "problems", "strengths", "admit_reason", "x", "tg")} \
                 if j else None
@@ -4246,15 +4271,17 @@ onchain_leaderboard.on_alert(_notify_gem)
 
 # The gems whose listing date is worth reading: whitekobra's whole view, the
 # arenas and Early, before its filters (an undated row may be too old).
-onchain_listing_dates.set_source(
-    lambda: _top_entries(ARENA_POOL, full=True) + (onchain_leaderboard.board().get("early") or []))
+onchain_listing_dates.set_source(lambda: _top_entries(ARENA_POOL, full=True) + _kobra_early())
 
 
 def _gem_view_keys(kind: str) -> set[tuple]:
     """(chain, token) of what the whitekobra gem view lists for this alert:
     the arenas for a Top entry, Early (and so Pearl) for the others."""
-    rows = _top_entries(ARENA_POOL, full=True) if kind == "new" else (onchain_leaderboard.board().get("early") or [])
-    return {(r.get("chain"), r.get("token_address")) for r in _gem_view(rows)}
+    rows = _top_entries(ARENA_POOL, full=True) if kind == "new" else _kobra_early()
+    view = _gem_view(rows)
+    if kind == "pearl":     # Pearl by his own scores too
+        view = [r for r in view if round(r.get("score") or 0) >= onchain_leaderboard.PEARL_MIN]
+    return {(r.get("chain"), r.get("token_address")) for r in view}
 
 
 def _gem_overflow_text(items: list[dict]) -> str:

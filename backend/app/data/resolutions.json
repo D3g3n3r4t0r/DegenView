@@ -3184,5 +3184,10 @@
     "status": "risolto",
     "at": 1792269920,
     "summary": "Per l'account whitekobra, una gemma senza data di creazione prende la data di listing: il pool piu' vecchio su DexScreener per le gemme dei DEX, la prima candela sull'exchange (Binance o MEXC) per i layer. Il server le legge un po' alla volta (5 al minuto), quindi le date compaiono nel giro di qualche minuto o ora; una gemma per cui non si trova niente si riprova dopo un giorno. Con la data, anche il limite dei 1000 giorni vale per questi progetti."
+  },
+  "seed-0341": {
+    "status": "risolto",
+    "at": 1792271459,
+    "summary": "Per l'account whitekobra il voto delle gemme usa i nuovi pesi: prodotto 35%, uso 25%, token 20%, DeepSeek 20%; il blocco partecipazione non c'e' piu'. La crescita degli holder in 30 giorni e' dentro l'uso (da -5% a +30%) e conta solo quando si puo' misurare, senza valore neutro. Senza GitHub si perdono 5 punti invece di 10. I voti nuovi valgono in arene, Top 25, Early, Pearl, pagina del token, soglia dei 60 e avvisi. Gli altri account restano coi pesi di prima."
   }
 }

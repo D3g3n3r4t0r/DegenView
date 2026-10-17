@@ -789,9 +789,11 @@ def test_the_arenas_score_a_database_row_with_its_pillars(monkeypatch):
         top = asyncio.run(m.onchain_top(n=10, narrative="", user=user))
         return next(e for a in top["arenas"] for e in a["entries"] if e["symbol"] == "PIL")["score"]
     page = asyncio.run(m.onchain_token("solana", "PILmint", user=kobra))
-    full = m.onchain_leaderboard.final_score(m.onchain_leaderboard.db_entry(projects_db.get("solana", "PILmint")))
+    row = m.onchain_leaderboard.db_entry(projects_db.get("solana", "PILmint"))
+    full = m.onchain_leaderboard.final_score(row, kobra=True)     # whitekobra's weights too
     assert arena_score(kobra) == page["entry"]["score"] == full
-    assert arena_score(other) != full  # everyone else: the Top as it was
+    # everyone else: the Top as it was, light rows and the old weights
+    assert arena_score(other) not in (full, m.onchain_leaderboard.final_score(row))
 
 
 def test_live_market_reaches_the_top_s_database_rows(monkeypatch):
@@ -864,3 +866,31 @@ def test_whitekobra_s_top_drops_duplicates_old_and_weak_gems(monkeypatch):
     other = asyncio.run(m.onchain_top(n=50, narrative="", user=User.model_construct(id="o", email="other@example.com")))
     assert [e["token_address"] for e in kobra["entries"]] == ["S2"] and kobra["early"] == []
     assert len(other["entries"]) == 3 and len(other["early"]) == 1
+
+
+def test_whitekobra_s_weights(monkeypatch):
+    """Lorenzo, 17/10, his account only: product 35, usage 25 (with the
+    holders' growth), token 20, DeepSeek 20, no participation; closed code -5."""
+    from app.trading.onchain import usage
+    e = {"chain": "solana", "token_address": "W", "pillars": {"site": {"score": 80}, "tokenomics": {"score": 60},
+         "github": {"score": 10, "facts": {"missing": True}}}}
+    monkeypatch.setattr(lb, "usage_score", lambda e, growth=False: 40.0 if growth else 30.0)
+    monkeypatch.setattr(lb, "participation_score", lambda e: 90.0)
+    monkeypatch.setattr(lb, "deepseek_score", lambda e: 50.0)
+    monkeypatch.setattr(lb.gem_learn, "approved", lambda: None)
+    # product 80 (site only), usage 40, token 60, deepseek 50 -> 61.0, minus 5
+    assert lb.final_score(e, kobra=True) == round(0.35 * 80 + 0.25 * 40 + 0.20 * 60 + 0.20 * 50 - 5, 1)
+    # everyone else: the old weights, participation in, -10
+    old = lb.SCORE_WEIGHTS
+    assert lb.final_score(e) == round((old["usage"] * 30 + old["participation"] * 90 + old["product"] * 80
+                                       + old["token"] * 60 + old["deepseek"] * 50) / sum(old.values()) - 10, 1)
+    monkeypatch.undo()
+    # the holders' growth is part of usage for whitekobra, and only when measured
+    monkeypatch.setattr(usage, "latest", lambda c, t: {"vol_7d_avg": 100_000, "buyers_24h": 300})
+    monkeypatch.setattr(lb, "true_cap", lambda e: 1_000_000)
+    monkeypatch.setattr(lb, "traction_of", lambda e: None)
+    monkeypatch.setattr(usage, "holders_growth", lambda c, t, d: None)
+    plain = lb.usage_score(e)
+    assert lb.usage_score(e, growth=True) == plain
+    monkeypatch.setattr(usage, "holders_growth", lambda c, t, d: 0.30)
+    assert lb.usage_score(e, growth=True) > plain
