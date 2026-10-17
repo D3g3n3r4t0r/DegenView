@@ -202,6 +202,12 @@ DISCOVERY_SLOW_S = 6 * 3600
 CODE_RETRY_S = 6 * 3600        # a failed reading waits: GitHub allows few calls an hour
 # Without public code a project ranks below an equal one that shows it.
 NO_GITHUB_PENALTY = 10.0
+# Whitekobra's weights (Lorenzo, 17/10, only his account): no participation
+# block, its holder growth moved into usage, product up, DeepSeek down, and
+# half the closed-code penalty. main._top_entries(full=True) scores with them.
+KOBRA_SCORE_WEIGHTS = {"usage": 0.25, "product": 0.35, "token": 0.20, "deepseek": 0.20}
+KOBRA_NO_GITHUB_PENALTY = 5.0
+KOBRA_GROWTH_WEIGHT = 20              # inside usage, next to volume/cap 45, volume 30, buyers 25
 RULES_VERSION = 12             # 2: "no GitHub" stopped being a ban; 3: radar launches out;
                                # 4: research read by reader.py, older bans and readings dropped;
                                # 5: reader recognises research-stage code and stated limits
@@ -784,9 +790,10 @@ def _fresh(d: dict, ttl: float, now: float | None = None) -> bool:
     return bool(at) and (now or time.time()) - at < 2 * ttl
 
 
-def usage_score(e: dict) -> float | None:
+def usage_score(e: dict, growth: bool = False) -> float | None:
     """0-100: how much the token is traded and used. Volume against the cap,
-    volume in dollars, distinct buyers; DefiLlama's TVL and fees when listed."""
+    volume in dollars, distinct buyers; DefiLlama's TVL and fees when listed.
+    `growth` (whitekobra) adds the holders' 30-day growth, when measurable."""
     m = usage.latest(e.get("chain"), e.get("token_address")) or {}
     use = traction_of(e)
     parts: list[tuple[float, float]] = []          # (weight, 0-1), only what was read
@@ -800,6 +807,10 @@ def usage_score(e: dict) -> float | None:
         parts.append((25, _ramp(math.log10(max(m["buyers_24h"], 1)), math.log10(USAGE_BUYERS_LO), 3)))  # 30 -> 1,000
     elif m.get("tx_24h") is not None:
         parts.append((25, _ramp(math.log10(max(m["tx_24h"], 1)), math.log10(USAGE_TX_LO), 3.5)))
+    if growth:
+        g = usage.holders_growth(e.get("chain"), e.get("token_address"), 30)
+        if g is not None:
+            parts.append((KOBRA_GROWTH_WEIGHT, _ramp(g, -0.05, 0.30)))      # -5% -> 0, +30% -> full
     if not parts and not use:
         return None
     pts = 100 * sum(w * x for w, x in parts) / sum(w for w, _ in parts) if parts else 0.0
@@ -848,24 +859,29 @@ def hidden_gem(e: dict) -> bool:
     return (b["product"] or 0) >= HIDDEN_PRODUCT_MIN and b["usage"] is not None and b["usage"] <= HIDDEN_USAGE_MAX
 
 
-def score_blocks(e: dict) -> dict:
+def score_blocks(e: dict, kobra: bool = False) -> dict:
     tok = ((e.get("pillars") or {}).get("tokenomics") or {}).get("score")
+    if kobra:
+        return {"usage": usage_score(e, growth=True), "product": product_score(e), "token": tok,
+                "deepseek": deepseek_score(e)}
     return {"usage": usage_score(e), "participation": participation_score(e), "product": product_score(e),
             "token": tok, "deepseek": deepseek_score(e)}
 
 
-def final_score(e: dict) -> float:
-    """Usage 30, participation 20, product 25, token 15, DeepSeek 10 (07/10).
-    Closed code costs NO_GITHUB_PENALTY; DREGG's likeness and the narrative
-    are labels, no longer points."""
-    blocks = score_blocks(e)
-    have = {k: v for k, v in blocks.items() if v is not None}
+def final_score(e: dict, kobra: bool = False) -> float:
+    """The weights of SCORE_WEIGHTS (or KOBRA_SCORE_WEIGHTS) over the blocks
+    that could be measured. Closed code costs NO_GITHUB_PENALTY (or
+    KOBRA_NO_GITHUB_PENALTY); DREGG's likeness and the narrative are labels,
+    no longer points."""
+    weights = KOBRA_SCORE_WEIGHTS if kobra else SCORE_WEIGHTS
+    blocks = score_blocks(e, kobra)
+    have = {k: v for k, v in blocks.items() if v is not None and k in weights}
     if not have:
         return 0.0
-    w = sum(SCORE_WEIGHTS[k] for k in have)
-    base = sum(SCORE_WEIGHTS[k] * v for k, v in have.items()) / w
+    w = sum(weights[k] for k in have)
+    base = sum(weights[k] * v for k, v in have.items()) / w
     if no_github(e):
-        base -= NO_GITHUB_PENALTY
+        base -= KOBRA_NO_GITHUB_PENALTY if kobra else NO_GITHUB_PENALTY
     rules = round(max(0.0, min(100.0, base)), 1)
     if gem_learn.approved():
         p = gem_learn.chance(score_parts(e, early=False))
