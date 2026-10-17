@@ -131,6 +131,10 @@ ALERTS_PER_TICK = 5
 # at that moment: database rows never, board entries almost never, and the
 # skipped ones were marked as sent for good.
 TOP_ALERT_POOL = 500
+# Pearl (whitekobra's app, 16/10): the early list's gems scoring 70 or more,
+# rounded as the app shows them. Lorenzo, 17/10: "aggiungi l'alert nella
+# chat delle gemme anche per quelle che eventualmente entrano nella sezione Pearl".
+PEARL_MIN = 70
 # Lorenzo (28/09): "per gemme solitamente si intende roba di capitalizzazione
 # bassa [...] massimo 10 milioni". A hard ceiling for every entry, checked on
 # the token's global cap too: AAVE's Solana copy showed $585k while AAVE
@@ -225,6 +229,7 @@ _outbox: list[tuple[str, str]] = []
 _alert_hooks: list = []
 _priming = False
 _top_primed = False                 # the Top already seen once: what is in it at first sight is not news
+_pearl_primed = False               # the same for Pearl
 _dirty = False
 _reset_market = False     # set by _load when the stored rules predate version 10
 _requeue_fatals = False   # set by _load when the stored rules predate version 8
@@ -286,9 +291,10 @@ def _load() -> None:
         _state["rescored_rules"] = raw.get("rescored_rules")
         _alerted.update(raw.get("alerted") or [])
         # First start with alerts: what is already on the board is not news.
-        global _priming, _top_primed
+        global _priming, _top_primed, _pearl_primed
         _priming = "alerted" not in raw
         _top_primed = bool(raw.get("top_primed"))
+        _pearl_primed = bool(raw.get("pearl_primed"))
         _rank()
         _priming = False
 
@@ -300,7 +306,8 @@ def _save() -> None:
         write_text_atomic(_STORE_FILE, json.dumps({"entries": _entries, "excluded": _excluded, "gone": _gone,
                                            "examined": _state["examined"], "rules": RULES_VERSION,
                                            "rescored_rules": _state.get("rescored_rules"),
-                                           "alerted": sorted(_alerted), "top_primed": _top_primed},
+                                           "alerted": sorted(_alerted), "top_primed": _top_primed,
+                                           "pearl_primed": _pearl_primed},
                                           ensure_ascii=False),
                                encoding="utf-8")
     except OSError:
@@ -309,8 +316,8 @@ def _save() -> None:
 
 
 def reset_for_tests() -> None:
-    global _top_primed
-    _top_primed = False
+    global _top_primed, _pearl_primed
+    _top_primed = _pearl_primed = False
     _alerted.clear()
     _recorded.clear()
     _outbox.clear()
@@ -1112,6 +1119,31 @@ def queue_top_news(top: list[dict]) -> int:
     return queued
 
 
+def is_pearl(e: dict) -> bool:
+    return is_early(e) and round(final_score(e)) >= PEARL_MIN
+
+
+def queue_pearl_news() -> int:
+    """Queues a "pearl" alert for each gem new to Pearl (the early list at
+    PEARL_MIN and up, what top.js paintPearl shows). First look: note only."""
+    global _pearl_primed, _dirty
+    queued = 0
+    for t in early_list():
+        if round(t.get("score") or 0) < PEARL_MIN:
+            continue
+        k = _key(t["chain"], t["token_address"])
+        if f"pearl:{k}" in _alerted:
+            continue
+        _alerted.add(f"pearl:{k}")
+        _dirty = True
+        if _pearl_primed:
+            _outbox.append(("pearl", k))
+            queued += 1
+    if not _pearl_primed:
+        _pearl_primed, _dirty = True, True
+    return queued
+
+
 async def drain_alerts() -> int:
     sent = 0
     # The place announced is the Top's, the list the app shows: the board's
@@ -1122,9 +1154,9 @@ async def drain_alerts() -> int:
     while _outbox and sent < ALERTS_PER_TICK:
         kind, k = _outbox.pop(0)
         e = _entries.get(k)
-        if kind == "early":
+        if kind in ("early", "pearl"):
             # Under the Top's floor by definition: never in the Top (07/10).
-            if e is None or not is_early(e):
+            if e is None or not (is_pearl(e) if kind == "pearl" else is_early(e)):
                 continue
             item = _public(e)
         else:
@@ -1505,6 +1537,7 @@ async def _sync_top(now: float) -> None:
     sync_top(now)
     _sync_database(_state["board"])
     queue_top_news(_top_source(TOP_ALERT_POOL))
+    queue_pearl_news()
 
 
 async def _audit(now: float) -> None:

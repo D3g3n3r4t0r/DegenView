@@ -1,7 +1,7 @@
 """The nightly research run (nightly.py): the clock, the catch-up after a
 restart, the loop choice in lifespan and the window that stops the run."""
 import asyncio
-from datetime import datetime
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -366,12 +366,14 @@ def test_the_research_waits_while_an_optimization_runs(monkeypatch):
     assert "In pausa" in nightly.text_it(s)
 
 
-def test_shipped_schedule_is_one_long_run_at_3(monkeypatch):
-    # Lorenzo, 14/10: "La ricerca delle gemme falla solo di notte [...] alle tre"
+def test_shipped_schedule_is_two_long_runs_at_3_and_18(monkeypatch):
+    # Lorenzo, 14/10: "La ricerca delle gemme falla solo di notte [...] alle tre";
+    # 17/10: "anche quella delle ore 18. Due ricerche al giorno".
     from app.config import Settings
     s = Settings()
-    assert (s.onchain_nightly_hour, s.onchain_nightly_extra_times, s.onchain_nightly_hourly) == (3, "", False)
+    assert (s.onchain_nightly_hour, s.onchain_nightly_extra_times, s.onchain_nightly_hourly) == (3, "18:00", False)
     assert s.onchain_nightly_max_hours >= 6
     for k in ("onchain_nightly_hour", "onchain_nightly_extra_times", "onchain_nightly_hourly"):
         monkeypatch.setattr(settings, k, getattr(s, k))
-    assert nightly.run_times() == [(3, 0)]
+    assert nightly.run_times() == [(3, 0), (18, 0)]
+    assert all(nightly.is_main_run(nightly._slot_on(date(2026, 10, 17), h)) for h in (3, 18))
