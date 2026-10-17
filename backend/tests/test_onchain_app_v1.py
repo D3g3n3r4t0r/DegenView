@@ -48,3 +48,12 @@ def test_other_accounts_and_the_login_screen_get_the_current_app(users):
 def test_every_frozen_module_the_page_imports_exists():
     names = {m.name for m in main._onchain_modules(main._ONCHAIN_V1_DIR)}
     assert "main.js" in names and "top.js" in names
+
+
+@pytest.mark.parametrize("html", [main._ONCHAIN_APP_HTML, main._ONCHAIN_APP_V1_HTML])
+def test_the_import_map_comes_before_any_module_fetch(html):
+    # A modulepreload listed before the map makes a reload (modules from cache,
+    # map not parsed yet) fail on "@onchain/nozoom.js" and leave a blank app.
+    importmap = html.index('<script type="importmap">')
+    assert importmap < html.index('rel="modulepreload"')
+    assert importmap < html.index('rel="stylesheet"')
