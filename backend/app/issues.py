@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0327", "Whitekobra: di nuovo la grafica nuova delle gemme e la sezione Pearl",
+     "Lorenzo, 17/10: 'io voglio le modifiche che avevamo fatto in questa chat nelle ore precedenti per quanto riguarda le modifiche grafiche e la sezione Pearl. Riprendi tutto da li' e applicalo all'account White Cobra, solo all'account White Cobra'.",
+     "media"),
     ("seed-0326", "App on-chain: grafica per account, funzionamento per tutti",
      "Lorenzo, 17/10: 'Lascia intatte le modifiche grafiche negli altri account e applicale solo su White Cobra. Per quanto riguarda [...] le modifiche di funzionamento, quelle applicale invece a tutti gli account', poi 'tutto cio' che riguarda la sezione del sito va bene per tutti gli account sempre, mentre per quanto riguarda le gemme e la sezione Discover [...] devi sempre fare la richiesta'.",
      "media"),
