@@ -779,10 +779,19 @@ def test_the_arenas_score_a_database_row_with_its_pillars(monkeypatch):
     monkeypatch.setattr(m.onchain_judge, "get", lambda *a: None)
     monkeypatch.setattr(m.onchain_leaderboard, "board", lambda: {"entries": []})
     monkeypatch.setattr(m, "_require_onchain_enabled", lambda: None)
-    top = next(e for e in m._top_entries(10) if e["symbol"] == "PIL")
-    page = asyncio.run(m.onchain_token("solana", "PILmint", user=User.model_construct(id="u", email="x@y.z")))
+    # Only the listed accounts for now (Lorenzo, 17/10: "solo per whitekobra").
+    monkeypatch.setattr(m.settings, "onchain_full_score_emails", "Kobra@Example.com")
+    monkeypatch.setattr(m.settings, "onchain_trading_enabled", False)
+    kobra = User.model_construct(id="k", email="kobra@example.com")
+    other = User.model_construct(id="o", email="other@example.com")
+
+    def arena_score(user):
+        top = asyncio.run(m.onchain_top(n=10, narrative="", user=user))
+        return next(e for a in top["arenas"] for e in a["entries"] if e["symbol"] == "PIL")["score"]
+    page = asyncio.run(m.onchain_token("solana", "PILmint", user=kobra))
     full = m.onchain_leaderboard.final_score(m.onchain_leaderboard.db_entry(projects_db.get("solana", "PILmint")))
-    assert top["score"] == page["entry"]["score"] == full
+    assert arena_score(kobra) == page["entry"]["score"] == full
+    assert arena_score(other) != full  # everyone else: the Top as it was
 
 
 def test_live_market_reaches_the_top_s_database_rows(monkeypatch):
