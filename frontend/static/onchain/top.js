@@ -10,9 +10,8 @@
  * bench. The podium is pound for pound: the projects that lead their own
  * arena by the most. Refreshed every POLL_MS; a tap opens the token page.
  *
- * Lorenzo, 16/10: the podium's three sit fixed in the top bar. The arenas
- * were listed open that day, then "rivoglio il mosaico": the mosaic is back,
- * a tile opens its ranking right under it.
+ * Lorenzo, 16/10: the podium's three sit fixed in the top bar, and every
+ * arena is listed open (tokens and scores) instead of the mosaic of tiles.
  */
 import * as api from "@onchain/api.js";
 import { register } from "@onchain/detail.js";
@@ -88,44 +87,13 @@ const heatBar = (h) => `<span class="ar-heat" aria-label="Narrative heat ${h} of
 // What the tile counts is what the list shows: tokens hidden by the user left out.
 const unhidden = (a) => a.entries.filter((e) => !isHidden(e.chain, e.token_address));
 const shownCount = (a) => unhidden(a).length;
-// The mosaic: the biggest arenas take the biggest tiles; the colour is how
-// the arena's projects moved in 24 hours (their median).
-const SPANS = [[4, 3], [2, 3], [3, 2], [3, 2], [2, 2], [2, 2], [2, 2]];
-const MOSAIC_MAX = 13;     // tiles before "+ N more"
-let mosaicAll = false;
-function move(a) {
-  const xs = unhidden(a).map((e) => e.change_24h).filter((v) => v != null).sort((x, y) => x - y);
-  if (!xs.length) return null;
-  const m = xs.length >> 1;
-  return xs.length % 2 ? xs[m] : (xs[m - 1] + xs[m]) / 2;
+// Every arena open, biggest first (Lorenzo, 16/10: "le sezioni [...] non
+// siano chiuse ma elencate in modo da poter vedere i token presenti in ogni
+// lista"): the ranking and the score of each token, no chart beside them.
+function listHtml() {
+  const list = arenas.filter((a) => shownCount(a)).sort((a, b) => shownCount(b) - shownCount(a));
+  return list.length ? `<div class="ar-grid">${list.map((a) => arenaHtml(a, true)).join("")}</div>` : "";
 }
-function mosaicHtml() {
-  if (!arenas.length) return "";
-  const list = [...arenas].sort((a, b) => shownCount(b) - shownCount(a));
-  const openA = hive ? arenas.find((a) => a.key === hive) : null;
-  const cut = mosaicAll || list.length <= MOSAIC_MAX ? list.length : MOSAIC_MAX - 1;
-  const tiles = list.slice(0, cut).map((a, i) => {
-    const [c, r] = SPANS[i] ?? [2, 1];
-    const n = shownCount(a);
-    const ch = move(a);
-    const tone = ch == null ? "" : ch >= 3 ? "g1" : ch >= 0.5 ? "g2" : ch <= -3 ? "r1" : ch <= -0.5 ? "r2" : "";
-    const top = unhidden(a)[0];
-    const lead = top ? `♛ ${escapeHtml(top.symbol ?? "")}` : "searching";
-    const pct = ch == null ? "" : ` <span class="${ch >= 0 ? "up" : "down"}">${ch >= 0 ? "+" : "−"}${Math.abs(ch).toFixed(Math.abs(ch) < 10 ? 1 : 0)}%</span>`;
-    const open = a.key === hive;
-    return `<button type="button" class="mz ${tone}${open ? " mz-open" : ""}" data-arena-pick="${escapeHtml(a.key)}" aria-expanded="${open}"
-      style="grid-column: span ${c}; grid-row: span ${r}" aria-label="${escapeHtml(a.label)}: ${n} projects">
-      <b>${escapeHtml(SHORT[a.label] || a.label)}</b>${r > 1 ? `<span class="mz-n">${n}<em> projects</em></span><small>${lead}${pct}</small>` : `<small>${n} · ${lead}</small>`}</button>`;
-  });
-  if (cut < list.length) tiles.push(`<button type="button" class="mz mz-more" data-mosaic-more style="grid-column: span 2">
-    <b>+ ${list.length - cut} more</b><small>smaller arenas</small></button>`);
-  return `<p class="mz-intro">Each tile is a narrative: its projects compete only with each other. Tap one for its ranking.</p>
-    <div class="mosaic" role="group" aria-label="Arenas">${tiles.join("")}</div>
-    <p class="mz-legend"><span>♛ leader · size = projects</span><span><i class="up">■</i> up 24h <i class="down">■</i> down 24h</span></p>
-    ${openA ? `<div class="ar-open">${arenaHtml(openA, true)}</div>` : ""}`;
-}
-// A tile opens its ranking right under the mosaic, same screen (10/10).
-let hive = null;            // arena key whose ranking is open
 const sigma = (z) => `${z >= 0 ? "+" : "−"}${Math.abs(z).toFixed(1)}σ`;
 
 function row(e, a) {
@@ -177,9 +145,8 @@ function paint() {
   paintTop3(top3);
 
   const box = root.querySelector("[data-top-arenas]");
-  if (hive && !arenas.some((a) => a.key === hive)) hive = null;
   withEntrance(box, () => {
-    box.innerHTML = mosaicHtml() || `<p class="muted pad">The arenas are filling up: projects appear as they pass the checks.</p>`;
+    box.innerHTML = listHtml() || `<p class="muted pad">The arenas are filling up: projects appear as they pass the checks.</p>`;
   });
 
   // A narrowed view is not what the last visit saw: no comparison.
@@ -260,6 +227,9 @@ function marketSub(e) {
   return line || (e.liquidity_usd != null ? `Liquidity ${usdShort(e.liquidity_usd)}` : "");
 }
 
+// Pearl (Lorenzo, 16/10): "le gemme selezionate su Early che pero' hanno
+// ottenuto un punteggio pari o superiore a 70".
+const PEARL_MIN = 70;
 function earlyRow(e, context) {
   const id = `gem:${e.chain}:${e.token_address}`;
   register(id, { kind: "gem", symbol: e.symbol, name: e.name, chain: e.chain, token: e.token_address, pair: e.pair_address,
@@ -268,6 +238,14 @@ function earlyRow(e, context) {
   return tokenRow({ id, symbol: e.symbol, name: e.name || e.symbol, chain: e.chain, token: e.token_address,
     image: e.image, cap: e.market_cap, change: e.change_24h != null ? e.change_24h / 100 : null, ageTs: e.launched_at,
     score: e.score, badge: "early", sub: marketSub(e) });
+}
+function paintPearl(list) {
+  const box = document.querySelector("[data-pearl-view]");
+  if (!box) return;
+  // the score as shown (rounded): a "70" on screen is always a pearl
+  const pearls = list.filter((e) => Math.round(e.score ?? 0) >= PEARL_MIN).sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+  box.querySelector("[data-pearl-empty]").hidden = pearls.length > 0;
+  box.querySelector("[data-pearl-rows]").innerHTML = pearls.map((e) => earlyRow(e, "Pearl")).join("");
 }
 
 // Top (Lorenzo, 16/10): "classificare le migliori 25 gemme per punteggio
@@ -324,6 +302,7 @@ async function load() {
     labStatus = top?.backtests ?? null;
     paint();
     paintEarly(top?.early ?? []);   // the board's own early list, never narrowed by narrative
+    paintPearl(top?.early ?? []);
     paintRank(top?.entries ?? []);
   } catch {
     // Keep the last view; with none yet, the cube says the next poll retries.
@@ -354,16 +333,6 @@ export function mountTop() {
     if (event.target.closest("[data-top-narr-clear]")) { narr.set([]); return; }
     const more = event.target.closest("[data-ar-more]");
     if (more) { more.closest(".arena")?.classList.add("ar-all"); more.remove(); return; }
-    const tileHit = event.target.closest(".mz[data-arena-pick]");
-    if (tileHit) {
-      const key = tileHit.dataset.arenaPick;
-      hive = hive === key ? null : key;        // the same tile again closes it
-      paint();
-      root.querySelector(`.mz[data-arena-pick="${CSS.escape(key)}"]`)?.focus({ preventScroll: true });
-      if (hive) root.querySelector(".ar-open")?.scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
-      return;
-    }
-    if (event.target.closest("[data-mosaic-more]")) { mosaicAll = true; paint(); root.querySelectorAll("[data-top-arenas] .mz")[MOSAIC_MAX - 1]?.focus({ preventScroll: true }); return; }
     if (event.target.closest("[data-top-wallet]")) { import("@onchain/sim-backtest.js").then((m) => m.openSimBacktest()); }
   });
   onHiddenChange(paint);

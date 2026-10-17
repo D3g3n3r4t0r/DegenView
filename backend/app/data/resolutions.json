@@ -3108,5 +3108,10 @@
     "status": "risolto",
     "at": 1792221532,
     "summary": "La grafica era gia' separata per account (seed-0325: l'altro account vede la copia dell'app di prima, whitekobra la nuova). Mancavano nella copia le correzioni di funzionamento fatte nella pagina: ora anche l'altro account ha la capitalizzazione e il grafico della pagina token aggiornati ogni minuto da DexScreener, Scout che dice come gira la ricerca (senza IA, ultimo e prossimo giro), 'Top #N' e la soglia Early $300k nella scheda Why, niente piu' letture del saldo a vuoto ogni 5 secondi, '1 alert' al singolare. La sua grafica non cambia (mosaico, podio, pannello a lato, saldo in alto). Il testo 'Under $50k' del badge e della nota Early corretto in $300k in entrambe le versioni. Il sito classico resta uguale per tutti. Regola in CLAUDE.md: per ogni modifica a gemme e Discover si chiede se vale solo per whitekobra o per entrambi."
+  },
+  "seed-0327": {
+    "status": "risolto",
+    "at": 1792222446,
+    "summary": "Sull'account whitekobra la sezione gemme torna com'era la sera del 16/10 (seed-0316..0322): primi tre fissi in alto, arene elencate aperte (5 per arena su telefono con 'Show all'), grafico solo al clic come pagina a se', menu Gems, Pearl, Early, Top, Scout, Profile, Pearl con le gemme Early da 70 in su. Annulla, solo per whitekobra, seed-0323/0324 (Pearl tolta, mosaico rimesso) e il 'senza minimo' di Pearl. Restano le correzioni arrivate dopo: ricaricamento al login (per servire la versione giusta all'account) e testi Early a $300k. L'altro account non cambia."
   }
 }
