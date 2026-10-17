@@ -1553,13 +1553,16 @@ html.detail-open .ask-fab, :root:has(#app-shell[data-view="entry"]) .ask-fab { d
 @media (width >= 1100px) { html body #dock-search.dock-search { inset-block-start: 540px; } }
 /* 16/10 review: an empty list draws no empty card (Early, Pearl, Top 25) */
 .memes-list:empty { display: none; }
-/* Arenas on phones: the first five tokens of each, then "Show all" */
-.ar-more { display: none; }
-@media (width < 1100px) {
-  .ar-grid .arena:not(.ar-all) [data-top-rows] > li:nth-child(n + 6) { display: none; }
-  .ar-more { display: block; inline-size: 100%; margin-block-start: 6px; padding: 9px; border-radius: 10px; font: inherit; font-size: 13px;
-    border: 1px solid var(--c-line, rgb(127 127 127 / .25)); background: none; color: inherit; cursor: pointer; }
-}
+/* Arenas (Lorenzo, 17/10): the first three tokens of each, phone and
+   desktop, then "Show all" opens and closes the rest */
+.ar-grid .arena:not(.ar-all) [data-top-rows] > li:nth-child(n + 4) { display: none; }
+.ar-more { display: block; inline-size: 100%; margin-block-start: 6px; padding: 9px; border-radius: 10px; font: inherit; font-size: 13px;
+  border: 1px solid var(--c-line, rgb(127 127 127 / .25)); background: none; color: inherit; cursor: pointer; }
+/* The gems' sort (Lorenzo, 17/10): score, cap, newest */
+.gem-sort { display: flex; gap: 6px; margin-block: 6px 10px; }
+.gem-sort button { padding: 6px 12px; border-radius: 999px; font: inherit; font-size: 12px; cursor: pointer;
+  border: 1px solid var(--c-line, rgb(127 127 127 / .25)); background: none; color: inherit; }
+.gem-sort button[aria-pressed="true"] { background: var(--c-ink, var(--engn-mint, #2de2b0)); color: var(--c-on-ink, #07110c); border-color: transparent; }
 
 /* Dark mode is the phone skin's (classic.css, theme.js): the desktop is dark already. */
 @media (min-width: 1100px) { .pf-theme { display: none !important; } }

@@ -838,3 +838,29 @@ def test_scout_reports_the_research_without_ai(monkeypatch):
     r = out["research"]
     assert r["ai"] is False and r["next_run"] > time.time()
     assert set(r) >= {"last_run", "examined", "entered", "running", "nightly"}
+
+
+def test_whitekobra_s_top_drops_duplicates_old_and_weak_gems(monkeypatch):
+    """Lorenzo, 17/10, for whitekobra only: one row per project, nothing over
+    1000 days old, nothing under 60 — in the arenas and in Early."""
+    import asyncio
+    import app.main as m
+    from app.models import User
+    now = time.time()
+    rows = [{"chain": "base", "token_address": "S1", "symbol": "SHW", "name": "Sherwood Protocol", "score": 81,
+             "liquidity_usd": 40_000, "launched_at": now - 90 * 86400, "on_board": True, "narratives": []},
+            {"chain": "solana", "token_address": "S2", "symbol": "SHW", "name": "Sherwood Protocol", "score": 66,
+             "liquidity_usd": 150_000, "launched_at": now - 90 * 86400, "on_board": False, "narratives": []},
+            {"chain": "base", "token_address": "W", "symbol": "WEAK", "name": "Weak", "score": 50,
+             "launched_at": now - 9 * 86400, "on_board": True, "narratives": []}]
+    early = [{"chain": "base", "token_address": "E", "symbol": "OLDE", "name": "Old Early", "score": 75,
+              "launched_at": now - 1200 * 86400}]
+    monkeypatch.setattr(m, "_top_entries", lambda n=50, narrative="", full=False: [dict(r) for r in rows])
+    monkeypatch.setattr(m.onchain_leaderboard, "board", lambda: {"entries": [], "early": early})
+    monkeypatch.setattr(m, "_require_onchain_enabled", lambda: None)
+    monkeypatch.setattr(m.settings, "onchain_trading_enabled", False)
+    monkeypatch.setattr(m.settings, "onchain_full_score_emails", "kobra@example.com")
+    kobra = asyncio.run(m.onchain_top(n=50, narrative="", user=User.model_construct(id="k", email="kobra@example.com")))
+    other = asyncio.run(m.onchain_top(n=50, narrative="", user=User.model_construct(id="o", email="other@example.com")))
+    assert [e["token_address"] for e in kobra["entries"]] == ["S2"] and kobra["early"] == []
+    assert len(other["entries"]) == 3 and len(other["early"]) == 1

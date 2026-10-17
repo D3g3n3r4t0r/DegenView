@@ -3685,6 +3685,9 @@ async def onchain_top(n: int = 15, narrative: str = "", user: User = Depends(aut
         # passed the gates, not a fixed 50; `entries` stays for older pages.
         full = _full_score(user)
         pool = _top_entries(ARENA_POOL, narrative, full=full)
+        early = onchain_leaderboard.board().get("early") or []
+        if full:
+            pool, early = _gem_view(pool), _gem_view(early)
         for e in pool:
             e["backtests"] = None
         out = pool[:max(1, min(int(n), 50))]
@@ -3692,7 +3695,7 @@ async def onchain_top(n: int = 15, narrative: str = "", user: User = Depends(aut
         # other accounts' arenas are still built on the lighter rows.
         tenure = onchain_arenas.load_tenure() if full else None
         return {"entries": out, "on_board": sum(1 for e in out if e["on_board"]), "backtests": None,
-                "early": onchain_leaderboard.board().get("early") or [],
+                "early": early,
                 **onchain_arenas.build(pool, prefer={k.strip() for k in narrative.split(",") if k.strip()}, tenure=tenure)}
     out = []
     for e in _top_entries(50, narrative):
@@ -3753,6 +3756,37 @@ ARENA_POOL = 500   # every gated project; the arenas set no fixed size
 
 def _full_score(user: User | None) -> bool:
     return getattr(user, "email", None) in email_allowlist(settings.onchain_full_score_emails)
+
+
+# Whitekobra's gems (Lorenzo, 17/10): one row per project, nothing launched
+# more than GEM_MAX_AGE_DAYS ago, nothing scoring under GEM_MIN_SCORE (as
+# shown, rounded). Applied to the Top, the arenas, Early and Pearl of the
+# accounts in settings.onchain_full_score_emails, and to their gem alerts.
+GEM_MAX_AGE_DAYS = 1000
+GEM_MIN_SCORE = 60
+
+
+def _project_key(e: dict) -> str:
+    """Two rows of one project (Sherwood Protocol twice, two scores): the
+    same name, letters and digits only; the symbol when there is no name."""
+    return re.sub(r"[^a-z0-9]", "", (e.get("name") or e.get("symbol") or "").lower())
+
+
+def _gem_view(entries: list[dict], now: float | None = None) -> list[dict]:
+    """`entries` without the old, the weak and the duplicates, order kept.
+    Of two rows of one project the one with the deeper pool stays (the real
+    market), then the higher score."""
+    now = now or _time.time()
+    ok = [e for e in entries
+          if round(e.get("score") or 0) >= GEM_MIN_SCORE
+          and not (e.get("launched_at") and now - e["launched_at"] > GEM_MAX_AGE_DAYS * 86400)]
+    rank = lambda e: ((e.get("liquidity_usd") or 0), (e.get("score") or 0))  # noqa: E731
+    best: dict[str, int] = {}               # project -> index in `ok` of the row kept
+    for i, e in enumerate(ok):
+        k = _project_key(e) or f"{e.get('chain')}:{e.get('token_address')}"
+        if k not in best or rank(e) > rank(ok[best[k]]):
+            best[k] = i
+    return [ok[i] for i in sorted(best.values())]
 
 
 def _top_entries(n: int = 50, narrative: str = "", full: bool = False) -> list[dict]:
@@ -3875,7 +3909,9 @@ async def onchain_token(chain: str, token: str, user: User = Depends(auth.get_cu
         # Its place in the Top as the Top 25 shows it (score order), not the
         # board's own rank: the page said "Rank #—" for database rows and a
         # board-only number for the others (16/10 review).
-        entry["top_rank"] = next((i for i, t in enumerate(_top_entries(ARENA_POOL, full=_full_score(user)), 1)
+        full = _full_score(user)
+        top = _top_entries(ARENA_POOL, full=full)
+        entry["top_rank"] = next((i for i, t in enumerate(_gem_view(top) if full else top, 1)
                                   if t["chain"] == chain and t["token_address"] == token), None)
     trading = settings.onchain_trading_enabled
     return {"entry": entry, "alerts": onchain_alert_track.for_token(chain, token) if trading else [],
@@ -4161,6 +4197,7 @@ async def _notify_gem(kind: str, e: dict) -> None:
         onchain_alert_track.record({**e, "price_usd": e.get("price_usd")}, "gem", now)
     text = _gem_telegram_text(kind, e)
     seen: set[str] = set()
+    view: set | None = None
     for user in auth.list_users():
         # The gems chat, else the main chat; never an alerts chat. No wallet
         # needed any more: that dated from the on-chain trading, off since 07/10.
@@ -4170,8 +4207,16 @@ async def _notify_gem(kind: str, e: dict) -> None:
         # frozen v1 copy has none.
         if kind == "pearl" and _onchain_variant(user) != "current":
             continue
-        if _unlimited(user) and not e.get("first_seen", True):
-            continue            # already in another ranking: not news for this account
+        if _unlimited(user):
+            # Only gems new to every ranking, except Pearl, always announced
+            # (Lorenzo, 17/10: "l'unica" exception); and only what the
+            # account's gem view shows (no duplicate, old or weak project).
+            if kind != "pearl" and not e.get("first_seen", True):
+                continue
+            if view is None:
+                view = _gem_view_keys(kind)
+            if (e.get("chain"), e.get("token_address")) not in view:
+                continue
         sent = [t for t in _gem_notified.get(user.id, []) if now - t < 3600]
         if len(sent) >= _GEM_NOTIFY_PER_HOUR and not _unlimited(user):
             _gem_overflow.setdefault(user.id, []).append(
@@ -4183,6 +4228,13 @@ async def _notify_gem(kind: str, e: dict) -> None:
 
 
 onchain_leaderboard.on_alert(_notify_gem)
+
+
+def _gem_view_keys(kind: str) -> set[tuple]:
+    """(chain, token) of what the whitekobra gem view lists for this alert:
+    the arenas for a Top entry, Early (and so Pearl) for the others."""
+    rows = _top_entries(ARENA_POOL, full=True) if kind == "new" else (onchain_leaderboard.board().get("early") or [])
+    return {(r.get("chain"), r.get("token_address")) for r in _gem_view(rows)}
 
 
 def _gem_overflow_text(items: list[dict]) -> str:
