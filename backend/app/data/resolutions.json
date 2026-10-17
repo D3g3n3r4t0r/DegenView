@@ -2765,10 +2765,10 @@
     "detail": "Causa: il blocco anti-rug dello Sniper era applicato anche al sito classico. Sui token DEX il massimo del giorno di lancio fa sembrare il token 'morto' (−85% dal massimo) già alla prima o seconda candela, e da lì la strategia non entrava più: 0 trade. Ora sul sito classico (grafico, Lab, archivio, alert della watchlist) resta solo la regola 'niente short sul DEX'; lo Sniper on-chain tiene l'anti-rug. Candele: GeckoTerminal ne dà al massimo 1000 per richiesta; ora si leggono a pagine all'indietro fino a dove arriva la storia del pool (fino a 6 pagine, 6000 candele). Priorità: grafico, backtest, ottimizzazione e archivio del sito classico usano la quota 'urgente' di GeckoTerminal (28 richieste al minuto invece di 14), davanti al motore di fondo."
   },
   "seed-0268": {
-    "status": "in corso",
-    "at": 1792161292,
-    "summary": "Seconda tranche (16/10): l'app scarica circa un terzo in meno, il CSS e il JavaScript arrivano compressi, il server riusa le connessioni. Resta la pulizia del codice di trading spento, in attesa di decisione.",
-    "detail": "Calcoli del grafico e del backtest in thread separati (massimo due insieme, per la memoria). Motore senza iterrows: 5000 candele da 233 a 26 ms, risultati identici verificati da un test contro la versione precedente. Con il feed live attivo il ricalcolo completo avviene una volta per candela, al massimo ogni 5 minuti, invece che ogni minuto. Corretta la corsa fra due ricerche (vinceva la risposta vecchia). CodeMirror (400 KB) caricato quando il browser è libero o quando si apre l'editor. Nuovo /api/perf con i tempi per endpoint e i blocchi del server. Resta il resto del piano di 8 settimane. 16/10: CSS dell'app in un file in cache (146 KB in meno a ogni apertura), moduli del trading spento caricati solo se il trading e' acceso, CSS minificato al volo (-29%) e JavaScript minificato nell'immagine (-32%), una connessione HTTP riusata per servizio esterno, compressione lasciata a Caddy, sette file di cache scritti in modo sicuro, workflow di misura dal vivo. Aspetto invariato: screenshot uguali a prima."
+    "status": "risolto",
+    "at": 1792237900,
+    "summary": "Chiusa da Lorenzo il 17/10, dopo due tranche online: grafico e backtest in thread separati (il sito non si blocca piu' per tutti durante un calcolo), motore 9 volte piu' veloce (5000 candele da 233 a 26 ms), ricalcolo una volta per candela invece che ogni minuto, editor Pine caricato solo quando serve, app un terzo piu' leggera con CSS e JavaScript compressi. Non fatti e lasciati: la pulizia del codice di trading spento e il resto del piano di 8 settimane.",
+    "detail": "Seconda tranche (16/10): l'app scarica circa un terzo in meno, il CSS e il JavaScript arrivano compressi, il server riusa le connessioni. Resta la pulizia del codice di trading spento, in attesa di decisione. Calcoli del grafico e del backtest in thread separati (massimo due insieme, per la memoria). Motore senza iterrows: 5000 candele da 233 a 26 ms, risultati identici verificati da un test contro la versione precedente. Con il feed live attivo il ricalcolo completo avviene una volta per candela, al massimo ogni 5 minuti, invece che ogni minuto. Corretta la corsa fra due ricerche (vinceva la risposta vecchia). CodeMirror (400 KB) caricato quando il browser è libero o quando si apre l'editor. Nuovo /api/perf con i tempi per endpoint e i blocchi del server. Resta il resto del piano di 8 settimane. 16/10: CSS dell'app in un file in cache (146 KB in meno a ogni apertura), moduli del trading spento caricati solo se il trading e' acceso, CSS minificato al volo (-29%) e JavaScript minificato nell'immagine (-32%), una connessione HTTP riusata per servizio esterno, compressione lasciata a Caddy, sette file di cache scritti in modo sicuro, workflow di misura dal vivo. Aspetto invariato: screenshot uguali a prima."
   },
   "seed-0269": {
     "status": "risolto",
@@ -3133,5 +3133,10 @@
     "status": "risolto",
     "at": 1792234612,
     "summary": "La strategia salvata nelle preferenze era una di quelle tolte dai menu il 16/10 (RSI+BB 4H / banda BTC): il menu restava vuoto e ogni analisi partiva senza strategia, quindi niente grafico e niente ticker nella barra. Ora una strategia non piu' disponibile viene ignorata e si usa quella predefinita. In More l'email non viene piu' ridotta al tondino con l'iniziale della barra desktop: si legge intera."
+  },
+  "seed-0321": {
+    "status": "scartato",
+    "at": 1792237900,
+    "summary": "Non e' un errore: il podio in alto mostra i tre con il distacco piu' grande dalla mediana della propria arena (\"pound for pound\"), la Top 25 ordina per punteggio assoluto, quindi possono essere diversi. Il 16/10 il podio era stato allineato alla Top 25 (#552), poi Lorenzo: \"Credevo fosse un errore ma era una strategia voluta\", e la modifica e' stata annullata. Chiusa da Lorenzo il 17/10."
   }
 }
