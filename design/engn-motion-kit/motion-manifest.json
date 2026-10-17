@@ -140,5 +140,5 @@
     "podium-adapter.mjs"
   ],
   "accessibility": "prefers-reduced-motion + decorative flag + semantic labels",
-  "repository": "Smowcomingsoon/liquidity-analysis-engine"
+  "repository": "snowcomingsoon/liquidity-analysis-engine"
 }

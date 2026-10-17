@@ -1405,7 +1405,7 @@ questa modifica.
 
 ## Stato del repo
 
-- **Repo**: `Smowcomingsoon/liquidity-analysis-engine`
+- **Repo**: `snowcomingsoon/liquidity-analysis-engine` (fino al 17/10 `Smowcomingsoon`: GitHub reindirizza il vecchio nome)
 - **Dove gira**: server proprio Hetzner CX23 a Norimberga (2 core, 4 GB,
   6,70 EUR/mese), dominio **liquidityengine.app**. Deploy automatico a ogni
   push su `main`: lint + **test** + deploy (vedi `deploy/README.md`).
