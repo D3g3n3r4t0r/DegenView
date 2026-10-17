@@ -31,7 +31,7 @@ const ago = (t) => {
 function sayings() {
   if (!data) return ["Scout connecting"];
   const out = (data.items ?? []).slice(0, 6).map((a) => a.text);
-  if (data.watching) out.push(`Watching ${data.watching} alerts`);
+  if (data.watching) out.push(`Watching ${data.watching} alert${data.watching === 1 ? "" : "s"}`);
   const judged = data.today?.scanner ?? 0;
   if (judged) out.push(`${judged} token checks today`);
   return out.length ? out : [data.active ? "Scout watching" : "Scout offline"];
@@ -96,7 +96,15 @@ function chips() {
   // (every note, LLM or not). A token studied 30 times counts as one project.
   const calls = Object.values(viewData?.today ?? {}).reduce((a, n) => a + n, 0);
   const cap = viewData?.cap_usd ? ` · $${(viewData.spent_usd ?? 0).toFixed(2)} of $${viewData.cap_usd.toFixed(2)}` : "";
-  const ai = calls ? `AI: ${calls} calls · ${compact(viewData?.tokens ?? 0)} tokens${cap}` : "";
+  const r = viewData?.research;
+  const hm = (t) => new Date(t * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+  // With the research AI off (14/10) the AI budget means nothing: say how the
+  // research runs, when it last ran and what it found, and when it runs next.
+  const ai = r && !r.ai
+    ? [r.running ? "Research running now, no AI" : "Research without AI",
+       r.last_run ? `last run ${hm(r.last_run)}${r.examined != null ? `: ${r.examined} examined, ${r.entered ?? 0} new on the board` : ""}` : "",
+       r.next_run && !r.running ? `next ${hm(r.next_run)}` : ""].filter(Boolean).join(" · ")
+    : calls ? `AI: ${calls} calls · ${compact(viewData?.tokens ?? 0)} tokens${cap}` : "";
   const distinct = viewData?.distinct ?? {};
   const work = Object.entries(viewData?.done ?? {})
     .map(([k, n]) => [k, distinct[k] ?? n])

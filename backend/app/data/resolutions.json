@@ -3103,5 +3103,10 @@
     "status": "risolto",
     "at": 1792193903,
     "summary": "Il server sceglie la pagina in base all'account: il tuo account vede l'app com'era il 15/10 sera (mosaico, podio grande, menu Gems, Early, Scout, Profile, niente Pearl ne' Top 25); tutti gli altri, White Kobra compreso, vedono quella attuale. Dopo il login la pagina si ricarica da sola per prendere la versione giusta. La lista degli account sta in ONCHAIN_V1_EMAILS. I dati sono gli stessi per tutti: cambia solo l'aspetto."
+  },
+  "seed-0326": {
+    "status": "risolto",
+    "at": 1792221532,
+    "summary": "La grafica era gia' separata per account (seed-0325: l'altro account vede la copia dell'app di prima, whitekobra la nuova). Mancavano nella copia le correzioni di funzionamento fatte nella pagina: ora anche l'altro account ha la capitalizzazione e il grafico della pagina token aggiornati ogni minuto da DexScreener, Scout che dice come gira la ricerca (senza IA, ultimo e prossimo giro), 'Top #N' e la soglia Early $300k nella scheda Why, niente piu' letture del saldo a vuoto ogni 5 secondi, '1 alert' al singolare. La sua grafica non cambia (mosaico, podio, pannello a lato, saldo in alto). Il testo 'Under $50k' del badge e della nota Early corretto in $300k in entrambe le versioni. Il sito classico resta uguale per tutti. Regola in CLAUDE.md: per ogni modifica a gemme e Discover si chiede se vale solo per whitekobra o per entrambi."
   }
 }

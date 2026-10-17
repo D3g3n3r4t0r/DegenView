@@ -235,7 +235,7 @@ export function openDetail(id, startTab) {
             <button type="button" class="ic dt-copy" data-copy aria-label="Copy address" title="${escapeHtml(e.token ?? "")}"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V5H5v11h3"/></svg><span>${e.token ? `${escapeHtml(e.token.slice(0, 4))}…${escapeHtml(e.token.slice(-4))}` : ""}</span></button>
             ${e.pairUrl ? `<a class="ic" href="${escapeHtml(e.pairUrl)}" target="_blank" rel="noopener" aria-label="Open chart"><svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"/></svg></a>` : ""}
           </small></span>
-        <span class="dt-mc"><small>MC</small><b>${usdShort(e.cap)}</b>${changePill(e.change)}</span>
+        <span class="dt-mc" data-mc>${mcHtml(e)}</span>
       </section>
       ${e.context ? `<p class="dt-context">${e.context}</p>` : ""}
       <div class="dt-chart" data-chart><div class="dt-chart-empty">Loading chart…</div></div>
@@ -273,6 +273,7 @@ export function openDetail(id, startTab) {
   }
   d.querySelector(".dt-scroll").scrollTop = 0;
   if (e.chain && e.token) enrich(id, e);
+  refreshLive(id, false);   // the page is open now: the live cap and scale
 }
 
 // Desktop: the token lists (memes, gems, strategies) sit in a column with the
@@ -864,7 +865,9 @@ async function drawChart(box, candles, e, iv = interval) {
   let LC;
   try { LC = await chartLib(); } catch { disposeChart(); box.innerHTML = svgChart(candles, e); return; }
   const last = candles[candles.length - 1].close;
-  const k = e.cap && last ? e.cap / last : 1;         // prices shown as market cap
+  // prices shown as market cap: the live supply (cap / price from
+  // DexScreener) when known, else the list's cap over the last close
+  const k = e.supply || (e.cap && last ? e.cap / last : 1);
   const bars = candles.map((c) => {
     const close = c.close * k;
     const open = (Number.isFinite(c.open) ? c.open : c.close) * k;
@@ -1027,6 +1030,49 @@ function svgChart(candles, e) {
     <g class="tag" transform="translate(${W - R + 4},${y(now) - 10})"><path d="M0 10 6 0h50v20H6z"/><text x="31" y="14" text-anchor="middle">${usdShort(now)}</text></g>
   </svg>`;
 }
+
+// ── Live market (Lorenzo, 16/10: "i grafici sempre aggiornati con i dati
+// dex, cosi' come la MarketCap"). On opening and every minute while the
+// page is open: cap, price and 24h change from DexScreener's deepest pool,
+// and the chart's candles fetched again. The supply (cap / price) puts the
+// chart in the same market cap as the header.
+const LIVE_MS = 60_000;
+function mcHtml(e) {
+  return `<small>MC</small><b>${usdShort(e.cap)}</b>${changePill(e.change)}`;
+}
+async function liveQuote(e) {
+  if (!e.token || !DS_EMBED.has(e.chain)) return false;
+  const rows = await fetchJson(`https://api.dexscreener.com/tokens/v1/${e.chain}/${e.token}`, 5000).catch(() => null);
+  const best = (Array.isArray(rows) ? rows : []).sort((x, y) => (y.liquidity?.usd ?? 0) - (x.liquidity?.usd ?? 0))[0];
+  const cap = Number(best?.marketCap || best?.fdv);
+  const price = Number(best?.priceUsd);
+  if (!(cap > 0)) return false;
+  e.cap = cap;
+  if (price > 0) e.supply = cap / price;
+  if (best.priceChange?.h24 != null) e.change = best.priceChange.h24 / 100;
+  if (!e.pair && best.pairAddress) e.pair = best.pairAddress;
+  return true;
+}
+async function refreshLive(id, candles = true) {
+  if (!dlg?.open || current?.id !== id) return;
+  const e = current.e;
+  const had = e.supply;
+  const ok = await liveQuote(e);
+  if (!dlg?.open || current?.id !== id) return;
+  if (ok) {
+    const mc = dlg.querySelector("[data-mc]");
+    if (mc) mc.innerHTML = mcHtml(e);
+  }
+  // New candles every minute; on opening only if the scale changed.
+  if (candles || (ok && e.supply !== had)) {
+    const [base] = DERIVED[interval] ?? [interval];
+    if (candles) charts.delete(`${e.chain}:${e.pair || e.token}:${base}`);
+    paintChart();
+  }
+}
+setInterval(() => {
+  if (document.visibilityState === "visible" && current) refreshLive(current.id);
+}, LIVE_MS);
 
 // Any row anywhere with data-open="<id>" opens the page.
 // The finger is on the row: start the chart now, it lands while the page opens.
