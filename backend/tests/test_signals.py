@@ -442,3 +442,38 @@ def test_the_gem_view_drops_duplicates_old_and_weak_projects():
     ]
     kept = [r["token_address"] for r in main._gem_view(rows, now)]
     assert kept == ["S2", "EDGE"]          # the deeper pool of the two Sherwoods
+
+
+def test_an_undated_gem_takes_its_listing_date(monkeypatch):
+    """Lorenzo, 17/10: the listing date where the gem trades, when no
+    source gave a creation date: the oldest DEX pool, a layer's first candle."""
+    from app import main
+    from app.trading.onchain import listing_dates as ld
+    ld.reset_for_tests()
+    monkeypatch.setattr(ld, "_save", lambda: None)
+    rows = [{"chain": "solana", "token_address": "DEX", "launched_at": None},
+            {"chain": "layer", "token_address": "kas-kaspa", "pair_address": "mexc:KASUSDT", "launched_at": None},
+            {"chain": "solana", "token_address": "DATED", "launched_at": 1_700_000_000}]
+    ld.set_source(lambda: rows)
+
+    class _Resp:
+        def __init__(self, body):
+            self.status_code, self._body = 200, body
+
+        def json(self):
+            return self._body
+    asked = []
+
+    class _Client:
+        async def get(self, url, params=None, timeout=None):
+            asked.append(url)
+            if "dexscreener" in url:
+                return _Resp([{"pairCreatedAt": 1_650_000_000_000}, {"pairCreatedAt": 1_600_000_000_000}])
+            return _Resp([[1_550_000_000_000, "1", "1", "1", "1"]])
+    assert asyncio.run(ld.fill(_Client(), now=T0)) == 2
+    assert ld.get("solana", "DEX") == 1_600_000_000 and ld.get("layer", "kas-kaspa") == 1_550_000_000
+    assert not any("DATED" in u for u in asked)
+    view = main._with_listing_dates([dict(r) for r in rows])
+    assert view[0]["launched_at"] == 1_600_000_000 and view[0]["launched_from_listing"]
+    assert view[2]["launched_at"] == 1_700_000_000 and "launched_from_listing" not in view[2]
+    ld.set_source(None)

@@ -165,6 +165,12 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0340", "Whitekobra: data di listing per le gemme senza data di creazione",
+     "Lorenzo, 17/10: 'vorrei capire se e' possibile utilizzare come data di creazione delle gemme che attualmente non hanno data la data di listing sull'exchange in cui viene analizzata', poi 'Si [...] mettile online'.",
+     "media"),
+    ("seed-0339", "Whitekobra: layer fra $300k e $30M",
+     "Lorenzo, 17/10: 'per quanto riguarda le soglie di capitalizzazione vanno tutte bene, tranne quella dei layer che rimodulerei da 300k a 30M'.",
+     "media"),
     ("seed-0338", "Whitekobra: gemme senza doppioni, vecchie o sotto 60; Pearl sempre notificata; ordinamento; arene a 3",
      "Lorenzo, 17/10: 'esiste uno Sherwood Protocol che ha due presenze [...] Tutti i casi doppi vanno eliminati [...] quelli vecchi con oltre 1000 giorni dalla creazione non vanno inseriti [...] non considerare tutti i progetti che non raggiungono un punteggio di almeno 60 [...] gli ingressi in Pearl devono essere notificati sempre [...] ordinamento per capitalizzazione e per quanto una gemma e' recente [...] per ogni narrativa far vedere massimo a vista scoperta le prime 3'.",
      "alta"),
