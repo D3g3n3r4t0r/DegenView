@@ -3156,8 +3156,8 @@
     "summary": "Nel Profilo, su telefono, c'e' 'Appearance' con Light, Dark e Auto (segue il telefono). Dark e' la stessa grafica in versione notte: fondo verde-nero, schede in rilievo, testo chiaro, il verde e la salvia per cio' che e' scelto; il grafico prende i colori nuovi subito. La scelta resta nel browser e si applica prima che la pagina compaia, senza lampo chiaro. Solo nella grafica di whitekobra; sul desktop l'app e' gia' scura e il selettore non c'e'."
   },
   "seed-0335": {
-    "status": "in corso",
-    "at": 1792259258,
-    "summary": "Letto il server (sola lettura): la ricerca delle 18 e' durata 32 minuti, senza ricontrolli, e ha portato 8 progetti nella Top, ma nessun avviso e' partito. La causa: il sistema vecchio segnava come 'gia' annunciato' ogni progetto entrato nella classifica interna della bacheca (1225 sul server), e l'avviso di ingresso nella Top leggeva lo stesso segno, quindi saltava quasi tutti. Ora l'ingresso nella Top ha un segno suo; al primo giro dopo l'aggiornamento il sistema registra la Top com'e' senza avvisi, poi annuncia chi entra. Prima avevo corretto anche gli avvisi che arrivano a fine ricerca e quelli oltre il limite di 6 l'ora. La chat gemme di whitekobra e' impostata e non e' una chat 'solo segnali'. La prova e' la ricerca delle 3."
+    "status": "risolto",
+    "at": 1792266013,
+    "summary": "Tre cause, tutte corrette. 1) L'ID della chat gemme nel profilo era sbagliato: Telegram rifiutava ogni messaggio (400); Lorenzo l'ha corretto. 2) Il vecchio sistema segnava come 'gia' annunciato' ogni progetto passato dalla classifica interna (1225 sul server), quindi l'ingresso nelle arene veniva saltato: ora ha un segno suo. 3) Gli avvisi dei progetti entrati a fine ricerca, e quelli oltre i 6 l'ora, si perdevano: ora partono a fine ricerca o in un messaggio unico. Il recupero degli 8 entrati alle 18 non e' stato mandato (bloccato dai permessi della sessione)."
   }
 }
