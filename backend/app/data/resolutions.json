@@ -3139,5 +3139,10 @@
     "status": "scartato",
     "at": 1792237900,
     "summary": "Non e' un errore: il podio in alto mostra i tre con il distacco piu' grande dalla mediana della propria arena (\"pound for pound\"), la Top 25 ordina per punteggio assoluto, quindi possono essere diversi. Il 16/10 il podio era stato allineato alla Top 25 (#552), poi Lorenzo: \"Credevo fosse un errore ma era una strategia voluta\", e la modifica e' stata annullata. Chiusa da Lorenzo il 17/10."
+  },
+  "seed-0332": {
+    "status": "risolto",
+    "at": 1792240057,
+    "summary": "Ricaricando la pagina i moduli arrivavano dalla cache prima che il browser avesse letto l'elenco che li traduce (import map, messo dopo i preload): il primo import falliva e l'app restava bianca. Provato con Chromium: 9 ricaricamenti su 10 fallivano, su tutte e due le versioni dell'app (whitekobra e l'altro account). Ora l'elenco sta in cima alla pagina, prima di qualunque modulo o foglio di stile: 0 errori su 30 ricaricamenti. Un test controlla l'ordine su entrambe le pagine."
   }
 }

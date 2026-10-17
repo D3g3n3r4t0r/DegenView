@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0332", "App on-chain: pagina bianca ricaricando",
+     "Trovato da Claude il 16/10 e chiuso il 17/10 su richiesta di Lorenzo ('Risolvi il punto 2'): ricaricando l'app on-chain compariva 'Failed to resolve module specifier @onchain/nozoom.js' e l'app non partiva.",
+     "alta"),
     ("seed-0331", "Grafico vuoto: 'Unknown strategy' e email tagliata in More",
      "Lorenzo, 17/10 (web app da iPhone): 'Unknown strategy: Check the ticker...' nel grafico senza aver cercato nulla, 'non vedo il ticker', 'non si vede email loggato'.",
      "alta"),
