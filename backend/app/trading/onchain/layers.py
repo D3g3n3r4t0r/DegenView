@@ -44,8 +44,13 @@ logger = logging.getLogger(__name__)
 
 _STORE_FILE = storage.data_file("onchain_layers.json")
 
-LAYER_CAP_MIN = 500_000
+# The research's band: wide enough for both views below.
+LAYER_CAP_MIN = 300_000
 LAYER_CAP_MAX = 100_000_000
+# What the Top shows (main._top_entries): whitekobra's band (Lorenzo, 17/10:
+# "rimodulerei da 300k a 30M"), the 07/10 band for every other account.
+LAYER_VIEW_BAND = (500_000, 100_000_000)
+LAYER_VIEW_BAND_KOBRA = (300_000, 30_000_000)
 LAYER_FDV_MAX_RATIO = 5.0
 RUN_EVERY_S = 24 * 3600
 DETAILS_PER_RUN = 20

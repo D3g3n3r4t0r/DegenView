@@ -3859,7 +3859,8 @@ def _top_entries(n: int = 50, narrative: str = "", full: bool = False) -> list[d
                 continue
             pair_address = f"{cex['exchange']}:{cex['pair']}"
             mcap = row.get("mcap")
-            if mcap is None or not (onchain_layers.LAYER_CAP_MIN <= mcap <= onchain_layers.LAYER_CAP_MAX):
+            lo, hi = onchain_layers.LAYER_VIEW_BAND_KOBRA if full else onchain_layers.LAYER_VIEW_BAND
+            if mcap is None or not (lo <= mcap <= hi):
                 continue
         seen.add(key)
         # The market of the last minute (live_market_loop), the analysis' one otherwise.

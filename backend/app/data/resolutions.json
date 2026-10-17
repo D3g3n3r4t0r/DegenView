@@ -3174,5 +3174,10 @@
     "status": "risolto",
     "at": 1792268070,
     "summary": "Solo per l'account whitekobra. Nelle gemme (arene, Top 25, Early, Pearl) e nei loro avvisi: un progetto con due voci (stesso nome, come Sherwood Protocol) ne tiene una sola, quella col pool piu' profondo; fuori i progetti creati da piu' di 1000 giorni e quelli con punteggio sotto 60. Gli ingressi in Pearl si notificano sempre, anche se la gemma era gia' in Early (l'unica eccezione). In ogni lista delle gemme c'e' l'ordinamento: Score, Cap (dalla piu' piccola) e Newest (dalla piu' recente); toccando di nuovo si inverte. Ogni arena mostra le prime 3 e 'Show all' apre e chiude le altre, su telefono e desktop."
+  },
+  "seed-0339": {
+    "status": "risolto",
+    "at": 1792269556,
+    "summary": "Per l'account whitekobra i layer (L0/L1/L2) entrano nelle gemme fra $300k e $30M di capitalizzazione, invece di $500k-$100M. La ricerca dei layer ora parte da $300k, cosi' trova anche quelli piu' piccoli; gli altri account continuano a vedere la fascia $500k-$100M."
   }
 }

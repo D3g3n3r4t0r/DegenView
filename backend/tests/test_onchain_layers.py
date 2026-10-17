@@ -201,3 +201,22 @@ def test_layer_token_page_reads_list_pillars(monkeypatch):
     out = asyncio.run(main.onchain_token("layer", "kas-kaspa", object()))
     assert out["entry"]["pillars"]["github"]["score"] == 70 and out["entry"]["pillars"]["site"]["score"] == 60
     assert lb.db_entry(projects_db.get("layer", "kas-kaspa"))["pillars"]["github"]["facts"]["repo"] == "kaspanet/rusty-kaspa"
+
+
+def test_whitekobra_sees_layers_from_300k_to_30m(monkeypatch):
+    """Lorenzo, 17/10: "rimodulerei da 300k a 30M" — whitekobra's view only;
+    every other account keeps the $500k-$100M band."""
+    import time
+    from app import main as m
+    now = time.time()
+
+    def row(token, mcap):
+        return {"chain": "layer", "token": token, "symbol": token.upper(), "name": token, "mcap": mcap, "score": 70,
+                "analyzed_at": now, "status": "studied", "overall": {"cex": {"exchange": "binance", "pair": f"{token.upper()}USDT"}}}
+    rows = [row("small", 400_000), row("big", 50_000_000)]
+    monkeypatch.setattr(m.onchain_projects_db, "search", lambda **kw: {"items": rows if kw.get("status") == "studied" else []})
+    monkeypatch.setattr(m.onchain_judge, "get", lambda *a: None)
+    monkeypatch.setattr(m.onchain_leaderboard, "board", lambda: {"entries": []})
+    kobra = {e["token_address"] for e in m._top_entries(50, full=True)}
+    other = {e["token_address"] for e in m._top_entries(50)}
+    assert kobra == {"small"} and other == {"big"}
