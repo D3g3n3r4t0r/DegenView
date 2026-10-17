@@ -1876,4 +1876,9 @@ async def live_market_loop() -> None:
                 await poll_live(client)
             except Exception:
                 logger.exception("classifica: mercato in tempo reale non letto")
+            try:
+                from app.trading.onchain import listing_dates
+                await listing_dates.fill(client)
+            except Exception:
+                logger.exception("classifica: date di listing non lette")
             await asyncio.sleep(LIVE_MARKET_S)

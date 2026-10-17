@@ -3179,5 +3179,10 @@
     "status": "risolto",
     "at": 1792269556,
     "summary": "Per l'account whitekobra i layer (L0/L1/L2) entrano nelle gemme fra $300k e $30M di capitalizzazione, invece di $500k-$100M. La ricerca dei layer ora parte da $300k, cosi' trova anche quelli piu' piccoli; gli altri account continuano a vedere la fascia $500k-$100M."
+  },
+  "seed-0340": {
+    "status": "risolto",
+    "at": 1792269920,
+    "summary": "Per l'account whitekobra, una gemma senza data di creazione prende la data di listing: il pool piu' vecchio su DexScreener per le gemme dei DEX, la prima candela sull'exchange (Binance o MEXC) per i layer. Il server le legge un po' alla volta (5 al minuto), quindi le date compaiono nel giro di qualche minuto o ora; una gemma per cui non si trova niente si riprova dopo un giorno. Con la data, anche il limite dei 1000 giorni vale per questi progetti."
   }
 }

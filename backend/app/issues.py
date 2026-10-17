@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0340", "Whitekobra: data di listing per le gemme senza data di creazione",
+     "Lorenzo, 17/10: 'vorrei capire se e' possibile utilizzare come data di creazione delle gemme che attualmente non hanno data la data di listing sull'exchange in cui viene analizzata', poi 'Si [...] mettile online'.",
+     "media"),
     ("seed-0339", "Whitekobra: layer fra $300k e $30M",
      "Lorenzo, 17/10: 'per quanto riguarda le soglie di capitalizzazione vanno tutte bene, tranne quella dei layer che rimodulerei da 300k a 30M'.",
      "media"),

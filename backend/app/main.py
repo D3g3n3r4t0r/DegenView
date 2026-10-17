@@ -120,6 +120,7 @@ from app.trading.onchain import send as onchain_send
 from app.trading.onchain import jito as onchain_jito
 from app.trading.onchain import keys as onchain_keys
 from app.trading.onchain import layers as onchain_layers
+from app.trading.onchain import listing_dates as onchain_listing_dates
 from app.trading.onchain import legit as onchain_legit
 from app.trading.onchain import consistency as onchain_consistency_audit
 from app.trading.onchain import gem_track as onchain_gem_track
@@ -3772,11 +3773,23 @@ def _project_key(e: dict) -> str:
     return re.sub(r"[^a-z0-9]", "", (e.get("name") or e.get("symbol") or "").lower())
 
 
+def _with_listing_dates(entries: list[dict]) -> list[dict]:
+    """A gem the sources gave no creation date takes its listing date
+    (listing_dates.py), flagged so the page can say so (Lorenzo, 17/10)."""
+    for e in entries:
+        if not e.get("launched_at") and e.get("token_address"):
+            at = onchain_listing_dates.get(e.get("chain") or "", e["token_address"])
+            if at:
+                e["launched_at"], e["launched_from_listing"] = at, True
+    return entries
+
+
 def _gem_view(entries: list[dict], now: float | None = None) -> list[dict]:
     """`entries` without the old, the weak and the duplicates, order kept.
     Of two rows of one project the one with the deeper pool stays (the real
-    market), then the higher score."""
+    market), then the higher score. A missing creation date is the listing's."""
     now = now or _time.time()
+    entries = _with_listing_dates(entries)
     ok = [e for e in entries
           if round(e.get("score") or 0) >= GEM_MIN_SCORE
           and not (e.get("launched_at") and now - e["launched_at"] > GEM_MAX_AGE_DAYS * 86400)]
@@ -4229,6 +4242,12 @@ async def _notify_gem(kind: str, e: dict) -> None:
 
 
 onchain_leaderboard.on_alert(_notify_gem)
+
+
+# The gems whose listing date is worth reading: whitekobra's whole view, the
+# arenas and Early, before its filters (an undated row may be too old).
+onchain_listing_dates.set_source(
+    lambda: _top_entries(ARENA_POOL, full=True) + (onchain_leaderboard.board().get("early") or []))
 
 
 def _gem_view_keys(kind: str) -> set[tuple]:
