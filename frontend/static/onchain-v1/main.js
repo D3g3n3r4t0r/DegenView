@@ -200,6 +200,9 @@ async function selectChain(next) {
 /* ------------------------------------------------------------------- dati */
 
 function loadChainData() {
+  // Trading off (07/10): no balance, holdings or chart to read — the reads
+  // failed for accounts with no wallet and retried every 5 s for ever.
+  if (!TRADING) return;
   if (view.empty.hidden === false) return;  // nessun wallet: niente da chiedere
   refreshBalance();
   refreshStatus();
@@ -212,6 +215,7 @@ function loadChainData() {
 }
 
 function paintHoldings(force = false) {
+  if (!TRADING) return;   // no holdings to read with trading off (16/10 review)
   refreshHoldings(view.holdings, {
     force,
     // Il tocco su una moneta apre lo scambio con quella in vendita.
@@ -224,6 +228,7 @@ function paintHoldings(force = false) {
 }
 
 let balanceRetry = null;
+let balanceTries = 0;
 
 async function refreshBalance() {
   clearTimeout(balanceRetry);
@@ -232,6 +237,7 @@ async function refreshBalance() {
     const reading = await api.getBalance(chain);
     if (chain !== state.chain) return;  // l'utente ha cambiato chain nel frattempo
     state.balance = reading;
+    balanceTries = 0;
     writeCache(chain, reading);
     paintBalance(reading, chainInfo().unit);
     view.liveDot.classList.add("is-live");
@@ -240,7 +246,9 @@ async function refreshBalance() {
   } catch (error) {
     if (chain !== state.chain) return;
     view.fresh.textContent = `${error.message} — retrying`;
-    balanceRetry = setTimeout(refreshBalance, 5000);
+    // Not every 5 s for ever: a missing wallet (404) never comes back by itself.
+    balanceTries += 1;
+    if (balanceTries < 6) balanceRetry = setTimeout(refreshBalance, 5000 * 2 ** (balanceTries - 1));
   }
 }
 

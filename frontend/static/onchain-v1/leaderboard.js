@@ -178,7 +178,7 @@ function badges(e) {
   const out = [];
   if (e.benchmark) out.push(`<em data-tone="gold">benchmark</em>`);
   else if (e.similarity?.score >= 25) out.push(`<em class="bd-sim">≈ DREGG ${e.similarity.score}%</em>`);
-  if (e.early) out.push(`<em data-tone="early" title="Under $50k with solid fundamentals: maybe worth a small bag. Research, not advice.">early · small bag?</em>`);
+  if (e.early) out.push(`<em data-tone="early" title="Under $300k and past every other bar of the Top: smaller and riskier. Research, not advice.">early</em>`);
   if (e.exception) out.push(`<em data-tone="gold">exception</em>`);
   if (e.bonding) out.push(`<em>pump.fun</em>`);
   if (e.closed_source) out.push(`<em>closed source</em>`);
@@ -315,7 +315,7 @@ export function gemWhy(e) {
   }).join("");
   const flags = Object.values(e.pillars ?? {}).flatMap((p) => p?.flags ?? []);
   return `<div class="why-score"><span class="ring" style="--v:${Math.round(e.score ?? 0)}"><b>${Math.round(e.score ?? 0)}</b></span>
-      <p><b>${e.early ? "Early gem" : `Rank #${e.rank ?? "—"}`}</b><small>${e.early ? "Under $50k with public code and every pillar solid: maybe worth a small bag." : "Code, research and tokenomics, scored every day."}</small></p></div>
+      <p><b>${e.top_rank ? `Top #${e.top_rank}` : e.early ? "Early gem" : e.top_rank === null ? "Not in the Top right now" : `Rank #${e.rank ?? "—"}`}</b><small>${e.early ? "Under $300k and past every other bar of the Top: smaller and riskier." : "Usage, holders, code, research and tokenomics, scored every day."}</small></p></div>
     <ul class="bars">${blocks}</ul>
     ${e.summary ? `<p class="dt-summary">${escapeHtml(e.summary)}</p>` : ""}
     ${deepseekBlock(e)}
@@ -443,13 +443,13 @@ function tractionBlock(e) {
     ${t.reasons?.length ? `<p class="bd-why">${escapeHtml(t.reasons.join(" · "))}</p>` : ""}</section>`;
 }
 
-/** Early gems first: under $50k with the fundamentals of the board. */
+/** Early gems first: under $300k with every other bar of the board. */
 function paintEarly(entries) {
   const box = root.querySelector("[data-board-early]");
   if (!box) return;
   const early = entries.filter((e) => e.early);
   box.hidden = !early.length;
-  box.innerHTML = early.length ? `<b>Early gems · ${early.length}</b> Under $50k with public code and every pillar solid: maybe worth a small bag, sized to lose.
+  box.innerHTML = early.length ? `<b>Early gems · ${early.length}</b> Under $300k and past every other bar of the Top: smaller and riskier, sized to lose.
     <span>${early.map((e) => `<button type="button" data-board="${escapeHtml(key(e))}">${escapeHtml(e.symbol)} · ${usd(e.market_cap)}</button>`).join("")}</span>` : "";
 }
 
