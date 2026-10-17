@@ -88,7 +88,7 @@ def test_early_gem_under_50k_with_fundamentals_is_flagged_and_alerted(monkeypatc
         got.append((kind, item["symbol"], item["early"]))
     lb.on_alert(hook)
     asyncio.run(lb.drain_alerts())
-    assert ("early", "G30000", True) in got and ("new", "G400000", False) in got
+    assert ("early", "G30000", True) in got and not any(k == "new" for k, _, _ in got)   # "new" is the Top's
     assert not any(s == "G35000" and k == "early" for k, s, _ in got)
     got.clear()
     lb._rank()
@@ -182,12 +182,54 @@ def test_new_gem_alert_names_the_tops_place(monkeypatch):
     monkeypatch.setattr("time.time", lambda: T0)
     a, b = _gem(400_000, liq=60_000), _gem(500_000, liq=60_000)
     lb._rank()
-    db_row = {"chain": "solana", "token_address": "DB", "on_board": False}
-    monkeypatch.setattr(lb, "_top_source", lambda n: [db_row, {"chain": "solana", "token_address": a["token_address"]}])
+    db_row = {"chain": "solana", "token_address": "DB", "symbol": "DBR", "on_board": False}
+    top = [db_row]
+    monkeypatch.setattr(lb, "_top_source", lambda n: top)
+    assert lb.queue_top_news(top) == 0                   # first look: what is there is not news
+    top.append({"chain": "solana", "token_address": a["token_address"]})
     got = []
 
     async def hook(kind, item):
         got.append((kind, item["symbol"], item["rank"]))
     lb.on_alert(hook)
+    assert lb.queue_top_news(top) == 1
     asyncio.run(lb.drain_alerts())
-    assert ("new", a["symbol"], 2) in got and not any(s == b["symbol"] for _, s, _ in got)
+    assert got == [("new", a["symbol"], 2)] and not any(s == b["symbol"] for _, s, _ in got)
+
+
+def test_a_database_row_entering_the_top_is_announced_once(monkeypatch):
+    """Lorenzo, 17/10: three projects entered the arenas overnight and the gems
+    chat stayed silent. Rows from the database are gems too."""
+    lb.queue_top_news([])
+    row = {"chain": "base", "token_address": "0xabc", "symbol": "NEWG", "name": "New", "score": 74,
+           "market_cap": 900_000, "on_board": False}
+    top = [{"chain": "solana", "token_address": "OLD", "symbol": "OLD"}, row]
+    monkeypatch.setattr(lb, "_top_source", lambda n: top)
+    got = []
+
+    async def hook(kind, item):
+        got.append((kind, item["symbol"], item["rank"], item["score"]))
+    lb.on_alert(hook)
+    assert lb.queue_top_news(top) == 2
+    asyncio.run(lb.drain_alerts())
+    assert ("new", "NEWG", 2, 74) in got
+    got.clear()
+    assert lb.queue_top_news(top) == 0                   # once
+    lb._outbox.append(("new", lb._key("base", "0xgone")))
+    asyncio.run(lb.drain_alerts())
+    assert got == []                                     # left the Top before its turn: skipped
+
+
+def test_early_alerts_are_not_held_to_the_top(monkeypatch):
+    """Early gems sit under the Top's floor: the Top check dropped every one."""
+    monkeypatch.setattr("time.time", lambda: T0)
+    _gem(30_000)
+    monkeypatch.setattr(lb, "_top_source", lambda n: [])
+    lb._rank()
+    got = []
+
+    async def hook(kind, item):
+        got.append((kind, item["symbol"]))
+    lb.on_alert(hook)
+    asyncio.run(lb.drain_alerts())
+    assert got == [("early", "G30000")]
