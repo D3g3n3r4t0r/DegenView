@@ -294,7 +294,9 @@ def _load() -> None:
         # First start with alerts: what is already on the board is not news.
         global _priming, _top_primed, _pearl_primed
         _priming = "alerted" not in raw
-        _top_primed = bool(raw.get("top_primed"))
+        # "top_seen", not the old "top_primed": the Top's own tags start empty
+        # (see queue_top_news), so the first look must take note again.
+        _top_primed = bool(raw.get("top_seen"))
         _pearl_primed = bool(raw.get("pearl_primed"))
         _rank()
         _priming = False
@@ -307,7 +309,7 @@ def _save() -> None:
         write_text_atomic(_STORE_FILE, json.dumps({"entries": _entries, "excluded": _excluded, "gone": _gone,
                                            "examined": _state["examined"], "rules": RULES_VERSION,
                                            "rescored_rules": _state.get("rescored_rules"),
-                                           "alerted": sorted(_alerted), "top_primed": _top_primed,
+                                           "alerted": sorted(_alerted), "top_seen": _top_primed,
                                            "pearl_primed": _pearl_primed},
                                           ensure_ascii=False),
                                encoding="utf-8")
@@ -1115,9 +1117,13 @@ def queue_top_news(top: list[dict]) -> int:
     queued = 0
     for t in top:
         k = _key(t["chain"], t["token_address"])
-        if f"new:{k}" in _alerted:
+        # Its own tag, not "new:": until 17/10 _rank() marked "new:" every
+        # project that entered the board's internal ranking (1225 on the
+        # server), so almost every gem entering the Top was skipped as
+        # already announced (Lorenzo, 17/10: 8 entered at 18:00, no message).
+        if f"top:{k}" in _alerted:
             continue
-        _alerted.add(f"new:{k}")
+        _alerted.add(f"top:{k}")
         _dirty = True
         if _top_primed and not benchmark.is_benchmark(t["chain"], t["token_address"]):
             _outbox.append(("new", k))
