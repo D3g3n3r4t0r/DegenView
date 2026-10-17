@@ -3167,7 +3167,7 @@
   },
   "seed-0337": {
     "status": "risolto",
-    "at": 1792267105,
-    "summary": "Le modifiche fatte solo per l'account whitekobra sono segnate nel commit; all'avviso di deploy vanno solo nella chat di whitekobra (quella principale, o quella gemme se la principale e' riservata ai segnali), non nella chat del repository, e restano fuori dal riepilogo settimanale. Se un deploy contiene solo modifiche per whitekobra, la chat del repository non riceve niente. Vale dalle prossime modifiche: quelle gia' fatte oggi non erano segnate."
+    "at": 1792267626,
+    "summary": "Le modifiche fatte solo per l'account whitekobra sono segnate nel commit e non generano nessuna notifica Telegram: non compaiono nell'avviso di deploy ne' nel riepilogo settimanale, e un deploy fatto solo di modifiche cosi' non manda niente. Prima versione (stessa sera): mandarle solo alla chat di whitekobra; poi Lorenzo: 'non sono necessarie notifiche su Telegram'."
   }
 }

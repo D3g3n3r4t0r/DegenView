@@ -62,8 +62,8 @@ _ACCOUNT_TRAILER = "Solo-account:"
 
 def private_account(commit_message: str) -> str:
     """The account a commit is for, from its "Solo-account:" trailer ("" for
-    everyone). Lorenzo, 17/10: a change made only for whitekobra is
-    announced only in whitekobra's chat, not in the repository's."""
+    everyone). Lorenzo, 17/10: a change made only for whitekobra needs no
+    Telegram at all, neither the deploy notice nor the weekly recap."""
     for line in commit_message.splitlines():
         stripped = line.strip()
         if stripped.lower().startswith(_ACCOUNT_TRAILER.lower()):

@@ -270,10 +270,9 @@ nel codice. Senza trailer non si rompe niente: `italian_line()` ricade sul
 titolo inglese, che e' meglio di un buco, ma il messaggio smette di essere
 tutto in italiano. Vedi `app/notify/weekly_recap.py`.
 
-**Modifiche solo per whitekobra** (Lorenzo, 17/10: "Quando effettui modifiche
-solo per l'account whitekobra [...] invia la notifica del repository
-solamente alla chat dell'account whitekobra"): il commit porta anche la riga
-`Solo-account: whitekobra`, dopo `Aggiornamento:`. L'avviso di deploy manda
-quelle righe solo alla chat di whitekobra (la principale, o quella gemme se la
-principale e' solo segnali), non a quella del repository, e il riepilogo
-settimanale le salta. Senza la riga, la modifica viene annunciata a tutti.
+**Modifiche solo per whitekobra** (Lorenzo, 17/10: "quando le modifiche
+riguardano solo l'account whitekobra non sono necessarie notifiche su
+Telegram"): il commit porta anche la riga `Solo-account: whitekobra`, dopo
+`Aggiornamento:`. L'avviso di deploy e il riepilogo settimanale la saltano, e
+un deploy fatto solo di modifiche cosi' non manda niente. Senza la riga, la
+modifica viene annunciata a tutti.

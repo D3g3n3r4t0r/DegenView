@@ -959,12 +959,6 @@ _LAST_SHA_FILE = Path(__file__).resolve().parent.parent / "data" / "last_deploy_
 _GITHUB_REPO = settings.github_repo
 
 
-def _deploy_chat(user: User) -> str:
-    """Where a private deploy line goes: the account's main chat, else its
-    gems chat when the main one is reserved to strategy signals."""
-    return _info_chat(user) or (user.telegram_gems_chat_id or "")
-
-
 async def _notify_deploy() -> None:
     # Nessuna delle uscite qui sotto era loggata: un token mancante o
     # scaduto spegneva l'avviso di deploy senza lasciare traccia da nessuna
@@ -1004,30 +998,22 @@ async def _notify_deploy() -> None:
             new_commits = commits[:idx]
         except StopIteration:
             pass  # piu' di 100 commit dall'ultimo avviso: si mandano tutti quelli letti
-    lines, private = [], []
+    lines = []
     for c in new_commits:
+        # "Solo-account: whitekobra": no Telegram at all (Lorenzo, 17/10:
+        # "non sono necessarie notifiche su Telegram").
+        if weekly_recap.private_account(c["commit"]["message"]):
+            continue
         # I messaggi di commit sono in inglese per convenzione (CLAUDE.md), ma
         # questa notifica la legge Lorenzo: `italian_line` prende il trailer
         # "Aggiornamento:" quando c'e' e ricade sul titolo quando manca.
         msg = _html.escape(weekly_recap.italian_line(c["commit"]["message"]), quote=False)
         sha_short = c["sha"][:7]
-        # "Solo-account: whitekobra": that account's chat only (Lorenzo, 17/10).
-        (private if weekly_recap.private_account(c["commit"]["message"]) == "whitekobra" else lines).append(
-            f"• <code>{sha_short}</code> {msg}")
-    if lines or not private:
-        changelog = "\n".join(lines) if lines else "• (nessun commit trovato)"
-        await telegram.send_message(f"🚀 <b>Nuovo deploy completato</b>\n\n<b>Modifiche:</b>\n{changelog}")
-    if private:
-        text = "🚀 <b>Nuovo deploy completato</b> · solo per il tuo account\n\n<b>Modifiche:</b>\n" + "\n".join(private)
-        seen: set[str] = set()
-        for user in auth.list_users():
-            if user.email in email_allowlist(settings.whitekobra_emails) and (chat := _deploy_chat(user)) \
-                    and chat not in seen:
-                seen.add(chat)
-                await telegram.send_to(chat, text)
-        if not seen:
-            # Never to the repository chat instead: these lines are private.
-            logger.warning("Notifica deploy privata saltata: nessuna chat per whitekobra_emails (%d righe)", len(private))
+        lines.append(f"• <code>{sha_short}</code> {msg}")
+    if not lines and new_commits:
+        return              # only "Solo-account:" changes: nothing to announce
+    changelog = "\n".join(lines) if lines else "• (nessun commit trovato)"
+    await telegram.send_message(f"🚀 <b>Nuovo deploy completato</b>\n\n<b>Modifiche:</b>\n{changelog}")
 
 
 _LAST_RECAP_FILE = Path(__file__).resolve().parent.parent / "data" / "last_weekly_recap.txt"
