@@ -3189,5 +3189,10 @@
     "status": "risolto",
     "at": 1792271459,
     "summary": "Per l'account whitekobra il voto delle gemme usa i nuovi pesi: prodotto 35%, uso 25%, token 20%, DeepSeek 20%; il blocco partecipazione non c'e' piu'. La crescita degli holder in 30 giorni e' dentro l'uso (da -5% a +30%) e conta solo quando si puo' misurare, senza valore neutro. Senza GitHub si perdono 5 punti invece di 10. I voti nuovi valgono in arene, Top 25, Early, Pearl, pagina del token, soglia dei 60 e avvisi. Gli altri account restano coi pesi di prima."
+  },
+  "seed-0342": {
+    "status": "risolto",
+    "at": 1792272626,
+    "summary": "Letto il server: tutte le chain funzionano (Ethereum quasi 2.000 progetti nella fascia, Base oltre 1.100, centinaia analizzati ogni settimana), ma i loro progetti vengono quasi tutti dall'elenco completo di CoinGecko, monete vecchie e spesso ferme, e prendono voti bassi (a 60 o piu': Ethereum 8, Base 4, Robinhood 46). Ora la ricerca legge anche i nuovi pool di GeckoTerminal su Ethereum e Base ogni 10 minuti, come Jupiter fa per Solana: solo token nella fascia di cap, con liquidita' e un sito, poi l'analisi di sempre. Vale per tutti gli account."
   }
 }

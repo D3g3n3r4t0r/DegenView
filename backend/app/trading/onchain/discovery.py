@@ -99,7 +99,7 @@ def reset_for_tests() -> None:
     _seen.clear()
     _chain_ids.clear()
     _state.update(cg_queue=[], cg_last_sweep=0.0, cg_next_at=0.0, profiles_at=0.0, gh_queue=[], gh_query=0,
-                  gh_search_at=0.0, gh_repo_at=0.0, found=0, skipped=0, running=False)
+                  gh_search_at=0.0, gh_repo_at=0.0, gt_at=0.0, found=0, skipped=0, running=False)
 
 
 def status() -> dict:
@@ -570,6 +570,88 @@ async def _poll_jupiter(client: httpx.AsyncClient, add: Callable[[dict, str], bo
         _note(key, add(item, "jupiter"), "verified list", now)
 
 
+# --------------------------------------------------------- GeckoTerminal
+#
+# New tokens on Ethereum and Base (Lorenzo, 17/10: "aggiungi la fonte di
+# token nuovi per Ethereum e Base"). Jupiter brings Solana's young projects;
+# the other two chains only had CoinGecko's full list, mostly old coins, and
+# scored far lower (8 and 4 studied projects at 60 or more, against 46 on
+# Robinhood). GeckoTerminal's newest pools, in the cap band, then the token's
+# own page for its website: no website, no analysis.
+
+GT_NEW_POOLS = "https://api.geckoterminal.com/api/v2/networks/{net}/new_pools"
+GT_TOKEN_INFO = "https://api.geckoterminal.com/api/v2/networks/{net}/tokens/{token}/info"
+GT_CHAINS = {"ethereum": "eth", "base": "base"}
+GT_POLL_S = 600
+GT_PAGES = 2                     # 20 pools a page
+GT_INFO_PER_POLL = 6             # token pages read per poll, both chains together
+GT_MIN_LIQUIDITY = 5_000
+# The quote side of a pool is never the project.
+GT_QUOTES = {"WETH", "ETH", "USDC", "USDT", "DAI", "CBBTC", "WBTC", "USDBC", "EURC", "USDE", "USDS"}
+
+
+def new_pool_candidates(chain: str, payload: dict | None) -> list[dict]:
+    """The base tokens of GeckoTerminal's new pools in the band, not memes."""
+    payload = payload or {}
+    tokens = {t.get("id"): (t.get("attributes") or {}) for t in payload.get("included") or [] if isinstance(t, dict)}
+    out, seen = [], set()
+    for pool in payload.get("data") or []:
+        a = pool.get("attributes") or {}
+        rel = ((pool.get("relationships") or {}).get("base_token") or {}).get("data") or {}
+        t = tokens.get(rel.get("id")) or {}
+        address, symbol = t.get("address"), (t.get("symbol") or "")
+        if not address or address.lower() in seen or symbol.upper() in GT_QUOTES:
+            continue
+        cap = float(a.get("market_cap_usd") or a.get("fdv_usd") or 0)
+        liq = float(a.get("reserve_in_usd") or 0)
+        if not (CAP_MIN <= cap <= CAP_MAX) or liq < GT_MIN_LIQUIDITY:
+            continue
+        if _looks_like_meme(symbol, t.get("name") or ""):
+            continue
+        seen.add(address.lower())
+        out.append({"chain": chain, "token_address": address, "symbol": symbol or "?", "name": t.get("name") or "",
+                    "market_cap": cap, "liquidity_usd": liq, "launched_at": _iso_ts(a.get("pool_created_at")),
+                    "image": t.get("image_url") if t.get("image_url") not in (None, "missing.png") else None})
+    return out
+
+
+def token_info_fields(payload: dict | None) -> dict:
+    """Website, socials and description from GeckoTerminal's token page."""
+    a = ((payload or {}).get("data") or {}).get("attributes") or {}
+    website = legit.pick_website(a.get("websites") or [])
+    socials = [{"type": k, "url": u} for k, u in (
+        ("twitter", f"https://x.com/{a['twitter_handle']}" if a.get("twitter_handle") else None),
+        ("telegram", f"https://t.me/{a['telegram_handle']}" if a.get("telegram_handle") else None),
+        ("discord", a.get("discord_url"))) if u]
+    desc = (a.get("description") or "")[:400]
+    if "meme" in desc.lower():
+        return {}
+    return {"website": website, "socials": socials, "description": desc} if website else {}
+
+
+async def _poll_new_pools(client: httpx.AsyncClient, add: Callable[[dict, str], bool], now: float) -> None:
+    if now - _state.get("gt_at", 0.0) < GT_POLL_S:
+        return
+    _state["gt_at"] = now
+    from app.trading.onchain.usage import _gecko      # the shared GeckoTerminal gate
+    reads = 0
+    for chain, net in GT_CHAINS.items():
+        for page in range(1, GT_PAGES + 1):
+            data = await _gecko(client, GT_NEW_POOLS.format(net=net), {"page": page, "include": "base_token"})
+            if not data:
+                break
+            for c in new_pool_candidates(chain, data):
+                k = f"gt:{chain}:{c['token_address'].lower()}"
+                if k in _seen or reads >= GT_INFO_PER_POLL:
+                    continue
+                reads += 1
+                extra = token_info_fields(await _gecko(client, GT_TOKEN_INFO.format(net=net, token=c["token_address"])))
+                if not extra:
+                    _note(k, False, "no website", now)
+                    continue
+                _note(k, add({**c, **extra}, "geckoterminal"), "new pool", now)
+
+
 async def tick(client: httpx.AsyncClient, add: Callable[[dict, str], bool], now: float | None = None) -> None:
     """Chiamato dal giro della classifica. Non solleva."""
     now = now or time.time()
@@ -577,7 +659,8 @@ async def tick(client: httpx.AsyncClient, add: Callable[[dict, str], bool], now:
         return
     _state["running"] = True
     try:
-        steps = (("jupiter", _poll_jupiter), ("defillama", traction.poll), ("coingecko", _cg_step), ("profili", _poll_profiles),
+        steps = (("jupiter", _poll_jupiter), ("geckoterminal", _poll_new_pools), ("defillama", traction.poll),
+                 ("coingecko", _cg_step), ("profili", _poll_profiles),
                  ("github", lambda c, a, n: _gh_search(c, n)), ("readme", _gh_repo))
         for name, step in steps:
             try:
