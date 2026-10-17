@@ -4079,7 +4079,7 @@ async def _notify_listing(item: dict) -> None:
         if not _info_chat(user) or not user.onchain_wallets or not _telegram_allowed(user):
             continue
         sent = [t for t in _listing_notified.get(user.id, []) if now - t < 3600]
-        if len(sent) >= _LISTING_NOTIFY_PER_HOUR:
+        if len(sent) >= _LISTING_NOTIFY_PER_HOUR and not _unlimited(user):
             continue
         _listing_notified[user.id] = sent + [now]
         if chat := _info_chats(seen, user):
@@ -4089,6 +4089,20 @@ async def _notify_listing(item: dict) -> None:
 onchain_listings.on_listing(_notify_listing)
 
 _GEM_NOTIFY_PER_HOUR = 6
+
+
+def _unlimited(user) -> bool:
+    """No cap on this account's Telegram alerts, paced chats, gems only on
+    their first entry into a ranking (settings.telegram_unlimited_emails)."""
+    return getattr(user, "email", None) in email_allowlist(settings.telegram_unlimited_emails)
+
+
+def _paced_chats() -> set[str]:
+    return {c for u in auth.list_users() if _unlimited(u)
+            for c in (u.telegram_chat_id, u.telegram_gems_chat_id, u.telegram_signal_chat_id) if c}
+
+
+telegram.set_paced_chats(_paced_chats)
 _gem_notified: dict[str, list[float]] = {}
 # The gems over the hourly cap, per account: sent together at the end of the
 # next flush (leaderboard.flush_alerts) instead of being dropped (17/10).
@@ -4151,8 +4165,10 @@ async def _notify_gem(kind: str, e: dict) -> None:
         # frozen v1 copy has none.
         if kind == "pearl" and _onchain_variant(user) != "current":
             continue
+        if _unlimited(user) and not e.get("first_seen", True):
+            continue            # already in another ranking: not news for this account
         sent = [t for t in _gem_notified.get(user.id, []) if now - t < 3600]
-        if len(sent) >= _GEM_NOTIFY_PER_HOUR:
+        if len(sent) >= _GEM_NOTIFY_PER_HOUR and not _unlimited(user):
             _gem_overflow.setdefault(user.id, []).append(
                 {"kind": kind, **{k: e.get(k) for k in ("symbol", "chain", "token_address", "score", "rank")}})
             continue

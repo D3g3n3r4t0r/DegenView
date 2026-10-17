@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0336", "Whitekobra: niente limiti sugli avvisi Telegram, gemme solo se nuove",
+     "Lorenzo, 17/10: 'Solo per account whitekobra: Rimuovi tutti i limiti per tutte le chat Telegram e utilizza lo stratagemma di qualche secondo di pausa per l'invio [...] solo quando una gemma non presente nelle classifiche, qualsiasi sia, allora scatta la notifica'.",
+     "media"),
     ("seed-0335", "Chat gemme: nessun avviso dopo la ricerca delle 18",
      "Lorenzo, 17/10: 'La ricerca delle gemme delle ore 18 e' finita e ho visto i risultati nella chat del repository, pero' non mi sono arrivate le notifiche delle nuove gemme nelle arene [...] la chat dedicata alle gemme continua a non funzionare'.",
      "alta"),

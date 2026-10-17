@@ -1158,6 +1158,19 @@ def queue_pearl_news() -> int:
     return queued
 
 
+# The rankings a gem can appear in, by the tag its alert leaves: the arenas
+# and the Top ("top:"), Early ("early:"), Pearl ("pearl:", inside Early).
+_RANKING_TAGS = {"new": "top", "early": "early", "pearl": "pearl"}
+
+
+def first_in_any_ranking(kind: str, k: str) -> bool:
+    """True when the gem had never been in another ranking: a project moving
+    from Early to the Top, or into Pearl, is not new (Lorenzo, 17/10: "Solo
+    quando una gemma non presente nelle classifiche, qualsiasi sia, allora
+    scatta la notifica")."""
+    return not any(f"{tag}:{k}" in _alerted for other, tag in _RANKING_TAGS.items() if other != kind)
+
+
 async def drain_alerts() -> int:
     sent = 0
     # The place announced is the Top's, the list the app shows: the board's
@@ -1179,6 +1192,7 @@ async def drain_alerts() -> int:
             place, row = places[k]
             item = _public(e) if e is not None else dict(row)
             item["rank"] = place
+        item["first_seen"] = first_in_any_ranking(kind, k)
         for fn in list(_alert_hooks):
             try:
                 await fn(kind, item)

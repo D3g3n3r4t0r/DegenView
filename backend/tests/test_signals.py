@@ -340,3 +340,65 @@ def test_pearl_alert_goes_to_the_current_app_only(monkeypatch):
     sent.clear()
     asyncio.run(main._notify_gem("new", {**item, "token_address": "U"}))
     assert sorted(sent) == ["111", "222"]
+
+
+def _unlimited_users(monkeypatch):
+    from app import main
+    users = [SimpleNamespace(id="k", email="kobra@x.it", telegram_gems_chat_id="111", telegram_chat_id="", telegram_signal_chat_id=""),
+             SimpleNamespace(id="o", email="other@x.it", telegram_gems_chat_id="222", telegram_chat_id="", telegram_signal_chat_id="")]
+    monkeypatch.setattr(main.auth, "list_users", lambda: users)
+    monkeypatch.setattr(main, "_telegram_allowed", lambda u: True)
+    monkeypatch.setattr(main, "_onchain_variant", lambda u: "current")
+    monkeypatch.setattr(main.settings, "telegram_unlimited_emails", "kobra@x.it")
+    sent = []
+    monkeypatch.setattr(main, "_fire", lambda coro: (sent.append(coro.cr_frame.f_locals.get("chat_id")), coro.close()))
+    main._gem_notified.clear()
+    main._gem_overflow.clear()
+    return main, sent
+
+
+def test_the_unlimited_account_has_no_hourly_cap_on_gems(monkeypatch):
+    """Lorenzo, 17/10: "Solo per account whitekobra: Rimuovi tutti i limiti"."""
+    main, sent = _unlimited_users(monkeypatch)
+    for i in range(main._GEM_NOTIFY_PER_HOUR + 4):
+        asyncio.run(main._notify_gem("new", {"chain": "solana", "token_address": f"T{i}", "symbol": f"G{i}",
+                                             "score": 70, "first_seen": True}))
+    assert sent.count("111") == main._GEM_NOTIFY_PER_HOUR + 4
+    assert sent.count("222") == main._GEM_NOTIFY_PER_HOUR      # the others keep the cap
+
+
+def test_the_unlimited_account_hears_only_of_gems_new_to_every_ranking(monkeypatch):
+    """A gem moving from Early to the Top, or into Pearl, was already there."""
+    main, sent = _unlimited_users(monkeypatch)
+    asyncio.run(main._notify_gem("new", {"chain": "solana", "token_address": "E", "symbol": "WASEARLY",
+                                         "score": 70, "first_seen": False}))
+    assert sent == ["222"]
+    k = lb._key("solana", "E")
+    lb._alerted.update({"early:" + k, "top:" + k})
+    assert not lb.first_in_any_ranking("new", k) and not lb.first_in_any_ranking("pearl", k)
+    assert lb.first_in_any_ranking("new", lb._key("solana", "FRESH"))
+
+
+def test_paced_chats_wait_between_two_messages(monkeypatch):
+    from app.notify import telegram
+    monkeypatch.setattr(telegram.settings, "telegram_bot_token", "x")
+    monkeypatch.setattr(telegram, "PACE_S", 0.2)
+    times = []
+
+    async def deliver(client, chat_id, text):
+        times.append((chat_id, __import__("time").monotonic()))
+        return True
+    monkeypatch.setattr(telegram, "_deliver", deliver)
+    telegram.set_paced_chats(lambda: {"111"})
+    telegram._pace_last.clear()
+    telegram._pace_locks.clear()
+
+    async def go():
+        await asyncio.gather(*(telegram.send_to(c, "hi") for c in ("111", "111", "222", "222")))
+    try:
+        asyncio.run(go())
+    finally:
+        telegram.set_paced_chats(None)
+    paced = [t for c, t in times if c == "111"]
+    free = [t for c, t in times if c == "222"]
+    assert paced[1] - paced[0] >= 0.19 and abs(free[1] - free[0]) < 0.1
