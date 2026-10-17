@@ -61,14 +61,15 @@ resta come via di ritorno.
 **Ogni lavoro finito va online senza chiedere** (Lorenzo, 16/10: "I deploy
 devono sempre andare online", poi "scrivi tu la regola in CLAUDE.md"): dopo
 le verifiche, PR dal branch della chat e merge in `main`.
-**Due grafiche nell'app on-chain, una per account** (Lorenzo, 17/10): il sito
-classico e' uguale per tutti, sempre. L'app on-chain (gemme e Discover) ha
-la grafica nuova solo per whitekobra@icloud.com (`static/onchain/`) e quella
-di prima per gli account in `settings.onchain_v1_emails` (copia congelata in
-`static/onchain-v1/` + `onchain-app-v1.html`, vedi HANDOVER 16/10 `seed-0325`);
-le modifiche di funzionamento valgono per tutti: vanno portate anche nella
-copia v1, senza cambiarne la grafica. Per ogni modifica alle gemme o a Discover
-**chiedi sempre** se va solo su whitekobra o su entrambi.
+**Due grafiche nell'app on-chain, una per account** (Lorenzo, 17/10, "nota
+importante, ricorda sempre"): il sito classico e' uguale per tutti, e li' si
+modifica per tutti gli account senza chiedere. Nell'app on-chain (gemme e
+Discover): le modifiche di **funzionamento** valgono per tutti gli account
+(anche nella copia v1, senza cambiarne la grafica); le modifiche **grafiche,
+le sezioni nuove e simili** solo per whitekobra@icloud.com (`static/onchain/`).
+Gli altri account (`settings.onchain_v1_emails`) hanno la copia congelata
+`static/onchain-v1/` + `onchain-app-v1.html` (HANDOVER 16/10 `seed-0325`).
+Per la sezione gemme **chiedi sempre conferma** prima di applicare.
 Il codice sta in `backend/app`, il frontend in `frontend/`.
 
 **Python 3.12 obbligatorio** — `pandas-ta` non si installa su 3.11. Se la shell
