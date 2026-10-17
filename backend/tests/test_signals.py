@@ -342,6 +342,11 @@ def test_pearl_alert_goes_to_the_current_app_only(monkeypatch):
     assert sorted(sent) == ["111", "222"]
 
 
+class _Everything:
+    def __contains__(self, item):
+        return True
+
+
 def _unlimited_users(monkeypatch):
     from app import main
     users = [SimpleNamespace(id="k", email="kobra@x.it", telegram_gems_chat_id="111", telegram_chat_id="", telegram_signal_chat_id=""),
@@ -350,6 +355,7 @@ def _unlimited_users(monkeypatch):
     monkeypatch.setattr(main, "_telegram_allowed", lambda u: True)
     monkeypatch.setattr(main, "_onchain_variant", lambda u: "current")
     monkeypatch.setattr(main.settings, "telegram_unlimited_emails", "kobra@x.it")
+    monkeypatch.setattr(main, "_gem_view_keys", lambda kind: _Everything())
     sent = []
     monkeypatch.setattr(main, "_fire", lambda coro: (sent.append(coro.cr_frame.f_locals.get("chat_id")), coro.close()))
     main._gem_notified.clear()
@@ -402,3 +408,37 @@ def test_paced_chats_wait_between_two_messages(monkeypatch):
     paced = [t for c, t in times if c == "111"]
     free = [t for c, t in times if c == "222"]
     assert paced[1] - paced[0] >= 0.19 and abs(free[1] - free[0]) < 0.1
+
+
+def test_pearl_entries_always_reach_the_unlimited_account(monkeypatch):
+    """Lorenzo, 17/10: the one exception, a gem entering Pearl is always news."""
+    main, sent = _unlimited_users(monkeypatch)
+    asyncio.run(main._notify_gem("pearl", {"chain": "solana", "token_address": "P", "symbol": "PRL",
+                                           "score": 75, "first_seen": False}))
+    assert sorted(sent) == ["111", "222"]
+
+
+def test_the_unlimited_account_hears_only_of_gems_its_view_lists(monkeypatch):
+    main, sent = _unlimited_users(monkeypatch)
+    monkeypatch.setattr(main, "_gem_view_keys", lambda kind: {("solana", "IN")})
+    for tok in ("IN", "OUT"):
+        asyncio.run(main._notify_gem("new", {"chain": "solana", "token_address": tok, "symbol": tok,
+                                             "score": 70, "first_seen": True}))
+    assert sent.count("111") == 1 and sent.count("222") == 2
+
+
+def test_the_gem_view_drops_duplicates_old_and_weak_projects():
+    """Lorenzo, 17/10: Sherwood Protocol twice with two scores; nothing over
+    1000 days old; nothing under 60."""
+    from app import main
+    now = 1_790_000_000.0
+    day = 86400
+    rows = [
+        {"chain": "base", "token_address": "S1", "name": "Sherwood Protocol", "score": 81, "liquidity_usd": 40_000, "launched_at": now - 90 * day},
+        {"chain": "solana", "token_address": "S2", "name": "Sherwood  protocol", "score": 66, "liquidity_usd": 150_000, "launched_at": now - 90 * day},
+        {"chain": "base", "token_address": "OLD", "name": "Old Coin", "score": 90, "launched_at": now - 1001 * day},
+        {"chain": "base", "token_address": "WEAK", "name": "Weak", "score": 59.4, "launched_at": now - 10 * day},
+        {"chain": "base", "token_address": "EDGE", "name": "Edge", "score": 59.6, "launched_at": None},
+    ]
+    kept = [r["token_address"] for r in main._gem_view(rows, now)]
+    assert kept == ["S2", "EDGE"]          # the deeper pool of the two Sherwoods

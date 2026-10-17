@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0338", "Whitekobra: gemme senza doppioni, vecchie o sotto 60; Pearl sempre notificata; ordinamento; arene a 3",
+     "Lorenzo, 17/10: 'esiste uno Sherwood Protocol che ha due presenze [...] Tutti i casi doppi vanno eliminati [...] quelli vecchi con oltre 1000 giorni dalla creazione non vanno inseriti [...] non considerare tutti i progetti che non raggiungono un punteggio di almeno 60 [...] gli ingressi in Pearl devono essere notificati sempre [...] ordinamento per capitalizzazione e per quanto una gemma e' recente [...] per ogni narrativa far vedere massimo a vista scoperta le prime 3'.",
+     "alta"),
     ("seed-0337", "Avviso di deploy: le modifiche solo per whitekobra solo nella sua chat",
      "Lorenzo, 17/10: 'Quando effettui modifiche solo per l'account whitekobra invia la notifica del repository solamente alla chat dell'account whitekobra'.",
      "media"),

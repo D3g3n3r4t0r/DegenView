@@ -108,21 +108,49 @@ function row(e, a) {
   return html.replace('<li class="trow"', `<li class="trow${rank === 1 ? " ar-champ" : ""}" style="--v:${Math.max(0, Math.min(100, Math.round(e.score ?? 0)))}%"`);
 }
 
-// On a phone every arena shows its first AR_FOLD tokens and a "Show all"
-// (16/10 review: thirty open arenas made the page endless); CSS folds them.
-const AR_FOLD = 5;
+// Every arena shows its first AR_FOLD tokens and a "Show all" that opens and
+// closes the rest (Lorenzo, 17/10: "massimo a vista scoperta le prime 3 [...]
+// le altre nascoste con la tendina", phone and desktop alike); CSS folds them.
+const AR_FOLD = 3;
+
+// The order of every gem list (Lorenzo, 17/10): by score, by market cap or
+// by how recent the gem is. Tapping the chosen one again reverses it. The
+// numbers on the rows stay the ranking's.
+const SORTS = [["score", "Score"], ["cap", "Cap"], ["new", "Newest"]];
+const SORT_KEY = "lae:gem-sort";
+let sortBy = { by: "score", desc: true };
+try { sortBy = { ...sortBy, ...JSON.parse(localStorage.getItem(SORT_KEY) || "{}") }; } catch { /* private mode */ }
+const SORT_DEFAULT_DESC = { score: true, cap: false, new: true };   // best, smallest, newest first
+function sortValue(e) {
+  return sortBy.by === "cap" ? e.market_cap : sortBy.by === "new" ? e.launched_at : e.score;
+}
+function sortRows(list) {
+  const sign = sortBy.desc ? -1 : 1;
+  // A gem with no cap or no launch date goes last either way.
+  return [...list].sort((a, b) => {
+    const x = sortValue(a), y = sortValue(b);
+    if (x == null || y == null) return (x == null) - (y == null);
+    return sign * (x - y);
+  });
+}
+function paintSortBars() {
+  const arrow = sortBy.desc ? "↓" : "↑";
+  document.querySelectorAll("[data-gem-sort]").forEach((nav) => {
+    nav.innerHTML = SORTS.map(([k, l]) => `<button type="button" data-sort="${k}" aria-pressed="${sortBy.by === k}">${l}${sortBy.by === k ? ` ${arrow}` : ""}</button>`).join("");
+  });
+}
 function arenaHtml(a, open = false) {
   const rows = a.entries.filter((e) => !isHidden(e.chain, e.token_address));
   if (!rows.length) {
     return open && !a.entries.length ? `<section class="arena" data-arena="${escapeHtml(a.key)}"><header class="ar-head"><h4>${escapeHtml(a.label)}</h4></header>
       <p class="muted pad">No ${escapeHtml(a.label)} project has passed the checks yet: they appear here as the research finds them.</p></section>` : "";
   }
-  const inn = open ? rows : rows.filter((e) => e.in);
-  const bench = open ? [] : rows.filter((e) => !e.in);
+  const inn = sortRows(open ? rows : rows.filter((e) => e.in));
+  const bench = sortRows(open ? [] : rows.filter((e) => !e.in));
   return `<section class="arena" data-arena="${escapeHtml(a.key)}">
     <header class="ar-head"><h4>${escapeHtml(a.label)}</h4>${a.heat ? heatBar(a.heat) : ""}<span class="ar-count">${open ? `${rows.length} projects` : `${inn.length} in`} · median ${Math.round(a.median)}</span></header>
     <ol class="memes-list" data-top-rows>${inn.map((e) => row(e, a)).join("")}</ol>
-    ${inn.length > AR_FOLD ? `<button type="button" class="ar-more" data-ar-more>Show all ${inn.length}</button>` : ""}
+    ${inn.length > AR_FOLD ? `<button type="button" class="ar-more" data-ar-more aria-expanded="false">Show all ${inn.length}</button>` : ""}
     ${bench.length ? `<details class="ar-bench"><summary>${bench.length} below the arena median</summary>
       <ol class="memes-list" data-top-rows>${bench.map((e) => row(e, a)).join("")}</ol></details>` : ""}
   </section>`;
@@ -243,7 +271,7 @@ function paintPearl(list) {
   const box = document.querySelector("[data-pearl-view]");
   if (!box) return;
   // the score as shown (rounded): a "70" on screen is always a pearl
-  const pearls = list.filter((e) => Math.round(e.score ?? 0) >= PEARL_MIN).sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+  const pearls = sortRows(list.filter((e) => Math.round(e.score ?? 0) >= PEARL_MIN));
   box.querySelector("[data-pearl-empty]").hidden = pearls.length > 0;
   box.querySelector("[data-pearl-rows]").innerHTML = pearls.map((e) => earlyRow(e, "Pearl")).join("");
 }
@@ -254,13 +282,15 @@ const RANK_N = 25;
 function paintRank(entries) {
   const box = document.querySelector("[data-rank-view]");
   if (!box) return;
-  const best = entries.filter((e) => !isHidden(e.chain, e.token_address))
-    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).slice(0, RANK_N);
+  // The 25 best by score, then in the chosen order; each keeps its place.
+  const best = sortRows(entries.filter((e) => !isHidden(e.chain, e.token_address))
+    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).slice(0, RANK_N).map((e, i) => ({ ...e, _place: i + 1 })));
   box.querySelector("[data-rank-empty]").hidden = best.length > 0;
   // A narrative filter narrows the Top too: the title says so.
   const head = box.querySelector("header h3");
   if (head) head.textContent = filtered ? `Top 25 · ${narr.get().map((k) => labels[k] ?? k).join(", ")}` : "Top 25";
-  box.querySelector("[data-rank-rows]").innerHTML = best.map((e, i) => {
+  box.querySelector("[data-rank-rows]").innerHTML = best.map((e) => {
+    const i = e._place - 1;
     const id = idOf(e);
     register(id, { kind: "gem", symbol: e.symbol, name: e.name, chain: e.chain, token: e.token_address, pair: e.pair_address,
       pairUrl: e.pair_url, image: e.image, cap: e.market_cap, change: e.change_24h != null ? e.change_24h / 100 : null,
@@ -276,7 +306,7 @@ function paintEarly(list) {
   const box = document.querySelector("[data-early-view]");
   if (!box) return;
   box.querySelector("[data-early-empty]").hidden = list.length > 0;
-  box.querySelector("[data-early-rows]").innerHTML = list.map((e) => earlyRow(e, "Early")).join("");
+  box.querySelector("[data-early-rows]").innerHTML = sortRows(list).map((e) => earlyRow(e, "Early")).join("");
 }
 
 // The H24 lab's best backtest (strategy_lab.py), in the row: what the
@@ -300,10 +330,9 @@ async function load() {
       entries: (top?.entries ?? []).map((e, i) => ({ ...e, arena_rank: i + 1, in: true })) }];
     p4p = top?.p4p ?? [];
     labStatus = top?.backtests ?? null;
-    paint();
-    paintEarly(top?.early ?? []);   // the board's own early list, never narrowed by narrative
-    paintPearl(top?.early ?? []);
-    paintRank(top?.entries ?? []);
+    lastEarly = top?.early ?? [];
+    lastEntries = top?.entries ?? [];
+    paintLists();
   } catch {
     // Keep the last view; with none yet, the cube says the next poll retries.
     const w = root.querySelector(".top-wait");
@@ -325,14 +354,39 @@ function waiting() {
   root.insertBefore(el, root.firstChild);
 }
 
+let lastEarly = [];
+let lastEntries = [];
+function paintLists() {
+  paintSortBars();
+  paint();
+  paintEarly(lastEarly);   // the board's own early list, never narrowed by narrative
+  paintPearl(lastEarly);
+  paintRank(lastEntries);
+}
+
 export function mountTop() {
   root = document.getElementById("top-picks");
   if (!root) return;
   waiting();
+  paintSortBars();
+  // One order for every gem list: the bars live in four views.
+  document.addEventListener("click", (event) => {
+    const b = event.target.closest("[data-gem-sort] [data-sort]");
+    if (!b) return;
+    const by = b.dataset.sort;
+    sortBy = by === sortBy.by ? { by, desc: !sortBy.desc } : { by, desc: SORT_DEFAULT_DESC[by] };
+    try { localStorage.setItem(SORT_KEY, JSON.stringify(sortBy)); } catch { /* private mode */ }
+    paintLists();
+  });
   root.addEventListener("click", (event) => {
     if (event.target.closest("[data-top-narr-clear]")) { narr.set([]); return; }
     const more = event.target.closest("[data-ar-more]");
-    if (more) { more.closest(".arena")?.classList.add("ar-all"); more.remove(); return; }
+    if (more) {
+      const open = more.closest(".arena")?.classList.toggle("ar-all");
+      more.setAttribute("aria-expanded", String(Boolean(open)));
+      more.textContent = open ? "Show less" : `Show all ${more.closest(".arena").querySelectorAll("[data-top-rows]")[0]?.children.length ?? ""}`;
+      return;
+    }
     if (event.target.closest("[data-top-wallet]")) { import("@onchain/sim-backtest.js").then((m) => m.openSimBacktest()); }
   });
   onHiddenChange(paint);
