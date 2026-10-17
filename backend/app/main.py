@@ -4090,6 +4090,9 @@ onchain_listings.on_listing(_notify_listing)
 
 _GEM_NOTIFY_PER_HOUR = 6
 _gem_notified: dict[str, list[float]] = {}
+# The gems over the hourly cap, per account: sent together at the end of the
+# next flush (leaderboard.flush_alerts) instead of being dropped (17/10).
+_gem_overflow: dict[str, list[dict]] = {}
 
 
 def _gem_telegram_text(kind: str, e: dict) -> str:
@@ -4150,6 +4153,8 @@ async def _notify_gem(kind: str, e: dict) -> None:
             continue
         sent = [t for t in _gem_notified.get(user.id, []) if now - t < 3600]
         if len(sent) >= _GEM_NOTIFY_PER_HOUR:
+            _gem_overflow.setdefault(user.id, []).append(
+                {"kind": kind, **{k: e.get(k) for k in ("symbol", "chain", "token_address", "score", "rank")}})
             continue
         _gem_notified[user.id] = sent + [now]
         if chat := _gems_chat(seen, user):
@@ -4157,6 +4162,35 @@ async def _notify_gem(kind: str, e: dict) -> None:
 
 
 onchain_leaderboard.on_alert(_notify_gem)
+
+
+def _gem_overflow_text(items: list[dict]) -> str:
+    import html as _html
+    esc = _html.escape
+    tag = {"early": "early", "pearl": "Pearl"}
+    lines = [f"💎 <b>Altre {len(items)} gemme</b>, oltre il limite di {_GEM_NOTIFY_PER_HOUR} messaggi l'ora:"]
+    for it in items:
+        sym = esc(it.get("symbol") or "?")
+        if it.get("token_address"):
+            url = app_token_url("pearl" if it["kind"] == "pearl" else "gems", it.get("chain") or "", it["token_address"])
+            sym = f'<a href="{esc(url, quote=True)}">{sym}</a>'
+        extra = f" · posto {it['rank']}" if it.get("rank") else ""
+        kind = f" · {tag[it['kind']]}" if it["kind"] in tag else ""
+        lines.append(f"• <b>{sym}</b> · punteggio {round(it.get('score') or 0)}{extra}{kind}")
+    lines.append("<i>Ricerca, non un consiglio: entra solo con cio' che puoi perdere.</i>")
+    return "\n".join(lines)
+
+
+async def _send_gem_overflow() -> None:
+    from app.notify import telegram
+    seen: set[str] = set()
+    for user in auth.list_users():
+        items = _gem_overflow.pop(user.id, None)
+        if items and _telegram_allowed(user) and (chat := _gems_chat(seen, user)):
+            _fire(telegram.send_to(chat, _gem_overflow_text(items)))
+
+
+onchain_leaderboard.on_flush(_send_gem_overflow)
 
 
 def _trend_signal_text(s: dict) -> str:

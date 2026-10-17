@@ -227,6 +227,7 @@ _recorded: set[str] = set()         # working-set keys whose verdict was written
 _alerted: set[str] = set()          # "new:<key>" / "early:<key>": alerts already sent
 _outbox: list[tuple[str, str]] = []
 _alert_hooks: list = []
+_flush_hooks: list = []              # awaited once a flush_alerts has sent everything (main.py)
 _priming = False
 _top_primed = False                 # the Top already seen once: what is in it at first sight is not news
 _pearl_primed = False               # the same for Pearl
@@ -322,6 +323,7 @@ def reset_for_tests() -> None:
     _recorded.clear()
     _outbox.clear()
     _alert_hooks.clear()
+    _flush_hooks.clear()
     gem_track.reset_for_tests()
     big_coins.reset_for_tests()
     traction.reset_for_tests()
@@ -1099,6 +1101,12 @@ def on_alert(fn) -> None:
     _alert_hooks.append(fn)
 
 
+def on_flush(fn) -> None:
+    """fn() is awaited at the end of flush_alerts: what the alert hooks held
+    back (main.py: the gems over the hourly cap) goes out there."""
+    _flush_hooks.append(fn)
+
+
 def queue_top_news(top: list[dict]) -> int:
     """Queues a "new" alert for each project in `top` (the Top's gated pool,
     best first) never announced before. The first look only takes note: a
@@ -1171,6 +1179,27 @@ async def drain_alerts() -> int:
             except Exception:
                 logger.exception("classifica: avviso %s fallito", k)
         sent += 1
+    return sent
+
+
+async def flush_alerts(now: float | None = None) -> int:
+    """Everything new in the Top or in Pearl, queued and sent now, not five a
+    tick. The nightly run's ticks stop before the run does: what the last
+    readings, the settle and the deep re-check put in the Top was announced
+    at the next run at best (Lorenzo, 17/10: the 18:00 run listed new gems
+    in its summary, the gems chat heard nothing)."""
+    if _top_source is not None:
+        await _sync_top(now or time.time())
+    sent = 0
+    while _outbox:              # every drain pops at least one: this ends
+        sent += await drain_alerts()
+    for fn in list(_flush_hooks):
+        try:
+            await fn()
+        except Exception:
+            logger.exception("classifica: chiusura degli avvisi fallita")
+    if _dirty:
+        _save()
     return sent
 
 

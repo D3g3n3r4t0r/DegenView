@@ -236,6 +236,11 @@ class Steps:
         if leaderboard._dirty:
             leaderboard._save()
 
+    async def alerts(self) -> None:
+        """The gems chat hears now about what entered since the last tick."""
+        from app.trading.onchain import leaderboard
+        await leaderboard.flush_alerts()
+
     def counters(self) -> dict:
         from app.trading.onchain import discovery, leaderboard
         d = discovery.status()
@@ -337,6 +342,8 @@ async def run_once(top: Callable[[], list[dict]], steps: Steps, deadline: float,
         if ticks >= MIN_TICKS and steps.drained():
             break
     await _guard("settle", steps.settle(max(30.0, min(SETTLE_S, deadline - clock()))))
+    # No tick from here on: what enters the Top now is sent by these calls.
+    await _guard("alerts", steps.alerts())
     left = steps.backlog()
     n_layers = await _guard("layers", steps.layers(), 0)
     await _guard("outcomes", steps.outcomes())
@@ -354,11 +361,14 @@ async def run_once(top: Callable[[], list[dict]], steps: Steps, deadline: float,
         if res == "down":
             break
         rechecked += res == "done"
+        if res == "done":
+            await _guard("alerts", steps.alerts())
         await sleep(RECHECK_GAP_S)
     else:
         stopped = "window"
     studies = await _guard("studies", steps.studies(), 0)
     duels = await _guard("duels", _duels(top, clock()), 0)
+    await _guard("alerts", steps.alerts())
     t1 = clock()
     after, top_after = steps.counters(), _top_map(top)
     return {

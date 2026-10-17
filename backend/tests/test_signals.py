@@ -220,6 +220,50 @@ def test_a_database_row_entering_the_top_is_announced_once(monkeypatch):
     assert got == []                                     # left the Top before its turn: skipped
 
 
+def test_flush_sends_what_entered_after_the_last_tick(monkeypatch):
+    """Lorenzo, 17/10: the 18:00 run listed new gems, the gems chat heard
+    nothing. The nightly run's ticks stop before the settle and the deep
+    re-check, which also put projects in the Top: the flush queues and sends
+    them all, not five a tick."""
+    top = [{"chain": "solana", "token_address": "OLD", "symbol": "OLD"}]
+    monkeypatch.setattr(lb, "_top_source", lambda n: top)
+    lb.queue_top_news(top)                                # the Top as first seen
+    top += [{"chain": "solana", "token_address": f"N{i}", "symbol": f"N{i}", "score": 70} for i in range(7)]
+    got, flushed = [], []
+
+    async def hook(kind, item):
+        got.append(item["symbol"])
+
+    async def done():
+        flushed.append(True)
+    lb.on_alert(hook)
+    lb.on_flush(done)
+    assert asyncio.run(lb.flush_alerts(T0)) == 7
+    assert got == [f"N{i}" for i in range(7)] and flushed == [True] and not lb._outbox
+
+
+def test_gems_over_the_hourly_cap_arrive_together(monkeypatch):
+    from app import main
+    users = [SimpleNamespace(id="a", email="new@x", telegram_gems_chat_id="111", telegram_chat_id="", telegram_signal_chat_id="")]
+    monkeypatch.setattr(main.auth, "list_users", lambda: users)
+    monkeypatch.setattr(main, "_telegram_allowed", lambda u: True)
+    monkeypatch.setattr(main, "_onchain_variant", lambda u: "current")
+    sent = []
+    monkeypatch.setattr(main, "_fire", lambda coro: (sent.append(coro.cr_frame.f_locals.get("text")), coro.close()))
+    main._gem_notified.clear()
+    main._gem_overflow.clear()
+    for i in range(main._GEM_NOTIFY_PER_HOUR + 3):
+        asyncio.run(main._notify_gem("new", {"chain": "solana", "token_address": f"T{i}", "symbol": f"G{i}",
+                                             "score": 70, "rank": i + 1}))
+    assert len(sent) == main._GEM_NOTIFY_PER_HOUR
+    asyncio.run(main._send_gem_overflow())
+    assert len(sent) == main._GEM_NOTIFY_PER_HOUR + 1
+    last = sent[-1]
+    assert "Altre 3 gemme" in last and all(f"G{i}" in last for i in range(6, 9))
+    asyncio.run(main._send_gem_overflow())
+    assert len(sent) == main._GEM_NOTIFY_PER_HOUR + 1    # once
+
+
 def test_early_alerts_are_not_held_to_the_top(monkeypatch):
     """Early gems sit under the Top's floor: the Top check dropped every one."""
     monkeypatch.setattr("time.time", lambda: T0)

@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0335", "Chat gemme: nessun avviso dopo la ricerca delle 18",
+     "Lorenzo, 17/10: 'La ricerca delle gemme delle ore 18 e' finita e ho visto i risultati nella chat del repository, pero' non mi sono arrivate le notifiche delle nuove gemme nelle arene [...] la chat dedicata alle gemme continua a non funzionare'.",
+     "alta"),
     ("seed-0334", "App on-chain: modalita' dark",
      "Lorenzo, 17/10: 'visto che ci sei aggiungi anche modalita' dark'.",
      "media"),
