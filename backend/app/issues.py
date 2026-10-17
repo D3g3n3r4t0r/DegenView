@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0331", "Grafico vuoto: 'Unknown strategy' e email tagliata in More",
+     "Lorenzo, 17/10 (web app da iPhone): 'Unknown strategy: Check the ticker...' nel grafico senza aver cercato nulla, 'non vedo il ticker', 'non si vede email loggato'.",
+     "alta"),
     ("seed-0330", "Seconda ricerca delle gemme alle 18",
      "Lorenzo, 17/10: 'aggiungi per tutti gli account una nuova ricerca alle ore 18. Quindi non ci sara' piu' solo la ricerca delle 3 la notte, ma anche quella delle ore 18. Due ricerche al giorno'.",
      "media"),
