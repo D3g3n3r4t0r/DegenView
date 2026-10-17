@@ -3758,7 +3758,7 @@ def _top_entries(n: int = 50, narrative: str = "") -> list[dict]:
     # "ranked" too: a row whose flag outlived its place on the board was
     # skipped by both halves of the Top (Lorenzo, 28/09: high scores never on the podium).
     rows = [r for st in ("studied", "ranked")
-            for r in onchain_projects_db.search(status=st, sort="score", limit=200, narrative=narrative)["items"]]
+            for r in onchain_projects_db.search(status=st, sort="score", limit=200, narrative=narrative, full=True)["items"]]
     for row in sorted(rows, key=lambda r: -(r.get("score") or 0)):
         if row.get("score") is None or (row.get("analyzed_at") or 0) < cutoff:
             continue
