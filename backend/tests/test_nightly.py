@@ -119,6 +119,9 @@ class FakeSteps:
     async def settle(self, timeout):
         self.order.append("settle")
 
+    async def alerts(self):
+        self.order.append("alerts")
+
     def counters(self):
         return dict(self.c)
 
@@ -164,7 +167,10 @@ def test_window_stops_the_run_at_max_hours():
     # the ticks used their share, the re-check the rest; studies once at the end
     assert clock.t - deadline < 700
     assert s["ticks"] == int(2 * 3600 * nightly.RESEARCH_SHARE // 30)    # 20 s of work + 10 s of pause
-    assert steps.order[:3] == ["settle", "layers", "outcomes"] and steps.order[-1] == "studies"
+    # the alerts after the settle, after every re-check and once at the end:
+    # no tick runs there (Lorenzo, 17/10: the gems chat heard nothing)
+    assert steps.order[:4] == ["settle", "alerts", "layers", "outcomes"] and steps.order[-2:] == ["studies", "alerts"]
+    assert steps.order.count("alerts") == 2 + steps.order.count("recheck")
     assert 0 < s["rechecked"] < 50
     assert s["entered"] == ["CCC"] and s["left"] == ["AAA"]
     assert s["analysed"] == 2 * s["ticks"] and s["deepseek_calls"] == 4 and s["layers"] == 3
@@ -316,6 +322,7 @@ def test_hourly_run_is_quiet_unless_the_top_changed(monkeypatch):
         def drained(self): return True
         def backlog(self): return {}
         async def settle(self, timeout): ...
+        async def alerts(self): ...
         def counters(self): return {"discovered": 0, "skipped": 0, "examined": 0, "analysed": 0}
         async def layers(self): return 0
         async def outcomes(self): ...
@@ -348,6 +355,7 @@ def test_the_research_waits_while_an_optimization_runs(monkeypatch):
         def drained(self): return True
         def backlog(self): return {}
         async def settle(self, timeout): ...
+        async def alerts(self): ...
         def counters(self): return {"discovered": 0, "skipped": 0, "examined": 0, "analysed": 0}
         async def layers(self): return 0
         async def outcomes(self): ...

@@ -3154,5 +3154,10 @@
     "status": "risolto",
     "at": 1792245278,
     "summary": "Nel Profilo, su telefono, c'e' 'Appearance' con Light, Dark e Auto (segue il telefono). Dark e' la stessa grafica in versione notte: fondo verde-nero, schede in rilievo, testo chiaro, il verde e la salvia per cio' che e' scelto; il grafico prende i colori nuovi subito. La scelta resta nel browser e si applica prima che la pagina compaia, senza lampo chiaro. Solo nella grafica di whitekobra; sul desktop l'app e' gia' scura e il selettore non c'e'."
+  },
+  "seed-0335": {
+    "status": "in corso",
+    "at": 1792258745,
+    "summary": "Trovato nel codice un buco preciso: gli avvisi delle gemme partivano solo durante i 'giri' della ricerca, ma la ricerca finisce con fasi senza giri (le ultime analisi e il ricontrollo della Top, fino a circa un'ora e mezza). Un progetto che entrava nelle arene in quelle fasi compariva nel riepilogo, ma l'avviso non partiva mai. Ora gli avvisi si mandano anche dopo le ultime analisi, dopo ogni ricontrollo e alla fine della ricerca. In piu' le gemme oltre il limite di 6 messaggi l'ora non si perdono piu': arrivano insieme in un messaggio solo. Non ho potuto leggere il server per confermare che fosse l'unica causa: la prova e' la ricerca delle 3 di stanotte. Se anche stavolta non arriva niente, il passo dopo e' leggere lo stato degli avvisi sul server."
   }
 }
