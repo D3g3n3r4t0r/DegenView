@@ -67,6 +67,12 @@ class Settings(BaseSettings):
     # whitekobra"). Everyone else keeps the lighter rows, and the Telegram
     # alerts and the nightly run read the Top as before.
     onchain_full_score_emails: str = "sha256:fdfcf4ae2f1823a2e1f24d0f48c3fcd8cf128541133709ad272f21f2e62f3f58"
+    # Accounts with no cap on their Telegram alerts (gems, listings), their
+    # chats paced instead (telegram.PACE_S between two messages), and gems
+    # announced only on their first entry into any ranking (Lorenzo, 17/10:
+    # "Solo per account whitekobra: Rimuovi tutti i limiti per tutte le chat
+    # Telegram").
+    telegram_unlimited_emails: str = "sha256:fdfcf4ae2f1823a2e1f24d0f48c3fcd8cf128541133709ad272f21f2e62f3f58"
     # Off on Hetzner (deploy/docker-compose.yml): Caddy compresses there.
     app_gzip: bool = True
     # The gem research (discovery, pillars, DeepSeek readings, layers,

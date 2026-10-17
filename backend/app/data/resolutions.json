@@ -3159,5 +3159,10 @@
     "status": "risolto",
     "at": 1792266013,
     "summary": "Tre cause, tutte corrette. 1) L'ID della chat gemme nel profilo era sbagliato: Telegram rifiutava ogni messaggio (400); Lorenzo l'ha corretto. 2) Il vecchio sistema segnava come 'gia' annunciato' ogni progetto passato dalla classifica interna (1225 sul server), quindi l'ingresso nelle arene veniva saltato: ora ha un segno suo. 3) Gli avvisi dei progetti entrati a fine ricerca, e quelli oltre i 6 l'ora, si perdevano: ora partono a fine ricerca o in un messaggio unico. Il recupero degli 8 entrati alle 18 non e' stato mandato (bloccato dai permessi della sessione)."
+  },
+  "seed-0336": {
+    "status": "risolto",
+    "at": 1792266755,
+    "summary": "Solo per l'account whitekobra: niente piu' limiti sugli avvisi Telegram (gemme e listing; gli alert di trading non ne avevano). Fra due messaggi alla stessa chat passano 3 secondi, cosi' Telegram non rifiuta le raffiche. Le gemme arrivano solo quando entrano per la prima volta in una classifica qualsiasi (arene e Top, Early, Pearl): una gemma gia' presente che passa da Early alla Top o entra in Pearl non viene annunciata. Gli altri account restano come prima."
   }
 }

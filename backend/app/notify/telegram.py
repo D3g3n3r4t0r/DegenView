@@ -28,9 +28,11 @@ ricreare) il cui id va in `TELEGRAM_DEV_CHAT_IDS`. Per trovarlo:
 `.venv/bin/python -m tools.telegram_chat_ids`.
 """
 
+import asyncio
 import html
 import logging
 import re
+import time
 
 import httpx
 
@@ -75,14 +77,47 @@ def is_configured() -> bool:
     return bool(settings.telegram_bot_token) and bool(_chat_ids())
 
 
+# Paced chats (main.py: the accounts in settings.telegram_unlimited_emails):
+# no cap on their alerts, so a burst is spread out instead, PACE_S between two
+# messages to the same chat. Telegram refuses more than ~20 a minute to a group.
+PACE_S = 3.0
+_paced_chats = None                      # () -> set[str], set by main.py
+_pace_locks: dict[str, asyncio.Lock] = {}
+_pace_last: dict[str, float] = {}
+
+
+def set_paced_chats(fn) -> None:
+    global _paced_chats
+    _paced_chats = fn
+
+
+def _is_paced(chat_id: str) -> bool:
+    try:
+        return bool(_paced_chats) and chat_id in _paced_chats()
+    except Exception:  # noqa: BLE001 — never block a message on this lookup
+        logger.exception("telegram: paced chats not readable")
+        return False
+
+
 async def send_to(chat_id: str, text: str) -> bool:
     """Send to one specific chat — used for per-user watchlist alerts now
     that each user has their own chat_id, instead of broadcasting to every
     configured recipient."""
     if not settings.telegram_bot_token or not chat_id:
         return False
-    async with http_client.pooled(timeout=15.0) as client:
-        return await _deliver(client, chat_id, text)
+    if not _is_paced(chat_id):
+        async with http_client.pooled(timeout=15.0) as client:
+            return await _deliver(client, chat_id, text)
+    lock = _pace_locks.setdefault(chat_id, asyncio.Lock())
+    async with lock:
+        wait = _pace_last.get(chat_id, 0.0) + PACE_S - time.monotonic()
+        if wait > 0:
+            await asyncio.sleep(wait)
+        try:
+            async with http_client.pooled(timeout=15.0) as client:
+                return await _deliver(client, chat_id, text)
+        finally:
+            _pace_last[chat_id] = time.monotonic()
 
 
 # Telegram rifiuta i messaggi oltre 4096 caratteri: si spezza prima, sulle
