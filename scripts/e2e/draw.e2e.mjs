@@ -223,7 +223,9 @@ await page.keyboard.press('Control+z');
 await page.click('[data-draw-tool="text"]');
 b = await box(page); pn = await pane(page);
 await page.mouse.click(b.x + pn.w * 0.4, b.y + pn.h * 0.2);
-await page.waitForSelector('.draw-text-input');
+// the input takes focus on the next tick: typing before that sends the keys
+// to the page and Enter then keeps an empty text (red run of 17/10)
+await page.waitForSelector('.draw-text-input:focus');
 await page.keyboard.type('Breakout');
 await page.keyboard.press('Enter');
 ds = await drawings(page);
