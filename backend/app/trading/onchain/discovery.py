@@ -584,7 +584,7 @@ GT_TOKEN_INFO = "https://api.geckoterminal.com/api/v2/networks/{net}/tokens/{tok
 GT_CHAINS = {"ethereum": "eth", "base": "base"}
 GT_POLL_S = 600
 GT_PAGES = 2                     # 20 pools a page
-GT_INFO_PER_POLL = 6             # token pages read per poll, both chains together
+GT_INFO_PER_CHAIN = 3            # token pages read per chain per poll: one chain cannot starve the other
 GT_MIN_LIQUIDITY = 5_000
 # The quote side of a pool is never the project.
 GT_QUOTES = {"WETH", "ETH", "USDC", "USDT", "DAI", "CBBTC", "WBTC", "USDBC", "EURC", "USDE", "USDS"}
@@ -602,7 +602,7 @@ def new_pool_candidates(chain: str, payload: dict | None) -> list[dict]:
         address, symbol = t.get("address"), (t.get("symbol") or "")
         if not address or address.lower() in seen or symbol.upper() in GT_QUOTES:
             continue
-        cap = float(a.get("market_cap_usd") or a.get("fdv_usd") or 0)
+        cap = next((float(v) for v in (a.get("market_cap_usd"), a.get("fdv_usd")) if v and float(v) > 0), 0.0)
         liq = float(a.get("reserve_in_usd") or 0)
         if not (CAP_MIN <= cap <= CAP_MAX) or liq < GT_MIN_LIQUIDITY:
             continue
@@ -619,9 +619,10 @@ def token_info_fields(payload: dict | None) -> dict:
     """Website, socials and description from GeckoTerminal's token page."""
     a = ((payload or {}).get("data") or {}).get("attributes") or {}
     website = legit.pick_website(a.get("websites") or [])
+    handle = lambda h: str(h).rstrip("/").rsplit("/", 1)[-1].lstrip("@")     # noqa: E731 - "@x", "x" or a full link
     socials = [{"type": k, "url": u} for k, u in (
-        ("twitter", f"https://x.com/{a['twitter_handle']}" if a.get("twitter_handle") else None),
-        ("telegram", f"https://t.me/{a['telegram_handle']}" if a.get("telegram_handle") else None),
+        ("twitter", f"https://x.com/{handle(a['twitter_handle'])}" if a.get("twitter_handle") else None),
+        ("telegram", f"https://t.me/{handle(a['telegram_handle'])}" if a.get("telegram_handle") else None),
         ("discord", a.get("discord_url"))) if u]
     desc = (a.get("description") or "")[:400]
     if "meme" in desc.lower():
@@ -634,20 +635,20 @@ async def _poll_new_pools(client: httpx.AsyncClient, add: Callable[[dict, str], 
         return
     _state["gt_at"] = now
     from app.trading.onchain.usage import _gecko      # the shared GeckoTerminal gate
-    reads = 0
     for chain, net in GT_CHAINS.items():
+        reads = 0
         for page in range(1, GT_PAGES + 1):
             data = await _gecko(client, GT_NEW_POOLS.format(net=net), {"page": page, "include": "base_token"})
             if not data:
                 break
             for c in new_pool_candidates(chain, data):
                 k = f"gt:{chain}:{c['token_address'].lower()}"
-                if k in _seen or reads >= GT_INFO_PER_POLL:
+                if k in _seen or reads >= GT_INFO_PER_CHAIN:
                     continue
                 reads += 1
                 extra = token_info_fields(await _gecko(client, GT_TOKEN_INFO.format(net=net, token=c["token_address"])))
                 if not extra:
-                    _note(k, False, "no website", now)
+                    _note(k, False, "no website, or a meme description", now)
                     continue
                 _note(k, add({**c, **extra}, "geckoterminal"), "new pool", now)
 

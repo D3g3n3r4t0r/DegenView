@@ -343,3 +343,28 @@ def test_new_pools_on_ethereum_and_base_feed_the_research(monkeypatch):
 def test_a_new_pool_without_a_website_is_not_analysed():
     assert d.token_info_fields({"data": {"attributes": {"websites": []}}}) == {}
     assert d.token_info_fields({"data": {"attributes": {"websites": ["https://x.example"], "description": "a meme coin"}}}) == {}
+
+
+def test_each_chain_has_its_own_budget_of_token_pages(monkeypatch):
+    """Review on #582: one shared budget let Ethereum starve Base."""
+    import app.trading.onchain.usage as u
+    many = lambda: {"data": [{"attributes": {"market_cap_usd": "0", "fdv_usd": "500000", "reserve_in_usd": "20000"},  # noqa: E731
+                              "relationships": {"base_token": {"data": {"id": f"t{i}"}}}} for i in range(8)],
+                    "included": [{"id": f"t{i}", "attributes": {"address": f"0x{i}", "symbol": f"P{i}", "name": f"Project {i}"}}
+                                 for i in range(8)]}
+    reads = []
+
+    async def gecko(client, url, params=None):
+        if url.endswith("/info"):
+            reads.append(url.split("/networks/")[1].split("/")[0])
+            return {"data": {"attributes": {"websites": [], "twitter_handle": "@x"}}}
+        return many() if (params or {}).get("page") == 1 else None
+    monkeypatch.setattr(u, "_gecko", gecko)
+    asyncio.run(d._poll_new_pools(None, lambda item, src: True, 5_000.0))
+    assert reads.count("eth") == d.GT_INFO_PER_CHAIN and reads.count("base") == d.GT_INFO_PER_CHAIN
+
+
+def test_token_page_handles_are_normalised():
+    f = d.token_info_fields({"data": {"attributes": {"websites": ["https://p.example"],
+                                                     "twitter_handle": "https://twitter.com/proj", "telegram_handle": "@projchat"}}})
+    assert {s["url"] for s in f["socials"]} == {"https://x.com/proj", "https://t.me/projchat"}
