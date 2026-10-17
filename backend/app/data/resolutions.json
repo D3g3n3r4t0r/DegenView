@@ -3114,7 +3114,6 @@
     "at": 1792222446,
     "summary": "Sull'account whitekobra la sezione gemme torna com'era la sera del 16/10 (seed-0316..0322): primi tre fissi in alto, arene elencate aperte (5 per arena su telefono con 'Show all'), grafico solo al clic come pagina a se', menu Gems, Pearl, Early, Top, Scout, Profile, Pearl con le gemme Early da 70 in su. Annulla, solo per whitekobra, seed-0323/0324 (Pearl tolta, mosaico rimesso) e il 'senza minimo' di Pearl. Restano le correzioni arrivate dopo: ricaricamento al login (per servire la versione giusta all'account) e testi Early a $300k. L'altro account non cambia."
   },
-
   "seed-0328": {
     "status": "risolto",
     "at": 1792227690,
@@ -3129,5 +3128,10 @@
     "status": "risolto",
     "at": 1792228709,
     "summary": "La ricerca delle gemme gira due volte al giorno, alle 03:00 e alle 18:00 (ora italiana), con la stessa durata massima (6 ore) e il riepilogo Telegram a fine giro. Vale per tutti: la ricerca e' una sola per il server."
+  },
+  "seed-0331": {
+    "status": "risolto",
+    "at": 1792234612,
+    "summary": "La strategia salvata nelle preferenze era una di quelle tolte dai menu il 16/10 (RSI+BB 4H / banda BTC): il menu restava vuoto e ogni analisi partiva senza strategia, quindi niente grafico e niente ticker nella barra. Ora una strategia non piu' disponibile viene ignorata e si usa quella predefinita. In More l'email non viene piu' ridotta al tondino con l'iniziale della barra desktop: si legge intera."
   }
 }

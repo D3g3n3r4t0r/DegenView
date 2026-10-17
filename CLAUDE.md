@@ -66,7 +66,7 @@ importante, ricorda sempre"): il sito classico e' uguale per tutti, e li' si
 modifica per tutti gli account senza chiedere. Nell'app on-chain (gemme e
 Discover): le modifiche di **funzionamento** valgono per tutti gli account
 (anche nella copia v1, senza cambiarne la grafica); le modifiche **grafiche,
-le sezioni nuove e simili** solo per whitekobra@icloud.com (`static/onchain/`).
+le sezioni nuove e simili** solo per l'account whitekobra (Lorenzo) (`static/onchain/`).
 Gli altri account (`settings.onchain_v1_emails`) hanno la copia congelata
 `static/onchain-v1/` + `onchain-app-v1.html` (HANDOVER 16/10 `seed-0325`).
 Per la sezione gemme **chiedi sempre conferma** prima di applicare.

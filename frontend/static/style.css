@@ -6080,6 +6080,12 @@ html.embed-chart, html.embed-chart body, html.embed-chart .chart-area { backgrou
     display: grid; place-items: center; background: var(--bg-raised); cursor: default;
   }
   .auth-user-email::before { content: attr(data-initial); font-size: 12px; font-weight: 600; color: var(--ink-dim); }
+  /* The avatar is for the top bar only: in More the whole address fits. */
+  .altro-account-slot .auth-user-email {
+    font-size: 13px; width: auto; height: auto; min-width: 0; border-radius: 0;
+    display: block; background: none; text-align: left;
+  }
+  .altro-account-slot .auth-user-email::before { content: none; }
 }
 /* tablets (760-1000px, below 760 the bar is hidden): two rows, not a scroll */
 @media (max-width: 1000px) {

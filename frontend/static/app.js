@@ -1359,6 +1359,11 @@
     });
   }
 
+  function hasStrategyOption(name) {
+    const sel = el("active-strategy-select");
+    return !!sel && [...sel.options].some((o) => o.value === name);
+  }
+
   async function populateStrategySelects() {
     let strategies = [];
     try {
@@ -4084,7 +4089,7 @@
     }
 
     const stratSel = el("active-strategy-select");
-    if (stratSel && strategyName && stratSel.value !== strategyName) {
+    if (stratSel && strategyName && stratSel.value !== strategyName && hasStrategyOption(strategyName)) {
       stratSel.value = strategyName;
       renderStrategyParamsFields();   // ogni strategia ha campi suoi
       updateOptimizeButtonVisibility();
@@ -11804,9 +11809,11 @@
       const sel = el("interval-primary");
       if (sel) sel.value = prefs.interval;
     }
-    if (prefs?.strategy) {
-      const sel = el("active-strategy-select");
-      if (sel) sel.value = prefs.strategy;
+    // A saved strategy that is no longer offered (hidden or removed, e.g.
+    // RSI+BB 4H on 16/10) would leave the select empty and every request
+    // would go out with strategy_name="": keep the default instead.
+    if (prefs?.strategy && hasStrategyOption(prefs.strategy)) {
+      el("active-strategy-select").value = prefs.strategy;
     }
     if (prefs?.layers) {
       Object.entries(prefs.layers).forEach(([k, v]) => {
