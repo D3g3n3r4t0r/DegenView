@@ -264,6 +264,30 @@ def test_gems_over_the_hourly_cap_arrive_together(monkeypatch):
     assert len(sent) == main._GEM_NOTIFY_PER_HOUR + 1    # once
 
 
+def test_an_old_board_mark_does_not_hide_a_gem_entering_the_top(monkeypatch):
+    """Lorenzo, 17/10: 8 gems entered the Top at 18:00, no message. The old
+    _rank() had marked "new:" every project that ever entered the board's
+    own ranking, and the Top's alert read the same mark."""
+    row = {"chain": "solana", "token_address": "WAS", "symbol": "WAS", "score": 72}
+    lb._alerted.add("new:" + lb._key("solana", "WAS"))
+    top = [{"chain": "solana", "token_address": "OLD", "symbol": "OLD"}]
+    monkeypatch.setattr(lb, "_top_source", lambda n: top)
+    assert lb.queue_top_news(top) == 0                   # first look
+    top.append(row)
+    assert lb.queue_top_news(top) == 1
+
+
+def test_the_top_is_looked_at_again_after_the_tag_change(tmp_path, monkeypatch):
+    """A store written before 17/10 has "top_primed" and "new:" tags only:
+    the first sync takes note of the Top instead of announcing all of it."""
+    monkeypatch.setattr(lb, "_STORE_FILE", tmp_path / "board.json")
+    (tmp_path / "board.json").write_text(json.dumps({"entries": {}, "alerted": ["new:solana:OLD"],
+                                                     "top_primed": True}), encoding="utf-8")
+    lb._load()
+    top = [{"chain": "solana", "token_address": "OLD", "symbol": "OLD"}]
+    assert lb.queue_top_news(top) == 0 and lb._top_primed
+
+
 def test_early_alerts_are_not_held_to_the_top(monkeypatch):
     """Early gems sit under the Top's floor: the Top check dropped every one."""
     monkeypatch.setattr("time.time", lambda: T0)

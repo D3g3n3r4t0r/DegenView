@@ -3157,7 +3157,7 @@
   },
   "seed-0335": {
     "status": "in corso",
-    "at": 1792258745,
-    "summary": "Trovato nel codice un buco preciso: gli avvisi delle gemme partivano solo durante i 'giri' della ricerca, ma la ricerca finisce con fasi senza giri (le ultime analisi e il ricontrollo della Top, fino a circa un'ora e mezza). Un progetto che entrava nelle arene in quelle fasi compariva nel riepilogo, ma l'avviso non partiva mai. Ora gli avvisi si mandano anche dopo le ultime analisi, dopo ogni ricontrollo e alla fine della ricerca. In piu' le gemme oltre il limite di 6 messaggi l'ora non si perdono piu': arrivano insieme in un messaggio solo. Non ho potuto leggere il server per confermare che fosse l'unica causa: la prova e' la ricerca delle 3 di stanotte. Se anche stavolta non arriva niente, il passo dopo e' leggere lo stato degli avvisi sul server."
+    "at": 1792259258,
+    "summary": "Letto il server (sola lettura): la ricerca delle 18 e' durata 32 minuti, senza ricontrolli, e ha portato 8 progetti nella Top, ma nessun avviso e' partito. La causa: il sistema vecchio segnava come 'gia' annunciato' ogni progetto entrato nella classifica interna della bacheca (1225 sul server), e l'avviso di ingresso nella Top leggeva lo stesso segno, quindi saltava quasi tutti. Ora l'ingresso nella Top ha un segno suo; al primo giro dopo l'aggiornamento il sistema registra la Top com'e' senza avvisi, poi annuncia chi entra. Prima avevo corretto anche gli avvisi che arrivano a fine ricerca e quelli oltre il limite di 6 l'ora. La chat gemme di whitekobra e' impostata e non e' una chat 'solo segnali'. La prova e' la ricerca delle 3."
   }
 }
