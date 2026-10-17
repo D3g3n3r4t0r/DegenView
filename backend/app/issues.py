@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0328", "Telegram: nessun messaggio nella chat delle gemme",
+     "Lorenzo, 17/10: 'continuano a non arrivare i messaggi delle nuove gemme. Anche stanotte, dopo la ricerca delle tre, non sono arrivati messaggi su nuove gemme nella chat dedicata'.",
+     "alta"),
     ("seed-0327", "Whitekobra: di nuovo la grafica nuova delle gemme e la sezione Pearl",
      "Lorenzo, 17/10: 'io voglio le modifiche che avevamo fatto in questa chat nelle ore precedenti per quanto riguarda le modifiche grafiche e la sezione Pearl. Riprendi tutto da li' e applicalo all'account White Cobra, solo all'account White Cobra'.",
      "media"),

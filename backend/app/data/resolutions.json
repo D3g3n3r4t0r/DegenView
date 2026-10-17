@@ -3113,5 +3113,11 @@
     "status": "risolto",
     "at": 1792222446,
     "summary": "Sull'account whitekobra la sezione gemme torna com'era la sera del 16/10 (seed-0316..0322): primi tre fissi in alto, arene elencate aperte (5 per arena su telefono con 'Show all'), grafico solo al clic come pagina a se', menu Gems, Pearl, Early, Top, Scout, Profile, Pearl con le gemme Early da 70 in su. Annulla, solo per whitekobra, seed-0323/0324 (Pearl tolta, mosaico rimesso) e il 'senza minimo' di Pearl. Restano le correzioni arrivate dopo: ricaricamento al login (per servire la versione giusta all'account) e testi Early a $300k. L'altro account non cambia."
+  },
+
+  "seed-0328": {
+    "status": "risolto",
+    "at": 1792227690,
+    "summary": "L'avviso 'nuova gemma' partiva quando un progetto entrava nella classifica interna della ricerca, e solo se in quel momento era gia' nella Top 50: le righe del database (la maggior parte della Top) non lo facevano mai, e quelle saltate venivano segnate come gia' inviate. Le gemme Early (sotto i $300k, quindi mai nella Top) venivano scartate dallo stesso controllo. Ora 'nuova gemma' = progetto che entra nella Top (lo stesso elenco del riepilogo notturno 'Entrati nelle arene'), con il posto della Top; Early partono di nuovo. Al primo avvio dopo il deploy la Top attuale viene solo registrata, senza messaggi. Restano il limite di 6 all'ora per account e la chat gemme (o la principale se non impostata, mai quella dei soli segnali)."
   }
 }

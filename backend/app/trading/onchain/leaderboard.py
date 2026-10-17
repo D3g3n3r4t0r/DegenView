@@ -124,6 +124,13 @@ MIN_LIQUIDITY_USD = 10_000
 EARLY_CAP_USD = 50_000
 EARLY_MIN_LIQUIDITY_USD = 5_000
 ALERTS_PER_TICK = 5
+# A "new gem" is a project entering the Top's gated pool (main.ARENA_POOL),
+# the list the nightly summary reads "Entrati nelle arene" from (Lorenzo,
+# 17/10: three entered overnight, no Telegram). It used to be a project
+# entering the board's own ranking, announced only if it was in the Top 50
+# at that moment: database rows never, board entries almost never, and the
+# skipped ones were marked as sent for good.
+TOP_ALERT_POOL = 500
 # Lorenzo (28/09): "per gemme solitamente si intende roba di capitalizzazione
 # bassa [...] massimo 10 milioni". A hard ceiling for every entry, checked on
 # the token's global cap too: AAVE's Solana copy showed $585k while AAVE
@@ -217,6 +224,7 @@ _alerted: set[str] = set()          # "new:<key>" / "early:<key>": alerts alread
 _outbox: list[tuple[str, str]] = []
 _alert_hooks: list = []
 _priming = False
+_top_primed = False                 # the Top already seen once: what is in it at first sight is not news
 _dirty = False
 _reset_market = False     # set by _load when the stored rules predate version 10
 _requeue_fatals = False   # set by _load when the stored rules predate version 8
@@ -278,8 +286,9 @@ def _load() -> None:
         _state["rescored_rules"] = raw.get("rescored_rules")
         _alerted.update(raw.get("alerted") or [])
         # First start with alerts: what is already on the board is not news.
-        global _priming
+        global _priming, _top_primed
         _priming = "alerted" not in raw
+        _top_primed = bool(raw.get("top_primed"))
         _rank()
         _priming = False
 
@@ -291,7 +300,8 @@ def _save() -> None:
         write_text_atomic(_STORE_FILE, json.dumps({"entries": _entries, "excluded": _excluded, "gone": _gone,
                                            "examined": _state["examined"], "rules": RULES_VERSION,
                                            "rescored_rules": _state.get("rescored_rules"),
-                                           "alerted": sorted(_alerted)}, ensure_ascii=False),
+                                           "alerted": sorted(_alerted), "top_primed": _top_primed},
+                                          ensure_ascii=False),
                                encoding="utf-8")
     except OSError:
         pass
@@ -299,6 +309,8 @@ def _save() -> None:
 
 
 def reset_for_tests() -> None:
+    global _top_primed
+    _top_primed = False
     _alerted.clear()
     _recorded.clear()
     _outbox.clear()
@@ -910,14 +922,12 @@ def _rank() -> None:
     for i, e in enumerate(ranked, 1):
         gem_track.enter(e, final_score(e), i, now, score_parts(e, now), rules_version())
         k = _key(e["chain"], e["token_address"])
-        for kind in ("new", "early"):
-            if kind == "early" and not is_early(e, now):
-                continue
-            tag = f"{kind}:{k}"
-            if tag not in _alerted:
-                _alerted.add(tag)
-                if not _priming and not benchmark.is_benchmark(e["chain"], e["token_address"]):
-                    _outbox.append((kind, k))
+        # "new" is the Top's (queue_top_news); the board flags early ones only.
+        tag = f"early:{k}"
+        if is_early(e, now) and tag not in _alerted:
+            _alerted.add(tag)
+            if not _priming and not benchmark.is_benchmark(e["chain"], e["token_address"]):
+                _outbox.append(("early", k))
         if e.get("rank") != i:
             e["rank_before"], e["rank"], e["moved_at"] = e.get("rank"), i, now
             history.append(k, "leaderboard.rank", {"moved_at": now, "rank": i, "rank_before": e["rank_before"]}, now)
@@ -1082,22 +1092,47 @@ def on_alert(fn) -> None:
     _alert_hooks.append(fn)
 
 
+def queue_top_news(top: list[dict]) -> int:
+    """Queues a "new" alert for each project in `top` (the Top's gated pool,
+    best first) never announced before. The first look only takes note: a
+    deploy must not announce the whole Top. Returns the alerts queued."""
+    global _top_primed, _dirty
+    queued = 0
+    for t in top:
+        k = _key(t["chain"], t["token_address"])
+        if f"new:{k}" in _alerted:
+            continue
+        _alerted.add(f"new:{k}")
+        _dirty = True
+        if _top_primed and not benchmark.is_benchmark(t["chain"], t["token_address"]):
+            _outbox.append(("new", k))
+            queued += 1
+    if not _top_primed:
+        _top_primed, _dirty = True, True
+    return queued
+
+
 async def drain_alerts() -> int:
     sent = 0
     # The place announced is the Top's, the list the app shows: the board's
     # own rank ignores the database rows mixed into the Top (Lorenzo, 29/09:
     # "PFWA posto 4" on Telegram, Covenant 4th in the app).
-    top = [_key(t["chain"], t["token_address"]) for t in _top_source(50)] if _top_source and _outbox else None
+    top = _top_source(TOP_ALERT_POOL) if _top_source and any(kind == "new" for kind, _ in _outbox) else []
+    places = {_key(t["chain"], t["token_address"]): (i, t) for i, t in enumerate(top, 1)}
     while _outbox and sent < ALERTS_PER_TICK:
         kind, k = _outbox.pop(0)
         e = _entries.get(k)
-        if e is None or (kind == "early" and not is_early(e)):
-            continue
-        if top is not None and k not in top:
-            continue
-        item = _public(e)
-        if top is not None:
-            item["rank"] = top.index(k) + 1
+        if kind == "early":
+            # Under the Top's floor by definition: never in the Top (07/10).
+            if e is None or not is_early(e):
+                continue
+            item = _public(e)
+        else:
+            if k not in places:
+                continue            # left the Top before its turn
+            place, row = places[k]
+            item = _public(e) if e is not None else dict(row)
+            item["rank"] = place
         for fn in list(_alert_hooks):
             try:
                 await fn(kind, item)
@@ -1469,6 +1504,7 @@ def sync_top(now: float | None = None) -> int:
 async def _sync_top(now: float) -> None:
     sync_top(now)
     _sync_database(_state["board"])
+    queue_top_news(_top_source(TOP_ALERT_POOL))
 
 
 async def _audit(now: float) -> None:
