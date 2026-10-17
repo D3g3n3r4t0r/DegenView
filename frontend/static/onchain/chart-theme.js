@@ -74,8 +74,9 @@ export function track(chart, series, kind) {
   return () => live.delete(item);
 }
 
-SKIN.addEventListener("change", () => {
-  // The new stylesheet applies on the same frame; read it on the next.
+// A new skin (crossing 1100px) or a new theme (theme.js, dark mode): the
+// stylesheet applies on the same frame, so the colours are read on the next.
+function repaint() {
   requestAnimationFrame(() => {
     const t = chartTheme();
     for (const item of live) {
@@ -85,4 +86,7 @@ SKIN.addEventListener("change", () => {
       } catch { live.delete(item); }
     }
   });
-});
+}
+
+SKIN.addEventListener("change", repaint);
+window.addEventListener("lae:theme", repaint);

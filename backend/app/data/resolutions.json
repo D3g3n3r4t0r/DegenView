@@ -3144,5 +3144,15 @@
     "status": "risolto",
     "at": 1792240057,
     "summary": "Ricaricando la pagina i moduli arrivavano dalla cache prima che il browser avesse letto l'elenco che li traduce (import map, messo dopo i preload): il primo import falliva e l'app restava bianca. Provato con Chromium: 9 ricaricamenti su 10 fallivano, su tutte e due le versioni dell'app (whitekobra e l'altro account). Ora l'elenco sta in cima alla pagina, prima di qualunque modulo o foglio di stile: 0 errori su 30 ricaricamenti. Un test controlla l'ordine su entrambe le pagine."
+  },
+  "seed-0333": {
+    "status": "risolto",
+    "at": 1792245278,
+    "summary": "La causa era nel server: la Top e le arene leggevano i progetti del database senza i pilastri (tokenomics, sito, GitHub) e senza la capitalizzazione globale, la pagina del token invece con tutto. Stessa formula, dati diversi: niente blocco token, prodotto quasi vuoto, nessuna penalita' per codice chiuso. Per ora corretto solo per l'account whitekobra: li' arene, Top 25 e 'Top #N' usano la riga intera e il punteggio coincide con quello sotto il grafico. Gli altri account, gli avvisi Telegram e la ricerca notturna restano come prima finche' Lorenzo non decide di estenderlo."
+  },
+  "seed-0334": {
+    "status": "risolto",
+    "at": 1792245278,
+    "summary": "Nel Profilo, su telefono, c'e' 'Appearance' con Light, Dark e Auto (segue il telefono). Dark e' la stessa grafica in versione notte: fondo verde-nero, schede in rilievo, testo chiaro, il verde e la salvia per cio' che e' scelto; il grafico prende i colori nuovi subito. La scelta resta nel browser e si applica prima che la pagina compaia, senza lampo chiaro. Solo nella grafica di whitekobra; sul desktop l'app e' gia' scura e il selettore non c'e'."
   }
 }

@@ -17,6 +17,7 @@ import * as phantom from "@onchain/phantomlink.js";
 import { loadLinked } from "@onchain/userswap.js";
 import { register } from "@onchain/detail.js";
 import { flash, liveDelta, liveKey, liveValue, priceOf, roll, watch } from "@onchain/live.js";
+import { THEMES, setTheme, themePref } from "@onchain/theme.js";
 
 const RANGES = [["1h", "1H"], ["2h", "2H"], ["3h", "3H"], ["4h", "4H"], ["8h", "8H"], ["24h", "1D"], ["7d", "1W"],
   ["30d", "1M"], ["all", "All"]];
@@ -355,6 +356,11 @@ function paint() {
         <li><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5.5" width="16" height="14" rx="2.5"/><path d="M4 10h16M9 3.5v4M15 3.5v4"/></svg>Joined ${since(p.joined)}</li>
       </ul>
     </header>
+    <section class="pf-theme">
+      <h3>Appearance</h3>
+      <nav class="pf-seg" aria-label="Appearance">${THEMES.map(([k, l]) =>
+        `<button type="button" data-theme-pick="${k}" aria-pressed="${themePref() === k}">${l}</button>`).join("")}</nav>
+    </section>
     <section class="pf-value" data-trading-only>
       <nav class="pf-wallet" aria-label="Wallet" data-trading-only>
         <button type="button" data-wallet="real" aria-pressed="${d.wallet !== "sim"}">Real wallet</button>
@@ -477,6 +483,12 @@ export function mountProfile({ go: goTo } = {}) {
     if (event.target.closest("[data-sim-top]")) { import("@onchain/sim-backtest.js").then((m) => m.openSimBacktest()); return; }
     const r = event.target.closest("[data-range]");
     if (r) { range = r.dataset.range; paint(); return; }
+    const th = event.target.closest("[data-theme-pick]");
+    if (th) {
+      setTheme(th.dataset.themePick);
+      root.querySelectorAll("[data-theme-pick]").forEach((b) => b.setAttribute("aria-pressed", String(b === th)));
+      return;
+    }
     const cf = event.target.closest("[data-chainf]");
     if (cf) { chainF = cf.dataset.chainf; paint(); return; }
     if (event.target.closest("[data-hidden]")) { showHidden = !showHidden; paint(); return; }
