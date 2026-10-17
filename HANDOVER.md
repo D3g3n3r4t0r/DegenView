@@ -1,6 +1,6 @@
 # 2026-10-17 — Chiuse `seed-0321` e `seed-0268` (Claude, a mano)
 
-Chat di prova sul repo rinominato. Lorenzo: "Chiudili entrambi". `seed-0321` (podio diverso dalla Top 25) -> scartato: il podio "pound for pound" e' voluto (16/10). La voce era sparita da `_SEED` con il revert di #552 ma restava sul volume: rimessa, se no la risoluzione e' orfana. `seed-0268` (overhaul sito classico) -> risolto: restano non fatti, per sua scelta, la pulizia del codice di trading spento e il resto del piano di 8 settimane. Nota: questa sessione cloud era configurata col nome vecchio `Smowcomingsoon` (git va per reindirizzamento, gli strumenti GitHub accettano solo quel nome).
+Chat di prova sul repo rinominato. Lorenzo: "Chiudili entrambi". `seed-0321` (podio diverso dalla Top 25) -> scartato: il podio "pound for pound" e' voluto (16/10). La voce era sparita da `_SEED` con il revert di #552 ma restava sul volume: rimessa, se no la risoluzione e' orfana. `seed-0268` (overhaul sito classico) -> risolto: restano non fatti, per sua scelta, la pulizia del codice di trading spento e il resto del piano di 8 settimane. Poi, "Si, chiudi": anche `seed-0310` (repo pubblico) -> risolto, la storia era gia' riscritta il 16/10. Nota: questa sessione cloud era configurata col nome vecchio `Smowcomingsoon` (git va per reindirizzamento, gli strumenti GitHub accettano solo quel nome).
 
 # 2026-10-17 — Alert Pearl nella chat gemme, ricerca anche alle 18 — `seed-0329`, `seed-0330` (Claude, a mano)
 

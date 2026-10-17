@@ -3030,9 +3030,10 @@
     "summary": "Nei file attuali le due email non compaiono piu': gli elenchi di accesso (admin, accesso completo, Telegram, registrazione, saldi) usano l'impronta sha256 dell'indirizzo invece dell'indirizzo, con lo stesso effetto; .env.example e HANDOVER con segnaposto. Restano nella storia del repository (commit vecchi) e come autore di ~450 commit fatti dal sito di GitHub: per quelli serve riscrivere la storia o renderla privata, e per il futuro l'opzione 'Keep my email addresses private' nelle impostazioni email di GitHub. Lorenzo, 16/10: 'non toccare niente, non c'e' bisogno di riscrivere la storia': la storia resta com'e'. Nella storia nessuna password, chiave o token (controllati tutti i 1.471 commit)."
   },
   "seed-0310": {
-    "status": "in corso",
-    "at": 1792168313,
-    "summary": "Scansione completa (gitleaks, 1.563 commit): nessuna chiave o token, mai. Tolti dai file l'IP del server, il percorso della chiave SSH, il nickname del tester e un'email di terzi; la bacheca /api/issues, che e' pubblica, mostrava le email degli autori a chiunque: ora chi non e' collegato vede solo le prime due lettere. Aggiunti gitleaks in CI (workflow 'Secret scan', separato dal deploy), regole per email e IP pubblici in .gitleaks.toml, hook pre-commit e .gitignore per .env e chiavi. Resta la storia: email e IP stanno ancora nei commit vecchi, serve la riscrittura con il si' di Lorenzo."
+    "status": "risolto",
+    "at": 1792238941,
+    "summary": "Fatto: nessuna chiave o token e' mai stato nel repository (gitleaks su tutta la storia). Tolti dai file IP del server, percorso della chiave SSH, nickname del tester ed email di terzi; la bacheca pubblica non mostra piu' le email degli autori. La storia di main e' stata riscritta il 16/10 (\"Si', riscrivi\"): stesso codice, zero risultati di gitleaks. Controlli automatici a ogni push (workflow 'Secret scan') e hook pre-commit. I branch vecchi e le PR conservano la storia precedente: lasciati, su decisione di Lorenzo (\"Lascia stare\"). Chiusa da Lorenzo il 17/10.",
+    "detail": "Scansione completa (gitleaks, 1.563 commit): nessuna chiave o token, mai. Tolti dai file l'IP del server, il percorso della chiave SSH, il nickname del tester e un'email di terzi; la bacheca /api/issues, che e' pubblica, mostrava le email degli autori a chiunque: ora chi non e' collegato vede solo le prime due lettere. Aggiunti gitleaks in CI (workflow 'Secret scan', separato dal deploy), regole per email e IP pubblici in .gitleaks.toml, hook pre-commit e .gitignore per .env e chiavi. Resta la storia: email e IP stanno ancora nei commit vecchi, serve la riscrittura con il si' di Lorenzo."
   },
   "seed-0311": {
     "status": "risolto",
