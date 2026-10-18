@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light dark" />
   <title>Liquidity Analysis Engine</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -19,7 +20,7 @@
 
     <form id="search-form" class="search-form">
       <div class="ticker-field">
-        <input id="ticker-input" type="text" form="search-form" placeholder="Search ticker — stocks or crypto" autocomplete="off" />
+        <input id="ticker-input" type="text" form="search-form" placeholder="Search ticker — stocks or crypto" autocomplete="off" aria-label="Search ticker" spellcheck="false" autocapitalize="off" />
         <ul id="ticker-suggestions" class="suggestions hidden"></ul>
       </div>
     </form>
@@ -27,7 +28,7 @@
     <!-- Scorciatoia per la watchlist (segnalazione 227a6142): la coppia sul
          grafico entra in YOUR TICKERS con un tocco; piena = gia' salvata. -->
     <button type="button" id="watch-star-btn" class="watch-star-btn hidden" aria-pressed="false" title="Add this pair to the Watchlist">
-      <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg>
+      <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg>
     </button>
 
     <div id="chart-settings-group" class="chart-settings-group">
@@ -37,7 +38,7 @@
 
       <select id="active-strategy-select" class="active-strategy-select toolbar-strategy"></select>
 
-      <button type="button" id="theme-toggle-btn" class="theme-toggle-btn" title="Toggle theme">☾</button>
+      <button type="button" id="theme-toggle-btn" class="theme-toggle-btn" title="Toggle theme" aria-label="Toggle theme">☾</button>
       <label class="toolbar-check" title="Log scale">
         <input type="checkbox" id="log-scale-toggle" /> Log
       </label>
@@ -399,7 +400,7 @@
         </nav>
         <div id="chart-wrap" class="chart-wrap hidden">
           <div id="main-chart" class="main-chart"><canvas id="draw-canvas"></canvas>
-            <button type="button" id="overlay-remove-badge" class="overlay-remove-badge hidden" title="Remove this indicator">✕</button>
+            <button type="button" id="overlay-remove-badge" class="overlay-remove-badge hidden" title="Remove this indicator" aria-label="Remove this indicator">✕</button>
             <div class="chart-top-left">
               <div id="chart-ohlc" class="chart-ohlc hidden" aria-live="off"></div>
               <div id="chart-indicator-legend" class="chart-indicator-legend"></div>
@@ -494,7 +495,7 @@
                 <span>To</span>
                 <input type="date" id="lab-date-end" class="lab-daterange-input" />
               </label>
-              <button type="button" id="lab-daterange-clear" class="lab-daterange-clear" title="Clear the range, use all available history">✕</button>
+              <button type="button" id="lab-daterange-clear" class="lab-daterange-clear" title="Clear the range, use all available history" aria-label="Clear the date range">✕</button>
             </div>
           </details>
 
