@@ -1527,6 +1527,7 @@ async def lifespan(app: FastAPI):
     from app.trading.onchain import nightly as onchain_nightly
     research = {
         "nightly": lambda: onchain_nightly.nightly_loop(lambda: _top_entries(ARENA_POOL)),
+        "sentinel": onchain_nightly.sentinel_loop,
         "leaderboard": onchain_leaderboard.leaderboard_loop,
         "sweep": lambda: onchain_deep_recheck.sweep_loop(
             lambda: [f"{e['chain']}:{e['token_address']}" for e in _top_entries(50)]),

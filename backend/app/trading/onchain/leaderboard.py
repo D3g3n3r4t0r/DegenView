@@ -1314,7 +1314,11 @@ async def _from_database(client: httpx.AsyncClient, now: float) -> None:
     feed_from_database(now)
 
 
-async def tick(client: httpx.AsyncClient, now: float | None = None) -> None:
+async def tick(client: httpx.AsyncClient, now: float | None = None, light: bool = False) -> None:
+    """`light` is the sentinel's tick (nightly.sentinel_loop): the fast
+    sources, the analysis of new and young projects, their usage, the Top
+    and its alerts; the database feed, DeepSeek's readings, the audits and
+    the CoinGecko sweep wait for the research runs."""
     now = now or time.time()
     _state["last_tick"] = now
     try:
@@ -1323,21 +1327,25 @@ async def tick(client: httpx.AsyncClient, now: float | None = None) -> None:
         logger.exception("classifica: lettura del radar fallita")
     # The fast sources always run (18/10: the pause had stopped them since
     # the pool passed POOL_TARGET); the pause holds the CoinGecko sweep only.
-    await _step("progetti", discovery.tick, client, add, now, discovery_open(now))
+    await _step("progetti", discovery.tick, client, add, now, not light and discovery_open(now))
     if now - _state["last_market"] >= MARKET_POLL_S and _entries:
         _state["last_market"] = now
         await _step("dexscreener", _poll_market, client)
     await _step("storico", gem_track.poll, client, set(_entries), now)
-    await _step("pagella", asyncio.to_thread, gem_learn.refresh, now)
-    await _step("database", _from_database, client, now)
-    await _step("grandi monete", _refresh_big_coins, client, now)
+    if not light:
+        await _step("pagella", asyncio.to_thread, gem_learn.refresh, now)
+        await _step("database", _from_database, client, now)
+        await _step("grandi monete", _refresh_big_coins, client, now)
     await _step("cap globale", _check_global_cap, client, now)
-    await _step("uso", _measure_usage, client)
-    if not _state.get("reviewing") and not priority.backtests_first():
+    if light:
+        await _step("uso", _measure_usage, client, USAGE_PER_TICK, [e for e in usage_candidates() if young(e, now)])
+    else:
+        await _step("uso", _measure_usage, client)
+    if not light and not _state.get("reviewing") and not priority.backtests_first():
         task = asyncio.create_task(_step("revisione", _review_board, now))
         _tasks.add(task)
         task.add_done_callback(_tasks.discard)
-    if not _state.get("code_reading"):
+    if not light and not _state.get("code_reading"):
         task = asyncio.create_task(_step("codice", _read_code, client, now))
         _tasks.add(task)
         task.add_done_callback(_tasks.discard)
@@ -1348,11 +1356,11 @@ async def tick(client: httpx.AsyncClient, now: float | None = None) -> None:
         task.add_done_callback(_tasks.discard)
     if _top_source is not None and now - _state.get("top_synced_at", 0.0) >= TOP_SYNC_EVERY_S:
         await _step("top sync", _sync_top, now)
-    if not _state.get("auditing") and consistency.due(now):
+    if not light and not _state.get("auditing") and consistency.due(now):
         task = asyncio.create_task(_step("coerenza", _audit, now))
         _tasks.add(task)
         task.add_done_callback(_tasks.discard)
-    if not _state.get("narr_mapping"):
+    if not light and not _state.get("narr_mapping"):
         task = asyncio.create_task(_step("narrative", _map_narratives, now))
         _tasks.add(task)
         task.add_done_callback(_tasks.discard)
@@ -1366,6 +1374,8 @@ async def tick(client: httpx.AsyncClient, now: float | None = None) -> None:
     for k, need in todo:
         if not need or len(_busy) >= ANALYZE_CONCURRENCY * 2:
             continue
+        if light and _entries[k]["pillars"] and not young(_entries[k], now):
+            continue            # refreshing the old ones is the research runs' job
         _busy.add(k)
         task = asyncio.create_task(_analyze(k, set(STALE_S) - need, client))
         _tasks.add(task)

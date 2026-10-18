@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0347", "Gemme: ricerca accesa piu' a lungo",
+     "Lorenzo, 18/10: 'Con tutte le fonti attuali ha senso tenere accesa la ricerca delle gemme piu' a lungo. Comporterebbe costi maggiori?', poi 'Procedi con la sentinella, notifiche subito a qualsiasi ora'.",
+     "media"),
     ("seed-0346", "Gemme: progetti nuovi intercettati tardi (Veil)",
      "Lorenzo, 18/10: 'non sono molti i progetti recenti, nuovi, che entrano tra le gemme [...] come possiamo fare per intercettare progetti come Veil prima che spicchino il volo?', poi fonti 'pump.fun [...], Meteora, Pons' e 'Procedi'.",
      "alta"),
