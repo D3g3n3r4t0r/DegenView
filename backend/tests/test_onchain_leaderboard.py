@@ -924,3 +924,26 @@ def test_whitekobra_s_weights(monkeypatch):
     assert lb.usage_score(e, growth=True) == plain
     monkeypatch.setattr(usage, "holders_growth", lambda c, t, d: 0.30)
     assert lb.usage_score(e, growth=True) > plain
+
+
+def test_the_light_tick_leaves_the_heavy_work_to_the_runs(monkeypatch):
+    """18/10: the sentinel's tick reads the fast sources and analyses what is
+    new; the database feed, DeepSeek and the CoinGecko sweep wait."""
+    import asyncio
+    called, bulk = [], []
+
+    async def disc(client, add, now, b):
+        bulk.append(b)
+    monkeypatch.setattr(lb.discovery, "tick", disc)
+    monkeypatch.setattr(lb, "discovery_open", lambda now: True)
+    for name in ("_from_database", "_review_board", "_read_code", "_audit", "_map_narratives", "_refresh_big_coins"):
+        async def mark(*a, _n=name, **k):
+            called.append(_n)
+        monkeypatch.setattr(lb, name, mark)
+
+    async def run():
+        await lb.tick(None, light=True)
+        await asyncio.sleep(0)
+    asyncio.run(run())
+    assert bulk == [False]
+    assert not set(called) & {"_from_database", "_review_board", "_read_code", "_audit", "_map_narratives", "_refresh_big_coins"}

@@ -61,8 +61,20 @@ MIN_TICKS = 30                  # 5 minutes: the readings spawned by the tick ge
 SETTLE_S = 300                  # readings still running when the ticks stop
 RECHECK_GAP_S = 5               # between two tokens of the re-check
 
+# The sentinel (Lorenzo, 18/10: "Procedi con la sentinella, notifiche subito
+# a qualsiasi ora"): between the research runs, every SENTINEL_EVERY_S a few
+# light ticks (leaderboard.tick(light=True)) read the fast sources and the
+# launchpads, analyse what is new, and send its alerts at once. It stops as
+# soon as nothing new waits, after SENTINEL_MAX_S at most, and never runs
+# beside a research run (_research_lock).
+SENTINEL_EVERY_S = 600
+SENTINEL_MAX_S = 300
+SENTINEL_MIN_TICKS = 3
+SENTINEL_SETTLE_S = 60
+
 _state: dict = {}
 _running = False
+_research_lock = asyncio.Lock()
 
 
 def _load() -> None:
@@ -211,6 +223,16 @@ class Steps:
     async def tick(self) -> None:
         from app.trading.onchain import leaderboard
         await leaderboard.tick(self.client)
+
+    async def light_tick(self) -> None:
+        from app.trading.onchain import leaderboard
+        await leaderboard.tick(self.client, light=True)
+
+    def quiet(self) -> bool:
+        """Nothing new waits for the sentinel: no analysis running, no entry
+        never analysed."""
+        from app.trading.onchain import leaderboard
+        return not leaderboard._busy and all(e["pillars"] for e in leaderboard._entries.values())
 
     def busy(self) -> bool:
         """An optimization is running: the research steps wait for it."""
@@ -429,7 +451,8 @@ async def run_night(slot: float, top: Callable[[], list[dict]], *, steps_factory
     deadline = max(_state["first_start"] + window_s(slot), now + RESUME_MIN_S)
     _running = True
     try:
-        async with httpx.AsyncClient(timeout=10.0, headers={"User-Agent": "Mozilla/5.0 (LiquidityEngine)"}) as client:
+        async with _research_lock, \
+                httpx.AsyncClient(timeout=10.0, headers={"User-Agent": "Mozilla/5.0 (LiquidityEngine)"}) as client:
             summary = await run_once(top, steps_factory(client), deadline, clock=clock, sleep=sleep,
                                      top_before=_state.get("top_before"))
     except asyncio.CancelledError:
@@ -508,6 +531,42 @@ async def nightly_loop(top: Callable[[], list[dict]], *, clock: Callable[[], flo
             await sleep(600)
 
 
+async def sentinel_once(steps, *, clock: Callable[[], float] = time.time, sleep=asyncio.sleep) -> int:
+    """One sentinel round: light ticks until nothing new waits (at least
+    SENTINEL_MIN_TICKS, at most SENTINEL_MAX_S), then the alerts. Returns
+    the ticks."""
+    from app.trading.onchain import leaderboard
+    end = clock() + SENTINEL_MAX_S
+    ticks = 0
+    while clock() < end:
+        await _guard("sentinel", steps.light_tick())
+        ticks += 1
+        await sleep(leaderboard.TICK_S)
+        if ticks >= SENTINEL_MIN_TICKS and steps.quiet():
+            break
+    await _guard("settle", steps.settle(SENTINEL_SETTLE_S))
+    await _guard("alerts", steps.alerts())
+    return ticks
+
+
+async def sentinel_loop(*, clock: Callable[[], float] = time.time, sleep=asyncio.sleep,
+                        steps_factory=Steps) -> None:
+    """A sentinel round every SENTINEL_EVERY_S, skipped while a research
+    run or an optimization is on."""
+    await sleep(START_DELAY_S * 2)
+    while True:
+        try:
+            if settings.onchain_sentinel_enabled and not _research_lock.locked():
+                async with _research_lock, \
+                        httpx.AsyncClient(timeout=10.0, headers={"User-Agent": "Mozilla/5.0 (LiquidityEngine)"}) as client:
+                    steps = steps_factory(client)
+                    if not steps.busy():
+                        await sentinel_once(steps, clock=clock, sleep=sleep)
+        except Exception:
+            logger.exception("sentinel: round failed")
+        await sleep(SENTINEL_EVERY_S)
+
+
 def loop_plan(radar_enabled: bool, nightly_enabled: bool) -> list[str]:
     """Which research loops the server starts (main.lifespan). The nightly
     run replaces the five around-the-clock loops; without the radar there is
@@ -515,5 +574,5 @@ def loop_plan(radar_enabled: bool, nightly_enabled: bool) -> list[str]:
     if not radar_enabled:
         return ["studies"]
     if nightly_enabled:
-        return ["nightly"]
+        return ["nightly", "sentinel"]
     return ["leaderboard", "sweep", "outcomes", "layers", "studies"]

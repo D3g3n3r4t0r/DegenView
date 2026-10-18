@@ -3214,5 +3214,10 @@
     "status": "risolto",
     "at": 1792355919,
     "summary": "La causa principale: la ricerca di progetti nuovi era quasi ferma. Una regola del 28/09 la metteva in pausa finche' c'era lavoro arretrato, e con DeepSeek spento quel lavoro non finiva mai; in 7 giorni erano entrati solo una ventina di progetti da fonti veloci. Ora le fonti veloci (profili DexScreener, Jupiter, GitHub, pool nuovi) girano sempre e la pausa vale solo per CoinGecko, che resta come fonte lenta di recupero (trova un terzo dei progetti buoni, ma in media 71 giorni dopo la nascita). Nuova fonte su tutti gli account: i launchpad pump.fun (anche i graduati su PumpSwap), Meteora, Raydium LaunchLab, Bags e LetsBonk su Solana e Pons su Robinhood, con sito obbligatorio e niente meme. I progetti nati da meno di 14 giorni passano davanti agli altri nell'analisi. MetaDAO non e' stato aggiunto: il sito blocca le letture automatiche."
+  },
+  "seed-0347": {
+    "status": "risolto",
+    "at": 1792356735,
+    "summary": "Fra le due ricerche (03:00 e 18:00) ora gira una sentinella: ogni 10 minuti legge le fonti veloci e i launchpad, analizza i progetti nuovi e manda subito la notifica quando una gemma entra, a qualsiasi ora. Si ferma appena non c'e' niente di nuovo (al massimo 5 minuti a giro) e non gira mai insieme a una ricerca. Il lavoro pesante (CoinGecko, ricontrollo settimanale, layer, riepilogo) resta nelle due ricerche. Costi: nessuno in soldi; un po' di carico in piu' sul server e sulle API gratuite."
   }
 }

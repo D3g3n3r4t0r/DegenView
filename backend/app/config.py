@@ -91,6 +91,9 @@ class Settings(BaseSettings):
     # ore 18 [...] Due ricerche al giorno": 03:00 and 18:00.
     onchain_nightly_extra_times: str = "18:00"
     onchain_nightly_max_hours: float = 6.0   # 03:00-09:00 at most
+    # Lorenzo, 18/10: between the runs, a light round every 10 minutes on
+    # the fast sources and the launchpads, alerts at once (nightly.sentinel_loop).
+    onchain_sentinel_enabled: bool = True
     # Lorenzo, 12/10: "la nostra selezione non e' molto popolata, aggiungi
     # controllo ogni ora". A run at every whole hour besides the ones above;
     # those runs get onchain_hourly_max_minutes, the main one keeps max_hours.

@@ -80,7 +80,7 @@ def test_boot_after_the_hour_runs_tonight_now():
 
 
 def test_loop_plan_follows_the_flag():
-    assert nightly.loop_plan(True, True) == ["nightly"]
+    assert nightly.loop_plan(True, True) == ["nightly", "sentinel"]
     assert nightly.loop_plan(True, False) == ["leaderboard", "sweep", "outcomes", "layers", "studies"]
     assert nightly.loop_plan(False, True) == ["studies"]
     assert nightly.loop_plan(False, False) == ["studies"]
@@ -385,3 +385,50 @@ def test_shipped_schedule_is_two_long_runs_at_3_and_18(monkeypatch):
         monkeypatch.setattr(settings, k, getattr(s, k))
     assert nightly.run_times() == [(3, 0), (18, 0)]
     assert all(nightly.is_main_run(nightly._slot_on(date(2026, 10, 17), h)) for h in (3, 18))
+
+
+class _Clock:
+    def __init__(self):
+        self.t = 0.0
+
+    def __call__(self):
+        return self.t
+
+
+class _SentinelSteps:
+    def __init__(self, clock, quiet_after=None):
+        self.clock, self.ticks, self.quiet_after, self.order = clock, 0, quiet_after, []
+
+    async def light_tick(self):
+        self.ticks += 1
+        self.clock.t += 5
+
+    def quiet(self):
+        return self.quiet_after is not None and self.ticks >= self.quiet_after
+
+    async def settle(self, timeout):
+        self.order.append("settle")
+
+    async def alerts(self):
+        self.order.append("alerts")
+
+
+def test_the_sentinel_stops_when_nothing_new_waits():
+    """Lorenzo, 18/10: a light round between the runs, alerts at once."""
+    clock = _Clock()
+
+    async def sleep(s):
+        clock.t += s
+    steps = _SentinelSteps(clock, quiet_after=1)
+    assert asyncio.run(nightly.sentinel_once(steps, clock=clock, sleep=sleep)) == nightly.SENTINEL_MIN_TICKS
+    assert steps.order == ["settle", "alerts"]
+
+
+def test_the_sentinel_round_is_bounded():
+    clock = _Clock()
+
+    async def sleep(s):
+        clock.t += s
+    steps = _SentinelSteps(clock)              # always something new
+    ticks = asyncio.run(nightly.sentinel_once(steps, clock=clock, sleep=sleep))
+    assert clock.t <= nightly.SENTINEL_MAX_S + 20 and ticks < nightly.SENTINEL_MAX_S / 10 + 1
