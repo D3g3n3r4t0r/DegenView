@@ -23,14 +23,25 @@ export function themePref() {
   }
 }
 
+// The phone's status bar takes the page colour: --c-bg comes from
+// classic.css, which only the phone skin loads; the desktop skin is dark.
+const DESKTOP_BAR = "#0d0e11";
+function paintBar() {
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (!meta) return;
+  const bg = getComputedStyle(document.documentElement).getPropertyValue("--c-bg").trim();
+  meta.content = bg || DESKTOP_BAR;
+}
+
 function apply() {
   const pref = themePref();
   const dark = pref === "dark" || (pref === "auto" && SYSTEM_DARK.matches);
   const next = dark ? "dark" : "light";
-  if (document.documentElement.dataset.theme === next) return;
+  if (document.documentElement.dataset.theme === next) { paintBar(); return; }
   document.documentElement.dataset.theme = next;
   // chart-theme.js repaints the canvases, which cannot read CSS.
   window.dispatchEvent(new Event("lae:theme"));
+  paintBar();
 }
 
 export function setTheme(pref) {
@@ -40,4 +51,5 @@ export function setTheme(pref) {
 }
 
 SYSTEM_DARK.addEventListener("change", () => { if (themePref() === "auto") apply(); });
+matchMedia("(min-width:1100px)").addEventListener("change", paintBar);
 apply();
