@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0349", "Whitekobra: gemme al massimo di un anno, fuori quelle che si spengono",
+     "Lorenzo, 18/10: 'abbassare il tetto della vita di un progetto dagli attuali 1000 giorni a un anno, quindi 365 giorni massimo [...] entro i 1000 giorni ho visto tanti progetti ormai morti o semimorti', poi 'applicalo anche ai layer e per i suggerimenti applica solo il secondo'.",
+     "media"),
     ("seed-0348", "Whitekobra: Pearl a 30 giorni, FDV invisibile, gemme che entrano ed escono",
      "Lorenzo, 18/10: 'devono esserci solo progetti datati max un mese' in Pearl; 'non ho visto nella sezione gemme da nessuna parte il nuovo parametro che indica i due tipi di capitalizzazione'; 'un progetto per uscire per capitalizzazione dalle gemme deve superare il tetto [...] per almeno 7 giorni consecutivi', poi 'mettili tutti tranne quello relativo al tetto d'emergenza'.",
      "media"),

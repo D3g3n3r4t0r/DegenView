@@ -3769,7 +3769,9 @@ def _full_score(user: User | None) -> bool:
 # shown, rounded), nothing without a creation or listing date (Lorenzo,
 # 18/10: "Quelli senza data non possono entrare nelle gemme"). Applied to the Top, the arenas, Early and Pearl of the
 # accounts in settings.onchain_full_score_emails, and to their gem alerts.
-GEM_MAX_AGE_DAYS = 1000
+# Lorenzo, 18/10: 365, was 1000 ("entro i 1000 giorni ho visto tanti progetti
+# ormai morti o semimorti"), layers included.
+GEM_MAX_AGE_DAYS = 365
 GEM_MIN_SCORE = 60
 GEM_DROP_SCORE = 55          # under it a gem leaves at once, no 3 days' wait
 # Lorenzo, 18/10: Pearl holds projects at most a month old.
@@ -3836,6 +3838,19 @@ def _score_kept(e: dict, now: float) -> bool:
     return onchain_gem_hold.keep(_gem_key(e), "score", s < GEM_MIN_SCORE, now)
 
 
+# Lorenzo, 18/10: a gem whose last week traded under a fifth of its month's
+# daily average is fading, young or not; from FADE_MIN_DAYS of history,
+# so a launch day's spike does not count against a pool a week old.
+FADE_RATIO = 0.2
+FADE_MIN_DAYS = 14
+
+
+def _fading(e: dict) -> bool:
+    u = e.get("usage") or onchain_leaderboard.usage.latest(e.get("chain") or "", e.get("token_address") or "") or {}
+    week, month = u.get("vol_7d_avg"), u.get("vol_30d_avg")
+    return bool((u.get("days") or 0) >= FADE_MIN_DAYS and week is not None and month and week < FADE_RATIO * month)
+
+
 def _mostly_locked(e: dict) -> bool:
     cap, fdv = e.get("market_cap") or 0, e.get("fdv") or 0
     return bool(cap and fdv and fdv > GEM_MAX_FDV_RATIO * cap)
@@ -3850,6 +3865,7 @@ def _gem_view(entries: list[dict], now: float | None = None) -> list[dict]:
     entries = _with_fdv(_with_listing_dates(entries))
     ok = [e for e in entries
           if _score_kept(e, now) and onchain_gem_hold.keep(_gem_key(e), "fdv", _mostly_locked(e), now)
+          and not _fading(e)
           and e.get("launched_at") and now - e["launched_at"] <= GEM_MAX_AGE_DAYS * 86400]
     rank = lambda e: ((e.get("liquidity_usd") or 0), (e.get("score") or 0))  # noqa: E731
     best: dict[str, int] = {}               # project -> index in `ok` of the row kept
