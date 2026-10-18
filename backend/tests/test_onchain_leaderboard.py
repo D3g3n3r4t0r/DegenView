@@ -771,7 +771,7 @@ def test_the_arenas_score_a_database_row_with_its_pillars(monkeypatch):
     from app.models import User
     from app.trading.onchain import projects_db
     item = {"chain": "solana", "token_address": "PILmint", "symbol": "PIL", "name": "Pillar Project",
-            "market_cap": 450_000, "liquidity_usd": 60_000}
+            "market_cap": 450_000, "liquidity_usd": 60_000, "launched_at": time.time() - 30 * 86400}
     projects_db.upsert(item, "test")
     pillars = {"tokenomics": {"score": 95}, "site": {"score": 90},
                "github": {"score": 10, "facts": {"missing": True}}}

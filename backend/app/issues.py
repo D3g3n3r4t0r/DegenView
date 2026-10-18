@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0345", "Gemme senza data escluse",
+     "Lorenzo, 18/10: 'se non c'e' modo di identificare la data di un layer, va rimosso. Quelli senza data non possono entrare nelle gemme. Questa e' una regola da ammettere.' (la regola dei 1000 giorni resta).",
+     "media"),
     ("seed-0344", "Layer tutti con la stessa data",
      "Lorenzo, 18/10: 'I layer presenti tra le gemme hanno tutti la stessa data, ho controllato e non e' corretto. Perche' succede?'.",
      "media"),
