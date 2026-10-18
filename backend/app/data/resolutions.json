@@ -3194,5 +3194,10 @@
     "status": "risolto",
     "at": 1792272626,
     "summary": "Letto il server: tutte le chain funzionano (Ethereum quasi 2.000 progetti nella fascia, Base oltre 1.100, centinaia analizzati ogni settimana), ma i loro progetti vengono quasi tutti dall'elenco completo di CoinGecko, monete vecchie e spesso ferme, e prendono voti bassi (a 60 o piu': Ethereum 8, Base 4, Robinhood 46). Ora la ricerca legge anche i nuovi pool di GeckoTerminal su Ethereum e Base ogni 10 minuti, come Jupiter fa per Solana: solo token nella fascia di cap, con liquidita' e un sito, poi l'analisi di sempre. Vale per tutti gli account."
+  },
+  "seed-0343": {
+    "status": "risolto",
+    "at": 1792307097,
+    "summary": "Nessun errore: $4,3M e' la capitalizzazione dei token in circolazione (DexScreener e CoinGecko concordano), $32,5M e' la FDV, cioe' tutti i token che esisteranno: di Limitless circola solo il 13%. Per l'account whitekobra la FDV ora si vede nelle liste (quando e' diversa dalla cap) e nella pagina del token, e le gemme con FDV oltre 5 volte la capitalizzazione (meno del 20% in circolazione) sono escluse, come gia' per i layer: Limitless esce."
   }
 }

@@ -99,7 +99,7 @@ const sigma = (z) => `${z >= 0 ? "+" : "−"}${Math.abs(z).toFixed(1)}σ`;
 function row(e, a) {
   const id = idOf(e);
   const rank = e.arena_rank;
-  register(id, { kind: "gem", symbol: e.symbol, name: e.name, chain: e.chain, token: e.token_address, pair: e.pair_address,
+  register(id, { kind: "gem", symbol: e.symbol, name: e.name, chain: e.chain, token: e.token_address, pair: e.pair_address, fdv: e.fdv,
     pairUrl: e.pair_url, image: e.image, cap: e.market_cap, change: e.change_24h != null ? e.change_24h / 100 : null,
     ageTs: e.launched_at, rank, context: `${a.label} · #${rank} of ${a.size} · score ${Math.round(e.score ?? 0)}` });
   const html = tokenRow({ id, symbol: e.symbol, name: `${rank}. ${e.name || e.symbol}`, chain: e.chain, token: e.token_address,
@@ -165,7 +165,7 @@ function paint() {
   // the most. Fixed in the top bar (Lorenzo, 16/10).
   const top3 = p4p.filter((e) => !isHidden(e.chain, e.token_address)).slice(0, 3).map((e) => {
     register(idOf(e), { kind: "gem", symbol: e.symbol, name: e.name, chain: e.chain, token: e.token_address,
-      pair: e.pair_address, pairUrl: e.pair_url, image: e.image, cap: e.market_cap,
+      pair: e.pair_address, fdv: e.fdv, pairUrl: e.pair_url, image: e.image, cap: e.market_cap,
       change: e.change_24h != null ? e.change_24h / 100 : null, ageTs: e.launched_at,
       context: `Pound for pound · leads ${e.arena_label} by ${sigma(e.z)}` });
     return e;
@@ -248,8 +248,10 @@ const compact = (n) => new Intl.NumberFormat("en-US", { notation: "compact", max
 function marketSub(e) {
   const u = e.usage ?? {};
   const vol = u.vol_7d_avg ?? u.vol_24h;
-  // Short enough for a phone row: "$812k/day · 15.2k holders".
-  const parts = [vol != null ? `${usdShort(vol)}/day` : null,
+  // Short enough for a phone row: "FDV $32.5M · $812k/day · 15.2k holders".
+  // The FDV only where it differs from the cap (Lorenzo, 18/10).
+  const parts = [e.fdv && e.market_cap && e.fdv > e.market_cap * 1.05 ? `FDV ${usdShort(e.fdv)}` : null,
+    vol != null ? `${usdShort(vol)}/day` : null,
     u.holders != null ? `${compact(u.holders)} holders` : null];
   const line = parts.filter(Boolean).join(" · ");
   return line || (e.liquidity_usd != null ? `Liquidity ${usdShort(e.liquidity_usd)}` : "");
@@ -260,7 +262,7 @@ function marketSub(e) {
 const PEARL_MIN = 70;
 function earlyRow(e, context) {
   const id = `gem:${e.chain}:${e.token_address}`;
-  register(id, { kind: "gem", symbol: e.symbol, name: e.name, chain: e.chain, token: e.token_address, pair: e.pair_address,
+  register(id, { kind: "gem", symbol: e.symbol, name: e.name, chain: e.chain, token: e.token_address, pair: e.pair_address, fdv: e.fdv,
     pairUrl: e.pair_url, image: e.image, cap: e.market_cap, change: e.change_24h != null ? e.change_24h / 100 : null,
     ageTs: e.launched_at, context: `${context} · score ${Math.round(e.score ?? 0)}` });
   return tokenRow({ id, symbol: e.symbol, name: e.name || e.symbol, chain: e.chain, token: e.token_address,
@@ -292,7 +294,7 @@ function paintRank(entries) {
   box.querySelector("[data-rank-rows]").innerHTML = best.map((e) => {
     const i = e._place - 1;
     const id = idOf(e);
-    register(id, { kind: "gem", symbol: e.symbol, name: e.name, chain: e.chain, token: e.token_address, pair: e.pair_address,
+    register(id, { kind: "gem", symbol: e.symbol, name: e.name, chain: e.chain, token: e.token_address, pair: e.pair_address, fdv: e.fdv,
       pairUrl: e.pair_url, image: e.image, cap: e.market_cap, change: e.change_24h != null ? e.change_24h / 100 : null,
       ageTs: e.launched_at, rank: i + 1, context: `Top 25 · #${i + 1} · score ${Math.round(e.score ?? 0)}` });
     return tokenRow({ id, symbol: e.symbol, name: `${i + 1}. ${e.name || e.symbol}`, chain: e.chain, token: e.token_address,
