@@ -104,7 +104,7 @@ function row(e, a) {
     ageTs: e.launched_at, rank, context: `${a.label} · #${rank} of ${a.size} · score ${Math.round(e.score ?? 0)}` });
   const html = tokenRow({ id, symbol: e.symbol, name: `${rank}. ${e.name || e.symbol}`, chain: e.chain, token: e.token_address,
     image: e.image, cap: e.market_cap, change: e.change_24h != null ? e.change_24h / 100 : null, ageTs: e.launched_at,
-    score: e.score, badge: e.early ? "early" : e.hidden ? "hidden" : null, sub: TRADING ? btSub(e.backtests) : marketSub(e) });
+    score: e.score, badge: e.early ? "early" : e.hidden ? "hidden" : null, sub: TRADING ? btSub(e.backtests) : marketSub(e), capTag: true });
   return html.replace('<li class="trow"', `<li class="trow${rank === 1 ? " ar-champ" : ""}" style="--v:${Math.max(0, Math.min(100, Math.round(e.score ?? 0)))}%"`);
 }
 
@@ -249,8 +249,9 @@ function marketSub(e) {
   const u = e.usage ?? {};
   const vol = u.vol_7d_avg ?? u.vol_24h;
   // Short enough for a phone row: "FDV $32.5M · $812k/day · 15.2k holders".
-  // The FDV only where it differs from the cap (Lorenzo, 18/10).
-  const parts = [e.fdv && e.market_cap && e.fdv > e.market_cap * 1.05 ? `FDV ${usdShort(e.fdv)}` : null,
+  // The FDV always, beside the cap on the right ("MC", Lorenzo, 18/10: "non
+  // ho visto [...] i due tipi di capitalizzazione").
+  const parts = [e.fdv ? `FDV ${usdShort(e.fdv)}` : null,
     vol != null ? `${usdShort(vol)}/day` : null,
     u.holders != null ? `${compact(u.holders)} holders` : null];
   const line = parts.filter(Boolean).join(" · ");
@@ -260,6 +261,7 @@ function marketSub(e) {
 // Pearl (Lorenzo, 16/10): "le gemme selezionate su Early che pero' hanno
 // ottenuto un punteggio pari o superiore a 70".
 const PEARL_MIN = 70;
+const PEARL_MAX_AGE_DAYS = 30;
 function earlyRow(e, context) {
   const id = `gem:${e.chain}:${e.token_address}`;
   register(id, { kind: "gem", symbol: e.symbol, name: e.name, chain: e.chain, token: e.token_address, pair: e.pair_address, fdv: e.fdv,
@@ -267,13 +269,15 @@ function earlyRow(e, context) {
     ageTs: e.launched_at, context: `${context} · score ${Math.round(e.score ?? 0)}` });
   return tokenRow({ id, symbol: e.symbol, name: e.name || e.symbol, chain: e.chain, token: e.token_address,
     image: e.image, cap: e.market_cap, change: e.change_24h != null ? e.change_24h / 100 : null, ageTs: e.launched_at,
-    score: e.score, badge: "early", sub: marketSub(e) });
+    score: e.score, badge: "early", sub: marketSub(e), capTag: true });
 }
 function paintPearl(list) {
   const box = document.querySelector("[data-pearl-view]");
   if (!box) return;
   // the score as shown (rounded): a "70" on screen is always a pearl
-  const pearls = sortRows(list.filter((e) => Math.round(e.score ?? 0) >= PEARL_MIN));
+  // A month old at most (Lorenzo, 18/10); main._gem_view_keys holds the same for the alerts.
+  const born = Date.now() / 1000 - PEARL_MAX_AGE_DAYS * 86400;
+  const pearls = sortRows(list.filter((e) => Math.round(e.score ?? 0) >= PEARL_MIN && (e.launched_at ?? 0) >= born));
   box.querySelector("[data-pearl-empty]").hidden = pearls.length > 0;
   box.querySelector("[data-pearl-rows]").innerHTML = pearls.map((e) => earlyRow(e, "Pearl")).join("");
 }
@@ -299,7 +303,7 @@ function paintRank(entries) {
       ageTs: e.launched_at, rank: i + 1, context: `Top 25 · #${i + 1} · score ${Math.round(e.score ?? 0)}` });
     return tokenRow({ id, symbol: e.symbol, name: `${i + 1}. ${e.name || e.symbol}`, chain: e.chain, token: e.token_address,
       image: e.image, cap: e.market_cap, change: e.change_24h != null ? e.change_24h / 100 : null, ageTs: e.launched_at,
-      score: e.score, badge: e.early ? "early" : e.hidden ? "hidden" : null, sub: marketSub(e) });
+      score: e.score, badge: e.early ? "early" : e.hidden ? "hidden" : null, sub: marketSub(e), capTag: true });
   }).join("");
 }
 

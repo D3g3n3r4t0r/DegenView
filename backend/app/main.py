@@ -115,6 +115,7 @@ from app.trading.onchain import balances as onchain_balances
 from app.trading.onchain import deposit as onchain_deposit
 from app.trading.onchain import ai_scan as onchain_ai_scan
 from app.trading.onchain import arenas as onchain_arenas
+from app.trading.onchain import gem_hold as onchain_gem_hold
 from app.trading.onchain import execute as onchain_execute
 from app.trading.onchain import send as onchain_send
 from app.trading.onchain import jito as onchain_jito
@@ -3690,6 +3691,9 @@ async def onchain_top(n: int = 15, narrative: str = "", user: User = Depends(aut
         early = _kobra_early() if full else onchain_leaderboard.board().get("early") or []
         if full:
             pool, early = _gem_view(pool), _gem_view(early)
+            # A gem held in the arenas under the $300k floor is not in Early too.
+            in_pool = {_gem_key(e) for e in pool}
+            early = [e for e in early if _gem_key(e) not in in_pool]
         for e in pool:
             e["backtests"] = None
         out = pool[:max(1, min(int(n), 50))]
@@ -3767,6 +3771,9 @@ def _full_score(user: User | None) -> bool:
 # accounts in settings.onchain_full_score_emails, and to their gem alerts.
 GEM_MAX_AGE_DAYS = 1000
 GEM_MIN_SCORE = 60
+GEM_DROP_SCORE = 55          # under it a gem leaves at once, no 3 days' wait
+# Lorenzo, 18/10: Pearl holds projects at most a month old.
+PEARL_MAX_AGE_DAYS = 30
 # Lorenzo, 18/10 (Limitless Exchange: $4.3M cap, $32.5M FDV, 13% in
 # circulation): a gem whose FDV is more than this many times its cap has
 # most of its supply still to unlock, and is left out. The layers' rule.
@@ -3815,6 +3822,20 @@ def _with_fdv(entries: list[dict]) -> list[dict]:
     return entries
 
 
+def _gem_key(e: dict) -> str:
+    return f"{e.get('chain')}:{e.get('token_address')}"
+
+
+def _score_kept(e: dict, now: float) -> bool:
+    """GEM_MIN_SCORE to enter; a gem already in leaves after 3 days under it
+    (gem_hold.py), or at once under GEM_DROP_SCORE (Lorenzo, 18/10)."""
+    s = round(e.get("score") or 0)
+    if s < GEM_DROP_SCORE:
+        onchain_gem_hold.drop(_gem_key(e), "score")
+        return False
+    return onchain_gem_hold.keep(_gem_key(e), "score", s < GEM_MIN_SCORE, now)
+
+
 def _mostly_locked(e: dict) -> bool:
     cap, fdv = e.get("market_cap") or 0, e.get("fdv") or 0
     return bool(cap and fdv and fdv > GEM_MAX_FDV_RATIO * cap)
@@ -3828,7 +3849,7 @@ def _gem_view(entries: list[dict], now: float | None = None) -> list[dict]:
     now = now or _time.time()
     entries = _with_fdv(_with_listing_dates(entries))
     ok = [e for e in entries
-          if round(e.get("score") or 0) >= GEM_MIN_SCORE and not _mostly_locked(e)
+          if _score_kept(e, now) and onchain_gem_hold.keep(_gem_key(e), "fdv", _mostly_locked(e), now)
           and e.get("launched_at") and now - e["launched_at"] <= GEM_MAX_AGE_DAYS * 86400]
     rank = lambda e: ((e.get("liquidity_usd") or 0), (e.get("score") or 0))  # noqa: E731
     best: dict[str, int] = {}               # project -> index in `ok` of the row kept
@@ -3857,6 +3878,11 @@ def _top_entries(n: int = 50, narrative: str = "", full: bool = False) -> list[d
         # Whitekobra's weights (leaderboard.KOBRA_SCORE_WEIGHTS), on the board's own entries.
         for e in out:
             _kobra_score(e)
+            # On the board: under the ceiling and over the floor, so a member
+            # of both rules when it later falls out (gem_hold.py).
+            k = f"{e['chain']}:{e['token_address']}"
+            onchain_gem_hold.keep(k, "cap", False)
+            onchain_gem_hold.keep(k, "floor", False)
     seen = {f"{e['chain']}:{e['token_address']}" for e in out}
     cutoff = time.time() - 30 * 86400
     # "ranked" too: a row whose flag outlived its place on the board was
@@ -3870,13 +3896,20 @@ def _top_entries(n: int = 50, narrative: str = "", full: bool = False) -> list[d
             continue
         if (row.get("overall") or {}).get("fatal") or onchain_leaderboard.no_name(row.get("symbol")):
             continue
+        key = f"{row['chain']}:{row['token']}"
         # The board's ceiling holds here too: bridged AAVE sat first (Lorenzo, 28/09).
         # Layer chains have their own band (LAYER_CAP_MIN-MAX), checked below.
-        if row["chain"] != onchain_layers.CHAIN and onchain_leaderboard.too_big(
-                {"symbol": row.get("symbol"), "name": row.get("name"),
-                 "market_cap": row.get("mcap"), "global_cap": row.get("cg_mcap")}):
-            continue
-        key = f"{row['chain']}:{row['token']}"
+        if row["chain"] != onchain_layers.CHAIN:
+            capped = {"symbol": row.get("symbol"), "name": row.get("name"),
+                      "market_cap": row.get("mcap"), "global_cap": row.get("cg_mcap")}
+            big = onchain_leaderboard.too_big(capped)
+            # Whitekobra's gems leave for the cap only after 7 days over it
+            # (gem_hold.py, Lorenzo 18/10); a bridged copy leaves at once.
+            if full and not onchain_leaderboard.big_coins.bridged(capped):
+                if not onchain_gem_hold.keep(key, "cap", bool(big)):
+                    continue
+            elif big:
+                continue
         if key in seen:
             continue
         j = onchain_judge.get(row["chain"], row["token"])
@@ -3899,7 +3932,13 @@ def _top_entries(n: int = 50, narrative: str = "", full: bool = False) -> list[d
         if row["chain"] != onchain_layers.CHAIN:
             # DeepSeek's reading too, so a token scores the same in both halves.
             entry = {**onchain_leaderboard.db_entry(row), "global_cap": row.get("cg_mcap"), "judge": j}
-            if onchain_leaderboard.usage_gate(entry):
+            gate = onchain_leaderboard.usage_gate(entry)
+            if full and (not gate or not onchain_leaderboard.usage_gate(entry, False)):
+                # Only the $300k floor fails, or nothing: whitekobra's arena
+                # gem falls back to Early only after 7 days under it.
+                if not onchain_gem_hold.keep(key, "floor", bool(gate)):
+                    continue
+            elif gate:
                 continue
             score = onchain_leaderboard.final_score(entry, kobra=full)
             hidden = onchain_leaderboard.hidden_gem(entry)
@@ -3914,7 +3953,12 @@ def _top_entries(n: int = 50, narrative: str = "", full: bool = False) -> list[d
             pair_address = f"{cex['exchange']}:{cex['pair']}"
             mcap = row.get("mcap")
             lo, hi = onchain_layers.LAYER_VIEW_BAND_KOBRA if full else onchain_layers.LAYER_VIEW_BAND
-            if mcap is None or not (lo <= mcap <= hi):
+            if mcap is None or mcap < lo:
+                continue
+            if full:
+                if not onchain_gem_hold.keep(key, "cap", mcap > hi):
+                    continue
+            elif mcap > hi:
                 continue
         seen.add(key)
         # The market of the last minute (live_market_loop), the analysis' one otherwise.
@@ -4294,7 +4338,17 @@ onchain_leaderboard.on_alert(_notify_gem)
 
 # The gems whose listing date is worth reading: whitekobra's whole view, the
 # arenas and Early, before its filters (an undated row may be too old).
-onchain_listing_dates.set_source(lambda: _top_entries(ARENA_POOL, full=True) + _kobra_early())
+def _gem_rows_each_minute() -> list[dict]:
+    """The rows listing_dates reads every minute, before the gem view's
+    filters. The view runs on a copy too, so the hold clocks (gem_hold.py)
+    tick even while nobody opens the page: a gem 4 days under 60 has been
+    measured for 4 days, not since the next visit."""
+    rows = _top_entries(ARENA_POOL, full=True) + _kobra_early()
+    _gem_view([dict(r) for r in rows])
+    return rows
+
+
+onchain_listing_dates.set_source(_gem_rows_each_minute)
 
 
 def _gem_view_keys(kind: str) -> set[tuple]:
@@ -4302,8 +4356,10 @@ def _gem_view_keys(kind: str) -> set[tuple]:
     the arenas for a Top entry, Early (and so Pearl) for the others."""
     rows = _top_entries(ARENA_POOL, full=True) if kind == "new" else _kobra_early()
     view = _gem_view(rows)
-    if kind == "pearl":     # Pearl by his own scores too
-        view = [r for r in view if round(r.get("score") or 0) >= onchain_leaderboard.PEARL_MIN]
+    if kind == "pearl":     # Pearl by his own scores too, a month old at most
+        now = _time.time()
+        view = [r for r in view if round(r.get("score") or 0) >= onchain_leaderboard.PEARL_MIN
+                and now - (r.get("launched_at") or 0) <= PEARL_MAX_AGE_DAYS * 86400]
     return {(r.get("chain"), r.get("token_address")) for r in view}
 
 

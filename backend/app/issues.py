@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0348", "Whitekobra: Pearl a 30 giorni, FDV invisibile, gemme che entrano ed escono",
+     "Lorenzo, 18/10: 'devono esserci solo progetti datati max un mese' in Pearl; 'non ho visto nella sezione gemme da nessuna parte il nuovo parametro che indica i due tipi di capitalizzazione'; 'un progetto per uscire per capitalizzazione dalle gemme deve superare il tetto [...] per almeno 7 giorni consecutivi', poi 'mettili tutti tranne quello relativo al tetto d'emergenza'.",
+     "media"),
     ("seed-0347", "Gemme: ricerca accesa piu' a lungo",
      "Lorenzo, 18/10: 'Con tutte le fonti attuali ha senso tenere accesa la ricerca delle gemme piu' a lungo. Comporterebbe costi maggiori?', poi 'Procedi con la sentinella, notifiche subito a qualsiasi ora'.",
      "media"),

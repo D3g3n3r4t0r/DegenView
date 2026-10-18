@@ -71,6 +71,15 @@ def _private_deepseek_journal(monkeypatch, tmp_path):
 
 
 @pytest.fixture(autouse=True)
+def _private_gem_hold(monkeypatch, tmp_path):
+    """Whitekobra's hold clocks (gem_hold.py) start empty in every test."""
+    from app.trading.onchain import gem_hold
+    monkeypatch.setattr(gem_hold, "_FILE", tmp_path / "gem_hold.json")
+    gem_hold.reset_for_tests()
+    yield
+
+
+@pytest.fixture(autouse=True)
 def _private_quant_memory(monkeypatch, tmp_path):
     from app.trading.onchain import quant_memory
     monkeypatch.setattr(quant_memory, "_path", tmp_path / "quant.sqlite3")
