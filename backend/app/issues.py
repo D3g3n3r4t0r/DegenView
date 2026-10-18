@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0346", "Gemme: progetti nuovi intercettati tardi (Veil)",
+     "Lorenzo, 18/10: 'non sono molti i progetti recenti, nuovi, che entrano tra le gemme [...] come possiamo fare per intercettare progetti come Veil prima che spicchino il volo?', poi fonti 'pump.fun [...], Meteora, Pons' e 'Procedi'.",
+     "alta"),
     ("seed-0345", "Gemme senza data escluse",
      "Lorenzo, 18/10: 'se non c'e' modo di identificare la data di un layer, va rimosso. Quelli senza data non possono entrare nelle gemme. Questa e' una regola da ammettere.' (la regola dei 1000 giorni resta).",
      "media"),

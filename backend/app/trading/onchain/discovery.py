@@ -99,7 +99,7 @@ def reset_for_tests() -> None:
     _seen.clear()
     _chain_ids.clear()
     _state.update(cg_queue=[], cg_last_sweep=0.0, cg_next_at=0.0, profiles_at=0.0, gh_queue=[], gh_query=0,
-                  gh_search_at=0.0, gh_repo_at=0.0, gt_at=0.0, found=0, skipped=0, running=False)
+                  gh_search_at=0.0, gh_repo_at=0.0, gt_at=0.0, gt_turn=-1, found=0, skipped=0, running=False)
 
 
 def status() -> dict:
@@ -586,6 +586,20 @@ GT_POLL_S = 600
 GT_PAGES = 2                     # 20 pools a page
 GT_INFO_PER_CHAIN = 3            # token pages read per chain per poll: one chain cannot starve the other
 GT_MIN_LIQUIDITY = 5_000
+# Launchpads (Lorenzo, 18/10: "pump.fun (Veil ad esempio e' stato lanciato da
+# li'), Meteora, Pons"). On Solana a new_pools page holds a minute of
+# pump.fun's bonding curves, so the launchpads are read by DEX instead:
+# the pools with the most trades in 24 hours (GeckoTerminal has no newest-
+# first order per DEX), i.e. the launches people are actually buying.
+# pumpswap = pump.fun's graduates, meteora-dbc / -damm-v2 = Meteora's curve
+# and its graduates (Believe, Jupiter Studio...), the others their own pads.
+GT_DEX_POOLS = "https://api.geckoterminal.com/api/v2/networks/{net}/dexes/{dex}/pools"
+GT_LAUNCHPADS = {
+    "solana": ("solana", ("pumpswap", "pump-fun", "meteora-dbc", "meteora-damm-v2", "raydium-launchlab",
+                          "bags-fm", "letsbonk-fun")),
+    "robinhood": ("robinhood", ("pons-dot-family", "pons-v2", "pons-v2-dex")),
+}
+GT_INFO_PER_LAUNCHPAD_CHAIN = 6  # token pages per poll on a launchpad chain: more lists, more candidates
 # The quote side of a pool is never the project.
 GT_QUOTES = {"WETH", "ETH", "USDC", "USDT", "DAI", "CBBTC", "WBTC", "USDBC", "EURC", "USDE", "USDS"}
 
@@ -635,26 +649,54 @@ async def _poll_new_pools(client: httpx.AsyncClient, add: Callable[[dict, str], 
         return
     _state["gt_at"] = now
     from app.trading.onchain.usage import _gecko      # the shared GeckoTerminal gate
+    lists: dict[str, list[tuple]] = {}
     for chain, net in GT_CHAINS.items():
-        reads = 0
-        for page in range(1, GT_PAGES + 1):
-            data = await _gecko(client, GT_NEW_POOLS.format(net=net), {"page": page, "include": "base_token"})
-            if not data:
-                break
-            for c in new_pool_candidates(chain, data):
-                k = f"gt:{chain}:{c['token_address'].lower()}"
-                if k in _seen or reads >= GT_INFO_PER_CHAIN:
+        lists.setdefault(chain, []).extend(
+            (net, GT_NEW_POOLS.format(net=net), {"page": page, "include": "base_token"}, "geckoterminal")
+            for page in range(1, GT_PAGES + 1))
+    # Each poll starts from the next launchpad: the first ones in the list
+    # cannot use up the budget every time (review on #591).
+    turn = _state["gt_turn"] = _state.get("gt_turn", -1) + 1
+    for chain, (net, dexes) in GT_LAUNCHPADS.items():
+        start = turn % len(dexes)
+        lists.setdefault(chain, []).extend(
+            (net, GT_DEX_POOLS.format(net=net, dex=dex), {"page": 1, "include": "base_token",
+                                                          "sort": "h24_tx_count_desc"}, "launchpad")
+            for dex in dexes[start:] + dexes[:start])
+    try:
+        for chain, reqs in lists.items():
+            budget = GT_INFO_PER_LAUNCHPAD_CHAIN if chain in GT_LAUNCHPADS else GT_INFO_PER_CHAIN
+            reads = 0
+            for net, url, params, source in reqs:
+                if reads >= budget:
+                    break
+                data = await _gecko(client, url, params)
+                if not data:
                     continue
-                reads += 1
-                extra = token_info_fields(await _gecko(client, GT_TOKEN_INFO.format(net=net, token=c["token_address"])))
-                if not extra:
-                    _note(k, False, "no website, or a meme description", now)
-                    continue
-                _note(k, add({**c, **extra}, "geckoterminal"), "new pool", now)
+                for c in new_pool_candidates(chain, data):
+                    k = f"gt:{chain}:{c['token_address'].lower()}"
+                    if k in _seen or reads >= budget:
+                        continue
+                    reads += 1
+                    extra = token_info_fields(await _gecko(client, GT_TOKEN_INFO.format(net=net, token=c["token_address"])))
+                    if not extra:
+                        _note(k, False, "no website, or a meme description", now)
+                        continue
+                    _note(k, add({**c, **extra}, source), "new pool", now)
+    finally:
+        _save()
 
 
-async def tick(client: httpx.AsyncClient, add: Callable[[dict, str], bool], now: float | None = None) -> None:
-    """Chiamato dal giro della classifica. Non solleva."""
+# The bulk sweep: CoinGecko's lists find projects weeks after their launch
+# (18/10: median 71 days for those only CoinGecko found, 10 for the rest), so
+# it alone waits while the pool is busy; the fast sources never stop.
+BULK_STEPS = ("coingecko",)
+
+
+async def tick(client: httpx.AsyncClient, add: Callable[[dict, str], bool], now: float | None = None,
+               bulk: bool = True) -> None:
+    """Chiamato dal giro della classifica. Non solleva. `bulk` False skips
+    BULK_STEPS (leaderboard.discovery_open)."""
     now = now or time.time()
     if _state["running"]:
         return
@@ -664,6 +706,8 @@ async def tick(client: httpx.AsyncClient, add: Callable[[dict, str], bool], now:
                  ("coingecko", _cg_step), ("profili", _poll_profiles),
                  ("github", lambda c, a, n: _gh_search(c, n)), ("readme", _gh_repo))
         for name, step in steps:
+            if not bulk and name in BULK_STEPS:
+                continue
             try:
                 await step(client, add, now)
             except (httpx.HTTPError, ValueError, RuntimeError) as exc:

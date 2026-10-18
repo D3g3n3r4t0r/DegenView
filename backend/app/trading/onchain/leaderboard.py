@@ -41,6 +41,7 @@ import time
 import httpx
 
 from app import http_client
+from app.config import settings
 
 from app.sniper.quality import _looks_like_meme
 from app.trading.onchain import (benchmark, big_coins, code_review, consistency, depth, discovery, gem_learn, gem_track, judge, legit, narrative_map,
@@ -195,7 +196,9 @@ CODE_EVERY_S = 60
 # Past POOL_TARGET projects that passed the filters, discovery of new ones
 # pauses while more than BACKLOG_LOW of them still miss a piece (analysis,
 # DeepSeek's report, the code reading); once nearly complete, one slow
-# discovery round every DISCOVERY_SLOW_S keeps the pool fresh.
+# discovery round every DISCOVERY_SLOW_S keeps the pool fresh. Since 18/10
+# this holds only discovery.BULK_STEPS (CoinGecko): the fast sources run
+# always, or a 4,000-project pool kept them off for good.
 POOL_TARGET = 300
 BACKLOG_LOW = 10
 DISCOVERY_SLOW_S = 6 * 3600
@@ -757,6 +760,17 @@ def no_name(symbol) -> bool:
     return str(symbol or "").strip().lower() in ("", "?", "null", "none", "undefined", "nan")
 
 
+# Lorenzo, 18/10 ("come possiamo fare per intercettare progetti come Veil
+# prima che spicchino il volo?"): a project launched less than YOUNG_DAYS ago
+# goes first in the analysis queue and in the usage measure.
+YOUNG_DAYS = 14
+
+
+def young(e: dict, now: float | None = None) -> bool:
+    born = e.get("launched_at")
+    return bool(born) and (now or time.time()) - float(born) < YOUNG_DAYS * 86400
+
+
 def research_floor(e: dict, now: float | None = None) -> str:
     """What a researcher would not even open: no name, a pool nobody can
     trade. Age is not a reason (29/09)."""
@@ -1307,8 +1321,9 @@ async def tick(client: httpx.AsyncClient, now: float | None = None) -> None:
         collect_saved()
     except Exception:
         logger.exception("classifica: lettura del radar fallita")
-    if discovery_open(now):
-        await _step("progetti", discovery.tick, client, add, now)
+    # The fast sources always run (18/10: the pause had stopped them since
+    # the pool passed POOL_TARGET); the pause holds the CoinGecko sweep only.
+    await _step("progetti", discovery.tick, client, add, now, discovery_open(now))
     if now - _state["last_market"] >= MARKET_POLL_S and _entries:
         _state["last_market"] = now
         await _step("dexscreener", _poll_market, client)
@@ -1343,9 +1358,11 @@ async def tick(client: httpx.AsyncClient, now: float | None = None) -> None:
         task.add_done_callback(_tasks.discard)
     await drain_alerts()
     _prune(now)
-    # I nuovi prima (nessun pilastro), poi i piu' vecchi da rinfrescare.
+    # I nuovi prima (nessun pilastro), fra questi i progetti giovani, poi i
+    # piu' vecchi da rinfrescare.
     todo = sorted(((k, due(e, now)) for k, e in _entries.items() if k not in _busy),
-                  key=lambda kv: (bool(_entries[kv[0]]["pillars"]), -_entries[kv[0]].get("found_at", 0)))
+                  key=lambda kv: (bool(_entries[kv[0]]["pillars"]), not young(_entries[kv[0]], now),
+                                  -_entries[kv[0]].get("found_at", 0)))
     for k, need in todo:
         if not need or len(_busy) >= ANALYZE_CONCURRENCY * 2:
             continue
@@ -1367,7 +1384,9 @@ def usage_candidates() -> list[dict]:
     the unmeasured ones, so it cannot be the source). Only chains with a
     DEX pool to measure (no layers)."""
     items = [e for k, e in _entries.items() if not research_floor(e) and not too_big(e)]
-    items.sort(key=lambda e: (_key(e["chain"], e["token_address"]) not in _state["board"], -final_score(e)))
+    now = time.time()
+    items.sort(key=lambda e: (not young(e, now), _key(e["chain"], e["token_address"]) not in _state["board"],
+                              -final_score(e)))
     seen = {_key(e["chain"], e["token_address"]) for e in items}
     cutoff = time.time() - 30 * 86400
     try:
@@ -1475,7 +1494,9 @@ def pool_status(now: float | None = None) -> dict:
             continue
         if o.get("fatal") or research_floor(e, now):
             continue
-        miss_report = not e.get("judge")
+        # With the research's DeepSeek off (settings.research_ai_enabled) no
+        # report is coming: waiting for one paused discovery for good (18/10).
+        miss_report = settings.research_ai_enabled and not e.get("judge")
         has_repo = bool((((e.get("pillars") or {}).get("github") or {}).get("facts") or {}).get("repo"))
         miss_code = has_repo and not e.get("code")
         reports += miss_report

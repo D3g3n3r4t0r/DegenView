@@ -576,6 +576,7 @@ def test_a_null_symbol_is_no_name():
 
 
 def test_discovery_pauses_on_a_full_pool_with_work_left(monkeypatch):
+    monkeypatch.setattr(lb.settings, "research_ai_enabled", True)
     monkeypatch.setattr(lb.projects_db, "stats", lambda: {"by_status": {"studied": 280, "ranked": 20}})
     for i in range(lb.BACKLOG_LOW + 1):
         _entry(f"P{i}", 90, 90, 90, cap=500_000)      # analysed, no DeepSeek report yet
@@ -583,6 +584,35 @@ def test_discovery_pauses_on_a_full_pool_with_work_left(monkeypatch):
     assert lb.pool_status(now)["paused"] and not lb.discovery_open(now)
     monkeypatch.setattr(lb.projects_db, "stats", lambda: {"by_status": {"studied": 50}})
     assert lb.discovery_open(now)                       # small pool: keep scanning
+
+
+def test_a_report_that_cannot_come_does_not_pause_discovery(monkeypatch):
+    """18/10: with the research's DeepSeek off, 204 projects waited for a
+    report that never comes, and discovery stayed paused for good."""
+    monkeypatch.setattr(lb.settings, "research_ai_enabled", False)
+    monkeypatch.setattr(lb.projects_db, "stats", lambda: {"by_status": {"studied": 4000}})
+    for i in range(lb.BACKLOG_LOW + 1):
+        _entry(f"P{i}", 90, 90, 90, cap=500_000)
+    assert not lb.pool_status(time.time())["paused"]
+
+
+def test_the_fast_sources_run_while_the_pool_is_paused(monkeypatch):
+    """18/10: the pause stopped every source; now it holds CoinGecko only."""
+    import asyncio
+    seen = []
+    monkeypatch.setattr(lb, "discovery_open", lambda now: False)
+
+    async def tick(client, add, now, bulk):
+        seen.append(bulk)
+    monkeypatch.setattr(lb.discovery, "tick", tick)
+    asyncio.run(lb._step("progetti", lb.discovery.tick, None, lb.add, 0.0, lb.discovery_open(0.0)))
+    assert seen == [False]
+
+
+def test_young_projects_are_analysed_first():
+    now = time.time()
+    assert lb.young({"launched_at": now - 3 * DAY}, now)
+    assert not lb.young({"launched_at": now - 30 * DAY}, now) and not lb.young({}, now)
 
 
 # ------------------------------------------------------------ the Top first

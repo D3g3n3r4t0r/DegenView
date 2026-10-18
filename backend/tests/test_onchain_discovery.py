@@ -320,6 +320,7 @@ def test_new_pools_on_ethereum_and_base_feed_the_research(monkeypatch):
     """Lorenzo, 17/10: a source of new tokens for Ethereum and Base, as
     Jupiter is for Solana. In the band, liquid, not a meme, with a website."""
     import app.trading.onchain.usage as u
+    monkeypatch.setattr(d, "GT_LAUNCHPADS", {})
     assert [c["token_address"] for c in d.new_pool_candidates("base", _gt_pools())] == ["0xgood"]
     asked = []
 
@@ -348,6 +349,7 @@ def test_a_new_pool_without_a_website_is_not_analysed():
 def test_each_chain_has_its_own_budget_of_token_pages(monkeypatch):
     """Review on #582: one shared budget let Ethereum starve Base."""
     import app.trading.onchain.usage as u
+    monkeypatch.setattr(d, "GT_LAUNCHPADS", {})
     many = lambda: {"data": [{"attributes": {"market_cap_usd": "0", "fdv_usd": "500000", "reserve_in_usd": "20000"},  # noqa: E731
                               "relationships": {"base_token": {"data": {"id": f"t{i}"}}}} for i in range(8)],
                     "included": [{"id": f"t{i}", "attributes": {"address": f"0x{i}", "symbol": f"P{i}", "name": f"Project {i}"}}
@@ -368,3 +370,65 @@ def test_token_page_handles_are_normalised():
     f = d.token_info_fields({"data": {"attributes": {"websites": ["https://p.example"],
                                                      "twitter_handle": "https://twitter.com/proj", "telegram_handle": "@projchat"}}})
     assert {s["url"] for s in f["socials"]} == {"https://x.com/proj", "https://t.me/projchat"}
+
+
+def test_the_bulk_sweep_waits_when_asked(monkeypatch):
+    """18/10: tick(bulk=False) skips CoinGecko, runs the fast sources."""
+    ran = []
+    for name in ("_poll_jupiter", "_poll_new_pools", "_cg_step", "_poll_profiles", "_gh_repo"):
+        async def step(client, add, now, _n=name):
+            ran.append(_n)
+        monkeypatch.setattr(d, name, step)
+
+    async def gh(client, now):
+        ran.append("_gh_search")
+    monkeypatch.setattr(d, "_gh_search", gh)
+
+    async def traction(client, add, now):
+        ran.append("traction")
+    monkeypatch.setattr(d.traction, "poll", traction)
+    asyncio.run(d.tick(None, lambda item, src: True, now=1.0, bulk=False))
+    assert "_cg_step" not in ran and {"_poll_jupiter", "_poll_new_pools", "_poll_profiles"} <= set(ran)
+    ran.clear()
+    asyncio.run(d.tick(None, lambda item, src: True, now=1.0))
+    assert "_cg_step" in ran
+
+
+def test_launchpads_feed_the_research(monkeypatch):
+    """Lorenzo, 18/10: pump.fun (Veil), Meteora, Pons. Each launchpad's most
+    traded pools, with the same filters as the new pools."""
+    import app.trading.onchain.usage as u
+    monkeypatch.setattr(d, "GT_CHAINS", {})
+    asked = []
+
+    async def gecko(client, url, params=None):
+        asked.append((url, (params or {}).get("sort")))
+        if url.endswith("/info"):
+            return {"data": {"attributes": {"websites": ["https://agent.example"], "description": "An agent protocol"}}}
+        return _gt_pools() if "/dexes/pumpswap/" in url or "/dexes/pons-dot-family/" in url else None
+    monkeypatch.setattr(u, "_gecko", gecko)
+    added = []
+    asyncio.run(d._poll_new_pools(None, lambda item, src: added.append((item["chain"], item["token_address"], src)) or True, 1_000.0))
+    assert added == [("solana", "0xgood", "launchpad"), ("robinhood", "0xgood", "launchpad")]
+    pads = [a for a in asked if "/dexes/" in a[0]]
+    assert {a[1] for a in pads} == {"h24_tx_count_desc"}
+    assert any("/networks/solana/dexes/meteora-dbc/" in a[0] for a in pads)
+
+
+def test_each_poll_starts_from_the_next_launchpad(monkeypatch):
+    """Review on #591: the first launchpads must not use up the budget every time."""
+    import app.trading.onchain.usage as u
+    monkeypatch.setattr(d, "GT_CHAINS", {})
+    monkeypatch.setattr(d, "GT_LAUNCHPADS", {"solana": ("solana", ("a", "b", "c"))})
+    first = []
+
+    async def gecko(client, url, params=None):
+        if "/dexes/" in url and len(first) < 10:
+            first.append(url.split("/dexes/")[1].split("/")[0])
+        return None
+    monkeypatch.setattr(u, "_gecko", gecko)
+    for i in range(3):
+        n = len(first)
+        asyncio.run(d._poll_new_pools(None, lambda item, src: True, 1_000.0 + i * d.GT_POLL_S))
+        first.append("|")
+        assert first[n] == "abc"[i]
