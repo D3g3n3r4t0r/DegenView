@@ -6107,3 +6107,13 @@ html.embed-chart, html.embed-chart body, html.embed-chart .chart-area { backgrou
 .telegram-check li { padding: 6px 8px; border-radius: 6px; background: var(--bg-raised); line-height: 1.4; }
 .telegram-check li.ok { border-left: 3px solid var(--bull); }
 .telegram-check li.bad { border-left: 3px solid var(--bear); }
+/* ── native controls follow the theme (scrollbars, date pickers) ───── */
+:root { color-scheme: light; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { color-scheme: dark; }
+}
+:root[data-theme="dark"] { color-scheme: dark; }
+
+/* ── touch: no double-tap zoom delay, no grey flash on tap ─────────── */
+html { -webkit-tap-highlight-color: transparent; }
+button, a, summary, label, select, input[type="checkbox"], input[type="radio"] { touch-action: manipulation; }
