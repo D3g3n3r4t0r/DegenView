@@ -3224,5 +3224,10 @@
     "status": "risolto",
     "at": 1792357882,
     "summary": "Per l'account whitekobra: in Pearl solo progetti con al massimo 30 giorni (anche per le notifiche Pearl). Nelle righe delle gemme accanto alla capitalizzazione c'e' 'MC' e sotto compare sempre la FDV quando e' nota (prima solo se superava la cap del 5%, quindi quasi mai). Contro i saliscendi: una gemma esce per capitalizzazione solo dopo 7 giorni di fila sopra il tetto, esce dalle arene verso Early solo dopo 7 giorni sotto i $300k, esce per la regola FDV oltre 5 volte la cap solo dopo 7 giorni, ed esce per il voto solo dopo 3 giorni sotto 60 (subito se scende sotto 55). Basta una lettura che torna nei limiti per azzerare il conteggio. Nessun tetto d'emergenza, come chiesto."
+  },
+  "seed-0349": {
+    "status": "risolto",
+    "at": 1792361087,
+    "summary": "Per l'account whitekobra le gemme hanno al massimo 365 giorni (prima 1000), layer compresi: con le date di listing vere quasi tutti i layer escono. In piu' esce ogni gemma il cui volume medio degli ultimi 7 giorni e' sceso sotto un quinto della media dei 30 giorni, cioe' un progetto che si sta spegnendo, purche' abbia almeno 14 giorni di storia (il picco del giorno di lancio non conta). La soglia di attivita' piu' alta non e' stata applicata, come chiesto."
   }
 }

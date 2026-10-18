@@ -429,16 +429,16 @@ def test_the_unlimited_account_hears_only_of_gems_its_view_lists(monkeypatch):
 
 def test_the_gem_view_drops_duplicates_old_and_weak_projects():
     """Lorenzo, 17/10: Sherwood Protocol twice with two scores; nothing over
-    1000 days old; nothing under 60. 18/10: nothing without a date."""
+    a year old (1000 days until 18/10); nothing under 60. 18/10: nothing without a date."""
     from app import main
     now = 1_790_000_000.0
     day = 86400
     rows = [
         {"chain": "base", "token_address": "S1", "name": "Sherwood Protocol", "score": 81, "liquidity_usd": 40_000, "launched_at": now - 90 * day},
         {"chain": "solana", "token_address": "S2", "name": "Sherwood  protocol", "score": 66, "liquidity_usd": 150_000, "launched_at": now - 90 * day},
-        {"chain": "base", "token_address": "OLD", "name": "Old Coin", "score": 90, "launched_at": now - 1001 * day},
+        {"chain": "base", "token_address": "OLD", "name": "Old Coin", "score": 90, "launched_at": now - 366 * day},
         {"chain": "base", "token_address": "WEAK", "name": "Weak", "score": 59.4, "launched_at": now - 10 * day},
-        {"chain": "base", "token_address": "EDGE", "name": "Edge", "score": 59.6, "launched_at": now - 999 * day},
+        {"chain": "base", "token_address": "EDGE", "name": "Edge", "score": 59.6, "launched_at": now - 364 * day},
         {"chain": "layer", "token_address": "NODATE", "name": "No Date", "score": 90, "launched_at": None},
     ]
     kept = [r["token_address"] for r in main._gem_view(rows, now)]
@@ -541,3 +541,23 @@ def test_pearl_holds_projects_a_month_old_at_most(monkeypatch):
     monkeypatch.setattr(main, "_kobra_early", lambda: rows)
     assert main._gem_view_keys("pearl") == {("solana", "NEW")}
     assert main._gem_view_keys("early") == {("solana", "NEW"), ("solana", "OLD")}
+
+
+def test_a_fading_gem_leaves_the_view(monkeypatch):
+    """Lorenzo, 18/10: the last week under a fifth of the month's daily
+    volume is a project going out, young or not."""
+    from app import main
+    now = 1_790_000_000.0
+    row = lambda tok, week, month, days=30: {"chain": "base", "token_address": tok, "name": tok, "score": 70,  # noqa: E731
+                                              "launched_at": now - 40 * 86400,
+                                              "usage": {"vol_7d_avg": week, "vol_30d_avg": month, "days": days}}
+    kept = [r["token_address"] for r in main._gem_view(
+        [row("FADE", 1_000, 10_000), row("OK", 5_000, 10_000), row("YOUNG", 1_000, 10_000, days=7)], now)]
+    assert kept == ["OK", "YOUNG"]
+
+
+def test_layers_older_than_a_year_leave_too():
+    from app import main
+    now = 1_790_000_000.0
+    rows = [{"chain": "layer", "token_address": "kava", "name": "Kava", "score": 80, "launched_at": now - 400 * 86400}]
+    assert main._gem_view(rows, now) == []
