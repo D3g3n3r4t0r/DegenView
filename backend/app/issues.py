@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0344", "Layer tutti con la stessa data",
+     "Lorenzo, 18/10: 'I layer presenti tra le gemme hanno tutti la stessa data, ho controllato e non e' corretto. Perche' succede?'.",
+     "media"),
     ("seed-0343", "Limitless Exchange: capitalizzazione $4M invece di $30M",
      "Lorenzo, 18/10: 'questa gemma Limitless Exchange ha una capitalizzazione diversa rispetto a quella reale. Nel nostro ambiente risulta 4 milioni, poco piu'. In realta' ne ha piu' di 30. Perche'?', poi 'Applica 1 piu' 3' (mostrare la FDV ed escludere le gemme con FDV oltre 5 volte la cap).",
      "media"),
