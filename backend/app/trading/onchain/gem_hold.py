@@ -49,9 +49,10 @@ def _load() -> None:
 def _save(now: float) -> None:
     if not _state["dirty"] or now - _state["saved_at"] < SAVE_EVERY_S:
         return
-    _state.update(dirty=False, saved_at=now)
+    _state["saved_at"] = now
     try:
         write_text_atomic(_FILE, json.dumps({"members": _members, "since": _since}), encoding="utf-8")
+        _state["dirty"] = False
     except OSError:
         logger.exception("gem hold not saved")
 

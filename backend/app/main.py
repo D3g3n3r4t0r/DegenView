@@ -3900,11 +3900,12 @@ def _top_entries(n: int = 50, narrative: str = "", full: bool = False) -> list[d
         # The board's ceiling holds here too: bridged AAVE sat first (Lorenzo, 28/09).
         # Layer chains have their own band (LAYER_CAP_MIN-MAX), checked below.
         if row["chain"] != onchain_layers.CHAIN:
-            big = onchain_leaderboard.too_big({"symbol": row.get("symbol"), "name": row.get("name"),
-                                               "market_cap": row.get("mcap"), "global_cap": row.get("cg_mcap")})
+            capped = {"symbol": row.get("symbol"), "name": row.get("name"),
+                      "market_cap": row.get("mcap"), "global_cap": row.get("cg_mcap")}
+            big = onchain_leaderboard.too_big(capped)
             # Whitekobra's gems leave for the cap only after 7 days over it
             # (gem_hold.py, Lorenzo 18/10); a bridged copy leaves at once.
-            if full and (not big or big.startswith("over ")):
+            if full and not onchain_leaderboard.big_coins.bridged(capped):
                 if not onchain_gem_hold.keep(key, "cap", bool(big)):
                     continue
             elif big:
