@@ -3765,6 +3765,10 @@ def _full_score(user: User | None) -> bool:
 # accounts in settings.onchain_full_score_emails, and to their gem alerts.
 GEM_MAX_AGE_DAYS = 1000
 GEM_MIN_SCORE = 60
+# Lorenzo, 18/10 (Limitless Exchange: $4.3M cap, $32.5M FDV, 13% in
+# circulation): a gem whose FDV is more than this many times its cap has
+# most of its supply still to unlock, and is left out. The layers' rule.
+GEM_MAX_FDV_RATIO = 5.0
 
 
 def _project_key(e: dict) -> str:
@@ -3801,14 +3805,28 @@ def _with_listing_dates(entries: list[dict]) -> list[dict]:
     return entries
 
 
+def _with_fdv(entries: list[dict]) -> list[dict]:
+    """Each gem's FDV from the minute's DexScreener market, shown beside the cap."""
+    for e in entries:
+        if e.get("fdv") is None and e.get("token_address"):
+            e["fdv"] = (onchain_leaderboard.live(e.get("chain") or "", e["token_address"]) or {}).get("fdv")
+    return entries
+
+
+def _mostly_locked(e: dict) -> bool:
+    cap, fdv = e.get("market_cap") or 0, e.get("fdv") or 0
+    return bool(cap and fdv and fdv > GEM_MAX_FDV_RATIO * cap)
+
+
 def _gem_view(entries: list[dict], now: float | None = None) -> list[dict]:
-    """`entries` without the old, the weak and the duplicates, order kept.
-    Of two rows of one project the one with the deeper pool stays (the real
-    market), then the higher score. A missing creation date is the listing's."""
+    """`entries` without the old, the weak, the mostly locked and the
+    duplicates, order kept. Of two rows of one project the one with the
+    deeper pool stays (the real market), then the higher score. A missing
+    creation date is the listing's."""
     now = now or _time.time()
-    entries = _with_listing_dates(entries)
+    entries = _with_fdv(_with_listing_dates(entries))
     ok = [e for e in entries
-          if round(e.get("score") or 0) >= GEM_MIN_SCORE
+          if round(e.get("score") or 0) >= GEM_MIN_SCORE and not _mostly_locked(e)
           and not (e.get("launched_at") and now - e["launched_at"] > GEM_MAX_AGE_DAYS * 86400)]
     rank = lambda e: ((e.get("liquidity_usd") or 0), (e.get("score") or 0))  # noqa: E731
     best: dict[str, int] = {}               # project -> index in `ok` of the row kept
@@ -3926,6 +3944,7 @@ async def onchain_token(chain: str, token: str, user: User = Depends(auth.get_cu
         entry = {**entry, "on_board": True}
         if kobra:
             _kobra_score(entry)
+            _with_fdv([entry])
     else:
         p = onchain_projects_db.get(chain, token)
         if p is not None:
@@ -3944,6 +3963,8 @@ async def onchain_token(chain: str, token: str, user: User = Depends(auth.get_cu
                 if j else None
             entry["code"] = {k: c.get(k) for k in ("complexity", "innovation", "fork_of", "summary", "strengths",
                                                    "concerns")} if c else None
+            if kobra:
+                _with_fdv([entry])
     if entry is not None:
         # Its place in the Top as the Top 25 shows it (score order), not the
         # board's own rank: the page said "Rank #—" for database rows and a

@@ -1860,7 +1860,10 @@ def apply_live(pairs: list[dict], now: float | None = None) -> int:
         _live[k] = {"market_cap": float(cap) if cap else None, "price_usd": p.get("priceUsd"),
                     "liquidity_usd": float((p.get("liquidity") or {}).get("usd") or 0),
                     "change_24h": (p.get("priceChange") or {}).get("h24"), "pair_url": p.get("url"),
-                    "pair_address": p.get("pairAddress"), "at": now}
+                    "pair_address": p.get("pairAddress"),
+                    # Every token that will exist, at today's price: whitekobra's view
+                    # weighs it against the cap (main._gem_view, 18/10).
+                    "fdv": float(p["fdv"]) if p.get("fdv") else None, "at": now}
     return len(best)
 
 

@@ -623,6 +623,7 @@ function paintTabs() {
         ${e.dossier ? `<div><dt>Score</dt><dd>${e.dossier.score != null ? Math.round(e.dossier.score) : "—"}</dd></div>
         <div><dt>Board</dt><dd>${e.dossier.on_board ? "on the board" : e.rank ? `Top #${e.rank}, from the database` : `not ranked${e.dossier.why ? `: ${escapeHtml(e.dossier.why)}` : ""}`}</dd></div>` : ""}
         <div><dt>Market cap</dt><dd>${usdShort(e.cap)}</dd></div>
+        ${(e.dossier?.fdv ?? e.fdv) ? `<div><dt>FDV</dt><dd>${usdShort(e.dossier?.fdv ?? e.fdv)}</dd></div>` : ""}
         ${e.dossier?.liquidity_usd != null ? `<div><dt>Liquidity</dt><dd>${usdShort(e.dossier.liquidity_usd)}</dd></div>` : ""}
         ${slipRows(e.slip)}
         ${e.ageTs ? `<div><dt>Age</dt><dd>${age(e.ageTs)[0]}</dd></div>` : ""}

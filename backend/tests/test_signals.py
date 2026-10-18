@@ -477,3 +477,22 @@ def test_an_undated_gem_takes_its_listing_date(monkeypatch):
     assert view[0]["launched_at"] == 1_600_000_000 and view[0]["launched_from_listing"]
     assert view[2]["launched_at"] == 1_700_000_000 and "launched_from_listing" not in view[2]
     ld.set_source(None)
+
+
+def test_the_gem_view_drops_mostly_locked_supplies(monkeypatch):
+    """Lorenzo, 18/10: Limitless Exchange, $4.3M cap and $32.5M FDV (13% in
+    circulation). Over 5 times the cap, a gem is left out; the FDV is shown."""
+    from app import main
+    live = {"LMTS": {"fdv": 32_500_000}, "OK": {"fdv": 9_000_000}}
+    monkeypatch.setattr(main.onchain_leaderboard, "live", lambda chain, token: live.get(token))
+    rows = [{"chain": "base", "token_address": "LMTS", "name": "Limitless", "score": 70, "market_cap": 4_300_000},
+            {"chain": "base", "token_address": "OK", "name": "Fine", "score": 70, "market_cap": 3_000_000},
+            {"chain": "base", "token_address": "NOFDV", "name": "Unknown", "score": 70, "market_cap": 3_000_000}]
+    kept = main._gem_view(rows, 1_790_000_000.0)
+    assert [r["token_address"] for r in kept] == ["OK", "NOFDV"] and kept[0]["fdv"] == 9_000_000
+
+
+def test_the_live_market_keeps_the_fdv():
+    lb.apply_live([{"chainId": "base", "baseToken": {"address": "LMTS"}, "marketCap": 4_281_829, "fdv": 32_537_018,
+                    "liquidity": {"usd": 136_000}, "priceUsd": "0.03"}], now=T0)
+    assert lb._live[lb._key("base", "LMTS").lower()]["fdv"] == 32_537_018
