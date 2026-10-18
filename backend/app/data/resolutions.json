@@ -3199,5 +3199,10 @@
     "status": "risolto",
     "at": 1792307097,
     "summary": "Nessun errore: $4,3M e' la capitalizzazione dei token in circolazione (DexScreener e CoinGecko concordano), $32,5M e' la FDV, cioe' tutti i token che esisteranno: di Limitless circola solo il 13%. Per l'account whitekobra la FDV ora si vede nelle liste (quando e' diversa dalla cap) e nella pagina del token, e le gemme con FDV oltre 5 volte la capitalizzazione (meno del 20% in circolazione) sono escluse, come gia' per i layer: Limitless esce."
+  },
+  "seed-0344": {
+    "status": "risolto",
+    "at": 1792323106,
+    "summary": "Era un errore nella data di listing aggiunta il 17/10: per i layer chiedevo a MEXC la prima candela con un parametro che MEXC ignora, e rispondeva sempre col mese in corso, quindi tutti i layer su MEXC risultavano nati il 1 ottobre 2026 (Binance invece rispondeva giusto). Ora la data si prende dall'intera storia mensile della coppia, su entrambi gli exchange, e le date sbagliate gia' salvate vengono cancellate e ricalcolate nel giro di qualche ora. Attenzione: con le date vere molti layer risultano piu' vecchi di 1000 giorni e, per la regola dell'eta' di whitekobra, escono dalle sue liste."
   }
 }

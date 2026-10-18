@@ -469,7 +469,8 @@ def test_an_undated_gem_takes_its_listing_date(monkeypatch):
             asked.append(url)
             if "dexscreener" in url:
                 return _Resp([{"pairCreatedAt": 1_650_000_000_000}, {"pairCreatedAt": 1_600_000_000_000}])
-            return _Resp([[1_550_000_000_000, "1", "1", "1", "1"]])
+            assert "startTime" not in (params or {})    # MEXC ignores it (18/10)
+            return _Resp([[1_550_000_000_000, "1", "1", "1", "1"], [1_552_000_000_000, "1", "1", "1", "1"]])
     assert asyncio.run(ld.fill(_Client(), now=T0)) == 2
     assert ld.get("solana", "DEX") == 1_600_000_000 and ld.get("layer", "kas-kaspa") == 1_550_000_000
     assert not any("DATED" in u for u in asked)
@@ -496,3 +497,19 @@ def test_the_live_market_keeps_the_fdv():
     lb.apply_live([{"chainId": "base", "baseToken": {"address": "LMTS"}, "marketCap": 4_281_829, "fdv": 32_537_018,
                     "liquidity": {"usd": 136_000}, "priceUsd": "0.03"}], now=T0)
     assert lb._live[lb._key("base", "LMTS").lower()]["fdv"] == 32_537_018
+
+
+def test_wrong_layer_listing_dates_are_read_again(tmp_path, monkeypatch):
+    """Lorenzo, 18/10: every MEXC layer dated this month. Version-1 layer
+    dates are dropped on load; DEX dates and version-2 ones stay."""
+    import json as _json
+    from app.trading.onchain import listing_dates as ld
+    f = tmp_path / "dates.json"
+    f.write_text(_json.dumps({"layer:kas-kaspa": {"at": 1_790_000_000, "checked": 1},
+                              "layer:sei-sei": {"at": 1_690_000_000, "checked": 1, "v": ld.VERSION},
+                              "base:0xabc": {"at": 1_700_000_000, "checked": 1}}), encoding="utf-8")
+    monkeypatch.setattr(ld, "_FILE", f)
+    ld.reset_for_tests()
+    monkeypatch.setattr(ld, "_loaded", False)
+    assert ld.get("layer", "kas-kaspa") is None
+    assert ld.get("layer", "sei-sei") == 1_690_000_000 and ld.get("base", "0xabc") == 1_700_000_000

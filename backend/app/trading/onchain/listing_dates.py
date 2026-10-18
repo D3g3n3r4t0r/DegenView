@@ -30,7 +30,11 @@ KLINES = {
     "mexc": "https://api.mexc.com/api/v3/klines",
 }
 
-_dates: dict[str, dict] = {}     # "chain:token" -> {"at": listing ts or None, "checked": ts}
+# 2: a layer's date read from the whole monthly history. Version 1 asked MEXC
+# for startTime=0, which MEXC ignores: every MEXC layer came back "listed"
+# this month (Lorenzo, 18/10: "I layer [...] hanno tutti la stessa data").
+VERSION = 2
+_dates: dict[str, dict] = {}     # "chain:token" -> {"at": listing ts or None, "checked": ts, "v": VERSION}
 _loaded = False
 _source = None                   # () -> rows of the gem view, set by main.py
 
@@ -45,9 +49,11 @@ def _load() -> None:
         return
     _loaded = True
     try:
-        _dates.update(json.loads(_FILE.read_text(encoding="utf-8")))
+        raw = json.loads(_FILE.read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        pass
+        raw = {}
+    # Layer dates of an older version are wrong (see VERSION): read again.
+    _dates.update({k: v for k, v in raw.items() if not k.startswith("layer:") or v.get("v") == VERSION})
 
 
 def _save() -> None:
@@ -86,9 +92,11 @@ async def _cex_listing(client: httpx.AsyncClient, pair_address: str) -> float | 
     url = KLINES.get(exchange.lower())
     if not url or not pair:
         return None
-    r = await client.get(url, params={"symbol": pair, "interval": "1M", "startTime": 0, "limit": 1}, timeout=10.0)
+    # The last 1000 months, oldest first: the first candle is the listing.
+    # No startTime, which MEXC ignores.
+    r = await client.get(url, params={"symbol": pair, "interval": "1M", "limit": 1000}, timeout=10.0)
     rows = r.json() if r.status_code == 200 else None
-    return rows[0][0] / 1000 if isinstance(rows, list) and rows and rows[0] else None
+    return min(row[0] for row in rows) / 1000 if isinstance(rows, list) and rows and all(rows) else None
 
 
 async def fill(client: httpx.AsyncClient, now: float | None = None) -> int:
@@ -117,7 +125,7 @@ async def fill(client: httpx.AsyncClient, now: float | None = None) -> int:
                 at = await _dex_listing(client, e["chain"], e["token_address"])
         except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError):
             at = None
-        _dates[k] = {"at": at, "checked": now}
+        _dates[k] = {"at": at, "checked": now, "v": VERSION}
     if todo:
         _save()
     return len(todo)
