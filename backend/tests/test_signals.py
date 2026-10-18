@@ -516,3 +516,28 @@ def test_wrong_layer_listing_dates_are_read_again(tmp_path, monkeypatch):
     monkeypatch.setattr(ld, "_loaded", False)
     assert ld.get("layer", "kas-kaspa") is None
     assert ld.get("layer", "sei-sei") == 1_690_000_000 and ld.get("base", "0xabc") == 1_700_000_000
+
+
+def test_a_gem_in_the_view_waits_before_leaving_for_its_score():
+    """Lorenzo, 18/10: 59.6 / 60.2 in and out every day. In at 60, out after
+    3 days under it, or at once under 55."""
+    from app import main
+    now = 1_790_000_000.0
+    row = lambda s: {"chain": "base", "token_address": "G", "name": "Gem", "score": s, "launched_at": now - 10 * 86400}  # noqa: E731
+    assert [r["token_address"] for r in main._gem_view([row(61)], now)] == ["G"]
+    assert main._gem_view([row(58)], now + 86400)                       # held
+    assert not main._gem_view([row(58)], now + 4 * 86400)               # 3 days under: out
+    assert main._gem_view([row(61)], now + 5 * 86400)
+    assert not main._gem_view([row(54)], now + 6 * 86400)               # under 55: at once
+    assert not main._gem_view([row(58)], now + 6 * 86400 + 60)
+
+
+def test_pearl_holds_projects_a_month_old_at_most(monkeypatch):
+    from app import main
+    import time
+    now = time.time()
+    rows = [{"chain": "solana", "token_address": "NEW", "name": "New", "score": 80, "launched_at": now - 10 * 86400},
+            {"chain": "solana", "token_address": "OLD", "name": "Old", "score": 80, "launched_at": now - 40 * 86400}]
+    monkeypatch.setattr(main, "_kobra_early", lambda: rows)
+    assert main._gem_view_keys("pearl") == {("solana", "NEW")}
+    assert main._gem_view_keys("early") == {("solana", "NEW"), ("solana", "OLD")}

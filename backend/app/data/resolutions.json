@@ -3219,5 +3219,10 @@
     "status": "risolto",
     "at": 1792356735,
     "summary": "Fra le due ricerche (03:00 e 18:00) ora gira una sentinella: ogni 10 minuti legge le fonti veloci e i launchpad, analizza i progetti nuovi e manda subito la notifica quando una gemma entra, a qualsiasi ora. Si ferma appena non c'e' niente di nuovo (al massimo 5 minuti a giro) e non gira mai insieme a una ricerca. Il lavoro pesante (CoinGecko, ricontrollo settimanale, layer, riepilogo) resta nelle due ricerche. Costi: nessuno in soldi; un po' di carico in piu' sul server e sulle API gratuite."
+  },
+  "seed-0348": {
+    "status": "risolto",
+    "at": 1792357882,
+    "summary": "Per l'account whitekobra: in Pearl solo progetti con al massimo 30 giorni (anche per le notifiche Pearl). Nelle righe delle gemme accanto alla capitalizzazione c'e' 'MC' e sotto compare sempre la FDV quando e' nota (prima solo se superava la cap del 5%, quindi quasi mai). Contro i saliscendi: una gemma esce per capitalizzazione solo dopo 7 giorni di fila sopra il tetto, esce dalle arene verso Early solo dopo 7 giorni sotto i $300k, esce per la regola FDV oltre 5 volte la cap solo dopo 7 giorni, ed esce per il voto solo dopo 3 giorni sotto 60 (subito se scende sotto 55). Basta una lettura che torna nei limiti per azzerare il conteggio. Nessun tetto d'emergenza, come chiesto."
   }
 }

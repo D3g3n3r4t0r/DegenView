@@ -947,3 +947,44 @@ def test_the_light_tick_leaves_the_heavy_work_to_the_runs(monkeypatch):
     asyncio.run(run())
     assert bulk == [False]
     assert not set(called) & {"_from_database", "_review_board", "_read_code", "_audit", "_map_narratives", "_refresh_big_coins"}
+
+
+def test_whitekobra_s_gem_leaves_for_its_cap_after_seven_days(monkeypatch):
+    """Lorenzo, 18/10: "per uscire per capitalizzazione dalle gemme deve
+    superare il tetto [...] per almeno 7 giorni consecutivi"; no emergency
+    ceiling. The other accounts still drop it at once."""
+    import app.main as m
+    from app.trading.onchain import gem_hold
+    clock = {"t": time.time()}
+    monkeypatch.setattr(gem_hold.time, "time", lambda: clock["t"])
+    row = {"chain": "solana", "token": "CAPmint", "symbol": "CAP", "name": "Cap Project", "mcap": 5_000_000,
+           "score": 70, "analyzed_at": clock["t"]}
+    monkeypatch.setattr(m.onchain_projects_db, "search", lambda **kw: {"items": [row]})
+    monkeypatch.setattr(m.onchain_judge, "get", lambda *a: None)
+    monkeypatch.setattr(m.onchain_leaderboard, "board", lambda: {"entries": []})
+    monkeypatch.setattr(m.onchain_leaderboard, "usage_gate", lambda e, cap_floor=True: "")
+    syms = lambda full: [e["symbol"] for e in m._top_entries(10, full=full)]  # noqa: E731
+    assert syms(True) == ["CAP"]
+    row["mcap"] = 30_000_000                                  # a flash to $30M
+    assert syms(True) == ["CAP"] and syms(False) == []
+    clock["t"] += 6 * DAY
+    assert syms(True) == ["CAP"]
+    clock["t"] += 1 * DAY + 1                                 # 7 days over: out
+    assert syms(True) == []
+    row["mcap"] = 8_000_000
+    assert syms(True) == ["CAP"]                              # back under: in again
+
+
+def test_whitekobra_s_arena_gem_waits_before_falling_back_to_early(monkeypatch):
+    import app.main as m
+    row = {"chain": "solana", "token": "FLmint", "symbol": "FL", "name": "Floor Project", "mcap": 400_000,
+           "score": 70, "analyzed_at": time.time()}
+    monkeypatch.setattr(m.onchain_projects_db, "search", lambda **kw: {"items": [row]})
+    monkeypatch.setattr(m.onchain_judge, "get", lambda *a: None)
+    monkeypatch.setattr(m.onchain_leaderboard, "board", lambda: {"entries": []})
+    floor = lambda e, cap_floor=True: "under $300k (early list)" if cap_floor and (e.get("market_cap") or 0) < 300_000 else ""  # noqa: E731
+    monkeypatch.setattr(m.onchain_leaderboard, "usage_gate", floor)
+    assert [e["symbol"] for e in m._top_entries(10, full=True)] == ["FL"]
+    row["mcap"] = 290_000
+    assert [e["symbol"] for e in m._top_entries(10, full=True)] == ["FL"]
+    assert [e["symbol"] for e in m._top_entries(10)] == []

@@ -132,7 +132,7 @@ export function changePill(f) {
  * One row for every list (memes, gems, search, leaderboard): logo with the
  * chain, name with a HOT/EARLY pill, ticker and age, market cap and a pill.
  */
-export function tokenRow({ id, symbol, name, chain, token, image, cap, change, pill, badge, ageTs, sub, sign, score }) {
+export function tokenRow({ id, symbol, name, chain, token, image, cap, change, pill, badge, ageTs, sub, sign, score, capTag }) {
   const [a, fresh] = age(ageTs);
   const tone = sign ?? (change == null ? "" : change >= 0 ? "up" : "down");
   return `<li class="trow" data-sign="${tone}"><button type="button" data-open="${escapeHtml(id)}">
@@ -141,7 +141,7 @@ export function tokenRow({ id, symbol, name, chain, token, image, cap, change, p
       <b>${escapeHtml(name || symbol)}${badge === "hot" ? ' <em class="hot">HOT</em>' : badge === "early" ? ' <em class="hot early">EARLY</em>' : badge === "hidden" ? ' <em class="hot hidden">HIDDEN GEM</em>' : ""}</b>
       <small>${score != null ? `<span class="score" data-band="${score >= 60 ? "hi" : score >= 40 ? "mid" : "lo"}" title="Engine score">${Math.round(score)}</span>` : ""}${escapeHtml(symbol)}${ageTs ? ` <span class="age${fresh ? " fresh" : ""}"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 14V7M8 9c0-3 2-4.5 5-4.5 0 3-2 4.5-5 4.5ZM8 8C8 5.5 6.3 4 3.5 4c0 2.6 1.7 4 4.5 4Z"/></svg>${a}</span>` : ""}${sub ? ` <span class="sub">${sub}</span>` : ""}</small>
     </span>
-    <span class="trow-num"><b>${usdShort(cap)}</b>${pill ?? changePill(change)}</span>
+    <span class="trow-num"><b>${capTag ? '<i class="cap-tag">MC</i>' : ""}${usdShort(cap)}</b>${pill ?? changePill(change)}</span>
   </button></li>`;
 }
 

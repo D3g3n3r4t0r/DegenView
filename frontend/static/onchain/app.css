@@ -1566,3 +1566,7 @@ html.detail-open .ask-fab, :root:has(#app-shell[data-view="entry"]) .ask-fab { d
 
 /* Dark mode is the phone skin's (classic.css, theme.js): the desktop is dark already. */
 @media (min-width: 1100px) { .pf-theme { display: none !important; } }
+
+/* "MC" beside the cap of a gem row, the FDV in the line below (Lorenzo, 18/10) */
+.trow-num .cap-tag { font: 600 9px/1 var(--sans, inherit); font-style: normal; letter-spacing: .04em;
+  opacity: .55; margin-right: 3px; vertical-align: 2px; }
