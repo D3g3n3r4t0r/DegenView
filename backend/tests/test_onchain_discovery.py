@@ -413,3 +413,22 @@ def test_launchpads_feed_the_research(monkeypatch):
     pads = [a for a in asked if "/dexes/" in a[0]]
     assert {a[1] for a in pads} == {"h24_tx_count_desc"}
     assert any("/networks/solana/dexes/meteora-dbc/" in a[0] for a in pads)
+
+
+def test_each_poll_starts_from_the_next_launchpad(monkeypatch):
+    """Review on #591: the first launchpads must not use up the budget every time."""
+    import app.trading.onchain.usage as u
+    monkeypatch.setattr(d, "GT_CHAINS", {})
+    monkeypatch.setattr(d, "GT_LAUNCHPADS", {"solana": ("solana", ("a", "b", "c"))})
+    first = []
+
+    async def gecko(client, url, params=None):
+        if "/dexes/" in url and len(first) < 10:
+            first.append(url.split("/dexes/")[1].split("/")[0])
+        return None
+    monkeypatch.setattr(u, "_gecko", gecko)
+    for i in range(3):
+        n = len(first)
+        asyncio.run(d._poll_new_pools(None, lambda item, src: True, 1_000.0 + i * d.GT_POLL_S))
+        first.append("|")
+        assert first[n] == "abc"[i]

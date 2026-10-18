@@ -99,7 +99,7 @@ def reset_for_tests() -> None:
     _seen.clear()
     _chain_ids.clear()
     _state.update(cg_queue=[], cg_last_sweep=0.0, cg_next_at=0.0, profiles_at=0.0, gh_queue=[], gh_query=0,
-                  gh_search_at=0.0, gh_repo_at=0.0, gt_at=0.0, found=0, skipped=0, running=False)
+                  gh_search_at=0.0, gh_repo_at=0.0, gt_at=0.0, gt_turn=-1, found=0, skipped=0, running=False)
 
 
 def status() -> dict:
@@ -654,31 +654,37 @@ async def _poll_new_pools(client: httpx.AsyncClient, add: Callable[[dict, str], 
         lists.setdefault(chain, []).extend(
             (net, GT_NEW_POOLS.format(net=net), {"page": page, "include": "base_token"}, "geckoterminal")
             for page in range(1, GT_PAGES + 1))
+    # Each poll starts from the next launchpad: the first ones in the list
+    # cannot use up the budget every time (review on #591).
+    turn = _state["gt_turn"] = _state.get("gt_turn", -1) + 1
     for chain, (net, dexes) in GT_LAUNCHPADS.items():
+        start = turn % len(dexes)
         lists.setdefault(chain, []).extend(
             (net, GT_DEX_POOLS.format(net=net, dex=dex), {"page": 1, "include": "base_token",
                                                           "sort": "h24_tx_count_desc"}, "launchpad")
-            for dex in dexes)
-    for chain, reqs in lists.items():
-        budget = GT_INFO_PER_LAUNCHPAD_CHAIN if chain in GT_LAUNCHPADS else GT_INFO_PER_CHAIN
-        reads = 0
-        for net, url, params, source in reqs:
-            if reads >= budget:
-                break
-            data = await _gecko(client, url, params)
-            if not data:
-                continue
-            for c in new_pool_candidates(chain, data):
-                k = f"gt:{chain}:{c['token_address'].lower()}"
-                if k in _seen or reads >= budget:
+            for dex in dexes[start:] + dexes[:start])
+    try:
+        for chain, reqs in lists.items():
+            budget = GT_INFO_PER_LAUNCHPAD_CHAIN if chain in GT_LAUNCHPADS else GT_INFO_PER_CHAIN
+            reads = 0
+            for net, url, params, source in reqs:
+                if reads >= budget:
+                    break
+                data = await _gecko(client, url, params)
+                if not data:
                     continue
-                reads += 1
-                extra = token_info_fields(await _gecko(client, GT_TOKEN_INFO.format(net=net, token=c["token_address"])))
-                if not extra:
-                    _note(k, False, "no website, or a meme description", now)
-                    continue
-                _note(k, add({**c, **extra}, source), "new pool", now)
-    _save()
+                for c in new_pool_candidates(chain, data):
+                    k = f"gt:{chain}:{c['token_address'].lower()}"
+                    if k in _seen or reads >= budget:
+                        continue
+                    reads += 1
+                    extra = token_info_fields(await _gecko(client, GT_TOKEN_INFO.format(net=net, token=c["token_address"])))
+                    if not extra:
+                        _note(k, False, "no website, or a meme description", now)
+                        continue
+                    _note(k, add({**c, **extra}, source), "new pool", now)
+    finally:
+        _save()
 
 
 # The bulk sweep: CoinGecko's lists find projects weeks after their launch
