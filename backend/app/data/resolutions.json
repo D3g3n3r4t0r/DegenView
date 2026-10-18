@@ -3204,5 +3204,10 @@
     "status": "risolto",
     "at": 1792323106,
     "summary": "Era un errore nella data di listing aggiunta il 17/10: per i layer chiedevo a MEXC la prima candela con un parametro che MEXC ignora, e rispondeva sempre col mese in corso, quindi tutti i layer su MEXC risultavano nati il 1 ottobre 2026 (Binance invece rispondeva giusto). Ora la data si prende dall'intera storia mensile della coppia, su entrambi gli exchange, e le date sbagliate gia' salvate vengono cancellate e ricalcolate nel giro di qualche ora. Attenzione: con le date vere molti layer risultano piu' vecchi di 1000 giorni e, per la regola dell'eta' di whitekobra, escono dalle sue liste."
+  },
+  "seed-0345": {
+    "status": "risolto",
+    "at": 1792327026,
+    "summary": "Per l'account whitekobra una gemma senza data di creazione ne' data di listing non entra piu' nelle gemme (Top, arene, Early, Pearl e notifiche), su qualunque chain. Escono i layer senza una coppia su Binance o MEXC (HDX, BLD, MODE, BLAST); una gemma nuova senza data compare appena la data di listing viene letta, di solito in pochi minuti. La regola dei 1000 giorni resta."
   }
 }

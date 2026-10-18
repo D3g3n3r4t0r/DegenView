@@ -3761,7 +3761,8 @@ def _full_score(user: User | None) -> bool:
 
 # Whitekobra's gems (Lorenzo, 17/10): one row per project, nothing launched
 # more than GEM_MAX_AGE_DAYS ago, nothing scoring under GEM_MIN_SCORE (as
-# shown, rounded). Applied to the Top, the arenas, Early and Pearl of the
+# shown, rounded), nothing without a creation or listing date (Lorenzo,
+# 18/10: "Quelli senza data non possono entrare nelle gemme"). Applied to the Top, the arenas, Early and Pearl of the
 # accounts in settings.onchain_full_score_emails, and to their gem alerts.
 GEM_MAX_AGE_DAYS = 1000
 GEM_MIN_SCORE = 60
@@ -3822,12 +3823,12 @@ def _gem_view(entries: list[dict], now: float | None = None) -> list[dict]:
     """`entries` without the old, the weak, the mostly locked and the
     duplicates, order kept. Of two rows of one project the one with the
     deeper pool stays (the real market), then the higher score. A missing
-    creation date is the listing's."""
+    creation date is the listing's; a gem with neither is left out."""
     now = now or _time.time()
     entries = _with_fdv(_with_listing_dates(entries))
     ok = [e for e in entries
           if round(e.get("score") or 0) >= GEM_MIN_SCORE and not _mostly_locked(e)
-          and not (e.get("launched_at") and now - e["launched_at"] > GEM_MAX_AGE_DAYS * 86400)]
+          and e.get("launched_at") and now - e["launched_at"] <= GEM_MAX_AGE_DAYS * 86400]
     rank = lambda e: ((e.get("liquidity_usd") or 0), (e.get("score") or 0))  # noqa: E731
     best: dict[str, int] = {}               # project -> index in `ok` of the row kept
     for i, e in enumerate(ok):
