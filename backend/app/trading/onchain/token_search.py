@@ -211,8 +211,10 @@ async def _fetch_json(url: str, params: dict) -> object:
     async with http_client.pooled(timeout=8.0) as client:
         resp = await _get(client, url, params)
         if resp.status_code == 429:
-            # GeckoTerminal regge ~30 richieste al minuto: un secondo tentativo,
-            # che il gate fa partire dopo la pausa chiesta (Retry-After).
+            # Un secondo tentativo: per GeckoTerminal il gate lo fa partire
+            # dopo la pausa chiesta (Retry-After), per le altre fonti una pausa breve.
+            if "geckoterminal.com" not in url:
+                await asyncio.sleep(1.5)
             resp = await _get(client, url, params)
     resp.raise_for_status()
     return resp.json()
