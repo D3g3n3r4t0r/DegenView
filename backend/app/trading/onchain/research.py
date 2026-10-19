@@ -31,6 +31,7 @@ from urllib.parse import urlparse
 
 import httpx
 
+from app.providers import gecko_client
 from app.trading.onchain import depth, legit, narratives, reader, storage
 from app.atomic_write import write_text_atomic
 
@@ -178,8 +179,8 @@ async def _gecko_info(chain: str, token: str, client: httpx.AsyncClient) -> dict
     if not net or not token:
         return {}
     try:
-        r = await client.get(GECKO_INFO.format(net=net, token=token), timeout=10.0,
-                             headers={"Accept": "application/json"})
+        r = await gecko_client.request(client, GECKO_INFO.format(net=net, token=token), timeout=10.0,
+                                       headers={"Accept": "application/json"}, caller="token:research")
         if r.status_code != 200:
             return {}
         a = (r.json().get("data") or {}).get("attributes") or {}

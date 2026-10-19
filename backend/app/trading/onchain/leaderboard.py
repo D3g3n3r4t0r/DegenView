@@ -1931,4 +1931,6 @@ async def live_market_loop() -> None:
                 await listing_dates.fill(client)
             except Exception:
                 logger.exception("classifica: date di listing non lette")
+            from app.providers import gecko_client
+            gecko_client.save(storage.data_file("gecko_metrics.json"))
             await asyncio.sleep(LIVE_MARKET_S)

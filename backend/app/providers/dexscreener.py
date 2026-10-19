@@ -22,14 +22,13 @@ mano in modo utile — si arriva qui scegliendo un risultato della ricerca,
 mai scrivendo il simbolo a memoria.
 """
 import asyncio
-import contextvars
 import re
 import time
-from collections import deque
 
 import httpx
 
 from app import http_client
+from app.providers import gecko_client
 import pandas as pd
 from cachetools import TTLCache
 
@@ -118,22 +117,17 @@ def _parse_symbol(symbol: str) -> tuple[str, str, str]:
 # per tutti: stessa richiesta nei 15 s servita una volta sola, un tetto al
 # minuto con una riserva per chi sta guardando un grafico, e se GeckoTerminal
 # rifiuta comunque, l'ultima risposta buona invece di un errore.
-_GECKO_WINDOW_S = 60.0
-
-
-def gecko_load() -> int:
-    """Quante chiamate a GeckoTerminal sono state fatte nell'ultimo minuto."""
-    now = time.monotonic()
-    while _gecko_calls and now - _gecko_calls[0] > _GECKO_WINDOW_S:
-        _gecko_calls.popleft()
-    return len(_gecko_calls)
-_GECKO_BACKGROUND_PER_MIN = 14   # leaves ~15 a minute for someone opening a chart
-_GECKO_URGENT_PER_MIN = 28
+# The window, the urgent reserve and the cooldown after a 429 live in
+# gecko_client, shared with every other GeckoTerminal caller (19/10).
+_GECKO_WINDOW_S = gecko_client.WINDOW_S
+gecko_load = gecko_client.load
+_GECKO_BACKGROUND_PER_MIN = gecko_client.BACKGROUND_PER_MIN   # leaves ~15 a minute for someone opening a chart
+_GECKO_URGENT_PER_MIN = gecko_client.GLOBAL_PER_MIN
 _GECKO_FRESH_S = 15.0
 _GECKO_STALE_S = 1800.0
 _GECKO_BACKOFF_S = (2.0, 4.0)
-gecko_urgent: contextvars.ContextVar[bool] = contextvars.ContextVar("gecko_urgent", default=False)
-_gecko_calls: deque[float] = deque()
+gecko_urgent = gecko_client.urgent
+_gecko_calls = gecko_client.calls
 _gecko_seen: dict[tuple, tuple[float, dict]] = {}
 _gecko_locks: dict[tuple, asyncio.Lock] = {}
 _gecko_loop: list[int] = [0]
@@ -155,28 +149,22 @@ def _gecko_lock(key: tuple) -> asyncio.Lock:
     return _gecko_locks.setdefault(key, asyncio.Lock())
 
 
-async def _gecko_slot() -> None:
-    cap = _GECKO_URGENT_PER_MIN if gecko_urgent.get() else _GECKO_BACKGROUND_PER_MIN
-    while True:
-        now = time.monotonic()
-        while _gecko_calls and now - _gecko_calls[0] > _GECKO_WINDOW_S:
-            _gecko_calls.popleft()
-        if len(_gecko_calls) < cap:
-            _gecko_calls.append(now)
-            return
-        await asyncio.sleep(min(_GECKO_WINDOW_S - (now - _gecko_calls[0]) + 0.05, 5.0))
+async def _gecko_slot(caller: str = "other") -> None:
+    await gecko_client.slot(caller)
 
 
-async def gecko_get(url: str, params: dict | None = None) -> dict | None:
+async def gecko_get(url: str, params: dict | None = None, caller: str = "gecko_get") -> dict | None:
     """Il JSON di GeckoTerminal, None su 404. GeckoBusy se rifiuta anche
     dopo le pause e non c'e' una risposta recente da riusare."""
     key = (url, tuple(sorted((params or {}).items())))
     seen = _gecko_seen.get(key)
     if seen and time.monotonic() - seen[0] < _GECKO_FRESH_S:
+        gecko_client.cache_hit(caller)
         return seen[1]
     async with _gecko_lock(key):
         seen = _gecko_seen.get(key)
         if seen and time.monotonic() - seen[0] < _GECKO_FRESH_S:
+            gecko_client.cache_hit(caller)
             return seen[1]
         resp = None
         # Someone is waiting on a chart: one short retry, then the last good
@@ -185,15 +173,15 @@ async def gecko_get(url: str, params: dict | None = None) -> dict | None:
         for pause in pauses:
             if pause:
                 await asyncio.sleep(pause)
-            await _gecko_slot()
             async with http_client.pooled(timeout=20.0) as client:
-                resp = await client.get(url, params=params)
+                resp = await gecko_client.request(client, url, params=params, caller=caller)
             if resp.status_code != 429:
                 break
     if resp.status_code == 404:
         return None
     if resp.status_code == 429 or resp.status_code >= 500:
         if seen and time.monotonic() - seen[0] < _GECKO_STALE_S:
+            gecko_client.cache_hit(caller)
             return seen[1]
         raise GeckoBusy(f"GeckoTerminal occupato ({resp.status_code})")
     try:
@@ -252,7 +240,7 @@ class DexScreenerProvider(DataProvider):
             if token_address:
                 params["token"] = token_address
             try:
-                payload = await gecko_get(url, params)
+                payload = await gecko_get(url, params, caller="ohlcv:chart")
             except httpx.HTTPError as exc:
                 if rows:
                     break  # keep the pages already read
@@ -305,7 +293,7 @@ class DexScreenerProvider(DataProvider):
                                 token_address: str | None) -> list[list]:
         url = f"{self._geckoterminal_base}/networks/{network}/pools/{pool}/trades"
         try:
-            trades = ((await gecko_get(url)) or {}).get("data") or []
+            trades = ((await gecko_get(url, caller="trades:chart")) or {}).get("data") or []
         except (httpx.HTTPError, ProviderError):
             return []
         return candles_from_trades([t.get("attributes") or {} for t in trades], bucket_s, token_address)

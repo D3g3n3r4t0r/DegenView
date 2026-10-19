@@ -39,6 +39,7 @@ from typing import Awaitable, Callable
 
 import httpx
 
+from app.providers import gecko_client
 from app import http_client
 
 from app.providers.base import ProviderError
@@ -555,8 +556,8 @@ async def _poll_pumpfun(client: httpx.AsyncClient) -> None:
 
 async def _poll_gecko(client: httpx.AsyncClient) -> None:
     for chain in legit.MEME_CHAINS:
-        r = await client.get(f"{GECKO_BASE}/networks/{chain}/new_pools", params={"page": 1},
-                             headers={"Accept": "application/json"})
+        r = await gecko_client.request(client, f"{GECKO_BASE}/networks/{chain}/new_pools", params={"page": 1},
+                                       headers={"Accept": "application/json"}, caller="listings")
         if r.status_code == 200:
             for pool in r.json().get("data") or []:
                 add_pending(chain, (pool.get("attributes") or {}).get("address") or "", "gecko")

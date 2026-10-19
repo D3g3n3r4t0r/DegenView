@@ -288,7 +288,7 @@ async def _candles(client, net: str, pool: str, tf: str, aggregate: int, before:
     if token:
         params["token"] = token     # the token's side of the pool, not always the base
     try:
-        payload = await gecko_get(GECKO_OHLCV.format(net=net, pool=pool, tf=tf), params)
+        payload = await gecko_get(GECKO_OHLCV.format(net=net, pool=pool, tf=tf), params, caller="ohlcv:alerts")
     except Exception:
         return None
     if payload is None:

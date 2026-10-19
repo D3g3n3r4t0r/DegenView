@@ -27,6 +27,8 @@ import time
 
 import httpx
 
+from app.providers import gecko_client
+
 logger = logging.getLogger(__name__)
 
 EVM_CHAINS = ("robinhood", "base", "ethereum", "bsc")
@@ -86,7 +88,8 @@ async def native_price(chain: str, client: httpx.AsyncClient) -> float | None:
         return hit[0]
     net, addr = WRAPPED[chain]
     try:
-        r = await client.get(f"https://api.geckoterminal.com/api/v2/simple/networks/{net}/token_price/{addr}")
+        r = await gecko_client.request(client, f"https://api.geckoterminal.com/api/v2/simple/networks/{net}/token_price/{addr}",
+                                       caller="prices:native")
         price = float(next(iter(r.json()["data"]["attributes"]["token_prices"].values())))
     except Exception:
         return hit[0] if hit else None

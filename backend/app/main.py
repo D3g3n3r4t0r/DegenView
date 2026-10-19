@@ -3654,6 +3654,14 @@ async def onchain_leaderboard_view(user: User = Depends(auth.get_current_user)) 
     return {**board, "entries": onchain_outcomes.without_shamed(board.get("entries") or [])}
 
 
+@app.get("/api/onchain/gecko")
+async def onchain_gecko(user: User = Depends(auth.get_current_user)) -> dict:
+    """GeckoTerminal's shared window and its counters by caller (requests,
+    429s, errors, waits, cache hits) since the process started."""
+    from app.providers import gecko_client
+    return gecko_client.metrics()
+
+
 @app.get("/api/onchain/track")
 async def onchain_track(user: User = Depends(auth.get_current_user)) -> dict:
     """Track record: how the Gem Finder's picks went after 1/3/7/30/90 days,

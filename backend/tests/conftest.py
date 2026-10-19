@@ -1,17 +1,19 @@
 import pytest
 
-from app.providers import dexscreener
+from app.providers import dexscreener, gecko_client
 
 
 @pytest.fixture(autouse=True)
-def _fresh_gecko_gate():
+def _fresh_gecko_gate(monkeypatch):
     """La cache e il tetto di GeckoTerminal sono globali: un test non deve
-    vedere le risposte finte di un altro, ne' aspettare il suo minuto."""
+    vedere le risposte finte di un altro, ne' aspettare il suo minuto (ne'
+    i 5 s di pausa dopo un 429 finto senza Retry-After)."""
+    monkeypatch.setattr(gecko_client, "DEFAULT_COOLDOWN_S", 0.01)
     dexscreener._gecko_seen.clear()
-    dexscreener._gecko_calls.clear()
+    gecko_client.reset_for_tests()
     yield
     dexscreener._gecko_seen.clear()
-    dexscreener._gecko_calls.clear()
+    gecko_client.reset_for_tests()
 
 
 @pytest.fixture(autouse=True)

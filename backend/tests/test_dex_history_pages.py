@@ -10,7 +10,7 @@ TOTAL = 2500  # candles the pool really has
 
 
 def _fake_gecko(calls):
-    async def fake(url, params=None):
+    async def fake(url, params=None, caller=None):
         calls.append(dict(params or {}))
         before = params.get("before_timestamp", NOW + DAY)
         limit = params["limit"]

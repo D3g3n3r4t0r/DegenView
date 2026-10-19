@@ -46,6 +46,7 @@ from datetime import datetime, timezone
 
 import httpx
 
+from app.providers import gecko_client
 from app import http_client
 import pandas as pd
 
@@ -548,8 +549,8 @@ async def _fetch_pools(client: httpx.AsyncClient, chain: str) -> list[Pool]:
     pools: list[Pool] = []
     for endpoint, params in requests:
         try:
-            resp = await client.get(f"{GECKO_BASE}/networks/{network}/{endpoint}", params=params,
-                                    headers={"Accept": "application/json"})
+            resp = await gecko_client.request(client, f"{GECKO_BASE}/networks/{network}/{endpoint}", params=params,
+                                              headers={"Accept": "application/json"}, caller="radar")
             if resp.status_code == 200:
                 pools += [p for p in (parse_pool(chain, x) for x in resp.json().get("data") or []) if p]
             else:

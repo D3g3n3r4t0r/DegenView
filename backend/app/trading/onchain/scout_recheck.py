@@ -379,7 +379,7 @@ async def gecko_volume(item: dict, client: httpx.AsyncClient) -> dict | None:
     if not net or not address:
         return None
     try:
-        data = await gecko_get(f"https://api.geckoterminal.com/api/v2/networks/{net}/tokens/{address}")
+        data = await gecko_get(f"https://api.geckoterminal.com/api/v2/networks/{net}/tokens/{address}", caller="token:recheck")
     except Exception:
         return None
     attrs = ((data or {}).get("data") or {}).get("attributes") or {}

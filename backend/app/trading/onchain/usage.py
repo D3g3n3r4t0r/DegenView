@@ -87,15 +87,15 @@ def _from_pair(p: dict) -> dict:
             "pool": p.get("pairAddress")}
 
 
-async def _gecko(client: httpx.AsyncClient, url: str, params: dict | None = None) -> dict | None:
-    """One GeckoTerminal call through the shared gate; one retry on 429."""
-    from app.providers.dexscreener import _gecko_slot
-    for pause in (0.0, 2.0):
-        if pause:
-            await asyncio.sleep(pause)
-        await _gecko_slot()
+async def _gecko(client: httpx.AsyncClient, url: str, params: dict | None = None,
+                 caller: str = "usage") -> dict | None:
+    """One GeckoTerminal call through the shared gate; one retry on 429
+    (the gate makes the retry wait out the 429's Retry-After)."""
+    from app.providers import gecko_client
+    for _ in range(2):
         try:
-            r = await client.get(url, params=params, timeout=15.0, headers={"Accept": "application/json"})
+            r = await gecko_client.request(client, url, params=params, timeout=15.0,
+                                           headers={"Accept": "application/json"}, caller=caller)
         except httpx.HTTPError:
             return None
         if r.status_code == 429:
@@ -122,7 +122,7 @@ async def _gecko_pool(client, net: str, pool: str) -> dict:
 
 async def _gecko_daily(client, net: str, pool: str) -> dict:
     data = await _gecko(client, f"{GECKO.format(net=net)}/pools/{pool}/ohlcv/day",
-                        {"limit": 31, "currency": "usd"})
+                        {"limit": 31, "currency": "usd"}, caller="ohlcv:usage")
     if not data:
         return {}
     rows = ((data.get("data") or {}).get("attributes") or {}).get("ohlcv_list") or []
