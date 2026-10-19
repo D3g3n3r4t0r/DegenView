@@ -152,7 +152,7 @@ async def step(top: list[dict], now: float | None = None, ask=None, requeue=None
     """One audit. Returns the issues found (empty when not due or failed)."""
     now = now or time.time()
     try:
-        if not due(now) or (ask is None and not settings.deepseek_api_key):
+        if not due(now) or (ask is None and not settings.research_deepseek):
             return []
         rows = rows_for(top)
         if not rows:

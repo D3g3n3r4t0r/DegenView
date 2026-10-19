@@ -158,6 +158,15 @@ class Settings(BaseSettings):
     # agent, kind "chat"); the research runs on free APIs and the rules.
     # The Anthropic key is ignored as well (cleared below).
     research_ai_enabled: bool = False
+
+    @property
+    def research_deepseek(self) -> bool:
+        """The research may call DeepSeek: a key and research_ai_enabled.
+        Off, the research's DeepSeek steps stop before doing anything else
+        (Lorenzo, 19/10: "impedire direttamente che chiamino DeepSeek che
+        comunque e' spento"), instead of reading GitHub or X for a call
+        deepseek_desk refuses anyway."""
+        return bool(self.deepseek_api_key) and self.research_ai_enabled
     # USDC contract on Robinhood Chain for the autotrader's cash; empty = found
     # from the most liquid USDC/USDG pool (autotrader.find_usdc).
     robinhood_usdc_address: str = ""

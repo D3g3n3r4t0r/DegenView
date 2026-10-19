@@ -784,7 +784,7 @@ async def ai_review(token: dict, site: dict, links: dict) -> dict | None:
         f"Website: {site.get('final_url')}\nPage title: {site.get('title')}"
     )
     if not settings.anthropic_api_key:
-        return await _ai_review_deepseek(token, site, head) if settings.deepseek_api_key else None
+        return await _ai_review_deepseek(token, site, head) if settings.research_deepseek else None
     from anthropic import AsyncAnthropic
     prompt = f"{head}\n\n<site_text>\n{site.get('text')}\n</site_text>"
     try:

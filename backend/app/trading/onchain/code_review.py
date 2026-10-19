@@ -13,6 +13,7 @@ import json
 import logging
 import time
 
+from app.config import settings
 from app.trading.onchain import legit, storage
 from app.atomic_write import write_text_atomic
 
@@ -179,6 +180,8 @@ async def review(e: dict, client, now: float | None = None, ask=None, priority: 
     count = f"{day}:top" if priority else day
     if _calls.get(count, 0) >= (PRIORITY_DAILY_MAX if priority else DAILY_MAX):
         return None
+    if ask is None and not settings.research_deepseek:
+        return None             # no GitHub reads for a call deepseek_desk refuses
     data = await fetch_code(repo, client)
     if data is None:
         return None
