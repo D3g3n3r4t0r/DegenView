@@ -254,7 +254,7 @@ async def ai_dossier(item: dict, description: str, texts: list[str], *, boost: b
               f"<listing_description>\n{description[:3000]}\n</listing_description>\n"
               f"<site_text>\n{body}\n</site_text>")
     if not legit.settings.anthropic_api_key:
-        return await _dossier_deepseek(prompt, f"{item.get('chain')}:{item.get('token_address')}") if legit.settings.deepseek_api_key else None
+        return await _dossier_deepseek(prompt, f"{item.get('chain')}:{item.get('token_address')}") if legit.settings.research_deepseek else None
     from anthropic import AsyncAnthropic
     try:
         async with AsyncAnthropic(api_key=legit.settings.anthropic_api_key, timeout=60.0) as client:

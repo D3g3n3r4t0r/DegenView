@@ -472,6 +472,8 @@ def test_deepseek_review_can_drop_and_reorder_the_board(monkeypatch):
     import asyncio
     import json as _json
     from app.trading.onchain import judge
+    monkeypatch.setattr(lb.settings, "research_ai_enabled", True)      # a faked DeepSeek, switched on
+    monkeypatch.setattr(lb.settings, "deepseek_api_key", "test")
     judge.reset_for_tests()
     monkeypatch.setattr(judge, "_save", lambda: None)
     _entry("CLAUPUMP", 90, 90, 90)
@@ -665,6 +667,8 @@ def _deepseek_off(tmp_path, monkeypatch):
 
 def test_top_fill_judges_a_database_row_even_with_the_daily_cap_spent(monkeypatch, _deepseek_off):
     import asyncio
+    monkeypatch.setattr(lb.settings, "research_ai_enabled", True)
+    monkeypatch.setattr(lb.settings, "deepseek_api_key", "test")
 
     from app.trading.onchain import code_review, judge
     now = time.time()
@@ -988,3 +992,24 @@ def test_whitekobra_s_arena_gem_waits_before_falling_back_to_early(monkeypatch):
     row["mcap"] = 290_000
     assert [e["symbol"] for e in m._top_entries(10, full=True)] == ["FL"]
     assert [e["symbol"] for e in m._top_entries(10)] == []
+
+
+def test_with_deepseek_off_the_research_steps_do_nothing_else(monkeypatch):
+    """Lorenzo, 19/10: "impedire direttamente che chiamino DeepSeek che
+    comunque e' spento": no GitHub read for the code, no X/Telegram reads
+    for the judge, no narrative batch."""
+    import asyncio
+    from app.trading.onchain import code_review, judge, narrative_map
+    monkeypatch.setattr(lb.settings, "research_ai_enabled", False)
+    monkeypatch.setattr(lb.settings, "deepseek_api_key", "test")
+    touched = []
+
+    async def fetch(repo, client):
+        touched.append(repo)
+    monkeypatch.setattr(code_review, "fetch_code", fetch)
+    e = _entry("OFF", 80, 80, 80)
+    e["pillars"]["github"] = {"score": 80, "facts": {"repo": "acme/off"}}
+    assert asyncio.run(code_review.review(e, None)) is None and touched == []
+    assert asyncio.run(judge.judge(e, "")) is None
+    assert asyncio.run(judge.review_board([e])) == {}
+    assert asyncio.run(narrative_map.step(time.time() + 10 ** 6)) == {}

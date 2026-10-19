@@ -113,7 +113,7 @@ async def step(now: float | None = None, ask=None) -> dict[str, list[str]]:
         day = time.strftime("%Y-%m-%d", time.gmtime(now))
         if now - _state["last"] < EVERY_S or _state["calls"].get(day, 0) >= DAILY_MAX:
             return {}
-        if ask is None and not settings.deepseek_api_key:
+        if ask is None and not settings.research_deepseek:
             return {}
         rows = projects_db.need_narratives(BATCH, before=CATALOGUE_AT)
         if not rows:

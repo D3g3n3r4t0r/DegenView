@@ -358,7 +358,7 @@ async def tick(now: float | None = None, client=None, ask=None, dossier_fn=None)
     from app.notify import deepseek_desk
     now = now or time.time()
     if ask is None:
-        if not settings.deepseek_api_key:
+        if not settings.research_deepseek:
             return []
         ask = deepseek_desk.ask
     dossier_fn = dossier_fn or dossier

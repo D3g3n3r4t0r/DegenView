@@ -19,6 +19,7 @@ import logging
 import re
 import time
 
+from app.config import settings
 from app.trading.onchain import storage
 from app.atomic_write import write_text_atomic
 
@@ -417,6 +418,8 @@ async def judge(e: dict, rules_why: str, now: float | None = None, ask=None,
     why = reason_to_judge(hit, seen, now, fresh)
     if not why:
         return hit
+    if ask is None and not settings.research_deepseek:
+        return None             # what the refused call gave, without the X/Telegram/Discord reads
     day = time.strftime("%Y-%m-%d", time.gmtime(now))
     count = f"{day}:top" if priority else day
     if _calls.get(count, 0) >= (PRIORITY_DAILY_MAX if priority else DAILY_MAX):
@@ -571,7 +574,7 @@ async def review_board(entries: list[dict], now: float | None = None, ask=None) 
         return {}
     now = now or time.time()
     day = time.strftime("%Y-%m-%d", time.gmtime(now))
-    if _calls.get(day, 0) >= DAILY_MAX:
+    if _calls.get(day, 0) >= DAILY_MAX or (ask is None and not settings.research_deepseek):
         return {}
     from app.notify import deepseek_desk
     if ask is None:

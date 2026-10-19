@@ -126,7 +126,7 @@ async def update(e: dict, now: float | None = None, client=None, ask=None) -> di
         return hit
     if ask is None:
         from app.config import settings
-        if not settings.deepseek_api_key:
+        if not settings.research_deepseek:
             return hit
         from app.notify import deepseek_desk
         ask = deepseek_desk.ask

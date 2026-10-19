@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0350", "Con DeepSeek spento la ricerca lo chiama comunque",
+     "Lorenzo, 19/10, dopo il controllo della ricerca delle 3 (75 errori nei log, 52 di DeepSeek spento): 'forse ha senso anche impedire direttamente che chiamino DeepSeek che comunque e' spento e quindi non puo' rispondere, no?'.",
+     "bassa"),
     ("seed-0349", "Whitekobra: gemme al massimo di un anno, fuori quelle che si spengono",
      "Lorenzo, 18/10: 'abbassare il tetto della vita di un progetto dagli attuali 1000 giorni a un anno, quindi 365 giorni massimo [...] entro i 1000 giorni ho visto tanti progetti ormai morti o semimorti', poi 'applicalo anche ai layer e per i suggerimenti applica solo il secondo'.",
      "media"),
