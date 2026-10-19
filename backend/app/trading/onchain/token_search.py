@@ -27,6 +27,7 @@ import time
 from collections.abc import Iterable
 
 
+from app.providers import gecko_client
 from app import http_client
 
 JUPITER_SEARCH_URL = "https://lite-api.jup.ag/tokens/v2/search"
@@ -194,14 +195,27 @@ def merge_candidates(primary: list[dict], extra: list[dict]) -> list[dict]:
     return list(merged.values())
 
 
+async def _get(client, url: str, params: dict):
+    if "geckoterminal.com" not in url:
+        return await client.get(url, params=params, headers={"accept": "application/json"})
+    # A person is typing: the urgent share of the shared GeckoTerminal window.
+    token = gecko_client.urgent.set(True)
+    try:
+        return await gecko_client.request(client, url, params=params, headers={"accept": "application/json"},
+                                          caller="search")
+    finally:
+        gecko_client.urgent.reset(token)
+
+
 async def _fetch_json(url: str, params: dict) -> object:
     async with http_client.pooled(timeout=8.0) as client:
-        resp = await client.get(url, params=params, headers={"accept": "application/json"})
+        resp = await _get(client, url, params)
         if resp.status_code == 429:
-            # GeckoTerminal regge ~30 richieste al minuto: una pausa breve e
-            # un secondo tentativo, invece di perdere la fonte principale.
-            await asyncio.sleep(1.5)
-            resp = await client.get(url, params=params, headers={"accept": "application/json"})
+            # Un secondo tentativo: per GeckoTerminal il gate lo fa partire
+            # dopo la pausa chiesta (Retry-After), per le altre fonti una pausa breve.
+            if "geckoterminal.com" not in url:
+                await asyncio.sleep(1.5)
+            resp = await _get(client, url, params)
     resp.raise_for_status()
     return resp.json()
 

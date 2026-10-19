@@ -8,6 +8,7 @@ import time
 
 import httpx
 
+from app.providers import gecko_client
 from app import http_client
 
 from app.models import OnchainChain
@@ -62,7 +63,7 @@ async def _gecko_price(network: str, token_address: str) -> float | None:
     url = f"{GECKOTERMINAL_BASE}/simple/networks/{network}/token_price/{token_address}"
     try:
         async with http_client.pooled(timeout=8.0) as client:
-            resp = await client.get(url)
+            resp = await gecko_client.request(client, url, caller="prices:token")
         if resp.status_code != 200:
             return None
         prices = resp.json()["data"]["attributes"]["token_prices"]

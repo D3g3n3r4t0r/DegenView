@@ -28,6 +28,7 @@ from collections import deque
 
 import httpx
 
+from app.providers import gecko_client
 from app import http_client
 
 from app.trading.onchain import pool_prices
@@ -130,7 +131,8 @@ async def _gecko(client: httpx.AsyncClient, chain: str, addrs: list[str]) -> dic
     if not _budget("gt", GT_PER_MIN):
         return {}
     try:
-        r = await client.get(GECKO_TOKENS.format(network=CHAINS[chain], addrs=",".join(addrs)))
+        r = await gecko_client.request(client, GECKO_TOKENS.format(network=CHAINS[chain], addrs=",".join(addrs)),
+                                       caller="prices:live")
         if r.status_code != 200:
             return {}
         prices = r.json()["data"]["attributes"]["token_prices"]

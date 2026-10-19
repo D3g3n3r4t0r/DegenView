@@ -324,7 +324,7 @@ def test_new_pools_on_ethereum_and_base_feed_the_research(monkeypatch):
     assert [c["token_address"] for c in d.new_pool_candidates("base", _gt_pools())] == ["0xgood"]
     asked = []
 
-    async def gecko(client, url, params=None):
+    async def gecko(client, url, params=None, caller=None):
         asked.append(url)
         if url.endswith("/info"):
             return {"data": {"attributes": {"websites": ["https://agent.example"], "twitter_handle": "agentp",
@@ -356,7 +356,7 @@ def test_each_chain_has_its_own_budget_of_token_pages(monkeypatch):
                                  for i in range(8)]}
     reads = []
 
-    async def gecko(client, url, params=None):
+    async def gecko(client, url, params=None, caller=None):
         if url.endswith("/info"):
             reads.append(url.split("/networks/")[1].split("/")[0])
             return {"data": {"attributes": {"websites": [], "twitter_handle": "@x"}}}
@@ -401,7 +401,7 @@ def test_launchpads_feed_the_research(monkeypatch):
     monkeypatch.setattr(d, "GT_CHAINS", {})
     asked = []
 
-    async def gecko(client, url, params=None):
+    async def gecko(client, url, params=None, caller=None):
         asked.append((url, (params or {}).get("sort")))
         if url.endswith("/info"):
             return {"data": {"attributes": {"websites": ["https://agent.example"], "description": "An agent protocol"}}}
@@ -422,7 +422,7 @@ def test_each_poll_starts_from_the_next_launchpad(monkeypatch):
     monkeypatch.setattr(d, "GT_LAUNCHPADS", {"solana": ("solana", ("a", "b", "c"))})
     first = []
 
-    async def gecko(client, url, params=None):
+    async def gecko(client, url, params=None, caller=None):
         if "/dexes/" in url and len(first) < 10:
             first.append(url.split("/dexes/")[1].split("/")[0])
         return None

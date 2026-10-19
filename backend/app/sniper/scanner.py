@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 
 import httpx
 
+from app.providers import gecko_client
 from app import http_client
 
 logger = logging.getLogger(__name__)
@@ -215,9 +216,9 @@ async def _fetch_gecko_pages(
         pools: list[dict] = []
         for attempt in range(2):  # at most one retry on 429
             try:
-                resp = await client.get(
-                    f"{GECKOTERMINAL_BASE}/networks/{network}/{endpoint}",
-                    params={"page": page},
+                resp = await gecko_client.request(
+                    client, f"{GECKOTERMINAL_BASE}/networks/{network}/{endpoint}",
+                    params={"page": page}, caller="scanner",
                 )
             except Exception as exc:
                 logger.warning(
@@ -272,9 +273,9 @@ async def fetch_geckoterminal_trending(client: httpx.AsyncClient) -> list[RawTok
     for chain_id in GECKO_NETWORKS:
         try:
             network = GECKO_NETWORKS[chain_id]
-            resp = await client.get(
-                f"{GECKOTERMINAL_BASE}/networks/{network}/trending_pools",
-                params={"page": 1},
+            resp = await gecko_client.request(
+                client, f"{GECKOTERMINAL_BASE}/networks/{network}/trending_pools",
+                params={"page": 1}, caller="scanner:trending",
             )
             if resp.status_code == 200:
                 pools = resp.json().get("data") or []

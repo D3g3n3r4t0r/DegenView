@@ -670,7 +670,7 @@ async def _poll_new_pools(client: httpx.AsyncClient, add: Callable[[dict, str], 
             for net, url, params, source in reqs:
                 if reads >= budget:
                     break
-                data = await _gecko(client, url, params)
+                data = await _gecko(client, url, params, caller="discovery")
                 if not data:
                     continue
                 for c in new_pool_candidates(chain, data):
@@ -678,7 +678,8 @@ async def _poll_new_pools(client: httpx.AsyncClient, add: Callable[[dict, str], 
                     if k in _seen or reads >= budget:
                         continue
                     reads += 1
-                    extra = token_info_fields(await _gecko(client, GT_TOKEN_INFO.format(net=net, token=c["token_address"])))
+                    extra = token_info_fields(await _gecko(client, GT_TOKEN_INFO.format(net=net, token=c["token_address"]),
+                                                           caller="discovery"))
                     if not extra:
                         _note(k, False, "no website, or a meme description", now)
                         continue
