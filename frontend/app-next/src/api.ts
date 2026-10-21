@@ -1,7 +1,7 @@
 import type { Top } from "./types";
 import { mockTop } from "./mock";
 
-// `?mock` (or `npm run dev` with no backend) shows sample data, for screenshots.
+// `?mock` shows sample data, for screenshots without a backend.
 const useMock = new URLSearchParams(location.search).has("mock");
 
 export async function getTop(n = 50): Promise<Top> {

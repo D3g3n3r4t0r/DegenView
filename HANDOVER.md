@@ -5,8 +5,8 @@ Lorenzo: "https://www.rareui.com/ possiamo applicarlo al nostro sito e app?", po
 - RareUI = componenti React + Motion via shadcn, licenza non dichiarata sul sito: si porta l'idea, non il codice, finche' non e' verificata. Scartati orb/gravity (canvas/fisica).
 - Sorgenti in `frontend/app-next/` (React 19, Motion, Tailwind 4, Vite). Il Dockerfile (stadio assets) fa `npm ci && npm run build` in `frontend/static/next/` e toglie i sorgenti dall'immagine. `static/next/` e `node_modules` sono in .gitignore.
 - Rotta `GET /app` (main.py): solo `settings.onchain_next_emails` (default = account di Lorenzo, lo stesso hash di `onchain_v1_emails`); chiunque altro, o build mancante, va a `/onchain-app.html`. Test `tests/test_onchain_app_next.py`.
-- Primo step: direzione A (memoria redesign) con dock Today/Sectors/Watch/Search, podio, Top con anello del voto, contatori animati, settori a pillole, scheda token a foglio dal basso, ricerca locale. Dati da `/api/onchain/top`. `?mock` = dati finti per screenshot (`npm run dev`, porta 5173, /static/next/?mock).
-- Resta: Watch, dossier completo in React, grafico, Agent/Profile, poi decidere se /app sostituisce l'app di Lorenzo. Bundle 119 KB gzip: passare a LazyMotion per tagliarlo.
+- Lorenzo, 21/10: "come colori mantieni attuale app cambia solo linguaggio", "versione desktop non cambiarla". Quindi /app e' la stessa app del telefono della v1 (skin classic.css: carta avena, verde scuro, salvia, Geist), riscritta in React: Gems (Arenas con podio p4p e mosaico come `onchain-v1/top.js`), Early, ricerca, scheda token a foglio. Sopra i 1100px `/app` rimanda a `/onchain-app.html`. Database, Scout e Profile per ora rimandano all'app attuale. `?mock` = dati finti per screenshot.
+- Resta: Database, dossier completo con grafico, Scout, Profile, poi decidere se /app sostituisce l'app del telefono di Lorenzo. Bundle 119 KB gzip: passare a LazyMotion per tagliarlo.
 
 # 2026-10-21 — Lo smaltimento non tocca la quota AI del resto — `seed-0372` (Claude, a mano)
 

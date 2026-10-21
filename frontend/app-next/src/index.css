@@ -1,27 +1,31 @@
 @import "tailwindcss";
 
-@font-face { font-family: "Inter"; font-weight: 100 900; font-display: swap; src: url("/static/fonts/inter-latin.woff2") format("woff2"); }
-@font-face { font-family: "JetBrains Mono"; font-weight: 400 500; font-display: swap; src: url("/static/fonts/jetbrains-mono-latin.woff2") format("woff2"); }
+@font-face { font-family: "Geist"; font-weight: 100 900; font-display: swap; src: url("/static/fonts/geist-latin.woff2") format("woff2"); }
 
-/* Same palette as static/onchain/shell.css, as Tailwind tokens (bg-panel, text-ink-dim...). */
+/* The classic phone skin of the current app (static/onchain-v1/classic.css),
+   unchanged: oat paper, warm cards, deep green ink, sage for what is chosen. */
 @theme {
-  --color-bg: #0d0e12;
-  --color-panel: #16181d;
-  --color-raised: #1c1f26;
-  --color-line: #262a33;
-  --color-ink: #f2f3f5;
-  --color-ink-dim: #9aa0ab;
-  --color-ink-faint: #5f6672;
-  --color-accent: #d84dfc;
-  --color-up: #2de0a8;
-  --color-down: #ff5c5c;
-  --color-amber: #ffb648;
-  --font-sans: "Inter", -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --color-bg: #efeae0;
+  --color-card: #f8f5ef;
+  --color-pill: #e4dfd3;
+  --color-press: #d9d3c5;
+  --color-line: #e0d9cb;
+  --color-ink: #2f3a32;
+  --color-ink-2: #4f5a4f;
+  --color-ink-3: #687264;
+  --color-ink-4: #bdb8aa;
+  --color-on-ink: #f3efe6;
+  --color-sage: #c9d4c0;
+  --color-up: #2f7a4a;
+  --color-down: #b4472f;
+  --color-amber: #8f6417;
+  --font-sans: "Geist", -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
+  --ease-calm: cubic-bezier(.25, .1, .25, 1);
 }
 
+:root { color-scheme: light; }
 html, body { background: var(--color-bg); color: var(--color-ink); }
 body { margin: 0; font-family: var(--font-sans); -webkit-font-smoothing: antialiased; overscroll-behavior-y: none; }
-.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.num { font-variant-numeric: tabular-nums; }
 .no-scrollbar { scrollbar-width: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }

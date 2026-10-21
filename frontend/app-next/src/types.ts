@@ -13,8 +13,11 @@ export type Entry = {
   pair_url?: string;
   arena?: string;
   arena_label?: string;
+  arena_rank?: number;
+  z?: number;
+  early?: boolean;
 };
 
-export type Arena = { key: string; label: string; heat: number; size: number; entries: Entry[] };
+export type Arena = { key: string; label: string; heat: number; size: number; median?: number; entries: Entry[] };
 
 export type Top = { entries: Entry[]; early: Entry[]; arenas: Arena[]; p4p: Entry[] };

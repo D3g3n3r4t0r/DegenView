@@ -1,35 +1,25 @@
 import { motion } from "motion/react";
 import type { Entry } from "../types";
 import { TokenLogo } from "./TokenLogo";
-import { AnimatedNumber } from "./AnimatedNumber";
 
-const ORDER = [1, 0, 2]; // silver, gold, bronze
-const HEIGHT = ["h-24", "h-16", "h-12"];
-const RING = ["ring-amber", "ring-ink-dim", "ring-[#c8824a]"];
-const int = (v: number) => String(Math.round(v));
+const sigma = (z?: number) => (z == null ? "" : `${z >= 0 ? "+" : "−"}${Math.abs(z).toFixed(1)}σ `);
 
-// The Top's best three, pound for pound across sectors.
+// Pound for pound: the projects leading their own arena by the most. Three soft cards, big grey numbers.
 export function Podium({ top, onOpen }: { top: Entry[]; onOpen: (e: Entry) => void }) {
-  if (top.length < 3) return null;
+  if (!top.length) return null;
   return (
-    <div className="grid grid-cols-3 items-end gap-2 px-1 pt-2">
-      {ORDER.map((p) => {
-        const e = top[p];
-        return (
-          <motion.button key={e.token_address} onClick={() => onOpen(e)} className="flex flex-col items-center gap-2"
-            initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.08 * (p + 1), type: "spring", stiffness: 260, damping: 24 }}>
-            <div className={`rounded-full ring-2 ring-offset-2 ring-offset-bg ${RING[p]}`}>
-              <TokenLogo src={e.image} symbol={e.symbol} size={p === 0 ? 52 : 42} />
-            </div>
-            <span className="max-w-full truncate text-[13px] font-semibold">{e.symbol}</span>
-            <div className={`flex w-full flex-col items-center justify-start rounded-t-xl border border-b-0 border-line bg-gradient-to-b from-raised to-bg pt-2 ${HEIGHT[p]}`}>
-              <span className="text-[18px] font-semibold"><AnimatedNumber value={e.score ?? 0} format={int} /></span>
-              <span className="text-[10px] uppercase tracking-wider text-ink-faint">{e.arena_label ?? "score"}</span>
-            </div>
-          </motion.button>
-        );
-      })}
+    <div className="my-3 grid grid-cols-3 gap-2.5">
+      {top.slice(0, 3).map((e, i) => (
+        <motion.button key={e.chain + e.token_address} onClick={() => onOpen(e)}
+          initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} whileTap={{ scale: 0.97 }}
+          transition={{ delay: i * 0.05, duration: 0.26 }}
+          className="relative grid min-h-[132px] content-end justify-items-start gap-0.5 rounded-[20px] bg-card p-3.5 text-left">
+          <span className="num absolute right-3.5 top-2.5 text-[30px] leading-none tracking-tight text-ink-3 max-[374px]:text-[24px]">0{i + 1}</span>
+          <span className="mb-auto"><TokenLogo src={e.image} symbol={e.symbol} size={44} /></span>
+          <span className="mt-3.5 max-w-full truncate text-[15px] font-semibold">{e.symbol}</span>
+          <span className="max-w-full truncate text-[13px] text-ink-2">{sigma(e.z)}{e.arena_label ?? ""}</span>
+        </motion.button>
+      ))}
     </div>
   );
 }

@@ -6,8 +6,9 @@ const rows: [string, string, string, number, number, number][] = [
   ["BRIX", "Brix Labs", "rwa", 82, 1.2e6, -8.7], ["TIDE", "Tidewater", "defi", 79, 3.3e6, 1.9],
   ["NOVA", "Nova Layer", "layer", 77, 9.1e6, -0.6], ["KYRA", "Kyra AI", "ai", 75, 0.9e6, 34.2],
   ["MESH", "Meshwave", "depin", 73, 2.2e6, -12.1], ["ORBT", "Orbit RWA", "rwa", 71, 5.5e6, 4.4],
+  ["HUSH", "Hush Network", "priv", 80, 3.9e6, 6.2], ["MASK", "Maskline", "priv", 74, 1.7e6, 2.4], ["PAYD", "Payday", "pay", 70, 2.9e6, -1.1], ["QUST", "Questfall", "game", 68, 0.8e6, -4.6],
 ];
-const LABEL: Record<string, string> = { ai: "AI agents", depin: "DePIN", defi: "DeFi", rwa: "RWA", layer: "Layer 1/2" };
+const LABEL: Record<string, string> = { ai: "AI Agents", depin: "DePIN Compute", defi: "Perps & Derivatives", rwa: "RWA", layer: "Chains L0/L1/L2", priv: "Privacy", pay: "Stablecoin Payments", game: "Gaming" };
 const CHAINS = ["solana", "base", "ethereum", "bsc", "robinhood"];
 
 export function mockTop(): Promise<Top> {
@@ -20,5 +21,5 @@ export function mockTop(): Promise<Top> {
     const e = entries.filter((x) => x.arena === key);
     return { key, label, heat: 5 - i, size: e.length, entries: e };
   });
-  return Promise.resolve({ entries, early: entries.slice(7), arenas, p4p: entries.slice(0, 3) });
+  return Promise.resolve({ entries, early: entries.slice(7).map((e) => ({ ...e, early: true })), arenas, p4p: entries.slice(0, 3).map((e, i) => ({ ...e, z: 2.4 - i * 0.5 })) });
 }
