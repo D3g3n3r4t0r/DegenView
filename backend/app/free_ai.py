@@ -112,7 +112,9 @@ def low_allowed(now: float | None = None) -> bool:
         return False
     models = _models_on()
     cooling = [m for m in models if _cool.get(m, 0) > now]
-    if any(_cool[m] - now > 3600 for m in cooling):       # a daily quota is gone
+    # A daily quota is gone: cooling until after midnight UTC. In the last
+    # hour of the day that is under an hour away, so the length alone misses it.
+    if any(_cool[m] - now > 3600 or _cool[m] >= _next_day(now) for m in cooling):
         return False
     return len(cooling) * 2 < max(1, len(models))
 
