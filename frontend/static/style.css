@@ -5340,8 +5340,8 @@ td {
 }
 
 @keyframes live-pulse-reduced {
-  0%, 100% { background-color: var(--bull); }
-  50% { background-color: var(--bull-soft); }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
 }
 
 /* ── entrata dei pannelli ──────────────────────────────────────────── */
@@ -5438,9 +5438,13 @@ button:active:not(:disabled) { transform: translateY(1px); }
 #search-btn:hover::after, .lab-btn-run:hover::after { transform: translateX(100%); }
 
 /* ── stati che devono farsi notare ─────────────────────────────────── */
+/* Opacity only: an animated box-shadow repaints and recommits the whole
+   page every frame, and with ~12k nodes that kept a phone's main thread
+   busy all the time (typing in the ticker box lagged 100-250 ms per key).
+   Opacity runs on the compositor and costs the page nothing. */
 @keyframes lae-battito {
-  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 var(--bull-soft); }
-  50%      { opacity: 0.65; box-shadow: 0 0 0 5px transparent; }
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.4; }
 }
 .live-badge .live-dot, .sys-led:not(.off) {
   animation: lae-battito 2.4s ease-in-out infinite;

@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0375", "Ricerca ticker che lagga e sito lento in generale",
+     "Lorenzo, 21/10: 'la ricerca nella barra di compilazione del ticker [...] lagga, impiega troppo tempo a caricare le lettere, e poi sembra che il sistema parta a fare dei caricamenti in background [...] il sito e' molto rallentato in generale'.",
+     "alta"),
     ("seed-0374", "I grafici impiegano troppo a comparire",
      "Lorenzo, 21/10: 'impiega troppo tempo a visualizzare i grafici' (BTCUSDT, Trend EMA, 5d, fermo su 'Analyzing...').",
      "alta"),

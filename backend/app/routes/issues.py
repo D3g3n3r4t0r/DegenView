@@ -54,19 +54,24 @@ async def reply_to_issue(
 @router.get("/api/issues")
 
 
-async def list_issues(user: User | None = Depends(auth.get_current_user_optional)) -> dict:
+async def list_issues(
+    user: User | None = Depends(auth.get_current_user_optional),
+    counts_only: bool = False,
+) -> dict:
     items = issues_store.list_issues()
+    counts = {
+        "aperto": sum(1 for i in items if i.get("status") == "aperto"),
+        "in corso": sum(1 for i in items if i.get("status") == "in corso"),
+        "risolto": sum(1 for i in items if i.get("status") == "risolto"),
+        "riaperto": sum(1 for i in items if i.get("status") == "riaperto"),
+    }
+    # The badge on the menu entry only needs the numbers: the full board is
+    # ~600 KB, and every page load fetched it just for them.
+    if counts_only:
+        return {"counts": counts}
     if user is None or guest_links.is_guest(user):
         items = _mask_emails(items)
-    return {
-        "items": items,
-        "counts": {
-            "aperto": sum(1 for i in items if i.get("status") == "aperto"),
-            "in corso": sum(1 for i in items if i.get("status") == "in corso"),
-            "risolto": sum(1 for i in items if i.get("status") == "risolto"),
-            "riaperto": sum(1 for i in items if i.get("status") == "riaperto"),
-        },
-    }
+    return {"items": items, "counts": counts}
 
 
 _EMAIL = re.compile(r"([A-Za-z0-9._%+-]{1,2})[A-Za-z0-9._%+-]*@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
