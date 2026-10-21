@@ -41,3 +41,7 @@ deploy/.env
 id_rsa*
 id_ed25519*
 *.keystore
+
+# React app (frontend/app-next): deps and build output stay out of git
+frontend/app-next/node_modules/
+frontend/static/next/

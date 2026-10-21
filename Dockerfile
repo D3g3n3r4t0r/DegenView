@@ -5,6 +5,9 @@ WORKDIR /srv
 COPY frontend ./frontend
 COPY deploy/minify-assets.sh ./minify-assets.sh
 RUN sh ./minify-assets.sh frontend/static
+# The on-chain app rebuilt in React (/app): Vite writes frontend/static/next/,
+# already minified. Its sources and node_modules stay out of the image.
+RUN cd frontend/app-next && npm ci --no-audit --no-fund && npm run build && cd .. && rm -rf app-next
 
 FROM python:3.13-slim
 
