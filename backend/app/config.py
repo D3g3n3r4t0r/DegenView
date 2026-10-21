@@ -62,6 +62,10 @@ class Settings(BaseSettings):
     # 16/10: his own account back to before that day's changes, everyone
     # else on the current app.
     onchain_v1_emails: str = "sha256:ec987139be8d4d3991504dbe9bd5c8f92ce102948dee4e4305db5e84e841eb0e"
+    # Accounts that may open /app, the on-chain app rebuilt in React
+    # (frontend/app-next). Lorenzo, 21/10: "non x whitekobra ma per lorenzo
+    # devi farla": his own account only, everyone else keeps their app.
+    onchain_next_emails: str = "sha256:ec987139be8d4d3991504dbe9bd5c8f92ce102948dee4e4305db5e84e841eb0e"
     # Accounts whose Top and arenas score the database rows on the whole row,
     # as the token page does (Lorenzo, 17/10: "per ora falla solo per
     # whitekobra"). Everyone else keeps the lighter rows, and the Telegram

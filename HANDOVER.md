@@ -1,3 +1,13 @@
+# 2026-10-21 — App on-chain rifatta in React, pagina /app solo per l'account di Lorenzo — **in corso** (Claude, a mano)
+
+Lorenzo: "https://www.rareui.com/ possiamo applicarlo al nostro sito e app?", poi "rifacciamo app", "solo per lorenzo", "non x whitekobra ma per lorenzo devi farla", "procedi".
+
+- RareUI = componenti React + Motion via shadcn, licenza non dichiarata sul sito: si porta l'idea, non il codice, finche' non e' verificata. Scartati orb/gravity (canvas/fisica).
+- Sorgenti in `frontend/app-next/` (React 19, Motion, Tailwind 4, Vite). Il Dockerfile (stadio assets) fa `npm ci && npm run build` in `frontend/static/next/` e toglie i sorgenti dall'immagine. `static/next/` e `node_modules` sono in .gitignore.
+- Rotta `GET /app` (main.py): solo `settings.onchain_next_emails` (default = account di Lorenzo, lo stesso hash di `onchain_v1_emails`); chiunque altro, o build mancante, va a `/onchain-app.html`. Test `tests/test_onchain_app_next.py`.
+- Lorenzo, 21/10: "come colori mantieni attuale app cambia solo linguaggio", "versione desktop non cambiarla". Quindi /app e' la stessa app del telefono della v1 (skin classic.css: carta avena, verde scuro, salvia, Geist), riscritta in React: Gems (Arenas con podio p4p e mosaico come `onchain-v1/top.js`), Early, ricerca, scheda token a foglio. Sopra i 1100px `/app` rimanda a `/onchain-app.html`. Database, Scout e Profile per ora rimandano all'app attuale. `?mock` = dati finti per screenshot.
+- Resta: Database, dossier completo con grafico, Scout, Profile, poi decidere se /app sostituisce l'app del telefono di Lorenzo. Bundle 119 KB gzip: passare a LazyMotion per tagliarlo.
+
 # 2026-10-21 — Lo smaltimento non tocca la quota AI del resto — `seed-0372` (Claude, a mano)
 
 Lorenzo: "lo smaltimento dei lavori in coda pero' non deve andare a inficiare il resto delle operazioni", poi chiede di GitHub Models come terza fonte gratuita. Stato coda alle 13:15: 237 → 146 in 6 giri. Fatto: `free_ai.low_priority()` intorno ai tick di `nightly.drain_once`; `free_ai.low_allowed`: max `LOW_DAILY` 120 chiamate, nessuna se un modello e' in pausa per quota giornaliera o se piu' di meta' dei modelli e' in pausa. `narrative_map` logga a INFO i `BudgetExceeded`. Poi "Ok, procedi" (`seed-0373`): GitHub Models in `free_ai.PROVIDERS` dopo Gemini (`openai/gpt-4.1-mini`, `openai/gpt-4o-mini`; nomi non verificati dalla sandbox, un nome sbagliato si raffredda fino al giorno dopo), chiave `github` in `service_keys` (env `GITHUB_MODELS_TOKEN`), controllata con una chiamata vera da 1 token perche' il catalogo risponde anche senza token. Il token lo crea Lorenzo (fine-grained, Models: read) e lo salva in Diagnostica.

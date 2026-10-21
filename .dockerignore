@@ -10,3 +10,5 @@ desktop-app/src-tauri/target
 *.pyo
 .git
 .github
+frontend/app-next/node_modules
+frontend/static/next

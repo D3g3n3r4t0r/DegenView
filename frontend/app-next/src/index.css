@@ -1,0 +1,31 @@
+@import "tailwindcss";
+
+@font-face { font-family: "Geist"; font-weight: 100 900; font-display: swap; src: url("/static/fonts/geist-latin.woff2") format("woff2"); }
+
+/* The classic phone skin of the current app (static/onchain-v1/classic.css),
+   unchanged: oat paper, warm cards, deep green ink, sage for what is chosen. */
+@theme {
+  --color-bg: #efeae0;
+  --color-card: #f8f5ef;
+  --color-pill: #e4dfd3;
+  --color-press: #d9d3c5;
+  --color-line: #e0d9cb;
+  --color-ink: #2f3a32;
+  --color-ink-2: #4f5a4f;
+  --color-ink-3: #687264;
+  --color-ink-4: #bdb8aa;
+  --color-on-ink: #f3efe6;
+  --color-sage: #c9d4c0;
+  --color-up: #2f7a4a;
+  --color-down: #b4472f;
+  --color-amber: #8f6417;
+  --font-sans: "Geist", -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
+  --ease-calm: cubic-bezier(.25, .1, .25, 1);
+}
+
+:root { color-scheme: light; }
+html, body { background: var(--color-bg); color: var(--color-ink); }
+body { margin: 0; font-family: var(--font-sans); -webkit-font-smoothing: antialiased; overscroll-behavior-y: none; }
+.num { font-variant-numeric: tabular-nums; }
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }

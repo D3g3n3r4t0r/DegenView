@@ -1599,6 +1599,7 @@ _PUBLIC_PATHS = frozenset({
     "/onchain-app.html",
     "/onchain-approve.html",
     "/onchain-passkey-setup.html",
+    "/app",                 # the React app: the route itself sends anyone not allowed to /onchain-app.html
     "/favicon.ico",
     "/sw.js",               # il service worker delle notifiche: il browser lo scarica da se'
     "/manifest.webmanifest",  # chiesto senza cookie (iPhone: "Aggiungi a Home")
@@ -8519,6 +8520,22 @@ async def web_manifest() -> FileResponse:
     is added to the home screen (iOS 16.4+)."""
     return FileResponse(FRONTEND_DIR / "static" / "manifest.webmanifest", media_type="application/manifest+json",
                         headers={"Cache-Control": "public, max-age=3600"})
+
+
+_NEXT_INDEX = FRONTEND_DIR / "static" / "next" / "index.html"
+
+
+@app.get("/app")
+async def onchain_next_page(user: User | None = Depends(auth.get_current_user_optional)) -> Response:
+    """The on-chain app rebuilt in React (frontend/app-next, built by the
+    Dockerfile into static/next/), for settings.onchain_next_emails only:
+    anyone else, or a build that is missing, goes to the current app."""
+    if user is None or user.email not in email_allowlist(settings.onchain_next_emails) or not _NEXT_INDEX.is_file():
+        return RedirectResponse("/onchain-app.html", status_code=303)
+    data = json.dumps(_onchain_boot_payload(user), separators=(",", ":")).replace("<", "\\u003c")
+    html = _NEXT_INDEX.read_text(encoding="utf-8").replace(
+        "<!--onchain-boot-->", f'<script type="application/json" id="onchain-boot">{data}</script>')
+    return HTMLResponse(html, headers={"Cache-Control": "private, no-cache", "Vary": "Cookie"})
 
 
 @app.get("/onchain-app.html")
