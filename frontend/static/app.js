@@ -1134,6 +1134,7 @@
       angleLines: false,
       elliott: false,
     },
+    heldLiveTicks: new Map(), // live ticks held while the ticker search covers the chart
   };
 
   const overlays = {
@@ -5659,7 +5660,7 @@
   let handleDragState = null; // { drawing, handleIndex, originalPoints }
   const appearAt = {};       // id -> ms when it was placed (150 ms fade-in)
 
-  function bumpDraw() { drawVersion++; }
+  function bumpDraw() { drawVersion++; wakeDraw(); }
 
   // Keyed by what the chart shows (the answer's asset type), not by the
   // asset type the search box last had: the two can differ for a moment.
@@ -5973,24 +5974,61 @@
     ].join("|");
   }
   function drawAnimating() {
-    return (state.layers.divergences && divergenceLines.length > 0) || Object.keys(appearAt).length > 0;
+    // A fade-in whose drawing is never painted (other symbol, off screen)
+    // used to stay in appearAt for good and keep the loop running.
+    const now = performance.now();
+    Object.keys(appearAt).forEach((id) => { if (now - appearAt[id] > 300) delete appearAt[id]; });
+    return Object.keys(appearAt).length > 0;
+  }
+  // Only a divergence still forming moves (its dashes march): ~12 fps is
+  // plenty for that, a full 60 fps loop is not.
+  function divergenceMarching() {
+    return state.layers.divergences && divergenceLines.some((d) => !d.confirmed);
+  }
+
+  // The loop runs only while something can move the drawings: a pointer,
+  // a scroll or zoom, a resize, new candles, an animation. Kept running
+  // forever it made the browser produce and commit a frame 60 times a
+  // second on a still chart, about a third of a phone's main thread, and
+  // typing in the ticker box lagged.
+  let drawActiveUntil = 0;
+  function drawLoop() {
+    drawRafId = null;
+    if (mainChart && candleSeries) {
+      const sig = drawSignature();
+      if (sig !== lastDrawSig || drawAnimating() || divergenceMarching()) {
+        lastDrawSig = sig;
+        // One bad frame must not stop the loop: before, an exception here
+        // ended requestAnimationFrame for good and every drawing vanished.
+        try { renderDrawCanvas(); } catch (err) { console.warn("drawing layer:", err); }
+      }
+    }
+    if (drawAnimating() || performance.now() < drawActiveUntil) {
+      drawRafId = requestAnimationFrame(drawLoop);
+    } else if (divergenceMarching() && !document.hidden) {
+      drawRafId = setTimeout(() => { drawRafId = requestAnimationFrame(drawLoop); }, 80);
+    }
+  }
+  function wakeDraw(ms = 700) {
+    drawActiveUntil = Math.max(drawActiveUntil, performance.now() + ms);
+    if (!drawRafId) drawRafId = requestAnimationFrame(drawLoop);
   }
 
   function startDrawRaf() {
-    if (drawRafId) return;
-    function loop() {
-      if (mainChart && candleSeries) {
-        const sig = drawSignature();
-        if (sig !== lastDrawSig || drawAnimating()) {
-          lastDrawSig = sig;
-          // One bad frame must not stop the loop: before, an exception here
-          // ended requestAnimationFrame for good and every drawing vanished.
-          try { renderDrawCanvas(); } catch (err) { console.warn("drawing layer:", err); }
-        }
-      }
-      drawRafId = requestAnimationFrame(loop);
+    const container = el("main-chart");
+    const wake = () => wakeDraw();
+    if (container) {
+      ["pointerdown", "pointermove", "pointerup", "wheel", "touchstart", "touchmove", "touchend"].forEach((type) => {
+        container.addEventListener(type, wake, { capture: true, passive: true });
+      });
+      if (window.ResizeObserver) new ResizeObserver(wake).observe(container);
     }
-    drawRafId = requestAnimationFrame(loop);
+    window.addEventListener("resize", wake);
+    if (mainChart) mainChart.timeScale().subscribeVisibleLogicalRangeChange(wake);
+    // Safety net for whatever moves the price scale without any of the
+    // above (an autoscale, a layer toggled elsewhere): one check a second.
+    setInterval(() => { if (!document.hidden) wakeDraw(0); }, 1000);
+    wakeDraw();
   }
 
   function initDrawCanvas() {
@@ -8481,6 +8519,7 @@
     // fixed 2-decimal price format rounds small prices straight to 0.00.
     candleSeries.applyOptions({ priceFormat: pricePrecisionFor(candles[candles.length - 1].close) });
     candleSeries.setData(candles.map((c) => ({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close })));
+    wakeDraw(0);
     setOhlcCandles(candles);
     setDrawTimes(candles);
     addSessionShading(candles, el("interval-primary").value);
@@ -9279,6 +9318,12 @@
     el("error-banner").classList.add("hidden");
   }
 
+  function flushHeldLiveTicks() {
+    const held = [...state.heldLiveTicks.values()];
+    state.heldLiveTicks.clear();
+    held.forEach((msg) => applyLiveCandle(msg.timeframe, msg.candle));
+  }
+
   function applyLiveCandle(timeframe, candle) {
     if (!state.data || !state.data.timeframes[timeframe]) return;
     const candles = state.data.timeframes[timeframe].candles;
@@ -9295,6 +9340,7 @@
     if (timeframe === state.activeTimeframe) {
       try {
         candleSeries.update(candle);
+        wakeDraw(0); // one frame: a tick can move the price scale
       } catch (err) {
         /* rare out-of-order update from the live feed; next tick self-corrects */
       }
@@ -9302,6 +9348,7 @@
   }
 
   function disconnectLiveFeed() {
+    state.heldLiveTicks.clear();
     if (state.liveSocket) {
       const ws = state.liveSocket;
       state.liveSocket = null; // cleared first so the socket's own close handler won't reconnect
@@ -9333,6 +9380,15 @@
       try {
         const msg = JSON.parse(event.data);
         state.liveLastMsg = Date.now();
+        // The full-screen ticker search covers the chart: redrawing it on
+        // every tick there only made typing lag. Ticks wait, last value per
+        // candle, and land when the search closes.
+        if (!el("mobile-ticker-search").classList.contains("hidden")) {
+          const key = `${msg.timeframe}|${msg.candle.time}`;
+          state.heldLiveTicks.delete(key);
+          state.heldLiveTicks.set(key, msg);
+          return;
+        }
         applyLiveCandle(msg.timeframe, msg.candle);
       } catch (err) {
         /* ignore malformed frame */
@@ -10171,6 +10227,7 @@
     if (field.parentElement !== searchForm) searchForm.appendChild(field);
     overlay.classList.add("hidden");
     el("ticker-input").blur();
+    flushHeldLiveTicks();
   }
 
   function bindMobileTickerSearch() {
@@ -10911,12 +10968,12 @@
       loadIssues();
     });
 
-    // Anche all'avvio: se una via d'accesso non chiama loadIssues, il pannello
-    // e' comunque gia' popolato quando lo si apre, invece di restare vuoto.
-    loadIssues();
+    // Not at startup any more: every way into the board calls loadIssues,
+    // and building it (~600 KB, ~8000 elements) on each page load slowed the
+    // chart and the ticker search while nobody was looking at it.
 
     // A count on the entry, so an open report is visible without opening it.
-    fetch("/api/issues")
+    fetch("/api/issues?counts_only=1")
       .then((r) => (r.ok ? r.json() : null))
       .then((b) => {
         if (!b) return;

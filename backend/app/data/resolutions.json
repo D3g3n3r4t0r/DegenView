@@ -3354,5 +3354,10 @@
     "status": "risolto",
     "at": 1792605520,
     "summary": "Il tempo di apertura del grafico era quasi tutto nel download delle candele da MEXC: 3000 candele arrivano a pagine da 500, scaricate una dopo l'altra (2-3 secondi). Ora le pagine partono insieme: stessi dati, circa 40% piu' veloce. I grafici 2d/3d/5d restano in memoria 10 minuti come il giornaliero (prima 90 secondi). E quando la copia in memoria e' scaduta il grafico compare subito con l'ultima copia buona (fino a 15 minuti per i time frame brevi, 6 ore dal giornaliero in su) e si aggiorna da solo dopo pochi secondi. Misurato su BTCUSDT 5d: da ~3 s a ~2 s alla prima apertura, ~0,6 s alle successive."
+  },
+  "seed-0375": {
+    "status": "risolto",
+    "at": 1792607679,
+    "summary": "Misurato su un telefono simulato (CPU rallentata 4 volte), grafico fermo: il browser lavorava 5,1 secondi ogni 5, cioe' sempre. Tre cause: il pallino LIVE pulsava con un'ombra che faceva ridisegnare tutta la pagina a ogni fotogramma; il livello dei disegni si ridisegnava 60 volte al secondo anche a grafico fermo; la bacheca segnalazioni (600 KB, 8.000 elementi) veniva scaricata due volte e costruita a ogni apertura del sito anche senza guardarla. Ora il pallino pulsa solo in trasparenza, i disegni si ridisegnano solo quando qualcosa si muove, la bacheca si costruisce quando la apri (il numero sul menu arriva da una richiesta leggera) e, mentre la ricerca ticker copre il grafico, il grafico non si ridisegna a ogni prezzo. Risultato: lavoro a grafico fermo da 5,1 a ~1 s ogni 5, ritardo per lettera nella ricerca da 132 a 51 ms, elementi nella pagina da 11.800 a 3.800, dati scaricati all'apertura da 2,3 a 1,3 MB."
   }
 }
