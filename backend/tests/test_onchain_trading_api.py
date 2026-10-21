@@ -32,6 +32,9 @@ def test_quote_solana_real_network_call(client):
     resp = client.post("/api/onchain/quote/solana", json={
         "input_mint": SOL_MINT, "output_mint": USDC_MINT, "amount_lamports": 10_000_000,
     })
+    if resp.status_code == 502:
+        # Jupiter down or rate-limited is not our bug: never block a deploy on it.
+        pytest.skip(f"Jupiter unreachable: {resp.text[:200]}")
     assert resp.status_code == 200
     body = resp.json()
     assert body["in_amount"] == 10_000_000
@@ -80,16 +83,26 @@ def test_circuit_breaker_reset_via_api(client):
     assert client.get("/api/onchain/risk/status/solana").json()["circuit_breaker"]["tripped"] is False
 
 
-def test_execute_solana_real_quote_signs_but_does_not_send(client, monkeypatch):
-    """Quote reale via Jupiter (rete vera), firma mockata: verifica il
-    percorso end-to-end dell'endpoint senza mai toccare la rete Solana per
-    l'invio. onchain_execution_enabled resta False (default): il guardrail
-    finale deve fermarsi lui, non l'endpoint."""
+def test_execute_solana_signs_but_does_not_send(client, monkeypatch):
+    """Quote, valuation and signing mocked: the endpoint path end-to-end
+    with no network at all (a live Jupiter call made CI flaky: a 502 from
+    Jupiter blocked the deploy on 21/10). The real quote is covered by
+    test_quote_solana_real_network_call. onchain_execution_enabled stays
+    False (default): the final guardrail must stop it, not the endpoint."""
     auth.create_onchain_wallet(client.owner_id, "solana")
+
+    async def _fake_quote(input_mint, output_mint, amount_lamports, slippage_bps=50):
+        return {"in_amount": amount_lamports, "out_amount": 1_500_000,
+                "price_impact_pct": 0.1, "raw": {}}
+
+    async def _fake_value(chain, token_in, amount_in, token_out, amount_out, side):
+        return {"notional_usd": 15.0, "price_usd": 1.0, "qty": 15.0}
 
     async def _fake_build(private_key_hex, quote):
         return b"signed-tx-bytes"
 
+    monkeypatch.setattr(main.onchain_quotes, "jupiter_quote", _fake_quote)
+    monkeypatch.setattr(main.onchain_valuation, "swap_value", _fake_value)
     monkeypatch.setattr(onchain_execute.execution, "build_signed_solana_swap", _fake_build)
 
     resp = client.post("/api/onchain/execute/solana", json={
