@@ -8,7 +8,7 @@ Questo è un pacchetto di design e prototipi da integrare. Non è un'integrazion
 
 ## Repository e punti verificati
 
-Repository: `snowcomingsoon/liquidity-analysis-engine`. Frontend vanilla JS, backend FastAPI. `main` attiva il deploy: lavorare su branch e PR, senza merge o deploy implicito per la sola consegna di questi asset.
+Repository: `D3g3n3r4t0r/DegenView`. Frontend vanilla JS, backend FastAPI. `main` attiva il deploy: lavorare su branch e PR, senza merge o deploy implicito per la sola consegna di questi asset.
 
 | File esistente | Ruolo e integrazione |
 | --- | --- |

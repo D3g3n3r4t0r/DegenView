@@ -1622,7 +1622,7 @@ questa modifica.
 
 ## Stato del repo
 
-- **Repo**: `snowcomingsoon/liquidity-analysis-engine`
+- **Repo**: `D3g3n3r4t0r/DegenView`
 - **Dove gira**: server proprio Hetzner CX23 a Norimberga (2 core, 4 GB,
   6,70 EUR/mese), dominio **liquidityengine.app**. Deploy automatico a ogni
   push su `main`: lint + **test** + deploy (vedi `deploy/README.md`).
