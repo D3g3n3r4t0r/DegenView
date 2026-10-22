@@ -9,16 +9,21 @@
  * Canvas, so 60 fps with hundreds of bubbles: frames run only while the
  * layout settles or a highlight fades, then the loop stops. With reduced
  * motion the layout is computed at once and drawn a single time.
+ * Also loaded by the React app (frontend/app-next, SellsMap.tsx) from
+ * /static/onchain/: one map for both apps.
  */
 
-const PALETTE = ["--c-down", "--k-amber", "#60a5fa", "#c084fc", "#2dd4bf", "#f472b6"];
+const PALETTE = ["--c-down", "--k-amber,--c-amber", "#60a5fa", "#c084fc", "#2dd4bf", "#f472b6"];
 const FALLBACK = ["#ef4444", "#facc15"];
 const NEUTRAL = "--c-text";          // the top-holders group: no link found
 const still = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 function colour(el, token, i) {
   if (!token.startsWith("--")) return token;
-  return getComputedStyle(el).getPropertyValue(token).trim() || FALLBACK[i] || "#888";
+  // "--a,--b": the first one the page defines (the classic app and /app name some differently).
+  const css = getComputedStyle(el);
+  for (const t of token.split(",")) { const v = css.getPropertyValue(t).trim(); if (v) return v; }
+  return FALLBACK[i] || "#888";
 }
 
 export function clusterMap(host, report, { onPick } = {}) {
