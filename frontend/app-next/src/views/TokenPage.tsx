@@ -19,9 +19,9 @@ const LOG_LINES = 4;
 
 export type Opened = { e: Gem; context?: string };
 
-const watchId = (e: Gem) => `gem:${e.chain}:${e.token_address}`;
-function watched(): Set<string> { try { return new Set(JSON.parse(localStorage.getItem(WATCH_KEY) || "[]")); } catch { return new Set(); } }
-function toggleWatch(id: string) {
+export const watchId = (e: Gem) => `gem:${e.chain}:${e.token_address}`;
+export function watched(): Set<string> { try { return new Set(JSON.parse(localStorage.getItem(WATCH_KEY) || "[]")); } catch { return new Set(); } }
+export function toggleWatch(id: string) {
   const w = watched();
   if (w.has(id)) w.delete(id); else w.add(id);
   try { localStorage.setItem(WATCH_KEY, JSON.stringify([...w])); } catch { /* private mode */ }
