@@ -1,5 +1,6 @@
 import type { Gem } from "./types";
 import { ApiError, device } from "./api";
+import { locale, t as tr } from "./i18n";
 
 // /api/onchain/sectors (backend sectors.py): the arenas summed up per sector,
 // and Today, what changed since about a day ago.
@@ -22,9 +23,9 @@ export function getSectors(): Promise<SectorsView> {
   if (inFlight) return inFlight;
   inFlight = (async () => {
     const r = await fetch("/api/onchain/sectors", { headers: device ? { "X-Device": device } : {}, signal: AbortSignal.timeout(15000) })
-      .catch(() => { throw new ApiError("network unreachable"); });
+      .catch(() => { throw new ApiError(tr("network unreachable")); });
     if (r.status === 401) location.href = "/onchain-app.html";
-    if (!r.ok) throw new ApiError(`error ${r.status}`, r.status);
+    if (!r.ok) throw new ApiError(tr("error {n}", { n: r.status }), r.status);
     return r.json() as Promise<SectorsView>;
   })().finally(() => { inFlight = null; });
   return inFlight;
@@ -38,7 +39,7 @@ export const newChampions = (t: TodayView | undefined) =>
 export function sinceText(t: number | null) {
   if (!t) return "";
   const d = new Date(t * 1000), now = new Date();
-  const hm = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  const hm = d.toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" });
   const days = Math.round((new Date(now.toDateString()).getTime() - new Date(d.toDateString()).getTime()) / 86400000);
-  return days <= 0 ? `since ${hm} today` : days === 1 ? `since ${hm} yesterday` : `since ${d.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`;
+  return days <= 0 ? tr("since {hm} today", { hm }) : days === 1 ? tr("since {hm} yesterday", { hm }) : tr("since {d}", { d: d.toLocaleDateString(locale(), { day: "numeric", month: "short" }) });
 }
