@@ -11,7 +11,7 @@ import { Logo } from "../components/Logo";
 import { CandleChart } from "../components/CandleChart";
 import { SellsMap } from "../components/SellsMap";
 import { DevPayments, DREGG_MINT } from "../components/DevPayments";
-import { DeepResult, DossierHead, Details, InfoFallback, WhyOf } from "./Dossier";
+import { DeepFacts, DeepResult, DossierHead, Details, InfoFallback, WhyOf } from "./Dossier";
 import { t as tr } from "../lib/i18n";
 
 // The token page (detail.js): a full screen with the identity, the market-cap
@@ -313,8 +313,8 @@ export function TokenPage({ open, onClose }: { open: Opened; onClose: () => void
               {entry ? <WhyOf e={entry} deep={deep} /> : <p className="text-[14px] text-text-2">{loading ? tr("Loading…") : tr("Nothing to add yet.")}</p>}
               {entry && (
                 <div>
-                  <DossierHead title="Deep re-check" right={deep ? `${deep.verdict ?? ""} · ${deep.score ?? "—"}/100` : undefined} />
-                  {deep && <DeepResult d={deep} />}
+                  <DossierHead title="Deep re-check" right={deep ? (deep.v ? `${deep.score ?? "—"}/100` : `${deep.verdict ?? ""} · ${deep.score ?? "—"}/100`) : undefined} />
+                  {deep && (deep.v ? <DeepFacts d={deep} /> : <DeepResult d={deep} />)}
                   <RecheckButton rc={rc} wait={wait} onClick={recheck} />
                 </div>
               )}

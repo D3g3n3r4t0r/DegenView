@@ -145,6 +145,27 @@ def _key(chain: str, token: str) -> str:
     return f"{chain}-{sync_watch._n(token)}"
 
 
+# The rules the clusters are built with. A token built under older rules is
+# built again, every one of them (Lorenzo, 22/10: "fai un ricontrollo completo
+# di tutti i report dei cluster"): 2 = Solana pools excluded like depth.py, no
+# same-slot link from one airdrop sender.
+RULES = 2
+
+
+def rebuild_old_rules(st: dict) -> int:
+    """Forgets when tokens built under older rules were built, so the loop
+    queues each again; returns how many."""
+    if st.get("rules", 1) >= RULES:
+        return 0
+    n = 0
+    for rec in (st.get("tokens") or {}).values():
+        if rec.get("built_at") or rec.get("failed_at"):
+            rec["built_at"] = rec["failed_at"] = None
+            n += 1
+    st["rules"] = RULES
+    return n
+
+
 # --- queue -----------------------------------------------------------------
 
 def request(chain: str, token: str, symbol: str = "", created_at: float | None = None,
@@ -562,7 +583,7 @@ async def build(chain: str, token: str, symbol: str = "", created_at: float | No
                from_block=start, to_block=latest, transfers=len(transfers), supply=str(supply),
                contracts=sorted(contracts), block_s=round(block_s, 4),
                coverage={"source": source, "partial": partial, "from_block": first_b, "to_block": last_b,
-                         "from_ts": anchors.get(first_b), "transfers": len(transfers)})
+                         "from_ts": anchors.get(first_b), "transfers": len(transfers), "rules": RULES})
     _dir().mkdir(parents=True, exist_ok=True)
     write_text_atomic(_dir() / f"{_key(chain, token)}.json", json.dumps(res))
     if res["clusters"] or len(res["top"]) >= 2:
@@ -580,6 +601,7 @@ async def _build_solana(mint: str, symbol: str) -> dict:
                  "clusters": len(res["clusters"]), "waves": len(res.get("waves") or [])})
     res.update(chain="solana", token=mint, symbol=symbol, built_at=int(time.time()),
                partial=True, transfers=res["coverage"]["transfers"])
+    res["coverage"]["rules"] = RULES
     _dir().mkdir(parents=True, exist_ok=True)
     write_text_atomic(_dir() / f"{_key('solana', mint)}.json", json.dumps(res))
     clusters = [{"id": c["id"], "wallets": c["wallets"], "links": c["links"], "edges": c["edges"]}
@@ -753,6 +775,11 @@ async def loop(candidates, every_s: int = LOOP_S) -> None:
     between builds the queue one token after another (Lorenzo 22/10: 101
     queued and the engine idle, at one build per 5 minutes)."""
     await asyncio.sleep(60)
+    st = _state()
+    n = rebuild_old_rules(st)
+    if n:
+        _save_state(st)
+        note("rebuild", {}, f"{n} tokens built again under the new rules")
     while True:
         try:
             cands = candidates()

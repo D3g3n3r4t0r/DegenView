@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { Deep, Entry, Judge, Pillar, Point } from "../lib/types";
+import type { Deep, DeepArea, Entry, Judge, Pillar, Point } from "../lib/types";
 import { t as tr } from "../lib/i18n";
 
 // The Why and Info tabs of the token page, as leaderboard.js gemWhy() and
@@ -265,6 +265,60 @@ export function DeepResult({ d }: { d: Deep }) {
         {claims.map((c, i) => row(`c${i}`, TONE[c.status]?.[0] ?? "warn", TONE[c.status]?.[1] ?? "", { text: c.text, evidence: c.evidence || c.note }))}
       </ul>
       <p className="mt-2 text-[14px] text-text-2">{tr("{a} cleared · {b} unverified · {c} confirmed", { a: count("refuted"), b: count("unverified"), c: count("confirmed") })} · {d.auto ? `${tr("weekly re-check")} ` : ""}{ago(d.at)}</p>
+    </>
+  );
+}
+
+const AREA_LABEL: Record<string, string> = {
+  holders: "Holders & clusters", contract: "Contract", pool: "Pool & market", usage: "Real usage",
+  code: "Code", site: "Site & product", social: "Social", developer: "Developer",
+};
+const AREA_DOT: Record<DeepArea["status"], string> = { good: "bg-up", warn: "bg-amber", bad: "bg-down", unknown: "bg-text-3" };
+const EFFECT: Record<string, [string, string]> = {
+  stays: ["Stays in the Top", "text-up"], back: ["Back in the Top", "text-up"],
+  out: ["Out of the Top until {d}", "text-down"], not_on_board: ["Not on the board", "text-text-2"],
+};
+
+/** The deep re-check by facts (v2, 22/10): what it does to the Top, the AI's
+ * read of the product, then one measured fact per area with its source. */
+export function DeepFacts({ d }: { d: Deep }) {
+  const [label, tone] = EFFECT[d.effect ?? "not_on_board"] ?? EFFECT.not_on_board;
+  const until = d.effect_until ? new Date(d.effect_until * 1000).toLocaleDateString(undefined, { day: "numeric", month: "short" }) : "";
+  const before = d.before && d.before.keep !== d.keep ? (d.before.keep ? tr("before: kept") : tr("before: dropped")) : "";
+  const ai = d.ai;
+  return (
+    <>
+      <p className={`mt-1 text-[16px] font-semibold ${tone}`}>{tr(label, { d: until })}</p>
+      <p className="mt-0.5 text-[14px] leading-snug text-text-2">{d.reason}{before && ` · ${before}`}</p>
+      <div className="mt-3 rounded-xl bg-bg px-3 py-2.5">
+        <small className="block text-[12px] font-semibold uppercase tracking-wide text-text-3">{tr("AI opinion")}</small>
+        {ai ? (
+          <>
+            {ai.product && <p className="mt-1 text-[14px] font-semibold leading-snug">{ai.product}</p>}
+            {ai.summary && <p className="mt-1 text-[14px] leading-snug text-text-2">{ai.summary}</p>}
+            {ai.impersonates && <p className="mt-1 text-[14px] text-amber">{tr("Borrows the name of {n}", { n: ai.impersonates })}</p>}
+          </>
+        ) : <p className="mt-1 text-[14px] text-text-2">{tr("No AI opinion: the verdict comes from measured facts only.")}</p>}
+      </div>
+      <ul className="mt-2">
+        {(d.areas ?? []).map((a) => (
+          <li key={a.key} className="relative border-b border-line py-2 pl-5 last:border-0">
+            <i className={`absolute left-0.5 top-[13px] h-2 w-2 rounded-full ${AREA_DOT[a.status] ?? "bg-text-3"}`} aria-hidden="true" />
+            <b className="block text-[14px] font-semibold">{tr(AREA_LABEL[a.key] ?? a.key)}</b>
+            <span className="block text-[14px] leading-snug">{a.line}</span>
+            {a.source && <small className="block text-[12px] text-text-3">{a.source}</small>}
+          </li>
+        ))}
+      </ul>
+      {!!d.checked?.length && (
+        <details className="mt-2 text-[14px]">
+          <summary className="cursor-pointer text-text-2">{tr("How it was checked")}</summary>
+          <ul className="mt-1">
+            {d.checked.map((c, i) => <li key={i} className="py-0.5 text-[13px] text-text-2">{c.source}: {c.result}{c.detail ? ` — ${c.detail}` : ""}</li>)}
+          </ul>
+        </details>
+      )}
+      <p className="mt-2 text-[13px] text-text-3">{d.auto ? `${tr("weekly re-check")} · ` : ""}{ago(d.at)}</p>
     </>
   );
 }

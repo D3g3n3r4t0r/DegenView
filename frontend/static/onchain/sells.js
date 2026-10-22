@@ -63,7 +63,7 @@ function report(r, idx) {
       <time>${ago(e.ts)}</time></li>`;
   }).join("");
   const title = r.symbol ? escapeHtml(r.symbol) : `<code>${escapeHtml(short(r.token))}</code>`;
-  return `<article class="cs-card" data-card="${idx}">
+  return `<article class="cs-card" data-card="${idx}" data-token="${escapeHtml(r.token)}">
     <header class="cs-head">
       <p><b>${title}</b><small>${escapeHtml(r.chain.charAt(0).toUpperCase() + r.chain.slice(1))}${r.updated_at ? ` · updated ${ago(r.updated_at)}` : ""}</small></p>
       <p class="cs-risk" data-level="${level(score)}" style="--r:${(score ?? 0) / 100}"><b>${score == null ? "—" : Math.round(score)}</b><small>risk</small><i></i></p>
