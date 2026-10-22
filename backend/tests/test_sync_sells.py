@@ -84,6 +84,6 @@ def test_structure_risk_counts_supply_in_linked_clusters():
     from app.trading.onchain import sync_sells as m
     a, b, c = ("0x" + x * 40 for x in "abc")
     rep = m.report("robinhood", "0x" + "1" * 40, [], [{"id": "a1", "wallets": [a, b]}, {"id": "top", "wallets": [c]}],
-                   [], 10**9, shares={a: 0.10, b: 0.08, c: 0.5})
-    assert rep["risk"]["structure"] == {"score": 60, "share": 0.18}
-    assert rep["risk"]["score"] == 60 and "18.0%" in rep["risk"]["reasons"][0]
+                   [], 10**9, shares={a: 0.07, b: 0.05, c: 0.5})
+    assert rep["risk"]["structure"] == {"score": 60, "share": 0.12}
+    assert rep["risk"]["score"] == 60 and "12.0%" in rep["risk"]["reasons"][0]
