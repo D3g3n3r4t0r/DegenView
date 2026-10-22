@@ -8693,7 +8693,7 @@ def _render_onchain_app(user: User | None) -> str:
     # Si cerca per id, non per l'intero tag: un attributo aggiunto al tag
     # (data-view del Pilota) bastava a far fallire il replace in silenzio.
     if _next_for(user):
-        html = html.replace("<head>", "<head>" + _TO_NEXT, 1)
+        html = html.replace("<head>", "<head>" + (_TO_NEXT_ALL if settings.onchain_next_desktop else _TO_NEXT), 1)
     target = "app-shell" if user else "login-screen"
     html = re.sub(rf'(<[^>]*\bid="{target}"[^>]*?) hidden>', r"\1>", html, count=1)
     return _with_guest_banner(html, user)
@@ -8726,10 +8726,13 @@ def _next_for(user: User | None) -> bool:
     return settings.onchain_next_for_all or user.email in email_allowlist(settings.onchain_next_emails)
 
 
-# A phone that opens the current app goes to /app (the desktop stays, and /app
-# sends widths of 1100px and up back here, so the two never loop).
+# A phone that opens the current app goes to /app; a computer too once
+# settings.onchain_next_desktop is on. /app never sends anyone back here (it
+# has its own desktop layout since 22/10), so the two cannot loop.
 _TO_NEXT = ('<script>if(innerWidth<1100&&!/[?&]classic=1/.test(location.search))'
             'location.replace("/app"+location.hash)</script>')
+_TO_NEXT_ALL = ('<script>if(!/[?&]classic=1/.test(location.search))'
+                'location.replace("/app"+location.hash)</script>')
 
 
 @app.get("/app")
@@ -8749,8 +8752,8 @@ async def onchain_next_page(user: User | None = Depends(auth.get_current_user_op
 async def onchain_app_page(request: Request, user: User | None = Depends(auth.get_current_user_optional)) -> Response:
     # A phone goes to /app from the server too, not only from the injected
     # script: a home-screen app could keep showing the old page (22/10).
-    if (_next_for(user) and "Mobi" in request.headers.get("user-agent", "")
-            and request.query_params.get("classic") != "1"):
+    if (_next_for(user) and request.query_params.get("classic") != "1"
+            and (settings.onchain_next_desktop or "Mobi" in request.headers.get("user-agent", ""))):
         return RedirectResponse("/app", status_code=303)
     # La pagina ora contiene chi sei: nessuna cache condivisa deve tenerla.
     return HTMLResponse(

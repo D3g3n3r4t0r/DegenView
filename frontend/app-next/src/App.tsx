@@ -22,6 +22,8 @@ import { Search } from "./views/Search";
 import { TokenSheet } from "./views/TokenSheet";
 import { Profile } from "./views/Profile";
 import { Clusters, appKey } from "./views/Clusters";
+import { Sidebar } from "./components/Sidebar";
+import { useDesk } from "./lib/desk";
 
 const POLL_MS = 30_000;
 const PEARL_MIN = 70;          // a "70" on screen is always a pearl
@@ -30,6 +32,10 @@ const ALL: View[] = ["today", "sectors", "watch", "search", "gems", "pearl", "to
 // Direction A (Lorenzo 22/10 "come in questo pdf"): the dock holds Today,
 // Sectors, Clusters, Watch and Search; the rest opens from the avatar.
 const GEMS: View[] = ["gems", "pearl", "top", "rank"];
+// On a computer these keep the list on the left with the token page beside it (the old desktop
+// terminal, 29/09); the others are boards, and the page covers them.
+const SPLIT: View[] = ["gems", "pearl", "top", "rank", "quality", "watch", "search"];
+const LIST_W = 470;
 
 // Read before the view's own hash replaces it.
 const LINK = location.hash.match(/&token=([^:&]+):([^&]+)/);
@@ -59,6 +65,8 @@ export function App() {
   const [labels, setLabels] = useState<Record<string, string>>({});
   const narr = useNarratives();
   const [{ initial }] = useState(boot);
+  // The desktop opens a row straight on the token page beside the rail: the preview sheet is the phone's.
+  const desk = useDesk();
 
   const load = useCallback(async () => {
     try {
@@ -91,6 +99,14 @@ export function App() {
     }).catch(() => {});
   }, []);
   useEffect(() => { history.replaceState(null, "", `${location.pathname}${location.search}#${view}`); scrollTo(0, 0); }, [view]);
+  // Escape closes the token page, as Back does on the phone.
+  useEffect(() => {
+    if (!open) return;
+    const k = (ev: KeyboardEvent) => { if (ev.key === "Escape") history.state?.detail ? history.back() : closePage(); };
+    addEventListener("keydown", k);
+    return () => removeEventListener("keydown", k);
+  }, [open, closePage]);
+  const split = desk && !!open && SPLIT.includes(view);
 
   const inGems = GEMS.includes(view);
   // Which tokens the app shows now, for the Clusters tab ("vedo piu di 200 cluster [...] i progetti in sectors sono 46").
@@ -100,7 +116,7 @@ export function App() {
   const born = Date.now() / 1000 - PEARL_MAX_AGE_DAYS * 86400;
   const sc = (e: { score?: number }) => Math.round(e.score ?? 0);
   // Each list says where the token was seen, on the page's context line (top.js, projects.js register()).
-  const openWith = (context: (e: Gem) => string) => (e: Gem) => setPeek({ e, context: context(e) });
+  const openWith = (context: (e: Gem) => string) => (e: Gem) => (desk ? setOpenRaw : setPeek)({ e, context: context(e) });
   const setOpen = (o: Opened | null) => setOpenRaw(o);
   const byScore = data ? [...data.entries].sort((a, b) => (b.score ?? 0) - (a.score ?? 0)) : [];
   const openArena = openWith((e) => {
@@ -108,7 +124,7 @@ export function App() {
     return a ? `${a.label} · ${t("#{n} of {m}", { n: e.arena_rank ?? 0, m: a.size })} · ${t("score {n}", { n: sc(e) })}` : t("score {n}", { n: sc(e) });
   });
   const openRanked = openWith((e) => `Top 25 · #${byScore.findIndex((x) => gemId(x) === gemId(e)) + 1} · ${t("score {n}", { n: sc(e) })}`);
-  const openProject = (p: Project) => setPeek({
+  const openProject = (p: Project) => (desk ? setOpenRaw : setPeek)({
     e: { chain: p.chain, token_address: p.token, symbol: p.symbol ?? "?", name: p.name, image: p.image, score: p.score, market_cap: p.mcap, liquidity_usd: p.liq },
     context: `Database · ${t("score {n}", { n: p.score == null ? "—" : Math.round(p.score) })} · ${p.status}${p.why ? ` · ${p.why}` : ""}` });
 
@@ -126,25 +142,29 @@ export function App() {
 
   return (
     <MotionConfig reducedMotion="user">
-      <main className="mx-auto max-w-xl px-4 pb-[calc(128px+env(safe-area-inset-bottom))] pt-[calc(env(safe-area-inset-top)+18px)]">
-        {view !== "search" && (
-          <header className="mb-3 flex items-center justify-between gap-3">
-            <h1 className="text-[28px] font-semibold leading-tight tracking-[-0.03em]">{t(LABEL[view])}</h1>
-            <LangSwitch />
+      <Sidebar view={view} sub={sub} quality={quality} initial={initial} onGo={(p) => { if (p.sub) setSub(p.sub); setView(p.v); }} />
+      <main className="mx-auto max-w-xl px-4 pb-[calc(128px+env(safe-area-inset-bottom))] pt-[calc(env(safe-area-inset-top)+18px)] desk:ml-[238px] desk:mr-0 desk:max-w-none desk:px-10 desk:pb-16 desk:pt-9" style={split ? { width: LIST_W, paddingInline: 20 } : undefined}>
+       <div className="desk:mx-auto desk:max-w-[1240px]">
+        {(view !== "search" || desk) && (
+          <header className="mb-3 flex items-center justify-between gap-3 desk:mb-5">
+            <h1 className="text-[28px] font-semibold leading-tight tracking-[-0.03em] desk:text-[34px]">{t(view === "gems" && desk ? (sub === "database" ? "Database" : "Arenas") : LABEL[view])}</h1>
+            <span className="ml-auto desk:hidden"><LangSwitch /></span>
             <button type="button" onClick={() => setMore(true)} aria-label={t("Profile and more")}
-              className="grid h-9 w-9 flex-none place-items-center rounded-full bg-ink text-[14px] font-semibold text-on-ink">{initial}</button>
+              className="grid h-9 w-9 flex-none place-items-center rounded-full bg-ink text-[14px] font-semibold text-on-ink desk:hidden">{initial}</button>
+            {inGems && desk && !split && <div className="w-[min(520px,50%)]"><Top3 list={podium} onOpen={openWith((e) => `Top 25 · ${t("score {n}", { n: sc(e) })}`)} /></div>}
           </header>
         )}
-        {inGems && <Top3 list={podium} onOpen={openWith((e) => `Top 25 · ${t("score {n}", { n: sc(e) })}`)} />}
+        {inGems && !desk && <Top3 list={podium} onOpen={openWith((e) => `Top 25 · ${t("score {n}", { n: sc(e) })}`)} />}
         {err && !data && <p className="rounded-2xl bg-card p-4 text-[14px] text-down">{t("Could not load the gems: {err}", { err })}</p>}
         <AnimatePresence mode="wait">
-          <motion.div key={view} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.16 }}>
+          <motion.div key={view} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.16 }}
+            className={view === "search" || view === "profile" ? "desk:max-w-[820px]" : ""}>
             {view === "today" && <Today data={sec} onOpen={openWith((e) => `${t("Today")} · ${(e as Gem & { sector?: string }).sector ?? t("Sectors")} · ${t("score {n}", { n: sc(e) })}`)} onSectors={() => setView("sectors")} onWatch={() => setView("watch")} early={data?.early.length ?? null} onEarly={() => setView("top")} />}
             {view === "sectors" && <Sectors data={sec} onOpen={openWith((e) => `${t("Sectors")} · ${e.arena_rank ? `#${e.arena_rank} · ` : ""}${t("score {n}", { n: sc(e) })}`)} />}
             {view === "watch" && <Watch data={sec} gems={data ? [...data.entries, ...data.early] : []} onOpen={openWith((e) => `${t("Watch")} · ${t("score {n}", { n: sc(e) })}`)} />}
             {view === "search" && <Search sectors={sec} onProject={openProject} onSector={() => setView("sectors")} onToken={(e) => setOpen({ e, context: t("Scan") })} />}
             {inGems && (
-              <div className="flex gap-1 rounded-full bg-pill p-1">
+              <div className="flex gap-1 rounded-full bg-pill p-1 desk:hidden">
                 {([["arenas", "Arenas", "gems"], ["database", "Database", "gems"], ["pearl", "Pearl", "pearl"], ["early", "Early", "top"], ["rank", "Top", "rank"]] as const).map(([s, label, v]) => {
                   const on = view === v && (v !== "gems" || sub === s);
                   return (
@@ -189,6 +209,7 @@ export function App() {
             {view === "profile" && <Profile onOpen={(e, context) => setPeek({ e, context })} />}
           </motion.div>
         </AnimatePresence>
+       </div>
       </main>
       <Dock view={view} onView={setView} />
       <Sheet open={more} title={t("More")} onClose={() => setMore(false)}>
@@ -202,7 +223,9 @@ export function App() {
         </nav>
       </Sheet>
       <TokenSheet open={peek} onClose={() => setPeek(null)} onFull={(o) => { setPeek(null); setOpen(o); }} />
-      <AnimatePresence>{open && <TokenPage key={gemId(open.e)} open={open} onClose={closePage} />}</AnimatePresence>
+      <div style={{ "--tp-left": split ? `${238 + LIST_W}px` : "238px" } as React.CSSProperties}>
+        <AnimatePresence>{open && <TokenPage key={gemId(open.e)} open={open} onClose={closePage} />}</AnimatePresence>
+      </div>
     </MotionConfig>
   );
 }
@@ -222,7 +245,7 @@ function ScanButton({ onClick }: { onClick: () => void }) {
 function LangSwitch() {
   const lang = useLang();
   return (
-    <div role="radiogroup" aria-label={t("Language")} className="ml-auto flex rounded-full bg-pill p-0.5 text-[11.5px] font-semibold">
+    <div role="radiogroup" aria-label={t("Language")} className="flex rounded-full bg-pill p-0.5 text-[11.5px] font-semibold">
       {(["it", "en"] as const).map((l) => (
         <button key={l} type="button" role="radio" aria-checked={lang === l} onClick={() => setLang(l)}
           className={`h-7 w-8 rounded-full uppercase ${lang === l ? "bg-card text-text shadow-[0_1px_2px_rgb(0_0_0/.06)]" : "text-text-3"}`}>{l}</button>

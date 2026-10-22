@@ -4,7 +4,7 @@ export const IT: Record<string, string> = {
   // Places
   "Today": "Oggi", "Sectors": "Settori", "Watch": "Seguiti", "Search": "Cerca", "Gems": "Gemme", "Pearl": "Perle",
   "Quality": "Qualità", "Clusters": "Cluster", "Profile": "Profilo", "Arenas": "Arene", "More": "Altro", "Sections": "Sezioni",
-  "Language": "Lingua", "Profile and more": "Profilo e altro",
+  "Language": "Lingua", "Profile and more": "Profilo e altro", "Engine": "Motore",
   "Projects under $300k cap that pass every other bar": "Progetti sotto $300k di cap che superano tutte le altre soglie",
   "Arenas, Database, Pearl, Early and Top 25": "Arene, Database, Perle, Early e Top 25",
   "Quality 80 or more, to accept or discard": "Qualità 80 o più, da accettare o scartare",

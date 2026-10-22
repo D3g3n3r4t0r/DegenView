@@ -73,3 +73,25 @@ def test_a_phone_is_sent_to_the_new_app_by_the_server(users, monkeypatch):
         resp = client.get("/onchain-app.html", headers=phone, follow_redirects=False)
         assert resp.status_code == 303 and resp.headers["location"] == "/app"
         assert client.get("/onchain-app.html?classic=1", headers=phone).status_code == 200
+
+
+def test_computers_stay_on_the_current_app_until_the_desktop_switch(users, monkeypatch):
+    monkeypatch.setattr(main.settings, "onchain_next_for_all", True)
+    desktop = {"user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130.0"}
+    with TestClient(main.app) as client:
+        client.post("/api/auth/login", json={"email": "other@example.com", "password": _PASSWORD})
+        resp = client.get("/onchain-app.html", headers=desktop, follow_redirects=False)
+        assert resp.status_code == 200 and "innerWidth<1100" in resp.text
+
+
+def test_the_desktop_switch_sends_computers_to_the_new_app(users, monkeypatch):
+    monkeypatch.setattr(main.settings, "onchain_next_for_all", True)
+    monkeypatch.setattr(main.settings, "onchain_next_desktop", True)
+    desktop = {"user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130.0"}
+    with TestClient(main.app) as client:
+        client.post("/api/auth/login", json={"email": "other@example.com", "password": _PASSWORD})
+        resp = client.get("/onchain-app.html", headers=desktop, follow_redirects=False)
+        assert resp.status_code == 303 and resp.headers["location"] == "/app"
+        page = client.get("/onchain-app.html?classic=1", headers=desktop)
+        assert page.status_code == 200 and "innerWidth<1100" not in page.text
+        assert client.get("/app", headers=desktop).status_code == 200

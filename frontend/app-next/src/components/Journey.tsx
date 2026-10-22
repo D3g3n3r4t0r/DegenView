@@ -178,7 +178,7 @@ export const Journey = forwardRef<JourneyHandle>(function Journey(_, ref) {
           </ol>
         </>
       )}
-      {clock && <p className="fixed bottom-[calc(112px+env(safe-area-inset-bottom))] left-1/2 z-30 max-w-[calc(100vw-32px)] -translate-x-1/2 rounded-full border border-up bg-card px-3.5 py-2 text-[13px] shadow-float">{clock}</p>}
+      {clock && <p className="fixed desk:bottom-8 bottom-[calc(112px+env(safe-area-inset-bottom))] left-1/2 z-30 max-w-[calc(100vw-32px)] -translate-x-1/2 rounded-full border border-up bg-card px-3.5 py-2 text-[13px] shadow-float">{clock}</p>}
     </section>
   );
 });

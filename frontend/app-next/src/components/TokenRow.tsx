@@ -2,7 +2,7 @@ import { motion } from "motion/react";
 import type { Gem } from "../lib/types";
 import { age, changeText, marketSub, usdShort } from "../lib/format";
 import { Logo } from "./Logo";
-import { t } from "../lib/i18n";
+import { locale, t } from "../lib/i18n";
 
 const BADGE = { early: "EARLY", hidden: "HIDDEN GEM" } as const;
 
@@ -18,7 +18,7 @@ export function TokenRow({ e, name, badge, onOpen, i = 0, dim = false, footer }:
   const sub = marketSub(e);
   return (
     <motion.li layout="position" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.26, ease: [0.25, 0.1, 0.25, 1], delay: Math.min(i, 8) * 0.025 }} className={`trow ${footer ? "has-foot" : ""}`}>
+      transition={{ duration: 0.26, ease: [0.25, 0.1, 0.25, 1], delay: Math.min(i, 8) * 0.025 }} className={`trow @container ${footer ? "has-foot" : ""}`}>
       <button type="button" onClick={() => onOpen(e)}
         className="flex w-full items-center gap-3 rounded-[12px] px-2 py-2 text-left transition-colors duration-150 active:bg-pill">
         <Logo size={38} symbol={e.symbol} image={e.image} chain={e.chain} token={e.token_address} />
@@ -35,15 +35,30 @@ export function TokenRow({ e, name, badge, onOpen, i = 0, dim = false, footer }:
                 <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={1.4} strokeLinecap="round" aria-hidden="true"><path d="M8 14V7M8 9c0-3 2-4.5 5-4.5 0 3-2 4.5-5 4.5ZM8 8C8 5.5 6.3 4 3.5 4c0 2.6 1.7 4 4.5 4Z" /></svg>{a}
               </span>
             )}
-            {sub && <span className="min-w-0 truncate">{sub}</span>}
+            {sub && <span className="min-w-0 truncate @min-[640px]:hidden">{sub}</span>}
           </small>
         </span>
-        <span className="flex flex-none flex-col items-end gap-0.5">
+        {/* A wide row (the desktop's lists) spells the market line out in columns. */}
+        <span className="hidden flex-none @min-[640px]:flex">
+          <Col label={t("Liquidity")} v={usdShort(e.liquidity_usd)} />
+          <Col label={t("Volume 7d")} v={e.usage?.vol_7d_avg != null ? t("{v}/d", { v: usdShort(e.usage.vol_7d_avg) }) : usdShort(e.usage?.vol_24h)} />
+          <Col label={t("Holders")} v={e.usage?.holders != null ? e.usage.holders.toLocaleString(locale()) : "—"} />
+        </span>
+        <span className="flex flex-none flex-col items-end gap-0.5 @min-[640px]:w-[92px]">
           <b className="num text-[14px] font-semibold leading-tight">{usdShort(e.market_cap)}</b>
           <em className={`num text-[12px] not-italic ${sign === "up" ? "text-up" : sign === "down" ? "text-down" : "text-text-3"}`}>{chg}</em>
         </span>
       </button>
       {footer}
     </motion.li>
+  );
+}
+
+function Col({ label, v }: { label: string; v: string }) {
+  return (
+    <span className="flex w-[104px] flex-col items-end gap-0.5">
+      <b className="num text-[14px] font-medium leading-tight text-text-2">{v}</b>
+      <small className="text-[11px] text-text-3">{label}</small>
+    </span>
   );
 }

@@ -6,6 +6,7 @@ import { changeText, usdShort } from "../lib/format";
 import { TokenRow, gemId } from "../components/TokenRow";
 import { Logo, Tile } from "../components/Logo";
 import { t } from "../lib/i18n";
+import { useDesk } from "../lib/desk";
 
 type Mode = "champions" | "map";
 // Lorenzo, 22/10: "avevo scelto M2" — Champions first, with the Map one tap away.
@@ -20,7 +21,7 @@ export function Sectors({ data, onOpen }: { data: SectorsView | null; onOpen: (e
   const projects = new Set(list.flatMap((s) => s.entries.map(gemId))).size;
   return (
     <>
-      <div className="flex gap-1 rounded-full bg-pill p-1" role="tablist" aria-label={t("Mosaic")}>
+      <div className="flex gap-1 rounded-full bg-pill p-1 desk:max-w-[360px]" role="tablist" aria-label={t("Mosaic")}>
         {MODES.map(([m, label]) => (
           <button key={m} type="button" role="tab" aria-selected={mode === m} onClick={() => setMode(m)}
             className={`relative h-9 flex-1 rounded-full text-[14px] font-medium transition-colors ${mode === m ? "text-text" : "text-text-2"}`}>
@@ -49,11 +50,11 @@ function Champions({ list, fresh, onOpen }: { list: Sector[]; fresh: Set<string>
   const [open, setOpen] = useState<string | null>(null);
   const max = Math.max(...list.map((s) => s.strength), 0.01);
   return (
-    <div className="grid grid-flow-row-dense grid-cols-2 gap-2">
+    <div className="grid grid-flow-row-dense grid-cols-2 gap-2 desk:grid-cols-4 desk:gap-3">
       {list.map((s, i) => {
         const champ = s.top[0], isNew = fresh.has(s.label), isOpen = open === s.key, wide = i === 0 || isOpen || isNew;
         return (
-          <motion.section key={s.key} layout="position" className={`min-w-0 rounded-[20px] bg-card p-3 ${i === 0 || isOpen || isNew ? "col-span-2" : ""} ${isNew ? "ring-[1.5px] ring-up" : ""}`}>
+          <motion.section key={s.key} layout="position" className={`min-w-0 rounded-[20px] bg-card p-3 ${i === 0 || isOpen || isNew ? "col-span-2" : ""} ${isOpen ? "desk:col-span-4" : ""} ${isNew ? "ring-[1.5px] ring-up" : ""}`}>
             <button type="button" onClick={() => setOpen(isOpen ? null : s.key)} aria-expanded={isOpen} className="flex w-full items-center gap-2 text-left">
               <span className="min-w-0 flex-1 truncate text-[11.5px] font-medium uppercase tracking-[0.07em] text-text-3">{s.label}</span>
               {isNew && <span className="text-[10px] font-bold tracking-wide text-up">{t("NEW CHAMPION")}</span>}
@@ -111,6 +112,7 @@ function tone(e: Gem, paint: Paint) {
 
 function MarketMap({ list, onOpen }: { list: Sector[]; onOpen: (e: Gem) => void }) {
   const [paint, setPaint] = useState<Paint>("24h");
+  const desk = useDesk();
   const weight = (cap: number) => Math.sqrt(Math.max(cap, 1));
   const sorted = [...list].sort((a, b) => b.cap - a.cap);
   const total = sorted.reduce((t, s) => t + weight(s.cap), 0) || 1;
@@ -129,16 +131,16 @@ function MarketMap({ list, onOpen }: { list: Sector[]; onOpen: (e: Gem) => void 
           const cells = [...s.entries].filter((e) => e.in !== false).sort((a, b) => (b.market_cap ?? 0) - (a.market_cap ?? 0));
           const inner = cells.reduce((t, e) => t + weight(e.market_cap ?? 0), 0) || 1;
           return (
-            <section key={s.key} className="flex min-w-0 flex-col rounded-[14px] bg-pill p-1" style={{ flex: `1 1 calc(${basis}% - 4px)`, minHeight: basis > 60 ? 132 : 92 }}>
+            <section key={s.key} className="flex min-w-0 flex-col rounded-[14px] bg-pill p-1" style={{ flex: `1 1 calc(${basis}% - 4px)`, minHeight: (basis > 60 ? 132 : 92) * (desk ? 1.7 : 1) }}>
               <h4 className="truncate px-1 pb-0.5 text-[10px] font-medium uppercase tracking-[0.07em] text-text-3">{s.label}</h4>
               <div className="flex flex-1 flex-wrap gap-[3px]">
                 {cells.map((e) => {
                   const w = weight(e.market_cap ?? 0) / inner;
                   return (
                     <button key={gemId(e)} type="button" onClick={() => onOpen(e)}
-                      className={`grid min-h-[34px] min-w-0 place-items-center overflow-hidden rounded-[8px] px-1 text-center leading-tight ${tone(e, paint)}`}
+                      className={`grid min-h-[34px] desk:min-h-[52px] desk:content-center desk:gap-0.5 min-w-0 place-items-center overflow-hidden rounded-[8px] px-1 text-center leading-tight ${tone(e, paint)}`}
                       style={{ flex: `${Math.max(w, 0.05)} 1 calc(${Math.min(100, Math.max(30, w * 100))}% - 3px)` }}>
-                      <span className="truncate text-[11px] font-semibold">{e.symbol}</span>
+                      <span className="truncate text-[11px] font-semibold desk:text-[13px]">{e.symbol}</span>
                       {w > 0.18 && <span className="num text-[10px] opacity-90">{paint === "24h" ? changeText(e.change_24h)[0] : Math.round(e.score ?? 0)}</span>}
                     </button>
                   );
