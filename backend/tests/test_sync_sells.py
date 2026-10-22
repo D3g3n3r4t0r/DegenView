@@ -57,3 +57,22 @@ def test_run_with_fake_rpc():
     r = asyncio.run(ss.run("robinhood", S["token"], W, [POOL], 0, 6_000, rpc=rpc))
     assert calls.count("eth_getLogs") == 2 and calls.count("eth_getBlockByNumber") == 1
     assert r["sold_pct"] == 3.0 and r["timeline"][0]["ts"] == 16 and r["groups"][0]["same_block"]
+
+
+def test_report_v1_and_write(tmp_path, monkeypatch):
+    import json
+    from app.trading.onchain import storage
+    tx = [t(100, w, POOL, 1.0, ts=1000 + i) for i, w in enumerate(W[:3])] + [t(100, W[4], POOL, 1.0, ts=1000)]
+    clusters = [{"id": "c1", "wallets": W[:3], "links": ["same_funder"]}, {"id": "c2", "wallets": W[3:]}]
+    rep = ss.report("robinhood", S["token"].upper().replace("0X", "0x"), tx, clusters, [POOL], SUPPLY,
+                    symbol="XYZ", shares={W[0]: 0.02, W[1]: 0.01}, now=2000)
+    assert rep["version"] == 1 and rep["token"] == S["token"] and rep["updated_at"] == 2000
+    c1, c2 = rep["clusters"]
+    assert c1["share"] == 0.03 and c1["links"] == ["same_funder", "same_block_sells"] and c2["risk"] == 0
+    [ev] = rep["events"]
+    assert ev == {"id": "c1-1000", "cluster": "c1", "ts": 1000, "window_s": 2, "wallets": 3,
+                  "share_sold": 0.03, "txs": ["0x64"] * 3}
+    assert rep["risk"]["score"] == c1["risk"] > 0 and rep["risk"]["reasons"]
+    monkeypatch.setattr(storage, "DATA_DIR", tmp_path)
+    ss.write_report(rep)
+    assert json.loads((tmp_path / "coordinated_sells" / f"robinhood-{S['token']}.json").read_text()) == rep
