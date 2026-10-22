@@ -25,7 +25,7 @@ import time
 import httpx
 
 from app.atomic_write import write_text_atomic
-from app.trading.onchain import launchpad, storage
+from app.trading.onchain import launchpad, storage, wallet_clusters
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +49,11 @@ SYSTEM = (
     "avoid: nothing real behind the token (no product, no code, generic or AI-written filler text, "
     "a token launcher whose only product is launching more tokens). "
     "impersonates: the name or ticker borrows a famous company, person or another crypto project "
-    "without being it. Be strict but fair: an early project with a real, specific product is ok."
+    "without being it. "
+    "wallet_clusters is our engine's on-chain report of holders acting together: the only evidence on rug "
+    "risk from holders and coordinated selling. A risk of 60 or more, or linked wallets holding 12% or more "
+    "of supply, is a sign of a rug pull; when it is not available that risk is unknown, never a reason. "
+    "Be strict but fair: an early project with a real, specific product is ok."
 )
 
 _verdicts: dict[str, dict] = {}
@@ -147,7 +151,9 @@ def reason(e: dict, now: float | None = None) -> str:
     return ""
 
 
-def _payload(e: dict) -> dict:
+def _payload(e: dict, clusters: str = "") -> dict:
+    """`clusters`: wallet_clusters.report_state() when the report is missing."""
+    from app.trading.onchain import coordinated_sells
     p = e.get("pillars") or {}
     site = (p.get("site") or {}).get("facts") or {}
     gh = (p.get("github") or {}).get("facts") or {}
@@ -164,7 +170,9 @@ def _payload(e: dict) -> dict:
                                          "docs_ok", "app_ok", "unreadable")} | {"excerpt": (site.get("excerpt") or "")[:900]},
         "github": None if gh.get("missing") else {k: gh.get(k) for k in ("repo", "description", "code_kb", "commits",
                                                                         "authors", "stars", "span_days")},
-        "holders": {k: tok.get(k) for k in ("top1_pct", "top10_pct", "holders", "linked_pct", "creator_pct")},
+        "holders": {k: tok.get(k) for k in ("top1_pct", "top10_pct", "holders", "creator_pct")},
+        "wallet_clusters": coordinated_sells.ai_facts(e.get("chain") or "", e.get("token_address") or "")
+        or {"available": False, "why": clusters or "no report"},
     }
 
 
@@ -186,10 +194,10 @@ def _parse(text: str) -> dict | None:
     return {k: out[k] for k in ("verdict", "impersonates", "meme", "confidence", "reason")}
 
 
-async def judge(e: dict, client: httpx.AsyncClient) -> dict | None:
+async def judge(e: dict, client: httpx.AsyncClient, clusters: str = "") -> dict | None:
     """One verdict from the first free model that answers (free_ai.py), stored; None if none did."""
     from app import free_ai
-    data = json.dumps(_payload(e), ensure_ascii=False, default=str)
+    data = json.dumps(_payload(e, clusters), ensure_ascii=False, default=str)
     body = {"model": "", "temperature": 0, "max_tokens": 400, "response_format": {"type": "json_object"},
             "messages": [{"role": "system", "content": SYSTEM}, {"role": "user", "content": f"Project data:\n{data}"}]}
     try:
@@ -223,8 +231,14 @@ async def run_once(candidates, client: httpx.AsyncClient, now: float | None = No
         if key.lower() in seen or fresh(key, now) or done >= PER_TURN or _state["calls"] >= DAILY_MAX:
             continue
         seen.add(key.lower())
+        # No cluster report yet: built first in line, the verdict waits for it.
+        chain, token = e.get("chain") or "", e.get("token_address") or ""
+        state = wallet_clusters.report_state(chain, token, now)
+        if state == "pending":
+            wallet_clusters.request(chain, token, e.get("symbol") or "", urgent=True, section="AI check")
+            continue
         _state["calls"] += 1
-        v = await judge(e, client)
+        v = await judge(e, client, "" if state == "ready" else state)
         if v is not None:
             done += 1
             await _alert_if_excellent_scam(e, v)

@@ -681,16 +681,70 @@ def start_manual(chain: str, token: str, symbol: str = "") -> bool:
     rec = (_state().get("tokens") or {}).get(k) or {}
     if rec.get("built_at") and time.time() - rec["built_at"] < 3600:
         return False
+    _spawn(chain, token, symbol, "manual")
+    return True
+
+
+def _spawn(chain: str, token: str, symbol: str, why: str) -> asyncio.Task:
+    k = _key(chain, token)
     item = {"key": k, "chain": chain, "token": token, "symbol": str(symbol or "")[:24], "manual": True}
     _running[k] = {"phase": "waiting", "progress": None, "started_at": int(time.time()), "chain": chain,
                    "token": token, "symbol": item["symbol"], "manual": True}
-    note("queued", item, "manual")
+    note("queued", item, why)
 
     async def go():
         async with _manual_sem:
-            await _build_tracked(item, time.time())
-    asyncio.get_running_loop().create_task(go())
-    return True
+            return await _build_tracked(item, time.time())
+    return asyncio.get_running_loop().create_task(go())
+
+
+# --- the report for the AI checks ------------------------------------------
+# Lorenzo, 22/10: the AI re-check and the AI veto read the cluster report,
+# and a missing one is built first (coordinated_sells.ai_facts).
+FORCE_WAIT_S = 600
+
+
+def report_state(chain: str, token: str, now: float | None = None) -> str:
+    """"ready" (a fresh report), "pending" (none yet, a build can make one),
+    or why there will be none."""
+    from app.trading.onchain import coordinated_sells
+    chain, token = (chain or "").lower(), sync_watch._n(token or "")
+    now = now if now is not None else time.time()
+    if coordinated_sells.fresh_report(chain, token, now):
+        return "ready"
+    if chain not in CHAINS or not sync_watch._ok(token, chain):
+        return "chain not covered"
+    k = _key(chain, token)
+    if k in _running:
+        return "pending"
+    rec = (_state().get("tokens") or {}).get(k) or {}
+    if rec.get("built_at") and now - rec["built_at"] < REBUILD_S:
+        return "built, fewer than two wallets to watch"
+    if rec.get("failed_at") and now - rec["failed_at"] < RETRY_S:
+        return "build failed: " + str(rec.get("error") or "")[:80]
+    return "pending"
+
+
+async def ensure(chain: str, token: str, symbol: str = "", wait_s: float = FORCE_WAIT_S) -> str:
+    """Builds the token's clusters now when the report is missing, waiting
+    up to `wait_s`; returns report_state() afterwards ("timeout" if slower)."""
+    chain, token = (chain or "").lower(), sync_watch._n(token or "")
+    state = report_state(chain, token)
+    if state != "pending":
+        return state
+    k = _key(chain, token)
+    try:
+        if k in _running:
+            async def done():
+                while k in _running:
+                    await asyncio.sleep(2)
+            await asyncio.wait_for(done(), wait_s)
+        else:
+            await asyncio.wait_for(asyncio.shield(_spawn(chain, token, symbol, "AI check")), wait_s)
+    except asyncio.TimeoutError:
+        return "timeout"
+    state = report_state(chain, token)
+    return "build failed" if state == "pending" else state
 
 
 async def loop(candidates, every_s: int = LOOP_S) -> None:

@@ -3364,5 +3364,10 @@
     "status": "in corso",
     "at": 1792657501,
     "summary": "Nell'app nuova (/app, dal telefono) ci sono due schermate nuove. Today, che e' quella che si apre, dice cosa e' cambiato da circa un giorno: nuovi campioni dei settori, progetti entrati, usciti e punteggi saliti o scesi di 5 punti o piu'. Sectors ha due mosaici, come scelto (M2 con il tasto per la Mappa): Campioni, che si apre per primo (per ogni settore il primo e chi lo insegue, ordinati per forza, con il bordo verde se il campione e' cambiato) e Mappa (ogni progetto e' un riquadro grande quanto la sua cap, colorato con il 24h o il punteggio). Il dock e' piu' corto: Today, Sectors, Gems, Scout, Profile; Pearl, Early e Top stanno dentro Gems. In cima a Today c'e' anche la tua watchlist (i token con la stella), ognuno con la riga di cosa e' cambiato. Resta la ricerca unica."
+  },
+  "seed-0377": {
+    "status": "risolto",
+    "at": 1792702581,
+    "summary": "Il re-check approfondito e il veto AI che decide chi entra nella Top ora leggono il report dei cluster del token: rischio, quanti wallet collegati e che quota di supply tengono, ondate di vendita coordinate. Per giudicare holder e rischio rug l'AI usa solo quello, non le sue ipotesi. Una regola nuova: rischio 60 o piu', oppure wallet collegati con il 12% della supply o piu', e' un motivo per scartare. Se il report manca, il re-check lo costruisce subito e lo aspetta (fino a 10 minuti, lo vedi fra i passi dal vivo); il veto mette il token in testa alla coda dei cluster e decide appena il report e' pronto. Se la chain non si puo' leggere, l'AI sa che il rischio dagli holder non e' verificato e non lo usa come motivo."
   }
 }

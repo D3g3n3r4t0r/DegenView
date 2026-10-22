@@ -178,3 +178,15 @@ def _private_free_ai():
     free_ai.reset_for_tests()
     yield
     free_ai.reset_for_tests()
+
+
+@pytest.fixture(autouse=True)
+def _no_cluster_builds(monkeypatch):
+    """The AI checks build a missing cluster report over RPC: never in tests
+    (tests of ensure/report_state take the real ones from the module)."""
+    from app.trading.onchain import wallet_clusters
+
+    async def offline(chain, token, symbol="", wait_s=0):
+        return "chain not covered"
+    monkeypatch.setattr(wallet_clusters, "ensure", offline)
+    monkeypatch.setattr(wallet_clusters, "report_state", lambda chain, token, now=None: "chain not covered")

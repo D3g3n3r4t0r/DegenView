@@ -41,7 +41,11 @@ SYSTEM = (
     "pages we could not read (unreadable means our reader failed, not that the page is empty), no DefiLlama TVL "
     "for a project that does not take deposits, any market figure written as unknown, the size of the site's HTML (a JavaScript app ships an almost empty "
     "page: what it does is in the app text and the APIs), an API that answered 5xx or timed out, and a "
-    "liquidity / cap ratio the evidence calls healthy. " + CHECK_RULES + "A strength and a problem must not contradict each other "
+    "liquidity / cap ratio the evidence calls healthy. "
+    "The 'Wallet cluster report' line is our engine's on-chain measurement of holders acting together: judge "
+    "rug risk from holders, holder concentration and coordinated selling only from it, never from guesses. A risk "
+    "of 60 or more, or linked wallets holding 12% or more of supply, is a measured negative fact and a reason to "
+    "drop; a report that is not available leaves that risk unverified, never a reason by itself. " + CHECK_RULES +"A strength and a problem must not contradict each other "
     "(a live API and \"no verifiable product\" cannot both stand). A drop must rest on "
     "a measured negative fact (thin pool against the cap, a copy of another project, a meme or borrowed name, "
     "no product at all on pages that WERE read, a dangerous contract or holder fact). The reason "
@@ -397,6 +401,14 @@ async def _run(chain: str, token: str, client, now: float | None = None, ask=Non
         from app.notify import deepseek_desk
         ask = deepseek_desk.ask
 
+    # The holders' side of the verdict is the cluster report, built now if missing.
+    from app.trading.onchain import coordinated_sells, wallet_clusters
+    scout_recheck.step("Reading the wallet cluster report")
+    state = await wallet_clusters.ensure(chain, token, copy.get("symbol") or "")
+    cluster_line = coordinated_sells.ai_text(coordinated_sells.ai_facts(chain, token), state)
+    scout_recheck.step_detail(cluster_line[:160])
+    rc = {**rc, "evidence": cluster_line + "\n" + (rc.get("evidence") or "")}
+
     user, claims, facts = prompt(copy, rc)
     scout_recheck.step("Asking DeepSeek for the verdict", f"{len(facts):,} characters of evidence")
     try:
@@ -423,6 +435,7 @@ async def _run(chain: str, token: str, client, now: float | None = None, ask=Non
               "found": (rc.get("found") or [])[:5],
               "claims": claims,
               "checked": (rc.get("checked") or [])[:12],
+              "clusters": cluster_line,
               "at": now,
               "before": {"keep": old.get("keep"), "reason": old.get("reason")} if old else None}
     result = tidy(result)

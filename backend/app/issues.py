@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0377", "Il re-check AI e il parere anti-rug devono leggere il report dei cluster",
+     "Lorenzo, 22/10: 'il recheck di deepseek o parerere ai anti rug deve considerare il report del cluster esclusivamente e se manca lo forza per averlo'.",
+     "alta"),
     ("seed-0376", "Rivoluzionare il design dell'app: Today e Sectors",
      "Lorenzo, 10/10: 'studia a fondo il design di tutta l'app e vedi come rivoluzionarlo per renderla piu' fruibile e moderna', poi 'opzione A, pero' dobbiamo creare anche un mosaico per vedere le top di ogni settore in maniera intelligente'; 22/10: 'applica tutto', 'SECTORS!'.",
      "media"),
