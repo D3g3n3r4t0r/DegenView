@@ -3362,7 +3362,7 @@
   },
   "seed-0376": {
     "status": "in corso",
-    "at": 1792657088,
-    "summary": "Nell'app nuova (/app, dal telefono) ci sono due schermate nuove. Today, che e' quella che si apre, dice cosa e' cambiato da circa un giorno: nuovi campioni dei settori, progetti entrati, usciti e punteggi saliti o scesi di 5 punti o piu'. Sectors ha tre mosaici: Campioni (per ogni settore il primo e chi lo insegue, ordinati per forza, con il bordo verde se il campione e' cambiato), Mappa (ogni progetto e' un riquadro grande quanto la sua cap, colorato con il 24h o il punteggio) e Slancio (i settori che migliorano nella settimana; i numeri arrivano dopo cinque giorni di letture). Il dock e' piu' corto: Today, Sectors, Gems, Scout, Profile; Pearl, Early e Top stanno dentro Gems. In cima a Today c'e' anche la tua watchlist (i token con la stella), ognuno con la riga di cosa e' cambiato. Resta la ricerca unica."
+    "at": 1792657501,
+    "summary": "Nell'app nuova (/app, dal telefono) ci sono due schermate nuove. Today, che e' quella che si apre, dice cosa e' cambiato da circa un giorno: nuovi campioni dei settori, progetti entrati, usciti e punteggi saliti o scesi di 5 punti o piu'. Sectors ha due mosaici, come scelto (M2 con il tasto per la Mappa): Campioni, che si apre per primo (per ogni settore il primo e chi lo insegue, ordinati per forza, con il bordo verde se il campione e' cambiato) e Mappa (ogni progetto e' un riquadro grande quanto la sua cap, colorato con il 24h o il punteggio). Il dock e' piu' corto: Today, Sectors, Gems, Scout, Profile; Pearl, Early e Top stanno dentro Gems. In cima a Today c'e' anche la tua watchlist (i token con la stella), ognuno con la riga di cosa e' cambiato. Resta la ricerca unica."
   }
 }

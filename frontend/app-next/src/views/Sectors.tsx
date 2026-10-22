@@ -6,8 +6,9 @@ import { changeText, usdShort } from "../lib/format";
 import { TokenRow, gemId } from "../components/TokenRow";
 import { Logo, Tile } from "../components/Logo";
 
-type Mode = "champions" | "map" | "momentum";
-const MODES: [Mode, string][] = [["champions", "Champions"], ["map", "Map"], ["momentum", "Momentum"]];
+type Mode = "champions" | "map";
+// Lorenzo, 22/10: "avevo scelto M2" — Champions first, with the Map one tap away.
+const MODES: [Mode, string][] = [["champions", "Champions"], ["map", "Map"]];
 
 /** The sectors as a mosaic (Lorenzo, 22/10 "SECTORS!"): champions and who chases
  *  them, a market map of every project, or which sectors are improving. */
@@ -28,15 +29,13 @@ export function Sectors({ data, onOpen }: { data: SectorsView | null; onOpen: (e
         ))}
       </div>
       <p className="mt-3 text-[13px] text-text-2">
-        {list.length} sectors · {projects} projects · {mode === "champions" ? "strongest first: how far the top 3 sit above the median"
-          : mode === "map" ? "size = market cap" : "size = how much the top 3 improved in a week"}
+        {list.length} sectors · {projects} projects · {mode === "champions" ? "strongest first: how far the top 3 sit above the median" : "size = market cap"}
       </p>
       {!list.length && <p className="py-6 text-[14px] text-text-2">The sectors are filling up: projects appear as they pass the checks.</p>}
       <AnimatePresence mode="wait">
         <motion.div key={mode} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.16 }} className="mt-3">
           {mode === "champions" && <Champions list={list} fresh={newChampions(data.today)} onOpen={onOpen} />}
           {mode === "map" && <MarketMap list={list} onOpen={onOpen} />}
-          {mode === "momentum" && <Momentum list={list} ready={data.momentum_ready} since={data.readings_since} onOpen={onOpen} />}
         </motion.div>
       </AnimatePresence>
     </>
@@ -154,39 +153,6 @@ function MarketMap({ list, onOpen }: { list: Sector[]; onOpen: (e: Gem) => void 
           : <><i className="h-2 w-4 rounded-sm bg-down/40" />under 50 <i className="h-2 w-4 rounded-sm bg-up/45" />60 <i className="h-2 w-4 rounded-sm bg-up" />80+</>}
         <span className="ml-auto">tap a square to open it</span>
       </p>
-    </>
-  );
-}
-
-// M3 ------------------------------------------------------------------
-
-function Momentum({ list, ready, since, onOpen }: { list: Sector[]; ready: boolean; since: number | null; onOpen: (e: Gem) => void }) {
-  const sorted = [...list].sort((a, b) => (b.momentum ?? -999) - (a.momentum ?? -999) || b.strength - a.strength);
-  const max = Math.max(...sorted.map((s) => Math.abs(s.momentum ?? 0)), 1);
-  return (
-    <>
-      {!ready && (
-        <p className="mb-2 rounded-[16px] bg-card p-3 text-[13px] text-text-2">
-          Momentum compares each sector's top 3 with a week ago. Readings started{since ? ` on ${new Date(since * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : " today"}: the numbers appear after five days.
-        </p>
-      )}
-      <div className="grid grid-cols-4 gap-1.5">
-        {sorted.map((s) => {
-          const m = s.momentum;
-          const big = m != null && Math.abs(m) >= max * 0.6;
-          const span = big ? "col-span-4" : m != null && Math.abs(m) >= max * 0.25 ? "col-span-2" : "col-span-2";
-          return (
-            <button key={s.key} type="button" onClick={() => onOpen(s.top[0])}
-              className={`${span} flex min-w-0 flex-col gap-1 rounded-[16px] p-2.5 text-left ${m == null ? "bg-card" : m > 0 ? "bg-up/15" : m < 0 ? "bg-down/15" : "bg-card"}`}>
-              <span className="flex items-center gap-2">
-                <span className="min-w-0 flex-1 truncate text-[11px] font-medium uppercase tracking-[0.07em] text-text-3">{s.label}</span>
-                <b className={`num text-[14px] font-semibold ${m == null ? "text-text-3" : m > 0 ? "text-up" : m < 0 ? "text-down" : ""}`}>{m == null ? "—" : `${m > 0 ? "+" : ""}${m} pts`}</b>
-              </span>
-              <span className="truncate text-[12px] text-text-2">{s.top.map((e) => `${e.symbol} ${Math.round(e.score ?? 0)}`).join(" · ")}</span>
-            </button>
-          );
-        })}
-      </div>
     </>
   );
 }
