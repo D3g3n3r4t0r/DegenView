@@ -198,3 +198,70 @@ async def run(chain: str, token: str, wallets: list[str], pools: list[str], from
     supply = await total_supply(chain, token, rpc)
     return {"chain": chain, "token": _addr(token), "from_block": from_block, "to_block": to_block,
             **analyze(transfers, wallets, pools, supply, decimals, **window)}
+
+
+# --- Report v1 (contract in coordinated_sells.py): one file per token in
+# backend/data/coordinated_sells/<chain>-<token>.json, read by the view and
+# the Telegram alert. Shares are fractions of supply, never percentages.
+
+REPORT_VERSION = 1
+
+
+def _reasons(cid: str, groups: list[dict], parts: dict) -> list[str]:
+    if not groups:
+        return []
+    top = max(len(g["wallets"]) for g in groups)
+    out = [f"{cid}: {len(groups)} wave(s), up to {top} wallets selling together"]
+    if any(g["same_block"] for g in groups):
+        out.append(f"{cid}: sells in the same block")
+    if parts.get("share", 0) >= W_SHARE / 2:
+        out.append(f"{cid}: large share of supply sold in sync")
+    return out
+
+
+def report(chain: str, token: str, transfers: list[dict], clusters: list[dict], pools: list[str],
+           supply: int, symbol: str = "", shares: dict[str, float] | None = None,
+           now: float | None = None, **window) -> dict:
+    """Build the v1 report. `clusters` = [{"id", "wallets": [addr], "links"?}]
+    from the holder-cluster work; `shares` = address -> fraction of supply held."""
+    import time
+    shares = {_addr(k): float(v) for k, v in (shares or {}).items()}
+    out_clusters, events, reasons, best = [], [], [], 0
+    for c in clusters:
+        cid, ws = str(c["id"]), [_addr(w) for w in c["wallets"]]
+        groups = group(classify(transfers, ws, pools), **window)
+        risk = score(groups, supply)
+        best = max(best, risk["score"])
+        reasons += _reasons(cid, groups, risk["parts"])
+        links = list(dict.fromkeys(list(c.get("links") or [])
+                                   + (["same_block_sells"] if any(g["same_block"] for g in groups) else [])))
+        out_clusters.append({"id": cid, "wallets": [{"address": w, "share": shares.get(w, 0.0)} for w in ws],
+                             "share": round(sum(shares.get(w, 0.0) for w in ws), 6),
+                             "links": links, "risk": risk["score"]})
+        for g in groups:
+            ts0, ts1 = g["first_ts"], g["last_ts"]
+            events.append({
+                "id": f"{cid}-{ts0 if ts0 is not None else 'b%d' % g['first_block']}",
+                "cluster": cid, "ts": ts0,
+                "window_s": ts1 - ts0 if ts0 is not None and ts1 is not None else None,
+                "wallets": len(g["wallets"]),
+                "share_sold": round(sum(int(m["amount"]) for m in g["moves"]) / supply, 6) if supply else 0.0,
+                "txs": [m["tx"] for m in g["moves"] if m.get("tx")],
+            })
+    events.sort(key=lambda e: e["ts"] or 0)
+    return {"version": REPORT_VERSION, "chain": chain, "token": _addr(token), "symbol": symbol,
+            "updated_at": int(now if now is not None else time.time()),
+            "risk": {"score": best, "reasons": reasons}, "clusters": out_clusters, "events": events}
+
+
+def report_path(chain: str, token: str):
+    from app.trading.onchain import storage
+    return storage.DATA_DIR / "coordinated_sells" / f"{chain}-{_addr(token)}.json"
+
+
+def write_report(rep: dict) -> None:
+    import json
+    from app.atomic_write import write_text_atomic
+    path = report_path(rep["chain"], rep["token"])
+    path.parent.mkdir(parents=True, exist_ok=True)
+    write_text_atomic(path, json.dumps(rep, indent=1))
