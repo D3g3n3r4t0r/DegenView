@@ -53,3 +53,22 @@ def test_from_analysis_maps_the_engine_output(tmp_path, monkeypatch):
     assert cs.reports()[1] is True          # nothing written yet: the sample
     cs.write(r)
     assert cs.reports() == ([r], False)
+
+
+def test_high_risk_report_excludes_the_token(tmp_path, monkeypatch):
+    from app.trading.onchain import coordinated_sells as cs, leaderboard as lb, storage
+    monkeypatch.setattr(storage, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(cs, "_excl_cache", (0.0, {}))
+    tok = "0x" + "ab" * 20
+    d = tmp_path / "coordinated_sells"
+    d.mkdir()
+    rep = {"version": 1, "chain": "robinhood", "token": tok, "updated_at": 1_000_000,
+           "risk": {"score": 74, "reasons": []}, "clusters": [], "events": []}
+    (d / f"robinhood-{tok}.json").write_text(json.dumps(rep))
+    assert cs.exclusion("robinhood", tok, now=1_000_100) == "coordinated sells: risk 74"
+    monkeypatch.setattr(cs, "_excl_cache", (0.0, {}))
+    assert cs.exclusion("robinhood", tok, now=1_000_000 + 8 * 86400) == ""   # stale report
+    monkeypatch.setattr(cs, "_excl_cache", (0.0, {}))
+    rep["risk"]["score"] = 59
+    (d / f"robinhood-{tok}.json").write_text(json.dumps(rep))
+    assert lb.crash_reason("robinhood", tok) == ""
