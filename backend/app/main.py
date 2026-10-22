@@ -3894,7 +3894,7 @@ async def onchain_coordinated_sells(user: User = Depends(auth.get_current_user))
     `sample` is true while the engine has written no report yet."""
     from app.trading.onchain import coordinated_sells
     _require_onchain_enabled()
-    if not (_full_score(user) or getattr(user, "email", None) in email_allowlist(settings.onchain_next_emails)):
+    if not (_full_score(user) or _next_for(user)):
         raise HTTPException(status_code=404, detail="Not found.")
     found, sample = coordinated_sells.reports()
     return {"sample": sample, "reports": found}
