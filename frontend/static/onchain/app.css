@@ -1586,3 +1586,46 @@ html.detail-open .ask-fab, :root:has(#app-shell[data-view="entry"]) .ask-fab { d
 .q-btn[data-q-act="accept"] { background: var(--c-text, var(--k-text)); color: var(--c-bg, #000); border-color: transparent; }
 .q-btn:disabled { opacity: .5; cursor: progress; }
 .quality-fold { margin-top: 14px; }
+
+/* Coordinated sells (sells.js, whitekobra only). Motion: transform and
+   opacity only; the bars grow with scaleX. */
+.cs-entry { display: flex; align-items: center; gap: 8px; inline-size: 100%; margin: 0 0 10px; padding: 10px 14px;
+  border: 1px solid var(--c-line, var(--k-line)); border-radius: 14px; background: none; color: var(--c-text, var(--k-text));
+  font: 600 13px/1.2 var(--sans); cursor: pointer; text-align: left;
+  & span { flex: 1; } & b { font: 600 11px/1 var(--mono, ui-monospace); opacity: .8; } & i { font-style: normal; opacity: .5; }
+  &[data-level="high"] b { color: var(--c-down, #ef4444); } &[data-level="mid"] b { color: var(--k-amber); } }
+.cs-sample { margin: 0 2px 12px; padding: 8px 10px; border-radius: 10px; font-size: 12px; background: rgb(250 204 21 / .1); color: var(--k-amber); }
+.cs-card { margin-bottom: 18px; animation: cs-in .35s ease-out both;
+  & h4 { display: flex; justify-content: space-between; margin: 16px 2px 8px; font-size: 12px; font-weight: 600; letter-spacing: .02em; opacity: .75;
+    & span { font-family: var(--mono, ui-monospace); } } }
+.cs-head { display: flex; align-items: center; gap: 12px; margin: 0 2px;
+  & > p:first-child { flex: 1; margin: 0; display: grid; gap: 2px; & b { font-size: 16px; } & small { font-size: 11.5px; opacity: .6; } } }
+.cs-risk { position: relative; margin: 0; display: grid; justify-items: end; gap: 2px; min-inline-size: 64px;
+  & b { font: 700 22px/1 var(--mono, ui-monospace); } & small { font-size: 10.5px; opacity: .6; text-transform: uppercase; letter-spacing: .08em; }
+  & i { inline-size: 64px; block-size: 3px; border-radius: 3px; background: currentColor; transform-origin: left; transform: scaleX(var(--r, 0));
+    animation: cs-grow .6s ease-out both; }
+  &[data-level="high"] { color: var(--c-down, #ef4444); } &[data-level="mid"] { color: var(--k-amber); } &[data-level="low"] { color: var(--k-mint); } }
+.cs-why { margin: 10px 2px 0; padding: 0 0 0 16px; font-size: 12px; line-height: 1.5; opacity: .75; }
+.cs-bar { display: flex; block-size: 10px; border-radius: 6px; overflow: hidden; background: var(--c-line, rgb(255 255 255 / .08)); margin: 0 2px 8px;
+  & .cs-seg { inline-size: var(--w); transform-origin: left; animation: cs-grow .6s ease-out both; } }
+:is(.cs-seg, .cs-dot) { background: var(--c-down, #ef4444); &[data-i="1"] { background: var(--k-amber); } &[data-i="2"] { background: #60a5fa; } &[data-i="3"] { background: #c084fc; } }
+.cs-dot { display: inline-block; inline-size: 8px; block-size: 8px; border-radius: 50%; flex: none; }
+.cs-cluster { border-top: 1px solid var(--c-line, var(--k-line)); padding: 0 2px;
+  & summary { display: flex; align-items: center; gap: 8px; padding: 10px 0; cursor: pointer; list-style: none; font-size: 13px;
+    & span { flex: 1; font-size: 12px; opacity: .65; } & em { font: 600 12px/1 var(--mono, ui-monospace); font-style: normal; }
+    & em[data-level="high"] { color: var(--c-down, #ef4444); } & em[data-level="mid"] { color: var(--k-amber); } }
+  & summary::-webkit-details-marker { display: none; } }
+.cs-links { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px;
+  & span { padding: 3px 8px; border-radius: 99px; font-size: 11px; border: 1px solid var(--c-line, var(--k-line)); opacity: .8; } }
+.cs-wallets { list-style: none; margin: 0 0 10px; padding: 0; font-size: 12px;
+  & li { display: flex; justify-content: space-between; padding: 3px 0; } & code { opacity: .8; } & span { font-family: var(--mono, ui-monospace); } }
+.cs-time { list-style: none; margin: 0; padding: 0 2px; position: relative;
+  &::before { content: ""; position: absolute; inset-block: 12px; inset-inline-start: 5.5px; inline-size: 1px; background: var(--c-line, var(--k-line)); }
+  & li { position: relative; display: flex; align-items: flex-start; gap: 12px; padding: 8px 0; animation: cs-in .35s ease-out both; }
+  & li:nth-child(2) { animation-delay: .05s; } & li:nth-child(n+3) { animation-delay: .1s; }
+  & .cs-dot { margin-top: 5px; box-shadow: 0 0 0 3px var(--c-bg, #000); }
+  & p { flex: 1; margin: 0; display: grid; gap: 2px; & b { font-size: 13px; font-weight: 600; } & small { font-size: 11.5px; opacity: .65; } }
+  & time { font-size: 11.5px; opacity: .55; white-space: nowrap; } }
+@keyframes cs-in { from { opacity: 0; transform: translateY(6px); } }
+@keyframes cs-grow { from { transform: scaleX(0); } }
+@media (prefers-reduced-motion: reduce) { :is(.cs-card, .cs-time li, .cs-risk i, .cs-seg) { animation: none; } }

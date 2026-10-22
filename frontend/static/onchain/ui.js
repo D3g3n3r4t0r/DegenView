@@ -10,6 +10,7 @@ const views={
   pearl:['02 / PEARL','The best of Early,','score 70 and up.','Small projects that pass every bar of the Top and score at least 70: the rarest finds of the research.'],
   top:['03 / EARLY','Small caps,','already proven.','Projects under $300k that pass every other bar of the Top: real usage, holders, code and research. Smaller and riskier.'],
   rank:['04 / TOP 25','The best 25,','by score.','The highest scores among the gems that passed every check, whatever their arena, with the market live from DexScreener.'],
+  sells:['04 / SELLS','Who sells','together.','Wallet clusters, their share of the supply, and every time they sold as one.'],
   agent:['05 / ENGINE ROOM','The engine,','at work.','Follow the research and analysis behind the app. Every update stays connected to its source.'],
   profile:['06 / YOUR PROFILE','Your account.','Your picks, checked.','Your profile, and how the gems picked by the engine went after 1, 3, 7, 30 and 90 days.'],
   wallet:['07 / YOUR WALLET','Your assets.','Your decisions.','Review balances and history in one workspace.']

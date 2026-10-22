@@ -1,3 +1,11 @@
+# 2026-10-22 — Vendite coordinate: scheda e avviso Telegram — **in corso** (Claude, a mano)
+
+Lorenzo, 22/10: strumento per le vendite coordinate, primo token `0x96f455a90a80dcf0c2df6703ea4ba3bedf286e43` (Robinhood Chain); "dividi le task con vari agenti" (un thread per il motore, uno per la vista).
+- Vista `sells` (solo whitekobra, `/api/onchain/coordinated-sells` 404 agli altri): pillola in cima a Scout, `#sells`, link dall'avviso. Cluster, quota di supply, timeline delle ondate di vendita, rischio 0-100. `frontend/static/onchain/sells.js`.
+- Formato del report v1 nel docstring di `backend/app/trading/onchain/coordinated_sells.py`: il motore scrive `backend/data/coordinated_sells/<chain>-<token>.json`. Finche' non ce n'e', la vista mostra `app/data/coordinated_sells_sample.json` con la scritta "Sample data" e nessun avviso parte.
+- Avviso Telegram (`_coordinated_sells_loop`, ogni 60 s): ondata con >=2 wallet e >=0,5% della supply, piu' recente di 6 ore, una volta sola per `id` (`data/coordinated_sells_sent.json`).
+- Resta: il motore vero (altro thread) che scrive i report.
+
 # 2026-10-22 — Motore vendite sincronizzate (backend, sola lettura) — **in corso** (Claude, a mano)
 
 Lorenzo, tramite il coordinatore: tool on-chain per vendite coordinate, primo token `0x96f455a90a80dcf0c2df6703ea4ba3bedf286e43` (Robinhood Chain). Fatto: `app/trading/onchain/sync_sells.py` — `fetch_transfers` (Transfer ERC-20 via `eth_getLogs` filtrato sui mittenti, blocchi da 5.000, timestamp per blocco), `analyze` puro: trasferimento verso un pool = vendita, verso altro indirizzo = uscita (peso 0,5), fra wallet della lista = consolidamento (ignorato); gruppi = mosse a <= 5 blocchi o <= 120 s dalla precedente con >= 2 wallet; quota di supply, timeline, rischio 0-100 (quota 45 con pieno a 5%, wallet nel gruppo 25 con pieno a 6, stesso blocco 20, ripetizioni 10). Lista wallet e pool in input: arrivano dal thread "Cluster wallet holder del token"; finche' manca, `SAMPLE` (indirizzi finti). Report v1 (`report`, `write_report`) nel formato di `coordinated_sells.py` (#645): `backend/data/coordinated_sells/<chain>-<token>.json`, quote in frazioni. Resta: lista vera dei cluster e un giro periodico che chiami `run`+`write_report`.

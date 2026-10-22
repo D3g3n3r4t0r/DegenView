@@ -1,0 +1,107 @@
+{
+ "version": 1,
+ "chain": "robinhood",
+ "token": "0x96f455a90a80dcf0c2df6703ea4ba3bedf286e43",
+ "symbol": "",
+ "updated_at": 1792645200,
+ "risk": {
+  "score": 72,
+  "reasons": [
+   "Two clusters hold 14.6% of supply",
+   "5 wallets of one cluster sold within 90 s",
+   "Cluster wallets funded by one address"
+  ]
+ },
+ "clusters": [
+  {
+   "id": "c1",
+   "share": 0.094,
+   "risk": 81,
+   "links": [
+    "same_funder",
+    "same_block_sells"
+   ],
+   "wallets": [
+    {
+     "address": "0x0101010101010101010101010101010101010101",
+     "share": 0.031
+    },
+    {
+     "address": "0x0202020202020202020202020202020202020202",
+     "share": 0.022
+    },
+    {
+     "address": "0x0303030303030303030303030303030303030303",
+     "share": 0.015
+    },
+    {
+     "address": "0x0404040404040404040404040404040404040404",
+     "share": 0.011
+    },
+    {
+     "address": "0x0505050505050505050505050505050505050505",
+     "share": 0.009
+    },
+    {
+     "address": "0x0606060606060606060606060606060606060606",
+     "share": 0.006
+    }
+   ]
+  },
+  {
+   "id": "c2",
+   "share": 0.052,
+   "risk": 58,
+   "links": [
+    "same_amounts"
+   ],
+   "wallets": [
+    {
+     "address": "0x0707070707070707070707070707070707070707",
+     "share": 0.018
+    },
+    {
+     "address": "0x0808080808080808080808080808080808080808",
+     "share": 0.014
+    },
+    {
+     "address": "0x0909090909090909090909090909090909090909",
+     "share": 0.012
+    },
+    {
+     "address": "0x0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a",
+     "share": 0.008
+    }
+   ]
+  }
+ ],
+ "events": [
+  {
+   "id": "c1-1792641600",
+   "cluster": "c1",
+   "ts": 1792641600,
+   "window_s": 90,
+   "wallets": 5,
+   "share_sold": 0.021,
+   "usd": 41000
+  },
+  {
+   "id": "c2-1792630800",
+   "cluster": "c2",
+   "ts": 1792630800,
+   "window_s": 300,
+   "wallets": 3,
+   "share_sold": 0.009,
+   "usd": 17500
+  },
+  {
+   "id": "c1-1792555200",
+   "cluster": "c1",
+   "ts": 1792555200,
+   "window_s": 45,
+   "wallets": 4,
+   "share_sold": 0.013,
+   "usd": 26800
+  }
+ ]
+}
