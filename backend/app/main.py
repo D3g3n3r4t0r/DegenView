@@ -25,7 +25,7 @@ from functools import partial
 from pathlib import Path
 from typing import Literal
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect
+from fastapi import Body, Depends, FastAPI, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -1488,9 +1488,11 @@ async def _onchain_reconcile_loop() -> None:
 async def _coordinated_sells_loop() -> None:
     """Telegram alert when a cluster sells one token together (Lorenzo,
     22/10): reads the engine's reports every minute."""
-    from app.trading.onchain import coordinated_sells
+    from app.trading.onchain import coordinated_sells, sync_watch
     while True:
         await asyncio.sleep(60)
+        if not sync_watch.busy():
+            _fire(sync_watch.run_all())     # each watched token every 6 h, in the background
         if not settings.telegram_bot_token:
             continue
         try:
@@ -3877,6 +3879,41 @@ async def onchain_coordinated_sells(user: User = Depends(auth.get_current_user))
         raise HTTPException(status_code=404, detail="Not found.")
     found, sample = coordinated_sells.reports()
     return {"sample": sample, "reports": found}
+
+
+def _require_full_score(user: User) -> None:
+    _require_onchain_enabled()
+    if not _full_score(user):
+        raise HTTPException(status_code=404, detail="Not found.")
+
+
+@app.get("/api/onchain/coordinated-sells/watch")
+async def onchain_sync_watch_list(user: User = Depends(auth.get_current_user)) -> dict:
+    """The tokens whose clusters are watched (sync_watch.py), no wallets."""
+    from app.trading.onchain import sync_watch
+    _require_full_score(user)
+    return {"watched": sync_watch.summary()}
+
+
+@app.post("/api/onchain/coordinated-sells/watch")
+async def onchain_sync_watch_upload(body: dict = Body(...), user: User = Depends(auth.get_current_user)) -> dict:
+    """Upload a cluster (sync_sells.SAMPLE format): saved on the data
+    volume, never in the repo, and read at once in the background."""
+    from app.trading.onchain import sync_watch
+    _require_full_score(user)
+    try:
+        cfg = sync_watch.save(body)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    _fire(sync_watch.run_all(force=True))
+    return {"ok": True, "token": cfg["token"], "wallets": len(cfg["wallets"])}
+
+
+@app.delete("/api/onchain/coordinated-sells/watch")
+async def onchain_sync_watch_remove(chain: str, token: str, user: User = Depends(auth.get_current_user)) -> dict:
+    from app.trading.onchain import sync_watch
+    _require_full_score(user)
+    return {"ok": sync_watch.remove(chain, token)}
 
 
 class QualityDecision(BaseModel):
