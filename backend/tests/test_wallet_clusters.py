@@ -189,3 +189,17 @@ def test_build_from_explorer_marks_coverage(data, monkeypatch):
     assert res["coverage"]["partial"] and res["coverage"]["source"] == "eth.blockscout.com"
     cfg = sw.watched()[0]
     assert cfg["coverage"]["partial"] and cfg["state"]["next_block"] == 10_000 - 300
+
+
+def test_manual_check_has_its_own_budget_and_goes_first(data):
+    now = 1_900_000_000.0
+    other = "0x" + "99" * 20
+    assert wc.request("robinhood", other, now=now)
+    st = wc._state()
+    st.update(day=__import__("time").strftime("%Y-%m-%d", __import__("time").gmtime(now)), built_today=wc.MAX_PER_DAY)
+    wc._save_state(st)
+    assert wc.request("robinhood", TOKEN, urgent=True, manual=True, now=now)
+    assert wc._take(now)["token"] == TOKEN          # automatic budget spent, manual still runs
+    assert wc._take(now) is None
+    s = wc.token_status("robinhood", other)
+    assert s["queued"] and s["position"] == 0

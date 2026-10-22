@@ -3928,6 +3928,31 @@ async def onchain_sync_watch_upload(body: dict = Body(...), user: User = Depends
     return {"ok": True, "token": cfg["token"], "wallets": len(cfg["wallets"])}
 
 
+@app.post("/api/onchain/coordinated-sells/check")
+async def onchain_coordinated_check(body: dict = Body(...), user: User = Depends(auth.get_current_user)) -> dict:
+    """Check a token by hand (Lorenzo, 22/10): {"chain", "token"}. Queued first
+    in line on its own daily budget (wallet_clusters.MANUAL_PER_DAY), built in
+    the background; the result lands in the watch and the report like the
+    automatic ones. Poll GET /api/onchain/coordinated-sells/check."""
+    from app.trading.onchain import sync_watch, wallet_clusters
+    _require_full_score(user)
+    chain, token = str(body.get("chain") or "").lower(), str(body.get("token") or "").strip()
+    if chain not in wallet_clusters.CHAINS:
+        raise HTTPException(status_code=400, detail=f"chain: one of {', '.join(wallet_clusters.CHAINS)}")
+    if not sync_watch._ok(token, chain):
+        raise HTTPException(status_code=400, detail="token: not an address of that chain")
+    queued = wallet_clusters.request(chain, token, str(body.get("symbol") or ""), urgent=True, manual=True)
+    _fire(wallet_clusters.run_once())
+    return {"queued": queued, **wallet_clusters.token_status(chain, token)}
+
+
+@app.get("/api/onchain/coordinated-sells/check")
+async def onchain_coordinated_check_status(chain: str, token: str, user: User = Depends(auth.get_current_user)) -> dict:
+    from app.trading.onchain import wallet_clusters
+    _require_full_score(user)
+    return wallet_clusters.token_status(chain, token)
+
+
 @app.delete("/api/onchain/coordinated-sells/watch")
 async def onchain_sync_watch_remove(chain: str, token: str, user: User = Depends(auth.get_current_user)) -> dict:
     from app.trading.onchain import sync_watch

@@ -58,6 +58,7 @@ WAVE_P = 0.01                             # a wave bigger than random this often
 AIRDROP_MIN_TARGETS = 20
 AIRDROP_SAME_SHARE = 0.5
 MAX_PER_DAY = 12
+MANUAL_PER_DAY = 20       # checks asked for by hand: their own budget, first in line
 REBUILD_S = 7 * 86400
 RETRY_S = 86400
 TS_EXACT = 300                            # exact timestamps for this many sell blocks
@@ -96,7 +97,7 @@ def _key(chain: str, token: str) -> str:
 # --- queue -----------------------------------------------------------------
 
 def request(chain: str, token: str, symbol: str = "", created_at: float | None = None,
-            urgent: bool = False, now: float | None = None) -> bool:
+            urgent: bool = False, now: float | None = None, manual: bool = False) -> bool:
     """Queue a token. Cheap and synchronous: the loop does the work. False
     when the chain has no source or the token was built recently."""
     chain, token = (chain or "").lower(), sync_watch._n(token or "")
@@ -106,15 +107,15 @@ def request(chain: str, token: str, symbol: str = "", created_at: float | None =
     st = _state()
     k = _key(chain, token)
     cur = st.get("tokens", {}).get(k) or {}
-    if cur.get("built_at") and now - cur["built_at"] < (RETRY_S if urgent else REBUILD_S):
+    if cur.get("built_at") and now - cur["built_at"] < (3600 if manual else RETRY_S if urgent else REBUILD_S):
         return False
-    if cur.get("failed_at") and now - cur["failed_at"] < RETRY_S:
+    if cur.get("failed_at") and now - cur["failed_at"] < (3600 if manual else RETRY_S):
         return False
     if not urgent and any(q.get("key") == k for q in st.get("queue", [])):
         return False
     queue = [q for q in st.get("queue", []) if q.get("key") != k]
     item = {"key": k, "chain": chain, "token": token, "symbol": str(symbol or "")[:24],
-            "created_at": created_at, "at": int(now)}
+            "created_at": created_at, "at": int(now), "manual": manual}
     queue.insert(0, item) if urgent else queue.append(item)
     st["queue"] = queue[:500]
     _save_state(st)
@@ -125,12 +126,18 @@ def _take(now: float) -> dict | None:
     st = _state()
     day = time.strftime("%Y-%m-%d", time.gmtime(now))
     if st.get("day") != day:
-        st["day"], st["built_today"] = day, 0
-    if st.get("built_today", 0) >= MAX_PER_DAY or not st.get("queue"):
+        st["day"], st["built_today"], st["manual_today"] = day, 0, 0
+    q = st.get("queue") or []
+    i = next((n for n, x in enumerate(q) if x.get("manual") and st.get("manual_today", 0) < MANUAL_PER_DAY), None)
+    if i is None and q and st.get("built_today", 0) < MAX_PER_DAY:
+        i = next((n for n, x in enumerate(q) if not x.get("manual")), None)
+    if i is None:
         _save_state(st)
         return None
-    item = st["queue"].pop(0)
-    st["built_today"] = st.get("built_today", 0) + 1
+    item = q.pop(i)
+    st["queue"] = q
+    field = "manual_today" if item.get("manual") else "built_today"
+    st[field] = st.get(field, 0) + 1
     _save_state(st)
     return item
 
@@ -145,6 +152,20 @@ def _done(item: dict, result: dict | None, error: str | None, now: float) -> Non
                    wallets=sum(len(c["wallets"]) for c in result["clusters"]), partial=result["partial"])
     st["tokens"][item["key"]] = rec
     _save_state(st)
+
+
+def token_status(chain: str, token: str) -> dict:
+    """One token: queued (and where), building, built, failed. No addresses."""
+    st = _state()
+    k = _key((chain or "").lower(), sync_watch._n(token or ""))
+    pos = next((n for n, q in enumerate(st.get("queue", [])) if q.get("key") == k), None)
+    rec = (st.get("tokens") or {}).get(k) or {}
+    return {"queued": pos is not None, "position": pos, "busy": _lock.locked(),
+            "built_at": rec.get("built_at"), "clusters": rec.get("clusters"), "wallets": rec.get("wallets"),
+            "partial": rec.get("partial"), "error": rec.get("error") if rec.get("failed_at") else None,
+            "failed_at": rec.get("failed_at"),
+            "manual_left": MANUAL_PER_DAY - (st.get("manual_today", 0) if st.get("day") ==
+                                             time.strftime("%Y-%m-%d", time.gmtime()) else 0)}
 
 
 def status() -> dict:
