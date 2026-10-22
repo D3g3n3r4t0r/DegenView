@@ -356,7 +356,8 @@ def cluster(transfers: list[dict], contracts: set[str], supply: int, block_s: fl
     for ws in groups.values():
         ws = sorted(ws, key=lambda a: -peak.get(a, 0))[:MAX_CLUSTER_WALLETS]
         why = Counter(r for pair, rs in links.items() if pair[0] in ws for r in rs)
-        out.append({"wallets": ws, "links": sorted(why), "link_counts": dict(why),
+        out.append({"wallets": ws, "links": sorted(why),
+                    "edges": [list(pair) for pair in links if pair[0] in ws][:2000], "link_counts": dict(why),
                     "share": share(sum(max(0, bal.get(a, 0)) for a in ws)),
                     "peak_share": share(sum(peak.get(a, 0) for a in ws))})
     out.sort(key=lambda c: -c["peak_share"])
@@ -440,7 +441,7 @@ async def build(chain: str, token: str, symbol: str = "", created_at: float | No
 async def _hand_to_watch(rpc, res: dict, transfers: list[dict], anchors: dict[int, int], latest: int) -> None:
     """The clusters to the sells watch, with the transfers already read, so
     its first run reads only new blocks."""
-    clusters = [{"id": c["id"], "wallets": c["wallets"], "links": c["links"]} for c in res["clusters"]]
+    clusters = [{"id": c["id"], "wallets": c["wallets"], "links": c["links"], "edges": c["edges"]} for c in res["clusters"]]
     clusters.append({"id": "top", "wallets": res["top"], "links": ["top_holders"]})
     wallets = list(dict.fromkeys(w for c in clusters for w in c["wallets"]))[:sync_watch.MAX_WALLETS]
     if len(wallets) < 2:

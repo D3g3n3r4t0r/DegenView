@@ -90,7 +90,9 @@ def clean(raw: dict) -> dict | None:
         wallets = [{"address": str(w.get("address", "")), "share": _num(w.get("share"), 0, 1)}
                    for w in c.get("wallets") or [] if isinstance(w, dict) and w.get("address")]
         clusters.append({"id": str(c["id"]), "wallets": wallets, "share": _num(c.get("share"), 0, 1),
-                         "links": [str(x) for x in c.get("links") or []][:8], "risk": _num(c.get("risk"), 0, 100)})
+                         "links": [str(x) for x in c.get("links") or []][:8], "risk": _num(c.get("risk"), 0, 100),
+                         "edges": [[str(a).lower(), str(b).lower()] for a, b in
+                                   (e for e in c.get("edges") or [] if isinstance(e, list) and len(e) == 2)][:2000]})
     ids = {c["id"] for c in clusters}
     events = []
     for e in raw.get("events") or []:
@@ -99,7 +101,8 @@ def clean(raw: dict) -> dict | None:
         events.append({"id": str(e["id"]), "cluster": str(e["cluster"]), "ts": _num(e["ts"]),
                        "window_s": _num(e.get("window_s"), 0), "wallets": int(_num(e.get("wallets"), 0) or 0),
                        "share_sold": _num(e.get("share_sold"), 0, 1), "usd": _num(e.get("usd"), 0),
-                       "txs": [str(t) for t in e.get("txs") or []][:20]})
+                       "txs": [str(t) for t in e.get("txs") or []][:20],
+                       "sellers": [str(a).lower() for a in e.get("sellers") or []][:200]})
     events.sort(key=lambda e: e["ts"], reverse=True)
     risk = raw.get("risk") if isinstance(raw.get("risk"), dict) else {}
     return {"version": VERSION, "chain": str(raw.get("chain") or ""), "token": str(raw["token"]).lower(),
