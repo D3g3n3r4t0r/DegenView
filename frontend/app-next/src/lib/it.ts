@@ -152,7 +152,7 @@ export const IT: Record<string, string> = {
   "clusters hold {p}": "i cluster tengono {p}", "last wave {t}, {p} sold": "ultima ondata {t}, venduto {p}", "no wave yet": "ancora nessuna ondata",
   "No token here checked yet: see All.": "Nessun token di qui ancora controllato: vedi Tutti.", "No token checked yet. Paste an address above.": "Ancora nessun token controllato. Incolla sopra un indirizzo.",
   "ready": "pronto", "Token page": "Pagina token", "waiting for a slot": "in attesa di un posto", "starting…": "avvio…", "manual": "manuale",
-  "gems": "gemme", "meme": "meme", "early": "early", "top": "top", "Engine now": "Motore ora", "{n} in line · {a} today": "{n} in coda · {a} fatti oggi",
+  "gems": "gemme", "meme": "meme", "early": "early", "top": "top", "Engine now": "Motore ora", "{n} in line · {a} done today": "{n} in coda · {a} fatti oggi",
   "Nothing running right now.": "Niente in corso ora.", "Next in line:": "Prossimi:", "and {n} more": "e altri {n}", "hide": "nascondi", "show all": "mostra tutti",
   "Engine console": "Console del motore", "Waiting for the engine… new events show here as they happen.": "In attesa del motore… i nuovi eventi compaiono qui man mano.",
   "Paste a token address above.": "Incolla sopra l'indirizzo di un token.", "Cluster check": "Controllo cluster",
