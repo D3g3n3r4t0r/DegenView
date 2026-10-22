@@ -1485,6 +1485,21 @@ async def _onchain_reconcile_loop() -> None:
         await asyncio.sleep(20)
 
 
+async def _coordinated_sells_loop() -> None:
+    """Telegram alert when a cluster sells one token together (Lorenzo,
+    22/10): reads the engine's reports every minute."""
+    from app.trading.onchain import coordinated_sells
+    while True:
+        await asyncio.sleep(60)
+        if not settings.telegram_bot_token:
+            continue
+        try:
+            await coordinated_sells.notify_once(
+                telegram.send_message, f"{settings.public_base_url}/onchain-app.html#sells")
+        except Exception:  # noqa: BLE001
+            logger.exception("coordinated sells loop")
+
+
 @asynccontextmanager
 def _sim_reset_once() -> None:
     """Lorenzo, 30/09: "devi fare un reset completo di tutti gli account e
@@ -1527,6 +1542,7 @@ async def lifespan(app: FastAPI):
     background.append(asyncio.create_task(_btc_regime_loop()))
     background.append(asyncio.create_task(_telegram_chat_loop()))
     background.append(asyncio.create_task(_deepseek_recap_loop()))
+    background.append(asyncio.create_task(_coordinated_sells_loop()))
     t5 = asyncio.create_task(_watchdog_loop())
     onchain_leaderboard.set_top_source(_top_entries)
     # Gem research (leaderboard, outcomes, layers, weekly re-check, studies):
@@ -3849,6 +3865,18 @@ async def onchain_quality(user: User = Depends(auth.get_current_user)) -> dict:
     if not _full_score(user):
         raise HTTPException(status_code=404, detail="Not found.")
     return _quality_view()
+
+
+@app.get("/api/onchain/coordinated-sells")
+async def onchain_coordinated_sells(user: User = Depends(auth.get_current_user)) -> dict:
+    """Clusters that sell together (coordinated_sells.py): whitekobra only.
+    `sample` is true while the engine has written no report yet."""
+    from app.trading.onchain import coordinated_sells
+    _require_onchain_enabled()
+    if not _full_score(user):
+        raise HTTPException(status_code=404, detail="Not found.")
+    found, sample = coordinated_sells.reports()
+    return {"sample": sample, "reports": found}
 
 
 class QualityDecision(BaseModel):

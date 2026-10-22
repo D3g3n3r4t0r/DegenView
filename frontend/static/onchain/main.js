@@ -34,6 +34,7 @@ import { mountAsk } from "@onchain/ask.js";
 import * as bg from "@onchain/bg.js";
 import { mountTop } from "@onchain/top.js";
 import { mountQuality } from "@onchain/quality.js";
+import { mountSells } from "@onchain/sells.js";
 import { mountTrack } from "@onchain/track.js";
 import { deskView, openFirst, openFromHash } from "@onchain/detail.js";
 
@@ -108,7 +109,7 @@ function paintChainStatic() {
     view.empty.querySelector("[data-chain-name]").textContent = label;
     view.spark.hidden = true;
     if (view.holdings) view.holdings.hidden = true;
-    if (!(TRADING ? ["gems", "meme"] : ["gems", "pearl", "top", "rank", "quality", "agent", "profile"]).includes(view.shell.dataset.view)) setView("gems");
+    if (!(TRADING ? ["gems", "meme"] : ["gems", "pearl", "top", "rank", "quality", "sells", "agent", "profile"]).includes(view.shell.dataset.view)) setView("gems");
     return;
   }
 
@@ -447,7 +448,7 @@ document.addEventListener("lae:wallet-menu", () => {
 // together with onchain_trading_enabled on the server.
 // Lorenzo, 16/10: Pearl right after Gems, Top (the 25 best by score) before Scout.
 // Lorenzo, 21/10: Quality after Top, whitekobra's only (quality.js shows its button).
-const VIEWS = TRADING ? ["meme", "gems", "pearl", "top", "rank", "quality", "agent", "profile", "wallet", "manual"] : ["gems", "pearl", "top", "rank", "quality", "agent", "profile", "wallet"];
+const VIEWS = TRADING ? ["meme", "gems", "pearl", "top", "rank", "quality", "sells", "agent", "profile", "wallet", "manual"] : ["gems", "pearl", "top", "rank", "quality", "sells", "agent", "profile", "wallet"];
 const DOCK = TRADING ? ["meme", "gems", "pearl", "top", "rank", "quality", "agent", "profile"] : ["gems", "pearl", "top", "rank", "quality", "agent", "profile"];   // the wallet lives in the profile
 
 // Resolves once the new view is painted (after the transition's update).
@@ -642,6 +643,7 @@ mountAgent();
 mountAsk();
 mountTop();
 mountQuality();
+mountSells();
 // Lorenzo, 30/09: the meme screens and the backtest hall of fame are gone.
 // The "meme" view now holds Signals, the "top" view the Early list (07/10;
 // the Track record folds under the profile). The view names stay: the home

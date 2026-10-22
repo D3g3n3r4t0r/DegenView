@@ -284,6 +284,14 @@
         <p class="early-empty" data-rank-empty hidden>The ranking is filling up: gems appear as they pass the checks.</p>
       </section>
 
+      <!-- Coordinated sells (Lorenzo, 22/10, whitekobra only): sells.js. -->
+      <section class="early-view sells-view" id="sells-view" data-sells-view>
+        <header><h3>Coordinated sells</h3><span>wallets that sell together</span></header>
+        <p class="early-lead">Wallet clusters linked by funding or timing, their share of the supply, and every wave they sold in. Research, not advice.</p>
+        <p class="cs-sample" data-sells-sample hidden>Sample data: the live engine has not written a report yet.</p>
+        <div data-sells-rows></div>
+        <p class="early-empty" data-sells-empty hidden>No token is watched yet.</p>
+      </section>
       <!-- Quality (Lorenzo, 21/10, whitekobra only): quality 80 or more and
            not in the Top 25, accepted into the gems or discarded by hand. -->
       <section class="early-view quality-view" id="quality-view" data-quality-view>
@@ -332,6 +340,8 @@
       <!-- DeepSeek's own tab (Lorenzo, 28/09: "diamo a DeepSeek una tab
            tutta sua con animazioni molto fatte bene [...] voglio vedere come
            ragiona"). Lo disegna static/onchain/agent.js. -->
+      <!-- Whitekobra only: sells.js shows it when the server answers. -->
+      <button type="button" class="cs-entry" id="sells-entry" data-go="sells" hidden><span>Coordinated sells</span><b data-sells-entry-risk></b><i aria-hidden="true">›</i></button>
       <section class="agent-view" id="agent-view" aria-label="Scout"></section>
       <dialog class="sheet review" id="review" aria-label="Daily review">
         <div class="grip" aria-hidden="true"></div>

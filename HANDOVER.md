@@ -1,3 +1,11 @@
+# 2026-10-22 — Vendite coordinate: scheda e avviso Telegram — **in corso** (Claude, a mano)
+
+Lorenzo, 22/10: strumento per le vendite coordinate, primo token `0x96f455a90a80dcf0c2df6703ea4ba3bedf286e43` (Robinhood Chain); "dividi le task con vari agenti" (un thread per il motore, uno per la vista).
+- Vista `sells` (solo whitekobra, `/api/onchain/coordinated-sells` 404 agli altri): pillola in cima a Scout, `#sells`, link dall'avviso. Cluster, quota di supply, timeline delle ondate di vendita, rischio 0-100. `frontend/static/onchain/sells.js`.
+- Formato del report v1 nel docstring di `backend/app/trading/onchain/coordinated_sells.py`: il motore scrive `backend/data/coordinated_sells/<chain>-<token>.json`. Finche' non ce n'e', la vista mostra `app/data/coordinated_sells_sample.json` con la scritta "Sample data" e nessun avviso parte.
+- Avviso Telegram (`_coordinated_sells_loop`, ogni 60 s): ondata con >=2 wallet e >=0,5% della supply, piu' recente di 6 ore, una volta sola per `id` (`data/coordinated_sells_sent.json`).
+- Resta: il motore vero (altro thread) che scrive i report.
+
 # 2026-10-21 — App on-chain rifatta in React, pagina /app solo per l'account di Lorenzo — **in corso** (Claude, a mano)
 
 Lorenzo: "https://www.rareui.com/ possiamo applicarlo al nostro sito e app?", poi "rifacciamo app", "solo per lorenzo", "non x whitekobra ma per lorenzo devi farla", "procedi".
