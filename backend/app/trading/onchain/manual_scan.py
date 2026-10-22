@@ -420,6 +420,10 @@ async def _scan(query: str, emit=None, kobra: bool = False) -> dict:
             step("pool", "fail", "no pool on our chains")
             return {"error": f"No pool for \"{query}\" on Solana, Robinhood, BSC, Base or Ethereum."}
         item = item_of(pair)
+        # A deep look at a token queues its wallet clusters first in line.
+        from app.trading.onchain import wallet_clusters
+        wallet_clusters.request(item["chain"], item["token_address"], item.get("symbol") or "",
+                                item.get("created_at"), urgent=True)
         step("pool", "ok", f"{item['symbol']} on {item['chain']} · {item.get('dex') or 'dex'}")
         links = legit.links_from_dexscreener(pair)
         step("name", "run")

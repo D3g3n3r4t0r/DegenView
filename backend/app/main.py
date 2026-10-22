@@ -1546,6 +1546,10 @@ async def lifespan(app: FastAPI):
     background.append(asyncio.create_task(_telegram_chat_loop()))
     background.append(asyncio.create_task(_deepseek_recap_loop()))
     background.append(asyncio.create_task(_coordinated_sells_loop()))
+    if settings.onchain_radar_enabled:
+        # Wallet clusters of the candidates, built by the server (22/10).
+        from app.trading.onchain import wallet_clusters
+        background.append(asyncio.create_task(wallet_clusters.loop(_ai_veto_candidates)))
     t5 = asyncio.create_task(_watchdog_loop())
     onchain_leaderboard.set_top_source(_top_entries)
     # Gem research (leaderboard, outcomes, layers, weekly re-check, studies):
@@ -5594,6 +5598,8 @@ def agent_activity(user: User = Depends(auth.get_current_user)) -> dict:
     # The free AI doing DeepSeek's research work (free_ai.py, 20/10).
     from app import free_ai
     out["research"]["free_ai"] = free_ai.status()
+    from app.trading.onchain import wallet_clusters
+    out["research"]["wallet_clusters"] = wallet_clusters.status()
     return out
 
 

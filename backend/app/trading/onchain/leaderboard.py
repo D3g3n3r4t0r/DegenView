@@ -257,8 +257,10 @@ def _key(chain: str, token: str) -> str:
 
 
 def crash_reason(chain: str, token: str) -> str:
-    """market_peaks' verdict for the token: "" unless it crashed in the last days."""
-    return market_peaks.crashed(_key(chain, token).lower())
+    """market_peaks' verdict for the token: "" unless it crashed in the last
+    days; then the coordinated-sell exclusion (risk >= 60, 22/10)."""
+    from app.trading.onchain import coordinated_sells
+    return market_peaks.crashed(_key(chain, token).lower()) or coordinated_sells.exclusion(chain, token)
 
 
 def _merge_spellings() -> None:

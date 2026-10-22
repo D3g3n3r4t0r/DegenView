@@ -23,6 +23,9 @@ WINDOW_BLOCKS = 5        # "close" when within this many blocks...
 WINDOW_S = 120           # ...or this many seconds (whichever is known)
 MIN_WALLETS = 2          # a group needs at least this many distinct wallets
 LOG_CHUNK = 5_000        # blocks per eth_getLogs call
+# The Robinhood Chain RPC takes 100k blocks per call when filtered on the
+# senders (~0.1 s blocks): 5,000 would be 43 calls per token every 6 hours.
+CHUNK = {"robinhood": 100_000}
 
 # Score weights (sum 100).
 W_SHARE, W_WALLETS, W_SAME_BLOCK, W_REPEAT = 45, 25, 20, 10
@@ -165,8 +168,9 @@ async def fetch_transfers(chain: str, token: str, wallets: list[str], from_block
     rpc = rpc or _default_rpc(chain)
     senders = ["0x" + "0" * 24 + _addr(w)[2:] for w in wallets]
     logs: list[dict] = []
-    for start in range(from_block, to_block + 1, LOG_CHUNK):
-        end = min(to_block, start + LOG_CHUNK - 1)
+    step = CHUNK.get(chain, LOG_CHUNK)
+    for start in range(from_block, to_block + 1, step):
+        end = min(to_block, start + step - 1)
         logs += await rpc("eth_getLogs", [{"address": token, "fromBlock": hex(start), "toBlock": hex(end),
                                            "topics": [TRANSFER_TOPIC, senders]}]) or []
     ts: dict[int, int] = {}

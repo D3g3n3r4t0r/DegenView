@@ -221,3 +221,27 @@ async def notify_once(send, url: str, now: float | None = None) -> int:
     if n:
         save_sent(sent_list)
     return n
+
+
+# Lorenzo, 22/10 (decision card): a coordinated-sell risk of 60 or more takes
+# the token out of the Top for every account, like a crash.
+EXCLUDE_RISK = 60
+EXCLUDE_MAX_AGE_S = 7 * 86400
+_excl_cache: tuple[float, dict[str, int]] = (0.0, {})
+
+
+def exclusion(chain: str, token: str, now: float | None = None) -> str:
+    """"" unless the token's fresh report has risk >= EXCLUDE_RISK."""
+    global _excl_cache
+    now = now if now is not None else time.time()
+    if now - _excl_cache[0] > 60:
+        risky = {}
+        d = _dir()
+        for p in d.glob("*.json") if d.is_dir() else []:
+            rep = _read(p)
+            score = ((rep or {}).get("risk") or {}).get("score") or 0
+            if rep and score >= EXCLUDE_RISK and now - (rep.get("updated_at") or 0) <= EXCLUDE_MAX_AGE_S:
+                risky[f"{rep['chain']}:{rep['token']}"] = round(score)
+        _excl_cache = (now, risky)
+    score = _excl_cache[1].get(f"{(chain or '').lower()}:{(token or '').lower()}")
+    return f"coordinated sells: risk {score}" if score else ""
