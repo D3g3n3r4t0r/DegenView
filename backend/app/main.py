@@ -1549,7 +1549,7 @@ async def lifespan(app: FastAPI):
     if settings.onchain_radar_enabled:
         # Wallet clusters of the candidates, built by the server (22/10).
         from app.trading.onchain import wallet_clusters
-        background.append(asyncio.create_task(wallet_clusters.loop(_ai_veto_candidates)))
+        background.append(asyncio.create_task(wallet_clusters.loop(_cluster_candidates)))
     t5 = asyncio.create_task(_watchdog_loop())
     onchain_leaderboard.set_top_source(_top_entries)
     # Gem research (leaderboard, outcomes, layers, weekly re-check, studies):
@@ -4183,6 +4183,35 @@ def _ai_veto_candidates() -> list[dict]:
             row = onchain_projects_db.get(t["chain"], t["token_address"])
             e = onchain_leaderboard.db_entry(row) if row else t
         out.append(e)
+    return out
+
+
+def _cluster_candidates() -> list[dict]:
+    """Every token the app shows, most important first (wallet_clusters):
+    the Top/arenas (rebuilt every 2 days), Early, Quality, the board, then the
+    research candidates. Light rows: chain, token, symbol, created_at, _top."""
+    out, seen = [], set()
+
+    def add(e: dict, top: bool = False) -> None:
+        chain, tok = e.get("chain") or "", e.get("token_address") or e.get("token") or ""
+        k = f"{chain}:{tok}".lower()
+        if chain and tok and k not in seen:
+            seen.add(k)
+            out.append({"chain": chain, "token_address": tok, "symbol": e.get("symbol") or "",
+                        "created_at": e.get("created_at") or e.get("pair_created_at"), "_top": top})
+    steps = [(lambda: _top_entries(ARENA_POOL, full=True), True),
+             (lambda: onchain_leaderboard.early_list(), False),
+             (lambda: _kobra_early(), False),
+             (lambda: (_quality_view().get("accepted") or []) + (_quality_view().get("waiting") or []), False),
+             (lambda: list(onchain_leaderboard._entries.values()), False),
+             (_ai_veto_candidates, False)]
+    for fn, top in steps:
+        try:
+            for e in fn():
+                if isinstance(e, dict):
+                    add(e, top)
+        except Exception:  # noqa: BLE001
+            logger.exception("cluster candidates")
     return out
 
 

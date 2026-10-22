@@ -211,3 +211,19 @@ def test_account_cap(data):
     assert not wc.account_take("u1", now=1_900_000_000)
     assert wc.account_take("u2", now=1_900_000_000)
     assert wc.account_take("u1", now=1_900_000_000 + 86400)
+
+
+def test_new_tokens_before_rebuilds_in_order(data):
+    now = 1_900_000_000.0
+    a, b, c = ("0x" + x * 20 for x in ("a1", "b2", "c3"))
+    wc._done({"key": wc._key("robinhood", c)}, {"clusters": [], "partial": False}, None, now - 8 * 86400)
+    assert wc.request("robinhood", c, now=now)              # old build: a rebuild
+    assert wc.request("robinhood", a, now=now)              # new
+    assert wc.request("robinhood", b, now=now)              # new, after a
+    assert [q["token"] for q in wc._state()["queue"]] == [a, b, c]
+    wc._done({"key": wc._key("robinhood", c)}, {"clusters": [], "partial": False}, None, now - 3 * 86400)
+    st = wc._state()
+    st["queue"] = []
+    wc._save_state(st)
+    assert not wc.request("robinhood", c, now=now)          # weekly for the rest
+    assert wc.request("robinhood", c, now=now, rebuild_s=wc.REBUILD_TOP_S)   # every 2 days in the Top

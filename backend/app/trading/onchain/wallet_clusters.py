@@ -57,7 +57,12 @@ SIMS = 300
 WAVE_P = 0.01                             # a wave bigger than random this often is kept
 AIRDROP_MIN_TARGETS = 20
 AIRDROP_SAME_SHARE = 0.5
-MAX_PER_DAY = 12
+# Lorenzo, 22/10: "il controllo cluster è vitale, deve avere priorità massima
+# sui titoli presenti nella nostra app, in qualunque sezione": every token the
+# app shows, not only the candidates. One build every LOOP_S, never two at once.
+MAX_PER_DAY = 60
+LOOP_S = 300
+REBUILD_TOP_S = 2 * 86400   # Top/arenas: rebuilt every 2 days, the rest weekly
 MANUAL_PER_DAY = 20       # checks asked for by hand: their own budget, first in line
 PER_ACCOUNT_PER_DAY = 5   # of which one account may ask (whitekobra: no own cap)
 
@@ -112,7 +117,8 @@ def _key(chain: str, token: str) -> str:
 # --- queue -----------------------------------------------------------------
 
 def request(chain: str, token: str, symbol: str = "", created_at: float | None = None,
-            urgent: bool = False, now: float | None = None, manual: bool = False) -> bool:
+            urgent: bool = False, now: float | None = None, manual: bool = False,
+            rebuild_s: float | None = None) -> bool:
     """Queue a token. Cheap and synchronous: the loop does the work. False
     when the chain has no source or the token was built recently."""
     chain, token = (chain or "").lower(), sync_watch._n(token or "")
@@ -122,16 +128,26 @@ def request(chain: str, token: str, symbol: str = "", created_at: float | None =
     st = _state()
     k = _key(chain, token)
     cur = st.get("tokens", {}).get(k) or {}
-    if cur.get("built_at") and now - cur["built_at"] < (3600 if manual else RETRY_S if urgent else REBUILD_S):
+    if cur.get("built_at") and now - cur["built_at"] < (3600 if manual else RETRY_S if urgent
+                                                       else rebuild_s or REBUILD_S):
         return False
     if cur.get("failed_at") and now - cur["failed_at"] < (3600 if manual else RETRY_S):
         return False
-    if not urgent and any(q.get("key") == k for q in st.get("queue", [])):
+    if not manual and any(q.get("key") == k for q in st.get("queue", [])):
         return False
+    # Never built: a token new to the app goes ahead of the rebuilds, in the
+    # order it came (the most important sections are queued first).
+    new = not cur
     queue = [q for q in st.get("queue", []) if q.get("key") != k]
     item = {"key": k, "chain": chain, "token": token, "symbol": str(symbol or "")[:24],
             "created_at": created_at, "at": int(now), "manual": manual}
-    queue.insert(0, item) if urgent else queue.append(item)
+    item["new"] = new
+    if urgent:
+        queue.insert(0, item)
+    elif new:
+        queue.insert(next((n for n, q in enumerate(queue) if not (q.get("manual") or q.get("new"))), len(queue)), item)
+    else:
+        queue.append(item)
     st["queue"] = queue[:500]
     _save_state(st)
     return True
@@ -551,15 +567,16 @@ async def run_once(now: float | None = None) -> dict | None:
         return res
 
 
-async def loop(candidates, every_s: int = 600) -> None:
-    """Queues the candidates (main._ai_veto_candidates) and builds one token
-    per turn."""
+async def loop(candidates, every_s: int = LOOP_S) -> None:
+    """Queues every token the app shows (main._cluster_candidates, most
+    important first; "_top" ones rebuilt sooner) and builds one per turn."""
     while True:
         await asyncio.sleep(every_s)
         try:
             for e in candidates():
                 request(e.get("chain") or "", e.get("token_address") or "", e.get("symbol") or "",
-                        e.get("created_at") or e.get("pair_created_at"))
+                        e.get("created_at") or e.get("pair_created_at"),
+                        rebuild_s=REBUILD_TOP_S if e.get("_top") else None)
             await run_once()
         except Exception:  # noqa: BLE001
             logger.exception("wallet clusters loop")
