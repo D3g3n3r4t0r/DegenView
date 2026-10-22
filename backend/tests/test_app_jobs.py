@@ -137,6 +137,6 @@ def test_push_endpoints(monkeypatch):
         assert not web_push.subscribed(DEVICE)
         sw = c.get("/sw.js")
         assert sw.status_code == 200 and "notificationclick" in sw.text
-        assert c.get("/manifest.webmanifest").json()["start_url"] == "/onchain-app.html"
+        assert c.get("/manifest.webmanifest").json()["start_url"] == "/app"
     finally:
         main.app.dependency_overrides.clear()
