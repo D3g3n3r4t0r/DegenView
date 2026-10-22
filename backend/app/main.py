@@ -3944,7 +3944,7 @@ async def onchain_dev_payments(token: str, user: User = Depends(auth.get_current
         raise HTTPException(status_code=404, detail="Not found.")
     rep = dev_payments.report(token.strip())
     watched = rep is not None or any(c["token"] == token.strip() for c in dev_payments.configs())
-    return {"watched": watched, "can_edit": _full_score(user) or not watched, "busy": dev_payments.busy(), "report": rep}
+    return {"watched": watched, "can_edit": _full_score(user) or not watched, "busy": dev_payments.busy(), "error": dev_payments.error(token.strip()), "report": rep}
 
 
 @app.post("/api/onchain/dev-payments/watch")

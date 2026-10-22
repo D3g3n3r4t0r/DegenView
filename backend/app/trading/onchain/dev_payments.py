@@ -35,8 +35,9 @@ from app.trading.onchain import solana_clusters, storage
 logger = logging.getLogger(__name__)
 
 RUN_EVERY_S = 30 * 60
-MAX_TX_PER_RUN = 300            # without a Helius key; a first run of a busy account takes a few runs
-HELIUS_TX_PER_RUN = 1500
+MAX_TX_PER_RUN = 40             # per chunk without a Helius key; the report is rewritten after each chunk
+HELIUS_TX_PER_RUN = 150
+CHUNKS_S = 240                  # one run_all keeps reading chunks this long while history is behind
 MAX_EVENTS = 3000
 MAX_CLAIMERS = 5
 DAYS = 60                       # the daily series of payments
@@ -105,6 +106,14 @@ def report(token: str) -> dict | None:
         return None
     r = _read(_rep_path(token))
     return r or None
+
+
+def error(token: str) -> str:
+    return str(_read(_dir() / f"{token}-error.json").get("error") or "") if _SOL.match(token or "") else ""
+
+
+def _error(token: str, msg: str) -> None:
+    _write(_dir() / f"{token}-error.json", {"error": msg, "at": int(time.time())})
 
 
 def busy() -> bool:
@@ -249,6 +258,7 @@ def build_report(cfg: dict, events: list[dict], holdings: dict[str, float], now:
         "claimers": claimers,
         "events": events[:400],
         "complete": not (cfg.get("state") or {}).get("behind"),
+        "read": (cfg.get("state") or {}).get("read", 0),
     }
 
 
@@ -283,12 +293,15 @@ async def run(cfg: dict, now: float | None = None) -> dict:
             await _read_account(acc, cursors, budget, lambda tx, sig, o=w: got.extend(wallet_moves(tx, sig, o, token)))
             new += got
             events = _merge(events, got)
-    state.update(cursors=cursors, behind=budget[0] <= 0, last_run=int(now))
+    start = HELIUS_TX_PER_RUN if solana_clusters.helius_key() else MAX_TX_PER_RUN
+    state.update(cursors=cursors, behind=budget[0] <= 0, last_run=int(now),
+                 read=int(state.get("read", 0)) + start - max(0, budget[0]), error="")
     cfg = {**cfg, "state": state}
     _write(_cfg_path(token), cfg)
     _write(_dir() / f"{token}-events.json", {"events": events})
     rep = build_report(cfg, events, holdings, now)
     _write(_rep_path(token), rep)
+    _write(_dir() / f"{token}-error.json", {})
     return rep
 
 
@@ -304,11 +317,17 @@ async def run_all(force: bool = False) -> int:
                 last = (cfg.get("state") or {}).get("last_run") or 0
                 behind = (cfg.get("state") or {}).get("behind")
                 if force or behind or time.time() - last >= RUN_EVERY_S:
+                    t0 = time.time()
                     try:
-                        await run(cfg)
-                        n += 1
-                    except Exception:  # noqa: BLE001
+                        while True:     # history in chunks, each one visible in the report
+                            rep = await run(cfg)
+                            n += 1
+                            if rep["complete"] or time.time() - t0 > CHUNKS_S:
+                                break
+                            cfg = next((c for c in configs() if c["token"] == cfg["token"]), cfg)
+                    except Exception as exc:  # noqa: BLE001
                         logger.exception("dev payments %s", cfg.get("symbol") or cfg["token"][:8])
+                        _error(cfg["token"], f"{type(exc).__name__}: {str(exc)[:160]}")
         finally:
             _busy = False
         return n

@@ -82,10 +82,11 @@ export function DevPayments({ token, symbol, setup = false }: { token: string; s
     <section className="mt-5">
       <h3 className="mb-2 flex items-baseline justify-between text-[11.5px] font-medium uppercase tracking-[0.07em] text-text-3">
         Developer payments
-        {r && <span className="text-[12px] normal-case tracking-normal">{r.complete ? `updated ${when(r.updated_at)}` : "reading history…"}</span>}
+        {r && <span className="text-[12px] normal-case tracking-normal">{r.complete ? `updated ${when(r.updated_at)}` : `reading history · ${r.read ?? 0} tx`}</span>}
       </h3>
       {!d.watched && <><p className="text-[13px] text-text-3">Paste the pump.fun account the creator fees go to.</p><Setup token={token} symbol={symbol} onDone={() => setN((x) => x + 1)} /></>}
-      {d.watched && !r && <p className="rounded-[14px] bg-card px-3 py-3 text-[13px] text-text-3">Reading the fee account…</p>}
+      {d.watched && !r && !d.error && <p className="rounded-[14px] bg-card px-3 py-3 text-[13px] text-text-3">{d.busy ? "Reading the fee account, first numbers within a minute…" : "Queued: the first read starts within a minute."}</p>}
+      {d.error && <p className="mb-2 rounded-[14px] bg-card px-3 py-3 text-[13px] text-down">Last read failed: {d.error}. Retrying every minute.</p>}
       {r && (
         <>
           <div className="grid grid-cols-3 gap-2">
