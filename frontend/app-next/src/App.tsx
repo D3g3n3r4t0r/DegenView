@@ -83,7 +83,7 @@ export function App() {
   useEffect(() => { loadHidden(); coverage().then((l) => setLabels(Object.fromEntries(l.map((n) => [n.key, n.label ?? n.key])))); }, []);
   // Quality is one account's (quality.js): its button shows only when the list answers.
   useEffect(() => { fetch("/api/onchain/quality").then((r) => setQuality(r.ok)).catch(() => {}); }, []);
-  // Coordinated sells is one account's too (sells.js): a pill at the top of Scout, with the highest risk.
+  // Coordinated sells is one account's too (sells.js): a pill at the top of Scout, with the highest risk, opening the Clusters tab.
   useEffect(() => {
     api.getCoordinatedSells().then((d) => {
       const top = Math.max(-1, ...(d.reports ?? []).map((r) => r.risk?.score ?? -1));
@@ -184,7 +184,7 @@ export function App() {
                 empty={t("The ranking is filling up: gems appear as they pass the checks.")} />
             )}
             {view === "quality" && <Quality onOpen={openWith(qualityContext)} />}
-            {view === "agent" && <Scout sells={sells} />}
+            {view === "agent" && <Scout sells={sells} onSells={() => setView("clusters")} />}
             {view === "clusters" && <Clusters onToken={(e) => setOpen({ e, context: t("Cluster check") })} inApp={inApp} />}
             {view === "profile" && <Profile onOpen={(e, context) => setPeek({ e, context })} />}
           </motion.div>

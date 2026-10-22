@@ -45,7 +45,7 @@ function todayLine(d: AgentInfo | null) {
   return [ai, work].filter(Boolean).join(" — ") || tr("Nothing yet today");
 }
 
-export function Scout({ sells }: { sells?: { risk: number | null } | null }) {
+export function Scout({ sells, onSells }: { sells?: { risk: number | null } | null; onSells: () => void }) {
   const [info, setInfo] = useState<AgentInfo | null>(null);
   const [items, setItems] = useState<AgentItem[]>([]);
   const [fresh, setFresh] = useState<Set<number>>(new Set());
@@ -105,11 +105,11 @@ export function Scout({ sells }: { sells?: { risk: number | null } | null }) {
   return (
     <>
       {sells && (
-        <a href="/onchain-app.html?classic=1#sells" className="flex h-11 items-center gap-2 rounded-full bg-card px-4 text-[14px] font-medium">
+        <button type="button" onClick={onSells} className="flex h-11 w-full items-center gap-2 rounded-full bg-card px-4 text-left text-[14px] font-medium">
           <span className="flex-1">{tr("Coordinated sells")}</span>
           {sells.risk != null && <b className={`text-[13px] ${sells.risk >= 70 ? "text-down" : sells.risk >= 40 ? "text-amber" : "text-text-2"}`}>{tr("risk {n}", { n: Math.round(sells.risk) })}</b>}
           <i className="not-italic text-text-3" aria-hidden="true">›</i>
-        </a>
+        </button>
       )}
 
       <div className="grid justify-items-center gap-1.5 pb-[18px] pt-6 text-center">
