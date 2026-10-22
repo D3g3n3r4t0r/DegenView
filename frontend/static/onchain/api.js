@@ -211,6 +211,7 @@ export const getTop = (n, keys = []) =>
   request(`/api/onchain/top?n=${n}${keys?.length ? `&narrative=${encodeURIComponent(keys.join(","))}` : ""}`);
 // Coordinated sells (sells.js): 404 for the other accounts.
 export const getCoordinatedSells = () => request("/api/onchain/coordinated-sells", { timeoutMs: 20000 });
+export const uploadCluster = (body) => request("/api/onchain/coordinated-sells/watch", { method: "POST", body, timeoutMs: 30000 });
 // Whitekobra's Quality list (quality.js): 404 for the other accounts.
 export const getQuality = () => request("/api/onchain/quality", { timeoutMs: 20000 });
 export const decideQuality = (chain, token, action) =>
