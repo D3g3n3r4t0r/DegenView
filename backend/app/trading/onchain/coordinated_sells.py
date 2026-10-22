@@ -21,7 +21,8 @@ backend/data/coordinated_sells/<chain>-<token lowercase>.json
         "wallets": [{"address": "0x...", "share": 0.012}],   # share of supply, 0..1
         "share": 0.083,                 # whole cluster, 0..1
         "links": ["same_funder", "same_block_sells", "same_amounts"],
-        "risk": 0-100
+        "risk": 0-100,
+        "edges": [["0xa", "0xb"]]       # optional: wallet pairs the engine linked (map lines)
       }],
       "events": [{
         "id": "c1-1761099000",          # stable: never reused for another sell
@@ -31,7 +32,8 @@ backend/data/coordinated_sells/<chain>-<token lowercase>.json
         "wallets": 5,                   # how many of the cluster sold
         "share_sold": 0.021,            # of supply, 0..1
         "usd": 41000.0,                 # optional
-        "txs": ["0x..."]                # optional
+        "txs": ["0x..."],               # optional
+        "sellers": ["0x..."]            # optional: who sold in the wave (lit on the map)
       }]
     }
 

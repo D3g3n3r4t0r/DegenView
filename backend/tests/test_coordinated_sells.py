@@ -55,6 +55,13 @@ def test_from_analysis_maps_the_engine_output(tmp_path, monkeypatch):
     assert cs.reports() == ([r], False)
 
 
+def test_clean_keeps_map_edges_and_sellers():
+    r = cs.clean({"version": 1, "token": "0xab",
+                  "clusters": [{"id": "c1", "wallets": [{"address": "0x1"}, {"address": "0x2"}], "edges": [["0x1", "0x2"], ["bad"]]}],
+                  "events": [{"id": "e1", "cluster": "c1", "ts": 10, "sellers": ["0x1"]}]})
+    assert r["clusters"][0]["edges"] == [["0x1", "0x2"]] and r["events"][0]["sellers"] == ["0x1"]
+
+
 def test_high_risk_report_excludes_the_token(tmp_path, monkeypatch):
     from app.trading.onchain import coordinated_sells as cs, leaderboard as lb, storage
     monkeypatch.setattr(storage, "DATA_DIR", tmp_path)

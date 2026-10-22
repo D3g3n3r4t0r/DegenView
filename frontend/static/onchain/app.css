@@ -1608,7 +1608,13 @@ html.detail-open .ask-fab, :root:has(#app-shell[data-view="entry"]) .ask-fab { d
 .cs-why { margin: 10px 2px 0; padding: 0 0 0 16px; font-size: 12px; line-height: 1.5; opacity: .75; }
 .cs-bar { display: flex; block-size: 10px; border-radius: 6px; overflow: hidden; background: var(--c-line, rgb(255 255 255 / .08)); margin: 0 2px 8px;
   & .cs-seg { inline-size: var(--w); transform-origin: left; animation: cs-grow .6s ease-out both; } }
-:is(.cs-seg, .cs-dot) { background: var(--c-down, #ef4444); &[data-i="1"] { background: var(--k-amber); } &[data-i="2"] { background: #60a5fa; } &[data-i="3"] { background: #c084fc; } }
+:is(.cs-seg, .cs-dot) { background: var(--c-down, #ef4444); &[data-i="1"] { background: var(--k-amber); } &[data-i="2"] { background: #60a5fa; } &[data-i="3"] { background: #c084fc; }
+  &[data-i="4"] { background: #2dd4bf; } &[data-i="5"] { background: #f472b6; } &[data-i="top"] { background: var(--c-text, #888); opacity: .45; } }
+.cs-map { margin: 12px 0 4px; border-radius: 16px; background: var(--c-line, rgb(127 127 127 / .08)); overflow: hidden; }
+.cs-map-canvas { display: block; inline-size: 100%; cursor: pointer; touch-action: manipulation; }
+.cs-pick { margin: 0 2px 6px; min-block-size: 1.4em; font: 500 11.5px/1.4 var(--sans); opacity: .65; }
+.cs-time li { cursor: pointer; border-radius: 10px; transition: opacity .2s; }
+.cs-time:has(li[aria-current]) li:not([aria-current]) { opacity: .45; }
 .cs-dot { display: inline-block; inline-size: 8px; block-size: 8px; border-radius: 50%; flex: none; }
 .cs-cluster { border-top: 1px solid var(--c-line, var(--k-line)); padding: 0 2px;
   & summary { display: flex; align-items: center; gap: 8px; padding: 10px 0; cursor: pointer; list-style: none; font-size: 13px;
