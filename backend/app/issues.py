@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0377", "Copy trading di wallet Solana nel sito classico",
+     "Richiesta in chat, 22/10: 'vorrei riuscire a fare copy trading di alcuni wallet su rete Solana [...] scrivendo l'indirizzo del wallet, si puo' fare copy trading praticamente quasi istantaneo [...] scegliere se copiare solo l'ingresso o sia ingresso che uscita [...] una percentuale [...] rispetto al trade originale [...] oppure una quota fissa, per esempio 50 dollari ogni posizione che si apre nuova'. Scelte: ricompre ignorate con la quota fissa, tetti $100 a trade e $500 al giorno, 10 posizioni, per tutti gli account con il Reale dietro conferma, prima in Simulato.",
+     "media"),
     ("seed-0376", "Rivoluzionare il design dell'app: Today e Sectors",
      "Lorenzo, 10/10: 'studia a fondo il design di tutta l'app e vedi come rivoluzionarlo per renderla piu' fruibile e moderna', poi 'opzione A, pero' dobbiamo creare anche un mosaico per vedere le top di ogni settore in maniera intelligente'; 22/10: 'applica tutto', 'SECTORS!'.",
      "media"),
