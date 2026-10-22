@@ -115,6 +115,7 @@ from app.trading.onchain import balances as onchain_balances
 from app.trading.onchain import deposit as onchain_deposit
 from app.trading.onchain import ai_scan as onchain_ai_scan
 from app.trading.onchain import arenas as onchain_arenas
+from app.trading.onchain import sectors as onchain_sectors
 from app.trading.onchain import gem_hold as onchain_gem_hold
 from app.trading.onchain import quality_picks as onchain_quality_picks
 from app.trading.onchain import execute as onchain_execute
@@ -3751,6 +3752,19 @@ async def onchain_top(n: int = 15, narrative: str = "", user: User = Depends(aut
     out = out[:max(1, min(int(n), 50))]
     return {"entries": out, "on_board": sum(1 for e in out if e["on_board"]),
             "backtests": onchain_strategy_lab.status(_top_entries(50))}
+
+
+@app.get("/api/onchain/sectors")
+async def onchain_sectors_view(user: User = Depends(auth.get_current_user)) -> dict:
+    """Sectors and Today for the React app (sectors.py, Lorenzo 22/10
+    "SECTORS!"): the same arenas as /api/onchain/top, unfiltered, summed up
+    per sector, with what changed since about a day ago."""
+    _require_onchain_enabled()
+    full = _full_score(user)
+    pool = _kobra_lists("")[0] if full else _top_entries(ARENA_POOL, "")
+    tenure = onchain_arenas.load_tenure() if full else None
+    built = onchain_arenas.build(pool, tenure=tenure)
+    return await asyncio.to_thread(onchain_sectors.view, built["arenas"], None, True, "full" if full else "base")
 
 
 # Whitekobra's Quality list (quality_picks.py, Lorenzo 21/10): the projects of

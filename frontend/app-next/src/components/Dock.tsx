@@ -1,8 +1,10 @@
 import { motion } from "motion/react";
 
-export type View = "gems" | "pearl" | "top" | "rank" | "quality" | "agent" | "profile";
+export type View = "today" | "sectors" | "gems" | "pearl" | "top" | "rank" | "quality" | "agent" | "profile";
 
 const ICONS: Record<Exclude<View, "profile">, React.ReactNode> = {
+  today: <><path d="M4 13h3l2.5-6 4 11 2.5-5H20" /></>,
+  sectors: <><rect x="3.5" y="3.5" width="9" height="9" rx="2" /><rect x="14.5" y="3.5" width="6" height="6" rx="1.5" /><rect x="14.5" y="11.5" width="6" height="9" rx="1.5" /><rect x="3.5" y="14.5" width="9" height="6" rx="2" /></>,
   gems: <><circle cx="9.5" cy="10" r="6" /><path d="M15.2 8.4a6 6 0 1 1-6.8 8.3" /></>,
   pearl: <><circle cx="12" cy="13" r="6.5" /><path d="M9.5 11a3 3 0 0 1 3-2" /><path d="M5 5.5 7 7.5M19 5.5 17 7.5M12 3v2" /></>,
   top: <><path d="M12 20v-8" /><path d="M12 12c0-3.5-2.5-6-6.5-6 0 3.5 2.5 6 6.5 6Z" /><path d="M12 13.5c0-3 2.2-5.5 6.5-5.5 0 3-2.2 5.5-6.5 5.5Z" /></>,
@@ -10,7 +12,7 @@ const ICONS: Record<Exclude<View, "profile">, React.ReactNode> = {
   quality: <path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9Z" />,
   agent: <><circle cx="12" cy="12" r="8" /><circle cx="12" cy="12" r="3.5" /><circle cx="12" cy="12" r="1" fill="currentColor" /></>,
 };
-export const LABEL: Record<View, string> = { gems: "Gems", pearl: "Pearl", top: "Early", rank: "Top", quality: "Quality", agent: "Scout", profile: "Profile" };
+export const LABEL: Record<View, string> = { today: "Today", sectors: "Sectors", gems: "Gems", pearl: "Pearl", top: "Early", rank: "Top", quality: "Quality", agent: "Scout", profile: "Profile" };
 
 /** The floating deep green bar and the round search button (classic.css #dock); the sage pill slides to the chosen view. */
 export function Dock({ view, views, onView, onSearch, initial }: {
