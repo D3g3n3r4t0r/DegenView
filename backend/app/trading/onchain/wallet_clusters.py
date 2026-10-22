@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 # Chains with a free RPC that serves the whole log history. Base, BSC and
 # Ethereum public RPCs answer getLogs only for the last hours (22/10, probed:
 # publicnode "archive requests require a token", drpc "free plan").
-CHAINS = ("robinhood", "ethereum", "base", "bsc")
+CHAINS = ("robinhood", "ethereum", "base", "bsc", "solana")
 MAX_WINDOW = {"robinhood": 5_000_000}     # the RPC takes up to 10M blocks / 10k logs
 MIN_WINDOW = 500
 MAX_CALLS = 600                           # getLogs calls per token
@@ -90,7 +90,7 @@ def _save_state(st: dict) -> None:
 
 
 def _key(chain: str, token: str) -> str:
-    return f"{chain}-{token.lower()}"
+    return f"{chain}-{sync_watch._n(token)}"
 
 
 # --- queue -----------------------------------------------------------------
@@ -99,8 +99,8 @@ def request(chain: str, token: str, symbol: str = "", created_at: float | None =
             urgent: bool = False, now: float | None = None) -> bool:
     """Queue a token. Cheap and synchronous: the loop does the work. False
     when the chain has no source or the token was built recently."""
-    chain, token = (chain or "").lower(), (token or "").lower()
-    if chain not in CHAINS or not token.startswith("0x") or len(token) != 42:
+    chain, token = (chain or "").lower(), sync_watch._n(token or "")
+    if chain not in CHAINS or not sync_watch._ok(token, chain):
         return False
     now = now if now is not None else time.time()
     st = _state()
@@ -399,6 +399,8 @@ async def _stamp(rpc, transfers: list[dict], blocks: set[int], anchors: dict[int
 
 
 async def build(chain: str, token: str, symbol: str = "", created_at: float | None = None, rpc=None) -> dict:
+    if chain == "solana":
+        return await _build_solana(token, symbol)
     rpc = rpc or sync_sells._default_rpc(chain)
     token = token.lower()
     latest = int(await _call(rpc, "eth_blockNumber", []) or "0x0", 16)
@@ -444,6 +446,26 @@ async def build(chain: str, token: str, symbol: str = "", created_at: float | No
     write_text_atomic(_dir() / f"{_key(chain, token)}.json", json.dumps(res))
     if res["clusters"] or len(res["top"]) >= 2:
         await _hand_to_watch(rpc, res, transfers, anchors, latest)
+    return res
+
+
+async def _build_solana(mint: str, symbol: str) -> dict:
+    from app.trading.onchain import solana_clusters
+    res = await solana_clusters.build(mint)
+    res.update(chain="solana", token=mint, symbol=symbol, built_at=int(time.time()),
+               partial=True, transfers=res["coverage"]["transfers"])
+    _dir().mkdir(parents=True, exist_ok=True)
+    write_text_atomic(_dir() / f"{_key('solana', mint)}.json", json.dumps(res))
+    clusters = [{"id": c["id"], "wallets": c["wallets"], "links": c["links"], "edges": c["edges"]}
+                for c in res["clusters"]] + [{"id": "top", "wallets": res["top"], "links": ["top_holders"]}]
+    cfg = sync_watch.save({"chain": "solana", "token": mint, "symbol": symbol, "pools": [],
+                           "wallets": res["top"], "shares": res["shares"], "clusters": clusters,
+                           "source": "auto", "coverage": res["coverage"], "accounts": res["accounts"],
+                           "supply": res["supply"], "decimals": res["decimals"]})
+    if cfg:
+        # The watch starts from today: older sells were not read.
+        cfg["state"] = {"last_sig": res["last_sig"]}
+        write_text_atomic(sync_watch._dir() / f"{_key('solana', mint)}.json", json.dumps(cfg))
     return res
 
 

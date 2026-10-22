@@ -81,6 +81,10 @@ def _num(v, lo: float | None = None, hi: float | None = None) -> float | None:
     return x
 
 
+def _norm(a: str) -> str:
+    return a.lower() if a.startswith("0x") else a
+
+
 def clean(raw: dict) -> dict | None:
     """One report as the app reads it, or None when it isn't one."""
     if not isinstance(raw, dict) or raw.get("version") != VERSION or not raw.get("token"):
@@ -93,7 +97,7 @@ def clean(raw: dict) -> dict | None:
                    for w in c.get("wallets") or [] if isinstance(w, dict) and w.get("address")]
         clusters.append({"id": str(c["id"]), "wallets": wallets, "share": _num(c.get("share"), 0, 1),
                          "links": [str(x) for x in c.get("links") or []][:8], "risk": _num(c.get("risk"), 0, 100),
-                         "edges": [[str(a).lower(), str(b).lower()] for a, b in
+                         "edges": [[_norm(str(a)), _norm(str(b))] for a, b in
                                    (e for e in c.get("edges") or [] if isinstance(e, list) and len(e) == 2)][:2000]})
     ids = {c["id"] for c in clusters}
     events = []
@@ -104,10 +108,10 @@ def clean(raw: dict) -> dict | None:
                        "window_s": _num(e.get("window_s"), 0), "wallets": int(_num(e.get("wallets"), 0) or 0),
                        "share_sold": _num(e.get("share_sold"), 0, 1), "usd": _num(e.get("usd"), 0),
                        "txs": [str(t) for t in e.get("txs") or []][:20],
-                       "sellers": [str(a).lower() for a in e.get("sellers") or []][:200]})
+                       "sellers": [_norm(str(a)) for a in e.get("sellers") or []][:200]})
     events.sort(key=lambda e: e["ts"], reverse=True)
     risk = raw.get("risk") if isinstance(raw.get("risk"), dict) else {}
-    return {"version": VERSION, "chain": str(raw.get("chain") or ""), "token": str(raw["token"]).lower(),
+    return {"version": VERSION, "chain": str(raw.get("chain") or ""), "token": _norm(str(raw["token"])),
             "symbol": str(raw.get("symbol") or ""), "updated_at": _num(raw.get("updated_at")),
             "risk": {"score": _num(risk.get("score"), 0, 100), "reasons": [str(x) for x in risk.get("reasons") or []][:6]},
             "clusters": sorted(clusters, key=lambda c: -(c["share"] or 0)), "events": events,
@@ -258,5 +262,5 @@ def exclusion(chain: str, token: str, now: float | None = None) -> str:
             if rep and score >= EXCLUDE_RISK and now - (rep.get("updated_at") or 0) <= EXCLUDE_MAX_AGE_S:
                 risky[f"{rep['chain']}:{rep['token']}"] = round(score)
         _excl_cache = (now, risky)
-    score = _excl_cache[1].get(f"{(chain or '').lower()}:{(token or '').lower()}")
+    score = _excl_cache[1].get(f"{(chain or '').lower()}:{_norm(token or '')}")
     return f"coordinated sells: risk {score}" if score else ""

@@ -26,7 +26,7 @@ from app.trading.onchain import storage, sync_sells
 
 logger = logging.getLogger(__name__)
 
-CHAINS = ("robinhood", "ethereum", "base", "bsc")
+CHAINS = ("robinhood", "ethereum", "base", "bsc", "solana")
 MAX_WALLETS = 500
 RUN_EVERY_S = 6 * 3600
 # A first run without "from_block" reads this far back (~3 days at the
@@ -34,6 +34,15 @@ RUN_EVERY_S = 6 * 3600
 FIRST_BLOCKS = 2_600_000
 KEEP_S = 30 * 86400      # transfers older than this drop out of the report
 _ADDR = re.compile(r"^0x[0-9a-fA-F]{40}$")
+_SOL = re.compile(r"^[1-9A-HJ-NP-Za-km-z]{32,44}$")
+
+
+def _ok(a: str, chain: str = "") -> bool:
+    return bool((_SOL if chain == "solana" else _ADDR).match(a))
+
+
+def _n(a: str) -> str:
+    return a.lower() if a.startswith("0x") else a
 _lock = asyncio.Lock()
 
 
@@ -42,15 +51,15 @@ def _dir() -> Path:
 
 
 def _key(chain: str, token: str) -> str:
-    return f"{chain}-{token.lower()}"
+    return f"{chain}-{_n(token)}"
 
 
-def _addrs(v, field: str) -> list[str]:
+def _addrs(v, field: str, chain: str = "") -> list[str]:
     if v is None:
         return []
-    if not isinstance(v, list) or not all(isinstance(a, str) and _ADDR.match(a) for a in v):
-        raise ValueError(f"{field}: a list of 0x addresses")
-    return list(dict.fromkeys(a.lower() for a in v))
+    if not isinstance(v, list) or not all(isinstance(a, str) and _ok(a, chain) for a in v):
+        raise ValueError(f"{field}: a list of addresses")
+    return list(dict.fromkeys(_n(a) for a in v))
 
 
 def clean(raw: dict) -> dict:
@@ -61,34 +70,38 @@ def clean(raw: dict) -> dict:
     if chain not in CHAINS:
         raise ValueError(f"chain: one of {', '.join(CHAINS)}")
     token = str(raw.get("token") or "")
-    if not _ADDR.match(token):
-        raise ValueError("token: a 0x address")
-    wallets = _addrs(raw.get("wallets"), "wallets") + _addrs(raw.get("extra_wallets"), "extra_wallets")
+    if not _ok(token, chain):
+        raise ValueError("token: an address")
+    wallets = _addrs(raw.get("wallets"), "wallets", chain) + _addrs(raw.get("extra_wallets"), "extra_wallets", chain)
     wallets = list(dict.fromkeys(wallets))
     if not 2 <= len(wallets) <= MAX_WALLETS:
         raise ValueError(f"wallets: between 2 and {MAX_WALLETS}")
     shares = {}
     for d in raw.get("details") or []:
         if isinstance(d, dict) and isinstance(d.get("address"), str) and isinstance(d.get("pct_now"), (int, float)):
-            shares[d["address"].lower()] = max(0.0, min(1.0, d["pct_now"] / 100))
+            shares[_n(d["address"])] = max(0.0, min(1.0, d["pct_now"] / 100))
     for a, v in (raw.get("shares") or {}).items() if isinstance(raw.get("shares"), dict) else []:
         if isinstance(a, str) and isinstance(v, (int, float)):
-            shares[a.lower()] = max(0.0, min(1.0, float(v)))
+            shares[_n(a)] = max(0.0, min(1.0, float(v)))
     from_block = raw.get("from_block")
     clusters = []
     for i, c in enumerate(raw.get("clusters") or [], 1):
         if isinstance(c, dict):
-            ws = [w for w in _addrs(c.get("wallets"), "clusters.wallets") if w in wallets]
+            ws = [w for w in _addrs(c.get("wallets"), "clusters.wallets", chain) if w in wallets]
             if len(ws) >= 2:
                 clusters.append({"id": str(c.get("id") or f"c{i}")[:12], "wallets": ws,
                                  "links": [str(x)[:24] for x in c.get("links") or []][:8],
-                                 "edges": [[a.lower(), b.lower()] for a, b in (e for e in c.get("edges") or []
+                                 "edges": [[_n(a), _n(b)] for a, b in (e for e in c.get("edges") or []
                                            if isinstance(e, list) and len(e) == 2)
-                                           if a.lower() in ws and b.lower() in ws][:2000]})
+                                           if _n(a) in ws and _n(b) in ws][:2000]})
     cov = raw.get("coverage") if isinstance(raw.get("coverage"), dict) else None
-    return {"coverage": cov and {k: cov.get(k) for k in ("source", "partial", "from_block", "from_ts", "transfers")},
-            "clusters": clusters, "source": "auto" if raw.get("source") == "auto" else "upload", "chain": chain, "token": token.lower(), "symbol": str(raw.get("symbol") or "")[:24],
-            "decimals": int(raw.get("decimals") or 18), "pools": _addrs(raw.get("pools"), "pools"),
+    return {"coverage": cov and {k: cov.get(k) for k in ("source", "partial", "from_block", "from_ts", "transfers", "note", "holders")},
+            # Solana: each wallet's token account (the watch reads its signatures).
+            "accounts": {o: a for o, a in (raw.get("accounts") or {}).items()
+                         if o in wallets and isinstance(a, str) and _ok(a, chain)} if chain == "solana" else {},
+            "supply": str(int(raw.get("supply") or 0)) if chain == "solana" else None,
+            "clusters": clusters, "source": "auto" if raw.get("source") == "auto" else "upload", "chain": chain, "token": _n(token), "symbol": str(raw.get("symbol") or "")[:24],
+            "decimals": int(raw.get("decimals") or 18), "pools": _addrs(raw.get("pools"), "pools", chain),
             "wallets": wallets, "shares": shares,
             "from_block": int(from_block) if isinstance(from_block, int) and from_block > 0 else None,
             "uploaded_at": int(time.time())}
@@ -157,6 +170,8 @@ def remove(chain: str, token: str) -> bool:
 
 async def run_one(cfg: dict, rpc=None) -> dict:
     """Reads the new blocks, keeps the transfers, rewrites the report."""
+    if cfg["chain"] == "solana":
+        return await _run_solana(cfg)
     rpc = rpc or sync_sells._default_rpc(cfg["chain"])
     key = _key(cfg["chain"], cfg["token"])
     tpath = _dir() / f"{key}.transfers.json"
@@ -177,6 +192,26 @@ async def run_one(cfg: dict, rpc=None) -> dict:
         rep["coverage"] = cfg["coverage"]
     sync_sells.write_report(rep)
     state.update(next_block=latest + 1, last_run=int(time.time()), error=None)
+    return state
+
+
+async def _run_solana(cfg: dict) -> dict:
+    """Solana (solana_clusters): new signatures of each token account."""
+    from app.trading.onchain import solana_clusters
+    key = _key(cfg["chain"], cfg["token"])
+    tpath = _dir() / f"{key}.transfers.json"
+    state = dict(cfg.get("state") or {})
+    moves, cursors = await solana_clusters.new_sells({**cfg, "state": state})
+    cut = time.time() - KEEP_S
+    transfers = [t for t in (_load(tpath) or []) + moves if t.get("ts") is None or t["ts"] >= cut]
+    write_text_atomic(tpath, json.dumps(transfers))
+    clusters = cfg.get("clusters") or [{"id": "c1", "wallets": cfg["wallets"]}]
+    rep = sync_sells.report(cfg["chain"], cfg["token"], transfers, clusters, ["pool"], int(cfg.get("supply") or 0),
+                            cfg.get("symbol", ""), cfg.get("shares"))
+    if cfg.get("coverage"):
+        rep["coverage"] = cfg["coverage"]
+    sync_sells.write_report(rep)
+    state.update(last_sig=cursors, last_run=int(time.time()), error=None)
     return state
 
 

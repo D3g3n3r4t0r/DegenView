@@ -48,7 +48,9 @@ SAMPLE = {
 
 
 def _addr(v: str) -> str:
-    return (v or "").lower()
+    """EVM addresses compare lower-case; Solana's are case-sensitive."""
+    v = v or ""
+    return v.lower() if v.startswith("0x") else v
 
 
 def _topic_addr(t: str) -> str:
