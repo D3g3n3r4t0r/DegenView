@@ -3,11 +3,17 @@ import { AnimatePresence, motion } from "motion/react";
 import type { Gem } from "../lib/types";
 import { type SectorsView, type TodayKind, sinceText } from "../lib/sectors";
 import { Logo } from "../components/Logo";
+import { changeText, usdShort } from "../lib/format";
 import { gemId } from "../components/TokenRow";
 
 const FILTERS: [TodayKind | "all", string][] = [["all", "All"], ["champion", "Champions"], ["entered", "New"], ["dropped", "Dropped"]];
 const MARK: Record<TodayKind, string> = { champion: "text-up", entered: "text-up", dropped: "text-down", moved: "text-text-3" };
 const PREVIEW = 4;
+const WATCH_KEY = "watchlist-v1";   // the token page's star (TokenPage.tsx)
+
+function watchedIds(): string[] {
+  try { return (JSON.parse(localStorage.getItem(WATCH_KEY) || "[]") as string[]).map((id) => id.replace(/^gem:/, "")); } catch { return []; }
+}
 
 /** Today (direction A, Lorenzo 10/10 and 22/10): what changed since about a
  *  day ago, then a glance at the strongest sectors. */
@@ -17,6 +23,11 @@ export function Today({ data, onOpen, onSectors }: { data: SectorsView | null; o
   const t = data.today;
   const items = t.items.filter((i) => filter === "all" || i.kind === filter);
   const ranked = new Set(data.sectors.flatMap((s) => s.entries.filter((e) => e.in !== false).map(gemId))).size;
+  // The starred tokens, with their sector and the line of what changed (direction A: the watchlist on Today).
+  const byId = new Map<string, { e: Gem; sector: string }>();
+  for (const s of data.sectors) for (const e of s.entries) if (!byId.has(gemId(e)) || e.in !== false) byId.set(gemId(e), { e, sector: s.label });
+  const news = new Map(t.items.map((i) => [gemId(i.gem), i] as const));
+  const watch = watchedIds().map((id) => ({ id, hit: byId.get(id), news: news.get(id) }));
   return (
     <>
       <p className="text-[13px] text-text-2">
@@ -26,6 +37,33 @@ export function Today({ data, onOpen, onSectors }: { data: SectorsView | null; o
         <Stat label="New champions" v={t.counts.champion} />
         <Stat label="Dropped" v={t.counts.dropped} />
       </div>
+      {watch.length > 0 && (
+        <>
+          <h2 className="mt-4 text-[11.5px] font-medium uppercase tracking-[0.07em] text-text-3">Your watchlist</h2>
+          <ol className="mt-2 rounded-[20px] bg-card p-1.5">
+            {watch.map(({ id, hit, news: n }) => {
+              const [chain, token] = [id.slice(0, id.indexOf(":")), id.slice(id.indexOf(":") + 1)];
+              const e = hit?.e ?? n?.gem ?? { chain, token_address: token, symbol: token.slice(0, 6) };
+              const [chg, sign] = changeText(e.change_24h);
+              return (
+                <li key={id}>
+                  <button type="button" onClick={() => onOpen(e)} className="flex w-full items-center gap-3 rounded-[16px] px-2 py-2 text-left active:bg-pill">
+                    <Logo size={34} symbol={e.symbol} image={e.image} chain={e.chain} token={e.token_address} />
+                    <span className="min-w-0 flex-1">
+                      <b className="block truncate text-[15px] font-medium leading-tight">{e.symbol}</b>
+                      <small className="block truncate text-[12.5px] text-text-2">{n ? n.text : hit ? `${hit.sector}${e.arena_rank ? ` · #${e.arena_rank}` : ""} · no change` : "not in the ranking now"}</small>
+                    </span>
+                    <span className="flex flex-col items-end">
+                      <b className="num text-[14px] font-semibold">{usdShort(e.market_cap)}</b>
+                      <em className={`num text-[12px] not-italic ${sign === "up" ? "text-up" : sign === "down" ? "text-down" : "text-text-3"}`}>{chg}</em>
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+        </>
+      )}
       {t.since ? (
         <>
           <div className="mt-3 flex flex-wrap gap-1.5">

@@ -5,7 +5,8 @@ Lorenzo, 10/10: "studia a fondo il design di tutta l'app e vedi come rivoluziona
 - Backend `trading/onchain/sectors.py` + `GET /api/onchain/sectors`: le arene di `/api/onchain/top` (stesso pool, `full` per gli account a righe intere) per settore: primi 3, forza = media degli z positivi dei primi 3 (ordine dei settori), mediana 24h, cap totale. Fotografia compatta al massimo una all'ora (`data/onchain_sector_snapshots[_full].json`: orarie per 2 giorni, poi una al giorno per 35), scritta in lettura e dopo ogni giro (`nightly._sector_snapshot`). Today = differenza con la fotografia piu' vicina a 24 h fa (campioni cambiati, entrati, usciti, punteggi mossi di 5+). Slancio = media dei primi 3 meno quella di ~7 giorni fa, `None` sotto 5 giorni di letture.
 - Frontend `app-next`: `views/Today.tsx` (vista d'apertura), `views/Sectors.tsx` (Champions con riquadro aperto sul posto, Map tipo heatmap con colore 24h/punteggio, Momentum), `lib/sectors.ts`. Dock: Today, Sectors, Gems, (Quality), Scout, Profile; Pearl, Early e Top sono segmenti dentro Gems. Solo `/app` (account di Lorenzo, telefono); desktop invariato (Lorenzo 21/10: "versione desktop non cambiarla").
 - Lavoro diviso col thread "Componenti RareUI per sito e app" (porta l'app originale in React): io solo i file nuovi sopra piu' l'aggancio in `App.tsx`/`Dock.tsx`.
-- Resta della direzione A: Watch (token seguiti con "cosa e' cambiato"), ricerca unica, dossier "da quando l'hai visto", togliere i resti del trading quando arrivano Profile e Scout.
+- Watch: blocco "Your watchlist" in cima a Today (stelle della scheda token, `localStorage` `watchlist-v1`), niente scheda nel dock per tenerlo corto.
+- Resta della direzione A: ricerca unica (progetti + settori + scansione), dossier "da quando l'hai visto", togliere i resti del trading quando arrivano Profile e Scout.
 
 # 2026-10-22 — Vendite coordinate: scheda e avviso Telegram — **in corso** (Claude, a mano)
 
