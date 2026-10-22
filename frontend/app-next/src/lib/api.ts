@@ -82,8 +82,14 @@ export const getAgent = () => get<AgentInfo>("/api/agent");
 export const getAgentLog = (before?: number) => get<{ items?: AgentItem[] }>(`/api/agent/log?limit=60${before ? `&before=${before}` : ""}`);
 export const getAgentJourney = ({ q = "", chain = "", token = "" }: { q?: string; chain?: string; token?: string }) =>
   get<JourneyAnswer>(`/api/agent/journey?q=${encodeURIComponent(q)}&chain=${encodeURIComponent(chain)}&token=${encodeURIComponent(token)}`, 20000);
-// Coordinated sells (sells.js): one account's; 404 for the others.
-export const getCoordinatedSells = () => get<{ reports?: { risk?: { score?: number } }[] }>("/api/onchain/coordinated-sells", 20000);
+// Coordinated sells (sells.js): whitekobra and the /app accounts; 404 for the others.
+export type SellsReport = {
+  chain: string; token: string; symbol?: string; updated_at?: number | null;
+  risk?: { score?: number | null; reasons?: string[] };
+  clusters: { id: string; wallets: { address: string; share?: number | null }[]; share?: number | null; links?: string[]; risk?: number | null; edges?: [string, string][] }[];
+  events: { id: string; cluster: string; ts: number; window_s?: number | null; wallets: number; share_sold?: number | null; sellers?: string[] }[];
+};
+export const getCoordinatedSells = () => get<{ sample?: boolean; reports?: SellsReport[] }>("/api/onchain/coordinated-sells", 20000);
 
 // The scanner (sheets.js openScan): a server job streamed as NDJSON; if the
 // phone drops the stream the job goes on and its result is collected by id.

@@ -8,6 +8,7 @@ import { DS_EMBED, INTERVALS, cached, chartFor, embedUrl, forget, liveQuote, typ
 import { Glance } from "../components/Glance";
 import { Logo } from "../components/Logo";
 import { CandleChart } from "../components/CandleChart";
+import { SellsMap } from "../components/SellsMap";
 import { DeepResult, DossierHead, Details, InfoFallback, WhyOf } from "./Dossier";
 
 // The token page (detail.js): a full screen with the identity, the market-cap
@@ -284,6 +285,7 @@ export function TokenPage({ open, onClose }: { open: Opened; onClose: () => void
           )}
         </div>
         {note && <p className="mt-1 text-[13px] text-text-3">{note}</p>}
+        <SellsMap chain={e.chain} token={e.token_address} />
         <nav ref={tabs} className="mt-[18px] flex scroll-mt-4 gap-1 rounded-full bg-pill p-1">
           {(["why", "info"] as const).map((t) => (
             <button key={t} type="button" aria-current={tab === t ? "true" : undefined} onClick={() => setTab(t)}

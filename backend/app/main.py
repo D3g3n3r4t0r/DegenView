@@ -3889,11 +3889,12 @@ async def onchain_quality(user: User = Depends(auth.get_current_user)) -> dict:
 
 @app.get("/api/onchain/coordinated-sells")
 async def onchain_coordinated_sells(user: User = Depends(auth.get_current_user)) -> dict:
-    """Clusters that sell together (coordinated_sells.py): whitekobra only.
+    """Clusters that sell together (coordinated_sells.py): whitekobra, and
+    the /app accounts (Lorenzo, 22/10: the map on the React token page).
     `sample` is true while the engine has written no report yet."""
     from app.trading.onchain import coordinated_sells
     _require_onchain_enabled()
-    if not _full_score(user):
+    if not (_full_score(user) or getattr(user, "email", None) in email_allowlist(settings.onchain_next_emails)):
         raise HTTPException(status_code=404, detail="Not found.")
     found, sample = coordinated_sells.reports()
     return {"sample": sample, "reports": found}
