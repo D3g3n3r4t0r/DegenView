@@ -7,7 +7,7 @@ import { t, locale } from "../lib/i18n";
 // module draws it here (canvas, 60 fps, still with reduced motion).
 const MAP_URL = "/static/onchain/cluster-map.js";
 type MapApi = { highlight(a: Set<string> | null): void; update(r: SellsReport): void; destroy(): void };
-type Pick = { address: string; share: number; cluster: { id: string } } | null;
+type Pick = { address: string; share: number; cluster: { id: string }; label?: string | null; others?: number } | null;
 
 const pct = (x?: number | null) => (x == null ? "—" : `${(x * 100).toFixed(x < 0.01 ? 2 : 1)}%`);
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
@@ -51,7 +51,7 @@ export function SellsMap({ chain, token, starting = false, bare = false }: { cha
     let gone = false;
     import(/* @vite-ignore */ MAP_URL).then((m) => {
       if (gone || !host.current) return;
-      map.current = m.clusterMap(host.current, rep, { onPick: setPick });
+      map.current = m.clusterMap(host.current, rep, { onPick: setPick, words: { cluster: t("Cluster"), wallets: t("wallets"), nolink: t("No link found"), none: t("No linked wallets among the top holders.") } });
     }).catch(() => {});
     return () => { gone = true; };
   }, [rep, has]);
@@ -81,12 +81,12 @@ export function SellsMap({ chain, token, starting = false, bare = false }: { cha
   return (
     <section className={bare ? "" : "mt-5"}>
       <h3 className="mb-2 flex items-baseline justify-between text-[11.5px] font-medium uppercase tracking-[0.07em] text-text-3">
-        {t("Coordinated sells")}<b className={`num text-[13px] font-semibold normal-case tracking-normal ${tone(rep.risk?.score)}`}>{done ? t("risk {n}", { n: rep.risk?.score == null ? "—" : Math.round(rep.risk.score) }) : t("live")}</b>
+        {t("Coordinated sells")}<b className={`num text-[13px] font-semibold normal-case tracking-normal ${tone(rep.risk?.score)}`}>{done ? (rep.risk?.score == null ? t("risk {n}", { n: "—" }) : t("risk {n}/100 · {level}", { n: Math.round(rep.risk.score), level: t(rep.risk.score >= 60 ? "high" : rep.risk.score >= 30 ? "medium" : "low") })) : t("live")}</b>
       </h3>
       {!done && <div className="mb-3"><CheckProgress check={check} /></div>}
       <div ref={host} className="overflow-hidden rounded-[16px] bg-card" aria-label={t("Wallet bubble map")} />
       <p className="mt-1 min-h-[1.4em] text-[12.5px] text-text-3">
-        {pick ? `${short(pick.address)} · ${t("{p} of supply", { p: pct(pick.share) })} · ${pick.cluster.id === "top" ? t("top holder, no link found") : name(pick.cluster.id)}`
+        {pick ? (pick.label ? `${t("{n} smaller holders, no link found", { n: pick.others ?? 0 })} · ${t("{p} of supply", { p: pct(pick.share) })}` : `${short(pick.address)} · ${t("{p} of supply", { p: pct(pick.share) })} · ${pick.cluster.id === "top" ? t("top holder, no link found") : name(pick.cluster.id)}`)
           : t("Bubble size = share of supply. Tap a bubble or a sell.")}
       </p>
       {waves.length > 0 && (
