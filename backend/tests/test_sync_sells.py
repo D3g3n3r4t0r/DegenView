@@ -37,7 +37,8 @@ def test_lone_seller_and_outflow_weight():
     assert out["outflow_pct"] == 2.0 and out["risk"]["parts"]["share"] < sell["risk"]["parts"]["share"]
 
 
-def test_run_with_fake_rpc():
+def test_run_with_fake_rpc(monkeypatch):
+    monkeypatch.setattr(ss, "CHUNK", {})
     def topic(a):
         return "0x" + "0" * 24 + a[2:]
     logs = [{"blockNumber": "0x64", "logIndex": hex(i), "transactionHash": f"0x{i}",
