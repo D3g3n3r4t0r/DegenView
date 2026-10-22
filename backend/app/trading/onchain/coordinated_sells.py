@@ -36,7 +36,8 @@ backend/data/coordinated_sells/<chain>-<token lowercase>.json
     }
 
 Unknown fields are ignored, missing optional ones stay None. Shares are
-fractions (0.021 = 2.1% of supply), never percentages.
+fractions (0.021 = 2.1% of supply), never percentages. sync_sells.analyze()
+turns into a report with from_analysis(), saved with write().
 """
 from __future__ import annotations
 
@@ -105,6 +106,38 @@ def clean(raw: dict) -> dict | None:
             "symbol": str(raw.get("symbol") or ""), "updated_at": _num(raw.get("updated_at")),
             "risk": {"score": _num(risk.get("score"), 0, 100), "reasons": [str(x) for x in risk.get("reasons") or []][:6]},
             "clusters": sorted(clusters, key=lambda c: -(c["share"] or 0)), "events": events}
+
+
+def from_analysis(a: dict, chain: str, token: str, wallets: list[str], symbol: str = "",
+                  holdings: dict[str, float] | None = None, now: float | None = None) -> dict:
+    """A report v1 from sync_sells.analyze(): its watched wallets are one
+    cluster, each of its groups one wave. `holdings` (address -> share of
+    supply, 0..1) fills the cluster's share when the caller has it.
+    sync_sells gives percentages; the report wants fractions."""
+    held = {w.lower(): (holdings or {}).get(w.lower()) for w in wallets}
+    known = [v for v in held.values() if v is not None]
+    events = [{"id": f"c1-{g['first_block']}", "cluster": "c1", "ts": g.get("first_ts"),
+               "window_s": (g["last_ts"] - g["first_ts"]) if g.get("first_ts") and g.get("last_ts") else None,
+               "wallets": len(g.get("wallets") or []), "share_sold": (g.get("supply_pct") or 0) / 100}
+              for g in a.get("groups") or [] if g.get("first_ts")]
+    reasons = [f"{a.get('sellers', 0)} of {a.get('wallets', 0)} watched wallets moved tokens",
+               f"{(a.get('sync_pct') or 0):.2f}% of supply moved in coordinated waves"]
+    return clean({"version": VERSION, "chain": chain, "token": token, "symbol": symbol,
+                  "updated_at": time.time() if now is None else now,
+                  "risk": {"score": (a.get("risk") or {}).get("score"), "reasons": reasons},
+                  "clusters": [{"id": "c1", "wallets": [{"address": w, "share": v} for w, v in held.items()],
+                                "share": sum(known) if known else None,
+                                "links": ["same_block_sells"] if any(g.get("same_block") for g in a.get("groups") or []) else [],
+                                "risk": (a.get("risk") or {}).get("score")}],
+                  "events": events})
+
+
+def write(report: dict) -> Path:
+    """Where the engine saves a report: the view and the alert read it."""
+    path = _dir() / f"{report['chain']}-{report['token'].lower()}.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    write_text_atomic(path, json.dumps(report))
+    return path
 
 
 def _read(path: Path) -> dict | None:

@@ -39,3 +39,17 @@ def test_alerts_once_per_wave_and_never_for_the_sample(tmp_path, monkeypatch):
     assert asyncio.run(cs.notify_once(send, "u", now)) == 1
     assert "XYZ" in sent[0] and "2,00%" in sent[0]
     assert asyncio.run(cs.notify_once(send, "u", now)) == 0       # already sent
+
+
+def test_from_analysis_maps_the_engine_output(tmp_path, monkeypatch):
+    monkeypatch.setattr(cs.storage, "DATA_DIR", tmp_path)
+    a = {"wallets": 2, "sellers": 2, "sync_pct": 2.5, "risk": {"score": 64},
+         "groups": [{"first_block": 7, "last_block": 8, "first_ts": 100, "last_ts": 160,
+                     "wallets": ["0x1", "0x2"], "same_block": True, "supply_pct": 2.5, "txs": 2}]}
+    r = cs.from_analysis(a, "robinhood", "0xAB", ["0x1", "0x2"], holdings={"0x1": 0.03}, now=200)
+    assert r["clusters"][0]["share"] == 0.03 and r["clusters"][0]["links"] == ["same_block_sells"]
+    e = r["events"][0]
+    assert (e["id"], e["window_s"], e["wallets"], e["share_sold"]) == ("c1-7", 60, 2, 0.025)
+    assert cs.reports()[1] is True          # nothing written yet: the sample
+    cs.write(r)
+    assert cs.reports() == ([r], False)
