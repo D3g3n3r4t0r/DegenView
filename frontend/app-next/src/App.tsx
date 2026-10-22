@@ -18,6 +18,7 @@ import { Quality, qualityContext } from "./views/Quality";
 import { Scout } from "./views/Scout";
 import { Watch } from "./views/Watch";
 import { Search } from "./views/Search";
+import { TokenSheet } from "./views/TokenSheet";
 
 const POLL_MS = 30_000;
 const PEARL_MIN = 70;          // a "70" on screen is always a pearl
@@ -48,6 +49,7 @@ export function App() {
   const [err, setErr] = useState("");
   const [open, setOpenRaw] = useState<Opened | null>(null);
   const [more, setMore] = useState(false);
+  const [peek, setPeek] = useState<Opened | null>(null);
   const closePage = useCallback(() => setOpenRaw(null), []);
   const [quality, setQuality] = useState(false);
   const [sells, setSells] = useState<{ risk: number | null } | null>(null);
@@ -92,7 +94,7 @@ export function App() {
   const born = Date.now() / 1000 - PEARL_MAX_AGE_DAYS * 86400;
   const sc = (e: { score?: number }) => Math.round(e.score ?? 0);
   // Each list says where the token was seen, on the page's context line (top.js, projects.js register()).
-  const openWith = (context: (e: Gem) => string) => (e: Gem) => setOpen({ e, context: context(e) });
+  const openWith = (context: (e: Gem) => string) => (e: Gem) => setPeek({ e, context: context(e) });
   const setOpen = (o: Opened | null) => setOpenRaw(o);
   const byScore = data ? [...data.entries].sort((a, b) => (b.score ?? 0) - (a.score ?? 0)) : [];
   const openArena = openWith((e) => {
@@ -100,7 +102,7 @@ export function App() {
     return a ? `${a.label} · #${e.arena_rank} of ${a.size} · score ${sc(e)}` : `score ${sc(e)}`;
   });
   const openRanked = openWith((e) => `Top 25 · #${byScore.findIndex((x) => gemId(x) === gemId(e)) + 1} · score ${sc(e)}`);
-  const openProject = (p: Project) => setOpen({
+  const openProject = (p: Project) => setPeek({
     e: { chain: p.chain, token_address: p.token, symbol: p.symbol ?? "?", name: p.name, image: p.image, score: p.score, market_cap: p.mcap, liquidity_usd: p.liq },
     context: `Database · score ${p.score == null ? "—" : Math.round(p.score)} · ${p.status}${p.why ? ` · ${p.why}` : ""}` });
 
@@ -193,6 +195,7 @@ export function App() {
           </a>
         </nav>
       </Sheet>
+      <TokenSheet open={peek} onClose={() => setPeek(null)} onFull={(o) => { setPeek(null); setOpen(o); }} />
       <AnimatePresence>{open && <TokenPage key={gemId(open.e)} open={open} onClose={closePage} />}</AnimatePresence>
     </MotionConfig>
   );
