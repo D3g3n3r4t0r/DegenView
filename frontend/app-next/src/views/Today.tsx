@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import type { Gem } from "../lib/types";
-import { type SectorsView, type TodayKind, sinceText } from "../lib/sectors";
+import { type SectorsView, type TodayKind, sinceText, todayText } from "../lib/sectors";
 import { Logo } from "../components/Logo";
 import { changeText, usdShort } from "../lib/format";
 import { gemId } from "../components/TokenRow";
@@ -58,7 +58,7 @@ export function Today({ data, onOpen, onSectors, onWatch, early, onEarly }: { da
                     <Logo size={34} symbol={e.symbol} image={e.image} chain={e.chain} token={e.token_address} />
                     <span className="min-w-0 flex-1">
                       <b className="block truncate text-[15px] font-medium leading-tight">{e.symbol}</b>
-                      <small className="block truncate text-[12.5px] text-text-2">{n ? n.text : `${hit.sector}${e.arena_rank ? ` · #${e.arena_rank}` : ""}${e.score != null ? ` · ${tr("score {n}", { n: Math.round(e.score) })}` : ""}`}</small>
+                      <small className="block truncate text-[12.5px] text-text-2">{n ? todayText(n)[0] : `${hit.sector}${e.arena_rank ? ` · #${e.arena_rank}` : ""}${e.score != null ? ` · ${tr("score {n}", { n: Math.round(e.score) })}` : ""}`}</small>
                     </span>
                     <span className="flex flex-col items-end">
                       <b className="num text-[14px] font-semibold">{usdShort(e.market_cap)}</b>
@@ -93,8 +93,8 @@ export function Today({ data, onOpen, onSectors, onWatch, early, onEarly }: { da
                     className="flex w-full items-center gap-3 rounded-[16px] px-2 py-2 text-left active:bg-pill disabled:active:bg-transparent">
                     <Logo size={38} symbol={i.gem.symbol} image={i.gem.image} chain={i.gem.chain} token={i.gem.token_address} />
                     <span className="min-w-0 flex-1">
-                      <b className="block truncate text-[15px] font-medium leading-tight">{i.text}</b>
-                      <small className="num block truncate text-[12.5px] text-text-2">{i.detail}</small>
+                      <b className="block truncate text-[15px] font-medium leading-tight">{todayText(i)[0]}</b>
+                      <small className="num block truncate text-[12.5px] text-text-2">{todayText(i)[1]}</small>
                     </span>
                     <span className={`text-[11px] font-semibold uppercase tracking-wide ${MARK[i.kind]}`}>{i.kind === "entered" ? tr("new") : i.kind === "champion" ? "♛" : tr(i.kind)}</span>
                   </button>

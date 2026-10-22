@@ -48,6 +48,9 @@ export const IT: Record<string, string> = {
   "Today compares the ranking with about a day ago. The first reading is saved now: changes show up after the next research run.":
     "Oggi confronta la classifica con circa un giorno fa. La prima lettura è salvata ora: i cambi compaiono dopo il prossimo giro di ricerca.",
   "Strongest sectors": "Settori più forti", "All sectors ›": "Tutti i settori ›",
+  "{s} takes {sector}": "{s} conquista {sector}", "from {was} · score {n}": "da {was} · punteggio {n}", "{s} enters {sector}": "{s} entra in {sector}",
+  "{s} left the ranking": "{s} è uscito dalla classifica", "{sector} · was {n}": "{sector} · era {n}", "{s} gains {d} points": "{s} guadagna {d} punti",
+  "{s} loses {d} points": "{s} perde {d} punti", "{sector} · {a} → {b}": "{sector} · {a} → {b}",
   "since {hm} today": "dalle {hm} di oggi", "since {hm} yesterday": "dalle {hm} di ieri", "since {d}": "dal {d}",
 
   // Sectors

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import * as api from "../lib/api";
 import type { Gem } from "../lib/types";
-import type { SectorsView } from "../lib/sectors";
+import { type SectorsView, todayText } from "../lib/sectors";
 import { Logo } from "../components/Logo";
 import { age, changeText, usdShort } from "../lib/format";
 import { gemId } from "../components/TokenRow";
@@ -82,7 +82,7 @@ export function Watch({ data, gems, onOpen }: { data: SectorsView | null; gems: 
         const ranked = rows.filter((r) => r.hit), off = rows.filter((r) => !r.hit);
         const row = ({ id, e, hit, n }: (typeof rows)[number]) => {
           const [chg, sign] = changeText(e.change_24h);
-          const line = n ? n.text : hit?.sector ? `${hit.sector}${e.arena_rank ? ` · #${e.arena_rank}` : ""}${e.score != null ? ` · ${t("score {n}", { n: Math.round(e.score) })}` : ""}` : "";
+          const line = n ? todayText(n)[0] : hit?.sector ? `${hit.sector}${e.arena_rank ? ` · #${e.arena_rank}` : ""}${e.score != null ? ` · ${t("score {n}", { n: Math.round(e.score) })}` : ""}` : "";
           return (
             <li key={id}>
               <button type="button" onClick={() => onOpen(e)} className="flex w-full items-center gap-3 rounded-[12px] px-2 py-2 text-left active:bg-pill">

@@ -13,7 +13,19 @@ export type Sector = {
 };
 
 export type TodayKind = "champion" | "entered" | "dropped" | "moved";
-export type TodayItem = { kind: TodayKind; text: string; detail: string; gem: Gem & { sector?: string } };
+export type TodayItem = { kind: TodayKind; text: string; detail: string; gem: Gem & { sector?: string };
+  args?: { s?: string; sector?: string; was?: string; n?: number; d?: number; a?: number; b?: number } };
+
+/** The line and detail of a Today item in the chosen language; the server's English when it sent no args. */
+export function todayText(i: TodayItem): [string, string] {
+  const a = i.args;
+  if (!a) return [i.text, i.detail];
+  const v = a as Record<string, string | number>;
+  if (i.kind === "champion") return [tr("{s} takes {sector}", v), tr("from {was} · score {n}", v)];
+  if (i.kind === "entered") return [tr("{s} enters {sector}", v), tr("score {n}", v)];
+  if (i.kind === "dropped") return [tr("{s} left the ranking", v), tr("{sector} · was {n}", v)];
+  return [tr((a.d ?? 0) > 0 ? "{s} gains {d} points" : "{s} loses {d} points", { ...v, d: Math.abs(a.d ?? 0) }), tr("{sector} · {a} → {b}", v)];
+}
 export type TodayView = { since: number | null; items: TodayItem[]; counts: Record<TodayKind, number> };
 export type SectorsView = { sectors: Sector[]; today: TodayView; readings_since: number | null; momentum_ready: boolean };
 
