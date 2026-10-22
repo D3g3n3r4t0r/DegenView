@@ -15,23 +15,27 @@
  * /static/onchain/: one map for both apps.
  */
 
-const PALETTE = ["--c-down", "--k-amber,--c-amber", "#3b82f6", "#a855f7", "#14b8a6", "#ec4899"];
-const FALLBACK = ["#ef4444", "#eab308"];
+// Red is kept for wallets that sold together ("non vengono connessi i wallet che hanno agito insieme").
+const SOLD = "--c-down";
+const PALETTE = ["--k-amber,--c-amber", "#3b82f6", "#a855f7", "#14b8a6", "#ec4899", "#f97316"];
+const FALLBACK = ["#eab308"];
 const NEUTRAL = "--c-text-3,--c-text";   // holders with no link found
 const TOP_N = 24;                         // grey holders drawn one by one
-const FILL = 0.34;                        // share of the frame the bubbles cover
+const FILL = 0.26;                        // share of the frame the bubbles cover
 const still = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 const pct = (x) => `${(x * 100).toFixed(x < 0.01 ? 2 : 1)}%`;
 
-function colour(el, token, i) {
+function colour(el, token, i, fb) {
   if (!token.startsWith("--")) return token;
   // "--a,--b": the first one the page defines (the classic app and /app name some differently).
   const css = getComputedStyle(el);
   for (const t of token.split(",")) { const v = css.getPropertyValue(t).trim(); if (v) return v; }
-  return FALLBACK[i] || "#888";
+  return fb || FALLBACK[i] || "#888";
 }
 
-const WORDS = { cluster: "Cluster", wallets: "wallets", nolink: "No link found", none: "No linked wallets among the top holders." };
+const WORDS = { cluster: "Cluster", wallets: "wallets", nolink: "No link found", none: "No linked wallets among the top holders.",
+  together: "Sold together", thicker: "thicker line = more waves together" };
+const MAX_SELLERS = 30;                   // per wave, for the pairs drawn
 
 export function clusterMap(host, report, { onPick, words } = {}) {
   const w = { ...WORDS, ...words };
@@ -44,7 +48,7 @@ export function clusterMap(host, report, { onPick, words } = {}) {
   host.replaceChildren(canvas, legend);
   const ctx = canvas.getContext("2d");
 
-  let real = [], top = null, list = [], edges = [], groups = [];
+  let real = [], top = null, list = [], edges = [], groups = [], together = [], teams = [];
   const nodes = new Map();
   const sync = (rep) => {
     real = rep.clusters.filter((c) => c.id !== "top" && c.wallets.length);
@@ -58,7 +62,19 @@ export function clusterMap(host, report, { onPick, words } = {}) {
       else nodes.set(id, { id, share, cluster, x: NaN, y: 0, vx: 0, vy: 0, a: 1, ta: 1, grow: 0, ...extra });
     };
     real.forEach((c) => c.wallets.forEach((w) => { if (!seen.has(w.address)) put(w.address, w.share ?? 0, c); }));
-    const loose = (top?.wallets ?? []).filter((w) => !seen.has(w.address)).sort((a, b) => (b.share ?? 0) - (a.share ?? 0));
+    // Who sold in the same wave, and how many times each pair did.
+    const pairs = new Map(), sold = new Map();
+    (rep.events ?? []).forEach((e) => {
+      const s = [...new Set(e.sellers ?? [])].slice(0, MAX_SELLERS);
+      s.forEach((a) => sold.set(a, (sold.get(a) ?? 0) + 1));
+      for (let i = 0; i < s.length; i++) for (let j = i + 1; j < s.length; j++) {
+        const k = s[i] < s[j] ? `${s[i]}|${s[j]}` : `${s[j]}|${s[i]}`;
+        pairs.set(k, (pairs.get(k) ?? 0) + 1);
+      }
+    });
+    // Sellers first among the grey holders, so none of them hides in "+N".
+    const loose = (top?.wallets ?? []).filter((w) => !seen.has(w.address))
+      .sort((a, b) => (sold.has(b.address) - sold.has(a.address)) || (b.share ?? 0) - (a.share ?? 0));
     loose.slice(0, TOP_N).forEach((w) => put(w.address, w.share ?? 0, top));
     const rest = loose.slice(TOP_N);
     if (rest.length) put("others", rest.reduce((s, w) => s + (w.share ?? 0), 0), top, { others: rest.length, members: rest.map((w) => w.address) });
@@ -68,6 +84,17 @@ export function clusterMap(host, report, { onPick, words } = {}) {
     real.forEach((c) => (c.edges ?? []).forEach(([a, b]) => {
       if (nodes.has(a) && nodes.has(b)) edges.push([nodes.get(a), nodes.get(b)]);
     }));
+    list.forEach((n) => { n.sold = sold.get(n.id) ?? 0; });
+    together = [...pairs].map(([k, wt]) => { const [a, b] = k.split("|"); return [nodes.get(a), nodes.get(b), wt]; }).filter(([a, b]) => a && b);
+    // Wallets joined by sells in the same wave: each group gets one halo.
+    const root = new Map(), find = (x) => (root.get(x) === x ? x : (root.set(x, find(root.get(x))), root.get(x)));
+    together.forEach(([a, b]) => { root.set(a, root.get(a) ?? a); root.set(b, root.get(b) ?? b); root.set(find(a), find(b)); });
+    const byRoot = new Map();
+    [...root.keys()].forEach((n) => byRoot.set(find(n), [...(byRoot.get(find(n)) ?? []), n]));
+    teams = [...byRoot.values()].filter((g) => g.length >= 2);
+    // A grey group that sold together leaves the grey pack and sits on its own.
+    list.forEach((n) => { n.group = n.cluster; });
+    teams.forEach((g, i) => { const team = { id: `sold-${i}` }; g.forEach((n) => { if (n.cluster === top) n.group = team; }); });
     groups = [...real, ...(top && loose.length ? [top] : [])];
     canvas.setAttribute("aria-label", `${real.length} linked cluster(s) among ${list.length} holder bubbles`);
   };
@@ -91,17 +118,20 @@ export function clusterMap(host, report, { onPick, words } = {}) {
     unit = Math.min(Math.sqrt(FILL * W * H / (Math.PI * total)), Math.min(W, H) * 0.15 / Math.sqrt(biggest));
     // Grey holders in the middle, each linked cluster on a ring around them.
     const packR = (ns) => Math.sqrt(ns.reduce((s, n) => s + radius(n) ** 2, 0)) * 1.25;
-    const greyR = top ? packR(list.filter((n) => n.cluster === top)) : 0;
+    const greyR = top ? packR(list.filter((n) => n.group === top)) : 0;
     const side = Math.min(W, H);
-    real.forEach((c, i) => {
-      const r = packR(list.filter((n) => n.cluster === c));
-      const ring = Math.min(Math.max(greyR + r + 14, side * 0.22), side / 2 - r - 10);
+    // Linked clusters and groups that sold together, around the grey pack.
+    const around = [...real, ...new Set(list.map((n) => n.group).filter((g) => g !== top && !real.includes(g)))];
+    around.forEach((c, i) => {
+      const r = packR(list.filter((n) => n.group === c));
+      const ring = Math.min(Math.max(greyR + r + 18, side * 0.22), side / 2 - r - 16);
       // Left and right first: the frame is wider than tall.
-      const t = real.length === 1 ? 0 : Math.PI + (i / real.length) * Math.PI * 2;
+      const t = around.length === 1 ? 0 : Math.PI + (i / around.length) * Math.PI * 2;
       anchors.set(c, { x: W / 2 + Math.cos(t) * ring * Math.min(1.5, W / H), y: H / 2 + Math.sin(t) * ring });
-      colours.set(c, colour(canvas, PALETTE[i % PALETTE.length], i));
     });
+    real.forEach((c, i) => colours.set(c, colour(canvas, PALETTE[i % PALETTE.length], i)));
     if (top) { anchors.set(top, { x: W / 2, y: H / 2 }); colours.set(top, colour(canvas, NEUTRAL, -1)); }
+    colours.set("sold", colour(canvas, SOLD, -1, "#ef4444"));
     drawLegend();
   }
   const radius = (n) => Math.max(n.cluster === top ? 2.5 : 5, Math.sqrt(n.share) * unit);
@@ -110,13 +140,14 @@ export function clusterMap(host, report, { onPick, words } = {}) {
     const item = (c, label) => `<li style="display:flex;align-items:center;gap:6px"><i style="inline-size:10px;block-size:10px;border-radius:50%;background:${colours.get(c)};opacity:${c === top ? .45 : .85}"></i>${label}</li>`;
     legend.innerHTML = real.map((c, i) => item(c, `<b>${w.cluster} ${i + 1}</b>&nbsp;${c.wallets.length} ${w.wallets} · ${pct(shareOf(c))}`)).join("")
       + (top && groups.includes(top) ? item(top, w.nolink) : "")
-      + (real.length ? "" : `<li>${w.none}</li>`);
+      + (together.length ? `<li style="display:flex;align-items:center;gap:6px"><i style="inline-size:16px;block-size:3px;border-radius:2px;background:${colours.get("sold")}"></i><b>${w.together}</b>&nbsp;${teams.reduce((s, g) => s + g.length, 0)} ${w.wallets} · ${w.thicker}</li>` : "")
+      + (real.length || together.length ? "" : `<li>${w.none}</li>`);
   }
 
   function seed() {
     list.forEach((n, i) => {
       if (!Number.isNaN(n.x)) return;
-      const a = anchors.get(n.cluster);
+      const a = anchors.get(n.group);
       const t = i * 2.399963;           // golden angle: an even spiral, no random
       const r = 4 * Math.sqrt(i + 1);
       n.x = a.x + Math.cos(t) * r; n.y = a.y + Math.sin(t) * r;
@@ -125,13 +156,14 @@ export function clusterMap(host, report, { onPick, words } = {}) {
 
   function step() {
     for (const n of list) {
-      const a = anchors.get(n.cluster);
-      const k = n.cluster === top ? 0.02 : 0.03;
+      const a = anchors.get(n.group);
+      const k = n.group === top ? 0.02 : 0.03;
       n.vx += (a.x - n.x) * k; n.vy += (a.y - n.y) * k;
     }
-    for (const [p, q] of edges) {
+    for (const [p, q, wt] of [...edges, ...together]) {
       const dx = q.x - p.x, dy = q.y - p.y, d = Math.hypot(dx, dy) || 1;
-      const f = (d - (radius(p) + radius(q) + 6)) * 0.01;
+      // Wallets that sold together pull harder, the more waves they share.
+      const f = (d - (radius(p) + radius(q) + 6)) * (wt ? 0.012 + 0.006 * Math.min(4, wt) : 0.01);
       p.vx += dx / d * f; p.vy += dy / d * f; q.vx -= dx / d * f; q.vy -= dy / d * f;
     }
     let energy = 0;
@@ -145,7 +177,7 @@ export function clusterMap(host, report, { onPick, words } = {}) {
       const p = list[i], rp = radius(p);
       for (let j = i + 1; j < list.length; j++) {
         // Different groups keep a wider gap, so each cluster reads as one.
-        const q = list[j], gap = p.cluster === q.cluster ? 1.5 : 6;
+        const q = list[j], gap = p.group === q.group ? 1.5 : 6;
         const dx = q.x - p.x, dy = q.y - p.y, min = rp + radius(q) + gap;
         const d2 = dx * dx + dy * dy;
         if (d2 >= min * min) continue;
@@ -162,10 +194,33 @@ export function clusterMap(host, report, { onPick, words } = {}) {
 
   function draw() {
     ctx.clearRect(0, 0, W, H);
+    // One halo around each linked cluster and each group that sold together.
+    const halo = (ns, c, dashed) => {
+      const live = ns.filter((n) => n.grow > 0.3);
+      if (live.length < 2) return;
+      const x = live.reduce((s, n) => s + n.x, 0) / live.length, y = live.reduce((s, n) => s + n.y, 0) / live.length;
+      const r = Math.max(...live.map((n) => Math.hypot(n.x - x, n.y - y) + radius(n))) + 7;
+      ctx.globalAlpha = 0.07 * Math.max(...live.map((n) => n.a));
+      ctx.fillStyle = c;
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 0.45 * Math.max(...live.map((n) => n.a));
+      ctx.strokeStyle = c; ctx.lineWidth = 1.2;
+      if (dashed) ctx.setLineDash([4, 4]);
+      ctx.stroke(); ctx.setLineDash([]);
+    };
+    real.forEach((c) => halo(list.filter((n) => n.cluster === c), colours.get(c), false));
+    teams.forEach((g) => halo(g, colours.get("sold"), true));
     ctx.lineWidth = 1.5;
     for (const [p, q] of edges) {
       ctx.globalAlpha = 0.6 * Math.min(p.a, q.a) * Math.min(p.grow, q.grow);
       ctx.strokeStyle = colours.get(p.cluster);
+      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke();
+    }
+    ctx.strokeStyle = colours.get("sold");
+    ctx.lineCap = "round";
+    for (const [p, q, wt] of together) {
+      ctx.globalAlpha = 0.75 * Math.min(p.a, q.a) * Math.min(p.grow, q.grow);
+      ctx.lineWidth = Math.min(6, 1.5 + 1.2 * (wt - 1));
       ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke();
     }
     for (const n of list) {
@@ -175,9 +230,11 @@ export function clusterMap(host, report, { onPick, words } = {}) {
       ctx.globalAlpha = (grey ? 0.16 : 0.62) * n.a;
       ctx.fillStyle = c;
       ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2); ctx.fill();
-      ctx.globalAlpha = (grey ? 0.35 : 0.95) * n.a;
-      ctx.strokeStyle = c;
-      ctx.lineWidth = n.ring ? 2.5 : 1;
+      // A grey holder that sold in a wave gets a red ring.
+      const seller = grey && n.sold && !n.others;
+      ctx.globalAlpha = (grey && !seller ? 0.35 : 0.95) * n.a;
+      ctx.strokeStyle = seller ? colours.get("sold") : c;
+      ctx.lineWidth = n.ring ? 2.5 : seller ? 1.8 : 1;
       if (n.others) ctx.setLineDash([3, 3]);
       ctx.stroke();
       ctx.setLineDash([]);
