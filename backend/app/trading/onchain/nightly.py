@@ -334,6 +334,14 @@ async def _duels(top: Callable[[], list[dict]], now: float) -> int:
     return arenas.record_night(top(), now)
 
 
+async def _sector_snapshot(top: Callable[[], list[dict]], now: float) -> int:
+    """A Sectors/Today reading after each run, so Today has a yesterday even
+    when nobody opened the app (sectors.py)."""
+    from app.trading.onchain import arenas, sectors
+    built = arenas.build(top(), now=now)
+    return len(sectors.record(sectors.summarize(built["arenas"]), now))
+
+
 async def _guard(name: str, coro: Awaitable, default=None):
     try:
         return await coro
@@ -431,6 +439,7 @@ async def run_once(top: Callable[[], list[dict]], steps: Steps, deadline: float,
         stopped = "window"
     studies = await _guard("studies", steps.studies(), 0)
     duels = await _guard("duels", _duels(top, clock()), 0)
+    await _guard("sector snapshot", _sector_snapshot(top, clock()), 0)
     await _guard("alerts", steps.alerts())
     t1 = clock()
     after, top_after = steps.counters(), _top_map(top)

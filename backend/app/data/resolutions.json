@@ -3359,5 +3359,10 @@
     "status": "risolto",
     "at": 1792607679,
     "summary": "Misurato su un telefono simulato (CPU rallentata 4 volte), grafico fermo: il browser lavorava 5,1 secondi ogni 5, cioe' sempre. Tre cause: il pallino LIVE pulsava con un'ombra che faceva ridisegnare tutta la pagina a ogni fotogramma; il livello dei disegni si ridisegnava 60 volte al secondo anche a grafico fermo; la bacheca segnalazioni (600 KB, 8.000 elementi) veniva scaricata due volte e costruita a ogni apertura del sito anche senza guardarla. Ora il pallino pulsa solo in trasparenza, i disegni si ridisegnano solo quando qualcosa si muove, la bacheca si costruisce quando la apri (il numero sul menu arriva da una richiesta leggera) e, mentre la ricerca ticker copre il grafico, il grafico non si ridisegna a ogni prezzo. Risultato: lavoro a grafico fermo da 5,1 a ~1 s ogni 5, ritardo per lettera nella ricerca da 132 a 51 ms, elementi nella pagina da 11.800 a 3.800, dati scaricati all'apertura da 2,3 a 1,3 MB."
+  },
+  "seed-0376": {
+    "status": "in corso",
+    "at": 1792657088,
+    "summary": "Nell'app nuova (/app, dal telefono) ci sono due schermate nuove. Today, che e' quella che si apre, dice cosa e' cambiato da circa un giorno: nuovi campioni dei settori, progetti entrati, usciti e punteggi saliti o scesi di 5 punti o piu'. Sectors ha tre mosaici: Campioni (per ogni settore il primo e chi lo insegue, ordinati per forza, con il bordo verde se il campione e' cambiato), Mappa (ogni progetto e' un riquadro grande quanto la sua cap, colorato con il 24h o il punteggio) e Slancio (i settori che migliorano nella settimana; i numeri arrivano dopo cinque giorni di letture). Il dock e' piu' corto: Today, Sectors, Gems, Scout, Profile; Pearl, Early e Top stanno dentro Gems. In cima a Today c'e' anche la tua watchlist (i token con la stella), ognuno con la riga di cosa e' cambiato. Resta la ricerca unica."
   }
 }

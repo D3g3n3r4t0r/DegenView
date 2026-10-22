@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0376", "Rivoluzionare il design dell'app: Today e Sectors",
+     "Lorenzo, 10/10: 'studia a fondo il design di tutta l'app e vedi come rivoluzionarlo per renderla piu' fruibile e moderna', poi 'opzione A, pero' dobbiamo creare anche un mosaico per vedere le top di ogni settore in maniera intelligente'; 22/10: 'applica tutto', 'SECTORS!'.",
+     "media"),
     ("seed-0375", "Ricerca ticker che lagga e sito lento in generale",
      "Lorenzo, 21/10: 'la ricerca nella barra di compilazione del ticker [...] lagga, impiega troppo tempo a caricare le lettere, e poi sembra che il sistema parta a fare dei caricamenti in background [...] il sito e' molto rallentato in generale'.",
      "alta"),
