@@ -110,7 +110,19 @@ def clean(raw: dict) -> dict | None:
                        "txs": [str(t) for t in e.get("txs") or []][:20],
                        "sellers": [_norm(str(a)) for a in e.get("sellers") or []][:200]})
     events.sort(key=lambda e: e["ts"], reverse=True)
-    risk = raw.get("risk") if isinstance(raw.get("risk"), dict) else {}
+    risk = dict(raw.get("risk")) if isinstance(raw.get("risk"), dict) else {}
+    # The structure risk read from the clusters themselves (sync_sells.structure):
+    # a report written before it, or by an older engine, cannot say 0 while
+    # linked wallets hold 19% (Lorenzo, 22/10: "come fa a essere rischio 0?").
+    from app.trading.onchain import sync_sells
+    # Only on clusters built under today's rules (wallet_clusters.RULES): an
+    # older build may hold an airdrop read as a cluster, rebuilt soon anyway.
+    held = sum(c["share"] or 0 for c in clusters if c["id"] != "top" and len(c["wallets"]) >= 2)
+    struct = round(100 * min(1.0, held / sync_sells.STRUCT_FULL))
+    rules = (raw.get("coverage") or {}).get("rules") if isinstance(raw.get("coverage"), dict) else None
+    if (rules or 0) >= 2 and struct > (_num(risk.get("score"), 0, 100) or 0):
+        risk["reasons"] = [f"linked wallets hold {100 * held:.1f}% of supply"] + list(risk.get("reasons") or [])
+        risk["score"] = struct
     return {"version": VERSION, "chain": str(raw.get("chain") or ""), "token": _norm(str(raw["token"])),
             "symbol": str(raw.get("symbol") or ""), "updated_at": _num(raw.get("updated_at")),
             "risk": {"score": _num(risk.get("score"), 0, 100), "reasons": [str(x) for x in risk.get("reasons") or []][:6]},
@@ -123,7 +135,7 @@ def _coverage(c) -> dict | None:
     not hidden behind a risk figure."""
     if not isinstance(c, dict):
         return None
-    return {"source": str(c.get("source") or "")[:40], "partial": bool(c.get("partial")),
+    return {"source": str(c.get("source") or "")[:40], "partial": bool(c.get("partial")), "rules": c.get("rules"),
             "from_ts": _num(c.get("from_ts")), "transfers": int(_num(c.get("transfers"), 0) or 0)}
 
 
