@@ -185,7 +185,7 @@ export function App() {
             )}
             {view === "quality" && <Quality onOpen={openWith(qualityContext)} />}
             {view === "agent" && <Scout sells={sells} />}
-            {view === "clusters" && <Clusters onToken={(e) => setOpen({ e, context: "Cluster check" })} inApp={inApp} />}
+            {view === "clusters" && <Clusters onToken={(e) => setOpen({ e, context: t("Cluster check") })} inApp={inApp} />}
             {view === "profile" && <Profile onOpen={(e, context) => setPeek({ e, context })} />}
           </motion.div>
         </AnimatePresence>
