@@ -75,23 +75,48 @@ def clean(raw: dict) -> dict:
         if isinstance(a, str) and isinstance(v, (int, float)):
             shares[a.lower()] = max(0.0, min(1.0, float(v)))
     from_block = raw.get("from_block")
-    return {"chain": chain, "token": token.lower(), "symbol": str(raw.get("symbol") or "")[:24],
+    clusters = []
+    for i, c in enumerate(raw.get("clusters") or [], 1):
+        if isinstance(c, dict):
+            ws = [w for w in _addrs(c.get("wallets"), "clusters.wallets") if w in wallets]
+            if len(ws) >= 2:
+                clusters.append({"id": str(c.get("id") or f"c{i}")[:12], "wallets": ws,
+                                 "links": [str(x)[:24] for x in c.get("links") or []][:8],
+                                 "edges": [[a.lower(), b.lower()] for a, b in (e for e in c.get("edges") or []
+                                           if isinstance(e, list) and len(e) == 2)
+                                           if a.lower() in ws and b.lower() in ws][:2000]})
+    return {"clusters": clusters, "source": "auto" if raw.get("source") == "auto" else "upload", "chain": chain, "token": token.lower(), "symbol": str(raw.get("symbol") or "")[:24],
             "decimals": int(raw.get("decimals") or 18), "pools": _addrs(raw.get("pools"), "pools"),
             "wallets": wallets, "shares": shares,
             "from_block": int(from_block) if isinstance(from_block, int) and from_block > 0 else None,
             "uploaded_at": int(time.time())}
 
 
-def save(raw: dict) -> dict:
+def save(raw: dict) -> dict | None:
+    """Saves the upload. An automatic cluster (wallet_clusters) never
+    replaces one uploaded by hand: None then."""
     cfg = clean(raw)
     path = _dir() / f"{_key(cfg['chain'], cfg['token'])}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     old = _load(path)
+    if cfg["source"] == "auto" and old and old.get("source", "upload") != "auto":
+        return None
     # Same wallets: keep what was already read; new wallets: read again.
     if old and old.get("wallets") == cfg["wallets"]:
         cfg["state"] = old.get("state") or {}
     write_text_atomic(path, json.dumps(cfg))
     return cfg
+
+
+def seed(cfg: dict | None, transfers: list[dict], next_block: int) -> None:
+    """Transfers already read (wallet_clusters): the next run starts at
+    `next_block`."""
+    if not cfg:
+        return
+    key = _key(cfg["chain"], cfg["token"])
+    write_text_atomic(_dir() / f"{key}.transfers.json", json.dumps(transfers))
+    cfg["state"] = {"next_block": next_block}
+    write_text_atomic(_dir() / f"{key}.json", json.dumps(cfg))
 
 
 def _load(path: Path) -> dict | None:
@@ -113,6 +138,7 @@ def summary() -> list[dict]:
     """What the view lists: no addresses beyond the token."""
     return [{"chain": c["chain"], "token": c["token"], "symbol": c.get("symbol", ""),
              "wallets": len(c.get("wallets") or []), "pools": len(c.get("pools") or []),
+             "source": c.get("source", "upload"),
              "last_run": (c.get("state") or {}).get("last_run"), "error": (c.get("state") or {}).get("error")}
             for c in watched()]
 
@@ -142,7 +168,8 @@ async def run_one(cfg: dict, rpc=None) -> dict:
         transfers = [t for t in transfers if t.get("ts") is None or t["ts"] >= cut]
         write_text_atomic(tpath, json.dumps(transfers))
     supply = await sync_sells.total_supply(cfg["chain"], cfg["token"], rpc)
-    rep = sync_sells.report(cfg["chain"], cfg["token"], transfers, [{"id": "c1", "wallets": cfg["wallets"]}],
+    clusters = cfg.get("clusters") or [{"id": "c1", "wallets": cfg["wallets"]}]
+    rep = sync_sells.report(cfg["chain"], cfg["token"], transfers, clusters,
                             cfg["pools"], supply, cfg.get("symbol", ""), cfg.get("shares"))
     sync_sells.write_report(rep)
     state.update(next_block=latest + 1, last_run=int(time.time()), error=None)

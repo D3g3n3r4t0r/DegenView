@@ -37,7 +37,8 @@ def test_lone_seller_and_outflow_weight():
     assert out["outflow_pct"] == 2.0 and out["risk"]["parts"]["share"] < sell["risk"]["parts"]["share"]
 
 
-def test_run_with_fake_rpc():
+def test_run_with_fake_rpc(monkeypatch):
+    monkeypatch.setattr(ss, "CHUNK", {})
     def topic(a):
         return "0x" + "0" * 24 + a[2:]
     logs = [{"blockNumber": "0x64", "logIndex": hex(i), "transactionHash": f"0x{i}",
@@ -70,6 +71,7 @@ def test_report_v1_and_write(tmp_path, monkeypatch):
     c1, c2 = rep["clusters"]
     assert c1["share"] == 0.03 and c1["links"] == ["same_funder", "same_block_sells"] and c2["risk"] == 0
     [ev] = rep["events"]
+    assert ev.pop("sellers") == sorted(W[:3])
     assert ev == {"id": "c1-1000", "cluster": "c1", "ts": 1000, "window_s": 2, "wallets": 3,
                   "share_sold": 0.03, "txs": ["0x64"] * 3}
     assert rep["risk"]["score"] == c1["risk"] > 0 and rep["risk"]["reasons"]

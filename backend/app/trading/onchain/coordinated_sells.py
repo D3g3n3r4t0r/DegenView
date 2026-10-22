@@ -54,7 +54,6 @@ from app.trading.onchain import storage
 logger = logging.getLogger(__name__)
 
 VERSION = 1
-MAX_EDGES = 2000
 SAMPLE = Path(__file__).resolve().parents[2] / "data" / "coordinated_sells_sample.json"
 # An alert needs at least this many wallets selling and this share of supply
 # in one wave, and a wave older than ALERT_MAX_AGE_S is history, not news.
@@ -94,8 +93,8 @@ def clean(raw: dict) -> dict | None:
                    for w in c.get("wallets") or [] if isinstance(w, dict) and w.get("address")]
         clusters.append({"id": str(c["id"]), "wallets": wallets, "share": _num(c.get("share"), 0, 1),
                          "links": [str(x) for x in c.get("links") or []][:8], "risk": _num(c.get("risk"), 0, 100),
-                         "edges": [[str(p[0]), str(p[1])] for p in c.get("edges") or []
-                                   if isinstance(p, (list, tuple)) and len(p) >= 2][:MAX_EDGES]})
+                         "edges": [[str(a).lower(), str(b).lower()] for a, b in
+                                   (e for e in c.get("edges") or [] if isinstance(e, list) and len(e) == 2)][:2000]})
     ids = {c["id"] for c in clusters}
     events = []
     for e in raw.get("events") or []:
@@ -105,7 +104,7 @@ def clean(raw: dict) -> dict | None:
                        "window_s": _num(e.get("window_s"), 0), "wallets": int(_num(e.get("wallets"), 0) or 0),
                        "share_sold": _num(e.get("share_sold"), 0, 1), "usd": _num(e.get("usd"), 0),
                        "txs": [str(t) for t in e.get("txs") or []][:20],
-                       "sellers": [str(a) for a in e.get("sellers") or []][:200]})
+                       "sellers": [str(a).lower() for a in e.get("sellers") or []][:200]})
     events.sort(key=lambda e: e["ts"], reverse=True)
     risk = raw.get("risk") if isinstance(raw.get("risk"), dict) else {}
     return {"version": VERSION, "chain": str(raw.get("chain") or ""), "token": str(raw["token"]).lower(),
@@ -227,3 +226,27 @@ async def notify_once(send, url: str, now: float | None = None) -> int:
     if n:
         save_sent(sent_list)
     return n
+
+
+# Lorenzo, 22/10 (decision card): a coordinated-sell risk of 60 or more takes
+# the token out of the Top for every account, like a crash.
+EXCLUDE_RISK = 60
+EXCLUDE_MAX_AGE_S = 7 * 86400
+_excl_cache: tuple[float, dict[str, int]] = (0.0, {})
+
+
+def exclusion(chain: str, token: str, now: float | None = None) -> str:
+    """"" unless the token's fresh report has risk >= EXCLUDE_RISK."""
+    global _excl_cache
+    now = now if now is not None else time.time()
+    if now - _excl_cache[0] > 60:
+        risky = {}
+        d = _dir()
+        for p in d.glob("*.json") if d.is_dir() else []:
+            rep = _read(p)
+            score = ((rep or {}).get("risk") or {}).get("score") or 0
+            if rep and score >= EXCLUDE_RISK and now - (rep.get("updated_at") or 0) <= EXCLUDE_MAX_AGE_S:
+                risky[f"{rep['chain']}:{rep['token']}"] = round(score)
+        _excl_cache = (now, risky)
+    score = _excl_cache[1].get(f"{(chain or '').lower()}:{(token or '').lower()}")
+    return f"coordinated sells: risk {score}" if score else ""
