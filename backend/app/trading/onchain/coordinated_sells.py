@@ -21,7 +21,8 @@ backend/data/coordinated_sells/<chain>-<token lowercase>.json
         "wallets": [{"address": "0x...", "share": 0.012}],   # share of supply, 0..1
         "share": 0.083,                 # whole cluster, 0..1
         "links": ["same_funder", "same_block_sells", "same_amounts"],
-        "risk": 0-100
+        "risk": 0-100,
+        "edges": [["0xa", "0xb"]]       # optional: wallet pairs the engine linked (map lines)
       }],
       "events": [{
         "id": "c1-1761099000",          # stable: never reused for another sell
@@ -31,7 +32,8 @@ backend/data/coordinated_sells/<chain>-<token lowercase>.json
         "wallets": 5,                   # how many of the cluster sold
         "share_sold": 0.021,            # of supply, 0..1
         "usd": 41000.0,                 # optional
-        "txs": ["0x..."]                # optional
+        "txs": ["0x..."],               # optional
+        "sellers": ["0x..."]            # optional: who sold in the wave (lit on the map)
       }]
     }
 
@@ -52,6 +54,7 @@ from app.trading.onchain import storage
 logger = logging.getLogger(__name__)
 
 VERSION = 1
+MAX_EDGES = 2000
 SAMPLE = Path(__file__).resolve().parents[2] / "data" / "coordinated_sells_sample.json"
 # An alert needs at least this many wallets selling and this share of supply
 # in one wave, and a wave older than ALERT_MAX_AGE_S is history, not news.
@@ -90,7 +93,9 @@ def clean(raw: dict) -> dict | None:
         wallets = [{"address": str(w.get("address", "")), "share": _num(w.get("share"), 0, 1)}
                    for w in c.get("wallets") or [] if isinstance(w, dict) and w.get("address")]
         clusters.append({"id": str(c["id"]), "wallets": wallets, "share": _num(c.get("share"), 0, 1),
-                         "links": [str(x) for x in c.get("links") or []][:8], "risk": _num(c.get("risk"), 0, 100)})
+                         "links": [str(x) for x in c.get("links") or []][:8], "risk": _num(c.get("risk"), 0, 100),
+                         "edges": [[str(p[0]), str(p[1])] for p in c.get("edges") or []
+                                   if isinstance(p, (list, tuple)) and len(p) >= 2][:MAX_EDGES]})
     ids = {c["id"] for c in clusters}
     events = []
     for e in raw.get("events") or []:
@@ -99,7 +104,8 @@ def clean(raw: dict) -> dict | None:
         events.append({"id": str(e["id"]), "cluster": str(e["cluster"]), "ts": _num(e["ts"]),
                        "window_s": _num(e.get("window_s"), 0), "wallets": int(_num(e.get("wallets"), 0) or 0),
                        "share_sold": _num(e.get("share_sold"), 0, 1), "usd": _num(e.get("usd"), 0),
-                       "txs": [str(t) for t in e.get("txs") or []][:20]})
+                       "txs": [str(t) for t in e.get("txs") or []][:20],
+                       "sellers": [str(a) for a in e.get("sellers") or []][:200]})
     events.sort(key=lambda e: e["ts"], reverse=True)
     risk = raw.get("risk") if isinstance(raw.get("risk"), dict) else {}
     return {"version": VERSION, "chain": str(raw.get("chain") or ""), "token": str(raw["token"]).lower(),
