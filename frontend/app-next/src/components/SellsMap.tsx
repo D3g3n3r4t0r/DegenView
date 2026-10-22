@@ -51,7 +51,7 @@ export function SellsMap({ chain, token, starting = false, bare = false }: { cha
     let gone = false;
     import(/* @vite-ignore */ MAP_URL).then((m) => {
       if (gone || !host.current) return;
-      map.current = m.clusterMap(host.current, rep, { onPick: setPick, words: { cluster: t("Cluster"), wallets: t("wallets"), nolink: t("No link found"), none: t("No linked wallets among the top holders.") } });
+      map.current = m.clusterMap(host.current, rep, { onPick: setPick, words: { cluster: t("Cluster"), wallets: t("wallets"), nolink: t("No link found"), none: t("No linked wallets among the top holders."), together: t("Sold together"), thicker: t("thicker line = more waves together") } });
     }).catch(() => {});
     return () => { gone = true; };
   }, [rep, has]);
