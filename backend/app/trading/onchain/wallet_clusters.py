@@ -34,14 +34,14 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 from app.atomic_write import write_text_atomic
-from app.trading.onchain import storage, sync_sells, sync_watch
+from app.trading.onchain import storage, sync_sells, sync_watch, transfer_sources
 
 logger = logging.getLogger(__name__)
 
 # Chains with a free RPC that serves the whole log history. Base, BSC and
 # Ethereum public RPCs answer getLogs only for the last hours (22/10, probed:
 # publicnode "archive requests require a token", drpc "free plan").
-CHAINS = ("robinhood",)
+CHAINS = ("robinhood", "ethereum", "base", "bsc")
 MAX_WINDOW = {"robinhood": 5_000_000}     # the RPC takes up to 10M blocks / 10k logs
 MIN_WINDOW = 500
 MAX_CALLS = 600                           # getLogs calls per token
@@ -404,8 +404,14 @@ async def build(chain: str, token: str, symbol: str = "", created_at: float | No
     latest = int(await _call(rpc, "eth_blockNumber", []) or "0x0", 16)
     if created_at and created_at > 1e12:
         created_at /= 1000
-    start = await block_at(rpc, created_at - 86400, latest) if created_at else 0
-    transfers, partial = await all_transfers(rpc, chain, token, start, latest)
+    if chain in transfer_sources.SOURCES:
+        # History from a free explorer: the free RPCs keep only recent logs.
+        transfers, partial, source = await transfer_sources.transfers(chain, token)
+        start = transfers[0]["block"] if transfers else 0
+    else:
+        start = await block_at(rpc, created_at - 86400, latest) if created_at else 0
+        transfers, partial = await all_transfers(rpc, chain, token, start, latest)
+        source = "rpc"
     if not transfers:
         raise RuntimeError("no transfers")
     supply = await sync_sells.total_supply(chain, token, rpc)
@@ -420,17 +426,20 @@ async def build(chain: str, token: str, symbol: str = "", created_at: float | No
                                + [a for a, n in touch.most_common(40) if n >= 20]))
     contracts = await _contracts(rpc, [a for a in probe if a not in DEAD])
     first_b, last_b = transfers[0]["block"], transfers[-1]["block"]
-    anchors = {}
-    for b in {first_b, last_b, *range(first_b, last_b, max(1, (last_b - first_b) // 24))}:
-        t = await _block_ts(rpc, b)
-        if t is not None:
-            anchors[b] = t
+    anchors = {t["block"]: t["ts"] for t in transfers if t.get("ts") is not None}
+    if not anchors:
+        for b in {first_b, last_b, *range(first_b, last_b, max(1, (last_b - first_b) // 24))}:
+            t = await _block_ts(rpc, b)
+            if t is not None:
+                anchors[b] = t
     span_b = max(1, max(anchors) - min(anchors))
     block_s = (anchors[max(anchors)] - anchors[min(anchors)]) / span_b
     res = cluster(transfers, contracts, supply, block_s)
     res.update(chain=chain, token=token, symbol=symbol, built_at=int(time.time()), partial=partial,
                from_block=start, to_block=latest, transfers=len(transfers), supply=str(supply),
-               contracts=sorted(contracts), block_s=round(block_s, 4))
+               contracts=sorted(contracts), block_s=round(block_s, 4),
+               coverage={"source": source, "partial": partial, "from_block": first_b, "to_block": last_b,
+                         "from_ts": anchors.get(first_b), "transfers": len(transfers)})
     _dir().mkdir(parents=True, exist_ok=True)
     write_text_atomic(_dir() / f"{_key(chain, token)}.json", json.dumps(res))
     if res["clusters"] or len(res["top"]) >= 2:
@@ -449,13 +458,18 @@ async def _hand_to_watch(rpc, res: dict, transfers: list[dict], anchors: dict[in
     ws = set(wallets)
     mine = [dict(t) for t in transfers if t["from"] in ws]
     cut = time.time() - sync_watch.KEEP_S
-    await _stamp(rpc, mine, {t["block"] for t in mine}, dict(anchors))
+    if any(t.get("ts") is None for t in mine):
+        await _stamp(rpc, mine, {t["block"] for t in mine}, dict(anchors))
     mine = [t for t in mine if t["ts"] >= cut]
     cfg = sync_watch.save({"chain": res["chain"], "token": res["token"], "symbol": res["symbol"],
                            "pools": res["contracts"], "wallets": wallets,
                            "shares": {w: res["shares"].get(w, 0.0) for w in wallets},
-                           "clusters": clusters, "source": "auto"})
-    sync_watch.seed(cfg, mine, latest + 1)
+                           "clusters": clusters, "source": "auto", "coverage": res.get("coverage")})
+    # An explorer lags the chain by a few blocks: the watch reads them again.
+    # A partial history stops long before today: the watch starts near the head
+    # (the free RPCs of these chains keep recent logs only).
+    nxt = latest + 1 if res.get("coverage", {}).get("source") == "rpc" else max(latest - 300, 0)
+    sync_watch.seed(cfg, mine, nxt)
 
 
 async def run_once(now: float | None = None) -> dict | None:

@@ -85,7 +85,9 @@ def clean(raw: dict) -> dict:
                                  "edges": [[a.lower(), b.lower()] for a, b in (e for e in c.get("edges") or []
                                            if isinstance(e, list) and len(e) == 2)
                                            if a.lower() in ws and b.lower() in ws][:2000]})
-    return {"clusters": clusters, "source": "auto" if raw.get("source") == "auto" else "upload", "chain": chain, "token": token.lower(), "symbol": str(raw.get("symbol") or "")[:24],
+    cov = raw.get("coverage") if isinstance(raw.get("coverage"), dict) else None
+    return {"coverage": cov and {k: cov.get(k) for k in ("source", "partial", "from_block", "from_ts", "transfers")},
+            "clusters": clusters, "source": "auto" if raw.get("source") == "auto" else "upload", "chain": chain, "token": token.lower(), "symbol": str(raw.get("symbol") or "")[:24],
             "decimals": int(raw.get("decimals") or 18), "pools": _addrs(raw.get("pools"), "pools"),
             "wallets": wallets, "shares": shares,
             "from_block": int(from_block) if isinstance(from_block, int) and from_block > 0 else None,
@@ -171,6 +173,8 @@ async def run_one(cfg: dict, rpc=None) -> dict:
     clusters = cfg.get("clusters") or [{"id": "c1", "wallets": cfg["wallets"]}]
     rep = sync_sells.report(cfg["chain"], cfg["token"], transfers, clusters,
                             cfg["pools"], supply, cfg.get("symbol", ""), cfg.get("shares"))
+    if cfg.get("coverage"):
+        rep["coverage"] = cfg["coverage"]
     sync_sells.write_report(rep)
     state.update(next_block=latest + 1, last_run=int(time.time()), error=None)
     return state
