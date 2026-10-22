@@ -214,8 +214,8 @@ async def run(chain: str, token: str, wallets: list[str], pools: list[str], from
 REPORT_VERSION = 1
 # Structure risk (Lorenzo 22/10, "conta anche la struttura"): the supply held
 # by linked wallets, before they sell. STRUCT_FULL of supply in clusters = 100,
-# so 18% reaches the exclusion line of 60.
-STRUCT_FULL = 0.30
+# so 12% reaches the exclusion line of 60 (Lorenzo 22/10, from 18%).
+STRUCT_FULL = 0.20
 
 
 def structure(out_clusters: list[dict]) -> dict:
