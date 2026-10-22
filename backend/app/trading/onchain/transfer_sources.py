@@ -21,7 +21,8 @@ _RS = "https://api.routescan.io/v2/network/mainnet/evm/{}/etherscan/api"
 SOURCES = {
     "ethereum": ["https://eth.blockscout.com/api", _RS.format(1)],
     "base": ["https://base.blockscout.com/api", _RS.format(8453)],
-    "bsc": [_RS.format(56)],
+    # No BSC: Routescan answers "chain not supported" for 56 (22/10); BSC
+    # reads its history from the NodeReal archive RPC (wallet_clusters.KEYED_RPC).
 }
 PAGE = 5000            # Blockscout returns up to 10k; Routescan pages of 10k max
 MAX_PAGES = 30         # 150k transfers

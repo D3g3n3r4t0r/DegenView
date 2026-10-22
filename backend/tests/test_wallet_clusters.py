@@ -263,3 +263,36 @@ def test_prune_and_console(data):
     wc.note("done", {"chain": "robinhood", "symbol": "A"}, "1 clusters")
     assert wc.queue_view(since=0)["log"][-1]["kind"] == "done"
     assert wc.queue_view(since=time.time() + 1)["log"] == []
+
+
+def test_bsc_reads_history_from_the_keyed_rpc(data, monkeypatch):
+    """BSC has no free explorer: with a NodeReal key the history comes from
+    the archive RPC (22/10), and the watch starts right after it."""
+    monkeypatch.setattr(sw, "KEEP_S", 10**10)
+    rpc = FakeChain(market(), {POOL})
+    monkeypatch.setattr(wc, "keyed_rpc", lambda chain: rpc if chain == "bsc" else None)
+    monkeypatch.setattr(ss, "_default_rpc", lambda chain: rpc)
+    res = asyncio.run(wc.build("bsc", TOKEN, "TEST", created_at=T0 + 1))
+    assert res["coverage"]["source"] == "nodereal" and not res["partial"]
+    assert res["transfers"] == len(market())
+    assert sw.watched()[0]["state"]["next_block"] == 10_001
+
+
+def test_bsc_without_key_says_what_is_missing(data, monkeypatch):
+    monkeypatch.setattr(wc, "keyed_rpc", lambda chain: None)
+    monkeypatch.setattr(ss, "_default_rpc", lambda chain: FakeChain([], {POOL}))
+    with pytest.raises(RuntimeError, match="nodereal key"):
+        asyncio.run(wc.build("bsc", TOKEN, "TEST"))
+
+
+def test_keyed_rpc_errors_never_show_the_key(monkeypatch):
+    from app import service_keys
+    monkeypatch.setattr(service_keys, "get", lambda name: "SECRETKEY123")
+
+    async def boom(self, url, **kw):
+        raise wc.httpx.ConnectError(f"cannot reach {url}")
+    monkeypatch.setattr(wc.httpx.AsyncClient, "post", boom)
+    with pytest.raises(RuntimeError) as e:
+        asyncio.run(wc.keyed_rpc("bsc")("eth_blockNumber", []))
+    assert "SECRETKEY123" not in str(e.value)
+    assert wc.keyed_rpc("ethereum") is None
