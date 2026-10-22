@@ -19,11 +19,12 @@ import { Scout } from "./views/Scout";
 import { Watch } from "./views/Watch";
 import { Search } from "./views/Search";
 import { TokenSheet } from "./views/TokenSheet";
+import { Profile } from "./views/Profile";
 
 const POLL_MS = 30_000;
 const PEARL_MIN = 70;          // a "70" on screen is always a pearl
 const PEARL_MAX_AGE_DAYS = 30;
-const ALL: View[] = ["today", "sectors", "watch", "search", "gems", "pearl", "top", "rank", "quality", "agent"];
+const ALL: View[] = ["today", "sectors", "watch", "search", "gems", "pearl", "top", "rank", "quality", "agent", "profile"];
 // Direction A (Lorenzo 22/10 "come in questo pdf"): the dock holds Today,
 // Sectors, Watch and Search; the rest opens from the avatar.
 const GEMS: View[] = ["gems", "pearl", "top", "rank"];
@@ -135,7 +136,7 @@ export function App() {
             {view === "today" && <Today data={sec} onOpen={openWith((e) => `Today · ${(e as Gem & { sector?: string }).sector ?? "Sectors"} · score ${sc(e)}`)} onSectors={() => setView("sectors")} />}
             {view === "sectors" && <Sectors data={sec} onOpen={openWith((e) => `Sectors · ${e.arena_rank ? `#${e.arena_rank} · ` : ""}score ${sc(e)}`)} />}
             {view === "watch" && <Watch data={sec} gems={data ? [...data.entries, ...data.early] : []} onOpen={openWith((e) => `Watch · score ${sc(e)}`)} />}
-            {view === "search" && <Search sectors={sec} onProject={openProject} onSector={() => setView("sectors")} />}
+            {view === "search" && <Search sectors={sec} onProject={openProject} onSector={() => setView("sectors")} onToken={(e) => setOpen({ e, context: "Scan" })} />}
             {inGems && (
               <div className="flex gap-1 rounded-full bg-pill p-1">
                 {([["arenas", "Arenas", "gems"], ["database", "Database", "gems"], ["pearl", "Pearl", "pearl"], ["early", "Early", "top"], ["rank", "Top", "rank"]] as const).map(([s, label, v]) => {
@@ -178,6 +179,7 @@ export function App() {
             )}
             {view === "quality" && <Quality onOpen={openWith(qualityContext)} />}
             {view === "agent" && <Scout sells={sells} />}
+            {view === "profile" && <Profile onOpen={(e, context) => setPeek({ e, context })} />}
           </motion.div>
         </AnimatePresence>
       </main>
@@ -185,14 +187,11 @@ export function App() {
       <Sheet open={more} title="More" onClose={() => setMore(false)}>
         <nav className="grid gap-1.5">
           {([["gems", "Gems", "Arenas, Database, Pearl, Early and Top 25"], ...(quality ? [["quality", "Quality", "Quality 80 or more, to accept or discard"]] : []),
-            ["agent", "Scout", "What the engine is doing, and every token's journey"]] as [View, string, string][]).map(([v, label, sub]) => (
+            ["agent", "Scout", "What the engine is doing, and every token's journey"], ["profile", "Profile", "Picture, name, theme and the picks' track record"]] as [View, string, string][]).map(([v, label, sub]) => (
             <button key={v} type="button" onClick={() => { setMore(false); setView(v); }} className="flex flex-col rounded-[16px] bg-bg px-4 py-3 text-left active:bg-pill">
               <b className="text-[16px] font-semibold">{label}</b><small className="text-[13px] text-text-3">{sub}</small>
             </button>
           ))}
-          <a href="/onchain-app.html#profile" className="flex flex-col rounded-[16px] bg-bg px-4 py-3">
-            <b className="text-[16px] font-semibold">Profile</b><small className="text-[13px] text-text-3">Wallets, alerts and theme, in the current app for now</small>
-          </a>
         </nav>
       </Sheet>
       <TokenSheet open={peek} onClose={() => setPeek(null)} onFull={(o) => { setPeek(null); setOpen(o); }} />
