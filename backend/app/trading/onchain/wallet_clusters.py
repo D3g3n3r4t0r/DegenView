@@ -59,6 +59,21 @@ AIRDROP_MIN_TARGETS = 20
 AIRDROP_SAME_SHARE = 0.5
 MAX_PER_DAY = 12
 MANUAL_PER_DAY = 20       # checks asked for by hand: their own budget, first in line
+PER_ACCOUNT_PER_DAY = 5   # of which one account may ask (whitekobra: no own cap)
+
+
+def account_take(who: str, now: float | None = None) -> bool:
+    """Counts one manual check for `who` today; False past its cap."""
+    now = now if now is not None else time.time()
+    st = _state()
+    day = time.strftime("%Y-%m-%d", time.gmtime(now))
+    by = st.get("manual_by") if (st.get("manual_by") or {}).get("day") == day else {"day": day}
+    if by.get(who, 0) >= PER_ACCOUNT_PER_DAY:
+        return False
+    by[who] = by.get(who, 0) + 1
+    st["manual_by"] = by
+    _save_state(st)
+    return True
 REBUILD_S = 7 * 86400
 RETRY_S = 86400
 TS_EXACT = 300                            # exact timestamps for this many sell blocks

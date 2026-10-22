@@ -203,3 +203,11 @@ def test_manual_check_has_its_own_budget_and_goes_first(data):
     assert wc._take(now) is None
     s = wc.token_status("robinhood", other)
     assert s["queued"] and s["position"] == 0
+
+
+def test_account_cap(data):
+    for _ in range(wc.PER_ACCOUNT_PER_DAY):
+        assert wc.account_take("u1", now=1_900_000_000)
+    assert not wc.account_take("u1", now=1_900_000_000)
+    assert wc.account_take("u2", now=1_900_000_000)
+    assert wc.account_take("u1", now=1_900_000_000 + 86400)

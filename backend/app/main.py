@@ -3935,12 +3935,16 @@ async def onchain_coordinated_check(body: dict = Body(...), user: User = Depends
     the background; the result lands in the watch and the report like the
     automatic ones. Poll GET /api/onchain/coordinated-sells/check."""
     from app.trading.onchain import sync_watch, wallet_clusters
-    _require_full_score(user)
+    if not (_full_score(user) or _next_for(user)):
+        raise HTTPException(status_code=404, detail="Not found.")
     chain, token = str(body.get("chain") or "").lower(), str(body.get("token") or "").strip()
     if chain not in wallet_clusters.CHAINS:
         raise HTTPException(status_code=400, detail=f"chain: one of {', '.join(wallet_clusters.CHAINS)}")
     if not sync_watch._ok(token, chain):
         raise HTTPException(status_code=400, detail="token: not an address of that chain")
+    st = wallet_clusters.token_status(chain, token)
+    if not st["queued"] and not _full_score(user) and not wallet_clusters.account_take(str(user.id)):
+        raise HTTPException(status_code=429, detail=f"{wallet_clusters.PER_ACCOUNT_PER_DAY} checks a day per account")
     queued = wallet_clusters.request(chain, token, str(body.get("symbol") or ""), urgent=True, manual=True)
     _fire(wallet_clusters.run_once())
     return {"queued": queued, **wallet_clusters.token_status(chain, token)}
@@ -3949,7 +3953,8 @@ async def onchain_coordinated_check(body: dict = Body(...), user: User = Depends
 @app.get("/api/onchain/coordinated-sells/check")
 async def onchain_coordinated_check_status(chain: str, token: str, user: User = Depends(auth.get_current_user)) -> dict:
     from app.trading.onchain import wallet_clusters
-    _require_full_score(user)
+    if not (_full_score(user) or _next_for(user)):
+        raise HTTPException(status_code=404, detail="Not found.")
     return wallet_clusters.token_status(chain, token)
 
 
