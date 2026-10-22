@@ -581,7 +581,7 @@ async def rugcheck_report(mint: str, client: httpx.AsyncClient) -> dict | None:
 
 
 def judge_tokenomics_solana(report: dict | None, exclude: set[str] | None = None,
-                            verified: dict | None = None) -> dict:
+                            verified: dict | None = None, clusters: dict | None = None) -> dict:
     """Dal report completo di RugCheck. `exclude`: conti che non sono
     persone (curva di pump.fun, pool) oltre a quelli che RugCheck conosce.
     `verified`: linked.verify, the linked wallets read on-chain (Top 50)."""
@@ -612,6 +612,11 @@ def judge_tokenomics_solana(report: dict | None, exclude: set[str] | None = None
     linked_pct, _ = legit.linked_share(report) if report.get("insiderNetworks") else (None, 0)
     if verified:
         linked_pct, insiders = verified["pct"], verified["wallets"]
+    # Lorenzo, 22/10: with our own cluster report, RugCheck's linked wallets
+    # no longer count (DREGG: "40%" from one airdrop, our report says otherwise).
+    if clusters:
+        linked_pct, insiders = clusters["linked_supply_pct"], clusters["linked_wallets"]
+        verified = {"source": "clusters", "pct": linked_pct, "wallets": insiders}
     lp_locked = max((float((m.get("lp") or {}).get("lpLockedPct") or 0) for m in report.get("markets") or []),
                     default=None)
     fee = float((report.get("transferFee") or {}).get("pct") or 0)
@@ -813,7 +818,8 @@ def _judge_tokenomics(*, top1: float, top10: float, creator: float, holders: int
     if linked_pct is not None:
         if linked_pct >= 1:
             flags.append(f"linked wallets hold {linked_pct:.0f}% of supply ({insiders} wallets"
-                         + (", balances checked on-chain, airdrop links ignored)" if linked_verified else ")"))
+                         + (", from our wallet cluster report)" if (linked_verified or {}).get("source") == "clusters"
+                            else ", balances checked on-chain, airdrop links ignored)" if linked_verified else ")"))
     elif insiders:
         flags.append(f"{insiders} wallets linked to each other")
     if lp_locked is not None and lp_locked < 80:
@@ -844,6 +850,10 @@ async def analyze_tokenomics(chain: str, token: str, client: httpx.AsyncClient, 
     if chain == "solana":
         report = await rugcheck_report(token, client)
         verified = None
+        from app.trading.onchain import coordinated_sells
+        clusters = coordinated_sells.ai_facts(chain, token)
+        if clusters:
+            return judge_tokenomics_solana(report, exclude, None, clusters)
         if deep and report and (legit.linked_share(report)[0] or 0) >= 1:
             from app.trading.onchain import linked
             try:
