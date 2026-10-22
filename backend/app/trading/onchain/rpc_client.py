@@ -53,6 +53,11 @@ _ENDPOINTS: dict[str, list[str]] = {
         # del modulo. Non aggiungere un URL qui senza averlo verificato dal
         # vivo con una vera chiamata RPC.
     ],
+    # Verified 22/10 (eth_blockNumber, getLogs over 2,000 recent blocks):
+    # recent state and logs only, which is what the sells watch reads.
+    "ethereum": ["https://ethereum-rpc.publicnode.com"],
+    "base": ["https://base-rpc.publicnode.com", "https://mainnet.base.org"],
+    "bsc": ["https://bsc-rpc.publicnode.com", "https://bsc-dataseed.bnbchain.org"],
 }
 
 _FAILURE_THRESHOLD = 3

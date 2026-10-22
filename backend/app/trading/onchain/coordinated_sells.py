@@ -110,7 +110,17 @@ def clean(raw: dict) -> dict | None:
     return {"version": VERSION, "chain": str(raw.get("chain") or ""), "token": str(raw["token"]).lower(),
             "symbol": str(raw.get("symbol") or ""), "updated_at": _num(raw.get("updated_at")),
             "risk": {"score": _num(risk.get("score"), 0, 100), "reasons": [str(x) for x in risk.get("reasons") or []][:6]},
-            "clusters": sorted(clusters, key=lambda c: -(c["share"] or 0)), "events": events}
+            "clusters": sorted(clusters, key=lambda c: -(c["share"] or 0)), "events": events,
+            "coverage": _coverage(raw.get("coverage"))}
+
+
+def _coverage(c) -> dict | None:
+    """How much history the clusters were built from: a partial one is said,
+    not hidden behind a risk figure."""
+    if not isinstance(c, dict):
+        return None
+    return {"source": str(c.get("source") or "")[:40], "partial": bool(c.get("partial")),
+            "from_ts": _num(c.get("from_ts")), "transfers": int(_num(c.get("transfers"), 0) or 0)}
 
 
 def from_analysis(a: dict, chain: str, token: str, wallets: list[str], symbol: str = "",

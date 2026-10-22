@@ -25,7 +25,8 @@ MIN_WALLETS = 2          # a group needs at least this many distinct wallets
 LOG_CHUNK = 5_000        # blocks per eth_getLogs call
 # The Robinhood Chain RPC takes 100k blocks per call when filtered on the
 # senders (~0.1 s blocks): 5,000 would be 43 calls per token every 6 hours.
-CHUNK = {"robinhood": 100_000}
+# Ethereum/Base/BSC public RPCs keep recent logs only and take small ranges.
+CHUNK = {"robinhood": 100_000, "ethereum": 2_000, "base": 2_000, "bsc": 2_000}
 
 # Score weights (sum 100).
 W_SHARE, W_WALLETS, W_SAME_BLOCK, W_REPEAT = 45, 25, 20, 10
