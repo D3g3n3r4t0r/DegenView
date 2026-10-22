@@ -1,3 +1,7 @@
+# 2026-10-22 — Motore vendite sincronizzate (backend, sola lettura) — **in corso** (Claude, a mano)
+
+Lorenzo, tramite il coordinatore: tool on-chain per vendite coordinate, primo token `0x96f455a90a80dcf0c2df6703ea4ba3bedf286e43` (Robinhood Chain). Fatto: `app/trading/onchain/sync_sells.py` — `fetch_transfers` (Transfer ERC-20 via `eth_getLogs` filtrato sui mittenti, blocchi da 5.000, timestamp per blocco), `analyze` puro: trasferimento verso un pool = vendita, verso altro indirizzo = uscita (peso 0,5), fra wallet della lista = consolidamento (ignorato); gruppi = mosse a <= 5 blocchi o <= 120 s dalla precedente con >= 2 wallet; quota di supply, timeline, rischio 0-100 (quota 45 con pieno a 5%, wallet nel gruppo 25 con pieno a 6, stesso blocco 20, ripetizioni 10). Lista wallet e pool in input: arrivano dal thread "Cluster wallet holder del token"; finche' manca, `SAMPLE` (indirizzi finti). Resta: lista vera, rotta API e schermata.
+
 # 2026-10-21 — App on-chain rifatta in React, pagina /app solo per l'account di Lorenzo — **in corso** (Claude, a mano)
 
 Lorenzo: "https://www.rareui.com/ possiamo applicarlo al nostro sito e app?", poi "rifacciamo app", "solo per lorenzo", "non x whitekobra ma per lorenzo devi farla", "procedi".
