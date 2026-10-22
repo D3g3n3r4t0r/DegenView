@@ -95,7 +95,7 @@ def clean(raw: dict) -> dict:
                                            if isinstance(e, list) and len(e) == 2)
                                            if _n(a) in ws and _n(b) in ws][:2000]})
     cov = raw.get("coverage") if isinstance(raw.get("coverage"), dict) else None
-    return {"coverage": cov and {k: cov.get(k) for k in ("source", "partial", "from_block", "from_ts", "transfers", "note", "holders")},
+    return {"coverage": cov and {k: cov.get(k) for k in ("source", "partial", "from_block", "from_ts", "transfers", "note", "holders", "rules")},
             # Solana: each wallet's token account (the watch reads its signatures).
             "accounts": {o: a for o, a in (raw.get("accounts") or {}).items()
                          if o in wallets and isinstance(a, str) and _ok(a, chain)} if chain == "solana" else {},

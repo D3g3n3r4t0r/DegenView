@@ -1959,6 +1959,52 @@ def analyze_now(chain: str, token: str) -> bool:
     return True
 
 
+async def retokenomics(chain: str, token: str, client: httpx.AsyncClient) -> dict | None:
+    """Only the tokenomics pillar read again and applied: the deep re-check
+    and a new cluster report need today's holders, not the whole analysis."""
+    k = _key(chain, token)
+    e = _entries.get(k)
+    if e is None:
+        return None
+    pillar = await depth.analyze_tokenomics(chain, e.get("token_address") or token, client,
+                                            pair_address=e.get("pair_address") or "",
+                                            liquidity_usd=float(e.get("liquidity_usd") or 0),
+                                            deep=k in _top_rank or bool(e.get("rank")))
+    apply_analysis(k, {"tokenomics": pillar})
+    return pillar
+
+
+_cluster_reread: dict[str, float] = {}
+CLUSTER_REREAD_S = 6 * 3600
+
+
+def clusters_changed(chain: str, token: str) -> bool:
+    """A cluster report was written: a Solana token on the board takes its
+    linked wallets from it (depth.judge_tokenomics_solana), so its
+    tokenomics is read again, at most once every CLUSTER_REREAD_S."""
+    k = _key(chain, token)
+    if chain != "solana" or k not in _entries or time.time() - _cluster_reread.get(k, 0) < CLUSTER_REREAD_S:
+        return False
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return False
+    _cluster_reread[k] = time.time()
+
+    async def _go() -> None:
+        try:
+            async with httpx.AsyncClient(timeout=10.0, headers={"User-Agent": "Mozilla/5.0 (LiquidityEngine)"}) as client:
+                await retokenomics(chain, token, client)
+            if _dirty:
+                _save()
+        except Exception:
+            logger.exception("tokenomics of %s not read again after its cluster report", k)
+    task = loop.create_task(_go())
+    _tasks.add(task)
+    task.add_done_callback(_tasks.discard)
+    return True
+
+
 def rescore_database() -> int:
     """Every studied database row scored again with today's formula and
     rules (07/10, Lorenzo: "aggiornami tutti i voti di quelle presenti nel

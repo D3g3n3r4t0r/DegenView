@@ -114,20 +114,24 @@ def test_the_deep_recheck_builds_the_report_and_puts_it_in_the_evidence(monkeypa
         ensured.append(token)
         return "ready"
 
-    async def recheck(entry, item, client, ask=None):
-        return {"confirmed": [], "unverified": [], "refuted": [], "found": [], "evidence": "ev"}
+    async def gather(entry, item, client):
+        return {"found": [], "pages": [], "checked": [], "snippets": [], "gecko": None}
+
+    async def tokenomics(chain, token, client, **kw):
+        return None
 
     async def ask(messages, **kw):
         asked.append(messages[1]["content"])
-        return json.dumps({"keep": True, "score": 60, "verdict": "watch", "reason": "ok", "strengths": [], "problems": []})
+        return json.dumps({"verdict": "ok", "confidence": 0.9, "product": "x", "summary": "y", "reason": "z"})
     monkeypatch.setattr(wc, "ensure", ensure)
-    monkeypatch.setattr(scout_recheck, "recheck", recheck)
+    monkeypatch.setattr(scout_recheck, "gather", gather)
+    monkeypatch.setattr(deep_recheck.depth, "analyze_tokenomics", tokenomics)
     monkeypatch.setattr(cs, "ai_facts", lambda chain, token, now=None: {
         "risk": 80, "risk_reasons": [], "linked_clusters": 2, "linked_wallets": 9, "linked_supply_pct": 15.0,
         "biggest_cluster_pct": 10.0, "links": ["transfer"], "top_holders_supply_pct": None, "sell_waves": 0,
         "sell_waves_7d": 0, "supply_sold_in_waves_pct": 0, "last_wave_hours_ago": None, "report_age_hours": 1,
         "coverage": None})
     res = asyncio.run(deep_recheck.run("base", TOKEN, None, ask=ask))
-    assert ensured == [TOKEN] and "risk 80/100" in asked[0] and "risk 80/100" in res["clusters"]
-    assert "Wallet cluster report" in deep_recheck.SYSTEM
+    assert ensured == [TOKEN] and "Risk 80/100" in asked[0] and "risk 80/100" in res["clusters"]
+    assert res["areas"][0]["status"] == "bad" and res["keep"] is False and res["by"] == "holders"
     deep_recheck.reset_for_tests()

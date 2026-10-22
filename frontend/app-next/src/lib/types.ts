@@ -61,7 +61,13 @@ export type Entry = Gem & {
   scan_url?: string; description?: string; website?: string; github?: string; socials?: { type: string; url: string }[];
 };
 export type Deep = { verdict?: string; score?: number; keep?: boolean; unsupported?: boolean; reason?: string; strengths?: Point[]; problems?: Point[];
-  claims?: { status: string; text?: string; evidence?: string; note?: string }[]; cleared?: number; unverified?: number; confirmed?: number; at?: number; auto?: boolean };
+  claims?: { status: string; text?: string; evidence?: string; note?: string }[]; cleared?: number; unverified?: number; confirmed?: number; at?: number; auto?: boolean;
+  // v2, by facts (fact_check.py, 22/10)
+  v?: number; by?: string; effect?: "stays" | "back" | "out" | "not_on_board"; effect_until?: number | null;
+  areas?: DeepArea[]; counts?: Partial<Record<DeepArea["status"], number>>; clusters?: string;
+  ai?: { verdict?: string; confidence?: number; meme?: boolean; impersonates?: string | null; product?: string; reason?: string; summary?: string; provider?: string | null } | null;
+  checked?: { source?: string; result?: string; detail?: string }[]; before?: { keep?: boolean; reason?: string } | null };
+export type DeepArea = { key: string; status: "good" | "warn" | "bad" | "unknown"; line: string; source?: string };
 export type RecheckProgress = { running?: boolean; started?: number; steps?: { label: string; detail?: string }[];
   log?: { n: number; src: string; text: string; code?: number | null }[] };
 export type TokenDossier = { entry: Entry | null; deep?: Deep | null; deep_wait_s?: number | null; deep_progress?: RecheckProgress | null };

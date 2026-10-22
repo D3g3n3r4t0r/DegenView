@@ -110,6 +110,8 @@ async function onClick(event) {
   if (t.closest("[data-back]")) { dlg.close(); return; }
   const rc = t.closest("[data-deep-recheck]");
   if (rc) { deepRecheck(rc); return; }
+  const ds = t.closest("[data-deep-sells]");
+  if (ds) { goSells(ds.dataset.deepSells); return; }
   const iv = t.closest("[data-iv]");
   if (iv) { interval = iv.dataset.iv; current.picked = true; paintChart(); paintChips(); return; }
   const tb = t.closest("[data-dtab]");
@@ -341,7 +343,7 @@ async function enrich(id, e) {
   if (current?.id === id) paintTabs();
 }
 
-// The Why tab of a dossier, with DeepSeek's dedicated re-check (Lorenzo,
+// The Why tab of a dossier, with the AI's dedicated re-check (Lorenzo,
 // 01/10). A newer re-check replaces the board review's drop line.
 function whyOf(lb, entry, e) {
   if (e.deep) {
@@ -362,11 +364,70 @@ function ago(at) {
   return `${Math.floor(s / 86400)}d ago`;
 }
 
+// Re-check by facts (Lorenzo, 22/10, result v2): what it does to the Top,
+// the AI's opinion, and one measured fact per area. No more claim lists.
+const AREAS = { holders: "Holders & clusters", contract: "Contract", pool: "Pool & market", usage: "Real usage",
+  code: "Code", site: "Site & product", social: "Social", developer: "Developer" };
+const EFFECTS = { stays: "Stays in the Top", back: "Back in the Top", out: "Out of the Top", not_on_board: "Not on the board" };
+const EFFECT_TONE = { stays: "good", back: "good", out: "bad", not_on_board: "unknown" };
+const STATUS = new Set(["good", "warn", "bad", "unknown"]);
+
+function until(at) {
+  if (!at) return "";
+  return new Date(at * 1000).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+}
+
+function deepFacts(d, e) {
+  const effect = String(d.effect ?? "");
+  let head = EFFECTS[effect] ?? (d.keep ? "Kept" : "Dropped");
+  if (effect === "out" && d.effect_until) head += ` until ${until(d.effect_until)}`;
+  const tone = EFFECT_TONE[effect] ?? (d.keep ? "good" : "bad");
+  const meta = [];
+  if (d.before && typeof d.before.keep === "boolean" && d.before.keep !== d.keep) meta.push(`before: ${d.before.keep ? "kept" : "dropped"}`);
+  if (d.auto) meta.push("weekly re-check");
+  if (d.at) meta.push(ago(d.at));
+  const ai = d.ai;
+  const opinion = ai
+    ? `<div class="dd-ai"><span>AI opinion${ai.provider ? ` · ${escapeHtml(ai.provider)}` : ""}</span>
+      ${ai.product ? `<p><b>${escapeHtml(ai.product)}</b></p>` : ""}
+      ${ai.summary ? `<p>${escapeHtml(ai.summary)}</p>` : ""}
+      ${ai.impersonates ? `<p class="dd-warn">Looks like it imitates ${escapeHtml(ai.impersonates)}.</p>` : ""}</div>`
+    : `<p class="dd-ai muted">No AI opinion: the verdict comes from measured facts only.</p>`;
+  const sells = document.getElementById("sells-entry") && e?.token;
+  const rows = (d.areas ?? []).map((a) => {
+    const st = STATUS.has(a.status) ? a.status : "unknown";
+    const link = a.key === "holders" && sells
+      ? ` <button type="button" class="dd-link" data-deep-sells="${escapeHtml(e.token)}">Coordinated sells ›</button>` : "";
+    return `<li class="dd-area" data-status="${st}"><i aria-hidden="true"></i>
+      <p><b>${escapeHtml(AREAS[a.key] ?? a.key ?? "")}</b>${link}<span>${escapeHtml(a.line ?? "")}</span>
+      ${a.source ? `<small>${escapeHtml(a.source)}</small>` : ""}</p></li>`;
+  }).join("");
+  const c = d.counts ?? {};
+  const counts = ["good", "warn", "bad", "unknown"].map((k) => `${Number(c[k]) || 0} ${k}`).join(" · ");
+  const checked = (d.checked ?? []).filter(Boolean);
+  return `<p class="dd-effect" data-status="${tone}"><b>${escapeHtml(head)}</b>${d.reason ? `<span>${escapeHtml(d.reason)}</span>` : ""}
+      ${meta.length ? `<small>${escapeHtml(meta.join(" · "))}</small>` : ""}</p>
+    ${opinion}
+    ${rows ? `<ul class="dd-areas">${rows}</ul><p class="muted dd-counts">${counts}</p>` : ""}
+    ${checked.length ? `<details class="dd-checked"><summary>How it was checked</summary><ul>${checked
+      .map((x) => `<li>${escapeHtml(typeof x === "string" ? x : x?.text ?? x?.label ?? JSON.stringify(x))}</li>`).join("")}</ul></details>` : ""}`;
+}
+
+// From the holders row to the token's card in Coordinated sells.
+function goSells(token) {
+  dlg?.close();
+  document.dispatchEvent(new CustomEvent("lae:go", { detail: "sells" }));
+  setTimeout(() => {
+    document.querySelector(`.cs-card[data-token="${CSS.escape(token)}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, 400);
+}
+
 function deepBlock(e) {
   const d = e.deep;
   const wait = e.deepWait ?? 0;
   let body = "";
-  if (d) {
+  if (d?.v >= 2) body = deepFacts(d, e);
+  else if (d) {
     // Every point carries the quote that backs it (#464); old results are plain strings.
     const why = (x) => (typeof x === "string" ? { text: x } : x ?? {});
     const quote = (q) => (q ? `<small>“${escapeHtml(q)}”</small>` : "");
@@ -383,7 +444,7 @@ function deepBlock(e) {
     </ul>
     <p class="muted">${count("refuted")} cleared · ${count("unverified")} unverified · ${count("confirmed")} confirmed · ${d.auto ? "weekly re-check " : ""}${escapeHtml(ago(d.at))}</p>`;
   }
-  let label = "Re-check with DeepSeek";
+  let label = "Re-check with AI";
   let disabled = "";
   if (e.deepBusy) { disabled = " disabled data-busy"; label = termHtml(e); }
   else if (e.deepFailed) { disabled = " disabled"; label = "Re-check failed"; }
@@ -391,7 +452,7 @@ function deepBlock(e) {
     disabled = " disabled";
     label = wait >= 3600 ? `Re-check in ${Math.round(wait / 3600)}h` : `Re-check in ${Math.max(1, Math.round(wait / 60))}m`;
   }
-  return `<div class="ds-deep"><h5>Deep re-check${d ? ` <b>${escapeHtml(d.verdict ?? "")} · ${d.score ?? "—"}/100</b>` : ""}</h5>
+  return `<div class="ds-deep"><h5>Deep re-check${d?.v >= 2 ? ` <b>${escapeHtml(String(d.score ?? "—"))}/100</b>` : d ? ` <b>${escapeHtml(d.verdict ?? "")} · ${d.score ?? "—"}/100</b>` : ""}</h5>
     ${body}
     <button class="ds-recheck" type="button" data-deep-recheck${disabled}>${label}</button></div>`;
 }

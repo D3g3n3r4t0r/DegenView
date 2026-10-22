@@ -300,8 +300,9 @@ def test_zero_volume_stays_when_geckoterminal_agrees():
 
 
 def test_rules_reach_every_review_and_name_each_chain_lockers():
-    from app.trading.onchain import deep_recheck, judge
-    for system in (judge.REVIEW_SYSTEM, deep_recheck.SYSTEM, sr.SYSTEM):
+    # The deep re-check judges no number since 22/10 (fact_check.py): the rules are the board's and the scout's.
+    from app.trading.onchain import judge
+    for system in (judge.REVIEW_SYSTEM, sr.SYSTEM):
         assert "never call a chain empty" in system and "HoodLock" in system and "Streamflow" in system
     lines = sr.market_lines({}, {"chain": "solana", "token_address": "x"})
     assert any(line.startswith("LP lock data (GoPlus): does not cover solana; lockers used there: Streamflow") for line in lines)

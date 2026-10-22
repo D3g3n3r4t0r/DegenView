@@ -108,11 +108,22 @@ async def report(mint: str) -> dict:
         return r.json()
 
 
-def holders(rep: dict) -> list[dict]:
-    """Wallet holders: [{"owner", "account", "pct"}], pools and programs out."""
+def pool_accounts(rep: dict) -> set[str]:
+    """Accounts that are not people: every account RugCheck knows (AMM,
+    locker, burn, creator tags), each market, its liquidity accounts and
+    their owners, as depth.judge_tokenomics_solana excludes them (Lorenzo,
+    22/10: "i liquidity pool non devono essere considerati")."""
     skip = set((rep.get("knownAccounts") or {}).keys())
     for m in rep.get("markets") or []:
-        skip |= {m.get("pubkey"), m.get("liquidityA"), m.get("liquidityB")}
+        skip |= {v for v in (m.get("pubkey"), m.get("liquidityA"), m.get("liquidityB"),
+                             (m.get("liquidityAAccount") or {}).get("owner"),
+                             (m.get("liquidityBAccount") or {}).get("owner")) if isinstance(v, str)}
+    return skip
+
+
+def holders(rep: dict) -> list[dict]:
+    """Wallet holders: [{"owner", "account", "pct"}], pools and programs out."""
+    skip = pool_accounts(rep)
     out = []
     for h in rep.get("topHolders") or []:
         o, a = h.get("owner"), h.get("address")
@@ -175,6 +186,15 @@ def sender_links(senders: dict[str, str], holders: set[str]) -> list[tuple[str, 
     return out
 
 
+def same_airdrop(senders: dict[str, str | None], a: str, b: str) -> bool:
+    """a and b got their first tokens from the same wallet, which fed at
+    least AIRDROP_MIN holders."""
+    s = senders.get(a)
+    if not s or s != senders.get(b) or legit.is_program_account(s):
+        return False
+    return sum(1 for x in senders.values() if x == s) >= AIRDROP_MIN
+
+
 def same_slot_links(first: dict[str, int]) -> list[tuple[str, str]]:
     by_slot: dict[int, list[str]] = defaultdict(list)
     for owner, slot in first.items():
@@ -192,9 +212,7 @@ async def build(mint: str) -> dict:
         rep = {}
     hs = holders(rep)
     if key:
-        skip = set((rep.get("knownAccounts") or {}).keys())
-        for m in rep.get("markets") or []:
-            skip |= {m.get("pubkey"), m.get("liquidityA"), m.get("liquidityB")}
+        skip = pool_accounts(rep)
         supply = int((rep.get("token") or {}).get("supply") or 0)
         if not supply:
             sup = await _rpc("getTokenSupply", [mint]) or {}
@@ -235,6 +253,10 @@ async def build(mint: str) -> dict:
                 tx = await _rpc("getTransaction", [ss[-1]["signature"], {"encoding": "jsonParsed",
                                                                          "maxSupportedTransactionVersion": 1}])
                 senders[h["owner"]] = _first_sender(tx or {}, mint, h["owner"])
+        # One sender feeding many holders in one go is an airdrop or a
+        # distribution: receiving it in the same slot links nobody.
+        pairs = [(a, b) for a, b in pairs if not same_airdrop(senders, a, b)]
+        why_of = {p: "same_slot" for p in pairs}
         for a, b, why in sender_links(senders, {h["owner"] for h in hs}):
             pairs.append((a, b))
             why_of[(a, b)] = why

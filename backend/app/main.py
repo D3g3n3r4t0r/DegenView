@@ -582,6 +582,24 @@ def _gems_chat(seen: set[str], user: User) -> str:
     return chat
 
 
+async def _to_gems_chats(text: str) -> bool:
+    """Coordinated-sell alerts go where the gems go (Lorenzo, 22/10: "sulla
+    chat DegeneroTotale, quella dove arrivano uscita gemme o nuove gemme"):
+    each account's gems chat, once per chat; the main chat only when no
+    account has a gems chat."""
+    from app.notify import telegram
+    seen: set[str] = set()
+    sent = False
+    for user in auth.list_users():
+        if not user.telegram_gems_chat_id or not _telegram_allowed(user):
+            continue
+        if chat := _gems_chat(seen, user):
+            sent = await telegram.send_to(chat, text) or sent
+    if not seen:
+        sent = await telegram.send_message(text)
+    return sent
+
+
 def _info_chats(seen: set[str], user: User) -> str:
     """`_info_chat` for one broadcast, once per chat (see `_alert_chats`)."""
     chat = _info_chat(user)
@@ -1500,7 +1518,7 @@ async def _coordinated_sells_loop() -> None:
             continue
         try:
             await coordinated_sells.notify_once(
-                telegram.send_message, f"{settings.public_base_url}/onchain-app.html#sells")
+                _to_gems_chats, f"{settings.public_base_url}/onchain-app.html#sells")
         except Exception:  # noqa: BLE001
             logger.exception("coordinated sells loop")
         try:
@@ -1619,6 +1637,8 @@ _PUBLIC_PATHS = frozenset({
     "/",                    # la pagina, che poi chiede di accedere
     "/sniper",
     "/engn",                # la presentazione del progetto e del token, per chi non ha un account
+    "/cantiere",            # what is being pushed to the public repository (22/10)
+    "/api/changes",
     # Le tre pagine del wallet on-chain: la shell HTML deve caricarsi sempre,
     # come "/" — sono le singole chiamate API al loro interno (protette da
     # auth.get_current_user) a decidere se mostrare dati o un errore. Senza
@@ -8650,6 +8670,44 @@ def _engn_contract_box() -> str:
 @app.get("/engn")
 async def engn_page() -> HTMLResponse:
     return HTMLResponse(_ENGN_HTML.replace("<!--engn-ca-->", _engn_contract_box()), headers=_HTML_HEADERS)
+
+
+# Lorenzo, 22/10: "una pagina web che mi permetta di vedere le modifiche che
+# stiamo pushando". The repository is public; the server reads GitHub for
+# the page (the site's CSP keeps browsers on their own origin), a minute of
+# cache per list, with the API token when there is one.
+_CHANGES_PATHS = {"pulls": "pulls?state=open&per_page=30", "runs": "actions/runs?branch=main&per_page=10",
+                  "commits": "commits?sha=main&per_page=30"}
+_changes_cache: dict[str, tuple[float, object]] = {}
+
+
+@app.get("/cantiere")
+async def changes_page() -> HTMLResponse:
+    return HTMLResponse((FRONTEND_DIR / "cantiere.html").read_text(encoding="utf-8"), headers=_HTML_HEADERS)
+
+
+@app.get("/api/changes")
+async def changes(what: str) -> JSONResponse:
+    if what not in _CHANGES_PATHS:
+        raise HTTPException(status_code=400, detail="what: pulls, runs or commits")
+    hit = _changes_cache.get(what)
+    if hit and _time.time() - hit[0] < 60:
+        return JSONResponse(hit[1])
+    headers = {"Accept": "application/vnd.github+json"}
+    if settings.github_api_token:
+        headers["Authorization"] = f"Bearer {settings.github_api_token}"
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.get(f"https://api.github.com/repos/{settings.github_repo}/{_CHANGES_PATHS[what]}",
+                                 headers=headers)
+        r.raise_for_status()
+        data = r.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        if hit:
+            return JSONResponse(hit[1])
+        raise HTTPException(status_code=502, detail=f"GitHub: {type(exc).__name__}")
+    _changes_cache[what] = (_time.time(), data)
+    return JSONResponse(data)
 
 
 @app.get("/onchain-approve.html")

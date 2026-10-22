@@ -165,6 +165,18 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0381", "Pagina per vedere in tempo reale le modifiche che vengono pubblicate",
+     "Lorenzo, 22/10: 'crea sito con aggiornamento in tempo reale delle modifiche', poi 'una pagina web che mi permetta di vedere le modifiche [che] stiamo pushando'.",
+     "media"),
+    ("seed-0380", "Gli avvisi di vendita coordinata vanno nella chat delle gemme",
+     "Lorenzo, 22/10: 'gli alert di vendita coordinata vanno sulla chat \"DegeneroTotale\", QUELLA dove arrivano uscita gemme o nuove gemme in classifica'.",
+     "alta"),
+    ("seed-0379", "Cluster con rischio 0 e falsi positivi da airdrop e pool",
+     "Lorenzo, 22/10, screenshot con un cluster di 23 wallet al 19,1%: 'come fa a essere rischio 0?', 'non voglio falsi positivi, i liquidity pool non devono essere considerati; o almeno evidenziali', poi 'fai un ricontrollo completo di tutti i report dei cluster'.",
+     "alta"),
+    ("seed-0378", "Il ricontrollo approfondito rifatto sui fatti misurati",
+     "Lorenzo, 22/10: su DREGG 'il ricontrollo approfondito mi dice linked wallet hold 40% of supply ma viene smentito dal controllo del cluster', 'il ricontrollo approfondito mi sembra un po' una merda', 'il giudice dei punti rossi [e'] un po' superato visto gli aggiornamenti', poi 'procedi'.",
+     "alta"),
     ("seed-0377", "Il re-check AI e il parere anti-rug devono leggere il report dei cluster",
      "Lorenzo, 22/10: 'il recheck di deepseek o parerere ai anti rug deve considerare il report del cluster esclusivamente e se manca lo forza per averlo'.",
      "alta"),
