@@ -135,3 +135,16 @@ def test_queue_budget_and_cache(data):
     st["built_today"] = wc.MAX_PER_DAY
     wc._save_state(st)
     assert wc._take(now) is None                                 # today's budget spent
+
+
+def test_edges_and_sellers_reach_the_report(data, monkeypatch):
+    monkeypatch.setattr(sw, "KEEP_S", 10**10)
+    rpc = FakeChain(market() + [tr(9500, w(1), POOL, 100, 1), tr(9500, w(2), POOL, 100, 2)], {POOL})
+    monkeypatch.setattr(ss, "_default_rpc", lambda chain: rpc)
+    asyncio.run(wc.build("robinhood", TOKEN, "TEST", rpc=rpc))
+    asyncio.run(sw.run_all(force=True))
+    from app.trading.onchain import coordinated_sells as cs
+    rep = cs.clean(json.loads(ss.report_path("robinhood", TOKEN).read_text()))
+    pairs = {tuple(e) for c in rep["clusters"] for e in c["edges"]}
+    assert (w(1), w(2)) in pairs
+    assert any({w(1), w(2)} <= set(e["sellers"]) for e in rep["events"])

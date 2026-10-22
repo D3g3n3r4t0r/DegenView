@@ -81,7 +81,10 @@ def clean(raw: dict) -> dict:
             ws = [w for w in _addrs(c.get("wallets"), "clusters.wallets") if w in wallets]
             if len(ws) >= 2:
                 clusters.append({"id": str(c.get("id") or f"c{i}")[:12], "wallets": ws,
-                                 "links": [str(x)[:24] for x in c.get("links") or []][:8]})
+                                 "links": [str(x)[:24] for x in c.get("links") or []][:8],
+                                 "edges": [[a.lower(), b.lower()] for a, b in (e for e in c.get("edges") or []
+                                           if isinstance(e, list) and len(e) == 2)
+                                           if a.lower() in ws and b.lower() in ws][:2000]})
     return {"clusters": clusters, "source": "auto" if raw.get("source") == "auto" else "upload", "chain": chain, "token": token.lower(), "symbol": str(raw.get("symbol") or "")[:24],
             "decimals": int(raw.get("decimals") or 18), "pools": _addrs(raw.get("pools"), "pools"),
             "wallets": wallets, "shares": shares,
