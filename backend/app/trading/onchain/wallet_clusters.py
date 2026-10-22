@@ -34,6 +34,9 @@ import time
 from collections import Counter, defaultdict, deque
 from pathlib import Path
 
+import httpx
+
+from app import service_keys
 from app.atomic_write import write_text_atomic
 from app.trading.onchain import storage, sync_sells, sync_watch, transfer_sources
 
@@ -43,7 +46,14 @@ logger = logging.getLogger(__name__)
 # Ethereum public RPCs answer getLogs only for the last hours (22/10, probed:
 # publicnode "archive requests require a token", drpc "free plan").
 CHAINS = ("robinhood", "ethereum", "base", "bsc", "solana")
-MAX_WINDOW = {"robinhood": 5_000_000}     # the RPC takes up to 10M blocks / 10k logs
+MAX_WINDOW = {"robinhood": 5_000_000,     # the RPC takes up to 10M blocks / 10k logs
+              "bsc": 50_000}              # NodeReal free plan; a refusal halves it anyway
+# Chains whose history comes from a keyed archive RPC (Diagnostics) instead
+# of an explorer: BSC has no free keyless source (22/10, Routescan "chain not
+# supported", Etherscan V2 refuses free BSC access).
+KEYED_RPC = {"bsc": "nodereal"}
+# Without the token's launch time the history starts this far back (partial).
+KEYED_LOOKBACK_S = 30 * 86400
 MIN_WINDOW = 500
 MAX_CALLS = 600                           # getLogs calls per token
 MAX_LOGS = 150_000                        # past this the history is cut (partial)
@@ -299,6 +309,33 @@ async def _call(rpc, method: str, params: list, tries: int = 5):
             await asyncio.sleep(2 ** i)
 
 
+def keyed_rpc(chain: str):
+    """The archive RPC of `chain` when its key is set (Diagnostics), else None.
+    Errors never carry the URL: it holds the key."""
+    name = KEYED_RPC.get(chain)
+    key = service_keys.get(name) if name else ""
+    if not key:
+        return None
+    url = service_keys.SERVICES[name][1].replace("{key}", key)
+
+    async def rpc(method: str, params: list):
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                r = await client.post(url, json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params})
+        except httpx.HTTPError as exc:
+            raise RuntimeError(f"{name} {method} failed ({type(exc).__name__})") from None
+        if r.status_code != 200:
+            raise RuntimeError(f"{name} {method}: HTTP {r.status_code}" + (" rate" if r.status_code == 429 else ""))
+        try:
+            data = r.json()
+        except ValueError:
+            raise RuntimeError(f"{name} {method} failed (not JSON)") from None
+        if "error" in data:
+            raise RuntimeError(f"RPC {chain} ({method}): {data['error']}")
+        return data.get("result")
+    return rpc
+
+
 async def _gather(coros, n: int = 4):
     sem = asyncio.Semaphore(n)
 
@@ -533,13 +570,23 @@ async def _stamp(rpc, transfers: list[dict], blocks: set[int], anchors: dict[int
 async def build(chain: str, token: str, symbol: str = "", created_at: float | None = None, rpc=None) -> dict:
     if chain == "solana":
         return await _build_solana(token, symbol)
-    rpc = rpc or sync_sells._default_rpc(chain)
+    keyed = None if rpc else keyed_rpc(chain)
+    rpc = rpc or keyed or sync_sells._default_rpc(chain)
     token = token.lower()
     latest = int(await _call(rpc, "eth_blockNumber", []) or "0x0", 16)
     if created_at and created_at > 1e12:
         created_at /= 1000
     progress("transfers", 0)
-    if chain in transfer_sources.SOURCES:
+    if keyed:
+        # Archive RPC with the full log history: read it like Robinhood's.
+        since = created_at - 86400 if created_at else time.time() - KEYED_LOOKBACK_S
+        start = await block_at(rpc, since, latest)
+        transfers, partial = await all_transfers(rpc, chain, token, start, latest)
+        partial = partial or not created_at
+        source = KEYED_RPC[chain]
+    elif chain in KEYED_RPC:
+        raise RuntimeError(f"{chain} needs a {KEYED_RPC[chain]} key (Diagnostics)")
+    elif chain in transfer_sources.SOURCES:
         # History from a free explorer: the free RPCs keep only recent logs.
         transfers, partial, source = await transfer_sources.transfers(chain, token)
         start = transfers[0]["block"] if transfers else 0
@@ -639,7 +686,7 @@ async def _hand_to_watch(rpc, res: dict, transfers: list[dict], anchors: dict[in
     # An explorer lags the chain by a few blocks: the watch reads them again.
     # A partial history stops long before today: the watch starts near the head
     # (the free RPCs of these chains keep recent logs only).
-    nxt = latest + 1 if res.get("coverage", {}).get("source") == "rpc" else max(latest - 300, 0)
+    nxt = latest + 1 if res.get("coverage", {}).get("source") in ("rpc", *KEYED_RPC.values()) else max(latest - 300, 0)
     sync_watch.seed(cfg, mine, nxt)
 
 
