@@ -34,12 +34,17 @@ SERVICES = {
     # Solana RPC and holder lists for the coordinated-sells check (22/10);
     # the key travels in the URL, not in a header.
     "helius": ("HELIUS_API_KEY", "https://mainnet.helius-rpc.com/?api-key={key}"),
+    # BSC archive RPC for the wallet clusters (22/10): no free keyless source
+    # serves the BSC log history (Routescan "chain not supported", Etherscan V2
+    # "free API access is not supported for this chain", public RPCs recent only).
+    "nodereal": ("NODEREAL_API_KEY", "https://bsc-mainnet.nodereal.io/v1/{key}"),
 }
 # The catalog of GitHub Models answers without a token, so its check is the
 # smallest real call: one token out.
 CHECK_POST = {"github": {"model": "openai/gpt-4o-mini", "max_tokens": 1,
                          "messages": [{"role": "user", "content": "ok"}]},
-              "helius": {"jsonrpc": "2.0", "id": 1, "method": "getHealth"}}
+              "helius": {"jsonrpc": "2.0", "id": 1, "method": "getHealth"},
+              "nodereal": {"jsonrpc": "2.0", "id": 1, "method": "eth_blockNumber", "params": []}}
 
 
 def _read() -> dict:
