@@ -1629,3 +1629,6 @@ html.detail-open .ask-fab, :root:has(#app-shell[data-view="entry"]) .ask-fab { d
 @keyframes cs-in { from { opacity: 0; transform: translateY(6px); } }
 @keyframes cs-grow { from { transform: scaleX(0); } }
 @media (prefers-reduced-motion: reduce) { :is(.cs-card, .cs-time li, .cs-risk i, .cs-seg) { animation: none; } }
+.cs-upload { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 4px 2px 18px; padding: 12px 14px; cursor: pointer;
+  border: 1px dashed var(--c-line, var(--k-line)); border-radius: 14px; font-size: 13px; font-weight: 600;
+  & small { font-size: 11.5px; font-weight: 400; opacity: .65; } &:active { opacity: .7; } }

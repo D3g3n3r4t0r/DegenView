@@ -88,9 +88,24 @@ async function load() {
 
 const shown = () => ["sells", "agent"].includes(document.getElementById("app-shell")?.dataset.view) && document.visibilityState === "visible";
 
+async function upload(input) {
+  const msg = box.querySelector("[data-sells-upload-msg]");
+  const file = input.files?.[0];
+  input.value = "";
+  if (!file) return;
+  msg.textContent = "Uploading…";
+  try {
+    const r = await api.uploadCluster(JSON.parse(await file.text()));
+    msg.textContent = `Saved: ${r.wallets ?? "?"} wallets. The first read takes a few minutes.`;
+  } catch (error) {
+    msg.textContent = error instanceof SyntaxError ? "Not a JSON file." : `Not saved: ${error?.message ?? "error"}`;
+  }
+}
+
 export function mountSells() {
   box = document.querySelector("[data-sells-view]");
   if (!box) return;
+  box.querySelector("[data-sells-upload]")?.addEventListener("change", (event) => upload(event.target));
   const shell = document.getElementById("app-shell");
   if (shell) new MutationObserver(() => { if (shown()) load(); }).observe(shell, { attributes: true, attributeFilter: ["data-view"] });
   load();
