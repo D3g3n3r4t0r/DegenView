@@ -55,7 +55,7 @@ segnalazione è una diagnosi che nessuno vedrà mai — c'è un test che lo veri
 
 ## Il progetto
 
-Repository: `snowcomingsoon/liquidity-analysis-engine` (account rinominato il 16-17/10 da `lorenzocorazzi-wq`; i nomi vecchi solo reindirizzano, nel codice il nome sta in `settings.github_repo`).
+Repository: `D3g3n3r4t0r/DegenView` (spostato il 22/10 da `snowcomingsoon/liquidity-analysis-engine`, a sua volta ex `lorenzocorazzi-wq`; nel codice il nome sta in `settings.github_repo`).
 
 FastAPI + frontend vanilla JS, deploy automatico da `main` su un server
 proprio (Hetzner CX23, ~2 minuti). Vedi `deploy/README.md`. Fly e' spento ma

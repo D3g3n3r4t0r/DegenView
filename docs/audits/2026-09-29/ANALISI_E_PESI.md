@@ -19,13 +19,13 @@ Non butterei il progetto. Ristrutturerei il criterio di giudizio e consoliderei 
 | Backtest/System | Rendimento simulato di strategie | Ritorni/costi, mediana e selezione di una strategia; non qualità del progetto |
 | Modello outcomes | Rug o trade vincente secondo esiti osservati | Modello statistico e soglie di attivazione; non lo score delle gemme |
 
-Fonti: [backend/app/trading/onchain/legit.py:129](https://github.com/snowcomingsoon/liquidity-analysis-engine/blob/ceef100a04a3a48dbef74137875ddd40ddc399ed/backend/app/trading/onchain/legit.py#L129), [backend/app/trading/onchain/meme_engine.py:43](https://github.com/snowcomingsoon/liquidity-analysis-engine/blob/ceef100a04a3a48dbef74137875ddd40ddc399ed/backend/app/trading/onchain/meme_engine.py#L43), [backend/app/sniper/scorer.py:63](https://github.com/snowcomingsoon/liquidity-analysis-engine/blob/ceef100a04a3a48dbef74137875ddd40ddc399ed/backend/app/sniper/scorer.py#L63), [backend/app/trading/onchain/system.py:271](https://github.com/snowcomingsoon/liquidity-analysis-engine/blob/ceef100a04a3a48dbef74137875ddd40ddc399ed/backend/app/trading/onchain/system.py#L271), [backend/app/trading/onchain/outcomes.py:578](https://github.com/snowcomingsoon/liquidity-analysis-engine/blob/ceef100a04a3a48dbef74137875ddd40ddc399ed/backend/app/trading/onchain/outcomes.py#L578).
+Fonti: [backend/app/trading/onchain/legit.py:129](https://github.com/D3g3n3r4t0r/DegenView/blob/ceef100a04a3a48dbef74137875ddd40ddc399ed/backend/app/trading/onchain/legit.py#L129), [backend/app/trading/onchain/meme_engine.py:43](https://github.com/D3g3n3r4t0r/DegenView/blob/ceef100a04a3a48dbef74137875ddd40ddc399ed/backend/app/trading/onchain/meme_engine.py#L43), [backend/app/sniper/scorer.py:63](https://github.com/D3g3n3r4t0r/DegenView/blob/ceef100a04a3a48dbef74137875ddd40ddc399ed/backend/app/sniper/scorer.py#L63), [backend/app/trading/onchain/system.py:271](https://github.com/D3g3n3r4t0r/DegenView/blob/ceef100a04a3a48dbef74137875ddd40ddc399ed/backend/app/trading/onchain/system.py#L271), [backend/app/trading/onchain/outcomes.py:578](https://github.com/D3g3n3r4t0r/DegenView/blob/ceef100a04a3a48dbef74137875ddd40ddc399ed/backend/app/trading/onchain/outcomes.py#L578).
 
 L'interfaccia dovrebbe nominare chiaramente ogni misura. La presenza di più motori non è un difetto in sé; presentare valori diversi come un unico giudizio affidabile lo diventa.
 
 ## 2. Formula effettiva delle gemme
 
-Fonti: [backend/app/trading/onchain/depth.py:40](https://github.com/snowcomingsoon/liquidity-analysis-engine/blob/ceef100a04a3a48dbef74137875ddd40ddc399ed/backend/app/trading/onchain/depth.py#L40), [backend/app/trading/onchain/depth.py:676](https://github.com/snowcomingsoon/liquidity-analysis-engine/blob/ceef100a04a3a48dbef74137875ddd40ddc399ed/backend/app/trading/onchain/depth.py#L676), [backend/app/trading/onchain/leaderboard.py:593](https://github.com/snowcomingsoon/liquidity-analysis-engine/blob/ceef100a04a3a48dbef74137875ddd40ddc399ed/backend/app/trading/onchain/leaderboard.py#L593).
+Fonti: [backend/app/trading/onchain/depth.py:40](https://github.com/D3g3n3r4t0r/DegenView/blob/ceef100a04a3a48dbef74137875ddd40ddc399ed/backend/app/trading/onchain/depth.py#L40), [backend/app/trading/onchain/depth.py:676](https://github.com/D3g3n3r4t0r/DegenView/blob/ceef100a04a3a48dbef74137875ddd40ddc399ed/backend/app/trading/onchain/depth.py#L676), [backend/app/trading/onchain/leaderboard.py:593](https://github.com/D3g3n3r4t0r/DegenView/blob/ceef100a04a3a48dbef74137875ddd40ddc399ed/backend/app/trading/onchain/leaderboard.py#L593).
 
 Indichiamo con G GitHub, W sito/ricerca e T tokenomics, tutti 0–100.
 
@@ -71,7 +71,7 @@ Con tutti questi passaggi attivi, +10 punti al pilastro GitHub aggiungono circa 
 
 ### GitHub
 
-[backend/app/trading/onchain/depth.py:161](https://github.com/snowcomingsoon/liquidity-analysis-engine/blob/ceef100a04a3a48dbef74137875ddd40ddc399ed/backend/app/trading/onchain/depth.py#L161) e [backend/app/trading/onchain/depth.py:241](https://github.com/snowcomingsoon/liquidity-analysis-engine/blob/ceef100a04a3a48dbef74137875ddd40ddc399ed/backend/app/trading/onchain/depth.py#L241):
+[backend/app/trading/onchain/depth.py:161](https://github.com/D3g3n3r4t0r/DegenView/blob/ceef100a04a3a48dbef74137875ddd40ddc399ed/backend/app/trading/onchain/depth.py#L161) e [backend/app/trading/onchain/depth.py:241](https://github.com/D3g3n3r4t0r/DegenView/blob/ceef100a04a3a48dbef74137875ddd40ddc399ed/backend/app/trading/onchain/depth.py#L241):
 
 | Indicatore | Punti massimi del pilastro |
 |---|---:|
@@ -91,19 +91,19 @@ Totale 100 prima delle penalità: moltiplicatore 1 − 0,5 × quota commit class
 
 ### Sito: in realtà è ricerca sul prodotto
 
-[backend/app/trading/onchain/research.py:315](https://github.com/snowcomingsoon/liquidity-analysis-engine/blob/ceef100a04a3a48dbef74137875ddd40ddc399ed/backend/app/trading/onchain/research.py#L315):
+[backend/app/trading/onchain/research.py:315](https://github.com/D3g3n3r4t0r/DegenView/blob/ceef100a04a3a48dbef74137875ddd40ddc399ed/backend/app/trading/onchain/research.py#L315):
 
 Con il lettore disponibile, W = 35% miglior sito leggibile + 65% lettura della sostanza. Nel ramo DeepSeek, la lettura stessa è 50% deterministica e 50% DeepSeek. Quindi W = 35% sito + 32,5% lettore locale + 32,5% DeepSeek. Senza lettura si usa un altro fallback; i siti illeggibili seguono una regola apposita.
 
 Nel caso completo della tabella, altri **2,73 punti percentuali** del voto derivano indirettamente dal DeepSeek di ricerca: 8,4% × 32,5%. La quota diretta+indiretta esplicitamente AI sale così al **74,73%**, in quello specifico ramo e senza bonus somiglianza attivo. Gli stessi dati vengono poi riletti dal giudice: non sono quattro esperimenti indipendenti.
 
-Il lettore locale assegna punti a concetti, concretezza, stadio del prodotto, utilità del token, informazione, coerenza e ammissione di limiti; premia inoltre primitive tecniche nominate. [backend/app/trading/onchain/reader.py:157](https://github.com/snowcomingsoon/liquidity-analysis-engine/blob/ceef100a04a3a48dbef74137875ddd40ddc399ed/backend/app/trading/onchain/reader.py#L157).
+Il lettore locale assegna punti a concetti, concretezza, stadio del prodotto, utilità del token, informazione, coerenza e ammissione di limiti; premia inoltre primitive tecniche nominate. [backend/app/trading/onchain/reader.py:157](https://github.com/D3g3n3r4t0r/DegenView/blob/ceef100a04a3a48dbef74137875ddd40ddc399ed/backend/app/trading/onchain/reader.py#L157).
 
 **Giudizio:** leggere docs/app invece della sola homepage è giusto. Contare parole tecniche e dichiarazioni resta facile da ingannare. Dire “abbiamo un SDK, un audit, un'integrazione” non prova che esistano. Ammettere limiti può essere onestà, ma anche testo copiato. La bellezza del sito dovrebbe pesare quasi zero; la verificabilità del prodotto deve pesare molto.
 
 ### Tokenomics: il nome è più ampio della misura
 
-[backend/app/trading/onchain/depth.py:625](https://github.com/snowcomingsoon/liquidity-analysis-engine/blob/ceef100a04a3a48dbef74137875ddd40ddc399ed/backend/app/trading/onchain/depth.py#L625):
+[backend/app/trading/onchain/depth.py:625](https://github.com/D3g3n3r4t0r/DegenView/blob/ceef100a04a3a48dbef74137875ddd40ddc399ed/backend/app/trading/onchain/depth.py#L625):
 
 | Indicatore | Punti massimi |
 |---|---:|
@@ -122,13 +122,13 @@ Honeypot/rug, mint/freeze, quota creatore >15%, singolo wallet >20%, top10 >60% 
 
 ### M01 — Un contratto non è automaticamente un pool o vesting sicuro
 
-[backend/app/trading/onchain/depth.py:559](https://github.com/snowcomingsoon/liquidity-analysis-engine/blob/ceef100a04a3a48dbef74137875ddd40ddc399ed/backend/app/trading/onchain/depth.py#L559) elimina tutti gli holder con is_contract=1 dalle soglie di concentrazione; resta una penalità massima di 10 punti. **Caso sintetico riprodotto:** un contratto non classificato detiene il 90% dell'offerta, altri segnali favorevoli → top1=0, score=90, nessun fatal.
+[backend/app/trading/onchain/depth.py:559](https://github.com/D3g3n3r4t0r/DegenView/blob/ceef100a04a3a48dbef74137875ddd40ddc399ed/backend/app/trading/onchain/depth.py#L559) elimina tutti gli holder con is_contract=1 dalle soglie di concentrazione; resta una penalità massima di 10 punti. **Caso sintetico riprodotto:** un contratto non classificato detiene il 90% dell'offerta, altri segnali favorevoli → top1=0, score=90, nessun fatal.
 
 Un multisig, proxy o contratto controllato dal creatore può essere una balena. Escludere soltanto indirizzi con ruolo/proprietà verificati; separare supply circolante da quote vincolate e rendere visibile il controllo beneficiario. Se la classificazione è sconosciuta, il rischio resta sconosciuto.
 
 ### M02 — Dati assenti diventano prove favorevoli
 
-[backend/app/trading/onchain/depth.py:553](https://github.com/snowcomingsoon/liquidity-analysis-engine/blob/ceef100a04a3a48dbef74137875ddd40ddc399ed/backend/app/trading/onchain/depth.py#L553) usa zero per percentuali mancanti; flag assenti diventano false; LP sconosciuta ottiene 15 punti, come LP almeno 90% bloccata.
+[backend/app/trading/onchain/depth.py:553](https://github.com/D3g3n3r4t0r/DegenView/blob/ceef100a04a3a48dbef74137875ddd40ddc399ed/backend/app/trading/onchain/depth.py#L553) usa zero per percentuali mancanti; flag assenti diventano false; LP sconosciuta ottiene 15 punti, come LP almeno 90% bloccata.
 
 **Caso sintetico riprodotto:** risposta contenente soltanto holder_count=5000 → tokenomics=100/100, nessun flag. Non significa che GoPlus risponda sempre così: dimostra che il contratto dati accetta una risposta parziale come perfetta.
 
@@ -136,7 +136,7 @@ Il fallback Gecko arriva fino a 65 pur senza prove di mint/freeze/tax/LP: può s
 
 ### M03 — DREGG è esente perfino dai fatal
 
-[backend/app/trading/onchain/leaderboard.py:517](https://github.com/snowcomingsoon/liquidity-analysis-engine/blob/ceef100a04a3a48dbef74137875ddd40ddc399ed/backend/app/trading/onchain/leaderboard.py#L517) restituisce “ammesso” per il benchmark prima di controllare capitalizzazione, liquidità o fatal. Il ranking corrente non lo fissa più automaticamente al primo posto: quel problema è distinto ed è già stato attenuato. **Resta però l'esenzione dai controlli**, riprodotta con overall.fatal impostato.
+[backend/app/trading/onchain/leaderboard.py:517](https://github.com/D3g3n3r4t0r/DegenView/blob/ceef100a04a3a48dbef74137875ddd40ddc399ed/backend/app/trading/onchain/leaderboard.py#L517) restituisce “ammesso” per il benchmark prima di controllare capitalizzazione, liquidità o fatal. Il ranking corrente non lo fissa più automaticamente al primo posto: quel problema è distinto ed è già stato attenuato. **Resta però l'esenzione dai controlli**, riprodotta con overall.fatal impostato.
 
 Non è una conclusione negativa su DREGG. È un difetto di imparzialità del motore. La menzione d'onore può stare in una sezione editoriale, senza deroghe alle protezioni.
 
@@ -148,27 +148,27 @@ Le cache judge durano 3 giorni e code review 7; final_score non controlla autono
 
 ### M05 — Ammissione AI senza soglia di confidenza simmetrica
 
-[backend/app/trading/onchain/leaderboard.py:540](https://github.com/snowcomingsoon/liquidity-analysis-engine/blob/ceef100a04a3a48dbef74137875ddd40ddc399ed/backend/app/trading/onchain/leaderboard.py#L540) richiede confidence≥0,7 per il veto, ma ammette gem/watch score≥80 senza confidence minima. **Prova:** tre pilastri a 10/100 vengono ammessi con giudizio 80 e confidenza 0, se non ci sono fatal/pending e i filtri antecedenti passano.
+[backend/app/trading/onchain/leaderboard.py:540](https://github.com/D3g3n3r4t0r/DegenView/blob/ceef100a04a3a48dbef74137875ddd40ddc399ed/backend/app/trading/onchain/leaderboard.py#L540) richiede confidence≥0,7 per il veto, ma ammette gem/watch score≥80 senza confidence minima. **Prova:** tre pilastri a 10/100 vengono ammessi con giudizio 80 e confidenza 0, se non ci sono fatal/pending e i filtri antecedenti passano.
 
 La confidence auto-dichiarata dal modello non è comunque una probabilità calibrata. Preferibile un elenco di deroghe motivate a criteri non di sicurezza, con evidenze verificabili; mai deroga ai gate di rischio.
 
 ### M06 — Top e Gems applicano regole diverse
 
-[backend/app/main.py:3947](https://github.com/snowcomingsoon/liquidity-analysis-engine/blob/ceef100a04a3a48dbef74137875ddd40ddc399ed/backend/app/main.py#L3947) aggiunge alla Top righe studiate del database fino a 30 giorni, saltando la soglia di liquidità e vari requisiti della board; controlla alcuni fatal/veto/cap, non tutto qualifies.
+[backend/app/main.py:3947](https://github.com/D3g3n3r4t0r/DegenView/blob/ceef100a04a3a48dbef74137875ddd40ddc399ed/backend/app/main.py#L3947) aggiunge alla Top righe studiate del database fino a 30 giorni, saltando la soglia di liquidità e vari requisiti della board; controlla alcuni fatal/veto/cap, non tutto qualifies.
 
 **Prova:** riga studiata con score 95, liquidità USD 1 e motivo “liquidity under $10k” entra nella Top. È un comportamento intenzionale descritto nei commenti, ma contraddice l'idea che “Top” significhi “ha superato le regole”. Separare “da approfondire” da “idoneo”, mantenendo una policy unica per gli indicatori di idoneità.
 
 ### M07 — Lettura AI del codice limitata e README passato nel formato sbagliato
 
-[backend/app/trading/onchain/code_review.py:101](https://github.com/snowcomingsoon/liquidity-analysis-engine/blob/ceef100a04a3a48dbef74137875ddd40ddc399ed/backend/app/trading/onchain/code_review.py#L101) chiede il README con Accept application/vnd.github+json e usa r.text; quindi legge il contenitore JSON e content base64, non il Markdown decodificato. Caso riprodotto con risposta API fittizia conforme al formato documentato da [GitHub](https://docs.github.com/en/rest/repos/contents?apiVersion=2022-11-28#get-a-repository-readme).
+[backend/app/trading/onchain/code_review.py:101](https://github.com/D3g3n3r4t0r/DegenView/blob/ceef100a04a3a48dbef74137875ddd40ddc399ed/backend/app/trading/onchain/code_review.py#L101) chiede il README con Accept application/vnd.github+json e usa r.text; quindi legge il contenitore JSON e content base64, non il Markdown decodificato. Caso riprodotto con risposta API fittizia conforme al formato documentato da [GitHub](https://docs.github.com/en/rest/repos/contents?apiVersion=2022-11-28#get-a-repository-readme).
 
 La review legge soltanto i quattro file sorgenti più grandi, massimo 3.000 caratteri ciascuno, più 4.000 di README. Non può dimostrare sicurezza, originalità globale o funzionamento del prodotto. Correggere decodifica, fissare commit, campionare i componenti per ruolo e chiedere citazioni file/riga. La complessità non deve diventare un premio automatico: può essere anche debito tecnico.
 
 ### M08 — Somiglianza al progetto preferito e correzioni ad hoc
 
-[backend/app/trading/onchain/benchmark.py:39](https://github.com/snowcomingsoon/liquidity-analysis-engine/blob/ceef100a04a3a48dbef74137875ddd40ddc399ed/backend/app/trading/onchain/benchmark.py#L39) favorisce Lean/verifica formale, ZK, linguaggi di sistema, consenso, SDK, storia lunga e dichiarazione dei limiti. È una descrizione del tipo di progetto che interessa a Lorenzo, non una misura universale di qualità o rendimento.
+[backend/app/trading/onchain/benchmark.py:39](https://github.com/D3g3n3r4t0r/DegenView/blob/ceef100a04a3a48dbef74137875ddd40ddc399ed/backend/app/trading/onchain/benchmark.py#L39) favorisce Lean/verifica formale, ZK, linguaggi di sistema, consenso, SDK, storia lunga e dichiarazione dei limiti. È una descrizione del tipo di progetto che interessa a Lorenzo, non una misura universale di qualità o rendimento.
 
-Il bonus su testo può essere ottenuto con parole chiave. Le note e [issue #289](https://github.com/snowcomingsoon/liquidity-analysis-engine/issues/289) mostrano aggiustamenti per esempi specifici. I casi reali sono utili test diagnostici; modificare criteri finché i nomi preferiti salgono è overfitting editoriale. Conservare quei casi in un set di sviluppo e valutare poi su un set indipendente non scelto per simpatia.
+Il bonus su testo può essere ottenuto con parole chiave. Le note e [issue #289](https://github.com/D3g3n3r4t0r/DegenView/issues/289) mostrano aggiustamenti per esempi specifici. I casi reali sono utili test diagnostici; modificare criteri finché i nomi preferiti salgono è overfitting editoriale. Conservare quei casi in un set di sviluppo e valutare poi su un set indipendente non scelto per simpatia.
 
 ## 5. Punti di forza da preservare
 
@@ -191,7 +191,7 @@ Il bonus su testo può essere ottenuto con parole chiave. Le note e [issue #289]
 
 **Test che possono nascondere difetti di integrazione.** Il middleware salta il gate se esiste qualsiasi dependency_override. Utile nei test di endpoint, ma quei test non provano l'autenticazione reale. La falsa conferma e il falso clamp mostrano che test di singoli componenti non bastano.
 
-**Validazione statistica incompleta.** outcomes._cv_fit usa fold interlacciati per indice, non una separazione temporale: il training può contenere osservazioni successive al test. Le statistiche di imputazione sono correttamente stimate sul training fold, ma resta il problema temporale e di token/progetti correlati. [backend/app/trading/onchain/outcomes.py:559](https://github.com/snowcomingsoon/liquidity-analysis-engine/blob/ceef100a04a3a48dbef74137875ddd40ddc399ed/backend/app/trading/onchain/outcomes.py#L559).
+**Validazione statistica incompleta.** outcomes._cv_fit usa fold interlacciati per indice, non una separazione temporale: il training può contenere osservazioni successive al test. Le statistiche di imputazione sono correttamente stimate sul training fold, ma resta il problema temporale e di token/progetti correlati. [backend/app/trading/onchain/outcomes.py:559](https://github.com/D3g3n3r4t0r/DegenView/blob/ceef100a04a3a48dbef74137875ddd40ddc399ed/backend/app/trading/onchain/outcomes.py#L559).
 
 **“Miglior backtest” selezionato dopo aver visto i risultati.** system._best_trades sceglie max(return_pct) sulla stessa storia mostrata; scoreboard sceglie la strategia con mediana migliore sugli alert già decisi. Sono analisi descrittive utili, non prova di performance futura indipendente. Registrare la scelta al tempo t e misurarla soltanto dopo t. La pipeline PBO/DSR del sito non si trasferisce automaticamente a questi altri percorsi.
 

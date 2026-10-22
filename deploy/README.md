@@ -23,7 +23,7 @@ Fly **1,69 s**, portatile **0,41 s**. Un CX22 sta nel mezzo, intorno ai
 
 ```bash
 ssh root@<IP>
-bash <(curl -fsSL https://raw.githubusercontent.com/snowcomingsoon/liquidity-analysis-engine/main/deploy/setup-server.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/D3g3n3r4t0r/DegenView/main/deploy/setup-server.sh)
 ```
 
 Installa Docker, chiude il firewall (aperti solo SSH/HTTP/HTTPS), disattiva
