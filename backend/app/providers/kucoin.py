@@ -145,12 +145,15 @@ class KucoinProvider(DataProvider):
 
         symbols = _symbols_cache.get("all")
         if symbols is None:
-            async with http_client.pooled(timeout=15.0) as client:
-                resp = await client.get(f"{self._base_url}/api/v1/symbols")
-            payload = resp.json()
-            all_symbols = payload.get("data", []) if isinstance(payload, dict) else []
-            # every quote (15/10): it used to keep the BTC pairs only
-            symbols = [s for s in all_symbols if s.get("enableTrading")]
+            try:
+                async with http_client.pooled(timeout=4.0) as client:
+                    resp = await client.get(f"{self._base_url}/api/v1/symbols")
+                payload = resp.json()
+                all_symbols = payload.get("data", []) if isinstance(payload, dict) else []
+                # every quote (15/10): it used to keep the BTC pairs only
+                symbols = [s for s in all_symbols if s.get("enableTrading")]
+            except Exception:  # noqa: BLE001
+                symbols = []
             if symbols:
                 _symbols_cache["all"] = symbols
 

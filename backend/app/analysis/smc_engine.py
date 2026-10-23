@@ -31,12 +31,14 @@ def _df_smc_key(df: pd.DataFrame, extra: str | int = "") -> tuple | None:
         return None
     try:
         idx = df.index
-        first_ts = int(idx[0].value) if hasattr(idx[0], "value") else hash(idx[0])
-        last_ts = int(idx[-1].value) if hasattr(idx[-1], "value") else hash(idx[-1])
+        first_ts = int(idx[0].timestamp()) if hasattr(idx[0], "timestamp") else hash(idx[0])
+        last_ts = int(idx[-1].timestamp()) if hasattr(idx[-1], "timestamp") else hash(idx[-1])
+        o_last = round(float(df["open"].iloc[-1]), 8)
         c_last = round(float(df["close"].iloc[-1]), 8)
         h_last = round(float(df["high"].iloc[-1]), 8)
         l_last = round(float(df["low"].iloc[-1]), 8)
-        return (extra, n, first_ts, last_ts, c_last, h_last, l_last)
+        v_last = round(float(df["volume"].iloc[-1]), 4) if "volume" in df.columns else 0.0
+        return (extra, n, first_ts, last_ts, o_last, c_last, h_last, l_last, v_last)
     except Exception:
         return None
 

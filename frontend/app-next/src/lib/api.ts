@@ -130,7 +130,7 @@ export const getClusterCheck = (chain: string, token: string): Promise<ClusterCh
   (e: { status?: number }) => { if (e?.status === 400) return { state: "unsupported" } as ClusterCheck; throw e; });
 // A cluster check on demand for a pasted address (wallet_clusters, first in line).
 export const askClusterCheck = (chain: string, token: string, url?: string) =>
-  post<{ queued?: boolean; position?: number | null; error?: string | null; manual_left?: number; chain?: string; token?: string }>("/api/onchain/coordinated-sells/check", url ? { chain, token, url } : { chain, token });
+  post<{ queued?: boolean; position?: number | null; error?: string | null; manual_left?: number; chain?: string; token?: string; symbol?: string }>("/api/onchain/coordinated-sells/check", url ? { chain, token, url } : { chain, token });
 export const getCoordinatedSells = () => get<{ sample?: boolean; reports?: SellsReport[] }>("/api/onchain/coordinated-sells", 20000);
 
 // The scanner (sheets.js openScan): a server job streamed as NDJSON; if the

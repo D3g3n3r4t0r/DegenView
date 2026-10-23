@@ -54,7 +54,7 @@ export function Clusters({ onToken, inApp }: { onToken: (e: Gem) => void; inApp?
           aria-label={t("Token address")} className="min-w-0 flex-1 bg-transparent text-[16px] outline-none placeholder:text-text-3" />
         {q && <button type="button" aria-label={t("Clear")} onClick={() => setQ("")} className="rounded-md bg-pill px-2 py-0.5 font-mono text-[12px] text-text-2">✕</button>}
       </label>
-      <div className="mt-3"><ClusterCheck address={s} onStart={(c) => { setAsked({ chain: c, token: s, at: Date.now() }); setScreen(true); }} onOpen={() => setQ("")} onFail={() => { setAsked(null); setScreen(false); }} /></div>
+      <div className="mt-3"><ClusterCheck address={s} onStart={(c) => { setAsked({ chain: c, token: s, at: Date.now() }); setScreen(true); }} onOpen={(g) => { setAsked((prev) => prev ? { ...prev, chain: g.chain || prev.chain, token: g.token_address || prev.token } : { chain: g.chain, token: g.token_address, at: Date.now() }); setQ(""); }} onFail={() => { setAsked(null); setScreen(false); }} /></div>
       {asked && <Asked key={asked.at} chain={asked.chain} token={asked.token} onOpen={() => setScreen(true)}
         onReady={() => api.getCoordinatedSells().then((d) => setList(d.sample ? [] : d.reports ?? [])).catch(() => {})} />}
       <AnimatePresence>

@@ -1662,7 +1662,8 @@ async def lifespan(app: FastAPI):
     # create_task() nobody holds can be garbage-collected mid-run (the order
     # reconciler was one) and nothing cancelled it at shutdown.
     background = [asyncio.create_task(_notify_deploy()),
-                  asyncio.create_task(_onchain_reconcile_loop())]
+                  asyncio.create_task(_onchain_reconcile_loop()),
+                  asyncio.create_task(_warm_symbol_catalogues())]
     trading = settings.onchain_trading_enabled
     if trading:
         from app.trading.onchain import twap_jobs as onchain_twap_jobs_resume
@@ -2080,14 +2081,32 @@ class BacktestParamsQuery(BaseModel):
     fill_at: Literal["signal_close", "next_open", "on_condition"] = "signal_close"
 
 
-_SEARCH_PROVIDER_TIMEOUT_S = 5.0
+_SEARCH_PROVIDER_TIMEOUT_S = 1.2
+_SYMBOL_SEARCH_CACHE: dict[str, tuple[float, list[SymbolSuggestion]]] = {}
+_SYMBOL_SEARCH_CACHE_TTL_S = 60.0
+_SYMBOL_SEARCH_CACHE_MAX = 512
+
+
+async def _warm_symbol_catalogues() -> None:
+    """Pre-warm CEX symbol lists at startup so the first user ticker search
+    hits in-memory catalogues in <1 ms instead of downloading 4 exchangeInfo payloads."""
+    await asyncio.sleep(0.5)
+    await asyncio.gather(
+        _safe_search(mexc_provider, "BTC", "crypto", "mexc"),
+        _safe_search(kucoin_provider, "BTC", "crypto", "kucoin"),
+        _safe_search(binance_provider, "BTC", "crypto", "binance"),
+        _safe_search(kraken_provider, "BTC", "crypto", "kraken"),
+        return_exceptions=True,
+    )
 
 
 async def _safe_search(
     provider: DataProvider, query: str, asset_type: AssetType, provider_id: str
 ) -> list[SymbolSuggestion]:
+    task = asyncio.create_task(provider.search_symbols(query))
+    task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
     try:
-        results = await asyncio.wait_for(provider.search_symbols(query), timeout=_SEARCH_PROVIDER_TIMEOUT_S)
+        results = await asyncio.wait_for(asyncio.shield(task), timeout=_SEARCH_PROVIDER_TIMEOUT_S)
     except Exception:  # noqa: BLE001 — any provider failure/timeout must not sink combined search
         # Un provider lento o irraggiungibile non deve far aspettare (o
         # affondare) la ricerca combinata: asyncio.gather aspetta TUTTE le
@@ -2125,6 +2144,12 @@ async def search_symbols(query: str = Query(..., min_length=1, max_length=20)) -
     # Single unified search across stocks and both crypto exchanges — no
     # upfront "stock vs crypto" toggle. The user picks the asset from results
     # that already say which market/exchange it's on.
+    q_norm = query.strip().upper()
+    now_m = _time.monotonic()
+    cached = _SYMBOL_SEARCH_CACHE.get(q_norm)
+    if cached is not None and (now_m - cached[0]) < _SYMBOL_SEARCH_CACHE_TTL_S:
+        return cached[1]
+
     stock_res, mexc_res, kucoin_res, binance_res, kraken_res, dex_res = await asyncio.gather(
         _safe_search(twelvedata_provider, query, "stock", "stock")
         if settings.stocks_enabled else _no_results(),
@@ -2135,7 +2160,12 @@ async def search_symbols(query: str = Query(..., min_length=1, max_length=20)) -
         _safe_search(dexscreener_provider, query, "dex", "dexscreener"),
     )
     merged = _interleave(stock_res, mexc_res, kucoin_res, binance_res, kraken_res, dex_res)
-    return _rank_suggestions(merged, query)[:25]
+    ranked = _rank_suggestions(merged, query)[:25]
+    if ranked:
+        if len(_SYMBOL_SEARCH_CACHE) >= _SYMBOL_SEARCH_CACHE_MAX:
+            _SYMBOL_SEARCH_CACHE.pop(next(iter(_SYMBOL_SEARCH_CACHE)), None)
+        _SYMBOL_SEARCH_CACHE[q_norm] = (now_m, ranked)
+    return ranked
 
 
 def _dispatch_telegram_alerts(
@@ -4181,30 +4211,32 @@ async def onchain_coordinated_check(body: dict = Body(...), user: User = Depends
     chain, token = str(body.get("chain") or "").lower(), str(body.get("token") or "").strip()
     from app.trading.onchain import layer_clusters
     custom_url = str(body.get("url") or "").strip()
+    sym = str(body.get("symbol") or "").strip()
     if token.startswith(("http://", "https://")) and not custom_url:
         custom_url = token
-        parsed = layer_clusters.parse_explorer_url(custom_url)
-        chain = parsed["chain"] if chain in ("", "url", "layer") else chain
-        token = parsed["token"]
     if custom_url:
         try:
             parsed = layer_clusters.parse_explorer_url(custom_url)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        if not chain or chain == "url":
+        if not chain or chain in ("url", "layer"):
             chain = parsed["chain"]
-        if not token:
+        if not token or token.startswith(("http://", "https://")):
             token = parsed["token"]
+        if not sym and parsed.get("symbol"):
+            sym = str(parsed["symbol"])
         layer_clusters.set_custom_url(chain, token, custom_url)
     elif chain == "layer":
-        token, _ = layer_clusters.resolve_layer_token(token, str(body.get("symbol") or ""))
+        token, norm_sym = layer_clusters.resolve_layer_token(token, sym)
+        if not sym and norm_sym:
+            sym = norm_sym
     if not custom_url and chain not in wallet_clusters.CHAINS:
         raise HTTPException(status_code=400, detail=f"chain: one of {', '.join(wallet_clusters.CHAINS)}")
     if not custom_url and not sync_watch._ok(token, chain):
         raise HTTPException(status_code=400, detail="token: not an address of that chain")
     wallet_clusters.account_take(str(user.id))
-    started = wallet_clusters.start_manual(chain, token, str(body.get("symbol") or ""))
-    return {"queued": started, "started": started, "chain": chain, "token": token, **wallet_clusters.token_status(chain, token)}
+    started = wallet_clusters.start_manual(chain, token, sym)
+    return {"queued": started, "started": started, "chain": chain, "token": token, "symbol": sym, **wallet_clusters.token_status(chain, token)}
 
 
 @app.get("/api/onchain/coordinated-sells/check")
@@ -7184,10 +7216,7 @@ async def analyze(
             candle_key = _df_smc_key(df_candles, f"candles:{tf_key}")
             candles = _CANDLES_CACHE.get(candle_key) if candle_key is not None else None
             if candles is None:
-                if hasattr(df_candles.index, "asi8"):
-                    times = (df_candles.index.asi8 // 10**9).tolist()
-                else:
-                    times = [int(ts.timestamp()) for ts in df_candles.index]
+                times = [int(ts.timestamp()) for ts in df_candles.index]
                 opens = df_candles["open"].astype(float).tolist()
                 highs_c = df_candles["high"].astype(float).tolist()
                 lows_c = df_candles["low"].astype(float).tolist()

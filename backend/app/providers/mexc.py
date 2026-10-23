@@ -163,7 +163,7 @@ class MexcProvider(DataProvider):
         if symbols is not None:
             return symbols
         try:
-            async with http_client.pooled(timeout=15.0) as client:
+            async with http_client.pooled(timeout=4.0) as client:
                 resp = await client.get(f"{self._base_url}/api/v3/exchangeInfo")
             payload = resp.json()
             fresh = payload.get("symbols", []) if isinstance(payload, dict) else []

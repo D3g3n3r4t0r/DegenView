@@ -9678,6 +9678,9 @@ const COLORS_LIGHT = {
           throw new Error(detail || `Error ${resp.status}`);
         }
         putSwrMap(chartSwrCache, url, body);
+        if (body.symbol && body.symbol !== symbol) {
+          putSwrMap(chartSwrCache, buildAnalyzeUrl(body.symbol), body);
+        }
       } else if (seq !== state.analyzeSeq) {
         return;
       }
@@ -10251,15 +10254,44 @@ const COLORS_LIGHT = {
   // lands after the search was submitted (Enter within the 300ms debounce,
   // or a slow /api/symbols) must not reopen the list over the chart.
   let suggestSeq = 0;
+  let suggestAbortCtrl = null;
+  const symbolSearchCache = new Map();
+  const SYMBOL_SEARCH_TTL_MS = 60_000;
+
+  async function querySymbolsCached(query, signal) {
+    const key = (query || "").trim().toUpperCase();
+    if (!key) return [];
+    const hit = symbolSearchCache.get(key);
+    if (hit && Date.now() - hit.ts < SYMBOL_SEARCH_TTL_MS) {
+      return hit.items;
+    }
+    const url = `/api/symbols?query=${encodeURIComponent(query.trim())}`;
+    const resp = await fetch(url, signal ? { signal } : undefined);
+    if (!resp.ok) return [];
+    const items = await resp.json();
+    if (Array.isArray(items)) {
+      if (symbolSearchCache.size >= 256) {
+        const firstKey = symbolSearchCache.keys().next().value;
+        if (firstKey !== undefined) symbolSearchCache.delete(firstKey);
+      }
+      symbolSearchCache.set(key, { ts: Date.now(), items });
+      return items;
+    }
+    return [];
+  }
 
   async function fetchSuggestions(query) {
     const seq = ++suggestSeq;
+    if (suggestAbortCtrl) {
+      try { suggestAbortCtrl.abort(); } catch (_) {}
+    }
+    const ctrl = new AbortController();
+    suggestAbortCtrl = ctrl;
     let items;
     try {
-      const url = `/api/symbols?query=${encodeURIComponent(query)}`;
-      const resp = await fetch(url);
-      items = resp.ok ? await resp.json() : [];
+      items = await querySymbolsCached(query, ctrl.signal);
     } catch (err) {
+      if (err && err.name === "AbortError") return;
       items = [];
     }
     if (seq !== suggestSeq) return;
@@ -10454,7 +10486,12 @@ const COLORS_LIGHT = {
         hideSuggestions();
         return;
       }
-      suggestTimer = setTimeout(() => fetchSuggestions(value), 300);
+      const cached = symbolSearchCache.get(value.toUpperCase());
+      if (cached && Date.now() - cached.ts < SYMBOL_SEARCH_TTL_MS) {
+        fetchSuggestions(value);
+        return;
+      }
+      suggestTimer = setTimeout(() => fetchSuggestions(value), 120);
     });
 
     input.addEventListener("keydown", (e) => {
@@ -10471,8 +10508,6 @@ const COLORS_LIGHT = {
         if (state.activeSuggestionIndex >= 0) {
           e.preventDefault();
           selectSuggestion(state.suggestions[state.activeSuggestionIndex]);
-        } else {
-          hideSuggestions();
         }
       } else if (e.key === "Escape") {
         hideSuggestions();
@@ -11844,27 +11879,28 @@ const COLORS_LIGHT = {
       // No suggestion explicitly picked (e.g. hit Enter right away) — if the
       // typed text exactly matches a suggestion already fetched, use its
       // asset type/exchange instead of falling back to whatever was set last.
-      const sameSymbol = (s) => s.symbol.toLowerCase() === symbol.toLowerCase();
+      const qLow = symbol.toLowerCase();
+      const sameSymbol = (s) =>
+        s.symbol.toLowerCase() === qLow || shortSymbol(s.symbol).toLowerCase() === qLow;
       let exact = state.suggestions.find(sameSymbol);
       hideSuggestions();
       closeMobileTickerSearch();
       if (!exact) {
-        // Enter pressed before the debounced suggestions arrived: ask once,
-        // briefly, so a pair listed only on KuCoin/Binance is not analysed
-        // on the exchange of the previous ticker.
         try {
           const ctrl = new AbortController();
-          const timer = setTimeout(() => ctrl.abort(), 1500);
-          const resp = await fetch(`/api/symbols?query=${encodeURIComponent(symbol)}`, { signal: ctrl.signal });
+          const timer = setTimeout(() => ctrl.abort(), 500);
+          const list = await querySymbolsCached(symbol, ctrl.signal);
           clearTimeout(timer);
-          if (resp.ok) exact = (await resp.json()).find(sameSymbol);
+          exact = list.find(sameSymbol);
         } catch { /* lookup is best effort: keep the last exchange */ }
       }
+      let targetSymbol = symbol;
       if (exact) {
         state.assetType = exact.asset_type;
         if (exact.asset_type === "crypto") state.cryptoExchange = exact.provider;
+        targetSymbol = exact.symbol;
       }
-      runAnalysis(symbol);
+      runAnalysis(targetSymbol);
     });
 
     bindTickerAutocomplete();

@@ -41,7 +41,7 @@ GECKOTERMINAL_BASE = "https://api.geckoterminal.com/api/v2"
 _MAX_SUGGESTIONS = 25
 GECKO_PAGE = 1000
 GECKO_MAX_PAGES = 6
-_SEARCH_CACHE_TTL_S = 30  # il prezzo cambia in continuazione, la lista dei pool no
+_SEARCH_CACHE_TTL_S = 180  # il prezzo cambia in continuazione, la lista dei pool no
 
 _search_cache: TTLCache = TTLCache(maxsize=200, ttl=_SEARCH_CACHE_TTL_S)
 
@@ -306,7 +306,7 @@ class DexScreenerProvider(DataProvider):
         pairs = _search_cache.get(query.lower())
         if pairs is None:
             try:
-                async with http_client.pooled(timeout=10.0) as client:
+                async with http_client.pooled(timeout=2.0) as client:
                     resp = await client.get(self._dexscreener_base, params={"q": query})
                 payload = resp.json()
             except (httpx.HTTPError, ValueError):

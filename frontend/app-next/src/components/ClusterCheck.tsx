@@ -6,8 +6,8 @@ import { t } from "../lib/i18n";
 const EVM_RE = /^0x[0-9a-fA-F]{40}$/;
 const SOL_RE = /^[1-9A-HJ-NP-Za-km-z]{32,48}$/;
 const URL_RE = /^https?:\/\/\S+$/i;
-const LAYER_RE = /^(kas-kaspa|kaspa|kas|inj-injective-protocol|injective|inj|arb-arbitrum|arbitrum|arb|op-optimism|optimism|op|tia-celestia|celestia|tia|sei-sei|sei|zro-layerzero|layerzero|zro|mnt-mantle|mantle|mnt|metis-metisdao|metis|zk-zksync|zksync|zk|zeta-zetachain|zetachain|zeta|axl-axelar|axelar|axl|w-wormhole|wormhole|[a-z0-9]{2,12}-[a-z0-9-]{2,40})$/i;
-export const ADDRESS = /^(0x[0-9a-fA-F]{40}|[1-9A-HJ-NP-Za-km-z]{32,48}|https?:\/\/\S+|(kas-kaspa|kaspa|kas|inj-injective-protocol|injective|inj|arb-arbitrum|arbitrum|arb|op-optimism|optimism|op|tia-celestia|celestia|tia|sei-sei|sei|zro-layerzero|layerzero|zro|mnt-mantle|mantle|mnt|metis-metisdao|metis|zk-zksync|zksync|zk|zeta-zetachain|zetachain|zeta|axl-axelar|axelar|axl|w-wormhole|wormhole|[a-z0-9]{2,12}-[a-z0-9-]{2,40}))$/i;
+const LAYER_RE = /^(kas-kaspa|kaspa|kas|octa-octaspace|octaspace|octa|inj-injective-protocol|injective|inj|arb-arbitrum|arbitrum|arb|op-optimism|optimism|op|tia-celestia|celestia|tia|sei-sei|sei|zro-layerzero|layerzero|zro|mnt-mantle|mantle|mnt|metis-metisdao|metis|zk-zksync|zksync|zk|zeta-zetachain|zetachain|zeta|axl-axelar|axelar|axl|w-wormhole|wormhole|[a-z0-9]{2,12}-[a-z0-9-]{2,40})$/i;
+export const ADDRESS = /^(0x[0-9a-fA-F]{40}|[1-9A-HJ-NP-Za-km-z]{32,48}|https?:\/\/\S+|(kas-kaspa|kaspa|kas|octa-octaspace|octaspace|octa|inj-injective-protocol|injective|inj|arb-arbitrum|arbitrum|arb|op-optimism|optimism|op|tia-celestia|celestia|tia|sei-sei|sei|zro-layerzero|layerzero|zro|mnt-mantle|mantle|mnt|metis-metisdao|metis|zk-zksync|zksync|zk|zeta-zetachain|zetachain|zeta|axl-axelar|axelar|axl|w-wormhole|wormhole|[a-z0-9]{2,12}-[a-z0-9-]{2,40}))$/i;
 const EVM = [["robinhood", "Robinhood"], ["ethereum", "Ethereum"], ["base", "Base"], ["bsc", "BSC"]] as const;
 
 /** A pasted address, Layer 0/1/2 chain id, or Explorer/DEX link: check its wallet clusters now
@@ -30,7 +30,7 @@ export function ClusterCheck({ address, onOpen, onStart, onFail }: { address: st
       const r = await api.askClusterCheck(chain, address, isUrl ? address : undefined);
       const outChain = r.chain || chain;
       const outToken = r.token || address;
-      const sym = isUrl ? outToken.slice(0, 8).toUpperCase() : isLayer ? address.toUpperCase().slice(0, 10) : `${address.slice(0, 4)}…${address.slice(-4)}`;
+      const sym = r.symbol || (isUrl ? outToken.slice(0, 8).toUpperCase() : isLayer ? address.toUpperCase().slice(0, 10) : `${address.slice(0, 4)}…${address.slice(-4)}`);
       onOpen({ chain: outChain, token_address: outToken, symbol: sym } as Gem);
       if (r.error) setMsg(r.error);
     } catch (e) {

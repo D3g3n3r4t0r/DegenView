@@ -79,6 +79,19 @@ LAYER_ALIASES: dict[str, tuple[str, str]] = {
     "w": ("w-wormhole", "W"),
     "wormhole": ("w-wormhole", "W"),
     "w-wormhole": ("w-wormhole", "W"),
+    "octa": ("octa-octaspace", "OCTA"),
+    "octaspace": ("octa-octaspace", "OCTA"),
+    "octa-octaspace": ("octa-octaspace", "OCTA"),
+}
+
+# Native L1 chains with a Blockscout v2 / v1 explorer (`/accounts`, `/api/v2/addresses`).
+BLOCKSCOUT_NATIVE_CHAINS: dict[str, dict] = {
+    "octa-octaspace": {
+        "symbol": "OCTA",
+        "origin": "https://scan.octa.space",
+        "decimals": 18,
+        "block_s": 11.2,
+    },
 }
 
 # Canonical (chain, contract_address, decimals) for L0/L1/L2 projects that have
@@ -645,6 +658,269 @@ async def resolve_contract(cid: str, symbol: str, client: httpx.AsyncClient | No
             await client.aclose()
 
 
+# --- 3. Blockscout Native L1 chains (e.g. OctaSpace https://scan.octa.space/accounts) ---
+
+def _extract_blockscout_native_tx(tx: dict, fallback_idx: int = 0) -> dict | None:
+    """Extracts a native L1 coin transfer from a Blockscout v2 `/api/v2/transactions`
+    or `/api/v2/addresses/{addr}/transactions` item."""
+    frm = str((tx.get("from") or {}).get("hash") or "").lower()
+    to = str((tx.get("to") or {}).get("hash") or "").lower()
+    if not frm or not to or frm == to:
+        return None
+    raw_val = str(tx.get("value") or "0").split(".")[0] or "0"
+    try:
+        val = int(raw_val)
+    except ValueError:
+        return None
+    if val <= 0:
+        return None
+    blk = int(tx.get("block_number") or tx.get("block") or (fallback_idx + 1))
+    ts_val = _parse_iso_ts(tx.get("timestamp"))
+    tx_hash = str(tx.get("hash") or f"bs-nat-{fallback_idx}")
+    return {
+        "block": blk,
+        "ts": ts_val,
+        "tx": tx_hash,
+        "log_index": int(tx.get("position") or tx.get("index") or fallback_idx),
+        "from": frm,
+        "to": to,
+        "amount": val,
+    }
+
+
+async def build_blockscout_native(
+    origin: str,
+    token: str,
+    symbol: str = "OCTA",
+    block_s: float = 11.2,
+    decimals: int = 18,
+    out_chain: str = "layer",
+    client: httpx.AsyncClient | None = None,
+) -> dict:
+    """Builds wallet clusters and coordinated sells for a native L1 coin
+    indexed on a Blockscout v2/v1 explorer (e.g. `https://scan.octa.space/accounts`)."""
+    import asyncio
+    from urllib.parse import urlparse
+    from app.trading.onchain import wallet_clusters
+
+    origin = origin.rstrip("/")
+    source = urlparse(origin).netloc or origin
+    own = client is None
+    client = client or httpx.AsyncClient(timeout=20.0, follow_redirects=True, headers={"accept": "application/json"})
+
+    balances_override: dict[str, int] = {}
+    supply = 0
+    transfers: list[dict] = []
+    seen_tx: set[tuple[str, str, str, int]] = set()
+
+    try:
+        wallet_clusters.progress("holders", 0.15)
+        # Step 1: top native coin holders from Blockscout v2 `/api/v2/addresses`
+        try:
+            r_addr = await client.get(f"{origin}/api/v2/addresses")
+            if r_addr.status_code == 200:
+                ad = r_addr.json() or {}
+                for it in ad.get("items") or []:
+                    addr = str(it.get("hash") or "").lower()
+                    raw_bal = str(it.get("coin_balance") or "0").split(".")[0] or "0"
+                    try:
+                        bal_val = int(raw_bal)
+                    except ValueError:
+                        bal_val = 0
+                    if addr.startswith("0x") and bal_val > 0 and addr not in wallet_clusters.DEAD:
+                        balances_override[addr] = bal_val
+                ts_raw = ad.get("total_supply")
+                if ts_raw is not None:
+                    ts_str = str(ts_raw).strip()
+                    try:
+                        ts_flt = float(ts_str)
+                        max_holder = max(balances_override.values(), default=0)
+                        if "." in ts_str or (max_holder > 10**18 and ts_flt < 10**15):
+                            supply = int(ts_flt * (10**decimals))
+                        else:
+                            supply = int(ts_str.split(".")[0] or 0)
+                    except ValueError:
+                        pass
+        except Exception:  # noqa: BLE001
+            pass
+
+        # Fallback v1: `?module=account&action=listaccounts`
+        if not balances_override:
+            try:
+                r_v1_acc = await client.get(
+                    f"{origin}/api",
+                    params={"module": "account", "action": "listaccounts", "page": 1, "offset": 50},
+                )
+                if r_v1_acc.status_code == 200:
+                    for row in (r_v1_acc.json() or {}).get("result") or []:
+                        if not isinstance(row, dict):
+                            continue
+                        addr = str(row.get("address") or "").lower()
+                        raw_bal = str(row.get("balance") or "0").split(".")[0] or "0"
+                        try:
+                            bal_val = int(raw_bal)
+                        except ValueError:
+                            bal_val = 0
+                        if addr.startswith("0x") and bal_val > 0 and addr not in wallet_clusters.DEAD:
+                            balances_override[addr] = bal_val
+            except Exception:  # noqa: BLE001
+                pass
+
+        supply = max(supply, sum(balances_override.values()), 1)
+        if balances_override:
+            wallet_clusters.progress("holders", 0.45)
+            wallet_clusters.live(
+                holders=[
+                    {"address": a, "share": round(v / supply, 5) if supply else None}
+                    for a, v in sorted(balances_override.items(), key=lambda x: -x[1])
+                ][:wallet_clusters.TOP_WATCH],
+                counts={"holders": len(balances_override), "transfers": 0},
+            )
+
+        # Step 2: recent chain-wide native transactions (`/api/v2/transactions`)
+        wallet_clusters.progress("transfers", 0.2)
+        try:
+            r_txs = await client.get(f"{origin}/api/v2/transactions")
+            if r_txs.status_code == 200:
+                for idx, tx in enumerate((r_txs.json() or {}).get("items") or []):
+                    tr = _extract_blockscout_native_tx(tx, idx)
+                    if tr is not None:
+                        k = (tr["tx"], tr["from"], tr["to"], tr["amount"])
+                        if k not in seen_tx:
+                            seen_tx.add(k)
+                            transfers.append(tr)
+        except Exception:  # noqa: BLE001
+            pass
+
+        # Step 3: per-holder native transaction history for top holders (batched)
+        ranked_holders = [
+            a for a, _ in sorted(balances_override.items(), key=lambda x: -x[1])[:25]
+        ]
+
+        async def _fetch_holder_txs(addr: str) -> list[dict]:
+            holder_trs: list[dict] = []
+            try:
+                r_htx = await client.get(f"{origin}/api/v2/addresses/{addr}/transactions")
+                if r_htx.status_code == 200:
+                    for idx, tx in enumerate((r_htx.json() or {}).get("items") or []):
+                        tr = _extract_blockscout_native_tx(tx, idx)
+                        if tr is not None:
+                            holder_trs.append(tr)
+                    if holder_trs:
+                        return holder_trs
+            except Exception:  # noqa: BLE001
+                pass
+            try:
+                r_v1 = await client.get(
+                    f"{origin}/api",
+                    params={"module": "account", "action": "txlist", "address": addr, "page": 1, "offset": 100, "sort": "desc"},
+                )
+                if r_v1.status_code == 200:
+                    rows = (r_v1.json() or {}).get("result")
+                    if isinstance(rows, list):
+                        for idx, row in enumerate(rows):
+                            frm = str(row.get("from") or "").lower()
+                            to = str(row.get("to") or "").lower()
+                            val = int(str(row.get("value") or "0").split(".")[0] or 0)
+                            blk = int(row.get("blockNumber") or (idx + 1))
+                            ts_val = int(row.get("timeStamp") or 0) or None
+                            if frm and to and frm != to and val > 0:
+                                holder_trs.append({
+                                    "block": blk,
+                                    "ts": ts_val,
+                                    "tx": str(row.get("hash") or f"v1-nat-{idx}"),
+                                    "log_index": int(row.get("transactionIndex") or idx),
+                                    "from": frm,
+                                    "to": to,
+                                    "amount": val,
+                                })
+            except Exception:  # noqa: BLE001
+                pass
+            return holder_trs
+
+        batch_size = 5
+        for b_start in range(0, len(ranked_holders), batch_size):
+            batch = ranked_holders[b_start : b_start + batch_size]
+            batch_lists = await asyncio.gather(*(_fetch_holder_txs(a) for a in batch))
+            for tr_list in batch_lists:
+                for tr in tr_list:
+                    k = (tr["tx"], tr["from"], tr["to"], tr["amount"])
+                    if k not in seen_tx:
+                        seen_tx.add(k)
+                        transfers.append(tr)
+            wallet_clusters.progress(
+                "transfers",
+                0.25 + 0.65 * min(len(ranked_holders), b_start + batch_size) / max(1, len(ranked_holders)),
+            )
+
+        if not transfers and balances_override:
+            # Ensure top holders from `/accounts` still render even if recent tx list was empty
+            now_ts = int(time.time())
+            for idx, (addr, bal_val) in enumerate(balances_override.items()):
+                transfers.append({
+                    "block": 1,
+                    "ts": now_ts,
+                    "tx": f"genesis-{idx}",
+                    "log_index": idx,
+                    "from": "0x0000000000000000000000000000000000000000",
+                    "to": addr,
+                    "amount": bal_val,
+                })
+
+        if not transfers:
+            raise RuntimeError(f"blockscout native {source}: no accounts or transfers returned")
+
+        transfers.sort(key=lambda t: (t["block"], t["log_index"]))
+        return _finalize_layer_build(
+            token=token,
+            symbol=symbol or "OCTA",
+            transfers=transfers,
+            supply=supply,
+            balances_override=balances_override or None,
+            source=source,
+            block_s=block_s,
+            out_chain=out_chain,
+        )
+    finally:
+        if own:
+            await client.aclose()
+
+
+async def blockscout_native_new_sells(
+    cfg: dict,
+    origin: str = "https://scan.octa.space",
+    client: httpx.AsyncClient | None = None,
+) -> list[dict]:
+    """Polls recent native coin transactions for watched Blockscout L1 wallets."""
+    origin = origin.rstrip("/")
+    own = client is None
+    client = client or httpx.AsyncClient(timeout=15.0, follow_redirects=True, headers={"accept": "application/json"})
+    wallets = list(cfg.get("wallets") or [])[:25]
+    ws = set(wallets)
+    out: list[dict] = []
+    seen: set[tuple[str, str, str, int]] = set()
+    try:
+        for addr in wallets:
+            if not str(addr).startswith("0x"):
+                continue
+            try:
+                r = await client.get(f"{origin}/api/v2/addresses/{addr}/transactions")
+                if r.status_code == 200:
+                    for idx, tx in enumerate((r.json() or {}).get("items") or []):
+                        tr = _extract_blockscout_native_tx(tx, idx)
+                        if tr is not None and tr["from"] in ws:
+                            k = (tr["tx"], tr["from"], tr["to"], tr["amount"])
+                            if k not in seen:
+                                seen.add(k)
+                                out.append(tr)
+            except Exception:  # noqa: BLE001
+                continue
+        return out
+    finally:
+        if own:
+            await client.aclose()
+
+
 # --- Shared cluster builder & sync_watch handoff ----------------------------
 
 def _finalize_layer_build(
@@ -675,7 +951,10 @@ def _finalize_layer_build(
     for t in transfers:
         counterparties[t["from"]].add(t["to"])
         counterparties[t["to"]].add(t["from"])
-    contracts = {a for a, peers in counterparties.items() if len(peers) >= 25}
+    contracts = {
+        a for a, peers in counterparties.items()
+        if len(peers) >= 25 and a not in wallet_clusters.DEAD
+    }
 
     wallet_clusters.progress("holders", 0.8)
     wallet_clusters.live(
@@ -687,12 +966,37 @@ def _finalize_layer_build(
         counts={"holders": len(peak), "transfers": len(transfers)},
     )
 
+    # Prepend synthetic opening balances from DEAD so `wallet_clusters.cluster()`
+    # sees the true current balances of all top holders in `balances_override`
+    # without introducing any false sender/transfer/buy links.
+    cluster_transfers = transfers
+    if balances_override:
+        raw_bal, _ = wallet_clusters.balances(transfers)
+        first_real_b = transfers[0]["block"] if transfers else 1
+        first_real_ts = transfers[0].get("ts") if transfers else None
+        dead_origin = "0x0000000000000000000000000000000000000000"
+        opening = [
+            {
+                "block": max(0, first_real_b - 1),
+                "ts": first_real_ts,
+                "tx": f"open-{idx}",
+                "log_index": idx,
+                "from": dead_origin,
+                "to": addr,
+                "amount": target_bal - raw_bal.get(addr, 0),
+            }
+            for idx, (addr, target_bal) in enumerate(balances_override.items())
+            if target_bal > raw_bal.get(addr, 0) and addr not in wallet_clusters.DEAD
+        ]
+        if opening:
+            cluster_transfers = opening + transfers
+
     wallet_clusters.progress("clusters", None)
-    res = wallet_clusters.cluster(transfers, contracts, supply, block_s=block_s)
+    res = wallet_clusters.cluster(cluster_transfers, contracts, supply, block_s=block_s)
     if balances_override and supply > 0:
-        for a in res["top"]:
-            if a in balances_override:
-                res["shares"][a] = round(max(0, balances_override[a]) / supply, 6)
+        for a, b in balances_override.items():
+            if a in res["shares"] or a in res["top"]:
+                res["shares"][a] = round(max(0, b) / supply, 6)
 
     wallet_clusters.live(
         clusters=[
@@ -793,7 +1097,20 @@ async def build(token: str, symbol: str = "", created_at: float | None = None, c
     if _is_kaspa(norm_cid, norm_sym):
         return await build_kaspa(keep_token, norm_sym or "KAS", client=client)
 
-    # 2. Injective & Cosmos-SDK L0/L1 chains: try native Cosmos LCD first,
+    # 2. Blockscout native L1 chains (e.g. OctaSpace https://scan.octa.space/accounts)
+    if norm_cid in BLOCKSCOUT_NATIVE_CHAINS:
+        bs_cfg = BLOCKSCOUT_NATIVE_CHAINS[norm_cid]
+        return await build_blockscout_native(
+            origin=bs_cfg["origin"],
+            token=keep_token,
+            symbol=norm_sym or bs_cfg["symbol"],
+            block_s=float(bs_cfg.get("block_s") or 11.2),
+            decimals=int(bs_cfg.get("decimals") or 18),
+            out_chain=out_chain,
+            client=client,
+        )
+
+    # 3. Injective & Cosmos-SDK L0/L1 chains: try native Cosmos LCD first,
     #    then fall back to canonical ERC-20 explorer transfers (e.g. INJ on Ethereum).
     if norm_cid in COSMOS_CHAINS:
         cosmos_res = await build_cosmos(keep_token, norm_sym, COSMOS_CHAINS[norm_cid], client=client)
@@ -939,6 +1256,20 @@ def parse_explorer_url(url: str) -> dict:
     # 1. Kaspa explorer
     if "kaspa.org" in host or "kas.fyi" in host:
         return {"chain": "layer", "token": "kas-kaspa", "symbol": "KAS", "origin": origin, "url": u}
+    # 1b. OctaSpace Blockscout explorer (https://scan.octa.space/accounts)
+    if "octa.space" in host:
+        m_octa_tok = re.search(r"/(?:token|tokens)/(0x[0-9a-fA-F]{40})", parsed.path, re.IGNORECASE)
+        if m_octa_tok:
+            t_addr = m_octa_tok.group(1).lower()
+            return {"chain": "layer", "token": t_addr, "symbol": t_addr[:6].upper(), "origin": origin, "url": u}
+        return {
+            "chain": "layer",
+            "token": "octa-octaspace",
+            "symbol": "OCTA",
+            "origin": "https://scan.octa.space",
+            "url": u,
+            "native_accounts": True,
+        }
     # 2. Injective explorer / Mintscan
     if "injective" in host or "mintscan.io/injective" in u.lower():
         return {"chain": "layer", "token": "inj-injective-protocol", "symbol": "INJ", "origin": origin, "url": u}
@@ -961,9 +1292,20 @@ def parse_explorer_url(url: str) -> dict:
             mint = m_sol.group(1)
             return {"chain": "solana", "token": mint, "symbol": mint[:6], "origin": origin, "url": u}
 
-    # 5. Generic URL slug
+    # 5. Generic URL slug (including Blockscout `/accounts` native coin pages)
+    norm_path = parsed.path.rstrip("/").lower()
+    is_native_accounts = norm_path.endswith("/accounts")
     slug = "url-" + hashlib.sha1(u.encode("utf-8")).hexdigest()[:12]
-    return {"chain": "layer", "token": slug, "symbol": host.split(".")[0][:8].upper(), "origin": origin, "url": u}
+    host_parts = [p for p in host.split(".") if p not in ("scan", "explorer", "blockscout", "www", "io", "com", "org", "net", "xyz", "space")]
+    sym_guess = (host_parts[0] if host_parts else host.split(".")[0])[:8].upper()
+    return {
+        "chain": "layer",
+        "token": slug,
+        "symbol": sym_guess,
+        "origin": origin,
+        "url": u,
+        "native_accounts": is_native_accounts,
+    }
 
 
 async def _fetch_custom_explorer_transfers(origin: str, contract: str, client: httpx.AsyncClient) -> tuple[list[dict], dict[str, int], int, str]:
@@ -1068,6 +1410,25 @@ async def build_from_url(
     if info["token"] == "kas-kaspa":
         res = await build_kaspa(keep_token, keep_sym, client=client)
         return res
+    if info["token"] in BLOCKSCOUT_NATIVE_CHAINS:
+        bs_cfg = BLOCKSCOUT_NATIVE_CHAINS[info["token"]]
+        return await build_blockscout_native(
+            origin=bs_cfg["origin"],
+            token=keep_token,
+            symbol=symbol or bs_cfg["symbol"],
+            block_s=float(bs_cfg.get("block_s") or 11.2),
+            decimals=int(bs_cfg.get("decimals") or 18),
+            out_chain=keep_chain,
+            client=client,
+        )
+    if info.get("native_accounts"):
+        return await build_blockscout_native(
+            origin=info["origin"],
+            token=keep_token,
+            symbol=keep_sym,
+            out_chain=keep_chain,
+            client=client,
+        )
     if info["token"] in COSMOS_CHAINS:
         cosmos_res = await build_cosmos(keep_token, keep_sym, COSMOS_CHAINS[info["token"]], client=client)
         if cosmos_res is not None:
@@ -1181,6 +1542,18 @@ async def build_from_url(
                     block_s=2.0,
                     out_chain=keep_chain,
                 )
+
+        # Fallback: try Blockscout native L1 accounts (`/api/v2/addresses`) at `info["origin"]`
+        try:
+            return await build_blockscout_native(
+                origin=info["origin"],
+                token=keep_token,
+                symbol=keep_sym,
+                out_chain=keep_chain,
+                client=client,
+            )
+        except Exception:  # noqa: BLE001
+            pass
     finally:
         if own_client and client is not None:
             await client.aclose()
@@ -1210,6 +1583,8 @@ async def run_watch_layer(cfg: dict) -> dict:
     new_moves: list[dict] = []
     if _is_kaspa(norm_cid, norm_sym):
         new_moves = await kaspa_new_sells(cfg)
+    elif norm_cid in BLOCKSCOUT_NATIVE_CHAINS:
+        new_moves = await blockscout_native_new_sells(cfg, origin=BLOCKSCOUT_NATIVE_CHAINS[norm_cid]["origin"])
     elif norm_cid in COSMOS_CHAINS:
         # Poll latest Cosmos bank txs from watched wallets
         ws = set(cfg.get("wallets") or [])

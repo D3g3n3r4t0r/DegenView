@@ -117,10 +117,13 @@ class BinanceProvider(DataProvider):
 
         symbols = _symbols_cache.get("all")
         if symbols is None:
-            async with http_client.pooled(timeout=15.0) as client:
-                resp = await client.get(f"{self._base_url}/api/v3/exchangeInfo")
-            payload = resp.json()
-            symbols = payload.get("symbols", []) if isinstance(payload, dict) else []
+            try:
+                async with http_client.pooled(timeout=4.0) as client:
+                    resp = await client.get(f"{self._base_url}/api/v3/exchangeInfo")
+                payload = resp.json()
+                symbols = payload.get("symbols", []) if isinstance(payload, dict) else []
+            except Exception:  # noqa: BLE001
+                symbols = []
             _symbols_cache["all"] = symbols
 
         q = query.upper().replace("/", "")

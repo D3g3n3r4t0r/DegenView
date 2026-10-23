@@ -358,9 +358,25 @@ footer{font-size:12px;color:var(--muted);padding-block:0 32px}
   var nextSeen = {};
   function mark(id){ nextSeen[id] = true; return fresh(id); }
 
+  function taskTimestampSec(it){
+    return Number((it.resolution && it.resolution.at) || it.updated_at || it.created_at || 0);
+  }
+
+  function effectiveTaskStatus(it){
+    var st = it.status || "aperto";
+    if(st === "in corso"){
+      var at = Number((it.resolution && it.resolution.at) || 0);
+      var nowSec = Date.now() / 1000;
+      // Una voce marcata "in corso" piu' di 3 ore fa con un summary gia' pubblicato
+      // non e' una lavorazione attiva in questo istante: mostriamola completata.
+      if(at > 0 && (nowSec - at) > 3 * 3600) return "risolto";
+    }
+    return st;
+  }
+
   function computeTaskProgress(it){
     if(typeof it.progress === "number") return Math.max(0, Math.min(100, Math.round(it.progress)));
-    var st = it.status || "aperto";
+    var st = effectiveTaskStatus(it);
     if(st === "risolto" || st === "scartato") return 100;
     if(st === "in corso") return 65;
     if(st === "riaperto") return 25;
@@ -371,13 +387,16 @@ footer{font-size:12px;color:var(--muted);padding-block:0 32px}
     if(issuesBody) lastIssuesBody = issuesBody;
     if(jobsList) lastJobsList = jobsList;
     var items = (lastIssuesBody && lastIssuesBody.items) || [];
-    var counts = (lastIssuesBody && lastIssuesBody.counts) || {};
     var activeJobs = (lastJobsList || []).filter(function(j){ return j && (j.status === "running" || j.status === "queued"); });
 
     // Update Global Cantiere progress summary
     var totalTasks = items.length;
-    var resolvedTasks = items.filter(function(i){ return i.status === "risolto" || i.status === "scartato"; }).length;
-    var inProgCount = (counts["in corso"] || 0) + (counts["aperto"] || 0) + (counts["riaperto"] || 0) + activeJobs.length;
+    var resolvedTasks = items.filter(function(i){ var s = effectiveTaskStatus(i); return s === "risolto" || s === "scartato"; }).length;
+    var activeItems = items.filter(function(i){ var s = effectiveTaskStatus(i); return s !== "risolto" && s !== "scartato"; });
+    var doneItems = items.filter(function(i){ var s = effectiveTaskStatus(i); return s === "risolto" || s === "scartato"; }).slice().sort(function(a, b){
+      return taskTimestampSec(b) - taskTimestampSec(a);
+    });
+    var inProgCount = activeItems.length + activeJobs.length;
     var weightedSum = 0;
     items.forEach(function(i){ weightedSum += computeTaskProgress(i); });
     var globalPct = totalTasks ? Math.round((weightedSum / totalTasks) * 10) / 10 : 100;
@@ -386,8 +405,6 @@ footer{font-size:12px;color:var(--muted);padding-block:0 32px}
     $("global-prog-fill").className = "task-prog-fill" + (inProgCount > 0 ? " is-run" : "");
     $("global-prog-counts").textContent = resolvedTasks + "/" + totalTasks + " completati" + (inProgCount ? " · " + inProgCount + " attivi" : "");
 
-    var activeItems = items.filter(function(i){ return i.status !== "risolto" && i.status !== "scartato"; });
-    var doneItems = items.filter(function(i){ return i.status === "risolto" || i.status === "scartato"; });
     var visibleIssues = showAllTasks ? activeItems.concat(doneItems) : activeItems.concat(doneItems.slice(0, 15));
 
     $("n-tasks").textContent = (activeJobs.length + activeItems.length)
@@ -415,7 +432,7 @@ footer{font-size:12px;color:var(--muted);padding-block:0 32px}
     // 2. Tasks from Bacheca (/api/issues)
     visibleIssues.forEach(function(it){
       var pct = computeTaskProgress(it);
-      var st = it.status || "aperto";
+      var st = effectiveTaskStatus(it);
       var stState = st === "risolto" ? ["ok", "risolto"]
         : st === "in corso" ? ["run", "in corso"]
         : st === "riaperto" ? ["bad", "riaperto"]
@@ -431,9 +448,8 @@ footer{font-size:12px;color:var(--muted);padding-block:0 32px}
         : st === "scartato"
         ? "Chiuso / Scartato"
         : "In coda di lavorazione";
-      var whenIso = ((it.resolution && it.resolution.at) || it.created_at)
-        ? new Date(((it.resolution && it.resolution.at) || it.created_at) * 1000).toISOString()
-        : "";
+      var tsSec = taskTimestampSec(it);
+      var whenIso = tsSec > 0 ? new Date(tsSec * 1000).toISOString() : "";
       var summary = it.resolution && it.resolution.summary ? it.resolution.summary : (it.detail || "");
       if(summary.length > 220) summary = summary.slice(0, 217) + "…";
       var liCls = (st === "in corso" ? "live " : st === "riaperto" ? "failed " : "") + mark("iss" + it.id + st + pct);

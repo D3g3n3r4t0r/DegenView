@@ -297,3 +297,84 @@ def test_keyed_rpc_errors_never_show_the_key(monkeypatch):
         asyncio.run(wc.keyed_rpc("bsc")("eth_blockNumber", []))
     assert "SECRETKEY123" not in str(e.value)
     assert wc.keyed_rpc("ethereum") is None
+
+
+def test_octaspace_blockscout_accounts_cluster_build(data, monkeypatch):
+    """https://scan.octa.space/accounts (Blockscout v2 L1 native coin explorer)
+    resolves to octa-octaspace (OCTA), fetches top accounts and native txs,
+    links wallets fed by the same sender or transferring between each other,
+    and writes the coordinated sells report."""
+    import httpx
+    from app.trading.onchain import layer_clusters as lc
+
+    monkeypatch.setattr(sw, "KEEP_S", 10**10)
+    parsed = lc.parse_explorer_url("https://scan.octa.space/accounts")
+    assert parsed["chain"] == "layer"
+    assert parsed["token"] == "octa-octaspace"
+    assert parsed["symbol"] == "OCTA"
+    assert parsed["native_accounts"] is True
+
+    h1, h2, h3, funder = w(1), w(2), w(3), w(9)
+    wei = 10**18
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        path = req.url.path
+        if path == "/api/v2/addresses":
+            return httpx.Response(200, json={
+                "total_supply": "10000000.0",
+                "items": [
+                    {"hash": h1, "coin_balance": str(2_000_000 * wei), "is_contract": False},
+                    {"hash": h2, "coin_balance": str(1_500_000 * wei), "is_contract": False},
+                    {"hash": h3, "coin_balance": str(500_000 * wei), "is_contract": False},
+                ],
+            })
+        if path == "/api/v2/transactions":
+            return httpx.Response(200, json={
+                "items": [
+                    {
+                        "hash": "0xtx1",
+                        "block_number": 100,
+                        "timestamp": "2026-10-23T12:00:00.000000Z",
+                        "value": str(100_000 * wei),
+                        "from": {"hash": funder},
+                        "to": {"hash": h1},
+                    },
+                    {
+                        "hash": "0xtx2",
+                        "block_number": 101,
+                        "timestamp": "2026-10-23T12:01:00.000000Z",
+                        "value": str(100_000 * wei),
+                        "from": {"hash": funder},
+                        "to": {"hash": h2},
+                    },
+                ],
+            })
+        if path.startswith("/api/v2/addresses/") and path.endswith("/transactions"):
+            return httpx.Response(200, json={
+                "items": [
+                    {
+                        "hash": "0xtx3",
+                        "block_number": 102,
+                        "timestamp": "2026-10-23T12:02:00.000000Z",
+                        "value": str(50_000 * wei),
+                        "from": {"hash": h1},
+                        "to": {"hash": h2},
+                    },
+                ],
+            })
+        return httpx.Response(404)
+
+    async def go():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as c:
+            return await lc.build_from_url("https://scan.octa.space/accounts", client=c)
+
+    res = asyncio.run(go())
+    assert res["chain"] == "layer"
+    assert res["token"] == "octa-octaspace"
+    assert res["symbol"] == "OCTA"
+    assert res["coverage"]["source"] == "scan.octa.space"
+    assert len(res["clusters"]) == 1
+    assert set(res["clusters"][0]["wallets"]) == {h1, h2}
+    assert res["shares"][h1] == pytest.approx(0.2, rel=1e-3)
+    assert res["shares"][h2] == pytest.approx(0.15, rel=1e-3)
+    assert ss.report_path("layer", "octa-octaspace").exists()

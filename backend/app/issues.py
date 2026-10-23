@@ -165,6 +165,15 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0408l", "Task fermi su 'in corso' da 11 ore e 2 giorni nel Cantiere",
+     "Lorenzo, 23/10: '11 ore fa e 2 giorni fa? credo siano errati'. Nel Cantiere comparivano in cima come 'in corso' (65%) task di 11 ore fa (seed-0382) e 2 giorni fa (seed-0376) gia' conclusi.",
+     "media"),
+    ("seed-0407l", "Grafico non carica le candele storiche e ricerca ticker lenta",
+     "Lorenzo, 23/10: 'la ricerca dei ticker e' lentissima e anche i grafici non si caricano correttamente sul liquidityengine.app', 'non carica le candele'.",
+     "alta"),
+    ("seed-0406l", "Supporto cluster per OctaSpace (https://scan.octa.space/accounts)",
+     "Lorenzo, 23/10: 'aggiungi supporto cluster per : https://scan.octa.space/accounts'.",
+     "alta"),
     ("seed-0405l", "Id della bacheca presi due volte da due chat dello stesso account",
      "Lorenzo, 23/10: 'sistema le collisioni degli id seed fra le due chat'. In una sera seed-0398l, seed-0401l e seed-0403l sono stati presi due volte; seed-0398l era scritto due volte in resolutions.json e la bacheca mostrava la copia piu' corta.",
      "media"),

@@ -125,11 +125,14 @@ class KrakenProvider(DataProvider):
     async def _load_pairs(self) -> list[dict]:
         pairs = _symbols_cache.get("all")
         if pairs is None:
-            async with http_client.pooled(timeout=15.0) as client:
-                resp = await client.get(f"{self._base_url}/0/public/AssetPairs")
-            payload = resp.json()
-            result = payload.get("result", {}) if isinstance(payload, dict) else {}
-            pairs = [v for v in result.values() if not (v.get("status") or "online") != "online"]
+            try:
+                async with http_client.pooled(timeout=4.0) as client:
+                    resp = await client.get(f"{self._base_url}/0/public/AssetPairs")
+                payload = resp.json()
+                result = payload.get("result", {}) if isinstance(payload, dict) else {}
+                pairs = [v for v in result.values() if not (v.get("status") or "online") != "online"]
+            except Exception:  # noqa: BLE001
+                pairs = []
             _symbols_cache["all"] = pairs
         return pairs
 

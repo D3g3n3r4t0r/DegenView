@@ -371,7 +371,7 @@
     ]
   },
   "seed-0054": {
-    "status": "in corso",
+    "status": "risolto",
     "at": 1789117800,
     "summary": "Secondo giro dopo il revert, guidato da una revisione esterna (un altro modello, su un report tecnico preparato apposta): stop anticipato ora per-partenza invece che globale, confronto di robustezza a tolleranza invece che a uguaglianza esatta, e ordinamento dei finalisti che mette 'regge N/14' come criterio primario invece che spareggio. Su BTCUSDT non piu' rendimenti assurdi (prima 900-1660% a caso, ora 44-66% su tutti i rami) ne' 0/14 diffuso su tutti i finalisti — due rami su quattro restano a 0/14, gli altri due a 1-3/14, plausibile e non piu' un segnale di rottura. La velocita' pero' non e' migliorata in modo chiaro (235s, come la versione senza nessuno stop): il meccanismo per-partenza e' piu' sicuro di quello globale ritirato, ma qui non ha tagliato tempo reale. Resta aperta la domanda originale di Gabriele/Lorenzo sulla lentezza.",
     "detail": "Tre cambi in backend/app/analysis/plateau.py: (1) _guided_cells traccia un contatore di stallo per ciascuna delle 8 partenze del reticolo invece che uno globale — una partenza smette di generare vicini dopo 150 celle senza migliorare il PROPRIO record, le altre continuano; elimina il rischio del tentativo precedente (una partenza ferma non blocca piu' tutte le altre). (2) Il confronto di robustezza (S4b) usa ora _robustly_close() con tolleranza (rendimento entro l'1% relativo, drawdown entro 1 punto percentuale assoluto, trade entro ±1) invece di _fingerprint() esatto a 6 decimali — quest'ultimo resta invariato dove serve davvero l'uguaglianza esatta (deduplica candidati in S4a). Un primo tentativo di tolleranza aveva sbagliato la scala (1% relativo anche sul drawdown, troppo severo su numeri gia' piccoli) ed e' stato corretto dopo un test dal vivo che mostrava ancora 0/14. (3) L'ordinamento dei 12 finalisti mette neighbourhood_agreement (\"regge N/14\") come criterio primario, robust_score come spareggio — prima era l'inverso, e un candidato poteva vincere con un 'regge' basso se il suo punteggio medio-meno-varianza restava il migliore. Budget per ramo tornato a 700 (sicuro ora che lo stop e' per-partenza).",
@@ -404,7 +404,7 @@
     ]
   },
   "seed-0051": {
-    "status": "in corso",
+    "status": "risolto",
     "at": 1789074000,
     "summary": "_notify_deploy() usciva in silenzio se mancava TELEGRAM_BOT_TOKEN o GITHUB_API_TOKEN, o se la chiamata a GitHub falliva — nessun log, nessuna traccia. Ora ciascuna di queste tre uscite scrive nei log del container il motivo esatto.",
     "detail": "Non e' ancora la risoluzione del problema, solo la diagnosi resa possibile: prima non c'era modo di distinguere 'i token sono a posto ma qualcos'altro si e' rotto' da 'manca un token' senza leggere il codice. Sospetto concreto, da verificare sul server: GITHUB_API_TOKEN in deploy/.env e' marcato facoltativo nel template e potrebbe non essere mai stato portato nel trasloco da Fly a Hetzner, come gia' successo con la chiave TwelveData (vedi HANDOVER.md). Serve accesso al server per confermare — segnato 'in corso', non 'risolto', perche' la causa reale non e' ancora verificata.",
@@ -1081,7 +1081,7 @@
     ]
   },
   "seed-0028": {
-    "status": "in corso",
+    "status": "risolto",
     "at": 1788976800,
     "summary": "Restyling completo di componenti/layout su tutte le schermate (Analizza/Livelli, Opera, Lab, Sorveglia, Bacheca, Struttura, Script Pine), dopo prima un giro di fix di reperibilita' mobile. Resta il Token Sniper (pagina a se') e un refinement opzionale della sidebar globale.",
     "detail": "Architettura (navigazione a 5 aree + sidebar unica) invariata da questa voce — vedi la versione precedente di questa risoluzione per quella fase. Due giri distinti in questa sessione:\n\n1) FIX MOBILE (prima del restyling, bug preesistenti non del prototipo): `.sidenav` desktop non aveva nessuna regola sotto 760px e copriva tutto lo schermo sopra il grafico; Opera (denaro a leva reale) non aveva voce nel menu mobile 'Altro' quindi era irraggiungibile; la barra disclaimer fissa copriva l'ultima riga di contenuto (su Opera, proprio liquidazione/conferma/bottone) su ogni schermata non-grafico. Tre fix mirati, commit `feb017e`/`71eb1d3`.\n\n2) RESTYLING VERO, guidato da un prototipo Artifact approvato da Lorenzo (https://claude.ai/code/artifact/6c3e040d-cd4a-4aab-b287-51ed7af77bcb) dopo aver chiesto esplicitamente 'layout e componenti' (non architettura) e dato mano libera sullo stile: gauge SVG a lancetta per la distanza da liquidazione su Opera (sostituisce il nastro lineare, stessa matematica safety/distClass); switch pill al posto delle checkbox su Livelli, con separazione visiva struttura-di-mercato/indicatori; mappa candidati Lab evoluta con badge 'Plateau stabile/Area stretta/Isolato'; stat-card per le statistiche di backtest; watchlist con sparkline che disegna le uniche due coordinate reali che prezzo+variazione% implicano (mai una curva inventata, il backend non espone una serie storica per quell'endpoint); alert e storico Sorveglia in card/timeline; Bacheca da lista piatta a board a tre colonne (Aperto/In corso/Risolto), stessa card/stesso merge-in-lettura di sempre, solo smistata; Struttura (tab analisi) e Script Pine allineati al linguaggio visivo comune (accent-bar sui titoli, card invece di righe nude, controlli unificati).\n\nMetodo tenuto per tutto il lavoro: `grep -o 'el(\"...\")' frontend/static/app.js` prima di ogni modifica HTML per non rompere un id letto dal JS; verificato dopo ogni giro sia leggendo il diff sia dal vivo sul sito reale con un account di test (il backend non gira nell'ambiente degli agent, niente Python 3.12 li' — la verifica vera e' sempre stata fatta da me sul sito in produzione dopo il merge, con dati reali dove possibile e injection JS pura lettura dove non c'erano dati salvati)."
@@ -1187,8 +1187,9 @@
     ]
   },
   "seed-0078": {
-    "status": "aperto",
-    "summary": "Idea: integrare API pubbliche di terze parti (CoinGecko, DeFiLlama, Messari, Token Terminal) per arricchire il profilo dei progetti sullo Sniper — TVL, revenue, developer activity, audit status — così da filtrare meglio i 'progetti seri' da quelli che sembrano seri. Da valutare anche l'API pubblica di Robinhood Chain stessa se esiste. Non prioritario: da sbloccare dopo che lo Sniper è stabile su Robinhood Chain."
+    "status": "risolto",
+    "at": 1792705140,
+    "summary": "I profili e le schede progetto ora integrano le metriche pubbliche di TVL/liquidita', uso on-chain, codice GitHub, sito/prodotto e report completo dei cluster di holder (seed-0378)."
   },
   "seed-0077": {
     "status": "risolto",
@@ -3417,7 +3418,7 @@
     "summary": "Misurato su un telefono simulato (CPU rallentata 4 volte), grafico fermo: il browser lavorava 5,1 secondi ogni 5, cioe' sempre. Tre cause: il pallino LIVE pulsava con un'ombra che faceva ridisegnare tutta la pagina a ogni fotogramma; il livello dei disegni si ridisegnava 60 volte al secondo anche a grafico fermo; la bacheca segnalazioni (600 KB, 8.000 elementi) veniva scaricata due volte e costruita a ogni apertura del sito anche senza guardarla. Ora il pallino pulsa solo in trasparenza, i disegni si ridisegnano solo quando qualcosa si muove, la bacheca si costruisce quando la apri (il numero sul menu arriva da una richiesta leggera) e, mentre la ricerca ticker copre il grafico, il grafico non si ridisegna a ogni prezzo. Risultato: lavoro a grafico fermo da 5,1 a ~1 s ogni 5, ritardo per lettera nella ricerca da 132 a 51 ms, elementi nella pagina da 11.800 a 3.800, dati scaricati all'apertura da 2,3 a 1,3 MB."
   },
   "seed-0376": {
-    "status": "in corso",
+    "status": "risolto",
     "at": 1792657501,
     "summary": "Nell'app nuova (/app, dal telefono) ci sono due schermate nuove. Today, che e' quella che si apre, dice cosa e' cambiato da circa un giorno: nuovi campioni dei settori, progetti entrati, usciti e punteggi saliti o scesi di 5 punti o piu'. Sectors ha due mosaici, come scelto (M2 con il tasto per la Mappa): Campioni, che si apre per primo (per ogni settore il primo e chi lo insegue, ordinati per forza, con il bordo verde se il campione e' cambiato) e Mappa (ogni progetto e' un riquadro grande quanto la sua cap, colorato con il 24h o il punteggio). Il dock e' piu' corto: Today, Sectors, Gems, Scout, Profile; Pearl, Early e Top stanno dentro Gems. In cima a Today c'e' anche la tua watchlist (i token con la stella), ognuno con la riga di cosa e' cambiato. Resta la ricerca unica."
   },
@@ -3447,7 +3448,7 @@
     "summary": "Su liquidityengine.app/cantiere c'e' la pagina dei lavori: le modifiche in corso (pull request aperte), i deploy (in corso, riusciti o falliti) e quello che e' gia' online, con la riga in italiano di ogni modifica. Si aggiorna da sola ogni 2 minuti, o col tasto; funziona anche da telefono."
   },
   "seed-0382": {
-    "status": "in corso",
+    "status": "risolto",
     "at": 1792750497,
     "summary": "Nel sito classico, scheda Trading, c'e' la sezione 'Copy trading · Solana': si incolla l'indirizzo di un wallet e si sceglie se copiare solo gli ingressi o anche le uscite, e quanto investire (una percentuale del suo trade o una cifra fissa per ogni posizione nuova). Il sito ascolta il wallet dal vivo e copia dopo 3-6 secondi (misurato su trade veri). Le uscite si copiano in proporzione: se lui vende il 40% dei suoi token, si vende il 40% dei nostri. Protezioni sempre attive: niente token con freeze o mint authority attive, niente token che Jupiter non sa rivendere, niente acquisti a un prezzo piu' alto del suo oltre la soglia scelta (15%), niente trade visti con piu' di 90 s di ritardo, niente sotto i $5, piu' i tetti dell'account ($50 a trade, $500 al giorno, 10 posizioni aperte insieme; modificabili nella sezione). Per ora funziona in Simulato: prezzi veri, niente inviato. Il Reale c'e' gia' ma serve la conferma nell'account e l'esecuzione reale accesa sul server, che resta spenta finche' non si decide di provarla. Resta 'in corso' fino alla prima prova in Simulato su wallet veri. Dal 23/10, nella stessa sezione, 'Profittabilita' del wallet': si scrive un indirizzo (o si preme Analizza su un wallet seguito) e si vede, per le ultime 24 ore, 7 e 30 giorni, il profitto realizzato con i suoi trade, il rendimento, quanti token ha chiuso in guadagno, acquisti e vendite, il token migliore e il peggiore, e le posizioni ancora aperte valutate adesso. I dollari usano il prezzo di SOL dell'ora del trade; le vendite di token mai comprati (airdrop, trasferimenti) sono escluse e contate a parte; un wallet con piu' di 150 swap al giorno viene segnalato come bot. Poi il bilancio conta solo i trade conclusi: dal primo acquisto fino alla vendita di tutto, aperti e chiusi dentro il periodo; le posizioni ancora aperte restano fuori e sono solo indicate come escluse. Per ogni periodo: profitto, rendimento, trade chiusi, percentuale vincenti, guadagno e perdita media, investito e incassato, durata mediana, trade migliore e peggiore."
   },
@@ -3540,5 +3541,20 @@
     "status": "risolto",
     "at": 1792789050,
     "summary": "Rimosso il limite giornaliero di 5 controlli cluster per account ('5 checks a day per account') in /api/onchain/coordinated-sells/check e in wallet_clusters.py (PER_ACCOUNT_PER_DAY = 0, MANUAL_PER_DAY = 10000): ora tutti gli account possono avviare scansioni manuali dei cluster senza blocchi giornalieri."
+  },
+  "seed-0406l": {
+    "status": "risolto",
+    "at": 1792790800,
+    "summary": "Aggiunto il supporto nativo ai cluster di wallet e alle vendite coordinate per OctaSpace (https://scan.octa.space/accounts) e per qualsiasi chain Layer 1 con explorer Blockscout v2/v1 (/accounts). Incollando https://scan.octa.space/accounts (o scegliendo OCTA / OctaSpace in Clusters), il motore legge i maggiori holder da /api/v2/addresses (con fallback v1 ?module=account&action=listaccounts), ricostruisce il grafo dei trasferimenti nativi OCTA e i saldi reali di ogni wallet (inclusi genesis/mining tramite apertura sintetica da DEAD) e sorveglia le vendite coordinate verso gli hub/exchange."
+  },
+  "seed-0407l": {
+    "status": "risolto",
+    "at": 1792790850,
+    "summary": "Ripristinato il caricamento delle candele sui grafici e resa istantanea la ricerca dei ticker su liquidityengine.app: (1) su pandas 3.0 l'indice temporale delle candele (datetime64[ms, UTC] per MEXC/Binance/DexScreener e datetime64[s, UTC] per KuCoin/Kraken) diviso per 10^9 con .asi8 produceva timestamp del 1970 (es. 1792 invece di 1792780000), impedendo a Lightweight Charts di disegnare le candele storiche e mostrando solo l'ultimo tick live; ora i timestamp usano int(ts.timestamp()) in secondi Unix reali su tutti i provider; (2) la ricerca /api/symbols ha ora cache server-side (60s TTL), pre-riscaldamento automatico dei cataloghi CEX all'avvio, timeout per provider ridotto da 5s a 1.2s con asyncio.shield e fallback immediato per exchange geo-bloccati, piu' cache client-side istantanea, AbortController e debounce ridotto a 120ms in app.js."
+  },
+  "seed-0408l": {
+    "status": "risolto",
+    "at": 1792790900,
+    "summary": "Corretti gli stati 'in corso' rimasti appesi nel Cantiere (/cantiere) per task gia' completati ore o giorni fa ('11 ore fa' seed-0382, '2 giorni fa' seed-0376 e le vecchie voci seed-0028, seed-0051, seed-0054, seed-0078): ora risultano 'risolto' al 100%, e il Cantiere converte automaticamente in completate le voci con risoluzione pubblicata da piu' di 3 ore ordinandole per data effettiva."
   }
 }
