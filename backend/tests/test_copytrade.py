@@ -72,14 +72,25 @@ def _follow(**kw):
 
 def test_size_pct_fixed_and_caps():
     lim = dict(ct.DEFAULT_LIMITS)
-    assert ct.size_buy(_follow(pct=10), lim, 1000, 0, 0, False) == (100, "")
-    assert ct.size_buy(_follow(pct=50), lim, 1000, 0, 0, False)[0] == 100            # max per trade
+    assert ct.size_buy(_follow(pct=10), lim, 400, 0, 0, False) == (40, "")
+    assert ct.size_buy(_follow(pct=10), lim, 1000, 0, 0, False)[0] == 50             # max per trade
     assert ct.size_buy(_follow(sizing="fixed", fixed_usd=50), lim, 9999, 0, 0, False) == (50, "")
     assert ct.size_buy(_follow(sizing="fixed"), lim, 1000, 0, 0, True)[0] is None    # re-buy ignored
-    assert ct.size_buy(_follow(pct=10), lim, 1000, 0, 0, True)[0] == 100             # re-buy at pct copied
+    assert ct.size_buy(_follow(pct=10), lim, 400, 0, 0, True)[0] == 40               # re-buy at pct copied
     assert ct.size_buy(_follow(pct=10), lim, 20, 0, 0, False)[0] is None             # $2 < minimum
-    assert ct.size_buy(_follow(pct=10), lim, 1000, 450, 0, False)[0] is None         # daily cap
+    assert ct.size_buy(_follow(pct=10), lim, 1000, 460, 0, False)[0] is None         # daily cap
     assert ct.size_buy(_follow(pct=10), lim, 1000, 0, 10, False)[0] is None          # max open
+
+
+def test_old_default_cap_moves_to_50_unless_chosen():
+    ct._load()["users"] = {"a": {"limits": {"max_trade_usd": 100.0, "max_day_usd": 500.0, "max_open": 10}},
+                           "b": {"limits": {"max_trade_usd": 100.0, "max_day_usd": 500.0, "max_open": 10},
+                                 "limits_set_at": 1.0}}
+    assert ct.DEFAULT_LIMITS == {"max_trade_usd": 50.0, "max_day_usd": 500.0, "max_open": 10}
+    assert ct.account("a")["limits"]["max_trade_usd"] == 50.0
+    assert ct.account("b")["limits"]["max_trade_usd"] == 100.0
+    ct.set_limits("a", {"max_trade_usd": 100})
+    assert ct.account("a")["limits"]["max_trade_usd"] == 100.0
 
 
 def test_follow_validation_and_real_consent():

@@ -55,7 +55,9 @@ PUBLIC_WS = "wss://api.mainnet-beta.solana.com"
 MODES = ("off", "sim", "real")
 COPIES = ("entry", "both")
 SIZINGS = ("pct", "fixed")
-DEFAULT_LIMITS = {"max_trade_usd": 100.0, "max_day_usd": 500.0, "max_open": 10}
+# $50 a trade since 23/10 ("max $50 a trade, $500 al giorno, max 10 posizioni"); it was $100.
+DEFAULT_LIMITS = {"max_trade_usd": 50.0, "max_day_usd": 500.0, "max_open": 10}
+_OLD_MAX_TRADE = 100.0
 DEFAULT_FOLLOW = {"mode": "sim", "copy": "both", "sizing": "pct", "pct": 10.0, "fixed_usd": 50.0,
                   "max_chase_pct": 15.0, "slippage_pct": 5.0}
 MIN_USD = 5.0              # below this the fees eat the trade
@@ -97,6 +99,8 @@ def account(owner_id: str) -> dict:
     users = _load()["users"]
     acc = users.setdefault(owner_id, {})
     acc.setdefault("limits", dict(DEFAULT_LIMITS))
+    if not acc.get("limits_set_at") and acc["limits"].get("max_trade_usd") == _OLD_MAX_TRADE:
+        acc["limits"]["max_trade_usd"] = DEFAULT_LIMITS["max_trade_usd"]   # the old default, never chosen by hand
     acc.setdefault("follows", {})
     acc.setdefault("positions", {})
     acc.setdefault("trades", [])
@@ -182,6 +186,7 @@ def set_limits(owner_id: str, limits: dict) -> dict:
             if v <= 0:
                 raise ValueError(f"{k} must be above zero.")
             acc["limits"][k] = int(v) if k == "max_open" else v
+    acc["limits_set_at"] = time.time()
     _save()
     return acc["limits"]
 
