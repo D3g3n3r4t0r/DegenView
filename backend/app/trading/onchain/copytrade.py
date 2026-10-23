@@ -443,12 +443,26 @@ def _wallet_of(owner_id: str) -> tuple[object, str] | None:
     return (user, w.address) if w else None
 
 
-def _real_block(acc: dict) -> str:
+WALLET_OFF = "the Solana wallet is switched off: turn on \"Wallet active\" in On-chain wallet → Limits"
+
+
+def wallet_enabled(owner_id: str) -> bool:
+    from app.trading.onchain import risk
+    return risk.check_wallet_enabled(owner_id, "solana")[0]
+
+
+def _real_block(acc: dict, owner_id: str) -> str:
+    """Why a real copy cannot go out now ('' when it can). The wallet switch
+    is checked here too: execute_order refuses a switched-off wallet, and a
+    new wallet starts off, so the first real copy failed with no hint of
+    where the switch is (Trading tab check, 23/10)."""
     from app.config import settings
     if not settings.onchain_execution_enabled:
         return "real execution is switched off on the server"
     if not acc["real_ok_at"]:
         return "real money not confirmed for this account"
+    if not wallet_enabled(owner_id):
+        return WALLET_OFF
     return ""
 
 
@@ -487,7 +501,7 @@ async def _copy_buy(owner: str, acc: dict, f: dict, swap: dict, price: float, ba
         return {**row, "status": "skipped", "reason": "no way to sell it back (possible honeypot)"}
 
     if f["mode"] == "real":
-        block = _real_block(acc)
+        block = _real_block(acc, owner)
         if block:
             return {**row, "status": "skipped", "reason": block}
         found = _wallet_of(owner)
@@ -551,7 +565,7 @@ async def _copy_sell(owner: str, acc: dict, f: dict, swap: dict, price: float, b
     row = {**base, "usd": round(usd, 2), "qty": units, "price": usd / units if units else None,
            "frac": round(frac, 3), "pnl_usd": round(usd - cost, 2), "impact_pct": round(q["price_impact_pct"], 2)}
     if pos.get("real"):
-        block = _real_block(acc)
+        block = _real_block(acc, owner)
         if block:
             return {**row, "status": "skipped", "reason": block}
         res = await _execute(user, mint, "sell", usd, row["price"] or 0.0, q, base)

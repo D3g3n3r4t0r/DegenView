@@ -76,7 +76,7 @@ async def copytrade_state(user: User = Depends(_member)) -> dict:
         "spent_today": round(copytrade.spent_today(acc), 2),
         "real_ok": bool(acc["real_ok_at"]),
         "stats": copytrade.stats(acc),
-        "wallet": {"address": w.address if w else None, "sol": sol},
+        "wallet": {"address": w.address if w else None, "sol": sol, "enabled": bool(w and w.enabled)},
         "server": {"real_enabled": settings.onchain_execution_enabled, **copytrade.status},
     }
 

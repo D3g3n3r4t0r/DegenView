@@ -1852,11 +1852,12 @@
   }
 
   // "% saldo" senza mostrare il saldo ordina alla cieca: l'utente non sa a
-  // quanti USDT corrisponde finche' l'ordine non e' gia' partito. Riusiamo
-  // /api/balances (la stessa fonte della tab Saldi), che oggi copre solo
-  // MEXC e KuCoin: per gli altri quattro exchange lo diciamo esplicitamente
-  // invece di lasciar credere che il silenzio sia un numero pari a zero.
-  const MANUAL_BALANCE_EXCHANGES = new Set(["mexc", "kucoin"]);
+  // quanti USDT corrisponde finche' l'ordine non e' gia' partito. Il saldo
+  // viene dalla chiave che l'utente ha salvato per quell'exchange
+  // (/api/diagnostics/test-connection, sola lettura), su tutti e sei:
+  // /api/balances leggeva le chiavi MEXC/KuCoin del server, visibili a un
+  // solo account (controllo della scheda Trading, 23/10).
+  const MANUAL_BALANCE_ASSETS = ["USDT", "USDC", "USD", "ZUSD", "FDUSD"];
 
   function ensureManualBalanceHint() {
     let hint = el("manual-balance-hint");
@@ -1877,24 +1878,32 @@
     if (mode !== "pct_balance") { hint.classList.add("hidden"); return; }
     hint.classList.remove("hidden");
     const exchange = el("manual-exchange")?.value;
-    if (!MANUAL_BALANCE_EXCHANGES.has(exchange)) {
-      hint.style.color = "var(--warn)";
-      hint.textContent = "Balance not available here for this exchange.";
-      return;
-    }
     hint.style.color = "var(--ink-dim)";
     hint.textContent = "Free balance: loading…";
     try {
-      const resp = await fetch("/api/balances");
-      if (!resp.ok) throw new Error("bad status");
-      const body = await resp.json();
-      const acct = body[exchange];
-      const usdt = acct?.balances?.find((b) => b.asset === "USDT");
-      if (usdt) {
-        hint.textContent = `Free balance: ${usdt.total.toLocaleString("en-US", { maximumFractionDigits: 2 })} USDT`;
+      const resp = await fetch("/api/diagnostics/test-connection", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ exchange, market: "spot" }),
+      });
+      if (el("manual-exchange")?.value !== exchange) return;   // changed meanwhile
+      const body = await resp.json().catch(() => ({}));
+      if (resp.status === 400) {
+        hint.style.color = "var(--warn)";
+        hint.textContent = "No API key saved for this exchange: add it in Auto-trading.";
+        return;
+      }
+      if (!resp.ok) throw new Error("network");
+      if (!body.ok) {
+        hint.style.color = "var(--warn)";
+        hint.textContent = `Balance not readable: ${body.error || "the exchange refused the key"}`;
+        return;
+      }
+      const cash = (body.balances || []).filter((b) => MANUAL_BALANCE_ASSETS.includes(String(b.asset).toUpperCase()) && b.free > 0);
+      if (cash.length) {
+        hint.textContent = "Free balance: " + cash.map((b) => `${Number(b.free).toLocaleString("en-US", { maximumFractionDigits: 2 })} ${String(b.asset).toUpperCase().replace(/^ZUSD$/, "USD")}`).join(" · ");
       } else {
         hint.style.color = "var(--warn)";
-        hint.textContent = "No USDT balance on this exchange.";
+        hint.textContent = "No USDT, USDC or USD balance on this exchange.";
       }
     } catch (_) {
       hint.style.color = "var(--warn)";

@@ -26,17 +26,30 @@ class BinanceFutures(FuturesAdapter):
             base_url=_b.FAPI_BASE, headers={"X-MBX-APIKEY": creds.api_key}, timeout=15.0
         )
 
+    # binance_futures_exec raises its own FuturesExecutionError: every call
+    # here translates it, or the site's handlers (which catch base's) turned
+    # a Binance refusal into a 500 and the positions list failed for every
+    # exchange (Trading tab check, 23/10).
     async def available_margin(self, creds: FuturesCreds) -> float:
-        async with self._client(creds) as c:
-            return await _b.get_available_margin_usdt(c, creds.api_secret)
+        try:
+            async with self._client(creds) as c:
+                return await _b.get_available_margin_usdt(c, creds.api_secret)
+        except _b.FuturesExecutionError as exc:
+            raise FuturesExecutionError(str(exc)) from exc
 
     async def mark_price(self, symbol: str, creds: FuturesCreds) -> float:
-        async with self._client(creds) as c:
-            return await _b.get_mark_price(c, self.symbol_for(symbol))
+        try:
+            async with self._client(creds) as c:
+                return await _b.get_mark_price(c, self.symbol_for(symbol))
+        except _b.FuturesExecutionError as exc:
+            raise FuturesExecutionError(str(exc)) from exc
 
     async def open_positions(self, creds: FuturesCreds) -> list[Position]:
-        async with self._client(creds) as c:
-            raw = await _b.get_open_positions(c, creds.api_secret)
+        try:
+            async with self._client(creds) as c:
+                raw = await _b.get_open_positions(c, creds.api_secret)
+        except _b.FuturesExecutionError as exc:
+            raise FuturesExecutionError(str(exc)) from exc
         out = []
         for p in raw:
             amt = float(p.get("positionAmt", 0))
