@@ -165,6 +165,9 @@ def _resolutions() -> dict[str, dict]:
 
 
 _SEED = [
+    ("seed-0404l", "Trascinando un disegno, si sposta meno del puntatore",
+     "Trovato dopo la scansione del sito classico: il test automatico degli strumenti di disegno falliva dal restyling desktop (seed-0396l). Un disegno trascinato di 80 pixel si spostava di 73,7. Lorenzo, 23/10: 'si, sistemalo'.",
+     "media"),
     ("seed-0403l", "Rimozione del limite di 5 controlli cluster al giorno per account ('5 checks a day per account')",
      "Lorenzo, 23/10: 'rimuovi questa limitazione per i cluster : Poi dice \"Max 5 check day for account\"'.",
      "alta"),

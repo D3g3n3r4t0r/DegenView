@@ -1,4 +1,10 @@
 {
+  "seed-0404l": {
+    "status": "risolto",
+    "at": 1792789155,
+    "summary": "Trascinare un disegno ora segue il puntatore. Lo spostamento si calcolava come 'candela sotto il puntatore adesso meno candela sotto il puntatore all'inizio', entrambe arrotondate: secondo il punto in cui si afferrava il disegno, l'errore arrivava quasi a una candela intera. Ora si misura lo spostamento vero e si arrotonda solo il risultato: il disegno resta agganciato alle candele, come quando lo si piazza, e cade al massimo a mezza candela dal puntatore ovunque lo si prenda.",
+    "detail": "app.js: xToLogicalExact() (interpolazione fra le due candele intere, come logicalToX) usata all'inizio e durante il trascinamento, con Math.round sulla differenza. Il test scripts/e2e/draw.e2e.mjs non si fidava di un margine fisso di 6 px (valido solo con candele di ~12 px, rotto dal nuovo layout): ora usa mezza candela misurata, e un controllo nuovo trascina il disegno di 1,4, 2,6 e 3,6 candele afferrandolo in punti diversi. Con il codice vecchio fallisce (errori di 8,8 px su 7,4 consentiti), con il nuovo passa. 39/39."
+  },
   "seed-0400l": {
     "status": "risolto",
     "at": 1792787799,

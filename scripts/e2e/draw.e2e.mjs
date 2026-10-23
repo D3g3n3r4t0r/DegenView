@@ -161,7 +161,33 @@ await page.mouse.move(mid.x + 80, mid.y + 40, { steps: 8 });
 await page.mouse.up();
 ds = await drawings(page);
 const n0 = await px(page, ds[0].points[0]);
-check('drag moves the drawing by the pointer delta', Math.abs((n0.x - m0.x) - 80) < 6 && Math.abs((n0.y - m0.y) - 40) < 4, `dx ${(n0.x - m0.x).toFixed(1)}, dy ${(n0.y - m0.y).toFixed(1)}`);
+// Points sit on whole bars (as when placed), so a drag lands within half a
+// bar of the pointer: the bound follows the real bar width, not a fixed 6px
+// that only held while the layout gave ~12px bars (broke with seed-0396l).
+const barPx = await page.evaluate(() => { const ts = window.__drawDebug.chart().timeScale(); const r = ts.getVisibleLogicalRange(); const i = Math.floor((r.from + r.to) / 2); return ts.logicalToCoordinate(i + 1) - ts.logicalToCoordinate(i); });
+check('drag moves the drawing by the pointer delta', Math.abs((n0.x - m0.x) - 80) <= barPx / 2 + 0.5 && Math.abs((n0.y - m0.y) - 40) < 4, `dx ${(n0.x - m0.x).toFixed(1)}, dy ${(n0.y - m0.y).toFixed(1)}, bar ${barPx.toFixed(1)}px`);
+
+// Fractional drags, grabbed at different spots along the line: each must land
+// within half a bar. Rounding the two ends separately (the old code) erred by
+// up to a whole bar depending on where the drawing was grabbed.
+{
+  const errs = [];
+  for (const [f, along] of [[1.4, 0.3], [2.6, 0.5], [3.6, 0.7]]) {
+    let cur = await drawings(page);
+    const a = await px(page, cur[0].points[0]), c = await px(page, cur[0].points[1]);
+    const g = { x: b.x + a.x + (c.x - a.x) * along, y: b.y + a.y + (c.y - a.y) * along };
+    await page.mouse.move(g.x, g.y); await page.mouse.down();
+    await page.mouse.move(g.x + f * barPx, g.y, { steps: 6 }); await page.mouse.up();
+    cur = await drawings(page);
+    const a2 = await px(page, cur[0].points[0]);
+    errs.push(Math.abs((a2.x - a.x) - f * barPx));
+  }
+  for (let k = 0; k < 3; k++) { await page.keyboard.press('Control+z'); await page.waitForTimeout(100); }
+  ds = await drawings(page);
+  check('fractional drags stay within half a bar wherever grabbed', errs.every((e) => e <= barPx / 2 + 0.5), errs.map((e) => e.toFixed(1)).join(', ') + ` (half bar ${(barPx / 2).toFixed(1)})`);
+  const back = await px(page, ds[0].points[0]);
+  check('undo restores the drawing after those drags', Math.abs(back.x - n0.x) < 1 && Math.abs(back.y - n0.y) < 1, `${back.x.toFixed(1)} vs ${n0.x.toFixed(1)}`);
+}
 
 // resize with a handle
 await page.mouse.click(b.x + n0.x + 1, b.y + n0.y + 1);

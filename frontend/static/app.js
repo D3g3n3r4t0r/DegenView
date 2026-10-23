@@ -5766,6 +5766,21 @@ const COLORS_LIGHT = {
     return x1 === null ? x0 : x0 + frac * (x1 - x0);
   }
 
+  // coordinateToLogical rounds to the nearest whole bar. A drag measured as
+  // "bar under the pointer now minus bar under it at the start" then erred by
+  // up to a full bar depending on where the drawing was grabbed (an 80px drag
+  // moved it 73.7px at 14.7px a bar). The exact position comes from the two
+  // whole bars around x, the same interpolation logicalToX uses.
+  function xToLogicalExact(x) {
+    const ts = mainChart.timeScale();
+    const i = ts.coordinateToLogical(x);
+    if (i === null) return null;
+    const x0 = ts.logicalToCoordinate(i);
+    const x1 = ts.logicalToCoordinate(i + 1);
+    if (x0 === null || x1 === null || x1 === x0) return i;
+    return i + (x - x0) / (x1 - x0);
+  }
+
   function timeToX(time) {
     if (!mainChart) return null;
     const logical = timeMapper.timeToLogical(time);
@@ -7369,10 +7384,12 @@ const COLORS_LIGHT = {
         return;
       }
       if (dragState) {
-        const logical = mainChart.timeScale().coordinateToLogical(p.x);
+        const logical = xToLogicalExact(p.x);
         const price = candleSeries.coordinateToPrice(p.y);
         if (logical === null || price === null) return;
-        const dl = logical - dragState.startLogical;
+        // Whole bars, like every placed point (xToTime), rounded from the real
+        // pointer movement: within half a bar of the pointer wherever it grabbed.
+        const dl = Math.round(logical - dragState.startLogical);
         const dPrice = price - dragState.startPrice;
         const d = dragState.drawing;
         d.points = dragState.originalPoints.map((q) => {
@@ -7435,7 +7452,7 @@ const COLORS_LIGHT = {
         deselectFractal();
         bumpDraw();
         if (hit.locked) { e.stopPropagation(); return; }
-        const logical = mainChart.timeScale().coordinateToLogical(p.x);
+        const logical = xToLogicalExact(p.x);
         const startPrice = candleSeries.coordinateToPrice(p.y);
         if (logical !== null && startPrice !== null) {
           pushDrawHistory();
