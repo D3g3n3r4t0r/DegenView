@@ -892,7 +892,34 @@
   "Real execution switched off on the server": "Esecuzione reale spenta sul server",
   "Copy wallet": "Wallet delle copie",
   "his trade": "suo trade",
-  "our copy": "nostra copia"
+  "our copy": "nostra copia",
+  "Wallet profitability": "Profittabilita' del wallet",
+  "Before copying a wallet, see how its trades went: realized profit in the last 24 hours, 7 and 30 days, read from its own swaps on chain.": "Prima di copiare un wallet, guarda com'e' andato: profitto realizzato nelle ultime 24 ore, 7 e 30 giorni, letto dai suoi swap on-chain.",
+  "Starting": "Avvio",
+  "Last 24 hours": "Ultime 24 ore",
+  "Last 7 days": "Ultimi 7 giorni",
+  "Last 30 days": "Ultimi 30 giorni",
+  "Realized profit": "Profitto realizzato",
+  "Return on sold": "Rendimento sul venduto",
+  "Opened and closed in the period": "Aperti e chiusi nel periodo",
+  "Tokens closed": "Token chiusi",
+  "Win rate": "Percentuale vincenti",
+  "Buys": "Acquisti",
+  "Sells": "Vendite",
+  "Best token": "Token migliore",
+  "Worst token": "Token peggiore",
+  "Still open now": "Ancora aperte adesso",
+  "Tokens, 30 days": "Token, 30 giorni",
+  "Copy this wallet": "Copia questo wallet",
+  "no route": "invendibile",
+  "holding": "in portafoglio",
+  "Reading the wallet's history (30 days)": "Lettura dello storico del wallet (30 giorni)",
+  "Valuing open positions": "Valutazione delle posizioni aperte",
+  "Analysis failed": "Analisi fallita",
+  "Too many transactions: only the latest": "Troppe transazioni: lette solo le ultime",
+  "No SOL price history: today's price was used.": "Nessuno storico del prezzo di SOL: usato il prezzo di oggi.",
+  "paid for it": "pagato",
+  "worth now": "vale ora"
  },
  "patterns": [
   [
@@ -1002,6 +1029,38 @@
   [
    "^(\\$[\\d.,]+) / position$",
    "$1 / posizione"
+  ],
+  [
+   "^(\\d+) transactions found$",
+   "$1 transazioni trovate"
+  ],
+  [
+   "^Read (\\d+) of (\\d+) transactions, (\\d+) swaps$",
+   "Lette $1 di $2 transazioni, $3 swap"
+  ],
+  [
+   "^(\\d+) sells of tokens with no buy in the history: left out of the profit$",
+   "$1 vendite di token senza acquisto nello storico: escluse dal profitto"
+  ],
+  [
+   "^Looks like a bot: ([\\d.]+) swaps a day\\. Copying it mostly pays fees\\.$",
+   "Sembra un bot: $1 swap al giorno. Copiarlo serve soprattutto a pagare commissioni."
+  ],
+  [
+   "^Too many transactions: only the latest (\\d+) were read\\.$",
+   "Troppe transazioni: lette solo le ultime $1."
+  ],
+  [
+   "^(\\d+) transactions could not be read and are missing\\.$",
+   "$1 transazioni non leggibili, mancano dal calcolo."
+  ],
+  [
+   "^(\\d+) buys · (\\d+) sells$",
+   "$1 acquisti · $2 vendite"
+  ],
+  [
+   "^· (\\d+) swaps in (\\d+) transactions · (.+) ago$",
+   "· $1 swap in $2 transazioni · $3 fa"
   ]
  ]
 }
