@@ -69,15 +69,15 @@ def test_deploy_notice_has_figures_details_and_renders_png_card(monkeypatch, tmp
         "Aggiornamento: risolte le vulnerabilità di sicurezza e arricchiti i messaggi di deploy su Telegram\n"
     )
     sent = _run(monkeypatch, tmp_path, [commit_msg])
-    assert len(sent) == 1
-    msg = sent[0]
-    assert "Figura 1 · Mappa d'Impatto dei Moduli" in msg
-    assert "Figura 2 · Pipeline" in msg
-    assert "risolte le vulnerabilità di sicurezza" in msg
-    assert "Fix X-Forwarded-For rate-limit IP extraction" in msg
+    assert sent == []
     assert len(sent_photos) == 1
-    assert sent_photos[0][0].startswith(b"\x89PNG\r\n\x1a\n")
-    assert len(sent_photos[0][0]) > 1000
+    photo_bytes, caption = sent_photos[0]
+    assert photo_bytes.startswith(b"\x89PNG\r\n\x1a\n")
+    assert len(photo_bytes) > 1000
+    assert "Deploy live" in caption
+    assert "risolte le vulnerabilità di sicurezza" in caption
+    assert "seed-0389" in caption
+    assert len(caption) < 700
 
 
 def test_security_hardening_invariants(tmp_path):
